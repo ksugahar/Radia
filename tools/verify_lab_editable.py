@@ -1,9 +1,18 @@
 """Read-only development editable-source verification.
 
-Defaults to the canonical LAB checkout. Use --source-root explicitly for an
-approved clean monorepo worktree, or --mcp-source for a separately approved
-MCP runtime. Never infer the expectation from the installed package: that
-would accept drift as its own source of truth.
+The expectation for each package is the recorded editable intent written by
+``release_quad repoint`` / Phase 8 (see tools/editable_intent.py). Use
+--source-root for an approved clean monorepo worktree or --mcp-source for a
+separately approved MCP runtime when you want to check against an explicit
+expectation instead. Never infer the expectation from the installed package:
+that would accept drift as its own source of truth.
+
+A package with neither a record nor an explicit expectation is UNVERIFIED
+(exit 5). It is not drift, and this tool never proposes a repair target: the
+tree that used to be canonical is not the expectation merely because it once
+was. Record the intended pointer with
+``python tools/release_quad.py repoint --record-current --reason ...`` or move
+it explicitly with ``repoint --package ... --source ... --reason ...``.
 
 Pointing at the right path is not the same as running current code. The LAB
 checkout can sit on a backup branch, so an install can satisfy the path check
@@ -141,27 +150,9 @@ def verify_against_origin_main(packages):
     return stale
 
 
-def canonical_lab_editable_packages():
-    """LAB development pointers, ignoring release-worktree overrides.
-
-    release_quad narrowed its own release-time set to ``radia`` alone when the
-    coupled release policy was retired (2026-09-16) and deleted the canonical
-    list this checker called, which left the drift check itself dead with an
-    AttributeError.  The daily check is a different question -- whether every
-    lab-editable install still points at its canonical tree, per the LAB
-    editable default -- so the four-package list lives with its only consumer.
-    """
-    root = release_quad.NAS_REPO_LAB.rstrip("/\\")
-    return [
-        ("radia", root),
-        ("cubit-mesh-export", root + "/packages/cubit-mesh-export"),
-        ("radia-mcp", root + "/packages/radia-mcp"),
-        ("mcp-server-document", "S:/mcp-server"),
-    ]
-
-
 def expected_packages(mcp_source=None, source_root=None):
-    packages = canonical_lab_editable_packages()
+    """Expected (name, path) pairs; path is None where nothing is recorded."""
+    packages = release_quad._recorded_lab_editable_packages()
     if source_root:
         root = pathlib.Path(source_root)
         monorepo_paths = {
@@ -189,10 +180,25 @@ def main(argv=None):
     args = parser.parse_args(argv)
     packages = expected_packages(
         mcp_source=args.mcp_source, source_root=args.source_root)
-    drift = release_quad._verify_lab_editable(packages)
+    known = [(name, path) for name, path in packages if path]
+    unverified = [name for name, path in packages
+                  if not path and name in VERSIONED_PACKAGES]
+    for name in unverified:
+        release_quad.warn(
+            f"{name:<26} UNVERIFIED: no recorded editable intent and no explicit "
+            "--source-root/--mcp-source. Not drift; nothing is repointed.")
+    drift = release_quad._verify_lab_editable(known) if known else 0
     if not args.skip_origin_check:
         drift += verify_against_origin_main(packages)
-    return 4 if drift else 0
+    if drift:
+        return 4
+    if unverified:
+        release_quad.info(
+            "Record the intended pointers with "
+            "`python tools/release_quad.py repoint --record-current --reason ...`, "
+            "or pass an explicit expectation. No default is assumed.")
+        return 5
+    return 0
 
 
 if __name__ == "__main__":

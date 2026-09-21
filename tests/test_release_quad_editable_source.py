@@ -96,6 +96,8 @@ def test_lab_deploy_changes_only_radia(monkeypatch, drift):
         events.append(command)
         return subprocess.CompletedProcess(command, 0)
     monkeypatch.setattr(release_quad, "run", run)
+    monkeypatch.setattr(release_quad, "_record_release_intent_lab",
+                        lambda repo: events.append(("record", repo)) or 0)
 
     assert release_quad._deploy_lab() == (4 if drift else 0)
     command = next(event for event in events if isinstance(event, list))
@@ -105,7 +107,12 @@ def test_lab_deploy_changes_only_radia(monkeypatch, drift):
     assert "radia-mcp" not in joined
     assert "cubit-mesh-export" not in joined
     assert "Stop-Process" not in joined
-    assert events[-1] == "verify"
+    if drift:
+        assert events[-1] == "verify"
+        assert not any(isinstance(e, tuple) for e in events)
+    else:
+        assert events[-2] == "verify"
+        assert events[-1] == ("record", root)
 
 
 @pytest.mark.parametrize("drift", [0, 1])
@@ -123,6 +130,9 @@ def test_remote_deploy_changes_only_radia(monkeypatch, drift):
         calls.append(command)
         return subprocess.CompletedProcess(command, 0)
     monkeypatch.setattr(release_quad, "run", run)
+    monkeypatch.setattr(
+        release_quad, "_record_release_intent_remote",
+        lambda host, label, repo: calls.append(("record", host, repo)) or 0)
 
     assert release_quad._deploy_editable_remote("100", "100", "W:/release") == (4 if drift else 0)
     script = base64.b64decode(calls[0][-1]).decode("utf-16le")
@@ -133,11 +143,34 @@ def test_remote_deploy_changes_only_radia(monkeypatch, drift):
     assert "Stop-Process" not in script
     assert "status --porcelain --untracked-files=no" in script
     assert script.index("rev-parse HEAD") < script.index("pip install")
-    assert calls[-1] == "verify"
+    if drift:
+        assert calls[-1] == "verify"
+        assert not any(isinstance(c, tuple) for c in calls)
+    else:
+        assert calls[-2] == "verify"
+        assert calls[-1] == ("record", "100", "W:/release")
 
 
-def test_done_checks_only_solver_editable_roots(monkeypatch):
+def test_done_checks_only_solver_editable_roots(monkeypatch, tmp_path):
     from argparse import Namespace
+
+    # `done` takes its source from the recorded editable intent and refuses
+    # when there is neither a record nor a release override -- no default tree
+    # is assumed. Record one in an isolated file so this test measures which
+    # roots are checked, not what this machine happens to have recorded.
+    intent_file = tmp_path / "editable-intent.json"
+    monkeypatch.setenv(release_quad.editable_intent.INTENT_FILE_ENV,
+                       str(intent_file))
+    monkeypatch.delenv(release_quad.EDITABLE_REPO_LAB_ENV, raising=False)
+    monkeypatch.delenv(release_quad.EDITABLE_REPO_100_ENV, raising=False)
+    intent_module = release_quad.editable_intent
+    data = intent_module.load_intent(intent_file)
+    intent_module.set_entry(data, "radia", {
+        "source": release_quad._editable_repo_lab(), "commit": None,
+        "tracked_clean": None, "recorded_at": "2026-09-21T00:00:00Z",
+        "recorded_by": "test", "recorded_via": "test", "reason": "fixture",
+        "pushed_refs": None, "previous": None})
+    intent_module.save_intent(data, intent_file)
 
     calls = []
     monkeypatch.setattr(release_quad, "cmd_preflight", lambda a: 0)
@@ -155,7 +188,17 @@ def test_done_checks_only_solver_editable_roots(monkeypatch):
     assert calls[1] == "tag"
     assert calls[2] == {"radia": release_quad._editable_repo_lab()}
     assert calls[3] == {"radia": release_quad._editable_repo_100()}
-    assert not hasattr(release_quad, "cmd_restore_editable")
+
+
+def test_restore_editable_is_a_tombstone_that_restores_nothing(monkeypatch, capsys):
+    """The command stays only to refuse and name its replacement."""
+    events = []
+    monkeypatch.setattr(release_quad, "run",
+                        lambda *a, **k: events.append(a) or None)
+    assert release_quad.cmd_restore_editable(None) == 2
+    out = capsys.readouterr().out
+    assert "repoint" in out
+    assert not events
 
 
 def test_editable_release_roots_can_target_one_clean_nas_worktree(monkeypatch):
