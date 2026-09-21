@@ -67,7 +67,7 @@ cubit.cmd('export nastran_bdf "mesh_jmag.bdf" nopyramid overwrite')
 | `cube_3d.bdf` | 3D tetrahedral mesh |
 | `plate_2d.bdf` | 2D triangular mesh |
 | `mixed_with_pyramid.bdf` | Mixed hex/tet with CPYRAM |
-| `mixed_for_jmag.bdf` | Mixed hex/tet with degenerate CHEXA |
+| `mixed_no_pyramid.bdf` | Mixed hex/tet with degenerate CHEXA |
 
 ## Regenerate Samples
 

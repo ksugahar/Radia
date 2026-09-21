@@ -62,7 +62,7 @@ verification bar:
 content stays out of this published package; query them for tool specifics.)
 
 Both servers carry the SAME `cross_ref.json`; this module is its radia-side
-view. See also `motor_femm_transient` (Lange-Henrotte-Hameyer 2009) which is
+view. See also `motor_transient_circuit` (Lange-Henrotte-Hameyer 2009) which is
 the FEMM transient method already captured here.
 """
 
@@ -171,7 +171,7 @@ open/commercial tools are strong and radia is reachable. All build on
 - Committed (clean): cogging/reluctance torque (2989bc15), IM rotor-coupling vs
   slip (d33e7ac5).
 - Uncommitted handoff (user owns git placement): periodic_h1 in solve.py +
-  test_planar_periodic + test_motor_sector_antiperiodic + femm_parity periodic
+  test_planar_periodic + test_motor_sector_antiperiodic + magnetostatic_2d_parity periodic
   rows.
 - Next: item 1 (demag knee) is the lowest-risk highest-clarity increment.
 """

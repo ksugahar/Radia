@@ -3,7 +3,7 @@ from __future__ import annotations
 from radia_mcp.radia_ngsolve.pwm_controlled_motor_loss_gate import (
     pwm_controlled_motor_loss_gate,
 )
-from test_jmag_generalization_v21 import _payload_v21
+from test_motor_generalization_v21 import _payload_v21
 
 
 def _payload_v22():
