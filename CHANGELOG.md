@@ -190,6 +190,10 @@ Released 2026-09-11.
   agenda at each major section transition, with only the section starting now
   distinctly emphasized. A one-time agenda or sparse section card no longer
   counts as recurring navigation.
+- Made recurring-outline validation discover the author's section names from
+  the repeated agenda instead of requiring Motivation, Method, and Results.
+  Four-part and domain-specific structures such as Theory or Implementation
+  now receive the same structural validation.
 
 ## 4.95.89 - Safe AMS setup and reliable native release packaging
 
