@@ -470,17 +470,14 @@ def _build_bema_coil_mesh(args):
             f"{bnd_names}.{hint}  Set the source/sink sidesets in the "
             f"Cubit .jou before exporting the coil .vol.")
 
-    # compute_inductance_source_sink uses HDivSurface(mesh, order=0) +
-    # LaplaceSL — these assume a PURE SURFACE MESH (no volume elements).
-    # When the .vol has volume tetrahedra (the common Cubit export
-    # case), the saddle-point K matrix gains a 0-pivot from extra null
-    # modes that the existing D[:-1, :] deflation doesn't remove, and
-    # LU fails with "singular matrix detected".
-    # Convert volume → surface in-memory before returning.
-    # (Keiko mdx + LAB gapped_torus_2port both reproduced 2026-05-12.)
-    if mesh.ne > 0:
-        from surface_mesh_extract import _extract_surface_mesh_filtered
-        mesh = _extract_surface_mesh_filtered(mesh, keep_label="")
+    # The volume .vol is returned as-is.  Its boundary is the coil surface,
+    # and compute_inductance_source_sink now wraps HDivSurface in Compress,
+    # which removes the interior-edge DOFs whose null modes made the dense
+    # saddle singular on 2026-05-12 (Keiko mdx + LAB gapped_torus_2port).
+    # The workaround then was to extract a flat surface here; that also threw
+    # away the curving order baked into the .vol at export, so the coil BEM-A
+    # ran on a polygonised surface while the workpiece BEM honoured
+    # vol_curve_order.  Both paths now consume the same curved boundary.
     return mesh
 
 
@@ -541,10 +538,24 @@ def _solve_coil_bem_a(args):
         check_source_sink_current_path)
 
     omega = 2.0 * math.pi * args.frequency
+    # Programmatic callers (the IH assembler's argv path goes through argparse,
+    # but tests and panels build a Namespace by hand) may predate the option;
+    # RT0 is the historical default.
+    coil_fes_order = int(getattr(args, "coil_fes_order", 0))
     progress("BEMA", f"loading pre-meshed coil .vol: "
                        f"{os.path.basename(args.coil_vol)}")
     t0 = time.perf_counter()
     coil_mesh = _build_bema_coil_mesh(args)
+    # Same source of truth as the workpiece BEM: the curving order baked into
+    # the .vol at export time (companion .json).  HDivSurface on the loaded
+    # volume mesh already honours whatever curvature the file carries; this
+    # only records it, because mesh.Curve() cannot upgrade a loaded .vol
+    # (no CAD callback -> silently flat).  Recorded so a BEM-A result states
+    # its geometry order the way the workpiece result does.
+    coil_vol_curve_order = _detect_vol_curving_order(args.coil_vol)
+    progress("BEMA", f"coil .vol curve_order={coil_vol_curve_order} "
+                       f"(from {os.path.basename(args.coil_vol)}.json; "
+                       f"1 = flat)")
     # We still extract verts/tris/masks for diagnostics + N_tris reporting.
     # Pass user-supplied source/sink names so the array masks stay in
     # sync with the .vol-validation step inside _build_bema_coil_mesh.
@@ -619,7 +630,7 @@ def _solve_coil_bem_a(args):
     # values are the same two names (dense vs HACApK-compressed SL matvec).
     progress("BEMA",
         f"ngsolve.bem impedance-EFIE solve (n_tris={len(coil_tris)}, "
-        f"fes_order=0, "
+        f"fes_order={coil_fes_order}, "
         f"Z_s={Z_s_coil_complex if omega > 0 else 'DC (vacuum L)'}, "
         f"saddle={saddle})")
     t0 = time.perf_counter()
@@ -627,7 +638,7 @@ def _solve_coil_bem_a(args):
         coil_mesh,
         source_label=args.coil_source_name,
         sink_label=args.coil_sink_name,
-        fes_order=0,
+        fes_order=coil_fes_order,
         solver=saddle,
         omega=omega,
         Z_s_complex=Z_s_coil_complex,
@@ -650,8 +661,10 @@ def _solve_coil_bem_a(args):
         f"L_coil={L_coil * 1e9:.3f} nH, R_coil(SIBC)={R_coil * 1e3:.4f} mΩ "
         f"residual={residual:.2e} ({t_solve:.1f}s)")
     progress("BEMA",
-        f"coil DoF: n_J={coil_n_J} (HDivSurface RT0), n_f={coil_n_f} "
-        f"(SurfaceL2 P0), saddle_ndof={coil_saddle_ndof} "
+        f"coil DoF: n_J={coil_n_J} (HDivSurface RT{coil_fes_order}, "
+        f"compressed to the boundary), n_f={coil_n_f} "
+        f"(SurfaceL2 P{max(0, coil_fes_order - 1)}), "
+        f"saddle_ndof={coil_saddle_ndof} "
         f"on {len(coil_tris)} triangles / {coil_mesh.nv} vertices")
 
     # Per-triangle COMPLEX J_s vectors at centroids (workpiece bridge
@@ -678,6 +691,8 @@ def _solve_coil_bem_a(args):
         "coil_n_J": coil_n_J,
         "coil_n_f": coil_n_f,
         "coil_saddle_ndof": coil_saddle_ndof,
+        "coil_fes_order": coil_fes_order,
+        "coil_vol_curve_order": int(coil_vol_curve_order),
         "bem_a_residual": residual,
         "t_coil_topology_s": t_mesh,
         "t_coil_solve_s": t_solve,
@@ -2728,7 +2743,7 @@ def build_argparser():
                              "exact vs LU, dense SL matvec -- the recommended "
                              "large-N solver), hacapk_cocr (the same COCR "
                              "with the HACApKBEMManager-compressed O(N log N) "
-                             "SL matvec, accuracy ~3e-7, RT0 only; identical "
+                             "SL matvec, accuracy ~3e-7, any --coil-fes-order; identical "
                              "R/L), gmres (complex-capable Krylov -- "
                              "unpreconditioned, stalls on large saddles), "
                              "minres (REAL symmetric Krylov -- VALID ONLY for "
@@ -2737,6 +2752,16 @@ def build_argparser():
                              "returns a wrong solution on the complex-"
                              "symmetric AC saddle, so it is rejected there). "
                              "Defaults to auto.")
+    parser.add_argument("--coil-fes-order", type=int, default=0,
+                        help="HDivSurface polynomial order of the BEM-A coil "
+                             "current (bem-a).  0 = RT0/RWG, the historical "
+                             "default; 1 or 2 add edge/face DOFs so the "
+                             "surface current can p-converge on strongly "
+                             "curved conductors (a rounded fin tip at RT0 "
+                             "under-resolves its current crowding no matter "
+                             "how small --maxh is, because the tip element "
+                             "size is set by its own curvature).  Any "
+                             "--coil-saddle-solver accepts it.")
     # NOTE (2026-07-02): the --bema-impedance-efie flag was REMOVED --
     # BEM-A is unified on the impedance-EFIE (Zs inside the saddle,
     # J = finite-impedance current).  The legacy post-hoc PEC integral

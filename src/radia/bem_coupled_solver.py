@@ -235,7 +235,7 @@ class CoupledBEMSolver:
                  coil_hacapk=False, coil_aca_eps=1e-8, coil_hacapk_leaf=64,
                  coil_hacapk_eta=2.0):
         from ngsolve import (HDivSurface, SurfaceL2, BilinearForm, LinearForm,
-                             ds, BND, div)
+                             ds, BND, div, Compress)
         from ngsolve.bem import LaplaceSL
         from radia.bem_sibc_solver import (ScalarBIESIBCSolver,
                                            SurfacePoissonPhiInc)
@@ -246,7 +246,10 @@ class CoupledBEMSolver:
 
         # === Coil EFIE setup (real saddle point factorization) ===
         t0 = time.perf_counter()
-        fes_J = HDivSurface(mesh_coil, order=fes_order)
+        # Compress: the coil mesh is usually the volume .vol whose boundary is
+        # the conductor, and HDivSurface on it carries unused interior-edge
+        # DOFs (same reasoning as compute_inductance_source_sink).
+        fes_J = Compress(HDivSurface(mesh_coil, order=fes_order))
         fes_L2 = SurfaceL2(mesh_coil, order=max(0, fes_order - 1))
         self.fes_J = fes_J
         self.n_J = fes_J.ndof
@@ -307,12 +310,11 @@ class CoupledBEMSolver:
         self.coil_hacapk = bool(coil_hacapk)
         if self.coil_hacapk:
             from radia.bem.coil_inductance_ngsolve import (
-                _LoopReducedSaddle, _edge_midpoint_coords)
-            if fes_order != 0:
-                raise ValueError(
-                    "coil_hacapk requires fes_order==0 (RT0) for the "
-                    "edge-midpoint HACApK cluster tree.")
-            coords = _edge_midpoint_coords(mesh_coil, self.n_J)
+                _LoopReducedSaddle, _dof_cluster_coords)
+            # Any fes_order: one cluster point per DOF (edge midpoints for
+            # edge DOFs, centroids for face DOFs), attributed through the
+            # boundary elements.  Replaces the RT0-only edge-midpoint tree.
+            coords = _dof_cluster_coords(mesh_coil, fes_J)
             self._coil_loop = _LoopReducedSaddle(
                 self.SL_coil, None, D_red, g_red, 0.0, None, "hacapk",
                 coords=coords, hacapk_aca_eps=float(coil_aca_eps),

@@ -12,10 +12,17 @@ gained extra null modes that the D[:-1, :] deflation could not
 remove, and scipy.linalg.solve raised "A singular matrix detected:
 slice(s) [0] are singular."
 
-Fix: _build_bema_coil_mesh extracts a surface-only mesh via
+Fix (2026-05-12): _build_bema_coil_mesh extracted a surface-only mesh via
 _extract_surface_mesh_filtered before returning, restoring the
 pure-surface assumption that compute_inductance_source_sink was
 designed for.
+
+Superseded (2026-09-21): the extraction is gone.  compute_inductance_source_sink
+wraps HDivSurface in ngsolve.Compress, which removes the unused interior-edge
+DOFs that produced the null modes, so the volume mesh is consumed directly and
+its export-time curving order reaches the solve (the extraction had discarded
+it).  This test now guards that route: a volume .vol through _solve_coil_bem_a
+must still give the PEEC-band inductance with no singular saddle.
 
 Reference values (gapped torus R_major=30 mm, r_minor=3 mm, gap=5 deg):
   * PEEC golden hard band: [80, 92] nH (from
@@ -113,8 +120,9 @@ def test_bem_a_inductance_from_volume_vol(gapped_torus_vol):
     lo, hi = PEEC_BAND_NH
     assert lo <= L_nH <= hi, (
         f"BEM-A on volume .vol: L = {L_nH:.3f} nH outside PEEC band "
-        f"[{lo}, {hi}].  Regression: did _build_bema_coil_mesh stop "
-        f"calling _extract_surface_mesh_filtered?")
+        f"[{lo}, {hi}].  Regression: did compute_inductance_source_sink "
+        f"stop wrapping HDivSurface in Compress (interior-edge null modes "
+        f"back in the saddle)?")
     # Residual at machine precision after dense LU.
     res = float(coil_data["bem_a_residual"])
     assert res < 1e-10, f"div(J) residual too large: {res:.3e}"

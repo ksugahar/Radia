@@ -1,4 +1,5 @@
-"""Coil self-inductance via ngsolve.bem LaplaceSL on HDivSurface RT₀.
+"""Coil self-inductance via ngsolve.bem LaplaceSL on HDivSurface (RT₀ by
+default; any ``fes_order`` since 2026-09-21, including under ``hacapk_cocr``).
 
 Production replacement for the intree (Python) BEM-A path retired
 2026-05-03 after benchmarking showed ngsolve.bem was 50-60x faster
@@ -185,7 +186,11 @@ def _cocr(matvec, b, tol=_LOOP_COCR_TOL, maxiter=_LOOP_COCR_MAXITER):
 def _edge_midpoint_coords(mesh, n_J):
     """Edge-midpoint coordinates for the HACApK cluster tree, aligned with the
     RT0 HDivSurface DOF numbering (DOF i == edge.nr i, verified for order-0
-    HDivSurface).  Only valid for fes_order == 0; raises otherwise."""
+    HDivSurface).  Only valid for fes_order == 0; raises otherwise.
+
+    Kept for the order-0 surface-mesh case and as the reference that
+    :func:`_dof_cluster_coords` must reproduce exactly there.  New code should
+    call ``_dof_cluster_coords``, which is order- and mesh-kind-independent."""
     coords = np.zeros((n_J, 3))
     n_edges = 0
     for e in mesh.edges:
@@ -197,6 +202,62 @@ def _edge_midpoint_coords(mesh, n_J):
             f"HACApK loop matvec needs fes_order==0 (RT0): got {n_edges} "
             f"edges but n_J={n_J}.  Use solver='cocr' (dense matvec) for "
             "higher order.")
+    return coords
+
+
+def _dof_cluster_coords(mesh, fes):
+    """One cluster-tree point per HDivSurface DOF, for any ``fes_order`` and
+    for either a surface mesh or the boundary of a volume mesh.
+
+    The H-matrix builder only needs a geometric location per SL row/column
+    to cluster on; it does not care what the basis function is.  DOFs are
+    attributed by multiplicity over the boundary elements: a DOF that two
+    elements share belongs to their common edge and sits at its midpoint,
+    a DOF seen in one element only is a face DOF and sits at the centroid.
+    ``fes.GetDofNrs(NodeId(EDGE, .))`` is empty on a surface mesh, which is
+    why the attribution goes through the elements.
+
+    At order 0 this reproduces :func:`_edge_midpoint_coords` exactly (checked
+    to 0.0 on the beak-fin surface).  Every DOF must be attributed: an
+    unassigned row means the space carries DOFs that no boundary element
+    owns -- an uncompressed ``HDivSurface`` on a volume mesh does that for
+    its interior edges -- and the caller has to ``Compress`` the space first.
+    """
+    from collections import defaultdict
+    from ngsolve import BND
+
+    owners = defaultdict(list)
+    for el in mesh.Elements(BND):
+        verts = tuple(int(v.nr) for v in el.vertices)
+        for dof in fes.GetDofNrs(el):
+            if dof >= 0:
+                owners[int(dof)].append(verts)
+    pts = np.asarray([mesh.vertices[i].point for i in range(mesh.nv)])
+    coords = np.full((fes.ndof, 3), np.nan)
+    for dof, elems in owners.items():
+        if len(elems) == 2:
+            shared = sorted(set(elems[0]) & set(elems[1]))
+            if len(shared) != 2:
+                raise ValueError(
+                    f"HDivSurface DOF {dof} is shared by two boundary "
+                    f"elements with {len(shared)} common vertices; expected "
+                    "an edge (2).  The boundary mesh is not a manifold "
+                    "triangulation.")
+            coords[dof] = 0.5 * (pts[shared[0]] + pts[shared[1]])
+        elif len(elems) == 1:
+            coords[dof] = pts[list(elems[0])].mean(axis=0)
+        else:
+            raise ValueError(
+                f"HDivSurface DOF {dof} is owned by {len(elems)} boundary "
+                "elements; a closed manifold surface allows 1 (face) or 2 "
+                "(edge).")
+    missing = int(np.isnan(coords).any(axis=1).sum())
+    if missing:
+        raise ValueError(
+            f"{missing} of {fes.ndof} HDivSurface DOFs belong to no boundary "
+            "element (interior-edge DOFs of an uncompressed space on a "
+            "volume mesh).  Wrap the space in ngsolve.Compress before "
+            "building the HACApK cluster tree.")
     return coords
 
 
@@ -233,8 +294,9 @@ class _LoopReducedSaddle:
 
     ``matvec_backend``: ``"dense"`` (``SL @ v``, reuses the already-assembled
     dense SL) or ``"hacapk"`` (compress SL to an O(N log N) H-matrix via
-    ``HACApKBEMManager``, the ``bem_sibc_solver`` pattern; fes_order==0 only,
-    needs ``coords``).  HACApK MatVec accuracy is ~3e-7 (>> the FMM backend's
+    ``HACApKBEMManager``, the ``bem_sibc_solver`` pattern; any fes_order,
+    one cluster point per DOF from ``_dof_cluster_coords``; needs
+    ``coords``).  HACApK MatVec accuracy is ~3e-7 (>> the FMM backend's
     ~1e-3), so it preserves the accuracy-sensitive R.
     """
 
@@ -524,13 +586,17 @@ def compute_inductance_source_sink(
     ``omega=0`` (frequency=0), not a fallback.
 
     Args:
-        mesh: NGSolve Mesh -- must be a PURE SURFACE mesh (no volume
-            elements).  A volume mesh's internal tets add saddle null
-            modes the D[:-1,:] deflation cannot remove and the LU
-            reports a singular matrix; extract the boundary first, as
-            the panel does via
-            ``surface_mesh_extract._extract_surface_mesh_filtered``
-            (see validation_test/bem/test_coil_bem_a_volume_vol.py).
+        mesh: NGSolve Mesh -- either a surface mesh or a volume mesh whose
+            boundary is the conductor.  The space is wrapped in
+            ``Compress``, which removes the interior-edge DOFs a volume
+            mesh would otherwise carry (their null modes made the dense
+            saddle singular before 2026-09-21, when the panel worked
+            around it by extracting a flat surface; that also discarded
+            the mesh's curving order).  Passing the volume mesh keeps
+            ``mesh.Curve(p)`` / the .vol export order effective; on the
+            beak-fin fixture the geometry order moved R by 0.067%, the
+            basis order by 1.69% -- see
+            validation_test/induction_heating/FIN_PEEC_IMPLEMENTATION_2026-09-19.md.
         source_label, sink_label: BND labels for current injection /
             extraction faces.  Set in the OCC face.name = "source"/"sink"
             BEFORE meshing, or rely on the panel's smallest-2-PLANE
@@ -548,9 +614,11 @@ def compute_inductance_source_sink(
               matvec.  The recommended solver for medium/large coils.
             - "hacapk_cocr": the same COCR, but the SL matvec is an
               O(N log N) ``HACApKBEMManager``-compressed H-matrix (the
-              ``bem_sibc_solver`` pattern; MatVec accuracy ~3e-7, fes_order==0
-              only).  Identical R/L to "cocr"; cuts the per-iteration matvec
-              cost on larger meshes.
+              ``bem_sibc_solver`` pattern; MatVec accuracy ~3e-7).  Any
+              fes_order: the cluster tree takes one point per DOF from
+              ``_dof_cluster_coords`` (edge DOFs at edge midpoints, face
+              DOFs at centroids).  Identical R/L to "cocr"; cuts the
+              per-iteration matvec cost on larger meshes.
             - "gmres": scipy GMRES on the dense saddle (unpreconditioned --
               stalls on large saddles, kept for comparison).
             - "minres" is accepted only for the ``omega == 0`` real solve:
@@ -578,7 +646,7 @@ def compute_inductance_source_sink(
         ``t_assembly``, ``t_solve``, ``t_total`` : timings [s]
     """
     from ngsolve import (HDivSurface, SurfaceL2, TaskManager, ds, BND,
-                         BilinearForm, LinearForm, div, GridFunction)
+                         BilinearForm, LinearForm, div, GridFunction, Compress)
     from ngsolve.bem import LaplaceSL
 
     # Optional progress log (default no-op).
@@ -608,14 +676,19 @@ def compute_inductance_source_sink(
 
     t_start = time.perf_counter()
 
-    fes_J = HDivSurface(mesh, order=fes_order)
+    # ``mesh`` may be a surface mesh or a (possibly curved) volume mesh whose
+    # boundary is the conductor.  On a volume mesh HDivSurface allocates a DOF
+    # for every mesh edge, interior ones included, and leaves the interior
+    # ones unused; Compress removes them so n_J is the boundary count either
+    # way (6816 both ways on the beak-fin fixture at RT0, against 14408
+    # uncompressed).  It also lets the curved boundary reach the solve, which
+    # a flat extracted surface cannot: Curve() needs the CAD to project onto.
+    fes_J = Compress(HDivSurface(mesh, order=fes_order))
     fes_L2 = SurfaceL2(mesh, order=max(0, fes_order - 1))
     n_J = fes_J.ndof
     n_f = fes_L2.ndof
-    if solver == "hacapk_cocr" and fes_order != 0:
-        raise ValueError(
-            "solver='hacapk_cocr' currently requires fes_order==0 (RT0); "
-            "use solver='cocr' (dense matvec) for higher-order HDivSurface.")
+    # hacapk_cocr is no longer RT0-only: the cluster tree takes one point per
+    # DOF from _dof_cluster_coords, which handles any order.
     _log("BEMA",
         f"FES built: n_J={n_J} (HDivSurface RT{fes_order}), "
         f"n_f={n_f} (SurfaceL2 P{max(0,fes_order-1)})")
@@ -696,7 +769,7 @@ def compute_inductance_source_sink(
             # subspace and solve the complex-symmetric Pi A11 Pi with COCR
             # (~24 mesh-independent iters) instead of the O(N^3) dense LU.
             mv = "hacapk" if solver == "hacapk_cocr" else "dense"
-            coords = (_edge_midpoint_coords(mesh, n_J)
+            coords = (_dof_cluster_coords(mesh, fes_J)
                       if mv == "hacapk" else None)
             _log("BEMA",
                 f"impedance-EFIE {solver} solve (div-free reduction, "
@@ -749,7 +822,7 @@ def compute_inductance_source_sink(
         #     function.) ---
         if solver in ("cocr", "hacapk_cocr"):
             mv = "hacapk" if solver == "hacapk_cocr" else "dense"
-            coords = (_edge_midpoint_coords(mesh, n_J)
+            coords = (_dof_cluster_coords(mesh, fes_J)
                       if mv == "hacapk" else None)
             _log("BEMA",
                 f"DC vacuum-L {solver} solve (div-free reduction, "

@@ -202,10 +202,12 @@ def test_impedance_efie_wire_bessel():
     from surface_mesh_extract import _extract_surface_mesh_filtered
     with TaskManager():
         mesh = Mesh(OCCGeometry(cyl).GenerateMesh(maxh=1.5e-3))
-        # compute_inductance_source_sink assumes a PURE SURFACE mesh
-        # (volume tets add saddle null modes the D[:-1,:] deflation
-        # cannot remove -> singular LU; same pathology the panel fixed
-        # in _build_bema_coil_mesh, see test_coil_bem_a_volume_vol.py).
+        # Since 2026-09-21 compute_inductance_source_sink also accepts the
+        # volume mesh (it compresses away the interior-edge DOFs whose null
+        # modes made the saddle singular).  This test keeps the extracted
+        # surface so its captured Bessel calibration is compared on the
+        # same discretisation it was recorded on; the volume route is
+        # covered by test_coil_bem_a_higher_order.py.
         mesh = _extract_surface_mesh_filtered(mesh, keep_label="")
         res = compute_inductance_source_sink(
             mesh, "source", "sink",
