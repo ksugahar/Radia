@@ -27,30 +27,30 @@ from radia_mcp.radia_ngsolve.slot_gates import (
     dq_to_three_phase_currents,
     drive_cycle_weighted_efficiency_gate,
     double_layer_winding_pitch_harmonic_gate,
-    femm_air_gap_sample_solver_ready_manifest_gate,
-    femm_block_label_source_contract_gate,
-    femm_group_motion_selection_gate,
-    femm_motor_model_artifact_package_gate,
-    femm_pm_magnetization_convention_gate,
-    femm_source_current_solver_ready_manifest_gate,
-    femm_static_current_circuit_rows_gate,
-    femm_winding_current_package_gate,
+    magnetostatic_2d_air_gap_sample_solver_ready_manifest_gate,
+    magnetostatic_2d_block_label_source_contract_gate,
+    magnetostatic_2d_group_motion_selection_gate,
+    magnetostatic_2d_motor_model_artifact_package_gate,
+    magnetostatic_2d_pm_magnetization_convention_gate,
+    magnetostatic_2d_source_current_solver_ready_manifest_gate,
+    magnetostatic_2d_static_current_circuit_rows_gate,
+    magnetostatic_2d_winding_current_package_gate,
     farfield_lobe_notebook_handoff_gate,
     farfield_pattern_metadata_gate,
     flux_linkage_back_emf_derivative_gate,
     geometric_integrator_energy_drift_gate,
-    jmag_angle_alignment_contract_gate,
-    jmag_current_torque_solver_ready_manifest_gate,
-    jmag_export_case_package_gate,
-    jmag_efficiency_operating_point_package_gate,
-    jmag_force_table_metadata_gate,
-    jmag_airgap_flux_sample_metadata_gate,
-    jmag_airgap_torque_integration_package_gate,
-    jmag_pm_short_circuit_fault_table_gate,
+    motor_fem_angle_alignment_contract_gate,
+    motor_fem_current_torque_solver_ready_manifest_gate,
+    motor_fem_export_case_package_gate,
+    motor_fem_efficiency_operating_point_package_gate,
+    motor_fem_force_table_metadata_gate,
+    motor_fem_airgap_flux_sample_metadata_gate,
+    motor_fem_airgap_torque_integration_package_gate,
+    motor_fem_pm_short_circuit_fault_table_gate,
     ipm_saliency_torque_component_gate,
     inverter_dc_bus_voltage_limit_gate,
-    jmag_motor_table_column_metadata_gate,
-    jmag_symmetry_sweep_coverage_gate,
+    motor_fem_table_column_metadata_gate,
+    motor_fem_symmetry_sweep_coverage_gate,
     licensed_solver_agentic_profile_gate,
     mcp_artifact_access_behavior_gate,
     lcurve_corner_choice,
@@ -3559,7 +3559,7 @@ def test_owned_solver_model_tag_lifecycle_gate_requires_owned_cleanup_before_reu
     artifact = {
         "connected": True,
         "status": "already-connected",
-        "artifact_id": "comsol_slot233_model_tag_identity",
+        "artifact_id": "multiphysics_slot233_model_tag_identity",
         "model_tag": "cc_slot233_tag_identity_20260630_203333",
         "owned_model_tag_prefix": "cc_slot233_",
         "model_tag_owner": "codex_slot233",
@@ -3578,7 +3578,7 @@ def test_owned_solver_model_tag_lifecycle_gate_requires_owned_cleanup_before_reu
 
     gate = owned_solver_model_tag_lifecycle_gate(
         artifact,
-        expected_artifact_id="comsol_slot233_model_tag_identity",
+        expected_artifact_id="multiphysics_slot233_model_tag_identity",
         expected_model_tag_prefix="cc_slot233_",
         expected_model_tag_owner="codex_slot233",
     )
@@ -3630,18 +3630,18 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
         "source": "COMSOL",
         "dataset": "dset1",
         "solution_tag": "sol1",
-        "solution_artifact_id": "comsol_slot353_solution_data_sol1_v1",
-        "solution_digest": "sha256:comsol_slot353_solution_data_sol1_v1",
+        "solution_artifact_id": "multiphysics_slot353_solution_data_sol1_v1",
+        "solution_digest": "sha256:multiphysics_slot353_solution_data_sol1_v1",
         "sweep_axis_id": "freq_grid_slot361_v1",
         "sweep_axis_digest": "sha256:freq_grid_slot361_v1",
         "sweep_axis_row_count": 4,
-        "parameter_set_artifact_id": "comsol_slot389_parameter_set_v1",
+        "parameter_set_artifact_id": "multiphysics_slot389_parameter_set_v1",
         "parameter_set_digest": "sha256:comsol-slot389-parameter-set-v1",
         "parameter_set_path": "validation/comsol/slot389_parameter_set.json",
-        "objective_observable_id": "comsol_slot389_impedance_absorption_objective_v1",
+        "objective_observable_id": "multiphysics_slot389_impedance_absorption_objective_v1",
         "objective_observable_family": "impedance_absorption_objective",
-        "solver_configuration_artifact_id": "comsol_slot368_solver_config_sol1_v1",
-        "solver_configuration_digest": "sha256:comsol_slot368_solver_config_sol1_v1",
+        "solver_configuration_artifact_id": "multiphysics_slot368_solver_config_sol1_v1",
+        "solver_configuration_digest": "sha256:multiphysics_slot368_solver_config_sol1_v1",
         "solver_sequence_tag": "sol1",
         "linear_solver": "direct_pardiso",
         "relative_tolerance": 1.0e-6,
@@ -3652,7 +3652,7 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
         "entity_dimensions": ["boundary"],
         "expressions": ["freq", "intop_bnd(acpr.p_t)", "acpr.Q_tot"],
         "operator_tags": ["intop_bnd"],
-        "result_table_schema_id": "comsol_mphtable_probe_impedance_sweep_v1",
+        "result_table_schema_id": "multiphysics_mphtable_probe_impedance_sweep_v1",
         "result_output_artifact_id": "tbl_probe_impedance_output_v1",
         "result_output_digest": "sha256:tbl_probe_impedance_output_v1",
         "result_output_path": "tbl_probe_impedance_output.json",
@@ -3661,16 +3661,16 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
         "result_row_convention": "frequency_sweep_one_boundary_selection_per_row",
         "result_normalization_basis": "absorption_normalized_by_incident_power",
         "result_evaluation_method": "mphtable_after_dataset_bound_derived_value",
-        "physics_convention_schema_id": "comsol_acoustic_impedance_derived_value_convention_v1",
+        "physics_convention_schema_id": "multiphysics_acoustic_impedance_derived_value_convention_v1",
         "result_postprocess_row_convention_schema_id": (
-            "comsol_mphtable_boundary_absorption_postprocess_row_v1"
+            "multiphysics_mphtable_boundary_absorption_postprocess_row_v1"
         ),
         "result_component_basis_schema_id": (
-            "comsol_mphtable_probe_impedance_component_basis_v1"
+            "multiphysics_mphtable_probe_impedance_component_basis_v1"
         ),
-        "result_artifact_id": "comsol_slot345_result_table_package_v1",
+        "result_artifact_id": "multiphysics_slot345_result_table_package_v1",
         "run_started_at": "2026-07-01T14:00:00+09:00",
-        "comsol_version": "COMSOL 6.4.0.378",
+        "multiphysics_version": "COMSOL 6.4.0.378",
         "timing_breakdown_s": {
             "attach_livelink_s": 0.05,
             "model_build_s": 0.20,
@@ -3678,29 +3678,29 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
             "table_eval_s": 0.04,
         },
         "execution": {
-            "resultArtifactId": "comsol_slot345_result_table_package_v1",
-            "solutionArtifactId": "comsol_slot353_solution_data_sol1_v1",
-            "solutionDigest": "sha256:comsol_slot353_solution_data_sol1_v1",
+            "resultArtifactId": "multiphysics_slot345_result_table_package_v1",
+            "solutionArtifactId": "multiphysics_slot353_solution_data_sol1_v1",
+            "solutionDigest": "sha256:multiphysics_slot353_solution_data_sol1_v1",
             "sweepAxisId": "freq_grid_slot361_v1",
             "sweepAxisDigest": "sha256:freq_grid_slot361_v1",
             "sweepAxisRowCount": 4,
-            "parameterSetArtifactId": "comsol_slot389_parameter_set_v1",
+            "parameterSetArtifactId": "multiphysics_slot389_parameter_set_v1",
             "parameterSetDigest": "sha256:comsol-slot389-parameter-set-v1",
             "parameterSetPath": "validation/comsol/slot389_parameter_set.json",
-            "objectiveObservableId": "comsol_slot389_impedance_absorption_objective_v1",
+            "objectiveObservableId": "multiphysics_slot389_impedance_absorption_objective_v1",
             "objectiveObservableFamily": "impedance_absorption_objective",
-            "solverConfigurationArtifactId": "comsol_slot368_solver_config_sol1_v1",
-            "solverConfigurationDigest": "sha256:comsol_slot368_solver_config_sol1_v1",
+            "solverConfigurationArtifactId": "multiphysics_slot368_solver_config_sol1_v1",
+            "solverConfigurationDigest": "sha256:multiphysics_slot368_solver_config_sol1_v1",
             "solverSequenceTag": "sol1",
             "linearSolver": "direct_pardiso",
             "relativeTolerance": 1.0e-6,
-            "resultTableSchemaId": "comsol_mphtable_probe_impedance_sweep_v1",
-            "physicsConventionSchemaId": "comsol_acoustic_impedance_derived_value_convention_v1",
+            "resultTableSchemaId": "multiphysics_mphtable_probe_impedance_sweep_v1",
+            "physicsConventionSchemaId": "multiphysics_acoustic_impedance_derived_value_convention_v1",
             "resultPostprocessRowConventionSchemaId": (
-                "comsol_mphtable_boundary_absorption_postprocess_row_v1"
+                "multiphysics_mphtable_boundary_absorption_postprocess_row_v1"
             ),
             "resultComponentBasisSchemaId": (
-                "comsol_mphtable_probe_impedance_component_basis_v1"
+                "multiphysics_mphtable_probe_impedance_component_basis_v1"
             ),
             "runStartedAt": "2026-07-01T14:00:00+09:00",
             "comsolVersion": "COMSOL 6.4.0.378",
@@ -3712,10 +3712,10 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
             },
         },
         "optimization": {
-            "parameterSetArtifactId": "comsol_slot389_parameter_set_v1",
+            "parameterSetArtifactId": "multiphysics_slot389_parameter_set_v1",
             "parameterSetDigest": "sha256:comsol-slot389-parameter-set-v1",
             "parameterSetPath": "validation/comsol/slot389_parameter_set.json",
-            "objectiveObservableId": "comsol_slot389_impedance_absorption_objective_v1",
+            "objectiveObservableId": "multiphysics_slot389_impedance_absorption_objective_v1",
             "objectiveObservableFamily": "impedance_absorption_objective",
         },
         "columns": ["freq_Hz", "Z11_ohm", "absorption"],
@@ -3731,18 +3731,18 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
         expected_source="COMSOL",
         expected_dataset_id="dset1",
         expected_solution_tag="sol1",
-        expected_solution_artifact_id="comsol_slot353_solution_data_sol1_v1",
-        expected_solution_digest="sha256:comsol_slot353_solution_data_sol1_v1",
+        expected_solution_artifact_id="multiphysics_slot353_solution_data_sol1_v1",
+        expected_solution_digest="sha256:multiphysics_slot353_solution_data_sol1_v1",
         expected_sweep_axis_id="freq_grid_slot361_v1",
         expected_sweep_axis_digest="sha256:freq_grid_slot361_v1",
         expected_sweep_axis_row_count=4,
-        expected_parameter_set_artifact_id="comsol_slot389_parameter_set_v1",
+        expected_parameter_set_artifact_id="multiphysics_slot389_parameter_set_v1",
         expected_parameter_set_digest="sha256:comsol-slot389-parameter-set-v1",
         expected_parameter_set_path="validation/comsol/slot389_parameter_set.json",
-        expected_objective_observable_id="comsol_slot389_impedance_absorption_objective_v1",
+        expected_objective_observable_id="multiphysics_slot389_impedance_absorption_objective_v1",
         expected_objective_observable_family="impedance_absorption_objective",
-        expected_solver_configuration_artifact_id="comsol_slot368_solver_config_sol1_v1",
-        expected_solver_configuration_digest="sha256:comsol_slot368_solver_config_sol1_v1",
+        expected_solver_configuration_artifact_id="multiphysics_slot368_solver_config_sol1_v1",
+        expected_solver_configuration_digest="sha256:multiphysics_slot368_solver_config_sol1_v1",
         expected_solver_sequence_tag="sol1",
         expected_linear_solver="direct_pardiso",
         expected_relative_tolerance=1.0e-6,
@@ -3753,7 +3753,7 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
         expected_entity_dimensions=("boundary",),
         expected_expressions=("intop_bnd(acpr.p_t)", "acpr.Q_tot"),
         expected_operator_tags=("intop_bnd",),
-        expected_result_table_schema_id="comsol_mphtable_probe_impedance_sweep_v1",
+        expected_result_table_schema_id="multiphysics_mphtable_probe_impedance_sweep_v1",
         expected_result_output_artifact_id="tbl_probe_impedance_output_v1",
         expected_result_output_digest="sha256:tbl_probe_impedance_output_v1",
         expected_result_observable_id="tbl_probe_impedance_boundary_absorption_v1",
@@ -3761,15 +3761,15 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
         expected_result_row_convention="frequency_sweep_one_boundary_selection_per_row",
         expected_result_normalization_basis="absorption_normalized_by_incident_power",
         expected_result_evaluation_method="mphtable_after_dataset_bound_derived_value",
-        expected_physics_convention_schema_id="comsol_acoustic_impedance_derived_value_convention_v1",
+        expected_physics_convention_schema_id="multiphysics_acoustic_impedance_derived_value_convention_v1",
         expected_result_postprocess_row_convention_schema_id=(
-            "comsol_mphtable_boundary_absorption_postprocess_row_v1"
+            "multiphysics_mphtable_boundary_absorption_postprocess_row_v1"
         ),
         expected_result_component_basis_schema_id=(
-            "comsol_mphtable_probe_impedance_component_basis_v1"
+            "multiphysics_mphtable_probe_impedance_component_basis_v1"
         ),
-        expected_result_artifact_id="comsol_slot345_result_table_package_v1",
-        expected_comsol_version="COMSOL 6.4.0.378",
+        expected_result_artifact_id="multiphysics_slot345_result_table_package_v1",
+        expected_multiphysics_version="COMSOL 6.4.0.378",
         require_solver_configuration=True,
         require_parameter_set_artifact=True,
         require_result_provenance=True,
@@ -3881,25 +3881,25 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
     assert gate["checks"]["expected_result_artifact_id_matches"] is True
     assert gate["checks"]["run_started_at_recorded_when_required"] is True
     assert gate["checks"]["run_started_at_parseable_when_present"] is True
-    assert gate["checks"]["comsol_version_recorded_when_required"] is True
-    assert gate["checks"]["expected_comsol_version_matches"] is True
+    assert gate["checks"]["multiphysics_version_recorded_when_required"] is True
+    assert gate["checks"]["expected_multiphysics_version_matches"] is True
     assert gate["checks"]["timing_breakdown_recorded_when_required"] is True
     assert gate["checks"]["timing_breakdown_has_at_least_four_items"] is True
     assert gate["checks"]["timing_breakdown_values_finite_nonnegative"] is True
     assert gate["dataset_id"] == "dset1"
     assert gate["solution_tag"] == "sol1"
-    assert gate["solution_artifact_id"] == "comsol_slot353_solution_data_sol1_v1"
-    assert gate["solution_digest"] == "sha256:comsol_slot353_solution_data_sol1_v1"
+    assert gate["solution_artifact_id"] == "multiphysics_slot353_solution_data_sol1_v1"
+    assert gate["solution_digest"] == "sha256:multiphysics_slot353_solution_data_sol1_v1"
     assert gate["sweep_axis_id"] == "freq_grid_slot361_v1"
     assert gate["sweep_axis_digest"] == "sha256:freq_grid_slot361_v1"
     assert gate["sweep_axis_row_count"] == 4
-    assert gate["parameter_set_artifact_id"] == "comsol_slot389_parameter_set_v1"
+    assert gate["parameter_set_artifact_id"] == "multiphysics_slot389_parameter_set_v1"
     assert gate["parameter_set_digest"] == "sha256:comsol-slot389-parameter-set-v1"
     assert gate["parameter_set_path"] == "validation/comsol/slot389_parameter_set.json"
-    assert gate["objective_observable_id"] == "comsol_slot389_impedance_absorption_objective_v1"
+    assert gate["objective_observable_id"] == "multiphysics_slot389_impedance_absorption_objective_v1"
     assert gate["objective_observable_family"] == "impedance_absorption_objective"
-    assert gate["solver_configuration_artifact_id"] == "comsol_slot368_solver_config_sol1_v1"
-    assert gate["solver_configuration_digest"] == "sha256:comsol_slot368_solver_config_sol1_v1"
+    assert gate["solver_configuration_artifact_id"] == "multiphysics_slot368_solver_config_sol1_v1"
+    assert gate["solver_configuration_digest"] == "sha256:multiphysics_slot368_solver_config_sol1_v1"
     assert gate["solver_sequence_tag"] == "sol1"
     assert gate["linear_solver"] == "direct_pardiso"
     assert gate["relative_tolerance"] == pytest.approx(1.0e-6)
@@ -3910,21 +3910,21 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
     assert gate["entity_dimensions"] == ["boundary"]
     assert gate["expressions"] == ["freq", "intop_bnd(acpr.p_t)", "acpr.Q_tot"]
     assert gate["operator_tags"] == ["intop_bnd"]
-    assert gate["result_table_schema_id"] == "comsol_mphtable_probe_impedance_sweep_v1"
-    assert gate["physics_convention_schema_id"] == "comsol_acoustic_impedance_derived_value_convention_v1"
+    assert gate["result_table_schema_id"] == "multiphysics_mphtable_probe_impedance_sweep_v1"
+    assert gate["physics_convention_schema_id"] == "multiphysics_acoustic_impedance_derived_value_convention_v1"
     assert gate["require_physics_convention_schema"] is True
     assert gate["result_postprocess_row_convention_schema_id"] == (
-        "comsol_mphtable_boundary_absorption_postprocess_row_v1"
+        "multiphysics_mphtable_boundary_absorption_postprocess_row_v1"
     )
     assert gate["result_postprocess_row_convention_schema_ids"] == [
-        "comsol_mphtable_boundary_absorption_postprocess_row_v1"
+        "multiphysics_mphtable_boundary_absorption_postprocess_row_v1"
     ]
     assert gate["require_result_postprocess_row_convention_schema"] is True
     assert gate["result_component_basis_schema_id"] == (
-        "comsol_mphtable_probe_impedance_component_basis_v1"
+        "multiphysics_mphtable_probe_impedance_component_basis_v1"
     )
     assert gate["result_component_basis_schema_ids"] == [
-        "comsol_mphtable_probe_impedance_component_basis_v1"
+        "multiphysics_mphtable_probe_impedance_component_basis_v1"
     ]
     assert gate["require_result_component_basis_schema"] is True
     assert gate["result_output_artifact_id"] == "tbl_probe_impedance_output_v1"
@@ -3935,9 +3935,9 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
     assert gate["result_row_convention"] == "frequency_sweep_one_boundary_selection_per_row"
     assert gate["result_normalization_basis"] == "absorption_normalized_by_incident_power"
     assert gate["result_evaluation_method"] == "mphtable_after_dataset_bound_derived_value"
-    assert gate["result_artifact_id"] == "comsol_slot345_result_table_package_v1"
+    assert gate["result_artifact_id"] == "multiphysics_slot345_result_table_package_v1"
     assert gate["run_started_at"] == "2026-07-01T14:00:00+09:00"
-    assert gate["comsol_version"] == "COMSOL 6.4.0.378"
+    assert gate["multiphysics_version"] == "COMSOL 6.4.0.378"
     assert gate["timing_breakdown_names"] == [
         "attach_livelink_s",
         "model_build_s",
@@ -3947,15 +3947,15 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
     assert gate["timing_breakdown_seconds"]["solve_s"] == pytest.approx(0.85)
 
     stale_table_schema = dict(metadata)
-    stale_table_schema["result_table_schema_id"] = "comsol_scalar_probe_impedance_v0"
+    stale_table_schema["result_table_schema_id"] = "multiphysics_scalar_probe_impedance_v0"
     stale_table_schema["execution"] = {
         **metadata["execution"],
-        "resultTableSchemaId": "comsol_scalar_probe_impedance_v0",
+        "resultTableSchemaId": "multiphysics_scalar_probe_impedance_v0",
     }
     stale_table_schema_gate = solver_result_table_metadata_gate(
         stale_table_schema,
         required_columns=("freq_Hz", "Z11_ohm", "absorption"),
-        expected_result_table_schema_id="comsol_mphtable_probe_impedance_sweep_v1",
+        expected_result_table_schema_id="multiphysics_mphtable_probe_impedance_sweep_v1",
         expected_result_output_artifact_id="tbl_probe_impedance_output_v1",
         expected_result_output_digest="sha256:tbl_probe_impedance_output_v1",
         require_result_table_schema=True,
@@ -3989,17 +3989,17 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
 
     stale_physics_convention_schema = dict(metadata)
     stale_physics_convention_schema["physics_convention_schema_id"] = (
-        "comsol_value_only_convention_v0"
+        "multiphysics_value_only_convention_v0"
     )
     stale_physics_convention_schema["execution"] = {
         **metadata["execution"],
-        "physicsConventionSchemaId": "comsol_value_only_convention_v0",
+        "physicsConventionSchemaId": "multiphysics_value_only_convention_v0",
     }
     stale_physics_convention_schema_gate = solver_result_table_metadata_gate(
         stale_physics_convention_schema,
         required_columns=("freq_Hz", "Z11_ohm", "absorption"),
-        expected_result_table_schema_id="comsol_mphtable_probe_impedance_sweep_v1",
-        expected_physics_convention_schema_id="comsol_acoustic_impedance_derived_value_convention_v1",
+        expected_result_table_schema_id="multiphysics_mphtable_probe_impedance_sweep_v1",
+        expected_physics_convention_schema_id="multiphysics_acoustic_impedance_derived_value_convention_v1",
         require_result_table_schema=True,
         require_physics_convention_schema=True,
     )
@@ -4017,7 +4017,7 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
     missing_physics_convention_schema_gate = solver_result_table_metadata_gate(
         missing_physics_convention_schema,
         required_columns=("freq_Hz", "Z11_ohm", "absorption"),
-        expected_physics_convention_schema_id="comsol_acoustic_impedance_derived_value_convention_v1",
+        expected_physics_convention_schema_id="multiphysics_acoustic_impedance_derived_value_convention_v1",
         require_physics_convention_schema=True,
     )
     assert missing_physics_convention_schema_gate["status"] == "needs_attention"
@@ -4036,19 +4036,19 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
 
     stale_postprocess_row_convention_schema = dict(metadata)
     stale_postprocess_row_convention_schema["result_postprocess_row_convention_schema_id"] = (
-        "comsol_scalar_residual_row_v0"
+        "multiphysics_scalar_residual_row_v0"
     )
     stale_postprocess_row_convention_schema["execution"] = {
         **metadata["execution"],
-        "resultPostprocessRowConventionSchemaId": "comsol_scalar_residual_row_v0",
+        "resultPostprocessRowConventionSchemaId": "multiphysics_scalar_residual_row_v0",
     }
     stale_postprocess_row_convention_schema_gate = solver_result_table_metadata_gate(
         stale_postprocess_row_convention_schema,
         required_columns=("freq_Hz", "Z11_ohm", "absorption"),
-        expected_result_table_schema_id="comsol_mphtable_probe_impedance_sweep_v1",
-        expected_physics_convention_schema_id="comsol_acoustic_impedance_derived_value_convention_v1",
+        expected_result_table_schema_id="multiphysics_mphtable_probe_impedance_sweep_v1",
+        expected_physics_convention_schema_id="multiphysics_acoustic_impedance_derived_value_convention_v1",
         expected_result_postprocess_row_convention_schema_id=(
-            "comsol_mphtable_boundary_absorption_postprocess_row_v1"
+            "multiphysics_mphtable_boundary_absorption_postprocess_row_v1"
         ),
         require_result_table_schema=True,
         require_physics_convention_schema=True,
@@ -4078,7 +4078,7 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
         missing_postprocess_row_convention_schema,
         required_columns=("freq_Hz", "Z11_ohm", "absorption"),
         expected_result_postprocess_row_convention_schema_id=(
-            "comsol_mphtable_boundary_absorption_postprocess_row_v1"
+            "multiphysics_mphtable_boundary_absorption_postprocess_row_v1"
         ),
         require_result_postprocess_row_convention_schema=True,
     )
@@ -4098,22 +4098,22 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
 
     stale_component_basis_schema = dict(metadata)
     stale_component_basis_schema["result_component_basis_schema_id"] = (
-        "comsol_mphtable_probe_impedance_abs_phase_v0"
+        "multiphysics_mphtable_probe_impedance_abs_phase_v0"
     )
     stale_component_basis_schema["execution"] = {
         **metadata["execution"],
-        "resultComponentBasisSchemaId": "comsol_mphtable_probe_impedance_abs_phase_v0",
+        "resultComponentBasisSchemaId": "multiphysics_mphtable_probe_impedance_abs_phase_v0",
     }
     stale_component_basis_schema_gate = solver_result_table_metadata_gate(
         stale_component_basis_schema,
         required_columns=("freq_Hz", "Z11_ohm", "absorption"),
-        expected_result_table_schema_id="comsol_mphtable_probe_impedance_sweep_v1",
-        expected_physics_convention_schema_id="comsol_acoustic_impedance_derived_value_convention_v1",
+        expected_result_table_schema_id="multiphysics_mphtable_probe_impedance_sweep_v1",
+        expected_physics_convention_schema_id="multiphysics_acoustic_impedance_derived_value_convention_v1",
         expected_result_postprocess_row_convention_schema_id=(
-            "comsol_mphtable_boundary_absorption_postprocess_row_v1"
+            "multiphysics_mphtable_boundary_absorption_postprocess_row_v1"
         ),
         expected_result_component_basis_schema_id=(
-            "comsol_mphtable_probe_impedance_component_basis_v1"
+            "multiphysics_mphtable_probe_impedance_component_basis_v1"
         ),
         require_result_component_basis_schema=True,
     )
@@ -4145,7 +4145,7 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
         missing_component_basis_schema,
         required_columns=("freq_Hz", "Z11_ohm", "absorption"),
         expected_result_component_basis_schema_id=(
-            "comsol_mphtable_probe_impedance_component_basis_v1"
+            "multiphysics_mphtable_probe_impedance_component_basis_v1"
         ),
         require_result_component_basis_schema=True,
     )
@@ -4201,12 +4201,12 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
     assert stale_solution["checks"]["expected_solution_tag_matches"] is False
 
     stale_solution_artifact = solver_result_table_metadata_gate(
-        {**metadata, "solution_artifact_id": "comsol_slot345_old_solution_data"},
+        {**metadata, "solution_artifact_id": "multiphysics_slot345_old_solution_data"},
         required_columns=("freq_Hz", "Z11_ohm"),
         expected_dataset_id="dset1",
         expected_solution_tag="sol1",
-        expected_solution_artifact_id="comsol_slot353_solution_data_sol1_v1",
-        expected_solution_digest="sha256:comsol_slot353_solution_data_sol1_v1",
+        expected_solution_artifact_id="multiphysics_slot353_solution_data_sol1_v1",
+        expected_solution_digest="sha256:multiphysics_slot353_solution_data_sol1_v1",
     )
     assert stale_solution_artifact["status"] == "needs_attention"
     assert stale_solution_artifact["checks"]["expected_solution_tag_matches"] is True
@@ -4222,7 +4222,7 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
     missing_solution_digest_gate = solver_result_table_metadata_gate(
         missing_solution_digest,
         required_columns=("freq_Hz", "Z11_ohm"),
-        expected_solution_digest="sha256:comsol_slot353_solution_data_sol1_v1",
+        expected_solution_digest="sha256:multiphysics_slot353_solution_data_sol1_v1",
     )
     assert missing_solution_digest_gate["status"] == "needs_attention"
     assert missing_solution_digest_gate["checks"]["solution_digest_recorded_when_expected"] is False
@@ -4338,8 +4338,8 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
     stale_solver_configuration_digest_gate = solver_result_table_metadata_gate(
         stale_solver_configuration_digest,
         required_columns=("freq_Hz", "Z11_ohm"),
-        expected_solver_configuration_artifact_id="comsol_slot368_solver_config_sol1_v1",
-        expected_solver_configuration_digest="sha256:comsol_slot368_solver_config_sol1_v1",
+        expected_solver_configuration_artifact_id="multiphysics_slot368_solver_config_sol1_v1",
+        expected_solver_configuration_digest="sha256:multiphysics_slot368_solver_config_sol1_v1",
         expected_solver_sequence_tag="sol1",
         expected_relative_tolerance=1.0e-6,
         require_solver_configuration=True,
@@ -4358,7 +4358,7 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
     missing_solver_configuration_digest_gate = solver_result_table_metadata_gate(
         missing_solver_configuration_digest,
         required_columns=("freq_Hz", "Z11_ohm"),
-        expected_solver_configuration_digest="sha256:comsol_slot368_solver_config_sol1_v1",
+        expected_solver_configuration_digest="sha256:multiphysics_slot368_solver_config_sol1_v1",
         require_solver_configuration=True,
     )
     assert missing_solver_configuration_digest_gate["status"] == "needs_attention"
@@ -4376,7 +4376,7 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
     wrong_relative_tolerance_gate = solver_result_table_metadata_gate(
         wrong_relative_tolerance,
         required_columns=("freq_Hz", "Z11_ohm"),
-        expected_solver_configuration_digest="sha256:comsol_slot368_solver_config_sol1_v1",
+        expected_solver_configuration_digest="sha256:multiphysics_slot368_solver_config_sol1_v1",
         expected_relative_tolerance=1.0e-6,
     )
     assert wrong_relative_tolerance_gate["status"] == "needs_attention"
@@ -4575,10 +4575,10 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
     assert missing_evaluation_method["checks"]["expected_result_evaluation_method_matches"] is False
 
     stale_result_artifact = solver_result_table_metadata_gate(
-        {**metadata, "result_artifact_id": "comsol_slot345_old_result_package_v0"},
+        {**metadata, "result_artifact_id": "multiphysics_slot345_old_result_package_v0"},
         required_columns=("freq_Hz", "Z11_ohm"),
-        expected_result_artifact_id="comsol_slot345_result_table_package_v1",
-        expected_comsol_version="COMSOL 6.4.0.378",
+        expected_result_artifact_id="multiphysics_slot345_result_table_package_v1",
+        expected_multiphysics_version="COMSOL 6.4.0.378",
         require_result_provenance=True,
     )
     assert stale_result_artifact["status"] == "needs_attention"
@@ -4588,8 +4588,8 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
     sparse_timing = solver_result_table_metadata_gate(
         {**metadata, "timing_breakdown_s": {"solve_s": 0.85}, "execution": {}},
         required_columns=("freq_Hz", "Z11_ohm"),
-        expected_result_artifact_id="comsol_slot345_result_table_package_v1",
-        expected_comsol_version="COMSOL 6.4.0.378",
+        expected_result_artifact_id="multiphysics_slot345_result_table_package_v1",
+        expected_multiphysics_version="COMSOL 6.4.0.378",
         require_result_provenance=True,
     )
     assert sparse_timing["status"] == "needs_attention"
@@ -4603,15 +4603,15 @@ def test_solver_result_table_metadata_gate_requires_columns_units_axis_and_rows(
             if key not in {"run_started_at", "execution"}
         },
         required_columns=("freq_Hz", "Z11_ohm"),
-        expected_result_artifact_id="comsol_slot345_result_table_package_v1",
-        expected_comsol_version="COMSOL 6.4.0.378",
+        expected_result_artifact_id="multiphysics_slot345_result_table_package_v1",
+        expected_multiphysics_version="COMSOL 6.4.0.378",
         require_result_provenance=True,
     )
     assert missing_run_started["status"] == "needs_attention"
     assert missing_run_started["checks"]["run_started_at_recorded_when_required"] is False
 
 
-def test_femm_static_current_circuit_rows_gate_requires_solver_ready_rows():
+def test_magnetostatic_2d_static_current_circuit_rows_gate_requires_solver_ready_rows():
     theta = math.radians(17.5)
     currents = dq_to_three_phase_currents(-2.5, 11.0, theta)
     rows = {
@@ -4635,7 +4635,7 @@ def test_femm_static_current_circuit_rows_gate_requires_solver_ready_rows():
         },
     }
 
-    gate = femm_static_current_circuit_rows_gate(
+    gate = magnetostatic_2d_static_current_circuit_rows_gate(
         currents,
         theta,
         rows,
@@ -4644,14 +4644,14 @@ def test_femm_static_current_circuit_rows_gate_requires_solver_ready_rows():
     )
 
     assert gate["status"] == "ok"
-    assert gate["policy"] == "femm_static_current_circuit_rows_gate"
+    assert gate["policy"] == "magnetostatic_2d_static_current_circuit_rows_gate"
     assert gate["dq"]["id"] == pytest.approx(-2.5)
     assert gate["dq"]["iq"] == pytest.approx(11.0)
     assert gate["checks"]["turns_nonzero"] is True
     assert gate["max_circuit_current_abs_error_A"] == pytest.approx(0.0)
 
     rms_rows = {phase: dict(row, current_kind="rms") for phase, row in rows.items()}
-    rms_gate = femm_static_current_circuit_rows_gate(
+    rms_gate = magnetostatic_2d_static_current_circuit_rows_gate(
         currents,
         theta,
         rms_rows,
@@ -4664,18 +4664,18 @@ def test_femm_static_current_circuit_rows_gate_requires_solver_ready_rows():
 
     missing_rows = dict(rows)
     del missing_rows["W"]
-    missing_gate = femm_static_current_circuit_rows_gate(currents, theta, missing_rows)
+    missing_gate = magnetostatic_2d_static_current_circuit_rows_gate(currents, theta, missing_rows)
     assert missing_gate["status"] == "needs_attention"
     assert missing_gate["checks"]["phase_set_ok"] is False
 
     mismatch_rows = {phase: dict(row) for phase, row in rows.items()}
     mismatch_rows["V"]["current_A"] += 1.0e-3
-    mismatch_gate = femm_static_current_circuit_rows_gate(currents, theta, mismatch_rows)
+    mismatch_gate = magnetostatic_2d_static_current_circuit_rows_gate(currents, theta, mismatch_rows)
     assert mismatch_gate["status"] == "needs_attention"
     assert mismatch_gate["checks"]["circuit_currents_match"] is False
 
 
-def test_femm_block_label_source_contract_gate_keeps_sources_explicit():
+def test_magnetostatic_2d_block_label_source_contract_gate_keeps_sources_explicit():
     rows = [
         {"region": "air", "material": "Air", "group": 0, "source_kind": "air"},
         {"region": "stator", "material": "M-19 Steel", "group": 1, "source_kind": "passive"},
@@ -4684,19 +4684,19 @@ def test_femm_block_label_source_contract_gate_keeps_sources_explicit():
         {"region": "phase_U_minus", "material": "Copper", "group": 11, "source_kind": "coil", "circuit_name": "phase_U", "turns": -18},
     ]
 
-    gate = femm_block_label_source_contract_gate(
+    gate = magnetostatic_2d_block_label_source_contract_gate(
         rows,
         required_regions=["air", "stator", "pm_N", "phase_U_plus", "phase_U_minus"],
     )
 
     assert gate["status"] == "ok"
-    assert gate["policy"] == "femm_block_label_source_contract_gate"
+    assert gate["policy"] == "magnetostatic_2d_block_label_source_contract_gate"
     assert gate["source_counts"] == {"air": 1, "coil": 2, "passive": 1, "pm": 1}
     assert gate["checks"]["coil_rows_have_nonzero_turns"] is True
     assert gate["checks"]["pm_rows_have_magnetization_direction"] is True
     assert "coils and PMs stay explicit sources" in gate["version_note"]
 
-    bad = femm_block_label_source_contract_gate(
+    bad = magnetostatic_2d_block_label_source_contract_gate(
         [
             {"region": "air", "material": "Air", "group": 0, "source_kind": "air", "circuit_name": "phase_U"},
             {"region": "pm_N", "material": "NdFeB 40", "group": 2, "source_kind": "pm"},
@@ -4719,7 +4719,7 @@ def test_femm_block_label_source_contract_gate_keeps_sources_explicit():
     assert bad["checks"]["air_passive_rows_have_no_source_metadata"] is False
 
 
-def test_femm_group_motion_selection_gate_keeps_rotor_entities_moving_together():
+def test_magnetostatic_2d_group_motion_selection_gate_keeps_rotor_entities_moving_together():
     rows = [
         {
             "entity_kind": "block_label",
@@ -4744,9 +4744,9 @@ def test_femm_group_motion_selection_gate_keeps_rotor_entities_moving_together()
         },
     ]
 
-    gate = femm_group_motion_selection_gate(rows, expected_group_id=7)
+    gate = magnetostatic_2d_group_motion_selection_gate(rows, expected_group_id=7)
 
-    assert gate["policy"] == "femm_group_motion_selection_gate"
+    assert gate["policy"] == "magnetostatic_2d_group_motion_selection_gate"
     assert gate["status"] == "ok"
     assert gate["checks"]["required_entity_kinds_present"] is True
     assert gate["checks"]["all_rows_use_expected_group"] is True
@@ -4755,14 +4755,14 @@ def test_femm_group_motion_selection_gate_keeps_rotor_entities_moving_together()
     bad_rows = [dict(row) for row in rows]
     bad_rows[1]["group_id"] = 0
     bad_rows[2]["selected_for_motion"] = False
-    bad = femm_group_motion_selection_gate(bad_rows, expected_group_id=7)
+    bad = magnetostatic_2d_group_motion_selection_gate(bad_rows, expected_group_id=7)
     assert bad["status"] == "needs_attention"
     assert bad["checks"]["all_rows_use_expected_group"] is False
     assert bad["checks"]["no_group_zero_rows"] is False
     assert bad["checks"]["all_rows_selected_for_motion"] is False
 
 
-def test_femm_pm_magnetization_convention_gate_requires_degree_frame_and_strength():
+def test_magnetostatic_2d_pm_magnetization_convention_gate_requires_degree_frame_and_strength():
     rows = [
         {
             "region": "pm_N",
@@ -4780,20 +4780,20 @@ def test_femm_pm_magnetization_convention_gate_requires_degree_frame_and_strengt
         },
     ]
 
-    gate = femm_pm_magnetization_convention_gate(
+    gate = magnetostatic_2d_pm_magnetization_convention_gate(
         rows,
         required_regions=["pm_N", "pm_S"],
     )
 
     assert gate["status"] == "ok"
-    assert gate["policy"] == "femm_pm_magnetization_convention_gate"
+    assert gate["policy"] == "magnetostatic_2d_pm_magnetization_convention_gate"
     assert gate["rows"][0]["unit_vector_xy"] == pytest.approx([1.0, 0.0], abs=1.0e-15)
     assert gate["rows"][1]["unit_vector_xy"] == pytest.approx([-1.0, 0.0], abs=1.0e-15)
     assert gate["checks"]["angles_are_degrees_and_finite"] is True
     assert gate["checks"]["strength_present"] is True
     assert "FEMM magdir must be degrees" in gate["version_note"]
 
-    bad = femm_pm_magnetization_convention_gate(
+    bad = magnetostatic_2d_pm_magnetization_convention_gate(
         [
             {"region": "pm_N", "magdir_deg": 0.0, "angle_unit": "rad", "frame": "global_xy", "Br_T": 1.2},
             {"region": "pm_N", "magdir_deg": "east", "frame": "rotor_xy", "Hc_A_per_m": 900000.0},
@@ -4810,7 +4810,7 @@ def test_femm_pm_magnetization_convention_gate_requires_degree_frame_and_strengt
     assert bad["missing_strength_regions"] == ["pm_S"]
 
 
-def test_jmag_motor_table_column_metadata_gate_closes_units_before_values():
+def test_motor_fem_table_column_metadata_gate_closes_units_before_values():
     metadata = {
         "columns": ["RotorAngle_deg", "Torque_Nm", "Id_A", "Iq_A", "Speed_rpm"],
         "angle_column": "RotorAngle_deg",
@@ -4823,20 +4823,20 @@ def test_jmag_motor_table_column_metadata_gate_closes_units_before_values():
         "torque_sign_convention": "positive_motoring",
     }
 
-    gate = jmag_motor_table_column_metadata_gate(
+    gate = motor_fem_table_column_metadata_gate(
         metadata,
         required_columns=["RotorAngle_deg", "Torque_Nm", "Id_A", "Iq_A"],
     )
 
     assert gate["status"] == "ok"
-    assert gate["policy"] == "jmag_motor_table_column_metadata_gate"
+    assert gate["policy"] == "motor_fem_table_column_metadata_gate"
     assert gate["angle_unit"] == "deg"
     assert gate["angle_basis"] == "mechanical"
     assert gate["checks"]["required_columns_present"] is True
     assert gate["checks"]["current_basis_valid"] is True
     assert "before JMAG torque/current/efficiency table parsing" in gate["version_note"]
 
-    bad = jmag_motor_table_column_metadata_gate(
+    bad = motor_fem_table_column_metadata_gate(
         {
             "columns": ["RotorAngle", "Id_A"],
             "angle_column": "RotorAngle_deg",
@@ -4862,7 +4862,7 @@ def test_jmag_motor_table_column_metadata_gate_closes_units_before_values():
     assert bad["checks"]["torque_sign_convention_valid"] is False
 
 
-def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_values():
+def test_motor_fem_force_table_metadata_gate_closes_units_frame_and_sign_before_values():
     metadata = {
         "columns": [
             "Gap_mm",
@@ -4890,34 +4890,34 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
         "component_frame": "global_xy",
         "projection_axis": "moving_core_to_fixed_core_gap_normal_positive_attraction",
         "source_tool": "JMAG-Designer",
-        "export_artifact_id": "jmag_force_export_artifact_A",
+        "export_artifact_id": "motor_fem_force_export_artifact_A",
         "result_set_id": "resultset_force_20260630_A",
-        "mesh_id": "jmag_mesh_gap_force_A_v3",
-        "solver_run_id": "jmag_solver_run_20260630_A",
-        "result_revision_id": "jmag_result_revision_force_A_001",
-        "solver_setup_artifact_id": "jmag_solver_setup_force_A_strict_iccg_nr_v1.json",
-        "material_state_artifact_id": "jmag_material_state_force_A_bh_curve_v2.json",
-        "material_state_digest": "sha256:jmag_slot333_material_state_digest_v1",
-        "excitation_source_artifact_id": "jmag_excitation_source_force_A_peak_current_v1.json",
+        "mesh_id": "motor_fem_mesh_gap_force_A_v3",
+        "solver_run_id": "motor_fem_solver_run_20260630_A",
+        "result_revision_id": "motor_fem_result_revision_force_A_001",
+        "solver_setup_artifact_id": "motor_fem_solver_setup_force_A_strict_iccg_nr_v1.json",
+        "material_state_artifact_id": "motor_fem_material_state_force_A_bh_curve_v2.json",
+        "material_state_digest": "sha256:motor_fem_slot333_material_state_digest_v1",
+        "excitation_source_artifact_id": "motor_fem_excitation_source_force_A_peak_current_v1.json",
         "current_definition_method": "peak_phase_current_table",
-        "export_trace_id": "jmag_slot285_force_export_macro_trace_v1",
-        "export_command_digest": "sha256:jmag_slot285_force_write_all_case_table",
+        "export_trace_id": "motor_fem_slot285_force_export_macro_trace_v1",
+        "export_command_digest": "sha256:motor_fem_slot285_force_write_all_case_table",
         "export_commands": [
             "select result set resultset_force_20260630_A",
             "open force report moving_core",
             "WriteAllCaseTable force_table.csv",
         ],
-        "export_output_artifact_id": "jmag_slot293_force_table_csv_v1",
-        "export_output_digest": "sha256:jmag_slot293_force_table_csv",
-        "export_output_path": "artifacts/motor/jmag_slot293_force_table.csv",
-        "force_observable_id": "jmag_slot301_maxwell_stress_force_report_xy_v1",
-        "force_observable_family": "jmag_force_report_maxwell_stress_xy",
+        "export_output_artifact_id": "motor_fem_slot293_force_table_csv_v1",
+        "export_output_digest": "sha256:motor_fem_slot293_force_table_csv",
+        "export_output_path": "artifacts/motor/motor_fem_slot293_force_table.csv",
+        "force_observable_id": "motor_fem_slot301_maxwell_stress_force_report_xy_v1",
+        "force_observable_family": "motor_fem_force_report_maxwell_stress_xy",
         "force_report_method": "maxwell_stress_force_report_xy",
         "target_region_id": "moving_core",
         "target_region_name": "moving_core_block_label",
         "target_material": "magnetic_steel_core",
-        "target_region_artifact_id": "jmag_region_labels_force_A_v2.json",
-        "target_region_geometry_digest": "sha256:jmag_slot325_moving_core_geometry_digest_v1",
+        "target_region_artifact_id": "motor_fem_region_labels_force_A_v2.json",
+        "target_region_geometry_digest": "sha256:motor_fem_slot325_moving_core_geometry_digest_v1",
         "target_region_centroid_xyz_m": [0.012, 0.0, 0.0],
         "symmetry_factor": 8,
         "force_sign_convention": "positive_attraction",
@@ -4925,7 +4925,7 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
         "quantity_dimension": "2d_per_length",
     }
 
-    gate = jmag_force_table_metadata_gate(
+    gate = motor_fem_force_table_metadata_gate(
         metadata,
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
         expected_case_id="case_gap_force_sweep_A",
@@ -4933,22 +4933,22 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
         expected_operating_point_id="op_gap_sweep_A",
         expected_analysis_type="magnetostatic",
         expected_frequency_hz=0.0,
-        expected_export_artifact_id="jmag_force_export_artifact_A",
+        expected_export_artifact_id="motor_fem_force_export_artifact_A",
         expected_result_set_id="resultset_force_20260630_A",
-        expected_mesh_id="jmag_mesh_gap_force_A_v3",
-        expected_solver_run_id="jmag_solver_run_20260630_A",
-        expected_result_revision_id="jmag_result_revision_force_A_001",
-        expected_solver_setup_artifact_id="jmag_solver_setup_force_A_strict_iccg_nr_v1.json",
-        expected_material_state_artifact_id="jmag_material_state_force_A_bh_curve_v2.json",
-        expected_material_state_digest="sha256:jmag_slot333_material_state_digest_v1",
-        expected_excitation_source_artifact_id="jmag_excitation_source_force_A_peak_current_v1.json",
+        expected_mesh_id="motor_fem_mesh_gap_force_A_v3",
+        expected_solver_run_id="motor_fem_solver_run_20260630_A",
+        expected_result_revision_id="motor_fem_result_revision_force_A_001",
+        expected_solver_setup_artifact_id="motor_fem_solver_setup_force_A_strict_iccg_nr_v1.json",
+        expected_material_state_artifact_id="motor_fem_material_state_force_A_bh_curve_v2.json",
+        expected_material_state_digest="sha256:motor_fem_slot333_material_state_digest_v1",
+        expected_excitation_source_artifact_id="motor_fem_excitation_source_force_A_peak_current_v1.json",
         expected_current_definition_method="peak_phase_current_table",
-        expected_export_trace_id="jmag_slot285_force_export_macro_trace_v1",
-        expected_export_command_digest="sha256:jmag_slot285_force_write_all_case_table",
-        expected_export_output_artifact_id="jmag_slot293_force_table_csv_v1",
-        expected_export_output_digest="sha256:jmag_slot293_force_table_csv",
-        expected_force_observable_id="jmag_slot301_maxwell_stress_force_report_xy_v1",
-        expected_force_observable_family="jmag_force_report_maxwell_stress_xy",
+        expected_export_trace_id="motor_fem_slot285_force_export_macro_trace_v1",
+        expected_export_command_digest="sha256:motor_fem_slot285_force_write_all_case_table",
+        expected_export_output_artifact_id="motor_fem_slot293_force_table_csv_v1",
+        expected_export_output_digest="sha256:motor_fem_slot293_force_table_csv",
+        expected_force_observable_id="motor_fem_slot301_maxwell_stress_force_report_xy_v1",
+        expected_force_observable_family="motor_fem_force_report_maxwell_stress_xy",
         expected_component_frame="global_xy",
         expected_projection_axis="moving_core_to_fixed_core_gap_normal_positive_attraction",
         expected_force_sign_convention="positive_attraction",
@@ -4958,13 +4958,13 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
         expected_target_region_id="moving_core",
         expected_target_region_name="moving_core_block_label",
         expected_target_material="magnetic_steel_core",
-        expected_target_region_artifact_id="jmag_region_labels_force_A_v2.json",
-        expected_target_region_geometry_digest="sha256:jmag_slot325_moving_core_geometry_digest_v1",
+        expected_target_region_artifact_id="motor_fem_region_labels_force_A_v2.json",
+        expected_target_region_geometry_digest="sha256:motor_fem_slot325_moving_core_geometry_digest_v1",
         expected_target_region_centroid_xyz_m=(0.012, 0.0, 0.0),
     )
 
     assert gate["status"] == "ok"
-    assert gate["policy"] == "jmag_force_table_metadata_gate"
+    assert gate["policy"] == "motor_fem_force_table_metadata_gate"
     assert gate["checks"]["force_columns_present"] is True
     assert gate["checks"]["force_unit_valid"] is True
     assert gate["checks"]["quantity_dimension_valid"] is True
@@ -5003,17 +5003,17 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert gate["checks"]["expected_analysis_type_matches"] is True
     assert gate["checks"]["frequency_hz_recorded"] is True
     assert gate["checks"]["expected_frequency_hz_matches"] is True
-    assert gate["export_artifact_id"] == "jmag_force_export_artifact_A"
+    assert gate["export_artifact_id"] == "motor_fem_force_export_artifact_A"
     assert gate["checks"]["export_artifact_id_recorded"] is True
     assert gate["checks"]["expected_export_artifact_id_matches"] is True
     assert gate["checks"]["expected_result_set_id_matches"] is True
-    assert gate["mesh_id"] == "jmag_mesh_gap_force_A_v3"
-    assert gate["solver_run_id"] == "jmag_solver_run_20260630_A"
-    assert gate["result_revision_id"] == "jmag_result_revision_force_A_001"
-    assert gate["solver_setup_artifact_id"] == "jmag_solver_setup_force_A_strict_iccg_nr_v1.json"
-    assert gate["material_state_artifact_id"] == "jmag_material_state_force_A_bh_curve_v2.json"
-    assert gate["material_state_digest"] == "sha256:jmag_slot333_material_state_digest_v1"
-    assert gate["excitation_source_artifact_id"] == "jmag_excitation_source_force_A_peak_current_v1.json"
+    assert gate["mesh_id"] == "motor_fem_mesh_gap_force_A_v3"
+    assert gate["solver_run_id"] == "motor_fem_solver_run_20260630_A"
+    assert gate["result_revision_id"] == "motor_fem_result_revision_force_A_001"
+    assert gate["solver_setup_artifact_id"] == "motor_fem_solver_setup_force_A_strict_iccg_nr_v1.json"
+    assert gate["material_state_artifact_id"] == "motor_fem_material_state_force_A_bh_curve_v2.json"
+    assert gate["material_state_digest"] == "sha256:motor_fem_slot333_material_state_digest_v1"
+    assert gate["excitation_source_artifact_id"] == "motor_fem_excitation_source_force_A_peak_current_v1.json"
     assert gate["current_definition_method"] == "peak_phase_current_table"
     assert gate["checks"]["mesh_id_recorded"] is True
     assert gate["checks"]["solver_run_id_recorded"] is True
@@ -5031,8 +5031,8 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert gate["checks"]["expected_material_state_digest_matches"] is True
     assert gate["checks"]["expected_excitation_source_artifact_id_matches"] is True
     assert gate["checks"]["expected_current_definition_method_matches"] is True
-    assert gate["export_trace_id"] == "jmag_slot285_force_export_macro_trace_v1"
-    assert gate["export_command_digest"] == "sha256:jmag_slot285_force_write_all_case_table"
+    assert gate["export_trace_id"] == "motor_fem_slot285_force_export_macro_trace_v1"
+    assert gate["export_command_digest"] == "sha256:motor_fem_slot285_force_write_all_case_table"
     assert gate["checks"]["export_trace_id_recorded"] is True
     assert gate["checks"]["expected_export_trace_id_matches"] is True
     assert gate["checks"]["export_command_digest_recorded"] is True
@@ -5040,16 +5040,16 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert gate["checks"]["export_commands_recorded"] is True
     assert gate["checks"]["export_commands_include_table_export"] is True
     assert gate["checks"]["export_commands_reference_force_report"] is True
-    assert gate["export_output_artifact_id"] == "jmag_slot293_force_table_csv_v1"
-    assert gate["export_output_digest"] == "sha256:jmag_slot293_force_table_csv"
-    assert gate["export_output_path"] == "artifacts/motor/jmag_slot293_force_table.csv"
+    assert gate["export_output_artifact_id"] == "motor_fem_slot293_force_table_csv_v1"
+    assert gate["export_output_digest"] == "sha256:motor_fem_slot293_force_table_csv"
+    assert gate["export_output_path"] == "artifacts/motor/motor_fem_slot293_force_table.csv"
     assert gate["checks"]["export_output_artifact_id_recorded"] is True
     assert gate["checks"]["expected_export_output_artifact_id_matches"] is True
     assert gate["checks"]["export_output_digest_recorded"] is True
     assert gate["checks"]["expected_export_output_digest_matches"] is True
     assert gate["checks"]["export_output_path_recorded"] is True
-    assert gate["force_observable_id"] == "jmag_slot301_maxwell_stress_force_report_xy_v1"
-    assert gate["force_observable_family"] == "jmag_force_report_maxwell_stress_xy"
+    assert gate["force_observable_id"] == "motor_fem_slot301_maxwell_stress_force_report_xy_v1"
+    assert gate["force_observable_family"] == "motor_fem_force_report_maxwell_stress_xy"
     assert gate["checks"]["force_observable_id_recorded"] is True
     assert gate["checks"]["expected_force_observable_id_matches"] is True
     assert gate["checks"]["force_observable_family_recorded"] is True
@@ -5061,8 +5061,8 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert gate["checks"]["expected_target_region_id_matches"] is True
     assert gate["target_region_name"] == "moving_core_block_label"
     assert gate["target_material"] == "magnetic_steel_core"
-    assert gate["target_region_artifact_id"] == "jmag_region_labels_force_A_v2.json"
-    assert gate["target_region_geometry_digest"] == "sha256:jmag_slot325_moving_core_geometry_digest_v1"
+    assert gate["target_region_artifact_id"] == "motor_fem_region_labels_force_A_v2.json"
+    assert gate["target_region_geometry_digest"] == "sha256:motor_fem_slot325_moving_core_geometry_digest_v1"
     assert gate["target_region_centroid_xyz_m"] == [0.012, 0.0, 0.0]
     assert gate["checks"]["target_region_name_recorded"] is True
     assert gate["checks"]["expected_target_region_name_matches"] is True
@@ -5078,87 +5078,87 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert gate["target_region_id"] == "moving_core"
     assert "before JMAG force/NVH/contact-force table parsing" in gate["version_note"]
 
-    stale_mesh_metadata = jmag_force_table_metadata_gate(
-        {**metadata, "mesh_id": "jmag_mesh_gap_force_old"},
+    stale_mesh_metadata = motor_fem_force_table_metadata_gate(
+        {**metadata, "mesh_id": "motor_fem_mesh_gap_force_old"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_mesh_id="jmag_mesh_gap_force_A_v3",
+        expected_mesh_id="motor_fem_mesh_gap_force_A_v3",
     )
     assert stale_mesh_metadata["status"] == "needs_attention"
     assert stale_mesh_metadata["checks"]["expected_mesh_id_matches"] is False
 
-    stale_solver_run_metadata = jmag_force_table_metadata_gate(
-        {**metadata, "solver_run_id": "jmag_solver_run_old"},
+    stale_solver_run_metadata = motor_fem_force_table_metadata_gate(
+        {**metadata, "solver_run_id": "motor_fem_solver_run_old"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_solver_run_id="jmag_solver_run_20260630_A",
+        expected_solver_run_id="motor_fem_solver_run_20260630_A",
     )
     assert stale_solver_run_metadata["status"] == "needs_attention"
     assert stale_solver_run_metadata["checks"]["expected_solver_run_id_matches"] is False
 
-    stale_result_revision_metadata = jmag_force_table_metadata_gate(
-        {**metadata, "result_revision_id": "jmag_result_revision_old"},
+    stale_result_revision_metadata = motor_fem_force_table_metadata_gate(
+        {**metadata, "result_revision_id": "motor_fem_result_revision_old"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_result_revision_id="jmag_result_revision_force_A_001",
+        expected_result_revision_id="motor_fem_result_revision_force_A_001",
     )
     assert stale_result_revision_metadata["status"] == "needs_attention"
     assert stale_result_revision_metadata["checks"]["expected_result_revision_id_matches"] is False
 
-    stale_solver_setup_metadata = jmag_force_table_metadata_gate(
-        {**metadata, "solver_setup_artifact_id": "jmag_solver_setup_force_A_loose_auto_v1.json"},
+    stale_solver_setup_metadata = motor_fem_force_table_metadata_gate(
+        {**metadata, "solver_setup_artifact_id": "motor_fem_solver_setup_force_A_loose_auto_v1.json"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_solver_setup_artifact_id="jmag_solver_setup_force_A_strict_iccg_nr_v1.json",
-        expected_material_state_artifact_id="jmag_material_state_force_A_bh_curve_v2.json",
-        expected_material_state_digest="sha256:jmag_slot333_material_state_digest_v1",
+        expected_solver_setup_artifact_id="motor_fem_solver_setup_force_A_strict_iccg_nr_v1.json",
+        expected_material_state_artifact_id="motor_fem_material_state_force_A_bh_curve_v2.json",
+        expected_material_state_digest="sha256:motor_fem_slot333_material_state_digest_v1",
     )
     assert stale_solver_setup_metadata["status"] == "needs_attention"
     assert stale_solver_setup_metadata["checks"]["expected_solver_setup_artifact_id_matches"] is False
     assert stale_solver_setup_metadata["checks"]["expected_material_state_artifact_id_matches"] is True
     assert stale_solver_setup_metadata["checks"]["expected_material_state_digest_matches"] is True
 
-    stale_material_state_metadata = jmag_force_table_metadata_gate(
-        {**metadata, "material_state_artifact_id": "jmag_material_state_force_A_old.json"},
+    stale_material_state_metadata = motor_fem_force_table_metadata_gate(
+        {**metadata, "material_state_artifact_id": "motor_fem_material_state_force_A_old.json"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_solver_setup_artifact_id="jmag_solver_setup_force_A_strict_iccg_nr_v1.json",
-        expected_material_state_artifact_id="jmag_material_state_force_A_bh_curve_v2.json",
-        expected_material_state_digest="sha256:jmag_slot333_material_state_digest_v1",
+        expected_solver_setup_artifact_id="motor_fem_solver_setup_force_A_strict_iccg_nr_v1.json",
+        expected_material_state_artifact_id="motor_fem_material_state_force_A_bh_curve_v2.json",
+        expected_material_state_digest="sha256:motor_fem_slot333_material_state_digest_v1",
     )
     assert stale_material_state_metadata["status"] == "needs_attention"
     assert stale_material_state_metadata["checks"]["expected_solver_setup_artifact_id_matches"] is True
     assert stale_material_state_metadata["checks"]["expected_material_state_artifact_id_matches"] is False
     assert stale_material_state_metadata["checks"]["expected_material_state_digest_matches"] is True
 
-    stale_material_digest_metadata = jmag_force_table_metadata_gate(
-        {**metadata, "material_state_digest": "sha256:jmag_slot333_material_state_digest_old"},
+    stale_material_digest_metadata = motor_fem_force_table_metadata_gate(
+        {**metadata, "material_state_digest": "sha256:motor_fem_slot333_material_state_digest_old"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_solver_setup_artifact_id="jmag_solver_setup_force_A_strict_iccg_nr_v1.json",
-        expected_material_state_artifact_id="jmag_material_state_force_A_bh_curve_v2.json",
-        expected_material_state_digest="sha256:jmag_slot333_material_state_digest_v1",
+        expected_solver_setup_artifact_id="motor_fem_solver_setup_force_A_strict_iccg_nr_v1.json",
+        expected_material_state_artifact_id="motor_fem_material_state_force_A_bh_curve_v2.json",
+        expected_material_state_digest="sha256:motor_fem_slot333_material_state_digest_v1",
     )
     assert stale_material_digest_metadata["status"] == "needs_attention"
     assert stale_material_digest_metadata["checks"]["expected_solver_setup_artifact_id_matches"] is True
     assert stale_material_digest_metadata["checks"]["expected_material_state_artifact_id_matches"] is True
     assert stale_material_digest_metadata["checks"]["expected_material_state_digest_matches"] is False
 
-    stale_excitation_source_metadata = jmag_force_table_metadata_gate(
-        {**metadata, "excitation_source_artifact_id": "jmag_excitation_source_force_A_old.json"},
+    stale_excitation_source_metadata = motor_fem_force_table_metadata_gate(
+        {**metadata, "excitation_source_artifact_id": "motor_fem_excitation_source_force_A_old.json"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_excitation_source_artifact_id="jmag_excitation_source_force_A_peak_current_v1.json",
+        expected_excitation_source_artifact_id="motor_fem_excitation_source_force_A_peak_current_v1.json",
         expected_current_definition_method="peak_phase_current_table",
     )
     assert stale_excitation_source_metadata["status"] == "needs_attention"
     assert stale_excitation_source_metadata["checks"]["expected_excitation_source_artifact_id_matches"] is False
     assert stale_excitation_source_metadata["checks"]["expected_current_definition_method_matches"] is True
 
-    wrong_current_definition_metadata = jmag_force_table_metadata_gate(
+    wrong_current_definition_metadata = motor_fem_force_table_metadata_gate(
         {**metadata, "current_definition_method": "rms_phase_current_table"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_excitation_source_artifact_id="jmag_excitation_source_force_A_peak_current_v1.json",
+        expected_excitation_source_artifact_id="motor_fem_excitation_source_force_A_peak_current_v1.json",
         expected_current_definition_method="peak_phase_current_table",
     )
     assert wrong_current_definition_metadata["status"] == "needs_attention"
     assert wrong_current_definition_metadata["checks"]["expected_excitation_source_artifact_id_matches"] is True
     assert wrong_current_definition_metadata["checks"]["expected_current_definition_method_matches"] is False
 
-    missing_current_definition_metadata = jmag_force_table_metadata_gate(
+    missing_current_definition_metadata = motor_fem_force_table_metadata_gate(
         {key: value for key, value in metadata.items() if key != "current_definition_method"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
         expected_current_definition_method="peak_phase_current_table",
@@ -5167,11 +5167,11 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert missing_current_definition_metadata["checks"]["current_definition_method_recorded"] is False
     assert missing_current_definition_metadata["checks"]["expected_current_definition_method_matches"] is False
 
-    stale_export_trace_metadata = jmag_force_table_metadata_gate(
+    stale_export_trace_metadata = motor_fem_force_table_metadata_gate(
         metadata,
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_export_trace_id="jmag_slot285_force_export_macro_trace_old",
-        expected_export_command_digest="sha256:jmag_slot285_force_write_all_case_table",
+        expected_export_trace_id="motor_fem_slot285_force_export_macro_trace_old",
+        expected_export_command_digest="sha256:motor_fem_slot285_force_write_all_case_table",
         require_export_command_trace=True,
     )
     assert stale_export_trace_metadata["status"] == "needs_attention"
@@ -5179,7 +5179,7 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert stale_export_trace_metadata["checks"]["expected_export_command_digest_matches"] is True
     assert stale_export_trace_metadata["checks"]["export_commands_include_table_export"] is True
 
-    missing_table_export_command = jmag_force_table_metadata_gate(
+    missing_table_export_command = motor_fem_force_table_metadata_gate(
         {
             **metadata,
             "export_commands": [
@@ -5188,8 +5188,8 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
             ],
         },
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_export_trace_id="jmag_slot285_force_export_macro_trace_v1",
-        expected_export_command_digest="sha256:jmag_slot285_force_write_all_case_table",
+        expected_export_trace_id="motor_fem_slot285_force_export_macro_trace_v1",
+        expected_export_command_digest="sha256:motor_fem_slot285_force_write_all_case_table",
         require_export_command_trace=True,
     )
     assert missing_table_export_command["status"] == "needs_attention"
@@ -5198,11 +5198,11 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert missing_table_export_command["checks"]["export_commands_include_table_export"] is False
     assert missing_table_export_command["checks"]["export_commands_reference_force_report"] is True
 
-    stale_export_output_artifact = jmag_force_table_metadata_gate(
+    stale_export_output_artifact = motor_fem_force_table_metadata_gate(
         metadata,
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_export_output_artifact_id="jmag_slot293_force_table_csv_old",
-        expected_export_output_digest="sha256:jmag_slot293_force_table_csv",
+        expected_export_output_artifact_id="motor_fem_slot293_force_table_csv_old",
+        expected_export_output_digest="sha256:motor_fem_slot293_force_table_csv",
         require_export_output_artifact=True,
     )
     assert stale_export_output_artifact["status"] == "needs_attention"
@@ -5210,24 +5210,24 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert stale_export_output_artifact["checks"]["expected_export_output_digest_matches"] is True
     assert stale_export_output_artifact["checks"]["export_output_path_recorded"] is True
 
-    stale_export_output_digest = jmag_force_table_metadata_gate(
+    stale_export_output_digest = motor_fem_force_table_metadata_gate(
         metadata,
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_export_output_artifact_id="jmag_slot293_force_table_csv_v1",
-        expected_export_output_digest="sha256:jmag_slot293_force_table_csv_old",
+        expected_export_output_artifact_id="motor_fem_slot293_force_table_csv_v1",
+        expected_export_output_digest="sha256:motor_fem_slot293_force_table_csv_old",
         require_export_output_artifact=True,
     )
     assert stale_export_output_digest["status"] == "needs_attention"
     assert stale_export_output_digest["checks"]["expected_export_output_artifact_id_matches"] is True
     assert stale_export_output_digest["checks"]["expected_export_output_digest_matches"] is False
 
-    stale_force_observable = jmag_force_table_metadata_gate(
+    stale_force_observable = motor_fem_force_table_metadata_gate(
         metadata,
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_force_observable_id="jmag_slot212_old_force_report_xy",
-        expected_force_observable_family="jmag_force_report_maxwell_stress_xy",
-        expected_export_output_artifact_id="jmag_slot293_force_table_csv_v1",
-        expected_export_output_digest="sha256:jmag_slot293_force_table_csv",
+        expected_force_observable_id="motor_fem_slot212_old_force_report_xy",
+        expected_force_observable_family="motor_fem_force_report_maxwell_stress_xy",
+        expected_export_output_artifact_id="motor_fem_slot293_force_table_csv_v1",
+        expected_export_output_digest="sha256:motor_fem_slot293_force_table_csv",
     )
     assert stale_force_observable["status"] == "needs_attention"
     assert stale_force_observable["checks"]["expected_force_observable_id_matches"] is False
@@ -5235,22 +5235,22 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert stale_force_observable["checks"]["expected_export_output_artifact_id_matches"] is True
     assert stale_force_observable["checks"]["expected_export_output_digest_matches"] is True
 
-    wrong_force_observable_family = jmag_force_table_metadata_gate(
-        {**metadata, "force_observable_family": "jmag_torque_report"},
+    wrong_force_observable_family = motor_fem_force_table_metadata_gate(
+        {**metadata, "force_observable_family": "motor_fem_torque_report"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_force_observable_id="jmag_slot301_maxwell_stress_force_report_xy_v1",
-        expected_force_observable_family="jmag_force_report_maxwell_stress_xy",
+        expected_force_observable_id="motor_fem_slot301_maxwell_stress_force_report_xy_v1",
+        expected_force_observable_family="motor_fem_force_report_maxwell_stress_xy",
     )
     assert wrong_force_observable_family["status"] == "needs_attention"
     assert wrong_force_observable_family["checks"]["expected_force_observable_id_matches"] is True
     assert wrong_force_observable_family["checks"]["expected_force_observable_family_matches"] is False
     assert wrong_force_observable_family["checks"]["force_kind_valid"] is True
 
-    wrong_force_report_method = jmag_force_table_metadata_gate(
+    wrong_force_report_method = motor_fem_force_table_metadata_gate(
         {**metadata, "force_report_method": "nodal_force_report_xy"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_force_observable_id="jmag_slot301_maxwell_stress_force_report_xy_v1",
-        expected_force_observable_family="jmag_force_report_maxwell_stress_xy",
+        expected_force_observable_id="motor_fem_slot301_maxwell_stress_force_report_xy_v1",
+        expected_force_observable_family="motor_fem_force_report_maxwell_stress_xy",
         expected_force_report_method="maxwell_stress_force_report_xy",
     )
     assert wrong_force_report_method["status"] == "needs_attention"
@@ -5259,7 +5259,7 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert wrong_force_report_method["checks"]["force_report_method_recorded_when_expected"] is True
     assert wrong_force_report_method["checks"]["expected_force_report_method_matches"] is False
 
-    missing_force_report_method = jmag_force_table_metadata_gate(
+    missing_force_report_method = motor_fem_force_table_metadata_gate(
         {key: value for key, value in metadata.items() if key != "force_report_method"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
         expected_force_report_method="maxwell_stress_force_report_xy",
@@ -5268,7 +5268,7 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert missing_force_report_method["checks"]["force_report_method_recorded_when_expected"] is False
     assert missing_force_report_method["checks"]["expected_force_report_method_matches"] is False
 
-    wrong_expected_frame = jmag_force_table_metadata_gate(
+    wrong_expected_frame = motor_fem_force_table_metadata_gate(
         {**metadata, "component_frame": "as_exported"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
         expected_component_frame="global_xy",
@@ -5282,7 +5282,7 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert wrong_expected_frame["checks"]["expected_projection_axis_matches"] is True
     assert wrong_expected_frame["checks"]["expected_force_sign_convention_matches"] is True
 
-    wrong_expected_projection = jmag_force_table_metadata_gate(
+    wrong_expected_projection = motor_fem_force_table_metadata_gate(
         {**metadata, "projection_axis": "fixed_core_to_moving_core_gap_normal_positive_repulsion"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
         expected_component_frame="global_xy",
@@ -5295,7 +5295,7 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert wrong_expected_projection["checks"]["expected_projection_axis_matches"] is False
     assert wrong_expected_projection["checks"]["expected_force_sign_convention_matches"] is True
 
-    wrong_expected_sign = jmag_force_table_metadata_gate(
+    wrong_expected_sign = motor_fem_force_table_metadata_gate(
         {**metadata, "force_sign_convention": "positive_repulsion"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
         expected_component_frame="global_xy",
@@ -5308,7 +5308,7 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert wrong_expected_sign["checks"]["expected_projection_axis_matches"] is True
     assert wrong_expected_sign["checks"]["expected_force_sign_convention_matches"] is False
 
-    stale_target_name_metadata = jmag_force_table_metadata_gate(
+    stale_target_name_metadata = motor_fem_force_table_metadata_gate(
         {**metadata, "target_region_name": "fixed_core_block_label"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
         expected_target_region_name="moving_core_block_label",
@@ -5316,7 +5316,7 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert stale_target_name_metadata["status"] == "needs_attention"
     assert stale_target_name_metadata["checks"]["expected_target_region_name_matches"] is False
 
-    stale_target_material_metadata = jmag_force_table_metadata_gate(
+    stale_target_material_metadata = motor_fem_force_table_metadata_gate(
         {**metadata, "target_material": "air"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
         expected_target_material="magnetic_steel_core",
@@ -5324,28 +5324,28 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert stale_target_material_metadata["status"] == "needs_attention"
     assert stale_target_material_metadata["checks"]["expected_target_material_matches"] is False
 
-    stale_target_artifact_metadata = jmag_force_table_metadata_gate(
-        {**metadata, "target_region_artifact_id": "jmag_region_labels_old.json"},
+    stale_target_artifact_metadata = motor_fem_force_table_metadata_gate(
+        {**metadata, "target_region_artifact_id": "motor_fem_region_labels_old.json"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_target_region_artifact_id="jmag_region_labels_force_A_v2.json",
+        expected_target_region_artifact_id="motor_fem_region_labels_force_A_v2.json",
     )
     assert stale_target_artifact_metadata["status"] == "needs_attention"
     assert stale_target_artifact_metadata["checks"]["expected_target_region_artifact_id_matches"] is False
 
-    stale_target_geometry_digest = jmag_force_table_metadata_gate(
-        {**metadata, "target_region_geometry_digest": "sha256:jmag_slot325_moving_core_geometry_old"},
+    stale_target_geometry_digest = motor_fem_force_table_metadata_gate(
+        {**metadata, "target_region_geometry_digest": "sha256:motor_fem_slot325_moving_core_geometry_old"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_target_region_geometry_digest="sha256:jmag_slot325_moving_core_geometry_digest_v1",
+        expected_target_region_geometry_digest="sha256:motor_fem_slot325_moving_core_geometry_digest_v1",
         expected_target_region_centroid_xyz_m=(0.012, 0.0, 0.0),
     )
     assert stale_target_geometry_digest["status"] == "needs_attention"
     assert stale_target_geometry_digest["checks"]["expected_target_region_geometry_digest_matches"] is False
     assert stale_target_geometry_digest["checks"]["expected_target_region_centroid_xyz_matches"] is True
 
-    stale_target_centroid = jmag_force_table_metadata_gate(
+    stale_target_centroid = motor_fem_force_table_metadata_gate(
         {**metadata, "target_region_centroid_xyz_m": [0.013, 0.0, 0.0]},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_target_region_geometry_digest="sha256:jmag_slot325_moving_core_geometry_digest_v1",
+        expected_target_region_geometry_digest="sha256:motor_fem_slot325_moving_core_geometry_digest_v1",
         expected_target_region_centroid_xyz_m=(0.012, 0.0, 0.0),
     )
     assert stale_target_centroid["status"] == "needs_attention"
@@ -5354,7 +5354,7 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
 
     missing_target_centroid_metadata = dict(metadata)
     missing_target_centroid_metadata.pop("target_region_centroid_xyz_m")
-    missing_target_centroid = jmag_force_table_metadata_gate(
+    missing_target_centroid = motor_fem_force_table_metadata_gate(
         missing_target_centroid_metadata,
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
         expected_target_region_centroid_xyz_m=(0.012, 0.0, 0.0),
@@ -5363,10 +5363,10 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert missing_target_centroid["checks"]["target_region_centroid_xyz_recorded_when_expected"] is False
     assert missing_target_centroid["checks"]["expected_target_region_centroid_xyz_matches"] is False
 
-    stale_export_artifact = jmag_force_table_metadata_gate(
+    stale_export_artifact = motor_fem_force_table_metadata_gate(
         metadata,
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_export_artifact_id="jmag_force_export_artifact_B",
+        expected_export_artifact_id="motor_fem_force_export_artifact_B",
         expected_result_set_id="resultset_force_20260630_A",
         expected_target_region_id="moving_core",
     )
@@ -5374,10 +5374,10 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert stale_export_artifact["checks"]["expected_export_artifact_id_matches"] is False
     assert stale_export_artifact["checks"]["expected_result_set_id_matches"] is True
 
-    row_identity = jmag_force_table_metadata_gate(
+    row_identity = motor_fem_force_table_metadata_gate(
         {**metadata, "identity_columns": ["TargetBodyId", "Gap_mm"]},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_export_artifact_id="jmag_force_export_artifact_A",
+        expected_export_artifact_id="motor_fem_force_export_artifact_A",
         expected_result_set_id="resultset_force_20260630_A",
         expected_target_region_id="moving_core",
         min_table_rows=2,
@@ -5392,7 +5392,7 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
                 "TargetBodyId": "moving_core",
                 "TargetBodyName": "moving_core_block_label",
                 "TargetMaterialName": "magnetic_steel_core",
-                "TargetRegionArtifactId": "jmag_region_labels_force_A_v2.json",
+                "TargetRegionArtifactId": "motor_fem_region_labels_force_A_v2.json",
                 "AnalysisType": "magnetostatic",
                 "FrequencyHz": 0.0,
             },
@@ -5405,7 +5405,7 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
                 "TargetBodyId": "moving_core",
                 "TargetBodyName": "moving_core_block_label",
                 "TargetMaterialName": "magnetic_steel_core",
-                "TargetRegionArtifactId": "jmag_region_labels_force_A_v2.json",
+                "TargetRegionArtifactId": "motor_fem_region_labels_force_A_v2.json",
                 "AnalysisType": "magnetostatic",
                 "FrequencyHz": 0.0,
             },
@@ -5428,7 +5428,7 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert row_identity["checks"]["row_target_material_matches_package"] is True
     assert row_identity["checks"]["row_target_region_artifact_id_matches_package"] is True
 
-    row_run_identity = jmag_force_table_metadata_gate(
+    row_run_identity = motor_fem_force_table_metadata_gate(
         {
             **metadata,
             "columns": metadata["columns"] + [
@@ -5444,13 +5444,13 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
             "identity_columns": ["TargetBodyId", "Gap_mm"],
         },
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_mesh_id="jmag_mesh_gap_force_A_v3",
-        expected_solver_run_id="jmag_solver_run_20260630_A",
-        expected_result_revision_id="jmag_result_revision_force_A_001",
-        expected_solver_setup_artifact_id="jmag_solver_setup_force_A_strict_iccg_nr_v1.json",
-        expected_material_state_artifact_id="jmag_material_state_force_A_bh_curve_v2.json",
-        expected_material_state_digest="sha256:jmag_slot333_material_state_digest_v1",
-        expected_excitation_source_artifact_id="jmag_excitation_source_force_A_peak_current_v1.json",
+        expected_mesh_id="motor_fem_mesh_gap_force_A_v3",
+        expected_solver_run_id="motor_fem_solver_run_20260630_A",
+        expected_result_revision_id="motor_fem_result_revision_force_A_001",
+        expected_solver_setup_artifact_id="motor_fem_solver_setup_force_A_strict_iccg_nr_v1.json",
+        expected_material_state_artifact_id="motor_fem_material_state_force_A_bh_curve_v2.json",
+        expected_material_state_digest="sha256:motor_fem_slot333_material_state_digest_v1",
+        expected_excitation_source_artifact_id="motor_fem_excitation_source_force_A_peak_current_v1.json",
         expected_current_definition_method="peak_phase_current_table",
         table_rows=[
             {
@@ -5462,16 +5462,16 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
                 "TargetBodyId": "moving_core",
                 "TargetBodyName": "moving_core_block_label",
                 "TargetMaterialName": "magnetic_steel_core",
-                "TargetRegionArtifactId": "jmag_region_labels_force_A_v2.json",
+                "TargetRegionArtifactId": "motor_fem_region_labels_force_A_v2.json",
                 "AnalysisType": "magnetostatic",
                 "FrequencyHz": 0.0,
-                "MeshId": "jmag_mesh_gap_force_A_v3",
-                "SolverRunId": "jmag_solver_run_20260630_A",
-                "ResultRevisionId": "jmag_result_revision_force_A_001",
-                "SolverSetupArtifactId": "jmag_solver_setup_force_A_strict_iccg_nr_v1.json",
-                "MaterialStateArtifactId": "jmag_material_state_force_A_bh_curve_v2.json",
-                "MaterialStateDigest": "sha256:jmag_slot333_material_state_digest_v1",
-                "ExcitationSourceArtifactId": "jmag_excitation_source_force_A_peak_current_v1.json",
+                "MeshId": "motor_fem_mesh_gap_force_A_v3",
+                "SolverRunId": "motor_fem_solver_run_20260630_A",
+                "ResultRevisionId": "motor_fem_result_revision_force_A_001",
+                "SolverSetupArtifactId": "motor_fem_solver_setup_force_A_strict_iccg_nr_v1.json",
+                "MaterialStateArtifactId": "motor_fem_material_state_force_A_bh_curve_v2.json",
+                "MaterialStateDigest": "sha256:motor_fem_slot333_material_state_digest_v1",
+                "ExcitationSourceArtifactId": "motor_fem_excitation_source_force_A_peak_current_v1.json",
                 "CurrentDefinitionMethod": "peak_phase_current_table",
             },
         ],
@@ -5489,7 +5489,7 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert row_run_identity["checks"]["row_target_material_matches_package"] is True
     assert row_run_identity["checks"]["row_target_region_artifact_id_matches_package"] is True
 
-    stale_solver_material_row = jmag_force_table_metadata_gate(
+    stale_solver_material_row = motor_fem_force_table_metadata_gate(
         {
             **metadata,
             "columns": metadata["columns"] + [
@@ -5505,10 +5505,10 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
             "identity_columns": ["TargetBodyId", "Gap_mm"],
         },
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_solver_setup_artifact_id="jmag_solver_setup_force_A_strict_iccg_nr_v1.json",
-        expected_material_state_artifact_id="jmag_material_state_force_A_bh_curve_v2.json",
-        expected_material_state_digest="sha256:jmag_slot333_material_state_digest_v1",
-        expected_excitation_source_artifact_id="jmag_excitation_source_force_A_peak_current_v1.json",
+        expected_solver_setup_artifact_id="motor_fem_solver_setup_force_A_strict_iccg_nr_v1.json",
+        expected_material_state_artifact_id="motor_fem_material_state_force_A_bh_curve_v2.json",
+        expected_material_state_digest="sha256:motor_fem_slot333_material_state_digest_v1",
+        expected_excitation_source_artifact_id="motor_fem_excitation_source_force_A_peak_current_v1.json",
         expected_current_definition_method="peak_phase_current_table",
         table_rows=[
             {
@@ -5520,13 +5520,13 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
                 "TargetBodyId": "moving_core",
                 "AnalysisType": "magnetostatic",
                 "FrequencyHz": 0.0,
-                "MeshId": "jmag_mesh_gap_force_A_v3",
-                "SolverRunId": "jmag_solver_run_20260630_A",
-                "ResultRevisionId": "jmag_result_revision_force_A_001",
-                "SolverSetupArtifactId": "jmag_solver_setup_force_A_loose_auto_v1.json",
-                "MaterialStateArtifactId": "jmag_material_state_force_A_old.json",
-                "MaterialStateDigest": "sha256:jmag_slot333_material_state_digest_old",
-                "ExcitationSourceArtifactId": "jmag_excitation_source_force_A_old.json",
+                "MeshId": "motor_fem_mesh_gap_force_A_v3",
+                "SolverRunId": "motor_fem_solver_run_20260630_A",
+                "ResultRevisionId": "motor_fem_result_revision_force_A_001",
+                "SolverSetupArtifactId": "motor_fem_solver_setup_force_A_loose_auto_v1.json",
+                "MaterialStateArtifactId": "motor_fem_material_state_force_A_old.json",
+                "MaterialStateDigest": "sha256:motor_fem_slot333_material_state_digest_old",
+                "ExcitationSourceArtifactId": "motor_fem_excitation_source_force_A_old.json",
                 "CurrentDefinitionMethod": "rms_phase_current_table",
             },
         ],
@@ -5546,7 +5546,7 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert stale_solver_material_row["row_excitation_source_artifact_id_mismatch_rows"] == [0]
     assert stale_solver_material_row["row_current_definition_method_mismatch_rows"] == [0]
 
-    stale_target_material_row = jmag_force_table_metadata_gate(
+    stale_target_material_row = motor_fem_force_table_metadata_gate(
         {
             **metadata,
             "columns": metadata["columns"] + ["MeshId", "SolverRunId", "ResultRevisionId"],
@@ -5555,7 +5555,7 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
         expected_target_region_name="moving_core_block_label",
         expected_target_material="magnetic_steel_core",
-        expected_target_region_artifact_id="jmag_region_labels_force_A_v2.json",
+        expected_target_region_artifact_id="motor_fem_region_labels_force_A_v2.json",
         table_rows=[
             {
                 "Gap_mm": 1.0,
@@ -5566,12 +5566,12 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
                 "TargetBodyId": "moving_core",
                 "TargetBodyName": "moving_core_block_label",
                 "TargetMaterialName": "air",
-                "TargetRegionArtifactId": "jmag_region_labels_force_A_v2.json",
+                "TargetRegionArtifactId": "motor_fem_region_labels_force_A_v2.json",
                 "AnalysisType": "magnetostatic",
                 "FrequencyHz": 0.0,
-                "MeshId": "jmag_mesh_gap_force_A_v3",
-                "SolverRunId": "jmag_solver_run_20260630_A",
-                "ResultRevisionId": "jmag_result_revision_force_A_001",
+                "MeshId": "motor_fem_mesh_gap_force_A_v3",
+                "SolverRunId": "motor_fem_solver_run_20260630_A",
+                "ResultRevisionId": "motor_fem_result_revision_force_A_001",
             },
         ],
     )
@@ -5582,16 +5582,16 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert stale_target_material_row["checks"]["row_target_region_artifact_id_matches_package"] is True
     assert stale_target_material_row["row_target_material_mismatch_rows"] == [0]
 
-    stale_mesh_row = jmag_force_table_metadata_gate(
+    stale_mesh_row = motor_fem_force_table_metadata_gate(
         {
             **metadata,
             "columns": metadata["columns"] + ["MeshId", "SolverRunId", "ResultRevisionId"],
             "identity_columns": ["TargetBodyId", "Gap_mm"],
         },
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_mesh_id="jmag_mesh_gap_force_A_v3",
-        expected_solver_run_id="jmag_solver_run_20260630_A",
-        expected_result_revision_id="jmag_result_revision_force_A_001",
+        expected_mesh_id="motor_fem_mesh_gap_force_A_v3",
+        expected_solver_run_id="motor_fem_solver_run_20260630_A",
+        expected_result_revision_id="motor_fem_result_revision_force_A_001",
         table_rows=[
             {
                 "Gap_mm": 1.0,
@@ -5602,9 +5602,9 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
                 "TargetBodyId": "moving_core",
                 "AnalysisType": "magnetostatic",
                 "FrequencyHz": 0.0,
-                "MeshId": "jmag_mesh_gap_force_old",
-                "SolverRunId": "jmag_solver_run_20260630_A",
-                "ResultRevisionId": "jmag_result_revision_force_A_001",
+                "MeshId": "motor_fem_mesh_gap_force_old",
+                "SolverRunId": "motor_fem_solver_run_20260630_A",
+                "ResultRevisionId": "motor_fem_result_revision_force_A_001",
             },
         ],
     )
@@ -5615,12 +5615,12 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert stale_mesh_row["checks"]["row_result_revision_id_matches_package"] is True
     assert stale_mesh_row["row_mesh_id_mismatch_rows"] == [0]
 
-    stale_case_row = jmag_force_table_metadata_gate(
+    stale_case_row = motor_fem_force_table_metadata_gate(
         {**metadata, "identity_columns": ["TargetBodyId", "Gap_mm"]},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
         expected_case_id="case_gap_force_sweep_A",
         expected_operating_point_id="op_gap_sweep_A",
-        expected_export_artifact_id="jmag_force_export_artifact_A",
+        expected_export_artifact_id="motor_fem_force_export_artifact_A",
         expected_result_set_id="resultset_force_20260630_A",
         expected_target_region_id="moving_core",
         min_table_rows=1,
@@ -5644,7 +5644,7 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert stale_case_row["checks"]["row_operating_point_id_matches_package"] is True
     assert stale_case_row["row_case_id_mismatch_rows"] == [0]
 
-    stale_analysis_metadata = jmag_force_table_metadata_gate(
+    stale_analysis_metadata = motor_fem_force_table_metadata_gate(
         {**metadata, "analysis_type": "transient"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
         expected_analysis_type="magnetostatic",
@@ -5652,7 +5652,7 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert stale_analysis_metadata["status"] == "needs_attention"
     assert stale_analysis_metadata["checks"]["expected_analysis_type_matches"] is False
 
-    stale_frequency_metadata = jmag_force_table_metadata_gate(
+    stale_frequency_metadata = motor_fem_force_table_metadata_gate(
         {**metadata, "frequency_hz": 50.0},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
         expected_frequency_hz=0.0,
@@ -5660,7 +5660,7 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert stale_frequency_metadata["status"] == "needs_attention"
     assert stale_frequency_metadata["checks"]["expected_frequency_hz_matches"] is False
 
-    stale_analysis_row = jmag_force_table_metadata_gate(
+    stale_analysis_row = motor_fem_force_table_metadata_gate(
         {**metadata, "identity_columns": ["TargetBodyId", "Gap_mm"]},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
         expected_analysis_type="magnetostatic",
@@ -5686,10 +5686,10 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert stale_analysis_row["row_analysis_type_mismatch_rows"] == [0]
     assert stale_analysis_row["row_frequency_hz_mismatch_rows"] == [0]
 
-    empty_force_rows = jmag_force_table_metadata_gate(
+    empty_force_rows = motor_fem_force_table_metadata_gate(
         metadata,
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_export_artifact_id="jmag_force_export_artifact_A",
+        expected_export_artifact_id="motor_fem_force_export_artifact_A",
         expected_result_set_id="resultset_force_20260630_A",
         expected_target_region_id="moving_core",
         min_table_rows=1,
@@ -5699,10 +5699,10 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert empty_force_rows["table_row_count"] == 0
     assert empty_force_rows["checks"]["table_rows_meet_minimum"] is False
 
-    duplicate_row_identity = jmag_force_table_metadata_gate(
+    duplicate_row_identity = motor_fem_force_table_metadata_gate(
         {**metadata, "identity_columns": ["TargetBodyId", "Gap_mm"]},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_export_artifact_id="jmag_force_export_artifact_A",
+        expected_export_artifact_id="motor_fem_force_export_artifact_A",
         expected_result_set_id="resultset_force_20260630_A",
         expected_target_region_id="moving_core",
         min_table_rows=2,
@@ -5733,10 +5733,10 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
         {"first_row": 0, "row": 1, "values": ["moving_core", "1.0"]}
     ]
 
-    wrong_row_identity = jmag_force_table_metadata_gate(
+    wrong_row_identity = motor_fem_force_table_metadata_gate(
         metadata,
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_export_artifact_id="jmag_force_export_artifact_A",
+        expected_export_artifact_id="motor_fem_force_export_artifact_A",
         expected_result_set_id="resultset_force_20260630_A",
         expected_target_region_id="moving_core",
         table_rows=[
@@ -5755,10 +5755,10 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert wrong_row_identity["checks"]["row_identity_matches_target_region"] is False
     assert wrong_row_identity["row_identity_mismatch_rows"] == [0]
 
-    wrong_force_dimension = jmag_force_table_metadata_gate(
+    wrong_force_dimension = motor_fem_force_table_metadata_gate(
         {**metadata, "force_unit": "N", "quantity_dimension": "2d_per_length"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_export_artifact_id="jmag_force_export_artifact_A",
+        expected_export_artifact_id="motor_fem_force_export_artifact_A",
         expected_result_set_id="resultset_force_20260630_A",
         expected_target_region_id="moving_core",
     )
@@ -5769,10 +5769,10 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
 
     missing_projection_axis = dict(metadata)
     missing_projection_axis.pop("projection_axis")
-    missing_projection = jmag_force_table_metadata_gate(
+    missing_projection = motor_fem_force_table_metadata_gate(
         missing_projection_axis,
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_export_artifact_id="jmag_force_export_artifact_A",
+        expected_export_artifact_id="motor_fem_force_export_artifact_A",
         expected_result_set_id="resultset_force_20260630_A",
         expected_target_region_id="moving_core",
     )
@@ -5780,10 +5780,10 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert missing_projection["checks"]["force_projection_axis_recorded"] is False
     assert missing_projection["checks"]["force_columns_match_component_frame"] is True
 
-    vague_projection_axis = jmag_force_table_metadata_gate(
+    vague_projection_axis = motor_fem_force_table_metadata_gate(
         {**metadata, "projection_axis": "screen"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_export_artifact_id="jmag_force_export_artifact_A",
+        expected_export_artifact_id="motor_fem_force_export_artifact_A",
         expected_result_set_id="resultset_force_20260630_A",
         expected_target_region_id="moving_core",
     )
@@ -5791,10 +5791,10 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert vague_projection_axis["checks"]["force_projection_axis_recorded"] is True
     assert vague_projection_axis["checks"]["force_projection_axis_descriptive"] is False
 
-    wrong_frame_columns = jmag_force_table_metadata_gate(
+    wrong_frame_columns = motor_fem_force_table_metadata_gate(
         {**metadata, "component_frame": "cylindrical_rt"},
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_export_artifact_id="jmag_force_export_artifact_A",
+        expected_export_artifact_id="motor_fem_force_export_artifact_A",
         expected_result_set_id="resultset_force_20260630_A",
         expected_target_region_id="moving_core",
     )
@@ -5803,10 +5803,10 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert wrong_frame_columns["checks"]["force_columns_match_component_frame"] is False
     assert wrong_frame_columns["expected_force_axes_for_frame"] == ["radial", "tangential"]
 
-    wrong_identity = jmag_force_table_metadata_gate(
+    wrong_identity = motor_fem_force_table_metadata_gate(
         metadata,
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_export_artifact_id="jmag_force_export_artifact_A",
+        expected_export_artifact_id="motor_fem_force_export_artifact_A",
         expected_result_set_id="resultset_force_20260630_A",
         expected_target_region_id="fixed_core",
     )
@@ -5814,7 +5814,7 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert wrong_identity["checks"]["expected_result_set_id_matches"] is True
     assert wrong_identity["checks"]["expected_target_region_id_matches"] is False
 
-    bad = jmag_force_table_metadata_gate(
+    bad = motor_fem_force_table_metadata_gate(
         {
             "columns": ["Gap", "Fx"],
             "position_columns": ["Gap_mm"],
@@ -5832,7 +5832,7 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
             "quantity_dimension": "screen_force",
         },
         required_columns=["Gap_mm", "Fx_N_per_m", "Fy_N_per_m"],
-        expected_export_artifact_id="jmag_force_export_artifact_A",
+        expected_export_artifact_id="motor_fem_force_export_artifact_A",
         expected_result_set_id="resultset_force_20260630_A",
         expected_target_region_id="moving_core",
     )
@@ -5856,19 +5856,19 @@ def test_jmag_force_table_metadata_gate_closes_units_frame_and_sign_before_value
     assert bad["checks"]["identity_columns_present"] is False
 
 
-def test_jmag_airgap_flux_sample_metadata_gate_binds_probe_output_identity():
+def test_motor_fem_airgap_flux_sample_metadata_gate_binds_probe_output_identity():
     rows = []
     for angle, br, bt in [(0.0, 0.72, 0.11), (5.0, 0.71, 0.12), (10.0, 0.70, 0.13)]:
         rows.append({
             "source_tool": "JMAG-Designer",
-            "result_set_id": "jmag_slot349_resultset_airgap_A",
-            "export_artifact_id": "jmag_slot349_airgap_line_probe_export_v1",
-            "field_probe_id": "jmag_slot349_mid_airgap_probe_v1",
-            "field_probe_method": "jmag_airgap_line_probe_export",
-            "field_probe_output_artifact_id": "jmag_slot349_airgap_flux_table_v1.csv",
+            "result_set_id": "motor_fem_slot349_resultset_airgap_A",
+            "export_artifact_id": "motor_fem_slot349_airgap_line_probe_export_v1",
+            "field_probe_id": "motor_fem_slot349_mid_airgap_probe_v1",
+            "field_probe_method": "motor_fem_airgap_line_probe_export",
+            "field_probe_output_artifact_id": "motor_fem_slot349_airgap_flux_table_v1.csv",
             "field_probe_output_digest": "sha256:jmag-slot349-airgap-flux-table-v1",
-            "field_probe_output_path": "artifacts/motor/jmag_slot349_airgap_flux_table_v1.csv",
-            "sample_grid_id": "jmag_slot357_airgap_angle_grid_v1",
+            "field_probe_output_path": "artifacts/motor/motor_fem_slot349_airgap_flux_table_v1.csv",
+            "sample_grid_id": "motor_fem_slot357_airgap_angle_grid_v1",
             "sample_grid_digest": "sha256:jmag-slot357-airgap-angle-grid-v1",
             "sample_count": 3,
             "RotorAngle_deg": angle,
@@ -5883,15 +5883,15 @@ def test_jmag_airgap_flux_sample_metadata_gate_binds_probe_output_identity():
             "torque_sign_convention": "positive_motoring",
         })
 
-    gate = jmag_airgap_flux_sample_metadata_gate(
+    gate = motor_fem_airgap_flux_sample_metadata_gate(
         rows,
-        expected_result_set_id="jmag_slot349_resultset_airgap_A",
-        expected_export_artifact_id="jmag_slot349_airgap_line_probe_export_v1",
-        expected_field_probe_id="jmag_slot349_mid_airgap_probe_v1",
-        expected_field_probe_method="jmag_airgap_line_probe_export",
-        expected_field_probe_output_artifact_id="jmag_slot349_airgap_flux_table_v1.csv",
+        expected_result_set_id="motor_fem_slot349_resultset_airgap_A",
+        expected_export_artifact_id="motor_fem_slot349_airgap_line_probe_export_v1",
+        expected_field_probe_id="motor_fem_slot349_mid_airgap_probe_v1",
+        expected_field_probe_method="motor_fem_airgap_line_probe_export",
+        expected_field_probe_output_artifact_id="motor_fem_slot349_airgap_flux_table_v1.csv",
         expected_field_probe_output_digest="sha256:jmag-slot349-airgap-flux-table-v1",
-        expected_sample_grid_id="jmag_slot357_airgap_angle_grid_v1",
+        expected_sample_grid_id="motor_fem_slot357_airgap_angle_grid_v1",
         expected_sample_grid_digest="sha256:jmag-slot357-airgap-angle-grid-v1",
         expected_sample_count=3,
         expected_angle_unit="deg",
@@ -5901,7 +5901,7 @@ def test_jmag_airgap_flux_sample_metadata_gate_binds_probe_output_identity():
         require_field_probe_output_artifact=True,
     )
 
-    assert gate["policy"] == "jmag_airgap_flux_sample_metadata_gate"
+    assert gate["policy"] == "motor_fem_airgap_flux_sample_metadata_gate"
     assert gate["status"] == "ok"
     assert gate["checks"]["source_tool_is_jmag"] is True
     assert gate["checks"]["br_t_recorded_and_finite"] is True
@@ -5916,41 +5916,41 @@ def test_jmag_airgap_flux_sample_metadata_gate_binds_probe_output_identity():
     assert gate["checks"]["expected_sample_grid_id_matches"] is True
     assert gate["checks"]["expected_sample_grid_digest_matches"] is True
     assert gate["checks"]["expected_sample_count_matches"] is True
-    assert gate["sample_grid_ids"] == ["jmag_slot357_airgap_angle_grid_v1"]
-    assert gate["field_probe_ids"] == ["jmag_slot349_mid_airgap_probe_v1"]
-    assert gate["field_probe_methods"] == ["jmag_airgap_line_probe_export"]
+    assert gate["sample_grid_ids"] == ["motor_fem_slot357_airgap_angle_grid_v1"]
+    assert gate["field_probe_ids"] == ["motor_fem_slot349_mid_airgap_probe_v1"]
+    assert gate["field_probe_methods"] == ["motor_fem_airgap_line_probe_export"]
 
-    stale_result = jmag_airgap_flux_sample_metadata_gate(
-        [{**row, "result_set_id": "jmag_slot341_old_resultset"} for row in rows],
-        expected_result_set_id="jmag_slot349_resultset_airgap_A",
+    stale_result = motor_fem_airgap_flux_sample_metadata_gate(
+        [{**row, "result_set_id": "motor_fem_slot341_old_resultset"} for row in rows],
+        expected_result_set_id="motor_fem_slot349_resultset_airgap_A",
     )
     assert stale_result["status"] == "needs_attention"
     assert stale_result["checks"]["expected_result_set_id_matches"] is False
 
-    stale_export = jmag_airgap_flux_sample_metadata_gate(
-        [{**row, "export_artifact_id": "jmag_slot333_old_airgap_export"} for row in rows],
-        expected_export_artifact_id="jmag_slot349_airgap_line_probe_export_v1",
+    stale_export = motor_fem_airgap_flux_sample_metadata_gate(
+        [{**row, "export_artifact_id": "motor_fem_slot333_old_airgap_export"} for row in rows],
+        expected_export_artifact_id="motor_fem_slot349_airgap_line_probe_export_v1",
     )
     assert stale_export["status"] == "needs_attention"
     assert stale_export["checks"]["expected_export_artifact_id_matches"] is False
 
-    stale_probe = jmag_airgap_flux_sample_metadata_gate(
-        [{**row, "field_probe_id": "jmag_slot326_old_probe"} for row in rows],
-        expected_field_probe_id="jmag_slot349_mid_airgap_probe_v1",
+    stale_probe = motor_fem_airgap_flux_sample_metadata_gate(
+        [{**row, "field_probe_id": "motor_fem_slot326_old_probe"} for row in rows],
+        expected_field_probe_id="motor_fem_slot349_mid_airgap_probe_v1",
     )
     assert stale_probe["status"] == "needs_attention"
     assert stale_probe["checks"]["expected_field_probe_id_matches"] is False
 
-    wrong_method = jmag_airgap_flux_sample_metadata_gate(
+    wrong_method = motor_fem_airgap_flux_sample_metadata_gate(
         [{**row, "field_probe_method": "point_b_probe"} for row in rows],
-        expected_field_probe_method="jmag_airgap_line_probe_export",
+        expected_field_probe_method="motor_fem_airgap_line_probe_export",
     )
     assert wrong_method["status"] == "needs_attention"
     assert wrong_method["checks"]["expected_field_probe_method_matches"] is False
 
-    stale_output = jmag_airgap_flux_sample_metadata_gate(
-        [{**row, "field_probe_output_artifact_id": "jmag_slot293_old_airgap.csv"} for row in rows],
-        expected_field_probe_output_artifact_id="jmag_slot349_airgap_flux_table_v1.csv",
+    stale_output = motor_fem_airgap_flux_sample_metadata_gate(
+        [{**row, "field_probe_output_artifact_id": "motor_fem_slot293_old_airgap.csv"} for row in rows],
+        expected_field_probe_output_artifact_id="motor_fem_slot349_airgap_flux_table_v1.csv",
         expected_field_probe_output_digest="sha256:jmag-slot349-airgap-flux-table-v1",
         require_field_probe_output_artifact=True,
     )
@@ -5958,9 +5958,9 @@ def test_jmag_airgap_flux_sample_metadata_gate_binds_probe_output_identity():
     assert stale_output["checks"]["expected_field_probe_output_artifact_id_matches"] is False
     assert stale_output["checks"]["expected_field_probe_output_digest_matches"] is True
 
-    stale_grid = jmag_airgap_flux_sample_metadata_gate(
-        [{**row, "sample_grid_id": "jmag_slot349_old_angle_grid"} for row in rows],
-        expected_sample_grid_id="jmag_slot357_airgap_angle_grid_v1",
+    stale_grid = motor_fem_airgap_flux_sample_metadata_gate(
+        [{**row, "sample_grid_id": "motor_fem_slot349_old_angle_grid"} for row in rows],
+        expected_sample_grid_id="motor_fem_slot357_airgap_angle_grid_v1",
         expected_sample_grid_digest="sha256:jmag-slot357-airgap-angle-grid-v1",
         expected_sample_count=3,
     )
@@ -5968,40 +5968,40 @@ def test_jmag_airgap_flux_sample_metadata_gate_binds_probe_output_identity():
     assert stale_grid["checks"]["expected_sample_grid_id_matches"] is False
     assert stale_grid["checks"]["expected_sample_grid_digest_matches"] is True
 
-    wrong_sample_count = jmag_airgap_flux_sample_metadata_gate(
+    wrong_sample_count = motor_fem_airgap_flux_sample_metadata_gate(
         [{**row, "sample_count": 4} for row in rows],
         expected_sample_count=3,
     )
     assert wrong_sample_count["status"] == "needs_attention"
     assert wrong_sample_count["checks"]["expected_sample_count_matches"] is False
 
-    wrong_frame = jmag_airgap_flux_sample_metadata_gate(
+    wrong_frame = motor_fem_airgap_flux_sample_metadata_gate(
         [{**row, "component_frame": "cartesian_xy"} for row in rows],
         expected_component_frame="cylindrical_rt",
     )
     assert wrong_frame["status"] == "needs_attention"
     assert wrong_frame["checks"]["expected_component_frame_matches"] is False
 
-    missing_bt = jmag_airgap_flux_sample_metadata_gate(
+    missing_bt = motor_fem_airgap_flux_sample_metadata_gate(
         [{k: v for k, v in row.items() if k != "Bt_T"} for row in rows],
     )
     assert missing_bt["status"] == "needs_attention"
     assert missing_bt["checks"]["bt_t_recorded_and_finite"] is False
 
 
-def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identity():
+def test_motor_fem_airgap_torque_integration_package_gate_binds_field_and_grid_identity():
     rows = []
     for angle, br, bt in [(0.0, 0.72, 0.11), (5.0, 0.71, 0.12), (10.0, 0.70, 0.13)]:
         rows.append({
             "source_tool": "JMAG-Designer",
-            "result_set_id": "jmag_slot365_resultset_airgap_A",
-            "export_artifact_id": "jmag_slot365_airgap_line_probe_export_v1",
-            "field_probe_id": "jmag_slot365_mid_airgap_probe_v1",
-            "field_probe_method": "jmag_airgap_line_probe_export",
-            "field_probe_output_artifact_id": "jmag_slot365_airgap_flux_table_v1.csv",
+            "result_set_id": "motor_fem_slot365_resultset_airgap_A",
+            "export_artifact_id": "motor_fem_slot365_airgap_line_probe_export_v1",
+            "field_probe_id": "motor_fem_slot365_mid_airgap_probe_v1",
+            "field_probe_method": "motor_fem_airgap_line_probe_export",
+            "field_probe_output_artifact_id": "motor_fem_slot365_airgap_flux_table_v1.csv",
             "field_probe_output_digest": "sha256:jmag-slot365-airgap-flux-table-v1",
-            "field_probe_output_path": "artifacts/motor/jmag_slot365_airgap_flux_table_v1.csv",
-            "sample_grid_id": "jmag_slot365_airgap_angle_grid_v1",
+            "field_probe_output_path": "artifacts/motor/motor_fem_slot365_airgap_flux_table_v1.csv",
+            "sample_grid_id": "motor_fem_slot365_airgap_angle_grid_v1",
             "sample_grid_digest": "sha256:jmag-slot365-airgap-angle-grid-v1",
             "sample_count": 3,
             "RotorAngle_deg": angle,
@@ -6015,15 +6015,15 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
             "symmetry_factor": 6,
             "torque_sign_convention": "positive_motoring",
         })
-    sample_gate = jmag_airgap_flux_sample_metadata_gate(
+    sample_gate = motor_fem_airgap_flux_sample_metadata_gate(
         rows,
-        expected_result_set_id="jmag_slot365_resultset_airgap_A",
-        expected_export_artifact_id="jmag_slot365_airgap_line_probe_export_v1",
-        expected_field_probe_id="jmag_slot365_mid_airgap_probe_v1",
-        expected_field_probe_method="jmag_airgap_line_probe_export",
-        expected_field_probe_output_artifact_id="jmag_slot365_airgap_flux_table_v1.csv",
+        expected_result_set_id="motor_fem_slot365_resultset_airgap_A",
+        expected_export_artifact_id="motor_fem_slot365_airgap_line_probe_export_v1",
+        expected_field_probe_id="motor_fem_slot365_mid_airgap_probe_v1",
+        expected_field_probe_method="motor_fem_airgap_line_probe_export",
+        expected_field_probe_output_artifact_id="motor_fem_slot365_airgap_flux_table_v1.csv",
         expected_field_probe_output_digest="sha256:jmag-slot365-airgap-flux-table-v1",
-        expected_sample_grid_id="jmag_slot365_airgap_angle_grid_v1",
+        expected_sample_grid_id="motor_fem_slot365_airgap_angle_grid_v1",
         expected_sample_grid_digest="sha256:jmag-slot365-airgap-angle-grid-v1",
         expected_sample_count=3,
         expected_angle_basis="mechanical",
@@ -6033,31 +6033,31 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
     assert sample_gate["status"] == "ok"
 
     package = {
-        "input_field_table_artifact_id": "jmag_slot365_airgap_flux_table_v1.csv",
+        "input_field_table_artifact_id": "motor_fem_slot365_airgap_flux_table_v1.csv",
         "input_field_table_digest": "sha256:jmag-slot365-airgap-flux-table-v1",
-        "input_field_table_path": "artifacts/motor/jmag_slot365_airgap_flux_table_v1.csv",
-        "model_input_artifact_id": "jmag_slot379_airgap_motor_project_v1.jproj",
+        "input_field_table_path": "artifacts/motor/motor_fem_slot365_airgap_flux_table_v1.csv",
+        "model_input_artifact_id": "motor_fem_slot379_airgap_motor_project_v1.jproj",
         "model_input_digest": "sha256:jmag-slot379-airgap-motor-project-v1",
-        "model_input_path": "artifacts/motor/jmag_slot379_airgap_motor_project_v1.jproj",
-        "export_recipe_artifact_id": "jmag_slot386_airgap_export_recipe_v1.py",
+        "model_input_path": "artifacts/motor/motor_fem_slot379_airgap_motor_project_v1.jproj",
+        "export_recipe_artifact_id": "motor_fem_slot386_airgap_export_recipe_v1.py",
         "export_recipe_digest": "sha256:jmag-slot386-airgap-export-recipe-v1",
-        "export_recipe_path": "artifacts/motor/jmag_slot386_airgap_export_recipe.py",
-        "parameter_set_artifact_id": "jmag_slot393_airgap_torque_parameter_set_v1.json",
+        "export_recipe_path": "artifacts/motor/motor_fem_slot386_airgap_export_recipe.py",
+        "parameter_set_artifact_id": "motor_fem_slot393_airgap_torque_parameter_set_v1.json",
         "parameter_set_digest": "sha256:jmag-slot393-airgap-torque-parameter-set-v1",
-        "parameter_set_path": "artifacts/motor/jmag_slot393_airgap_torque_parameter_set.json",
-        "objective_observable_id": "jmag_slot393_airgap_torque_objective_v1",
+        "parameter_set_path": "artifacts/motor/motor_fem_slot393_airgap_torque_parameter_set.json",
+        "objective_observable_id": "motor_fem_slot393_airgap_torque_objective_v1",
         "objective_observable_family": "airgap_torque_maxwell_shear_objective",
-        "sample_grid_id": "jmag_slot365_airgap_angle_grid_v1",
+        "sample_grid_id": "motor_fem_slot365_airgap_angle_grid_v1",
         "sample_grid_digest": "sha256:jmag-slot365-airgap-angle-grid-v1",
         "sample_count": 3,
         "integration_method": "maxwell_shear_from_br_bt_samples",
         "integration_policy": "trapezoid_periodic_full_sector_expand_symmetry",
         "component_frame": "cylindrical_rt",
         "torque_sign_convention": "positive_motoring",
-        "torque_output_artifact_id": "jmag_slot365_airgap_torque_integration_v1.json",
+        "torque_output_artifact_id": "motor_fem_slot365_airgap_torque_integration_v1.json",
         "torque_output_digest": "sha256:jmag-slot365-airgap-torque-integration-v1",
-        "torque_output_path": "artifacts/motor/jmag_slot365_airgap_torque_integration_v1.json",
-        "torque_output_schema_id": "jmag_airgap_torque_table_v1",
+        "torque_output_path": "artifacts/motor/motor_fem_slot365_airgap_torque_integration_v1.json",
+        "torque_output_schema_id": "motor_fem_airgap_torque_table_v1",
         "torque_output_columns": [
             "RotorAngle_deg",
             "Br_T",
@@ -6072,32 +6072,32 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
             "torque_density_N_per_m2": "N/m^2",
             "torque_Nm": "N*m",
         },
-        "torque_convention_schema_id": "jmag_airgap_torque_convention_v1",
-        "torque_component_basis_schema_id": "jmag_airgap_cylindrical_rt_component_basis_v1",
-        "torque_postprocess_row_convention_schema_id": "jmag_airgap_torque_row_convention_v1",
+        "torque_convention_schema_id": "motor_fem_airgap_torque_convention_v1",
+        "torque_component_basis_schema_id": "motor_fem_airgap_cylindrical_rt_component_basis_v1",
+        "torque_postprocess_row_convention_schema_id": "motor_fem_airgap_torque_row_convention_v1",
         "torque_Nm": 0.04125,
     }
-    gate = jmag_airgap_torque_integration_package_gate(
+    gate = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         package,
-        expected_input_field_table_artifact_id="jmag_slot365_airgap_flux_table_v1.csv",
+        expected_input_field_table_artifact_id="motor_fem_slot365_airgap_flux_table_v1.csv",
         expected_input_field_table_digest="sha256:jmag-slot365-airgap-flux-table-v1",
-        expected_model_input_artifact_id="jmag_slot379_airgap_motor_project_v1.jproj",
+        expected_model_input_artifact_id="motor_fem_slot379_airgap_motor_project_v1.jproj",
         expected_model_input_digest="sha256:jmag-slot379-airgap-motor-project-v1",
-        expected_model_input_path="artifacts/motor/jmag_slot379_airgap_motor_project_v1.jproj",
-        expected_export_recipe_artifact_id="jmag_slot386_airgap_export_recipe_v1.py",
+        expected_model_input_path="artifacts/motor/motor_fem_slot379_airgap_motor_project_v1.jproj",
+        expected_export_recipe_artifact_id="motor_fem_slot386_airgap_export_recipe_v1.py",
         expected_export_recipe_digest="sha256:jmag-slot386-airgap-export-recipe-v1",
-        expected_export_recipe_path="artifacts/motor/jmag_slot386_airgap_export_recipe.py",
-        expected_parameter_set_artifact_id="jmag_slot393_airgap_torque_parameter_set_v1.json",
+        expected_export_recipe_path="artifacts/motor/motor_fem_slot386_airgap_export_recipe.py",
+        expected_parameter_set_artifact_id="motor_fem_slot393_airgap_torque_parameter_set_v1.json",
         expected_parameter_set_digest="sha256:jmag-slot393-airgap-torque-parameter-set-v1",
-        expected_parameter_set_path="artifacts/motor/jmag_slot393_airgap_torque_parameter_set.json",
-        expected_objective_observable_id="jmag_slot393_airgap_torque_objective_v1",
+        expected_parameter_set_path="artifacts/motor/motor_fem_slot393_airgap_torque_parameter_set.json",
+        expected_objective_observable_id="motor_fem_slot393_airgap_torque_objective_v1",
         expected_objective_observable_family="airgap_torque_maxwell_shear_objective",
-        expected_sample_grid_id="jmag_slot365_airgap_angle_grid_v1",
+        expected_sample_grid_id="motor_fem_slot365_airgap_angle_grid_v1",
         expected_sample_grid_digest="sha256:jmag-slot365-airgap-angle-grid-v1",
-        expected_torque_output_artifact_id="jmag_slot365_airgap_torque_integration_v1.json",
+        expected_torque_output_artifact_id="motor_fem_slot365_airgap_torque_integration_v1.json",
         expected_torque_output_digest="sha256:jmag-slot365-airgap-torque-integration-v1",
-        expected_torque_output_schema_id="jmag_airgap_torque_table_v1",
+        expected_torque_output_schema_id="motor_fem_airgap_torque_table_v1",
         expected_torque_output_columns=[
             "RotorAngle_deg",
             "Br_T",
@@ -6112,9 +6112,9 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
             "torque_density_N_per_m2": "N/m^2",
             "torque_Nm": "N*m",
         },
-        expected_torque_convention_schema_id="jmag_airgap_torque_convention_v1",
-        expected_torque_component_basis_schema_id="jmag_airgap_cylindrical_rt_component_basis_v1",
-        expected_torque_postprocess_row_convention_schema_id="jmag_airgap_torque_row_convention_v1",
+        expected_torque_convention_schema_id="motor_fem_airgap_torque_convention_v1",
+        expected_torque_component_basis_schema_id="motor_fem_airgap_cylindrical_rt_component_basis_v1",
+        expected_torque_postprocess_row_convention_schema_id="motor_fem_airgap_torque_row_convention_v1",
         expected_torque_nm=0.04125,
         torque_abs_tol=1.0e-14,
         require_export_recipe_artifact=True,
@@ -6126,7 +6126,7 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
         require_torque_postprocess_row_convention_schema=True,
     )
 
-    assert gate["policy"] == "jmag_airgap_torque_integration_package_gate"
+    assert gate["policy"] == "motor_fem_airgap_torque_integration_package_gate"
     assert gate["status"] == "ok"
     assert gate["checks"]["sample_metadata_gate_ok"] is True
     assert gate["checks"]["input_field_table_artifact_matches_sample_gate"] is True
@@ -6144,7 +6144,7 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
     assert gate["checks"]["expected_export_recipe_digest_matches"] is True
     assert gate["checks"]["expected_export_recipe_path_matches"] is True
     assert gate["export_recipe_artifact_required"] is True
-    assert gate["export_recipe_artifact_id"] == "jmag_slot386_airgap_export_recipe_v1.py"
+    assert gate["export_recipe_artifact_id"] == "motor_fem_slot386_airgap_export_recipe_v1.py"
     assert gate["parameter_set_artifact_required"] is True
     assert gate["checks"]["parameter_set_artifact_id_recorded"] is True
     assert gate["checks"]["parameter_set_digest_recorded"] is True
@@ -6156,7 +6156,7 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
     assert gate["checks"]["expected_objective_observable_id_matches"] is True
     assert gate["checks"]["objective_observable_family_recorded"] is True
     assert gate["checks"]["expected_objective_observable_family_matches"] is True
-    assert gate["parameter_set_artifact_id"] == "jmag_slot393_airgap_torque_parameter_set_v1.json"
+    assert gate["parameter_set_artifact_id"] == "motor_fem_slot393_airgap_torque_parameter_set_v1.json"
     assert gate["objective_observable_family"] == "airgap_torque_maxwell_shear_objective"
     assert gate["checks"]["sample_grid_id_matches_sample_gate"] is True
     assert gate["checks"]["sample_grid_digest_matches_sample_gate"] is True
@@ -6167,27 +6167,27 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
     assert gate["checks"]["expected_torque_output_schema_id_matches"] is True
     assert gate["checks"]["expected_torque_output_columns_match"] is True
     assert gate["checks"]["expected_torque_output_units_match"] is True
-    assert gate["torque_output_schema_id"] == "jmag_airgap_torque_table_v1"
+    assert gate["torque_output_schema_id"] == "motor_fem_airgap_torque_table_v1"
     assert gate["torque_convention_schema_required"] is True
     assert gate["checks"]["torque_convention_schema_id_recorded"] is True
     assert gate["checks"]["expected_torque_convention_schema_id_matches"] is True
-    assert gate["torque_convention_schema_id"] == "jmag_airgap_torque_convention_v1"
+    assert gate["torque_convention_schema_id"] == "motor_fem_airgap_torque_convention_v1"
     assert gate["torque_component_basis_schema_required"] is True
     assert gate["checks"]["torque_component_basis_schema_id_recorded"] is True
     assert gate["checks"]["expected_torque_component_basis_schema_id_matches"] is True
-    assert gate["torque_component_basis_schema_id"] == "jmag_airgap_cylindrical_rt_component_basis_v1"
-    assert gate["expected_torque_component_basis_schema_id"] == "jmag_airgap_cylindrical_rt_component_basis_v1"
+    assert gate["torque_component_basis_schema_id"] == "motor_fem_airgap_cylindrical_rt_component_basis_v1"
+    assert gate["expected_torque_component_basis_schema_id"] == "motor_fem_airgap_cylindrical_rt_component_basis_v1"
     assert gate["torque_postprocess_row_convention_schema_required"] is True
     assert gate["checks"]["torque_postprocess_row_convention_schema_id_recorded"] is True
     assert gate["checks"]["expected_torque_postprocess_row_convention_schema_id_matches"] is True
-    assert gate["torque_postprocess_row_convention_schema_id"] == "jmag_airgap_torque_row_convention_v1"
+    assert gate["torque_postprocess_row_convention_schema_id"] == "motor_fem_airgap_torque_row_convention_v1"
     assert gate["checks"]["expected_torque_nm_matches"] is True
 
     execution_package = {
         **package,
-        "torque_output_artifact_id": "jmag_slot372_airgap_torque_integration_v1.json",
+        "torque_output_artifact_id": "motor_fem_slot372_airgap_torque_integration_v1.json",
         "torque_output_digest": "sha256:jmag-slot372-airgap-torque-integration-v1",
-        "torque_output_path": "artifacts/motor/jmag_slot372_airgap_torque_integration_v1.json",
+        "torque_output_path": "artifacts/motor/motor_fem_slot372_airgap_torque_integration_v1.json",
         "created_at_utc": "2026-07-01T11:12:20Z",
         "run_timestamp_utc": "2026-07-01T11:12:00Z",
         "solver_version": "JMAG-Designer 24.2.1",
@@ -6200,14 +6200,14 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
             "write_json_s": 0.3,
         },
     }
-    execution_gate = jmag_airgap_torque_integration_package_gate(
+    execution_gate = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         execution_package,
-        expected_input_field_table_artifact_id="jmag_slot365_airgap_flux_table_v1.csv",
+        expected_input_field_table_artifact_id="motor_fem_slot365_airgap_flux_table_v1.csv",
         expected_input_field_table_digest="sha256:jmag-slot365-airgap-flux-table-v1",
-        expected_sample_grid_id="jmag_slot365_airgap_angle_grid_v1",
+        expected_sample_grid_id="motor_fem_slot365_airgap_angle_grid_v1",
         expected_sample_grid_digest="sha256:jmag-slot365-airgap-angle-grid-v1",
-        expected_torque_output_artifact_id="jmag_slot372_airgap_torque_integration_v1.json",
+        expected_torque_output_artifact_id="motor_fem_slot372_airgap_torque_integration_v1.json",
         expected_torque_output_digest="sha256:jmag-slot372-airgap-torque-integration-v1",
         expected_torque_nm=0.04125,
         expected_created_at_utc="2026-07-01T11:12:20Z",
@@ -6238,21 +6238,21 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
 
     model_input_package = {
         **execution_package,
-        "torque_output_artifact_id": "jmag_slot379_airgap_torque_integration_v1.json",
+        "torque_output_artifact_id": "motor_fem_slot379_airgap_torque_integration_v1.json",
         "torque_output_digest": "sha256:jmag-slot379-airgap-torque-integration-v1",
-        "torque_output_path": "artifacts/motor/jmag_slot379_airgap_torque_integration_v1.json",
+        "torque_output_path": "artifacts/motor/motor_fem_slot379_airgap_torque_integration_v1.json",
     }
-    model_input_gate = jmag_airgap_torque_integration_package_gate(
+    model_input_gate = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         model_input_package,
-        expected_input_field_table_artifact_id="jmag_slot365_airgap_flux_table_v1.csv",
+        expected_input_field_table_artifact_id="motor_fem_slot365_airgap_flux_table_v1.csv",
         expected_input_field_table_digest="sha256:jmag-slot365-airgap-flux-table-v1",
-        expected_model_input_artifact_id="jmag_slot379_airgap_motor_project_v1.jproj",
+        expected_model_input_artifact_id="motor_fem_slot379_airgap_motor_project_v1.jproj",
         expected_model_input_digest="sha256:jmag-slot379-airgap-motor-project-v1",
-        expected_model_input_path="artifacts/motor/jmag_slot379_airgap_motor_project_v1.jproj",
-        expected_sample_grid_id="jmag_slot365_airgap_angle_grid_v1",
+        expected_model_input_path="artifacts/motor/motor_fem_slot379_airgap_motor_project_v1.jproj",
+        expected_sample_grid_id="motor_fem_slot365_airgap_angle_grid_v1",
         expected_sample_grid_digest="sha256:jmag-slot365-airgap-angle-grid-v1",
-        expected_torque_output_artifact_id="jmag_slot379_airgap_torque_integration_v1.json",
+        expected_torque_output_artifact_id="motor_fem_slot379_airgap_torque_integration_v1.json",
         expected_torque_output_digest="sha256:jmag-slot379-airgap-torque-integration-v1",
         expected_torque_nm=0.04125,
         require_model_input_artifact=True,
@@ -6262,25 +6262,25 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
     )
     assert model_input_gate["status"] == "ok"
     assert model_input_gate["model_input_artifact_required"] is True
-    assert model_input_gate["model_input_artifact_id"] == "jmag_slot379_airgap_motor_project_v1.jproj"
+    assert model_input_gate["model_input_artifact_id"] == "motor_fem_slot379_airgap_motor_project_v1.jproj"
     assert model_input_gate["checks"]["model_input_artifact_id_recorded"] is True
     assert model_input_gate["checks"]["model_input_digest_recorded"] is True
     assert model_input_gate["checks"]["model_input_path_recorded"] is True
     assert model_input_gate["checks"]["expected_model_input_digest_matches"] is True
 
-    stale_project_digest = jmag_airgap_torque_integration_package_gate(
+    stale_project_digest = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         {**model_input_package, "model_input_digest": "sha256:jmag-slot365-old-project"},
-        expected_model_input_artifact_id="jmag_slot379_airgap_motor_project_v1.jproj",
+        expected_model_input_artifact_id="motor_fem_slot379_airgap_motor_project_v1.jproj",
         expected_model_input_digest="sha256:jmag-slot379-airgap-motor-project-v1",
-        expected_model_input_path="artifacts/motor/jmag_slot379_airgap_motor_project_v1.jproj",
+        expected_model_input_path="artifacts/motor/motor_fem_slot379_airgap_motor_project_v1.jproj",
         require_model_input_artifact=True,
     )
     assert stale_project_digest["status"] == "needs_attention"
     assert stale_project_digest["checks"]["expected_model_input_artifact_id_matches"] is True
     assert stale_project_digest["checks"]["expected_model_input_digest_matches"] is False
 
-    missing_project_path = jmag_airgap_torque_integration_package_gate(
+    missing_project_path = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         {key: value for key, value in model_input_package.items() if key != "model_input_path"},
         require_model_input_artifact=True,
@@ -6290,19 +6290,19 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
     assert missing_project_path["checks"]["model_input_digest_recorded"] is True
     assert missing_project_path["checks"]["model_input_path_recorded"] is False
 
-    stale_export_recipe_digest = jmag_airgap_torque_integration_package_gate(
+    stale_export_recipe_digest = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         {**model_input_package, "export_recipe_digest": "sha256:jmag-slot365-old-export-recipe"},
-        expected_export_recipe_artifact_id="jmag_slot386_airgap_export_recipe_v1.py",
+        expected_export_recipe_artifact_id="motor_fem_slot386_airgap_export_recipe_v1.py",
         expected_export_recipe_digest="sha256:jmag-slot386-airgap-export-recipe-v1",
-        expected_export_recipe_path="artifacts/motor/jmag_slot386_airgap_export_recipe.py",
+        expected_export_recipe_path="artifacts/motor/motor_fem_slot386_airgap_export_recipe.py",
         require_export_recipe_artifact=True,
     )
     assert stale_export_recipe_digest["status"] == "needs_attention"
     assert stale_export_recipe_digest["checks"]["expected_export_recipe_artifact_id_matches"] is True
     assert stale_export_recipe_digest["checks"]["expected_export_recipe_digest_matches"] is False
 
-    missing_export_recipe_path = jmag_airgap_torque_integration_package_gate(
+    missing_export_recipe_path = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         {key: value for key, value in model_input_package.items() if key != "export_recipe_path"},
         require_export_recipe_artifact=True,
@@ -6312,12 +6312,12 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
     assert missing_export_recipe_path["checks"]["export_recipe_digest_recorded"] is True
     assert missing_export_recipe_path["checks"]["export_recipe_path_recorded"] is False
 
-    stale_parameter_set_digest = jmag_airgap_torque_integration_package_gate(
+    stale_parameter_set_digest = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         {**model_input_package, "parameter_set_digest": "sha256:jmag-slot365-old-parameter-set"},
-        expected_parameter_set_artifact_id="jmag_slot393_airgap_torque_parameter_set_v1.json",
+        expected_parameter_set_artifact_id="motor_fem_slot393_airgap_torque_parameter_set_v1.json",
         expected_parameter_set_digest="sha256:jmag-slot393-airgap-torque-parameter-set-v1",
-        expected_parameter_set_path="artifacts/motor/jmag_slot393_airgap_torque_parameter_set.json",
+        expected_parameter_set_path="artifacts/motor/motor_fem_slot393_airgap_torque_parameter_set.json",
         require_parameter_set_artifact=True,
     )
     assert stale_parameter_set_digest["status"] == "needs_attention"
@@ -6326,7 +6326,7 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
     assert stale_parameter_set_digest["checks"]["expected_parameter_set_path_matches"] is True
     assert stale_parameter_set_digest["checks"]["expected_torque_nm_matches"] is True
 
-    missing_parameter_set_path = jmag_airgap_torque_integration_package_gate(
+    missing_parameter_set_path = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         {key: value for key, value in model_input_package.items() if key != "parameter_set_path"},
         require_parameter_set_artifact=True,
@@ -6336,10 +6336,10 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
     assert missing_parameter_set_path["checks"]["parameter_set_digest_recorded"] is True
     assert missing_parameter_set_path["checks"]["parameter_set_path_recorded"] is False
 
-    wrong_objective_family = jmag_airgap_torque_integration_package_gate(
+    wrong_objective_family = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         {**model_input_package, "objective_observable_family": "flux_density_ripple_objective"},
-        expected_objective_observable_id="jmag_slot393_airgap_torque_objective_v1",
+        expected_objective_observable_id="motor_fem_slot393_airgap_torque_objective_v1",
         expected_objective_observable_family="airgap_torque_maxwell_shear_objective",
     )
     assert wrong_objective_family["status"] == "needs_attention"
@@ -6347,7 +6347,7 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
     assert wrong_objective_family["checks"]["expected_objective_observable_family_matches"] is False
     assert wrong_objective_family["checks"]["expected_torque_nm_matches"] is True
 
-    stale_execution_version = jmag_airgap_torque_integration_package_gate(
+    stale_execution_version = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         {**execution_package, "solver_version": "JMAG-Designer 23.0 stale"},
         expected_solver_version="JMAG-Designer 24.2.1",
@@ -6357,7 +6357,7 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
     assert stale_execution_version["status"] == "needs_attention"
     assert stale_execution_version["checks"]["expected_solver_version_matches"] is False
 
-    stale_created_run_skew = jmag_airgap_torque_integration_package_gate(
+    stale_created_run_skew = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         {**execution_package, "created_at_utc": "2026-07-01T13:12:20Z"},
         expected_created_at_utc="2026-07-01T13:12:20Z",
@@ -6372,7 +6372,7 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
     assert stale_created_run_skew["checks"]["created_run_timestamp_skew_within_limit"] is False
     assert stale_created_run_skew["checks"]["expected_torque_nm_matches"] is True
 
-    thin_timing_breakdown = jmag_airgap_torque_integration_package_gate(
+    thin_timing_breakdown = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         {**execution_package, "timing_breakdown_s": {"solve_s": 8.0, "write_json_s": 0.2}},
         require_execution_metadata=True,
@@ -6382,7 +6382,7 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
     assert thin_timing_breakdown["status"] == "needs_attention"
     assert thin_timing_breakdown["checks"]["timing_breakdown_has_required_sections"] is False
 
-    impossible_timing_total = jmag_airgap_torque_integration_package_gate(
+    impossible_timing_total = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         {**execution_package, "run_duration_s": 4.0},
         require_execution_metadata=True,
@@ -6391,52 +6391,52 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
     assert impossible_timing_total["status"] == "needs_attention"
     assert impossible_timing_total["checks"]["timing_breakdown_total_within_run_duration"] is False
 
-    stale_field = jmag_airgap_torque_integration_package_gate(
+    stale_field = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
-        {**package, "input_field_table_artifact_id": "jmag_slot357_airgap_flux_table_old.csv"},
-        expected_input_field_table_artifact_id="jmag_slot365_airgap_flux_table_v1.csv",
+        {**package, "input_field_table_artifact_id": "motor_fem_slot357_airgap_flux_table_old.csv"},
+        expected_input_field_table_artifact_id="motor_fem_slot365_airgap_flux_table_v1.csv",
     )
     assert stale_field["status"] == "needs_attention"
     assert stale_field["checks"]["input_field_table_artifact_matches_sample_gate"] is False
     assert stale_field["checks"]["expected_input_field_table_artifact_matches"] is False
 
-    stale_grid = jmag_airgap_torque_integration_package_gate(
+    stale_grid = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
-        {**package, "sample_grid_id": "jmag_slot357_airgap_angle_grid_v1"},
-        expected_sample_grid_id="jmag_slot365_airgap_angle_grid_v1",
+        {**package, "sample_grid_id": "motor_fem_slot357_airgap_angle_grid_v1"},
+        expected_sample_grid_id="motor_fem_slot365_airgap_angle_grid_v1",
     )
     assert stale_grid["status"] == "needs_attention"
     assert stale_grid["checks"]["sample_grid_id_matches_sample_gate"] is False
     assert stale_grid["checks"]["expected_sample_grid_id_matches"] is False
 
-    wrong_method = jmag_airgap_torque_integration_package_gate(
+    wrong_method = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         {**package, "integration_method": "plain_mean_of_magnitude_only"},
     )
     assert wrong_method["status"] == "needs_attention"
     assert wrong_method["checks"]["expected_integration_method_matches"] is False
 
-    missing_output_digest = jmag_airgap_torque_integration_package_gate(
+    missing_output_digest = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         {key: value for key, value in package.items() if key != "torque_output_digest"},
-        expected_torque_output_artifact_id="jmag_slot365_airgap_torque_integration_v1.json",
+        expected_torque_output_artifact_id="motor_fem_slot365_airgap_torque_integration_v1.json",
         expected_torque_output_digest="sha256:jmag-slot365-airgap-torque-integration-v1",
         require_torque_output_artifact=True,
     )
     assert missing_output_digest["status"] == "needs_attention"
     assert missing_output_digest["checks"]["torque_output_digest_recorded"] is False
 
-    stale_torque_output_schema = jmag_airgap_torque_integration_package_gate(
+    stale_torque_output_schema = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         {
             **package,
-            "torque_output_schema_id": "jmag_airgap_scalar_torque_v0",
+            "torque_output_schema_id": "motor_fem_airgap_scalar_torque_v0",
             "torque_output_columns": ["torque_Nm"],
             "torque_output_units": {"torque_Nm": "N*m"},
         },
-        expected_torque_output_artifact_id="jmag_slot365_airgap_torque_integration_v1.json",
+        expected_torque_output_artifact_id="motor_fem_slot365_airgap_torque_integration_v1.json",
         expected_torque_output_digest="sha256:jmag-slot365-airgap-torque-integration-v1",
-        expected_torque_output_schema_id="jmag_airgap_torque_table_v1",
+        expected_torque_output_schema_id="motor_fem_airgap_torque_table_v1",
         expected_torque_output_columns=[
             "RotorAngle_deg",
             "Br_T",
@@ -6463,14 +6463,14 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
     assert stale_torque_output_schema["checks"]["expected_torque_output_units_match"] is False
     assert stale_torque_output_schema["checks"]["expected_torque_nm_matches"] is True
 
-    stale_torque_convention_schema = jmag_airgap_torque_integration_package_gate(
+    stale_torque_convention_schema = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         {
             **package,
-            "torque_convention_schema_id": "jmag_airgap_value_only_convention_v0",
+            "torque_convention_schema_id": "motor_fem_airgap_value_only_convention_v0",
         },
-        expected_torque_output_schema_id="jmag_airgap_torque_table_v1",
-        expected_torque_convention_schema_id="jmag_airgap_torque_convention_v1",
+        expected_torque_output_schema_id="motor_fem_airgap_torque_table_v1",
+        expected_torque_convention_schema_id="motor_fem_airgap_torque_convention_v1",
         expected_torque_nm=0.04125,
         require_torque_output_schema=True,
         require_torque_convention_schema=True,
@@ -6480,10 +6480,10 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
     assert stale_torque_convention_schema["checks"]["expected_torque_convention_schema_id_matches"] is False
     assert stale_torque_convention_schema["checks"]["expected_torque_nm_matches"] is True
 
-    missing_torque_convention_schema = jmag_airgap_torque_integration_package_gate(
+    missing_torque_convention_schema = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         {key: value for key, value in package.items() if key != "torque_convention_schema_id"},
-        expected_torque_convention_schema_id="jmag_airgap_torque_convention_v1",
+        expected_torque_convention_schema_id="motor_fem_airgap_torque_convention_v1",
         expected_torque_nm=0.04125,
         require_torque_convention_schema=True,
     )
@@ -6491,16 +6491,16 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
     assert missing_torque_convention_schema["checks"]["torque_convention_schema_id_recorded"] is False
     assert missing_torque_convention_schema["checks"]["expected_torque_nm_matches"] is True
 
-    stale_torque_component_basis_schema = jmag_airgap_torque_integration_package_gate(
+    stale_torque_component_basis_schema = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         {
             **package,
-            "torque_component_basis_schema_id": "jmag_airgap_cartesian_xy_component_basis_v0",
+            "torque_component_basis_schema_id": "motor_fem_airgap_cartesian_xy_component_basis_v0",
         },
-        expected_torque_output_schema_id="jmag_airgap_torque_table_v1",
-        expected_torque_convention_schema_id="jmag_airgap_torque_convention_v1",
-        expected_torque_component_basis_schema_id="jmag_airgap_cylindrical_rt_component_basis_v1",
-        expected_torque_postprocess_row_convention_schema_id="jmag_airgap_torque_row_convention_v1",
+        expected_torque_output_schema_id="motor_fem_airgap_torque_table_v1",
+        expected_torque_convention_schema_id="motor_fem_airgap_torque_convention_v1",
+        expected_torque_component_basis_schema_id="motor_fem_airgap_cylindrical_rt_component_basis_v1",
+        expected_torque_postprocess_row_convention_schema_id="motor_fem_airgap_torque_row_convention_v1",
         expected_torque_nm=0.04125,
         require_torque_output_schema=True,
         require_torque_convention_schema=True,
@@ -6524,14 +6524,14 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
     )
     assert stale_torque_component_basis_schema["checks"]["expected_torque_nm_matches"] is True
 
-    missing_torque_component_basis_schema = jmag_airgap_torque_integration_package_gate(
+    missing_torque_component_basis_schema = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         {
             key: value
             for key, value in package.items()
             if key != "torque_component_basis_schema_id"
         },
-        expected_torque_component_basis_schema_id="jmag_airgap_cylindrical_rt_component_basis_v1",
+        expected_torque_component_basis_schema_id="motor_fem_airgap_cylindrical_rt_component_basis_v1",
         expected_torque_nm=0.04125,
         require_torque_component_basis_schema=True,
     )
@@ -6544,15 +6544,15 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
     )
     assert missing_torque_component_basis_schema["checks"]["expected_torque_nm_matches"] is True
 
-    stale_torque_row_convention_schema = jmag_airgap_torque_integration_package_gate(
+    stale_torque_row_convention_schema = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         {
             **package,
-            "torque_postprocess_row_convention_schema_id": "jmag_airgap_scalar_torque_row_v0",
+            "torque_postprocess_row_convention_schema_id": "motor_fem_airgap_scalar_torque_row_v0",
         },
-        expected_torque_output_schema_id="jmag_airgap_torque_table_v1",
-        expected_torque_convention_schema_id="jmag_airgap_torque_convention_v1",
-        expected_torque_postprocess_row_convention_schema_id="jmag_airgap_torque_row_convention_v1",
+        expected_torque_output_schema_id="motor_fem_airgap_torque_table_v1",
+        expected_torque_convention_schema_id="motor_fem_airgap_torque_convention_v1",
+        expected_torque_postprocess_row_convention_schema_id="motor_fem_airgap_torque_row_convention_v1",
         expected_torque_nm=0.04125,
         require_torque_output_schema=True,
         require_torque_convention_schema=True,
@@ -6569,14 +6569,14 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
     )
     assert stale_torque_row_convention_schema["checks"]["expected_torque_nm_matches"] is True
 
-    missing_torque_row_convention_schema = jmag_airgap_torque_integration_package_gate(
+    missing_torque_row_convention_schema = motor_fem_airgap_torque_integration_package_gate(
         sample_gate,
         {
             key: value
             for key, value in package.items()
             if key != "torque_postprocess_row_convention_schema_id"
         },
-        expected_torque_postprocess_row_convention_schema_id="jmag_airgap_torque_row_convention_v1",
+        expected_torque_postprocess_row_convention_schema_id="motor_fem_airgap_torque_row_convention_v1",
         expected_torque_nm=0.04125,
         require_torque_postprocess_row_convention_schema=True,
     )
@@ -6590,10 +6590,10 @@ def test_jmag_airgap_torque_integration_package_gate_binds_field_and_grid_identi
     assert missing_torque_row_convention_schema["checks"]["expected_torque_nm_matches"] is True
 
 
-def test_jmag_symmetry_sweep_coverage_gate_checks_sector_span_before_values():
+def test_motor_fem_symmetry_sweep_coverage_gate_checks_sector_span_before_values():
     rows = [{"RotorAngle_deg": float(theta)} for theta in range(0, 61, 5)]
 
-    gate = jmag_symmetry_sweep_coverage_gate(
+    gate = motor_fem_symmetry_sweep_coverage_gate(
         rows,
         pole_pairs=4,
         symmetry_factor=6,
@@ -6604,7 +6604,7 @@ def test_jmag_symmetry_sweep_coverage_gate_checks_sector_span_before_values():
     )
 
     assert gate["status"] == "ok"
-    assert gate["policy"] == "jmag_symmetry_sweep_coverage_gate"
+    assert gate["policy"] == "motor_fem_symmetry_sweep_coverage_gate"
     assert gate["expected_mechanical_span_deg"] == pytest.approx(60.0)
     assert gate["covered_mechanical_span_deg"] == pytest.approx(60.0)
     assert gate["covered_electrical_span_deg"] == pytest.approx(240.0)
@@ -6615,7 +6615,7 @@ def test_jmag_symmetry_sweep_coverage_gate_checks_sector_span_before_values():
         {"Theta_e_rad": math.radians(float(theta) * 4.0)}
         for theta in range(0, 60, 5)
     ]
-    excluded = jmag_symmetry_sweep_coverage_gate(
+    excluded = motor_fem_symmetry_sweep_coverage_gate(
         electrical_rows,
         pole_pairs=4,
         symmetry_factor=6,
@@ -6631,17 +6631,17 @@ def test_jmag_symmetry_sweep_coverage_gate_checks_sector_span_before_values():
         {"RotorAngle_deg": value}
         for value in (0.0, 5.0, 10.25, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0)
     ]
-    bad_step = jmag_symmetry_sweep_coverage_gate(nonuniform, pole_pairs=4, symmetry_factor=6)
+    bad_step = motor_fem_symmetry_sweep_coverage_gate(nonuniform, pole_pairs=4, symmetry_factor=6)
     assert bad_step["status"] == "needs_attention"
     assert bad_step["checks"]["angle_step_uniform"] is False
 
     wrong_span = [{"RotorAngle_deg": float(theta)} for theta in range(0, 56, 5)]
-    bad_span = jmag_symmetry_sweep_coverage_gate(wrong_span, pole_pairs=4, symmetry_factor=6)
+    bad_span = motor_fem_symmetry_sweep_coverage_gate(wrong_span, pole_pairs=4, symmetry_factor=6)
     assert bad_span["status"] == "needs_attention"
     assert bad_span["checks"]["mechanical_sector_span_matches_symmetry"] is False
 
 
-def test_jmag_angle_alignment_contract_gate_closes_gamma_and_rotor_offsets():
+def test_motor_fem_angle_alignment_contract_gate_closes_gamma_and_rotor_offsets():
     rows = [
         {
             "theta_mech_deg": 0.0,
@@ -6665,7 +6665,7 @@ def test_jmag_angle_alignment_contract_gate_closes_gamma_and_rotor_offsets():
             "symmetry_factor": 8,
         },
     ]
-    gate = jmag_angle_alignment_contract_gate(
+    gate = motor_fem_angle_alignment_contract_gate(
         rows,
         pole_pairs=4,
         expected_gamma_offset_deg=5.0,
@@ -6673,7 +6673,7 @@ def test_jmag_angle_alignment_contract_gate_closes_gamma_and_rotor_offsets():
         expected_symmetry_factor=8,
     )
 
-    assert gate["policy"] == "jmag_angle_alignment_contract_gate"
+    assert gate["policy"] == "motor_fem_angle_alignment_contract_gate"
     assert gate["status"] == "ok"
     assert gate["max_theta_e_error_deg"] == pytest.approx(0.0)
     assert gate["max_gamma_offset_error_deg"] == pytest.approx(0.0)
@@ -6682,7 +6682,7 @@ def test_jmag_angle_alignment_contract_gate_closes_gamma_and_rotor_offsets():
 
     wrong_gamma = [dict(row) for row in rows]
     wrong_gamma[1]["gamma_jmag_deg"] = 30.0
-    gamma_gate = jmag_angle_alignment_contract_gate(
+    gamma_gate = motor_fem_angle_alignment_contract_gate(
         wrong_gamma,
         pole_pairs=4,
         expected_gamma_offset_deg=5.0,
@@ -6694,7 +6694,7 @@ def test_jmag_angle_alignment_contract_gate_closes_gamma_and_rotor_offsets():
 
     wrong_theta = [dict(row) for row in rows]
     wrong_theta[2]["theta_e_deg"] = 20.0
-    theta_gate = jmag_angle_alignment_contract_gate(
+    theta_gate = motor_fem_angle_alignment_contract_gate(
         wrong_theta,
         pole_pairs=4,
         expected_gamma_offset_deg=5.0,
@@ -6706,7 +6706,7 @@ def test_jmag_angle_alignment_contract_gate_closes_gamma_and_rotor_offsets():
 
     wrong_symmetry = [dict(row) for row in rows]
     wrong_symmetry[0]["symmetry_factor"] = 1
-    symmetry_gate = jmag_angle_alignment_contract_gate(
+    symmetry_gate = motor_fem_angle_alignment_contract_gate(
         wrong_symmetry,
         pole_pairs=4,
         expected_gamma_offset_deg=5.0,
@@ -6717,7 +6717,7 @@ def test_jmag_angle_alignment_contract_gate_closes_gamma_and_rotor_offsets():
     assert symmetry_gate["checks"]["symmetry_factor_matches_expected"] is False
 
 
-def test_jmag_export_case_package_gate_keeps_case_study_and_result_set_ids():
+def test_motor_fem_export_case_package_gate_keeps_case_study_and_result_set_ids():
     artifacts = [
         {
             "kind": "column_metadata",
@@ -6726,7 +6726,7 @@ def test_jmag_export_case_package_gate_keeps_case_study_and_result_set_ids():
             "result_set_id": "resultset_20260629_A",
             "source_tool": "JMAG-Designer",
             "path": "slot149_columns.json",
-            "gate_policy": "jmag_motor_table_column_metadata_gate",
+            "gate_policy": "motor_fem_table_column_metadata_gate",
             "status": "ok",
         },
         {
@@ -6736,7 +6736,7 @@ def test_jmag_export_case_package_gate_keeps_case_study_and_result_set_ids():
             "result_set_id": "resultset_20260629_A",
             "source_tool": "JMAG",
             "path": "slot149_symmetry.json",
-            "gate_policy": "jmag_symmetry_sweep_coverage_gate",
+            "gate_policy": "motor_fem_symmetry_sweep_coverage_gate",
             "status": "ok",
         },
         {
@@ -6763,7 +6763,7 @@ def test_jmag_export_case_package_gate_keeps_case_study_and_result_set_ids():
         },
     ]
 
-    gate = jmag_export_case_package_gate(
+    gate = motor_fem_export_case_package_gate(
         artifacts,
         expected_case_id="case_fw_004",
         expected_study_id="pm_drive_map",
@@ -6771,7 +6771,7 @@ def test_jmag_export_case_package_gate_keeps_case_study_and_result_set_ids():
     )
 
     assert gate["status"] == "ok"
-    assert gate["policy"] == "jmag_export_case_package_gate"
+    assert gate["policy"] == "motor_fem_export_case_package_gate"
     assert gate["case_ids"] == ["case_fw_004"]
     assert gate["study_ids"] == ["pm_drive_map"]
     assert gate["result_set_ids"] == ["resultset_20260629_A"]
@@ -6780,25 +6780,25 @@ def test_jmag_export_case_package_gate_keeps_case_study_and_result_set_ids():
 
     stale_result = [dict(row) for row in artifacts]
     stale_result[3]["result_set_id"] = "resultset_old"
-    stale_result_gate = jmag_export_case_package_gate(stale_result)
+    stale_result_gate = motor_fem_export_case_package_gate(stale_result)
     assert stale_result_gate["status"] == "needs_attention"
     assert stale_result_gate["checks"]["result_set_ids_unique"] is False
 
     missing_case = [dict(row) for row in artifacts]
     missing_case[0].pop("case_id")
-    missing_case_gate = jmag_export_case_package_gate(missing_case)
+    missing_case_gate = motor_fem_export_case_package_gate(missing_case)
     assert missing_case_gate["status"] == "needs_attention"
     assert missing_case_gate["checks"]["case_ids_present"] is False
 
     missing_op_in_table = [dict(row) for row in artifacts]
     missing_op_in_table[2]["operating_point_ids"] = ["MTPA"]
-    missing_op_gate = jmag_export_case_package_gate(missing_op_in_table)
+    missing_op_gate = motor_fem_export_case_package_gate(missing_op_in_table)
     assert missing_op_gate["status"] == "needs_attention"
     assert missing_op_gate["checks"]["notebook_operating_point_in_value_table"] is False
 
     wrong_source = [dict(row) for row in artifacts]
     wrong_source[1]["source_tool"] = "FEMM"
-    wrong_source_gate = jmag_export_case_package_gate(wrong_source)
+    wrong_source_gate = motor_fem_export_case_package_gate(wrong_source)
     assert wrong_source_gate["status"] == "needs_attention"
     assert wrong_source_gate["checks"]["source_tool_is_jmag"] is False
 
@@ -6811,7 +6811,7 @@ def test_jmag_current_torque_solver_ready_manifest_keeps_current_and_torque_lock
             "result_set_id": "resultset_20260630_B",
             "source_tool": "JMAG-Designer",
             "path": "slot165_columns.json",
-            "gate_policy": "jmag_motor_table_column_metadata_gate",
+            "gate_policy": "motor_fem_table_column_metadata_gate",
             "status": "ok",
         },
         {
@@ -6820,7 +6820,7 @@ def test_jmag_current_torque_solver_ready_manifest_keeps_current_and_torque_lock
             "result_set_id": "resultset_20260630_B",
             "source_tool": "JMAG",
             "path": "slot165_symmetry.json",
-            "gate_policy": "jmag_symmetry_sweep_coverage_gate",
+            "gate_policy": "motor_fem_symmetry_sweep_coverage_gate",
             "status": "ok",
         },
         {
@@ -6849,14 +6849,14 @@ def test_jmag_current_torque_solver_ready_manifest_keeps_current_and_torque_lock
         },
     ]
 
-    gate = jmag_current_torque_solver_ready_manifest_gate(
+    gate = motor_fem_current_torque_solver_ready_manifest_gate(
         artifacts,
         expected_case_id="case_torque_006",
         expected_result_set_id="resultset_20260630_B",
         expected_operating_point_id="id-4_iq18_theta22p5",
     )
 
-    assert gate["policy"] == "jmag_current_torque_solver_ready_manifest_gate"
+    assert gate["policy"] == "motor_fem_current_torque_solver_ready_manifest_gate"
     assert gate["status"] == "ok"
     assert gate["present_kinds"] == {
         "column_metadata": 1,
@@ -6870,25 +6870,25 @@ def test_jmag_current_torque_solver_ready_manifest_keeps_current_and_torque_lock
 
     stale = [dict(row) for row in artifacts]
     stale[3]["result_set_id"] = "resultset_old"
-    stale_gate = jmag_current_torque_solver_ready_manifest_gate(stale)
+    stale_gate = motor_fem_current_torque_solver_ready_manifest_gate(stale)
     assert stale_gate["status"] == "needs_attention"
     assert stale_gate["checks"]["result_set_ids_unique"] is False
 
     rms = [dict(row) for row in artifacts]
     rms[2]["current_kind"] = "rms"
-    rms_gate = jmag_current_torque_solver_ready_manifest_gate(rms)
+    rms_gate = motor_fem_current_torque_solver_ready_manifest_gate(rms)
     assert rms_gate["status"] == "needs_attention"
     assert rms_gate["checks"]["current_snapshot_is_instantaneous"] is False
 
     unlocked = [dict(row) for row in artifacts]
     unlocked[3]["rotor_current_phase_locked"] = False
-    unlocked_gate = jmag_current_torque_solver_ready_manifest_gate(unlocked)
+    unlocked_gate = motor_fem_current_torque_solver_ready_manifest_gate(unlocked)
     assert unlocked_gate["status"] == "needs_attention"
     assert unlocked_gate["checks"]["torque_table_locked_to_current_phase"] is False
 
     missing_torque_op = [dict(row) for row in artifacts]
     missing_torque_op[3].pop("operating_point_id")
-    missing_gate = jmag_current_torque_solver_ready_manifest_gate(missing_torque_op)
+    missing_gate = motor_fem_current_torque_solver_ready_manifest_gate(missing_torque_op)
     assert missing_gate["status"] == "needs_attention"
     assert missing_gate["checks"]["operating_point_ids_present_for_current_and_torque"] is False
 
@@ -6937,13 +6937,13 @@ def test_jmag_efficiency_operating_point_package_keeps_map_rows_aligned():
         },
     ]
 
-    gate = jmag_efficiency_operating_point_package_gate(
+    gate = motor_fem_efficiency_operating_point_package_gate(
         artifacts,
         expected_case_id="case_fw_004",
         expected_result_set_id="resultset_20260629_A",
     )
 
-    assert gate["policy"] == "jmag_efficiency_operating_point_package_gate"
+    assert gate["policy"] == "motor_fem_efficiency_operating_point_package_gate"
     assert gate["status"] == "ok"
     assert gate["reference_operating_point_ids"] == ["FW", "MTPA", "high_current"]
     assert gate["checks"]["table_operating_point_sets_match"] is True
@@ -6951,19 +6951,19 @@ def test_jmag_efficiency_operating_point_package_keeps_map_rows_aligned():
 
     stale_result = [dict(row) for row in artifacts]
     stale_result[1]["result_set_id"] = "resultset_old"
-    stale_gate = jmag_efficiency_operating_point_package_gate(stale_result)
+    stale_gate = motor_fem_efficiency_operating_point_package_gate(stale_result)
     assert stale_gate["status"] == "needs_attention"
     assert stale_gate["checks"]["result_set_ids_unique"] is False
 
     missing_loss_op = [dict(row) for row in artifacts]
     missing_loss_op[1]["operating_point_ids"] = ["MTPA", "FW"]
-    mismatch_gate = jmag_efficiency_operating_point_package_gate(missing_loss_op)
+    mismatch_gate = motor_fem_efficiency_operating_point_package_gate(missing_loss_op)
     assert mismatch_gate["status"] == "needs_attention"
     assert mismatch_gate["checks"]["table_operating_point_sets_match"] is False
 
     notebook_outside = [dict(row) for row in artifacts]
     notebook_outside[3]["operating_point_id"] = "burst"
-    outside_gate = jmag_efficiency_operating_point_package_gate(notebook_outside)
+    outside_gate = motor_fem_efficiency_operating_point_package_gate(notebook_outside)
     assert outside_gate["status"] == "needs_attention"
     assert outside_gate["checks"]["notebook_operating_points_in_tables"] is False
 
@@ -7152,7 +7152,7 @@ def test_spwm_snapshot_sampling_mode_metadata_checks_timer_offset():
     assert wrong["checks"]["sampling_offset_matches_mode"] is False
 
 
-def test_spwm_snapshot_rows_feed_jmag_style_dq_torque_table_contract():
+def test_spwm_snapshot_rows_feed_motor_fem_style_dq_torque_table_contract():
     summary = spwm_snapshot_current_handoff_summary(
         id_current=-2.5,
         iq_current=11.0,
@@ -7278,7 +7278,7 @@ def test_femm_motor_model_artifact_package_keeps_model_and_operating_point_ids()
             "model_id": "ipm_teaching_v1",
             "source_tool": "FEMM",
             "path": "slot148_block_labels.json",
-            "gate_policy": "femm_block_label_source_contract_gate",
+            "gate_policy": "magnetostatic_2d_block_label_source_contract_gate",
             "status": "ok",
         },
         {
@@ -7305,14 +7305,14 @@ def test_femm_motor_model_artifact_package_keeps_model_and_operating_point_ids()
         },
     ]
 
-    gate = femm_motor_model_artifact_package_gate(
+    gate = magnetostatic_2d_motor_model_artifact_package_gate(
         artifacts,
         expected_model_id="ipm_teaching_v1",
         expected_operating_point_id="id-3_iq12_theta0",
     )
 
     assert gate["status"] == "ok"
-    assert gate["policy"] == "femm_motor_model_artifact_package_gate"
+    assert gate["policy"] == "magnetostatic_2d_motor_model_artifact_package_gate"
     assert gate["model_ids"] == ["ipm_teaching_v1"]
     assert gate["operating_point_ids"] == ["id-3_iq12_theta0"]
     assert gate["checks"]["required_kinds_present"] is True
@@ -7321,20 +7321,20 @@ def test_femm_motor_model_artifact_package_keeps_model_and_operating_point_ids()
 
     wrong_model = [dict(row) for row in artifacts]
     wrong_model[2]["model_id"] = "stale_motor_v0"
-    wrong_model_gate = femm_motor_model_artifact_package_gate(wrong_model)
+    wrong_model_gate = magnetostatic_2d_motor_model_artifact_package_gate(wrong_model)
     assert wrong_model_gate["status"] == "needs_attention"
     assert wrong_model_gate["checks"]["model_ids_unique"] is False
 
     missing_op = [dict(row) for row in artifacts]
     missing_op[1].pop("operating_point_id")
-    missing_op_gate = femm_motor_model_artifact_package_gate(missing_op)
+    missing_op_gate = magnetostatic_2d_motor_model_artifact_package_gate(missing_op)
     assert missing_op_gate["status"] == "needs_attention"
     assert missing_op_gate["checks"]["operating_point_ids_present_for_current_and_torque"] is False
 
     bad_torque = [dict(row) for row in artifacts]
     bad_torque[2]["angle_basis"] = "electrical"
     bad_torque[2]["rotor_current_phase_locked"] = False
-    bad_torque_gate = femm_motor_model_artifact_package_gate(bad_torque)
+    bad_torque_gate = magnetostatic_2d_motor_model_artifact_package_gate(bad_torque)
     assert bad_torque_gate["status"] == "needs_attention"
     assert bad_torque_gate["checks"]["torque_table_metadata_solver_ready"] is False
 
@@ -7358,7 +7358,7 @@ def test_femm_winding_current_package_keeps_model_and_phase_ids():
             "model_id": "ipm_teaching_v1",
             "source_tool": "FEMM",
             "path": "slot156_block_labels.json",
-            "gate_policy": "femm_block_label_source_contract_gate",
+            "gate_policy": "magnetostatic_2d_block_label_source_contract_gate",
             "status": "ok",
             "phase_set": ["U", "V", "W"],
         },
@@ -7367,19 +7367,19 @@ def test_femm_winding_current_package_keeps_model_and_phase_ids():
             "model_id": "ipm_teaching_v1",
             "source_tool": "FEMM",
             "path": "slot156_current_snapshot.json",
-            "gate_policy": "femm_static_current_circuit_rows_gate",
+            "gate_policy": "magnetostatic_2d_static_current_circuit_rows_gate",
             "status": "ok",
             "current_kind": "instantaneous",
             "phase_set": ["U", "V", "W"],
         },
     ]
 
-    gate = femm_winding_current_package_gate(
+    gate = magnetostatic_2d_winding_current_package_gate(
         artifacts,
         expected_model_id="ipm_teaching_v1",
     )
 
-    assert gate["policy"] == "femm_winding_current_package_gate"
+    assert gate["policy"] == "magnetostatic_2d_winding_current_package_gate"
     assert gate["status"] == "ok"
     assert gate["checks"]["winding_geometry_metadata_present"] is True
     assert gate["checks"]["phase_sets_match_expected"] is True
@@ -7387,19 +7387,19 @@ def test_femm_winding_current_package_keeps_model_and_phase_ids():
 
     stale = [dict(row) for row in artifacts]
     stale[0]["model_id"] = "old_winding_v0"
-    stale_gate = femm_winding_current_package_gate(stale)
+    stale_gate = magnetostatic_2d_winding_current_package_gate(stale)
     assert stale_gate["status"] == "needs_attention"
     assert stale_gate["checks"]["model_ids_unique"] is False
 
     wrong_phase = [dict(row) for row in artifacts]
     wrong_phase[1]["phase_set"] = ["U", "W", "V"]
-    wrong_phase_gate = femm_winding_current_package_gate(wrong_phase)
+    wrong_phase_gate = magnetostatic_2d_winding_current_package_gate(wrong_phase)
     assert wrong_phase_gate["status"] == "needs_attention"
     assert wrong_phase_gate["checks"]["phase_sets_match_expected"] is False
 
     rms_current = [dict(row) for row in artifacts]
     rms_current[2]["current_kind"] = "rms"
-    rms_gate = femm_winding_current_package_gate(rms_current)
+    rms_gate = magnetostatic_2d_winding_current_package_gate(rms_current)
     assert rms_gate["status"] == "needs_attention"
     assert rms_gate["checks"]["current_snapshot_is_instantaneous"] is False
 
@@ -7411,7 +7411,7 @@ def test_femm_source_current_solver_ready_manifest_keeps_presolve_sources_togeth
             "model_id": "ipm_teaching_v1",
             "source_tool": "FEMM",
             "path": "slot164_block_labels.json",
-            "gate_policy": "femm_block_label_source_contract_gate",
+            "gate_policy": "magnetostatic_2d_block_label_source_contract_gate",
             "status": "ok",
             "phase_set": ["U", "V", "W"],
         },
@@ -7420,7 +7420,7 @@ def test_femm_source_current_solver_ready_manifest_keeps_presolve_sources_togeth
             "model_id": "ipm_teaching_v1",
             "source_tool": "FEMM",
             "path": "slot164_pm_magnetization.json",
-            "gate_policy": "femm_pm_magnetization_convention_gate",
+            "gate_policy": "magnetostatic_2d_pm_magnetization_convention_gate",
             "status": "ok",
         },
         {
@@ -7429,20 +7429,20 @@ def test_femm_source_current_solver_ready_manifest_keeps_presolve_sources_togeth
             "operating_point_id": "id-3_iq12_theta17p5",
             "source_tool": "pyFEMM",
             "path": "slot164_current_snapshot.json",
-            "gate_policy": "femm_static_current_circuit_rows_gate",
+            "gate_policy": "magnetostatic_2d_static_current_circuit_rows_gate",
             "status": "ok",
             "current_kind": "instantaneous",
             "phase_set": ["U", "V", "W"],
         },
     ]
 
-    gate = femm_source_current_solver_ready_manifest_gate(
+    gate = magnetostatic_2d_source_current_solver_ready_manifest_gate(
         artifacts,
         expected_model_id="ipm_teaching_v1",
         expected_operating_point_id="id-3_iq12_theta17p5",
     )
 
-    assert gate["policy"] == "femm_source_current_solver_ready_manifest_gate"
+    assert gate["policy"] == "magnetostatic_2d_source_current_solver_ready_manifest_gate"
     assert gate["status"] == "ok"
     assert gate["present_kinds"] == {
         "block_labels": 1,
@@ -7453,7 +7453,7 @@ def test_femm_source_current_solver_ready_manifest_keeps_presolve_sources_togeth
     assert gate["checks"]["current_snapshot_is_instantaneous"] is True
     assert "before FEMM solve/result tables" in gate["version_note"]
 
-    missing_pm = femm_source_current_solver_ready_manifest_gate(
+    missing_pm = magnetostatic_2d_source_current_solver_ready_manifest_gate(
         [artifacts[0], artifacts[2]],
         expected_model_id="ipm_teaching_v1",
     )
@@ -7462,13 +7462,13 @@ def test_femm_source_current_solver_ready_manifest_keeps_presolve_sources_togeth
 
     rms_current = [dict(row) for row in artifacts]
     rms_current[2]["current_kind"] = "rms"
-    rms_gate = femm_source_current_solver_ready_manifest_gate(rms_current)
+    rms_gate = magnetostatic_2d_source_current_solver_ready_manifest_gate(rms_current)
     assert rms_gate["status"] == "needs_attention"
     assert rms_gate["checks"]["current_snapshot_is_instantaneous"] is False
 
     stale_pm = [dict(row) for row in artifacts]
     stale_pm[1]["model_id"] = "stale_pm_model"
-    stale_gate = femm_source_current_solver_ready_manifest_gate(stale_pm)
+    stale_gate = magnetostatic_2d_source_current_solver_ready_manifest_gate(stale_pm)
     assert stale_gate["status"] == "needs_attention"
     assert stale_gate["checks"]["model_ids_unique"] is False
 
@@ -7481,7 +7481,7 @@ def test_femm_air_gap_sample_manifest_keeps_source_samples_and_torque_locked():
             "operating_point_id": "id-3_iq12_theta17p5",
             "source_tool": "FEMM",
             "path": "slot172_source_current_manifest.json",
-            "gate_policy": "femm_source_current_solver_ready_manifest_gate",
+            "gate_policy": "magnetostatic_2d_source_current_solver_ready_manifest_gate",
             "status": "ok",
         },
         {
@@ -7490,7 +7490,7 @@ def test_femm_air_gap_sample_manifest_keeps_source_samples_and_torque_locked():
             "operating_point_id": "id-3_iq12_theta17p5",
             "source_tool": "pyFEMM",
             "path": "slot172_gap_samples.json",
-            "gate_policy": "femm_air_gap_sample_metadata_contract",
+            "gate_policy": "magnetostatic_2d_air_gap_sample_metadata_contract",
             "status": "ok",
             "angle_unit": "deg",
             "component_frame": "cylindrical_rt",
@@ -7510,13 +7510,13 @@ def test_femm_air_gap_sample_manifest_keeps_source_samples_and_torque_locked():
         },
     ]
 
-    gate = femm_air_gap_sample_solver_ready_manifest_gate(
+    gate = magnetostatic_2d_air_gap_sample_solver_ready_manifest_gate(
         artifacts,
         expected_model_id="ipm_teaching_v1",
         expected_operating_point_id="id-3_iq12_theta17p5",
     )
 
-    assert gate["policy"] == "femm_air_gap_sample_solver_ready_manifest_gate"
+    assert gate["policy"] == "magnetostatic_2d_air_gap_sample_solver_ready_manifest_gate"
     assert gate["status"] == "ok"
     assert gate["present_kinds"] == {
         "air_gap_sample_table": 1,
@@ -7529,7 +7529,7 @@ def test_femm_air_gap_sample_manifest_keeps_source_samples_and_torque_locked():
     assert gate["checks"]["torque_sign_convention_consistent"] is True
     assert "before promoting Br/Bt rows" in gate["version_note"]
 
-    missing_sample = femm_air_gap_sample_solver_ready_manifest_gate(
+    missing_sample = magnetostatic_2d_air_gap_sample_solver_ready_manifest_gate(
         [artifacts[0], artifacts[2]],
         expected_model_id="ipm_teaching_v1",
     )
@@ -7538,31 +7538,31 @@ def test_femm_air_gap_sample_manifest_keeps_source_samples_and_torque_locked():
 
     stale_op = [dict(row) for row in artifacts]
     stale_op[1]["operating_point_id"] = "theta_old"
-    stale_gate = femm_air_gap_sample_solver_ready_manifest_gate(stale_op)
+    stale_gate = magnetostatic_2d_air_gap_sample_solver_ready_manifest_gate(stale_op)
     assert stale_gate["status"] == "needs_attention"
     assert stale_gate["checks"]["operating_point_ids_unique"] is False
 
     rad_angle = [dict(row) for row in artifacts]
     rad_angle[1]["angle_unit"] = "rad"
-    rad_gate = femm_air_gap_sample_solver_ready_manifest_gate(rad_angle)
+    rad_gate = magnetostatic_2d_air_gap_sample_solver_ready_manifest_gate(rad_angle)
     assert rad_gate["status"] == "needs_attention"
     assert rad_gate["checks"]["sample_angle_unit_is_deg"] is False
 
     cartesian_frame = [dict(row) for row in artifacts]
     cartesian_frame[1]["component_frame"] = "cartesian_xy"
-    frame_gate = femm_air_gap_sample_solver_ready_manifest_gate(cartesian_frame)
+    frame_gate = magnetostatic_2d_air_gap_sample_solver_ready_manifest_gate(cartesian_frame)
     assert frame_gate["status"] == "needs_attention"
     assert frame_gate["checks"]["sample_component_frame_is_cylindrical_rt"] is False
 
     stale_status = [dict(row) for row in artifacts]
     stale_status[0]["status"] = "needs_attention"
-    status_gate = femm_air_gap_sample_solver_ready_manifest_gate(stale_status)
+    status_gate = magnetostatic_2d_air_gap_sample_solver_ready_manifest_gate(stale_status)
     assert status_gate["status"] == "needs_attention"
     assert status_gate["checks"]["upstream_gate_status_ok"] is False
 
     sign_flip = [dict(row) for row in artifacts]
     sign_flip[2]["torque_sign_convention"] = "positive_generator"
-    sign_gate = femm_air_gap_sample_solver_ready_manifest_gate(sign_flip)
+    sign_gate = magnetostatic_2d_air_gap_sample_solver_ready_manifest_gate(sign_flip)
     assert sign_gate["status"] == "needs_attention"
     assert sign_gate["checks"]["torque_sign_convention_consistent"] is False
 
@@ -7721,7 +7721,7 @@ def test_dq_torque_table_health_closes_jmag_map_column_contract():
     assert bad["checks"]["peak_row_matches_closed_form"] is False
 
 
-def test_jmag_pm_short_circuit_fault_table_gate_tracks_dq_fault_physics():
+def test_motor_fem_pm_short_circuit_fault_table_gate_tracks_dq_fault_physics():
     R = 0.05
     Ld = 8.0e-3
     Lq = 16.0e-3
@@ -7749,9 +7749,9 @@ def test_jmag_pm_short_circuit_fault_table_gate_tracks_dq_fault_physics():
         }
 
     rows = [row(1.0), row(6.25), row(50.0), row(5000.0)]
-    gate = jmag_pm_short_circuit_fault_table_gate(rows, R, Ld, Lq, lambda_m, pole_pairs)
+    gate = motor_fem_pm_short_circuit_fault_table_gate(rows, R, Ld, Lq, lambda_m, pole_pairs)
 
-    assert gate["policy"] == "jmag_pm_short_circuit_fault_table_gate"
+    assert gate["policy"] == "motor_fem_pm_short_circuit_fault_table_gate"
     assert gate["status"] == "ok"
     assert gate["characteristic_current_A"] == pytest.approx(12.5)
     assert gate["peak_braking_row"]["omega_e"] == pytest.approx(6.25)
@@ -7762,26 +7762,26 @@ def test_jmag_pm_short_circuit_fault_table_gate_tracks_dq_fault_physics():
 
     bad_residual = [dict(item) for item in rows]
     bad_residual[1]["vd_residual"] = 1.0e-3
-    residual_gate = jmag_pm_short_circuit_fault_table_gate(bad_residual, R, Ld, Lq, lambda_m, pole_pairs)
+    residual_gate = motor_fem_pm_short_circuit_fault_table_gate(bad_residual, R, Ld, Lq, lambda_m, pole_pairs)
     assert residual_gate["status"] == "needs_attention"
     assert residual_gate["checks"]["short_terminal_residuals_ok"] is False
 
     stale_speed = [dict(item) for item in rows]
     stale_speed[2]["omega_mech"] = stale_speed[2]["omega_e"]
-    speed_gate = jmag_pm_short_circuit_fault_table_gate(stale_speed, R, Ld, Lq, lambda_m, pole_pairs)
+    speed_gate = motor_fem_pm_short_circuit_fault_table_gate(stale_speed, R, Ld, Lq, lambda_m, pole_pairs)
     assert speed_gate["status"] == "needs_attention"
     assert speed_gate["checks"]["omega_mech_matches_pole_pairs"] is False
 
     wrong_demag = [dict(item) for item in rows]
     wrong_demag[-1]["d_axis_demag_fraction"] = 0.20
-    demag_gate = jmag_pm_short_circuit_fault_table_gate(wrong_demag, R, Ld, Lq, lambda_m, pole_pairs)
+    demag_gate = motor_fem_pm_short_circuit_fault_table_gate(wrong_demag, R, Ld, Lq, lambda_m, pole_pairs)
     assert demag_gate["status"] == "needs_attention"
     assert demag_gate["checks"]["d_axis_demag_fraction_matches_characteristic_current"] is False
     assert demag_gate["checks"]["high_speed_demag_fraction_near_one"] is False
 
     wrong_torque = [dict(item) for item in rows]
     wrong_torque[1]["torque_Nm"] = abs(wrong_torque[1]["torque_Nm"])
-    torque_gate = jmag_pm_short_circuit_fault_table_gate(wrong_torque, R, Ld, Lq, lambda_m, pole_pairs)
+    torque_gate = motor_fem_pm_short_circuit_fault_table_gate(wrong_torque, R, Ld, Lq, lambda_m, pole_pairs)
     assert torque_gate["status"] == "needs_attention"
     assert torque_gate["checks"]["torque_column_matches_closed_form"] is False
 
