@@ -942,7 +942,7 @@ private:
  * When the physical source satisfies H = -grad(Phi) in the current-free
  * source/total interface neighbourhood, this coefficient and
  * KelvinRadiaFieldStrengthCoefficient satisfy H' = -grad(Phi').  It is the
- * interface datum used by the TOSCA-style mixed total/reduced Omega solve.
+ * interface datum used by the mixed total/reduced Omega solve.
  */
 class KelvinRadiaScalarPotentialCoefficient final
     : public ngfem::CoefficientFunctionNoDerivative {

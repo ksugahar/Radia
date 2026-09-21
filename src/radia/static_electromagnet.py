@@ -1,4 +1,4 @@
-"""TOSCA-style H1 mixed total/reduced Omega route for electromagnets.
+"""H1 mixed total/reduced scalar-potential route for electromagnets.
 
 This is deliberately a small adapter around NGSolve-owned finite-element
 spaces and the Kelvin solver.  It fixes the physical partition and source
@@ -11,7 +11,7 @@ from typing import Iterable
 
 
 MIXED_TOTAL_REDUCED_OMEGA = "mixed_total_reduced_omega"
-MIXED_TOTAL_REDUCED_OMEGA_LABEL = "H1 TOSCA mixed total/reduced Omega"
+MIXED_TOTAL_REDUCED_OMEGA_LABEL = "H1 mixed total/reduced Omega"
 
 
 def _unique_names(names: Iterable[str], *, field: str) -> tuple[str, ...]:

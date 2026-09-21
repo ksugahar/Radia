@@ -669,7 +669,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         interface_multiplier_dirichlet_boundary=None,
         reduced_zero_normal_boundary=None, surface_dirichlet=None, _fixed_rhs_cache=None,
         _rhs_material=None, kelvin_match_exact=False):
-    """Solve the TOSCA-style mixed total/reduced Omega formulation.
+    """Solve the mixed total/reduced Omega formulation.
 
     ``return_system=True`` retains assembled forms for explicit diagnostics.
     The default returns ``system=None`` to avoid retaining their matrix storage.
@@ -716,7 +716,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     inside high-permeability material.  The normal flux condition is natural
     in the variational form; the scalar-trace constraint supplies the
     tangential-H condition.  It is the finite-element form of the total /
-    reduced Omega split used by TOSCA-class magnetostatic solvers.
+    reduced Omega split of Simkin and Trowbridge (1980), ``simkin1980three``.
 
     ``source_potential`` is intentionally mandatory.  It must satisfy
     ``H_s = -grad(source_potential)`` in the current-free neighbourhood of the
