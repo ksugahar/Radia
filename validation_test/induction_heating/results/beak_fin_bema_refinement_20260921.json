@@ -60,5 +60,37 @@
   "finding": "BEM-A does not converge in this metric under maxh refinement. Over maxh 0.75 -> 0.55 -> 0.45 mm its beak loss fraction moves 0.325491 -> 0.323364 -> 0.324678, i.e. -4.74%, -5.36%, -4.97% against the 2-D reference: non-monotone and flat at about -5%. The surface face count only grows 5990 -> 7828 -> 9820 while the linear mesh size falls by 1.67x, because the 0.25 mm tip radius already drives the local refinement; reducing maxh therefore adds faces on the flat body rather than on the fin where this metric lives.",
   "consequence": "the pairwise 3% criterion is not a decidable gate on this fixture. It moves 3.00% -> 3.68% -> 3.26% with BEM-A's mesh and crosses the threshold in both directions without either route changing physically. The implementation ledger already requires acceptance 'after both discretizations have independently converged'; that precondition is measured here to be unmet on the BEM-A side, so the gate cannot be closed by refining what is exposed.",
   "what_would_close_it": "score each route against the independent 2-D reference instead of against the other, which is the rule the mixed-Omega work already adopted, or give the BEM-A surface mesh a fin-local refinement control so its perimeter sampling can be converged independently of maxh. Neither is done here.",
-  "not_claimed": "this says nothing about which route is more accurate at a converged discretisation, and it does not change the delivery-metric definitions"
+  "not_claimed": "this says nothing about which route is more accurate at a converged discretisation, and it does not change the delivery-metric definitions",
+  "cause": {
+    "statement": "the BEM-A side of this comparison is geometrically first order. compare_beak_fin_bema.py builds its surface through _extract_surface_mesh_filtered, which returns a flat P1 surface mesh and never calls mesh.Curve, so the 0.25 mm rounded tip is a polygon at every maxh. The repository does have a curvature-aware extractor, extract_surface_curved with geom_order >= 2, but it returns raw P2 node arrays for the SIBC-HACApK kernel and does not feed compute_inductance_source_sink, which this comparison uses",
+    "evidence": [
+      {
+        "maxh_mm": 0.75,
+        "n_surface_faces": 5990,
+        "tip_absK_ratio_peec_over_bema": 1.0261225060524648,
+        "tip_loss_ratio_peec_over_bema": 1.0608930313640776,
+        "bema_tip_loss_fraction": 0.18563701122758341,
+        "peec_tip_loss_fraction": 0.19416769541605744
+      },
+      {
+        "maxh_mm": 0.55,
+        "n_surface_faces": 7828,
+        "tip_absK_ratio_peec_over_bema": 1.0263629538154517,
+        "tip_loss_ratio_peec_over_bema": 1.0610865137436392,
+        "bema_tip_loss_fraction": 0.1842417427960782,
+        "peec_tip_loss_fraction": 0.19416769541605744
+      },
+      {
+        "maxh_mm": 0.45,
+        "n_surface_faces": 9820,
+        "tip_absK_ratio_peec_over_bema": 1.0242155214678543,
+        "tip_loss_ratio_peec_over_bema": 1.0568248883935845,
+        "bema_tip_loss_fraction": 0.18471294976314534,
+        "peec_tip_loss_fraction": 0.19416769541605744
+      }
+    ],
+    "why_this_is_geometric_not_algebraic": "the PEEC-over-BEM-A tip ratios are constant -- 1.026, 1.026, 1.024 in |K| and 1.061, 1.061, 1.057 in loss -- across a 1.6x change in face count. A discretisation error shrinks under refinement; this does not, because the tip's element size is already set by its own curvature and maxh cannot reach it. BEM-A's tip loss fraction sits at 0.1846 +/- 0.0007 against the 2-D reference 0.2023, i.e. -8.7% and flat, while PEEC is -4.0%",
+    "not_the_sibc_model": "the 2-D SIBC reference converges to the continuum value and PEEC, which uses the same SIBC sheet, lands within 4% of it. The disagreement tracks the tip geometry, not the impedance model. The BEM-A solve is algebraically sound on its own mesh: R partition closure -4.3e-15 and current continuity about 3.2e-16",
+    "fix": "give compute_inductance_source_sink a curved surface, or route this comparison through the curved SIBC path. Until then BEM-A cannot serve as the converged reference this gate assumes"
+  }
 }
