@@ -79,7 +79,7 @@ print("  Created: mixed_with_pyramid.bdf")
 
 # Export with pyramid as degenerate hex (for JMAG compatibility)
 print("\nExporting without pyramids (for JMAG)...")
-cubit.cmd('export jmag_nastran "mixed_for_jmag.bdf" dimension 3 nopyramid overwrite')
-print("  Created: mixed_for_jmag.bdf")
+cubit.cmd('export jmag_nastran "mixed_no_pyramid.bdf" dimension 3 nopyramid overwrite')
+print("  Created: mixed_no_pyramid.bdf")
 
 print("\nDone!")
