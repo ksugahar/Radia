@@ -3,7 +3,7 @@
 Each mesh level runs in a fresh Python process.  This both isolates NGSolve/C++
 state and preserves the public ``run_three_engine.py`` contract.  Acceptance
 requires converged nonlinear solves, contracting mesh increments for HDiv-MMM,
-HCurl reduced-A, and H1 TOSCA mixed total/reduced Omega, a small fine-mesh three-route spread,
+HCurl reduced-A, and H1 mixed total/reduced Omega, a small fine-mesh three-route spread,
 and a conservative combined numerical-uncertainty envelope.
 """
 

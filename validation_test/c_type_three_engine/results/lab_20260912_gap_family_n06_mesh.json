@@ -9,7 +9,7 @@
   "mesh_policy": {
     "hdiv_mmm": "exact iron-only Cubit/ACIS TET .vol; Coulomb open boundary",
     "reduced_a": "exact iron + locally refined physical air + Kelvin exterior",
-    "mixed_total_reduced_omega": "same periodic Kelvin .vol as reduced-A; H1 TOSCA mixed total/reduced Omega"
+    "mixed_total_reduced_omega": "same periodic Kelvin .vol as reduced-A; H1 mixed total/reduced Omega"
   },
   "kelvin_radius_m": 0.22,
   "kelvin_physical_center_m": [

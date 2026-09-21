@@ -8,7 +8,7 @@ multipole analysis, rotating coil measurement, Radia case studies.
 # `<short>_topics()` via common.register_topics_tool).
 TOPICS: dict[str, str] = {
     "end_pole": "Analytical chamfer design (Delferriere)",
-    "kolkata": "Radia + TOSCA validation case study",
+    "kolkata": "Radia vs 3-D FEM validation case study",
     "rotating_coil": "Multipole measurement + field reconstruction",
     "isochronous_endpack": (
         "Radial field index design: scaling (k=const) vs isochronous "
@@ -198,9 +198,9 @@ ampere-turns.
 For the quadrupole with bore radius r_g and gradient G_dyn:
     ∆ = L_f · (r_g²·G_dyn/(2·μ₀·NI) - 1)
 
-## Numerical verification (TOSCA)
+## Numerical verification
 
-Tested in TOSCA 3D for both dipole and quadrupole geometries:
+The paper reports 3-D FEM tests for both dipole and quadrupole geometries:
 - Sharp end (no chamfer): integrated multipoles A_3, A_5, A_7 ~ 10⁻³
 - 45° chamfer: ~10⁻⁴
 - Analytical profile (10-slope approximation): ~10⁻⁵ — 3 orders of
@@ -223,8 +223,8 @@ A Radia workflow:
    rad.Fld() along beam trajectory
 4. Choose ∆ that minimizes A_3 + A_5 + A_7 (or the relevant
    multipole budget)
-5. Validate with TOSCA / NGSolve (using the radia-mcp.radia_ngsolve
-   FEM pipeline)
+5. Validate with an independent FEM route (the radia-mcp.radia_ngsolve
+   pipeline)
 
 This is exactly the workflow used at SOLEIL, ESRF, and Kindai's
 accelerator partners.
@@ -241,11 +241,11 @@ to various current combinations.  Internal field can only be measured
 up to r = 673 mm (extraction radius).  Beyond that, simulation must
 extrapolate.
 
-## Why Radia + TOSCA
+## Why Radia alongside a 3-D FEM code
 
 The paper compares two simulation codes:
 
-| Aspect | TOSCA (FEM) | Radia |
+| Aspect | 3-D FEM code | Radia |
 |---|---|---|
 | Solver | Finite element | Boundary integral |
 | Mesh | 450k elements needed | None |
@@ -296,7 +296,7 @@ The Kolkata workflow is exactly what radia-mcp.electromagnet supports:
 - Apply BH curve with MatSatIsoTab
 - Compute field via rad.Fld()
 - Verify via Mathematica (radia-mcp.mathematica) symbolic identities
-- Use TOSCA/NGSolve for cross-validation when needed
+- Use an independent FEM route for cross-validation when needed
 
 The Pradhan 2007 paper is THE blueprint for using Radia at an
 accelerator facility.
@@ -1249,7 +1249,7 @@ def get_accelerator_documentation(topic: str = "all") -> str:
     Topics:
       "all"
       "end_pole"             - Analytical chamfer design (Delferriere)
-      "kolkata"              - Radia + TOSCA validation case study
+      "kolkata"              - Radia vs 3-D FEM validation case study
       "rotating_coil"        - Multipole measurement + field reconstruction
       "isochronous_endpack"  - Radial field index: scaling vs isochronous,
                                saturated nonlinear end-pack reshape
