@@ -182,7 +182,7 @@ rule the mixed-Omega work adopted for the same reason -- or a fin-local
 refinement control for the BEM-A surface mesh. Data:
 `results/beak_fin_bema_refinement_20260921.json`.
 
-### The cause is geometry order, not the SIBC model (2026-09-21)
+### Geometry order is not the cause; basis order is (2026-09-21)
 
 The BEM-A side of this comparison is geometrically first order.
 `compare_beak_fin_bema.py` builds its surface through
@@ -211,6 +211,35 @@ The consequence for the gate is that BEM-A cannot serve as the converged
 reference this comparison assumes until `compute_inductance_source_sink` is
 given a curved surface, or this comparison is routed through the curved SIBC
 path.
+
+### Measured: basis order, not geometry order (2026-09-21)
+
+The section above named geometry order. That code fact holds -- the coil
+BEM-A is geometrically first order while the workpiece BEM-A reads
+`vol_curve_order` and runs the curved SIBC kernel -- but measurement shows it
+is not the cause, and this entry replaces that attribution.
+
+`HDivSurface` also lives on the boundary of a curved volume mesh with the same
+DOF count, so the same solve was run with the tip as an arc rather than a
+polygon. Curving raises the tip boundary area from 3.14395e-05 to 3.15880e-05
+m2 and converges by order 2, but R moves only from 125.81210 to 125.89625
+micro-ohm: **+0.067%**. That cannot explain an 8.7% tip-loss deficit.
+
+Basis order can. `compute_inductance_source_sink` defaults to `fes_order=0`,
+RT0/RWG, the lowest order, and the comparison never varied it. One order step
+on maxh 1.8 mm moves R from 123.68237 to 125.77627 micro-ohm, **+1.69%**,
+about 25x the geometry-order effect, and `fes_order=1` at maxh 1.8 mm nearly
+reproduces `fes_order=0` at maxh 0.75 mm. One order is therefore worth roughly
+a 2.4x mesh refinement here, and R is still rising.
+
+So the BEM-A side was never p-converged. The comparison only ever varied
+`maxh`, which saturates because the tip element size is set by its own
+curvature. Converging it needs `fes_order`, and `hacapk_cocr` is RT0-only, so
+an order-1 run at the fine mesh needs the dense `cocr` path or higher-order
+support in the compressed solver.
+
+None of this indicts the SIBC model. The 2-D SIBC reference converges to the
+continuum value and PEEC, on the same SIBC sheet, lands within 4% of it.
 
 ## Required next gates
 

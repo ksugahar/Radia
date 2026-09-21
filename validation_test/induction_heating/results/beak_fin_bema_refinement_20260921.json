@@ -91,6 +91,40 @@
     ],
     "why_this_is_geometric_not_algebraic": "the PEEC-over-BEM-A tip ratios are constant -- 1.026, 1.026, 1.024 in |K| and 1.061, 1.061, 1.057 in loss -- across a 1.6x change in face count. A discretisation error shrinks under refinement; this does not, because the tip's element size is already set by its own curvature and maxh cannot reach it. BEM-A's tip loss fraction sits at 0.1846 +/- 0.0007 against the 2-D reference 0.2023, i.e. -8.7% and flat, while PEEC is -4.0%",
     "not_the_sibc_model": "the 2-D SIBC reference converges to the continuum value and PEEC, which uses the same SIBC sheet, lands within 4% of it. The disagreement tracks the tip geometry, not the impedance model. The BEM-A solve is algebraically sound on its own mesh: R partition closure -4.3e-15 and current continuity about 3.2e-16",
-    "fix": "give compute_inductance_source_sink a curved surface, or route this comparison through the curved SIBC path. Until then BEM-A cannot serve as the converged reference this gate assumes"
+    "fix": "give compute_inductance_source_sink a curved surface, or route this comparison through the curved SIBC path. Until then BEM-A cannot serve as the converged reference this gate assumes",
+    "superseded": "the statement above named geometry order as the cause. Measurement does not support it and the entry below replaces it. The code fact is correct -- the coil BEM-A is geometrically first order while the workpiece BEM-A is curve-aware -- but its size is wrong"
+  },
+  "cause_measured": {
+    "geometry_order": {
+      "test": "HDivSurface also lives on the boundary of a curved volume mesh with the same DOF count, so the same solve was run with the tip as an arc instead of a polygon",
+      "tip_boundary_area_m2": {
+        "Curve(1)": 3.14395e-05,
+        "Curve(2)": 3.1588e-05,
+        "Curve(3)": 3.15909e-05
+      },
+      "R_uOhm": {
+        "flat": 125.8121,
+        "Curve(1)": 125.8121,
+        "Curve(2)": 125.89625
+      },
+      "effect_on_R": 0.00067,
+      "verdict": "curving raises the tip area by 0.47% and R by 0.067%. Real, converged by order 2, and far too small to explain an 8.7% tip-loss deficit"
+    },
+    "basis_order": {
+      "test": "compute_inductance_source_sink defaults to fes_order=0, RT0/RWG, the lowest order. One order step, on maxh 1.8 mm with the dense cocr solver",
+      "maxh_mm": 1.8,
+      "R_uOhm": {
+        "fes_order=0": 123.68237,
+        "fes_order=1": 125.77627
+      },
+      "ndof": {
+        "fes_order=0": 6816,
+        "fes_order=1": 13632
+      },
+      "effect_on_R": 0.01693,
+      "verdict": "+1.69% from one order step, about 25x the geometry-order effect. fes_order=1 at maxh 1.8 mm (125.776) nearly reproduces fes_order=0 at maxh 0.75 mm (125.812), so one order is worth roughly a 2.4x mesh refinement here, and R is still rising"
+    },
+    "conclusion": "the BEM-A side of this comparison was never p-converged. It is driven at RT0 and the comparison only ever varied maxh, which saturates because the tip element size is set by its own curvature. Basis order is the control that moves this quantity. Geometry order is a real asymmetry in the code but a 0.067% effect here, and nothing in these measurements indicts the SIBC model: the 2-D SIBC reference converges to the continuum value and PEEC, on the same SIBC sheet, lands within 4% of it",
+    "next": "converge BEM-A in fes_order before using it as the reference this gate assumes. hacapk_cocr is RT0-only, so an order-1 run at the fine mesh needs either the dense cocr path or higher-order support in the compressed solver"
   }
 }
