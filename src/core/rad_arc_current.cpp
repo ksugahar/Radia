@@ -43,6 +43,7 @@
 #include "rad_arc_current.h"
 // #include "rad_subdivided_arc_current.h" REMOVED (Phase C, 2026-04-16)
 #include "rad_elliptic_integral.h"
+#include "rad_arc_section.h" // Regularized near sections and smooth far moments.
 
 #include <math.h>
 #include <sstream>
@@ -156,25 +157,28 @@ void radTArcCur::B_compElliptic(radTField* FieldPtr)
 
 	const double SmallPositive = 1.E-10;
 	double r2_xy = P_mi_CenPo.x*P_mi_CenPo.x + P_mi_CenPo.y*P_mi_CenPo.y;
-	double r = sqrt(r2_xy + SmallPositive);  // SmallPositive avoids division by zero in B-field
-	double r_exact = sqrt(r2_xy);  // Exact r for solid angle (no offset)
-	double phi_obs = ((P_mi_CenPo.y < 0)? (TwoPi - acos(P_mi_CenPo.x/r)) : (acos(P_mi_CenPo.x/r)));
+	// Preserve the exact axis so the circular-loop analytic axis branch runs.
+	// A fixed squared-radius offset changes both the field and its direction.
+	double r = sqrt(r2_xy);
+	double r_exact = r;
+	double phi_obs = (r == 0.0) ? 0.0 : atan2(P_mi_CenPo.y, P_mi_CenPo.x);
 	double z = P_mi_CenPo.z;
 
 	// Check if this is a full circular coil or an arc
 	double delta_phi = Phi_max - Phi_min;
-	bool is_full_circle = (fabs(delta_phi - TwoPi) < 1.0e-6);
+	// Only absorb endpoint subtraction roundoff, not a physically missing sector.
+	bool is_full_circle = (fabs(delta_phi - TwoPi) <= 8.0*2.2204460492503131e-16*TwoPi);
 
 	double IntForAx = 0.0, IntForAy = 0.0;
 	double IntForBx = 0.0, IntForBy = 0.0, IntForBz = 0.0;
 	double IntForPhi = 0.0;  // Magnetic scalar potential [A]
 
 	if (is_full_circle) {
-		// Full circular coil: use direct elliptic integral formulas
-		// Integrate over the rectangular cross-section
+		// A and scalar potential retain elliptic-loop section quadrature.
+		// B/H uses closed axis primitives, analytic sections and far-field moments.
 
 		// Integration over cross-section using Gaussian quadrature (4x4)
-		// 4-point Gauss-Legendre quadrature gives excellent accuracy for thick coils
+		// These potential paths require their own section-convergence check.
 		// Reference: Abramowitz & Stegun, Table 25.4
 		static const int GAUSS_ORDER = 4;
 		static const double gp[] = {
@@ -209,20 +213,8 @@ void radTArcCur::B_compElliptic(radTField* FieldPtr)
 				// dI = J_azim [A/m^2] * w_total [m^2] = J_azim * w_total [A]
 				double dI = J_azim * w_total;
 
-				// Compute B-field from this circular loop using elliptic integrals
-				double dBR = 0.0, dBZ = 0.0;
-				RadElliptic::CircularLoopBField(r, z, r_coil, z_coil, dI, dBR, dBZ);
-
-				// BR and BZ are in cylindrical coordinates
-				// Convert to Cartesian at observation point
-				double cos_phi = cos(phi_obs);
-				double sin_phi = sin(phi_obs);
-
-				if (FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_) {
-					IntForBx += dBR * cos_phi;
-					IntForBy += dBR * sin_phi;
-					IntForBz += dBZ;
-				}
+				const double cos_phi = cos(phi_obs);
+				const double sin_phi = sin(phi_obs);
 
 				// Vector potential
 				if (FieldPtr->FieldKey.A_) {
@@ -240,97 +232,26 @@ void radTArcCur::B_compElliptic(radTField* FieldPtr)
 				}
 			}
 		}
-	} else {
-		// Arc coil: use Biot-Savart with Gauss quadrature over cross-section
-		// This replaces the analytical Kameari formula which had accuracy issues
-		// for thick coils with large aspect ratios.
-
-		double r_mid = 0.5 * (R_max + R_min);
-		double r_half = 0.5 * (R_max - R_min);  // Half radial width (a)
-		double z_half = 0.5 * Height;           // Half axial width (b)
-
-		// B-field calculation using Biot-Savart with Gauss quadrature
 		if (FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_) {
-			// 4-point Gauss-Legendre quadrature for cross-section integration
-			static const int GAUSS_ORDER = 4;
-			static const double gp[] = {
-				-0.8611363115940526,
-				-0.3399810435848563,
-				 0.3399810435848563,
-				 0.8611363115940526
-			};
-			static const double gw[] = {
-				0.3478548451374538,
-				0.6521451548625461,
-				0.6521451548625461,
-				0.3478548451374538
-			};
+			const auto b = (r < 1.e-5*R_min)
+				? RadArcSection::FullCircleAxis(r,z,R_min,R_max,Height)
+				: RadArcSection::Field(r,z,R_min,R_max,Height,0.,TwoPi);
+			IntForBx = ConstForJ*J_azim*b[0]*cos(phi_obs);
+			IntForBy = ConstForJ*J_azim*b[0]*sin(phi_obs);
+			IntForBz = ConstForJ*J_azim*b[2];
+		}
+	} else {
+		const double r_mid = 0.5 * (R_max + R_min);
+		const double r_half = 0.5 * (R_max - R_min);
+		const double z_half = 0.5 * Height;
 
-			// Number of phi segments for arc integration
-			// Use at least 4 segments per 90 degrees for accuracy
-			int n_phi = NumberOfSectors;
-			if (n_phi < 4) n_phi = 4;
-			// Scale by arc angle relative to full circle
-			n_phi = std::max(4, (int)(n_phi * delta_phi / TwoPi + 0.5));
-
-			double dphi = delta_phi / n_phi;
-
-			// Biot-Savart constant: mu_0 / (4 * pi)
-			const double mu0_over_4pi = 1.0e-7;
-
-			// Integrate over cross-section using Gauss quadrature
-			for (int ir = 0; ir < GAUSS_ORDER; ++ir) {
-				double r_coil = r_mid + r_half * gp[ir];
-				double w_r = gw[ir] * r_half;
-
-				for (int iz = 0; iz < GAUSS_ORDER; ++iz) {
-					double z_coil = z_half * gp[iz];
-					double w_z = gw[iz] * z_half;
-
-					// Current for this cross-section element
-					double dI = J_azim * w_r * w_z;
-
-					// Integrate over arc angle using midpoint rule
-					for (int iphi = 0; iphi < n_phi; ++iphi) {
-						double phi_coil = Phi_min + (iphi + 0.5) * dphi;
-
-						// Position of current element (in coil-centered coordinates)
-						double x_src = r_coil * cos(phi_coil);
-						double y_src = r_coil * sin(phi_coil);
-						double z_src = z_coil;
-
-						// Current direction (tangent to arc)
-						// dl = r_coil * dphi * (-sin(phi), cos(phi), 0)
-						double dlx = r_coil * dphi * (-sin(phi_coil));
-						double dly = r_coil * dphi * cos(phi_coil);
-						double dlz = 0.0;
-
-						// Vector from source to observation point
-						double Rx = P_mi_CenPo.x - x_src;
-						double Ry = P_mi_CenPo.y - y_src;
-						double Rz = P_mi_CenPo.z - z_src;
-
-						double R_mag_sq = Rx*Rx + Ry*Ry + Rz*Rz;
-						double R_mag = sqrt(R_mag_sq);
-
-						if (R_mag > 1.0e-15) {
-							double R_mag_cubed = R_mag_sq * R_mag;
-
-							// dB = (mu_0 / 4pi) * dI * (dl x R) / |R|^3
-							// Cross product: dl x R
-							double crossX = dly * Rz - dlz * Ry;
-							double crossY = dlz * Rx - dlx * Rz;
-							double crossZ = dlx * Ry - dly * Rx;
-
-							double factor = mu0_over_4pi * dI / R_mag_cubed;
-
-							IntForBx += factor * crossX;
-							IntForBy += factor * crossY;
-							IntForBz += factor * crossZ;
-						}
-					}
-				}
-			}
+		if (FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_) {
+			const auto b = RadArcSection::Field(r, z, R_min, R_max, Height,
+			                                    Phi_min-phi_obs, Phi_max-phi_obs);
+			const double c = cos(phi_obs), s = sin(phi_obs);
+			IntForBx = ConstForJ*J_azim*(c*b[0]-s*b[1]);
+			IntForBy = ConstForJ*J_azim*(s*b[0]+c*b[1]);
+			IntForBz = ConstForJ*J_azim*b[2];
 		}
 
 		// Vector potential and scalar potential still use numerical integration

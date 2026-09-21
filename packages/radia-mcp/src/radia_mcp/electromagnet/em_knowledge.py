@@ -218,6 +218,67 @@ The exchange deliberately does not import a source tool's B-H interpolation.
 Nonlinear material response remains governed by the Radia/NGSolve material
 implementation and is compared through a separate constitutive-response gate.
 
+## Loft Field Routing
+
+`to_radia()` accepts constant rectangular straight/arc solids; unsupported
+profiles and lofts must not be omitted or replaced with bounding rectangles.
+For matching rectangular or circular straight lofts and positive-angle arc lofts, use
+`to_radia_loft_filaments(nw, nh, n_arc=64)` explicitly. This is a native
+thin-filament approximation with prescribed equal current per stream tube,
+not a solid-volume kernel or a conduction solution. Require this method to
+exist in the loaded runtime; do not silently fall back on older installations.
+
+Straight linear loft paths use closed-form line fields. Curved lofts use
+chords, so refine `n_arc` independently of the section counts `nw` and `nh`.
+Check an independent volume integral, current conservation, constant-section
+limits and rigid transforms. A matching coil field at one point is insufficient.
+
+Use only for external fields. Do not use it for internal fields, self-energy,
+self-force, Joule loss, skin effect or proximity effect. Negative-angle arc
+lofts, cross-type transitions, arbitrary profiles and discontinuous cross-section joins remain
+unsupported by this API. An open segment provides a field contribution;
+it is not a complete steady-current circuit without a return path.
+Use `require_closed=True` to check matching endpoint sections and individual
+current paths before export. No return wire is added. Unequal endpoint
+profiles on a full-turn loft are rejected. Closure does not certify absence
+of self-intersections in arbitrary multi-segment coils.
+
+Rectangular and circular loft CAD export is separate from field routing: straight lofts
+use centered endpoint sections; arc lofts interpolate circularly placed
+sections through `to_occ_shape()`. Arc CAD requires `0 < angle < 360`,
+`n_sub >= 4`, positive dimensions and a clear inner radius. Refine `n_sub`
+for CAD geometry convergence and verify analytic volume and STEP round trips.
+CAD export does not make `to_radia()` support native solid loft fields.
+Circular field sampling uses an equal-area radial/angular grid; refine both
+section counts and arc chords, and validate against an independent integral.
+
+## Mixed Omega Validation And Cost
+
+Record separate monotonic wall timings for mesh, coil-source evaluation,
+interface projection, linear solve and postprocessing, with active/completed
+phase, thread count, mesh/order, source tolerance, versions and cold/warm state.
+A timeout means incomplete execution, not numerical disagreement. Do not
+report speedup from incomplete runs or compare different accuracy targets.
+Compare signed field vectors, interface continuity, spatial observables and
+energy against an independent identity-matched reference before claiming parity.
+
+Internal fields, self-energy and Joule loss require a finite-section volume
+current model; conductivity and terminal conditions are required for conduction
+and losses. Validate mesh convergence and power/energy balance. External
+filament agreement alone cannot establish these capabilities. This routing
+does not claim that coupled volume-conductor support is already implemented.
+
+Constant-section full-turn rectangular/circular loft CAD uses exact revolution.
+Unequal endpoint profiles are rejected. General closed multi-segment CAD and
+self-intersection certification remain separate validation tasks.
+Use `audit_segment_volume_overlaps()` to detect positive-volume overlap
+between CAD segments, including adjacent ones. Touching faces are permitted.
+This reports pairwise overlap only, not clearance or intra-segment validity;
+call it before constructing a volume-conductor mesh and inspect failed pairs.
+Mixed-potential solve profiling must separate matrix assembly, source RHS
+assembly, factorization and backsolve. A long source RHS assembly is not
+evidence that the direct matrix solver is slow.
+
 See also: `docs/complex_coil_geometry/complex_coil.ipynb` -- 8-segment beam-steering
 coil showcase using CoilBuilder add_straight/add_arc with a Biot-Savart field map.
 

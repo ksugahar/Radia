@@ -10,6 +10,8 @@ from __future__ import annotations
 import pathlib
 import re
 
+from .._shared.page_limit import page_limit_content_selection_policy
+
 # Plan B Tier 1 (v0.12.0) — composite score + human-advisor comments
 from .plans.T1 import paper_writing_abstract_strength  # noqa: F401
 from .plans.T2 import paper_writing_contribution_clarity_score  # noqa: F401
@@ -104,6 +106,8 @@ def paper_writing_usage() -> str:
     活動ツール (実測、v0.14.0 時点):
 
     ## 基本 lint (existing)
+    - paper_writing_page_limit_revision_policy — 意味の通る基準稿を改善し、
+      組版後に最低重要度の一文・論点を丸ごと削る共通必須手順
     - paper_writing_count_underlines / validate_pdf_pages / check_overfull_hbox
     - paper_writing_analyze_sentences / count_weak_expressions
     - paper_writing_validate_abstract_length
@@ -142,12 +146,12 @@ def paper_writing_usage() -> str:
       `check_pdf_obvious_errors` の更に深い後段。score 0-10.
     - paper_writing_check_prose_density — 圧縮 anti-pattern 検出
       (nominalisation, em-dash+semicolon chaining, jargon クラスタ,
-      40 語超 long sentence). flag 率 >30% で recommendation が
-      `rewrite` → `reduce_content` に切替 (圧縮の床を踏んだ signal).
+      40 語超 long sentence). `page_limit_pressure=True` では一件でも
+      `reduce_content` とし、最低重要度の一文・論点を丸ごと削除する。
     - paper_writing_suggest_concept_drops — どの概念を落とすか
       (PARALLEL_CITATION / EM_DASH_INTERPOLATION / PARENTHETICAL_ASIDE /
       TRAILING_SEMICOLON_CLAUSE / CITATION_ONLY_PARENTHETICAL).
-      check_prose_density の companion。compression floor を超えた時、
+      check_prose_density の companion。圧縮兆候またはページ超過時、
       pattern match で droppable な候補を ranked list で提案。
       投稿先 (digest / journal) ごとに残す/削るは判断必要。
     - paper_writing_check_typography_hacks — 「fontを小さくするはだめ」
@@ -336,6 +340,16 @@ def paper_writing_count_underlines(tex_path: str) -> dict:
         "target_range": "0 (journal paper では 強調は \\emph / \\textbf)",
         "warning_threshold": ">=5 per page",
     }
+
+
+def paper_writing_page_limit_revision_policy() -> dict:
+    """Return the mandatory page-limit editing policy for papers.
+
+    A page overflow is resolved by selecting and removing complete,
+    lower-priority content units.  It is never resolved by compressing the
+    sentences, semantic relations, or typography that remain.
+    """
+    return page_limit_content_selection_policy("paper")
 
 
 def paper_writing_validate_pdf_pages(pdf_path: str, page_limit: int) -> dict:
@@ -4907,6 +4921,7 @@ def paper_writing_check_pdf_advanced_anomalies(
 def paper_writing_check_prose_density(
     text: str,
     max_report: int = 10,
+    page_limit_pressure: bool = False,
 ) -> dict:
     """Detect compression-induced prose-density anti-patterns.
 
@@ -4919,15 +4934,18 @@ def paper_writing_check_prose_density(
     hard to read.
 
     Five per-sentence axes are scored; sentences with score >= 2 are
-    flagged.  When >30% of sentences are flagged, the recommendation
-    switches from "rewrite sentence X" to "**reduce content** --- the
-    text is past its compression limit, the right move is to drop a
-    concept, not compress further".
+    flagged. When ``page_limit_pressure`` is true, any finding switches the
+    recommendation to content selection: first restore a natural sentence,
+    then remove a complete lower-priority claim, example, or evidence unit.
+    A shorter or page-fitting sentence is never accepted merely because it
+    occupies fewer lines.
 
     Args:
         text: prose to analyze (LaTeX or plain).  LaTeX commands are
             roughly stripped before sentence splitting.
         max_report: max number of flagged sentences to return.
+        page_limit_pressure: whether the text is being edited to fit a hard
+            page limit. Enables the mandatory no-prose-compression gate.
 
     Returns:
         dict with overall score (0-10), per-sentence issues, and a
@@ -5077,7 +5095,15 @@ def paper_writing_check_prose_density(
         ratio_flagged = len(flagged) / total_sents
         # 10 if no issues; drop linearly with flagged-ratio
         overall_score = round(max(0.0, 10.0 - 30.0 * ratio_flagged), 1)
-        if ratio_flagged > 0.30:
+        if page_limit_pressure and ratio_flagged > 0:
+            recommendation = (
+                "PAGE-LIMIT GATE --- restore every flagged sentence to a "
+                "natural, self-contained form first. Then make the document "
+                "fit by dropping a complete lower-priority claim, example, "
+                "or evidence unit. Do not shorten the surviving sentences "
+                "for line count."
+            )
+        elif ratio_flagged > 0.30:
             recommendation = (
                 "REDUCE CONTENT --- the text is past its compression "
                 "limit; >30% of sentences carry compression anti-patterns. "
@@ -5099,10 +5125,24 @@ def paper_writing_check_prose_density(
             )
         else:
             recommendation = "clean prose; no compression anti-patterns."
+            if page_limit_pressure:
+                recommendation += (
+                    " If the PDF still exceeds its limit, remove a complete "
+                    "lower-priority content unit; do not compress this prose."
+                )
 
     return {
         "score": overall_score,
         "score_max": 10,
+        "page_limit_pressure": page_limit_pressure,
+        "page_limit_policy_id": (
+            "page_limit_select_content_do_not_compress_prose"
+            if page_limit_pressure else None
+        ),
+        "required_page_limit_action": (
+            "drop_whole_low_priority_content_unit"
+            if page_limit_pressure else None
+        ),
         "total_sentences": total_sents,
         "flagged_sentences": len(flagged),
         "ratio_flagged": round(len(flagged) / max(total_sents, 1), 2),
@@ -5118,8 +5158,10 @@ def paper_writing_check_prose_density(
             "verbs ('the augmentation' vs 'we augment'); (2) em-dash + "
             "semicolon overuse to glue ideas without subordination; "
             "(3) jargon clustering (>5 technical terms in <50 words); "
-            "(4) sentences over 40 words.  When >30% of sentences are "
-            "flagged, the fix is REDUCE CONTENT, not further compression."
+            "(4) sentences over 40 words. Under a hard page limit, prose "
+            "compression is forbidden at any density: write clearly first, "
+            "then reduce scope by dropping a whole lower-priority content "
+            "unit."
         ),
         "source": (
             "Wallwork English for Writing Research Papers §13 (sentence "
@@ -5134,12 +5176,11 @@ def paper_writing_suggest_concept_drops(
     text: str,
     max_report: int = 10,
 ) -> dict:
-    """Suggest specific concepts to drop when prose is over the
-    compression floor.
+    """Suggest complete content units to drop instead of compressing prose.
 
     Companion to `paper_writing_check_prose_density`: that tool flags
     *which sentences* are over-compressed; this tool suggests *what to
-    drop* to recover natural prose.
+    drop* to recover natural prose and meet a hard page limit.
 
     The IGTE 2026 digest debugging (2026-05-21) made the meta-rule
     concrete: when you have N concepts that won't fit in M lines, the
@@ -5360,8 +5401,11 @@ def paper_writing_suggest_concept_drops(
         recommendation = (
             "No droppable concepts found by pattern matching.  The "
             "compression issues, if any, are in sentence structure "
-            "rather than removable content.  Consider rewriting "
-            "flagged sentences with active verbs instead."
+            "rather than an automatically removable content unit. Rewrite "
+            "flagged sentences for clarity, not brevity. If the PDF is over "
+            "its limit, identify another complete lower-priority claim, "
+            "example, or evidence unit manually; do not squeeze these "
+            "sentences."
         )
     elif total_words_saved >= 15:
         recommendation = (
@@ -5373,8 +5417,9 @@ def paper_writing_suggest_concept_drops(
     else:
         recommendation = (
             f"Candidates exist but small savings ({total_words_saved}w "
-            "total).  Combine with sentence-level rewrites for full "
-            "compression-floor recovery."
+            "total). If that is insufficient, remove another complete "
+            "lower-priority content unit. Do not obtain the remaining "
+            "space by shortening the surviving prose."
         )
 
     return {
@@ -5383,12 +5428,15 @@ def paper_writing_suggest_concept_drops(
         "total_words_saved_if_all_dropped": total_words_saved,
         "recommendation": recommendation,
         "hint": (
-            "Run AFTER `check_prose_density` flags compression issues. "
+            "Run after `check_prose_density` flags compression issues or a "
+            "compiled PDF exceeds its page limit. "
             "PARALLEL_CITATION (cost 2) and CITATION_ONLY_PARENTHETICAL "
             "(cost 1) are the safest drops.  EM_DASH_INTERPOLATION and "
             "TRAILING_SEMICOLON_CLAUSE are cheap if the interpolation "
             "is a Nagamine-style late addition.  PARENTHETICAL_ASIDE "
-            "needs human judgement -- review each."
+            "needs human judgement -- review each. Never trade away the "
+            "actor, object, condition, causal link, or cross-task relation "
+            "in a retained sentence."
         ),
         "source": (
             "Manual debugging trace, IGTE 2026 digest 2026-05-21: "
@@ -5424,13 +5472,14 @@ def paper_writing_check_typography_hacks(tex_path: str) -> dict:
       - `\\setlength{\\textheight}{...}`, `\\setlength{\\textwidth}{...}`,
         `\\setlength{\\topmargin}{...}`, `\\setlength{\\oddsidemargin}{...}`
       - `\\geometry{...}` (overriding journal class margins)
-    - **INFO** vspace usage (not a violation, layout tool — Sugahara
+    - **INFO** vspace usage (not automatically a violation, layout tool — Sugahara
       2026-05-21 "\\vspace は、見た目が良くなるならありにしよう"):
       - `\\vspace{-Xmm}` etc. is reported for audit but does NOT count
         against the score.  Use of \\vspace for legitimate visual
         layout (template tightening, figure-text gap reduction) is
-        explicitly allowed; the only concern is if it is used to cram
-        content past the page limit, which is judged contextually.
+        allowed only for visual correction. Using it to retain extra content
+        after a page overflow violates the page-limit policy; that intent is
+        judged contextually.
 
     Context-aware: a `\\small` inside `\\begin{table}...\\end{table}` or
     `\\caption{...}` is NORMAL (IEEE style for tables/captions);
@@ -5648,9 +5697,9 @@ def paper_writing_check_typography_hacks(tex_path: str) -> dict:
                     "match": m.group(0),
                     "reason": (
                         f"\\vspace{{-{val}{unit}}}: large negative "
-                        "vspace.  OK if for visual improvement "
-                        "(template tightening, figure gap reduction). "
-                        "Audit if used to cram content past page limit."
+                        "vspace. OK only for visual improvement, not to "
+                        "retain extra content after a page overflow. Audit "
+                        "the editing intent."
                     ),
                 })
 
@@ -5698,10 +5747,10 @@ def paper_writing_check_typography_hacks(tex_path: str) -> dict:
         "n_issues": len(issues),
         "recommendation": recommendation,
         "hint": (
-            "Hierarchy of bad page-limit responses (Sugahara 2026-05-21):\n"
-            "  0. Typography hacks  --- STRICTLY FORBIDDEN (this tool)\n"
-            "  1. Prose compression --- check_prose_density\n"
-            "  2. Drop content      --- suggest_concept_drops (the right move)\n"
+            "Mandatory page-limit response (Sugahara 2026-09-03):\n"
+            "  FORBIDDEN: typography hacks and compression of surviving prose\n"
+            "  REQUIRED:  remove a complete lower-priority content unit\n"
+            "             (see suggest_concept_drops)\n"
             "Reviewers spot non-standard typography immediately; "
             "the IEEE/IEEJ heuristic is 'if the authors had to break "
             "typography to fit, the content is too long for this venue'."

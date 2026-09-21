@@ -12,12 +12,165 @@ if testCase.TestData.RemoveMatlabDirectory
     addpath(matlabDirectory);
 end
 testCase.TestData.MatlabDirectory = matlabDirectory;
+testCase.assumeTrue(radia.ltspice.LTspice.isAvailable(), ...
+    "Current ADI LTspice is not installed on this test host.");
+testCase.TestData.TempDirectory=string(tempname("C:\temp"));mkdir(testCase.TestData.TempDirectory);
 end
 
 function teardownOnce(testCase)
 if testCase.TestData.RemoveMatlabDirectory
     rmpath(testCase.TestData.MatlabDirectory);
 end
+if isfolder(testCase.TestData.TempDirectory),rmdir(testCase.TestData.TempDirectory,'s');end
+end
+
+function testBinaryRawDoubleFlagIsDecodedWithoutSilentStrideError(testCase)
+source=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_rc.cir");
+netlist=string(fileread(source));netlist=replace(netlist,".tran 0 20m 0 10u",".options numdgt=7"+newline+".tran 0 20m 0 10u");
+fixture=fullfile(testCase.TestData.TempDirectory,"double_precision.cir");writeTextFixture(fixture,netlist);
+result=radia.ltspice.run(fixture,RawFormat="binary",OutputDirectory=fullfile(testCase.TestData.TempDirectory,"double_run"));
+verifyTrue(testCase,any(result.waveform.flags=="double"));
+verifyEqual(testCase,result.waveform.values(1,:),zeros(1,4),'AbsTol',0);
+verifyGreaterThan(testCase,result.waveform.values(2,1),0);
+verifyGreaterThan(testCase,result.waveform.values(2,2),0);
+verifyLessThan(testCase,result.waveform.values(2,1),1e-6);
+end
+
+function testFastAccessDoubleRawUsesColumnMajorStorage(testCase)
+source=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_rc.cir");
+netlist=string(fileread(source));netlist=replace(netlist,".tran 0 20m 0 10u",".options numdgt=7"+newline+".tran 0 20m 0 10u");
+fixture=fullfile(testCase.TestData.TempDirectory,"fastaccess_source.cir");writeTextFixture(fixture,netlist);
+result=radia.ltspice.run(fixture,RawFormat="binary",OutputDirectory=fullfile(testCase.TestData.TempDirectory,"fastaccess_run"));
+before=radia.ltspice.readRawBinary(result.raw_file);converted=fullfile(testCase.TestData.TempDirectory,"fastaccess.raw");copyfile(result.raw_file,converted);
+convertRawToFastAccess(converted,radia.ltspice.findExecutable());after=radia.ltspice.readRawBinary(converted);
+verifyTrue(testCase,any(after.flags=="fastaccess"));verifyEqual(testCase,after.names,before.names);verifyEqual(testCase,after.values,before.values,'AbsTol',0);
+end
+
+function testRawPropertiesStopBeforeVariableTable(testCase)
+source=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_rc.cir");
+result=radia.ltspice.run(source,RawFormat="binary",OutputDirectory=fullfile(testCase.TestData.TempDirectory,"properties_run"));raw=radia.ltspice.readRawBinary(result.raw_file);
+verifyFalse(testCase,isfield(raw.raw_properties,"Variables"));
+verifyFalse(testCase,isfield(raw.raw_properties,"x2I_x1"));
+end
+
+function testMissingSubcircuitStateFailsLoudly(testCase)
+netlist=fullfile(testCase.TestData.TempDirectory,"sub_state.cir");
+writeTextFixture(netlist,"Subcircuit state test"+newline+"X1 in 0 dynamic"+newline+".subckt dynamic a b"+newline+"L1 a b 1m"+newline+".ends"+newline+".end");
+raw=struct("names",["time","V(in)"],"values",[0,0;1e-3,1],"step_ranges",[1,2]);
+verifyError(testCase,@()radia.ltspice.extractTransientState(raw,NetlistFile=netlist),"radia:ltspice:MissingSubcircuitState");
+end
+
+function testSubcircuitPortCurrentsDoNotMasqueradeAsState(testCase)
+root=testCase.TestData.TempDirectory;negativeNetlist=fullfile(root,"sub.cir");positiveNetlist=fullfile(root,"sub2.cir");
+base="* subcircuit state regression"+newline+".subckt rl a b"+newline+"L1 a m 1m"+newline+"R1 m b 1"+newline+".ends"+newline+"V1 in 0 PULSE(0 1 0 1u 1u 5m 10m)"+newline+"X1 in 0 rl"+newline;
+writeTextFixture(negativeNetlist,base+".tran 0 1m 0 1u"+newline+".end");writeTextFixture(positiveNetlist,base+".save V(in) I(x1:L1)"+newline+".tran 0 1m 0 1u"+newline+".end");
+negative=radia.ltspice.run(negativeNetlist,OutputDirectory=fullfile(root,"sub_run")).raw_file;positive=radia.ltspice.run(positiveNetlist,OutputDirectory=fullfile(root,"sub2_run")).raw_file;raw=radia.ltspice.readRaw(negative);
+verifyTrue(testCase,any(startsWith(lower(raw.names),"ix(x1:")));
+verifyError(testCase,@()radia.ltspice.extractTransientState(raw,NetlistFile=negativeNetlist),"radia:ltspice:MissingSubcircuitState");
+saved=radia.ltspice.extractTransientState(radia.ltspice.readRaw(positive),NetlistFile=positiveNetlist);
+verifyTrue(testCase,any(strcmpi(saved.inductor_names,"x1:L1")));
+end
+
+function testStatelessSubcircuitDoesNotRequireImpossibleStateTrace(testCase)
+netlist=fullfile(testCase.TestData.TempDirectory,"stateless_sub.cir");
+writeTextFixture(netlist,"Stateless subcircuit test"+newline+"V1 in 0 1"+newline+"X1 in 0 rdiv"+newline+".subckt rdiv a b"+newline+"R1 a b 1k"+newline+".ends"+newline+".tran 1m"+newline+".end");
+raw=struct("names",["time","V(in)","Ix(x1:a)","Ix(x1:b)"],"values",[0,0,0,0;1e-3,1,1e-3,-1e-3],"step_ranges",[1,2]);
+state=radia.ltspice.extractTransientState(raw,NetlistFile=netlist);
+verifyEmpty(testCase,state.inductor_names);
+end
+
+function testNestedStatefulSubcircuitRequiresTrace(testCase)
+netlist=fullfile(testCase.TestData.TempDirectory,"nested_state.cir");
+writeTextFixture(netlist,"Nested state test"+newline+"Xtop in 0 outer"+newline+".subckt outer a b"+newline+"Xinner a b dynamic"+newline+".ends"+newline+".subckt dynamic a b"+newline+"C1 a b 1u"+newline+".ends"+newline+".end");
+raw=struct("names",["time","V(in)","Ix(xtop:a)"],"values",[0,0,0;1e-3,1,1e-3],"step_ranges",[1,2]);
+verifyError(testCase,@()radia.ltspice.extractTransientState(raw,NetlistFile=netlist),"radia:ltspice:MissingSubcircuitState");
+end
+
+function testParamsSyntaxResolvesStatelessSubcircuit(testCase)
+netlist=fullfile(testCase.TestData.TempDirectory,"params_stateless.cir");
+writeTextFixture(netlist,"Parameter syntax test"+newline+"X1 in 0 rdiv params: R=1k"+newline+".subckt rdiv a b params: R=1k"+newline+"R1 a b {R}"+newline+".ends"+newline+".end");
+raw=struct("names",["time","V(in)"],"values",[0,0;1e-3,1],"step_ranges",[1,2]);
+state=radia.ltspice.extractTransientState(raw,NetlistFile=netlist);verifyEmpty(testCase,state.inductor_names);
+end
+
+function testDeviceInternalSubcircuitStateFailsAsUnsupported(testCase)
+netlist=fullfile(testCase.TestData.TempDirectory,"diode_state.cir");
+writeTextFixture(netlist,"Device state test"+newline+"X1 in 0 dd"+newline+".subckt dd a b"+newline+"D1 a m DM"+newline+"R1 m b 1"+newline+".model DM D(Cjo=100p)"+newline+".ends"+newline+".end");
+raw=struct("names",["time","V(in)"],"values",[0,0;1e-3,1],"step_ranges",[1,2]);
+verifyError(testCase,@()radia.ltspice.extractTransientState(raw,NetlistFile=netlist),"radia:ltspice:UnsupportedSubcircuitState");
+end
+
+function testAlgebraicBehavioralSourceIsStateless(testCase)
+netlist=fullfile(testCase.TestData.TempDirectory,"algebraic_b.cir");
+writeTextFixture(netlist,"Algebraic source test"+newline+"X1 in 0 algebraic"+newline+".subckt algebraic a b"+newline+"B1 a b V=V(a)*2"+newline+".ends"+newline+".end");
+raw=struct("names",["time","V(in)"],"values",[0,0;1e-3,1],"step_ranges",[1,2]);
+state=radia.ltspice.extractTransientState(raw,NetlistFile=netlist);verifyEmpty(testCase,state.inductor_names);
+end
+
+function testTopLevelHistoryDevicesFailLoudly(testCase)
+raw=struct("names",["time","V(in)","V(out)"],"values",[0,0,0;1e-3,1,1],"step_ranges",[1,2]);
+cases=["T1 in 0 out 0 Td=1u Z0=50","O1 in 0 out 0 LTRA","B1 out 0 V=delay(V(in),1u)"];
+for k=1:numel(cases)
+ netlist=fullfile(testCase.TestData.TempDirectory,"top_history_"+k+".cir");writeTextFixture(netlist,"* top-level history"+newline+cases(k)+newline+".end");
+ verifyError(testCase,@()radia.ltspice.extractTransientState(raw,NetlistFile=netlist),"radia:ltspice:UnsupportedTransientState");
+end
+end
+
+function testSpiceTitleLineIsNotParsedAsDevice(testCase)
+netlist=fullfile(testCase.TestData.TempDirectory,"title_line.cir");
+writeTextFixture(netlist,"Two stage RC test"+newline+"V1 in 0 1"+newline+"R1 in 0 1k"+newline+".tran 1m"+newline+".end");
+raw=struct("names",["time","V(in)"],"values",[0,0;1e-3,1],"step_ranges",[1,2]);
+state=radia.ltspice.extractTransientState(raw,NetlistFile=netlist);verifyEmpty(testCase,state.inductor_names);
+end
+
+function testProcessTreeTerminationUsesFrameworkCompatibleApi(testCase)
+if ~ispc,testCase.assumeFail("Windows-only process lifecycle test.");end
+info=System.Diagnostics.ProcessStartInfo();info.FileName='pwsh';
+info.Arguments='-NoLogo -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 30"';
+info.UseShellExecute=false;info.CreateNoWindow=true;
+process=System.Diagnostics.Process();process.StartInfo=info;verifyTrue(testCase,process.Start());
+cleanup=onCleanup(@()radia.ltspice.internal.terminateProcessTree(process));
+verifyTrue(testCase,radia.ltspice.internal.terminateProcessTree(process));
+verifyTrue(testCase,process.HasExited);clear cleanup
+end
+
+function testRunTimeoutTerminatesOwnedProcessTree(testCase)
+if ~ispc,testCase.assumeFail("Windows-only timeout test.");end
+fake=fullfile(testCase.TestData.TempDirectory,"slow_ltspice.cmd");
+pidFile=fullfile(testCase.TestData.TempDirectory,"slow_child.pid");
+child=string(sprintf('pwsh -NoLogo -NoProfile -NonInteractive -Command "$PID | Set-Content -LiteralPath ''%s''; Start-Sleep -Seconds 30"',pidFile));
+writeTextFixture(fake,"@echo off"+newline+child+newline);
+netlist=fullfile(testCase.TestData.TempDirectory,"timeout.cir");writeTextFixture(netlist,".tran 1m"+newline+".end");
+verifyError(testCase,@()radia.ltspice.run(netlist,Executable=fake,Timeout_s=5,OutputDirectory=fullfile(testCase.TestData.TempDirectory,"timeout_run")),"radia:ltspice:Timeout");
+verifyTrue(testCase,isfile(pidFile));pid=str2double(strtrim(string(fileread(pidFile))));alive=true;
+try,childProcess=System.Diagnostics.Process.GetProcessById(pid);alive=~childProcess.HasExited;catch,alive=false;end
+verifyFalse(testCase,alive,"The timeout left its child process running.");
+end
+
+function testStateInjectionFailsWithoutEndAndAcceptsHierarchicalInductor(testCase)
+fixture=fullfile(testCase.TestData.TempDirectory,"missing_end.cir");writeTextFixture(fixture,"V1 in 0 1"+newline+".tran 1m");
+state=struct("schema","radia.ltspice.transient_state.v1","time_s",0,"node_names","in","node_voltages_V",1,"inductor_names","X1:L1","inductor_currents_A",2);
+verifyError(testCase,@()radia.ltspice.applyTransientState(fixture,state,fullfile(testCase.TestData.TempDirectory,"out.cir"),Duration_s=1e-3),"radia:ltspice:MissingEnd");
+raw=struct("names",["time","V(in)","I(X1:L1)"],"values",[0,0,0;1e-3,1,2],"step_ranges",[1,2]);extracted=radia.ltspice.extractTransientState(raw);
+verifyEqual(testCase,extracted.inductor_names,"X1:L1");verifyEqual(testCase,extracted.inductor_currents_A,2);
+end
+
+function testIntervalShiftKeepsSignalAndMatrixAxisSynchronized(testCase)
+fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_rc.cir");
+result=radia.ltspice.runIntervals(fixture,[1e-4;1e-4],OutputDirectory=fullfile(testCase.TestData.TempDirectory,"intervals"),MaxStep_s=1e-5);
+for k=1:numel(result.runs),verifyEqual(testCase,result.runs{k}.waveform.signals.time,result.runs{k}.waveform.values(:,1),'AbsTol',0);end
+end
+
+function testDependenciesSeparateRootSiblingAndExternalFiles(testCase)
+root=fullfile(testCase.TestData.TempDirectory,"lib");sibling=fullfile(testCase.TestData.TempDirectory,"lib2");mkdir(root);mkdir(sibling);
+external=fullfile(sibling,"external.inc");writeTextFixture(external,".param ext=1");local=fullfile(root,"local.inc");writeTextFixture(local,".param local=1");
+main=fullfile(root,"main.cir");writeTextFixture(main,".include local.inc"+newline+".include "+external+newline+".end");manifest=radia.ltspice.collectDependencies(main);
+verifyEqual(testCase,numel(manifest.local_files),2);verifyEqual(testCase,numel(manifest.absolute_external),1);verifyEqual(testCase,string(manifest.absolute_external),string(java.io.File(external).getCanonicalPath()));
+end
+
+function testOddLengthFftDoublesLastPositiveFrequencyBin(testCase)
+n=9;t=(0:n-1)'/n;y=cos(2*pi*4*t);raw=struct("names",["time","V(out)"],"values",[t,y]);result=radia.ltspice.analyzeFFT(raw,"V(out)",SampleCount=n,Window="rectangular");
+verifyEqual(testCase,result.amplitude(end),1,'AbsTol',1e-12);
 end
 
 function testInstalledLTspiceRunsAndRawIsParsed(testCase)
@@ -35,15 +188,15 @@ end
 
 function testAscSchematicEditConvertAndRun(testCase)
 fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_rc.asc");
-edited=fullfile("C:\temp","radia_ltspice_edited.asc"); editor=radia.ltspice.SchematicEditor(fixture); editor.setComponentValue("R1","2k"); editor.saveAs(edited);
-converted=radia.ltspice.schematicToNetlist(edited,OutputDirectory="C:\temp\radia_ltspice_asc_convert");
+edited=tempPath(testCase,"edited.asc"); editor=radia.ltspice.SchematicEditor(fixture); editor.setComponentValue("R1","2k"); editor.saveAs(edited);
+converted=radia.ltspice.schematicToNetlist(edited,OutputDirectory=tempPath(testCase,"asc_convert"));
 verifyTrue(testCase,contains(string(fileread(converted.netlist)),"R1 N001 NC_01 2k"));
 result=radia.ltspice.run(edited); verifyEqual(testCase,result.schema,"radia.ltspice.run.v1"); verifyFalse(testCase,isempty(result.schematic_conversion));
 end
 
 function testPythonNetlistToSchematicWrapper(testCase)
 fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_rc.cir");
-output=fullfile("C:\temp","radia_ltspice_from_cir.asc");
+output=tempPath(testCase,"from_cir.asc");
 result=radia.ltspice.netlistToSchematic(fixture,OutputFile=output,ValidateRoundTrip=true);
 verifyEqual(testCase,result.schema,"radia.ltspice.netlist_to_schematic.v1");
 verifyTrue(testCase,isfile(output)); verifyTrue(testCase,result.validation.topology.equivalent);
@@ -59,7 +212,7 @@ verifyError(testCase, ...
 end
 
 function testPwlExportForSimulinkSignal(testCase)
-destination = fullfile("C:\temp", "radia_ltspice_test_gate.pwl");
+destination = tempPath(testCase,"gate.pwl");
 info = radia.ltspice.writePwl(destination, [0; 1e-6; 2e-6], [0; 1; 0]);
 verifyEqual(testCase, info.schema, "radia.ltspice.pwl.v1");
 verifyEqual(testCase, info.sample_count, 3);
@@ -95,9 +248,9 @@ end
 function testMatlabNativePyLTSpiceEquivalentClasses(testCase)
 fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_rc.cir");
 editor=radia.ltspice.SpiceEditor(fixture); editor.setParameter("Rval",1500);
-edited=fullfile("C:\temp","radia_ltspice_edited.cir"); editor.saveAs(edited);
+edited=tempPath(testCase,"edited.cir"); editor.saveAs(edited);
 verifyTrue(testCase,contains(string(fileread(edited)),".param Rval=1500"));
-runner=radia.ltspice.SimRunner(OutputFolder="C:\temp\radia_ltspice_runner_test");
+runner=radia.ltspice.SimRunner(OutputFolder=tempPath(testCase,"runner"));
 result=runner.runNow(edited,RunName="single");
 verifyTrue(testCase,any(result.raw.getTraceNames()=="V(out)"));
 verifyGreaterThan(testCase,numel(result.raw.getTrace("V(out)")),100);
@@ -115,7 +268,7 @@ end
 
 function testSimRunnerMultipleCases(testCase)
 fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_rc.cir");
-runner=radia.ltspice.SimRunner(OutputFolder="C:\temp\radia_ltspice_many_test");
+runner=radia.ltspice.SimRunner(OutputFolder=tempPath(testCase,"many"));
 results=runner.runMany(fixture,{struct("Rval",1000),struct("Rval",2000)});
 verifyEqual(testCase,numel(results),2); verifyEqual(testCase,results{2}.parameters.Rval,2000);
 end
@@ -146,13 +299,13 @@ verifyEqual(testCase,raw.get_trace_names(),raw.getTraceNames());
 trace=raw.get_trace("V(out)"); verifyClass(testCase,trace,"radia.ltspice.Trace");
 verifyEqual(testCase,trace.get_wave(0),raw.getWave("V(out)",0));
 writer=radia.ltspice.RawWrite(); writer.PlotName="AC Analysis";
-writer.add_traces_from_raw(raw,{"frequency","V(out)"}); output=fullfile("C:\temp","radia_raw_roundtrip.raw"); writer.save(output);
+writer.add_traces_from_raw(raw,{"frequency","V(out)"}); output=tempPath(testCase,"roundtrip.raw"); writer.save(output);
 copy=radia.ltspice.RawRead(output); verifyEqual(testCase,copy.getTrace("V(out)"),raw.getTrace("V(out)"),"RelTol",1e-14);
-csv=fullfile("C:\temp","radia_raw_export.csv"); raw.to_csv(csv,{"frequency","V(out)"},0); verifyTrue(testCase,isfile(csv));
+csv=tempPath(testCase,"export.csv"); raw.to_csv(csv,{"frequency","V(out)"},0); verifyTrue(testCase,isfile(csv));
 end
 
 function testRawIndicesAreZeroBasedAndAliasesAreSafe(testCase)
-fixture=fullfile("C:\temp","radia_ltspice_alias_fixture.raw");
+fixture=tempPath(testCase,"alias_fixture.raw");
 writeAliasRawFixture(fixture);raw=radia.ltspice.RawRead(fixture);
 verifyEqual(testCase,raw.getTrace(0),[0;1]);
 verifyEqual(testCase,raw.getTrace(1),[1;2]);
@@ -185,12 +338,85 @@ editor.set_parameters(struct("Rval",2200)); verifyEqual(testCase,editor.get_para
 verifyEqual(testCase,editor.get_component_nodes("R1"),["in";"out"]);
 end
 
+function testSpiceEditorEditsOnlyResolvedComponentLine(testCase)
+fixture=tempPath(testCase,"editor_line.cir");
+writeTextFixture(fixture,"Editor regression"+newline+"R1 in out 1k"+newline+"* copy: R1 in out 1k"+newline+".end");
+editor=radia.ltspice.SpiceEditor(fixture);verifyEqual(testCase,editor.get_components(),"R1");
+editor.setComponentValue("r1","2k");output=tempPath(testCase,"editor_line_out.cir");editor.saveAs(output);text=string(fileread(output));
+verifyTrue(testCase,contains(text,"R1 in out 2k"));verifyTrue(testCase,contains(text,"* copy: R1 in out 1k"));
+end
+
+function testSpiceEditorRejectsAmbiguousAndUnterminatedEdits(testCase)
+duplicate=tempPath(testCase,"duplicate_editor.cir");writeTextFixture(duplicate,"Duplicate editor"+newline+"R1 a b 1k"+newline+"r1 b 0 2k"+newline+".param gain=1"+newline+".param GAIN=2"+newline+".end");
+editor=radia.ltspice.SpiceEditor(duplicate);verifyError(testCase,@()editor.getComponentValue("R1"),"radia:ltspice:AmbiguousComponent");verifyError(testCase,@()editor.setParameter("gain",3),"radia:ltspice:AmbiguousParameter");
+unterminated=tempPath(testCase,"unterminated_editor.cir");writeTextFixture(unterminated,"Unterminated"+newline+"R1 a 0 1k");editor=radia.ltspice.SpiceEditor(unterminated);
+verifyError(testCase,@()editor.addInstruction(".tran 1m"),"radia:ltspice:MissingEnd");verifyError(testCase,@()editor.addComponent("C1",["a";"0"],"1u"),"radia:ltspice:MissingEnd");
+end
+
+function testSpiceEditorUnderstandsSubcircuitParamsSyntax(testCase)
+fixture=tempPath(testCase,"subckt_params_editor.cir");writeTextFixture(fixture,"Subcircuit editor"+newline+"X1 in 0 divider params: R=1k"+newline+".subckt divider a b params: R=1k"+newline+"R1 a b {R}"+newline+".ends divider"+newline+".end");
+editor=radia.ltspice.SpiceEditor(fixture);verifyEqual(testCase,editor.getComponentValue("X1"),"divider");circuit=editor.getSubcircuit("X1");verifyClass(testCase,circuit,"radia.ltspice.SpiceCircuit");
+end
+
+function testSpiceEditorKeepsTopLevelAndSubcircuitComponentsSeparate(testCase)
+fixture=tempPath(testCase,"scoped_components.cir");
+writeTextFixture(fixture,"Scoped editor"+newline+"R1 in out 1k"+newline+"X1 out 0 divider"+newline+".subckt divider a b"+newline+"R1 a b 10"+newline+"C1 a b 1u"+newline+".ends divider"+newline+".end");
+editor=radia.ltspice.SpiceEditor(fixture);
+verifyEqual(testCase,editor.getComponents(),["R1";"X1"]);
+editor.setComponentValue("R1","2k");output=tempPath(testCase,"scoped_components_out.cir");editor.saveAs(output);text=string(fileread(output));
+verifyTrue(testCase,contains(text,"R1 in out 2k"));verifyTrue(testCase,contains(text,"R1 a b 10"));
+end
+
+function testSpiceEditorRejectsImplicitSubcircuitComponentEdit(testCase)
+fixture=tempPath(testCase,"nested_component_only.cir");
+writeTextFixture(fixture,"Nested only"+newline+"X1 in 0 divider"+newline+".subckt divider a b"+newline+"R1 a b 10"+newline+".ends divider"+newline+".end");
+editor=radia.ltspice.SpiceEditor(fixture);
+verifyError(testCase,@()editor.setComponentValue("R1","999k"),"radia:ltspice:ComponentInSubcircuit");
+end
+
+function testSpiceEditorAppliesParameterPolicyAtTopLevelOnly(testCase)
+fixture=tempPath(testCase,"scoped_parameters.cir");
+writeTextFixture(fixture,"Scoped params"+newline+".param gain=1"+newline+"X1 in 0 macro"+newline+".subckt macro a b"+newline+".param gain=10"+newline+"R1 a b {gain}"+newline+".ends macro"+newline+".end");
+editor=radia.ltspice.SpiceEditor(fixture);verifyEqual(testCase,editor.getAllParameterNames(),"gain");editor.setParameter("gain",2);verifyEqual(testCase,editor.getParameter("gain"),"2");
+output=tempPath(testCase,"scoped_parameters_out.cir");editor.saveAs(output);text=string(fileread(output));verifyTrue(testCase,contains(text,".param gain=10"));
+nested=tempPath(testCase,"nested_parameter_only.cir");writeTextFixture(nested,"Nested param"+newline+"X1 in 0 macro"+newline+".subckt macro a b"+newline+".param gain=10"+newline+"R1 a b {gain}"+newline+".ends macro"+newline+".end");
+nestedEditor=radia.ltspice.SpiceEditor(nested);verifyError(testCase,@()nestedEditor.getParameter("gain"),"radia:ltspice:ParameterInSubcircuit");
+end
+
+function testSpiceEditorRejectsDuplicateParameterNameEnumeration(testCase)
+fixture=tempPath(testCase,"duplicate_parameter_names.cir");writeTextFixture(fixture,"Duplicate params"+newline+".param gain=1"+newline+".param GAIN=2"+newline+".end");
+editor=radia.ltspice.SpiceEditor(fixture);verifyError(testCase,@()editor.getAllParameterNames(),"radia:ltspice:AmbiguousParameter");
+end
+
+function testSpiceEditorTracksNestedSubcircuitDepth(testCase)
+for namedEnds=[false,true]
+    if namedEnds,innerEnd=".ends inner";outerEnd=".ends outer";suffix="named";else,innerEnd=".ends";outerEnd=".ends";suffix="plain";end
+    fixture=tempPath(testCase,"nested_subcircuits_"+suffix+".cir");
+    writeTextFixture(fixture,"Nested definitions"+newline+"V1 in 0 1"+newline+"X1 in 0 outer"+newline+".subckt outer a b"+newline+".subckt inner c d"+newline+"R5 c d 1"+newline+innerEnd+newline+"R6 a b 2"+newline+outerEnd+newline+".end");
+    editor=radia.ltspice.SpiceEditor(fixture);verifyEqual(testCase,editor.getComponents(),["V1";"X1"]);verifyEqual(testCase,editor.getSubcircuitNames(),"outer");
+    verifyError(testCase,@()editor.setComponentValue("R6","99"),"radia:ltspice:ComponentInSubcircuit");
+    outer=editor.getSubcircuitNamed("outer");extracted=string(fileread(outer.SourcePath));verifyTrue(testCase,contains(extracted,"R5 c d 1"));verifyTrue(testCase,contains(extracted,"R6 a b 2"));verifyTrue(testCase,contains(extracted,outerEnd));
+end
+end
+
+function testSpiceEditorSubcircuitParserHasConsistentEmptyAndInvalidResults(testCase)
+plain=tempPath(testCase,"no_subcircuits.cir");writeTextFixture(plain,"Plain circuit"+newline+"R1 in 0 1k"+newline+".end");editor=radia.ltspice.SpiceEditor(plain);
+names=editor.getSubcircuitNames();verifyClass(testCase,names,"string");verifySize(testCase,names,[0,1]);
+broken=tempPath(testCase,"unterminated_subcircuit.cir");writeTextFixture(broken,"Broken scope"+newline+"V1 in 0 1"+newline+".subckt outer a b"+newline+"R1 a b 1k"+newline+".end");editor=radia.ltspice.SpiceEditor(broken);
+verifyError(testCase,@()editor.getSubcircuitNames(),"radia:ltspice:UnterminatedSubcircuit");verifyError(testCase,@()editor.getComponents(),"radia:ltspice:UnterminatedSubcircuit");
+end
+
 function testAscGraphicalEditingCompatibility(testCase)
 fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_rc.asc");editor=radia.ltspice.AscEditor(fixture);
 [position,rotation]=editor.get_component_position("R1");verifyEqual(testCase,position,[160,80]);verifyEqual(testCase,rotation,"R90");
 editor.set_component_position("R1",[192,112],"R0");editor.set_component_attribute("R1","SpiceLine","temp=25");editor.addWire([0,0],[16,0]);editor.set_parameter("gain",2);
-output=fullfile("C:\temp","radia_asc_editor_compat.asc");editor.save_as(output);text=string(fileread(output));
+output=tempPath(testCase,"asc_editor_compat.asc");editor.save_as(output);text=string(fileread(output));
 verifyTrue(testCase,contains(text,"SYMBOL res 192 112 R0"));verifyTrue(testCase,contains(text,"SYMATTR SpiceLine temp=25"));verifyTrue(testCase,contains(text,"WIRE 0 0 16 0"));verifyEqual(testCase,editor.get_parameter("gain"),"2");
+end
+
+function testSchematicEditorRejectsCaseInsensitiveDuplicateReferences(testCase)
+fixture=tempPath(testCase,"duplicate.asc");writeTextFixture(fixture,"Version 4"+newline+"SHEET 1 880 680"+newline+"SYMBOL res 64 64 R0"+newline+"SYMATTR InstName R1"+newline+"SYMATTR Value 1k"+newline+"SYMBOL res 128 64 R0"+newline+"SYMATTR InstName r1"+newline+"SYMATTR Value 2k");
+editor=radia.ltspice.SchematicEditor(fixture);verifyError(testCase,@()editor.getComponentValue("R1"),"radia:ltspice:AmbiguousComponent");verifyError(testCase,@()editor.addComponent("res","R1",[192,64]),"radia:ltspice:DuplicateComponent");
 end
 
 function testSteppedLogQueriesAndRawStepConditions(testCase)
@@ -200,7 +426,7 @@ raw=radia.ltspice.RawRead(result.raw_file);verifyEqual(testCase,raw.get_steps(st
 end
 
 function testAsynchronousSimRunnerTask(testCase)
-fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_rc.cir");runner=radia.ltspice.SimRunner(OutputFolder="C:\temp\radia_ltspice_async_test");
+fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_rc.cir");runner=radia.ltspice.SimRunner(OutputFolder=tempPath(testCase,"async"));
 task=runner.run(fixture);verifyClass(testCase,task,"radia.ltspice.RunTask");verifyTrue(testCase,task.wait(30));files=task.wait_results();verifyTrue(testCase,isfile(files{1}));verifyTrue(testCase,isfile(files{2}));verifyEqual(testCase,task.Status,"completed");
 end
 
@@ -216,9 +442,9 @@ function testRecursiveDependenciesAndStateHandoff(testCase)
 fixtureFolder=fullfile(fileparts(mfilename("fullpath")),"fixtures");
 fixture=fullfile(fixtureFolder,"ltspice_dependency_root.cir"); manifest=radia.ltspice.collectDependencies(fixture);
 verifyEqual(testCase,numel(manifest.local_files),3);
-result=radia.ltspice.run(fixture,OutputDirectory="C:\temp\radia_ltspice_dependency_test");
+result=radia.ltspice.run(fixture,OutputDirectory=tempPath(testCase,"dependency"));
 verifyTrue(testCase,isfile(fullfile(result.output_directory,"models","stage1.inc")));
-rc=fullfile(fixtureFolder,"ltspice_rc.cir"); intervals=radia.ltspice.runIntervals(rc,[5e-4;5e-4],OutputDirectory="C:\temp\radia_ltspice_interval_test",MaxStep_s=1e-5);
+rc=fullfile(fixtureFolder,"ltspice_rc.cir"); intervals=radia.ltspice.runIntervals(rc,[5e-4;5e-4],OutputDirectory=tempPath(testCase,"interval"),MaxStep_s=1e-5);
 verifyEqual(testCase,intervals.schema,"radia.ltspice.interval_run.v1"); verifyEqual(testCase,numel(intervals.runs),2);
 verifyEqual(testCase,intervals.runs{2}.waveform.values(1,1),5e-4,"AbsTol",1e-15);
 verifyTrue(testCase,all(ismember(["in";"out"],intervals.states{1}.node_names)));
@@ -240,6 +466,17 @@ function score = scoreTrial(result, ~)
 index = find(result.waveform.names == "V(out)", 1);
 score = result.waveform.values(end, index);
 end
+
+function writeTextFixture(path,text)
+handle=fopen(path,'w');assert(handle>=0);cleanup=onCleanup(@()fclose(handle));fprintf(handle,'%s',text);clear cleanup
+end
+
+function convertRawToFastAccess(path,executable)
+info=System.Diagnostics.ProcessStartInfo();info.FileName=char(executable);info.Arguments='-FastAccess "'+string(path)+'"';info.UseShellExecute=false;info.CreateNoWindow=true;
+process=System.Diagnostics.Process();process.StartInfo=info;assert(process.Start());assert(process.WaitForExit(30000));assert(process.ExitCode==0);
+end
+
+function path=tempPath(testCase,name),path=fullfile(testCase.TestData.TempDirectory,name);end
 
 
 function writeAliasRawFixture(path)

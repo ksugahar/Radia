@@ -14,7 +14,8 @@ t=t(keep);y=y(keep);if numel(t)<2,error("radia:ltspice:FFTSamples","FFT interval
 uniform=linspace(t(1),t(end),options.SampleCount).'; samples=interp1(t,y,uniform,"linear"); samples=samples-mean(samples);
 if options.Window=="hann",window=.5-.5*cos(2*pi*(0:options.SampleCount-1)'/(options.SampleCount-1));else,window=ones(options.SampleCount,1);end
 coherentGain=mean(window); transformed=fft(samples.*window); count=floor(options.SampleCount/2)+1;
-amplitude=abs(transformed(1:count))/(options.SampleCount*coherentGain);if count>2,amplitude(2:end-1)=2*amplitude(2:end-1);end
+amplitude=abs(transformed(1:count))/(options.SampleCount*coherentGain);
+lastDoubled=count-1+mod(options.SampleCount,2);if lastDoubled>=2,amplitude(2:lastDoubled)=2*amplitude(2:lastDoubled);end
 dt=uniform(2)-uniform(1); frequency=(0:count-1)'/(options.SampleCount*dt);
 spectrum=struct("schema","radia.ltspice.fft.v1","trace",traceName,"frequency_hz",frequency,"amplitude",amplitude,"sample_time_s",dt,"sample_count",options.SampleCount,"window",options.Window);
 end
