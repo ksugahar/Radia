@@ -1,0 +1,64 @@
+{
+  "schema": "radia.beak_fin.bema_refinement.v1",
+  "generated_at_utc": "2026-09-21T05:22:37.423151+00:00",
+  "git_head": "c4029753909615a11458615e0e70f8bef33eac6d",
+  "host": "intel11",
+  "question": "the delivery gate is held at accepted=false by a 3.24% beak-loss-fraction difference between BEM-A and PEEC. Against the independent 2-D n=1024 reference PEEC is 1.5% low and BEM-A 4.6% low, so the difference looked like BEM-A's own discretisation error. Refine BEM-A and see",
+  "fixture": "24 mm straight beak fin, 150 kHz, copper",
+  "peec": {
+    "n_peri": 256,
+    "n_stations": 17
+  },
+  "reference_2d_beak_loss_fraction": 0.3416716228,
+  "rows": [
+    {
+      "maxh_mm": 0.75,
+      "n_surface_faces": 5990,
+      "bema_beak_loss_fraction": 0.325490925546603,
+      "peec_beak_loss_fraction": 0.33525197238257876,
+      "bema_error_vs_2d": -0.047357451346986656,
+      "peec_error_vs_2d": -0.018788948186016174,
+      "beak_loss_fraction_relative": 0.029988691142721846,
+      "beak_current_fraction_relative": 0.007533855232735975,
+      "beak_current_centroid_absolute_m": 1.538170762022898e-05,
+      "centroid_limit_m": 8.93804627214884e-05,
+      "probe_H_relative_L2": 0.007220863950966414,
+      "accepted": true,
+      "status": "accepted"
+    },
+    {
+      "maxh_mm": 0.55,
+      "n_surface_faces": 7828,
+      "bema_beak_loss_fraction": 0.323364439751408,
+      "peec_beak_loss_fraction": 0.33525197238257876,
+      "bema_error_vs_2d": -0.0535812219304741,
+      "peec_error_vs_2d": -0.018788948186016174,
+      "beak_loss_fraction_relative": 0.03676202813243634,
+      "beak_current_fraction_relative": 0.009099869864395815,
+      "beak_current_centroid_absolute_m": 1.5198899395826165e-05,
+      "centroid_limit_m": 8.93804627214884e-05,
+      "probe_H_relative_L2": 0.007789339676918447,
+      "accepted": false,
+      "status": "rejected: integral fin-delivery metrics mismatch"
+    },
+    {
+      "maxh_mm": 0.45,
+      "n_surface_faces": 9820,
+      "bema_beak_loss_fraction": 0.3246775347291626,
+      "peec_beak_loss_fraction": 0.33525197238257876,
+      "bema_error_vs_2d": -0.04973807286531673,
+      "peec_error_vs_2d": -0.018788948186016174,
+      "beak_loss_fraction_relative": 0.03256904627613699,
+      "beak_current_fraction_relative": 0.009258255353998157,
+      "beak_current_centroid_absolute_m": 1.3566205625154502e-05,
+      "centroid_limit_m": 8.93804627214884e-05,
+      "probe_H_relative_L2": 0.007927300341462969,
+      "accepted": false,
+      "status": "rejected: integral fin-delivery metrics mismatch"
+    }
+  ],
+  "finding": "BEM-A does not converge in this metric under maxh refinement. Over maxh 0.75 -> 0.55 -> 0.45 mm its beak loss fraction moves 0.325491 -> 0.323364 -> 0.324678, i.e. -4.74%, -5.36%, -4.97% against the 2-D reference: non-monotone and flat at about -5%. The surface face count only grows 5990 -> 7828 -> 9820 while the linear mesh size falls by 1.67x, because the 0.25 mm tip radius already drives the local refinement; reducing maxh therefore adds faces on the flat body rather than on the fin where this metric lives.",
+  "consequence": "the pairwise 3% criterion is not a decidable gate on this fixture. It moves 3.00% -> 3.68% -> 3.26% with BEM-A's mesh and crosses the threshold in both directions without either route changing physically. The implementation ledger already requires acceptance 'after both discretizations have independently converged'; that precondition is measured here to be unmet on the BEM-A side, so the gate cannot be closed by refining what is exposed.",
+  "what_would_close_it": "score each route against the independent 2-D reference instead of against the other, which is the rule the mixed-Omega work already adopted, or give the BEM-A surface mesh a fin-local refinement control so its perimeter sampling can be converged independently of maxh. Neither is done here.",
+  "not_claimed": "this says nothing about which route is more accurate at a converged discretisation, and it does not change the delivery-metric definitions"
+}

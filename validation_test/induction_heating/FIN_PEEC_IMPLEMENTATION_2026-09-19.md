@@ -159,6 +159,29 @@ limit. Therefore the strict combined result remains `accepted=false`, without
 mischaracterising the well-converged integral and delivered-field quantities.
 See `beak_fin_delivery_metrics_150kHz.json`.
 
+### The pairwise 3% criterion is not decidable on this fixture (2026-09-21)
+
+The 3.24% beak-loss-fraction difference was read as BEM-A's own discretisation
+error, since against the independent 2-D n=1024 reference PEEC is 1.5% low and
+BEM-A 4.6% low. Refining BEM-A does not close it. Over maxh 0.75, 0.55 and
+0.45 mm its beak loss fraction is 0.325491, 0.323364 and 0.324678 -- -4.74%,
+-5.36% and -4.97% against the 2-D value, non-monotone and flat near -5% -- and
+the pairwise difference moves 3.00%, 3.68%, 3.26%, crossing the threshold in
+both directions while neither route changes physically.
+
+The reason is visible in the mesh: the surface face count grows only 5990 ->
+7828 -> 9820 while the linear size falls by 1.67x, because the 0.25 mm tip
+radius already drives the local refinement. Reducing maxh adds faces on the
+flat body, not on the fin where this metric is measured.
+
+Acceptance above already requires that both discretisations have independently
+converged. That precondition is now measured to be unmet on the BEM-A side, so
+the gate cannot be closed with the controls the comparison exposes. Closing it
+needs either per-route scoring against the independent 2-D reference -- the
+rule the mixed-Omega work adopted for the same reason -- or a fin-local
+refinement control for the BEM-A surface mesh. Data:
+`results/beak_fin_bema_refinement_20260921.json`.
+
 ## Required next gates
 
 1. A synthetic straight beak-fin STEP and reproducible generator now live in
