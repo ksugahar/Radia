@@ -27,7 +27,7 @@ This document records the architectural decisions BEFORE Phase A begins so they 
 - **IABC / SDI / asymptotic-BC content** -- Radia's Kelvin transformation is the lab default for FEM open boundary. The equivalence-theorem reconstruction is BC-insensitive (Sugahara Lab 2015 empirical result), so any IABC variant is redundant.
 - **FMM acceleration** -- not pursued in this design. See §10 for the analysis.
 - **Re-implementing the entire FEM solver** -- this is a post-processing layer.
-- **Visualisation** -- field probing via the CF interface is sufficient; CST-style 3D rendering is GMSH's job (CLAUDE.md "NGSolve-Through Principle").
+- **Visualisation** -- field probing via the CF interface is sufficient; 3D rendering is GMSH's job (CLAUDE.md "NGSolve-Through Principle").
 
 ## 3. Kernel mathematics
 
@@ -309,7 +309,7 @@ dependency).  No HACApK link, no FMM library vendor.
 
 ### 8.3 Numerical fixtures
 
-Reference data from the 2015_04_12 Femtet directory (Sugahara Lab benchmark grid) lands in `tests/equivalence_source/fixtures/femtet_2015_reference/` (TODO Phase A or B). The grid covers:
+A stored 2015 benchmark grid is retained internally as a regression reference (TODO Phase A or B); it is not distributed here. The grid covers:
 
 - 10 MHz Hertzian dipole, Dirichlet + Neumann + radiation + IABC inner BCs
 - 300 MHz Hertzian dipole, same matrix
@@ -357,9 +357,7 @@ If a future use case demands N > 10⁶ (multi-billion-DOF FEM with massive surfa
 - **Jackson 1999** — _Classical Electrodynamics_ 3e §10.2 (Kirchhoff integral)
 - **Balanis 2012** — _Advanced Engineering Electromagnetics_ §7-3 (dyadic Green's function)
 - **Harrington 2001** — _Time-Harmonic Electromagnetic Fields_ §3-5 (Schelkunoff form for radiating fields)
-- **Sugahara Lab 2008** axisym foundations (S:\FEMM\等価定理の基礎原理\軸対称\)
-- **Sugahara Lab 2015** open-domain solution thesis (S:\FEMM\2015_05_21_等価定理\)
-- **Sugahara Lab 2015** FEMTET IABC + reconstruction reports (S:\99_調査済\Femtet\2015_04_12_IABC_recnstruct\)
+- Internal 2008 axisymmetric foundations and 2015 open-domain studies, retained as stored regression references and not distributed here
 - **HACApK_LH-Cimplm** library (src/ext/HACApK_LH-Cimplm/) — H-matrix acceleration
 - Companion MCP tool: `fem_equivalence_source(topic="overview|schelkunoff_love|...")` (`radia_mcp.fem.equivalence_source_knowledge`)
 
