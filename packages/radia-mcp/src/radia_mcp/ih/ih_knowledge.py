@@ -1726,6 +1726,14 @@ INDUCTION_HEATING_PEEC_BEM_SIBC = """
                     SL matvec (``auto`` picks this for large systems).
 - ``hacapk_cocr`` : the same COCR with the HACApKBEMManager-compressed
                     O(N log N) SL matvec (accuracy ~3e-7; identical R/L).
+                    Since 2026-09-21 it accepts any ``--coil-fes-order``: the
+                    cluster tree takes one point per DOF (edge midpoints for
+                    edge DOFs, centroids for face DOFs) instead of assuming
+                    RT0.  Raise the order to p-converge current crowding on
+                    strongly curved conductors; on the beak-fin fixture one
+                    order step moved R by +1.69% where curving the geometry
+                    moved it by +0.067%, so ``--maxh`` alone does not reach
+                    a rounded tip whose element size is set by its curvature.
 
 (Dense ``lu`` stays the small-N direct option; ``gmres`` / ``minres`` are kept
 only for comparison -- unpreconditioned GMRES stalls on the indefinite AC
@@ -1783,6 +1791,13 @@ mesh curve order does NOT close it:
   association, so there is no geometry to project the mid-side nodes onto.
   Raising geometry order would require a Cubit ``export netgen ... order N``
   surface ``.vol`` loaded directly.
+  UPDATE 2026-09-21: the coil path no longer extracts.  The volume ``.vol``
+  is passed whole and ``compute_inductance_source_sink`` compresses the
+  space, so the export-time curving order (and ``mesh.Curve(p)`` on an
+  in-memory OCC mesh) now reaches the solve.  Measured on the beak-fin
+  fixture: geometry order 1 -> 2 moved R by +0.067%, confirming the
+  conclusion above; the lever that does move a curved conductor is the
+  BASIS order (``--coil-fes-order``: one step +1.69%).
 - Even properly applied, curve order is NOT the lever: EXTERNAL L is
   loop-dominated (turn radius, enclosed area, N^2 -- already resolved by flat
   elements), and round-wire faceting enters L only logarithmically

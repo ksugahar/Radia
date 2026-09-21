@@ -2450,13 +2450,14 @@ from ngsolve import Mesh
 #   sideset 2 add surface <sink_face_id>;    sideset 2 name "sink"
 #   export netgen "coil.vol" overwrite
 mesh = Mesh("coil.vol")
-# CRITICAL: compute_inductance_source_sink needs a PURE SURFACE mesh.
-# A Cubit 'export netgen' of a meshed VOLUME contains internal tets,
-# which make the saddle LU singular.  Either mesh only the surface in
-# Cubit, or extract the boundary the way the panel does:
-from surface_mesh_extract import _extract_surface_mesh_filtered  # src/radia/panels
-if mesh.ne > 0:
-    mesh = _extract_surface_mesh_filtered(mesh, keep_label="")
+# A Cubit 'export netgen' of a meshed VOLUME is accepted as-is since
+# 2026-09-21: compute_inductance_source_sink compresses the HDivSurface
+# space, which removes the interior-edge DOFs whose null modes used to make
+# the saddle LU singular.  Do NOT extract a flat surface first -- that
+# discards the curving order you gave 'export netgen ... order N'.  Pass
+# fes_order=1 (or --coil-fes-order 1 in calc_inductance) when the conductor
+# has strongly curved features: RT0 does not p-converge current crowding at
+# a rounded edge, and refining maxh cannot reach it there.
 # Impedance-EFIE (the sole formulation since 2026-07-02): the complex
 # Leontovich Zs = (1+1j)/(sigma*delta) sits INSIDE the saddle system,
 # so J is the finite-impedance current and R is physical (the old PEC
