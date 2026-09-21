@@ -2,6 +2,15 @@
 
 ## 3.1.0 — release candidate
 
+- Replace the native embedded CFF resource with Eqnedit Math, a reproducibly
+  converted TrueType-outline derivative of Latin Modern Math. Both EXE and
+  wheel module use the same asset and physical family; reject a non-TrueType
+  resource before registration. This avoids the reproduced Windows ATM host
+  failure path, rather than hiding it behind successful registration retries.
+  Preserve advances and math-layout tables, test all glyph bounds and winding,
+  and document the modified font and license. Final candidate acceptance is
+  recorded separately in FONT_DIAGNOSTICS.md; this entry is not release approval.
+
 - Share Web suffix attachment across degrees, stars, flat/sharp, primes and
   editable scripts so selections survive and repeated scripts do not collide.
   Test compound/scripted bases and prefix accents, including real degree clicks.
