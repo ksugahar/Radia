@@ -376,3 +376,90 @@ def presentation_citation_audit(
         "references_never_cited": uncited,
         "ok": not missing,
     }
+
+
+def _slide_authors(field: str, max_authors: int = 0) -> str:
+    """Author list in reading order: "A. Kameari, H. Ebrahimi and T. Matsuo"."""
+    import re as _re
+    names = []
+    for a in _re.split(r"\s+and\s+", field or ""):
+        a = _re.sub(r"\\[a-zA-Z]+\s*", "", a).replace("{", "").replace("}", "")
+        a = " ".join(a.split())
+        if not a:
+            continue
+        if "," in a:
+            last, first = (x.strip() for x in a.split(",", 1))
+        else:
+            parts = a.split()
+            last, first = parts[-1], " ".join(parts[:-1])
+        initials = " ".join(w[0].upper() + "." for w in first.split() if w)
+        names.append(f"{initials} {last}".strip())
+    if max_authors and len(names) > max_authors:
+        return ", ".join(names[:max_authors]) + " et al."
+    if len(names) > 1:
+        return ", ".join(names[:-1]) + " and " + names[-1]
+    return names[0] if names else ""
+
+
+def presentation_references_from_bib(keys, bib_path: str = "",
+                                     max_authors: int = 0,
+                                     start: int = 1) -> str:
+    """Render numbered reference lines for a slide from the bibliography.
+
+    keys : the cite keys, in the order they should be numbered -- a list, or a
+           string separated by commas or whitespace.
+    max_authors : truncate to "et al." after this many; 0 keeps everyone.
+
+    A key that is not in the bibliography is reported rather than skipped: a
+    silently shorter list renumbers everything after it.
+    """
+    import re as _re
+
+    from ..bibliography._bibparse import read_bib_file
+    from ..bibliography.plans.T14_canonical import CANONICAL
+
+    if isinstance(keys, str):
+        keys = [k for k in _re.split(r"[,\s]+", keys) if k]
+    path = bib_path or str(CANONICAL)
+    entries = {e.key: e for e in read_bib_file(path)
+               if not e.kind.startswith("@")}
+
+    def clean(x):
+        x = _re.sub(r"\\[a-zA-Z]+\s*", "", x or "")
+        return " ".join(x.replace("{", "").replace("}", "").split())
+
+    out, missing = [f"presentation_references_from_bib: {len(keys)} keys"], []
+    for i, k in enumerate(keys, start=start):
+        e = entries.get(k)
+        if e is None:
+            missing.append(k)
+            out.append(f"[{i}] *** {k} は書誌に無い ***")
+            continue
+        who = _slide_authors(e.fields.get("author", ""), max_authors)
+        bits = [who + "," if who else ""]
+        title = clean(e.fields.get("title", ""))
+        bits.append(f'"{title},"' if title else "")
+        venue = clean(e.fields.get("journal") or e.fields.get("booktitle") or "")
+        # a book is identified by its publisher, not by a journal name
+        if not venue and e.kind.lower() in {"book", "inbook", "incollection"}:
+            venue = clean(e.fields.get("publisher", ""))
+        if venue:
+            bits.append(venue + ",")
+        for label, f in (("vol.", "volume"), ("no.", "number")):
+            if e.fields.get(f):
+                bits.append(f"{label} {clean(e.fields[f])},")
+        if e.fields.get("pages"):
+            # ranges arrive as "1--4", "1-4" or with an en dash from Crossref
+            pp = clean(e.fields["pages"])
+            for dash in ("--", "\u2013", "\u2014"):
+                pp = pp.replace(dash, "-")
+            bits.append(f"pp. {pp}," if "-" in pp else f"art. {pp},")
+        if e.fields.get("year"):
+            bits.append(clean(e.fields["year"]) + ".")
+        out.append(f"[{i}] " + " ".join(b for b in bits if b))
+
+    if missing:
+        out.append("")
+        out.append(f"書誌に無いキー {len(missing)} 件: " + ", ".join(missing))
+        out.append("先に正典へ追加すること。スライドに手で書かない。")
+    return "\n".join(out)

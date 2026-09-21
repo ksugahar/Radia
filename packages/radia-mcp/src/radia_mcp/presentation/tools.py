@@ -97,6 +97,7 @@ from ._citations import (  # noqa: F401
     presentation_references_slide,
     presentation_add_citation_footer,
     presentation_citation_audit,
+    presentation_references_from_bib,
 )
 from ._figure_text_repair import (  # noqa: F401
     presentation_replace_embedded_figure_text,

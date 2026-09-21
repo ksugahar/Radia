@@ -440,6 +440,45 @@ BEAMER_169_FULL = PaperProfile.from_base(
     spec_url="beamer aspectratio=169 (160 x 90 mm)",
 )
 
+# PowerPoint 16:9 is 33.87 x 19.05 cm, not beamer's 16 x 9 cm, so "full" means
+# something different here. These are the widths a figure actually occupies on
+# a Radia slide: the whole content column, or one side of a figure-plus-text
+# layout. Author at that width and place at 100%; letting PowerPoint shrink a
+# 30 cm figure into a 15 cm box halves every letter in it.
+POWERPOINT_169_FULL = PaperProfile.from_base(
+    name="powerpoint_169_full",
+    full_name="PowerPoint 16:9 slide, full content width",
+    width_mm=300.0,
+    column="page",
+    base_pt=24.0,
+    small_offset=0.0,
+    linewidth_pt=1.3,
+    axes_linewidth_pt=0.9,
+    marker_size_pt=5.0,
+    margin_left=0.085, margin_right=0.99,
+    margin_top=0.97, margin_bottom=0.16,
+    wspace=0.20, hspace=0.30,
+    default_aspect=0.42,
+    spec_url="PowerPoint 16:9 (338.7 x 190.5 mm)",
+)
+
+POWERPOINT_169_HALF = PaperProfile.from_base(
+    name="powerpoint_169_half",
+    full_name="PowerPoint 16:9 slide, figure beside text",
+    width_mm=150.0,
+    column="page",
+    base_pt=24.0,
+    small_offset=0.0,
+    linewidth_pt=1.3,
+    axes_linewidth_pt=0.9,
+    marker_size_pt=5.0,
+    margin_left=0.085, margin_right=0.99,
+    margin_top=0.97, margin_bottom=0.16,
+    wspace=0.20, hspace=0.30,
+    default_aspect=0.50,
+    spec_url="PowerPoint 16:9 (338.7 x 190.5 mm)",
+)
+
 BEAMER_169_HALF = PaperProfile.from_base(
     name="beamer_169_half",
     full_name="Beamer 16:9 slide, half column (two-column frame)",
@@ -466,6 +505,10 @@ PROFILES: dict[str, PaperProfile] = {
         IEEJ_DOUBLE_COLUMN,
         IGTE_DIGEST_DOUBLE,
         IGTE_DIGEST_SINGLE,
+        # The lab presents in PowerPoint; the beamer names stay because
+        # existing figure scripts use them.
+        POWERPOINT_169_FULL,
+        POWERPOINT_169_HALF,
         BEAMER_169_FULL,
         BEAMER_169_HALF,
     ]

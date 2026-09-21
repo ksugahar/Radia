@@ -40,6 +40,10 @@ _MATH_TOKEN = re.compile(
 # A LaTeX control sequence that no run-splitting can repair (\frac, \mathrm...).
 _LATEX_MACRO = re.compile(r"\\[A-Za-z]{2,}")
 _MATH_DELIM = re.compile(r"\$[^$]{1,80}\$")
+# markdown emphasis that a converter passed through as text: **bold**,
+# __bold__, `code`. Seen when a deck is built from markdown and the converter
+# only knows headings, bullets and math.
+_MD_EMPHASIS = re.compile(r"\*\*[^*\n]{1,120}\*\*|(?<![\w`])`[^`\n]{1,80}`|(?<!\w)__[^_\n]{1,120}__(?!\w)")
 
 _SUB_BASELINE = "-25000"
 _SUP_BASELINE = "30000"
@@ -137,6 +141,9 @@ def presentation_check_raw_math_markup(pptx_path: str,
     - ``latex_macro``: ``\\frac`` ``\\mathrm`` などの制御綴。run分割では
       直せないため人手で書き換える。
     - ``math_delimiter``: ``$...$`` がそのまま残っている。
+    - ``markdown_emphasis``: ``**太字**`` ``__太字__`` `` `code` `` が文字の
+      まま残っている。markdown から組んだデッキで変換器が強調を知らない
+      ときに起こる。該当 run を太字書式に置き換えて記号を消す。
 
     Args:
         pptx_path: 点検する .pptx。
@@ -171,6 +178,8 @@ def presentation_check_raw_math_markup(pptx_path: str,
             kinds.append("latex_macro")
         if _MATH_DELIM.search(text):
             kinds.append("math_delimiter")
+        if _MD_EMPHASIS.search(text):
+            kinds.append("markdown_emphasis")
         if not kinds:
             continue
         slides_hit.add(slide_no)
