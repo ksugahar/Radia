@@ -26,6 +26,19 @@ classdef (Abstract) BaseSampler < handle
         end
         function value=sample_independent(obj,study,trial,param_name,distribution)
             spec=radia.optuna.internal.DistributionCodec.normalize(distribution);
+            if radia.optuna.internal.DistributionCodec.isSingle(spec)
+                % Optuna's Trial._suggest answers a single-valued
+                % distribution itself and never reaches a sampler, so a
+                % direct sample_independent call must not consume a random
+                % number either.
+                if spec.kind=="categorical"
+                    value=radia.optuna.internal.DistributionCodec.choiceAt( ...
+                        spec.choices,1);
+                else
+                    value=spec.low;
+                end
+                return
+            end
             switch spec.kind
                 case "float"
                     value=obj.sampleFloat(study,trial,param_name, ...
@@ -40,7 +53,8 @@ classdef (Abstract) BaseSampler < handle
                     else
                         value=obj.sampleFloat(study,trial,param_name, ...
                             spec.low,spec.high,struct("Log",spec.log,"Step",spec.step));
-                        value=spec.low+round((double(value)-spec.low)/spec.step)*spec.step;
+                        value=spec.low+radia.optuna.internal.UpstreamNumerics. ...
+                            roundTiesToEven((double(value)-spec.low)/spec.step)*spec.step;
                         value=min(max(value,spec.low),spec.high);
                     end
                 case "categorical"
