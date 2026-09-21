@@ -358,6 +358,44 @@ accuracy to match the inner tolerance did not rescue it.  The option is not
 kept: a code path that does not converge is not an option, and the
 discretisation result above removes the need for one.
 
+Compression does not help the BEM-A reference either, which is now the whole
+remaining cost.  On the same 48 mm system, `n_J = 16962`:
+
+| solver | seconds | R (uOhm) | residual |
+|---|---|---|---|
+| `cocr` | 437.3 | 250.074338 | 1.945e-10 |
+| `hacapk_cocr` | 459.8 | 250.074524 | 1.951e-10 |
+
+The H-matrix path is `5%` slower for the same answer -- R agrees to `7.5e-7`,
+L to `7.5e-9`.  At this size the dense COCR is already the right tool; the
+compression overhead is not repaid.  That also corrects the cost attribution:
+the original `1164 s` was `437 s` of BEM-A plus `290 s` of dense PEEC plus
+meshing, so with the PEEC at `0.91 s` the comparison is about eight minutes
+and is entirely its reference.
+
+The reference mesh is not a lever either:
+
+| `maxh` | faces | `n_J` | BEM-A (s) | R (uOhm) | vs finest |
+|---|---|---|---|---|---|
+| 2.00 mm | 8280 | 12420 | 217.5 | 244.660 | -2.17% |
+| 1.50 mm | 8528 | 12792 | 231.9 | 246.629 | -1.38% |
+| 1.00 mm | 9506 | 14259 | 291.1 | 248.355 | -0.69% |
+| 0.75 mm | 11308 | 16962 | 474.1 | 250.074 | 0 |
+
+A `2.7x` coarser `maxh` removes only `27%` of the faces, because the floor is
+set by the `0.25 mm` tip radius rather than by `maxh`, and it buys `2.2x` at
+the price of a reference that is itself `2.17%` from converged.  The gate
+closes at every level, but the beak-loss error wanders -- `0.40%`, `0.22%`,
+`1.59%`, `0.49%` -- which is the reference moving under it, not the PEEC.
+A gate decided against an unconverged reference is not worth the minutes.
+`0.75 mm` stays.  Data:
+`results/beak_fin_reference_mesh_cost_20260922.json`.
+
+So the speed answer is asymmetric and worth stating plainly: the production
+fin path is now under a second, and the validation comparison is about eight
+minutes of irreducible reference.  Both available levers on the reference --
+compression and mesh -- were measured and rejected.
+
 ### Gate 2 measured: the branch mutual is filamentary (2026-09-22)
 
 `MutualInductanceRectBar` averages the Neumann kernel over both cross-sections
