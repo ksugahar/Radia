@@ -1,0 +1,75 @@
+{
+  "schema": "radia.beak_fin.length_resolution.v1",
+  "generated_at_utc": "2026-09-21T07:11:15.033892+00:00",
+  "git_head": "0c4c184a9ead3e9b5de00678c9672873a8ead547",
+  "host": "intel11",
+  "question": "the delivery gate had stood at accepted=false on a 3.24% beak-loss difference.  h, p and geometry order were each moved on the 24 mm fixture without shifting it.  Both routes sat below the infinite-length 2-D reference in the same order, so the remaining candidate was the fixture length",
+  "reference_2d_sibc_n1024": {
+    "beak_current_fraction": 0.308146102,
+    "beak_loss_fraction": 0.3416716228,
+    "tip_loss_fraction": 0.2023114598,
+    "beak_current_centroid_x_mm": 2.8531143942,
+    "probe_center_H_A_per_m": 41.7840683704
+  },
+  "length_24mm": {
+    "bema": {
+      "beak_current_fraction": 0.30346801786838806,
+      "beak_loss_fraction": 0.32483710193850207,
+      "tip_loss_fraction": 0.18490914975328926,
+      "beak_current_centroid_x_mm": 2.8165478804225086,
+      "probe_center_H_A_per_m": 41.01644730659551
+    },
+    "peec": {
+      "beak_current_fraction": 0.3058460617363037,
+      "beak_loss_fraction": 0.33525197238257876,
+      "tip_loss_fraction": 0.19416769541605744,
+      "beak_current_centroid_x_mm": 2.83389934168559,
+      "probe_center_H_A_per_m": 41.44632110459702
+    },
+    "peec_vs_bema": {
+      "beak_current_fraction_relative": 0.007836225657713136,
+      "beak_loss_fraction_relative": 0.03206182539471247,
+      "beak_current_centroid_absolute_mm": 0.017351461263081635,
+      "centroid_limit_mm": 0.0893804627214884,
+      "probe_line_H_relative_L2": 0.008138543877678596,
+      "accepted": false
+    },
+    "bema_settings": {
+      "curve_order": 2,
+      "fes_order": 1,
+      "maxh_mm": 0.75
+    }
+  },
+  "length_48mm": {
+    "bema": {
+      "beak_current_fraction": 0.30862763827300826,
+      "beak_loss_fraction": 0.34085828590548917,
+      "tip_loss_fraction": 0.20093548476525844,
+      "beak_current_centroid_x_mm": 2.8436949041664694,
+      "probe_center_H_A_per_m": 41.6888030771467
+    },
+    "peec": {
+      "beak_current_fraction": 0.3077569437150281,
+      "beak_loss_fraction": 0.3428484034458946,
+      "tip_loss_fraction": 0.20338061101127392,
+      "beak_current_centroid_x_mm": 2.8537306319428026,
+      "probe_center_H_A_per_m": 41.80540269518334
+    },
+    "peec_vs_bema": {
+      "beak_current_fraction_relative": 0.0028211814173620953,
+      "beak_loss_fraction_relative": 0.005838548225749252,
+      "beak_current_centroid_absolute_mm": 0.01003572777633294,
+      "centroid_limit_mm": 0.0893804627214884,
+      "probe_line_H_relative_L2": 0.0016948349747252394,
+      "accepted": true
+    },
+    "bema_settings": {
+      "curve_order": 2,
+      "fes_order": 0,
+      "maxh_mm": 0.75
+    }
+  },
+  "finding": "doubling the fixture to 48 mm converges both routes onto the independent 2-D reference and closes the gate.  The beak loss fraction moves from -4.93% (BEM-A) and -1.88% (PEEC) of the reference to -0.24% and +0.34%; the pairwise difference falls from 3.21% to 0.58%.  Every acceptance metric then passes with at least five times margin, and the 48 mm run does it at fes_order=0, so the basis order was never what the fractions needed either",
+  "why_length": "the fractions are ratios measured mid-span, and the source and sink caps carry an approximately length-independent loss -- 6.53, 6.76 and 6.90 micro-ohm at 6, 12 and 24 mm in the earlier sweep.  At 24 mm that end contribution is still large enough to depress the mid-span beak and tip shares of both routes, by different amounts because the two discretisations distribute the end current differently.  It is not a discretisation error in either, which is why no refinement control could reach it",
+  "not_claimed": "this is a straight constant-section fin in copper at one frequency. It does not establish tapered or curved fins, brazed fin solids, filleted roots, nonlinear material, or the branch-current back-reaction of gate 4"
+}
