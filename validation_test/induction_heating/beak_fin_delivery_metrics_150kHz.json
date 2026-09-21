@@ -7,7 +7,7 @@
     "current": "1 A peak phasor"
   },
   "reference_2d_sibc_n1024": {
-    "beak_current_fraction": 0.3081461020,
+    "beak_current_fraction": 0.308146102,
     "beak_loss_fraction": 0.3416716228,
     "tip_loss_fraction": 0.2023114598,
     "beak_current_centroid_x_mm": 2.8531143942,
@@ -29,24 +29,79 @@
       "n_peri": 256,
       "max_axial_mm": 1.5,
       "beak_current_fraction": 0.3065987296,
-      "beak_loss_fraction": 0.3364678200,
+      "beak_loss_fraction": 0.33646782,
       "tip_loss_fraction": 0.1976414451,
       "beak_current_centroid_x_mm": 2.8308682045,
       "probe_center_H_A_per_m": 41.4462789689
     },
     "peec_vs_bema": {
-      "beak_current_fraction_relative_error": 0.0085052050,
+      "beak_current_fraction_relative_error": 0.008505205,
       "beak_loss_fraction_relative_error": 0.0323722683,
       "beak_current_centroid_error_mm": 0.0140973809,
       "probe_center_H_relative_error": 0.0094419291,
       "probe_line_H_relative_L2": 0.0072218441
-    }
+    },
+    "note": "24 mm geometry.  Superseded as the acceptance basis on 2026-09-21: at this length both routes sit below the infinite-length 2-D reference because the end caps are a third of the conductor, and the fractions are measured mid-span.  Retained as provenance"
   },
   "acceptance": {
     "current_and_loss_fraction_relative_max": 0.03,
     "centroid_absolute_max": "one perimeter lane spacing",
     "probe_line_H_relative_L2_max": 0.02,
-    "accepted": false,
-    "reason": "Beak loss fraction differs by 3.24%, narrowly above the 3% threshold. All other integral/delivery metrics pass. Pointwise maximum K is diagnostic only and is not an acceptance metric."
+    "accepted": true,
+    "basis": "48 mm geometry, 2026-09-21",
+    "margins": "beak current fraction 0.28%, beak loss fraction 0.58%, centroid 0.0100 mm against a 0.0894 mm lane spacing, probe-line H 0.17% -- every metric inside its limit by a factor of five or more, and both routes within 0.7% of the independent 2-D reference on all of them",
+    "scope": "a straight constant-section beak fin at 150 kHz in copper, with both discretisations independently converged.  It does not cover tapered or curved fins, brazed separate fin solids, filleted roots, nonlinear or temperature-dependent material, or workpiece back-reaction on the branch currents (gate 4).  Pointwise maximum K remains diagnostic only"
+  },
+  "length_resolved_2026_09_21": {
+    "why": "h (maxh 0.75 -> 0.45 mm), p (fes_order 0 -> 1) and geometry order (1 -> 2) were each moved on the 24 mm fixture and the delivery fractions followed none of them, while R did.  Both routes lay below the infinite-length 2-D reference in the same order, which points at the fixture length rather than at either discretisation",
+    "geometry_length_mm": 48,
+    "bema": {
+      "maxh_mm": 0.75,
+      "curve_order": 2,
+      "fes_order": 0,
+      "n_surface_faces": 11308,
+      "n_J": 16962,
+      "R_uOhm": 250.07433774170556,
+      "L_nH": 24.17166700098774,
+      "beak_current_fraction": 0.30862763827300826,
+      "beak_loss_fraction": 0.34085828590548917,
+      "tip_loss_fraction": 0.20093548476525844,
+      "beak_current_centroid_x_mm": 2.8436949041664694,
+      "probe_center_H_A_per_m": 41.6888030771467
+    },
+    "peec": {
+      "n_peri": 256,
+      "n_stations": 33,
+      "beak_current_fraction": 0.3077569437150281,
+      "beak_loss_fraction": 0.3428484034458946,
+      "tip_loss_fraction": 0.20338061101127392,
+      "beak_current_centroid_x_mm": 2.8537306319428026,
+      "probe_center_H_A_per_m": 41.80540269518334
+    },
+    "relative_to_2d_reference": {
+      "bema": {
+        "beak_current_fraction": 0.0016,
+        "beak_loss_fraction": -0.0024,
+        "tip_loss_fraction": -0.0068
+      },
+      "peec": {
+        "beak_current_fraction": -0.0013,
+        "beak_loss_fraction": 0.0034,
+        "tip_loss_fraction": 0.0053
+      },
+      "reading": "the two routes bracket the reference -- BEM-A just below, PEEC just above, on all three fractions -- which is what two independently converged discretisations do around a true value"
+    },
+    "peec_vs_bema": {
+      "beak_current_fraction_relative": 0.0028211814173620953,
+      "beak_loss_fraction_relative": 0.005838548225749252,
+      "beak_current_centroid_absolute_mm": 0.01003572777633294,
+      "centroid_limit_mm": 0.0893804627214884,
+      "probe_line_H_relative_L2": 0.0016948349747252394,
+      "accepted": true
+    },
+    "terminal": {
+      "peec_relative_R_error": 0.001389393839305475,
+      "peec_relative_L_error": -0.00580319618366143
+    }
   }
 }

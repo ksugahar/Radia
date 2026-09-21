@@ -234,9 +234,12 @@ a 2.4x mesh refinement here, and R is still rising.
 
 So the BEM-A side was never p-converged. The comparison only ever varied
 `maxh`, which saturates because the tip element size is set by its own
-curvature. Converging it needs `fes_order`, and `hacapk_cocr` is RT0-only, so
-an order-1 run at the fine mesh needs the dense `cocr` path or higher-order
-support in the compressed solver.
+curvature. Converging it needs `fes_order`; `hacapk_cocr` was RT0-only until
+later the same day, when `_dof_cluster_coords` gave its cluster tree one point
+per DOF for any order (and `compute_inductance_source_sink` gained `Compress`,
+so the coil `.vol` is consumed whole and its curving order reaches the solve --
+the same boundary the workpiece BEM already used).  The next entry records
+what that order-1, curved run showed.
 
 None of this indicts the SIBC model. The 2-D SIBC reference converges to the
 continuum value and PEEC, on the same SIBC sheet, lands within 4% of it.
@@ -266,6 +269,37 @@ thin-sheet PEEC current models are the second.  A length sweep of the
 fractions discriminates the first; required gate 3 (an independent 3-D
 reference) is what settles the second.  Data:
 `results/beak_fin_bema_refinement_20260921.json`.
+
+### The gate closes at 48 mm: it was the fixture length (2026-09-21)
+
+Doubling the fixture converges both routes onto the independent 2-D reference
+and the delivery gate passes.  The beak loss fraction goes from -4.93% (BEM-A)
+and -1.88% (PEEC) of the reference at 24 mm to **-0.24%** and **+0.34%** at
+48 mm; tip loss from -8.60% / -4.03% to -0.68% / +0.53%; current fraction to
++0.16% / -0.13%.  The two routes bracket the reference on all three fractions,
+which is what two independently converged discretisations do around a true
+value.  The pairwise difference falls from 3.21% to **0.58%**, and every
+acceptance metric passes with at least five times margin: current fraction
+0.28%, loss fraction 0.58% (limit 3%), centroid 0.0100 mm against a 0.0894 mm
+lane spacing, probe-line H 0.17% (limit 2%).  Terminal agreement follows:
+PEEC is +0.14% in R and -0.58% in L, against -3.01% and -1.06% at 24 mm.
+
+The 48 mm run uses `fes_order=0`, so the basis order was not what the fractions
+needed either -- only R responded to it.
+
+Why length: the fractions are ratios measured mid-span, and the caps carry an
+approximately length-independent loss (6.53, 6.76, 6.90 micro-ohm at 6, 12,
+24 mm in the earlier sweep).  At 24 mm that end contribution still depresses
+the mid-span beak and tip shares of both routes, by different amounts because
+the two discretisations distribute the end current differently.  It is not a
+discretisation error in either, which is why no refinement control reached it.
+
+`beak_fin_delivery_metrics_150kHz.json` now records `accepted=true` on the
+48 mm basis, with the 24 mm block retained as provenance.  Scope: a straight
+constant-section fin in copper at 150 kHz with both discretisations
+independently converged -- not tapered or curved fins, brazed fin solids,
+filleted roots, nonlinear material, or the gate-4 back-reaction.  Data:
+`results/beak_fin_length_resolution_20260921.json`.
 
 ## Required next gates
 
