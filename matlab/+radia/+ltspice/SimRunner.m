@@ -19,12 +19,14 @@ classdef SimRunner < handle
         end
         function results=runMany(obj,netlist,parameterSets,options)
             arguments, obj; netlist (1,1) string {mustBeFile}; parameterSets (1,:) cell; options.UseParallel (1,1) logical=false, end
+            obj.requireSupportedSwitches(strings(1,0));
             results=cell(size(parameterSets));
             if options.UseParallel
                 if isempty(ver('parallel')), error("radia:ltspice:ParallelToolbox","Parallel Computing Toolbox is required."); end
                 root=obj.OutputFolder; exe=obj.Executable;
                 parfor k=1:numel(parameterSets)
-                    results{k}=radia.ltspice.run(netlist,Parameters=parameterSets{k},Executable=exe,OutputDirectory=fullfile(root,sprintf("run_%06d",k)));
+                    item=radia.ltspice.run(netlist,Parameters=parameterSets{k},Executable=exe,OutputDirectory=fullfile(root,sprintf("run_%06d",k)));
+                    item.raw=radia.ltspice.RawRead(item.raw_file);item.log_reader=radia.ltspice.LogReader(item.log_file);results{k}=item;
                 end
             else
                 for k=1:numel(parameterSets), results{k}=obj.runNow(netlist,Parameters=parameterSets{k},RunName=sprintf("run_%06d",k)); end
@@ -39,8 +41,8 @@ classdef SimRunner < handle
             obj.requireSupportedSwitches(options.Switches);
             if strlength(options.RunFilename)==0,name="run_"+string(numel(obj.CompletedRuns)+1);else,[~,name]=fileparts(options.RunFilename);end
             output=fullfile(obj.OutputFolder,name);
-            if isempty(ver('parallel')),result=localRunTask(string(netlist),obj.Executable,output,options.Timeout);task=radia.ltspice.RunTask(result,options.Callback);
-            else,pool=gcp('nocreate');if isempty(pool),pool=parpool('Processes');end,future=parfeval(pool,@localRunTask,1,string(netlist),obj.Executable,output,options.Timeout);task=radia.ltspice.RunTask(future,options.Callback);end
+            if isempty(ver('parallel')),error("radia:ltspice:ParallelToolbox","Asynchronous SimRunner.run requires Parallel Computing Toolbox. Use runNow for explicit synchronous execution.");end
+            pool=gcp('nocreate');if isempty(pool),pool=parpool('Processes');end,future=parfeval(pool,@localRunTask,1,string(netlist),obj.Executable,output,options.Timeout);task=radia.ltspice.RunTask(future,options.Callback);
             obj.Tasks{end+1}=task;
         end
         function [raw,log]=run_now(obj,netlist,options)

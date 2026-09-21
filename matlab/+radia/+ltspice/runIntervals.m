@@ -19,7 +19,9 @@ for k=1:numel(intervals)
  radia.ltspice.applyTransientState(netlistFile,initial,source,Duration_s=intervals(k),MaxStep_s=options.MaxStep_s);
  runs{k}=radia.ltspice.run(source,Parameters=options.Parameters,Executable=options.Executable,OutputDirectory=runFolder);
  runs{k}.waveform.values(:,1)=runs{k}.waveform.values(:,1)+offset;
- states{k}=radia.ltspice.extractTransientState(runs{k}); offset=offset+intervals(k);
+ axisName=matlab.lang.makeValidName(char(runs{k}.waveform.names(1)));
+ if isfield(runs{k}.waveform,'signals')&&isfield(runs{k}.waveform.signals,axisName),runs{k}.waveform.signals.(axisName)=runs{k}.waveform.values(:,1);end
+ states{k}=radia.ltspice.extractTransientState(runs{k},NetlistFile=source); offset=offset+intervals(k);
 end
 result=struct("schema","radia.ltspice.interval_run.v1","runs",{runs},"states",{states}, ...
  "total_duration_s",sum(intervals),"output_directory",folder);

@@ -38,7 +38,7 @@ register_status_tool(
         "radia-mcp)."
     ),
     subpackage="radia_mcp.research_project",
-    related_servers=["document-meta", "grant-writing", "paper-writing", "poster", "bibliography"],
+    related_servers=["document-meta", "grant-writing", "paper-writing", "bibliography"],
     optional_deps=["pymupdf", "python-pptx"],
 )
 

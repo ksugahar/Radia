@@ -12,6 +12,20 @@ This is the most important knowledge module. It covers:
 WORKFLOW_OVERVIEW = """
 # Netgen High-Order Curving: Workflow Overview
 
+## Discover the capability before choosing an export route
+
+`docs/cubit_mesh_export/cubit_mesh_export_showcase.ipynb` contains saved
+WebGUI views of historical Cubit-exported 56-HEX spheres at geometry orders
+1, 2 and 3, plus a manufactured Poisson field on the cubic mesh. This is
+the discovery/evidence page; this MCP guide remains the operating manual.
+For result-bearing `.vol` examples, run `check-vol` before downstream use,
+save the report and a mesh scene, and save a named field-and-mesh scene when
+a field is computed. Preserve exported curved nodes instead of calling
+`mesh.Curve()` on these already curved files. Verify saved rich output and
+widget state: a missing-dependency placeholder is not a WebGUI result.
+Historical file reloads do not establish the provenance of a fresh export,
+and this scalar HEX example does not certify all mixed-element/vector spaces.
+
 ## Two Export Paths (produce identical results)
 
 ### Path A: APREPRO Command (recommended, fast)

@@ -195,6 +195,20 @@ void CircularLoopBField(double R, double Z, double CR, double CZ, double CI,
     // Then AA / (2*sqrt(S+P)) gives [T] when S+P is in m^2
     double AA = 4.0e-7 * CI;
 
+    // Near the axis the elliptic expression subtracts nearly equal terms.
+    // Use the regular axisymmetric expansion through R^3 (BR), R^2 (BZ).
+    const double axis_dz = Z - CZ;
+    const double axis_d2 = CR*CR + axis_dz*axis_dz;
+    if (axis_d2 > 0.0 && R*R < 1.e-8*axis_d2) {
+        const double b0 = AA*PI*0.5*CR*CR/(axis_d2*sqrt(axis_d2));
+        const double b2 = b0*(12.0*axis_dz*axis_dz-3.0*CR*CR)/(axis_d2*axis_d2);
+        const double b3 = b0*15.0*axis_dz*(3.0*CR*CR-4.0*axis_dz*axis_dz)
+                          /(axis_d2*axis_d2*axis_d2);
+        BR = 1.5*R*b0*axis_dz/axis_d2 + R*R*R*b3/16.0;
+        BZ = b0 - R*R*b2/4.0;
+        return;
+    }
+
     // On-axis case (R = 0)
     double R_check = R + 1.0;
     if (R_check == 1.0) {  // R is essentially zero

@@ -106,6 +106,9 @@ from ._figure_text_repair import (  # noqa: F401
 # Deck integrity (2026-08-16, MMPM SA-26-069): unrendered math markup left on
 # the slide (`X_y`, `int_{S_f}`) and the same artwork reused across slides --
 # two classes every text/layout lint above walked past.
+from ._claim_premises import (  # noqa: F401
+    presentation_check_negated_premise,
+)
 from ._deck_integrity import (  # noqa: F401
     presentation_check_raw_math_markup,
     presentation_apply_math_subscripts,

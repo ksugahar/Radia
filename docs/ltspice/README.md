@@ -50,6 +50,30 @@ Core capabilities:
 - Provide public circuit-knowledge helpers and MCP tools for agentic circuit
   design workflows.
 
+For transient interval and Simulink handoff, the MATLAB layer restores saved
+node voltages and inductor currents. It follows nested `.subckt` definitions
+and requires explicit internal traces when L/C storage is present;
+terminal-current traces such as `Ix(x1:a)` are not state. Semiconductor state
+inside subcircuits, transmission-line history (`T`/`O`), and behavioral sources
+using memory operators such as `idt`, `sdt`, `ddt`, or `delay` cannot be
+completely reconstructed by this contract and therefore fail loudly. Purely
+algebraic behavioral sources remain supported. The guard confirms
+that a qualifying trace exists, but cannot prove that every internal L/C state
+was saved. Production circuits must therefore validate continuous execution
+against interval execution at the intended sample time.
+
+Both coupling blocks retain run evidence asymmetrically, because the two
+failure reports that matter — "it crashed" and "the number is wrong" — need
+different artifacts. Each run writes one small record file to a deterministic
+path under the block's root directory, overwritten once per run and appended
+one line per step (inputs, outputs, iteration count, residual, and the folder
+that held that step's netlist, RAW and log). That record always survives,
+whatever the exit code. The heavy per-step folders are kept as a bounded ring
+of the most recent steps, pruned as the run advances so peak disk usage stays
+flat instead of growing with the step count. On a clean finish the ring is
+removed and the record remains; on a failure the folders are kept, so the
+failing step is still on disk next to the record that names it.
+
 Conversion graph:
 
 ```
@@ -57,7 +81,7 @@ Conversion graph:
 ```
 
 Release history now follows Radia's unified [changelog](../../CHANGELOG.md).
-See [BENCHMARKS.md](BENCHMARKS.md) for the public evaluation methodology.
+See [CONVERSION_GATES.md](CONVERSION_GATES.md) for the public conversion-gate methodology.
 
 Works without LTspice (pure-Python), but **uses LTspice's own
 `-netlist` automatically when LTspice.exe is installed** — that is the
@@ -354,7 +378,7 @@ looks like this:
 5. **Reopen in LTspice** to visually inspect and run the simulation.
    The regenerated schematic looks like one a human would have drawn
    — `.asc → .cir → .asc` count match is 100 % on real-world corpora
-   (see [BENCHMARKS.md](BENCHMARKS.md)).
+   (see [CONVERSION_GATES.md](CONVERSION_GATES.md)).
 
 ### Same loop without MCP (just the CLI)
 
@@ -455,7 +479,7 @@ parser warning.
 Radia checks more than component counts. The public regression lane verifies
 node-rename-invariant topology, grounded-pin placement, subcircuit retention,
 controlled and behavioral sources, generated script execution, CLI error
-behavior, and measure-log schemas. See [BENCHMARKS.md](BENCHMARKS.md) for the
+behavior, and measure-log schemas. See [CONVERSION_GATES.md](CONVERSION_GATES.md) for the
 reproducible public methodology.
 
 ### Third-party symbol libraries
