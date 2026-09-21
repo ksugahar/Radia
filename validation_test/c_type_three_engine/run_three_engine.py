@@ -1,6 +1,6 @@
 """Compare three formulations on one C-type electromagnet.
 
-HDiv-MMM, HCurl reduced-A, and H1 TOSCA-style mixed total/reduced Omega share
+HDiv-MMM, HCurl reduced-A, and H1 mixed total/reduced Omega share
 the exact Cubit/ACIS iron authority, one solid ``CoilBuilder`` excitation, one
 B-H table, and one set of physical observation points. HDiv-MMM intentionally
 uses the iron-only mesh because its Coulomb Gram is the open-boundary operator;
@@ -446,7 +446,7 @@ def solve_omega(
     bonus_intorder: int = 4,
     exact_exterior_source: bool = False,
 ) -> tuple[np.ndarray, dict[str, object]]:
-    """Run the TOSCA-style total/reduced Omega route on the Kelvin mesh.
+    """Run the mixed total/reduced Omega route on the Kelvin mesh.
 
     The physical air contains the CoilBuilder source and is the reduced
     region.  Iron and the Kelvin exterior are total-potential regions, so the
@@ -499,7 +499,7 @@ def solve_omega(
     field = evaluate_cf(result["B_cf"], mesh, points)
     source_trace = result["static_electromagnet_contract"]["source_trace"]
     return field, {
-        "formulation": "H1 TOSCA mixed total/reduced Omega",
+        "formulation": "H1 mixed total/reduced Omega",
         "open_boundary": "periodic spherical Kelvin transform",
         "source_contract": (
             "exact Radia H is restricted to physical air; the source/iron "

@@ -289,7 +289,7 @@ rad.ObjBckgCF/
 *.msh
 *.msh.opt
 *.step
-!docs/hdiv_vim/c_type_three_formulation_tosca_mixed_iron.vol
+!docs/hdiv_vim/c_type_three_formulation_mixed_omega_iron.vol
 validation_test/cubit/kelvin_1_4_p_convergence/p_convergence.json
 !validation_test/peec_integration/verification/cubit_mesh_generation/*.msh
 # Test fixtures: hand-curated STEP files checked into the repo as

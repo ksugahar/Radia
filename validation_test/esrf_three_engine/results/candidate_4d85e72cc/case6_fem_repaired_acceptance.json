@@ -74639,7 +74639,7 @@
       "runtime_s": 1355.541588299995
     },
     "mixed_total_reduced_omega": {
-      "formulation": "H1 TOSCA mixed total/reduced Omega",
+      "formulation": "H1 mixed total/reduced Omega",
       "open_boundary": "periodic spherical Kelvin transform",
       "source_contract": "exact Radia H is restricted to physical air; the source/iron interface uses a projected scalar trace; iron and Kelvin use total Omega",
       "source_trace": {
