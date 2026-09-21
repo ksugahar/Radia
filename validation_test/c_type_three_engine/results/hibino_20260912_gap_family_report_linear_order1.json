@@ -1,0 +1,237 @@
+{
+  "schema": "radia.validation.c-type-gap-family-report.v1",
+  "generated_at_utc": "2026-09-11T16:56:07.946781+00:00",
+  "passed": true,
+  "machine": "lab",
+  "claim": {
+    "refined": "gap only: N parallel slabs through the full gap, in-gap size h/N",
+    "held_fixed": {
+      "iron_size_m": 0.03,
+      "air_size_m": 0.04,
+      "kelvin_mesh_size_m": 0.05,
+      "kelvin_radius_m": 0.22,
+      "curve_order": 2
+    },
+    "statement": "gap-only refinement: the FEM routes' increments and Richardson estimates bound the gap-resolution error of THIS base mesh; HDiv-MMM is the fixed air-mesh-free route, not a converged truth",
+    "analytic_absolute_truth_claimed": false
+  },
+  "mode": "linear",
+  "radia_version": "4.95.90",
+  "fem_contract": {
+    "hdiv_mmm": {
+      "mode": "linear",
+      "hdiv_order": 2,
+      "hdiv_gram_eps": 1e-14,
+      "nonlinear_tolerance": 2e-05,
+      "nonlinear_maximum_iterations": 80,
+      "bh_table_sha256": null
+    },
+    "reduced_a": {
+      "mode": "linear",
+      "fem_order": 1,
+      "nonlinear_tolerance": 2e-05,
+      "nonlinear_maximum_iterations": 80,
+      "source_trace_tolerance": 0.05,
+      "bh_table_sha256": null,
+      "engine": "reduced_a",
+      "linear_solver": "direct",
+      "relax": 0.1
+    },
+    "mixed_total_reduced_omega": {
+      "mode": "linear",
+      "fem_order": 1,
+      "nonlinear_tolerance": 2e-05,
+      "nonlinear_maximum_iterations": 80,
+      "source_trace_tolerance": 0.05,
+      "bh_table_sha256": null,
+      "engine": "mixed_total_reduced_omega"
+    }
+  },
+  "gap_refinement_ratio": 2.0,
+  "levels": [
+    {
+      "name": "n06",
+      "gap_layers": 6,
+      "gap_elements": 11874,
+      "result": "C:\\temp\\ctype_gapfamily2\\runs2\\n06_linear_order1.json",
+      "result_sha256": "a8f0cace3bc2c95eec2408091f4426a211913ecc7528b0ea20552e15afef8079",
+      "machine": "Hibino",
+      "maximum_gap_core_pairwise_relative_rms": 0.0022638439782017646,
+      "pairwise_median_projected_gap_core": {
+        "hdiv_mmm__vs__reduced_a": {
+          "relative_rms": 0.0019987005497802135,
+          "maximum_absolute_difference_T": 0.000779026031725901
+        },
+        "hdiv_mmm__vs__mixed_total_reduced_omega": {
+          "relative_rms": 0.001920088611035952,
+          "maximum_absolute_difference_T": 0.0007043398379747572
+        },
+        "reduced_a__vs__mixed_total_reduced_omega": {
+          "relative_rms": 0.0022638439782017646,
+          "maximum_absolute_difference_T": 0.000986925889532031
+        }
+      },
+      "engines": {
+        "hdiv_mmm": {
+          "ndof": 10860,
+          "mesh_elements": 542,
+          "runtime_s": 10.278957100003026
+        },
+        "reduced_a": {
+          "ndof": 123777,
+          "mesh_elements": 104794,
+          "runtime_s": 3.2284243000030983
+        },
+        "mixed_total_reduced_omega": {
+          "ndof": 22640,
+          "mesh_elements": 104794,
+          "runtime_s": 4.8559301999921445
+        }
+      }
+    },
+    {
+      "name": "n12",
+      "gap_layers": 12,
+      "gap_elements": 96842,
+      "result": "C:\\temp\\ctype_gapfamily2\\runs2\\n12_linear_order1.json",
+      "result_sha256": "689cf26e9ddef4303abbbed6b9a8d8f99b904257ef5ed62296de8784a84cc20f",
+      "machine": "Hibino",
+      "maximum_gap_core_pairwise_relative_rms": 0.0018867850946862439,
+      "pairwise_median_projected_gap_core": {
+        "hdiv_mmm__vs__reduced_a": {
+          "relative_rms": 0.0010123913296364757,
+          "maximum_absolute_difference_T": 0.00038645881289611073
+        },
+        "hdiv_mmm__vs__mixed_total_reduced_omega": {
+          "relative_rms": 0.00154558485708021,
+          "maximum_absolute_difference_T": 0.0005124542552563053
+        },
+        "reduced_a__vs__mixed_total_reduced_omega": {
+          "relative_rms": 0.0018867850946862439,
+          "maximum_absolute_difference_T": 0.0005912271680565961
+        }
+      },
+      "engines": {
+        "hdiv_mmm": {
+          "ndof": 10860,
+          "mesh_elements": 542,
+          "runtime_s": 8.058105700009037
+        },
+        "reduced_a": {
+          "ndof": 617859,
+          "mesh_elements": 528094,
+          "runtime_s": 16.218524900003104
+        },
+        "mixed_total_reduced_omega": {
+          "ndof": 104430,
+          "mesh_elements": 528094,
+          "runtime_s": 20.23558230001072
+        }
+      }
+    },
+    {
+      "name": "n24",
+      "gap_layers": 24,
+      "gap_elements": 801988,
+      "result": "C:\\temp\\ctype_gapfamily2\\runs2\\n24_linear_order1.json",
+      "result_sha256": "5013fc19b19a735a4162c4be84b0c434b36d0c0b6310cbe3500a607ca06302c5",
+      "machine": "Hibino",
+      "maximum_gap_core_pairwise_relative_rms": 0.0018938567443431862,
+      "pairwise_median_projected_gap_core": {
+        "hdiv_mmm__vs__reduced_a": {
+          "relative_rms": 0.0009126233030661311,
+          "maximum_absolute_difference_T": 0.00027666061083032694
+        },
+        "hdiv_mmm__vs__mixed_total_reduced_omega": {
+          "relative_rms": 0.0016326185908291265,
+          "maximum_absolute_difference_T": 0.0005090504968921467
+        },
+        "reduced_a__vs__mixed_total_reduced_omega": {
+          "relative_rms": 0.0018938567443431862,
+          "maximum_absolute_difference_T": 0.0004868771852656658
+        }
+      },
+      "engines": {
+        "hdiv_mmm": {
+          "ndof": 10860,
+          "mesh_elements": 542,
+          "runtime_s": 9.037558300013188
+        },
+        "reduced_a": {
+          "ndof": 4087820,
+          "mesh_elements": 3501632,
+          "runtime_s": 205.74432189999789
+        },
+        "mixed_total_reduced_omega": {
+          "ndof": 649333,
+          "mesh_elements": 3501632,
+          "runtime_s": 176.54753080000228
+        }
+      }
+    }
+  ],
+  "hdiv_identity": {
+    "relative_rms_to_finest": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "tolerance": 1e-09,
+    "identical": true
+  },
+  "fem_convergence_in_gap_layers": {
+    "reduced_a": {
+      "convergence_levels": [
+        "n06",
+        "n12",
+        "n24"
+      ],
+      "penultimate_increment_absolute_rms_T": 0.0003238977933421691,
+      "last_increment_absolute_rms_T": 9.995634050046413e-05,
+      "last_increment_relative_rms": 0.0004364516214423848,
+      "contraction_ratio": 0.3086045738967699,
+      "contracting": true,
+      "observed_order": 1.696168650317384,
+      "richardson_relative_uncertainty": 0.00019481032355234468,
+      "conservative_relative_uncertainty": 0.0004364516214423848
+    },
+    "mixed_total_reduced_omega": {
+      "convergence_levels": [
+        "n06",
+        "n12",
+        "n24"
+      ],
+      "penultimate_increment_absolute_rms_T": 0.00016514661931650544,
+      "last_increment_absolute_rms_T": 7.68889457559051e-05,
+      "last_increment_relative_rms": 0.0003350979424993355,
+      "contraction_ratio": 0.4655798954536667,
+      "contracting": true,
+      "observed_order": 1.1028993333669443,
+      "richardson_relative_uncertainty": 0.0002919330012257299,
+      "conservative_relative_uncertainty": 0.0003350979424993355
+    }
+  },
+  "distance_to_hdiv_relative_rms": {
+    "reduced_a": [
+      0.0019987005497802135,
+      0.0010123913296364757,
+      0.0009126233030661311
+    ],
+    "mixed_total_reduced_omega": [
+      0.001920088611035952,
+      0.00154558485708021,
+      0.0016326185908291265
+    ]
+  },
+  "distance_to_hdiv_shrinks_every_level": {
+    "reduced_a": true,
+    "mixed_total_reduced_omega": false
+  },
+  "checks": {
+    "hdiv_mmm_unchanged_by_gap_refinement": true,
+    "reduced_a_contracting": true,
+    "mixed_omega_contracting": true
+  },
+  "gap_family": "C:\\temp\\ctype_gapfamily2\\gap_family.json",
+  "gap_family_sha256": "bd58a7fb995ae47797f6710b85278445d7405c2639e4f5b587477de5fdec1f93"
+}

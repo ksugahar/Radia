@@ -180,3 +180,126 @@ which is the signature of a truncation floor; after it converges like the other
 two and reaches the reduced-A level. The `after` artifacts carry a different
 `radia.kelvin_solver` implementation hash, which is how they are told apart.
 
+## Gap-thickness mesh family (2026-09-11)
+
+`--gap-size` is a pole-face SURFACE size: it refines the gap air in plane
+while a tetrahedron stays free to span the whole half-gap in z.  On the scale
+family above, lines through the gap crossed 6 to 18 elements but the longest
+stay inside one element was 2.7 to 2.9 mm of the 10 mm gap at every level, so
+the family did not control the field's resolution through the gap thickness.
+
+`build_cubit_meshes.py` now measures what a line meets on its way across the
+gap (`gap_inventory.line_profile`): the exact straight-tetrahedron clipping
+on five representative lines, the same measurement on the curved cells by
+bisection, two sampled counts, and coverage.  The acceptance requires a
+minimum crossing count `--gap-elements-across N` on both geometries and a
+longest stay of at most `--gap-segment-factor` x gap_height/N.  Three probe
+traps are handled rather than trusted: NGSolve's point locator accepts a point
+up to about 1e-4 reference barycentric OUTSIDE the returned element (a
+tolerance-band answer is never read as a membership); pieces shorter than
+1 nm are grazing contacts, not crossings; and both the curved walk and the
+sampled counts are seeded with the straight-segment midpoints so thin elements
+are not stepped over.  `results/lab_20260911_gap_probe_locator_regression.json`
+records the probe on the four scale-family meshes: all twenty lines agree
+between the four counts and the coverage deviation is zero.
+
+`--gap-layers N` (even) cuts the positive-z gap air under a 60 x 50 mm column
+into N/2 parallel slabs, meshes them at gap_height/N, and reflects the meshed
+slabs with the rest of the half.  Two Cubit facts shape the construction:
+the default merge tolerance is 5e-4 MODEL units (0.5 mm in this metre model),
+and the imprint has an absolute tolerance of about the same size that no
+setting changes, so slabs thinner than 0.5 mm are collapsed.  A slabbed half is
+therefore built, imprinted, merged, meshed and reflected in a working frame
+scaled by 1000 and scaled back to metres; the unlayered path keeps the
+historical commands and rebuilds byte-identical.  Every slab face except the
+symmetry plane must be merged, and every volume meshed, before export.
+`add_kelvin_cubit` (cubit-mesh-export) was made to select only faces on the
+air sphere: it used to take the largest face of every air volume, which with
+slabs put interior faces into `kelvin_int`.
+
+`build_mesh_family.py --gap-layers 6 12 24` writes the separately named
+manifest `gap_family.json` (schema `c-type-cubit-gap-family.v1`): the gap is
+refined alone, the iron, air and Kelvin sizes are held at the medium base
+level, and the manifest must not be read by `run_mesh_convergence.py`.
+`analyze_gap_family.py` reads one three-engine result per level, requires
+HDiv-MMM (iron mesh only) to be identical across levels, and reports the two
+FEM routes' gap-core increments, observed order in N and Richardson estimate,
+which bound the gap-resolution error of this base mesh, not the whole model.
+
+`results/lab_20260912_gap_family.json` and the three
+`lab_20260912_gap_family_n{06,12,24}_mesh.json` contracts (LAB, curve order
+2, Cubit 2025.12):
+
+| N | elements | gap elements | minimum crossings | longest stay / limit |
+|---|---|---|---|---|
+| 6 | 104,794 | 11,874 | 16 | 1.427 / 2.000 mm |
+| 12 | 528,094 | 96,842 | 34 | 0.633 / 1.000 mm |
+| 24 | 3,501,632 | 801,988 | 72 | 0.211 / 0.500 mm |
+
+All three pass the exact reflection, periodic Kelvin (462 pairs, trace ratio
+1 to 1e-15) and on-sphere `kelvin_int` gates.
+
+### The direct reduced-A solve, and why N=24 first failed
+
+The first attempts at the family stopped in PARDISO: N=6 order 3 and N=12
+order 2 exhausted the 57 GB of mdx at about 1.5 M HCurl unknowns, and N=24
+order 1 (4.1 M) exhausted the 220 GB of hibino.  The iterative routes do not
+apply (AMS is refused on periodic Kelvin HCurl; BDDC at order 1 keeps every
+edge in the coarse space).  The cause was the pip NGSolve PARDISO wrapper:
+it hard-codes the minimum-degree ordering and ignores the ordering it is
+handed, and that ordering fills far more than METIS on three-dimensional
+HCurl systems.  Peak process memory of the order-1 reduced-A solve, same
+field to 1e-11 (`probe_n24_direct.py`, a research probe kept in `C:/temp`):
+
+| unknowns | shipped default | METIS (+SPD) | sparsecholesky | umfpack |
+|---|---|---|---|---|
+| 124 k (N=6) | 1.40 GB | 0.81 (0.88) GB | 1.56 GB | 6.7 GB, 47 s |
+| 618 k (N=12) | 12.7 GB, 62 s | 5.0 (5.1) GB, 20 s | 16.5 GB, 79 s | fails at 29 GB |
+| 4.09 M (N=24) | out of memory, 220 GB | 54 GB, 200 s | MemoryError | -- |
+
+`radia.vector_potential_solver` now registers its own SPD PARDISO with
+METIS ordering (`DIRECT_INVERSE_TYPE`) through NGSolve's own hooks and uses
+it on its direct paths; the solutions equal the shipped wrapper's to 2e-14
+on every level below.  N=24 at order 2 (about 21 M unknowns) is still out
+of reach, so the order-2 family stops at N=12.
+
+### Three-engine results on the gap family
+
+hibino, one contract per family: the branch's Python source over the
+installed `radia 4.95.90` binaries (`results/hibino_20260912_gap_family_
+native_overlay_manifest.json` records their hashes; the driver's
+`radia_version` field is the installed distribution's `4.95.90` while the
+source is `4.95.91`), linear, HDiv BDM2, direct reduced-A with METIS,
+72 threads.  Gap-core relative RMS of the median-plane-projected B:
+
+| level | FEM order | HDiv vs reduced-A | HDiv vs mixed Omega | reduced-A vs mixed | reduced-A unknowns |
+|---|---|---|---|---|---|
+| N=6 | 1 | 0.200% | 0.192% | 0.226% | 123,777 |
+| N=12 | 1 | 0.101% | 0.155% | 0.189% | 617,859 |
+| N=24 | 1 | 0.091% | 0.163% | 0.189% | 4,087,820 |
+| N=6 | 2 | 0.092% | 0.117% | 0.051% | 544,793 |
+| N=12 | 2 | 0.088% | 0.107% | 0.035% | 2,732,075 |
+
+(`results/hibino_20260912_gap_family_*_metis.json`; the `mdx*_20260911_*`
+and `hibino_20260912_*_order{1,2}.json` files without `_metis` are the
+same levels on the shipped solver, identical fields to 4e-14.)
+
+`results/hibino_20260912_gap_family_report_linear_order1.json` is the
+`analyze_gap_family.py` report on the order-1 family.  It passes: HDiv-MMM
+is identical across the three levels (it never sees the gap air), and both
+FEM routes' gap-core increments contract in N -- reduced-A with ratio 0.31
+(observed order 1.7, Richardson estimate 1.9e-4), mixed Omega with ratio
+0.47 (order 1.1, Richardson 2.9e-4).  What the two routes converge to
+differs.  Reduced-A approaches HDiv-MMM at every level (0.200, 0.101,
+0.091%); the mixed Omega route does not (0.192, 0.155, 0.163%) and stays
+0.189% from reduced-A at N=12 and N=24.  Its Kelvin source-trace tangential
+residual is 4.53% at every level (gate 5%), also unchanged by the gap.
+Gap resolution is therefore not what limits the mixed Omega route on this
+base mesh; that is consistent with the source-load quadrature localised on
+ESRF #6, and is not a proof of it.  At order 2 both routes sit within
+0.12% of HDiv-MMM on two levels; three levels are not available.
+
+The report bounds the gap-resolution error of this base mesh only.  It says
+nothing about the iron, outer-air or Kelvin discretisation, and nothing
+about a family built with other base sizes.
+

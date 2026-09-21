@@ -118,6 +118,9 @@ def build_family(options: argparse.Namespace) -> dict[str, object]:
                     kelvin_radius=expected["kelvin_radius_m"],
                     kelvin_mesh_size=expected["kelvin_mesh_size_m"],
                     curve_order=expected["curve_order"],
+                    gap_layers=0,
+                    gap_elements_across=options.gap_elements_across,
+                    gap_segment_factor=options.gap_segment_factor,
                 )
             )
         rows.append(
@@ -172,6 +175,116 @@ def build_family(options: argparse.Namespace) -> dict[str, object]:
     return result
 
 
+GAP_HEIGHT_M = 0.010
+
+
+def build_gap_family(options: argparse.Namespace) -> dict[str, object]:
+    """Refine ONLY the gap: N parallel slabs and an in-gap size of h/N.
+
+    Iron, air and Kelvin sizes are held at one base level, so a converging
+    sequence bounds the gap-resolution error alone, not the discretisation
+    error of the whole model.  The manifest therefore carries its own schema
+    and must not be read as a scale family.
+    """
+    output_dir = options.output_dir.resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    layers = [int(value) for value in options.gap_layers]
+    if len(layers) < 3:
+        raise ValueError("provide at least three --gap-layers values")
+    if any(value <= 0 or value % 2 for value in layers):
+        raise ValueError("--gap-layers values must be positive and even")
+    ratios = [right / left for left, right in zip(layers, layers[1:])]
+    if min(ratios) <= 1.0 or max(ratios) - min(ratios) > 1e-12:
+        raise ValueError("--gap-layers must increase geometrically")
+
+    rows = []
+    for count in layers:
+        name = f"n{count:02d}"
+        level_dir = output_dir / name
+        expected = {
+            "iron_size_m": float(options.iron_size),
+            "air_size_m": float(options.air_size),
+            "gap_size_m": float(GAP_HEIGHT_M / count),
+            "kelvin_mesh_size_m": float(options.kelvin_mesh_size),
+            "kelvin_radius_m": float(options.kelvin_radius),
+            "curve_order": int(options.curve_order),
+            "gap_layers": int(count),
+            "gap_elements_across_required": int(count),
+        }
+        if options.reuse_existing and (level_dir / "mesh_result.json").is_file():
+            payload = _load_matching_level(level_dir, expected)
+        else:
+            payload = build(
+                SimpleNamespace(
+                    output_dir=level_dir,
+                    cubit=options.cubit,
+                    command_plugin_dir=options.command_plugin_dir,
+                    iron_size=expected["iron_size_m"],
+                    air_size=expected["air_size_m"],
+                    gap_size=expected["gap_size_m"],
+                    kelvin_radius=expected["kelvin_radius_m"],
+                    kelvin_mesh_size=expected["kelvin_mesh_size_m"],
+                    curve_order=expected["curve_order"],
+                    gap_layers=count,
+                    gap_elements_across=count,
+                    gap_segment_factor=options.gap_segment_factor,
+                )
+            )
+        profile = payload["gap_inventory"]["line_profile"]
+        rows.append(
+            {
+                "name": name,
+                "gap_layers": int(count),
+                "relative_directory": name,
+                "mesh_result": f"{name}/mesh_result.json",
+                "mesh_result_sha256": sha256(level_dir / "mesh_result.json"),
+                "gap_size_m": expected["gap_size_m"],
+                "kelvin_elements": int(payload["inventory"]["kelvin_domain"]["elements"]),
+                "gap_elements": int(payload["gap_inventory"]["elements"]),
+                "minimum_crossings": int(profile["minimum_segments"]),
+                "curved_minimum_crossings": int(profile["curved_minimum_segments"]),
+                "maximum_piece_m": float(profile["maximum_segment_m"]),
+                "piece_limit_m": float(payload["gap_segment_limit_m"]),
+                "iron_vol_sha256": payload["artifacts"]["iron_vol_sha256"],
+                "kelvin_domain_vol_sha256": payload["artifacts"]["kelvin_domain_vol_sha256"],
+            }
+        )
+
+    monotone = all(left[key] < right[key] for left, right in zip(rows, rows[1:])
+                   for key in ("kelvin_elements", "gap_elements"))
+    result = {
+        "schema": "radia.validation.c-type-cubit-gap-family.v1",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "passed": bool(monotone),
+        "refined": "gap only: N parallel slabs through the full gap, in-gap size h/N",
+        "held_fixed": {
+            "iron_size_m": float(options.iron_size),
+            "air_size_m": float(options.air_size),
+            "kelvin_mesh_size_m": float(options.kelvin_mesh_size),
+            "kelvin_radius_m": float(options.kelvin_radius),
+            "curve_order": int(options.curve_order),
+        },
+        "gap_height_m": GAP_HEIGHT_M,
+        "gap_refinement_ratio": float(sum(ratios) / len(ratios)),
+        "cad_authority": "cad/c_type_iron.jou",
+        "builder": "build_cubit_meshes.py",
+        "builder_sha256": sha256(HERE / "build_cubit_meshes.py"),
+        "physical_helper_sha256": sha256(HERE / "cubit_reflection_mesh.py"),
+        "family_builder_sha256": sha256(Path(__file__).resolve()),
+        "levels": rows,
+        "checks": {
+            "all_mesh_contracts_passed": True,
+            "element_counts_strictly_increase": monotone,
+            "geometric_layer_sequence": True,
+        },
+    }
+    manifest = output_dir / "gap_family.json"
+    manifest.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    if not result["passed"]:
+        raise RuntimeError(f"C-type gap family contract failed; see {manifest}")
+    return result
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -184,7 +297,14 @@ def main() -> None:
     parser.add_argument("--kelvin-radius", type=float, default=0.22)
     parser.add_argument("--kelvin-mesh-size", type=float, default=0.050)
     parser.add_argument("--curve-order", type=int, choices=range(2, 6), default=2)
+    parser.add_argument("--gap-elements-across", type=int, default=2)
+    parser.add_argument("--gap-segment-factor", type=float, default=1.2)
     parser.add_argument("--reuse-existing", action="store_true")
+    parser.add_argument("--gap-layers", type=int, nargs="+",
+                        help="build the separately named GAP family instead: "
+                             "e.g. 6 12 24 slabs through the gap with an in-gap "
+                             "size of gap/N, all other sizes held at the base "
+                             "level; writes gap_family.json")
     options = parser.parse_args()
     if any(
         value <= 0.0
@@ -197,7 +317,12 @@ def main() -> None:
         )
     ):
         raise ValueError("mesh sizes must be positive")
-    build_family(options)
+    if options.gap_layers:
+        if options.level:
+            raise ValueError("--gap-layers and --level describe different families")
+        build_gap_family(options)
+    else:
+        build_family(options)
 
 
 if __name__ == "__main__":

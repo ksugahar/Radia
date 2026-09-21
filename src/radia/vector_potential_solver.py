@@ -36,6 +36,47 @@ MU_0 = 4 * np.pi * 1e-7
 DEFAULT_GAUGE_EPSILON = 1.0e-6
 LINEAR_RELATIVE_RESIDUAL_LIMIT = 1.0e-6
 
+# The inverse type radia's direct HCurl solves ask NGSolve for.
+DIRECT_INVERSE_TYPE = "radia_pardisospd_metis"
+_direct_inverse_registered = False
+
+
+def direct_inverse_type():
+    """Return the NGSolve inverse-type name of radia's direct HCurl solve.
+
+    NGSolve's pip PARDISO wrapper (``ngsolve.solvers.mkl_pardiso``) hard-codes
+    the minimum-degree ordering (``iparm[1] = 0``) and overwrites the
+    ``params`` it is handed, so the ordering cannot be chosen through its
+    interface.  On three-dimensional HCurl systems that ordering fills far
+    more than METIS nested dissection.  Measured on the C-type gap family
+    (2026-09-12, order-1 reduced-A, peak process memory): the shipped default
+    took 1.40 GB at 124 k unknowns against 0.88 GB with METIS and the SPD
+    matrix type, ran out of memory at about 1.5 M unknowns on 57 GB and at
+    4.1 M on 220 GB, while METIS with the SPD type factorised the 4.1 M
+    system in 54 GB and 200 s; the solutions agree to 1e-11.
+
+    radia therefore registers, on first use, its own subclass of the
+    wrapper's SPD solver that switches the ordering to METIS after
+    construction -- through the wrapper's own attribute and NGSolve's own
+    ``RegisterInverseType``.  The SPD type is what the gauged curl-curl
+    systems of this module are; a matrix that is not SPD makes PARDISO fail
+    loudly.  Without the wrapper's PARDISO the construction raises the
+    wrapper's own error.
+    """
+    global _direct_inverse_registered
+    if not _direct_inverse_registered:
+        from ngsolve import la as ngla
+        from ngsolve.solvers.mkl_pardiso import MKLPardisoSPD
+
+        class _PardisoSPDMetis(MKLPardisoSPD):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self._params[1] = 2        # METIS nested dissection
+
+        ngla.RegisterInverseType(DIRECT_INVERSE_TYPE, _PardisoSPDMetis)
+        _direct_inverse_registered = True
+    return DIRECT_INVERSE_TYPE
+
 
 def _relative_residual_on_free_dofs(residual_values, rhs_values, free_dof_mask):
     """Return the algebraic residual norm on unconstrained HCurl DOFs."""
@@ -457,7 +498,8 @@ class VectorPotentialSolver:
             iterations = getattr(inv, 'iterations', None)
         else:
             self._A_gf.vec.data = (
-                a.mat.Inverse(fes.FreeDofs()) * f.vec)
+                a.mat.Inverse(fes.FreeDofs(), inverse=direct_inverse_type())
+                * f.vec)
 
         solution_values = np.asarray(self._A_gf.vec.FV().NumPy())
         linear_residual = f.vec.CreateVector()
@@ -478,6 +520,8 @@ class VectorPotentialSolver:
             )
         self._last_linear_stats = {
             'solver': solver,
+            'direct_inverse': (direct_inverse_type()
+                               if solver not in ('ams', 'bddc') else None),
             'ndof': int(fes.ndof),
             'iterations': (int(iterations) if iterations is not None else None),
             'physical_gauge_epsilon': physical_eps,
@@ -903,7 +947,7 @@ class VectorPotentialSolver:
                 A_gf.vec.data = inv * f.vec
             else:
                 A_gf.vec.data = a.mat.Inverse(
-                    fes.FreeDofs(), inverse='pardisospd') * f.vec
+                    fes.FreeDofs(), inverse=direct_inverse_type()) * f.vec
 
             linear_residual = f.vec.CreateVector()
             linear_residual.data = f.vec - a.mat * A_gf.vec
@@ -1001,7 +1045,8 @@ class VectorPotentialSolver:
             'tolerance': float(tol),
             'maximum_iterations': int(maxiter),
             'maximum_linear_relative_residual': maximum_linear_relative_residual,
-            'direct_inverse': 'pardisospd' if solver == 'direct' else None,
+            'direct_inverse': (direct_inverse_type()
+                               if solver == 'direct' else None),
             'solver': solver,
             'physical_gauge_epsilon': physical_eps,
             'kelvin_gauge_epsilon': resolved_kelvin_eps,
