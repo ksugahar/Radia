@@ -1,0 +1,90 @@
+{
+  "schema": "radia.beak_fin_reference_mesh_cost.v1",
+  "generated_at_utc": "2026-09-21T21:03:26.305169+00:00",
+  "git_head": "cf5d4bddf46a74afe91e5d129988c37c6ade23fd",
+  "host": "intel11",
+  "question": "with the PEEC side converged and cheap, the comparison is the BEM-A reference.  How coarse can that reference be and still decide the delivery gate the same way?",
+  "fixture": "C:\\temp\\radia-ih-beakfin-20260922\\tests\\coil_from_cad\\fixtures\\beak_fin_48mm.step",
+  "peec": {
+    "n_peri": 256,
+    "n_stations": 5
+  },
+  "solver_note": "hacapk_cocr was measured on the 0.75 mm level at 459.8 s against 437.3 s for dense cocr, agreeing to 7.5e-7 in R: the H-matrix does not pay at this size, so the mesh is the only lever",
+  "levels": [
+    {
+      "maxh_mm": 2.0,
+      "n_surface_faces": 8280,
+      "n_J": 12420,
+      "bema_seconds": 217.52399329998298,
+      "peec_seconds": 3.6633171000285074,
+      "bema_R_uohm": 244.65994525359062,
+      "bema_L_nH": 24.205981193093685,
+      "peec_R_uohm": 250.4580102629345,
+      "errors": {
+        "beak_current_fraction_relative": 0.004166383575909149,
+        "beak_loss_fraction_relative": 0.004042484892952114,
+        "beak_current_centroid_absolute_mm": 0.003797521335533599,
+        "probe_H_relative_L2": 0.0017118835816284093
+      },
+      "accepted": true
+    },
+    {
+      "maxh_mm": 1.5,
+      "n_surface_faces": 8528,
+      "n_J": 12792,
+      "bema_seconds": 231.92134760000044,
+      "peec_seconds": 2.0752339999889955,
+      "bema_R_uohm": 246.62934372174942,
+      "bema_L_nH": 24.195143605974323,
+      "peec_R_uohm": 250.4580102629345,
+      "errors": {
+        "beak_current_fraction_relative": 0.004964650862771092,
+        "beak_loss_fraction_relative": 0.0021474528552480887,
+        "beak_current_centroid_absolute_mm": 0.006002564565579793,
+        "probe_H_relative_L2": 0.0015599217102757175
+      },
+      "accepted": true
+    },
+    {
+      "maxh_mm": 1.0,
+      "n_surface_faces": 9506,
+      "n_J": 14259,
+      "bema_seconds": 291.0669804000063,
+      "peec_seconds": 2.08730509999441,
+      "bema_R_uohm": 248.3547302250419,
+      "bema_L_nH": 24.18518157057274,
+      "peec_R_uohm": 250.4580102629345,
+      "errors": {
+        "beak_current_fraction_relative": 0.002237894283590114,
+        "beak_loss_fraction_relative": 0.015904587731467412,
+        "beak_current_centroid_absolute_mm": 0.0005543755710554245,
+        "probe_H_relative_L2": 0.000658254994587909
+      },
+      "accepted": true
+    },
+    {
+      "maxh_mm": 0.75,
+      "n_surface_faces": 11308,
+      "n_J": 16962,
+      "bema_seconds": 474.1329777999781,
+      "peec_seconds": 2.100092900043819,
+      "bema_R_uohm": 250.07433767122447,
+      "bema_L_nH": 24.171667001039882,
+      "peec_R_uohm": 250.4580102629345,
+      "errors": {
+        "beak_current_fraction_relative": 0.0032001977223876654,
+        "beak_loss_fraction_relative": 0.00488389317182869,
+        "beak_current_centroid_absolute_mm": 0.009246110491086847,
+        "probe_H_relative_L2": 0.001427527935755368
+      },
+      "accepted": true
+    }
+  ],
+  "reference_R_uohm_at_finest": 250.07433767122447,
+  "relative_R_to_finest": [
+    -0.021651131691698078,
+    -0.013775879530686708,
+    -0.006876385086915127,
+    0.0
+  ]
+}
