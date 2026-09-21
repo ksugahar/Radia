@@ -693,23 +693,24 @@ These rules are enforced by
 `em_submission_gate` runs it automatically).  Violations are a
 reviewer-visible, database-visible defect.
 
-## Page-fitting philosophy: don't OVER-compress
+## Page-fitting philosophy: never compress surviving prose
 
 When fitting a hard page limit (IGTE / Compumag 2-page digest, a
-1-page extended abstract, IEEE TMag 8-page full paper), there are two
-ways to make content fit:
+1-page extended abstract, IEEE TMag 8-page full paper), treat the limit
+as a content-selection problem:
 
 | Approach | Verdict |
 |----------|---------|
-| **Cram**: shrink fonts below the 10 pt rule, squeeze margins, kill whitespace, pack every sentence | ✗ AVOID — hurts readability, breaks the 10 pt-at-8 cm figure font rule, reviewers complain |
-| **Select**: reduce SCOPE — cut secondary results, move detail to a future full paper, keep fewer points but keep them readable | ✓ PREFERRED |
+| **Cram**: shorten surviving sentences, omit semantic relations, shrink fonts, squeeze margins, kill whitespace | ✗ FORBIDDEN — creates ambiguous prose and non-standard typography |
+| **Select**: rank sentence/claim importance, delete the lowest-priority complete sentence or content unit, keep fewer points readable | ✓ REQUIRED |
 
-**Rule**: to fit one page (or any page limit), you do NOT have to
-over-compress the information.  It is equally valid — and usually
-better — to **reduce the amount of content** (be selective) rather than
-cram everything in at the cost of readability.  Keep the surviving
-content at full readability (10 pt fonts, adequate whitespace, figures
-at proper size); drop or defer the rest.
+**Rule**: never compress the prose that survives in order to fit one page
+(or any page limit). First write the clear, self-contained version. Rank each
+sentence by its contribution to the central question, venue criteria, core
+method/validation/result, and unique evidence. Delete the lowest-priority
+complete sentence or content unit. If a sentence cannot remain clear, omit it
+rather than leave a compressed, ambiguous version. Keep the surviving content
+at full readability (10 pt fonts, adequate whitespace, figures at proper size).
 
 Why this matters:
 - A digest is a TEASER, not a compressed full paper.  It should leave
@@ -724,11 +725,12 @@ Why this matters:
   1. Draft the abstract in plain prose; remove every `$...$`,
      `\cite{}` / `[1]`, and domain-specific acronym — verify with
      `paper_writing_check_abstract_no_math_no_citation`.
-  2. If over the page limit, FIRST cut scope (secondary results,
-     redundant figures), THEN check fit — do not reach for smaller
-     fonts / tighter margins as the primary tool.
+  2. If over the page limit, score sentence/claim importance and remove the
+     lowest-priority complete sentence or content unit (secondary result,
+     redundant figure, optional example). Do not shorten retained prose or
+     tighten typography to keep extra content.
   3. Re-gate; the figure font rule and whitespace checks confirm you
-     did not over-compress.
+     did not compress the surviving prose or typography.
 
 ## Cross-reference
 
@@ -1129,8 +1131,8 @@ etc.) are journal-agnostic.  THIS module is EM-paper-specific:
 
   abstract / abstract_rules / conciseness / page_fitting
         Abstract carries NO math and NO citations.  To fit a page
-        limit, reduce SCOPE rather than over-compressing (don't shrink
-        fonts / cram); keep surviving content fully readable.
+        limit, rank sentence/claim importance and delete the lowest-priority
+        complete unit. Never compress surviving prose or typography.
 
   bilingual / japanese_translation / translation / page_limit
         English paper + Japanese translation lab workflow.  The page
@@ -1180,7 +1182,8 @@ def paper_writing_em_paper_style(topic: str = "overview") -> str:
         iteration_fairness / fixed_iteration  -- fixed-budget disclosure
                                                   and fair count comparison
         abstract / conciseness / page_fitting -- no math/cite in abstract;
-                                                 cut scope, don't over-compress
+                                                 rank importance, delete the
+                                                 lowest-priority complete unit
         bilingual / japanese_translation      -- EN paper + JA translation,
                                                  page limit EN-only
         reference_bib / bib_policy            -- canonical references.bib;

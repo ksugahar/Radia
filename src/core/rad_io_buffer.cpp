@@ -19,7 +19,7 @@
 
 //-------------------------------------------------------------------------
 
-int radTIOBuffer::AmOfErrors = 141; //modify this when adding new error !!!
+int radTIOBuffer::AmOfErrors = 142; //modify this when adding new error !!!
 string radTIOBuffer::err_ar[] = {
 
 	"Radia::ErrorXXX::::Wrong Error Number.\0",
@@ -155,6 +155,7 @@ string radTIOBuffer::err_ar[] = {
 	"Radia::Error203::::Mesh-less soft iron is not a supported solve path in this Radia version. Build soft iron from a Netgen/NGSolve mesh and use FEEC HDiv-VIM via radia.SoftIron(...), radia.vim.MeshSoftIron(...), or radia.vim.Solve(...).\0",
 	"Radia::Error204::::Incorrect input: a single demag Solve mixes incompatible magnetic element families. Solve them as separate containers or build mesh-backed soft iron for HDiv-VIM.\0",
 	"Radia::Error205::::Incorrect input: B-input hysteresis (b_input_newton / b_input_hantila) requires EVERY element to be a hysteresis material (MatPlayHysteresis / MatEnergyHysteresis). Build mesh-backed soft iron and use HDiv-VIM for soft-iron solves.\0",
+	"Radia::Error206::::Field evaluation failed: invalid coordinates or numerical evaluation failure.\0",
 	"Radia::Error500::::Incorrect input: Byte string is expected.\0", //keep on adding new "Incorrect inputs" after this
 	"Radia::Error501::::Incorrect input: Wrong / unsupported magnetic kick units.\0", //keep on adding new "Incorrect inputs" after this
 	"Radia::Error502::::Incorrect input: Wrong / unsupported kick-map string/file format specification.\0", //keep on adding new "Incorrect inputs" after this

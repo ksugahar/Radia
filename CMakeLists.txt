@@ -375,6 +375,25 @@ if(BUILD_TESTING)
 		target_compile_options(test_rad_beam_dynamics PRIVATE -Wall -Wextra -Wpedantic)
 	endif()
 	add_test(NAME radia.beam_dynamics.cpp COMMAND test_rad_beam_dynamics)
+
+	# Header-only arc kernel: an axial closed form, four independent volume
+	# integration references with a convergence check, five boundary partition
+	# identities and ten two-sided boundary limits. The partition and continuity
+	# checks are consistency checks, not independent field references. It does
+	# not certify the Python extension, CoilBuilder placement or vector-potential
+	# accuracy; the integration tests do.
+	add_executable(test_rad_arc_section
+		${CMAKE_CURRENT_SOURCE_DIR}/tests/cpp/test_rad_arc_section.cpp
+	)
+	target_include_directories(test_rad_arc_section PRIVATE ${CORE_DIR})
+	target_compile_features(test_rad_arc_section PRIVATE cxx_std_17)
+	if(MSVC)
+		target_compile_options(test_rad_arc_section PRIVATE /W4 /permissive-)
+	else()
+		target_compile_options(test_rad_arc_section PRIVATE -Wall -Wextra -Wpedantic)
+	endif()
+	add_test(NAME radia.arc_section.cpp COMMAND test_rad_arc_section)
+	set_tests_properties(radia.arc_section.cpp PROPERTIES TIMEOUT 120)
 endif()
 
 # Platform-neutral C ABI for Simulink S-functions, Modelica, and FMI wrappers.

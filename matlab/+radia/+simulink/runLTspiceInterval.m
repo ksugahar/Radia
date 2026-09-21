@@ -19,7 +19,7 @@ for k=1:numel(inputNames)
 end
 simulation=radia.simulink.runLTspice(stateNetlist,InputSignals=signals,Executable=options.Executable, ...
  OutputDirectory=options.OutputDirectory,Timeout_s=options.Timeout_s);
-nextState=radia.ltspice.extractTransientState(simulation);
+nextState=radia.ltspice.extractTransientState(simulation,NetlistFile=stateNetlist);
 nextState.time_s=state.time_s+options.Duration_s;
 result=struct("schema","radia.simulink.ltspice.interval.v1","simulation",simulation, ...
  "state",nextState,"duration_s",options.Duration_s,"input_names",inputNames,"input_values",inputValues);

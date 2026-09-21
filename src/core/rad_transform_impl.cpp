@@ -21,6 +21,7 @@
 #include "rad_field_unified.h"
 
 #include <math.h>
+#include <cmath>
 #include <string.h>
 #include <vector>
 
@@ -188,6 +189,18 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, double** Points
 	double *arFldVals = 0, *arFldValsRecv = 0; //OC02012020
 	try
 	{
+		if(Np < 0 || (Np > 0 && Points == nullptr))
+		{
+			Send.ErrorMessage("Radia::Error206"); return;
+		}
+		for(long i = 0; i < Np; ++i)
+		{
+			if(Points[i] == nullptr || !std::isfinite(Points[i][0]) ||
+			   !std::isfinite(Points[i][1]) || !std::isfinite(Points[i][2]))
+			{
+				Send.ErrorMessage("Radia::Error206"); return;
+			}
+		}
 		radThg hg;
 		if(!ValidateElemKey(ElemKey, hg)) return;
 		radTg3d* g3dPtr = Cast.g3dCast(hg.rep);
@@ -243,7 +256,7 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, double** Points
 		// RAII: vFieldArray cleaned up automatically
 		if(arFldVals != 0) delete[] arFldVals; //OC02012020
 		if(arFldValsRecv != 0) delete[] arFldValsRecv; //OC02012020
-		Initialize(); return;
+		Send.ErrorMessage("Radia::Error206"); return;
 	}
 }
 

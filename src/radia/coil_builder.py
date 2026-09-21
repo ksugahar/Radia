@@ -263,25 +263,36 @@ class LoftStraightSegment(CoilSegment):
 	def to_occ_shape(self, index=0):
 		"""Loft OCC shape from profile_start at s=0 to profile_end at s=1.
 
-		Stage 3a implementation supports only RectProfile -> RectProfile
-		and emits a ThruSections loft between the two rectangle wires.
+		Supports matching rectangular or circular profiles and emits a
+		ThruSections loft between the two centered section wires.
 		The resulting Solid is usable for STEP export and visual
 		inspection.
 		"""
 		from netgen.occ import (WorkPlane, Axes, Pnt, Axis, X, Y, Z, Vec,
 		                         ThruSections)
-		from radia.coil_profile import RectProfile
-		if not (isinstance(self.profile_start, RectProfile)
-		        and isinstance(self.profile_end, RectProfile)):
+		from radia.coil_profile import RectProfile, CircleProfile
+		if (type(self.profile_start) is not type(self.profile_end)
+		    or type(self.profile_start) not in (RectProfile, CircleProfile)):
 			raise NotImplementedError(
-				"LoftStraightSegment.to_occ_shape is only implemented for "
-				"RectProfile -> RectProfile (Stage 3a).")
+				"Straight loft CAD requires matching rectangular or circular profiles.")
+		if (not np.isfinite(self.length) or self.length <= 0
+		    or any(not np.all(np.isfinite(p.bounding_wh())) or min(p.bounding_wh()) <= 0
+		           for p in (self.profile_start, self.profile_end))):
+			raise ValueError("Straight loft CAD requires positive finite length and dimensions.")
+		if type(self.profile_start) is CircleProfile:
+			wires = [WorkPlane(Axes(Pnt(0, y, 0), n=Y, h=X)).Circle(p.r).Wire()
+			         for y, p in [(0, self.profile_start), (self.length, self.profile_end)]]
+			shape = self.apply_pose_occ(ThruSections(wires, solid=True), self.start_pos)
+			shape.name = "coil_loft_" + str(index)
+			return shape
 		w0, h0 = self.profile_start.w, self.profile_start.h
 		w1, h1 = self.profile_end.w, self.profile_end.h
 		# ThruSections requires Wires (boundary curves), not Faces.
 		wire0 = WorkPlane(Axes(Pnt(0, 0, 0), n=Y, h=X)) \
+		        .MoveTo(-w0 / 2, -h0 / 2) \
 		        .Rectangle(w0, h0).Wire()
 		wire1 = WorkPlane(Axes(Pnt(0, self.length, 0), n=Y, h=X)) \
+		        .MoveTo(-w1 / 2, -h1 / 2) \
 		        .Rectangle(w1, h1).Wire()
 		shape = ThruSections([wire0, wire1], solid=True)
 		shape = self.apply_pose_occ(shape, self.start_pos)
@@ -366,12 +377,53 @@ class LoftArcSegment(CoilSegment):
 		return self.profile_start.interpolate(self.profile_end, s)
 
 	def to_occ_shape(self, index=0):
-		"""OCC shape for LoftArcSegment is not yet implemented. For
-		visualization / STEP export, use multiple LoftStraightSegment
-		pieces along the arc, or use build123d's sweep/loft directly."""
-		raise NotImplementedError(
-			"LoftArcSegment.to_occ_shape: not implemented yet. "
-			"Use LoftStraightSegment chains for CAD export.")
+		"""Interpolated rectangular/circular arc loft; refine n_sub for CAD convergence.
+
+		This section loft approximates the curved side surfaces, not an
+		exact analytic sweep. Constant-section full turns use exact revolution.
+		Negative-angle bends are unsupported.
+		"""
+		from netgen.occ import WorkPlane, Axes, Axis, Pnt, Vec, ThruSections, Z
+		from radia.coil_profile import RectProfile, CircleProfile
+		if (type(self.profile_start) is not type(self.profile_end)
+		    or type(self.profile_start) not in (RectProfile, CircleProfile)):
+			raise NotImplementedError("Arc loft CAD requires matching rectangular or circular profiles.")
+		dims = np.array([*self.profile_start.bounding_wh(),
+		                 *self.profile_end.bounding_wh()])
+		if (not np.all(np.isfinite(dims)) or np.any(dims <= 0)
+		    or not np.isfinite(self.radius)
+		    or self.radius <= max(dims[0], dims[2]) / 2
+		    or not 0 < self.arc_angle <= 360 or self.n_sub < 4):
+			raise ValueError("Arc loft CAD requires positive dimensions, clear inner "
+			                 "radius, 0 < angle <= 360 and n_sub >= 4.")
+		if self.arc_angle == 360:
+			if self.profile_start.bounding_wh() != self.profile_end.bounding_wh():
+				raise ValueError("Full-turn CAD requires identical endpoint profiles.")
+			plane = WorkPlane(Axes(Pnt(0, 0, 0), n=Vec(0, 1, 0), h=Vec(1, 0, 0)))
+			if type(self.profile_start) is CircleProfile:
+				face = plane.Circle(self.profile_start.r).Face()
+			else:
+				face = plane.MoveTo(-dims[0] / 2, -dims[1] / 2).Rectangle(dims[0], dims[1]).Face()
+			shape = face.Revolve(Axis(Pnt(-self.radius, 0, 0), Z), 360)
+			shape = self.apply_pose_occ(shape, self.start_pos)
+			shape.name = "coil_arc_loft_" + str(index)
+			return shape
+		wires = []
+		for s in np.linspace(0, 1, self.n_sub + 1):
+			theta = np.deg2rad(self.arc_angle) * s
+			c, sn = np.cos(theta), np.sin(theta)
+			profile = self.profile_at(s)
+			axes = Axes(Pnt(self.radius * (c - 1), self.radius * sn, 0),
+			            n=Vec(-sn, c, 0), h=Vec(c, sn, 0))
+			if type(profile) is CircleProfile:
+				wires.append(WorkPlane(axes).Circle(profile.r).Wire())
+			else:
+				wires.append(WorkPlane(axes).MoveTo(-profile.w / 2, -profile.h / 2)
+				             .Rectangle(profile.w, profile.h).Wire())
+		shape = ThruSections(wires, solid=True)
+		shape = self.apply_pose_occ(shape, self.start_pos)
+		shape.name = "coil_arc_loft_" + str(index)
+		return shape
 
 
 class ArcSegment(CoilSegment):
@@ -770,8 +822,8 @@ class CoilBuilder:
 
 		The cross-section interpolates linearly from profile_start at
 		s=0 to profile_end at s=1. profile_start defaults to the
-		current builder cross-section (a RectProfile constructed from
-		the builder's _width, _height).
+		current builder profile, or a rectangular fallback constructed
+		from the builder's _width and _height.
 
 		Args:
 			profile_end: Profile at the segment end. Same type as
@@ -781,15 +833,14 @@ class CoilBuilder:
 				discretization. Default 20.
 			tilt: Y-axis tilt [deg].
 			profile_start: explicit Profile at segment start. If None,
-				uses RectProfile(self._width, self._height) matching
-				the builder's current cross-section.
+				uses the builder's current profile or rectangular fallback.
 		Returns:
 			self (for chaining).
 		"""
 		from radia.coil_profile import RectProfile
 		if profile_start is None:
 			self._check_cross_section()
-			profile_start = RectProfile(self._width, self._height)
+			profile_start = self._profile if self._profile is not None else RectProfile(self._width, self._height)
 
 		segment = LoftStraightSegment(
 			self.current, self._position, self._orientation,
@@ -804,6 +855,7 @@ class CoilBuilder:
 		w_end, h_end = profile_end.bounding_wh()
 		self._width = w_end
 		self._height = h_end
+		self._profile = profile_end
 
 		return self
 
@@ -896,15 +948,131 @@ class CoilBuilder:
 
 		return self
 
+	def to_radia_loft_filaments(self, nw, nh, n_arc=64, *, require_closed=False):
+		"""Export rectangular straight/loft segments as native filaments.
+
+		Each canonical section cell carries I/(nw*nh), conserved through
+		every segment. This prescribes a divergence-free stream-tube current
+		inside the conductor; it does not solve conduction or skin effects.
+		Straight filament fields use the native closed-form line integral.
+		Section midpoint sampling still requires nw/nh convergence studies.
+		Do not use this thin-filament approximation for internal fields,
+		self-energy or self-force. Positive-angle arc lofts use n_arc chords;
+		both section and path resolution require convergence checks.
+
+		Returns a list of native object IDs, one per continuous filament.
+		Unlike to_radia(), this explicitly selects an approximate section
+		model. Geometry is validated before allocating any native objects.
+		Set require_closed=True to require matching entry/exit sections and
+		closed current paths. No implicit return wire is added.
+		"""
+		import operator
+		import radia as rad
+		from radia.coil_profile import RectProfile, CircleProfile
+
+		for count in (nw, nh, n_arc):
+			if isinstance(count, (bool, np.bool_)) or operator.index(count) < 1:
+				raise ValueError("nw, nh and n_arc must be positive integers")
+		nw, nh = operator.index(nw), operator.index(nh)
+		n_arc = operator.index(n_arc)
+		if not self.segments or not np.isfinite(self.current):
+			raise ValueError("A nonempty coil with finite current is required")
+		alpha, beta = np.meshgrid((np.arange(nw) + .5) / nw,
+		                         (np.arange(nh) + .5) / nh, indexing='ij')
+		paths = [[] for _ in range(nw * nh)]
+		previous_exit = None
+		previous_profile_type = None
+		first_entry = None
+		first_profile_type = None
+		for index, seg in enumerate(self.segments):
+			if type(seg) is StraightSegment:
+				start, end = seg.profile, seg.profile
+			elif type(seg) in (LoftStraightSegment, LoftArcSegment):
+				start, end = seg.profile_start, seg.profile_end
+			else:
+				raise NotImplementedError(f"segment {index}: only rectangular straight segments and lofts are supported")
+			if type(start) is not type(end):
+				raise NotImplementedError(f"segment {index}: cross-type lofts are unsupported")
+			if previous_profile_type is not None and type(start) is not previous_profile_type:
+				raise ValueError(f"segment {index}: disconnected profile types")
+			for profile in (start, end):
+				if type(profile) not in (RectProfile, CircleProfile):
+					raise NotImplementedError(f"segment {index}: rectangular or circular profiles are required")
+				if not np.all(np.isfinite(profile.bounding_wh())) or min(profile.bounding_wh()) <= 0:
+					raise ValueError(f"segment {index}: profile dimensions must be finite and positive")
+			curved = type(seg) is LoftArcSegment
+			w0, h0 = start.bounding_wh()
+			w1, h1 = end.bounding_wh()
+			if curved:
+				if not np.isfinite(seg.arc_angle) or not 0 < seg.arc_angle <= 360:
+					raise ValueError(f"segment {index}: arc loft angle must be in (0, 360]")
+				if not np.isfinite(seg.radius) or seg.radius <= max(w0, w1) / 2:
+					raise ValueError(f"segment {index}: arc loft has nonpositive inner radius")
+				length = seg.radius * np.deg2rad(seg.arc_angle)
+				if seg.arc_angle == 360 and start.bounding_wh() != end.bounding_wh():
+					raise ValueError(f"segment {index}: full-turn loft must have matching endpoint profiles")
+			else:
+				length = seg.length
+			if not np.isfinite(length) or length <= 0 or seg.current != self.current:
+				raise ValueError(f"segment {index}: invalid length or inconsistent current")
+			frame = np.asarray(seg.orientation)
+			if not np.all(np.isfinite(frame)) or not np.allclose(frame @ frame.T, np.eye(3), rtol=0, atol=1e-12):
+				raise ValueError(f"segment {index}: an orthonormal frame is required")
+			# Corner checks also detect a section jump with a 1x1 center sample.
+			corners0 = start.sample_at(np.array([0, 1, 1, 0]), np.array([0, 0, 1, 1]))
+			corners1 = end.sample_at(np.array([0, 1, 1, 0]), np.array([0, 0, 1, 1]))
+			if type(start) is CircleProfile:
+				corners0 = start.sample_at(np.ones(4), np.arange(4) / 4)
+				corners1 = end.sample_at(np.ones(4), np.arange(4) / 4)
+			entry = seg.start_pos + corners0[0][:, None] * frame[0] + corners0[1][:, None] * frame[2]
+			if first_entry is None:
+				first_entry = entry.copy()
+				first_profile_type = type(start)
+			if previous_exit is not None and not np.allclose(previous_exit, entry, rtol=0, atol=1e-12 * max(w0, h0)):
+				raise ValueError(f"segment {index}: disconnected cross-section")
+			exit_frame = seg.end_orientation
+			previous_exit = seg.end_pos + corners1[0][:, None] * exit_frame[0] + corners1[1][:, None] * exit_frame[2]
+			previous_profile_type = type(end)
+			uv0, uv1 = start.sample_at(alpha.ravel(), beta.ravel()), end.sample_at(alpha.ravel(), beta.ravel())
+			p0 = seg.start_pos + uv0[0][:, None] * frame[0] + uv0[1][:, None] * frame[2]
+			p1 = seg.end_pos + uv1[0][:, None] * exit_frame[0] + uv1[1][:, None] * exit_frame[2]
+			if not np.all(np.isfinite(p0)) or not np.all(np.isfinite(p1)):
+				raise ValueError(f"segment {index}: nonfinite endpoints")
+			waypoints = [p1]
+			if curved:
+				waypoints = []
+				for s in np.linspace(0, 1, n_arc + 1)[1:]:
+					u, v = start.interpolate(end, s).sample_at(alpha.ravel(), beta.ravel())
+					theta = s * np.deg2rad(seg.arc_angle)
+					radial = np.cos(theta) * frame[0] + np.sin(theta) * frame[1]
+					waypoints.append(seg.arc_center + (seg.radius + u)[:, None] * radial + v[:, None] * frame[2])
+			for k, path in enumerate(paths):
+				if path and not np.allclose(path[-1], p0[k], rtol=0, atol=1e-12 * max(length, w0, h0)):
+					raise ValueError(f"segment {index}: disconnected filament; no implicit joining wire")
+				if not path:
+					path.append(p0[k].tolist())
+				path.extend(p[k].tolist() for p in waypoints)
+		if require_closed:
+			scale = max(np.linalg.norm(first_entry - first_entry.mean(axis=0), axis=1))
+			if (previous_profile_type is not first_profile_type
+			    or not np.allclose(previous_exit, first_entry, rtol=0, atol=1e-12 * scale)):
+				raise ValueError("Closed coil requires matching entry and exit sections")
+			for path in paths:
+				if not np.allclose(path[-1], path[0], rtol=0, atol=1e-12 * scale):
+					raise ValueError("Closed coil requires closed current paths")
+				path[-1] = path[0].copy()
+		return [rad.ObjFlmCur(path, float(self.current) / (nw * nh)) for path in paths]
+
 	def to_radia(self, arc_max_segment_length=None):
 		"""
 		Convert all segments to Radia objects.
 
-		Arc currents are discretized so that one Radia integration segment is
-		no longer than ``arc_max_segment_length``.  By default the larger
-		cross-section dimension is used.  The former fixed value of 10 is not
-		adequate for long, large-radius accelerator coils observed close to the
-		conductor and can create artificial field peaks.
+		The native arc subdivision count is selected from
+		``arc_max_segment_length`` (default: larger cross-section dimension).
+		The updated native B/H kernel uses analytic section integrals and
+		adaptive angular integration, not this count as its accuracy control.
+		The count is retained for legacy kernels and separate potential paths;
+		changing it alone does not certify field convergence.
 
 		Args:
 			arc_max_segment_length: Maximum arc integration segment length in
@@ -913,8 +1081,44 @@ class CoilBuilder:
 
 		Returns:
 			list: List of Radia object IDs (can be combined with rad.ObjCnt)
+
+		Raises:
+			NotImplementedError: A segment is not a constant rectangular
+				straight or arc. Validation precedes native object allocation.
+			ValueError: Profile dimensions disagree with native dimensions.
 		"""
 		import radia as rad
+		from radia.coil_profile import RectProfile
+
+		# Native primitives cannot represent lofts or arbitrary profiles.
+		# Check the whole coil before allocating even its supported prefix.
+		if arc_max_segment_length is not None:
+			arc_max_segment_length = float(arc_max_segment_length)
+			if not np.isfinite(arc_max_segment_length) or arc_max_segment_length <= 0:
+				raise ValueError("arc_max_segment_length must be positive and finite")
+		for index, seg in enumerate(self.segments):
+			if type(seg) not in (StraightSegment, ArcSegment) or type(seg.profile) is not RectProfile:
+				raise NotImplementedError(
+					f"segment {index}: native conversion requires a constant rectangular straight or arc"
+				)
+			if seg.profile.bounding_wh() != (seg.width, seg.height):
+				raise ValueError(f"segment {index}: profile and native dimensions disagree")
+			if (not np.all(np.isfinite([seg.width, seg.height, seg.current]))
+			    or min(seg.width, seg.height) <= 0):
+				raise ValueError(f"segment {index}: positive finite dimensions and finite current required")
+			frame = np.asarray(seg.orientation)
+			position = np.asarray(seg.start_pos)
+			if (position.shape != (3,) or not np.all(np.isfinite(position))
+			    or frame.shape != (3, 3) or not np.all(np.isfinite(frame))
+			    or not np.allclose(frame @ frame.T, np.eye(3), rtol=0, atol=1e-12)
+			    or not np.isclose(np.linalg.det(frame), 1, rtol=0, atol=1e-12)):
+				raise ValueError(f"segment {index}: finite position and proper orthonormal frame required")
+			if type(seg) is StraightSegment:
+				if not np.isfinite(seg.length) or seg.length <= 0:
+					raise ValueError(f"segment {index}: positive finite length required")
+			elif (not np.all(np.isfinite([seg.radius, seg.arc_angle]))
+			      or seg.radius <= seg.width / 2 or not 0 < abs(seg.arc_angle) <= 360):
+				raise ValueError(f"segment {index}: clear inner radius and 0 < abs(angle) <= 360 required")
 
 		radia_objects = []
 		for seg in self.segments:
@@ -968,7 +1172,7 @@ class CoilBuilder:
 					[phi1, phi2],     # phi range
 					seg.height,       # height
 					n_arc_segments,   # nseg
-					"man",            # enforce the accuracy-derived subdivision
+					"man",            # retain explicit subdivision for legacy paths
 					"z",              # axis (transformed by Euler angles below)
 					j_density         # j (current density, sign handles direction)
 				)
@@ -982,6 +1186,31 @@ class CoilBuilder:
 
 		return radia_objects
 
+
+	def audit_segment_volume_overlaps(self, relative_tolerance=1e-9):
+		"""Check pairwise positive-volume CAD overlap, including adjacent segments.
+
+		Touching faces are permitted. This is not a clearance check, an
+		intra-segment validity proof or arbitrary-sweep self-intersection proof.
+		Volumes use the active geometry unit cubed. Unsupported CAD raises.
+		"""
+		if not np.isfinite(relative_tolerance) or not 0 <= relative_tolerance < 1:
+			raise ValueError("relative_tolerance must be finite and in [0, 1)")
+		if not self.segments:
+			raise ValueError("No segments added")
+		shapes = [seg.to_occ_shape(i) for i, seg in enumerate(self.segments)]
+		volumes = [shape.mass for shape in shapes]
+		if any(not np.isfinite(v) or v <= 0 for v in volumes):
+			raise ValueError("All segment CAD volumes must be finite and positive")
+		overlaps = []
+		for i, left in enumerate(shapes):
+			for j in range(i + 1, len(shapes)):
+				common = left * shapes[j]
+				volume = sum(solid.mass for solid in common.solids)
+				if volume > relative_tolerance * min(volumes[i], volumes[j]):
+					overlaps.append({"segments": [i, j], "overlap_volume": volume})
+		return {"scope": "pairwise_segment_volume_overlap", "overlaps": overlaps,
+		        "passed": not overlaps, "relative_tolerance": relative_tolerance}
 
 	def to_occ(self):
 		"""Convert all segments to a combined OCC shape.

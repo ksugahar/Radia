@@ -8,7 +8,7 @@
   "source_artifact": "matlab/samples/ltspice_rlc_resonance_ac.cir",
   "pass": true,
   "run": {
-    "command": "radia.ltspice.runCoilGeometryResonanceOptimizationDemo",
+    "command": "runLtspiceCoilGeometryResonanceOptimization",
     "workdir": "<runtime-output>/radia_coil_geometry_validation",
     "exit_code": 0,
     "duration_s": 148.2819372,

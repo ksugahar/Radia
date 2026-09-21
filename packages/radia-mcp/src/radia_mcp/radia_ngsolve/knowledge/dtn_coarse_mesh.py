@@ -2970,8 +2970,8 @@ DTN_COARSE_MESH_DTN_TO_CLN = r"""
 #   import radia.open_boundary as ob
 #   # (1) dtn_cln -- exact closed-form SEPARABLE (pure numpy/scipy):
 #   ob.eddy_dtn(n, s, R0, mu_sigma)        # exact eddy/diffusion DtN per multipole
-#   ob.cauer_ladder(n); ob.eval_ladder(..) # Cauer ladder, EXACT at n+1 stages
-#   ob.companion_poles(n)                  # passive transient Robin (Grote-Keller, Re<0)
+#   ob.cauer_ladder(n); ob.eval_ladder(..) # finite identity in the sqrt(s) variable
+#   ob.companion_poles(n)                 # inspect the variable convention before time realization
 #   # (2) kelvin_dtn -- Kelvin-BUILT material-aware / NON-separable:
 #   ob.kelvin_fem_radial_dtn(n, s)         # Kelvin-FEM BUILDS the DtN, no DC floor (numpy)
 #   ob.kelvin_dtn_matrix(mesh, p, s, nu=, sigma=); ob.steklov_spectrum(S, Mg)  # NGSolve,
@@ -2981,6 +2981,12 @@ DTN_COARSE_MESH_DTN_TO_CLN = r"""
 # Goldens tests/open_boundary/{test_dtn_cln,test_kelvin_dtn}.py; example docs/open_boundary/demo_dtn_cln_usage.py.
 # SHOWCASE NOTEBOOK docs/open_boundary/open_boundary_demo.ipynb (DtN symbol, CLN ladder,
 #   companion poles, sqrt(s) ladder, Kelvin-FEM DtN build -- executed + rendered).
+# Diffusion qualification: a rational identity in q=sqrt(s) is not a rational
+# transfer function in the physical Laplace variable s. A finite q-ladder alone
+# does not supply an exact finite physical-time ODE. Diffusion memory needs
+# convolution/fractional treatment or a separately validated band-limited s-fit.
+# Poles in q must not be read as physical-time decay rates. Saved algebraic
+# assertions do not establish unconditional timestep stability or PML superiority.
 # PROVENANCE (3 layers -- see kelvin_transformation(topic="material_exterior")):
 #   separable Zs-DtN-CLN = Grote-Keller / Hagstrom-Warburton continued-fraction ABCs /
 #     Warburg-Cauer / Kameari CLN (classical);

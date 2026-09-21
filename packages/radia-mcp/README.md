@@ -67,6 +67,34 @@ build123d script  →  STEP  →  Cubit hex mesh  →  .msh v4.1 / .vol  →  ng
                                   + persistent headless replay)
 ```
 
+It is also Radia's **primary and canonical manual**. The live MCP status,
+usage, and recipe tools own current workflow guidance, accepted inputs,
+constraints, artifacts, failure modes, provenance, and validation routes for
+every public Radia capability. The repository README and `docs/` introduce
+what Radia can do and show result-bearing evidence; they do not maintain a
+competing procedural manual. Start with the selected capability pack's
+`capability_pack_status`, then follow the domain tools it reports.
+
+Public `docs/**/*.ipynb` notebooks remain rich technical discovery artifacts:
+equations, derivations, verified literature citations, executable Python, saved
+results, and applicable WebGUI scenes. Their citation keys resolve against the
+canonical `references.bib`; MCP, not the notebook, owns current operating steps.
+
+Radia is MCP-native. LLM agents invoke the Python solver and workflow
+implementations through these MCP contracts; Python is not maintained as a
+separate direct-user operating surface. The formal Simulink UI requires
+MathWorks' official MATLAB MCP Server for MATLAB execution and model operations.
+If that foundation is unavailable, the workflow fails explicitly rather than
+silently bypassing MCP.
+
+MCP is Radia's primary AI-facing entrypoint and canonical operating manual.
+The masked blocks in the single **Radia** Simulink library are the formal
+human-facing UI; their operating guidance remains MCP-owned rather than being
+duplicated under `docs/`. A separate standalone MATLAB edition remains
+undecided. MATLAB `.m`/`.mlx` files remain implementation assets under
+`matlab/`, not documentation artifacts; GitHub-renderable Markdown or an
+executed Python `.ipynb` carries the public discovery story and results.
+
 What makes it different from typical CAD-MCP servers (FreeCAD, OpenSCAD,
 Blender):
 
