@@ -56,8 +56,8 @@ contract.
   a descriptive comment.
 - Property cards reference the corresponding Cubit group ID as a material ID,
   but the exporter deliberately writes no `MAT1`, `MAT10`, or other physical
-  material card. Add the real constitutive data in JMAG, COMSOL, or another
-  receiving application. The result is an interchange mesh, not a complete
+  material card. Add the real constitutive data in the receiving application.
+  The result is an interchange mesh, not a complete
   Nastran analysis deck.
 
 ## Examples
