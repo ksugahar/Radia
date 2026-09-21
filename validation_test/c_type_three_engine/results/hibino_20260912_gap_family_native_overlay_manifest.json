@@ -1,0 +1,37 @@
+[
+  {
+    "file": "_equation.pyd",
+    "sha256": "388A1FDE01F39ADE526FB69C3D33C05B66FB112704DC63840CFF152AE80190CF",
+    "source": "C:\\Program Files\\Python312\\Lib\\site-packages\\radia\\_equation.pyd"
+  },
+  {
+    "file": "_radia_pybind.pyd",
+    "sha256": "4D0B6B9492050EA35EF9B46D3C601CF74B1C2684D7BB6CCDAC21FD6BAC9141B4",
+    "source": "C:\\Program Files\\Python312\\Lib\\site-packages\\radia\\_radia_pybind.pyd"
+  },
+  {
+    "file": "axifem.pyd",
+    "sha256": "B0B62D2282FE2FFAD60DF09EDE6358F6888A8ECBADCFDEABFE2FA60407A6CB9A",
+    "source": "C:\\Program Files\\Python312\\Lib\\site-packages\\radia\\axifem.pyd"
+  },
+  {
+    "file": "cln_core.pyd",
+    "sha256": "020EB9577BECED80406AC5B3F4085C7D36C658E83AFD151AAFC3417EFDDEC7F5",
+    "source": "C:\\Program Files\\Python312\\Lib\\site-packages\\radia\\cln_core.pyd"
+  },
+  {
+    "file": "peec_matrices.pyd",
+    "sha256": "7FBA4E7BFE395B13A604644CA798A2173D3504AC2D0D25FE8EF93FA1F402C72D",
+    "source": "C:\\Program Files\\Python312\\Lib\\site-packages\\radia\\peec_matrices.pyd"
+  },
+  {
+    "file": "radia_motor_rom.dll",
+    "sha256": "445C09322E0EAB46766EEBED284C05D05E9C01EF2B369632298EAB5E7E6F51AF",
+    "source": "C:\\Program Files\\Python312\\Lib\\site-packages\\radia\\radia_motor_rom.dll"
+  },
+  {
+    "file": "sparsesolv_ngsolve.pyd",
+    "sha256": "2D8CA02A67A70FF2C49B120B670A455E5F4D33AE4836B6F0240CEDB9A6579729",
+    "source": "C:\\Program Files\\Python312\\Lib\\site-packages\\radia\\sparsesolv_ngsolve.pyd"
+  }
+]
