@@ -109,7 +109,17 @@ the volume eddy-current problem at each frequency.
 
 - M. A. Leontovich, "Investigations on Radio Wave Propagation",
   Part II, USSR Academy of Sciences, 1948 (original SIBC)
-- S. M. Rytov, J. Exp. Theor. Phys. 10:180-189, 1940 (asymptotic
+- S. M. Rytov, 1940, the perturbation expansion the whole tower rests
+  on. TWO citations for it circulate and we have not established which
+  our sources meant, so it is NOT in the canonical references.bib:
+    Zh. Eksp. Teor. Fiz. (JETP) 10:180-189, 1940     [Russian]
+    J. Phys. USSR 2(3):233-242, 1940,
+      "Calcul du skin-effet par la methode des perturbations"  [French]
+  Soviet-era work commonly appeared in both the Russian journal and the
+  Academy's foreign-language organ, so these are plausibly companion
+  publications of one work rather than a mistake -- but that is a guess.
+  Western SIBC literature cites the J. Phys. USSR form. Verify against a
+  physical copy before adding either. (asymptotic
   expansion)
 - K. M. Mitzner, IEEE TAP 15:540-543, 1967 (curvature correction)
 - S. Yuferev, N. Ida, "Surface Impedance Boundary Conditions: A

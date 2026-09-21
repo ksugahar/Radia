@@ -1,0 +1,98 @@
+{
+  "timestamp": "2026-08-28T15:40:16+09:00",
+  "hostname": "HIBINO",
+  "benchmark": "radia.optuna history store scaling",
+  "schema": "radia.optuna.history-store-benchmark.v1",
+  "matlab_version": "26.1.0.3312084 (R2026a) Update 4",
+  "problem": {
+    "trial_counts": [
+      500,
+      1000,
+      2000,
+      4000,
+      8000
+    ],
+    "parameters_per_trial": 2,
+    "reported_steps_per_pruned_trial": 4,
+    "pruned_fraction": 0.33333333333333331,
+    "lookup_probe_count": 200
+  },
+  "results": [
+    {
+      "iterations": 500,
+      "t_setup": 1.349341,
+      "t_solve": 0.2959921,
+      "t_indexed_lookup": 0.0021765,
+      "t_scan_lookup": 0.0033809,
+      "lookup_speedup": 1.5533654950608775,
+      "peak_memory_mb": 1693.76171875,
+      "frozen_trials": 500,
+      "intermediate_rows": 664,
+      "parameter_rows": 1000,
+      "probe_count": 200,
+      "converged": true
+    },
+    {
+      "iterations": 1000,
+      "t_setup": 1.7685871,
+      "t_solve": 0.5658689,
+      "t_indexed_lookup": 0.0009448,
+      "t_scan_lookup": 0.0035995,
+      "lookup_speedup": 3.8098010160880609,
+      "peak_memory_mb": 1714.6015625,
+      "frozen_trials": 1000,
+      "intermediate_rows": 1332,
+      "parameter_rows": 2000,
+      "probe_count": 200,
+      "converged": true
+    },
+    {
+      "iterations": 2000,
+      "t_setup": 3.3938402,
+      "t_solve": 1.0103158,
+      "t_indexed_lookup": 0.0009045,
+      "t_scan_lookup": 0.0036361,
+      "lookup_speedup": 4.0200110558319517,
+      "peak_memory_mb": 1736.14453125,
+      "frozen_trials": 2000,
+      "intermediate_rows": 2664,
+      "parameter_rows": 4000,
+      "probe_count": 200,
+      "converged": true
+    },
+    {
+      "iterations": 4000,
+      "t_setup": 6.4085417,
+      "t_solve": 1.941924,
+      "t_indexed_lookup": 0.0022438,
+      "t_scan_lookup": 0.0123025,
+      "lookup_speedup": 5.482886175238435,
+      "peak_memory_mb": 1770.37109375,
+      "frozen_trials": 4000,
+      "intermediate_rows": 5332,
+      "parameter_rows": 8000,
+      "probe_count": 200,
+      "converged": true
+    },
+    {
+      "iterations": 8000,
+      "t_setup": 13.5581236,
+      "t_solve": 3.8835257,
+      "t_indexed_lookup": 0.0007494,
+      "t_scan_lookup": 0.0080942,
+      "lookup_speedup": 10.800907392580731,
+      "peak_memory_mb": 1862.046875,
+      "frozen_trials": 8000,
+      "intermediate_rows": 10664,
+      "parameter_rows": 16000,
+      "probe_count": 200,
+      "converged": true
+    }
+  ],
+  "scaling": {
+    "write_exponent": 0.85150601025706385,
+    "freeze_exponent": 0.92064198597582159,
+    "indexed_lookup_exponent": -0.18285410567694135,
+    "scan_lookup_exponent": 0.42920453972949107
+  }
+}
