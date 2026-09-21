@@ -1,0 +1,1696 @@
+{
+  "schema": "radia.validation.c-type-cubit-meshes.v1",
+  "passed": true,
+  "machine": "lab",
+  "cad_authority": "C:\\temp\\radia-omega-kelvin\\validation_test\\c_type_three_engine\\cad\\c_type_iron.jou",
+  "cad_sha256": "dc857c13ada42f8c7f73f7e0eab634523a839c185af376c6b5e2634aa2abfb1f",
+  "cubit": "C:\\Program Files\\Coreform Cubit 2025.12\\bin\\coreform_cubit.com",
+  "command_plugin_dir": null,
+  "mesh_policy": {
+    "hdiv_mmm": "exact iron-only Cubit/ACIS TET .vol; Coulomb open boundary",
+    "reduced_a": "exact iron + locally refined physical air + Kelvin exterior",
+    "mixed_total_reduced_omega": "same periodic Kelvin .vol as reduced-A; H1 TOSCA mixed total/reduced Omega"
+  },
+  "kelvin_radius_m": 0.22,
+  "kelvin_physical_center_m": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "iron_size_m": 0.03,
+  "air_size_m": 0.04,
+  "gap_size_m": 0.0008333333333333334,
+  "gap_layers": 12,
+  "kelvin_mesh_size_m": 0.05,
+  "curve_order": 2,
+  "gap_inventory": {
+    "elements": 96842,
+    "maximum_edge_m": 0.0014388404016629432,
+    "maximum_z_span_m": 0.0008333333333334,
+    "gap_height_m": 0.01,
+    "z_resolution_indicator": 11.99999999999904,
+    "line_profile": {
+      "lines": [
+        {
+          "x_m": 0.0,
+          "y_m": 0.0,
+          "segments": 38,
+          "grazing_segments": 0,
+          "maximum_segment_m": 0.0006330200594735153,
+          "minimum_segment_m": 1.65939664691344e-06,
+          "covered_m": 0.009999999999999998,
+          "uncovered_m": 0.0,
+          "overlap_m": 0.0,
+          "sampled_4001": 38,
+          "sampled_16001": 38,
+          "curved": {
+            "segments": 38,
+            "maximum_segment_m": 0.0006330204283282225,
+            "minimum_segment_m": 1.6590739306300561e-06,
+            "covered_m": 0.01,
+            "grazing_segments": 0,
+            "switch_tolerance_m": 1e-09,
+            "locator_band_samples": 4,
+            "seed_samples": 38
+          }
+        },
+        {
+          "x_m": 0.008,
+          "y_m": 0.0,
+          "segments": 34,
+          "grazing_segments": 2,
+          "maximum_segment_m": 0.0004367474334404124,
+          "minimum_segment_m": 0.00020170487797547165,
+          "covered_m": 0.01,
+          "uncovered_m": 0.0,
+          "overlap_m": 0.0,
+          "sampled_4001": 34,
+          "sampled_16001": 34,
+          "curved": {
+            "segments": 34,
+            "maximum_segment_m": 0.0004367473491739531,
+            "minimum_segment_m": 0.00020170467157312006,
+            "covered_m": 0.01,
+            "grazing_segments": 0,
+            "switch_tolerance_m": 1e-09,
+            "locator_band_samples": 7,
+            "seed_samples": 36
+          }
+        },
+        {
+          "x_m": 0.0,
+          "y_m": 0.005,
+          "segments": 36,
+          "grazing_segments": 0,
+          "maximum_segment_m": 0.0006011101617969441,
+          "minimum_segment_m": 1.1720728753869536e-09,
+          "covered_m": 0.01,
+          "uncovered_m": 0.0,
+          "overlap_m": 0.0,
+          "sampled_4001": 34,
+          "sampled_16001": 34,
+          "curved": {
+            "segments": 34,
+            "maximum_segment_m": 0.000601110193742981,
+            "minimum_segment_m": 0.00011966062059912044,
+            "covered_m": 0.01,
+            "grazing_segments": 0,
+            "switch_tolerance_m": 1e-09,
+            "locator_band_samples": 4,
+            "seed_samples": 36
+          }
+        },
+        {
+          "x_m": 0.008,
+          "y_m": 0.005,
+          "segments": 36,
+          "grazing_segments": 0,
+          "maximum_segment_m": 0.00040596913954715503,
+          "minimum_segment_m": 2.7839062904236496e-05,
+          "covered_m": 0.01,
+          "uncovered_m": 0.0,
+          "overlap_m": 0.0,
+          "sampled_4001": 36,
+          "sampled_16001": 36,
+          "curved": {
+            "segments": 36,
+            "maximum_segment_m": 0.00040596915708740466,
+            "minimum_segment_m": 2.7838824022278878e-05,
+            "covered_m": 0.01,
+            "grazing_segments": 0,
+            "switch_tolerance_m": 1e-09,
+            "locator_band_samples": 1,
+            "seed_samples": 36
+          }
+        },
+        {
+          "x_m": -0.008,
+          "y_m": -0.005,
+          "segments": 36,
+          "grazing_segments": 0,
+          "maximum_segment_m": 0.0004059691911395026,
+          "minimum_segment_m": 2.7839065703011596e-05,
+          "covered_m": 0.01,
+          "uncovered_m": 0.0,
+          "overlap_m": 0.0,
+          "sampled_4001": 36,
+          "sampled_16001": 36,
+          "curved": {
+            "segments": 36,
+            "maximum_segment_m": 0.00040596915708740466,
+            "minimum_segment_m": 2.7838824022278878e-05,
+            "covered_m": 0.01,
+            "grazing_segments": 0,
+            "switch_tolerance_m": 1e-09,
+            "locator_band_samples": 3,
+            "seed_samples": 36
+          }
+        }
+      ],
+      "minimum_segments": 34,
+      "maximum_segment_m": 0.0006330200594735153,
+      "clean_traversal": true,
+      "sampling_is_stable": true,
+      "curved_minimum_segments": 34,
+      "curved_maximum_segment_m": 0.0006330204283282225,
+      "geometry_of_lengths": "straight vertex tetrahedra; the 'curved' entries repeat the measurement on the curved cells",
+      "note": "measured on the listed representative lines only; not a statement about the whole gap"
+    }
+  },
+  "gap_elements_across_required": 12,
+  "gap_segment_limit_m": 0.001,
+  "gap_segment_factor": 1.2,
+  "reflection_inventory": {
+    "iron": {
+      "vertex_count": 211,
+      "missing_reflected_vertices": 0,
+      "maximum_reflected_vertex_error_m": 0.0,
+      "volume_element_count": 542,
+      "missing_reflected_volume_elements": 0
+    },
+    "kelvin_domain": {
+      "vertex_count": 88847,
+      "missing_reflected_vertices": 0,
+      "maximum_reflected_vertex_error_m": 0.0,
+      "volume_element_count": 528094,
+      "missing_reflected_volume_elements": 0
+    }
+  },
+  "kelvin_identification": {
+    "pair_count": 462,
+    "translation_m": [
+      0.6600000000000015,
+      -1.526143629460548e-17,
+      0.0
+    ],
+    "maximum_pair_translation_error_m": 1.7923829864784e-15
+  },
+  "kelvin_fes": {
+    "base_h1_ndof": 88847,
+    "periodic_h1_ndof": 88847,
+    "slaved_free_dofs": 462,
+    "kelvin_int_trace_norm": 0.6082005475733531,
+    "kelvin_ext_trace_norm": 0.6082005475733533,
+    "trace_norm_ratio": 1.0000000000000004
+  },
+  "kelvin_int_on_sphere": {
+    "elements": 920,
+    "elements_off_sphere": 0,
+    "maximum_vertex_radius_error_m": 1.1102230246251565e-16,
+    "radius_tolerance_m": 1e-09
+  },
+  "exact_iron_volume_m3": 0.001446095333333,
+  "mesh_iron_volume_m3": 0.0014460953333333623,
+  "relative_iron_volume_error": 2.5056464652957813e-13,
+  "artifacts": {
+    "iron_vol": "C:\\temp\\ctype_gapfamily2\\n12\\iron.vol",
+    "iron_vol_sha256": "932f99b95303e9dba2f40a43fca574d8e97430b5b68d109d7b06e3ead8aeb978",
+    "kelvin_domain_vol": "C:\\temp\\ctype_gapfamily2\\n12\\kelvin_domain.vol",
+    "kelvin_domain_vol_sha256": "3c14c671a07f724ec548d182a2dba4cff60be2c4f352dbc7ba6cdfa0ccec75b5"
+  },
+  "inventory": {
+    "iron": {
+      "elements": 542,
+      "vertices": 211,
+      "materials": [
+        "iron"
+      ],
+      "boundaries": [
+        "iron_boundary"
+      ],
+      "volume_element_vertex_counts": [
+        4
+      ]
+    },
+    "kelvin_domain": {
+      "elements": 528094,
+      "vertices": 88847,
+      "materials": [
+        "iron",
+        "air",
+        "kelvin"
+      ],
+      "boundaries": [
+        "iron_air_interface",
+        "kelvin_ext",
+        "kelvin_int"
+      ],
+      "volume_element_vertex_counts": [
+        4
+      ]
+    }
+  },
+  "checks": {
+    "iron": {
+      "run": {
+        "command": [
+          "check-vol",
+          "C:\\temp\\ctype_gapfamily2\\n12\\iron.vol",
+          "--strict-labels",
+          "--required-materials",
+          "iron",
+          "--required-boundaries",
+          "iron_boundary",
+          "--report-json",
+          "C:\\temp\\ctype_gapfamily2\\n12\\iron.vol-check.json",
+          "--format",
+          "json"
+        ],
+        "returncode": 0,
+        "runtime_s": 0.5463013999979012,
+        "log": "C:\\temp\\ctype_gapfamily2\\n12\\iron.check-vol.log"
+      },
+      "report": "C:\\temp\\ctype_gapfamily2\\n12\\iron.vol-check.json",
+      "payload": {
+        "schema": "cubit-mesh-export.vol-check.v1",
+        "generated_at_utc": "2026-09-11T10:19:14.930543+00:00",
+        "versions": {
+          "cubit_mesh_export": "0.14.17",
+          "ngsolve": "6.2.2606",
+          "python": "3.12.10"
+        },
+        "passed": true,
+        "vol_file": "C:\\temp\\ctype_gapfamily2\\n12\\iron.vol",
+        "json_file": "C:\\temp\\ctype_gapfamily2\\n12\\iron.vol.json",
+        "threshold_pct": 1.0,
+        "cad_reference": {
+          "available": true,
+          "file": "C:\\temp\\ctype_gapfamily2\\n12\\iron.vol.json",
+          "auto_discovered": true,
+          "mesh_only_materials": [],
+          "metadata_checks": {
+            "n_elements": {
+              "expected": 542,
+              "actual": 542,
+              "passed": true
+            },
+            "n_points": {
+              "expected": 211,
+              "actual": 211,
+              "passed": true
+            },
+            "order": {
+              "expected": 1,
+              "actual": 1,
+              "passed": true
+            }
+          }
+        },
+        "mesh": {
+          "dimension": 3,
+          "curve_order": 1,
+          "n_elements": 542,
+          "n_points": 211
+        },
+        "order": 1,
+        "n_elements": 542,
+        "n_points": 211,
+        "labels": {
+          "schema": "radia.vol-label-contract.v1",
+          "passed": true,
+          "application": null,
+          "strict_labels": true,
+          "materials": [
+            "iron"
+          ],
+          "boundaries": [
+            "iron_boundary"
+          ],
+          "bboundaries": [
+            "default"
+          ],
+          "bbboundaries": [],
+          "required": {
+            "materials": [
+              "iron"
+            ],
+            "boundaries": [
+              "iron_boundary"
+            ],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "allowed": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "allowed_specified": {
+            "materials": false,
+            "boundaries": false,
+            "bboundaries": false,
+            "bbboundaries": false
+          },
+          "missing": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "unexpected": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "invalid": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "autogenerated": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "casefold_collisions": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "relational_issues": [],
+          "warnings": []
+        },
+        "quality": {
+          "passed": true,
+          "curve_order": 1,
+          "integration_order": 1,
+          "volume_element_count": 542,
+          "tetrahedron_count": 542,
+          "mapping_sample_count": 542,
+          "finite_jacobian_sample_count": 542,
+          "finite_scaled_jacobian_sample_count": 542,
+          "minimum_jacobian": -3.91158731122004e-05,
+          "maximum_jacobian": -1.7019996607713008e-06,
+          "minimum_absolute_jacobian": 1.7019996607713008e-06,
+          "minimum_scaled_jacobian": 0.3094180518839941,
+          "invalid_jacobian_sample_count": 0,
+          "orientation_flip_sample_count": 0,
+          "negative_jacobian_sample_count": 542,
+          "positive_orientation_element_count": 0,
+          "negative_orientation_element_count": 542,
+          "low_scaled_jacobian_sample_count": 0,
+          "invalid_jacobian_elements": [],
+          "low_scaled_jacobian_elements": [],
+          "materials": [
+            "iron"
+          ],
+          "boundaries": [
+            "iron_boundary"
+          ],
+          "missing_materials": [],
+          "missing_boundaries": [],
+          "adjacency": {
+            "enabled": false,
+            "conductive_materials": [],
+            "air_materials": [
+              "air",
+              "vacuum"
+            ]
+          },
+          "warnings": []
+        },
+        "boundary_domain_ownership": {
+          "passed": true,
+          "volume_element_count": 542,
+          "surface_element_count": 368,
+          "volume_domain_counts": {
+            "1": 542
+          },
+          "surface_domain_pair_counts": {
+            "1->0": 368
+          },
+          "domain_surface_incidence_counts": {
+            "1": 368
+          },
+          "exterior_surface_element_count": 368,
+          "exterior_surface_domain_counts": {
+            "1": 368
+          },
+          "internal_interface_element_count": 0,
+          "internal_interface_domain_pair_counts": {},
+          "material_ids": [
+            1
+          ],
+          "missing_material_ids": [],
+          "unknown_surface_domains": [],
+          "unreferenced_volume_domains": [],
+          "invalid_volume_rows": [],
+          "invalid_surface_rows": [],
+          "invalid_surface_connectivity_rows": [],
+          "duplicate_surface_connectivity_rows": [],
+          "zero_zero_rows": [],
+          "equal_domain_rows": [],
+          "issues": []
+        },
+        "materials": [
+          {
+            "name": "iron",
+            "ng_volume": 0.0014460953333333623,
+            "cad_volume": 0.001446095333333334,
+            "error_pct": 1.9643308614821757e-12
+          }
+        ],
+        "boundaries": [
+          {
+            "name": "iron_boundary",
+            "ng_area": 0.11760085771569836,
+            "cad_area": 0.11760085771569954,
+            "error_pct": -1.0030640818249342e-12
+          }
+        ],
+        "edges": [
+          {
+            "name": "default",
+            "ng_length": 3.5538512516844
+          },
+          {
+            "name": "curve_10",
+            "cad_length": 0.024
+          },
+          {
+            "name": "curve_103",
+            "cad_length": 0.055
+          },
+          {
+            "name": "curve_104",
+            "cad_length": 0.055
+          },
+          {
+            "name": "curve_105",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_106",
+            "cad_length": 0.08000000000000002
+          },
+          {
+            "name": "curve_107",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_108",
+            "cad_length": 0.08000000000000002
+          },
+          {
+            "name": "curve_109",
+            "cad_length": 0.10500000000000001
+          },
+          {
+            "name": "curve_11",
+            "cad_length": 0.034
+          },
+          {
+            "name": "curve_110",
+            "cad_length": 0.10500000000000001
+          },
+          {
+            "name": "curve_111",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_112",
+            "cad_length": 0.1825
+          },
+          {
+            "name": "curve_113",
+            "cad_length": 0.1825
+          },
+          {
+            "name": "curve_114",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_115",
+            "cad_length": 0.09200000000000001
+          },
+          {
+            "name": "curve_116",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_117",
+            "cad_length": 0.09200000000000001
+          },
+          {
+            "name": "curve_118",
+            "cad_length": 0.042
+          },
+          {
+            "name": "curve_119",
+            "cad_length": 0.04
+          },
+          {
+            "name": "curve_12",
+            "cad_length": 0.024
+          },
+          {
+            "name": "curve_120",
+            "cad_length": 0.042
+          },
+          {
+            "name": "curve_121",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_122",
+            "cad_length": 0.04
+          },
+          {
+            "name": "curve_123",
+            "cad_length": 0.034
+          },
+          {
+            "name": "curve_124",
+            "cad_length": 0.024
+          },
+          {
+            "name": "curve_125",
+            "cad_length": 0.034
+          },
+          {
+            "name": "curve_126",
+            "cad_length": 0.024
+          },
+          {
+            "name": "curve_127",
+            "cad_length": 0.01385640646055102
+          },
+          {
+            "name": "curve_128",
+            "cad_length": 0.01385640646055102
+          },
+          {
+            "name": "curve_129",
+            "cad_length": 0.01385640646055102
+          },
+          {
+            "name": "curve_13",
+            "cad_length": 0.01385640646055102
+          },
+          {
+            "name": "curve_130",
+            "cad_length": 0.01385640646055102
+          },
+          {
+            "name": "curve_14",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_15",
+            "cad_length": 0.01385640646055102
+          },
+          {
+            "name": "curve_16",
+            "cad_length": 0.01385640646055102
+          },
+          {
+            "name": "curve_17",
+            "cad_length": 0.04
+          },
+          {
+            "name": "curve_18",
+            "cad_length": 0.01385640646055102
+          },
+          {
+            "name": "curve_19",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_20",
+            "cad_length": 0.04
+          },
+          {
+            "name": "curve_29",
+            "cad_length": 0.09200000000000001
+          },
+          {
+            "name": "curve_45",
+            "cad_length": 0.1825
+          },
+          {
+            "name": "curve_48",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_54",
+            "cad_length": 0.09200000000000001
+          },
+          {
+            "name": "curve_70",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_71",
+            "cad_length": 0.1825
+          },
+          {
+            "name": "curve_85",
+            "cad_length": 0.0625
+          },
+          {
+            "name": "curve_86",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_87",
+            "cad_length": 0.0625
+          },
+          {
+            "name": "curve_88",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_89",
+            "cad_length": 0.055
+          },
+          {
+            "name": "curve_9",
+            "cad_length": 0.034
+          },
+          {
+            "name": "curve_90",
+            "cad_length": 0.055
+          },
+          {
+            "name": "curve_91",
+            "cad_length": 0.10500000000000001
+          },
+          {
+            "name": "curve_92",
+            "cad_length": 0.10500000000000001
+          },
+          {
+            "name": "curve_93",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_94",
+            "cad_length": 0.08000000000000002
+          },
+          {
+            "name": "curve_95",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_96",
+            "cad_length": 0.08000000000000002
+          },
+          {
+            "name": "curve_97",
+            "cad_length": 0.042
+          },
+          {
+            "name": "curve_98",
+            "cad_length": 0.042
+          }
+        ],
+        "edge_check": {
+          "available": true,
+          "error": null,
+          "per_edge_mapping": "best-effort",
+          "total_length_comparison": "used for the CAD gate when edges exist"
+        },
+        "warnings": [],
+        "total_edge_length": {
+          "cad": 3.5538512516844083,
+          "ng": 3.5538512516844,
+          "error_pct": -2.3742397724586815e-13
+        }
+      }
+    },
+    "kelvin_domain": {
+      "run": {
+        "command": [
+          "check-vol",
+          "C:\\temp\\ctype_gapfamily2\\n12\\kelvin_domain.vol",
+          "--strict-labels",
+          "--required-materials",
+          "iron,air,kelvin",
+          "--required-boundaries",
+          "iron_air_interface,kelvin_int,kelvin_ext",
+          "--air-materials",
+          "air,kelvin",
+          "--report-json",
+          "C:\\temp\\ctype_gapfamily2\\n12\\kelvin_domain.vol-check.json",
+          "--format",
+          "json"
+        ],
+        "returncode": 0,
+        "runtime_s": 73.51903909997782,
+        "log": "C:\\temp\\ctype_gapfamily2\\n12\\kelvin_domain.check-vol.log"
+      },
+      "report": "C:\\temp\\ctype_gapfamily2\\n12\\kelvin_domain.vol-check.json",
+      "payload": {
+        "schema": "cubit-mesh-export.vol-check.v1",
+        "generated_at_utc": "2026-09-11T10:20:28.476739+00:00",
+        "versions": {
+          "cubit_mesh_export": "0.14.17",
+          "ngsolve": "6.2.2606",
+          "python": "3.12.10"
+        },
+        "passed": true,
+        "vol_file": "C:\\temp\\ctype_gapfamily2\\n12\\kelvin_domain.vol",
+        "json_file": "C:\\temp\\ctype_gapfamily2\\n12\\kelvin_domain.vol.json",
+        "threshold_pct": 1.0,
+        "cad_reference": {
+          "available": true,
+          "file": "C:\\temp\\ctype_gapfamily2\\n12\\kelvin_domain.vol.json",
+          "auto_discovered": true,
+          "mesh_only_materials": [],
+          "metadata_checks": {
+            "n_elements": {
+              "expected": 528094,
+              "actual": 528094,
+              "passed": true
+            },
+            "n_points": {
+              "expected": 88847,
+              "actual": 88847,
+              "passed": true
+            },
+            "order": {
+              "expected": 2,
+              "actual": 2,
+              "passed": true
+            }
+          }
+        },
+        "mesh": {
+          "dimension": 3,
+          "curve_order": 2,
+          "n_elements": 528094,
+          "n_points": 88847
+        },
+        "order": 2,
+        "n_elements": 528094,
+        "n_points": 88847,
+        "labels": {
+          "schema": "radia.vol-label-contract.v1",
+          "passed": true,
+          "application": null,
+          "strict_labels": true,
+          "materials": [
+            "air",
+            "iron",
+            "kelvin"
+          ],
+          "boundaries": [
+            "iron_air_interface",
+            "kelvin_ext",
+            "kelvin_int"
+          ],
+          "bboundaries": [
+            "default"
+          ],
+          "bbboundaries": [
+            "GND"
+          ],
+          "required": {
+            "materials": [
+              "air",
+              "iron",
+              "kelvin"
+            ],
+            "boundaries": [
+              "iron_air_interface",
+              "kelvin_ext",
+              "kelvin_int"
+            ],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "allowed": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "allowed_specified": {
+            "materials": false,
+            "boundaries": false,
+            "bboundaries": false,
+            "bbboundaries": false
+          },
+          "missing": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "unexpected": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "invalid": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "autogenerated": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "casefold_collisions": {
+            "materials": [],
+            "boundaries": [],
+            "bboundaries": [],
+            "bbboundaries": []
+          },
+          "relational_issues": [],
+          "warnings": []
+        },
+        "quality": {
+          "passed": true,
+          "curve_order": 2,
+          "integration_order": 6,
+          "volume_element_count": 528094,
+          "tetrahedron_count": 528094,
+          "mapping_sample_count": 33798016,
+          "finite_jacobian_sample_count": 33798016,
+          "finite_scaled_jacobian_sample_count": 33798016,
+          "minimum_jacobian": -0.0001643274614301215,
+          "maximum_jacobian": -1.329998446161504e-10,
+          "minimum_absolute_jacobian": 1.329998446161504e-10,
+          "minimum_scaled_jacobian": 0.16565704944481133,
+          "invalid_jacobian_sample_count": 0,
+          "orientation_flip_sample_count": 0,
+          "negative_jacobian_sample_count": 33798016,
+          "positive_orientation_element_count": 0,
+          "negative_orientation_element_count": 528094,
+          "low_scaled_jacobian_sample_count": 0,
+          "invalid_jacobian_elements": [],
+          "low_scaled_jacobian_elements": [],
+          "materials": [
+            "air",
+            "iron",
+            "kelvin"
+          ],
+          "boundaries": [
+            "iron_air_interface",
+            "kelvin_ext",
+            "kelvin_int"
+          ],
+          "missing_materials": [],
+          "missing_boundaries": [],
+          "adjacency": {
+            "enabled": false,
+            "conductive_materials": [],
+            "air_materials": [
+              "air",
+              "kelvin"
+            ]
+          },
+          "warnings": []
+        },
+        "boundary_domain_ownership": {
+          "passed": true,
+          "volume_element_count": 528094,
+          "surface_element_count": 10664,
+          "volume_domain_counts": {
+            "1": 52982,
+            "2": 470256,
+            "3": 4856
+          },
+          "surface_domain_pair_counts": {
+            "1->2": 8824,
+            "2->0": 920,
+            "3->0": 920
+          },
+          "domain_surface_incidence_counts": {
+            "1": 8824,
+            "2": 9744,
+            "3": 920
+          },
+          "exterior_surface_element_count": 1840,
+          "exterior_surface_domain_counts": {
+            "2": 920,
+            "3": 920
+          },
+          "internal_interface_element_count": 8824,
+          "internal_interface_domain_pair_counts": {
+            "1<->2": 8824
+          },
+          "material_ids": [
+            1,
+            2,
+            3
+          ],
+          "missing_material_ids": [],
+          "unknown_surface_domains": [],
+          "unreferenced_volume_domains": [],
+          "invalid_volume_rows": [],
+          "invalid_surface_rows": [],
+          "invalid_surface_connectivity_rows": [],
+          "duplicate_surface_connectivity_rows": [],
+          "zero_zero_rows": [],
+          "equal_domain_rows": [],
+          "issues": []
+        },
+        "materials": [
+          {
+            "name": "air",
+            "ng_volume": 0.04315484290535568,
+            "cad_volume": 0.04315612457217516,
+            "error_pct": -0.00296983761212595
+          },
+          {
+            "name": "iron",
+            "ng_volume": 0.0014460953333333688,
+            "cad_volume": 0.001446095333333334,
+            "error_pct": 2.414177623653666e-12
+          },
+          {
+            "name": "kelvin",
+            "ng_volume": 0.04460093823847139,
+            "cad_volume": 0.0446022381005655,
+            "error_pct": -0.0029143427537958217
+          }
+        ],
+        "boundaries": [
+          {
+            "name": "iron_air_interface",
+            "ng_area": 0.11760085771569312,
+            "cad_area": 0.11760085771569954,
+            "error_pct": -5.463749057469935e-12
+          },
+          {
+            "name": "kelvin_ext",
+            "ng_area": 0.6082005475725212,
+            "cad_area": 0.608212337734984,
+            "error_pct": -0.0019384944584787916
+          },
+          {
+            "name": "kelvin_int",
+            "ng_area": 0.6082005475725205,
+            "cad_area": 0.608212337734984,
+            "error_pct": -0.0019384944585883147
+          }
+        ],
+        "edges": [
+          {
+            "name": "default",
+            "ng_length": 9.218442208983902
+          },
+          {
+            "name": "curve_10",
+            "cad_length": 0.024
+          },
+          {
+            "name": "curve_11",
+            "cad_length": 0.034
+          },
+          {
+            "name": "curve_12",
+            "cad_length": 0.024
+          },
+          {
+            "name": "curve_13",
+            "cad_length": 0.01385640646055102
+          },
+          {
+            "name": "curve_14",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_145",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_146",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_147",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_148",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_15",
+            "cad_length": 0.01385640646055102
+          },
+          {
+            "name": "curve_151",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_153",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_155",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_156",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_16",
+            "cad_length": 0.01385640646055102
+          },
+          {
+            "name": "curve_169",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_17",
+            "cad_length": 0.04
+          },
+          {
+            "name": "curve_170",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_171",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_172",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_18",
+            "cad_length": 0.01385640646055102
+          },
+          {
+            "name": "curve_181",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_182",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_183",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_184",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_185",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_186",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_187",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_188",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_19",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_197",
+            "cad_length": 0.0008333333333333333
+          },
+          {
+            "name": "curve_198",
+            "cad_length": 0.0008333333333333333
+          },
+          {
+            "name": "curve_199",
+            "cad_length": 0.0008333333333333333
+          },
+          {
+            "name": "curve_20",
+            "cad_length": 0.04
+          },
+          {
+            "name": "curve_200",
+            "cad_length": 0.0008333333333333333
+          },
+          {
+            "name": "curve_201",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_202",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_203",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_204",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_213",
+            "cad_length": 0.0008333333333333333
+          },
+          {
+            "name": "curve_214",
+            "cad_length": 0.0008333333333333333
+          },
+          {
+            "name": "curve_215",
+            "cad_length": 0.0008333333333333333
+          },
+          {
+            "name": "curve_216",
+            "cad_length": 0.0008333333333333333
+          },
+          {
+            "name": "curve_217",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_218",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_219",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_220",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_229",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_230",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_231",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_232",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_233",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_234",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_235",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_236",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_237",
+            "cad_length": 0.0008333333333333331
+          },
+          {
+            "name": "curve_238",
+            "cad_length": 0.0008333333333333331
+          },
+          {
+            "name": "curve_239",
+            "cad_length": 0.0008333333333333331
+          },
+          {
+            "name": "curve_240",
+            "cad_length": 0.0008333333333333331
+          },
+          {
+            "name": "curve_245",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_246",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_247",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_248",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_29",
+            "cad_length": 0.09200000000000001
+          },
+          {
+            "name": "curve_301",
+            "cad_length": 0.055
+          },
+          {
+            "name": "curve_302",
+            "cad_length": 0.055
+          },
+          {
+            "name": "curve_303",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_304",
+            "cad_length": 0.08000000000000002
+          },
+          {
+            "name": "curve_305",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_306",
+            "cad_length": 0.08000000000000002
+          },
+          {
+            "name": "curve_307",
+            "cad_length": 0.10500000000000001
+          },
+          {
+            "name": "curve_308",
+            "cad_length": 0.10500000000000001
+          },
+          {
+            "name": "curve_309",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_310",
+            "cad_length": 0.1825
+          },
+          {
+            "name": "curve_311",
+            "cad_length": 0.1825
+          },
+          {
+            "name": "curve_312",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_313",
+            "cad_length": 0.09200000000000001
+          },
+          {
+            "name": "curve_314",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_315",
+            "cad_length": 0.09200000000000001
+          },
+          {
+            "name": "curve_316",
+            "cad_length": 0.042
+          },
+          {
+            "name": "curve_317",
+            "cad_length": 0.04
+          },
+          {
+            "name": "curve_318",
+            "cad_length": 0.042
+          },
+          {
+            "name": "curve_319",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_320",
+            "cad_length": 0.04
+          },
+          {
+            "name": "curve_321",
+            "cad_length": 0.034
+          },
+          {
+            "name": "curve_322",
+            "cad_length": 0.024
+          },
+          {
+            "name": "curve_323",
+            "cad_length": 0.034
+          },
+          {
+            "name": "curve_324",
+            "cad_length": 0.024
+          },
+          {
+            "name": "curve_325",
+            "cad_length": 0.01385640646055102
+          },
+          {
+            "name": "curve_326",
+            "cad_length": 0.01385640646055102
+          },
+          {
+            "name": "curve_327",
+            "cad_length": 0.01385640646055102
+          },
+          {
+            "name": "curve_328",
+            "cad_length": 0.01385640646055102
+          },
+          {
+            "name": "curve_329",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_330",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_331",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_332",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_333",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_334",
+            "cad_length": 0.0008333333333333331
+          },
+          {
+            "name": "curve_335",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_336",
+            "cad_length": 0.0008333333333333331
+          },
+          {
+            "name": "curve_337",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_338",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_339",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_340",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_341",
+            "cad_length": 0.0008333333333333331
+          },
+          {
+            "name": "curve_342",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_343",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_344",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_345",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_346",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_347",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_348",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_349",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_350",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_351",
+            "cad_length": 0.0008333333333333331
+          },
+          {
+            "name": "curve_352",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_353",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_354",
+            "cad_length": 0.0008333333333333333
+          },
+          {
+            "name": "curve_355",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_356",
+            "cad_length": 0.0008333333333333333
+          },
+          {
+            "name": "curve_357",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_358",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_359",
+            "cad_length": 0.0008333333333333333
+          },
+          {
+            "name": "curve_360",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_361",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_362",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_363",
+            "cad_length": 0.0008333333333333333
+          },
+          {
+            "name": "curve_364",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_365",
+            "cad_length": 0.0008333333333333333
+          },
+          {
+            "name": "curve_366",
+            "cad_length": 0.0008333333333333333
+          },
+          {
+            "name": "curve_367",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_368",
+            "cad_length": 0.0008333333333333333
+          },
+          {
+            "name": "curve_369",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_370",
+            "cad_length": 0.06
+          },
+          {
+            "name": "curve_371",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_373",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_374",
+            "cad_length": 0.0008333333333333333
+          },
+          {
+            "name": "curve_375",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_376",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_382",
+            "cad_length": 0.0008333333333333335
+          },
+          {
+            "name": "curve_45",
+            "cad_length": 0.1825
+          },
+          {
+            "name": "curve_48",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_490",
+            "cad_length": 1.382300767579509
+          },
+          {
+            "name": "curve_54",
+            "cad_length": 0.09200000000000001
+          },
+          {
+            "name": "curve_70",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_71",
+            "cad_length": 0.1825
+          },
+          {
+            "name": "curve_85",
+            "cad_length": 0.0625
+          },
+          {
+            "name": "curve_86",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_87",
+            "cad_length": 0.0625
+          },
+          {
+            "name": "curve_88",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_89",
+            "cad_length": 0.055
+          },
+          {
+            "name": "curve_9",
+            "cad_length": 0.034
+          },
+          {
+            "name": "curve_90",
+            "cad_length": 0.055
+          },
+          {
+            "name": "curve_91",
+            "cad_length": 0.10500000000000001
+          },
+          {
+            "name": "curve_92",
+            "cad_length": 0.10500000000000001
+          },
+          {
+            "name": "curve_93",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_94",
+            "cad_length": 0.08000000000000002
+          },
+          {
+            "name": "curve_95",
+            "cad_length": 0.05
+          },
+          {
+            "name": "curve_96",
+            "cad_length": 0.08000000000000002
+          },
+          {
+            "name": "curve_97",
+            "cad_length": 0.042
+          },
+          {
+            "name": "curve_98",
+            "cad_length": 0.042
+          },
+          {
+            "name": "curve_99",
+            "cad_length": 1.382300767579509
+          }
+        ],
+        "edge_check": {
+          "available": true,
+          "error": null,
+          "per_edge_mapping": "best-effort",
+          "total_length_comparison": "used for the CAD gate when edges exist"
+        },
+        "warnings": [],
+        "total_edge_length": {
+          "cad": 9.218452786843427,
+          "ng": 9.218442208983902,
+          "error_pct": -0.00011474658242304587
+        }
+      }
+    }
+  },
+  "runs": {
+    "iron": {
+      "command": [
+        "C:\\Program Files\\Coreform Cubit 2025.12\\bin\\coreform_cubit.com",
+        "-nographics",
+        "-batch",
+        "-nojournal",
+        "-input",
+        "C:\\temp\\ctype_gapfamily2\\n12\\build_iron.jou"
+      ],
+      "returncode": 0,
+      "runtime_s": 1.4685565999825485,
+      "log": "C:\\temp\\ctype_gapfamily2\\n12\\iron.cubit.log"
+    },
+    "kelvin_domain": {
+      "command": [
+        "C:\\Program Files\\Coreform Cubit 2025.12\\bin\\coreform_cubit.com",
+        "-nographics",
+        "-batch",
+        "-nojournal",
+        "-input",
+        "C:\\temp\\ctype_gapfamily2\\n12\\build_kelvin_domain.jou"
+      ],
+      "returncode": 0,
+      "runtime_s": 38.1583096999675,
+      "log": "C:\\temp\\ctype_gapfamily2\\n12\\kelvin_domain.cubit.log"
+    }
+  }
+}
