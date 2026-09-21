@@ -45,6 +45,12 @@ if "192.168.11.100" in _norm and "/Radia/01_GitHub" in _norm:
 # Trowbridge's mixed total/reduced scalar potential (``simkin1980three``).
 SCRUBBED_BRANDS = ("TOSCA",)
 
+# Policy 10: solvers whose MCP servers must never be published, whatever the
+# repository they live in.  This is a stricter rule than Policy 9 and does not
+# wait for a brand's prose scrub: a catalog entry carries an install path and a
+# repository URL, so it publishes the server rather than merely naming a tool.
+COMMERCIAL_SOLVERS = ("COMSOL", "FEMM", "JMAG", "CST", "TOSCA", "Opera")
+
 # Policy 9 allowlist: surfaces that name a brand for a legitimate reason --
 # a citation of published work, or a declaration that something is absent.
 BRAND_CITATION_ALLOW = (
@@ -195,6 +201,27 @@ def check_all():
     results.append((f"Policy 9: no scrubbed commercial brand "
                     f"({'/'.join(SCRUBBED_BRANDS)}) in Radia code or results",
                     not bad, bad[0] if bad else "ok"))
+
+    # 10: the published radia-mcp catalog must not advertise an MCP server for
+    # a commercial solver.  Naming the reference tools is one thing; shipping
+    # a public directory entry with their install path and repository URL
+    # publishes the servers themselves, which the boundary forbids outright.
+    catalog = os.path.join(REPO, "packages", "radia-mcp", "src", "radia_mcp",
+                           "meta", "catalog.py")
+    bad = []
+    try:
+        with open(catalog, encoding="utf-8") as f:
+            entries = re.findall(r'^    "([A-Za-z0-9_-]+)": \{\n(.*?)^    \},$',
+                                 f.read(), re.S | re.M)
+        for name, body in entries:
+            named = [b for b in COMMERCIAL_SOLVERS
+                     if re.search(rf"\b{b}\b", name + body, re.I)]
+            if named:
+                bad.append(f"catalog entry {name!r} advertises {'/'.join(named)}")
+    except OSError as exc:
+        bad.append(f"cannot read the radia-mcp catalog: {exc}")
+    results.append(("Policy 10: the public MCP catalog advertises no "
+                    "commercial-solver server", not bad, bad[0] if bad else "ok"))
 
     return results
 
