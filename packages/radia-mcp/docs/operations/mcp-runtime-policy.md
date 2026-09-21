@@ -82,6 +82,19 @@ identity. Use registration-time provenance when exposed and a harmless changed
 tool call. Report contradictory evidence as unverified, with a mixed-generation
 reason; one verified client does not establish all clients are current.
 
+The intended source per host, interpreter and package is a recorded fact, not
+an inference. `python tools/release_quad.py repoint` (and Phase 8 of a release)
+writes it to `%ProgramData%\Radia\editable-intent.json`
+(`RADIA_EDITABLE_INTENT_FILE`) together with the previous pointer, commit,
+actor, time and reason, and appends every change to a log beside it.
+`verify-editable` and `tools/verify_lab_editable.py` compare installations with
+that record. A package without a record is UNVERIFIED, not drift, and no tool
+proposes a repair target for it: record the current pointer if it is intended
+(`repoint --record-current --reason ...`) or move it explicitly. `repoint` does
+not uninstall first and does not stop processes. A pushed ref is required only
+for formal handoff or completion evidence (`repoint --require-pushed`), not for
+routine MCP development.
+
 ## Reload And Reconnect
 
 Editing source or running pip does not refresh existing Python objects or tool
