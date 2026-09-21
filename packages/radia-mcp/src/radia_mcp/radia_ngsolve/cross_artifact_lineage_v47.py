@@ -85,7 +85,7 @@ def validate_public_identity(payload: object) -> dict[str, object]:
     if not checks:
         return {}
     return {
-        "policy": "comsol_v47_public_identity_v1",
+        "policy": "multiphysics_v47_public_identity_v1",
         "status": "ok" if all(checks.values()) else "needs_attention",
         "checks": checks,
         "issues": [name for name, ok in checks.items() if not ok],

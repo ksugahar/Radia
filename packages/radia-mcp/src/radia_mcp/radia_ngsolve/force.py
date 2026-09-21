@@ -2381,8 +2381,10 @@ def parallel_wire_force_result_package_gate(
         "force_units_are_per_length": "n/m" in units_compact or "n_per_m" in units_compact,
         "force_unit_basis_is_per_length": force_unit_basis == "per_length",
         "depth_integrated_force_not_used_for_per_length_gate": force_unit_basis != "depth_integrated",
-        "femm_planar_depth_recorded": not femm_source or planar_depth_m is not None,
-        "femm_planar_depth_positive": planar_depth_m is None or planar_depth_m > 0.0,
+        "magnetostatic_2d_planar_depth_recorded":
+            not femm_source or planar_depth_m is not None,
+        "magnetostatic_2d_planar_depth_positive":
+            planar_depth_m is None or planar_depth_m > 0.0,
         "problem_type_recorded": expected_problem is None or bool(problem_type_normalized),
         "expected_problem_type_matches": expected_problem is None
         or problem_type_normalized == expected_problem,

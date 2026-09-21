@@ -15,7 +15,7 @@ def test_presentation_bedrock_uses_shared_hedge_scanner():
 @pytest.mark.parametrize("coordinates", ["1, 2, 3", "1;2;3", "1 2 3"])
 @pytest.mark.parametrize("gate_name,packet,keyword,sequence", [
     ("cst_touchstone_solver_ready_manifest_gate", [{}], "expected_port_face_centers_xyz_m", True),
-    ("jmag_force_table_metadata_gate", {"columns": ["Fx"]}, "expected_target_region_centroid_xyz_m", False),
+    ("motor_fem_force_table_metadata_gate", {"columns": ["Fx"]}, "expected_target_region_centroid_xyz_m", False),
     ("pm_demag_margin_screening_package_gate", [{}], "expected_field_probe_point_xyz_m", False),
 ])
 def test_public_gate_string_coordinates_match_numeric_coordinates(

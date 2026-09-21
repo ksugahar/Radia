@@ -22,10 +22,10 @@ def validate_public_v45_identity(identity: object) -> dict[str, bool]:
     checks: dict[str, bool] = {}
     force = identity.get("v45_public_axisymmetric_force_torque_coenergy_stress_contour_owner_mismatch")
     if isinstance(force, Mapping):
-        checks["femm_v45_axisymmetric_force_contour_generation"] = _closed(
+        checks["magnetostatic_2d_v45_axisymmetric_force_contour_generation"] = _closed(
             force, ("force_generation", "torque_generation", "coenergy_generation", "stress_contour_generation", "axis_factor_generation", "mesh_generation", "result_generation")
         )
-        checks["femm_v45_axisymmetric_force_contour_values"] = (
+        checks["magnetostatic_2d_v45_axisymmetric_force_contour_values"] = (
             force.get("force_method") == "weighted_stress_tensor"
             and force.get("result_force_method") == force.get("force_method")
             and force.get("torque_method") == "airgap_contour"
@@ -34,7 +34,7 @@ def validate_public_v45_identity(identity: object) -> dict[str, bool]:
             and math.isclose(float(force.get("torque_nm")), float(force.get("result_torque_nm")), rel_tol=1e-12)
             and math.isclose(float(force.get("coenergy_j")), float(force.get("result_coenergy_j")), rel_tol=1e-12)
         )
-        checks["femm_v45_axisymmetric_force_contour_owner"] = (
+        checks["magnetostatic_2d_v45_axisymmetric_force_contour_owner"] = (
             math.isclose(float(force.get("axisymmetric_factor")), 2.0 * math.pi, rel_tol=1e-12)
             and force.get("result_axisymmetric_factor") == force.get("axisymmetric_factor")
             and str(force.get("contour_owner", "")).startswith("contour:")
@@ -46,14 +46,14 @@ def validate_public_v45_identity(identity: object) -> dict[str, bool]:
         )
     fringe = identity.get("v45_public_electrostatic_fringe_charge_energy_capacitance_interface_flux_axisfactor_mismatch")
     if isinstance(fringe, Mapping):
-        checks["femm_v45_electrostatic_fringe_generation"] = _closed(
+        checks["magnetostatic_2d_v45_electrostatic_fringe_generation"] = _closed(
             fringe, ("charge_generation", "energy_generation", "capacitance_generation", "interface_generation", "axis_factor_generation", "mesh_generation", "result_generation")
         )
         voltage = float(fringe.get("voltage_v"))
         capacitance = float(fringe.get("capacitance_f"))
         charge = float(fringe.get("charge_c"))
         energy = float(fringe.get("stored_energy_j"))
-        checks["femm_v45_electrostatic_fringe_values"] = (
+        checks["magnetostatic_2d_v45_electrostatic_fringe_values"] = (
             voltage > 0.0 and fringe.get("result_voltage_v") == voltage
             and capacitance > 0.0 and fringe.get("result_capacitance_f") == capacitance
             and math.isclose(charge, capacitance * voltage, rel_tol=1e-12)
@@ -62,7 +62,7 @@ def validate_public_v45_identity(identity: object) -> dict[str, bool]:
             and fringe.get("result_stored_energy_j") == energy
             and fringe.get("result_interface_flux_c") == charge
         )
-        checks["femm_v45_electrostatic_fringe_owner"] = (
+        checks["magnetostatic_2d_v45_electrostatic_fringe_owner"] = (
             math.isclose(float(fringe.get("axisymmetric_factor")), 2.0 * math.pi, rel_tol=1e-12)
             and fringe.get("result_axisymmetric_factor") == fringe.get("axisymmetric_factor")
             and str(fringe.get("mesh_owner", "")).startswith("mesh:")

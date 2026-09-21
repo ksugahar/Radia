@@ -273,16 +273,16 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     row = {
         "model_id": "slot188_parallel_wire_pair_v1",
         "operating_point_id": "I1_10A_I2_5A_d_20mm",
-        "artifact_id": "femm_slot228_parallel_wire_recovered_table_A",
+        "artifact_id": "magnetostatic_2d_slot228_parallel_wire_recovered_table_A",
         "result_set_id": "rs_I1_10A_I2_5A_d_20mm_v1",
-        "parameter_set_artifact_id": "femm_slot392_parallel_wire_parameter_set_v1.json",
+        "parameter_set_artifact_id": "magnetostatic_2d_slot392_parallel_wire_parameter_set_v1.json",
         "parameter_set_digest": "sha256:slot392-parallel-wire-parameter-set-v1",
         "parameter_set_path": "artifacts/femm/slot392_parallel_wire_parameter_set.json",
-        "model_input_artifact_id": "femm_slot378_parallel_wire_model_v1.fem",
+        "model_input_artifact_id": "magnetostatic_2d_slot378_parallel_wire_model_v1.fem",
         "model_input_digest": "sha256:slot378-parallel-wire-model-v1",
-        "model_input_path": "artifacts/femm/femm_slot378_parallel_wire_model_v1.fem",
-        "solution_artifact_id": "femm_slot252_parallel_wire_pair_v1.ans",
-        "block_label_artifact_id": "femm_slot276_parallel_wire_block_labels_v1.json",
+        "model_input_path": "artifacts/femm/magnetostatic_2d_slot378_parallel_wire_model_v1.fem",
+        "solution_artifact_id": "magnetostatic_2d_slot252_parallel_wire_pair_v1.ans",
+        "block_label_artifact_id": "magnetostatic_2d_slot276_parallel_wire_block_labels_v1.json",
         "solution_loaded": True,
         "source_tool": "FEMM",
         "source_function": "block_integral_force_normalized_to_wire2_radial_axis",
@@ -300,21 +300,21 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
         "force_sign_convention": "positive_radial_force_points_away_from_wire1_attraction_is_negative",
         "force_extraction_method": "weighted_stress_block_integral_xy",
         "block_integral_types": [18, 19],
-        "force_observable_id": "femm_slot300_weighted_stress_block_force_xy_v1",
-        "force_observable_family": "femm_weighted_stress_block_force_xy",
-        "force_convention_schema_id": "femm_parallel_wire_force_convention_v1",
-        "force_component_basis_schema_id": "femm_global_xy_radial_projection_basis_v1",
-        "postprocess_row_convention_schema_id": "femm_weighted_stress_force_row_convention_v1",
-        "objective_observable_id": "femm_slot392_force_objective_radial_N_per_m_v1",
+        "force_observable_id": "magnetostatic_2d_slot300_weighted_stress_block_force_xy_v1",
+        "force_observable_family": "magnetostatic_2d_weighted_stress_block_force_xy",
+        "force_convention_schema_id": "magnetostatic_2d_parallel_wire_force_convention_v1",
+        "force_component_basis_schema_id": "magnetostatic_2d_global_xy_radial_projection_basis_v1",
+        "postprocess_row_convention_schema_id": "magnetostatic_2d_weighted_stress_force_row_convention_v1",
+        "objective_observable_id": "magnetostatic_2d_slot392_force_objective_radial_N_per_m_v1",
         "objective_observable_family": "force_minimize_abs_radial_N_per_m",
         "current1_A": 10.0,
         "current2_A": 5.0,
-        "current_source_artifact_id": "femm_slot332_parallel_wire_current_definition_v1.json",
-        "current_definition_method": "femm_circuit_current_snapshot",
+        "current_source_artifact_id": "magnetostatic_2d_slot332_parallel_wire_current_definition_v1.json",
+        "current_definition_method": "magnetostatic_2d_circuit_current_snapshot",
         "separation_m": 0.02,
         "force_units": "N/m",
         "force_unit_basis": "per_length",
-        "force_unit_basis_schema_id": "femm_planar_force_per_length_depth_basis_v1",
+        "force_unit_basis_schema_id": "magnetostatic_2d_planar_force_per_length_depth_basis_v1",
         "problem_depth_m": 1.0,
         "problem_type": "planar",
         "length_unit": "meters",
@@ -330,16 +330,16 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
         row,
         expected_model_id="slot188_parallel_wire_pair_v1",
         expected_operating_point_id="I1_10A_I2_5A_d_20mm",
-        expected_artifact_id="femm_slot228_parallel_wire_recovered_table_A",
+        expected_artifact_id="magnetostatic_2d_slot228_parallel_wire_recovered_table_A",
         expected_result_set_id="rs_I1_10A_I2_5A_d_20mm_v1",
-        expected_parameter_set_artifact_id="femm_slot392_parallel_wire_parameter_set_v1.json",
+        expected_parameter_set_artifact_id="magnetostatic_2d_slot392_parallel_wire_parameter_set_v1.json",
         expected_parameter_set_digest="sha256:slot392-parallel-wire-parameter-set-v1",
         expected_parameter_set_path="artifacts/femm/slot392_parallel_wire_parameter_set.json",
-        expected_model_input_artifact_id="femm_slot378_parallel_wire_model_v1.fem",
+        expected_model_input_artifact_id="magnetostatic_2d_slot378_parallel_wire_model_v1.fem",
         expected_model_input_digest="sha256:slot378-parallel-wire-model-v1",
-        expected_model_input_path="artifacts/femm/femm_slot378_parallel_wire_model_v1.fem",
-        expected_solution_artifact_id="femm_slot252_parallel_wire_pair_v1.ans",
-        expected_block_label_artifact_id="femm_slot276_parallel_wire_block_labels_v1.json",
+        expected_model_input_path="artifacts/femm/magnetostatic_2d_slot378_parallel_wire_model_v1.fem",
+        expected_solution_artifact_id="magnetostatic_2d_slot252_parallel_wire_pair_v1.ans",
+        expected_block_label_artifact_id="magnetostatic_2d_slot276_parallel_wire_block_labels_v1.json",
         expected_source_tool="FEMM",
         expected_source_group_id=11,
         expected_target_group_id=12,
@@ -349,21 +349,21 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
         expected_target_region="wire_2_positive_current",
         expected_source_material="Copper",
         expected_target_material="Copper",
-        expected_force_observable_id="femm_slot300_weighted_stress_block_force_xy_v1",
-        expected_force_observable_family="femm_weighted_stress_block_force_xy",
-        expected_force_convention_schema_id="femm_parallel_wire_force_convention_v1",
-        expected_force_component_basis_schema_id="femm_global_xy_radial_projection_basis_v1",
-        expected_force_unit_basis_schema_id="femm_planar_force_per_length_depth_basis_v1",
-        expected_postprocess_row_convention_schema_id="femm_weighted_stress_force_row_convention_v1",
-        expected_objective_observable_id="femm_slot392_force_objective_radial_N_per_m_v1",
+        expected_force_observable_id="magnetostatic_2d_slot300_weighted_stress_block_force_xy_v1",
+        expected_force_observable_family="magnetostatic_2d_weighted_stress_block_force_xy",
+        expected_force_convention_schema_id="magnetostatic_2d_parallel_wire_force_convention_v1",
+        expected_force_component_basis_schema_id="magnetostatic_2d_global_xy_radial_projection_basis_v1",
+        expected_force_unit_basis_schema_id="magnetostatic_2d_planar_force_per_length_depth_basis_v1",
+        expected_postprocess_row_convention_schema_id="magnetostatic_2d_weighted_stress_force_row_convention_v1",
+        expected_objective_observable_id="magnetostatic_2d_slot392_force_objective_radial_N_per_m_v1",
         expected_objective_observable_family="force_minimize_abs_radial_N_per_m",
         expected_force_component_frame="global_cartesian_xy",
         expected_radial_projection_axis="wire1_to_wire2_separation_axis_positive_away_from_wire1",
         expected_force_sign_convention="positive_radial_force_points_away_from_wire1_attraction_is_negative",
         expected_force_extraction_method="weighted_stress_block_integral_xy",
         expected_block_integral_types=(18, 19),
-        expected_current_source_artifact_id="femm_slot332_parallel_wire_current_definition_v1.json",
-        expected_current_definition_method="femm_circuit_current_snapshot",
+        expected_current_source_artifact_id="magnetostatic_2d_slot332_parallel_wire_current_definition_v1.json",
+        expected_current_definition_method="magnetostatic_2d_circuit_current_snapshot",
         expected_problem_type="planar",
         expected_length_unit="meters",
         expected_frequency_hz=0.0,
@@ -383,7 +383,7 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     assert virtual["force_rel_error"] < 1.0e-8
     assert gate["policy"] == "parallel_wire_force_result_package_gate"
     assert gate["status"] == "ok"
-    assert gate["artifact_id"] == "femm_slot228_parallel_wire_recovered_table_A"
+    assert gate["artifact_id"] == "magnetostatic_2d_slot228_parallel_wire_recovered_table_A"
     assert gate["result_set_id"] == "rs_I1_10A_I2_5A_d_20mm_v1"
     assert gate["checks"]["artifact_id_recorded"] is True
     assert gate["checks"]["result_set_id_recorded"] is True
@@ -421,37 +421,37 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     assert gate["checks"]["expected_objective_observable_id_matches"] is True
     assert gate["checks"]["objective_observable_family_recorded"] is True
     assert gate["checks"]["expected_objective_observable_family_matches"] is True
-    assert gate["parameter_set_artifact_id"] == "femm_slot392_parallel_wire_parameter_set_v1.json"
+    assert gate["parameter_set_artifact_id"] == "magnetostatic_2d_slot392_parallel_wire_parameter_set_v1.json"
     assert gate["parameter_set_digest"] == "sha256:slot392-parallel-wire-parameter-set-v1"
     assert gate["parameter_set_path"].endswith("slot392_parallel_wire_parameter_set.json")
-    assert gate["expected_parameter_set_artifact_id"] == "femm_slot392_parallel_wire_parameter_set_v1.json"
+    assert gate["expected_parameter_set_artifact_id"] == "magnetostatic_2d_slot392_parallel_wire_parameter_set_v1.json"
     assert gate["expected_parameter_set_digest"] == "sha256:slot392-parallel-wire-parameter-set-v1"
     assert gate["expected_parameter_set_path"].endswith("slot392_parallel_wire_parameter_set.json")
-    assert gate["objective_observable_id"] == "femm_slot392_force_objective_radial_N_per_m_v1"
+    assert gate["objective_observable_id"] == "magnetostatic_2d_slot392_force_objective_radial_N_per_m_v1"
     assert gate["objective_observable_family"] == "force_minimize_abs_radial_N_per_m"
-    assert gate["expected_objective_observable_id"] == "femm_slot392_force_objective_radial_N_per_m_v1"
+    assert gate["expected_objective_observable_id"] == "magnetostatic_2d_slot392_force_objective_radial_N_per_m_v1"
     assert gate["expected_objective_observable_family"] == "force_minimize_abs_radial_N_per_m"
     assert gate["parameter_set_artifact_required"] is True
-    assert gate["force_observable_id"] == "femm_slot300_weighted_stress_block_force_xy_v1"
-    assert gate["force_observable_family"] == "femm_weighted_stress_block_force_xy"
-    assert gate["force_convention_schema_id"] == "femm_parallel_wire_force_convention_v1"
-    assert gate["expected_force_convention_schema_id"] == "femm_parallel_wire_force_convention_v1"
+    assert gate["force_observable_id"] == "magnetostatic_2d_slot300_weighted_stress_block_force_xy_v1"
+    assert gate["force_observable_family"] == "magnetostatic_2d_weighted_stress_block_force_xy"
+    assert gate["force_convention_schema_id"] == "magnetostatic_2d_parallel_wire_force_convention_v1"
+    assert gate["expected_force_convention_schema_id"] == "magnetostatic_2d_parallel_wire_force_convention_v1"
     assert gate["force_convention_schema_required"] is True
-    assert gate["force_component_basis_schema_id"] == "femm_global_xy_radial_projection_basis_v1"
-    assert gate["expected_force_component_basis_schema_id"] == "femm_global_xy_radial_projection_basis_v1"
+    assert gate["force_component_basis_schema_id"] == "magnetostatic_2d_global_xy_radial_projection_basis_v1"
+    assert gate["expected_force_component_basis_schema_id"] == "magnetostatic_2d_global_xy_radial_projection_basis_v1"
     assert gate["force_component_basis_schema_required"] is True
-    assert gate["force_unit_basis_schema_id"] == "femm_planar_force_per_length_depth_basis_v1"
-    assert gate["expected_force_unit_basis_schema_id"] == "femm_planar_force_per_length_depth_basis_v1"
+    assert gate["force_unit_basis_schema_id"] == "magnetostatic_2d_planar_force_per_length_depth_basis_v1"
+    assert gate["expected_force_unit_basis_schema_id"] == "magnetostatic_2d_planar_force_per_length_depth_basis_v1"
     assert gate["force_unit_basis_schema_required"] is True
-    assert gate["postprocess_row_convention_schema_id"] == "femm_weighted_stress_force_row_convention_v1"
-    assert gate["expected_postprocess_row_convention_schema_id"] == "femm_weighted_stress_force_row_convention_v1"
+    assert gate["postprocess_row_convention_schema_id"] == "magnetostatic_2d_weighted_stress_force_row_convention_v1"
+    assert gate["expected_postprocess_row_convention_schema_id"] == "magnetostatic_2d_weighted_stress_force_row_convention_v1"
     assert gate["expected_force_component_frame"] == "global_cartesian_xy"
     assert gate["expected_radial_projection_axis"] == "wire1_to_wire2_separation_axis_positive_away_from_wire1"
     assert gate["expected_force_sign_convention"] == "positive_radial_force_points_away_from_wire1_attraction_is_negative"
     assert gate["checks"]["solution_loaded_recorded"] is True
     assert gate["checks"]["solution_loaded_before_postprocess"] is True
-    assert gate["solution_artifact_id"] == "femm_slot252_parallel_wire_pair_v1.ans"
-    assert gate["block_label_artifact_id"] == "femm_slot276_parallel_wire_block_labels_v1.json"
+    assert gate["solution_artifact_id"] == "magnetostatic_2d_slot252_parallel_wire_pair_v1.ans"
+    assert gate["block_label_artifact_id"] == "magnetostatic_2d_slot276_parallel_wire_block_labels_v1.json"
     assert gate["solution_loaded"] is True
     assert gate["solution_loaded_required"] is True
     assert gate["checks"]["expected_source_tool_matches"] is True
@@ -471,8 +471,8 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     assert gate["expected_min_angle_deg"] == pytest.approx(30.0)
     assert gate["checks"]["force_unit_basis_is_per_length"] is True
     assert gate["checks"]["depth_integrated_force_not_used_for_per_length_gate"] is True
-    assert gate["checks"]["femm_planar_depth_recorded"] is True
-    assert gate["checks"]["femm_planar_depth_positive"] is True
+    assert gate["checks"]["magnetostatic_2d_planar_depth_recorded"] is True
+    assert gate["checks"]["magnetostatic_2d_planar_depth_positive"] is True
     assert gate["checks"]["problem_type_recorded"] is True
     assert gate["checks"]["expected_problem_type_matches"] is True
     assert gate["checks"]["length_unit_recorded"] is True
@@ -521,10 +521,10 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     assert gate["force_sign_convention"] == "positive_radial_force_points_away_from_wire1_attraction_is_negative"
     assert gate["force_extraction_method"] == "weighted_stress_block_integral_xy"
     assert gate["expected_force_extraction_method"] == "weighted_stress_block_integral_xy"
-    assert gate["current_source_artifact_id"] == "femm_slot332_parallel_wire_current_definition_v1.json"
-    assert gate["current_definition_method"] == "femm_circuit_current_snapshot"
-    assert gate["expected_current_source_artifact_id"] == "femm_slot332_parallel_wire_current_definition_v1.json"
-    assert gate["expected_current_definition_method"] == "femm_circuit_current_snapshot"
+    assert gate["current_source_artifact_id"] == "magnetostatic_2d_slot332_parallel_wire_current_definition_v1.json"
+    assert gate["current_definition_method"] == "magnetostatic_2d_circuit_current_snapshot"
+    assert gate["expected_current_source_artifact_id"] == "magnetostatic_2d_slot332_parallel_wire_current_definition_v1.json"
+    assert gate["expected_current_definition_method"] == "magnetostatic_2d_circuit_current_snapshot"
     assert gate["checks"]["current_source_artifact_id_recorded_when_expected"] is True
     assert gate["checks"]["expected_current_source_artifact_id_matches"] is True
     assert gate["checks"]["current_definition_method_recorded_when_expected"] is True
@@ -539,9 +539,9 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     stale_component_basis = parallel_wire_force_result_package_gate(
         {
             **row,
-            "force_component_basis_schema_id": "femm_local_rt_force_basis_v0",
+            "force_component_basis_schema_id": "magnetostatic_2d_local_rt_force_basis_v0",
         },
-        expected_force_component_basis_schema_id="femm_global_xy_radial_projection_basis_v1",
+        expected_force_component_basis_schema_id="magnetostatic_2d_global_xy_radial_projection_basis_v1",
         require_force_component_basis_schema=True,
     )
     assert stale_component_basis["status"] == "needs_attention"
@@ -554,7 +554,7 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
             for key, value in row.items()
             if key != "force_component_basis_schema_id"
         },
-        expected_force_component_basis_schema_id="femm_global_xy_radial_projection_basis_v1",
+        expected_force_component_basis_schema_id="magnetostatic_2d_global_xy_radial_projection_basis_v1",
         require_force_component_basis_schema=True,
     )
     assert missing_component_basis["status"] == "needs_attention"
@@ -564,9 +564,9 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     stale_force_unit_basis = parallel_wire_force_result_package_gate(
         {
             **row,
-            "force_unit_basis_schema_id": "femm_depth_integrated_force_unit_basis_v0",
+            "force_unit_basis_schema_id": "magnetostatic_2d_depth_integrated_force_unit_basis_v0",
         },
-        expected_force_unit_basis_schema_id="femm_planar_force_per_length_depth_basis_v1",
+        expected_force_unit_basis_schema_id="magnetostatic_2d_planar_force_per_length_depth_basis_v1",
         require_force_unit_basis_schema=True,
     )
     assert stale_force_unit_basis["status"] == "needs_attention"
@@ -578,7 +578,7 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     missing_force_unit_basis_row.pop("force_unit_basis_schema_id")
     missing_force_unit_basis = parallel_wire_force_result_package_gate(
         missing_force_unit_basis_row,
-        expected_force_unit_basis_schema_id="femm_planar_force_per_length_depth_basis_v1",
+        expected_force_unit_basis_schema_id="magnetostatic_2d_planar_force_per_length_depth_basis_v1",
         require_force_unit_basis_schema=True,
     )
     assert missing_force_unit_basis["status"] == "needs_attention"
@@ -588,11 +588,11 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     clear_selection = parallel_wire_force_result_package_gate(
         {
             **row,
-            "artifact_id": "femm_slot244_parallel_wire_clear_selection_A",
+            "artifact_id": "magnetostatic_2d_slot244_parallel_wire_clear_selection_A",
             "result_set_id": "rs_I1_10A_I2_5A_d_20mm_clear_selection_v1",
             "selection_function": "mo_clearblock(); mo_groupselectblock(12); mo_blockintegral(18); mo_blockintegral(19)",
         },
-        expected_artifact_id="femm_slot244_parallel_wire_clear_selection_A",
+        expected_artifact_id="magnetostatic_2d_slot244_parallel_wire_clear_selection_A",
         expected_result_set_id="rs_I1_10A_I2_5A_d_20mm_clear_selection_v1",
         expected_target_group_id=12,
         require_selection_clear=True,
@@ -604,15 +604,15 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     traced_postprocess = parallel_wire_force_result_package_gate(
         {
             **row,
-            "artifact_id": "femm_slot284_parallel_wire_postprocess_trace_A",
+            "artifact_id": "magnetostatic_2d_slot284_parallel_wire_postprocess_trace_A",
             "result_set_id": "rs_I1_10A_I2_5A_d_20mm_trace_v1",
             "selection_function": "mo_clearblock(); mo_groupselectblock(12); mo_blockintegral(18); mo_blockintegral(19)",
-            "postprocess_trace_id": "femm_slot284_postprocess_trace_v1",
+            "postprocess_trace_id": "magnetostatic_2d_slot284_postprocess_trace_v1",
             "postprocess_command_digest": "sha256:slot284_clear_select_force_xy",
-            "postprocess_output_artifact_id": "femm_slot292_parallel_wire_force_table_v1.json",
+            "postprocess_output_artifact_id": "magnetostatic_2d_slot292_parallel_wire_force_table_v1.json",
             "postprocess_output_digest": "sha256:slot292_force_table_json",
             "postprocess_output_path": "artifacts/femm/slot292_force_table.json",
-            "postprocess_output_schema_id": "femm_force_table_xy_v1",
+            "postprocess_output_schema_id": "magnetostatic_2d_force_table_xy_v1",
             "postprocess_output_columns": [
                 "target_group_id",
                 "Fx_N_per_m",
@@ -625,9 +625,9 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
                 "Fy_N_per_m": "N/m",
                 "radial_force_on_wire2_N_per_m": "N/m",
             },
-            "postprocess_script_artifact_id": "femm_slot385_parallel_wire_postprocess_script_v1.py",
+            "postprocess_script_artifact_id": "magnetostatic_2d_slot385_parallel_wire_postprocess_script_v1.py",
             "postprocess_script_digest": "sha256:slot385_parallel_wire_postprocess_script_v1",
-            "postprocess_script_path": "artifacts/femm/femm_slot385_parallel_wire_postprocess.py",
+            "postprocess_script_path": "artifacts/femm/magnetostatic_2d_slot385_parallel_wire_postprocess.py",
             "postprocess_commands": [
                 "mo_clearblock()",
                 "mo_groupselectblock(12)",
@@ -635,14 +635,14 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
                 "mo_blockintegral(19)",
             ],
         },
-        expected_artifact_id="femm_slot284_parallel_wire_postprocess_trace_A",
+        expected_artifact_id="magnetostatic_2d_slot284_parallel_wire_postprocess_trace_A",
         expected_result_set_id="rs_I1_10A_I2_5A_d_20mm_trace_v1",
         expected_target_group_id=12,
-        expected_postprocess_trace_id="femm_slot284_postprocess_trace_v1",
+        expected_postprocess_trace_id="magnetostatic_2d_slot284_postprocess_trace_v1",
         expected_postprocess_command_digest="sha256:slot284_clear_select_force_xy",
-        expected_postprocess_output_artifact_id="femm_slot292_parallel_wire_force_table_v1.json",
+        expected_postprocess_output_artifact_id="magnetostatic_2d_slot292_parallel_wire_force_table_v1.json",
         expected_postprocess_output_digest="sha256:slot292_force_table_json",
-        expected_postprocess_output_schema_id="femm_force_table_xy_v1",
+        expected_postprocess_output_schema_id="magnetostatic_2d_force_table_xy_v1",
         expected_postprocess_output_columns=[
             "target_group_id",
             "Fx_N_per_m",
@@ -655,11 +655,11 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
             "Fy_N_per_m": "N/m",
             "radial_force_on_wire2_N_per_m": "N/m",
         },
-        expected_postprocess_script_artifact_id="femm_slot385_parallel_wire_postprocess_script_v1.py",
+        expected_postprocess_script_artifact_id="magnetostatic_2d_slot385_parallel_wire_postprocess_script_v1.py",
         expected_postprocess_script_digest="sha256:slot385_parallel_wire_postprocess_script_v1",
-        expected_postprocess_script_path="artifacts/femm/femm_slot385_parallel_wire_postprocess.py",
-        expected_force_observable_id="femm_slot300_weighted_stress_block_force_xy_v1",
-        expected_force_observable_family="femm_weighted_stress_block_force_xy",
+        expected_postprocess_script_path="artifacts/femm/magnetostatic_2d_slot385_parallel_wire_postprocess.py",
+        expected_force_observable_id="magnetostatic_2d_slot300_weighted_stress_block_force_xy_v1",
+        expected_force_observable_family="magnetostatic_2d_weighted_stress_block_force_xy",
         require_selection_clear=True,
         require_postprocess_command_trace=True,
         require_postprocess_output_artifact=True,
@@ -685,7 +685,7 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     assert traced_postprocess["checks"]["postprocess_output_units_recorded"] is True
     assert traced_postprocess["checks"]["expected_postprocess_output_units_match"] is True
     assert traced_postprocess["postprocess_output_schema_required"] is True
-    assert traced_postprocess["postprocess_output_schema_id"] == "femm_force_table_xy_v1"
+    assert traced_postprocess["postprocess_output_schema_id"] == "magnetostatic_2d_force_table_xy_v1"
     assert traced_postprocess["checks"]["postprocess_script_artifact_id_recorded"] is True
     assert traced_postprocess["checks"]["postprocess_script_digest_recorded"] is True
     assert traced_postprocess["checks"]["postprocess_script_path_recorded"] is True
@@ -695,7 +695,7 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     assert traced_postprocess["checks"]["expected_force_observable_id_matches"] is True
     assert traced_postprocess["checks"]["expected_force_observable_family_matches"] is True
     assert traced_postprocess["postprocess_output_path"].endswith("slot292_force_table.json")
-    assert traced_postprocess["postprocess_script_path"].endswith("femm_slot385_parallel_wire_postprocess.py")
+    assert traced_postprocess["postprocess_script_path"].endswith("magnetostatic_2d_slot385_parallel_wire_postprocess.py")
     assert traced_postprocess["checks"]["postprocess_commands_recorded"] is True
     assert traced_postprocess["checks"]["postprocess_commands_clear_select_force_xy"] is True
     assert traced_postprocess["checks"]["postprocess_commands_mention_target_group"] is True
@@ -703,7 +703,7 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     execution_packaged = parallel_wire_force_result_package_gate(
         {
             **row,
-            "artifact_id": "femm_slot371_parallel_wire_execution_package_A",
+            "artifact_id": "magnetostatic_2d_slot371_parallel_wire_execution_package_A",
             "result_set_id": "rs_I1_10A_I2_5A_d_20mm_execution_v1",
             "created_at_utc": "2026-07-01T10:37:20Z",
             "run_timestamp_utc": "2026-07-01T10:37:00Z",
@@ -717,7 +717,7 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
                 "write_json_s": 0.1,
             },
         },
-        expected_artifact_id="femm_slot371_parallel_wire_execution_package_A",
+        expected_artifact_id="magnetostatic_2d_slot371_parallel_wire_execution_package_A",
         expected_result_set_id="rs_I1_10A_I2_5A_d_20mm_execution_v1",
         expected_created_at_utc="2026-07-01T10:37:20Z",
         expected_run_timestamp_utc="2026-07-01T10:37:00Z",
@@ -753,19 +753,19 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     model_input_packaged = parallel_wire_force_result_package_gate(
         {
             **row,
-            "artifact_id": "femm_slot378_parallel_wire_model_input_package_A",
+            "artifact_id": "magnetostatic_2d_slot378_parallel_wire_model_input_package_A",
             "result_set_id": "rs_I1_10A_I2_5A_d_20mm_model_input_v1",
         },
-        expected_artifact_id="femm_slot378_parallel_wire_model_input_package_A",
+        expected_artifact_id="magnetostatic_2d_slot378_parallel_wire_model_input_package_A",
         expected_result_set_id="rs_I1_10A_I2_5A_d_20mm_model_input_v1",
-        expected_model_input_artifact_id="femm_slot378_parallel_wire_model_v1.fem",
+        expected_model_input_artifact_id="magnetostatic_2d_slot378_parallel_wire_model_v1.fem",
         expected_model_input_digest="sha256:slot378-parallel-wire-model-v1",
-        expected_model_input_path="artifacts/femm/femm_slot378_parallel_wire_model_v1.fem",
+        expected_model_input_path="artifacts/femm/magnetostatic_2d_slot378_parallel_wire_model_v1.fem",
         require_model_input_artifact=True,
     )
     assert model_input_packaged["status"] == "ok"
     assert model_input_packaged["model_input_artifact_required"] is True
-    assert model_input_packaged["model_input_artifact_id"] == "femm_slot378_parallel_wire_model_v1.fem"
+    assert model_input_packaged["model_input_artifact_id"] == "magnetostatic_2d_slot378_parallel_wire_model_v1.fem"
     assert model_input_packaged["checks"]["model_input_artifact_id_recorded"] is True
     assert model_input_packaged["checks"]["model_input_digest_recorded"] is True
     assert model_input_packaged["checks"]["model_input_path_recorded"] is True
@@ -778,9 +778,9 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
             **row,
             "model_input_digest": "sha256:slot188-old-parallel-wire-model",
         },
-        expected_model_input_artifact_id="femm_slot378_parallel_wire_model_v1.fem",
+        expected_model_input_artifact_id="magnetostatic_2d_slot378_parallel_wire_model_v1.fem",
         expected_model_input_digest="sha256:slot378-parallel-wire-model-v1",
-        expected_model_input_path="artifacts/femm/femm_slot378_parallel_wire_model_v1.fem",
+        expected_model_input_path="artifacts/femm/magnetostatic_2d_slot378_parallel_wire_model_v1.fem",
         require_model_input_artifact=True,
     )
     assert stale_model_input_digest["status"] == "needs_attention"
@@ -890,7 +890,7 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     stale_trace = parallel_wire_force_result_package_gate(
         {
             **row,
-            "postprocess_trace_id": "femm_slot244_postprocess_trace_old",
+            "postprocess_trace_id": "magnetostatic_2d_slot244_postprocess_trace_old",
             "postprocess_command_digest": "sha256:slot284_clear_select_force_xy",
             "postprocess_commands": [
                 "mo_clearblock()",
@@ -899,7 +899,7 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
                 "mo_blockintegral(19)",
             ],
         },
-        expected_postprocess_trace_id="femm_slot284_postprocess_trace_v1",
+        expected_postprocess_trace_id="magnetostatic_2d_slot284_postprocess_trace_v1",
         expected_postprocess_command_digest="sha256:slot284_clear_select_force_xy",
         require_postprocess_command_trace=True,
     )
@@ -910,9 +910,9 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     stale_postprocess_output = parallel_wire_force_result_package_gate(
         {
             **row,
-            "postprocess_trace_id": "femm_slot284_postprocess_trace_v1",
+            "postprocess_trace_id": "magnetostatic_2d_slot284_postprocess_trace_v1",
             "postprocess_command_digest": "sha256:slot284_clear_select_force_xy",
-            "postprocess_output_artifact_id": "femm_slot244_old_force_table.json",
+            "postprocess_output_artifact_id": "magnetostatic_2d_slot244_old_force_table.json",
             "postprocess_output_digest": "sha256:slot292_force_table_json",
             "postprocess_commands": [
                 "mo_clearblock()",
@@ -921,9 +921,9 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
                 "mo_blockintegral(19)",
             ],
         },
-        expected_postprocess_trace_id="femm_slot284_postprocess_trace_v1",
+        expected_postprocess_trace_id="magnetostatic_2d_slot284_postprocess_trace_v1",
         expected_postprocess_command_digest="sha256:slot284_clear_select_force_xy",
-        expected_postprocess_output_artifact_id="femm_slot292_parallel_wire_force_table_v1.json",
+        expected_postprocess_output_artifact_id="magnetostatic_2d_slot292_parallel_wire_force_table_v1.json",
         expected_postprocess_output_digest="sha256:slot292_force_table_json",
         require_postprocess_command_trace=True,
         require_postprocess_output_artifact=True,
@@ -936,11 +936,11 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     stale_postprocess_output_schema = parallel_wire_force_result_package_gate(
         {
             **row,
-            "postprocess_trace_id": "femm_slot284_postprocess_trace_v1",
+            "postprocess_trace_id": "magnetostatic_2d_slot284_postprocess_trace_v1",
             "postprocess_command_digest": "sha256:slot284_clear_select_force_xy",
-            "postprocess_output_artifact_id": "femm_slot292_parallel_wire_force_table_v1.json",
+            "postprocess_output_artifact_id": "magnetostatic_2d_slot292_parallel_wire_force_table_v1.json",
             "postprocess_output_digest": "sha256:slot292_force_table_json",
-            "postprocess_output_schema_id": "femm_force_table_scalar_v0",
+            "postprocess_output_schema_id": "magnetostatic_2d_force_table_scalar_v0",
             "postprocess_output_columns": [
                 "target_group_id",
                 "force_N",
@@ -956,11 +956,11 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
                 "mo_blockintegral(19)",
             ],
         },
-        expected_postprocess_trace_id="femm_slot284_postprocess_trace_v1",
+        expected_postprocess_trace_id="magnetostatic_2d_slot284_postprocess_trace_v1",
         expected_postprocess_command_digest="sha256:slot284_clear_select_force_xy",
-        expected_postprocess_output_artifact_id="femm_slot292_parallel_wire_force_table_v1.json",
+        expected_postprocess_output_artifact_id="magnetostatic_2d_slot292_parallel_wire_force_table_v1.json",
         expected_postprocess_output_digest="sha256:slot292_force_table_json",
-        expected_postprocess_output_schema_id="femm_force_table_xy_v1",
+        expected_postprocess_output_schema_id="magnetostatic_2d_force_table_xy_v1",
         expected_postprocess_output_columns=[
             "target_group_id",
             "Fx_N_per_m",
@@ -987,9 +987,9 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     stale_force_convention_schema = parallel_wire_force_result_package_gate(
         {
             **row,
-            "force_convention_schema_id": "femm_force_value_only_convention_v0",
+            "force_convention_schema_id": "magnetostatic_2d_force_value_only_convention_v0",
         },
-        expected_force_convention_schema_id="femm_parallel_wire_force_convention_v1",
+        expected_force_convention_schema_id="magnetostatic_2d_parallel_wire_force_convention_v1",
         require_force_convention_schema=True,
     )
     assert stale_force_convention_schema["status"] == "needs_attention"
@@ -1001,7 +1001,7 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     missing_force_convention_schema_row.pop("force_convention_schema_id")
     missing_force_convention_schema = parallel_wire_force_result_package_gate(
         missing_force_convention_schema_row,
-        expected_force_convention_schema_id="femm_parallel_wire_force_convention_v1",
+        expected_force_convention_schema_id="magnetostatic_2d_parallel_wire_force_convention_v1",
         require_force_convention_schema=True,
     )
     assert missing_force_convention_schema["status"] == "needs_attention"
@@ -1012,10 +1012,10 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     stale_postprocess_row_convention_schema = parallel_wire_force_result_package_gate(
         {
             **row,
-            "postprocess_row_convention_schema_id": "femm_force_scalar_row_convention_v0",
+            "postprocess_row_convention_schema_id": "magnetostatic_2d_force_scalar_row_convention_v0",
         },
-        expected_force_convention_schema_id="femm_parallel_wire_force_convention_v1",
-        expected_postprocess_row_convention_schema_id="femm_weighted_stress_force_row_convention_v1",
+        expected_force_convention_schema_id="magnetostatic_2d_parallel_wire_force_convention_v1",
+        expected_postprocess_row_convention_schema_id="magnetostatic_2d_weighted_stress_force_row_convention_v1",
         require_force_convention_schema=True,
         require_postprocess_row_convention_schema=True,
     )
@@ -1033,7 +1033,7 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     missing_postprocess_row_convention_schema_row.pop("postprocess_row_convention_schema_id")
     missing_postprocess_row_convention_schema = parallel_wire_force_result_package_gate(
         missing_postprocess_row_convention_schema_row,
-        expected_postprocess_row_convention_schema_id="femm_weighted_stress_force_row_convention_v1",
+        expected_postprocess_row_convention_schema_id="magnetostatic_2d_weighted_stress_force_row_convention_v1",
         require_postprocess_row_convention_schema=True,
     )
     assert missing_postprocess_row_convention_schema["status"] == "needs_attention"
@@ -1054,13 +1054,13 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     stale_postprocess_script = parallel_wire_force_result_package_gate(
         {
             **row,
-            "postprocess_trace_id": "femm_slot284_postprocess_trace_v1",
+            "postprocess_trace_id": "magnetostatic_2d_slot284_postprocess_trace_v1",
             "postprocess_command_digest": "sha256:slot284_clear_select_force_xy",
-            "postprocess_output_artifact_id": "femm_slot292_parallel_wire_force_table_v1.json",
+            "postprocess_output_artifact_id": "magnetostatic_2d_slot292_parallel_wire_force_table_v1.json",
             "postprocess_output_digest": "sha256:slot292_force_table_json",
-            "postprocess_script_artifact_id": "femm_slot385_parallel_wire_postprocess_script_v1.py",
+            "postprocess_script_artifact_id": "magnetostatic_2d_slot385_parallel_wire_postprocess_script_v1.py",
             "postprocess_script_digest": "sha256:slot244_old_postprocess_script",
-            "postprocess_script_path": "artifacts/femm/femm_slot385_parallel_wire_postprocess.py",
+            "postprocess_script_path": "artifacts/femm/magnetostatic_2d_slot385_parallel_wire_postprocess.py",
             "postprocess_commands": [
                 "mo_clearblock()",
                 "mo_groupselectblock(12)",
@@ -1068,13 +1068,13 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
                 "mo_blockintegral(19)",
             ],
         },
-        expected_postprocess_trace_id="femm_slot284_postprocess_trace_v1",
+        expected_postprocess_trace_id="magnetostatic_2d_slot284_postprocess_trace_v1",
         expected_postprocess_command_digest="sha256:slot284_clear_select_force_xy",
-        expected_postprocess_output_artifact_id="femm_slot292_parallel_wire_force_table_v1.json",
+        expected_postprocess_output_artifact_id="magnetostatic_2d_slot292_parallel_wire_force_table_v1.json",
         expected_postprocess_output_digest="sha256:slot292_force_table_json",
-        expected_postprocess_script_artifact_id="femm_slot385_parallel_wire_postprocess_script_v1.py",
+        expected_postprocess_script_artifact_id="magnetostatic_2d_slot385_parallel_wire_postprocess_script_v1.py",
         expected_postprocess_script_digest="sha256:slot385_parallel_wire_postprocess_script_v1",
-        expected_postprocess_script_path="artifacts/femm/femm_slot385_parallel_wire_postprocess.py",
+        expected_postprocess_script_path="artifacts/femm/magnetostatic_2d_slot385_parallel_wire_postprocess.py",
         require_postprocess_command_trace=True,
         require_postprocess_output_artifact=True,
         require_postprocess_script_artifact=True,
@@ -1087,9 +1087,9 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
 
     missing_postprocess_script_path_row = {
         **row,
-        "postprocess_trace_id": "femm_slot284_postprocess_trace_v1",
+        "postprocess_trace_id": "magnetostatic_2d_slot284_postprocess_trace_v1",
         "postprocess_command_digest": "sha256:slot284_clear_select_force_xy",
-        "postprocess_script_artifact_id": "femm_slot385_parallel_wire_postprocess_script_v1.py",
+        "postprocess_script_artifact_id": "magnetostatic_2d_slot385_parallel_wire_postprocess_script_v1.py",
         "postprocess_script_digest": "sha256:slot385_parallel_wire_postprocess_script_v1",
     }
     missing_postprocess_script_path = parallel_wire_force_result_package_gate(
@@ -1104,11 +1104,11 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     stale_force_observable = parallel_wire_force_result_package_gate(
         {
             **row,
-            "force_observable_id": "femm_slot212_torque_observable_old",
-            "force_observable_family": "femm_weighted_stress_block_force_xy",
+            "force_observable_id": "magnetostatic_2d_slot212_torque_observable_old",
+            "force_observable_family": "magnetostatic_2d_weighted_stress_block_force_xy",
         },
-        expected_force_observable_id="femm_slot300_weighted_stress_block_force_xy_v1",
-        expected_force_observable_family="femm_weighted_stress_block_force_xy",
+        expected_force_observable_id="magnetostatic_2d_slot300_weighted_stress_block_force_xy_v1",
+        expected_force_observable_family="magnetostatic_2d_weighted_stress_block_force_xy",
     )
     assert stale_force_observable["status"] == "needs_attention"
     assert stale_force_observable["checks"]["expected_force_observable_id_matches"] is False
@@ -1118,11 +1118,11 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     wrong_force_observable_family = parallel_wire_force_result_package_gate(
         {
             **row,
-            "force_observable_id": "femm_slot300_weighted_stress_block_force_xy_v1",
-            "force_observable_family": "femm_weighted_stress_torque",
+            "force_observable_id": "magnetostatic_2d_slot300_weighted_stress_block_force_xy_v1",
+            "force_observable_family": "magnetostatic_2d_weighted_stress_torque",
         },
-        expected_force_observable_id="femm_slot300_weighted_stress_block_force_xy_v1",
-        expected_force_observable_family="femm_weighted_stress_block_force_xy",
+        expected_force_observable_id="magnetostatic_2d_slot300_weighted_stress_block_force_xy_v1",
+        expected_force_observable_family="magnetostatic_2d_weighted_stress_block_force_xy",
         expected_block_integral_types=(18, 19),
     )
     assert wrong_force_observable_family["status"] == "needs_attention"
@@ -1135,7 +1135,7 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
             **row,
             "parameter_set_digest": "sha256:slot188-old-design-parameter-set",
         },
-        expected_parameter_set_artifact_id="femm_slot392_parallel_wire_parameter_set_v1.json",
+        expected_parameter_set_artifact_id="magnetostatic_2d_slot392_parallel_wire_parameter_set_v1.json",
         expected_parameter_set_digest="sha256:slot392-parallel-wire-parameter-set-v1",
         expected_parameter_set_path="artifacts/femm/slot392_parallel_wire_parameter_set.json",
         require_parameter_set_artifact=True,
@@ -1161,10 +1161,10 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     wrong_objective_family = parallel_wire_force_result_package_gate(
         {
             **row,
-            "objective_observable_id": "femm_slot392_force_objective_radial_N_per_m_v1",
+            "objective_observable_id": "magnetostatic_2d_slot392_force_objective_radial_N_per_m_v1",
             "objective_observable_family": "torque_ripple_objective",
         },
-        expected_objective_observable_id="femm_slot392_force_objective_radial_N_per_m_v1",
+        expected_objective_observable_id="magnetostatic_2d_slot392_force_objective_radial_N_per_m_v1",
         expected_objective_observable_family="force_minimize_abs_radial_N_per_m",
     )
     assert wrong_objective_family["status"] == "needs_attention"
@@ -1175,7 +1175,7 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     missing_force_y_command = parallel_wire_force_result_package_gate(
         {
             **row,
-            "postprocess_trace_id": "femm_slot284_postprocess_trace_v1",
+            "postprocess_trace_id": "magnetostatic_2d_slot284_postprocess_trace_v1",
             "postprocess_command_digest": "sha256:slot284_clear_select_force_xy",
             "postprocess_commands": [
                 "mo_clearblock()",
@@ -1184,7 +1184,7 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
             ],
         },
         expected_target_group_id=12,
-        expected_postprocess_trace_id="femm_slot284_postprocess_trace_v1",
+        expected_postprocess_trace_id="magnetostatic_2d_slot284_postprocess_trace_v1",
         expected_postprocess_command_digest="sha256:slot284_clear_select_force_xy",
         require_postprocess_command_trace=True,
     )
@@ -1204,7 +1204,7 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
         row,
         expected_model_id="slot188_parallel_wire_pair_v1",
         expected_operating_point_id="I1_10A_I2_5A_d_20mm",
-        expected_artifact_id="femm_slot228_parallel_wire_recovered_table_A",
+        expected_artifact_id="magnetostatic_2d_slot228_parallel_wire_recovered_table_A",
         expected_result_set_id="rs_I1_10A_I2_5A_d_20mm_v2",
         expected_source_tool="FEMM",
         expected_source_group_id=11,
@@ -1218,10 +1218,10 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     stale_solution = parallel_wire_force_result_package_gate(
         {
             **row,
-            "solution_artifact_id": "femm_slot244_parallel_wire_pair_old.ans",
+            "solution_artifact_id": "magnetostatic_2d_slot244_parallel_wire_pair_old.ans",
             "solution_loaded": True,
         },
-        expected_solution_artifact_id="femm_slot252_parallel_wire_pair_v1.ans",
+        expected_solution_artifact_id="magnetostatic_2d_slot252_parallel_wire_pair_v1.ans",
         require_solution_loaded=True,
     )
     assert stale_solution["status"] == "needs_attention"
@@ -1231,7 +1231,7 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
 
     missing_loaded_state = parallel_wire_force_result_package_gate(
         {**row, "solution_loaded": False},
-        expected_solution_artifact_id="femm_slot252_parallel_wire_pair_v1.ans",
+        expected_solution_artifact_id="magnetostatic_2d_slot252_parallel_wire_pair_v1.ans",
         require_solution_loaded=True,
     )
     assert missing_loaded_state["status"] == "needs_attention"
@@ -1282,9 +1282,9 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     stale_block_labels = parallel_wire_force_result_package_gate(
         {
             **row,
-            "block_label_artifact_id": "femm_slot204_parallel_wire_block_labels_old.json",
+            "block_label_artifact_id": "magnetostatic_2d_slot204_parallel_wire_block_labels_old.json",
         },
-        expected_block_label_artifact_id="femm_slot276_parallel_wire_block_labels_v1.json",
+        expected_block_label_artifact_id="magnetostatic_2d_slot276_parallel_wire_block_labels_v1.json",
         expected_source_region="wire_1_positive_current",
         expected_target_region="wire_2_positive_current",
         expected_source_material="Copper",
@@ -1297,7 +1297,7 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
 
     stale_target_material = parallel_wire_force_result_package_gate(
         {**row, "target_material": "Air"},
-        expected_block_label_artifact_id="femm_slot276_parallel_wire_block_labels_v1.json",
+        expected_block_label_artifact_id="magnetostatic_2d_slot276_parallel_wire_block_labels_v1.json",
         expected_target_material="Copper",
     )
     assert stale_target_material["status"] == "needs_attention"
@@ -1344,7 +1344,7 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     missing_depth_row.pop("problem_depth_m")
     missing_depth = parallel_wire_force_result_package_gate(missing_depth_row)
     assert missing_depth["status"] == "needs_attention"
-    assert missing_depth["checks"]["femm_planar_depth_recorded"] is False
+    assert missing_depth["checks"]["magnetostatic_2d_planar_depth_recorded"] is False
     assert missing_depth["checks"]["force_unit_basis_is_per_length"] is True
 
     missing_projection_axis = parallel_wire_force_result_package_gate(
@@ -1465,9 +1465,9 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     assert stale_center_distance["checks"]["vector_force_matches_ampere"] is True
 
     stale_current_artifact = parallel_wire_force_result_package_gate(
-        {**row, "current_source_artifact_id": "femm_slot188_old_current_table.json"},
-        expected_current_source_artifact_id="femm_slot332_parallel_wire_current_definition_v1.json",
-        expected_current_definition_method="femm_circuit_current_snapshot",
+        {**row, "current_source_artifact_id": "magnetostatic_2d_slot188_old_current_table.json"},
+        expected_current_source_artifact_id="magnetostatic_2d_slot332_parallel_wire_current_definition_v1.json",
+        expected_current_definition_method="magnetostatic_2d_circuit_current_snapshot",
     )
     assert stale_current_artifact["status"] == "needs_attention"
     assert stale_current_artifact["checks"]["expected_current_source_artifact_id_matches"] is False
@@ -1478,7 +1478,7 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
     missing_current_method_row.pop("current_definition_method")
     missing_current_method = parallel_wire_force_result_package_gate(
         missing_current_method_row,
-        expected_current_definition_method="femm_circuit_current_snapshot",
+        expected_current_definition_method="magnetostatic_2d_circuit_current_snapshot",
     )
     assert missing_current_method["status"] == "needs_attention"
     assert missing_current_method["checks"]["current_definition_method_recorded_when_expected"] is False
@@ -1487,8 +1487,8 @@ def test_parallel_wire_force_result_package_gate_tracks_ampere_sign_and_units():
 
     wrong_current_method = parallel_wire_force_result_package_gate(
         {**row, "current_definition_method": "rms_current_table"},
-        expected_current_source_artifact_id="femm_slot332_parallel_wire_current_definition_v1.json",
-        expected_current_definition_method="femm_circuit_current_snapshot",
+        expected_current_source_artifact_id="magnetostatic_2d_slot332_parallel_wire_current_definition_v1.json",
+        expected_current_definition_method="magnetostatic_2d_circuit_current_snapshot",
     )
     assert wrong_current_method["status"] == "needs_attention"
     assert wrong_current_method["checks"]["expected_current_source_artifact_id_matches"] is True
@@ -1540,10 +1540,10 @@ def test_magnetic_field_probe_result_package_gate_binds_solution_point_and_outpu
     row = {
         "model_id": "slot348_parallel_wire_probe_model",
         "operating_point_id": "I10A_I5A_static",
-        "artifact_id": "femm_slot348_probe_case_v1",
-        "solution_artifact_id": "femm_slot348_probe_case_v1.ans",
+        "artifact_id": "magnetostatic_2d_slot348_probe_case_v1",
+        "solution_artifact_id": "magnetostatic_2d_slot348_probe_case_v1.ans",
         "solution_digest": "sha256:femm-slot348-probe-case-ans-v1",
-        "solution_path": r"artifacts/femm/femm_slot348_probe_case_v1.ans",
+        "solution_path": r"artifacts/femm/magnetostatic_2d_slot348_probe_case_v1.ans",
         "solution_loaded": True,
         "source_tool": "FEMM",
         "source_function": "mo_getb(0.010, 0.0)",
@@ -1556,7 +1556,7 @@ def test_magnetic_field_probe_result_package_gate_binds_solution_point_and_outpu
         "B_T": [1.2e-4, -3.0e-5],
         "field_units": "T",
         "field_component_frame": "global_cartesian_xy",
-        "field_probe_method": "femm_mo_getb_point_sample",
+        "field_probe_method": "magnetostatic_2d_mo_getb_point_sample",
         "postprocess_trace_id": "slot348_mo_getb_trace_v1",
         "postprocess_command_digest": "sha256:slot348-mo-getb-trace-v1",
         "postprocess_commands": [
@@ -1572,10 +1572,10 @@ def test_magnetic_field_probe_result_package_gate_binds_solution_point_and_outpu
         row,
         expected_model_id="slot348_parallel_wire_probe_model",
         expected_operating_point_id="I10A_I5A_static",
-        expected_artifact_id="femm_slot348_probe_case_v1",
-        expected_solution_artifact_id="femm_slot348_probe_case_v1.ans",
+        expected_artifact_id="magnetostatic_2d_slot348_probe_case_v1",
+        expected_solution_artifact_id="magnetostatic_2d_slot348_probe_case_v1.ans",
         expected_solution_digest="sha256:femm-slot348-probe-case-ans-v1",
-        expected_solution_path=r"artifacts/femm/femm_slot348_probe_case_v1.ans",
+        expected_solution_path=r"artifacts/femm/magnetostatic_2d_slot348_probe_case_v1.ans",
         expected_source_tool="FEMM",
         expected_probe_id="slot348_midgap_B_probe_v1",
         expected_probe_point_xy_m=(0.010, 0.0),
@@ -1584,7 +1584,7 @@ def test_magnetic_field_probe_result_package_gate_binds_solution_point_and_outpu
         expected_coordinate_scale_to_m=1.0,
         expected_field_component_frame="global_cartesian_xy",
         expected_field_units="T",
-        expected_field_probe_method="femm_mo_getb_point_sample",
+        expected_field_probe_method="magnetostatic_2d_mo_getb_point_sample",
         expected_postprocess_trace_id="slot348_mo_getb_trace_v1",
         expected_postprocess_command_digest="sha256:slot348-mo-getb-trace-v1",
         expected_probe_output_artifact_id="slot348_probe_table_v1",
@@ -1608,8 +1608,8 @@ def test_magnetic_field_probe_result_package_gate_binds_solution_point_and_outpu
     assert gate["checks"]["expected_probe_output_artifact_id_matches"] is True
 
     stale_solution = magnetic_field_probe_result_package_gate(
-        {**row, "solution_artifact_id": "femm_slot340_old_force_case.ans"},
-        expected_solution_artifact_id="femm_slot348_probe_case_v1.ans",
+        {**row, "solution_artifact_id": "magnetostatic_2d_slot340_old_force_case.ans"},
+        expected_solution_artifact_id="magnetostatic_2d_slot348_probe_case_v1.ans",
         require_solution_loaded=True,
     )
     assert stale_solution["status"] == "needs_attention"
@@ -1617,9 +1617,9 @@ def test_magnetic_field_probe_result_package_gate_binds_solution_point_and_outpu
 
     stale_solution_digest = magnetic_field_probe_result_package_gate(
         {**row, "solution_digest": "sha256:old-slot348-ans"},
-        expected_solution_artifact_id="femm_slot348_probe_case_v1.ans",
+        expected_solution_artifact_id="magnetostatic_2d_slot348_probe_case_v1.ans",
         expected_solution_digest="sha256:femm-slot348-probe-case-ans-v1",
-        expected_solution_path=r"artifacts/femm/femm_slot348_probe_case_v1.ans",
+        expected_solution_path=r"artifacts/femm/magnetostatic_2d_slot348_probe_case_v1.ans",
         require_solution_artifact=True,
         require_solution_loaded=True,
     )
@@ -1629,9 +1629,9 @@ def test_magnetic_field_probe_result_package_gate_binds_solution_point_and_outpu
 
     missing_solution_path = magnetic_field_probe_result_package_gate(
         {key: value for key, value in row.items() if key != "solution_path"},
-        expected_solution_artifact_id="femm_slot348_probe_case_v1.ans",
+        expected_solution_artifact_id="magnetostatic_2d_slot348_probe_case_v1.ans",
         expected_solution_digest="sha256:femm-slot348-probe-case-ans-v1",
-        expected_solution_path=r"artifacts/femm/femm_slot348_probe_case_v1.ans",
+        expected_solution_path=r"artifacts/femm/magnetostatic_2d_slot348_probe_case_v1.ans",
         require_solution_artifact=True,
         require_solution_loaded=True,
     )
@@ -1640,7 +1640,7 @@ def test_magnetic_field_probe_result_package_gate_binds_solution_point_and_outpu
 
     unloaded = magnetic_field_probe_result_package_gate(
         {**row, "solution_loaded": False},
-        expected_solution_artifact_id="femm_slot348_probe_case_v1.ans",
+        expected_solution_artifact_id="magnetostatic_2d_slot348_probe_case_v1.ans",
         require_solution_loaded=True,
     )
     assert unloaded["status"] == "needs_attention"
@@ -1666,7 +1666,7 @@ def test_magnetic_field_probe_result_package_gate_binds_solution_point_and_outpu
 
     wrong_method = magnetic_field_probe_result_package_gate(
         {**row, "field_probe_method": "line_average_b_field"},
-        expected_field_probe_method="femm_mo_getb_point_sample",
+        expected_field_probe_method="magnetostatic_2d_mo_getb_point_sample",
     )
     assert wrong_method["status"] == "needs_attention"
     assert wrong_method["checks"]["expected_field_probe_method_matches"] is False
