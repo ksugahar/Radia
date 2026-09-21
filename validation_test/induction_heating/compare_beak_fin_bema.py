@@ -85,10 +85,17 @@ def _distribution_metrics(k_surface, ds, xy, sheet_resistance, analysis,
 def run(step_path: Path, *, frequency: float, maxh: float,
         n_peri: int, n_stations: int, mesh_only: bool = False,
         experimental_peec: bool = False, profile_csv: Path | None = None,
-        bema_solver: str = "lu", lane_grading: str = "uniform"):
+        bema_solver: str = "lu", lane_grading: str = "uniform",
+        curve_order: int = 2, fes_order: int = 0):
+    """``curve_order`` curves the BEM-A volume mesh before its boundary is
+    used, so the 0.25 mm rounded tip is an arc rather than a polygon;
+    ``fes_order`` is the HDivSurface order of the BEM-A current.  Both were
+    fixed at 1 and 0 before 2026-09-21, when the tip deficit turned out to be
+    a p-convergence problem: one order step moved R by +1.69% where curving
+    moved it by +0.067%.  The same solve on the same boundary; only the
+    representation changes."""
     from netgen.occ import OCCGeometry, Pnt
-    from ngsolve import Mesh, TaskManager
-    from surface_mesh_extract import _extract_surface_mesh_filtered
+    from ngsolve import BND, Mesh, TaskManager
 
     from radia.bem.coil_inductance_ngsolve import (
         compute_centroids_areas_J,
@@ -124,18 +131,27 @@ def run(step_path: Path, *, frequency: float, maxh: float,
                      "sink" if abs(z - z_end) < 1e-8 else "body")
     with TaskManager():
         mesh = Mesh(OCCGeometry(solid).GenerateMesh(maxh=maxh))
-        surface = _extract_surface_mesh_filtered(mesh, keep_label="")
-        print(f"BEM-A mesh: nface={surface.nface} nv={surface.nv}",
+        # The boundary of the curved volume mesh IS the BEM-A surface:
+        # HDivSurface lives on it directly (the solver compresses away the
+        # interior-edge DOFs), and Curve() has the CAD to project onto.  The
+        # earlier flat extraction discarded the curvature and could not be
+        # curved afterwards.
+        mesh.Curve(int(curve_order))
+        n_surface_faces = int(mesh.GetNE(BND))
+        n_surface_vertices = len({int(v.nr) for el in mesh.Elements(BND)
+                                  for v in el.vertices})
+        print(f"BEM-A mesh: nface={n_surface_faces} nv={n_surface_vertices} "
+              f"curve_order={curve_order} fes_order={fes_order}",
               file=sys.stderr, flush=True)
         if mesh_only:
-            return {"n_surface_faces": int(surface.nface),
-                    "n_vertices": int(surface.nv), "cad": cad}
+            return {"n_surface_faces": n_surface_faces,
+                    "n_vertices": n_surface_vertices, "cad": cad}
         bem = compute_inductance_source_sink(
-            surface, "source", "sink", omega=omega, Z_s_complex=zs,
-            solver=bema_solver)
-    cen, area, j_re = compute_centroids_areas_J(surface, bem["gf_J"])
+            mesh, "source", "sink", fes_order=int(fes_order), omega=omega,
+            Z_s_complex=zs, solver=bema_solver)
+    cen, area, j_re = compute_centroids_areas_J(mesh, bem["gf_J"])
     _cen_im, _area_im, j_im = compute_centroids_areas_J(
-        surface, bem["gf_J_im"])
+        mesh, bem["gf_J_im"])
     j_complex = j_re + 1j * j_im
     j_abs2 = np.sum(np.abs(j_complex) ** 2, axis=1)
     end_tol = max(1e-12, z_end * 1e-8)
@@ -157,7 +173,9 @@ def run(step_path: Path, *, frequency: float, maxh: float,
         "bema": {"R_ohm": float(bem["R"]), "L_H": float(bem["L"]),
                  "residual": float(bem["residual"]),
                  "n_J": int(bem["n_J"]), "n_f": int(bem["n_f"]),
-                 "n_surface_faces": int(surface.nface),
+                 "n_surface_faces": n_surface_faces,
+                 "curve_order": int(curve_order),
+                 "fes_order": int(fes_order),
                  "solver": bema_solver,
                  "R_source_cap_ohm": cap_r_source,
                  "R_sink_cap_ohm": cap_r_sink,
@@ -329,6 +347,14 @@ def main():
     parser.add_argument("--lane-grading", choices=("uniform", "auto"),
                         default="uniform",
                         help="auto: grade PEEC lanes toward the detected fin tip")
+    parser.add_argument("--curve-order", type=int, default=2,
+                        help="geometry order of the BEM-A boundary (2 makes "
+                             "the rounded tip an arc; 1 reproduces the "
+                             "pre-2026-09-21 flat surface)")
+    parser.add_argument("--fes-order", type=int, default=0,
+                        help="HDivSurface order of the BEM-A current; 0 is "
+                             "RT0, the pre-2026-09-21 default, and does not "
+                             "p-converge the tip")
     args = parser.parse_args()
     print(json.dumps(run(args.step, frequency=args.frequency,
                          maxh=args.maxh, n_peri=args.n_peri,
@@ -337,7 +363,9 @@ def main():
                          experimental_peec=args.experimental_peec,
                          profile_csv=args.profile_csv,
                          bema_solver=args.bema_solver,
-                         lane_grading=args.lane_grading), indent=2))
+                         lane_grading=args.lane_grading,
+                         curve_order=args.curve_order,
+                         fes_order=args.fes_order), indent=2))
 
 
 if __name__ == "__main__":
