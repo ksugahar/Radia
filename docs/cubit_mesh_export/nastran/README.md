@@ -26,16 +26,16 @@ Controls pyramid element handling in hybrid hex/tet meshes:
 | PYRAM | Output | Use Case |
 |-------|--------|----------|
 | `True` | CPYRAM (5-node pyramid) | Standard Nastran solvers |
-| `False` | Degenerate CHEXA (8-node hex with duplicate nodes) | JMAG compatibility |
+| `False` | Degenerate CHEXA (8-node hex with duplicate nodes) | importers without CPYRAM support |
 
-**Background**: When hex and tet regions meet, pyramid elements bridge the interface. Some solvers (e.g., JMAG) cannot import CPYRAM and interpret them as degenerate CHEXA.
+**Background**: When hex and tet regions meet, pyramid elements bridge the interface. Some solvers cannot import CPYRAM and interpret them as degenerate CHEXA.
 
 ```python
 # Standard export with CPYRAM elements
 cubit.cmd('export nastran_bdf "mesh.bdf" overwrite')
 
-# For JMAG: convert pyramids to degenerate hex
-cubit.cmd('export nastran_bdf "mesh_jmag.bdf" nopyramid overwrite')
+# For importers without CPYRAM support: convert pyramids to degenerate hex
+cubit.cmd('export nastran_bdf "mesh_no_pyramid.bdf" nopyramid overwrite')
 ```
 
 ## Element Mapping
@@ -58,7 +58,7 @@ cubit.cmd('export nastran_bdf "mesh_jmag.bdf" nopyramid overwrite')
   nodesets produce SET1 cards.
 - MAT cards are intentionally omitted because the exporter cannot infer real
   constitutive data. Assign materials in the receiving application.
-- `export jmag_nastran` remains a deprecated alias for old journals.
+- `export jmag_nastran` was retired. Journals still using it must be updated to `export nastran_bdf`; the wheel gate fails if the retired token reappears in the compiled `.ccm`.
 
 ## Sample Files
 
