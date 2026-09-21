@@ -2342,7 +2342,6 @@ def main():
     handler = {
         "preflight":        cmd_preflight,
         "temp-shadows":     cmd_temp_shadows,
-        "phase0":           cmd_phase0,
         "phase8":           cmd_phase8,
         "phase8e":          cmd_phase8e,
         "phase9":           cmd_phase9,
