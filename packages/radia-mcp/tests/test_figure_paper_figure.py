@@ -469,7 +469,10 @@ def test_emit_raises_when_times_new_roman_not_requested(tmp_path):
 
 @pytest.mark.parametrize(
     "prof_name",
-    sorted(name for name in PROFILES if not name.startswith("beamer_169_")),
+    # The 10 pt rule is a PAPER rule. A 16:9 slide profile is authored at
+    # slide size and read from across a room, so it is out of its scope.
+    sorted(name for name in PROFILES
+           if not name.startswith(("beamer_169_", "powerpoint_169_"))),
 )
 def test_profile_uses_10pt_body_font(prof_name):
     """Every visible default is >=10 pt for every paper profile.

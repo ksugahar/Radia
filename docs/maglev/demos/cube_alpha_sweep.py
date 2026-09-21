@@ -1,6 +1,9 @@
 """cube_alpha_sweep.py -- Generate a 5mm Cu cube .vol and sweep alpha(s).
 
-Demonstrates the radia.maglev.mixed_galerkin API on the simplest case.
+Demonstrates the radia.maglev.mixed_galerkin API on the simplest case: the
+CAD-direct edge topology, the bulk Foster spectrum, the additive Y_mixed
+(the form behind the LTI export) and the projected BoxMixedGalerkin (bulk
+modes and surface envelope in one Galerkin space, exact at DC).
 """
 from __future__ import annotations
 
@@ -12,6 +15,7 @@ from netgen.occ import Box, OCCGeometry, Pnt
 from ngsolve import Mesh, TaskManager
 
 from radia.maglev.mixed_galerkin import (
+    BoxMixedGalerkin,
     bulk_foster_via_eigen,
     K_SIBC_total,
     measure_total_area,
@@ -50,6 +54,7 @@ def main():
     with TaskManager():
         lam, tau, g_n, V = bulk_foster_via_eigen(mesh, SIGMA_CU, MU_0, n_eigen=80)
         S_mesh = measure_total_area(mesh)
+        projected = BoxMixedGalerkin(mesh, SIGMA_CU, MU_0, n_eigen=40)
     print(f"Mesh-integrated area S = {S_mesh*1e6:.3f} mm^2 "
           f"(CAD-direct {S_cad*1e6:.3f} mm^2)")
     K_SIBC = K_SIBC_total(S_cad, SIGMA_CU, MU_0)
@@ -58,12 +63,18 @@ def main():
     print(f"V = {V*1e9:.3f} mm^3, K_SIBC = {K_SIBC:.4e}")
     print(f"Foster modes: {len(lam)}")
     print()
-    print(f"  {'f (Hz)':>10}  {'|alpha|/V':>12}  {'Re(alpha)/V':>14}  {'-Im(alpha)/V':>14}")
-    for f in [1e3, 1e4, 1e5, 1e6, 1e9]:
+    print("projected (BoxMixedGalerkin, exact at DC) | additive (Y_mixed, LTI export form)")
+    print(f"  {'f (Hz)':>10}  {'Re(alpha)/V':>12}  {'-Im(alpha)/V':>13}  |  {'Re(alpha)/V':>12}  {'-Im(alpha)/V':>13}")
+    for f in [0.0, 1e2, 1e3, 1e4, 1e5, 1e6, 1e9]:
         s = 1j * 2 * math.pi * f
-        Y = Y_mixed(s, lam, tau, g_n, K_SIBC, c1_cad)   # use CAD-direct c_1
-        a = alpha_from_Y(Y, V, SIGMA_CU)
-        print(f"  {f:10.2e}  {abs(a)/V:12.4f}  {a.real/V:+14.4e}  {-a.imag/V:+14.4e}")
+        a_p = projected.alpha(s)
+        if f > 0:
+            Y = Y_mixed(s, lam, tau, g_n, K_SIBC, c1_cad)   # use CAD-direct c_1
+            a_a = alpha_from_Y(Y, V, SIGMA_CU)
+            add = f"{a_a.real/V:+12.4e}  {-a_a.imag/V:+13.4e}"
+        else:
+            add = f"{'(diverges)':>12}  {'':>13}"
+        print(f"  {f:10.2e}  {a_p.real/V:+12.4e}  {-a_p.imag/V:+13.4e}  |  {add}")
 
 
 if __name__ == "__main__":

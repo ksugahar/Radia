@@ -235,7 +235,20 @@ def presentation_slide_titles_outline_coherence(pptx_path: str) -> dict:
             "分かった結論として役割を分ける。"
         )
 
-    if n_phases_present < 3:
+    # Phases are found by looking for words like "background" or "results" in
+    # the TITLE. A deck written to the lab's format has none of them there: the
+    # title is a short noun phrase and the claim lives in the bottom takeaway.
+    # So a low phase count on such a deck says nothing about its arc.
+    topic_title_style = claim_density < 0.2 and topic_specificity >= 0.6
+    if n_phases_present < 3 and topic_title_style:
+        comments.append(
+            f"ℹ phase 検出 {n_phases_present}/4 は、このデッキには当てはまらない。"
+            "phase はタイトル中の語 (background / results / conclusion 等) で"
+            "判定するが、研究室の書式はタイトルを名詞句に保ち主張を下端文へ置く"
+            "ため、その語は設計上そこに無い。筋の有無は "
+            "presentation_kishotenketsu_check で下端文から測ること。"
+        )
+    elif n_phases_present < 3:
         missing_phases = [k for k, v in flow_hits.items() if not v]
         comments.append(
             f"⚠ 4 phases 中 {n_phases_present} のみ出現。不在: {missing_phases}。"
@@ -294,6 +307,8 @@ def presentation_slide_titles_outline_coherence(pptx_path: str) -> dict:
         "claim_density": round(claim_density, 3),
         "topic_specificity": round(topic_specificity, 3),
         "n_phases_present": n_phases_present,
+        "phase_detection_applicable": not (claim_density < 0.2
+                                           and topic_specificity >= 0.6),
         "phases_detected": {k: v for k, v in flow_hits.items() if v},
         "avg_adjacent_overlap": round(avg_overlap, 3),
         "diversity_status": diversity_status,
