@@ -301,6 +301,97 @@ independently converged -- not tapered or curved fins, brazed fin solids,
 filleted roots, nonlinear material, or the gate-4 back-reaction.  Data:
 `results/beak_fin_length_resolution_20260921.json`.
 
+### Gate 1 closes: the metrics are perimeter-limited and axially converged (2026-09-22)
+
+The delivery gate had passed at exactly one discretisation, which says nothing
+about convergence.  Refining each direction independently against a fixed
+BEM-A reference settles it.  Perimeter, at 33 stations:
+
+| `n_peri` | branches | R (uOhm) | beak current | beak loss | probe H | accepted |
+|---|---|---|---|---|---|---|
+| 32 | 2016 | 265.930 | 3.96% | 10.92% | 2.63% | no |
+| 64 | 4032 | 257.828 | 0.55% | 3.29% | 0.77% | no |
+| 128 | 8064 | 253.305 | 0.20% | 0.71% | 0.36% | **yes** |
+| 256 | 16128 | 250.422 | 0.28% | 0.58% | 0.17% | **yes** |
+
+R descends monotonically onto the BEM-A reference `250.074 uOhm` and is within
+`0.14%` of it at `n_peri=256`.  Axial, at 256 lanes:
+
+| `n_stations` | branches | R (uOhm) | beak current | beak loss | accepted |
+|---|---|---|---|---|---|
+| 5 | 1792 | 250.458 | 0.32% | 0.49% | **yes** |
+| 9 | 3840 | 250.498 | 0.30% | 0.58% | **yes** |
+| 17 | 7936 | 250.478 | 0.29% | 0.60% | **yes** |
+| 33 | 16128 | 250.422 | 0.28% | 0.58% | **yes** |
+
+The axial column is flat.  Five stations already give the converged answer,
+and the geometry rejections -- station alignment, zero-area cells, a present
+tip -- hold at every level.  Data: `results/beak_fin_refinement_gate_20260922.json`.
+
+The accepted 48 mm basis is now a tracked fixture,
+`tests/coil_from_cad/fixtures/beak_fin_48mm.step`, checked against the
+generator by solid volume, area and bounding box rather than by STEP bytes.
+Before this it existed only in a scratch directory, so the closed gate could
+not be reproduced from the repository.
+
+### The fin PEEC is 319x faster at the converged discretisation (2026-09-22)
+
+The axial column above is not only free of information, it is where all the
+cost is.  Measured on the 48 mm fixture at 256 lanes:
+
+| `n_stations` | branches | seconds | resident | R (uOhm) |
+|---|---|---|---|---|
+| 33 | 16128 | 290.03 | 6.81 GB | 250.4218 |
+| 17 | 7936 | 37.01 | 1.56 GB | 250.4783 |
+| 9 | 3840 | 5.66 | 0.36 GB | 250.4977 |
+| 5 | 1792 | **0.91** | **0.08 GB** | 250.4580 |
+
+Thirty-three stations cost `290 s` and `6.8 GB` to move R by `0.014%` against
+five.  The converged configuration is `n_peri=256, n_stations=5`, and it runs
+in under a second.
+
+A compressed PEEC was tried first and rejected.  `PEECCircuitSolver` already
+carries a HACApK path, and routing the fin assembly through it avoids the
+dense L fill; but its nodal saddle solve does not converge on this graph --
+`8.4e-2` residual after 2000 outer matvecs -- and tightening the H-matrix
+accuracy to match the inner tolerance did not rescue it.  The option is not
+kept: a code path that does not converge is not an option, and the
+discretisation result above removes the need for one.
+
+### Gate 2 measured: the branch mutual is filamentary (2026-09-22)
+
+`MutualInductanceRectBar` averages the Neumann kernel over both cross-sections
+and exists, in the kernel's own comment, because filamentary Neumann gives a
+"spurious circulating current artifact ... for close parallel bars".  It is
+reached only when both segments are sub-filaments of one parent, which
+`add_connected_segment` never produces.  Every fin branch pair therefore takes
+the filamentary formula, confirmed behaviourally: the built L matrix
+reproduces Grover's equal, aligned, parallel filament closed form to machine
+precision at four separations.
+
+That is exactly the case the comment warns about.  At the accepted
+discretisation the perimeter spacing is `0.0894 mm`, the band width is the
+same `0.0894 mm`, and the sheet depth is the `0.1706 mm` skin depth: adjacent
+bands touch, and their separation is smaller than their own depth.  Against
+the cross-section-averaged value over the same two bars, **the filamentary
+mutual is 5.71% high on average and 5.73% at worst** -- mean and maximum
+together, so it is a uniform bias rather than a local artifact.
+
+`5.7%` is larger than the 3% the delivery gate allows, and the gate passes at
+`0.28%` and `0.58%` anyway.  Both are true: a uniform bias on every
+neighbour mutual shifts L without redistributing the current much.  The
+element is not thereby validated -- it gives a passing answer for a reason
+unrelated to its accuracy.  Data:
+`results/fin_partial_element_mutual_20260922.json`; the behaviour is pinned by
+`tests/test_fin_peec_branch_mutual.py`.
+
+A first reading of this attributed the error to the cross-section orientation,
+since `PEECSegment` carries no frame and `MutualInductanceRectBar` builds one
+from a global fallback axis.  That was wrong: the averaged kernel is not
+reached at all, so its frame never applies.  The orientation sensitivity is
+retained in the artifact as a secondary number -- `7.35%` -- because it
+becomes the next question if the averaged path is ever adopted.
+
 ## Required next gates
 
 1. A synthetic straight beak-fin STEP and reproducible generator now live in
@@ -308,14 +399,20 @@ filleted roots, nonlinear material, or the gate-4 back-reaction.  Data:
    `validation_test/induction_heating/make_beak_fin_step.py`. The dedicated
    straight-prism section route preserves its single solid, 0.25 mm rounded
    tip, constant section, and direct perimeter (64 lanes in the fixture test).
-   This is not representative of an as-built coil. Obtain representative CAD,
-   then check station alignment, branch geometry, and convergence under
-   perimeter/axial refinement. Reject missing tips and zero-area cells.
+   This is not representative of an as-built coil. **Done on the synthetic
+   fixture (2026-09-22)**: station alignment, branch geometry, and convergence
+   under perimeter and axial refinement are measured above, and missing tips
+   and zero-area cells are rejected per level. **Still open**: representative
+   as-built CAD, which the lab has to supply; nothing here establishes that a
+   real coil's section behaves like this prism.
 2. Preserve the experimental path's SIBC-consistent surface-band resistance
    and transverse MNA topology when promoting it. Replace or validate the
    rectangular Ruehli self term as a nonorthogonal surface partial element;
    do not route it through production's isolated-wire Dowell/Bessel allocation
-   or proximity correction.
+   or proximity correction. **Measured, not passed (2026-09-22)**: the branch
+   mutual is the bare filamentary formula and runs `5.7%` high on touching
+   bands. Replacing it means reaching the cross-section-averaged kernel, which
+   today is only accessible to sub-filaments of a shared parent.
 3. Compare local current, tip/root loss, terminal impedance, and field at the
    workpiece against an independent 3-D A-phi/HCurl reference over frequency,
    conductivity, geometry, and mesh sweeps. KCL alone is not an accuracy gate.
