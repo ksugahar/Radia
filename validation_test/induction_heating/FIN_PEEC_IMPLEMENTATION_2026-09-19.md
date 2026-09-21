@@ -182,6 +182,36 @@ rule the mixed-Omega work adopted for the same reason -- or a fin-local
 refinement control for the BEM-A surface mesh. Data:
 `results/beak_fin_bema_refinement_20260921.json`.
 
+### The cause is geometry order, not the SIBC model (2026-09-21)
+
+The BEM-A side of this comparison is geometrically first order.
+`compare_beak_fin_bema.py` builds its surface through
+`_extract_surface_mesh_filtered`, which returns a flat P1 surface mesh and
+never calls `mesh.Curve`, so the 0.25 mm rounded tip is a polygon at every
+`maxh`. `extract_surface_curved` (geom_order >= 2) exists but returns raw P2
+node arrays for the SIBC-HACApK kernel and does not feed
+`compute_inductance_source_sink`, which this comparison uses.
+
+The measurement separates a geometric error from a discretisation one. Across
+maxh 0.75, 0.55 and 0.45 mm the PEEC-over-BEM-A tip ratios are constant --
+1.026, 1.026, 1.024 in mean |K| and 1.061, 1.061, 1.057 in mean loss -- while
+the face count changes by 1.6x. A discretisation error shrinks under
+refinement; this does not, because the tip's element size is already set by its
+own curvature and `maxh` cannot reach it. BEM-A's tip loss fraction stays at
+0.1846 +/- 0.0007 against the 2-D reference 0.2023, i.e. -8.7% and flat, where
+PEEC is -4.0%.
+
+This is not evidence against the SIBC model. The 2-D SIBC reference converges
+to the continuum value and PEEC, which uses the same SIBC sheet, lands within
+4% of it; the disagreement follows the tip geometry, not the impedance model.
+The BEM-A solve is algebraically sound on the mesh it is given: R partition
+closure -4.3e-15, current continuity about 3.2e-16.
+
+The consequence for the gate is that BEM-A cannot serve as the converged
+reference this comparison assumes until `compute_inductance_source_sink` is
+given a curved surface, or this comparison is routed through the curved SIBC
+path.
+
 ## Required next gates
 
 1. A synthetic straight beak-fin STEP and reproducible generator now live in
