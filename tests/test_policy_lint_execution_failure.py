@@ -32,9 +32,9 @@ def test_a_failing_git_fails_the_lint(monkeypatch, capsys, rc):
     lint = _load()
     monkeypatch.setattr(lint, "_sh", lambda cmd: (rc, ""))
     assert lint.main([]) == 1
-    err = capsys.readouterr().err
-    assert "could not run" in err
-    assert "PASS" not in capsys.readouterr().out
+    captured = capsys.readouterr()
+    assert "could not run" in captured.err
+    assert "PASS" not in captured.out
 
 
 def test_a_missing_git_fails_the_lint(monkeypatch, capsys):
@@ -52,7 +52,6 @@ def test_a_missing_git_fails_the_lint(monkeypatch, capsys):
 def test_grep_and_ls_files_distinguish_no_match_from_failure():
     """git grep exits 1 for no matches; that is a result, not an error."""
     lint = _load()
-    assert lint._git_grep.__doc__ is None or True  # helpers exist
     with pytest.raises(lint.LintExecutionError):
         lint._sh = lambda cmd: (128, "")
         lint._git_grep("anything", ())
