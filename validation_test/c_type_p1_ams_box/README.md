@@ -59,6 +59,19 @@ Linear solves (`--reduced-a-solver`):
   updated in place at every Newton step, constructed outside `TaskManager` as
   its contract requires) with conjugate gradients on the mass-regularised
   system (`--gauge-epsilon`, default 1e-6).
+  With `--gauge-epsilon 0 --ams-preconditioner-shift 0.01`, only the AMS
+  hierarchy sees `K + sigma nu_0 M`; CG still solves the original singular,
+  compatible `K A = f`. The shifted matrix has independent storage and is
+  updated with the tangent. This mode uses the existing compiled AMS; it
+  does not disable the gradient correction or require a native rebuild.
+  `--ams-project-gradients` optionally wraps this as `P0 B_shift P0`, where
+  `P0` is the Euclidean complement of gradients from interior H1 nodes. This
+  diagnostic uses a cached sparse nodal factorization, leaves `K` and `f`
+  unchanged, and still checks their original residual. It costs additional
+  time and memory. On the coarse nonlinear case, the unprojected shifted
+  route passed the loose `1e-3` Newton residual gate but stalled at a `1e-8`
+  gate; the projected route reached the tighter gate. This is a validation
+  option, not a new production solver default.
 * `iccg`: Radia's compiled shifted incomplete-Cholesky CG of the same module
   (`SparseSolvSolver("ICCG")`, `--ic-shift` 1.05, ABMC parallel triangular
   solves), refactorised per system.  It wants the **ungauged** system
@@ -69,9 +82,14 @@ Linear solves (`--reduced-a-solver`):
   stays off.
 * `direct`: METIS SPD PARDISO, the cross-check.
 
-Every iterative solve is continued until the **true** relative residual on the
-free DOFs is below `--cg-tolerance` (the Krylov loop's own measure is the
-preconditioned norm and is not the contract).
+Every iterative solve must meet the **true** relative residual on the free
+DOFs, below `--cg-tolerance`. AMS uses NGSolve's CG recurrence with this check
+at every iteration. Its preconditioned residual norm is not the acceptance
+criterion: stopping on that norm and restarting with successively tighter
+relative tolerances can over-solve a singular system and amplify roundoff.
+An iteration limit is a failure, not convergence. Shift selection and timing
+remain case-dependent; a successful shifted solve is not a general performance
+claim. The IC factorization shift and the AMS mass shift are different operations.
 
 The CLI writes `completed` and `passed` in its result. `passed` means all
 requested engines converged, not that an accuracy or timing certificate was

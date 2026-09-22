@@ -151,6 +151,46 @@ def test_newton_on_a_linear_law_is_one_exact_step(box_mesh):
     assert np.max(np.linalg.norm(field_newton - field_linear, axis=1)) / scale < 1.0e-5
 
 
+@pytest.mark.parametrize("shift", [1e-2, 1e-6])
+@pytest.mark.parametrize("project", [False, True])
+def test_shifted_ams_preserves_the_ungauged_operator_and_field(box_mesh, shift, project):
+    ams = _engine(box_mesh, "ams", gauge_epsilon=0., ams_preconditioner_shift=shift,
+                  cg_tolerance=1e-7, ams_project_gradients=project)
+    reference = _engine(box_mesh, "iccg", gauge_epsilon=0., cg_tolerance=1e-7)
+    field, stats, _ = ams.run_linear(1000., _points())
+    expected, _, _ = reference.run_linear(1000., _points())
+    np.testing.assert_allclose(field, expected, rtol=1e-5, atol=1e-7)
+    row = stats['history'][0]
+    assert row['relative_residual'] <= 1e-7
+    assert row['cg_restarts'] == 0
+    # Matrix setup must not overwrite the operator that CG actually solves.
+    a, _ = ams._picard_forms()
+    with ng.TaskManager():
+        a.Assemble()
+    original = a.mat.AsVector().FV().NumPy().copy()
+    ams._ams_prepare(a.mat)
+    np.testing.assert_array_equal(a.mat.AsVector().FV().NumPy(), original)
+    assert not np.array_equal(ams._ams_shift_form.mat.AsVector().FV().NumPy(), original)
+    if project:
+        pre = ams._ams_prepare(a.mat)
+        gradient, _ = ams._gradient_projection
+        x = np.random.default_rng(18).normal(size=ams.fes.ndof)
+        projected = pre.project(x)
+        assert np.linalg.norm(gradient.T @ projected) < 1e-10 * np.linalg.norm(x)
+        np.testing.assert_allclose(pre.project(projected), projected, atol=1e-10)
+
+
+def test_shifted_ams_fails_closed_on_invalid_shift_and_iteration_limit(box_mesh):
+    for shift in (-1., float('nan'), float('inf')):
+        with pytest.raises(ValueError, match='ams_preconditioner_shift'):
+            _engine(box_mesh, 'ams', gauge_epsilon=0., ams_preconditioner_shift=shift)
+    with pytest.raises(ValueError, match='requires AMS'):
+        _engine(box_mesh, 'iccg', gauge_epsilon=0., ams_preconditioner_shift=.01)
+    with pytest.raises(RuntimeError, match='true relative residual'):
+        _engine(box_mesh, 'ams', gauge_epsilon=0., ams_preconditioner_shift=.01,
+                cg_max_iterations=1).run_linear(1000., _points())
+
+
 def test_newton_accepts_an_initially_zero_residual(box_mesh):
     engine = _engine(box_mesh, "ams", source=(0.0, 0.0, 0.0))
     field, stats, _ = engine.run_newton(
