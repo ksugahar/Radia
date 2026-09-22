@@ -778,17 +778,6 @@ EXTERNAL_PACKAGES: dict[str, dict[str, Any]] = {
                        "over help HTM, examples, vendor wiki, ctypes API.",
         "related": ["radia-ngsolve", "motor", "mor"],
     },
-    "comsol": {
-        "pypi": "(fork-only, not on PyPI yet)",
-        "github": "https://github.com/ksugahar/COMSOL_Multiphysics_MCP",
-        "install": "git clone + pip install -e .",
-        "entry_point": "comsol-mcp",
-        "description": "COMSOL Multiphysics MCP — Sugahara lab fork of "
-                       "wjc9011/COMSOL_Multiphysics_MCP with multilingual "
-                       "embedding, Kelvin-transform tutorial, Cubit-to-"
-                       "COMSOL bridge, Japanese chapter detection.",
-        "related": ["fem", "matrix-solvers", "differential-forms"],
-    },
     "mcp-server-document": {
         "pypi": "(LAB-private, not on PyPI)",
         "github": "(internal: public-safe curated corpus)",

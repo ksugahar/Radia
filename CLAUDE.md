@@ -28,7 +28,7 @@ Scope commits and CI to the owner. Shared files trigger multiple lanes only for 
 - `examples/`: retired; never add files.
 
 Do not commit logs, transient solver output, binary backups, lock copies, generated inventories or root scratch.
-Do not keep two tests with the same purpose and failure signal.
+Do not keep two tests with the same purpose and failure signal.  Commercial-solver interchange (a converter or an MCP exposing one) belongs in that tool's non-public mcp-server; Policy 10 enforces it.
 
 ## Engineering Architecture
 Prefer established public abstractions over proprietary plumbing.
