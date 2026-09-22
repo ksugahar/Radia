@@ -1,8 +1,27 @@
 """H1 mixed total/reduced Omega route for electromagnets.
 
-This is deliberately a small adapter around NGSolve-owned finite-element
-spaces and the Kelvin solver.  It fixes the physical partition and source
-trace contract shared by every static-electromagnet acceptance calculation.
+The formulation is the total/reduced scalar-potential split: a total potential
+in the iron, a reduced potential carrying the source field in the air, and an
+interface condition between them.  It is due to Simkin and Trowbridge, who
+introduced the total scalar potential for this purpose in 1979 [1] and gave
+the nonlinear three-dimensional treatment in 1980 [2].  The cancellation the
+split exists to avoid -- a large source field minus a nearly equal gradient,
+inside high-permeability iron -- is the reason a single reduced potential is
+not used everywhere.
+
+    [1] J. Simkin and C. W. Trowbridge, "On the use of the total scalar
+        potential in the numerical solution of field problems in
+        electromagnetics", Int. J. Numer. Methods Eng. 14(3), 423-440, 1979.
+        doi:10.1002/nme.1620140308  (bibliography key ``simkin1979use``)
+    [2] J. Simkin and C. W. Trowbridge, "Three-dimensional nonlinear
+        electromagnetic field computations, using scalar potentials", IEE
+        Proc. B 127(6), 368-374, 1980.  doi:10.1049/ip-b.1980.0052
+        (bibliography key ``simkin1980three``)
+
+This module itself is deliberately a small adapter around NGSolve-owned
+finite-element spaces and the Kelvin solver.  It fixes the physical partition
+and source trace contract shared by every static-electromagnet acceptance
+calculation.
 """
 from __future__ import annotations
 
