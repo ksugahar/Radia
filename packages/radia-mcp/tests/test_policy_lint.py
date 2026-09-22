@@ -176,3 +176,15 @@ def test_tracked_only_provenance_scan_uses_all_scan_suffixes(tmp_path):
 
     tracked_findings = policy_lint.scan_text_tree(tmp_path, tracked_only=True)
     assert [item[0] for item in tracked_findings] == ["src/public_leak.m"]
+
+
+def test_root_prose_is_scanned_and_tracked_filter_is_preserved(tmp_path):
+    for name in ("README.md", "CHANGELOG.md", "CONTRIBUTING.md"):
+        (tmp_path / name).write_text("Source: W:/00_CAE/NGSolve/private\n", encoding="utf-8")
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(["git", "add", "README.md", "CHANGELOG.md"], cwd=tmp_path,
+                   check=True, stdout=subprocess.DEVNULL)
+    assert {row[0] for row in policy_lint.scan_text_tree(tmp_path, tracked_only=True)} == {
+        "README.md", "CHANGELOG.md"}
+    assert {row[0] for row in policy_lint.scan_text_tree(tmp_path)} == {
+        "README.md", "CHANGELOG.md", "CONTRIBUTING.md"}

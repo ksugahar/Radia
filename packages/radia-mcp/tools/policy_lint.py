@@ -460,7 +460,8 @@ def scan_text_tree(root: Path, *, tracked_only: bool = False) -> list[tuple[str,
         for f in sorted(tracked):
             if "__pycache__" in f.parts or f.suffix not in _SCAN_SUFFIXES:
                 continue
-            if not any(_is_relative_to(f, base) for base in scan_bases):
+            root_prose = f.parent == scan_root and f.name in _SCAN_ROOT_FILES
+            if not root_prose and not any(_is_relative_to(f, base) for base in scan_bases):
                 continue
             if f in seen:
                 continue
@@ -634,7 +635,7 @@ def main(argv: list[str] | None = None) -> int:
     # report provenance findings (file:line: reason)
     suffix = " (git-tracked only)" if args.tracked_only else ""
     print(f"\nPROVENANCE (commercial-tool attribution / internal paths) in "
-          f"src+examples+tests{suffix}:")
+          f"src+examples+tests+root prose{suffix}:")
     if findings:
         for label, lineno, reason in findings:
             print(f"  {label}:{lineno}: {reason}")
