@@ -138,7 +138,7 @@ def test_hybrid_undulator_runner_keeps_fixed_magnetization_out_of_material_unkno
     assert runner.MIXED_DOMAIN.reduced_materials == ("air",)
     assert runner.MIXED_DOMAIN.total_materials == ("iron", "kelvin")
     assert runner.MIXED_DOMAIN.nonlinear_materials == ("iron",)
-    assert runner.MIXED_DOMAIN_LABEL == "H1 TOSCA mixed total/reduced Omega"
+    assert runner.MIXED_DOMAIN_LABEL == "H1 mixed total/reduced Omega"
     points = runner.observation_points()
     assert points.shape == (27, 3)
     assert (points[:, 0] == 0.0).all()

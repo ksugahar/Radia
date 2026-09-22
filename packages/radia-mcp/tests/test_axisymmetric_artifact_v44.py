@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 
-from radia_mcp.radia_ngsolve.femm_v44_identity import validate_public_identity
+from radia_mcp.radia_ngsolve.axisymmetric_v44_identity import validate_public_identity
 
 
 _PROMOTED_CASE_IDS = (

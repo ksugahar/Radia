@@ -873,7 +873,7 @@ Eliminate A_FE via Schur complement:
        ↑ effective coil impedance (N_coil×N_coil) — small!
 
 This is identical in structure to the Lange-Henrotte-Hameyer 2009
-field-circuit coupling (cf. `femm_transient_knowledge`), with the
+field-circuit coupling (cf. `transient_circuit_knowledge`), with the
 key difference that K_FE here uses the EFFECTIVE (homogenized) iron
 material — NOT the full sheet-by-sheet discretization.
 

@@ -939,7 +939,7 @@ exterior-source routes, the twisted
 0-form pullback contracts, and the A\*/A-Phi p-sweep — and embeds the
 outputs.
 
-#### TOSCA-style mixed total/reduced Omega
+#### mixed total/reduced Omega
 
 For a compact coil and high-permeability iron, a *global* reduced scalar
 potential is a poor numerical split: it evaluates `H_s - grad(phi)` inside
@@ -1021,7 +1021,7 @@ topological/source contract.  It is intentionally not a hysteresis solver.
 EnergyStop and Play state evolution need their own committed material-state
 iteration and must not be substituted by the memoryless `B(H)` update.
 
-Golden coverage: `tests/test_kelvin_tosca_mixed_omega.py` locks the interface
+Golden coverage: `tests/test_kelvin_mixed_omega.py` locks the interface
 jump, high-`mu_r` source exclusion, scalar-trace residual gate, and the
 linear-law Picard path. `tests/test_kelvin_radia_source_contract.py` locks
 the native Kelvin 0-form and twisted-1-form transforms.

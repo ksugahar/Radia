@@ -118,7 +118,7 @@ This is the signed/directional gate behind
 When a two-wire row is promoted from an external solver or a recovered table,
 the current values alone are not enough evidence.  Bind the row to
 ``current_source_artifact_id`` and ``current_definition_method`` (for example
-``femm_circuit_current_snapshot``) so a stale current table or RMS/peak
+``magnetostatic_2d_circuit_current_snapshot``) so a stale current table or RMS/peak
 convention cannot pass merely because the final force value still matches the
 Ampere-law toy case.  Slot 2026-07-01/332 makes this an executable
 ``parallel_wire_force_result_package_gate`` contract.
@@ -192,7 +192,7 @@ wire-pair direction.  Slot 2026-07-02/427 adds
 ``force_component_basis_schema_id`` plus
 ``require_force_component_basis_schema`` to
 ``parallel_wire_force_result_package_gate``.  Use a schema such as
-``femm_global_xy_radial_projection_basis_v1`` before importing weighted-stress
+``magnetostatic_2d_global_xy_radial_projection_basis_v1`` before importing weighted-stress
 block-force rows into notebooks, radia-ngsolve validation records, or
 optimization objectives.
 
@@ -202,7 +202,7 @@ switching from per-length ``N/m`` evidence to depth-integrated total ``N``.
 Slot 2026-07-02/434 adds ``force_unit_basis_schema_id`` plus
 ``require_force_unit_basis_schema`` to
 ``parallel_wire_force_result_package_gate``.  Use a schema such as
-``femm_planar_force_per_length_depth_basis_v1`` so the N/m comparison basis,
+``magnetostatic_2d_planar_force_per_length_depth_basis_v1`` so the N/m comparison basis,
 stored ``mi_probdef`` problem depth, and total-force exclusion travel together
 as one reusable contract.
 
@@ -280,7 +280,7 @@ For table-based line-probe exports, keep the sample-grid package with the field
 table: ``sample_grid_id``, ``sample_grid_digest``, and ``sample_count`` belong
 beside ``result_set_id``, ``export_artifact_id``, ``field_probe_id``, and the
 output artifact.  Slot 2026-07-01/357 adds this to
-``jmag_airgap_flux_sample_metadata_gate`` so a stale angle grid or truncated
+``motor_fem_airgap_flux_sample_metadata_gate`` so a stale angle grid or truncated
 row count cannot be joined to a plausible Br/Bt table before torque comparison.
 After the shear integration, do not promote a bare scalar torque.  The result
 package should repeat ``input_field_table_artifact_id``,
@@ -288,7 +288,7 @@ package should repeat ``input_field_table_artifact_id``,
 ``integration_method``, ``integration_policy``, ``torque_output_artifact_id``,
 ``torque_output_digest``, ``component_frame``, and
 ``torque_sign_convention``.  Slot 2026-07-01/365 adds
-``jmag_airgap_torque_integration_package_gate`` so stale field tables, stale
+``motor_fem_airgap_torque_integration_package_gate`` so stale field tables, stale
 angle grids, wrong integration methods, and missing torque-output digests fail
 before the torque scalar is handed to a notebook, optimizer, or cross-solver
 comparison.  Slot 2026-07-01/372 extends that package with

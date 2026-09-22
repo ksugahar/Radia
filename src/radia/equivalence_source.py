@@ -1,4 +1,4 @@
-"""Equivalence-theorem near-field source (CST Near-Field Source equivalent).
+"""Equivalence-theorem near-field source.
 
 Schelkunoff/Love equivalence theorem implementation for the Radia /
 NGSolve stack.  Record EM field on a closed surface around a source
@@ -10,8 +10,7 @@ region, persist it, replay it later as either
   (b) a re-radiation source for downstream tools (Radia rad.Fld, or
       external MoM via Nastran Near_Field_Area_*.dat export).
 
-See radia_mcp.fem.equivalence_source_knowledge for theory & lab
-provenance (3 FEMM/Femtet directories distilled).
+See radia_mcp.fem.equivalence_source_knowledge for the theory.
 
 Scope (intentional):
   - Equivalence-theorem extraction + reconstruction ONLY.
@@ -657,11 +656,10 @@ class NearFieldSource:
     # -----------------------------------------------------------------
 
     def write_nastran_nfs(self, path, frequency_hz: Optional[float] = None):
-        """Export to a Nastran-style Near_Field_Area_*.dat that the
-        EMCoS Antenna Vlab / FEKO / equivalent tools can ingest.
+        """Export to a Nastran-style Near_Field_Area_*.dat.
 
-        Matches the format produced by the Sugahara Lab 2015_04_12
-        FEMTET workflow (appendix MATLAB script).
+        The file carries the recorded surface field as an equivalent
+        near-field source that a method-of-moments code can re-radiate.
 
         Args:
             path: output file path

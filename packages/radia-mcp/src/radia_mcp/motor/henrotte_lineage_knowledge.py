@@ -25,7 +25,7 @@ Coverage:
                      use them together for motor analysis
 
 For the 2009 field-circuit-coupling capstone of this arc, see
-`femm_transient_knowledge` (Lange-Henrotte-Hameyer 2009).
+`transient_circuit_knowledge` (Lange-Henrotte-Hameyer 2009).
 For the 2004 EM force-density paper that bridges to forces, see
 `radia_mcp.differential_forms.forces_knowledge`.
 """
@@ -472,7 +472,7 @@ methods**.  Read in this order:
 2007  SRM winding eddy currents (PhD)       [Carstensen, Hameyer]
        ↓
 2009  Field-circuit coupling (linearization)[Lange, Henrotte, Hameyer]
-       ↓                                    (in femm_transient_knowledge)
+       ↓                                    (in transient_circuit_knowledge)
 2013  Variational hysteresis (FE-ready)    [François-Lavet et al.]
        ↓
 2018  Energy-based hysteresis PhD (254p)    [Jacques]
