@@ -82,7 +82,12 @@ also save a failed JSON with the exception and options before propagating.
 `radia.kelvin_solver` on the same mesh: air and coil are the reduced region,
 iron the total region, the total-Hodge split supplies the interface trace and
 the harmonic remainder, natural `B.n = 0` on the box and the `GND` point gauge.
-Its nonlinear loop is the production Picard iteration (damped or Anderson).
+Its default nonlinear loop is the production Picard iteration (damped or
+Anderson). `--omega-nonlinear-method newton` selects quadrature-based PCHIP
+coenergy Newton, with residual backtracking and both equation-residual and
+vector-field-change convergence checks. `--omega-order 2` enables the P2
+scalar-potential comparison; reduced-A remains first order. Newton does not
+use Anderson mixing. These switches do not imply a timing certificate.
 
 ## Reference and metrics
 

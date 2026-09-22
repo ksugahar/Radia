@@ -1427,7 +1427,8 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
         source_rhs_reduced=None, reduced_normal_flux=None,
         reduced_flux_boundary=None, solver="direct", inverse="pardiso",
         cg_preconditioner="local", cg_tolerance=1.0e-10,
-        cg_max_iterations=2000, return_system=False):
+        cg_max_iterations=2000, return_system=False,
+        dirichlet_bbbnd=None, total_source_h=None, total_source_materials=()):
     """Solve the finite-domain matching-trace mixed Omega problem as SPD.
 
     This is a strict acceleration path for a joined, non-periodic mesh whose
@@ -1459,6 +1460,11 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
     actual = set(mesh.GetMaterials())
     reduced_set = set(reduced_materials)
     total_set = set(total_materials)
+    total_source_materials = tuple(total_source_materials)
+    if not set(total_source_materials) <= total_set:
+        raise ValueError("total_source_materials must be in total_materials")
+    if bool(total_source_materials) != (total_source_h is not None):
+        raise ValueError("total_source_h and total_source_materials must be supplied together")
     if (not reduced_set or not total_set or reduced_set & total_set
             or reduced_set | total_set != actual):
         raise ValueError(
@@ -1484,6 +1490,7 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
     interface_selector = mesh.Boundaries(interface_boundary)
     fes = H1(
         mesh, order=order,
+        **({"dirichlet_bbbnd": dirichlet_bbbnd} if dirichlet_bbbnd else {}),
         **({"dirichlet": dirichlet_boundary} if dirichlet_boundary else {}))
     reduced_space = H1(mesh, order=order, definedon=reduced_selector)
     u, v = fes.TnT()
@@ -1498,6 +1505,8 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
         # junction is its exact eliminated counterpart.
         _zero_h1_boundary_dofs(
             mesh, lift, dirichlet_boundary, order=order)
+    if dirichlet_bbbnd:
+        lift.vec.FV().NumPy()[~np.asarray(list(fes.FreeDofs()), dtype=bool)] = 0.0
 
     a_bf = BilinearForm(fes, symmetric=True)
     a_bf += mu_cf * grad(u) * grad(v) * dx(
@@ -1512,6 +1521,10 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
             definedon=reduced_selector, bonus_intorder=bonus_intorder)
     f_lf += mu_cf * grad(lift) * grad(v) * dx(
         definedon=reduced_selector, bonus_intorder=bonus_intorder)
+    if total_source_h is not None:
+        f_lf += mu_cf * total_source_h * grad(v) * dx(
+            definedon=mesh.Materials("|".join(total_source_materials)),
+            bonus_intorder=bonus_intorder)
     if reduced_normal_flux is not None:
         reduced_flux_names = boundaries_touching_materials(
             mesh, str(reduced_flux_boundary).split("|"), reduced_materials)
@@ -1562,8 +1575,9 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
     postprocess_started = time.perf_counter()
     phi_reduced = solution - lift
     H_reduced = H_s - grad(solution) + grad(lift)
-    H_total = -grad(solution)
     zero = CoefficientFunction((0.0, 0.0, 0.0))
+    total_source = mesh.MaterialCF({name: total_source_h for name in total_source_materials}, default=zero)
+    H_total = total_source - grad(solution)
     components = []
     for component in range(3):
         components.append(mesh.MaterialCF({
@@ -2745,7 +2759,7 @@ def audit_mixed_omega_constitutive_field(mesh, H_cf, B_cf, bh_table,
     delta = B_cf - target
     region = mesh.Materials("|".join(names))
     def integral(value):
-        return float(Integrate(value, mesh, definedon=region,
+        return float(Integrate(value.Compile(), mesh, definedon=region,
                                order=int(integration_order)).real)
     defect = integral(InnerProduct(delta, delta))
     reference = integral(InnerProduct(target, target))
