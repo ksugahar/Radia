@@ -486,6 +486,59 @@ the integration order from 2 to 14 settled the fraction to `1e-4` by order 6,
 so the measurement was fine and the 50 kHz row was simply under-resolved --
 its skin is thinner than one element.
 
+### 150 kHz reached by revolving the section, and the assumption fails there too (2026-09-22)
+
+The three-dimensional route could not reach the frequency the delivery gate
+was accepted at.  Revolving the section removes the third dimension without
+removing the physics: the beak profile becomes the meridian of a ring, the
+skin is resolved by a two-dimensional mesh, and a solve takes **0.3 s** at
+43k degrees of freedom against 10 minutes at 976k.  `radia.eddy_axisym_ring`
+drives `radia.axifem`'s already-validated stiffness and sigma-mass operators
+with a loop voltage and recovers the ring current.
+
+The solver carries the same anchor as the three-dimensional one.  Against the
+exact Bessel round-wire resistance it converges to `-0.61%` at `a / delta` of
+both 6 and 12, and the residual shrinks as `1/R0` -- `-2.70%` at `R0/a = 10`,
+`-0.50%` at 30 -- so it is the ring's curvature rather than the solve.
+
+On the beak section the sweep is converged in both directions: refining
+`maxh` from `0.08` to `0.05 mm` moves the 150 kHz beak share by `0.05%`, and
+doubling the radius from 200 to 400 mm moves it by `0.14%`.
+
+| frequency | skin depth | beak loss | tip loss |
+|---|---|---|---|
+| 5 kHz | 0.935 mm | 0.31570 | 0.09119 |
+| 15 kHz | 0.540 mm | 0.34770 | 0.16105 |
+| 50 kHz | 0.296 mm | 0.32490 | 0.22959 |
+| **150 kHz** | **0.171 mm** | **0.30753** | **0.24504** |
+
+Against the 2-D surface-impedance reference at 150 kHz -- the same section, the
+same cuts, converged to 1024 perimeter samples, differing only in that it
+replaces the interior by a Leontovich impedance:
+
+| | beak loss | tip loss |
+|---|---|---|
+| interior resolved | 0.30753 | 0.24504 |
+| 2-D SIBC, n=1024 | 0.34167 | 0.20231 |
+| **SIBC relative** | **+11.10%** | **-17.44%** |
+
+The reason is geometric and can be read off the fixture.  The tip radius is
+`0.125 mm` and the skin depth at 150 kHz is `0.171 mm`: **the layer the
+surface impedance describes is thicker than the curvature of the surface it
+assumes to be locally flat.**  The assumption has to fail at the tip first,
+and the tip is what a beak fin is for.  That is where the error is largest and
+it changes sign against the beak share, which is what a redistribution looks
+like rather than a scale error.
+
+This does not say the delivery gate's *pairwise* acceptance was wrongly
+computed -- BEM-A and the PEEC do agree with each other to `0.58%`, and that
+was never in doubt.  It says the quantity they agree on is not the one the
+conductor produces.  Data: `results/beak_section_axisym_sweep_20260922.json`.
+
+Scope: a ring is not a straight fin, and end effects are absent by
+construction, so this is the mid-span comparison and not a terminal one.  The
+curvature is measured rather than assumed away, but it is not zero.
+
 ## Required next gates
 
 1. A synthetic straight beak-fin STEP and reproducible generator now live in
@@ -510,12 +563,15 @@ its skin is thinner than one element.
 3. Compare local current, tip/root loss, terminal impedance, and field at the
    workpiece against an independent 3-D A-phi/HCurl reference over frequency,
    conductivity, geometry, and mesh sweeps. KCL alone is not an accuracy gate.
-   **Reference built and validated, first point measured, gate NOT passed
-   (2026-09-22)**: at 5 kHz the surface-impedance routes are `4%` out on the
-   beak share, a third out on the tip share and `36%` low on R, and they agree
-   with each other throughout. The mesh sweep is done at that frequency; the
-   frequency, conductivity and geometry sweeps are not, and 150 kHz is blocked
-   on the Netgen boundary-layer defect recorded above.
+   **Reference built and validated, gate NOT passed (2026-09-22)**: at 5 kHz
+   the three-dimensional A-V solve puts the surface-impedance routes `4%` out
+   on the beak share, a third out on the tip share and `36%` low on R, and
+   they agree with each other throughout. Revolving the section then reached
+   150 kHz, where the surface-impedance description is `+11.1%` on the beak
+   share and `-17.4%` on the tip share, for the geometric reason that the skin
+   is thicker than the tip radius. Mesh and frequency sweeps are done;
+   conductivity and geometry sweeps are not, and the terminal quantities on
+   the straight fin at 150 kHz remain out of reach in three dimensions.
 4. Extend the workpiece weak and strong coupling APIs to accept per-branch
    currents and per-branch induced EMFs. The present K-by-K bundle reduction
    and one-current-per-filament field projection cannot represent transverse
