@@ -151,6 +151,41 @@ def test_newton_on_a_linear_law_is_one_exact_step(box_mesh):
     assert np.max(np.linalg.norm(field_newton - field_linear, axis=1)) / scale < 1.0e-5
 
 
+def test_newton_accepts_an_initially_zero_residual(box_mesh):
+    engine = _engine(box_mesh, "ams", source=(0.0, 0.0, 0.0))
+    field, stats, _ = engine.run_newton(
+        lane().SoftIronLaw(_bh_table()), newton_tolerance=1e-8,
+        tolerance=1e-6, max_iterations=10, max_halvings=4, observation=_points())
+    assert stats["converged"] and stats["iterations"] == 0
+    assert stats["final_residual_relative"] == 0.0
+    np.testing.assert_array_equal(field, 0.0)
+
+
+def test_cli_preserves_runtime_failure_as_json(tmp_path, monkeypatch):
+    module = lane()
+    output = tmp_path / "failure.json"
+    monkeypatch.setattr(sys, "argv", ["run_p1_box.py", "--vol", str(tmp_path / "missing.vol"),
+                                     "--output", str(output)])
+    def fail(options):
+        raise RuntimeError("native backend unavailable")
+    monkeypatch.setattr(module, "run", fail)
+    with pytest.raises(RuntimeError, match="native backend unavailable"):
+        module.main()
+    report = json.loads(output.read_text())
+    assert not report["completed"] and not report["passed"]
+    assert report["error"]["message"] == "native backend unavailable"
+
+
+def test_cli_returns_failure_for_nonconvergence(tmp_path, monkeypatch):
+    module = lane()
+    monkeypatch.setattr(sys, "argv", ["run_p1_box.py", "--vol", "unused.vol",
+                                     "--output", str(tmp_path / "result.json")])
+    monkeypatch.setattr(module, "run", lambda options: {"completed": True, "passed": False})
+    with pytest.raises(SystemExit) as exc:
+        module.main()
+    assert exc.value.code == 1
+
+
 def test_newton_converges_on_the_sample_table_with_full_steps(box_mesh):
     module = lane()
     engine = _engine(box_mesh, "ams")
