@@ -2,7 +2,7 @@
 
 The permanent magnets are a prescribed C++ ``MagnetizationSource``.  They are
 never material-response unknowns: the HDiv iron response, HCurl reduced-A, and
-TOSCA-style mixed total/reduced Omega paths evaluate the same source field.
+mixed total/reduced Omega paths evaluate the same source field.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 MU0 = 4.0e-7 * math.pi
-MIXED_DOMAIN_LABEL = "H1 TOSCA mixed total/reduced Omega"
+MIXED_DOMAIN_LABEL = "H1 mixed total/reduced Omega"
 
 
 def _sha256(path: Path) -> str:

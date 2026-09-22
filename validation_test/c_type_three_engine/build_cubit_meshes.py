@@ -737,7 +737,7 @@ def build(options: argparse.Namespace) -> dict[str, object]:
             "hdiv_mmm": "exact iron-only Cubit/ACIS TET .vol; Coulomb open boundary",
             "reduced_a": "exact iron + locally refined physical air + Kelvin exterior",
             "mixed_total_reduced_omega": (
-                "same periodic Kelvin .vol as reduced-A; H1 TOSCA "
+                "same periodic Kelvin .vol as reduced-A; H1 "
                 "mixed total/reduced Omega"
             ),
         },

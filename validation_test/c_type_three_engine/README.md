@@ -7,13 +7,13 @@ scope-specific acceptance when a comparator is unvalidated or resource-limited.
 Such runs retain their failed or incomplete comparison status.
 
 The physical C-type model
-is evaluated by HDiv-MMM, HCurl reduced-A, and the NGSolve TOSCA-style H1 mixed
+is evaluated by HDiv-MMM, HCurl reduced-A, and the NGSolve H1 mixed
 total/reduced Omega route:
 
 1. HDiv-MMM (BDM1 or BDM2), with the Coulomb charge Gram as the exact open
    boundary operator;
 2. HCurl reduced-A;
-3. H1 TOSCA mixed total/reduced Omega.
+3. H1 mixed total/reduced Omega.
 
 ## Canonical geometry route
 
@@ -124,7 +124,7 @@ analytic solution.
 `results/lab_20260829_mesh.json` records the passing Cubit/Kelvin topology
 contract. The `20260829` and `20260830` field artifacts remain tracked as
 historical evidence for the former global reduced-Omega route only. They do
-not certify the current TOSCA mixed formulation, because they omit its required
+not certify the current mixed total/reduced Omega formulation, because they omit its required
 physical-air/Kelvin source-potential jump.
 
 The current pre-release evidence is explicit about native binary provenance:
@@ -133,21 +133,21 @@ the current Python mixed-formulation source was overlaid on the installed
 CoilBuilder, Radia source evaluation, and NGSolve assembly were therefore the
 installed wheel's components.
 
-- `results/hibino_20260903_linear_order3_tosca_mixed_v4.json` is the linear
+- `results/hibino_20260903_linear_order3_mixed_omega_v4.json` is the linear
   order-3 full three-engine run. At a 1% all-pair gate its HDiv/mixed,
   HDiv/reduced-A, and mixed/reduced-A gap-core RMS differences are 0.41955%,
   0.38661%, and 0.45977%. The physical source-trace residuals are 1.26933%
   on iron/air and 1.75381% on `kelvin_int`, both below the 5% cut gate.
-- `results/hibino_20260903_nonlinear_order2_tosca_mixed_v4.json` is the
+- `results/hibino_20260903_nonlinear_order2_mixed_omega_v4.json` is the
   nonlinear full three-engine run with the shared monotone PCHIP B(H) table.
   All engines converge; the three respective gap-core RMS differences are
   0.12324%, 0.10674%, and 0.16023%. Its trace residuals are 2.98511% and
-  4.53077%, both below the same 5% gate. The HDiv, reduced-A, and H1 TOSCA
+  4.53077%, both below the same 5% gate. The HDiv, reduced-A, and H1
   mixed total/reduced Omega
   runtimes are 11.27 s, 216.93 s, and 134.71 s.
 
 These two artifacts complete the fixed-mesh three-formulation acceptance for
-the current TOSCA split. The released-binary four-level campaign is recorded
+the current mixed total/reduced Omega split. The released-binary four-level campaign is recorded
 in `results/c_type_20260903_nonlinear_bdm2_mesh_convergence_certificate.json`
 with its portable level artifacts:
 

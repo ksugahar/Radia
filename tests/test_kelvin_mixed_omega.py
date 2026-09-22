@@ -1,4 +1,4 @@
-"""TOSCA-style total/reduced Omega coupling tests."""
+"""mixed total/reduced Omega coupling tests."""
 
 from __future__ import annotations
 
