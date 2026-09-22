@@ -1,0 +1,47 @@
+{
+  "vol": "C:\\temp\\ctype_box\\meshes\\ctype_box_s15.vol",
+  "vol_sha256": "dd556973315a410972b8f27e7bf3c701848dff3c0774116949096a0c1189eaf1",
+  "bdf": "C:\\temp\\ctype_box\\meshes\\ctype_box_s15.bdf",
+  "bdf_sha256": "23414e2a39389cab4e25b0866a207c1d130c5c094a1d7b1fcd889131889a226b",
+  "nodes": 11603,
+  "tetrahedra": 67397,
+  "netgen_materials_by_domain": [
+    "iron",
+    "coil",
+    "coil",
+    "coil",
+    "coil",
+    "coil",
+    "coil",
+    "coil",
+    "coil",
+    "air",
+    "air"
+  ],
+  "part_by_domain": [
+    "iron",
+    "coil",
+    "coil",
+    "coil",
+    "coil",
+    "coil",
+    "coil",
+    "coil",
+    "coil",
+    "air",
+    "air"
+  ],
+  "psolid_by_part": {
+    "iron": 1,
+    "coil": 2,
+    "air": 3
+  },
+  "tetrahedra_by_part": {
+    "iron": 7805,
+    "coil": 17866,
+    "air": 41726
+  },
+  "tetrahedra_reoriented": 67397,
+  "split_material": null,
+  "units": "metres"
+}
