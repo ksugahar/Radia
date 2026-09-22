@@ -171,6 +171,13 @@ SIMULINK_TARGETS = {
     "mdx1": ("mdx1", SSH_MDX1, "python"),
     "mdx2": ("mdx2", SSH_MDX2, "python"),
 }
+# The promotion gate imports the same tuple, so the machines that produce
+# release evidence and the machines the gate demands evidence from cannot
+# drift apart again.  release_acceptance.py is the single owner of the list.
+from release_acceptance import RELEASE_ACCEPTANCE_HOSTS  # noqa: E402
+
+assert tuple(SIMULINK_TARGETS) == RELEASE_ACCEPTANCE_HOSTS, (
+    "release_quad targets and the release acceptance hosts have drifted")
 
 
 def _editable_repo_lab():
