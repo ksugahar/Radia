@@ -150,7 +150,7 @@ end
 function testStateInjectionFailsWithoutEndAndAcceptsHierarchicalInductor(testCase)
 fixture=fullfile(testCase.TestData.TempDirectory,"missing_end.cir");writeTextFixture(fixture,"V1 in 0 1"+newline+".tran 1m");
 state=struct("schema","radia.ltspice.transient_state.v1","time_s",0,"node_names","in","node_voltages_V",1,"inductor_names","X1:L1","inductor_currents_A",2);
-verifyError(testCase,@()radia.ltspice.applyTransientState(fixture,state,fullfile(testCase.TestData.TempDirectory,"out.cir"),Duration_s=1e-3),"radia:ltspice:MissingEnd");
+verifyError(testCase,@()radia.ltspice.applyTransientState(fixture,state,fullfile(testCase.TestData.TempDirectory,"out.cir"),Duration_s=1e-3),"radia:ltspice:StateNetlistEnd");
 raw=struct("names",["time","V(in)","I(X1:L1)"],"values",[0,0,0;1e-3,1,2],"step_ranges",[1,2]);extracted=radia.ltspice.extractTransientState(raw);
 verifyEqual(testCase,extracted.inductor_names,"X1:L1");verifyEqual(testCase,extracted.inductor_currents_A,2);
 end
@@ -350,7 +350,7 @@ function testSpiceEditorRejectsAmbiguousAndUnterminatedEdits(testCase)
 duplicate=tempPath(testCase,"duplicate_editor.cir");writeTextFixture(duplicate,"Duplicate editor"+newline+"R1 a b 1k"+newline+"r1 b 0 2k"+newline+".param gain=1"+newline+".param GAIN=2"+newline+".end");
 editor=radia.ltspice.SpiceEditor(duplicate);verifyError(testCase,@()editor.getComponentValue("R1"),"radia:ltspice:AmbiguousComponent");verifyError(testCase,@()editor.setParameter("gain",3),"radia:ltspice:AmbiguousParameter");
 unterminated=tempPath(testCase,"unterminated_editor.cir");writeTextFixture(unterminated,"Unterminated"+newline+"R1 a 0 1k");editor=radia.ltspice.SpiceEditor(unterminated);
-verifyError(testCase,@()editor.addInstruction(".tran 1m"),"radia:ltspice:MissingEnd");verifyError(testCase,@()editor.addComponent("C1",["a";"0"],"1u"),"radia:ltspice:MissingEnd");
+verifyError(testCase,@()editor.addInstruction(".tran 1m"),"radia:ltspice:StateNetlistEnd");verifyError(testCase,@()editor.addComponent("C1",["a";"0"],"1u"),"radia:ltspice:StateNetlistEnd");
 end
 
 function testSpiceEditorUnderstandsSubcircuitParamsSyntax(testCase)
