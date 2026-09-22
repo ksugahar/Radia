@@ -1,0 +1,27 @@
+{
+  "schema": "radia.maintenance.integration.v1",
+  "host": "mdx1",
+  "ngsolve": "6.2.2606",
+  "numerical_tests": {
+    "total_passed": 50,
+    "first_batch": 39,
+    "remainder": 11,
+    "note": "First bounded process stopped at 90 seconds after 39 passes; remaining 11 passed in a separate process. Initial two-thread attempt was interrupted; final numerical validation used one NGSolve and BLAS thread."
+  },
+  "interface_contract_tests_passed": 52,
+  "matlab_parity": {
+    "classified": 297,
+    "total": 297,
+    "missing": 0
+  },
+  "matlab_live_execution": "not run",
+  "changes": [
+    "Integrate mixed Omega material-law and convergence checks",
+    "Integrate mesh material-adjacency optimization",
+    "Restore MATLAB periodic H1 batch entry and parity classification"
+  ],
+  "limitations": [
+    "Contract checks do not certify live MATLAB, Simulink, LTspice, or MEX execution",
+    "Remaining backup branch content still requires semantic audit"
+  ]
+}
