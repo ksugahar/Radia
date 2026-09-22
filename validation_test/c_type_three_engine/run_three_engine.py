@@ -445,6 +445,8 @@ def solve_omega(
     source_projection_order: int | None = None,
     bonus_intorder: int = 4,
     exact_exterior_source: bool = False,
+    nonlinear_method: str = "picard",
+    progress_callback=None,
 ) -> tuple[np.ndarray, dict[str, object]]:
     """Run the mixed total/reduced Omega route on the Kelvin mesh.
 
@@ -491,7 +493,9 @@ def solve_omega(
             kelvin_source_h=exterior_source,
             nonlinear_tolerance=nonlinear_tolerance,
             nonlinear_max_iterations=nonlinear_maximum_iterations,
-            nonlinear_material_update_order=(order - 1 if order > 1 else None),
+            nonlinear_material_update_order=(order - 1 if order > 1 and nonlinear_method == "picard" else None),
+            nonlinear_method=nonlinear_method,
+            nonlinear_progress_callback=progress_callback,
             nonlinear_relaxation=float(relaxation),
             nonlinear_anderson_depth=int(anderson_depth),
             nonlinear_mu_r_initial=mu_r_initial,
