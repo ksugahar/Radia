@@ -132,10 +132,18 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     nonlinear_material_log_state_initial=None,
     nonlinear_material_sampling: str = "element_centroid",
     nonlinear_bh_interpolation: str = "pchip",
+    nonlinear_method: str = "picard",
+    nonlinear_residual_tolerance: float = 1e-8,
+    nonlinear_progress_callback=None,
     inverse: str = "pardiso",
     bonus_intorder: int = 4,
 ) -> dict[str, object]:
     """Solve one static electromagnet through the required H1 formulation.
+
+    ``nonlinear_method="newton"`` selects quadrature-based PCHIP Newton for
+    orders one and two, with residual backtracking. It does not use a projected
+    material state or Anderson mixing. ``nonlinear_residual_tolerance`` bounds
+    its free-DOF equation residual; ``nonlinear_tolerance`` bounds field change.
 
     The nonlinear loop is the Picard iteration of
     :func:`radia.kelvin_solver.solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin`:
@@ -331,7 +339,27 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     else:
         if not domain.nonlinear_materials:
             raise ValueError("bh_table requires declared nonlinear_materials")
-        result = solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
+        if nonlinear_method not in ("picard", "newton"):
+            raise ValueError("nonlinear_method must be 'picard' or 'newton'")
+        nonlinear_solver = solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin
+        iteration_options = dict(
+            relaxation=float(nonlinear_relaxation),
+            anderson_depth=int(nonlinear_anderson_depth),
+            anderson_transform=str(nonlinear_anderson_transform),
+            material_update_order=nonlinear_material_update_order,
+            material_log_state_initial=nonlinear_material_log_state_initial,
+            material_sampling=nonlinear_material_sampling,
+            bh_interpolation=nonlinear_bh_interpolation)
+        if nonlinear_method == "newton":
+            from .mixed_omega_newton import solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin
+            if (nonlinear_anderson_depth != 0
+                    or nonlinear_material_update_order is not None
+                    or nonlinear_material_log_state_initial is not None
+                    or nonlinear_bh_interpolation != "pchip"):
+                raise ValueError("Newton requires PCHIP without Anderson or projected material state")
+            nonlinear_solver = solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin
+            iteration_options = dict(residual_tolerance=float(nonlinear_residual_tolerance))
+        result = nonlinear_solver(
             mesh,
             source_h,
             source_potential,
@@ -342,15 +370,10 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
             nonlinear_materials=domain.nonlinear_materials,
             tolerance=float(nonlinear_tolerance),
             max_iterations=int(nonlinear_max_iterations),
-            relaxation=float(nonlinear_relaxation),
-            anderson_depth=int(nonlinear_anderson_depth),
-            anderson_transform=str(nonlinear_anderson_transform),
             mu_r_initial=nonlinear_mu_r_initial,
             observation_points=nonlinear_observation_points,
-            material_update_order=nonlinear_material_update_order,
-            material_log_state_initial=nonlinear_material_log_state_initial,
-            material_sampling=nonlinear_material_sampling,
-            bh_interpolation=nonlinear_bh_interpolation,
+            progress_callback=nonlinear_progress_callback,
+            **iteration_options,
             **common,
         )
     trace_gate_applied = source_trace_tolerance is not None and (
