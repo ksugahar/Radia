@@ -502,6 +502,18 @@
       "classification": "private/not-applicable",
       "matlab": [],
       "notes": "Private compatibility implementation."
+    },
+    {
+      "id": "periodic-h1-space",
+      "patterns": [
+        "periodic_h1.py"
+      ],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": [
+        "matlab/+radia/+python/periodicH1.m"
+      ],
+      "notes": "A face-consistent H1 space across one explicit periodic interface, built by the native _periodic_h1_single_interface. The returned space is a Python ecosystem object: it is an argument to later Python calls rather than a value MATLAB computes on, and it must be rebuilt after loading a mesh rather than serialized. Multi-interface, adaptive and parallel-distributed spaces are outside the verified scope."
     }
   ],
   "native_promotion_backlog": [
