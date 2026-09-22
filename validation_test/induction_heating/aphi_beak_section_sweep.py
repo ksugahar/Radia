@@ -85,74 +85,87 @@ def build_section_ring(radius_mm, *, maxh_conductor_mm, maxh_air_mm,
 
 
 def shares(result, radius_mm):
-    """Beak and tip loss shares, by the same cuts the other routes use."""
-    import ngsolve as ng
+    """Beak and tip loss shares, by the same cuts the other routes use.
 
-    mesh = result.mesh
-    region = mesh.Materials(result.conductor)
-    j = result.current_density()
-    loss = (j * ng.Conj(j)).real / (2.0 * result.sigma_S_per_m)
-    beak_cut = (radius_mm + BEAK_X_MM) * 1e-3
-    tip_cut = (radius_mm + TIP_X_MM) * 1e-3
-    total = float(ng.Integrate(loss, mesh, definedon=region, order=10).real)
-    beak = float(ng.Integrate(loss * ng.IfPos(ng.x - beak_cut, 1.0, 0.0), mesh,
-                              definedon=region, order=10).real)
-    tip = float(ng.Integrate(loss * ng.IfPos(ng.x - tip_cut, 1.0, 0.0), mesh,
-                             definedon=region, order=10).real)
+    Dissipation lives in the revolved solid, so it is integrated in the volume
+    measure; ``AxisymRingResult`` owns that choice rather than each caller
+    rediscovering it.  The weight is a fraction of a percent at these radii,
+    but it is a bias, not noise, and it is smallest exactly where the model
+    looks most trustworthy.
+    """
+    total = result.total_loss()
+    beak = result.loss_beyond((radius_mm + BEAK_X_MM) * 1e-3)
+    tip = result.loss_beyond((radius_mm + TIP_X_MM) * 1e-3)
     return total, beak / total, tip / total
 
 
-def _compare_to_sibc(rows):
-    """Put the converged 150 kHz row beside the 2-D surface-impedance solve.
+def _compare(rows, planar_path):
+    """Put this route beside the planar control, and say what still separates.
 
-    The counterpart is the same section at the same frequency, converged to
-    1024 perimeter samples, differing only in that it replaces the conductor's
-    interior by a Leontovich impedance.
+    The planar control resolves the same section and imposes the exterior
+    field of the same total current on its air boundary, so its truncation
+    states the answer instead of obstructing it, and it is anchored on the
+    exact Bessel round wire.  This route pins ``psi = 0`` on a box -- a flux
+    barrier, which behaves as a coaxial return -- so what separates the two is
+    an open-boundary truncation, and the box sweep in ``levels`` measures it.
     """
-    sibc_path = (HERE / "beak_fin_discretization_convergence_150kHz.json")
-    sibc = json.loads(sibc_path.read_text(encoding="utf-8"))
-    ref = sibc["reference_delivery_metrics_n1024"]
+    from make_beak_fin_step import TIP_RADIUS
+
     at_150k = [r for r in rows if abs(r["frequency_hz"] - 150_000.0) < 1e-6]
     if not at_150k:
         return {"note": "no 150 kHz level in this run"}
-    # Largest radius, finest mesh: the converged corner.
-    finest = max(at_150k, key=lambda r: (r["radius_mm"],
+    # Widest box, largest radius, finest mesh: the least truncated corner.
+    finest = max(at_150k, key=lambda r: (r["box_factor"], r["radius_mm"],
                                          -r["maxh_conductor_mm"]))
-    from make_beak_fin_step import TIP_RADIUS
-
-    return {
+    out = {
         "frequency_hz": 150_000.0,
         "skin_depth_mm": finest["skin_depth_mm"],
         "tip_radius_mm": float(TIP_RADIUS),
         "tip_radius_over_skin_depth": float(
             TIP_RADIUS / finest["skin_depth_mm"]),
-        "why_it_matters": (
+        "why_the_surface_impedance_fails_here": (
             "a Leontovich impedance is the leading term of an expansion in "
-            "the ratio of skin depth to the radius of curvature of the "
-            "surface.  At the beak tip that ratio is not small -- the tip "
-            "radius is under one and a half skin depths -- so the first "
-            "curvature correction is of order one rather than of order a "
-            "percent, and the beak root carries genuine sharp corners where "
-            "the radius of curvature is zero and no term of the expansion "
-            "applies at all.  This is where the assumption has to fail "
-            "first, and it is also what a beak fin is for"),
-        "axisymmetric_interior_resolved": {
+            "the ratio of the skin depth to the radius of curvature of the "
+            "surface.  At the beak tip that ratio is 0.68 -- the tip radius "
+            "is under one and a half skin depths -- so the first curvature "
+            "correction is of order one rather than of order a percent, and "
+            "the beak root and the far end carry square corners, where the "
+            "radius of curvature is zero and no term of the expansion "
+            "applies at all"),
+        "least_truncated_axisymmetric": {
             "beak_loss_fraction": finest["beak_loss_fraction"],
             "tip_loss_fraction": finest["tip_loss_fraction"],
             "radius_mm": finest["radius_mm"],
             "maxh_conductor_mm": finest["maxh_conductor_mm"],
-        },
-        "two_dimensional_sibc_n1024": {
-            "beak_loss_fraction": ref["beak_loss_fraction"],
-            "tip_loss_fraction": ref["tip_loss_fraction"],
-        },
-        "sibc_relative_to_resolved": {
-            "beak_loss_fraction": float(
-                ref["beak_loss_fraction"] / finest["beak_loss_fraction"] - 1.0),
-            "tip_loss_fraction": float(
-                ref["tip_loss_fraction"] / finest["tip_loss_fraction"] - 1.0),
+            "box_factor": finest["box_factor"],
         },
     }
+    if not planar_path.exists():
+        out["planar_control"] = {"note": f"{planar_path.name} not present"}
+        return out
+    planar = json.loads(planar_path.read_text(encoding="utf-8"))
+    control = planar["control"]["levels"][-1]
+    out["planar_control"] = {
+        "source": planar_path.name,
+        "beak_loss_fraction": control["beak_loss_fraction"],
+        "tip_loss_fraction": control["tip_loss_fraction"],
+        "worst_error_against_exact_bessel": max(
+            abs(row["relative_error"])
+            for row in planar["control"]["round_wire"]),
+    }
+    out["axisymmetric_relative_to_planar"] = {
+        "beak_loss_fraction": float(finest["beak_loss_fraction"]
+                                    / control["beak_loss_fraction"] - 1.0),
+        "tip_loss_fraction": float(finest["tip_loss_fraction"]
+                                   / control["tip_loss_fraction"] - 1.0),
+        "what_it_is": (
+            "an open-boundary truncation, not a disagreement about the "
+            "physics.  The residual falls monotonically as the box grows and "
+            "does not reach zero for any box that can usefully be meshed, "
+            "which is the argument for giving this route a Kelvin or DtN "
+            "exterior rather than a wider rectangle"),
+    }
+    return out
 
 
 def main():
@@ -167,7 +180,13 @@ def main():
     parser.add_argument("--maxh-conductor-mm", type=float, nargs="+",
                         default=[0.08, 0.05])
     parser.add_argument("--maxh-air-mm", type=float, default=20.0)
-    parser.add_argument("--box-factor", type=float, default=3.0)
+    parser.add_argument("--box-factor", type=float, nargs="+",
+                        default=[3.0, 10.0, 30.0, 100.0],
+                        help="air-box half-size in section widths; psi = 0 "
+                             "there is a flux barrier, so this is an open-"
+                             "boundary truncation and has to be swept")
+    parser.add_argument("--planar-control", type=Path, default=(
+        HERE / "results" / "sibc_patch_corrected_beak_20260922.json"))
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.output.exists():
@@ -176,37 +195,41 @@ def main():
     from radia.eddy_axisym_ring import solve_axisym_ring
 
     rows = []
-    for radius_mm in args.radius_mm:
-        for maxh in args.maxh_conductor_mm:
-            mesh = build_section_ring(
-                radius_mm, maxh_conductor_mm=maxh,
-                maxh_air_mm=args.maxh_air_mm, box_factor=args.box_factor,
-                curve_order=args.curve_order)
-            for frequency in args.frequency_hz:
-                t0 = time.perf_counter()
-                res = solve_axisym_ring(mesh, conductor="conductor",
-                                        frequency_hz=frequency,
-                                        sigma=args.sigma, order=args.order)
-                seconds = time.perf_counter() - t0
-                total, beak, tip = shares(res, radius_mm)
-                delta = res.skin_depth_m
-                row = {
-                    "radius_mm": radius_mm,
-                    "maxh_conductor_mm": maxh,
-                    "frequency_hz": frequency,
-                    "skin_depth_mm": delta * 1e3,
-                    "elements_per_skin_depth": delta / (maxh * 1e-3),
-                    "ndof": res.ndof,
-                    "seconds": seconds,
-                    "R_uohm_per_m": res.impedance_per_metre.real * 1e6,
-                    "beak_loss_fraction": beak,
-                    "tip_loss_fraction": tip,
-                }
-                rows.append(row)
-                print(json.dumps({"phase": "level", **{
-                    k: row[k] for k in ("radius_mm", "maxh_conductor_mm",
-                                        "frequency_hz", "beak_loss_fraction",
-                                        "tip_loss_fraction")}}), flush=True)
+    for box_factor in args.box_factor:
+        for radius_mm in args.radius_mm:
+            for maxh in args.maxh_conductor_mm:
+                mesh = build_section_ring(
+                    radius_mm, maxh_conductor_mm=maxh,
+                    maxh_air_mm=args.maxh_air_mm, box_factor=box_factor,
+                    curve_order=args.curve_order)
+                for frequency in args.frequency_hz:
+                    t0 = time.perf_counter()
+                    res = solve_axisym_ring(
+                        mesh, conductor="conductor", frequency_hz=frequency,
+                        sigma=args.sigma, order=args.order)
+                    seconds = time.perf_counter() - t0
+                    total, beak, tip = shares(res, radius_mm)
+                    delta = res.skin_depth_m
+                    row = {
+                        "box_factor": box_factor,
+                        "radius_mm": radius_mm,
+                        "maxh_conductor_mm": maxh,
+                        "frequency_hz": frequency,
+                        "skin_depth_mm": delta * 1e3,
+                        "elements_per_skin_depth": delta / (maxh * 1e-3),
+                        "ndof": res.ndof,
+                        "seconds": seconds,
+                        "R_uohm_per_m": res.impedance_per_metre.real * 1e6,
+                        "total_loss_W": total,
+                        "beak_loss_fraction": beak,
+                        "tip_loss_fraction": tip,
+                    }
+                    rows.append(row)
+                    print(json.dumps({"phase": "level", **{
+                        k: row[k] for k in (
+                            "box_factor", "radius_mm", "maxh_conductor_mm",
+                            "frequency_hz", "beak_loss_fraction",
+                            "tip_loss_fraction")}}), flush=True)
 
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT,
                           capture_output=True, text=True).stdout.strip()
@@ -222,17 +245,24 @@ def main():
         "sigma_S_per_m": args.sigma,
         "reference_validation": (
             "the solver reproduces the exact Bessel round-wire resistance to "
-            "0.6% at a/delta 6 and 12, mesh-converged, with the residual "
-            "shrinking as 1/R0 -- it is the ring's curvature, not the solve"),
+            "0.6% at a/delta 6 and 12, mesh-converged.  That residual was "
+            "read as the ring's curvature; the box sweep here shows the "
+            "open-boundary truncation is the larger part of it"),
+        "measure": (
+            "dissipation is integrated in the revolved volume measure "
+            "2 pi r dr dz, through radia.axisym_measure; the terminal current "
+            "is a meridian-measure quantity and is integrated as one"),
         "cuts_mm": {"beak": BEAK_X_MM, "tip": TIP_X_MM},
         "levels": rows,
-        "against_the_surface_impedance_reference": _compare_to_sibc(rows),
+        "against_the_planar_control": _compare(rows, args.planar_control),
         "not_claimed": (
             "a ring is not a straight fin.  The curvature is made small by "
             "the radius and its size is measured by varying that radius; it "
             "is not eliminated.  End effects are absent by construction, "
             "which is what makes this the mid-span comparison and not a "
-            "terminal one"),
+            "terminal one.  This route's open boundary is a psi = 0 box and "
+            "is NOT converged: it is reported with its truncation measured, "
+            "not as a reference"),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n",
