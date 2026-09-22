@@ -249,3 +249,34 @@ FreeCAD adapters are welcome and maintained as **interop / compat** layers —
 they are not first-class authoring targets. FreeCAD specifically is a
 `friendly` source: the lab respects the FreeCAD community and maintains
 first-class interop through `freecad_to_cubit_hex`.
+
+## Commercial-solver interchange stays on the commercial side
+
+A converter between a commercial solver and Radia/NGSolve, and any MCP server
+exposing one, belongs inside that tool's **non-public** mcp-server home. It is
+not part of this repository, not part of the `radia-mcp` distribution, and is
+advertised from neither.
+
+What makes it non-public is the commercial format it reads and writes, not who
+wrote it. "We wrote this parser ourselves" is not a licence to publish a reader
+for somebody's product, and the same holds for an emitter that targets one.
+
+Where the line falls, because it is easy to breach by accident:
+
+- A neutral intermediate representation, and a Radia-side emitter that consumes
+  it, may be public. The parser that reads a vendor format may not.
+- A public module must not import, name, install or wire a commercial
+  converter. `packages/radia-mcp/tools/policy_lint.py` already fails a build
+  that wires one into a public entry point or ships it in the wheel.
+- The public catalog lists no commercial-solver MCP server. The single
+  carve-out is the documentation-only ELF server, which carries no solver, no
+  converter and no vendor-derived numbers.
+- A public artifact must not carry a vendor file path, project file, licence
+  identifier, or a sentence saying a result was cross-validated against one.
+  Citing a published paper is a different act and stays allowed.
+
+`tools/policy_lint.py` Policy 10 enforces the repository half; the packaging
+guard above enforces the distribution half. The first thing Policy 10 caught
+when it was written was a validation test whose docstring said it
+cross-validated a commercial converter's capability -- the test was sound, the
+sentence was not.

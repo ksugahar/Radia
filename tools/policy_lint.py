@@ -21,6 +21,7 @@ Policies (see CLAUDE.md):
   4 no CblasColMajor in core (allowlist)
   8 HDiv geometry/field pairs use the central capability table
   9 no product name on a Radia formulation (citations allowlisted)
+ 10 commercial-solver interchange stays in its non-public mcp-server
 """
 from __future__ import annotations
 
@@ -192,6 +193,7 @@ def check_all():
         # needle disarms it silently, which is the failure mode this policy
         # exists to prevent in the first place.
         "tests/test_label_rename_audit.py",
+        "tests/test_formulation_attribution.py",
         "tools/policy_lint.py",
     }
     branded = []
@@ -202,6 +204,61 @@ def check_all():
                 branded.append(line[:160])
     results.append(("Policy 9: no product name on a Radia formulation",
                     not branded, branded[0] if branded else "ok"))
+
+    # 10: a converter between a commercial solver and Radia/NGSolve, and any
+    # MCP server exposing one, lives in that tool's non-public mcp-server
+    # home.  What makes it non-public is the commercial format it reads and
+    # writes, not who wrote it -- "we wrote it ourselves" is not a licence to
+    # publish a reader for somebody's product.  Two halves are checked: the
+    # converter must not be HERE, and the public catalog must not ADVERTISE a
+    # commercial-solver server, which is the same boundary crossed by
+    # description rather than by code.
+    tools = ("comsol", "femm", "jmag", "cst", "elf")
+    converter = re.compile(
+        r"\b(?:" + "|".join(tools) + r")_converter\b"
+        r"|\b(?:mph|fem|jmag|cst|elf)-to-radia\b"
+        r"|\bradia-to-(?:mph|fem|jmag|cst|elf)\b", re.IGNORECASE)
+    leaked = []
+    hits = _git_grep(r"_converter\|-to-radia\|radia-to-", (), extra=("-i",)) or []
+    # The packaging guard in packages/radia-mcp already rejects a commercial
+    # converter wired into public scripts; its test builds a synthetic repo
+    # containing exactly that to prove it. A detector's fixture has to name
+    # what it detects, so it is held back here rather than disarmed.
+    converter_allowed = {
+        "tools/policy_lint.py",
+        "CLAUDE.md",
+        "packages/radia-mcp/tests/test_policy_lint.py",
+        "packages/radia-mcp/tools/policy_lint.py",
+    }
+    for line in hits:
+        path, _, rest = line.partition(":")
+        if path in converter_allowed:
+            continue
+        if converter.search(rest):
+            leaked.append(line[:160])
+
+    # The catalog is data, so it is read rather than grepped: an entry for a
+    # commercial tool is a violation however its description is worded.  The
+    # documentation-only ELF server is the one carve-out -- no solver, no
+    # converter, no vendor-derived numbers.
+    catalog_path = os.path.join(
+        REPO, "packages", "radia-mcp", "src", "radia_mcp", "meta",
+        "catalog.py")
+    advertised = []
+    try:
+        with open(catalog_path, encoding="utf-8") as f:
+            catalog_text = f.read()
+        for name in re.findall(r'^    "([A-Za-z0-9_\-]+)": \{', catalog_text,
+                               re.M):
+            stem = name.replace("mcp-server-", "")
+            if stem in tools and stem != "elf":
+                advertised.append(f"catalog.py advertises {name!r}")
+    except OSError as exc:
+        advertised.append(f"cannot read the catalog: {exc}")
+
+    bad = leaked + advertised
+    results.append(("Policy 10: commercial interchange stays non-public",
+                    not bad, bad[0] if bad else "ok"))
 
     return results
 
