@@ -38,11 +38,15 @@ field on the iron (the only place the reduced right-hand side integrates it)
 and evaluated exactly at the observation points.  Nonlinear loop:
 
 * `--nonlinear-method newton` (default): element-constant flux density,
-  reluctivity from the exact inverse of the PCHIP law and its differential
-  reluctivity from that tabulated inverse, Jacobian
+  reluctivity interpolated from a dense sampling of the production PCHIP
+  inverse, and differential reluctivity from numerical differentiation of
+  that table. The approximate Jacobian is
   `nu I + (dH/dB - nu) B B^T / |B|^2`, Armijo backtracking on the true
   residual.  Stops when the relative residual is below `--newton-tolerance`
   and the element flux change is below `--tolerance` times `B_sat`.
+  The interpolation also enters the residual; it is not an exact evaluation
+  of the production inverse. The unit test bounds its discrepancy at six
+  sampled flux densities to relative tolerance 1e-4.
 * `--nonlinear-method picard`: the damped / constrained-Anderson update of
   the three-engine lane (kept for the cross-check; on this mesh family it
   needs about a hundred solves at relaxation 0.1 and oscillates at 0.3, in the
@@ -68,6 +72,11 @@ Linear solves (`--reduced-a-solver`):
 Every iterative solve is continued until the **true** relative residual on the
 free DOFs is below `--cg-tolerance` (the Krylov loop's own measure is the
 preconditioned norm and is not the contract).
+
+The CLI writes `completed` and `passed` in its result. `passed` means all
+requested engines converged, not that an accuracy or timing certificate was
+met. Nonconvergence exits nonzero after saving the results. Runtime exceptions
+also save a failed JSON with the exception and options before propagating.
 
 **mixed_omega** -- first-order total/reduced scalar potential of
 `radia.kelvin_solver` on the same mesh: air and coil are the reduced region,
