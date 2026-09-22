@@ -106,7 +106,9 @@ def test_policy_lint_enforces_the_retired_examples_boundary():
     policy = (ROOT / "tools" / "policy_lint.py").read_text(encoding="utf-8")
 
     assert '"src/radia/*.py", "src/radia/**/*.py"' in policy
-    assert '["git", "ls-files", "examples"]' in policy
+    # Policy 7 lists the retired tier through the failing-loud ls-files
+    # helper, so a broken git fails the check instead of passing it.
+    assert '_git_ls_files("examples")' in policy
     assert "README.md in every example dir" not in policy
 
 
