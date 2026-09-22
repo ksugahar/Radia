@@ -130,7 +130,7 @@ verifyEqual(testCase,x1,x2,"AbsTol",0);
 clear cleanup
 end
 
-function testAutoSamplerPolicyUsesGPAndNSGAIIIAtOptunaBudgets(testCase)
+function testAutoSamplerPolicyUsesTPEInsteadOfNSGAII(testCase)
 spec=struct("fixed_numeric",true,"dimensions",3, ...
     "has_constraints",false,"constraints_declared",true, ...
     "has_categorical",false,"is_conditional",false);
@@ -140,8 +140,9 @@ verifyEqual(testCase,name,"gp");
 verifyEqual(testCase,name,"cmaes");
 [name,~]=radia.optuna.internal.AutoSamplerPolicy.choose(spec,3,100);
 verifyEqual(testCase,name,"gp");
-[name,~]=radia.optuna.internal.AutoSamplerPolicy.choose(spec,3,500);
-verifyEqual(testCase,name,"nsgaii");
+[name,reason]=radia.optuna.internal.AutoSamplerPolicy.choose(spec,3,500);
+verifyEqual(testCase,name,"tpe");
+verifyEqual(testCase,reason,"multiobjective_tpe_default");
 [name,~]=radia.optuna.internal.AutoSamplerPolicy.choose(spec,4,500);
 verifyEqual(testCase,name,"nsgaiii");
 spec.has_categorical=true;
