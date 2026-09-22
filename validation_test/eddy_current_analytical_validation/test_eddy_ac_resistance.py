@@ -7,8 +7,8 @@ The radia-motor winding-loss 数式: a solid round conductor carrying AC has
 This solves the radial complex magnetic-diffusion equation for the axial current
 density J_z(r) with the axisymmetric (r-weighted) weak form on a 1-D radial mesh
 [0, a] (regularity at r=0 natural, J_z(a) prescribed), computes R_ac/R_dc from the
-solved profile, and checks it against the exact Bessel ratio -- cross-validating the
-jmag_converter cap round_conductor_ac_resistance_bessel. Pure NGSolve + scipy.
+solved profile, and checks it against the exact Bessel ratio. The closed form is
+the reference; nothing here is scored against another solver. Pure NGSolve + scipy.
 """
 import math
 import pytest
