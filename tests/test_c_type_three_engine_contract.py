@@ -53,9 +53,10 @@ def test_three_engine_runner_has_shared_physics_contract():
     assert "source_trace_tolerance=source_trace_tolerance" in runner
     assert "source_trace" in runner
     assert "iron volume Hodge split retains" in runner
-    assert "source_projection_order = max(2, int(order))" in (
-        ROOT / "src" / "radia" / "static_electromagnet.py"
-    ).read_text(encoding="utf-8")
+    electromagnet = (ROOT / "src" / "radia" / "static_electromagnet.py").read_text(encoding="utf-8")
+    assert 'int(order) if source_potential_contract == "total_hodge"' in electromagnet
+    assert "else max(2, int(order))" in electromagnet
+    assert "nonlinear_material_update_order=(order - 1 if order > 1 else None)" in runner
     assert "fixed_mesh_equality_claimed" in runner
     assert "pairwise_raw_full_tube" in runner
     assert "pairwise_median_projected_gap_core" in runner
