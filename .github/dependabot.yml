@@ -23,3 +23,65 @@ updates:
     ignore:
       # NGSolve version is pinned due to known regression bugs
       - dependency-name: "ngsolve"
+
+  # The monorepo releases four more distributions with their own
+  # pyproject.toml; a root-only pip target left every one of them unwatched.
+  # Each gets its own entry so a bump is scoped to the package that owns it.
+  - package-ecosystem: "pip"
+    directory: "/packages/radia-mcp"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
+      - "python"
+      - "radia-mcp"
+    commit-message:
+      prefix: "chore(deps/radia-mcp):"
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "ngsolve"
+      # Optuna 5.0.0 is the pinned oracle for the shared MATLAB behaviour;
+      # a version bump is an algorithm change, not a dependency update.
+      - dependency-name: "optuna"
+
+  - package-ecosystem: "pip"
+    directory: "/packages/cubit-mesh-export"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
+      - "python"
+      - "cubit-mesh-export"
+    commit-message:
+      prefix: "chore(deps/cubit-mesh-export):"
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "ngsolve"
+      - dependency-name: "netgen-mesher"
+
+  - package-ecosystem: "pip"
+    directory: "/packages/radia-optuna"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
+      - "python"
+      - "radia-optuna"
+    commit-message:
+      prefix: "chore(deps/radia-optuna):"
+    open-pull-requests-limit: 5
+    ignore:
+      # Pinned Optuna 5.0.0 is the sole oracle; see the Optuna policy.
+      - dependency-name: "optuna"
+
+  - package-ecosystem: "pip"
+    directory: "/packages/eqnedit64"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
+      - "python"
+      - "eqnedit64"
+    commit-message:
+      prefix: "chore(deps/eqnedit64):"
+    open-pull-requests-limit: 5
