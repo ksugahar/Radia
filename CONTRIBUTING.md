@@ -69,7 +69,10 @@ Test markers: `basic`, `comprehensive`, `advanced`, `performance`, `slow`, `benc
 
 ## Project Policies
 
-These are enforced by CI ([policy-lint.yml](.github/workflows/policy-lint.yml)):
+These are enforced by CI ([policy-lint.yml](.github/workflows/policy-lint.yml))
+through `tools/policy_lint.py`, which is the single source of truth for the
+list. A check that cannot run (git failing, a missing tool) fails the lint
+rather than passing it. At the time of writing:
 
 1. **Unit System**: Radia always uses meters. No `FldUnits()` call needed
 2. **No Binaries in Git**: .pyd/.dll/.so hosted on GitHub Releases
@@ -77,6 +80,11 @@ These are enforced by CI ([policy-lint.yml](.github/workflows/policy-lint.yml)):
 4. **Row-Major Matrices**: No `CblasColMajor` in core (except LAPACK wrapper boundaries)
 5. **No Generated Files at Root**: .msh/.vtu/.vtk/.vol go next to source scripts
 6. **No Legacy Paths**: Use `src/radia`, not `src/python`
+7. **Examples Tier Retired**: no tracked `examples/`
+8. **Central HDiv Capabilities**: geometry/field order pairs come from one table
+9. **No Product Names on Formulations**: cite the paper, not the vendor
+10. **Commercial Interchange Stays Non-Public**: converters and their MCP
+    servers live in the tool's non-public home, never here
 
 ### Examples Retired Policy
 
@@ -84,12 +92,17 @@ These are enforced by CI ([policy-lint.yml](.github/workflows/policy-lint.yml)):
 outside the repository in `C:\temp`; tracked work enters only after promotion
 to a durable lane:
 
-- `tests/` for fast CI-friendly regressions
-- `validation_test/` for heavier numerical verification, benchmarks, and
-  golden locks
-- `docs/<topic>/*.ipynb` with synchronized JSON for user-facing explanations
+- `tests/` for fast, deterministic bug and contract protection
+- `validation_test/` for numerical, performance, native and multi-machine
+  evidence with machine-readable result JSON
+- `docs/<topic>/*.ipynb` for executed, result-bearing public demonstrations.
+  Saved notebook output is the record; no adjacent JSON or runtime gate is
+  required
 - `src/` for reusable APIs and solver helpers
-- `panels/` or notebook workbenches for final operating surfaces
+
+Standalone PySide/PyQt panels and notebook workbenches are retired and are not
+a promotion target. The human production interface is the masked blocks in the
+single Radia Simulink library; the AI interface is Python/MCP.
 
 Historical references to `examples/` are migration blockers. Migrate the
 owning code/docs to one of the lanes above, then delete the stale reference.
