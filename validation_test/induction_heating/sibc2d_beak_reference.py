@@ -93,6 +93,17 @@ def solve_beak_sibc_2d(step_path: Path, *, frequency=150_000.0,
         "lane_grading": cad["lane_grading"],
         "probe_xy_m": probe.tolist(),
         "probe_H_abs_A_per_m": float(np.sqrt(abs(hx)**2 + abs(hy)**2)),
+        # Raw solution, for consumers that need the field rather than the
+        # summary: the panel currents reproduce A_z anywhere through the same
+        # logarithmic kernel, and the multiplier IS the uniform axial electric
+        # field, since the panel equation reads Zs K + j omega A = E0.
+        "panel_xy_m": xy,
+        "panel_ds_m": ds,
+        "panel_current_A": panel_current,
+        "axial_E_field_V_per_m": complex(solution[n_peri]),
+        "surface_impedance_ohm": complex(zs),
+        "omega_rad_per_s": float(omega),
+        "sigma_S_per_m": float(sigma),
     }
 
 
