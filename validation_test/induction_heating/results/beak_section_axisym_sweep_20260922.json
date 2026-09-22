@@ -1,7 +1,7 @@
 {
   "schema": "radia.beak_section_axisym_sweep.v1",
-  "generated_at_utc": "2026-09-22T01:03:20.260597+00:00",
-  "git_head": "485d74b86b88c4ff2750b66dda67ac2d51b5e366",
+  "generated_at_utc": "2026-09-22T03:48:09.024080+00:00",
+  "git_head": "1dd804c2caeef49904ab809efcaf33afef620f68",
   "host": "intel11",
   "question": "the delivery gate was accepted at 150 kHz on two routes that share a surface-impedance assumption.  What does the same section say when its interior is resolved?",
   "section": "the tracked beak profile, revolved about the axis",
@@ -19,7 +19,7 @@
       "skin_depth_mm": 0.9345900061927291,
       "elements_per_skin_depth": 11.682375077409114,
       "ndof": 30717,
-      "seconds": 0.21863010001834482,
+      "seconds": 0.30650130001595244,
       "R_uohm_per_m": 1345.2970892800522,
       "beak_loss_fraction": 0.316266726483999,
       "tip_loss_fraction": 0.09103830582705773
@@ -31,7 +31,7 @@
       "skin_depth_mm": 0.5395857916573062,
       "elements_per_skin_depth": 6.744822395716327,
       "ndof": 30717,
-      "seconds": 0.18669709999812767,
+      "seconds": 0.6548674000077881,
       "R_uohm_per_m": 2213.927619757823,
       "beak_loss_fraction": 0.3483397688381335,
       "tip_loss_fraction": 0.16103604075000266
@@ -43,7 +43,7 @@
       "skin_depth_mm": 0.29554330979998955,
       "elements_per_skin_depth": 3.694291372499869,
       "ndof": 30717,
-      "seconds": 0.2125133000081405,
+      "seconds": 0.28051010001217946,
       "R_uohm_per_m": 3784.7922411867094,
       "beak_loss_fraction": 0.32538067924683894,
       "tip_loss_fraction": 0.2297675976424465
@@ -55,7 +55,7 @@
       "skin_depth_mm": 0.1706320094702169,
       "elements_per_skin_depth": 2.132900118377711,
       "ndof": 30717,
-      "seconds": 0.18311139999423176,
+      "seconds": 0.24308980000205338,
       "R_uohm_per_m": 6329.874150642136,
       "beak_loss_fraction": 0.307961252074316,
       "tip_loss_fraction": 0.24529448008347976
@@ -67,7 +67,7 @@
       "skin_depth_mm": 0.9345900061927291,
       "elements_per_skin_depth": 18.691800123854584,
       "ndof": 74939,
-      "seconds": 0.44031259999610484,
+      "seconds": 0.6955764999729581,
       "R_uohm_per_m": 1345.3732174441832,
       "beak_loss_fraction": 0.3163286321391661,
       "tip_loss_fraction": 0.0911050328569502
@@ -79,7 +79,7 @@
       "skin_depth_mm": 0.5395857916573062,
       "elements_per_skin_depth": 10.791715833146123,
       "ndof": 74939,
-      "seconds": 0.4869063000078313,
+      "seconds": 0.6046893000020646,
       "R_uohm_per_m": 2214.0404880345486,
       "beak_loss_fraction": 0.3484505876670157,
       "tip_loss_fraction": 0.1611514712654072
@@ -91,7 +91,7 @@
       "skin_depth_mm": 0.29554330979998955,
       "elements_per_skin_depth": 5.91086619599979,
       "ndof": 74939,
-      "seconds": 0.5278798000072129,
+      "seconds": 0.824345999979414,
       "R_uohm_per_m": 3784.608170234477,
       "beak_loss_fraction": 0.3255125157919782,
       "tip_loss_fraction": 0.22991108569284255
@@ -103,7 +103,7 @@
       "skin_depth_mm": 0.1706320094702169,
       "elements_per_skin_depth": 3.4126401894043377,
       "ndof": 74939,
-      "seconds": 0.4884697999805212,
+      "seconds": 0.6295053000212647,
       "R_uohm_per_m": 6327.362128938009,
       "beak_loss_fraction": 0.30810687333197534,
       "tip_loss_fraction": 0.2454087572053189
@@ -115,7 +115,7 @@
       "skin_depth_mm": 0.9345900061927291,
       "elements_per_skin_depth": 11.682375077409114,
       "ndof": 31557,
-      "seconds": 0.18691410002065822,
+      "seconds": 0.2519259999971837,
       "R_uohm_per_m": 1350.0104052705558,
       "beak_loss_fraction": 0.3156663872885266,
       "tip_loss_fraction": 0.09126863614342287
@@ -127,7 +127,7 @@
       "skin_depth_mm": 0.5395857916573062,
       "elements_per_skin_depth": 6.744822395716327,
       "ndof": 31557,
-      "seconds": 0.1895026999991387,
+      "seconds": 0.23072270001284778,
       "R_uohm_per_m": 2222.0886275195703,
       "beak_loss_fraction": 0.3476791391779268,
       "tip_loss_fraction": 0.16115637113772027
@@ -139,7 +139,7 @@
       "skin_depth_mm": 0.29554330979998955,
       "elements_per_skin_depth": 3.694291372499869,
       "ndof": 31557,
-      "seconds": 0.20564400003058836,
+      "seconds": 0.2933626000303775,
       "R_uohm_per_m": 3795.4441916455075,
       "beak_loss_fraction": 0.3248923429933021,
       "tip_loss_fraction": 0.22966827370898518
@@ -151,7 +151,7 @@
       "skin_depth_mm": 0.1706320094702169,
       "elements_per_skin_depth": 2.132900118377711,
       "ndof": 31557,
-      "seconds": 0.22610060003353283,
+      "seconds": 0.35061929997755215,
       "R_uohm_per_m": 6343.155455806614,
       "beak_loss_fraction": 0.3075171101209808,
       "tip_loss_fraction": 0.24501912720078536
@@ -163,7 +163,7 @@
       "skin_depth_mm": 0.9345900061927291,
       "elements_per_skin_depth": 18.691800123854584,
       "ndof": 77835,
-      "seconds": 0.5988772999844514,
+      "seconds": 0.6988049999927171,
       "R_uohm_per_m": 1349.9620136444144,
       "beak_loss_fraction": 0.3156977800332052,
       "tip_loss_fraction": 0.09119415020991081
@@ -175,7 +175,7 @@
       "skin_depth_mm": 0.5395857916573062,
       "elements_per_skin_depth": 10.791715833146123,
       "ndof": 77835,
-      "seconds": 0.6416116000036709,
+      "seconds": 0.7434799000038765,
       "R_uohm_per_m": 2221.9347978150345,
       "beak_loss_fraction": 0.3476994737094795,
       "tip_loss_fraction": 0.1610498778778023
@@ -187,7 +187,7 @@
       "skin_depth_mm": 0.29554330979998955,
       "elements_per_skin_depth": 5.91086619599979,
       "ndof": 77835,
-      "seconds": 0.6381440999684855,
+      "seconds": 0.6930395999806933,
       "R_uohm_per_m": 3794.7065230603666,
       "beak_loss_fraction": 0.3249026090497887,
       "tip_loss_fraction": 0.22958513847101217
@@ -199,7 +199,7 @@
       "skin_depth_mm": 0.1706320094702169,
       "elements_per_skin_depth": 3.4126401894043377,
       "ndof": 77835,
-      "seconds": 0.5704268999979831,
+      "seconds": 0.6716072999988683,
       "R_uohm_per_m": 6339.508611844053,
       "beak_loss_fraction": 0.3075330697189907,
       "tip_loss_fraction": 0.24503882484449213
@@ -208,8 +208,9 @@
   "against_the_surface_impedance_reference": {
     "frequency_hz": 150000.0,
     "skin_depth_mm": 0.1706320094702169,
-    "tip_radius_mm": 0.125,
-    "why_it_matters": "the skin depth is larger than the tip radius, so the surface a Leontovich impedance assumes to be locally flat is more sharply curved than the layer it describes.  The tip is where the assumption has to fail first, and it is also what a beak fin is for",
+    "tip_radius_mm": 0.25,
+    "tip_radius_over_skin_depth": 1.4651412755215572,
+    "why_it_matters": "a Leontovich impedance is the leading term of an expansion in the ratio of skin depth to the radius of curvature of the surface.  At the beak tip that ratio is not small -- the tip radius is under one and a half skin depths -- so the first curvature correction is of order one rather than of order a percent, and the beak root carries genuine sharp corners where the radius of curvature is zero and no term of the expansion applies at all.  This is where the assumption has to fail first, and it is also what a beak fin is for",
     "axisymmetric_interior_resolved": {
       "beak_loss_fraction": 0.3075330697189907,
       "tip_loss_fraction": 0.24503882484449213,

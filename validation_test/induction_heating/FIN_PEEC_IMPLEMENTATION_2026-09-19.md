@@ -456,7 +456,7 @@ mesh-converged -- `maxh` `0.9`, `0.7`, `0.5 mm` give a beak fraction spread of
 The two surface-impedance routes differ from each other by `0.41%` on the beak
 loss and land on the same side of the reference by `4%`, while the tip share --
 the quantity most exposed to the assumption, since the nose radius is
-`0.125 mm` against a `0.93 mm` skin -- is out by a third.  R is low by `36%`.
+`0.25 mm` against a `0.93 mm` skin -- is out by a third.  R is low by `36%`.
 This is exactly the failure gate 3 exists to catch: two routes that share an
 assumption agreeing with each other and being wrong together.  Data:
 `results/beak_fin_three_route_20260922.json`.
@@ -522,13 +522,24 @@ replaces the interior by a Leontovich impedance:
 | 2-D SIBC, n=1024 | 0.34167 | 0.20231 |
 | **SIBC relative** | **+11.10%** | **-17.44%** |
 
-The reason is geometric and can be read off the fixture.  The tip radius is
-`0.125 mm` and the skin depth at 150 kHz is `0.171 mm`: **the layer the
-surface impedance describes is thicker than the curvature of the surface it
-assumes to be locally flat.**  The assumption has to fail at the tip first,
-and the tip is what a beak fin is for.  That is where the error is largest and
-it changes sign against the beak share, which is what a redistribution looks
-like rather than a scale error.
+The reason is geometric and can be read off the fixture.  A Leontovich
+impedance is the leading term of an expansion in `delta / R`, the skin depth
+over the local radius of curvature.  At 150 kHz the skin is `0.171 mm` and the
+tip radius is `0.25 mm` (`TIP_RADIUS` in the generator), so **`delta / R` is
+`0.68`: the first curvature correction is of order one, not of order a
+percent** -- and the beak root is a pair of sharp corners, where `R` is zero
+and no term of the expansion applies at all.  The assumption has to fail at
+those features first, and they are what a beak fin is for.  That is where the
+error is largest and it changes sign against the beak share, which is what a
+redistribution looks like rather than a scale error.
+
+*(Corrected 2026-09-22: an earlier revision of this section and of the commit
+that introduced it quoted the tip radius as `0.125 mm` and concluded the skin
+was thicker than the tip.  The fixture's radius is `0.25 mm`; at 150 kHz the
+skin is thinner than the tip radius, not thicker.  The measured shares and the
+`+11.10% / -17.44%` split are unaffected -- only the stated cause was wrong,
+and it is the cause that motivates the correction below.  The 5 kHz row, where
+the skin is `0.935 mm`, does sit beyond the tip radius.)*
 
 This does not say the delivery gate's *pairwise* acceptance was wrongly
 computed -- BEM-A and the PEEC do agree with each other to `0.58%`, and that
@@ -568,8 +579,9 @@ curvature is measured rather than assumed away, but it is not zero.
    on the beak share, a third out on the tip share and `36%` low on R, and
    they agree with each other throughout. Revolving the section then reached
    150 kHz, where the surface-impedance description is `+11.1%` on the beak
-   share and `-17.4%` on the tip share, for the geometric reason that the skin
-   is thicker than the tip radius. Mesh and frequency sweeps are done;
+   share and `-17.4%` on the tip share, for the geometric reason that
+   `delta / R` at the tip is `0.68` and infinite at the beak root corners.
+   Mesh and frequency sweeps are done;
    conductivity and geometry sweeps are not, and the terminal quantities on
    the straight fin at 150 kHz remain out of reach in three dimensions.
 4. Extend the workpiece weak and strong coupling APIs to accept per-branch

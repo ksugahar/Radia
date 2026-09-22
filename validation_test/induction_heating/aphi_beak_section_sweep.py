@@ -118,16 +118,24 @@ def _compare_to_sibc(rows):
     # Largest radius, finest mesh: the converged corner.
     finest = max(at_150k, key=lambda r: (r["radius_mm"],
                                          -r["maxh_conductor_mm"]))
+    from make_beak_fin_step import TIP_RADIUS
+
     return {
         "frequency_hz": 150_000.0,
         "skin_depth_mm": finest["skin_depth_mm"],
-        "tip_radius_mm": 0.125,
+        "tip_radius_mm": float(TIP_RADIUS),
+        "tip_radius_over_skin_depth": float(
+            TIP_RADIUS / finest["skin_depth_mm"]),
         "why_it_matters": (
-            "the skin depth is larger than the tip radius, so the surface a "
-            "Leontovich impedance assumes to be locally flat is more sharply "
-            "curved than the layer it describes.  The tip is where the "
-            "assumption has to fail first, and it is also what a beak fin is "
-            "for"),
+            "a Leontovich impedance is the leading term of an expansion in "
+            "the ratio of skin depth to the radius of curvature of the "
+            "surface.  At the beak tip that ratio is not small -- the tip "
+            "radius is under one and a half skin depths -- so the first "
+            "curvature correction is of order one rather than of order a "
+            "percent, and the beak root carries genuine sharp corners where "
+            "the radius of curvature is zero and no term of the expansion "
+            "applies at all.  This is where the assumption has to fail "
+            "first, and it is also what a beak fin is for"),
         "axisymmetric_interior_resolved": {
             "beak_loss_fraction": finest["beak_loss_fraction"],
             "tip_loss_fraction": finest["tip_loss_fraction"],
