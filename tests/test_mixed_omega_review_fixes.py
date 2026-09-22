@@ -39,7 +39,7 @@ def helpers():
     """The Picard fixtures from the main mixed-Omega test module, by path."""
     global _HELPERS
     if _HELPERS is None:
-        path = Path(__file__).with_name("test_kelvin_mixed_omega.py")
+        path = Path(__file__).with_name("test_kelvin_tosca_mixed_omega.py")
         spec = importlib.util.spec_from_file_location("kelvin_mixed_omega_tests", path)
         module = importlib.util.module_from_spec(spec)
         assert spec.loader is not None
