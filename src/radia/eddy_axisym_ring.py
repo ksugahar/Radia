@@ -76,6 +76,33 @@ class AxisymRingResult:
         return (ng.CF(self.scale) * self.sigma_S_per_m
                 / (2.0 * np.pi * ng.x) * applied)
 
+    def loss_density(self):
+        """``|J|^2 / (2 sigma)``: time-average watts per cubic metre."""
+        import ngsolve as ng
+
+        j = self.current_density()
+        return (j * ng.Conj(j)).real / (2.0 * self.sigma_S_per_m)
+
+    def total_loss(self):
+        """Dissipated power in the whole ring, in watts.
+
+        Integrated in the revolved volume measure -- see
+        :mod:`radia.axisym_measure` for why that has to be said out loud.
+        """
+        from radia.axisym_measure import axi_volume_integral
+
+        return float(axi_volume_integral(
+            self.loss_density(), self.mesh,
+            definedon=self.mesh.Materials(self.conductor)).real)
+
+    def loss_beyond(self, r_m):
+        """Dissipated power in the part of the ring beyond radius ``r_m``."""
+        from radia.axisym_measure import axi_volume_beyond
+
+        return float(axi_volume_beyond(
+            self.loss_density(), self.mesh, r_m,
+            definedon=self.mesh.Materials(self.conductor)).real)
+
 
 def solve_axisym_ring(mesh, *, conductor, frequency_hz, sigma, order=2,
                       mu_r=1.0, dirichlet="axis|outer", solver="umfpack"):
@@ -138,14 +165,20 @@ def solve_axisym_ring(mesh, *, conductor, frequency_hz, sigma, order=2,
         gf_psi.vec.data = system.Inverse(freedofs=fes.FreeDofs(),
                                          inverse=solver) * rhs
 
+    from radia.axisym_measure import axi_section_integral
+
     radius = ng.x
     j_phi = sigma_cf / (2.0 * np.pi * radius) * (1.0 - 1j * omega * gf_psi)
-    current = complex(ng.Integrate(j_phi, mesh, definedon=region))
+    # Terminal current and section geometry are meridian-measure quantities:
+    # the current flows THROUGH this cross-section.  Dissipation is not, and
+    # goes through the volume measure instead.
+    current = complex(axi_section_integral(j_phi, mesh, definedon=region))
     if current == 0:
         raise RuntimeError("the solution carries no ring current")
-    area = float(ng.Integrate(ng.CF(1.0), mesh, definedon=region).real)
-    mean_radius = float(
-        ng.Integrate(radius, mesh, definedon=region).real) / area
+    area = float(axi_section_integral(ng.CF(1.0), mesh,
+                                      definedon=region).real)
+    mean_radius = float(axi_section_integral(
+        radius, mesh, definedon=region).real) / area
 
     scale = 1.0 / current
     impedance = 1.0 / current          # V = 1 was applied

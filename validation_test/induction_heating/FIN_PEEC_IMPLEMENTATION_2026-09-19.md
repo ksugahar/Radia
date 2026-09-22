@@ -499,56 +499,154 @@ with a loop voltage and recovers the ring current.
 The solver carries the same anchor as the three-dimensional one.  Against the
 exact Bessel round-wire resistance it converges to `-0.61%` at `a / delta` of
 both 6 and 12, and the residual shrinks as `1/R0` -- `-2.70%` at `R0/a = 10`,
-`-0.50%` at 30 -- so it is the ring's curvature rather than the solve.
+`-0.50%` at 30.  That was read at the time as the ring's curvature; the box
+sweep below shows the open-boundary truncation is the larger part of it, and
+the same anchor run on a route with a proper exterior lands at `3.5e-8`.
 
-On the beak section the sweep is converged in both directions: refining
+On the beak section the sweep is converged in mesh and radius: refining
 `maxh` from `0.08` to `0.05 mm` moves the 150 kHz beak share by `0.05%`, and
-doubling the radius from 200 to 400 mm moves it by `0.14%`.
+doubling the radius from 200 to 400 mm moves it by `0.14%`.  At the least
+truncated corner available -- `R0 = 6400 mm`, `box_factor = 100`,
+`maxh = 0.05 mm`:
 
 | frequency | skin depth | beak loss | tip loss |
 |---|---|---|---|
-| 5 kHz | 0.935 mm | 0.31570 | 0.09119 |
-| 15 kHz | 0.540 mm | 0.34770 | 0.16105 |
-| 50 kHz | 0.296 mm | 0.32490 | 0.22959 |
-| **150 kHz** | **0.171 mm** | **0.30753** | **0.24504** |
+| 5 kHz | 0.935 mm | 0.30780 | 0.08924 |
+| 15 kHz | 0.540 mm | 0.33826 | 0.15702 |
+| 50 kHz | 0.296 mm | 0.31552 | 0.22316 |
+| **150 kHz** | **0.171 mm** | **0.29830** | **0.23783** |
 
-Against the 2-D surface-impedance reference at 150 kHz -- the same section, the
-same cuts, converged to 1024 perimeter samples, differing only in that it
-replaces the interior by a Leontovich impedance:
+**This route is still not the reference.  It is reported with its truncation
+measured** -- which is the correction below, found by building a second
+interior-resolved route and failing to make the two agree.
 
-| | beak loss | tip loss |
+### The reference was its own air box, and the correction is 3.5% (2026-09-22)
+
+The original sweep pinned `psi = 0` on an air box `box_factor = 3`
+section-widths away and **never varied it**.  `psi = 0` is a flux barrier, so
+that box is a coaxial return conductor three section-widths from a conductor
+whose current distribution is the quantity under test.  Sweeping it, at
+`R0 = 6400 mm` where the ring's own curvature is negligible:
+
+| box_factor | beak loss | vs planar control |
 |---|---|---|
-| interior resolved | 0.30753 | 0.24504 |
-| 2-D SIBC, n=1024 | 0.34167 | 0.20231 |
-| **SIBC relative** | **+11.10%** | **-17.44%** |
+| 3 | 0.30712 | +3.53% |
+| 10 | 0.30197 | +1.80% |
+| 30 | 0.29924 | +0.88% |
+| 100 | 0.29830 | **+0.56%** |
 
-The reason is geometric and can be read off the fixture.  A Leontovich
-impedance is the leading term of an expansion in `delta / R`, the skin depth
-over the local radius of curvature.  At 150 kHz the skin is `0.171 mm` and the
-tip radius is `0.25 mm` (`TIP_RADIUS` in the generator), so **`delta / R` is
-`0.68`: the first curvature correction is of order one, not of order a
-percent** -- and the beak root is a pair of sharp corners, where `R` is zero
-and no term of the expansion applies at all.  The assumption has to fail at
-those features first, and they are what a beak fin is for.  That is where the
-error is largest and it changes sign against the beak share, which is what a
-redistribution looks like rather than a scale error.
+It falls monotonically and does not reach zero for any box worth meshing.
+What it does reach is `+0.56%` of a route built on a different formulation,
+a different element family and a different open boundary -- which is the
+cross-validation, once the truncation is named instead of ignored.
+**This is the argument for giving the axisymmetric eddy route a Kelvin or DtN
+exterior rather than a wider rectangle**, and it is recorded as a required
+gate below.  The repository's Kelvin machinery -- `kelvin_geometry`'s two
+sphere construction and `open_boundary/kelvin_dtn.py`'s separable radial
+Kelvin-FEM DtN builder -- is three-dimensional and in the Omega/H1
+convention, so the axisymmetric `psi = 2 pi r A_phi` eddy exterior needs a
+Kelvin-weighted `axifem` integrator that does not exist yet.
 
-*(Corrected 2026-09-22: an earlier revision of this section and of the commit
-that introduced it quoted the tip radius as `0.125 mm` and concluded the skin
-was thicker than the tip.  The fixture's radius is `0.25 mm`; at 150 kHz the
-skin is thinner than the tip radius, not thicker.  The measured shares and the
-`+11.10% / -17.44%` split are unaffected -- only the stated cause was wrong,
-and it is the cause that motivates the correction below.  The 5 kHz row, where
-the skin is `0.935 mm`, does sit beyond the tip radius.)*
+The route it converges onto is a **planar** interior-resolved solve of the
+same section, which imposes the *exterior field of the same total current* on
+its air boundary instead of a barrier.  That one is anchored where it cannot
+argue: against the exact Bessel round wire it reproduces the resistance to
+`3.5e-8` relative at `a / delta` of 3.4, 6.8 and 13.5, recovering 1 A to
+twelve digits, and it moves by `0.02%` when the air boundary goes from 8 mm
+to 72 mm.  It is the reference from here on.
+
+|  | total loss | beak loss | tip loss |
+|---|---|---|---|
+| planar control (exact) | 3.1735e-3 W/m | 0.29665 | 0.23644 |
+| 2-D SIBC, n=1024 | **-17.31%** | 0.34304 (**+15.64%**) | 0.20155 (**-14.78%**) |
+
+So the surface-impedance route does not merely redistribute the loss: it
+**loses 17.3% of the dissipation altogether**, which is the resistance the
+delivery gate reports.  The share error is larger on the beak and smaller on
+the tip than the truncated reference had said.
+
+A Leontovich impedance is the leading term of an expansion in `delta / R`,
+the skin depth over the local radius of curvature.  At 150 kHz the skin is
+`0.171 mm` and the tip radius is `0.25 mm` (`TIP_RADIUS` in the generator),
+so **`delta / R` is `0.68`: the first curvature correction is of order one,
+not of order a percent** -- and the beak root and the far end are square
+corners, where `R` is zero and no term of the expansion applies at all.
+
+*(Corrected 2026-09-22: an earlier revision of this section, and the commit
+that introduced it, quoted the tip radius as `0.125 mm` and concluded the
+skin was thicker than the tip.  The fixture's radius is `0.25 mm`; at 150 kHz
+the skin is thinner than the tip radius.  The 5 kHz row, where the skin is
+`0.935 mm`, does sit beyond the tip radius.)*
+
+A second defect surfaced with it and was fixed structurally rather than
+locally: the loss integral over an axisymmetric meridian mesh was missing its
+`2 pi r` volume weight.  On this geometry that is worth a few tenths of a
+percent -- smallest, as always, when the section sits far from the axis and
+the model looks most trustworthy.  `ngsolve.Integrate` on a meridian mesh
+returns the plane measure and says nothing about it, and this repository has
+now paid for that more than once, so there is no longer a correct bare
+`Integrate` in axisymmetric code: `radia.axisym_measure` owns both measures
+under names that state which was meant, `AxisymRingResult` exposes the loss
+through them, and `tests/test_axisym_measure_contract.py` fails the build if
+axisymmetric code calls `Integrate` directly.
 
 This does not say the delivery gate's *pairwise* acceptance was wrongly
 computed -- BEM-A and the PEEC do agree with each other to `0.58%`, and that
 was never in doubt.  It says the quantity they agree on is not the one the
-conductor produces.  Data: `results/beak_section_axisym_sweep_20260922.json`.
+conductor produces.
 
-Scope: a ring is not a straight fin, and end effects are absent by
-construction, so this is the mid-span comparison and not a terminal one.  The
-curvature is measured rather than assumed away, but it is not zero.
+### The surface impedance can be repaired where it fails (2026-09-22)
+
+Asked how edges and corners are handled, the literature answer is not a
+better impedance: Deeley (1990), Warne (1994) and Yuferev, Proekt and Ida
+(2001) all describe corrections that are asymptotic in `delta / R` and
+therefore have nothing to expand in when `R` is zero.  What does work is
+Proekt, Yuferev, Tsukerman and Ida's **method of overlapping patches**
+(2002): resolve the conductor's interior in a neighbourhood of each offending
+feature, leave the impedance in charge only of the band between them, and
+match across a chord of the thick body.  Dauge, Dular, Krahenbuhl, Peron,
+Perrussel and Poignard (2014) put the corner layer at the scale of `delta`,
+which is what makes a patch of a few skin depths large enough and a match
+several hundred skin depths back safely outside it.
+
+`radia.sibc_corner_patch` implements it.  The local problem is driven by the
+global one: `E0` is the outer solve's own Lagrange multiplier, the air
+boundary takes the outer solve's exterior field, and the cut chord takes the
+outer model's *interior* asymptotics -- the half-space profile measured from
+each face, about `A = E0 / (j omega)` rather than about zero, since the axial
+field vanishes with depth and `A` does not.
+
+Scored against the planar control at 150 kHz:
+
+| | total loss | beak loss | tip loss |
+|---|---|---|---|
+| surface impedance alone | -17.31% | +15.64% | -14.78% |
+| both ends patched, band `[-2.5, 0.5] mm` | +3.76% | -2.79% | -3.00% |
+| both ends patched, band `[-2.0, 0.0] mm` | +1.95% | -1.76% | -1.86% |
+| both ends patched, band `[-1.5, -0.5] mm` | **+0.61%** | **-0.85%** | **-0.88%** |
+
+One patch is not enough because this section has three failing features, not
+one: the beak tip, the beak root corners, and the two square corners at the
+far end.  With a single patch on the fin the *fin's own* dissipation goes from
+`-21.40%` to `+1.62%`, and what is left over is the far end, which the outer
+model still owns and still gets `-13.4%` wrong.  Patch both ends and the
+outer model keeps only the flat band it is actually valid on, and the total
+comes back to `+0.61%`.
+
+What this does **not** show is economy.  In a two-dimensional section the
+patches cover most of the conductor, so the composite is no cheaper than
+resolving all of it (98k--121k degrees of freedom against 150k).  The
+economy is a three-dimensional claim -- a patch around a feature *line*
+rather than a whole cross-section -- and it is not tested here.  What is
+shown is the correction: an 18x reduction in the share error and a 28x
+reduction in the total-loss error, at a cost that is not worse.
+
+Data: `results/sibc_patch_corrected_beak_20260922.json` and
+`results/beak_section_axisym_sweep_20260922.json`.
+
+Scope: a ring is not a straight fin, end effects are absent by construction,
+and all of this is one section at one frequency.  These are mid-span
+quantities.
 
 ## Required next gates
 
@@ -577,18 +675,31 @@ curvature is measured rather than assumed away, but it is not zero.
    **Reference built and validated, gate NOT passed (2026-09-22)**: at 5 kHz
    the three-dimensional A-V solve puts the surface-impedance routes `4%` out
    on the beak share, a third out on the tip share and `36%` low on R, and
-   they agree with each other throughout. Revolving the section then reached
-   150 kHz, where the surface-impedance description is `+11.1%` on the beak
-   share and `-17.4%` on the tip share, for the geometric reason that
-   `delta / R` at the tip is `0.68` and infinite at the beak root corners.
-   Mesh and frequency sweeps are done;
-   conductivity and geometry sweeps are not, and the terminal quantities on
-   the straight fin at 150 kHz remain out of reach in three dimensions.
-4. Extend the workpiece weak and strong coupling APIs to accept per-branch
+   they agree with each other throughout. At 150 kHz, against a planar
+   interior-resolved control anchored on the exact Bessel round wire to
+   `3.5e-8`, the surface-impedance description **loses `17.3%` of the total
+   dissipation** and is `+15.6%` on the beak share and `-14.8%` on the tip
+   share, for the geometric reason that `delta / R` at the tip is `0.68` and
+   infinite at the beak root and far-end corners. Mesh, frequency, radius,
+   open-boundary and order sweeps are done; conductivity and geometry sweeps
+   are not, and the terminal quantities on the straight fin at 150 kHz remain
+   out of reach in three dimensions.
+4. **Give the axisymmetric eddy route a Kelvin or DtN exterior.** Its open
+   boundary is `psi = 0` on a rectangle, which is a flux barrier and therefore
+   a coaxial return; the box size was never swept, and sweeping it showed the
+   committed 150 kHz reference was `+3.5%` off for that reason alone, falling
+   to `+0.56%` only at `box_factor = 100` and not reaching zero. Padding is
+   not a fix, it is a budget. The existing Kelvin machinery
+   (`kelvin_geometry`'s two-sphere construction, `open_boundary/kelvin_dtn.py`)
+   is three-dimensional and in the Omega/H1 convention, so this needs a
+   Kelvin-weighted `axifem` integrator for `psi = 2 pi r A_phi`. Until it
+   exists, the planar control is the reference and the axisymmetric route is
+   reported with its truncation measured.
+5. Extend the workpiece weak and strong coupling APIs to accept per-branch
    currents and per-branch induced EMFs. The present K-by-K bundle reduction
    and one-current-per-filament field projection cannot represent transverse
    branches or longitudinal redistribution.
-5. Only after those gates, add an explicit `fin-surface` IH backend and
+6. Only after those gates, add an explicit `fin-surface` IH backend and
    document its contract through the owning Radia MCP manual. Existing
    rectangle/circle production behavior must remain unchanged.
 
