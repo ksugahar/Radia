@@ -1,0 +1,164 @@
+{
+  "schema": "radia.sibc_patch_corrected_beak.v1",
+  "generated_at_utc": "2026-09-22T04:17:21.712631+00:00",
+  "git_head": "a2248ac943d084b0ef7faab1d1bb446a835e702d",
+  "host": "intel11",
+  "question": "the surface impedance fails where the surface curves inside a skin depth.  Can it be repaired there instead of abandoned, and by how much?",
+  "method": "overlapping patches, Proekt, Yuferev, Tsukerman and Ida (2002); patch scale from the corner-layer result of Dauge, Dular, Krahenbuhl, Peron, Perrussel and Poignard (2014)",
+  "frequency_hz": 150000.0,
+  "sigma_S_per_m": 58000000.0,
+  "skin_depth_mm": 0.1706320094702169,
+  "tip_radius_mm": 0.25,
+  "skin_depth_over_tip_radius": 0.6825280378808676,
+  "cuts_mm": {
+    "beak": 1.6,
+    "tip": 3.5
+  },
+  "control": {
+    "what": "the whole section resolved in the plane, driven by the exterior field of the same total current",
+    "anchored_on": "the exact Bessel round wire, solved by the same routine with a closed-form exterior",
+    "round_wire": [
+      {
+        "frequency_hz": 50000.0,
+        "radius_over_skin_depth": 3.38359883929281,
+        "resistance_ohm_per_m": 0.010789452243098628,
+        "exact_bessel_ohm_per_m": 0.010789452622273547,
+        "relative_error": -3.514310986663105e-08,
+        "recovered_current_A": 0.9999999999999973
+      },
+      {
+        "frequency_hz": 200000.0,
+        "radius_over_skin_depth": 6.76719767858562,
+        "resistance_ohm_per_m": 0.02001620347637012,
+        "exact_bessel_ohm_per_m": 0.02001620362764938,
+        "relative_error": -7.557839798444377e-09,
+        "recovered_current_A": 0.9999999999999959
+      },
+      {
+        "frequency_hz": 800000.0,
+        "radius_over_skin_depth": 13.53439535717124,
+        "resistance_ohm_per_m": 0.0385489529380967,
+        "exact_bessel_ohm_per_m": 0.03854895317247708,
+        "relative_error": -6.080071113245822e-09,
+        "recovered_current_A": 0.9999999999999951
+      }
+    ],
+    "levels": [
+      {
+        "air_pad_mm": 8.0,
+        "ndof": 156607,
+        "seconds": 5.378482399974018,
+        "recovered_current_A": 0.9980669741100742,
+        "total_loss_W_per_m": 0.0031735656542572575,
+        "beak_loss_fraction": 0.2967090500429778,
+        "tip_loss_fraction": 0.23652620135189892
+      },
+      {
+        "air_pad_mm": 24.0,
+        "ndof": 149914,
+        "seconds": 5.304361300019082,
+        "recovered_current_A": 0.9988590280877081,
+        "total_loss_W_per_m": 0.003173496377012991,
+        "beak_loss_fraction": 0.2966532882630849,
+        "tip_loss_fraction": 0.23643578099420554
+      },
+      {
+        "air_pad_mm": 72.0,
+        "ndof": 170758,
+        "seconds": 6.8483208999969065,
+        "recovered_current_A": 0.9992217513159906,
+        "total_loss_W_per_m": 0.003173486546781172,
+        "beak_loss_fraction": 0.2966446458439271,
+        "tip_loss_fraction": 0.23650033005386958
+      }
+    ]
+  },
+  "surface_impedance_only": {
+    "total_loss_W_per_m": 0.0026241663931548097,
+    "total_loss_relative": -0.17309673305013096,
+    "beak_loss_fraction": 0.3430432596814832,
+    "beak_relative": 0.1564114319527199,
+    "tip_loss_fraction": 0.20155129536798105,
+    "tip_relative": -0.14777583895095592
+  },
+  "one_patch": [
+    {
+      "x_cut_mm": 1.0,
+      "cut_over_skin_depth_from_root": 3.516339061251738,
+      "ndof": 29446,
+      "seconds": 1.315308700024616,
+      "exact_loss_beyond_cut_W_per_m": 0.0014016273245799006,
+      "patched_relative": 0.06979053099846455,
+      "outer_only_relative": -0.23368376351366038,
+      "outer_only_relative_outside_cut": -0.12516942802002984
+    },
+    {
+      "x_cut_mm": 0.0,
+      "cut_over_skin_depth_from_root": 9.376904163337967,
+      "ndof": 51388,
+      "seconds": 1.9703602000372484,
+      "exact_loss_beyond_cut_W_per_m": 0.001558843051608721,
+      "patched_relative": 0.016184516393091375,
+      "outer_only_relative": -0.2139770302259928,
+      "outer_only_relative_outside_cut": -0.13362921753303802
+    },
+    {
+      "x_cut_mm": -2.0,
+      "cut_over_skin_depth_from_root": 21.098034367510422,
+      "ndof": 95275,
+      "seconds": 3.312964799988549,
+      "exact_loss_beyond_cut_W_per_m": 0.0018077763313976384,
+      "patched_relative": -0.023331569855730927,
+      "outer_only_relative": -0.18476436909192728,
+      "outer_only_relative_outside_cut": -0.15765240522557988
+    }
+  ],
+  "two_patches": [
+    {
+      "outer_band_mm": [
+        -2.0,
+        0.0
+      ],
+      "outer_band_share": 0.07679717513419591,
+      "ndof": 98498,
+      "seconds": 3.3467249000095762,
+      "total_loss_W_per_m": 0.0032354996495168103,
+      "total_loss_relative": 0.019541000669606623,
+      "beak_loss_fraction": 0.2914180758439783,
+      "beak_relative": -0.017618959496402464,
+      "tip_loss_fraction": 0.23209905855903204,
+      "tip_relative": -0.0186100014906323
+    },
+    {
+      "outer_band_mm": [
+        -2.5,
+        0.5
+      ],
+      "outer_band_share": 0.11812007508229647,
+      "ndof": 76178,
+      "seconds": 2.5829827000270598,
+      "total_loss_W_per_m": 0.003292731947874326,
+      "total_loss_relative": 0.03757551807304904,
+      "beak_loss_fraction": 0.28837222120406103,
+      "beak_relative": -0.02788664739365765,
+      "tip_loss_fraction": 0.22940849891932558,
+      "tip_relative": -0.029986559143188707
+    },
+    {
+      "outer_band_mm": [
+        -1.5,
+        -0.5
+      ],
+      "outer_band_share": 0.038045648470681884,
+      "ndof": 120611,
+      "seconds": 4.033006499987096,
+      "total_loss_W_per_m": 0.0031927973388918237,
+      "total_loss_relative": 0.006085039853166663,
+      "beak_loss_fraction": 0.29412402752165745,
+      "beak_relative": -0.00849709697304224,
+      "tip_loss_fraction": 0.23442555834859416,
+      "tip_relative": -0.008772806806666367
+    }
+  ],
+  "not_claimed": "this is one section at one frequency, and it is a cost demonstration for nothing: in two dimensions the patches cover most of the conductor, so the composite is not cheaper than resolving all of it.  What is demonstrated is the correction, not the economy.  The economy is a three-dimensional claim -- a patch around a feature LINE rather than a whole cross-section -- and it is not tested here.  End effects are absent by construction, so these are mid-span quantities"
+}
