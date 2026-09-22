@@ -1,0 +1,838 @@
+"""First-order finite-box lane for the C-type dipole: reduced-A with AMS, and mixed Omega.
+
+This is the accelerator-scale *solver* lane, deliberately separate from the
+three-engine accuracy lane in ``validation_test/c_type_three_engine``: the
+mesh is one finite air box of straight tetrahedra with the coil meshed, the
+finite-element order is one, and the question is how fast and how accurately
+the two H1/HCurl formulations reach the C-type gap field on such a mesh.
+
+Engines on the same tetrahedra, the same CoilBuilder source and the same
+monotone PCHIP B(H) law as the three-engine lane:
+
+* ``reduced_a``: lowest-order Nedelec reduced vector potential
+  (``B = B_s + curl A_r``, ``A_r x n = 0`` on the box).  The nonlinear loop is
+  Newton on the element-constant flux density (exact inverse of the PCHIP law
+  and its differential reluctivity, Armijo backtracking on the residual) or
+  the damped/Anderson Picard update of the three-engine lane.  Each linear
+  system is solved by Radia's compiled auxiliary-space Maxwell preconditioner
+  (``radia.sparsesolv_ngsolve.HypreBasedAMSPreconditioner``, updated in place
+  between iterations) with conjugate gradients to a true relative residual,
+  warm-started from the current iterate; or by the METIS SPD PARDISO direct
+  solve for a cross-check.
+* ``mixed_omega``: first-order total/reduced scalar potential with the coil
+  air as the reduced region, iron as the total region, the total-Hodge
+  source split, natural ``B.n = 0`` on the box and the ``GND`` point gauge.
+
+The reference for the accuracy column is a three-engine result of the Kelvin
+lane (``--reference``): its consensus gap-core field is open-boundary, so the
+deviation reported here bundles the box truncation with the discretisation.
+
+Timing is wall time per phase inside one process with a fixed thread count;
+the mesh is loaded once and the source is evaluated once.  Every run writes a
+machine-readable JSON.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import importlib.util
+import json
+import math
+import platform
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+SOURCE_ROOT = HERE.parents[1] / "src"
+if (SOURCE_ROOT / "radia" / "__init__.py").is_file():
+    sys.path.insert(0, str(SOURCE_ROOT))
+
+import ngsolve as ng  # noqa: E402
+import numpy as np  # noqa: E402
+import radia as rad  # noqa: E402
+from ngsolve.krylovspace import CGSolver  # noqa: E402
+
+from radia.kelvin_solver import (  # noqa: E402
+    MixedOmegaPicardNotConverged,
+    project_source_total_hodge,
+    solve_magnetostatic_mixed_total_reduced_omega_kelvin,
+    solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin,
+)
+from radia.picard_acceleration import ConstrainedAndersonAccelerator  # noqa: E402
+from radia.vector_potential_solver import (  # noqa: E402
+    _build_nu_of_b_interpolator,
+    direct_inverse_type,
+)
+
+MU0 = 4.0e-7 * math.pi
+NU0 = 1.0 / MU0
+GAUGE_EPSILON = 1.0e-6
+THREE_ENGINE_RUNNER = HERE.parent / "c_type_three_engine" / "run_three_engine.py"
+DEFAULT_BH = Path(rad.__file__).resolve().parent / "panels" / "samples" / "em_sample_bh.txt"
+REQUIRED_MATERIALS = ("iron", "coil", "air")
+CENTRE_INDEX = 40  # (x, y, z) = (0, 0, 0) in the shared 9 x 3 x 3 stencil
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def load_three_engine_adapters():
+    """The C-type coil, observation stencil and comparison metrics, by path."""
+    spec = importlib.util.spec_from_file_location("_radia_c_type_engines", THREE_ENGINE_RUNNER)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load {THREE_ENGINE_RUNNER}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def progress(event: str, **values) -> None:
+    print(json.dumps({"event": event, **values}, sort_keys=True, default=str), flush=True)
+
+
+def check_mesh_contract(vol: Path, mesh: ng.Mesh) -> dict:
+    contract_path = vol.with_suffix(".json")
+    if not contract_path.is_file():
+        raise FileNotFoundError(contract_path)
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    if contract.get("vol_sha256") != sha256(vol):
+        raise RuntimeError(f"{vol.name} differs from its contract {contract_path.name}")
+    materials = set(mesh.GetMaterials())
+    if not {"iron", "air"} <= materials <= set(REQUIRED_MATERIALS):
+        raise RuntimeError(f"mesh materials {sorted(materials)} are not iron/air(/coil)")
+    boundaries = set(mesh.GetBoundaries())
+    for name in ("outer", "iron_air_interface"):
+        if name not in boundaries:
+            raise RuntimeError(f"boundary {name!r} missing from {sorted(boundaries)}")
+    if "GND" not in set(mesh.GetBBBoundaries()):
+        raise RuntimeError("GND vertex gauge missing")
+    if mesh.GetCurveOrder() != 1:
+        raise RuntimeError("this lane uses straight tetrahedra only")
+    contract["contract_path"] = str(contract_path)
+    return contract
+
+
+def iron_elements_with_centroids(mesh: ng.Mesh) -> list[tuple[int, tuple[float, float, float]]]:
+    out = []
+    for element in mesh.Elements(ng.VOL):
+        if str(element.mat) != "iron":
+            continue
+        pts = [mesh.vertices[v.nr].point for v in element.vertices]
+        centroid = tuple(sum(float(p[k]) for p in pts) / len(pts) for k in range(3))
+        out.append((int(element.nr), centroid))
+    return out
+
+
+class SoftIronLaw:
+    """The shared monotone PCHIP B(H) law seen from the flux-density side.
+
+    ``nu(|B|)`` is the exact inverse used by the production reduced-A Picard
+    solver (:func:`radia.vector_potential_solver._build_nu_of_b_interpolator`),
+    tabulated once on a dense grid so that a whole mesh can be updated in one
+    vectorised call; ``dH/dB`` is the slope of that tabulated inverse and only
+    steers the Newton direction, never the converged field.
+    """
+
+    def __init__(self, bh_table, *, samples: int = 4001):
+        nu_of_b, b_saturation = _build_nu_of_b_interpolator(bh_table)
+        self.b_saturation = float(b_saturation)
+        self.nu_initial = float(nu_of_b(0.0))
+        grid = np.concatenate(([0.0], np.geomspace(1.0e-7, 20.0 * self.b_saturation, samples)))
+        nu = np.asarray([nu_of_b(value) for value in grid], dtype=float)
+        h = nu * grid
+        dhdb = np.gradient(h, grid)
+        dhdb[0] = nu[0]
+        if not np.all(np.isfinite(nu)) or np.any(nu <= 0.0) or np.any(dhdb <= 0.0):
+            raise RuntimeError("the inverted B-H law is not positive and monotone")
+        self._grid, self._nu, self._dhdb = grid, nu, dhdb
+
+    def reluctivity(self, magnitude: np.ndarray) -> np.ndarray:
+        return np.interp(magnitude, self._grid, self._nu)
+
+    def differential_reluctivity(self, magnitude: np.ndarray) -> np.ndarray:
+        return np.interp(magnitude, self._grid, self._dhdb)
+
+
+class ReducedAP1Box:
+    """Reduced-A, order one, on a finite box; AMS or direct linear solves."""
+
+    def __init__(self, mesh: ng.Mesh, source_cf, *, linear_solver: str,
+                 cg_tolerance: float, cg_max_iterations: int, ams_num_smooth: int,
+                 source_projection_order: int, ams_update_every: int = 1,
+                 ic_shift: float = 1.05, gauge_epsilon: float = GAUGE_EPSILON):
+        """``source_cf`` is the vacuum source flux density B_s as a vector CF.
+
+        ``linear_solver``: ``"ams"`` (compiled auxiliary-space Maxwell
+        preconditioner + CG), ``"iccg"`` (Radia's compiled shifted incomplete
+        Cholesky CG of the same sparsesolv module, factorised per system with
+        ``ic_shift``), or ``"direct"`` (METIS SPD PARDISO).
+        ``ams_update_every`` rebuilds the AMS hierarchy only every N-th linear
+        system (1 = every system); a lagged preconditioner trades CG iterations
+        for setup time and is recorded as such.
+        """
+        if linear_solver not in ("ams", "iccg", "direct"):
+            raise ValueError("linear_solver must be 'ams', 'iccg' or 'direct'")
+        if cg_tolerance <= 0.0 or cg_max_iterations < 1 or ams_num_smooth < 1:
+            raise ValueError("cg_tolerance, cg_max_iterations and ams_num_smooth must be positive")
+        if int(ams_update_every) < 1:
+            raise ValueError("ams_update_every must be positive")
+        if not ic_shift >= 1.0:
+            raise ValueError("ic_shift must be at least 1")
+        if gauge_epsilon < 0.0:
+            raise ValueError("gauge_epsilon must be non-negative")
+        if gauge_epsilon == 0.0 and linear_solver != "iccg":
+            # Without the mass regularisation the curl-curl system is singular
+            # (gradient kernel); CG on a consistent right-hand side still
+            # converges, a factorisation or the AMS hierarchy as built here does not.
+            raise ValueError("gauge_epsilon=0 (ungauged, singular but consistent) requires linear_solver='iccg'")
+        self.mesh = mesh
+        self.linear_solver = linear_solver
+        self.ic_shift = float(ic_shift)
+        self.gauge_epsilon = float(gauge_epsilon)
+        self.cg_tolerance = float(cg_tolerance)
+        self.cg_max_iterations = int(cg_max_iterations)
+        self.ams_num_smooth = int(ams_num_smooth)
+        self.ams_update_every = int(ams_update_every)
+        self._ams_systems_seen = 0
+        self.timing: dict[str, float] = {}
+        started = time.perf_counter()
+        self.fes = ng.HCurl(mesh, order=1, dirichlet="outer", nograds=True)
+        self.free = np.fromiter(self.fes.FreeDofs(), dtype=bool, count=self.fes.ndof)
+        self.nu_space = ng.L2(mesh, order=0)
+        self.nu_gf = ng.GridFunction(self.nu_space)
+        self.iron = iron_elements_with_centroids(mesh)
+        self.timing["spaces"] = time.perf_counter() - started
+        # The exact Radia source, evaluated once on the iron and kept as a
+        # discontinuous polynomial field; the reduced right-hand side only
+        # ever integrates B_s over iron, where B_s is smooth.
+        started = time.perf_counter()
+        self.source_cf = source_cf
+        bs_space = ng.L2(mesh, order=int(source_projection_order), dim=3,
+                         definedon=mesh.Materials("iron"))
+        self.source_gf = ng.GridFunction(bs_space)
+        with ng.TaskManager():
+            self.source_gf.Set(self.source_cf, definedon=mesh.Materials("iron"))
+        self.timing["source_projection"] = time.perf_counter() - started
+        self.source_projection_order = int(source_projection_order)
+        # Element-constant helpers: the iron element numbers, the exact source at
+        # their centroids (once), the element volumes, and order-zero fields for
+        # the Newton rank-one coefficient and the element flux density.
+        started = time.perf_counter()
+        self.iron_numbers = np.asarray([number for number, _ in self.iron], dtype=np.int64)
+        centroids = np.asarray([centroid for _, centroid in self.iron], dtype=float)
+        mips = mesh(centroids[:, 0], centroids[:, 1], centroids[:, 2])
+        self.source_at_centroids = np.asarray(self.source_cf(mips), dtype=float).reshape(-1, 3)
+        with ng.TaskManager():
+            self.volumes = np.asarray(ng.Integrate(ng.CF(1.0), mesh, ng.VOL, element_wise=True),
+                                      dtype=float)
+        self._bvec_gfs = [ng.GridFunction(self.nu_space) for _ in range(3)]
+        self.q_gf = ng.GridFunction(self.nu_space)
+        self.timing["element_helpers"] = time.perf_counter() - started
+        self._ams = None
+        self._gradient = None
+
+    # ------------------------------------------------------------------ linear algebra
+    def _ams_prepare(self, matrix):
+        import radia.sparsesolv_ngsolve as ssn
+
+        if self._gradient is None:
+            gradient, h1 = self.fes.CreateGradient()
+            if int(h1.ndof) != int(self.mesh.nv):
+                raise RuntimeError("AMS needs one H1 DOF per vertex")
+            xyz = np.asarray(self.mesh.ngmesh.Coordinates(), dtype=float)
+            self._gradient = (gradient, xyz)
+        gradient, xyz = self._gradient
+        # Construction and Update must run outside TaskManager (sparsesolv contract).
+        if self._ams is None:
+            self._ams = ssn.HypreBasedAMSPreconditioner(
+                mat=matrix, grad_mat=gradient, freedofs=self.fes.FreeDofs(),
+                coord_x=xyz[:, 0].tolist(), coord_y=xyz[:, 1].tolist(),
+                coord_z=xyz[:, 2].tolist(), cycle_type=1, print_level=0,
+                num_smooth=self.ams_num_smooth)
+            self._ams_lagged = False
+        elif self._ams_systems_seen % self.ams_update_every == 0:
+            self._ams.Update(matrix)
+            self._ams_lagged = False
+        else:
+            self._ams_lagged = True
+        self._ams_systems_seen += 1
+        return self._ams
+
+    def _solve_linear(self, matrix, rhs, solution_vec, *, warm_start: bool) -> dict:
+        """Solve ``matrix x = rhs`` for the free DOFs to a true relative residual."""
+        record: dict[str, float | int | None] = {}
+        rhs_norm = float(np.linalg.norm(rhs.FV().NumPy()[self.free]))
+        if rhs_norm == 0.0:
+            solution_vec[:] = 0.0
+            return {"preconditioner_s": 0.0, "solve_s": 0.0, "cg_iterations": 0,
+                    "relative_residual": 0.0}
+        if self.linear_solver == "ams":
+            t0 = time.perf_counter()
+            pre = self._ams_prepare(matrix)
+            record["preconditioner_s"] = time.perf_counter() - t0
+            t0 = time.perf_counter()
+            # The Krylov loop measures the preconditioned residual; the contract
+            # here is the true relative residual on the free DOFs, so the solve
+            # continues (warm-started) until that is met.
+            iterations = 0
+            residual = rhs.CreateVector()
+            internal_tolerance = self.cg_tolerance
+            initialize = not warm_start
+            true_relative = float("inf")
+            for attempt in range(6):
+                solver = CGSolver(mat=matrix, pre=pre, maxiter=self.cg_max_iterations,
+                                  tol=internal_tolerance, printrates=False)
+                with ng.TaskManager():
+                    solver.Solve(rhs=rhs, sol=solution_vec, initialize=initialize)
+                    residual.data = rhs - matrix * solution_vec
+                iterations += int(solver.iterations)
+                true_relative = float(np.linalg.norm(residual.FV().NumPy()[self.free]) / rhs_norm)
+                if true_relative <= self.cg_tolerance:
+                    break
+                initialize = False
+                internal_tolerance *= 0.1
+            else:
+                raise RuntimeError(
+                    f"AMS-CG did not reach the true relative residual {self.cg_tolerance:.1e} "
+                    f"(reached {true_relative:.2e} after {iterations} iterations)")
+            record["solve_s"] = time.perf_counter() - t0
+            record["cg_iterations"] = iterations
+            record["cg_restarts"] = attempt
+            record["preconditioner_lagged"] = bool(self._ams_lagged)
+            record["relative_residual"] = true_relative
+        elif self.linear_solver == "iccg":
+            import radia.sparsesolv_ngsolve as ssn
+
+            t0 = time.perf_counter()
+            solver = ssn.SparseSolvSolver(
+                matrix, method="ICCG", freedofs=self.fes.FreeDofs(), tol=self.cg_tolerance,
+                maxiter=self.cg_max_iterations, shift=self.ic_shift, save_best_result=True,
+                use_abmc=True)
+            record["preconditioner_s"] = time.perf_counter() - t0
+            t0 = time.perf_counter()
+            if not warm_start:
+                solution_vec[:] = 0.0
+            iterations = 0
+            residual = rhs.CreateVector()
+            true_relative = float("inf")
+            for attempt in range(6):
+                with ng.TaskManager():
+                    result = solver.Solve(rhs, solution_vec)
+                    residual.data = rhs - matrix * solution_vec
+                iterations += int(result.iterations)
+                true_relative = float(np.linalg.norm(residual.FV().NumPy()[self.free]) / rhs_norm)
+                if true_relative <= self.cg_tolerance:
+                    break
+                solver.tol = solver.tol * 0.1
+            else:
+                raise RuntimeError(
+                    f"shifted ICCG did not reach the true relative residual {self.cg_tolerance:.1e} "
+                    f"(reached {true_relative:.2e} after {iterations} iterations)")
+            record["solve_s"] = time.perf_counter() - t0
+            record["cg_iterations"] = iterations
+            record["cg_restarts"] = attempt
+            record["relative_residual"] = true_relative
+        else:
+            t0 = time.perf_counter()
+            with ng.TaskManager():
+                inverse = matrix.Inverse(self.fes.FreeDofs(), inverse=direct_inverse_type())
+                solution_vec.data = inverse * rhs
+                residual = rhs.CreateVector()
+                residual.data = rhs - matrix * solution_vec
+            record["preconditioner_s"] = 0.0
+            record["solve_s"] = time.perf_counter() - t0
+            record["cg_iterations"] = None
+            record["relative_residual"] = float(
+                np.linalg.norm(residual.FV().NumPy()[self.free]) / rhs_norm)
+        if not math.isfinite(record["relative_residual"]):
+            raise RuntimeError("non-finite linear residual")
+        return record
+
+    # ------------------------------------------------------------------ material state
+    def _element_flux(self, solution) -> tuple[np.ndarray, np.ndarray]:
+        """Element-constant B in iron: exact source at the centroid + curl A."""
+        with ng.TaskManager():
+            curl = np.stack([
+                np.asarray(ng.Integrate(ng.curl(solution)[k], self.mesh, ng.VOL,
+                                        element_wise=True), dtype=float)
+                for k in range(3)], axis=1) / self.volumes[:, None]
+        b_iron = self.source_at_centroids + curl[self.iron_numbers]
+        return b_iron, np.linalg.norm(b_iron, axis=1)
+
+    def _set_material(self, nu_iron: np.ndarray, *, law: SoftIronLaw | None = None,
+                      b_iron: np.ndarray | None = None, magnitude: np.ndarray | None = None) -> None:
+        values = self.nu_gf.vec.FV().NumPy()
+        values[:] = NU0
+        values[self.iron_numbers] = nu_iron
+        if law is None:
+            return
+        # Newton rank-one coefficient (dH/dB - nu)/|B|^2 and the element field.
+        dhdb = law.differential_reluctivity(magnitude)
+        safe = np.where(magnitude > 1.0e-9, magnitude, 1.0)
+        q = np.where(magnitude > 1.0e-9, (dhdb - nu_iron) / (safe * safe), 0.0)
+        q_values = self.q_gf.vec.FV().NumPy()
+        q_values[:] = 0.0
+        q_values[self.iron_numbers] = q
+        for k in range(3):
+            component = self._bvec_gfs[k].vec.FV().NumPy()
+            component[:] = 0.0
+            component[self.iron_numbers] = b_iron[:, k]
+
+    def _picard_forms(self):
+        u, v = self.fes.TnT()
+        a = ng.BilinearForm(self.fes, symmetric=True)
+        a += self.nu_gf * ng.InnerProduct(ng.curl(u), ng.curl(v)) * ng.dx
+        if self.gauge_epsilon > 0.0:
+            a += self.gauge_epsilon * NU0 * ng.InnerProduct(u, v) * ng.dx
+        f = ng.LinearForm(self.fes)
+        f += (NU0 - self.nu_gf) * ng.InnerProduct(self.source_gf, ng.curl(v)) * ng.dx("iron")
+        return a, f
+
+    def _residual(self, solution) -> tuple:
+        """Nonlinear residual R(A) = K(nu(A)) A - f(nu(A)) for the material set."""
+        v = self.fes.TestFunction()
+        r = ng.LinearForm(self.fes)
+        r += self.nu_gf * ng.InnerProduct(ng.curl(solution), ng.curl(v)) * ng.dx
+        r += (self.nu_gf - NU0) * ng.InnerProduct(self.source_gf, ng.curl(v)) * ng.dx("iron")
+        if self.gauge_epsilon > 0.0:
+            r += self.gauge_epsilon * NU0 * ng.InnerProduct(solution, v) * ng.dx
+        with ng.TaskManager():
+            r.Assemble()
+        return r.vec, float(np.linalg.norm(r.vec.FV().NumPy()[self.free]))
+
+    def _jacobian(self):
+        u, v = self.fes.TnT()
+        bvec = ng.CF(tuple(self._bvec_gfs))
+        J = ng.BilinearForm(self.fes, symmetric=True)
+        J += self.nu_gf * ng.InnerProduct(ng.curl(u), ng.curl(v)) * ng.dx
+        J += self.q_gf * ng.InnerProduct(bvec, ng.curl(u)) * ng.InnerProduct(bvec, ng.curl(v)) * ng.dx("iron")
+        if self.gauge_epsilon > 0.0:
+            J += self.gauge_epsilon * NU0 * ng.InnerProduct(u, v) * ng.dx
+        return J
+
+    # ------------------------------------------------------------------ drivers
+    def run_linear(self, mu_r: float, observation: np.ndarray) -> tuple:
+        started = time.perf_counter()
+        self._set_material(np.full(len(self.iron), NU0 / float(mu_r)))
+        solution = ng.GridFunction(self.fes, name="A_reduced")
+        solution.vec[:] = 0.0
+        a, f = self._picard_forms()
+        t0 = time.perf_counter()
+        with ng.TaskManager():
+            a.Assemble()
+            f.Assemble()
+        entry = {"iteration": 1, "assemble_s": time.perf_counter() - t0}
+        entry.update(self._solve_linear(a.mat, f.vec, solution.vec, warm_start=False))
+        field = self._observe(solution, observation)
+        stats = {"method": "linear", "converged": True, "iterations": 1, "history": [entry]}
+        return field, stats, time.perf_counter() - started
+
+    def run_picard(self, law: SoftIronLaw, *, relax: float, anderson_depth: int,
+                   tolerance: float, max_iterations: int, observation: np.ndarray) -> tuple:
+        started = time.perf_counter()
+        nu_current = np.full(len(self.iron), law.nu_initial)
+        self._set_material(nu_current)
+        solution = ng.GridFunction(self.fes, name="A_reduced")
+        solution.vec[:] = 0.0
+        accelerator = ConstrainedAndersonAccelerator(
+            depth=int(anderson_depth), relaxation=float(relax),
+            lower=min(NU0, law.nu_initial), upper=max(NU0, law.nu_initial), transform="log")
+        history, b_previous, converged, final_change = [], None, False, None
+        for iteration in range(1, int(max_iterations) + 1):
+            entry = {"iteration": iteration}
+            a, f = self._picard_forms()
+            t0 = time.perf_counter()
+            with ng.TaskManager():
+                a.Assemble()
+                f.Assemble()
+            entry["assemble_s"] = time.perf_counter() - t0
+            entry.update(self._solve_linear(a.mat, f.vec, solution.vec, warm_start=iteration > 1))
+            t0 = time.perf_counter()
+            b_iron, magnitude = self._element_flux(solution)
+            nu_target = law.reluctivity(magnitude)
+            accelerator.lower = min(accelerator.lower, float(np.min(nu_target)))
+            accelerator.upper = max(accelerator.upper, float(np.max(nu_target)))
+            nu_current = np.asarray(accelerator.step(nu_current, nu_target), dtype=float)
+            self._set_material(nu_current)
+            entry["material_update_s"] = time.perf_counter() - t0
+            entry["nu_min"], entry["nu_max"] = float(np.min(nu_current)), float(np.max(nu_current))
+            if b_previous is not None:
+                final_change = float(np.max(np.abs(magnitude - b_previous)) / law.b_saturation)
+                entry["relative_B_change"] = final_change
+            history.append(entry)
+            progress("picard", engine="reduced_a", iteration=iteration,
+                     cg_iterations=entry.get("cg_iterations"), relative_B_change=final_change)
+            if b_previous is not None and final_change < tolerance:
+                converged = True
+                break
+            b_previous = magnitude.copy()
+        field = self._observe(solution, observation)
+        stats = {
+            "method": "Picard", "converged": bool(converged), "iterations": len(history),
+            "final_relative_change": final_change, "tolerance": float(tolerance),
+            "maximum_iterations": int(max_iterations), "relaxation": float(relax),
+            "anderson_depth": int(anderson_depth), "history": history,
+            "maximum_linear_relative_residual": max(row["relative_residual"] for row in history),
+            "anderson": accelerator.stats(),
+        }
+        return field, stats, time.perf_counter() - started
+
+    def run_newton(self, law: SoftIronLaw, *, newton_tolerance: float, tolerance: float,
+                   max_iterations: int, max_halvings: int, observation: np.ndarray) -> tuple:
+        started = time.perf_counter()
+        solution = ng.GridFunction(self.fes, name="A_reduced")
+        solution.vec[:] = 0.0
+        update = solution.vec.CreateVector()
+        trial = ng.GridFunction(self.fes)
+        b_iron, magnitude = self._element_flux(solution)
+        self._set_material(law.reluctivity(magnitude), law=law, b_iron=b_iron, magnitude=magnitude)
+        residual_vec, residual_norm = self._residual(solution)
+        residual_0 = residual_norm
+        history, converged, final_change = [], False, None
+        for iteration in range(1, int(max_iterations) + 1):
+            entry = {"iteration": iteration, "residual_relative": residual_norm / residual_0}
+            t0 = time.perf_counter()
+            J = self._jacobian()
+            with ng.TaskManager():
+                J.Assemble()
+            entry["assemble_s"] = time.perf_counter() - t0
+            negative = residual_vec.CreateVector()
+            negative.data = -1.0 * residual_vec
+            update[:] = 0.0
+            entry.update(self._solve_linear(J.mat, negative, update, warm_start=False))
+            # Armijo backtracking on the true residual norm.
+            t0 = time.perf_counter()
+            alpha, accepted = 1.0, None
+            for halving in range(int(max_halvings) + 1):
+                trial.vec.data = solution.vec + alpha * update
+                b_trial, magnitude_trial = self._element_flux(trial)
+                self._set_material(law.reluctivity(magnitude_trial), law=law,
+                                   b_iron=b_trial, magnitude=magnitude_trial)
+                trial_vec, trial_norm = self._residual(trial)
+                if trial_norm <= (1.0 - 1.0e-4 * alpha) * residual_norm:
+                    accepted = (alpha, trial_vec, trial_norm, magnitude_trial)
+                    break
+                alpha *= 0.5
+            if accepted is None:
+                # Take the last (smallest) step anyway and let the residual
+                # history show the stall rather than hide it.
+                accepted = (alpha * 2.0, trial_vec, trial_norm, magnitude_trial)
+                entry["line_search_failed"] = True
+            alpha, residual_vec, new_norm, magnitude_new = accepted
+            solution.vec.data = solution.vec + alpha * update
+            entry["line_search_s"] = time.perf_counter() - t0
+            entry["step_length"] = alpha
+            entry["line_search_evaluations"] = halving + 1
+            final_change = float(np.max(np.abs(magnitude_new - magnitude)) / law.b_saturation)
+            entry["relative_B_change"] = final_change
+            entry["residual_relative_after"] = new_norm / residual_0
+            nu_now = self.nu_gf.vec.FV().NumPy()[self.iron_numbers]
+            entry["nu_min"], entry["nu_max"] = float(np.min(nu_now)), float(np.max(nu_now))
+            history.append(entry)
+            magnitude, residual_norm = magnitude_new, new_norm
+            progress("newton", engine="reduced_a", iteration=iteration, step=alpha,
+                     cg_iterations=entry.get("cg_iterations"),
+                     residual_relative=entry["residual_relative_after"],
+                     relative_B_change=final_change)
+            if residual_norm <= newton_tolerance * residual_0 and final_change <= tolerance:
+                converged = True
+                break
+        field = self._observe(solution, observation)
+        stats = {
+            "method": "Newton", "converged": bool(converged), "iterations": len(history),
+            "final_relative_change": final_change, "tolerance": float(tolerance),
+            "newton_tolerance": float(newton_tolerance),
+            "final_residual_relative": residual_norm / residual_0,
+            "maximum_iterations": int(max_iterations), "history": history,
+            "maximum_linear_relative_residual": max(row["relative_residual"] for row in history),
+        }
+        return field, stats, time.perf_counter() - started
+
+    def _observe(self, solution, observation):
+        total = self.source_cf + ng.curl(solution)
+        return np.asarray([[float(c) for c in total(self.mesh(*map(float, p)))]
+                           for p in observation], dtype=float)
+
+    def describe(self) -> dict:
+        return {
+            "formulation": "HCurl reduced-A, order 1, nograds gauge",
+            "boundary": "A_r x n = 0 on the box (source flux passes through)",
+            "linear_solver": {
+                "ams": "AMS(compiled, sparsesolv)+CG to a true relative residual, warm-started",
+                "iccg": f"shifted IC(0) CG (compiled, sparsesolv, shift {self.ic_shift}, ABMC) "
+                        "to a true relative residual, warm-started",
+                "direct": direct_inverse_type(),
+            }[self.linear_solver],
+            "cg_relative_tolerance": self.cg_tolerance if self.linear_solver != "direct" else None,
+            "ams_num_smooth": self.ams_num_smooth if self.linear_solver == "ams" else None,
+            "ams_update_every": self.ams_update_every if self.linear_solver == "ams" else None,
+            "source": "exact Radia B_s projected once to L2 order "
+                      f"{self.source_projection_order} on iron; exact at observation points",
+            "ndof": int(self.fes.ndof),
+            "gauge_epsilon": self.gauge_epsilon,
+            "gauge": ("nograds space + mass regularisation" if self.gauge_epsilon > 0.0
+                      else "nograds space only: singular, consistent right-hand side"),
+            "setup_timing_s": self.timing,
+        }
+
+
+def solve_mixed_omega_box(mesh: ng.Mesh, coil: int, material, *, nonlinear: bool,
+                          relaxation: float, anderson_depth: int, tolerance: float,
+                          max_iterations: int, observation: np.ndarray,
+                          bonus_intorder: int) -> tuple:
+    started = time.perf_counter()
+    source_h = rad.RadiaField(coil, "h")
+    timing = {}
+    t0 = time.perf_counter()
+    with ng.TaskManager():
+        hodge = project_source_total_hodge(mesh, source_h, ("iron",), order=1,
+                                           bonus_intorder=bonus_intorder)
+    timing["source_hodge_projection_s"] = time.perf_counter() - t0
+    reduced = tuple(name for name in ("air", "coil") if name in set(mesh.GetMaterials()))
+    common = dict(
+        reduced_materials=reduced, total_materials=("iron",),
+        interface_boundary="iron_air_interface", order=1, dirichlet_bbbnd="GND",
+        bonus_intorder=bonus_intorder, kelvin_mats=(), kelvin_match_exact=True,
+        total_source_h=hodge["harmonic_field"], total_source_materials=("iron",),
+    )
+    t0 = time.perf_counter()
+    stats = {}
+    with ng.TaskManager():
+        if nonlinear:
+            try:
+                result = solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
+                    mesh, source_h, hodge["potential"], 1.0, (10.0, 0.0, 0.0),
+                    bh_table=material, nonlinear_materials=("iron",),
+                    tolerance=float(tolerance), max_iterations=int(max_iterations),
+                    relaxation=float(relaxation), anderson_depth=int(anderson_depth),
+                    observation_points=observation, **common)
+            except MixedOmegaPicardNotConverged as exc:
+                # The carried state has the iteration history but no field:
+                # report the failure with its history and a NaN field.
+                stats = dict(exc.state["nonlinear_stats"])
+                stats["converged"] = False
+                stats["error"] = str(exc)[:500]
+                timing["solve_s"] = time.perf_counter() - t0
+                field = np.full((len(observation), 3), float("nan"))
+                description = {
+                    "formulation": "H1 mixed total/reduced Omega, order 1",
+                    "boundary": "natural B.n = 0 on the box; GND vertex gauge",
+                    "iron_relative_harmonic_norm": float(hodge["relative_harmonic_norm"]),
+                    "linear_solver": "PARDISO (symmetric indefinite saddle point)",
+                    "timing_s": timing, "ndof": None,
+                }
+                return field, stats, description, time.perf_counter() - started
+            stats = dict(result["nonlinear_stats"])
+        else:
+            result = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+                mesh, source_h, hodge["potential"], 1.0, (10.0, 0.0, 0.0),
+                mu_r_by_material={"iron": float(material)}, **common)
+            stats = {"converged": True, "iterations": 1}
+    timing["solve_s"] = time.perf_counter() - t0
+    field = np.asarray([[float(c) for c in result["B_cf"](mesh(*map(float, p)))]
+                        for p in observation], dtype=float)
+    description = {
+        "formulation": "H1 mixed total/reduced Omega, order 1",
+        "boundary": "natural B.n = 0 on the box; GND vertex gauge",
+        "source": "exact Radia H_s in the reduced air/coil; total-Hodge split in iron",
+        "iron_relative_harmonic_norm": float(hodge["relative_harmonic_norm"]),
+        "ndof": int(result["fes"].ndof),
+        "linear_solver": "PARDISO (symmetric indefinite saddle point)",
+        "phase_timings_seconds": result.get("phase_timings_seconds"),
+        "timing_s": timing,
+    }
+    return field, stats, description, time.perf_counter() - started
+
+
+def compare(points, fields: dict, reference: dict | None, core_half_length: float, adapters):
+    core = np.abs(points[:, 0]) <= core_half_length + 1e-14
+    projected = {name: adapters.median_plane_projection(points, value)
+                 for name, value in fields.items()}
+    out = {
+        "pairwise_median_projected_gap_core": adapters.pairwise_metrics(projected, core),
+        "pairwise_raw_full_tube": adapters.pairwise_metrics(fields, np.ones(len(points), bool)),
+        "centre_field_T": {name: value[CENTRE_INDEX].tolist() for name, value in fields.items()},
+    }
+    if reference is not None:
+        ref_points = np.asarray(reference["observation_points_m"], dtype=float)
+        if not np.allclose(ref_points, points, atol=1e-12):
+            raise RuntimeError("reference observation stencil differs")
+        ref_fields = {f"reference_{name}": np.asarray(value, dtype=float)
+                      for name, value in reference["fields_T"].items()}
+        ref_projected = {name: adapters.median_plane_projection(points, value)
+                         for name, value in ref_fields.items()}
+        versus = {}
+        for ours, value in projected.items():
+            for theirs, ref in ref_projected.items():
+                versus[f"{ours}__vs__{theirs}"] = {
+                    "gap_core_relative_rms": adapters.relative_rms(ref[core], value[core]),
+                    "centre_relative_difference": float(
+                        np.linalg.norm(value[CENTRE_INDEX] - ref[CENTRE_INDEX])
+                        / np.linalg.norm(ref[CENTRE_INDEX])),
+                }
+        out["versus_reference"] = versus
+        out["reference_centre_field_T"] = {
+            name: v[CENTRE_INDEX].tolist() for name, v in ref_fields.items()}
+        out["reference_file"] = reference["_path"]
+        out["reference_sha256"] = reference["_sha256"]
+    return out
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--vol", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--bh-table", type=Path, default=DEFAULT_BH)
+    parser.add_argument("--mode", choices=("linear", "nonlinear"), default="nonlinear")
+    parser.add_argument("--mu-r", type=float, default=1000.0)
+    parser.add_argument("--engines", default="reduced_a,mixed_omega",
+                        help="comma list of reduced_a, mixed_omega")
+    parser.add_argument("--threads", type=int, default=8)
+    parser.add_argument("--reduced-a-solver", choices=("ams", "iccg", "direct"), default="ams")
+    parser.add_argument("--ic-shift", type=float, default=1.05,
+                        help="shift of the incomplete Cholesky factorisation (iccg)")
+    parser.add_argument("--gauge-epsilon", type=float, default=GAUGE_EPSILON,
+                        help="mass regularisation of the curl-curl operator; 0 only with iccg")
+    parser.add_argument("--nonlinear-method", choices=("newton", "picard"), default="newton")
+    parser.add_argument("--cg-tolerance", type=float, default=1.0e-8)
+    parser.add_argument("--cg-max-iterations", type=int, default=2000)
+    parser.add_argument("--ams-num-smooth", type=int, default=1)
+    parser.add_argument("--ams-update-every", type=int, default=1,
+                        help="rebuild the AMS hierarchy every N-th linear system")
+    parser.add_argument("--source-projection-order", type=int, default=2)
+    parser.add_argument("--relax", type=float, default=0.3)
+    parser.add_argument("--anderson-depth", type=int, default=0)
+    parser.add_argument("--newton-tolerance", type=float, default=1.0e-6,
+                        help="relative nonlinear residual at which Newton stops")
+    parser.add_argument("--line-search-max-halvings", type=int, default=6)
+    parser.add_argument("--omega-relax", type=float, default=0.3)
+    parser.add_argument("--omega-anderson-depth", type=int, default=0)
+    parser.add_argument("--omega-bonus-intorder", type=int, default=4)
+    parser.add_argument("--tolerance", type=float, default=2.0e-5,
+                        help="max |dB| / B_sat between iterations at which a loop is converged")
+    parser.add_argument("--max-iterations", type=int, default=80)
+    parser.add_argument("--gap-core-half-length", type=float, default=0.010)
+    parser.add_argument("--reference", type=Path, default=None,
+                        help="three-engine result JSON of the Kelvin lane")
+    options = parser.parse_args()
+
+    if options.threads > 0:
+        ng.SetNumThreads(options.threads)
+    engines = [name.strip() for name in options.engines.split(",") if name.strip()]
+    for name in engines:
+        if name not in ("reduced_a", "mixed_omega"):
+            raise ValueError(f"unknown engine {name!r}")
+    adapters = load_three_engine_adapters()
+    nonlinear = options.mode == "nonlinear"
+    material = (np.loadtxt(options.bh_table, dtype=float)[:, :2].tolist()
+                if nonlinear else options.mu_r)
+
+    t0 = time.perf_counter()
+    mesh = ng.Mesh(str(options.vol.resolve()))
+    mesh_load_s = time.perf_counter() - t0
+    contract = check_mesh_contract(options.vol.resolve(), mesh)
+    rad.UtiDelAll()
+    coil, coil_manifest = adapters.build_coil()
+    points = adapters.observation_points()
+    for point in points:
+        if not mesh(*map(float, point)):
+            raise RuntimeError(f"observation point {point} outside the mesh")
+
+    reference = None
+    if options.reference is not None:
+        reference = json.loads(options.reference.read_text(encoding="utf-8"))
+        reference["_path"] = str(options.reference.resolve())
+        reference["_sha256"] = sha256(options.reference)
+
+    fields: dict[str, np.ndarray] = {}
+    diagnostics: dict[str, dict] = {}
+    if "reduced_a" in engines:
+        progress("engine_start", engine="reduced_a", mesh_elements=int(mesh.ne))
+        engine = ReducedAP1Box(
+            mesh, rad.RadiaField(coil, "b"), linear_solver=options.reduced_a_solver,
+            cg_tolerance=options.cg_tolerance, cg_max_iterations=options.cg_max_iterations,
+            ams_num_smooth=options.ams_num_smooth,
+            source_projection_order=options.source_projection_order,
+            ams_update_every=options.ams_update_every, ic_shift=options.ic_shift,
+            gauge_epsilon=options.gauge_epsilon)
+        if not nonlinear:
+            field, stats, runtime = engine.run_linear(options.mu_r, points)
+        elif options.nonlinear_method == "newton":
+            field, stats, runtime = engine.run_newton(
+                SoftIronLaw(material), newton_tolerance=options.newton_tolerance,
+                tolerance=options.tolerance, max_iterations=options.max_iterations,
+                max_halvings=options.line_search_max_halvings, observation=points)
+        else:
+            field, stats, runtime = engine.run_picard(
+                SoftIronLaw(material), relax=options.relax,
+                anderson_depth=options.anderson_depth, tolerance=options.tolerance,
+                max_iterations=options.max_iterations, observation=points)
+        fields["reduced_a"] = field
+        totals: dict[str, float] = {}
+        for row in stats["history"]:
+            for key in ("assemble_s", "preconditioner_s", "solve_s", "material_update_s",
+                        "line_search_s"):
+                if key in row:
+                    totals[key] = totals.get(key, 0.0) + float(row[key])
+        diagnostics["reduced_a"] = {
+            **engine.describe(), "nonlinear": nonlinear, "nonlinear_stats": stats,
+            "runtime_s": runtime, "mesh_elements": int(mesh.ne), "mesh_vertices": int(mesh.nv),
+            "phase_totals_s": totals,
+            "total_cg_iterations": sum(int(row["cg_iterations"] or 0) for row in stats["history"]),
+        }
+        progress("engine_complete", engine="reduced_a", runtime_s=runtime,
+                 converged=stats["converged"], iterations=stats["iterations"])
+    if "mixed_omega" in engines:
+        progress("engine_start", engine="mixed_omega", mesh_elements=int(mesh.ne))
+        field, stats, description, runtime = solve_mixed_omega_box(
+            mesh, coil, material, nonlinear=nonlinear, relaxation=options.omega_relax,
+            anderson_depth=options.omega_anderson_depth, tolerance=options.tolerance,
+            max_iterations=options.max_iterations, observation=points,
+            bonus_intorder=options.omega_bonus_intorder)
+        fields["mixed_omega"] = field
+        diagnostics["mixed_omega"] = {**description, "nonlinear": nonlinear,
+                                      "nonlinear_stats": stats, "runtime_s": runtime,
+                                      "mesh_elements": int(mesh.ne), "mesh_vertices": int(mesh.nv)}
+        progress("engine_complete", engine="mixed_omega", runtime_s=runtime,
+                 converged=stats.get("converged"), iterations=stats.get("iterations"))
+
+    comparison = compare(points, fields, reference, options.gap_core_half_length, adapters)
+    output = {
+        "schema": "radia.validation.c-type-p1-box-bench.v1",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "machine": platform.node(),
+        "python": sys.version,
+        "ngsolve": ng.__version__,
+        "threads": int(options.threads),
+        "mode": options.mode,
+        "mesh": {"vol": str(options.vol.resolve()), "vol_sha256": contract["vol_sha256"],
+                 "elements": int(mesh.ne), "vertices": int(mesh.nv),
+                 "load_seconds": mesh_load_s, "contract": contract},
+        "bh_table": None if not nonlinear else str(options.bh_table.resolve()),
+        "bh_table_sha256": None if not nonlinear else sha256(options.bh_table),
+        "mu_r": None if nonlinear else options.mu_r,
+        "coil": coil_manifest,
+        "observation_points_m": points.tolist(),
+        "engines": diagnostics,
+        "fields_T": {name: value.tolist() for name, value in fields.items()},
+        "comparison": comparison,
+        "gap_core_half_length_m": options.gap_core_half_length,
+        "options": {key: (str(value) if isinstance(value, Path) else value)
+                    for key, value in vars(options).items()},
+    }
+    options.output.parent.mkdir(parents=True, exist_ok=True)
+    options.output.write_text(json.dumps(output, indent=2, default=str) + "\n", encoding="utf-8")
+    progress("complete", output=str(options.output),
+             runtimes={name: row["runtime_s"] for name, row in diagnostics.items()})
+
+
+if __name__ == "__main__":
+    main()
