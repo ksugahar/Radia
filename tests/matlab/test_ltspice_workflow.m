@@ -176,7 +176,7 @@ end
 function testInstalledLTspiceRunsAndRawIsParsed(testCase)
 fixture = fullfile(fileparts(mfilename("fullpath")), ...
     "fixtures", "ltspice_rc.cir");
-result = radia.ltspice.run(fixture, Parameters=struct("Rval", 2000));
+result = radia.ltspice.run(fixture, Parameters=struct("Rval", 2000),OutputDirectory=tempPath(testCase,"parameters"));
 verifyEqual(testCase, result.schema, "radia.ltspice.run.v1");
 verifyEqual(testCase, result.waveform.names, ...
     ["time", "V(in)", "V(out)", "I(V1)"]);
@@ -191,7 +191,7 @@ fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_rc.asc");
 edited=tempPath(testCase,"edited.asc"); editor=radia.ltspice.SchematicEditor(fixture); editor.setComponentValue("R1","2k"); editor.saveAs(edited);
 converted=radia.ltspice.schematicToNetlist(edited,OutputDirectory=tempPath(testCase,"asc_convert"));
 verifyTrue(testCase,contains(string(fileread(converted.netlist)),"R1 N001 NC_01 2k"));
-result=radia.ltspice.run(edited); verifyEqual(testCase,result.schema,"radia.ltspice.run.v1"); verifyFalse(testCase,isempty(result.schematic_conversion));
+result=radia.ltspice.run(edited,OutputDirectory=tempPath(testCase,"edited_run")); verifyEqual(testCase,result.schema,"radia.ltspice.run.v1"); verifyFalse(testCase,isempty(result.schematic_conversion));
 end
 
 function testPythonNetlistToSchematicWrapper(testCase)
@@ -207,7 +207,7 @@ function testUnknownParameterIsRejected(testCase)
 fixture = fullfile(fileparts(mfilename("fullpath")), ...
     "fixtures", "ltspice_rc.cir");
 verifyError(testCase, ...
-    @() radia.ltspice.run(fixture, Parameters=struct("missing", 1)), ...
+    @() radia.ltspice.run(fixture, Parameters=struct("missing", 1),OutputDirectory=tempPath(testCase,"missing_parameter")), ...
     "radia:ltspice:ParameterNotFound");
 end
 
@@ -226,7 +226,7 @@ fixture = fullfile(fileparts(mfilename("fullpath")), ...
     "fixtures", "ltspice_pwl_rc.cir");
 gate = [0, 0; 1e-6, 0; 1.01e-6, 1; 10e-6, 1; 10.01e-6, 0; 20e-6, 0];
 result = radia.simulink.runLTspice(fixture, ...
-    InputSignals=struct("gate", gate));
+    InputSignals=struct("gate", gate),OutputDirectory=tempPath(testCase,"pwl_run"));
 verifyEqual(testCase, result.schema, "radia.simulink.ltspice.run.v1");
 inputIndex = find(result.waveform.names == "V(in)", 1);
 verifyGreaterThan(testCase, max(result.waveform.values(:, inputIndex)), 0.99);
@@ -238,7 +238,7 @@ fixture = fullfile(fileparts(mfilename("fullpath")), ...
     "fixtures", "ltspice_rc.cir");
 study = radia.optuna.createStudy(direction="maximize", AutoSave=false);
 runner = radia.optuna.LTspiceRunner(fixture, ...
-    ConfigureFcn=@configureTrial, ScoreFcn=@scoreTrial);
+    ConfigureFcn=@configureTrial, ScoreFcn=@scoreTrial,OutputRoot=tempPath(testCase,"optuna"));
 table = runner.optimize(study, 2);
 verifyEqual(testCase, table.State, ["COMPLETE"; "COMPLETE"]);
 verifyTrue(testCase, all(isfinite(table.Value)));
@@ -259,7 +259,7 @@ end
 
 function testBinaryRawAndStepSeparation(testCase)
 fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_step_rc.cir");
-result=radia.ltspice.run(fixture,RawFormat="binary"); raw=radia.ltspice.RawRead(result.raw_file);
+result=radia.ltspice.run(fixture,RawFormat="binary",OutputDirectory=tempPath(testCase,"binary_run")); raw=radia.ltspice.RawRead(result.raw_file);
 verifyEqual(testCase,raw.Data.schema,"radia.ltspice.raw.binary.v1");
 verifyEqual(testCase,raw.getStepCount(),2);
 verifyGreaterThan(testCase,numel(raw.getStep("V(out)",1)),100);
@@ -275,7 +275,7 @@ end
 
 function testComplexAcRawBecomesMatlabComplex(testCase)
 fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_ac_rc.cir");
-result=radia.ltspice.run(fixture,RawFormat="binary"); raw=radia.ltspice.RawRead(result.raw_file);
+result=radia.ltspice.run(fixture,RawFormat="binary",OutputDirectory=tempPath(testCase,"binary_run")); raw=radia.ltspice.RawRead(result.raw_file);
 frequency=raw.getTrace("frequency"); vout=raw.getTrace("V(out)");
 verifyTrue(testCase,raw.isComplex()); verifyEqual(testCase,imag(frequency),zeros(size(frequency)));
 expected=1/(1+1i*2*pi*frequency(1)*1000*1e-6);
@@ -287,14 +287,14 @@ end
 
 function testComplexAsciiRawIsParsed(testCase)
 fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_ac_rc.cir");
-result=radia.ltspice.run(fixture,RawFormat="ascii"); raw=radia.ltspice.RawRead(result.raw_file);
+result=radia.ltspice.run(fixture,RawFormat="ascii",OutputDirectory=tempPath(testCase,"ascii_run")); raw=radia.ltspice.RawRead(result.raw_file);
 verifyTrue(testCase,raw.isComplex()); verifyEqual(testCase,raw.Data.analysis,"ac");
 vout=raw.getTrace("V(out)"); verifyLessThan(testCase,angle(vout(end)),0);
 end
 
 function testPyLTSpiceRawCompatibilityAndRoundTrip(testCase)
 fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_ac_rc.cir");
-result=radia.ltspice.run(fixture,RawFormat="ascii"); raw=radia.ltspice.RawRead(result.raw_file);
+result=radia.ltspice.run(fixture,RawFormat="ascii",OutputDirectory=tempPath(testCase,"ascii_run")); raw=radia.ltspice.RawRead(result.raw_file);
 verifyEqual(testCase,raw.get_trace_names(),raw.getTraceNames());
 trace=raw.get_trace("V(out)"); verifyClass(testCase,trace,"radia.ltspice.Trace");
 verifyEqual(testCase,trace.get_wave(0),raw.getWave("V(out)",0));
@@ -420,7 +420,7 @@ editor=radia.ltspice.SchematicEditor(fixture);verifyError(testCase,@()editor.get
 end
 
 function testSteppedLogQueriesAndRawStepConditions(testCase)
-fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_step_rc.cir");result=radia.ltspice.run(fixture,RawFormat="binary");
+fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_step_rc.cir");result=radia.ltspice.run(fixture,RawFormat="binary",OutputDirectory=tempPath(testCase,"binary_run"));
 log=radia.ltspice.LTSpiceLogReader(result.log_file);verifyTrue(testCase,log.has_steps());verifyEqual(testCase,log.get_step_vars(),"rval");verifyEqual(testCase,log.steps_with_parameter_equal_to("rval",2000),1);
 raw=radia.ltspice.RawRead(result.raw_file);verifyEqual(testCase,raw.get_steps(struct("rval",1000)),0);
 end
@@ -432,9 +432,9 @@ end
 
 function testNoiseAndFFTAnalysisAPIs(testCase)
 folder=fullfile(fileparts(mfilename("fullpath")),"fixtures");
-noise=radia.ltspice.runNoise(fullfile(folder,"ltspice_noise_rc.cir"));
+noise=radia.ltspice.runNoise(fullfile(folder,"ltspice_noise_rc.cir"),OutputDirectory=tempPath(testCase,"noise"));
 verifyEqual(testCase,noise.schema,"radia.ltspice.noise.v1"); verifyGreaterThan(testCase,numel(noise.frequency_hz),10); verifyFalse(testCase,isempty(fieldnames(noise.noise_traces)));
-transient=radia.ltspice.run(fullfile(folder,"ltspice_rc.cir")); fftResult=radia.ltspice.analyzeFFT(transient,"V(out)",SampleCount=1024);
+transient=radia.ltspice.run(fullfile(folder,"ltspice_rc.cir"),OutputDirectory=tempPath(testCase,"fft")); fftResult=radia.ltspice.analyzeFFT(transient,"V(out)",SampleCount=1024);
 verifyEqual(testCase,fftResult.schema,"radia.ltspice.fft.v1"); verifyEqual(testCase,numel(fftResult.frequency_hz),513); verifyGreaterThanOrEqual(testCase,min(fftResult.amplitude),0);
 end
 
@@ -454,7 +454,7 @@ function testParallelOptunaRunnerEvaluatesCircuitTrials(testCase)
 if isempty(ver("parallel")), testCase.assumeFail("Parallel Computing Toolbox is unavailable."); end
 fixture=fullfile(fileparts(mfilename("fullpath")),"fixtures","ltspice_rc.cir");
 study=radia.optuna.createStudy(AutoSave=false);
-runner=radia.optuna.LTspiceRunner(fixture,ConfigureFcn=@configureTrial,ScoreFcn=@scoreTrial);
+runner=radia.optuna.LTspiceRunner(fixture,ConfigureFcn=@configureTrial,ScoreFcn=@scoreTrial,OutputRoot=tempPath(testCase,"parallel_optuna"));
 result=runner.optimizeParallel(study,2,ShowProgress=false);
 verifyEqual(testCase,result.State,["COMPLETE";"COMPLETE"]);
 end
