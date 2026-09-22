@@ -187,11 +187,26 @@ def verify_artifact(api, run, commit, wheel_dir, context_dir, expected_hash):
                     source_commit=run["head_sha"], ci_run=run["id"],
                     sources_verified=sources, version=version)
     prefix = f"validation_test/esrf_three_engine/results/candidate_{run['head_sha'][:9]}"
-    for host in ("lab", "hibino"):
-        acceptance = strict_json(api.file(f"{prefix}/{host}/acceptance.json", commit))
-        full = strict_json(api.file(f"{prefix}/{host}/full6.json", commit))
-        verify_host(acceptance, full, api.file(f"{prefix}/{host}/focused.xml", commit), identity, host)
-    return dict(identity, acceptance_commit=commit, hosts=["lab", "hibino"], passed=True)
+    # The hosts come from the same tuple release-quad produces evidence for,
+    # so this gate cannot quietly ask for fewer machines than policy requires.
+    # It used to name two hosts of its own, one of which is not an acceptance
+    # target at all, and would have published on two of the four.
+    from release_acceptance import RELEASE_ACCEPTANCE_HOSTS
+    missing = []
+    for host in RELEASE_ACCEPTANCE_HOSTS:
+        try:
+            acceptance = strict_json(api.file(f"{prefix}/{host}/acceptance.json", commit))
+            full = strict_json(api.file(f"{prefix}/{host}/full6.json", commit))
+            focused = api.file(f"{prefix}/{host}/focused.xml", commit)
+        except Exception as exc:  # noqa: BLE001 -- report every missing host, then fail
+            missing.append(f"{host} ({type(exc).__name__})")
+            continue
+        verify_host(acceptance, full, focused, identity, host)
+    require(not missing,
+            f"Acceptance evidence missing for {', '.join(missing)}; release-quad "
+            f"requires all of {', '.join(RELEASE_ACCEPTANCE_HOSTS)} at {prefix}")
+    return dict(identity, acceptance_commit=commit,
+                hosts=list(RELEASE_ACCEPTANCE_HOSTS), passed=True)
 
 
 def main():

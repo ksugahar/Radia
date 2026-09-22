@@ -330,7 +330,7 @@ shown below for reference; everything else is discoverable via meta.
 | Server | Entry point | Access | Highlights |
 |---|---|---|---|
 | **★ meta** | `mcp-server-radia-meta` | direct | Cross-server catalog + health/golden gate — RECOMMENDED FIRST CALL |
-| **literature-index** | `mcp-server-literature-index` | direct | Full-text search across 2,339 lab literature files in W:/03_文献・論文 (ChromaDB + semantic search) |
+| **literature-index** | `mcp-server-literature-index` | direct | Full-text search across 2,339 lab literature files in the lab literature corpus (ChromaDB + semantic search) |
 | **build123d** | `mcp-server-build123d` | direct + validation catalog | `build123d_to_cubit_hex`, `lint_build123d_script`, `build123d_try` (subprocess isolation), `build123d_inspect_step`, `build123d_heal`, `build123d_api`, Radia/general templates, CadQuery + bd_warehouse interop |
 | **GMSH** | `mcp-server-gmsh` | direct | `lint_gmsh_script`, `gmsh_audit_summary`, `gmsh_numsubedges_remediation_plan`, `gmsh_mesh_generation_remediation_plan`, references + examples |
 | **Force** | `mcp-server-force` | direct + validation catalog | Common Motor/MagLev force layer: shared result normalization; static and peak/RMS phasor Lorentz/Maxwell force and torque; virtual work, coenergy and uniform/sampled air-gap torque; method selection, independent-method/action-reaction/lift-weight gates; and validation guidance (numerical tools require the `radia` extra). |
@@ -416,7 +416,7 @@ content. Consult its own catalog for current source availability.
 | Source | Kind | Volume |
 |---|---|---|
 | Coreform forum (Discourse) | `cubit_examples` | full archive walk, ≈ 60 code-bearing posts |
-| `S:\CoreformCubit` + `Radia/01_GitHub/examples` | `cubit_examples` | 787 `.jou` / `.py` files (lab archive + Coreform training pack) |
+| `the lab Cubit archive` + `the repository's retired examples tier` | `cubit_examples` | 787 `.jou` / `.py` files (lab archive + Coreform training pack) |
 | Cubit YouTube tutorials | `cubit_examples` | 5 transcripts |
 | GitHub `.jou` code search (PAT) | `cubit_examples` | 15 files |
 | `gumyr/build123d/examples` | `build123d_examples` | 65 scripts |
