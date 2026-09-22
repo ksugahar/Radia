@@ -1,0 +1,60 @@
+{
+  "schema": "radia.validation.matlab-branch-recovery.v1",
+  "host": "mdx1",
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "route": "official MATLAB Engine for Python",
+  "optuna_mex_sha256": "c0426bf4462fcf87e08c926575e15b9d42f2722fb6fe82fcaca687de71122393",
+  "owned_session_closed": true,
+  "suites": [
+    {
+      "suite": "test_ltspice_data_safety",
+      "passed": 13,
+      "failed": 0,
+      "incomplete": 0
+    },
+    {
+      "suite": "test_ltspice_state_contract",
+      "passed": 4,
+      "failed": 0,
+      "incomplete": 0
+    },
+    {
+      "suite": "test_ltspice_workflow",
+      "passed": 0,
+      "failed": 0,
+      "incomplete": 50
+    },
+    {
+      "suite": "test_ltspice_simulink_coupling",
+      "passed": 0,
+      "failed": 0,
+      "incomplete": 5
+    },
+    {
+      "suite": "test_simulink_file_generation",
+      "passed": 1,
+      "failed": 0,
+      "incomplete": 0
+    },
+    {
+      "suite": "test_optuna_simulink_block",
+      "passed": 13,
+      "failed": 0,
+      "incomplete": 0
+    }
+  ],
+  "limitations": [
+    "LTspice executable absent: 55 executable-dependent cases were not run",
+    "This is scoped branch-recovery validation, not full MATLAB/MEX release certification"
+  ],
+  "findings": [
+    "Restored NetlistFile state-extraction contract from preserved work",
+    "Hierarchical inductor names survive extraction and injection",
+    "Unsupported nested device state dominates directly restorable parent state",
+    "Teardown tolerates executable-dependent setup skips"
+  ],
+  "sources": {
+    "matlab/+radia/+ltspice/extractTransientState.m": "8cb27838365dc05ee48f1f4fb3a929bbd225e442d65f0d591dcc3ff359bf8a42",
+    "tests/matlab/test_ltspice_state_contract.m": "e47183445c64ce04de545e7fe4d5ee709ec4aee058011884d1fe49fa1ca152d1"
+  }
+}

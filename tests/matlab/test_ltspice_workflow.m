@@ -21,7 +21,7 @@ function teardownOnce(testCase)
 if testCase.TestData.RemoveMatlabDirectory
     rmpath(testCase.TestData.MatlabDirectory);
 end
-if isfolder(testCase.TestData.TempDirectory),rmdir(testCase.TestData.TempDirectory,'s');end
+if isfield(testCase.TestData,"TempDirectory")&&isfolder(testCase.TestData.TempDirectory),rmdir(testCase.TestData.TempDirectory,'s');end
 end
 
 function testBinaryRawDoubleFlagIsDecodedWithoutSilentStrideError(testCase)
