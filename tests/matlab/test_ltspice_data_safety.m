@@ -40,8 +40,18 @@ v=[0 1;1 2];
 d=radia.ltspice.readRaw(fixture(t,"real double",v,true));
 verifyEqual(t,d.values,v);
 end
+function testFastAccessLayouts(t)
+v=[0 1.25 -3;1e-10 2.5 4;0.25 -0.75 8];
+for flags=["real forward fastaccess","real double fastaccess","complex fastaccess"]
+ expected=v;
+ if contains(flags,"complex"),expected(:,2:end)=expected(:,2:end)+1i*[2 -1;3 5;7 -2];end
+ d=radia.ltspice.readRaw(fixture(t,flags,expected,false));
+ verifyEqual(t,d.values,expected);
+ verifyTrue(t,any(d.flags=="fastaccess"));
+end
+end
 function testUnsupportedFlags(t)
-p=fixture(t,"real fastaccess",[0 1;1 2],false);
+p=fixture(t,"real unknown_layout",[0 1;1 2],false);
 verifyError(t,@()radia.ltspice.readRaw(p),"radia:ltspice:RawFlags");
 end
 function testConflictingFlags(t)
@@ -103,6 +113,18 @@ for k=2:size(v,2),header=header+(k-1)+" V(n"+k+") voltage"+eol;end
 header=header+"Binary:"+eol;
 f=fopen(p,'wb','ieee-le');c=onCleanup(@()fclose(f));
 fwrite(f,unicode2native(header,'UTF-16LE'),'uint8');
+if contains(flags,"fastaccess")
+ for k=1:size(v,2)
+  if contains(flags,"complex")
+   fwrite(f,[real(v(:,k)).';imag(v(:,k)).'],'double');
+  elseif contains(flags,"double") || k==1
+   fwrite(f,v(:,k),'double');
+  else
+   fwrite(f,v(:,k),'single');
+  end
+ end
+ return
+end
 for row=1:size(v,1)
  if contains(flags,"complex")
   for k=1:size(v,2),fwrite(f,[real(v(row,k)) imag(v(row,k))],'double');end

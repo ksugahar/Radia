@@ -12,11 +12,12 @@ if isempty(at),error("radia:ltspice:RawFormat","Binary marker not found.");end
 headerEnd=at(1)+numel(marker)-1;
 lines=splitlines(string(native2unicode(bytes(1:headerEnd),'UTF-16LE')));
 flags=split(lower(headerValue(lines,"Flags:")));
-supported=["real","complex","double","forward","stepped","log"];
+supported=["real","complex","double","forward","stepped","log","fastaccess"];
 if any(~ismember(flags,supported)) || sum(ismember(flags,["real","complex"]))~=1
     error("radia:ltspice:RawFlags","Unsupported or conflicting RAW flags: %s",join(flags," "));
 end
 isComplex=any(flags=="complex"); allDouble=any(flags=="double");
+fastAccess=any(flags=="fastaccess");
 nvar=headerInt(lines,"No. Variables:"); npoint=headerInt(lines,"No. Points:");
 vline=find(strtrim(lines)=="Variables:");
 if numel(vline)~=1 || vline+nvar>numel(lines)
@@ -41,7 +42,17 @@ if numel(payload)<stride*npoint,error("radia:ltspice:RawTruncated","Binary RAW p
 if numel(payload)~=stride*npoint
     error("radia:ltspice:RawFormat","Payload size does not match the declared layout.");
 end
-if isComplex
+if fastAccess && isComplex
+    parts=reshape(decode(payload,'double'),2,npoint,nvar);
+    values=reshape(complex(parts(1,:,:),parts(2,:,:)),npoint,nvar);
+elseif fastAccess && allDouble
+    values=reshape(decode(payload,'double'),npoint,nvar);
+elseif fastAccess
+    axisBytes=payload(1:8*npoint);
+    signalBytes=payload(8*npoint+1:end);
+    values=[decode(axisBytes,'double').', ...
+        reshape(double(decode(signalBytes,'single')),npoint,nvar-1)];
+elseif isComplex
     parts=reshape(decode(payload,'double'),2*nvar,npoint);
     values=complex(parts(1:2:end,:),parts(2:2:end,:)).';
 elseif allDouble
@@ -54,7 +65,7 @@ else
 end
 data=struct("schema","radia.ltspice.raw.binary.v1","path",rawFile, ...
     "names",names,"types",types,"values",values,"is_complex",isComplex, ...
-    "raw_properties",properties);
+    "raw_properties",properties,"flags",flags);
 end
 
 function value=headerValue(lines,label)
