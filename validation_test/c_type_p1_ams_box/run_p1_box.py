@@ -11,8 +11,8 @@ monotone PCHIP B(H) law as the three-engine lane:
 
 * ``reduced_a``: lowest-order Nedelec reduced vector potential
   (``B = B_s + curl A_r``, ``A_r x n = 0`` on the box).  The nonlinear loop is
-  Newton on the element-constant flux density (exact inverse of the PCHIP law
-  and its differential reluctivity, Armijo backtracking on the residual) or
+  Newton on the element-constant flux density (tabulated approximation to the
+  PCHIP inverse and its derivative, Armijo backtracking on the residual) or
   the damped/Anderson Picard update of the three-engine lane.  Each linear
   system is solved by Radia's compiled auxiliary-space Maxwell preconditioner
   (``radia.sparsesolv_ngsolve.HypreBasedAMSPreconditioner``, updated in place
@@ -134,11 +134,11 @@ def iron_elements_with_centroids(mesh: ng.Mesh) -> list[tuple[int, tuple[float, 
 class SoftIronLaw:
     """The shared monotone PCHIP B(H) law seen from the flux-density side.
 
-    ``nu(|B|)`` is the exact inverse used by the production reduced-A Picard
-    solver (:func:`radia.vector_potential_solver._build_nu_of_b_interpolator`),
-    tabulated once on a dense grid so that a whole mesh can be updated in one
-    vectorised call; ``dH/dB`` is the slope of that tabulated inverse and only
-    steers the Newton direction, never the converged field.
+    ``nu(|B|)`` approximates the production reduced-A Picard inverse
+    (:func:`radia.vector_potential_solver._build_nu_of_b_interpolator`) by
+    linear interpolation on a dense grid. This approximation also enters the
+    residual and thus the converged field. ``dH/dB`` is a numerical derivative
+    of the tabulated H values and steers the Newton direction.
     """
 
     def __init__(self, bh_table, *, samples: int = 4001):
@@ -497,6 +497,15 @@ class ReducedAP1Box:
         residual_vec, residual_norm = self._residual(solution)
         residual_0 = residual_norm
         history, converged, final_change = [], False, None
+        if residual_0 == 0.0:
+            return self._observe(solution, observation), {
+                "method": "Newton", "converged": True, "iterations": 0,
+                "final_relative_change": 0.0, "tolerance": float(tolerance),
+                "newton_tolerance": float(newton_tolerance),
+                "final_residual_relative": 0.0,
+                "maximum_iterations": int(max_iterations), "history": [],
+                "maximum_linear_relative_residual": 0.0,
+            }, time.perf_counter() - started
         for iteration in range(1, int(max_iterations) + 1):
             entry = {"iteration": iteration, "residual_relative": residual_norm / residual_0}
             t0 = time.perf_counter()
@@ -724,9 +733,32 @@ def main() -> None:
                         help="three-engine result JSON of the Kelvin lane")
     options = parser.parse_args()
 
+    try:
+        output = run(options)
+    except Exception as exc:
+        output = {
+            "schema": "radia.validation.c-type-p1-box-bench.v1",
+            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "machine": platform.node(), "python": sys.version,
+            "ngsolve": ng.__version__, "completed": False, "passed": False,
+            "error": {"type": type(exc).__name__, "message": str(exc)},
+            "options": {key: str(value) if isinstance(value, Path) else value
+                        for key, value in vars(options).items()},
+        }
+        options.output.parent.mkdir(parents=True, exist_ok=True)
+        options.output.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
+        raise
+    if not output["passed"]:
+        raise SystemExit(1)
+
+
+def run(options) -> dict:
+
     if options.threads > 0:
         ng.SetNumThreads(options.threads)
     engines = [name.strip() for name in options.engines.split(",") if name.strip()]
+    if not engines or len(set(engines)) != len(engines):
+        raise ValueError("engines must be a nonempty list without duplicates")
     for name in engines:
         if name not in ("reduced_a", "mixed_omega"):
             raise ValueError(f"unknown engine {name!r}")
@@ -807,6 +839,9 @@ def main() -> None:
     comparison = compare(points, fields, reference, options.gap_core_half_length, adapters)
     output = {
         "schema": "radia.validation.c-type-p1-box-bench.v1",
+        "completed": True,
+        "passed": all(row["nonlinear_stats"].get("converged") is True
+                      for row in diagnostics.values()),
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "machine": platform.node(),
         "python": sys.version,
@@ -832,6 +867,7 @@ def main() -> None:
     options.output.write_text(json.dumps(output, indent=2, default=str) + "\n", encoding="utf-8")
     progress("complete", output=str(options.output),
              runtimes={name: row["runtime_s"] for name, row in diagnostics.items()})
+    return output
 
 
 if __name__ == "__main__":
