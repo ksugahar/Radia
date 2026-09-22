@@ -386,3 +386,6 @@ from .magnet import magnet_box  # noqa: E402,F401
 # keep working unchanged.
 from .magnet import ObjRecMag  # noqa: E402,F401
 from .lamination import laminated_mu_eff  # noqa: E402,F401
+
+# Register the HYPRE-free H1 AMG name in every fresh NGSolve process.
+from . import _preconditioners  # noqa: E402,F401

@@ -69,6 +69,30 @@ anymore.
 
 ## Solver-selection guidance
 
+### Registration and complex HCurl
+
+`import radia` registers `Preconditioner(a, "compactamg")` in each fresh
+NGSolve process. Use it with a real H1 operator and ordinary sparse storage
+(`BilinearForm(fes)`). It is the in-tree CompactAMG implementation, distinct
+from NGSolve's `h1amg` and external HYPRE's `hypre`. Testing whether `hypre`
+is registered does not test whether Radia's CompactAMG or AMS is available.
+The native matrix factory `CompactAMGPreconditioner` remains available too.
+
+For HCurl, use `HypreBasedAMSPreconditioner` (real) or
+`ComplexHypreBasedAMSPreconditioner` (complex); the older CompactAMS names
+remain aliases. These require `order=1, nograds=True`, the discrete gradient
+from the matching real space, vertex coordinates, and the free-DOF mask.
+Complex AMS takes a **real auxiliary matrix**, for example `K + abs(omega)*M`,
+while COCR/GMRES solves the original complex system. It does not replace
+that system by its real part. Construct/update AMS outside `TaskManager`;
+applying the constructed preconditioner may run inside it.
+
+There is no implicit `Preconditioner(a, "compactams")` registration: the
+matrix-only registry cannot infer the required geometry or real auxiliary
+operator. Use the explicit factories rather than an unavailable string name.
+The focused SparseSolv CI lane checks fresh-process H1 registration and the
+complex HCurl solution against its true residual and a direct solve.
+
 | Problem | FE space | Recommended solver | Reason |
 |---|---|---|---|
 | Poisson (H1, real) | H1 | ICCG | memory-efficient, fast |
