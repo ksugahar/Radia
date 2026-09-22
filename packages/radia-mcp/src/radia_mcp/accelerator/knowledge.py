@@ -198,9 +198,9 @@ ampere-turns.
 For the quadrupole with bore radius r_g and gradient G_dyn:
     ∆ = L_f · (r_g²·G_dyn/(2·μ₀·NI) - 1)
 
-## Numerical verification (TOSCA)
+## Numerical verification reported in the study
 
-Tested in TOSCA 3D for both dipole and quadrupole geometries:
+The study tested both dipole and quadrupole geometries:
 - Sharp end (no chamfer): integrated multipoles A_3, A_5, A_7 ~ 10⁻³
 - 45° chamfer: ~10⁻⁴
 - Analytical profile (10-slope approximation): ~10⁻⁵ — 3 orders of
@@ -223,7 +223,7 @@ A Radia workflow:
    rad.Fld() along beam trajectory
 4. Choose ∆ that minimizes A_3 + A_5 + A_7 (or the relevant
    multipole budget)
-5. Validate with TOSCA / NGSolve (using the radia-mcp.radia_ngsolve
+5. Validate with an independent FEM route (radia-mcp.radia_ngsolve
    FEM pipeline)
 
 This is exactly the workflow used at SOLEIL, ESRF, and Kindai's
@@ -296,7 +296,7 @@ The Kolkata workflow is exactly what radia-mcp.electromagnet supports:
 - Apply BH curve with MatSatIsoTab
 - Compute field via rad.Fld()
 - Verify via Mathematica (radia-mcp.mathematica) symbolic identities
-- Use TOSCA/NGSolve for cross-validation when needed
+- Use an independent FEM route (NGSolve) for cross-validation when needed
 
 The Pradhan 2007 paper is THE blueprint for using Radia at an
 accelerator facility.

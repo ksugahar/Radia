@@ -2169,7 +2169,7 @@ Workarounds for a current-driven coil source:
 
 
 KELVIN_SOURCE_IN_OMEGA_FORM = """
-# Kelvin magnetostatics: TOSCA-style mixed total/reduced Omega
+# Kelvin magnetostatics: mixed total/reduced Omega
 
 Use this route for a compact current source surrounded by a high-permeability
 magnet and a periodic Kelvin exterior.  It deliberately avoids placing a
@@ -2355,8 +2355,8 @@ samples: recovered or averaged display fields are not constitutive oracles.
 Validated path: `validation_test/c_type_three_engine/run_three_engine.py`.
 This analysis workflow belongs to Radia MCP, not the exporter-owned Cubit MCP.
 Historical C-type records in `validation_test/c_type_three_engine/results/`
-(`hibino_20260902_linear_order3_tosca_mixed_v3.json` and
-`hibino_20260902_nonlinear_order2_tosca_mixed_v3.json`) report passed runs on
+(`hibino_20260902_linear_order3_mixed_omega_v3.json` and
+`hibino_20260902_nonlinear_order2_mixed_omega_v3.json`) report passed runs on
 Radia 4.95.77. They do not certify a rebuilt current binary or FFAG acceptance.
 FFAG comparison on a common Kelvin mesh, CoilBuilder source and NKJ1 material
 remains pending; do not describe FFAG as accepted to 1 % on this evidence.

@@ -33,7 +33,7 @@
       "formulations": {
         "hdiv_mmm": "HDiv-MMM",
         "reduced_a": "HCurl reduced-A",
-        "mixed_total_reduced_omega": "H1 TOSCA mixed total/reduced Omega"
+        "mixed_total_reduced_omega": "H1 mixed total/reduced Omega"
       },
       "h1_acceptance_route": "mixed_total_reduced_omega",
       "global_reduced_omega_acceptance_forbidden": true
@@ -1866,7 +1866,7 @@
       "runtime_s": 3.402395199998864
     },
     "mixed_total_reduced_omega": {
-      "formulation": "H1 TOSCA mixed total/reduced Omega",
+      "formulation": "H1 mixed total/reduced Omega",
       "open_boundary": "periodic spherical Kelvin transform",
       "source_contract": "exact Radia H is restricted to physical air; the source/iron interface uses a projected scalar trace; iron and Kelvin use total Omega",
       "source_trace": {
