@@ -2,7 +2,7 @@
 
 The HDiv-VIM acceptance route is intentionally formulation-independent.  A
 static electromagnet is accepted only when the identical physical model has
-been evaluated by HDiv-MMM, HCurl reduced-A, and the H1 TOSCA-style mixed
+been evaluated by HDiv-MMM, HCurl reduced-A, and the H1 mixed
 total/reduced Omega formulation.
 """
 from __future__ import annotations
@@ -19,7 +19,7 @@ STATIC_ELECTROMAGNET_THREE_ENGINES = (
 STATIC_ELECTROMAGNET_FORMULATIONS = {
     "hdiv_mmm": "HDiv-MMM",
     "reduced_a": "HCurl reduced-A",
-    "mixed_total_reduced_omega": "H1 TOSCA mixed total/reduced Omega",
+    "mixed_total_reduced_omega": "H1 mixed total/reduced Omega",
 }
 
 # The seven source cases are the shipped ESRF Radia notebooks.  They are a

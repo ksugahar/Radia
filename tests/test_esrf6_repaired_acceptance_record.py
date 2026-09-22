@@ -5,14 +5,29 @@ from pathlib import Path
 
 import numpy as np
 
+# This artifact was edited after its run, to take a product name out of a
+# formulation label.  Both identities are pinned: what the file is now, and
+# what the run produced.  Substituting the label back has to give the second,
+# which is what keeps the first from being a hash that simply follows whatever
+# the file happens to contain.
+AS_PRODUCED = 'b00ba5d7a6532721e23eefe6e8b1c0b8889b9f52e1f4240bbd2f2a99570d722f'
+AS_IT_STANDS = 'e19541032ec0ba496065ece3870c95d8732f6bb6ceeac203ee147bd5fa85947e'
+RENAMED_FROM = b'H1 TOSCA mixed total/reduced Omega'
+RENAMED_TO = b'H1 mixed total/reduced Omega'
+
 
 def test_ci_wheel_nominal_three_engine_record():
     directory = (Path(__file__).resolve().parents[1] / 'validation_test' /
                  'esrf_three_engine/results/candidate_59b094d8')
     path = directory / 'three_engine_case6_bdm1_bonus12.json'
-    assert hashlib.sha256(path.read_bytes()).hexdigest() == (
-        'b00ba5d7a6532721e23eefe6e8b1c0b8889b9f52e1f4240bbd2f2a99570d722f')
-    result = json.loads(path.read_bytes())
+    raw = path.read_bytes()
+    assert hashlib.sha256(raw).hexdigest() == AS_IT_STANDS
+    restored = raw.replace(RENAMED_TO, RENAMED_FROM)
+    assert restored != raw, 'the renamed label is not in this artifact'
+    assert hashlib.sha256(restored).hexdigest() == AS_PRODUCED, (
+        'this artifact differs from the one the run produced by more than the '
+        'label')
+    result = json.loads(raw)
     assert result['passed'] is True and result['nonlinear_converged'] is True
     runtime = result['runtime_identity']
     assert runtime['editable'] is False and runtime['installed_import'] is True

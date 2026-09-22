@@ -7,7 +7,7 @@
     "quantity": "gauge-invariant B in the C-yoke useful gap core",
     "analytic_absolute_truth_claimed": false,
     "certified_statement": "three independent formulations converge toward one common mesh-refined field within the reported numerical envelope",
-    "scope": "nonlinear order-2 Cubit/ACIS C-type model with Kelvin open boundary; HDiv-MMM, HCurl reduced-A, and H1 TOSCA mixed total/reduced Omega"
+    "scope": "nonlinear order-2 Cubit/ACIS C-type model with Kelvin open boundary; HDiv-MMM, HCurl reduced-A, and H1 mixed total/reduced Omega"
   },
   "mesh_family": "cubit_20260830_mesh_family.json",
   "mesh_family_sha256": "b8bf3118dca503d11d9ed906768eb773cc1eb4cca59fd089c478140efbe6edf8",
@@ -16,7 +16,7 @@
       "name": "coarse",
       "scale": 1.25,
       "result": "c_type_20260903_nonlinear_bdm2_coarse.json",
-      "result_sha256": "7faa8b66974ae5ce1f71a9e6d5cea90f4ce11be65de50eac33b0a3e5a916da19",
+      "result_sha256": "c82157e67d5a721c753414a8d3add794567988f5401ee7584e998543044aeca3",
       "engines": {
         "hdiv_mmm": {
           "formulation": "HDiv-MMM",
@@ -78,7 +78,7 @@
           "runtime_s": 146.0413997999858
         },
         "mixed_total_reduced_omega": {
-          "formulation": "H1 TOSCA mixed total/reduced Omega",
+          "formulation": "H1 mixed total/reduced Omega",
           "open_boundary": "periodic spherical Kelvin transform",
           "source_contract": "exact Radia H is restricted to physical air; the source/iron interface uses a projected scalar trace; iron and Kelvin use total Omega",
           "source_trace": {
@@ -116,7 +116,7 @@
       "name": "medium",
       "scale": 1.0,
       "result": "c_type_20260903_nonlinear_bdm2_medium.json",
-      "result_sha256": "ead59c8fee68c3e9503759150e095327965aa902cbcf8916064ed332e8fcd1a2",
+      "result_sha256": "6950ea379dc792907dbf292afffb9f13b6bd7d6bef63175d6c9d9472bd8c89a8",
       "engines": {
         "hdiv_mmm": {
           "formulation": "HDiv-MMM",
@@ -178,7 +178,7 @@
           "runtime_s": 215.9455430000089
         },
         "mixed_total_reduced_omega": {
-          "formulation": "H1 TOSCA mixed total/reduced Omega",
+          "formulation": "H1 mixed total/reduced Omega",
           "open_boundary": "periodic spherical Kelvin transform",
           "source_contract": "exact Radia H is restricted to physical air; the source/iron interface uses a projected scalar trace; iron and Kelvin use total Omega",
           "source_trace": {
@@ -216,7 +216,7 @@
       "name": "fine",
       "scale": 0.8,
       "result": "c_type_20260903_nonlinear_bdm2_fine.json",
-      "result_sha256": "57634d3ecf1328224fa3eec5052ec6a6213ad5abcb79aefaafdf2bb99c11da9e",
+      "result_sha256": "cdf9bf4ccc3acf8b3859429165dc231fe3edc486601b8ba6ce9b676775e3160f",
       "engines": {
         "hdiv_mmm": {
           "formulation": "HDiv-MMM",
@@ -278,7 +278,7 @@
           "runtime_s": 408.8887230999535
         },
         "mixed_total_reduced_omega": {
-          "formulation": "H1 TOSCA mixed total/reduced Omega",
+          "formulation": "H1 mixed total/reduced Omega",
           "open_boundary": "periodic spherical Kelvin transform",
           "source_contract": "exact Radia H is restricted to physical air; the source/iron interface uses a projected scalar trace; iron and Kelvin use total Omega",
           "source_trace": {
@@ -316,7 +316,7 @@
       "name": "finer",
       "scale": 0.64,
       "result": "c_type_20260903_nonlinear_bdm2_finer_mdx.json",
-      "result_sha256": "ab42052a6dcb15174ba9f2f93564cdb26e1c607122cbea30c8cc8891a515999f",
+      "result_sha256": "1f28912f2e7b49bd683dce3904043c4fe68e697fde59436a9fa6deb5b8ab9f2f",
       "engines": {
         "hdiv_mmm": {
           "formulation": "HDiv-MMM",
@@ -378,7 +378,7 @@
           "runtime_s": 885.5966482000658
         },
         "mixed_total_reduced_omega": {
-          "formulation": "H1 TOSCA mixed total/reduced Omega",
+          "formulation": "H1 mixed total/reduced Omega",
           "open_boundary": "periodic spherical Kelvin transform",
           "source_contract": "exact Radia H is restricted to physical air; the source/iron interface uses a projected scalar trace; iron and Kelvin use total Omega",
           "source_trace": {
@@ -520,5 +520,33 @@
     "combined_uncertainty_passed": true,
     "independent_host_reproducibility_passed": true
   },
-  "result_artifact_policy": "Paths are portable filenames relative to this results directory; result_sha256 is the immutable content identity."
+  "result_artifact_policy": "Paths are portable filenames relative to this results directory. result_sha256 is the content identity of the artifact as it now stands. Where 'label_rename' is present, the artifact was edited after the run to remove a product name from a formulation label and nothing else; 'pre_rename_result_sha256' there is the identity the run itself produced, and substituting the old label back reproduces it exactly.",
+  "label_rename": {
+    "what": "a product name was removed from a formulation label after these runs; no numerical value was touched",
+    "from": "H1 TOSCA mixed total/reduced Omega",
+    "to": "H1 mixed total/reduced Omega",
+    "audit": "substitute 'from' back for 'to' in each artifact and its pre_rename_result_sha256 is reproduced exactly; this was verified for every row below before the hashes were updated",
+    "artifacts": [
+      {
+        "result": "c_type_20260903_nonlinear_bdm2_coarse.json",
+        "pre_rename_result_sha256": "7faa8b66974ae5ce1f71a9e6d5cea90f4ce11be65de50eac33b0a3e5a916da19",
+        "result_sha256": "c82157e67d5a721c753414a8d3add794567988f5401ee7584e998543044aeca3"
+      },
+      {
+        "result": "c_type_20260903_nonlinear_bdm2_medium.json",
+        "pre_rename_result_sha256": "ead59c8fee68c3e9503759150e095327965aa902cbcf8916064ed332e8fcd1a2",
+        "result_sha256": "6950ea379dc792907dbf292afffb9f13b6bd7d6bef63175d6c9d9472bd8c89a8"
+      },
+      {
+        "result": "c_type_20260903_nonlinear_bdm2_fine.json",
+        "pre_rename_result_sha256": "57634d3ecf1328224fa3eec5052ec6a6213ad5abcb79aefaafdf2bb99c11da9e",
+        "result_sha256": "cdf9bf4ccc3acf8b3859429165dc231fe3edc486601b8ba6ce9b676775e3160f"
+      },
+      {
+        "result": "c_type_20260903_nonlinear_bdm2_finer_mdx.json",
+        "pre_rename_result_sha256": "ab42052a6dcb15174ba9f2f93564cdb26e1c607122cbea30c8cc8891a515999f",
+        "result_sha256": "1f28912f2e7b49bd683dce3904043c4fe68e697fde59436a9fa6deb5b8ab9f2f"
+      }
+    ]
+  }
 }

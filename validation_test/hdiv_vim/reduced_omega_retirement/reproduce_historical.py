@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Is the TOSCA total/reduced split a pure change of variables?
+"""Is the total/reduced split a pure change of variables?
 
 HISTORICAL RESEARCH SCRIPT -- requires the original assets and pre-retirement
 solver (for example source at f2f2fd799). The following hypothesis was NOT

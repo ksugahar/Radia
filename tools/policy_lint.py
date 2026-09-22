@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""The 8 Radia source policies as ONE reusable module.
+"""The Radia source policies as ONE reusable module.
 
 Single source of truth for BOTH:
   - .github/workflows/policy-lint.yml   (the CI gate)
@@ -11,7 +11,7 @@ silently miss it).  Mirrors the historical inline bash greps; uses
 `git grep` / `git ls-files` so it sees TRACKED working-tree content (what
 CI checks out on a fresh runner).
 
-    python tools/policy_lint.py        # run all 8; exit 1 on any violation
+    python tools/policy_lint.py        # run them all; exit 1 on any violation
     python tools/policy_lint.py --quiet
 
 Policies (see CLAUDE.md):
@@ -20,6 +20,7 @@ Policies (see CLAUDE.md):
   3 no Helmholtz WAVE kernel in core     7 no tracked retired examples/ tier
   4 no CblasColMajor in core (allowlist)
   8 HDiv geometry/field pairs use the central capability table
+  9 no product name on a Radia formulation (citations allowlisted)
 """
 from __future__ import annotations
 
@@ -58,7 +59,7 @@ def _git_grep(pattern, pathspecs, extra=()):
 
 
 def check_all():
-    """Return list of (policy_name, ok, detail) for all 8 policies."""
+    """Return list of (policy_name, ok, detail) for every policy."""
     results = []
 
     # 1: the removed unit-switching API must not return to executable Radia.
@@ -158,6 +159,50 @@ def check_all():
     results.append(("Policy 8: central HDiv geometry/order capabilities", not bad,
                     bad[0] if bad else "ok"))
 
+    # 9: a formulation is not named after a product. Reference solvers are
+    # instruments, and a public artifact must not carry one as the name of
+    # Radia's own method -- it both advertises a brand and says what the work
+    # was scored against. Citing a published paper is a different act and is
+    # allowed, so the allowlist below holds back the places where the word is
+    # somebody else's name and not ours: a paper's title or quoted abstract,
+    # the catalog entry citing it, an external input-deck file name, a path a
+    # historical run recorded, a list of products an audience uses, and the
+    # policy text that forbids commercial artifacts in the first place.
+    allowed = {
+        "docs/api/EARLY_TIMES_CPP_API_DESIGN.md",
+        "packages/radia-mcp/src/radia_mcp/__init__.py",
+        "packages/radia-mcp/src/radia_mcp/accelerator/bibliography_index_knowledge.py",
+        "packages/radia-mcp/src/radia_mcp/accelerator/knowledge.py",
+        "packages/radia-mcp/src/radia_mcp/accelerator/server.py",
+        "packages/radia-mcp/src/radia_mcp/presentation/skill.md",
+        "packages/radia-mcp/src/radia_mcp/presentation/talk_feedback.py",
+        "packages/radia-mcp/src/radia_mcp/radia_ngsolve/bibliography_index_knowledge.py",
+        "validation_test/omega_quadrature/candidate_de7feea0/README.md",
+        "validation_test/omega_quadrature/omega_quadrature_embedding_p12_20260911.json",
+        "validation_test/omega_quadrature/omega_quadrature_small_20260911.json",
+        # The audit record of the rename itself: it has to name the label it
+        # replaced, or restoring it to check the pre-rename hash is not
+        # possible and the record proves nothing.
+        "validation_test/c_type_three_engine/results/"
+        "c_type_20260903_nonlinear_bdm2_mesh_convergence_certificate.json",
+        # The same audit, carried out in a test rather than recorded in a
+        # certificate: it has to hold the old label to substitute it back.
+        "tests/test_esrf6_repaired_acceptance_record.py",
+        # Detectors have to name what they detect. Renaming a detector's
+        # needle disarms it silently, which is the failure mode this policy
+        # exists to prevent in the first place.
+        "tests/test_label_rename_audit.py",
+        "tools/policy_lint.py",
+    }
+    branded = []
+    for token in ("tosca", "opera-3d"):
+        for line in _git_grep(rf"\b{token}\b", (), extra=("-i",)) or ():
+            path = line.split(":", 1)[0]
+            if path not in allowed:
+                branded.append(line[:160])
+    results.append(("Policy 9: no product name on a Radia formulation",
+                    not branded, branded[0] if branded else "ok"))
+
     return results
 
 
@@ -173,10 +218,10 @@ def main(argv=None):
             nfail += 1
             print(f"FAIL  {name}: {detail}")
     if nfail:
-        print(f"\n{nfail}/8 policies FAILED", file=sys.stderr)
+        print(f"\n{nfail}/{len(results)} policies FAILED", file=sys.stderr)
         return 1
     if not quiet:
-        print("\nall 8 policies pass")
+        print(f"\nall {len(results)} policies pass")
     return 0
 
 
