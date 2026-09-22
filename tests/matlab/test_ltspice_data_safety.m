@@ -59,11 +59,12 @@ f=fopen(p,'rb');b=fread(f,inf,'*uint8');fclose(f);
 f=fopen(p,'wb');fwrite(f,b(1:end-1),'uint8');fclose(f);
 verifyError(t,@()radia.ltspice.readRaw(p),"radia:ltspice:RawTruncated");
 end
-function testHierarchicalStateFails(t)
+function testHierarchicalStateIsPreserved(t)
 d=struct('names',["time","V(a)","I(X1:L1)"], ...
  'values',[0 1 2;1 3 4],'step_ranges',[1 2]);
-verifyError(t,@()radia.ltspice.extractTransientState(d), ...
- "radia:ltspice:UnsupportedHierarchicalState");
+state=radia.ltspice.extractTransientState(d);
+verifyEqual(t,state.inductor_names,"X1:L1");
+verifyEqual(t,state.inductor_currents_A,4);
 end
 function testTopLevelState(t)
 d=struct('names',["time","V(a)","I(L1)","I(V1)"], ...

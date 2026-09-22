@@ -16,7 +16,7 @@ function teardownOnce(t)
 if t.TestData.RemoveMatlabDirectory
     rmpath(fullfile(t.TestData.Root,"matlab"));
 end
-if isfolder(t.TestData.TempDirectory),rmdir(t.TestData.TempDirectory,'s');end
+if isfield(t.TestData,"TempDirectory")&&isfolder(t.TestData.TempDirectory),rmdir(t.TestData.TempDirectory,'s');end
 end
 
 function testStatefulMultipleIOAndRestartCleanup(t)
