@@ -6714,7 +6714,7 @@ def solver_result_table_metadata_gate(
     expected_result_postprocess_row_convention_schema_id=None,
     expected_result_component_basis_schema_id=None,
     expected_result_artifact_id=None,
-    expected_comsol_version=None,
+    expected_multiphysics_version=None,
     require_solver_configuration=False,
     require_parameter_set_artifact=False,
     require_result_provenance=False,
@@ -7567,7 +7567,7 @@ def solver_result_table_metadata_gate(
             "resultPhysicsConventionSchemaId",
             "derived_value_convention_schema_id",
             "derivedValueConventionSchemaId",
-            "comsol_derived_value_convention_schema_id",
+            "multiphysics_derived_value_convention_schema_id",
             "comsolDerivedValueConventionSchemaId",
             "field_convention_schema_id",
             "fieldConventionSchemaId",
@@ -7580,7 +7580,7 @@ def solver_result_table_metadata_gate(
             "resultPhysicsConventionSchemaId",
             "derived_value_convention_schema_id",
             "derivedValueConventionSchemaId",
-            "comsol_derived_value_convention_schema_id",
+            "multiphysics_derived_value_convention_schema_id",
             "comsolDerivedValueConventionSchemaId",
             "field_convention_schema_id",
             "fieldConventionSchemaId",
@@ -7597,7 +7597,7 @@ def solver_result_table_metadata_gate(
             "postprocessRowConventionSchemaId",
             "derived_value_postprocess_row_convention_schema_id",
             "derivedValuePostprocessRowConventionSchemaId",
-            "comsol_postprocess_row_convention_schema_id",
+            "multiphysics_postprocess_row_convention_schema_id",
             "comsolPostprocessRowConventionSchemaId",
         )
         + collect_string_values_from(
@@ -7608,7 +7608,7 @@ def solver_result_table_metadata_gate(
             "postprocessRowConventionSchemaId",
             "derived_value_postprocess_row_convention_schema_id",
             "derivedValuePostprocessRowConventionSchemaId",
-            "comsol_postprocess_row_convention_schema_id",
+            "multiphysics_postprocess_row_convention_schema_id",
             "comsolPostprocessRowConventionSchemaId",
         )
     )
@@ -7775,22 +7775,22 @@ def solver_result_table_metadata_gate(
         )
     )
     run_started_text = None if run_started is None else str(run_started).strip()
-    comsol_versions = unique_strings(
+    multiphysics_versions = unique_strings(
         collect_string_values(
-            "comsol_version",
+            "multiphysics_version",
             "comsolVersion",
             "solver_version",
             "solverVersion",
         )
         + collect_string_values_from(
             execution,
-            "comsol_version",
+            "multiphysics_version",
             "comsolVersion",
             "solver_version",
             "solverVersion",
         )
     )
-    comsol_version = comsol_versions[0] if comsol_versions else None
+    multiphysics_version = multiphysics_versions[0] if multiphysics_versions else None
     timing_breakdown = pick_mapping(
         pick("timing_breakdown_s", "timing_breakdown", "timingBreakdown", "timings", default=None),
         pick_from(
@@ -7949,7 +7949,7 @@ def solver_result_table_metadata_gate(
         else str(expected_result_artifact_id).strip()
     )
     expected_solver_version = (
-        None if expected_comsol_version is None else str(expected_comsol_version).strip()
+        None if expected_multiphysics_version is None else str(expected_multiphysics_version).strip()
     )
     result_table_schema_required = bool(
         require_result_table_schema or expected_result_table_schema is not None
@@ -8288,7 +8288,7 @@ def solver_result_table_metadata_gate(
             or result_evaluation_methods == [expected_evaluation_method]
         ),
         "result_artifact_id_consistent_when_present": len(result_artifact_ids) <= 1,
-        "comsol_version_consistent_when_present": len(comsol_versions) <= 1,
+        "multiphysics_version_consistent_when_present": len(multiphysics_versions) <= 1,
         "result_artifact_id_recorded_when_required": (
             not result_provenance_required or bool(result_artifact_id)
         ),
@@ -8301,11 +8301,11 @@ def solver_result_table_metadata_gate(
         "run_started_at_parseable_when_present": (
             not run_started_text or parse_time(run_started_text)
         ),
-        "comsol_version_recorded_when_required": (
-            not result_provenance_required or bool(comsol_version)
+        "multiphysics_version_recorded_when_required": (
+            not result_provenance_required or bool(multiphysics_version)
         ),
-        "expected_comsol_version_matches": (
-            expected_solver_version is None or comsol_versions == [expected_solver_version]
+        "expected_multiphysics_version_matches": (
+            expected_solver_version is None or multiphysics_versions == [expected_solver_version]
         ),
         "timing_breakdown_recorded_when_required": (
             not result_provenance_required or bool(timing_breakdown_seconds)
@@ -8438,9 +8438,9 @@ def solver_result_table_metadata_gate(
         "result_artifact_ids": result_artifact_ids,
         "expected_result_artifact_id": expected_result_artifact,
         "run_started_at": run_started_text,
-        "comsol_version": comsol_version,
-        "comsol_versions": comsol_versions,
-        "expected_comsol_version": expected_solver_version,
+        "multiphysics_version": multiphysics_version,
+        "multiphysics_versions": multiphysics_versions,
+        "expected_multiphysics_version": expected_solver_version,
         "timing_breakdown_seconds": timing_breakdown_seconds,
         "timing_breakdown_names": timing_breakdown_names,
         "require_result_provenance": result_provenance_required,
@@ -11034,7 +11034,7 @@ def three_phase_currents_to_dq_summary(
     return payload
 
 
-def femm_static_current_circuit_rows_gate(
+def magnetostatic_2d_static_current_circuit_rows_gate(
     currents,
     theta_e_rad,
     circuit_rows,
@@ -11155,7 +11155,7 @@ def femm_static_current_circuit_rows_gate(
         "dq_roundtrip_ok": dq["status"] == "ok",
     }
     return {
-        "policy": "femm_static_current_circuit_rows_gate",
+        "policy": "magnetostatic_2d_static_current_circuit_rows_gate",
         "phase_order": list(phase_names),
         "theta_e_rad": float(theta_e_rad),
         "expected_current_kind": expected_kind,
@@ -11171,7 +11171,7 @@ def femm_static_current_circuit_rows_gate(
     }
 
 
-def femm_block_label_source_contract_gate(
+def magnetostatic_2d_block_label_source_contract_gate(
     block_rows,
     required_regions=None,
     allowed_source_kinds=("air", "passive", "coil", "pm"),
@@ -11246,7 +11246,7 @@ def femm_block_label_source_contract_gate(
         "air_passive_rows_have_no_source_metadata": not passive_source_rows,
     }
     return {
-        "policy": "femm_block_label_source_contract_gate",
+        "policy": "magnetostatic_2d_block_label_source_contract_gate",
         "n_rows": len(normalized_rows),
         "required_regions": required,
         "missing_required_regions": missing_required_regions,
@@ -11264,7 +11264,7 @@ def femm_block_label_source_contract_gate(
     }
 
 
-def femm_group_motion_selection_gate(
+def magnetostatic_2d_group_motion_selection_gate(
     rows,
     expected_group_id,
     required_entity_kinds=("block_label", "segment", "arc_segment"),
@@ -11325,7 +11325,7 @@ def femm_group_motion_selection_gate(
         "motion_command_matches": not bad_motion_rows,
     }
     return {
-        "policy": "femm_group_motion_selection_gate",
+        "policy": "magnetostatic_2d_group_motion_selection_gate",
         "status": "ok" if all(checks.values()) else "needs_attention",
         "expected_group_id": expected_group,
         "required_entity_kinds": sorted(required),
@@ -11344,7 +11344,7 @@ def femm_group_motion_selection_gate(
     }
 
 
-def femm_pm_magnetization_convention_gate(
+def magnetostatic_2d_pm_magnetization_convention_gate(
     pm_rows,
     required_regions=None,
     allowed_frames=("global_xy", "rotor_xy", "local_radial", "local_tangential"),
@@ -11428,7 +11428,7 @@ def femm_pm_magnetization_convention_gate(
         "unit_vectors_normalized": (max(vector_errors) if vector_errors else 0.0) < 1.0e-12,
     }
     return {
-        "policy": "femm_pm_magnetization_convention_gate",
+        "policy": "magnetostatic_2d_pm_magnetization_convention_gate",
         "n_rows": len(normalized_rows),
         "allowed_frames": sorted(allowed),
         "required_regions": required,
@@ -11442,14 +11442,14 @@ def femm_pm_magnetization_convention_gate(
         "checks": checks,
         "status": "ok" if all(checks.values()) else "needs_attention",
         "version_note": (
-            "Use this after femm_block_label_source_contract_gate for PM rows: "
+            "Use this after magnetostatic_2d_block_label_source_contract_gate for PM rows: "
             "FEMM magdir must be degrees plus an explicit coordinate frame and "
             "Br/Hc strength before radia-ngsolve vector emission."
         ),
     }
 
 
-def jmag_motor_table_column_metadata_gate(
+def motor_fem_table_column_metadata_gate(
     metadata,
     required_columns=(),
     *,
@@ -11500,7 +11500,7 @@ def jmag_motor_table_column_metadata_gate(
         "torque_sign_convention_valid": sign_key is None or sign_key in sign_conventions,
     }
     return {
-        "policy": "jmag_motor_table_column_metadata_gate",
+        "policy": "motor_fem_table_column_metadata_gate",
         "columns": columns,
         "required_columns": required,
         "missing_required_columns": missing_required,
@@ -11521,7 +11521,7 @@ def jmag_motor_table_column_metadata_gate(
     }
 
 
-def jmag_force_table_metadata_gate(
+def motor_fem_force_table_metadata_gate(
     metadata,
     required_columns=(),
     *,
@@ -12672,7 +12672,7 @@ def jmag_force_table_metadata_gate(
         ),
     }
     return {
-        "policy": "jmag_force_table_metadata_gate",
+        "policy": "motor_fem_force_table_metadata_gate",
         "columns": columns,
         "required_columns": required,
         "missing_required_columns": missing_required,
@@ -12814,7 +12814,7 @@ def jmag_force_table_metadata_gate(
     }
 
 
-def jmag_airgap_flux_sample_metadata_gate(
+def motor_fem_airgap_flux_sample_metadata_gate(
     rows,
     *,
     expected_result_set_id=None,
@@ -13203,7 +13203,7 @@ def jmag_airgap_flux_sample_metadata_gate(
         checks["torque_sign_convention_recorded"] = bool(unique_signs)
 
     return {
-        "policy": "jmag_airgap_flux_sample_metadata_gate",
+        "policy": "motor_fem_airgap_flux_sample_metadata_gate",
         "status": "ok" if all(checks.values()) else "needs_attention",
         "n_rows": len(data),
         "rows": normalized_rows,
@@ -13238,7 +13238,7 @@ def jmag_airgap_flux_sample_metadata_gate(
     }
 
 
-def jmag_airgap_torque_integration_package_gate(
+def motor_fem_airgap_torque_integration_package_gate(
     sample_metadata_gate,
     torque_package,
     *,
@@ -13287,7 +13287,7 @@ def jmag_airgap_torque_integration_package_gate(
 ):
     """Bind a air-gap torque result to its Br/Bt input package.
 
-    This gate sits after :func:`jmag_airgap_flux_sample_metadata_gate`.  It
+    This gate sits after :func:`motor_fem_airgap_flux_sample_metadata_gate`.  It
     keeps the computed torque result from becoming a free-floating scalar by
     requiring the field table artifact, sample-grid artifact, and integration
     method to be repeated in the result package.
@@ -13847,7 +13847,7 @@ def jmag_airgap_torque_integration_package_gate(
         )
     )
     solver_version = _string_or_none(
-        _first(package, ("solver_version", "jmag_version", "source_tool_version"))
+        _first(package, ("solver_version", "motor_fem_version", "source_tool_version"))
     )
     radia_mcp_version = _string_or_none(
         _first(package, ("radia_mcp_version", "radia_ngsolve_version", "mcp_server_version"))
@@ -14104,7 +14104,7 @@ def jmag_airgap_torque_integration_package_gate(
     }
 
     return {
-        "policy": "jmag_airgap_torque_integration_package_gate",
+        "policy": "motor_fem_airgap_torque_integration_package_gate",
         "status": "ok" if all(checks.values()) else "needs_attention",
         "input_field_table_artifact_id": input_artifact,
         "input_field_table_digest": input_digest,
@@ -14200,7 +14200,7 @@ def jmag_airgap_torque_integration_package_gate(
     }
 
 
-def jmag_symmetry_sweep_coverage_gate(
+def motor_fem_symmetry_sweep_coverage_gate(
     rows,
     pole_pairs,
     symmetry_factor,
@@ -14282,7 +14282,7 @@ def jmag_symmetry_sweep_coverage_gate(
         ),
     }
     return {
-        "policy": "jmag_symmetry_sweep_coverage_gate",
+        "policy": "motor_fem_symmetry_sweep_coverage_gate",
         "n_rows": len(data),
         "angle_column": column,
         "angle_unit": unit,
@@ -14301,14 +14301,14 @@ def jmag_symmetry_sweep_coverage_gate(
         "checks": checks,
         "status": "ok" if all(checks.values()) else "needs_attention",
         "version_note": (
-            "Use this after jmag_motor_table_column_metadata_gate and before "
+            "Use this after motor_fem_table_column_metadata_gate and before "
             "torque/current/harmonic parsing so a symmetry-sector export covers "
             "the intended mechanical/electrical angle span."
         ),
     }
 
 
-def jmag_angle_alignment_contract_gate(
+def motor_fem_angle_alignment_contract_gate(
     rows,
     pole_pairs,
     *,
@@ -14441,7 +14441,7 @@ def jmag_angle_alignment_contract_gate(
         or (len(symmetry_values) == len(data) and max_symmetry_error <= tol),
     }
     return {
-        "policy": "jmag_angle_alignment_contract_gate",
+        "policy": "motor_fem_angle_alignment_contract_gate",
         "n_rows": len(data),
         "pole_pairs": pp,
         "rotor_electrical_offset_deg": float(rotor_electrical_offset_deg),
@@ -14464,7 +14464,7 @@ def jmag_angle_alignment_contract_gate(
     }
 
 
-def jmag_export_case_package_gate(
+def motor_fem_export_case_package_gate(
     artifacts,
     expected_case_id=None,
     expected_study_id=None,
@@ -14488,8 +14488,8 @@ def jmag_export_case_package_gate(
         raise ValueError("required_kinds must not be empty")
 
     expected_policies = {
-        "column_metadata": {"jmag_motor_table_column_metadata_gate"},
-        "symmetry_coverage": {"jmag_symmetry_sweep_coverage_gate"},
+        "column_metadata": {"motor_fem_table_column_metadata_gate"},
+        "symmetry_coverage": {"motor_fem_symmetry_sweep_coverage_gate"},
         "value_table": {
             "pm_drive_terminal_table_health_gate",
             "pm_drive_loss_bucket_efficiency_gate",
@@ -14525,7 +14525,7 @@ def jmag_export_case_package_gate(
         if not isinstance(row, dict):
             raise ValueError("each artifact must be a dictionary")
         kind = _norm(_first(row, ("kind", "artifact_kind", "type")))
-        case_id = _first(row, ("case_id", "jmag_case_id", "design_case_id"))
+        case_id = _first(row, ("case_id", "motor_fem_case_id", "design_case_id"))
         study_id = _first(row, ("study_id", "study_name", "study"))
         result_set_id = _first(row, ("result_set_id", "result_id", "dataset_id", "export_id"))
         source_tool = _first(row, ("source_tool", "tool", "source"))
@@ -14630,7 +14630,7 @@ def jmag_export_case_package_gate(
         checks["expected_result_set_id_matches"] = unique_result_set_ids == [str(expected_result_set_id)]
 
     return {
-        "policy": "jmag_export_case_package_gate",
+        "policy": "motor_fem_export_case_package_gate",
         "required_kinds": list(required),
         "present_kinds": dict(sorted(kind_counts.items())),
         "case_ids": unique_case_ids,
@@ -14661,7 +14661,7 @@ def jmag_export_case_package_gate(
     }
 
 
-def jmag_current_torque_solver_ready_manifest_gate(
+def motor_fem_current_torque_solver_ready_manifest_gate(
     artifacts,
     expected_case_id=None,
     expected_result_set_id=None,
@@ -14689,8 +14689,8 @@ def jmag_current_torque_solver_ready_manifest_gate(
         raise ValueError("expected_phases must not be empty")
 
     expected_policies = {
-        "column_metadata": {"jmag_motor_table_column_metadata_gate"},
-        "symmetry_coverage": {"jmag_symmetry_sweep_coverage_gate"},
+        "column_metadata": {"motor_fem_table_column_metadata_gate"},
+        "symmetry_coverage": {"motor_fem_symmetry_sweep_coverage_gate"},
         "current_snapshot": {
             "motor_current_snapshot_table_contract_gate",
             "spwm_snapshot_current_handoff_gate",
@@ -14725,7 +14725,7 @@ def jmag_current_torque_solver_ready_manifest_gate(
         if not isinstance(row, dict):
             raise ValueError("each artifact must be a dictionary")
         kind = _norm(_first(row, ("kind", "artifact_kind", "type")))
-        case_id = _first(row, ("case_id", "jmag_case_id", "design_case_id"))
+        case_id = _first(row, ("case_id", "motor_fem_case_id", "design_case_id"))
         result_set_id = _first(row, ("result_set_id", "result_id", "dataset_id", "export_id"))
         operating_point_id = _first(row, ("operating_point_id", "op_id", "snapshot_id"))
         source_tool = _first(row, ("source_tool", "tool", "source"))
@@ -14828,7 +14828,7 @@ def jmag_current_torque_solver_ready_manifest_gate(
         checks["expected_operating_point_id_matches"] = unique_operating_point_ids == [str(expected_operating_point_id)]
 
     return {
-        "policy": "jmag_current_torque_solver_ready_manifest_gate",
+        "policy": "motor_fem_current_torque_solver_ready_manifest_gate",
         "required_kinds": list(required),
         "present_kinds": dict(sorted(kind_counts.items())),
         "case_ids": unique_case_ids,
@@ -14860,7 +14860,7 @@ def jmag_current_torque_solver_ready_manifest_gate(
     }
 
 
-def jmag_efficiency_operating_point_package_gate(
+def motor_fem_efficiency_operating_point_package_gate(
     artifacts,
     expected_case_id=None,
     expected_result_set_id=None,
@@ -14920,7 +14920,7 @@ def jmag_efficiency_operating_point_package_gate(
         if not isinstance(row, dict):
             raise ValueError("each artifact must be a dictionary")
         kind = _norm(_first(row, ("kind", "artifact_kind", "type")))
-        case_id = _first(row, ("case_id", "jmag_case_id", "design_case_id"))
+        case_id = _first(row, ("case_id", "motor_fem_case_id", "design_case_id"))
         result_set_id = _first(row, ("result_set_id", "result_id", "dataset_id", "export_id"))
         source_tool = _first(row, ("source_tool", "tool", "source"))
         source_tool_norm = _norm(source_tool)
@@ -15011,7 +15011,7 @@ def jmag_efficiency_operating_point_package_gate(
         checks["expected_result_set_id_matches"] = unique_result_set_ids == [str(expected_result_set_id)]
 
     return {
-        "policy": "jmag_efficiency_operating_point_package_gate",
+        "policy": "motor_fem_efficiency_operating_point_package_gate",
         "required_kinds": list(required),
         "present_kinds": dict(sorted(kind_counts.items())),
         "case_ids": unique_case_ids,
@@ -15359,7 +15359,7 @@ def motor_current_snapshot_table_contract_gate(
     }
 
 
-def femm_motor_model_artifact_package_gate(
+def magnetostatic_2d_motor_model_artifact_package_gate(
     artifacts,
     expected_model_id=None,
     expected_operating_point_id=None,
@@ -15382,10 +15382,10 @@ def femm_motor_model_artifact_package_gate(
         raise ValueError("required_kinds must not be empty")
 
     expected_policies = {
-        "block_labels": {"femm_block_label_source_contract_gate"},
+        "block_labels": {"magnetostatic_2d_block_label_source_contract_gate"},
         "current_snapshot": {
             "motor_current_snapshot_table_contract_gate",
-            "femm_static_current_circuit_rows_gate",
+            "magnetostatic_2d_static_current_circuit_rows_gate",
             "spwm_snapshot_current_handoff_gate",
         },
         "torque_table": {
@@ -15501,7 +15501,7 @@ def femm_motor_model_artifact_package_gate(
         checks["expected_operating_point_id_matches"] = unique_operating_point_ids == [str(expected_operating_point_id)]
 
     return {
-        "policy": "femm_motor_model_artifact_package_gate",
+        "policy": "magnetostatic_2d_motor_model_artifact_package_gate",
         "required_kinds": list(required),
         "present_kinds": dict(sorted(kind_counts.items())),
         "model_ids": unique_model_ids,
@@ -15528,7 +15528,7 @@ def femm_motor_model_artifact_package_gate(
     }
 
 
-def femm_winding_current_package_gate(
+def magnetostatic_2d_winding_current_package_gate(
     artifacts,
     expected_model_id=None,
     expected_phases=("U", "V", "W"),
@@ -15559,10 +15559,10 @@ def femm_winding_current_package_gate(
             "integral_slot_winding_factor",
             "winding_factor_table_gate",
         },
-        "block_labels": {"femm_block_label_source_contract_gate"},
+        "block_labels": {"magnetostatic_2d_block_label_source_contract_gate"},
         "current_snapshot": {
             "motor_current_snapshot_table_contract_gate",
-            "femm_static_current_circuit_rows_gate",
+            "magnetostatic_2d_static_current_circuit_rows_gate",
             "spwm_snapshot_current_handoff_gate",
         },
     }
@@ -15676,7 +15676,7 @@ def femm_winding_current_package_gate(
         checks["expected_model_id_matches"] = unique_model_ids == [str(expected_model_id)]
 
     return {
-        "policy": "femm_winding_current_package_gate",
+        "policy": "magnetostatic_2d_winding_current_package_gate",
         "required_kinds": list(required),
         "present_kinds": dict(sorted(kind_counts.items())),
         "model_ids": unique_model_ids,
@@ -15702,7 +15702,7 @@ def femm_winding_current_package_gate(
     }
 
 
-def femm_source_current_solver_ready_manifest_gate(
+def magnetostatic_2d_source_current_solver_ready_manifest_gate(
     artifacts,
     expected_model_id=None,
     expected_operating_point_id=None,
@@ -15712,7 +15712,7 @@ def femm_source_current_solver_ready_manifest_gate(
     """Check FEMM source/current metadata before a static solve is trusted.
 
     This is the pre-solve companion to
-    :func:`femm_motor_model_artifact_package_gate`.  It bundles the upstream
+    :func:`magnetostatic_2d_motor_model_artifact_package_gate`.  It bundles the upstream
     source contracts that must already be true before FEMM/pyFEMM starts
     solving: block-label source rows, PM magnetization convention rows, and
     instantaneous circuit-current rows.
@@ -15730,10 +15730,10 @@ def femm_source_current_solver_ready_manifest_gate(
         raise ValueError("expected_phases must not be empty")
 
     expected_policies = {
-        "block_labels": {"femm_block_label_source_contract_gate"},
-        "pm_magnetization": {"femm_pm_magnetization_convention_gate"},
+        "block_labels": {"magnetostatic_2d_block_label_source_contract_gate"},
+        "pm_magnetization": {"magnetostatic_2d_pm_magnetization_convention_gate"},
         "current_snapshot": {
-            "femm_static_current_circuit_rows_gate",
+            "magnetostatic_2d_static_current_circuit_rows_gate",
             "motor_current_snapshot_table_contract_gate",
             "spwm_snapshot_current_handoff_gate",
         },
@@ -15850,7 +15850,7 @@ def femm_source_current_solver_ready_manifest_gate(
         checks["expected_operating_point_id_matches"] = unique_operating_point_ids == [str(expected_operating_point_id)]
 
     return {
-        "policy": "femm_source_current_solver_ready_manifest_gate",
+        "policy": "magnetostatic_2d_source_current_solver_ready_manifest_gate",
         "required_kinds": list(required),
         "present_kinds": dict(sorted(kind_counts.items())),
         "model_ids": unique_model_ids,
@@ -15878,7 +15878,7 @@ def femm_source_current_solver_ready_manifest_gate(
     }
 
 
-def femm_air_gap_sample_solver_ready_manifest_gate(
+def magnetostatic_2d_air_gap_sample_solver_ready_manifest_gate(
     artifacts,
     expected_model_id=None,
     expected_operating_point_id=None,
@@ -15902,10 +15902,10 @@ def femm_air_gap_sample_solver_ready_manifest_gate(
         raise ValueError("required_kinds must not be empty")
 
     expected_policies = {
-        "source_current_manifest": {"femm_source_current_solver_ready_manifest_gate"},
+        "source_current_manifest": {"magnetostatic_2d_source_current_solver_ready_manifest_gate"},
         "air_gap_sample_table": {
-            "femm_air_gap_sample_metadata_contract",
-            "femm_air_gap_sample_metadata_contract_gate",
+            "magnetostatic_2d_air_gap_sample_metadata_contract",
+            "magnetostatic_2d_air_gap_sample_metadata_contract_gate",
         },
         "torque_summary": {
             "air_gap_shear_torque_from_angle_samples",
@@ -16044,7 +16044,7 @@ def femm_air_gap_sample_solver_ready_manifest_gate(
         checks["expected_operating_point_id_matches"] = unique_operating_point_ids == [str(expected_operating_point_id)]
 
     return {
-        "policy": "femm_air_gap_sample_solver_ready_manifest_gate",
+        "policy": "magnetostatic_2d_air_gap_sample_solver_ready_manifest_gate",
         "required_kinds": list(required),
         "present_kinds": dict(sorted(kind_counts.items())),
         "model_ids": unique_model_ids,
@@ -16433,7 +16433,7 @@ def ipm_saliency_torque_component_gate(
     }
 
 
-def jmag_pm_short_circuit_fault_table_gate(
+def motor_fem_pm_short_circuit_fault_table_gate(
     rows,
     R,
     Ld,
@@ -16570,7 +16570,7 @@ def jmag_pm_short_circuit_fault_table_gate(
         ),
     }
     return {
-        "policy": "jmag_pm_short_circuit_fault_table_gate",
+        "policy": "motor_fem_pm_short_circuit_fault_table_gate",
         "row_count": len(table),
         "R_ohm": r,
         "Ld_H": ld,
@@ -17312,14 +17312,14 @@ def pm_drive_loss_bucket_efficiency_gate(rows, loss_columns=None, tol=1.0e-9):
     if not table:
         raise ValueError("rows must not be empty")
     if loss_columns is None:
-        jmag_style = ("P_cu_W", "P_iron_W", "P_magnet_W", "P_mechanical_loss_W")
+        motor_fem_style = ("P_cu_W", "P_iron_W", "P_magnet_W", "P_mechanical_loss_W")
         elf_style = ("copper_loss_w", "iron_loss_w", "magnet_loss_w", "mechanical_loss_w")
-        if all(name in table[0] for name in jmag_style):
-            loss_columns = jmag_style
+        if all(name in table[0] for name in motor_fem_style):
+            loss_columns = motor_fem_style
         elif all(name in table[0] for name in elf_style):
             loss_columns = elf_style
         else:
-            loss_columns = jmag_style
+            loss_columns = motor_fem_style
     loss_columns = tuple(str(name) for name in loss_columns)
     required = ("P_out_W", "P_in_W", "efficiency", *loss_columns)
     for index, row in enumerate(table):

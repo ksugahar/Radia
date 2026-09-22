@@ -8,7 +8,7 @@ allowed-tools: Bash(python *), Bash(*coreform_cubit*), Bash(ssh *), Bash(cp *), 
 
 > **CURRENT POLICY (2026-07-06)**: target Coreform Cubit 2025.12 and the
 > `cubit_mesh_export.ccm` APREPRO commands (`export netgen/gmsh/vtk/...`
-> and `export jmag_nastran`). The old `radia_export ...` verb and Cubit
+> and `export nastran_bdf`). The old `radia_export ...` verb and Cubit
 > 2025.3 paths are historical. Prefer
 > `C:\temp` for temporary journals and outputs.
 
@@ -35,8 +35,8 @@ CUBIT="C:\Program Files\Coreform Cubit 2025.12\bin\coreform_cubit.exe"
 
 export gmsh "{DIR}/test.msh" order 1 overwrite
 export gmsh "{DIR}/test_o2.msh" order 2 overwrite
-export jmag_nastran "{DIR}/test.bdf" order 1 overwrite
-export jmag_nastran "{DIR}/test_o2.bdf" order 2 overwrite
+export nastran_bdf "{DIR}/test.bdf" order 1 overwrite
+export nastran_bdf "{DIR}/test_o2.bdf" order 2 overwrite
 export vtk "{DIR}/test.vtk" order 1 overwrite
 export vtk "{DIR}/test_o2.vtk" order 2 overwrite
 export netgen "{DIR}/test_o1.vol" order 1 overwrite

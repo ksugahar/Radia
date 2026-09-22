@@ -1,7 +1,7 @@
 """Three-engine nonlinear validation for coil-driven ESRF Examples 6 and 7.
 
 HDiv-MMM receives its checked iron-only Cubit Q2 mesh.  HCurl reduced-A and
-the TOSCA-style mixed total/reduced Omega route receive an independently
+the mixed total/reduced Omega route receive an independently
 checked, conforming physical-air plus Kelvin mesh built from the same iron
 STEP.  Every formulation is driven by one mesh-free CoilBuilder source tree.
 """

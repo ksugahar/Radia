@@ -51,7 +51,7 @@ Layout:
                             verification of kernel transformations.
   radia_mcp.accelerator   — Accelerator magnet design with Radia: analytical
                             end-pole chamfer (Delferriere SOLEIL), Kolkata
-                            superconducting cyclotron Radia+TOSCA validation
+                            superconducting cyclotron case study
                             (Pradhan 2007), rotating-coil multipole measurement
                             and 3D field reconstruction.
   radia_mcp.presentation  — Research-talk slide lint + PPTX tools (promoted

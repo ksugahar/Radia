@@ -14,8 +14,8 @@ Result-bearing showcase notebooks:
 [isochronous_topopt.ipynb](isochronous_topopt.ipynb) (density adjoint gate,
 constrained trust-region SLP design loop, exact-void iron-only verification;
 golden-band lane `validation_test/isochronous_topopt/`), and
-[c_type_three_formulation_tosca_mixed.ipynb](c_type_three_formulation_tosca_mixed.ipynb)
-(Cubit/ACIS C-yoke; HDiv-MMM, HCurl reduced-A, and H1 TOSCA mixed
+[c_type_three_formulation_mixed_omega.ipynb](c_type_three_formulation_mixed_omega.ipynb)
+(Cubit/ACIS C-yoke; HDiv-MMM, HCurl reduced-A, and H1 mixed
 total/reduced Omega nonlinear BDM2 four-level, two-host mesh-convergence
 acceptance; validation evidence in `validation_test/c_type_three_engine/`).
 

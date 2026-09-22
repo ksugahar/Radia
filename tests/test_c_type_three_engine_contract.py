@@ -44,7 +44,7 @@ def test_three_engine_runner_has_shared_physics_contract():
     assert '"formulation": "HDiv-MMM"' in runner
     assert '"discretization": "BDM%d" % order' in runner
     assert "HCurl reduced-A" in runner
-    assert "H1 TOSCA mixed total/reduced Omega" in runner
+    assert "H1 mixed total/reduced Omega" in runner
     assert "StaticElectromagnetMixedDomain" in runner
     assert "solve_static_electromagnet_mixed_total_reduced_omega" in runner
     assert 'reduced_materials=("air",)' in runner
@@ -259,15 +259,15 @@ def test_historical_global_omega_results_preserve_pass_and_failed_gate_evidence(
     assert nonlinear_order2["comparison_contract"]["bh_interpolation_shared"]
 
 
-def test_historical_tosca_mixed_v3_evidence_is_not_current_contract():
+def test_historical_mixed_omega_v3_evidence_is_not_current_contract():
     results = SUITE / "results"
     linear = json.loads(
-        (results / "hibino_20260902_linear_order3_tosca_mixed_v3.json").read_text(
+        (results / "hibino_20260902_linear_order3_mixed_omega_v3.json").read_text(
             encoding="utf-8"
         )
     )
     nonlinear = json.loads(
-        (results / "hibino_20260902_nonlinear_order2_tosca_mixed_v3.json").read_text(
+        (results / "hibino_20260902_nonlinear_order2_mixed_omega_v3.json").read_text(
             encoding="utf-8"
         )
     )
@@ -289,22 +289,22 @@ def test_historical_tosca_mixed_v3_evidence_is_not_current_contract():
     }
 
 
-def test_current_tosca_mixed_three_engine_v4_evidence_is_complete():
+def test_current_mixed_omega_three_engine_v4_evidence_is_complete():
     results = SUITE / "results"
     linear = json.loads(
         (
-            results / "hibino_20260903_linear_order3_tosca_mixed_v4.json"
+            results / "hibino_20260903_linear_order3_mixed_omega_v4.json"
         ).read_text(encoding="utf-8")
     )
     nonlinear = json.loads(
         (
-            results / "hibino_20260903_nonlinear_order2_tosca_mixed_v4.json"
+            results / "hibino_20260903_nonlinear_order2_mixed_omega_v4.json"
         ).read_text(encoding="utf-8")
     )
     expected = {
         "hdiv_mmm": "HDiv-MMM",
         "reduced_a": "HCurl reduced-A",
-        "mixed_total_reduced_omega": "H1 TOSCA mixed total/reduced Omega",
+        "mixed_total_reduced_omega": "H1 mixed total/reduced Omega",
     }
     for payload in (linear, nonlinear):
         assert payload["schema"] == "radia.validation.c-type-formulation-comparison.v4"
@@ -330,7 +330,7 @@ def test_current_tosca_mixed_three_engine_v4_evidence_is_complete():
     ]
 
 
-def test_current_tosca_mixed_mesh_certificate_is_complete_and_portable():
+def test_current_mixed_omega_mesh_certificate_is_complete_and_portable():
     results = SUITE / "results"
     certificate = json.loads(
         (
@@ -345,7 +345,7 @@ def test_current_tosca_mixed_mesh_certificate_is_complete_and_portable():
     assert certificate["passed"] is True
     assert all(certificate["checks"].values())
     assert certificate["claim"]["analytic_absolute_truth_claimed"] is False
-    assert "TOSCA" in certificate["claim"]["scope"]
+    assert "mixed total/reduced Omega" in certificate["claim"]["scope"]
     assert certificate["fine_mesh_maximum_pairwise_relative_rms"] < 0.005
     assert certificate["combined_relative_numerical_uncertainty"] < 0.01
     assert certificate["reproducibility"]["reference_machine"].casefold() == "mdx"
@@ -405,7 +405,7 @@ def test_historical_global_omega_accuracy_certificate_is_not_relabelled():
         row["convergence_levels"] == ["medium", "fine", "finer"]
         for row in certificate["engine_convergence"].values()
     )
-    assert "TOSCA" not in certificate["claim"]["scope"]
+    assert "mixed total/reduced Omega" not in certificate["claim"]["scope"]
 
 
 def test_mesh_family_builder_uses_one_geometric_cubit_sequence():

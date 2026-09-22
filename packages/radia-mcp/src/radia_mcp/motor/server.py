@@ -28,7 +28,7 @@ from radia_mcp.common.mcp_contract import apply_tool_contract
 from .onelab_knowledge import get_onelab_knowledge
 from .topology_opt_knowledge import get_topology_opt_knowledge
 from .darwin_model_knowledge import get_darwin_knowledge
-from .femm_transient_knowledge import get_femm_transient_knowledge
+from .transient_circuit_knowledge import get_transient_circuit_knowledge
 from .henrotte_lineage_knowledge import get_henrotte_lineage_knowledge
 from .hollaus_eddy_knowledge import get_hollaus_eddy_knowledge
 from .hollaus_genealogy_knowledge import get_hollaus_genealogy
@@ -495,7 +495,7 @@ def motor_angle_periodic_rom(topic: str = "architecture") -> str:
 
 
 @mcp.tool()
-def motor_femm_transient(topic: str = "lab_recommendation") -> str:
+def motor_transient_circuit(topic: str = "lab_recommendation") -> str:
     """
     FEMM newbuild transient solver — Lange-Henrotte-Hameyer 2009
     incremental-permeability linearization with sliding-band air-gap BC.
@@ -524,7 +524,7 @@ def motor_femm_transient(topic: str = "lab_recommendation") -> str:
             "simulink_coupling"      - Simulink S-function + HIL/RT notes
             "all"                    - Everything
     """
-    return get_femm_transient_knowledge(topic)
+    return get_transient_circuit_knowledge(topic)
 
 
 @mcp.tool()
@@ -1469,7 +1469,7 @@ def new_motor_simulation(motor_type: str = "pmsm") -> str:
     base = (
         f"Set up a {motor_type} simulation using the radia-mcp motor toolchain.\n\n"
         "Recommended path:\n"
-        "1. motor_femm_transient('lab_recommendation') for the **lab-canonical**\n"
+        "1. motor_transient_circuit('lab_recommendation') for the **lab-canonical**\n"
         "   transient approach (Lange-Henrotte-Hameyer 2009).\n"
         "2. motor_onelab('overview') for ONELAB ElectricMachines layout\n"
         "   (reference geometry templates).\n"
@@ -1554,7 +1554,7 @@ def main():
         from .onelab_knowledge import SECTIONS as O_SEC
         from .topology_opt_knowledge import SECTIONS as T_SEC
         from .darwin_model_knowledge import SECTIONS as D_SEC
-        from .femm_transient_knowledge import SECTIONS as F_SEC
+        from .transient_circuit_knowledge import SECTIONS as F_SEC
         from .henrotte_lineage_knowledge import SECTIONS as H_SEC
         from .hollaus_eddy_knowledge import SECTIONS as E_SEC
         from .tritool_cross_reference_knowledge import SECTIONS as X_SEC
@@ -1575,8 +1575,8 @@ def main():
             print(f"  motor_darwin_model({k!r}): {len(r)} chars")
             assert len(r) > 100, f"Darwin topic {k} too short"
         for k in F_SEC:
-            r = motor_femm_transient(k)
-            print(f"  motor_femm_transient({k!r}): {len(r)} chars")
+            r = motor_transient_circuit(k)
+            print(f"  motor_transient_circuit({k!r}): {len(r)} chars")
             assert len(r) > 100, f"FEMM transient topic {k} too short"
         for k in H_SEC:
             r = motor_henrotte_lineage(k)
