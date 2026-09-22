@@ -100,6 +100,22 @@ def test_the_effective_law_no_longer_depends_on_the_initial_guess():
     np.testing.assert_allclose(fields[0], fields[1], rtol=2.0e-6, atol=0.0)
 
 
+def test_projected_material_reuses_only_the_fixed_source_rhs():
+    h = helpers()
+    mesh, source, potential, table = h._picard_case()
+    results = []
+    for cached in (False, True):
+        result = h._picard_solve(
+            mesh, source, potential, table, order=2, material_update_order=1,
+            anderson_depth=0, cache_fixed_rhs=cached,
+            total_source_h=ng.CF((0., 0., .1)),
+            total_source_materials=("total",), tolerance=1e-6)
+        assert result["nonlinear_stats"]["converged"]
+        assert result["nonlinear_stats"]["rhs_cache"] == ("fixed_vector" if cached else "none")
+        results.append(np.asarray(result["B_cf"](mesh(.5, .1, .2))))
+    np.testing.assert_allclose(results[0], results[1], rtol=1e-10, atol=1e-14)
+
+
 def test_convergence_requires_the_material_residual_too():
     """Finding 2: a converged solve is self-consistent with the law."""
     h = helpers()

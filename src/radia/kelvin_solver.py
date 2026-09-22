@@ -1120,7 +1120,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             f_lf.Assemble()
             f_lf.vec.data += fixed_rhs.vec
         else:
-            # This cache belongs to one P1 Picard call, with fixed source and spaces.
+            # This cache belongs to one Picard call, with fixed source and spaces.
             layout = tuple(space.ndof for space in fes.components)
             if "fixed" not in _fixed_rhs_cache:
                 fixed_rhs.Assemble()
@@ -1876,6 +1876,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
             refinement_parent_identity=normalized_refinement_parent_identity,
             refinement_parent_identity_sha256=refinement_parent_identity_sha256,
             surface_dirichlet=surface_dirichlet,
+            cache_fixed_rhs=cache_fixed_rhs,
         )
     if requested_material_order not in (None, 0):
         raise ValueError("order=1 supports material_update_order=0 only")
@@ -2088,7 +2089,7 @@ def _solve_mixed_omega_projected_log_material(
         total_source_h, total_source_materials, observation_points,
         material_log_state_initial, refinement_parent_identity,
         refinement_parent_identity_sha256, surface_dirichlet=None,
-        kelvin_match_exact=False, mu_r_by_material=None):
+        kelvin_match_exact=False, mu_r_by_material=None, cache_fixed_rhs=True):
     """Picard lane with a positive spatial L2 secant-permeability field."""
 
     from ngsolve import (
@@ -2240,6 +2241,7 @@ def _solve_mixed_omega_projected_log_material(
     constitutive_change = float("inf")
     final_state_constitutive_residual = None
     integration_order = max(4, 2 * int(material_update_order) + 2)
+    rhs_cache = {} if cache_fixed_rhs else None
 
     def solve_current_material_state():
         return solve_magnetostatic_mixed_total_reduced_omega_kelvin(
@@ -2266,6 +2268,7 @@ def _solve_mixed_omega_projected_log_material(
             total_source_h=total_source_h,
             total_source_materials=total_source_materials,
             surface_dirichlet=surface_dirichlet,
+            _fixed_rhs_cache=rhs_cache,
         )
 
     for iteration in range(1, int(max_iterations) + 1):
@@ -2274,7 +2277,10 @@ def _solve_mixed_omega_projected_log_material(
         B_target = _build_bh_coefficient_function(H_magnitude, bh_array)
         mu_r_target = B_target / (MU_0 * H_magnitude)
         admissible_mu_r_target = IfPos(mu_r_target - 1.0, mu_r_target, 1.0)
-        target_log_mu.Set(log(admissible_mu_r_target), definedon=nonlinear_selector)
+        # Evaluate the shared field once per quadrature rule, rather than once
+        # per occurrence in every PCHIP branch. This compiles the expression
+        # graph without changing its interpolation or quadrature.
+        target_log_mu.Set(log(admissible_mu_r_target).Compile(), definedon=nonlinear_selector)
         # The ceiling must never clip the law's own target (P1 lane does the
         # same): raise it to whatever the projection asked for.
         target_max = float(np.max(target_log_mu.vec.FV().NumPy()[active_dofs]))
@@ -2375,7 +2381,7 @@ def _solve_mixed_omega_projected_log_material(
         H_final = sqrt(InnerProduct(result["H_cf"], result["H_cf"]) + 1.0e-24)
         mu_final_target = _build_bh_coefficient_function(H_final, bh_array) / (
             MU_0 * H_final)
-        target_log_mu.Set(log(IfPos(mu_final_target - 1.0, mu_final_target, 1.0)),
+        target_log_mu.Set(log(IfPos(mu_final_target - 1.0, mu_final_target, 1.0)).Compile(),
                           definedon=nonlinear_selector)
         nonlinear_measure = float(
             Integrate(1.0, mesh, definedon=nonlinear_selector,
@@ -2402,6 +2408,7 @@ def _solve_mixed_omega_projected_log_material(
     }
     stats = {
         "method": "Picard projected log-permeability",
+        "rhs_cache": "fixed_vector" if rhs_cache is not None else "none",
         "iterations": int(iteration),
         "converged": converged,
         "relative_B_change": relative_change,
