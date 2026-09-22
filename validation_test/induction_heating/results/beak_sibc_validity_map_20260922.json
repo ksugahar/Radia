@@ -1,0 +1,380 @@
+{
+  "schema": "radia.beak_sibc_validity_map.v1",
+  "generated_at_utc": "2026-09-22T05:57:30.479570+00:00",
+  "git_head": "72646ab22230cc591d77bf040f54f0c7a7571900",
+  "host": "intel11",
+  "question": "the surface impedance's failure on this section was explained by delta over the local radius of curvature.  Does the error actually depend on that ratio alone?",
+  "reference": "the planar interior-resolved control of radia.sibc_corner_patch, which reproduces the exact Bessel round wire to 3.5e-8",
+  "levels": [
+    {
+      "tip_x_mm": 4.0,
+      "frequency_hz": 15000.0,
+      "sigma_S_per_m": 58000000.0,
+      "skin_depth_mm": 0.5395857916573062,
+      "skin_depth_over_tip_radius": 2.158343166629225,
+      "cuts_mm": {
+        "beak": 1.608233109157825,
+        "tip": 3.4999965290053474
+      },
+      "fin_length_mm": 2.391763419847549,
+      "ndof": 20656,
+      "seconds": 1.5299692999687977,
+      "exact": {
+        "total_loss_W_per_m": 0.0011122370244251191,
+        "beak_loss_fraction": 0.3364222344807697,
+        "tip_loss_fraction": 0.15600012109419728
+      },
+      "surface_impedance": {
+        "total_loss_relative": -0.3167065507570179,
+        "beak_relative": -0.03852750446368225,
+        "tip_relative": -0.051782176443916805
+      },
+      "family": "frequency"
+    },
+    {
+      "tip_x_mm": 4.0,
+      "frequency_hz": 50000.0,
+      "sigma_S_per_m": 58000000.0,
+      "skin_depth_mm": 0.29554330979998955,
+      "skin_depth_over_tip_radius": 1.1821732391999582,
+      "cuts_mm": {
+        "beak": 1.608233109157825,
+        "tip": 3.4999965290053474
+      },
+      "fin_length_mm": 2.391763419847549,
+      "ndof": 53812,
+      "seconds": 2.6921064000343904,
+      "exact": {
+        "total_loss_W_per_m": 0.0018996422301558525,
+        "beak_loss_fraction": 0.3138232687134536,
+        "tip_loss_fraction": 0.2219820351733042
+      },
+      "surface_impedance": {
+        "total_loss_relative": -0.23518951049432235,
+        "beak_relative": 0.06374320524691712,
+        "tip_relative": -0.19433007718092765
+      },
+      "family": "frequency"
+    },
+    {
+      "tip_x_mm": 4.0,
+      "frequency_hz": 150000.0,
+      "sigma_S_per_m": 58000000.0,
+      "skin_depth_mm": 0.1706320094702169,
+      "skin_depth_over_tip_radius": 0.6825280378808676,
+      "cuts_mm": {
+        "beak": 1.608233109157825,
+        "tip": 3.4999965290053474
+      },
+      "fin_length_mm": 2.391763419847549,
+      "ndof": 149914,
+      "seconds": 5.963105900038499,
+      "exact": {
+        "total_loss_W_per_m": 0.003173496377012991,
+        "beak_loss_fraction": 0.2966424295259741,
+        "tip_loss_fraction": 0.23643578099420554
+      },
+      "surface_impedance": {
+        "total_loss_relative": -0.17309929446815076,
+        "beak_relative": 0.15642007190156937,
+        "tip_relative": -0.1475431742164246
+      },
+      "family": "frequency"
+    },
+    {
+      "tip_x_mm": 4.0,
+      "frequency_hz": 450000.0,
+      "sigma_S_per_m": 58000000.0,
+      "skin_depth_mm": 0.0985144365999965,
+      "skin_depth_over_tip_radius": 0.394057746399986,
+      "cuts_mm": {
+        "beak": 1.608233109157825,
+        "tip": 3.4999965290053474
+      },
+      "fin_length_mm": 2.391763419847549,
+      "ndof": 447157,
+      "seconds": 17.899083400028758,
+      "exact": {
+        "total_loss_W_per_m": 0.005422091414922934,
+        "beak_loss_fraction": 0.2903299060723547,
+        "tip_loss_fraction": 0.2325316546790945
+      },
+      "surface_impedance": {
+        "total_loss_relative": -0.1298955026443861,
+        "beak_relative": 0.20727129899102348,
+        "tip_relative": -0.0655063251808028
+      },
+      "family": "frequency"
+    },
+    {
+      "tip_x_mm": 4.0,
+      "frequency_hz": 150000.0,
+      "sigma_S_per_m": 580000000.0,
+      "skin_depth_mm": 0.05395857916573062,
+      "skin_depth_over_tip_radius": 0.2158343166629225,
+      "cuts_mm": {
+        "beak": 1.608233109157825,
+        "tip": 3.4999965290053474
+      },
+      "fin_length_mm": 2.391763419847549,
+      "ndof": 1437670,
+      "seconds": 59.55025879997993,
+      "exact": {
+        "total_loss_W_per_m": 0.000984128146565645,
+        "beak_loss_fraction": 0.2867405643746167,
+        "tip_loss_fraction": 0.23143971250349063
+      },
+      "surface_impedance": {
+        "total_loss_relative": -0.09481754913494067,
+        "beak_relative": 0.2422435840064272,
+        "tip_relative": -0.017644849189415557
+      },
+      "family": "conductivity",
+      "sigma_scale": 10.0
+    },
+    {
+      "tip_x_mm": 4.0,
+      "frequency_hz": 150000.0,
+      "sigma_S_per_m": 174000000.0,
+      "skin_depth_mm": 0.0985144365999965,
+      "skin_depth_over_tip_radius": 0.394057746399986,
+      "cuts_mm": {
+        "beak": 1.608233109157825,
+        "tip": 3.4999965290053474
+      },
+      "fin_length_mm": 2.391763419847549,
+      "ndof": 447157,
+      "seconds": 18.62511620001169,
+      "exact": {
+        "total_loss_W_per_m": 0.0018073638049743881,
+        "beak_loss_fraction": 0.29032990607235115,
+        "tip_loss_fraction": 0.2325316546790982
+      },
+      "surface_impedance": {
+        "total_loss_relative": -0.12989550264442207,
+        "beak_relative": 0.2072712989910377,
+        "tip_relative": -0.065506325180815
+      },
+      "family": "conductivity",
+      "sigma_scale": 3.0
+    },
+    {
+      "tip_x_mm": 4.0,
+      "frequency_hz": 150000.0,
+      "sigma_S_per_m": 58000000.0,
+      "skin_depth_mm": 0.1706320094702169,
+      "skin_depth_over_tip_radius": 0.6825280378808676,
+      "cuts_mm": {
+        "beak": 1.608233109157825,
+        "tip": 3.4999965290053474
+      },
+      "fin_length_mm": 2.391763419847549,
+      "ndof": 149914,
+      "seconds": 6.3542686000000685,
+      "exact": {
+        "total_loss_W_per_m": 0.003173496377012991,
+        "beak_loss_fraction": 0.2966424295259741,
+        "tip_loss_fraction": 0.23643578099420554
+      },
+      "surface_impedance": {
+        "total_loss_relative": -0.17309929446815076,
+        "beak_relative": 0.15642007190156937,
+        "tip_relative": -0.1475431742164246
+      },
+      "family": "conductivity",
+      "sigma_scale": 1.0
+    },
+    {
+      "tip_x_mm": 4.0,
+      "frequency_hz": 150000.0,
+      "sigma_S_per_m": 19333333.333333332,
+      "skin_depth_mm": 0.29554330979998955,
+      "skin_depth_over_tip_radius": 1.1821732391999582,
+      "cuts_mm": {
+        "beak": 1.608233109157825,
+        "tip": 3.4999965290053474
+      },
+      "fin_length_mm": 2.391763419847549,
+      "ndof": 53812,
+      "seconds": 3.035565599973779,
+      "exact": {
+        "total_loss_W_per_m": 0.005698926690467346,
+        "beak_loss_fraction": 0.3138232687134424,
+        "tip_loss_fraction": 0.22198203517329537
+      },
+      "surface_impedance": {
+        "total_loss_relative": -0.23518951049429304,
+        "beak_relative": 0.06374320524695509,
+        "tip_relative": -0.1943300771808949
+      },
+      "family": "conductivity",
+      "sigma_scale": 0.3333333333333333
+    },
+    {
+      "tip_x_mm": 4.0,
+      "frequency_hz": 150000.0,
+      "sigma_S_per_m": 58000000.0,
+      "skin_depth_mm": 0.1706320094702169,
+      "skin_depth_over_tip_radius": 0.6825280378808676,
+      "cuts_mm": {
+        "beak": 1.608233109157825,
+        "tip": 3.4999965290053474
+      },
+      "fin_length_mm": 2.391763419847549,
+      "ndof": 149914,
+      "seconds": 6.348559300007764,
+      "exact": {
+        "total_loss_W_per_m": 0.003173496377012991,
+        "beak_loss_fraction": 0.2966424295259741,
+        "tip_loss_fraction": 0.23643578099420554
+      },
+      "surface_impedance": {
+        "total_loss_relative": -0.17309929446815076,
+        "beak_relative": 0.15642007190156937,
+        "tip_relative": -0.1475431742164246
+      },
+      "family": "geometry"
+    },
+    {
+      "tip_x_mm": 3.2,
+      "frequency_hz": 150000.0,
+      "sigma_S_per_m": 58000000.0,
+      "skin_depth_mm": 0.1706320094702169,
+      "skin_depth_over_tip_radius": 0.6825280378808676,
+      "cuts_mm": {
+        "beak": 1.6090647562778237,
+        "tip": 2.69999478722894
+      },
+      "fin_length_mm": 1.590930030951075,
+      "ndof": 145729,
+      "seconds": 6.5023405000101775,
+      "exact": {
+        "total_loss_W_per_m": 0.0032691065451414354,
+        "beak_loss_fraction": 0.22812048314992775,
+        "tip_loss_fraction": 0.19249478638570303
+      },
+      "surface_impedance": {
+        "total_loss_relative": -0.17253018137353549,
+        "beak_relative": 0.3196511634641419,
+        "tip_relative": -0.14060665018423757
+      },
+      "family": "geometry"
+    },
+    {
+      "tip_x_mm": 2.4,
+      "frequency_hz": 150000.0,
+      "sigma_S_per_m": 58000000.0,
+      "skin_depth_mm": 0.1706320094702169,
+      "skin_depth_over_tip_radius": 0.6825280378808676,
+      "cuts_mm": {
+        "beak": 1.6094936618631337,
+        "tip": 1.892374745750201
+      },
+      "fin_length_mm": 0.7905045052897927,
+      "ndof": 139816,
+      "seconds": 5.905686700018123,
+      "exact": {
+        "total_loss_W_per_m": 0.003319265505450212,
+        "beak_loss_fraction": 0.1302493157033066,
+        "tip_loss_fraction": 0.11904209257354624
+      },
+      "surface_impedance": {
+        "total_loss_relative": -0.16245655785519553,
+        "beak_relative": 0.9913844480760887,
+        "tip_relative": -0.09669516103704534
+      },
+      "family": "geometry"
+    }
+  ],
+  "frequency_against_conductivity": [
+    {
+      "skin_depth_mm": 0.0985144365999965,
+      "skin_depth_mismatch": 0.0,
+      "by_frequency": {
+        "frequency_hz": 450000.0,
+        "sigma_S_per_m": 58000000.0,
+        "total_loss_relative": -0.1298955026443861,
+        "beak_relative": 0.20727129899102348
+      },
+      "by_conductivity": {
+        "frequency_hz": 150000.0,
+        "sigma_S_per_m": 174000000.0,
+        "total_loss_relative": -0.12989550264442207,
+        "beak_relative": 0.2072712989910377
+      },
+      "total_loss_error_difference": 3.597122599785507e-14,
+      "beak_error_difference": 1.4210854715202004e-14
+    },
+    {
+      "skin_depth_mm": 0.1706320094702169,
+      "skin_depth_mismatch": 0.0,
+      "by_frequency": {
+        "frequency_hz": 150000.0,
+        "sigma_S_per_m": 58000000.0,
+        "total_loss_relative": -0.17309929446815076,
+        "beak_relative": 0.15642007190156937
+      },
+      "by_conductivity": {
+        "frequency_hz": 150000.0,
+        "sigma_S_per_m": 58000000.0,
+        "total_loss_relative": -0.17309929446815076,
+        "beak_relative": 0.15642007190156937
+      },
+      "total_loss_error_difference": 0.0,
+      "beak_error_difference": 0.0
+    },
+    {
+      "skin_depth_mm": 0.29554330979998955,
+      "skin_depth_mismatch": 0.0,
+      "by_frequency": {
+        "frequency_hz": 50000.0,
+        "sigma_S_per_m": 58000000.0,
+        "total_loss_relative": -0.23518951049432235,
+        "beak_relative": 0.06374320524691712
+      },
+      "by_conductivity": {
+        "frequency_hz": 150000.0,
+        "sigma_S_per_m": 19333333.333333332,
+        "total_loss_relative": -0.23518951049429304,
+        "beak_relative": 0.06374320524695509
+      },
+      "total_loss_error_difference": 2.930988785010413e-14,
+      "beak_error_difference": 3.7969627442180354e-14
+    }
+  ],
+  "how_the_error_decays": {
+    "total_loss": {
+      "exponent": 0.5289633742730014,
+      "worst_relative_residual": 0.010782142105086878,
+      "reads_as": "one half is a corner, where there is no radius to divide by; one would be a resolved smooth surface whose curvature correction was simply dropped"
+    },
+    "over_skin_depths_mm": [
+      0.05395857916573062,
+      0.0985144365999965,
+      0.0985144365999965,
+      0.1706320094702169,
+      0.1706320094702169,
+      0.29554330979998955,
+      0.29554330979998955,
+      0.5395857916573062
+    ]
+  },
+  "geometry_spread": {
+    "tip_x_mm": [
+      4.0,
+      3.2,
+      2.4
+    ],
+    "total_loss_relative": [
+      -0.17309929446815076,
+      -0.17253018137353549,
+      -0.16245655785519553
+    ],
+    "beak_relative": [
+      0.15642007190156937,
+      0.3196511634641419,
+      0.9913844480760887
+    ]
+  },
+  "not_claimed": "the geometry sweep moves the beak's reach at a fixed tip radius; it does not vary the radius itself, so it separates aspect from curvature rather than mapping curvature.  A shorter beak runs a steeper flank into the same arc, so the section analysis fits the tip circle 1.5% large at a 2.4 mm reach and the tip cut, which is two fitted radii back from the extremity, is that much wider; the arc itself is exactly TIP_RADIUS by construction at every reach.  All of it is one section in two dimensions, mid-span"
+}

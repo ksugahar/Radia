@@ -57,11 +57,19 @@ def _beak_face(plane, radial_offset: float = 0.0, tip_x: float = 4.0):
     return make_face(outline.edges())
 
 
-def make_beak_fin(length_mm: float = 60.0):
-    """Prismatic copper-like conductor with a 0.25 mm rounded beak tip."""
+def make_beak_fin(length_mm: float = 60.0, tip_x_mm: float = 4.0):
+    """Prismatic copper-like conductor with a 0.25 mm rounded beak tip.
+
+    ``tip_x_mm`` varies how far the beak reaches while the tip circle keeps
+    its radius, so a sweep over it changes the fin's length and aspect at a
+    fixed local curvature -- which is what separates a geometry effect from
+    the curvature effect the surface impedance is sensitive to.
+    """
     if length_mm <= 0:
         raise ValueError("length_mm must be positive")
-    return extrude(_beak_face(Plane.XY), amount=length_mm)
+    if not 1.9 < tip_x_mm <= 4.0:
+        raise ValueError("the beak tip must stay ahead of its 1.6 mm root")
+    return extrude(_beak_face(Plane.XY, tip_x=tip_x_mm), amount=length_mm)
 
 
 def make_curved_beak_fin(major_radius_mm: float = 30.0,
