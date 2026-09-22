@@ -1263,6 +1263,45 @@ class TestGMRESSolver:
 class TestCompactAMG:
     """Tests for CompactAMG preconditioner."""
 
+    def test_registration_survives_a_fresh_process_and_reassembly(self):
+        """The user-facing name must exist without a manual native import."""
+        script = r'''
+import radia
+import ngsolve as ng
+import numpy as np
+from netgen.csg import unit_cube
+from ngsolve.krylovspace import CGSolver
+ng.SetNumThreads(2)
+mesh = ng.Mesh(unit_cube.GenerateMesh(maxh=0.4))
+fes = ng.H1(mesh, order=1, dirichlet=".*")
+u, v = fes.TnT()
+factor = ng.Parameter(1.0)
+a = ng.BilinearForm(fes)
+a += factor * ng.grad(u) * ng.grad(v) * ng.dx
+pre = ng.Preconditioner(a, "compactamg")
+f = ng.LinearForm(fes)
+f += v * ng.dx
+f.Assemble()
+free = np.asarray(list(fes.FreeDofs()), dtype=bool)
+for scale in (1.0, 3.0):
+    factor.Set(scale)
+    a.Assemble()
+    assert type(pre.mat).__name__ == "CompactAMGPreconditionerImpl"
+    sol = ng.GridFunction(fes)
+    inv = CGSolver(a.mat, pre.mat, tol=1e-11, maxiter=200, printrates=False)
+    sol.vec.data = inv * f.vec
+    residual = f.vec.CreateVector()
+    residual.data = f.vec - a.mat * sol.vec
+    relative = np.linalg.norm(residual.FV().NumPy()[free]) / np.linalg.norm(f.vec.FV().NumPy()[free])
+    assert np.isfinite(relative) and relative < 1e-8, relative
+print("COMPACTAMG_REGISTERED_AND_REASSEMBLED")
+'''
+        result = subprocess.run(
+            [sys.executable, "-c", script], capture_output=True, text=True, timeout=90
+        )
+        assert result.returncode == 0, (result.stdout, result.stderr)
+        assert "COMPACTAMG_REGISTERED_AND_REASSEMBLED" in result.stdout
+
     @pytest.fixture
     def has_amg(self):
         from radia.sparsesolv_ngsolve import has_compact_ams
@@ -1452,6 +1491,23 @@ class TestComplexCompactAMS:
         assert Norm(gfu.vec) > 0
         print(f"ComplexCompactAMS+COCR: {inv.iterations} iterations")
         assert inv.iterations < 500
+        # Iteration count and a nonzero vector do not prove that AMS solved
+        # the complex HCurl problem. Check the actual free-row residual and
+        # an independent direct solve of the same unmodified operator.
+        import numpy as np
+        free = np.asarray(list(fes.FreeDofs()), dtype=bool)
+        residual = f.vec.CreateVector()
+        residual.data = f.vec - a.mat * gfu.vec
+        relative = np.linalg.norm(residual.FV().NumPy()[free]) / np.linalg.norm(
+            f.vec.FV().NumPy()[free])
+        assert np.isfinite(relative) and relative < 1e-5
+        direct = GridFunction(fes)
+        direct.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+        difference = gfu.vec.CreateVector()
+        difference.data = gfu.vec - direct.vec
+        relative_error = Norm(difference) / Norm(direct.vec)
+        print(f"ComplexCompactAMS true residual={relative:.3e}, direct error={relative_error:.3e}")
+        assert relative_error < 1e-4
 
     def test_complex_ams_ndof_auto(self, has_ams, eddy_current_3d):
         """ComplexCompactAMS with ndof_complex=0 auto-derives from matrix."""
