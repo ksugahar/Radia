@@ -1373,6 +1373,21 @@ def _zero_h1_boundary_dofs(mesh, grid_function, boundary, *, order):
                     values[dof] = 0.0
 
 
+class LinearSolveNotConverged(RuntimeError):
+    """The linear solve returned, but not with a solution.
+
+    NGSolve's CGSolver stops at ``maxiter`` without raising, and with
+    ``printrates=False`` without a word; a direct factorisation can return
+    garbage on a singular or ill-scaled system just as quietly.  The residual
+    of what came back is the only witness, so it is checked before the result
+    is handed on, and this carries it.
+    """
+
+    def __init__(self, message, residual):
+        super().__init__(message)
+        self.residual = residual
+
+
 def boundaries_touching_materials(mesh, names, materials):
     """Which of ``names`` has a face on an element of one of ``materials``?
 
@@ -1579,6 +1594,20 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
             "relative": relative_residual,
         }
     }
+    # A solve that ran out of iterations, or came back non-finite, used to be
+    # returned like any other; CGSolver does not raise at maxiter and says
+    # nothing with printrates=False.  The true residual is checked here, on
+    # the solution the caller will receive.  CG's own tolerance is on the
+    # preconditioned residual, so the true one is allowed a factor over it.
+    residual_limit = (100.0 * float(cg_tolerance) if solver == "cg" else 1.0e-8)
+    linear_residual["accepted_below"] = residual_limit
+    if not (math.isfinite(relative_residual) and relative_residual <= residual_limit):
+        raise LinearSolveNotConverged(
+            "matching-trace linear solve did not converge: "
+            f"solver={solver}, iterations={locals().get('iterations')}, "
+            f"relative_residual={relative_residual:.3e}, "
+            f"accepted_below={residual_limit:.3e}",
+            linear_residual)
     postprocess_seconds = time.perf_counter() - postprocess_started
     return {
         "solution": solution,
@@ -2095,14 +2124,33 @@ def _solve_mixed_omega_projected_log_material(
     if not math.isfinite(initial_mu_r) or initial_mu_r < 1.0:
         raise ValueError("mu_r_initial must be finite and >= 1")
 
+    # The admissible permeability ceiling must come from the constitutive law
+    # as it is actually evaluated -- the PCHIP interpolant -- not from the
+    # tabulated nodes alone.  Between and below the nodes the interpolated
+    # secant B/(mu0 H) exceeds every node secant: on the Picard test table the
+    # nodes top out at 2000 while the law reaches 2620, so a node-derived cap
+    # silently rewrote the material by up to 31%, and by a different amount
+    # for each mu_r_initial.  The P1 lane already widened its cap to the
+    # law's own targets; this lane now does the same, and starts from the
+    # law's dense maximum rather than from the nodes.
+    from ngsolve import Parameter
+    from radia.scalar_potential_solver import _build_bh_interpolator
+
     positive = (bh_array[:, 0] > 0.0) & (bh_array[:, 1] > 0.0)
-    secant_upper = (
-        float(np.max(bh_array[positive, 1] / (MU_0 * bh_array[positive, 0])))
-        if np.any(positive)
-        else 1.0
-    )
+    if np.any(positive):
+        law = _build_bh_interpolator(bh_array)
+        h_max = float(np.max(bh_array[positive, 0]))
+        h_min = float(np.min(bh_array[positive, 0]))
+        dense_h = np.geomspace(max(h_min * 1.0e-3, 1.0e-9), h_max, 4001)
+        law_secant = np.asarray([law(h) for h in dense_h]) / (MU_0 * dense_h)
+        node_secant = bh_array[positive, 1] / (MU_0 * bh_array[positive, 0])
+        secant_upper = float(max(np.max(law_secant), np.max(node_secant)))
+    else:
+        secant_upper = 1.0
     mu_r_upper = max(initial_mu_r, secant_upper, 1.0)
-    log_mu_upper = math.log(mu_r_upper)
+    # A Parameter, so the loop can raise the ceiling whenever the law's own
+    # target exceeds it; the coefficient function below reads it live.
+    log_mu_upper = Parameter(math.log(mu_r_upper))
 
     nonlinear_materials = tuple(nonlinear_materials)
     nonlinear_set = set(nonlinear_materials)
@@ -2196,6 +2244,8 @@ def _solve_mixed_omega_projected_log_material(
     result = None
     converged = False
     relative_change = float("inf")
+    constitutive_change = float("inf")
+    final_state_constitutive_residual = None
     integration_order = max(4, 2 * int(material_update_order) + 2)
 
     def solve_current_material_state():
@@ -2232,6 +2282,22 @@ def _solve_mixed_omega_projected_log_material(
         mu_r_target = B_target / (MU_0 * H_magnitude)
         admissible_mu_r_target = IfPos(mu_r_target - 1.0, mu_r_target, 1.0)
         target_log_mu.Set(log(admissible_mu_r_target), definedon=nonlinear_selector)
+        # The ceiling must never clip the law's own target (P1 lane does the
+        # same): raise it to whatever the projection asked for.
+        target_max = float(np.max(target_log_mu.vec.FV().NumPy()[active_dofs]))
+        if target_max > log_mu_upper.Get():
+            log_mu_upper.Set(target_max)
+        # Material fixed-point residual: how far the state that assembled
+        # this solve sits from the law's answer to it, as an RMS relative
+        # permeability change over the nonlinear region.  A B that stopped
+        # moving because the update stalled is not a converged material.
+        nonlinear_measure = float(
+            Integrate(1.0, mesh, definedon=nonlinear_selector,
+                      order=integration_order).real)
+        constitutive_change = math.sqrt(max(float(Integrate(
+            (exp(target_log_mu - log_mu) - 1.0) ** 2, mesh,
+            definedon=nonlinear_selector, order=integration_order).real), 0.0)
+            / max(nonlinear_measure, 1.0e-300))
 
         b_magnitude = sqrt(InnerProduct(result["B_cf"], result["B_cf"]) + 1.0e-30)
         b_projected.Set(b_magnitude, definedon=nonlinear_selector)
@@ -2293,8 +2359,15 @@ def _solve_mixed_omega_projected_log_material(
         entry["material_log_state_max"] = float(
             np.max(current_coefficients[active_dofs])
         )
+        entry["relative_constitutive_change"] = constitutive_change
+        entry["mu_r_upper"] = float(math.exp(log_mu_upper.Get()))
         history.append(entry)
-        if iteration > 1 and relative_change <= tolerance:
+        # Both have to be small: the field between iterations AND the
+        # material against the law.  Stalling under a small relaxation makes
+        # the first tiny while the second stays large, and that was being
+        # reported as convergence.
+        if (iteration > 1 and relative_change <= tolerance
+                and constitutive_change <= tolerance):
             converged = True
             break
 
@@ -2302,6 +2375,24 @@ def _solve_mixed_omega_projected_log_material(
         raise RuntimeError("projected mixed Omega Picard iteration did not start")
     if converged:
         result = solve_current_material_state()
+        # The returned field was assembled with the relaxed state, not the
+        # state the loop tested.  Check the material against the law on THIS
+        # solve; it is the one the caller receives, so it is the one that has
+        # to be self-consistent.
+        H_final = sqrt(InnerProduct(result["H_cf"], result["H_cf"]) + 1.0e-24)
+        mu_final_target = _build_bh_coefficient_function(H_final, bh_array) / (
+            MU_0 * H_final)
+        target_log_mu.Set(log(IfPos(mu_final_target - 1.0, mu_final_target, 1.0)),
+                          definedon=nonlinear_selector)
+        nonlinear_measure = float(
+            Integrate(1.0, mesh, definedon=nonlinear_selector,
+                      order=integration_order).real)
+        final_state_constitutive_residual = math.sqrt(max(float(Integrate(
+            (exp(target_log_mu - log_mu) - 1.0) ** 2, mesh,
+            definedon=nonlinear_selector, order=integration_order).real), 0.0)
+            / max(nonlinear_measure, 1.0e-300))
+        if not (final_state_constitutive_residual <= tolerance):
+            converged = False
         if observation is not None:
             observed_field = np.asarray(
                 [
@@ -2329,7 +2420,12 @@ def _solve_mixed_omega_projected_log_material(
         "response_order": int(order),
         "material_update_order": int(material_update_order),
         "material_sampling": "L2_log_secant_projection",
-        "physical_permeability_bounds": [1.0, float(mu_r_upper)],
+        # The upper bound as it stands after the loop raised it to the law's
+        # own targets; mu_r_upper alone is only where it started.
+        "physical_permeability_bounds": [1.0, float(math.exp(log_mu_upper.Get()))],
+        "physical_permeability_bounds_initial": [1.0, float(mu_r_upper)],
+        "relative_constitutive_change": constitutive_change,
+        "final_state_constitutive_residual": final_state_constitutive_residual,
         "history": history,
         "contraction_rate_estimate": estimate_contraction_rate(
             [
@@ -2353,6 +2449,8 @@ def _solve_mixed_omega_projected_log_material(
         raise MixedOmegaPicardNotConverged(
             "projected mixed total/reduced Omega Picard iteration did not converge: "
             f"iterations={iteration}, relative_B_change={relative_change:.3e}, "
+            f"relative_constitutive_change={constitutive_change:.3e}, "
+            f"final_state_constitutive_residual={final_state_constitutive_residual}, "
             f"tolerance={tolerance:.3e}",
             {
                 "material_log_state_dofs": state.tolist(),
