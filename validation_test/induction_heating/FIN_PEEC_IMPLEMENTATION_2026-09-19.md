@@ -648,6 +648,69 @@ Scope: a ring is not a straight fin, end effects are absent by construction,
 and all of this is one section at one frequency.  These are mid-span
 quantities.
 
+### The error is a corner, and it decays as the square root (2026-09-22)
+
+The geometric explanation offered above -- that a Leontovich impedance is an
+expansion in `delta / R` and this section has features where `R` is small or
+zero -- had only ever seen one frequency and one conductivity.  That is a
+story, not a measurement.  Gate 3's remaining sweeps test it.
+
+**Conductivity against frequency.**  The skin depth was moved both ways.
+They enter the physics separately: `omega` only through the diffusion term,
+`sigma` through the diffusion term *and* the impedance itself.  If the
+explanation holds, the error must depend on the resulting `delta` and not on
+which knob produced it.
+
+| skin depth | by frequency | by conductivity | difference |
+|---|---|---|---|
+| 0.0985 mm | -12.9896% | -12.9896% | `3.6e-14` |
+| 0.1706 mm | -17.3099% | -17.3099% | `0` |
+| 0.2955 mm | -23.5190% | -23.5190% | `2.9e-14` |
+
+They agree to machine precision.  The error is a function of `delta` alone.
+
+**How it decays.**  Over a tenfold range of `delta`, the total-loss error
+follows a power law with exponent **0.529**, worst residual `1.1%`:
+
+| `delta` | `delta / r_tip` | total loss vs exact |
+|---|---|---|
+| 0.540 mm | 2.16 | -31.67% |
+| 0.296 mm | 1.18 | -23.52% |
+| 0.171 mm | 0.68 | -17.31% |
+| 0.0985 mm | 0.39 | -12.99% |
+| 0.0540 mm | 0.22 | -9.48% |
+
+**That exponent is the diagnosis.**  A smooth surface whose curvature
+correction has merely been dropped gives a first correction of order
+`delta / R`, so an exponent of 1.  A corner has no radius to divide by; Dauge,
+Dular, Krahenbuhl, Peron, Perrussel and Poignard (2014) place its layer at the
+scale of `delta` and its contribution at half-integer order, so a corner shows
+an exponent of `1/2`.  Measured: `0.529`.  **The error this section carries is
+owned by its square corners, not by its rounded tip** -- which is why it is
+still `-9.5%` at a fifth of the tip radius and would not be cured by any
+frequency an induction heater runs at.
+
+**Geometry.**  `tip_x` moves the beak's reach while the tip circle keeps its
+radius, so it varies aspect without varying curvature.  At 150 kHz:
+
+| reach | total loss | beak share | tip share |
+|---|---|---|---|
+| 4.0 mm | -17.31% | +15.64% | -14.75% |
+| 3.2 mm | -17.25% | +31.97% | -14.06% |
+| 2.4 mm | -16.25% | +99.14% | -9.67% |
+
+The total-loss error barely moves -- `1.1` points across a `40%` change in
+reach -- because the corners it belongs to did not move.  The beak *share*
+error explodes, because the same absolute error sits in a region that is
+shrinking.  Both are what the corner diagnosis predicts, and neither is what
+a fin-aspect effect would look like.
+
+**Gate 3 is closed, and it did not pass.**  The surface-impedance description
+of this section is wrong by `-17.3%` on dissipation at the delivery frequency,
+the error is a corner effect decaying as `sqrt(delta)`, and it is repaired to
+`+0.6%` by patching both ends (previous section).  Data:
+`results/beak_sibc_validity_map_20260922.json`.
+
 ## Required next gates
 
 1. A synthetic straight beak-fin STEP and reproducible generator now live in
@@ -680,10 +743,18 @@ quantities.
    `3.5e-8`, the surface-impedance description **loses `17.3%` of the total
    dissipation** and is `+15.6%` on the beak share and `-14.8%` on the tip
    share, for the geometric reason that `delta / R` at the tip is `0.68` and
-   infinite at the beak root and far-end corners. Mesh, frequency, radius,
-   open-boundary and order sweeps are done; conductivity and geometry sweeps
-   are not, and the terminal quantities on the straight fin at 150 kHz remain
-   out of reach in three dimensions.
+   infinite at the beak root and far-end corners. **Gate CLOSED and NOT
+   passed (2026-09-22)**: the conductivity and geometry sweeps are now done
+   too. Frequency and conductivity give identical errors at equal skin depth
+   to machine precision, so the error depends on `delta` alone; it decays as
+   `delta^0.529` over a tenfold range, which is the corner exponent and not
+   the `delta^1` of a dropped curvature correction; and a `40%` change in the
+   beak's reach moves the total-loss error by `1.1` points. The failure
+   belongs to the square corners, it is `-9.5%` even at a fifth of the tip
+   radius, and no operating frequency cures it. It is repaired to `+0.6%` by
+   patching both ends. What remains out of scope is the terminal quantities on
+   the straight fin at 150 kHz, which are still out of reach in three
+   dimensions.
 4. **Give the axisymmetric eddy route a Kelvin or DtN exterior.** Its open
    boundary is `psi = 0` on a rectangle, which is a flux barrier and therefore
    a coaxial return; the box size was never swept, and sweeping it showed the
