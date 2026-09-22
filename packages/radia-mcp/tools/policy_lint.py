@@ -367,6 +367,8 @@ _SCAN_SUFFIXES = tuple(
 )
 # Subtrees of the package to scan.
 _SCAN_DIRS = ("src", "examples", "tests")
+# The package's own prose, which ships with the distribution.
+_SCAN_ROOT_FILES = ("CHANGELOG.md", "README.md", "CONTRIBUTING.md")
 # Files exempt from the provenance scan: this guard's OWN test, which holds
 # synthetic boundary-pattern fixtures (e.g. "vs COMSOL .mph") on purpose to
 # exercise the STRUCTURE guard -- they are not real attributions.
@@ -434,7 +436,13 @@ def _git_tracked_files(root: Path) -> list[Path] | None:
 
 
 def scan_text_tree(root: Path, *, tracked_only: bool = False) -> list[tuple[str, int, str]]:
-    """Scan src/ + examples/ + tests/ files matching _SCAN_GLOBS for findings."""
+    """Scan the scanned subtrees, and the package's own top-level prose.
+
+    The root files are included because a CHANGELOG ships with the
+    distribution and is the natural place to write down where a
+    feature came from -- which is the leak these rules exist to
+    stop, and was not being looked at.
+    """
     findings: list[tuple[str, int, str]] = []
     seen: set[Path] = set()
     try:
@@ -452,7 +460,8 @@ def scan_text_tree(root: Path, *, tracked_only: bool = False) -> list[tuple[str,
         for f in sorted(tracked):
             if "__pycache__" in f.parts or f.suffix not in _SCAN_SUFFIXES:
                 continue
-            if not any(_is_relative_to(f, base) for base in scan_bases):
+            root_prose = f.parent == scan_root and f.name in _SCAN_ROOT_FILES
+            if not root_prose and not any(_is_relative_to(f, base) for base in scan_bases):
                 continue
             if f in seen:
                 continue
@@ -470,6 +479,11 @@ def scan_text_tree(root: Path, *, tracked_only: bool = False) -> list[tuple[str,
                     continue
                 seen.add(f)
                 findings.extend(scan_file(f, root))
+    for name in _SCAN_ROOT_FILES:
+        f = root / name
+        if f.is_file() and f not in seen:
+            seen.add(f)
+            findings.extend(scan_file(f, root))
     return findings
 
 
@@ -621,7 +635,7 @@ def main(argv: list[str] | None = None) -> int:
     # report provenance findings (file:line: reason)
     suffix = " (git-tracked only)" if args.tracked_only else ""
     print(f"\nPROVENANCE (commercial-tool attribution / internal paths) in "
-          f"src+examples+tests{suffix}:")
+          f"src+examples+tests+root prose{suffix}:")
     if findings:
         for label, lineno, reason in findings:
             print(f"  {label}:{lineno}: {reason}")

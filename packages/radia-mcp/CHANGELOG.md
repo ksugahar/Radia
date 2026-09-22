@@ -1697,7 +1697,7 @@ forward.
 
 Released 2026-05-26.
 
-User directive: "S:\\mcp-server の paper writing は、radia に完全移植
+User directive: "the lab document server の paper writing は、radia に完全移植
 しよう。paper-writing では、ちゃんと画像でレイアウトを確認するスキル
 もつけよう。 どうやって確認するかは、web 検索でノウハウを吸収しよう。
 TeX の figure の配置スキルを paper writing に反映してほしい"
@@ -1707,7 +1707,7 @@ TeX の figure の配置スキルを paper writing に反映してほしい"
 ### Part 1: complete migration
 
 - **NEW subpackage** `radia_mcp.paper_writing` (~5000 LOC, 67 tools)
-  promoted from `s:/mcp-server/src/mcp_server_document/paper_writing/`:
+  promoted from `the lab document server's paper-writing tools`:
     * tools.py (33 paper_writing_* tools + 20 Plan-B helpers from
       plans/T1-T20)  -- byte-identical migration
     * cross_lint.py + _ja_lint.py (8 JA-lint wrappers; original
@@ -1792,7 +1792,7 @@ User directive: "TeX の figure の配置スキルを paper writing に
 - meta-health: 9/9 (bidirectional related-edge invariant
   maintained: 4 reverse edges added to literature-index, graph,
   chart2d, md2html, all pointing back to paper-writing)
-- LAB editable install at `S:\\Radia\\01_GitHub\\packages\\radia-mcp`
+- LAB editable install at `the LAB editable install`
   refreshed to 0.88.0
 - pyproject.toml + __init__.py bumped to 0.88.0
 
@@ -1808,7 +1808,7 @@ public version is the canonical one.
 
 Released 2026-05-26.
 
-User directive: "W:\\03_文献・論文\\00_電磁界解析\\11_BEM_モーメント法\\
+User directive: "the lab BEM literature corpus
 10_sommerfeld_layered ここを学ばせてください" — absorb 3 Sommerfeld
 integral PDFs into the BEM subpackage.
 
@@ -1888,20 +1888,17 @@ mcp-server-bem).
 
 Released 2026-05-26.
 
-User directive: "S:\\FEMM\\2020_01_06_磁束線 ここもradia-mcpのgraphに
-反映" — reflect the 2020-01-06 lab MATLAB/FEMM workflow for tracing
-magnetic flux lines and visualising the field along them into the
-graph subpackage.
+Brings magnetic flux-line tracing, and the plots that read a field along a
+traced line, into the graph subpackage.
 
-Source absorbed:
+What it covers:
 
-- `S:\\FEMM\\2020_01_06_磁束線\\main.m`         (MATLAB driver)
-- `S:\\FEMM\\2020_01_06_磁束線\\plot_trajectory.m`
-- `S:\\FEMM\\2020_01_06_磁束線\\velocity.m`     (rhs for ode45)
-- `S:\\FEMM\\2020_01_06_磁束線\\磁束線の方程式.docx` (dx/ds = B equations)
-- `S:\\FEMM\\2020_01_06_磁束線\\陽的_陰的シンプレクティック.jpg`
-                                                 (symplectic Euler note)
-- 4 reference PNGs: flux_line, B_in_elements, s-B, s-Az
+- the flux-line equation `dx/ds = B / |B|`, integrated as an initial-value
+  problem from a seed point;
+- explicit and symplectic-Euler integration, and why the symplectic form is
+  preferred for a closed line;
+- the four plots the traced line supports: the line itself, `B` per element,
+  and `B` and `A_z` against arc length.
 
 What shipped:
 
@@ -2051,12 +2048,12 @@ emit_paper_figure(fig, 'pair', 'ieee_single_column')
 Released 2026-05-26.
 
 User directive: "COMSOLのmcp-serverの知見は、radia-mcpにはNGSolveにも
-反映させた上で継続学習。S:\\NGSolve\\03_TolologyOptimization にあるPDF
+反映させた上で継続学習。the lab topology-optimization corpus にあるPDF
 も追加学習" — i.e. the topology-optimization knowledge that lives in
 COMSOL MCP (`docs/TOPOLOGY_OPTIMIZATION.md` + RAG prompt) must also
 be reflected in the radia-mcp NGSolve subpackage as the
 implementation-flavoured mirror, plus the 3 Gangl PDFs from
-`S:\NGSolve\03_TolologyOptimization` should be absorbed.
+`the lab topology-optimization corpus` should be absorbed.
 
 What shipped:
 
@@ -2086,7 +2083,7 @@ What shipped:
       NS; ch.8 conjugate HT; ch.9 LBM; App A objective cookbook;
       App C Helmholtz filter; App D KKT dual evolution.
     * **Gangl-Sturm 3-paper bundle** (TU Graz + TU Wien, 2015-2019,
-      `S:\NGSolve\03_TolologyOptimization` 3 PDFs):
+      `the lab topology-optimization corpus` 3 PDFs):
         - Part I = sensitivity analysis for nonlinear curl-curl
         - Part II = NGSolve implementation pattern
         - IPM motor case study (27% cogging-torque-surrogate
@@ -2126,7 +2123,7 @@ What shipped:
   renamed to `test_meta_related_to_chart2d_includes_graph` to use a
   stable cross-link pair (both chart2d and graph shipped 2026-05 and
   are not at risk of removal).
-- Companion cleanup at `s:/mcp-server/`:
+- Companion cleanup at `the lab document server`:
     - `mcp_server_document/graph/` directory **deleted** (959 LOC
       backward-compat shim).  `mcp-server-graph` is canonical at
       `radia_mcp.graph` since v0.77.0; the shim was no longer needed.
@@ -2143,9 +2140,9 @@ Suite: **174/174 pytest pass**.
 
 Released 2026-05-26.
 
-User decision (after s:\mcp-server enumeration):
+User decision (after the lab document server enumeration):
   - DISCARD: `mcp_server_document/diagram/` (raster → Excalidraw
-             pipeline) + sibling `s:/mcp-server/excalidraw/` Node.js
+             pipeline) + sibling `the lab document server's excalidraw tree` Node.js
              tree.  Not LAB-aligned; bulky deps; better third-party
              options exist.
   - COMPLETE MIGRATION: `mathematica/` → `radia_mcp.mathematica`
@@ -2157,7 +2154,7 @@ User decision (after s:\mcp-server enumeration):
 What shipped:
 
 - **NEW subpackage `radia_mcp.md2html`** (393 LOC, verbatim from
-  `s:/mcp-server/src/mcp_server_document/md2html/`):
+  `the lab document server's md2html tools`):
     converter.py (302 LOC) + tools.py (69 LOC) carried over
     byte-identical; only the registration layer (server.py, 95 LOC) is
     new and follows the standard radia_mcp.<topic>.server pattern
@@ -2199,7 +2196,7 @@ Catalog evolution:
   v0.81.0   39 (+ chart2d)
   v0.82.0  *40* (+ md2html)  ← this release
 
-Survey verdict (4 candidates from s:\mcp-server, 2 chosen):
+Survey verdict (4 candidates from the lab document server, 2 chosen):
   ✅ MOVED: md2html (393 LOC, generic utility, low dep)
   ✅ STALE COPY DELETED: mathematica (already in radia-mcp)
   ⏸  DEFERRED: pdf (1055 LOC PDF toolkit) -- still recommended for
@@ -2595,7 +2592,7 @@ follows.
 What shipped:
 
 1. **NEW: `radia_mcp.graph` subpackage** — promoted from
-   `s:/mcp-server/src/mcp_server_document/graph/`.  Sugahara Lab
+   `the lab document server's graph tools`.  Sugahara Lab
    publication-figure style guide: IEEE / IEEJ font/size profiles,
    MATLAB + Matplotlib snippets, lab style rules (units in parentheses,
    no in-figure title, Times New Roman serif).  Two MCP tools
@@ -2677,12 +2674,12 @@ What shipped:
 Suite: 9/9 meta_health pytest pass, optuna --selftest PASSED
 (27 topics x 4 tools, 25k+ chars on the new tool).
 
-## 0.74.0 — Full CLN corpus absorption (W:\30_CauerLadderNetwork)
+## 0.74.0 — Full CLN corpus absorption (the lab CLN corpus)
 
 Released 2026-05-25.
 
 Complete absorption of the Sugahara lab's **Cauer Ladder Network**
-practice corpus at `W:\30_CauerLadderNetwork\` -- ~500 .m / .mph /
+practice corpus at `the lab CLN corpus\` -- ~500 .m / .mph /
 .docx / .pdf files across 16 topic folders + 6 root references -- into
 the `radia_mcp.mor` subpackage. CLN is the lab's signature MOR
 method; Sugahara is co-author on the canonical Kameari-Ebrahimi-
@@ -2719,7 +2716,7 @@ Released 2026-05-25.
 Cross-pollination from the upstream wjc9011/COMSOL_Multiphysics_MCP fork
 this lab maintains (`ksugahar/COMSOL_Multiphysics_MCP`). The fork added
 Japanese / Chinese support to its ChromaDB RAG layer for the COMSOL PDF
-manual corpus; radia-mcp's lab corpus at W:/03_文献・論文/00_電磁界解析
+manual corpus; radia-mcp's lab corpus at the lab electromagnetics literature
 is **more multilingual** (roughly 50/50 Japanese textbooks + English IEEE
 papers), so the same infrastructure pays off bigger here.
 
@@ -2776,7 +2773,7 @@ Released 2026-05-24.
   loading), `async_runner` (long-running command wrapper),
   `chroma_retriever` (optional ChromaDB+sentence-transformers RAG).
 
-**New subpackages from W:/04_機械学習と最適化 + 99_アプリケーション**:
+**New subpackages from the lab ML and optimization corpus + 99_アプリケーション**:
 - 7 ML/optimization: `bayesian_opt`, `evolutionary`, `gnn`,
   `data_assimilation`, `optuna` (Sano-Akiba-Imamura textbook), `pinn`,
   `topology_optimization`.
@@ -2957,7 +2954,7 @@ asking the `peec_inductance(topic=...)` MCP tool got stale guidance.
 ## 0.40.0 — 3D CLN (Tanimoto-Kameari) knowledge module
 
 New `radia_ngsolve.knowledge.cln_3d` module captures Tanimoto's 3D
-Cauer Ladder Network (CLN) methods from W:/00_CAE/NGSolve/谷本/
+Cauer Ladder Network (CLN) methods from the lab CLN source corpus
 master's thesis + production code (~25 notebooks). Covers:
 
   - **A-T**, **T-Ω**, **A-Φ** formulations (mathematical foundation,
@@ -3063,7 +3060,7 @@ which panel mode is asking.
 - `cubit_session_status` reports `mode = owned | attached`.
 - New MCP knowledge placement policy in `CLAUDE.md`: stable /
   general → public `radia-mcp` (PyPI), research-stage / lab-only →
-  `S:\mcp-server\mcp-server-ih`.
+  `the lab IH server`.
 
 ## 0.23.x — YouTube + training pack + GitHub `.jou` search
 
@@ -3204,8 +3201,8 @@ which panel mode is asking.
 
 - FAMILY mapping: `cubit` = `[cubit, cubit_local]`; `build123d`
   = `[build123d, bd_warehouse]`.
-- `cubit_local` indexer walks `S:\CoreformCubit` (lab archive of
-  ~145 .jou) + `S:\Radia\01_GitHub\examples` (~400 files); 753
+- `cubit_local` indexer walks `the lab Cubit archive` (lab archive of
+  ~145 .jou) + `the repository's retired examples tier` (~400 files); 753
   files indexed.
 - `bd_warehouse` (15 modules: gear, bearing, fastener, flange,
   pipe, …).
