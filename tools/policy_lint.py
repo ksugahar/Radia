@@ -52,10 +52,33 @@ def _sh(cmd):
     return p.returncode, (p.stdout or "")
 
 
+class LintExecutionError(RuntimeError):
+    """The lint could not run a check, which is not the same as passing it."""
+
+
 def _git_grep(pattern, pathspecs, extra=()):
+    # git grep exits 0 with matches and 1 without; anything else means the
+    # search itself failed (not a repository, bad pathspec, git missing).
+    # That used to return None, which every caller read as "no violation" --
+    # a broken git made all policies pass.  A check that could not run has
+    # to fail the run, so this raises and main() turns it into exit 1.
     rc, out = _sh(["git", "grep", "-n", *extra, pattern, "--", *pathspecs])
     if rc not in (0, 1):
-        return None
+        raise LintExecutionError(
+            f"git grep exited {rc} for pattern {pattern!r}; the policy "
+            f"could not be checked and is therefore not passed")
+    return [ln for ln in out.splitlines() if ln.strip()]
+
+
+def _git_ls_files(*patterns):
+    # Same contract as _git_grep: a listing that could not be produced is
+    # not an empty listing.  Three policies read "no tracked files" as
+    # "no violation", so a failing git used to pass all three.
+    rc, out = _sh(["git", "ls-files", *patterns])
+    if rc != 0:
+        raise LintExecutionError(
+            f"git ls-files exited {rc} for {patterns!r}; the policy could "
+            f"not be checked and is therefore not passed")
     return [ln for ln in out.splitlines() if ln.strip()]
 
 
@@ -69,9 +92,7 @@ def check_all():
                     hits[0] if hits else "ok"))
 
     # 2: no tracked binaries
-    rc, out = _sh(["git", "ls-files", "*.pyd", "*.dll", "*.so",
-                   "*.lib", "*.exe", "*.obj"])
-    bins = [b for b in out.splitlines() if b.strip()]
+    bins = _git_ls_files("*.pyd", "*.dll", "*.so", "*.lib", "*.exe", "*.obj")
     results.append(("Policy 2: no tracked binaries", not bins,
                     str(bins[:3]) if bins else "ok"))
 
@@ -93,8 +114,8 @@ def check_all():
                     bad[0] if bad else "ok"))
 
     # 5: no TRACKED generated files at repo root
-    rc, out = _sh(["git", "ls-files", "*.msh", "*.vtu", "*.vtk", "*.vol", "*.vts"])
-    root_gen = [f for f in out.splitlines() if f.strip() and "/" not in f.strip()]
+    root_gen = [f for f in _git_ls_files("*.msh", "*.vtu", "*.vtk", "*.vol",
+                                         "*.vts") if "/" not in f]
     results.append(("Policy 5: no tracked generated files at root", not root_gen,
                     str(root_gen) if root_gen else "ok"))
 
@@ -109,8 +130,7 @@ def check_all():
 
     # 7: the examples tier is retired. Public demonstrations belong in docs,
     # numerical evidence in validation_test, and regressions in tests.
-    rc, out = _sh(["git", "ls-files", "examples"])
-    examples = [path for path in out.splitlines() if path.strip()]
+    examples = _git_ls_files("examples")
     results.append(("Policy 7: no tracked retired examples tier", not examples,
                     str(examples[:3]) if examples else "ok"))
 
@@ -265,7 +285,14 @@ def check_all():
 
 def main(argv=None):
     quiet = "--quiet" in (argv if argv is not None else sys.argv[1:])
-    results = check_all()
+    try:
+        results = check_all()
+    except (LintExecutionError, OSError) as exc:
+        # A lint that could not run has not passed.  Say so and fail the
+        # run; silently reporting PASS here is how a broken git once made
+        # every policy green.
+        print(f"FAIL  policy lint could not run: {exc}", file=sys.stderr)
+        return 1
     nfail = 0
     for name, ok, detail in results:
         if ok:
