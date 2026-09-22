@@ -1098,7 +1098,12 @@ convenience, but it is not required for multivariate TPE.
 For electromagnetic CAE, TPE owns mixed, conditional, and discrete search
 spaces; GP targets fixed numeric small-budget studies; CMA-ES owns larger
 continuous correlated single-objective geometry and control searches; and
-NSGA-II/III own population-scale multi- and many-objective studies. The
+multiobjective TPE handles larger two- and three-objective studies. NSGA-III
+remains the many-objective population option. NSGA-II is available only by
+explicit selection for existing workflows and comparisons; it is no longer
+selected automatically or used by the Pareto teaching exercise. This follows
+the Optuna 5 move to TPE as the multiobjective default, not a deprecation of
+the upstream NSGAIISampler API. The
 Simulink `auto` policy records which rule selected the sampler. Random and QMC
 remain quality baselines, while finite brute-force search is useful for small
 conditional design trees.

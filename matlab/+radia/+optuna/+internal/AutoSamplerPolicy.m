@@ -1,5 +1,5 @@
 classdef AutoSamplerPolicy
-    %AUTOSAMPLERPOLICY Budget/search-space routing aligned with OptunaHub.
+    %AUTOSAMPLERPOLICY Budget/search-space routing with Optuna 5 multiobjective TPE.
 
     methods (Static)
         function [name,reason]=choose(spec,nObjectives,nTrials)
@@ -15,8 +15,8 @@ classdef AutoSamplerPolicy
                     name="nsgaiii";
                     reason="fixed_numeric_many_objectives_population_budget";
                 elseif spec.fixed_numeric && nTrials>250
-                    name="nsgaii";
-                    reason="fixed_numeric_population_budget";
+                    name="tpe";
+                    reason="multiobjective_tpe_default";
                 else
                     name="tpe";
                     reason="multiobjective_unknown_space_safe_default";
