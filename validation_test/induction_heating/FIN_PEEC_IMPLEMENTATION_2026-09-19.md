@@ -430,6 +430,62 @@ reached at all, so its frame never applies.  The orientation sensitivity is
 retained in the artifact as a secondary number -- `7.35%` -- because it
 becomes the next question if the averaged path is ever adopted.
 
+### Gate 3 opens: the two routes agree with each other and both miss (2026-09-22)
+
+BEM-A and the surface PEEC agree on the delivery metrics to `0.58%`.  They also
+both impose a Leontovich surface impedance, so that agreement tests their
+discretisations and says nothing about the assumption they share.  An
+interior-resolved A-V solve now sits beside them.
+
+The reference is `radia.eddy_aphi`: a terminal-driven, time-harmonic A-V
+formulation in which the conductor's interior is solved and the skin profile is
+an output.  It reproduces the exact Bessel round-wire resistance to `2.3e-5`
+over `a / delta` from `0.25` to `4`
+(`results/eddy_aphi_round_wire_20260922.json`).
+
+On the 48 mm fin at 5 kHz, where the skin depth is `0.9346 mm`, the reference is
+mesh-converged -- `maxh` `0.9`, `0.7`, `0.5 mm` give a beak fraction spread of
+`1.4e-3` and R within `0.11%`:
+
+| route | R (uOhm) | beak loss | vs A-V | tip loss | vs A-V |
+|---|---|---|---|---|---|
+| A-V, interior resolved | **64.729** | 0.30157 | -- | 0.08724 | -- |
+| BEM-A, SIBC | 41.582 | 0.31376 | +4.04% | 0.11638 | **+33.40%** |
+| PEEC, SIBC | 40.582 | 0.31504 | +4.47% | 0.11846 | **+35.79%** |
+
+The two surface-impedance routes differ from each other by `0.41%` on the beak
+loss and land on the same side of the reference by `4%`, while the tip share --
+the quantity most exposed to the assumption, since the nose radius is
+`0.125 mm` against a `0.93 mm` skin -- is out by a third.  R is low by `36%`.
+This is exactly the failure gate 3 exists to catch: two routes that share an
+assumption agreeing with each other and being wrong together.  Data:
+`results/beak_fin_three_route_20260922.json`.
+
+Two things this does NOT say, both recorded in the artifact.  The fractions are
+measured differently by construction -- a volume integral of `|J|^2 / 2 sigma`
+against `|K|^2 Rs / 2` weighted by perimeter -- and those coincide exactly in
+the thin-skin limit.  The divergence is that limit failing rather than a
+mismatch to correct away, but it has to be stated.  And the delivery gate was
+accepted at 150 kHz, where `delta / thickness` is `0.043` against `0.23` here:
+this locates a failure at one end and does not locate the boundary.
+
+Reaching 150 kHz is blocked, not merely expensive.  Resolving a `0.17 mm` skin
+over a 48 mm fin isotropically is out of reach -- `maxh 0.5 mm` already gives
+170561 elements, 975622 DOFs and ten minutes per frequency -- and the
+anisotropic boundary layer that would do it cheaply cannot be built in Netgen
+6.2.2606: `Mesh.BoundaryLayer` refuses with "Call syntax has changed", and the
+replacement route raises `Need to register class
+netgen::BoundaryLayerParameters for Archive using std::any`.  A different
+route to the same end -- meshing the conductor separately in layers, or halving
+the model on its symmetry plane -- is the next move, not a bigger machine.
+
+One false lead worth not repeating: the first 48 mm sweep gave a non-monotonic
+beak fraction (0.302, 0.331, 0.302 at 5, 15, 50 kHz), which looked like a
+measurement artefact because the region masks cut through elements.  Varying
+the integration order from 2 to 14 settled the fraction to `1e-4` by order 6,
+so the measurement was fine and the 50 kHz row was simply under-resolved --
+its skin is thinner than one element.
+
 ## Required next gates
 
 1. A synthetic straight beak-fin STEP and reproducible generator now live in
@@ -454,6 +510,12 @@ becomes the next question if the averaged path is ever adopted.
 3. Compare local current, tip/root loss, terminal impedance, and field at the
    workpiece against an independent 3-D A-phi/HCurl reference over frequency,
    conductivity, geometry, and mesh sweeps. KCL alone is not an accuracy gate.
+   **Reference built and validated, first point measured, gate NOT passed
+   (2026-09-22)**: at 5 kHz the surface-impedance routes are `4%` out on the
+   beak share, a third out on the tip share and `36%` low on R, and they agree
+   with each other throughout. The mesh sweep is done at that frequency; the
+   frequency, conductivity and geometry sweeps are not, and 150 kHz is blocked
+   on the Netgen boundary-layer defect recorded above.
 4. Extend the workpiece weak and strong coupling APIs to accept per-branch
    currents and per-branch induced EMFs. The present K-by-K bundle reduction
    and one-current-per-filament field projection cannot represent transverse
