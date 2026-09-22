@@ -1,0 +1,27 @@
+{
+  "schema": "radia.compact-registration-validation.v1",
+  "host": "mdx1",
+  "date": "2026-09-22",
+  "ngsolve_version": "6.2.2606",
+  "scope": "Python registration change tested against existing native binaries; no native rebuild",
+  "source_base": "d5b4f2d1e33acad5104040154cdd3dcba7864060",
+  "native_sha256": "0aa31cba7279e604742080906fb7aaf88e5193516d59be20a9a9b95d8bfee539",
+  "native_tests_passed": 14,
+  "ci_contract_tests_passed": 40,
+  "fresh_process_registration": "passed",
+  "reassembly": "passed",
+  "complex_hcurl": {
+    "order": 1,
+    "nograds": true,
+    "outer_solver": "COCR",
+    "iterations": 19,
+    "true_relative_residual": 1.005e-14,
+    "relative_error_against_direct": 1.259e-14
+  },
+  "historical_loss_cause": "not established",
+  "current_findings": [
+    "Native CompactAMG, real AMS and complex AMS factories are present.",
+    "Prior source exported matrix factories but did not register an NGSolve string preconditioner.",
+    "External hypre registration is independent of these factories."
+  ]
+}
