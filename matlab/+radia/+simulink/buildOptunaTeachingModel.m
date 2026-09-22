@@ -177,7 +177,7 @@ switch exercise
         parameterExpression = ...
             "radia.optuna.OptimizationParameter('x'," + ...
             "Value=0.5,Minimum=0,Maximum=1)";
-        sampler = "nsgaii";
+        sampler = "tpe";
         pruner = "none";
         nTrials = 12;
         initialValue = 0.5;
