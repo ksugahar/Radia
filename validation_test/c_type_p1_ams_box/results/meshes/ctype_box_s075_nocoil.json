@@ -1,0 +1,38 @@
+{
+  "schema": "radia.validation.c-type-box-mesh.v1",
+  "geometry": "ESRF Example 5 C-type dipole; iron + finite air box (coil volume left as air)",
+  "coil_meshed": false,
+  "vol": "C:\\temp\\ctype_box\\meshes\\ctype_box_s075_nocoil.vol",
+  "vol_sha256": "1a4212d9a62042f2a91c45a7643ca06f5d9f876f717e19d1a6132420b2ac0133",
+  "box_half_m": 0.5,
+  "scale": 0.75,
+  "mesh_sizes_m": {
+    "gap": 0.001875,
+    "iron": 0.006,
+    "coil": 0.0075,
+    "air": 0.09
+  },
+  "grading": 0.3,
+  "curve_order": 1,
+  "elements": 147822,
+  "vertices": 25497,
+  "elements_by_material": {
+    "iron": 35590,
+    "air": 112232
+  },
+  "materials": [
+    "air",
+    "iron"
+  ],
+  "boundaries": [
+    "default",
+    "iron_air_interface",
+    "outer"
+  ],
+  "bbboundaries": [
+    "GND",
+    "default"
+  ],
+  "build_seconds": 11.40357630001381,
+  "netgen": "6.2.2606"
+}
