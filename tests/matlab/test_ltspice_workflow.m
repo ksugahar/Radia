@@ -350,7 +350,7 @@ function testSpiceEditorRejectsAmbiguousAndUnterminatedEdits(testCase)
 duplicate=tempPath(testCase,"duplicate_editor.cir");writeTextFixture(duplicate,"Duplicate editor"+newline+"R1 a b 1k"+newline+"r1 b 0 2k"+newline+".param gain=1"+newline+".param GAIN=2"+newline+".end");
 editor=radia.ltspice.SpiceEditor(duplicate);verifyError(testCase,@()editor.getComponentValue("R1"),"radia:ltspice:AmbiguousComponent");verifyError(testCase,@()editor.setParameter("gain",3),"radia:ltspice:AmbiguousParameter");
 unterminated=tempPath(testCase,"unterminated_editor.cir");writeTextFixture(unterminated,"Unterminated"+newline+"R1 a 0 1k");editor=radia.ltspice.SpiceEditor(unterminated);
-verifyError(testCase,@()editor.addInstruction(".tran 1m"),"radia:ltspice:StateNetlistEnd");verifyError(testCase,@()editor.addComponent("C1",["a";"0"],"1u"),"radia:ltspice:StateNetlistEnd");
+verifyError(testCase,@()editor.addInstruction(".tran 1m"),"radia:ltspice:MissingEnd");verifyError(testCase,@()editor.addComponent("C1",["a";"0"],"1u"),"radia:ltspice:MissingEnd");
 end
 
 function testSpiceEditorUnderstandsSubcircuitParamsSyntax(testCase)
