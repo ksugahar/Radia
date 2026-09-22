@@ -184,7 +184,7 @@ def main():
     # Acceptance: 2% over 8 obs points covering near-field (1 m) to
     # mid-field (5 m).  Discretization-limited; finer mesh -> tighter
     # band, but 2% is already enough for any engineering near-field-
-    # source use case (CST etc. document similar accuracy levels).
+    # source use case.
     accept = max_err <= 0.02
     status = "PASS" if accept else "FAIL"
     print(f"Max relative error: {max_err*100:.3f}% (threshold 2.0%)  --  {status}")

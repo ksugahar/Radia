@@ -4,7 +4,7 @@ Stage-2 CLI script (per Panel Design Workflow Policy) implementing
 the field-circuit coupling method of Lange, Henrotte, and Hameyer
 (IEEE Trans. Mag. 45(3):1258-1261, 2009; DOI 10.1109/TMAG.2009.2012585).
 
-Knowledge prerequisite: `radia_mcp.motor.femm_transient_knowledge` +
+Knowledge prerequisite: `radia_mcp.motor.transient_circuit_knowledge` +
 `radia_mcp.motor.henrotte_lineage_knowledge`.
 
 ### Algorithm summary
@@ -585,7 +585,7 @@ def solve_motor_transient(
             "Eddy currents: NOT included (Lange-HH limitation). "
             "See radia_mcp.motor.hollaus_eddy_knowledge for the MSFEM "
             "extension that adds them.",
-            "Knowledge: radia_mcp.motor.femm_transient_knowledge "
+            "Knowledge: radia_mcp.motor.transient_circuit_knowledge "
             "+ radia_mcp.motor.henrotte_lineage_knowledge "
             "+ radia_mcp.motor.hollaus_eddy_knowledge",
         ],

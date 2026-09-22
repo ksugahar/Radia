@@ -84,7 +84,7 @@ def test_global_reduced_omega_cannot_be_relabelled_as_mixed_h1():
     diagnostics["mixed_total_reduced_omega"]["formulation"] = (
         "H1 global reduced Omega"
     )
-    with pytest.raises(ValueError, match="TOSCA mixed"):
+    with pytest.raises(ValueError, match="mixed total/reduced Omega"):
         require_static_electromagnet_three_engine_contract(diagnostics)
 
 

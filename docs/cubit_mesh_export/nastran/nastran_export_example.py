@@ -33,7 +33,7 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 1 name 'solid'")
 
 print("\nExporting to Nastran (3D)...")
-cubit.cmd('export jmag_nastran "cube_3d.bdf" dimension 3 overwrite')
+cubit.cmd('export nastran_bdf "cube_3d.bdf" dimension 3 overwrite')
 print("  Created: cube_3d.bdf")
 
 # ============================================================
@@ -50,7 +50,7 @@ cubit.cmd("block 1 add tri all")
 cubit.cmd("block 1 name 'plate'")
 
 print("\nExporting to Nastran (2D)...")
-cubit.cmd('export jmag_nastran "plate_2d.bdf" dimension 2 overwrite')
+cubit.cmd('export nastran_bdf "plate_2d.bdf" dimension 2 overwrite')
 print("  Created: plate_2d.bdf")
 
 # ============================================================
@@ -74,12 +74,12 @@ cubit.cmd("block 1 name 'mixed'")
 
 # Export with pyramid as CPYRAM
 print("\nExporting with pyramids...")
-cubit.cmd('export jmag_nastran "mixed_with_pyramid.bdf" dimension 3 overwrite')
+cubit.cmd('export nastran_bdf "mixed_with_pyramid.bdf" dimension 3 overwrite')
 print("  Created: mixed_with_pyramid.bdf")
 
-# Export with pyramid as degenerate hex (for JMAG compatibility)
-print("\nExporting without pyramids (for JMAG)...")
-cubit.cmd('export jmag_nastran "mixed_for_jmag.bdf" dimension 3 nopyramid overwrite')
-print("  Created: mixed_for_jmag.bdf")
+# Export with pyramid as degenerate hex, for importers without CPYRAM support
+print("\nExporting without pyramids...")
+cubit.cmd('export nastran_bdf "mixed_no_pyramid.bdf" dimension 3 nopyramid overwrite')
+print("  Created: mixed_no_pyramid.bdf")
 
 print("\nDone!")

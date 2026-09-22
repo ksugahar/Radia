@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 HERE = Path(__file__).resolve().parent
-REPORT = HERE / "c_type_three_formulation_tosca_mixed_iron.vol-check.json"
+REPORT = HERE / "c_type_three_formulation_mixed_omega_iron.vol-check.json"
 
 
 def test_c_type_iron_mesh_preflight_evidence():

@@ -6221,7 +6221,7 @@
       "sha256": "75a548dc77eb2200ad0bdb1f2ccb9742c5a493cade522da2355bb078ee3c7850"
     },
     {
-      "path": "docs/cubit_mesh_export/nastran/mixed_for_jmag.bdf",
+      "path": "docs/cubit_mesh_export/nastran/mixed_no_pyramid.bdf",
       "bytes": 59477,
       "sha256": "4ab634f398fa0fea04f462b941fc9eb598311d52b8002b5ec5049389c567cfe9"
     },

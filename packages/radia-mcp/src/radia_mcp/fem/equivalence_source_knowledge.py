@@ -14,9 +14,9 @@ Scope (intentionally narrow):
       is stronger and more general than any of those tricks.
     - The user-facing question this module answers is the operational
       one:  "I solved an FEM problem with whatever BC was convenient
-      (typically Kelvin).  Now I want the equivalent of CST's near-field
-      source so I can probe the far field, or hand the result off to a
-      MoM/BEM tool, without re-running the FEM."
+      (typically Kelvin).  Now I want a near-field source so I can probe
+      the far field, or hand the result off to a MoM/BEM tool, without
+      re-running the FEM."
 
 Lab background (the source of this knowledge — three lab studies):
 
@@ -73,17 +73,17 @@ GridFunction, a set of basis coefficients, whatever.  Now you want to:
    simulation -- typical examples are
        - Feed it into ngsolve.bem for far-field radiation
        - Convert it into a Radia ObjCnt for `rad.Fld()` queries
-       - Export as a CST/FEKO-compatible `.nfs` / Nastran
-         `Near_Field_Area_*.dat` for external MoM tools.
+       - Export as a Nastran-style `Near_Field_Area_*.dat` for an
+         external MoM tool.
 
 3. **Persist**:  serialize the result to disk independent of the
    solver state, so the downstream consumer can re-use it without
    re-solving.
 
-CST Microwave Studio's "Near-Field Source" is the canonical commercial
-implementation.  ANSYS HFSS calls it "Field Source" / "Linked Field
-Data Source".  FEKO uses "Equivalent Source File".  All three rely
-on the same Schelkunoff / Love equivalence theorem.
+The feature appears under several names across field solvers -- near-field
+source, field source, equivalent source file -- and all of them rest on the
+same Schelkunoff / Love equivalence theorem, which is what this module
+implements.
 
 ## The mathematical kernel (one paragraph)
 
@@ -296,11 +296,10 @@ discrete-evaluation dots overlaid on the analytical curves with
 perfect agreement.  This dipole test is reproduced as a unit test
 in `tests/equivalence_source/test_dipole_analytic.py`.
 
-## The Sugahara Lab 2015 inner-BC empirical insensitivity
+## The 2015 inner-BC empirical insensitivity
 
-The 2015_05_11 Femtet user-group report Table 1 (small electric
-dipole at 1 GHz, 1 m sphere FEM domain) compared four inner BC
-choices:
+A stored 2015 study (small electric dipole at 1 GHz, 1 m sphere FEM
+domain) compared four inner BC choices:
 
     | inner BC                          | reconstruction OUTSIDE |
     |-----------------------------------|------------------------|
@@ -523,28 +522,25 @@ volume grid for visualisation), a Radia ObjCnt with hierarchical
 H-matrix / sparse acceleration is faster.  Both code paths are
 provided; pick by problem size.
 
-## The Femtet workflow as a sanity check
+## The handoff file, and why it is shaped the way it is
 
-The 2015_04_12 Femtet user-group report VBA macro implements the
-same extraction in FEMTET:
+The established recipe for this handoff is simple and worth stating,
+because `write_nastran_nfs` follows it:
 
-    Sub EHonSphere()
-      ...
-      For each face in boundary("neumann"):
-        m1, m2, m3 = face nodes
-        Gx, Gy, Gz = (x1+x2+x3)/3, ...
-        E = FEMTET.Gogh.Hertz.GetVectorAtPoint(Gx, Gy, Gz, ...)
-        H = FEMTET.Gogh.Hertz.GetVectorAtPoint(Gx, Gy, Gz, ...)
-        Print node.csv, elem.csv, EH.csv
-      Next
-    End Sub
+    for each face of the closed surface:
+        take the face centroid
+        sample (E, H) there
+        emit one record per face
 
-then a MATLAB script normalises node ordering to outward CCW and
-writes a Nastran-style `Near_Field_Area_*.dat` for EMCoS Antenna
-Vlab to ingest.  Our `NearFieldSource.write_nastran_nfs(path)` and
-`write_emcos_format(path)` produce the same files, so a Radia /
-NGSolve solution can be handed off to the same MoM tools the lab
-already uses.
+with node ordering normalised to outward CCW before writing, so the
+consumer's surface normals agree with the ones the sources were
+derived against.  Getting that ordering wrong flips the sign of
+J_s = n x H and rho_m = n . B on the affected faces, which shows up
+as a reconstruction that is correct in magnitude and wrong in phase.
+
+`NearFieldSource.write_nastran_nfs(path)` emits that file, so a
+Radia / NGSolve solution can be handed to a method-of-moments code
+without re-running the FEM.
 """
 
 
@@ -628,11 +624,11 @@ when the underlying behaviour changes we notice.)
 
 ## Reference data sets
 
-The 2015_04_12 Femtet directory has 20+ FEMTET project files
-(`*.femprj`) with already-converged solutions and their EMCoS Vlab
-post-processed far-field reconstructions.  These can be used as
-fixed reference data for the NGSolve port -- see
-`tests/equivalence_source/fixtures/femtet_2015_reference/`.
+A 2015 study left 20+ converged solutions with their post-processed
+far-field reconstructions.  They are retained internally as stored
+regression references for the NGSolve port; they are not distributed
+with this package, and the port is accepted against the analytic
+cases below rather than against them.
 
 The 2008 axisymmetric MATLAB scripts (Analitic.m, Biot_Savart.m,
 CircleEH.m + the H1_*.mat / H2_*.mat result files) give analytical
@@ -675,7 +671,7 @@ def get_equivalence_source_knowledge(topic: str = "overview") -> str:
 
     Args:
         topic: One of:
-            "overview"               - CST NFS equivalent + scope (DEFAULT)
+            "overview"               - what a near-field source is + scope (DEFAULT)
             "schelkunoff_love"       - Stratton-Chu math + static reduction
             "ngsolve_recipe"         - NGSolve extraction pattern
             "radia_recipe"           - Radia extract + re-radiate pattern

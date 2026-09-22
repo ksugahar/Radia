@@ -1,0 +1,24 @@
+{
+  "schema": "radia.validation.maintenance-integration.v1",
+  "date": "2026-09-22",
+  "host": "mdx1",
+  "scope": "Neutral formulation names, public catalog boundary, Nastran documentation, and byte-stable mesh evidence",
+  "integrated_branch_tip": "05fe997a22bad27017ef8de87d06b1b909d84138",
+  "tests": {
+    "initial_collected": 247,
+    "initial_passed": 246,
+    "initial_failed": 1,
+    "failure": "Windows CRLF checkout changed result bytes hashed by the mesh certificate",
+    "fix": "Pin the certificate result family to LF in .gitattributes; numerical data unchanged",
+    "affected_suite_retest_passed": 17,
+    "unresolved_failures": 0,
+    "optional_module_file_exclusions": ["cubit", "magpylib"]
+  },
+  "policy_checks_passed": 10,
+  "preserved_contracts": [
+    "Explicit response/material order matching in nonlinear mixed Omega",
+    "Mixed Omega review regression helper follows renamed test module",
+    "All four mesh-result blobs differ from the parent only by formulation label"
+  ],
+  "release_certification_claimed": false
+}

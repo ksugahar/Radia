@@ -5,8 +5,7 @@
 * Project:        RADIA
 *
 * Description:    Equivalence-theorem near-field source kernels
-*                 (Schelkunoff/Love).  CST Near-Field-Source equivalent
-*                 for the Radia/NGSolve stack.
+*                 (Schelkunoff/Love) for the Radia/NGSolve stack.
 *
 *                 Given (E, H) on a closed surface around all primary
 *                 sources, reconstruct the exterior field at any obs

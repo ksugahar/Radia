@@ -45,3 +45,6 @@ validation_test/omega_quadrature/bonus4_correction_20260912.json -text
 validation_test/esrf_three_engine/results/candidate_4d85e72cc/case6_bdm1_mass_riesz.json -text whitespace=cr-at-eol
 validation_test/esrf_three_engine/results/candidate_4d85e72cc/case6_fem_repaired_acceptance.json -text whitespace=cr-at-eol
 validation_test/esrf_three_engine/results/candidate_59b094d8/*.json -text whitespace=cr-at-eol
+
+# The mixed-Omega mesh certificate hashes these result files byte for byte.
+validation_test/c_type_three_engine/results/c_type_20260903_nonlinear_bdm2_*.json text eol=lf

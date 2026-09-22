@@ -91,8 +91,8 @@ _complex_vector_field_maximum_gate = lazy_callable(".complex_field_maximum_gate"
 _one_port_vi_s_impedance_gate = lazy_callable(".one_port_vi_s_gate", "one_port_vi_s_impedance_gate", __package__)
 _force_position_profile_gate = lazy_callable(".force_position_profile_gate", "force_position_profile_gate", __package__)
 _force_coenergy_displacement_gate = lazy_callable(".force_coenergy_gate", "force_coenergy_displacement_gate", __package__)
-_validate_femm_v44_identity = lazy_callable(".femm_v44_identity", "validate_public_identity", __package__)
-_validate_femm_v46_identity = lazy_callable(".femm_v46_identity", "validate_public_identity", __package__)
+_validate_axisymmetric_v44_identity = lazy_callable(".axisymmetric_v44_identity", "validate_public_identity", __package__)
+_validate_axisymmetric_v46_identity = lazy_callable(".axisymmetric_v46_identity", "validate_public_identity", __package__)
 from .magnetic_artifact_lineage_v47 import validate_public_identity as _validate_femm_v47_identity
 _validate_femm_v48_identity = lazy_callable(".electromagnetic_semantic_identity_v48", "validate_public_identity", __package__)
 _validate_femm_v49_identity = lazy_callable(".electromagnetic_artifact_identity_v49", "validate_public_identity", __package__)
@@ -218,7 +218,7 @@ from .knowledge.cln_3d import (
 from .knowledge.bem_cln import get_bem_cln_documentation
 from .knowledge.cln_sphere_dd import get_cln_sphere_dd_documentation
 from .knowledge.hdiv_vim import get_hdiv_vim_documentation
-from .knowledge.femm_parity import get_femm_parity_documentation
+from .knowledge.magnetostatic_2d_parity import get_magnetostatic_2d_parity_documentation
 from .knowledge.fem_bem_schur import get_fem_bem_schur_documentation
 from .knowledge.airgap_motor_workflow import get_airgap_motor_workflow_documentation
 from .knowledge.dtn_coarse_mesh import get_dtn_coarse_mesh_documentation
@@ -1510,7 +1510,7 @@ def axifem_documentation(topic: str = "all") -> str:
 
 
 @mcp.tool()
-def femm_parity_documentation(topic: str = "all") -> str:
+def magnetostatic_2d_parity_documentation(topic: str = "all") -> str:
     """
     Get FEMM-parity documentation: which FEMM (Finite Element Method Magnetics,
     D. Meeker) analyses are reproduced as EXECUTABLE + TESTED NGSolve capability
@@ -1531,7 +1531,7 @@ def femm_parity_documentation(topic: str = "all") -> str:
                            conductor proximity circuit, FEMM open-bdry cross-check
             "validation" - regression test list and per-test error bounds
     """
-    return get_femm_parity_documentation(topic)
+    return get_magnetostatic_2d_parity_documentation(topic)
 
 
 @mcp.tool()
@@ -3567,16 +3567,16 @@ def force_coenergy_displacement_gate(
             "error": str(exc),
         }
     if isinstance(artifact_identity, dict):
-        v44_checks = _validate_femm_v44_identity(artifact_identity)
+        v44_checks = _validate_axisymmetric_v44_identity(artifact_identity)
         if v44_checks:
             result.setdefault("checks", {}).update(v44_checks)
-            result["femm_v44_identity_checks"] = v44_checks
+            result["axisymmetric_v44_identity_checks"] = v44_checks
             if not all(v44_checks.values()):
                 result["status"] = "needs_attention"
-        v46_checks = _validate_femm_v46_identity(artifact_identity)
+        v46_checks = _validate_axisymmetric_v46_identity(artifact_identity)
         if v46_checks:
             result.setdefault("checks", {}).update(v46_checks)
-            result["femm_v46_identity_checks"] = v46_checks
+            result["axisymmetric_v46_identity_checks"] = v46_checks
             if not all(v46_checks.values()):
                 result["status"] = "needs_attention"
         v47_checks = _validate_femm_v47_identity(artifact_identity)

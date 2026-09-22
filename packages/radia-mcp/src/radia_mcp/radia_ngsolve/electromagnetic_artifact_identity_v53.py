@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 
-from .femm_artifact_identity_v54 import validate_public_identity as validate_public_v54_identity
+from .electromagnetic_artifact_identity_v54 import validate_public_identity as validate_public_v54_identity
 
 
 HYSTERESIS = "hysteresis_complex_permeability_phasor_loss_material_owner_identity"

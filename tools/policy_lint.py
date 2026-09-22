@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""The 8 Radia source policies as ONE reusable module.
+"""The Radia source policies as ONE reusable module.
 
 Single source of truth for BOTH:
   - .github/workflows/policy-lint.yml   (the CI gate)
@@ -11,7 +11,7 @@ silently miss it).  Mirrors the historical inline bash greps; uses
 `git grep` / `git ls-files` so it sees TRACKED working-tree content (what
 CI checks out on a fresh runner).
 
-    python tools/policy_lint.py        # run all 8; exit 1 on any violation
+    python tools/policy_lint.py        # run them all; exit 1 on any violation
     python tools/policy_lint.py --quiet
 
 Policies (see CLAUDE.md):
@@ -20,6 +20,7 @@ Policies (see CLAUDE.md):
   3 no Helmholtz WAVE kernel in core     7 no tracked retired examples/ tier
   4 no CblasColMajor in core (allowlist)
   8 HDiv geometry/field pairs use the central capability table
+  9 no scrubbed commercial-solver brand in code or stored results
 """
 from __future__ import annotations
 
@@ -36,6 +37,34 @@ REPO = os.path.dirname(os.path.dirname(_THIS))
 _norm = REPO.replace("\\", "/")
 if "192.168.11.100" in _norm and "/Radia/01_GitHub" in _norm:
     REPO = "S:" + _norm[_norm.index("/Radia/01_GitHub"):]
+
+# Policy 9: brands whose scrub is complete, so a reappearance is a regression
+# rather than unfinished work.  COMSOL, FEMM, JMAG, CST and ELF are NOT here
+# yet -- they still appear widely in code and join this tuple as each one's
+# scrub lands.  The formulation those names once carried is Simkin and
+# Trowbridge's mixed total/reduced scalar potential (``simkin1980three``).
+SCRUBBED_BRANDS = ("TOSCA",)
+
+# Policy 10: solvers whose MCP servers must never be published, whatever the
+# repository they live in.  This is a stricter rule than Policy 9 and does not
+# wait for a brand's prose scrub: a catalog entry carries an install path and a
+# repository URL, so it publishes the server rather than merely naming a tool.
+COMMERCIAL_SOLVERS = ("COMSOL", "FEMM", "JMAG", "CST", "TOSCA", "Opera")
+
+# Policy 9 allowlist: surfaces that name a brand for a legitimate reason --
+# a citation of published work, or a declaration that something is absent.
+BRAND_CITATION_ALLOW = (
+    # the cited paper's own title, and the verbatim abstract of the paper the
+    # formulation comes from
+    "packages/radia-mcp/src/radia_mcp/accelerator/bibliography_index_knowledge.py",
+    "packages/radia-mcp/src/radia_mcp/radia_ngsolve/bibliography_index_knowledge.py",
+    "packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib",
+    # conference-positioning advice, where naming the incumbent tools is the
+    # substance of the advice rather than a validation provenance claim
+    "packages/radia-mcp/src/radia_mcp/presentation/talk_feedback.py",
+    # this file, which has to spell the brand out to forbid it
+    "tools/policy_lint.py",
+)
 
 # Policy 4 allowlist: genuine LAPACK / HACApK column-major interop.
 CBLAS_COLMAJOR_ALLOW = (
@@ -158,6 +187,42 @@ def check_all():
     results.append(("Policy 8: central HDiv geometry/order capabilities", not bad,
                     bad[0] if bad else "ok"))
 
+    # 9: a scrubbed commercial-solver brand must not return to Radia's own
+    # identifiers, labels, source, tests or stored result JSONs.  Prose that
+    # CITES published work keeps its brand words, which is why this checks
+    # code and result data rather than Markdown.
+    hits = _git_grep("|".join(SCRUBBED_BRANDS),
+                     ["src/*", "tests/*", "matlab/*", "tools/*",
+                      "validation_test/*.py", "validation_test/**/*.py",
+                      "validation_test/**/*.json", "packages/**/*.py"],
+                     extra=["-E", "-w", "-i"]) or []
+    bad = [h for h in hits
+           if not any(h.startswith(a + ":") for a in BRAND_CITATION_ALLOW)]
+    results.append((f"Policy 9: no scrubbed commercial brand "
+                    f"({'/'.join(SCRUBBED_BRANDS)}) in Radia code or results",
+                    not bad, bad[0] if bad else "ok"))
+
+    # 10: the published radia-mcp catalog must not advertise an MCP server for
+    # a commercial solver.  Naming the reference tools is one thing; shipping
+    # a public directory entry with their install path and repository URL
+    # publishes the servers themselves, which the boundary forbids outright.
+    catalog = os.path.join(REPO, "packages", "radia-mcp", "src", "radia_mcp",
+                           "meta", "catalog.py")
+    bad = []
+    try:
+        with open(catalog, encoding="utf-8") as f:
+            entries = re.findall(r'^    "([A-Za-z0-9_-]+)": \{\n(.*?)^    \},$',
+                                 f.read(), re.S | re.M)
+        for name, body in entries:
+            named = [b for b in COMMERCIAL_SOLVERS
+                     if re.search(rf"\b{b}\b", name + body, re.I)]
+            if named:
+                bad.append(f"catalog entry {name!r} advertises {'/'.join(named)}")
+    except OSError as exc:
+        bad.append(f"cannot read the radia-mcp catalog: {exc}")
+    results.append(("Policy 10: the public MCP catalog advertises no "
+                    "commercial-solver server", not bad, bad[0] if bad else "ok"))
+
     return results
 
 
@@ -173,10 +238,10 @@ def main(argv=None):
             nfail += 1
             print(f"FAIL  {name}: {detail}")
     if nfail:
-        print(f"\n{nfail}/8 policies FAILED", file=sys.stderr)
+        print(f"\n{nfail}/{len(results)} policies FAILED", file=sys.stderr)
         return 1
     if not quiet:
-        print("\nall 8 policies pass")
+        print(f"\nall {len(results)} policies pass")
     return 0
 
 

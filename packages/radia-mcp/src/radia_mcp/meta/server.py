@@ -66,7 +66,7 @@ def radia_mcp_overview(full: bool = False) -> dict:
             "Call radia_mcp_get(name) for one complete catalog entry, or "
             "<server>_status() for live introspection + dependency probe. "
             "External packages "
-            "(optuna-mcp / elf / comsol / mcp-server-document) ship from their own "
+            "(optuna-mcp / elf / mcp-server-document) ship from their own "
             "repos — see entries in `external_packages` for install paths.",
     }
 

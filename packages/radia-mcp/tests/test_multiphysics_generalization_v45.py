@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from test_comsol_generalization_v36 import _summary, gate
+from test_multiphysics_generalization_v36 import _summary, gate
 
 
 _PROMOTED_CASE_IDS = (
