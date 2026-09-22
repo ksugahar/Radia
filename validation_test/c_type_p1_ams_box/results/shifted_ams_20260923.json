@@ -1,0 +1,73 @@
+{
+  "schema": "radia.validation.shifted-ams.v1",
+  "passed": true,
+  "host": "mdx2",
+  "ngsolve": "6.2.2606",
+  "threads": 8,
+  "mkl_threads": 1,
+  "openblas_threads": 1,
+  "native_sha256": "c84be18a3b6f91cbfd0c493effad84012f0056527cab7118cc803ba3ac5498f8",
+  "operator": "K A = f, no mass regularization",
+  "preconditioner": "compact AMS built from K + sigma*nu0*M",
+  "linear_stopping": "true free-DOF residual checked every CG iteration",
+  "linear_tolerance": 1e-06,
+  "newton_residual_tolerance": 0.001,
+  "field_change_tolerance": 1000000000.0,
+  "field_change_gate": "effectively disabled for this loose stopping comparison",
+  "timing_scope": "one uncontended Newton run per final route; excludes mesh/source/projection setup; not total application time",
+  "cases": [
+    {
+      "case": "s15",
+      "elements": 67397,
+      "mesh_sha256": "dd556973315a410972b8f27e7bf3c701848dff3c0774116949096a0c1189eaf1",
+      "ndof": 79209,
+      "sigma": 1e-06,
+      "newton_iterations": 7,
+      "true_linear_residual_max": 9.81244302076742e-07,
+      "newton_residual_relative": 0.00028919317323650655,
+      "shifted_ams_newton_s": 7.62419639993459,
+      "iccg_newton_s": 4.409264800022356,
+      "time_ratio": 1.7291309879814734,
+      "field_relative_vector_rms": 2.2760189239488602e-10
+    },
+    {
+      "case": "s075",
+      "elements": 195309,
+      "mesh_sha256": "9cf43d682a72f17e959a10d79038db8ecc5d75415dba43649084183bee9f8799",
+      "ndof": 229732,
+      "sigma": 0.01,
+      "newton_iterations": 7,
+      "true_linear_residual_max": 9.411903945810489e-07,
+      "newton_residual_relative": 0.0002930350673908179,
+      "shifted_ams_newton_s": 20.614638500032015,
+      "iccg_newton_s": 12.182895999983884,
+      "time_ratio": 1.692096731356755,
+      "field_relative_vector_rms": 1.3099436200222765e-10
+    }
+  ],
+  "loose_runner_sha256": "3dc1fa909563bda6f03edbfb1f0fe2d8b933be05ec1197778a3add5122859c08",
+  "tight_runner_sha256": "1851b5fc957430c311fc675f89dcdb4f516f8fd9cd4d6597fc8245b4e5b5806c",
+  "tight_case": {
+    "case": "s15",
+    "sigma": 0.01,
+    "gradient_projection": true,
+    "passed": true,
+    "newton_residual_tolerance": 1e-08,
+    "field_change_tolerance": 2e-05,
+    "linear_tolerance": 1e-06,
+    "newton_iterations": 11,
+    "newton_residual_relative": 4.092200257038871e-10,
+    "final_field_change": 2.6423640704202408e-06,
+    "true_linear_residual_max": 9.318325871266388e-07,
+    "shifted_ams_newton_s": 26.535831999965012,
+    "iccg_newton_s": 16.741859800065868,
+    "time_ratio": 1.5849990572648691,
+    "field_relative_vector_rms": 2.655969499355981e-15,
+    "iccg_total_iterations": 8785
+  },
+  "limitations": [
+    "Unprojected sigma=.01 did not pass the tight s15 gate: AMS-CG did not reach the true relative residual 1.0e-06 (reached 1.67e-02 after 500 iterations)",
+    "Only these meshes and tolerances were measured; no general speed or robustness guarantee.",
+    "The optional gradient projector uses a nodal sparse direct factorization; its scaling has not been established."
+  ]
+}

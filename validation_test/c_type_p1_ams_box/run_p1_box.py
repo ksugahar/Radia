@@ -164,13 +164,69 @@ class SoftIronLaw:
         return np.interp(magnitude, self._grid, self._dhdb)
 
 
+class _TrueResidualCG(CGSolver):
+    """Keep NGSolve's CG recurrence; stop on the original free-DOF equation."""
+
+    def __init__(self, *, rhs, solution, free, tolerance, **options):
+        super().__init__(tol=tolerance, **options)
+        self._rhs = rhs
+        self._solution = solution
+        self._free = free
+        self._relative_tolerance = tolerance
+        self._rhs_norm = max(float(np.linalg.norm(rhs.FV().NumPy()[free])), 1e-30)
+        self._true_residual = rhs.CreateVector()
+
+    def CheckResidual(self, _preconditioned_residual):
+        self.iterations += 1
+        self._true_residual.data = self._rhs - self.mat * self._solution
+        relative = float(np.linalg.norm(self._true_residual.FV().NumPy()[self._free]) / self._rhs_norm)
+        if not math.isfinite(relative):
+            raise RuntimeError("non-finite true AMS-CG residual")
+        self.residuals.append(relative)
+        return relative <= self._relative_tolerance or self.iterations >= self.maxiter
+
+
+class _GradientComplement(ng.BaseMatrix):
+    """Diagnostic orthogonal P0 B P0; K and its residual remain unchanged."""
+
+    def __init__(self, preconditioner, matrix, gradient, nodal_factor, free):
+        super().__init__()
+        self.preconditioner = preconditioner
+        self.matrix = matrix
+        self.gradient = gradient
+        self.nodal_factor = nodal_factor
+        self.free = free
+        self.input = matrix.CreateRowVector()
+        self.output = matrix.CreateColVector()
+
+    def IsComplex(self): return False
+    def Height(self): return self.matrix.height
+    def Width(self): return self.matrix.width
+    def CreateRowVector(self): return self.matrix.CreateRowVector()
+    def CreateColVector(self): return self.matrix.CreateColVector()
+
+    def project(self, vector):
+        data = vector.copy()
+        data[~self.free] = 0.0
+        if self.nodal_factor is not None:
+            data -= self.gradient @ self.nodal_factor.solve(self.gradient.T @ data)
+        return data
+
+    def Mult(self, x, y):
+        self.input.FV().NumPy()[:] = self.project(x.FV().NumPy())
+        self.preconditioner.Mult(self.input, self.output)
+        y.FV().NumPy()[:] = self.project(self.output.FV().NumPy())
+
+
 class ReducedAP1Box:
     """Reduced-A, order one, on a finite box; AMS or direct linear solves."""
 
     def __init__(self, mesh: ng.Mesh, source_cf, *, linear_solver: str,
                  cg_tolerance: float, cg_max_iterations: int, ams_num_smooth: int,
                  source_projection_order: int, ams_update_every: int = 1,
-                 ic_shift: float = 1.05, gauge_epsilon: float = GAUGE_EPSILON):
+                 ic_shift: float = 1.05, gauge_epsilon: float = GAUGE_EPSILON,
+                 ams_preconditioner_shift: float = 0.0,
+                 ams_project_gradients: bool = False):
         """``source_cf`` is the vacuum source flux density B_s as a vector CF.
 
         ``linear_solver``: ``"ams"`` (compiled auxiliary-space Maxwell
@@ -189,17 +245,25 @@ class ReducedAP1Box:
             raise ValueError("ams_update_every must be positive")
         if not ic_shift >= 1.0:
             raise ValueError("ic_shift must be at least 1")
-        if gauge_epsilon < 0.0:
+        if not math.isfinite(gauge_epsilon) or gauge_epsilon < 0.0:
             raise ValueError("gauge_epsilon must be non-negative")
-        if gauge_epsilon == 0.0 and linear_solver != "iccg":
-            # Without the mass regularisation the curl-curl system is singular
-            # (gradient kernel); CG on a consistent right-hand side still
-            # converges, a factorisation or the AMS hierarchy as built here does not.
-            raise ValueError("gauge_epsilon=0 (ungauged, singular but consistent) requires linear_solver='iccg'")
+        if not math.isfinite(ams_preconditioner_shift) or ams_preconditioner_shift < 0.0:
+            raise ValueError("ams_preconditioner_shift must be finite and non-negative")
+        if ams_preconditioner_shift and (linear_solver != "ams" or gauge_epsilon != 0.0):
+            raise ValueError("ams_preconditioner_shift requires AMS and gauge_epsilon=0")
+        if ams_project_gradients and not ams_preconditioner_shift:
+            raise ValueError("ams_project_gradients requires a positive AMS preconditioner shift")
+        if gauge_epsilon == 0.0 and not (linear_solver == "iccg" or
+                (linear_solver == "ams" and ams_preconditioner_shift > 0.0)):
+            raise ValueError("gauge_epsilon=0 requires linear_solver='iccg' or shifted AMS")
         self.mesh = mesh
         self.linear_solver = linear_solver
         self.ic_shift = float(ic_shift)
         self.gauge_epsilon = float(gauge_epsilon)
+        self.ams_preconditioner_shift = float(ams_preconditioner_shift)
+        self._ams_shift_form = None
+        self.ams_project_gradients = bool(ams_project_gradients)
+        self._gradient_projection = None
         self.cg_tolerance = float(cg_tolerance)
         self.cg_max_iterations = int(cg_max_iterations)
         self.ams_num_smooth = int(ams_num_smooth)
@@ -246,6 +310,23 @@ class ReducedAP1Box:
     def _ams_prepare(self, matrix):
         import radia.sparsesolv_ngsolve as ssn
 
+        if self.ams_preconditioner_shift:
+            if self._ams_shift_form is None:
+                u, v = self.fes.TnT()
+                self._ams_shift_form = ng.BilinearForm(self.fes, symmetric=True)
+                self._ams_shift_form += ng.InnerProduct(u, v) * ng.dx
+                with ng.TaskManager():
+                    self._ams_shift_form.Assemble()
+                self._ams_mass_values = self._ams_shift_form.mat.AsVector().FV().NumPy().copy()
+            shifted = self._ams_shift_form.mat
+            _, columns, offsets = matrix.CSR()
+            _, mass_columns, mass_offsets = shifted.CSR()
+            if not (np.array_equal(columns, mass_columns) and np.array_equal(offsets, mass_offsets)):
+                raise RuntimeError("AMS mass shift requires matching sparse matrix ordering")
+            shifted.AsVector().FV().NumPy()[:] = (matrix.AsVector().FV().NumPy()
+                + self.ams_preconditioner_shift * NU0 * self._ams_mass_values)
+            matrix = shifted  # Only hierarchy setup sees this matrix; CG keeps K.
+
         if self._gradient is None:
             gradient, h1 = self.fes.CreateGradient()
             if int(h1.ndof) != int(self.mesh.nv):
@@ -267,6 +348,19 @@ class ReducedAP1Box:
         else:
             self._ams_lagged = True
         self._ams_systems_seen += 1
+        if self.ams_project_gradients:
+            if self._gradient_projection is None:
+                from scipy.sparse import csr_matrix, diags
+                from scipy.sparse.linalg import splu
+                values, columns, offsets = gradient.CSR()
+                discrete_gradient = csr_matrix((np.array(values), np.array(columns), np.array(offsets)),
+                                               shape=(gradient.height, gradient.width))
+                nodal_space = ng.H1(self.mesh, order=1, dirichlet="outer")
+                nodal_free = np.array(list(nodal_space.FreeDofs()), dtype=bool)
+                restricted = diags(self.free.astype(float)) @ discrete_gradient[:, nodal_free]
+                factor = splu((restricted.T @ restricted).tocsc()) if restricted.shape[1] else None
+                self._gradient_projection = restricted, factor
+            return _GradientComplement(self._ams, matrix, *self._gradient_projection, self.free)
         return self._ams
 
     def _solve_linear(self, matrix, rhs, solution_vec, *, warm_start: bool) -> dict:
@@ -282,33 +376,25 @@ class ReducedAP1Box:
             pre = self._ams_prepare(matrix)
             record["preconditioner_s"] = time.perf_counter() - t0
             t0 = time.perf_counter()
-            # The Krylov loop measures the preconditioned residual; the contract
-            # here is the true relative residual on the free DOFs, so the solve
-            # continues (warm-started) until that is met.
-            iterations = 0
+            # Restarting from a preconditioned-norm stop with a tighter relative
+            # tolerance can over-solve a singular system and amplify nullspace
+            # roundoff. Check the original equation at each CG iteration instead.
             residual = rhs.CreateVector()
-            internal_tolerance = self.cg_tolerance
-            initialize = not warm_start
-            true_relative = float("inf")
-            for attempt in range(6):
-                solver = CGSolver(mat=matrix, pre=pre, maxiter=self.cg_max_iterations,
-                                  tol=internal_tolerance, printrates=False)
-                with ng.TaskManager():
-                    solver.Solve(rhs=rhs, sol=solution_vec, initialize=initialize)
-                    residual.data = rhs - matrix * solution_vec
-                iterations += int(solver.iterations)
-                true_relative = float(np.linalg.norm(residual.FV().NumPy()[self.free]) / rhs_norm)
-                if true_relative <= self.cg_tolerance:
-                    break
-                initialize = False
-                internal_tolerance *= 0.1
-            else:
+            solver = _TrueResidualCG(mat=matrix, pre=pre, maxiter=self.cg_max_iterations,
+                rhs=rhs, solution=solution_vec, free=self.free,
+                tolerance=self.cg_tolerance, printrates=False)
+            with ng.TaskManager():
+                solver.Solve(rhs=rhs, sol=solution_vec, initialize=not warm_start)
+                residual.data = rhs - matrix * solution_vec
+            iterations = int(solver.iterations)
+            true_relative = float(np.linalg.norm(residual.FV().NumPy()[self.free]) / rhs_norm)
+            if not math.isfinite(true_relative) or true_relative > self.cg_tolerance:
                 raise RuntimeError(
                     f"AMS-CG did not reach the true relative residual {self.cg_tolerance:.1e} "
                     f"(reached {true_relative:.2e} after {iterations} iterations)")
             record["solve_s"] = time.perf_counter() - t0
             record["cg_iterations"] = iterations
-            record["cg_restarts"] = attempt
+            record["cg_restarts"] = 0
             record["preconditioner_lagged"] = bool(self._ams_lagged)
             record["relative_residual"] = true_relative
         elif self.linear_solver == "iccg":
@@ -586,6 +672,8 @@ class ReducedAP1Box:
             "cg_relative_tolerance": self.cg_tolerance if self.linear_solver != "direct" else None,
             "ams_num_smooth": self.ams_num_smooth if self.linear_solver == "ams" else None,
             "ams_update_every": self.ams_update_every if self.linear_solver == "ams" else None,
+            "ams_preconditioner_shift": self.ams_preconditioner_shift,
+            "ams_project_gradients": self.ams_project_gradients,
             "source": "exact Radia B_s projected once to L2 order "
                       f"{self.source_projection_order} on iron; exact at observation points",
             "ndof": int(self.fes.ndof),
@@ -723,7 +811,11 @@ def main() -> None:
     parser.add_argument("--ic-shift", type=float, default=1.05,
                         help="shift of the incomplete Cholesky factorisation (iccg)")
     parser.add_argument("--gauge-epsilon", type=float, default=GAUGE_EPSILON,
-                        help="mass regularisation of the curl-curl operator; 0 only with iccg")
+                        help="operator mass regularisation; 0 with iccg or shifted AMS")
+    parser.add_argument("--ams-preconditioner-shift", type=float, default=0.0,
+                        help="AMS-only mass shift sigma*nu_0*M; requires --gauge-epsilon 0")
+    parser.add_argument("--ams-project-gradients", action="store_true",
+                        help="diagnostic P0 B_shift P0 with a cached nodal direct solve")
     parser.add_argument("--nonlinear-method", choices=("newton", "picard"), default="newton")
     parser.add_argument("--cg-tolerance", type=float, default=1.0e-8)
     parser.add_argument("--cg-max-iterations", type=int, default=2000)
@@ -810,7 +902,9 @@ def run(options) -> dict:
             ams_num_smooth=options.ams_num_smooth,
             source_projection_order=options.source_projection_order,
             ams_update_every=options.ams_update_every, ic_shift=options.ic_shift,
-            gauge_epsilon=options.gauge_epsilon)
+            gauge_epsilon=options.gauge_epsilon,
+            ams_preconditioner_shift=options.ams_preconditioner_shift,
+            ams_project_gradients=options.ams_project_gradients)
         if not nonlinear:
             field, stats, runtime = engine.run_linear(options.mu_r, points)
         elif options.nonlinear_method == "newton":
