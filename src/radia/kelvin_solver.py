@@ -671,6 +671,13 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         _rhs_material=None, kelvin_match_exact=False):
     """Solve the mixed total/reduced Omega formulation.
 
+    The total/reduced scalar-potential split of Simkin and Trowbridge
+    (``simkin1979use``, doi:10.1002/nme.1620140308; nonlinear
+    three-dimensional treatment in ``simkin1980three``,
+    doi:10.1049/ip-b.1980.0052): a total potential where the material is
+    permeable, a reduced potential carrying ``H_s`` where the source lives,
+    and an interface condition between them.
+
     ``return_system=True`` retains assembled forms for explicit diagnostics.
     The default returns ``system=None`` to avoid retaining their matrix storage.
     ``phase_callback`` optionally receives start/complete dictionaries for
