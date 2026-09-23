@@ -1,0 +1,746 @@
+{
+  "scope": "HDiv-only replay diagnostic; not a three-engine validation pass",
+  "host": "Hibino",
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "rows": [
+    {
+      "rule": 2,
+      "tolerance": 1e-10,
+      "field_T": [
+        [
+          -0.00415120571330098,
+          -0.00023513559492349993,
+          0.03696684376075959
+        ],
+        [
+          1.8912633203940266e-11,
+          -5.486968660594975e-12,
+          0.03726787130371638
+        ],
+        [
+          0.0041512057512340175,
+          0.00023513558398069882,
+          0.03696684376195069
+        ],
+        [
+          -0.00415867582808898,
+          -7.555584986120183e-05,
+          0.03719698091374815
+        ],
+        [
+          1.9430596733405004e-11,
+          -7.45430927543046e-12,
+          0.03750065298147141
+        ],
+        [
+          0.004158675867066539,
+          7.555583499039329e-05,
+          0.037196980915042435
+        ],
+        [
+          -0.004137329821320888,
+          8.150954599479913e-05,
+          0.037194633715888804
+        ],
+        [
+          1.986241449904932e-11,
+          -9.646189875078786e-12,
+          0.03749586289293747
+        ],
+        [
+          0.0041373298611767,
+          -8.150956523693433e-05,
+          0.03719463371731517
+        ],
+        [
+          -0.010423004106889478,
+          -0.0002962683505243561,
+          0.0703070974752145
+        ],
+        [
+          1.9971614760472223e-11,
+          -3.1156363306259503e-12,
+          0.07122710259673912
+        ],
+        [
+          0.01042300414719602,
+          0.00029626834435163686,
+          0.07030709747864863
+        ],
+        [
+          -0.01041639251688228,
+          -3.8791068175346426e-05,
+          0.07054241739798395
+        ],
+        [
+          2.085112793827795e-11,
+          -5.058815597151005e-12,
+          0.07147680812879269
+        ],
+        [
+          0.010416392558976495,
+          3.879105817130334e-05,
+          0.07054241740166575
+        ],
+        [
+          -0.010392285437229169,
+          0.00021384843078182716,
+          0.07042530221139312
+        ],
+        [
+          2.1838481476670745e-11,
+          -7.358171833633924e-12,
+          0.07134625870521431
+        ],
+        [
+          0.010392285481346141,
+          -0.0002138484453324412,
+          0.07042530221548308
+        ],
+        [
+          -0.029002287839828195,
+          -0.0001473304977022869,
+          0.16158271899856794
+        ],
+        [
+          1.1511347739791656e-11,
+          -6.511275670384425e-13,
+          0.1628171560246948
+        ],
+        [
+          0.029002287863112902,
+          0.00014733049646481778,
+          0.16158271900571794
+        ],
+        [
+          -0.028927022638137182,
+          1.841787194783825e-05,
+          0.16158118835486604
+        ],
+        [
+          1.2191289955843181e-11,
+          -1.7509795140088267e-12,
+          0.16291065847046254
+        ],
+        [
+          0.028927022662807403,
+          -1.8417875174093352e-05,
+          0.16158118836251742
+        ],
+        [
+          -0.02900672448754775,
+          0.0001519915246300783,
+          0.1615222405758679
+        ],
+        [
+          1.3240097170240611e-11,
+          -3.245853520010383e-12,
+          0.16278861633076286
+        ],
+        [
+          0.02900672451443557,
+          -0.00015199153059507667,
+          0.16152224058468645
+        ],
+        [
+          -0.0006022370266720939,
+          -0.0007915192890419287,
+          0.22954549890894413
+        ],
+        [
+          1.0272147907834694e-12,
+          9.749274880742229e-14,
+          0.22885024801860568
+        ],
+        [
+          0.0006022370283611065,
+          0.0007915192892583549,
+          0.22954549891076273
+        ],
+        [
+          -0.0005925998356517718,
+          0.00014014163366635272,
+          0.23034084986970949
+        ],
+        [
+          1.0872227559743389e-12,
+          -4.4851891724702365e-13,
+          0.22930716798001274
+        ],
+        [
+          0.0005925998374398462,
+          -0.00014014163441360578,
+          0.23034084987186154
+        ],
+        [
+          -0.0005893311969215352,
+          0.0007807955544644379,
+          0.22909518169988147
+        ],
+        [
+          1.185847529106806e-12,
+          -1.283014784772843e-12,
+          0.22864516186331832
+        ],
+        [
+          0.0005893311988859248,
+          -0.0007807955566897979,
+          0.22909518170259754
+        ],
+        [
+          1.4938453319306148e-05,
+          -0.0001373944716260883,
+          0.22953673750114742
+        ],
+        [
+          -1.7970625825219646e-14,
+          1.1031288060772357e-13,
+          0.22941482508456204
+        ],
+        [
+          -1.4938453344381439e-05,
+          0.00013739447181698906,
+          0.22953673750181772
+        ],
+        [
+          1.113458187634236e-05,
+          -5.5023903769547585e-06,
+          0.2296572169964669
+        ],
+        [
+          -3.1053761664011256e-14,
+          -3.181350932969067e-13,
+          0.22954256777174709
+        ],
+        [
+          -1.1134581950573728e-05,
+          5.502389880624477e-06,
+          0.22965721699730607
+        ],
+        [
+          6.690934781942682e-06,
+          0.00013176767235711093,
+          0.22954967609862212
+        ],
+        [
+          -1.0026040566048814e-14,
+          -1.0435649002062322e-12,
+          0.22942760510934937
+        ],
+        [
+          -6.6909347970623294e-06,
+          -0.000131767674022949,
+          0.22954967610024868
+        ],
+        [
+          0.0006619643919885248,
+          -0.0007733926831959901,
+          0.2290120856564125
+        ],
+        [
+          -1.0490718689750236e-12,
+          -1.0534323099124896e-14,
+          0.2285987062615777
+        ],
+        [
+          -0.0006619643937996653,
+          0.0007733926831171963,
+          0.22901208565819658
+        ],
+        [
+          0.0008032733107254475,
+          -0.00017133683577769853,
+          0.23030503148989354
+        ],
+        [
+          -1.081119772558073e-12,
+          -4.988665893428301e-13,
+          0.22928122261756784
+        ],
+        [
+          -0.0008032733125422487,
+          0.00017133683478919696,
+          0.23030503149154263
+        ],
+        [
+          0.000713828573992952,
+          0.0007749266830942985,
+          0.22953381363728773
+        ],
+        [
+          -1.156260623608672e-12,
+          -1.1579828605737325e-12,
+          0.2288542706078879
+        ],
+        [
+          -0.0007138285758345817,
+          -0.000774926684918423,
+          0.2295338136395467
+        ],
+        [
+          0.029001537558580155,
+          -0.00014381349819303442,
+          0.1615858822043306
+        ],
+        [
+          -1.1501309418233738e-11,
+          -6.562428933444902e-13,
+          0.16281936774833744
+        ],
+        [
+          -0.029001537581848882,
+          0.00014381349694844733,
+          0.16158588221148976
+        ],
+        [
+          0.02892294728284158,
+          2.2061084044033957e-05,
+          0.16157776216751316
+        ],
+        [
+          -1.2183757586098302e-11,
+          -1.7452178246727385e-12,
+          0.162906985454469
+        ],
+        [
+          -0.028922947307501737,
+          -2.2061087265474687e-05,
+          0.16157776217517694
+        ],
+        [
+          0.0290007122783419,
+          0.00015474396605358036,
+          0.16151422566537393
+        ],
+        [
+          -1.3240676379792797e-11,
+          -3.242842613890833e-12,
+          0.162780353237654
+        ],
+        [
+          -0.029000712305238756,
+          -0.00015474397200272448,
+          0.16151422567421234
+        ],
+        [
+          0.010423135880820321,
+          -0.0002962631956342834,
+          0.07030842344925124
+        ],
+        [
+          -1.9970683202013723e-11,
+          -3.1141319207604438e-12,
+          0.07122830204412745
+        ],
+        [
+          -0.010423135921123986,
+          0.0002962631894623428,
+          0.07030842345268325
+        ],
+        [
+          0.010416339842437826,
+          -3.868881945679257e-05,
+          0.07054366340425726
+        ],
+        [
+          -2.0853414800706966e-11,
+          -5.058330725155492e-12,
+          0.07147789579159444
+        ],
+        [
+          -0.01041633988453169,
+          3.86888094419895e-05,
+          0.07054366340794306
+        ],
+        [
+          0.010392144748656731,
+          0.00021393765678683123,
+          0.07042641921983216
+        ],
+        [
+          -2.183951216834544e-11,
+          -7.358350386583197e-12,
+          0.0713471897477665
+        ],
+        [
+          -0.010392144792771306,
+          -0.00021393767133591623,
+          0.07042641922393136
+        ],
+        [
+          0.004151368055348755,
+          -0.00023515641604124143,
+          0.03696684909020013
+        ],
+        [
+          -1.890791184890398e-11,
+          -5.487135773793786e-12,
+          0.03726789792582486
+        ],
+        [
+          -0.004151368093276529,
+          0.0002351564050924992,
+          0.03696684909138739
+        ],
+        [
+          0.004158847899824225,
+          -7.555368721609572e-05,
+          0.037197000050960674
+        ],
+        [
+          -1.9432378013740388e-11,
+          -7.450341854984953e-12,
+          0.03750069414011073
+        ],
+        [
+          -0.004158847938804731,
+          7.555367235145237e-05,
+          0.03719700005225582
+        ],
+        [
+          0.00413749608922229,
+          8.153503991288667e-05,
+          0.0371946323869525
+        ],
+        [
+          -1.9865394208230158e-11,
+          -9.64319307839867e-12,
+          0.037495882856428735
+        ],
+        [
+          -0.004137496129075093,
+          -8.153505915359463e-05,
+          0.037194632388381416
+        ]
+      ],
+      "diagnostics": {
+        "formulation": "HDiv-MMM",
+        "discretization": "BDM2",
+        "open_boundary": "Coulomb charge Gram; iron-only mesh",
+        "mesh_elements": 846,
+        "mesh_vertices": 285,
+        "ndof": 16608,
+        "linear_iterations": 48,
+        "nonlinear": false,
+        "nonlinear_stats": {},
+        "preconditioner": "mass-riesz",
+        "gram_eps": 1e-14,
+        "timings": {
+          "fes_wall_s": 0.002472000000125263,
+          "charge_gram_wall_s": 22.600395399998888,
+          "projection_wall_s": 2.6479168999994727,
+          "solve_wall_s": 0.9097873000009713,
+          "post_wall_s": 0.012970199999472243,
+          "total_wall_s_internal": 26.21814389999963
+        },
+        "hmat_stats": {
+          "n_dof": 6144,
+          "n_leaves": 3250,
+          "n_lowrank": 458,
+          "n_dense": 2792,
+          "max_rank": 362,
+          "compression": 0.49532514148288304,
+          "build_time": 14.778422800000001,
+          "memory_mb": 142.6536407470703,
+          "dense_memory_mb": 288.0,
+          "build_prep_s": 0.0592745,
+          "build_cluster_s": 0.00035620000016933773,
+          "build_leafgen_s": 0.0003446000009716954,
+          "build_fill_s": 14.718065099999876,
+          "build_diag_s": 0.0786645,
+          "hex_cache_stats_enabled": 0.0,
+          "hex_block_cache_limit": 200000.0,
+          "hex_trans_cache_enabled": 1.0,
+          "hex_congruent_cache_enabled": 1.0,
+          "hex_congruent_ready": 0.0,
+          "hex_congruent_templates": 0.0,
+          "hex_congruent_hosts": 0.0,
+          "hex_far_one_sided_threshold": 0.0,
+          "hex_affine_exact_near_factor": 1.0,
+          "hex_distorted_far_factor": 1.0,
+          "hex_near_inner_exact": 1.0,
+          "hex_near_inner_host_cone": 1.0,
+          "hex_near_sinh_min_width": 0.001,
+          "hex_near_sinh_max_width": 1.0,
+          "hex_pair_duffy_enabled": 1.0,
+          "hex_affine_cells": 0.0,
+          "hex_cells": 0.0,
+          "quad_affine_faces": 0.0,
+          "quad_faces": 0.0,
+          "hex_glpair_n": 0.0,
+          "hex_glpair_affine_n": 0.0,
+          "hex_glpair_w_n": 0.0,
+          "hex_glpair_affine_w_n": 0.0,
+          "hex_pair_nonconforming": 0.0,
+          "hex_pair_anisotropy_graded": 0.0,
+          "hex_exponential_rule_max_anisotropy": 12.0,
+          "hex_cluster_radius_enabled": 1.0,
+          "hex_glnear_n": 0.0,
+          "hex_glout_n": 0.0,
+          "hex_glin_n": 0.0,
+          "hex_glin_self_n": 0.0,
+          "curved_direct_enabled": 1.0,
+          "hex_blk_affine_near": 0.0,
+          "hex_blk_affine_far": 0.0,
+          "hex_blk_distorted_far": 0.0,
+          "hex_blk_general_near": 0.0,
+          "hex_blk_general_far": 0.0,
+          "hex_s_affine_near": 0.0,
+          "hex_s_affine_far": 0.0,
+          "hex_s_distorted_far": 0.0,
+          "hex_s_general_near": 0.0,
+          "hex_s_general_far": 0.0,
+          "hex_general_shared_lookups": 0.0,
+          "hex_general_shared_hits": 0.0,
+          "hex_general_shared_misses": 0.0,
+          "hex_general_shared_entries": 0.0,
+          "wedge_far_one_sided_threshold": 0.0,
+          "wedge_trans_cache_scope": 2.0,
+          "wedge_trans_cache_enabled": 1.0,
+          "ho_far_one_sided_enabled": 0.0,
+          "ho_analytic_block_available": 1.0,
+          "ho_analytic_block_enabled": 1.0,
+          "ho_image_block_enabled": 1.0,
+          "ho_image_far_enabled": 1.0,
+          "hmatvec_stats_enabled": 0.0,
+          "hmatvec_mkl_threads": 1.0,
+          "nonproduction_numerical_override_active": 0.0,
+          "nondefault_performance_override_active": 0.0,
+          "release_claim_eligible": 1.0,
+          "hex_block_lookups": 0.0,
+          "hex_block_hits": 0.0,
+          "hex_block_misses": 0.0,
+          "hex_block_clears": 0.0,
+          "hex_trans_block_lookups": 0.0,
+          "hex_trans_block_hits": 0.0,
+          "hex_trans_block_misses": 0.0,
+          "hex_trans_block_clears": 0.0,
+          "hex_sym_block_lookups": 0.0,
+          "hex_sym_block_hits": 0.0,
+          "hex_sym_block_misses": 0.0,
+          "hex_sym_block_clears": 0.0,
+          "hex_sym_trans_block_lookups": 0.0,
+          "hex_sym_trans_block_hits": 0.0,
+          "hex_sym_trans_block_misses": 0.0,
+          "hex_sym_trans_block_clears": 0.0,
+          "ho_sym_block_lookups": 0.0,
+          "ho_sym_block_hits": 0.0,
+          "ho_sym_block_misses": 0.0,
+          "ho_sym_block_clears": 0.0,
+          "ho_image_far_entries": 0.0,
+          "ho_image_block_entries": 0.0,
+          "ho_image_scalar_entries": 0.0,
+          "hex_block_hit_rate": 0.0,
+          "hex_trans_block_hit_rate": 0.0,
+          "hex_sym_block_hit_rate": 0.0,
+          "hex_sym_trans_block_hit_rate": 0.0,
+          "ho_sym_block_hit_rate": 0.0,
+          "curved_touch_blocks": 0.0,
+          "curved_touch_build_time": 0.0,
+          "hex_uniform_affine_cells": false,
+          "hex_uniform_trans_hosts": false
+        },
+        "image": null,
+        "runtime_s": 27.22193150000021
+      },
+      "solve_scalars": {
+        "iters": 48,
+        "demag": 0.22894805857795406,
+        "ndof": 16608,
+        "n_el": 846,
+        "n_charge": 6144,
+        "nonlinear": false,
+        "linear_solver": "mass-riesz-cg",
+        "preconditioner": "mass-riesz",
+        "preconditioner_requested": "auto",
+        "preconditioner_policy": "auto:linear-mass-riesz",
+        "order": 2,
+        "curve_order": null,
+        "image": null,
+        "gram_backend": "hmat",
+        "exact_dense_normalized_gram": false,
+        "operator_reused": false,
+        "symmetry_constrained_dofs": 0,
+        "setup_wall_s": 25.295379699999103,
+        "periodic_slave_dofs": 0,
+        "solve_wall_s": 0.9097873000009713,
+        "post_wall_s": 0.012970199999472243,
+        "total_wall_s_internal": 26.21814389999963,
+        "fes_wall_s": 0.002472000000125263,
+        "charge_gram_wall_s": 22.600395399998888,
+        "charge_basis_wall_s": null,
+        "charge_gram_cpp_wall_s": null,
+        "hex_state_check_wall_s": null,
+        "projection_wall_s": 2.6479168999994727,
+        "demag_probe_wall_s": 0.044570699999894714,
+        "magnetization_source_count": 0,
+        "solve_total_s": 0.9087025000000001,
+        "solve_factor_s": 0.0,
+        "solve_prec_s": 0.43335689999999993,
+        "solve_bx_s": 0.0012582000000000001,
+        "solve_gmatvec_s": 0.16542299999999996,
+        "solve_btx_s": 0.0027003,
+        "solve_mass_s": 0.0154485,
+        "solve_dot_s": 0.28643589999999997,
+        "solve_ax_total_s": 0.1852003,
+        "solve_ax_other_s": 0.0003703000000000027,
+        "solve_pcg_update_s": 0.6955105000000005,
+        "mass_riesz_local_blocks": 0.0,
+        "mass_riesz_max_block": 0.0,
+        "mass_riesz_geometry_preconditioner": 1.0,
+        "solve_apply_count": 49.0,
+        "solve_prec_count": 49.0,
+        "solve_dot_count": 148.0,
+        "last_solve_converged": 1.0,
+        "last_solve_final_relative_residual": 9.06317422680347e-11,
+        "hmatvec_total_s": 0.0,
+        "hmatvec_zero_s": 0.0,
+        "hmatvec_permute_s": 0.0,
+        "hmatvec_leaf_s": 0.0,
+        "hmatvec_reduce_s": 0.0,
+        "hmatvec_meta_s": 0.0,
+        "hmatvec_lowrank_flop_est": 0.0,
+        "hmatvec_dense_flop_est": 0.0,
+        "hmatvec_calls": 0.0,
+        "hmatvec_lowrank_leaves": 0.0,
+        "hmatvec_dense_leaves": 0.0,
+        "hmatvec_mirrored_upper_leaves": 0.0,
+        "hmatvec_diagonal_leaves": 0.0,
+        "hmatvec_skipped_lower_leaves": 0.0,
+        "hmatvec_last_nd": 0.0,
+        "hmatvec_last_nthr": 0.0,
+        "hmatvec_lowrank_upper_leaves": 0.0,
+        "hmatvec_dense_upper_leaves": 0.0,
+        "hmatvec_inactive_skipped_leaves": 0.0,
+        "hmatvec_lowrank_directions": 0.0,
+        "hmatvec_dense_directions": 0.0,
+        "hmatvec_gemm_calls": 0.0,
+        "hmatvec_lowrank_rank_sum": 0.0,
+        "hmatvec_lowrank_rank_max": 0.0,
+        "hmatvec_lowrank_rank_le4": 0.0,
+        "hmatvec_lowrank_rank_le8": 0.0,
+        "hmatvec_lowrank_rank_le16": 0.0,
+        "hmatvec_lowrank_rank_le32": 0.0,
+        "field_evaluator_build_wall_s": 0.004086299999471521,
+        "result_keys": [
+          "M",
+          "M_avg",
+          "gfM",
+          "iters",
+          "demag",
+          "ndof",
+          "n_el",
+          "n_charge",
+          "nonlinear",
+          "linear_solver",
+          "preconditioner",
+          "preconditioner_requested",
+          "preconditioner_policy",
+          "order",
+          "curve_order",
+          "image",
+          "gram_backend",
+          "exact_dense_normalized_gram",
+          "operator_reused",
+          "symmetry_constrained_dofs",
+          "setup_wall_s",
+          "periodic_slave_dofs",
+          "cyclic_periodic_boundaries",
+          "solve_wall_s",
+          "post_wall_s",
+          "total_wall_s_internal",
+          "fes_wall_s",
+          "charge_gram_wall_s",
+          "charge_basis_wall_s",
+          "charge_gram_cpp_wall_s",
+          "hex_state_check_wall_s",
+          "projection_wall_s",
+          "demag_probe_wall_s",
+          "_charge_gram",
+          "_m_coefficients",
+          "_magnetization_sources",
+          "magnetization_source_count",
+          "cpp_solve_timings",
+          "solve_total_s",
+          "solve_factor_s",
+          "solve_prec_s",
+          "solve_bx_s",
+          "solve_gmatvec_s",
+          "solve_btx_s",
+          "solve_mass_s",
+          "solve_dot_s",
+          "solve_ax_total_s",
+          "solve_ax_other_s",
+          "solve_pcg_update_s",
+          "mass_riesz_local_blocks",
+          "mass_riesz_max_block",
+          "mass_riesz_geometry_preconditioner",
+          "solve_apply_count",
+          "solve_prec_count",
+          "solve_dot_count",
+          "last_solve_converged",
+          "last_solve_final_relative_residual",
+          "hmatvec_total_s",
+          "hmatvec_zero_s",
+          "hmatvec_permute_s",
+          "hmatvec_leaf_s",
+          "hmatvec_reduce_s",
+          "hmatvec_meta_s",
+          "hmatvec_lowrank_flop_est",
+          "hmatvec_dense_flop_est",
+          "hmatvec_calls",
+          "hmatvec_lowrank_leaves",
+          "hmatvec_dense_leaves",
+          "hmatvec_mirrored_upper_leaves",
+          "hmatvec_diagonal_leaves",
+          "hmatvec_skipped_lower_leaves",
+          "hmatvec_last_nd",
+          "hmatvec_last_nthr",
+          "hmatvec_lowrank_upper_leaves",
+          "hmatvec_dense_upper_leaves",
+          "hmatvec_inactive_skipped_leaves",
+          "hmatvec_lowrank_directions",
+          "hmatvec_dense_directions",
+          "hmatvec_gemm_calls",
+          "hmatvec_lowrank_rank_sum",
+          "hmatvec_lowrank_rank_max",
+          "hmatvec_lowrank_rank_le4",
+          "hmatvec_lowrank_rank_le8",
+          "hmatvec_lowrank_rank_le16",
+          "hmatvec_lowrank_rank_le32",
+          "hmat_stats",
+          "_field_evaluator",
+          "field_evaluator_stats",
+          "field_evaluator_build_wall_s"
+        ],
+        "field_evaluator_stats": {
+          "source_count": 1306,
+          "image_count": 0,
+          "tree_nodes": 127,
+          "leaf_size": 32,
+          "theta": 0.05,
+          "tree_min_sources": 256,
+          "auto_min_work": 500000000,
+          "tree_relative_tolerance": 1e-05,
+          "probe_count": 16,
+          "bounds_min": [
+            -0.025,
+            -0.02,
+            -0.105
+          ],
+          "bounds_max": [
+            0.025,
+            0.1625,
+            0.105
+          ],
+          "source_kind": "analytic-tet-bdm2",
+          "build_wall_s": 0.004086299999471521
+        }
+      },
+      "relative_vector_difference_from_previous_fine": 0.0
+    }
+  ],
+  "script_sha256": "5caf947e25d09a05a56e745ba753c5c1b16aba1ecc0fae33109173a07c86f1f4",
+  "note": "BDM2-only result; legacy difference key is self difference, not a comparison. Quadrature defaults follow FE order.",
+  "level": "fine"
+}
