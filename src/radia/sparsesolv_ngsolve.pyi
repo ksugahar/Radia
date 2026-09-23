@@ -386,6 +386,9 @@ class CompactAMSPreconditionerImpl(BaseMatrix):
     is preserved, only matrix-dependent parts are rebuilt.
     """
 
+    @property
+    def beta_zero(self) -> bool: ...
+
     def Update(self, new_mat: BaseMatrix | None = None) -> None:
         """Rebuild with current or new matrix values (geometry preserved).
 
@@ -406,10 +409,12 @@ def CompactAMSPreconditioner(
     print_level: int = 0,
     subspace_solver: int = 0,
     num_smooth: int = 1,
+    beta_zero: bool = False,
 ) -> CompactAMSPreconditionerImpl:
     """Compact AMS (Auxiliary-space Maxwell Solver) Preconditioner.
 
-    For real HCurl curl-curl + mass systems. No external dependency.
+    For real HCurl curl-curl + mass systems, or compatible pure curl-curl
+    systems with ``beta_zero=True``. No external dependency.
     Supports ``Update()`` for Newton iteration.
 
     Args:
@@ -423,6 +428,7 @@ def CompactAMSPreconditioner(
         print_level: Verbosity (default: 0).
         subspace_solver: 0=CompactAMG (default), 1=SparseCholesky.
         num_smooth: Smoother sweeps (default: 1).
+        beta_zero: Skip gradient correction and its hierarchy (default: False).
     """
     ...
 

@@ -301,6 +301,7 @@ inline void ExportHypreBasedAMS(py::module& m) {
   // Type registrations for HypreBasedAMS / ComplexHypreBasedAMS (enables Update() from Python)
   py::class_<HypreBasedAMS, shared_ptr<HypreBasedAMS>, BaseMatrix>
       (m, "HypreBasedAMSPreconditionerImpl")
+      .def_property_readonly("beta_zero", &HypreBasedAMS::GetBetaZero)
       .def("Update", py::overload_cast<>(&HypreBasedAMS::Update),
            "Rebuild preconditioner with current matrix values (geometry preserved).")
       .def("Update", py::overload_cast<shared_ptr<SparseMatrix<double>>>(&HypreBasedAMS::Update),
@@ -376,7 +377,8 @@ print_level : int
        int cycle_type,
        int print_level,
        int subspace_solver,
-       int num_smooth) -> shared_ptr<HypreBasedAMS>
+       int num_smooth,
+       bool beta_zero) -> shared_ptr<HypreBasedAMS>
     {
       auto sp_mat = dynamic_pointer_cast<SparseMatrix<double>>(mat);
       if (!sp_mat)
@@ -398,7 +400,7 @@ print_level : int
       return make_shared<HypreBasedAMS>(
           sp_mat, sp_grad, sp_freedofs,
           to_vec(coord_x_list), to_vec(coord_y_list), to_vec(coord_z_list),
-          cycle_type, num_smooth, 0.25, print_level, 1.0, subspace_solver);
+          cycle_type, num_smooth, 0.25, print_level, 1.0, subspace_solver, beta_zero);
     },
     py::arg("mat"),
     py::arg("grad_mat"),
@@ -410,11 +412,15 @@ print_level : int
     py::arg("print_level") = 0,
     py::arg("subspace_solver") = 0,
     py::arg("num_smooth") = 1,
+    py::arg("beta_zero") = false,
     R"raw_string(
 Compact AMS (Auxiliary-space Maxwell Solver) Preconditioner.
 
 TaskManager-parallel AMS for HCurl curl-curl + mass systems. No external dependency.
 Uses CompactAMG as sub-solver for gradient and nodal auxiliary spaces.
+With beta_zero=True, omit the gradient correction and hierarchy, as in the
+two-level beta=0 AMS mode. Use for compatible pure curl-curl systems; this
+does not add a mass penalty, shift the matrix, or project the right-hand side.
 
 Construct and call Update outside ngsolve.TaskManager. An active context raises
 RuntimeError; applying an already-built preconditioner may run inside TaskManager.
@@ -436,6 +442,8 @@ cycle_type : int
   AMS cycle type (1=01210, 7=0201020, default=1).
 print_level : int
   Verbosity (0=silent, default=0).
+beta_zero : bool
+  Pure curl-curl mode without the gradient subspace solver (default=False).
 )raw_string");
 
   m.def("ComplexHypreBasedAMSPreconditioner",
