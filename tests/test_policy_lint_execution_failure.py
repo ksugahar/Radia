@@ -68,3 +68,16 @@ def test_the_real_lint_still_passes_on_this_tree():
     """The fix must not have turned an honest pass into a failure."""
     lint = _load()
     assert lint.main(["--quiet"]) == 0
+
+
+def test_git_trust_is_scoped_to_the_active_checkout(monkeypatch):
+    from types import SimpleNamespace
+    lint = _load()
+    calls = []
+    def run(command, **kwargs):
+        calls.append((command, kwargs))
+        return SimpleNamespace(returncode=128, stdout="", stderr="git diagnostic")
+    monkeypatch.setattr(lint.subprocess, "run", run)
+    assert lint._sh(["git", "grep", "needle"]) == (128, "git diagnostic")
+    assert calls[0][0] == ["git", "-c", f"safe.directory={lint.REPO}", "grep", "needle"]
+    assert calls[0][1]["cwd"] == lint.REPO
