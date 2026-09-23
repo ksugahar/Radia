@@ -1,0 +1,29 @@
+{
+  "status": "BDM2 diagnostic, not three-engine pass or accuracy certificate",
+  "core_increments": [
+    0.0024220641210618886,
+    4.294337164392029e-05
+  ],
+  "ratio": 0.017730072160555735,
+  "primary_dof": [
+    10860,
+    16608,
+    32580
+  ],
+  "runtime_s": [
+    17.265267599999788,
+    27.22193150000021,
+    57.27914789999886
+  ],
+  "native_residual": [
+    7.512853472064542e-11,
+    9.06317422680347e-11,
+    8.157396609914261e-11
+  ],
+  "source_hashes": [
+    "ff26be476302adf64e219efe5c67d89fe8e4f3d922fbed1181fed87b0786692d",
+    "158e5ce03666409fd09fab3f34b32a28627a9fb0d6e867a556c3609164320482",
+    "4d4d59b2e07eeea004de2a79ac8efa7ae25e2b03136b5ce7eb0c9d02568325de"
+  ],
+  "normalization": "Last input level core vector norm for both increments; campaign axial projection and core mask"
+}
