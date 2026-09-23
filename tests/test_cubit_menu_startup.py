@@ -9,6 +9,8 @@ from pathlib import Path
 import sys
 import types
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 REGISTER_TOOLBAR = ROOT / "packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/register_toolbar.py"
 EXPORT_MENU = ROOT / "packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/cubit_export_menu.py"
@@ -26,6 +28,44 @@ check_pyside6_ownership_boundary = _AUDIT_MODULE.check_pyside6_ownership_boundar
 
 def test_pyside6_is_confined_to_cubit_owned_code_and_tests():
     assert check_pyside6_ownership_boundary() == []
+
+
+@pytest.mark.parametrize("check", [
+    _AUDIT_MODULE.check_no_legacy_qt_imports,
+    check_pyside6_ownership_boundary,
+])
+@pytest.mark.parametrize("returncode", [0, 1, 128])
+def test_import_audit_distinguishes_no_matches_from_git_failure(monkeypatch, check, returncode):
+    monkeypatch.setattr(_AUDIT_MODULE.subprocess, "run", lambda *a, **kw:
+                        types.SimpleNamespace(returncode=returncode, stdout="",
+                                              stderr="repository unavailable"))
+    issues = check()
+    if returncode == 128:
+        assert issues == ["git audit failed (128): repository unavailable"]
+    else:
+        assert issues == []
+
+
+@pytest.mark.parametrize("returncode", [2, -1073741819])
+def test_failed_export_process_cannot_pass_with_an_existing_artifact(monkeypatch, tmp_path, returncode):
+    path = EXPORT_MENU.parents[1] / "smoke_test.py"
+    spec = importlib.util.spec_from_file_location("cubit_process_smoke", path)
+    smoke = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(smoke)
+    monkeypatch.setattr(smoke, "_find_cubit_exe", lambda: tmp_path / "coreform_cubit.exe")
+    monkeypatch.setattr(smoke, "_find_sample_jou", lambda *_: tmp_path / "sample.jou")
+    monkeypatch.setattr(smoke.tempfile, "mkdtemp", lambda **_: str(tmp_path))
+
+    def failed_export(*args, **kwargs):
+        (tmp_path / "smoke.vol").write_text("exported before failure", encoding="utf-8")
+        return types.SimpleNamespace(returncode=returncode, stdout="export finished", stderr="shutdown failed")
+
+    monkeypatch.setattr(smoke.subprocess, "run", failed_export)
+    monkeypatch.setattr(smoke, "_validate_exported_vol", lambda *a, **kw:
+                        pytest.fail("failed process must not be accepted via artifact validation"))
+    assert smoke.run_smoke_test() == 1
+    assert (tmp_path / "smoke.vol").is_file()
+    assert "shutdown failed" in (tmp_path / "cubit.log").read_text(encoding="utf-8")
 
 
 def test_deployment_audit_rejects_startup_from_another_checkout(tmp_path):
