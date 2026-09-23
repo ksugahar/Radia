@@ -29,15 +29,18 @@ def test_candidate_uses_package_specific_success_marker(tmp_path, monkeypatch, s
     monkeypatch.setattr(module, 'SIMULINK_GATE_ROOT', tmp_path)
     visited = []
 
-    def verify_target(key, path, digest, success_marker):
+    def verify_target(key, path, digest, success_marker, engine_session=None):
         assert path == package
         assert digest == module._sha256_file(package)
         assert success_marker == marker
+        assert engine_session == ('shared_validation' if key == '100' else None)
         visited.append(key)
         return True, marker
 
     monkeypatch.setattr(module, '_run_simulink_candidate_target', verify_target)
-    assert module.cmd_simulink_candidate(SimpleNamespace(package=str(package), target='all')) == 0
+    args = SimpleNamespace(package=str(package), target='all',
+                           engine_session=['100=shared_validation'])
+    assert module.cmd_simulink_candidate(args) == 0
     assert visited == list(module.SIMULINK_TARGETS)
     recorded = json.loads(module._simulink_state_path(module._sha256_file(package)).read_text())
     assert all(target['status'] == 'passed' for target in recorded['targets'].values())
