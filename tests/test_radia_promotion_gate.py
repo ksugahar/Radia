@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import zipfile
+import xml.etree.ElementTree as ET
 
 import pytest
 
@@ -161,7 +162,12 @@ def test_exact_wheel_end_to_end(tmp_path):
         assert commit == "b" * 40
         assert path.startswith("validation_test/esrf_three_engine/results/candidate_aaaaaaaaa/")
         host, name = path.split("/")[-2:]
-        a, f, x, _ = evidence(host)
+        # Synthetic four-host API fixture, not a claim of machine acceptance.
+        a, f, x, _ = evidence("lab")
+        tree = ET.fromstring(x)
+        suite = tree if tree.tag == "testsuite" else tree.find("testsuite")
+        suite.set("hostname", host)
+        x = ET.tostring(tree)
         if name == "acceptance.json":
             a.update(wheel_sha256=digest, native_sha256=hashlib.sha256(b"native").hexdigest(),
                      source_commit="a" * 40, ci_run=9, sources_verified=1)
@@ -170,7 +176,16 @@ def test_exact_wheel_end_to_end(tmp_path):
 
     api.file = read_file
     report = gate.verify_artifact(api, run, "b" * 40, wheel_dir, tmp_path, digest)
-    assert report["hosts"] == ["lab", "hibino"] and report["passed"]
+    assert report["hosts"] == ["lab", "100", "mdx1", "mdx2"] and report["passed"]
+    for missing_host in report["hosts"]:
+        def incomplete(path, commit):
+            if path.split("/")[-2] == missing_host:
+                raise FileNotFoundError(path)
+            return read_file(path, commit)
+        api.file = incomplete
+        with pytest.raises(ValueError, match="Acceptance evidence missing for " + missing_host):
+            gate.verify_artifact(api, run, "b" * 40, wheel_dir, tmp_path, digest)
+    api.file = read_file
     with pytest.raises(ValueError, match="hash mismatch"):
         gate.verify_artifact(api, run, "b" * 40, wheel_dir, tmp_path, "0" * 64)
     ctx["ref_type"] = "branch"

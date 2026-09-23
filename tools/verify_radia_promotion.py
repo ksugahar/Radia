@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import importlib.util
 import json
 import math
 import os
@@ -191,7 +192,11 @@ def verify_artifact(api, run, commit, wheel_dir, context_dir, expected_hash):
     # so this gate cannot quietly ask for fewer machines than policy requires.
     # It used to name two hosts of its own, one of which is not an acceptance
     # target at all, and would have published on two of the four.
-    from release_acceptance import RELEASE_ACCEPTANCE_HOSTS
+    spec = importlib.util.spec_from_file_location(
+        "radia_release_acceptance", Path(__file__).resolve().with_name("release_acceptance.py"))
+    acceptance_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(acceptance_module)
+    RELEASE_ACCEPTANCE_HOSTS = acceptance_module.RELEASE_ACCEPTANCE_HOSTS
     missing = []
     for host in RELEASE_ACCEPTANCE_HOSTS:
         try:

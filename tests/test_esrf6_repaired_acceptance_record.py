@@ -10,8 +10,9 @@ def test_ci_wheel_nominal_three_engine_record():
     directory = (Path(__file__).resolve().parents[1] / 'validation_test' /
                  'esrf_three_engine/results/candidate_59b094d8')
     path = directory / 'three_engine_case6_bdm1_bonus12.json'
+    # Label-only terminology update in 6216de330; numerical evidence is unchanged.
     assert hashlib.sha256(path.read_bytes()).hexdigest() == (
-        'b00ba5d7a6532721e23eefe6e8b1c0b8889b9f52e1f4240bbd2f2a99570d722f')
+        'e19541032ec0ba496065ece3870c95d8732f6bb6ceeac203ee147bd5fa85947e')
     result = json.loads(path.read_bytes())
     assert result['passed'] is True and result['nonlinear_converged'] is True
     runtime = result['runtime_identity']
