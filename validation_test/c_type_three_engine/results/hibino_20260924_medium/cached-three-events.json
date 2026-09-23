@@ -1,0 +1,32 @@
+[
+  {
+    "event": "source_cache_begin",
+    "points": 1218000,
+    "mapping_s": 0.38505179999992833
+  },
+  {
+    "event": "source_cache_ready",
+    "preparation_s": 529.2549417,
+    "cache": {
+      "enabled": true,
+      "size": 1218000,
+      "hits": 0,
+      "misses": 0,
+      "hit_rate": 0.0
+    }
+  },
+  {
+    "event": "source_hodge_complete",
+    "inclusive_s": 530.4572527999999,
+    "cache": {
+      "enabled": true,
+      "size": 1218000,
+      "hits": 6090000,
+      "misses": 0,
+      "hit_rate": 1.0
+    }
+  },
+  {
+    "event": "completed"
+  }
+]
