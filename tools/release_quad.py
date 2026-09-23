@@ -174,7 +174,11 @@ SIMULINK_TARGETS = {
 # The promotion gate imports the same tuple, so the machines that produce
 # release evidence and the machines the gate demands evidence from cannot
 # drift apart again.  release_acceptance.py is the single owner of the list.
-from release_acceptance import RELEASE_ACCEPTANCE_HOSTS  # noqa: E402
+_acceptance_spec = importlib.util.spec_from_file_location(
+    "radia_release_acceptance", Path(__file__).resolve().with_name("release_acceptance.py"))
+_acceptance_module = importlib.util.module_from_spec(_acceptance_spec)
+_acceptance_spec.loader.exec_module(_acceptance_module)
+RELEASE_ACCEPTANCE_HOSTS = _acceptance_module.RELEASE_ACCEPTANCE_HOSTS
 
 assert tuple(SIMULINK_TARGETS) == RELEASE_ACCEPTANCE_HOSTS, (
     "release_quad targets and the release acceptance hosts have drifted")
