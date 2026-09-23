@@ -86,7 +86,9 @@ def check_no_legacy_qt_imports() -> list[str]:
     for p in pats:
         args += ["-e", p]
     args += ["--", "*.py"]
-    r = subprocess.run(args, cwd=ROOT, capture_output=True, text=True)
+    r = subprocess.run(args, cwd=ROOT, capture_output=True, text=True, encoding="utf-8")
+    if r.returncode not in (0, 1):
+        return [f"git audit failed ({r.returncode}): {r.stderr.strip()}"]
     # git grep: rc 0 = matches found (BAD), rc 1 = no match (GOOD)
     hits = [ln for ln in r.stdout.splitlines() if ln.strip()]
     return hits
@@ -102,6 +104,8 @@ def check_pyside6_ownership_boundary() -> list[str]:
         text=True, encoding="utf-8",
     )
     issues = []
+    if result.returncode not in (0, 1):
+        return [f"git audit failed ({result.returncode}): {result.stderr.strip()}"]
     for raw_path in result.stdout.splitlines():
         relative = raw_path.strip().replace("\\", "/")
         if not relative or relative in PYSIDE6_ALLOWED_FILES:
