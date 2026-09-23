@@ -59,6 +59,16 @@ Linear solves (`--reduced-a-solver`):
   updated in place at every Newton step, constructed outside `TaskManager` as
   its contract requires) with conjugate gradients on the mass-regularised
   system (`--gauge-epsilon`, default 1e-6).
+  `--gauge-epsilon 0 --ams-beta-zero` selects the pure curl-curl mode:
+  gradient correction and its Galerkin matrix/solver are omitted; fine-space
+  smoothing and vector nodal corrections remain. This requires a native
+  build exposing `beta_zero=True`. Neither the physical operator nor the
+  preconditioner receives a mass shift. The caller must supply a compatible
+  right-hand side; this option does not project incompatible residuals.
+  It is an independent AMS mode, not an incomplete-Cholesky shift.
+  The mode follows the omission described by hypre's
+  [`HYPRE_AMSSetBetaPoissonMatrix(NULL)`](https://hypre.readthedocs.io/en/latest/api-sol-parcsr.html#c.HYPRE_AMSSetBetaPoissonMatrix);
+  Radia still uses its own compact implementation, not a hypre binding.
   With `--gauge-epsilon 0 --ams-preconditioner-shift 0.01`, only the AMS
   hierarchy sees `K + sigma nu_0 M`; CG still solves the original singular,
   compatible `K A = f`. The shifted matrix has independent storage and is

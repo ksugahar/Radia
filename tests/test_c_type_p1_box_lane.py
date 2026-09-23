@@ -201,6 +201,22 @@ def test_newton_accepts_an_initially_zero_residual(box_mesh):
     np.testing.assert_array_equal(field, 0.0)
 
 
+def test_beta_zero_ams_preserves_the_ungauged_field(box_mesh):
+    ams = _engine(box_mesh, "ams", gauge_epsilon=0., ams_beta_zero=True,
+                  cg_tolerance=1e-7)
+    reference = _engine(box_mesh, "iccg", gauge_epsilon=0., cg_tolerance=1e-7)
+    field, stats, _ = ams.run_linear(1000., _points())
+    expected, _, _ = reference.run_linear(1000., _points())
+    assert ams._ams.beta_zero is True
+    assert ams._ams_shift_form is None and ams._gradient_projection is None
+    assert stats['history'][0]['relative_residual'] <= 1e-7
+    np.testing.assert_allclose(field, expected, rtol=1e-5, atol=1e-7)
+    for kwargs in ({"gauge_epsilon": 1e-6}, {"ams_preconditioner_shift": .01}):
+        with pytest.raises(ValueError, match="ams_beta_zero"):
+            _engine(box_mesh, "ams", ams_beta_zero=True,
+                    **{"gauge_epsilon": 0., **kwargs})
+
+
 def test_cli_preserves_runtime_failure_as_json(tmp_path, monkeypatch):
     module = lane()
     output = tmp_path / "failure.json"
