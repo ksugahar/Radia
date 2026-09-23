@@ -132,6 +132,7 @@ public:
         RequireSerialSetup();
         mult_count_ = 0;
         t_smooth_ = t_grad_ = t_nodal_ = t_bc_ = 0;
+        t_residual_ = t_restrict_ = t_auxiliary_ = t_prolong_ = 0;
         RebuildMatrix();
     }
 
@@ -216,7 +217,7 @@ public:
         t_bc_ += elapsed();
 
         if (cycle_type_ == 7) {
-            FineSmooth(b0, x); t_smooth_ += elapsed();
+            FineSmooth(b0, x, true); t_smooth_ += elapsed();
             GradientCorrect(b0, x); t_grad_ += elapsed();
             FineSmooth(b0, x); t_smooth_ += elapsed();
             NodalCorrect(b0, x); t_nodal_ += elapsed();
@@ -225,7 +226,7 @@ public:
             FineSmooth(b0, x); t_smooth_ += elapsed();
         } else {
             // 01210 (default, cycle_type=1)
-            FineSmooth(b0, x); t_smooth_ += elapsed();
+            FineSmooth(b0, x, true); t_smooth_ += elapsed();
             GradientCorrect(b0, x); t_grad_ += elapsed();
             NodalCorrect(b0, x); t_nodal_ += elapsed();
             GradientCorrect(b0, x); t_grad_ += elapsed();
@@ -250,6 +251,9 @@ public:
                       << " bc=" << t_bc_ << "s"
                       << " total=" << (t_smooth_+t_grad_+t_nodal_+t_bc_) << "s"
                       << std::endl;
+            std::cout << "  AMS correction subphases: residual=" << t_residual_
+                      << "s restrict=" << t_restrict_ << "s auxiliary=" << t_auxiliary_
+                      << "s prolong=" << t_prolong_ << "s" << std::endl;
         }
     }
 
@@ -296,6 +300,14 @@ private:
     // Accumulated timing (mutable for const Mult)
     mutable int mult_count_ = 0;
     mutable double t_smooth_ = 0, t_grad_ = 0, t_nodal_ = 0, t_bc_ = 0;
+    mutable double t_residual_ = 0, t_restrict_ = 0, t_auxiliary_ = 0, t_prolong_ = 0;
+
+    template <class F> void ProfileCorrection(double& seconds, F&& action) const {
+        if (print_level_ == 0) { action(); return; }
+        auto start = std::chrono::steady_clock::now();
+        action();
+        seconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    }
 
     // =====================================================================
     // Setup: split into geometry (one-time) + matrix (per-Update) + alloc
@@ -592,7 +604,7 @@ private:
         ParallelFor(fv_s.Size(), [&](size_t i) { fv_d[i] = fv_s[i]; });
     }
 
-    void FineSmooth(const BaseVector& b, BaseVector& x) const {
+    void FineSmooth(const BaseVector& b, BaseVector& x, bool initially_zero = false) const {
         // l1-Jacobi: fully parallel, no data dependency between rows.
         // Each sweep: compute residual r = b - A*x, then x += r / l1_norm.
         auto& res = *r0_;
@@ -600,7 +612,9 @@ private:
         for (int s = 0; s < num_smooth_; s++) {
             // Residual: r = b - A*x (NGSolve SpMV is TaskManager-parallel)
             CopyVector(b, res);
-            A_bc_->MultAdd(-1.0, x, res);
+            // Mult explicitly zeroes x before the first smoother: A*0 adds no information.
+            if (!initially_zero || s != 0)
+                A_bc_->MultAdd(-1.0, x, res);
 
             // Jacobi update: x[i] += r[i] / l1_norm[i] (fully parallel)
             auto fv_x = x.FVDouble();
@@ -623,19 +637,21 @@ private:
                          BaseVector& g_c,
                          const char* label = "") const {
         // Restrict: r_c = P^T * residual
-        Pt.Mult(residual, r_c);
+        ProfileCorrection(t_restrict_, [&]() { Pt.Mult(residual, r_c); });
 
         // Coarse solve: g_c = B^{-1} * r_c (one AMG V-cycle)
         g_c.FVDouble() = 0;
-        B.Mult(r_c, g_c);
+        ProfileCorrection(t_auxiliary_, [&]() { B.Mult(r_c, g_c); });
 
         // Prolongate and add: x += omega * P * g_c
-        P.MultAdd(correction_weight_, g_c, x);
+        ProfileCorrection(t_prolong_, [&]() { P.MultAdd(correction_weight_, g_c, x); });
     }
 
     void ComputeResidual(const BaseVector& b, const BaseVector& x, BaseVector& res) const {
+        ProfileCorrection(t_residual_, [&]() {
         CopyVector(b, res);
         A_bc_->MultAdd(-1.0, x, res);
+        });
     }
 
     void GradientCorrect(const BaseVector& b, BaseVector& x) const {
@@ -651,22 +667,28 @@ private:
         // Saves 2 fine-level SpMVs per AMS cycle vs multiplicative approach.
 
         // Restrict to all 3 subspaces from same residual
+        ProfileCorrection(t_restrict_, [&]() {
         Pix_t_->Mult(*r0_, *r_Pix_);
         Piy_t_->Mult(*r0_, *r_Piy_);
         Piz_t_->Mult(*r0_, *r_Piz_);
+        });
 
         // Solve all 3 (sequential: each AMG uses TaskManager internally)
+        ProfileCorrection(t_auxiliary_, [&]() {
         g_Pix_->FVDouble() = 0;
         B_Pix_->Mult(*r_Pix_, *g_Pix_);
         g_Piy_->FVDouble() = 0;
         B_Piy_->Mult(*r_Piy_, *g_Piy_);
         g_Piz_->FVDouble() = 0;
         B_Piz_->Mult(*r_Piz_, *g_Piz_);
+        });
 
         // Prolongate and add all 3 corrections
+        ProfileCorrection(t_prolong_, [&]() {
         Pix_->MultAdd(correction_weight_, *g_Pix_, x);
         Piy_->MultAdd(correction_weight_, *g_Piy_, x);
         Piz_->MultAdd(correction_weight_, *g_Piz_, x);
+        });
     }
 
     // =====================================================================

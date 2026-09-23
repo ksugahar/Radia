@@ -97,8 +97,9 @@ def test_the_flux_side_law_matches_the_production_inverse():
         lane().SoftIronLaw([[0.0, 0.0]])
 
 
-def test_ams_and_direct_linear_solves_agree(box_mesh):
-    ams = _engine(box_mesh, "ams")
+@pytest.mark.parametrize("smoothing_sweeps", [1, 2])
+def test_ams_and_direct_linear_solves_agree(box_mesh, smoothing_sweeps):
+    ams = _engine(box_mesh, "ams", ams_num_smooth=smoothing_sweeps)
     direct = _engine(box_mesh, "direct")
     with ng.TaskManager():
         pass
