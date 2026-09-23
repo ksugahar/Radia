@@ -1,0 +1,11 @@
+{
+  "host": "Hibino",
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "executable": "C:\\temp\\hdiv-mixed-20260924\\venv\\Scripts\\python.exe",
+  "radia_path": "C:\\temp\\hdiv-mixed-20260924\\venv\\Lib\\site-packages\\radia\\__init__.py",
+  "ngsolve_path": "C:\\Program Files\\Python312\\Lib\\site-packages\\ngsolve\\__init__.py",
+  "wrapper_sha256": "5c815b21411b186c0ea80151f97179c76941b497e5e78a53b89e11a92c19af18",
+  "source_cache_is_inside_engine_runtime": true,
+  "resume": false,
+  "warning": "Experimental implementation; no speed superiority without matched error and completed gates."
+}
