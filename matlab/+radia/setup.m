@@ -61,25 +61,6 @@ if ~options.Force && ~isempty(cachedInfo) && ...
     return
 end
 
-expectedMexCommit = "";
-if options.RequireMex
-    verifier = fullfile(matlabDir, "verify_radia_mex_provenance.py");
-    command = sprintf('"%s" "%s" "%s"', ...
-        char(options.PythonExecutable), verifier, selectedMex);
-    [verified, output] = system(command);
-    if verified ~= 0
-        error("radia:setup:StaleMex", ...
-            "radia_mex provenance check failed: %s", strtrim(output));
-    end
-    lines = splitlines(string(output));
-    values = extractAfter(lines(startsWith(lines, "RADIA_MEX_COMMIT:")), ...
-        "RADIA_MEX_COMMIT:");
-    if numel(values) ~= 1 || strlength(values) ~= 40
-        error("radia:setup:StaleMex", "Invalid radia_mex build identity.");
-    end
-    expectedMexCommit = values(1);
-end
-
 runtimeDirs = strings(0, 1);
 excludedOpenMPRuntimeDirs = strings(0, 1);
 ngsolveVersion = "";
@@ -129,6 +110,26 @@ if ispc
         keep(i) = ~any(strcmpi(current(i), managedRuntimeDirs));
     end
     setenv("PATH", char(strjoin([runtimeDirs; current(keep)], pathsep)));
+end
+
+% Validate the Python runtime before attributing subprocess failures to MEX.
+expectedMexCommit = "";
+if options.RequireMex
+    verifier = fullfile(matlabDir, "verify_radia_mex_provenance.py");
+    command = sprintf('"%s" "%s" "%s"', ...
+        char(options.PythonExecutable), verifier, selectedMex);
+    [verified, output] = system(command);
+    if verified ~= 0
+        error("radia:setup:StaleMex", ...
+            "radia_mex provenance check failed: %s", strtrim(output));
+    end
+    lines = splitlines(string(output));
+    values = extractAfter(lines(startsWith(lines, "RADIA_MEX_COMMIT:")), ...
+        "RADIA_MEX_COMMIT:");
+    if numel(values) ~= 1 || strlength(values) ~= 40
+        error("radia:setup:StaleMex", "Invalid radia_mex build identity.");
+    end
+    expectedMexCommit = values(1);
 end
 
  mexPath = which("radia_mex");
