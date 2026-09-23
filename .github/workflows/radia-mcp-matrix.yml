@@ -72,17 +72,6 @@ jobs:
       changed_files_json: ${{ steps.classify.outputs.changed_files_json }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Fetch impact comparison base
-        if: needs.scope.outputs.run_tests == 'true' && needs.scope.outputs.run_full != 'true'
-        shell: bash
-        env:
-          CI_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-        run: |
-          if [[ -n "$CI_BASE_SHA" && ! "$CI_BASE_SHA" =~ ^0+$ ]]; then
-            git cat-file -e "$CI_BASE_SHA^{commit}" 2>/dev/null || \
-              git fetch --no-tags --depth=1 origin "$CI_BASE_SHA"
-          fi
         with:
           fetch-depth: 0
 
