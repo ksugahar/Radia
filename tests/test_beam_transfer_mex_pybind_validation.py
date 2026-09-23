@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,25 @@ SPEC = importlib.util.spec_from_file_location("beam_transfer_validation", SCRIPT
 MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
+
+
+def test_source_provenance_survives_matlab_account_boundary(tmp_path, monkeypatch):
+    source = tmp_path / "checkout"
+    source.mkdir()
+    subprocess.run(["git", "init", str(source)], check=True, capture_output=True)
+    tracked = source / "source.txt"
+    tracked.write_text("validated source\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(source), "add", "source.txt"], check=True)
+    subprocess.run(["git", "-C", str(source), "-c", "user.name=Test",
+                    "-c", "user.email=test@example.invalid", "commit", "-m", "fixture"],
+                   check=True, capture_output=True)
+    expected = MODULE._git_head(source)
+    monkeypatch.setenv("GIT_TEST_ASSUME_DIFFERENT_OWNER", "1")
+    assert MODULE._git_head(source) == expected
+    MODULE._require_clean_source(source)
+    tracked.write_text("changed source\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="clean source checkout"):
+        MODULE._require_clean_source(source)
 
 
 def _report(backend: str) -> dict:
