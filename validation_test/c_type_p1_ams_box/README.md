@@ -39,6 +39,16 @@ the solver's linear/Newton field agreement, zero-current and polarity
 controls are covered by the focused tests. The existing CLI engine list
 is unchanged.
 
+For raw element-field comparisons, identical coordinates are not sufficient
+when a probe lies on a shared face: the lowest-order curl is discontinuous
+and point locators can choose different neighbouring cells. Freeze the tet4
+connectivity and material ID, evaluate at its centroid (barycentric weights
+all 1/4), and verify that the point locator returns that cell. Keep the
+original face-probe diagnostic rather than silently replacing it. A tiny
+coordinate offset can remain inside a locator's tolerance and is not a
+reliable side-selection contract. Report gap samples and material-stratified
+samples separately; neither establishes agreement at every mesh element.
+
 The reduced-A option `--outer-boundary natural_total` imposes the weak
 condition `n x H_total = 0`, instead of the default `source_flux` condition
 `A_r x n = 0`. It frees the outer tangential DOFs and adds
