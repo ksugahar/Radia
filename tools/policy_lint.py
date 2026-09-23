@@ -74,9 +74,13 @@ CBLAS_COLMAJOR_ALLOW = (
 
 
 def _sh(cmd):
+    if cmd[0] == "git":
+        # CI service and interactive checkout owners may differ. Trust only
+        # this invocation's repository, as ci_preflight's diff helper does.
+        cmd = [cmd[0], "-c", f"safe.directory={REPO}", *cmd[1:]]
     p = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True,
                        encoding="utf-8", errors="replace")
-    return p.returncode, (p.stdout or "")
+    return p.returncode, (p.stdout or "") + (p.stderr or "" if p.returncode not in (0, 1) else "")
 
 
 class LintExecutionError(RuntimeError):
@@ -93,7 +97,7 @@ def _git_grep(pattern, pathspecs, extra=()):
     if rc not in (0, 1):
         raise LintExecutionError(
             f"git grep exited {rc} for pattern {pattern!r}; the policy "
-            f"could not be checked and is therefore not passed")
+            f"could not be checked and is therefore not passed: {out.strip()}")
     return [ln for ln in out.splitlines() if ln.strip()]
 
 
