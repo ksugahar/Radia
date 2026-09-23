@@ -1,0 +1,9 @@
+{
+  "host": "Hibino",
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "executable": "C:\\temp\\hdiv-bdm2finer-20260924\\venv\\Scripts\\python.exe",
+  "ngsolve_version": "6.2.2606",
+  "ngsolve_path": "C:\\Program Files\\Python312\\Lib\\site-packages\\ngsolve\\__init__.py",
+  "radia_path": "C:\\temp\\hdiv-bdm2finer-20260924\\venv\\Lib\\site-packages\\radia\\__init__.py",
+  "wheel_sha256": "41b5f5ec02c5c26ad47147da7e4496525e3e2066216d85d787487ecc253023e6"
+}
