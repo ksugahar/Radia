@@ -21,7 +21,10 @@ from mcp.server.stdio import stdio_server
 from . import PACKS, modules_for
 from .. import __version__
 from radia_mcp.common.status import build_status_payload, _runtime_provenance
-from radia_mcp.common.mcp_contract import audit_tool_definitions, SCHEMA
+from radia_mcp.common.mcp_contract import (
+    audit_tool_definitions, SCHEMA, _install_client_info_capture,
+    get_client_connection_state,
+)
 
 
 class CapabilityServer:
@@ -51,6 +54,8 @@ class CapabilityServer:
         self.server.get_prompt()(self.get_prompt)
         self.server.list_resources()(self.list_resources)
         self.server.read_resource()(self.read_resource)
+        self._mcp_server = self.server
+        _install_client_info_capture(self, f"mcp-server-{pack}", __version__)
 
     async def initialize(self):
         """Load selected domains, rejecting any ambiguous public ownership."""
@@ -90,6 +95,7 @@ class CapabilityServer:
             runtime_provenance=provenance,
         )
         payload.update({
+            "client_connection": get_client_connection_state(self),
             "pack": self.pack, "profile": self.profile,
             "modules": list(self.modules),
             "profiles": ["all", *[p for p in PACKS[self.pack]["profiles"] if p != "all"]],

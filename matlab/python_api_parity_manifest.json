@@ -504,15 +504,43 @@
       "notes": "Private compatibility implementation."
     },
     {
-      "id": "periodic-h1-space",
-      "patterns": [
-        "periodic_h1.py"
-      ],
+      "id": "axisymmetric-measure",
+      "patterns": ["axisym_measure.py"],
       "classification": "python-fallback",
       "backend_contract": "in-process-python",
-      "matlab": [
-        "matlab/+radia/+python/periodicH1.m"
-      ],
+      "matlab": ["matlab/+radia/+python/axisymMeasure.m"],
+      "notes": "The two integration measures an axisymmetric meridian mesh carries: the meridian dr dz for a current or flux through the cross-section, and the revolved 2 pi r dr dz for anything living in the body. They are one identical-looking call in NGSolve, and choosing the wrong one is a bias that is smallest exactly where the model looks most trustworthy, so both are named. No numerical oracle is duplicated: the MATLAB entry calls the same two functions."
+    },
+    {
+      "id": "axisymmetric-eddy-ring",
+      "patterns": ["eddy_axisym_ring.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/eddyAxisymRing.m"],
+      "notes": "Voltage-driven axisymmetric eddy operating points on the already-validated axifem stiffness and sigma-mass operators; what is added here is the drive and the terminal quantities. Batch only -- the result owns an NGSolve mesh and GridFunction, which have no MATLAB representation."
+    },
+    {
+      "id": "terminal-driven-eddy-aphi",
+      "patterns": ["eddy_aphi.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/eddyAphi.m"],
+      "notes": "Terminal-driven three-dimensional A-V eddy solves, used as an independent reference for surface-impedance routes. Batch only, for the same mesh and GridFunction reason."
+    },
+    {
+      "id": "surface-impedance-corner-patch",
+      "patterns": ["sibc_corner_patch.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/sibcCornerPatch.m"],
+      "notes": "The matched patch that repairs a surface impedance where its expansion in skin depth over radius of curvature has nothing to expand in, and the whole-section control it is scored against. Batch only, for the same reason."
+    },
+    {
+      "id": "periodic-h1-space",
+      "patterns": ["periodic_h1.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/periodicH1.m"],
       "notes": "A face-consistent H1 space across one explicit periodic interface, built by the native _periodic_h1_single_interface. The returned space is a Python ecosystem object: it is an argument to later Python calls rather than a value MATLAB computes on, and it must be rebuilt after loading a mesh rather than serialized. Multi-interface, adaptive and parallel-distributed spaces are outside the verified scope."
     }
   ],
