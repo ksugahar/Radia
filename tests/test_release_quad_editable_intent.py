@@ -220,7 +220,7 @@ def test_lab_deploy_records_the_installed_source_after_pip_install(monkeypatch):
     assert not any("cubit-mesh-export" in c or "radia-mcp" in c for c in commands)
 
 
-def test_lab_record_helper_adopts_the_three_packages_without_pip(monkeypatch):
+def test_lab_record_helper_adopts_only_solver_without_pip(monkeypatch):
     seen = {}
     monkeypatch.setattr(release_quad, "_release_head", lambda: "b" * 40)
 
@@ -230,7 +230,7 @@ def test_lab_record_helper_adopts_the_three_packages_without_pip(monkeypatch):
 
     monkeypatch.setattr(intent, "record_current", fake_record_current)
     assert release_quad._record_release_intent_lab("S:/Radia/release-quad/x") == 0
-    assert seen["packages"] == ["radia", "cubit-mesh-export", "radia-mcp"]
+    assert seen["packages"] == ["radia"]
     assert "phase8" in seen["reason"] and "bbbbbbbbbbbb" in seen["reason"]
     assert seen["kwargs"] == {"via": "release-quad phase8"}
 
@@ -244,7 +244,8 @@ def test_remote_record_helper_uses_record_current_with_the_host_tool(monkeypatch
     assert release_quad._record_release_intent_remote("100", "100号機", r"W:\x") == 0
     assert seen["host"] == "100"
     assert seen["argv"][:3] == ["--json", "repoint", "--record-current"]
-    assert seen["argv"].count("--package") == 3
+    assert seen["argv"].count("--package") == 1
+    assert seen["argv"][-2:] == ["--package", "radia"]
     assert "--source" not in seen["argv"]
 
 

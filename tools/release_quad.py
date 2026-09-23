@@ -931,6 +931,48 @@ def cmd_preflight(args):
     return 0
 
 
+SOLVER_INSTALL_GUARD = r'''
+import importlib.metadata as metadata
+import importlib.util
+import os
+from pathlib import Path
+import sys
+import sysconfig
+if os.name == "nt":
+    candidates = set()
+    try:
+        distribution = metadata.distribution("radia")
+    except metadata.PackageNotFoundError:
+        distribution = None
+    if distribution is not None:
+        scripts = Path(sysconfig.get_path("scripts"))
+        candidates.update(scripts / (ep.name + ".exe") for ep in distribution.entry_points
+                          if ep.group == "console_scripts")
+    spec = importlib.util.find_spec("radia")
+    for location in (spec.submodule_search_locations or []) if spec else []:
+        root = Path(location)
+        candidates.update(root.glob("*.pyd"))
+        candidates.update(root.glob("*.dll"))
+    blocked = []
+    for path in sorted(candidates):
+        if path.is_file():
+            try:
+                with path.open("r+b"):
+                    pass
+            except OSError:
+                blocked.append(str(path))
+    if blocked:
+        sys.exit("Radia install blocked before pip: binaries are locked or not writable: "
+                 + "; ".join(blocked))
+'''
+
+
+def _solver_install_guard_powershell(python_command="python"):
+    encoded = base64.b64encode(SOLVER_INSTALL_GUARD.encode("utf-8")).decode("ascii")
+    return (f'{python_command} -c "import base64; exec(base64.b64decode(\'{encoded}\'))"\n'
+            'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n')
+
+
 def _deploy_lab():
     """Install only the numerical Radia solver from the approved editable."""
     step("Phase 8 (LAB): verify and install Radia solver editable")
@@ -938,6 +980,9 @@ def _deploy_lab():
     rc = _verify_local_release_source(repo, _release_head())
     if rc != 0:
         return rc
+    if run([sys.executable, "-c", SOLVER_INSTALL_GUARD], check=False).returncode:
+        fail("Radia install preflight failed; existing installation was preserved")
+        return 3
     installed = run(
         [sys.executable, "-m", "pip", "install", "--no-deps",
          "--no-cache-dir", "--no-build-isolation", "-e", repo],
@@ -970,6 +1015,7 @@ if ($LASTEXITCODE -ne 0 -or $sourceDirty) {{
   Write-Error "Release source has tracked changes: $sourceDirty"
   exit 42
 }}
+{_solver_install_guard_powershell()}
 python -m pip install --no-deps --no-cache-dir --no-build-isolation -e "{repo}"
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 """
@@ -1019,6 +1065,7 @@ def _deploy_pypi(ssh_host, label, *, python_cmd="python"):
 
     ps_block = f"""
 $ErrorActionPreference = 'Stop'
+{_solver_install_guard_powershell(python_cmd)}
 {python_cmd} -m pip install --upgrade --force-reinstall --no-deps --no-cache-dir "radia=={v_radia}"
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 """
@@ -1622,7 +1669,7 @@ def _record_release_intent_lab(repo):
     reason = f"release-quad phase8 deploy from {repo} at {_release_head()[:12]}"
     try:
         result = editable_intent.record_current(
-            list(EDITABLE_PACKAGES), reason, via="release-quad phase8")
+            ["radia"], reason, via="release-quad phase8")
     except OSError as exc:
         warn(f"LAB editable intent was not recorded ({exc}); run "
              "`release_quad repoint --record-current` before `done`")
@@ -1639,7 +1686,7 @@ def _record_release_intent_remote(ssh_host, label, repo):
     reason = f"release-quad phase8 deploy from {repo} at {_release_head()[:12]}"
     argv = ["--json", "repoint", "--record-current", "--reason", reason,
             "--via", "release-quad phase8"]
-    for pkg in EDITABLE_PACKAGES:
+    for pkg in ("radia",):
         argv.extend(["--package", pkg])
     try:
         rc, result, text = _remote_editable_intent(ssh_host, argv)

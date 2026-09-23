@@ -100,7 +100,7 @@ def test_lab_deploy_changes_only_radia(monkeypatch, drift):
                         lambda repo: events.append(("record", repo)) or 0)
 
     assert release_quad._deploy_lab() == (4 if drift else 0)
-    command = next(event for event in events if isinstance(event, list))
+    command = next(event for event in events if isinstance(event, list) and "pip" in event)
     joined = " ".join(command)
     assert "pip install" in joined
     assert "uninstall" not in joined
@@ -333,6 +333,20 @@ def test_lab_deploy_stops_before_install_on_source_mismatch(monkeypatch):
         lambda *_a, **_k: pytest.fail("install must not run for invalid source"))
 
     assert release_quad._deploy_lab() == 4
+
+
+def test_lab_deploy_preserves_install_when_binary_preflight_fails(monkeypatch):
+    monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
+    monkeypatch.setattr(release_quad, "_verify_local_release_source", lambda *_: 0)
+    calls = []
+    def blocked(command, **_kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 1)
+    monkeypatch.setattr(release_quad, "run", blocked)
+    assert release_quad._deploy_lab() == 3
+    assert len(calls) == 1
+    assert calls[0][-1] == release_quad.SOLVER_INSTALL_GUARD
+    assert "pip" not in calls[0]
 
 
 def test_remote_deploy_checks_exact_source_before_install(monkeypatch):
