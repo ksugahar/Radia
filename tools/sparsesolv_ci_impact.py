@@ -10,6 +10,16 @@ import tomllib
 
 # Checked against both workflow trigger lists by the lightweight contract suite.
 NATIVE_PATHS = (
+    'src/core/rad_beam_transfer.*',
+    'src/lib/rad_beam_transfer_pybind.*',
+    'src/matlab/radia_beam_mex_commands.*',
+    'src/radia/beam.py',
+    'matlab/+radia/+beam/canonicalBodyHamiltonianJet.m',
+    'matlab/+radia/+beam/propagateVariationalMap.m',
+    'tests/matlab/test_beam_transfer_mex.m',
+    'tests/matlab/beam_transfer_python_reference.py',
+    'validation_test/accelerator/benchmark_beam_transfer_mex_python.py',
+
     "src/radia/eddy_aphi.py",
     "src/radia/eddy_axisym_ring.py",
     "src/radia/axisym_measure.py",
