@@ -226,7 +226,7 @@ class ReducedAP1Box:
                  source_projection_order: int, ams_update_every: int = 1,
                  ic_shift: float = 1.05, gauge_epsilon: float = GAUGE_EPSILON,
                  ams_preconditioner_shift: float = 0.0,
-                 ams_project_gradients: bool = False):
+                 ams_project_gradients: bool = False, ams_beta_zero: bool = False):
         """``source_cf`` is the vacuum source flux density B_s as a vector CF.
 
         ``linear_solver``: ``"ams"`` (compiled auxiliary-space Maxwell
@@ -253,9 +253,12 @@ class ReducedAP1Box:
             raise ValueError("ams_preconditioner_shift requires AMS and gauge_epsilon=0")
         if ams_project_gradients and not ams_preconditioner_shift:
             raise ValueError("ams_project_gradients requires a positive AMS preconditioner shift")
+        if ams_beta_zero and (linear_solver != "ams" or gauge_epsilon != 0.0
+                              or ams_preconditioner_shift or ams_project_gradients):
+            raise ValueError("ams_beta_zero requires unshifted AMS with gauge_epsilon=0 and no projection")
         if gauge_epsilon == 0.0 and not (linear_solver == "iccg" or
-                (linear_solver == "ams" and ams_preconditioner_shift > 0.0)):
-            raise ValueError("gauge_epsilon=0 requires linear_solver='iccg' or shifted AMS")
+                (linear_solver == "ams" and (ams_preconditioner_shift > 0.0 or ams_beta_zero))):
+            raise ValueError("gauge_epsilon=0 requires linear_solver='iccg', shifted AMS or beta-zero AMS")
         self.mesh = mesh
         self.linear_solver = linear_solver
         self.ic_shift = float(ic_shift)
@@ -263,6 +266,7 @@ class ReducedAP1Box:
         self.ams_preconditioner_shift = float(ams_preconditioner_shift)
         self._ams_shift_form = None
         self.ams_project_gradients = bool(ams_project_gradients)
+        self.ams_beta_zero = bool(ams_beta_zero)
         self._gradient_projection = None
         self.cg_tolerance = float(cg_tolerance)
         self.cg_max_iterations = int(cg_max_iterations)
@@ -340,7 +344,8 @@ class ReducedAP1Box:
                 mat=matrix, grad_mat=gradient, freedofs=self.fes.FreeDofs(),
                 coord_x=xyz[:, 0].tolist(), coord_y=xyz[:, 1].tolist(),
                 coord_z=xyz[:, 2].tolist(), cycle_type=1, print_level=0,
-                num_smooth=self.ams_num_smooth)
+                num_smooth=self.ams_num_smooth,
+                **({"beta_zero": True} if self.ams_beta_zero else {}))
             self._ams_lagged = False
         elif self._ams_systems_seen % self.ams_update_every == 0:
             self._ams.Update(matrix)
@@ -674,6 +679,7 @@ class ReducedAP1Box:
             "ams_update_every": self.ams_update_every if self.linear_solver == "ams" else None,
             "ams_preconditioner_shift": self.ams_preconditioner_shift,
             "ams_project_gradients": self.ams_project_gradients,
+            "ams_beta_zero": self.ams_beta_zero,
             "source": "exact Radia B_s projected once to L2 order "
                       f"{self.source_projection_order} on iron; exact at observation points",
             "ndof": int(self.fes.ndof),
@@ -811,9 +817,11 @@ def main() -> None:
     parser.add_argument("--ic-shift", type=float, default=1.05,
                         help="shift of the incomplete Cholesky factorisation (iccg)")
     parser.add_argument("--gauge-epsilon", type=float, default=GAUGE_EPSILON,
-                        help="operator mass regularisation; 0 with iccg or shifted AMS")
+                        help="operator mass regularisation; 0 with iccg, beta-zero or shifted AMS")
     parser.add_argument("--ams-preconditioner-shift", type=float, default=0.0,
                         help="AMS-only mass shift sigma*nu_0*M; requires --gauge-epsilon 0")
+    parser.add_argument("--ams-beta-zero", action="store_true",
+                        help="Pure curl-curl AMS without gradient correction; requires gauge-epsilon 0")
     parser.add_argument("--ams-project-gradients", action="store_true",
                         help="diagnostic P0 B_shift P0 with a cached nodal direct solve")
     parser.add_argument("--nonlinear-method", choices=("newton", "picard"), default="newton")
@@ -904,7 +912,8 @@ def run(options) -> dict:
             ams_update_every=options.ams_update_every, ic_shift=options.ic_shift,
             gauge_epsilon=options.gauge_epsilon,
             ams_preconditioner_shift=options.ams_preconditioner_shift,
-            ams_project_gradients=options.ams_project_gradients)
+            ams_project_gradients=options.ams_project_gradients,
+            ams_beta_zero=options.ams_beta_zero)
         if not nonlinear:
             field, stats, runtime = engine.run_linear(options.mu_r, points)
         elif options.nonlinear_method == "newton":
