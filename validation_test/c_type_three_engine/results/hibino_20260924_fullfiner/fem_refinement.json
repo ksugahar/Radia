@@ -1,0 +1,48 @@
+{
+  "levels": [
+    "medium",
+    "fine",
+    "finer"
+  ],
+  "engines": {
+    "reduced_a": {
+      "core_increments": [
+        0.0004473349165707092,
+        0.00038872344894731725
+      ],
+      "contraction_ratio": 0.8689763185205611,
+      "primary_dofs": [
+        190396,
+        288902,
+        470288
+      ]
+    },
+    "mixed_total_reduced_omega": {
+      "core_increments": [
+        0.001076538289605691,
+        0.00039665566788396145
+      ],
+      "contraction_ratio": 0.36845476999173576,
+      "primary_dofs": [
+        60848,
+        90863,
+        145030
+      ]
+    }
+  },
+  "inputs": [
+    {
+      "path": "S:\\Radia\\validation_artifacts\\hdiv_medium_20260924\\cached-three.json",
+      "sha256": "e49e031e3197745a60a31b744a21b9bdbd400ff4857d768126ae314662499502"
+    },
+    {
+      "path": "S:\\Radia\\validation_artifacts\\hdiv_fine_20260924\\cached-three.json",
+      "sha256": "4790d84af93d4cd5e6d7e90c367ac0dd3ef9875f558f6640264ea6d7e8b7cce6"
+    },
+    {
+      "path": "S:\\Radia\\validation_artifacts\\hdiv_fullfiner_20260924\\recovered\\cached-three.json",
+      "sha256": "6ec1d6f436119dad550c049bb1a84b8cb1592fc6a1e2fedb117adf7d0716ab59"
+    }
+  ],
+  "interpretation": "Mesh sensitivity only, common finer denominator. HDiv omitted because these campaigns change BDM1 to BDM2. No continuum error bound or matched-error speed claim."
+}

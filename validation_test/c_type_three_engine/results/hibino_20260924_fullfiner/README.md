@@ -40,3 +40,22 @@ shared C:/temp/radia-ctype-family remains untouched.
 The prior BDM2 refinement diagnostics show contraction at the last step,
 but independent-host replication and comparable error control remain open.
 Do not advertise the observed time ratio as a matched-accuracy speedup.
+
+## FEM refinement audit
+
+`analyze_fem_finer.py` checks matching observation points, coil, core mask,
+FEM order and implementation hash before examining medium/fine/finer.
+The common-finer-normalized increments are 0.04473% then 0.03887% for
+reduced-A, and 0.10765% then 0.03967% for mixed Omega. Both contract, but
+contraction alone is not a rigorous error bound. HDiv is deliberately omitted
+from this audit because the three complete campaigns change BDM1 to BDM2.
+Its separate same-order diagnostics must be used instead.
+
+The 0.248% cross-formulation difference remains larger than the latest
+refinement increments. This does not isolate a cause. Next investigate source
+projection/trace sensitivity on a small case before increasing mesh size.
+The current Omega trace diagnostics (about 1.52% iron harmonic norm and
+1.40% Kelvin tangential residual) have a 5% acceptance threshold; the harmonic
+quantity must not be assumed to be pure projection error since topology can
+produce a retained harmonic field. No additional heavy job launched for this
+offline audit. No matched-error claim added to the manuscript or slides.
