@@ -191,6 +191,7 @@ def test_mixed_manifest_and_runtime_dependency_change_still_runs():
 @pytest.mark.parametrize("source", [
     "src/radia/mixed_omega_newton.py", "src/radia/eddy_aphi.py",
     "src/radia/eddy_axisym_ring.py", "src/radia/sibc_corner_patch.py",
+    "src/radia/vector_potential_solver.py", "src/radia/topology_optimization.py",
 ])
 def test_numerical_source_changes_select_built_ngsolve_lane(source):
     assert IMPACT.native_required("push", {"before": "a" * 40},

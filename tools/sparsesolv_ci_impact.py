@@ -10,6 +10,12 @@ import tomllib
 
 # Checked against both workflow trigger lists by the lightweight contract suite.
 NATIVE_PATHS = (
+    'src/radia/vector_potential_solver.py',
+    'src/radia/topology_optimization.py',
+    'tests/test_vector_potential_bh_tail.py',
+    'tests/test_reduced_a_source_materialization.py',
+    'tests/test_hdiv_response_contract.py',
+
     'src/core/rad_beam_transfer.*',
     'src/lib/rad_beam_transfer_pybind.*',
     'src/matlab/radia_beam_mex_commands.*',
