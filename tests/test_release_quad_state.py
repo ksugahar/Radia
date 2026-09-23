@@ -1,4 +1,5 @@
 import importlib.util
+import base64
 import json
 import subprocess
 import sys
@@ -15,6 +16,35 @@ SPEC.loader.exec_module(module)
 
 def state(**targets):
     return {'schema': 'test', 'commit': 'a', 'package_sha256': 'hash', 'targets': targets}
+
+
+def test_remote_candidate_sends_powershell_as_encoded_argument(tmp_path, monkeypatch):
+    scripts = []
+
+    def run(command, **kwargs):
+        assert 'input' not in kwargs
+        assert kwargs['timeout'] > 0
+        if command[0] == 'ssh':
+            assert '-Command' not in command
+            assert command[-2] == '-EncodedCommand'
+            decoded = base64.b64decode(command[-1]).decode('utf-16le')
+            assert kwargs['stdin'] == subprocess.DEVNULL
+            assert kwargs['stderr'] == subprocess.STDOUT
+            assert 'capture_output' not in kwargs
+            kwargs['stdout'].write(b'RADIA_SIMULINK_RELEASE_OK {"status": "passed"}')
+            scripts.append(decoded)
+        return subprocess.CompletedProcess(command, 0,
+            'RADIA_SIMULINK_RELEASE_OK {"status": "passed"}', '')
+
+    monkeypatch.setattr(module.subprocess, 'run', run)
+    passed, _ = module._run_simulink_candidate_target(
+        '100', tmp_path/'candidate.zip', 'a'*64,
+        'RADIA_SIMULINK_RELEASE_OK', 'MATLAB_13544')
+    assert passed
+    assert len(scripts) == 2
+    assert 'New-Item' in scripts[0]
+    assert "--engine-session 'MATLAB_13544'" in scripts[1]
+    assert 'exit $LASTEXITCODE' in scripts[1]
 
 
 @pytest.mark.parametrize('schema,marker', [

@@ -11,11 +11,11 @@ on:
         required: true
         type: string
       wheel_sha256:
-        description: SHA-256 of the wheel accepted on LAB and hibino
+        description: SHA-256 of the wheel accepted on LAB, 100, mdx1, and mdx2
         required: true
         type: string
       acceptance_commit:
-        description: Full main-reachable commit containing both host acceptance records
+        description: Full main-reachable commit containing all four host acceptance records
         required: true
         type: string
 
@@ -55,7 +55,7 @@ jobs:
     if: github.event_name == 'workflow_run'
     runs-on: ubuntu-latest
     steps:
-      - run: echo 'PyPI publication is held. Accept the exact tag artifact on LAB and hibino, commit evidence to main, then dispatch Release with run ID, wheel SHA-256 and acceptance commit.'
+      - run: echo 'PyPI publication is held. Accept the exact tag artifact on LAB, 100, mdx1, and mdx2, commit evidence to main, then dispatch Release with run ID, wheel SHA-256 and acceptance commit.'
 
   verify-promotion:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
