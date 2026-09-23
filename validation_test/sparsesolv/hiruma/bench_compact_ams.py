@@ -66,7 +66,8 @@ def get_peak_memory_mb():
 
 def setup_problem(mesh_name):
     print(f"Loading mesh: {mesh_path(mesh_name)}", flush=True)
-    mesh = load_hiruma_mesh(mesh_name)
+    with TaskManager():
+        mesh = load_hiruma_mesh(mesh_name)
     ne = mesh.ne
     nv = mesh.nv
     print(f"  ne={ne:,}, nv={nv:,}", flush=True)

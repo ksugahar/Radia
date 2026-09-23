@@ -50,7 +50,8 @@ def get_peak_memory_mb():
 
 
 def setup_problem(mesh_name):
-    mesh = load_hiruma_mesh(mesh_name)
+    with TaskManager():
+        mesh = load_hiruma_mesh(mesh_name)
 
     nu_cf = 1.0 / (mu0 * IfPos(mesh.MaterialCF({"core": 1}), mu_r_core, 1.0))
     sigma_cf = mesh.MaterialCF({"cond": sigma_cu}, default=0)

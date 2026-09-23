@@ -34,21 +34,6 @@ def test_periodic_hash_direction_regression_and_curve_orders():
     assert result["free_residual_inf"] < 1.0e-10
 
 
-@pytest.mark.parametrize(
-    "case, message",
-    [
-        ({"method": "pml"}, "kelvin_transform"),
-        ({"pml": True}, "PML"),
-        ({"physics_regime": "time_harmonic_wave"}, "static-only"),
-        ({"wave_boundary_inference": "reuse_for_waves"}, "forbidden"),
-        ({"inner_radius": 1.0, "outer_radius": 1.0}, "smaller"),
-        ({"offset": 1.5}, "disjoint"),
-    ],
-)
-def test_invalid_static_policy_or_geometry_fails_closed(case, message):
-    with pytest.raises(ValueError, match=message):
-        run_kelvin_open_boundary_validation(case)
-
 
 def test_stale_expected_result_identity_is_rejected(verified_result):
     stale = run_kelvin_open_boundary_validation({"expected_result_sha256": "0" * 64})

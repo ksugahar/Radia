@@ -60,7 +60,8 @@ def main(argv=None) -> int:
         log = out / f"{tag}.cubit.log"
         Q.write_mesh_journal(journal, vol, size_m=size, order=options.order, scheme=options.scheme)
         Q.run_cubit(cubit, journal, log)
-        mesh = ng.Mesh(str(vol))
+        with ng.TaskManager():
+            mesh = ng.Mesh(str(vol))
         conformity = mesh_conformity_report(mesh)
         if not conformity["conforming"]:
             raise RuntimeError(f"{vol}: non-conforming mesh {conformity}")

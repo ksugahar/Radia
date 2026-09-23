@@ -12,6 +12,8 @@ import math
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
+
 MU0 = 4e-7 * math.pi
 
 
@@ -50,11 +52,13 @@ def test_interior_solve_reproduces_the_exact_round_wire():
         exterior_potential=(MU0 / (2.0 * math.pi)) * ng.log(a / radius))
     face = WorkPlane().Circle(0.0, 0.0, a).Face()
 
-    currents = [solve_cut_patch(face, axial_E_field=drive,
-                                **common).total_current()
-                for drive in (0.0 + 0j, 1.0 + 0j)]
-    drive = (1.0 - currents[0]) / (currents[1] - currents[0])
-    patch = solve_cut_patch(face, axial_E_field=drive, **common)
+    with pytest.warns(RuntimeWarning, match="unverified boundary data"):
+        currents = [solve_cut_patch(face, axial_E_field=drive,
+                                    **common).total_current()
+                    for drive in (0.0 + 0j, 1.0 + 0j)]
+        drive = (1.0 - currents[0]) / (currents[1] - currents[0])
+        patch = solve_cut_patch(face, axial_E_field=drive, **common)
+    assert patch.boundary_data_error is None
 
     assert abs(patch.total_current()) == pytest.approx(1.0, rel=1e-9)
     resistance = 2.0 * patch.total_loss() / abs(patch.total_current()) ** 2

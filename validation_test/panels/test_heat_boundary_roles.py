@@ -487,3 +487,10 @@ def test_spatial_qsurf_high_order_transfer_fails_before_loading_files():
     assert calc_heat.QSURF_HANDOFF_ORDER == 1
     with pytest.raises(ValueError, match="--qsurf-order 1 only"):
         calc_heat._validate_qsurf_transfer_order(2)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _caller_taskmanager():
+    from ngsolve import TaskManager
+    with TaskManager():
+        yield

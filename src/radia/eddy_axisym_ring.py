@@ -151,19 +151,18 @@ def solve_axisym_ring(mesh, *, conductor, frequency_hz, sigma, order=2,
 
     gf_one = ng.GridFunction(fes)
     gf_psi = ng.GridFunction(fes)
-    with ng.TaskManager():
-        stiffness.Assemble()
-        mass.Assemble()
-        # The interpolant of psi = 1, not a row sum: the basis is polynomial
-        # in s = r^2 and is not a partition of unity.
-        gf_one.Set(ng.CF(1.0 + 0j))
-        rhs = gf_psi.vec.CreateVector()
-        rhs.data = mass.mat * gf_one.vec
-        system = stiffness.mat.CreateMatrix()
-        system.AsVector().data = (stiffness.mat.AsVector()
-                                  + 1j * omega * mass.mat.AsVector())
-        gf_psi.vec.data = system.Inverse(freedofs=fes.FreeDofs(),
-                                         inverse=solver) * rhs
+    stiffness.Assemble()
+    mass.Assemble()
+    # The interpolant of psi = 1, not a row sum: the basis is polynomial
+    # in s = r^2 and is not a partition of unity.
+    gf_one.Set(ng.CF(1.0 + 0j))
+    rhs = gf_psi.vec.CreateVector()
+    rhs.data = mass.mat * gf_one.vec
+    system = stiffness.mat.CreateMatrix()
+    system.AsVector().data = (stiffness.mat.AsVector()
+                              + 1j * omega * mass.mat.AsVector())
+    gf_psi.vec.data = system.Inverse(freedofs=fes.FreeDofs(),
+                                     inverse=solver) * rhs
 
     from radia.axisym_measure import axi_section_integral
 

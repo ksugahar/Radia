@@ -1,6 +1,8 @@
 """Coincident hex interfaces: preserve boundary flags and complete face maps."""
 import itertools
 import pytest
+
+pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
 import ngsolve as ng
 from netgen.meshing import Mesh, MeshPoint, Pnt, Element3D, Element2D, FaceDescriptor, IdentificationType
 from radia.periodic_h1 import periodic_h1_single_interface as _periodic_h1_single_interface

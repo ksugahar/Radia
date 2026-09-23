@@ -163,7 +163,8 @@ def main(argv=None) -> int:
     if not fem_path.is_file() or not report_path.is_file():
         raise FileNotFoundError(f"{fem_path} / {report_path}")
     fem_report = json.loads(report_path.read_text(encoding="utf-8"))
-    fem_mesh = ng.Mesh(str(fem_path))
+    with ng.TaskManager():
+        fem_mesh = ng.Mesh(str(fem_path))
     if not has_kelvin_identification(fem_mesh):
         raise RuntimeError("FEM mesh has no Kelvin point identification")
     kelvin_center = tuple(float(v) for v in detect_kelvin_offset(fem_mesh))
@@ -193,7 +194,8 @@ def main(argv=None) -> int:
         diagnostics["hdiv_mmm"] = dict(prior["hdiv"]) | {"reused_result": str(options.hdiv_result.resolve())}
         hdiv_provenance = {"mesh": prior["mesh"], "host": prior.get("host")}
     else:
-        hdiv_mesh = ng.Mesh(str(options.hdiv_mesh.resolve()))
+        with ng.TaskManager():
+            hdiv_mesh = ng.Mesh(str(options.hdiv_mesh.resolve()))
         conformity = mesh_conformity_report(hdiv_mesh)
         if not conformity["conforming"]:
             raise RuntimeError(f"non-conforming HDiv mesh: {conformity}")

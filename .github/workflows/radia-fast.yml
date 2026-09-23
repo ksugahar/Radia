@@ -65,6 +65,12 @@ jobs:
           & $env:RADIA_FAST_PYTHON -m compileall -q src/radia
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Audit caller-owned TaskManager regions
+        shell: pwsh
+        run: |
+          & $env:RADIA_FAST_PYTHON tools/audit_taskmanager.py
+          exit $LASTEXITCODE
+
       - name: Run mdx preflight contracts
         shell: pwsh
         run: |

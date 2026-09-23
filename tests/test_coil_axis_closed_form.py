@@ -1,6 +1,8 @@
 """Finite rectangular-section coil: analytic field, not a filament limit."""
 import numpy as np
 import pytest
+
+pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
 import radia as rad
 import ngsolve as ng
 from netgen.occ import Box, OCCGeometry, Pnt

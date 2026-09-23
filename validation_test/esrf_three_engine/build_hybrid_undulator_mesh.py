@@ -338,7 +338,8 @@ def validate_fem_mesh(path: Path) -> dict[str, object]:
     """Validate labels and Kelvin identification before a three-way solve."""
     import ngsolve as ng
 
-    mesh = ng.Mesh(str(path))
+    with ng.TaskManager():
+        mesh = ng.Mesh(str(path))
     contract = three_engine_material_contract()
     materials = set(map(str, mesh.GetMaterials()))
     boundaries = set(map(str, mesh.GetBoundaries()))

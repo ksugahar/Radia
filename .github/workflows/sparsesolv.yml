@@ -4,6 +4,24 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'src/radia/eddy_aphi.py'
+      - 'src/radia/eddy_axisym_ring.py'
+      - 'src/radia/axisym_measure.py'
+      - 'src/radia/sibc_corner_patch.py'
+      - 'src/radia/mixed_omega_newton.py'
+      - 'src/radia/static_electromagnet.py'
+      - 'src/radia/kelvin_solver.py'
+      - 'src/radia/kelvin_mesh_validation.py'
+      - 'src/radia/scalar_potential_solver.py'
+      - 'validation_test/c_type_p1_ams_box/run_p1_box.py'
+      - 'tests/test_eddy_aphi_contract.py'
+      - 'tests/test_axisym_measure_contract.py'
+      - 'tests/test_sibc_corner_patch.py'
+      - 'tests/test_boundary_material_adjacency.py'
+      - 'tests/test_coil_axis_closed_form.py'
+      - 'tests/test_mixed_omega_newton.py'
+      - 'tests/test_mixed_omega_review_fixes.py'
+      - 'tests/test_c_type_p1_box_lane.py'
       - 'src/ext/sparsesolv/**'
       - 'src/matlab/radia_mex.cpp'
       - 'matlab/+radia/+internal/callMex.m'
@@ -32,6 +50,24 @@ on:
   push:
     branches: [main]
     paths:
+      - 'src/radia/eddy_aphi.py'
+      - 'src/radia/eddy_axisym_ring.py'
+      - 'src/radia/axisym_measure.py'
+      - 'src/radia/sibc_corner_patch.py'
+      - 'src/radia/mixed_omega_newton.py'
+      - 'src/radia/static_electromagnet.py'
+      - 'src/radia/kelvin_solver.py'
+      - 'src/radia/kelvin_mesh_validation.py'
+      - 'src/radia/scalar_potential_solver.py'
+      - 'validation_test/c_type_p1_ams_box/run_p1_box.py'
+      - 'tests/test_eddy_aphi_contract.py'
+      - 'tests/test_axisym_measure_contract.py'
+      - 'tests/test_sibc_corner_patch.py'
+      - 'tests/test_boundary_material_adjacency.py'
+      - 'tests/test_coil_axis_closed_form.py'
+      - 'tests/test_mixed_omega_newton.py'
+      - 'tests/test_mixed_omega_review_fixes.py'
+      - 'tests/test_c_type_p1_box_lane.py'
       - 'src/ext/sparsesolv/**'
       - 'src/matlab/radia_mex.cpp'
       - 'matlab/+radia/+internal/callMex.m'
@@ -159,6 +195,24 @@ jobs:
           python tools/run_test_tier.py --profile sparsesolv --junitxml "$env:RUNNER_TEMP\sparsesolv-results.xml"
           exit $LASTEXITCODE
 
+      - name: Run required NGSolve numerical contracts
+        if: steps.native-impact.outputs.required == 'true'
+        shell: pwsh
+        env:
+          PYTHONPATH: '${{ github.workspace }}\src'
+          RADIA_TESTS_ALLOW_PARTIAL: '0'
+          RADIA_TEST_NGSOLVE_THREADS: '1'
+          OMP_NUM_THREADS: '1'
+          OPENBLAS_NUM_THREADS: '1'
+          MKL_NUM_THREADS: '1'
+        run: |
+          python -c "import ngsolve, radia; print('NGSolve:', ngsolve.__version__); print('Radia:', radia.__file__)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/run_test_tier.py --profile solver-numerics --junitxml "$env:RUNNER_TEMP\solver-numerics.xml"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import os, pathlib, xml.etree.ElementTree as ET; p=pathlib.Path(os.environ['RUNNER_TEMP'])/'solver-numerics.xml'; cases=list(ET.parse(p).iter('testcase')); assert cases and all(c.find('skipped') is None for c in cases), 'required numerical tests must execute without skips'; print('Executed numerical cases:', len(cases))"
+          exit $LASTEXITCODE
+
       - name: Build and verify native MATLAB parity
         if: steps.native-impact.outputs.required == 'true' && steps.matlab-impact.outputs.required == 'true'
         shell: pwsh
@@ -181,6 +235,7 @@ jobs:
           name: sparsesolv-results
           path: |
             ${{ runner.temp }}/sparsesolv-results.xml
+            ${{ runner.temp }}/solver-numerics.xml
             ${{ runner.temp }}/sparsesolv-matlab.json
             build-msvc/build.log
           if-no-files-found: warn

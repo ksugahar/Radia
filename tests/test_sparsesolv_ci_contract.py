@@ -184,3 +184,24 @@ def test_mixed_manifest_and_runtime_dependency_change_still_runs():
             return PROJECT if args[1].startswith("base:") else PROJECT.replace("6.2.2606", "6.2.2607")
         return json.dumps(manifest())
     assert IMPACT.native_required("push", {"before": "base"}, git)[0]
+
+
+@pytest.mark.parametrize("source", [
+    "src/radia/mixed_omega_newton.py", "src/radia/eddy_aphi.py",
+    "src/radia/eddy_axisym_ring.py", "src/radia/sibc_corner_patch.py",
+])
+def test_numerical_source_changes_select_built_ngsolve_lane(source):
+    assert IMPACT.native_required("push", {"before": "a" * 40},
+                                  lambda *args: source + "\0")[0]
+    workflow = yaml.safe_load((ROOT / ".github/workflows/sparsesolv.yml").read_text())
+    steps = workflow["jobs"]["ams-regression"]["steps"]
+    numerical = next(s for s in steps if s.get("name") == "Run required NGSolve numerical contracts")
+    assert "--profile solver-numerics" in numerical["run"]
+    assert numerical["env"]["RADIA_TESTS_ALLOW_PARTIAL"] == "0"
+    assert "find('skipped') is None" in numerical["run"]
+
+
+def test_numerical_tier_changes_cannot_skip_native_lane():
+    before, after = manifest(), manifest()
+    after["profiles"]["solver-numerics"] = {"paths": ["tests/test_mixed_omega_newton.py"]}
+    assert not IMPACT.ams_manifest_unchanged(json.dumps(before), json.dumps(after))

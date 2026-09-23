@@ -121,7 +121,8 @@ def main():
         from radia import kelvin_solver as solver
     before = identity(args.factory, solver)
     ng.SetNumThreads(args.threads)
-    case = load_module(args.factory, '_omega_case').create_case(args.mesh)
+    with ng.TaskManager():
+        case = load_module(args.factory, '_omega_case').create_case(args.mesh)
     mesh, h_s, h_ext = case['mesh'], case['H_s'], case['H_ext']
     rows, nesting = [], []
     payload = {'schema': 'radia.validation.omega-quadrature.v1', 'host': platform.node(),

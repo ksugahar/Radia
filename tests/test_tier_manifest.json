@@ -78,6 +78,20 @@
         "src/ext/sparsesolv/tests/test_sparsesolv.py"
       ]
     },
+    "solver-numerics": {
+      "description": "Required NGSolve numerical contracts for mixed Omega, eddy currents and matched SIBC patches; no partial dependency run.",
+      "max_elapsed_seconds": 300,
+      "paths": [
+        "tests/test_eddy_aphi_contract.py",
+        "tests/test_axisym_measure_contract.py",
+        "tests/test_sibc_corner_patch.py",
+        "tests/test_boundary_material_adjacency.py",
+        "tests/test_coil_axis_closed_form.py",
+        "tests/test_mixed_omega_newton.py",
+        "tests/test_mixed_omega_review_fixes.py",
+        "tests/test_c_type_p1_box_lane.py"
+      ]
+    },
     "sparsesolv": {
       "description": "Required native AMS, AMG and Krylov solver regressions.",
       "max_elapsed_seconds": 120,

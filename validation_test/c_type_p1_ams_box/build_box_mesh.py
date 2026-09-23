@@ -122,10 +122,12 @@ def main() -> None:
                               gap_h=options.gap_h, iron_h=options.iron_h,
                               coil_h=options.coil_h, air_h=options.air_h,
                               mesh_coil=not options.no_coil)
-    ngmesh = geometry.GenerateMesh(maxh=options.air_h * options.scale,
-                                   grading=options.grading)
+    with ng.TaskManager():
+        ngmesh = geometry.GenerateMesh(maxh=options.air_h * options.scale,
+                                       grading=options.grading)
     build_seconds = time.perf_counter() - started
-    mesh = ng.Mesh(ngmesh)
+    with ng.TaskManager():
+        mesh = ng.Mesh(ngmesh)
     options.output.parent.mkdir(parents=True, exist_ok=True)
     ngmesh.Save(str(options.output))
 

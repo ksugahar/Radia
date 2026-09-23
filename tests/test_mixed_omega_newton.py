@@ -15,14 +15,27 @@ def case():
     spec = importlib.util.spec_from_file_location('mixed_helpers', Path(__file__).with_name('test_kelvin_mixed_omega.py'))
     helper = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(helper)
-    return helper._picard_case(maxh=0.65)
+    from netgen.meshing import Element0D
+    from radia.kelvin_solver import project_source_interface_potential
+    mesh, source, _, table = helper._picard_case(maxh=0.65)
+    material = mesh.GetMaterials().index('total') + 1
+    vertex = next(v for e in mesh.ngmesh.Elements3D() if e.index == material
+                  for v in e.vertices if mesh.ngmesh.Points()[v].p[0] > 0.)
+    gauge_index = len(mesh.GetBBBoundaries()) + 1
+    mesh.ngmesh.Add(Element0D(vertex, index=gauge_index))
+    mesh.ngmesh.SetCD3Name(gauge_index, 'GND')
+    with ng.TaskManager():
+        mesh = ng.Mesh(mesh.ngmesh)
+        potential = project_source_interface_potential(
+            mesh, source, 'source_total_interface', order=2)['potential']
+    return mesh, source, potential, table
 
 
 def run(case, **options):
     mesh, source, potential, table = case
     args = dict(bh_table=table, nonlinear_materials=('total',),
                 reduced_materials=('reduced',), total_materials=('total',),
-                interface_boundary='source_total_interface', dirichlet_bbbnd='outer',
+                interface_boundary='source_total_interface', dirichlet_bbbnd='GND',
                 kelvin_mats=(), tolerance=1e-6, residual_tolerance=1e-9)
     args.update(options)
     with ng.TaskManager():
@@ -51,7 +64,7 @@ def test_newton_linear_law_agrees_with_linear_mixed_solver(case):
         reference = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             mesh, source, potential, 1., (3., 0., 0.), mu_r_by_material={'total':500.},
             reduced_materials=('reduced',), total_materials=('total',),
-            interface_boundary='source_total_interface', dirichlet_bbbnd='outer', kelvin_mats=())
+            interface_boundary='source_total_interface', dirichlet_bbbnd='GND', kelvin_mats=())
     for p in [(0.5, 0.1, 0.2),(-0.5, 0.1, 0.2)]:
         np.testing.assert_allclose(result['B_cf'](mesh(*p)), reference['B_cf'](mesh(*p)), rtol=1e-7, atol=1e-13)
 
@@ -84,3 +97,19 @@ def test_matching_trace_newton_preserves_harmonic_source_and_field(case, order):
     for point in [(0.5,0.1,0.2),(-0.5,0.1,0.2)]:
         np.testing.assert_allclose(condensed['B_cf'](mesh(*point)),
                                    reference['B_cf'](mesh(*point)), rtol=2e-6, atol=1e-12)
+
+
+@pytest.mark.parametrize("sampling", ["element_centroid", "invalid"])
+def test_public_workflow_rejects_incompatible_sampling_before_projection(sampling):
+    from radia.static_electromagnet import solve_static_electromagnet_mixed_total_reduced_omega
+    with pytest.raises(ValueError, match="different material discretization"):
+        solve_static_electromagnet_mixed_total_reduced_omega(
+            None, None, None, 1., (0.,0.,0.), order=1,
+            bh_table=[[0.,0.],[1.,1.]], nonlinear_method="newton",
+            nonlinear_material_sampling=sampling)
+
+
+def test_matching_trace_rejects_a_missing_point_gauge(case):
+    with pytest.raises(ValueError, match="requires a gauge"):
+        run(case, order=2, condense_matching_trace=True, linear_solver='cg',
+            dirichlet_bbbnd='missing')

@@ -237,6 +237,10 @@ def pytest_configure(config):
                                    for name, reason
                                    in sorted(_MISSING_REQUIRED.items())),
                    os.linesep, ALLOW_PARTIAL_ENV))
+    threads = os.environ.get("RADIA_TEST_NGSOLVE_THREADS")
+    if threads is not None:
+        import ngsolve as ng
+        ng.SetNumThreads(int(threads))
     config.addinivalue_line("markers", "basic: Basic functionality tests (fast)")
     config.addinivalue_line("markers", "comprehensive: Comprehensive test suite")
     config.addinivalue_line("markers", "advanced: Advanced features and edge cases")
@@ -289,3 +293,11 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.slow)
         if "ngsolve" in item.name.lower() or "ngsolve" in str(item.fspath).lower():
             item.add_marker(pytest.mark.ngsolve)
+
+
+@pytest.fixture(scope="module")
+def ngsolve_taskmanager():
+    """Caller-owned context for a numerical test module and its fixtures."""
+    import ngsolve as ng
+    with ng.TaskManager():
+        yield
