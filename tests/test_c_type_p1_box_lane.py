@@ -47,6 +47,28 @@ def _bh_table():
     return [[0.0, 0.0], [100.0, 0.6], [400.0, 1.2], [2000.0, 1.6], [20000.0, 1.9]]
 
 
+def test_total_natural_boundary_cancels_curl_free_source(box_mesh):
+    points = np.array([[0.03, 0.02, 0.01], [0.3, 0.2, 0.1]])
+    natural = _engine(box_mesh, "direct", outer_boundary="natural_total")
+    field, _, _ = natural.run_linear(1.0, points)
+    assert np.linalg.norm(field) < 1e-6
+    fixed = _engine(box_mesh, "direct")
+    retained, _, _ = fixed.run_linear(1.0, points)
+    np.testing.assert_allclose(retained, [[0, 0, .8]] * 2, atol=1e-9)
+
+
+def test_total_natural_residual_matches_load(box_mesh):
+    engine = _engine(box_mesh, "direct", outer_boundary="natural_total")
+    engine._set_material(np.full(len(engine.iron), 1 / MU0))
+    zero = ng.GridFunction(engine.fes)
+    _, load = engine._picard_forms()
+    with ng.TaskManager():
+        load.Assemble()
+    residual, _ = engine._residual(zero)
+    np.testing.assert_allclose(residual.FV().NumPy(), -load.vec.FV().NumPy(), atol=1e-8)
+    assert np.linalg.norm(load.vec.FV().NumPy()) > 1
+
+
 @pytest.fixture(scope="module")
 def box_mesh():
     from netgen.occ import Box, Glue, OCCGeometry, Pnt
