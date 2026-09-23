@@ -9,12 +9,6 @@ import time
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from .fem_bem_coupling import (
-    kelvin_dtn_eigenvalue,
-    kelvin_twosphere_shell_dipole,
-)
-
-
 SCHEMA = "radia.kelvin-open-boundary-validation.v1"
 
 
@@ -96,6 +90,12 @@ def run_kelvin_open_boundary_validation(request: Mapping[str, Any]) -> dict[str,
         raise ValueError("offset must keep the physical and Kelvin spheres disjoint")
     if three["order"] < 1 or three["curve_order"] < 1:
         raise ValueError("3-D field and curve orders must be positive")
+
+    # Invalid requests must fail without loading numerical dependencies.
+    from .fem_bem_coupling import (
+        kelvin_dtn_eigenvalue,
+        kelvin_twosphere_shell_dipole,
+    )
 
     started = time.perf_counter()
     mode_rows = [
