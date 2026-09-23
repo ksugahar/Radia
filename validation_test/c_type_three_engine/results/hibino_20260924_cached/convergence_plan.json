@@ -1,0 +1,24 @@
+{
+  "status": "planned_not_executed",
+  "purpose": "Measure discretization convergence before matched-error performance claims",
+  "all_remote_kelvin_hashes_match_family_manifest": true,
+  "levels": [
+    {"name":"coarse","hdiv_iron_elements":434,"fem_iron_elements":6844,"fem_air_elements":14854,"fem_kelvin_elements":2436,"completed":true},
+    {"name":"medium","hdiv_iron_elements":542,"fem_iron_elements":9744,"fem_air_elements":21658,"fem_kelvin_elements":4806,"completed":false},
+    {"name":"fine","hdiv_iron_elements":846,"fem_iron_elements":14774,"fem_air_elements":30468,"fem_kelvin_elements":9644,"completed":false},
+    {"name":"finer","hdiv_iron_elements":1688,"fem_iron_elements":23484,"fem_air_elements":48038,"fem_kelvin_elements":17932,"completed":false}
+  ],
+  "next_level": "medium",
+  "next_level_estimate_minutes": [15,25],
+  "estimate_basis": "Coarse sum of engine times is 694.0722935 s. Medium/coarse FEM element ratio is 36208/24134 = 1.5003. Linear extrapolation gives 17.4 minutes. Actual source and sparse solve costs need measurement; range is a planning heuristic, not a guarantee.",
+  "fixed_settings": {"linear_mu_r":1000,"hdiv_order":1,"fem_order":2,"threads":8,"gram_eps":1e-14,"source_trace_tolerance":0.05},
+  "requirements": [
+    "Stage a fresh task-owned environment using the recovered, hash-verified same wheel and driver",
+    "Run all three engines foreground, no overlap and no prior engine checkpoint reuse for timing",
+    "Include exact-point source cache preparation in mixed Omega engine runtime",
+    "Compare field increments at the same raw and projected observation points",
+    "Record auxiliary projection DOF and distinguish global peak from per-engine memory",
+    "Do not call a two-level increment an absolute-error certificate",
+    "Estimate subsequent levels from this measured medium result before launching them"
+  ]
+}
