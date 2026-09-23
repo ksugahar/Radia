@@ -93,6 +93,20 @@ def test_unknown_server_never_imports_domain(monkeypatch):
     assert m.main(["serve", "unknown"]) == 2
 
 
+def test_source_checkout_cli_without_distribution_metadata(monkeypatch, capsys):
+    def missing_distribution(_):
+        raise m.metadata.PackageNotFoundError("radia-mcp")
+
+    monkeypatch.setattr(m.metadata, "distribution", missing_distribution)
+    with pytest.raises(SystemExit) as exit_info:
+        m.main(["--version"])
+    assert exit_info.value.code == 0
+    assert capsys.readouterr().out.strip() == m.__version__
+    assert m.main(["serve", "unknown"]) == 2
+    assert m.main(["doctor"]) == 2
+    assert "PackageNotFoundError" in capsys.readouterr().err
+
+
 def test_doctor_rejects_wrong_source_and_version(monkeypatch, tmp_path):
     monkeypatch.setattr(m.metadata, "distribution", lambda _: SimpleNamespace(
         version="old", read_text=lambda _: json.dumps({"dir_info": {"editable": True}, "url": "file:///old"})))
