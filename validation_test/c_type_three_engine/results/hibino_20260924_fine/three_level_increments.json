@@ -1,0 +1,74 @@
+{
+  "status": "three_level_increments_not_accuracy_certificate",
+  "engines": {
+    "hdiv_mmm": {
+      "core_increments_normalized_by_fine": [
+        0.0001627804035454513,
+        0.010014932242695453
+      ],
+      "core_increment_contraction_ratio": 61.524188566709746,
+      "raw_increments_normalized_by_fine": [
+        0.00016602443852353164,
+        0.01089163046072947
+      ],
+      "primary_dofs": [
+        3090,
+        3804,
+        5766
+      ],
+      "runtime_seconds": [
+        3.1265336999999818,
+        3.4928630000003977,
+        4.925489399999606
+      ]
+    },
+    "reduced_a": {
+      "core_increments_normalized_by_fine": [
+        0.0007187728920554116,
+        0.00044739682672539547
+      ],
+      "core_increment_contraction_ratio": 0.6224453254574113,
+      "raw_increments_normalized_by_fine": [
+        0.009783293254891974,
+        0.006380027828114616
+      ],
+      "primary_dofs": [
+        126834,
+        190396,
+        288902
+      ],
+      "runtime_seconds": [
+        19.86210600000004,
+        27.91258529999959,
+        40.85516049999933
+      ]
+    },
+    "mixed_total_reduced_omega": {
+      "core_increments_normalized_by_fine": [
+        0.0013261919421777753,
+        0.0010763283604643082
+      ],
+      "core_increment_contraction_ratio": 0.8115931987166508,
+      "raw_increments_normalized_by_fine": [
+        0.017175929627620903,
+        0.008441713356062518
+      ],
+      "primary_dofs": [
+        41305,
+        60848,
+        90863
+      ],
+      "runtime_seconds": [
+        671.0836537999999,
+        975.0445808000004,
+        1421.5401161999998
+      ]
+    }
+  },
+  "warning": "Fine is not exact truth. The lane requires four levels and independent-host replay for its certificate. No matched-error speed claim.",
+  "max_core_pairwise_relative_rms": [
+    0.004535457592290168,
+    0.004123779220183117,
+    0.008998604032991825
+  ]
+}
