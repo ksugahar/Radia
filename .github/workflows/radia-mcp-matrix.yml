@@ -237,8 +237,8 @@ jobs:
           # tomllib is stdlib only on 3.11+).  No-op on 3.11/3.12 via the env marker.
           python -m pip install -e "packages/radia-mcp[maintenance]" "tomli; python_version < '3.11'"
           if [[ "$RUN_TESTS" == "true" ]]; then
-            # CSV/input contracts need NumPy, but never the optional solver stack.
-            python -m pip install pytest numpy
+            # CSV and HDF5 report contracts need their data libraries, not a solver.
+            python -m pip install pytest numpy h5py
           fi
 
       - name: Prepare impact-scoped test plan
