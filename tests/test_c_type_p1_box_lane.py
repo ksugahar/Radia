@@ -334,3 +334,21 @@ def test_inexact_newton_restores_tolerance_after_linear_failure(box_mesh, monkey
                           newton_tolerance=1e-8, tolerance=1e-5,
                           max_iterations=30, max_halvings=6, observation=_points())
     assert engine.cg_tolerance == 1e-9
+
+
+def test_periodic_true_residual_checks_preserve_linear_field(box_mesh):
+    engine = _engine(box_mesh, "ams", cg_check_interval=4)
+    field, stats, _ = engine.run_linear(1000., _points())
+    expected, _, _ = _engine(box_mesh, "direct").run_linear(1000., _points())
+    np.testing.assert_allclose(field, expected, rtol=1e-6, atol=1e-8)
+    row = stats["history"][0]
+    assert row["relative_residual"] <= engine.cg_tolerance
+    assert row["true_residual_checks"] < row["cg_iterations"]
+    for interval in (0, -1, 1.5, True):
+        with pytest.raises(ValueError, match="positive integer"):
+            _engine(box_mesh, "ams", cg_check_interval=interval)
+    with pytest.raises(ValueError, match="requires AMS"):
+        _engine(box_mesh, "direct", cg_check_interval=4)
+    with pytest.raises(RuntimeError, match="true relative residual"):
+        _engine(box_mesh, "ams", cg_check_interval=100,
+                cg_max_iterations=2).run_linear(1000., _points())
