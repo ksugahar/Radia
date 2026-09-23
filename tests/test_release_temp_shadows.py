@@ -1,3 +1,4 @@
+import base64
 import importlib.util
 import json
 from pathlib import Path
@@ -13,8 +14,11 @@ def test_exact_hosts_and_read_only_default(monkeypatch):
     calls = []
     def run(command, **kwargs):
         calls.append(command)
-        assert "$apply = $false" in kwargs["input"]
-        return SimpleNamespace(stdout=json.dumps({"passed": True}))
+        assert command[-2] == "-EncodedCommand"
+        assert "$apply = $false" in base64.b64decode(command[-1]).decode("utf-16-le")
+        assert kwargs["stdin"] == MODULE.subprocess.DEVNULL
+        assert kwargs["timeout"] == 90
+        kwargs["stdout"].write(json.dumps({"passed": True}))
     monkeypatch.setattr(MODULE.subprocess, "run", run)
     assert all(x["passed"] for x in MODULE.inspect_shadows().values())
     assert [cmd[5] for cmd in calls] == ["mdx1", "mdx2", "hibino"]
@@ -45,5 +49,12 @@ def test_missing_remote_report_fails_loudly(monkeypatch):
 
 def test_active_host_remains_a_blocker(monkeypatch):
     report = {"passed": False, "exists": True, "blockers": ["active process"]}
-    monkeypatch.setattr(MODULE.subprocess, "run", lambda *a, **k: SimpleNamespace(stdout=json.dumps(report)))
+    monkeypatch.setattr(MODULE.subprocess, "run", lambda *a, **k: k["stdout"].write(json.dumps(report)))
     assert all(record == report for record in MODULE.inspect_shadows(True).values())
+
+
+def test_timeout_is_not_reported_clean(monkeypatch):
+    def run(command, **kwargs):
+        raise MODULE.subprocess.TimeoutExpired(command, kwargs["timeout"])
+    monkeypatch.setattr(MODULE.subprocess, "run", run)
+    assert all(not record["passed"] for record in MODULE.inspect_shadows().values())
