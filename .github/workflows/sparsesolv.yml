@@ -88,7 +88,14 @@ jobs:
         shell: pwsh
         run: |
           $workspace = $env:GITHUB_WORKSPACE -replace '\\', '/'
-          $diff = @(git -c "safe.directory=$workspace" -C "$workspace" diff --name-only 'HEAD~1' HEAD -- 2>&1)
+          # A push can contain several implementation commits followed by docs.
+          # Inspect the complete push; an unavailable base fails closed below.
+          $base = 'HEAD^1'
+          if ($env:GITHUB_EVENT_NAME -eq 'push') {
+            $event = Get-Content -LiteralPath $env:GITHUB_EVENT_PATH -Raw | ConvertFrom-Json
+            $base = [string]$event.before
+          }
+          $diff = @(git -c "safe.directory=$workspace" -C "$workspace" diff --name-only "$base" HEAD -- 2>&1)
           $diffFailed = $LASTEXITCODE -ne 0
           $changed = @()
           if ($diffFailed) {

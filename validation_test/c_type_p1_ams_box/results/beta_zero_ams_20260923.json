@@ -1,0 +1,235 @@
+{
+  "schema": "radia.validation.beta-zero-ams.v1",
+  "machine": "mdx2",
+  "ngsolve": "6.2.2606",
+  "native_sha256": "ab24a097369360eb05a22ddea63dbb665a4ea1e5c4eeef139f6500b486c2012d",
+  "tested_source_base": "00142515f8cf4c80ef9925fd6cee8792850db7ef",
+  "implementation_commit": "ce416693c",
+  "linear_tolerance": 1e-06,
+  "nonlinear_tolerance": 1e-08,
+  "field_change_tolerance": 2e-05,
+  "measurements_per_case": 1,
+  "mkl_threads": 1,
+  "regression_tests_passed": 82,
+  "rows": [
+    {
+      "case": "s15-beta-t1-cg6",
+      "status": 0,
+      "wall_seconds": 70.01710509999975,
+      "passed": true,
+      "threads": 1,
+      "elements": 67397,
+      "ndof": 79209,
+      "newton_seconds": 13.991882100001021,
+      "setup_seconds": {
+        "spaces": 0.3927750999991986,
+        "source_projection": 49.6525658999999,
+        "element_helpers": 3.4998880999992252
+      },
+      "phase_seconds": {
+        "assemble_s": 4.00569170000017,
+        "preconditioner_s": 2.6202343000004475,
+        "solve_s": 3.5079488000028505,
+        "line_search_s": 3.3926587000023574
+      },
+      "cg_iterations": 244,
+      "newton_iterations": 8,
+      "nonlinear_residual": 7.234311235342211e-11,
+      "field_change": 8.256549993190044e-07,
+      "max_linear_residual": 9.331333827874282e-07
+    },
+    {
+      "case": "s15-beta-t2-cg6",
+      "status": 0,
+      "wall_seconds": 41.97033029999875,
+      "passed": true,
+      "threads": 2,
+      "elements": 67397,
+      "ndof": 79209,
+      "newton_seconds": 9.853521199998795,
+      "setup_seconds": {
+        "spaces": 0.3907183999999688,
+        "source_projection": 25.644386599999052,
+        "element_helpers": 3.620829199999207
+      },
+      "phase_seconds": {
+        "assemble_s": 2.3343991999990976,
+        "preconditioner_s": 2.6632453000038367,
+        "solve_s": 2.392138300001534,
+        "line_search_s": 2.1589390999997704
+      },
+      "cg_iterations": 244,
+      "newton_iterations": 8,
+      "nonlinear_residual": 7.234139278916096e-11,
+      "field_change": 8.256549998291143e-07,
+      "max_linear_residual": 9.331333834809457e-07
+    },
+    {
+      "case": "s15-penalty-t2-cg6",
+      "status": 0,
+      "wall_seconds": 42.38624080000045,
+      "passed": true,
+      "threads": 2,
+      "elements": 67397,
+      "ndof": 79209,
+      "newton_seconds": 12.55477449999853,
+      "setup_seconds": {
+        "spaces": 0.2925298999998631,
+        "source_projection": 23.99331220000022,
+        "element_helpers": 3.491787299999487
+      },
+      "phase_seconds": {
+        "assemble_s": 2.7530300000016723,
+        "preconditioner_s": 3.3771009000029153,
+        "solve_s": 3.5447701000030065,
+        "line_search_s": 2.5115834000007453
+      },
+      "cg_iterations": 243,
+      "newton_iterations": 8,
+      "nonlinear_residual": 7.226783343789105e-11,
+      "field_change": 8.251356084429441e-07,
+      "max_linear_residual": 9.402496950613843e-07
+    },
+    {
+      "case": "s15-beta-t8-cg6",
+      "status": 0,
+      "wall_seconds": 18.002468800001225,
+      "passed": true,
+      "threads": 8,
+      "elements": 67397,
+      "ndof": 79209,
+      "newton_seconds": 5.635905400000411,
+      "setup_seconds": {
+        "spaces": 0.29278319999866653,
+        "source_projection": 6.396839400000317,
+        "element_helpers": 3.625291099999231
+      },
+      "phase_seconds": {
+        "assemble_s": 0.8097792999997182,
+        "preconditioner_s": 2.8901095999990503,
+        "solve_s": 1.0068570999992517,
+        "line_search_s": 0.7867992000010418
+      },
+      "cg_iterations": 244,
+      "newton_iterations": 8,
+      "nonlinear_residual": 7.234575144283743e-11,
+      "field_change": 8.25654999999151e-07,
+      "max_linear_residual": 9.331333833886622e-07
+    },
+    {
+      "case": "s15-penalty-t8-cg6",
+      "status": 0,
+      "wall_seconds": 19.600028900000325,
+      "passed": true,
+      "threads": 8,
+      "elements": 67397,
+      "ndof": 79209,
+      "newton_seconds": 7.097005800000261,
+      "setup_seconds": {
+        "spaces": 0.2929524000010133,
+        "source_projection": 6.519042800000534,
+        "element_helpers": 3.617426200000409
+      },
+      "phase_seconds": {
+        "assemble_s": 0.9144988000043668,
+        "preconditioner_s": 3.709314700003233,
+        "solve_s": 1.3888830999985657,
+        "line_search_s": 0.907599800000753
+      },
+      "cg_iterations": 243,
+      "newton_iterations": 8,
+      "nonlinear_residual": 7.226967604328593e-11,
+      "field_change": 8.251356095481823e-07,
+      "max_linear_residual": 9.402496895455646e-07
+    },
+    {
+      "case": "s075-beta-t2-cg6",
+      "status": "timeout",
+      "wall_seconds": 150.17204270000002
+    },
+    {
+      "case": "s075-penalty-t2-cg6",
+      "status": "timeout",
+      "wall_seconds": 150.1697261999998
+    },
+    {
+      "case": "s075-beta-t8-cg6",
+      "status": 0,
+      "wall_seconds": 72.4389859999992,
+      "passed": true,
+      "threads": 8,
+      "elements": 195309,
+      "ndof": 229732,
+      "newton_seconds": 21.511087099999713,
+      "setup_seconds": {
+        "spaces": 1.0779818999999407,
+        "source_projection": 29.544128399998954,
+        "element_helpers": 17.47060600000077
+      },
+      "phase_seconds": {
+        "assemble_s": 3.4590408000021853,
+        "preconditioner_s": 11.403507700002592,
+        "solve_s": 3.3640070000019477,
+        "line_search_s": 2.96527999999671
+      },
+      "cg_iterations": 296,
+      "newton_iterations": 11,
+      "nonlinear_residual": 2.0277325652839112e-10,
+      "field_change": 9.188138375827445e-07,
+      "max_linear_residual": 8.733703426889113e-07
+    },
+    {
+      "case": "s075-penalty-t8-cg6",
+      "status": 0,
+      "wall_seconds": 78.89068510000106,
+      "passed": true,
+      "threads": 8,
+      "elements": 195309,
+      "ndof": 229732,
+      "newton_seconds": 27.09139689999938,
+      "setup_seconds": {
+        "spaces": 1.4430136999999377,
+        "source_projection": 30.13583649999964,
+        "element_helpers": 17.417428500000824
+      },
+      "phase_seconds": {
+        "assemble_s": 4.0315463000006275,
+        "preconditioner_s": 14.38487669999995,
+        "solve_s": 4.809328599994842,
+        "line_search_s": 3.495969800002058
+      },
+      "cg_iterations": 296,
+      "newton_iterations": 11,
+      "nonlinear_residual": 2.0287426454224605e-10,
+      "field_change": 9.189950887399256e-07,
+      "max_linear_residual": 8.625681924092243e-07
+    }
+  ],
+  "comparisons": [
+    {
+      "mesh": "s15",
+      "threads": 2,
+      "field_relative_l2": 5.339629962227626e-08,
+      "penalty_over_beta_newton_time": 1.2741409131996453
+    },
+    {
+      "mesh": "s15",
+      "threads": 8,
+      "field_relative_l2": 5.339629956068e-08,
+      "penalty_over_beta_newton_time": 1.2592485672310512
+    },
+    {
+      "mesh": "s075",
+      "threads": 8,
+      "field_relative_l2": 5.3624499268622213e-08,
+      "penalty_over_beta_newton_time": 1.2594155178703053
+    }
+  ],
+  "limitations": [
+    "Single measurements, not a statistical performance certificate.",
+    "Newton timing excludes source projection and element helper setup; wall time includes them.",
+    "A separate s15 beta-zero run with linear tolerance 1e-9 failed at Newton iteration 7: true relative linear residual 4.57e-3 after 500 iterations.",
+    "s15 penalty at one thread was interrupted to repair the timeout harness; no measurement claimed.",
+    "Two-thread large-mesh timeout is a wall-time limit, not a divergence diagnosis."
+  ]
+}
