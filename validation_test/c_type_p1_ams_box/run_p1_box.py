@@ -233,7 +233,8 @@ class ReducedAP1Box:
                  ic_shift: float = 1.05, gauge_epsilon: float = GAUGE_EPSILON,
                  ams_preconditioner_shift: float = 0.0,
                  ams_project_gradients: bool = False, ams_beta_zero: bool = False,
-                 cg_check_interval: int = 1, ams_print_level: int = 0):
+                 cg_check_interval: int = 1, ams_print_level: int = 0,
+                 outer_boundary: str = "source_flux"):
         """``source_cf`` is the vacuum source flux density B_s as a vector CF.
 
         ``linear_solver``: ``"ams"`` (compiled auxiliary-space Maxwell
@@ -274,6 +275,9 @@ class ReducedAP1Box:
         if gauge_epsilon == 0.0 and not (linear_solver == "iccg" or
                 (linear_solver == "ams" and (ams_preconditioner_shift > 0.0 or ams_beta_zero))):
             raise ValueError("gauge_epsilon=0 requires linear_solver='iccg', shifted AMS or beta-zero AMS")
+        if outer_boundary not in ("source_flux", "natural_total"):
+            raise ValueError("unknown outer boundary policy")
+        self.outer_boundary = outer_boundary
         self.mesh = mesh
         self.linear_solver = linear_solver
         self.ic_shift = float(ic_shift)
@@ -290,7 +294,9 @@ class ReducedAP1Box:
         self._ams_systems_seen = 0
         self.timing: dict[str, float] = {}
         started = time.perf_counter()
-        self.fes = ng.HCurl(mesh, order=1, dirichlet="outer", nograds=True)
+        self.fes = ng.HCurl(mesh, order=1,
+                            dirichlet="outer" if outer_boundary == "source_flux" else "",
+                            nograds=True)
         self.free = np.fromiter(self.fes.FreeDofs(), dtype=bool, count=self.fes.ndof)
         self.nu_space = ng.L2(mesh, order=0)
         self.nu_gf = ng.GridFunction(self.nu_space)
@@ -504,6 +510,8 @@ class ReducedAP1Box:
             a += self.gauge_epsilon * NU0 * ng.InnerProduct(u, v) * ng.dx
         f = ng.LinearForm(self.fes)
         f += (NU0 - self.nu_gf) * ng.InnerProduct(self.source_gf, ng.curl(v)) * ng.dx("iron")
+        if self.outer_boundary == "natural_total":
+            f += NU0 * ng.InnerProduct(ng.Cross(ng.specialcf.normal(3), self.source_cf), v.Trace()) * ng.ds("outer", bonus_intorder=4)
         return a, f
 
     def _residual(self, solution) -> tuple:
@@ -512,6 +520,8 @@ class ReducedAP1Box:
         r = ng.LinearForm(self.fes)
         r += self.nu_gf * ng.InnerProduct(ng.curl(solution), ng.curl(v)) * ng.dx
         r += (self.nu_gf - NU0) * ng.InnerProduct(self.source_gf, ng.curl(v)) * ng.dx("iron")
+        if self.outer_boundary == "natural_total":
+            r += -NU0 * ng.InnerProduct(ng.Cross(ng.specialcf.normal(3), self.source_cf), v.Trace()) * ng.ds("outer", bonus_intorder=4)
         if self.gauge_epsilon > 0.0:
             r += self.gauge_epsilon * NU0 * ng.InnerProduct(solution, v) * ng.dx
         with ng.TaskManager():
@@ -694,7 +704,9 @@ class ReducedAP1Box:
     def describe(self) -> dict:
         return {
             "formulation": "HCurl reduced-A, order 1, nograds gauge",
-            "boundary": "A_r x n = 0 on the box (source flux passes through)",
+            "boundary": ("n x H_total = 0 on the box; source boundary load included"
+                         if self.outer_boundary == "natural_total" else
+                         "A_r x n = 0 on the box (source flux passes through)"),
             "linear_solver": {
                 "ams": "AMS(compiled, sparsesolv)+CG to a true relative residual, warm-started",
                 "iccg": f"shifted IC(0) CG (compiled, sparsesolv, shift {self.ic_shift}, ABMC) "
@@ -866,6 +878,7 @@ def main() -> None:
     parser.add_argument("--ams-update-every", type=int, default=1,
                         help="rebuild the AMS hierarchy every N-th linear system")
     parser.add_argument("--source-projection-order", type=int, default=2)
+    parser.add_argument("--outer-boundary", choices=("source_flux", "natural_total"), default="source_flux")
     parser.add_argument("--relax", type=float, default=0.3)
     parser.add_argument("--anderson-depth", type=int, default=0)
     parser.add_argument("--newton-tolerance", type=float, default=1.0e-6,
@@ -946,6 +959,7 @@ def run(options) -> dict:
             ams_print_level=options.ams_print_level,
             ams_num_smooth=options.ams_num_smooth,
             source_projection_order=options.source_projection_order,
+            outer_boundary=options.outer_boundary,
             ams_update_every=options.ams_update_every, ic_shift=options.ic_shift,
             gauge_epsilon=options.gauge_epsilon,
             ams_preconditioner_shift=options.ams_preconditioner_shift,
