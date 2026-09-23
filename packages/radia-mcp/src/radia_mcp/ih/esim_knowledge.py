@@ -17,6 +17,20 @@ src/radia/panels/calc_inductance.py argparse.
 ESIM_USAGE_OVERVIEW = """
 # ESIM — when to use it
 
+## Retained spatial example and interpretation
+
+`docs/esim_spatial/esim_spatial_demo.ipynb` retains the 2026-09-15
+weak-coupled 100 A coil/workpiece calculation at 10, 50 and 100 kHz.
+Saved scenes distinguish tangential field, Re(Z_s), the local diagnostic
+0.5*Re(Z_s)*|H_t|^2, and the power-normalized `qsurf_sol` transfer artifact.
+Integral conservation does not independently validate the spatial loss pattern.
+This notebook does not certify thermal or volume-FEM accuracy, and recovery
+of its saved outputs is not a new calculation or rendered visual acceptance.
+Its boundary-only mesh check uses 10% for unused air/coil regions, while
+workpiece volume and SIBC area each satisfy 1%; this is not a relaxed FEM
+acceptance gate. Numerical inputs and evidence live in
+`validation_test/esim_spatial/`.
+
 The 1-D nonlinear cell-problem solver returns Z_s(|H_t|) for a
 ferromagnetic conductor with a BH curve.  ESIM **only** beats linear
 SIBC in one regime: a ferromagnetic workpiece (typically steel /
@@ -48,7 +62,7 @@ per-element when surface H_t spans the BH knee.
 
 ESIM is from K. Hollaus, V. Hanser, and M. Schoebinger, "A Nonlinear
 Effective Surface Impedance in a Magnetic Scalar Potential Formulation,"
-IEEE Trans. Magn., 2025, doi:10.1109/TMAG.2025.3613932 (bib key Hollaus2025;
+IEEE Trans. Magn., 62(7), 2026, doi:10.1109/TMAG.2025.3613932 (bib key Hollaus2025;
 official bibtex author field: "Hollaus, Karl and Hanser, Valentin and
 Sch\\"{o}binger, Markus").  The Sugahara-lab IGTE 2026 paper re-casts this
 method into a scalar BIE-SIBC; Karl Hollaus (TU Wien) is a co-author.
