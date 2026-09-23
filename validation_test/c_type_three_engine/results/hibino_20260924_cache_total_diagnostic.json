@@ -1,0 +1,54 @@
+{
+  "status": "subset_diagnostic_not_full_benchmark",
+  "threads": 1,
+  "rows": [
+    {
+      "elements": 1,
+      "direct_s": 0.2834448999997221,
+      "mapping_s": 0.052168499999879714,
+      "prepare_s": 0.07905849999997372,
+      "cached_assembly_s": 0.002589599999737402,
+      "total_cached_s": 0.13381659999959084,
+      "cache": {
+        "enabled": true,
+        "size": 125,
+        "hits": 375,
+        "misses": 0,
+        "hit_rate": 1.0
+      },
+      "relative_rhs_difference": 0.0
+    },
+    {
+      "elements": 8,
+      "direct_s": 1.6711759999998321,
+      "mapping_s": 0.05096659999981057,
+      "prepare_s": 0.555008799999996,
+      "cached_assembly_s": 0.0030277999999270833,
+      "total_cached_s": 0.6090031999997336,
+      "cache": {
+        "enabled": true,
+        "size": 1000,
+        "hits": 3000,
+        "misses": 0,
+        "hit_rate": 1.0
+      },
+      "relative_rhs_difference": 0.0
+    },
+    {
+      "elements": 32,
+      "direct_s": 6.384952100000191,
+      "mapping_s": 0.039512199999990116,
+      "prepare_s": 1.6327572000000146,
+      "cached_assembly_s": 0.0032538999998905638,
+      "total_cached_s": 1.6755232999998952,
+      "cache": {
+        "enabled": true,
+        "size": 4000,
+        "hits": 12000,
+        "misses": 0,
+        "hit_rate": 1.0
+      },
+      "relative_rhs_difference": 0.0
+    }
+  ]
+}
