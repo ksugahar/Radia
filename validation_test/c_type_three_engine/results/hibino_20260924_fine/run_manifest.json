@@ -1,0 +1,21 @@
+{
+  "host": "hibino",
+  "remote_root": "C:/temp/hdiv-fine-20260924",
+  "mesh_level": "fine",
+  "threads": 8,
+  "thread_environment": {"OMP_NUM_THREADS": "8", "MKL_NUM_THREADS": "8", "OPENBLAS_NUM_THREADS": "8"},
+  "command": "C:/temp/hdiv-fine-20260924/venv/Scripts/python.exe -u run_cached_three.py",
+  "execution": "foreground SSH, no resume, all three engines",
+  "radia_version": "5.0.0",
+  "radia_wheel_sha256": "41b5f5ec02c5c26ad47147da7e4496525e3e2066216d85d787487ecc253023e6",
+  "native_ci_run": "35863320903",
+  "radia_source_commit": "1b9f6769bbd402a9859e0a892d2a729e13294d6c",
+  "ngsolve_version": "6.2.2606",
+  "python_version": "3.12.10",
+  "iron_mesh_sha256": "065b418c14c151d32d49a777d961794a3ac5d5e7df647a6d49240edfaf4c4c71",
+  "kelvin_mesh_sha256": "741c247e6ac4ba11b3a55aa1f98858d9247b56268573044ed1e5659d7c84deb2",
+  "measurement_changes": "Read-only auxiliary-space counts and 50-ms whole-process RSS sampling around each original engine adapter. Not independent per-engine peak memory. Source cache preparation remains inside Omega adapter timing.",
+  "pre_run_estimate_minutes": [25,35],
+  "estimate_basis": "Medium all-engine total about 17 minutes, fine FEM elements 54886 versus medium 36208; required third mesh increment.",
+  "status": "Run manifest only; see final result for completion and acceptance"
+}
