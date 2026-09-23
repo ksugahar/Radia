@@ -84,7 +84,8 @@ def test_missing_diff_base_selects_matlab_without_failing_step(tmp_path):
     output = tmp_path/"output"
     result = subprocess.run([pwsh, "-NoProfile", "-Command",
         "function git { $global:LASTEXITCODE=1 }; " + script],
-        env={**os.environ, "GITHUB_OUTPUT": str(output)}, capture_output=True,
+        env={**os.environ, "GITHUB_OUTPUT": str(output),
+             "GITHUB_EVENT_NAME": "pull_request"}, capture_output=True,
         text=True, encoding="utf-8", errors="replace")
     assert result.returncode == 0, result.stderr
     assert output.read_text().strip() == "required=true"
@@ -125,10 +126,15 @@ def test_impact_uses_checkout_even_outside_repository(tmp_path, changed, event, 
                 if s.get('id') == 'matlab-impact')
     script = step['run'].replace('${{ github.event_name }}', event)
     output = tmp_path / 'github-output'
+    base = subprocess.check_output([git, '-C', str(repo), 'rev-parse', 'HEAD^'],
+                                   env=env, text=True).strip()
+    event_path = tmp_path / 'event.json'
+    event_path.write_text(json.dumps({'before': base}), encoding='utf-8')
     runner_env = {**env, 'GIT_TEST_ASSUME_DIFFERENT_OWNER': '1',
                   'GIT_CONFIG_NOSYSTEM': '1',
                   'GIT_CONFIG_GLOBAL': str(tmp_path / 'empty-gitconfig'),
-                  'GITHUB_WORKSPACE': str(repo), 'GITHUB_OUTPUT': str(output)}
+                  'GITHUB_WORKSPACE': str(repo), 'GITHUB_OUTPUT': str(output),
+                  'GITHUB_EVENT_NAME': event, 'GITHUB_EVENT_PATH': str(event_path)}
     untrusted = subprocess.run([git, '-C', str(repo), 'rev-parse', '--show-toplevel'],
                                env=runner_env, capture_output=True, text=True,
                                encoding="utf-8", errors="replace")
