@@ -49,6 +49,21 @@ coordinate offset can remain inside a locator's tolerance and is not a
 reliable side-selection contract. Report gap samples and material-stratified
 samples separately; neither establishes agreement at every mesh element.
 
+Closed meshed conductors can use `radia.meshed_current.solve_closed_coil_current`:
+an RT0/P0 mixed solve enforces zero cell divergence and insulating walls, including
+walls whose labels are shared with internal material interfaces. The source is
+normalized using a complete straight driven leg and its physical length. Only
+one face-connected conductor on straight tetrahedra is accepted. Pass the returned
+`current` to `TotalAP1Box`; use a caller-owned `ngsolve.TaskManager()`.
+A continuous H1 potential gradient only enforces weak current continuity and
+must not be assumed to preserve normal flux between cells or at conductor walls.
+
+The material interpolation is part of the comparison identity, not merely the
+tabulated values. `SoftIronLaw` retains the monotone PCHIP B(H) inverse.
+`PiecewiseLinearIronLaw` explicitly selects linear H(B) between strictly increasing
+samples starting at (0,0), with a vacuum-slope continuation above the table.
+Neither interpolation is silently substituted for the other.
+
 The reduced-A option `--outer-boundary natural_total` imposes the weak
 condition `n x H_total = 0`, instead of the default `source_flux` condition
 `A_r x n = 0`. It frees the outer tangential DOFs and adds

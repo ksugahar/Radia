@@ -47,6 +47,20 @@ def _bh_table():
     return [[0.0, 0.0], [100.0, 0.6], [400.0, 1.2], [2000.0, 1.6], [20000.0, 1.9]]
 
 
+def test_piecewise_linear_h_of_b_contract():
+    law = lane().PiecewiseLinearIronLaw([[0,0],[100,1],[400,2]])
+    b = np.array([0,.5,1.,1.5,2.,3.])
+    h = np.array([0,50,100,250,400,400+1/MU0])
+    np.testing.assert_allclose(law.reluctivity(b)*b,h)
+    np.testing.assert_allclose(law.differential_reluctivity(np.array([.5,1.5,3.])),
+                              [100,300,1/MU0])
+    for invalid in ([[1,1],[2,2]], [[0,0],[1,0]], [[0,0],[float('nan'),1]]):
+        with pytest.raises(ValueError):
+            lane().PiecewiseLinearIronLaw(invalid)
+    with pytest.raises(ValueError):
+        law.reluctivity(np.array([-1.]))
+
+
 def test_total_a_current_sign_zero_and_newton(box_mesh):
     module = lane()
     x, y = ng.x, ng.y

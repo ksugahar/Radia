@@ -164,6 +164,40 @@ class SoftIronLaw:
         return np.interp(magnitude, self._grid, self._dhdb)
 
 
+class PiecewiseLinearIronLaw:
+    """Explicit piecewise-linear H(B), with a vacuum-slope high-field tail.
+
+    This is a different constitutive contract from SoftIronLaw's PCHIP B(H).
+    Select it only when the input contract specifies this interpolation.
+    """
+
+    def __init__(self, bh_table):
+        table = np.asarray(bh_table, dtype=float)
+        if (table.ndim != 2 or table.shape[1] != 2 or len(table) < 2
+                or not np.isfinite(table).all() or np.any(table[0] != 0)
+                or np.any(np.diff(table, axis=0) <= 0)):
+            raise ValueError("strictly increasing finite [H,B] table starting at [0,0] required")
+        self._h, self._b = table[:, 0], table[:, 1]
+        self._slopes = np.diff(self._h) / np.diff(self._b)
+        self.nu_initial = float(self._slopes[0])
+        self.b_saturation = float(self._b[-1])
+
+    def reluctivity(self, magnitude):
+        b = np.asarray(magnitude, dtype=float)
+        if not np.isfinite(b).all() or np.any(b < 0):
+            raise ValueError("finite nonnegative flux magnitude required")
+        h = np.interp(b, self._b, self._h)
+        h = np.where(b > self._b[-1], self._h[-1] + NU0*(b-self._b[-1]), h)
+        return np.divide(h, b, out=np.full_like(b, self.nu_initial), where=b > 0)
+
+    def differential_reluctivity(self, magnitude):
+        b = np.asarray(magnitude, dtype=float)
+        if not np.isfinite(b).all() or np.any(b < 0):
+            raise ValueError("finite nonnegative flux magnitude required")
+        index = np.clip(np.searchsorted(self._b, b, side="right")-1, 0, len(self._slopes)-1)
+        return np.where(b >= self._b[-1], NU0, self._slopes[index])
+
+
 class _TrueResidualCG(CGSolver):
     """Keep NGSolve's CG recurrence; stop on the original free-DOF equation."""
 
