@@ -19,14 +19,12 @@ from radia.coil_builder import CoilBuilder
 mm = 1e-3  # 1 mm in meters
 
 
-def create_beam_steering_coil():
+def create_beam_steering_builder():
 	"""
 	Create the 8-segment beam steering magnet coil.
 
 	Returns:
-		tuple: (coil_object, coil_parameters)
-			- coil_object: Radia object ID
-			- coil_parameters: Dictionary with coil specifications
+		CoilBuilder: shared geometry for CAD and finite-filament field views.
 	"""
 	# Coil parameters
 	I = 1265.0       # Current (A)
@@ -39,7 +37,7 @@ def create_beam_steering_coil():
 	x0 = np.array([(48 + 170) * mm, -L_start / 2, -20 * mm - W / 2])
 
 	# Build coil using modern fluent interface
-	coil_segments = (CoilBuilder(current=I)
+	return (CoilBuilder(current=I)
 		.set_start(x0, V)
 		.set_cross_section(width=W, height=H)
 		.add_straight(length=16.43186645 * 2 * mm, tilt=0)
@@ -50,8 +48,13 @@ def create_beam_steering_coil():
 		.add_arc(radius=121 * mm, arc_angle=115.40771811, tilt=-90)
 		.add_straight(length=1018.51313197 * mm, tilt=90)
 		.add_arc(radius=121 * mm, arc_angle=64.59228189, tilt=-90)
-		.to_radia()
 	)
+
+
+def create_beam_steering_coil():
+	"""Original solid-current object contract, using the same shared geometry."""
+	builder = create_beam_steering_builder()
+	coil_segments = builder.to_radia()
 
 	# Combine all coils
 	coils_container = rad.ObjCnt(coil_segments)
@@ -61,8 +64,8 @@ def create_beam_steering_coil():
 
 	# Store parameters for reference
 	parameters = {
-		'current': I,
-		'cross_section': {'width': W, 'height': H},
+		'current': builder.current,
+		'cross_section': {'width': 122 * mm, 'height': 122 * mm},
 		'num_segments': len(coil_segments),
 		'description': '8-segment beam steering magnet coil'
 	}

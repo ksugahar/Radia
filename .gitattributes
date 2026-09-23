@@ -48,3 +48,8 @@ validation_test/esrf_three_engine/results/candidate_59b094d8/*.json -text whites
 
 # The mixed-Omega mesh certificate hashes these result files byte for byte.
 validation_test/c_type_three_engine/results/c_type_20260903_nonlinear_bdm2_*.json text eol=lf
+# Retained ESIM fixtures are verified by byte hashes on every platform.
+validation_test/esim_spatial/*.json -text whitespace=cr-at-eol
+validation_test/esim_spatial/inputs/* -text whitespace=cr-at-eol
+validation_test/esim_spatial/inputs/*.vol binary
+validation_test/esim_spatial/*_qsurf.sol binary
