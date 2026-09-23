@@ -23,6 +23,47 @@ from radia.sparsesolv_ngsolve import SparseSolvSolver
 from ngsolve.krylovspace import CGSolver
 
 
+@pytest.mark.parametrize("cycle", [1, 7])
+@pytest.mark.parametrize("subspace_solver", [0, 1])
+def test_beta_zero_ams_solves_compatible_singular_system_and_updates(cycle, subspace_solver):
+    import numpy as np
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.35))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet=".*")
+    u, v = space.TnT()
+    a = BilinearForm(space)
+    a += curl(u) * curl(v) * dx
+    a.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = [[mesh.ngmesh.Points()[i+1][j] for i in range(mesh.nv)] for j in range(3)]
+    before = a.mat.AsVector().FV().NumPy().copy()
+    pre = HypreBasedAMSPreconditioner(a.mat, grad, freedofs=space.FreeDofs(),
+        coord_x=coords[0], coord_y=coords[1], coord_z=coords[2], beta_zero=True,
+        cycle_type=cycle, subspace_solver=subspace_solver, print_level=1)
+    assert pre.beta_zero is True
+    exact = GridFunction(space)
+    free = np.asarray(list(space.FreeDofs()), dtype=bool)
+    exact.vec.FV().NumPy()[:] = np.random.default_rng(418).normal(size=space.ndof) * free
+    rhs = exact.vec.CreateVector()
+    rhs.data = a.mat * exact.vec
+    rhs.FV().NumPy()[~free] = 0
+    for update in (None, a.mat):
+        if update is None:
+            pre.Update()
+        else:
+            pre.Update(update)
+        np.testing.assert_array_equal(a.mat.AsVector().FV().NumPy(), before)
+        solution = GridFunction(space)
+        with TaskManager():
+            inv = CGSolver(a.mat, pre, tol=1e-10, maxiter=500, printrates=False)
+            solution.vec.data = inv * rhs
+        residual = rhs.CreateVector()
+        residual.data = rhs - a.mat * solution.vec
+        assert np.linalg.norm(residual.FV().NumPy()[free]) / Norm(rhs) < 1e-7
+        difference = curl(solution) - curl(exact)
+        assert Integrate(difference * difference, mesh) < 1e-12 * Integrate(curl(exact)*curl(exact), mesh)
+
+
 @pytest.mark.parametrize("factory", [
     "HypreBasedAMSPreconditioner", "CompactAMSPreconditioner",
     "ComplexHypreBasedAMSPreconditioner", "ComplexCompactAMSPreconditioner",

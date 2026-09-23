@@ -67,6 +67,7 @@ public:
     /// @param amg_theta    AMG strength threshold (default=0.25)
     /// @param print_level  Verbosity (0=silent)
     /// @param subspace_solver  0=CompactAMG (default), 1=SparseCholesky (diagnostic)
+    /// @param beta_zero Omit gradient correction for compatible pure curl-curl systems.
     HypreBasedAMS(shared_ptr<SparseMatrix<double>> mat,
                shared_ptr<SparseMatrix<double>> grad,
                shared_ptr<BitArray> freedofs,
@@ -78,12 +79,13 @@ public:
                double amg_theta = 0.25,
                int print_level = 0,
                double correction_weight = 1.0,
-               int subspace_solver = 0)
+               int subspace_solver = 0,
+               bool beta_zero = false)
         : mat_(mat), grad_(grad), freedofs_(freedofs),
           ndof_hc_(mat->Height()), ndof_h1_(grad->Width()),
           cycle_type_(cycle_type), num_smooth_(num_smooth),
           print_level_(print_level), correction_weight_(correction_weight),
-          subspace_solver_(subspace_solver), amg_theta_(amg_theta)
+          subspace_solver_(subspace_solver), amg_theta_(amg_theta), beta_zero_(beta_zero)
     {
         RequireSerialSetup();
         if ((int)coord_x.size() != ndof_h1_ ||
@@ -163,7 +165,10 @@ public:
     const SparseMatrix<double>& GetPixT() const { return *Pix_t_; }
     const SparseMatrix<double>& GetPiyT() const { return *Piy_t_; }
     const SparseMatrix<double>& GetPizT() const { return *Piz_t_; }
-    const BaseMatrix& GetBG() const { return *B_G_; }
+    const BaseMatrix& GetBG() const {
+        if (!B_G_) throw std::runtime_error("AMS beta_zero has no gradient solver");
+        return *B_G_;
+    }
     const BaseMatrix& GetBPix() const { return *B_Pix_; }
     const BaseMatrix& GetBPiy() const { return *B_Piy_; }
     const BaseMatrix& GetBPiz() const { return *B_Piz_; }
@@ -179,6 +184,7 @@ public:
     double GetCorrectionWeight() const { return correction_weight_; }
     int GetNumSmooth() const { return num_smooth_; }
     int GetCycleType() const { return cycle_type_; }
+    bool GetBetaZero() const { return beta_zero_; }
     shared_ptr<BitArray> GetFreeDofs() const { return freedofs_; }
 
     /// Apply one AMS V-cycle: cycle_type=1 -> "01210"
@@ -263,6 +269,7 @@ private:
     double correction_weight_;
     int subspace_solver_;  // 0=CompactAMG, 1=SparseCholesky
     double amg_theta_;     // AMG strength threshold (preserved for Update)
+    const bool beta_zero_; // Pure curl-curl: omit G correction and its hierarchy.
 
     // Gradient subspace
     shared_ptr<SparseMatrix<double>> grad_t_;  // G^T
@@ -363,6 +370,7 @@ private:
         // 2. Galerkin projection: A_G = G^T * A_bc * G, etc.
         auto t0 = std::chrono::high_resolution_clock::now();
         ParallelFor(4, [&](size_t d) {
+            if (d == 0 && beta_zero_) return;
             if (d == 0)
                 A_G_ = dynamic_pointer_cast<SparseMatrix<double>>(A_bc_->Restrict(*grad_));
             else if (d == 1)
@@ -376,13 +384,15 @@ private:
         double dt_restrict = std::chrono::duration<double>(t1 - t0).count();
 
         if (print_level_ > 0) {
-            std::cout << "\n  Galerkin restrict: " << dt_restrict << "s"
-                      << " A_G=" << A_G_->Height() << "x" << A_G_->Width()
-                      << " nnz=" << A_G_->NZE() << std::flush;
+            std::cout << "\n  Galerkin restrict: " << dt_restrict << "s";
+            if (beta_zero_) std::cout << " beta_zero: gradient hierarchy omitted";
+            else std::cout << " A_G=" << A_G_->Height() << "x" << A_G_->Width()
+                           << " nnz=" << A_G_->NZE();
+            std::cout << std::flush;
         }
 
         // 3. Fix zero rows: set diag = 1.0 for truly zero rows.
-        FixZeroRows(*A_G_);
+        if (!beta_zero_) FixZeroRows(*A_G_);
         FixZeroRows(*A_Pix_);
         FixZeroRows(*A_Piy_);
         FixZeroRows(*A_Piz_);
@@ -393,10 +403,12 @@ private:
                 std::cout << "\n  Subspace solver: SparseCholesky (diagnostic)" << std::flush;
 
             t0 = std::chrono::high_resolution_clock::now();
-            A_G_->SetInverseType("sparsecholesky");
-            B_G_ = A_G_->InverseMatrix(shared_ptr<BitArray>(nullptr));
+            if (!beta_zero_) {
+                A_G_->SetInverseType("sparsecholesky");
+                B_G_ = A_G_->InverseMatrix(shared_ptr<BitArray>(nullptr));
+            }
             t1 = std::chrono::high_resolution_clock::now();
-            if (print_level_ > 0)
+            if (print_level_ > 0 && !beta_zero_)
                 std::cout << "\n  B_G setup: " << std::chrono::duration<double>(t1 - t0).count()
                           << "s (direct, n=" << A_G_->Height() << ")" << std::flush;
 
@@ -417,13 +429,16 @@ private:
                 std::cout << "\n  Subspace solver: CompactAMG (min_coarse="
                           << min_coarse_aux << ")" << std::flush;
 
-            auto amg_G = make_shared<CompactAMG>(A_G_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
+            shared_ptr<CompactAMG> amg_G;
+            if (!beta_zero_)
+                amg_G = make_shared<CompactAMG>(A_G_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
             auto amg_Pix = make_shared<CompactAMG>(A_Pix_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
             auto amg_Piy = make_shared<CompactAMG>(A_Piy_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
             auto amg_Piz = make_shared<CompactAMG>(A_Piz_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
 
             t0 = std::chrono::high_resolution_clock::now();
             ParallelFor(4, [&](size_t d) {
+                if (d == 0 && beta_zero_) return;
                 if (d == 0) amg_G->Setup();
                 else if (d == 1) amg_Pix->Setup();
                 else if (d == 2) amg_Piy->Setup();
@@ -433,7 +448,7 @@ private:
             if (print_level_ > 0)
                 std::cout << "\n  AMG setup (4-way parallel): "
                           << std::chrono::duration<double>(t1 - t0).count()
-                          << "s, levels: G=" << amg_G->NumLevels()
+                          << "s, levels: G=" << (amg_G ? amg_G->NumLevels() : 0)
                           << " Px=" << amg_Pix->NumLevels()
                           << " Py=" << amg_Piy->NumLevels()
                           << " Pz=" << amg_Piz->NumLevels() << std::flush;
@@ -479,8 +494,10 @@ private:
     void AllocateWorkVectors() {
         b0_ = std::make_unique<VVector<double>>(ndof_hc_);
         r0_ = std::make_unique<VVector<double>>(ndof_hc_);
-        r_G_ = std::make_unique<VVector<double>>(ndof_h1_);
-        g_G_ = std::make_unique<VVector<double>>(ndof_h1_);
+        if (!beta_zero_) {
+            r_G_ = std::make_unique<VVector<double>>(ndof_h1_);
+            g_G_ = std::make_unique<VVector<double>>(ndof_h1_);
+        }
         r_Pix_ = std::make_unique<VVector<double>>(ndof_h1_);
         g_Pix_ = std::make_unique<VVector<double>>(ndof_h1_);
         r_Piy_ = std::make_unique<VVector<double>>(ndof_h1_);
@@ -622,6 +639,7 @@ private:
     }
 
     void GradientCorrect(const BaseVector& b, BaseVector& x) const {
+        if (beta_zero_) return;
         ComputeResidual(b, x, *r0_);
         SubspaceCorrect(*grad_, *grad_t_, *B_G_, *r0_, x, *r_G_, *g_G_, "G");
     }
