@@ -73,7 +73,8 @@ def main(argv: list[str] | None = None) -> int:
                     changed = diff.stdout.decode('utf-8').split('\0')
                     if 'tests/test_tier_manifest.json' in changed:
                         previous_manifest = read_previous_manifest(args.since)
-            paths = select_impact_tests(paths, changed, previous_manifest=previous_manifest)
+            paths = select_impact_tests(paths, changed, previous_manifest=previous_manifest,
+                                        profile_name=args.profile)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"test-tier configuration error: {exc}", file=sys.stderr)
         return 2
@@ -121,10 +122,28 @@ def read_previous_manifest(ref: str) -> dict | None:
         return None
 
 
-def changed_impact_tests(current: dict, previous: dict | None) -> set[str] | None:
+def changed_impact_tests(
+    current: dict, previous: dict | None, *, profile_name: str | None = None,
+) -> set[str] | None:
     """Select rule/membership deltas; budgets, inheritance and unknowns stay broad."""
     if not isinstance(previous, dict):
         return None
+    if profile_name is not None:
+        def scoped(data):
+            profiles = data.get('profiles')
+            if not isinstance(profiles, dict):
+                return None
+            selected = {}
+            name = profile_name
+            while name:
+                if not isinstance(name, str) or name in selected or not isinstance(profiles.get(name), dict):
+                    return None
+                selected[name] = profiles[name]
+                name = profiles[name].get('extends')
+            return {**data, 'profiles': selected}
+        current, previous = scoped(current), scoped(previous)
+        if current is None or previous is None:
+            return None
     excluded = {'impact_rules', 'profiles'}
     if ({key: value for key, value in current.items() if key not in excluded}
             != {key: value for key, value in previous.items() if key not in excluded}):
@@ -165,6 +184,7 @@ def changed_impact_tests(current: dict, previous: dict | None) -> set[str] | Non
 
 def select_impact_tests(
     paths: list[str], changed: list[str] | None, *, previous_manifest: dict | None = None,
+    profile_name: str | None = None,
 ) -> list[str]:
     """Match files exactly and trailing-slash directories recursively; unknown bases fail broad."""
     manifest = json.loads(MANIFEST.read_text(encoding='utf-8'))
@@ -172,7 +192,8 @@ def select_impact_tests(
     selected = list(paths)
     manifest_tests = set()
     if changed is not None and 'tests/test_tier_manifest.json' in changed:
-        manifest_tests = changed_impact_tests(manifest, previous_manifest)
+        manifest_tests = changed_impact_tests(
+            manifest, previous_manifest, profile_name=profile_name)
         if manifest_tests is None:
             changed = None
             manifest_tests = set()
