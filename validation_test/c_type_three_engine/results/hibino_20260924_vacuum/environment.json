@@ -1,0 +1,27 @@
+{
+  "host": "Hibino",
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "executable": "C:\\temp\\hdiv-vacuum-20260924\\venv\\Scripts\\python.exe",
+  "versions": {
+    "radia": "5.0.0",
+    "ngsolve": "6.2.2606",
+    "numpy": "2.4.3",
+    "psutil": "7.2.2"
+  },
+  "radia_path": "C:\\temp\\hdiv-vacuum-20260924\\venv\\Lib\\site-packages\\radia\\__init__.py",
+  "ngsolve_path": "C:\\Program Files\\Python312\\Lib\\site-packages\\ngsolve\\__init__.py",
+  "logical_cpus": 38,
+  "memory": {
+    "total": 61680418816,
+    "available": 54541905920,
+    "percent": 11.6,
+    "used": 7138512896,
+    "free": 54541905920
+  },
+  "scripts": {
+    "phase_memory.py": "127648f4262483b4a53aa5e22118f404e2a859ce68e519d0547466f7b04fc495",
+    "run_finer_three.py": "306e681d01a457c00afd070577c4a5cf076cc189f8c9012278260c74c41a61ea",
+    "run_three_engine.py": "7baa0feaee8bf3c9b921944d4b5c4102dec0ac072748f0c29e287f5fb1f0c334",
+    "vacuum_omega.py": "c4516f2df6ae8219af8cdaa322de0295b061e486b626928916e70a1380a0b767"
+  }
+}
