@@ -56,6 +56,11 @@ def main():
                                 root/"tests/matlab/test_mex_runtime_setup.m", root/"matlab/+radia/+internal/callMex.m",
                                 root/"matlab/+radia/setup.m",
                                 root/"tests/matlab/sparsesolv_python_reference.py",
+                                root/"tests/matlab/test_beam_transfer_mex.m",
+                                root/"tests/matlab/beam_transfer_python_reference.py",
+                                root/"src/core/rad_beam_transfer.cpp",
+                                root/"src/lib/rad_beam_transfer_pybind.cpp",
+                                root/"src/matlab/radia_beam_mex_commands.cpp",
                                 *sorted((root/"src/ext/sparsesolv/include").rglob("*.hpp"))]},
                   passed=False)
     eng = None
@@ -65,6 +70,7 @@ def main():
     try:
         eng = matlab.engine.start_matlab("-nodesktop -nosplash")
         eng.cd(str(root), nargout=0)
+        eng.setenv("RADIA_PYTHON_EXECUTABLE", sys.executable, nargout=0)
         eng.addpath(str(root/"matlab"), nargout=0)
         eng.setenv("RADIA_SPARSESOLV_METRICS", str(metrics), nargout=0)
         eng.eval("radia.setup(Force=true);", nargout=0)
@@ -73,7 +79,8 @@ def main():
         if Path(record["resolved_mex"]).resolve() != mex.resolve():
             raise RuntimeError("MATLAB resolved a different MEX")
         eng.workspace["testfiles"] = [str(root/"tests/matlab/test_sparsesolv_mex.m"),
-                                      str(root/"tests/matlab/test_mex_runtime_setup.m")]
+                                      str(root/"tests/matlab/test_mex_runtime_setup.m"),
+                                      str(root/"tests/matlab/test_beam_transfer_mex.m")]
         eng.eval("r = runtests(testfiles); disp(table(r));", nargout=0)
         record["tests"] = json.loads(eng.eval("jsonencode(struct('names',{string({r.Name})},'passed',[r.Passed],'failed',[r.Failed],'incomplete',[r.Incomplete],'duration',[r.Duration]))"))
         record["passed"] = bool(eng.eval("~isempty(r) && all([r.Passed])"))

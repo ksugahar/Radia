@@ -27,6 +27,15 @@ on:
       - 'matlab/+radia/+internal/callMex.m'
       - 'matlab/+radia/setup.m'
       - 'tests/matlab/test_mex_runtime_setup.m'
+      - 'src/core/rad_beam_transfer.*'
+      - 'src/lib/rad_beam_transfer_pybind.*'
+      - 'src/matlab/radia_beam_mex_commands.*'
+      - 'src/radia/beam.py'
+      - 'matlab/+radia/+beam/canonicalBodyHamiltonianJet.m'
+      - 'matlab/+radia/+beam/propagateVariationalMap.m'
+      - 'tests/matlab/test_beam_transfer_mex.m'
+      - 'tests/matlab/beam_transfer_python_reference.py'
+      - 'validation_test/accelerator/benchmark_beam_transfer_mex_python.py'
       - 'matlab/+radia/+sparsesolv/**'
       - 'matlab/+radia/+python/sparsesolv.m'
       - 'matlab/+radia/+python/electromagnetValidation.m'
@@ -73,6 +82,15 @@ on:
       - 'matlab/+radia/+internal/callMex.m'
       - 'matlab/+radia/setup.m'
       - 'tests/matlab/test_mex_runtime_setup.m'
+      - 'src/core/rad_beam_transfer.*'
+      - 'src/lib/rad_beam_transfer_pybind.*'
+      - 'src/matlab/radia_beam_mex_commands.*'
+      - 'src/radia/beam.py'
+      - 'matlab/+radia/+beam/canonicalBodyHamiltonianJet.m'
+      - 'matlab/+radia/+beam/propagateVariationalMap.m'
+      - 'tests/matlab/test_beam_transfer_mex.m'
+      - 'tests/matlab/beam_transfer_python_reference.py'
+      - 'validation_test/accelerator/benchmark_beam_transfer_mex_python.py'
       - 'matlab/+radia/+sparsesolv/**'
       - 'matlab/+radia/+python/sparsesolv.m'
       - 'matlab/+radia/+python/electromagnetValidation.m'
@@ -143,6 +161,7 @@ jobs:
           $required = $required -or [bool]($changed -match '^(src/ext/sparsesolv/|src/matlab/|matlab/\+radia/\+sparsesolv/|tests/matlab/.*sparsesolv|validation_test/ngsolve_matlab_parity/run_sparsesolv|CMakeLists.txt|Build.ps1|\.github/workflows/sparsesolv.yml)')
           $required = $required -or [bool]($changed -match '^matlab/(python_api_parity_manifest.json|\+radia/\+python/(sparsesolv|electromagnetValidation|esrfExamples|staticElectromagnet)\.m)')
           $required = $required -or [bool]($changed -match '^(matlab/\+radia/(setup\.m|\+internal/callMex\.m)|tests/matlab/test_mex_runtime_setup\.m)$')
+          $required = $required -or [bool]($changed -match '^(src/(core/rad_beam_transfer|lib/rad_beam_transfer_pybind|matlab/radia_beam_mex_commands|radia/beam\.py)|matlab/\+radia/\+beam/(canonicalBodyHamiltonianJet|propagateVariationalMap)\.m|tests/matlab/(test_beam_transfer_mex\.m|beam_transfer_python_reference\.py)|validation_test/accelerator/benchmark_beam_transfer_mex_python\.py)')
           $required = $required -or ($changed -contains 'tools/native_build_provenance.ps1')
           "required=$($required.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
           Write-Host "MATLAB parity required=$required; diff_failed=$diffFailed; changed_files=$($changed.Count)"

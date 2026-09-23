@@ -67,10 +67,12 @@ def test_mex_runtime_boundary_has_native_ci_coverage():
     triggers = workflow.get("on", workflow.get(True))
     for event in ("push", "pull_request"):
         for path in ("matlab/+radia/+internal/callMex.m", "matlab/+radia/setup.m",
-                     "tests/matlab/test_mex_runtime_setup.m"):
+                     "tests/matlab/test_mex_runtime_setup.m", "tests/matlab/test_beam_transfer_mex.m"):
             assert path in triggers[event]["paths"]
     runner = (ROOT/"validation_test/ngsolve_matlab_parity/run_sparsesolv_parity.py").read_text()
     assert 'root/"tests/matlab/test_mex_runtime_setup.m"' in runner
+    assert 'root/"tests/matlab/test_beam_transfer_mex.m"' in runner
+    assert 'eng.setenv("RADIA_PYTHON_EXECUTABLE", sys.executable' in runner
     assert "runtests(testfiles)" in runner
 
 
