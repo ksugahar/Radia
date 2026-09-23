@@ -302,3 +302,35 @@ def test_the_mesh_contract_rejects_a_mesh_without_the_lane_labels(tmp_path, box_
     good.with_suffix(".json").write_text(json.dumps({"vol_sha256": module.sha256(good)}))
     contract = module.check_mesh_contract(good, box_mesh)
     assert contract["vol_sha256"] == module.sha256(good)
+
+
+def test_inexact_newton_preserves_field_and_outer_gates(box_mesh):
+    law = lane().SoftIronLaw(_bh_table())
+    options = dict(newton_tolerance=1e-8, tolerance=1e-5, max_iterations=30,
+                   max_halvings=6, observation=_points())
+    reference, fixed_stats, _ = _engine(box_mesh, "ams").run_newton(law, **options)
+    engine = _engine(box_mesh, "ams", ams_update_every=2)
+    field, stats, _ = engine.run_newton(law, inexact_linear=True, **options)
+    assert fixed_stats["converged"] and stats["converged"]
+    assert stats["final_residual_relative"] <= options["newton_tolerance"]
+    assert stats["final_relative_change"] <= options["tolerance"]
+    assert engine.cg_tolerance == 1e-9
+    assert stats["inexact_linear"] is True
+    for row in stats["history"]:
+        assert 1e-9 <= row["linear_tolerance"] <= 0.01
+        assert row["relative_residual"] <= row["linear_tolerance"]
+    assert stats["history"][-1]["linear_tolerance"] < stats["history"][0]["linear_tolerance"]
+    np.testing.assert_allclose(field, reference, rtol=1e-6, atol=1e-8)
+
+
+def test_inexact_newton_restores_tolerance_after_linear_failure(box_mesh, monkeypatch):
+    engine = _engine(box_mesh, "ams")
+    def fail(*args, **kwargs):
+        assert engine.cg_tolerance == 0.01
+        raise RuntimeError("injected linear failure")
+    monkeypatch.setattr(engine, "_solve_linear", fail)
+    with pytest.raises(RuntimeError, match="injected linear failure"):
+        engine.run_newton(lane().SoftIronLaw(_bh_table()), inexact_linear=True,
+                          newton_tolerance=1e-8, tolerance=1e-5,
+                          max_iterations=30, max_halvings=6, observation=_points())
+    assert engine.cg_tolerance == 1e-9

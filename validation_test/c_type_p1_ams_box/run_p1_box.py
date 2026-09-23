@@ -580,7 +580,8 @@ class ReducedAP1Box:
         return field, stats, time.perf_counter() - started
 
     def run_newton(self, law: SoftIronLaw, *, newton_tolerance: float, tolerance: float,
-                   max_iterations: int, max_halvings: int, observation: np.ndarray) -> tuple:
+                   max_iterations: int, max_halvings: int, observation: np.ndarray,
+                   inexact_linear: bool = False) -> tuple:
         started = time.perf_counter()
         solution = ng.GridFunction(self.fes, name="A_reduced")
         solution.vec[:] = 0.0
@@ -594,6 +595,7 @@ class ReducedAP1Box:
         if residual_0 == 0.0:
             return self._observe(solution, observation), {
                 "method": "Newton", "converged": True, "iterations": 0,
+                "inexact_linear": bool(inexact_linear),
                 "final_relative_change": 0.0, "tolerance": float(tolerance),
                 "newton_tolerance": float(newton_tolerance),
                 "final_residual_relative": 0.0,
@@ -610,7 +612,15 @@ class ReducedAP1Box:
             negative = residual_vec.CreateVector()
             negative.data = -1.0 * residual_vec
             update[:] = 0.0
-            entry.update(self._solve_linear(J.mat, negative, update, warm_start=False))
+            fixed_tolerance = self.cg_tolerance
+            # Tighten inner solves with the nonlinear residual; outer gates stay fixed.
+            if inexact_linear:
+                self.cg_tolerance = max(fixed_tolerance, min(0.01, 0.1 * residual_norm / residual_0))
+            entry["linear_tolerance"] = self.cg_tolerance
+            try:
+                entry.update(self._solve_linear(J.mat, negative, update, warm_start=False))
+            finally:
+                self.cg_tolerance = fixed_tolerance
             # Armijo backtracking on the true residual norm.
             t0 = time.perf_counter()
             alpha, accepted = 1.0, None
@@ -651,6 +661,7 @@ class ReducedAP1Box:
         field = self._observe(solution, observation)
         stats = {
             "method": "Newton", "converged": bool(converged), "iterations": len(history),
+            "inexact_linear": bool(inexact_linear),
             "final_relative_change": final_change, "tolerance": float(tolerance),
             "newton_tolerance": float(newton_tolerance),
             "final_residual_relative": residual_norm / residual_0,
@@ -805,6 +816,8 @@ def compare(points, fields: dict, reference: dict | None, core_half_length: floa
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--inexact-linear", action="store_true",
+                        help="Adapt Newton inner tolerance without relaxing final convergence gates")
     parser.add_argument("--vol", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--bh-table", type=Path, default=DEFAULT_BH)
@@ -920,7 +933,8 @@ def run(options) -> dict:
             field, stats, runtime = engine.run_newton(
                 SoftIronLaw(material), newton_tolerance=options.newton_tolerance,
                 tolerance=options.tolerance, max_iterations=options.max_iterations,
-                max_halvings=options.line_search_max_halvings, observation=points)
+                max_halvings=options.line_search_max_halvings, observation=points,
+                inexact_linear=options.inexact_linear)
         else:
             field, stats, runtime = engine.run_picard(
                 SoftIronLaw(material), relax=options.relax,
