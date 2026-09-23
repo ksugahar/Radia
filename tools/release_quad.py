@@ -1194,6 +1194,43 @@ for r in ["simulink/application.py",
 '''
 
 
+def _run_script_with_file_output(command, source, timeout):
+    """Bound remote Python runs without waiting for inherited output pipes."""
+    if command[0] == "ssh" and source is not None:
+        # Python's stdin route can remain open under Windows OpenSSH. Stage
+        # the script, then execute with stdin closed and clean it remotely.
+        host, python, dash, *arguments = command[1:]
+        if dash != "-":
+            raise ValueError("Expected a Python stdin command")
+        with tempfile.TemporaryDirectory(prefix="radia-probe-", dir=r"C:\temp") as scratch:
+            source_path = Path(scratch) / "probe.py"
+            source_path.write_text(source, encoding="utf-8")
+            remote = "C:/temp/" + Path(scratch).name + ".py"
+            subprocess.run(["scp", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
+                            str(source_path), f"{host}:{remote}"],
+                           stdin=subprocess.DEVNULL, timeout=60, check=True)
+            quoted_args = " ".join("'" + arg.replace("'", "''") + "'" for arg in arguments)
+            script = (f"try {{ & {python} -X utf8 '{remote}' {quoted_args}; "
+                      "$result = $LASTEXITCODE } finally { "
+                      f"Remove-Item -LiteralPath '{remote}' -Force }}; exit $result")
+            encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+            return _run_script_with_file_output(
+                ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host,
+                 "pwsh", "-NoProfile", "-EncodedCommand", encoded], None, timeout)
+    with tempfile.TemporaryFile(mode="w+b", dir=r"C:\temp") as output, \
+            tempfile.TemporaryFile(mode="w+b", dir=r"C:\temp") as errors:
+        result = subprocess.run(command, input=source.encode("utf-8") if source is not None else None,
+                                **({"stdin": subprocess.DEVNULL} if source is None else {}),
+                                stdout=output, stderr=errors, timeout=timeout,
+                                check=False)
+        output.seek(0)
+        errors.seek(0)
+        return subprocess.CompletedProcess(
+            command, result.returncode,
+            output.read().decode("utf-8", errors="replace"),
+            errors.read().decode("utf-8", errors="replace"))
+
+
 def _probe(host_label, cmd_prefix, probe_src=CROSS_MACHINE_PROBE):
     """Run the probe on a target (cmd_prefix is the python invocation).
 
@@ -1202,8 +1239,7 @@ def _probe(host_label, cmd_prefix, probe_src=CROSS_MACHINE_PROBE):
     release tag via git) -- see those probe strings for the rationale.
     """
     try:
-        p = subprocess.run(cmd_prefix, input=probe_src,
-                           capture_output=True, text=True, shell=False, timeout=120)
+        p = _run_script_with_file_output(cmd_prefix, probe_src, timeout=120)
     except (OSError, subprocess.TimeoutExpired) as exc:
         fail(f"probe could not run on {host_label}: {exc}")
         return None
@@ -1585,10 +1621,9 @@ def _remote_editable_intent(ssh_host, argv, python="python", timeout=900):
     Returns (returncode, parsed JSON report or None, combined text).
     """
     token = base64.b64encode(json.dumps(list(argv)).encode("utf-8")).decode("ascii")
-    proc = subprocess.run(
+    proc = _run_script_with_file_output(
         ["ssh", ssh_host, python, "-", "--argv-b64", token],
-        input=REMOTE_EDITABLE_VERIFY, capture_output=True, text=True,
-        encoding="utf-8", errors="replace", timeout=timeout, check=False,
+        REMOTE_EDITABLE_VERIFY, timeout=timeout,
     )
     text = (proc.stdout or "").strip()
     report = None

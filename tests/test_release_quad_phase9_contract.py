@@ -84,10 +84,46 @@ def test_probe_launch_failure_is_not_acceptance(monkeypatch, error):
 
 def test_failed_exit_rejects_even_complete_stdout(monkeypatch):
     monkeypatch.setattr(
-        quad.subprocess, "run",
+        quad, "_run_script_with_file_output",
         lambda *args, **_kwargs: subprocess.CompletedProcess(
             args, 1, stdout=probe(), stderr="failed after output"))
     assert quad._probe("LAB", ["python", "-"]) is None
+
+
+def test_script_output_uses_files_and_preserves_utf8_and_exit(monkeypatch):
+    def run(command, **kwargs):
+        assert kwargs["input"] == "print('検証')".encode("utf-8")
+        assert kwargs["timeout"] == 12
+        assert kwargs["stdout"] != subprocess.PIPE
+        assert kwargs["stderr"] != subprocess.PIPE
+        kwargs["stdout"].write("検証\n".encode("utf-8"))
+        kwargs["stderr"].write(b"diagnostic")
+        return subprocess.CompletedProcess(command, 7)
+    monkeypatch.setattr(quad.subprocess, "run", run)
+    result = quad._run_script_with_file_output(["python", "-"], "print('検証')", 12)
+    assert (result.returncode, result.stdout, result.stderr) == (7, "検証\n", "diagnostic")
+
+
+def test_remote_script_is_staged_and_cleaned_without_stdin(monkeypatch):
+    import base64
+    from pathlib import Path
+    calls = []
+    def run(command, **kwargs):
+        calls.append(command)
+        assert kwargs["stdin"] == subprocess.DEVNULL
+        if command[0] == "scp":
+            assert Path(command[-2]).read_text(encoding="utf-8") == "print('ok')"
+            assert command[-1].startswith("100:C:/temp/radia-probe-")
+        else:
+            script = base64.b64decode(command[-1]).decode("utf-16-le")
+            assert "finally" in script and "Remove-Item -LiteralPath" in script
+            assert "'--argv-b64' 'YWJj'" in script
+            kwargs["stdout"].write(b"ok\n")
+        return subprocess.CompletedProcess(command, 0)
+    monkeypatch.setattr(quad.subprocess, "run", run)
+    result = quad._run_script_with_file_output(
+        ["ssh", "100", "python", "-", "--argv-b64", "YWJj"], "print('ok')", 12)
+    assert result.stdout == "ok\n" and len(calls) == 2
 
 
 def test_missing_version_parser_fails_closed(monkeypatch):
