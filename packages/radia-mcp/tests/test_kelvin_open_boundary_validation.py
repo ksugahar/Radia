@@ -1,4 +1,5 @@
 """Fast policy and argument validation; no NGSolve solve is permitted."""
+import builtins
 import pytest
 from radia_mcp.radia_ngsolve import kelvin_open_boundary_validation as validation
 
@@ -15,9 +16,11 @@ from radia_mcp.radia_ngsolve import kelvin_open_boundary_validation as validatio
     ],
 )
 def test_invalid_static_policy_or_geometry_fails_before_any_solve(case, message, monkeypatch):
-    def forbidden_solve(**kwargs):
-        pytest.fail("invalid request reached a numerical solver")
-    monkeypatch.setattr(validation, "kelvin_dtn_eigenvalue", forbidden_solve)
-    monkeypatch.setattr(validation, "kelvin_twosphere_shell_dipole", forbidden_solve)
+    real_import = builtins.__import__
+    def guarded_import(name, *args, **kwargs):
+        if name.rsplit(".", 1)[-1] in {"fem_bem_coupling", "ngsolve"}:
+            pytest.fail("invalid request imported a numerical solver")
+        return real_import(name, *args, **kwargs)
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
     with pytest.raises(ValueError, match=message):
         validation.run_kelvin_open_boundary_validation(case)
