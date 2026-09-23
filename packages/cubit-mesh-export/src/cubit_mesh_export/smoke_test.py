@@ -425,10 +425,8 @@ def run_smoke_test(*, jou: str = "", order: int = 2,
     # removed in cubit-mesh-export 0.8.0 along with the unified panel
     # launcher (target-centric architecture, 2026-05-05).
 
-    # Cubit's headless mode is flaky: it often segfaults in the mesh-cleanup
-    # stage AFTER export has written the .vol. We therefore trust the
-    # .vol as the source of truth -- its presence + valid bcnames means the
-    # plugin round-trip succeeded, regardless of Cubit's exit code.
+    # A valid artifact cannot turn an unsuccessful invocation into a pass.
+    # Keep its output for diagnosis; validate the process and artifact separately.
     if not vol_path.is_file():
         print(f"[FAIL] export did not produce {vol_path}")
         if proc.returncode != 0:
@@ -440,9 +438,8 @@ def run_smoke_test(*, jou: str = "", order: int = 2,
         return 1
 
     if proc.returncode != 0:
-        print(f"[WARN] Cubit exited {proc.returncode} after exporting the "
-              ".vol. Cubit's headless teardown can segfault after a "
-              "successful export; continuing because the .vol looks valid.")
+        print(f"[FAIL] Cubit exited {proc.returncode}; output is retained for diagnosis.")
+        return 1
     print(f"  .vol size: {vol_path.stat().st_size} bytes")
 
     try:
