@@ -1,0 +1,32 @@
+{
+  "status": "two_level_increment_not_error_certificate",
+  "engines": {
+    "hdiv_mmm": {
+      "raw_full_relative_increment": 0.0001656059331132914,
+      "projected_core_relative_increment": 0.00016150560673917108,
+      "coarse_primary_dof": 3090,
+      "medium_primary_dof": 3804,
+      "coarse_seconds": 3.1265336999999818,
+      "medium_seconds": 3.4928630000003977
+    },
+    "reduced_a": {
+      "raw_full_relative_increment": 0.009780650152340777,
+      "projected_core_relative_increment": 0.0007186164938935526,
+      "coarse_primary_dof": 126834,
+      "medium_primary_dof": 190396,
+      "coarse_seconds": 19.86210600000004,
+      "medium_seconds": 27.91258529999959
+    },
+    "mixed_total_reduced_omega": {
+      "raw_full_relative_increment": 0.017158577491115854,
+      "projected_core_relative_increment": 0.0013263406568686817,
+      "coarse_primary_dof": 41305,
+      "medium_primary_dof": 60848,
+      "coarse_seconds": 671.0836537999999,
+      "medium_seconds": 975.0445808000004
+    }
+  },
+  "coarse_core_pairwise_max": 0.004535457592290168,
+  "medium_core_pairwise_max": 0.004123779220183117,
+  "warning": "Medium is not an exact reference; two levels do not establish asymptotic convergence or matched error."
+}
