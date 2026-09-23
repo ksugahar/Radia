@@ -233,7 +233,7 @@ class ReducedAP1Box:
                  ic_shift: float = 1.05, gauge_epsilon: float = GAUGE_EPSILON,
                  ams_preconditioner_shift: float = 0.0,
                  ams_project_gradients: bool = False, ams_beta_zero: bool = False,
-                 cg_check_interval: int = 1):
+                 cg_check_interval: int = 1, ams_print_level: int = 0):
         """``source_cf`` is the vacuum source flux density B_s as a vector CF.
 
         ``linear_solver``: ``"ams"`` (compiled auxiliary-space Maxwell
@@ -251,6 +251,9 @@ class ReducedAP1Box:
         if cg_check_interval != 1 and linear_solver != "ams":
             raise ValueError("cg_check_interval requires AMS")
         self.cg_check_interval = int(cg_check_interval)
+        if ams_print_level not in (0, 1):
+            raise ValueError("ams_print_level must be 0 or 1")
+        self.ams_print_level = int(ams_print_level)
         if cg_tolerance <= 0.0 or cg_max_iterations < 1 or ams_num_smooth < 1:
             raise ValueError("cg_tolerance, cg_max_iterations and ams_num_smooth must be positive")
         if int(ams_update_every) < 1:
@@ -355,7 +358,7 @@ class ReducedAP1Box:
             self._ams = ssn.HypreBasedAMSPreconditioner(
                 mat=matrix, grad_mat=gradient, freedofs=self.fes.FreeDofs(),
                 coord_x=xyz[:, 0].tolist(), coord_y=xyz[:, 1].tolist(),
-                coord_z=xyz[:, 2].tolist(), cycle_type=1, print_level=0,
+                coord_z=xyz[:, 2].tolist(), cycle_type=1, print_level=self.ams_print_level,
                 num_smooth=self.ams_num_smooth,
                 **({"beta_zero": True} if self.ams_beta_zero else {}))
             self._ams_lagged = False
@@ -700,6 +703,7 @@ class ReducedAP1Box:
             }[self.linear_solver],
             "cg_relative_tolerance": self.cg_tolerance if self.linear_solver != "direct" else None,
             "cg_check_interval": self.cg_check_interval,
+            "ams_print_level": self.ams_print_level,
             "ams_num_smooth": self.ams_num_smooth if self.linear_solver == "ams" else None,
             "ams_update_every": self.ams_update_every if self.linear_solver == "ams" else None,
             "ams_preconditioner_shift": self.ams_preconditioner_shift,
@@ -830,6 +834,8 @@ def compare(points, fields: dict, reference: dict | None, core_half_length: floa
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--ams-print-level", type=int, choices=(0, 1), default=0,
+                        help="Native AMS setup and sampled application timing diagnostics")
     parser.add_argument("--cg-check-interval", type=int, default=1,
                         help="AMS true residual check interval; final check is mandatory")
     parser.add_argument("--inexact-linear", action="store_true",
@@ -937,6 +943,7 @@ def run(options) -> dict:
             mesh, rad.RadiaField(coil, "b"), linear_solver=options.reduced_a_solver,
             cg_tolerance=options.cg_tolerance, cg_max_iterations=options.cg_max_iterations,
             cg_check_interval=options.cg_check_interval,
+            ams_print_level=options.ams_print_level,
             ams_num_smooth=options.ams_num_smooth,
             source_projection_order=options.source_projection_order,
             ams_update_every=options.ams_update_every, ic_shift=options.ic_shift,
