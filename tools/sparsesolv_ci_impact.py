@@ -36,6 +36,8 @@ NATIVE_PATHS = (
     "src/radia/axisym_measure.py",
     "src/radia/sibc_corner_patch.py",
     "src/radia/mixed_omega_newton.py",
+    "src/radia/meshed_current.py",
+    "tests/test_meshed_current.py",
     "src/radia/static_electromagnet.py",
     "src/radia/kelvin_solver.py",
     "src/radia/kelvin_mesh_validation.py",
