@@ -1,0 +1,28 @@
+{
+  "host": "Hibino",
+  "python": "3.12.10",
+  "ngsolve_version": "6.2.2606",
+  "ngsolve_path": "C:/Program Files/Python312/Lib/site-packages/ngsolve/__init__.py",
+  "scope": "Post-run space inventory, not a repeated solve or performance validation. Reconstructed exactly as Compress(H1(mesh, order=2, definedon=selector)). No Radia import. Main and auxiliary counts are separate, not a simultaneous system dimension.",
+  "command_route": "PowerShell here-string piped to ssh -o BatchMode=yes -o ConnectTimeout=8 hibino 'python -u -'",
+  "threads": 8,
+  "remote_scratch": "None created; input mesh family preserved",
+  "levels": {
+    "coarse": {
+      "mesh_path": "C:/temp/radia-ctype-family/coarse/kelvin_domain.vol",
+      "mesh_sha256": "078a8fa56d065c0e0dfb8721f540e1a4b8e96a7932905305dd4c78cdda9dde2f",
+      "spaces": {
+        "iron_source_total_hodge": {"selector": "Materials('iron')", "ndof": 10994, "free_ndof": 10994},
+        "kelvin_source_interface": {"selector": "Boundaries('kelvin_int')", "ndof": 1182, "free_ndof": 1182}
+      }
+    },
+    "medium": {
+      "mesh_path": "C:/temp/radia-ctype-family/medium/kelvin_domain.vol",
+      "mesh_sha256": "0cc559e6dcdabc61fd37f7c09b09674c228710b9af7682b947927d41984628d4",
+      "spaces": {
+        "iron_source_total_hodge": {"selector": "Materials('iron')", "ndof": 15477, "free_ndof": 15477},
+        "kelvin_source_interface": {"selector": "Boundaries('kelvin_int')", "ndof": 1842, "free_ndof": 1842}
+      }
+    }
+  }
+}
