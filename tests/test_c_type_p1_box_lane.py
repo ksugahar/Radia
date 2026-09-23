@@ -364,3 +364,36 @@ def test_native_ams_diagnostics_preserve_the_linear_solution(box_mesh):
     assert engine.describe()["ams_print_level"] == 1
     with pytest.raises(ValueError, match="ams_print_level"):
         _engine(box_mesh, "ams", ams_print_level=2)
+
+
+@pytest.mark.parametrize("sweeps", [1, 2])
+def test_scalar_amg_reinitializes_every_cycle(box_mesh, sweeps):
+    import radia.sparsesolv_ngsolve as native
+    fes = ng.H1(box_mesh, order=1, dirichlet="outer")
+    u, v = fes.TnT()
+    a = ng.BilinearForm(fes, symmetric=True)
+    a += (ng.grad(u) * ng.grad(v) + u * v) * ng.dx
+    with ng.TaskManager():
+        a.Assemble()
+    pre = native.CompactAMGPreconditioner(a.mat, fes.FreeDofs(),
+                                         min_coarse=10, num_smooth=sweeps)
+    rng = np.random.default_rng(731)
+    b, c, pb, pc = [a.mat.CreateRowVector() for _ in range(4)]
+    free = np.array(list(fes.FreeDofs()), dtype=bool)
+    b.FV().NumPy()[:] = rng.normal(size=fes.ndof) * free
+    c.FV().NumPy()[:] = rng.normal(size=fes.ndof) * free
+    with ng.TaskManager():
+        pre.Mult(b, pb)
+        pre.Mult(c, pc)
+    expected = pb.FV().NumPy().copy()
+    assert np.dot(b.FV().NumPy(), expected) > 0.
+    assert np.dot(b.FV().NumPy(), pc.FV().NumPy()) == pytest.approx(
+        np.dot(c.FV().NumPy(), expected), rel=1e-10, abs=1e-10)
+    pb[:] = 123.
+    with ng.TaskManager():
+        pre.Mult(b, pb)
+    np.testing.assert_allclose(pb.FV().NumPy(), expected, rtol=1e-12, atol=1e-12)
+    b[:] = 0.
+    with ng.TaskManager():
+        pre.Mult(b, pb)
+    np.testing.assert_array_equal(pb.FV().NumPy(), 0.)
