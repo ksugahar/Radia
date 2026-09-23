@@ -346,6 +346,7 @@ def test_remote_deploy_checks_exact_source_before_install(monkeypatch):
 
     monkeypatch.setattr(release_quad, "run", capture_run)
     monkeypatch.setattr(release_quad, "_verify_remote_editable", lambda *_a: 0)
+    monkeypatch.setattr(release_quad, "_record_release_intent_remote", lambda *_a: 0)
 
     assert release_quad._deploy_editable_remote(
         "release-host", "release host", r"W:\Radia\release-source"
@@ -360,7 +361,8 @@ def test_remote_deploy_checks_exact_source_before_install(monkeypatch):
     assert "cubit-mesh-export" not in script
 
 
-def test_done_keeps_exact_verified_editables_after_all_gates(monkeypatch):
+def test_done_keeps_exact_verified_editables_after_all_gates(monkeypatch, tmp_path):
+    monkeypatch.setenv(release_quad.EDITABLE_REPO_LAB_ENV, str(tmp_path))
     calls = []
     monkeypatch.setattr(release_quad, "cmd_temp_shadows", lambda _args: calls.append("shadows") or 0)
     monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: calls.append("preflight") or 0)
@@ -392,7 +394,8 @@ def test_done_keeps_exact_verified_editables_after_all_gates(monkeypatch):
     ]
 
 
-def test_done_stops_before_machine_checks_when_active_source_is_stale(monkeypatch):
+def test_done_stops_before_machine_checks_when_active_source_is_stale(monkeypatch, tmp_path):
+    monkeypatch.setenv(release_quad.EDITABLE_REPO_LAB_ENV, str(tmp_path))
     calls = []
     monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: calls.append("preflight") or 0)
     monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
