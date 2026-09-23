@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "oracle_version": "5.0.0",
   "matlab_namespace": "radia.optuna",
-  "matlab_file_count": 222,
+  "matlab_file_count": 224,
   "native_gateway": "optuna_mex",
   "native_command_count": 21,
   "native_sobol_max_dimension": 21201,
