@@ -369,14 +369,57 @@ def _run_matlab_process(command: list[str], timeout: int):
         return subprocess.CompletedProcess(command, returncode, output.read(), b"")
 
 
-def _engine_worker(expected_root: str, expression: str) -> int:
-    """Own one Engine session; never connect to or quit a user's session."""
+def _matlab_process_ids() -> set[int]:
+    """Observe processes separately from Engine sharing; fail closed."""
+    result = subprocess.run([
+        "powershell", "-NoProfile", "-NonInteractive", "-Command",
+        "@(Get-Process MATLAB -ErrorAction SilentlyContinue | "
+        "Select-Object -ExpandProperty Id) | ConvertTo-Json -Compress",
+    ], capture_output=True, text=True, check=True, timeout=30)
+    value = json.loads(result.stdout) if result.stdout.strip() else []
+    return {int(pid) for pid in (value if isinstance(value, list) else [value])}
+
+
+def _engine_worker(expected_root: str, expression: str, session: str | None = None) -> int:
+    """Reuse an explicitly named session, or own one when no MATLAB exists."""
     import matlab.engine
 
-    print("Starting dedicated MATLAB Engine session", flush=True)
-    engine = matlab.engine.start_matlab("-nodesktop -nosplash")
+    processes = _matlab_process_ids()
+    shared = tuple(matlab.engine.find_matlab())
+    if session:
+        if session not in shared:
+            raise RuntimeError(f"Requested MATLAB Engine is not shared: {session}; available={shared}")
+        engine = matlab.engine.connect_matlab(session)
+    else:
+        if processes or shared:
+            raise RuntimeError(
+                f"MATLAB already exists (PIDs={sorted(processes)}, shared={shared}); "
+                "select an existing session with --engine-session. No new MATLAB was started.")
+        # Sharing discovery is not evidence that an unshared process is absent.
+        if _matlab_process_ids():
+            raise RuntimeError("MATLAB started during preflight; retry session discovery")
+        print("Starting dedicated MATLAB Engine session", flush=True)
+        engine = matlab.engine.start_matlab("-nodesktop -nosplash")
     output, errors = io.StringIO(), io.StringIO()
+    saved_path = saved_pwd = None
+    borrowed_ready = False
+    saved_environment = {}
     try:
+        if session:
+            pid = int(engine.feature("getpid"))
+            if pid not in processes:
+                raise RuntimeError(f"Shared MATLAB PID {pid} was not observed in process preflight")
+            loaded = engine.find_system("SearchDepth", 0.0, "Type", "block_diagram")
+            if loaded:
+                raise RuntimeError("Borrowed MATLAB has loaded Simulink diagrams; refusing to disturb them")
+            _, mex_files = engine.inmem(nargout=2)
+            if any(Path(str(name)).stem in {"radia_mex", "optuna_mex"} for name in mex_files):
+                raise RuntimeError("Borrowed MATLAB already has Radia/Optuna MEX loaded; preserving its handles")
+            saved_path, saved_pwd = engine.path(), engine.pwd()
+            saved_environment = {name: engine.getenv(name) for name in (
+                "PATH", "MKL_THREADING_LAYER", "PYTHONPATH")}
+            borrowed_ready = True
+            print(f"Reusing MATLAB Engine {session}, PID={pid}", flush=True)
         actual_root = engine.matlabroot()
         if Path(actual_root).resolve() != Path(expected_root).resolve():
             raise RuntimeError(
@@ -387,7 +430,18 @@ def _engine_worker(expected_root: str, expression: str) -> int:
     finally:
         print(output.getvalue(), end="", flush=True)
         print(errors.getvalue(), end="", file=sys.stderr, flush=True)
-        engine.quit()
+        if session:
+            try:
+                if borrowed_ready:
+                    engine.eval("clear radia_mex optuna_mex", nargout=0)
+            finally:
+                if saved_path is not None:
+                    engine.path(saved_path, nargout=0)
+                    engine.cd(saved_pwd, nargout=0)
+                    for name, value in saved_environment.items():
+                        engine.setenv(name, value, nargout=0)
+        else:
+            engine.quit()
     return 0
 
 
@@ -405,7 +459,8 @@ class _EngineScratch(tempfile.TemporaryDirectory):
                 time.sleep(0.25)
 
 
-def run_matlab_smoke(archive: Path, matlab: Path, timeout: int = 300) -> str:
+def run_matlab_smoke(archive: Path, matlab: Path, timeout: int = 300,
+                     engine_session: str | None = None) -> str:
     if not matlab.is_file():
         raise FileNotFoundError(f"MATLAB executable does not exist: {matlab}")
     scratch = Path(r"C:\temp")
@@ -435,11 +490,12 @@ def run_matlab_smoke(archive: Path, matlab: Path, timeout: int = 300) -> str:
         matlab_root = str((root / "matlab").resolve()).replace("'", "''")
         expression = (
             f"addpath('{matlab_root}','-begin');"
-            f"report={verification_function}();assert(report.passed);"
+            f"assert(getfield({verification_function}(),'passed'));"
         )
         result = _run_matlab_process(
             [sys.executable, "-X", "utf8", "-s", str(Path(__file__).resolve()),
-             "--engine-worker", str(matlab.parent.parent), expression],
+             "--engine-worker", str(matlab.parent.parent), expression]
+            + ([engine_session] if engine_session else []),
             timeout=timeout,
         )
         # The Python Engine worker emits UTF-8 even on a cp932 host.
@@ -458,13 +514,14 @@ def run_matlab_smoke(archive: Path, matlab: Path, timeout: int = 300) -> str:
 
 
 def main() -> int:
-    if len(sys.argv) == 4 and sys.argv[1] == "--engine-worker":
-        return _engine_worker(sys.argv[2], sys.argv[3])
+    if len(sys.argv) in (4, 5) and sys.argv[1] == "--engine-worker":
+        return _engine_worker(sys.argv[2], sys.argv[3], sys.argv[4] if len(sys.argv) == 5 else None)
     parser = argparse.ArgumentParser()
     parser.add_argument("archive", type=Path)
     parser.add_argument("--matlab", type=Path)
     parser.add_argument("--manifest-only", action="store_true")
     parser.add_argument("--timeout", type=int, default=300)
+    parser.add_argument("--engine-session", help="Explicit shared MATLAB Engine to reuse; never quits it")
     args = parser.parse_args()
     archive = args.archive.resolve()
     manifest = verify_archive(archive)
@@ -472,7 +529,7 @@ def main() -> int:
         if args.matlab is None:
             parser.error("--matlab is required unless --manifest-only is used")
         matlab_output = run_matlab_smoke(
-            archive, args.matlab.resolve(), args.timeout)
+            archive, args.matlab.resolve(), args.timeout, args.engine_session)
         print(_console_safe(matlab_output.rstrip()))
     print(json.dumps({
         "status": "passed",

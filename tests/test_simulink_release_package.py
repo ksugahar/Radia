@@ -382,6 +382,8 @@ def test_engine_worker_quits_its_session_on_success_and_failure(monkeypatch, tmp
 
     api = types.ModuleType("matlab.engine")
     api.start_matlab = lambda options: Engine()
+    api.find_matlab = lambda: ()
+    monkeypatch.setattr(module, "_matlab_process_ids", lambda: set())
     parent = types.ModuleType("matlab")
     parent.engine = api
     monkeypatch.setitem(sys.modules, "matlab", parent)
@@ -392,6 +394,81 @@ def test_engine_worker_quits_its_session_on_success_and_failure(monkeypatch, tmp
     else:
         assert module._engine_worker(str(tmp_path), "verify()") == 0
     assert calls == ["verify()", "quit"]
+
+
+def test_unshared_existing_matlab_prevents_substitute_start(monkeypatch, tmp_path):
+    import types
+    import sys
+    module = load_module("verify_existing_matlab", ROOT / "tools" / "verify_simulink_release.py")
+    api = types.ModuleType("matlab.engine")
+    api.find_matlab = lambda: ()
+    api.start_matlab = lambda *_: pytest.fail("must not start a substitute MATLAB")
+    parent = types.ModuleType("matlab")
+    parent.engine = api
+    monkeypatch.setitem(sys.modules, "matlab", parent)
+    monkeypatch.setitem(sys.modules, "matlab.engine", api)
+    monkeypatch.setattr(module, "_matlab_process_ids", lambda: {123})
+    with pytest.raises(RuntimeError, match="No new MATLAB"):
+        module._engine_worker(str(tmp_path), "verify()")
+
+
+@pytest.mark.parametrize("failure,blocked", [
+    (False, None), (True, None), (False, "pid"),
+    (False, "model"), (False, "mex"),
+])
+def test_named_borrowed_engine_is_preserved_and_environment_restored(monkeypatch, tmp_path, failure, blocked):
+    import types
+    import sys
+    module = load_module("verify_borrowed_matlab", ROOT / "tools" / "verify_simulink_release.py")
+    calls = []
+
+    class Engine:
+        def feature(self, name):
+            assert name == "getpid"
+            return 999 if blocked == "pid" else 123
+        def find_system(self, *args): return ["user_model"] if blocked == "model" else []
+        def inmem(self, **kwargs): return [], ["radia_mex"] if blocked == "mex" else []
+        def path(self, *args, **kwargs):
+            if args: calls.append(("path", args[0]))
+            return "original path"
+        def pwd(self): return "original folder"
+        def cd(self, value, **kwargs): calls.append(("pwd", value))
+        def getenv(self, name): return "original " + name
+        def setenv(self, name, value, **kwargs): calls.append((name, value))
+        def matlabroot(self): return str(tmp_path)
+        def eval(self, expression, **kwargs):
+            calls.append(expression)
+            if expression == "verify()" and failure:
+                raise RuntimeError("simulation failed")
+        def quit(self): pytest.fail("borrowed MATLAB must remain alive")
+
+    api = types.ModuleType("matlab.engine")
+    api.find_matlab = lambda: ("owned_by_user",)
+    api.start_matlab = lambda *_: pytest.fail("must reuse the named Engine")
+    def connect(name):
+        assert name == "owned_by_user"
+        return Engine()
+    api.connect_matlab = connect
+    parent = types.ModuleType("matlab")
+    parent.engine = api
+    monkeypatch.setitem(sys.modules, "matlab", parent)
+    monkeypatch.setitem(sys.modules, "matlab.engine", api)
+    monkeypatch.setattr(module, "_matlab_process_ids", lambda: {123, 456})
+    if blocked:
+        with pytest.raises(RuntimeError):
+            module._engine_worker(str(tmp_path), "verify()", "owned_by_user")
+        assert calls == []
+        return
+    if failure:
+        with pytest.raises(RuntimeError, match="simulation failed"):
+            module._engine_worker(str(tmp_path), "verify()", "owned_by_user")
+    else:
+        assert module._engine_worker(str(tmp_path), "verify()", "owned_by_user") == 0
+    assert calls == ["verify()", "clear radia_mex optuna_mex",
+                     ("path", "original path"), ("pwd", "original folder"),
+                     ("PATH", "original PATH"),
+                     ("MKL_THREADING_LAYER", "original MKL_THREADING_LAYER"),
+                     ("PYTHONPATH", "original PYTHONPATH")]
 
 
 def test_engine_scratch_retries_transient_dll_lock(monkeypatch, tmp_path):

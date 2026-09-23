@@ -401,7 +401,7 @@ def _write_simulink_state(path: Path, state: dict, target: str) -> None:
 
 def _run_simulink_candidate_target(
         key: str, package: Path, package_sha256: str,
-        success_marker: str) -> tuple[bool, str]:
+        success_marker: str, engine_session: str | None = None) -> tuple[bool, str]:
     label, host, python_command = SIMULINK_TARGETS[key]
     verifier = REPO / "tools/verify_simulink_release.py"
     if host is None:
@@ -409,6 +409,8 @@ def _run_simulink_candidate_target(
             sys.executable, str(verifier), str(package),
             "--matlab", MATLAB_EXE,
         ]
+        if engine_session:
+            command.extend(["--engine-session", engine_session])
         result = subprocess.run(
             command,
             capture_output=True,
@@ -444,9 +446,12 @@ def _run_simulink_candidate_target(
             )
             if copied.returncode != 0:
                 return False, copied.stderr.strip() or copied.stdout.strip()
+        session_option = (
+            " --engine-session '" + engine_session.replace("'", "''") + "'"
+            if engine_session else "")
         invocation = (
             f"& {python_command} '{remote_verifier}' '{remote_package}' "
-            f"--matlab '{MATLAB_EXE}'\nexit $LASTEXITCODE\n"
+            f"--matlab '{MATLAB_EXE}'{session_option}\nexit $LASTEXITCODE\n"
         )
         result = subprocess.run(
             ["ssh", host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
@@ -507,12 +512,21 @@ def cmd_simulink_candidate(args):
         fail(f"unknown Simulink target(s): {', '.join(unknown)}")
         return 2
 
+    sessions = {}
+    for entry in getattr(args, "engine_session", None) or []:
+        key, separator, name = entry.partition("=")
+        if not separator or key not in requested or not name.strip() or key in sessions:
+            fail("engine sessions must be unique selected-target=shared-name pairs")
+            return 2
+        sessions[key] = name.strip()
+
     failed = 0
     for key in requested:
         label = SIMULINK_TARGETS[key][0]
         info(f"verifying extracted package on {label}")
+        session_args = [sessions[key]] if key in sessions else []
         passed, output = _run_simulink_candidate_target(
-            key, package, package_sha256, success_marker)
+            key, package, package_sha256, success_marker, *session_args)
         state["targets"][key] = {
             "label": label,
             "status": "passed" if passed else "failed",
@@ -2286,6 +2300,8 @@ def main():
                     help="path to an IH preview or full Radia Simulink ZIP")
     ss.add_argument("--target", default="all",
                     help="comma list: lab, 100, mdx1, mdx2, all")
+    ss.add_argument("--engine-session", action="append", metavar="HOST=NAME",
+                    help="reuse an explicitly shared Engine on this target (repeatable)")
     optuna_candidate = sub.add_parser(
         "optuna-candidate",
         help="download one main-CI radia-optuna wheel and verify it on four MATLAB machines")

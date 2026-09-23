@@ -106,8 +106,17 @@ rebuilding. Changed bytes require new acceptance.
 This does not replace QUAD `done` or the Simulink candidate gate. A full
 Simulink package includes `radia_simulink_library.slx`, support files, standalone
 MEX handles, runtime DLLs, `manifest.json`, and `SHA256SUMS.txt`. Verify the exact
-ZIP independently on LAB, 100, mdx1, and mdx2 through owned MATLAB Engine
+ZIP independently on LAB, 100, mdx1, and mdx2 through verified MATLAB Engine
 sessions. Rebuilding the ZIP invalidates all prior candidate evidence.
+
+Check MATLAB processes, shared Engine names, and the official MCP connection
+separately before acceptance. Reuse an appropriate existing session explicitly:
+`simulink-candidate --package <zip> --target 100 --engine-session 100=<name>`.
+The verifier checks its PID, refuses loaded Simulink diagrams or existing
+Radia/Optuna MEX handles, restores the borrowed path and environment, and does
+not quit it. Without an explicit session it starts MATLAB only when no MATLAB
+process or shared Engine exists; inaccessible existing sessions are not a
+reason to launch a substitute. Close only sessions owned by this operation.
 
 ## Completion rules
 
