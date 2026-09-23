@@ -167,7 +167,10 @@ class SoftIronLaw:
 class _TrueResidualCG(CGSolver):
     """Keep NGSolve's CG recurrence; stop on the original free-DOF equation."""
 
-    def __init__(self, *, rhs, solution, free, tolerance, **options):
+    def __init__(self, *, rhs, solution, free, tolerance, check_interval=1, **options):
+        if isinstance(check_interval, bool) or int(check_interval) != check_interval or check_interval < 1:
+            raise ValueError("check_interval must be a positive integer")
+        self._check_interval = int(check_interval)
         super().__init__(tol=tolerance, **options)
         self._rhs = rhs
         self._solution = solution
@@ -178,6 +181,9 @@ class _TrueResidualCG(CGSolver):
 
     def CheckResidual(self, _preconditioned_residual):
         self.iterations += 1
+        if (self.iterations != 1 and self.iterations < self.maxiter
+                and (self.iterations - 1) % self._check_interval):
+            return False
         self._true_residual.data = self._rhs - self.mat * self._solution
         relative = float(np.linalg.norm(self._true_residual.FV().NumPy()[self._free]) / self._rhs_norm)
         if not math.isfinite(relative):
@@ -226,7 +232,8 @@ class ReducedAP1Box:
                  source_projection_order: int, ams_update_every: int = 1,
                  ic_shift: float = 1.05, gauge_epsilon: float = GAUGE_EPSILON,
                  ams_preconditioner_shift: float = 0.0,
-                 ams_project_gradients: bool = False, ams_beta_zero: bool = False):
+                 ams_project_gradients: bool = False, ams_beta_zero: bool = False,
+                 cg_check_interval: int = 1):
         """``source_cf`` is the vacuum source flux density B_s as a vector CF.
 
         ``linear_solver``: ``"ams"`` (compiled auxiliary-space Maxwell
@@ -239,6 +246,11 @@ class ReducedAP1Box:
         """
         if linear_solver not in ("ams", "iccg", "direct"):
             raise ValueError("linear_solver must be 'ams', 'iccg' or 'direct'")
+        if isinstance(cg_check_interval, bool) or int(cg_check_interval) != cg_check_interval or cg_check_interval < 1:
+            raise ValueError("cg_check_interval must be a positive integer")
+        if cg_check_interval != 1 and linear_solver != "ams":
+            raise ValueError("cg_check_interval requires AMS")
+        self.cg_check_interval = int(cg_check_interval)
         if cg_tolerance <= 0.0 or cg_max_iterations < 1 or ams_num_smooth < 1:
             raise ValueError("cg_tolerance, cg_max_iterations and ams_num_smooth must be positive")
         if int(ams_update_every) < 1:
@@ -387,7 +399,7 @@ class ReducedAP1Box:
             residual = rhs.CreateVector()
             solver = _TrueResidualCG(mat=matrix, pre=pre, maxiter=self.cg_max_iterations,
                 rhs=rhs, solution=solution_vec, free=self.free,
-                tolerance=self.cg_tolerance, printrates=False)
+                tolerance=self.cg_tolerance, check_interval=self.cg_check_interval, printrates=False)
             with ng.TaskManager():
                 solver.Solve(rhs=rhs, sol=solution_vec, initialize=not warm_start)
                 residual.data = rhs - matrix * solution_vec
@@ -400,6 +412,7 @@ class ReducedAP1Box:
             record["solve_s"] = time.perf_counter() - t0
             record["cg_iterations"] = iterations
             record["cg_restarts"] = 0
+            record["true_residual_checks"] = len(solver.residuals)
             record["preconditioner_lagged"] = bool(self._ams_lagged)
             record["relative_residual"] = true_relative
         elif self.linear_solver == "iccg":
@@ -686,6 +699,7 @@ class ReducedAP1Box:
                 "direct": direct_inverse_type(),
             }[self.linear_solver],
             "cg_relative_tolerance": self.cg_tolerance if self.linear_solver != "direct" else None,
+            "cg_check_interval": self.cg_check_interval,
             "ams_num_smooth": self.ams_num_smooth if self.linear_solver == "ams" else None,
             "ams_update_every": self.ams_update_every if self.linear_solver == "ams" else None,
             "ams_preconditioner_shift": self.ams_preconditioner_shift,
@@ -816,6 +830,8 @@ def compare(points, fields: dict, reference: dict | None, core_half_length: floa
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--cg-check-interval", type=int, default=1,
+                        help="AMS true residual check interval; final check is mandatory")
     parser.add_argument("--inexact-linear", action="store_true",
                         help="Adapt Newton inner tolerance without relaxing final convergence gates")
     parser.add_argument("--vol", type=Path, required=True)
@@ -920,6 +936,7 @@ def run(options) -> dict:
         engine = ReducedAP1Box(
             mesh, rad.RadiaField(coil, "b"), linear_solver=options.reduced_a_solver,
             cg_tolerance=options.cg_tolerance, cg_max_iterations=options.cg_max_iterations,
+            cg_check_interval=options.cg_check_interval,
             ams_num_smooth=options.ams_num_smooth,
             source_projection_order=options.source_projection_order,
             ams_update_every=options.ams_update_every, ic_shift=options.ic_shift,
