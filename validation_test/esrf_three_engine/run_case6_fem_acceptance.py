@@ -53,7 +53,8 @@ def main():
         raise RuntimeError('FEM mesh is not the audited ESRF6 mesh')
     mesh_contract = _require_mesh_contract(args.fem_report)
     ng.SetNumThreads(args.threads)
-    mesh = ng.Mesh(str(args.fem_mesh))
+    with ng.TaskManager():
+        mesh = ng.Mesh(str(args.fem_mesh))
     if not has_kelvin_identification(mesh):
         raise RuntimeError('Missing Kelvin identification')
     centre = tuple(map(float, detect_kelvin_offset(mesh)))

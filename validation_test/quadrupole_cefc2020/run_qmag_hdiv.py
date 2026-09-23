@@ -168,7 +168,8 @@ def main(argv=None) -> int:
     mesh_path = options.mesh.resolve()
     if not mesh_path.is_file():
         raise FileNotFoundError(mesh_path)
-    mesh = ng.Mesh(str(mesh_path))
+    with ng.TaskManager():
+        mesh = ng.Mesh(str(mesh_path))
     conformity = mesh_conformity_report(mesh)
     if not conformity["conforming"]:
         raise RuntimeError(f"non-conforming iron mesh: {conformity}")

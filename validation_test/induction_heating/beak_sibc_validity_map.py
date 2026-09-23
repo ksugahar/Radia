@@ -60,9 +60,8 @@ def fixture_for(tip_x_mm, length_mm=48.0):
     from make_beak_fin_step import make_beak_fin
 
     SCRATCH.mkdir(parents=True, exist_ok=True)
-    path = SCRATCH / f"beak_fin_tip{tip_x_mm:.2f}mm.step"
-    if not path.exists():
-        export_step(make_beak_fin(length_mm, tip_x_mm), str(path))
+    path = SCRATCH / f"beak_fin_length{length_mm:.17g}_tip{tip_x_mm:.17g}mm.step"
+    export_step(make_beak_fin(length_mm, tip_x_mm), str(path))
     return path
 
 

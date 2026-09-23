@@ -181,3 +181,13 @@ def test_syntax_warning_identifies_source_file(audit_module, tmp_path):
 
     assert caught
     assert caught[0].filename == str(path)
+
+
+def test_fast_ci_runs_the_full_taskmanager_audit():
+    import yaml
+    root = Path(__file__).resolve().parents[1]
+    workflow = yaml.safe_load((root / ".github/workflows/radia-fast.yml").read_text())
+    steps = workflow["jobs"]["fast-contracts"]["steps"]
+    audit = next(s for s in steps if s.get("name") == "Audit caller-owned TaskManager regions")
+    assert "tools/audit_taskmanager.py" in audit["run"]
+    assert "exit $LASTEXITCODE" in audit["run"]

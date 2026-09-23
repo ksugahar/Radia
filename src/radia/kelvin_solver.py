@@ -1499,6 +1499,10 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
         mesh, order=order,
         **({"dirichlet_bbbnd": dirichlet_bbbnd} if dirichlet_bbbnd else {}),
         **({"dirichlet": dirichlet_boundary} if dirichlet_boundary else {}))
+    if all(fes.FreeDofs()):
+        raise ValueError(
+            "matching-trace Omega requires a gauge: dirichlet_boundary or "
+            "dirichlet_bbbnd must constrain at least one scalar degree of freedom")
     reduced_space = H1(mesh, order=order, definedon=reduced_selector)
     u, v = fes.TnT()
 

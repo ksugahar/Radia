@@ -501,8 +501,10 @@ def main(argv: list[str] | None = None) -> int:
         if not path.is_file():
             raise FileNotFoundError(path)
     fem_mesh_report = _require_mesh_contract(options.fem_mesh_report.resolve())
-    iron_mesh = ng.Mesh(str(iron_mesh_path))
-    fem_mesh = ng.Mesh(str(fem_mesh_path))
+    with ng.TaskManager():
+        iron_mesh = ng.Mesh(str(iron_mesh_path))
+    with ng.TaskManager():
+        fem_mesh = ng.Mesh(str(fem_mesh_path))
     if not has_kelvin_identification(fem_mesh):
         raise RuntimeError("FEM mesh has no Kelvin point identification")
     points, field_points = observation_volume_quadrature(

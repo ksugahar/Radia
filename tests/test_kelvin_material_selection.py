@@ -1,6 +1,8 @@
 """Geometry and metric must resolve the same Kelvin material set."""
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
 import ngsolve as ng
 from netgen.occ import Box, Pnt, OCCGeometry
 from radia.kelvin_material import make_kelvin_mu_cf, make_kelvin_nu_cf, MU_0

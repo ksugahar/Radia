@@ -117,14 +117,6 @@ def solve_eddy_aphi(mesh, *, conductor, source, sink, frequency_hz, sigma,
         if mesh.Boundaries(name).Mask().NumSet() == 0:
             raise ValueError(f"no boundary carries the name {name!r}")
 
-    # Full HCurl, gauged by a small conductivity in the non-conducting region
-    # rather than by dropping the gradient shapes.  `nograds=True` looks
-    # tempting and is wrong here: the coupling term projects the pure gradient
-    # grad V onto a space with no gradient shapes, which is not the same as
-    # removing it, and the resulting A came out six orders of magnitude too
-    # large on the round wire.  A slightly lossy air is both non-singular and
-    # physically readable, and its influence is a parameter the caller can
-    # vary.
     # Unknowns are A and the SCALED potential Vt = V / (j omega).  The scaling
     # is what makes the two coupling blocks equal, so the assembled system is
     # symmetric; every result therefore carries a j omega that has to be put
@@ -172,19 +164,18 @@ def solve_eddy_aphi(mesh, *, conductor, source, sink, frequency_hz, sigma,
     indicator.Set(ng.CF(1.0 + 0j), definedon=mesh.Boundaries(source))
 
     rhs = ng.LinearForm(fes)
-    with ng.TaskManager():
-        form.Assemble()
-        rhs.Assemble()
-        residual = rhs.vec.CreateVector()
-        residual.data = rhs.vec - form.mat * gfu.vec
-        if condense:
-            residual.data += form.harmonic_extension_trans * residual
-        inverse = form.mat.Inverse(freedofs=fes.FreeDofs(condense),
-                                   inverse=solver)
-        gfu.vec.data += inverse * residual
-        if condense:
-            gfu.vec.data += form.harmonic_extension * gfu.vec
-            gfu.vec.data += form.inner_solve * residual
+    form.Assemble()
+    rhs.Assemble()
+    residual = rhs.vec.CreateVector()
+    residual.data = rhs.vec - form.mat * gfu.vec
+    if condense:
+        residual.data += form.harmonic_extension_trans * residual
+    inverse = form.mat.Inverse(freedofs=fes.FreeDofs(condense),
+                               inverse=solver)
+    gfu.vec.data += inverse * residual
+    if condense:
+        gfu.vec.data += form.harmonic_extension * gfu.vec
+        gfu.vec.data += form.inner_solve * residual
 
     current = terminal_current(mesh, gf_a, gf_v, indicator, sigma=sigma,
                                omega=omega, region=region)

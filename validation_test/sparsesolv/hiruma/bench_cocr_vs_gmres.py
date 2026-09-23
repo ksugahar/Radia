@@ -32,7 +32,8 @@ tol = 1e-10
 
 def setup_problem(mesh_name):
     print(f"Loading mesh: {mesh_path(mesh_name)}", flush=True)
-    mesh = load_hiruma_mesh(mesh_name)
+    with TaskManager():
+        mesh = load_hiruma_mesh(mesh_name)
     print(f"  ne={mesh.ne:,}, nv={mesh.nv:,}", flush=True)
 
     nu_cf = 1.0 / (mu0 * IfPos(mesh.MaterialCF({"core": 1}), mu_r_core, 1.0))

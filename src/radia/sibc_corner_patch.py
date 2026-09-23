@@ -161,7 +161,7 @@ class PatchSolution:
     sigma_S_per_m: float
     omega_rad_per_s: float
     axial_E_field_V_per_m: complex
-    boundary_data_error: float
+    boundary_data_error: float | None
 
     def current_density(self):
         """``J = sigma (E0 - j omega A)`` inside the conductor."""
@@ -229,7 +229,8 @@ def solve_cut_patch(section_face, *, x_cut, panel_xy, panel_ds, panel_current,
         order, curve_order: polynomial and geometry order.
         exterior_potential: optional CoefficientFunction replacing the panel
             kernel on the air boundary, for a geometry whose exterior field is
-            known in closed form.
+            known in closed form. Its accuracy cannot be inferred from the
+            panel data: a warning is emitted and boundary_data_error is None.
         side: ``"high"`` keeps the conductor beyond ``x_cut``, ``"low"`` keeps
             the part before it.  A section with a failing feature at each end
             needs one of each, with the outer model left the band between.
@@ -322,7 +323,12 @@ def solve_cut_patch(section_face, *, x_cut, panel_xy, panel_ds, panel_current,
         # A caller-supplied exterior, for cases whose outer field is known in
         # closed form -- which is what makes an analytic anchor possible.
         outer_cf = exterior_potential
-        data_error = 0.0
+        import warnings
+        warnings.warn(
+            "caller-supplied exterior_potential has unverified boundary data; "
+            "validate it independently before accepting corrected losses",
+            RuntimeWarning, stacklevel=2)
+        data_error = None
     boundary = {"outer": outer_cf}
 
     if x_cut is not None:
@@ -353,15 +359,14 @@ def solve_cut_patch(section_face, *, x_cut, panel_xy, panel_ds, panel_current,
     rhs += MU0 * sigma_cf * complex(axial_E_field) * v * ng.dx
 
     gf = ng.GridFunction(fes)
-    with ng.TaskManager():
-        gf.Set(mesh.BoundaryCF(boundary, default=0.0),
-               definedon=mesh.Boundaries(dirichlet))
-        form.Assemble()
-        rhs.Assemble()
-        residual = rhs.vec.CreateVector()
-        residual.data = rhs.vec - form.mat * gf.vec
-        gf.vec.data += form.mat.Inverse(freedofs=fes.FreeDofs(),
-                                        inverse="umfpack") * residual
+    gf.Set(mesh.BoundaryCF(boundary, default=0.0),
+           definedon=mesh.Boundaries(dirichlet))
+    form.Assemble()
+    rhs.Assemble()
+    residual = rhs.vec.CreateVector()
+    residual.data = rhs.vec - form.mat * gf.vec
+    gf.vec.data += form.mat.Inverse(freedofs=fes.FreeDofs(),
+                                    inverse="umfpack") * residual
 
     return PatchSolution(
         x_cut_m=None if x_cut is None else float(x_cut), side=side,
@@ -369,7 +374,7 @@ def solve_cut_patch(section_face, *, x_cut, panel_xy, panel_ds, panel_current,
         mesh=mesh, gf_A=gf, conductor=conductor, sigma_S_per_m=float(sigma),
         omega_rad_per_s=float(omega),
         axial_E_field_V_per_m=complex(axial_E_field),
-        boundary_data_error=float(data_error))
+        boundary_data_error=data_error)
 
 
 def _chord_extent(panel_xy, x_cut):

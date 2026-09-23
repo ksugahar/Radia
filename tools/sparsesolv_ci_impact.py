@@ -10,6 +10,25 @@ import tomllib
 
 # Checked against both workflow trigger lists by the lightweight contract suite.
 NATIVE_PATHS = (
+    "src/radia/eddy_aphi.py",
+    "src/radia/eddy_axisym_ring.py",
+    "src/radia/axisym_measure.py",
+    "src/radia/sibc_corner_patch.py",
+    "src/radia/mixed_omega_newton.py",
+    "src/radia/static_electromagnet.py",
+    "src/radia/kelvin_solver.py",
+    "src/radia/kelvin_mesh_validation.py",
+    "src/radia/scalar_potential_solver.py",
+    "validation_test/c_type_p1_ams_box/run_p1_box.py",
+    "tests/test_eddy_aphi_contract.py",
+    "tests/test_axisym_measure_contract.py",
+    "tests/test_sibc_corner_patch.py",
+    "tests/test_boundary_material_adjacency.py",
+    "tests/test_coil_axis_closed_form.py",
+    "tests/test_mixed_omega_newton.py",
+    "tests/test_mixed_omega_review_fixes.py",
+    "tests/test_c_type_p1_box_lane.py",
+
     "src/ext/sparsesolv/**", "src/matlab/radia_mex.cpp",
     "matlab/+radia/+internal/callMex.m", "matlab/+radia/setup.m",
     "tests/matlab/test_mex_runtime_setup.m", "matlab/+radia/+sparsesolv/**",
@@ -63,6 +82,8 @@ def ams_manifest_unchanged(before: str, after: str) -> bool:
             name = profile.get("extends")
             if name is not None and not isinstance(name, str):
                 raise ValueError("invalid AMS parent")
+        if "solver-numerics" in profiles:
+            selected["solver-numerics"] = profiles["solver-numerics"]
         data["profiles"] = selected
         paths = [path for profile in selected.values() for path in profile.get("paths", [])]
         if not paths or len(paths) != len(set(paths)):

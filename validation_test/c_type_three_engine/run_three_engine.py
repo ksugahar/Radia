@@ -495,6 +495,7 @@ def solve_omega(
             nonlinear_max_iterations=nonlinear_maximum_iterations,
             nonlinear_material_update_order=(order - 1 if order > 1 and nonlinear_method == "picard" else None),
             nonlinear_method=nonlinear_method,
+            nonlinear_material_sampling=("integration_point" if nonlinear_method == "newton" else "element_centroid"),
             nonlinear_progress_callback=progress_callback,
             nonlinear_relaxation=float(relaxation),
             nonlinear_anderson_depth=int(anderson_depth),

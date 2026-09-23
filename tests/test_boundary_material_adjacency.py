@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
+
 
 def _brute_force(mesh, names, materials):
     """The exhaustive definition, written out. Correct, and slow by design."""
