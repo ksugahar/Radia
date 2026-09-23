@@ -481,6 +481,7 @@ def cmd_simulink_candidate(args):
             "radia.simulink.library-release-manifest.v1",
             "radia.simulink.library-release-manifest.v2",
             "radia.simulink.library-release-manifest.v3",
+            "radia.simulink.library-release-manifest.v4",
         }
         else "RADIA_IH_RELEASE_OK"
     )

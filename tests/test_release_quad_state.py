@@ -3,6 +3,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -14,6 +15,32 @@ SPEC.loader.exec_module(module)
 
 def state(**targets):
     return {'schema': 'test', 'commit': 'a', 'package_sha256': 'hash', 'targets': targets}
+
+
+@pytest.mark.parametrize('schema,marker', [
+    ('radia.simulink.library-release-manifest.v4', 'RADIA_SIMULINK_RELEASE_OK'),
+    ('radia.simulink.ih-release-manifest.v3', 'RADIA_IH_RELEASE_OK'),
+])
+def test_candidate_uses_package_specific_success_marker(tmp_path, monkeypatch, schema, marker):
+    package = tmp_path / 'candidate.zip'
+    package.write_bytes(b'candidate identity')
+    monkeypatch.setattr(module, '_simulink_manifest', lambda _: {
+        'schema': schema, 'version': '5.0.0', 'commit': 'a' * 40})
+    monkeypatch.setattr(module, 'SIMULINK_GATE_ROOT', tmp_path)
+    visited = []
+
+    def verify_target(key, path, digest, success_marker):
+        assert path == package
+        assert digest == module._sha256_file(package)
+        assert success_marker == marker
+        visited.append(key)
+        return True, marker
+
+    monkeypatch.setattr(module, '_run_simulink_candidate_target', verify_target)
+    assert module.cmd_simulink_candidate(SimpleNamespace(package=str(package), target='all')) == 0
+    assert visited == list(module.SIMULINK_TARGETS)
+    recorded = json.loads(module._simulink_state_path(module._sha256_file(package)).read_text())
+    assert all(target['status'] == 'passed' for target in recorded['targets'].values())
 
 
 @pytest.mark.parametrize('matched', [True, False])
