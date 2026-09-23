@@ -182,6 +182,18 @@ mesh without the lane's labels.
 
 ## Results (LAB, 2026-09-22, uncontended sequential runs, 8 threads)
 
+### Optional Inexact Newton Inner Solves
+
+`--inexact-linear --ams-update-every 2` enables an experimental static
+Newton configuration. The inner true-relative-residual target is
+`max(cg_tolerance, min(0.01, 0.1 * nonlinear_residual / initial_residual))`.
+The final nonlinear residual and flux-change gates remain unchanged; the
+fixed inner tolerance is restored after every solve, including failures.
+Each history row records `linear_tolerance` alongside the achieved true
+residual. This is opt-in and does not establish suitability for complex
+frequency-domain systems. Compare both preparation-inclusive and engine
+times, and verify fields before interpreting any speedup.
+
 `results/lab_20260922_<mesh>_<variant>.json`, meshes reproducible from
 `results/meshes/*.json` (scale, sizes, SHA-256).  "tight" stops at relative
 residual 1e-6 and |dB|/B_sat 2e-5; "loose" at relative residual 1e-3 with no
