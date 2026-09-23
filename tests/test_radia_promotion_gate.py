@@ -3,6 +3,7 @@ import copy
 import importlib.util
 import hashlib
 import json
+import io
 from pathlib import Path
 import zipfile
 import xml.etree.ElementTree as ET
@@ -14,6 +15,18 @@ spec = importlib.util.spec_from_file_location("promotion_gate", ROOT / "tools/ve
 gate = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gate)
 EVIDENCE = ROOT / "validation_test/esrf_three_engine/results/candidate_ed58b5deb"
+
+
+@pytest.mark.parametrize("suffix", ["", "actions/runs/123"])
+def test_github_endpoint_has_no_empty_trailing_path(monkeypatch, suffix):
+    seen = []
+    def open_request(request, timeout):
+        seen.append(request.full_url)
+        return io.BytesIO(b'{"id": 123}')
+    monkeypatch.setenv("GH_TOKEN", "test-token")
+    monkeypatch.setattr(gate.urllib.request, "urlopen", open_request)
+    assert gate.GitHub("owner/repo").get(suffix) == {"id": 123}
+    assert seen == ["https://api.github.com/repos/owner/repo" + ("/"+suffix if suffix else "")]
 
 
 def evidence(host="lab"):
