@@ -31,6 +31,14 @@ SHA-256 that `run_p1_box.py` verifies.
 
 ## Engines
 
+The Python API `TotalAP1Box(mesh, current_cf, **settings)` also runs a
+meshed-current total-A comparison with `A_total x n = 0` on `outer`.
+It assembles `integral_coil J dot v`, without any analytical source field.
+The caller owns current continuity and cross-section normalization checks;
+the solver's linear/Newton field agreement, zero-current and polarity
+controls are covered by the focused tests. The existing CLI engine list
+is unchanged.
+
 The reduced-A option `--outer-boundary natural_total` imposes the weak
 condition `n x H_total = 0`, instead of the default `source_flux` condition
 `A_r x n = 0`. It frees the outer tangential DOFs and adds

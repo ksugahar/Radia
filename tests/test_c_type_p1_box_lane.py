@@ -47,6 +47,28 @@ def _bh_table():
     return [[0.0, 0.0], [100.0, 0.6], [400.0, 1.2], [2000.0, 1.6], [20000.0, 1.9]]
 
 
+def test_total_a_current_sign_zero_and_newton(box_mesh):
+    module = lane()
+    x, y = ng.x, ng.y
+    current = 1e7 * ng.CF((-2*y*(x-.5)*(.7-x), -(1.2-2*x)*(.01-y*y), 0))
+    settings = dict(linear_solver="direct", cg_tolerance=1e-9,
+                    cg_max_iterations=1000, ams_num_smooth=1, source_projection_order=0)
+    def engine(sign):
+        return module.TotalAP1Box(box_mesh, sign*current, **settings)
+    points = _points()
+    positive, _, _ = engine(1).run_linear(500., points)
+    negative, _, _ = engine(-1).run_linear(500., points)
+    zero, _, _ = engine(0).run_linear(500., points)
+    assert np.linalg.norm(positive) > 1e-6
+    np.testing.assert_allclose(negative, -positive, atol=1e-10)
+    np.testing.assert_allclose(zero, 0, atol=1e-15)
+    law = module.SoftIronLaw([[0, 0], [10, 10*MU0*500], [1e6, 1e6*MU0*500]])
+    actual, stats, _ = engine(1).run_newton(law, newton_tolerance=1e-8,
+        tolerance=1e-6, max_iterations=10, max_halvings=4, observation=points)
+    assert stats['converged']
+    np.testing.assert_allclose(actual, positive, rtol=1e-5, atol=1e-10)
+
+
 def test_total_natural_boundary_cancels_curl_free_source(box_mesh):
     points = np.array([[0.03, 0.02, 0.01], [0.3, 0.2, 0.1]])
     natural = _engine(box_mesh, "direct", outer_boundary="natural_total")

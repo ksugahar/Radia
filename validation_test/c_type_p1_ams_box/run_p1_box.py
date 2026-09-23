@@ -731,6 +731,40 @@ class ReducedAP1Box:
         }
 
 
+class TotalAP1Box(ReducedAP1Box):
+    """Total-A with a meshed coil current and homogeneous outer tangential A.
+
+    The caller supplies a charge-conserving current density in A/m^2 and
+    verifies its cross-section current. No analytical source field is added.
+    """
+
+    def __init__(self, mesh, current_cf, **settings):
+        if settings.get("outer_boundary", "source_flux") != "source_flux":
+            raise ValueError("total-A requires homogeneous tangential A on outer")
+        if "coil" not in mesh.GetMaterials():
+            raise ValueError("total-A requires a meshed coil region")
+        super().__init__(mesh, ng.CF((0, 0, 0)), **settings)
+        self.current_load = ng.LinearForm(self.fes)
+        self.current_load += ng.InnerProduct(current_cf, self.fes.TestFunction()) * ng.dx("coil")
+        with ng.TaskManager():
+            self.current_load.Assemble()
+
+    def _picard_forms(self):
+        matrix, _ = super()._picard_forms()
+        return matrix, self.current_load
+
+    def _residual(self, solution):
+        residual, _ = super()._residual(solution)
+        residual.data -= self.current_load.vec
+        return residual, float(np.linalg.norm(residual.FV().NumPy()[self.free]))
+
+    def describe(self):
+        result = super().describe()
+        result.update(formulation="HCurl total-A, order 1, meshed coil J",
+                      boundary="A_total x n = 0 on outer", source="volume integral J dot v on coil")
+        return result
+
+
 def solve_mixed_omega_box(mesh: ng.Mesh, coil: int, material, *, nonlinear: bool,
                           relaxation: float, anderson_depth: int, tolerance: float,
                           max_iterations: int, observation: np.ndarray,
