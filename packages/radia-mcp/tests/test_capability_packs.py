@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.types import Implementation
 
 from radia_mcp.capability_packs import PACKS, modules_for
 from radia_mcp.capability_packs.server import CapabilityServer
@@ -91,13 +92,19 @@ def test_real_stdio_discovery_call_and_errors(pack, profile, tmp_path):
             "--profile", profile,
         ], env=env)
         async with stdio_client(params) as (read, write):
-            async with ClientSession(read, write) as client:
+            async with ClientSession(read, write, client_info=Implementation(
+                    name="pack-contract", version="1.0")) as client:
                 await client.initialize()
                 listing = await client.list_tools()
                 assert listing.tools
                 status = await client.call_tool("capability_pack_status", {})
                 assert not status.isError
                 assert status.structuredContent["modules"] == list(modules_for(pack, profile))
+                again = await client.call_tool("capability_pack_status", {})
+                connection = again.structuredContent["client_connection"]
+                assert connection["connection_count"] == 1
+                assert connection["latest"]["name"] == "pack-contract"
+                assert connection["latest"]["version"] == "1.0"
                 bad = await client.call_tool("no_such_tool", {})
                 assert bad.isError
                 if pack == "document-ops":

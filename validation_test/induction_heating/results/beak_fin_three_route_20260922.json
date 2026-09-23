@@ -1,0 +1,70 @@
+{
+  "schema": "radia.beak_fin_three_route.v1",
+  "generated_at_utc": "2026-09-22T00:23:17.159114+00:00",
+  "git_head": "4c191183184668d48f3089c62231ee8a05c8e35b",
+  "host": "intel11",
+  "question": "BEM-A and the surface PEEC both assume a Leontovich surface impedance.  Does an interior-resolved solve agree with them where that assumption is weakest?",
+  "frequency_hz": 5000.0,
+  "fixture": "tests\\coil_from_cad\\fixtures\\beak_fin_48mm.step",
+  "aphi_reference": {
+    "validated_against": "the exact Bessel round-wire resistance to 2.3e-5 over a/delta from 0.25 to 4; see results/eddy_aphi_round_wire_20260922.json",
+    "mesh_convergence": [
+      {
+        "maxh_conductor_mm": 0.9,
+        "n_elements": 126092,
+        "frequency_hz": 5000.0,
+        "skin_depth_mm": 0.9345900061927291,
+        "R_uohm": 64.80049262853113,
+        "beak_loss_fraction": 0.30173330121440595,
+        "tip_loss_fraction": 0.08699216452186814,
+        "seconds": 273.7458106999984
+      },
+      {
+        "maxh_conductor_mm": 0.7,
+        "n_elements": 146086,
+        "frequency_hz": 5000.0,
+        "skin_depth_mm": 0.9345900061927291,
+        "R_uohm": 64.75117404595106,
+        "beak_loss_fraction": 0.301314648422892,
+        "tip_loss_fraction": 0.08720602217449729,
+        "seconds": 455.56702159997076
+      },
+      {
+        "maxh_conductor_mm": 0.5,
+        "n_elements": 170561,
+        "frequency_hz": 5000.0,
+        "skin_depth_mm": 0.9345900061927291,
+        "R_uohm": 64.7291421734286,
+        "beak_loss_fraction": 0.3015673128772803,
+        "tip_loss_fraction": 0.08723929057122894,
+        "seconds": 588.5075172999641
+      }
+    ],
+    "beak_loss_fraction_relative_spread": 0.001388389547010929,
+    "converged_beak_loss_fraction": 0.3015673128772803,
+    "converged_tip_loss_fraction": 0.08723929057122894,
+    "R_uohm": 64.7291421734286
+  },
+  "surface_impedance_routes": {
+    "bema": {
+      "beak_loss_fraction": 0.31375893958915624,
+      "tip_loss_fraction": 0.11638061469758776,
+      "beak_relative_to_aphi": 0.0404275469896076,
+      "tip_relative_to_aphi": 0.33403898559406064,
+      "route": "bema"
+    },
+    "peec": {
+      "beak_loss_fraction": 0.31504146750458856,
+      "tip_loss_fraction": 0.11846393891507617,
+      "beak_relative_to_aphi": 0.04468042142482287,
+      "tip_relative_to_aphi": 0.35791955825629973,
+      "route": "peec"
+    },
+    "bema_R_uohm": 41.581663305195654,
+    "peec_R_uohm": 40.58243151837596,
+    "peec_vs_bema_beak_loss_relative": 0.004087621908436034
+  },
+  "how_the_fractions_are_measured": "the A-V fraction is a volume integral of |J|^2 / 2 sigma beyond the cut; the surface-impedance routes weight |K|^2 Rs / 2 by perimeter arc length.  The two coincide exactly in the thin-skin limit, where the depth-integrated loss per unit perimeter IS |K|^2 Rs / 2, and they part company as delta approaches the section thickness.  That is not a measurement mismatch to be corrected away: it is the limit failing, which is the quantity under test",
+  "does_not_invalidate_the_delivery_gate": "the delivery gate was accepted at 150 kHz, where delta is 0.17 mm and delta / thickness is 0.043 -- five times thinner than here.  This says the surface-impedance family is wrong at delta / thickness = 0.23.  It says nothing about 0.043, and the boundary between them is not located by this run",
+  "not_claimed": "one frequency on one straight fin.  It does not establish the surface-impedance assumption over the operating band, and the 150 kHz point the delivery gate was accepted at is not reached here"
+}

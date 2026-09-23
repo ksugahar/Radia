@@ -1,0 +1,92 @@
+{
+  "schema": "radia.eddy_aphi_round_wire.v1",
+  "generated_at_utc": "2026-09-21T23:12:04.732018+00:00",
+  "git_head": "8e33532efa8b1f5ab19ca839de7adf12659fa875",
+  "host": "intel11",
+  "question": "before the A-V solver is used as the fin's independent reference, does it reproduce the exact Bessel impedance of a round wire across the skin-effect range?",
+  "geometry": {
+    "radius_mm": 1.0,
+    "length_mm": 6.0,
+    "box_factor": 6.0,
+    "maxh_conductor_mm": 0.25,
+    "maxh_air_mm": 1.5,
+    "order": 3,
+    "n_elements": 13064
+  },
+  "sigma_S_per_m": 58000000.0,
+  "R_dc_ohm_per_m": 0.0054881014859274255,
+  "levels": [
+    {
+      "a_over_delta": 0.25,
+      "frequency_hz": 272.9557748985393,
+      "skin_depth_mm": 4.0,
+      "seconds": 65.65682989999186,
+      "ndof": 205946,
+      "R_numeric_ohm_per_m": 0.005488529043182536,
+      "R_exact_ohm_per_m": 0.005488548079694788,
+      "R_relative_error": -3.4684058471956547e-06,
+      "X_numeric_ohm_per_m": 0.0007263185547364027,
+      "internal_X_exact_ohm_per_m": 8.574809672273734e-05,
+      "R_over_Rdc_numeric": 1.0000779062224354,
+      "R_over_Rdc_exact": 1.0000813749105237
+    },
+    {
+      "a_over_delta": 0.5,
+      "frequency_hz": 1091.8230995941572,
+      "skin_depth_mm": 2.0,
+      "seconds": 62.97871449997183,
+      "ndof": 205946,
+      "R_numeric_ohm_per_m": 0.005495221053460713,
+      "R_exact_ohm_per_m": 0.005495240016247271,
+      "R_relative_error": -3.4507658449589584e-06,
+      "X_numeric_ohm_per_m": 0.0029050651223776302,
+      "internal_X_exact_ohm_per_m": 0.00034278328315878075,
+      "R_over_Rdc_numeric": 1.0012972733014402,
+      "R_over_Rdc_exact": 1.0013007285557949
+    },
+    {
+      "a_over_delta": 1.0,
+      "frequency_hz": 4367.292398376629,
+      "skin_depth_mm": 1.0,
+      "seconds": 63.220226000004914,
+      "ndof": 205946,
+      "R_numeric_ohm_per_m": 0.005600548068327014,
+      "R_exact_ohm_per_m": 0.0056005657956561695,
+      "R_relative_error": -3.1652746887989025e-06,
+      "X_numeric_ohm_per_m": 0.011607114598381837,
+      "internal_X_exact_ohm_per_m": 0.0013579867984495671,
+      "R_over_Rdc_numeric": 1.0204891587168938,
+      "R_over_Rdc_exact": 1.0204923888556223
+    },
+    {
+      "a_over_delta": 2.0,
+      "frequency_hz": 17469.169593506515,
+      "skin_depth_mm": 0.5,
+      "seconds": 63.33562329999404,
+      "ndof": 205946,
+      "R_numeric_ohm_per_m": 0.006940496466699408,
+      "R_exact_ohm_per_m": 0.006940488613085603,
+      "R_relative_error": 1.1315649723897536e-06,
+      "X_numeric_ohm_per_m": 0.04577382692434061,
+      "internal_X_exact_ohm_per_m": 0.004777296826409322,
+      "R_over_Rdc_numeric": 1.2646443372988292,
+      "R_over_Rdc_exact": 1.2646429062732139
+    },
+    {
+      "a_over_delta": 4.0,
+      "frequency_hz": 69876.67837402606,
+      "skin_depth_mm": 0.25,
+      "seconds": 77.33387530001346,
+      "ndof": 205946,
+      "R_numeric_ohm_per_m": 0.01247856526115816,
+      "R_exact_ohm_per_m": 0.01247885101372752,
+      "R_relative_error": -2.2898948712990475e-05,
+      "X_numeric_ohm_per_m": 0.17480464960861022,
+      "internal_X_exact_ohm_per_m": 0.010817005503976634,
+      "R_over_Rdc_numeric": 2.273748999204126,
+      "R_over_Rdc_exact": 2.273801066858139
+    }
+  ],
+  "worst_R_relative_error": 2.2898948712990475e-05,
+  "not_claimed": "the reactance is not compared: the computed terminal impedance carries the external inductance of a finite wire in a box, which the analytic internal impedance does not contain"
+}

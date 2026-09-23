@@ -82,18 +82,25 @@ def _distribution_metrics(k_surface, ds, xy, sheet_resistance, analysis,
     }
 
 
-def run(step_path: Path, *, frequency: float, maxh: float,
-        n_peri: int, n_stations: int, mesh_only: bool = False,
-        experimental_peec: bool = False, profile_csv: Path | None = None,
-        bema_solver: str = "lu", lane_grading: str = "uniform",
-        curve_order: int = 2, fes_order: int = 0):
-    """``curve_order`` curves the BEM-A volume mesh before its boundary is
-    used, so the 0.25 mm rounded tip is an arc rather than a polygon;
-    ``fes_order`` is the HDivSurface order of the BEM-A current.  Both were
-    fixed at 1 and 0 before 2026-09-21, when the tip deficit turned out to be
-    a p-convergence problem: one order step moved R by +1.69% where curving
-    moved it by +0.067%.  The same solve on the same boundary; only the
-    representation changes."""
+def solve_bema(step_path: Path, *, frequency: float, maxh: float,
+               bema_solver: str = "lu", curve_order: int = 2,
+               fes_order: int = 0, mesh_only: bool = False):
+    """Solve the BEM-A reference once and return everything the comparison needs.
+
+    Split out of ``run`` because the reference depends on the fixture, the
+    mesh and the basis, and on nothing the PEEC side varies.  A refinement
+    sweep over ``n_peri`` / ``n_stations`` would otherwise re-solve the same
+    dense system at every point, which on the 48 mm fixture is the whole cost
+    of the sweep.
+
+    ``curve_order`` curves the BEM-A volume mesh before its boundary is used,
+    so the 0.25 mm rounded tip is an arc rather than a polygon; ``fes_order``
+    is the HDivSurface order of the BEM-A current.  Both were fixed at 1 and 0
+    before 2026-09-21, when the tip deficit turned out to be a p-convergence
+    problem: one order step moved R by +1.69% where curving moved it by
+    +0.067%.  The same solve on the same boundary; only the representation
+    changes.
+    """
     from netgen.occ import OCCGeometry, Pnt
     from ngsolve import BND, Mesh, TaskManager
 
@@ -101,26 +108,12 @@ def run(step_path: Path, *, frequency: float, maxh: float,
         compute_centroids_areas_J,
         compute_inductance_source_sink,
     )
-    from radia.peec_fin_topology import (
-        assemble_experimental_fin_peec,
-        build_hybrid_surface_topology_from_straight_prism_step,
-    )
 
     sigma = 5.8e7
     mu0 = 4e-7 * math.pi
     omega = 2 * math.pi * frequency
     delta = math.sqrt(2 / (omega * mu0 * sigma))
     zs = (1 + 1j) / (sigma * delta)
-
-    graph, cad = build_hybrid_surface_topology_from_straight_prism_step(
-        step_path, n_peri=n_peri, n_stations=n_stations,
-        lane_grading=lane_grading)
-    cad = dict(cad)
-    analysis = cad.pop("section_analysis")
-    fin = analysis.primary
-    if fin is None:
-        raise ValueError("no fin detected on the STEP section; the beak "
-                         "comparison needs a protruding fin")
 
     # OCCGeometry's STEP units are mm; scale to SI before NGSolve assembly.
     solid = OCCGeometry(str(step_path)).shape.Scale(Pnt(0, 0, 0), 1e-3)
@@ -144,8 +137,8 @@ def run(step_path: Path, *, frequency: float, maxh: float,
               f"curve_order={curve_order} fes_order={fes_order}",
               file=sys.stderr, flush=True)
         if mesh_only:
-            return {"n_surface_faces": n_surface_faces,
-                    "n_vertices": n_surface_vertices, "cad": cad}
+            return {"mesh_only": True, "n_surface_faces": n_surface_faces,
+                    "n_vertices": n_surface_vertices}
         bem = compute_inductance_source_sink(
             mesh, "source", "sink", fes_order=int(fes_order), omega=omega,
             Z_s_complex=zs, solver=bema_solver)
@@ -167,9 +160,12 @@ def run(step_path: Path, *, frequency: float, maxh: float,
     cap_r_sink = region_resistance(sink_cap)
     cap_r = cap_r_source + cap_r_sink
     lateral_r = region_resistance(~caps)
-    result = {
+    return {
+        "mesh_only": False,
         "fixture": str(step_path), "frequency_hz": frequency,
         "sigma_S_per_m": sigma, "skin_depth_m": delta,
+        "sigma": sigma, "omega": omega, "delta": delta, "zs": zs,
+        "z_end": z_end, "cen": cen, "area": area, "j_complex": j_complex,
         "bema": {"R_ohm": float(bem["R"]), "L_H": float(bem["L"]),
                  "residual": float(bem["residual"]),
                  "n_J": int(bem["n_J"]), "n_f": int(bem["n_f"]),
@@ -183,10 +179,67 @@ def run(step_path: Path, *, frequency: float, maxh: float,
                  "R_lateral_ohm": lateral_r,
                  "R_partition_relative_closure": float(
                      (cap_r + lateral_r) / bem["R"] - 1)},
+        "_R": float(bem["R"]), "_L": float(bem["L"]),
+    }
+
+
+def compare_peec(state: dict, step_path: Path, *, n_peri: int,
+                 n_stations: int, experimental_peec: bool = False,
+                 profile_csv: Path | None = None,
+                 lane_grading: str = "uniform"):
+    """Build the PEEC topology at one refinement and compare it to ``state``."""
+    from radia.peec_fin_topology import (
+        assemble_experimental_fin_peec,
+        build_hybrid_surface_topology_from_straight_prism_step,
+    )
+
+    sigma = state["sigma"]
+    delta = state["delta"]
+    zs = state["zs"]
+    frequency = state["frequency_hz"]
+    z_end = state["z_end"]
+    cen = state["cen"]
+    area = state["area"]
+    j_complex = state["j_complex"]
+
+    graph, cad = build_hybrid_surface_topology_from_straight_prism_step(
+        step_path, n_peri=n_peri, n_stations=n_stations,
+        lane_grading=lane_grading)
+    cad = dict(cad)
+    analysis = cad.pop("section_analysis")
+    fin = analysis.primary
+    if fin is None:
+        raise ValueError("no fin detected on the STEP section; the beak "
+                         "comparison needs a protruding fin")
+
+    result = {
+        "fixture": state["fixture"], "frequency_hz": frequency,
+        "sigma_S_per_m": sigma, "skin_depth_m": delta,
+        "bema": state["bema"],
         "peec_topology": {**cad, "n_branches": len(graph.branches),
                           "n_nodes": len(graph.nodes)},
         "status": "BEM-A baseline only; PEEC physical R/L and current/loss comparison pending",
     }
+    bem = {"R": state["_R"], "L": state["_L"]}
+
+    # Gate 1 asks for station alignment, branch geometry, and the rejection of
+    # missing tips and zero-area cells.  Report them as data rather than as an
+    # exception so a refinement sweep can record where a level fails.
+    station_z = np.array([graph.branch_xyz[s * graph.n_lanes, 0, 2]
+                          for s in range(graph.n_stations - 1)]
+                         + [graph.branch_xyz[
+                             (graph.n_stations - 2) * graph.n_lanes, 1, 2]])
+    spacing = np.diff(station_z)
+    checks = {
+        "n_stations": int(graph.n_stations),
+        "n_lanes": int(graph.n_lanes),
+        "stations_monotonic": bool(np.all(spacing > 0)),
+        "station_spacing_relative_spread": float(
+            (spacing.max() - spacing.min()) / spacing.mean())
+        if spacing.size else 0.0,
+        "axial_step_m": float(spacing.mean()) if spacing.size else 0.0,
+    }
+    result["geometry_checks"] = checks
     if experimental_peec:
         # The existing rectangular PEEC kernel is *not* a validated SIBC
         # discretization on a folded fin. This is a discrepancy probe only.
@@ -251,6 +304,19 @@ def run(step_path: Path, *, frequency: float, maxh: float,
                        np.linalg.norm(k_bem[valid]))
         beak = fin.fin_mask(xy)
         tip = fin.tip_mask(xy)
+        mid_widths = np.asarray(widths)[first:last]
+        checks.update({
+            "min_cell_width_m": float(mid_widths.min()),
+            "no_zero_area_cells": bool(mid_widths.min() > 0.0),
+            "beak_lanes": int(np.count_nonzero(beak)),
+            "tip_lanes": int(np.count_nonzero(tip)),
+            "tip_present": bool(np.count_nonzero(tip) > 0),
+            "every_lane_sampled_by_bema": bool(np.all(valid)),
+        })
+        checks["passed"] = bool(
+            checks["stations_monotonic"] and checks["no_zero_area_cells"]
+            and checks["tip_present"] and checks["beak_lanes"] > 0
+            and checks["station_spacing_relative_spread"] <= 1e-9)
         rs = zs.real
         loss_bem = 0.5 * rs * np.abs(k_bem) ** 2
         loss_peec = 0.5 * rs * np.abs(k_peec_aligned) ** 2
@@ -328,6 +394,42 @@ def run(step_path: Path, *, frequency: float, maxh: float,
                                      abs(k_bem[k]), abs(k_peec_aligned[k]),
                                      loss_bem[k], loss_peec[k]])
     return result
+
+
+def run(step_path: Path, *, frequency: float, maxh: float,
+        n_peri: int, n_stations: int, mesh_only: bool = False,
+        experimental_peec: bool = False, profile_csv: Path | None = None,
+        bema_solver: str = "lu", lane_grading: str = "uniform",
+        curve_order: int = 2, fes_order: int = 0):
+    """One BEM-A reference and one PEEC comparison against it."""
+    state = solve_bema(step_path, frequency=frequency, maxh=maxh,
+                       bema_solver=bema_solver, curve_order=curve_order,
+                       fes_order=fes_order, mesh_only=mesh_only)
+    if mesh_only:
+        cad = build_section_topology_cad(step_path, n_peri=n_peri,
+                                         n_stations=n_stations,
+                                         lane_grading=lane_grading)
+        return {"n_surface_faces": state["n_surface_faces"],
+                "n_vertices": state["n_vertices"], "cad": cad}
+    return compare_peec(state, step_path, n_peri=n_peri,
+                        n_stations=n_stations,
+                        experimental_peec=experimental_peec,
+                        profile_csv=profile_csv, lane_grading=lane_grading)
+
+
+def build_section_topology_cad(step_path: Path, *, n_peri: int,
+                               n_stations: int, lane_grading: str):
+    """The CAD summary ``--mesh-only`` reports, without the section analysis."""
+    from radia.peec_fin_topology import (
+        build_hybrid_surface_topology_from_straight_prism_step,
+    )
+
+    _graph, cad = build_hybrid_surface_topology_from_straight_prism_step(
+        step_path, n_peri=n_peri, n_stations=n_stations,
+        lane_grading=lane_grading)
+    cad = dict(cad)
+    cad.pop("section_analysis", None)
+    return cad
 
 
 def main():

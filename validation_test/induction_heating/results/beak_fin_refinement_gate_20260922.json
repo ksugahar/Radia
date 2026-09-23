@@ -1,0 +1,366 @@
+{
+  "schema": "radia.beak_fin_refinement_gate.v1",
+  "generated_at_utc": "2026-09-21T20:16:11.997066+00:00",
+  "git_head": "b257cbf5f75e78b22facdae8db470d695dcedf8a",
+  "host": "intel11",
+  "question": "the delivery gate closed at one discretisation.  Does it survive refinement of the perimeter and of the axial stations independently, and do the geometry rejections hold at every level?",
+  "fixture": "C:\\temp\\radia-ih-beakfin-20260922\\tests\\coil_from_cad\\fixtures\\beak_fin_48mm.step",
+  "frequency_hz": 150000.0,
+  "bema_reference": {
+    "maxh_m": 0.00075,
+    "curve_order": 2,
+    "fes_order": 0,
+    "solver": "cocr",
+    "R_uohm": 250.07433767122095,
+    "L_nH": 24.17166700103945,
+    "n_J": 16962,
+    "n_surface_faces": 11308,
+    "note": "solved once; it depends on the fixture, the mesh and the basis, and on neither PEEC refinement parameter"
+  },
+  "perimeter_refinement": {
+    "n_stations": 33,
+    "levels": [
+      {
+        "n_peri": 32,
+        "n_stations": 33,
+        "skipped": false,
+        "n_branches": 2016,
+        "geometry_checks": {
+          "n_stations": 33,
+          "n_lanes": 32,
+          "stations_monotonic": true,
+          "station_spacing_relative_spread": 4.625929269271485e-15,
+          "axial_step_m": 0.0015,
+          "min_cell_width_m": 0.0006129008627080813,
+          "no_zero_area_cells": true,
+          "beak_lanes": 11,
+          "tip_lanes": 1,
+          "tip_present": true,
+          "every_lane_sampled_by_bema": true,
+          "passed": true
+        },
+        "peec_R_uohm": 265.9296517658948,
+        "relative_R_error": 0.06340240363055272,
+        "relative_L_error": -0.009901006328636885,
+        "peec": {
+          "beak_current_fraction": 0.30781877480407815,
+          "beak_loss_fraction": 0.3576360847838923,
+          "tip_loss_fraction": 0.21270217279721315,
+          "beak_current_centroid_x_mm": 2.886120446507887
+        },
+        "bema": {
+          "beak_current_fraction": 0.2960975622738831,
+          "beak_loss_fraction": 0.3224238212111532,
+          "tip_loss_fraction": 0.17294867362548025,
+          "beak_current_centroid_x_mm": 2.8562392533659446
+        },
+        "errors": {
+          "beak_current_fraction_relative": 0.03958564346218152,
+          "beak_loss_fraction_relative": 0.10921111052051824,
+          "beak_current_centroid_absolute_mm": 0.029881193141942375,
+          "probe_H_relative_L2": 0.026276506011019562
+        },
+        "accepted": false
+      },
+      {
+        "n_peri": 64,
+        "n_stations": 33,
+        "skipped": false,
+        "n_branches": 4032,
+        "geometry_checks": {
+          "n_stations": 33,
+          "n_lanes": 64,
+          "stations_monotonic": true,
+          "station_spacing_relative_spread": 4.625929269271485e-15,
+          "axial_step_m": 0.0015,
+          "min_cell_width_m": 0.00030645043135404037,
+          "no_zero_area_cells": true,
+          "beak_lanes": 22,
+          "tip_lanes": 4,
+          "tip_present": true,
+          "every_lane_sampled_by_bema": false,
+          "passed": true
+        },
+        "peec_R_uohm": 257.8277973390086,
+        "relative_R_error": 0.031004619426329594,
+        "relative_L_error": -0.008042609096166053,
+        "peec": {
+          "beak_current_fraction": 0.30767829443833344,
+          "beak_loss_fraction": 0.3479240487474429,
+          "tip_loss_fraction": 0.20783410806686323,
+          "beak_current_centroid_x_mm": 2.8603267077136105
+        },
+        "bema": {
+          "beak_current_fraction": 0.30598359408376796,
+          "beak_loss_fraction": 0.3368583267033825,
+          "tip_loss_fraction": 0.19235361034847165,
+          "beak_current_centroid_x_mm": 2.8446493439771805
+        },
+        "errors": {
+          "beak_current_fraction_relative": 0.005538533396341361,
+          "beak_loss_fraction_relative": 0.03284978035826991,
+          "beak_current_centroid_absolute_mm": 0.015677363736430264,
+          "probe_H_relative_L2": 0.0076796045685053604
+        },
+        "accepted": false
+      },
+      {
+        "n_peri": 128,
+        "n_stations": 33,
+        "skipped": false,
+        "n_branches": 8064,
+        "geometry_checks": {
+          "n_stations": 33,
+          "n_lanes": 128,
+          "stations_monotonic": true,
+          "station_spacing_relative_spread": 4.625929269271485e-15,
+          "axial_step_m": 0.0015,
+          "min_cell_width_m": 0.0001532252156770198,
+          "no_zero_area_cells": true,
+          "beak_lanes": 43,
+          "tip_lanes": 7,
+          "tip_present": true,
+          "every_lane_sampled_by_bema": false,
+          "passed": true
+        },
+        "peec_R_uohm": 253.30498440664678,
+        "relative_R_error": 0.012918745543868182,
+        "relative_L_error": -0.006878822238404969,
+        "peec": {
+          "beak_current_fraction": 0.30670494351842637,
+          "beak_loss_fraction": 0.34260394138718586,
+          "tip_loss_fraction": 0.2056733533745041,
+          "beak_current_centroid_x_mm": 2.861582043158639
+        },
+        "bema": {
+          "beak_current_fraction": 0.3073278070872067,
+          "beak_loss_fraction": 0.3401851912603431,
+          "tip_loss_fraction": 0.1995001916245752,
+          "beak_current_centroid_x_mm": 2.8481499640965224
+        },
+        "errors": {
+          "beak_current_fraction_relative": 0.002026707490883184,
+          "beak_loss_fraction_relative": 0.007110098231735584,
+          "beak_current_centroid_absolute_mm": 0.013432079062116516,
+          "probe_H_relative_L2": 0.0035868976684094666
+        },
+        "accepted": true
+      },
+      {
+        "n_peri": 256,
+        "n_stations": 33,
+        "skipped": false,
+        "n_branches": 16128,
+        "geometry_checks": {
+          "n_stations": 33,
+          "n_lanes": 256,
+          "stations_monotonic": true,
+          "station_spacing_relative_spread": 4.625929269271485e-15,
+          "axial_step_m": 0.0015,
+          "min_cell_width_m": 7.66126078385096e-05,
+          "no_zero_area_cells": true,
+          "beak_lanes": 87,
+          "tip_lanes": 15,
+          "tip_present": true,
+          "every_lane_sampled_by_bema": false,
+          "passed": true
+        },
+        "peec_R_uohm": 250.42178947540765,
+        "relative_R_error": 0.001389394079465811,
+        "relative_L_error": -0.00580319622872405,
+        "peec": {
+          "beak_current_fraction": 0.30775694371329193,
+          "beak_loss_fraction": 0.3428484034427322,
+          "tip_loss_fraction": 0.20338061101000615,
+          "beak_current_centroid_x_mm": 2.853730631945635
+        },
+        "bema": {
+          "beak_current_fraction": 0.3086276382484492,
+          "beak_loss_fraction": 0.34085828568840676,
+          "tip_loss_fraction": 0.20093548440647704,
+          "beak_current_centroid_x_mm": 2.8436949036740113
+        },
+        "errors": {
+          "beak_current_fraction_relative": 0.002821181343636958,
+          "beak_loss_fraction_relative": 0.005838548857059811,
+          "beak_current_centroid_absolute_mm": 0.010035728271623814,
+          "probe_H_relative_L2": 0.0016948351315376183
+        },
+        "accepted": true
+      }
+    ]
+  },
+  "axial_refinement": {
+    "n_peri": 256,
+    "levels": [
+      {
+        "n_peri": 256,
+        "n_stations": 5,
+        "skipped": false,
+        "n_branches": 1792,
+        "geometry_checks": {
+          "n_stations": 5,
+          "n_lanes": 256,
+          "stations_monotonic": true,
+          "station_spacing_relative_spread": 5.782411586589357e-16,
+          "axial_step_m": 0.012,
+          "min_cell_width_m": 7.66126078385096e-05,
+          "no_zero_area_cells": true,
+          "beak_lanes": 87,
+          "tip_lanes": 15,
+          "tip_present": true,
+          "every_lane_sampled_by_bema": false,
+          "passed": true
+        },
+        "peec_R_uohm": 250.4580102629345,
+        "relative_R_error": 0.0015342341612756272,
+        "relative_L_error": -0.005832162684452524,
+        "peec": {
+          "beak_current_fraction": 0.3076399687834648,
+          "beak_loss_fraction": 0.3425230011424473,
+          "tip_loss_fraction": 0.20300508701741907,
+          "beak_current_centroid_x_mm": 2.852941014165092
+        },
+        "bema": {
+          "beak_current_fraction": 0.3086276382484492,
+          "beak_loss_fraction": 0.34085828568840676,
+          "tip_loss_fraction": 0.20093548440647704,
+          "beak_current_centroid_x_mm": 2.8436949036740113
+        },
+        "errors": {
+          "beak_current_fraction_relative": 0.0032001977223742317,
+          "beak_loss_fraction_relative": 0.004883893171845566,
+          "beak_current_centroid_absolute_mm": 0.009246110491080775,
+          "probe_H_relative_L2": 0.0014275279357573905
+        },
+        "accepted": true
+      },
+      {
+        "n_peri": 256,
+        "n_stations": 9,
+        "skipped": false,
+        "n_branches": 3840,
+        "geometry_checks": {
+          "n_stations": 9,
+          "n_lanes": 256,
+          "stations_monotonic": true,
+          "station_spacing_relative_spread": 1.1564823173178713e-15,
+          "axial_step_m": 0.006,
+          "min_cell_width_m": 7.66126078385096e-05,
+          "no_zero_area_cells": true,
+          "beak_lanes": 87,
+          "tip_lanes": 15,
+          "tip_present": true,
+          "every_lane_sampled_by_bema": false,
+          "passed": true
+        },
+        "peec_R_uohm": 250.49774288194848,
+        "relative_R_error": 0.0016931173932936971,
+        "relative_L_error": -0.0058542930699889695,
+        "peec": {
+          "beak_current_fraction": 0.30771500987687994,
+          "beak_loss_fraction": 0.34282146671995484,
+          "tip_loss_fraction": 0.20339991376817926,
+          "beak_current_centroid_x_mm": 2.85375556810418
+        },
+        "bema": {
+          "beak_current_fraction": 0.3086276382484492,
+          "beak_loss_fraction": 0.34085828568840676,
+          "tip_loss_fraction": 0.20093548440647704,
+          "beak_current_centroid_x_mm": 2.8436949036740113
+        },
+        "errors": {
+          "beak_current_fraction_relative": 0.0029570532851453946,
+          "beak_loss_fraction_relative": 0.005759522693083996,
+          "beak_current_centroid_absolute_mm": 0.010060664430168974,
+          "probe_H_relative_L2": 0.0016717605198931504
+        },
+        "accepted": true
+      },
+      {
+        "n_peri": 256,
+        "n_stations": 17,
+        "skipped": false,
+        "n_branches": 7936,
+        "geometry_checks": {
+          "n_stations": 17,
+          "n_lanes": 256,
+          "stations_monotonic": true,
+          "station_spacing_relative_spread": 2.3129646346357427e-15,
+          "axial_step_m": 0.003,
+          "min_cell_width_m": 7.66126078385096e-05,
+          "no_zero_area_cells": true,
+          "beak_lanes": 87,
+          "tip_lanes": 15,
+          "tip_present": true,
+          "every_lane_sampled_by_bema": false,
+          "passed": true
+        },
+        "peec_R_uohm": 250.47828594756598,
+        "relative_R_error": 0.0016153127910154552,
+        "relative_L_error": -0.005844056491143279,
+        "peec": {
+          "beak_current_fraction": 0.3077416791430904,
+          "beak_loss_fraction": 0.3428859196871824,
+          "tip_loss_fraction": 0.2034633286444194,
+          "beak_current_centroid_x_mm": 2.853890407788394
+        },
+        "bema": {
+          "beak_current_fraction": 0.3086276382484492,
+          "beak_loss_fraction": 0.34085828568840676,
+          "tip_loss_fraction": 0.20093548440647704,
+          "beak_current_centroid_x_mm": 2.8436949036740113
+        },
+        "errors": {
+          "beak_current_fraction_relative": 0.0028706408485864587,
+          "beak_loss_fraction_relative": 0.0059486129101440355,
+          "beak_current_centroid_absolute_mm": 0.010195504114382786,
+          "probe_H_relative_L2": 0.0017240556129289736
+        },
+        "accepted": true
+      },
+      {
+        "n_peri": 256,
+        "n_stations": 33,
+        "skipped": false,
+        "n_branches": 16128,
+        "geometry_checks": {
+          "n_stations": 33,
+          "n_lanes": 256,
+          "stations_monotonic": true,
+          "station_spacing_relative_spread": 4.625929269271485e-15,
+          "axial_step_m": 0.0015,
+          "min_cell_width_m": 7.66126078385096e-05,
+          "no_zero_area_cells": true,
+          "beak_lanes": 87,
+          "tip_lanes": 15,
+          "tip_present": true,
+          "every_lane_sampled_by_bema": false,
+          "passed": true
+        },
+        "peec_R_uohm": 250.42178947540765,
+        "relative_R_error": 0.001389394079465811,
+        "relative_L_error": -0.00580319622872405,
+        "peec": {
+          "beak_current_fraction": 0.30775694371329193,
+          "beak_loss_fraction": 0.3428484034427322,
+          "tip_loss_fraction": 0.20338061101000615,
+          "beak_current_centroid_x_mm": 2.853730631945635
+        },
+        "bema": {
+          "beak_current_fraction": 0.3086276382484492,
+          "beak_loss_fraction": 0.34085828568840676,
+          "tip_loss_fraction": 0.20093548440647704,
+          "beak_current_centroid_x_mm": 2.8436949036740113
+        },
+        "errors": {
+          "beak_current_fraction_relative": 0.002821181343636958,
+          "beak_loss_fraction_relative": 0.005838548857059811,
+          "beak_current_centroid_absolute_mm": 0.010035728271623814,
+          "probe_H_relative_L2": 0.0016948351315376183
+        },
+        "accepted": true
+      }
+    ]
+  }
+}
