@@ -9,6 +9,10 @@ Picard fixed-point ("Karl iteration") on the surface impedance Z_s.
 This folder holds the implementation documentation.  Read order depends
 on the reader's goal:
 
+For a spatial view, open the [executed ESIM example](../esim_spatial/esim_spatial_demo.ipynb).
+It distinguishes the local surface-loss diagnostic from the power-normalized
+transfer artifact and retains its original calculation scope.
+
 ## Entry points by goal
 
 | You want to ... | Start with |

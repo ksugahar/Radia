@@ -281,6 +281,9 @@ evidence that the direct matrix solver is slow.
 
 See also: `docs/complex_coil_geometry/complex_coil.ipynb` -- 8-segment beam-steering
 coil showcase using CoilBuilder add_straight/add_arc with a Biot-Savart field map.
+The saved WebGUI supplement shows CAD, a sampling mesh, field magnitude and
+vectors using `h_segments_cf`. This centreline approximation is distinct from
+the historical thick-conductor calculation.
 
 ## Dipole Example (C-type magnet)
 
