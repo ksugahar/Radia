@@ -1,0 +1,22 @@
+{
+  "schema": "hdiv-mixed-diagnostic.v1",
+  "status": "incomplete",
+  "performance_comparison_valid": false,
+  "host": "HIBINO",
+  "probe_timeout_s": 60,
+  "termination": "task-owned faulthandler timeout with exit=True",
+  "sampled_stack": {
+    "module": "radia.kelvin_solver",
+    "function": "project_source_total_hodge",
+    "line": 342,
+    "operation": "f_lf.Assemble()"
+  },
+  "interpretation": "One stack sample localizes activity to source projection RHS assembly; it is not an integrated profile or proof of the entire previous runtime's cause.",
+  "next_step": "Inspect source-field evaluation and quadrature cost in Hodge projection before expanding the benchmark.",
+  "remote_retention": {
+    "owner": "hdiv-mixed-hibino",
+    "path": "C:/temp/hdiv-mixed-20260924",
+    "reason": "ongoing diagnostic campaign",
+    "cleanup_trigger": "complete diagnostic recovery, verify hashes and commit evidence"
+  }
+}
