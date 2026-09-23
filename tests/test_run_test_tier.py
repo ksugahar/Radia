@@ -305,3 +305,26 @@ def test_rules_do_not_select_similarly_named_siblings(changed):
 ])
 def test_ltspice_scope_regression_is_reachable_from_ci(changed):
     assert 'tests/test_ltspice_ci_scope.py' in runner_module().select_impact_tests([], [changed])
+
+
+def test_adding_numerical_profile_does_not_expand_fast_lane(monkeypatch, tmp_path):
+    runner = runner_module()
+    current = json.loads(runner.MANIFEST.read_text(encoding='utf-8'))
+    previous = copy.deepcopy(current)
+    del previous['profiles']['solver-numerics']
+    manifest = tmp_path / 'manifest.json'
+    manifest.write_text(json.dumps(current), encoding='utf-8')
+    monkeypatch.setattr(runner, 'MANIFEST', manifest)
+    paths, _ = runner.load_profile('fast-contracts')
+    assert runner.select_impact_tests(
+        paths, ['tests/test_tier_manifest.json'], previous_manifest=previous,
+        profile_name='fast-contracts') == paths
+
+
+def test_scoped_native_lane_still_checks_changed_parent_profile():
+    runner = runner_module()
+    current = json.loads(runner.MANIFEST.read_text(encoding='utf-8'))
+    previous = copy.deepcopy(current)
+    previous['profiles']['fast-contracts']['paths'].remove('tests/test_ci_monitor.py')
+    assert runner.changed_impact_tests(
+        current, previous, profile_name='native-smoke') == {'tests/test_ci_monitor.py'}
