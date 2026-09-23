@@ -639,8 +639,18 @@ private:
     }
 
     /// l1-Jacobi sweep: x += r / l1_norm (fully parallel, no data dependency)
-    void L1JacobiSmooth(int level, const BaseVector& b, BaseVector& x) const {
+    void L1JacobiSmooth(int level, const BaseVector& b, BaseVector& x,
+                        bool initially_zero = false) const {
         auto& lev = levels_[level];
+        if (initially_zero) {
+            // Every real V-cycle starts from zero, including coarse corrections.
+            auto fv_b = b.FVDouble();
+            auto fv_x = x.FVDouble();
+            ParallelFor(lev.ndof, [&](size_t i) {
+                fv_x[i] = fv_b[i] / lev.l1_norms[i];
+            });
+            return;
+        }
         auto& res = *lev.residual;
 
         // Residual: r = b - A*x (NGSolve SpMV is TaskManager-parallel)
@@ -808,14 +818,14 @@ private:
             } else {
                 // Fall back to l1-Jacobi smoothing
                 for (int s = 0; s < 10; s++)
-                    L1JacobiSmooth(level, b, x);
+                    L1JacobiSmooth(level, b, x, s == 0);
             }
             return;
         }
 
         // Pre-smooth: l1-Jacobi (fully parallel)
         for (int s = 0; s < num_smooth_; s++)
-            L1JacobiSmooth(level, b, x);
+            L1JacobiSmooth(level, b, x, s == 0);
 
         // Compute residual: r = b - A*x
         auto& res = *lev.residual;
