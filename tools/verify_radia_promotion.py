@@ -69,8 +69,11 @@ class GitHub:
         self.trees = {}
 
     def get(self, suffix):
+        url = f"https://api.github.com/repos/{self.repo}"
+        if suffix:
+            url += "/" + suffix
         request = urllib.request.Request(
-            f"https://api.github.com/repos/{self.repo}/{suffix}",
+            url,
             headers={"Authorization": f"Bearer {os.environ['GH_TOKEN']}",
                      "Accept": "application/vnd.github+json"})
         with urllib.request.urlopen(request, timeout=60) as response:
