@@ -1,159 +1,204 @@
-function tests = test_beam_transfer_mex
-%TEST_BEAM_TRANSFER_MEX Verify the native variational transfer-map ABI.
-tests = functiontests(localfunctions);
-end
+classdef test_beam_transfer_mex < matlab.unittest.TestCase
+    %TEST_BEAM_TRANSFER_MEX Verify the native variational transfer-map ABI.
+    properties (Access = private)
+        PythonReference
+    end
 
-function setupOnce(testCase)
-testDir = fileparts(mfilename("fullpath"));
-repoRoot = fileparts(fileparts(testDir));
-addpath(fullfile(repoRoot,"matlab"));
-testCase.TestData.SetupInfo = radia.setup(Force=true);
-end
+    methods (TestClassSetup)
+        function setupNativeReference(testCase)
+            testDir = fileparts(mfilename("fullpath"));
+            repoRoot = fileparts(fileparts(testDir));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
+                fullfile(repoRoot,"matlab")));
+            radia.setup(Force=true);
+            referencePath = string(tempname("C:\temp")) + ".mat";
+            testCase.addTeardown(@() deleteReference(referencePath));
+            testCase.PythonReference = loadPythonReference(repoRoot, referencePath);
+        end
+    end
 
-function testCommandCatalogAndNonlinearAttribution(testCase)
-commands = string(radia.internal.callMex("api.commands"));
-verifyTrue(testCase,ismember( ...
-    "beam.transfer.propagate_variational",commands));
-verifyTrue(testCase,ismember( ...
-    "beam.hamiltonian.canonical_body_jet",commands));
+    methods (Test)
+        function testCommandCatalogAndNonlinearAttribution(testCase)
+        commands = string(radia.internal.callMex("api.commands"));
+        verifyTrue(testCase,ismember( ...
+            "beam.transfer.propagate_variational",commands));
+        verifyTrue(testCase,ismember( ...
+            "beam.hamiltonian.canonical_body_jet",commands));
 
-config = nonlinearConfig();
-actual = runConfig(config);
+        config = nonlinearConfig();
+        actual = runConfig(config);
 
-verifyEqual(testCase,actual.schema, ...
-    'radia.beam.variational-map.result.v1');
-verifyEqual(testCase,actual.backend,'native-cpp-mex');
-verifyEqual(testCase,string(actual.coordinate_order), ...
-    ["x";"px_over_p0";"y";"py_over_p0";"sigma";"delta"]);
-verifyEqual(testCase,actual.maximum_order,3);
-verifySize(testCase,actual.R,[6,6]);
-verifySize(testCase,actual.T,[6,6,6]);
-verifySize(testCase,actual.U,[6,6,6,6]);
-verifySize(testCase,actual.station_R,[6,6,4]);
-verifySize(testCase,actual.region_T,[6,6,6,3]);
-verifyEqual(testCase,actual.station_s_m,[0;0.3;0.7;0.9], ...
-    "AbsTol",2e-15);
-verifyEqual(testCase,string(actual.region_names), ...
-    ["upstream_sextupole";"downstream_sextupole";"direct_octupole"]);
-verifyEqual(testCase,actual.region_bounds_m, ...
-    [0,0.3;0.3,0.7;0.7,0.9],"AbsTol",2e-15);
+        verifyEqual(testCase,actual.schema, ...
+            'radia.beam.variational-map.result.v1');
+        verifyEqual(testCase,actual.backend,'native-cpp-mex');
+        verifyEqual(testCase,string(actual.coordinate_order), ...
+            ["x";"px_over_p0";"y";"py_over_p0";"sigma";"delta"]);
+        verifyEqual(testCase,actual.maximum_order,3);
+        verifySize(testCase,actual.R,[6,6]);
+        verifySize(testCase,actual.T,[6,6,6]);
+        verifySize(testCase,actual.U,[6,6,6,6]);
+        verifySize(testCase,actual.station_R,[6,6,4]);
+        verifySize(testCase,actual.region_T,[6,6,6,3]);
+        verifyEqual(testCase,actual.station_s_m,[0;0.3;0.7;0.9], ...
+            "AbsTol",2e-15);
+        verifyEqual(testCase,string(actual.region_names), ...
+            ["upstream_sextupole";"downstream_sextupole";"direct_octupole"]);
+        verifyEqual(testCase,actual.region_bounds_m, ...
+            [0,0.3;0.3,0.7;0.7,0.9],"AbsTol",2e-15);
 
-verifyEqual(testCase,actual.T(2,1,1),0.6,"AbsTol",2e-14);
-verifyEqual(testCase,actual.T(3,1,2),0.6,"AbsTol",2e-14);
-verifyEqual(testCase,actual.T(3,2,1),0.6,"AbsTol",2e-14);
-verifyEqual(testCase,actual.U(3,1,1,1),1.08,"AbsTol",3e-14);
-verifyEqual(testCase,actual.U(4,1,1,1),-0.14,"AbsTol",2e-14);
-verifyEqual(testCase,actual.pair_regions,[1,2]);
-verifyEqual(testCase,actual.pair_U_cascade(3,1,1,1,1),1.08, ...
-    "AbsTol",3e-14);
-verifyEqual(testCase,actual.region_U_direct(4,1,1,1,3),-0.14, ...
-    "AbsTol",2e-14);
+        verifyEqual(testCase,actual.T(2,1,1),0.6,"AbsTol",2e-14);
+        verifyEqual(testCase,actual.T(3,1,2),0.6,"AbsTol",2e-14);
+        verifyEqual(testCase,actual.T(3,2,1),0.6,"AbsTol",2e-14);
+        verifyEqual(testCase,actual.U(3,1,1,1),1.08,"AbsTol",3e-14);
+        verifyEqual(testCase,actual.U(4,1,1,1),-0.14,"AbsTol",2e-14);
+        verifyEqual(testCase,actual.pair_regions,[1,2]);
+        verifyEqual(testCase,actual.pair_U_cascade(3,1,1,1,1),1.08, ...
+            "AbsTol",3e-14);
+        verifyEqual(testCase,actual.region_U_direct(4,1,1,1,3),-0.14, ...
+            "AbsTol",2e-14);
 
-verifyLessThan(testCase,actual.diagnostics.R_composition_error,2e-14);
-verifyLessThan(testCase,actual.diagnostics.T_reconstruction_error,3e-14);
-verifyLessThan(testCase,actual.diagnostics.U_reconstruction_error,4e-14);
-verifyLessThan(testCase,actual.diagnostics.T_symmetry_defect,1e-14);
-verifyLessThan(testCase,actual.diagnostics.U_symmetry_defect,1e-14);
-end
+        verifyLessThan(testCase,actual.diagnostics.R_composition_error,2e-14);
+        verifyLessThan(testCase,actual.diagnostics.T_reconstruction_error,3e-14);
+        verifyLessThan(testCase,actual.diagnostics.U_reconstruction_error,4e-14);
+        verifyLessThan(testCase,actual.diagnostics.T_symmetry_defect,1e-14);
+        verifyLessThan(testCase,actual.diagnostics.U_symmetry_defect,1e-14);
+        end
 
-function testCanonicalBodyHamiltonianJet(testCase)
-actual = radia.beam.canonicalBodyHamiltonianJet( ...
-    [0.2,2.4,-0.6,5,1.5,-7,2,9,-3],3,ReferenceBeta=0.8);
-verifyEqual(testCase,actual.schema, ...
-    'radia.beam.canonical-hamiltonian-jet.result.v1');
-verifyEqual(testCase,actual.backend,'native-cpp-mex');
-verifyEqual(testCase,string(actual.coordinate_order), ...
-    ["x";"px_over_p0";"y";"py_over_p0";"ell";"delta"]);
-verifyEqual(testCase,actual.poisson_pair_signs,[1,1,-1]);
-verifySize(testCase,actual.H2_per_m,[6,6]);
-verifySize(testCase,actual.H3_per_m,[6,6,6]);
-verifySize(testCase,actual.H4_per_m,[6,6,6,6]);
-verifySize(testCase,actual.H5_per_m,[6,6,6,6,6]);
-verifyEqual(testCase,actual.H2_per_m(1,6),-1/15,"AbsTol",2e-15);
-verifyEqual(testCase,actual.A_per_m(2,6),1/15,"AbsTol",2e-15);
-verifyEqual(testCase,actual.F2_per_m(2,1,1),-10/3,"AbsTol",2e-14);
-verifyEqual(testCase,actual.F3_per_m(2,1,1,1),14,"AbsTol",2e-14);
-verifyEqual(testCase,actual.H5_per_m(1,1,1,1,1),72,"AbsTol",2e-13);
-verifyEqual(testCase,actual.F4_per_m(2,1,1,1,1),-72,"AbsTol",2e-13);
+        function testTransferMapAndCanonicalJetMatchPybind(testCase)
+        % The fixture is generated by the public pybind11 boundary from the same
+        % C++ kernels.  This catches array-order, tensor-rank, and diagnostic drift
+        % between the standalone MEX ABI and Python without accepting hand-written
+        % MATLAB goldens as the compatibility authority.
+        reference = testCase.PythonReference;
+        actual = runConfig(nonlinearConfig());
+        verifyEqual(testCase, actual.R, reference.R, RelTol=2e-13, AbsTol=2e-14);
+        verifyEqual(testCase, actual.T, reference.T, RelTol=3e-13, AbsTol=3e-14);
+        verifyEqual(testCase, actual.U, reference.U, RelTol=4e-13, AbsTol=4e-14);
+        verifyEqual(testCase, actual.station_R, reference.station_R, ...
+            RelTol=2e-13, AbsTol=2e-14);
+        verifyEqual(testCase, actual.region_T, reference.region_T, ...
+            RelTol=3e-13, AbsTol=3e-14);
+        verifyEqual(testCase, actual.region_U_direct, reference.region_U_direct, ...
+            RelTol=4e-13, AbsTol=4e-14);
+        verifyEqual(testCase, actual.region_U_local_cascade, ...
+            reference.region_U_local_cascade, RelTol=4e-13, AbsTol=4e-14);
+        verifyEqual(testCase, actual.pair_regions, double(reference.pair_regions));
+        verifyEqual(testCase, actual.pair_U_cascade, reference.pair_U_cascade, ...
+            RelTol=4e-13, AbsTol=4e-14);
 
-geometric = radia.beam.canonicalBodyHamiltonianJet( ...
-    [0.3,0,0,0,0,0,0],3,ReferenceCurvaturePerM=0.25);
-verifyEqual(testCase,geometric.reference_curvature_per_m,0.25, ...
-    "AbsTol",2e-15);
-verifyEqual(testCase,geometric.field_curvature_per_m,0.1, ...
-    "AbsTol",2e-15);
-verifyEqual(testCase,geometric.H2_per_m(1,6),-0.25, ...
-    "AbsTol",2e-15);
-verifyEqual(testCase,geometric.H2_per_m(1,1),0.025, ...
-    "AbsTol",2e-15);
-end
+        verifyReferenceFields(testCase, actual.diagnostics, reference, ...
+            ["R_composition_error", "T_reconstruction_error", ...
+             "U_reconstruction_error", "T_symmetry_defect", "U_symmetry_defect"], "");
 
-function testNormalQuadrupoleMatchesAnalyticMatrix(testCase)
-strength = 1.7;
-lengthM = 0.8;
-rootStrength = sqrt(strength);
-config.schema = 'radia.beam.variational-map.v1';
-config.lengths_m = lengthM;
-config.A_per_m = zeros(6,6);
-config.A_per_m(1,2) = 1;
-config.A_per_m(2,1) = -strength;
-config.A_per_m(3,4) = 1;
-config.A_per_m(4,3) = strength;
-config.maximum_order = 1;
-config.maximum_step_m = 0.001;
+        canonical = radia.beam.canonicalBodyHamiltonianJet( ...
+            reference.canonical_coefficients, reference.canonical_rigidity_t_m, ...
+            ReferenceBeta=reference.canonical_reference_beta);
+        verifyReferenceFields(testCase, canonical, reference, ...
+            ["H2_per_m", "H3_per_m", "H4_per_m", "H5_per_m", ...
+             "A_per_m", "F2_per_m", "F3_per_m", "F4_per_m"], "canonical_");
+        end
 
-actual = radia.beam.propagateVariationalMap( ...
-    config.lengths_m,config.A_per_m, ...
-    MaximumOrder=config.maximum_order, ...
-    MaximumStepM=config.maximum_step_m);
-phase = rootStrength*lengthM;
-expectedX = [cos(phase),sin(phase)/rootStrength; ...
-    -rootStrength*sin(phase),cos(phase)];
-expectedY = [cosh(phase),sinh(phase)/rootStrength; ...
-    rootStrength*sinh(phase),cosh(phase)];
-verifyEqual(testCase,actual.R(1:2,1:2),expectedX,"AbsTol",8e-13);
-verifyEqual(testCase,actual.R(3:4,3:4),expectedY,"AbsTol",8e-13);
-end
+        function testCanonicalBodyHamiltonianJet(testCase)
+        actual = radia.beam.canonicalBodyHamiltonianJet( ...
+            [0.2,2.4,-0.6,5,1.5,-7,2,9,-3],3,ReferenceBeta=0.8);
+        verifyEqual(testCase,actual.schema, ...
+            'radia.beam.canonical-hamiltonian-jet.result.v1');
+        verifyEqual(testCase,actual.backend,'native-cpp-mex');
+        verifyEqual(testCase,string(actual.coordinate_order), ...
+            ["x";"px_over_p0";"y";"py_over_p0";"ell";"delta"]);
+        verifyEqual(testCase,actual.poisson_pair_signs,[1,1,-1]);
+        verifySize(testCase,actual.H2_per_m,[6,6]);
+        verifySize(testCase,actual.H3_per_m,[6,6,6]);
+        verifySize(testCase,actual.H4_per_m,[6,6,6,6]);
+        verifySize(testCase,actual.H5_per_m,[6,6,6,6,6]);
+        verifyEqual(testCase,actual.H2_per_m(1,6),-1/15,"AbsTol",2e-15);
+        verifyEqual(testCase,actual.A_per_m(2,6),1/15,"AbsTol",2e-15);
+        verifyEqual(testCase,actual.F2_per_m(2,1,1),-10/3,"AbsTol",2e-14);
+        verifyEqual(testCase,actual.F3_per_m(2,1,1,1),14,"AbsTol",2e-14);
+        verifyEqual(testCase,actual.H5_per_m(1,1,1,1,1),72,"AbsTol",2e-13);
+        verifyEqual(testCase,actual.F4_per_m(2,1,1,1,1),-72,"AbsTol",2e-13);
 
-function testNonsymmetricJetAndInvalidShapeFailLoudly(testCase)
-config.schema = 'radia.beam.variational-map.v1';
-config.lengths_m = 1;
-config.A_per_m = zeros(6,6);
-config.F2_per_m = zeros(6,6,6);
-config.F2_per_m(1,1,2) = 1;
-config.maximum_order = 2;
-verifyError(testCase,@() radia.internal.callMex( ...
-    "beam.transfer.propagate_variational",config), ...
-    "radia:mex:Exception");
+        geometric = radia.beam.canonicalBodyHamiltonianJet( ...
+            [0.3,0,0,0,0,0,0],3,ReferenceCurvaturePerM=0.25);
+        verifyEqual(testCase,geometric.reference_curvature_per_m,0.25, ...
+            "AbsTol",2e-15);
+        verifyEqual(testCase,geometric.field_curvature_per_m,0.1, ...
+            "AbsTol",2e-15);
+        verifyEqual(testCase,geometric.H2_per_m(1,6),-0.25, ...
+            "AbsTol",2e-15);
+        verifyEqual(testCase,geometric.H2_per_m(1,1),0.025, ...
+            "AbsTol",2e-15);
+        end
 
-config = rmfield(config,"F2_per_m");
-config.A_per_m = zeros(5,6);
-verifyError(testCase,@() radia.beam.propagateVariationalMap( ...
-    config.lengths_m,config.A_per_m, ...
-    MaximumOrder=config.maximum_order),"radia:beam:InvalidShape");
-end
+        function testNormalQuadrupoleMatchesAnalyticMatrix(testCase)
+        strength = 1.7;
+        lengthM = 0.8;
+        rootStrength = sqrt(strength);
+        config.schema = 'radia.beam.variational-map.v1';
+        config.lengths_m = lengthM;
+        config.A_per_m = zeros(6,6);
+        config.A_per_m(1,2) = 1;
+        config.A_per_m(2,1) = -strength;
+        config.A_per_m(3,4) = 1;
+        config.A_per_m(4,3) = strength;
+        config.maximum_order = 1;
+        config.maximum_step_m = 0.001;
 
-function testSubstepCascadeStaysInsideOneRegion(testCase)
-f2 = zeros(6,6,6);
-f2(2,1,1) = 2;
-f2(3,1,2) = 1.5;
-f2(3,2,1) = 1.5;
-actual = radia.beam.propagateVariationalMap( ...
-    1,zeros(6,6),F2PerM=f2,MaximumOrder=3,MaximumStepM=0.1);
+        actual = radia.beam.propagateVariationalMap( ...
+            config.lengths_m,config.A_per_m, ...
+            MaximumOrder=config.maximum_order, ...
+            MaximumStepM=config.maximum_step_m);
+        phase = rootStrength*lengthM;
+        expectedX = [cos(phase),sin(phase)/rootStrength; ...
+            -rootStrength*sin(phase),cos(phase)];
+        expectedY = [cosh(phase),sinh(phase)/rootStrength; ...
+            rootStrength*sinh(phase),cosh(phase)];
+        verifyEqual(testCase,actual.R(1:2,1:2),expectedX,"AbsTol",8e-13);
+        verifyEqual(testCase,actual.R(3:4,3:4),expectedY,"AbsTol",8e-13);
+        end
 
-verifyEqual(testCase,actual.U(3,1,1,1),4.5,"AbsTol",2e-13);
-verifyEqual(testCase,actual.region_U_local_cascade(3,1,1,1,1), ...
-    4.5,"AbsTol",2e-13);
-verifyTrue(testCase,isempty(actual.pair_regions));
-verifyTrue(testCase,isempty(actual.pair_U_cascade));
-verifyLessThan(testCase,actual.diagnostics.U_reconstruction_error,3e-13);
-end
+        function testNonsymmetricJetAndInvalidShapeFailLoudly(testCase)
+        config.schema = 'radia.beam.variational-map.v1';
+        config.lengths_m = 1;
+        config.A_per_m = zeros(6,6);
+        config.F2_per_m = zeros(6,6,6);
+        config.F2_per_m(1,1,2) = 1;
+        config.maximum_order = 2;
+        verifyError(testCase,@() radia.internal.callMex( ...
+            "beam.transfer.propagate_variational",config), ...
+            "radia:mex:Exception");
 
-function testUnicodeRegionNameRoundTrips(testCase)
-regionName = string(char([20837,21475,22235,26997]));
-actual = radia.beam.propagateVariationalMap( ...
-    0.1,zeros(6),Names=regionName,MaximumOrder=1,MaximumStepM=0.1);
-verifyEqual(testCase,string(actual.region_names{1}),regionName);
+        config = rmfield(config,"F2_per_m");
+        config.A_per_m = zeros(5,6);
+        verifyError(testCase,@() radia.beam.propagateVariationalMap( ...
+            config.lengths_m,config.A_per_m, ...
+            MaximumOrder=config.maximum_order),"radia:beam:InvalidShape");
+        end
+
+        function testSubstepCascadeStaysInsideOneRegion(testCase)
+        f2 = zeros(6,6,6);
+        f2(2,1,1) = 2;
+        f2(3,1,2) = 1.5;
+        f2(3,2,1) = 1.5;
+        actual = radia.beam.propagateVariationalMap( ...
+            1,zeros(6,6),F2PerM=f2,MaximumOrder=3,MaximumStepM=0.1);
+
+        verifyEqual(testCase,actual.U(3,1,1,1),4.5,"AbsTol",2e-13);
+        verifyEqual(testCase,actual.region_U_local_cascade(3,1,1,1,1), ...
+            4.5,"AbsTol",2e-13);
+        verifyTrue(testCase,isempty(actual.pair_regions));
+        verifyTrue(testCase,isempty(actual.pair_U_cascade));
+        verifyLessThan(testCase,actual.diagnostics.U_reconstruction_error,3e-13);
+        end
+
+        function testUnicodeRegionNameRoundTrips(testCase)
+        regionName = string(char([20837,21475,22235,26997]));
+        actual = radia.beam.propagateVariationalMap( ...
+            0.1,zeros(6),Names=regionName,MaximumOrder=1,MaximumStepM=0.1);
+        verifyEqual(testCase,string(actual.region_names{1}),regionName);
+        end
+
+    end
 end
 
 function config = nonlinearConfig()
@@ -180,4 +225,38 @@ result = radia.beam.propagateVariationalMap( ...
     F2PerM=config.F2_per_m,F3PerM=config.F3_per_m, ...
     Names=config.names,MaximumOrder=config.maximum_order, ...
     MaximumStepM=config.maximum_step_m);
+end
+
+function reference = loadPythonReference(repoRoot, path)
+pythonExecutable = string(getenv("RADIA_PYTHON_EXECUTABLE"));
+if strlength(pythonExecutable) == 0
+    pythonExecutable = "python";
+end
+helper = fullfile(repoRoot, "tests", "matlab", ...
+    "beam_transfer_python_reference.py");
+command = quoteCommandArgument(pythonExecutable) + " " + ...
+    quoteCommandArgument(helper) + " " + quoteCommandArgument(path);
+[status, output] = radia.internal.runPythonProcess(command);
+if status ~= 0
+    error("radia:test:PythonReference", ...
+        "Python beam-transfer reference failed (%d): %s", status, output);
+end
+reference = load(path);
+end
+
+function value = quoteCommandArgument(value)
+value = '"' + replace(string(value), '"', '""') + '"';
+end
+
+function verifyReferenceFields(testCase, actual, reference, names, prefix)
+for name = names
+    verifyEqual(testCase, actual.(name), reference.(prefix + name), ...
+        RelTol=4e-13, AbsTol=4e-14);
+end
+end
+
+function deleteReference(path)
+if isfile(path)
+    delete(path);
+end
 end
