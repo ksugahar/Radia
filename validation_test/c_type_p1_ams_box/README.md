@@ -31,6 +31,17 @@ SHA-256 that `run_p1_box.py` verifies.
 
 ## Engines
 
+The reduced-A option `--outer-boundary natural_total` imposes the weak
+condition `n x H_total = 0`, instead of the default `source_flux` condition
+`A_r x n = 0`. It frees the outer tangential DOFs and adds
+`nu_0 integral_outer (n x B_s) . v` to the right-hand side (with the
+opposite sign in the nonlinear residual). These are different finite-box
+problems. The option does not change the mixed-Omega engine. Compare total
+`B`, not gauge-dependent `A`, and record the boundary policy with results.
+A curl-free uniform vacuum source must be cancelled by the natural-total
+solution; the default source-flux boundary retains it. This signed control
+is covered by the focused tests.
+
 **reduced_a** -- lowest-order Nedelec `A_r` with `B = B_s + curl A_r`,
 `nograds` gauge plus the `1e-6 nu_0` mass regularisation, `A_r x n = 0` on the
 box.  The exact Radia source is projected once to a second-order discontinuous
