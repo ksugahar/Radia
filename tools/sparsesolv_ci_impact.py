@@ -10,6 +10,8 @@ import tomllib
 
 # Checked against both workflow trigger lists by the lightweight contract suite.
 NATIVE_PATHS = (
+    "src/ext/HACApK/**",
+    "tests/test_hdiv_chargegram_build_safety.py",
     'src/radia/vector_potential_solver.py',
     'src/radia/topology_optimization.py',
     'tests/test_vector_potential_bh_tail.py',

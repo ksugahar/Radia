@@ -128,7 +128,7 @@ def test_fill_exception_restores_chargegram_and_global_hacapk_state(monkeypatch)
     assert np.isfinite(result).all()
 
 
-def test_chargegram_build_honors_requested_max_rank():
+def test_chargegram_rank_cap_preserves_requested_accuracy():
     rng = np.random.default_rng(4)
     points = rng.normal(size=(64, 3))
     weights = np.ones(64, dtype=np.float64)
@@ -139,8 +139,14 @@ def test_chargegram_build_honors_requested_max_rank():
     gram.build_hmatrix(eps=1.0e-14, leaf=4, eta=2.0, max_rank=1)
     stats = gram.stats()
 
-    assert stats["n_lowrank"] > 0
-    assert stats["max_rank"] == 1
+    assert stats["max_rank"] <= 1
+    # A rank budget cannot authorize an inaccurate operator. Compare all
+    # columns against the independent regularized Laplace kernel, including
+    # off-diagonal entries that a dominant self-energy could hide in a norm.
+    distance2 = np.sum((points[:, None, :] - points[None, :, :]) ** 2, axis=2)
+    expected = 1.0 / (4.0 * np.pi * np.sqrt(distance2 + 1.0e-6))
+    actual = np.column_stack([gram.matvec_sym(column) for column in np.eye(64)])
+    np.testing.assert_allclose(actual, expected, rtol=2.0e-12, atol=1.0e-14)
 
 
 def test_symmetric_chargegram_keeps_coincident_diagonal_leaves_dense():
