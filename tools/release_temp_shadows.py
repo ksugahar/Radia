@@ -1,6 +1,8 @@
 """Retire the explicitly named Omega override after its main integration."""
+import base64
 import json
 import subprocess
+import tempfile
 
 HOSTS = ("mdx1", "mdx2", "hibino")
 SCRIPT = r'''
@@ -52,12 +54,20 @@ def inspect_shadows(apply=False):
     results = {}
     for host in HOSTS:
         try:
-            result = subprocess.run(
-                ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host,
-                 "pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command -"],
-                input=SCRIPT.replace("__APPLY__", "$true" if apply else "$false"),
-                text=True, capture_output=True, timeout=90, check=True)
-            lines = [line for line in result.stdout.splitlines() if line.startswith("{")]
+            script = SCRIPT.replace("__APPLY__", "$true" if apply else "$false")
+            encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+            # Avoid interactive stdin parsing and inherited pipe handles in
+            # Windows OpenSSH. A regular file keeps the timeout bounded.
+            with tempfile.TemporaryFile(mode="w+", encoding="utf-8", dir=r"C:\temp") as output:
+                subprocess.run(
+                    ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host,
+                     "pwsh", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+                     "-EncodedCommand", encoded],
+                    stdin=subprocess.DEVNULL, stdout=output, stderr=output,
+                    text=True, timeout=90, check=True)
+                output.seek(0)
+                report_text = output.read()
+            lines = [line for line in report_text.splitlines() if line.startswith("{")]
             if not lines:
                 raise ValueError("Remote cleanup returned no JSON report")
             report = json.loads(lines[-1])
