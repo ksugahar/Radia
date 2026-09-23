@@ -194,6 +194,14 @@ residual. This is opt-in and does not establish suitability for complex
 frequency-domain systems. Compare both preparation-inclusive and engine
 times, and verify fields before interpreting any speedup.
 
+`--cg-check-interval N` optionally reduces repeated original-equation matrix
+products during AMS-CG. The default is 1. The initial and iteration-limit
+checks are mandatory, as is the independent true-residual check after CG
+returns. Skipped checks never authorize convergence. A larger interval may
+add Krylov iterations and is not necessarily faster. History records the
+number of true-residual checks; residual samples are not an every-iteration
+trace when N exceeds 1. Other linear backends reject nondefault intervals.
+
 `results/lab_20260922_<mesh>_<variant>.json`, meshes reproducible from
 `results/meshes/*.json` (scale, sizes, SHA-256).  "tight" stops at relative
 residual 1e-6 and |dB|/B_sat 2e-5; "loose" at relative residual 1e-3 with no
