@@ -1,0 +1,72 @@
+{
+  "wheel_sha256": "493ebd77b8eecdf41fc500bff0565f33700eeeb424975bb45f6ec97258930281",
+  "native_sha256": "2189cae130ac2929e518957387f5fcc33d2d59585457b12e455260e74483cfe9",
+  "source_commit": "5fde91e48c86049ce47e67e33e30bac02ed77ed6",
+  "ci_run": 35912088288,
+  "sources_verified": 303,
+  "version": "5.0.0",
+  "import_path": "C:\\temp\\radia-quad-wheel-venv-20260924\\Lib\\site-packages\\radia",
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "hostname": "mdx2",
+  "steps": [
+    {
+      "name": "pip-check",
+      "command": [
+        "C:\\temp\\radia-quad-wheel-venv-20260924\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-m",
+        "pip",
+        "check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "full6",
+      "command": [
+        "C:\\temp\\radia-quad-wheel-venv-20260924\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-I",
+        "C:\\temp\\radia-quad-inputs-20260924\\hdiv_newton_native_smoke_strong.py",
+        "--drive",
+        "300000",
+        "--output",
+        "C:\\temp\\radia-quad-accept-5fde91e48\\mdx2\\full6.json"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "focused",
+      "command": [
+        "C:\\temp\\radia-quad-wheel-venv-20260924\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-I",
+        "-m",
+        "pytest",
+        "-q",
+        "--confcutdir",
+        "C:\\temp\\radia-quad-inputs-20260924",
+        "C:\\temp\\radia-quad-inputs-20260924\\tests\\feec\\test_hdiv_jacobi_diagonal_fail_loud.py",
+        "C:\\temp\\radia-quad-inputs-20260924\\validation_test\\feec\\test_wedge_frozen_pcg.py",
+        "--junitxml",
+        "C:\\temp\\radia-quad-accept-5fde91e48\\mdx2\\focused.xml"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "pip-freeze",
+      "command": [
+        "C:\\temp\\radia-quad-wheel-venv-20260924\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-m",
+        "pip",
+        "freeze"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "passed": true
+}
