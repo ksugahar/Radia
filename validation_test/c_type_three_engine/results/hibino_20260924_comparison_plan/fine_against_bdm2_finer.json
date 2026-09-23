@@ -1,0 +1,12 @@
+{
+  "status": "Cross-run diagnostic, not a new three-engine pass",
+  "reference": "BDM2 finer numerical field, not analytic truth",
+  "relative_core_vector_differences": {
+    "hdiv_mmm": 0.010649008897347663,
+    "reduced_a": 0.002597175486219201,
+    "mixed_total_reduced_omega": 0.0023747730934571844
+  },
+  "reference_sha256": "4d4d59b2e07eeea004de2a79ac8efa7ae25e2b03136b5ce7eb0c9d02568325de",
+  "campaign_sha256": "4790d84af93d4cd5e6d7e90c367ac0dd3ef9875f558f6640264ea6d7e8b7cce6",
+  "warning": "No speed ratio. Observation ordering relies on the shared retained driver and checked input contract; diagnostic JSON lacks its own point array."
+}
