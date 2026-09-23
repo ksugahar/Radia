@@ -22,3 +22,10 @@ No new remote computation or remote staging was performed during this audit.
 After finer result, compare FEM increments and field spread before selecting
 matched-error timing points; independent-host reproduction remains outstanding.
 Recover/hash/commit all evidence, then remove dedicated remote staging.
+
+Prepared run_finer_three.py: retains prior measured cache and phase-memory
+implementation, sets BDM2/FEM2, extends failure watchdog to5400s, records native
+HDiv convergence/residual and fails if convergence is not confirmed.
+Syntax compilation and the existing three phase-memory unit tests passed on LAB.
+It requires run_three_engine.py and phase_memory.py alongside it plus checked
+finer inputs in meshes/. No full calculation has been launched at this step.
