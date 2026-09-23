@@ -399,6 +399,24 @@ def _write_simulink_state(path: Path, state: dict, target: str) -> None:
                 fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
 
+def _run_ssh_powershell(host: str, script: str, timeout: int):
+    encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
+    command = ["ssh", "-v", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15",
+               host, "pwsh", "-NoProfile",
+               "-EncodedCommand", encoded]
+    # Use a file rather than inherited output pipes: Windows SSH/Engine
+    # descendants can keep a pipe open after the command has exited.
+    with tempfile.TemporaryDirectory(prefix="radia-ssh-", dir=r"C:\temp") as scratch:
+        with (Path(scratch) / "output.log").open("w+b") as output:
+            result = subprocess.run(command, stdin=subprocess.DEVNULL,
+                                    stdout=output, stderr=subprocess.STDOUT,
+                                    timeout=timeout)
+            output.seek(0)
+            return subprocess.CompletedProcess(
+                command, result.returncode,
+                output.read().decode("utf-8", errors="replace"), "")
+
+
 def _run_simulink_candidate_target(
         key: str, package: Path, package_sha256: str,
         success_marker: str, engine_session: str | None = None) -> tuple[bool, str]:
@@ -422,15 +440,7 @@ def _run_simulink_candidate_target(
         remote_root_posix = f"C:/temp/radia-release-quad/{package_sha256[:16]}"
         remote_root_windows = remote_root_posix.replace("/", "\\")
         prepare = f"New-Item -ItemType Directory -Force -Path '{remote_root_windows}' | Out-Null\n"
-        created = subprocess.run(
-            ["ssh", host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
-             "-Command", "-"],
-            input=prepare,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        created = _run_ssh_powershell(host, prepare, timeout=60)
         if created.returncode != 0:
             return False, created.stderr.strip() or created.stdout.strip()
         remote_package = f"{remote_root_posix}/{package.name}"
@@ -443,6 +453,7 @@ def _run_simulink_candidate_target(
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                timeout=180,
             )
             if copied.returncode != 0:
                 return False, copied.stderr.strip() or copied.stdout.strip()
@@ -453,15 +464,7 @@ def _run_simulink_candidate_target(
             f"& {python_command} '{remote_verifier}' '{remote_package}' "
             f"--matlab '{MATLAB_EXE}'{session_option}\nexit $LASTEXITCODE\n"
         )
-        result = subprocess.run(
-            ["ssh", host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
-             "-Command", "-"],
-            input=invocation,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        result = _run_ssh_powershell(host, invocation, timeout=420)
     output = ((result.stdout or "") + (result.stderr or "")).strip()
     if result.returncode != 0:
         return False, output
