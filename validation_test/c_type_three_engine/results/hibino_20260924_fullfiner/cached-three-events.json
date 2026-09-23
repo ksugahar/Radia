@@ -1,0 +1,86 @@
+[
+  {
+    "event": "hdiv_native_convergence",
+    "converged": 1.0,
+    "residual": 9.530603207840468e-09
+  },
+  {
+    "event": "engine_phase_memory",
+    "engine": "solve_hdiv",
+    "completed": true,
+    "rss_start_bytes": 161042432,
+    "rss_end_bytes": 250327040,
+    "sampled_max_process_rss_bytes": 1014005760,
+    "samples": 891,
+    "sampling_interval_s": 0.05,
+    "errors": [],
+    "memory_scope": "Sampled whole-process RSS during this engine; may retain previous-engine allocations; sampling can miss peaks. Not isolated engine peak memory."
+  },
+  {
+    "event": "engine_phase_memory",
+    "engine": "solve_reduced_a",
+    "completed": true,
+    "rss_start_bytes": 250417152,
+    "rss_end_bytes": 254439424,
+    "sampled_max_process_rss_bytes": 3728904192,
+    "samples": 1057,
+    "sampling_interval_s": 0.05,
+    "errors": [],
+    "memory_scope": "Sampled whole-process RSS during this engine; may retain previous-engine allocations; sampling can miss peaks. Not isolated engine peak memory."
+  },
+  {
+    "event": "source_cache_begin",
+    "points": 2935500,
+    "mapping_s": 0.8023040999996738
+  },
+  {
+    "event": "source_cache_ready",
+    "preparation_s": 1268.6466924999986,
+    "cache": {
+      "enabled": true,
+      "size": 2935464,
+      "hits": 0,
+      "misses": 0,
+      "hit_rate": 0.0
+    }
+  },
+  {
+    "event": "source_hodge_complete",
+    "inclusive_s": 1271.6526311000016,
+    "cache": {
+      "enabled": true,
+      "size": 2935464,
+      "hits": 14677500,
+      "misses": 0,
+      "hit_rate": 1.0
+    },
+    "auxiliary_space_role": "iron_source_total_hodge",
+    "auxiliary_ndof": 35999,
+    "auxiliary_free_ndof": 35999,
+    "auxiliary_count_scope": "this projection only; not all auxiliary spaces or simultaneous system size"
+  },
+  {
+    "event": "source_interface_complete",
+    "runtime_s": 9.15994199999841,
+    "auxiliary_space_role": "source_interface_potential",
+    "boundary": "kelvin_int",
+    "auxiliary_ndof": 4546,
+    "auxiliary_free_ndof": 4546,
+    "auxiliary_count_scope": "this projection only; not simultaneous system size"
+  },
+  {
+    "event": "engine_phase_memory",
+    "engine": "solve_omega",
+    "completed": true,
+    "rss_start_bytes": 254464000,
+    "rss_end_bytes": 257314816,
+    "sampled_max_process_rss_bytes": 3959480320,
+    "samples": 16988,
+    "sampling_interval_s": 0.05,
+    "errors": [],
+    "memory_scope": "Sampled whole-process RSS during this engine; may retain previous-engine allocations; sampling can miss peaks. Not isolated engine peak memory."
+  },
+  {
+    "event": "completed"
+  }
+]
