@@ -4,6 +4,11 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'src/radia/vector_potential_solver.py'
+      - 'src/radia/topology_optimization.py'
+      - 'tests/test_vector_potential_bh_tail.py'
+      - 'tests/test_reduced_a_source_materialization.py'
+      - 'tests/test_hdiv_response_contract.py'
       - 'src/radia/eddy_aphi.py'
       - 'src/radia/eddy_axisym_ring.py'
       - 'src/radia/axisym_measure.py'
@@ -59,6 +64,11 @@ on:
   push:
     branches: [main]
     paths:
+      - 'src/radia/vector_potential_solver.py'
+      - 'src/radia/topology_optimization.py'
+      - 'tests/test_vector_potential_bh_tail.py'
+      - 'tests/test_reduced_a_source_materialization.py'
+      - 'tests/test_hdiv_response_contract.py'
       - 'src/radia/eddy_aphi.py'
       - 'src/radia/eddy_axisym_ring.py'
       - 'src/radia/axisym_measure.py'
