@@ -138,6 +138,64 @@ def _build_nu_of_b_interpolator(bh_data):
     return nu_of_b, b_max
 
 
+def _coercive_bh_law(B_values, H_values):
+    """Return NGSolve H(B) and coenergy laws with a vacuum high-field tail.
+
+    NGSolve ``BSpline`` objects have compact support: evaluation above the
+    final knot returns zero.  A nonlinear Newton step can temporarily leave
+    the tabulated range even when the accepted physical solution does not.
+    Using the bare spline there removes magnetic coercivity and leaves only
+    the source coupling, creating a nonphysical large-field energy branch.
+
+    Extend the final tabulated point to three times its B value (at least
+    5 T), as before, then continue H with the vacuum slope for *all* larger B.
+    The matching quadratic coenergy tail preserves value and first derivative
+    at the endpoint (up to the next-representable-float endpoint sample).
+    """
+
+    from ngsolve import BSpline, CF, IfPos
+
+    B_values = [float(value) for value in B_values]
+    H_values = [float(value) for value in H_values]
+    B_max_ext = max(B_values[-1] * 3.0, 5.0)
+    H_max_ext = (
+        H_values[-1] + (B_max_ext - B_values[-1]) / MU_0
+    )
+    h_spline = BSpline(
+        2, [0.0] + B_values + [B_max_ext],
+        H_values + [H_max_ext],
+    )
+    w_spline = h_spline.Integrate()
+
+    # At the exact final knot NGSolve may already select the compact-support
+    # exterior.  Sample the last representable interior value for the tail's
+    # additive constant; the difference from the endpoint is round-off scale.
+    B_endpoint_inside = float(np.nextafter(B_max_ext, 0.0))
+    w_max_ext = w_spline(CF(B_endpoint_inside))
+
+    def h_of_b(B):
+        delta = B - B_max_ext
+        return IfPos(
+            B_max_ext - B,
+            h_spline(B),
+            H_max_ext + delta / MU_0,
+        )
+
+    def w_star(B):
+        delta = B - B_max_ext
+        return IfPos(
+            B_max_ext - B,
+            w_spline(B),
+            w_max_ext + H_max_ext * delta
+            + 0.5 * delta * delta / MU_0,
+        )
+
+    return h_of_b, w_star, {
+        'B_max_ext': float(B_max_ext),
+        'H_max_ext': float(H_max_ext),
+        'B_endpoint_inside': B_endpoint_inside,
+    }
+
 class VectorPotentialSolver:
     """Reduced vector potential magnetostatic solver (Radia + NGSolve).
 
@@ -208,6 +266,8 @@ class VectorPotentialSolver:
 
         # Source field: B_s (vector, 3 components)
         self._B_source_cf = None
+        self._B_source_gridfunction = None
+        self._source_projection_diagnostics = None
         self._kelvin_source_cf = None
         self._radia_obj = None
 
@@ -393,7 +453,146 @@ class VectorPotentialSolver:
             Vector CF of dimension 3 giving B_s in Tesla.
         """
         self._B_source_cf = B_source_cf
+        self._B_source_gridfunction = None
+        self._source_projection_diagnostics = None
         self._kelvin_source_cf = kelvin_source_cf
+
+    # ------------------------------------------------------------------
+    # Source projection
+    # ------------------------------------------------------------------
+
+    def materialize_source_hdiv(self, order=None, *, tol=1.0e-12,
+                                maxiter=2000, bonus_intorder=None):
+        """Materialize the source B field as an NGSolve HDiv GridFunction.
+
+        Custom coefficient functions can provide ordinary floating-point
+        evaluation without implementing NGSolve's ``AutoDiffDiff`` scalar
+        type.  ``SymbolicEnergy`` requests that type while assembling a
+        nonlinear Newton Hessian even though the source field is constant with
+        respect to the trial function.  Projecting through NGSolve's native
+        HDiv space preserves the conforming B-field contract and gives the
+        automatic-differentiation machinery a GridFunction it can treat as a
+        constant coefficient.
+
+        This is a weak L2 projection, not ``GridFunction.Set`` interpolation.
+        The distinction matters for a non-polynomial Radia field on curved or
+        high-order meshes: interpolation can retain a percent-level volume
+        error even when point samples in the aperture look converged.  The
+        interpolation is nevertheless a useful *initial guess* for the same
+        weak mass equation.  Starting CG from it avoids spending thousands of
+        iterations rediscovering the smooth source while preserving the final
+        weak-projection contract.  A local mass preconditioner keeps the
+        residual correction practical for the large HDiv spaces used by the
+        nonlinear reduced-A validation route.
+
+        The caller owns the surrounding ``ngsolve.TaskManager`` context.
+        The mesh must contain physical coordinates only; Kelvin source
+        pullbacks require their own projection contract.
+        """
+        from ngsolve import (BilinearForm, GridFunction, HDiv, InnerProduct,
+                             LinearForm, Preconditioner, dx)
+        from ngsolve.krylovspace import CGSolver
+
+        if self._B_source_cf is None:
+            raise RuntimeError("Set source field first")
+        if self._kelvin_region:
+            raise ValueError("HDiv source projection requires a physical-only mesh")
+        projection_order = self.order if order is None else int(order)
+        if projection_order < 1:
+            raise ValueError("HDiv source projection order must be at least one")
+        projection_tol = float(tol)
+        projection_maxiter = int(maxiter)
+        if not np.isfinite(projection_tol) or projection_tol <= 0.0:
+            raise ValueError(
+                "HDiv source projection tolerance must be positive and finite")
+        if projection_maxiter < 1:
+            raise ValueError(
+                "HDiv source projection maxiter must be at least one")
+        integration_bonus = (
+            max(3, projection_order) if bonus_intorder is None
+            else int(bonus_intorder)
+        )
+        if integration_bonus < 0:
+            raise ValueError(
+                "HDiv source projection bonus_intorder must be nonnegative")
+
+        original_source = self._B_source_cf
+        source_space = HDiv(self.mesh, order=projection_order)
+        source = GridFunction(source_space, name="B_source_hdiv")
+        trial = source_space.TrialFunction()
+        test = source_space.TestFunction()
+        mass = BilinearForm(source_space, symmetric=True)
+        mass += InnerProduct(trial, test) * dx
+        preconditioner = Preconditioner(mass, "local")
+        rhs = LinearForm(source_space)
+        rhs += InnerProduct(original_source, test) * dx(
+            bonus_intorder=integration_bonus)
+        mass.Assemble()
+        rhs.Assemble()
+        # Use NGSolve's own HDiv interpolation only as the initial iterate.
+        # ``initialize=False`` below then solves the unchanged weak mass
+        # equation to the requested tolerance, so the returned field is not an
+        # interpolation substitute.  This is particularly effective for the
+        # smooth free-space coil field on large curved TET meshes.
+        source.Set(original_source)
+        initial_residual = rhs.vec.CreateVector()
+        initial_residual.data = mass.mat * source.vec - rhs.vec
+        rhs_norm = float(np.linalg.norm(rhs.vec.FV().NumPy()))
+        initial_relative_residual = float(
+            np.linalg.norm(initial_residual.FV().NumPy())
+            / max(rhs_norm, 1.0e-30)
+        )
+        inverse = CGSolver(
+            mat=mass.mat,
+            pre=preconditioner.mat,
+            maxiter=projection_maxiter,
+            tol=projection_tol,
+            printrates=False,
+        )
+        if initial_relative_residual <= projection_tol:
+            projection_iterations = 0
+        else:
+            inverse.Solve(rhs=rhs.vec, sol=source.vec, initialize=False)
+            projection_iterations = int(inverse.iterations)
+        projection_residual = rhs.vec.CreateVector()
+        projection_residual.data = mass.mat * source.vec - rhs.vec
+        relative_residual = float(
+            np.linalg.norm(projection_residual.FV().NumPy())
+            / max(rhs_norm, 1.0e-30)
+        )
+        residual_limit = max(10.0 * projection_tol, 100.0 * np.finfo(float).eps)
+        projection_converged = bool(
+            np.all(np.isfinite(source.vec.FV().NumPy()))
+            and np.isfinite(relative_residual)
+            and relative_residual <= residual_limit)
+        projection_diagnostics = {
+            "kind": "weak-l2",
+            "order": int(projection_order),
+            "ndof": int(source_space.ndof),
+            "tolerance": projection_tol,
+            "maximum_iterations": projection_maxiter,
+            "iterations": projection_iterations,
+            "converged": projection_converged,
+            "algebraic_relative_residual": relative_residual,
+            "relative_residual_limit": residual_limit,
+            "initial_guess": "ngsolve-hdiv-interpolation",
+            "initial_algebraic_relative_residual":
+                initial_relative_residual,
+            "bonus_intorder": int(integration_bonus),
+            "preconditioner": "local-mass",
+        }
+        self._source_projection_diagnostics = projection_diagnostics
+        if not projection_converged:
+            error = RuntimeError(
+                "HDiv source L2 projection failed its true-residual contract: "
+                f"{relative_residual:.6e} > {residual_limit:.6e} "
+                f"after {projection_iterations} iterations")
+            error.source_projection_diagnostics = dict(
+                projection_diagnostics)
+            raise error
+        self._B_source_cf = source
+        self._B_source_gridfunction = source
+        return source
 
     # ------------------------------------------------------------------
     # Linear solver
@@ -595,16 +794,9 @@ class VectorPotentialSolver:
                 B_unique.append(B_sorted[i])
                 H_unique.append(H_sorted[i])
 
-        # Extend to high B with vacuum slope (dH/dB ~ 1/mu_0)
-        B_max_ext = max(B_unique[-1] * 3, 5.0)
-        H_max_ext = H_unique[-1] + (1.0 / MU_0) * (B_max_ext - B_unique[-1])
-        B_tab_ext = B_unique + [B_max_ext]
-        H_tab_ext = H_unique + [H_max_ext]
-
-        # BSpline for H(B): len(knots) = len(values) + 1
-        h_of_b_spline = BSpline(2, [0] + B_tab_ext, H_tab_ext)
-        # Coenergy: w*(B) = integral_0^B H(B') dB'
-        w_star_bspline = h_of_b_spline.Integrate()
+        # The spline is compactly supported; keep vacuum coercivity beyond
+        # its last knot during Newton trial steps and post-processing.
+        h_of_b, w_star, _ = _coercive_bh_law(B_unique, H_unique)
 
         # FE space: HCurl with nograds gauge
         if dirichlet == 'default':
@@ -642,7 +834,7 @@ class VectorPotentialSolver:
         # Iron: w*(|B|) from BSpline
         for mat in iron_mats:
             a += SymbolicEnergy(
-                w_star_bspline(B_mag_safe),
+                w_star(B_mag_safe),
                 definedon=self.mesh.Materials(mat))
 
         # Source coupling: -nu_0 * B_s . curl(A_r)
@@ -738,7 +930,7 @@ class VectorPotentialSolver:
 
         # H from inverted B-H: H = nu_eff * B where nu_eff = H(|B|) / |B|
         B_mag_post = sqrt(InnerProduct(B_cf, B_cf) + 1e-30)
-        nu_eff = h_of_b_spline(B_mag_post) / B_mag_post
+        nu_eff = h_of_b(B_mag_post) / B_mag_post
         iron_indicator = self._build_domain_indicator()
         from ngsolve import CF
         nu_total = iron_indicator * nu_eff + (1 - iron_indicator) * (1.0 / MU_0)
