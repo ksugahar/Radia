@@ -15,6 +15,8 @@ import uuid
 from urllib.parse import urlsplit
 from urllib.request import url2pathname
 
+from . import __version__
+
 BASELINE = {
     "radia-meta": "meta",
     "radia-build123d": "build123d",
@@ -234,7 +236,9 @@ def doctor(expected_root: Path | None = None, expected_version: str | None = Non
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--version", action="version", version=metadata.version("radia-mcp"))
+    # Source-checkout launchers do not require installed distribution metadata.
+    # doctor() separately checks the installed distribution and source identity.
+    parser.add_argument("--version", action="version", version=__version__)
     commands = parser.add_subparsers(dest="mode", required=True)
     serve = commands.add_parser("serve", help="Run a catalog server without launcher wrappers")
     serve.add_argument("server")
