@@ -35,16 +35,24 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _source_git_command(root: Path, *arguments: str) -> list[str]:
+    # MATLAB may run under a different authenticated account than checkout.
+    # Trust only the explicitly selected source, without changing Git config.
+    source = root.resolve()
+    return ["git", "-c", f"safe.directory={source.as_posix()}",
+            "-C", str(source), *arguments]
+
+
 def _git_head(root: Path = ROOT) -> str:
     return subprocess.check_output(
-        ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
+        _source_git_command(root, "rev-parse", "HEAD"), text=True
     ).strip()
 
 
 def _require_clean_source(root: Path = ROOT) -> None:
     for arguments in (("diff", "--quiet", "HEAD", "--"),
                       ("diff", "--cached", "--quiet", "HEAD", "--")):
-        if subprocess.run(["git", "-C", str(root), *arguments], check=False).returncode:
+        if subprocess.run(_source_git_command(root, *arguments), check=False).returncode:
             raise RuntimeError("beam backend validation requires a clean source checkout")
 
 

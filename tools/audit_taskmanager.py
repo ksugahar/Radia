@@ -83,6 +83,7 @@ LANE_HELPERS = {
     "validation_test/omega_quadrature/diagnostics.py",
     "validation_test/sparsesolv/hiruma/hiruma_mesh.py",
     "docs/electric_machine/planar_vim_motor_helpers.py",
+    "docs/esim_spatial/esim_spatial_demo.py",
     "tests/_ngsolve_2606.py",
     "tests/axifem/_vol_mesh.py",
     "validation_test/cubit/cubit_202512_helpers.py",
