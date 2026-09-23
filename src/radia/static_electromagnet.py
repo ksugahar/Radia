@@ -160,7 +160,9 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     """Solve one static electromagnet through the required H1 formulation.
 
     ``nonlinear_method="newton"`` selects quadrature-based PCHIP Newton for
-    orders one and two, with residual backtracking. It does not use a projected
+    orders one and two, with residual backtracking. It requires an explicit
+    ``nonlinear_material_sampling="integration_point"``; centroid sampling is
+    a different discrete material law and is rejected. It does not use a projected
     material state or Anderson mixing. ``nonlinear_residual_tolerance`` bounds
     its free-DOF equation residual; ``nonlinear_tolerance`` bounds field change.
 
@@ -198,6 +200,11 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     """
     if int(order) < 1:
         raise ValueError("order must be positive")
+    if (bh_table is not None and nonlinear_method == "newton"
+            and nonlinear_material_sampling != "integration_point"):
+        raise ValueError(
+            "Newton requires nonlinear_material_sampling='integration_point'; "
+            "element_centroid is a different material discretization")
     if source_projection_order is None:
         source_projection_order = (
             int(order) if source_potential_contract == "total_hodge"

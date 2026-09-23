@@ -368,7 +368,8 @@ def validate_fem_mesh(path: Path) -> dict[str, object]:
 
     from radia.kelvin_identify_ngsolve import has_kelvin_identification
 
-    mesh = ng.Mesh(str(path))
+    with ng.TaskManager():
+        mesh = ng.Mesh(str(path))
     contract = three_engine_material_contract()
     materials = set(map(str, mesh.GetMaterials()))
     boundaries = set(map(str, mesh.GetBoundaries()))

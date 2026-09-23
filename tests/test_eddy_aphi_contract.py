@@ -21,6 +21,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "validation_test" / "induction_heating"))
 
@@ -31,7 +33,7 @@ SIGMA = 5.8e7
 
 
 @pytest.fixture(scope="module")
-def wire():
+def wire(ngsolve_taskmanager):
     pytest.importorskip("ngsolve")
     pytest.importorskip("netgen.occ")
     from aphi_round_wire_validation import build_wire_mesh

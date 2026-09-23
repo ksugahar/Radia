@@ -77,6 +77,11 @@ CALLER_EXCLUDE = [
     "**/*.ipynb",
 ]
 LANE_HELPERS = {
+    "validation_test/eddy_current_analytical_validation/axisym_sibc_reference.py",
+    "validation_test/omega_quadrature/ctype.py",
+    "validation_test/omega_quadrature/esrf6.py",
+    "validation_test/omega_quadrature/diagnostics.py",
+    "validation_test/sparsesolv/hiruma/hiruma_mesh.py",
     "docs/electric_machine/planar_vim_motor_helpers.py",
     "tests/_ngsolve_2606.py",
     "tests/axifem/_vol_mesh.py",

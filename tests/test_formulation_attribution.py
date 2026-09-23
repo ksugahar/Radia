@@ -1,13 +1,6 @@
-"""A method renamed off a product has to carry its own attribution.
+"""Require published formulation citations and canonical bibliography entries.
 
-The mixed total/reduced Omega route used to be named after a commercial
-package. Taking that name out is only half of the job: what replaced it is a
-published method, and a formulation with neither a product name nor a citation
-reads as though it came from nowhere. So the citation is required where the
-formulation is defined, and the entries it points at are required to exist in
-the canonical bibliography.
-
-Historical artifact provenance is retained separately from this attribution contract.
+The total/reduced scalar-potential method is attributed where it is defined.
 """
 from __future__ import annotations
 

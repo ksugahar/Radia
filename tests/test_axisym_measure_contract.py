@@ -20,6 +20,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
+
 ROOT = Path(__file__).resolve().parents[1]
 
 # Axisymmetric code: every integral here is over a meridian mesh.

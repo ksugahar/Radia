@@ -201,4 +201,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    from ngsolve import TaskManager
+    with TaskManager():
+        main()
