@@ -175,7 +175,8 @@ extern void cHACApK_calc_vec(
   int *lod,
   int i_bemv,
   int *lmsk,
-  int ld);
+  int ld,
+  double *workspace);
 
 extern int cHACApK_acaplus(
   double *zaa, // zaa(ndl,kmax)
