@@ -15,6 +15,11 @@ import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
 
+_acceptance_spec = importlib.util.spec_from_file_location(
+    "radia_release_acceptance", Path(__file__).resolve().with_name("release_acceptance.py"))
+acceptance_module = importlib.util.module_from_spec(_acceptance_spec)
+_acceptance_spec.loader.exec_module(acceptance_module)
+
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 HASH = re.compile(r"[0-9a-f]{64}\Z")
 STEPS = {"pip-check", "full6", "focused", "pip-freeze"}
@@ -159,7 +164,8 @@ def verify_host(acceptance, full, junit, identity, host):
     require(len(suites) == 1 and suites[0].get("tests") == "7"
             and all(suites[0].get(k) == "0" for k in ("failures", "errors", "skipped")),
             "Focused suite totals mismatch")
-    require(suites[0].get("hostname", "").lower() == host, "Wrong acceptance host")
+    hostnames = acceptance_module.RELEASE_ACCEPTANCE_HOSTNAMES.get(host, {host})
+    require(suites[0].get("hostname", "").lower() in hostnames, "Wrong acceptance host")
     require(all(math.isfinite(float(node.get("time", "nan")))
                 and float(node.get("time", "nan")) >= 0 for node in suites + cases),
             "Nonfinite or invalid focused duration")
@@ -192,10 +198,6 @@ def verify_artifact(api, run, commit, wheel_dir, context_dir, expected_hash):
     # so this gate cannot quietly ask for fewer machines than policy requires.
     # It used to name two hosts of its own, one of which is not an acceptance
     # target at all, and would have published on two of the four.
-    spec = importlib.util.spec_from_file_location(
-        "radia_release_acceptance", Path(__file__).resolve().with_name("release_acceptance.py"))
-    acceptance_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(acceptance_module)
     RELEASE_ACCEPTANCE_HOSTS = acceptance_module.RELEASE_ACCEPTANCE_HOSTS
     missing = []
     for host in RELEASE_ACCEPTANCE_HOSTS:

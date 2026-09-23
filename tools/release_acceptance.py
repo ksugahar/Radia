@@ -20,6 +20,15 @@ tooling's SSH, MATLAB and filesystem assumptions.
 # validation_test/<suite>/results/candidate_<sha9>/<host>/, in gate order.
 RELEASE_ACCEPTANCE_HOSTS = ("lab", "100", "mdx1", "mdx2")
 
+# Evidence directories use deployment roles; JUnit records the OS hostname.
+# 100 is an SSH/deployment alias for INTEL11, not a second physical machine.
+RELEASE_ACCEPTANCE_HOSTNAMES = {
+    "lab": frozenset({"lab"}),
+    "100": frozenset({"100", "intel11"}),
+    "mdx1": frozenset({"mdx1"}),
+    "mdx2": frozenset({"mdx2"}),
+}
+
 # Human names, for messages that name a machine rather than a directory.
 RELEASE_ACCEPTANCE_HOST_LABELS = {
     "lab": "LAB",

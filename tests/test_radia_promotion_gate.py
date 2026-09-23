@@ -83,6 +83,17 @@ def test_host_and_focused_failure():
         gate.verify_host(a, f, x.replace(b'failures="0"', b'failures="1"'), identity, "lab")
 
 
+def test_100_role_accepts_actual_intel11_hostname_only_for_that_target():
+    a, f, xml, identity = evidence()
+    root = ET.fromstring(xml)
+    root.find('.//testsuite').set('hostname', 'INTEL11')
+    actual = ET.tostring(root)
+    gate.verify_host(a, f, actual, identity, '100')
+    for wrong_target in ('lab', 'mdx1', 'mdx2'):
+        with pytest.raises(ValueError, match='Wrong acceptance host'):
+            gate.verify_host(a, f, actual, identity, wrong_target)
+
+
 @pytest.mark.parametrize("key", ["residual", "linear_parity", "order"])
 def test_bool_is_not_a_numerical_result(key):
     a, f, x, identity = evidence()
