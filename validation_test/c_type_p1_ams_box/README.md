@@ -87,7 +87,7 @@ Linear solves (`--reduced-a-solver`):
   solves), refactorised per system.  It wants the **ungauged** system
   (`--gauge-epsilon 0`): the reduced right-hand side lies in the range of the
   singular curl-curl operator, so CG converges on it, whereas the ε-mass term
-  that AMS needs makes IC(0)-CG stall.  Diagonal scaling together with ABMC
+  used by the default AMS route makes IC(0)-CG stall in this lane. Diagonal scaling together with ABMC
   ordering multiplied the iteration count twentyfold in the diagnostic, so it
   stays off.
 * `direct`: METIS SPD PARDISO, the cross-check.
@@ -105,6 +105,33 @@ The CLI writes `completed` and `passed` in its result. `passed` means all
 requested engines converged, not that an accuracy or timing certificate was
 met. Nonconvergence exits nonzero after saving the results. Runtime exceptions
 also save a failed JSON with the exception and options before propagating.
+
+### Beta-zero measurements (2026-09-23)
+
+The [measurement record](results/beta_zero_ams_20260923.json) compares two
+AMS modes on mdx2, NGSolve 6.2.2606, MKL with one thread. Both use a true
+linear residual tolerance of `1e-6`, nonlinear residual tolerance of `1e-8`,
+and flux-change tolerance of `2e-5`. Values below are single measurements.
+
+| Elements | NGSolve threads | Beta-zero Newton / whole process (s) | Penalty AMS Newton / whole process (s) |
+|---|---|---|---|
+| 67,397 | 2 | 9.85 / 41.97 | 12.55 / 42.39 |
+| 67,397 | 8 | 5.64 / 18.00 | 7.10 / 19.60 |
+| 195,309 | 8 | 21.51 / 72.44 | 27.09 / 78.89 |
+
+Newton time includes assembly, preconditioner setup, CG and line search,
+but excludes source projection and element helper setup. Beta-zero's
+67,397-element Newton time was 13.99 s at one thread. On the fixed field
+stencil the two modes differ by relative L2 norm below `5.4e-8`; this measures
+agreement between these Radia modes, not error against an exact solution.
+Both large-mesh two-thread runs reached the 150 s wall-time limit, so their
+speed and convergence are not established. A separate small-mesh beta-zero
+run with linear tolerance `1e-9` stalled at Newton step 7; omitting gradient
+correction does not eliminate finite-precision compatibility problems.
+
+The native/Python option is opt-in. MATLAB can pass it through the existing
+`radia.python.sparsesolv` batch entry point; the native MEX AMS options and
+the production solver defaults are unchanged.
 
 **mixed_omega** -- first-order total/reduced scalar potential of
 `radia.kelvin_solver` on the same mesh: air and coil are the reduced region,
