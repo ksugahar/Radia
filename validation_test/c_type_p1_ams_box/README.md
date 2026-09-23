@@ -202,6 +202,13 @@ add Krylov iterations and is not necessarily faster. History records the
 number of true-residual checks; residual samples are not an every-iteration
 trace when N exceeds 1. Other linear backends reject nondefault intervals.
 
+`--ams-print-level 1` enables native setup and application timing output.
+Redirect stdout to retain it. Application breakdowns sample the first 25
+applications after each hierarchy construction/update, not the entire solve.
+Gradient/nodal correction times include residual computation, restriction,
+AMG application and prolongation; they are not isolated coarsest-level solve
+times. Keep the JSON phase totals as the whole-run timing authority.
+
 `results/lab_20260922_<mesh>_<variant>.json`, meshes reproducible from
 `results/meshes/*.json` (scale, sizes, SHA-256).  "tight" stops at relative
 residual 1e-6 and |dB|/B_sat 2e-5; "loose" at relative residual 1e-3 with no

@@ -352,3 +352,14 @@ def test_periodic_true_residual_checks_preserve_linear_field(box_mesh):
     with pytest.raises(RuntimeError, match="true relative residual"):
         _engine(box_mesh, "ams", cg_check_interval=100,
                 cg_max_iterations=2).run_linear(1000., _points())
+
+
+def test_native_ams_diagnostics_preserve_the_linear_solution(box_mesh):
+    engine = _engine(box_mesh, "ams", ams_print_level=1)
+    field, stats, _ = engine.run_linear(1000., _points())
+    expected, _, _ = _engine(box_mesh, "ams").run_linear(1000., _points())
+    np.testing.assert_allclose(field, expected, rtol=1e-8, atol=1e-9)
+    assert stats["history"][0]["relative_residual"] <= engine.cg_tolerance
+    assert engine.describe()["ams_print_level"] == 1
+    with pytest.raises(ValueError, match="ams_print_level"):
+        _engine(box_mesh, "ams", ams_print_level=2)
