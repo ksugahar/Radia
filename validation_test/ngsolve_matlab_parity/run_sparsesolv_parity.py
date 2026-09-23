@@ -57,6 +57,9 @@ def main():
                                 root/"matlab/+radia/setup.m",
                                 root/"tests/matlab/sparsesolv_python_reference.py",
                                 root/"tests/matlab/test_beam_transfer_mex.m",
+                                root/"tests/matlab/test_hacapk_rank_cap.m",
+                                root/"src/ext/HACApK/cHACApK_base.c",
+                                root/"src/core/rad_hacapk_hdiv.cpp",
                                 root/"tests/matlab/beam_transfer_python_reference.py",
                                 root/"src/core/rad_beam_transfer.cpp",
                                 root/"src/lib/rad_beam_transfer_pybind.cpp",
@@ -80,7 +83,8 @@ def main():
             raise RuntimeError("MATLAB resolved a different MEX")
         eng.workspace["testfiles"] = [str(root/"tests/matlab/test_sparsesolv_mex.m"),
                                       str(root/"tests/matlab/test_mex_runtime_setup.m"),
-                                      str(root/"tests/matlab/test_beam_transfer_mex.m")]
+                                      str(root/"tests/matlab/test_beam_transfer_mex.m"),
+                                      str(root/"tests/matlab/test_hacapk_rank_cap.m")]
         eng.eval("r = runtests(testfiles); disp(table(r));", nargout=0)
         record["tests"] = json.loads(eng.eval("jsonencode(struct('names',{string({r.Name})},'passed',[r.Passed],'failed',[r.Failed],'incomplete',[r.Incomplete],'duration',[r.Duration]))"))
         record["passed"] = bool(eng.eval("~isempty(r) && all([r.Passed])"))

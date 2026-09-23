@@ -27,6 +27,9 @@ on:
       - 'tests/test_mixed_omega_newton.py'
       - 'tests/test_mixed_omega_review_fixes.py'
       - 'tests/test_c_type_p1_box_lane.py'
+      - 'src/core/rad_hacapk*'
+      - 'matlab/+radia/HACApKChargeGram.m'
+      - 'tests/matlab/test_hacapk_rank_cap.m'
       - 'src/ext/HACApK/**'
       - 'tests/test_hdiv_chargegram_build_safety.py'
       - 'src/ext/sparsesolv/**'
@@ -89,6 +92,9 @@ on:
       - 'tests/test_mixed_omega_newton.py'
       - 'tests/test_mixed_omega_review_fixes.py'
       - 'tests/test_c_type_p1_box_lane.py'
+      - 'src/core/rad_hacapk*'
+      - 'matlab/+radia/HACApKChargeGram.m'
+      - 'tests/matlab/test_hacapk_rank_cap.m'
       - 'src/ext/HACApK/**'
       - 'tests/test_hdiv_chargegram_build_safety.py'
       - 'src/ext/sparsesolv/**'
@@ -172,7 +178,7 @@ jobs:
             $changed = $diff
           }
           $required = $diffFailed -or '${{ github.event_name }}' -eq 'workflow_dispatch'
-          $required = $required -or [bool]($changed -match '^(src/ext/sparsesolv/|src/matlab/|matlab/\+radia/\+sparsesolv/|tests/matlab/.*sparsesolv|validation_test/ngsolve_matlab_parity/run_sparsesolv|CMakeLists.txt|Build.ps1|\.github/workflows/sparsesolv.yml)')
+          $required = $required -or [bool]($changed -match '^(src/ext/HACApK/|src/core/rad_hacapk|matlab/\+radia/HACApKChargeGram\.m|tests/matlab/test_hacapk_rank_cap\.m|src/ext/sparsesolv/|src/matlab/|matlab/\+radia/\+sparsesolv/|tests/matlab/.*sparsesolv|validation_test/ngsolve_matlab_parity/run_sparsesolv|CMakeLists.txt|Build.ps1|\.github/workflows/sparsesolv.yml)')
           $required = $required -or [bool]($changed -match '^matlab/(python_api_parity_manifest.json|\+radia/\+python/(sparsesolv|electromagnetValidation|esrfExamples|staticElectromagnet)\.m)')
           $required = $required -or [bool]($changed -match '^(matlab/\+radia/(setup\.m|\+internal/callMex\.m)|tests/matlab/test_mex_runtime_setup\.m)$')
           $required = $required -or [bool]($changed -match '^(src/(core/rad_beam_transfer|lib/rad_beam_transfer_pybind|matlab/radia_beam_mex_commands|radia/beam\.py)|matlab/\+radia/\+beam/(canonicalBodyHamiltonianJet|propagateVariationalMap)\.m|tests/matlab/(test_beam_transfer_mex\.m|beam_transfer_python_reference\.py)|validation_test/accelerator/benchmark_beam_transfer_mex_python\.py)')
