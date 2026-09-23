@@ -1235,11 +1235,18 @@ class HDivMMMElementGenerationLinearization:
 
 @dataclass(frozen=True)
 class HDivMMMBlockInsertionResponse:
-    """Exact fixed-active-set response of a finite candidate-element bundle."""
+    """Fixed-active-set response of a finite candidate-element bundle.
+
+    ``candidate_directional_reduction`` is true for the proposal-only
+    one-Ritz-coordinate-per-element model.  Such a response must not be
+    reported as a full-block exact oracle; the optimizer still accepts a move
+    only after a complete active-set physical solve.
+    """
     selected_elements: np.ndarray
     candidate_state: np.ndarray
     response_delta: np.ndarray
     schur_complement: np.ndarray
+    candidate_directional_reduction: bool = False
 
 
 @dataclass(frozen=True)
@@ -2182,13 +2189,15 @@ def linearize_hdiv_mmm_element_generation(*, charge_gram, fes, inv_chi,
 
 def hdiv_mmm_block_insertion_response(linearization,
         selected_elements) -> HDivMMMBlockInsertionResponse:
-    """Evaluate a full-strength multi-element insertion from one reduced Schur matrix.
+    """Evaluate a multi-element insertion from one reduced Schur matrix.
 
     ``linearize_hdiv_mmm_element_generation`` has already eliminated every
     active DOF.  This routine therefore solves only the candidate DOFs in the
     requested bundle, while retaining all candidate-candidate interactions.
-    It is algebraically identical to enlarging and solving the active system,
-    but does not repeat an H-matrix solve during combinatorial search.
+    A full-block linearization is algebraically identical to enlarging and
+    solving the active system.  A directional linearization is explicitly a
+    proposal-only Ritz model, identified by the matching result flag; either
+    route avoids repeating an H-matrix solve during combinatorial search.
     """
     selected=np.asarray(selected_elements,dtype=np.int64).reshape(-1)
     if selected.size==0 or np.unique(selected).size!=selected.size:
@@ -2213,7 +2222,8 @@ def hdiv_mmm_block_insertion_response(linearization,
     response=(np.asarray(linearization.reduced_response_matrix,dtype=float)[:,local]
               @state)
     return HDivMMMBlockInsertionResponse(
-        selected,state,np.asarray(response).reshape(-1),schur)
+        selected,state,np.asarray(response).reshape(-1),schur,
+        bool(linearization.candidate_directional_reduction))
 
 
 def hdiv_mmm_removal_group_responses(linearization,removal_groups,*,
@@ -2235,6 +2245,10 @@ def hdiv_mmm_removal_group_responses(linearization,removal_groups,*,
     if not isinstance(linearization,HDivMMMElementGenerationLinearization):
         raise TypeError(
             "linearization must be HDivMMMElementGenerationLinearization")
+    if linearization.candidate_directional_reduction:
+        raise ValueError(
+            "exact removal responses require a full-block candidate "
+            "linearization, not a directional Ritz proposal")
     available=np.asarray(
         linearization.candidate_elements,dtype=np.int64).reshape(-1)
     selected=(available.copy() if full_elements is None else
@@ -4210,6 +4224,11 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 linear_incident_response=np.ascontiguousarray(
                     objective_projection@np.asarray(
                         incident_response,dtype=float).reshape(-1),dtype=float)
+        unprojected_nonlinear_response=(
+            response_transform is not None and objective_projection is None)
+        linear_screen_band=(band if linear_response_matrix.shape[0]==band.size
+                            else np.ones(linear_response_matrix.shape[0],
+                                         dtype=float))
 
         tsvd_proposal=None
         tsvd_material_data=None
@@ -4229,7 +4248,15 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             candidate_dof_count=candidate_dof_count)
         use_directional_candidate_reduction=(
             int(fes.ndof)>4096 or candidate_dof_count>64)
-        if (len(candidates)<=8 and working_adjoint_count>0 and
+        if unprojected_nonlinear_response:
+            # Without an analytic transform Jacobian there is no valid map
+            # from design-space bands back to raw observation rows.  Retain
+            # every raw adjoint and let the candidate selector evaluate the
+            # nonlinear transform exactly.  This is a correctness lane; large
+            # production transforms should provide their analytic Jacobian.
+            proposal_adjoint_rows=np.arange(
+                linear_response_matrix.shape[0],dtype=np.int64)
+        elif (len(candidates)<=8 and working_adjoint_count>0 and
                 not use_directional_candidate_reduction):
             # A small *element* front is not necessarily a cheap exact front:
             # one BDM1 HEX still owns 36 candidate DOFs, and every retained
@@ -4287,7 +4314,8 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                     charge_gram=charge_gram,inv_chi=inv_chi,
                     dof_blocks=removal_blocks,state=approximate_state,
                     response_matrix=linear_response_matrix,
-                    screen_context=screen_context,response_band=band))
+                    screen_context=screen_context,
+                    response_band=linear_screen_band))
             for removal_column,element in enumerate(removal_candidates):
                 local_material=removal_linear_material[:,removal_column]
                 if objective_projection is None:
@@ -4509,9 +4537,9 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             candidate_screen_context=screen_context,
             candidate_direction_reduction=(
                 use_directional_candidate_reduction),
-            screen_response_band=band)
+            screen_response_band=linear_screen_band)
         if (working_adjoint_count>0 and
-                proposal_adjoint_rows.size!=target.size):
+                proposal_adjoint_rows.size!=linear_response_matrix.shape[0]):
             direct_capture={}
             def capture_direct_candidates(elements,approximate_delta,
                                           approximate_state,
@@ -5042,7 +5070,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                     proposal_adjoint_rows),
                 candidate_direction_reduction=(
                     use_directional_candidate_reduction),
-                screen_response_band=band)
+                screen_response_band=linear_screen_band)
             if len(lin.candidate_elements)==0:
                 stop_reason="full_solve_rejected_removal_only_tsvd";break
 
@@ -5170,7 +5198,8 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                         stop_reason="exact_nonmonotone_beam_in_progress"
                         continue
                     stop_reason=("exact_nonmonotone_beam_exhausted" if
-                        exact_beam_width else "no_improving_exact_bundle")
+                        exact_beam_width else
+                        "no_improving_proposal_model_bundle")
                     break
             # The reduced Schur is a proposal oracle; acceptance remains tied
             # to a fresh complete solve and the topology gate.
