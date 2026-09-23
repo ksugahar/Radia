@@ -2171,10 +2171,15 @@ Workarounds for a current-driven coil source:
 KELVIN_SOURCE_IN_OMEGA_FORM = """
 # Kelvin magnetostatics: mixed total/reduced Omega
 
+The total/reduced scalar-potential split of Simkin and Trowbridge
+(`simkin1979use`, doi:10.1002/nme.1620140308; the nonlinear three-dimensional
+treatment is `simkin1980three`, doi:10.1049/ip-b.1980.0052).
+
 Use this route for a compact current source surrounded by a high-permeability
 magnet and a periodic Kelvin exterior.  It deliberately avoids placing a
 reduced source field in iron: doing so makes a large source and correction
-cancel numerically in the high-mu material.
+cancel numerically in the high-mu material -- which is the cancellation the
+1979 paper introduced the total potential to avoid.
 
 ```python
 from ngsolve import TaskManager
