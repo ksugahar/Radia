@@ -208,6 +208,11 @@ applications after each hierarchy construction/update, not the entire solve.
 Gradient/nodal correction times include residual computation, restriction,
 AMG application and prolongation; they are not isolated coarsest-level solve
 times. Keep the JSON phase totals as the whole-run timing authority.
+Native builds with correction subphase diagnostics additionally report
+residual, restriction, auxiliary-cycle and prolongation samples. These
+subphases are contained within gradient/nodal correction times and must not
+be added again to the overall total. The auxiliary-cycle time still includes
+all AMG levels; it is not a coarsest-level-only measurement.
 
 `results/lab_20260922_<mesh>_<variant>.json`, meshes reproducible from
 `results/meshes/*.json` (scale, sizes, SHA-256).  "tight" stops at relative
