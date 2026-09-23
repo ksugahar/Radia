@@ -243,6 +243,13 @@
       "file": "test_optuna_sampler_wrappers.m",
       "oracle": null,
       "scope": "MATLAB sampler-state persistence and AutoSampler policy integration",
+      "test": "testBaseSamplerUpstreamNamedInterface"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_sampler_wrappers.m",
+      "oracle": null,
+      "scope": "MATLAB sampler-state persistence and AutoSampler policy integration",
       "test": "testGPProposalResumesWithHyperparametersAndRandomState"
     },
     {
@@ -250,7 +257,7 @@
       "file": "test_optuna_sampler_wrappers.m",
       "oracle": null,
       "scope": "MATLAB sampler-state persistence and AutoSampler policy integration",
-      "test": "testAutoSamplerPolicyUsesGPAndNSGAIIIAtOptunaBudgets"
+      "test": "testAutoSamplerPolicyUsesTPEInsteadOfNSGAII"
     },
     {
       "classification": "matlab-integration",
