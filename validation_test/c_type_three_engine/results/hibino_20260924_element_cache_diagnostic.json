@@ -1,0 +1,29 @@
+{
+  "status": "single_element_diagnostic",
+  "element": 0,
+  "seconds": 0.0029812000002493733,
+  "cache": {
+    "enabled": true,
+    "size": 767,
+    "hits": 375,
+    "misses": 0,
+    "hit_rate": 1.0
+  },
+  "norm": 0.839962247302813,
+  "candidate_cache_rules": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+  ],
+  "uncached_seconds": 0.2392754999996214,
+  "relative_rhs_difference": 0.0
+}
