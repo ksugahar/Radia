@@ -246,6 +246,11 @@ _PYBIND_INTERNAL_NUMERICAL_COMMANDS = {
 }
 
 _PYBIND_INTERNAL_EXCLUSIONS = {
+    "_periodic_h1_single_interface": (
+        "NGSolve-owned periodic H1 space construction; MATLAB uses "
+        "radia.python.periodicH1 under the periodic-h1-space Python fallback "
+        "contract, not a standalone numerical MEX kernel"
+    ),
     "_compute_ho_bnd_nodes": "NGSolve-owned mesh/high-order boundary plumbing",
     "_volume_element_vertex_counts": "NGSolve-owned mesh inspection plumbing",
     "_TestPEECHACApKSanity": "Python regression-test helper, not a user API",
