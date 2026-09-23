@@ -940,6 +940,13 @@ def test_native_bdm1_directional_schur_matches_full_schur_projection():
         directional.candidate_response_delta[:,0],
         expected_response*(expected_rhs/expected_schur),
         rtol=3e-9,atol=3e-11)
+    directional_bundle=hdiv_mmm_block_insertion_response(
+        directional,directional.candidate_elements)
+    assert directional_bundle.candidate_directional_reduction
+    with pytest.raises(ValueError,match="full-block candidate linearization"):
+        hdiv_mmm_removal_group_responses(
+            directional,[directional.candidate_elements],
+            full_elements=directional.candidate_elements)
     partial=linearize_hdiv_mmm_element_generation(
         **common,candidate_selector=lambda elements,*_:elements,
         candidate_direction_reduction=True,
@@ -3665,3 +3672,39 @@ def test_sequential_vim_lp_reaches_volume_constrained_material_layout():
     result=optimize_vim_lp([0.5]*3,[1.0]*3,0.5,linearize,objective_weights=[1.0,0.0],move_limit=0.25,max_iterations=5)
     assert np.sum(result.density)<=1.5+1e-12
     assert result.density[0]>=result.density[2]
+
+
+def test_hdiv_mmm_nonlinear_transform_may_reduce_response_dimension():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+
+    mesh=MakeStructured3DMesh(hexes=False,nx=2,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(
+            fes,eps=1e-10,leafsize=256,eta=2.0,
+            internal_interfaces=True)
+    rng=np.random.default_rng(20260831)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    response_matrix=rng.normal(size=(2,fes.ndof))
+    active=np.zeros(mesh.ne,dtype=bool);active[0]=True
+    initial=linearize_hdiv_mmm_element_generation(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=active,
+        solve_tolerance=1e-11)
+    inserted=initial.response+initial.candidate_response_delta[:,0]
+    transform=lambda values:np.array([values[0]+0.25*values[1]**2])
+    target=transform(inserted)
+    volumes=np.asarray(ng.Integrate(1.0,mesh,element_wise=True))
+
+    result=grow_hdiv_mmm_by_superposition(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=active,
+        element_volumes=volumes,response_target=target,
+        response_band=[1e-8],volume_max=float(np.sum(volumes))+1e-14,
+        maximum_batch_elements=1,max_iterations=1,
+        solve_tolerance=1e-11,response_transform=transform)
+
+    assert result.converged
+    np.testing.assert_allclose(result.objective_response,target,rtol=0,atol=4e-12)
