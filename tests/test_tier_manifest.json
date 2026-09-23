@@ -92,7 +92,8 @@
         "tests/test_c_type_p1_box_lane.py",
         "tests/test_vector_potential_bh_tail.py",
         "tests/test_reduced_a_source_materialization.py",
-        "tests/test_hdiv_response_contract.py"
+        "tests/test_hdiv_response_contract.py",
+        "tests/test_hdiv_chargegram_build_safety.py"
       ]
     },
     "sparsesolv": {

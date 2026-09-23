@@ -1140,6 +1140,38 @@ typedef struct {
   int i_bemv;
 } fill_leaf_ctx;
 
+/* Fill one leaf exactly.  ACA's rank cap is a storage/performance guard, not
+ * a convergence criterion: accepting a block that merely hit kparam can
+ * violate the requested eps by O(1), and a symmetric matvec cannot repair
+ * that loss.  Saturated ACA leaves are therefore promoted to this dense path
+ * instead of silently retaining an unconverged factorization. */
+static int fill_dense_leaf_exact(
+  st_cHACApK_leafmtx leaf, int *lodl, int *lodt, int i_bemv)
+{
+  const int ndl = leaf->ndl;
+  const int ndt = leaf->ndt;
+  const int nstrtl = leaf->nstrtl;
+  const int nstrtt = leaf->nstrtt;
+  leaf->ltmtx = 2;
+  leaf->kt = 0;
+  leaf->a2 = NULL;
+  leaf->a1 = (double *) calloc((size_t)ndt*(size_t)ndl, sizeof(double));
+  if(leaf->a1 == NULL) {
+    fprintf(stderr, "sub cHACApK_fill_leafmtx_hyp; dense a1 allocation failed !\n");
+    fprintf(stderr, "ndt=%d ndl=%d\n",ndt,ndl);
+    return 0;
+  }
+  for (int il=0; il<ndl; il++) {
+    const int ill=il+nstrtl;
+    for (int it=0; it<ndt; it++) {
+      const int itt=it+nstrtt;
+      leaf->a1[it+ndt*il]=cHACApK_entry_ij(
+        lodl[ill],lodt[itt],i_bemv);
+    }
+  }
+  return 1;
+}
+
 static void fill_one_leaf_block(int idx, void *data) {
   fill_leaf_ctx *ctx = (fill_leaf_ctx*)data;
   int ip = idx + 1;  /* 0-based idx to 1-based ip */
@@ -1190,6 +1222,15 @@ static void fill_one_leaf_block(int idx, void *data) {
       return;
     }
 
+    /* Reaching kparam while both block dimensions are larger means ACA
+     * exhausted the rank budget; it does NOT mean the eps criterion passed.
+     * Dense promotion is the correctness-preserving fallback. */
+    if(kt >= kparam && kparam < ndl && kparam < ndt) {
+      free(zab); free(zaa);
+      fill_dense_leaf_exact(st_lf[ip],lodl,lodt,i_bemv);
+      return;
+    }
+
     st_lf[ip]->kt=kt;
     st_lf[ip]->a1 = (double *) calloc(ndt*kt,sizeof(double));
     st_lf[ip]->a2 = (double *) calloc(ndl*kt,sizeof(double));
@@ -1204,21 +1245,7 @@ static void fill_one_leaf_block(int idx, void *data) {
     free(zab); free(zaa);
 
   } else if(ltmtx==2) {
-    /* Dense block */
-    st_lf[ip]->a1 = (double *) calloc(ndt*ndl,sizeof(double));
-    if(st_lf[ip]->a1 == NULL) {
-      fprintf(stderr, "sub cHACApK_fill_leafmtx_hyp; a1 Memory allocation failed !\n");
-      fprintf(stderr, "ip=%d ndt=%d ndl=%d\n",ip,ndt,ndl);
-      return;
-    }
-    for (int il=0; il<ndl; il++) {
-      int ill=il+nstrtl;
-      for (int it=0; it<ndt; it++) {
-        int itt=it+nstrtt;
-        double val = cHACApK_entry_ij(lodl[ill],lodt[itt],i_bemv);
-        st_lf[ip]->a1[it+ndt*il] = val;
-      }
-    }
+    fill_dense_leaf_exact(st_lf[ip],lodl,lodt,i_bemv);
   }
 }
 
