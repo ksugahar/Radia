@@ -1,0 +1,10 @@
+{
+  "status": "allocation_diagnostic_no_field_calculation",
+  "points": 855500,
+  "mapping_and_list_s": 0.26882519999981014,
+  "rss_baseline_bytes": 83431424,
+  "rss_after_bytes": 307515392,
+  "rss_increase_bytes": 224083968,
+  "coordinate_and_field_float64_payload_bytes": 41064000,
+  "warning": "RSS excludes native field cache construction and solver matrices; not total benchmark memory."
+}
