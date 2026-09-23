@@ -1,0 +1,30 @@
+{
+  "status": "diagnostic_not_accuracy_certificate",
+  "rows": [
+    {
+      "intorder": null,
+      "core_increments": [
+        0.0001627804490890059,
+        0.01001493225358194
+      ],
+      "ratio": 61.52417142003292
+    },
+    {
+      "intorder": 9,
+      "core_increments": [
+        0.00016256207354985888,
+        0.011860429151677931
+      ],
+      "ratio": 72.95938648346693
+    },
+    {
+      "intorder": 13,
+      "core_increments": [
+        0.0001629090667959839,
+        0.012004721567847864
+      ],
+      "ratio": 73.6897080313016
+    }
+  ],
+  "normalization": "Fine norm for both increments; median-plane axial projection and campaign core mask"
+}
