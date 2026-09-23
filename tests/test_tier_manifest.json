@@ -89,7 +89,10 @@
         "tests/test_coil_axis_closed_form.py",
         "tests/test_mixed_omega_newton.py",
         "tests/test_mixed_omega_review_fixes.py",
-        "tests/test_c_type_p1_box_lane.py"
+        "tests/test_c_type_p1_box_lane.py",
+        "tests/test_vector_potential_bh_tail.py",
+        "tests/test_reduced_a_source_materialization.py",
+        "tests/test_hdiv_response_contract.py"
       ]
     },
     "sparsesolv": {
