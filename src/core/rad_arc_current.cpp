@@ -235,7 +235,8 @@ void radTArcCur::B_compElliptic(radTField* FieldPtr)
 		if (FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_) {
 			const auto b = (r < 1.e-5*R_min)
 				? RadArcSection::FullCircleAxis(r,z,R_min,R_max,Height)
-				: RadArcSection::Field(r,z,R_min,R_max,Height,0.,TwoPi);
+				: RadArcSection::Field(r,z,R_min,R_max,Height,0.,TwoPi,
+				                       FieldPtr->CompCriterium.RelPrecArc);
 			IntForBx = ConstForJ*J_azim*b[0]*cos(phi_obs);
 			IntForBy = ConstForJ*J_azim*b[0]*sin(phi_obs);
 			IntForBz = ConstForJ*J_azim*b[2];
@@ -247,7 +248,8 @@ void radTArcCur::B_compElliptic(radTField* FieldPtr)
 
 		if (FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_) {
 			const auto b = RadArcSection::Field(r, z, R_min, R_max, Height,
-			                                    Phi_min-phi_obs, Phi_max-phi_obs);
+			                                    Phi_min-phi_obs, Phi_max-phi_obs,
+			                                    FieldPtr->CompCriterium.RelPrecArc);
 			const double c = cos(phi_obs), s = sin(phi_obs);
 			IntForBx = ConstForJ*J_azim*(c*b[0]-s*b[1]);
 			IntForBy = ConstForJ*J_azim*(s*b[0]+c*b[1]);

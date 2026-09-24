@@ -101,8 +101,21 @@ template<class F> Vec Gauss4(const F& f, double lo, double hi)
     return result;
 }
 
+// Default relative tolerance of the adaptive angular quadrature (round-off level).
+constexpr double DefaultRelTol = 1.e-9;
+
+// Absolute tolerance scale that accompanies a relative tolerance. The default
+// keeps the historical constant exactly so default results are bit-identical.
+inline double AbsTolScale(double rtol)
+{
+    if(!(std::isfinite(rtol) && rtol >= 1.e-12 && rtol <= 1.e-3))
+        throw std::invalid_argument("Arc quadrature relative tolerance must lie in [1e-12, 1e-3]");
+    return rtol == DefaultRelTol ? 1.e-12 : 1.e-3*rtol;
+}
+
 template<class F> Vec Refine(const F& f, double lo, double hi,
-                            const Vec& coarse, double atol, int depth)
+                            const Vec& coarse, double atol, int depth,
+                            double rtol = DefaultRelTol)
 {
     const double mid=(lo+hi)/2;
     const Vec left=Gauss4(f,lo,mid), right=Gauss4(f,mid,hi);
@@ -115,10 +128,10 @@ template<class F> Vec Refine(const F& f, double lo, double hi,
         error=std::max(error,std::abs(fine[k]-coarse[k]));
         magnitude=std::max(magnitude,std::abs(fine[k]));
     }
-    if(error<=atol+1.e-9*magnitude) return fine;
+    if(error<=atol+rtol*magnitude) return fine;
     if(depth==0) throw std::runtime_error("Arc section integral did not converge");
-    const Vec a=Refine(f,lo,mid,left,atol/2,depth-1);
-    const Vec b=Refine(f,mid,hi,right,atol/2,depth-1);
+    const Vec a=Refine(f,lo,mid,left,atol/2,depth-1,rtol);
+    const Vec b=Refine(f,mid,hi,right,atol/2,depth-1,rtol);
     for(int k=0;k<3;++k) fine[k]=a[k]+b[k];
     return fine;
 }
@@ -269,8 +282,9 @@ inline Vec FullCircleAxis(double r, double z, double ri, double ro, double h)
 }
 
 inline Vec Field(double r, double z, double ri, double ro, double h,
-                 double lo, double hi)
+                 double lo, double hi, double rtol = DefaultRelTol)
 {
+    const double atol_scale=AbsTolScale(rtol);
     const double pi=3.14159265358979323846;
     const double span=hi-lo;
     lo=std::remainder(lo,2*pi);
@@ -323,7 +337,7 @@ inline Vec Field(double r, double z, double ri, double ro, double h,
             // The far moment kernel has no endpoint peak; retain its smooth rule.
             auto smooth=[=](double phi){return Section(phi,r,z,ri,ro,h);};
             value=Refine(smooth,lo,end,Gauss4(smooth,lo,end),
-                         1.e-12*std::max(ro,h)*(end-lo),20);
+                         atol_scale*std::max(ro,h)*(end-lo),20,rtol);
         } else for(int side=0;side<2;++side) {
             const double endpoint=std::remainder(side==0 ? lo : end,2*pi);
             auto regular=[=](double t) {
@@ -333,7 +347,7 @@ inline Vec Field(double r, double z, double ri, double ro, double h,
                 return v;
             };
             const Vec part=Refine(regular,0.,1.,Gauss4(regular,0.,1.),
-                                  1.e-12*std::max(ro,h)*half,20);
+                                  atol_scale*std::max(ro,h)*half,20,rtol);
             for(int k=0;k<3;++k) value[k]+=part[k];
         }
         for(int k=0;k<3;++k) result[k]+=value[k];
