@@ -80,12 +80,14 @@ public:
                int print_level = 0,
                double correction_weight = 1.0,
                int subspace_solver = 0,
-               bool beta_zero = false)
+               bool beta_zero = false,
+               bool reuse_hierarchy = false)
         : mat_(mat), grad_(grad), freedofs_(freedofs),
           ndof_hc_(mat->Height()), ndof_h1_(grad->Width()),
           cycle_type_(cycle_type), num_smooth_(num_smooth),
           print_level_(print_level), correction_weight_(correction_weight),
-          subspace_solver_(subspace_solver), amg_theta_(amg_theta), beta_zero_(beta_zero)
+          subspace_solver_(subspace_solver), amg_theta_(amg_theta), beta_zero_(beta_zero),
+          reuse_hierarchy_(reuse_hierarchy)
     {
         RequireSerialSetup();
         if ((int)coord_x.size() != ndof_h1_ ||
@@ -186,6 +188,8 @@ public:
     int GetNumSmooth() const { return num_smooth_; }
     int GetCycleType() const { return cycle_type_; }
     bool GetBetaZero() const { return beta_zero_; }
+    bool GetReuseHierarchy() const { return reuse_hierarchy_; }
+    int GetHierarchyRefreshes() const { return hierarchy_refreshes_; }
     int GetSetupWorkers() const { return setup_workers_; }
     shared_ptr<BitArray> GetFreeDofs() const { return freedofs_; }
 
@@ -275,6 +279,8 @@ private:
     int subspace_solver_;  // 0=CompactAMG, 1=SparseCholesky
     double amg_theta_;     // AMG strength threshold (preserved for Update)
     const bool beta_zero_; // Pure curl-curl: omit G correction and its hierarchy.
+    const bool reuse_hierarchy_; // Update(): frozen AMG coarsening, refreshed Galerkin matrices.
+    int hierarchy_refreshes_ = 0;
     int setup_workers_ = 0;
 
     // Gradient subspace
@@ -441,23 +447,46 @@ private:
                 std::cout << "\n  Subspace solver: CompactAMG (min_coarse="
                           << min_coarse_aux << ")" << std::flush;
 
-            shared_ptr<CompactAMG> amg_G;
-            if (!beta_zero_)
-                amg_G = make_shared<CompactAMG>(A_G_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
-            auto amg_Pix = make_shared<CompactAMG>(A_Pix_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
-            auto amg_Piy = make_shared<CompactAMG>(A_Piy_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
-            auto amg_Piz = make_shared<CompactAMG>(A_Piz_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
+            // reuse_hierarchy: keep the coarsening and interpolation of the
+            // first build and refresh only the Galerkin coarse matrices.
+            auto existing = [](const shared_ptr<BaseMatrix>& solver) {
+                return dynamic_pointer_cast<CompactAMG>(solver);
+            };
+            const bool refresh = reuse_hierarchy_ && existing(B_Pix_) && existing(B_Piy_)
+                && existing(B_Piz_) && (beta_zero_ || existing(B_G_));
+            shared_ptr<CompactAMG> amg_G, amg_Pix, amg_Piy, amg_Piz;
+            if (refresh) {
+                if (!beta_zero_) amg_G = existing(B_G_);
+                amg_Pix = existing(B_Pix_);
+                amg_Piy = existing(B_Piy_);
+                amg_Piz = existing(B_Piz_);
+            } else {
+                if (!beta_zero_)
+                    amg_G = make_shared<CompactAMG>(A_G_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
+                amg_Pix = make_shared<CompactAMG>(A_Pix_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
+                amg_Piy = make_shared<CompactAMG>(A_Piy_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
+                amg_Piz = make_shared<CompactAMG>(A_Piz_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
+            }
 
             t0 = std::chrono::high_resolution_clock::now();
-            if (!beta_zero_) amg_G->Setup();
-            amg_Pix->Setup();
-            amg_Piy->Setup();
-            amg_Piz->Setup();
+            if (refresh) {
+                if (!beta_zero_) amg_G->Refresh(A_G_);
+                amg_Pix->Refresh(A_Pix_);
+                amg_Piy->Refresh(A_Piy_);
+                amg_Piz->Refresh(A_Piz_);
+                hierarchy_refreshes_++;
+            } else {
+                if (!beta_zero_) amg_G->Setup();
+                amg_Pix->Setup();
+                amg_Piy->Setup();
+                amg_Piz->Setup();
+            }
             setup_workers_ = std::max({beta_zero_ ? 0 : amg_G->SetupWorkers(),
                 amg_Pix->SetupWorkers(), amg_Piy->SetupWorkers(), amg_Piz->SetupWorkers()});
             t1 = std::chrono::high_resolution_clock::now();
             if (print_level_ > 0)
-                std::cout << "\n  AMG setup (internally parallel hierarchy, serial coarse factorization): "
+                std::cout << (refresh ? "\n  AMG refresh (frozen coarsening and interpolation): "
+                                      : "\n  AMG setup (internally parallel hierarchy, serial coarse factorization): ")
                           << std::chrono::duration<double>(t1 - t0).count()
                           << "s, levels: G=" << (amg_G ? amg_G->NumLevels() : 0)
                           << " Px=" << amg_Pix->NumLevels()

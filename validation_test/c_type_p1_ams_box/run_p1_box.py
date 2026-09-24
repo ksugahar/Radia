@@ -289,7 +289,7 @@ class ReducedAP1Box:
                  ams_project_gradients: bool = False, ams_beta_zero: bool = False,
                  cg_check_interval: int = 1, ams_print_level: int = 0,
                  outer_boundary: str = "source_flux", zero_source: bool = False,
-                 algebraic_residual: bool = True):
+                 algebraic_residual: bool = True, ams_reuse_hierarchy: bool = False):
         """``source_cf`` is the vacuum source flux density B_s as a vector CF.
 
         ``zero_source=True`` declares ``source_cf`` identically zero (total-A):
@@ -396,6 +396,9 @@ class ReducedAP1Box:
         # Residual and element flux by sparse products with the element curl
         # (built lazily, once); False keeps per-call form assembly.
         self.algebraic_residual = bool(algebraic_residual)
+        if ams_reuse_hierarchy and linear_solver != "ams":
+            raise ValueError("ams_reuse_hierarchy requires linear_solver='ams'")
+        self.ams_reuse_hierarchy = bool(ams_reuse_hierarchy)
         self._algebra_cache = None
         self._residual_vector = None
 
@@ -421,7 +424,8 @@ class ReducedAP1Box:
             matrix = shifted  # Only hierarchy setup sees this matrix; CG keeps K.
 
         if self._gradient is None:
-            gradient, h1 = self.fes.CreateGradient()
+            with ng.TaskManager():
+                gradient, h1 = self.fes.CreateGradient()
             if int(h1.ndof) != int(self.mesh.nv):
                 raise RuntimeError("AMS needs one H1 DOF per vertex")
             xyz = np.asarray(self.mesh.ngmesh.Coordinates(), dtype=float)
@@ -434,7 +438,8 @@ class ReducedAP1Box:
                 coord_x=xyz[:, 0].tolist(), coord_y=xyz[:, 1].tolist(),
                 coord_z=xyz[:, 2].tolist(), cycle_type=1, print_level=self.ams_print_level,
                 num_smooth=self.ams_num_smooth,
-                **({"beta_zero": True} if self.ams_beta_zero else {}))
+                **({"beta_zero": True} if self.ams_beta_zero else {}),
+                **({"reuse_hierarchy": True} if self.ams_reuse_hierarchy else {}))
             self._ams_lagged = False
         elif self._ams_systems_seen % self.ams_update_every == 0:
             self._ams.Update(matrix)
@@ -491,6 +496,8 @@ class ReducedAP1Box:
             record["cg_restarts"] = 0
             record["true_residual_checks"] = len(solver.residuals)
             record["preconditioner_lagged"] = bool(self._ams_lagged)
+            if self.ams_reuse_hierarchy:
+                record["hierarchy_refreshes"] = int(getattr(self._ams, "hierarchy_refreshes", 0))
             record["relative_residual"] = true_relative
         elif self.linear_solver == "iccg":
             import radia.sparsesolv_ngsolve as ssn
@@ -912,6 +919,7 @@ class ReducedAP1Box:
             "ams_preconditioner_shift": self.ams_preconditioner_shift,
             "ams_project_gradients": self.ams_project_gradients,
             "ams_beta_zero": self.ams_beta_zero,
+            "ams_reuse_hierarchy": self.ams_reuse_hierarchy,
             "source": "exact Radia B_s projected once to L2 order "
                       f"{self.source_projection_order} on iron; exact at observation points",
             "ndof": int(self.fes.ndof),
@@ -1109,6 +1117,9 @@ def main() -> None:
                         help="AMS true residual check interval; final check is mandatory")
     parser.add_argument("--inexact-linear", action="store_true",
                         help="Adapt Newton inner tolerance without relaxing final convergence gates")
+    parser.add_argument("--ams-reuse-hierarchy", action="store_true",
+                        help="AMS Update keeps the first AMG coarsening/interpolation and refreshes "
+                             "only the Galerkin coarse matrices (frozen interpolation)")
     parser.add_argument("--legacy-residual", action="store_true",
                         help="assemble the Newton residual and element flux as forms on every call "
                              "(default: sparse products with the element curl, built once)")
@@ -1236,7 +1247,8 @@ def run(options) -> dict:
         ams_preconditioner_shift=options.ams_preconditioner_shift,
         ams_project_gradients=options.ams_project_gradients,
         ams_beta_zero=options.ams_beta_zero,
-        algebraic_residual=not options.legacy_residual)
+        algebraic_residual=not options.legacy_residual,
+        ams_reuse_hierarchy=options.ams_reuse_hierarchy)
 
     def run_potential_engine(name, engine, extra=None):
         if not nonlinear:
