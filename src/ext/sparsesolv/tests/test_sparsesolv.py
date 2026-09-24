@@ -1346,7 +1346,12 @@ print("COMPACTAMG_REGISTERED_AND_REASSEMBLED")
             [sys.executable, "-u", "-X", "faulthandler", "-c", script],
             capture_output=True, text=True, timeout=90
         )
-        assert result.returncode == 0, (result.stdout, result.stderr)
+        if result.returncode:
+            pytest.fail(
+                f"compactamg child exited {result.returncode}\n"
+                f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+                pytrace=False,
+            )
         assert "COMPACTAMG_REGISTERED_AND_REASSEMBLED" in result.stdout
 
     @pytest.fixture

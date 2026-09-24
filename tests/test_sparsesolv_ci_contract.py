@@ -40,6 +40,8 @@ def test_solver_workflow_builds_before_testing_on_mdx():
         assert "pyproject.toml" in triggers[event]["paths"]
     job = workflow["jobs"]["ams-regression"]
     assert "mdx" in job["runs-on"]
+    for variable in ("OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        assert job["env"][variable] == "1", "Bound BLAS before subprocess imports"
     assert "head.repo.full_name == github.repository" in job["if"]
     script = "\n".join(step.get("run", "") for step in job["steps"])
     assert script.index("--target sparsesolv_ngsolve") < script.index("--profile sparsesolv")
