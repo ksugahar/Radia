@@ -9,14 +9,6 @@
   ],
   "rules": [
     {
-      "id": "meshed-current",
-      "patterns": ["meshed_current.py"],
-      "classification": "python-fallback",
-      "backend_contract": "in-process-python",
-      "matlab": ["matlab/+radia/+python/meshedCurrent.m"],
-      "notes": "Explicit batch entry for conservative conductor-current construction. NGSolve meshes and current GridFunctions remain Python-owned; no per-step Simulink fallback or duplicate numerical implementation."
-    },
-    {
       "id": "picard-acceleration",
       "patterns": ["picard_acceleration.py"],
       "classification": "python-fallback",
@@ -534,6 +526,14 @@
       "backend_contract": "in-process-python",
       "matlab": ["matlab/+radia/+python/eddyAphi.m"],
       "notes": "Terminal-driven three-dimensional A-V eddy solves, used as an independent reference for surface-impedance routes. Batch only, for the same mesh and GridFunction reason."
+    },
+    {
+      "id": "meshed-coil-current",
+      "patterns": ["meshed_current.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/meshedCurrent.m"],
+      "notes": "Impressed DC current of a closed meshed conductor (mixed RT0/P0 and the A-phi potential with one cut), the source of meshed-coil total-A solves. Batch only: the current is a GridFunction on the conductor mesh."
     },
     {
       "id": "surface-impedance-corner-patch",
