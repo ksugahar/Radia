@@ -18,6 +18,7 @@ NATIVE_PATHS = (
     'tests/test_arc_far_rule.py',
     'tests/test_radiafield_cache_parallel.py',
     'tests/test_radiafield_memoize.py',
+    'tests/test_radiafield_precision.py',
     'tests/test_mixed_omega_source_load.py',
 
     "tests/test_ams_internal_setup_parallel.py",
