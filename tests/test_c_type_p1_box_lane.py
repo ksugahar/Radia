@@ -382,6 +382,56 @@ def test_inexact_newton_preserves_field_and_outer_gates(box_mesh):
     np.testing.assert_allclose(field, reference, rtol=1e-6, atol=1e-8)
 
 
+def _random_solution(engine, seed):
+    solution = ng.GridFunction(engine.fes)
+    solution.vec.FV().NumPy()[:] = np.random.default_rng(seed).normal(size=engine.fes.ndof) * 1e-3
+    return solution
+
+
+@pytest.mark.parametrize("overrides", [{}, {"outer_boundary": "natural_total"},
+                                       {"gauge_epsilon": 0.0, "linear_solver": "iccg"}])
+def test_algebraic_residual_and_flux_match_form_assembly(box_mesh, overrides):
+    law = lane().SoftIronLaw(_bh_table())
+    settings = dict(overrides)
+    solver = settings.pop("linear_solver", "ams")
+    fast = _engine(box_mesh, solver, **settings)
+    slow = _engine(box_mesh, solver, algebraic_residual=False, **settings)
+    solution = _random_solution(fast, 7)
+    for engine in (fast, slow):
+        b, magnitude = engine._element_flux(solution)
+        engine._set_material(law.reluctivity(magnitude), law=law, b_iron=b, magnitude=magnitude)
+    b_fast, _ = fast._element_flux(solution)
+    b_slow, _ = slow._element_flux(solution)
+    np.testing.assert_allclose(b_fast, b_slow, rtol=1e-11, atol=1e-13 * np.max(np.abs(b_slow)))
+    r_fast, n_fast = fast._residual(solution)
+    r_slow, n_slow = slow._residual(solution)
+    difference = r_fast.FV().NumPy() - r_slow.FV().NumPy()
+    assert np.linalg.norm(difference[fast.free]) <= 1e-11 * n_slow
+    assert n_fast == pytest.approx(n_slow, rel=1e-11)
+
+
+def test_algebraic_total_a_residual_matches_form_assembly(box_mesh):
+    module = lane()
+    x, y = ng.x, ng.y
+    current = 1e7 * ng.CF((-2*y*(x-.5)*(.7-x), -(1.2-2*x)*(.01-y*y), 0))
+    settings = dict(linear_solver="ams", cg_tolerance=1e-10, cg_max_iterations=1000,
+                    ams_num_smooth=1, source_projection_order=2)
+    fast = module.TotalAP1Box(box_mesh, current, **settings)
+    slow = module.TotalAP1Box(box_mesh, current, algebraic_residual=False, **settings)
+    solution = _random_solution(fast, 11)
+    r_fast, n_fast = fast._residual(solution)
+    r_slow, n_slow = slow._residual(solution)
+    difference = r_fast.FV().NumPy() - r_slow.FV().NumPy()
+    assert np.linalg.norm(difference[fast.free]) <= 1e-11 * n_slow
+    law = module.SoftIronLaw(_bh_table())
+    options = dict(newton_tolerance=1e-9, tolerance=1e-7, max_iterations=30,
+                   max_halvings=4, observation=_points())
+    field_fast, stats_fast, _ = fast.run_newton(law, **options)
+    field_slow, stats_slow, _ = slow.run_newton(law, **options)
+    assert stats_fast["converged"] and stats_slow["converged"]
+    np.testing.assert_allclose(field_fast, field_slow, rtol=1e-8, atol=1e-12)
+
+
 def test_vectorised_iron_centroids_match_the_element_loop(box_mesh):
     numbers, centroids = lane().iron_elements_with_centroids(box_mesh)
     expected_numbers, expected = [], []
@@ -404,8 +454,12 @@ def test_total_a_zero_source_shortcut_is_bit_identical(box_mesh):
     law = module.SoftIronLaw(_bh_table())
     options = dict(newton_tolerance=1e-8, tolerance=1e-6, max_iterations=20,
                    max_halvings=4, observation=_points())
-    fast = module.TotalAP1Box(box_mesh, current, **settings)
-    generic = module.TotalAP1Box(box_mesh, current, zero_source=False, **settings)
+    # Form-assembled residual on both sides: this pins the zero-source shortcut
+    # alone (the direct SPD factorisation of the eps=1e-6 gauged Jacobian is
+    # round-off sensitive, so both runs must follow the same arithmetic).
+    fast = module.TotalAP1Box(box_mesh, current, algebraic_residual=False, **settings)
+    generic = module.TotalAP1Box(box_mesh, current, zero_source=False,
+                                 algebraic_residual=False, **settings)
     assert fast.zero_source and not generic.zero_source
     np.testing.assert_array_equal(fast.source_at_centroids, generic.source_at_centroids)
     field_fast, stats_fast, _ = fast.run_newton(law, **options)
