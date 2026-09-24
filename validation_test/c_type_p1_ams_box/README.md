@@ -221,6 +221,11 @@ Newton options common to `reduced_a` and `total_a`:
   The direct cross-check keeps a fresh Jacobian form per step: the SPD sparse
   direct factorisation of the `eps = 1e-6` gauged Jacobian is round-off
   sensitive, so it is a cross-check, not a timing route.
+* `--ams-reuse-hierarchy` builds the AMS with `reuse_hierarchy=True`: every
+  later Update keeps the nodal AMG coarsening and interpolation of the first
+  build and refreshes only the Galerkin coarse matrices, the l1 norms and the
+  coarsest factorisation (frozen interpolation). Each history row records
+  `hierarchy_refreshes`.
 
 ## Reference and metrics
 
@@ -272,9 +277,12 @@ A-phi current + engine setup (mesh load excluded).
 | beta-zero AMS, ungauged | loose | 27.5 | 31.8 | 7 | 63 |
 | shifted ICCG, ungauged | loose | 30.3 | 34.7 | 7 | 308 |
 | beta-zero AMS, ungauged | tight | 42.4 | 46.7 | 11 | 118 |
+| beta-zero AMS, frozen hierarchy | loose | 25.5 | 30.1 | 7 | 64 |
+| beta-zero AMS, frozen hierarchy | tight | 38.3 | 42.8 | 11 | 114 |
 
-Beta-zero loose repeated: 31.8, 30.9, 31.8 s end-to-end. All with
-`--inexact-linear`; single host, single problem.
+Beta-zero loose repeated: 31.8, 30.9, 31.8 s end-to-end; with the frozen
+hierarchy 30.1, 30.1, 30.3 s (AMS update 1.1 s -> 0.77 s, CG iterations
+unchanged). All with `--inexact-linear`; single host, single problem.
 
 ## Results (LAB, 2026-09-22, uncontended sequential runs, 8 threads)
 
