@@ -428,3 +428,53 @@ def test_installed_style_bytes_are_staged_and_rechecked(tmp_path, monkeypatch, c
         assert str(installed) in result
         assert hashlib.sha256(b"installed snapshot").hexdigest() in result
     assert not list(tmp_path.glob(".paper.bbl.*.tmp"))
+
+
+@pytest.mark.parametrize(
+    ("style_bytes", "available", "expected"),
+    [
+        (b"FUNCTION {x} { \"a\" is.kanji.str$ }", {"upbibtex", "pbibtex", "bibtex"}, "upbibtex"),
+        (b"FUNCTION {x} { \"a\" is.kanji.str$ }", {"pbibtex", "bibtex"}, "pbibtex"),
+        (b"FUNCTION {x} { \"a\" is.kanji.str$ }", {"bibtex"}, None),
+        (b"FUNCTION {x} { \"a\" empty$ }", {"upbibtex", "bibtex"}, "bibtex"),
+    ],
+)
+def test_bibtex_engine_follows_style_requirements(monkeypatch, style_bytes, available, expected):
+    from radia_mcp.bibliography.plans import T14_canonical as canonical
+    monkeypatch.setattr(canonical.shutil, "which", lambda name: name if name in available else None)
+    name, path = canonical._select_bibtex_engine(style_bytes)
+    if expected is None:
+        assert path is None
+    else:
+        assert (name, path) == (expected, expected)
+
+
+@pytest.mark.parametrize("japanese_available", [True, False])
+@pytest.mark.parametrize("plain_available", [True, False])
+def test_make_bbl_runs_japanese_bibtex_for_kanji_style(tmp_path, monkeypatch, japanese_available, plain_available):
+    from radia_mcp.bibliography.plans import T14_canonical as canonical
+    bib = tmp_path / "fixture.bib"
+    bib.write_bytes(b"@misc{one,title={First}}")
+    monkeypatch.setattr(canonical, "CANONICAL", bib)
+    available = ({"bibtex"} if plain_available else set()) | ({"upbibtex"} if japanese_available else set())
+    monkeypatch.setattr(canonical.shutil, "which", lambda name: name if name in available else None)
+    tex = tmp_path / "paper.tex"
+    tex.write_text(r"\cite{one}", encoding="utf-8")
+    (tmp_path / "jstyle.bst").write_bytes(b'FUNCTION {k} { "a" is.kanji.str$ pop$ }')
+    output = tex.with_suffix(".bbl")
+    output.write_bytes(b"verified")
+    calls = []
+    def run(args, cwd, **kwargs):
+        calls.append(args)
+        (cwd / "manuscript.bbl").write_bytes(br"\bibitem{one}First")
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+    monkeypatch.setattr(canonical.subprocess, "run", run)
+    result = canonical.bibliography_make_bbl(str(tex), style="jstyle")
+    if japanese_available:
+        assert calls == [["upbibtex", "manuscript"]], calls
+        assert "bibtex_engine: upbibtex" in result, result
+        assert output.read_bytes() == br"\bibitem{one}First"
+    else:
+        assert calls == [] and result.startswith("Error:"), result
+        assert ("upbibtex or pbibtex" if plain_available else "TeX installation") in result
+        assert output.read_bytes() == b"verified"
