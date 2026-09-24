@@ -191,6 +191,37 @@ vector-field-change convergence checks. `--omega-order 2` enables the P2
 scalar-potential comparison; reduced-A remains first order. Newton does not
 use Anderson mixing. These switches do not imply a timing certificate.
 
+**total_a** -- lowest-order Nedelec total `A` with the coil meshed and no
+analytical source field: the coil current is the A-phi DC current of
+`radia.meshed_current.solve_closed_coil_current_phi` (electric scalar
+potential in H1, one thick cut across the middle of the first straight leg,
+net current through the cut equal to the coil current). Its piecewise-constant
+current density is weakly divergence-free against every P1 function, so the
+right-hand side is orthogonal to the Nedelec gradients and the ungauged
+system stays compatible: `--gauge-epsilon 0` works with `--ams-beta-zero` and
+with `--reduced-a-solver iccg`. `--coil-cut-radius` overrides the in-plane
+cut radius (default halfway between the coil section's half diagonal and the
+opposite leg). The zero source is declared, so no source evaluation, projection
+or residual term is spent on it.
+
+Newton options common to `reduced_a` and `total_a`:
+
+* The inner solve never targets an absolute residual below
+  `0.1 * newton_tolerance * |R_0|` (relative inner tolerance capped at 0.5).
+  Beyond the nonlinear target it buys nothing, and an ungauged singular
+  system cannot deliver it: round-off leaves a gradient component near
+  `1e-7 |R_k|`. With the floor, beta-zero AMS and ungauged ICCG pass the tight
+  rule. `--no-linear-floor` restores the unbounded inner target. The nonlinear
+  gates are unchanged; each history row records `linear_floor`.
+* The element flux and the Newton residual (every line-search trial included)
+  are sparse products with a discrete element curl built once
+  (`B_k = int_e curl(phi)_k psi_e`, `psi_e` the order-zero L2 function); the
+  iterative solvers reuse one Jacobian form for the run. `--legacy-residual`
+  assembles forms on every call instead; the two agree to 1e-11 (tests).
+  The direct cross-check keeps a fresh Jacobian form per step: the SPD sparse
+  direct factorisation of the `eps = 1e-6` gauged Jacobian is round-off
+  sensitive, so it is a cross-check, not a timing route.
+
 ## Reference and metrics
 
 `--reference` takes a three-engine result JSON of the Kelvin lane.  The
@@ -226,6 +257,24 @@ matches the direct solve under the true-residual contract, Newton is one exact
 step on a linear law and converges with full steps on the sample table, Picard
 and Newton agree on a mildly saturated cube, and the mesh contract rejects a
 mesh without the lane's labels.
+
+## Results: total_a on one million tetrahedra (2026-09-25)
+
+Host INTEL11, 8 threads, sequential, host otherwise idle; mesh
+`build_box_mesh.py --scale 0.38` (1,009,219 tets, 1,184,786 dofs; contract
+`results/meshes/ctype_box_s038.json`); loose rule = Newton residual 1e-3.
+Records `results/intel11_20260925_s038_total_*.json`. End-to-end = Newton +
+A-phi current + engine setup (mesh load excluded).
+
+| Linear solver | Rule | Newton s | End-to-end s | Newton steps | CG iterations |
+|---|---|---|---|---|---|
+| AMS, eps = 1e-6 gauge | loose | 34.5 | 38.9 | 7 | 64 |
+| beta-zero AMS, ungauged | loose | 27.5 | 31.8 | 7 | 63 |
+| shifted ICCG, ungauged | loose | 30.3 | 34.7 | 7 | 308 |
+| beta-zero AMS, ungauged | tight | 42.4 | 46.7 | 11 | 118 |
+
+Beta-zero loose repeated: 31.8, 30.9, 31.8 s end-to-end. All with
+`--inexact-linear`; single host, single problem.
 
 ## Results (LAB, 2026-09-22, uncontended sequential runs, 8 threads)
 
