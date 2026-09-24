@@ -390,6 +390,12 @@ class CompactAMSPreconditionerImpl(BaseMatrix):
     def beta_zero(self) -> bool: ...
 
     @property
+    def reuse_hierarchy(self) -> bool: ...
+
+    @property
+    def hierarchy_refreshes(self) -> int: ...
+
+    @property
     def setup_workers(self) -> int:
         """Workers observed in strength construction; zero if no coarsening."""
         ...
@@ -415,6 +421,7 @@ def CompactAMSPreconditioner(
     subspace_solver: int = 0,
     num_smooth: int = 1,
     beta_zero: bool = False,
+    reuse_hierarchy: bool = False,
 ) -> CompactAMSPreconditionerImpl:
     """Compact AMS (Auxiliary-space Maxwell Solver) Preconditioner.
 
@@ -434,6 +441,8 @@ def CompactAMSPreconditioner(
         subspace_solver: 0=CompactAMG (default), 1=SparseCholesky.
         num_smooth: Smoother sweeps (default: 1).
         beta_zero: Skip gradient correction and its hierarchy (default: False).
+        reuse_hierarchy: Update() keeps the first AMG coarsening and interpolation
+            and refreshes only the Galerkin coarse matrices (default: False).
     """
     ...
 

@@ -302,6 +302,9 @@ inline void ExportHypreBasedAMS(py::module& m) {
   py::class_<HypreBasedAMS, shared_ptr<HypreBasedAMS>, BaseMatrix>
       (m, "HypreBasedAMSPreconditionerImpl")
       .def_property_readonly("beta_zero", &HypreBasedAMS::GetBetaZero)
+      .def_property_readonly("reuse_hierarchy", &HypreBasedAMS::GetReuseHierarchy)
+      .def_property_readonly("hierarchy_refreshes", &HypreBasedAMS::GetHierarchyRefreshes,
+          "Updates that refreshed the frozen AMG hierarchies instead of rebuilding them.")
       .def_property_readonly("setup_workers", &HypreBasedAMS::GetSetupWorkers,
           "Observed workers in AMG strength-row construction (zero when no coarsening occurs).")
       .def("Update", py::overload_cast<>(&HypreBasedAMS::Update),
@@ -380,7 +383,8 @@ print_level : int
        int print_level,
        int subspace_solver,
        int num_smooth,
-       bool beta_zero) -> shared_ptr<HypreBasedAMS>
+       bool beta_zero,
+       bool reuse_hierarchy) -> shared_ptr<HypreBasedAMS>
     {
       auto sp_mat = dynamic_pointer_cast<SparseMatrix<double>>(mat);
       if (!sp_mat)
@@ -402,7 +406,8 @@ print_level : int
       return make_shared<HypreBasedAMS>(
           sp_mat, sp_grad, sp_freedofs,
           to_vec(coord_x_list), to_vec(coord_y_list), to_vec(coord_z_list),
-          cycle_type, num_smooth, 0.25, print_level, 1.0, subspace_solver, beta_zero);
+          cycle_type, num_smooth, 0.25, print_level, 1.0, subspace_solver, beta_zero,
+          reuse_hierarchy);
     },
     py::arg("mat"),
     py::arg("grad_mat"),
@@ -415,6 +420,7 @@ print_level : int
     py::arg("subspace_solver") = 0,
     py::arg("num_smooth") = 1,
     py::arg("beta_zero") = false,
+    py::arg("reuse_hierarchy") = false,
     R"raw_string(
 Compact AMS (Auxiliary-space Maxwell Solver) Preconditioner.
 
@@ -446,6 +452,10 @@ print_level : int
   Verbosity (0=silent, default=0).
 beta_zero : bool
   Pure curl-curl mode without the gradient subspace solver (default=False).
+reuse_hierarchy : bool
+  Update() keeps the AMG coarsening and interpolation of the first build and
+  refreshes only the Galerkin coarse matrices (frozen interpolation), for a
+  sequence of matrices on one sparsity pattern, e.g. Newton (default=False).
 )raw_string");
 
   m.def("ComplexHypreBasedAMSPreconditioner",

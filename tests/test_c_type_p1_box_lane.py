@@ -432,6 +432,21 @@ def test_algebraic_total_a_residual_matches_form_assembly(box_mesh):
     np.testing.assert_allclose(field_fast, field_slow, rtol=1e-8, atol=1e-12)
 
 
+def test_reused_ams_hierarchy_keeps_the_newton_field(box_mesh):
+    law = lane().SoftIronLaw(_bh_table())
+    options = dict(newton_tolerance=1e-8, tolerance=1e-6, max_iterations=30,
+                   max_halvings=4, observation=_points(), inexact_linear=True)
+    fresh, fresh_stats, _ = _engine(box_mesh, "ams").run_newton(law, **options)
+    engine = _engine(box_mesh, "ams", ams_reuse_hierarchy=True)
+    reused, stats, _ = engine.run_newton(law, **options)
+    assert fresh_stats["converged"] and stats["converged"]
+    refreshes = [row["hierarchy_refreshes"] for row in stats["history"]]
+    assert refreshes == list(range(len(refreshes)))  # first step builds, later steps refresh
+    np.testing.assert_allclose(reused, fresh, rtol=1e-6, atol=1e-9)
+    with pytest.raises(ValueError, match="ams_reuse_hierarchy"):
+        _engine(box_mesh, "iccg", gauge_epsilon=0.0, ams_reuse_hierarchy=True)
+
+
 def test_vectorised_iron_centroids_match_the_element_loop(box_mesh):
     numbers, centroids = lane().iron_elements_with_centroids(box_mesh)
     expected_numbers, expected = [], []
