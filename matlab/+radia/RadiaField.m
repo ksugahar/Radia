@@ -39,6 +39,15 @@ classdef RadiaField < radia.ngsolve.CoefficientFunction
                 obj.nativeHandle());
         end
 
+        function setMemoize(obj, enabled)
+            arguments
+                obj (1,1) radia.RadiaField
+                enabled (1,1) logical
+            end
+            radia.internal.callMex('ngsolve.radia_field.set_memoize', ...
+                obj.nativeHandle(), enabled);
+        end
+
         function value = cacheStats(obj)
             value = radia.internal.callMex( ...
                 'ngsolve.radia_field.cache_stats', obj.nativeHandle());
