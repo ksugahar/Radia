@@ -20,8 +20,8 @@ silently dropped from the count.
 | Public top-level pybind11 names | 100 |
 | Covered mapped MEX names | 100 |
 | Underscore numerical kernels | 21 / 21 covered |
-| Stateful pybind11 class surface | 126 / 126 covered |
-| Radia MEX gateway commands | 365 |
+| Stateful pybind11 class surface | 128 / 128 covered |
+| Radia MEX gateway commands | 366 |
 | Optuna MEX gateway commands | 21 |
 | MATLAB Optuna classes | 95 |
 | MATLAB Optuna functions | 90 |
@@ -98,6 +98,7 @@ MATLAB receives numeric or value-type contracts at the boundary:
   matrices, reduced block sums, and native diagonal preconditioners
 - `ngsolve.radia_field.*` and `radia.RadiaField` for direct Radia B/H/A/M/Phi
   fields as NGSolve CoefficientFunctions, coordinate transforms, point caches,
+  automatic source-field memoization (`setMemoize` and `fieldInfo().memoize`),
   and native trilinear voxel CoefficientFunctions
 - `radia.HACApKChargeGram.configureMassMatrixNGSolve` and
   `configureGeometryMassMatrixNGSolve` for direct registration of an assembled

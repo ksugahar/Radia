@@ -187,9 +187,10 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     # from the roundoff-amplification fix) is EXCLUDED with a reason, and
     # exclusions leave the relevant surface. The raw Rayleigh/leaf diagnostics
     # and bounded exact-dense fallback are private validation aids, while cyclic
-    # image setup expands the covered stateful surface to 126 entries, including
+    # image setup and source memoization expand the covered stateful surface to 128 entries, including
     # field-gradient and configured directional-Schur/shape-derivative bindings.
-    assert contract["pybind_class_surface_count"] == 126
+    assert contract["pybind_class_surface_count"] == 128
+    assert "ngsolve.radia_field.set_memoize" in contract["command_names"]
     assert ("_ChargeGramHMatrix.charge_sigma"
             in contract["pybind_class_exclusions"])
     assert (
@@ -430,7 +431,10 @@ def test_root_readme_publishes_native_topology_mex_parity():
     parity_doc = (root / "docs" / "api" / "MATLAB_MEX_NGSOLVE_PARITY.md").read_text(
         encoding="utf-8"
     )
-    assert "| Stateful pybind11 class surface | 126 / 126 covered |" in parity_doc
+    assert (
+        f"| Stateful pybind11 class surface | {contract['pybind_class_covered_count']} / "
+        f"{contract['pybind_class_surface_count']} covered |"
+    ) in parity_doc
     assert (
         f"| Public top-level pybind11 names | {contract['pybind_public_count']} |"
         in parity_doc

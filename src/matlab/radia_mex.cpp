@@ -1482,6 +1482,7 @@ mxArray* Commands() {
         "ngsolve.radia_field.create",
         "ngsolve.radia_field.info",
         "ngsolve.radia_field.prepare_cache",
+        "ngsolve.radia_field.set_memoize",
         "ngsolve.radia_field.clear_cache",
         "ngsolve.radia_field.cache_stats",
         "ngsolve.radia_field.as_voxel_coefficient",
@@ -5349,8 +5350,8 @@ void NGSolveRadiaFieldInfo(int nlhs, mxArray* plhs[], int nrhs,
         "info = radia_mex('ngsolve.radia_field.info', handle)");
     const auto field = NGSolveRadiaField(Handle(prhs[1]));
     const char* fields[] = {"radia_obj", "field_type", "use_transform",
-                            "has_precision", "precision"};
-    plhs[0] = mxCreateStructMatrix(1, 1, 5, fields);
+                            "has_precision", "precision", "memoize"};
+    plhs[0] = mxCreateStructMatrix(1, 1, 6, fields);
     mxSetField(plhs[0], 0, "radia_obj",
                mxCreateDoubleScalar(field->Object()));
     mxSetField(plhs[0], 0, "field_type",
@@ -5361,6 +5362,14 @@ void NGSolveRadiaFieldInfo(int nlhs, mxArray* plhs[], int nrhs,
                mxCreateLogicalScalar(field->Precision().has_value()));
     mxSetField(plhs[0], 0, "precision", mxCreateDoubleScalar(
         field->Precision().value_or(std::numeric_limits<double>::quiet_NaN())));
+    mxSetField(plhs[0], 0, "memoize", mxCreateLogicalScalar(field->Memoizes()));
+}
+
+void NGSolveRadiaFieldSetMemoize(int nlhs, mxArray* plhs[], int nrhs,
+                                const mxArray* prhs[]) {
+    CheckArity(nrhs, 3, nlhs, 0,
+        "radia_mex('ngsolve.radia_field.set_memoize', handle, enabled)");
+    NGSolveRadiaField(Handle(prhs[1]))->SetMemoize(Boolean(prhs[2], "enabled"));
 }
 
 void NGSolveRadiaFieldPrepareCache(int nlhs, mxArray* plhs[], int nrhs,
@@ -12324,6 +12333,10 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
     }
     if (command == "ngsolve.radia_field.prepare_cache") {
         NGSolveRadiaFieldPrepareCache(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "ngsolve.radia_field.set_memoize") {
+        NGSolveRadiaFieldSetMemoize(nlhs, plhs, nrhs, prhs);
         return;
     }
     if (command == "ngsolve.radia_field.clear_cache") {

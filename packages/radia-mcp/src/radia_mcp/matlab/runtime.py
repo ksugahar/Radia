@@ -465,10 +465,11 @@ _PYBIND_CLASS_COMMANDS = {
     "RadiaField.__init__": ("ngsolve.radia_field.create",),
     "RadiaField.PrepareCache": ("ngsolve.radia_field.prepare_cache",),
     "RadiaField.ClearCache": ("ngsolve.radia_field.clear_cache",),
+    "RadiaField.SetMemoize": ("ngsolve.radia_field.set_memoize",),
     "RadiaField.GetCacheStats": ("ngsolve.radia_field.cache_stats",),
     "RadiaField.as_voxel_cf": ("ngsolve.radia_field.as_voxel_coefficient",),
     **_class_commands("RadiaField", (
-        "radia_obj", "field_type", "use_transform", "precision"),
+        "radia_obj", "field_type", "use_transform", "precision", "memoize"),
         "ngsolve.radia_field.info"),
     "HACApKPEECManager.__binding__": ("hacapk.peec.create",),
     "HACApKPEECManager.__init__": ("hacapk.peec.create",),

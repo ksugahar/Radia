@@ -19,6 +19,8 @@ NATIVE_PATHS = (
     'tests/test_radiafield_cache_parallel.py',
     'tests/test_radiafield_memoize.py',
     'tests/test_radiafield_precision.py',
+    'matlab/+radia/RadiaField.m',
+    'tests/matlab/test_radiafield_mex.m',
     'tests/test_mixed_omega_source_load.py',
 
     "tests/test_ams_internal_setup_parallel.py",
