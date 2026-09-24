@@ -2,6 +2,8 @@
 #define RAD_NGSOLVE_RADIA_FIELD_H
 
 #include <coefficient.hpp>
+#include "rad_parallel.h"
+#include <mutex>
 
 #include <array>
 #include <algorithm>
@@ -192,7 +194,7 @@ public:
         for (std::size_t i = 0; i < count; ++i)
             TransformToLocal(&global_points[3 * i], &local_points[3 * i]);
         std::vector<double> local_values;
-        ComputeLocalField(local_points, count, local_values);
+        ComputeLocalFieldParallel(local_points, count, local_values);
         for (std::size_t i = 0; i < count; ++i) {
             std::array<double, 3> cached{};
             if (field_type_ == "phi") {
@@ -424,6 +426,42 @@ private:
             for (std::size_t i = 0; i < values.size(); ++i)
                 values[i] = flux_density[i] * inverse_mu0 - field_strength[i];
         }
+    }
+
+    // Same values as ComputeLocalField, split into fixed blocks over the
+    // TaskManager.  Each block is one serial Radia batch, the call NGSolve
+    // assembly workers already make concurrently.  Only for callers outside a
+    // TaskManager job (PrepareCache is called from Python, not from assembly).
+    void ComputeLocalFieldParallel(std::vector<double>& points,
+                                   std::size_t count,
+                                   std::vector<double>& values) const {
+        constexpr std::size_t block = 256;
+        const std::size_t width = field_type_ == "phi" ? 1 : 3;
+        const std::size_t blocks = (count + block - 1) / block;
+        values.assign(width * count, 0.0);
+        std::atomic<bool> failed{false};
+        std::string failure;
+        std::mutex failure_mutex;
+        {
+            ngcore::RegionTaskManager region(radia::GetMaxThreads());
+            ngcore::ParallelFor(ngcore::IntRange(blocks), [&](std::size_t index) {
+                if (failed.load()) return;
+                const std::size_t begin = index * block;
+                const std::size_t n = std::min(block, count - begin);
+                std::vector<double> local(points.begin() + 3 * begin,
+                                          points.begin() + 3 * (begin + n));
+                std::vector<double> out;
+                try {
+                    ComputeLocalField(local, n, out);
+                } catch (const std::exception& error) {
+                    std::lock_guard<std::mutex> lock(failure_mutex);
+                    if (!failed.exchange(true)) failure = error.what();
+                    return;
+                }
+                std::copy(out.begin(), out.end(), values.begin() + width * begin);
+            });
+        }
+        if (failed.load()) throw std::runtime_error(failure);
     }
 
     void EvaluateGlobalPoints(const std::vector<double>& global_points,
