@@ -79,7 +79,10 @@ is covered by the focused tests.
 `nograds` gauge plus the `1e-6 nu_0` mass regularisation, `A_r x n = 0` on the
 box.  The exact Radia source is projected once to a second-order discontinuous
 field on the iron (the only place the reduced right-hand side integrates it)
-and evaluated exactly at the observation points.  Nonlinear loop:
+and evaluated exactly at the observation points.  `--arc-rel-tol` sets
+Radia's `PrcArc` relative tolerance of the arc-current source quadrature
+(default 1e-9, accepted range [1e-12, 1e-3]); the value is recorded with the
+coil in the result JSON.  Nonlinear loop:
 
 * `--nonlinear-method newton` (default): element-constant flux density,
   reluctivity interpolated from a dense sampling of the production PCHIP
