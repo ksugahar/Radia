@@ -4,6 +4,7 @@
 #include <array>
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <stdexcept>
 
 namespace RadArcSection {
@@ -122,6 +123,93 @@ template<class F> Vec Refine(const F& f, double lo, double hi,
     return fine;
 }
 
+// Gauss-Legendre nodes and weights on [-1, 1] for 1..20 points, computed
+// once by Newton iteration (thread-safe static initialisation).
+struct LegendreRule { int n = 0; std::array<double, 20> x{}, w{}; };
+inline const LegendreRule& Legendre(int n)
+{
+    static const std::array<LegendreRule, 21> rules = [] {
+        std::array<LegendreRule, 21> table{};
+        const double pi = 3.14159265358979323846;
+        for (int m = 1; m <= 20; ++m) {
+            table[m].n = m;
+            for (int i = 0; i < m; ++i) {
+                double t = std::cos(pi * (i + 0.75) / (m + 0.5)), derivative = 0.;
+                for (int iteration = 0; iteration < 100; ++iteration) {
+                    double p0 = 1., p1 = t;
+                    for (int k = 2; k <= m; ++k) {
+                        const double p2 = ((2 * k - 1) * t * p1 - (k - 1) * p0) / k;
+                        p0 = p1; p1 = p2;
+                    }
+                    if (m == 1) { p1 = t; p0 = 1.; }
+                    derivative = m * (t * p1 - p0) / (t * t - 1.);
+                    const double step = p1 / derivative;
+                    t -= step;
+                    if (std::abs(step) < 1.e-16) break;
+                }
+                table[m].x[i] = t;
+                table[m].w[i] = 2. / ((1. - t * t) * derivative * derivative);
+            }
+        }
+        return table;
+    }();
+    return rules[n];
+}
+
+// RADIA_ARC_FAR_RULE=0 keeps the adaptive rule everywhere, so the fixed far
+// rule can be compared against it in a separate process.  Read once.
+inline bool FarRuleEnabled()
+{
+    static const bool enabled = [] {
+        const char* value = std::getenv("RADIA_ARC_FAR_RULE");
+        return !(value && value[0] == '0');
+    }();
+    return enabled;
+}
+
+// Fixed-rule order for one azimuthal piece [lo, hi] of the section integral,
+// or 0 when the adaptive rule must be kept.  The section is integrated in
+// closed form, so only the azimuthal integrand's analyticity matters.  Its
+// nearest complex singularity is at least the distance d from the observer
+// to the arc solid; for a piece of half-length L (at the outer radius) the
+// Bernstein-ellipse parameter is rho = t + sqrt(1 + t^2), t = d / L, and an
+// n-point Gauss rule errs by O(rho^-2n).  n is chosen for 64 * rho^-2n below
+// 1e-10, and points closer than L (n > 16) keep the adaptive rule.  The
+// bound is relative to the integrand, not to an integral that cancels, so
+// the caller also compares with n + 4 points and accepts only under the
+// adaptive rule's own criterion (FarPiece).
+inline int FarPieceOrder(double r, double z, double ri, double ro, double h,
+                         double lo, double hi)
+{
+    const double pi = 3.14159265358979323846;
+    const auto contains = [&](double angle) { return lo <= angle && angle <= hi; };
+    const double c = (contains(0.) || contains(2 * pi) || contains(-2 * pi))
+        ? 1. : std::max(std::cos(lo), std::cos(hi));
+    // Closest point of the solid: nearest azimuth, then radius, then height.
+    const double radius = c > 0. ? std::clamp(r * c, ri, ro) : ri;
+    const double height = std::clamp(z, -h / 2, h / 2);
+    const double d2 = r * r + radius * radius - 2 * r * radius * c
+                      + (z - height) * (z - height);
+    const double half = ro * (hi - lo) / 2;
+    if (!(half > 0.) || !(d2 > 0.)) return 0;
+    const double t = std::sqrt(d2) / half;
+    const double rho = t + std::sqrt(1. + t * t);
+    const int n = int(std::ceil(std::log(64. / 1.e-10) / (2. * std::log(rho))));
+    return (n <= 16) ? std::max(n, 2) : 0;
+}
+
+template<class F> Vec GaussFixed(const F& f, double lo, double hi, int n)
+{
+    const LegendreRule& rule = Legendre(n);
+    Vec result{};
+    const double mid = (lo + hi) / 2, half = (hi - lo) / 2;
+    for (int i = 0; i < n; ++i) {
+        const Vec value = f(mid + half * rule.x[i]);
+        for (int k = 0; k < 3; ++k) result[k] += half * rule.w[i] * value[k];
+    }
+    return result;
+}
+
 inline Vec AxisPrimitive(double v, double ri, double ro)
 {
     // Radial antiderivative of the axial field and its first two z
@@ -208,6 +296,25 @@ inline Vec Field(double r, double z, double ri, double ro, double h,
         const double next=(std::floor(lo/pi)+1)*pi;
         const double end=std::min(hi,std::min(lo+pi/2,next));
         if(end<=lo) throw std::runtime_error("Arc integration interval collapsed");
+        if(const int fixed = FarRuleEnabled() ? FarPieceOrder(r,z,ri,ro,h,lo,end) : 0) {
+            // Accept the fixed rule only under the adaptive rule's criterion,
+            // estimated from the n and n + 4 point results; else refine below.
+            auto smooth=[=](double phi){return Section(phi,r,z,ri,ro,h);};
+            const Vec coarse=GaussFixed(smooth,lo,end,fixed);
+            const Vec fine=GaussFixed(smooth,lo,end,fixed+4);
+            double error=0, magnitude=0;
+            bool finite=true;
+            for(int k=0;k<3;++k) {
+                finite=finite && std::isfinite(fine[k]) && std::isfinite(coarse[k]);
+                error=std::max(error,std::abs(fine[k]-coarse[k]));
+                magnitude=std::max(magnitude,std::abs(fine[k]));
+            }
+            if(finite && error<=1.e-12*std::max(ro,h)*(end-lo)+1.e-9*magnitude) {
+                for(int k=0;k<3;++k) result[k]+=fine[k];
+                lo=end;
+                continue;
+            }
+        }
         Vec value{};
         // Integrable logarithms and nearby exterior peaks occur at endpoints.
         // Map each half interval from its endpoint with phi = endpoint +/- L*t^4.
