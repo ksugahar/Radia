@@ -293,9 +293,230 @@ def project_source_physical_potential(
     }
 
 
+SOURCE_LOADS = ("volume", "surface_flux")
+
+
+def _check_source_load(name, value):
+    if value not in SOURCE_LOADS:
+        raise ValueError(f"{name} must be one of {SOURCE_LOADS}; got {value!r}")
+
+
+def material_set_boundary_signs(mesh, materials):
+    """Outward-normal sign of every boundary label that encloses ``materials``.
+
+    ``specialcf.normal`` on a boundary face points from the face's ``domin``
+    material to its ``domout`` material, so a label is ``+1`` when the set lies
+    on the ``domin`` side and ``-1`` when it lies on the ``domout`` side.
+    Faces with the set on both sides are interior and are not returned.  A
+    label that mixes orientations, or that also names interior or unrelated
+    faces, cannot be integrated with one sign and is rejected.
+    """
+    names = tuple(mesh.GetMaterials())
+    labels = tuple(mesh.GetBoundaries())
+    inside = {str(name) for name in materials}
+    unknown = sorted(inside - set(names))
+    if not inside or unknown:
+        raise ValueError(f"materials must name mesh materials; unknown={unknown}")
+    signs = {}
+    other = set()
+    for face in mesh.ngmesh.FaceDescriptors():
+        label = labels[face.bc - 1]
+        side_in = face.domin > 0 and names[face.domin - 1] in inside
+        side_out = face.domout > 0 and names[face.domout - 1] in inside
+        if side_in == side_out:
+            other.add(label)
+            continue
+        sign = 1.0 if side_in else -1.0
+        if signs.setdefault(label, sign) != sign:
+            raise ValueError(
+                f"boundary {label!r} encloses {sorted(inside)} with both orientations; "
+                "split the label before using a surface-flux source load")
+    mixed = sorted(other & set(signs))
+    if mixed:
+        raise ValueError(
+            f"boundary labels {mixed} also name faces that do not enclose "
+            f"{sorted(inside)}; a surface-flux source load needs exclusive labels")
+    if not signs:
+        raise ValueError(f"materials {sorted(inside)} have no enclosing boundary")
+    return signs
+
+
+def outward_source_flux_form(mesh, H_s, signs, test_trace, *, bonus_intorder, scale=1.0):
+    """``scale (H_s . n_out - q) v`` on the enclosing boundary in ``signs``.
+
+    For a divergence-free source, ``int_Omega H_s . grad(v) dx`` equals
+    ``oint_dOmega (H_s . n_out) v ds``; this is that boundary form, so a
+    volume source load is replaced by source evaluations on faces only.
+
+    The net outward flux of a divergence-free field through a closed surface
+    is zero, and the volume form satisfies that exactly (``grad 1 = 0``).  The
+    surface quadrature does not, and on a Neumann block a nonzero net load
+    drives the constant mode through its gauge.  ``q`` is the mean outward
+    flux, removed so the boundary load is compatible like the volume load.
+    Returns ``(form, diagnostics)``; ``relative_flux_imbalance`` is the
+    removed net flux over the absolute flux, a quadrature diagnostic.
+    """
+    from ngsolve import specialcf
+
+    sign = mesh.BoundaryCF(dict(signs), default=0.0)
+    measure = ds(definedon=mesh.Boundaries("|".join(sorted(signs))),
+                 bonus_intorder=int(bonus_intorder))
+    outward = sign * InnerProduct(H_s, specialcf.normal(mesh.dim))
+    area = float(Integrate(CoefficientFunction(1.0) * measure, mesh))
+    from ngsolve import IfPos
+
+    # Same measure as the assembly, so the removed mean cancels its net load.
+    net = float(Integrate(outward * measure, mesh))
+    absolute = float(Integrate(IfPos(outward, outward, -outward) * measure, mesh))
+    mean = net / area
+    form = float(scale) * (outward - mean) * test_trace * measure
+    return form, {"mean_outward_flux": mean, "net_outward_flux": net,
+                  "relative_flux_imbalance": abs(net) / max(absolute, 1.0e-300)}
+
+
+def _evaluate_cf_at_points(mesh, field, points):
+    if hasattr(field, "PrepareCache"):
+        # RadiaField: one parallel batch, then cache hits during point lookup.
+        field.PrepareCache(points.tolist())
+    located = mesh(points[:, 0], points[:, 1], points[:, 2])
+    return np.asarray(field(located), dtype=float).reshape(len(points), -1)
+
+
+def interpolate_source_field(mesh, H_s, region, *, order=2):
+    """Nodal H1 interpolant of a smooth vector source on ``region``.
+
+    ``region`` is a material or boundary region (``mesh.Materials(...)`` or
+    ``mesh.Boundaries(...)``).  The source is evaluated once per interpolation
+    node, at the vertices and, for ``order=2``, at the edge midpoints of the
+    (possibly curved) geometry, instead of at every quadrature point of every
+    element.  NGSolve's H1 basis is hierarchical, so an edge coefficient is
+    ``(f(mid) - (f(a) + f(b)) / 2) / c`` with ``c`` the edge shape function
+    at the midpoint, measured on a straight edge rather than assumed.
+
+    The interpolant carries an ``O(h^{order+1})`` error that the exact source
+    does not: use it for loads, and the exact source where a field is reported.
+    Returns the vector coefficient, its space, the node count and timings.
+    """
+    from ngsolve import EDGE, VERTEX, NodeId, x, y, z
+
+    if int(order) not in (1, 2):
+        raise ValueError("order must be 1 or 2")
+    started = time.perf_counter()
+    scalar = H1(mesh, order=int(order), definedon=region)
+    active = scalar.GetDofs(region)
+    vertex_nodes, vertex_dofs = [], []
+    for vertex in range(mesh.nv):
+        dofs = scalar.GetDofNrs(NodeId(VERTEX, vertex))
+        if len(dofs) and dofs[0] >= 0 and active[dofs[0]]:
+            vertex_nodes.append(vertex)
+            vertex_dofs.append(dofs[0])
+    if not vertex_nodes:
+        raise ValueError("region has no interpolation nodes")
+    vertex_points = np.asarray([mesh.vertices[v].point for v in vertex_nodes], dtype=float)
+    points = [vertex_points]
+    edge_rows = []
+    if int(order) == 2:
+        coordinate = []
+        for component in (x, y, z):
+            gf = GridFunction(scalar)
+            gf.Set(component, definedon=region)
+            coordinate.append(gf.vec.FV().NumPy().copy())
+        coordinate = np.stack(coordinate, axis=1)
+        position = {vertex: index for index, vertex in enumerate(vertex_nodes)}
+        for edge in range(mesh.nedge):
+            dofs = scalar.GetDofNrs(NodeId(EDGE, edge))
+            if len(dofs) and dofs[0] >= 0 and active[dofs[0]]:
+                a, b = (v.nr for v in mesh.edges[edge].vertices)
+                edge_rows.append((dofs[0], position[a], position[b]))
+        edge_rows = np.asarray(edge_rows, dtype=np.int64)
+        curvature = coordinate[edge_rows[:, 0]]
+        scale = float(np.ptp(vertex_points, axis=0).max())
+        straight = np.flatnonzero(np.abs(curvature).max(axis=1) <= 1.0e-12 * scale)
+        if not len(straight):
+            raise RuntimeError("no straight edge to measure the edge shape value on")
+        from ngsolve import ElementId
+
+        kind = region.VB()
+        mask = region.Mask()
+        probe = GridFunction(scalar)
+        shape_mid = 0.0
+        for candidate in straight[:200]:
+            row = edge_rows[candidate]
+            middle = 0.5 * (vertex_points[row[1]] + vertex_points[row[2]])
+            located = mesh(*middle, VOL_or_BND=kind)
+            if located.nr < 0 or not mask[mesh[ElementId(kind, located.nr)].index]:
+                continue
+            probe.vec[:] = 0.0
+            probe.vec[int(row[0])] = 1.0
+            shape_mid = float(probe(located))
+            break
+        if not shape_mid:
+            raise RuntimeError("could not measure the edge shape value inside the region")
+        endpoints = 0.5 * (vertex_points[edge_rows[:, 1]] + vertex_points[edge_rows[:, 2]])
+        points.append(endpoints + shape_mid * curvature)
+    points = np.concatenate(points, axis=0)
+    geometry_seconds = time.perf_counter() - started
+
+    started = time.perf_counter()
+    values = _evaluate_cf_at_points(mesh, H_s, points)
+    evaluation_seconds = time.perf_counter() - started
+
+    components = []
+    n_vertex = len(vertex_nodes)
+    for axis in range(values.shape[1]):
+        gf = GridFunction(scalar)
+        gf.vec[:] = 0.0
+        array = gf.vec.FV().NumPy()
+        array[np.asarray(vertex_dofs)] = values[:n_vertex, axis]
+        if len(edge_rows):
+            linear = 0.5 * (values[edge_rows[:, 1], axis] + values[edge_rows[:, 2], axis])
+            array[edge_rows[:, 0]] = (values[n_vertex:, axis] - linear) / shape_mid
+        components.append(gf)
+    return {
+        "field": CoefficientFunction(tuple(components)),
+        "space": scalar,
+        "nodes": int(len(points)),
+        "order": int(order),
+        "timings_seconds": {"geometry": geometry_seconds, "source_evaluation": evaluation_seconds},
+    }
+
+
+def _material_centroid(mesh, material):
+    from ngsolve import VOL
+
+    for element in mesh.Elements(VOL):
+        if element.mat == material:
+            points = [mesh.vertices[vertex.nr].point for vertex in element.vertices]
+            return tuple(sum(point[axis] for point in points) / len(points) for axis in range(3))
+    raise ValueError(f"material {material!r} has no volume element")
+
+
+def _uniform_permeability(mesh, mu_cf, materials, mu_r_by_material, *, role):
+    """Constant ``mu`` shared by ``materials``, checked against ``mu_cf``.
+
+    The surface-flux identity moves ``mu`` outside the integral, so it is
+    valid only where ``mu`` is one constant.  The declared value is taken
+    from ``mu_r_by_material`` (default 1) and verified at each material's
+    element centroid against the permeability actually assembled.
+    """
+    values = {name: MU_0 * float((mu_r_by_material or {}).get(name, 1.0)) for name in materials}
+    if len(set(values.values())) != 1:
+        raise ValueError(f"surface-flux {role} load needs one permeability; got {values}")
+    mu = next(iter(values.values()))
+    for name in materials:
+        point = _material_centroid(mesh, name)
+        actual = float(mu_cf(mesh(*point)))
+        if not math.isclose(actual, mu, rel_tol=1e-12):
+            raise ValueError(
+                f"surface-flux {role} load: assembled permeability in {name!r} is "
+                f"{actual!r}, declared {mu!r}; the identity needs a constant mu")
+    return mu
+
+
 def project_source_total_hodge(
         mesh, H_s, total_source_materials, *, order=2, inverse="pardiso",
-        gauge_epsilon=1.0e-12, bonus_intorder=4):
+        gauge_epsilon=1.0e-12, bonus_intorder=4, source_load="volume",
+        tangential_tolerance=None):
     """Split a linked source inside total-potential materials.
 
     On a multiply connected iron body a curl-free coil field need not be the
@@ -310,7 +531,23 @@ def project_source_total_hodge(
     use the mixed solver's value when composing the two operations. Matching
     bonuses does not establish source quadrature convergence or orthogonality
     against a different test space.
+
+    ``source_load="surface_flux"`` assembles the same right-hand side from
+    the source normal flux on the enclosing boundary (``div H_s = 0``), so the
+    source is evaluated on faces only.  That load determines the exact part
+    alone: a harmonic (linked-current) remainder is not represented by
+    boundary normal data.  It therefore requires ``tangential_tolerance`` and
+    fails when the boundary tangential residual
+    ``|n x (H_s + grad Phi_s)| / |n x H_s|`` exceeds it, which is what a
+    linked source produces.  The volume norms are not evaluated in this mode.
     """
+    _check_source_load("source_load", source_load)
+    if source_load == "surface_flux" and (
+            tangential_tolerance is None or not math.isfinite(float(tangential_tolerance))
+            or float(tangential_tolerance) <= 0.0):
+        raise ValueError(
+            "surface_flux Hodge projection needs a positive tangential_tolerance; "
+            "without it a linked-source harmonic remainder would be dropped silently")
     names = tuple(str(name) for name in total_source_materials)
     if not names or len(names) != len(set(names)) or any(not name for name in names):
         raise ValueError(
@@ -337,7 +574,13 @@ def project_source_total_hodge(
     a_bf += InnerProduct(grad(potential), grad(test)) * d_total
     a_bf += float(gauge_epsilon) * potential * test * d_total
     f_lf = LinearForm(fes)
-    f_lf += -InnerProduct(H_s, grad(test)) * d_total
+    if source_load == "volume":
+        f_lf += -InnerProduct(H_s, grad(test)) * d_total
+    else:
+        signs = material_set_boundary_signs(mesh, names)
+        flux_form, flux_balance = outward_source_flux_form(
+            mesh, H_s, signs, test.Trace(), bonus_intorder=bonus_intorder, scale=-1.0)
+        f_lf += flux_form
     a_bf.Assemble()
     f_lf.Assemble()
     potential_gf = GridFunction(fes, name="total_source_potential")
@@ -345,6 +588,41 @@ def project_source_total_hodge(
         fes.FreeDofs(), inverse=inverse) * f_lf.vec
 
     harmonic_field = H_s + grad(potential_gf)
+    if source_load == "surface_flux":
+        from ngsolve import specialcf
+
+        normal = specialcf.normal(mesh.dim)
+        d_boundary = ds(definedon=mesh.Boundaries("|".join(sorted(signs))),
+                        bonus_intorder=int(bonus_intorder))
+        source_t = H_s - InnerProduct(H_s, normal) * normal
+        residual_t = source_t + grad(potential_gf).Trace()
+        residual_t = residual_t - InnerProduct(residual_t, normal) * normal
+        residual_norm = float(math.sqrt(Integrate(
+            InnerProduct(residual_t, residual_t) * d_boundary, mesh)))
+        source_t_norm = float(math.sqrt(Integrate(
+            InnerProduct(source_t, source_t) * d_boundary, mesh)))
+        relative_t = residual_norm / max(source_t_norm, 1.0e-300)
+        if relative_t > float(tangential_tolerance):
+            raise RuntimeError(
+                "surface_flux Hodge projection: boundary tangential residual "
+                f"{relative_t:.3e} exceeds {float(tangential_tolerance):.3e}; the "
+                "source is not exact on this total region (linked current?). Use "
+                "source_load='volume', which retains the harmonic remainder")
+        return {
+            "potential": potential_gf,
+            "harmonic_field": harmonic_field,
+            "fes": fes,
+            "relative_harmonic_norm": None,
+            "harmonic_norm": None,
+            "source_norm": None,
+            "relative_tangential_residual": relative_t,
+            "tangential_tolerance": float(tangential_tolerance),
+            "boundary_signs": dict(signs),
+            "flux_balance": flux_balance,
+            "total_source_materials": names,
+            "bonus_intorder": int(bonus_intorder),
+            "source_load": source_load,
+        }
     harmonic_norm = float(math.sqrt(Integrate(
         InnerProduct(harmonic_field, harmonic_field) * d_total, mesh)))
     source_norm = float(math.sqrt(Integrate(
@@ -358,6 +636,7 @@ def project_source_total_hodge(
         "source_norm": source_norm,
         "total_source_materials": names,
         "bonus_intorder": int(bonus_intorder),
+        "source_load": source_load,
     }
 
 
@@ -668,7 +947,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         reduced_dirichlet_boundary=None, total_dirichlet_boundary=None,
         interface_multiplier_dirichlet_boundary=None,
         reduced_zero_normal_boundary=None, surface_dirichlet=None, _fixed_rhs_cache=None,
-        _rhs_material=None, kelvin_match_exact=False):
+        _rhs_material=None, kelvin_match_exact=False,
+        reduced_source_load="volume", total_source_load="volume",
+        total_source_potential=None, load_source_h=None):
     """Solve the mixed total/reduced Omega formulation.
 
     The total/reduced scalar-potential split of Simkin and Trowbridge
@@ -793,7 +1074,35 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         interface_multiplier_dirichlet_boundary: optional boundary on which
             the interface constraint is already fixed by essential traces.
             Use only after checking the intersecting interface DOFs.
+        reduced_source_load: ``"volume"`` (default) assembles
+            ``mu H_s . grad(v)`` over the reduced region.  ``"surface_flux"``
+            assembles the equal boundary form ``mu (H_s . n_out) v`` on the
+            region's enclosing labels, valid because ``div H_s = 0`` and the
+            reduced permeability is one constant (checked).  It evaluates the
+            source on faces only; the discrete loads differ by quadrature
+            error, so compare before substituting one for the other.
+        total_source_load: the same choice for ``total_source_h`` on
+            ``total_source_materials``.  ``"surface_flux"`` needs
+            ``total_source_h`` to be the raw source ``H_s`` and
+            ``total_source_potential`` the Hodge potential ``Phi_s`` of
+            ``H_s + grad(Phi_s)``, and a constant permeability per material
+            (linear only; a supplied ``mu_cf`` must match it).
+        load_source_h: optional representation of ``H_s`` used only in the
+            reduced load (for example :func:`interpolate_source_field`).  The
+            reported reduced field still uses the exact ``H_s``.
     """
+    _check_source_load("reduced_source_load", reduced_source_load)
+    _check_source_load("total_source_load", total_source_load)
+    if (total_source_load == "surface_flux") != (total_source_potential is not None):
+        raise ValueError(
+            "total_source_potential is required by, and only used with, "
+            "total_source_load='surface_flux'")
+    if total_source_load == "surface_flux" and _rhs_material is not None:
+        raise ValueError("the cached material RHS operator is a volume form; "
+                         "total_source_load='surface_flux' is linear only")
+    if reduced_source_load == "surface_flux" and source_rhs_reduced is not None:
+        raise ValueError("source_rhs_reduced replaces the reduced load; do not combine it "
+                         "with reduced_source_load='surface_flux'")
     reduced_materials = tuple(reduced_materials)
     total_materials = tuple(total_materials)
     actual_materials = set(mesh.GetMaterials())
@@ -1054,9 +1363,18 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         multiplier * jump_test + test_multiplier * jump_trial) * d_interface
 
     fixed_rhs = LinearForm(fes)
-    if source_rhs_reduced is None:
-        fixed_rhs += mu_cf * H_s * grad(test_reduced) * dx(
+    source_load_diagnostics = {}
+    reduced_load_h = H_s if load_source_h is None else load_source_h
+    if source_rhs_reduced is None and reduced_source_load == "volume":
+        fixed_rhs += mu_cf * reduced_load_h * grad(test_reduced) * dx(
             definedon=reduced_selector, bonus_intorder=bonus_intorder)
+    elif source_rhs_reduced is None:
+        mu_reduced = _uniform_permeability(
+            mesh, mu_cf, reduced_materials, mu_r_by_material, role="reduced")
+        flux_form, source_load_diagnostics["reduced"] = outward_source_flux_form(
+            mesh, reduced_load_h, material_set_boundary_signs(mesh, reduced_materials),
+            test_reduced.Trace(), bonus_intorder=bonus_intorder, scale=mu_reduced)
+        fixed_rhs += flux_form
     if reduced_zero_normal_boundary is not None:
         from ngsolve import specialcf, BoundaryFromVolumeCF
         labels = set(str(reduced_zero_normal_boundary).split("|"))
@@ -1093,7 +1411,21 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             definedon=total_source_selector,
             intrules={kind: IntegrationRule(kind, order=2 * int(order) + int(bonus_intorder))
                       for kind in {element.type for element in mesh.Elements(VOL)}})
-        f_lf += mu_cf * total_source_h * grad(test_total) * material_rhs_measure
+        if total_source_load == "volume":
+            f_lf += mu_cf * total_source_h * grad(test_total) * material_rhs_measure
+        else:
+            # mu (H_s + grad Phi_s) . grad v = mu [(H_s . n_out) v on the
+            # boundary + grad Phi_s . grad v], material by material.
+            for name in total_source_materials:
+                mu_material = _uniform_permeability(
+                    mesh, mu_cf, (name,), mu_r_by_material, role="total")
+                flux_form, source_load_diagnostics[f"total:{name}"] = outward_source_flux_form(
+                    mesh, total_source_h, material_set_boundary_signs(mesh, (name,)),
+                    test_total.Trace(), bonus_intorder=bonus_intorder, scale=mu_material)
+                f_lf += flux_form
+                f_lf += mu_material * InnerProduct(
+                    grad(total_source_potential), grad(test_total)) * dx(
+                        definedon=mesh.Materials(name), bonus_intorder=bonus_intorder)
     fixed_rhs += interface_constraint_scale * test_multiplier * source_potential * d_interface
     # Prescribed normal flux is part of the source, so it belongs to the cached
     # fixed right-hand side rather than the material-dependent one.
@@ -1195,6 +1527,10 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
 
     phi_reduced_gf, phi_total_gf, multiplier_gf = solution.components[:3]
     H_reduced = H_s - grad(phi_reduced_gf)
+    if total_source_load == "surface_flux":
+        # The load used the raw source and its Hodge potential separately;
+        # the field keeps the harmonic-remainder meaning of total_source_h.
+        total_source_h = total_source_h + grad(total_source_potential)
     zero_h = CoefficientFunction((0.0, 0.0, 0.0))
     total_source_by_material = mesh.MaterialCF({
         material: total_source_h
@@ -1254,6 +1590,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         "kelvin_source_potential": kelvin_source_potential,
         "total_source_h": total_source_h,
         "total_source_materials": total_source_materials,
+        "source_loads": {"reduced": reduced_source_load, "total": total_source_load,
+                         "surface_flux_balance": source_load_diagnostics},
         "H_cf": H_cf,
         "B_cf": mu_cf * H_cf,
     }
