@@ -367,9 +367,9 @@ def test_inexact_newton_preserves_field_and_outer_gates(box_mesh):
     law = lane().SoftIronLaw(_bh_table())
     options = dict(newton_tolerance=1e-8, tolerance=1e-5, max_iterations=30,
                    max_halvings=6, observation=_points())
-    reference, fixed_stats, _ = _engine(box_mesh, "ams").run_newton(law, **options)
+    reference, fixed_stats, _ = _engine(box_mesh, "ams").run_newton(law, linear_floor=False, **options)
     engine = _engine(box_mesh, "ams", ams_update_every=2)
-    field, stats, _ = engine.run_newton(law, inexact_linear=True, **options)
+    field, stats, _ = engine.run_newton(law, inexact_linear=True, linear_floor=False, **options)
     assert fixed_stats["converged"] and stats["converged"]
     assert stats["final_residual_relative"] <= options["newton_tolerance"]
     assert stats["final_relative_change"] <= options["tolerance"]
@@ -380,6 +380,130 @@ def test_inexact_newton_preserves_field_and_outer_gates(box_mesh):
         assert row["relative_residual"] <= row["linear_tolerance"]
     assert stats["history"][-1]["linear_tolerance"] < stats["history"][0]["linear_tolerance"]
     np.testing.assert_allclose(field, reference, rtol=1e-6, atol=1e-8)
+
+
+def _random_solution(engine, seed):
+    solution = ng.GridFunction(engine.fes)
+    solution.vec.FV().NumPy()[:] = np.random.default_rng(seed).normal(size=engine.fes.ndof) * 1e-3
+    return solution
+
+
+@pytest.mark.parametrize("overrides", [{}, {"outer_boundary": "natural_total"},
+                                       {"gauge_epsilon": 0.0, "linear_solver": "iccg"}])
+def test_algebraic_residual_and_flux_match_form_assembly(box_mesh, overrides):
+    law = lane().SoftIronLaw(_bh_table())
+    settings = dict(overrides)
+    solver = settings.pop("linear_solver", "ams")
+    fast = _engine(box_mesh, solver, **settings)
+    slow = _engine(box_mesh, solver, algebraic_residual=False, **settings)
+    solution = _random_solution(fast, 7)
+    for engine in (fast, slow):
+        b, magnitude = engine._element_flux(solution)
+        engine._set_material(law.reluctivity(magnitude), law=law, b_iron=b, magnitude=magnitude)
+    b_fast, _ = fast._element_flux(solution)
+    b_slow, _ = slow._element_flux(solution)
+    np.testing.assert_allclose(b_fast, b_slow, rtol=1e-11, atol=1e-13 * np.max(np.abs(b_slow)))
+    r_fast, n_fast = fast._residual(solution)
+    r_slow, n_slow = slow._residual(solution)
+    difference = r_fast.FV().NumPy() - r_slow.FV().NumPy()
+    assert np.linalg.norm(difference[fast.free]) <= 1e-11 * n_slow
+    assert n_fast == pytest.approx(n_slow, rel=1e-11)
+
+
+def test_algebraic_total_a_residual_matches_form_assembly(box_mesh):
+    module = lane()
+    x, y = ng.x, ng.y
+    current = 1e7 * ng.CF((-2*y*(x-.5)*(.7-x), -(1.2-2*x)*(.01-y*y), 0))
+    settings = dict(linear_solver="ams", cg_tolerance=1e-10, cg_max_iterations=1000,
+                    ams_num_smooth=1, source_projection_order=2)
+    fast = module.TotalAP1Box(box_mesh, current, **settings)
+    slow = module.TotalAP1Box(box_mesh, current, algebraic_residual=False, **settings)
+    solution = _random_solution(fast, 11)
+    r_fast, n_fast = fast._residual(solution)
+    r_slow, n_slow = slow._residual(solution)
+    difference = r_fast.FV().NumPy() - r_slow.FV().NumPy()
+    assert np.linalg.norm(difference[fast.free]) <= 1e-11 * n_slow
+    law = module.SoftIronLaw(_bh_table())
+    options = dict(newton_tolerance=1e-9, tolerance=1e-7, max_iterations=30,
+                   max_halvings=4, observation=_points())
+    field_fast, stats_fast, _ = fast.run_newton(law, **options)
+    field_slow, stats_slow, _ = slow.run_newton(law, **options)
+    assert stats_fast["converged"] and stats_slow["converged"]
+    np.testing.assert_allclose(field_fast, field_slow, rtol=1e-8, atol=1e-12)
+
+
+def test_vectorised_iron_centroids_match_the_element_loop(box_mesh):
+    numbers, centroids = lane().iron_elements_with_centroids(box_mesh)
+    expected_numbers, expected = [], []
+    for element in box_mesh.Elements(ng.VOL):
+        if str(element.mat) != "iron":
+            continue
+        pts = [box_mesh.vertices[v.nr].point for v in element.vertices]
+        expected_numbers.append(int(element.nr))
+        expected.append([sum(float(p[k]) for p in pts) / len(pts) for k in range(3)])
+    np.testing.assert_array_equal(numbers, np.asarray(expected_numbers))
+    np.testing.assert_array_equal(centroids, np.asarray(expected))
+
+
+def test_total_a_zero_source_shortcut_is_bit_identical(box_mesh):
+    module = lane()
+    x, y = ng.x, ng.y
+    current = 1e7 * ng.CF((-2*y*(x-.5)*(.7-x), -(1.2-2*x)*(.01-y*y), 0))
+    settings = dict(linear_solver="direct", cg_tolerance=1e-9, cg_max_iterations=1000,
+                    ams_num_smooth=1, source_projection_order=2)
+    law = module.SoftIronLaw(_bh_table())
+    options = dict(newton_tolerance=1e-8, tolerance=1e-6, max_iterations=20,
+                   max_halvings=4, observation=_points())
+    # Form-assembled residual on both sides: this pins the zero-source shortcut
+    # alone (the direct SPD factorisation of the eps=1e-6 gauged Jacobian is
+    # round-off sensitive, so both runs must follow the same arithmetic).
+    fast = module.TotalAP1Box(box_mesh, current, algebraic_residual=False, **settings)
+    generic = module.TotalAP1Box(box_mesh, current, zero_source=False,
+                                 algebraic_residual=False, **settings)
+    assert fast.zero_source and not generic.zero_source
+    np.testing.assert_array_equal(fast.source_at_centroids, generic.source_at_centroids)
+    field_fast, stats_fast, _ = fast.run_newton(law, **options)
+    field_generic, stats_generic, _ = generic.run_newton(law, **options)
+    assert stats_fast["converged"] and stats_generic["converged"]
+    np.testing.assert_array_equal(field_fast, field_generic)
+
+
+def test_linear_floor_follows_the_nonlinear_target_and_keeps_the_field(box_mesh):
+    law = lane().SoftIronLaw(_bh_table())
+    options = dict(newton_tolerance=1e-8, tolerance=1e-5, max_iterations=30,
+                   max_halvings=6, observation=_points(), inexact_linear=True)
+    reference, _, _ = _engine(box_mesh, "ams").run_newton(law, linear_floor=False, **options)
+    engine = _engine(box_mesh, "ams")
+    field, stats, _ = engine.run_newton(law, **options)
+    assert stats["converged"] and stats["linear_floor"] is True
+    assert stats["final_residual_relative"] <= options["newton_tolerance"]
+    first = stats["history"][0]
+    for row in stats["history"]:
+        # floor = 0.1 * newton_tolerance * |R_0| / |R_k|; relative residual_relative is |R_k|/|R_0|
+        assert row["linear_floor"] == pytest.approx(0.1 * 1e-8 / row["residual_relative"], rel=1e-12)
+        forcing = max(1e-9, min(0.01, 0.1 * row["residual_relative"]))
+        assert row["linear_tolerance"] == pytest.approx(min(0.5, max(forcing, row["linear_floor"])))
+        assert row["relative_residual"] <= row["linear_tolerance"]
+    assert first["linear_floor"] == pytest.approx(1e-9)
+    assert engine.cg_tolerance == 1e-9
+    np.testing.assert_allclose(field, reference, rtol=1e-6, atol=1e-8)
+
+
+def test_ungauged_iccg_newton_reaches_a_tight_rule_with_the_floor(box_mesh):
+    law = lane().SoftIronLaw(_bh_table())
+    engine = _engine(box_mesh, "iccg", gauge_epsilon=0.0, cg_tolerance=1e-8,
+                     cg_max_iterations=5000)
+    field, stats, _ = engine.run_newton(law, newton_tolerance=1e-9, tolerance=2e-6,
+                                        max_iterations=40, max_halvings=6,
+                                        observation=_points(), inexact_linear=True)
+    assert stats["converged"]
+    assert stats["final_residual_relative"] <= 1e-9
+    assert stats["final_relative_change"] <= 2e-6
+    assert all(row["relative_residual"] <= row["linear_tolerance"] for row in stats["history"])
+    gauged, _, _ = _engine(box_mesh, "ams").run_newton(
+        law, newton_tolerance=1e-9, tolerance=2e-6, max_iterations=40, max_halvings=6,
+        observation=_points(), inexact_linear=True)
+    np.testing.assert_allclose(field, gauged, rtol=2e-5, atol=1e-8)
 
 
 def test_inexact_newton_restores_tolerance_after_linear_failure(box_mesh, monkeypatch):

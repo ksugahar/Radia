@@ -224,6 +224,9 @@ struct radTCompCriterium {
 	double AbsPrecEnergy;
 	double AbsPrecTrjCoord;
 	double AbsPrecTrjAngle;
+	// Relative tolerance of the adaptive angular quadrature of arc-current B/H.
+	// The absolute part scales with it (1e-3 x, times section size and interval).
+	double RelPrecArc;
 	double MltplThresh[4]; // Threshold ratios for 4 diff. orders of multipole approx. at field computation
 
 	double WorstRelPrec;
@@ -240,6 +243,7 @@ struct radTCompCriterium {
 		AbsPrecTorque = 10.;  // Newton * mm
 		AbsPrecEnergy = 10.;
 		AbsPrecTrjCoord = AbsPrecTrjAngle = -1.;
+		RelPrecArc = 1.e-9; // Round-off level default; "PrcArc->" relaxes it explicitly
 
 		WorstRelPrec = 0.1;  // Used for Force computation through energy
 		BasedOnWorstRelPrec = 0;
