@@ -156,6 +156,10 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     nonlinear_progress_callback=None,
     inverse: str = "pardiso",
     bonus_intorder: int = 4,
+    reduced_source_load: str = "volume",
+    total_source_load: str = "volume",
+    source_representation: str = "exact",
+    source_interpolation_order: int = 2,
 ) -> dict[str, object]:
     """Solve one static electromagnet through the required H1 formulation.
 
@@ -197,7 +201,41 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     vacuum. Explicit over-order projections remain available for convergence
     studies and carry a discretization warning. Other trace contracts retain
     their at-least-order-two projection default.
+
+    ``reduced_source_load`` / ``total_source_load`` select how the coil
+    source enters the load: ``"volume"`` (default) integrates ``H_s`` over the
+    region, ``"surface_flux"`` uses the equal boundary normal-flux form
+    (``div H_s = 0``) and evaluates the source on faces only.  Both are linear
+    only.  ``total_source_load="surface_flux"`` requires the ``total_hodge``
+    contract and ``source_trace_tolerance``, which then also gates the iron
+    boundary tangential residual: a linked source that the surface form cannot
+    represent fails instead of losing its harmonic part.
+
+    ``source_representation="nodal"`` replaces the coil field in every load
+    (reduced load, source traces, iron Hodge projection and iron load) by its
+    nodal H1 interpolant of ``source_interpolation_order`` on the region each
+    load integrates over: the region's volume for a volume load, its enclosing
+    boundary for a surface-flux load.  The reported reduced field keeps the
+    exact source.  The interpolant adds an ``O(h^{p+1})`` source error that
+    grows where the mesh does not resolve the coil's proximity, so it must be
+    validated per mesh.  Linear only.
     """
+    from radia.kelvin_solver import SOURCE_LOADS
+
+    for name, value in (("reduced_source_load", reduced_source_load),
+                        ("total_source_load", total_source_load)):
+        if value not in SOURCE_LOADS:
+            raise ValueError(f"{name} must be one of {SOURCE_LOADS}; got {value!r}")
+    if bh_table is not None and "surface_flux" in (reduced_source_load, total_source_load):
+        raise ValueError("surface_flux source loads are implemented for the linear solve only")
+    if total_source_load == "surface_flux" and source_potential_contract != "total_hodge":
+        raise ValueError("total_source_load='surface_flux' requires source_potential_contract='total_hodge'")
+    if source_representation not in ("exact", "nodal"):
+        raise ValueError("source_representation must be 'exact' or 'nodal'")
+    if source_representation == "nodal" and bh_table is not None:
+        raise ValueError("source_representation='nodal' is implemented for the linear solve only")
+    if source_representation == "nodal" and source_potential_contract == "global_physical":
+        raise ValueError("source_representation='nodal' does not cover the global_physical contract")
     if int(order) < 1:
         raise ValueError("order must be positive")
     if (bh_table is not None and nonlinear_method == "newton"
@@ -228,6 +266,35 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
         mesh.GetMaterials(), mesh.GetBoundaries(), mesh.GetBBBoundaries()
     )
 
+    reduced_load_h = None
+    total_load_h = source_h
+    interpolation = {}
+    if source_representation == "nodal":
+        from radia.kelvin_solver import interpolate_source_field, material_set_boundary_signs
+
+        def load_region(materials, load):
+            if load == "volume":
+                return mesh.Materials("|".join(materials))
+            return mesh.Boundaries("|".join(sorted(
+                material_set_boundary_signs(mesh, materials))))
+
+        reduced_interpolant = interpolate_source_field(
+            mesh, source_h, load_region(tuple(domain.reduced_materials), reduced_source_load),
+            order=int(source_interpolation_order))
+        reduced_load_h = reduced_interpolant["field"]
+        interpolation["reduced"] = {key: reduced_interpolant[key]
+                                    for key in ("nodes", "order", "timings_seconds")}
+        if source_potential_contract == "total_hodge":
+            iron_materials = tuple(name for name in domain.total_materials
+                                   if name not in domain.kelvin_materials)
+            total_interpolant = interpolate_source_field(
+                mesh, source_h, load_region(iron_materials, total_source_load),
+                order=int(source_interpolation_order))
+            total_load_h = total_interpolant["field"]
+            interpolation["total"] = {key: total_interpolant[key]
+                                      for key in ("nodes", "order", "timings_seconds")}
+    trace_source_h = source_h if reduced_load_h is None else reduced_load_h
+
     from radia.kelvin_solver import (
         project_source_total_hodge,
         project_source_physical_potential,
@@ -239,14 +306,14 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     if source_potential_contract == "surface_trace":
         source_trace = project_source_interface_potential(
             mesh,
-            source_h,
+            trace_source_h,
             domain.reduced_total_interface,
             order=int(source_projection_order),
             relative_tolerance=source_trace_tolerance,
         )
         kelvin_trace = project_source_interface_potential(
             mesh,
-            source_h,
+            trace_source_h,
             domain.kelvin_interface,
             order=int(source_projection_order),
             relative_tolerance=source_trace_tolerance,
@@ -265,6 +332,7 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
             "relative_tolerance": source_trace_tolerance,
         }
         total_source_h = None
+        total_source_potential = None
         total_source_materials = ()
     elif source_potential_contract == "total_hodge":
         total_source_materials = tuple(
@@ -273,10 +341,13 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
         )
         source_hodge = project_source_total_hodge(
             mesh,
-            source_h,
+            total_load_h,
             total_source_materials,
             order=int(source_projection_order),
             bonus_intorder=bonus_intorder,
+            source_load=total_source_load,
+            tangential_tolerance=(source_trace_tolerance
+                                  if total_source_load == "surface_flux" else None),
         )
         # The exact pulled-back exterior source needs no interface trace at
         # all, so the projection is skipped rather than computed and dropped.
@@ -284,7 +355,7 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
             None if kelvin_source_h is not None
             else project_source_interface_potential(
                 mesh,
-                source_h,
+                trace_source_h,
                 domain.kelvin_interface,
                 order=int(source_projection_order),
                 relative_tolerance=source_trace_tolerance,
@@ -293,14 +364,23 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
         source_potential = source_hodge["potential"]
         kelvin_source_potential = (
             None if kelvin_trace is None else kelvin_trace["potential"])
-        total_source_h = source_hodge["harmonic_field"]
+        if total_source_load == "surface_flux":
+            total_source_h = total_load_h
+            total_source_potential = source_hodge["potential"]
+        else:
+            total_source_h = source_hodge["harmonic_field"]
+            total_source_potential = None
         source_diagnostics = {
             "contract": source_potential_contract,
             "projection_order": int(source_projection_order),
             "total_source_materials": list(total_source_materials),
-            "iron_relative_harmonic_norm": float(
-                source_hodge["relative_harmonic_norm"]
-            ),
+            "iron_relative_harmonic_norm": (
+                None if source_hodge["relative_harmonic_norm"] is None
+                else float(source_hodge["relative_harmonic_norm"])),
+            "iron_relative_tangential_residual": source_hodge.get(
+                "relative_tangential_residual"),
+            "reduced_source_load": reduced_source_load,
+            "total_source_load": total_source_load,
             "projection_bonus_intorder": source_hodge["bonus_intorder"],
             "kelvin_exterior_source": (
                 "exact pulled-back field" if kelvin_trace is None
@@ -325,6 +405,7 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
         source_potential = source_volume["potential"]
         kelvin_source_potential = source_potential
         total_source_h = None
+        total_source_potential = None
         total_source_materials = ()
         source_diagnostics = {
             "contract": source_potential_contract,
@@ -360,6 +441,10 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
             float(kelvin_radius),
             kelvin_offset,
             mu_r_by_material=dict(linear_mu_r_by_material),
+            reduced_source_load=reduced_source_load,
+            total_source_load=total_source_load,
+            total_source_potential=total_source_potential,
+            load_source_h=reduced_load_h,
             **common,
         )
     else:
@@ -402,6 +487,9 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
             **iteration_options,
             **common,
         )
+    source_diagnostics["source_representation"] = source_representation
+    if interpolation:
+        source_diagnostics["interpolation"] = interpolation
     trace_gate_applied = source_trace_tolerance is not None and (
         source_potential_contract != "total_hodge" or kelvin_trace is not None)
     source_diagnostics["gate_enabled"] = trace_gate_applied
