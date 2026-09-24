@@ -25,8 +25,9 @@ def arc():
 def test_precision_is_accepted_at_any_positive_magnitude(precision):
     field = rad.RadiaField(arc(), "b", precision=precision)
     assert field.precision == precision
-    mesh = ng.Mesh(ng.unit_cube.GenerateMesh(maxh=0.5))
-    value = np.asarray(field(mesh(0.5, 0.5, 0.5)))
+    with ng.TaskManager():
+        mesh = ng.Mesh(ng.unit_cube.GenerateMesh(maxh=0.5))
+        value = np.asarray(field(mesh(0.5, 0.5, 0.5)))
     assert np.all(np.isfinite(value)) and np.linalg.norm(value) > 0
 
 
@@ -36,11 +37,12 @@ def test_precision_works_for_every_field_type(field_type):
 
 
 def test_precision_does_not_change_the_arc_field():
-    mesh = ng.Mesh(ng.unit_cube.GenerateMesh(maxh=0.5))
-    point = mesh(0.2, 0.3, 0.4)
-    plain = np.asarray(rad.RadiaField(arc(), "b")(point))
-    rad.FldCmpPrc(DEFAULT)
-    tight = np.asarray(rad.RadiaField(arc(), "b", precision=1e-9)(point))
+    with ng.TaskManager():
+        mesh = ng.Mesh(ng.unit_cube.GenerateMesh(maxh=0.5))
+        point = mesh(0.2, 0.3, 0.4)
+        plain = np.asarray(rad.RadiaField(arc(), "b")(point))
+        rad.FldCmpPrc(DEFAULT)
+        tight = np.asarray(rad.RadiaField(arc(), "b", precision=1e-9)(point))
     np.testing.assert_array_equal(plain, tight)
 
 
