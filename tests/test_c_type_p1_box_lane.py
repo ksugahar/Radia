@@ -367,9 +367,9 @@ def test_inexact_newton_preserves_field_and_outer_gates(box_mesh):
     law = lane().SoftIronLaw(_bh_table())
     options = dict(newton_tolerance=1e-8, tolerance=1e-5, max_iterations=30,
                    max_halvings=6, observation=_points())
-    reference, fixed_stats, _ = _engine(box_mesh, "ams").run_newton(law, **options)
+    reference, fixed_stats, _ = _engine(box_mesh, "ams").run_newton(law, linear_floor=False, **options)
     engine = _engine(box_mesh, "ams", ams_update_every=2)
-    field, stats, _ = engine.run_newton(law, inexact_linear=True, **options)
+    field, stats, _ = engine.run_newton(law, inexact_linear=True, linear_floor=False, **options)
     assert fixed_stats["converged"] and stats["converged"]
     assert stats["final_residual_relative"] <= options["newton_tolerance"]
     assert stats["final_relative_change"] <= options["tolerance"]
@@ -380,6 +380,44 @@ def test_inexact_newton_preserves_field_and_outer_gates(box_mesh):
         assert row["relative_residual"] <= row["linear_tolerance"]
     assert stats["history"][-1]["linear_tolerance"] < stats["history"][0]["linear_tolerance"]
     np.testing.assert_allclose(field, reference, rtol=1e-6, atol=1e-8)
+
+
+def test_linear_floor_follows_the_nonlinear_target_and_keeps_the_field(box_mesh):
+    law = lane().SoftIronLaw(_bh_table())
+    options = dict(newton_tolerance=1e-8, tolerance=1e-5, max_iterations=30,
+                   max_halvings=6, observation=_points(), inexact_linear=True)
+    reference, _, _ = _engine(box_mesh, "ams").run_newton(law, linear_floor=False, **options)
+    engine = _engine(box_mesh, "ams")
+    field, stats, _ = engine.run_newton(law, **options)
+    assert stats["converged"] and stats["linear_floor"] is True
+    assert stats["final_residual_relative"] <= options["newton_tolerance"]
+    first = stats["history"][0]
+    for row in stats["history"]:
+        # floor = 0.1 * newton_tolerance * |R_0| / |R_k|; relative residual_relative is |R_k|/|R_0|
+        assert row["linear_floor"] == pytest.approx(0.1 * 1e-8 / row["residual_relative"], rel=1e-12)
+        forcing = max(1e-9, min(0.01, 0.1 * row["residual_relative"]))
+        assert row["linear_tolerance"] == pytest.approx(min(0.5, max(forcing, row["linear_floor"])))
+        assert row["relative_residual"] <= row["linear_tolerance"]
+    assert first["linear_floor"] == pytest.approx(1e-9)
+    assert engine.cg_tolerance == 1e-9
+    np.testing.assert_allclose(field, reference, rtol=1e-6, atol=1e-8)
+
+
+def test_ungauged_iccg_newton_reaches_a_tight_rule_with_the_floor(box_mesh):
+    law = lane().SoftIronLaw(_bh_table())
+    engine = _engine(box_mesh, "iccg", gauge_epsilon=0.0, cg_tolerance=1e-8,
+                     cg_max_iterations=5000)
+    field, stats, _ = engine.run_newton(law, newton_tolerance=1e-9, tolerance=2e-6,
+                                        max_iterations=40, max_halvings=6,
+                                        observation=_points(), inexact_linear=True)
+    assert stats["converged"]
+    assert stats["final_residual_relative"] <= 1e-9
+    assert stats["final_relative_change"] <= 2e-6
+    assert all(row["relative_residual"] <= row["linear_tolerance"] for row in stats["history"])
+    gauged, _, _ = _engine(box_mesh, "ams").run_newton(
+        law, newton_tolerance=1e-9, tolerance=2e-6, max_iterations=40, max_halvings=6,
+        observation=_points(), inexact_linear=True)
+    np.testing.assert_allclose(field, gauged, rtol=2e-5, atol=1e-8)
 
 
 def test_inexact_newton_restores_tolerance_after_linear_failure(box_mesh, monkeypatch):
