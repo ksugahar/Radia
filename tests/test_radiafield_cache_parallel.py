@@ -28,5 +28,11 @@ def test_parallel_cache_values_equal_direct_evaluation(inside_taskmanager):
     stats = field.GetCacheStats()
     assert stats["size"] == len(points)
     assert stats["hits"] >= 0.99 * len(points)
+    # Cached values come from the same serial batch kernel, block by block, so
+    # they equal a single serial batch bit for bit.  (rad.Fld with a point list
+    # takes the parallel path and is a different reference.)
+    serial = rad.RadiaField(coil, "h")
+    serial_values = np.asarray(serial(located)).reshape(-1, 3)
+    np.testing.assert_array_equal(cached, serial_values)
     direct = np.asarray(rad.Fld(coil, "h", physical.tolist()))
     np.testing.assert_allclose(cached, direct, rtol=1e-13, atol=0.0)
