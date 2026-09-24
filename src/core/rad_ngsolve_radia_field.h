@@ -11,6 +11,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <memory>
 #include <optional>
@@ -177,11 +178,13 @@ public:
         if (precision_) {
             if (!std::isfinite(*precision_) || *precision_ <= 0.0)
                 throw std::invalid_argument("precision must be positive and finite");
-            std::string options =
-                "PrcB->" + std::to_string(*precision_) +
-                ",PrcA->" + std::to_string(*precision_) +
-                ",PrcH->" + std::to_string(*precision_) +
-                ",PrcM->" + std::to_string(*precision_);
+            // Radia's precision options are PrcB (B, also used for H) and PrcA;
+            // there is no PrcH/PrcM, and an unknown key rejects the whole call.
+            // %.17g keeps the value exact: to_string's fixed six decimals
+            // turned any precision below 5e-7 into zero, which Radia rejects.
+            char value[32];
+            std::snprintf(value, sizeof(value), "%.17g", *precision_);
+            std::string options = std::string("PrcB->") + value + ",PrcA->" + value;
             std::vector<char> mutable_options(options.begin(), options.end());
             mutable_options.push_back('\0');
             int result = 0;
