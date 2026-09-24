@@ -931,6 +931,9 @@ def main() -> None:
     parser.add_argument("--reduced-a-solver", choices=("ams", "iccg", "direct"), default="ams")
     parser.add_argument("--ic-shift", type=float, default=1.05,
                         help="shift of the incomplete Cholesky factorisation (iccg)")
+    parser.add_argument("--arc-rel-tol", type=float, default=None,
+                        help="relative tolerance of the arc-current source quadrature "
+                             "(Radia 'PrcArc', [1e-12, 1e-3]); default keeps Radia's 1e-9")
     parser.add_argument("--gauge-epsilon", type=float, default=GAUGE_EPSILON,
                         help="operator mass regularisation; 0 with iccg, beta-zero or shifted AMS")
     parser.add_argument("--ams-preconditioner-shift", type=float, default=0.0,
@@ -1005,6 +1008,10 @@ def run(options) -> dict:
     contract = check_mesh_contract(options.vol.resolve(), mesh)
     rad.UtiDelAll()
     coil, coil_manifest = adapters.build_coil()
+    if options.arc_rel_tol is not None:
+        # Global Radia setting; applies to every later source evaluation of this run.
+        rad.FldCmpPrc(f"PrcArc->{float(options.arc_rel_tol):.17g}")
+    coil_manifest = dict(coil_manifest, arc_rel_tol=options.arc_rel_tol)
     points = adapters.observation_points()
     for point in points:
         if not mesh(*map(float, point)):
