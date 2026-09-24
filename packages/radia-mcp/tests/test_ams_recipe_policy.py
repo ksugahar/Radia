@@ -26,3 +26,12 @@ def test_ams_recipe_keeps_shift_out_of_physical_system():
     assert not call.args
     assert {kw.arg for kw in call.keywords} >= {
         "a_real_mat", "grad_mat", "freedofs", "coord_x", "coord_y", "coord_z"}
+
+
+def test_ams_setup_diagnostic_does_not_remove_caller_guard():
+    path = Path(__file__).parents[1] / "src/radia_mcp/matrix_solvers/preconditioners_knowledge.py"
+    text = path.read_text(encoding="utf-8")
+    assert "caller must STILL construct/Update" in text
+    assert "setup_workers" in text
+    assert "0 when no coarsening occurs" in text
+    assert "configured thread count alone is not execution proof" in text

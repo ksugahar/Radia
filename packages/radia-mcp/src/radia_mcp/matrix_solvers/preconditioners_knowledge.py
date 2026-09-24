@@ -307,6 +307,14 @@ an already-built preconditioner inside TaskManager remains supported.
 Wrap mesh/space/forms/assembly and the SOLVE, but construct or update AMS outside
 the region. The subprocess regression in test_sparsesolv.py checks rejection,
 continued process operation, unchanged state, and parallel application.
+New native builds additionally create bounded internal TaskManager regions for
+Galerkin products and AMG hierarchy construction, while keeping coarse direct
+factorization outside those regions. The caller must STILL construct/Update
+outside TaskManager. Auxiliary spaces are visited sequentially, not in an outer
+four-way job. On real AMS, `setup_workers` counts workers actually observed in
+strength-row construction (0 when no coarsening occurs); it does not certify
+parallel execution of every setup phase. Check deployed binary support before
+using this diagnostic; a configured thread count alone is not execution proof.
 Older installed binaries can still crash: verify the deployed build before
 relying on the guard. Never probe an unknown binary inside a live MCP or MATLAB
 process; use the subprocess regression.
