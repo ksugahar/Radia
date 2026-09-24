@@ -641,7 +641,18 @@ class ReducedAP1Box:
 
     def run_newton(self, law: SoftIronLaw, *, newton_tolerance: float, tolerance: float,
                    max_iterations: int, max_halvings: int, observation: np.ndarray,
-                   inexact_linear: bool = False) -> tuple:
+                   inexact_linear: bool = False, linear_floor: bool = True) -> tuple:
+        """Newton on the element-constant flux density with Armijo backtracking.
+
+        ``linear_floor``: never ask the linear solve for an absolute residual
+        below ``0.1 * newton_tolerance * |R_0|`` -- beyond the nonlinear target
+        it buys nothing, and an ungauged singular system cannot deliver it
+        (round-off leaves a gradient component near 1e-7 of |R_k|). The
+        relative inner tolerance is then capped at 0.5; the nonlinear gates are
+        unchanged.
+        """
+        if not 0.0 < float(newton_tolerance) < 1.0:
+            raise ValueError("newton_tolerance must lie in (0, 1)")
         started = time.perf_counter()
         solution = ng.GridFunction(self.fes, name="A_reduced")
         solution.vec[:] = 0.0
@@ -676,6 +687,10 @@ class ReducedAP1Box:
             # Tighten inner solves with the nonlinear residual; outer gates stay fixed.
             if inexact_linear:
                 self.cg_tolerance = max(fixed_tolerance, min(0.01, 0.1 * residual_norm / residual_0))
+            if linear_floor:
+                floor = 0.1 * float(newton_tolerance) * residual_0 / residual_norm
+                entry["linear_floor"] = floor
+                self.cg_tolerance = min(0.5, max(self.cg_tolerance, floor))
             entry["linear_tolerance"] = self.cg_tolerance
             try:
                 entry.update(self._solve_linear(J.mat, negative, update, warm_start=False))
@@ -721,7 +736,7 @@ class ReducedAP1Box:
         field = self._observe(solution, observation)
         stats = {
             "method": "Newton", "converged": bool(converged), "iterations": len(history),
-            "inexact_linear": bool(inexact_linear),
+            "inexact_linear": bool(inexact_linear), "linear_floor": bool(linear_floor),
             "final_relative_change": final_change, "tolerance": float(tolerance),
             "newton_tolerance": float(newton_tolerance),
             "final_residual_relative": residual_norm / residual_0,
@@ -950,6 +965,9 @@ def main() -> None:
                         help="AMS true residual check interval; final check is mandatory")
     parser.add_argument("--inexact-linear", action="store_true",
                         help="Adapt Newton inner tolerance without relaxing final convergence gates")
+    parser.add_argument("--no-linear-floor", action="store_true",
+                        help="Newton: drop the absolute inner-solve floor 0.1*newton_tolerance*|R_0| "
+                             "(needed by ungauged systems at tight rules; on by default)")
     parser.add_argument("--vol", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--bh-table", type=Path, default=DEFAULT_BH)
@@ -1080,7 +1098,7 @@ def run(options) -> dict:
                 SoftIronLaw(material), newton_tolerance=options.newton_tolerance,
                 tolerance=options.tolerance, max_iterations=options.max_iterations,
                 max_halvings=options.line_search_max_halvings, observation=points,
-                inexact_linear=options.inexact_linear)
+                inexact_linear=options.inexact_linear, linear_floor=not options.no_linear_floor)
         else:
             field, stats, runtime = engine.run_picard(
                 SoftIronLaw(material), relax=options.relax,
