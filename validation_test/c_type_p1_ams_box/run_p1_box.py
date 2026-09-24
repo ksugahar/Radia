@@ -123,15 +123,35 @@ def check_mesh_contract(vol: Path, mesh: ng.Mesh) -> dict:
     return contract
 
 
-def iron_elements_with_centroids(mesh: ng.Mesh) -> list[tuple[int, tuple[float, float, float]]]:
-    out = []
-    for element in mesh.Elements(ng.VOL):
-        if str(element.mat) != "iron":
-            continue
-        pts = [mesh.vertices[v.nr].point for v in element.vertices]
-        centroid = tuple(sum(float(p[k]) for p in pts) / len(pts) for k in range(3))
-        out.append((int(element.nr), centroid))
-    return out
+def iron_elements_with_centroids(mesh: ng.Mesh) -> tuple[np.ndarray, np.ndarray]:
+    """Element numbers and vertex-mean centroids of the iron tets, vectorised.
+
+    Same element order and the same left-to-right vertex sum as a loop over
+    ``mesh.Elements(VOL)``, hence bit-identical centroids.
+    """
+    elements = mesh.ngmesh.Elements3D().NumPy()
+    iron_index = [index + 1 for index, name in enumerate(mesh.GetMaterials()) if name == "iron"]
+    numbers = np.flatnonzero(np.isin(elements["index"], iron_index)).astype(np.int64)
+    if numbers.size == 0:
+        raise RuntimeError("mesh has no iron elements")
+    if np.any(elements["np"][numbers] != 4):
+        raise RuntimeError("this lane uses straight tetrahedra only")
+    nodes = elements["nodes"][numbers][:, :4].astype(np.int64) - 1
+    points = np.array([point.p for point in mesh.ngmesh.Points()], dtype=float)
+    corners = points[nodes]
+    # Python 3.12's float sum() is Neumaier-compensated; reproduce it so the
+    # centroids stay bit-identical to the former per-element loop.
+    total = np.zeros((len(numbers), 3))
+    compensation = np.zeros_like(total)
+    for k in range(4):
+        term = corners[:, k]
+        running = total + term
+        compensation += np.where(np.abs(total) >= np.abs(term),
+                                 (total - running) + term, (term - running) + total)
+        total = running
+    total = np.where(compensation != 0.0, total + compensation, total)
+    return numbers, total / 4
+
 
 
 class SoftIronLaw:
@@ -268,8 +288,12 @@ class ReducedAP1Box:
                  ams_preconditioner_shift: float = 0.0,
                  ams_project_gradients: bool = False, ams_beta_zero: bool = False,
                  cg_check_interval: int = 1, ams_print_level: int = 0,
-                 outer_boundary: str = "source_flux"):
+                 outer_boundary: str = "source_flux", zero_source: bool = False):
         """``source_cf`` is the vacuum source flux density B_s as a vector CF.
+
+        ``zero_source=True`` declares ``source_cf`` identically zero (total-A):
+        its iron projection and centroid values are then zero without being
+        evaluated, which avoids a point search per iron element.
 
         ``linear_solver``: ``"ams"`` (compiled auxiliary-space Maxwell
         preconditioner + CG), ``"iccg"`` (Radia's compiled shifted incomplete
@@ -334,28 +358,32 @@ class ReducedAP1Box:
         self.free = np.fromiter(self.fes.FreeDofs(), dtype=bool, count=self.fes.ndof)
         self.nu_space = ng.L2(mesh, order=0)
         self.nu_gf = ng.GridFunction(self.nu_space)
-        self.iron = iron_elements_with_centroids(mesh)
+        self.iron_numbers, centroids = iron_elements_with_centroids(mesh)
+        self.iron = self.iron_numbers  # one entry per iron element
         self.timing["spaces"] = time.perf_counter() - started
         # The exact Radia source, evaluated once on the iron and kept as a
         # discontinuous polynomial field; the reduced right-hand side only
         # ever integrates B_s over iron, where B_s is smooth.
         started = time.perf_counter()
         self.source_cf = source_cf
+        self.zero_source = bool(zero_source)
         bs_space = ng.L2(mesh, order=int(source_projection_order), dim=3,
                          definedon=mesh.Materials("iron"))
         self.source_gf = ng.GridFunction(bs_space)
-        with ng.TaskManager():
-            self.source_gf.Set(self.source_cf, definedon=mesh.Materials("iron"))
+        if not self.zero_source:
+            with ng.TaskManager():
+                self.source_gf.Set(self.source_cf, definedon=mesh.Materials("iron"))
         self.timing["source_projection"] = time.perf_counter() - started
         self.source_projection_order = int(source_projection_order)
         # Element-constant helpers: the iron element numbers, the exact source at
         # their centroids (once), the element volumes, and order-zero fields for
         # the Newton rank-one coefficient and the element flux density.
         started = time.perf_counter()
-        self.iron_numbers = np.asarray([number for number, _ in self.iron], dtype=np.int64)
-        centroids = np.asarray([centroid for _, centroid in self.iron], dtype=float)
-        mips = mesh(centroids[:, 0], centroids[:, 1], centroids[:, 2])
-        self.source_at_centroids = np.asarray(self.source_cf(mips), dtype=float).reshape(-1, 3)
+        if self.zero_source:
+            self.source_at_centroids = np.zeros((len(self.iron_numbers), 3))
+        else:
+            mips = mesh(centroids[:, 0], centroids[:, 1], centroids[:, 2])
+            self.source_at_centroids = np.asarray(self.source_cf(mips), dtype=float).reshape(-1, 3)
         with ng.TaskManager():
             self.volumes = np.asarray(ng.Integrate(ng.CF(1.0), mesh, ng.VOL, element_wise=True),
                                       dtype=float)
@@ -553,7 +581,8 @@ class ReducedAP1Box:
         v = self.fes.TestFunction()
         r = ng.LinearForm(self.fes)
         r += self.nu_gf * ng.InnerProduct(ng.curl(solution), ng.curl(v)) * ng.dx
-        r += (self.nu_gf - NU0) * ng.InnerProduct(self.source_gf, ng.curl(v)) * ng.dx("iron")
+        if not self.zero_source:  # identically zero otherwise; skipping it changes no bit
+            r += (self.nu_gf - NU0) * ng.InnerProduct(self.source_gf, ng.curl(v)) * ng.dx("iron")
         if self.outer_boundary == "natural_total":
             r += -NU0 * ng.InnerProduct(ng.Cross(ng.specialcf.normal(3), self.source_cf), v.Trace()) * ng.ds("outer", bonus_intorder=4)
         if self.gauge_epsilon > 0.0:
@@ -792,7 +821,9 @@ class TotalAP1Box(ReducedAP1Box):
             raise ValueError("total-A requires homogeneous tangential A on outer")
         if "coil" not in mesh.GetMaterials():
             raise ValueError("total-A requires a meshed coil region")
-        super().__init__(mesh, ng.CF((0, 0, 0)), **settings)
+        # zero_source=False keeps the generic evaluation path (diagnostic).
+        zero_source = settings.pop("zero_source", True)
+        super().__init__(mesh, ng.CF((0, 0, 0)), zero_source=zero_source, **settings)
         self.current_load = ng.LinearForm(self.fes)
         self.current_load += ng.InnerProduct(current_cf, self.fes.TestFunction()) * ng.dx("coil")
         with ng.TaskManager():

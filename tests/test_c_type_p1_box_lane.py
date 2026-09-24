@@ -382,6 +382,38 @@ def test_inexact_newton_preserves_field_and_outer_gates(box_mesh):
     np.testing.assert_allclose(field, reference, rtol=1e-6, atol=1e-8)
 
 
+def test_vectorised_iron_centroids_match_the_element_loop(box_mesh):
+    numbers, centroids = lane().iron_elements_with_centroids(box_mesh)
+    expected_numbers, expected = [], []
+    for element in box_mesh.Elements(ng.VOL):
+        if str(element.mat) != "iron":
+            continue
+        pts = [box_mesh.vertices[v.nr].point for v in element.vertices]
+        expected_numbers.append(int(element.nr))
+        expected.append([sum(float(p[k]) for p in pts) / len(pts) for k in range(3)])
+    np.testing.assert_array_equal(numbers, np.asarray(expected_numbers))
+    np.testing.assert_array_equal(centroids, np.asarray(expected))
+
+
+def test_total_a_zero_source_shortcut_is_bit_identical(box_mesh):
+    module = lane()
+    x, y = ng.x, ng.y
+    current = 1e7 * ng.CF((-2*y*(x-.5)*(.7-x), -(1.2-2*x)*(.01-y*y), 0))
+    settings = dict(linear_solver="direct", cg_tolerance=1e-9, cg_max_iterations=1000,
+                    ams_num_smooth=1, source_projection_order=2)
+    law = module.SoftIronLaw(_bh_table())
+    options = dict(newton_tolerance=1e-8, tolerance=1e-6, max_iterations=20,
+                   max_halvings=4, observation=_points())
+    fast = module.TotalAP1Box(box_mesh, current, **settings)
+    generic = module.TotalAP1Box(box_mesh, current, zero_source=False, **settings)
+    assert fast.zero_source and not generic.zero_source
+    np.testing.assert_array_equal(fast.source_at_centroids, generic.source_at_centroids)
+    field_fast, stats_fast, _ = fast.run_newton(law, **options)
+    field_generic, stats_generic, _ = generic.run_newton(law, **options)
+    assert stats_fast["converged"] and stats_generic["converged"]
+    np.testing.assert_array_equal(field_fast, field_generic)
+
+
 def test_linear_floor_follows_the_nonlinear_target_and_keeps_the_field(box_mesh):
     law = lane().SoftIronLaw(_bh_table())
     options = dict(newton_tolerance=1e-8, tolerance=1e-5, max_iterations=30,
