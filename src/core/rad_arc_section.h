@@ -323,7 +323,7 @@ inline Vec Field(double r, double z, double ri, double ro, double h,
                 error=std::max(error,std::abs(fine[k]-coarse[k]));
                 magnitude=std::max(magnitude,std::abs(fine[k]));
             }
-            if(finite && error<=1.e-12*std::max(ro,h)*(end-lo)+1.e-9*magnitude) {
+            if(finite && error<=atol_scale*std::max(ro,h)*(end-lo)+rtol*magnitude) {
                 for(int k=0;k<3;++k) result[k]+=fine[k];
                 lo=end;
                 continue;
