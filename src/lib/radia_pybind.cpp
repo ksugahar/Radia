@@ -6402,6 +6402,11 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "Pre-cache field values at given points for fast gf.Set().")
         .def("ClearCache", &SharedRadiaField::ClearCache,
              "Clear cached field values")
+        .def("SetMemoize", &SharedRadiaField::SetMemoize, py::arg("enabled"),
+             "Keep every evaluated point in the cache so repeated evaluations at the "
+             "same coordinates reuse the value (identical to direct evaluation). "
+             "Entries accumulate until ClearCache(). Not applied to field_type 'phi'.")
+        .def_property_readonly("memoize", &SharedRadiaField::Memoizes)
         .def("GetCacheStats", [](const SharedRadiaField& field) {
                  const auto stats = field.CacheStats();
                  py::dict result;

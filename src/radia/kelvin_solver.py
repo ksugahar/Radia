@@ -23,11 +23,13 @@ two-sphere Kelvin geometry built via
 
 from __future__ import annotations
 
+import functools
 import math
 import hashlib
 import json
 import time
 from collections.abc import Mapping
+from contextlib import contextmanager
 
 import numpy as np
 
@@ -294,6 +296,42 @@ def project_source_physical_potential(
 
 
 SOURCE_LOADS = ("volume", "surface_flux")
+
+
+@contextmanager
+def _memoized_source(field):
+    """Reuse coil evaluations across nonlinear iterations, values unchanged.
+
+    A B(H) iteration reassembles the iron load and re-samples the iron field
+    at the same quadrature points every step; with a volume harmonic
+    remainder each step re-evaluates the coil there.  A RadiaField in
+    memoisation mode computes a point once and returns the identical value
+    afterwards.  Other coefficient types, or a field already memoising, are
+    left alone; a cache the caller did not have is cleared afterwards.
+    """
+    setter = getattr(field, "SetMemoize", None)
+    if field is None or setter is None or field.memoize:
+        yield
+        return
+    had_cache = bool(field.GetCacheStats()["enabled"])
+    setter(True)
+    try:
+        yield
+    finally:
+        setter(False)
+        if not had_cache:
+            field.ClearCache()
+
+
+def memoize_linked_source(function):
+    """Memoise ``H_s`` for a nonlinear mixed Omega solve that keeps a volume
+    ``total_source_h`` (the only case that re-evaluates the coil per step)."""
+    @functools.wraps(function)
+    def wrapper(mesh, H_s, *args, **kwargs):
+        target = H_s if kwargs.get("total_source_h") is not None else None
+        with _memoized_source(target):
+            return function(mesh, H_s, *args, **kwargs)
+    return wrapper
 
 
 def _check_source_load(name, value):
@@ -2012,6 +2050,7 @@ class MixedOmegaPicardNotConverged(RuntimeError):
         self.state = state
 
 
+@memoize_linked_source
 def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         mesh, H_s, source_potential, R_K, offset, *, bh_table,
         nonlinear_materials, reduced_materials, total_materials,
