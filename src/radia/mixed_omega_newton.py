@@ -17,6 +17,12 @@ class MixedOmegaNewtonNotConverged(RuntimeError):
         self.state = state
 
 
+def _memoize_linked_source(function):
+    from .kelvin_solver import memoize_linked_source
+    return memoize_linked_source(function)
+
+
+@_memoize_linked_source
 def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         mesh, H_s, source_potential, R_K, offset, *, bh_table,
         nonlinear_materials, reduced_materials, total_materials,

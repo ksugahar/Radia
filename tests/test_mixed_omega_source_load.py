@@ -147,6 +147,73 @@ def test_nodal_interpolant_reproduces_its_polynomial_space(order, on_boundary):
         assert result["nodes"] == len(vertices)
 
 
+@pytest.fixture(scope="module")
+def nonlinear_case():
+    import math
+    from netgen.meshing import Element0D
+    from radia.kelvin_solver import project_source_interface_potential
+
+    mesh = _mesh(0.5)
+    material = mesh.GetMaterials().index("total") + 1
+    vertex = next(v for e in mesh.ngmesh.Elements3D() if e.index == material
+                  for v in e.vertices if mesh.ngmesh.Points()[v].p[0] > 0.)
+    gauge = len(mesh.GetBBBoundaries()) + 1
+    mesh.ngmesh.Add(Element0D(vertex, index=gauge))
+    mesh.ngmesh.SetCD3Name(gauge, "GND")
+    mesh = ng.Mesh(mesh.ngmesh)
+    source = _divergence_free_source()
+    mu0 = 4.0e-7 * math.pi
+    # Saturating, so the constitutive update is genuinely nonlinear here.
+    table = ((0.0, 0.0), (0.5, 0.5 * mu0 * 2000.0), (2.0, 1.4e-3), (8.0, 2.0e-3), (40.0, 2.4e-3))
+    with ng.TaskManager():
+        potential = project_source_interface_potential(
+            mesh, source, "source_total_interface", order=2, relative_tolerance=0.05)["potential"]
+    return mesh, source, potential, table
+
+
+_LANES = {
+    "picard_centroid_p1": dict(order=1, relaxation=0.3),
+    "picard_projected_p2": dict(order=2, material_update_order=1, relaxation=0.3),
+    "picard_pointwise_p1": dict(order=1, material_sampling="integration_point",
+                                relaxation=1.0, anderson_depth=0),
+    "newton_p2": dict(order=2),
+}
+
+
+def _nonlinear_solve(case, lane, load):
+    from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin
+    from radia.mixed_omega_newton import solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin
+
+    mesh, source, potential, table = case
+    common = dict(bh_table=table, nonlinear_materials=("total",), reduced_materials=("reduced",),
+                  total_materials=("total",), interface_boundary="source_total_interface",
+                  dirichlet_bbbnd="GND", kelvin_mats=(), reduced_source_load=load)
+    with ng.TaskManager():
+        if lane.startswith("newton"):
+            return solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
+                mesh, source, potential, 1.0, (3.0, 0.0, 0.0), tolerance=1e-8,
+                residual_tolerance=1e-10, **_LANES[lane], **common)
+        return solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
+            mesh, source, potential, 1.0, (3.0, 0.0, 0.0), tolerance=1e-9,
+            max_iterations=400, **_LANES[lane], **common)
+
+
+@pytest.mark.parametrize("lane", sorted(_LANES))
+def test_nonlinear_reduced_surface_flux_matches_the_volume_load(nonlinear_case, lane):
+    """Air keeps mu0 under a B(H) iron, so the reduced surface identity holds."""
+    mesh = nonlinear_case[0]
+    volume = _nonlinear_solve(nonlinear_case, lane, "volume")
+    surface = _nonlinear_solve(nonlinear_case, lane, "surface_flux")
+    assert volume["nonlinear_stats"]["converged"] and surface["nonlinear_stats"]["converged"]
+    points = ((-0.5, 0.15, -0.1), (-0.15, -0.2, 0.25), (-0.8, 0.5, 0.5),
+              (0.5, 0.1, 0.2), (0.2, -0.3, -0.1), (0.05, 0.0, 0.0))
+    expected = np.asarray([volume["B_cf"](mesh(*point)) for point in points])
+    actual = np.asarray([surface["B_cf"](mesh(*point)) for point in points])
+    # Relative to the field scale: the iron points see a field far below the air's.
+    scale = np.linalg.norm(expected, axis=1).max()
+    assert np.linalg.norm(actual - expected, axis=1).max() <= 1e-6 * scale
+
+
 def test_surface_flux_hodge_refuses_a_linked_source():
     from netgen.occ import Box, OCCGeometry, Pnt
     from radia.kelvin_solver import project_source_total_hodge

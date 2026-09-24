@@ -672,9 +672,11 @@ Facility. The current project extends that heritage with NGSolve integration,
 open-boundary engineering methods, high-order formulations, optimization,
 native MATLAB/Simulink interfaces, and AI-oriented automation.
 
-The platform depends on and respects the work of the
-[NGSolve](https://ngsolve.org/) community. NGSolve is the source of truth for
-finite-element mathematics in Radia workflows. Radia also integrates the
+We gratefully acknowledge Joachim Schöberl and the Netgen/NGSolve development
+team and community for the numerical foundation that makes these workflows
+possible. [NGSolve](https://ngsolve.org/) provides the finite-element spaces,
+geometric mappings, quadrature, assembly, and field evaluation on which Radia
+builds its electromagnetic applications. Radia also integrates the
 HACApK H-matrix library, sparseSolv, Netgen, Gmsh, build123d, Coreform Cubit,
 and the broader Python/MATLAB scientific ecosystems.
 
