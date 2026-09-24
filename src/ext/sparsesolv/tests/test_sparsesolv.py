@@ -64,6 +64,51 @@ def test_beta_zero_ams_solves_compatible_singular_system_and_updates(cycle, subs
         assert Integrate(difference * difference, mesh) < 1e-12 * Integrate(curl(exact)*curl(exact), mesh)
 
 
+@pytest.mark.parametrize("beta_zero", [False, True])
+def test_reused_ams_hierarchy_refreshes_and_still_converges(beta_zero):
+    import numpy as np
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.2))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet=".*")
+    u, v = space.TnT()
+    nu = GridFunction(L2(mesh, order=0))
+    nu.vec.FV().NumPy()[:] = 1.0
+    a = BilinearForm(space)
+    a += nu * curl(u) * curl(v) * dx
+    if not beta_zero:
+        a += 1e-6 * u * v * dx
+    a.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = [[mesh.ngmesh.Points()[i+1][j] for i in range(mesh.nv)] for j in range(3)]
+    options = dict(freedofs=space.FreeDofs(), coord_x=coords[0], coord_y=coords[1],
+                   coord_z=coords[2], beta_zero=beta_zero, cycle_type=1)
+    reused = HypreBasedAMSPreconditioner(a.mat, grad, reuse_hierarchy=True, **options)
+    assert reused.reuse_hierarchy is True and reused.hierarchy_refreshes == 0
+    free = np.asarray(list(space.FreeDofs()), dtype=bool)
+    exact = GridFunction(space)
+    exact.vec.FV().NumPy()[:] = np.random.default_rng(5).normal(size=space.ndof) * free
+    # A coefficient jump of three decades on half of the elements.
+    nu.vec.FV().NumPy()[: mesh.ne // 2] = 1e3
+    a.Assemble()
+    rhs = exact.vec.CreateVector()
+    rhs.data = a.mat * exact.vec
+    rhs.FV().NumPy()[~free] = 0
+    reused.Update(a.mat)
+    assert reused.hierarchy_refreshes == 1
+    fresh = HypreBasedAMSPreconditioner(a.mat, grad, **options)
+    iterations = {}
+    for name, pre in (("reused", reused), ("fresh", fresh)):
+        solution = GridFunction(space)
+        with TaskManager():
+            inv = CGSolver(a.mat, pre, tol=1e-10, maxiter=2000, printrates=False)
+            solution.vec.data = inv * rhs
+        residual = rhs.CreateVector()
+        residual.data = rhs - a.mat * solution.vec
+        assert np.linalg.norm(residual.FV().NumPy()[free]) / Norm(rhs) < 1e-7
+        iterations[name] = inv.iterations
+    assert iterations["reused"] <= 2 * iterations["fresh"] + 5, iterations
+
+
 @pytest.mark.parametrize("factory", [
     "HypreBasedAMSPreconditioner", "CompactAMSPreconditioner",
     "ComplexHypreBasedAMSPreconditioner", "ComplexCompactAMSPreconditioner",

@@ -161,6 +161,42 @@ public:
                       << levels_.back().ndof << " DOFs" << std::endl;
     }
 
+    /// Refresh the hierarchy for new values on the same sparsity pattern.
+    /// Keeps the coarsening and the interpolation operators of the last
+    /// Setup() ("frozen interpolation") and recomputes only the Galerkin
+    /// coarse matrices P^T A P, the l1 smoother norms and the coarsest
+    /// factorization. Falls back to Setup() when there is no hierarchy yet.
+    void Refresh(shared_ptr<SparseMatrix<double>> mat) {
+        if (mat->Height() != mat_->Height() || mat->Width() != mat_->Width())
+            throw std::invalid_argument("CompactAMG::Refresh: matrix dimension changed");
+        mat_ = mat;
+        if (levels_.empty()) { Setup(); return; }
+        {
+        ngcore::RegionTaskManager tasks;
+        auto& fine = levels_[0];
+        fine.A = freedofs_ ? CreateBCModifiedMatrix(*mat_, *freedofs_) : mat_;
+        ComputeL1Norms(*fine.A, fine.l1_norms);
+        for (size_t l = 0; l + 1 < levels_.size(); l++) {
+            auto& cur = levels_[l];
+            if (!cur.P)
+                throw std::runtime_error("CompactAMG::Refresh: level without interpolation");
+            auto coarse = dynamic_pointer_cast<SparseMatrix<double>>(cur.A->Restrict(*cur.P));
+            if (!coarse || coarse->Height() != levels_[l + 1].ndof)
+                throw std::runtime_error("CompactAMG::Refresh: Galerkin product changed size");
+            levels_[l + 1].A = coarse;
+            ComputeL1Norms(*coarse, levels_[l + 1].l1_norms);
+        }
+        }
+        auto& coarsest = levels_.back();
+        if (coarsest.inv) {
+            coarsest.A->SetInverseType("sparsecholesky");
+            coarsest.inv = coarsest.A->InverseMatrix(shared_ptr<BitArray>(nullptr));
+        }
+        refresh_count_++;
+    }
+
+    int RefreshCount() const { return refresh_count_; }
+
     // BaseMatrix interface
     int VHeight() const override { return mat_->Height(); }
     int VWidth() const override { return mat_->Width(); }
@@ -215,6 +251,7 @@ public:
 
 private:
     mutable int setup_workers_ = 0;
+    int refresh_count_ = 0;
     // =====================================================================
     // Level data
     // =====================================================================
