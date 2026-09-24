@@ -6194,6 +6194,12 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
         Args:
             opt: Options string like "PrcB->1e-6,PrcA->1e-5,..."
+
+        "PrcArc->rtol" sets the relative tolerance of the adaptive angular
+        quadrature used for arc-current B and H (rad.ObjArcCur, CoilBuilder
+        arcs) by rad.Fld, batch field evaluation and RadiaField. The default
+        1e-9 is round-off level; values in [1e-12, 1e-3] are accepted and any
+        other value raises. The setting is global for the Radia session.
     )pbdoc");
 
     // FldLenTol - Length tolerance
