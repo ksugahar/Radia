@@ -1307,12 +1307,14 @@ class TestCompactAMG:
     def test_registration_survives_a_fresh_process_and_reassembly(self):
         """The user-facing name must exist without a manual native import."""
         script = r'''
+print("compactamg: import", flush=True)
 import radia
 import ngsolve as ng
 import numpy as np
 from netgen.csg import unit_cube
 from ngsolve.krylovspace import CGSolver
 ng.SetNumThreads(2)
+print("compactamg: mesh", flush=True)
 mesh = ng.Mesh(unit_cube.GenerateMesh(maxh=0.4))
 fes = ng.H1(mesh, order=1, dirichlet=".*")
 u, v = fes.TnT()
@@ -1320,16 +1322,19 @@ factor = ng.Parameter(1.0)
 a = ng.BilinearForm(fes)
 a += factor * ng.grad(u) * ng.grad(v) * ng.dx
 pre = ng.Preconditioner(a, "compactamg")
+print("compactamg: registered", flush=True)
 f = ng.LinearForm(fes)
 f += v * ng.dx
 f.Assemble()
 free = np.asarray(list(fes.FreeDofs()), dtype=bool)
 for scale in (1.0, 3.0):
+    print("compactamg: assemble", scale, flush=True)
     factor.Set(scale)
     a.Assemble()
     assert type(pre.mat).__name__ == "CompactAMGPreconditionerImpl"
     sol = ng.GridFunction(fes)
     inv = CGSolver(a.mat, pre.mat, tol=1e-11, maxiter=200, printrates=False)
+    print("compactamg: solve", scale, flush=True)
     sol.vec.data = inv * f.vec
     residual = f.vec.CreateVector()
     residual.data = f.vec - a.mat * sol.vec
@@ -1338,7 +1343,8 @@ for scale in (1.0, 3.0):
 print("COMPACTAMG_REGISTERED_AND_REASSEMBLED")
 '''
         result = subprocess.run(
-            [sys.executable, "-c", script], capture_output=True, text=True, timeout=90
+            [sys.executable, "-u", "-X", "faulthandler", "-c", script],
+            capture_output=True, text=True, timeout=90
         )
         assert result.returncode == 0, (result.stdout, result.stderr)
         assert "COMPACTAMG_REGISTERED_AND_REASSEMBLED" in result.stdout
