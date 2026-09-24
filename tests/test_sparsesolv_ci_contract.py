@@ -26,7 +26,9 @@ beam = ["scipy"]
 def test_sparsesolv_is_in_native_release_and_focused_tiers_only():
     profiles = json.loads((ROOT / "tests/test_tier_manifest.json").read_text())["profiles"]
     assert SUITE in profiles["native-smoke"]["paths"]
-    assert profiles["sparsesolv"]["paths"] == [SUITE]
+    parallel = "tests/test_ams_internal_setup_parallel.py"
+    assert profiles["sparsesolv"]["paths"] == [SUITE, parallel]
+    assert parallel in profiles["native-smoke"]["paths"]
     assert SUITE not in profiles["fast-contracts"]["paths"]
 
 

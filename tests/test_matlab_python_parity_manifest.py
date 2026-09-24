@@ -19,6 +19,7 @@ def test_every_python_module_has_a_checked_matlab_classification():
         ("electromagnet_validation.py", "electromagnetValidation"),
         ("esrf_examples.py", "esrfExamples"),
         ("static_electromagnet.py", "staticElectromagnet"),
+        ("meshed_current.py", "meshedCurrent"),
     ]:
         entry = next(item for item in result["assignments"] if item["python"] == module)
         assert entry["classification"] == "python-fallback"

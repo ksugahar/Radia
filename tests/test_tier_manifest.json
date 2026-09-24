@@ -75,7 +75,8 @@
         "tests/test_meshless_relaxation_contract.py",
         "tests/test_version_consistency.py",
         "tests/test_vim_api_names.py",
-        "src/ext/sparsesolv/tests/test_sparsesolv.py"
+        "src/ext/sparsesolv/tests/test_sparsesolv.py",
+        "tests/test_ams_internal_setup_parallel.py"
       ]
     },
     "solver-numerics": {
@@ -100,7 +101,7 @@
     "sparsesolv": {
       "description": "Required native AMS, AMG and Krylov solver regressions.",
       "max_elapsed_seconds": 120,
-      "paths": ["src/ext/sparsesolv/tests/test_sparsesolv.py"]
+      "paths": ["src/ext/sparsesolv/tests/test_sparsesolv.py", "tests/test_ams_internal_setup_parallel.py"]
     }
   }
 }

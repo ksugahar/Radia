@@ -10,6 +10,7 @@ import tomllib
 
 # Checked against both workflow trigger lists by the lightweight contract suite.
 NATIVE_PATHS = (
+    "tests/test_ams_internal_setup_parallel.py",
     "src/core/rad_hacapk*",
     "matlab/+radia/HACApKChargeGram.m",
     "tests/matlab/test_hacapk_rank_cap.m",
