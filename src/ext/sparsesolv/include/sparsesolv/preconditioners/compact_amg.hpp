@@ -65,6 +65,10 @@ public:
     /// Build the AMG hierarchy. Must be called before Mult().
     void Setup() {
         levels_.clear();
+        setup_workers_ = 0;
+
+        {
+        ngcore::RegionTaskManager tasks;
 
         // Level 0: finest level
         Level lev0;
@@ -141,6 +145,8 @@ public:
             levels_.push_back(std::move(next_lev));
         }
 
+        }
+        // Factorization remains outside the internally owned parallel region.
         // Coarsest level: direct solver
         auto& coarsest = levels_.back();
         if (coarsest.ndof <= min_coarse_ * 10) {
@@ -205,8 +211,10 @@ public:
     }
 
     int NumLevels() const { return (int)levels_.size(); }
+    int SetupWorkers() const { return setup_workers_; }
 
 private:
+    mutable int setup_workers_ = 0;
     // =====================================================================
     // Level data
     // =====================================================================
@@ -301,8 +309,11 @@ private:
         //   Strong connection: -a_ij >= theta * max_neg
         //   If no negative off-diagonals (rare), fallback to absolute value criterion.
         std::vector<int> row_count(n, 0);
+        std::vector<int> workers(ngcore::TaskManager::GetNumThreads(), 0);
 
-        ParallelFor(n, [&](size_t i) {
+        ParallelForRange(n, [&](IntRange range) {
+            if (range.Size()) workers[ngcore::TaskManager::GetThreadId()] = 1;
+            for (auto i : range) {
             auto cols = A.GetRowIndices(i);
             auto vals = A.GetRowValues(i);
 
@@ -331,7 +342,10 @@ private:
                 }
             }
             row_count[i] = cnt;
+            }
         });
+        setup_workers_ = std::max(setup_workers_,
+            (int)std::count(workers.begin(), workers.end(), 1));
 
         // Build row_ptr
         S.row_ptr[0] = 0;

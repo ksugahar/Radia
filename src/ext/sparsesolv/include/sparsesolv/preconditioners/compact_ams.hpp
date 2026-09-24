@@ -49,8 +49,8 @@ namespace ngla {
 ///   // Use as preconditioner with COCR or CG
 class HypreBasedAMS : public BaseMatrix {
 public:
-    // Hierarchy setup is unsafe under an active NGSolve TaskManager.
-    // Reject before touching matrix state; Mult remains parallel-capable.
+    // Reject caller-owned regions before touching matrix state. Setup owns
+    // bounded internal regions, excluding coarse direct factorization.
     static void RequireSerialSetup() {
         if (ngcore::GetTaskManager() != nullptr)
             throw std::runtime_error(
@@ -186,6 +186,7 @@ public:
     int GetNumSmooth() const { return num_smooth_; }
     int GetCycleType() const { return cycle_type_; }
     bool GetBetaZero() const { return beta_zero_; }
+    int GetSetupWorkers() const { return setup_workers_; }
     shared_ptr<BitArray> GetFreeDofs() const { return freedofs_; }
 
     /// Apply one AMS V-cycle: cycle_type=1 -> "01210"
@@ -274,6 +275,7 @@ private:
     int subspace_solver_;  // 0=CompactAMG, 1=SparseCholesky
     double amg_theta_;     // AMG strength threshold (preserved for Update)
     const bool beta_zero_; // Pure curl-curl: omit G correction and its hierarchy.
+    int setup_workers_ = 0;
 
     // Gradient subspace
     shared_ptr<SparseMatrix<double>> grad_t_;  // G^T
@@ -370,6 +372,7 @@ private:
     // Called on every Update() — geometry is preserved.
     // =====================================================================
     void RebuildMatrix() {
+        setup_workers_ = 0;
         auto t_rebuild = std::chrono::high_resolution_clock::now();
 
         // 1. Create BC-modified matrix (identity rows for constrained DOFs).
@@ -381,17 +384,14 @@ private:
 
         // 2. Galerkin projection: A_G = G^T * A_bc * G, etc.
         auto t0 = std::chrono::high_resolution_clock::now();
-        ParallelFor(4, [&](size_t d) {
-            if (d == 0 && beta_zero_) return;
-            if (d == 0)
+        {
+            ngcore::RegionTaskManager tasks;
+            if (!beta_zero_)
                 A_G_ = dynamic_pointer_cast<SparseMatrix<double>>(A_bc_->Restrict(*grad_));
-            else if (d == 1)
-                A_Pix_ = dynamic_pointer_cast<SparseMatrix<double>>(A_bc_->Restrict(*Pix_));
-            else if (d == 2)
-                A_Piy_ = dynamic_pointer_cast<SparseMatrix<double>>(A_bc_->Restrict(*Piy_));
-            else
-                A_Piz_ = dynamic_pointer_cast<SparseMatrix<double>>(A_bc_->Restrict(*Piz_));
-        });
+            A_Pix_ = dynamic_pointer_cast<SparseMatrix<double>>(A_bc_->Restrict(*Pix_));
+            A_Piy_ = dynamic_pointer_cast<SparseMatrix<double>>(A_bc_->Restrict(*Piy_));
+            A_Piz_ = dynamic_pointer_cast<SparseMatrix<double>>(A_bc_->Restrict(*Piz_));
+        }
         auto t1 = std::chrono::high_resolution_clock::now();
         double dt_restrict = std::chrono::duration<double>(t1 - t0).count();
 
@@ -449,16 +449,15 @@ private:
             auto amg_Piz = make_shared<CompactAMG>(A_Piz_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
 
             t0 = std::chrono::high_resolution_clock::now();
-            ParallelFor(4, [&](size_t d) {
-                if (d == 0 && beta_zero_) return;
-                if (d == 0) amg_G->Setup();
-                else if (d == 1) amg_Pix->Setup();
-                else if (d == 2) amg_Piy->Setup();
-                else amg_Piz->Setup();
-            });
+            if (!beta_zero_) amg_G->Setup();
+            amg_Pix->Setup();
+            amg_Piy->Setup();
+            amg_Piz->Setup();
+            setup_workers_ = std::max({beta_zero_ ? 0 : amg_G->SetupWorkers(),
+                amg_Pix->SetupWorkers(), amg_Piy->SetupWorkers(), amg_Piz->SetupWorkers()});
             t1 = std::chrono::high_resolution_clock::now();
             if (print_level_ > 0)
-                std::cout << "\n  AMG setup (4-way parallel): "
+                std::cout << "\n  AMG setup (internally parallel hierarchy, serial coarse factorization): "
                           << std::chrono::duration<double>(t1 - t0).count()
                           << "s, levels: G=" << (amg_G ? amg_G->NumLevels() : 0)
                           << " Px=" << amg_Pix->NumLevels()

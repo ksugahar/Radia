@@ -389,6 +389,11 @@ class CompactAMSPreconditionerImpl(BaseMatrix):
     @property
     def beta_zero(self) -> bool: ...
 
+    @property
+    def setup_workers(self) -> int:
+        """Workers observed in strength construction; zero if no coarsening."""
+        ...
+
     def Update(self, new_mat: BaseMatrix | None = None) -> None:
         """Rebuild with current or new matrix values (geometry preserved).
 
