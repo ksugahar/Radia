@@ -13,6 +13,9 @@ from netgen.csg import unit_cube
 spec = importlib.util.spec_from_file_location('sparsesolv_ngsolve', sys.argv[1])
 native = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(native)
+# Bound the initial assembly too: a fresh process otherwise inherits the host's
+# full core count and reserves a multi-gigabyte local heap before the loop.
+SetNumThreads(1)
 mesh = Mesh(unit_cube.GenerateMesh(maxh=0.12))
 fes = HCurl(mesh, order=1, nograds=True)
 u,v = fes.TnT()
