@@ -217,6 +217,17 @@ def _generated_keys(data: bytes) -> list[str]:
     return [item[1].decode("ascii") for item in items]
 
 
+def _select_bibtex_engine(style_bytes: bytes) -> tuple[str, str | None]:
+    """Return (engine name, executable path) able to run the given style."""
+    if b"is.kanji.str$" not in style_bytes:
+        return "bibtex", shutil.which("bibtex")
+    for name in ("upbibtex", "pbibtex"):
+        path = shutil.which(name)
+        if path is not None:
+            return name, path
+    return "upbibtex", None
+
+
 def _resolve_installed_style(style: str, directory: pathlib.Path) -> pathlib.Path:
     """Locate the exact installed bst so generation never uses an untracked style."""
     command = shutil.which("kpsewhich")
@@ -382,8 +393,7 @@ def _make_bbl_unlocked(
     # Validate every input that does not require an external executable first.
     # In particular, an unknown citation key must fail closed even on a host
     # without a TeX installation, and must never replace an existing .bbl.
-    bibtex = shutil.which("bibtex")
-    if bibtex is None:
+    if shutil.which("bibtex") is None:
         return "Error: bibtex is not on PATH; a TeX installation is required"
 
     try:
@@ -391,6 +401,15 @@ def _make_bbl_unlocked(
         selected_style_bytes = style_bytes if style_bytes is not None else selected_style.read_bytes()
     except (OSError, ValueError) as exc:
         return f"Error: cannot snapshot bibliography style: {exc}"
+
+    # Japanese styles (IEEJtran, jIEEEtran, ...) call is.kanji.str$, which only
+    # the Japanese BibTeX builds implement; plain bibtex aborts on every entry.
+    engine_name, bibtex = _select_bibtex_engine(selected_style_bytes)
+    if bibtex is None:
+        return (
+            f"Error: style {style} needs a Japanese BibTeX (upbibtex or pbibtex), "
+            "but neither is on PATH"
+        )
 
     with tempfile.TemporaryDirectory(prefix="radia-bbl-") as temp_name:
         work = pathlib.Path(temp_name)
@@ -478,6 +497,7 @@ def _make_bbl_unlocked(
         f"bibliography_make_bbl: {source.name} -> {destination}\n"
         f"  cited {len(keys)} canonical keys; wrote {bibitem_count} bibitems; "
         f"style {style}\n"
+        f"  bibtex_engine: {engine_name}\n"
         f"  canonical_sha256: {hashlib.sha256(canonical_bytes).hexdigest()}\n"
         + (f"  selected_source_sha256: {notebook_fingerprint}\n" if notebook_fingerprint else "")
         +
