@@ -288,7 +288,8 @@ class ReducedAP1Box:
                  ams_preconditioner_shift: float = 0.0,
                  ams_project_gradients: bool = False, ams_beta_zero: bool = False,
                  cg_check_interval: int = 1, ams_print_level: int = 0,
-                 outer_boundary: str = "source_flux", zero_source: bool = False):
+                 outer_boundary: str = "source_flux", zero_source: bool = False,
+                 algebraic_residual: bool = True):
         """``source_cf`` is the vacuum source flux density B_s as a vector CF.
 
         ``zero_source=True`` declares ``source_cf`` identically zero (total-A):
@@ -392,6 +393,11 @@ class ReducedAP1Box:
         self.timing["element_helpers"] = time.perf_counter() - started
         self._ams = None
         self._gradient = None
+        # Residual and element flux by sparse products with the element curl
+        # (built lazily, once); False keeps per-call form assembly.
+        self.algebraic_residual = bool(algebraic_residual)
+        self._algebra_cache = None
+        self._residual_vector = None
 
     # ------------------------------------------------------------------ linear algebra
     def _ams_prepare(self, matrix):
@@ -534,9 +540,88 @@ class ReducedAP1Box:
             raise RuntimeError("non-finite linear residual")
         return record
 
+    # ------------------------------------------------------------------ algebraic path
+    def _algebra(self) -> dict:
+        """Operators for residual and element flux without per-call form assembly.
+
+        The curl of a lowest-order Nedelec function is constant per element, so
+        the element curl is ``(B_k A) / w`` with ``B_k[e, i] = int_e curl(phi_i)_k
+        psi_e`` (``psi_e`` the order-zero L2 function of element e, ``w_e = int_e
+        psi_e``), and ``int_e nu curl A . curl v = nu_e vol_e curlA_e . curlv_e``.
+        Built once; every later evaluation is sparse matrix-vector products.
+        """
+        if self._algebra_cache is not None:
+            return self._algebra_cache
+        from scipy.sparse import csr_matrix
+
+        started = time.perf_counter()
+        mesh = self.mesh
+        scalar = ng.L2(mesh, order=0)
+        if scalar.ndof != mesh.ne or scalar.GetDofNrs(ng.ElementId(ng.VOL, mesh.ne - 1))[0] != mesh.ne - 1:
+            raise RuntimeError("unexpected order-0 L2 dof layout")
+        u = self.fes.TrialFunction()
+        w = scalar.TestFunction()
+        weight_form = ng.LinearForm(scalar)
+        weight_form += w * ng.dx
+        curls, curls_t = [], []
+        with ng.TaskManager():
+            weight_form.Assemble()
+            for k in range(3):
+                form = ng.BilinearForm(trialspace=self.fes, testspace=scalar)
+                form += ng.curl(u)[k] * w * ng.dx
+                form.Assemble()
+                values, columns, offsets = form.mat.CSR()
+                matrix = csr_matrix((np.array(values), np.array(columns), np.array(offsets)),
+                                    shape=(scalar.ndof, self.fes.ndof))
+                curls.append(matrix)
+                curls_t.append(matrix.T.tocsr())
+        weights = weight_form.vec.FV().NumPy().copy()
+        if np.any(weights <= 0.0):
+            raise RuntimeError("non-positive order-zero L2 weights")
+        algebra = {"curl": curls, "curl_t": curls_t, "weight": weights,
+                   "scale": self.volumes / weights ** 2, "mass": None, "constant": None,
+                   "source_mean": None}
+        if self.gauge_epsilon > 0.0:
+            a, b = self.fes.TnT()
+            mass = ng.BilinearForm(self.fes, symmetric=False)
+            mass += self.gauge_epsilon * NU0 * ng.InnerProduct(a, b) * ng.dx
+            with ng.TaskManager():
+                mass.Assemble()
+            values, columns, offsets = mass.mat.CSR()
+            algebra["mass"] = csr_matrix((np.array(values), np.array(columns), np.array(offsets)),
+                                         shape=(self.fes.ndof, self.fes.ndof))
+        if not self.zero_source:
+            with ng.TaskManager():
+                means = np.stack([np.asarray(ng.Integrate(self.source_gf[k], mesh, ng.VOL,
+                                                          element_wise=True), dtype=float)
+                                  for k in range(3)], axis=1)
+            algebra["source_mean"] = means[self.iron_numbers] / self.volumes[self.iron_numbers, None]
+        if self.outer_boundary == "natural_total":
+            v = self.fes.TestFunction()
+            boundary = ng.LinearForm(self.fes)
+            boundary += -NU0 * ng.InnerProduct(ng.Cross(ng.specialcf.normal(3), self.source_cf),
+                                                v.Trace()) * ng.ds("outer", bonus_intorder=4)
+            with ng.TaskManager():
+                boundary.Assemble()
+            algebra["constant"] = boundary.vec.FV().NumPy().copy()
+        algebra["build_s"] = time.perf_counter() - started
+        self.timing["algebra_build"] = algebra["build_s"]
+        self._algebra_cache = algebra
+        return algebra
+
+    def _element_curl(self, solution) -> np.ndarray:
+        algebra = self._algebra()
+        coefficients = solution.vec.FV().NumPy()
+        return np.stack([matrix @ coefficients for matrix in algebra["curl"]], axis=1) \
+            / algebra["weight"][:, None]
+
     # ------------------------------------------------------------------ material state
     def _element_flux(self, solution) -> tuple[np.ndarray, np.ndarray]:
         """Element-constant B in iron: exact source at the centroid + curl A."""
+        if self.algebraic_residual:
+            curl = self._element_curl(solution)
+            b_iron = self.source_at_centroids + curl[self.iron_numbers]
+            return b_iron, np.linalg.norm(b_iron, axis=1)
         with ng.TaskManager():
             curl = np.stack([
                 np.asarray(ng.Integrate(ng.curl(solution)[k], self.mesh, ng.VOL,
@@ -578,6 +663,27 @@ class ReducedAP1Box:
 
     def _residual(self, solution) -> tuple:
         """Nonlinear residual R(A) = K(nu(A)) A - f(nu(A)) for the material set."""
+        if self.algebraic_residual:
+            algebra = self._algebra()
+            coefficients = solution.vec.FV().NumPy()
+            nu = self.nu_gf.vec.FV().NumPy()
+            values = np.zeros(self.fes.ndof)
+            iron = self.iron_numbers
+            for k in range(3):
+                load = nu * algebra["scale"] * (algebra["curl"][k] @ coefficients)
+                if algebra["source_mean"] is not None:
+                    load[iron] += ((nu[iron] - NU0) * (self.volumes[iron] / algebra["weight"][iron])
+                                   * algebra["source_mean"][:, k])
+                values += algebra["curl_t"][k] @ load
+            if algebra["mass"] is not None:
+                values += algebra["mass"] @ coefficients
+            if algebra["constant"] is not None:
+                values += algebra["constant"]
+            if self._residual_vector is None:
+                self._residual_vector = solution.vec.CreateVector()
+            residual = self._residual_vector.CreateVector()
+            residual.FV().NumPy()[:] = values
+            return residual, float(np.linalg.norm(values[self.free]))
         v = self.fes.TestFunction()
         r = ng.LinearForm(self.fes)
         r += self.nu_gf * ng.InnerProduct(ng.curl(solution), ng.curl(v)) * ng.dx
@@ -702,10 +808,17 @@ class ReducedAP1Box:
                 "maximum_iterations": int(max_iterations), "history": [],
                 "maximum_linear_relative_residual": 0.0,
             }, time.perf_counter() - started
+        # Iterative solvers: one form for the whole run, its coefficients (nu, q,
+        # element B) updated in place, reassembly reusing the sparsity graph.
+        # The direct cross-check keeps a fresh form per step: the sparse direct
+        # factorisation keeps state on the matrix and rejects a reassembled one.
+        reuse_jacobian = self.linear_solver != "direct"
+        J = self._jacobian() if reuse_jacobian else None
         for iteration in range(1, int(max_iterations) + 1):
             entry = {"iteration": iteration, "residual_relative": residual_norm / residual_0}
             t0 = time.perf_counter()
-            J = self._jacobian()
+            if not reuse_jacobian:
+                J = self._jacobian()
             with ng.TaskManager():
                 J.Assemble()
             entry["assemble_s"] = time.perf_counter() - t0
@@ -996,6 +1109,9 @@ def main() -> None:
                         help="AMS true residual check interval; final check is mandatory")
     parser.add_argument("--inexact-linear", action="store_true",
                         help="Adapt Newton inner tolerance without relaxing final convergence gates")
+    parser.add_argument("--legacy-residual", action="store_true",
+                        help="assemble the Newton residual and element flux as forms on every call "
+                             "(default: sparse products with the element curl, built once)")
     parser.add_argument("--no-linear-floor", action="store_true",
                         help="Newton: drop the absolute inner-solve floor 0.1*newton_tolerance*|R_0| "
                              "(needed by ungauged systems at tight rules; on by default)")
@@ -1119,7 +1235,8 @@ def run(options) -> dict:
         gauge_epsilon=options.gauge_epsilon,
         ams_preconditioner_shift=options.ams_preconditioner_shift,
         ams_project_gradients=options.ams_project_gradients,
-        ams_beta_zero=options.ams_beta_zero)
+        ams_beta_zero=options.ams_beta_zero,
+        algebraic_residual=not options.legacy_residual)
 
     def run_potential_engine(name, engine, extra=None):
         if not nonlinear:
