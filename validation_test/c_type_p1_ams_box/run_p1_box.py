@@ -799,6 +799,36 @@ class TotalAP1Box(ReducedAP1Box):
         return result
 
 
+def coil_current_phi(mesh: ng.Mesh, coil_manifest: dict, cut_radius: float | None) -> dict:
+    """A-phi current of the meshed racetrack: one cut across the first straight leg.
+
+    The cut plane passes through the middle of the leg at +x with normal +y,
+    the leg the CoilBuilder path starts on; the net current through it is the
+    CoilBuilder current. The default in-plane radius lies halfway between the
+    section's half diagonal and the in-plane distance to the opposite leg, so
+    the plane's second crossing of the loop is excluded.
+    """
+    from radia.meshed_current import solve_closed_coil_current_phi
+
+    centre = np.asarray(coil_manifest["centre_m"], dtype=float)
+    leg_x = 0.5 * float(coil_manifest["straight_x_m"]) + float(coil_manifest["radius_m"])
+    width, height = map(float, coil_manifest["cross_section_m"])
+    half_diagonal = math.hypot(0.5 * width, 0.5 * height)
+    opposite = 2.0 * leg_x - 0.5 * width
+    if not half_diagonal < opposite:
+        raise RuntimeError("coil legs too close for a single-leg cut")
+    radius = 0.5 * (half_diagonal + opposite) if cut_radius is None else float(cut_radius)
+    if not half_diagonal < radius < opposite:
+        raise ValueError(f"cut radius must lie in ({half_diagonal:.4g}, {opposite:.4g}) m")
+    origin = centre + np.array([leg_x, 0.0, 0.0])
+    with ng.TaskManager():
+        result = solve_closed_coil_current_phi(
+            mesh, current_A=float(coil_manifest["current_A"]), cut_origin=origin,
+            cut_normal=(0.0, 1.0, 0.0), cut_radius_m=radius, materials=("coil",))
+    result["cut"] = {"origin_m": origin.tolist(), "normal": [0.0, 1.0, 0.0], "radius_m": radius}
+    return result
+
+
 def solve_mixed_omega_box(mesh: ng.Mesh, coil: int, material, *, nonlinear: bool,
                           relaxation: float, anderson_depth: int, tolerance: float,
                           max_iterations: int, observation: np.ndarray,
@@ -926,11 +956,14 @@ def main() -> None:
     parser.add_argument("--mode", choices=("linear", "nonlinear"), default="nonlinear")
     parser.add_argument("--mu-r", type=float, default=1000.0)
     parser.add_argument("--engines", default="reduced_a,mixed_omega",
-                        help="comma list of reduced_a, mixed_omega")
+                        help="comma list of reduced_a, total_a (meshed coil, A-phi current), mixed_omega")
     parser.add_argument("--threads", type=int, default=8)
     parser.add_argument("--reduced-a-solver", choices=("ams", "iccg", "direct"), default="ams")
     parser.add_argument("--ic-shift", type=float, default=1.05,
                         help="shift of the incomplete Cholesky factorisation (iccg)")
+    parser.add_argument("--coil-cut-radius", type=float, default=None,
+                        help="total_a: in-plane radius of the A-phi cut (default between the "
+                             "section half diagonal and the opposite leg)")
     parser.add_argument("--arc-rel-tol", type=float, default=None,
                         help="relative tolerance of the arc-current source quadrature "
                              "(Radia 'PrcArc', [1e-12, 1e-3]); default keeps Radia's 1e-9")
@@ -995,7 +1028,7 @@ def run(options) -> dict:
     if not engines or len(set(engines)) != len(engines):
         raise ValueError("engines must be a nonempty list without duplicates")
     for name in engines:
-        if name not in ("reduced_a", "mixed_omega"):
+        if name not in ("reduced_a", "total_a", "mixed_omega"):
             raise ValueError(f"unknown engine {name!r}")
     adapters = load_three_engine_adapters()
     nonlinear = options.mode == "nonlinear"
@@ -1025,21 +1058,21 @@ def run(options) -> dict:
 
     fields: dict[str, np.ndarray] = {}
     diagnostics: dict[str, dict] = {}
-    if "reduced_a" in engines:
-        progress("engine_start", engine="reduced_a", mesh_elements=int(mesh.ne))
-        engine = ReducedAP1Box(
-            mesh, rad.RadiaField(coil, "b"), linear_solver=options.reduced_a_solver,
-            cg_tolerance=options.cg_tolerance, cg_max_iterations=options.cg_max_iterations,
-            cg_check_interval=options.cg_check_interval,
-            ams_print_level=options.ams_print_level,
-            ams_num_smooth=options.ams_num_smooth,
-            source_projection_order=options.source_projection_order,
-            outer_boundary=options.outer_boundary,
-            ams_update_every=options.ams_update_every, ic_shift=options.ic_shift,
-            gauge_epsilon=options.gauge_epsilon,
-            ams_preconditioner_shift=options.ams_preconditioner_shift,
-            ams_project_gradients=options.ams_project_gradients,
-            ams_beta_zero=options.ams_beta_zero)
+    potential_settings = dict(
+        linear_solver=options.reduced_a_solver,
+        cg_tolerance=options.cg_tolerance, cg_max_iterations=options.cg_max_iterations,
+        cg_check_interval=options.cg_check_interval,
+        ams_print_level=options.ams_print_level,
+        ams_num_smooth=options.ams_num_smooth,
+        source_projection_order=options.source_projection_order,
+        outer_boundary=options.outer_boundary,
+        ams_update_every=options.ams_update_every, ic_shift=options.ic_shift,
+        gauge_epsilon=options.gauge_epsilon,
+        ams_preconditioner_shift=options.ams_preconditioner_shift,
+        ams_project_gradients=options.ams_project_gradients,
+        ams_beta_zero=options.ams_beta_zero)
+
+    def run_potential_engine(name, engine, extra=None):
         if not nonlinear:
             field, stats, runtime = engine.run_linear(options.mu_r, points)
         elif options.nonlinear_method == "newton":
@@ -1053,21 +1086,35 @@ def run(options) -> dict:
                 SoftIronLaw(material), relax=options.relax,
                 anderson_depth=options.anderson_depth, tolerance=options.tolerance,
                 max_iterations=options.max_iterations, observation=points)
-        fields["reduced_a"] = field
+        fields[name] = field
         totals: dict[str, float] = {}
         for row in stats["history"]:
             for key in ("assemble_s", "preconditioner_s", "solve_s", "material_update_s",
                         "line_search_s"):
                 if key in row:
                     totals[key] = totals.get(key, 0.0) + float(row[key])
-        diagnostics["reduced_a"] = {
-            **engine.describe(), "nonlinear": nonlinear, "nonlinear_stats": stats,
+        diagnostics[name] = {
+            **engine.describe(), **(extra or {}), "nonlinear": nonlinear, "nonlinear_stats": stats,
             "runtime_s": runtime, "mesh_elements": int(mesh.ne), "mesh_vertices": int(mesh.nv),
             "phase_totals_s": totals,
             "total_cg_iterations": sum(int(row["cg_iterations"] or 0) for row in stats["history"]),
         }
-        progress("engine_complete", engine="reduced_a", runtime_s=runtime,
+        progress("engine_complete", engine=name, runtime_s=runtime,
                  converged=stats["converged"], iterations=stats["iterations"])
+
+    if "reduced_a" in engines:
+        progress("engine_start", engine="reduced_a", mesh_elements=int(mesh.ne))
+        engine = ReducedAP1Box(mesh, rad.RadiaField(coil, "b"), **potential_settings)
+        run_potential_engine("reduced_a", engine)
+    if "total_a" in engines:
+        progress("engine_start", engine="total_a", mesh_elements=int(mesh.ne))
+        current = coil_current_phi(mesh, coil_manifest, options.coil_cut_radius)
+        t0 = time.perf_counter()
+        engine = TotalAP1Box(mesh, current["current"], **potential_settings)
+        setup_s = time.perf_counter() - t0
+        run_potential_engine("total_a", engine, {
+            "coil_current": current["stats"], "coil_current_cut": current["cut"],
+            "engine_setup_s": setup_s})
     if "mixed_omega" in engines:
         progress("engine_start", engine="mixed_omega", mesh_elements=int(mesh.ne))
         field, stats, description, runtime = solve_mixed_omega_box(
