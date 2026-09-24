@@ -175,6 +175,13 @@ jobs:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: [self-hosted, Windows, X64, mdx]
     timeout-minutes: 20
+    env:
+      # Bound library pools before the parent and its fresh Python children
+      # import NumPy/SciPy. NGSolve parallel tests select their worker counts.
+      OMP_NUM_THREADS: '1'
+      NGS_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
     steps:
       - uses: actions/checkout@v4
         with:
