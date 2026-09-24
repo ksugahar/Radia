@@ -10,8 +10,14 @@ folder = tempname('C:\temp');
 mkdir(folder);
 t.TestData.folder = folder;
 helper = fullfile(root,'tests','matlab','sparsesolv_python_reference.py');
-[status, output] = radia.internal.runPythonProcess('python "' + string(helper) + '" "' + string(folder) + '"');
-assert(status == 0, 'Python oracle failed: %s', output);
+pythonExecutable = string(getenv('RADIA_PYTHON_EXECUTABLE'));
+if strlength(pythonExecutable) == 0
+    pythonExecutable = "python";
+end
+command = '"' + pythonExecutable + '" -u -X faulthandler "' + ...
+    string(helper) + '" "' + string(folder) + '" 2>&1';
+[status, output] = radia.internal.runPythonProcess(command);
+assert(status == 0, 'Python oracle failed (exit %d): %s', status, output);
 t.TestData.ref = jsondecode(fileread(fullfile(folder,'reference.json')));
 end
 

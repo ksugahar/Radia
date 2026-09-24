@@ -11,6 +11,9 @@ import radia.sparsesolv_ngsolve as ss
 
 
 def generate(directory):
+    # This is a small parity fixture, not a scaling benchmark. Never inherit
+    # the host-wide default thread count for mesh generation and assembly.
+    ng.SetNumThreads(2)
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     mesh_path = directory / "mesh.vol"
@@ -36,7 +39,8 @@ def generate(directory):
     with ng.TaskManager():
         ac.Assemble()
     amsc = ss.ComplexHypreBasedAMSPreconditioner(a.mat, **kwargs)
-    output = dict(mesh=str(mesh_path), python=sys.version, ngsolve=ng.__version__,
+    output = dict(mesh=str(mesh_path), python=sys.version, python_executable=sys.executable,
+                  ngsolve=ng.__version__, ngsolve_threads=2,
                   mesh_sha256=hashlib.sha256(mesh_path.read_bytes()).hexdigest(),
                   sparsesolv_sha256=hashlib.sha256(Path(ss.__file__).read_bytes()).hexdigest(),
                   sparsesolv_binary=ss.__file__, cases=[])
