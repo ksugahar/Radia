@@ -101,6 +101,9 @@ def test_missing_diff_base_selects_matlab_without_failing_step(tmp_path):
     ('matlab/+radia/setup.m', 'push', 'true'),
     ('tests/matlab/test_mex_runtime_setup.m', 'pull_request', 'true'),
     ('docs/intro.md', 'workflow_dispatch', 'true'),
+    ('src/core/rad_ngsolve_radia_field.h', 'push', 'true'),
+    ('matlab/+radia/RadiaField.m', 'push', 'true'),
+    ('tests/matlab/test_radiafield_mex.m', 'push', 'true'),
 ])
 def test_impact_uses_checkout_even_outside_repository(tmp_path, changed, event, expected):
     pwsh, git = shutil.which('pwsh'), shutil.which('git')

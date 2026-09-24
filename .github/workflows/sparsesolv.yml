@@ -45,6 +45,8 @@ on:
       - 'tests/test_radiafield_cache_parallel.py'
       - 'tests/test_radiafield_memoize.py'
       - 'tests/test_radiafield_precision.py'
+      - 'matlab/+radia/RadiaField.m'
+      - 'tests/matlab/test_radiafield_mex.m'
       - 'tests/test_mixed_omega_source_load.py'
       - 'src/matlab/radia_mex.cpp'
       - 'matlab/+radia/+internal/callMex.m'
@@ -123,6 +125,8 @@ on:
       - 'tests/test_radiafield_cache_parallel.py'
       - 'tests/test_radiafield_memoize.py'
       - 'tests/test_radiafield_precision.py'
+      - 'matlab/+radia/RadiaField.m'
+      - 'tests/matlab/test_radiafield_mex.m'
       - 'tests/test_mixed_omega_source_load.py'
       - 'src/matlab/radia_mex.cpp'
       - 'matlab/+radia/+internal/callMex.m'
@@ -209,6 +213,7 @@ jobs:
           $required = $required -or [bool]($changed -match '^(matlab/\+radia/(setup\.m|\+internal/callMex\.m)|tests/matlab/test_mex_runtime_setup\.m)$')
           $required = $required -or [bool]($changed -match '^(src/(core/rad_beam_transfer|lib/rad_beam_transfer_pybind|matlab/radia_beam_mex_commands|radia/beam\.py)|matlab/\+radia/\+beam/(canonicalBodyHamiltonianJet|propagateVariationalMap)\.m|tests/matlab/(test_beam_transfer_mex\.m|beam_transfer_python_reference\.py)|validation_test/accelerator/benchmark_beam_transfer_mex_python\.py)')
           $required = $required -or ($changed -contains 'tools/native_build_provenance.ps1')
+          $required = $required -or [bool]($changed -match '^(src/core/rad_ngsolve_radia_field\.h|matlab/\+radia/RadiaField\.m|tests/matlab/test_radiafield_mex\.m)$')
           "required=$($required.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
           Write-Host "MATLAB parity required=$required; diff_failed=$diffFailed; changed_files=$($changed.Count)"
           exit 0

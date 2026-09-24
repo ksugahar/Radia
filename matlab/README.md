@@ -1456,9 +1456,9 @@ materialized in the optimization loop.
 
 The executable parity audit compares three pybind11 surfaces with the
 `radia_mex` command table: 100 mapped public top-level names, 21
-underscore-prefixed numerical kernels, and 126 stateful class members in the
+underscore-prefixed numerical kernels, and 128 stateful class members in the
 mapped contract.
-All 247 mapped entries are covered by the current 365-command gateway. The
+All 249 mapped entries are covered by the current 366-command gateway. The
 independent 21-command
 `optuna_mex` owns only its two API commands and 19 optimizer kernels. Three
 internal mesh/test helpers are
