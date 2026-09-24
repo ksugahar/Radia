@@ -302,6 +302,8 @@ inline void ExportHypreBasedAMS(py::module& m) {
   py::class_<HypreBasedAMS, shared_ptr<HypreBasedAMS>, BaseMatrix>
       (m, "HypreBasedAMSPreconditionerImpl")
       .def_property_readonly("beta_zero", &HypreBasedAMS::GetBetaZero)
+      .def_property_readonly("setup_workers", &HypreBasedAMS::GetSetupWorkers,
+          "Observed workers in AMG strength-row construction (zero when no coarsening occurs).")
       .def("Update", py::overload_cast<>(&HypreBasedAMS::Update),
            "Rebuild preconditioner with current matrix values (geometry preserved).")
       .def("Update", py::overload_cast<shared_ptr<SparseMatrix<double>>>(&HypreBasedAMS::Update),

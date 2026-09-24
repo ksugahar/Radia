@@ -183,6 +183,15 @@ pre = ssn.ComplexCompactAMSPreconditioner(
 ```
 
 **TaskManagerの範囲：**
+Construction and Update still require an inactive caller TaskManager. Internally,
+Galerkin products and AMG hierarchy construction now own bounded TaskManager
+regions. Auxiliary spaces are processed sequentially; their row operations are
+parallel. Coarsest sparse factorization remains outside these owned regions.
+The real AMS object's `setup_workers` reports observed workers in AMG strength
+construction (zero if no coarsening was needed), not a requested thread count.
+This is not a claim that every setup phase is parallel. SetNumThreads controls
+the internal regions as well as the caller's solve region.
+
 ```python
 # WRONG: hierarchy setup inside TaskManager is rejected
 with TaskManager():
