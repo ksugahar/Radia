@@ -10,6 +10,16 @@ import tomllib
 
 # Checked against both workflow trigger lists by the lightweight contract suite.
 NATIVE_PATHS = (
+    'src/core/rad_arc_section.h',
+    'src/core/rad_arc_current.cpp',
+    'src/core/rad_ngsolve_radia_field.h',
+    'src/core/rad_parallel.h',
+    'tests/test_arc_field_tolerance.py',
+    'tests/test_arc_far_rule.py',
+    'tests/test_radiafield_cache_parallel.py',
+    'tests/test_radiafield_memoize.py',
+    'tests/test_mixed_omega_source_load.py',
+
     "tests/test_ams_internal_setup_parallel.py",
     "src/core/rad_hacapk*",
     "matlab/+radia/HACApKChargeGram.m",
