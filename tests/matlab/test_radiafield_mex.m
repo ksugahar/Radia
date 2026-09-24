@@ -15,7 +15,8 @@ classdef test_radiafield_mex < matlab.unittest.TestCase
             radia.FldLenRndSw('off');
             testCase.addTeardown(@() radia.FldLenRndSw('on'));
             testCase.addTeardown(@() radia.FldCmpPrc('PrcB->0.0001,PrcA->0.001'));
-            object = radia.ObjRecMag([-1,-1,-1], [0.1,0.1,0.1], [0,0,1]);
+            vertices = [-1,-1,-1; -0.9,-1,-1; -1,-0.9,-1; -1,-1,-0.9];
+            object = radia.ObjTetrahedron(vertices, [0,0,1]);
             testCase.Field = radia.RadiaField(object, 'b', Precision=2.5e-13);
             testCase.addTeardown(@() delete(testCase.Field));
             testCase.MeshPath = string(tempname('C:\temp')) + '.vol';
