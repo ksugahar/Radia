@@ -23,11 +23,13 @@ two-sphere Kelvin geometry built via
 
 from __future__ import annotations
 
+import functools
 import math
 import hashlib
 import json
 import time
 from collections.abc import Mapping
+from contextlib import contextmanager
 
 import numpy as np
 
@@ -294,6 +296,42 @@ def project_source_physical_potential(
 
 
 SOURCE_LOADS = ("volume", "surface_flux")
+
+
+@contextmanager
+def _memoized_source(field):
+    """Reuse coil evaluations across nonlinear iterations, values unchanged.
+
+    A B(H) iteration reassembles the iron load and re-samples the iron field
+    at the same quadrature points every step; with a volume harmonic
+    remainder each step re-evaluates the coil there.  A RadiaField in
+    memoisation mode computes a point once and returns the identical value
+    afterwards.  Other coefficient types, or a field already memoising, are
+    left alone; a cache the caller did not have is cleared afterwards.
+    """
+    setter = getattr(field, "SetMemoize", None)
+    if field is None or setter is None or field.memoize:
+        yield
+        return
+    had_cache = bool(field.GetCacheStats()["enabled"])
+    setter(True)
+    try:
+        yield
+    finally:
+        setter(False)
+        if not had_cache:
+            field.ClearCache()
+
+
+def memoize_linked_source(function):
+    """Memoise ``H_s`` for a nonlinear mixed Omega solve that keeps a volume
+    ``total_source_h`` (the only case that re-evaluates the coil per step)."""
+    @functools.wraps(function)
+    def wrapper(mesh, H_s, *args, **kwargs):
+        target = H_s if kwargs.get("total_source_h") is not None else None
+        with _memoized_source(target):
+            return function(mesh, H_s, *args, **kwargs)
+    return wrapper
 
 
 def _check_source_load(name, value):
@@ -1368,6 +1406,10 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     if source_rhs_reduced is None and reduced_source_load == "volume":
         fixed_rhs += mu_cf * reduced_load_h * grad(test_reduced) * dx(
             definedon=reduced_selector, bonus_intorder=bonus_intorder)
+    elif source_rhs_reduced is None and _fixed_rhs_cache is not None and "fixed" in _fixed_rhs_cache:
+        # A Picard cache already holds this assembled load; building the form
+        # again would re-evaluate the source for its flux balance only.
+        source_load_diagnostics["reduced"] = _fixed_rhs_cache.get("reduced_flux_balance")
     elif source_rhs_reduced is None:
         mu_reduced = _uniform_permeability(
             mesh, mu_cf, reduced_materials, mu_r_by_material, role="reduced")
@@ -1375,6 +1417,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             mesh, reduced_load_h, material_set_boundary_signs(mesh, reduced_materials),
             test_reduced.Trace(), bonus_intorder=bonus_intorder, scale=mu_reduced)
         fixed_rhs += flux_form
+        if _fixed_rhs_cache is not None:
+            _fixed_rhs_cache["reduced_flux_balance"] = source_load_diagnostics["reduced"]
     if reduced_zero_normal_boundary is not None:
         from ngsolve import specialcf, BoundaryFromVolumeCF
         labels = set(str(reduced_zero_normal_boundary).split("|"))
@@ -2006,6 +2050,7 @@ class MixedOmegaPicardNotConverged(RuntimeError):
         self.state = state
 
 
+@memoize_linked_source
 def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         mesh, H_s, source_potential, R_K, offset, *, bh_table,
         nonlinear_materials, reduced_materials, total_materials,
@@ -2022,7 +2067,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         reduced_zero_normal_boundary=None, surface_dirichlet=None,
         kelvin_match_exact=False, mu_r_by_material=None,
         material_sampling="element_centroid", bh_interpolation="pchip",
-        progress_callback=None):
+        progress_callback=None, reduced_source_load="volume"):
     """Picard solve for the mixed total/reduced Omega formulation.
 
     The source split and its interface trace stay fixed throughout the
@@ -2074,12 +2119,18 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     H-potential under a shared identity. A loop that reaches
     ``max_iterations`` raises :class:`MixedOmegaPicardNotConverged` carrying that
     state.  Caller wraps the complete operation in :class:`ngsolve.TaskManager`.
+
+    ``reduced_source_load="surface_flux"`` moves the fixed reduced load to the
+    region's boundary as in the linear solve.  It is valid for B(H) iron
+    because the reduced region's permeability stays constant; the iron volume
+    term, whose permeability is updated, has no such form here.
     """
     from ngsolve import GridFunction, L2, VOL
     from radia.picard_acceleration import (
         ConstrainedAndersonAccelerator, estimate_contraction_rate)
     from radia.scalar_potential_solver import _build_bh_interpolator
 
+    _check_source_load("reduced_source_load", reduced_source_load)
     nonlinear_materials = tuple(nonlinear_materials)
     nonlinear_set = set(nonlinear_materials)
     actual_materials = set(mesh.GetMaterials())
@@ -2182,7 +2233,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
             surface_dirichlet=surface_dirichlet, kelvin_match_exact=kelvin_match_exact,
             mu_r_by_material=mu_r_by_material,
             bh_interpolation=bh_interpolation,
-            progress_callback=progress_callback)
+            progress_callback=progress_callback,
+            reduced_source_load=reduced_source_load)
     if genuinely_nonlinear and int(order) > 1 and requested_material_order is None:
         raise ValueError(
             "nonlinear mixed total/reduced Omega currently updates permeability "
@@ -2240,6 +2292,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
             refinement_parent_identity_sha256=refinement_parent_identity_sha256,
             surface_dirichlet=surface_dirichlet,
             cache_fixed_rhs=cache_fixed_rhs,
+            reduced_source_load=reduced_source_load,
         )
     if requested_material_order not in (None, 0):
         raise ValueError("order=1 supports material_update_order=0 only")
@@ -2343,7 +2396,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
             total_source_materials=total_source_materials,
             reduced_zero_normal_boundary=reduced_zero_normal_boundary,
             surface_dirichlet=surface_dirichlet,
-            _fixed_rhs_cache=rhs_cache, _rhs_material=cache_material)
+            _fixed_rhs_cache=rhs_cache, _rhs_material=cache_material,
+            reduced_source_load=reduced_source_load)
         B_current = np.zeros(len(nonlinear_elements))
         mu_r_target = np.empty(len(nonlinear_elements))
         for index, (element_nr, centroid) in enumerate(nonlinear_elements):
@@ -2452,7 +2506,8 @@ def _solve_mixed_omega_projected_log_material(
         total_source_h, total_source_materials, observation_points,
         material_log_state_initial, refinement_parent_identity,
         refinement_parent_identity_sha256, surface_dirichlet=None,
-        kelvin_match_exact=False, mu_r_by_material=None, cache_fixed_rhs=True):
+        kelvin_match_exact=False, mu_r_by_material=None, cache_fixed_rhs=True,
+        reduced_source_load="volume"):
     """Picard lane with a positive spatial L2 secant-permeability field."""
 
     from ngsolve import (
@@ -2632,6 +2687,7 @@ def _solve_mixed_omega_projected_log_material(
             total_source_materials=total_source_materials,
             surface_dirichlet=surface_dirichlet,
             _fixed_rhs_cache=rhs_cache,
+            reduced_source_load=reduced_source_load,
         )
 
     for iteration in range(1, int(max_iterations) + 1):
@@ -2953,7 +3009,7 @@ def _solve_mixed_omega_pointwise_picard(
         kelvin_source_potential, kelvin_source_h, total_source_h,
         total_source_materials, reduced_zero_normal_boundary,
         surface_dirichlet, kelvin_match_exact, mu_r_by_material,
-        bh_interpolation, progress_callback):
+        bh_interpolation, progress_callback, reduced_source_load="volume"):
     """P1 secant Picard with the coefficient evaluated by volume quadrature."""
     from ngsolve import IfPos, sqrt
     from scipy.interpolate import PchipInterpolator
@@ -3007,7 +3063,8 @@ def _solve_mixed_omega_pointwise_picard(
             total_source_materials=total_source_materials,
             reduced_zero_normal_boundary=reduced_zero_normal_boundary,
             surface_dirichlet=surface_dirichlet,
-            _fixed_rhs_cache=fixed_rhs_cache)
+            _fixed_rhs_cache=fixed_rhs_cache,
+            reduced_source_load=reduced_source_load)
         linear_solve_seconds = time.perf_counter() - iteration_started
         audit = audit_mixed_omega_constitutive_field(
             mesh, result["H_cf"], result["B_cf"], bh_array, material_names,
