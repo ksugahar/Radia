@@ -25,6 +25,7 @@
 
 struct radTOptionNames {
 	char B[25], A[25], BInt[25], Force[25], Torque[25], Energy[25], Coord[25], Angle[25]; // Precisions
+	char ArcRel[25]; // Relative tolerance of the adaptive arc-current B/H quadrature
 
 	char Frame[25], FrameValues[3][25];
 	char SubdParamCode[25], SubdParamBorderCode[25], SubdParamCodeValues[2][25];
@@ -56,6 +57,7 @@ struct radTOptionNames {
 		strncpy(Energy, "PrcEnergy", 24); Energy[24] = '\0';
 		strncpy(Coord, "PrcCoord", 24); Coord[24] = '\0';
 		strncpy(Angle, "PrcAngle", 24); Angle[24] = '\0';
+		strncpy(ArcRel, "PrcArc", 24); ArcRel[24] = '\0';
 
 		strncpy(Frame, "Frame", 24); Frame[24] = '\0';
 		strncpy(FrameValues[0], "Loc", 24); FrameValues[0][24] = '\0';

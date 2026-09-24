@@ -1981,6 +1981,12 @@ int radTApplication::SetCompPrecisions(const char** ValNames, double* Values, in
 			else if(!strcmp(*BufString, OptionNames.Energy)) CompCriterium.AbsPrecEnergy = *Ptr;
 			else if(!strcmp(*BufString, OptionNames.Coord)) CompCriterium.AbsPrecTrjCoord = *Ptr;
 			else if(!strcmp(*BufString, OptionNames.Angle)) CompCriterium.AbsPrecTrjAngle = *Ptr;
+			else if(!strcmp(*BufString, OptionNames.ArcRel))
+			{
+				// Arc-current B/H quadrature: from round-off (1e-12) to 1e-3 relative.
+				if(!(std::isfinite(*Ptr) && *Ptr >= 1.e-12 && *Ptr <= 1.e-3)) { Send.ErrorMessage("Radia::Error057"); return 0;}
+				CompCriterium.RelPrecArc = *Ptr;
+			}
 			else { Send.ErrorMessage("Radia::Error057"); return 0;}
 			BufString++; Ptr++;
 		}
