@@ -205,11 +205,19 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     ``reduced_source_load`` / ``total_source_load`` select how the coil
     source enters the load: ``"volume"`` (default) integrates ``H_s`` over the
     region, ``"surface_flux"`` uses the equal boundary normal-flux form
-    (``div H_s = 0``) and evaluates the source on faces only.  Both are linear
-    only.  ``total_source_load="surface_flux"`` requires the ``total_hodge``
+    (``div H_s = 0``) and evaluates the source on faces only.
+    ``total_source_load="surface_flux"`` requires the ``total_hodge``
     contract and ``source_trace_tolerance``, which then also gates the iron
     boundary tangential residual: a linked source that the surface form cannot
     represent fails instead of losing its harmonic part.
+
+    With ``bh_table`` the reduced surface load is exact (air stays at mu0).
+    The iron term ``mu(H) (H_s + grad Phi_s) . grad v`` cannot move to the
+    boundary because ``mu`` varies, so ``total_source_load="surface_flux"``
+    drops that harmonic remainder instead: once the gate shows the source is
+    exact on the iron, the remainder is zero in the continuous problem and
+    only the Hodge projection error of ``Phi_s``.  The result records it as
+    ``iron_harmonic_remainder="dropped"``.
 
     ``source_representation="nodal"`` replaces the coil field in every load
     (reduced load, source traces, iron Hodge projection and iron load) by its
@@ -226,8 +234,6 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
                         ("total_source_load", total_source_load)):
         if value not in SOURCE_LOADS:
             raise ValueError(f"{name} must be one of {SOURCE_LOADS}; got {value!r}")
-    if bh_table is not None and "surface_flux" in (reduced_source_load, total_source_load):
-        raise ValueError("surface_flux source loads are implemented for the linear solve only")
     if total_source_load == "surface_flux" and source_potential_contract != "total_hodge":
         raise ValueError("total_source_load='surface_flux' requires source_potential_contract='total_hodge'")
     if source_representation not in ("exact", "nodal"):
@@ -364,7 +370,12 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
         source_potential = source_hodge["potential"]
         kelvin_source_potential = (
             None if kelvin_trace is None else kelvin_trace["potential"])
-        if total_source_load == "surface_flux":
+        if total_source_load == "surface_flux" and bh_table is not None:
+            # mu(H) varies in the iron: keep the gated exact part only.
+            total_source_h = None
+            total_source_potential = None
+            total_source_materials = ()
+        elif total_source_load == "surface_flux":
             total_source_h = total_load_h
             total_source_potential = source_hodge["potential"]
         else:
@@ -381,6 +392,10 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
                 "relative_tangential_residual"),
             "reduced_source_load": reduced_source_load,
             "total_source_load": total_source_load,
+            "iron_harmonic_remainder": (
+                "dropped" if total_source_load == "surface_flux" and bh_table is not None
+                else "boundary_identity" if total_source_load == "surface_flux"
+                else "volume"),
             "projection_bonus_intorder": source_hodge["bonus_intorder"],
             "kelvin_exterior_source": (
                 "exact pulled-back field" if kelvin_trace is None
@@ -470,6 +485,9 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
                 raise ValueError("Newton requires PCHIP without Anderson or projected material state")
             nonlinear_solver = solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin
             iteration_options = dict(residual_tolerance=float(nonlinear_residual_tolerance))
+        if reduced_source_load != "volume":
+            # Picard takes it explicitly; Newton forwards it to its linear solve.
+            iteration_options["reduced_source_load"] = reduced_source_load
         result = nonlinear_solver(
             mesh,
             source_h,
