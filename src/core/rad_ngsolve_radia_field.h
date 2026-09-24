@@ -4,6 +4,7 @@
 #include <coefficient.hpp>
 #include "rad_parallel.h"
 #include <mutex>
+#include <shared_mutex>
 
 #include <array>
 #include <algorithm>
@@ -41,6 +42,23 @@ RADIA_FIELD_C_API int RADIA_FIELD_C_CALL RadFldCmpPrc(
 #undef RADIA_FIELD_C_CALL
 
 namespace radia::ngsolve_bridge {
+
+// Quantised coordinates of a cached field point.  Equality is on the whole
+// triple, so two different points never share an entry; the hash only
+// spreads buckets (splitmix64 finaliser per component).
+using PointKey = std::array<std::int64_t, 3>;
+struct PointKeyHash {
+    std::size_t operator()(const PointKey& key) const noexcept {
+        std::uint64_t hash = 0x9e3779b97f4a7c15ULL;
+        for (const std::int64_t value : key) {
+            std::uint64_t z = static_cast<std::uint64_t>(value) + 0x9e3779b97f4a7c15ULL + (hash << 6) + (hash >> 2);
+            z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ULL;
+            z = (z ^ (z >> 27)) * 0x94d049bb133111ebULL;
+            hash ^= z ^ (z >> 31);
+        }
+        return static_cast<std::size_t>(hash);
+    }
+};
 
 struct RadiaFieldCacheStats {
     bool enabled = false;
@@ -195,6 +213,7 @@ public:
             TransformToLocal(&global_points[3 * i], &local_points[3 * i]);
         std::vector<double> local_values;
         ComputeLocalFieldParallel(local_points, count, local_values);
+        std::unique_lock<std::shared_mutex> lock(cache_mutex_);
         for (std::size_t i = 0; i < count; ++i) {
             std::array<double, 3> cached{};
             if (field_type_ == "phi") {
@@ -208,13 +227,26 @@ public:
     }
 
     void ClearCache() {
+        std::unique_lock<std::shared_mutex> lock(cache_mutex_);
         point_cache_.clear();
         use_cache_ = false;
         cache_hits_ = 0;
         cache_misses_ = 0;
     }
 
+    // Memoisation: a missed point is evaluated as usual and then kept, so a
+    // later evaluation at the same coordinates is a hit.  Values are the ones
+    // the direct evaluation returns; only repeated work is removed.  Entries
+    // accumulate until ClearCache().  Scalar potential is not memoised.
+    void SetMemoize(bool enabled) {
+        std::unique_lock<std::shared_mutex> lock(cache_mutex_);
+        memoize_ = enabled && field_type_ != "phi";
+        if (memoize_) use_cache_ = true;
+    }
+    bool Memoizes() const { return memoize_; }
+
     RadiaFieldCacheStats CacheStats() const {
+        std::shared_lock<std::shared_mutex> lock(cache_mutex_);
         RadiaFieldCacheStats result;
         result.enabled = use_cache_;
         result.size = point_cache_.size();
@@ -293,6 +325,11 @@ public:
         TransformToGlobal(values.data(), transformed);
         for (int component = 0; component < 3; ++component)
             result(component) = transformed[component];
+        if (memoize_) {
+            std::unique_lock<std::shared_mutex> lock(cache_mutex_);
+            point_cache_.emplace(HashPoint(global),
+                                 std::array<double, 3>{transformed[0], transformed[1], transformed[2]});
+        }
     }
 
     void Evaluate(const ngfem::BaseMappedIntegrationRule& rule,
@@ -301,12 +338,14 @@ public:
         if (use_cache_ && ReadCache(rule, result)) return;
 
         std::vector<double> local_points(3 * count);
+        std::vector<double> global_points(3 * count);
         for (std::size_t i = 0; i < count; ++i) {
             const auto mapped = rule[i].GetPoint();
             const int dimension = mapped.Size();
-            double global[3] = {
-                mapped[0], dimension >= 2 ? mapped[1] : 0.0,
-                dimension >= 3 ? mapped[2] : 0.0};
+            double* global = &global_points[3 * i];
+            global[0] = mapped[0];
+            global[1] = dimension >= 2 ? mapped[1] : 0.0;
+            global[2] = dimension >= 3 ? mapped[2] : 0.0;
             TransformToLocal(global, &local_points[3 * i]);
         }
         std::vector<double> values;
@@ -315,11 +354,16 @@ public:
             for (std::size_t i = 0; i < count; ++i) result(i, 0) = values[i];
             return;
         }
+        std::vector<std::array<double, 3>> transformed(count);
         for (std::size_t i = 0; i < count; ++i) {
-            double transformed[3];
-            TransformToGlobal(&values[3 * i], transformed);
+            TransformToGlobal(&values[3 * i], transformed[i].data());
             for (int component = 0; component < 3; ++component)
-                result(i, component) = transformed[component];
+                result(i, component) = transformed[i][component];
+        }
+        if (memoize_) {
+            std::unique_lock<std::shared_mutex> lock(cache_mutex_);
+            for (std::size_t i = 0; i < count; ++i)
+                point_cache_.emplace(HashPoint(&global_points[3 * i]), transformed[i]);
         }
     }
 
@@ -380,18 +424,15 @@ private:
                           w_axis_[row] * local[2];
     }
 
-    std::uint64_t HashPoint(const double point[3]) const {
-        const std::int64_t ix =
-            static_cast<std::int64_t>(point[0] / cache_tolerance_);
-        const std::int64_t iy =
-            static_cast<std::int64_t>(point[1] / cache_tolerance_);
-        const std::int64_t iz =
-            static_cast<std::int64_t>(point[2] / cache_tolerance_);
-        std::uint64_t hash = 14695981039346656037ULL;
-        hash ^= static_cast<std::uint64_t>(ix); hash *= 1099511628211ULL;
-        hash ^= static_cast<std::uint64_t>(iy); hash *= 1099511628211ULL;
-        hash ^= static_cast<std::uint64_t>(iz); hash *= 1099511628211ULL;
-        return hash;
+    // The cache key is the quantised coordinate triple itself, compared in
+    // full.  The former key was a 64-bit FNV mix of that triple with no
+    // equality check on the coordinates, and mirror-symmetric points such as
+    // (x, -a, -a) and (x, a, a) could share it: a lookup then silently
+    // returned another point's field.
+    PointKey HashPoint(const double point[3]) const {
+        return {static_cast<std::int64_t>(std::floor(point[0] / cache_tolerance_)),
+                static_cast<std::int64_t>(std::floor(point[1] / cache_tolerance_)),
+                static_cast<std::int64_t>(std::floor(point[2] / cache_tolerance_))};
     }
 
     void ComputeLocalField(std::vector<double>& points,
@@ -483,6 +524,7 @@ private:
 
     bool ReadCache(const double global[3], ngbla::FlatVector<> result) const {
         if (!use_cache_) return false;
+        std::shared_lock<std::shared_mutex> lock(cache_mutex_);
         const auto found = point_cache_.find(HashPoint(global));
         if (found == point_cache_.end()) {
             ++cache_misses_;
@@ -496,6 +538,7 @@ private:
 
     bool ReadCache(const ngfem::BaseMappedIntegrationRule& rule,
                    ngbla::BareSliceMatrix<> result) const {
+        std::shared_lock<std::shared_mutex> lock(cache_mutex_);
         for (std::size_t i = 0; i < rule.Size(); ++i) {
             const auto mapped = rule[i].GetPoint();
             const int dimension = mapped.Size();
@@ -522,7 +565,11 @@ private:
     std::array<double, 3> w_axis_{0.0, 0.0, 1.0};
     bool use_transform_ = false;
     std::optional<double> precision_;
-    std::unordered_map<std::uint64_t, std::array<double, 3>> point_cache_;
+    // Mutable for memoisation from const Evaluate; guarded by cache_mutex_
+    // (shared for lookups by NGSolve workers, unique for inserts).
+    mutable std::unordered_map<PointKey, std::array<double, 3>, PointKeyHash> point_cache_;
+    mutable std::shared_mutex cache_mutex_;
+    std::atomic<bool> memoize_{false};
     bool use_cache_ = false;
     double cache_tolerance_ = 1.0e-10;
     mutable std::atomic<std::size_t> cache_hits_{0};
