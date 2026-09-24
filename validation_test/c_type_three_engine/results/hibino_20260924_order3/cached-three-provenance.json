@@ -1,0 +1,24 @@
+{
+  "host": "Hibino",
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "executable": "C:\\temp\\hdiv-order3-20260924\\venv\\Scripts\\python.exe",
+  "versions": {
+    "radia": "5.0.0",
+    "ngsolve": "6.2.2606",
+    "numpy": "2.4.3"
+  },
+  "logical_cpus": 38,
+  "memory": {
+    "total": 61680418816,
+    "available": 56712241152,
+    "percent": 8.1,
+    "used": 4968177664,
+    "free": 56712241152
+  },
+  "radia_path": "C:\\temp\\hdiv-order3-20260924\\venv\\Lib\\site-packages\\radia\\__init__.py",
+  "ngsolve_path": "C:\\Program Files\\Python312\\Lib\\site-packages\\ngsolve\\__init__.py",
+  "wrapper_sha256": "b6be92fe86cc5b7c4adac1bf3875d7029e7fc615c37d988c6e440af1e1b22923",
+  "source_cache_is_inside_engine_runtime": true,
+  "resume": false,
+  "warning": "Experimental implementation; no speed superiority without matched error and completed gates."
+}

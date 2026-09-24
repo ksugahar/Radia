@@ -1,0 +1,27 @@
+{
+  "kind": "p-refinement sensitivity, not absolute error or matched-error speed",
+  "inputs": {
+    "coarse_p3": {
+      "path": "S:\\Radia\\validation_artifacts\\hdiv_order3_20260924\\recovered\\cached-three.json",
+      "sha256": "cfb02f84b699792ed53d8fbcb31c575d029bcb775623299af46be1410e06c645"
+    },
+    "coarse_p2": {
+      "path": "S:\\Radia\\validation_artifacts\\hdiv_mixed_20260924\\cached-three.json",
+      "sha256": "a6fc808add5fcfd0f3b76555c4854aeb1123ac665944c62e752cdd65e1955557"
+    },
+    "finer_p2": {
+      "path": "S:\\Radia\\validation_artifacts\\hdiv_fullfiner_20260924\\recovered\\cached-three.json",
+      "sha256": "6ec1d6f436119dad550c049bb1a84b8cb1592fc6a1e2fedb117adf7d0716ab59"
+    }
+  },
+  "comparisons": {
+    "reduced_a": {
+      "coarse_p2": 0.0004917761644798027,
+      "finer_p2": 0.00040853003608547596
+    },
+    "mixed_total_reduced_omega": {
+      "coarse_p2": 0.0020487955500425544,
+      "finer_p2": 0.0009354509940288991
+    }
+  }
+}
