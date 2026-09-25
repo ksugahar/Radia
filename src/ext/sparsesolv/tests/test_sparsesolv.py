@@ -159,6 +159,86 @@ def test_in_place_ams_update_matches_symbolic_galerkin_products(beta_zero):
     assert np.linalg.norm(after.FV().NumPy() - before.FV().NumPy()) <= tolerance * scale
 
 
+def _ams_system(beta_zero, maxh=0.2):
+    import numpy as np
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=maxh))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet="left|bottom")
+    u, v = space.TnT()
+    nu = GridFunction(L2(mesh, order=0))
+    nu.vec.FV().NumPy()[:] = np.random.default_rng(21).uniform(1.0, 1e3, mesh.ne)
+    a = BilinearForm(space)
+    a += nu * curl(u) * curl(v) * dx
+    if not beta_zero:
+        a += 1e-2 * u * v * dx
+    a.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = [[mesh.ngmesh.Points()[i+1][j] for i in range(mesh.nv)] for j in range(3)]
+    options = dict(freedofs=space.FreeDofs(), coord_x=coords[0], coord_y=coords[1],
+                   coord_z=coords[2], beta_zero=beta_zero, cycle_type=1)
+    return mesh, space, a, grad, options
+
+
+@pytest.mark.parametrize("beta_zero", [False, True])
+def test_native_first_build_matches_the_restrict_build(beta_zero):
+    """reuse_hierarchy builds its first Galerkin matrices natively (vertex-graph
+    pattern, fused Pi pass, native AMG products); the preconditioner must equal
+    the default Restrict build up to summation order."""
+    import numpy as np
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+    mesh, space, a, grad, options = _ams_system(beta_zero)
+    native = HypreBasedAMSPreconditioner(a.mat, grad, reuse_hierarchy=True, **options)
+    reference = HypreBasedAMSPreconditioner(a.mat, grad, **options)
+    x = a.mat.CreateColVector()
+    x.FV().NumPy()[:] = np.random.default_rng(22).normal(size=space.ndof)
+    y1, y2 = x.CreateVector(), x.CreateVector()
+    with TaskManager():
+        y1.data = native * x
+        y2.data = reference * x
+    scale = np.linalg.norm(y2.FV().NumPy())
+    tolerance = 1e-10 if beta_zero else 1e-6  # gauged G^T A G: cancellation round-off
+    assert np.linalg.norm(y1.FV().NumPy() - y2.FV().NumPy()) <= tolerance * scale
+
+
+@pytest.mark.parametrize("beta_zero", [False, True])
+def test_native_pcg_solves_to_the_true_residual(beta_zero):
+    import numpy as np
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner, NativePCG
+    mesh, space, a, grad, options = _ams_system(beta_zero)
+    pre = HypreBasedAMSPreconditioner(a.mat, grad, reuse_hierarchy=True, **options)
+    free = np.asarray(list(space.FreeDofs()), dtype=bool)
+    exact = a.mat.CreateColVector()
+    exact.FV().NumPy()[:] = np.random.default_rng(23).normal(size=space.ndof) * free
+    b = exact.CreateVector()
+    b.data = a.mat * exact
+    b.FV().NumPy()[~free] = 0.0
+    pcg = NativePCG(a.mat, pre, space.FreeDofs())
+    x1, x2 = b.CreateVector(), b.CreateVector()
+    with TaskManager():
+        its, rel, ok = pcg.Solve(b, x1, 1e-10, 500)
+        its2, rel2, ok2 = pcg.Solve(b, x2, 1e-10, 500)
+    assert ok and rel <= 1e-10
+    residual = b.CreateVector()
+    residual.data = b - a.mat * x1
+    assert np.linalg.norm(residual.FV().NumPy()[free]) <= 1e-10 * np.linalg.norm(b.FV().NumPy()[free]) * 1.0001
+    # The PCG's own inner products are deterministic; the AMS application under a
+    # TaskManager differs between runs at round-off (2e-16), which two solves to
+    # 1e-10 amplify to ~1e-9 in the solution.
+    assert its == its2 and abs(rel - rel2) <= 1e-3 * rel
+    np.testing.assert_allclose(x1.FV().NumPy(), x2.FV().NumPy(), rtol=0,
+                               atol=1e-6 * np.max(np.abs(x1.FV().NumPy())))
+    if not beta_zero:  # the gauged system is nonsingular: the solution is the field itself
+        np.testing.assert_allclose(x1.FV().NumPy(), exact.FV().NumPy(), rtol=0,
+                                   atol=1e-6 * np.max(np.abs(exact.FV().NumPy())))
+    with TaskManager():
+        its3, rel3, ok3 = pcg.Solve(b, x1, 1e-12, 1)
+    assert its3 == 1 and not ok3 and rel3 > 1e-12
+    negative = BilinearForm(space)
+    negative += -1.0 * InnerProduct(space.TrialFunction(), space.TestFunction()) * dx
+    negative.Assemble()
+    with TaskManager(), pytest.raises(Exception, match="not SPD"):
+        NativePCG(a.mat, negative.mat, None).Solve(b, x1, 1e-8, 10)
+
+
 def test_lowest_order_gradient_equals_create_gradient():
     import numpy as np
     from radia.sparsesolv_ngsolve import LowestOrderGradient

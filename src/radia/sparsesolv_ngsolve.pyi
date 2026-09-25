@@ -442,6 +442,19 @@ def ClosedCoilCurrentPhi(mesh: object, materials: list[int], current_A: float, o
     ...
 
 
+class NativePCG:
+    """Preconditioned CG stopped on the true relative residual over free dofs.
+
+    ``Solve(b, x, tolerance, maxiter)`` starts from x = 0 and returns
+    ``(iterations, true_relative_residual, converged)``; one product and one
+    preconditioner application per iteration, the true residual computed only to
+    confirm convergence; raises when p.Ap <= 0 or r.z <= 0.
+    """
+
+    def __init__(self, mat: BaseMatrix, pre: BaseMatrix, freedofs: BitArray | None) -> None: ...
+    def Solve(self, b: BaseVector, x: BaseVector, tolerance: float, maxiter: int) -> tuple: ...
+
+
 class LowestOrderCurlResidual:
     """Element flux, material state and residual of a lowest-order HCurl problem.
 
