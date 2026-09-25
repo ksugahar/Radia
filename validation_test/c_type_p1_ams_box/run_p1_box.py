@@ -68,6 +68,12 @@ from radia.vector_potential_solver import (  # noqa: E402
     _build_nu_of_b_interpolator,
     direct_inverse_type,
 )
+from radia.p1_newton import (  # noqa: E402
+    ElementCurl,
+    FluxSideLaw,
+    IronJacobian,
+    lowest_order_gradient,
+)
 
 MU0 = 4.0e-7 * math.pi
 NU0 = 1.0 / MU0
@@ -154,34 +160,9 @@ def iron_elements_with_centroids(mesh: ng.Mesh) -> tuple[np.ndarray, np.ndarray]
 
 
 
-class SoftIronLaw:
-    """The shared monotone PCHIP B(H) law seen from the flux-density side.
-
-    ``nu(|B|)`` approximates the production reduced-A Picard inverse
-    (:func:`radia.vector_potential_solver._build_nu_of_b_interpolator`) by
-    linear interpolation on a dense grid. This approximation also enters the
-    residual and thus the converged field. ``dH/dB`` is a numerical derivative
-    of the tabulated H values and steers the Newton direction.
-    """
-
-    def __init__(self, bh_table, *, samples: int = 4001):
-        nu_of_b, b_saturation = _build_nu_of_b_interpolator(bh_table)
-        self.b_saturation = float(b_saturation)
-        self.nu_initial = float(nu_of_b(0.0))
-        grid = np.concatenate(([0.0], np.geomspace(1.0e-7, 20.0 * self.b_saturation, samples)))
-        nu = np.asarray([nu_of_b(value) for value in grid], dtype=float)
-        h = nu * grid
-        dhdb = np.gradient(h, grid)
-        dhdb[0] = nu[0]
-        if not np.all(np.isfinite(nu)) or np.any(nu <= 0.0) or np.any(dhdb <= 0.0):
-            raise RuntimeError("the inverted B-H law is not positive and monotone")
-        self._grid, self._nu, self._dhdb = grid, nu, dhdb
-
-    def reluctivity(self, magnitude: np.ndarray) -> np.ndarray:
-        return np.interp(magnitude, self._grid, self._nu)
-
-    def differential_reluctivity(self, magnitude: np.ndarray) -> np.ndarray:
-        return np.interp(magnitude, self._grid, self._dhdb)
+# The flux-side law, element curl, closed-form Jacobian and discrete gradient
+# are the production ones (radia.p1_newton); this lane adds diagnostics around them.
+SoftIronLaw = FluxSideLaw
 
 
 class PiecewiseLinearIronLaw:
@@ -428,8 +409,8 @@ class ReducedAP1Box:
 
         if self._gradient is None:
             with ng.TaskManager():
-                gradient, h1 = self.fes.CreateGradient()
-            if int(h1.ndof) != int(self.mesh.nv):
+                gradient = lowest_order_gradient(self.fes)  # = CreateGradient()[0], edge table
+            if int(gradient.width) != int(self.mesh.nv):
                 raise RuntimeError("AMS needs one H1 DOF per vertex")
             xyz = np.asarray(self.mesh.ngmesh.Coordinates(), dtype=float)
             self._gradient = (gradient, xyz)
@@ -566,29 +547,11 @@ class ReducedAP1Box:
 
         started = time.perf_counter()
         mesh = self.mesh
-        scalar = ng.L2(mesh, order=0)
-        if scalar.ndof != mesh.ne or scalar.GetDofNrs(ng.ElementId(ng.VOL, mesh.ne - 1))[0] != mesh.ne - 1:
-            raise RuntimeError("unexpected order-0 L2 dof layout")
-        u = self.fes.TrialFunction()
-        w = scalar.TestFunction()
-        weight_form = ng.LinearForm(scalar)
-        weight_form += w * ng.dx
-        curls, curls_t = [], []
         with ng.TaskManager():
-            weight_form.Assemble()
-            for k in range(3):
-                form = ng.BilinearForm(trialspace=self.fes, testspace=scalar)
-                form += ng.curl(u)[k] * w * ng.dx
-                form.Assemble()
-                values, columns, offsets = form.mat.CSR()
-                matrix = csr_matrix((np.array(values), np.array(columns), np.array(offsets)),
-                                    shape=(scalar.ndof, self.fes.ndof))
-                curls.append(matrix)
-                curls_t.append(matrix.T.tocsr())
-        weights = weight_form.vec.FV().NumPy().copy()
-        if np.any(weights <= 0.0):
-            raise RuntimeError("non-positive order-zero L2 weights")
-        algebra = {"curl": curls, "curl_t": curls_t, "weight": weights,
+            element_curl = ElementCurl(self.fes)  # production operator (radia.p1_newton)
+        weights = element_curl.weight
+        algebra = {"element_curl": element_curl, "curl": element_curl.curl,
+                   "curl_t": element_curl.curl_t, "weight": weights,
                    "scale": self.volumes / weights ** 2, "mass": None, "constant": None,
                    "source_mean": None}
         if self.gauge_epsilon > 0.0:
@@ -729,73 +692,23 @@ class ReducedAP1Box:
         element matrix is ``vol_e C_e^T (nu_e I + q_e b_e b_e^T) C_e`` with the
         3x6 element curl coefficients ``C_e`` taken from the discrete element
         curl of ``_algebra``; it is evaluated for all iron elements at once and
-        added at precomputed pattern positions. Returns the Jacobian form and a
+        added at precomputed pattern positions by the production
+        :class:`radia.p1_newton.IronJacobian`. Returns the Jacobian form and a
         callable that refreshes its matrix values for the current state.
         """
         algebra = self._algebra()
-        u, v = self.fes.TnT()
-        nu_constant = ng.GridFunction(self.nu_space)
-        nu_constant.vec.FV().NumPy()[:] = NU0
-        nu_constant.vec.FV().NumPy()[self.iron_numbers] = 0.0
-        full = ng.BilinearForm(self.fes, symmetric=True)
-        full += nu_constant * ng.InnerProduct(ng.curl(u), ng.curl(v)) * ng.dx
-        if self.gauge_epsilon > 0.0:
-            full += self.gauge_epsilon * NU0 * ng.InnerProduct(u, v) * ng.dx
         with ng.TaskManager():
-            full.Assemble()
-        base = full.mat.AsVector().FV().NumPy().copy()
-
+            jacobian = IronJacobian(self.fes, algebra["element_curl"], self.iron_numbers,
+                                    self.gauge_epsilon * NU0)  # production (radia.p1_newton)
         iron = self.iron_numbers
-        dofs, coefficients = None, []
-        for matrix in algebra["curl"]:
-            rows = matrix[iron]
-            if not np.all(np.diff(rows.indptr) == 6):
-                raise RuntimeError("split Jacobian expects six edge dofs per iron tetrahedron")
-            columns = rows.indices.reshape(-1, 6)
-            values = rows.data.reshape(-1, 6)
-            order = np.argsort(columns, axis=1)
-            columns = np.take_along_axis(columns, order, axis=1)
-            values = np.take_along_axis(values, order, axis=1)
-            if dofs is None:
-                dofs = columns
-            elif not np.array_equal(dofs, columns):
-                raise RuntimeError("element curl components disagree on the element dofs")
-            coefficients.append(values)
-        curl = np.stack(coefficients, axis=1) / algebra["weight"][iron, None, None]  # (n, 3, 6)
-        volume = self.volumes[iron]
-
-        _, full_columns, full_offsets = full.mat.CSR()
-        full_columns = np.asarray(full_columns, dtype=np.int64)
-        full_offsets = np.asarray(full_offsets, dtype=np.int64)
-        width = np.int64(full.mat.width)
-        full_rows = np.repeat(np.arange(len(full_offsets) - 1, dtype=np.int64), np.diff(full_offsets))
-        full_keys = full_rows * width + full_columns
-        if np.any(np.diff(full_keys) <= 0):
-            raise RuntimeError("Jacobian pattern is not sorted row-major")
-        lower_only = not np.any(full_columns > full_rows)
-        pair_rows = np.repeat(dofs, 6, axis=1).ravel()
-        pair_columns = np.tile(dofs, (1, 6)).ravel()
-        keep = (pair_columns <= pair_rows) if lower_only else np.ones(pair_rows.size, dtype=bool)
-        keys = pair_rows[keep] * width + pair_columns[keep]
-        positions = np.searchsorted(full_keys, keys)
-        if (np.any(positions >= len(full_keys))
-                or not np.array_equal(full_keys[np.minimum(positions, len(full_keys) - 1)], keys)):
-            raise RuntimeError("iron element entries fall outside the Jacobian pattern")
-        size = len(base)
-        eye = np.eye(3)
 
         def refresh():
             nu = self.nu_gf.vec.FV().NumPy()[iron]
             q = self.q_gf.vec.FV().NumPy()[iron]
             b = np.stack([gf.vec.FV().NumPy()[iron] for gf in self._bvec_gfs], axis=1)
-            tangent = nu[:, None, None] * eye + q[:, None, None] * b[:, :, None] * b[:, None, :]
-            element = np.einsum("nki,nkj->nij", curl, np.einsum("nkl,nlj->nkj", tangent, curl))
-            element *= volume[:, None, None]
-            values = base + np.bincount(positions, weights=element.reshape(len(iron), 36).ravel()[keep],
-                                        minlength=size)
-            full.mat.AsVector().FV().NumPy()[:] = values
+            jacobian.refresh(nu, q, b)
 
-        return full, refresh
+        return jacobian.form, refresh
 
     # ------------------------------------------------------------------ drivers
     def run_linear(self, mu_r: float, observation: np.ndarray) -> tuple:
