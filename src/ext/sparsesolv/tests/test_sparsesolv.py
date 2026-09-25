@@ -220,6 +220,63 @@ def test_lowest_order_curl_system_matches_form_assembly():
         LowestOrderCurlSystem(space, coefficient=np.ones(3))
 
 
+def test_lowest_order_curl_jacobian_refresh_is_the_tangent_form():
+    import numpy as np
+    from radia.sparsesolv_ngsolve import LowestOrderCurlJacobian, LowestOrderCurlSystem
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.25))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet=".*")
+    rng = np.random.default_rng(11)
+    subset = np.sort(rng.choice(mesh.ne, mesh.ne // 3, replace=False))
+    constant = np.full(mesh.ne, 2.0)
+    constant[subset] = 0.0
+    with TaskManager():
+        system = LowestOrderCurlSystem(space, coefficient=constant)
+    matrix = system["matrix"]
+    before = np.asarray(matrix.CSR()[0]).copy()
+    native = LowestOrderCurlJacobian(matrix, system["dofs"][subset], system["curl"][subset],
+                                     system["volume"][subset], system["positions"][subset])
+    assert native.elements == len(subset)
+    nu, q = rng.uniform(1.0, 3.0, len(subset)), rng.uniform(-0.5, 2.0, len(subset))
+    b = rng.normal(size=(len(subset), 3))
+    for _ in range(2):  # a refresh rewrites, it does not accumulate
+        with TaskManager():
+            native.Refresh(nu, q, b)
+    fields = [GridFunction(L2(mesh, order=0)) for _ in range(5)]
+    for gf, values in zip(fields[:2], (nu, q)):
+        gf.vec.FV().NumPy()[subset] = values
+    for k in range(3):
+        fields[2 + k].vec.FV().NumPy()[subset] = b[:, k]
+    coefficient = GridFunction(L2(mesh, order=0))
+    coefficient.vec.FV().NumPy()[:] = constant
+    bvec = CoefficientFunction(tuple(fields[2:]))
+    trial, test = space.TnT()
+    form = BilinearForm(space, symmetric=True)
+    form += (coefficient + fields[0]) * curl(trial) * curl(test) * dx
+    form += fields[1] * InnerProduct(bvec, curl(trial)) * InnerProduct(bvec, curl(test)) * dx
+    form.Assemble()
+    reference = np.asarray(form.mat.CSR()[0])
+    values = np.asarray(matrix.CSR()[0])
+    np.testing.assert_allclose(values, reference, rtol=0, atol=1e-13 * np.max(np.abs(reference)))
+    pos = system["positions"]
+    transpose = pos.reshape(-1, 6, 6).transpose(0, 2, 1).reshape(-1, 36)
+    assert np.array_equal(values[pos], values[transpose])
+    untouched = np.ones(len(values), bool)
+    untouched[pos[subset].ravel()] = False
+    touched_rows = np.unique(system["dofs"][subset])
+    so = np.asarray(matrix.CSR()[2]).astype(np.int64)
+    for row in touched_rows:
+        untouched[so[row]:so[row + 1]] = False
+    assert np.array_equal(values[untouched], before[untouched])
+    with pytest.raises(Exception, match="same n"):
+        LowestOrderCurlJacobian(matrix, system["dofs"][:2], system["curl"][:3], system["volume"][:3],
+                                system["positions"][:3])
+    shifted = system["positions"][subset].copy()
+    shifted[:, 1] = shifted[:, 0]
+    with pytest.raises(Exception, match="do not match"):
+        LowestOrderCurlJacobian(matrix, system["dofs"][subset], system["curl"][subset],
+                                system["volume"][subset], shifted)
+
+
 def test_taskmanager_active_reports_the_parallel_region():
     from radia.sparsesolv_ngsolve import TaskManagerActive
     assert TaskManagerActive() is False

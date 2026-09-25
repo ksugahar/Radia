@@ -430,6 +430,23 @@ def LowestOrderCurlSystem(fes: FESpace, coefficient: object = None) -> dict:
     ...
 
 
+class LowestOrderCurlJacobian:
+    """Newton Jacobian refresh on the elements given (LowestOrderCurlSystem data).
+
+    ``Refresh(nu, q, b)`` rewrites every row the elements touch as the saved
+    constant part plus sum_e vol_e C_e^T (nu_e I + q_e b_e b_e^T) C_e, gathered
+    per row in ascending element order (exactly symmetric).
+    """
+
+    def __init__(self, matrix: BaseMatrix, dofs: object, curl: object, volume: object,
+                 positions: object) -> None: ...
+    def Refresh(self, nu: object, q: object, b: object) -> None: ...
+    @property
+    def elements(self) -> int: ...
+    @property
+    def rows(self) -> int: ...
+
+
 def LowestOrderGradient(fes: FESpace) -> BaseMatrix:
     """Discrete gradient H1(order 1) -> lowest-order HCurl from the edge table.
 
