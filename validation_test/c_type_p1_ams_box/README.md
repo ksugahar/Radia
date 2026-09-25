@@ -299,6 +299,8 @@ A-phi current + engine setup (mesh load excluded).
 | `radia.p1_newton`, native iron Jacobian | tight | 19.2 | 21.9 | 11 | 114 |
 | `radia.p1_newton`, native trial residual | loose | 11.8 | 14.5 | 7 | 64 |
 | `radia.p1_newton`, native trial residual | tight | 17.3 | 20.0 | 11 | 114 |
+| `radia.p1_newton`, native A-phi coil current | loose | 11.8 | 12.2 | 7 | 64 |
+| `radia.p1_newton`, native A-phi coil current | tight | 17.4 | 17.8 | 11 | 114 |
 
 Beta-zero loose repeated: 31.8, 30.9, 31.8 s end-to-end; with the frozen
 hierarchy 30.1, 30.1, 30.3 s (AMS update 1.1 s -> 0.77 s, CG iterations
@@ -329,7 +331,11 @@ the native trial evaluation (`LowestOrderCurlResidual`: element curl, iron
 flux, law interpolation and residual in one pass; records `*_nativeres_*`) a
 Newton or line-search trial costs 0.045 s instead of 0.21 s (line search 1.6
 s -> 0.4 s); end-to-end 14.4, 14.5, 14.5 s loose and 20.0 s tight, counts and
-field unchanged. All with `--inexact-linear`; single host, single problem.
+field unchanged. With the native A-phi coil current (`ClosedCoilCurrentPhi`:
+conductor-only faces, cut, P1 Laplacian solved by IC(0)-CG to 1e-12, checks;
+records `*_nativephi_*`) the coil current takes 0.4 s instead of 2.8 s;
+end-to-end 12.3, 12.2, 12.3 s loose and 17.8 s tight, counts and field
+unchanged. All with `--inexact-linear`; single host, single problem.
 
 ## Results (LAB, 2026-09-22, uncontended sequential runs, 8 threads)
 
