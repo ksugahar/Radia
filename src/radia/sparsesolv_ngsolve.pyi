@@ -396,6 +396,11 @@ class CompactAMSPreconditionerImpl(BaseMatrix):
     def hierarchy_refreshes(self) -> int: ...
 
     @property
+    def in_place_updates(self) -> int:
+        """Updates whose Galerkin products ran numerically on the previous patterns."""
+        ...
+
+    @property
     def setup_workers(self) -> int:
         """Workers observed in strength construction; zero if no coarsening."""
         ...

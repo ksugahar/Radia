@@ -109,6 +109,56 @@ def test_reused_ams_hierarchy_refreshes_and_still_converges(beta_zero):
     assert iterations["reused"] <= 2 * iterations["fresh"] + 5, iterations
 
 
+@pytest.mark.parametrize("beta_zero", [False, True])
+def test_in_place_ams_update_matches_symbolic_galerkin_products(beta_zero):
+    """With reuse_hierarchy and an unchanged pattern, Update refreshes the
+    Galerkin matrices numerically on their previous patterns. On unchanged
+    values that must reproduce the symbolic products of the first build.
+
+    G^T A G cancels the curl-curl part exactly in exact arithmetic, so with a
+    gauge eps its round-off relative to eps scales like 1/eps whatever the
+    summation order; the gauged case uses eps = 1e-2 to compare the products,
+    not that cancellation."""
+    import numpy as np
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.2))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet="left|bottom")
+    u, v = space.TnT()
+    nu = GridFunction(L2(mesh, order=0))
+    nu.vec.FV().NumPy()[:] = np.random.default_rng(3).uniform(1.0, 1e3, mesh.ne)
+    a = BilinearForm(space)
+    a += nu * curl(u) * curl(v) * dx
+    if not beta_zero:
+        a += 1e-2 * u * v * dx
+    a.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = [[mesh.ngmesh.Points()[i+1][j] for i in range(mesh.nv)] for j in range(3)]
+    pre = HypreBasedAMSPreconditioner(a.mat, grad, freedofs=space.FreeDofs(), coord_x=coords[0],
+                                      coord_y=coords[1], coord_z=coords[2], beta_zero=beta_zero,
+                                      cycle_type=1, reuse_hierarchy=True)
+    x = a.mat.CreateColVector()
+    x.FV().NumPy()[:] = np.random.default_rng(4).normal(size=space.ndof)
+    before, after = x.CreateVector(), x.CreateVector()
+    before.data = pre * x
+    pre.Update(a.mat)
+    assert pre.in_place_updates == 1 and pre.hierarchy_refreshes == 1
+    after.data = pre * x
+    scale = np.linalg.norm(before.FV().NumPy())
+    # Measured: 1e-12 beta-zero; 1e-9 gauged at eps 1e-2 (1e-5 at eps 1e-6).
+    tolerance = 1e-11 if beta_zero else 1e-7
+    assert np.linalg.norm(after.FV().NumPy() - before.FV().NumPy()) <= tolerance * scale
+    # A different matrix object with the same pattern is compared and refreshed in place.
+    b = BilinearForm(space)
+    b += nu * curl(u) * curl(v) * dx
+    if not beta_zero:
+        b += 1e-2 * u * v * dx
+    b.Assemble()
+    pre.Update(b.mat)
+    assert pre.in_place_updates == 2
+    after.data = pre * x
+    assert np.linalg.norm(after.FV().NumPy() - before.FV().NumPy()) <= tolerance * scale
+
+
 def test_lowest_order_gradient_equals_create_gradient():
     import numpy as np
     from radia.sparsesolv_ngsolve import LowestOrderGradient

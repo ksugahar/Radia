@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <iostream>
+#include <atomic>
 
 namespace ngla {
 
@@ -36,6 +37,95 @@ struct CSRGraph {
     const int* NeighborBegin(int i) const { return col_idx.data() + row_ptr[i]; }
     const int* NeighborEnd(int i) const { return col_idx.data() + row_ptr[i + 1]; }
 };
+
+/// True when a and b have the same sparsity pattern (row lengths and column indices).
+inline bool SameSparsityPattern(const SparseMatrix<double>& a, const SparseMatrix<double>& b) {
+    if (&a == &b) return true;
+    if (a.Height() != b.Height() || a.Width() != b.Width() || a.NZE() != b.NZE()) return false;
+    std::atomic<bool> same{true};
+    ParallelForRange(a.Height(), [&](IntRange range) {
+        for (auto i : range) {
+            auto ca = a.GetRowIndices(i);
+            auto cb = b.GetRowIndices(i);
+            if (ca.Size() != cb.Size()
+                || !std::equal(ca.Data(), ca.Data() + ca.Size(), cb.Data())) {
+                same.store(false, std::memory_order_relaxed);
+                return;
+            }
+        }
+    });
+    return same.load();
+}
+
+/// Overwrite the values of B (which has A's pattern) with A, using identity rows
+/// for constrained dofs and zero couplings to them -- the values of
+/// CreateBCModifiedMatrix without allocating a new matrix.
+inline void FillBCModifiedValues(const SparseMatrix<double>& A, const BitArray& freedofs,
+                                 SparseMatrix<double>& B) {
+    ParallelFor(A.Height(), [&](size_t i) {
+        auto cols = A.GetRowIndices(i);
+        auto src = A.GetRowValues(i);
+        auto dst = B.GetRowValues(i);
+        const bool free_row = freedofs.Test(i);
+        for (int j = 0; j < cols.Size(); j++) {
+            if (!free_row)
+                dst[j] = (cols[j] == (int)i) ? 1.0 : 0.0;
+            else
+                dst[j] = freedofs.Test(cols[j]) ? src[j] : 0.0;
+        }
+    });
+}
+
+/// Galerkin product C = Pt * A * P computed into the existing pattern of C
+/// (numeric phase only: no symbolic product, no allocation). Row u of C is
+/// sum_e Pt[u,e] sum_k A[e,k] P[k,:], accumulated through a per-task column
+/// marker. Returns false when a nonzero contribution falls outside C's
+/// pattern; the values of C are then unspecified and the caller must rebuild.
+inline bool GalerkinProductOnPattern(const SparseMatrix<double>& Pt, const SparseMatrix<double>& A,
+                                     const SparseMatrix<double>& P, SparseMatrix<double>& C) {
+    if (Pt.Height() != C.Height() || Pt.Width() != A.Height() || A.Width() != P.Height()
+        || P.Width() != C.Width())
+        throw std::invalid_argument("GalerkinProductOnPattern: dimension mismatch");
+    std::atomic<bool> inside{true};
+    const int width = C.Width();
+    ParallelForRange(C.Height(), [&](IntRange range) {
+        std::vector<int> marker(width, -1);
+        for (auto u : range) {
+            auto ccols = C.GetRowIndices(u);
+            auto cvals = C.GetRowValues(u);
+            for (int p = 0; p < ccols.Size(); p++) {
+                marker[ccols[p]] = p;
+                cvals[p] = 0.0;
+            }
+            auto ecols = Pt.GetRowIndices(u);
+            auto evals = Pt.GetRowValues(u);
+            for (int a = 0; a < ecols.Size(); a++) {
+                const double pe = evals[a];
+                if (pe == 0.0) continue;
+                const int e = ecols[a];
+                auto kcols = A.GetRowIndices(e);
+                auto kvals = A.GetRowValues(e);
+                for (int b = 0; b < kcols.Size(); b++) {
+                    const double w = pe * kvals[b];
+                    if (w == 0.0) continue;
+                    const int k = kcols[b];
+                    auto jcols = P.GetRowIndices(k);
+                    auto jvals = P.GetRowValues(k);
+                    for (int c = 0; c < jcols.Size(); c++) {
+                        const int pos = marker[jcols[c]];
+                        if (pos < 0) {
+                            if (jvals[c] != 0.0) inside.store(false, std::memory_order_relaxed);
+                            continue;
+                        }
+                        cvals[pos] += w * jvals[c];
+                    }
+                }
+            }
+            for (int p = 0; p < ccols.Size(); p++) marker[ccols[p]] = -1;
+        }
+    });
+    return inside.load();
+}
 
 /// Compact Algebraic Multigrid preconditioner for scalar H1 problems.
 ///
@@ -166,25 +256,39 @@ public:
     /// Setup() ("frozen interpolation") and recomputes only the Galerkin
     /// coarse matrices P^T A P, the l1 smoother norms and the coarsest
     /// factorization. Falls back to Setup() when there is no hierarchy yet.
+    /// When the new matrix has the sparsity pattern of the previous one, the
+    /// level matrices are refreshed in place: the coarse patterns are those of
+    /// the previous products, so only the numeric Galerkin phase runs.
     void Refresh(shared_ptr<SparseMatrix<double>> mat) {
         if (mat->Height() != mat_->Height() || mat->Width() != mat_->Width())
             throw std::invalid_argument("CompactAMG::Refresh: matrix dimension changed");
-        mat_ = mat;
-        if (levels_.empty()) { Setup(); return; }
+        if (levels_.empty()) { mat_ = mat; Setup(); return; }
         {
         ngcore::RegionTaskManager tasks;
         auto& fine = levels_[0];
-        fine.A = freedofs_ ? CreateBCModifiedMatrix(*mat_, *freedofs_) : mat_;
+        // fine.A carries the previous matrix pattern (a BC-modified copy or
+        // the previous matrix itself).
+        bool in_place = SameSparsityPattern(*mat, *fine.A);
+        mat_ = mat;
+        if (!freedofs_) fine.A = mat_;
+        else if (in_place) FillBCModifiedValues(*mat_, *freedofs_, *fine.A);
+        else fine.A = CreateBCModifiedMatrix(*mat_, *freedofs_);
         ComputeL1Norms(*fine.A, fine.l1_norms);
         for (size_t l = 0; l + 1 < levels_.size(); l++) {
             auto& cur = levels_[l];
-            if (!cur.P)
+            if (!cur.P || !cur.Pt)
                 throw std::runtime_error("CompactAMG::Refresh: level without interpolation");
-            auto coarse = dynamic_pointer_cast<SparseMatrix<double>>(cur.A->Restrict(*cur.P));
-            if (!coarse || coarse->Height() != levels_[l + 1].ndof)
-                throw std::runtime_error("CompactAMG::Refresh: Galerkin product changed size");
-            levels_[l + 1].A = coarse;
-            ComputeL1Norms(*coarse, levels_[l + 1].l1_norms);
+            auto& next = levels_[l + 1];
+            in_place = in_place && GalerkinProductOnPattern(*cur.Pt, *cur.A, *cur.P, *next.A);
+            if (!in_place) {
+                auto coarse = dynamic_pointer_cast<SparseMatrix<double>>(cur.A->Restrict(*cur.P));
+                if (!coarse || coarse->Height() != next.ndof)
+                    throw std::runtime_error("CompactAMG::Refresh: Galerkin product changed size");
+                next.A = coarse;
+            } else {
+                in_place_products_++;
+            }
+            ComputeL1Norms(*next.A, next.l1_norms);
         }
         }
         auto& coarsest = levels_.back();
@@ -196,6 +300,8 @@ public:
     }
 
     int RefreshCount() const { return refresh_count_; }
+    /// Galerkin coarse matrices refreshed numerically on their existing pattern.
+    int InPlaceProductCount() const { return in_place_products_; }
 
     // BaseMatrix interface
     int VHeight() const override { return mat_->Height(); }
@@ -252,6 +358,7 @@ public:
 private:
     mutable int setup_workers_ = 0;
     int refresh_count_ = 0;
+    int in_place_products_ = 0;
     // =====================================================================
     // Level data
     // =====================================================================
