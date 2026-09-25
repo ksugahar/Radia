@@ -159,6 +159,147 @@ inline shared_ptr<BitArray> ExtractFreeDofs(py::object freedofs) {
   return py::cast<shared_ptr<BitArray>>(freedofs);
 }
 
+/// Nonlinear magnetostatic state and residual of a lowest-order HCurl
+/// curl-curl problem with element-constant flux, in one native pass.
+/// Built from LowestOrderCurlSystem data of all elements and the nonlinear
+/// ("iron") element numbers. Evaluate(x, ...) computes the element curl
+/// c_e = C_e x[dofs_e]; on the iron B_e = c_e (+ the source mean), |B_e|,
+/// nu_e and dH/dB by linear interpolation of the tabulated law (np.interp
+/// semantics), q_e = (dH/dB - nu)/|B|^2 (0 below 1e-9 T); and the residual
+/// r = sum_e vol_e C_e^T (nu_e c_e + [iron] (nu_e - nu0) Bs_e) - f,
+/// gathered per dof over its elements in ascending order (deterministic).
+class LowestOrderCurlResidual {
+public:
+  LowestOrderCurlResidual(py::array_t<int32_t, py::array::c_style | py::array::forcecast> dofs,
+                          py::array_t<double, py::array::c_style | py::array::forcecast> curl,
+                          py::array_t<double, py::array::c_style | py::array::forcecast> volume,
+                          size_t ndof,
+                          py::array_t<int64_t, py::array::c_style | py::array::forcecast> iron,
+                          double nu0)
+      : ndof_(ndof), nu0_(nu0)
+  {
+    ne_ = volume.ndim() == 1 ? size_t(volume.shape(0)) : 0;
+    if (dofs.ndim() != 2 || size_t(dofs.shape(0)) != ne_ || dofs.shape(1) != 6
+        || curl.ndim() != 3 || size_t(curl.shape(0)) != ne_ || curl.shape(1) != 3 || curl.shape(2) != 6
+        || iron.ndim() != 1)
+      throw py::value_error("LowestOrderCurlResidual: dofs (ne, 6), curl (ne, 3, 6), volume (ne,), iron (n,)");
+    dofs_.assign(dofs.data(), dofs.data() + 6 * ne_);
+    curl_.assign(curl.data(), curl.data() + 18 * ne_);
+    volume_.assign(volume.data(), volume.data() + ne_);
+    for (auto d : dofs_)
+      if (d < 0 || size_t(d) >= ndof_) throw py::value_error("LowestOrderCurlResidual: dof outside ndof");
+    iron_.assign(iron.data(), iron.data() + iron.shape(0));
+    iron_slot_.assign(ne_, -1);
+    for (size_t k = 0; k < iron_.size(); k++) {
+      if (iron_[k] < 0 || size_t(iron_[k]) >= ne_ || iron_slot_[iron_[k]] >= 0)
+        throw py::value_error("LowestOrderCurlResidual: iron elements must be distinct element numbers");
+      iron_slot_[iron_[k]] = int(k);
+    }
+    TableCreator<int> creator(ndof_);
+    for (; !creator.Done(); creator++)
+      for (size_t e = 0; e < ne_; e++)
+        for (int a = 0; a < 6; a++)
+          creator.Add(dofs_[6 * e + a], int(6 * e + a));
+    dof_slots_ = creator.MoveTable();
+    element_curl_.resize(3 * ne_);
+    loads_.resize(3 * ne_);
+  }
+
+  py::tuple Evaluate(py::array_t<double, py::array::c_style | py::array::forcecast> x,
+                     py::object source_mean,
+                     py::array_t<double, py::array::c_style | py::array::forcecast> grid,
+                     py::array_t<double, py::array::c_style | py::array::forcecast> nu_table,
+                     py::array_t<double, py::array::c_style | py::array::forcecast> dhdb_table,
+                     py::array_t<double, py::array::c_style | py::array::forcecast> load,
+                     py::array_t<double, py::array::c_style> residual)
+  {
+    const size_t n = iron_.size();
+    if (x.ndim() != 1 || size_t(x.shape(0)) != ndof_ || load.ndim() != 1 || size_t(load.shape(0)) != ndof_
+        || residual.ndim() != 1 || size_t(residual.shape(0)) != ndof_)
+      throw py::value_error("LowestOrderCurlResidual.Evaluate: x, load and residual need ndof entries");
+    const size_t m = grid.ndim() == 1 ? size_t(grid.shape(0)) : 0;
+    if (m < 2 || nu_table.ndim() != 1 || size_t(nu_table.shape(0)) != m
+        || dhdb_table.ndim() != 1 || size_t(dhdb_table.shape(0)) != m)
+      throw py::value_error("LowestOrderCurlResidual.Evaluate: grid, nu and dH/dB tables of one length >= 2");
+    const double* sm = nullptr;
+    py::array_t<double, py::array::c_style | py::array::forcecast> sm_array;
+    if (!source_mean.is_none()) {
+      sm_array = source_mean.cast<py::array_t<double, py::array::c_style | py::array::forcecast>>();
+      if (sm_array.ndim() != 2 || size_t(sm_array.shape(0)) != n || sm_array.shape(1) != 3)
+        throw py::value_error("LowestOrderCurlResidual.Evaluate: source_mean (n_iron, 3)");
+      sm = sm_array.data();
+    }
+    const double* xv = x.data();
+    const double* g = grid.data();
+    const double* nt = nu_table.data();
+    const double* dt = dhdb_table.data();
+    const double* f = load.data();
+    double* r = residual.mutable_data();
+    py::array_t<double> b({py::ssize_t(n), py::ssize_t(3)});
+    py::array_t<double> magnitude{std::vector<py::ssize_t>{py::ssize_t(n)}};
+    py::array_t<double> nu{std::vector<py::ssize_t>{py::ssize_t(n)}};
+    py::array_t<double> q{std::vector<py::ssize_t>{py::ssize_t(n)}};
+    double* bv = b.mutable_data();
+    double* mv = magnitude.mutable_data();
+    double* nv = nu.mutable_data();
+    double* qv = q.mutable_data();
+    auto interp = [&](double value, const double* table) {
+      // numpy.interp for an ascending grid.
+      if (!(value > g[0])) return table[0];
+      if (!(value < g[m - 1])) return table[m - 1];
+      const size_t j = size_t(std::upper_bound(g, g + m, value) - g) - 1;
+      const double slope = (table[j + 1] - table[j]) / (g[j + 1] - g[j]);
+      return slope * (value - g[j]) + table[j];
+    };
+    ParallelFor(ne_, [&](size_t e) {
+      const double* C = curl_.data() + 18 * e;
+      const int32_t* d = dofs_.data() + 6 * e;
+      for (int k = 0; k < 3; k++) {
+        double s = 0.0;
+        for (int a = 0; a < 6; a++) s += C[6 * k + a] * xv[d[a]];
+        element_curl_[3 * e + k] = s;
+      }
+      const int slot = iron_slot_[e];
+      if (slot < 0) {
+        for (int k = 0; k < 3; k++) loads_[3 * e + k] = volume_[e] * (nu0_ * element_curl_[3 * e + k]);
+        return;
+      }
+      double be[3];
+      for (int k = 0; k < 3; k++) be[k] = element_curl_[3 * e + k] + (sm ? sm[3 * slot + k] : 0.0);
+      const double mag = std::sqrt(be[0] * be[0] + be[1] * be[1] + be[2] * be[2]);
+      const double nue = interp(mag, nt);
+      const double dhdb = interp(mag, dt);
+      for (int k = 0; k < 3; k++) bv[3 * slot + k] = be[k];
+      mv[slot] = mag;
+      nv[slot] = nue;
+      qv[slot] = mag > 1.0e-9 ? (dhdb - nue) / (mag * mag) : 0.0;
+      for (int k = 0; k < 3; k++)
+        loads_[3 * e + k] = volume_[e] * (nue * element_curl_[3 * e + k]
+                                          + (sm ? (nue - nu0_) * sm[3 * slot + k] : 0.0));
+    });
+    ParallelFor(ndof_, [&](size_t row) {
+      double s = 0.0;
+      for (int slot : dof_slots_[row]) {
+        const size_t e = size_t(slot) / 6;
+        const int a = slot % 6;
+        const double* C = curl_.data() + 18 * e;
+        s += C[a] * loads_[3 * e] + C[6 + a] * loads_[3 * e + 1] + C[12 + a] * loads_[3 * e + 2];
+      }
+      r[row] = s - f[row];
+    });
+    return py::make_tuple(b, magnitude, nu, q);
+  }
+
+private:
+  size_t ndof_, ne_ = 0;
+  double nu0_;
+  std::vector<int32_t> dofs_;
+  std::vector<double> curl_, volume_, element_curl_, loads_;
+  std::vector<int64_t> iron_;
+  std::vector<int> iron_slot_;
+  Table<int> dof_slots_;
+};
+
 /// Newton Jacobian refresh of a lowest-order HCurl curl-curl matrix on a set
 /// of elements with the tangent reluctivity nu I + q b b^T (element-constant).
 /// Built from LowestOrderCurlSystem data of those elements; the values of every
@@ -694,6 +835,27 @@ Parallel under an ngsolve TaskManager.
          "Rewrite the touched rows for element reluctivity nu, rank-one q and flux b (n, 3).")
     .def_property_readonly("elements", &LowestOrderCurlJacobian::NumElements)
     .def_property_readonly("rows", &LowestOrderCurlJacobian::NumRows);
+
+  py::class_<LowestOrderCurlResidual>(m, "LowestOrderCurlResidual", R"raw_string(
+Nonlinear state and residual of a lowest-order HCurl curl-curl problem.
+
+Constructed from the ``dofs``, ``curl`` and ``volume`` of LowestOrderCurlSystem
+(all elements), ``ndof``, the nonlinear element numbers ``iron`` and ``nu0``.
+``Evaluate(x, source_mean, grid, nu, dhdb, load, residual)`` returns
+``(b, magnitude, nu, q)`` on the iron (b = element curl + source_mean, which
+may be None; nu and dH/dB interpolated like numpy.interp on the ascending
+grid; q = (dH/dB - nu)/|b|^2, 0 below 1e-9) and writes ``residual`` =
+sum_e vol_e C_e^T (nu_e c_e + [iron] (nu_e - nu0) Bs_e) - load, with nu0 off
+the iron, gathered per dof (deterministic). Parallel under a TaskManager.
+)raw_string")
+    .def(py::init<py::array_t<int32_t, py::array::c_style | py::array::forcecast>,
+                  py::array_t<double, py::array::c_style | py::array::forcecast>,
+                  py::array_t<double, py::array::c_style | py::array::forcecast>, size_t,
+                  py::array_t<int64_t, py::array::c_style | py::array::forcecast>, double>(),
+         py::arg("dofs"), py::arg("curl"), py::arg("volume"), py::arg("ndof"), py::arg("iron"),
+         py::arg("nu0"))
+    .def("Evaluate", &LowestOrderCurlResidual::Evaluate, py::arg("x"), py::arg("source_mean"),
+         py::arg("grid"), py::arg("nu"), py::arg("dhdb"), py::arg("load"), py::arg("residual"));
 
   m.def("HypreBasedAMSPreconditioner",
     [](shared_ptr<BaseMatrix> mat,
