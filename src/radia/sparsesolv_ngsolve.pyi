@@ -419,6 +419,17 @@ def TaskManagerActive() -> bool:
     ...
 
 
+def LowestOrderCurlSystem(fes: FESpace, coefficient: object = None) -> dict:
+    """Element data of a lowest-order HCurl space on straight tetrahedra, in one pass.
+
+    Keys: ``dofs`` (ne, 6) int32 ascending, ``curl`` (ne, 3, 6) element-constant
+    basis curls, ``volume`` (ne,), ``matrix`` (element-graph SparseMatrix; with
+    ``coefficient`` (ne,) it holds sum_e c_e vol_e curl_e^T curl_e, exactly
+    symmetric, else zeros) and ``positions`` (ne, 36) int32 value indices.
+    """
+    ...
+
+
 def LowestOrderGradient(fes: FESpace) -> BaseMatrix:
     """Discrete gradient H1(order 1) -> lowest-order HCurl from the edge table.
 

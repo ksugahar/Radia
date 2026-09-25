@@ -46,6 +46,40 @@ def test_lowest_order_gradient_is_create_gradient(box_mesh):
         lowest_order_gradient(ng.HCurl(box_mesh, order=1))
 
 
+def test_iron_jacobian_needs_the_matching_constant_part(box_mesh):
+    from radia.p1_newton import ElementCurl, IronJacobian, _material_numbers, constant_reluctivity
+
+    fes = ng.HCurl(box_mesh, order=1, nograds=True, dirichlet="outer")
+    iron = _material_numbers(box_mesh, ["iron"])
+    with ng.TaskManager():
+        plain = ElementCurl(fes)
+        with pytest.raises(ValueError, match="constant_reluctivity"):
+            IronJacobian(fes, plain, iron, 0.0)
+        curl = ElementCurl(fes, constant_reluctivity=constant_reluctivity(box_mesh.ne, iron))
+        jacobian = IronJacobian(fes, curl, iron, 1e-6 * 1e7 / (4 * np.pi))
+        n = len(iron)
+        b = np.random.default_rng(9).normal(size=(n, 3))
+        jacobian.refresh(np.full(n, 300.0), np.full(n, 50.0), b)
+        u, v = fes.TnT()
+        nu = ng.GridFunction(ng.L2(box_mesh, order=0))
+        q = ng.GridFunction(ng.L2(box_mesh, order=0))
+        bs = [ng.GridFunction(ng.L2(box_mesh, order=0)) for _ in range(3)]
+        nu.vec.FV().NumPy()[:] = 1e7 / (4 * np.pi)
+        nu.vec.FV().NumPy()[iron] = 300.0
+        q.vec.FV().NumPy()[iron] = 50.0
+        for k in range(3):
+            bs[k].vec.FV().NumPy()[iron] = b[:, k]
+        bvec = ng.CF(tuple(bs))
+        form = ng.BilinearForm(fes, symmetric=True)
+        form += nu * ng.curl(u) * ng.curl(v) * ng.dx
+        form += q * ng.InnerProduct(bvec, ng.curl(u)) * ng.InnerProduct(bvec, ng.curl(v)) * ng.dx("iron")
+        form += 1e-6 * 1e7 / (4 * np.pi) * u * v * ng.dx
+        form.Assemble()
+    reference = np.asarray(form.mat.CSR()[0])
+    values = np.asarray(jacobian.matrix.CSR()[0])
+    np.testing.assert_allclose(values, reference, rtol=0, atol=1e-12 * np.max(np.abs(reference)))
+
+
 def test_linear_law_matches_the_independent_linear_solve(box_mesh):
     from radia.vector_potential_solver import VectorPotentialSolver
 
