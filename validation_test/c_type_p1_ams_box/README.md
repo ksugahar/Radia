@@ -291,6 +291,8 @@ A-phi current + engine setup (mesh load excluded).
 | same, native edge gradient (lane engine) | loose | 20.5 | 25.3 | 7 | 64 |
 | `radia.p1_newton` (engine `total_a_production`) | loose | 21.9 | 24.7 | 7 | 64 |
 | `radia.p1_newton` (engine `total_a_production`) | tight | 31.4 | 34.1 | 11 | 114 |
+| `radia.p1_newton`, in-place AMS update | loose | 19.0 | 21.7 | 7 | 64 |
+| `radia.p1_newton`, in-place AMS update | tight | 26.7 | 29.4 | 11 | 114 |
 
 Beta-zero loose repeated: 31.8, 30.9, 31.8 s end-to-end; with the frozen
 hierarchy 30.1, 30.1, 30.3 s (AMS update 1.1 s -> 0.77 s, CG iterations
@@ -303,8 +305,13 @@ Jacobian took 32.3 s). With the native edge-table gradient
 production entry `radia.p1_newton` (records `*_total_production_*`; its Newton
 time includes its own 4.6 s setup) took 25.5, 24.7, 24.7 s end-to-end and
 matches the in-session lane engine (`*_total_lane_nativegrad_control`, 25.3 s)
-to 3e-14 in the observed field with identical Newton and CG counts. All with
-`--inexact-linear`; single host, single problem.
+to 3e-14 in the observed field with identical Newton and CG counts. With the
+in-place AMS update (2026-09-26: Galerkin matrices recomputed numerically on
+their fixed patterns, the three nodal components in one sweep; records
+`intel11_20260926_*`) each AMS update takes 0.35 s instead of 0.82 s (AMS
+total 6.2 s -> 3.6 s); end-to-end 22.0, 21.7, 21.7 s, Newton and CG counts and
+the observed field unchanged. All with `--inexact-linear`; single host, single
+problem.
 
 ## Results (LAB, 2026-09-22, uncontended sequential runs, 8 threads)
 
