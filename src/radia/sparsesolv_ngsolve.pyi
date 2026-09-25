@@ -430,6 +430,20 @@ def LowestOrderCurlSystem(fes: FESpace, coefficient: object = None) -> dict:
     ...
 
 
+class LowestOrderCurlResidual:
+    """Element flux, material state and residual of a lowest-order HCurl problem.
+
+    ``Evaluate(x, source_mean, grid, nu, dhdb, load, residual)`` returns
+    ``(b, magnitude, nu, q)`` on the nonlinear elements and writes
+    ``residual`` = sum_e vol_e C_e^T (nu_e c_e + [iron] (nu_e - nu0) Bs_e) - load.
+    """
+
+    def __init__(self, dofs: object, curl: object, volume: object, ndof: int, iron: object,
+                 nu0: float) -> None: ...
+    def Evaluate(self, x: object, source_mean: object, grid: object, nu: object, dhdb: object,
+                 load: object, residual: object) -> tuple: ...
+
+
 class LowestOrderCurlJacobian:
     """Newton Jacobian refresh on the elements given (LowestOrderCurlSystem data).
 

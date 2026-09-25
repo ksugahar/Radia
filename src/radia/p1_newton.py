@@ -14,10 +14,12 @@ function is constant per element, so
 * one native pass over the elements (:class:`ElementCurl`) gives the element
   dofs, the element-constant curl ``C_e`` of the space's basis, the volumes,
   the element-graph matrix with the Jacobian's constant part (nu0 curl-curl off
-  the iron) and every element's matrix positions; the residual and the element
-  flux are gathers and scatters with ``C_e``, and the Newton Jacobian adds the
-  closed-form iron element matrices ``vol_e C_e^T (nu_e I + q_e b_e b_e^T) C_e``
-  at those positions (:class:`IronJacobian`).
+  the iron) and every element's matrix positions; the element flux, the
+  material state and the residual of every Newton and line-search trial come
+  from one native gather/scatter with ``C_e`` (``LowestOrderCurlResidual``),
+  and the Newton Jacobian adds the closed-form iron element matrices
+  ``vol_e C_e^T (nu_e I + q_e b_e b_e^T) C_e`` at those positions, natively
+  (:class:`IronJacobian`).
 
 Linear solves: compiled AMS + CG to a true relative residual (default,
 ``beta_zero`` on the ungauged compatible system, frozen AMG hierarchy across
@@ -48,7 +50,7 @@ def _sparsesolv():
     import radia.sparsesolv_ngsolve as ssn
 
     for name in ("LowestOrderGradient", "LowestOrderCurlSystem", "LowestOrderCurlJacobian",
-                 "HypreBasedAMSPreconditioner",
+                 "LowestOrderCurlResidual", "HypreBasedAMSPreconditioner",
                  "TaskManagerActive"):
         if not hasattr(ssn, name):
             raise RuntimeError(f"radia.sparsesolv_ngsolve lacks {name}; rebuild the native module")
@@ -85,6 +87,21 @@ class FluxSideLaw:
         if not np.all(np.isfinite(nu)) or np.any(nu <= 0.0) or np.any(dhdb <= 0.0):
             raise RuntimeError("the inverted B-H law is not positive and monotone")
         self._grid, self._nu, self._dhdb = grid, nu, dhdb
+
+    @property
+    def grid(self) -> np.ndarray:
+        """Ascending |B| sample grid of the tables (T)."""
+        return self._grid
+
+    @property
+    def nu_table(self) -> np.ndarray:
+        """Reluctivity at :attr:`grid`; :meth:`reluctivity` interpolates it linearly."""
+        return self._nu
+
+    @property
+    def dhdb_table(self) -> np.ndarray:
+        """dH/dB at :attr:`grid`; :meth:`differential_reluctivity` interpolates it linearly."""
+        return self._dhdb
 
     def reluctivity(self, magnitude: np.ndarray) -> np.ndarray:
         return np.interp(magnitude, self._grid, self._nu)
@@ -344,42 +361,24 @@ def solve_p1_newton(mesh, bh_table, *, iron=("iron",), source_cf=None, current_c
             mass = csr_matrix((np.array(values), np.array(columns), np.array(offsets)),
                               shape=(fes.ndof, fes.ndof))
     coordinates = np.asarray(mesh.ngmesh.Coordinates(), dtype=float)
-    nu_all = np.full(mesh.ne, NU0)
-    # curl.of already divides by w, so both terms pull back with vol / w.
-    scale_all = curl.volume / curl.weight
-    source_scale = scale_all[iron_numbers]
+    # Element flux, material state and residual in one native pass per trial.
+    evaluator = ssn.LowestOrderCurlResidual(curl.dofs, curl.coefficients, curl.volume, fes.ndof,
+                                            iron_numbers, NU0)
+    law_tables = (law.grid, law.nu_table, law.dhdb_table)
 
-    def element_flux(coefficients):
-        b = curl.of(coefficients)[iron_numbers]
-        if source_mean is not None:
-            b = b + source_mean
-        return b, np.linalg.norm(b, axis=1)
-
-    def material(b, magnitude):
-        nu = law.reluctivity(magnitude)
-        dhdb = law.differential_reluctivity(magnitude)
-        safe = np.where(magnitude > 1.0e-9, magnitude, 1.0)
-        q = np.where(magnitude > 1.0e-9, (dhdb - nu) / (safe * safe), 0.0)
-        return nu, q
-
-    def residual(coefficients, nu_iron):
-        nu = nu_all.copy()
-        nu[iron_numbers] = nu_iron
-        curl_a = curl.of(coefficients)
-        loads = (nu * scale_all)[:, None] * curl_a
-        if source_mean is not None:
-            loads[iron_numbers] += ((nu_iron - NU0) * source_scale)[:, None] * source_mean
-        values = curl.pull_back(loads) - load
+    def evaluate(coefficients):
+        """(b, |b|, nu, q) on the iron and the residual with its free-dof norm."""
+        values = np.empty(fes.ndof)
+        with ng.TaskManager():
+            b, magnitude, nu, q = evaluator.Evaluate(coefficients, source_mean, *law_tables, load, values)
         if mass is not None:
             values += mass @ coefficients
-        return values, float(np.linalg.norm(values[free]))
+        return b, magnitude, nu, q, values, float(np.linalg.norm(values[free]))
 
     solution = ng.GridFunction(fes, name="A_p1_newton")
     solution.vec[:] = 0.0
     x = solution.vec.FV().NumPy()
-    b, magnitude = element_flux(x)
-    nu, q = material(b, magnitude)
-    r, r_norm = residual(x, nu)
+    b, magnitude, nu, q, r, r_norm = evaluate(x)
     r0 = r_norm
     rhs = solution.vec.CreateVector()
     update = solution.vec.CreateVector()
@@ -464,9 +463,7 @@ def solve_p1_newton(mesh, bh_table, *, iron=("iron",), source_cf=None, current_c
         alpha, accepted = 1.0, None
         for halving in range(int(max_halvings) + 1):
             trial = x + alpha * step
-            b_trial, magnitude_trial = element_flux(trial)
-            nu_trial, q_trial = material(b_trial, magnitude_trial)
-            r_trial, n_trial = residual(trial, nu_trial)
+            b_trial, magnitude_trial, nu_trial, q_trial, r_trial, n_trial = evaluate(trial)
             if n_trial <= (1.0 - 1.0e-4 * alpha) * r_norm:
                 accepted = (trial, b_trial, magnitude_trial, nu_trial, q_trial, r_trial, n_trial)
                 break

@@ -277,6 +277,51 @@ def test_lowest_order_curl_jacobian_refresh_is_the_tangent_form():
                                 system["volume"][subset], shifted)
 
 
+@pytest.mark.parametrize("with_source", [False, True])
+def test_lowest_order_curl_residual_matches_numpy(with_source):
+    import numpy as np
+    from radia.sparsesolv_ngsolve import LowestOrderCurlResidual, LowestOrderCurlSystem
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.25))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet=".*")
+    rng = np.random.default_rng(12)
+    iron = np.sort(rng.choice(mesh.ne, mesh.ne // 2, replace=False)).astype(np.int64)
+    with TaskManager():
+        system = LowestOrderCurlSystem(space)
+    dofs, curl_e, volume = system["dofs"], system["curl"], system["volume"]
+    nu0 = 7.0
+    grid = np.concatenate(([0.0], np.geomspace(1e-7, 50.0, 400)))
+    nu_table = 1.0 + 3.0 / (1.0 + grid)
+    dhdb_table = np.gradient(nu_table * grid, grid)
+    x = rng.normal(size=space.ndof)
+    load = rng.normal(size=space.ndof)
+    source = rng.normal(size=(len(iron), 3)) if with_source else None
+    native = LowestOrderCurlResidual(dofs, curl_e, volume, space.ndof, iron, nu0)
+    residual = np.empty(space.ndof)
+    with TaskManager():
+        b, magnitude, nu, q = native.Evaluate(x, source, grid, nu_table, dhdb_table, load, residual)
+    element = np.einsum("nkj,nj->nk", curl_e, x[dofs])
+    b_ref = element[iron] + (source if with_source else 0.0)
+    m_ref = np.linalg.norm(b_ref, axis=1)
+    nu_ref = np.interp(m_ref, grid, nu_table)
+    q_ref = (np.interp(m_ref, grid, dhdb_table) - nu_ref) / m_ref ** 2
+    np.testing.assert_allclose(b, b_ref, rtol=1e-14, atol=1e-14)
+    np.testing.assert_allclose(magnitude, m_ref, rtol=1e-14)
+    np.testing.assert_allclose(nu, nu_ref, rtol=1e-13)
+    np.testing.assert_allclose(q, q_ref, rtol=1e-11)
+    coefficient = np.full(mesh.ne, nu0)
+    coefficient[iron] = nu_ref
+    loads = coefficient[:, None] * element
+    if with_source:
+        loads[iron] += (nu_ref - nu0)[:, None] * source
+    weights = np.einsum("nkj,nk->nj", curl_e, loads) * volume[:, None]
+    r_ref = np.bincount(dofs.ravel(), weights=weights.ravel(), minlength=space.ndof) - load
+    np.testing.assert_allclose(residual, r_ref, rtol=0, atol=1e-12 * np.max(np.abs(r_ref)))
+    with pytest.raises(Exception, match="distinct"):
+        LowestOrderCurlResidual(dofs, curl_e, volume, space.ndof, np.array([0, 0]), nu0)
+    with pytest.raises(Exception, match="source_mean"):
+        native.Evaluate(x, np.zeros((2, 3)), grid, nu_table, dhdb_table, load, residual)
+
+
 def test_taskmanager_active_reports_the_parallel_region():
     from radia.sparsesolv_ngsolve import TaskManagerActive
     assert TaskManagerActive() is False
