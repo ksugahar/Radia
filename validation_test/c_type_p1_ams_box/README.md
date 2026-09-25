@@ -288,13 +288,23 @@ A-phi current + engine setup (mesh load excluded).
 | beta-zero AMS, frozen hierarchy | tight | 38.3 | 42.8 | 11 | 114 |
 | beta-zero AMS, frozen hierarchy, closed-form Jacobian | loose | 22.6 | 27.3 | 7 | 64 |
 | beta-zero AMS, frozen hierarchy, closed-form Jacobian | tight | 31.7 | 36.4 | 11 | 114 |
+| same, native edge gradient (lane engine) | loose | 20.5 | 25.3 | 7 | 64 |
+| `radia.p1_newton` (engine `total_a_production`) | loose | 21.9 | 24.7 | 7 | 64 |
+| `radia.p1_newton` (engine `total_a_production`) | tight | 31.4 | 34.1 | 11 | 114 |
 
 Beta-zero loose repeated: 31.8, 30.9, 31.8 s end-to-end; with the frozen
 hierarchy 30.1, 30.1, 30.3 s (AMS update 1.1 s -> 0.77 s, CG iterations
 unchanged); with the closed-form Jacobian as well 28.2, 27.4, 27.3 s
 (assembly per Newton step 1.35 s -> 0.34 s; that session had one core busy
 with an unrelated background process, its in-session control with the full
-Jacobian took 32.3 s). All with `--inexact-linear`; single host, single problem.
+Jacobian took 32.3 s). With the native edge-table gradient
+(`LowestOrderGradient`, 1M tets 3.25 s -> 0.026 s, bit-identical to
+`CreateGradient`) the first AMS setup drops from 4.4 s to 1.4-1.6 s. The
+production entry `radia.p1_newton` (records `*_total_production_*`; its Newton
+time includes its own 4.6 s setup) took 25.5, 24.7, 24.7 s end-to-end and
+matches the in-session lane engine (`*_total_lane_nativegrad_control`, 25.3 s)
+to 3e-14 in the observed field with identical Newton and CG counts. All with
+`--inexact-linear`; single host, single problem.
 
 ## Results (LAB, 2026-09-22, uncontended sequential runs, 8 threads)
 
