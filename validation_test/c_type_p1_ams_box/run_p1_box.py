@@ -717,38 +717,23 @@ class ReducedAP1Box:
             J += self.gauge_epsilon * NU0 * ng.InnerProduct(u, v) * ng.dx
         return J
 
-    @staticmethod
-    def _pattern_positions(full, part) -> np.ndarray:
-        """Positions of the entries of sparse matrix ``part`` inside ``full``'s pattern."""
-        def keys(matrix):
-            _, columns, offsets = matrix.CSR()
-            columns = np.asarray(columns, dtype=np.int64)
-            offsets = np.asarray(offsets, dtype=np.int64)
-            rows = np.repeat(np.arange(len(offsets) - 1, dtype=np.int64), np.diff(offsets))
-            return rows * np.int64(matrix.width) + columns
-        full_keys, part_keys = keys(full), keys(part)
-        if np.any(np.diff(full_keys) <= 0):
-            raise RuntimeError("Jacobian pattern is not sorted row-major")
-        positions = np.searchsorted(full_keys, part_keys)
-        if (np.any(positions >= len(full_keys))
-                or not np.array_equal(full_keys[np.minimum(positions, len(full_keys) - 1)], part_keys)):
-            raise RuntimeError("split Jacobian part has entries outside the full pattern")
-        return positions
-
     def _split_jacobian(self):
-        """Full Jacobian whose constant non-iron part is assembled once.
+        """Newton Jacobian: constant part assembled once, iron part in closed form.
 
-        Only nu and the Newton rank-one term in the iron change between Newton
-        steps; the non-iron nu0 curl-curl part and the gauge mass do not. Their
-        values are assembled once and mapped into the full pattern; each step
-        reassembles only the iron form and adds it. Returns the full form and
-        a callable that refreshes its matrix values for the current state.
+        Only nu and the rank-one tangent term change between Newton steps, and
+        only in the iron. The constant part (nu0 curl-curl off the iron and the
+        gauge mass) is one form spanning every element -- its coefficient is a
+        GridFunction that is zero on the iron, so the form cannot be simplified
+        away -- whose matrix carries the full pattern and serves as the
+        Jacobian. Curl is constant per lowest-order Nedelec element, so an iron
+        element matrix is ``vol_e C_e^T (nu_e I + q_e b_e b_e^T) C_e`` with the
+        3x6 element curl coefficients ``C_e`` taken from the discrete element
+        curl of ``_algebra``; it is evaluated for all iron elements at once and
+        added at precomputed pattern positions. Returns the Jacobian form and a
+        callable that refreshes its matrix values for the current state.
         """
+        algebra = self._algebra()
         u, v = self.fes.TnT()
-        # The constant form spans every element (its coefficient is a
-        # GridFunction that is zero on iron, so it cannot be simplified away),
-        # hence its matrix has the full Jacobian pattern and is reused as the
-        # Jacobian itself; no full assembly is spent on the pattern.
         nu_constant = ng.GridFunction(self.nu_space)
         nu_constant.vec.FV().NumPy()[:] = NU0
         nu_constant.vec.FV().NumPy()[self.iron_numbers] = 0.0
@@ -756,21 +741,58 @@ class ReducedAP1Box:
         full += nu_constant * ng.InnerProduct(ng.curl(u), ng.curl(v)) * ng.dx
         if self.gauge_epsilon > 0.0:
             full += self.gauge_epsilon * NU0 * ng.InnerProduct(u, v) * ng.dx
-        bvec = ng.CF(tuple(self._bvec_gfs))
-        iron = ng.BilinearForm(self.fes, symmetric=True)
-        iron += self.nu_gf * ng.InnerProduct(ng.curl(u), ng.curl(v)) * ng.dx("iron")
-        iron += self.q_gf * ng.InnerProduct(bvec, ng.curl(u)) * ng.InnerProduct(bvec, ng.curl(v)) * ng.dx("iron")
         with ng.TaskManager():
             full.Assemble()
-            iron.Assemble()
         base = full.mat.AsVector().FV().NumPy().copy()
-        iron_positions = self._pattern_positions(full.mat, iron.mat)
+
+        iron = self.iron_numbers
+        dofs, coefficients = None, []
+        for matrix in algebra["curl"]:
+            rows = matrix[iron]
+            if not np.all(np.diff(rows.indptr) == 6):
+                raise RuntimeError("split Jacobian expects six edge dofs per iron tetrahedron")
+            columns = rows.indices.reshape(-1, 6)
+            values = rows.data.reshape(-1, 6)
+            order = np.argsort(columns, axis=1)
+            columns = np.take_along_axis(columns, order, axis=1)
+            values = np.take_along_axis(values, order, axis=1)
+            if dofs is None:
+                dofs = columns
+            elif not np.array_equal(dofs, columns):
+                raise RuntimeError("element curl components disagree on the element dofs")
+            coefficients.append(values)
+        curl = np.stack(coefficients, axis=1) / algebra["weight"][iron, None, None]  # (n, 3, 6)
+        volume = self.volumes[iron]
+
+        _, full_columns, full_offsets = full.mat.CSR()
+        full_columns = np.asarray(full_columns, dtype=np.int64)
+        full_offsets = np.asarray(full_offsets, dtype=np.int64)
+        width = np.int64(full.mat.width)
+        full_rows = np.repeat(np.arange(len(full_offsets) - 1, dtype=np.int64), np.diff(full_offsets))
+        full_keys = full_rows * width + full_columns
+        if np.any(np.diff(full_keys) <= 0):
+            raise RuntimeError("Jacobian pattern is not sorted row-major")
+        lower_only = not np.any(full_columns > full_rows)
+        pair_rows = np.repeat(dofs, 6, axis=1).ravel()
+        pair_columns = np.tile(dofs, (1, 6)).ravel()
+        keep = (pair_columns <= pair_rows) if lower_only else np.ones(pair_rows.size, dtype=bool)
+        keys = pair_rows[keep] * width + pair_columns[keep]
+        positions = np.searchsorted(full_keys, keys)
+        if (np.any(positions >= len(full_keys))
+                or not np.array_equal(full_keys[np.minimum(positions, len(full_keys) - 1)], keys)):
+            raise RuntimeError("iron element entries fall outside the Jacobian pattern")
+        size = len(base)
+        eye = np.eye(3)
 
         def refresh():
-            with ng.TaskManager():
-                iron.Assemble()
-            values = base.copy()
-            values[iron_positions] += iron.mat.AsVector().FV().NumPy()
+            nu = self.nu_gf.vec.FV().NumPy()[iron]
+            q = self.q_gf.vec.FV().NumPy()[iron]
+            b = np.stack([gf.vec.FV().NumPy()[iron] for gf in self._bvec_gfs], axis=1)
+            tangent = nu[:, None, None] * eye + q[:, None, None] * b[:, :, None] * b[:, None, :]
+            element = np.einsum("nki,nkj->nij", curl, np.einsum("nkl,nlj->nkj", tangent, curl))
+            element *= volume[:, None, None]
+            values = base + np.bincount(positions, weights=element.reshape(len(iron), 36).ravel()[keep],
+                                        minlength=size)
             full.mat.AsVector().FV().NumPy()[:] = values
 
         return full, refresh
