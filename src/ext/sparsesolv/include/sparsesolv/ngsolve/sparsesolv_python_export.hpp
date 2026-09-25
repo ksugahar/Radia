@@ -14,6 +14,8 @@
 #include "sparsesolv_precond.hpp"
 #include "sparsesolv_solvers.hpp"
 #include <comp.hpp>
+#include <array>
+#include <chrono>
 #include <atomic>
 #include <type_traits>
 
@@ -157,6 +159,314 @@ void ExportSparseSolvTyped(py::module& m, const std::string& suffix) {
 inline shared_ptr<BitArray> ExtractFreeDofs(py::object freedofs) {
   if (freedofs.is_none()) return nullptr;
   return py::cast<shared_ptr<BitArray>>(freedofs);
+}
+
+/// A-phi DC current of a closed conductor with one thick cut (see
+/// radia.meshed_current.solve_closed_coil_current_phi for the method). Every
+/// step works on the conductor only: its tets, faces, connectivity, the cut
+/// and its completeness, the jump function, the P1 Laplacian on the conductor
+/// vertices (assembled per row in ascending element order and solved by the
+/// given NGSolve inverse type with one vertex gauged), the current density,
+/// the weak-divergence gate and the cut-face flux.
+inline py::dict ClosedCoilCurrentPhiImpl(shared_ptr<ngcomp::MeshAccess> ma,
+                                         const std::vector<int>& materials, double current_A,
+                                         std::array<double, 3> origin, std::array<double, 3> normal,
+                                         double radius, const std::string& inverse)
+{
+  using Vec3 = std::array<double, 3>;
+  py::dict timing;
+  auto tic = std::chrono::steady_clock::now();
+  auto lap = [&](const char* name) { auto now = std::chrono::steady_clock::now(); timing[name] = std::chrono::duration<double>(now - tic).count(); tic = now; };
+  const size_t ne = ma->GetNE(ngfem::VOL);
+  std::vector<char> wanted(*std::max_element(materials.begin(), materials.end()) + 1, 0);
+  for (int m : materials) wanted[m] = 1;
+  std::vector<int64_t> cells;
+  for (size_t i = 0; i < ne; i++) {
+    const int index = ma->GetElIndex(ngfem::ElementId(ngfem::VOL, i));
+    if (index >= 0 && size_t(index) < wanted.size() && wanted[index]) cells.push_back(int64_t(i));
+  }
+  const size_t n = cells.size();
+  if (n == 0) throw py::value_error("nonempty tetrahedral conductor required");
+  std::vector<std::array<int, 4>> tets(n);
+  std::atomic<size_t> bad{0};
+  ParallelFor(n, [&](size_t c) {
+    ngfem::ElementId ei(ngfem::VOL, cells[c]);
+    auto vertices = ma->GetElVertices(ei);
+    if (ma->GetElType(ei) != ngfem::ET_TET || vertices.Size() != 4) { bad++; return; }
+    for (int k = 0; k < 4; k++) tets[c][k] = vertices[k];
+  });
+  if (bad) throw py::value_error("closed-coil current requires straight tet4 conductor cells");
+  auto point = [&](int v) { auto p = ma->GetPoint<3>(v); return Vec3{p(0), p(1), p(2)}; };
+
+  lap("conductor_s");
+  // Faces: sorted vertex triples with their owners; unshared faces are walls.
+  struct Face { std::array<int, 3> v; int64_t owner; };
+  std::vector<Face> all(4 * n);
+  static const int local[4][3] = {{1, 2, 3}, {0, 2, 3}, {0, 1, 3}, {0, 1, 2}};
+  ParallelFor(n, [&](size_t c) {
+    for (int f = 0; f < 4; f++) {
+      std::array<int, 3> t{tets[c][local[f][0]], tets[c][local[f][1]], tets[c][local[f][2]]};
+      std::sort(t.begin(), t.end());
+      all[4 * c + f] = Face{t, int64_t(c)};
+    }
+  });
+  // Group equal triples within buckets of their smallest vertex (in parallel),
+  // then list faces in bucket (= vertex) order: deterministic.
+  const size_t nvert = ma->GetNV();
+  TableCreator<int> face_creator(nvert);
+  for (; !face_creator.Done(); face_creator++)
+    for (size_t i = 0; i < all.size(); i++) face_creator.Add(all[i].v[0], int(i));
+  Table<int> buckets = face_creator.MoveTable();
+  std::vector<int8_t> kind(all.size(), 0);  // 1 shared (first owner), 2 wall, 0 skip
+  std::vector<int64_t> partner(all.size(), -1);
+  std::atomic<size_t> nonmanifold{0};
+  ParallelFor(nvert, [&](size_t vertex) {
+    auto bucket = buckets[vertex];
+    std::sort(bucket.Data(), bucket.Data() + bucket.Size(), [&](int a, int b) {
+      return all[a].v != all[b].v ? all[a].v < all[b].v : all[a].owner < all[b].owner; });
+    for (size_t i = 0; i < bucket.Size();) {
+      size_t j = i + 1;
+      while (j < bucket.Size() && all[bucket[j]].v == all[bucket[i]].v) j++;
+      if (j - i > 2) nonmanifold++;
+      else if (j - i == 2) { kind[bucket[i]] = 1; partner[bucket[i]] = all[bucket[i + 1]].owner; }
+      else kind[bucket[i]] = 2;
+      i = j;
+    }
+  });
+  if (nonmanifold) throw py::value_error("nonmanifold conductor face");
+  std::vector<std::array<int, 3>> shared_faces, wall_faces;
+  std::vector<int64_t> first, second;
+  for (size_t vertex = 0; vertex < nvert; vertex++)
+    for (int i : buckets[vertex]) {
+      if (kind[i] == 1) { shared_faces.push_back(all[i].v); first.push_back(all[i].owner); second.push_back(partner[i]); }
+      else if (kind[i] == 2) wall_faces.push_back(all[i].v);
+    }
+  {
+    std::vector<int64_t> parent(n);
+    for (size_t i = 0; i < n; i++) parent[i] = int64_t(i);
+    auto find = [&](int64_t i) { while (parent[i] != i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+    for (size_t k = 0; k < first.size(); k++) {
+      const int64_t ra = find(first[k]), rb = find(second[k]);
+      if (ra != rb) parent[ra] = rb;
+    }
+    const int64_t root = find(0);
+    for (size_t i = 1; i < n; i++)
+      if (find(int64_t(i)) != root)
+        throw py::value_error("conductor must be face-connected; split independent coils");
+  }
+
+  lap("faces_connectivity_s");
+  // Cells near the cut: signed distance and in-plane radius of the centroid.
+  std::vector<double> signed_distance(n);
+  std::vector<char> near(n);
+  ParallelFor(n, [&](size_t c) {
+    Vec3 centroid{0, 0, 0};
+    for (int k = 0; k < 4; k++) { auto p = point(tets[c][k]); for (int d = 0; d < 3; d++) centroid[d] += p[d]; }
+    Vec3 offset;
+    for (int d = 0; d < 3; d++) offset[d] = centroid[d] / 4.0 - origin[d];
+    const double s = offset[0] * normal[0] + offset[1] * normal[1] + offset[2] * normal[2];
+    double r2 = 0.0;
+    for (int d = 0; d < 3; d++) { const double t = offset[d] - s * normal[d]; r2 += t * t; }
+    signed_distance[c] = s;
+    near[c] = std::sqrt(r2) < radius;
+  });
+  std::vector<size_t> crossing;
+  for (size_t k = 0; k < shared_faces.size(); k++) {
+    const auto a = first[k], b = second[k];
+    if (near[a] && near[b] && ((signed_distance[a] < 0) != (signed_distance[b] < 0))) crossing.push_back(k);
+  }
+  if (crossing.empty())
+    throw py::value_error("cut plane does not cross the conductor within cut_radius_m");
+  // Completeness: every border edge of the cut sheet must lie on the wall.
+  {
+    std::vector<std::array<int, 2>> cut_edges, wall_edges;
+    for (auto k : crossing) {
+      const auto& f = shared_faces[k];
+      cut_edges.push_back({f[0], f[1]}); cut_edges.push_back({f[0], f[2]}); cut_edges.push_back({f[1], f[2]});
+    }
+    for (const auto& f : wall_faces) {
+      wall_edges.push_back({f[0], f[1]}); wall_edges.push_back({f[0], f[2]}); wall_edges.push_back({f[1], f[2]});
+    }
+    std::sort(cut_edges.begin(), cut_edges.end());
+    std::sort(wall_edges.begin(), wall_edges.end());
+    size_t loose = 0;
+    for (size_t i = 0; i < cut_edges.size();) {
+      size_t j = i + 1;
+      while (j < cut_edges.size() && cut_edges[j] == cut_edges[i]) j++;
+      if (j - i == 1 && !std::binary_search(wall_edges.begin(), wall_edges.end(), cut_edges[i])) loose++;
+      i = j;
+    }
+    if (loose)
+      throw py::value_error("cut does not span the conductor section (" + std::to_string(loose)
+                            + " interior border edges)");
+  }
+
+  // Geometry, the jump function tau (one at cut vertices on the positive side)
+  // and h = grad tau on its support cells.
+  const size_t nv = ma->GetNV();
+  std::vector<char> on_cut_vertex(nv, 0);
+  for (auto k : crossing) for (int v : shared_faces[k]) on_cut_vertex[v] = 1;
+  std::vector<double> volume(n);
+  std::vector<std::array<Vec3, 4>> grads(n);
+  std::vector<Vec3> jump(n);
+  std::atomic<size_t> degenerate{0}, support_cells{0};
+  ParallelFor(n, [&](size_t c) {
+    const Vec3 x0 = point(tets[c][0]);
+    double E[3][3];
+    for (int i = 0; i < 3; i++) { const Vec3 xi = point(tets[c][i + 1]); for (int d = 0; d < 3; d++) E[i][d] = xi[d] - x0[d]; }
+    const double det = E[0][0] * (E[1][1] * E[2][2] - E[1][2] * E[2][1])
+                     - E[0][1] * (E[1][0] * E[2][2] - E[1][2] * E[2][0])
+                     + E[0][2] * (E[1][0] * E[2][1] - E[1][1] * E[2][0]);
+    volume[c] = std::abs(det) / 6.0;
+    if (!(volume[c] > 0.0)) { degenerate++; return; }
+    // grad lambda_i (i = 1..3) is column i of E^{-1}: the rows of E^{-T}.
+    double inv[3][3];
+    inv[0][0] = (E[1][1] * E[2][2] - E[1][2] * E[2][1]) / det;
+    inv[0][1] = (E[0][2] * E[2][1] - E[0][1] * E[2][2]) / det;
+    inv[0][2] = (E[0][1] * E[1][2] - E[0][2] * E[1][1]) / det;
+    inv[1][0] = (E[1][2] * E[2][0] - E[1][0] * E[2][2]) / det;
+    inv[1][1] = (E[0][0] * E[2][2] - E[0][2] * E[2][0]) / det;
+    inv[1][2] = (E[0][2] * E[1][0] - E[0][0] * E[1][2]) / det;
+    inv[2][0] = (E[1][0] * E[2][1] - E[1][1] * E[2][0]) / det;
+    inv[2][1] = (E[0][1] * E[2][0] - E[0][0] * E[2][1]) / det;
+    inv[2][2] = (E[0][0] * E[1][1] - E[0][1] * E[1][0]) / det;
+    for (int i = 0; i < 3; i++)
+      for (int d = 0; d < 3; d++) grads[c][i + 1][d] = inv[d][i];
+    for (int d = 0; d < 3; d++) grads[c][0][d] = -(grads[c][1][d] + grads[c][2][d] + grads[c][3][d]);
+    bool touches = false;
+    for (int k = 0; k < 4; k++) touches = touches || on_cut_vertex[tets[c][k]];
+    const bool support = near[c] && signed_distance[c] >= 0 && touches;
+    Vec3 h{0, 0, 0};
+    if (support) {
+      support_cells++;
+      for (int k = 0; k < 4; k++)
+        if (on_cut_vertex[tets[c][k]]) for (int d = 0; d < 3; d++) h[d] += grads[c][k][d];
+    }
+    jump[c] = h;
+  });
+  if (degenerate) throw py::value_error("degenerate conductor tetrahedron");
+
+  lap("cut_geometry_s");
+  // P1 Laplacian on the conductor vertices (local numbering, ascending global).
+  std::vector<int> local_of(nv, -1), global_of;
+  for (size_t c = 0; c < n; c++) for (int k = 0; k < 4; k++) local_of[tets[c][k]] = 0;
+  for (size_t v = 0; v < nv; v++) if (local_of[v] == 0) { local_of[v] = int(global_of.size()); global_of.push_back(int(v)); }
+  const size_t m = global_of.size();
+  Array<int> sizes(n);
+  sizes = 4;
+  Table<int> elements(sizes);
+  for (size_t c = 0; c < n; c++) for (int k = 0; k < 4; k++) elements[c][k] = local_of[tets[c][k]];
+  // The graph constructor sorts the element rows in place: after it, index the
+  // element vertices through tets / local_of, never through this table.
+  auto laplace = make_shared<SparseMatrix<double>>(m, m, elements, elements, false);
+  laplace->AsVector() = 0.0;
+  TableCreator<int> creator(m);
+  for (; !creator.Done(); creator++)
+    for (size_t c = 0; c < n; c++) for (int k = 0; k < 4; k++) creator.Add(local_of[tets[c][k]], int(4 * c + k));
+  Table<int> vertex_slots = creator.MoveTable();
+  VVector<double> rhs(m), phi(m);
+  auto values = laplace->AsVector().FVDouble();
+  auto dot = [](const Vec3& a, const Vec3& b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; };
+  ParallelFor(m, [&](size_t row) {
+    double f = 0.0;
+    for (int slot : vertex_slots[row]) {
+      const size_t c = size_t(slot) / 4;
+      const int a = slot % 4;
+      for (int b = 0; b < 4; b++)
+        values[laplace->GetPosition(row, local_of[tets[c][b]])] += volume[c] * dot(grads[c][a], grads[c][b]);
+      f -= volume[c] * dot(jump[c], grads[c][a]);
+    }
+    rhs.FV()[row] = f;
+  });
+  auto free = make_shared<BitArray>(m);
+  free->Set();
+  free->Clear(local_of[tets[0][0]]);  // one potential gauge for the connected conductor
+  lap("assembly_s");
+  if (inverse == "iccg") {
+    // IC(0)-preconditioned CG to a true relative residual of 1e-12 on the
+    // gauged SPD system; non-convergence fails loudly.
+    SparseSolvSolver<double> solver(laplace, "ICCG", free, 1e-12, 20000, 1.0);
+    phi.FV() = 0.0;
+    const auto result = solver.Solve(rhs, phi);
+    if (!result.converged)
+      throw std::runtime_error("A-phi potential: ICCG did not converge (residual "
+                               + std::to_string(result.final_residual) + ")");
+  } else {
+    laplace->SetInverseType(inverse);
+    auto solver = laplace->InverseMatrix(free);
+    solver->Mult(rhs, phi);
+  }
+
+  lap("solve_s");
+  // Field E = grad phi + h, energy, current density J = scale E.
+  py::array_t<double> density({py::ssize_t(n), py::ssize_t(3)});
+  double* J = density.mutable_data();
+  std::vector<Vec3> field(n);
+  ParallelFor(n, [&](size_t c) {
+    Vec3 e = jump[c];
+    for (int k = 0; k < 4; k++) {
+      const double value = phi.FV()[local_of[tets[c][k]]];
+      for (int d = 0; d < 3; d++) e[d] += value * grads[c][k][d];
+    }
+    field[c] = e;
+  });
+  double energy = 0.0;
+  for (size_t c = 0; c < n; c++) energy += volume[c] * dot(field[c], field[c]);
+  if (!std::isfinite(energy) || !(energy > 0.0))
+    throw py::value_error("cut does not drive a resolved closed current path");
+  const double scale = -current_A / energy;  // flux of E through the cut along +n is -energy
+  for (size_t c = 0; c < n; c++) for (int d = 0; d < 3; d++) J[3 * c + d] = scale * field[c][d];
+
+  // Weak divergence against every conductor P1 function, relative to the drive.
+  std::vector<double> divergence(m), drive(m);
+  ParallelFor(m, [&](size_t row) {
+    double dv = 0.0, dr = 0.0;
+    for (int slot : vertex_slots[row]) {
+      const size_t c = size_t(slot) / 4;
+      const int a = slot % 4;
+      const Vec3 jc{J[3 * c], J[3 * c + 1], J[3 * c + 2]};
+      dv += volume[c] * dot(jc, grads[c][a]);
+      dr += volume[c] * scale * dot(jump[c], grads[c][a]);
+    }
+    divergence[row] = dv;
+    drive[row] = dr;
+  });
+  double dn = 0.0, rn = 0.0;
+  for (size_t i = 0; i < m; i++) { dn += divergence[i] * divergence[i]; rn += drive[i] * drive[i]; }
+  const double relative_divergence = rn > 0.0 ? std::sqrt(dn) / std::sqrt(rn) : 0.0;
+  if (current_A != 0.0 && !(relative_divergence <= 1e-8))
+    throw std::runtime_error("weak current divergence gate failed (" + std::to_string(relative_divergence) + ")");
+  // Independent check: face-averaged flux through the cut sheet along +n.
+  double face_flux = 0.0;
+  for (auto k : crossing) {
+    const auto& f = shared_faces[k];
+    const Vec3 p0 = point(f[0]), p1 = point(f[1]), p2 = point(f[2]);
+    const Vec3 u{p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]}, w{p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]};
+    Vec3 area{0.5 * (u[1] * w[2] - u[2] * w[1]), 0.5 * (u[2] * w[0] - u[0] * w[2]), 0.5 * (u[0] * w[1] - u[1] * w[0])};
+    const double sign = dot(area, normal) > 0 ? 1.0 : (dot(area, normal) < 0 ? -1.0 : 0.0);
+    for (int d = 0; d < 3; d++) area[d] *= sign;
+    const auto a = first[k], b = second[k];
+    for (int d = 0; d < 3; d++) face_flux += 0.5 * (J[3 * a + d] + J[3 * b + d]) * area[d];
+  }
+  lap("current_checks_s");
+  py::array_t<int64_t> element_numbers{std::vector<py::ssize_t>{py::ssize_t(n)}};
+  std::copy(cells.begin(), cells.end(), element_numbers.mutable_data());
+  py::array_t<int32_t> vertices{std::vector<py::ssize_t>{py::ssize_t(m)}};
+  std::copy(global_of.begin(), global_of.end(), vertices.mutable_data());
+  py::array_t<double> potential{std::vector<py::ssize_t>{py::ssize_t(m)}};
+  for (size_t i = 0; i < m; i++) potential.mutable_data()[i] = phi.FV()[i];
+  py::dict out;
+  out["elements"] = element_numbers;
+  out["density"] = density;
+  out["vertices"] = vertices;
+  out["phi"] = potential;
+  out["cut_faces"] = crossing.size();
+  out["support_cells"] = support_cells.load();
+  out["phi_ndof"] = m - 1;
+  out["relative_weak_divergence"] = relative_divergence;
+  out["cut_face_flux_A"] = face_flux;
+  out["timing"] = timing;
+  return out;
 }
 
 /// Nonlinear magnetostatic state and residual of a lowest-order HCurl
@@ -835,6 +1145,27 @@ Parallel under an ngsolve TaskManager.
          "Rewrite the touched rows for element reluctivity nu, rank-one q and flux b (n, 3).")
     .def_property_readonly("elements", &LowestOrderCurlJacobian::NumElements)
     .def_property_readonly("rows", &LowestOrderCurlJacobian::NumRows);
+
+  m.def("ClosedCoilCurrentPhi",
+    [](shared_ptr<ngcomp::MeshAccess> mesh, std::vector<int> materials, double current_A,
+       std::array<double, 3> origin, std::array<double, 3> normal, double radius,
+       std::string inverse) {
+      if (materials.empty()) throw py::value_error("conductor material labels are missing");
+      return ClosedCoilCurrentPhiImpl(mesh, materials, current_A, origin, normal, radius, inverse);
+    },
+    py::arg("mesh"), py::arg("materials"), py::arg("current_A"), py::arg("origin"),
+    py::arg("normal"), py::arg("radius"), py::arg("inverse") = "sparsecholesky",
+    R"raw_string(
+A-phi DC current of a closed conductor with one thick cut, natively.
+
+``materials`` are 0-based material indices of the conductor; ``normal`` must
+be a unit vector. Returns ``elements`` (conductor element numbers),
+``density`` (n, 3) in A/m^2, ``vertices`` and ``phi`` (conductor vertices and
+the potential), ``cut_faces``, ``support_cells``, ``phi_ndof``,
+``relative_weak_divergence`` and ``cut_face_flux_A``. Raises the same errors as
+radia.meshed_current.solve_closed_coil_current_phi. Parallel under a
+TaskManager.
+)raw_string");
 
   py::class_<LowestOrderCurlResidual>(m, "LowestOrderCurlResidual", R"raw_string(
 Nonlinear state and residual of a lowest-order HCurl curl-curl problem.
