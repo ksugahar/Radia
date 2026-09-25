@@ -10,6 +10,7 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/numpy.h>
 #include "sparsesolv_precond.hpp"
 #include "sparsesolv_solvers.hpp"
 #include <comp.hpp>
@@ -426,6 +427,135 @@ Built directly from the mesh edge table in parallel; the matrix equals the
 first return value of fes.CreateGradient() for HCurl(order=1, nograds=True)
 (or order=0). Fails for any space whose dofs are not one per edge in edge
 order.
+)raw_string");
+
+  m.def("LowestOrderCurlSystem",
+    [](shared_ptr<ngcomp::FESpace> fes, py::object coefficient) -> py::dict
+    {
+      // One pass over the volume elements of a lowest-order HCurl space on
+      // straight tetrahedra: element dofs, the element-constant curl of the
+      // space's own basis, the volume, the element-graph matrix and every
+      // element's 36 value positions in it.
+      auto ma = fes->GetMeshAccess();
+      if (ma->GetDimension() != 3)
+        throw py::value_error("LowestOrderCurlSystem: needs a three-dimensional mesh");
+      const size_t ne = ma->GetNE(ngfem::VOL);
+      const size_t ndof = fes->GetNDof();
+      py::array_t<int32_t> dofs({py::ssize_t(ne), py::ssize_t(6)});
+      py::array_t<double> curl({py::ssize_t(ne), py::ssize_t(3), py::ssize_t(6)});
+      py::array_t<double> volume{std::vector<py::ssize_t>{py::ssize_t(ne)}};
+      int32_t* dof_out = dofs.mutable_data();
+      double* curl_out = curl.mutable_data();
+      double* volume_out = volume.mutable_data();
+      std::atomic<size_t> rejected{0};
+      ParallelForRange(ne, [&](IntRange range) {
+        LocalHeap lh(100000, "LowestOrderCurlSystem", true);
+        Array<ngcomp::DofId> dnums;
+        for (auto i : range) {
+          HeapReset hr(lh);
+          ngfem::ElementId ei(ngfem::VOL, i);
+          if (ma->GetElType(ei) != ngfem::ET_TET) { rejected++; continue; }
+          fes->GetDofNrs(ei, dnums);
+          const auto& fel = fes->GetFE(ei, lh);
+          auto hcurl = dynamic_cast<const ngfem::HCurlFiniteElement<3>*>(&fel);
+          if (!hcurl || fel.GetNDof() != 6 || dnums.Size() != 6) { rejected++; continue; }
+          const auto& trafo = ma->GetTrafo(ei, lh);
+          if (trafo.IsCurvedElement()) { rejected++; continue; }
+          ngfem::IntegrationPoint ip(0.25, 0.25, 0.25);
+          ngfem::MappedIntegrationPoint<3, 3> mip(ip, trafo);
+          FlatMatrix<double> shape(6, 3, lh);
+          hcurl->CalcMappedCurlShape(mip, shape);
+          // Sort the six dofs ascending and carry the curl columns along.
+          int order[6] = {0, 1, 2, 3, 4, 5};
+          std::sort(order, order + 6, [&](int a, int b) { return dnums[a] < dnums[b]; });
+          for (int a = 0; a < 6; a++) {
+            if (!ngcomp::IsRegularDof(dnums[order[a]])) { rejected++; break; }
+            dof_out[6 * i + a] = int32_t(dnums[order[a]]);
+            for (int k = 0; k < 3; k++)
+              curl_out[18 * i + 6 * k + a] = shape(order[a], k);
+          }
+          volume_out[i] = std::abs(mip.GetJacobiDet()) / 6.0;
+        }
+      });
+      if (rejected)
+        throw py::value_error("LowestOrderCurlSystem: needs straight tetrahedra with six regular "
+                              "HCurl dofs each (HCurl(order=1, nograds=True)); "
+                              + std::to_string(rejected.load()) + " elements differ");
+      Array<int> sizes(ne);
+      sizes = 6;
+      Table<int> elements(sizes);
+      ParallelFor(ne, [&](size_t i) {
+        for (int a = 0; a < 6; a++) elements[i][a] = dof_out[6 * i + a];
+      });
+      auto matrix = make_shared<SparseMatrix<double>>(ndof, ndof, elements, elements, false);
+      matrix->AsVector() = 0.0;
+      py::array_t<int32_t> positions({py::ssize_t(ne), py::ssize_t(36)});
+      int32_t* position_out = positions.mutable_data();
+      if (matrix->NZE() > size_t(std::numeric_limits<int32_t>::max()))
+        throw py::value_error("LowestOrderCurlSystem: matrix too large for int32 positions");
+      std::atomic<size_t> missing{0};
+      ParallelFor(ne, [&](size_t i) {
+        const int32_t* d = dof_out + 6 * i;
+        for (int a = 0; a < 6; a++)
+          for (int b = 0; b < 6; b++) {
+            const size_t position = matrix->GetPositionTest(d[a], d[b]);
+            if (position == numeric_limits<size_t>::max()) { missing++; continue; }
+            position_out[36 * i + 6 * a + b] = int32_t(position);
+          }
+      });
+      if (missing)
+        throw std::runtime_error("LowestOrderCurlSystem: element entries outside the graph");
+      if (!coefficient.is_none()) {
+        // matrix = sum_e c_e vol_e C_e^T C_e, gathered row by row over the
+        // elements of each dof in ascending element order: deterministic, and
+        // entries (i, j) and (j, i) sum identical terms in the same order, so
+        // the matrix is exactly symmetric.
+        auto c = coefficient.cast<py::array_t<double, py::array::c_style | py::array::forcecast>>();
+        if (c.ndim() != 1 || size_t(c.shape(0)) != ne)
+          throw py::value_error("LowestOrderCurlSystem: coefficient needs one value per element");
+        const double* cf = c.data();
+        TableCreator<int> creator(ndof);
+        for (; !creator.Done(); creator++)
+          for (size_t i = 0; i < ne; i++)
+            for (int a = 0; a < 6; a++)
+              creator.Add(dof_out[6 * i + a], int(6 * i + a));
+        Table<int> dof_elements = creator.MoveTable();
+        auto values = matrix->AsVector().FVDouble();
+        ParallelFor(ndof, [&](size_t row) {
+          for (int slot : dof_elements[row]) {
+            const size_t i = size_t(slot) / 6;
+            const int a = slot % 6;
+            const double scale = cf[i] * volume_out[i];
+            if (scale == 0.0) continue;
+            const double* C = curl_out + 18 * i;
+            for (int b = 0; b < 6; b++)
+              values[position_out[36 * i + 6 * a + b]] +=
+                  scale * (C[a] * C[b] + C[6 + a] * C[6 + b] + C[12 + a] * C[12 + b]);
+          }
+        });
+      }
+      py::dict result;
+      result["dofs"] = dofs;
+      result["curl"] = curl;
+      result["volume"] = volume;
+      result["matrix"] = shared_ptr<BaseMatrix>(matrix);
+      result["positions"] = positions;
+      return result;
+    },
+    py::arg("fes"), py::arg("coefficient") = py::none(),
+    R"raw_string(
+Element data of a lowest-order HCurl space on straight tetrahedra, in one pass.
+
+Returns a dict: ``dofs`` (ne, 6) int32 ascending per element; ``curl``
+(ne, 3, 6), the element-constant curl of the space's basis functions in that
+dof order; ``volume`` (ne,); ``matrix``, a zero SparseMatrix with the element
+graph (full storage, sorted columns), i.e. the pattern of any bilinear form on
+the space; ``positions`` (ne, 36) int32, the index into ``matrix`` values of
+entry (dofs[e, a], dofs[e, b]) at 6 a + b. With `coefficient` (ne,), the
+matrix holds sum_e coefficient[e] vol_e curl_e^T curl_e (the curl-curl form
+with an element-constant coefficient), summed deterministically and exactly
+symmetric; otherwise its values are zero. Parallel under an ngsolve
+TaskManager. Fails for curved, non-tetrahedral or higher-order elements.
 )raw_string");
 
   m.def("HypreBasedAMSPreconditioner",
