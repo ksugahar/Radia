@@ -295,6 +295,8 @@ A-phi current + engine setup (mesh load excluded).
 | `radia.p1_newton`, in-place AMS update | tight | 26.7 | 29.4 | 11 | 114 |
 | `radia.p1_newton`, one-pass setup | loose | 15.1 | 17.8 | 7 | 64 |
 | `radia.p1_newton`, one-pass setup | tight | 22.7 | 25.3 | 11 | 114 |
+| `radia.p1_newton`, native iron Jacobian | loose | 13.0 | 15.7 | 7 | 64 |
+| `radia.p1_newton`, native iron Jacobian | tight | 19.2 | 21.9 | 11 | 114 |
 
 Beta-zero loose repeated: 31.8, 30.9, 31.8 s end-to-end; with the frozen
 hierarchy 30.1, 30.1, 30.3 s (AMS update 1.1 s -> 0.77 s, CG iterations
@@ -317,7 +319,11 @@ the observed field unchanged. With the one-pass setup (native
 matrix holding the Jacobian's constant part and every element's matrix
 positions; records `*_onepass_*`) the one-off setup takes 0.9 s instead of
 4.6 s; end-to-end 18.7, 17.8, 17.8 s loose and 25.3 s tight, counts and field
-unchanged. All with `--inexact-linear`; single host, single problem.
+unchanged. With the native iron Jacobian refresh (`LowestOrderCurlJacobian`:
+only the rows the iron touches, gathered per row; records `*_nativejac_*`)
+the Jacobian costs 0.03 s per Newton step instead of 0.34 s; end-to-end
+15.6, 16.4, 15.7 s loose and 21.9 s tight, counts and field unchanged. All
+with `--inexact-linear`; single host, single problem.
 
 ## Results (LAB, 2026-09-22, uncontended sequential runs, 8 threads)
 
