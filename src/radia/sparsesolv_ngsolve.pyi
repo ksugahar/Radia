@@ -430,6 +430,18 @@ def LowestOrderCurlSystem(fes: FESpace, coefficient: object = None) -> dict:
     ...
 
 
+def ClosedCoilCurrentPhi(mesh: object, materials: list[int], current_A: float, origin: object,
+                         normal: object, radius: float, inverse: str = "sparsecholesky") -> dict:
+    """A-phi DC current of a closed conductor with one thick cut (conductor-only, native).
+
+    Used by radia.meshed_current.solve_closed_coil_current_phi. ``inverse`` is
+    "iccg" (IC(0)-CG to 1e-12, fails loudly) or an NGSolve inverse type. Returns
+    ``elements``, ``density`` (n, 3), ``vertices``, ``phi``, the cut statistics,
+    ``relative_weak_divergence``, ``cut_face_flux_A`` and ``timing``.
+    """
+    ...
+
+
 class LowestOrderCurlResidual:
     """Element flux, material state and residual of a lowest-order HCurl problem.
 
