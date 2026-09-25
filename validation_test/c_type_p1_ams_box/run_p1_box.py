@@ -1140,7 +1140,8 @@ def main() -> None:
     parser.add_argument("--mode", choices=("linear", "nonlinear"), default="nonlinear")
     parser.add_argument("--mu-r", type=float, default=1000.0)
     parser.add_argument("--engines", default="reduced_a,mixed_omega",
-                        help="comma list of reduced_a, total_a (meshed coil, A-phi current), mixed_omega")
+                        help="comma list of reduced_a, total_a (meshed coil, A-phi current), "
+                             "total_a_production (the same through radia.p1_newton), mixed_omega")
     parser.add_argument("--threads", type=int, default=8)
     parser.add_argument("--reduced-a-solver", choices=("ams", "iccg", "direct"), default="ams")
     parser.add_argument("--ic-shift", type=float, default=1.05,
@@ -1212,7 +1213,7 @@ def run(options) -> dict:
     if not engines or len(set(engines)) != len(engines):
         raise ValueError("engines must be a nonempty list without duplicates")
     for name in engines:
-        if name not in ("reduced_a", "total_a", "mixed_omega"):
+        if name not in ("reduced_a", "total_a", "total_a_production", "mixed_omega"):
             raise ValueError(f"unknown engine {name!r}")
     adapters = load_three_engine_adapters()
     nonlinear = options.mode == "nonlinear"
@@ -1302,6 +1303,44 @@ def run(options) -> dict:
         run_potential_engine("total_a", engine, {
             "coil_current": current["stats"], "coil_current_cut": current["cut"],
             "engine_setup_s": setup_s})
+    if "total_a_production" in engines:
+        # The production entry radia.p1_newton, called outside TaskManager as
+        # it requires; it owns its parallel regions and its setup timing.
+        if not (nonlinear and options.nonlinear_method == "newton"):
+            raise ValueError("total_a_production is the nonlinear Newton path")
+        from radia.p1_newton import solve_p1_newton
+
+        progress("engine_start", engine="total_a_production", mesh_elements=int(mesh.ne))
+        current = coil_current_phi(mesh, coil_manifest, options.coil_cut_radius)
+        t0 = time.perf_counter()
+        result = solve_p1_newton(
+            mesh, material, iron=("iron",), current_cf=current["current"],
+            current_materials="coil", dirichlet="outer",
+            linear_solver=options.reduced_a_solver, gauge_epsilon=options.gauge_epsilon,
+            reuse_hierarchy=options.ams_reuse_hierarchy,
+            newton_tolerance=options.newton_tolerance,
+            field_tolerance=None if options.tolerance >= 1.0 else options.tolerance,
+            max_iterations=options.max_iterations, max_halvings=options.line_search_max_halvings,
+            cg_tolerance=options.cg_tolerance, cg_max_iterations=options.cg_max_iterations,
+            inexact=options.inexact_linear, linear_floor=not options.no_linear_floor,
+            ic_shift=options.ic_shift, observation_points=points)
+        runtime = time.perf_counter() - t0
+        stats = result["stats"]
+        fields["total_a_production"] = result["observation_B_T"]
+        totals: dict[str, float] = {}
+        for row in stats["history"]:
+            for key in ("assembly_s", "preconditioner_s", "solve_s", "line_search_s"):
+                totals[key] = totals.get(key, 0.0) + float(row.get(key) or 0.0)
+        diagnostics["total_a_production"] = {
+            "formulation": "HCurl total-A, order 1, meshed coil J (radia.p1_newton)",
+            "coil_current": current["stats"], "coil_current_cut": current["cut"],
+            "nonlinear": True, "nonlinear_stats": stats, "runtime_s": runtime,
+            "setup_timing_s": stats["setup_s"], "mesh_elements": int(mesh.ne),
+            "mesh_vertices": int(mesh.nv), "phase_totals_s": totals,
+            "total_cg_iterations": sum(int(row["cg_iterations"] or 0) for row in stats["history"]),
+        }
+        progress("engine_complete", engine="total_a_production", runtime_s=runtime,
+                 converged=stats["converged"], iterations=stats["iterations"])
     if "mixed_omega" in engines:
         progress("engine_start", engine="mixed_omega", mesh_elements=int(mesh.ne))
         field, stats, description, runtime = solve_mixed_omega_box(
