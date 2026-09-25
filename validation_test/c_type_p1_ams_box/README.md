@@ -293,6 +293,8 @@ A-phi current + engine setup (mesh load excluded).
 | `radia.p1_newton` (engine `total_a_production`) | tight | 31.4 | 34.1 | 11 | 114 |
 | `radia.p1_newton`, in-place AMS update | loose | 19.0 | 21.7 | 7 | 64 |
 | `radia.p1_newton`, in-place AMS update | tight | 26.7 | 29.4 | 11 | 114 |
+| `radia.p1_newton`, one-pass setup | loose | 15.1 | 17.8 | 7 | 64 |
+| `radia.p1_newton`, one-pass setup | tight | 22.7 | 25.3 | 11 | 114 |
 
 Beta-zero loose repeated: 31.8, 30.9, 31.8 s end-to-end; with the frozen
 hierarchy 30.1, 30.1, 30.3 s (AMS update 1.1 s -> 0.77 s, CG iterations
@@ -310,8 +312,12 @@ in-place AMS update (2026-09-26: Galerkin matrices recomputed numerically on
 their fixed patterns, the three nodal components in one sweep; records
 `intel11_20260926_*`) each AMS update takes 0.35 s instead of 0.82 s (AMS
 total 6.2 s -> 3.6 s); end-to-end 22.0, 21.7, 21.7 s, Newton and CG counts and
-the observed field unchanged. All with `--inexact-linear`; single host, single
-problem.
+the observed field unchanged. With the one-pass setup (native
+`LowestOrderCurlSystem`: element dofs, basis curls, volumes, the element-graph
+matrix holding the Jacobian's constant part and every element's matrix
+positions; records `*_onepass_*`) the one-off setup takes 0.9 s instead of
+4.6 s; end-to-end 18.7, 17.8, 17.8 s loose and 25.3 s tight, counts and field
+unchanged. All with `--inexact-linear`; single host, single problem.
 
 ## Results (LAB, 2026-09-22, uncontended sequential runs, 8 threads)
 
