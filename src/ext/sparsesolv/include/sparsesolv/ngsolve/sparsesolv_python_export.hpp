@@ -159,6 +159,122 @@ inline shared_ptr<BitArray> ExtractFreeDofs(py::object freedofs) {
   return py::cast<shared_ptr<BitArray>>(freedofs);
 }
 
+/// Newton Jacobian refresh of a lowest-order HCurl curl-curl matrix on a set
+/// of elements with the tangent reluctivity nu I + q b b^T (element-constant).
+/// Built from LowestOrderCurlSystem data of those elements; the values of every
+/// row they touch are saved at construction (the constant part) and each
+/// Refresh rewrites exactly those rows as constant part + sum over the
+/// row's elements, in ascending element order, of
+/// vol (nu C_a.C_b + q (b.C_a)(b.C_b)). Entries (i, j) and (j, i) sum
+/// identical terms in the same order, so the matrix stays exactly symmetric.
+class LowestOrderCurlJacobian {
+public:
+  LowestOrderCurlJacobian(shared_ptr<BaseMatrix> matrix,
+                          py::array_t<int32_t, py::array::c_style | py::array::forcecast> dofs,
+                          py::array_t<double, py::array::c_style | py::array::forcecast> curl,
+                          py::array_t<double, py::array::c_style | py::array::forcecast> volume,
+                          py::array_t<int32_t, py::array::c_style | py::array::forcecast> positions)
+  {
+    matrix_ = dynamic_pointer_cast<SparseMatrix<double>>(matrix);
+    if (!matrix_) throw py::type_error("LowestOrderCurlJacobian: needs a real SparseMatrix");
+    n_ = volume.ndim() == 1 ? size_t(volume.shape(0)) : 0;
+    if (dofs.ndim() != 2 || size_t(dofs.shape(0)) != n_ || dofs.shape(1) != 6
+        || curl.ndim() != 3 || size_t(curl.shape(0)) != n_ || curl.shape(1) != 3 || curl.shape(2) != 6
+        || positions.ndim() != 2 || size_t(positions.shape(0)) != n_ || positions.shape(1) != 36)
+      throw py::value_error("LowestOrderCurlJacobian: dofs (n, 6), curl (n, 3, 6), volume (n,), "
+                            "positions (n, 36) of the same n");
+    dofs_.assign(dofs.data(), dofs.data() + 6 * n_);
+    curl_.assign(curl.data(), curl.data() + 18 * n_);
+    volume_.assign(volume.data(), volume.data() + n_);
+    positions_.assign(positions.data(), positions.data() + 36 * n_);
+    const size_t height = matrix_->Height();
+    const size_t nze = matrix_->NZE();
+    for (size_t i = 0; i < 6 * n_; i++)
+      if (dofs_[i] < 0 || size_t(dofs_[i]) >= height)
+        throw py::value_error("LowestOrderCurlJacobian: dof outside the matrix");
+    for (size_t i = 0; i < 36 * n_; i++)
+      if (positions_[i] < 0 || size_t(positions_[i]) >= nze)
+        throw py::value_error("LowestOrderCurlJacobian: position outside the matrix");
+    // Positions must be the (dof_a, dof_b) entries: check the columns and rows.
+    std::atomic<size_t> wrong{0};
+    ParallelFor(n_, [&](size_t e) {
+      for (int a = 0; a < 6; a++) {
+        auto first = matrix_->First(dofs_[6 * e + a]);
+        auto next = matrix_->First(dofs_[6 * e + a] + 1);
+        auto cols = matrix_->GetRowIndices(dofs_[6 * e + a]);
+        for (int b = 0; b < 6; b++) {
+          const size_t p = size_t(positions_[36 * e + 6 * a + b]);
+          if (p < first || p >= next || cols[p - first] != dofs_[6 * e + b]) wrong++;
+        }
+      }
+    });
+    if (wrong) throw py::value_error("LowestOrderCurlJacobian: positions do not match the dofs");
+    TableCreator<int> creator(height);
+    for (; !creator.Done(); creator++)
+      for (size_t e = 0; e < n_; e++)
+        for (int a = 0; a < 6; a++)
+          creator.Add(dofs_[6 * e + a], int(6 * e + a));
+    row_slots_ = creator.MoveTable();
+    for (size_t row = 0; row < height; row++)
+      if (row_slots_[row].Size()) rows_.push_back(int(row));
+    auto values = matrix_->AsVector().FVDouble();
+    base_offset_.resize(rows_.size() + 1);
+    base_offset_[0] = 0;
+    for (size_t r = 0; r < rows_.size(); r++)
+      base_offset_[r + 1] = base_offset_[r] + (matrix_->First(rows_[r] + 1) - matrix_->First(rows_[r]));
+    base_.resize(base_offset_.back());
+    ParallelFor(rows_.size(), [&](size_t r) {
+      const size_t first = matrix_->First(rows_[r]);
+      for (size_t k = 0; k < base_offset_[r + 1] - base_offset_[r]; k++)
+        base_[base_offset_[r] + k] = values[first + k];
+    });
+  }
+
+  void Refresh(py::array_t<double, py::array::c_style | py::array::forcecast> nu,
+               py::array_t<double, py::array::c_style | py::array::forcecast> q,
+               py::array_t<double, py::array::c_style | py::array::forcecast> b)
+  {
+    if (nu.ndim() != 1 || size_t(nu.shape(0)) != n_ || q.ndim() != 1 || size_t(q.shape(0)) != n_
+        || b.ndim() != 2 || size_t(b.shape(0)) != n_ || b.shape(1) != 3)
+      throw py::value_error("LowestOrderCurlJacobian.Refresh: nu (n,), q (n,), b (n, 3)");
+    const double* nuv = nu.data();
+    const double* qv = q.data();
+    const double* bv = b.data();
+    auto values = matrix_->AsVector().FVDouble();
+    ParallelFor(rows_.size(), [&](size_t r) {
+      const int row = rows_[r];
+      const size_t first = matrix_->First(row);
+      for (size_t k = 0; k < base_offset_[r + 1] - base_offset_[r]; k++)
+        values[first + k] = base_[base_offset_[r] + k];
+      for (int slot : row_slots_[row]) {
+        const size_t e = size_t(slot) / 6;
+        const int a = slot % 6;
+        const double* C = curl_.data() + 18 * e;
+        const double* be = bv + 3 * e;
+        const double vol = volume_[e], n = nuv[e], qq = qv[e];
+        const double ta = be[0] * C[a] + be[1] * C[6 + a] + be[2] * C[12 + a];
+        for (int c = 0; c < 6; c++) {
+          const double s = C[a] * C[c] + C[6 + a] * C[6 + c] + C[12 + a] * C[12 + c];
+          const double tc = be[0] * C[c] + be[1] * C[6 + c] + be[2] * C[12 + c];
+          values[positions_[36 * e + 6 * a + c]] += vol * (n * s + qq * (ta * tc));
+        }
+      }
+    });
+  }
+
+  size_t NumElements() const { return n_; }
+  size_t NumRows() const { return rows_.size(); }
+
+private:
+  shared_ptr<SparseMatrix<double>> matrix_;
+  size_t n_ = 0;
+  std::vector<int32_t> dofs_, positions_;
+  std::vector<double> curl_, volume_, base_;
+  std::vector<size_t> base_offset_;
+  std::vector<int> rows_;
+  Table<int> row_slots_;
+};
+
 // ============================================================================
 // Internal: Factory functions with auto-dispatch via mat->IsComplex()
 // ============================================================================
@@ -557,6 +673,27 @@ with an element-constant coefficient), summed deterministically and exactly
 symmetric; otherwise its values are zero. Parallel under an ngsolve
 TaskManager. Fails for curved, non-tetrahedral or higher-order elements.
 )raw_string");
+
+  py::class_<LowestOrderCurlJacobian>(m, "LowestOrderCurlJacobian", R"raw_string(
+Newton Jacobian refresh for a lowest-order HCurl curl-curl matrix.
+
+Constructed from the ``matrix`` of LowestOrderCurlSystem (holding the constant
+part) and the ``dofs``, ``curl``, ``volume`` and ``positions`` rows of the
+nonlinear elements. ``Refresh(nu, q, b)`` rewrites every row those elements
+touch as its constant part plus sum_e vol_e C_e^T (nu_e I + q_e b_e b_e^T) C_e,
+gathered per row in ascending element order (deterministic, exactly symmetric).
+Parallel under an ngsolve TaskManager.
+)raw_string")
+    .def(py::init<shared_ptr<BaseMatrix>,
+                  py::array_t<int32_t, py::array::c_style | py::array::forcecast>,
+                  py::array_t<double, py::array::c_style | py::array::forcecast>,
+                  py::array_t<double, py::array::c_style | py::array::forcecast>,
+                  py::array_t<int32_t, py::array::c_style | py::array::forcecast>>(),
+         py::arg("matrix"), py::arg("dofs"), py::arg("curl"), py::arg("volume"), py::arg("positions"))
+    .def("Refresh", &LowestOrderCurlJacobian::Refresh, py::arg("nu"), py::arg("q"), py::arg("b"),
+         "Rewrite the touched rows for element reluctivity nu, rank-one q and flux b (n, 3).")
+    .def_property_readonly("elements", &LowestOrderCurlJacobian::NumElements)
+    .def_property_readonly("rows", &LowestOrderCurlJacobian::NumRows);
 
   m.def("HypreBasedAMSPreconditioner",
     [](shared_ptr<BaseMatrix> mat,
