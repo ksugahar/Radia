@@ -306,6 +306,9 @@ inline void ExportHypreBasedAMS(py::module& m) {
       .def_property_readonly("reuse_hierarchy", &HypreBasedAMS::GetReuseHierarchy)
       .def_property_readonly("hierarchy_refreshes", &HypreBasedAMS::GetHierarchyRefreshes,
           "Updates that refreshed the frozen AMG hierarchies instead of rebuilding them.")
+      .def_property_readonly("in_place_updates", &HypreBasedAMS::GetInPlaceUpdates,
+          "Updates (reuse_hierarchy, unchanged sparsity) whose Galerkin products ran "
+          "numerically on the previous patterns, without symbolic products or allocation.")
       .def_property_readonly("setup_workers", &HypreBasedAMS::GetSetupWorkers,
           "Observed workers in AMG strength-row construction (zero when no coarsening occurs).")
       .def("Update", py::overload_cast<>(&HypreBasedAMS::Update),

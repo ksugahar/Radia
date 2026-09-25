@@ -190,6 +190,7 @@ public:
     bool GetBetaZero() const { return beta_zero_; }
     bool GetReuseHierarchy() const { return reuse_hierarchy_; }
     int GetHierarchyRefreshes() const { return hierarchy_refreshes_; }
+    int GetInPlaceUpdates() const { return in_place_updates_; }
     int GetSetupWorkers() const { return setup_workers_; }
     shared_ptr<BitArray> GetFreeDofs() const { return freedofs_; }
 
@@ -281,6 +282,9 @@ private:
     const bool beta_zero_; // Pure curl-curl: omit G correction and its hierarchy.
     const bool reuse_hierarchy_; // Update(): frozen AMG coarsening, refreshed Galerkin matrices.
     int hierarchy_refreshes_ = 0;
+    int in_place_updates_ = 0;   // Updates whose auxiliary products ran on fixed patterns.
+    int pi_shared_pattern_ = -1; // Pi_x/y/z, transposes and products share patterns (-1 unknown).
+    shared_ptr<SparseMatrix<double>> pattern_source_;  // matrix A_bc_ was last built from
     int setup_workers_ = 0;
 
     // Gradient subspace
@@ -381,16 +385,45 @@ private:
         setup_workers_ = 0;
         auto t_rebuild = std::chrono::high_resolution_clock::now();
 
-        // 1. Create BC-modified matrix (identity rows for constrained DOFs).
-        if (freedofs_) {
-            A_bc_ = CreateBCModifiedMatrix(*mat_, *freedofs_);
-        } else {
-            A_bc_ = mat_;
-        }
-
-        // 2. Galerkin projection: A_G = G^T * A_bc * G, etc.
+        // reuse_hierarchy with an unchanged sparsity pattern: refresh A_bc and
+        // the auxiliary Galerkin matrices in place (numeric products only).
         auto t0 = std::chrono::high_resolution_clock::now();
+        bool in_place = false;
         {
+            ngcore::RegionTaskManager tasks;
+            // A SparseMatrix never changes its pattern, so the matrix object
+            // A_bc was last built from needs no comparison.
+            in_place = reuse_hierarchy_ && A_bc_ && A_Pix_ && A_Piy_ && A_Piz_
+                && (beta_zero_ || A_G_)
+                && (mat_ == pattern_source_ || SameSparsityPattern(*mat_, *A_bc_));
+            if (in_place) {
+                if (freedofs_) FillBCModifiedValues(*mat_, *freedofs_, *A_bc_);
+                else A_bc_ = mat_;
+                if (pi_shared_pattern_ < 0)
+                    pi_shared_pattern_ = SameSparsityPattern(*Pix_, *Piy_) && SameSparsityPattern(*Pix_, *Piz_)
+                        && SameSparsityPattern(*Pix_t_, *Piy_t_) && SameSparsityPattern(*Pix_t_, *Piz_t_)
+                        && SameSparsityPattern(*A_Pix_, *A_Piy_) && SameSparsityPattern(*A_Pix_, *A_Piz_);
+                const bool nodal = pi_shared_pattern_
+                    ? FusedPiProducts()
+                    : GalerkinProductOnPattern(*Pix_t_, *A_bc_, *Pix_, *A_Pix_)
+                      && GalerkinProductOnPattern(*Piy_t_, *A_bc_, *Piy_, *A_Piy_)
+                      && GalerkinProductOnPattern(*Piz_t_, *A_bc_, *Piz_, *A_Piz_);
+                in_place = nodal
+                    && (beta_zero_ || GalerkinProductOnPattern(*grad_t_, *A_bc_, *grad_, *A_G_));
+                if (in_place) in_place_updates_++;
+            }
+        }
+        if (!in_place) pi_shared_pattern_ = -1;  // the products below get new patterns
+        pattern_source_ = mat_;
+        if (!in_place) {
+            // 1. Create BC-modified matrix (identity rows for constrained DOFs).
+            if (freedofs_) {
+                A_bc_ = CreateBCModifiedMatrix(*mat_, *freedofs_);
+            } else {
+                A_bc_ = mat_;
+            }
+
+            // 2. Galerkin projection: A_G = G^T * A_bc * G, etc.
             ngcore::RegionTaskManager tasks;
             if (!beta_zero_)
                 A_G_ = dynamic_pointer_cast<SparseMatrix<double>>(A_bc_->Restrict(*grad_));
@@ -402,7 +435,10 @@ private:
         double dt_restrict = std::chrono::duration<double>(t1 - t0).count();
 
         if (print_level_ > 0) {
-            std::cout << "\n  Galerkin restrict: " << dt_restrict << "s";
+            std::cout << (!in_place ? "\n  Galerkin restrict: "
+                          : pi_shared_pattern_ == 1 ? "\n  Galerkin refresh (fixed pattern, fused Pi): "
+                                                    : "\n  Galerkin refresh (fixed pattern): ")
+                      << dt_restrict << "s";
             if (beta_zero_) std::cout << " beta_zero: gradient hierarchy omitted";
             else std::cout << " A_G=" << A_G_->Height() << "x" << A_G_->Width()
                            << " nnz=" << A_G_->NZE();
@@ -611,6 +647,64 @@ private:
                 }
             }
         });
+    }
+
+    /// Pi_d^T A_bc Pi_d for d = x, y, z in one sweep of A_bc, on the existing
+    /// patterns of A_Pix/y/z. The three Pi share G's pattern, so their
+    /// transposes and products share theirs (checked by the caller); only the
+    /// values differ. Returns false (values unspecified) when a nonzero
+    /// contribution falls outside the pattern.
+    bool FusedPiProducts() {
+        auto& Cx = *A_Pix_;
+        auto& Cy = *A_Piy_;
+        auto& Cz = *A_Piz_;
+        std::atomic<bool> inside{true};
+        const int width = Cx.Width();
+        ParallelForRange(Cx.Height(), [&](IntRange range) {
+            std::vector<int> marker(width, -1);
+            for (auto u : range) {
+                auto ccols = Cx.GetRowIndices(u);
+                auto cx = Cx.GetRowValues(u);
+                auto cy = Cy.GetRowValues(u);
+                auto cz = Cz.GetRowValues(u);
+                for (int p = 0; p < ccols.Size(); p++) {
+                    marker[ccols[p]] = p;
+                    cx[p] = cy[p] = cz[p] = 0.0;
+                }
+                auto ecols = Pix_t_->GetRowIndices(u);
+                auto tx = Pix_t_->GetRowValues(u);
+                auto ty = Piy_t_->GetRowValues(u);
+                auto tz = Piz_t_->GetRowValues(u);
+                for (int a = 0; a < ecols.Size(); a++) {
+                    const int e = ecols[a];
+                    auto kcols = A_bc_->GetRowIndices(e);
+                    auto kvals = A_bc_->GetRowValues(e);
+                    for (int b = 0; b < kcols.Size(); b++) {
+                        const double w = kvals[b];
+                        if (w == 0.0) continue;
+                        const double wx = tx[a] * w, wy = ty[a] * w, wz = tz[a] * w;
+                        const int k = kcols[b];
+                        auto jcols = Pix_->GetRowIndices(k);
+                        auto px = Pix_->GetRowValues(k);
+                        auto py = Piy_->GetRowValues(k);
+                        auto pz = Piz_->GetRowValues(k);
+                        for (int c = 0; c < jcols.Size(); c++) {
+                            const int pos = marker[jcols[c]];
+                            if (pos < 0) {
+                                if (wx * px[c] != 0.0 || wy * py[c] != 0.0 || wz * pz[c] != 0.0)
+                                    inside.store(false, std::memory_order_relaxed);
+                                continue;
+                            }
+                            cx[pos] += wx * px[c];
+                            cy[pos] += wy * py[c];
+                            cz[pos] += wz * pz[c];
+                        }
+                    }
+                }
+                for (int p = 0; p < ccols.Size(); p++) marker[ccols[p]] = -1;
+            }
+        });
+        return inside.load();
     }
 
     // =====================================================================
