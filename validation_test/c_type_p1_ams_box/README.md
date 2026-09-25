@@ -221,6 +221,13 @@ Newton options common to `reduced_a` and `total_a`:
   The direct cross-check keeps a fresh Jacobian form per step: the SPD sparse
   direct factorisation of the `eps = 1e-6` gauged Jacobian is round-off
   sensitive, so it is a cross-check, not a timing route.
+* The iterative solvers' Jacobian: the constant part (nu0 curl-curl off the
+  iron, gauge mass) is one form spanning every element, assembled once, whose
+  matrix is the Jacobian; each step adds the iron element matrices
+  `vol_e C_e^T (nu_e I + q_e b_e b_e^T) C_e` in closed form (element curl
+  coefficients `C_e` from the discrete element curl) at pattern positions
+  computed once. `--full-jacobian` reassembles the whole form every step;
+  the two agree to 1e-12 of the largest entry (tests).
 * `--ams-reuse-hierarchy` builds the AMS with `reuse_hierarchy=True`: every
   later Update keeps the nodal AMG coarsening and interpolation of the first
   build and refreshes only the Galerkin coarse matrices, the l1 norms and the
@@ -279,10 +286,15 @@ A-phi current + engine setup (mesh load excluded).
 | beta-zero AMS, ungauged | tight | 42.4 | 46.7 | 11 | 118 |
 | beta-zero AMS, frozen hierarchy | loose | 25.5 | 30.1 | 7 | 64 |
 | beta-zero AMS, frozen hierarchy | tight | 38.3 | 42.8 | 11 | 114 |
+| beta-zero AMS, frozen hierarchy, closed-form Jacobian | loose | 22.6 | 27.3 | 7 | 64 |
+| beta-zero AMS, frozen hierarchy, closed-form Jacobian | tight | 31.7 | 36.4 | 11 | 114 |
 
 Beta-zero loose repeated: 31.8, 30.9, 31.8 s end-to-end; with the frozen
 hierarchy 30.1, 30.1, 30.3 s (AMS update 1.1 s -> 0.77 s, CG iterations
-unchanged). All with `--inexact-linear`; single host, single problem.
+unchanged); with the closed-form Jacobian as well 28.2, 27.4, 27.3 s
+(assembly per Newton step 1.35 s -> 0.34 s; that session had one core busy
+with an unrelated background process, its in-session control with the full
+Jacobian took 32.3 s). All with `--inexact-linear`; single host, single problem.
 
 ## Results (LAB, 2026-09-22, uncontended sequential runs, 8 threads)
 
