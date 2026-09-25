@@ -23,8 +23,26 @@
 #include <stdexcept>
 #include <iostream>
 #include <atomic>
+#include <array>
+#include <chrono>
 
 namespace ngla {
+
+inline bool GalerkinProductOnPattern(const SparseMatrix<double>& Pt, const SparseMatrix<double>& A,
+                                     const SparseMatrix<double>& P, SparseMatrix<double>& C);
+inline shared_ptr<SparseMatrix<double>> GalerkinPattern(const SparseMatrix<double>& Pt,
+                                                        const SparseMatrix<double>& A,
+                                                        const SparseMatrix<double>& P);
+
+/// Pt * A * P with a native symbolic pass and the numeric pass on its pattern.
+inline shared_ptr<SparseMatrix<double>> GalerkinProduct(const SparseMatrix<double>& Pt,
+                                                        const SparseMatrix<double>& A,
+                                                        const SparseMatrix<double>& P) {
+    auto C = GalerkinPattern(Pt, A, P);
+    if (!GalerkinProductOnPattern(Pt, A, P, *C))
+        throw std::runtime_error("GalerkinProduct: contribution outside its own pattern");
+    return C;
+}
 
 /// Compact CSR graph (binary adjacency, no values)
 struct CSRGraph {
@@ -74,6 +92,52 @@ inline void FillBCModifiedValues(const SparseMatrix<double>& A, const BitArray& 
                 dst[j] = freedofs.Test(cols[j]) ? src[j] : 0.0;
         }
     });
+}
+
+/// Structural pattern of Pt * A * P as a zero SparseMatrix (sorted columns):
+/// row u holds every j reached by u -Pt-> e -A-> k -P-> j. Two parallel passes
+/// (count, fill) with a per-task column marker; no values are computed.
+inline shared_ptr<SparseMatrix<double>> GalerkinPattern(const SparseMatrix<double>& Pt,
+                                                        const SparseMatrix<double>& A,
+                                                        const SparseMatrix<double>& P) {
+    if (Pt.Width() != A.Height() || A.Width() != P.Height())
+        throw std::invalid_argument("GalerkinPattern: dimension mismatch");
+    const size_t height = Pt.Height();
+    const int width = P.Width();
+    Array<int> counts(height);
+    auto visit = [&](size_t u, std::vector<int>& marker, auto&& emit) {
+        auto ecols = Pt.GetRowIndices(u);
+        for (int a = 0; a < ecols.Size(); a++) {
+            auto kcols = A.GetRowIndices(ecols[a]);
+            for (int b = 0; b < kcols.Size(); b++) {
+                auto jcols = P.GetRowIndices(kcols[b]);
+                for (int c = 0; c < jcols.Size(); c++) {
+                    const int j = jcols[c];
+                    if (marker[j] != int(u)) { marker[j] = int(u); emit(j); }
+                }
+            }
+        }
+    };
+    ParallelForRange(height, [&](IntRange range) {
+        std::vector<int> marker(width, -1);
+        for (auto u : range) {
+            int n = 0;
+            visit(u, marker, [&](int) { n++; });
+            counts[u] = n;
+        }
+    });
+    auto C = make_shared<SparseMatrix<double>>(counts, width);
+    ParallelForRange(height, [&](IntRange range) {
+        std::vector<int> marker(width, -1);
+        for (auto u : range) {
+            auto cols = C->GetRowIndices(u);
+            int n = 0;
+            visit(u, marker, [&](int j) { cols[n++] = j; });
+            std::sort(cols.Data(), cols.Data() + cols.Size());
+            C->GetRowValues(u) = 0.0;
+        }
+    });
+    return C;
 }
 
 /// Galerkin product C = Pt * A * P computed into the existing pattern of C
@@ -183,10 +247,14 @@ public:
                 break;
 
             // 1. Strength of connection
+            auto t_phase = std::chrono::steady_clock::now();
+            auto phase = [&](int k) { auto now = std::chrono::steady_clock::now(); setup_phase_s_[k] += std::chrono::duration<double>(now - t_phase).count(); t_phase = now; };
             CSRGraph S = ComputeStrength(*cur.A, theta_);
+            phase(0);
 
             // 2. PMIS coarsening
             std::vector<int> cf_marker = CoarsenPMIS(S);
+            phase(1);
 
             // Count C-points
             int nc = 0;
@@ -218,20 +286,24 @@ public:
 
             // 3. Build interpolation
             auto P = BuildClassicalInterp(*cur.A, S, cf_marker, nc);
+            phase(2);
             if (!P) break;
 
             cur.P = P;
             cur.Pt = dynamic_pointer_cast<SparseMatrix<double>>(P->CreateTranspose(true));
+            phase(3);
 
             // 4. Galerkin coarse matrix: A_c = P^T * A * P
             Level next_lev;
-            next_lev.A = dynamic_pointer_cast<SparseMatrix<double>>(cur.A->Restrict(*P));
-
+            next_lev.A = native_galerkin_ ? GalerkinProduct(*cur.Pt, *cur.A, *P)
+                                          : dynamic_pointer_cast<SparseMatrix<double>>(cur.A->Restrict(*P));
+            phase(4);
             if (!next_lev.A) break;
 
             next_lev.ndof = nc;
             ComputeL1Norms(*next_lev.A, next_lev.l1_norms);
             AllocWorkVectors(next_lev);
+            phase(5);
             levels_.push_back(std::move(next_lev));
         }
 
@@ -239,12 +311,14 @@ public:
         // Factorization remains outside the internally owned parallel region.
         // Coarsest level: direct solver
         auto& coarsest = levels_.back();
+        auto t_factor = std::chrono::steady_clock::now();
         if (coarsest.ndof <= min_coarse_ * 10) {
             // Use sparse Cholesky for coarsest level
             coarsest.A->SetInverseType("sparsecholesky");
             coarsest.inv = coarsest.A->InverseMatrix(shared_ptr<BitArray>(nullptr));
         }
         // else: just use smoother at coarsest level too
+        setup_phase_s_[6] += std::chrono::duration<double>(std::chrono::steady_clock::now() - t_factor).count();
 
         if (print_level_ > 0)
             std::cout << "\n  CompactAMG: " << levels_.size() << " levels, coarsest = "
@@ -281,7 +355,8 @@ public:
             auto& next = levels_[l + 1];
             in_place = in_place && GalerkinProductOnPattern(*cur.Pt, *cur.A, *cur.P, *next.A);
             if (!in_place) {
-                auto coarse = dynamic_pointer_cast<SparseMatrix<double>>(cur.A->Restrict(*cur.P));
+                auto coarse = native_galerkin_ ? GalerkinProduct(*cur.Pt, *cur.A, *cur.P)
+                    : dynamic_pointer_cast<SparseMatrix<double>>(cur.A->Restrict(*cur.P));
                 if (!coarse || coarse->Height() != next.ndof)
                     throw std::runtime_error("CompactAMG::Refresh: Galerkin product changed size");
                 next.A = coarse;
@@ -300,6 +375,12 @@ public:
     }
 
     int RefreshCount() const { return refresh_count_; }
+    /// Build coarse matrices with the native symbolic + numeric Galerkin product
+    /// instead of SparseMatrix::Restrict (same matrices up to summation order).
+    void SetNativeGalerkin(bool on) { native_galerkin_ = on; }
+    /// Accumulated Setup phases: strength, coarsening, interpolation,
+    /// transpose, Galerkin, l1 norms + work vectors, coarsest factorization.
+    const std::array<double, 7>& SetupPhases() const { return setup_phase_s_; }
     /// Galerkin coarse matrices refreshed numerically on their existing pattern.
     int InPlaceProductCount() const { return in_place_products_; }
 
@@ -358,6 +439,8 @@ public:
 private:
     mutable int setup_workers_ = 0;
     int refresh_count_ = 0;
+    bool native_galerkin_ = false;
+    std::array<double, 7> setup_phase_s_{};
     int in_place_products_ = 0;
     // =====================================================================
     // Level data
@@ -658,39 +741,40 @@ private:
             if (cf_marker[i] == 1)
                 coarse_idx[i] = cidx++;
 
-        // Build strength set for fast lookup
-        std::vector<std::vector<bool>> is_strong(nf);
-        for (int i = 0; i < nf; i++) {
+        // Strength flags aligned with A's value positions (flat, filled in parallel)
+        std::vector<char> strong_flag(A.NZE(), 0);
+        ParallelFor(nf, [&](size_t i) {
             auto cols = A.GetRowIndices(i);
-            is_strong[i].resize(cols.Size(), false);
-            int spos = S.row_ptr[i];
-            int send = S.row_ptr[i + 1];
+            const size_t base = A.First(i);
+            const int spos = S.row_ptr[i];
+            const int send = S.row_ptr[i + 1];
             for (int j = 0; j < cols.Size(); j++) {
                 for (int k = spos; k < send; k++) {
                     if (S.col_idx[k] == cols[j]) {
-                        is_strong[i][j] = true;
+                        strong_flag[base + j] = 1;
                         break;
                     }
                 }
             }
-        }
+        });
+        auto is_strong_at = [&](int i, int j) { return strong_flag[A.First(i) + j] != 0; };
 
         // Count entries per row in P
         std::vector<int> P_row_nnz(nf, 0);
-        for (int i = 0; i < nf; i++) {
+        ParallelFor(nf, [&](size_t i) {
             if (cf_marker[i] == 1) {
                 P_row_nnz[i] = 1;  // C-point: identity
             } else {
                 // F-point: count strong C-neighbors
                 auto cols = A.GetRowIndices(i);
+                int count = 0;
                 for (int j = 0; j < cols.Size(); j++) {
-                    if (is_strong[i][j] && cf_marker[cols[j]] == 1)
-                        P_row_nnz[i]++;
+                    if (is_strong_at(int(i), j) && cf_marker[cols[j]] == 1)
+                        count++;
                 }
-                if (P_row_nnz[i] == 0)
-                    P_row_nnz[i] = 1;  // Fallback: inject to nearest C
+                P_row_nnz[i] = count == 0 ? 1 : count;  // Fallback: inject to nearest C
             }
-        }
+        });
 
         // Build P as NGSolve SparseMatrix
         // First create the sparsity pattern using Table
@@ -724,7 +808,7 @@ private:
                 for (int j = 0; j < cols.Size(); j++) {
                     if (cols[j] == (int)i) continue;  // skip diagonal
                     // Skip strong C-neighbors (these become interpolation weights)
-                    if (is_strong[i][j] && cf_marker[cols[j]] == 1) continue;
+                    if (is_strong_at(int(i), j) && cf_marker[cols[j]] == 1) continue;
                     sum_non_interp += vals[j];
                 }
 
@@ -737,7 +821,7 @@ private:
                 auto p_vals = P->GetRowValues(i);
 
                 for (int j = 0; j < cols.Size(); j++) {
-                    if (is_strong[i][j] && cf_marker[cols[j]] == 1) {
+                    if (is_strong_at(int(i), j) && cf_marker[cols[j]] == 1) {
                         p_cols[pos] = coarse_idx[cols[j]];
                         p_vals[pos] = -vals[j] / denom;
                         pos++;
@@ -796,6 +880,23 @@ private:
         ParallelFor(fv_s.Size(), [&](size_t i) { fv_d[i] = fv_s[i]; });
     }
 
+    /// res = b - A x in one pass over the rows (no separate copy of b).
+    static void ResidualInto(const SparseMatrix<double>& A, const BaseVector& b,
+                             const BaseVector& x, BaseVector& res) {
+        auto fb = b.FVDouble();
+        auto fx = x.FVDouble();
+        auto fr = res.FVDouble();
+        ParallelForRange(A.Height(), [&](IntRange range) {
+            for (auto i : range) {
+                auto cols = A.GetRowIndices(i);
+                auto vals = A.GetRowValues(i);
+                double s = fb[i];
+                for (int j = 0; j < cols.Size(); j++) s -= vals[j] * fx[cols[j]];
+                fr[i] = s;
+            }
+        });
+    }
+
     /// l1-Jacobi sweep: x += r / l1_norm (fully parallel, no data dependency)
     void L1JacobiSmooth(int level, const BaseVector& b, BaseVector& x,
                         bool initially_zero = false) const {
@@ -811,9 +912,8 @@ private:
         }
         auto& res = *lev.residual;
 
-        // Residual: r = b - A*x (NGSolve SpMV is TaskManager-parallel)
-        CopyVector(b, res);
-        lev.A->MultAdd(-1.0, x, res);
+        // Residual: r = b - A*x in one pass
+        ResidualInto(*lev.A, b, x, res);
 
         // Jacobi update: x[i] += r[i] / l1_norm[i] (fully parallel)
         auto fv_x = x.FVDouble();
@@ -987,8 +1087,7 @@ private:
 
         // Compute residual: r = b - A*x
         auto& res = *lev.residual;
-        CopyVector(b, res);
-        lev.A->MultAdd(-1.0, x, res);
+        ResidualInto(*lev.A, b, x, res);
 
         // Restrict to coarse: r_c = P^T * r
         auto& next = levels_[level + 1];
@@ -997,7 +1096,9 @@ private:
 
         // Coarse solve: e_c = 0; VCycle(level+1, r_c, e_c)
         auto& e_c = *next.correction;
-        e_c = 0;
+        // With a pre-smoother the coarse V-cycle assigns every entry (first
+        // smoother or direct solve); zero it only when there is none.
+        if (num_smooth_ < 1) e_c = 0;
         VCycle(level + 1, r_c, e_c);
 
         // Prolongate and add: x += P * e_c

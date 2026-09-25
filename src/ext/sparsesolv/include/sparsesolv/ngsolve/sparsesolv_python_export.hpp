@@ -161,6 +161,90 @@ inline shared_ptr<BitArray> ExtractFreeDofs(py::object freedofs) {
   return py::cast<shared_ptr<BitArray>>(freedofs);
 }
 
+/// Preconditioned CG for an SPD system on free dofs, stopped on the true
+/// relative residual |b - A x|_free / |b|_free. Iterates on the recurrence
+/// residual and confirms with the true residual before stopping (continuing
+/// from the true residual when they disagree), so it costs one matrix product
+/// and one preconditioner application per iteration. Inner products are summed
+/// over a fixed number of chunks in a fixed order: deterministic. The
+/// preconditioner must return zero on constrained dofs (the AMS does).
+class NativePCG {
+public:
+  NativePCG(shared_ptr<BaseMatrix> mat, shared_ptr<BaseMatrix> pre, shared_ptr<BitArray> freedofs)
+      : mat_(mat), pre_(pre), free_(freedofs), r_(mat->CreateColVector()), z_(mat->CreateColVector()),
+        p_(mat->CreateColVector()), q_(mat->CreateColVector())
+  {
+    n_ = mat_->Height();
+    if (mat_->Width() != n_ || pre_->Height() != n_ || pre_->Width() != n_)
+      throw py::value_error("NativePCG: square matrix and preconditioner of one size required");
+    if (free_ && free_->Size() != n_) throw py::value_error("NativePCG: freedofs size mismatch");
+  }
+
+  py::tuple Solve(const BaseVector& b, BaseVector& x, double tolerance, int maxiter) {
+    if (!(tolerance > 0.0 && tolerance < 1.0) || maxiter < 1)
+      throw py::value_error("NativePCG.Solve: tolerance in (0, 1) and maxiter >= 1 required");
+    auto fb = b.FVDouble(), fx = x.FVDouble();
+    auto r = r_.FVDouble(), z = z_.FVDouble(), p = p_.FVDouble(), q = q_.FVDouble();
+    const bool masked = bool(free_);
+    auto is_free = [&](size_t i) { return !masked || free_->Test(i); };
+    ParallelFor(n_, [&](size_t i) { fx[i] = 0.0; r[i] = is_free(i) ? fb[i] : 0.0; });
+    const double bnorm = std::sqrt(Dot(r, r));
+    if (bnorm == 0.0) return py::make_tuple(0, 0.0, true);
+    pre_->Mult(r_, z_);
+    ParallelFor(n_, [&](size_t i) { p[i] = z[i]; });
+    double rz = Dot(r, z);
+    if (!(rz > 0.0) || !std::isfinite(rz))
+      throw std::runtime_error("NativePCG: r.z <= 0 (preconditioner not SPD on the free dofs)");
+    const double target = tolerance * bnorm;
+    double true_relative = 1.0;
+    for (int it = 1; it <= maxiter; it++) {
+      mat_->Mult(p_, q_);
+      if (masked) ParallelFor(n_, [&](size_t i) { if (!free_->Test(i)) q[i] = 0.0; });
+      const double pq = Dot(p, q);
+      if (!(pq > 0.0) || !std::isfinite(pq))
+        throw std::runtime_error("NativePCG: p.Ap <= 0 (matrix or preconditioner not SPD on the free dofs)");
+      const double alpha = rz / pq;
+      ParallelFor(n_, [&](size_t i) { fx[i] += alpha * p[i]; r[i] -= alpha * q[i]; });
+      if (std::sqrt(Dot(r, r)) <= target) {
+        // Confirm with the true residual; continue from it when it disagrees.
+        mat_->Mult(x, q_);
+        ParallelFor(n_, [&](size_t i) { r[i] = is_free(i) ? fb[i] - q[i] : 0.0; });
+        true_relative = std::sqrt(Dot(r, r)) / bnorm;
+        if (true_relative <= tolerance) return py::make_tuple(it, true_relative, true);
+      }
+      pre_->Mult(r_, z_);
+      const double rz_new = Dot(r, z);
+      if (!(rz_new > 0.0) || !std::isfinite(rz_new))
+        throw std::runtime_error("NativePCG: r.z <= 0 (preconditioner not SPD on the free dofs)");
+      const double beta = rz_new / rz;
+      rz = rz_new;
+      ParallelFor(n_, [&](size_t i) { p[i] = z[i] + beta * p[i]; });
+    }
+    mat_->Mult(x, q_);
+    ParallelFor(n_, [&](size_t i) { r[i] = is_free(i) ? fb[i] - q[i] : 0.0; });
+    return py::make_tuple(maxiter, std::sqrt(Dot(r, r)) / bnorm, false);
+  }
+
+private:
+  static constexpr size_t chunks_ = 256;
+  double Dot(FlatVector<double> a, FlatVector<double> b) const {
+    std::array<double, chunks_> partial{};
+    ParallelFor(chunks_, [&](size_t c) {
+      const size_t begin = n_ * c / chunks_, end = n_ * (c + 1) / chunks_;
+      double s = 0.0;
+      for (size_t i = begin; i < end; i++) s += a[i] * b[i];
+      partial[c] = s;
+    });
+    double s = 0.0;
+    for (double v : partial) s += v;
+    return s;
+  }
+  shared_ptr<BaseMatrix> mat_, pre_;
+  shared_ptr<BitArray> free_;
+  size_t n_ = 0;
+  AutoVector r_, z_, p_, q_;
+};
+
 /// A-phi DC current of a closed conductor with one thick cut (see
 /// radia.meshed_current.solve_closed_coil_current_phi for the method). Every
 /// step works on the conductor only: its tets, faces, connectivity, the cut
@@ -1145,6 +1229,20 @@ Parallel under an ngsolve TaskManager.
          "Rewrite the touched rows for element reluctivity nu, rank-one q and flux b (n, 3).")
     .def_property_readonly("elements", &LowestOrderCurlJacobian::NumElements)
     .def_property_readonly("rows", &LowestOrderCurlJacobian::NumRows);
+
+  py::class_<NativePCG>(m, "NativePCG", R"raw_string(
+Preconditioned CG stopped on the true relative residual over free dofs.
+
+``NativePCG(mat, pre, freedofs)``; ``Solve(b, x, tolerance, maxiter)`` starts
+from x = 0 and returns ``(iterations, true_relative_residual, converged)``.
+Each iteration is one matrix product and one preconditioner application; the
+true residual is computed only to confirm convergence. Deterministic inner
+products. Parallel under an ngsolve TaskManager.
+)raw_string")
+    .def(py::init<shared_ptr<BaseMatrix>, shared_ptr<BaseMatrix>, shared_ptr<BitArray>>(),
+         py::arg("mat"), py::arg("pre"), py::arg("freedofs"))
+    .def("Solve", &NativePCG::Solve, py::arg("b"), py::arg("x"), py::arg("tolerance"),
+         py::arg("maxiter"));
 
   m.def("ClosedCoilCurrentPhi",
     [](shared_ptr<ngcomp::MeshAccess> mesh, std::vector<int> materials, double current_A,
