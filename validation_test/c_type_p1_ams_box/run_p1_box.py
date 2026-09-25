@@ -289,7 +289,8 @@ class ReducedAP1Box:
                  ams_project_gradients: bool = False, ams_beta_zero: bool = False,
                  cg_check_interval: int = 1, ams_print_level: int = 0,
                  outer_boundary: str = "source_flux", zero_source: bool = False,
-                 algebraic_residual: bool = True, ams_reuse_hierarchy: bool = False):
+                 algebraic_residual: bool = True, ams_reuse_hierarchy: bool = False,
+                 split_jacobian: bool = True):
         """``source_cf`` is the vacuum source flux density B_s as a vector CF.
 
         ``zero_source=True`` declares ``source_cf`` identically zero (total-A):
@@ -399,6 +400,8 @@ class ReducedAP1Box:
         if ams_reuse_hierarchy and linear_solver != "ams":
             raise ValueError("ams_reuse_hierarchy requires linear_solver='ams'")
         self.ams_reuse_hierarchy = bool(ams_reuse_hierarchy)
+        # Iterative Newton solves: constant non-iron Jacobian part assembled once.
+        self.split_jacobian = bool(split_jacobian)
         self._algebra_cache = None
         self._residual_vector = None
 
@@ -714,6 +717,64 @@ class ReducedAP1Box:
             J += self.gauge_epsilon * NU0 * ng.InnerProduct(u, v) * ng.dx
         return J
 
+    @staticmethod
+    def _pattern_positions(full, part) -> np.ndarray:
+        """Positions of the entries of sparse matrix ``part`` inside ``full``'s pattern."""
+        def keys(matrix):
+            _, columns, offsets = matrix.CSR()
+            columns = np.asarray(columns, dtype=np.int64)
+            offsets = np.asarray(offsets, dtype=np.int64)
+            rows = np.repeat(np.arange(len(offsets) - 1, dtype=np.int64), np.diff(offsets))
+            return rows * np.int64(matrix.width) + columns
+        full_keys, part_keys = keys(full), keys(part)
+        if np.any(np.diff(full_keys) <= 0):
+            raise RuntimeError("Jacobian pattern is not sorted row-major")
+        positions = np.searchsorted(full_keys, part_keys)
+        if (np.any(positions >= len(full_keys))
+                or not np.array_equal(full_keys[np.minimum(positions, len(full_keys) - 1)], part_keys)):
+            raise RuntimeError("split Jacobian part has entries outside the full pattern")
+        return positions
+
+    def _split_jacobian(self):
+        """Full Jacobian whose constant non-iron part is assembled once.
+
+        Only nu and the Newton rank-one term in the iron change between Newton
+        steps; the non-iron nu0 curl-curl part and the gauge mass do not. Their
+        values are assembled once and mapped into the full pattern; each step
+        reassembles only the iron form and adds it. Returns the full form and
+        a callable that refreshes its matrix values for the current state.
+        """
+        u, v = self.fes.TnT()
+        # The constant form spans every element (its coefficient is a
+        # GridFunction that is zero on iron, so it cannot be simplified away),
+        # hence its matrix has the full Jacobian pattern and is reused as the
+        # Jacobian itself; no full assembly is spent on the pattern.
+        nu_constant = ng.GridFunction(self.nu_space)
+        nu_constant.vec.FV().NumPy()[:] = NU0
+        nu_constant.vec.FV().NumPy()[self.iron_numbers] = 0.0
+        full = ng.BilinearForm(self.fes, symmetric=True)
+        full += nu_constant * ng.InnerProduct(ng.curl(u), ng.curl(v)) * ng.dx
+        if self.gauge_epsilon > 0.0:
+            full += self.gauge_epsilon * NU0 * ng.InnerProduct(u, v) * ng.dx
+        bvec = ng.CF(tuple(self._bvec_gfs))
+        iron = ng.BilinearForm(self.fes, symmetric=True)
+        iron += self.nu_gf * ng.InnerProduct(ng.curl(u), ng.curl(v)) * ng.dx("iron")
+        iron += self.q_gf * ng.InnerProduct(bvec, ng.curl(u)) * ng.InnerProduct(bvec, ng.curl(v)) * ng.dx("iron")
+        with ng.TaskManager():
+            full.Assemble()
+            iron.Assemble()
+        base = full.mat.AsVector().FV().NumPy().copy()
+        iron_positions = self._pattern_positions(full.mat, iron.mat)
+
+        def refresh():
+            with ng.TaskManager():
+                iron.Assemble()
+            values = base.copy()
+            values[iron_positions] += iron.mat.AsVector().FV().NumPy()
+            full.mat.AsVector().FV().NumPy()[:] = values
+
+        return full, refresh
+
     # ------------------------------------------------------------------ drivers
     def run_linear(self, mu_r: float, observation: np.ndarray) -> tuple:
         started = time.perf_counter()
@@ -820,14 +881,23 @@ class ReducedAP1Box:
         # The direct cross-check keeps a fresh form per step: the sparse direct
         # factorisation keeps state on the matrix and rejects a reassembled one.
         reuse_jacobian = self.linear_solver != "direct"
-        J = self._jacobian() if reuse_jacobian else None
+        J, refresh_jacobian = None, None
+        if reuse_jacobian and self.split_jacobian:
+            t0 = time.perf_counter()
+            J, refresh_jacobian = self._split_jacobian()
+            self.timing["jacobian_split_setup"] = time.perf_counter() - t0
+        elif reuse_jacobian:
+            J = self._jacobian()
         for iteration in range(1, int(max_iterations) + 1):
             entry = {"iteration": iteration, "residual_relative": residual_norm / residual_0}
             t0 = time.perf_counter()
-            if not reuse_jacobian:
-                J = self._jacobian()
-            with ng.TaskManager():
-                J.Assemble()
+            if refresh_jacobian is not None:
+                refresh_jacobian()
+            else:
+                if not reuse_jacobian:
+                    J = self._jacobian()
+                with ng.TaskManager():
+                    J.Assemble()
             entry["assemble_s"] = time.perf_counter() - t0
             negative = residual_vec.CreateVector()
             negative.data = -1.0 * residual_vec
@@ -1120,6 +1190,9 @@ def main() -> None:
     parser.add_argument("--ams-reuse-hierarchy", action="store_true",
                         help="AMS Update keeps the first AMG coarsening/interpolation and refreshes "
                              "only the Galerkin coarse matrices (frozen interpolation)")
+    parser.add_argument("--full-jacobian", action="store_true",
+                        help="reassemble the whole Newton Jacobian every step "
+                             "(default: constant non-iron part once, iron part per step)")
     parser.add_argument("--legacy-residual", action="store_true",
                         help="assemble the Newton residual and element flux as forms on every call "
                              "(default: sparse products with the element curl, built once)")
@@ -1248,7 +1321,8 @@ def run(options) -> dict:
         ams_project_gradients=options.ams_project_gradients,
         ams_beta_zero=options.ams_beta_zero,
         algebraic_residual=not options.legacy_residual,
-        ams_reuse_hierarchy=options.ams_reuse_hierarchy)
+        ams_reuse_hierarchy=options.ams_reuse_hierarchy,
+        split_jacobian=not options.full_jacobian)
 
     def run_potential_engine(name, engine, extra=None):
         if not nonlinear:
