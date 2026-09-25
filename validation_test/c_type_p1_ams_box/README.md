@@ -297,6 +297,8 @@ A-phi current + engine setup (mesh load excluded).
 | `radia.p1_newton`, one-pass setup | tight | 22.7 | 25.3 | 11 | 114 |
 | `radia.p1_newton`, native iron Jacobian | loose | 13.0 | 15.7 | 7 | 64 |
 | `radia.p1_newton`, native iron Jacobian | tight | 19.2 | 21.9 | 11 | 114 |
+| `radia.p1_newton`, native trial residual | loose | 11.8 | 14.5 | 7 | 64 |
+| `radia.p1_newton`, native trial residual | tight | 17.3 | 20.0 | 11 | 114 |
 
 Beta-zero loose repeated: 31.8, 30.9, 31.8 s end-to-end; with the frozen
 hierarchy 30.1, 30.1, 30.3 s (AMS update 1.1 s -> 0.77 s, CG iterations
@@ -322,8 +324,12 @@ positions; records `*_onepass_*`) the one-off setup takes 0.9 s instead of
 unchanged. With the native iron Jacobian refresh (`LowestOrderCurlJacobian`:
 only the rows the iron touches, gathered per row; records `*_nativejac_*`)
 the Jacobian costs 0.03 s per Newton step instead of 0.34 s; end-to-end
-15.6, 16.4, 15.7 s loose and 21.9 s tight, counts and field unchanged. All
-with `--inexact-linear`; single host, single problem.
+15.6, 16.4, 15.7 s loose and 21.9 s tight, counts and field unchanged. With
+the native trial evaluation (`LowestOrderCurlResidual`: element curl, iron
+flux, law interpolation and residual in one pass; records `*_nativeres_*`) a
+Newton or line-search trial costs 0.045 s instead of 0.21 s (line search 1.6
+s -> 0.4 s); end-to-end 14.4, 14.5, 14.5 s loose and 20.0 s tight, counts and
+field unchanged. All with `--inexact-linear`; single host, single problem.
 
 ## Results (LAB, 2026-09-22, uncontended sequential runs, 8 threads)
 
