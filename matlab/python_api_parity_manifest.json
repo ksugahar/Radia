@@ -536,6 +536,14 @@
       "notes": "Impressed DC current of a closed meshed conductor (mixed RT0/P0 and the A-phi potential with one cut), the source of meshed-coil total-A solves. Batch only: the current is a GridFunction on the conductor mesh."
     },
     {
+      "id": "first-order-nonlinear-newton",
+      "patterns": ["p1_newton.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/p1Newton.m"],
+      "notes": "Lowest-order Nedelec nonlinear magnetostatic Newton (reduced or total A, closed-form iron Jacobian, AMS/IC/direct inner solves). Batch only: the mesh, the A GridFunction and the field CoefficientFunctions stay on the Python side."
+    },
+    {
       "id": "surface-impedance-corner-patch",
       "patterns": ["sibc_corner_patch.py"],
       "classification": "python-fallback",

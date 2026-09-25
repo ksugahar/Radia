@@ -5,7 +5,7 @@ Compact AMS preconditioners for HCurl eddy-current problems,
 and COCR/GMRES Krylov solvers.
 """
 
-from ngsolve import BaseMatrix, BaseVector, BitArray
+from ngsolve import BaseMatrix, BaseVector, BitArray, FESpace
 
 __all__ = [
     "SparseSolvResult",
@@ -408,6 +408,20 @@ class CompactAMSPreconditionerImpl(BaseMatrix):
                      If None, rebuilds using the current matrix.
         """
         ...
+
+def TaskManagerActive() -> bool:
+    """True inside an ngsolve.TaskManager context (where AMS setup refuses to run)."""
+    ...
+
+
+def LowestOrderGradient(fes: FESpace) -> BaseMatrix:
+    """Discrete gradient H1(order 1) -> lowest-order HCurl from the edge table.
+
+    Equals ``fes.CreateGradient()[0]`` for ``HCurl(order=1, nograds=True)``
+    (or order 0); raises for any other dof layout.
+    """
+    ...
+
 
 def CompactAMSPreconditioner(
     mat: BaseMatrix,
