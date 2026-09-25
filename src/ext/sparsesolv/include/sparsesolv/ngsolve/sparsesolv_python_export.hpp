@@ -13,6 +13,7 @@
 #include "sparsesolv_precond.hpp"
 #include "sparsesolv_solvers.hpp"
 #include <comp.hpp>
+#include <atomic>
 #include <type_traits>
 
 // Compact AMG/AMS (TaskManager-based, no external dependency)
@@ -370,6 +371,58 @@ num_smooth : int
   Smoother sweeps per level (default=1).
 print_level : int
   Verbosity (0=silent, default=0).
+)raw_string");
+
+  m.def("TaskManagerActive", []() { return ngcore::GetTaskManager() != nullptr; },
+    "True inside an ngsolve.TaskManager context: AMS construction and Update refuse to run there.");
+
+  m.def("LowestOrderGradient",
+    [](shared_ptr<ngcomp::FESpace> fes) -> shared_ptr<BaseMatrix>
+    {
+      // Discrete gradient H1(order 1) -> lowest-order HCurl straight from the
+      // mesh edge table: row e holds -1 / +1 at the edge's first / second
+      // vertex, exactly as FESpace.CreateGradient() for this space.
+      auto ma = fes->GetMeshAccess();
+      const size_t nedge = ma->GetNEdges();
+      const size_t nv = ma->GetNV();
+      if (fes->GetNDof() != nedge)
+        throw py::value_error("LowestOrderGradient: needs one HCurl dof per edge "
+                              "(HCurl(order=1, nograds=True) or order=0)");
+      std::atomic<size_t> mismatched{0};
+      ParallelFor(nedge, [&](size_t e) {
+        Array<ngcomp::DofId> dnums;
+        fes->GetDofNrs(ngfem::NodeId(ngfem::NT_EDGE, e), dnums);
+        if (dnums.Size() != 1 || size_t(dnums[0]) != e) mismatched++;
+      });
+      if (mismatched)
+        throw py::value_error("LowestOrderGradient: HCurl dofs are not numbered by edge ("
+                              + std::to_string(mismatched.load()) + " edges differ)");
+      Array<int> counts(nedge);
+      counts = 2;
+      auto gradient = make_shared<SparseMatrix<double>>(counts, int(nv));
+      ParallelFor(nedge, [&](size_t e) {
+        auto pnums = ma->GetEdgePNums(e);
+        const int first = pnums[0], second = pnums[1];
+        auto columns = gradient->GetRowIndices(e);
+        auto values = gradient->GetRowValues(e);
+        if (first < second) {
+          columns[0] = first;  values[0] = -1.0;
+          columns[1] = second; values[1] = 1.0;
+        } else {
+          columns[0] = second; values[0] = 1.0;
+          columns[1] = first;  values[1] = -1.0;
+        }
+      });
+      return gradient;
+    },
+    py::arg("fes"),
+    R"raw_string(
+Discrete gradient of the vertex space into a lowest-order HCurl space.
+
+Built directly from the mesh edge table in parallel; the matrix equals the
+first return value of fes.CreateGradient() for HCurl(order=1, nograds=True)
+(or order=0). Fails for any space whose dofs are not one per edge in edge
+order.
 )raw_string");
 
   m.def("HypreBasedAMSPreconditioner",

@@ -109,6 +109,29 @@ def test_reused_ams_hierarchy_refreshes_and_still_converges(beta_zero):
     assert iterations["reused"] <= 2 * iterations["fresh"] + 5, iterations
 
 
+def test_lowest_order_gradient_equals_create_gradient():
+    import numpy as np
+    from radia.sparsesolv_ngsolve import LowestOrderGradient
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.3))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet=".*")
+    reference, _ = space.CreateGradient()
+    with TaskManager():
+        fast = LowestOrderGradient(space)
+    assert (fast.height, fast.width) == (reference.height, reference.width)
+    for a, b in zip(reference.CSR(), fast.CSR()):
+        np.testing.assert_array_equal(np.asarray(a), np.asarray(b))
+    with pytest.raises(Exception, match="one HCurl dof per edge"):
+        LowestOrderGradient(HCurl(mesh, order=1))
+
+
+def test_taskmanager_active_reports_the_parallel_region():
+    from radia.sparsesolv_ngsolve import TaskManagerActive
+    assert TaskManagerActive() is False
+    with TaskManager():
+        assert TaskManagerActive() is True
+    assert TaskManagerActive() is False
+
+
 @pytest.mark.parametrize("factory", [
     "HypreBasedAMSPreconditioner", "CompactAMSPreconditioner",
     "ComplexHypreBasedAMSPreconditioner", "ComplexCompactAMSPreconditioner",
