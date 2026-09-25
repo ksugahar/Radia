@@ -47,7 +47,8 @@ NU0 = 1.0 / MU0
 def _sparsesolv():
     import radia.sparsesolv_ngsolve as ssn
 
-    for name in ("LowestOrderGradient", "LowestOrderCurlSystem", "HypreBasedAMSPreconditioner",
+    for name in ("LowestOrderGradient", "LowestOrderCurlSystem", "LowestOrderCurlJacobian",
+                 "HypreBasedAMSPreconditioner",
                  "TaskManagerActive"):
         if not hasattr(ssn, name):
             raise RuntimeError(f"radia.sparsesolv_ngsolve lacks {name}; rebuild the native module")
@@ -171,24 +172,17 @@ class IronJacobian:
                     and np.array_equal(np.asarray(offsets), np.asarray(mass_offsets))):
                 raise RuntimeError("gauge mass pattern differs from the element graph")
             values += np.asarray(mass_values)
-        self._base = values.copy()
-        dofs, self._curl = curl.element_coefficients(iron)
-        self._volume = curl.volume[iron]
-        self._positions = curl.positions[iron].ravel().astype(np.int64)
-        self._eye = np.eye(3)
+        # The native refresh saves the constant part of every row the iron
+        # touches and rewrites those rows per Newton step, gathered row by row
+        # (exactly symmetric, as the SPD direct factorisation requires).
+        dofs, coefficients = curl.element_coefficients(iron)
+        self._native = _sparsesolv().LowestOrderCurlJacobian(
+            self.matrix, dofs, coefficients, curl.volume[iron], curl.positions[iron])
 
     def refresh(self, nu: np.ndarray, q: np.ndarray, b: np.ndarray) -> None:
         """Write the Jacobian for iron reluctivity ``nu``, rank-one ``q`` and flux ``b``."""
-        tangent = nu[:, None, None] * self._eye + q[:, None, None] * b[:, :, None] * b[:, None, :]
-        element = np.einsum("nki,nkj->nij", self._curl, np.einsum("nkl,nlj->nkj", tangent, self._curl))
-        element *= self._volume[:, None, None]
-        # Exactly symmetric element matrices keep the full-storage matrix exactly
-        # symmetric (entries (i, j) and (j, i) sum the same values in the same
-        # element order); the SPD direct factorisation relies on that.
-        element = 0.5 * (element + element.transpose(0, 2, 1))
-        added = np.bincount(self._positions, weights=element.reshape(len(nu), 36).ravel(),
-                            minlength=self._base.size)
-        self.matrix.AsVector().FV().NumPy()[:] = self._base + added
+        self._native.Refresh(np.ascontiguousarray(nu, dtype=float), np.ascontiguousarray(q, dtype=float),
+                             np.ascontiguousarray(b, dtype=float))
 
 
 class _TrueResidualCG(CGSolver):

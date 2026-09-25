@@ -703,7 +703,8 @@ class ReducedAP1Box:
             nu = self.nu_gf.vec.FV().NumPy()[iron]
             q = self.q_gf.vec.FV().NumPy()[iron]
             b = np.stack([gf.vec.FV().NumPy()[iron] for gf in self._bvec_gfs], axis=1)
-            jacobian.refresh(nu, q, b)
+            with ng.TaskManager():  # the native refresh runs in parallel
+                jacobian.refresh(nu, q, b)
 
         return SimpleNamespace(mat=jacobian.matrix), refresh
 
