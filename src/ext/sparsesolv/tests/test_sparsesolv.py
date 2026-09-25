@@ -174,6 +174,52 @@ def test_lowest_order_gradient_equals_create_gradient():
         LowestOrderGradient(HCurl(mesh, order=1))
 
 
+def test_lowest_order_curl_system_matches_form_assembly():
+    import numpy as np
+    from radia.sparsesolv_ngsolve import LowestOrderCurlSystem
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.25))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet=".*")
+    coefficient = np.random.default_rng(7).uniform(0.5, 2.0, mesh.ne)
+    with TaskManager():
+        system = LowestOrderCurlSystem(space, coefficient=coefficient)
+    dofs, curl_e, volume, pos = (system[k] for k in ("dofs", "curl", "volume", "positions"))
+    assert dofs.shape == (mesh.ne, 6) and np.all(np.diff(dofs, axis=1) > 0)
+    reference_volume = np.asarray(Integrate(CoefficientFunction(1.0), mesh, VOL, element_wise=True))
+    np.testing.assert_allclose(volume, reference_volume, rtol=1e-13)
+    # Element curl of a random field equals NGSolve's element mean of curl(u).
+    u = GridFunction(space)
+    u.vec.FV().NumPy()[:] = np.random.default_rng(8).normal(size=space.ndof)
+    mean = np.stack([np.asarray(Integrate(curl(u)[k], mesh, VOL, element_wise=True)) for k in range(3)],
+                    axis=1) / reference_volume[:, None]
+    ours = np.einsum("nkj,nj->nk", curl_e, u.vec.FV().NumPy()[dofs])
+    np.testing.assert_allclose(ours, mean, rtol=0, atol=1e-12 * np.max(np.abs(mean)))
+    # The matrix is the curl-curl form with the element coefficient, on its exact pattern.
+    nu = GridFunction(L2(mesh, order=0))
+    nu.vec.FV().NumPy()[:] = coefficient
+    trial, test = space.TnT()
+    form = BilinearForm(space, symmetric=True)
+    form += nu * curl(trial) * curl(test) * dx
+    form.Assemble()
+    fv, fc, fo = (np.asarray(x) for x in form.mat.CSR())
+    sv, sc, so = (np.asarray(x) for x in system["matrix"].CSR())
+    np.testing.assert_array_equal(sc, fc)
+    np.testing.assert_array_equal(so, fo)
+    np.testing.assert_allclose(sv, fv, rtol=0, atol=1e-13 * np.max(np.abs(fv)))
+    rows = np.repeat(np.arange(len(so) - 1), np.diff(so.astype(np.int64)))
+    assert np.array_equal(rows[pos[:, 7]], dofs[:, 1]) and np.array_equal(sc[pos[:, 7]], dofs[:, 1])
+    assert np.array_equal(rows[pos[:, 11]], dofs[:, 1]) and np.array_equal(sc[pos[:, 11]], dofs[:, 5])
+    # Exactly symmetric: (i, j) and (j, i) hold the same bits.
+    transpose = pos.reshape(-1, 6, 6).transpose(0, 2, 1).reshape(-1, 36)
+    assert np.array_equal(sv[pos], sv[transpose])
+    with TaskManager():
+        empty = LowestOrderCurlSystem(space)
+    assert not np.any(np.asarray(empty["matrix"].CSR()[0]))
+    with pytest.raises(Exception, match="six regular"):
+        LowestOrderCurlSystem(HCurl(mesh, order=1))
+    with pytest.raises(Exception, match="one value per element"):
+        LowestOrderCurlSystem(space, coefficient=np.ones(3))
+
+
 def test_taskmanager_active_reports_the_parallel_region():
     from radia.sparsesolv_ngsolve import TaskManagerActive
     assert TaskManagerActive() is False

@@ -11,10 +11,13 @@ function is constant per element, so
   element mean of B_s projected once to discontinuous order ``p`` on the iron;
 * the reluctivity is the exact inverse of the shared PCHIP law at that element
   flux (``_build_nu_of_b_interpolator``), sampled on a dense grid;
-* the residual and the element flux are sparse products with a discrete element
-  curl built once (:class:`ElementCurl`); the Newton Jacobian is a constant
-  form assembled once plus closed-form iron element matrices
-  ``vol_e C_e^T (nu_e I + q_e b_e b_e^T) C_e`` (:class:`IronJacobian`).
+* one native pass over the elements (:class:`ElementCurl`) gives the element
+  dofs, the element-constant curl ``C_e`` of the space's basis, the volumes,
+  the element-graph matrix with the Jacobian's constant part (nu0 curl-curl off
+  the iron) and every element's matrix positions; the residual and the element
+  flux are gathers and scatters with ``C_e``, and the Newton Jacobian adds the
+  closed-form iron element matrices ``vol_e C_e^T (nu_e I + q_e b_e b_e^T) C_e``
+  at those positions (:class:`IronJacobian`).
 
 Linear solves: compiled AMS + CG to a true relative residual (default,
 ``beta_zero`` on the ungauged compatible system, frozen AMG hierarchy across
@@ -44,7 +47,8 @@ NU0 = 1.0 / MU0
 def _sparsesolv():
     import radia.sparsesolv_ngsolve as ssn
 
-    for name in ("LowestOrderGradient", "HypreBasedAMSPreconditioner", "TaskManagerActive"):
+    for name in ("LowestOrderGradient", "LowestOrderCurlSystem", "HypreBasedAMSPreconditioner",
+                 "TaskManagerActive"):
         if not hasattr(ssn, name):
             raise RuntimeError(f"radia.sparsesolv_ngsolve lacks {name}; rebuild the native module")
     return ssn
@@ -88,115 +92,89 @@ class FluxSideLaw:
         return np.interp(magnitude, self._grid, self._dhdb)
 
 
-class ElementCurl:
-    """Discrete element curl of a lowest-order Nedelec space, built once.
+def constant_reluctivity(ne: int, iron: np.ndarray) -> np.ndarray:
+    """Element reluctivity of the Newton Jacobian's constant part: nu0 off the iron, 0 on it."""
+    values = np.full(int(ne), NU0)
+    values[np.asarray(iron, dtype=np.int64)] = 0.0
+    return values
 
-    ``B_k[e, i] = int_e curl(phi_i)_k psi_e`` with ``psi_e`` the order-zero L2
-    function of element ``e``; the element curl of ``A`` is ``(B_k A) / w`` and
-    ``int_e f . curl v = sum_k B_k^T (vol_e / w_e f_k)`` for element-constant f.
+
+class ElementCurl:
+    """Element data of a lowest-order Nedelec space, from one native pass.
+
+    ``LowestOrderCurlSystem`` evaluates, per straight tetrahedron, the six dofs
+    (ascending), the element-constant curl ``C_e`` (3 x 6) of the space's own
+    basis and the volume, and builds the element-graph matrix with each
+    element's 36 value positions. With ``constant_reluctivity`` (one value per
+    element) that matrix already holds ``sum_e c_e vol_e C_e^T C_e`` -- the
+    Newton Jacobian's constant part, taken over by :class:`IronJacobian`.
+
+    The element curl of ``A`` is ``C_e A[dofs_e]``; ``int_e f . curl v`` for an
+    element-constant f is ``vol_e C_e^T f_e`` (``weight`` = ``volume``, the
+    integral of the order-zero L2 function).
     """
 
-    def __init__(self, fes):
-        from scipy.sparse import csr_matrix
-
-        mesh = fes.mesh
-        scalar = ng.L2(mesh, order=0)
-        if scalar.ndof != mesh.ne or scalar.GetDofNrs(ng.ElementId(ng.VOL, mesh.ne - 1))[0] != mesh.ne - 1:
-            raise RuntimeError("unexpected order-0 L2 dof layout")
-        u, w = fes.TrialFunction(), scalar.TestFunction()
-        weight_form = ng.LinearForm(scalar)
-        weight_form += w * ng.dx
-        self.curl, self.curl_t = [], []
-        weight_form.Assemble()
-        for k in range(3):
-            form = ng.BilinearForm(trialspace=fes, testspace=scalar)
-            form += ng.curl(u)[k] * w * ng.dx
-            form.Assemble()
-            values, columns, offsets = form.mat.CSR()
-            matrix = csr_matrix((np.array(values), np.array(columns), np.array(offsets)),
-                                shape=(scalar.ndof, fes.ndof))
-            self.curl.append(matrix)
-            self.curl_t.append(matrix.T.tocsr())
-        self.weight = weight_form.vec.FV().NumPy().copy()
-        if np.any(self.weight <= 0.0):
-            raise RuntimeError("non-positive order-zero L2 weights")
-        self.volume = np.asarray(ng.Integrate(ng.CF(1.0), mesh, ng.VOL, element_wise=True), dtype=float)
+    def __init__(self, fes, *, constant_reluctivity=None):
+        system = _sparsesolv().LowestOrderCurlSystem(fes, coefficient=constant_reluctivity)
+        self.ndof = int(fes.ndof)
+        self.dofs = system["dofs"]
+        self.coefficients = system["curl"]
+        self.volume = system["volume"]
+        self.weight = self.volume
+        if np.any(self.volume <= 0.0):
+            raise RuntimeError("non-positive element volumes")
+        self.matrix = system["matrix"]
+        self.positions = system["positions"]
+        self.constant_reluctivity = (None if constant_reluctivity is None
+                                     else np.asarray(constant_reluctivity, dtype=float).copy())
 
     def of(self, coefficients: np.ndarray) -> np.ndarray:
         """Element curl (ne, 3) of the coefficient vector."""
-        return np.stack([matrix @ coefficients for matrix in self.curl], axis=1) / self.weight[:, None]
+        return np.einsum("nkj,nj->nk", self.coefficients, coefficients[self.dofs])
 
     def pull_back(self, loads: np.ndarray) -> np.ndarray:
-        """``sum_k B_k^T loads[:, k]`` (loads already carry vol / w factors)."""
-        values = self.curl_t[0] @ loads[:, 0]
-        values += self.curl_t[1] @ loads[:, 1]
-        values += self.curl_t[2] @ loads[:, 2]
-        return values
+        """``sum_e w_e C_e^T loads_e`` (loads already carry vol / w factors)."""
+        weights = np.einsum("nkj,nk->nj", self.coefficients, loads) * self.weight[:, None]
+        return np.bincount(self.dofs.ravel(), weights=weights.ravel(), minlength=self.ndof)
 
     def element_coefficients(self, elements: np.ndarray):
         """Sorted edge dofs (n, 6) and curl coefficients (n, 3, 6) of the given tets."""
-        dofs, coefficients = None, []
-        for matrix in self.curl:
-            rows = matrix[elements]
-            if not np.all(np.diff(rows.indptr) == 6):
-                raise RuntimeError("expected six edge dofs per tetrahedron")
-            columns = rows.indices.reshape(-1, 6)
-            values = rows.data.reshape(-1, 6)
-            order = np.argsort(columns, axis=1)
-            columns = np.take_along_axis(columns, order, axis=1)
-            values = np.take_along_axis(values, order, axis=1)
-            if dofs is None:
-                dofs = columns
-            elif not np.array_equal(dofs, columns):
-                raise RuntimeError("element curl components disagree on the element dofs")
-            coefficients.append(values)
-        return dofs, np.stack(coefficients, axis=1) / self.weight[elements, None, None]
+        return self.dofs[elements], self.coefficients[elements]
 
 
 class IronJacobian:
     """Newton Jacobian: constant part once, iron element matrices in closed form.
 
-    The constant part (nu0 curl-curl off the iron, gauge mass) is one form over
-    every element -- its coefficient is a GridFunction that is zero on the iron,
-    so it is not simplified away -- whose matrix carries the full pattern and is
-    the Jacobian matrix. :meth:`refresh` adds ``vol_e C_e^T (nu_e I + q_e b_e
-    b_e^T) C_e`` for every iron element at pattern positions computed once.
+    The matrix is the element-graph matrix of ``curl`` (built with
+    :func:`constant_reluctivity`, so it holds nu0 curl-curl off the iron), plus
+    the gauge mass when ``gauge_coefficient`` > 0. :meth:`refresh` adds
+    ``vol_e C_e^T (nu_e I + q_e b_e b_e^T) C_e`` for every iron element at the
+    element positions of the same pass.
     """
 
     def __init__(self, fes, curl: ElementCurl, iron: np.ndarray, gauge_coefficient: float):
-        u, v = fes.TnT()
-        nu_space = ng.L2(fes.mesh, order=0)
-        nu_constant = ng.GridFunction(nu_space)
-        nu_constant.vec.FV().NumPy()[:] = NU0
-        nu_constant.vec.FV().NumPy()[iron] = 0.0
-        form = ng.BilinearForm(fes, symmetric=True)
-        form += nu_constant * ng.InnerProduct(ng.curl(u), ng.curl(v)) * ng.dx
+        iron = np.asarray(iron, dtype=np.int64)
+        expected = constant_reluctivity(len(curl.volume), iron)
+        if curl.constant_reluctivity is None or not np.array_equal(curl.constant_reluctivity, expected):
+            raise ValueError("IronJacobian needs ElementCurl(fes, constant_reluctivity="
+                             "constant_reluctivity(mesh.ne, iron))")
+        self.matrix = curl.matrix
+        values = self.matrix.AsVector().FV().NumPy()
         if gauge_coefficient > 0.0:
-            form += gauge_coefficient * ng.InnerProduct(u, v) * ng.dx
-        form.Assemble()
-        self.form = form
-        self.matrix = form.mat
-        self._base = form.mat.AsVector().FV().NumPy().copy()
+            u, v = fes.TnT()
+            mass = ng.BilinearForm(fes, symmetric=True)
+            mass += gauge_coefficient * ng.InnerProduct(u, v) * ng.dx
+            mass.Assemble()
+            _, columns, offsets = self.matrix.CSR()
+            mass_values, mass_columns, mass_offsets = mass.mat.CSR()
+            if not (np.array_equal(np.asarray(columns), np.asarray(mass_columns))
+                    and np.array_equal(np.asarray(offsets), np.asarray(mass_offsets))):
+                raise RuntimeError("gauge mass pattern differs from the element graph")
+            values += np.asarray(mass_values)
+        self._base = values.copy()
         dofs, self._curl = curl.element_coefficients(iron)
         self._volume = curl.volume[iron]
-        _, columns, offsets = form.mat.CSR()
-        columns = np.asarray(columns, dtype=np.int64)
-        offsets = np.asarray(offsets, dtype=np.int64)
-        width = np.int64(form.mat.width)
-        rows = np.repeat(np.arange(len(offsets) - 1, dtype=np.int64), np.diff(offsets))
-        keys = rows * width + columns
-        if np.any(np.diff(keys) <= 0):
-            raise RuntimeError("Jacobian pattern is not sorted row-major")
-        lower_only = not np.any(columns > rows)
-        pair_rows = np.repeat(dofs, 6, axis=1).ravel()
-        pair_columns = np.tile(dofs, (1, 6)).ravel()
-        self._keep = (pair_columns <= pair_rows) if lower_only else np.ones(pair_rows.size, dtype=bool)
-        wanted = pair_rows[self._keep] * width + pair_columns[self._keep]
-        positions = np.searchsorted(keys, wanted)
-        if (np.any(positions >= len(keys))
-                or not np.array_equal(keys[np.minimum(positions, len(keys) - 1)], wanted)):
-            raise RuntimeError("iron element entries fall outside the Jacobian pattern")
-        self._positions = positions
+        self._positions = curl.positions[iron].ravel().astype(np.int64)
         self._eye = np.eye(3)
 
     def refresh(self, nu: np.ndarray, q: np.ndarray, b: np.ndarray) -> None:
@@ -208,7 +186,7 @@ class IronJacobian:
         # symmetric (entries (i, j) and (j, i) sum the same values in the same
         # element order); the SPD direct factorisation relies on that.
         element = 0.5 * (element + element.transpose(0, 2, 1))
-        added = np.bincount(self._positions, weights=element.reshape(len(nu), 36).ravel()[self._keep],
+        added = np.bincount(self._positions, weights=element.reshape(len(nu), 36).ravel(),
                             minlength=self._base.size)
         self.matrix.AsVector().FV().NumPy()[:] = self._base + added
 
@@ -313,8 +291,8 @@ def solve_p1_newton(mesh, bh_table, *, iron=("iron",), source_cf=None, current_c
     free = np.fromiter(fes.FreeDofs(), dtype=bool, count=fes.ndof)
     with ng.TaskManager():
         t0 = time.perf_counter()
-        curl = ElementCurl(fes)
-        timing["element_curl_s"] = time.perf_counter() - t0
+        curl = ElementCurl(fes, constant_reluctivity=constant_reluctivity(mesh.ne, iron_numbers))
+        timing["element_system_s"] = time.perf_counter() - t0
         t0 = time.perf_counter()
         gradient = lowest_order_gradient(fes)
         timing["gradient_s"] = time.perf_counter() - t0

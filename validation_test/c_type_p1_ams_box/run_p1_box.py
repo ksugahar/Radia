@@ -41,6 +41,7 @@ import math
 import platform
 import sys
 import time
+from types import SimpleNamespace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -72,6 +73,7 @@ from radia.p1_newton import (  # noqa: E402
     ElementCurl,
     FluxSideLaw,
     IronJacobian,
+    constant_reluctivity,
     lowest_order_gradient,
 )
 
@@ -535,11 +537,11 @@ class ReducedAP1Box:
     def _algebra(self) -> dict:
         """Operators for residual and element flux without per-call form assembly.
 
-        The curl of a lowest-order Nedelec function is constant per element, so
-        the element curl is ``(B_k A) / w`` with ``B_k[e, i] = int_e curl(phi_i)_k
-        psi_e`` (``psi_e`` the order-zero L2 function of element e, ``w_e = int_e
-        psi_e``), and ``int_e nu curl A . curl v = nu_e vol_e curlA_e . curlv_e``.
-        Built once; every later evaluation is sparse matrix-vector products.
+        The curl of a lowest-order Nedelec function is constant per element
+        (``C_e``, from the production one-pass :class:`radia.p1_newton.ElementCurl`),
+        and ``int_e nu curl A . curl v = nu_e vol_e curlA_e . curlv_e``. Built
+        once; every later evaluation is a gather/scatter with ``C_e``. The same
+        pass carries the Newton Jacobian's constant part (see ``_split_jacobian``).
         """
         if self._algebra_cache is not None:
             return self._algebra_cache
@@ -548,11 +550,11 @@ class ReducedAP1Box:
         started = time.perf_counter()
         mesh = self.mesh
         with ng.TaskManager():
-            element_curl = ElementCurl(self.fes)  # production operator (radia.p1_newton)
+            element_curl = ElementCurl(  # production operator (radia.p1_newton)
+                self.fes, constant_reluctivity=constant_reluctivity(mesh.ne, self.iron_numbers))
         weights = element_curl.weight
-        algebra = {"element_curl": element_curl, "curl": element_curl.curl,
-                   "curl_t": element_curl.curl_t, "weight": weights,
-                   "scale": self.volumes / weights ** 2, "mass": None, "constant": None,
+        algebra = {"element_curl": element_curl, "weight": weights,
+                   "scale": self.volumes / weights, "mass": None, "constant": None,
                    "source_mean": None}
         if self.gauge_epsilon > 0.0:
             a, b = self.fes.TnT()
@@ -584,9 +586,7 @@ class ReducedAP1Box:
 
     def _element_curl(self, solution) -> np.ndarray:
         algebra = self._algebra()
-        coefficients = solution.vec.FV().NumPy()
-        return np.stack([matrix @ coefficients for matrix in algebra["curl"]], axis=1) \
-            / algebra["weight"][:, None]
+        return algebra["element_curl"].of(solution.vec.FV().NumPy())
 
     # ------------------------------------------------------------------ material state
     def _element_flux(self, solution) -> tuple[np.ndarray, np.ndarray]:
@@ -640,14 +640,12 @@ class ReducedAP1Box:
             algebra = self._algebra()
             coefficients = solution.vec.FV().NumPy()
             nu = self.nu_gf.vec.FV().NumPy()
-            values = np.zeros(self.fes.ndof)
             iron = self.iron_numbers
-            for k in range(3):
-                load = nu * algebra["scale"] * (algebra["curl"][k] @ coefficients)
-                if algebra["source_mean"] is not None:
-                    load[iron] += ((nu[iron] - NU0) * (self.volumes[iron] / algebra["weight"][iron])
-                                   * algebra["source_mean"][:, k])
-                values += algebra["curl_t"][k] @ load
+            loads = (nu * algebra["scale"])[:, None] * algebra["element_curl"].of(coefficients)
+            if algebra["source_mean"] is not None:
+                loads[iron] += ((nu[iron] - NU0) * (self.volumes[iron] / algebra["weight"][iron]))[:, None] \
+                    * algebra["source_mean"]
+            values = algebra["element_curl"].pull_back(loads)
             if algebra["mass"] is not None:
                 values += algebra["mass"] @ coefficients
             if algebra["constant"] is not None:
@@ -685,10 +683,9 @@ class ReducedAP1Box:
 
         Only nu and the rank-one tangent term change between Newton steps, and
         only in the iron. The constant part (nu0 curl-curl off the iron and the
-        gauge mass) is one form spanning every element -- its coefficient is a
-        GridFunction that is zero on the iron, so the form cannot be simplified
-        away -- whose matrix carries the full pattern and serves as the
-        Jacobian. Curl is constant per lowest-order Nedelec element, so an iron
+        gauge mass) is the element-graph matrix of the same native pass that
+        gives the element curl, and it serves as the Jacobian (returned as an
+        object with ``.mat``, like a form). Curl is constant per lowest-order Nedelec element, so an iron
         element matrix is ``vol_e C_e^T (nu_e I + q_e b_e b_e^T) C_e`` with the
         3x6 element curl coefficients ``C_e`` taken from the discrete element
         curl of ``_algebra``; it is evaluated for all iron elements at once and
@@ -708,7 +705,7 @@ class ReducedAP1Box:
             b = np.stack([gf.vec.FV().NumPy()[iron] for gf in self._bvec_gfs], axis=1)
             jacobian.refresh(nu, q, b)
 
-        return jacobian.form, refresh
+        return SimpleNamespace(mat=jacobian.matrix), refresh
 
     # ------------------------------------------------------------------ drivers
     def run_linear(self, mu_r: float, observation: np.ndarray) -> tuple:
