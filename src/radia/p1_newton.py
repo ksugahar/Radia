@@ -21,7 +21,7 @@ function is constant per element, so
   ``vol_e C_e^T (nu_e I + q_e b_e b_e^T) C_e`` at those positions, natively
   (:class:`IronJacobian`).
 
-Linear solves: compiled AMS + CG to a true relative residual (default,
+Linear solves: native PCG with compiled AMS to a true relative residual (default,
 ``beta_zero`` on the ungauged compatible system, frozen AMG hierarchy across
 Newton steps), compiled shifted IC(0) CG, or the SPD sparse direct solve.
 Inner tolerances follow the nonlinear residual (inexact Newton) but never go
@@ -40,7 +40,6 @@ import time
 
 import numpy as np
 import ngsolve as ng
-from ngsolve.krylovspace import CGSolver
 
 MU0 = 4.0e-7 * math.pi
 NU0 = 1.0 / MU0
@@ -50,7 +49,7 @@ def _sparsesolv():
     import radia.sparsesolv_ngsolve as ssn
 
     for name in ("LowestOrderGradient", "LowestOrderCurlSystem", "LowestOrderCurlJacobian",
-                 "LowestOrderCurlResidual", "HypreBasedAMSPreconditioner",
+                 "LowestOrderCurlResidual", "NativePCG", "HypreBasedAMSPreconditioner",
                  "TaskManagerActive"):
         if not hasattr(ssn, name):
             raise RuntimeError(f"radia.sparsesolv_ngsolve lacks {name}; rebuild the native module")
@@ -200,26 +199,6 @@ class IronJacobian:
         """Write the Jacobian for iron reluctivity ``nu``, rank-one ``q`` and flux ``b``."""
         self._native.Refresh(np.ascontiguousarray(nu, dtype=float), np.ascontiguousarray(q, dtype=float),
                              np.ascontiguousarray(b, dtype=float))
-
-
-class _TrueResidualCG(CGSolver):
-    """NGSolve CG recurrence stopped on the original free-DOF equation."""
-
-    def __init__(self, *, rhs, solution, free, tolerance, **options):
-        super().__init__(tol=tolerance, **options)
-        self._rhs, self._solution, self._free = rhs, solution, free
-        self._tolerance = tolerance
-        self._rhs_norm = max(float(np.linalg.norm(rhs.FV().NumPy()[free])), 1e-300)
-        self._true_residual = rhs.CreateVector()
-
-    def CheckResidual(self, _preconditioned_residual):
-        self.iterations += 1
-        self._true_residual.data = self._rhs - self.mat * self._solution
-        relative = float(np.linalg.norm(self._true_residual.FV().NumPy()[self._free]) / self._rhs_norm)
-        if not math.isfinite(relative):
-            raise RuntimeError("non-finite true CG residual")
-        self.residuals.append(relative)
-        return relative <= self._tolerance or self.iterations >= self.maxiter
 
 
 def _material_numbers(mesh, names) -> np.ndarray:
@@ -408,16 +387,19 @@ def solve_p1_newton(mesh, bh_table, *, iron=("iron",), source_cf=None, current_c
                     coord_x=coordinates[:, 0].tolist(), coord_y=coordinates[:, 1].tolist(),
                     coord_z=coordinates[:, 2].tolist(), cycle_type=1, print_level=0,
                     beta_zero=bool(beta_zero), reuse_hierarchy=bool(reuse_hierarchy))
+                pcg = ssn.NativePCG(jacobian.matrix, ams, fes.FreeDofs())
             else:
                 ams.Update(jacobian.matrix)
             row["preconditioner_s"] = time.perf_counter() - t0
             t0 = time.perf_counter()
-            cg = _TrueResidualCG(mat=jacobian.matrix, pre=ams, maxiter=int(cg_max_iterations),
-                                 rhs=rhs, solution=update, free=free, tolerance=tolerance,
-                                 printrates=False)
+            # Native PCG: one product and one AMS application per iteration,
+            # stopped on the true relative residual (confirmed before stopping).
             with ng.TaskManager():
-                cg.Solve(rhs=rhs, sol=update, initialize=True)
-            row["cg_iterations"] = int(cg.iterations)
+                iterations, _, pcg_converged = pcg.Solve(rhs, update, tolerance, int(cg_max_iterations))
+            row["cg_iterations"] = int(iterations)
+            if not pcg_converged:
+                raise RuntimeError(f"Newton linear solve (ams) did not reach {tolerance:.2e} "
+                                   f"in {cg_max_iterations} CG iterations")
         elif linear_solver == "iccg":
             solver = ssn.SparseSolvSolver(jacobian.matrix, method="ICCG", freedofs=fes.FreeDofs(),
                                           tol=tolerance, maxiter=int(cg_max_iterations),
