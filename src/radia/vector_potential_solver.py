@@ -938,6 +938,51 @@ class VectorPotentialSolver:
 
         return sol
 
+    def solve_nonlinear_newton_p1(self, bh_data, *, dirichlet='default', current_cf=None,
+                                  current_materials=None, observation_points=None,
+                                  **options):
+        """First-order Newton for the B-H law (lowest-order Nedelec, fast path).
+
+        Wraps :func:`radia.p1_newton.solve_p1_newton` for this solver's mesh
+        and iron domains: reduced A with the source set by ``set_source_*``
+        (``B = B_s + curl A``), or total A when ``current_cf`` (A/m^2 on
+        ``current_materials``, e.g. from
+        :func:`radia.meshed_current.solve_closed_coil_current_phi`) is given.
+        The element flux is constant per element and the reluctivity the
+        exact inverse of the shared PCHIP law; see the module for the Jacobian,
+        the linear solvers (``linear_solver='ams'`` beta-zero by default,
+        ``'iccg'``, ``'direct'``) and the stopping rule (``newton_tolerance``,
+        optional ``field_tolerance``). Further keywords go to that function.
+
+        Requires ``order=1`` and no Kelvin region, and must be called
+        **outside** ``ngsolve.TaskManager``: the native AMS setup refuses to run
+        inside one, so this path owns its parallel regions. Raises when it
+        does not converge. Stores A, B, H and the statistics like the other
+        solve methods and returns the A GridFunction.
+        """
+        from radia.p1_newton import solve_p1_newton
+
+        if int(self.order) != 1:
+            raise ValueError("solve_nonlinear_newton_p1 needs VectorPotentialSolver(order=1)")
+        if self._kelvin_region:
+            raise NotImplementedError("solve_nonlinear_newton_p1 supports finite domains only")
+        if current_cf is None and self._B_source_cf is None:
+            raise RuntimeError("Set a source field first, or pass current_cf for total A")
+        if current_cf is not None and self._B_source_cf is not None:
+            raise ValueError("pass current_cf only without a reduced source field")
+        result = solve_p1_newton(
+            self.mesh, bh_data, iron=tuple(self.iron_domains),
+            source_cf=self._B_source_cf if current_cf is None else None,
+            current_cf=current_cf, current_materials=current_materials,
+            dirichlet='.*' if dirichlet == 'default' else dirichlet,
+            observation_points=observation_points, **options)
+        self._A_gf = result["A"]
+        self._B_cf = result["B_cf"]
+        self._H_cf = result["H_cf"]
+        self._last_nonlinear_stats = result["stats"]
+        self._last_p1_newton = result
+        return result["A"]
+
     # ------------------------------------------------------------------
     # Picard nonlinear solver
     # ------------------------------------------------------------------

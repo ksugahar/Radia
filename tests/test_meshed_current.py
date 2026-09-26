@@ -121,6 +121,23 @@ def test_phi_and_mixed_currents_converge_to_one_distribution():
     assert differences[1] < differences[0] < 0.5
 
 
+def test_phi_iterative_default_matches_the_direct_solve(ring):
+    kwargs = dict(current_A=2.0, cut_origin=(1.5, 0.0, 0.5), cut_normal=(0, 1, 0),
+                  cut_radius_m=1.0, materials=("drive", "return"))
+    with ng.TaskManager():
+        default = solve_closed_coil_current_phi(ring, **kwargs)
+        direct = solve_closed_coil_current_phi(ring, inverse="sparsecholesky", **kwargs)
+    assert default["stats"]["inverse"] == "iccg"
+    for a, b in zip(default["components"], direct["components"]):
+        np.testing.assert_allclose(a.vec.FV().NumPy(), b.vec.FV().NumPy(), rtol=0,
+                                   atol=1e-9 * np.max(np.abs(b.vec.FV().NumPy())))
+    # phi is built on first access and is the same potential (one gauged vertex).
+    assert "phi" not in default
+    phi_default, phi_direct = default["phi"].vec.FV().NumPy(), direct["phi"].vec.FV().NumPy()
+    np.testing.assert_allclose(phi_default, phi_direct, rtol=0, atol=1e-9 * np.max(np.abs(phi_direct)))
+    assert default["phi"] is default["phi"]
+
+
 def test_phi_cut_must_cross_and_span_the_conductor(ring):
     # A radius smaller than the unit section's half diagonal cuts only part of it.
     with pytest.raises(ValueError, match="does not span"):

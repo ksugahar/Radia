@@ -5,7 +5,7 @@ Compact AMS preconditioners for HCurl eddy-current problems,
 and COCR/GMRES Krylov solvers.
 """
 
-from ngsolve import BaseMatrix, BaseVector, BitArray
+from ngsolve import BaseMatrix, BaseVector, BitArray, FESpace
 
 __all__ = [
     "SparseSolvResult",
@@ -390,6 +390,20 @@ class CompactAMSPreconditionerImpl(BaseMatrix):
     def beta_zero(self) -> bool: ...
 
     @property
+    def reuse_hierarchy(self) -> bool: ...
+
+    @property
+    def mixed_precision(self) -> bool: ...
+
+    @property
+    def hierarchy_refreshes(self) -> int: ...
+
+    @property
+    def in_place_updates(self) -> int:
+        """Updates whose Galerkin products ran numerically on the previous patterns."""
+        ...
+
+    @property
     def setup_workers(self) -> int:
         """Workers observed in strength construction; zero if no coarsening."""
         ...
@@ -403,6 +417,87 @@ class CompactAMSPreconditionerImpl(BaseMatrix):
         """
         ...
 
+def TaskManagerActive() -> bool:
+    """True inside an ngsolve.TaskManager context (where AMS setup refuses to run)."""
+    ...
+
+
+def LowestOrderCurlSystem(fes: FESpace, coefficient: object = None) -> dict:
+    """Element data of a lowest-order HCurl space on straight tetrahedra, in one pass.
+
+    Keys: ``dofs`` (ne, 6) int32 ascending, ``curl`` (ne, 3, 6) element-constant
+    basis curls, ``volume`` (ne,), ``matrix`` (element-graph SparseMatrix; with
+    ``coefficient`` (ne,) it holds sum_e c_e vol_e curl_e^T curl_e, exactly
+    symmetric, else zeros) and ``positions`` (ne, 36) int32 value indices.
+    """
+    ...
+
+
+def ClosedCoilCurrentPhi(mesh: object, materials: list[int], current_A: float, origin: object,
+                         normal: object, radius: float, inverse: str = "sparsecholesky") -> dict:
+    """A-phi DC current of a closed conductor with one thick cut (conductor-only, native).
+
+    Used by radia.meshed_current.solve_closed_coil_current_phi. ``inverse`` is
+    "iccg" (IC(0)-CG to 1e-12, fails loudly) or an NGSolve inverse type. Returns
+    ``elements``, ``density`` (n, 3), ``vertices``, ``phi``, the cut statistics,
+    ``relative_weak_divergence``, ``cut_face_flux_A`` and ``timing``.
+    """
+    ...
+
+
+class NativePCG:
+    """Preconditioned CG stopped on the true relative residual over free dofs.
+
+    ``Solve(b, x, tolerance, maxiter)`` starts from x = 0 and returns
+    ``(iterations, true_relative_residual, converged)``; one product and one
+    preconditioner application per iteration, the true residual computed only to
+    confirm convergence; raises when p.Ap <= 0 or r.z <= 0.
+    """
+
+    def __init__(self, mat: BaseMatrix, pre: BaseMatrix, freedofs: BitArray | None) -> None: ...
+    def Solve(self, b: BaseVector, x: BaseVector, tolerance: float, maxiter: int) -> tuple: ...
+
+
+class LowestOrderCurlResidual:
+    """Element flux, material state and residual of a lowest-order HCurl problem.
+
+    ``Evaluate(x, source_mean, grid, nu, dhdb, load, residual)`` returns
+    ``(b, magnitude, nu, q)`` on the nonlinear elements and writes
+    ``residual`` = sum_e vol_e C_e^T (nu_e c_e + [iron] (nu_e - nu0) Bs_e) - load.
+    """
+
+    def __init__(self, dofs: object, curl: object, volume: object, ndof: int, iron: object,
+                 nu0: float) -> None: ...
+    def Evaluate(self, x: object, source_mean: object, grid: object, nu: object, dhdb: object,
+                 load: object, residual: object) -> tuple: ...
+
+
+class LowestOrderCurlJacobian:
+    """Newton Jacobian refresh on the elements given (LowestOrderCurlSystem data).
+
+    ``Refresh(nu, q, b)`` rewrites every row the elements touch as the saved
+    constant part plus sum_e vol_e C_e^T (nu_e I + q_e b_e b_e^T) C_e, gathered
+    per row in ascending element order (exactly symmetric).
+    """
+
+    def __init__(self, matrix: BaseMatrix, dofs: object, curl: object, volume: object,
+                 positions: object) -> None: ...
+    def Refresh(self, nu: object, q: object, b: object) -> None: ...
+    @property
+    def elements(self) -> int: ...
+    @property
+    def rows(self) -> int: ...
+
+
+def LowestOrderGradient(fes: FESpace) -> BaseMatrix:
+    """Discrete gradient H1(order 1) -> lowest-order HCurl from the edge table.
+
+    Equals ``fes.CreateGradient()[0]`` for ``HCurl(order=1, nograds=True)``
+    (or order 0); raises for any other dof layout.
+    """
+    ...
+
+
 def CompactAMSPreconditioner(
     mat: BaseMatrix,
     grad_mat: BaseMatrix,
@@ -415,6 +510,8 @@ def CompactAMSPreconditioner(
     subspace_solver: int = 0,
     num_smooth: int = 1,
     beta_zero: bool = False,
+    reuse_hierarchy: bool = False,
+    mixed_precision: bool = False,
 ) -> CompactAMSPreconditionerImpl:
     """Compact AMS (Auxiliary-space Maxwell Solver) Preconditioner.
 
@@ -434,6 +531,10 @@ def CompactAMSPreconditioner(
         subspace_solver: 0=CompactAMG (default), 1=SparseCholesky.
         num_smooth: Smoother sweeps (default: 1).
         beta_zero: Skip gradient correction and its hierarchy (default: False).
+        reuse_hierarchy: Update() keeps the first AMG coarsening and interpolation
+            and refreshes only the Galerkin coarse matrices (default: False).
+        mixed_precision: residual products inside the cycle read float32 value
+            copies (vectors and sums double); requires beta_zero (default: False).
     """
     ...
 

@@ -192,3 +192,12 @@ def test_fast_ci_runs_the_full_taskmanager_audit():
     audit = next(s for s in steps if s.get("name") == "Audit caller-owned TaskManager regions")
     assert "tools/audit_taskmanager.py" in audit["run"]
     assert "exit $LASTEXITCODE" in audit["run"]
+
+
+def test_p1_orchestration_exception_does_not_exempt_helpers(audit_module, tmp_path):
+    path = tmp_path / "src/radia/p1_newton.py"
+    path.parent.mkdir(parents=True)
+    path.write_text("def solve_p1_newton():\n    with ng.TaskManager():\n        pass\ndef helper():\n    with ng.TaskManager():\n        pass\n")
+    findings = audit_module._audit_helper(path)
+    assert len(findings) == 1
+    assert findings[0].line == 5

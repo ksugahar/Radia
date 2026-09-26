@@ -221,6 +221,18 @@ Newton options common to `reduced_a` and `total_a`:
   The direct cross-check keeps a fresh Jacobian form per step: the SPD sparse
   direct factorisation of the `eps = 1e-6` gauged Jacobian is round-off
   sensitive, so it is a cross-check, not a timing route.
+* The iterative solvers' Jacobian: the constant part (nu0 curl-curl off the
+  iron, gauge mass) is one form spanning every element, assembled once, whose
+  matrix is the Jacobian; each step adds the iron element matrices
+  `vol_e C_e^T (nu_e I + q_e b_e b_e^T) C_e` in closed form (element curl
+  coefficients `C_e` from the discrete element curl) at pattern positions
+  computed once. `--full-jacobian` reassembles the whole form every step;
+  the two agree to 1e-12 of the largest entry (tests).
+* `--ams-reuse-hierarchy` builds the AMS with `reuse_hierarchy=True`: every
+  later Update keeps the nodal AMG coarsening and interpolation of the first
+  build and refreshes only the Galerkin coarse matrices, the l1 norms and the
+  coarsest factorisation (frozen interpolation). Each history row records
+  `hierarchy_refreshes`.
 
 ## Reference and metrics
 
@@ -272,9 +284,90 @@ A-phi current + engine setup (mesh load excluded).
 | beta-zero AMS, ungauged | loose | 27.5 | 31.8 | 7 | 63 |
 | shifted ICCG, ungauged | loose | 30.3 | 34.7 | 7 | 308 |
 | beta-zero AMS, ungauged | tight | 42.4 | 46.7 | 11 | 118 |
+| beta-zero AMS, frozen hierarchy | loose | 25.5 | 30.1 | 7 | 64 |
+| beta-zero AMS, frozen hierarchy | tight | 38.3 | 42.8 | 11 | 114 |
+| beta-zero AMS, frozen hierarchy, closed-form Jacobian | loose | 22.6 | 27.3 | 7 | 64 |
+| beta-zero AMS, frozen hierarchy, closed-form Jacobian | tight | 31.7 | 36.4 | 11 | 114 |
+| same, native edge gradient (lane engine) | loose | 20.5 | 25.3 | 7 | 64 |
+| `radia.p1_newton` (engine `total_a_production`) | loose | 21.9 | 24.7 | 7 | 64 |
+| `radia.p1_newton` (engine `total_a_production`) | tight | 31.4 | 34.1 | 11 | 114 |
+| `radia.p1_newton`, in-place AMS update | loose | 19.0 | 21.7 | 7 | 64 |
+| `radia.p1_newton`, in-place AMS update | tight | 26.7 | 29.4 | 11 | 114 |
+| `radia.p1_newton`, one-pass setup | loose | 15.1 | 17.8 | 7 | 64 |
+| `radia.p1_newton`, one-pass setup | tight | 22.7 | 25.3 | 11 | 114 |
+| `radia.p1_newton`, native iron Jacobian | loose | 13.0 | 15.7 | 7 | 64 |
+| `radia.p1_newton`, native iron Jacobian | tight | 19.2 | 21.9 | 11 | 114 |
+| `radia.p1_newton`, native trial residual | loose | 11.8 | 14.5 | 7 | 64 |
+| `radia.p1_newton`, native trial residual | tight | 17.3 | 20.0 | 11 | 114 |
+| `radia.p1_newton`, native A-phi coil current | loose | 11.8 | 12.2 | 7 | 64 |
+| `radia.p1_newton`, native A-phi coil current | tight | 17.4 | 17.8 | 11 | 114 |
+| `radia.p1_newton`, native PCG + leaner AMS | loose | 10.2 | 10.6 | 7 | 57* |
+| `radia.p1_newton`, native PCG + leaner AMS | tight | 14.6 | 15.0 | 11 | 103* |
+| `radia.p1_newton`, mixed-precision AMS cycle | loose | 9.0 | 9.4 | 7 | 57* |
+| `radia.p1_newton`, mixed-precision AMS cycle | tight | 13.0 | 13.4 | 11 | 103* |
+| `radia.p1_newton`, parallel first AMS build | loose | 8.6 | 8.9 | 7 | 57* |
+| `radia.p1_newton`, parallel first AMS build | tight | 12.5 | 12.8 | 11 | 103* |
+| `radia.p1_newton`, row-tracked AMS update | loose | 8.0 | 8.3 | 7 | 57* |
+| `radia.p1_newton`, row-tracked AMS update | tight | 10.7 | 11.1 | 11 | 103* |
 
-Beta-zero loose repeated: 31.8, 30.9, 31.8 s end-to-end. All with
-`--inexact-linear`; single host, single problem.
+Beta-zero loose repeated: 31.8, 30.9, 31.8 s end-to-end; with the frozen
+hierarchy 30.1, 30.1, 30.3 s (AMS update 1.1 s -> 0.77 s, CG iterations
+unchanged); with the closed-form Jacobian as well 28.2, 27.4, 27.3 s
+(assembly per Newton step 1.35 s -> 0.34 s; that session had one core busy
+with an unrelated background process, its in-session control with the full
+Jacobian took 32.3 s). With the native edge-table gradient
+(`LowestOrderGradient`, 1M tets 3.25 s -> 0.026 s, bit-identical to
+`CreateGradient`) the first AMS setup drops from 4.4 s to 1.4-1.6 s. The
+production entry `radia.p1_newton` (records `*_total_production_*`; its Newton
+time includes its own 4.6 s setup) took 25.5, 24.7, 24.7 s end-to-end and
+matches the in-session lane engine (`*_total_lane_nativegrad_control`, 25.3 s)
+to 3e-14 in the observed field with identical Newton and CG counts. With the
+in-place AMS update (2026-09-26: Galerkin matrices recomputed numerically on
+their fixed patterns, the three nodal components in one sweep; records
+`intel11_20260926_*`) each AMS update takes 0.35 s instead of 0.82 s (AMS
+total 6.2 s -> 3.6 s); end-to-end 22.0, 21.7, 21.7 s, Newton and CG counts and
+the observed field unchanged. With the one-pass setup (native
+`LowestOrderCurlSystem`: element dofs, basis curls, volumes, the element-graph
+matrix holding the Jacobian's constant part and every element's matrix
+positions; records `*_onepass_*`) the one-off setup takes 0.9 s instead of
+4.6 s; end-to-end 18.7, 17.8, 17.8 s loose and 25.3 s tight, counts and field
+unchanged. With the native iron Jacobian refresh (`LowestOrderCurlJacobian`:
+only the rows the iron touches, gathered per row; records `*_nativejac_*`)
+the Jacobian costs 0.03 s per Newton step instead of 0.34 s; end-to-end
+15.6, 16.4, 15.7 s loose and 21.9 s tight, counts and field unchanged. With
+the native trial evaluation (`LowestOrderCurlResidual`: element curl, iron
+flux, law interpolation and residual in one pass; records `*_nativeres_*`) a
+Newton or line-search trial costs 0.045 s instead of 0.21 s (line search 1.6
+s -> 0.4 s); end-to-end 14.4, 14.5, 14.5 s loose and 20.0 s tight, counts and
+field unchanged. With the native A-phi coil current (`ClosedCoilCurrentPhi`:
+conductor-only faces, cut, P1 Laplacian solved by IC(0)-CG to 1e-12, checks;
+records `*_nativephi_*`) the coil current takes 0.4 s instead of 2.8 s;
+end-to-end 12.3, 12.2, 12.3 s loose and 17.8 s tight, counts and field
+unchanged. With the native PCG (`NativePCG`: recurrence residual, true
+residual only to confirm the stop) and the leaner AMS cycle (fused
+restriction/prolongation of the three nodal components, one-pass residuals)
+plus the faster first build (vertex-graph Pi pattern, native AMG Galerkin,
+parallel interpolation setup; records `*_pcg_*`), CG takes 3.3 s instead of
+4.7 s and the first AMS build 1.1 s instead of 1.4 s; end-to-end 10.7, 10.6,
+10.7 s loose and 15.0 s tight, field unchanged. *The native PCG does not
+count the initial residual check as an iteration: one fewer per Newton step
+for the same solves. With the mixed-precision AMS cycle (float32 value
+mirrors for the fine and AMG-level residuals and the Pi transfers, beta-zero
+only; records `*_mixed_*`) CG takes 2.6 s instead of 3.3 s; end-to-end 9.2,
+9.4, 9.5 s loose and 13.4 s tight. That session's host was quieter: the
+in-session lane control (double precision, Python CG) also went 14.3 -> 12.4 s,
+so about half of the step is the host. Field unchanged (4.7e-13 vs the lane).
+With the parallel first AMS build (setup loops in their own parallel regions,
+one-pass native Galerkin product, one transposition for Pi; records
+`*_firstbuild_*`, a host as quiet as the previous session's) the first AMS
+build takes 0.70 s instead of 1.03 s; end-to-end 8.7, 9.0, 9.0 s loose and
+12.8 s tight, field unchanged. With the row-tracked AMS update (an in-place
+Update recomputes only the Galerkin rows, AMG-level rows, l1 norms and float
+mirrors that the changed matrix rows reach; records `*_rowrefresh_*`) an
+update takes 0.16 s instead of 0.31 s (AMS total 1.8 s instead of 2.6 s);
+end-to-end 8.5, 8.4, 7.9 s loose and 11.1 s tight, field unchanged (a load
+spike hit two rows of the campaign; they were rerun on the idle host). All
+with `--inexact-linear`; single host, single problem.
 
 ## Results (LAB, 2026-09-22, uncontended sequential runs, 8 threads)
 
