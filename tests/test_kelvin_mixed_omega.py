@@ -840,6 +840,29 @@ def test_ngsolve_bh_coefficient_function_matches_scalar_pchip_and_vacuum_tail():
         assert derivative == pytest.approx(scalar(H_value), rel=2.0e-8, abs=1.0e-10)
 
 
+def test_projected_picard_iron_updates_never_evaluate_the_air_source():
+    """The iron material update must not compile H_cf (whose air entry is the coil)."""
+    import time
+    import ngsolve as ng
+    from radia.esrf_examples import get_esrf_bh_table
+    from radia.scalar_potential_solver import _build_bh_coefficient_function
+
+    mesh, h_source, potential, bh_table = _picard_case()
+    costly = 1e-30 * _build_bh_coefficient_function(
+        ng.sqrt(ng.x * ng.x + 1.0), get_esrf_bh_table(6))
+    times, fields = [], []
+    for source in (h_source, h_source + ng.CF((costly, costly, costly))):
+        started = time.perf_counter()
+        result = _picard_solve(mesh, source, potential, bh_table, order=2,
+                               material_update_order=1)
+        times.append(time.perf_counter() - started)
+        fields.append(np.asarray(result["B_cf"](mesh(0.5, 0.1, 0.2))))
+    # The costly term legitimately enters the (cached) air load once; the
+    # former per-iteration evaluation at iron points cost about 100 times.
+    assert times[1] < 15.0 * times[0] + 2.0
+    np.testing.assert_allclose(fields[1], fields[0], rtol=1e-9, atol=1e-18)
+
+
 def test_mixed_omega_projected_material_state_validates_resume_shape():
     mesh, h_source, potential, bh_table = _picard_case()
     solved = _picard_solve(
