@@ -62,6 +62,10 @@ Prefer established public abstractions over proprietary plumbing.
   smooth free-space BEM and Biot-Savart work.
 - Python FE work follows caller-owned `ngsolve.TaskManager()`. MATLAB
   parallel work follows MATLAB's runtime.
+  `p1_newton.solve_p1_newton` is an explicit serial orchestration entry point:
+  it rejects an active TaskManager and owns alternating assembly/solve regions
+  because native AMS coarse factorization requires a serial boundary. This
+  exception does not apply to its reusable helpers or other solvers.
 - Fail loudly on unsupported geometry, labels, ABI, convergence, or backend
   state. Never silently substitute a numerically different route.
 
