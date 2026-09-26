@@ -956,6 +956,7 @@ inline void ExportHypreBasedAMS(py::module& m) {
       (m, "HypreBasedAMSPreconditionerImpl")
       .def_property_readonly("beta_zero", &HypreBasedAMS::GetBetaZero)
       .def_property_readonly("reuse_hierarchy", &HypreBasedAMS::GetReuseHierarchy)
+      .def_property_readonly("mixed_precision", &HypreBasedAMS::GetMixedPrecision)
       .def_property_readonly("hierarchy_refreshes", &HypreBasedAMS::GetHierarchyRefreshes,
           "Updates that refreshed the frozen AMG hierarchies instead of rebuilding them.")
       .def_property_readonly("in_place_updates", &HypreBasedAMS::GetInPlaceUpdates,
@@ -1298,7 +1299,8 @@ the iron, gathered per dof (deterministic). Parallel under a TaskManager.
        int subspace_solver,
        int num_smooth,
        bool beta_zero,
-       bool reuse_hierarchy) -> shared_ptr<HypreBasedAMS>
+       bool reuse_hierarchy,
+       bool mixed_precision) -> shared_ptr<HypreBasedAMS>
     {
       auto sp_mat = dynamic_pointer_cast<SparseMatrix<double>>(mat);
       if (!sp_mat)
@@ -1321,7 +1323,7 @@ the iron, gathered per dof (deterministic). Parallel under a TaskManager.
           sp_mat, sp_grad, sp_freedofs,
           to_vec(coord_x_list), to_vec(coord_y_list), to_vec(coord_z_list),
           cycle_type, num_smooth, 0.25, print_level, 1.0, subspace_solver, beta_zero,
-          reuse_hierarchy);
+          reuse_hierarchy, mixed_precision);
     },
     py::arg("mat"),
     py::arg("grad_mat"),
@@ -1335,6 +1337,7 @@ the iron, gathered per dof (deterministic). Parallel under a TaskManager.
     py::arg("num_smooth") = 1,
     py::arg("beta_zero") = false,
     py::arg("reuse_hierarchy") = false,
+    py::arg("mixed_precision") = false,
     R"raw_string(
 Compact AMS (Auxiliary-space Maxwell Solver) Preconditioner.
 
@@ -1370,6 +1373,13 @@ reuse_hierarchy : bool
   Update() keeps the AMG coarsening and interpolation of the first build and
   refreshes only the Galerkin coarse matrices (frozen interpolation), for a
   sequence of matrices on one sparsity pattern, e.g. Newton (default=False).
+mixed_precision : bool
+  The residual products inside the cycle (fine level and every AMG level) read
+  float32 copies of the matrix values; vectors and sums stay double. The
+  preconditioner stays a fixed symmetric operator, so CG remains valid; use it
+  with a Krylov method that checks the double-precision residual. Requires
+  beta_zero: with a gauge the float32 values lose the gauge-scale gradient
+  components the gradient correction amplifies (default=False).
 )raw_string");
 
   m.def("ComplexHypreBasedAMSPreconditioner",
