@@ -303,6 +303,8 @@ A-phi current + engine setup (mesh load excluded).
 | `radia.p1_newton`, native A-phi coil current | tight | 17.4 | 17.8 | 11 | 114 |
 | `radia.p1_newton`, native PCG + leaner AMS | loose | 10.2 | 10.6 | 7 | 57* |
 | `radia.p1_newton`, native PCG + leaner AMS | tight | 14.6 | 15.0 | 11 | 103* |
+| `radia.p1_newton`, mixed-precision AMS cycle | loose | 9.0 | 9.4 | 7 | 57* |
+| `radia.p1_newton`, mixed-precision AMS cycle | tight | 13.0 | 13.4 | 11 | 103* |
 
 Beta-zero loose repeated: 31.8, 30.9, 31.8 s end-to-end; with the frozen
 hierarchy 30.1, 30.1, 30.3 s (AMS update 1.1 s -> 0.77 s, CG iterations
@@ -345,7 +347,13 @@ parallel interpolation setup; records `*_pcg_*`), CG takes 3.3 s instead of
 4.7 s and the first AMS build 1.1 s instead of 1.4 s; end-to-end 10.7, 10.6,
 10.7 s loose and 15.0 s tight, field unchanged. *The native PCG does not
 count the initial residual check as an iteration: one fewer per Newton step
-for the same solves. All with `--inexact-linear`; single host, single problem.
+for the same solves. With the mixed-precision AMS cycle (float32 value
+mirrors for the fine and AMG-level residuals and the Pi transfers, beta-zero
+only; records `*_mixed_*`) CG takes 2.6 s instead of 3.3 s; end-to-end 9.2,
+9.4, 9.5 s loose and 13.4 s tight. That session's host was quieter: the
+in-session lane control (double precision, Python CG) also went 14.3 -> 12.4 s,
+so about half of the step is the host. Field unchanged (4.7e-13 vs the lane).
+All with `--inexact-linear`; single host, single problem.
 
 ## Results (LAB, 2026-09-22, uncontended sequential runs, 8 threads)
 
