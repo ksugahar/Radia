@@ -64,6 +64,454 @@ def test_beta_zero_ams_solves_compatible_singular_system_and_updates(cycle, subs
         assert Integrate(difference * difference, mesh) < 1e-12 * Integrate(curl(exact)*curl(exact), mesh)
 
 
+@pytest.mark.parametrize("beta_zero", [False, True])
+def test_reused_ams_hierarchy_refreshes_and_still_converges(beta_zero):
+    import numpy as np
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.2))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet=".*")
+    u, v = space.TnT()
+    nu = GridFunction(L2(mesh, order=0))
+    nu.vec.FV().NumPy()[:] = 1.0
+    a = BilinearForm(space)
+    a += nu * curl(u) * curl(v) * dx
+    if not beta_zero:
+        a += 1e-6 * u * v * dx
+    a.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = [[mesh.ngmesh.Points()[i+1][j] for i in range(mesh.nv)] for j in range(3)]
+    options = dict(freedofs=space.FreeDofs(), coord_x=coords[0], coord_y=coords[1],
+                   coord_z=coords[2], beta_zero=beta_zero, cycle_type=1)
+    reused = HypreBasedAMSPreconditioner(a.mat, grad, reuse_hierarchy=True, **options)
+    assert reused.reuse_hierarchy is True and reused.hierarchy_refreshes == 0
+    free = np.asarray(list(space.FreeDofs()), dtype=bool)
+    exact = GridFunction(space)
+    exact.vec.FV().NumPy()[:] = np.random.default_rng(5).normal(size=space.ndof) * free
+    # A coefficient jump of three decades on half of the elements.
+    nu.vec.FV().NumPy()[: mesh.ne // 2] = 1e3
+    a.Assemble()
+    rhs = exact.vec.CreateVector()
+    rhs.data = a.mat * exact.vec
+    rhs.FV().NumPy()[~free] = 0
+    reused.Update(a.mat)
+    assert reused.hierarchy_refreshes == 1
+    fresh = HypreBasedAMSPreconditioner(a.mat, grad, **options)
+    iterations = {}
+    for name, pre in (("reused", reused), ("fresh", fresh)):
+        solution = GridFunction(space)
+        with TaskManager():
+            inv = CGSolver(a.mat, pre, tol=1e-10, maxiter=2000, printrates=False)
+            solution.vec.data = inv * rhs
+        residual = rhs.CreateVector()
+        residual.data = rhs - a.mat * solution.vec
+        assert np.linalg.norm(residual.FV().NumPy()[free]) / Norm(rhs) < 1e-7
+        iterations[name] = inv.iterations
+    assert iterations["reused"] <= 2 * iterations["fresh"] + 5, iterations
+
+
+@pytest.mark.parametrize("beta_zero", [False, True])
+def test_in_place_ams_update_matches_symbolic_galerkin_products(beta_zero):
+    """With reuse_hierarchy and an unchanged pattern, Update refreshes the
+    Galerkin matrices numerically on their previous patterns. On unchanged
+    values that must reproduce the symbolic products of the first build.
+
+    G^T A G cancels the curl-curl part exactly in exact arithmetic, so with a
+    gauge eps its round-off relative to eps scales like 1/eps whatever the
+    summation order; the gauged case uses eps = 1e-2 to compare the products,
+    not that cancellation."""
+    import numpy as np
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.2))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet="left|bottom")
+    u, v = space.TnT()
+    nu = GridFunction(L2(mesh, order=0))
+    nu.vec.FV().NumPy()[:] = np.random.default_rng(3).uniform(1.0, 1e3, mesh.ne)
+    a = BilinearForm(space)
+    a += nu * curl(u) * curl(v) * dx
+    if not beta_zero:
+        a += 1e-2 * u * v * dx
+    a.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = [[mesh.ngmesh.Points()[i+1][j] for i in range(mesh.nv)] for j in range(3)]
+    pre = HypreBasedAMSPreconditioner(a.mat, grad, freedofs=space.FreeDofs(), coord_x=coords[0],
+                                      coord_y=coords[1], coord_z=coords[2], beta_zero=beta_zero,
+                                      cycle_type=1, reuse_hierarchy=True)
+    x = a.mat.CreateColVector()
+    x.FV().NumPy()[:] = np.random.default_rng(4).normal(size=space.ndof)
+    before, after = x.CreateVector(), x.CreateVector()
+    before.data = pre * x
+    pre.Update(a.mat)
+    assert pre.in_place_updates == 1 and pre.hierarchy_refreshes == 1
+    after.data = pre * x
+    scale = np.linalg.norm(before.FV().NumPy())
+    # Measured: 1e-12 beta-zero; 1e-9 gauged at eps 1e-2 (1e-5 at eps 1e-6).
+    tolerance = 1e-11 if beta_zero else 1e-7
+    assert np.linalg.norm(after.FV().NumPy() - before.FV().NumPy()) <= tolerance * scale
+    # A different matrix object with the same pattern is compared and refreshed in place.
+    b = BilinearForm(space)
+    b += nu * curl(u) * curl(v) * dx
+    if not beta_zero:
+        b += 1e-2 * u * v * dx
+    b.Assemble()
+    pre.Update(b.mat)
+    assert pre.in_place_updates == 2
+    after.data = pre * x
+    assert np.linalg.norm(after.FV().NumPy() - before.FV().NumPy()) <= tolerance * scale
+
+
+def _ams_system(beta_zero, maxh=0.2):
+    import numpy as np
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=maxh))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet="left|bottom")
+    u, v = space.TnT()
+    nu = GridFunction(L2(mesh, order=0))
+    nu.vec.FV().NumPy()[:] = np.random.default_rng(21).uniform(1.0, 1e3, mesh.ne)
+    a = BilinearForm(space)
+    a += nu * curl(u) * curl(v) * dx
+    if not beta_zero:
+        a += 1e-2 * u * v * dx
+    a.Assemble()
+    grad, _ = space.CreateGradient()
+    coords = [[mesh.ngmesh.Points()[i+1][j] for i in range(mesh.nv)] for j in range(3)]
+    options = dict(freedofs=space.FreeDofs(), coord_x=coords[0], coord_y=coords[1],
+                   coord_z=coords[2], beta_zero=beta_zero, cycle_type=1)
+    return mesh, space, a, grad, options
+
+
+@pytest.mark.parametrize("beta_zero", [False, True])
+def test_native_first_build_matches_the_restrict_build(beta_zero):
+    """reuse_hierarchy builds its first Galerkin matrices natively (vertex-graph
+    pattern, fused Pi pass, native AMG products); the preconditioner must equal
+    the default Restrict build up to summation order."""
+    import numpy as np
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+    mesh, space, a, grad, options = _ams_system(beta_zero)
+    native = HypreBasedAMSPreconditioner(a.mat, grad, reuse_hierarchy=True, **options)
+    reference = HypreBasedAMSPreconditioner(a.mat, grad, **options)
+    x = a.mat.CreateColVector()
+    x.FV().NumPy()[:] = np.random.default_rng(22).normal(size=space.ndof)
+    y1, y2 = x.CreateVector(), x.CreateVector()
+    with TaskManager():
+        y1.data = native * x
+        y2.data = reference * x
+    scale = np.linalg.norm(y2.FV().NumPy())
+    tolerance = 1e-10 if beta_zero else 1e-6  # gauged G^T A G: cancellation round-off
+    assert np.linalg.norm(y1.FV().NumPy() - y2.FV().NumPy()) <= tolerance * scale
+
+
+@pytest.mark.parametrize("beta_zero,mixed", [(False, False), (True, False), (True, True)])
+def test_row_tracked_update_equals_a_full_refresh(beta_zero, mixed):
+    """An in-place Update recomputes only the rows its value changes reach
+    (Galerkin rows, AMG levels, l1 norms, float mirrors). Its preconditioner
+    must be the one of an Update that recomputes everything."""
+    import numpy as np
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+    mesh, space, a, grad, options = _ams_system(beta_zero)
+    values = a.mat.AsVector().FV().NumPy()
+    original = values.copy()
+    kwargs = dict(reuse_hierarchy=True, mixed_precision=mixed, **options)
+    # One object for both states: separately built hierarchies differ in the
+    # last bits (the setup is not bit-reproducible), the refresh kernels are.
+    pre = HypreBasedAMSPreconditioner(a.mat, grad, **kwargs)
+    # New values on the rows of a few elements only (a symmetric local change).
+    rows = set()
+    for el in list(mesh.Elements(VOL))[:40]:
+        rows.update(space.GetDofNrs(el))
+    rows = np.array(sorted(rows))
+    _, cols, offsets = (np.asarray(v) for v in a.mat.CSR())
+    offsets = offsets.astype(np.int64)
+    target = original.copy()
+    for r in rows:
+        for k in range(offsets[r], offsets[r + 1]):
+            if cols[k] in rows:
+                target[k] *= 1.7
+    x = a.mat.CreateColVector()
+    x.FV().NumPy()[:] = np.random.default_rng(41).normal(size=space.ndof)
+    y0, y1, y2 = x.CreateVector(), x.CreateVector(), x.CreateVector()
+    y0.data = pre * x
+    # Tracked: only the element rows change.
+    values[:] = target
+    pre.Update(a.mat)
+    y1.data = pre * x   # serial: bit-reproducible
+    # Full: every row changes first, then the same target values again.
+    values[:] = original * 3.0
+    pre.Update(a.mat)
+    values[:] = target
+    pre.Update(a.mat)
+    y2.data = pre * x
+    assert pre.in_place_updates == 3
+    # The build uses /fp:fast and parallel ranges, so even two full refreshes
+    # agree only to round-off (1e-16 beta-zero, ~1e-9 gauged: G^T A G
+    # cancellation); a row the tracking missed would differ like the change.
+    def rel(p, q):
+        return np.max(np.abs(p.FV().NumPy() - q.FV().NumPy())) / np.max(np.abs(q.FV().NumPy()))
+    tolerance = 1e-13 if beta_zero else 1e-7
+    assert rel(y0, y1) > 1e-4                 # the change is seen
+    assert rel(y1, y2) <= tolerance
+
+
+def test_mixed_precision_ams_requires_beta_zero():
+    """With a gauge, float32 values lose the gauge-scale gradient components
+    that the G correction amplifies (measured: 33 % off the double cycle)."""
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+    mesh, space, a, grad, options = _ams_system(False)
+    with pytest.raises(Exception, match="requires beta_zero"):
+        HypreBasedAMSPreconditioner(a.mat, grad, reuse_hierarchy=True, mixed_precision=True, **options)
+
+
+def test_mixed_precision_ams_is_symmetric_and_close_to_double():
+    """mixed_precision reads float32 matrix/transfer values inside the cycle:
+    the preconditioner stays symmetric (CG-valid) and within float round-off of
+    the double cycle, and its refresh keeps the mirrors current."""
+    import numpy as np
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner, NativePCG
+    beta_zero = True
+    mesh, space, a, grad, options = _ams_system(beta_zero)
+    mixed = HypreBasedAMSPreconditioner(a.mat, grad, reuse_hierarchy=True, mixed_precision=True, **options)
+    double = HypreBasedAMSPreconditioner(a.mat, grad, reuse_hierarchy=True, **options)
+    assert mixed.mixed_precision and not double.mixed_precision
+    free = np.asarray(list(space.FreeDofs()), dtype=bool)
+    rng = np.random.default_rng(31)
+    x, y = a.mat.CreateColVector(), a.mat.CreateColVector()
+    x.FV().NumPy()[:] = rng.normal(size=space.ndof) * free
+    y.FV().NumPy()[:] = rng.normal(size=space.ndof) * free
+    mx, my, dx_ = x.CreateVector(), x.CreateVector(), x.CreateVector()
+    with TaskManager():
+        mx.data = mixed * x
+        my.data = mixed * y
+        dx_.data = double * x
+    xmy, ymx = float(np.dot(x.FV().NumPy(), my.FV().NumPy())), float(np.dot(y.FV().NumPy(), mx.FV().NumPy()))
+    assert abs(xmy - ymx) <= 1e-5 * max(abs(xmy), abs(ymx))
+    tolerance = 1e-5
+    assert np.linalg.norm(mx.FV().NumPy() - dx_.FV().NumPy()) <= tolerance * np.linalg.norm(dx_.FV().NumPy())
+    # After a value change the mirrors follow (in-place refresh).
+    a.mat.AsVector().FV().NumPy()[:] *= 3.0
+    mixed.Update(a.mat)
+    double.Update(a.mat)
+    with TaskManager():
+        mx.data = mixed * x
+        dx_.data = double * x
+    assert np.linalg.norm(mx.FV().NumPy() - dx_.FV().NumPy()) <= tolerance * np.linalg.norm(dx_.FV().NumPy())
+    b = x.CreateVector()
+    b.data = a.mat * x
+    b.FV().NumPy()[~free] = 0.0
+    sol = b.CreateVector()
+    with TaskManager():
+        its, rel, ok = NativePCG(a.mat, mixed, space.FreeDofs()).Solve(b, sol, 1e-10, 500)
+    assert ok and rel <= 1e-10
+
+
+@pytest.mark.parametrize("beta_zero", [False, True])
+def test_native_pcg_solves_to_the_true_residual(beta_zero):
+    import numpy as np
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner, NativePCG
+    mesh, space, a, grad, options = _ams_system(beta_zero)
+    pre = HypreBasedAMSPreconditioner(a.mat, grad, reuse_hierarchy=True, **options)
+    free = np.asarray(list(space.FreeDofs()), dtype=bool)
+    exact = a.mat.CreateColVector()
+    exact.FV().NumPy()[:] = np.random.default_rng(23).normal(size=space.ndof) * free
+    b = exact.CreateVector()
+    b.data = a.mat * exact
+    b.FV().NumPy()[~free] = 0.0
+    pcg = NativePCG(a.mat, pre, space.FreeDofs())
+    x1, x2 = b.CreateVector(), b.CreateVector()
+    with TaskManager():
+        its, rel, ok = pcg.Solve(b, x1, 1e-10, 500)
+        its2, rel2, ok2 = pcg.Solve(b, x2, 1e-10, 500)
+    assert ok and rel <= 1e-10
+    residual = b.CreateVector()
+    residual.data = b - a.mat * x1
+    assert np.linalg.norm(residual.FV().NumPy()[free]) <= 1e-10 * np.linalg.norm(b.FV().NumPy()[free]) * 1.0001
+    # The PCG's own inner products are deterministic; the AMS application under a
+    # TaskManager differs between runs at round-off (2e-16), which two solves to
+    # 1e-10 amplify to ~1e-9 in the solution.
+    assert its == its2 and abs(rel - rel2) <= 1e-3 * rel
+    np.testing.assert_allclose(x1.FV().NumPy(), x2.FV().NumPy(), rtol=0,
+                               atol=1e-6 * np.max(np.abs(x1.FV().NumPy())))
+    if not beta_zero:  # the gauged system is nonsingular: the solution is the field itself
+        np.testing.assert_allclose(x1.FV().NumPy(), exact.FV().NumPy(), rtol=0,
+                                   atol=1e-6 * np.max(np.abs(exact.FV().NumPy())))
+    with TaskManager():
+        its3, rel3, ok3 = pcg.Solve(b, x1, 1e-12, 1)
+    assert its3 == 1 and not ok3 and rel3 > 1e-12
+    negative = BilinearForm(space)
+    negative += -1.0 * InnerProduct(space.TrialFunction(), space.TestFunction()) * dx
+    negative.Assemble()
+    with TaskManager(), pytest.raises(Exception, match="not SPD"):
+        NativePCG(a.mat, negative.mat, None).Solve(b, x1, 1e-8, 10)
+
+
+def test_lowest_order_gradient_equals_create_gradient():
+    import numpy as np
+    from radia.sparsesolv_ngsolve import LowestOrderGradient
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.3))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet=".*")
+    reference, _ = space.CreateGradient()
+    with TaskManager():
+        fast = LowestOrderGradient(space)
+    assert (fast.height, fast.width) == (reference.height, reference.width)
+    for a, b in zip(reference.CSR(), fast.CSR()):
+        np.testing.assert_array_equal(np.asarray(a), np.asarray(b))
+    with pytest.raises(Exception, match="one HCurl dof per edge"):
+        LowestOrderGradient(HCurl(mesh, order=1))
+
+
+def test_lowest_order_curl_system_matches_form_assembly():
+    import numpy as np
+    from radia.sparsesolv_ngsolve import LowestOrderCurlSystem
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.25))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet=".*")
+    coefficient = np.random.default_rng(7).uniform(0.5, 2.0, mesh.ne)
+    with TaskManager():
+        system = LowestOrderCurlSystem(space, coefficient=coefficient)
+    dofs, curl_e, volume, pos = (system[k] for k in ("dofs", "curl", "volume", "positions"))
+    assert dofs.shape == (mesh.ne, 6) and np.all(np.diff(dofs, axis=1) > 0)
+    reference_volume = np.asarray(Integrate(CoefficientFunction(1.0), mesh, VOL, element_wise=True))
+    np.testing.assert_allclose(volume, reference_volume, rtol=1e-13)
+    # Element curl of a random field equals NGSolve's element mean of curl(u).
+    u = GridFunction(space)
+    u.vec.FV().NumPy()[:] = np.random.default_rng(8).normal(size=space.ndof)
+    mean = np.stack([np.asarray(Integrate(curl(u)[k], mesh, VOL, element_wise=True)) for k in range(3)],
+                    axis=1) / reference_volume[:, None]
+    ours = np.einsum("nkj,nj->nk", curl_e, u.vec.FV().NumPy()[dofs])
+    np.testing.assert_allclose(ours, mean, rtol=0, atol=1e-12 * np.max(np.abs(mean)))
+    # The matrix is the curl-curl form with the element coefficient, on its exact pattern.
+    nu = GridFunction(L2(mesh, order=0))
+    nu.vec.FV().NumPy()[:] = coefficient
+    trial, test = space.TnT()
+    form = BilinearForm(space, symmetric=True)
+    form += nu * curl(trial) * curl(test) * dx
+    form.Assemble()
+    fv, fc, fo = (np.asarray(x) for x in form.mat.CSR())
+    sv, sc, so = (np.asarray(x) for x in system["matrix"].CSR())
+    np.testing.assert_array_equal(sc, fc)
+    np.testing.assert_array_equal(so, fo)
+    np.testing.assert_allclose(sv, fv, rtol=0, atol=1e-13 * np.max(np.abs(fv)))
+    rows = np.repeat(np.arange(len(so) - 1), np.diff(so.astype(np.int64)))
+    assert np.array_equal(rows[pos[:, 7]], dofs[:, 1]) and np.array_equal(sc[pos[:, 7]], dofs[:, 1])
+    assert np.array_equal(rows[pos[:, 11]], dofs[:, 1]) and np.array_equal(sc[pos[:, 11]], dofs[:, 5])
+    # Exactly symmetric: (i, j) and (j, i) hold the same bits.
+    transpose = pos.reshape(-1, 6, 6).transpose(0, 2, 1).reshape(-1, 36)
+    assert np.array_equal(sv[pos], sv[transpose])
+    with TaskManager():
+        empty = LowestOrderCurlSystem(space)
+    assert not np.any(np.asarray(empty["matrix"].CSR()[0]))
+    with pytest.raises(Exception, match="six regular"):
+        LowestOrderCurlSystem(HCurl(mesh, order=1))
+    with pytest.raises(Exception, match="one value per element"):
+        LowestOrderCurlSystem(space, coefficient=np.ones(3))
+
+
+def test_lowest_order_curl_jacobian_refresh_is_the_tangent_form():
+    import numpy as np
+    from radia.sparsesolv_ngsolve import LowestOrderCurlJacobian, LowestOrderCurlSystem
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.25))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet=".*")
+    rng = np.random.default_rng(11)
+    subset = np.sort(rng.choice(mesh.ne, mesh.ne // 3, replace=False))
+    constant = np.full(mesh.ne, 2.0)
+    constant[subset] = 0.0
+    with TaskManager():
+        system = LowestOrderCurlSystem(space, coefficient=constant)
+    matrix = system["matrix"]
+    before = np.asarray(matrix.CSR()[0]).copy()
+    native = LowestOrderCurlJacobian(matrix, system["dofs"][subset], system["curl"][subset],
+                                     system["volume"][subset], system["positions"][subset])
+    assert native.elements == len(subset)
+    nu, q = rng.uniform(1.0, 3.0, len(subset)), rng.uniform(-0.5, 2.0, len(subset))
+    b = rng.normal(size=(len(subset), 3))
+    for _ in range(2):  # a refresh rewrites, it does not accumulate
+        with TaskManager():
+            native.Refresh(nu, q, b)
+    fields = [GridFunction(L2(mesh, order=0)) for _ in range(5)]
+    for gf, values in zip(fields[:2], (nu, q)):
+        gf.vec.FV().NumPy()[subset] = values
+    for k in range(3):
+        fields[2 + k].vec.FV().NumPy()[subset] = b[:, k]
+    coefficient = GridFunction(L2(mesh, order=0))
+    coefficient.vec.FV().NumPy()[:] = constant
+    bvec = CoefficientFunction(tuple(fields[2:]))
+    trial, test = space.TnT()
+    form = BilinearForm(space, symmetric=True)
+    form += (coefficient + fields[0]) * curl(trial) * curl(test) * dx
+    form += fields[1] * InnerProduct(bvec, curl(trial)) * InnerProduct(bvec, curl(test)) * dx
+    form.Assemble()
+    reference = np.asarray(form.mat.CSR()[0])
+    values = np.asarray(matrix.CSR()[0])
+    np.testing.assert_allclose(values, reference, rtol=0, atol=1e-13 * np.max(np.abs(reference)))
+    pos = system["positions"]
+    transpose = pos.reshape(-1, 6, 6).transpose(0, 2, 1).reshape(-1, 36)
+    assert np.array_equal(values[pos], values[transpose])
+    untouched = np.ones(len(values), bool)
+    untouched[pos[subset].ravel()] = False
+    touched_rows = np.unique(system["dofs"][subset])
+    so = np.asarray(matrix.CSR()[2]).astype(np.int64)
+    for row in touched_rows:
+        untouched[so[row]:so[row + 1]] = False
+    assert np.array_equal(values[untouched], before[untouched])
+    with pytest.raises(Exception, match="same n"):
+        LowestOrderCurlJacobian(matrix, system["dofs"][:2], system["curl"][:3], system["volume"][:3],
+                                system["positions"][:3])
+    shifted = system["positions"][subset].copy()
+    shifted[:, 1] = shifted[:, 0]
+    with pytest.raises(Exception, match="do not match"):
+        LowestOrderCurlJacobian(matrix, system["dofs"][subset], system["curl"][subset],
+                                system["volume"][subset], shifted)
+
+
+@pytest.mark.parametrize("with_source", [False, True])
+def test_lowest_order_curl_residual_matches_numpy(with_source):
+    import numpy as np
+    from radia.sparsesolv_ngsolve import LowestOrderCurlResidual, LowestOrderCurlSystem
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.25))
+    space = HCurl(mesh, order=1, nograds=True, dirichlet=".*")
+    rng = np.random.default_rng(12)
+    iron = np.sort(rng.choice(mesh.ne, mesh.ne // 2, replace=False)).astype(np.int64)
+    with TaskManager():
+        system = LowestOrderCurlSystem(space)
+    dofs, curl_e, volume = system["dofs"], system["curl"], system["volume"]
+    nu0 = 7.0
+    grid = np.concatenate(([0.0], np.geomspace(1e-7, 50.0, 400)))
+    nu_table = 1.0 + 3.0 / (1.0 + grid)
+    dhdb_table = np.gradient(nu_table * grid, grid)
+    x = rng.normal(size=space.ndof)
+    load = rng.normal(size=space.ndof)
+    source = rng.normal(size=(len(iron), 3)) if with_source else None
+    native = LowestOrderCurlResidual(dofs, curl_e, volume, space.ndof, iron, nu0)
+    residual = np.empty(space.ndof)
+    with TaskManager():
+        b, magnitude, nu, q = native.Evaluate(x, source, grid, nu_table, dhdb_table, load, residual)
+    element = np.einsum("nkj,nj->nk", curl_e, x[dofs])
+    b_ref = element[iron] + (source if with_source else 0.0)
+    m_ref = np.linalg.norm(b_ref, axis=1)
+    nu_ref = np.interp(m_ref, grid, nu_table)
+    q_ref = (np.interp(m_ref, grid, dhdb_table) - nu_ref) / m_ref ** 2
+    np.testing.assert_allclose(b, b_ref, rtol=1e-14, atol=1e-14)
+    np.testing.assert_allclose(magnitude, m_ref, rtol=1e-14)
+    np.testing.assert_allclose(nu, nu_ref, rtol=1e-13)
+    np.testing.assert_allclose(q, q_ref, rtol=1e-11)
+    coefficient = np.full(mesh.ne, nu0)
+    coefficient[iron] = nu_ref
+    loads = coefficient[:, None] * element
+    if with_source:
+        loads[iron] += (nu_ref - nu0)[:, None] * source
+    weights = np.einsum("nkj,nk->nj", curl_e, loads) * volume[:, None]
+    r_ref = np.bincount(dofs.ravel(), weights=weights.ravel(), minlength=space.ndof) - load
+    np.testing.assert_allclose(residual, r_ref, rtol=0, atol=1e-12 * np.max(np.abs(r_ref)))
+    with pytest.raises(Exception, match="distinct"):
+        LowestOrderCurlResidual(dofs, curl_e, volume, space.ndof, np.array([0, 0]), nu0)
+    with pytest.raises(Exception, match="source_mean"):
+        native.Evaluate(x, np.zeros((2, 3)), grid, nu_table, dhdb_table, load, residual)
+
+
+def test_taskmanager_active_reports_the_parallel_region():
+    from radia.sparsesolv_ngsolve import TaskManagerActive
+    assert TaskManagerActive() is False
+    with TaskManager():
+        assert TaskManagerActive() is True
+    assert TaskManagerActive() is False
+
+
 @pytest.mark.parametrize("factory", [
     "HypreBasedAMSPreconditioner", "CompactAMSPreconditioner",
     "ComplexHypreBasedAMSPreconditioner", "ComplexCompactAMSPreconditioner",

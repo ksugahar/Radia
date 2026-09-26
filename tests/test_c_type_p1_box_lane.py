@@ -432,6 +432,61 @@ def test_algebraic_total_a_residual_matches_form_assembly(box_mesh):
     np.testing.assert_allclose(field_fast, field_slow, rtol=1e-8, atol=1e-12)
 
 
+@pytest.mark.parametrize("overrides", [{}, {"gauge_epsilon": 0.0, "linear_solver": "iccg"}])
+def test_split_jacobian_matches_full_assembly(box_mesh, overrides):
+    law = lane().SoftIronLaw(_bh_table())
+    settings = dict(overrides)
+    solver = settings.pop("linear_solver", "ams")
+    engine = _engine(box_mesh, solver, **settings)
+    solution = _random_solution(engine, 3)
+    b, magnitude = engine._element_flux(solution)
+    engine._set_material(law.reluctivity(magnitude), law=law, b_iron=b, magnitude=magnitude)
+    split, refresh = engine._split_jacobian()
+    refresh()
+    full = engine._jacobian()
+    with ng.TaskManager():
+        full.Assemble()
+    s_values, s_columns, s_offsets = (np.asarray(x) for x in split.mat.CSR())
+    f_values, f_columns, f_offsets = (np.asarray(x) for x in full.mat.CSR())
+    np.testing.assert_array_equal(s_columns, f_columns)
+    np.testing.assert_array_equal(s_offsets, f_offsets)
+    np.testing.assert_allclose(s_values, f_values, rtol=0, atol=1e-12 * np.max(np.abs(f_values)))
+    # A second state: refresh must follow the in-place coefficient update.
+    solution.vec.data *= 3.0
+    b, magnitude = engine._element_flux(solution)
+    engine._set_material(law.reluctivity(magnitude), law=law, b_iron=b, magnitude=magnitude)
+    refresh()
+    with ng.TaskManager():
+        full.Assemble()
+    np.testing.assert_allclose(np.asarray(split.mat.CSR()[0]), np.asarray(full.mat.CSR()[0]),
+                               rtol=0, atol=1e-12 * np.max(np.abs(f_values)))
+
+
+def test_split_jacobian_keeps_the_newton_field(box_mesh):
+    law = lane().SoftIronLaw(_bh_table())
+    options = dict(newton_tolerance=1e-8, tolerance=1e-6, max_iterations=30,
+                   max_halvings=4, observation=_points(), inexact_linear=True)
+    split, split_stats, _ = _engine(box_mesh, "ams").run_newton(law, **options)
+    full, full_stats, _ = _engine(box_mesh, "ams", split_jacobian=False).run_newton(law, **options)
+    assert split_stats["converged"] and full_stats["converged"]
+    np.testing.assert_allclose(split, full, rtol=1e-6, atol=1e-9)
+
+
+def test_reused_ams_hierarchy_keeps_the_newton_field(box_mesh):
+    law = lane().SoftIronLaw(_bh_table())
+    options = dict(newton_tolerance=1e-8, tolerance=1e-6, max_iterations=30,
+                   max_halvings=4, observation=_points(), inexact_linear=True)
+    fresh, fresh_stats, _ = _engine(box_mesh, "ams").run_newton(law, **options)
+    engine = _engine(box_mesh, "ams", ams_reuse_hierarchy=True)
+    reused, stats, _ = engine.run_newton(law, **options)
+    assert fresh_stats["converged"] and stats["converged"]
+    refreshes = [row["hierarchy_refreshes"] for row in stats["history"]]
+    assert refreshes == list(range(len(refreshes)))  # first step builds, later steps refresh
+    np.testing.assert_allclose(reused, fresh, rtol=1e-6, atol=1e-9)
+    with pytest.raises(ValueError, match="ams_reuse_hierarchy"):
+        _engine(box_mesh, "iccg", gauge_epsilon=0.0, ams_reuse_hierarchy=True)
+
+
 def test_vectorised_iron_centroids_match_the_element_loop(box_mesh):
     numbers, centroids = lane().iron_elements_with_centroids(box_mesh)
     expected_numbers, expected = [], []

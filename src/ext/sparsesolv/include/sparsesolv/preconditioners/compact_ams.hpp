@@ -80,14 +80,20 @@ public:
                int print_level = 0,
                double correction_weight = 1.0,
                int subspace_solver = 0,
-               bool beta_zero = false)
+               bool beta_zero = false,
+               bool reuse_hierarchy = false,
+               bool mixed_precision = false)
         : mat_(mat), grad_(grad), freedofs_(freedofs),
           ndof_hc_(mat->Height()), ndof_h1_(grad->Width()),
           cycle_type_(cycle_type), num_smooth_(num_smooth),
           print_level_(print_level), correction_weight_(correction_weight),
-          subspace_solver_(subspace_solver), amg_theta_(amg_theta), beta_zero_(beta_zero)
+          subspace_solver_(subspace_solver), amg_theta_(amg_theta), beta_zero_(beta_zero),
+          reuse_hierarchy_(reuse_hierarchy), mixed_precision_(mixed_precision)
     {
         RequireSerialSetup();
+        if (mixed_precision_ && !beta_zero_)
+            throw std::invalid_argument("HypreBasedAMS: mixed_precision requires beta_zero (float32 matrix values "
+                "lose the gauge-scale gradient components that the G correction amplifies)");
         if ((int)coord_x.size() != ndof_h1_ ||
             (int)coord_y.size() != ndof_h1_ ||
             (int)coord_z.size() != ndof_h1_)
@@ -186,6 +192,10 @@ public:
     int GetNumSmooth() const { return num_smooth_; }
     int GetCycleType() const { return cycle_type_; }
     bool GetBetaZero() const { return beta_zero_; }
+    bool GetReuseHierarchy() const { return reuse_hierarchy_; }
+    bool GetMixedPrecision() const { return mixed_precision_; }
+    int GetHierarchyRefreshes() const { return hierarchy_refreshes_; }
+    int GetInPlaceUpdates() const { return in_place_updates_; }
     int GetSetupWorkers() const { return setup_workers_; }
     shared_ptr<BitArray> GetFreeDofs() const { return freedofs_; }
 
@@ -201,19 +211,21 @@ public:
         };
 
         // The matrix gateway may supply a freshly allocated parallel vector.
-        // Initialize its local real storage explicitly before the first SpMV,
-        // so the cycle does not depend on BaseVector::SetScalar behavior across
-        // concrete parallel-vector implementations.
-        x.FVDouble() = 0.0;
+        // Every entry of x is written before it is read: the first smoother
+        // assigns x = b0 / l1 (see FineSmooth), and without smoothing x is zeroed
+        // here, so the cycle does not depend on BaseVector::SetScalar behavior
+        // across concrete parallel-vector implementations.
+        if (num_smooth_ < 1) x.FVDouble() = 0.0;
 
-        // Zero constrained DOFs in RHS
+        // Zero constrained DOFs in RHS (one fused copy-and-mask pass)
         auto& b0 = *b0_;
-        CopyVector(b, b0);
-        if (freedofs_) {
-            auto fv = b0.FVDouble();
-            ParallelFor(ndof_hc_, [&](size_t i) {
-                if (!freedofs_->Test(i)) fv[i] = 0;
-            });
+        {
+            auto src = b.FVDouble();
+            auto dst = b0.FVDouble();
+            if (freedofs_)
+                ParallelFor(ndof_hc_, [&](size_t i) { dst[i] = freedofs_->Test(i) ? src[i] : 0.0; });
+            else
+                ParallelFor(ndof_hc_, [&](size_t i) { dst[i] = src[i]; });
         }
         t_bc_ += elapsed();
 
@@ -225,6 +237,18 @@ public:
             FineSmooth(b0, x); t_smooth_ += elapsed();
             GradientCorrect(b0, x); t_grad_ += elapsed();
             FineSmooth(b0, x); t_smooth_ += elapsed();
+        } else if (num_smooth_ == 1) {
+            // 01210 with one sweep: run the cycle in the work vector and let the
+            // last smoother write x = w + (b0 - A w) / l1, masked, in one pass.
+            auto& w = *w_;
+            FineSmooth(b0, w, true); t_smooth_ += elapsed();
+            GradientCorrect(b0, w); t_grad_ += elapsed();
+            NodalCorrect(b0, w); t_nodal_ += elapsed();
+            GradientCorrect(b0, w); t_grad_ += elapsed();
+            FinalSmoothInto(b0, w, x); t_smooth_ += elapsed();
+            mult_count_++;
+            PrintMultBreakdown();
+            return;
         } else {
             // 01210 (default, cycle_type=1)
             FineSmooth(b0, x, true); t_smooth_ += elapsed();
@@ -244,6 +268,10 @@ public:
         t_bc_ += elapsed();
 
         mult_count_++;
+        PrintMultBreakdown();
+    }
+
+    void PrintMultBreakdown() const {
         if (print_level_ >= 1 && mult_count_ == 25) {
             std::cout << "\n  AMS Mult x" << mult_count_ << " breakdown:"
                       << " smooth=" << t_smooth_ << "s"
@@ -256,6 +284,31 @@ public:
                       << "s restrict=" << t_restrict_ << "s auxiliary=" << t_auxiliary_
                       << "s prolong=" << t_prolong_ << "s" << std::endl;
         }
+    }
+
+    /// x = w + (b - A_bc w) / l1 on free dofs, 0 on constrained ones, in one
+    /// pass (the last l1-Jacobi sweep of the 01210 cycle written to the output).
+    void FinalSmoothInto(const BaseVector& b, const BaseVector& w, BaseVector& x) const {
+        auto fb = b.FVDouble();
+        auto fw = w.FVDouble();
+        auto fx = x.FVDouble();
+        const auto& A = *A_bc_;
+        const float* vf = mixed_precision_ ? abc_values_f_.data() : nullptr;
+        ParallelForRange(ndof_hc_, [&](IntRange range) {
+            for (auto i : range) {
+                if (freedofs_ && !freedofs_->Test(i)) { fx[i] = 0.0; continue; }
+                auto cols = A.GetRowIndices(i);
+                double s = fb[i];
+                if (vf) {
+                    const float* v = vf + A.First(i);
+                    for (int j = 0; j < cols.Size(); j++) s -= double(v[j]) * fw[cols[j]];
+                } else {
+                    auto vals = A.GetRowValues(i);
+                    for (int j = 0; j < cols.Size(); j++) s -= vals[j] * fw[cols[j]];
+                }
+                fx[i] = fw[i] + s / fine_l1_norms_[i];
+            }
+        });
     }
 
     void MultTrans(const BaseVector& b, BaseVector& x) const override {
@@ -275,6 +328,17 @@ private:
     int subspace_solver_;  // 0=CompactAMG, 1=SparseCholesky
     double amg_theta_;     // AMG strength threshold (preserved for Update)
     const bool beta_zero_; // Pure curl-curl: omit G correction and its hierarchy.
+    const bool reuse_hierarchy_; // Update(): frozen AMG coarsening, refreshed Galerkin matrices.
+    const bool mixed_precision_; // Residual SpMVs inside the cycle read float32 value mirrors.
+    std::vector<float> abc_values_f_;  // float32 mirror of A_bc_ (mixed precision only)
+    std::vector<float> pi_values_f_, pit_values_f_;  // interleaved Pi / Pi^T values (mixed, fused)
+    int hierarchy_refreshes_ = 0;
+    int in_place_updates_ = 0;   // Updates whose auxiliary products ran on fixed patterns.
+    bool row_refresh_ = false;   // last Update changed values in place (row-tracked)
+    std::vector<char> changed_edges_, changed_nodes_, changed_gradient_nodes_;
+    int pi_shared_pattern_ = -1; // Pi_x/y/z, transposes and products share patterns (-1 unknown).
+    bool pi_fused_ = false;      // Pi_x/y/z and their transposes share patterns (set in SetupGeometry).
+    shared_ptr<SparseMatrix<double>> pattern_source_;  // matrix A_bc_ was last built from
     int setup_workers_ = 0;
 
     // Gradient subspace
@@ -294,6 +358,7 @@ private:
     // Work vectors
     mutable std::unique_ptr<VVector<double>> b0_;  // Modified RHS (constrained DOFs zeroed)
     mutable std::unique_ptr<VVector<double>> r0_;  // Fine residual
+    mutable std::unique_ptr<VVector<double>> w_;   // Cycle iterate (01210, one sweep)
     mutable std::unique_ptr<VVector<double>> r_G_, g_G_;      // Gradient space
     mutable std::unique_ptr<VVector<double>> r_Pix_, g_Pix_;  // Pix space
     mutable std::unique_ptr<VVector<double>> r_Piy_, g_Piy_;  // Piy space
@@ -350,21 +415,52 @@ private:
     void SetupGeometry(const std::vector<double>& cx,
                        const std::vector<double>& cy,
                        const std::vector<double>& cz) {
+        // Parallel region (setup runs outside any caller TaskManager).
+        ngcore::RegionTaskManager tasks;
+        auto t_geometry = std::chrono::steady_clock::now();
         BuildPiComponents(cx, cy, cz);
-        ParallelFor(4, [&](size_t d) {
-            if (d == 0)
-                grad_t_ = dynamic_pointer_cast<SparseMatrix<double>>(
-                    grad_->CreateTranspose(true));
-            else if (d == 1)
-                Pix_t_ = dynamic_pointer_cast<SparseMatrix<double>>(
-                    Pix_->CreateTranspose(true));
-            else if (d == 2)
-                Piy_t_ = dynamic_pointer_cast<SparseMatrix<double>>(
-                    Piy_->CreateTranspose(true));
-            else
-                Piz_t_ = dynamic_pointer_cast<SparseMatrix<double>>(
-                    Piz_->CreateTranspose(true));
+        grad_t_ = dynamic_pointer_cast<SparseMatrix<double>>(grad_->CreateTranspose(true));
+        // Pi_d has G's pattern, so Pi_d^T has G^T's: copy it and read each
+        // value from the edge row of Pi_d (an exact transpose, one transposition).
+        Pix_t_ = make_shared<SparseMatrix<double>>(*grad_t_);
+        Piy_t_ = make_shared<SparseMatrix<double>>(*grad_t_);
+        Piz_t_ = make_shared<SparseMatrix<double>>(*grad_t_);
+        ParallelFor(ndof_h1_, [&](size_t v) {
+            auto edges = grad_t_->GetRowIndices(v);
+            auto tx = Pix_t_->GetRowValues(v);
+            auto ty = Piy_t_->GetRowValues(v);
+            auto tz = Piz_t_->GetRowValues(v);
+            for (int j = 0; j < edges.Size(); j++) {
+                const int e = edges[j];
+                auto ends = Pix_->GetRowIndices(e);
+                int k = 0;
+                while (k < ends.Size() && ends[k] != int(v)) k++;
+                tx[j] = Pix_->GetRowValues(e)[k];
+                ty[j] = Piy_->GetRowValues(e)[k];
+                tz[j] = Piz_->GetRowValues(e)[k];
+            }
         });
+        // Pi_x/y/z are built on G's pattern; when their transposes share one
+        // pattern too, restriction and prolongation run as single sweeps.
+        pi_fused_ = SameSparsityPattern(*Pix_, *Piy_) && SameSparsityPattern(*Pix_, *Piz_)
+            && SameSparsityPattern(*Pix_t_, *Piy_t_) && SameSparsityPattern(*Pix_t_, *Piz_t_);
+        if (mixed_precision_ && pi_fused_) {
+            // Geometry-only: interleaved (x, y, z) float32 values per entry.
+            auto interleave = [](const SparseMatrix<double>& X, const SparseMatrix<double>& Y,
+                                 const SparseMatrix<double>& Z, std::vector<float>& out) {
+                auto vx = X.AsVector().FVDouble(), vy = Y.AsVector().FVDouble(), vz = Z.AsVector().FVDouble();
+                out.resize(3 * vx.Size());
+                ParallelFor(vx.Size(), [&](size_t k) {
+                    out[3 * k] = float(vx[k]); out[3 * k + 1] = float(vy[k]); out[3 * k + 2] = float(vz[k]);
+                });
+            };
+            interleave(*Pix_, *Piy_, *Piz_, pi_values_f_);
+            interleave(*Pix_t_, *Piy_t_, *Piz_t_, pit_values_f_);
+        }
+        if (print_level_ > 0)
+            std::cout << "\n  Geometry (Pi, transposes): "
+                      << std::chrono::duration<double>(std::chrono::steady_clock::now() - t_geometry).count()
+                      << "s" << std::flush;
     }
 
     // =====================================================================
@@ -375,28 +471,96 @@ private:
         setup_workers_ = 0;
         auto t_rebuild = std::chrono::high_resolution_clock::now();
 
-        // 1. Create BC-modified matrix (identity rows for constrained DOFs).
-        if (freedofs_) {
-            A_bc_ = CreateBCModifiedMatrix(*mat_, *freedofs_);
-        } else {
-            A_bc_ = mat_;
-        }
-
-        // 2. Galerkin projection: A_G = G^T * A_bc * G, etc.
+        // reuse_hierarchy with an unchanged sparsity pattern: refresh A_bc and
+        // the auxiliary Galerkin matrices in place (numeric products only).
         auto t0 = std::chrono::high_resolution_clock::now();
+        bool in_place = false;
         {
             ngcore::RegionTaskManager tasks;
-            if (!beta_zero_)
-                A_G_ = dynamic_pointer_cast<SparseMatrix<double>>(A_bc_->Restrict(*grad_));
-            A_Pix_ = dynamic_pointer_cast<SparseMatrix<double>>(A_bc_->Restrict(*Pix_));
-            A_Piy_ = dynamic_pointer_cast<SparseMatrix<double>>(A_bc_->Restrict(*Piy_));
-            A_Piz_ = dynamic_pointer_cast<SparseMatrix<double>>(A_bc_->Restrict(*Piz_));
+            // A SparseMatrix never changes its pattern, so the matrix object
+            // A_bc was last built from needs no comparison.
+            in_place = reuse_hierarchy_ && A_bc_ && A_Pix_ && A_Piy_ && A_Piz_
+                && (beta_zero_ || A_G_)
+                && (mat_ == pattern_source_ || SameSparsityPattern(*mat_, *A_bc_));
+            if (in_place) {
+                // Track the rows whose values change: between Newton steps only
+                // the nonlinear elements' rows do, and each dependent row below
+                // is recomputed exactly as in a full refresh.
+                std::vector<char> changed_edges;
+                if (freedofs_) FillBCModifiedValuesTracked(*mat_, *freedofs_, *A_bc_, changed_edges);
+                else { A_bc_ = mat_; changed_edges.assign(ndof_hc_, 1); }
+                changed_edges_ = changed_edges;
+                changed_nodes_ = AffectedGalerkinRows(*Pix_t_, changed_edges);
+                const auto node_rows = FlaggedRows(changed_nodes_);
+                if (pi_shared_pattern_ < 0)
+                    pi_shared_pattern_ = SameSparsityPattern(*Pix_, *Piy_) && SameSparsityPattern(*Pix_, *Piz_)
+                        && SameSparsityPattern(*Pix_t_, *Piy_t_) && SameSparsityPattern(*Pix_t_, *Piz_t_)
+                        && SameSparsityPattern(*A_Pix_, *A_Piy_) && SameSparsityPattern(*A_Pix_, *A_Piz_);
+                const int* nr = node_rows.data();
+                const size_t nn = node_rows.size();
+                const bool nodal = pi_shared_pattern_
+                    ? FusedPiProducts(nr, nn)
+                    : GalerkinProductOnPatternRows(*Pix_t_, *A_bc_, *Pix_, *A_Pix_, nr, nn)
+                      && GalerkinProductOnPatternRows(*Piy_t_, *A_bc_, *Piy_, *A_Piy_, nr, nn)
+                      && GalerkinProductOnPatternRows(*Piz_t_, *A_bc_, *Piz_, *A_Piz_, nr, nn);
+                bool gradient = beta_zero_;
+                if (!beta_zero_) {
+                    const auto grad_rows = FlaggedRows(AffectedGalerkinRows(*grad_t_, changed_edges));
+                    gradient = GalerkinProductOnPatternRows(*grad_t_, *A_bc_, *grad_, *A_G_,
+                                                            grad_rows.data(), grad_rows.size());
+                    changed_gradient_nodes_ = AffectedGalerkinRows(*grad_t_, changed_edges);
+                }
+                in_place = nodal && gradient;
+                if (in_place) in_place_updates_++;
+            }
+        }
+        if (!in_place) pi_shared_pattern_ = -1;  // the products below get new patterns
+        pattern_source_ = mat_;
+        if (!in_place) {
+            ngcore::RegionTaskManager tasks;
+            // 1. Create BC-modified matrix (identity rows for constrained DOFs).
+            if (freedofs_) {
+                A_bc_ = CreateBCModifiedMatrix(*mat_, *freedofs_);
+            } else {
+                A_bc_ = mat_;
+            }
+
+            // 2. Galerkin projection: A_G = G^T * A_bc * G, etc.
+            if (reuse_hierarchy_ && pi_fused_) {
+                // Native: one symbolic pass for the shared Pi pattern, then the
+                // fused numeric pass for all three components.
+                // For an element-graph A the pattern of Pi^T A Pi is the vertex
+                // graph: every pair of tet vertices is an edge, so it is each
+                // vertex and its edge neighbours (read off Pi^T). Any other A
+                // falls back to the full symbolic product.
+                A_Pix_ = VertexEdgePattern();
+                A_Piy_ = make_shared<SparseMatrix<double>>(*A_Pix_);
+                A_Piz_ = make_shared<SparseMatrix<double>>(*A_Pix_);
+                pi_shared_pattern_ = 1;
+                if (!FusedPiProducts()) {
+                    A_Pix_ = GalerkinPattern(*Pix_t_, *A_bc_, *Pix_);
+                    A_Piy_ = make_shared<SparseMatrix<double>>(*A_Pix_);
+                    A_Piz_ = make_shared<SparseMatrix<double>>(*A_Pix_);
+                    if (!FusedPiProducts())
+                        throw std::runtime_error("HypreBasedAMS: Pi product outside its own pattern");
+                }
+                if (!beta_zero_) A_G_ = GalerkinProduct(*grad_t_, *A_bc_, *grad_);
+            } else {
+                if (!beta_zero_)
+                    A_G_ = dynamic_pointer_cast<SparseMatrix<double>>(A_bc_->Restrict(*grad_));
+                A_Pix_ = dynamic_pointer_cast<SparseMatrix<double>>(A_bc_->Restrict(*Pix_));
+                A_Piy_ = dynamic_pointer_cast<SparseMatrix<double>>(A_bc_->Restrict(*Piy_));
+                A_Piz_ = dynamic_pointer_cast<SparseMatrix<double>>(A_bc_->Restrict(*Piz_));
+            }
         }
         auto t1 = std::chrono::high_resolution_clock::now();
         double dt_restrict = std::chrono::duration<double>(t1 - t0).count();
 
         if (print_level_ > 0) {
-            std::cout << "\n  Galerkin restrict: " << dt_restrict << "s";
+            std::cout << (!in_place ? "\n  Galerkin restrict: "
+                          : pi_shared_pattern_ == 1 ? "\n  Galerkin refresh (fixed pattern, fused Pi): "
+                                                    : "\n  Galerkin refresh (fixed pattern): ")
+                      << dt_restrict << "s";
             if (beta_zero_) std::cout << " beta_zero: gradient hierarchy omitted";
             else std::cout << " A_G=" << A_G_->Height() << "x" << A_G_->Width()
                            << " nnz=" << A_G_->NZE();
@@ -404,10 +568,14 @@ private:
         }
 
         // 3. Fix zero rows: set diag = 1.0 for truly zero rows.
-        if (!beta_zero_) FixZeroRows(*A_G_);
-        FixZeroRows(*A_Pix_);
-        FixZeroRows(*A_Piy_);
-        FixZeroRows(*A_Piz_);
+        {
+            ngcore::RegionTaskManager tasks;
+            if (!beta_zero_) FixZeroRows(*A_G_);
+            FixZeroRows(*A_Pix_);
+            FixZeroRows(*A_Piy_);
+            FixZeroRows(*A_Piz_);
+        }
+        row_refresh_ = in_place;
 
         // 4. Build solvers for auxiliary spaces
         if (subspace_solver_ == 1) {
@@ -441,39 +609,95 @@ private:
                 std::cout << "\n  Subspace solver: CompactAMG (min_coarse="
                           << min_coarse_aux << ")" << std::flush;
 
-            shared_ptr<CompactAMG> amg_G;
-            if (!beta_zero_)
-                amg_G = make_shared<CompactAMG>(A_G_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
-            auto amg_Pix = make_shared<CompactAMG>(A_Pix_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
-            auto amg_Piy = make_shared<CompactAMG>(A_Piy_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
-            auto amg_Piz = make_shared<CompactAMG>(A_Piz_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
+            // reuse_hierarchy: keep the coarsening and interpolation of the
+            // first build and refresh only the Galerkin coarse matrices.
+            auto existing = [](const shared_ptr<BaseMatrix>& solver) {
+                return dynamic_pointer_cast<CompactAMG>(solver);
+            };
+            const bool refresh = reuse_hierarchy_ && existing(B_Pix_) && existing(B_Piy_)
+                && existing(B_Piz_) && (beta_zero_ || existing(B_G_));
+            shared_ptr<CompactAMG> amg_G, amg_Pix, amg_Piy, amg_Piz;
+            if (refresh) {
+                if (!beta_zero_) amg_G = existing(B_G_);
+                amg_Pix = existing(B_Pix_);
+                amg_Piy = existing(B_Piy_);
+                amg_Piz = existing(B_Piz_);
+            } else {
+                if (!beta_zero_)
+                    amg_G = make_shared<CompactAMG>(A_G_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
+                amg_Pix = make_shared<CompactAMG>(A_Pix_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
+                amg_Piy = make_shared<CompactAMG>(A_Piy_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
+                amg_Piz = make_shared<CompactAMG>(A_Piz_, nullptr, amg_theta_, 25, min_coarse_aux, 1, 0);
+                // reuse_hierarchy: coarse matrices from the native Galerkin product
+                // (the refresh path's numeric pass then runs on those patterns).
+                for (auto& amg : {amg_G, amg_Pix, amg_Piy, amg_Piz})
+                    if (amg) { amg->SetNativeGalerkin(reuse_hierarchy_); amg->SetMixedPrecision(mixed_precision_); }
+            }
 
             t0 = std::chrono::high_resolution_clock::now();
-            if (!beta_zero_) amg_G->Setup();
-            amg_Pix->Setup();
-            amg_Piy->Setup();
-            amg_Piz->Setup();
+            if (refresh) {
+                // In-place value changes: refresh only the rows they reach.
+                if (!beta_zero_ && !(row_refresh_ && amg_G->RefreshRows(A_G_, changed_gradient_nodes_)))
+                    amg_G->Refresh(A_G_);
+                if (!(row_refresh_ && amg_Pix->RefreshRows(A_Pix_, changed_nodes_))) amg_Pix->Refresh(A_Pix_);
+                if (!(row_refresh_ && amg_Piy->RefreshRows(A_Piy_, changed_nodes_))) amg_Piy->Refresh(A_Piy_);
+                if (!(row_refresh_ && amg_Piz->RefreshRows(A_Piz_, changed_nodes_))) amg_Piz->Refresh(A_Piz_);
+                hierarchy_refreshes_++;
+            } else {
+                if (!beta_zero_) amg_G->Setup();
+                amg_Pix->Setup();
+                amg_Piy->Setup();
+                amg_Piz->Setup();
+            }
             setup_workers_ = std::max({beta_zero_ ? 0 : amg_G->SetupWorkers(),
                 amg_Pix->SetupWorkers(), amg_Piy->SetupWorkers(), amg_Piz->SetupWorkers()});
             t1 = std::chrono::high_resolution_clock::now();
             if (print_level_ > 0)
-                std::cout << "\n  AMG setup (internally parallel hierarchy, serial coarse factorization): "
+                std::cout << (refresh ? "\n  AMG refresh (frozen coarsening and interpolation): "
+                                      : "\n  AMG setup (internally parallel hierarchy, serial coarse factorization): ")
                           << std::chrono::duration<double>(t1 - t0).count()
                           << "s, levels: G=" << (amg_G ? amg_G->NumLevels() : 0)
                           << " Px=" << amg_Pix->NumLevels()
                           << " Py=" << amg_Piy->NumLevels()
                           << " Pz=" << amg_Piz->NumLevels() << std::flush;
 
+            if (print_level_ > 0 && !refresh) {
+                std::array<double, 7> sum{};
+                for (auto& amg : {amg_G, amg_Pix, amg_Piy, amg_Piz})
+                    if (amg) for (int k = 0; k < 7; k++) sum[k] += amg->SetupPhases()[k];
+                std::cout << "\n  AMG setup phases: strength=" << sum[0] << "s coarsen=" << sum[1]
+                          << "s interp=" << sum[2] << "s transpose=" << sum[3] << "s galerkin=" << sum[4]
+                          << "s l1+alloc=" << sum[5] << "s coarse_factor=" << sum[6] << "s" << std::flush;
+            }
             B_G_ = amg_G;
             B_Pix_ = amg_Pix;
             B_Piy_ = amg_Piy;
             B_Piz_ = amg_Piz;
         }
 
-        // 5. Compute truncated l1 norms for fine-grid smoother
+        // 5. Float mirror and truncated l1 norms for the fine-grid smoother,
+        // in a parallel region (the coarse factorizations above stay outside).
         {
+            ngcore::RegionTaskManager tasks;
+            // After an in-place update only the changed rows need new values.
+            const bool rows_only = row_refresh_ && changed_edges_.size() == size_t(ndof_hc_)
+                && fine_l1_norms_.size() == size_t(ndof_hc_)
+                && (!mixed_precision_ || abc_values_f_.size() == A_bc_->NZE());
+            const std::vector<int> rows = rows_only ? FlaggedRows(changed_edges_) : std::vector<int>();
+            if (mixed_precision_) {
+                if (rows_only) {
+                    auto values = A_bc_->AsVector().FVDouble();
+                    ParallelFor(rows.size(), [&](size_t r) {
+                        for (size_t k = A_bc_->First(rows[r]); k < A_bc_->First(rows[r] + 1); k++)
+                            abc_values_f_[k] = float(values[k]);
+                    });
+                } else {
+                    MirrorValues(*A_bc_, abc_values_f_);
+                }
+            }
             fine_l1_norms_.resize(ndof_hc_);
-            ParallelFor(ndof_hc_, [&](size_t i) {
+            ParallelFor(rows_only ? rows.size() : size_t(ndof_hc_), [&](size_t r) {
+                const size_t i = rows_only ? size_t(rows[r]) : r;
                 auto cols = A_bc_->GetRowIndices(i);
                 auto vals = A_bc_->GetRowValues(i);
                 double diag = 0, off_diag = 0;
@@ -505,6 +729,7 @@ private:
     void AllocateWorkVectors() {
         b0_ = std::make_unique<VVector<double>>(ndof_hc_);
         r0_ = std::make_unique<VVector<double>>(ndof_hc_);
+        w_ = std::make_unique<VVector<double>>(ndof_hc_);
         if (!beta_zero_) {
             r_G_ = std::make_unique<VVector<double>>(ndof_h1_);
             g_G_ = std::make_unique<VVector<double>>(ndof_h1_);
@@ -584,6 +809,86 @@ private:
         });
     }
 
+    /// Zero matrix on the vertex graph read off Pi^T (= |G|^T): row v holds v
+    /// and the other endpoint of each of its edges, sorted.
+    shared_ptr<SparseMatrix<double>> VertexEdgePattern() const {
+        Array<int> counts(ndof_h1_);
+        ParallelFor(ndof_h1_, [&](size_t v) { counts[v] = int(Pix_t_->GetRowIndices(v).Size()) + 1; });
+        auto C = make_shared<SparseMatrix<double>>(counts, ndof_h1_);
+        ParallelFor(ndof_h1_, [&](size_t v) {
+            auto cols = C->GetRowIndices(v);
+            auto edges = Pix_t_->GetRowIndices(v);
+            cols[0] = int(v);
+            for (int a = 0; a < edges.Size(); a++) {
+                auto ends = grad_->GetRowIndices(edges[a]);
+                cols[a + 1] = ends[0] == int(v) ? ends[1] : ends[0];
+            }
+            std::sort(cols.Data(), cols.Data() + cols.Size());
+            C->GetRowValues(v) = 0.0;
+        });
+        return C;
+    }
+
+    /// Pi_d^T A_bc Pi_d for d = x, y, z in one sweep of A_bc, on the existing
+    /// patterns of A_Pix/y/z. The three Pi share G's pattern, so their
+    /// transposes and products share theirs (checked by the caller); only the
+    /// values differ. Returns false (values unspecified) when a nonzero
+    /// contribution falls outside the pattern.
+    bool FusedPiProducts(const int* rows = nullptr, size_t nrows = size_t(-1)) {
+        auto& Cx = *A_Pix_;
+        auto& Cy = *A_Piy_;
+        auto& Cz = *A_Piz_;
+        std::atomic<bool> inside{true};
+        const int width = Cx.Width();
+        if (!rows) nrows = Cx.Height();
+        ParallelForRange(nrows, [&](IntRange range) {
+            std::vector<int> marker(width, -1);
+            for (auto r : range) {
+                const size_t u = rows ? size_t(rows[r]) : size_t(r);
+                auto ccols = Cx.GetRowIndices(u);
+                auto cx = Cx.GetRowValues(u);
+                auto cy = Cy.GetRowValues(u);
+                auto cz = Cz.GetRowValues(u);
+                for (int p = 0; p < ccols.Size(); p++) {
+                    marker[ccols[p]] = p;
+                    cx[p] = cy[p] = cz[p] = 0.0;
+                }
+                auto ecols = Pix_t_->GetRowIndices(u);
+                auto tx = Pix_t_->GetRowValues(u);
+                auto ty = Piy_t_->GetRowValues(u);
+                auto tz = Piz_t_->GetRowValues(u);
+                for (int a = 0; a < ecols.Size(); a++) {
+                    const int e = ecols[a];
+                    auto kcols = A_bc_->GetRowIndices(e);
+                    auto kvals = A_bc_->GetRowValues(e);
+                    for (int b = 0; b < kcols.Size(); b++) {
+                        const double w = kvals[b];
+                        if (w == 0.0) continue;
+                        const double wx = tx[a] * w, wy = ty[a] * w, wz = tz[a] * w;
+                        const int k = kcols[b];
+                        auto jcols = Pix_->GetRowIndices(k);
+                        auto px = Pix_->GetRowValues(k);
+                        auto py = Piy_->GetRowValues(k);
+                        auto pz = Piz_->GetRowValues(k);
+                        for (int c = 0; c < jcols.Size(); c++) {
+                            const int pos = marker[jcols[c]];
+                            if (pos < 0) {
+                                if (wx * px[c] != 0.0 || wy * py[c] != 0.0 || wz * pz[c] != 0.0)
+                                    inside.store(false, std::memory_order_relaxed);
+                                continue;
+                            }
+                            cx[pos] += wx * px[c];
+                            cy[pos] += wy * py[c];
+                            cz[pos] += wz * pz[c];
+                        }
+                    }
+                }
+                for (int p = 0; p < ccols.Size(); p++) marker[ccols[p]] = -1;
+            }
+        });
+        return inside.load();
+    }
+
     // =====================================================================
     // Fine-grid smoother: l1-Jacobi (fully TaskManager parallel)
     //
@@ -603,20 +908,28 @@ private:
         ParallelFor(fv_s.Size(), [&](size_t i) { fv_d[i] = fv_s[i]; });
     }
 
+    /// res = b - A_bc x in one pass over the rows (no separate copy of b); with
+    /// mixed precision A_bc's values come from its float32 mirror.
+    void ResidualInto(const BaseVector& b, const BaseVector& x, BaseVector& res) const {
+        ResidualWithValues(*A_bc_, mixed_precision_ ? abc_values_f_.data() : nullptr, b, x, res);
+    }
+
     void FineSmooth(const BaseVector& b, BaseVector& x, bool initially_zero = false) const {
         // l1-Jacobi: fully parallel, no data dependency between rows.
         // Each sweep: compute residual r = b - A*x, then x += r / l1_norm.
         auto& res = *r0_;
+        auto fv_x = x.FVDouble();
 
         for (int s = 0; s < num_smooth_; s++) {
-            // Residual: r = b - A*x (NGSolve SpMV is TaskManager-parallel)
-            CopyVector(b, res);
-            // Mult explicitly zeroes x before the first smoother: A*0 adds no information.
-            if (!initially_zero || s != 0)
-                A_bc_->MultAdd(-1.0, x, res);
-
+            if (initially_zero && s == 0) {
+                // x = 0 before the first sweep: the sweep is x = b / l1 (x is
+                // assigned, so its previous content is never read).
+                auto fv_b = b.FVDouble();
+                ParallelFor(ndof_hc_, [&](size_t i) { fv_x[i] = fv_b[i] / fine_l1_norms_[i]; });
+                continue;
+            }
+            ResidualInto(b, x, res);
             // Jacobi update: x[i] += r[i] / l1_norm[i] (fully parallel)
-            auto fv_x = x.FVDouble();
             auto fv_r = res.FVDouble();
             ParallelFor(ndof_hc_, [&](size_t i) {
                 fv_x[i] += fv_r[i] / fine_l1_norms_[i];
@@ -647,10 +960,7 @@ private:
     }
 
     void ComputeResidual(const BaseVector& b, const BaseVector& x, BaseVector& res) const {
-        ProfileCorrection(t_residual_, [&]() {
-        CopyVector(b, res);
-        A_bc_->MultAdd(-1.0, x, res);
-        });
+        ProfileCorrection(t_residual_, [&]() { ResidualInto(b, x, res); });
     }
 
     void GradientCorrect(const BaseVector& b, BaseVector& x) const {
@@ -665,28 +975,93 @@ private:
         // Additive Pi corrections: all 3 use the same residual (no recomputation).
         // Saves 2 fine-level SpMVs per AMS cycle vs multiplicative approach.
 
-        // Restrict to all 3 subspaces from same residual
+        // Restrict to all 3 subspaces from same residual (one sweep when the
+        // three Pi share a pattern, as built)
         ProfileCorrection(t_restrict_, [&]() {
-        Pix_t_->Mult(*r0_, *r_Pix_);
-        Piy_t_->Mult(*r0_, *r_Piy_);
-        Piz_t_->Mult(*r0_, *r_Piz_);
+        if (pi_fused_) {
+            auto r = r0_->FVDouble();
+            auto rx = r_Pix_->FVDouble();
+            auto ry = r_Piy_->FVDouble();
+            auto rz = r_Piz_->FVDouble();
+            const float* tf = pit_values_f_.empty() ? nullptr : pit_values_f_.data();
+            ParallelForRange(ndof_h1_, [&](IntRange range) {
+                for (auto v : range) {
+                    auto cols = Pix_t_->GetRowIndices(v);
+                    double sx = 0.0, sy = 0.0, sz = 0.0;
+                    if (tf) {
+                        const float* t = tf + 3 * Pix_t_->First(v);
+                        for (int j = 0; j < cols.Size(); j++) {
+                            const double re = r[cols[j]];
+                            sx += double(t[3 * j]) * re; sy += double(t[3 * j + 1]) * re;
+                            sz += double(t[3 * j + 2]) * re;
+                        }
+                    } else {
+                        auto tx = Pix_t_->GetRowValues(v);
+                        auto ty = Piy_t_->GetRowValues(v);
+                        auto tz = Piz_t_->GetRowValues(v);
+                        for (int j = 0; j < cols.Size(); j++) {
+                            const double re = r[cols[j]];
+                            sx += tx[j] * re; sy += ty[j] * re; sz += tz[j] * re;
+                        }
+                    }
+                    rx[v] = sx; ry[v] = sy; rz[v] = sz;
+                }
+            });
+        } else {
+            Pix_t_->Mult(*r0_, *r_Pix_);
+            Piy_t_->Mult(*r0_, *r_Piy_);
+            Piz_t_->Mult(*r0_, *r_Piz_);
+        }
         });
 
         // Solve all 3 (sequential: each AMG uses TaskManager internally)
         ProfileCorrection(t_auxiliary_, [&]() {
-        g_Pix_->FVDouble() = 0;
+        // CompactAMG::Mult initializes its output; other subspace solvers
+        // (direct inverses) assign it as well.
+        // Sequential on purpose: each AMG V-cycle is internally parallel, and
+        // running the three inside one ParallelFor (nested jobs) livelocks.
         B_Pix_->Mult(*r_Pix_, *g_Pix_);
-        g_Piy_->FVDouble() = 0;
         B_Piy_->Mult(*r_Piy_, *g_Piy_);
-        g_Piz_->FVDouble() = 0;
         B_Piz_->Mult(*r_Piz_, *g_Piz_);
         });
 
-        // Prolongate and add all 3 corrections
+        // Prolongate and add all 3 corrections (one sweep when fused)
         ProfileCorrection(t_prolong_, [&]() {
-        Pix_->MultAdd(correction_weight_, *g_Pix_, x);
-        Piy_->MultAdd(correction_weight_, *g_Piy_, x);
-        Piz_->MultAdd(correction_weight_, *g_Piz_, x);
+        if (pi_fused_) {
+            auto fx = x.FVDouble();
+            auto gx = g_Pix_->FVDouble();
+            auto gy = g_Piy_->FVDouble();
+            auto gz = g_Piz_->FVDouble();
+            const double w = correction_weight_;
+            const float* pf = pi_values_f_.empty() ? nullptr : pi_values_f_.data();
+            ParallelForRange(ndof_hc_, [&](IntRange range) {
+                for (auto e : range) {
+                    auto cols = Pix_->GetRowIndices(e);
+                    double s = 0.0;
+                    if (pf) {
+                        const float* p = pf + 3 * Pix_->First(e);
+                        for (int j = 0; j < cols.Size(); j++) {
+                            const int v = cols[j];
+                            s += double(p[3 * j]) * gx[v] + double(p[3 * j + 1]) * gy[v]
+                                 + double(p[3 * j + 2]) * gz[v];
+                        }
+                    } else {
+                        auto px = Pix_->GetRowValues(e);
+                        auto py = Piy_->GetRowValues(e);
+                        auto pz = Piz_->GetRowValues(e);
+                        for (int j = 0; j < cols.Size(); j++) {
+                            const int v = cols[j];
+                            s += px[j] * gx[v] + py[j] * gy[v] + pz[j] * gz[v];
+                        }
+                    }
+                    fx[e] += w * s;
+                }
+            });
+        } else {
+            Pix_->MultAdd(correction_weight_, *g_Pix_, x);
+            Piy_->MultAdd(correction_weight_, *g_Piy_, x);
+            Piz_->MultAdd(correction_weight_, *g_Piz_, x);
+        }
         });
     }
 
