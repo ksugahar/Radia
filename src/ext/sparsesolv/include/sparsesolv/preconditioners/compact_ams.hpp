@@ -413,20 +413,30 @@ private:
     void SetupGeometry(const std::vector<double>& cx,
                        const std::vector<double>& cy,
                        const std::vector<double>& cz) {
+        // Parallel region (setup runs outside any caller TaskManager).
+        ngcore::RegionTaskManager tasks;
+        auto t_geometry = std::chrono::steady_clock::now();
         BuildPiComponents(cx, cy, cz);
-        ParallelFor(4, [&](size_t d) {
-            if (d == 0)
-                grad_t_ = dynamic_pointer_cast<SparseMatrix<double>>(
-                    grad_->CreateTranspose(true));
-            else if (d == 1)
-                Pix_t_ = dynamic_pointer_cast<SparseMatrix<double>>(
-                    Pix_->CreateTranspose(true));
-            else if (d == 2)
-                Piy_t_ = dynamic_pointer_cast<SparseMatrix<double>>(
-                    Piy_->CreateTranspose(true));
-            else
-                Piz_t_ = dynamic_pointer_cast<SparseMatrix<double>>(
-                    Piz_->CreateTranspose(true));
+        grad_t_ = dynamic_pointer_cast<SparseMatrix<double>>(grad_->CreateTranspose(true));
+        // Pi_d has G's pattern, so Pi_d^T has G^T's: copy it and read each
+        // value from the edge row of Pi_d (an exact transpose, one transposition).
+        Pix_t_ = make_shared<SparseMatrix<double>>(*grad_t_);
+        Piy_t_ = make_shared<SparseMatrix<double>>(*grad_t_);
+        Piz_t_ = make_shared<SparseMatrix<double>>(*grad_t_);
+        ParallelFor(ndof_h1_, [&](size_t v) {
+            auto edges = grad_t_->GetRowIndices(v);
+            auto tx = Pix_t_->GetRowValues(v);
+            auto ty = Piy_t_->GetRowValues(v);
+            auto tz = Piz_t_->GetRowValues(v);
+            for (int j = 0; j < edges.Size(); j++) {
+                const int e = edges[j];
+                auto ends = Pix_->GetRowIndices(e);
+                int k = 0;
+                while (k < ends.Size() && ends[k] != int(v)) k++;
+                tx[j] = Pix_->GetRowValues(e)[k];
+                ty[j] = Piy_->GetRowValues(e)[k];
+                tz[j] = Piz_->GetRowValues(e)[k];
+            }
         });
         // Pi_x/y/z are built on G's pattern; when their transposes share one
         // pattern too, restriction and prolongation run as single sweeps.
@@ -445,6 +455,10 @@ private:
             interleave(*Pix_, *Piy_, *Piz_, pi_values_f_);
             interleave(*Pix_t_, *Piy_t_, *Piz_t_, pit_values_f_);
         }
+        if (print_level_ > 0)
+            std::cout << "\n  Geometry (Pi, transposes): "
+                      << std::chrono::duration<double>(std::chrono::steady_clock::now() - t_geometry).count()
+                      << "s" << std::flush;
     }
 
     // =====================================================================
@@ -486,6 +500,7 @@ private:
         if (!in_place) pi_shared_pattern_ = -1;  // the products below get new patterns
         pattern_source_ = mat_;
         if (!in_place) {
+            ngcore::RegionTaskManager tasks;
             // 1. Create BC-modified matrix (identity rows for constrained DOFs).
             if (freedofs_) {
                 A_bc_ = CreateBCModifiedMatrix(*mat_, *freedofs_);
@@ -494,7 +509,6 @@ private:
             }
 
             // 2. Galerkin projection: A_G = G^T * A_bc * G, etc.
-            ngcore::RegionTaskManager tasks;
             if (reuse_hierarchy_ && pi_fused_) {
                 // Native: one symbolic pass for the shared Pi pattern, then the
                 // fused numeric pass for all three components.
@@ -638,10 +652,11 @@ private:
             B_Piz_ = amg_Piz;
         }
 
-        if (mixed_precision_) MirrorValues(*A_bc_, abc_values_f_);
-
-        // 5. Compute truncated l1 norms for fine-grid smoother
+        // 5. Float mirror and truncated l1 norms for the fine-grid smoother,
+        // in a parallel region (the coarse factorizations above stay outside).
         {
+            ngcore::RegionTaskManager tasks;
+            if (mixed_precision_) MirrorValues(*A_bc_, abc_values_f_);
             fine_l1_norms_.resize(ndof_hc_);
             ParallelFor(ndof_hc_, [&](size_t i) {
                 auto cols = A_bc_->GetRowIndices(i);

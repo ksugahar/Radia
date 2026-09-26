@@ -34,13 +34,75 @@ inline shared_ptr<SparseMatrix<double>> GalerkinPattern(const SparseMatrix<doubl
                                                         const SparseMatrix<double>& A,
                                                         const SparseMatrix<double>& P);
 
-/// Pt * A * P with a native symbolic pass and the numeric pass on its pattern.
+/// Pt * A * P in one sweep: each row's pattern and values are accumulated
+/// together (column marker), sorted, and kept in per-chunk buffers; the matrix
+/// is allocated from the counts and filled in parallel. Rows are split into a
+/// fixed number of chunks, so the result does not depend on scheduling.
 inline shared_ptr<SparseMatrix<double>> GalerkinProduct(const SparseMatrix<double>& Pt,
                                                         const SparseMatrix<double>& A,
                                                         const SparseMatrix<double>& P) {
-    auto C = GalerkinPattern(Pt, A, P);
-    if (!GalerkinProductOnPattern(Pt, A, P, *C))
-        throw std::runtime_error("GalerkinProduct: contribution outside its own pattern");
+    if (Pt.Width() != A.Height() || A.Width() != P.Height())
+        throw std::invalid_argument("GalerkinProduct: dimension mismatch");
+    const size_t height = Pt.Height();
+    const int width = P.Width();
+    const size_t nchunks = std::max<size_t>(1, std::min<size_t>(height, 256));
+    struct Chunk { std::vector<int> cols; std::vector<double> vals; std::vector<int> counts; };
+    std::vector<Chunk> chunks(nchunks);
+    ParallelFor(nchunks, [&](size_t c) {
+        const size_t begin = height * c / nchunks, end = height * (c + 1) / nchunks;
+        auto& chunk = chunks[c];
+        chunk.counts.resize(end - begin);
+        std::vector<int> marker(width, -1);
+        std::vector<int> order;
+        std::vector<int> row_cols;
+        std::vector<double> row_vals;
+        for (size_t u = begin; u < end; u++) {
+            row_cols.clear(); row_vals.clear();
+            auto ecols = Pt.GetRowIndices(u);
+            auto evals = Pt.GetRowValues(u);
+            for (int a = 0; a < ecols.Size(); a++) {
+                const double pe = evals[a];
+                auto kcols = A.GetRowIndices(ecols[a]);
+                auto kvals = A.GetRowValues(ecols[a]);
+                for (int b = 0; b < kcols.Size(); b++) {
+                    const double w = pe * kvals[b];
+                    auto jcols = P.GetRowIndices(kcols[b]);
+                    auto jvals = P.GetRowValues(kcols[b]);
+                    for (int k = 0; k < jcols.Size(); k++) {
+                        const int j = jcols[k];
+                        int pos = marker[j];
+                        if (pos < 0) {
+                            pos = marker[j] = int(row_cols.size());
+                            row_cols.push_back(j);
+                            row_vals.push_back(0.0);
+                        }
+                        row_vals[pos] += w * jvals[k];
+                    }
+                }
+            }
+            order.resize(row_cols.size());
+            for (size_t i = 0; i < order.size(); i++) order[i] = int(i);
+            std::sort(order.begin(), order.end(), [&](int x, int y) { return row_cols[x] < row_cols[y]; });
+            for (int i : order) { chunk.cols.push_back(row_cols[i]); chunk.vals.push_back(row_vals[i]); }
+            for (int j : row_cols) marker[j] = -1;
+            chunk.counts[u - begin] = int(row_cols.size());
+        }
+    });
+    Array<int> counts(height);
+    for (size_t c = 0; c < nchunks; c++) {
+        const size_t begin = height * c / nchunks;
+        for (size_t r = 0; r < chunks[c].counts.size(); r++) counts[begin + r] = chunks[c].counts[r];
+    }
+    auto C = make_shared<SparseMatrix<double>>(counts, width);
+    ParallelFor(nchunks, [&](size_t c) {
+        const size_t begin = height * c / nchunks, end = height * (c + 1) / nchunks;
+        size_t k = 0;
+        for (size_t u = begin; u < end; u++) {
+            auto cols = C->GetRowIndices(u);
+            auto vals = C->GetRowValues(u);
+            for (int j = 0; j < cols.Size(); j++, k++) { cols[j] = chunks[c].cols[k]; vals[j] = chunks[c].vals[k]; }
+        }
+    });
     return C;
 }
 
@@ -933,6 +995,7 @@ private:
     }
 
     void MirrorLevels() {
+        ngcore::RegionTaskManager tasks;  // called after the coarse factorization, outside its region
         for (auto& lev : levels_) {
             if (mixed_precision_) MirrorValues(*lev.A, lev.values_f);
             else std::vector<float>().swap(lev.values_f);
