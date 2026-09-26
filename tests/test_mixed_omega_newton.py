@@ -126,6 +126,24 @@ def test_spline_and_ifpos_newton_agree(case):
         run(case, bh_evaluation='linear')
 
 
+def test_iron_integrals_never_evaluate_the_air_source(case):
+    """A compiled MaterialCF evaluates every entry; the coil lives in the air one."""
+    from radia.esrf_examples import get_esrf_bh_table
+    from radia.scalar_potential_solver import _build_bh_coefficient_function
+    mesh, source, potential, table = case
+    # A costly air-only addition (221-interval nested IfPos) of negligible size.
+    costly = 1e-30 * _build_bh_coefficient_function(
+        ng.sqrt(ng.x * ng.x + 1.0), get_esrf_bh_table(6))
+    cheap = run(case, order=2)
+    heavy = run((mesh, source + ng.CF((costly, costly, costly)), potential, table), order=2)
+    cheap_s = sum(row['field_change_s'] for row in cheap['nonlinear_stats']['history'])
+    heavy_s = sum(row['field_change_s'] for row in heavy['nonlinear_stats']['history'])
+    # Evaluating the air entry at iron points costs about 80 times more here.
+    assert heavy_s < 5.0 * cheap_s + 0.05
+    point = mesh(0.5, 0.1, 0.2)
+    np.testing.assert_allclose(heavy['B_cf'](point), cheap['B_cf'](point), rtol=1e-9, atol=1e-16)
+
+
 def test_public_workflow_rejects_material_bonus_outside_newton():
     from radia.static_electromagnet import solve_static_electromagnet_mixed_total_reduced_omega
     with pytest.raises(ValueError, match='nonlinear Newton solve only'):
