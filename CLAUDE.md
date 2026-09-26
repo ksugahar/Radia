@@ -58,10 +58,8 @@ Prefer established public abstractions over proprietary plumbing.
   smooth free-space BEM and Biot-Savart work.
 - Python FE work follows caller-owned `ngsolve.TaskManager()`. MATLAB
   parallel work follows MATLAB's runtime.
-  `p1_newton.solve_p1_newton` is an explicit serial orchestration entry point:
-  it rejects an active TaskManager and owns alternating assembly/solve regions
-  because native AMS coarse factorization requires a serial boundary. This
-  exception does not apply to its reusable helpers or other solvers.
+  Exception: `p1_newton.solve_p1_newton` rejects active TaskManager and owns
+  its regions for serial AMS coarse factorization; its helpers stay caller-owned.
 - Fail loudly on unsupported geometry, labels, ABI, convergence, or backend
   state. Never silently substitute a numerically different route.
 ## Interfaces
@@ -227,11 +225,8 @@ Compute work must never delay or destabilize CI/preflight.
 Historical mdx measurements remain valid provenance. Record host, runtime,
 versions, and measured quantities in validation JSON.
 
-Core count does not imply speed; settle the setting before the host. One #6
-Gram build moved from 51 s to 1567 s on a single host by quadrature rule alone
-(`validation_test/esrf_three_engine/results/hex_gram_definiteness_*.json`).
-hibino's real advantage is memory — 230 GB with no pagefile — rather than its
-76 logical cores.
+Core count does not imply speed; settle quadrature and thread settings first.
+hibino offers 230 GB memory without a pagefile, not guaranteed speedup.
 
 **POLICY**: 全てのベンチマークスクリプトは機械可読な JSON 結果を保存すること。
 
