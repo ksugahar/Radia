@@ -752,6 +752,21 @@ public:
     row_slots_ = creator.MoveTable();
     for (size_t row = 0; row < height; row++)
       if (row_slots_[row].Size()) rows_.push_back(int(row));
+    // Store each lower/upper pair once. Fast-math vectorization may round
+    // separately gathered transposed entries differently; PCG's matrix
+    // contract requires a symmetric operator on every supported build.
+    for (int row : rows_) {
+      const size_t first = matrix_->First(row);
+      auto columns = matrix_->GetRowIndices(row);
+      for (int k = 0; k < columns.Size(); k++) {
+        const int col = columns[k];
+        if (col >= row) continue;
+        const size_t transpose = matrix_->GetPositionTest(col, row);
+        if (transpose == std::numeric_limits<size_t>::max())
+          throw py::value_error("LowestOrderCurlJacobian: nonsymmetric sparsity pattern");
+        symmetric_entries_.emplace_back(first + k, transpose);
+      }
+    }
     auto values = matrix_->AsVector().FVDouble();
     base_offset_.resize(rows_.size() + 1);
     base_offset_[0] = 0;
@@ -795,6 +810,12 @@ public:
         }
       }
     });
+    // The row gather is complete; upper entries are read-only in this pass
+    // and every lower destination is unique, so there are no write races.
+    ParallelFor(symmetric_entries_.size(), [&](size_t k) {
+      const auto& pair = symmetric_entries_[k];
+      values[pair.first] = values[pair.second];
+    });
   }
 
   size_t NumElements() const { return n_; }
@@ -807,6 +828,7 @@ private:
   std::vector<double> curl_, volume_, base_;
   std::vector<size_t> base_offset_;
   std::vector<int> rows_;
+  std::vector<std::pair<size_t, size_t>> symmetric_entries_;
   Table<int> row_slots_;
 };
 
