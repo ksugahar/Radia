@@ -44,6 +44,39 @@ inline shared_ptr<SparseMatrix<double>> GalerkinProduct(const SparseMatrix<doubl
     return C;
 }
 
+/// res = b - A x in one pass over the rows. With `values` (a float32 mirror of
+/// A's values in storage order) the products read the mirror: half the value
+/// traffic; vectors and accumulation stay double.
+inline void ResidualWithValues(const SparseMatrix<double>& A, const float* values,
+                               const BaseVector& b, const BaseVector& x, BaseVector& res) {
+    auto fb = b.FVDouble();
+    auto fx = x.FVDouble();
+    auto fr = res.FVDouble();
+    ParallelForRange(A.Height(), [&](IntRange range) {
+        for (auto i : range) {
+            auto cols = A.GetRowIndices(i);
+            double s = fb[i];
+            if (values) {
+                const float* v = values + A.First(i);
+                for (int j = 0; j < cols.Size(); j++) s -= double(v[j]) * fx[cols[j]];
+            } else {
+                auto vals = A.GetRowValues(i);
+                for (int j = 0; j < cols.Size(); j++) s -= vals[j] * fx[cols[j]];
+            }
+            fr[i] = s;
+        }
+    });
+}
+
+/// float32 copy of A's values in storage order (parallel).
+inline void MirrorValues(const SparseMatrix<double>& A, std::vector<float>& out) {
+    auto values = A.AsVector().FVDouble();
+    out.resize(values.Size());
+    ParallelForRange(values.Size(), [&](IntRange range) {
+        for (auto k : range) out[k] = float(values[k]);
+    });
+}
+
 /// Compact CSR graph (binary adjacency, no values)
 struct CSRGraph {
     int n = 0;
@@ -320,6 +353,7 @@ public:
         // else: just use smoother at coarsest level too
         setup_phase_s_[6] += std::chrono::duration<double>(std::chrono::steady_clock::now() - t_factor).count();
 
+        MirrorLevels();
         if (print_level_ > 0)
             std::cout << "\n  CompactAMG: " << levels_.size() << " levels, coarsest = "
                       << levels_.back().ndof << " DOFs" << std::endl;
@@ -371,6 +405,7 @@ public:
             coarsest.A->SetInverseType("sparsecholesky");
             coarsest.inv = coarsest.A->InverseMatrix(shared_ptr<BitArray>(nullptr));
         }
+        MirrorLevels();
         refresh_count_++;
     }
 
@@ -378,6 +413,8 @@ public:
     /// Build coarse matrices with the native symbolic + numeric Galerkin product
     /// instead of SparseMatrix::Restrict (same matrices up to summation order).
     void SetNativeGalerkin(bool on) { native_galerkin_ = on; }
+    /// V-cycle residuals read float32 mirrors of the level matrices (set before Setup).
+    void SetMixedPrecision(bool on) { mixed_precision_ = on; }
     /// Accumulated Setup phases: strength, coarsening, interpolation,
     /// transpose, Galerkin, l1 norms + work vectors, coarsest factorization.
     const std::array<double, 7>& SetupPhases() const { return setup_phase_s_; }
@@ -440,6 +477,7 @@ private:
     mutable int setup_workers_ = 0;
     int refresh_count_ = 0;
     bool native_galerkin_ = false;
+    bool mixed_precision_ = false;
     std::array<double, 7> setup_phase_s_{};
     int in_place_products_ = 0;
     // =====================================================================
@@ -452,6 +490,7 @@ private:
         shared_ptr<BaseMatrix> inv;           // Direct solver (coarsest only)
         int ndof = 0;
         std::vector<double> l1_norms;
+        std::vector<float> values_f;  // float32 mirror of A (mixed precision only)
 
         // Work vectors (mutable for const Mult)
         mutable std::unique_ptr<VVector<double>> residual;
@@ -883,18 +922,21 @@ private:
     /// res = b - A x in one pass over the rows (no separate copy of b).
     static void ResidualInto(const SparseMatrix<double>& A, const BaseVector& b,
                              const BaseVector& x, BaseVector& res) {
-        auto fb = b.FVDouble();
-        auto fx = x.FVDouble();
-        auto fr = res.FVDouble();
-        ParallelForRange(A.Height(), [&](IntRange range) {
-            for (auto i : range) {
-                auto cols = A.GetRowIndices(i);
-                auto vals = A.GetRowValues(i);
-                double s = fb[i];
-                for (int j = 0; j < cols.Size(); j++) s -= vals[j] * fx[cols[j]];
-                fr[i] = s;
-            }
-        });
+        ResidualWithValues(A, nullptr, b, x, res);
+    }
+
+    /// Level residual; with mixed precision A's values come from the level's
+    /// float32 mirror (vectors and accumulation stay double).
+    void LevelResidual(const Level& lev, const BaseVector& b, const BaseVector& x,
+                       BaseVector& res) const {
+        ResidualWithValues(*lev.A, mixed_precision_ ? lev.values_f.data() : nullptr, b, x, res);
+    }
+
+    void MirrorLevels() {
+        for (auto& lev : levels_) {
+            if (mixed_precision_) MirrorValues(*lev.A, lev.values_f);
+            else std::vector<float>().swap(lev.values_f);
+        }
     }
 
     /// l1-Jacobi sweep: x += r / l1_norm (fully parallel, no data dependency)
@@ -913,7 +955,7 @@ private:
         auto& res = *lev.residual;
 
         // Residual: r = b - A*x in one pass
-        ResidualInto(*lev.A, b, x, res);
+        LevelResidual(lev, b, x, res);
 
         // Jacobi update: x[i] += r[i] / l1_norm[i] (fully parallel)
         auto fv_x = x.FVDouble();
@@ -1087,7 +1129,7 @@ private:
 
         // Compute residual: r = b - A*x
         auto& res = *lev.residual;
-        ResidualInto(*lev.A, b, x, res);
+        LevelResidual(lev, b, x, res);
 
         // Restrict to coarse: r_c = P^T * r
         auto& next = levels_[level + 1];

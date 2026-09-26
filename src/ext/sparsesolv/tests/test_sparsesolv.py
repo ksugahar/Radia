@@ -199,6 +199,57 @@ def test_native_first_build_matches_the_restrict_build(beta_zero):
     assert np.linalg.norm(y1.FV().NumPy() - y2.FV().NumPy()) <= tolerance * scale
 
 
+def test_mixed_precision_ams_requires_beta_zero():
+    """With a gauge, float32 values lose the gauge-scale gradient components
+    that the G correction amplifies (measured: 33 % off the double cycle)."""
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+    mesh, space, a, grad, options = _ams_system(False)
+    with pytest.raises(Exception, match="requires beta_zero"):
+        HypreBasedAMSPreconditioner(a.mat, grad, reuse_hierarchy=True, mixed_precision=True, **options)
+
+
+def test_mixed_precision_ams_is_symmetric_and_close_to_double():
+    """mixed_precision reads float32 matrix/transfer values inside the cycle:
+    the preconditioner stays symmetric (CG-valid) and within float round-off of
+    the double cycle, and its refresh keeps the mirrors current."""
+    import numpy as np
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner, NativePCG
+    beta_zero = True
+    mesh, space, a, grad, options = _ams_system(beta_zero)
+    mixed = HypreBasedAMSPreconditioner(a.mat, grad, reuse_hierarchy=True, mixed_precision=True, **options)
+    double = HypreBasedAMSPreconditioner(a.mat, grad, reuse_hierarchy=True, **options)
+    assert mixed.mixed_precision and not double.mixed_precision
+    free = np.asarray(list(space.FreeDofs()), dtype=bool)
+    rng = np.random.default_rng(31)
+    x, y = a.mat.CreateColVector(), a.mat.CreateColVector()
+    x.FV().NumPy()[:] = rng.normal(size=space.ndof) * free
+    y.FV().NumPy()[:] = rng.normal(size=space.ndof) * free
+    mx, my, dx_ = x.CreateVector(), x.CreateVector(), x.CreateVector()
+    with TaskManager():
+        mx.data = mixed * x
+        my.data = mixed * y
+        dx_.data = double * x
+    xmy, ymx = float(np.dot(x.FV().NumPy(), my.FV().NumPy())), float(np.dot(y.FV().NumPy(), mx.FV().NumPy()))
+    assert abs(xmy - ymx) <= 1e-5 * max(abs(xmy), abs(ymx))
+    tolerance = 1e-5
+    assert np.linalg.norm(mx.FV().NumPy() - dx_.FV().NumPy()) <= tolerance * np.linalg.norm(dx_.FV().NumPy())
+    # After a value change the mirrors follow (in-place refresh).
+    a.mat.AsVector().FV().NumPy()[:] *= 3.0
+    mixed.Update(a.mat)
+    double.Update(a.mat)
+    with TaskManager():
+        mx.data = mixed * x
+        dx_.data = double * x
+    assert np.linalg.norm(mx.FV().NumPy() - dx_.FV().NumPy()) <= tolerance * np.linalg.norm(dx_.FV().NumPy())
+    b = x.CreateVector()
+    b.data = a.mat * x
+    b.FV().NumPy()[~free] = 0.0
+    sol = b.CreateVector()
+    with TaskManager():
+        its, rel, ok = NativePCG(a.mat, mixed, space.FreeDofs()).Solve(b, sol, 1e-10, 500)
+    assert ok and rel <= 1e-10
+
+
 @pytest.mark.parametrize("beta_zero", [False, True])
 def test_native_pcg_solves_to_the_true_residual(beta_zero):
     import numpy as np

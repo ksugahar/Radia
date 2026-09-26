@@ -212,7 +212,7 @@ def _material_numbers(mesh, names) -> np.ndarray:
 
 def solve_p1_newton(mesh, bh_table, *, iron=("iron",), source_cf=None, current_cf=None,
                     current_materials=None, dirichlet="outer", linear_solver="ams",
-                    gauge_epsilon=None, beta_zero=None, reuse_hierarchy=True,
+                    gauge_epsilon=None, beta_zero=None, reuse_hierarchy=True, mixed_precision=None,
                     newton_tolerance=1e-3, field_tolerance=None, max_iterations=40,
                     max_halvings=6, cg_tolerance=1e-8, cg_max_iterations=2000, inexact=True,
                     linear_floor=True, ic_shift=1.05, source_projection_order=2,
@@ -230,7 +230,9 @@ def solve_p1_newton(mesh, bh_table, *, iron=("iron",), source_cf=None, current_c
     and enforced for a current density), ``"iccg"`` (shifted IC(0) CG on the
     ungauged system) or ``"direct"`` (SPD sparse direct, gauged; a cross-check).
     ``gauge_epsilon`` (default 0 for ams/iccg, 1e-6 for direct) adds
-    ``gauge_epsilon nu0 int A.v``.
+    ``gauge_epsilon nu0 int A.v``. ``mixed_precision`` (ams; default: on for beta-zero) lets
+    the AMS cycle's residual products read float32 copies of the matrix and
+    transfer values; CG, its stopping test and the Newton residual stay double.
 
     Convergence: relative residual <= ``newton_tolerance`` and, when
     ``field_tolerance`` is given, max change of |B| per iron element divided by
@@ -263,6 +265,8 @@ def solve_p1_newton(mesh, bh_table, *, iron=("iron",), source_cf=None, current_c
         raise ValueError("the direct solve needs gauge_epsilon > 0 (SPD system)")
     if beta_zero is None:
         beta_zero = linear_solver == "ams" and gauge_epsilon == 0.0
+    if mixed_precision is None:
+        mixed_precision = bool(beta_zero)
     if beta_zero and (linear_solver != "ams" or gauge_epsilon != 0.0):
         raise ValueError("beta_zero requires linear_solver='ams' and gauge_epsilon=0")
     if linear_solver == "ams" and gauge_epsilon == 0.0 and not beta_zero:
@@ -386,7 +390,8 @@ def solve_p1_newton(mesh, bh_table, *, iron=("iron",), source_cf=None, current_c
                     mat=jacobian.matrix, grad_mat=gradient, freedofs=fes.FreeDofs(),
                     coord_x=coordinates[:, 0].tolist(), coord_y=coordinates[:, 1].tolist(),
                     coord_z=coordinates[:, 2].tolist(), cycle_type=1, print_level=0,
-                    beta_zero=bool(beta_zero), reuse_hierarchy=bool(reuse_hierarchy))
+                    beta_zero=bool(beta_zero), reuse_hierarchy=bool(reuse_hierarchy),
+                    mixed_precision=bool(mixed_precision))
                 pcg = ssn.NativePCG(jacobian.matrix, ams, fes.FreeDofs())
             else:
                 ams.Update(jacobian.matrix)
@@ -471,8 +476,8 @@ def solve_p1_newton(mesh, bh_table, *, iron=("iron",), source_cf=None, current_c
              "final_relative_B_change": change, "newton_tolerance": float(newton_tolerance),
              "field_tolerance": field_tolerance, "linear_solver": linear_solver,
              "gauge_epsilon": gauge_epsilon, "beta_zero": bool(beta_zero),
-             "reuse_hierarchy": bool(reuse_hierarchy), "inexact": bool(inexact),
-             "linear_floor": bool(linear_floor), "ndof": int(fes.ndof),
+             "reuse_hierarchy": bool(reuse_hierarchy), "mixed_precision": bool(mixed_precision),
+             "inexact": bool(inexact), "linear_floor": bool(linear_floor), "ndof": int(fes.ndof),
              "iron_elements": int(len(iron_numbers)), "history": history, "setup_s": timing,
              "total_s": time.perf_counter() - started}
     if not converged:
