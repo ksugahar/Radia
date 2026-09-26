@@ -407,7 +407,16 @@ def _audit_helper(path: Path) -> list[Finding]:
     except SyntaxError as exc:
         return [Finding(path, exc.lineno or 0, "parse-error",
                          str(exc)[:80], "fix syntax")]
+    # P1 Newton is a serial orchestration entry point: native AMS coarse
+    # factorization must run outside TaskManager. Only this top-level function
+    # owns alternating regions; other helpers in the module remain audited.
+    allowed = []
+    if path.relative_to(ROOT).as_posix() == "src/radia/p1_newton.py":
+        allowed = [(n.lineno, n.end_lineno) for n in tree.body
+                   if isinstance(n, ast.FunctionDef) and n.name == "solve_p1_newton"]
     for start, _end in _find_tm_wraps(tree):
+        if any(lo <= start <= hi for lo, hi in allowed):
+            continue
         snippet = text.splitlines()[start - 1].strip()[:80]
         findings.append(Finding(
             file=path, line=start, kind="helper-wraps",
