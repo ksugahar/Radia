@@ -301,6 +301,8 @@ A-phi current + engine setup (mesh load excluded).
 | `radia.p1_newton`, native trial residual | tight | 17.3 | 20.0 | 11 | 114 |
 | `radia.p1_newton`, native A-phi coil current | loose | 11.8 | 12.2 | 7 | 64 |
 | `radia.p1_newton`, native A-phi coil current | tight | 17.4 | 17.8 | 11 | 114 |
+| `radia.p1_newton`, native PCG + leaner AMS | loose | 10.2 | 10.6 | 7 | 57* |
+| `radia.p1_newton`, native PCG + leaner AMS | tight | 14.6 | 15.0 | 11 | 103* |
 
 Beta-zero loose repeated: 31.8, 30.9, 31.8 s end-to-end; with the frozen
 hierarchy 30.1, 30.1, 30.3 s (AMS update 1.1 s -> 0.77 s, CG iterations
@@ -335,7 +337,15 @@ field unchanged. With the native A-phi coil current (`ClosedCoilCurrentPhi`:
 conductor-only faces, cut, P1 Laplacian solved by IC(0)-CG to 1e-12, checks;
 records `*_nativephi_*`) the coil current takes 0.4 s instead of 2.8 s;
 end-to-end 12.3, 12.2, 12.3 s loose and 17.8 s tight, counts and field
-unchanged. All with `--inexact-linear`; single host, single problem.
+unchanged. With the native PCG (`NativePCG`: recurrence residual, true
+residual only to confirm the stop) and the leaner AMS cycle (fused
+restriction/prolongation of the three nodal components, one-pass residuals)
+plus the faster first build (vertex-graph Pi pattern, native AMG Galerkin,
+parallel interpolation setup; records `*_pcg_*`), CG takes 3.3 s instead of
+4.7 s and the first AMS build 1.1 s instead of 1.4 s; end-to-end 10.7, 10.6,
+10.7 s loose and 15.0 s tight, field unchanged. *The native PCG does not
+count the initial residual check as an iteration: one fewer per Newton step
+for the same solves. All with `--inexact-linear`; single host, single problem.
 
 ## Results (LAB, 2026-09-22, uncontended sequential runs, 8 threads)
 
