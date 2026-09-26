@@ -307,6 +307,8 @@ A-phi current + engine setup (mesh load excluded).
 | `radia.p1_newton`, mixed-precision AMS cycle | tight | 13.0 | 13.4 | 11 | 103* |
 | `radia.p1_newton`, parallel first AMS build | loose | 8.6 | 8.9 | 7 | 57* |
 | `radia.p1_newton`, parallel first AMS build | tight | 12.5 | 12.8 | 11 | 103* |
+| `radia.p1_newton`, row-tracked AMS update | loose | 8.0 | 8.3 | 7 | 57* |
+| `radia.p1_newton`, row-tracked AMS update | tight | 10.7 | 11.1 | 11 | 103* |
 
 Beta-zero loose repeated: 31.8, 30.9, 31.8 s end-to-end; with the frozen
 hierarchy 30.1, 30.1, 30.3 s (AMS update 1.1 s -> 0.77 s, CG iterations
@@ -359,8 +361,13 @@ With the parallel first AMS build (setup loops in their own parallel regions,
 one-pass native Galerkin product, one transposition for Pi; records
 `*_firstbuild_*`, a host as quiet as the previous session's) the first AMS
 build takes 0.70 s instead of 1.03 s; end-to-end 8.7, 9.0, 9.0 s loose and
-12.8 s tight, field unchanged. All with `--inexact-linear`; single host,
-single problem.
+12.8 s tight, field unchanged. With the row-tracked AMS update (an in-place
+Update recomputes only the Galerkin rows, AMG-level rows, l1 norms and float
+mirrors that the changed matrix rows reach; records `*_rowrefresh_*`) an
+update takes 0.16 s instead of 0.31 s (AMS total 1.8 s instead of 2.6 s);
+end-to-end 8.5, 8.4, 7.9 s loose and 11.1 s tight, field unchanged (a load
+spike hit two rows of the campaign; they were rerun on the idle host). All
+with `--inexact-linear`; single host, single problem.
 
 ## Results (LAB, 2026-09-22, uncontended sequential runs, 8 threads)
 
