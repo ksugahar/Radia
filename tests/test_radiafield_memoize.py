@@ -72,6 +72,35 @@ def test_mirror_symmetric_points_keep_their_own_values(mode):
     np.testing.assert_array_equal(np.asarray(field(located)).reshape(-1, 3), direct)
 
 
+def test_static_workflow_memoises_the_coil_for_the_whole_solve(monkeypatch):
+    """Source projections, gates and loads share one coil cache, cleared after."""
+    from radia.static_electromagnet import (
+        StaticElectromagnetMixedDomain, solve_static_electromagnet_mixed_total_reduced_omega)
+
+    source = rad.RadiaField(_coil(), "h")
+    seen = {}
+
+    class Stop(Exception):
+        pass
+
+    def spy(self, *args, **kwargs):
+        # The first step of the solve; everything after it runs memoised too.
+        seen["memoize"] = source.memoize
+        raise Stop
+
+    monkeypatch.setattr(StaticElectromagnetMixedDomain, "validate_mesh_labels", spy)
+    mesh = ng.Mesh(ng.unit_cube.GenerateMesh(maxh=0.5))
+    domain = StaticElectromagnetMixedDomain(
+        reduced_materials=("air",), total_materials=("iron", "kelvin"),
+        nonlinear_materials=("iron",))
+    with pytest.raises(Stop):
+        solve_static_electromagnet_mixed_total_reduced_omega(
+            mesh, source, domain, 1.0, (0.0, 0.0, 0.0), order=1,
+            linear_mu_r_by_material={"iron": 100.0}, source_trace_tolerance=0.05)
+    assert seen == {"memoize": True}
+    assert not source.memoize and source.GetCacheStats()["size"] == 0
+
+
 @pytest.fixture(scope="module")
 def picard_case():
     return _picard_case_data()
