@@ -189,6 +189,25 @@ inline void FillBCModifiedValues(const SparseMatrix<double>& A, const BitArray& 
     });
 }
 
+/// FillBCModifiedValues that also flags every row of B whose values change.
+inline void FillBCModifiedValuesTracked(const SparseMatrix<double>& A, const BitArray& freedofs,
+                                        SparseMatrix<double>& B, std::vector<char>& changed) {
+    changed.assign(A.Height(), 0);
+    ParallelFor(A.Height(), [&](size_t i) {
+        auto cols = A.GetRowIndices(i);
+        auto src = A.GetRowValues(i);
+        auto dst = B.GetRowValues(i);
+        const bool free_row = freedofs.Test(i);
+        char row_changed = 0;
+        for (int j = 0; j < cols.Size(); j++) {
+            const double v = !free_row ? ((cols[j] == (int)i) ? 1.0 : 0.0)
+                                       : (freedofs.Test(cols[j]) ? src[j] : 0.0);
+            if (v != dst[j]) { dst[j] = v; row_changed = 1; }
+        }
+        changed[i] = row_changed;
+    });
+}
+
 /// Structural pattern of Pt * A * P as a zero SparseMatrix (sorted columns):
 /// row u holds every j reached by u -Pt-> e -A-> k -P-> j. Two parallel passes
 /// (count, fill) with a per-task column marker; no values are computed.
@@ -240,16 +259,48 @@ inline shared_ptr<SparseMatrix<double>> GalerkinPattern(const SparseMatrix<doubl
 /// sum_e Pt[u,e] sum_k A[e,k] P[k,:], accumulated through a per-task column
 /// marker. Returns false when a nonzero contribution falls outside C's
 /// pattern; the values of C are then unspecified and the caller must rebuild.
+inline bool GalerkinProductOnPatternRows(const SparseMatrix<double>& Pt, const SparseMatrix<double>& A,
+                                         const SparseMatrix<double>& P, SparseMatrix<double>& C,
+                                         const int* rows, size_t nrows);
+
 inline bool GalerkinProductOnPattern(const SparseMatrix<double>& Pt, const SparseMatrix<double>& A,
                                      const SparseMatrix<double>& P, SparseMatrix<double>& C) {
+    return GalerkinProductOnPatternRows(Pt, A, P, C, nullptr, C.Height());
+}
+
+/// Rows whose Galerkin row can change when the flagged rows of A change: row u
+/// of Pt * A * P reads the A rows listed in row u of Pt.
+inline std::vector<char> AffectedGalerkinRows(const SparseMatrix<double>& Pt,
+                                              const std::vector<char>& changed) {
+    std::vector<char> out(Pt.Height(), 0);
+    ParallelFor(Pt.Height(), [&](size_t u) {
+        for (int e : Pt.GetRowIndices(u))
+            if (changed[e]) { out[u] = 1; break; }
+    });
+    return out;
+}
+
+/// Indices of the flagged entries, ascending.
+inline std::vector<int> FlaggedRows(const std::vector<char>& flags) {
+    std::vector<int> rows;
+    for (size_t i = 0; i < flags.size(); i++) if (flags[i]) rows.push_back(int(i));
+    return rows;
+}
+
+/// The Galerkin numeric pass on the given rows only (all rows when rows is
+/// null); each row is computed exactly as in the full pass.
+inline bool GalerkinProductOnPatternRows(const SparseMatrix<double>& Pt, const SparseMatrix<double>& A,
+                                         const SparseMatrix<double>& P, SparseMatrix<double>& C,
+                                         const int* rows, size_t nrows) {
     if (Pt.Height() != C.Height() || Pt.Width() != A.Height() || A.Width() != P.Height()
         || P.Width() != C.Width())
         throw std::invalid_argument("GalerkinProductOnPattern: dimension mismatch");
     std::atomic<bool> inside{true};
     const int width = C.Width();
-    ParallelForRange(C.Height(), [&](IntRange range) {
+    ParallelForRange(nrows, [&](IntRange range) {
         std::vector<int> marker(width, -1);
-        for (auto u : range) {
+        for (auto r : range) {
+            const size_t u = rows ? size_t(rows[r]) : size_t(r);
             auto ccols = C.GetRowIndices(u);
             auto cvals = C.GetRowValues(u);
             for (int p = 0; p < ccols.Size(); p++) {
@@ -469,6 +520,45 @@ public:
         }
         MirrorLevels();
         refresh_count_++;
+    }
+
+    /// Refresh after the values of the level-0 matrix changed in place, only in
+    /// the flagged rows (the same matrix object, no Dirichlet copy): each
+    /// level recomputes only the Galerkin rows, l1 norms and float mirrors its
+    /// changed fine rows reach; the coarsest factorization is redone when its
+    /// matrix changed. Row by row identical to a full Refresh. Returns false
+    /// (nothing done) when this does not apply; the caller then uses Refresh.
+    bool RefreshRows(shared_ptr<SparseMatrix<double>> mat, const std::vector<char>& changed) {
+        if (levels_.empty() || freedofs_ || mat != mat_ || levels_[0].A != mat_
+            || changed.size() != size_t(mat_->Height()))
+            return false;
+        bool coarsest_changed = false;
+        {
+        ngcore::RegionTaskManager tasks;
+        std::vector<char> flags = changed;
+        for (size_t l = 0; l < levels_.size(); l++) {
+            auto& lev = levels_[l];
+            const auto rows = FlaggedRows(flags);
+            RefreshRowNorms(lev, rows);
+            if (l + 1 == levels_.size()) { coarsest_changed = !rows.empty(); break; }
+            if (!lev.P || !lev.Pt)
+                throw std::runtime_error("CompactAMG::RefreshRows: level without interpolation");
+            auto next_flags = AffectedGalerkinRows(*lev.Pt, flags);
+            const auto next_rows = FlaggedRows(next_flags);
+            if (!GalerkinProductOnPatternRows(*lev.Pt, *lev.A, *lev.P, *levels_[l + 1].A,
+                                              next_rows.data(), next_rows.size()))
+                throw std::runtime_error("CompactAMG::RefreshRows: contribution outside the coarse pattern");
+            in_place_products_++;
+            flags = std::move(next_flags);
+        }
+        }
+        auto& coarsest = levels_.back();
+        if (coarsest.inv && coarsest_changed) {
+            coarsest.A->SetInverseType("sparsecholesky");
+            coarsest.inv = coarsest.A->InverseMatrix(shared_ptr<BitArray>(nullptr));
+        }
+        refresh_count_++;
+        return true;
     }
 
     int RefreshCount() const { return refresh_count_; }
@@ -961,6 +1051,24 @@ private:
     // No data dependency between rows -> full ParallelFor parallelism.
     // Reference: Baker et al., SIAM J. Sci. Comput. 33(5), 2011.
     // =====================================================================
+    /// l1 norm and float mirror of the listed rows of a level (as ComputeL1Norms
+    /// and MirrorValues do for all rows).
+    void RefreshRowNorms(Level& lev, const std::vector<int>& rows) const {
+        const auto& A = *lev.A;
+        const bool mirror = mixed_precision_ && lev.values_f.size() == A.NZE();
+        auto values = A.AsVector().FVDouble();
+        ParallelFor(rows.size(), [&](size_t r) {
+            const int i = rows[r];
+            auto vals = A.GetRowValues(i);
+            double sum = 0;
+            for (int j = 0; j < vals.Size(); j++)
+                sum += std::abs(vals[j]);
+            lev.l1_norms[i] = (sum > 0) ? sum : 1.0;
+            if (mirror)
+                for (size_t k = A.First(i); k < A.First(i + 1); k++) lev.values_f[k] = float(values[k]);
+        });
+    }
+
     void ComputeL1Norms(const SparseMatrix<double>& A,
                         std::vector<double>& norms) const {
         int n = A.Height();

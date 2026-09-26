@@ -199,6 +199,57 @@ def test_native_first_build_matches_the_restrict_build(beta_zero):
     assert np.linalg.norm(y1.FV().NumPy() - y2.FV().NumPy()) <= tolerance * scale
 
 
+@pytest.mark.parametrize("beta_zero,mixed", [(False, False), (True, False), (True, True)])
+def test_row_tracked_update_equals_a_full_refresh(beta_zero, mixed):
+    """An in-place Update recomputes only the rows its value changes reach
+    (Galerkin rows, AMG levels, l1 norms, float mirrors). Its preconditioner
+    must be the one of an Update that recomputes everything."""
+    import numpy as np
+    from radia.sparsesolv_ngsolve import HypreBasedAMSPreconditioner
+    mesh, space, a, grad, options = _ams_system(beta_zero)
+    values = a.mat.AsVector().FV().NumPy()
+    original = values.copy()
+    kwargs = dict(reuse_hierarchy=True, mixed_precision=mixed, **options)
+    # One object for both states: separately built hierarchies differ in the
+    # last bits (the setup is not bit-reproducible), the refresh kernels are.
+    pre = HypreBasedAMSPreconditioner(a.mat, grad, **kwargs)
+    # New values on the rows of a few elements only (a symmetric local change).
+    rows = set()
+    for el in list(mesh.Elements(VOL))[:40]:
+        rows.update(space.GetDofNrs(el))
+    rows = np.array(sorted(rows))
+    _, cols, offsets = (np.asarray(v) for v in a.mat.CSR())
+    offsets = offsets.astype(np.int64)
+    target = original.copy()
+    for r in rows:
+        for k in range(offsets[r], offsets[r + 1]):
+            if cols[k] in rows:
+                target[k] *= 1.7
+    x = a.mat.CreateColVector()
+    x.FV().NumPy()[:] = np.random.default_rng(41).normal(size=space.ndof)
+    y0, y1, y2 = x.CreateVector(), x.CreateVector(), x.CreateVector()
+    y0.data = pre * x
+    # Tracked: only the element rows change.
+    values[:] = target
+    pre.Update(a.mat)
+    y1.data = pre * x   # serial: bit-reproducible
+    # Full: every row changes first, then the same target values again.
+    values[:] = original * 3.0
+    pre.Update(a.mat)
+    values[:] = target
+    pre.Update(a.mat)
+    y2.data = pre * x
+    assert pre.in_place_updates == 3
+    # The build uses /fp:fast and parallel ranges, so even two full refreshes
+    # agree only to round-off (1e-16 beta-zero, ~1e-9 gauged: G^T A G
+    # cancellation); a row the tracking missed would differ like the change.
+    def rel(p, q):
+        return np.max(np.abs(p.FV().NumPy() - q.FV().NumPy())) / np.max(np.abs(q.FV().NumPy()))
+    tolerance = 1e-13 if beta_zero else 1e-7
+    assert rel(y0, y1) > 1e-4                 # the change is seen
+    assert rel(y1, y2) <= tolerance
+
+
 def test_mixed_precision_ams_requires_beta_zero():
     """With a gauge, float32 values lose the gauge-scale gradient components
     that the G correction amplifies (measured: 33 % off the double cycle)."""
