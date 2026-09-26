@@ -81,15 +81,19 @@ public:
                double correction_weight = 1.0,
                int subspace_solver = 0,
                bool beta_zero = false,
-               bool reuse_hierarchy = false)
+               bool reuse_hierarchy = false,
+               bool mixed_precision = false)
         : mat_(mat), grad_(grad), freedofs_(freedofs),
           ndof_hc_(mat->Height()), ndof_h1_(grad->Width()),
           cycle_type_(cycle_type), num_smooth_(num_smooth),
           print_level_(print_level), correction_weight_(correction_weight),
           subspace_solver_(subspace_solver), amg_theta_(amg_theta), beta_zero_(beta_zero),
-          reuse_hierarchy_(reuse_hierarchy)
+          reuse_hierarchy_(reuse_hierarchy), mixed_precision_(mixed_precision)
     {
         RequireSerialSetup();
+        if (mixed_precision_ && !beta_zero_)
+            throw std::invalid_argument("HypreBasedAMS: mixed_precision requires beta_zero (float32 matrix values "
+                "lose the gauge-scale gradient components that the G correction amplifies)");
         if ((int)coord_x.size() != ndof_h1_ ||
             (int)coord_y.size() != ndof_h1_ ||
             (int)coord_z.size() != ndof_h1_)
@@ -189,6 +193,7 @@ public:
     int GetCycleType() const { return cycle_type_; }
     bool GetBetaZero() const { return beta_zero_; }
     bool GetReuseHierarchy() const { return reuse_hierarchy_; }
+    bool GetMixedPrecision() const { return mixed_precision_; }
     int GetHierarchyRefreshes() const { return hierarchy_refreshes_; }
     int GetInPlaceUpdates() const { return in_place_updates_; }
     int GetSetupWorkers() const { return setup_workers_; }
@@ -232,6 +237,18 @@ public:
             FineSmooth(b0, x); t_smooth_ += elapsed();
             GradientCorrect(b0, x); t_grad_ += elapsed();
             FineSmooth(b0, x); t_smooth_ += elapsed();
+        } else if (num_smooth_ == 1) {
+            // 01210 with one sweep: run the cycle in the work vector and let the
+            // last smoother write x = w + (b0 - A w) / l1, masked, in one pass.
+            auto& w = *w_;
+            FineSmooth(b0, w, true); t_smooth_ += elapsed();
+            GradientCorrect(b0, w); t_grad_ += elapsed();
+            NodalCorrect(b0, w); t_nodal_ += elapsed();
+            GradientCorrect(b0, w); t_grad_ += elapsed();
+            FinalSmoothInto(b0, w, x); t_smooth_ += elapsed();
+            mult_count_++;
+            PrintMultBreakdown();
+            return;
         } else {
             // 01210 (default, cycle_type=1)
             FineSmooth(b0, x, true); t_smooth_ += elapsed();
@@ -251,6 +268,10 @@ public:
         t_bc_ += elapsed();
 
         mult_count_++;
+        PrintMultBreakdown();
+    }
+
+    void PrintMultBreakdown() const {
         if (print_level_ >= 1 && mult_count_ == 25) {
             std::cout << "\n  AMS Mult x" << mult_count_ << " breakdown:"
                       << " smooth=" << t_smooth_ << "s"
@@ -263,6 +284,31 @@ public:
                       << "s restrict=" << t_restrict_ << "s auxiliary=" << t_auxiliary_
                       << "s prolong=" << t_prolong_ << "s" << std::endl;
         }
+    }
+
+    /// x = w + (b - A_bc w) / l1 on free dofs, 0 on constrained ones, in one
+    /// pass (the last l1-Jacobi sweep of the 01210 cycle written to the output).
+    void FinalSmoothInto(const BaseVector& b, const BaseVector& w, BaseVector& x) const {
+        auto fb = b.FVDouble();
+        auto fw = w.FVDouble();
+        auto fx = x.FVDouble();
+        const auto& A = *A_bc_;
+        const float* vf = mixed_precision_ ? abc_values_f_.data() : nullptr;
+        ParallelForRange(ndof_hc_, [&](IntRange range) {
+            for (auto i : range) {
+                if (freedofs_ && !freedofs_->Test(i)) { fx[i] = 0.0; continue; }
+                auto cols = A.GetRowIndices(i);
+                double s = fb[i];
+                if (vf) {
+                    const float* v = vf + A.First(i);
+                    for (int j = 0; j < cols.Size(); j++) s -= double(v[j]) * fw[cols[j]];
+                } else {
+                    auto vals = A.GetRowValues(i);
+                    for (int j = 0; j < cols.Size(); j++) s -= vals[j] * fw[cols[j]];
+                }
+                fx[i] = fw[i] + s / fine_l1_norms_[i];
+            }
+        });
     }
 
     void MultTrans(const BaseVector& b, BaseVector& x) const override {
@@ -283,6 +329,9 @@ private:
     double amg_theta_;     // AMG strength threshold (preserved for Update)
     const bool beta_zero_; // Pure curl-curl: omit G correction and its hierarchy.
     const bool reuse_hierarchy_; // Update(): frozen AMG coarsening, refreshed Galerkin matrices.
+    const bool mixed_precision_; // Residual SpMVs inside the cycle read float32 value mirrors.
+    std::vector<float> abc_values_f_;  // float32 mirror of A_bc_ (mixed precision only)
+    std::vector<float> pi_values_f_, pit_values_f_;  // interleaved Pi / Pi^T values (mixed, fused)
     int hierarchy_refreshes_ = 0;
     int in_place_updates_ = 0;   // Updates whose auxiliary products ran on fixed patterns.
     int pi_shared_pattern_ = -1; // Pi_x/y/z, transposes and products share patterns (-1 unknown).
@@ -307,6 +356,7 @@ private:
     // Work vectors
     mutable std::unique_ptr<VVector<double>> b0_;  // Modified RHS (constrained DOFs zeroed)
     mutable std::unique_ptr<VVector<double>> r0_;  // Fine residual
+    mutable std::unique_ptr<VVector<double>> w_;   // Cycle iterate (01210, one sweep)
     mutable std::unique_ptr<VVector<double>> r_G_, g_G_;      // Gradient space
     mutable std::unique_ptr<VVector<double>> r_Pix_, g_Pix_;  // Pix space
     mutable std::unique_ptr<VVector<double>> r_Piy_, g_Piy_;  // Piy space
@@ -382,6 +432,19 @@ private:
         // pattern too, restriction and prolongation run as single sweeps.
         pi_fused_ = SameSparsityPattern(*Pix_, *Piy_) && SameSparsityPattern(*Pix_, *Piz_)
             && SameSparsityPattern(*Pix_t_, *Piy_t_) && SameSparsityPattern(*Pix_t_, *Piz_t_);
+        if (mixed_precision_ && pi_fused_) {
+            // Geometry-only: interleaved (x, y, z) float32 values per entry.
+            auto interleave = [](const SparseMatrix<double>& X, const SparseMatrix<double>& Y,
+                                 const SparseMatrix<double>& Z, std::vector<float>& out) {
+                auto vx = X.AsVector().FVDouble(), vy = Y.AsVector().FVDouble(), vz = Z.AsVector().FVDouble();
+                out.resize(3 * vx.Size());
+                ParallelFor(vx.Size(), [&](size_t k) {
+                    out[3 * k] = float(vx[k]); out[3 * k + 1] = float(vy[k]); out[3 * k + 2] = float(vz[k]);
+                });
+            };
+            interleave(*Pix_, *Piy_, *Piz_, pi_values_f_);
+            interleave(*Pix_t_, *Piy_t_, *Piz_t_, pit_values_f_);
+        }
     }
 
     // =====================================================================
@@ -533,7 +596,7 @@ private:
                 // reuse_hierarchy: coarse matrices from the native Galerkin product
                 // (the refresh path's numeric pass then runs on those patterns).
                 for (auto& amg : {amg_G, amg_Pix, amg_Piy, amg_Piz})
-                    if (amg) amg->SetNativeGalerkin(reuse_hierarchy_);
+                    if (amg) { amg->SetNativeGalerkin(reuse_hierarchy_); amg->SetMixedPrecision(mixed_precision_); }
             }
 
             t0 = std::chrono::high_resolution_clock::now();
@@ -575,6 +638,8 @@ private:
             B_Piz_ = amg_Piz;
         }
 
+        if (mixed_precision_) MirrorValues(*A_bc_, abc_values_f_);
+
         // 5. Compute truncated l1 norms for fine-grid smoother
         {
             fine_l1_norms_.resize(ndof_hc_);
@@ -610,6 +675,7 @@ private:
     void AllocateWorkVectors() {
         b0_ = std::make_unique<VVector<double>>(ndof_hc_);
         r0_ = std::make_unique<VVector<double>>(ndof_hc_);
+        w_ = std::make_unique<VVector<double>>(ndof_hc_);
         if (!beta_zero_) {
             r_G_ = std::make_unique<VVector<double>>(ndof_h1_);
             g_G_ = std::make_unique<VVector<double>>(ndof_h1_);
@@ -786,21 +852,10 @@ private:
         ParallelFor(fv_s.Size(), [&](size_t i) { fv_d[i] = fv_s[i]; });
     }
 
-    /// res = b - A_bc x in one pass over the rows (no separate copy of b).
+    /// res = b - A_bc x in one pass over the rows (no separate copy of b); with
+    /// mixed precision A_bc's values come from its float32 mirror.
     void ResidualInto(const BaseVector& b, const BaseVector& x, BaseVector& res) const {
-        auto fb = b.FVDouble();
-        auto fx = x.FVDouble();
-        auto fr = res.FVDouble();
-        const auto& A = *A_bc_;
-        ParallelForRange(ndof_hc_, [&](IntRange range) {
-            for (auto i : range) {
-                auto cols = A.GetRowIndices(i);
-                auto vals = A.GetRowValues(i);
-                double s = fb[i];
-                for (int j = 0; j < cols.Size(); j++) s -= vals[j] * fx[cols[j]];
-                fr[i] = s;
-            }
-        });
+        ResidualWithValues(*A_bc_, mixed_precision_ ? abc_values_f_.data() : nullptr, b, x, res);
     }
 
     void FineSmooth(const BaseVector& b, BaseVector& x, bool initially_zero = false) const {
@@ -872,16 +927,26 @@ private:
             auto rx = r_Pix_->FVDouble();
             auto ry = r_Piy_->FVDouble();
             auto rz = r_Piz_->FVDouble();
+            const float* tf = pit_values_f_.empty() ? nullptr : pit_values_f_.data();
             ParallelForRange(ndof_h1_, [&](IntRange range) {
                 for (auto v : range) {
                     auto cols = Pix_t_->GetRowIndices(v);
-                    auto tx = Pix_t_->GetRowValues(v);
-                    auto ty = Piy_t_->GetRowValues(v);
-                    auto tz = Piz_t_->GetRowValues(v);
                     double sx = 0.0, sy = 0.0, sz = 0.0;
-                    for (int j = 0; j < cols.Size(); j++) {
-                        const double re = r[cols[j]];
-                        sx += tx[j] * re; sy += ty[j] * re; sz += tz[j] * re;
+                    if (tf) {
+                        const float* t = tf + 3 * Pix_t_->First(v);
+                        for (int j = 0; j < cols.Size(); j++) {
+                            const double re = r[cols[j]];
+                            sx += double(t[3 * j]) * re; sy += double(t[3 * j + 1]) * re;
+                            sz += double(t[3 * j + 2]) * re;
+                        }
+                    } else {
+                        auto tx = Pix_t_->GetRowValues(v);
+                        auto ty = Piy_t_->GetRowValues(v);
+                        auto tz = Piz_t_->GetRowValues(v);
+                        for (int j = 0; j < cols.Size(); j++) {
+                            const double re = r[cols[j]];
+                            sx += tx[j] * re; sy += ty[j] * re; sz += tz[j] * re;
+                        }
                     }
                     rx[v] = sx; ry[v] = sy; rz[v] = sz;
                 }
@@ -895,11 +960,12 @@ private:
 
         // Solve all 3 (sequential: each AMG uses TaskManager internally)
         ProfileCorrection(t_auxiliary_, [&]() {
-        g_Pix_->FVDouble() = 0;
+        // CompactAMG::Mult initializes its output; other subspace solvers
+        // (direct inverses) assign it as well.
+        // Sequential on purpose: each AMG V-cycle is internally parallel, and
+        // running the three inside one ParallelFor (nested jobs) livelocks.
         B_Pix_->Mult(*r_Pix_, *g_Pix_);
-        g_Piy_->FVDouble() = 0;
         B_Piy_->Mult(*r_Piy_, *g_Piy_);
-        g_Piz_->FVDouble() = 0;
         B_Piz_->Mult(*r_Piz_, *g_Piz_);
         });
 
@@ -911,16 +977,26 @@ private:
             auto gy = g_Piy_->FVDouble();
             auto gz = g_Piz_->FVDouble();
             const double w = correction_weight_;
+            const float* pf = pi_values_f_.empty() ? nullptr : pi_values_f_.data();
             ParallelForRange(ndof_hc_, [&](IntRange range) {
                 for (auto e : range) {
                     auto cols = Pix_->GetRowIndices(e);
-                    auto px = Pix_->GetRowValues(e);
-                    auto py = Piy_->GetRowValues(e);
-                    auto pz = Piz_->GetRowValues(e);
                     double s = 0.0;
-                    for (int j = 0; j < cols.Size(); j++) {
-                        const int v = cols[j];
-                        s += px[j] * gx[v] + py[j] * gy[v] + pz[j] * gz[v];
+                    if (pf) {
+                        const float* p = pf + 3 * Pix_->First(e);
+                        for (int j = 0; j < cols.Size(); j++) {
+                            const int v = cols[j];
+                            s += double(p[3 * j]) * gx[v] + double(p[3 * j + 1]) * gy[v]
+                                 + double(p[3 * j + 2]) * gz[v];
+                        }
+                    } else {
+                        auto px = Pix_->GetRowValues(e);
+                        auto py = Piy_->GetRowValues(e);
+                        auto pz = Piz_->GetRowValues(e);
+                        for (int j = 0; j < cols.Size(); j++) {
+                            const int v = cols[j];
+                            s += px[j] * gx[v] + py[j] * gy[v] + pz[j] * gz[v];
+                        }
                     }
                     fx[e] += w * s;
                 }

@@ -393,6 +393,9 @@ class CompactAMSPreconditionerImpl(BaseMatrix):
     def reuse_hierarchy(self) -> bool: ...
 
     @property
+    def mixed_precision(self) -> bool: ...
+
+    @property
     def hierarchy_refreshes(self) -> int: ...
 
     @property
@@ -508,6 +511,7 @@ def CompactAMSPreconditioner(
     num_smooth: int = 1,
     beta_zero: bool = False,
     reuse_hierarchy: bool = False,
+    mixed_precision: bool = False,
 ) -> CompactAMSPreconditionerImpl:
     """Compact AMS (Auxiliary-space Maxwell Solver) Preconditioner.
 
@@ -529,6 +533,8 @@ def CompactAMSPreconditioner(
         beta_zero: Skip gradient correction and its hierarchy (default: False).
         reuse_hierarchy: Update() keeps the first AMG coarsening and interpolation
             and refreshes only the Galerkin coarse matrices (default: False).
+        mixed_precision: residual products inside the cycle read float32 value
+            copies (vectors and sums double); requires beta_zero (default: False).
     """
     ...
 
