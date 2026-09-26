@@ -1,7 +1,6 @@
 # Claude Code - Radia Project Policy
 
 Keep active rules here; details belong in source, tests, package docs, skills and `radia-mcp` knowledge. Historical investigations remain in Git history.
-
 ## Mission
 Radia is an AI-native electromagnetic CAE platform, not another standalone solver.
 AI designs; Radia provides the engineering platform. Extend NGSolve only for missing engineering capability.
@@ -13,7 +12,6 @@ Until explicitly closed, work is limited to:
    build, CI, packaging, and release operation.
 
 Do not add unrelated features during this maintenance program.
-
 ## Repository Boundaries
 The monorepo independently releases `radia`, `cubit-mesh-export`, `radia-mcp`, `radia-optuna` and `eqnedit64`.
 Scope commits and CI to the owner. Shared files trigger multiple lanes only for real shared ABI, build or integration changes.
@@ -29,7 +27,6 @@ Scope commits and CI to the owner. Shared files trigger multiple lanes only for 
 
 Do not commit logs, transient solver output, binary backups, lock copies, generated inventories or root scratch.
 Do not keep two tests with the same purpose and failure signal.  Commercial converters stay in independent private repositories, separate from MCP servers.
-
 ## Engineering Architecture
 Prefer established public abstractions over proprietary plumbing.
 
@@ -44,7 +41,6 @@ Prefer established public abstractions over proprietary plumbing.
   Consolidate with preserved contracts per `packages/radia-mcp/CONTRIBUTING.md`.
 - Keep two genuinely independent analysis routes for important models when
   feasible.
-
 ### Numerical Rules
 - Name eigenmode-bulk/surface coupling **Foster + SIBC**; use **CLN + SIBC**
   for an actual CLN/Krylov bulk basis. Do not call these scalar enriched-space
@@ -68,7 +64,6 @@ Prefer established public abstractions over proprietary plumbing.
   exception does not apply to its reusable helpers or other solvers.
 - Fail loudly on unsupported geometry, labels, ABI, convergence, or backend
   state. Never silently substitute a numerically different route.
-
 ## Interfaces
 Python/MCP is the first-class AI interface. Masked blocks in the single Radia
 Simulink library are the human production interface. Implement and study both
