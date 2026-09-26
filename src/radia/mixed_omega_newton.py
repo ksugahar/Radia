@@ -183,10 +183,18 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
     integration_order = max(4, 2 * int(order) + int(material_bonus_intorder))
     # H_cf refers to this persistent solution; updating it preserves all lifts.
     field_h = result["H_cf"]
-    magnitude = ng.sqrt(ng.InnerProduct(field_h, field_h) + 1e-24)
-    secant = (b_of(magnitude) / magnitude).Compile()
+    # The nonlinear integrals run over the iron only, so they use the iron's
+    # own field.  H_cf is a MaterialCF whose air entry holds the coil source,
+    # and a compiled MaterialCF evaluates every material's entry at every
+    # point: ESRF Example 6 spent 1875 s per iteration evaluating the coil at
+    # iron quadrature points.  The returned B_cf stays uncompiled for the
+    # same reason.
+    iron_h = source - ng.grad(solution if condense_matching_trace else solution.components[1])
+    iron_magnitude = ng.sqrt(ng.InnerProduct(iron_h, iron_h) + 1e-24)
+    secant = (b_of(iron_magnitude) / iron_magnitude).Compile()
+    iron_b = (secant * iron_h).Compile()
     physical_mu = mesh.MaterialCF({name: secant for name in nonlinear}, default=result["mu_cf"])
-    field_b = (physical_mu * field_h).Compile()
+    field_b = physical_mu * field_h
     previous = ng.GridFunction(fes)
     reason = "iteration limit"
     for iteration in range(1, int(max_iterations) + 1):
@@ -248,10 +256,10 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         solution.vec.data = trial
         norm = trial_norm
         t0 = time.perf_counter()
-        delta = (field_b - before_b).Compile()
+        delta = (iron_b - before_b).Compile()
         numerator = float(ng.Integrate(ng.InnerProduct(delta, delta), mesh,
                                       definedon=selector, order=integration_order))
-        denominator = float(ng.Integrate(ng.InnerProduct(field_b, field_b), mesh,
+        denominator = float(ng.Integrate(ng.InnerProduct(iron_b, iron_b), mesh,
                                         definedon=selector, order=integration_order))
         relative_change = math.sqrt(max(numerator, 0.) / max(denominator, 1e-60))
         row["field_change_s"] = time.perf_counter() - t0
@@ -275,7 +283,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
     result.update(mu_cf=physical_mu, B_cf=field_b, nonlinear_stats=stats, system=None,
                   assembled_energy=None, linear_residual=None)
     result["constitutive_field_audit"] = audit_mixed_omega_constitutive_field(
-        mesh, field_h, field_b, table, nonlinear, integration_order=integration_order)
+        mesh, iron_h, iron_b, table, nonlinear, integration_order=integration_order)
     if observation_points is not None:
         points = np.asarray(observation_points, dtype=float).reshape(-1, 3)
         stats["observation_field_T"] = [list(field_b(mesh(*p))) for p in points]
