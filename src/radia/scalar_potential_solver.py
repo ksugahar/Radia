@@ -341,6 +341,87 @@ def _build_bh_coenergy_coefficient_function(H_magnitude, bh_data):
     return IfPos(H_cf - float(H_tab[0]), result, below)
 
 
+def _build_bh_spline_law(bh_data, *, tail_factor=1.0e3):
+    """Return the monotone-PCHIP B(H) law as native NGSolve splines.
+
+    The same law as :func:`_build_bh_coefficient_function` and
+    :func:`_build_bh_coenergy_coefficient_function`, evaluated by table lookup
+    instead of one nested ``IfPos`` per table interval.  Those builders
+    evaluate every interval's polynomial at every point, and automatic
+    differentiation repeats that for every element degree of freedom; on a
+    221-row table a Newton linearization costs about 350 times what it costs
+    on a 5-row one.
+
+    Each PCHIP interval is written in Bezier form and the interior knots are
+    tripled, so the cubic B-spline coefficients are the Bezier control points
+    and the representation is exact (no fit).  One more interval carries the
+    vacuum-slope continuation ``B_max + mu0 (H - H_max)`` to
+    ``H_limit = tail_factor * H_max``; the returned callables continue it
+    analytically beyond that.  Returns ``(b_of, coenergy_of, H_limit)``, where
+    ``b_of(H)`` and ``coenergy_of(H)`` map an NGSolve CF ``|H|`` to B(|H|) and
+    the co-energy density ``integral_0^|H| B dh``.
+    """
+    from ngsolve import BSpline, IfPos
+    from scipy.interpolate import PchipInterpolator
+
+    bh = np.asarray(bh_data, dtype=float)
+    if bh.ndim != 2 or bh.shape[1] < 2 or bh.shape[0] < 2:
+        raise ValueError("bh_data must contain at least two [H, B] rows")
+    H_tab = bh[:, 0]
+    B_tab = bh[:, 1]
+    if not np.all(np.isfinite(H_tab)) or not np.all(np.isfinite(B_tab)):
+        raise ValueError("bh_data must contain finite H and B values")
+    if np.any(np.diff(H_tab) <= 0.0):
+        raise ValueError("bh_data H values must be strictly increasing")
+    if np.any(np.diff(B_tab) < 0.0):
+        raise ValueError("bh_data B values must be non-decreasing")
+    if H_tab[0] != 0.0 or B_tab[0] != 0.0:
+        raise ValueError("the spline B(H) law needs a table that starts at [0, 0]")
+    if not float(tail_factor) > 1.0:
+        raise ValueError("tail_factor must exceed 1")
+
+    slope = PchipInterpolator(H_tab, B_tab, extrapolate=False).derivative()
+    H_max = float(H_tab[-1])
+    B_max = float(B_tab[-1])
+    H_limit = float(tail_factor) * H_max
+    B_limit = B_max + MU_0 * (H_limit - H_max)
+    breakpoints = np.append(H_tab, H_limit)
+    values = np.append(B_tab, B_limit)
+    # One-sided end slopes per interval: the table's PCHIP slopes, then mu0 on
+    # the tail piece (the law is only C0 at H_max, which a triple knot allows).
+    left = np.append(slope(H_tab[:-1]), MU_0)
+    right = np.append(slope(H_tab[1:]), MU_0)
+    width = np.diff(breakpoints)
+    control = [float(values[0])]
+    for index in range(len(width)):
+        control += [float(values[index] + left[index] * width[index] / 3.0),
+                    float(values[index + 1] - right[index] * width[index] / 3.0),
+                    float(values[index + 1])]
+    knots = ([float(breakpoints[0])] * 4
+             + [float(value) for value in np.repeat(breakpoints[1:-1], 3)]
+             + [float(breakpoints[-1])] * 4)
+    b_spline = BSpline(4, knots, control)
+    coenergy_spline = b_spline.Integrate()
+    # An NGSolve BSpline is zero at and beyond its last knot, so the value
+    # there comes from the Bezier form (integral = width * mean control point)
+    # and the analytic continuation takes over at H_limit itself.
+    coenergy_limit = float(sum(
+        width[index] * (control[3 * index] + control[3 * index + 1]
+                        + control[3 * index + 2] + control[3 * index + 3]) / 4.0
+        for index in range(len(width))))
+
+    def b_of(H_magnitude):
+        beyond = B_limit + MU_0 * (H_magnitude - H_limit)
+        return IfPos(H_limit - H_magnitude, b_spline(H_magnitude), beyond)
+
+    def coenergy_of(H_magnitude):
+        delta = H_magnitude - H_limit
+        beyond = coenergy_limit + B_limit * delta + 0.5 * MU_0 * delta * delta
+        return IfPos(-delta, coenergy_spline(H_magnitude), beyond)
+
+    return b_of, coenergy_of, H_limit
+
+
 class ScalarPotentialSolver:
     """Simkin-Trowbridge magnetostatic solver (Radia + NGSolve).
 

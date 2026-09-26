@@ -515,9 +515,17 @@ def solve_omega(
         "source_trace": {
             "iron_interface_boundary": "iron_air_interface",
             "projection_order": int(source_trace["projection_order"]),
-            "iron_relative_harmonic_norm": float(
-                source_trace["iron_relative_harmonic_norm"]
-            ),
+            # A surface-flux iron load evaluates the source on faces only and
+            # reports the boundary tangential residual instead of the volume
+            # harmonic norm, which is then None.
+            "iron_relative_harmonic_norm": (
+                None if source_trace.get("iron_relative_harmonic_norm") is None
+                else float(source_trace["iron_relative_harmonic_norm"])),
+            "iron_relative_tangential_residual": source_trace.get(
+                "iron_relative_tangential_residual"),
+            "reduced_source_load": source_trace.get("reduced_source_load", "volume"),
+            "total_source_load": source_trace.get("total_source_load", "volume"),
+            "iron_harmonic_remainder": source_trace.get("iron_harmonic_remainder", "volume"),
             "kelvin_interface_boundary": "kelvin_int",
             "kelvin_relative_tangential_residual": (
                 None if exact_exterior_source else

@@ -153,6 +153,7 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     nonlinear_bh_interpolation: str = "pchip",
     nonlinear_method: str = "picard",
     nonlinear_residual_tolerance: float = 1e-8,
+    nonlinear_material_bonus_intorder: int | None = None,
     nonlinear_progress_callback=None,
     inverse: str = "pardiso",
     bonus_intorder: int = 4,
@@ -169,6 +170,9 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     a different discrete material law and is rejected. It does not use a projected
     material state or Anderson mixing. ``nonlinear_residual_tolerance`` bounds
     its free-DOF equation residual; ``nonlinear_tolerance`` bounds field change.
+    ``nonlinear_material_bonus_intorder`` (Newton only) sets the quadrature
+    bonus of the B(H) co-energy separately from ``bonus_intorder``; ``None``
+    keeps ``bonus_intorder``.
 
     The nonlinear loop is the Picard iteration of
     :func:`radia.kelvin_solver.solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin`:
@@ -249,6 +253,10 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
         raise ValueError(
             "Newton requires nonlinear_material_sampling='integration_point'; "
             "element_centroid is a different material discretization")
+    if nonlinear_material_bonus_intorder is not None and (
+            bh_table is None or nonlinear_method != "newton"):
+        raise ValueError(
+            "nonlinear_material_bonus_intorder applies to a nonlinear Newton solve only")
     if source_projection_order is None:
         source_projection_order = (
             int(order) if source_potential_contract == "total_hodge"
@@ -484,7 +492,8 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
                     or nonlinear_bh_interpolation != "pchip"):
                 raise ValueError("Newton requires PCHIP without Anderson or projected material state")
             nonlinear_solver = solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin
-            iteration_options = dict(residual_tolerance=float(nonlinear_residual_tolerance))
+            iteration_options = dict(residual_tolerance=float(nonlinear_residual_tolerance),
+                                     material_bonus_intorder=nonlinear_material_bonus_intorder)
         if reduced_source_load != "volume":
             # Picard takes it explicitly; Newton forwards it to its linear solve.
             iteration_options["reduced_source_load"] = reduced_source_load
