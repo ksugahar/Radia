@@ -31,7 +31,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         max_halvings=12, observation_points=None, progress_callback=None,
         bonus_intorder=4, inverse="pardiso", mu_r_by_material=None,
         condense_matching_trace=False, linear_solver="direct",
-        material_bonus_intorder=None, **linear_options):
+        material_bonus_intorder=None, bh_evaluation="spline", **linear_options):
     """Newton with residual backtracking and the production PCHIP B(H) law.
 
     Nonlinear materials must lie in the physical total-potential region.
@@ -42,6 +42,10 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
     and source terms; applied to the PCHIP co-energy it multiplies the
     linearization cost (12 is about 50 times 4 on a P2 mesh), so it is set
     separately and must be validated like any quadrature choice.
+    ``bh_evaluation="spline"`` evaluates that PCHIP law by native spline
+    lookup (exact to rounding, see ``_build_bh_spline_law``); ``"ifpos"`` keeps
+    the nested per-interval expression, whose automatic differentiation grows
+    with the table length.
     Caller owns TaskManager, as for the linear mixed solver. Failure raises
     ``MixedOmegaNewtonNotConverged`` carrying iteration diagnostics.
     """
@@ -51,7 +55,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         solve_magnetostatic_matching_trace_total_reduced_omega,
         audit_mixed_omega_constitutive_field)
     from .scalar_potential_solver import (
-        _build_bh_coefficient_function, _build_bh_coenergy_coefficient_function)
+        _build_bh_coefficient_function, _build_bh_coenergy_coefficient_function,
+        _build_bh_spline_law)
 
     mu0 = 4e-7 * math.pi
     table = np.asarray(bh_table, dtype=float)
@@ -77,6 +82,16 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         raise ValueError("Newton owns the assembled system and constitutive coefficient")
     if linear_solver not in ("direct", "cg") or (linear_solver == "cg" and not condense_matching_trace):
         raise ValueError("Newton CG requires matching-trace condensation")
+    if bh_evaluation == "spline":
+        b_of, coenergy_of, _ = _build_bh_spline_law(table)
+    elif bh_evaluation == "ifpos":
+        def b_of(magnitude):
+            return _build_bh_coefficient_function(magnitude, table)
+
+        def coenergy_of(magnitude):
+            return _build_bh_coenergy_coefficient_function(magnitude, table)
+    else:
+        raise ValueError("bh_evaluation must be 'spline' or 'ifpos'")
     if material_bonus_intorder is None:
         material_bonus_intorder = bonus_intorder
     if type(material_bonus_intorder) is not int or material_bonus_intorder < 0:
@@ -143,7 +158,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
     trial_h = source - ng.grad(ut)
     # Smooth only the radial norm at machine-scale H, not the B(H) table.
     hmag = ng.sqrt(ng.InnerProduct(trial_h, trial_h) + 1e-24)
-    correction = (_build_bh_coenergy_coefficient_function(hmag, table)
+    correction = (coenergy_of(hmag)
                   - 0.5 * mu0 * float(mu_r_initial) * ng.InnerProduct(trial_h, trial_h))
     tangent += ng.SymbolicEnergy(correction.Compile(), definedon=selector,
                                 bonus_intorder=material_bonus_intorder)
@@ -169,7 +184,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
     # H_cf refers to this persistent solution; updating it preserves all lifts.
     field_h = result["H_cf"]
     magnitude = ng.sqrt(ng.InnerProduct(field_h, field_h) + 1e-24)
-    secant = (_build_bh_coefficient_function(magnitude, table) / magnitude).Compile()
+    secant = (b_of(magnitude) / magnitude).Compile()
     physical_mu = mesh.MaterialCF({name: secant for name in nonlinear}, default=result["mu_cf"])
     field_b = (physical_mu * field_h).Compile()
     previous = ng.GridFunction(fes)
@@ -181,7 +196,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         previous.vec.data = solution.vec
         before_h = source - ng.grad(previous if condense_matching_trace else previous.components[1])
         before_mag = ng.sqrt(ng.InnerProduct(before_h, before_h) + 1e-24)
-        before_b = (_build_bh_coefficient_function(before_mag, table) / before_mag * before_h).Compile()
+        before_b = (b_of(before_mag) / before_mag * before_h).Compile()
         t0 = time.perf_counter()
         tangent.AssembleLinearization(solution.vec)
         row["assembly_s"] = time.perf_counter() - t0
@@ -232,12 +247,14 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
             break
         solution.vec.data = trial
         norm = trial_norm
+        t0 = time.perf_counter()
         delta = (field_b - before_b).Compile()
         numerator = float(ng.Integrate(ng.InnerProduct(delta, delta), mesh,
                                       definedon=selector, order=integration_order))
         denominator = float(ng.Integrate(ng.InnerProduct(field_b, field_b), mesh,
                                         definedon=selector, order=integration_order))
         relative_change = math.sqrt(max(numerator, 0.) / max(denominator, 1e-60))
+        row["field_change_s"] = time.perf_counter() - t0
         row.update(residual_relative=norm / reference_norm,
                    relative_B_change=relative_change)
         history.append(row)
@@ -247,7 +264,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
 
     stats = dict(method="quadrature_pchip_newton", material_sampling="integration_point",
                  matching_trace_condensed=bool(condense_matching_trace), linear_solver=linear_solver,
-                 bh_interpolation="pchip", bonus_intorder=int(bonus_intorder),
+                 bh_interpolation="pchip", bh_evaluation=bh_evaluation, bonus_intorder=int(bonus_intorder),
                  material_bonus_intorder=int(material_bonus_intorder),
                  converged=bool(converged), iterations=len(history),
                  residual_relative=norm / reference_norm, residual_tolerance=float(residual_tolerance),
