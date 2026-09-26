@@ -31,11 +31,17 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         max_halvings=12, observation_points=None, progress_callback=None,
         bonus_intorder=4, inverse="pardiso", mu_r_by_material=None,
         condense_matching_trace=False, linear_solver="direct",
-        **linear_options):
+        material_bonus_intorder=None, **linear_options):
     """Newton with residual backtracking and the production PCHIP B(H) law.
 
     Nonlinear materials must lie in the physical total-potential region.
     Orders one and two use the same quadrature-evaluated constitutive law.
+    ``material_bonus_intorder`` sets the quadrature of that law (the iron
+    co-energy, its linearization and the field-change and audit integrals);
+    ``None`` keeps ``bonus_intorder``. A high assembly bonus serves the Kelvin
+    and source terms; applied to the PCHIP co-energy it multiplies the
+    linearization cost (12 is about 50 times 4 on a P2 mesh), so it is set
+    separately and must be validated like any quadrature choice.
     Caller owns TaskManager, as for the linear mixed solver. Failure raises
     ``MixedOmegaNewtonNotConverged`` carrying iteration diagnostics.
     """
@@ -71,6 +77,10 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         raise ValueError("Newton owns the assembled system and constitutive coefficient")
     if linear_solver not in ("direct", "cg") or (linear_solver == "cg" and not condense_matching_trace):
         raise ValueError("Newton CG requires matching-trace condensation")
+    if material_bonus_intorder is None:
+        material_bonus_intorder = bonus_intorder
+    if type(material_bonus_intorder) is not int or material_bonus_intorder < 0:
+        raise ValueError("material_bonus_intorder must be a nonnegative integer or None")
 
     initial_mu = dict(mu_r_by_material or {})
     initial_mu.update({name: float(mu_r_initial) for name in nonlinear})
@@ -136,7 +146,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
     correction = (_build_bh_coenergy_coefficient_function(hmag, table)
                   - 0.5 * mu0 * float(mu_r_initial) * ng.InnerProduct(trial_h, trial_h))
     tangent += ng.SymbolicEnergy(correction.Compile(), definedon=selector,
-                                bonus_intorder=bonus_intorder)
+                                bonus_intorder=material_bonus_intorder)
     preconditioner = ng.Preconditioner(tangent, "local") if linear_solver == "cg" else None
     residual = rhs.CreateVector()
     trial = solution.vec.CreateVector()
@@ -155,7 +165,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
     history = []
     converged = norm / reference_norm <= residual_tolerance
     relative_change = 0.0 if converged else None
-    integration_order = max(4, 2 * int(order) + int(bonus_intorder))
+    integration_order = max(4, 2 * int(order) + int(material_bonus_intorder))
     # H_cf refers to this persistent solution; updating it preserves all lifts.
     field_h = result["H_cf"]
     magnitude = ng.sqrt(ng.InnerProduct(field_h, field_h) + 1e-24)
@@ -237,7 +247,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
 
     stats = dict(method="quadrature_pchip_newton", material_sampling="integration_point",
                  matching_trace_condensed=bool(condense_matching_trace), linear_solver=linear_solver,
-                 bh_interpolation="pchip", converged=bool(converged), iterations=len(history),
+                 bh_interpolation="pchip", bonus_intorder=int(bonus_intorder),
+                 material_bonus_intorder=int(material_bonus_intorder),
+                 converged=bool(converged), iterations=len(history),
                  residual_relative=norm / reference_norm, residual_tolerance=float(residual_tolerance),
                  relative_B_change=relative_change, tolerance=float(tolerance), history=history,
                  initial_linear_solve_s=initial_seconds, elapsed_s=time.perf_counter() - started)

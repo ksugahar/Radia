@@ -69,6 +69,35 @@ def test_newton_linear_law_agrees_with_linear_mixed_solver(case):
         np.testing.assert_allclose(result['B_cf'](mesh(*p)), reference['B_cf'](mesh(*p)), rtol=1e-7, atol=1e-13)
 
 
+def test_material_quadrature_is_set_apart_from_the_assembly_bonus(case):
+    mesh = case[0]
+    default = run(case, order=2, bonus_intorder=6)
+    same = run(case, order=2, bonus_intorder=6, material_bonus_intorder=6)
+    lower = run(case, order=2, bonus_intorder=6, material_bonus_intorder=2)
+    assert default['nonlinear_stats']['material_bonus_intorder'] == 6
+    assert lower['nonlinear_stats']['material_bonus_intorder'] == 2
+    assert lower['nonlinear_stats']['bonus_intorder'] == 6
+    assert lower['nonlinear_stats']['converged']
+    for point in [(0.5, 0.1, 0.2), (-0.5, 0.1, 0.2)]:
+        # None keeps the assembly bonus (threaded assembly rounds run to run).
+        np.testing.assert_allclose(same['B_cf'](mesh(*point)), default['B_cf'](mesh(*point)),
+                                   rtol=1e-12, atol=1e-18)
+        # A lower co-energy rule changes only the quadrature of a smooth law.
+        np.testing.assert_allclose(lower['B_cf'](mesh(*point)), default['B_cf'](mesh(*point)),
+                                   rtol=1e-3, atol=1e-10)
+    for bad in (-1, 2.0):
+        with pytest.raises(ValueError, match='material_bonus_intorder'):
+            run(case, material_bonus_intorder=bad)
+
+
+def test_public_workflow_rejects_material_bonus_outside_newton():
+    from radia.static_electromagnet import solve_static_electromagnet_mixed_total_reduced_omega
+    with pytest.raises(ValueError, match='nonlinear Newton solve only'):
+        solve_static_electromagnet_mixed_total_reduced_omega(
+            None, None, None, 1., (0., 0., 0.), order=1,
+            bh_table=[[0., 0.], [1., 1.]], nonlinear_material_bonus_intorder=2)
+
+
 def test_iteration_limit_never_returns_an_accepted_field(case):
     with pytest.raises(MixedOmegaNewtonNotConverged) as exc:
         run(case, max_iterations=1)
