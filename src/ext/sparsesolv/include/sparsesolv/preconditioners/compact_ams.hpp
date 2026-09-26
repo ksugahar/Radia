@@ -334,6 +334,8 @@ private:
     std::vector<float> pi_values_f_, pit_values_f_;  // interleaved Pi / Pi^T values (mixed, fused)
     int hierarchy_refreshes_ = 0;
     int in_place_updates_ = 0;   // Updates whose auxiliary products ran on fixed patterns.
+    bool row_refresh_ = false;   // last Update changed values in place (row-tracked)
+    std::vector<char> changed_edges_, changed_nodes_, changed_gradient_nodes_;
     int pi_shared_pattern_ = -1; // Pi_x/y/z, transposes and products share patterns (-1 unknown).
     bool pi_fused_ = false;      // Pi_x/y/z and their transposes share patterns (set in SetupGeometry).
     shared_ptr<SparseMatrix<double>> pattern_source_;  // matrix A_bc_ was last built from
@@ -481,19 +483,34 @@ private:
                 && (beta_zero_ || A_G_)
                 && (mat_ == pattern_source_ || SameSparsityPattern(*mat_, *A_bc_));
             if (in_place) {
-                if (freedofs_) FillBCModifiedValues(*mat_, *freedofs_, *A_bc_);
-                else A_bc_ = mat_;
+                // Track the rows whose values change: between Newton steps only
+                // the nonlinear elements' rows do, and each dependent row below
+                // is recomputed exactly as in a full refresh.
+                std::vector<char> changed_edges;
+                if (freedofs_) FillBCModifiedValuesTracked(*mat_, *freedofs_, *A_bc_, changed_edges);
+                else { A_bc_ = mat_; changed_edges.assign(ndof_hc_, 1); }
+                changed_edges_ = changed_edges;
+                changed_nodes_ = AffectedGalerkinRows(*Pix_t_, changed_edges);
+                const auto node_rows = FlaggedRows(changed_nodes_);
                 if (pi_shared_pattern_ < 0)
                     pi_shared_pattern_ = SameSparsityPattern(*Pix_, *Piy_) && SameSparsityPattern(*Pix_, *Piz_)
                         && SameSparsityPattern(*Pix_t_, *Piy_t_) && SameSparsityPattern(*Pix_t_, *Piz_t_)
                         && SameSparsityPattern(*A_Pix_, *A_Piy_) && SameSparsityPattern(*A_Pix_, *A_Piz_);
+                const int* nr = node_rows.data();
+                const size_t nn = node_rows.size();
                 const bool nodal = pi_shared_pattern_
-                    ? FusedPiProducts()
-                    : GalerkinProductOnPattern(*Pix_t_, *A_bc_, *Pix_, *A_Pix_)
-                      && GalerkinProductOnPattern(*Piy_t_, *A_bc_, *Piy_, *A_Piy_)
-                      && GalerkinProductOnPattern(*Piz_t_, *A_bc_, *Piz_, *A_Piz_);
-                in_place = nodal
-                    && (beta_zero_ || GalerkinProductOnPattern(*grad_t_, *A_bc_, *grad_, *A_G_));
+                    ? FusedPiProducts(nr, nn)
+                    : GalerkinProductOnPatternRows(*Pix_t_, *A_bc_, *Pix_, *A_Pix_, nr, nn)
+                      && GalerkinProductOnPatternRows(*Piy_t_, *A_bc_, *Piy_, *A_Piy_, nr, nn)
+                      && GalerkinProductOnPatternRows(*Piz_t_, *A_bc_, *Piz_, *A_Piz_, nr, nn);
+                bool gradient = beta_zero_;
+                if (!beta_zero_) {
+                    const auto grad_rows = FlaggedRows(AffectedGalerkinRows(*grad_t_, changed_edges));
+                    gradient = GalerkinProductOnPatternRows(*grad_t_, *A_bc_, *grad_, *A_G_,
+                                                            grad_rows.data(), grad_rows.size());
+                    changed_gradient_nodes_ = AffectedGalerkinRows(*grad_t_, changed_edges);
+                }
+                in_place = nodal && gradient;
                 if (in_place) in_place_updates_++;
             }
         }
@@ -551,10 +568,14 @@ private:
         }
 
         // 3. Fix zero rows: set diag = 1.0 for truly zero rows.
-        if (!beta_zero_) FixZeroRows(*A_G_);
-        FixZeroRows(*A_Pix_);
-        FixZeroRows(*A_Piy_);
-        FixZeroRows(*A_Piz_);
+        {
+            ngcore::RegionTaskManager tasks;
+            if (!beta_zero_) FixZeroRows(*A_G_);
+            FixZeroRows(*A_Pix_);
+            FixZeroRows(*A_Piy_);
+            FixZeroRows(*A_Piz_);
+        }
+        row_refresh_ = in_place;
 
         // 4. Build solvers for auxiliary spaces
         if (subspace_solver_ == 1) {
@@ -615,10 +636,12 @@ private:
 
             t0 = std::chrono::high_resolution_clock::now();
             if (refresh) {
-                if (!beta_zero_) amg_G->Refresh(A_G_);
-                amg_Pix->Refresh(A_Pix_);
-                amg_Piy->Refresh(A_Piy_);
-                amg_Piz->Refresh(A_Piz_);
+                // In-place value changes: refresh only the rows they reach.
+                if (!beta_zero_ && !(row_refresh_ && amg_G->RefreshRows(A_G_, changed_gradient_nodes_)))
+                    amg_G->Refresh(A_G_);
+                if (!(row_refresh_ && amg_Pix->RefreshRows(A_Pix_, changed_nodes_))) amg_Pix->Refresh(A_Pix_);
+                if (!(row_refresh_ && amg_Piy->RefreshRows(A_Piy_, changed_nodes_))) amg_Piy->Refresh(A_Piy_);
+                if (!(row_refresh_ && amg_Piz->RefreshRows(A_Piz_, changed_nodes_))) amg_Piz->Refresh(A_Piz_);
                 hierarchy_refreshes_++;
             } else {
                 if (!beta_zero_) amg_G->Setup();
@@ -656,9 +679,25 @@ private:
         // in a parallel region (the coarse factorizations above stay outside).
         {
             ngcore::RegionTaskManager tasks;
-            if (mixed_precision_) MirrorValues(*A_bc_, abc_values_f_);
+            // After an in-place update only the changed rows need new values.
+            const bool rows_only = row_refresh_ && changed_edges_.size() == size_t(ndof_hc_)
+                && fine_l1_norms_.size() == size_t(ndof_hc_)
+                && (!mixed_precision_ || abc_values_f_.size() == A_bc_->NZE());
+            const std::vector<int> rows = rows_only ? FlaggedRows(changed_edges_) : std::vector<int>();
+            if (mixed_precision_) {
+                if (rows_only) {
+                    auto values = A_bc_->AsVector().FVDouble();
+                    ParallelFor(rows.size(), [&](size_t r) {
+                        for (size_t k = A_bc_->First(rows[r]); k < A_bc_->First(rows[r] + 1); k++)
+                            abc_values_f_[k] = float(values[k]);
+                    });
+                } else {
+                    MirrorValues(*A_bc_, abc_values_f_);
+                }
+            }
             fine_l1_norms_.resize(ndof_hc_);
-            ParallelFor(ndof_hc_, [&](size_t i) {
+            ParallelFor(rows_only ? rows.size() : size_t(ndof_hc_), [&](size_t r) {
+                const size_t i = rows_only ? size_t(rows[r]) : r;
                 auto cols = A_bc_->GetRowIndices(i);
                 auto vals = A_bc_->GetRowValues(i);
                 double diag = 0, off_diag = 0;
@@ -795,15 +834,17 @@ private:
     /// transposes and products share theirs (checked by the caller); only the
     /// values differ. Returns false (values unspecified) when a nonzero
     /// contribution falls outside the pattern.
-    bool FusedPiProducts() {
+    bool FusedPiProducts(const int* rows = nullptr, size_t nrows = size_t(-1)) {
         auto& Cx = *A_Pix_;
         auto& Cy = *A_Piy_;
         auto& Cz = *A_Piz_;
         std::atomic<bool> inside{true};
         const int width = Cx.Width();
-        ParallelForRange(Cx.Height(), [&](IntRange range) {
+        if (!rows) nrows = Cx.Height();
+        ParallelForRange(nrows, [&](IntRange range) {
             std::vector<int> marker(width, -1);
-            for (auto u : range) {
+            for (auto r : range) {
+                const size_t u = rows ? size_t(rows[r]) : size_t(r);
                 auto ccols = Cx.GetRowIndices(u);
                 auto cx = Cx.GetRowValues(u);
                 auto cy = Cy.GetRowValues(u);
