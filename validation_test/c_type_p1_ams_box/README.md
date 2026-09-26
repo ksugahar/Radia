@@ -305,6 +305,8 @@ A-phi current + engine setup (mesh load excluded).
 | `radia.p1_newton`, native PCG + leaner AMS | tight | 14.6 | 15.0 | 11 | 103* |
 | `radia.p1_newton`, mixed-precision AMS cycle | loose | 9.0 | 9.4 | 7 | 57* |
 | `radia.p1_newton`, mixed-precision AMS cycle | tight | 13.0 | 13.4 | 11 | 103* |
+| `radia.p1_newton`, parallel first AMS build | loose | 8.6 | 8.9 | 7 | 57* |
+| `radia.p1_newton`, parallel first AMS build | tight | 12.5 | 12.8 | 11 | 103* |
 
 Beta-zero loose repeated: 31.8, 30.9, 31.8 s end-to-end; with the frozen
 hierarchy 30.1, 30.1, 30.3 s (AMS update 1.1 s -> 0.77 s, CG iterations
@@ -353,7 +355,12 @@ only; records `*_mixed_*`) CG takes 2.6 s instead of 3.3 s; end-to-end 9.2,
 9.4, 9.5 s loose and 13.4 s tight. That session's host was quieter: the
 in-session lane control (double precision, Python CG) also went 14.3 -> 12.4 s,
 so about half of the step is the host. Field unchanged (4.7e-13 vs the lane).
-All with `--inexact-linear`; single host, single problem.
+With the parallel first AMS build (setup loops in their own parallel regions,
+one-pass native Galerkin product, one transposition for Pi; records
+`*_firstbuild_*`, a host as quiet as the previous session's) the first AMS
+build takes 0.70 s instead of 1.03 s; end-to-end 8.7, 9.0, 9.0 s loose and
+12.8 s tight, field unchanged. All with `--inexact-linear`; single host,
+single problem.
 
 ## Results (LAB, 2026-09-22, uncontended sequential runs, 8 threads)
 
