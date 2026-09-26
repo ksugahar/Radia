@@ -90,6 +90,42 @@ def test_material_quadrature_is_set_apart_from_the_assembly_bonus(case):
             run(case, material_bonus_intorder=bad)
 
 
+def test_spline_law_is_the_pchip_law_and_its_coenergy():
+    from radia.esrf_examples import get_esrf_bh_table
+    from radia.scalar_potential_solver import (
+        _build_bh_coefficient_function, _build_bh_coenergy_coefficient_function,
+        _build_bh_spline_law)
+    table = np.asarray(get_esrf_bh_table(6), dtype=float)
+    b_of, coenergy_of, limit = _build_bh_spline_law(table)
+    mesh = ng.Mesh(ng.unit_cube.GenerateMesh(maxh=0.5))
+    point = mesh(0.5, 0.5, 0.5)
+    h = ng.Parameter(0.0)
+    pairs = ((b_of(h), _build_bh_coefficient_function(h, table)),
+             (coenergy_of(h), _build_bh_coenergy_coefficient_function(h, table)))
+    # Every knot, the tail piece, H_limit itself (where an NGSolve BSpline is
+    # zero) and the analytic continuation beyond it.
+    for value in np.concatenate([table[:, 0], np.geomspace(1e-6, 5 * limit, 400), [limit]]):
+        h.Set(float(value))
+        for spline, reference in pairs:
+            expected = reference(point)
+            assert spline(point) == pytest.approx(expected, rel=1e-13, abs=1e-300)
+    with pytest.raises(ValueError, match=r'\[0, 0\]'):
+        _build_bh_spline_law([[1., 0.], [2., 1.]])
+
+
+def test_spline_and_ifpos_newton_agree(case):
+    mesh = case[0]
+    spline = run(case, order=2)
+    nested = run(case, order=2, bh_evaluation='ifpos')
+    assert spline['nonlinear_stats']['bh_evaluation'] == 'spline'
+    assert nested['nonlinear_stats']['bh_evaluation'] == 'ifpos'
+    for point in [(0.5, 0.1, 0.2), (-0.5, 0.1, 0.2)]:
+        np.testing.assert_allclose(spline['B_cf'](mesh(*point)), nested['B_cf'](mesh(*point)),
+                                   rtol=1e-10, atol=1e-16)
+    with pytest.raises(ValueError, match='bh_evaluation'):
+        run(case, bh_evaluation='linear')
+
+
 def test_public_workflow_rejects_material_bonus_outside_newton():
     from radia.static_electromagnet import solve_static_electromagnet_mixed_total_reduced_omega
     with pytest.raises(ValueError, match='nonlinear Newton solve only'):
