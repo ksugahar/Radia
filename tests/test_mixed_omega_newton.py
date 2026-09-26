@@ -69,6 +69,89 @@ def test_newton_linear_law_agrees_with_linear_mixed_solver(case):
         np.testing.assert_allclose(result['B_cf'](mesh(*p)), reference['B_cf'](mesh(*p)), rtol=1e-7, atol=1e-13)
 
 
+def test_material_quadrature_is_set_apart_from_the_assembly_bonus(case):
+    mesh = case[0]
+    default = run(case, order=2, bonus_intorder=6)
+    same = run(case, order=2, bonus_intorder=6, material_bonus_intorder=6)
+    lower = run(case, order=2, bonus_intorder=6, material_bonus_intorder=2)
+    assert default['nonlinear_stats']['material_bonus_intorder'] == 6
+    assert lower['nonlinear_stats']['material_bonus_intorder'] == 2
+    assert lower['nonlinear_stats']['bonus_intorder'] == 6
+    assert lower['nonlinear_stats']['converged']
+    for point in [(0.5, 0.1, 0.2), (-0.5, 0.1, 0.2)]:
+        # None keeps the assembly bonus (threaded assembly rounds run to run).
+        np.testing.assert_allclose(same['B_cf'](mesh(*point)), default['B_cf'](mesh(*point)),
+                                   rtol=1e-12, atol=1e-18)
+        # A lower co-energy rule changes only the quadrature of a smooth law.
+        np.testing.assert_allclose(lower['B_cf'](mesh(*point)), default['B_cf'](mesh(*point)),
+                                   rtol=1e-3, atol=1e-10)
+    for bad in (-1, 2.0):
+        with pytest.raises(ValueError, match='material_bonus_intorder'):
+            run(case, material_bonus_intorder=bad)
+
+
+def test_spline_law_is_the_pchip_law_and_its_coenergy():
+    from radia.esrf_examples import get_esrf_bh_table
+    from radia.scalar_potential_solver import (
+        _build_bh_coefficient_function, _build_bh_coenergy_coefficient_function,
+        _build_bh_spline_law)
+    table = np.asarray(get_esrf_bh_table(6), dtype=float)
+    b_of, coenergy_of, limit = _build_bh_spline_law(table)
+    mesh = ng.Mesh(ng.unit_cube.GenerateMesh(maxh=0.5))
+    point = mesh(0.5, 0.5, 0.5)
+    h = ng.Parameter(0.0)
+    pairs = ((b_of(h), _build_bh_coefficient_function(h, table)),
+             (coenergy_of(h), _build_bh_coenergy_coefficient_function(h, table)))
+    # Every knot, the tail piece, H_limit itself (where an NGSolve BSpline is
+    # zero) and the analytic continuation beyond it.
+    for value in np.concatenate([table[:, 0], np.geomspace(1e-6, 5 * limit, 400), [limit]]):
+        h.Set(float(value))
+        for spline, reference in pairs:
+            expected = reference(point)
+            assert spline(point) == pytest.approx(expected, rel=1e-13, abs=1e-300)
+    with pytest.raises(ValueError, match=r'\[0, 0\]'):
+        _build_bh_spline_law([[1., 0.], [2., 1.]])
+
+
+def test_spline_and_ifpos_newton_agree(case):
+    mesh = case[0]
+    spline = run(case, order=2)
+    nested = run(case, order=2, bh_evaluation='ifpos')
+    assert spline['nonlinear_stats']['bh_evaluation'] == 'spline'
+    assert nested['nonlinear_stats']['bh_evaluation'] == 'ifpos'
+    for point in [(0.5, 0.1, 0.2), (-0.5, 0.1, 0.2)]:
+        np.testing.assert_allclose(spline['B_cf'](mesh(*point)), nested['B_cf'](mesh(*point)),
+                                   rtol=1e-10, atol=1e-16)
+    with pytest.raises(ValueError, match='bh_evaluation'):
+        run(case, bh_evaluation='linear')
+
+
+def test_iron_integrals_never_evaluate_the_air_source(case):
+    """A compiled MaterialCF evaluates every entry; the coil lives in the air one."""
+    from radia.esrf_examples import get_esrf_bh_table
+    from radia.scalar_potential_solver import _build_bh_coefficient_function
+    mesh, source, potential, table = case
+    # A costly air-only addition (221-interval nested IfPos) of negligible size.
+    costly = 1e-30 * _build_bh_coefficient_function(
+        ng.sqrt(ng.x * ng.x + 1.0), get_esrf_bh_table(6))
+    cheap = run(case, order=2)
+    heavy = run((mesh, source + ng.CF((costly, costly, costly)), potential, table), order=2)
+    cheap_s = sum(row['field_change_s'] for row in cheap['nonlinear_stats']['history'])
+    heavy_s = sum(row['field_change_s'] for row in heavy['nonlinear_stats']['history'])
+    # Evaluating the air entry at iron points costs about 80 times more here.
+    assert heavy_s < 5.0 * cheap_s + 0.05
+    point = mesh(0.5, 0.1, 0.2)
+    np.testing.assert_allclose(heavy['B_cf'](point), cheap['B_cf'](point), rtol=1e-9, atol=1e-16)
+
+
+def test_public_workflow_rejects_material_bonus_outside_newton():
+    from radia.static_electromagnet import solve_static_electromagnet_mixed_total_reduced_omega
+    with pytest.raises(ValueError, match='nonlinear Newton solve only'):
+        solve_static_electromagnet_mixed_total_reduced_omega(
+            None, None, None, 1., (0., 0., 0.), order=1,
+            bh_table=[[0., 0.], [1., 1.]], nonlinear_material_bonus_intorder=2)
+
+
 def test_iteration_limit_never_returns_an_accepted_field(case):
     with pytest.raises(MixedOmegaNewtonNotConverged) as exc:
         run(case, max_iterations=1)

@@ -31,11 +31,21 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         max_halvings=12, observation_points=None, progress_callback=None,
         bonus_intorder=4, inverse="pardiso", mu_r_by_material=None,
         condense_matching_trace=False, linear_solver="direct",
-        **linear_options):
+        material_bonus_intorder=None, bh_evaluation="spline", **linear_options):
     """Newton with residual backtracking and the production PCHIP B(H) law.
 
     Nonlinear materials must lie in the physical total-potential region.
     Orders one and two use the same quadrature-evaluated constitutive law.
+    ``material_bonus_intorder`` sets the quadrature of that law (the iron
+    co-energy, its linearization and the field-change and audit integrals);
+    ``None`` keeps ``bonus_intorder``. A high assembly bonus serves the Kelvin
+    and source terms; applied to the PCHIP co-energy it multiplies the
+    linearization cost (12 is about 50 times 4 on a P2 mesh), so it is set
+    separately and must be validated like any quadrature choice.
+    ``bh_evaluation="spline"`` evaluates that PCHIP law by native spline
+    lookup (exact to rounding, see ``_build_bh_spline_law``); ``"ifpos"`` keeps
+    the nested per-interval expression, whose automatic differentiation grows
+    with the table length.
     Caller owns TaskManager, as for the linear mixed solver. Failure raises
     ``MixedOmegaNewtonNotConverged`` carrying iteration diagnostics.
     """
@@ -45,7 +55,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         solve_magnetostatic_matching_trace_total_reduced_omega,
         audit_mixed_omega_constitutive_field)
     from .scalar_potential_solver import (
-        _build_bh_coefficient_function, _build_bh_coenergy_coefficient_function)
+        _build_bh_coefficient_function, _build_bh_coenergy_coefficient_function,
+        _build_bh_spline_law)
 
     mu0 = 4e-7 * math.pi
     table = np.asarray(bh_table, dtype=float)
@@ -71,6 +82,20 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         raise ValueError("Newton owns the assembled system and constitutive coefficient")
     if linear_solver not in ("direct", "cg") or (linear_solver == "cg" and not condense_matching_trace):
         raise ValueError("Newton CG requires matching-trace condensation")
+    if bh_evaluation == "spline":
+        b_of, coenergy_of, _ = _build_bh_spline_law(table)
+    elif bh_evaluation == "ifpos":
+        def b_of(magnitude):
+            return _build_bh_coefficient_function(magnitude, table)
+
+        def coenergy_of(magnitude):
+            return _build_bh_coenergy_coefficient_function(magnitude, table)
+    else:
+        raise ValueError("bh_evaluation must be 'spline' or 'ifpos'")
+    if material_bonus_intorder is None:
+        material_bonus_intorder = bonus_intorder
+    if type(material_bonus_intorder) is not int or material_bonus_intorder < 0:
+        raise ValueError("material_bonus_intorder must be a nonnegative integer or None")
 
     initial_mu = dict(mu_r_by_material or {})
     initial_mu.update({name: float(mu_r_initial) for name in nonlinear})
@@ -133,10 +158,10 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
     trial_h = source - ng.grad(ut)
     # Smooth only the radial norm at machine-scale H, not the B(H) table.
     hmag = ng.sqrt(ng.InnerProduct(trial_h, trial_h) + 1e-24)
-    correction = (_build_bh_coenergy_coefficient_function(hmag, table)
+    correction = (coenergy_of(hmag)
                   - 0.5 * mu0 * float(mu_r_initial) * ng.InnerProduct(trial_h, trial_h))
     tangent += ng.SymbolicEnergy(correction.Compile(), definedon=selector,
-                                bonus_intorder=bonus_intorder)
+                                bonus_intorder=material_bonus_intorder)
     preconditioner = ng.Preconditioner(tangent, "local") if linear_solver == "cg" else None
     residual = rhs.CreateVector()
     trial = solution.vec.CreateVector()
@@ -155,13 +180,21 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
     history = []
     converged = norm / reference_norm <= residual_tolerance
     relative_change = 0.0 if converged else None
-    integration_order = max(4, 2 * int(order) + int(bonus_intorder))
+    integration_order = max(4, 2 * int(order) + int(material_bonus_intorder))
     # H_cf refers to this persistent solution; updating it preserves all lifts.
     field_h = result["H_cf"]
-    magnitude = ng.sqrt(ng.InnerProduct(field_h, field_h) + 1e-24)
-    secant = (_build_bh_coefficient_function(magnitude, table) / magnitude).Compile()
+    # The nonlinear integrals run over the iron only, so they use the iron's
+    # own field.  H_cf is a MaterialCF whose air entry holds the coil source,
+    # and a compiled MaterialCF evaluates every material's entry at every
+    # point: ESRF Example 6 spent 1875 s per iteration evaluating the coil at
+    # iron quadrature points.  The returned B_cf stays uncompiled for the
+    # same reason.
+    iron_h = source - ng.grad(solution if condense_matching_trace else solution.components[1])
+    iron_magnitude = ng.sqrt(ng.InnerProduct(iron_h, iron_h) + 1e-24)
+    secant = (b_of(iron_magnitude) / iron_magnitude).Compile()
+    iron_b = (secant * iron_h).Compile()
     physical_mu = mesh.MaterialCF({name: secant for name in nonlinear}, default=result["mu_cf"])
-    field_b = (physical_mu * field_h).Compile()
+    field_b = physical_mu * field_h
     previous = ng.GridFunction(fes)
     reason = "iteration limit"
     for iteration in range(1, int(max_iterations) + 1):
@@ -171,7 +204,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         previous.vec.data = solution.vec
         before_h = source - ng.grad(previous if condense_matching_trace else previous.components[1])
         before_mag = ng.sqrt(ng.InnerProduct(before_h, before_h) + 1e-24)
-        before_b = (_build_bh_coefficient_function(before_mag, table) / before_mag * before_h).Compile()
+        before_b = (b_of(before_mag) / before_mag * before_h).Compile()
         t0 = time.perf_counter()
         tangent.AssembleLinearization(solution.vec)
         row["assembly_s"] = time.perf_counter() - t0
@@ -222,12 +255,14 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
             break
         solution.vec.data = trial
         norm = trial_norm
-        delta = (field_b - before_b).Compile()
+        t0 = time.perf_counter()
+        delta = (iron_b - before_b).Compile()
         numerator = float(ng.Integrate(ng.InnerProduct(delta, delta), mesh,
                                       definedon=selector, order=integration_order))
-        denominator = float(ng.Integrate(ng.InnerProduct(field_b, field_b), mesh,
+        denominator = float(ng.Integrate(ng.InnerProduct(iron_b, iron_b), mesh,
                                         definedon=selector, order=integration_order))
         relative_change = math.sqrt(max(numerator, 0.) / max(denominator, 1e-60))
+        row["field_change_s"] = time.perf_counter() - t0
         row.update(residual_relative=norm / reference_norm,
                    relative_B_change=relative_change)
         history.append(row)
@@ -237,7 +272,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
 
     stats = dict(method="quadrature_pchip_newton", material_sampling="integration_point",
                  matching_trace_condensed=bool(condense_matching_trace), linear_solver=linear_solver,
-                 bh_interpolation="pchip", converged=bool(converged), iterations=len(history),
+                 bh_interpolation="pchip", bh_evaluation=bh_evaluation, bonus_intorder=int(bonus_intorder),
+                 material_bonus_intorder=int(material_bonus_intorder),
+                 converged=bool(converged), iterations=len(history),
                  residual_relative=norm / reference_norm, residual_tolerance=float(residual_tolerance),
                  relative_B_change=relative_change, tolerance=float(tolerance), history=history,
                  initial_linear_solve_s=initial_seconds, elapsed_s=time.perf_counter() - started)
@@ -246,7 +283,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
     result.update(mu_cf=physical_mu, B_cf=field_b, nonlinear_stats=stats, system=None,
                   assembled_energy=None, linear_residual=None)
     result["constitutive_field_audit"] = audit_mixed_omega_constitutive_field(
-        mesh, field_h, field_b, table, nonlinear, integration_order=integration_order)
+        mesh, iron_h, iron_b, table, nonlinear, integration_order=integration_order)
     if observation_points is not None:
         points = np.asarray(observation_points, dtype=float).reshape(-1, 3)
         stats["observation_field_T"] = [list(field_b(mesh(*p))) for p in points]
