@@ -140,14 +140,16 @@ def solve_ih_axisym_coupled(mesh_path, *, workpiece, coils, frequency,
         _log(f"STEP:{step} t={entry['t_s']:.4g}s P={entry['P_W']:.4e}W "
              f"T_max={entry['T_max_nodal_C']:.1f}C")
 
+    from ngsolve import TaskManager
     try:
-        result, gfT, em = C.run_coupled(
-            mesh, frequency=frequency, workpiece=workpiece, coils=coils,
-            dirichlet=em_dirichlet, em_material=em_mat,
-            thermal_material=th_mat, boundaries=boundaries, dt=dt,
-            t_end=t_end, t_initial=t_initial, em_every=em_every,
-            em_order=em_order, thermal_order=thermal_order,
-            newton_tol_K=newton_tol, on_step=on_step)
+        with TaskManager():
+            result, gfT, em = C.run_coupled(
+                mesh, frequency=frequency, workpiece=workpiece, coils=coils,
+                dirichlet=em_dirichlet, em_material=em_mat,
+                thermal_material=th_mat, boundaries=boundaries, dt=dt,
+                t_end=t_end, t_initial=t_initial, em_every=em_every,
+                em_order=em_order, thermal_order=thermal_order,
+                newton_tol_K=newton_tol, on_step=on_step)
     except (ValueError, RuntimeError) as exc:
         return {"error": str(exc)}
 

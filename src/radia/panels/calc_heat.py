@@ -711,7 +711,10 @@ def solve_heat(wp_vol,
     T_probe = []
     probe_mip = None
     if probe_point is not None:
-        probe_mip = _locate_probe(wp_mesh, probe_point)
+        try:
+            probe_mip = _locate_probe(wp_mesh, probe_point)
+        except ValueError as exc:
+            return {"error": str(exc)}
         T_probe.append(_probe_value(gfT, probe_mip))
 
     from ngsolve import NodeId, VERTEX
@@ -740,7 +743,8 @@ def solve_heat(wp_vol,
             q_resample(omega_mech * t)
         if nonlinear:
             try:
-                stepper.advance(float(dt))
+                with TaskManager():
+                    stepper.advance(float(dt))
             except (ValueError, RuntimeError) as exc:
                 return {"error": f"t={t:.4g} s: {exc}"}
         else:

@@ -1104,8 +1104,11 @@ class ImpedanceTable:
         lq = ((1 - u) * (1 - w) * L[i, j] + u * (1 - w) * L[i + 1, j]
               + (1 - u) * w * L[i, j + 1] + u * w * L[i + 1, j + 1])
         q = np.exp(lq)
-        return np.where(below, q * np.exp(2.0 * (lh - self.logH[0])), q) \
-            * (H > 0)
+        # outside the H grid, continue with the local q ~ |H|^2 trend
+        q = np.where(below, q * np.exp(2.0 * (lh - self.logH[0])), q)
+        above = lh > self.logH[-1]
+        q = np.where(above, q * np.exp(2.0 * (lh - self.logH[-1])), q)
+        return q * (H > 0)
 
     def invert_H(self, q, T):
         """|H_t| that gives ``q`` at temperature ``T`` (scalar T)."""
