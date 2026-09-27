@@ -56,4 +56,6 @@ the exported files.
 python validation_test/cubit_mesh_export/geometric_refit_benchmark.py --plugin-dir <dir with candidate cubit_mesh_export.ccm>
 ```
 
+Pass `--plugin-dir` as an absolute path: Cubit rejects a relative one
+("Invalid Plugin Directory") and silently loads the installed plugin.
 It writes `geometric_refit_benchmark_results.json` next to the script.

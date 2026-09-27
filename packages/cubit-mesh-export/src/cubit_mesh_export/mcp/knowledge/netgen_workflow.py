@@ -82,8 +82,16 @@ refit is kept only when the sampled distance decreases and the element
 Jacobian does not degenerate; the export log reports accepted/tried counts and
 the maximum distance before and after.  For the unit sphere
 (`validation_test/cubit_mesh_export/geometric_refit_benchmark.py`) the radial
-L2 error of the 32-HEX mesh drops from 1.2e-3 to 9.8e-7 at p=3 and from
-1.8e-5 to 6.0e-9 at p=4; from p=4 on it levels off near 1e-8.  Set
+L2 error of the 32-HEX mesh drops from 1.2e-3 to 9.8e-7 at p=3, from
+1.8e-5 to 8.6e-10 at p=4 and from 3.3e-5 to 7.3e-11 at p=5; log10(error)
+is close to linear in p (volume error about 2.6 decades per order).  Three
+things capped p>=4 near 1e-8 before 2.1.1: the `.vol` writer rounded the
+curving coefficients to 8 digits (upstream Netgen does the same), a
+Tikhonov weight of 1e-10 held back the order-5 coefficients, and the normal
+equations (condition 1e14 for order-5 faces) were solved instead of the
+least-squares problem.  Edges are also refitted from a second start with the
+highest coefficient removed, since from Netgen's order-5 start the solve
+settles in a worse minimum than the one the hierarchical basis contains.  Set
 `CUBIT_MESH_EXPORT_GEOMETRIC_REFIT=0` to export Netgen's coefficients for A/B
 comparison.
 
