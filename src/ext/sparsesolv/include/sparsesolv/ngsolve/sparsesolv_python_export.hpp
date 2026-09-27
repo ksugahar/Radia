@@ -1481,6 +1481,19 @@ print_level : int
         for (int k = 0; k < 10; k++) stages[names[k]] = sec[k];
         d["cycle_stage_s"] = stages;
         d["cycles_run"] = ams->CyclesRun();
+        py::dict amg_levels;
+        const auto& real = ams->Real();
+        const std::pair<const char*, CompactAMG*> amgs[4] = {
+            {"G", real.GetBGAsAMG()}, {"Px", real.GetBPixAsAMG()},
+            {"Py", real.GetBPiyAsAMG()}, {"Pz", real.GetBPizAsAMG()}};
+        for (const auto& [name, amg] : amgs) {
+          if (!amg) continue;
+          py::list rows;
+          for (const auto& row : amg->DualLevelProfile())
+            rows.append(py::make_tuple(int(row[0]), int(row[1]), row[2], int(row[3])));
+          amg_levels[name] = rows;
+        }
+        d["amg_levels"] = amg_levels;
       }
       return d;
     },
@@ -1492,6 +1505,9 @@ classes. For an HCurl BilinearForm, Preconditioner(a, "bddc",
 coarsetype="sparsesolv_ams", coarseflags={...}) replaces the direct wirebasket
 inverse by Compact AMS on the lowest-order edge block. coarseflags: cycles
 (k AMS cycles as k stationary steps on the wirebasket system, default 1),
+lean_coarse (default 1: auxiliary AMGs stop where coarsening stalls and solve
+a coarsest level of at most 1024 rows densely when that reproduces a test
+vector; 0 keeps sparse Cholesky),
 cycle_type, num_smooth, print_level, eps (relative diagonal shift of the AMS
 surrogate), beta_zero and mixed_precision (real systems only). A complex
 wirebasket matrix S uses the real surrogate Re S + Im S.

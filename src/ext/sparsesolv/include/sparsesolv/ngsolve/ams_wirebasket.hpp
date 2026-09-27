@@ -185,6 +185,7 @@ public:
     {
         cycle_type_ = int(flags.GetNumFlag("cycle_type", 1));
         cycles_ = int(flags.GetNumFlag("cycles", 1));
+        lean_coarse_ = flags.GetNumFlag("lean_coarse", 1.0) != 0.0;
         num_smooth_ = int(flags.GetNumFlag("num_smooth", 1));
         print_level_ = int(flags.GetNumFlag("print_level", 0));
         eps_ = flags.GetNumFlag("eps", 0.0);
@@ -345,14 +346,14 @@ private:
                 throw Exception("sparsesolv_ams: beta_zero and mixed_precision are real-only");
             auto complex_ams = make_shared<ComplexHypreBasedAMS>(edge_mat, gradient, local_free, x, y, z,
                                                     int(nloc), cycle_type_, print_level_,
-                                                    1.0, 0, num_smooth_, has_extra);
+                                                    1.0, 0, num_smooth_, has_extra, lean_coarse_);
             GetAMSWirebasketStats().complex_ams = complex_ams;
             ams = complex_ams;
         } else {
             ams = make_shared<HypreBasedAMS>(edge_mat, gradient, local_free, x, y, z,
                                              cycle_type_, num_smooth_, 0.25, print_level_,
                                              1.0, 0, beta_zero_, false, mixed_precision_,
-                                             has_extra);
+                                             has_extra, lean_coarse_);
         }
         auto& stats = GetAMSWirebasketStats();
         stats.builds++;
@@ -375,7 +376,7 @@ private:
     shared_ptr<BaseMatrix> op_;
     int cycle_type_ = 1, num_smooth_ = 1, print_level_ = 0, cycles_ = 1;
     double eps_ = 0.0;
-    bool beta_zero_ = false, mixed_precision_ = false;
+    bool beta_zero_ = false, mixed_precision_ = false, lean_coarse_ = true;
 };
 
 /// Register "sparsesolv_ams" with NGSolve's preconditioner classes (once).

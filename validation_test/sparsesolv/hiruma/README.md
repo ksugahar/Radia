@@ -91,6 +91,37 @@ What the exploration (`summary_mdx1_20260927.json`) settled:
   reduce the iteration count.  More than half of an AMS cycle (57 %) is the
   five auxiliary AMG V-cycles on the 23.7k-vertex hierarchies.
 
+### Auxiliary AMG V-cycles (`bddc_coarse/amg_20260927/`)
+
+Per-level timers (`AMSCoarseStats()["amg_levels"]`) showed the nodal (Pi)
+AMGs coarsening past the point where a step still shrinks (Pz: 17 levels,
+506 -> 504 -> 503 ... rows) and a sparse Cholesky solve of 0.28 ms for the two
+right-hand sides of a 427-500-row coarsest level.  With `lean_coarse` (the
+wirebasket default) the auxiliary AMGs stop once a step keeps more than 80 %
+of a level of at most 5000 rows and solve a coarsest level of at most 1024
+rows with a dense inverse (in-place Gauss-Jordan on the caller's
+TaskManager), accepted only if it reproduces a test vector; the nearly
+singular gradient coarsest level fails that check and keeps sparse Cholesky
+(storing that factorization's operator densely diverged).  The dual V-cycle
+also runs a loop serially by work (fewer than 16k nonzeros) instead of rows.
+
+mdx1, 8 threads, AMS 4 cycles, edge wirebasket, one binary:
+
+| mesh | lean_coarse | iterations | solve s | nodal AMG s | gradient AMG s |
+|---|---|---|---|---|---|
+| 2.5T | 0 (median of 4) | 596 | 67.5 | 14.8 | 6.6 |
+| 2.5T | 1 (median of 4) | 595.5 | 65.5 | 11.7 | 6.8 |
+| 3.5T | 0 / 1 | 783 / 782 | 140.7 / 134.6 | 26.4 / 22.6 | 10.7 / 10.8 |
+| 5.5T | 0 / 1 | 582 / 583 | 176.3 / 170.8 | 31.5 / 28.0 | 13.7 / 13.3 |
+
+Before these changes the same host measured 17.2 s nodal and 7.0 s gradient
+AMG at 2.5T, so the auxiliary V-cycles cost 24 % less and the solve 5-7 %
+less.  One 2.5T `lean_coarse=1` run took 953 iterations (loss differing at
+1e-11); three repeats took 595-596 and it was not reproduced.  Also tried and
+dropped: float32 level values (all AMGs: 47 -> 70 iterations on a test box;
+nodal only: no gain, the levels are cache resident) and the additive 0(1+2)0
+AMS cycle (825 vs 595 iterations).
+
 ## Independent-host evidence
 
 `compact_ams_results_hibino.json` records the 2026-09-11 Hibino run. Its
