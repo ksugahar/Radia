@@ -1,0 +1,70 @@
+{
+  "schema": "radia.validation.sparsesolv-bddc-coarse-cases.v1",
+  "generated_at_utc": "2026-09-27T16:52:21.906830+00:00",
+  "hostname": "mdx1",
+  "label": "disk_1e4_direct",
+  "environment": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10",
+    "ngsolve": "6.2.2606",
+    "cpu_count": 38
+  },
+  "argv": [
+    "disk",
+    "--freq",
+    "10000",
+    "--hcond",
+    "7e-4",
+    "--hair",
+    "5e-3",
+    "--coarse",
+    "direct",
+    "--threads",
+    "8",
+    "--label",
+    "disk_1e4_direct",
+    "--output",
+    "results\\disk_1e4_direct.json"
+  ],
+  "result": {
+    "case": "disk",
+    "freq_hz": 10000.0,
+    "ne": 40549,
+    "nv": 7485,
+    "nedge": 49201,
+    "order": 2,
+    "ndof": 213733,
+    "coarse": "direct",
+    "inverse": "sparsecholesky",
+    "cycles": 4,
+    "lean_coarse": 1,
+    "system_eps": 1e-06,
+    "edge_wirebasket": false,
+    "face_dofs_returned_to_interface": 0,
+    "threads": 8,
+    "iterations": 71,
+    "converged": true,
+    "true_residual": 2.0773678253080386e-08,
+    "t_mesh": 2.323,
+    "t_assemble_and_bddc_setup": 34.773,
+    "t_solve": 13.456,
+    "t_total_wall": 50.889,
+    "peak_memory_mb": 5977.1,
+    "conductor_loss_w": 1.849837276540928e-08,
+    "reduced_field_energy": 6.125637937699397e-13,
+    "bz_average": [
+      0.9610029746244493,
+      -0.1318145870467973
+    ],
+    "reference": {
+      "bz_average": [
+        0.95172,
+        -0.11536
+      ],
+      "source": "axisymmetric Q2 (stored)",
+      "bz_relative_error": 0.019706674254985027
+    },
+    "coarse_stats": {}
+  },
+  "binary_sha256": "126CB410B063E05D9DD8BE180398E7C5CF93291D04D1E759F995A7AFA8B30386"
+}

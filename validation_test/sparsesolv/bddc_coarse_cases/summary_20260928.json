@@ -1,0 +1,298 @@
+{
+  "schema": "radia.validation.sparsesolv-bddc-coarse-cases-summary.v1",
+  "binary_sha256": "126CB410B063E05D9DD8BE180398E7C5CF93291D04D1E759F995A7AFA8B30386",
+  "commit": "41a044187",
+  "threads": 8,
+  "hosts": "mdx1 (disk), mdx2 (sphere, plate); each shared with one job of another session",
+  "note": "disk_1e4_fine_direct started with the host at 89 % CPU (see campaign logs)",
+  "rows": [
+    {
+      "file": "mdx1_20260928_disk_100_ams.json",
+      "case": "disk",
+      "freq_hz": 100.0,
+      "ndof": 213733,
+      "coarse": "sparsesolv_ams",
+      "iterations": 55,
+      "setup_s": 0.824,
+      "solve_s": 1.635,
+      "peak_mb": 490.6,
+      "loss_w": 6.6060119532958765e-12,
+      "bz": [
+        1.087445139254987,
+        -0.0041426650195831895
+      ],
+      "reference": {
+        "bz_average": [
+          1.09161,
+          -0.00417
+        ],
+        "source": "axisymmetric Q2 (stored)",
+        "bz_relative_error": 0.0038153919974715364
+      }
+    },
+    {
+      "file": "mdx1_20260928_disk_100_direct.json",
+      "case": "disk",
+      "freq_hz": 100.0,
+      "ndof": 213733,
+      "coarse": "direct",
+      "iterations": 43,
+      "setup_s": 33.125,
+      "solve_s": 8.188,
+      "peak_mb": 5685.6,
+      "loss_w": 6.606011955917018e-12,
+      "bz": [
+        1.0874451392657767,
+        -0.0041426649992794985
+      ],
+      "reference": {
+        "bz_average": [
+          1.09161,
+          -0.00417
+        ],
+        "source": "axisymmetric Q2 (stored)",
+        "bz_relative_error": 0.0038153919877097846
+      }
+    },
+    {
+      "file": "mdx1_20260928_disk_1e4_ams.json",
+      "case": "disk",
+      "freq_hz": 10000.0,
+      "ndof": 213733,
+      "coarse": "sparsesolv_ams",
+      "iterations": 61,
+      "setup_s": 0.726,
+      "solve_s": 1.643,
+      "peak_mb": 490.9,
+      "loss_w": 1.849837276527913e-08,
+      "bz": [
+        0.9610029747373552,
+        -0.13181458726257728
+      ],
+      "reference": {
+        "bz_average": [
+          0.95172,
+          -0.11536
+        ],
+        "source": "axisymmetric Q2 (stored)",
+        "bz_relative_error": 0.019706674508887193
+      }
+    },
+    {
+      "file": "mdx1_20260928_disk_1e4_direct.json",
+      "case": "disk",
+      "freq_hz": 10000.0,
+      "ndof": 213733,
+      "coarse": "direct",
+      "iterations": 71,
+      "setup_s": 34.773,
+      "solve_s": 13.456,
+      "peak_mb": 5977.1,
+      "loss_w": 1.849837276540928e-08,
+      "bz": [
+        0.9610029746244493,
+        -0.1318145870467973
+      ],
+      "reference": {
+        "bz_average": [
+          0.95172,
+          -0.11536
+        ],
+        "source": "axisymmetric Q2 (stored)",
+        "bz_relative_error": 0.019706674254985027
+      }
+    },
+    {
+      "file": "mdx1_20260928_disk_1e4_fine_ams.json",
+      "case": "disk",
+      "freq_hz": 10000.0,
+      "ndof": 702468,
+      "coarse": "sparsesolv_ams",
+      "iterations": 85,
+      "setup_s": 1.905,
+      "solve_s": 8.05,
+      "peak_mb": 1304.1,
+      "loss_w": 1.7747624582766682e-08,
+      "bz": [
+        0.9609512173941889,
+        -0.12473728444154694
+      ],
+      "reference": {
+        "bz_average": [
+          0.95172,
+          -0.11536
+        ],
+        "source": "axisymmetric Q2 (stored)",
+        "bz_relative_error": 0.01372566502468961
+      }
+    },
+    {
+      "file": "mdx1_20260928_disk_1e4_fine_direct.json",
+      "case": "disk",
+      "freq_hz": 10000.0,
+      "ndof": 702468,
+      "coarse": "direct",
+      "iterations": 65,
+      "setup_s": 243.457,
+      "solve_s": 57.13,
+      "peak_mb": 24877.2,
+      "loss_w": 1.7747624588064377e-08,
+      "bz": [
+        0.9609512176320498,
+        -0.12473728482828443
+      ],
+      "reference": {
+        "bz_average": [
+          0.95172,
+          -0.11536
+        ],
+        "source": "axisymmetric Q2 (stored)",
+        "bz_relative_error": 0.013725665486228092
+      }
+    },
+    {
+      "file": "mdx2_20260928_plate_1e3_ams.json",
+      "case": "plate",
+      "freq_hz": 1000.0,
+      "ndof": 742783,
+      "coarse": "sparsesolv_ams",
+      "iterations": 34,
+      "setup_s": 2.068,
+      "solve_s": 5.018,
+      "peak_mb": 1296.7,
+      "loss_w": 9223.137392966732,
+      "bz": null,
+      "reference": {
+        "source": "direct wirebasket run of the same system"
+      }
+    },
+    {
+      "file": "mdx2_20260928_plate_1e3_direct.json",
+      "case": "plate",
+      "freq_hz": 1000.0,
+      "ndof": 742783,
+      "coarse": "direct",
+      "iterations": 39,
+      "setup_s": 60.367,
+      "solve_s": 17.727,
+      "peak_mb": 10111.1,
+      "loss_w": 9223.137392964527,
+      "bz": null,
+      "reference": {
+        "source": "direct wirebasket run of the same system"
+      }
+    },
+    {
+      "file": "mdx2_20260928_plate_1e5_ams.json",
+      "case": "plate",
+      "freq_hz": 100000.0,
+      "ndof": 742783,
+      "coarse": "sparsesolv_ams",
+      "iterations": 31,
+      "setup_s": 2.13,
+      "solve_s": 4.915,
+      "peak_mb": 1311.2,
+      "loss_w": 14507933.969639996,
+      "bz": null,
+      "reference": {
+        "source": "direct wirebasket run of the same system"
+      }
+    },
+    {
+      "file": "mdx2_20260928_plate_1e5_direct.json",
+      "case": "plate",
+      "freq_hz": 100000.0,
+      "ndof": 742783,
+      "coarse": "direct",
+      "iterations": 50,
+      "setup_s": 62.728,
+      "solve_s": 22.672,
+      "peak_mb": 9955.0,
+      "loss_w": 14507933.969450159,
+      "bz": null,
+      "reference": {
+        "source": "direct wirebasket run of the same system"
+      }
+    },
+    {
+      "file": "mdx2_20260928_sphere_1e4_ams.json",
+      "case": "sphere",
+      "freq_hz": 10000.0,
+      "ndof": 349648,
+      "coarse": "sparsesolv_ams",
+      "iterations": 41,
+      "setup_s": 1.043,
+      "solve_s": 1.631,
+      "peak_mb": 715.1,
+      "loss_w": 3512.9042369624176,
+      "bz": null,
+      "reference": {
+        "loss_w": 3378.246740373787,
+        "a_over_delta": 7.565957013248112,
+        "source": "Smythe dipole moment",
+        "loss_relative_error": 0.03986017213583738
+      }
+    },
+    {
+      "file": "mdx2_20260928_sphere_1e4_direct.json",
+      "case": "sphere",
+      "freq_hz": 10000.0,
+      "ndof": 349648,
+      "coarse": "direct",
+      "iterations": 50,
+      "setup_s": 77.698,
+      "solve_s": 16.567,
+      "peak_mb": 10200.3,
+      "loss_w": 3512.904242942309,
+      "bz": null,
+      "reference": {
+        "loss_w": 3378.246740373787,
+        "a_over_delta": 7.565957013248112,
+        "source": "Smythe dipole moment",
+        "loss_relative_error": 0.03986017390595418
+      }
+    },
+    {
+      "file": "mdx2_20260928_sphere_700_ams.json",
+      "case": "sphere",
+      "freq_hz": 700.0,
+      "ndof": 349648,
+      "coarse": "sparsesolv_ams",
+      "iterations": 44,
+      "setup_s": 1.048,
+      "solve_s": 1.789,
+      "peak_mb": 711.1,
+      "loss_w": 463.6360502295724,
+      "bz": null,
+      "reference": {
+        "loss_w": 462.9831702285341,
+        "a_over_delta": 2.001764068725952,
+        "source": "Smythe dipole moment",
+        "loss_relative_error": 0.0014101592520436852
+      }
+    },
+    {
+      "file": "mdx2_20260928_sphere_700_direct.json",
+      "case": "sphere",
+      "freq_hz": 700.0,
+      "ndof": 349648,
+      "coarse": "direct",
+      "iterations": 46,
+      "setup_s": 76.575,
+      "solve_s": 15.736,
+      "peak_mb": 10749.5,
+      "loss_w": 463.6360502290448,
+      "bz": null,
+      "reference": {
+        "loss_w": 462.9831702285341,
+        "a_over_delta": 2.001764068725952,
+        "source": "Smythe dipole moment",
+        "loss_relative_error": 0.0014101592509041972
+      }
+    }
+  ],
+  "campaign_logs": {
+    "mdx1": "start disk_100_direct cpu%=5.7 2026-09-28T01:50:28.0236687+09:00\nend disk_100_direct exit=0 2026-09-28T01:51:15.7753143+09:00\nstart disk_100_ams cpu%=8.6 2026-09-28T01:51:18.8058789+09:00\nend disk_100_ams exit=0 2026-09-28T01:51:26.4176128+09:00\nstart disk_1e4_direct cpu%=7.1 2026-09-28T01:51:29.4425395+09:00\nend disk_1e4_direct exit=0 2026-09-28T01:52:22.0709132+09:00\nstart disk_1e4_ams cpu%=5.1 2026-09-28T01:52:25.1096899+09:00\nend disk_1e4_ams exit=0 2026-09-28T01:52:32.3737263+09:00\ncampaign done\nstart disk_1e4_fine_direct cpu%=89.1 2026-09-28T01:53:47.0108528+09:00\nend disk_1e4_fine_direct exit=0 2026-09-28T01:58:57.5978376+09:00\nstart disk_1e4_fine_ams cpu%=2.1 2026-09-28T01:59:00.6314677+09:00\nend disk_1e4_fine_ams exit=0 2026-09-28T01:59:21.2185009+09:00\nfine done\n",
+    "mdx2": "start sphere_700_direct cpu%=2.4 2026-09-28T01:50:26.0301155+09:00\nend sphere_700_direct exit=0 2026-09-28T01:52:06.2589916+09:00\nstart sphere_700_ams cpu%=7.7 2026-09-28T01:52:09.3006451+09:00\nend sphere_700_ams exit=0 2026-09-28T01:52:18.3046538+09:00\nstart sphere_1e4_direct cpu%=5.4 2026-09-28T01:52:21.3405331+09:00\nend sphere_1e4_direct exit=0 2026-09-28T01:54:01.7250847+09:00\nstart sphere_1e4_ams cpu%=1.9 2026-09-28T01:54:04.7489596+09:00\nend sphere_1e4_ams exit=0 2026-09-28T01:54:14.5023946+09:00\nstart plate_1e3_direct cpu%=3.5 2026-09-28T01:54:17.5463031+09:00\nend plate_1e3_direct exit=0 2026-09-28T01:55:46.3936298+09:00\nstart plate_1e3_ams cpu%=2.2 2026-09-28T01:55:49.4328165+09:00\nend plate_1e3_ams exit=0 2026-09-28T01:56:10.1949847+09:00\nstart plate_1e5_direct cpu%=3 2026-09-28T01:56:13.2336643+09:00\nend plate_1e5_direct exit=0 2026-09-28T01:57:49.6386962+09:00\nstart plate_1e5_ams cpu%=3.2 2026-09-28T01:57:52.6733162+09:00\nend plate_1e5_ams exit=0 2026-09-28T01:58:12.5769786+09:00\ncampaign done\n"
+  }
+}

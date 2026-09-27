@@ -1,0 +1,100 @@
+{
+  "schema": "radia.validation.sparsesolv-bddc-coarse-cases.v1",
+  "generated_at_utc": "2026-09-27T16:52:32.220549+00:00",
+  "hostname": "mdx1",
+  "label": "disk_1e4_ams",
+  "environment": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10",
+    "ngsolve": "6.2.2606",
+    "cpu_count": 38
+  },
+  "argv": [
+    "disk",
+    "--freq",
+    "10000",
+    "--hcond",
+    "7e-4",
+    "--hair",
+    "5e-3",
+    "--coarse",
+    "sparsesolv_ams",
+    "--ssn-dir",
+    "ssn",
+    "--edge-wirebasket",
+    "--cycles",
+    "4",
+    "--threads",
+    "8",
+    "--label",
+    "disk_1e4_ams",
+    "--output",
+    "results\\disk_1e4_ams.json"
+  ],
+  "result": {
+    "case": "disk",
+    "freq_hz": 10000.0,
+    "ne": 40549,
+    "nv": 7485,
+    "nedge": 49201,
+    "order": 2,
+    "ndof": 213733,
+    "coarse": "sparsesolv_ams",
+    "inverse": null,
+    "cycles": 4,
+    "lean_coarse": 1,
+    "system_eps": 1e-06,
+    "edge_wirebasket": true,
+    "face_dofs_returned_to_interface": 56,
+    "threads": 8,
+    "iterations": 61,
+    "converged": true,
+    "true_residual": 6.595295651626047e-09,
+    "t_mesh": 2.096,
+    "t_assemble_and_bddc_setup": 0.726,
+    "t_solve": 1.643,
+    "t_total_wall": 5.636,
+    "peak_memory_mb": 490.9,
+    "conductor_loss_w": 1.849837276527913e-08,
+    "reduced_field_energy": 6.125637940431873e-13,
+    "bz_average": [
+      0.9610029747373552,
+      -0.13181458726257728
+    ],
+    "reference": {
+      "bz_average": [
+        0.95172,
+        -0.11536
+      ],
+      "source": "axisymmetric Q2 (stored)",
+      "bz_relative_error": 0.019706674508887193
+    },
+    "coarse_stats": {
+      "builds": 1,
+      "n_edges": 49201,
+      "n_extra": 0,
+      "cycles": 4,
+      "n_free": 45697,
+      "n_vertices": 7485,
+      "complex": true,
+      "extract_s": 0.024593200000000003,
+      "setup_s": 0.1289385,
+      "applies": 62,
+      "apply_s": 1.1254187999999998,
+      "cycle_stage_s": {
+        "split": 0.015426800000000003,
+        "grad_residual": 0.12321129999999998,
+        "grad_restrict": 0.027186299999999993,
+        "grad_amg": 0.34684180000000003,
+        "grad_prolong": 0.04237139999999997,
+        "nodal_residual": 0.06127450000000004,
+        "nodal_restrict": 0.02332780000000001,
+        "nodal_amg": 0.3011751999999999,
+        "nodal_prolong": 0.040300299999999976,
+        "final_sweep": 0.06533330000000007
+      },
+      "cycles_run": 248
+    }
+  },
+  "binary_sha256": "126CB410B063E05D9DD8BE180398E7C5CF93291D04D1E759F995A7AFA8B30386"
+}
