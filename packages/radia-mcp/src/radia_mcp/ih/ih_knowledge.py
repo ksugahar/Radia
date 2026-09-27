@@ -686,31 +686,47 @@ as P1 even when the electromagnetic solve itself uses a higher order.
 ``radia.ih_thermal`` owns the EM-to-thermal handoff for ``calc_heat.py``,
 ``calc_heat_axisym.py`` and the Simulink operator assembly:
 
-* **Sidecars.** EM runs write ``<stem>_qsurf.sol.json`` (and a P1
-  ``<stem>_Ht.sol`` + sidecar): mesh file digest, H1 order, DOF count,
-  quantity, heated boundaries and ``P_wp_W``.  The heat solvers verify the
-  pair and the EM power; a ``.sol`` without a sidecar is accepted on its byte
-  count only and reported as ``provenance: size-only``.  Temperature fields
-  get the same sidecar; ``ih_thermal.load_field(T.sol)`` rebuilds them
-  exactly (order, ``definedon`` region) and never calls ``Mesh.Curve``.
+* **Sidecars are required.** EM runs write ``<stem>_qsurf.sol.json`` (and
+  a P1 ``<stem>_Ht.sol`` + sidecar): mesh file digest, H1 order, DOF count,
+  quantity, heated boundaries, ``P_wp_W`` and (|H_t|) ``frequency_Hz``.  The
+  heat solvers verify the pair, the quantity and the EM power.  A ``.sol``
+  without a sidecar is an error; after confirming the pairing, adopt it
+  explicitly:
+
+  ```bash
+  python -m radia.ih_thermal sidecar --sol q.sol --mesh em.vol --order 1 \
+      --quantity surface_loss_density --boundaries "wp_outer|wp_top" --p-wp 1234.5
+  ```
+
+  (``--frequency`` for ``surface_tangential_H_amplitude``; ``--geometry 3d|axisymmetric-rz`` and
+  ``--definedon`` for temperature.)  Temperature fields carry the same
+  sidecar; ``ih_thermal.load_field(T.sol, quantity="temperature")`` rebuilds
+  them exactly (order, ``definedon`` region) and never calls ``Mesh.Curve``.
 * **Pointwise transfer.** Thermal heat-flux vertices are projected onto the
   nearest EM heated triangle; a vertex farther than ``--transfer-tolerance``
-  (default a quarter of the median EM edge) is an error; there is no zero-flux
-  fallback.
+  (default a quarter of the median EM edge, at most one median edge) is an
+  error; there is no zero-flux fallback.
 * **Circumferential average** (``--q-phi-average``; always in the
   axisymmetric solver).  Every EM triangle is cut at meridian arc-length bin
   edges and integrated exactly, so the average conserves the EM power and has
   no azimuth sampling error; each thermal vertex takes the value at its
-  meridian position.  A surface that is not a body of revolution about the
-  axis is rejected.  ``--q-phi-bin`` sets the bin width.
+  meridian position.  Triangles pierced by the axis are split at the
+  piercing point (exact for P1), so the bins at ``r = 0`` are integrated, not
+  interpolated; an empty bin is an error.  A surface that is not a body of
+  revolution about the axis is rejected.  ``--q-phi-bin`` sets the bin
+  width.
   ``--q-phi-average-n`` was removed; in the axisymmetric solver
   ``--n-phi-samples`` (default 128) now drives an independent pointwise ring
   check reported as ``qsurf_projection.pointwise_ring_check``.
 * **Power gate.** The thermal heat input must match the EM power over
-  ``--em-heat-boundaries`` (default: the sidecar, else the thermal heat-flux
-  names when they exist on the EM mesh) within ``--power-tolerance``
-  (default 2%).  A mismatch usually means the thermal model heats only part
-  of the EM heated surface.
+  ``--em-heat-boundaries`` (default: the boundaries recorded in the sidecar;
+  thermal boundary names are never borrowed) within ``--power-tolerance``
+  (default 2%).  Every transfer is gated, including each rotation resample.
+  A mismatch usually means the thermal model heats only part of the EM
+  heated surface.
+* ``--q-uniform`` is a constant flux; any option that shapes a spatial
+  source (``--qsurf-sol``, ``--em-table``, ``--q-scale`` ...) given with it is
+  an error.
 * ``--q-scale`` multiplies q (current sweeps, ``(I/I_ref)^2``) and is
   recorded.
 
@@ -780,7 +796,8 @@ verifies the mesh digest and order and never curves the mesh:
 
 ```python
 from radia import ih_thermal
-mesh, gfT, audit = ih_thermal.load_field("workpiece_thermal_heat_T.sol")
+mesh, gfT, audit = ih_thermal.load_field("workpiece_thermal_heat_T.sol",
+                                         quantity="temperature")
 T_at = float(gfT(mesh(x, y, z)))
 ```
 
@@ -798,20 +815,30 @@ mesh reported a 6.9e6 m^2 surface) and every later point evaluation is wrong.
   3D the temperature spread on the ring through the peak; a large spread
   under a supposedly axisymmetric source means the source was not
   axisymmetric.
-* ``case_depth(mesh, gfT, 850.0, boundary_names=... | origins=, normals=,
-  span=..., n_phi=...)`` -- marches inward and classifies every ray:
-  ``ok``, ``not_reached`` (surface below threshold), ``through`` (leaves the
-  material still hot), ``beyond_span`` (probe too short; lower bound only).
-  Meridian stations on a 3D body report min/mean/max over the azimuth.
+* ``case_depth(mesh, gfT, 850.0, span=..., boundary_names=... | origins=,
+  normals=, n_phi=...)`` -- ``span`` (probe length) is required.  Station
+  origins are projected onto the material surface (a station farther than a
+  quarter edge is an error; distances are reported), then marched inward;
+  every ray is classified ``ok``, ``not_reached`` (surface below threshold),
+  ``through`` (leaves the material still hot), ``beyond_span`` (probe too
+  short; lower bound only) or ``edge`` (automatic station on an edge or
+  corner, no depth).  Meridian stations on a 3D body report min/mean/max over
+  the azimuth; a 2D (r, z) mesh takes (r, z) stations.
 * CLI: ``python -m radia.ih_thermal_post {exposure,depth} --temperature T.sol
-  ...`` reads the field through its sidecar and writes JSON/CSV.
+  ...`` reads the field, its ``definedon`` region and its geometry from the
+  sidecar and writes JSON/CSV.  Boundaries are ``|``-separated.  A stations
+  CSV has exactly the header ``x_m,y_m,z_m,nx,ny,nz`` or ``r_m,z_m,n_r,n_z``
+  (``_mm`` variants; optional ``s_m``/``s_mm`` arc-length column).
 
 ## Temperature-dependent heating and the Curie band (radia 5.1)
 
 * ``--material-table T_C,k_W_mK,cp_J_kgK`` (+ ``--latent-heat``,
   ``--latent-range``) switches the heat solvers to an enthalpy
-  backward-Euler Newton integrator (energy balance reported, typically
-  < 1e-6).  Leaving the table is an error unless
+  backward-Euler Newton integrator.  The energy balance is checked at the
+  end of the run (relative tolerance 1e-4; it closes to rounding when Newton
+  converges).  A step that does not converge is an error; ``--max-halvings N``
+  allows N explicit step halvings (default 0), and the halvings are
+  reported.  Leaving the table is an error unless
   ``--allow-table-extrapolation``.
 * **Do not freeze |H_t| for ferromagnetic workpieces.**  For a
   current-driven coil the surface |H_t| falls as sigma(T) falls and rises
@@ -826,8 +853,11 @@ mesh reported a 6.9e6 m^2 surface) and every later point evaluation is wrong.
   ``calc_ih_axisym_coupled.py`` (``radia.ih_axisym_coupled``): volumetric
   A_phi eddy currents with sigma(T), mu_r(T) (``T_C,sigma_S_m,mu_r``)
   re-solved from the temperature every ``--em-every`` steps, Joule heat in
-  the volume, exact coil/Joule power identity checked every solve, Bessel
-  solution reproduced to 5e-4.  It resolves the skin depth, which above the
+  the volume, exact coil/Joule power identity checked every solve.  A
+  skin-depth gate refuses a mesh whose workpiece-interface edges exceed
+  ``--skin-resolution`` (default 1) skin depths at any EM solve: at order 2
+  the Bessel error is 0.3 % at h/delta = 1 and 6 % at 2.  It resolves the skin
+  depth, which above the
   Curie band reaches millimetres (6 mm at 7 kHz for hot steel) -- the regime
   where a surface-impedance model is itself no longer valid.  A rotating part
   under a coil with short leads is usually well described by the ring coil
