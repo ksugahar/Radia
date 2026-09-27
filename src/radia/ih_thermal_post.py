@@ -378,6 +378,21 @@ def _march(mesh, gf, origins, normals, threshold, span, step,
         depth[i] = t0 + (t1 - t0) * (v0 - threshold) / (v0 - v1)
         status[i] = "ok"
         reentrant[i] = bool(np.any(seg[j:] >= threshold))
+    # A ray that leaves the material (the far surface, or a hole) still hot
+    # is reported at the exit point, found by bisection between the last
+    # sample inside and the first outside.
+    out = np.flatnonzero(status == "through")
+    if out.size:
+        lo = depth[out].copy()
+        hi = lo + step
+        for _ in range(40):
+            mid = 0.5 * (lo + hi)
+            v = _evaluate_points(mesh, gf, origins[out] + mid[:, None]
+                                 * normals[out], region_mask)
+            inside = ~np.isnan(v)
+            lo = np.where(inside, mid, lo)
+            hi = np.where(inside, hi, mid)
+        depth[out] = 0.5 * (lo + hi)
     return depth, status, surface, reentrant
 
 
@@ -452,7 +467,7 @@ def case_depth(mesh, gf, threshold_C: float, *, span: float,
     ``ok``          the temperature falls through the threshold at ``depth``;
     ``not_reached`` the first sample is below the threshold (depth 0);
     ``through``     the ray leaves the material still above the threshold
-                    (depth = distance to the far surface);
+                    (depth = distance to the far surface or hole wall);
     ``beyond_span`` still above the threshold after ``span`` inside the
                     material (depth is only a lower bound);
     ``edge``        an automatic station on an edge or corner (no depth).
