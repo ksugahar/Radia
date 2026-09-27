@@ -12,6 +12,18 @@
 // Avoid Cubit/Netgen name clashes by aliasing Netgen element types
 namespace ng = netgen;
 
+// Evaluate a volume element through Netgen's multi-point transformation:
+// NGSolve assembles with that path, and the scalar CalcElementTransformation
+// ignores the quad-face coefficients of hexes (its derivative rows for them
+// are even left uninitialised).
+static void map_volume(ng::CurvedElements & ce, ng::ElementIndex ei,
+                       const ng::Point<3> & ref, ng::Point<3> & phys)
+{
+  double xi[3] = {ref(0), ref(1), ref(2)}, x[3];
+  ce.CalcMultiPointElementTransformation(ei, 1, xi, 3, x, 3, (double *)nullptr, 0);
+  phys = ng::Point<3>(x[0], x[1], x[2]);
+}
+
 // Now include Cubit headers
 // Cubit defines: ::QUAD, ::HEX, ::PYRAMID, ::Surface (class)
 #include "CubitInterface.hpp"
@@ -1326,7 +1338,7 @@ bool NetgenCurver::curve_and_extract(int order)
           lam[(e[1]+1)%4] = t;
           ng::Point<3> ref(lam[1], lam[2], lam[3]);
           ng::Point<3> phys;
-          curved.CalcElementTransformation(ref, ei, phys);
+          map_volume(curved, ei, ref, phys);
 
           int new_id = next_node_id_++;
           total_nodes_++;
@@ -1366,7 +1378,7 @@ bool NetgenCurver::curve_and_extract(int order)
               lam[(f[2]+1)%4] = b;
               ng::Point<3> ref(lam[1], lam[2], lam[3]);
               ng::Point<3> phys;
-              curved.CalcElementTransformation(ref, ei, phys);
+              map_volume(curved, ei, ref, phys);
 
               int new_id = next_node_id_++;
               total_nodes_++;
@@ -1394,7 +1406,7 @@ bool NetgenCurver::curve_and_extract(int order)
               double c = (double)k / order;
               ng::Point<3> ref(a, b, c);
               ng::Point<3> phys;
-              curved.CalcElementTransformation(ref, ei, phys);
+              map_volume(curved, ei, ref, phys);
 
               int new_id = next_node_id_++;
               total_nodes_++;
@@ -1418,7 +1430,7 @@ bool NetgenCurver::curve_and_extract(int order)
         for (int rv = 0; rv < 8; rv++) {
           ng::Point<3> ref(ref_verts[rv][0], ref_verts[rv][1], ref_verts[rv][2]);
           ng::Point<3> phys;
-          curved.CalcElementTransformation(ref, ei, phys);
+          map_volume(curved, ei, ref, phys);
           // Find closest Cubit vertex
           int best_v = -1; double best_d = 1e30;
           for (int k = 0; k < 8; k++) {
@@ -1462,7 +1474,7 @@ bool NetgenCurver::curve_and_extract(int order)
           double zeta = hex_ref[e[0]][2] + t * (hex_ref[e[1]][2] - hex_ref[e[0]][2]);
           ng::Point<3> ref(xi, eta, zeta);
           ng::Point<3> phys;
-          curved.CalcElementTransformation(ref, ei, phys);
+          map_volume(curved, ei, ref, phys);
           int new_id = next_node_id_++;
           total_nodes_++;
           ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
@@ -1501,7 +1513,7 @@ bool NetgenCurver::curve_and_extract(int order)
                           + s*t*hex_ref[f[2]][2] + (1-s)*t*hex_ref[f[3]][2];
               ng::Point<3> ref(xi, eta, zeta);
               ng::Point<3> phys;
-              curved.CalcElementTransformation(ref, ei, phys);
+              map_volume(curved, ei, ref, phys);
               int new_id = next_node_id_++;
               total_nodes_++;
               ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
@@ -1520,7 +1532,7 @@ bool NetgenCurver::curve_and_extract(int order)
               double zeta = (double)k / order;
               ng::Point<3> ref(xi, eta, zeta);
               ng::Point<3> phys;
-              curved.CalcElementTransformation(ref, ei, phys);
+              map_volume(curved, ei, ref, phys);
               int new_id = next_node_id_++;
               total_nodes_++;
               ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
@@ -1539,7 +1551,7 @@ bool NetgenCurver::curve_and_extract(int order)
         for (int rv = 0; rv < 6; rv++) {
           ng::Point<3> ref(ref_verts[rv][0], ref_verts[rv][1], ref_verts[rv][2]);
           ng::Point<3> phys;
-          curved.CalcElementTransformation(ref, ei, phys);
+          map_volume(curved, ei, ref, phys);
           int best_v = -1; double best_d = 1e30;
           for (int k = 0; k < 6; k++) {
             int cid = ng_pi_to_cubit_nid_[el[k]];
@@ -1587,7 +1599,7 @@ bool NetgenCurver::curve_and_extract(int order)
           double zeta = prism_ref[e[0]][2] + t * (prism_ref[e[1]][2] - prism_ref[e[0]][2]);
           ng::Point<3> ref(xi, eta, zeta);
           ng::Point<3> phys;
-          curved.CalcElementTransformation(ref, ei, phys);
+          map_volume(curved, ei, ref, phys);
           int new_id = next_node_id_++;
           total_nodes_++;
           ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
@@ -1618,7 +1630,7 @@ bool NetgenCurver::curve_and_extract(int order)
               double zeta = c*prism_ref[f[0]][2] + a*prism_ref[f[1]][2] + b*prism_ref[f[2]][2];
               ng::Point<3> ref(xi, eta, zeta);
               ng::Point<3> phys;
-              curved.CalcElementTransformation(ref, ei, phys);
+              map_volume(curved, ei, ref, phys);
               int new_id = next_node_id_++;
               total_nodes_++;
               ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
@@ -1640,7 +1652,7 @@ bool NetgenCurver::curve_and_extract(int order)
                           + s*t*prism_ref[f[2]][2] + (1-s)*t*prism_ref[f[3]][2];
               ng::Point<3> ref(xi, eta, zeta);
               ng::Point<3> phys;
-              curved.CalcElementTransformation(ref, ei, phys);
+              map_volume(curved, ei, ref, phys);
               int new_id = next_node_id_++;
               total_nodes_++;
               ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
@@ -1657,7 +1669,7 @@ bool NetgenCurver::curve_and_extract(int order)
               double zeta = (double)k / order;
               ng::Point<3> ref(xi, eta, zeta);
               ng::Point<3> phys;
-              curved.CalcElementTransformation(ref, ei, phys);
+              map_volume(curved, ei, ref, phys);
               int new_id = next_node_id_++;
               total_nodes_++;
               ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
@@ -1699,7 +1711,7 @@ bool NetgenCurver::curve_and_extract(int order)
         for (int rv = 0; rv < 5; rv++) {
           ng::Point<3> ref(pyr_ref[rv][0], pyr_ref[rv][1], pyr_ref[rv][2]);
           ng::Point<3> phys;
-          curved.CalcElementTransformation(ref, ei, phys);
+          map_volume(curved, ei, ref, phys);
           int best_v = -1; double best_d = 1e30;
           for (int k = 0; k < 5; k++) {
             int cid = ng_pi_to_cubit_nid_[el[k]];
@@ -1734,7 +1746,7 @@ bool NetgenCurver::curve_and_extract(int order)
           double zeta = pyr_ref[e[0]][2] + t * (pyr_ref[e[1]][2] - pyr_ref[e[0]][2]);
           ng::Point<3> ref(xi, eta, zeta);
           ng::Point<3> phys;
-          curved.CalcElementTransformation(ref, ei, phys);
+          map_volume(curved, ei, ref, phys);
           int new_id = next_node_id_++;
           total_nodes_++;
           ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
@@ -1760,7 +1772,7 @@ bool NetgenCurver::curve_and_extract(int order)
             double eta  = (double)j / order;
             ng::Point<3> ref(xi, eta, 0.0);
             ng::Point<3> phys;
-            curved.CalcElementTransformation(ref, ei, phys);
+            map_volume(curved, ei, ref, phys);
             int new_id = next_node_id_++;
             total_nodes_++;
             ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
@@ -1779,7 +1791,7 @@ bool NetgenCurver::curve_and_extract(int order)
               double zeta = c*pyr_ref[f[0]][2] + a*pyr_ref[f[1]][2] + b*pyr_ref[f[2]][2];
               ng::Point<3> ref(xi, eta, zeta);
               ng::Point<3> phys;
-              curved.CalcElementTransformation(ref, ei, phys);
+              map_volume(curved, ei, ref, phys);
               int new_id = next_node_id_++;
               total_nodes_++;
               ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
