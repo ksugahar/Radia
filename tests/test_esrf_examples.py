@@ -446,6 +446,8 @@ def test_cubit_journal_merges_partitioned_solids_before_meshing(number, tmp_path
             < journal.index("merge volume all") < journal.index("mesh volume all"))
     assert "hex_recovery" not in journal
     assert "list volume with not is_meshed" in journal
+    assert "sideset 1 add surface all with is_merged=false" in journal.splitlines()
+    assert "sideset 1 add surface all" not in journal.splitlines()
 
 
 def test_example6_cubit_journal_sweeps_every_volume_along_the_beam_axis(tmp_path):

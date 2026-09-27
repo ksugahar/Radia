@@ -1183,7 +1183,10 @@ def export_esrf_cubit_assets(number: int, output_dir: str | Path,
         lines.extend([
             "imprint volume all",
             "merge volume all",
-            "sideset 1 add surface all",
+            # Merged partition interfaces belong to the same iron domain,
+            # not to its exterior. The exporter rejects labelled internal
+            # faces with identical domains on both sides.
+            "sideset 1 add surface all with is_merged=false",
             'sideset 1 name "outer_boundary"',
         ])
         sweep_axis = mesh_policy["iron_sweep_axis"]
