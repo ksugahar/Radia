@@ -1,4 +1,4 @@
-"""Build the FEM Kelvin mesh for coil-driven ESRF Examples 6 and 7.
+"""Build the FEM Kelvin mesh for coil-driven ESRF Examples 5, 6 and 7.
 
 The corresponding HDiv-MMM response mesh is the existing iron-only Q2 Cubit
 asset ``model.vol``.  This builder creates its independent FEM partner from
@@ -419,7 +419,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--assets-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--case", choices=(6, 7), type=int, required=True)
+    parser.add_argument("--case", choices=(5, 6, 7), type=int, required=True)
     parser.add_argument("--cubit", type=Path, default=DEFAULT_CUBIT)
     parser.add_argument("--kelvin-radius", type=float, default=None)
     parser.add_argument("--iron-size", type=float, default=None)

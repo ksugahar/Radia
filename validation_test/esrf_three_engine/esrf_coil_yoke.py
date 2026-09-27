@@ -1,6 +1,7 @@
 """Shared physical contracts for the coil-driven ESRF yoke validations.
 
-Examples 6 and 7 are nonlinear quadrupoles.  Their response mesh is the
+Example 5 is a nonlinear dipole; Examples 6 and 7 are nonlinear quadrupoles.
+Their response mesh is the
 iron-only Cubit mesh used by HDiv-MMM, while reduced-A and mixed
 total/reduced-Omega use a second, conforming physical-air plus Kelvin mesh.
 The current source must not be meshed: all three formulations receive the
@@ -34,6 +35,20 @@ class ESRFCoilYokeCase:
 
 
 _CASES = {
+    5: ESRFCoilYokeCase(
+        number=5,
+        slug="c_dipole",
+        beam_axis=0,
+        kelvin_radius_m=0.30,
+        core_half_length_m=0.010,
+        transverse_offsets_m=(-0.002, 0.0, 0.002),
+        axial_stations_m=(-0.020, -0.010, 0.0, 0.010, 0.020),
+        gap_refinement_radius_m=0.024,
+        gap_refinement_half_length_m=0.030,
+        iron_size_m=0.008,
+        outer_air_size_m=0.030,
+        kelvin_size_m=0.060,
+    ),
     6: ESRFCoilYokeCase(
         number=6,
         slug="quadrupole",
@@ -72,7 +87,7 @@ def get_case(number: int) -> ESRFCoilYokeCase:
     try:
         return _CASES[int(number)]
     except KeyError as exc:
-        raise ValueError("only ESRF coil-yoke examples 6 and 7 are supported") from exc
+        raise ValueError("only ESRF coil-yoke examples 5, 6 and 7 are supported") from exc
 
 
 def observation_points(number: int) -> np.ndarray:

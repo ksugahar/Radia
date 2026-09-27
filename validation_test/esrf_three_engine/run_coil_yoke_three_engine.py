@@ -1,4 +1,4 @@
-"""Three-engine nonlinear validation for coil-driven ESRF Examples 6 and 7.
+"""Three-engine nonlinear validation for coil-driven ESRF Examples 5, 6 and 7.
 
 HDiv-MMM receives its checked iron-only Cubit Q2 mesh.  HCurl reduced-A and
 the mixed total/reduced Omega route receive an independently
@@ -390,7 +390,7 @@ def _process_peak_memory_mb() -> float | None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--case", choices=(6, 7), type=int, required=True)
+    parser.add_argument("--case", choices=(5, 6, 7), type=int, required=True)
     parser.add_argument("--assets-dir", type=Path, required=True)
     parser.add_argument("--fem-mesh", type=Path, required=True)
     parser.add_argument("--fem-mesh-report", type=Path, required=True)
