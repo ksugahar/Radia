@@ -236,3 +236,19 @@ def test_phi_average_requires_spatial_not_uniform(synthetic_setup):
         q_phi_average=True)
     with pytest.raises(ValueError, match="q-phi-average"):
         calc_heat._build_qsurf_cf(wp_mesh, args)
+
+
+def test_rotation_off_the_em_surface_is_refused(synthetic_setup):
+    """A cube turned by 45 degrees leaves the EM surface: the resample must
+    fail, not hand the thermal solve a zero or extrapolated flux."""
+    import calc_heat
+    import tempfile
+
+    em_mesh, gf_q_em, wp_mesh = synthetic_setup
+    with tempfile.TemporaryDirectory() as td:
+        sol, vol = _write_em_pair(em_mesh, gf_q_em, td)
+        args = calc_heat.qsurf_args(
+            qsurf_sol=sol, em_vol=vol, heat_flux_boundary_names=["default"])
+        _q, resample = calc_heat._build_qsurf_cf(wp_mesh, args)
+        with pytest.raises(ValueError, match="farther than"):
+            resample(math.pi / 4.0)
