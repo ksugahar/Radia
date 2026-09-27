@@ -91,7 +91,12 @@
     "inverse": "sparsecholesky",
     "exit_code": -1073740791,
     "exit_code_hex": "0xC0000409",
-    "note": "process terminated during Assemble (BDDC wirebasket factorization) after about 2 min with 47 GB free; reproduced three times (2026-09-27 19:55, 20:07, 20:57)"
+    "note": "process terminated during Assemble (BDDC wirebasket factorization) after about 2 min with 47 GB free; reproduced three times (2026-09-27 19:55, 20:07, 20:57)",
+    "edge_wirebasket_run": {
+      "wirebasket_dofs": 331595,
+      "exit_code": -1073740791,
+      "note": "same exit with the edge-only wirebasket; the 3.5T default wirebasket (353473 dofs) factors on mdx1, so size alone is not the cause"
+    }
   },
   "exploration_2.5T": [
     {

@@ -63,6 +63,12 @@ mdx1, 8 threads, 2026-09-27, one binary (`bddc_coarse/`):
 | 5.5T | 1,456,057 | direct | fails (process exit 0xC0000409 during the wirebasket factorization, three runs) | | | | |
 | 5.5T | 1,456,057 | AMS, 4 cycles, edge wirebasket | 584 | 4.0 | 180.2 | 192.9 | 2.58 |
 
+The 5.5T direct failure is not the wirebasket size: with `--edge-wirebasket`
+(331,595 wirebasket dofs) it exits the same way, while the 3.5T default
+wirebasket (353,473 dofs) factors on the same host.  The same exit code has
+been seen from sparse Cholesky on a small SPD system on mdx2, so the cause is
+unresolved.
+
 Conductor loss agrees with the direct runs to 1e-12 relative and the magnetic
 energy to 6e-9 (the solver tolerance is 1e-8).  Another session's 4-thread job
 shared mdx1 during all runs.  The direct solver's cost is the wirebasket
