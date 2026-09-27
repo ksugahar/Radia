@@ -23,13 +23,9 @@ data.  Output: results/coupled_curie_cylinder_frozen_ht.json.
 from __future__ import annotations
 
 import argparse
-import datetime
-import hashlib
 import json
 import math
 import os
-import platform
-import subprocess
 import sys
 import time
 
@@ -38,6 +34,7 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.join(ROOT, "src"))
+sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(ROOT, "src", "radia", "panels"))
 
 from radia import ih_axisym_coupled as C  # noqa: E402
@@ -99,60 +96,15 @@ def build_mesh(maxh_skin=6e-5, maxh_wp=5e-4, maxh_air=0.01, skin=1.5e-3):
 
 
 def provenance(argv, source_commit):
-    """Commit, dirty state, and hashes of this script and the modules used.
-
-    In a git checkout the commit is read (and must equal ``source_commit``
-    when that is given).  A copy made with ``git archive`` has no .git and
-    must name its commit with ``--source-commit``; it is clean by
-    construction."""
-    def git(*args):
-        return subprocess.run(["git", *args], cwd=ROOT, capture_output=True,
-                              text=True, check=True).stdout.strip()
+    """Commit, clean state and hashes of this script and the modules used
+    (see ``_provenance``)."""
+    from _provenance import provenance as _prov
     files = [os.path.abspath(__file__)] + [
         os.path.join(ROOT, "src", "radia", name) for name in (
             "ih_axisym_coupled.py", "ih_heat_transient.py",
             "ih_thermal_material.py", "ih_thermal.py", "em_material.py")] + [
         os.path.join(ROOT, "src", "radia", "panels", "calc_heat_axisym.py")]
-    hashes = {}
-    for f in files:
-        with open(f, "rb") as fh:
-            hashes[os.path.relpath(f, ROOT).replace("\\", "/")] = \
-                hashlib.sha256(fh.read()).hexdigest()
-    import ngsolve
-    import scipy
-    if os.path.exists(os.path.join(ROOT, ".git")):
-        commit = git("rev-parse", "HEAD")
-        dirty = bool(git("status", "--porcelain", "--", "src",
-                         "validation_test/induction_heating"))
-        if source_commit and source_commit != commit:
-            raise SystemExit(f"--source-commit {source_commit} is not the "
-                             f"checkout's HEAD {commit}")
-        source = "git-checkout"
-    else:
-        if not source_commit:
-            raise SystemExit("this copy has no .git; pass --source-commit "
-                             "(the commit it was archived from)")
-        commit, dirty, source = source_commit, False, "git-archive"
-    # build products that `import radia` loads (not in git); the IH path is
-    # pure Python, but the package initialisation needs them
-    native = {}
-    pkg = os.path.join(ROOT, "src", "radia")
-    for name in sorted(os.listdir(pkg)):
-        if name.endswith((".pyd", ".dll", ".so")):
-            with open(os.path.join(pkg, name), "rb") as fh:
-                native[name] = hashlib.sha256(fh.read()).hexdigest()
-    import radia
-    if os.path.dirname(os.path.abspath(radia.__file__)) != os.path.abspath(pkg):
-        raise SystemExit(f"radia is imported from {radia.__file__}, not from "
-                         f"this tree's {pkg}")
-    return {"commit": commit, "dirty": dirty, "source": source,
-            "sha256": hashes, "native_sha256": native,
-            "command": [os.path.basename(sys.executable), *argv],
-            "utc": datetime.datetime.now(datetime.timezone.utc).isoformat(
-                timespec="seconds"),
-            "host": platform.node(), "python": platform.python_version(),
-            "numpy": np.__version__, "scipy": scipy.__version__,
-            "ngsolve": ngsolve.__version__, "cpu_count": os.cpu_count()}
+    return _prov(argv, source_commit, files)
 
 
 def wall_source(em, zs):
