@@ -1002,3 +1002,246 @@ def scale_field_artifact(sol_path: str, out_path: str, factor: float) -> str:
         out_path, mesh_path=record["mesh_file"], mesh=mesh,
         fes_order=record["fes_order"], quantity=record["quantity"],
         unit=record["unit"], boundaries=record["boundaries"], extra=extra)
+
+# ---------------------------------------------------------------------------
+# Temperature-dependent surface source (local surface-impedance model)
+# ---------------------------------------------------------------------------
+
+HT_QUANTITY = "surface_tangential_H_amplitude"
+HT_UNIT = "A/m"
+
+
+def load_impedance_table(path: str):
+    """Load an (|H_t|, T) surface-impedance table written by calc_em_table.
+
+    Returns a dict with ``H`` (A/m, peak), ``T`` (degC), ``q`` (W/m^2 at
+    that peak |H_t|, ``q = Re(Z_s) |H_t|^2 / 2``) and ``meta``.
+    """
+    data = np.load(path, allow_pickle=False)
+    for key in ("H_grid", "T_grid", "Zs_re", "q_surf", "meta"):
+        if key not in data.files:
+            raise ValueError(f"{path} is not an impedance table (no {key})")
+    H = np.asarray(data["H_grid"], float)
+    T = np.asarray(data["T_grid"], float)
+    q = np.asarray(data["q_surf"], float)
+    if not (np.all(np.diff(H) > 0) and np.all(np.diff(T) > 0)):
+        raise ValueError(f"{path}: table axes must increase")
+    if q.shape != (len(H), len(T)) or np.any(q <= 0):
+        raise ValueError(f"{path}: q table must be positive, shape (nH, nT)")
+    if np.any(np.diff(q, axis=0) <= 0):
+        raise ValueError(f"{path}: q must increase with |H_t| at every T")
+    return {"path": os.path.abspath(path), "H": H, "T": T, "q": q,
+            "meta": json.loads(str(data["meta"]))}
+
+
+class ImpedanceTable:
+    """Bilinear lookup of q(|H_t|, T) in (log H, T); strict range checks."""
+
+    def __init__(self, table: dict, *, allow_extrapolation: bool = False):
+        self.table = table
+        self.logH = np.log(table["H"])
+        self.T = table["T"]
+        self.logq = np.log(table["q"])
+        self.allow = bool(allow_extrapolation)
+        self.max_T_excursion = 0.0
+        self.max_H_excursion = 0.0
+
+    def _check_T(self, T):
+        lo, hi = self.T[0], self.T[-1]
+        over = max(0.0, float(np.max(T) - hi), float(lo - np.min(T)))
+        if over > 0:
+            if not self.allow:
+                raise ValueError(
+                    f"surface temperature {np.min(T):.1f}..{np.max(T):.1f} C "
+                    f"leaves the impedance table {lo:.1f}..{hi:.1f} C; "
+                    "extend the table or allow extrapolation explicitly")
+            self.max_T_excursion = max(self.max_T_excursion, over)
+        return np.clip(T, lo, hi)
+
+    def q(self, H, T):
+        """q [W/m^2] at peak |H_t| ``H`` and temperature ``T`` (broadcast).
+
+        Below the H grid q follows the linear regime ``q ~ H^2``; above it
+        the lookup is an error unless extrapolation is allowed.
+        """
+        H = np.asarray(H, float)
+        T = self._check_T(np.asarray(T, float))
+        Hs = np.where(H > 0, H, np.exp(self.logH[0]))
+        lh = np.log(Hs)
+        if np.any(lh > self.logH[-1] + 1e-12):
+            if not self.allow:
+                raise ValueError(
+                    f"|H_t| up to {float(Hs.max()):.3e} A/m exceeds the "
+                    f"impedance table ({np.exp(self.logH[-1]):.3e} A/m)")
+            self.max_H_excursion = max(self.max_H_excursion,
+                                       float(Hs.max()) / np.exp(self.logH[-1]))
+        below = lh < self.logH[0]
+        lhc = np.clip(lh, self.logH[0], self.logH[-1])
+        i = np.clip(np.searchsorted(self.logH, lhc) - 1, 0, len(self.logH) - 2)
+        j = np.clip(np.searchsorted(self.T, T) - 1, 0, len(self.T) - 2)
+        u = (lhc - self.logH[i]) / (self.logH[i + 1] - self.logH[i])
+        w = (T - self.T[j]) / (self.T[j + 1] - self.T[j])
+        L = self.logq
+        lq = ((1 - u) * (1 - w) * L[i, j] + u * (1 - w) * L[i + 1, j]
+              + (1 - u) * w * L[i, j + 1] + u * w * L[i + 1, j + 1])
+        q = np.exp(lq)
+        return np.where(below, q * np.exp(2.0 * (lh - self.logH[0])), q) \
+            * (H > 0)
+
+    def invert_H(self, q, T):
+        """|H_t| that gives ``q`` at temperature ``T`` (scalar T)."""
+        q = np.asarray(q, float)
+        H = np.exp(self.logH)
+        qcol = self.q(H, np.full(len(H), float(T)))
+        lq = np.log(np.maximum(q, 1e-300))
+        out = np.exp(np.interp(lq, np.log(qcol), self.logH))
+        low = lq < np.log(qcol[0])
+        out[low] = H[0] * np.sqrt(q[low] / qcol[0])    # linear regime
+        if np.any(lq > np.log(qcol[-1]) + 1e-12):
+            raise ValueError("q_surf exceeds the impedance table at the "
+                             "reference temperature")
+        return np.where(q > 0, out, 0.0)
+
+
+class TemperatureDependentSource:
+    """q_i(T) = q_ref,i * <q_tab(s H_ik, T_i)>_k / <q_tab(H_ik, T_ref)>_k.
+
+    ``q_ref`` is the transferred EM source at the reference temperature
+    (exact circumferential average or pointwise), ``H_ik`` the |H_t| samples
+    that feed vertex ``i`` (one, or one per azimuth for a rotating part),
+    ``s`` the current scale.  At ``T = T_ref`` and ``s = 1`` the source
+    equals the EM solution exactly; the table only supplies the local
+    temperature and current dependence.
+    """
+
+    def __init__(self, table: ImpedanceTable, q_ref, H_samples, vertex_dofs,
+                 gf_target, *, T_ref: float, H_scale: float = 1.0,
+                 gf_damping=None, dT_fd: float = 1.0):
+        self.table = table
+        self.q_ref = np.asarray(q_ref, float)
+        self.H = np.atleast_2d(np.asarray(H_samples, float))
+        if self.H.shape[0] != len(self.q_ref):
+            self.H = self.H.T
+        self.dofs = np.asarray(vertex_dofs, int)
+        self.gf = gf_target
+        self.T_ref = float(T_ref)
+        self.s = float(H_scale)
+        denom = table.q(self.H, np.full(self.H.shape, self.T_ref)).mean(axis=1)
+        self.ratio_ref = np.where(denom > 0, 1.0 / np.maximum(denom, 1e-300),
+                                  0.0)
+        self.T_surface_range = [np.inf, -np.inf]
+        # max(-dq/dT, 0) on the same vertices: the stabilising part of the
+        # source derivative, added to the Newton matrix by the stepper.
+        self.gf_damping = gf_damping
+        self.dT_fd = float(dT_fd)
+
+    def values(self, T_vertices):
+        T = np.asarray(T_vertices, float)
+        self.T_surface_range = [min(self.T_surface_range[0], float(T.min())),
+                                max(self.T_surface_range[1], float(T.max()))]
+        num = self.table.q(self.s * self.H,
+                           np.broadcast_to(T[:, None], self.H.shape))
+        return self.q_ref * num.mean(axis=1) * self.ratio_ref
+
+    def update(self, gfT, temperature_dofs):
+        T = np.asarray(gfT.vec.FV().NumPy())[temperature_dofs]
+        vec = self.gf.vec.FV().NumPy()
+        q = self.values(T)
+        vec[self.dofs] = q
+        if self.gf_damping is not None:
+            lo, hi = self.table.T[0], self.table.T[-1]
+            Tp = np.minimum(T + self.dT_fd, hi)
+            Tm = np.maximum(T - self.dT_fd, lo)
+            span = np.maximum(Tp - Tm, 1e-12)
+            dq = (self.values(Tp) - self.values(Tm)) / span
+            self.gf_damping.vec.FV().NumPy()[self.dofs] = np.maximum(-dq, 0.0)
+
+    def audit(self) -> dict:
+        return {"model": "ratio-of-local-surface-impedance",
+                "table": self.table.table["path"].replace("\\", "/"),
+                "table_meta": self.table.table["meta"],
+                "T_ref_C": self.T_ref, "H_scale": self.s,
+                "azimuth_samples": int(self.H.shape[1]),
+                "surface_T_range_C": self.T_surface_range,
+                "table_T_excursion_C": self.table.max_T_excursion,
+                "table_H_excursion_ratio": self.table.max_H_excursion}
+
+def build_temperature_dependent_source(source: "EMHeatSource", *, table_path,
+                                       target_xyz, q_ref, gf_target, dofs,
+                                       T_ref, H_scale=1.0, ht_sol="",
+                                       azimuths=0, allow_extrapolation=False,
+                                       consistency_tolerance=0.05):
+    """Couple a transferred EM source to the local surface temperature.
+
+    ``source`` is the verified reference source, ``target_xyz`` the thermal
+    heat-flux points (for an axisymmetric thermal mesh, ``(r, 0, z)``),
+    ``q_ref`` the transferred reference values there.  ``|H_t|`` comes from
+    ``ht_sol`` (an ``_Ht.sol`` artifact on the EM mesh) or, without it, is
+    inferred from ``q_surf`` through the table at ``T_ref``.  With
+    ``azimuths > 0`` each point takes |H_t| on that many azimuths of its
+    ring (a rotating part); otherwise at the point itself.
+
+    When |H_t| comes from an artifact the table is checked against the EM
+    run: its power at ``T_ref`` must match the EM power within
+    ``consistency_tolerance``, otherwise the table does not describe the
+    material that was solved.
+    """
+    from ngsolve import GridFunction, H1
+
+    if source.q_scale != 1.0:
+        raise ValueError("with a temperature-dependent source, scale the "
+                         "current with --ht-scale (|H_t| ~ I), not --q-scale")
+    table = ImpedanceTable(load_impedance_table(table_path),
+                           allow_extrapolation=allow_extrapolation)
+    freq_table = float(table.table["meta"].get("frequency", 0.0))
+    audit = {"table_frequency_Hz": freq_table}
+    em = source.surface
+    if ht_sol:
+        pair = verify_field_pair(ht_sol, source.em_vol, source.em_mesh, 1,
+                                 quantity=HT_QUANTITY
+                                 if read_field_sidecar(ht_sol) else None)
+        gf_h = GridFunction(H1(source.em_mesh, order=1))
+        gf_h.Load(os.path.abspath(ht_sol))
+        H_v = np.asarray(gf_h.vec.FV().NumPy(), float)[:source.em_mesh.nv]
+        rec = read_field_sidecar(ht_sol) or {}
+        f_ht = rec.get("frequency_Hz")
+        if f_ht and freq_table and abs(f_ht - freq_table) > 1e-6 * f_ht:
+            raise ValueError(f"impedance table is for {freq_table:g} Hz but "
+                             f"the |H_t| field was solved at {f_ht:g} Hz")
+        q_tab = table.q(H_v, np.full(H_v.shape, float(T_ref)))
+        P_tab = p1_surface_power(em.points, em.tris, q_tab)
+        audit["consistency"] = power_balance(
+            P_tab, source.power, consistency_tolerance,
+            what="impedance table at the reference temperature against the "
+                 "EM power",
+            hint="The table must be built for the material, frequency and "
+                 "|H_t| range of the EM run (same sigma, BH curve).")
+        audit["H_t_source"] = {"file": os.path.abspath(ht_sol)
+                               .replace("\\", "/"), **pair}
+    else:
+        H_v = table.invert_H(em.values, float(T_ref))
+        audit["consistency"] = None
+        audit["H_t_source"] = "inferred from q_surf through the table at T_ref"
+    h_field = SurfaceP1Field(em.points, em.tris, H_v)
+    xyz = np.asarray(target_xyz, float)
+    if azimuths and azimuths > 0:
+        cols = []
+        for k in range(int(azimuths)):
+            pts = rotate_about_axis(xyz, 2.0 * math.pi * k / azimuths,
+                                    source.axis)
+            vals, _ = h_field.evaluate(pts, max_distance=source.transfer_tolerance,
+                                       what="ring samples of |H_t|")
+            cols.append(vals)
+        H_samples = np.stack(cols, axis=1)
+    else:
+        H_samples, _ = h_field.evaluate(xyz, max_distance=source.transfer_tolerance,
+                                        what="thermal heat-flux vertices")
+        H_samples = H_samples[:, None]
+    gf_damp = GridFunction(gf_target.space)
+    gf_damp.vec[:] = 0.0
+    coupled = TemperatureDependentSource(
+        table, q_ref, H_samples, dofs, gf_target, T_ref=T_ref,
+        H_scale=H_scale, gf_damping=gf_damp)
+    audit.update({"H_t_range_A_m": [float(H_samples.min()),
+                                    float(H_samples.max())]})
+    return coupled, audit

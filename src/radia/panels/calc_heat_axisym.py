@@ -230,6 +230,29 @@ def _build_axisym_qsurf_gf(wp_mesh, heat_flux_boundary_names, args):
          f"{dist.max():.3e} m, revolved P/P_EM - 1 = "
          f"{balance['relative_error']:+.3e}, pointwise {n_phi}-azimuth ring "
          f"check {ring_dev if ring_dev is None else f'{ring_dev:.3e}'}")
+    if getattr(args, "em_table", ""):
+        q_ref = np.asarray(gf_wp_q.vec.FV().NumPy())[vnrs].copy()
+        T_ref = getattr(args, "em_reference_temperature", None)
+        if T_ref is None:
+            raise ValueError("--em-reference-temperature is required with "
+                             "--em-table")
+        coupled, coupled_audit = ih_thermal.build_temperature_dependent_source(
+            source, table_path=args.em_table,
+            target_xyz=np.c_[rz[:, 0], np.zeros(len(rz)), rz[:, 1]],
+            q_ref=q_ref, gf_target=gf_wp_q, dofs=vnrs, T_ref=float(T_ref),
+            H_scale=float(getattr(args, "ht_scale", 1.0) or 1.0),
+            ht_sol=getattr(args, "ht_sol", "") or "",
+            azimuths=int(getattr(args, "em_table_azimuths", 64) or 64),
+            allow_extrapolation=bool(getattr(
+                args, "allow_em_table_extrapolation", False)),
+            consistency_tolerance=float(getattr(
+                args, "em_table_tolerance", None) or 0.05))
+        audit["temperature_dependent_source"] = coupled_audit
+        audit["_coupled"] = coupled
+        _log(f"Q_SURF:temperature-dependent source from "
+             f"{os.path.basename(args.em_table)} (T_ref={float(T_ref):g} C, "
+             f"|H_t| {coupled_audit['H_t_range_A_m'][0]:.3e}.."
+             f"{coupled_audit['H_t_range_A_m'][1]:.3e} A/m)")
     return gf_wp_q, gf_wp_q, audit
 
 
@@ -250,6 +273,11 @@ def solve_heat_axisym(wp_vol,
                       q_phi_bin=None,
                       exposure_thresholds=(), temperature_limit=None,
                       material_table="", latent_heat=0.0,
+                      em_table="", ht_sol="", ht_scale=1.0,
+                      em_reference_temperature=None,
+                      em_table_azimuths=64,
+                      allow_em_table_extrapolation=False,
+                      em_table_tolerance=0.05,
                       latent_range=None,
                       allow_table_extrapolation=False,
                       newton_tol=1.0e-3, newton_max_iter=25,
@@ -403,11 +431,21 @@ def solve_heat_axisym(wp_vol,
     a_local.transfer_tolerance = transfer_tolerance
     a_local.power_tolerance = power_tolerance
     a_local.q_phi_bin = q_phi_bin
+    a_local.em_table = em_table
+    a_local.ht_sol = ht_sol
+    a_local.ht_scale = ht_scale
+    a_local.em_reference_temperature = (
+        float(t_initial) if em_reference_temperature is None
+        else float(em_reference_temperature))
+    a_local.em_table_azimuths = em_table_azimuths
+    a_local.allow_em_table_extrapolation = allow_em_table_extrapolation
+    a_local.em_table_tolerance = em_table_tolerance
     try:
         gf_q, q_cf, qsurf_projection = _build_axisym_qsurf_gf(
             wp_mesh, set(heat_flux_names), a_local)
     except (ValueError, FileNotFoundError) as exc:
         return {"error": str(exc)}
+    coupled = qsurf_projection.pop("_coupled", None)
 
     # Uniform initial state.  ``gfT.vec[:] = T0`` is WRONG for order >= 2:
     # the hierarchical H1 edge/face coefficients are not nodal
@@ -432,7 +470,7 @@ def solve_heat_axisym(wp_vol,
                 rho_v, cp_v, k_v)
     except (ValueError, OSError) as exc:
         return {"error": f"material table: {exc}"}
-    nonlinear = not thermal_material.is_constant
+    nonlinear = (not thermal_material.is_constant) or coupled is not None
     if nonlinear and time_scheme != "backward-euler":
         return {"error": "temperature-dependent materials are integrated "
                          "with the enthalpy backward-Euler scheme only; "
@@ -479,9 +517,21 @@ def solve_heat_axisym(wp_vol,
                 radiation=radiation_selector if float(emissivity) else "",
                 emissivity=float(emissivity)),
             weight=weight, q_source=q_cf,
+            q_update=(None if coupled is None else
+                      (lambda g: coupled.update(g, coupled_T_dofs))),
+            q_damping=None if coupled is None else coupled.gf_damping,
             linear_solver=linear_solver,
             newton_tol_K=float(newton_tol),
             max_newton=int(newton_max_iter))
+        if coupled is not None:
+            from ngsolve import NodeId as _NodeId, VERTEX as _VERTEX
+            coupled_T_dofs = np.asarray([
+                fes_T.GetDofNrs(_NodeId(_VERTEX, int(vn)))[0]
+                for vn in coupled.dofs])
+            try:
+                coupled.update(gfT, coupled_T_dofs)
+            except ValueError as exc:
+                return {"error": str(exc)}
         _log(f"SOLVER:{linear_solver} (enthalpy backward-euler + Newton, "
              f"dt={dt}, t_end={t_end})")
 
@@ -550,6 +600,9 @@ def solve_heat_axisym(wp_vol,
     if nonlinear:
         Q_input_J = stepper.audit.energy_in_J
         q_int = stepper.last_heat_input_W
+    if coupled is not None:
+        qsurf_projection["temperature_dependent_source"].update(
+            coupled.audit())
 
     # Raw order>=2 H1 coefficients are not temperatures, and vertices
     # alone can miss a higher-order field extremum.
@@ -763,6 +816,33 @@ def main():
                         help="Density [kg/m^3] (overrides preset).")
     parser.add_argument("--cp", type=float, default=None,
                         help="Specific heat [J/(kg.K)] (overrides preset).")
+    parser.add_argument("--em-table", default="",
+                        help="(|H_t|, T) surface-impedance table from "
+                             "calc_em_table.py.  Makes q_surf follow the "
+                             "local surface temperature: q = q_EM * "
+                             "q_tab(s|H_t|, T) / q_tab(|H_t|, T_ref).")
+    parser.add_argument("--ht-sol", default="",
+                        help="|H_t| field (_Ht.sol) of the EM run on "
+                             "--em-vol.  Without it |H_t| is inferred from "
+                             "q_surf through the table at T_ref, and the "
+                             "table-vs-EM consistency check is skipped.")
+    parser.add_argument("--ht-scale", type=float, default=1.0,
+                        help="Scale of |H_t| (coil current ratio I/I_ref) "
+                             "for --em-table.")
+    parser.add_argument("--em-reference-temperature", type=float,
+                        default=None,
+                        help="Workpiece temperature [degC] of the EM run "
+                             "(default: --t-initial).")
+    parser.add_argument("--em-table-azimuths", type=int, default=64,
+                        help="Azimuths of |H_t| per ring for --em-table with "
+                             "--q-phi-average.")
+    parser.add_argument("--allow-em-table-extrapolation",
+                        action="store_true",
+                        help="Clamp temperatures / |H_t| outside --em-table "
+                             "instead of failing; excursions are reported.")
+    parser.add_argument("--em-table-tolerance", type=float, default=0.05,
+                        help="Allowed relative power difference between the "
+                             "table at T_ref and the EM run (with --ht-sol).")
     parser.add_argument("--material-table", default="",
                         help="CSV with header T_C,k_W_mK,cp_J_kgK giving "
                              "temperature-dependent conductivity and "
@@ -920,6 +1000,13 @@ def main():
             exposure_thresholds=thresholds,
             temperature_limit=args.temperature_limit,
             material_table=args.material_table,
+            em_table=args.em_table,
+            ht_sol=args.ht_sol,
+            ht_scale=args.ht_scale,
+            em_reference_temperature=args.em_reference_temperature,
+            em_table_azimuths=args.em_table_azimuths,
+            allow_em_table_extrapolation=args.allow_em_table_extrapolation,
+            em_table_tolerance=args.em_table_tolerance,
             latent_heat=args.latent_heat,
             latent_range=latent_range,
             allow_table_extrapolation=args.allow_table_extrapolation,

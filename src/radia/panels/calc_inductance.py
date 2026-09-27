@@ -1576,6 +1576,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     # via coordinate matching against the parent vol_mesh.
     qsurf_sol_path = ""
     qsurf_vol_path = ""
+    ht_sol_path = ""
     if gf_q_wp is not None:
         try:
             from ngsolve import H1 as _H1
@@ -1586,12 +1587,14 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             vol_vec_np = gf_q_vol.vec.FV().NumPy()
 
             # Resolve wp_mesh vertex -> vol_mesh vertex mapping.
+            vol_of_wp = np.full(wp_mesh.nv, -1, dtype=int)
             if _wp_new_to_old is not None:
                 # Material-extracted path: map provided.
                 for wp_v_idx in range(wp_mesh.nv):
                     vol_v_idx = _wp_new_to_old.get(wp_v_idx)
                     if vol_v_idx is not None:
                         vol_vec_np[vol_v_idx] = float(q_per_dof[wp_v_idx])
+                        vol_of_wp[wp_v_idx] = int(vol_v_idx)
                 n_matched = len(_wp_new_to_old)
             else:
                 # Boundary-extracted path: build mapping by coord
@@ -1612,6 +1615,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
                     vol_v_idx = vol_coord_to_idx.get(key)
                     if vol_v_idx is not None:
                         vol_vec_np[vol_v_idx] = float(q_per_dof[wp_v_idx])
+                        vol_of_wp[wp_v_idx] = int(vol_v_idx)
                         n_matched += 1
 
             if n_matched != wp_mesh.nv:
@@ -1641,22 +1645,46 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             # mesh digest and integrates q over exactly these against P_wp.
             from radia import ih_thermal
             from ngsolve import BND as _BND_q
-            wp_vertices = set(np.flatnonzero(vol_vec_np != 0.0).tolist())
-            if _wp_new_to_old is not None:
-                wp_vertices = set(int(v) for v in _wp_new_to_old.values())
+            wp_vertices = set(int(v) for v in vol_of_wp if v >= 0)
             heated = sorted({
                 el.mat for el in vol_mesh.Elements(_BND_q)
                 if all(v.nr in wp_vertices for v in el.vertices)})
+            common = {"frequency_Hz": float(args.frequency),
+                      "current_A": float(getattr(args, "current", 0.0)
+                                         or 0.0),
+                      "impedance_model": str(args.impedance_model),
+                      "producer": "calc_inductance"}
             ih_thermal.write_field_sidecar(
                 sol_Q, mesh_path=args.vol, mesh=vol_mesh, fes_order=1,
                 quantity=ih_thermal.QSURF_QUANTITY,
                 unit=ih_thermal.QSURF_UNIT, boundaries=heated,
-                extra={"P_wp_W": float(P_wp),
-                       "frequency_Hz": float(args.frequency),
-                       "current_A": float(getattr(args, "current", 0.0)
-                                          or 0.0),
-                       "producer": "calc_inductance",
+                extra={"P_wp_W": float(P_wp), **common,
                        "qsurf_method": "solved-total-field-lumped-P1"})
+            # |H_t| peak amplitude consistent with q = Re(Z_s)|H_t|^2 / 2 at
+            # every workpiece vertex (Z_s scalar, or per DOF with
+            # --esim-per-panel), for temperature-dependent re-evaluation.
+            re_z = np.real(np.asarray(Z_s_wp, dtype=complex))
+            re_z = np.broadcast_to(re_z, (wp_mesh.nv,)) \
+                if re_z.ndim == 0 else re_z[:wp_mesh.nv]
+            h_per_dof = np.sqrt(np.maximum(
+                2.0 * np.asarray(q_per_dof, float)[:wp_mesh.nv]
+                / np.maximum(re_z, 1e-300), 0.0))
+            gf_h_vol = _GF(fes_q_vol)
+            gf_h_vol.vec[:] = 0
+            h_vec = gf_h_vol.vec.FV().NumPy()
+            ok = vol_of_wp >= 0
+            h_vec[vol_of_wp[ok]] = h_per_dof[ok]
+            sol_H = os.path.join(base_dir,
+                                 f"{stem}_Ht.sol").replace("\\", "/")
+            gf_h_vol.Save(sol_H)
+            ih_thermal.write_field_sidecar(
+                sol_H, mesh_path=args.vol, mesh=vol_mesh, fes_order=1,
+                quantity=ih_thermal.HT_QUANTITY, unit=ih_thermal.HT_UNIT,
+                boundaries=heated,
+                extra={**common, "convention": "peak phasor amplitude, "
+                       "q = Re(Z_s) |H_t|^2 / 2",
+                       "Z_s_per_dof": bool(np.ndim(Z_s_wp) > 0)})
+            ht_sol_path = sol_H
             progress("BEM",
                 f"wrote qsurf.sol on parent vol_mesh: "
                 f"{os.path.basename(sol_Q)} "
@@ -1703,6 +1731,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         "msh_file": msh_file,
         "qsurf_sol": qsurf_sol_path,
         "qsurf_em_vol": qsurf_vol_path,
+        "ht_sol": ht_sol_path,
         "wp_phi_inc": phi_inc_mode,
         "wp_phi_inc_grad_residual": (
             float(phi_inc_grad_residual)
@@ -1842,6 +1871,7 @@ def _assemble_full_output(args, coil_data, wp_data):
     # vol_mesh P2 needs explicit coord matching; out of scope for now).
     out["qsurf_sol"] = wp_data.get("qsurf_sol", "")
     out["qsurf_em_vol"] = wp_data.get("qsurf_em_vol", "")
+    out["ht_sol"] = wp_data.get("ht_sol", "")
     out["wp_dissipation_R_mOhm"] = wp_data["wp_dissipation_R_mOhm"]
     out["wp_mesh_nv"] = wp_data["wp_mesh_nv"]
     out["wp_mesh_n_tris"] = wp_data["wp_mesh_n_tris"]
