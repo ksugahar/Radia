@@ -10,6 +10,9 @@ import tomllib
 
 # Checked against both workflow trigger lists by the lightweight contract suite.
 NATIVE_PATHS = (
+    'src/radia/vim/_nonlinear.py',
+    'src/radia/vim/_solve.py',
+    'tests/test_hdiv_energy_material_consistency.py',
     'src/core/rad_arc_section.h',
     'src/core/rad_arc_current.cpp',
     'src/core/rad_ngsolve_radia_field.h',

@@ -85,6 +85,7 @@
       "max_elapsed_seconds": 300,
       "paths": [
         "tests/test_eddy_aphi_contract.py",
+        "tests/test_hdiv_energy_material_consistency.py",
         "tests/test_axisym_measure_contract.py",
         "tests/test_sibc_corner_patch.py",
         "tests/test_boundary_material_adjacency.py",
