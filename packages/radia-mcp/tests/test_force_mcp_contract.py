@@ -76,6 +76,17 @@ def test_force_is_the_canonical_router_for_compatibility_front_doors():
     assert "compute_lorentz_force_result_via_hcurl_vim" in common_maglev
     assert "high-frequency truncation" in common_maglev
 
+    assert "source_quadrature" in knowledge.TOPICS
+    source_quadrature = knowledge.get_force_knowledge("source_quadrature")
+    assert source_quadrature in knowledge.get_force_knowledge("all")
+    assert "source_load_quadrature_20260927" in source_quadrature
+    assert "definedonelements" in source_quadrature
+    # MagLev cites its measured TEAM 28 evidence and keeps the unmeasured
+    # lateral-motion and default-intorder cases visible.
+    assert 'force("source_quadrature")' in maglev_force
+    assert "team28_source_quadrature_20260927" in maglev_force
+    assert "Still not measured: lateral motion" in maglev_force
+
 
 class _Result(list):
     def tolist(self):
