@@ -3,6 +3,48 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## Unreleased (5.1.0) - Induction-heating thermal chain
+
+- **Exact, verified heat-source transfer.** `radia.ih_thermal` ties every
+  `.sol` to its mesh through a `.sol.json` sidecar (mesh digest, H1 order,
+  DOF count, quantity, EM power) and loads fields without curving the mesh.
+  Thermal heat-flux vertices are projected onto the EM heated surface under
+  an explicit distance tolerance, with no zero-flux fallback. The
+  circumferential average (`--q-phi-average`, and the axisymmetric solver)
+  now cuts every EM triangle at meridian arc-length bin edges and
+  integrates it exactly, so it conserves power and has no azimuth sampling
+  error; bodies that are not of revolution are rejected. Both heat solvers
+  gate the transferred power against the EM power (`--power-tolerance`),
+  and output, probe and source failures fail the run. `--q-phi-average-n`
+  is removed; `--n-phi-samples` drives an independent ring check.
+- **Overheating is reported.** `thermal_exposure` integrates the volume
+  above given temperatures over integration points, locates it, and
+  reports the temperature spread around the hottest ring;
+  `--exposure-thresholds` and `--temperature-limit` add it to heat results
+  as an optimiser constraint.
+- **Case depth with explicit ray outcomes.** `case_depth` and
+  `python -m radia.ih_thermal_post depth` classify each ray as `ok`,
+  `not_reached`, `through` or `beyond_span` instead of reporting a probe
+  length as a depth; meridian stations report the depth range over the
+  azimuth.
+- **Temperature-dependent materials.** `--material-table`
+  (`T_C,k_W_mK,cp_J_kgK`), `--latent-heat` and `--latent-range` switch the
+  heat solvers to an enthalpy backward-Euler Newton integrator whose energy
+  balance closes to 1e-5 or better.
+- **Coupled axisymmetric eddy-current + heat solver**
+  (`radia.ih_axisym_coupled`, `calc_ih_axisym_coupled.py`): volumetric
+  A_phi with element-wise sigma(T), mu_r(T), re-solved from the temperature
+  (staggered), with an exact coil/Joule power identity checked every
+  solve and a Bessel-solution check to 5e-4.
+- **Frozen-|H_t| sources refused by default.** A two-route validation
+  (`validation_test/induction_heating/coupled_curie_cylinder.py`) shows
+  that freezing the EM run's surface field is wrong for ferromagnetic
+  workpieces crossing the Curie band. `--em-table` therefore needs
+  `--allow-frozen-ht`, and `calc_heat_with_em_table` documents that it
+  holds for non-magnetic parts only; the latter also no longer turns
+  unmapped |H_t| into zero.
+- EM runs write a P1 `_Ht.sol` with a sidecar next to `qsurf.sol`.
+
 ## 5.0.0 - HDiv-MMM production milestone
 
 Release candidate. Publication and four-machine deployment remain subject to
