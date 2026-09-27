@@ -48,25 +48,36 @@ void gauss_rule(int n, std::vector<double> & x, std::vector<double> & w)
   }
 }
 
-// Solve the symmetric positive semi-definite system A x = b in place
-// (Gaussian elimination with partial pivoting).  Returns false if singular.
-bool solve_dense(std::vector<double> & A, std::vector<double> & b, int n)
+// Least-squares solution of min |A x - b| for a row-major m x n matrix
+// (m >= n) by Householder QR, in place; x is returned in b[0..n).  QR works
+// on A itself: forming the normal equations A^T A squares the condition
+// number, which reaches 1e14 for order-5 face bubbles and leaves the step
+// with no correct digits.  Returns false if A is rank deficient.
+bool lstsq_qr(std::vector<double> & A, std::vector<double> & b, int m, int n)
 {
   for (int c = 0; c < n; c++) {
-    int piv = c;
-    for (int r = c + 1; r < n; r++)
-      if (std::fabs(A[r * n + c]) > std::fabs(A[piv * n + c])) piv = r;
-    if (std::fabs(A[piv * n + c]) < 1e-300) return false;
-    if (piv != c) {
-      for (int k = 0; k < n; k++) std::swap(A[c * n + k], A[piv * n + k]);
-      std::swap(b[c], b[piv]);
+    double norm = 0;
+    for (int r = c; r < m; r++) norm += A[r * n + c] * A[r * n + c];
+    norm = std::sqrt(norm);
+    if (!(norm > 0)) return false;
+    const double alpha = A[c * n + c] > 0 ? -norm : norm;
+    // v = a_c - alpha e_c, stored in column c below the diagonal.
+    A[c * n + c] -= alpha;
+    double vv = 0;
+    for (int r = c; r < m; r++) vv += A[r * n + c] * A[r * n + c];
+    if (vv > 0) {
+      for (int k = c + 1; k < n; k++) {
+        double s = 0;
+        for (int r = c; r < m; r++) s += A[r * n + c] * A[r * n + k];
+        s *= 2 / vv;
+        for (int r = c; r < m; r++) A[r * n + k] -= s * A[r * n + c];
+      }
+      double s = 0;
+      for (int r = c; r < m; r++) s += A[r * n + c] * b[r];
+      s *= 2 / vv;
+      for (int r = c; r < m; r++) b[r] -= s * A[r * n + c];
     }
-    for (int r = c + 1; r < n; r++) {
-      double f = A[r * n + c] / A[c * n + c];
-      if (f == 0) continue;
-      for (int k = c; k < n; k++) A[r * n + k] -= f * A[c * n + k];
-      b[r] -= f * b[c];
-    }
+    A[c * n + c] = alpha;   // R's diagonal
   }
   for (int r = n - 1; r >= 0; r--) {
     double s = b[r];
@@ -317,32 +328,29 @@ struct Refitter
       coef[k](0) -= 1.0;
     }
 
-    // Weighted normal-distance residual, its Gauss-Newton normal equations
-    // (A, b) at the coefficient change d.  False if a projection fails.
+    // Weighted normal-distance residuals at the coefficient change d: one row
+    // per sample and direction, J3 = d(residual)/d(coefficient) (rows x nu,
+    // row-major) and rv = the residuals, both scaled by sqrt(weight).  res
+    // is the weighted squared distance.  False if a projection fails.
     std::vector<ng::Vec<3>> dirs;
     ng::Point<3> q;
     auto evaluate = [&](const std::vector<double> & d, double & res,
-                        std::vector<double> & A, std::vector<double> & b) {
-      A.assign(nu * nu, 0.0);
-      b.assign(nu, 0.0);
+                        std::vector<double> & J3, std::vector<double> & rv) {
+      J3.clear();
+      rv.clear();
       res = 0;
       for (int j = 0; j < np; j++) {
         ng::Point<3> x = x0[j];
         for (int k = 0; k < n; k++)
           for (int c = 0; c < 3; c++) x(c) += phi[k * np + j] * d[3 * k + c];
         if (!project(e, e.fit_ref[j], x, q, dirs)) return false;
+        const double sw = std::sqrt(e.fit_w[j]);
         for (const auto & nv : dirs) {
           double r = nv * (x - q);
           res += e.fit_w[j] * r * r;
+          rv.push_back(sw * r);
           for (int k = 0; k < n; k++)
-            for (int c = 0; c < 3; c++) {
-              double jk = nv(c) * phi[k * np + j];
-              b[3 * k + c] -= e.fit_w[j] * jk * r;
-              for (int l = 0; l < n; l++)
-                for (int cc = 0; cc < 3; cc++)
-                  A[(3 * k + c) * nu + 3 * l + cc] +=
-                      e.fit_w[j] * jk * nv(cc) * phi[l * np + j];
-            }
+            for (int c = 0; c < 3; c++) J3.push_back(sw * nv(c) * phi[k * np + j]);
         }
       }
       return true;
@@ -354,23 +362,19 @@ struct Refitter
       fd = {ng::Vec<3>(1, 0, 0), ng::Vec<3>(0, 1, 0), ng::Vec<3>(0, 0, 1)};
     const int nd = (int)fd.size();
     const int nr = n * nd;
-    auto reduce = [&](const std::vector<double> & A3, const std::vector<double> & b3,
-                      std::vector<double> & Ar, std::vector<double> & br) {
-      Ar.assign(nr * nr, 0.0);
-      br.assign(nr, 0.0);
-      for (int k = 0; k < n; k++)
-        for (int m = 0; m < nd; m++) {
-          int i = k * nd + m;
-          for (int c = 0; c < 3; c++) br[i] += fd[m](c) * b3[3 * k + c];
-          for (int l = 0; l < n; l++)
-            for (int mm = 0; mm < nd; mm++) {
-              double v = 0;
-              for (int c = 0; c < 3; c++)
-                for (int cc = 0; cc < 3; cc++)
-                  v += fd[m](c) * A3[(3 * k + c) * nu + 3 * l + cc] * fd[mm](cc);
-              Ar[i * nr + l * nd + mm] = v;
-            }
-        }
+    int rows = 0;
+    auto reduce = [&](const std::vector<double> & J3, const std::vector<double> & rv3,
+                      std::vector<double> & Jr, std::vector<double> & rvr) {
+      rows = (int)rv3.size();
+      Jr.assign(rows * nr, 0.0);
+      rvr = rv3;
+      for (int r = 0; r < rows; r++)
+        for (int k = 0; k < n; k++)
+          for (int m = 0; m < nd; m++) {
+            double v = 0;
+            for (int c = 0; c < 3; c++) v += J3[r * nu + 3 * k + c] * fd[m](c);
+            Jr[r * nr + k * nd + m] = v;
+          }
     };
 
     // The unknowns are the reduced changes u: coefficient k moves by
@@ -379,8 +383,8 @@ struct Refitter
     // equivalent re-parametrisations otherwise leave the minimiser
     // undetermined, and roundoff in the CAD projection then selects a
     // different point (and a different accept/reject outcome) per run.
-    // lambda removes only directions whose curvature is below 1e-10 of the
-    // strongest one.
+    // lambda removes only directions whose curvature is below 1e-14 of the
+    // strongest one; at 1e-10 it held the order-5 coefficients back.
     std::vector<double> d(nu, 0.0), A, b, Ar, br, M, s;
     auto to_d = [&](const std::vector<double> & uu) {
       std::vector<double> dd(nu, 0.0);
@@ -400,23 +404,40 @@ struct Refitter
       return -1;
     }
     reduce(A, b, Ar, br);
+    // Column squared norms of the reduced Jacobian (the normal-matrix diagonal).
+    auto column_norms = [&](std::vector<double> & D) {
+      D.assign(nr, 0.0);
+      for (int r = 0; r < rows; r++)
+        for (int i = 0; i < nr; i++) D[i] += Ar[r * nr + i] * Ar[r * nr + i];
+    };
+    std::vector<double> D;
+    column_norms(D);
     double diag0 = 0;
-    for (int i = 0; i < nr; i++) diag0 = std::max(diag0, Ar[i * nr + i]);
-    const double lambda = 1e-10 * diag0 + 1e-300;
+    for (double v : D) diag0 = std::max(diag0, v);
+    const double lambda = 1e-14 * diag0 + 1e-300;
     auto objective = [&](double r, const std::vector<double> & uu) {
       double t = r;
       for (double v : uu) t += lambda * v * v;
       return t;
     };
-    // Regularised normal equations at u: (Ar + (lambda + damp) I) s = br - lambda u.
+    // Step s minimising |Jr s + rv|^2 + lambda |u + s|^2 + damp sum D_i s_i^2,
+    // as an augmented least-squares problem solved by QR.
     auto step_for = [&](const std::vector<double> & uu, double damp, std::vector<double> & ss) {
-      M = Ar;
-      ss = br;
-      for (int i = 0; i < nr; i++) {
-        M[i * nr + i] += lambda + damp * std::max(Ar[i * nr + i], 1e-12 * diag0);
-        ss[i] -= lambda * uu[i];
+      column_norms(D);
+      M.assign((rows + nr) * nr, 0.0);
+      ss.assign(rows + nr, 0.0);
+      for (int r = 0; r < rows; r++) {
+        for (int i = 0; i < nr; i++) M[r * nr + i] = Ar[r * nr + i];
+        ss[r] = -br[r];
       }
-      return solve_dense(M, ss, nr);
+      for (int i = 0; i < nr; i++) {
+        const double c = std::sqrt(lambda + damp * std::max(D[i], 1e-12 * diag0));
+        M[(rows + i) * nr + i] = c;
+        ss[rows + i] = -lambda * uu[i] / c;
+      }
+      if (!lstsq_qr(M, ss, rows + nr, nr)) return false;
+      ss.resize(nr);
+      return true;
     };
 
     // Gauss-Newton on the full (non-monotone) path: the tangential unknowns
@@ -521,6 +542,34 @@ struct Refitter
   }
 };
 
+// Edge refit from two starts: Netgen's coefficients, and the same with the
+// highest-degree coefficient removed (the edge's shape one order lower).
+// The distance is not convex in the coefficients; from Netgen's order-5
+// start the solve settles in a minimum 5x worse than the order-4 one, which
+// the hierarchical basis contains.  The closer result is kept, and the
+// second only if its elements stay within a factor two of Netgen's.
+int refit_edge_two_starts(Refitter & R, const Entity & E, ng::Vec<3> * coef, int n,
+                          double & before, double & after)
+{
+  std::vector<ng::Vec<3>> orig(coef, coef + n);
+  const std::vector<double> area0 = R.area_samples(E), det0 = R.volume_det_samples(E);
+  int r1 = R.refit(E, coef, n, before, after);
+  if (n < 2 || before < 0) return r1;
+  std::vector<ng::Vec<3>> c1(coef, coef + n);
+  for (int k = 0; k < n; k++) coef[k] = orig[k];
+  coef[n - 1] = ng::Vec<3>(0, 0, 0);
+  double b2 = 0, a2 = 0;
+  const int r2 = R.refit(E, coef, n, b2, a2);
+  if (r2 > 0 && a2 < after && a2 < before &&
+      Refitter::within_factor_two(area0, R.area_samples(E)) &&
+      Refitter::within_factor_two(det0, R.volume_det_samples(E))) {
+    after = a2;
+    return 1;
+  }
+  for (int k = 0; k < n; k++) coef[k] = c1[k];
+  return r1;
+}
+
 }  // namespace
 
 GeometricRefitStats geometric_refit(ng::Mesh & mesh)
@@ -610,7 +659,7 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
 
       st.edges_tried++;
       double before = 0, after = 0;
-      int r = R.refit(E, R.curved.EdgeCoefficients(ei), n, before, after);
+      int r = refit_edge_two_starts(R, E, R.curved.EdgeCoefficients(ei), n, before, after);
       if (r > 0) st.edges_accepted++;
       if (r == -1) st.edges_failed++;
       if (r == -2) st.edges_rejected_distortion++;
