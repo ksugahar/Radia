@@ -62,6 +62,8 @@ def test_hybrid_material_controls_reach_solver_and_checkpoint(method, order):
     settings = {k.arg: ast.unparse(k.value) for k in contracts[0].keywords}
     for key in ("mixed_method", "mixed_bonus", "mixed_material_bonus"):
         assert settings[key] == f"options.{key}"
+    assert settings["runtime_identity"] == "runtime_identity"
+    assert settings["implementation_sha256"] == "implementation_sha256"
 
 
 @pytest.mark.parametrize("exact,source_order,bonus,missing", [(False, None, 4, False), (True, 3, 8, False), (True, 4, 12, False), (True, 3, 8, True)])
