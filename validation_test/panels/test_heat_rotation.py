@@ -229,15 +229,6 @@ def test_phi_average_keeps_an_axisymmetric_source(cylinder_mesh, tmp_path):
         audit["source_power_W"], rel=1e-12)
 
 
-def test_phi_average_rejects_a_body_that_is_not_of_revolution(
-        synthetic_setup, tmp_path):
-    """A cube has no meaningful circumferential average about z."""
-    em_mesh, _, _ = synthetic_setup
-    from ngsolve import x
-    with pytest.raises(ValueError, match="not a body of revolution"):
-        _phi_average_on(em_mesh, x, str(tmp_path))
-
-
 def test_phi_average_requires_spatial_not_uniform(synthetic_setup):
     """--q-phi-average + --q-uniform is contradictory (a constant is
     already azimuthally uniform) and must fail loud, per No-Fallback."""

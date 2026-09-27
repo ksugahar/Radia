@@ -118,6 +118,31 @@ class EMMaterialTable:
 # Eddy-current solver
 # ---------------------------------------------------------------------------
 
+def _check_axis_dirichlet(mesh, pts, dirichlet):
+    """Every boundary segment on r = 0 must be in the Dirichlet set."""
+    import re
+    from ngsolve import BND
+    if not dirichlet:
+        raise ValueError("a Dirichlet set containing the r = 0 axis is "
+                         "required (A_phi = 0 there)")
+    pat = re.compile(str(dirichlet))
+    scale = max(float(np.max(np.abs(pts[:, 0]))), 1e-300)
+    on_axis, missing = 0, set()
+    for el in mesh.Elements(BND):
+        r = [abs(float(pts[v.nr, 0])) for v in el.vertices]
+        if max(r) <= 1e-12 * scale:
+            on_axis += 1
+            if not pat.fullmatch(el.mat):
+                missing.add(el.mat)
+    if on_axis == 0:
+        raise ValueError("the mesh has no boundary on the r = 0 axis")
+    if missing:
+        raise ValueError(
+            f"boundary segments on the r = 0 axis named {sorted(missing)} are "
+            f"not in the Dirichlet set {dirichlet!r}; A_phi must vanish on the "
+            "whole axis")
+
+
 class AxisymEddyCurrent:
     """Time-harmonic A_phi on an (r, z) mesh with element-wise materials.
 
@@ -136,12 +161,10 @@ class AxisymEddyCurrent:
         for name in coils:
             if name not in mats:
                 raise ValueError(f"coil material {name!r} is not in the mesh")
-        if not dirichlet or "axis" not in str(dirichlet):
-            raise ValueError("the Dirichlet set must contain the r = 0 axis "
-                             "(A_phi = 0 there)")
         pts = np.asarray([v.point for v in mesh.vertices])
         if np.min(pts[:, 0]) < -1e-12:
             raise ValueError("an axisymmetric mesh needs r = x >= 0")
+        _check_axis_dirichlet(mesh, pts, dirichlet)
         self.mesh = mesh
         self.workpiece = workpiece
         self.omega = 2.0 * math.pi * float(frequency)
@@ -173,7 +196,7 @@ class AxisymEddyCurrent:
     def solve(self, sigma_wp, mu_wp):
         """Solve with per-workpiece-element sigma, mu_r; return a record."""
         from ngsolve import (BilinearForm, Integrate, InnerProduct,
-                             LinearForm, TaskManager, dx, grad, x as r)
+                             LinearForm, dx, grad, x as r)
         s = np.zeros(self.mesh.ne)
         m = np.ones(self.mesh.ne)
         s[self._wp] = sigma_wp
@@ -197,17 +220,17 @@ class AxisymEddyCurrent:
                  intrules=exact)
         f = LinearForm(self.fes)
         f += self.J * r * v * dx(intrules=exact)
-        with TaskManager():
-            a.Assemble()
-            f.Assemble()
-            self.gfA.vec.data = a.mat.Inverse(
-                self.fes.FreeDofs(), inverse=self.linear_solver) * f.vec
-            wp = self.mesh.Materials(self.workpiece)
-            P_joule = float(Integrate(
-                self.heat_density() * 2 * math.pi * r, self.mesh,
-                definedon=wp, order=2 * self.fes.globalorder + 3).real)
-            S = Integrate(1j * self.omega * self.gfA * self.J * r, self.mesh,
-                          order=2 * self.fes.globalorder + 3)
+        # Parallelism follows the caller's ngsolve.TaskManager().
+        a.Assemble()
+        f.Assemble()
+        self.gfA.vec.data = a.mat.Inverse(
+            self.fes.FreeDofs(), inverse=self.linear_solver) * f.vec
+        wp = self.mesh.Materials(self.workpiece)
+        P_joule = float(Integrate(
+            self.heat_density() * 2 * math.pi * r, self.mesh,
+            definedon=wp, order=2 * self.fes.globalorder + 3).real)
+        S = Integrate(1j * self.omega * self.gfA * self.J * r, self.mesh,
+                      order=2 * self.fes.globalorder + 3)
         P_coil = float(0.5 * (2 * math.pi) * complex(S).real)
         return {"P_joule_W": P_joule, "P_coil_W": P_coil,
                 "power_balance_relative_error":
@@ -242,7 +265,7 @@ def run_coupled(mesh, *, frequency, workpiece, coils, dirichlet,
                 on_step=None, linear_solver_em="pardiso",
                 linear_solver_heat="sparsecholesky"):
     """Staggered EM-thermal transient.  Returns ``(result, gfT, em)``."""
-    from ngsolve import CF, GridFunction, H1, TaskManager, x as r
+    from ngsolve import CF, GridFunction, H1, x as r
     try:
         from . import ih_heat_transient as iht
     except ImportError:                  # imported as a top-level module
@@ -253,9 +276,7 @@ def run_coupled(mesh, *, frequency, workpiece, coils, dirichlet,
                            linear_solver=linear_solver_em)
     fesT = H1(mesh, order=int(thermal_order), definedon=workpiece)
     gfT = GridFunction(fesT)
-    with TaskManager():
-        gfT.Set(CF(float(t_initial)),
-                definedon=mesh.Materials(workpiece))
+    gfT.Set(CF(float(t_initial)), definedon=mesh.Materials(workpiece))
     wp_el = em.workpiece_elements
     Q = em.heat_density()
     stepper = iht.NonlinearHeatStepper(

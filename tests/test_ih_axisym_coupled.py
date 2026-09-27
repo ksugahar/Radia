@@ -129,3 +129,39 @@ def test_command_line_writes_a_reloadable_temperature(tmp_path):
     again = ih_thermal_post.thermal_exposure(mesh2, gf, [100.0],
                                              axisymmetric=True, region="wp")
     assert again["T_max_C"] == pytest.approx(ex["T_max_C"], rel=1e-12)
+
+
+def test_unnamed_axis_segments_are_refused():
+    """A_phi = 0 must hold on the whole axis, not only where it is named."""
+    from netgen.occ import Glue, MoveTo, OCCGeometry, X
+    from ngsolve import Mesh
+
+    core = MoveTo(0, 0).Rectangle(A, L).Face()
+    core.faces.name = "wp"                   # its axis edge stays unnamed
+    air = MoveTo(0, 0).Rectangle(ROUT, L).Face()
+    air.faces.name = "air"
+    air.edges.Min(X).name = "axis"
+    coil = MoveTo(RC, 0).Rectangle(TC, L).Face()
+    coil.faces.name = "coil"
+    air = air - core - coil
+    mesh = Mesh(OCCGeometry(Glue([air, core, coil]), dim=2)
+                .GenerateMesh(maxh=3e-3))
+    with pytest.raises(ValueError, match="r = 0 axis"):
+        C.AxisymEddyCurrent(mesh, frequency=1e3, workpiece="wp",
+                            coils={"coil": 1.0}, dirichlet="axis")
+
+
+def test_material_table_starting_above_zero_is_not_tripped_by_air(tmp_path):
+    """The temperature lives on the workpiece only; air vertices (value 0 in
+    the definedon space) must not count as leaving a 20 C.. table."""
+    from radia import ih_heat_transient as iht, ih_thermal_material as itm
+    em_mat, _ = _materials(curie=False)
+    th = itm.ThermalMaterial(rho=7800.0, T=[20.0, 1500.0], k=[40.0, 30.0],
+                             cp=[450.0, 700.0], source="20C table")
+    result, gfT, em = C.run_coupled(
+        _slice(1e-3), frequency=7000.0, workpiece="wp",
+        coils={"coil": 1500.0}, dirichlet="axis", em_material=em_mat,
+        thermal_material=th, boundaries=iht.HeatBoundaryTerms(), dt=0.1,
+        t_end=0.3)
+    assert result["history"][-1]["T_max_nodal_C"] > 20.0
+    assert result["nonlinear_transient"]["table_extrapolation_C"] == 0.0
