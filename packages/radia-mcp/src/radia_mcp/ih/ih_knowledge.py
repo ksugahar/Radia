@@ -602,9 +602,10 @@ and monitor temperature statistics must use them. The raw temperature port
 contains these coefficients in this mode. Periodic coefficient transport is
 not supported and fails explicitly. The monitor extrema are sampled at mapped
 volume quadrature points, not certified global polynomial extrema.
-Transfer uses the existing boundary azimuth
-sampler with coverage checks, and rejects an integrated power difference
-over 2%; it does not silently rescale the source. The transfer difference is
+Transfer uses the exact circumferential average of
+``radia.ih_thermal`` (see "Heat-source transfer contract" below) and rejects
+an integrated power difference over 2%; it does not silently rescale the
+source. The transfer difference is
 part of the error budget, not proof of 2% total application accuracy.
 Convection in this initial native axisymmetric route acts on ``sibc`` only;
 independently selected inner/outer convection coefficients are not supported.
@@ -680,15 +681,42 @@ higher-order H1 coefficients are hierarchical; accepting order 2 would silently
 distort the heat source.  ``calc_fem_kelvin.py`` therefore saves this handoff
 as P1 even when the electromagnetic solve itself uses a higher order.
 
-For the 3D-to-axisymmetric handoff, ``calc_heat_axisym.py`` evaluates the source
-GridFunction through NGSolve's boundary point locator (``BND``), not a volume
-point lookup.  Independently meshed representations of the same CAD surface
-have slightly different facets; volume lookup previously rejected some valid
-reference-case meridian points and silently left them at zero flux.  The default is 128
-azimuth samples (within 0.013% of 256 samples for both reference-case cases).  Result JSON
-``qsurf_projection`` records requested/accepted samples, coverage, and partial
-vertices.  A missing target vertex or less than 80% global sample coverage is a
-hard error; there is no zero-flux fallback.
+## Heat-source transfer contract (radia 5.1)
+
+``radia.ih_thermal`` owns the EM-to-thermal handoff for ``calc_heat.py``,
+``calc_heat_axisym.py`` and the Simulink operator assembly:
+
+* **Sidecars.** EM runs write ``<stem>_qsurf.sol.json`` (and a P1
+  ``<stem>_Ht.sol`` + sidecar): mesh file digest, H1 order, DOF count,
+  quantity, heated boundaries and ``P_wp_W``.  The heat solvers verify the
+  pair and the EM power; a ``.sol`` without a sidecar is accepted on its byte
+  count only and reported as ``provenance: size-only``.  Temperature fields
+  get the same sidecar; ``ih_thermal.load_field(T.sol)`` rebuilds them
+  exactly (order, ``definedon`` region) and never calls ``Mesh.Curve``.
+* **Pointwise transfer.** Thermal heat-flux vertices are projected onto the
+  nearest EM heated triangle; a vertex farther than ``--transfer-tolerance``
+  (default a quarter of the median EM edge) is an error; there is no zero-flux
+  fallback.
+* **Circumferential average** (``--q-phi-average``; always in the
+  axisymmetric solver).  Every EM triangle is cut at meridian arc-length bin
+  edges and integrated exactly, so the average conserves the EM power and has
+  no azimuth sampling error; each thermal vertex takes the value at its
+  meridian position.  A surface that is not a body of revolution about the
+  axis is rejected.  ``--q-phi-bin`` sets the bin width.
+  ``--q-phi-average-n`` was removed; in the axisymmetric solver
+  ``--n-phi-samples`` (default 128) now drives an independent pointwise ring
+  check reported as ``qsurf_projection.pointwise_ring_check``.
+* **Power gate.** The thermal heat input must match the EM power over
+  ``--em-heat-boundaries`` (default: the sidecar, else the thermal heat-flux
+  names when they exist on the EM mesh) within ``--power-tolerance``
+  (default 2%).  A mismatch usually means the thermal model heats only part
+  of the EM heated surface.
+* ``--q-scale`` multiplies q (current sweeps, ``(I/I_ref)^2``) and is
+  recorded.
+
+Result JSON ``qsurf_projection`` records the mode, provenance, EM boundaries
+and rule, transfer distances, the power balance and (phi-average) the
+profile audit.
 
 The headless runner and Simulink initialization both fail before solving when
 the ``.sol`` / ``.vol`` pair is incomplete or incompatible.  They do not infer
@@ -733,7 +761,11 @@ JSON output keys (calc_heat / calc_heat_axisym):
 | ``msh_file`` | GMSH `.msh v4.1` (T_C + q_surf fields) when `--msh-output` was set |
 | ``csv_file`` | probe history CSV when both `--probe-point` + `--csv-output` were set |
 | ``boundary_audit`` | Concrete matched heat-flux, convection, and radiation boundaries; per-boundary area; and per-boundary heat input |
-| ``qsurf_projection`` | axisymmetric 3D-boundary transfer coverage and sample counts (or ``mode=uniform``) |
+| ``qsurf_projection`` | transfer mode, provenance, EM boundaries, distances, power balance (or ``mode=uniform``) |
+| ``thermal_exposure`` | volume above each ``--exposure-thresholds`` / ``--temperature-limit`` value, its bounding box and meridian range, the peak and its location, and (3D) the hottest-ring spread |
+| ``temperature_limit`` | constraint record for optimisers: exceeded, excess over the limit, volume above it |
+| ``T_max_history_C`` | nodal peak temperature per step |
+| ``thermal_material`` / ``nonlinear_transient`` | material audit; Newton counts, halvings and energy balance when temperature-dependent |
 
 Naming convention:
 
@@ -743,19 +775,66 @@ Naming convention:
   `wp.vol`.  No separate companion mesh; reload directly against
   the same `wp.vol` the solve consumed.
 
-Reload pattern:
+Reload pattern (radia 5.1): read the field through its sidecar, which
+verifies the mesh digest and order and never curves the mesh:
 
 ```python
-from ngsolve import Mesh, H1, GridFunction
-wp_mesh = Mesh("workpiece_thermal.vol")  # or <msh-stem>_heat.vol
-fes_T   = H1(wp_mesh, order=2)           # MUST match the solve's
-                                         # --fes-order: read the
-                                         # "fes_order" JSON key
-                                         # (default 2 since 2026-09)
-gfT     = GridFunction(fes_T)
-gfT.Load("workpiece_thermal_heat_T.sol") # or <msh-stem>_T.sol
-T_at = float(gfT(wp_mesh(x, y, z)))      # sample at body point
+from radia import ih_thermal
+mesh, gfT, audit = ih_thermal.load_field("workpiece_thermal_heat_T.sol")
+T_at = float(gfT(mesh(x, y, z)))
 ```
+
+Do not call ``Mesh.Curve`` on the reader side "to match the writer": on a
+CAD-derived ``.vol`` a failed ``Curve`` corrupts the element maps (the reference-case
+mesh reported a 6.9e6 m^2 surface) and every later point evaluation is wrong.
+
+## Post-processing: exposure and case depth (radia 5.1)
+
+``radia.ih_thermal_post`` (MATLAB ``radia.python.ihThermalPost``):
+
+* ``thermal_exposure(mesh, gfT, thresholds, axisymmetric=..., region=...)``
+  -- volume above each temperature from integration points (a molten skin
+  thinner than an element is counted), bounding boxes, peak location, and for
+  3D the temperature spread on the ring through the peak; a large spread
+  under a supposedly axisymmetric source means the source was not
+  axisymmetric.
+* ``case_depth(mesh, gfT, 850.0, boundary_names=... | origins=, normals=,
+  span=..., n_phi=...)`` -- marches inward and classifies every ray:
+  ``ok``, ``not_reached`` (surface below threshold), ``through`` (leaves the
+  material still hot), ``beyond_span`` (probe too short; lower bound only).
+  Meridian stations on a 3D body report min/mean/max over the azimuth.
+* CLI: ``python -m radia.ih_thermal_post {exposure,depth} --temperature T.sol
+  ...`` reads the field through its sidecar and writes JSON/CSV.
+
+## Temperature-dependent heating and the Curie band (radia 5.1)
+
+* ``--material-table T_C,k_W_mK,cp_J_kgK`` (+ ``--latent-heat``,
+  ``--latent-range``) switches the heat solvers to an enthalpy
+  backward-Euler Newton integrator (energy balance reported, typically
+  < 1e-6).  Leaving the table is an error unless
+  ``--allow-table-extrapolation``.
+* **Do not freeze |H_t| for ferromagnetic workpieces.**  For a
+  current-driven coil the surface |H_t| falls as sigma(T) falls and rises
+  when the surface passes the Curie band.  In the validation case
+  (``validation_test/induction_heating/coupled_curie_cylinder.py``) the true
+  power stays within +5% up to the Curie band and then rises by a third,
+  while a frozen-|H_t| table predicts +70% and a false self-limit at the
+  Curie temperature.  ``--em-table`` therefore requires
+  ``--allow-frozen-ht`` (non-magnetic parts, or between EM re-solves), and
+  ``calc_heat_with_em_table.py`` holds for non-magnetic parts only.
+* For bodies of revolution with coaxial coils use the coupled solver
+  ``calc_ih_axisym_coupled.py`` (``radia.ih_axisym_coupled``): volumetric
+  A_phi eddy currents with sigma(T), mu_r(T) (``T_C,sigma_S_m,mu_r``)
+  re-solved from the temperature every ``--em-every`` steps, Joule heat in
+  the volume, exact coil/Joule power identity checked every solve, Bessel
+  solution reproduced to 5e-4.  It resolves the skin depth, which above the
+  Curie band reaches millimetres (6 mm at 7 kHz for hot steel) -- the regime
+  where a surface-impedance model is itself no longer valid.  A rotating part
+  under a coil with short leads is usually well described by the ring coil
+  of the same cross-section.
+* 3D temperature-dependent EM through the BEM-SIBC route needs a spatially
+  varying Z_s with a consistent weighted operator; the per-panel path is not
+  yet accepted by the verified heat post-processing.
 
 Same three contracts as the qsurf side (see "Strict .sol + .vol
 contract" above): the `.sol` is a raw coefficient vector, the

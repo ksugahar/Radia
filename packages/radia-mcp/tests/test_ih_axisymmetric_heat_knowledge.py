@@ -80,10 +80,23 @@ def test_ih_thermal_knowledge_prefers_axisym_and_audits_3d_handoff():
     assert "experiment constraint, not a formulation requirement" in normalized
     assert "separately generated 2D ``(r,z)`` workpiece mesh" in normalized
     assert "``Curve()`` changes geometry order, not dimension" in normalized
-    assert "boundary point locator (``BND``)" in normalized
-    assert "default is 128 azimuth samples" in normalized
+    assert "cut at meridian arc-length bin" in normalized
+    assert "conserves the EM power" in normalized
+    assert "``--n-phi-samples`` (default 128)" in normalized
+    assert "--power-tolerance" in normalized
     assert "``qsurf_projection``" in thermal
     assert "no zero-flux fallback" in normalized
+
+
+def test_ih_thermal_knowledge_warns_against_frozen_ht_for_magnetic_parts():
+    thermal = get_induction_heating_documentation("thermal")
+    normalized = " ".join(thermal.split())
+
+    assert "Do not freeze |H_t| for ferromagnetic workpieces" in normalized
+    assert "--allow-frozen-ht" in normalized
+    assert "calc_ih_axisym_coupled.py" in normalized
+    assert "ih_thermal.load_field" in normalized
+    assert "beyond_span" in normalized
 
 
 def test_ih_reciprocity_and_heat_manual_does_not_certify_old_approximations():
