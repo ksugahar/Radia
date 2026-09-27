@@ -150,3 +150,49 @@ def test_command_line_reads_the_sidecar(tmp_path):
     assert result["field"]["provenance"] == "sidecar-verified"
     np.testing.assert_allclose(result["depth_m"], 1.5e-3, atol=1e-6)
     assert csv_out.read_text(encoding="utf-8").startswith("s,")
+
+def test_a_2d_mesh_takes_meridian_stations_only():
+    from netgen.geom2d import SplineGeometry
+    from ngsolve import Mesh, x
+
+    geo = SplineGeometry()
+    geo.AddRectangle((0, 0), (0.02, 0.01), bcs=("b", "outer", "t", "axis"))
+    mesh = Mesh(geo.GenerateMesh(maxh=0.002))
+    gf = _field(mesh, 1000.0 - 1.0e5 * (0.02 - x))
+    d = ih_thermal_post.case_depth(mesh, gf, 850.0, span=0.01,
+                                   origins=[[0.02, 0.005]], normals=[[-1, 0]])
+    assert d["depth_m"][0] == pytest.approx(1.5e-3, abs=1e-6)
+    with pytest.raises(ValueError, match="do not fit a 2D mesh"):
+        ih_thermal_post.case_depth(mesh, gf, 850.0, span=0.01,
+                                   origins=[[0.02, 0.0, 0.005]],
+                                   normals=[[-1, 0, 0]])
+
+
+def test_a_station_off_the_surface_is_refused():
+    from ngsolve import x
+    mesh = _slab()
+    with pytest.raises(ValueError, match="farther"):
+        ih_thermal_post.case_depth(
+            mesh, _field(mesh, 1000.0 - 1.0e5 * x), 850.0, span=0.01,
+            origins=[[0.005, 0.005, 0.005]], normals=[[1, 0, 0]])
+
+
+@pytest.mark.parametrize("header, ok", [
+    ("x_m,y_m,z_m,nx,ny,nz", True),
+    ("s_mm,r_mm,z_mm,n_r,n_z", True),
+    ("x,y,z,nx,ny,nz", False),              # no unit: not guessed
+    ("x_m,y_mm,z_m,nx,ny,nz", False),       # mixed units
+    ("r_m,z_m,nr,nz", False),               # alias of n_r, n_z
+])
+def test_stations_csv_header_is_exact(tmp_path, header, ok):
+    n = len(header.split(","))
+    csv = tmp_path / "st.csv"
+    csv.write_text(header + "\n" + ",".join(["1"] * n) + "\n", encoding="utf-8")
+    if ok:
+        o, nrm, s = ih_thermal_post._read_stations(str(csv))
+        scale = 1e-3 if "_mm" in header else 1.0
+        assert np.allclose(o, scale) and np.allclose(nrm, 1.0)
+        assert (s is not None) == header.startswith("s_")
+    else:
+        with pytest.raises(ValueError):
+            ih_thermal_post._read_stations(str(csv))
