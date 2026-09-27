@@ -214,6 +214,50 @@ def test_nonlinear_reduced_surface_flux_matches_the_volume_load(nonlinear_case, 
     assert np.linalg.norm(actual - expected, axis=1).max() <= 1e-6 * scale
 
 
+@pytest.mark.parametrize("case, expected", [
+    ("bh_gate_passes", ["surface_flux"]),
+    ("bh_gate_fails", ["surface_flux", "volume"]),
+    ("linear", ["volume"]),
+    ("bh_no_tolerance", ["volume"]),
+])
+def test_auto_source_load_prefers_the_gated_surface_route_for_bh_iron(monkeypatch, case, expected):
+    """Default loads: gated surface flux for B-H iron under total_hodge, volume otherwise."""
+    import radia.kelvin_solver as kelvin
+    from radia.static_electromagnet import (
+        StaticElectromagnetMixedDomain, solve_static_electromagnet_mixed_total_reduced_omega)
+
+    calls = []
+
+    class Stop(Exception):
+        pass
+
+    def hodge(mesh, H_s, materials, *, source_load, tangential_tolerance, **kwargs):
+        calls.append(source_load)
+        if case == "bh_gate_fails" and source_load == "surface_flux":
+            raise RuntimeError("surface_flux Hodge projection: boundary tangential residual 0.2")
+        assert (tangential_tolerance is not None) == (source_load == "surface_flux")
+        return {"potential": 0.0, "harmonic_field": None, "relative_harmonic_norm": None,
+                "bonus_intorder": 4}
+
+    def stop(*args, **kwargs):
+        raise Stop
+
+    monkeypatch.setattr(kelvin, "project_source_total_hodge", hodge)
+    monkeypatch.setattr(kelvin, "project_source_interface_potential", stop)
+    monkeypatch.setattr(StaticElectromagnetMixedDomain, "validate_mesh_labels",
+                        lambda self, *args: None)
+    domain = StaticElectromagnetMixedDomain(
+        reduced_materials=("air",), total_materials=("iron", "kelvin"), nonlinear_materials=("iron",))
+    material = ({"linear_mu_r_by_material": {"iron": 100.0}} if case == "linear"
+                else {"bh_table": [[0.0, 0.0], [1.0, 1.0]]})
+    tolerance = None if case == "bh_no_tolerance" else 0.05
+    with pytest.raises(Stop):
+        solve_static_electromagnet_mixed_total_reduced_omega(
+            _mesh(0.6), ng.CF((0.0, 0.0, 1.0)), domain, 1.0, (0.0, 0.0, 0.0), order=1,
+            source_potential_contract="total_hodge", source_trace_tolerance=tolerance, **material)
+    assert calls == expected
+
+
 def test_surface_flux_hodge_refuses_a_linked_source():
     from netgen.occ import Box, OCCGeometry, Pnt
     from radia.kelvin_solver import project_source_total_hodge
