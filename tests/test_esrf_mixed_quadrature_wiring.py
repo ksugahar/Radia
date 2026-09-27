@@ -13,11 +13,55 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 ADAPTER = ROOT / "validation_test/c_type_three_engine/run_three_engine.py"
 RUNNER = ROOT / "validation_test/esrf_three_engine/run_coil_yoke_three_engine.py"
+HYBRID_RUNNER = ROOT / "validation_test/esrf_three_engine/run_hybrid_undulator_three_engine.py"
 
 
 def compile_functions(nodes, namespace):
     tree = ast.Module(body=[ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0), *nodes], type_ignores=[])
     exec(compile(ast.fix_missing_locations(tree), "<reviewed-local-caller>", "exec"), namespace)  # noqa: S102 - local reviewed AST
+
+
+@pytest.mark.parametrize("method,order", [("picard", 1), ("picard", 2), ("newton", 2)])
+def test_hybrid_material_controls_reach_solver_and_checkpoint(method, order):
+    calls = {}
+    def solve(*args, **kwargs):
+        calls.update(kwargs)
+        return {"B_cf": object(), "fes": SimpleNamespace(ndof=10),
+                "nonlinear_stats": {"converged": True},
+                "static_electromagnet_contract": {"source_trace": {}}}
+    tree = ast.parse(HYBRID_RUNNER.read_text(encoding="utf-8"))
+    node = next(n for n in tree.body if isinstance(n, ast.FunctionDef)
+                and n.name == "_solve_mixed_omega")
+    ns = {"np": np, "ng": SimpleNamespace(TaskManager=nullcontext),
+          "time": SimpleNamespace(perf_counter=lambda: 0),
+          "MIXED_DOMAIN": object(), "MIXED_DOMAIN_LABEL": "mixed Omega",
+          "solve_static_electromagnet_mixed_total_reduced_omega": solve,
+          "_evaluate_cf": lambda *args: np.ones((2, 3))}
+    compile_functions([node], ns)
+    bonus = 8 if method == "newton" else None
+    _, diag = ns["_solve_mixed_omega"](
+        SimpleNamespace(ne=2, nv=8), SimpleNamespace(field_cf=object()), "BH", None,
+        order=order, kelvin_radius=.18, kelvin_center=(0, 0, 0),
+        nonlinear_tolerance=2e-5, nonlinear_maximum_iterations=80,
+        nonlinear_relaxation=.2, source_potential_tolerance=.05,
+        nonlinear_method=method, bonus_intorder=12, material_bonus_intorder=bonus)
+    assert calls["nonlinear_method"] == method
+    assert calls["nonlinear_material_bonus_intorder"] == bonus
+    assert calls["bonus_intorder"] == 12
+    assert calls["source_potential_contract"] == "global_physical"
+    assert calls["nonlinear_material_sampling"] == (
+        "integration_point" if method == "newton" else "element_centroid")
+    assert calls["nonlinear_material_update_order"] == (
+        1 if method == "picard" and order > 1 else None)
+    assert diag["nonlinear_method"] == method
+    # A changed material rule must invalidate previous field checkpoints.
+    contracts = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
+                 and isinstance(n.func, ast.Name) and n.func.id == "_checkpoint_contract"
+                 and any(k.arg == "assets" for k in n.keywords)]
+    assert len(contracts) == 1
+    settings = {k.arg: ast.unparse(k.value) for k in contracts[0].keywords}
+    for key in ("mixed_method", "mixed_bonus", "mixed_material_bonus"):
+        assert settings[key] == f"options.{key}"
 
 
 @pytest.mark.parametrize("exact,source_order,bonus,missing", [(False, None, 4, False), (True, 3, 8, False), (True, 4, 12, False), (True, 3, 8, True)])
