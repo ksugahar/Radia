@@ -103,7 +103,11 @@ they are curved only where the transition interface meets a curved boundary
 (on the cylinder, 18 of 37 pyramids share the rim circle where the z=0
 interface meets the side face).  Keep the hex/tet interface away from curved
 boundaries, or compare the integrated volume with the CAD value (a 1 %
-check-vol tolerance does not catch a 4e-4 deficit).
+check-vol tolerance does not catch a 4e-4 deficit).  `check-vol` compares
+NGSolve's scalar and vectorised maps on every curved pyramid and lists the
+disagreeing ones as an advisory (`advisories`,
+`quality.curved_pyramid_map`); the check still passes, since the `.vol` is
+correct and a fixed NGSolve reports none.
 
 On Windows PowerShell, prefer `coreform_cubit.com -nographics -batch script.py`
 or the lab launcher background path when you need to wait for batch completion

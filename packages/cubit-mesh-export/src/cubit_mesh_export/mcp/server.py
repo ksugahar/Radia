@@ -912,9 +912,11 @@ def cubit_check_vol(vol_path: str,
 	        report there (index it from result.json in production runs).
 
 	Returns:
-	    JSON: {"passed": bool, "warnings": [...], mesh/labels/materials/
-	    boundaries/quality details}.  passed=false means the mesh must not
-	    proceed to a solver.
+	    JSON: {"passed": bool, "warnings": [...], "advisories": [...],
+	    mesh/labels/materials/boundaries/quality details}.  passed=false
+	    means the mesh must not proceed to a solver.  Advisories do not fail
+	    the gate but must be relayed: currently curved pyramids that the
+	    installed NGSolve maps inconsistently (quality.curved_pyramid_map).
 	"""
 	try:
 		from cubit_mesh_export.check import check_consistency
