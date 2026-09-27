@@ -1284,11 +1284,14 @@ bool NetgenCurver::curve_and_extract(int order)
         if (curved.NumEdgeCoefficients(int(edge)) > 0) { curved_pyramids++; break; }
     }
     if (curved_pyramids > 0)
-      PRINT_WARNING("NetgenCurver: %d pyramids have curved edges. NGSolve up to "
+      PRINT_WARNING("NetgenCurver: %d pyramids have curved edges: the hex/tet "
+                    "transition interface meets a curved boundary, and these "
+                    "interface pyramids share its curved edges. NGSolve up to "
                     "6.2.2607 evaluates curved pyramids inconsistently in its "
                     "vectorised path (volume/field errors that do not converge "
-                    "with order). Prefer an all-hex or all-tet boundary layer, "
-                    "or check the domain volume against the CAD value.\n",
+                    "with order). Keep the hex/tet interface away from curved "
+                    "boundaries, or check the domain volume against the CAD "
+                    "value.\n",
                     curved_pyramids);
   }
 
