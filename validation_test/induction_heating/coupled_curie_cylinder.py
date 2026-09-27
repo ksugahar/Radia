@@ -38,10 +38,9 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.join(ROOT, "src"))
-sys.path.insert(0, os.path.join(ROOT, "src", "radia"))
 sys.path.insert(0, os.path.join(ROOT, "src", "radia", "panels"))
 
-import ih_axisym_coupled as C  # noqa: E402  (no native Radia needed)
+from radia import ih_axisym_coupled as C  # noqa: E402
 
 MU0 = C.MU0
 R_WP, H_WP = 0.020, 0.040
@@ -166,8 +165,8 @@ def wall_source(em, zs):
 
 
 def route_a(mesh, frequency, current, dt, t_end, em_every):
-    import ih_heat_transient as iht
-    import ih_thermal_material as itm
+    from radia import ih_heat_transient as iht
+    from radia import ih_thermal_material as itm
     from ngsolve import TaskManager
     th = itm.ThermalMaterial.constant(RHO, CP, K)
     t0 = time.time()
@@ -214,7 +213,7 @@ def impedance_table(path, frequency):
 
 def route_b(workdir, zs, q0, h0, frequency, dt, t_end, P0):
     import calc_heat_axisym
-    import ih_thermal
+    from radia import ih_thermal
     from netgen.geom2d import SplineGeometry
     from netgen.occ import Axes, Cylinder, OCCGeometry, Pnt, Z
     from ngsolve import GridFunction, H1, Mesh
