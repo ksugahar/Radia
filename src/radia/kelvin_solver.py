@@ -1637,6 +1637,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         "source_loads": {"reduced": reduced_source_load, "total": total_source_load,
                          "surface_flux_balance": source_load_diagnostics},
         "H_cf": H_cf,
+        # The total-region field alone.  H_cf is a MaterialCF whose air entry
+        # holds the coil; compiled, it evaluates that entry everywhere.
+        "H_total_cf": H_total,
         "B_cf": mu_cf * H_cf,
     }
 
@@ -2018,6 +2021,9 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
         "fes_reduced_source": reduced_space,
         "mu_cf": mu_cf,
         "H_cf": H_cf,
+        # The total-region field alone.  H_cf is a MaterialCF whose air entry
+        # holds the coil; compiled, it evaluates that entry everywhere.
+        "H_total_cf": H_total,
         "B_cf": mu_cf * H_cf,
         "linear_residual": linear_residual,
         "linear_residual_relative": relative_residual,
@@ -2692,7 +2698,10 @@ def _solve_mixed_omega_projected_log_material(
 
     for iteration in range(1, int(max_iterations) + 1):
         result = solve_current_material_state()
-        H_magnitude = sqrt(InnerProduct(result["H_cf"], result["H_cf"]) + 1.0e-24)
+        # The iron's own field: the compiled target below would evaluate the
+        # coil held by H_cf's air entry at every iron point.
+        iron_h = result["H_total_cf"]
+        H_magnitude = sqrt(InnerProduct(iron_h, iron_h) + 1.0e-24)
         B_target = _build_bh_coefficient_function(H_magnitude, bh_array)
         mu_r_target = B_target / (MU_0 * H_magnitude)
         admissible_mu_r_target = IfPos(mu_r_target - 1.0, mu_r_target, 1.0)
@@ -2797,7 +2806,7 @@ def _solve_mixed_omega_projected_log_material(
         # state the loop tested.  Check the material against the law on THIS
         # solve; it is the one the caller receives, so it is the one that has
         # to be self-consistent.
-        H_final = sqrt(InnerProduct(result["H_cf"], result["H_cf"]) + 1.0e-24)
+        H_final = sqrt(InnerProduct(result["H_total_cf"], result["H_total_cf"]) + 1.0e-24)
         mu_final_target = _build_bh_coefficient_function(H_final, bh_array) / (
             MU_0 * H_final)
         target_log_mu.Set(log(IfPos(mu_final_target - 1.0, mu_final_target, 1.0)).Compile(),
@@ -3158,14 +3167,23 @@ def audit_mixed_omega_constitutive_field(mesh, H_cf, B_cf, bh_table,
     if interpolation not in ("pchip", "linear_spline"):
         raise ValueError("interpolation must be pchip or linear_spline")
     magnitude = sqrt(InnerProduct(H_cf, H_cf) + 1.e-30)
-    build_b = (_build_bh_coefficient_function if interpolation == "pchip"
-               else _build_bh_linear_spline_coefficient_function)
-    law_b = build_b(magnitude, np.asarray(bh_table, dtype=float))
+    table = np.asarray(bh_table, dtype=float)
+    if interpolation == "pchip" and table[0, 0] == 0.0 and table[0, 1] == 0.0:
+        # The same PCHIP law by spline lookup, cheap without compiling.
+        from radia.scalar_potential_solver import _build_bh_spline_law
+        law_b = _build_bh_spline_law(table)[0](magnitude)
+    else:
+        build_b = (_build_bh_coefficient_function if interpolation == "pchip"
+                   else _build_bh_linear_spline_coefficient_function)
+        law_b = build_b(magnitude, table)
     target = law_b * H_cf / magnitude
     delta = B_cf - target
     region = mesh.Materials("|".join(names))
     def integral(value):
-        return float(Integrate(value.Compile(), mesh, definedon=region,
+        # Not compiled: callers pass MaterialCF fields whose other entries
+        # (the air-side coil source) a compiled expression would evaluate at
+        # every point of this region.
+        return float(Integrate(value, mesh, definedon=region,
                                order=int(integration_order)).real)
     defect = integral(InnerProduct(delta, delta))
     reference = integral(InnerProduct(target, target))
