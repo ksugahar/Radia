@@ -486,6 +486,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--relative-rms-tolerance", type=float, default=0.05)
     parser.add_argument("--threads", type=int, default=0)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--require-wheel", action="store_true",
+                        help="reject editable or source-overlay solver imports")
     parser.add_argument(
         "--preflight",
         action="store_true",
@@ -552,6 +554,14 @@ def main(argv: list[str] | None = None) -> int:
         raise RuntimeError("FEM mesh report has no Kelvin identification")
 
     implementation_paths = _verify_overlay()
+    if options.require_wheel and SOURCE_OVERLAY is not None:
+        raise RuntimeError("--require-wheel rejects RADIA_SOURCE_OVERLAY")
+    from run_coil_yoke_three_engine import _runtime_identity, _implementation_identity
+    runtime_identity = _runtime_identity(options.require_wheel)
+    implementation_sha256 = _implementation_identity()
+    implementation_sha256["hybrid_runner"] = _sha256(Path(__file__))
+    implementation_sha256.update({name: _sha256(Path(path))
+                                  for name, path in implementation_paths.items()})
     iron_mesh = ng.Mesh(str(iron_vol))
     source_mesh = ng.Mesh(str(source_vol))
     fem_mesh = ng.Mesh(str(fem_mesh_path))
@@ -617,6 +627,8 @@ def main(argv: list[str] | None = None) -> int:
             "passed": True,
             "source_overlay": None if SOURCE_OVERLAY is None else str(SOURCE_OVERLAY),
             "implementation_paths": implementation_paths,
+            "runtime_identity": runtime_identity,
+            "implementation_sha256": implementation_sha256,
             "source_projection": _source_stats(source),
             "source_field_gap_rms_A_per_m": float(
                 np.sqrt(np.mean(np.sum(source_h_samples * source_h_samples, axis=1)))
@@ -646,6 +658,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     common = _checkpoint_contract(
+        runtime_identity=runtime_identity,
+        implementation_sha256=implementation_sha256,
         assets={"iron": _sha256(iron_vol), "source": _sha256(source_vol)},
         fem_mesh_sha256=_sha256(fem_mesh_path),
         bh_table_sha256=_json_digest(bh_table),
@@ -731,6 +745,8 @@ def main(argv: list[str] | None = None) -> int:
         "radia_module": str(Path(rad.__file__).resolve()),
         "source_overlay": None if SOURCE_OVERLAY is None else str(SOURCE_OVERLAY),
         "implementation_paths": implementation_paths,
+        "runtime_identity": runtime_identity,
+        "implementation_sha256": implementation_sha256,
         "formulation_contract": three_engine_contract,
         "shared_input_contract": {
             "case": "ESRF Example #3 hybrid permanent-magnet undulator",
