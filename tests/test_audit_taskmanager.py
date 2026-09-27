@@ -79,6 +79,23 @@ def test_mesh_constructor_candidate_is_not_skipped(audit_module, tmp_path):
     assert findings[0].snippet.startswith("[Mesh(...)]")
 
 
+@pytest.mark.parametrize("constructor", ["Mesh", "ng.Mesh"])
+@pytest.mark.parametrize("argument, required", [
+    ('str(mesh_dir / "checked.vol")', False),
+    ('str(filename)', False),
+    ('make_mesh()', True),
+    ('str(make_mesh())', True),
+    ('geo.GenerateMesh()', True),
+])
+def test_mesh_filename_conversion_preserves_generation_gate(
+    audit_module, tmp_path, constructor, argument, required
+):
+    path = tmp_path / "tests" / "test_mesh.py"
+    path.parent.mkdir(parents=True)
+    path.write_text(f"mesh = {constructor}({argument})\n", encoding="utf-8")
+    assert bool(audit_module._audit_caller(path)) is required
+
+
 def test_caller_region_satisfies_minimum_gate(audit_module, tmp_path):
     path = tmp_path / "validation_test" / "solver.py"
     path.parent.mkdir(parents=True)

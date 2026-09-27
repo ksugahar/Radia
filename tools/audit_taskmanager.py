@@ -286,6 +286,18 @@ def _is_parallel_op(node: ast.Call) -> str | None:
         return f"{fn.id}(...)"
     if isinstance(fn, ast.Attribute) and fn.attr in _NGSOLVE_TM_REQUIRED_NAMES:
         return f".{fn.attr}(...)"
+    # Loading a filename expressed as str(path / "mesh.vol") is the same
+    # as Mesh(filename). Keep calls inside the conversion conservative:
+    # Mesh(str(make_mesh())) must still require a caller-owned region.
+    if node.args and isinstance(node.args[0], ast.Call):
+        arg = node.args[0]
+        if (isinstance(arg.func, ast.Name) and arg.func.id == "str"
+                and len(arg.args) == 1 and not arg.keywords
+                and not any(isinstance(child, ast.Call)
+                            for child in ast.walk(arg.args[0]))):
+            if ((isinstance(fn, ast.Name) and fn.id == "Mesh")
+                    or (isinstance(fn, ast.Attribute) and fn.attr == "Mesh")):
+                return None
     # ngsolve.Mesh(...) constructor with a Netgen mesh / geometry inside
     if (isinstance(fn, ast.Name) and fn.id == "Mesh" and node.args
             and isinstance(node.args[0], ast.Call)):
