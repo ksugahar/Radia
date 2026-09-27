@@ -1327,9 +1327,11 @@ def build_temperature_dependent_source(source: "EMHeatSource", *, table_path,
     **Validity.**  The model freezes the spatial |H_t| of the EM run.  For
     a current-driven coil around a ferromagnetic workpiece that is wrong:
     |H_t| falls as sigma(T) falls and rises when the surface passes the
-    Curie band, so the true power stays nearly flat and then rises, while
-    this model predicts +70 % below the Curie point and a false
-    self-limit above it (validation_test/induction_heating/results/
+    Curie band.  In the validation case the true power stays within +5 %
+    until the surface reaches the Curie band and peaks at +34 % as the band
+    passes, while this model rises to +53 % below the Curie point and then
+    stalls the surface at the Curie temperature, a false self-limit
+    (validation_test/induction_heating/results/
     coupled_curie_cylinder_frozen_ht.json).  It is therefore refused unless
     ``acknowledge_frozen_ht`` is set; use it for non-magnetic workpieces,
     or between EM re-solves of a staggered EM-thermal run.

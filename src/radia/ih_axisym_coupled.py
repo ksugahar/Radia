@@ -325,8 +325,8 @@ def run_coupled(mesh, *, frequency, workpiece, coils, dirichlet,
     """Staggered EM-thermal transient.  Returns ``(result, gfT, em)``.
 
     ``em_every`` (>= 1) re-solves the EM problem every that many steps; the
-    validation record shows +3.8 % (2) and +12 % (5) in the peak temperature
-    across the Curie band against every step, so values above 1 trade
+    validation record shows +2.0 % (2) and +10 % (5) in the final peak
+    temperature across the Curie band against every step, so values above 1 trade
     accuracy for speed and are recorded.
     """
     from ngsolve import CF, GridFunction, H1, x as r
