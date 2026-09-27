@@ -38,6 +38,7 @@ All notable changes to the `radia` package.  Format: each release lists
   `not_reached`, `through`, `beyond_span` or `edge` instead of reporting a
   probe length as a depth; station origins are projected onto the material
   surface, and meridian stations report the depth range over the azimuth.
+  A hot ray that reaches a hole or the far surface reports the exit point.
   The command reads the region and geometry from the temperature sidecar.
 - **Temperature-dependent materials.** `--material-table`
   (`T_C,k_W_mK,cp_J_kgK`), `--latent-heat` and `--latent-range` switch the
