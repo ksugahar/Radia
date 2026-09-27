@@ -1,0 +1,72 @@
+{
+  "wheel_sha256": "ad43d4ac6153ab95e07b7b29367ff51462326923c0876d59c68bcbf40c574e84",
+  "native_sha256": "94788ccda981be839fde7d0d9d9873d1706861825e6dfeed3e941c14cc61b966",
+  "source_commit": "f6a682eac78c5c460968c5ff7eb25ef19e6be6e7",
+  "ci_run": 36331605590,
+  "sources_verified": 304,
+  "version": "5.0.2",
+  "import_path": "C:\\temp\\radia-quad-f6a682eac\\venv\\Lib\\site-packages\\radia",
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "hostname": "intel11",
+  "steps": [
+    {
+      "name": "pip-check",
+      "command": [
+        "C:\\temp\\radia-quad-f6a682eac\\venv\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-m",
+        "pip",
+        "check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "full6",
+      "command": [
+        "C:\\temp\\radia-quad-f6a682eac\\venv\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-I",
+        "C:\\temp\\radia-quad-f6a682eac\\inputs\\hdiv_newton_native_smoke_strong.py",
+        "--drive",
+        "300000",
+        "--output",
+        "C:\\temp\\radia-quad-f6a682eac\\results\\full6.json"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "focused",
+      "command": [
+        "C:\\temp\\radia-quad-f6a682eac\\venv\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-I",
+        "-m",
+        "pytest",
+        "-q",
+        "--confcutdir",
+        "C:\\temp\\radia-quad-f6a682eac\\inputs",
+        "C:\\temp\\radia-quad-f6a682eac\\inputs\\tests\\feec\\test_hdiv_jacobi_diagonal_fail_loud.py",
+        "C:\\temp\\radia-quad-f6a682eac\\inputs\\validation_test\\feec\\test_wedge_frozen_pcg.py",
+        "--junitxml",
+        "C:\\temp\\radia-quad-f6a682eac\\results\\focused.xml"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "pip-freeze",
+      "command": [
+        "C:\\temp\\radia-quad-f6a682eac\\venv\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-m",
+        "pip",
+        "freeze"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "passed": true
+}
