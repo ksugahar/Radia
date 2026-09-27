@@ -61,6 +61,16 @@ All notable changes to the `radia` package.  Format: each release lists
   holds for non-magnetic parts only; the latter also no longer turns
   unmapped |H_t| into zero.
 - EM runs write a P1 `_Ht.sol` with a sidecar next to `qsurf.sol`.
+- **Rotating parts of any shape.** `ih_thermal.RotatingSurfaceSource`
+  tabulates the source in the body angle and applies, per time step, its
+  exact average over the angles the step sweeps; the previous per-step
+  sample at one angle aliased (a step of one revolution saw the part where
+  it started). A body of revolution uses one EM solution turned with the
+  part; any other part (cross holes, flats) uses `--rotor-states`, a
+  manifest of one EM solution per rotor angle over its symmetry period
+  (world or body frame), expanded to the revolution through the declared
+  n-fold symmetry and gated by `--angle-step-tolerance`. A part that is not
+  of revolution given one EM solution is refused.
 
 ## 5.0.0 - HDiv-MMM production milestone
 

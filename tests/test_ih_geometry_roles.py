@@ -313,6 +313,27 @@ def test_thermal_constraint_fields_are_visible_and_halvings_are_explicit():
             .build_command(python="python", panels_dir="panels")
 
 
+def test_rotor_states_reach_the_rotating_heat_solver():
+    from dataclasses import replace
+    from radia.ih_design import METHOD_THERMAL_3D_ROTATING
+    spec = IHDesignSpec(
+        method=METHOD_THERMAL_3D_ROTATING, wp_vol="workpiece.vol",
+        heat_source=HEAT_SRC_SPATIAL, rotor_states="rotor.json",
+        rotation_rpm=60.0, heat_flux_boundaries="heated",
+        convection_boundaries="exposed")
+    assert "rotor_states" in spec.visible_fields()
+    command = spec.build_command(python="python", panels_dir="panels")
+    assert command[command.index("--rotor-states") + 1] == "rotor.json"
+    assert "--qsurf-sol" not in command
+    for bad, match in (({"qsurf_sol": "q.sol"}, "leave qsurf_sol"),
+                       ({"rotation_rpm": 0.0}, "rotation_rpm > 0"),
+                       ({"method": METHOD_THERMAL_AXISYM,
+                         "wp_vol": "workpiece_axisym.vol"}, "rotating 3D")):
+        with pytest.raises(ValueError, match=match):
+            replace(spec, **bad).build_command(python="python",
+                                               panels_dir="panels")
+
+
 def test_a_non_numeric_temperature_limit_fails_early():
     with pytest.raises(ValueError):
         IHDesignSpec(

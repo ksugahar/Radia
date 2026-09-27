@@ -1093,6 +1093,241 @@ class EMHeatSource:
         return out
 
 
+# ---------------------------------------------------------------------------
+# Rotating workpiece: angle-resolved source and its exact step average
+# ---------------------------------------------------------------------------
+
+ROTOR_STATES_SCHEMA = "radia.ih-rotor-states/1"
+ROTOR_FRAMES = ("world", "body")
+DEFAULT_ANGLE_STEP_TOLERANCE = 0.25
+
+
+def load_rotor_states(path: str, *, em_boundaries=None, q_scale=1.0,
+                      transfer_tolerance=None):
+    """EM solutions of a rotating workpiece, one per rotor angle.
+
+    The manifest (schema ``radia.ih-rotor-states/1``) lists ``states`` of
+    ``{"angle_rad", "qsurf_sol", "em_vol"}`` (paths relative to the manifest),
+    the rotation ``axis``, the ``period_rad`` after which the arrangement
+    repeats (2 pi, or 2 pi / n for an n-fold part) and the ``frame``:
+
+    ``world``  each EM mesh holds the part turned by ``angle_rad``;
+    ``body``   each EM mesh holds the part unturned and the coil turned by
+               ``-angle_rad``.
+
+    Returns ``(states, meta)`` with ``states`` a list of
+    ``(angle_rad, EMHeatSource)`` sorted by angle.
+    """
+    with open(path, encoding="utf-8") as fh:
+        man = json.load(fh)
+    if man.get("schema") != ROTOR_STATES_SCHEMA:
+        raise ValueError(f"{path}: schema must be {ROTOR_STATES_SCHEMA!r}, "
+                         f"got {man.get('schema')!r}")
+    for key in ("axis", "period_rad", "frame", "states"):
+        if key not in man:
+            raise ValueError(f"{path}: missing {key!r}")
+    frame = man["frame"]
+    if frame not in ROTOR_FRAMES:
+        raise ValueError(f"{path}: frame must be one of {ROTOR_FRAMES}")
+    period = float(man["period_rad"])
+    n_fold = 2 * math.pi / period if period > 0 else 0.0
+    if not (period > 0 and abs(n_fold - round(n_fold)) < 1e-9):
+        raise ValueError(f"{path}: period_rad must be 2 pi / n, got {period!r}")
+    base = os.path.dirname(os.path.abspath(path))
+    states = []
+    for i, st in enumerate(man["states"]):
+        for key in ("angle_rad", "qsurf_sol", "em_vol"):
+            if key not in st:
+                raise ValueError(f"{path}: state {i} lacks {key!r}")
+        ang = float(st["angle_rad"])
+        if not (0.0 <= ang < period):
+            raise ValueError(f"{path}: state {i} angle {ang!r} is outside "
+                             f"[0, period_rad = {period!r})")
+        src = EMHeatSource(os.path.join(base, st["qsurf_sol"]),
+                           os.path.join(base, st["em_vol"]),
+                           em_boundaries=em_boundaries, q_scale=q_scale,
+                           transfer_tolerance=transfer_tolerance)
+        recorded = src.sidecar.get("rotor_angle_rad")
+        if recorded is not None and abs(float(recorded) - ang) > 1e-9:
+            raise ValueError(f"{st['qsurf_sol']}: its sidecar records rotor "
+                             f"angle {recorded!r}, the manifest {ang!r}")
+        states.append((ang, src))
+    if len(states) < 2:
+        raise ValueError(f"{path}: a rotor-states manifest needs at least two "
+                         "states; a body of revolution needs none (one EM "
+                         "solution is turned with the part)")
+    states.sort(key=lambda s: s[0])
+    angles = [a for a, _ in states]
+    if np.any(np.diff(angles) <= 0):
+        raise ValueError(f"{path}: rotor angles must be distinct")
+    return states, {"manifest": os.path.abspath(path).replace("\\", "/"),
+                    "axis": str(man["axis"]).lower(), "period_rad": period,
+                    "frame": frame, "n_states": len(states)}
+
+
+class RotatingSurfaceSource:
+    """Heat flux on a rotating part, resolved in its angle.
+
+    The source at body angle ``theta`` is tabulated at knots over one
+    revolution and taken piecewise linear in between.  Knots come either
+    from one EM solution of a body of revolution, turned with the part at a
+    spacing that resolves the EM surface mesh, or from one EM solution per
+    rotor angle over the symmetry ``period`` (:func:`load_rotor_states`).
+    An n-fold part repeats its EM solution every ``period`` = 2 pi / n, but a
+    point of the part returns only after a revolution: the knot at
+    ``a_k + m period`` reads state ``k`` at the point turned by
+    ``a_k + m period`` (world frame) or ``m period`` (body frame), which lies
+    on the part only if it really is n-fold -- otherwise the transfer fails.
+    Every knot is transferred with the power gate.
+
+    :meth:`average` writes the exact time average over the angles a time
+    step sweeps -- a step longer than a revolution averages whole
+    revolutions -- so a coarse time step does not sample the rotation
+    stroboscopically.  :meth:`at` writes the value at one angle.
+    """
+
+    def __init__(self, target_mesh, heat_names, gf_target, *, states,
+                 power_tolerance, axis="z", period=2 * math.pi,
+                 frame="world", angle_step_tolerance=None):
+        import time
+
+        t0 = time.perf_counter()
+        self.axis = str(axis).lower()
+        _axis_frame(self.axis)
+        if frame not in ROTOR_FRAMES:
+            raise ValueError(f"frame must be one of {ROTOR_FRAMES}")
+        self.state_period = float(period)
+        n_fold = 2 * math.pi / self.state_period
+        if abs(n_fold - round(n_fold)) > 1e-9:
+            raise ValueError("period must be 2 pi / n")
+        n_fold = int(round(n_fold))
+        self.period = 2 * math.pi          # of the body-frame source
+        self.gf = gf_target
+        self.tol_step = check_tolerance(
+            DEFAULT_ANGLE_STEP_TOLERANCE if angle_step_tolerance is None
+            else angle_step_tolerance, "angle step tolerance", upper=1.0)
+        self.vnrs = boundary_vertex_numbers(target_mesh, heat_names)
+        pts = mesh_vertices(target_mesh)[self.vnrs]
+        r_max = float(np.max(to_meridian(pts, self.axis)[:, 0]))
+        if len(states) == 1:
+            _, src = states[0]
+            if src.mode != "direct":
+                raise ValueError("a rotating source is transferred pointwise; "
+                                 "the phi-average is already rotation-free")
+            # resolve the EM surface mesh along the path of the outermost
+            # point: half an EM edge per knot
+            if n_fold != 1:
+                raise ValueError("one turned EM solution needs period 2 pi")
+            n = max(8, int(math.ceil(self.period * r_max
+                                     / (0.5 * src.surface.h_median))))
+            knots = [(self.period * k / n, src, self.period * k / n)
+                     for k in range(n)]
+            self.kind = "turned-single-state"
+        else:
+            knots = [(a + m * self.state_period, src,
+                      a + m * self.state_period if frame == "world"
+                      else m * self.state_period)
+                     for m in range(n_fold) for a, src in states]
+            self.kind = "rotor-states"
+        self.n_fold = n_fold
+        self.angles = np.asarray([a for a, _, _ in knots], float)
+        vals, records = [], []
+        for ang, src, theta in knots:
+            try:
+                rec = src.transfer(target_mesh, heat_names, gf_target,
+                                   power_tolerance=power_tolerance,
+                                   theta=theta)
+            except ValueError as exc:
+                if len(states) == 1:
+                    raise ValueError(
+                        f"at body angle {ang:.4f} rad: {exc}  The turned part "
+                        "leaves the EM surface, so it is not a body of "
+                        "revolution about the rotation axis; give one EM "
+                        "solution per rotor angle (--rotor-states).") from exc
+                raise
+            if not np.array_equal(rec.pop("vertex_numbers"), self.vnrs):
+                raise RuntimeError("heat-flux vertex numbering changed")
+            vals.append(gf_target.vec.FV().NumPy()[self.vnrs].copy())
+            records.append(rec)
+        self.values = np.asarray(vals)
+        self.knot_records = records
+        # angular resolution: change between neighbouring knots, relative
+        # to the largest knot field
+        ref = float(np.max(np.linalg.norm(self.values, axis=1)))
+        nxt = np.roll(self.values, -1, axis=0)
+        change = np.linalg.norm(nxt - self.values, axis=1) / max(ref, 1e-300)
+        self.max_step_change = float(change.max())
+        worst = int(np.argmax(change))
+        if self.max_step_change > self.tol_step:
+            raise ValueError(
+                f"the rotor angles are too coarse: the source changes by "
+                f"{self.max_step_change:.1%} between {self.angles[worst]:.4f} "
+                f"and the next knot (limit {self.tol_step:.0%}); add EM "
+                "solutions between them")
+        # segment integrals for the exact average
+        a_ext = np.r_[self.angles, self.angles[0] + self.period]
+        self._L = np.diff(a_ext)
+        v_ext = np.vstack([self.values, self.values[:1]])
+        self._seg = 0.5 * self._L[:, None] * (v_ext[:-1] + v_ext[1:])
+        self._cum = np.vstack([np.zeros(len(self.vnrs)),
+                               np.cumsum(self._seg, axis=0)])
+        self._v_ext = v_ext
+        self.build_s = time.perf_counter() - t0
+        self.at(self.angles[0])
+
+    # -- evaluation ---------------------------------------------------------
+    def _locate(self, theta):
+        u = (float(theta) - self.angles[0]) % self.period
+        j = int(np.searchsorted(self.angles - self.angles[0], u,
+                                side="right") - 1)
+        j = min(max(j, 0), len(self.angles) - 1)
+        s = u - (self.angles[j] - self.angles[0])
+        return j, s, u
+
+    def _value(self, theta):
+        j, s, _ = self._locate(theta)
+        v0, v1 = self._v_ext[j], self._v_ext[j + 1]
+        return v0 + (v1 - v0) * (s / self._L[j])
+
+    def _integral(self, theta):
+        """Integral of the source from the first knot to ``theta``."""
+        m = math.floor((float(theta) - self.angles[0]) / self.period)
+        j, s, _ = self._locate(theta)
+        v0, v1 = self._v_ext[j], self._v_ext[j + 1]
+        part = s * v0 + (v1 - v0) * s * s / (2.0 * self._L[j])
+        return m * self._cum[-1] + self._cum[j] + part
+
+    def _write(self, values):
+        vec = self.gf.vec.FV().NumPy()
+        vec[:] = 0.0
+        vec[self.vnrs] = values
+
+    def at(self, theta):
+        self._write(self._value(theta))
+
+    def average(self, theta0, theta1):
+        """Write the time average over body angles ``theta0 .. theta1``."""
+        if theta1 < theta0:
+            raise ValueError("theta1 must not precede theta0")
+        if theta1 - theta0 <= 1e-15 * self.period:
+            self.at(theta0)
+            return
+        self._write((self._integral(theta1) - self._integral(theta0))
+                    / (theta1 - theta0))
+
+    def audit(self) -> dict:
+        return {"kind": self.kind, "axis": self.axis,
+                "state_period_rad": self.state_period, "n_fold": self.n_fold,
+                "knots": int(len(self.angles)),
+                "knot_spacing_max_rad": float(self._L.max()),
+                "max_neighbour_change": self.max_step_change,
+                "angle_step_tolerance": self.tol_step,
+                "knot_power_relative_error_max": float(max(
+                    abs(r["power_balance"]["relative_error"])
+                    for r in self.knot_records)),
+                "build_s": round(self.build_s, 3)}
+
+
 def scale_field_artifact(sol_path: str, out_path: str, factor: float) -> str:
     """Write ``factor * field`` with a sidecar recording the scaling.
 
