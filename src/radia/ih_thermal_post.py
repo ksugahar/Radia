@@ -34,8 +34,21 @@ def _ref_rule(element_type, order):
     return rule, w / w.sum()
 
 
+def _region_mask(mesh, region):
+    """Boolean mask over volume elements belonging to ``region`` (or all)."""
+    if region is None:
+        return np.ones(mesh.ne, dtype=bool)
+    import re
+    pat = re.compile(str(region))
+    mask = np.asarray([bool(pat.fullmatch(el.mat)) for el in mesh.Elements()])
+    if not mask.any():
+        raise ValueError(f"region {region!r} matches no volume element")
+    return mask
+
+
 def field_samples(mesh, gf, *, order: int | None = None,
-                  axisymmetric: bool = False) -> dict:
+                  axisymmetric: bool = False, region: str | None = None
+                  ) -> dict:
     """Values, volume weights and coordinates at element integration points.
 
     Weights are the element measure (volume, or revolved volume ``2 pi r``
@@ -77,18 +90,25 @@ def field_samples(mesh, gf, *, order: int | None = None,
     if axisymmetric:
         # measure[] is the (r, z) area; revolve each point with its radius.
         w = w * 2.0 * math.pi * X[:, 0]
+    if region is not None:
+        keep = _region_mask(mesh, region)[elem]
+        v, w, X, elem = v[keep], w[keep], X[keep], elem[keep]
     return {"values": v, "weights": w, "coords": X, "element": elem,
             "order": int(order)}
 
 
-def _boundary_peak(mesh, gf, order):
-    """Largest value and its location over boundary integration points."""
+def _boundary_peak(mesh, gf, order, vertices=None):
+    """Largest value and its location over boundary integration points
+    (of the boundary elements whose vertices all lie in ``vertices``)."""
     from ngsolve import BND, CF, x, y, z
 
     xyz_cf = CF((x, y, z)) if mesh.dim == 3 else CF((x, y))
     best, where = -np.inf, None
     rules = {}
     for el in mesh.Elements(BND):
+        if vertices is not None and not all(vertices[v.nr]
+                                            for v in el.vertices):
+            continue
         if el.type not in rules:
             rules[el.type] = _ref_rule(el.type, order)[0]
         mir = mesh.GetTrafo(el)(rules[el.type])
@@ -101,15 +121,22 @@ def _boundary_peak(mesh, gf, order):
 
 
 def _vertex_values(mesh, gf):
+    """Nodal values; vertices without a DOF (outside a definedon space)
+    get NaN."""
     from ngsolve import NodeId, VERTEX
-    dofs = [gf.space.GetDofNrs(NodeId(VERTEX, v.nr))[0] for v in mesh.vertices]
-    return np.asarray(gf.vec.FV().NumPy(), float)[dofs]
+    dofs = np.asarray([(gf.space.GetDofNrs(NodeId(VERTEX, v.nr)) or [-1])[0]
+                       for v in mesh.vertices])
+    vec = np.asarray(gf.vec.FV().NumPy(), float)
+    out = np.full(len(dofs), np.nan)
+    out[dofs >= 0] = vec[dofs[dofs >= 0]]
+    return out
 
 
 def thermal_exposure(mesh, gf, thresholds_C: Iterable[float] = (), *,
                      axisymmetric: bool = False, axis: str = "z",
                      order: int | None = None, ring_samples: int = 72,
-                     samples: dict | None = None) -> dict:
+                     samples: dict | None = None,
+                     region: str | None = None) -> dict:
     """Summarise where a temperature field exceeds given limits.
 
     Returns a JSON-serialisable dictionary with the peak temperature and
@@ -121,26 +148,36 @@ def thermal_exposure(mesh, gf, thresholds_C: Iterable[float] = (), *,
     not axisymmetric.
     """
     s = samples if samples is not None else field_samples(
-        mesh, gf, order=order, axisymmetric=axisymmetric)
+        mesh, gf, order=order, axisymmetric=axisymmetric, region=region)
     vals, w, X = s["values"], s["weights"], s["coords"]
     if not np.all(np.isfinite(vals)):
         raise RuntimeError("the temperature field contains non-finite values")
     pts = _it.mesh_vertices(mesh)[:, :mesh.dim]
     vv = _vertex_values(mesh, gf)
-    i_s, i_v = int(np.argmax(vals)), int(np.argmax(vv))
+    in_region = None
+    if region is not None:
+        mask = _region_mask(mesh, region)
+        in_region = np.zeros(mesh.nv, dtype=bool)
+        for el in mesh.Elements():
+            if mask[el.nr]:
+                for vtx in el.vertices:
+                    in_region[vtx.nr] = True
+        pts, vv = pts[in_region], vv[in_region]
+    i_s, i_v = int(np.argmax(vals)), int(np.nanargmax(vv))
     candidates = [(float(vals[i_s]), X[i_s]), (float(vv[i_v]), pts[i_v])]
     if gf.space.globalorder > 1:
-        candidates.append(_boundary_peak(mesh, gf, s["order"]))
+        candidates.append(_boundary_peak(mesh, gf, s["order"], in_region))
     t_max, loc = max(candidates, key=lambda c: c[0])
     total = float(w.sum())
     out = {
         "method": "integration-point-indicator",
+        "region": region,
         "integration_order": s["order"],
         "axisymmetric": bool(axisymmetric),
         "domain_measure_m3": total,
         "T_max_C": t_max,
         "T_max_location_m": [float(c) for c in loc],
-        "T_min_C": float(min(vals.min(), vv.min())),
+        "T_min_C": float(min(vals.min(), np.nanmin(vv))),
         "T_mean_C": float(np.sum(vals * w) / total),
         "thresholds": [],
     }
@@ -224,24 +261,29 @@ def limit_check(exposure: dict, limit_C: float) -> dict:
 DEPTH_STATUS = ("ok", "not_reached", "through", "beyond_span")
 
 
-def _evaluate_points(mesh, gf, pts):
-    """Field values at ``pts`` (n, dim); NaN where a point is outside."""
+def _evaluate_points(mesh, gf, pts, region_mask=None):
+    """Field values at ``pts`` (n, dim); NaN where a point is outside the
+    mesh or outside the region."""
     cols = [np.ascontiguousarray(pts[:, k]) for k in range(pts.shape[1])]
     mips = mesh(*cols)
     inside = mips["nr"] >= 0
+    if region_mask is not None:
+        nr = mips["nr"]
+        inside &= np.where(nr >= 0, region_mask[np.maximum(nr, 0)], False)
     out = np.full(len(pts), np.nan)
     if np.any(inside):
         out[inside] = np.real(np.asarray(gf(mips[inside]))).reshape(-1)
     return out
 
 
-def _march(mesh, gf, origins, normals, threshold, span, step, entry):
+def _march(mesh, gf, origins, normals, threshold, span, step, entry,
+           region_mask=None):
     """Depth of the first fall through ``threshold`` along each ray."""
     ts = np.arange(0.0, span + 0.5 * step, step)
     n_st = len(origins)
     P = (origins[:, None, :] + ts[None, :, None] * normals[:, None, :])
-    T = _evaluate_points(mesh, gf, P.reshape(-1, origins.shape[1])) \
-        .reshape(n_st, len(ts))
+    T = _evaluate_points(mesh, gf, P.reshape(-1, origins.shape[1]),
+                         region_mask).reshape(n_st, len(ts))
     depth = np.full(n_st, np.nan)
     status = np.empty(n_st, dtype=object)
     surface = np.full(n_st, np.nan)
@@ -280,7 +322,8 @@ def _march(mesh, gf, origins, normals, threshold, span, step, entry):
     return depth, status, surface, exit_at, reentrant
 
 
-def surface_stations(mesh, boundary_names: Sequence[str]):
+def surface_stations(mesh, boundary_names: Sequence[str],
+                     region_mask=None):
     """Stations on the named boundaries with unit inward normals.
 
     3D: every boundary vertex, normal = area-weighted mean of the adjacent
@@ -308,7 +351,10 @@ def surface_stations(mesh, boundary_names: Sequence[str]):
     normals = normals / np.linalg.norm(normals, axis=1)[:, None]
     probe = origins + 0.25 * h * normals
     cols = [np.ascontiguousarray(probe[:, k]) for k in range(mesh.dim)]
-    inside = mesh(*cols)["nr"] >= 0
+    nr = mesh(*cols)["nr"]
+    inside = nr >= 0
+    if region_mask is not None:
+        inside &= np.where(nr >= 0, region_mask[np.maximum(nr, 0)], False)
     normals[~inside] *= -1.0
     return origins, normals, h
 
@@ -316,7 +362,8 @@ def surface_stations(mesh, boundary_names: Sequence[str]):
 def case_depth(mesh, gf, threshold_C: float, *, origins=None, normals=None,
                boundary_names: Sequence[str] | None = None,
                span: float | None = None, step: float | None = None,
-               axis: str = "z", n_phi: int = 0) -> dict:
+               axis: str = "z", n_phi: int = 0,
+               region: str | None = None) -> dict:
     """Depth at which the temperature falls below ``threshold_C``.
 
     Stations are either given (``origins``, ``normals``; unit inward
@@ -339,10 +386,11 @@ def case_depth(mesh, gf, threshold_C: float, *, origins=None, normals=None,
     if (origins is None) != (normals is None):
         raise ValueError("pass both origins and normals, or neither")
     meridian = False
+    rmask = _region_mask(mesh, region) if region is not None else None
     if origins is None:
         if not boundary_names:
             raise ValueError("give stations or boundary_names")
-        origins, normals, h = surface_stations(mesh, boundary_names)
+        origins, normals, h = surface_stations(mesh, boundary_names, rmask)
     else:
         origins = np.asarray(origins, float)
         normals = np.asarray(normals, float)
@@ -380,7 +428,7 @@ def case_depth(mesh, gf, threshold_C: float, *, origins=None, normals=None,
     else:
         O, N = origins, normals
     depth, status, surf, exit_at, reent = _march(
-        mesh, gf, O, N, float(threshold_C), float(span), step, entry)
+        mesh, gf, O, N, float(threshold_C), float(span), step, entry, rmask)
     off = np.flatnonzero(status == "off_mesh")
     if off.size:
         raise ValueError(

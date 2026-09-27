@@ -84,6 +84,7 @@ class NonlinearHeatStepper:
                  weight=None, q_source=None,
                  q_update: Callable | None = None,
                  q_damping=None,
+                 volume_source=None, region: str | None = None,
                  linear_solver: str = "sparsecholesky",
                  newton_tol_K: float = 1.0e-3, max_newton: int = 25,
                  max_halvings: int = 6):
@@ -103,6 +104,10 @@ class NonlinearHeatStepper:
         # optional non-negative -dq/dT on the heat-flux boundary (Newton
         # term of a temperature-dependent source)
         self.q_damping = q_damping
+        # optional volumetric heat density [W/m^3] (induction Joule heat)
+        # and the mesh region the temperature lives on (None = all)
+        self.volume_source = volume_source
+        self.region = region
         self._rdt = Parameter(1.0)
         self._forms = None
         self.linear_solver = linear_solver
@@ -135,7 +140,10 @@ class NonlinearHeatStepper:
             rules[vb] = {et: IntegrationRule(et, self.intorder)
                          for et in types}
         self._rules = rules
-        return (lambda **kw: dx(intrules=rules[VOL], **kw),
+        definedon = (self.mesh.Materials(self.region)
+                     if self.region else None)
+        return (lambda **kw: dx(definedon=definedon, intrules=rules[VOL],
+                                **kw),
                 lambda region: ds(region, intrules=rules[BND]))
 
     def _nodal(self, gf=None):
@@ -158,14 +166,21 @@ class NonlinearHeatStepper:
         from ngsolve import Integrate
         H = self.H_cf if gf is None else self.material.coefficient_functions(
             gf)[1]
-        return float(Integrate(H * self.w, self.mesh,
-                               order=self.intorder).real)
+        kw = ({"definedon": self.mesh.Materials(self.region)}
+              if self.region else {})
+        return float(Integrate(H * self.w, self.mesh, order=self.intorder,
+                               **kw).real)
 
     def _flows(self, q_cf):
         """(heat input, losses) [W] at the current iterate."""
         from ngsolve import BND, Integrate
         b = self.bnd
         qin = 0.0
+        if self.volume_source is not None:
+            kw = ({"definedon": self.mesh.Materials(self.region)}
+                  if self.region else {})
+            qin += float(Integrate(self.volume_source * self.w, self.mesh,
+                                   order=self.intorder, **kw).real)
         if b.heat_flux:
             qin = float(Integrate(q_cf * self.w, self.mesh, BND,
                                   definedon=self.mesh.Boundaries(
@@ -200,6 +215,8 @@ class NonlinearHeatStepper:
         J = BilinearForm(self.fes, symmetric=True)
         J += self.c_secant * rdt * u * v * self.w * DX
         J += self.k_cf * InnerProduct(grad(u), grad(v)) * self.w * DX
+        if self.volume_source is not None:
+            R += -self.volume_source * v * self.w * DX
         if b.heat_flux:
             R += -self.q_source * v * self.w * DS(b.heat_flux)
             if self.q_damping is not None:
