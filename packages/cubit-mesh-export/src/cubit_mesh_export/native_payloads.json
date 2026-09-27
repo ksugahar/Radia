@@ -13,8 +13,8 @@
       "toolchain": "MSVC 19.50 / CMake / Ninja"
     },
     "cubit_mesh_export.ccm": {
-      "sha256": "02bdf971af4e1ec4f6810a2bc663bb7137540ea6f3b4a7daed5547c6b3eba671",
-      "size": 2396160,
+      "sha256": "91e2cf01dfb0b90d32cddd31dc88ce03f7db2ae22d1c070eb96e74f2c8aef088",
+      "size": 2397184,
       "platform": "win_amd64",
       "cubit_version": "2025.12",
       "toolchain": "MSVC 19.50 / CMake / Ninja"
@@ -22,8 +22,8 @@
   },
   "source": {
     "hash_format": "sha256-path-nul-lf-content-nul-v1",
-    "tree_sha256": "3ba2f6a87275ca9d4c2d5c8d5749e0eb48a0c8c6a1f4ae71852480b2e13a951d",
+    "tree_sha256": "e4670fcc77803d02822a3a2bbe99a7b63337e3fd36db0da7742a5f5345555405",
     "file_count": 209,
-    "commit": "e129f433a6ba9d2feef4ad2e4bf96bbd87dca387"
+    "commit": "80716f52bf9266a7e53e1d7271594e6d5d49e8a0"
   }
 }
