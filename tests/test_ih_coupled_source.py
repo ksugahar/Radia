@@ -81,7 +81,7 @@ def _solve(case, table, **kw):
                 _write_solution=False)
     args.update(kw)
     if table:
-        args.update(em_table=table, ht_sol=case["ht"])
+        args.update(em_table=table, ht_sol=case["ht"], allow_frozen_ht=True)
     return calc_heat.solve_heat("<plate>", **args)
 
 
@@ -108,6 +108,20 @@ def test_a_falling_surface_resistance_limits_the_heating(case):
     nl = coupled["nonlinear_transient"]
     assert abs(nl["energy_balance_relative_error"]) < 1e-5
     assert nl["halvings"] == 0
+
+
+def test_frozen_ht_needs_an_explicit_acknowledgement(case):
+    import calc_heat
+    from ngsolve import Mesh
+    table = _table(case["dir"] / "t.npz")
+    result = calc_heat.solve_heat(
+        "<plate>", material="steel", h_conv=0.0,
+        heat_flux_boundaries="heated", qsurf_sol=case["q"],
+        em_vol=case["vol"], dt=0.25, t_end=0.25, fes_order=1,
+        _wp_mesh=Mesh(case["vol"]), _write_solution=False, em_table=table,
+        ht_sol=case["ht"])
+    assert "--allow-frozen-ht" in result["error"]
+    assert "coupled_curie_cylinder_frozen_ht" in result["error"]
 
 
 def test_a_table_for_another_material_is_refused(case):
@@ -171,7 +185,7 @@ def test_axisymmetric_solver_uses_ring_samples(tmp_path):
                   _write_solution=False)
     fixed = calc_heat_axisym.solve_heat_axisym("<m>", **common)
     coupled = calc_heat_axisym.solve_heat_axisym(
-        "<m>", em_table=table, ht_sol=hs, **common)
+        "<m>", em_table=table, ht_sol=hs, allow_frozen_ht=True, **common)
     assert "error" not in coupled, coupled
     tds = coupled["qsurf_projection"]["temperature_dependent_source"]
     assert tds["azimuth_samples"] == 64

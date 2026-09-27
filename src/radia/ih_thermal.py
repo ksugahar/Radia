@@ -1170,7 +1170,8 @@ def build_temperature_dependent_source(source: "EMHeatSource", *, table_path,
                                        target_xyz, q_ref, gf_target, dofs,
                                        T_ref, H_scale=1.0, ht_sol="",
                                        azimuths=0, allow_extrapolation=False,
-                                       consistency_tolerance=0.05):
+                                       consistency_tolerance=0.05,
+                                       acknowledge_frozen_ht=False):
     """Couple a transferred EM source to the local surface temperature.
 
     ``source`` is the verified reference source, ``target_xyz`` the thermal
@@ -1185,9 +1186,28 @@ def build_temperature_dependent_source(source: "EMHeatSource", *, table_path,
     run: its power at ``T_ref`` must match the EM power within
     ``consistency_tolerance``, otherwise the table does not describe the
     material that was solved.
+
+    **Validity.**  The model freezes the spatial |H_t| of the EM run.  For
+    a current-driven coil around a ferromagnetic workpiece that is wrong:
+    |H_t| falls as sigma(T) falls and rises when the surface passes the
+    Curie band, so the true power stays nearly flat and then rises, while
+    this model predicts +70 % below the Curie point and a false
+    self-limit above it (validation_test/induction_heating/results/
+    coupled_curie_cylinder_frozen_ht.json).  It is therefore refused unless
+    ``acknowledge_frozen_ht`` is set; use it for non-magnetic workpieces,
+    or between EM re-solves of a staggered EM-thermal run.
     """
     from ngsolve import GridFunction, H1
 
+    if not acknowledge_frozen_ht:
+        raise ValueError(
+            "--em-table freezes the EM run's |H_t|; for a ferromagnetic "
+            "workpiece it overstates heating below the Curie point and "
+            "predicts a false self-limit above it (validation_test/"
+            "induction_heating/results/coupled_curie_cylinder_frozen_ht.json)"
+            ". Pass --allow-frozen-ht to use it knowingly (non-magnetic parts, "
+            "or between EM re-solves), or use the axisymmetric coupled "
+            "EM-thermal solver.")
     if source.q_scale != 1.0:
         raise ValueError("with a temperature-dependent source, scale the "
                          "current with --ht-scale (|H_t| ~ I), not --q-scale")
