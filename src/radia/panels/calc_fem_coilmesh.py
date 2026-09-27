@@ -526,10 +526,21 @@ def solve_fem_coilmesh(vol, frequency, I_target,
             # H1 scalar field; non-wp DOFs remain at 0 by .Set's
             # definedon=wp_region restriction.  Thermal Phase B loads
             # this same .sol as the Neumann BC source.
-            fes_q = H1(mesh, order=fes_order)
+            # fixed P1 cross-mesh handoff (as calc_fem_kelvin): higher-order
+            # H1 coefficients are hierarchical, not vertex values
+            fes_q = H1(mesh, order=1)
             gf_q = GridFunction(fes_q)
             gf_q.vec[:] = 0
             gf_q.Set(q_surf_cf, definedon=wp_region)
+            qsurf_p1_power = float(
+                Integrate(gf_q, mesh, BND, definedon=wp_region).real)
+            p1_error = (qsurf_p1_power - P_total_check) / max(
+                abs(P_total_check), 1e-300)
+            if not abs(p1_error) <= 0.02:
+                raise RuntimeError(
+                    f"the P1 q_surf handoff integrates to {qsurf_p1_power:.6e}"
+                    f" W but the solved surface loss is {P_total_check:.6e} W "
+                    f"({p1_error:+.2%}); refine the workpiece surface mesh")
             # Stats via mask trick (matches calc_fem_kelvin).
             mask_gf = GridFunction(fes_q)
             mask_gf.vec[:] = 0
@@ -549,8 +560,9 @@ def solve_fem_coilmesh(vol, frequency, I_target,
                      f"p95={q_surf_p95:.3e} W/m^2 "
                      f"(P_check={P_total_check:.4e} vs P_total={P_total:.4e})")
         except Exception as e:
-            progress("FEM", f"Q_SURF stats failed: {type(e).__name__}: {e}")
-            gf_q = None
+            raise RuntimeError(
+                f"could not build the q_surf handoff field: "
+                f"{type(e).__name__}: {e}") from e
         # |J_s| = |H_t| on wp surface (scalar) and Re(J_s) (vector).
         gf_J = None
         gf_J_vec = None
@@ -616,8 +628,20 @@ def solve_fem_coilmesh(vol, frequency, I_target,
                                       f"{name_stem}_qsurf.sol").replace("\\", "/")
                 gf_q.Save(sol_Q)
                 qsurf_sol_path = sol_Q
+                import re as _re
+                from radia import ih_thermal
+                heated = sorted(n for n in set(mesh.GetBoundaries())
+                                if _re.fullmatch(str(sibc_bnd), n))
+                ih_thermal.write_field_sidecar(
+                    sol_Q, mesh_path=vol_B, mesh=mesh, fes_order=1,
+                    quantity=ih_thermal.QSURF_QUANTITY,
+                    unit=ih_thermal.QSURF_UNIT, boundaries=heated,
+                    extra={"P_wp_W": float(P_total_check),
+                           "qsurf_p1_power_W": qsurf_p1_power,
+                           "frequency_Hz": float(frequency),
+                           "producer": "calc_fem_coilmesh"})
                 sol_entries.append(
-                    {"sol": sol_Q, "fes": "H1", "fes_order": fes_order,
+                    {"sol": sol_Q, "fes": "H1", "fes_order": 1,
                      "fes_dim": 1, "name": "q_surf", "ncomp": 1})
             if gf_J is not None:
                 sol_J = _os.path.join(base_dir,
@@ -640,8 +664,11 @@ def solve_fem_coilmesh(vol, frequency, I_target,
                      f"({len(sol_entries)} views: "
                      f"{', '.join(e['name'] for e in sol_entries)})")
         except Exception as e:
-            msh_export_error = f"{type(e).__name__}: {e}"
-            progress("FEM", f"GMSH export failed: {msh_export_error}")
+            # the export carries the thermal q_surf handoff; a partial
+            # result must not look complete
+            raise RuntimeError(
+                f"field export to {msh_output} failed: "
+                f"{type(e).__name__}: {e}") from e
 
     result = {
         "status": "ok",

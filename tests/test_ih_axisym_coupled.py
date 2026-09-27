@@ -34,10 +34,11 @@ def _slice(delta):
     core = MoveTo(0, 0).Rectangle(A - sk, L).Face()
     core.faces.name = "wp"
     core.edges.Min(X).name = "axis"
-    core.maxh = 2e-3
+    # the skin depth opens up to millimetres through the Curie band
+    core.maxh = 6e-4
     shell = MoveTo(A - sk, 0).Rectangle(sk, L).Face()
     shell.faces.name = "wp"
-    shell.maxh = min(delta / 2, 1e-3)
+    shell.maxh = min(delta / 3, 1e-3)
     coil = MoveTo(RC, 0).Rectangle(TC, L).Face()
     coil.faces.name = "coil"
     coil.maxh = TC / 2
@@ -108,7 +109,7 @@ def test_command_line_writes_a_reloadable_temperature(tmp_path):
     import calc_ih_axisym_coupled as cli
     from radia import ih_thermal, ih_thermal_post
 
-    mesh = _slice(1e-3)
+    mesh = _slice(2.45e-3)                 # skin depth of 6e6 S/m at 7 kHz
     vol = tmp_path / "slice.vol"
     mesh.ngmesh.Save(str(vol))
     table = tmp_path / "em.csv"
@@ -124,11 +125,21 @@ def test_command_line_writes_a_reloadable_temperature(tmp_path):
     ex = result["thermal_exposure"]
     assert ex["region"] == "wp"
     assert ex["T_min_C"] >= 20.0 - 1e-6        # air is not counted
-    mesh2, gf, audit = ih_thermal.load_field(str(out))
+    mesh2, gf, audit = ih_thermal.load_field(
+        str(out), quantity=ih_thermal.TEMPERATURE_QUANTITY)
     assert audit["provenance"] == "sidecar-verified"
     again = ih_thermal_post.thermal_exposure(mesh2, gf, [100.0],
                                              axisymmetric=True, region="wp")
     assert again["T_max_C"] == pytest.approx(ex["T_max_C"], rel=1e-12)
+    # the post-processing command reads region and geometry from the sidecar
+    report = tmp_path / "exposure.json"
+    assert ih_thermal_post.main(["exposure", "--temperature", str(out),
+                                 "--thresholds", "100",
+                                 "--output", str(report)]) == 0
+    import json
+    cli_ex = json.loads(report.read_text(encoding="utf-8"))
+    assert cli_ex["region"] == "wp"
+    assert cli_ex["T_max_C"] == pytest.approx(ex["T_max_C"], rel=1e-12)
 
 
 def test_unnamed_axis_segments_are_refused():
@@ -159,7 +170,7 @@ def test_material_table_starting_above_zero_is_not_tripped_by_air(tmp_path):
     th = itm.ThermalMaterial(rho=7800.0, T=[20.0, 1500.0], k=[40.0, 30.0],
                              cp=[450.0, 700.0], source="20C table")
     result, gfT, em = C.run_coupled(
-        _slice(1e-3), frequency=7000.0, workpiece="wp",
+        _slice(2.45e-3), frequency=7000.0, workpiece="wp",
         coils={"coil": 1500.0}, dirichlet="axis", em_material=em_mat,
         thermal_material=th, boundaries=iht.HeatBoundaryTerms(), dt=0.1,
         t_end=0.3)

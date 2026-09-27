@@ -16,7 +16,7 @@ import pytest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src", "radia"))
 
-import ih_thermal_post  # noqa: E402
+from radia import ih_thermal_post
 
 
 def _slab(thickness=0.02, maxh=0.004):
@@ -112,17 +112,20 @@ def test_meridian_stations_report_the_azimuthal_range():
     assert d["depth_max_m"][0] == pytest.approx(1.875e-3, abs=2e-5)
 
 
-def test_span_is_required():
+def test_span_is_required_and_positive():
     from ngsolve import x
     mesh = _slab()
-    with pytest.raises(ValueError, match="span"):
+    with pytest.raises(TypeError, match="span"):
         ih_thermal_post.case_depth(mesh, _field(mesh, x), 850.0,
+                                   boundary_names=["heated"])
+    with pytest.raises(ValueError, match="span"):
+        ih_thermal_post.case_depth(mesh, _field(mesh, x), 850.0, span=0.0,
                                    boundary_names=["heated"])
 
 
 def test_command_line_reads_the_sidecar(tmp_path):
     import json
-    import ih_thermal
+    from radia import ih_thermal
     from ngsolve import x
 
     mesh = _slab()
@@ -136,7 +139,7 @@ def test_command_line_reads_the_sidecar(tmp_path):
     ih_thermal.write_field_sidecar(
         str(sol), mesh_path=str(vol), mesh=mesh, fes_order=2,
         quantity=ih_thermal.TEMPERATURE_QUANTITY,
-        unit=ih_thermal.TEMPERATURE_UNIT)
+        unit=ih_thermal.TEMPERATURE_UNIT, extra={"geometry": "3d"})
     out = tmp_path / "depth.json"
     csv_out = tmp_path / "depth.csv"
     assert ih_thermal_post.main([
