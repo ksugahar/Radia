@@ -4,6 +4,19 @@ All notable changes to `cubit-mesh-export` — the high-order curved
 mesh export package for Coreform Cubit (Netgen / GMSH / Nastran /
 VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
+## 2.1.1 - Full-precision curving and order-5 refit
+
+- `.vol` files store the curving coefficients with 17 significant digits.
+  Netgen's writer (6.2.2606 through master) left the stream at the 8 digits
+  set for the face colours, which capped every order near 1e-8.
+- The geometric refit solves its least-squares steps by QR instead of the
+  normal equations (condition number up to 1e14 for order-5 faces), uses a
+  Tikhonov weight of 1e-14 instead of 1e-10 of the strongest direction, and
+  refits each edge also from its one-order-lower shape, keeping the closer
+  result.  Unit sphere, boundary radial L2: 32 HEX p=4 6.0e-9 -> 8.6e-10,
+  p=5 2.2e-8 -> 7.3e-11; 231 TET p=5 6.5e-9 -> 8.2e-11.  p=5 now improves
+  on p=4.  Exports stay byte-identical across runs.
+
 ## 2.1.0 - Geometric curving refit and Netgen 6.2.2607
 
 - The vendored Netgen snapshot moves from 6.2.2602 to 6.2.2607 (curved
