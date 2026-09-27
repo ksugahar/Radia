@@ -6,17 +6,28 @@ All notable changes to the `radia` package.  Format: each release lists
 ## Unreleased (5.1.0) - Induction-heating thermal chain
 
 - **Exact, verified heat-source transfer.** `radia.ih_thermal` ties every
-  `.sol` to its mesh through a `.sol.json` sidecar (mesh digest, H1 order,
-  DOF count, quantity, EM power) and loads fields without curving the mesh.
-  Thermal heat-flux vertices are projected onto the EM heated surface under
-  an explicit distance tolerance, with no zero-flux fallback. The
-  circumferential average (`--q-phi-average`, and the axisymmetric solver)
-  now cuts every EM triangle at meridian arc-length bin edges and
-  integrates it exactly, so it conserves power and has no azimuth sampling
-  error; bodies that are not of revolution are rejected. Both heat solvers
-  gate the transferred power against the EM power (`--power-tolerance`),
-  and output, probe and source failures fail the run. `--q-phi-average-n`
-  is removed; `--n-phi-samples` drives an independent ring check.
+  `.sol` to its mesh through a required `.sol.json` sidecar (mesh digest,
+  H1 order, DOF count, quantity, heated boundaries, EM power, frequency) and
+  loads fields without curving the mesh. A `.sol` without a sidecar is an
+  error; `python -m radia.ih_thermal sidecar` adopts a trusted pair
+  explicitly. Thermal heat-flux vertices are projected onto the EM heated
+  surface under an explicit distance tolerance, with no zero-flux fallback.
+  The circumferential average (`--q-phi-average`, and the axisymmetric
+  solver) cuts every EM triangle at meridian arc-length bin edges, and
+  splits triangles pierced by the axis, so it integrates the P1 source
+  exactly, conserves power and has no azimuth sampling error; bodies that
+  are not of revolution are rejected. Every transfer, including each
+  rotation resample, is gated against the EM power over the sidecar's
+  boundaries (`--power-tolerance`); thermal boundary names are never
+  borrowed. Output, probe and source failures fail the run.
+  `--q-phi-average-n` is removed; `--n-phi-samples` drives an independent
+  ring check.
+- **No fallbacks in the EM-to-thermal chain.** The q_surf producers write
+  a P1 field gated at 2 % against the solved loss; |H| outside the EM
+  table, a coil-current time outside its CSV, an out-of-range material
+  table and a non-converging step are errors (`--max-halvings N` allows N
+  explicit, reported step halvings; default 0). `--q-uniform` with any
+  spatial-source option is an error.
 - **Overheating is reported.** `thermal_exposure` integrates the volume
   above given temperatures over integration points, locates it, and
   reports the temperature spread around the hottest ring;
@@ -24,18 +35,23 @@ All notable changes to the `radia` package.  Format: each release lists
   as an optimiser constraint.
 - **Case depth with explicit ray outcomes.** `case_depth` and
   `python -m radia.ih_thermal_post depth` classify each ray as `ok`,
-  `not_reached`, `through` or `beyond_span` instead of reporting a probe
-  length as a depth; meridian stations report the depth range over the
-  azimuth.
+  `not_reached`, `through`, `beyond_span` or `edge` instead of reporting a
+  probe length as a depth; station origins are projected onto the material
+  surface, and meridian stations report the depth range over the azimuth.
+  The command reads the region and geometry from the temperature sidecar.
 - **Temperature-dependent materials.** `--material-table`
   (`T_C,k_W_mK,cp_J_kgK`), `--latent-heat` and `--latent-range` switch the
-  heat solvers to an enthalpy backward-Euler Newton integrator whose energy
-  balance closes to 1e-5 or better.
+  heat solvers to an enthalpy backward-Euler Newton integrator. The energy
+  balance is checked at the end of every run (tolerance 1e-4; the tests
+  close it below 1e-6).
 - **Coupled axisymmetric eddy-current + heat solver**
   (`radia.ih_axisym_coupled`, `calc_ih_axisym_coupled.py`): volumetric
   A_phi with element-wise sigma(T), mu_r(T), re-solved from the temperature
   (staggered), with an exact coil/Joule power identity checked every
-  solve and a Bessel-solution check to 5e-4.
+  solve and a Bessel-solution check to 5e-4 on a mesh resolving the skin
+  depth by three elements. A skin-depth gate (`--skin-resolution`, default
+  one element per skin depth on the workpiece interface) refuses coarser
+  meshes at every EM solve.
 - **Frozen-|H_t| sources refused by default.** A two-route validation
   (`validation_test/induction_heating/coupled_curie_cylinder.py`) shows
   that freezing the EM run's surface field is wrong for ferromagnetic
