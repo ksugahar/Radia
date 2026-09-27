@@ -209,12 +209,18 @@ def select_impact_tests(
     current_references.update(test for profile in manifest.get('profiles', {}).values()
                               for test in profile.get('paths', []))
     runnable = []
+    numerical_paths = set(manifest.get('profiles', {}).get('solver-numerics', {}).get('paths', []))
     for path in selected:
         if not (ROOT / path).is_file():
             if path in manifest_tests and path not in current_references:
                 print(f'Retired test removed from manifest and checkout: {path}')
                 continue
             raise ValueError(f'impact rule names missing test: {path}')
+        if profile_name == 'fast-contracts' and path in numerical_paths:
+            if path in paths:
+                raise ValueError(f'fast-contracts explicitly contains numerical test: {path}')
+            print(f'Numerical contract belongs to solver-numerics: {path}')
+            continue
         runnable.append(path)
     return runnable
 
