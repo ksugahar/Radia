@@ -39,3 +39,21 @@ the executed public showcase notebook without placing a duplicate result JSON
 under `docs/`.
 `p_convergence_demo_results.json` records the Cubit-to-`.vol` p-convergence
 run consumed by the executed docs notebook of the same name.
+
+## Geometric curving refit
+
+`geometric_refit_benchmark.py` exports the same TET and HEX unit spheres at
+orders 1-5 twice through one candidate `.ccm`, with Netgen's coefficients
+(`CUBIT_MESH_EXPORT_GEOMETRIC_REFIT=0`) and with the geometric refit, then
+compares boundary radial error, the electrostatic field error of
+`paper_sphere_benchmark.py` and check-vol. On a host with an installed
+exporter Cubit also loads the deployed plugin, so the commands register
+twice; the script therefore requires the candidate's own refit log line
+(`geometric refit - ...` or `geometric refit disabled`) before it accepts
+the exported files.
+
+```powershell
+python validation_test/cubit_mesh_export/geometric_refit_benchmark.py --plugin-dir <dir with candidate cubit_mesh_export.ccm>
+```
+
+It writes `geometric_refit_benchmark_results.json` next to the script.
