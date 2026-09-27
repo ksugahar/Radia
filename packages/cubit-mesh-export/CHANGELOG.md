@@ -4,7 +4,7 @@ All notable changes to `cubit-mesh-export` — the high-order curved
 mesh export package for Coreform Cubit (Netgen / GMSH / Nastran /
 VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
-## Unreleased
+## 2.1.0 - Geometric curving refit and Netgen 6.2.2607
 
 - The vendored Netgen snapshot moves from 6.2.2602 to 6.2.2607 (curved
   prism/pyramid treatment, EdgeDescriptor segments, per-instance task
@@ -29,6 +29,12 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
   A refit is kept only when it lowers the sampled distance without degrading
   the Jacobian.  `CUBIT_MESH_EXPORT_GEOMETRIC_REFIT=0` keeps Netgen's
   coefficients.
+- `add_kelvin_cubit` puts into `kelvin_int` only faces that lie on the air
+  sphere and pairs every one with its Kelvin partner; faces of an air domain
+  cut into slabs no longer leak into the sideset.  The helper is
+  origin-based and rejects an air domain that is not centred at the origin.
+- The batch smoke test validates high-order `.vol` mappings and keeps its
+  failure gates when run from saved standalone work.
 
 ## 2.0.1 - Reproducible mesh and electrostatic comparison
 
