@@ -65,6 +65,7 @@ NATIVE_PATHS = (
     "tests/test_boundary_material_adjacency.py",
     "tests/test_coil_axis_closed_form.py",
     "tests/test_mixed_omega_newton.py",
+    "tests/test_kelvin_mixed_omega.py",
     "tests/test_mixed_omega_review_fixes.py",
     "tests/test_c_type_p1_box_lane.py",
 

@@ -137,6 +137,7 @@ def _implementation_identity() -> dict[str, str]:
     modules = (
         "radia._radia_pybind", "radia.vim._vim", "radia.kelvin_solver",
         "radia.static_electromagnet", "radia.vector_potential_solver",
+        "radia.mixed_omega_newton", "radia.scalar_potential_solver",
         "radia.picard_acceleration", "ngsolve.ngslib",
     )
     identity = {}
@@ -449,6 +450,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="Hodge source projection order; default preserves API order selection")
     parser.add_argument("--mixed-bonus", type=int, default=4,
                         help="Mixed Omega volume/interface assembly bonus")
+    parser.add_argument("--mixed-method", choices=("picard", "newton"), default="picard")
+    parser.add_argument("--mixed-material-bonus", type=int, default=None,
+                        help="Newton material quadrature bonus (defaults to mixed-bonus)")
+    parser.add_argument("--mixed-source-load", choices=("volume", "surface_flux"), default="volume")
     parser.add_argument("--mixed-exact-exterior-source", action="store_true",
                         help="Use exact Kelvin-pulled source instead of projected exterior trace")
     parser.add_argument("--relative-rms-tolerance", type=float, default=0.01)
@@ -465,6 +470,11 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("--mixed-source-order must be positive")
     if options.mixed_bonus < 0:
         raise ValueError("--mixed-bonus must be nonnegative")
+    if options.mixed_material_bonus is not None and (
+            options.mixed_material_bonus < 0 or options.mixed_method != "newton"):
+        raise ValueError("--mixed-material-bonus requires Newton and a nonnegative value")
+    if options.mixed_method == "newton" and options.mixed_anderson_depth:
+        raise ValueError("Newton does not support --mixed-anderson-depth")
     if options.fem_order < 1:
         raise ValueError("--fem-order must be positive")
     if options.nonlinear_maximum_iterations < 1:
@@ -602,6 +612,9 @@ def main(argv: list[str] | None = None) -> int:
             source_trace_tolerance=options.source_trace_tolerance,
             source_projection_order=options.mixed_source_order,
             bonus_intorder=options.mixed_bonus,
+            nonlinear_method=options.mixed_method,
+            material_bonus_intorder=options.mixed_material_bonus,
+            source_load=options.mixed_source_load,
             exact_exterior_source=options.mixed_exact_exterior_source,
             relaxation=options.mixed_relaxation,
             anderson_depth=options.mixed_anderson_depth,
@@ -635,6 +648,9 @@ def main(argv: list[str] | None = None) -> int:
                                         if options.mixed_source_order is None
                                         else int(options.mixed_source_order)),
             "bonus_intorder": int(options.mixed_bonus),
+            "nonlinear_method": options.mixed_method,
+            "material_bonus_intorder": options.mixed_material_bonus,
+            "source_load": options.mixed_source_load,
             "exact_exterior_source": bool(options.mixed_exact_exterior_source),
             "source_trace_tolerance": float(options.source_trace_tolerance),
             "relaxation": float(options.mixed_relaxation),
