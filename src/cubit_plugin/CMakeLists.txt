@@ -155,6 +155,7 @@ set(CCM_SOURCES
 if(HAVE_NETGEN)
   list(APPEND CCM_SOURCES
     callbackgeom.cpp callbackgeom.hpp
+    NetgenGeometricRefit.cpp NetgenGeometricRefit.hpp
     ExportNetgenCommand.cpp ExportNetgenCommand.hpp
   )
   if(USE_COMPACT_NETGEN)

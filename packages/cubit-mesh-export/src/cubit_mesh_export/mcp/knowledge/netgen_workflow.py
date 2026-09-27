@@ -64,8 +64,28 @@ orders 1, 2, and 3.  The expected inventory is 56 hexes and no tet/wedge/
 pyramid elements.  The CAD volume is exactly `4*pi/3`; NGSolve should load
 each `.vol` directly and integrate `CF(1)` with high-order quadrature.  Typical
 2026-06-29 live results were order-1 rel err 0.2336, order-2 rel err 0.00211,
-and order-3 rel err 0.00131.  Do not call `mesh.Curve()` after reading this
+and order-3 rel err 0.00131 (Netgen's own curving coefficients, before the
+geometric refit below).  Do not call `mesh.Curve()` after reading this
 high-order `.vol`; the curving is already baked into the file.
+
+### Geometric refit of the curving coefficients
+
+Netgen fits each curved edge/face to the chord point's projection at fixed
+parameters in L2.  On a symmetric edge the normal part of that displacement
+is even, so an odd order adds nothing to the shape: the boundary error stalls
+from p=2 to p=3 and from p=4 to p=5.  This holds for Netgen 6.2.2606, 6.2.2607
+and the 2607 pre-release alike (OCC sphere, maxh=0.8: edge error 5.7e-4 at
+p=2, 6.0e-4 at p=3).  `export netgen` therefore refits Netgen's edge and face
+coefficients by minimising the distance to the CAD geometry
+(`NetgenGeometricRefit.cpp`), keeping Netgen's basis and `.vol` layout.  A
+refit is kept only when the sampled distance decreases and the element
+Jacobian does not degenerate; the export log reports accepted/tried counts and
+the maximum distance before and after.  For the unit sphere
+(`validation_test/cubit_mesh_export/geometric_refit_benchmark.py`) the radial
+L2 error of the 32-HEX mesh drops from 1.2e-3 to 9.8e-7 at p=3 and from
+1.8e-5 to 6.0e-9 at p=4; from p=4 on it levels off near 1e-8.  Set
+`CUBIT_MESH_EXPORT_GEOMETRIC_REFIT=0` to export Netgen's coefficients for A/B
+comparison.
 
 On Windows PowerShell, prefer `coreform_cubit.com -nographics -batch script.py`
 or the lab launcher background path when you need to wait for batch completion
