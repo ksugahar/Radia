@@ -91,6 +91,7 @@ class NonlinearHeatStepper:
         from ngsolve import CF, GridFunction
 
         self.gfT = gfT
+        self.region = region
         self.fes = gfT.space
         self.mesh = self.fes.mesh
         self.material = material
@@ -107,7 +108,6 @@ class NonlinearHeatStepper:
         # optional volumetric heat density [W/m^3] (induction Joule heat)
         # and the mesh region the temperature lives on (None = all)
         self.volume_source = volume_source
-        self.region = region
         self._rdt = Parameter(1.0)
         self._forms = None
         self.linear_solver = linear_solver
@@ -119,8 +119,19 @@ class NonlinearHeatStepper:
         self._dx, self._ds = self._measures()
         self.audit = TransientAudit()
         from ngsolve import NodeId, VERTEX
-        self._vdofs = np.asarray([self.fes.GetDofNrs(NodeId(VERTEX, v.nr))[0]
-                                  for v in self.mesh.vertices])
+        vertices = range(self.mesh.nv)
+        if region:
+            # a definedon space still numbers the vertices outside the
+            # region; their coefficients stay 0 and are not temperatures
+            import re
+            pat = re.compile(str(region))
+            inside = set()
+            for el in self.mesh.Elements():
+                if pat.fullmatch(el.mat):
+                    inside.update(v.nr for v in el.vertices)
+            vertices = sorted(inside)
+        self._vdofs = np.asarray([self.fes.GetDofNrs(NodeId(VERTEX, v))[0]
+                                  for v in vertices])
         from ngsolve import IfPos
         self.k_cf, self.H_cf, self.c_cf = material.coefficient_functions(gfT)
         self.k_old, self.H_old, _ = material.coefficient_functions(self.gf_old)
@@ -235,7 +246,6 @@ class NonlinearHeatStepper:
         return R, J
 
     def _solve_step(self, dt):
-        from ngsolve import TaskManager
         if self._forms is None:
             self._forms = self._build_forms()
         R, J = self._forms
@@ -245,13 +255,13 @@ class NonlinearHeatStepper:
         for it in range(1, self.max_newton + 1):
             if self.q_update is not None:
                 self.q_update(self.gfT)
-            with TaskManager():
-                R.Assemble()
-                J.Assemble()
-                inv = J.mat.Inverse(self.fes.FreeDofs(),
-                                    inverse=self.linear_solver)
-                du.data = inv * R.vec
-                self.gfT.vec.data -= du
+            # Parallelism follows the caller's ngsolve.TaskManager().
+            R.Assemble()
+            J.Assemble()
+            inv = J.mat.Inverse(self.fes.FreeDofs(),
+                                inverse=self.linear_solver)
+            du.data = inv * R.vec
+            self.gfT.vec.data -= du
             step = float(np.max(np.abs(np.asarray(du.FV().NumPy())
                                        [self._vdofs])))
             if not math.isfinite(step):

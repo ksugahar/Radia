@@ -574,7 +574,8 @@ def solve_heat_axisym(wp_vol,
         t = step * float(dt)
         if nonlinear:
             try:
-                stepper.advance(float(dt))
+                with TaskManager():
+                    stepper.advance(float(dt))
             except (ValueError, RuntimeError) as exc:
                 return {"error": f"t={t:.4g} s: {exc}"}
         else:
