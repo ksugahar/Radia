@@ -486,6 +486,7 @@ namespace ngcore
     numlistflags.Update(other.numlistflags);
     strlistflags.Update(other.strlistflags);
     flaglistflags.Update(other.flaglistflags);
+    anyflags.Update(other.anyflags);    
   }
 
   void Flags :: SetCommandLineFlag (const char * st, SymbolTable<Flags> * sf )

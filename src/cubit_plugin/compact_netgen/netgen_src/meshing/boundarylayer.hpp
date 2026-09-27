@@ -36,7 +36,23 @@ struct SpecialBoundaryPoint
 DLL_HEADER void GenerateBoundaryLayer (Mesh& mesh,
                                        const BoundaryLayerParameters& blp);
 
-DLL_HEADER int /* new_domain_number */ GenerateBoundaryLayer2 (Mesh& mesh, int domain, const Array<double>& thicknesses, bool should_make_new_domain = true, const Array<int>& boundaries = Array<int>{});
+struct BoundaryLayer2dInfo
+{
+  int domain;
+  int new_domain;
+  bool make_new_domain;
+  int n_edge_descriptors;
+  Array<int> front_edge_descriptors;      // segments in front of the layer
+  Array<int> moved_edge_descriptors;      // boundaries the layer was grown from
+  Array<int> bl_edge_descriptors;         // boundary under the layer ...
+  Array<int> bl_edge_descriptors_orig;    // ... and where it came from
+};
+
+DLL_HEADER BoundaryLayer2dInfo InsertBoundaryLayer2d (Mesh& mesh, int domain, const Array<double>& thicknesses, bool should_make_new_domain = true, const Array<int>& boundaries = Array<int>{});
+
+DLL_HEADER Array<BoundaryLayer2dInfo> InsertBoundaryLayers2d (Mesh& mesh, const MeshingParameters& mp);
+
+DLL_HEADER void FinalizeBoundaryLayers2d (Mesh& mesh, FlatArray<BoundaryLayer2dInfo> infos);
 
 class BoundaryLayerTool
 {
@@ -72,6 +88,7 @@ public:
 
   bool have_single_segments;
   Array<Segment> old_segments, free_segments, segments, new_segments, new_segments_on_moved_bnd;
+  Array<int> seg_face;  // per-segment face descriptor index (replaces seg.si usage in BL)
   Array<Element2d, SurfaceElementIndex> new_sels, new_sels_on_moved_bnd;
   Array<Array<PointIndex>, PointIndex> mapto;
   Array<PointIndex, PointIndex> mapfrom;

@@ -6,6 +6,14 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+- The vendored Netgen snapshot moves from 6.2.2602 to 6.2.2607 (curved
+  prism/pyramid treatment, EdgeDescriptor segments, per-instance task
+  manager).  `.vol` files now carry `edgesegmentsgi3` and need NGSolve
+  6.2.2605 or newer to load.
+- The snapshot fixes the curved-pyramid base-edge blending in Netgen's
+  vectorised element transformation.  NGSolve up to 6.2.2607 still has the
+  defect, so `export netgen` warns when it writes curved pyramids.
+
 - `export netgen` refits Netgen's curved edge/face coefficients by
   minimising the distance to the CAD geometry.  Netgen's fixed-parameter L2
   fit stalls at odd orders; on the unit sphere the 32-HEX boundary error now

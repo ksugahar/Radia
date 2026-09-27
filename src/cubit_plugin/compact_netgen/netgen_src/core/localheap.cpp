@@ -50,15 +50,34 @@ namespace ngcore
     cout << "throw LocalHeapOverflow, totsize = "<< totsize << endl;
     cout << "heap name = " << name << endl;
     */
-    throw LocalHeapOverflow(totsize);
+    throw LocalHeapOverflow(totsize, name);
   }
 
+  size_t tl_heap_size = 50*1000*1000;
+  thread_local LocalHeap tl_heap(tl_heap_size, "tlheap");
 
-  LocalHeapOverflow :: LocalHeapOverflow (size_t size) 
+  LocalHeap& TLHeap()
+  {
+    return tl_heap;
+  }
+
+  
+  void SetTLHeapSize(size_t s)
+  {
+    tl_heap_size = s;
+    // if (tl_heap.Available() == tl_heap.Size()) // check if not in used
+    tl_heap = LocalHeap(tl_heap_size, "tlheap");
+  }
+
+  
+
+  LocalHeapOverflow :: LocalHeapOverflow (size_t size, const char *name)
     : Exception("Local Heap overflow\n")
   {
     std::stringstream str;
-    str << "Current heapsize is " << size << '\n';
+    if(name)
+        str << "\tName: " << name << '\n';
+    str << "\tSize: " << size << '\n';
     Append (str.str());
     // Append ("please use 'define constant heapsize = xxx' with larger value\n");
   }
