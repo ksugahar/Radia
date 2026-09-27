@@ -430,14 +430,19 @@ def AMSCoarseStats() -> dict:
     coarseflags={...})`` on an HCurl form replaces the direct wirebasket inverse
     by Compact AMS on the lowest-order edge block (built inside Assemble, which
     may run in TaskManager). coarseflags: ``cycles`` (k stationary AMS steps on
-    the wirebasket system, default 1), ``cycle_type``, ``num_smooth``,
+    the wirebasket system, default 1), ``lean_coarse`` (default 1: the
+    auxiliary AMGs stop coarsening where it stalls and solve a coarsest level
+    of at most 1024 rows with a dense inverse, accepted only if it reproduces a
+    test vector; 0 keeps sparse Cholesky), ``cycle_type``, ``num_smooth``,
     ``print_level``, ``eps`` (relative diagonal shift of the AMS surrogate),
     ``beta_zero`` and ``mixed_precision`` (real systems only). A complex
     wirebasket matrix S uses the real surrogate Re S + Im S. Keys: ``builds``,
     ``n_edges``, ``n_extra`` (non-edge wirebasket dofs, smoothed only),
     ``cycles``, ``n_free``, ``n_vertices``, ``complex``, ``extract_s``,
-    ``setup_s``, ``applies``, ``apply_s`` and, for a complex system,
-    ``cycle_stage_s`` and ``cycles_run``.
+    ``setup_s``, ``applies``, ``apply_s`` and, for a complex system while the
+    preconditioner is alive, ``cycle_stage_s``, ``cycles_run`` and
+    ``amg_levels`` (per auxiliary AMG: rows, nonzeros, seconds per level and
+    the coarsest solve, 1 sparse / 2 dense).
     """
     ...
 

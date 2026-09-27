@@ -356,7 +356,7 @@ def test_lowest_order_gradient_equals_create_gradient():
         LowestOrderGradient(HCurl(mesh, order=1))
 
 
-def _bddc_order2_solve(coarse, complex_system, face_wirebasket=False):
+def _bddc_order2_solve(coarse, complex_system, face_wirebasket=False, **coarseflags):
     import radia.sparsesolv_ngsolve as ssn
     mesh = Mesh(unit_cube.GenerateMesh(maxh=0.2))
     space = HCurl(mesh, order=2, nograds=True, dirichlet=".*", complex=complex_system)
@@ -369,7 +369,7 @@ def _bddc_order2_solve(coarse, complex_system, face_wirebasket=False):
     a = BilinearForm(curl(u) * curl(v) * dx + mass * u * v * dx)
     flags = {"coarsetype": coarse}
     if coarse != "direct":
-        flags["coarseflags"] = {"eps": 1e-6}
+        flags["coarseflags"] = {"eps": 1e-6, **coarseflags}
     pre = Preconditioner(a, "bddc", **flags)
     f = LinearForm(CoefficientFunction((y, -x, 1)) * v * dx)
     with TaskManager():  # the wirebasket AMS is built inside Assemble
@@ -378,6 +378,8 @@ def _bddc_order2_solve(coarse, complex_system, face_wirebasket=False):
         solver = ssn.COCRSolver(a.mat, pre, freedofs=space.FreeDofs(), maxiter=400, tol=1e-11)
         gfu = GridFunction(space)
         gfu.vec.data = solver * f.vec
+    # Read the stats while BDDC (and its wirebasket AMS) is still alive.
+    _bddc_order2_solve.stats = dict(ssn.AMSCoarseStats()) if coarse != "direct" else {}
     return mesh, gfu, solver.iterations
 
 
@@ -396,6 +398,31 @@ def test_bddc_wirebasket_ams_matches_direct_coarse_solve(complex_system, face_wi
     diff = Integrate(InnerProduct(ams - direct, ams - direct).real, mesh)
     norm = Integrate(InnerProduct(direct, direct).real, mesh)
     assert diff ** 0.5 < 1e-8 * norm ** 0.5
+
+
+@pytest.mark.parametrize("coarseflags", [{"lean_coarse": 0}, {"cycles": 2}])
+def test_bddc_wirebasket_ams_variants_match_direct_coarse_solve(coarseflags):
+    # lean_coarse=0 keeps the sparse coarsest factorizations (the default
+    # solves small coarsest levels densely). Both stay fixed symmetric operators.
+    import radia.sparsesolv_ngsolve as ssn
+    mesh, direct, _ = _bddc_order2_solve("direct", True)
+    _, ams, iterations = _bddc_order2_solve("sparsesolv_ams", True, **coarseflags)
+    assert iterations > 0
+    levels = _bddc_order2_solve.stats["amg_levels"]
+    coarsest = {name: rows[-1][3] for name, rows in levels.items()}
+    if coarseflags.get("lean_coarse", 1) == 0:
+        assert set(coarsest.values()) == {1}
+    diff = Integrate(InnerProduct(ams - direct, ams - direct).real, mesh)
+    norm = Integrate(InnerProduct(direct, direct).real, mesh)
+    assert diff ** 0.5 < 1e-8 * norm ** 0.5
+
+
+def test_bddc_wirebasket_ams_default_uses_dense_coarsest_levels():
+    import radia.sparsesolv_ngsolve as ssn
+    _bddc_order2_solve("sparsesolv_ams", True)
+    levels = _bddc_order2_solve.stats["amg_levels"]
+    # 2 = dense inverse (accepted only after it reproduces a test vector)
+    assert any(rows[-1][3] == 2 for rows in levels.values())
 
 
 def test_bddc_wirebasket_ams_rejects_non_edge_spaces():

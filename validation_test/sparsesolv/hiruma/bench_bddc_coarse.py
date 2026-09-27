@@ -112,7 +112,8 @@ def run(args):
                                 "cycle_type": args.cycle_type,
                                 "num_smooth": args.num_smooth,
                                 "eps": args.coarse_eps,
-                                "cycles": args.cycles}
+                                "cycles": args.cycles,
+                                "lean_coarse": args.lean_coarse}
     else:
         flags["inverse"] = args.inverse
     pre = Preconditioner(a, "bddc", **flags)
@@ -162,6 +163,7 @@ def run(args):
         "inverse": args.inverse if args.coarse == "direct" else None,
         "cycle_type": args.cycle_type, "num_smooth": args.num_smooth,
         "cycles": args.cycles,
+        "lean_coarse": args.lean_coarse,
         "coarse_eps": args.coarse_eps,
         "system_eps": args.eps,
         "edge_wirebasket": bool(args.edge_wirebasket),
@@ -196,6 +198,8 @@ def main(argv=None):
     p.add_argument("--inverse", default="sparsecholesky")
     p.add_argument("--cycle-type", type=int, default=1)
     p.add_argument("--num-smooth", type=int, default=1)
+    p.add_argument("--lean-coarse", type=int, default=1,
+                   help="auxiliary AMGs stop where coarsening stalls and solve the coarsest level densely")
     p.add_argument("--cycles", type=int, default=1,
                    help="AMS cycles (stationary steps) per wirebasket solve")
     p.add_argument("--coarse-eps", type=float, default=0.0,

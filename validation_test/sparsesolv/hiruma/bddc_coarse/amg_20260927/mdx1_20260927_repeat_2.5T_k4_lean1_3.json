@@ -1,0 +1,248 @@
+{
+  "schema": "radia.validation.sparsesolv-hiruma-bddc-coarse.v1",
+  "generated_at_utc": "2026-09-27T13:53:42.317921+00:00",
+  "hostname": "mdx1",
+  "label": "rep_2.5T_k4_lean1_3",
+  "physics": {
+    "frequency_hz": 30000.0,
+    "sigma_cu": 59600000.0,
+    "mu_r_core": 1000,
+    "tol": 1e-08,
+    "maxiter": 2500
+  },
+  "environment": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 106 Stepping 6, GenuineIntel",
+    "python": "3.12.10",
+    "ngsolve": "6.2.2606",
+    "cpu_count": 38
+  },
+  "argv": [
+    "mesh1_2.5T",
+    "--mesh-dir",
+    "meshes",
+    "--threads",
+    "8",
+    "--maxiter",
+    "2500",
+    "--coarse",
+    "sparsesolv_ams",
+    "--ssn-dir",
+    "ssn15",
+    "--edge-wirebasket",
+    "--cycles",
+    "4",
+    "--lean-coarse",
+    "1",
+    "--label",
+    "rep_2.5T_k4_lean1_3",
+    "--output",
+    "rep_2.5T_k4_lean1_3.json"
+  ],
+  "result": {
+    "mesh": "mesh1_2.5T",
+    "mesh_sha256": "f3920dff6db470f8ce48a2f4983a404c564b8f92254abdae4c1e7cf8e620f33a",
+    "ne": 130460,
+    "nv": 23731,
+    "nedge": 155527,
+    "order": 2,
+    "ndof": 680041,
+    "coarse": "sparsesolv_ams",
+    "inverse": null,
+    "cycle_type": 1,
+    "num_smooth": 1,
+    "cycles": 4,
+    "lean_coarse": 1,
+    "coarse_eps": 0.0,
+    "system_eps": 1e-06,
+    "edge_wirebasket": true,
+    "face_dofs_returned_to_interface": 124040,
+    "t_coupling_reset": 2.943,
+    "threads": 8,
+    "iterations": 595,
+    "converged": true,
+    "true_residual": 9.89159316627721e-09,
+    "t_assemble_and_bddc_setup": 2.319,
+    "t_solve": 65.281,
+    "ms_per_iter": 109.72,
+    "t_total_wall": 72.415,
+    "peak_memory_mb": 1287.9,
+    "conductor_loss_w": 0.059535317501732035,
+    "magnetic_energy_j": 1.2753362853592486e-10,
+    "coarse_stats": {
+      "builds": 1,
+      "n_edges": 155527,
+      "n_extra": 0,
+      "cycles": 4,
+      "n_free": 151571,
+      "n_vertices": 23731,
+      "complex": true,
+      "extract_s": 0.0905722,
+      "setup_s": 0.6616798,
+      "applies": 596,
+      "apply_s": 41.191225599999946,
+      "cycle_stage_s": {
+        "split": 0.5290450999999998,
+        "grad_residual": 6.3376551999999915,
+        "grad_restrict": 1.5820609999999973,
+        "grad_amg": 6.7743833,
+        "grad_prolong": 1.7075558999999978,
+        "nodal_residual": 3.145574199999997,
+        "nodal_restrict": 1.2185525000000001,
+        "nodal_amg": 11.733539300000002,
+        "nodal_prolong": 1.7606057000000008,
+        "final_sweep": 3.0612783000000006
+      },
+      "cycles_run": 2384,
+      "amg_levels": {
+        "G": [
+          [
+            23731,
+            333567,
+            3.000884699999998,
+            0
+          ],
+          [
+            6861,
+            221619,
+            1.8502732000000073,
+            0
+          ],
+          [
+            1650,
+            68670,
+            0.5882025000000007,
+            0
+          ],
+          [
+            427,
+            17985,
+            1.3250299000000008,
+            1
+          ]
+        ],
+        "Px": [
+          [
+            23731,
+            333567,
+            1.5324464000000007,
+            0
+          ],
+          [
+            8368,
+            208860,
+            1.0879221999999997,
+            0
+          ],
+          [
+            3484,
+            113990,
+            0.5766427999999991,
+            0
+          ],
+          [
+            1814,
+            65102,
+            0.3383787000000005,
+            0
+          ],
+          [
+            1147,
+            38273,
+            0.20222859999999973,
+            0
+          ],
+          [
+            830,
+            23458,
+            0.14263469999999975,
+            0
+          ],
+          [
+            650,
+            15194,
+            0.19106409999999968,
+            2
+          ]
+        ],
+        "Py": [
+          [
+            23731,
+            333567,
+            1.5032252999999978,
+            0
+          ],
+          [
+            7870,
+            198078,
+            1.0381266000000007,
+            0
+          ],
+          [
+            3227,
+            106149,
+            0.5252488999999995,
+            0
+          ],
+          [
+            1723,
+            55211,
+            0.28365549999999984,
+            0
+          ],
+          [
+            1102,
+            32260,
+            0.18142470000000066,
+            0
+          ],
+          [
+            804,
+            20582,
+            0.2710266000000008,
+            2
+          ]
+        ],
+        "Pz": [
+          [
+            23731,
+            333567,
+            1.4800789999999981,
+            0
+          ],
+          [
+            7953,
+            199541,
+            1.027294600000001,
+            0
+          ],
+          [
+            3350,
+            110482,
+            0.5399113999999998,
+            0
+          ],
+          [
+            1799,
+            58005,
+            0.2958176000000012,
+            0
+          ],
+          [
+            1178,
+            34514,
+            0.19688460000000035,
+            0
+          ],
+          [
+            860,
+            21150,
+            0.3005893999999996,
+            2
+          ]
+        ]
+      }
+    }
+  },
+  "binary_sha256": "DE92987B4D3F707DDEF04376AE3B6091E8CEF81A7DCF554088810028F05DE4D3"
+}
