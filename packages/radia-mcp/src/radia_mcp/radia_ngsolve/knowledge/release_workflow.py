@@ -43,12 +43,12 @@ This document is the AI-readable canonical reference for the Radia
 release flow.  Its canonical local orchestrator is
 `tools/release_quad.py`; the former triple-machine workflow is retired.
 Radia PyPI publication is explicitly held after tag CI. Accept the exact tag
-run's wheel on LAB and hibino and merge its tracked acceptance.json/full6.json/
+run's wheel on LAB, 100, mdx1 and mdx2 and merge its tracked acceptance.json/full6.json/
 focused.xml evidence to main under validation_test/esrf_three_engine/results/
 candidate_<source-sha-first-9>/. Dispatch the Release workflow on main with
 ci_run_id, wheel_sha256, and full acceptance_commit. Its read-only gate checks
 the GitHub run/workflow/repository, tag context and peeled SHA, main reachability,
-both hosts and all mandatory tests, and wheel/native hashes. Publication uses
+all four hosts and all mandatory tests, and wheel/native hashes. Publication uses
 the same artifact without rebuilding. Changed bytes require new acceptance;
 four-machine QUAD done and Simulink gates remain separate obligations.
 Topics: overview, mcp_release, phases, simulink_candidate, optuna_candidate, preflight_gates, mcp_quality_review,
