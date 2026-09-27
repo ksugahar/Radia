@@ -589,3 +589,38 @@ def test_cubit_toolbar_verifier_delegates_to_canonical_checker(
     assert updated["ng_materials"]["body"] == pytest.approx(1.0)
     assert updated["ng_boundaries"]["outer"] == pytest.approx(6.0)
     assert updated["warnings"] == []
+
+
+MIXED_CYLINDER = (
+    Path(__file__).resolve().parent / "fixtures" / "cubit" / "mixed_cylinder_o2.vol.gz"
+)
+
+
+def test_curved_pyramid_map_is_an_advisory_not_a_failure():
+    # Cubit export (2.1.0): radius-1, height-2 cylinder, hexes above z=0, tets
+    # below, 37 transition pyramids, order 2.  18 of them share the rim circle
+    # where the z=0 interface meets the curved side, so their base edge is
+    # curved.  NGSolve up to 6.2.2607 maps those inconsistently (~3e-2 of the
+    # element size); a fixed NGSolve maps them consistently.  Either way the
+    # .vol is correct and the gate passes.
+    result = check_consistency(str(MIXED_CYLINDER))
+    pyramids = result["quality"]["curved_pyramid_map"]
+
+    assert result["passed"]
+    assert pyramids["pyramid_count"] == 37
+    assert pyramids["inconsistent_count"] in (0, 18)
+    if pyramids["inconsistent_count"]:
+        assert pyramids["max_relative_deviation"] > 1.0e-3
+        assert len(result["advisories"]) == 1
+        assert result["advisories"][0].startswith("18 of 37 pyramids are curved")
+    else:
+        assert pyramids["max_relative_deviation"] <= pyramids["tolerance"]
+        assert result["advisories"] == []
+
+
+def test_straight_elements_have_no_curved_pyramid_advisory(tmp_path):
+    _, vol_path = _save_box(tmp_path)
+    result = check_consistency(str(vol_path))
+
+    assert result["quality"]["curved_pyramid_map"]["pyramid_count"] == 0
+    assert result["advisories"] == []

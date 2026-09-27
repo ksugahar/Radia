@@ -12,7 +12,9 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
   6.2.2605 or newer to load.
 - The snapshot fixes the curved-pyramid base-edge blending in Netgen's
   vectorised element transformation.  NGSolve up to 6.2.2607 still has the
-  defect, so `export netgen` warns when it writes curved pyramids.
+  defect, so `export netgen` warns when it writes curved pyramids, and
+  `check-vol` lists the curved pyramids that the installed NGSolve maps
+  inconsistently under a new `advisories` entry, which does not fail the check.
 - High-order nodes written to Gmsh/Nastran/VTK and the refit's Jacobian
   checks evaluate volume elements through Netgen's multi-point
   transformation, the path NGSolve assembles with.  The scalar path ignored
