@@ -323,3 +323,12 @@ both.  The ~0.15% mixed Omega discrepancy on this mesh is response
 discretization.  One mesh only; details and element-wise error maps are in
 that folder.
 
+
+### Load selection and historical records
+
+The high-level mixed-Omega API now defaults to `auto` for newly executed
+calls. This validation driver's `source_load` is explicit and defaults to
+`volume`; the ESRF coil-yoke wrapper also defaults `--mixed-source-load` to
+`volume`. Select `surface_flux` explicitly to compare that route. Stored
+results preserve their original load, wheel/source identity and convergence
+gates; they are not relabelled as results of the new API default.

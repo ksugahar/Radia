@@ -3,6 +3,20 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## Unreleased
+
+- The high-level mixed total/reduced Omega API now accepts `auto` source
+  loads by default. With B-H material, exact source representation,
+  `total_hodge`, and an explicit trace tolerance, it selects surface flux.
+  A failed surface tangential gate restores the total volume load and records
+  the reason in `source_trace["load_selection"]`. Other configurations retain
+  volume loads, and explicit load choices are unchanged.
+- This API change postdates the immutable 5.0.2 release. Historical field
+  records retain their original settings and implementation identities.
+  C-type/coil-yoke validation drivers explicitly select their source load
+  (their CLI default remains `volume`); they do not inherit the API's `auto`.
+  The hybrid-undulator driver uses `global_physical` and retains volume loads.
+
 ## 5.0.0 - HDiv-MMM production milestone
 
 Release candidate. Publication and four-machine deployment remain subject to

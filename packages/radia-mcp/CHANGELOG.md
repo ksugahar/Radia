@@ -13,7 +13,8 @@ crystallized as its own package.
   elements near the source (reduced-potential loads, `J x B_ext`, drive
   terms), with the distance classes, the measured C-type error levels and the
   near-element subdivision remedy. MagLev `force_computation` points to it and
-  states that its lift and F(z)-ripple consequences are not yet measured.
+  records TEAM 28 axial-motion measurements; lateral motion and the default
+  low-order sampling remain unmeasured.
 
 ## [1.6.0] - 2026-09-18
 
