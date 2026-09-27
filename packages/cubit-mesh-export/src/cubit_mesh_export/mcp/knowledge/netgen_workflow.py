@@ -98,9 +98,12 @@ its neighbours: on a hex/pyramid/tet cylinder the element volumes miss
 paths differ by 1e-2.  The exported `.vol` is correct and the exporter's own
 snapshot is patched, but NGSolve up to 6.2.2607 reads it through the
 unpatched path; `export netgen` warns when curved pyramids are written.
-Prefer all-hex or all-tet elements next to curved boundaries, or compare the
-integrated volume with the CAD value (a 1 % check-vol tolerance does not
-catch a 4e-4 deficit).
+Pyramids are the hex/tet interface elements; their faces are interior, and
+they are curved only where the transition interface meets a curved boundary
+(on the cylinder, 18 of 37 pyramids share the rim circle where the z=0
+interface meets the side face).  Keep the hex/tet interface away from curved
+boundaries, or compare the integrated volume with the CAD value (a 1 %
+check-vol tolerance does not catch a 4e-4 deficit).
 
 On Windows PowerShell, prefer `coreform_cubit.com -nographics -batch script.py`
 or the lab launcher background path when you need to wait for batch completion
