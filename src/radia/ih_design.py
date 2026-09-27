@@ -224,6 +224,16 @@ class IHDesignSpec:
     linear_solver: str = "sparsecholesky"
     probe_point: str = ""
     csv_output: str = ""
+    # Overheating as an optimisation constraint: the heat result reports
+    # the volume above each threshold and, for temperature_limit (for
+    # example the solidus of the alloy), exceeded / excess / volume above.
+    exposure_thresholds: str = ""
+    temperature_limit: str = ""
+    # Temperature-dependent k, cp (CSV T_C,k_W_mK,cp_J_kgK) and the EM
+    # boundaries that carry q_surf when their names differ from the thermal
+    # heat-flux boundaries.
+    thermal_material_table: str = ""
+    em_heat_boundaries: str = ""
 
     # Repairs applied by normalize_geometry_roles, newest last.  Kept on
     # the spec so the Simulink runner / MCP callers can surface them.
@@ -812,6 +822,15 @@ class IHDesignSpec:
             elif self.q_phi_average:
                 cmd += ["--q-phi-average"]
 
+        if self.heat_source != HEAT_SRC_UNIFORM and self.em_heat_boundaries:
+            cmd += ["--em-heat-boundaries", self.em_heat_boundaries]
+        if self.exposure_thresholds.strip():
+            cmd += ["--exposure-thresholds", self.exposure_thresholds.strip()]
+        if str(self.temperature_limit).strip():
+            float(self.temperature_limit)          # fail early on bad input
+            cmd += ["--temperature-limit", str(self.temperature_limit).strip()]
+        if self.thermal_material_table:
+            cmd += ["--material-table", self.thermal_material_table]
         probe = self.probe_point.strip()
         if probe:
             cmd += ["--probe-point", probe]

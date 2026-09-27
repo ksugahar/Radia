@@ -266,3 +266,34 @@ def test_spatial_qsurf_high_order_is_rejected_before_command_execution():
     )
     with pytest.raises(ValueError, match="qsurf_order=1"):
         spec.build_command(python="python", panels_dir="panels")
+
+
+def test_overheating_constraint_and_material_table_reach_the_heat_solver():
+    command = IHDesignSpec(
+        method=METHOD_THERMAL_AXISYM,
+        wp_vol="workpiece_axisym.vol",
+        heat_source=HEAT_SRC_SPATIAL,
+        qsurf_sol="qsurf.sol",
+        em_vol="em.vol",
+        em_heat_boundaries="sibc",
+        heat_flux_boundaries="heated",
+        convection_boundaries="exposed",
+        exposure_thresholds="850,1400",
+        temperature_limit="1450",
+        thermal_material_table="steel_kcp.csv",
+    ).build_command(python="python", panels_dir="panels")
+    assert command[command.index("--temperature-limit") + 1] == "1450"
+    assert command[command.index("--exposure-thresholds") + 1] == "850,1400"
+    assert command[command.index("--material-table") + 1] == "steel_kcp.csv"
+    assert command[command.index("--em-heat-boundaries") + 1] == "sibc"
+
+
+def test_a_non_numeric_temperature_limit_fails_early():
+    with pytest.raises(ValueError):
+        IHDesignSpec(
+            method=METHOD_THERMAL_3D_STATIC,
+            wp_vol="workpiece.vol",
+            heat_flux_boundaries="heated",
+            convection_boundaries="exposed",
+            temperature_limit="hot",
+        ).build_command(python="python", panels_dir="panels")
