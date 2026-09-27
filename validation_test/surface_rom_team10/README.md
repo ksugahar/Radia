@@ -148,6 +148,34 @@ see the provenance section.
 - **Scale:** the steel indicator is about 3x the dual one.  Its 10 % stop
   threshold (provisionally eta < 0.1) is calibrated on these same data only.
 
+### 5. Small selection basis
+
+Source: `results/team10_pattern_select_p3_sel42.json`, hibino.
+
+- **Selection basis:** (4, 2), 12 columns, ECSW 1e-2.
+- **Evaluation basis:** unchanged at k16 r8.
+
+| | selection basis k16 r8 | selection basis k4 r2 |
+|---|---|---|
+| one round (build / candidate ROMs / indicator) | 38-46 / 30-38 / 27-30 s, about 100-110 s | 13-18 / 4 / 27-32 s, **about 49 s** |
+| round 0 ranking (steel indicator) | `c2_pulse` 2.53 > `c2_pulse_x2` 2.47 > `mixp_add` 1.23 > `mixp_oppose` 1.14 >> main-coil group <= 0.07 | `c2_pulse` 1.01 > `c2_pulse_x2` 1.00 > `mixp_add` 0.51 > `mixp_oppose` 0.49 >> main-coil group <= 0.021 |
+| picks, rounds 1 and 2 | `c2_pulse`, `c2_pulse_x2` | the same |
+| tests after round 1 (k16 r8) | 2.2 / 5.3 / 3.8 % | the same |
+
+- **Same selection:** the small basis makes the same selections, so the test
+  errors are identical.  Every round passes the 10 % target.
+- **Where the time goes now:** the indicator (about 4.5 s per candidate).
+  The seven candidate reduced runs together take about 4 s.
+- **Trap candidate:** with the k4 r2 basis the mirror `c1_rise_neg` is no
+  longer last.  Its eta (0.017) equals the truncation floor of the training
+  pattern itself; by odd symmetry the mirror is represented exactly as well
+  as `c1_rise`.  That eta is still about 60 times below the web-coil group,
+  so it is never picked.
+- **Stop rule:** eta scales with the selection basis.  After round 1 the pool
+  maximum is 0.24 at k4 r2 against 0.12 at k16 r8.  A stop rule should
+  therefore compare the pool against this floor rather than against a fixed
+  number.  That rule is not calibrated yet.
+
 ## Limits
 
 - **Where the advantage holds:** only with a changing excitation pattern.
