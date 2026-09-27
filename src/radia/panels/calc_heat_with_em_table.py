@@ -53,6 +53,16 @@ the enthalpy Newton integrator with temperature-dependent materials, and
 reports thermal exposure.  This module remains for the incident
 Biot-Savart source (``--ht-source biot``) and for its existing contracts.
 
+Validity of the frozen |H_t| assumption
+---------------------------------------
+For a current-driven coil around a ferromagnetic workpiece the spatial
+|H_t| is NOT frozen: it falls as sigma(T) falls and rises once the surface
+passes the Curie band.  The true power stays nearly flat below the Curie
+point and then rises, while a frozen-|H_t| table lookup predicts a rising
+power below it and a false self-limit above it (validation_test/
+induction_heating/results/coupled_curie_cylinder_frozen_ht.json).  Treat
+results of this module as valid for non-magnetic workpieces only.
+
 This module is a pragmatic *engineering* replacement for the
 sigma(T) coupling research-track that was dropped 2026-05-24.  Its
 single dominant simplification is that the SPATIAL distribution of

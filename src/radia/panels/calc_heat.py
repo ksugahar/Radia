@@ -417,7 +417,9 @@ def _build_qsurf_source(wp_mesh, args):
             allow_extrapolation=bool(getattr(
                 args, "allow_em_table_extrapolation", False)),
             consistency_tolerance=float(getattr(
-                args, "em_table_tolerance", None) or 0.05))
+                args, "em_table_tolerance", None) or 0.05),
+            acknowledge_frozen_ht=bool(getattr(args, "allow_frozen_ht",
+                                               False)))
         audit["temperature_dependent_source"] = coupled_audit
         audit["_coupled"] = coupled
         _log(f"Q_SURF:temperature-dependent source from "
@@ -465,6 +467,7 @@ def solve_heat(wp_vol,
                em_reference_temperature=None, em_table_azimuths=64,
                allow_em_table_extrapolation=False,
                em_table_tolerance=0.05,
+               allow_frozen_ht=False,
                allow_table_extrapolation=False,
                newton_tol=1.0e-3, newton_max_iter=25,
                dt=0.5, t_end=5.0,
@@ -590,6 +593,7 @@ def solve_heat(wp_vol,
     a_local.em_table_azimuths = em_table_azimuths
     a_local.allow_em_table_extrapolation = allow_em_table_extrapolation
     a_local.em_table_tolerance = em_table_tolerance
+    a_local.allow_frozen_ht = allow_frozen_ht
     heat_flux_region = wp_mesh.Boundaries(heat_flux_selector)
     try:
         q_cf, q_resample, qsurf_projection = _build_qsurf_source(
@@ -1069,6 +1073,11 @@ def main():
                         action="store_true",
                         help="Clamp temperatures / |H_t| outside --em-table "
                              "instead of failing; excursions are reported.")
+    parser.add_argument("--allow-frozen-ht", action="store_true",
+                        help="Acknowledge that --em-table freezes the EM "
+                             "run's |H_t| (invalid for a ferromagnetic part "
+                             "crossing its Curie band; see the validation "
+                             "record coupled_curie_cylinder_frozen_ht.json).")
     parser.add_argument("--em-table-tolerance", type=float, default=0.05,
                         help="Allowed relative power difference between the "
                              "table at T_ref and the EM run (with --ht-sol).")
@@ -1288,6 +1297,7 @@ def main():
             em_table_azimuths=args.em_table_azimuths,
             allow_em_table_extrapolation=args.allow_em_table_extrapolation,
             em_table_tolerance=args.em_table_tolerance,
+            allow_frozen_ht=args.allow_frozen_ht,
             latent_heat=args.latent_heat,
             latent_range=latent_range,
             allow_table_extrapolation=args.allow_table_extrapolation,
