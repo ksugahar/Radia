@@ -292,11 +292,6 @@ def _validate_qsurf_transfer_order(order):
 # q_surf source: spatial (.sol) or uniform scalar
 # -----------------------------------------------------------------
 
-def _build_qsurf_cf(wp_mesh, args):
-    """Return ``(q_cf, resample_fn)``; see :func:`_build_qsurf_source`."""
-    q_cf, resample, _audit = _build_qsurf_source(wp_mesh, args)
-    return q_cf, resample
-
 
 def qsurf_args(**given):
     """The complete argument record of :func:`_build_qsurf_source`.
@@ -312,7 +307,7 @@ def qsurf_args(**given):
         transfer_tolerance=None, power_tolerance=None, em_table="",
         ht_sol="", ht_scale=1.0, em_reference_temperature=None,
         em_table_azimuths=64, allow_em_table_extrapolation=False,
-        em_table_tolerance=0.05, allow_frozen_ht=False)
+        em_table_tolerance=0.05, allow_frozen_ht=False, rotor_states="")
     unknown = set(given) - set(fields)
     if unknown:
         raise TypeError(f"unknown q_surf source options {sorted(unknown)}")
@@ -328,7 +323,8 @@ _SPATIAL_OPTIONS = (
     ("q_phi_average", "--q-phi-average"), ("q_phi_bin", "--q-phi-bin"),
     ("em_table", "--em-table"), ("ht_sol", "--ht-sol"),
     ("allow_frozen_ht", "--allow-frozen-ht"),
-    ("em_reference_temperature", "--em-reference-temperature"))
+    ("em_reference_temperature", "--em-reference-temperature"),
+    ("rotor_states", "--rotor-states"))
 
 
 def _reject_options_with_uniform(args):
@@ -354,9 +350,13 @@ def _build_qsurf_source(wp_mesh, args):
     2. ``--qsurf-sol`` + ``--em-vol`` with ``--q-phi-average``: the exact
        circumferential average of the EM source; static.
     3. ``--qsurf-sol`` + ``--em-vol``: the EM source evaluated at the thermal
-       heat-flux vertices by projection onto the EM heated surface;
-       ``resample_fn(theta)`` re-evaluates it on the body rotated by
-       ``theta`` about ``--rotation-axis``.
+       heat-flux vertices by projection onto the EM heated surface.
+    4. ``--rotor-states``: one EM solution per rotor angle of a part that is
+       not a body of revolution; the source is written at the first state.
+
+    ``resample_fn`` is always ``None``; a rotating run builds an
+    :class:`ih_thermal.RotatingSurfaceSource` from ``audit["_source"]`` or
+    ``audit["_rotor_states"]``.
 
     Every transfer goes through :meth:`ih_thermal.EMHeatSource.transfer`,
     which refuses vertices off the EM surface and a heat input that differs
@@ -371,10 +371,43 @@ def _build_qsurf_source(wp_mesh, args):
         return (CoefficientFunction(float(args.q_uniform)), None,
                 {"mode": "uniform"})
 
+    if args.rotor_states:
+        for attr, flag in (("qsurf_sol", "--qsurf-sol"), ("em_vol", "--em-vol"),
+                           ("q_phi_average", "--q-phi-average"),
+                           ("em_table", "--em-table"), ("ht_sol", "--ht-sol")):
+            if getattr(args, attr):
+                raise ValueError(f"--rotor-states lists its own EM solutions; "
+                                 f"{flag} does not apply with it")
+        _validate_qsurf_transfer_order(args.qsurf_order)
+        states, meta = ih_thermal.load_rotor_states(
+            args.rotor_states, em_boundaries=args.em_heat_boundaries or None,
+            q_scale=float(args.q_scale),
+            transfer_tolerance=args.transfer_tolerance)
+        if meta["axis"] != str(args.rotation_axis).lower().strip():
+            raise ValueError(f"--rotor-states turns about {meta['axis']}, "
+                             f"--rotation-axis is {args.rotation_axis}")
+        power_tol = (ih_thermal.DEFAULT_POWER_TOLERANCE
+                     if args.power_tolerance is None else args.power_tolerance)
+        gf_wp_q = GridFunction(H1(wp_mesh, order=1))
+        a0, s0 = states[0]
+        first = s0.transfer(
+            wp_mesh, list(args.heat_flux_boundary_names), gf_wp_q,
+            power_tolerance=power_tol,
+            theta=a0 if meta["frame"] == "world" else 0.0)
+        first.pop("vertex_numbers")
+        audit = {"mode": "rotor-states", **meta,
+                 "power_tolerance": float(power_tol), "initial": first,
+                 "states": [{"angle_rad": a, **src.audit()}
+                            for a, src in states],
+                 "_rotor_states": (states, meta)}
+        _log(f"Q_SURF:rotor states {meta['n_states']} from "
+             f"{os.path.basename(args.rotor_states)} (frame {meta['frame']}, "
+             f"period {meta['period_rad']:.6f} rad)")
+        return gf_wp_q, None, audit
     if not args.qsurf_sol:
         raise ValueError(
-            "Either --q-uniform or --qsurf-sol is required (no heat "
-            "input was supplied).")
+            "Either --q-uniform, --qsurf-sol or --rotor-states is required "
+            "(no heat input was supplied).")
     if not args.em_vol:
         raise ValueError(
             "--em-vol is required when --qsurf-sol is supplied.  "
@@ -405,13 +438,6 @@ def _build_qsurf_source(wp_mesh, args):
          f"P_EM={source.power:.6e} W")
 
     gf_wp_q = GridFunction(H1(wp_mesh, order=1))
-
-    def _apply(theta_rad: float) -> dict:
-        rec = source.transfer(wp_mesh, heat_names, gf_wp_q,
-                              power_tolerance=power_tol, theta=theta_rad)
-        rec.pop("vertex_numbers")
-        return rec
-
     first = source.transfer(wp_mesh, heat_names, gf_wp_q,
                             power_tolerance=power_tol)
     vnrs = first.pop("vertex_numbers")
@@ -450,21 +476,9 @@ def _build_qsurf_source(wp_mesh, args):
                        ("allow_frozen_ht", "--allow-frozen-ht")):
         if getattr(args, attr):
             raise ValueError(f"{flag} only applies with --em-table")
-    if phi_average:
-        return gf_wp_q, None, audit
-
-    worst = {"relative_error": first["power_balance"]["relative_error"],
-             "theta_rad": 0.0}
-
-    def _resample(theta_rad: float) -> None:
-        rec = _apply(theta_rad)
-        rel = rec["power_balance"]["relative_error"]
-        if abs(rel) > abs(worst["relative_error"]):
-            worst["relative_error"] = rel
-            worst["theta_rad"] = rec["theta_rad"]
-
-    audit["rotation_worst_power_error"] = worst
-    return gf_wp_q, _resample, audit
+    if not phi_average:
+        audit["_source"] = source
+    return gf_wp_q, None, audit
 
 
 # -----------------------------------------------------------------
@@ -501,6 +515,7 @@ def solve_heat(wp_vol,
                fes_order=1,
                rotation_rpm=0.0,
                rotation_axis="z",
+               rotor_states="", angle_step_tolerance=None,
                probe_point=None,
                msh_output="",
                csv_output="",
@@ -509,6 +524,7 @@ def solve_heat(wp_vol,
     """Run the transient heat solve.  See module docstring for inputs."""
     setup_paths()
     t0 = time.perf_counter()
+    from radia import ih_thermal
 
     # Lazy imports so --help is fast.
     from ngsolve import (Mesh, H1, BilinearForm, LinearForm, GridFunction,
@@ -605,7 +621,7 @@ def solve_heat(wp_vol,
         em_table_azimuths=em_table_azimuths,
         allow_em_table_extrapolation=allow_em_table_extrapolation,
         em_table_tolerance=em_table_tolerance,
-        allow_frozen_ht=allow_frozen_ht)
+        allow_frozen_ht=allow_frozen_ht, rotor_states=rotor_states)
     heat_flux_region = wp_mesh.Boundaries(heat_flux_selector)
     try:
         q_cf, q_resample, qsurf_projection = _build_qsurf_source(
@@ -613,25 +629,54 @@ def solve_heat(wp_vol,
     except (ValueError, FileNotFoundError) as exc:
         return {"error": str(exc)}
     coupled = qsurf_projection.pop("_coupled", None)
+    single = qsurf_projection.pop("_source", None)
+    rotor = qsurf_projection.pop("_rotor_states", None)
     if coupled is not None and float(rotation_rpm) > 0.0 and not q_phi_average:
         return {"error": "a temperature-dependent source on a rotating part "
                          "needs --q-phi-average (the fast-rotation limit)"}
 
-    # Rotation control: when --rotation-rpm > 0 AND a resampler is
-    # available (spatial qsurf only -- uniform is rotation-invariant),
-    # re-project q_cf at the workpiece body's instantaneous angle each
-    # timestep.  Mesh / FES / stiffness / mass are held fixed; only the
-    # LinearForm RHS depends on q_cf and is re-Assembled per step.
+    # Rotation: the source is tabulated in the body angle (one EM solution
+    # turned with a body of revolution, or one EM solution per rotor angle)
+    # and each step applies its exact average over the angles the step
+    # sweeps.  Mesh / FES / stiffness / mass are held fixed; only the RHS
+    # depends on q_cf.
     omega_mech = (2.0 * math.pi / 60.0) * float(rotation_rpm)
-    rotation_active = (omega_mech > 0.0) and (q_resample is not None)
-    if float(rotation_rpm) > 0.0 and q_resample is None:
+    if not (math.isfinite(omega_mech) and omega_mech >= 0.0):
+        return {"error": f"--rotation-rpm must be >= 0, got {rotation_rpm!r}"}
+    if rotor is not None and omega_mech == 0.0:
+        return {"error": "--rotor-states describes a rotating part; give "
+                         "--rotation-rpm > 0"}
+    rotating = None
+    if omega_mech > 0.0 and (single is not None or rotor is not None):
+        try:
+            if rotor is not None:
+                states, meta = rotor
+                rotating = ih_thermal.RotatingSurfaceSource(
+                    wp_mesh, heat_flux_names, q_cf, states=states,
+                    power_tolerance=qsurf_projection["power_tolerance"],
+                    axis=meta["axis"], period=meta["period_rad"],
+                    frame=meta["frame"],
+                    angle_step_tolerance=angle_step_tolerance)
+            else:
+                rotating = ih_thermal.RotatingSurfaceSource(
+                    wp_mesh, heat_flux_names, q_cf, states=[(0.0, single)],
+                    power_tolerance=qsurf_projection["power_tolerance"],
+                    axis=rotation_axis,
+                    angle_step_tolerance=angle_step_tolerance)
+        except ValueError as exc:
+            return {"error": str(exc)}
+        qsurf_projection["rotation"] = {
+            **rotating.audit(), "omega_rad_s": omega_mech,
+            "swept_per_step_rad": omega_mech * float(dt),
+            "step_source": "exact average over the swept angles"}
+        _log(f"ROTATION:rpm={float(rotation_rpm):g} {rotating.kind}, "
+             f"{len(rotating.angles)} knots, {omega_mech * float(dt):.3f} rad "
+             "per step (step-averaged)")
+    elif omega_mech > 0.0:
         _log("ROTATION:rpm>0 has no effect here -- q_surf is azimuthally "
              "uniform (--q-uniform constant, or --q-phi-average already "
              "gives the rotation-averaged axisymmetric q).")
-    elif rotation_active:
-        _log(f"ROTATION:rpm={float(rotation_rpm):g} "
-             f"omega={omega_mech:.4f} rad/s -- "
-             f"resampling qsurf on the body frame each step.")
+    rotation_active = rotating is not None
 
     # ------------------- Material model -------------------
     from radia import ih_heat_transient
@@ -749,11 +794,8 @@ def solve_heat(wp_vol,
     for step in range(1, n_steps + 1):
         t = step * float(dt)
         if rotation_active:
-            # Body has rotated by omega_mech * t around z at the start
-            # of this step.  Re-sample qsurf on the wp surface at that
-            # body orientation.  q_cf (a GridFunction) is updated in
-            # place; q_int (the integrated heat input) tracks below.
-            q_resample(omega_mech * t)
+            # the source averaged over the angles swept during this step
+            rotating.average(omega_mech * (t - float(dt)), omega_mech * t)
         if nonlinear:
             try:
                 with TaskManager():
@@ -776,9 +818,7 @@ def solve_heat(wp_vol,
                 res_vec.data = f_form.vec - a_form.mat * gfT.vec
                 gfT.vec.data += float(dt) * (inv * res_vec)
         if rotation_active:
-            # q_int can drift with rotation if the EM-frame hotspot
-            # only partially overlaps the wp surface at some angles.
-            # Re-integrate to keep Q_input_J honest.
+            # the step-averaged source changes with the angle
             heat_flux_audit = _boundary_role_audit(
                 wp_mesh, heat_flux_names, q_cf=q_cf)
             q_int = float(heat_flux_audit["heat_input_W"])
@@ -852,7 +892,6 @@ def solve_heat(wp_vol,
             vol_T = os.path.join(base_dir, f"{stem}_heat.vol").replace("\\", "/")
             save_vol_sol_pair(vol_T, sol_T, wp_mesh.ngmesh, gfT)
             T_sol_file = sol_T
-            from radia import ih_thermal
             ih_thermal.write_field_sidecar(
                 sol_T, mesh_path=vol_T, mesh=wp_mesh,
                 fes_order=int(fes_order),
@@ -870,7 +909,7 @@ def solve_heat(wp_vol,
             # Project q_cf onto a workpiece-mesh H1 GridFunction so
             # GMSH renders it.  The CF itself may be either a uniform
             # scalar (--q-uniform mode) or the cross-mesh projection
-            # already living in gf_q from _build_qsurf_cf; in either
+            # already living in gf_q from _build_qsurf_source; in either
             # case Set on the surface region is the right thing.
             try:
                 fes_qg = H1(wp_mesh, order=int(fes_order))
@@ -913,7 +952,6 @@ def solve_heat(wp_vol,
                 base_dir, f"{stem}_heat_T.sol").replace("\\", "/")
             gfT.Save(sol_T)
             T_sol_file = sol_T
-            from radia import ih_thermal
             ih_thermal.write_field_sidecar(
                 sol_T, mesh_path=wp_vol, mesh=wp_mesh,
                 fes_order=int(fes_order),
@@ -1225,6 +1263,16 @@ def main():
                              "the rotated body each time step; "
                              "--q-phi-average gives its fast-rotation "
                              "limit.")
+    parser.add_argument("--rotor-states", default="",
+                        help="JSON manifest (radia.ih-rotor-states/1) of one "
+                             "EM solution per rotor angle, for a rotating "
+                             "part that is not a body of revolution (cross "
+                             "holes, flats, keys).  Replaces --qsurf-sol / "
+                             "--em-vol; needs --rotation-rpm > 0.")
+    parser.add_argument("--angle-step-tolerance", type=float, default=None,
+                        help="Largest relative change of the source between "
+                             "neighbouring rotor angles (default 0.25); a "
+                             "larger change means the angles are too coarse.")
     parser.add_argument("--rotation-axis", default="z",
                         choices=["x", "y", "z"],
                         help="Workpiece rotation axis (default z).  "
@@ -1306,6 +1354,8 @@ def main():
             fes_order=args.fes_order,
             rotation_rpm=args.rotation_rpm,
             rotation_axis=args.rotation_axis,
+            rotor_states=args.rotor_states,
+            angle_step_tolerance=args.angle_step_tolerance,
             q_phi_average=args.q_phi_average,
             q_phi_bin=args.q_phi_bin,
             em_heat_boundaries=args.em_heat_boundaries,

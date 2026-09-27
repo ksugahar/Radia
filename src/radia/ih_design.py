@@ -214,6 +214,9 @@ class IHDesignSpec:
     k: str = "46.6"
     rotation_rpm: float = 0.0
     rotation_axis: str = "z"
+    # One EM solution per rotor angle (radia.ih-rotor-states/1) for a
+    # rotating part that is not a body of revolution; replaces qsurf_sol.
+    rotor_states: str = ""
     h_conv: str = "10"
     t_ext: str = "20"
     emissivity: str = "0"
@@ -392,6 +395,9 @@ class IHDesignSpec:
                 fields.add("max_halvings")
             if self.method != METHOD_THERMAL_3D_STATIC:
                 fields.update({"rotation_rpm", "rotation_axis"})
+                if (self.method != METHOD_THERMAL_AXISYM
+                        and self.heat_source != HEAT_SRC_UNIFORM):
+                    fields.add("rotor_states")
             if self.heat_source == HEAT_SRC_UNIFORM:
                 fields.add("q_uniform")
             else:
@@ -795,7 +801,18 @@ class IHDesignSpec:
         if self.heat_source == HEAT_SRC_UNIFORM:
             cmd += ["--q-uniform", self.q_uniform]
         else:
-            if not (self.qsurf_sol and self.em_vol):
+            if self.rotor_states:
+                if is_axisym or self.method == METHOD_THERMAL_3D_STATIC:
+                    raise ValueError("rotor_states describes a rotating 3D "
+                                     "part; use the rotating 3D thermal "
+                                     "method")
+                if self.qsurf_sol or self.em_vol or self.q_phi_average:
+                    raise ValueError("rotor_states lists its own EM "
+                                     "solutions; leave qsurf_sol, em_vol and "
+                                     "q_phi_average unset")
+                if not float(self.rotation_rpm) > 0:
+                    raise ValueError("rotor_states needs rotation_rpm > 0")
+            elif not (self.qsurf_sol and self.em_vol):
                 raise ValueError(
                     "Spatial qsurf mode requires a qsurf .sol and its companion EM .vol."
                 )
@@ -804,11 +821,15 @@ class IHDesignSpec:
                     "Spatial cross-mesh qsurf currently requires "
                     "qsurf_order=1; higher-order H1 transfer is not a "
                     "vertex-sampling contract.")
-            cmd += [
-                "--qsurf-sol", self.qsurf_sol,
-                "--em-vol", self.em_vol,
-                "--qsurf-order", str(self.qsurf_order),
-            ]
+            if self.rotor_states:
+                cmd += ["--rotor-states", self.rotor_states,
+                        "--qsurf-order", str(self.qsurf_order)]
+            else:
+                cmd += [
+                    "--qsurf-sol", self.qsurf_sol,
+                    "--em-vol", self.em_vol,
+                    "--qsurf-order", str(self.qsurf_order),
+                ]
             if is_axisym:
                 if isinstance(self.n_phi_samples, bool):
                     raise ValueError(

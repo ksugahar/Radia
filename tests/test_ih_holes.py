@@ -303,3 +303,72 @@ def test_coupled_transient_on_a_tube():
                                 2 * math.pi * 7000.0, sigma, 1.0)
     assert result["em_history"][0]["P_joule_W"] == pytest.approx(P * L,
                                                                  rel=1e-4)
+
+
+def _cross_hole_body(angle=0.0, maxh=0.003):
+    """Cylinder with a radial through hole (two-fold), turned by ``angle``."""
+    from netgen.occ import Axes, Axis, Cylinder, OCCGeometry, Pnt, X, Z
+    from ngsolve import Mesh
+
+    body = Cylinder(Axes(Pnt(0, 0, 0), Z), r=A_OUT, h=H3)
+    hole = Cylinder(Pnt(-0.03, 0, H3 / 2), X, r=0.004, h=0.06)
+    part = body - hole
+    if angle:
+        part = part.Rotate(Axis((0, 0, 0), Z), math.degrees(angle))
+    part.faces.name = "surf"
+    return Mesh(OCCGeometry(part).GenerateMesh(maxh=maxh))
+
+
+def test_rotating_cross_hole_part_with_rotor_states(tmp_path):
+    """A radial through hole makes the part two-fold: states over half a
+    turn reproduce the body-frame source of a fixed coil at every angle,
+    while one turned EM solution is refused."""
+    import json
+    from ngsolve import BND, GridFunction, H1, Integrate, x
+
+    period = math.pi
+    angles = [period * k / 8 for k in range(8)]
+    states = []
+    for i, a in enumerate(angles):
+        mesh = _cross_hole_body(a)
+        vol = str(tmp_path / f"s{i}.vol")
+        mesh.ngmesh.Save(vol)
+        from ngsolve import Mesh
+        mesh = Mesh(vol)
+        gf = _p1(mesh, 1.0 + 20.0 * x)            # coil on the +x side
+        sol = str(tmp_path / f"s{i}.sol")
+        gf.Save(sol)
+        ih_thermal.write_field_sidecar(
+            sol, mesh_path=vol, mesh=mesh, fes_order=1,
+            quantity=ih_thermal.QSURF_QUANTITY, unit=ih_thermal.QSURF_UNIT,
+            boundaries=["surf"],
+            extra={"P_wp_W": float(Integrate(gf, mesh, BND)),
+                   "rotor_angle_rad": a})
+        states.append({"angle_rad": a, "qsurf_sol": f"s{i}.sol",
+                       "em_vol": f"s{i}.vol"})
+    man = tmp_path / "rotor.json"
+    man.write_text(json.dumps({"schema": "radia.ih-rotor-states/1",
+                               "axis": "z", "period_rad": period,
+                               "frame": "world", "states": states}),
+                   encoding="utf-8")
+    loaded, meta = ih_thermal.load_rotor_states(str(man))
+    thermal = _cross_hole_body(maxh=0.0025)          # meshed independently
+    gf = GridFunction(H1(thermal, order=1))
+    rot = ih_thermal.RotatingSurfaceSource(
+        thermal, ["surf"], gf, states=loaded, power_tolerance=0.02,
+        axis="z", period=meta["period_rad"], frame="world")
+    assert rot.n_fold == 2 and len(rot.angles) == 16
+    pts = ih_thermal.mesh_vertices(thermal)[rot.vnrs]
+    for theta in (angles[3], period + angles[5]):      # knots
+        rot.at(theta)
+        exact = 1.0 + 20.0 * (pts[:, 0] * math.cos(theta)
+                              - pts[:, 1] * math.sin(theta))
+        np.testing.assert_allclose(gf.vec.FV().NumPy()[rot.vnrs], exact,
+                                   atol=0.01)
+    rot.average(0.0, 2 * math.pi)
+    np.testing.assert_allclose(gf.vec.FV().NumPy()[rot.vnrs], 1.0,
+                               atol=0.02)
+    # the same part from one turned EM solution: refused
+    with pytest.raises(ValueError, match="--rotor-states"):
+        ih_thermal.RotatingSurfaceSource(
+            thermal, ["surf"], gf, states=[loaded[0]], power_tolerance=0.02)
