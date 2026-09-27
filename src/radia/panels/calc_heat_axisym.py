@@ -59,6 +59,8 @@ from calc_heat import (  # noqa: E402
     _resolve_boundary_role,
     _resolve_material,
     _input_mesh_geometry_audit,
+    _locate_probe,
+    _probe_value,
     _temperature_extrema,
     _validate_qsurf_transfer_order,
 )
@@ -246,6 +248,7 @@ def solve_heat_axisym(wp_vol,
                       em_heat_boundaries="", q_scale=1.0,
                       transfer_tolerance=None, power_tolerance=None,
                       q_phi_bin=None,
+                      exposure_thresholds=(), temperature_limit=None,
                       dt=0.5, t_end=5.0,
                       time_scheme="backward-euler",
                       linear_solver="sparsecholesky",
@@ -441,12 +444,18 @@ def solve_heat_axisym(wp_vol,
     # ------- Time loop -------
     t_arr = [0.0]
     T_probe = []
+    probe_mip = None
     if probe_point is not None:
         try:
-            mip = wp_mesh(*[float(c) for c in probe_point])
-            T_probe.append(float(getattr(gfT(mip), "real", gfT(mip))))
-        except Exception:
-            T_probe.append(float("nan"))
+            probe_mip = _locate_probe(wp_mesh, probe_point)
+        except ValueError as exc:
+            return {"error": str(exc)}
+        T_probe.append(_probe_value(gfT, probe_mip))
+    from ngsolve import NodeId, VERTEX
+    vertex_dofs_T = np.asarray([
+        fes_T.GetDofNrs(NodeId(VERTEX, vtx.nr))[0]
+        for vtx in wp_mesh.vertices])
+    T_max_history = [float(t_initial)]
 
     n_steps = int(math.ceil(t_end / dt))
 
@@ -481,13 +490,10 @@ def solve_heat_axisym(wp_vol,
             gfT.vec.data += float(dt) * (inv * res_vec)
         Q_input_J += q_int * float(dt)
         t_arr.append(t)
-        if probe_point is not None:
-            try:
-                mip = wp_mesh(*[float(c) for c in probe_point])
-                val = gfT(mip)
-                T_probe.append(float(getattr(val, "real", val)))
-            except Exception:
-                T_probe.append(float("nan"))
+        T_max_history.append(
+            float(np.max(gfT.vec.FV().NumPy()[vertex_dofs_T])))
+        if probe_mip is not None:
+            T_probe.append(_probe_value(gfT, probe_mip))
         _log(f"STEP:{step}/{n_steps} t={t:.3f}s "
              f"T_probe={T_probe[-1] if probe_point is not None else 'n/a'}")
 
@@ -496,6 +502,19 @@ def solve_heat_axisym(wp_vol,
     T_min, T_max, T_extrema = _temperature_extrema(
         gfT, wp_mesh, fes_order
     )
+    import ih_thermal_post
+    thresholds = sorted(set(float(t) for t in (exposure_thresholds or ())))
+    if temperature_limit is not None:
+        thresholds = sorted(set(thresholds) | {float(temperature_limit)})
+    thermal_exposure = ih_thermal_post.thermal_exposure(
+        wp_mesh, gfT, thresholds, axisymmetric=True)
+    limit_record = (ih_thermal_post.limit_check(thermal_exposure,
+                                                temperature_limit)
+                    if temperature_limit is not None else None)
+    for entry in thermal_exposure["thresholds"]:
+        _log(f"EXPOSURE:T>{entry['T_C']:g} C volume "
+             f"{entry['volume_m3'] * 1e9:.3f} mm^3 "
+             f"({entry['volume_fraction']:.3%})")
     # Physical volume mean.  The computational mesh is a meridian section,
     # so both numerator and denominator require the same 2*pi*r Jacobian.
     revolved_volume = float(Integrate(weight, wp_mesh))
@@ -551,14 +570,17 @@ def solve_heat_axisym(wp_vol,
                      "fes_dim": 1,
                      "name": "q_surf", "ncomp": 1})
             except Exception as e:
-                _log(f"GMSH_qsurf overlay skipped: "
-                     f"{type(e).__name__}: {e}")
+                raise RuntimeError(
+                    f"could not write the q_surf overlay: "
+                    f"{type(e).__name__}: {e}") from e
             vol2msh(msh_output, vol_T, sol_entries)
             gmsh_file = msh_output
             _log(f"GMSH:wrote {os.path.basename(msh_output)} "
                  f"({len(sol_entries)} fields, 2D axisym)")
         except Exception as e:
-            _log(f"GMSH_ERROR:{type(e).__name__}: {e}")
+            raise RuntimeError(
+                f"thermal field export to {msh_output} failed: "
+                f"{type(e).__name__}: {e}") from e
     elif _write_solution:
         # No --msh-output: still save T.sol alongside wp_vol so a
         # later evaluation pass can reload it (mirrors qsurf.sol
@@ -582,7 +604,9 @@ def solve_heat_axisym(wp_vol,
                  f"(no GMSH bundle requested; load with the same "
                  f"wp_vol + H1 order={fes_order}, axisym 2D)")
         except Exception as e:
-            _log(f"T_SOL_ERROR:{type(e).__name__}: {e}")
+            raise RuntimeError(
+                f"could not save the temperature field: "
+                f"{type(e).__name__}: {e}") from e
 
     if csv_output and probe_point is not None:
         try:
@@ -594,7 +618,9 @@ def solve_heat_axisym(wp_vol,
                     w.writerow([f"{ti:.6f}", f"{Ti:.6f}"])
             _log(f"CSV:wrote {os.path.basename(csv_output)}")
         except Exception as e:
-            _log(f"CSV_ERROR:{type(e).__name__}: {e}")
+            raise RuntimeError(
+                f"could not write {csv_output}: "
+                f"{type(e).__name__}: {e}") from e
 
     t_total = time.perf_counter() - t0
     _log(f"DONE:T_max={T_max:.2f} C  Q_input={Q_input_J:.4e} J "
@@ -623,6 +649,9 @@ def solve_heat_axisym(wp_vol,
         "revolved_volume_m3": revolved_volume,
         "n_phi_samples": int(n_phi_samples),
         "qsurf_projection": qsurf_projection,
+        "thermal_exposure": thermal_exposure,
+        "temperature_limit": limit_record,
+        "T_max_history_C": T_max_history,
         "material": material,
         "rho_kg_m3": float(rho_v),
         "cp_J_kgK": float(cp_v),
@@ -701,6 +730,15 @@ def main():
                         help="Azimuths of the independent pointwise ring "
                              "check reported next to the exact "
                              "circumferential average (default 128).")
+    parser.add_argument("--exposure-thresholds", default="",
+                        help="Comma-separated temperatures [degC]; the "
+                             "result reports the volume above each, where "
+                             "it is and how it is distributed.")
+    parser.add_argument("--temperature-limit", type=float, default=None,
+                        help="Temperature limit [degC] (for example the "
+                             "solidus of the workpiece alloy).  The result "
+                             "reports whether and by how much it is "
+                             "exceeded, as a constraint for optimisers.")
     parser.add_argument("--q-phi-bin", type=float, default=None,
                         help="Meridian bin width [m] of the circumferential "
                              "average (default: a quarter of the median EM "
@@ -744,6 +782,13 @@ def main():
     parser.add_argument("--csv-output", default="")
 
     def run(args):
+        try:
+            thresholds = [float(t) for t in
+                          str(args.exposure_thresholds).split(",")
+                          if t.strip()]
+        except ValueError:
+            return {"error": "--exposure-thresholds must be comma-separated "
+                             f"numbers, got {args.exposure_thresholds!r}"}
         if args.surface_label is not None:
             return {"error":
                     "--surface-label was removed because it coupled heat "
@@ -787,6 +832,8 @@ def main():
             transfer_tolerance=args.transfer_tolerance,
             power_tolerance=args.power_tolerance,
             q_phi_bin=args.q_phi_bin,
+            exposure_thresholds=thresholds,
+            temperature_limit=args.temperature_limit,
             dt=args.dt, t_end=args.t_end,
             time_scheme=args.time_scheme,
             linear_solver=args.linear_solver,
