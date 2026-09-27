@@ -285,11 +285,11 @@
     },
     {
       "id": "ih-thermal-python",
-      "patterns": ["ih_thermal.py"],
+      "patterns": ["ih_thermal.py", "ih_thermal_post.py"],
       "classification": "python-fallback",
       "backend_contract": "in-process-python",
-      "matlab": ["matlab/+radia/+python/ihThermal.m"],
-      "notes": "Field-artifact sidecars, the verified EM-to-thermal surface heat transfer and the exact circumferential average are one Python source of truth shared by the 3D and axisymmetric heat solvers and the Simulink IH assembler; MATLAB reaches them through a named batch fallback, never per time step."
+      "matlab": ["matlab/+radia/+python/ihThermal.m", "matlab/+radia/+python/ihThermalPost.m"],
+      "notes": "Field-artifact sidecars, the verified EM-to-thermal surface heat transfer and the exact circumferential average, and the temperature-exposure and case-depth post-processing are one Python source of truth shared by the 3D and axisymmetric heat solvers and the Simulink IH assembler; MATLAB reaches them through a named batch fallback, never per time step."
     },    {
       "id": "lamination-python",
       "patterns": ["lamination.py"],
