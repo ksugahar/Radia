@@ -1158,38 +1158,37 @@ python -m radia.panels.calc_heat \\
     --rotation-rpm 12        # <-- workpiece spins around z at 12 rpm
 ```
 
-## How calc_heat.py implements rotation
+## How calc_heat.py implements rotation (radia 5.1)
 
-The implementation is a **per-step re-projection of q_surf on the body
-frame** (NOT mesh deformation).  Cheaper than `mesh.SetDeformation`
-because:
+The part turns under a coil fixed in the world; a point ``p`` of the part
+sits at ``R(theta) p``.  The thermal mesh, FE space and matrices stay fixed
+in the part; only the heat-flux source changes, as
+``q(p, theta) = q_EM(theta)(R(theta) p)``.
 
-* The thermal mesh / FES / mass matrix / stiffness matrix are held FIXED
-  for the entire simulation -- they're built once outside the time loop
-  and the linear solver factorisation (`mstar = M + theta*dt*K`) is
-  cached.  Only the LinearForm RHS reassembles each step (it already
-  has to, for the convection term).
-* Re-projection cost = N surface vertex point-evaluations of the EM-frame
-  qsurf GridFunction.  Identical to the one-shot projection done at
-  startup, so per-step overhead = O(one initial projection).
+``ih_thermal.RotatingSurfaceSource`` tabulates that source at knots over one
+revolution, each knot a gated transfer (off-surface vertices and a power
+mismatch are errors), and takes it piecewise linear in the angle:
 
-The body-frame projection at angle `theta = omega * t`:
+* **Body of revolution** (``--qsurf-sol`` + ``--em-vol``): one EM solution,
+  turned with the part; knots every half EM edge along the outermost path.
+  A part that is not of revolution leaves the EM surface when turned and is
+  refused with a pointer to ``--rotor-states``.
+* **Any other part** (cross holes, flats, keyways): ``--rotor-states
+  rotor.json`` lists one EM solution per rotor angle over the symmetry
+  period (schema ``radia.ih-rotor-states/1``: ``axis``, ``period_rad`` =
+  2 pi / n, ``frame`` ``world`` (part turned in each EM mesh) or ``body``
+  (coil turned by -angle), ``states`` of ``angle_rad``, ``qsurf_sol``,
+  ``em_vol``).  An n-fold part repeats its EM solution every period, but a
+  point returns only after a revolution, so the table is expanded to 2 pi by
+  reading state k on the part turned by whole periods -- a declared symmetry
+  the part does not have fails the transfer.  ``--angle-step-tolerance``
+  (default 25 %) refuses states whose neighbours differ too much.
 
-```python
-# At each timestep, sample q_em at the world-frame coord that
-# corresponds to body coord (xb, yb, zb) after rotation by +theta:
-c, s = math.cos(theta), math.sin(theta)
-for vnr, (xb, yb, zb) in zip(surf_vnrs, surf_xyz):
-    xw = xb*c - yb*s
-    yw = xb*s + yb*c
-    em_mip = em_mesh(xw, yw, zb)        # world-frame lookup
-    val = gf_q_em(em_mip)               # q_em evaluated there
-    gf_wp_q.vec.FV()[vnr] = float(val)  # update body-frame GF in place
-```
-
-The rebuilt `gf_wp_q` is the same GridFunction returned by
-`_build_qsurf_cf(...)`; it's updated **in place** so q_cf in the
-LinearForm picks up the new values automatically.
+Each time step applies the **exact average over the angles it sweeps**
+(``omega (t - dt) .. omega t``).  Sampling one angle per step is
+stroboscopic: at 120 rpm and dt = 0.5 s every sample sees the part where it
+started.  ``qsurf_projection.rotation`` records the knots, the largest
+neighbour change, the worst knot power error and the angle swept per step.
 
 ## Why NOT mesh deformation
 
