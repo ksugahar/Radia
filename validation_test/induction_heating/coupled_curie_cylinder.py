@@ -133,8 +133,20 @@ def provenance(argv, source_commit):
             raise SystemExit("this copy has no .git; pass --source-commit "
                              "(the commit it was archived from)")
         commit, dirty, source = source_commit, False, "git-archive"
+    # build products that `import radia` loads (not in git); the IH path is
+    # pure Python, but the package initialisation needs them
+    native = {}
+    pkg = os.path.join(ROOT, "src", "radia")
+    for name in sorted(os.listdir(pkg)):
+        if name.endswith((".pyd", ".dll", ".so")):
+            with open(os.path.join(pkg, name), "rb") as fh:
+                native[name] = hashlib.sha256(fh.read()).hexdigest()
+    import radia
+    if os.path.dirname(os.path.abspath(radia.__file__)) != os.path.abspath(pkg):
+        raise SystemExit(f"radia is imported from {radia.__file__}, not from "
+                         f"this tree's {pkg}")
     return {"commit": commit, "dirty": dirty, "source": source,
-            "sha256": hashes,
+            "sha256": hashes, "native_sha256": native,
             "command": [os.path.basename(sys.executable), *argv],
             "utc": datetime.datetime.now(datetime.timezone.utc).isoformat(
                 timespec="seconds"),
