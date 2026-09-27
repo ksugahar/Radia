@@ -200,8 +200,10 @@ cases; it does not rerun the high-precision lane or need a native build.
 `nonlinear_surface_modes_1d/` (2026-09-27) checks the bulk + surface idea on
 a saturating steel slab in 1-D.  Linear surface modes lose their advantage as
 the material saturates; surface POD learned from amplitude-normalized
-snapshots keeps a 3-4x gain, and linear + POD surface modes together are best
-over the whole amplitude range.  Projection errors only.
+snapshots improves the equal-dimension bulk basis at intermediate amplitudes,
+but bulk 9 is slightly better at 100,000 A/m. Combining linear and POD
+surface modes is best only in the low-amplitude rows. Projection errors
+only; periodic-state and space/time convergence remain unverified.
 
 ## Bibliography (selected)
 
