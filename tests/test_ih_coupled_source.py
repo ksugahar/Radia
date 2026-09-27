@@ -200,3 +200,13 @@ def test_axisymmetric_solver_uses_ring_samples(tmp_path):
     assert fixed["T_max_C"] > 900.0
     assert coupled["T_max_C"] < fixed["T_max_C"] - 100.0
     assert coupled["nonlinear_transient"]["halvings"] == 0
+    # the per-step heat input integrates to the reported energy; the fixed
+    # source is constant and the temperature-dependent one falls
+    for res in (fixed, coupled):
+        hist = res["heat_input_history_W"]
+        assert len(hist) == len(res["t_history_s"]) - 1
+        assert sum(hist) * 0.25 == pytest.approx(res["Q_input_J"], rel=1e-12)
+    assert max(fixed["heat_input_history_W"]) == pytest.approx(
+        min(fixed["heat_input_history_W"]), rel=1e-12)
+    assert coupled["heat_input_history_W"][-1] < \
+        0.9 * coupled["heat_input_history_W"][0]
