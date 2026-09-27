@@ -21,10 +21,7 @@ from typing import Iterable, Sequence
 
 import numpy as np
 
-try:                                     # package or panels-style import
-    from . import ih_thermal as _it
-except ImportError:                      # pragma: no cover
-    import ih_thermal as _it
+from . import ih_thermal as _it
 
 
 def _ref_rule(element_type, order):
@@ -121,15 +118,22 @@ def _boundary_peak(mesh, gf, order, vertices=None):
 
 
 def _vertex_values(mesh, gf):
-    """Nodal values; vertices without a DOF (outside a definedon space)
-    get NaN."""
+    """Nodal values of an H1 field at every mesh vertex."""
     from ngsolve import NodeId, VERTEX
-    dofs = np.asarray([(gf.space.GetDofNrs(NodeId(VERTEX, v.nr)) or [-1])[0]
+    dofs = np.asarray([gf.space.GetDofNrs(NodeId(VERTEX, v.nr))[0]
                        for v in mesh.vertices])
-    vec = np.asarray(gf.vec.FV().NumPy(), float)
-    out = np.full(len(dofs), np.nan)
-    out[dofs >= 0] = vec[dofs[dofs >= 0]]
-    return out
+    return np.asarray(gf.vec.FV().NumPy(), float)[dofs]
+
+
+def _require_region_for_definedon(mesh, gf, region):
+    """A field on a subdomain has meaningless zeros elsewhere: its region
+    must be named."""
+    from ngsolve import H1
+    full = H1(mesh, order=gf.space.globalorder).ndof
+    if region is None and gf.space.ndof != full:
+        raise ValueError(
+            "the field is defined on a subdomain (definedon space); pass its "
+            "region so the rest of the mesh is not counted as material")
 
 
 def thermal_exposure(mesh, gf, thresholds_C: Iterable[float] = (), *,
@@ -147,6 +151,7 @@ def thermal_exposure(mesh, gf, thresholds_C: Iterable[float] = (), *,
     a large spread under an axisymmetric heat source means the source was
     not axisymmetric.
     """
+    _require_region_for_definedon(mesh, gf, region)
     s = samples if samples is not None else field_samples(
         mesh, gf, order=order, axisymmetric=axisymmetric, region=region)
     vals, w, X = s["values"], s["weights"], s["coords"]
@@ -163,7 +168,7 @@ def thermal_exposure(mesh, gf, thresholds_C: Iterable[float] = (), *,
                 for vtx in el.vertices:
                     in_region[vtx.nr] = True
         pts, vv = pts[in_region], vv[in_region]
-    i_s, i_v = int(np.argmax(vals)), int(np.nanargmax(vv))
+    i_s, i_v = int(np.argmax(vals)), int(np.argmax(vv))
     candidates = [(float(vals[i_s]), X[i_s]), (float(vv[i_v]), pts[i_v])]
     if gf.space.globalorder > 1:
         candidates.append(_boundary_peak(mesh, gf, s["order"], in_region))
@@ -177,7 +182,7 @@ def thermal_exposure(mesh, gf, thresholds_C: Iterable[float] = (), *,
         "domain_measure_m3": total,
         "T_max_C": t_max,
         "T_max_location_m": [float(c) for c in loc],
-        "T_min_C": float(min(vals.min(), np.nanmin(vv))),
+        "T_min_C": float(min(vals.min(), vv.min())),
         "T_mean_C": float(np.sum(vals * w) / total),
         "thresholds": [],
     }
@@ -205,11 +210,12 @@ def thermal_exposure(mesh, gf, thresholds_C: Iterable[float] = (), *,
 
 
 def _ring_spread(mesh, gf, point, axis, n):
-    """Sample the ring through ``point`` about ``axis``.
+    """Temperature on the ring through ``point`` about ``axis``.
 
-    On a faceted surface the rotated copies of a surface point lie just
-    outside the chords; those are pulled radially inward by up to a few
-    chord sags (``h^2 / 8r``), and the largest inset used is reported.
+    The ring is taken a quarter of the median boundary edge radially inside
+    ``point``: rotated copies of a surface point lie off a faceted surface,
+    so a ring exactly on it would leave the mesh.  Points of the ring that
+    are still outside the mesh are counted, not replaced.
     """
     from ngsolve import BND
 
@@ -217,29 +223,24 @@ def _ring_spread(mesh, gf, point, axis, n):
     r = math.hypot(point[iu], point[iw])
     tris = np.asarray([[v.nr for v in el.vertices][:3]
                        for el in mesh.Elements(BND)], int)
-    h = _it.median_edge_length(_it.mesh_vertices(mesh), tris)
-    sag = h * h / (8.0 * r) if r > 0 else 0.0
-    insets = [0.0] + [min(f * sag, 0.5 * r) for f in (1.0, 2.0, 4.0)]
-    vals, used = [], 0.0
-    for k in range(n):
-        p = _it.rotate_about_axis(point[None, :], 2 * math.pi * k / n, axis)[0]
-        for inset in insets:
-            q = p.copy()
-            if inset and r > 0:
-                scale = (r - inset) / r
-                q[iu] *= scale
-                q[iw] *= scale
-            mip = mesh(*q)
-            if mip.nr >= 0:
-                vals.append(float(np.real(gf(mip))))
-                used = max(used, inset)
-                break
-    rec = {"r_m": r, "a_m": float(point[ia]), "n_requested": n,
-           "n_inside": len(vals), "max_radial_inset_m": used}
-    if vals:
-        rec.update({"T_min_C": min(vals), "T_max_C": max(vals),
-                    "T_mean_C": float(np.mean(vals)),
-                    "spread_C": max(vals) - min(vals)})
+    inset = min(0.25 * _it.median_edge_length(_it.mesh_vertices(mesh), tris),
+                0.5 * r)
+    q0 = np.array(point, float)
+    if r > 0:
+        q0[iu] *= (r - inset) / r
+        q0[iw] *= (r - inset) / r
+    ring = np.concatenate([_it.rotate_about_axis(q0[None, :],
+                                                 2 * math.pi * k / n, axis)
+                           for k in range(n)])
+    vals = _evaluate_points(mesh, gf, ring)
+    ok = ~np.isnan(vals)
+    rec = {"r_m": r, "ring_r_m": r - inset, "a_m": float(point[ia]),
+           "n_requested": n, "n_inside": int(ok.sum())}
+    if np.any(ok):
+        v = vals[ok]
+        rec.update({"T_min_C": float(v.min()), "T_max_C": float(v.max()),
+                    "T_mean_C": float(v.mean()),
+                    "spread_C": float(v.max() - v.min())})
     return rec
 
 
@@ -258,7 +259,7 @@ def limit_check(exposure: dict, limit_C: float) -> dict:
 # Case depth
 # ---------------------------------------------------------------------------
 
-DEPTH_STATUS = ("ok", "not_reached", "through", "beyond_span")
+DEPTH_STATUS = ("ok", "not_reached", "through", "beyond_span", "edge")
 
 
 def _evaluate_points(mesh, gf, pts, region_mask=None):
@@ -276,59 +277,121 @@ def _evaluate_points(mesh, gf, pts, region_mask=None):
     return out
 
 
-def _march(mesh, gf, origins, normals, threshold, span, step, entry,
+def _region_boundary(mesh, rmask):
+    """Boundary facets of the region: triangles (3D, on the mesh boundary)
+    or segments (2D, including interfaces with other regions)."""
+    from collections import Counter
+    from ngsolve import BND
+    pts = _it.mesh_vertices(mesh)[:, :mesh.dim]
+    region_vertices = set()
+    for el in mesh.Elements():
+        if rmask is None or rmask[el.nr]:
+            region_vertices.update(v.nr for v in el.vertices)
+    if mesh.dim == 3:
+        facets = [[v.nr for v in el.vertices] for el in mesh.Elements(BND)
+                  if all(v.nr in region_vertices for v in el.vertices)]
+        tris = []
+        for f in facets:
+            tris.append(f[:3])
+            if len(f) == 4:
+                tris.append([f[0], f[2], f[3]])
+        return pts, np.asarray(tris, int)
+    edges = Counter()
+    for el in mesh.Elements():
+        if rmask is not None and not rmask[el.nr]:
+            continue
+        vv = [v.nr for v in el.vertices]
+        for i in range(len(vv)):
+            edges[tuple(sorted((vv[i], vv[(i + 1) % len(vv)])))] += 1
+    return pts, np.asarray([e for e, n in edges.items() if n == 1], int)
+
+
+def _project_to_boundary(query, pts, facets):
+    """Closest points on facets (triangles in 3D, segments in 2D)."""
+    q = np.asarray(query, float)
+    if facets.shape[1] == 3:
+        field = _it.SurfaceP1Field(np.c_[pts, np.zeros((len(pts), 3 - pts.shape[1]))]
+                                   if pts.shape[1] < 3 else pts,
+                                   facets, np.zeros(len(pts)))
+        tri, lam, d = field.locate(q)
+        a, b, c = field._abc
+        cp = lam[:, :1] * a[tri] + lam[:, 1:2] * b[tri] + lam[:, 2:] * c[tri]
+        return cp, d
+    a, b = pts[facets[:, 0]], pts[facets[:, 1]]
+    best_d = np.full(len(q), np.inf)
+    best = np.zeros_like(q)
+    for lo in range(0, len(q), 256):
+        qq = q[lo:lo + 256]
+        ab = b - a
+        t = np.einsum("ijk,jk->ij", qq[:, None, :] - a[None], ab) / \
+            np.maximum(np.einsum("ij,ij->i", ab, ab), 1e-300)[None]
+        t = np.clip(t, 0.0, 1.0)
+        cp = a[None] + t[..., None] * ab[None]
+        d = np.linalg.norm(qq[:, None, :] - cp, axis=2)
+        j = np.argmin(d, axis=1)
+        best_d[lo:lo + 256] = d[np.arange(len(qq)), j]
+        best[lo:lo + 256] = cp[np.arange(len(qq)), j]
+    return best, best_d
+
+
+def _march(mesh, gf, origins, normals, threshold, span, step,
            region_mask=None):
-    """Depth of the first fall through ``threshold`` along each ray."""
-    ts = np.arange(0.0, span + 0.5 * step, step)
+    """Depth of the first fall through ``threshold`` along each ray.
+
+    Samples sit at ``(k + 1/2) step`` below the (projected) surface point.
+    A ray whose first sample is not in the region points out of the
+    material; that is an error, not a skipped sample.
+    """
+    ts = (np.arange(int(math.ceil(span / step))) + 0.5) * step
     n_st = len(origins)
     P = (origins[:, None, :] + ts[None, :, None] * normals[:, None, :])
     T = _evaluate_points(mesh, gf, P.reshape(-1, origins.shape[1]),
                          region_mask).reshape(n_st, len(ts))
+    bad = np.isnan(T[:, 0])
+    if np.any(bad):
+        i = int(np.flatnonzero(bad)[0])
+        raise ValueError(
+            f"{int(bad.sum())}/{n_st} depth rays leave the material at their "
+            f"first sample (station {np.round(origins[i], 6).tolist()}, normal "
+            f"{np.round(normals[i], 3).tolist()}); the normal must point into "
+            "the region")
     depth = np.full(n_st, np.nan)
     status = np.empty(n_st, dtype=object)
-    surface = np.full(n_st, np.nan)
-    exit_at = np.full(n_st, np.nan)
+    surface = T[:, 0].copy()
     reentrant = np.zeros(n_st, dtype=bool)
-    entry_steps = int(math.ceil(entry / step))
     for i in range(n_st):
         row = T[i]
-        valid = np.flatnonzero(~np.isnan(row))
-        if valid.size == 0 or valid[0] > entry_steps:
-            status[i] = "off_mesh"
-            continue
-        first = valid[0]
-        # material ends at the first invalid sample after entering it
-        gap = np.flatnonzero(np.isnan(row[first:]))
-        last = first + (gap[0] - 1 if gap.size else len(row) - first - 1)
-        seg = row[first:last + 1]
-        surface[i] = seg[0]
+        gap = np.flatnonzero(np.isnan(row))
+        last = gap[0] - 1 if gap.size else len(row) - 1
+        seg = row[:last + 1]
         if seg[0] < threshold:
             depth[i], status[i] = 0.0, "not_reached"
             continue
         below = np.flatnonzero(seg < threshold)
         if below.size == 0:
-            if gap.size:
-                depth[i], status[i] = ts[last], "through"
-                exit_at[i] = ts[last]
-            else:
-                depth[i], status[i] = ts[last], "beyond_span"
+            depth[i] = ts[last]
+            status[i] = "through" if gap.size else "beyond_span"
             continue
         j = below[0]
-        t0, t1 = ts[first + j - 1], ts[first + j]
+        t0, t1 = ts[j - 1], ts[j]
         v0, v1 = seg[j - 1], seg[j]
         depth[i] = t0 + (t1 - t0) * (v0 - threshold) / (v0 - v1)
         status[i] = "ok"
         reentrant[i] = bool(np.any(seg[j:] >= threshold))
-    return depth, status, surface, exit_at, reentrant
+    return depth, status, surface, reentrant
 
 
 def surface_stations(mesh, boundary_names: Sequence[str],
-                     region_mask=None):
+                     region_mask=None, edge_angle_deg: float = 30.0):
     """Stations on the named boundaries with unit inward normals.
 
     3D: every boundary vertex, normal = area-weighted mean of the adjacent
-    triangle normals.  2D (r, z): every boundary segment midpoint.  The
-    sign is chosen so that a short step along the normal stays in the mesh.
+    triangle normals; a vertex whose adjacent face normals differ from that
+    mean by more than ``edge_angle_deg`` sits on an edge or corner, where a
+    single ray does not measure the depth -- it is returned flagged.
+    2D (r, z): every boundary segment midpoint.  The sign is chosen so that
+    a short step along the normal stays in the region.
+    Returns ``(origins, normals, h, edge_flags)``.
     """
     pts = _it.mesh_vertices(mesh)[:, :mesh.dim]
     if mesh.dim == 3:
@@ -339,6 +402,13 @@ def surface_stations(mesh, boundary_names: Sequence[str],
         for k in range(3):
             np.add.at(acc, tris[:, k], fn)
         idx = np.unique(tris)
+        mean = acc / np.maximum(np.linalg.norm(acc, axis=1), 1e-300)[:, None]
+        unit_fn = fn / np.linalg.norm(fn, axis=1)[:, None]
+        worst = np.ones(len(pts))
+        for k in range(3):
+            cosang = np.einsum("ij,ij->i", unit_fn, mean[tris[:, k]])
+            np.minimum.at(worst, tris[:, k], cosang)
+        edge = worst[idx] < math.cos(math.radians(edge_angle_deg))
         origins, normals = pts[idx], acc[idx]
         h = _it.median_edge_length(pts, tris)
     else:
@@ -348,6 +418,7 @@ def surface_stations(mesh, boundary_names: Sequence[str],
         d = b - a
         normals = np.c_[-d[:, 1], d[:, 0]]
         h = float(np.median(np.linalg.norm(d, axis=1)))
+        edge = np.zeros(len(origins), dtype=bool)
     normals = normals / np.linalg.norm(normals, axis=1)[:, None]
     probe = origins + 0.25 * h * normals
     cols = [np.ascontiguousarray(probe[:, k]) for k in range(mesh.dim)]
@@ -356,41 +427,51 @@ def surface_stations(mesh, boundary_names: Sequence[str],
     if region_mask is not None:
         inside &= np.where(nr >= 0, region_mask[np.maximum(nr, 0)], False)
     normals[~inside] *= -1.0
-    return origins, normals, h
+    return origins, normals, h, edge
 
 
-def case_depth(mesh, gf, threshold_C: float, *, origins=None, normals=None,
+def case_depth(mesh, gf, threshold_C: float, *, span: float,
+               origins=None, normals=None,
                boundary_names: Sequence[str] | None = None,
-               span: float | None = None, step: float | None = None,
-               axis: str = "z", n_phi: int = 0,
-               region: str | None = None) -> dict:
+               step: float | None = None, axis: str = "z", n_phi: int = 0,
+               region: str | None = None, edge_angle_deg: float = 30.0,
+               projection_tolerance: float | None = None) -> dict:
     """Depth at which the temperature falls below ``threshold_C``.
 
     Stations are either given (``origins``, ``normals``; unit inward
     normals in mesh coordinates) or taken from ``boundary_names`` with
     :func:`surface_stations`.  For a 3D mesh ``origins`` may instead be
     meridian points ``(r, a)`` with meridian normals ``(n_r, n_a)`` about
-    ``axis``, marched on ``n_phi`` azimuths each.
+    ``axis``, marched on ``n_phi`` azimuths each.  Every origin is projected
+    onto the region boundary; a projection farther than
+    ``projection_tolerance`` (default a quarter of the median boundary edge)
+    is an error, and the projection distances are reported.
 
-    Each ray is marched from the surface in steps of ``step`` for at most
-    ``span``.  Status per ray:
+    Rays are marched inward for ``span`` in steps of ``step``.  Status:
 
     ``ok``          the temperature falls through the threshold at ``depth``;
-    ``not_reached`` the surface itself is below the threshold (depth 0);
+    ``not_reached`` the first sample is below the threshold (depth 0);
     ``through``     the ray leaves the material still above the threshold
                     (depth = distance to the far surface);
     ``beyond_span`` still above the threshold after ``span`` inside the
                     material (depth is only a lower bound);
-    ``off_mesh``    the station could not be located on the mesh.
+    ``edge``        an automatic station on an edge or corner (no depth).
     """
     if (origins is None) != (normals is None):
         raise ValueError("pass both origins and normals, or neither")
-    meridian = False
+    if not (span and span > 0):
+        raise ValueError("span (probe length) must be positive; choose it "
+                         "longer than the expected depth ('beyond_span' marks "
+                         "rays it cut short)")
+    _require_region_for_definedon(mesh, gf, region)
     rmask = _region_mask(mesh, region) if region is not None else None
+    meridian = False
+    edge = None
     if origins is None:
         if not boundary_names:
             raise ValueError("give stations or boundary_names")
-        origins, normals, h = surface_stations(mesh, boundary_names, rmask)
+        origins, normals, h, edge = surface_stations(
+            mesh, boundary_names, rmask, edge_angle_deg)
     else:
         origins = np.asarray(origins, float)
         normals = np.asarray(normals, float)
@@ -398,20 +479,18 @@ def case_depth(mesh, gf, threshold_C: float, *, origins=None, normals=None,
         if np.any(nrm == 0):
             raise ValueError("station normals must be non-zero")
         normals = normals / nrm[:, None]
+        if origins.shape != normals.shape or origins.shape[1] not in (
+                (2,) if mesh.dim == 2 else (2, 3)):
+            raise ValueError(
+                f"stations of shape {origins.shape}/{normals.shape} do not fit "
+                f"a {mesh.dim}D mesh (a 2D (r, z) mesh takes (r, z) stations)")
         meridian = mesh.dim == 3 and origins.shape[1] == 2
-        from ngsolve import BND
-        tris = [[v.nr for v in el.vertices][:mesh.dim]
-                for el in mesh.Elements(BND)]
-        pts = _it.mesh_vertices(mesh)[:, :mesh.dim]
-        tris = np.asarray(tris, int)
-        e = pts[tris[:, 1]] - pts[tris[:, 0]]
-        h = float(np.median(np.linalg.norm(e, axis=1)))
-    if span is None:
-        raise ValueError("span (probe length) is required: choose it longer "
-                         "than the expected depth; 'beyond_span' marks rays "
-                         "that it cut short")
+    bpts, facets = _region_boundary(mesh, rmask)
+    fe = bpts[facets[:, 1]] - bpts[facets[:, 0]]
+    h = float(np.median(np.linalg.norm(fe, axis=1)))
+    tol = 0.25 * h if projection_tolerance is None else float(
+        projection_tolerance)
     step = float(step) if step else min(h / 8.0, span / 50.0)
-    entry = 0.5 * h
     n_st = len(origins)
     if meridian:
         if n_phi < 1:
@@ -427,25 +506,35 @@ def case_depth(mesh, gf, threshold_C: float, *, origins=None, normals=None,
                                                   axis) for k in range(n_phi)])
     else:
         O, N = origins, normals
-    depth, status, surf, exit_at, reent = _march(
-        mesh, gf, O, N, float(threshold_C), float(span), step, entry, rmask)
-    off = np.flatnonzero(status == "off_mesh")
-    if off.size:
+    Op, dproj = _project_to_boundary(O, bpts, facets)
+    if np.any(dproj > tol):
+        i = int(np.argmax(dproj))
         raise ValueError(
-            f"{off.size}/{len(status)} depth stations could not be located "
-            f"within {entry:.3e} m of the mesh surface (first at "
-            f"{np.round(O[off[0]], 6).tolist()})")
+            f"{int((dproj > tol).sum())}/{len(O)} depth stations lie farther "
+            f"than {tol:.3e} m from the material surface (worst {dproj[i]:.3e}"
+            f" m at {np.round(O[i], 6).tolist()})")
+    keep = np.ones(len(Op), dtype=bool) if edge is None else ~edge
+    depth = np.full(len(Op), np.nan)
+    status = np.full(len(Op), "edge", dtype=object)
+    surf = np.full(len(Op), np.nan)
+    reent = np.zeros(len(Op), dtype=bool)
+    if np.any(keep):
+        d_, s_, t_, r_ = _march(mesh, gf, Op[keep], N[keep],
+                                float(threshold_C), float(span), step, rmask)
+        depth[keep], status[keep], surf[keep], reent[keep] = d_, s_, t_, r_
     out = {"threshold_C": float(threshold_C), "span_m": float(span),
-           "step_m": step, "n_stations": n_st,
+           "step_m": step, "n_stations": n_st, "region": region,
+           "projection_tolerance_m": tol,
+           "max_projection_distance_m": float(dproj.max()),
            "origins": origins.tolist(), "normals": normals.tolist()}
     if meridian:
         D = depth.reshape(n_phi, n_st).T
         S = status.reshape(n_phi, n_st).T
         out.update({
             "n_phi": int(n_phi),
-            "depth_min_m": np.nanmin(D, axis=1).tolist(),
-            "depth_mean_m": np.nanmean(D, axis=1).tolist(),
-            "depth_max_m": np.nanmax(D, axis=1).tolist(),
+            "depth_min_m": np.min(D, axis=1).tolist(),
+            "depth_mean_m": np.mean(D, axis=1).tolist(),
+            "depth_max_m": np.max(D, axis=1).tolist(),
             "depth_m": D.tolist(),
             "status": [[str(x) for x in row] for row in S],
             "status_counts": {k: int(np.sum(S == k)) for k in DEPTH_STATUS},
@@ -466,37 +555,41 @@ def case_depth(mesh, gf, threshold_C: float, *, origins=None, normals=None,
 # Command line
 # ---------------------------------------------------------------------------
 
-def _read_stations(path: str, unit_scale: float):
-    """Stations CSV with a header: x,y,z,nx,ny,nz or r,z,n_r,n_z (optional s)."""
+_STATION_LAYOUTS = {
+    ("x", "y", "z", "nx", "ny", "nz"): "xyz",
+    ("r", "z", "n_r", "n_z"): "meridian",
+}
+
+
+def _read_stations(path: str):
+    """Stations CSV.  The header states the layout and the length unit:
+    ``x_m,y_m,z_m,nx,ny,nz`` or ``r_m,z_m,n_r,n_z`` (``_mm`` for
+    millimetres), optionally preceded by ``s_m`` / ``s_mm``."""
     import csv
 
-    with open(path, encoding="utf-8-sig") as handle:
-        rows = list(csv.DictReader(handle))
-    if not rows:
+    with open(path, encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.reader(handle))
+    header = [h.strip() for h in rows[0]]
+    data = np.asarray([[float(v) for v in r] for r in rows[1:] if r])
+    if data.size == 0:
         raise ValueError(f"{path} has no stations")
-    keys = {k.strip().lower().split("_mm")[0].split("[")[0]: k
-            for k in rows[0]}
-
-    def col(*names):
-        for n in names:
-            if n in keys:
-                return np.asarray([float(r[keys[n]]) for r in rows])
-        return None
-
-    s = col("s")
-    if col("x") is not None:
-        o = np.c_[col("x"), col("y"), col("z")] * unit_scale
-        n = np.c_[col("nx"), col("ny"), col("nz")]
-    elif col("r") is not None:
-        a = col("z", "a")
-        o = np.c_[col("r"), a] * unit_scale
-        n = np.c_[col("n_r", "nr"), col("n_z", "n_a", "nz")]
-    else:
-        raise ValueError(f"{path}: need columns x,y,z,nx,ny,nz or "
-                         "r,z,n_r,n_z")
-    if np.any(np.isnan(n)):
-        raise ValueError(f"{path}: missing normal columns")
-    return o, n, s
+    s_col = None
+    if header[0] in ("s_m", "s_mm"):
+        s_col = data[:, 0] * (1e-3 if header[0] == "s_mm" else 1.0)
+        header, data = header[1:], data[:, 1:]
+    units = {h.rsplit("_", 1)[1] for h in header
+             if h.endswith(("_m", "_mm"))}
+    if len(units) != 1:
+        raise ValueError(f"{path}: coordinate columns must all be _m or all "
+                         f"_mm, got {header}")
+    scale = 1e-3 if units == {"mm"} else 1.0
+    bare = tuple(h[:-3] if h.endswith("_mm") else h[:-2]
+                 if h.endswith("_m") else h for h in header)
+    if bare not in _STATION_LAYOUTS:
+        raise ValueError(f"{path}: header must be x_m,y_m,z_m,nx,ny,nz or "
+                         f"r_m,z_m,n_r,n_z (or _mm), got {header}")
+    nc = 3 if _STATION_LAYOUTS[bare] == "xyz" else 2
+    return data[:, :nc] * scale, data[:, nc:], s_col
 
 
 def main(argv=None) -> int:
@@ -510,23 +603,20 @@ def main(argv=None) -> int:
     ap.add_argument("command", choices=("exposure", "depth"))
     ap.add_argument("--temperature", required=True, help="temperature .sol")
     ap.add_argument("--mesh", default=None,
-                    help="mesh .vol (default: from the sidecar)")
-    ap.add_argument("--order", type=int, default=None,
-                    help="H1 order (default: from the sidecar)")
-    ap.add_argument("--axisymmetric", action="store_true",
-                    help="the mesh is an (r, z) axisymmetric section")
+                    help="relocated mesh .vol (its digest must match the "
+                         "sidecar)")
     ap.add_argument("--axis", default="z", choices=("x", "y", "z"))
     ap.add_argument("--thresholds", default="",
                     help="exposure: comma-separated temperatures [degC]")
     ap.add_argument("--threshold", type=float, default=None,
                     help="depth: threshold temperature [degC]")
     ap.add_argument("--stations", default="",
-                    help="depth: stations CSV (x,y,z,nx,ny,nz or "
-                         "r,z,n_r,n_z; meridian stations are marched on "
-                         "--n-phi azimuths)")
-    ap.add_argument("--stations-unit", default="m", choices=("m", "mm"))
+                    help="depth: stations CSV with header x_m,y_m,z_m,nx,ny,nz"
+                         " or r_m,z_m,n_r,n_z (_mm for millimetres); meridian "
+                         "stations are marched on --n-phi azimuths")
     ap.add_argument("--boundaries", default="",
-                    help="depth: boundary names for automatic stations")
+                    help="depth: '|'-separated boundary names for automatic "
+                         "stations")
     ap.add_argument("--span", type=float, default=None,
                     help="depth: probe length [m]")
     ap.add_argument("--step", type=float, default=None,
@@ -537,28 +627,40 @@ def main(argv=None) -> int:
     ap.add_argument("--csv", default="", help="depth: CSV output file")
     a = ap.parse_args(argv)
 
-    mesh, gf, audit = _it.load_field(
-        a.temperature, a.mesh, fes_order=a.order,
-        quantity=_it.TEMPERATURE_QUANTITY if _it.read_field_sidecar(
-            a.temperature) else None)
+    mesh, gf, audit = _it.load_field(a.temperature,
+                                     quantity=_it.TEMPERATURE_QUANTITY,
+                                     mesh_path=a.mesh)
+    record = audit.pop("sidecar_record")
+    region = record.get("definedon")
+    geometry = record.get("geometry")
+    if geometry not in ("3d", "axisymmetric-rz"):
+        raise SystemExit(
+            f"{a.temperature}: the sidecar records no geometry ('3d' or "
+            "'axisymmetric-rz'); rewrite it with 'python -m radia.ih_thermal "
+            "sidecar ... --geometry'")
+    axisymmetric = geometry == "axisymmetric-rz"
+    if mesh.dim != (2 if axisymmetric else 3):
+        raise SystemExit(f"{a.temperature}: the sidecar records geometry "
+                         f"{geometry!r} but the mesh is {mesh.dim}D")
     if a.command == "exposure":
         thr = [float(t) for t in a.thresholds.split(",") if t.strip()]
-        result = thermal_exposure(mesh, gf, thr, axisymmetric=a.axisymmetric,
-                                  axis=a.axis)
+        result = thermal_exposure(mesh, gf, thr, axisymmetric=axisymmetric,
+                                  axis=a.axis, region=region)
     else:
         if a.threshold is None:
             ap.error("depth needs --threshold")
+        if a.span is None:
+            ap.error("depth needs --span")
         s_col = None
         if a.stations:
-            o, n, s_col = _read_stations(
-                a.stations, 1e-3 if a.stations_unit == "mm" else 1.0)
+            o, n, s_col = _read_stations(a.stations)
             result = case_depth(mesh, gf, a.threshold, origins=o, normals=n,
                                 span=a.span, step=a.step, axis=a.axis,
-                                n_phi=a.n_phi)
+                                n_phi=a.n_phi, region=region)
         else:
-            names = [b for b in a.boundaries.split(",") if b.strip()]
+            names = [b for b in a.boundaries.split("|") if b.strip()]
             result = case_depth(mesh, gf, a.threshold, boundary_names=names,
-                                span=a.span, step=a.step)
+                                span=a.span, step=a.step, region=region)
         if a.csv:
             _write_depth_csv(a.csv, result, s_col)
     result["field"] = audit

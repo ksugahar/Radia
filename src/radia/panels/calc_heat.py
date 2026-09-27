@@ -298,36 +298,75 @@ def _build_qsurf_cf(wp_mesh, args):
     return q_cf, resample
 
 
+def qsurf_args(**given):
+    """The complete argument record of :func:`_build_qsurf_source`.
+
+    Every field has the command-line default; unknown names are errors, so a
+    caller cannot silently pass an option the builder does not read.
+    """
+    from types import SimpleNamespace
+    fields = dict(
+        q_uniform=None, qsurf_sol="", em_vol="", qsurf_order=1,
+        heat_flux_boundary_names=(), rotation_axis="z", q_phi_average=False,
+        q_phi_bin=None, em_heat_boundaries="", q_scale=1.0,
+        transfer_tolerance=None, power_tolerance=None, em_table="",
+        ht_sol="", ht_scale=1.0, em_reference_temperature=None,
+        em_table_azimuths=64, allow_em_table_extrapolation=False,
+        em_table_tolerance=0.05, allow_frozen_ht=False)
+    unknown = set(given) - set(fields)
+    if unknown:
+        raise TypeError(f"unknown q_surf source options {sorted(unknown)}")
+    fields.update(given)
+    return SimpleNamespace(**fields)
+
+
+_SPATIAL_OPTIONS = (
+    ("qsurf_sol", "--qsurf-sol"), ("em_vol", "--em-vol"),
+    ("em_heat_boundaries", "--em-heat-boundaries"),
+    ("transfer_tolerance", "--transfer-tolerance"),
+    ("power_tolerance", "--power-tolerance"),
+    ("q_phi_average", "--q-phi-average"), ("q_phi_bin", "--q-phi-bin"),
+    ("em_table", "--em-table"), ("ht_sol", "--ht-sol"),
+    ("allow_frozen_ht", "--allow-frozen-ht"),
+    ("em_reference_temperature", "--em-reference-temperature"))
+
+
+def _reject_options_with_uniform(args):
+    """--q-uniform has no EM source; options that shape one are errors."""
+    given = [flag for attr, flag in _SPATIAL_OPTIONS
+             if getattr(args, attr, None) not in (None, "", False)]
+    for attr, flag in (("q_scale", "--q-scale"), ("ht_scale", "--ht-scale")):
+        if float(getattr(args, attr, 1.0)) != 1.0:
+            given.append(flag)
+    if given:
+        raise ValueError(
+            f"--q-uniform is a constant flux; {', '.join(given)} only apply "
+            "to a spatial --qsurf-sol source")
+
+
 def _build_qsurf_source(wp_mesh, args):
     """Return ``(q_cf, resample_fn, audit)`` for the heating face.
 
-    Modes, in priority order:
+    Modes:
 
-    1. ``--q-uniform``: a constant flux; ``resample_fn`` is ``None``.
+    1. ``--q-uniform``: a constant flux; ``resample_fn`` is ``None``.  Any
+       option that shapes a spatial source is an error.
     2. ``--qsurf-sol`` + ``--em-vol`` with ``--q-phi-average``: the exact
-       circumferential average of the EM source
-       (:class:`ih_thermal.AxisymmetricSurfaceProfile`); static, so
-       ``resample_fn`` is ``None``.
+       circumferential average of the EM source; static.
     3. ``--qsurf-sol`` + ``--em-vol``: the EM source evaluated at the thermal
-       heat-flux vertices by projection onto the EM heated surface.
-       ``resample_fn(theta)`` re-evaluates it with the body rotated by
+       heat-flux vertices by projection onto the EM heated surface;
+       ``resample_fn(theta)`` re-evaluates it on the body rotated by
        ``theta`` about ``--rotation-axis``.
 
-    Every thermal heat-flux vertex must lie on the EM heated surface within
-    the transfer tolerance, and the transferred power must match the EM
-    power within ``--power-tolerance``; otherwise the solve is refused.
+    Every transfer goes through :meth:`ih_thermal.EMHeatSource.transfer`,
+    which refuses vertices off the EM surface and a heat input that differs
+    from the EM power by more than ``--power-tolerance``.
     """
-    from ngsolve import (H1, GridFunction, CoefficientFunction, BND,
-                         Integrate)
-    import ih_thermal
-
-    if getattr(args, "q_phi_average", False) and args.q_uniform is not None:
-        raise ValueError(
-            "--q-phi-average averages the SPATIAL --qsurf-sol into an "
-            "axisymmetric q; it cannot be combined with --q-uniform "
-            "(a constant q is already azimuthally uniform).")
+    from ngsolve import H1, GridFunction, CoefficientFunction
+    from radia import ih_thermal
 
     if args.q_uniform is not None:
+        _reject_options_with_uniform(args)
         _log(f"Q_SURF:uniform {args.q_uniform:.4e} W/m^2")
         return (CoefficientFunction(float(args.q_uniform)), None,
                 {"mode": "uniform"})
@@ -336,10 +375,6 @@ def _build_qsurf_source(wp_mesh, args):
         raise ValueError(
             "Either --q-uniform or --qsurf-sol is required (no heat "
             "input was supplied).")
-
-    # The EM .vol that the .sol was saved against MUST be supplied
-    # explicitly: NGSolve's .sol format is a raw coefficient vector (no
-    # embedded mesh / order), so the only safe contract is both files.
     if not args.em_vol:
         raise ValueError(
             "--em-vol is required when --qsurf-sol is supplied.  "
@@ -348,89 +383,78 @@ def _build_qsurf_source(wp_mesh, args):
             "be passed explicitly.")
     _validate_qsurf_transfer_order(args.qsurf_order)
 
-    axis_str = str(getattr(args, "rotation_axis", "z") or "z").lower().strip()
+    axis_str = str(args.rotation_axis).lower().strip()
     if axis_str not in ("x", "y", "z"):
         raise ValueError(
             f"--rotation-axis must be one of x / y / z (got {axis_str!r}).")
 
     heat_names = list(args.heat_flux_boundary_names)
-    phi_average = bool(getattr(args, "q_phi_average", False))
+    phi_average = bool(args.q_phi_average)
     source = ih_thermal.EMHeatSource(
         args.qsurf_sol, args.em_vol,
-        thermal_names=heat_names,
-        em_boundaries=getattr(args, "em_heat_boundaries", None) or None,
+        em_boundaries=args.em_heat_boundaries or None,
         mode="phi-average" if phi_average else "direct",
-        axis=axis_str,
-        q_scale=float(getattr(args, "q_scale", 1.0) or 1.0),
-        transfer_tolerance=getattr(args, "transfer_tolerance", None),
-        bin_width=getattr(args, "q_phi_bin", None))
-    power_tol = float(getattr(args, "power_tolerance", None)
-                      or ih_thermal.DEFAULT_POWER_TOLERANCE)
+        axis=axis_str, q_scale=float(args.q_scale),
+        transfer_tolerance=args.transfer_tolerance,
+        bin_width=args.q_phi_bin)
+    power_tol = (ih_thermal.DEFAULT_POWER_TOLERANCE
+                 if args.power_tolerance is None else args.power_tolerance)
     _log(f"Q_SURF:{os.path.basename(source.qsurf_sol)} on "
-         f"{os.path.basename(source.em_vol)} ({source.pair_audit['provenance']}), "
-         f"EM boundaries {source.em_boundaries} ({source.boundary_rule}), "
+         f"{os.path.basename(source.em_vol)}, EM boundaries "
+         f"{source.em_boundaries} ({source.boundary_rule}), "
          f"P_EM={source.power:.6e} W")
 
-    vnrs = ih_thermal.boundary_vertex_numbers(wp_mesh, heat_names)
-    xyz = ih_thermal.mesh_vertices(wp_mesh)[vnrs]
     gf_wp_q = GridFunction(H1(wp_mesh, order=1))
-    region = wp_mesh.Boundaries("|".join(heat_names))
 
     def _apply(theta_rad: float) -> dict:
-        values, dist = source.values_at_xyz(xyz, theta_rad)
-        vec = gf_wp_q.vec.FV().NumPy()
-        vec[:] = 0.0
-        vec[vnrs] = values
-        power = float(Integrate(gf_wp_q, wp_mesh, BND,
-                                definedon=region).real)
-        balance = ih_thermal.power_balance(
-            power, source.power, power_tol,
-            what="thermal heat input against the EM source power",
-            scale=source.surface.magnitude_power,
-            hint=ih_thermal.TRANSFER_POWER_HINT)
-        return {"theta_rad": float(theta_rad),
-                "max_transfer_distance_m": float(dist.max()),
-                "power_balance": balance}
+        rec = source.transfer(wp_mesh, heat_names, gf_wp_q,
+                              power_tolerance=power_tol, theta=theta_rad)
+        rec.pop("vertex_numbers")
+        return rec
 
-    first = _apply(0.0)
+    first = source.transfer(wp_mesh, heat_names, gf_wp_q,
+                            power_tolerance=power_tol)
+    vnrs = first.pop("vertex_numbers")
     audit = source.audit()
-    audit.update({"target_vertices": int(len(vnrs)),
-                  "power_tolerance": power_tol,
-                  "initial": first})
-    _log(f"Q_SURF:{source.mode} transfer to {len(vnrs)} vertices, "
-         f"max distance {first['max_transfer_distance_m']:.3e} m, "
+    audit.update({"power_tolerance": float(power_tol), "initial": first})
+    _log(f"Q_SURF:{source.mode} transfer to {first['target_vertices']} "
+         f"vertices, max distance {first['max_transfer_distance_m']:.3e} m, "
          f"P_thermal/P_EM - 1 = "
          f"{first['power_balance']['relative_error']:+.3e}")
 
-    if getattr(args, "em_table", ""):
-        q_ref = np.asarray(gf_wp_q.vec.FV().NumPy())[vnrs].copy()
-        T_ref = getattr(args, "em_reference_temperature", None)
-        if T_ref is None:
-            raise ValueError("--em-reference-temperature is required with "
+    if args.em_table:
+        if args.em_reference_temperature is None:
+            raise ValueError("--em-reference-temperature (the workpiece "
+                             "temperature of the EM run) is required with "
                              "--em-table")
+        q_ref = np.asarray(gf_wp_q.vec.FV().NumPy())[vnrs].copy()
+        xyz = ih_thermal.mesh_vertices(wp_mesh)[vnrs]
         coupled, coupled_audit = ih_thermal.build_temperature_dependent_source(
             source, table_path=args.em_table, target_xyz=xyz,
-            q_ref=q_ref, gf_target=gf_wp_q, dofs=vnrs, T_ref=float(T_ref),
-            H_scale=float(getattr(args, "ht_scale", 1.0) or 1.0),
-            ht_sol=getattr(args, "ht_sol", "") or "",
-            azimuths=int(getattr(args, "em_table_azimuths", 64) or 64) if phi_average else 0,
-            allow_extrapolation=bool(getattr(
-                args, "allow_em_table_extrapolation", False)),
-            consistency_tolerance=float(getattr(
-                args, "em_table_tolerance", None) or 0.05),
-            acknowledge_frozen_ht=bool(getattr(args, "allow_frozen_ht",
-                                               False)))
+            q_ref=q_ref, gf_target=gf_wp_q, dofs=vnrs,
+            T_ref=float(args.em_reference_temperature),
+            H_scale=float(args.ht_scale), ht_sol=args.ht_sol,
+            azimuths=int(args.em_table_azimuths) if phi_average else 0,
+            allow_extrapolation=bool(args.allow_em_table_extrapolation),
+            consistency_tolerance=args.em_table_tolerance,
+            acknowledge_frozen_ht=bool(args.allow_frozen_ht))
         audit["temperature_dependent_source"] = coupled_audit
         audit["_coupled"] = coupled
         _log(f"Q_SURF:temperature-dependent source from "
-             f"{os.path.basename(args.em_table)} (T_ref={float(T_ref):g} C, "
-             f"|H_t| {coupled_audit['H_t_range_A_m'][0]:.3e}.."
+             f"{os.path.basename(args.em_table)} (T_ref="
+             f"{float(args.em_reference_temperature):g} C, |H_t| "
+             f"{coupled_audit['H_t_range_A_m'][0]:.3e}.."
              f"{coupled_audit['H_t_range_A_m'][1]:.3e} A/m)")
         return gf_wp_q, None, audit
+    for attr, flag in (("ht_sol", "--ht-sol"),
+                       ("allow_frozen_ht", "--allow-frozen-ht")):
+        if getattr(args, attr):
+            raise ValueError(f"{flag} only applies with --em-table")
     if phi_average:
         return gf_wp_q, None, audit
 
-    worst = {"relative_error": first["power_balance"]["relative_error"]}
+    worst = {"relative_error": first["power_balance"]["relative_error"],
+             "theta_rad": 0.0}
 
     def _resample(theta_rad: float) -> None:
         rec = _apply(theta_rad)
@@ -470,6 +494,7 @@ def solve_heat(wp_vol,
                allow_frozen_ht=False,
                allow_table_extrapolation=False,
                newton_tol=1.0e-3, newton_max_iter=25,
+               max_halvings=0,
                dt=0.5, t_end=5.0,
                time_scheme="backward-euler",
                linear_solver="sparsecholesky",
@@ -569,31 +594,18 @@ def solve_heat(wp_vol,
 
     # q_surf source -- needs a Namespace-like object to thread the
     # CLI args through helper.
-    class _Args:
-        pass
-    a_local = _Args()
-    a_local.q_uniform = q_uniform
-    a_local.qsurf_sol = qsurf_sol
-    a_local.em_vol = em_vol
-    a_local.qsurf_order = qsurf_order
-    a_local.heat_flux_boundary_names = heat_flux_names
-    a_local.rotation_axis = rotation_axis
-    a_local.q_phi_average = q_phi_average
-    a_local.q_phi_bin = q_phi_bin
-    a_local.em_heat_boundaries = em_heat_boundaries
-    a_local.q_scale = q_scale
-    a_local.transfer_tolerance = transfer_tolerance
-    a_local.power_tolerance = power_tolerance
-    a_local.em_table = em_table
-    a_local.ht_sol = ht_sol
-    a_local.ht_scale = ht_scale
-    a_local.em_reference_temperature = (
-        float(t_initial) if em_reference_temperature is None
-        else float(em_reference_temperature))
-    a_local.em_table_azimuths = em_table_azimuths
-    a_local.allow_em_table_extrapolation = allow_em_table_extrapolation
-    a_local.em_table_tolerance = em_table_tolerance
-    a_local.allow_frozen_ht = allow_frozen_ht
+    a_local = qsurf_args(
+        q_uniform=q_uniform, qsurf_sol=qsurf_sol, em_vol=em_vol,
+        qsurf_order=qsurf_order, heat_flux_boundary_names=heat_flux_names,
+        rotation_axis=rotation_axis, q_phi_average=q_phi_average,
+        q_phi_bin=q_phi_bin, em_heat_boundaries=em_heat_boundaries,
+        q_scale=q_scale, transfer_tolerance=transfer_tolerance,
+        power_tolerance=power_tolerance, em_table=em_table, ht_sol=ht_sol,
+        ht_scale=ht_scale, em_reference_temperature=em_reference_temperature,
+        em_table_azimuths=em_table_azimuths,
+        allow_em_table_extrapolation=allow_em_table_extrapolation,
+        em_table_tolerance=em_table_tolerance,
+        allow_frozen_ht=allow_frozen_ht)
     heat_flux_region = wp_mesh.Boundaries(heat_flux_selector)
     try:
         q_cf, q_resample, qsurf_projection = _build_qsurf_source(
@@ -622,8 +634,8 @@ def solve_heat(wp_vol,
              f"resampling qsurf on the body frame each step.")
 
     # ------------------- Material model -------------------
-    import ih_heat_transient
-    import ih_thermal_material
+    from radia import ih_heat_transient
+    from radia import ih_thermal_material
     try:
         if material_table:
             thermal_material = ih_thermal_material.ThermalMaterial.from_csv(
@@ -693,7 +705,8 @@ def solve_heat(wp_vol,
             q_damping=None if coupled is None else coupled.gf_damping,
             linear_solver=linear_solver,
             newton_tol_K=float(newton_tol),
-            max_newton=int(newton_max_iter))
+            max_newton=int(newton_max_iter),
+            max_halvings=int(max_halvings))
         if coupled is not None:
             from ngsolve import NodeId as _NodeId, VERTEX as _VERTEX
             coupled_T_dofs = np.asarray([
@@ -779,6 +792,10 @@ def solve_heat(wp_vol,
              f"T_probe={T_probe[-1] if probe_point is not None else 'n/a'}")
 
     if nonlinear:
+        try:
+            stepper.check_energy()
+        except RuntimeError as exc:
+            return {"error": str(exc)}
         Q_input_J = stepper.audit.energy_in_J
         q_int = stepper.last_heat_input_W
     if coupled is not None:
@@ -791,7 +808,7 @@ def solve_heat(wp_vol,
     T_min, T_max, T_extrema = _temperature_extrema(
         gfT, wp_mesh, fes_order
     )
-    import ih_thermal_post
+    from radia import ih_thermal_post
     thresholds = sorted(set(float(t) for t in (exposure_thresholds or ())))
     if temperature_limit is not None:
         thresholds = sorted(set(thresholds) | {float(temperature_limit)})
@@ -835,13 +852,13 @@ def solve_heat(wp_vol,
             vol_T = os.path.join(base_dir, f"{stem}_heat.vol").replace("\\", "/")
             save_vol_sol_pair(vol_T, sol_T, wp_mesh.ngmesh, gfT)
             T_sol_file = sol_T
-            import ih_thermal
+            from radia import ih_thermal
             ih_thermal.write_field_sidecar(
                 sol_T, mesh_path=vol_T, mesh=wp_mesh,
                 fes_order=int(fes_order),
                 quantity=ih_thermal.TEMPERATURE_QUANTITY,
                 unit=ih_thermal.TEMPERATURE_UNIT,
-                extra={"producer": "calc_heat",
+                extra={"producer": "calc_heat", "geometry": "3d",
                        "t_end_s": float(t_end)})
             heat_vol_file = vol_T
             sol_entries = [
@@ -896,13 +913,13 @@ def solve_heat(wp_vol,
                 base_dir, f"{stem}_heat_T.sol").replace("\\", "/")
             gfT.Save(sol_T)
             T_sol_file = sol_T
-            import ih_thermal
+            from radia import ih_thermal
             ih_thermal.write_field_sidecar(
                 sol_T, mesh_path=wp_vol, mesh=wp_mesh,
                 fes_order=int(fes_order),
                 quantity=ih_thermal.TEMPERATURE_QUANTITY,
                 unit=ih_thermal.TEMPERATURE_UNIT,
-                extra={"producer": "calc_heat",
+                extra={"producer": "calc_heat", "geometry": "3d",
                        "t_end_s": float(t_end)})
             # heat_vol_file stays "" -- in this branch the wp_vol
             # itself IS the companion mesh (no separate _heat.vol
@@ -1103,8 +1120,12 @@ def main():
                         help="Newton step tolerance [K] of the nonlinear "
                              "integrator.")
     parser.add_argument("--newton-max-iter", type=int, default=25,
-                        help="Newton iterations per step before the step is "
-                             "halved.")
+                        help="Newton iterations per step; a step that does "
+                             "not converge fails the run.")
+    parser.add_argument("--max-halvings", type=int, default=0,
+                        help="Allow a non-converged step to be split in "
+                             "halves up to this many times (default 0: "
+                             "fail).  Every split is recorded.")
 
     # Boundary conditions.
     parser.add_argument("--h-conv", type=float, default=10.0,
@@ -1307,6 +1328,7 @@ def main():
             allow_table_extrapolation=args.allow_table_extrapolation,
             newton_tol=args.newton_tol,
             newton_max_iter=args.newton_max_iter,
+            max_halvings=args.max_halvings,
             probe_point=probe_point,
             msh_output=args.msh_output,
             csv_output=args.csv_output,
