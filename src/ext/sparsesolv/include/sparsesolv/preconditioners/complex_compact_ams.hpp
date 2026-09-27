@@ -41,7 +41,8 @@ public:
         double correction_weight = 1.0,
         int subspace_solver = 0,
         int num_smooth = 1,
-        bool smoothing_only_rows = false)
+        bool smoothing_only_rows = false,
+        bool lean_coarse = false)
         : ndof_complex_(ndof_complex > 0 ? ndof_complex : a_real_mat->Height())
     {
         // Build the real AMS hierarchy (shared for Re and Im)
@@ -49,7 +50,7 @@ public:
             a_real_mat, grad_mat, freedofs,
             coord_x, coord_y, coord_z,
             cycle_type, num_smooth, 0.25, print_level, correction_weight,
-            subspace_solver, false, false, false, smoothing_only_rows);
+            subspace_solver, false, false, false, smoothing_only_rows, lean_coarse);
 
         // Cache accessors
         ndof_hc_ = ams_->GetNdofHC();
@@ -186,6 +187,7 @@ public:
     /// prolong, final sweep; and the number of such cycles.
     std::vector<double> StageSeconds() const { return std::vector<double>(t_stage_, t_stage_ + 10); }
     long CyclesRun() const { return cycles_run_; }
+    const HypreBasedAMS& Real() const { return *ams_; }
 
 private:
     mutable double t_stage_[10] = {0};

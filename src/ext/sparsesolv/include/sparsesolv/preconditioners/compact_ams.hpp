@@ -96,14 +96,15 @@ public:
                bool beta_zero = false,
                bool reuse_hierarchy = false,
                bool mixed_precision = false,
-               bool smoothing_only_rows = false)
+               bool smoothing_only_rows = false,
+               bool lean_coarse = false)
         : mat_(mat), grad_(grad), freedofs_(freedofs),
           ndof_hc_(mat->Height()), ndof_h1_(grad->Width()),
           cycle_type_(cycle_type), num_smooth_(num_smooth),
           print_level_(print_level), correction_weight_(correction_weight),
           subspace_solver_(subspace_solver), amg_theta_(amg_theta), beta_zero_(beta_zero),
           reuse_hierarchy_(reuse_hierarchy), mixed_precision_(mixed_precision),
-          smoothing_only_rows_(smoothing_only_rows)
+          smoothing_only_rows_(smoothing_only_rows), lean_coarse_(lean_coarse)
     {
         RequireSerialSetup();
         if (mixed_precision_ && !beta_zero_)
@@ -351,6 +352,9 @@ private:
     // Empty gradient rows are dofs outside the edge space (e.g. BDDC wirebasket
     // face dofs): the fine smoother covers them, the auxiliary spaces do not.
     const bool smoothing_only_rows_;
+    // Auxiliary AMGs stop coarsening where it stalls and solve a small coarsest
+    // level with a dense inverse (CompactAMG::SetLeanCoarse).
+    const bool lean_coarse_;
     std::vector<float> abc_values_f_;  // float32 mirror of A_bc_ (mixed precision only)
     std::vector<float> pi_values_f_, pit_values_f_;  // interleaved Pi / Pi^T values (mixed, fused)
     int hierarchy_refreshes_ = 0;
@@ -652,7 +656,11 @@ private:
                 // reuse_hierarchy: coarse matrices from the native Galerkin product
                 // (the refresh path's numeric pass then runs on those patterns).
                 for (auto& amg : {amg_G, amg_Pix, amg_Piy, amg_Piz})
-                    if (amg) { amg->SetNativeGalerkin(reuse_hierarchy_); amg->SetMixedPrecision(mixed_precision_); }
+                    if (amg) {
+                        amg->SetNativeGalerkin(reuse_hierarchy_);
+                        amg->SetMixedPrecision(mixed_precision_);
+                        if (lean_coarse_) amg->SetLeanCoarse(0.8, 1024);
+                    }
             }
 
             t0 = std::chrono::high_resolution_clock::now();
