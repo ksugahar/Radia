@@ -310,3 +310,16 @@ The report bounds the gap-resolution error of this base mesh only.  It says
 nothing about the iron, outer-air or Kelvin discretisation, and nothing
 about a family built with other base sizes.
 
+## Source-load quadrature and response order (2026-09-27)
+
+`source_load_quadrature_20260927/` tests the source-load quadrature
+hypothesis above on the linear coarse mesh and does not support it.
+Load-only changes (air volume or face-flux load, iron Hodge projection,
+whole mixed-solver bonus, exact Kelvin exterior source) move gap-core B by
+less than 1e-6.  Raising the response order does move it: on Radia 5.0.1
+reduced-A vs mixed Omega goes from 0.162% at p = 2 to 0.052% at p = 3, while
+HDiv BDM2 (the highest order `vim.Solve` accepts) stays about 0.1% from
+both.  The ~0.15% mixed Omega discrepancy on this mesh is response
+discretization.  One mesh only; details and element-wise error maps are in
+that folder.
+

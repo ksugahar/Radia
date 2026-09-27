@@ -1689,6 +1689,25 @@ HCurl-VIM result by 63--89% on the recorded plate case.  The
 directly and falls back when the eigenbasis is too short at high frequency;
 that controls Foster truncation only and does not cure the model discrepancy.
 
+### Source-field quadrature near the coil
+
+`F = integral J x B_ext dV` evaluates the coil field at conductor quadrature
+points, and its largest weights sit on the elements nearest the coil; the
+drive `integral mode . A_ext` does the same.  The common
+`force("source_quadrature")` topic holds the distance classes, error levels
+and the near-element subdivision remedy.
+
+Measured on TEAM 28 (3-D HCurl eddy bubble + VIM, CoilBuilder solid coils,
+`validation_test/maglev/team28_source_quadrature_20260927/`): with the lane's
+`intorder = 10` sampling, the lift error against order 18 grows from 2e-8 at
+the nominal 10.8 mm gap to 1.2e-5 at 2 mm and 5.0e-5 at 0.5 mm.  A fine axial
+F(z) sweep shows no mesh-periodic ripple (quartic-fit residual 4e-8) and a
+smooth stiffness bias of at most 2.3e-4.  So for axial motion at these gaps
+the production sampling is adequate and no near-element correction is
+needed.  Still not measured: lateral motion (brakes, movers), which changes
+the element-to-quadrature layout, and runs that keep the eddy-hybrid default
+`intorder = 2`, which samples the source far more coarsely.
+
 ## Consistency check
 
 Routes 1 and 3 must agree: the Maxwell stress on an enclosing surface

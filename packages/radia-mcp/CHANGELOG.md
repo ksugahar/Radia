@@ -7,6 +7,14 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+### Added
+
+- `force("source_quadrature")`: quadrature of an analytic source field on
+  elements near the source (reduced-potential loads, `J x B_ext`, drive
+  terms), with the distance classes, the measured C-type error levels and the
+  near-element subdivision remedy. MagLev `force_computation` points to it and
+  states that its lift and F(z)-ripple consequences are not yet measured.
+
 ## [1.6.0] - 2026-09-18
 
 ### Changed

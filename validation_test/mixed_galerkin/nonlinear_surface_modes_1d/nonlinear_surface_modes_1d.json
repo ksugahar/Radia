@@ -1,0 +1,122 @@
+{
+  "schema": "radia.validation.nonlinear-surface-modes-1d.v1",
+  "host": "intel11",
+  "python": "3.12.10",
+  "numpy": "2.5.2",
+  "scipy": "1.17.1",
+  "script_sha256": "71b93e5f22cda13e41fbbb047874c56f19b921c8260d6753261a9d85de3cb885",
+  "acceptance": "HOLD: projection (best-approximation) error, not a solved ROM",
+  "parameters": {
+    "L_m": 0.01,
+    "sigma_S_per_m": 5000000.0,
+    "mur": 1000.0,
+    "Js_T": 1.6,
+    "freq_Hz": 50.0,
+    "delta_linear_m": 0.0010065842420897407,
+    "cells": 2000,
+    "steps_per_period": 800,
+    "periods": 4,
+    "bh": "B = mu0 H + Js tanh(mu0 mur H / Js)"
+  },
+  "training_amplitudes_A_per_m": [
+    30.0,
+    300.0,
+    3000.0,
+    30000.0
+  ],
+  "surface_pod_singular_value_ratios": [
+    1.0,
+    0.35456949444724356,
+    0.08232116311112772,
+    0.05588516618673794,
+    0.03389538488630663
+  ],
+  "metric": "relative space-time L2 projection error over the last period",
+  "rows": [
+    {
+      "H0_A_per_m": 10.0,
+      "surface_peak_B_T": 0.012578678605709779,
+      "in_training_set": false,
+      "bulk_only_n5": 0.24709376813187356,
+      "bulk_only_n7": 0.06111415575479587,
+      "bulk_only_n9": 0.009686007785914733,
+      "bulk5_plus_analytic_surface2": 0.0002052042830599685,
+      "bulk5_plus_surface_pod2": 0.005499381356418968,
+      "bulk5_plus_surface_pod4": 0.001670851647669195,
+      "bulk5_plus_analytic2_plus_pod2": 8.28767730749169e-05
+    },
+    {
+      "H0_A_per_m": 100.0,
+      "surface_peak_B_T": 0.1255316201639154,
+      "in_training_set": false,
+      "bulk_only_n5": 0.24703219074952068,
+      "bulk_only_n7": 0.06109025030630978,
+      "bulk_only_n9": 0.009688860138911244,
+      "bulk5_plus_analytic_surface2": 0.00019407630456534704,
+      "bulk5_plus_surface_pod2": 0.005476707002388162,
+      "bulk5_plus_surface_pod4": 0.0016613740138024524,
+      "bulk5_plus_analytic2_plus_pod2": 8.09338914210162e-05
+    },
+    {
+      "H0_A_per_m": 1000.0,
+      "surface_peak_B_T": 1.0505273612737118,
+      "in_training_set": false,
+      "bulk_only_n5": 0.24120277723174444,
+      "bulk_only_n7": 0.05908035865304061,
+      "bulk_only_n9": 0.010463492444890785,
+      "bulk5_plus_analytic_surface2": 0.003918533194628114,
+      "bulk5_plus_surface_pod2": 0.004920336970966562,
+      "bulk5_plus_surface_pod4": 0.00201419918945606,
+      "bulk5_plus_analytic2_plus_pod2": 0.0019472995024091026
+    },
+    {
+      "H0_A_per_m": 3000.0,
+      "surface_peak_B_T": 1.5752793191958898,
+      "in_training_set": true,
+      "bulk_only_n5": 0.20871579501905832,
+      "bulk_only_n7": 0.05543486445895176,
+      "bulk_only_n9": 0.019476393358942915,
+      "bulk5_plus_analytic_surface2": 0.020702520552878075,
+      "bulk5_plus_surface_pod2": 0.019356169916261858,
+      "bulk5_plus_surface_pod4": 0.008605086310049226,
+      "bulk5_plus_analytic2_plus_pod2": 0.008920680609272395
+    },
+    {
+      "H0_A_per_m": 10000.0,
+      "surface_peak_B_T": 1.6125658883689038,
+      "in_training_set": false,
+      "bulk_only_n5": 0.1298726979229572,
+      "bulk_only_n7": 0.05823319692914814,
+      "bulk_only_n9": 0.031845784702863464,
+      "bulk5_plus_analytic_surface2": 0.04190979675967672,
+      "bulk5_plus_surface_pod2": 0.04042020948364864,
+      "bulk5_plus_surface_pod4": 0.015398834373765236,
+      "bulk5_plus_analytic2_plus_pod2": 0.01573245766160471
+    },
+    {
+      "H0_A_per_m": 30000.0,
+      "surface_peak_B_T": 1.6376991118430777,
+      "in_training_set": true,
+      "bulk_only_n5": 0.08257203873048335,
+      "bulk_only_n7": 0.0439203101823664,
+      "bulk_only_n9": 0.02699941720991234,
+      "bulk5_plus_analytic_surface2": 0.0386941731261394,
+      "bulk5_plus_surface_pod2": 0.037592912570358926,
+      "bulk5_plus_surface_pod4": 0.016389346236390708,
+      "bulk5_plus_analytic2_plus_pod2": 0.01660103471818902
+    },
+    {
+      "H0_A_per_m": 100000.0,
+      "surface_peak_B_T": 1.7256637061435918,
+      "in_training_set": false,
+      "bulk_only_n5": 0.03951999999445592,
+      "bulk_only_n7": 0.02226464457738683,
+      "bulk_only_n9": 0.01446954060418926,
+      "bulk5_plus_analytic_surface2": 0.023437365735218197,
+      "bulk5_plus_surface_pod2": 0.023083842841077028,
+      "bulk5_plus_surface_pod4": 0.0147800519504063,
+      "bulk5_plus_analytic2_plus_pod2": 0.014827295839839624
+    }
+  ],
+  "runtime_s": 117.1880070999614
+}
