@@ -435,6 +435,7 @@ def solve_heat(wp_vol,
                q_phi_average=False, q_phi_bin=None,
                em_heat_boundaries="", q_scale=1.0,
                transfer_tolerance=None, power_tolerance=None,
+               exposure_thresholds=(), temperature_limit=None,
                dt=0.5, t_end=5.0,
                time_scheme="backward-euler",
                linear_solver="sparsecholesky",
@@ -609,6 +610,11 @@ def solve_heat(wp_vol,
         probe_mip = _locate_probe(wp_mesh, probe_point)
         T_probe.append(_probe_value(gfT, probe_mip))
 
+    from ngsolve import NodeId, VERTEX
+    vertex_dofs_T = np.asarray([
+        fes_T.GetDofNrs(NodeId(VERTEX, vtx.nr))[0]
+        for vtx in wp_mesh.vertices])
+    T_max_history = [float(t_initial)]
     n_steps = int(math.ceil(t_end / dt))
     Q_input_J = 0.0
     heat_flux_audit = _boundary_role_audit(
@@ -651,6 +657,8 @@ def solve_heat(wp_vol,
             q_int = float(heat_flux_audit["heat_input_W"])
         Q_input_J += q_int * float(dt)
         t_arr.append(t)
+        T_max_history.append(
+            float(np.max(gfT.vec.FV().NumPy()[vertex_dofs_T])))
         if probe_mip is not None:
             T_probe.append(_probe_value(gfT, probe_mip))
         _log(f"STEP:{step}/{n_steps} t={t:.3f}s "
@@ -662,6 +670,24 @@ def solve_heat(wp_vol,
     T_min, T_max, T_extrema = _temperature_extrema(
         gfT, wp_mesh, fes_order
     )
+    import ih_thermal_post
+    thresholds = sorted(set(float(t) for t in (exposure_thresholds or ())))
+    if temperature_limit is not None:
+        thresholds = sorted(set(thresholds) | {float(temperature_limit)})
+    thermal_exposure = ih_thermal_post.thermal_exposure(
+        wp_mesh, gfT, thresholds, axis=rotation_axis)
+    limit_record = (ih_thermal_post.limit_check(thermal_exposure,
+                                                temperature_limit)
+                    if temperature_limit is not None else None)
+    for entry in thermal_exposure["thresholds"]:
+        _log(f"EXPOSURE:T>{entry['T_C']:g} C volume "
+             f"{entry['volume_m3'] * 1e9:.3f} mm^3 "
+             f"({entry['volume_fraction']:.3%})")
+    if "hottest_ring" in thermal_exposure:
+        ring = thermal_exposure["hottest_ring"]
+        if "spread_C" in ring:
+            _log(f"EXPOSURE:hottest ring r={ring['r_m']:.4g} m spread "
+                 f"{ring['spread_C']:.1f} C around the {rotation_axis} axis")
     # Volume-averaged mean temperature -- the integral quantity
     # (int T dV / int dV), the physically meaningful "average" rather
     # than a nodal mean (kubota 2026-05-29: report mean/max/min).
@@ -828,6 +854,9 @@ def solve_heat(wp_vol,
                            else "qsurf_sol")),
         "q_phi_average": bool(q_phi_average),
         "qsurf_projection": qsurf_projection,
+        "thermal_exposure": thermal_exposure,
+        "temperature_limit": limit_record,
+        "T_max_history_C": T_max_history,
         "qsurf_sol": qsurf_sol if q_uniform is None else "",
         "em_vol": em_vol if q_uniform is None else "",
         "T_sol_file": T_sol_file,
@@ -942,6 +971,15 @@ def main():
                              "mode is simply --qsurf-sol with "
                              "--rotation-rpm 0 (the spatial q applied as-is, "
                              "non-axisymmetric).")
+    parser.add_argument("--exposure-thresholds", default="",
+                        help="Comma-separated temperatures [degC]; the "
+                             "result reports the volume above each, where "
+                             "it is and how it is distributed.")
+    parser.add_argument("--temperature-limit", type=float, default=None,
+                        help="Temperature limit [degC] (for example the "
+                             "solidus of the workpiece alloy).  The result "
+                             "reports whether and by how much it is "
+                             "exceeded, as a constraint for optimisers.")
     parser.add_argument("--q-phi-average-n", default=None,
                         help=argparse.SUPPRESS)
     parser.add_argument("--q-phi-bin", type=float, default=None,
@@ -1023,6 +1061,13 @@ def main():
         if (args.q_uniform is None) and (not args.qsurf_sol):
             return {"error":
                     "Either --q-uniform or --qsurf-sol is required."}
+        try:
+            thresholds = [float(t) for t in
+                          str(args.exposure_thresholds).split(",")
+                          if t.strip()]
+        except ValueError:
+            return {"error": "--exposure-thresholds must be comma-separated "
+                             f"numbers, got {args.exposure_thresholds!r}"}
         if args.q_phi_average_n is not None:
             return {"error":
                     "--q-phi-average-n was removed: --q-phi-average now "
@@ -1062,6 +1107,8 @@ def main():
             q_scale=args.q_scale,
             transfer_tolerance=args.transfer_tolerance,
             power_tolerance=args.power_tolerance,
+            exposure_thresholds=thresholds,
+            temperature_limit=args.temperature_limit,
             probe_point=probe_point,
             msh_output=args.msh_output,
             csv_output=args.csv_output,
