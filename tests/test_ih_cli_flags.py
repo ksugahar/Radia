@@ -14,7 +14,8 @@ PANELS = os.path.join(ROOT, "src", "radia", "panels")
 CASES = {
     "calc_heat.py": (["--max-halvings", "--allow-frozen-ht",
                       "--em-reference-temperature", "--power-tolerance",
-                      "--em-heat-boundaries"],
+                      "--em-heat-boundaries", "--rotor-states",
+                      "--angle-step-tolerance"],
                      ["--q-phi-average-n", "--surface-label"]),
     "calc_heat_axisym.py": (["--max-halvings", "--allow-frozen-ht",
                              "--n-phi-samples", "--power-tolerance"],

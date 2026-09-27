@@ -15,7 +15,7 @@ Chain under test::
 Why this test exists
 ====================
 
-The cross-mesh projection in ``calc_heat._build_qsurf_cf`` walks every
+The cross-mesh projection in ``calc_heat._build_qsurf_source`` walks every
 workpiece-mesh surface vertex and queries the EM mesh's GridFunction
 at that point.  A regression in any of:
 
@@ -206,7 +206,7 @@ def test_fem_kelvin_to_heat_chain(tmp_path):
         f"err {err_pct:.2f}% (tol {exp_h['tolerance_qsurf_int_pct']}%).  "
         f"Most likely cause: cross-mesh transfer regressed -- "
         f"check the surface-vertex enumeration in "
-        f"calc_heat._build_qsurf_cf.")
+        f"calc_heat._build_qsurf_source.")
 
     # Cross-mesh sanity vs the EM-side P_total.  Looser bracket
     # because the two surfaces are meshed independently.
