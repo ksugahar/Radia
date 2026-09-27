@@ -106,13 +106,16 @@ def wall_source(em, zs):
 def route_a(mesh, frequency, current, dt, t_end, em_every):
     import ih_heat_transient as iht
     import ih_thermal_material as itm
+    from ngsolve import TaskManager
     th = itm.ThermalMaterial.constant(RHO, CP, K)
     t0 = time.time()
-    result, gfT, em = C.run_coupled(
-        mesh, frequency=frequency, workpiece="wp", coils={"coil": current},
-        dirichlet="axis|outer|top|bot", em_material=em_material(),
-        thermal_material=th, boundaries=iht.HeatBoundaryTerms(), dt=dt,
-        t_end=t_end, t_initial=T0, em_every=em_every)
+    with TaskManager():
+        result, gfT, em = C.run_coupled(
+            mesh, frequency=frequency, workpiece="wp",
+            coils={"coil": current}, dirichlet="axis|outer|top|bot",
+            em_material=em_material(), thermal_material=th,
+            boundaries=iht.HeatBoundaryTerms(), dt=dt, t_end=t_end,
+            t_initial=T0, em_every=em_every)
     return {"dt_s": dt, "em_every": em_every,
             "runtime_s": time.time() - t0,
             "t_s": [h["t_s"] for h in result["history"]],
@@ -227,6 +230,11 @@ def main():
         print(f"route A dt={dt} em_every={every}: T_max(end)="
               f"{run['T_max_C'][-1]:.1f} C  P(end)={run['P_W'][-1]:.0f} W  "
               f"({run['runtime_s']:.0f}s)", flush=True)
+    os.makedirs(os.path.dirname(a.out), exist_ok=True)
+    partial = a.out + ".route_A.json"
+    with open(partial, "w", encoding="utf-8") as fh:     # keep A if B fails
+        json.dump({"route_A_ladder": runs, "host": platform.node()}, fh,
+                  indent=1)
     em = C.AxisymEddyCurrent(mesh, frequency=a.frequency, workpiece="wp",
                              coils={"coil": a.current},
                              dirichlet="axis|outer|top|bot")
@@ -260,6 +268,7 @@ def main():
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as fh:
         json.dump(result, fh, indent=1)
+    os.remove(partial)
     ref = finest
     tB = np.asarray(rb["fixed_source"]["t_s"])
     for t in (1.0, 2.0, 3.0, a.t_end):
