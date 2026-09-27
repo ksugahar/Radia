@@ -11,6 +11,7 @@
 #include <core/register_archive.hpp>
 #else
 #include "meshing.hpp"
+#include "boundarylayer.hpp"
 #include <core/register_archive.hpp>
 #endif
 
@@ -542,10 +543,16 @@ namespace netgen
     while (lam<1. && hvalue.Size() < 20000) {
       fine_params.Append(lam);
       auto h = mesh.GetH(old_p, layer);
-      auto step = safety * h/GetTangent(lam).Length();
-      lam += step;
-      lam = min2(lam, 1.0);
+      auto tanlen = GetTangent(lam).Length();
+      auto step = tanlen > 0 ? safety * h/tanlen : 1.0-lam;
+      lam = min2(lam+step, 1.0);
       p = GetPoint(lam);
+      for(int cnt = 0; (p-old_p).Length() > h && lam > fine_params.Last() && cnt < 30; cnt++)
+        {
+          step *= 0.5;
+          lam = min2(fine_params.Last()+step, 1.0);
+          p = GetPoint(lam);
+        }
       hvalue.Append((hvalue.Size()==0 ? 0.0 : hvalue.Last()) + 1./h * (p-old_p).Length());
       old_p = p;
     }
@@ -639,6 +646,16 @@ namespace netgen
     auto nedges = edges.Size();
     Array<Array<PointIndex>> all_pnums(nedges);
     Array<Array<double>> all_params(nedges);
+
+    // Build edge→face mapping: for each edge, store the first two faces that use it (1-based)
+    Array<int> edge_first_face(edges.Size());
+    edge_first_face = -1;
+    for (int k = 0; k < (int)faces.Size(); k++)
+        for (auto * edge_ptr : faces[k]->edges)
+          {
+            if (edge_first_face[edge_ptr->nr] < 0)
+                edge_first_face[edge_ptr->nr] = k + 1;
+          }
 
     for (auto edgenr : Range(edges))
     {
@@ -754,25 +771,37 @@ namespace netgen
             pnums[i+1] = pi;
         }
 
+        // create edge descriptor for this geometric edge
+        EdgeDescriptor ed;
+        ed.SetEdgeNr(edgenr+1);
+        ed.SetName(edge->properties.GetName());
+        ed.SetSingEdgeLeft(edge->properties.hpref);
+        ed.SetSingEdgeRight(edge->properties.hpref);
+
+        // Populate surfnr/domin/domout from the faces array so that
+        // RebuildFDIndices() can reconstruct the index after load.
+        // (FaceDescriptors don't exist yet - they're created in MeshSurface.)
+        int fdi = (edgenr < edge_first_face.Size() && edge_first_face[edgenr] > 0)
+                  ? edge_first_face[edgenr] : edgenr + 1;
+        ed.SetSurfNr(0, edge->domin+1);
+        ed.SetSurfNr(1, edge->domout+1);
+        ed.SetDomainIn(edge->domin+1);
+        ed.SetDomainOut(edge->domout+1);
+        ed.SetIndex(fdi);
+        auto edsi = mesh.AddEdgeDescriptor(ed);
+
         for(auto i : Range(pnums.Size()-1))
         {
           // segnr++;
             Segment seg;
             seg[0] = pnums[i];
             seg[1] = pnums[i+1];
-            seg.edgenr = edgenr+1;
-            seg.si = edgenr+1;
-            seg.epgeominfo[0].dist = params[i];
-            seg.epgeominfo[1].dist = params[i+1];
-            seg.epgeominfo[0].edgenr = edgenr;
-            seg.epgeominfo[1].edgenr = edgenr;
-            seg.singedge_left = edge->properties.hpref;
-            seg.singedge_right = edge->properties.hpref;
-            seg.domin = edge->domin+1;
-            seg.domout = edge->domout+1;
+            seg.SetIndex(edsi);
+            seg.EPGeomInfo(0).dist = params[i];
+            seg.EPGeomInfo(1).dist = params[i+1];
             mesh.AddSegment(seg);
         }
-        mesh.SetCD2Name(edgenr+1, edge->properties.GetName());
+        mesh.SetCD2Name(edsi, edge->properties.GetName());
     }
 
     for (auto & edge : edges)
@@ -845,10 +874,10 @@ namespace netgen
       {
         PointGeomInfo gi0, gi1;
         gi0.trignum = gi1.trignum = k+1;
-        gi0.u = seg.epgeominfo[0].u;
-        gi0.v = seg.epgeominfo[0].v;
-        gi1.u = seg.epgeominfo[1].u;
-        gi1.v = seg.epgeominfo[1].v;
+        gi0.u = seg.GeomInfo(0).u;
+        gi0.v = seg.GeomInfo(0).v;
+        gi1.u = seg.GeomInfo(1).u;
+        gi1.v = seg.GeomInfo(1).v;
         meshing.AddBoundaryElement(glob2loc[seg[0]],
                                    glob2loc[seg[1]],
                                    gi0, gi1);
@@ -877,8 +906,6 @@ namespace netgen
     multithread.task = "Mesh Surface";
     mesh.ClearFaceDescriptors();
 
-    size_t n_failed_faces = 0;
-    Array<int, PointIndex> glob2loc(mesh.GetNP());
     for(auto k : Range(faces))
     {
         auto & face = *faces[k];
@@ -887,6 +914,22 @@ namespace netgen
           fd.SetSurfColour(*face.properties.col);
         mesh.AddFaceDescriptor(fd);
         mesh.SetBCName(k, face.properties.GetName());
+    }
+
+    int max_index = mesh.GetNFD();
+    for(const auto & sel : mesh.SurfaceElements())
+        max_index = max2(max_index, sel.GetIndex());
+    while(mesh.GetNFD() < max_index)
+    {
+        FaceDescriptor fd(mesh.GetNFD()+1, 0, 0, -1);
+        mesh.AddFaceDescriptor(fd);
+    }
+
+    size_t n_failed_faces = 0;
+    Array<int, PointIndex> glob2loc(mesh.GetNP());
+    for(auto k : Range(faces))
+    {
+        auto & face = *faces[k];
         if(face.primary == &face)
         {
             // check if this face connects two identified closesurfaces
@@ -894,7 +937,7 @@ namespace netgen
             std::set<int> relevant_edges;
             auto segments = face.GetBoundary(mesh);
             for(const auto &s : segments)
-                relevant_edges.insert(s.edgenr-1);
+                relevant_edges.insert(mesh.GetEdgeDescriptor(s.GetIndex()).EdgeNr()-1);
 
             Array<bool, PointIndex> is_point_in_tree(mesh.Points().Size());
             is_point_in_tree = false;
@@ -925,7 +968,7 @@ namespace netgen
                 }
                 for(const auto & s : segments)
                 {
-                    auto edgenr = s.edgenr-1;
+                    auto edgenr = mesh.GetEdgeDescriptor(s.GetIndex()).EdgeNr()-1;
                     auto & edge = *edges[edgenr];
                     // ShapeIdentification *edge_mapping;
 
@@ -957,8 +1000,8 @@ namespace netgen
                         auto gis = sel.GeomInfo();
                         for(auto i : Range(2))
                         {
-                            gis[i].u = s.epgeominfo[i].u;
-                            gis[i].v = s.epgeominfo[i].v;
+                            gis[i].u = s.GeomInfo(i).u;
+                            gis[i].v = s.GeomInfo(i).v;
                         }
 
                         Point<3> p2 = mesh[s[1]];
@@ -989,8 +1032,8 @@ namespace netgen
                         for(auto i : Range(2))
                         {
                             auto i_other = sel[i+2] == s_other[i] ? i : 1-i;
-                            gis[i+2].u = s_other.epgeominfo[i_other].u;
-                            gis[i+2].v = s_other.epgeominfo[i_other].v;
+                            gis[i+2].u = s_other.GeomInfo(i_other).u;
+                            gis[i+2].v = s_other.GeomInfo(i_other).v;
                         }
 
                         sel.SetIndex(face.nr+1);
@@ -1110,7 +1153,7 @@ namespace netgen
                 p = (*trafo)(p);
               else
                 for(auto& edge: dst.edges)
-                  if (edge->primary->nr == seg.edgenr-1)
+                  if (edge->primary->nr == mesh.GetEdgeDescriptor(seg.GetIndex()).EdgeNr()-1)
                     {
                       if (mesh[pi].Type() == FIXEDPOINT) {
                         if((edge->GetStartVertex().GetPoint() - p).Length2() >\
@@ -1137,8 +1180,8 @@ namespace netgen
               pmap[tree.Find(mesh[pi], -1)] = pi;
 
             // store uv values (might be different values for same point in case of internal edges)
-            double u = seg.epgeominfo[i].u;
-            double v = seg.epgeominfo[i].v;
+            double u = seg.GeomInfo(i).u;
+            double v = seg.GeomInfo(i).v;
             auto & vals = uv_values[pi];
             bool found = false;
             for(const auto & [u1,v1] : vals)
@@ -1355,9 +1398,14 @@ namespace netgen
         return 0;
       }
 
+    Array<BoundaryLayer2dInfo> bl_infos;
     if (mparam.perfstepsstart <= MESHCONST_MESHSURFACE)
       {
+        if(dimension == 2)
+          bl_infos = InsertBoundaryLayers2d(*mesh, mparam);
         MeshSurface(*mesh, mparam);
+        if(dimension == 2)
+          FinalizeBoundaryLayers2d(*mesh, bl_infos);
       }
 
     if (multithread.terminate || mparam.perfstepsend <= MESHCONST_OPTSURFACE)

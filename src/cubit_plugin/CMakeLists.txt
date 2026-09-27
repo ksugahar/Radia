@@ -25,8 +25,10 @@ set(COMPACT_NETGEN_OVERRIDES "" CACHE PATH "Compact Netgen overrides directory")
 
 # Option 1: Compact Netgen (source compiled directly into plugin)
 # Netgen sources are snapshotted in compact_netgen/netgen_src/ (no external dependency).
-# To update: copy libsrc/ files from upstream netgen, apply COMPACT_NETGEN_STATIC patch
-# to ngcore_api.hpp and mydefs.hpp.
+# Snapshot: upstream v6.2.2607 plus local patches (static-library macros in
+# ngcore_api.hpp/mydefs.hpp, BlockAllocator mutex lifetime, CurvedElements
+# coefficient accessors, pyramid base-edge blending in EvaluateMapping).
+# To update, run compact_netgen/update_snapshot.py (three-way merge).
 if(NOT COMPACT_NETGEN_OVERRIDES)
   set(COMPACT_NETGEN_OVERRIDES "${CMAKE_CURRENT_SOURCE_DIR}/compact_netgen")
 endif()
@@ -87,6 +89,7 @@ if(EXISTS "${NETGEN_SNAP}/meshing/meshing.hpp" AND EXISTS "${COMPACT_NETGEN_OVER
       COMPACT_NETGEN_STATIC       # DLL_HEADER / NGCORE_API = empty
       NO_PARALLEL_THREADS         # NgMutex = empty class (TaskManager disabled)
       # OpenMP is still used for BuildCurvedElements parallelization
+      CUBIT_MESH_EXPORT_NETGEN_EDGE_DESCRIPTOR_API  # snapshot >= 6.2.2605
     )
     # Enable OpenMP for edge/face curving parallelization
     find_package(OpenMP)

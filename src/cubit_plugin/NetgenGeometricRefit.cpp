@@ -108,7 +108,8 @@ struct Entity
   ng::SurfaceElementIndex sei;   // surface element used for evaluation
   int surfnr = -1;               // surface for normal-distance entities
   bool on_curve = false;         // distance to a geometric curve instead
-  int surfnr1 = -1, surfnr2 = -1;
+  int surfnr1 = -1, surfnr2 = -1;   // curve: 1-based face descriptors
+  int edgenr = -1;                  // curve: geometric edge number
   std::vector<std::array<double, 2>> fit_ref, check_ref;  // reference points
   std::vector<double> fit_w;
   double scale = 1;              // characteristic length (edge length)
@@ -192,8 +193,8 @@ struct Refitter
     dirs.clear();
     if (e.on_curve) {
       ng::EdgePointGeomInfo egi;
-      geo.ProjectPointEdge(e.surfnr1, e.surfnr2, q, &egi);
-      ng::Vec<3> t = geo.GetTangent(q, e.surfnr1, e.surfnr2, egi);
+      geo.ProjectPointEdge(e.surfnr1, e.surfnr2, q, &egi, e.edgenr);
+      ng::Vec<3> t = geo.GetTangent(q, e.surfnr1, e.surfnr2, egi, e.edgenr);
       double tl = t.Length();
       if (!(tl > 0)) return false;
       t /= tl;
@@ -567,10 +568,12 @@ GeometricRefitStats geometric_refit(ng::Mesh & mesh)
       E.sei = sei;
       auto it = curve_edge.find(ei);
       if (it != curve_edge.end()) {
-        const ng::Segment & seg = mesh[ng::SegmentIndex(it->second)];
+        const ng::EdgeDescriptor & ed =
+            mesh.GetEdgeDescriptor(mesh[ng::SegmentIndex(it->second)]);
         E.on_curve = true;
-        E.surfnr1 = seg.surfnr1;
-        E.surfnr2 = seg.surfnr2;
+        E.surfnr1 = ed.SurfNr(0);
+        E.surfnr2 = ed.SurfNr(1);
+        E.edgenr = ed.EdgeNr();
       } else if (edge_surf[ei] >= 0) {
         E.surfnr = edge_surf[ei];
       } else {

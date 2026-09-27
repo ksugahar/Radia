@@ -10,36 +10,39 @@ namespace ngcore
 // ============================================================
 // TaskManager — single-threaded stub (no thread pool)
 // ============================================================
+// Netgen >= 6.2.2607 keeps the task manager per instance behind a
+// thread_local pointer.  No instance is ever created here, so every
+// parallel region runs inline on the calling thread.
+thread_local TaskManager * task_manager = nullptr;
+TaskManager * GetTaskManager() { return task_manager; }
+
 bool TaskManager::use_paje_trace = false;
 int TaskManager::max_threads = 1;
-int TaskManager::num_threads = 1;
 thread_local int TaskManager::thread_id = 0;
+// -1 disables timers: NgProfiler then never touches per-worker storage.
+thread_local int TaskManager::timer_thread_id = -1;
+thread_local WorkerData * TaskManager::worker_data = nullptr;
 
-const std::function<void(TaskInfo&)> * TaskManager::func = nullptr;
-const std::function<void()> * TaskManager::startup_function = nullptr;
-const std::function<void()> * TaskManager::cleanup_function = nullptr;
-
-std::atomic<int> TaskManager::ntasks{0};
-Exception * TaskManager::ex = nullptr;
-std::atomic<int> TaskManager::jobnr{0};
-std::atomic<int> TaskManager::complete[8] = {};
-std::atomic<int> TaskManager::done{0};
-std::atomic<int> TaskManager::active_workers{0};
-std::atomic<int> TaskManager::workers_on_node[8] = {};
-int TaskManager::sleep_usecs = 1000;
-bool TaskManager::sleep = false;
-TaskManager::NodeData *TaskManager::nodedata[8] = {};
-int TaskManager::num_nodes = 1;
-
-TaskManager::TaskManager() { num_threads = 1; }
+WorkerData::~WorkerData() {}
+TaskManager::TaskManager(int) : taskqueue_ptr(nullptr), num_nodes(1), num_threads(1) {}
 TaskManager::~TaskManager() {}
 void TaskManager::StartWorkers() {}
 void TaskManager::StopWorkers() {}
-// SuspendWorkers, ResumeWorkers, GetMaxThreads are inline in header
-void TaskManager::SetNumThreads(int) { num_threads = 1; }
+void TaskManager::SetNumThreads(int) {}
 int TaskManager::GetThreadId() { return thread_id; }
+int TaskManager::GetTimerThreadId() { return timer_thread_id; }
+WorkerData * TaskManager::GetWorkerData() { return worker_data; }
+bool TaskManager::ProcessTask() { return false; }
+void TaskManager::Loop(int) {}
+std::list<std::tuple<std::string, double>> TaskManager::Timing() { return {}; }
+void RunWithTaskManager(std::function<void()> alg) { alg(); }
+int EnterTaskManager(int) { return 0; }
+void ExitTaskManager(int) {}
+
 void TaskManager::CreateJob(const std::function<void(TaskInfo&)> &f, int antasks) {
-  // Single-threaded fallback: run all tasks sequentially
+  // Single-threaded fallback: run all tasks sequentially.  antasks = -1
+  // means "one task per thread", i.e. one task here.
+  if (antasks < 1) antasks = 1;
   for (int i = 0; i < antasks; i++) {
     TaskInfo ti;
     ti.task_nr = i;
@@ -55,15 +58,12 @@ void TaskManager::CreateJob(const std::function<void(TaskInfo&)> &f, int antasks
 // ============================================================
 std::vector<NgProfiler::TimerVal> NgProfiler::timers;
 std::string NgProfiler::filename;
-std::array<size_t, NgProfiler::SIZE> NgProfiler::dummy_thread_times = {};
-size_t * NgProfiler::thread_times = NgProfiler::dummy_thread_times.data();
-std::array<size_t, NgProfiler::SIZE> NgProfiler::dummy_thread_flops = {};
-size_t * NgProfiler::thread_flops = NgProfiler::dummy_thread_flops.data();
 std::shared_ptr<Logger> NgProfiler::logger;
 
 NgProfiler::NgProfiler() {}
 NgProfiler::~NgProfiler() {}
 void NgProfiler::Print(FILE*) {}
+void NgProfiler::Reset() {}
 int NgProfiler::CreateTimer(const std::string &) {
   // Must return a valid index into timers vector
   timers.push_back(TimerVal());
