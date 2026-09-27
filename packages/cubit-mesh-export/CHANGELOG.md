@@ -13,6 +13,14 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 - The snapshot fixes the curved-pyramid base-edge blending in Netgen's
   vectorised element transformation.  NGSolve up to 6.2.2607 still has the
   defect, so `export netgen` warns when it writes curved pyramids.
+- High-order nodes written to Gmsh/Nastran/VTK and the refit's Jacobian
+  checks evaluate volume elements through Netgen's multi-point
+  transformation, the path NGSolve assembles with.  The scalar path ignored
+  hex quad-face curvature and read uninitialised derivative rows, which made
+  one refit decision on a curved hex/pyramid/tet mesh depend on the build.
+- The plugin is built with `_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR`: Cubit
+  2025.12 ships MSVCP140 14.31, which crashes on the constexpr `std::mutex`
+  produced by MSVC 14.40 and newer.
 
 - `export netgen` refits Netgen's curved edge/face coefficients by
   minimising the distance to the CAD geometry.  Netgen's fixed-parameter L2

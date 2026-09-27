@@ -255,18 +255,20 @@ struct Refitter
   }
 
   // Jacobian determinants of the adjacent volume elements at interior
-  // sample points (empty for a surface-only mesh).
+  // sample points (empty for a surface-only mesh).  Uses Netgen's
+  // multi-point transformation, the path NGSolve assembles with: the scalar
+  // CalcElementTransformation ignores hex quad-face coefficients and leaves
+  // their derivative rows uninitialised.
   std::vector<double> volume_det_samples(const Entity & e)
   {
     std::vector<double> d;
     for (auto ei : e.volumes)
-      for (const auto & xi : volume_ref_points(mesh[ei].GetType())) {
-        ng::Point<3> x;
-        ng::Mat<3, 3> jac;
-        curved.CalcElementTransformation(xi, ei, x, jac);
-        d.push_back(jac(0, 0) * (jac(1, 1) * jac(2, 2) - jac(1, 2) * jac(2, 1))
-                  - jac(0, 1) * (jac(1, 0) * jac(2, 2) - jac(1, 2) * jac(2, 0))
-                  + jac(0, 2) * (jac(1, 0) * jac(2, 1) - jac(1, 1) * jac(2, 0)));
+      for (const auto & p : volume_ref_points(mesh[ei].GetType())) {
+        double xi[3] = {p(0), p(1), p(2)}, x[3], j[9];
+        curved.CalcMultiPointElementTransformation(ei, 1, xi, 3, x, 3, j, 9);
+        d.push_back(j[0] * (j[4] * j[8] - j[5] * j[7])
+                  - j[1] * (j[3] * j[8] - j[5] * j[6])
+                  + j[2] * (j[3] * j[7] - j[4] * j[6]));
       }
     return d;
   }

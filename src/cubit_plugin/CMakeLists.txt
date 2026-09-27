@@ -176,6 +176,10 @@ set_target_properties(cubit_mesh_export_ccm PROPERTIES
     COMPILE_PDB_NAME "cubit_mesh_export_ccm"
 )
 target_link_libraries(cubit_mesh_export_ccm cubiti cubit_util cubit_geom)
+# Cubit 2025.12 loads its bundled MSVCP140.dll 14.31.  Since MSVC 14.40 the
+# std::mutex constructor is constexpr, and a mutex built that way crashes in
+# lock() against an older runtime.  Keep the pre-14.40 constructor.
+target_compile_definitions(cubit_mesh_export_ccm PRIVATE _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
 
 # DELAYLOAD cubit_geom so the .ccm can still load even if
 # cubit_geom.dll init is deferred until first geometry call
