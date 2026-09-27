@@ -25,6 +25,7 @@ calculation.
 """
 from __future__ import annotations
 
+import functools
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -126,6 +127,25 @@ class StaticElectromagnetMixedDomain:
         }
 
 
+def _memoized_coil(function):
+    """Evaluate a RadiaField source once per point for the whole solve.
+
+    The source projections, their gates and flux diagnostics, and the linear
+    load all integrate the coil on the same boundary quadrature points; on
+    ESRF Example 6 those repeats took 810 of the 1193 s of a Newton solve.  A
+    memoising RadiaField returns the identical value on a repeat.  Other
+    coefficient types are untouched, and the cache is cleared afterwards.
+    """
+    @functools.wraps(function)
+    def wrapper(mesh, source_h, *args, **kwargs):
+        from radia.kelvin_solver import _memoized_source
+
+        with _memoized_source(source_h):
+            return function(mesh, source_h, *args, **kwargs)
+    return wrapper
+
+
+@_memoized_coil
 def solve_static_electromagnet_mixed_total_reduced_omega(
     mesh,
     source_h,
