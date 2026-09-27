@@ -928,7 +928,14 @@ class EMHeatSource:
             sidecar=self.sidecar, thermal_names=thermal_names)
         self.surface = SurfaceP1Field.from_gridfunction(
             self.em_mesh, self.gf, self.em_boundaries)
-        self.power = self.surface.power
+        # Reference power on the mesh geometry as loaded (curved elements
+        # included); the flat-triangle value only feeds the transfer.
+        from ngsolve import BND, Integrate
+        self.power = float(Integrate(
+            self.gf, self.em_mesh, BND,
+            definedon=self.em_mesh.Boundaries("|".join(self.em_boundaries))
+        ).real)
+        self.power_flat = self.surface.power
         self.sidecar_power = None
         if self.sidecar and self.sidecar.get("P_wp_W") is not None:
             ref = float(self.sidecar["P_wp_W"]) * self.q_scale
@@ -973,6 +980,7 @@ class EMHeatSource:
             "em_heat_boundary_rule": self.boundary_rule,
             "q_scale": self.q_scale,
             "source_power_W": self.power,
+            "source_power_flat_W": self.power_flat,
             "sidecar_power_check": self.sidecar_power,
             "transfer_tolerance_m": self.transfer_tolerance,
             "source_h_median_m": self.surface.h_median,
@@ -1242,7 +1250,7 @@ def build_temperature_dependent_source(source: "EMHeatSource", *, table_path,
         q_tab = table.q(H_v, np.full(H_v.shape, float(T_ref)))
         P_tab = p1_surface_power(em.points, em.tris, q_tab)
         audit["consistency"] = power_balance(
-            P_tab, source.power, consistency_tolerance,
+            P_tab, source.power_flat, consistency_tolerance,
             what="impedance table at the reference temperature against the "
                  "EM power",
             hint="The table must be built for the material, frequency and "
