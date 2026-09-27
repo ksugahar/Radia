@@ -44,6 +44,15 @@ Coil current trajectory:
   --coil-current-csv <2col.csv>      ``t_s, I_A_peak``
                                      (linear interp, clamp ends)
 
+Production route
+----------------
+``calc_heat.py --em-table`` (and ``calc_heat_axisym.py --em-table``) is the
+production temperature-dependent source: it keeps the EM solution exactly
+at the reference temperature, checks the table against the EM run, uses
+the enthalpy Newton integrator with temperature-dependent materials, and
+reports thermal exposure.  This module remains for the incident
+Biot-Savart source (``--ht-source biot``) and for its existing contracts.
+
 This module is a pragmatic *engineering* replacement for the
 sigma(T) coupling research-track that was dropped 2026-05-24.  Its
 single dominant simplification is that the SPATIAL distribution of
@@ -76,8 +85,11 @@ from calc_heat import (  # noqa: E402
     THERMAL_PRESETS,
     _boundary_role_audit,
     _input_mesh_geometry_audit,
+    _locate_probe,
+    _probe_value,
     _resolve_boundary_role,
     _resolve_material,
+    _temperature_extrema,
 )
 
 
@@ -308,7 +320,8 @@ def solve_heat_em_table(wp_vol, em_table_path,
                          fes_order=1,
                          linear_solver="sparsecholesky",
                          probe_point=None,
-                         csv_output=""):
+                         csv_output="",
+                         allow_table_extrapolation=False):
     """Backward-Euler heat solve with per-step 2D-table q_surf lookup."""
     setup_paths()
     t0 = time.perf_counter()
@@ -329,6 +342,13 @@ def solve_heat_em_table(wp_vol, em_table_path,
          f"T_range=[{tab.T_grid[0]:.1f},{tab.T_grid[-1]:.1f}] C")
 
     wp_mesh = Mesh(wp_vol)
+    if wp_mesh.dim != 3 or wp_mesh.ne == 0:
+        return {"error": f"--wp-vol {os.path.basename(wp_vol)} must be a 3D "
+                         "volume mesh of the workpiece solid"}
+    if len(set(wp_mesh.GetMaterials())) > 1:
+        return {"error": "thermal analysis targets the WORKPIECE ONLY, but "
+                         f"--wp-vol has materials "
+                         f"{sorted(set(wp_mesh.GetMaterials()))}"}
     try:
         mesh_geometry = _input_mesh_geometry_audit(wp_mesh, fes_order)
     except ValueError as exc:
@@ -360,7 +380,9 @@ def solve_heat_em_table(wp_vol, em_table_path,
     fes_T = H1(wp_mesh, order=int(fes_order))
     u, v = fes_T.TnT()
     gfT = GridFunction(fes_T)
-    gfT.vec[:] = float(t_initial)
+    # Set() interpolates the constant; a constant coefficient vector is not
+    # a constant field for hierarchical H1 order >= 2.
+    gfT.Set(CF(float(t_initial)))
     _log(f"FES:H1 order={fes_order} ndof={fes_T.ndof}")
 
     # -------------------- |H_t_ref(r)| --------------------
@@ -384,13 +406,12 @@ def solve_heat_em_table(wp_vol, em_table_path,
             wp_mesh, dof_xyz, em_vol, ht_sol, ht_order)
         _log(f"HT_REF:projected {n_ok}/{n_surf} surface DOFs from "
              f"{os.path.basename(ht_sol)} (NaN tagged outside)")
-        if n_ok == 0:
+        if n_ok != n_surf:
             return {"error":
-                    "--ht-sol projection produced zero valid DOFs.  "
-                    "Check that --em-vol matches the .sol that was saved."}
-        # Replace NaN with 0 so the lookup returns 0 (clamped to H_min
-        # which gives ~0 q_surf for steel BH below the first tabulated H).
-        Ht_ref_arr = np.where(np.isfinite(Ht_ref_arr), Ht_ref_arr, 0.0)
+                    f"--ht-sol could be evaluated at only {n_ok}/{n_surf} "
+                    "heat-flux DOFs; the thermal surface is not inside the "
+                    "EM mesh.  No zero-field fallback is applied.  Use "
+                    "calc_heat.py --em-table for surface-projected transfer."}
     elif ht_source == "biot":
         if not coil_step:
             return {"error":
@@ -419,8 +440,10 @@ def solve_heat_em_table(wp_vol, em_table_path,
              f"image_factor={biot_image_factor:g}; |H_t| range "
              f"[{float(np.min(Ht_ref_arr)):.3e},"
              f"{float(np.max(Ht_ref_arr)):.3e}] A/m")
-        # Defensive: zero out any non-finite (degenerate geometry).
-        Ht_ref_arr = np.where(np.isfinite(Ht_ref_arr), Ht_ref_arr, 0.0)
+        if not np.all(np.isfinite(Ht_ref_arr)):
+            return {"error": "the incident |H_t| is not finite at "
+                             f"{int((~np.isfinite(Ht_ref_arr)).sum())} DOFs "
+                             "(degenerate coil or surface geometry)"}
     else:
         return {"error": f"Unknown --ht-source {ht_source!r}"}
 
@@ -469,12 +492,19 @@ def solve_heat_em_table(wp_vol, em_table_path,
     T_avg_hist = []
     T_max_hist = []
 
+    probe_mip = None
     if probe_point is not None:
         try:
-            mip = wp_mesh(*[float(c) for c in probe_point])
-            T_probe_hist.append(float(getattr(gfT(mip), "real", gfT(mip))))
-        except Exception:
-            T_probe_hist.append(float("nan"))
+            probe_mip = _locate_probe(wp_mesh, probe_point)
+        except ValueError as exc:
+            return {"error": str(exc)}
+        T_probe_hist.append(_probe_value(gfT, probe_mip))
+    from ngsolve import NodeId, VERTEX
+    vertex_dofs_T = np.asarray([fes_T.GetDofNrs(NodeId(VERTEX, vx.nr))[0]
+                                for vx in wp_mesh.vertices])
+    volume = float(Integrate(CF(1.0), wp_mesh).real)
+    lo_T, hi_T = float(tab.T_grid[0]), float(tab.T_grid[-1])
+    max_T_excursion = 0.0
 
     Q_input_J = 0.0
     for step in range(1, n_steps + 1):
@@ -488,6 +518,19 @@ def solve_heat_em_table(wp_vol, em_table_path,
         # and dof_vnrs ARE H1 DOFs for fes_T (order=fes_order; ndof=
         # ngVertices + edge/face DOFs, but surface VERTEX DOFs come first).
         T_dof = np.asarray([float(Tv_fv[int(idx)]) for idx in dof_vnrs])
+        over = max(0.0, float(T_dof.max()) - hi_T, lo_T - float(T_dof.min()))
+        if over > 0.0:
+            if not allow_table_extrapolation:
+                return {"error":
+                        f"t={t:.4g} s: surface temperature "
+                        f"{T_dof.min():.1f}..{T_dof.max():.1f} C leaves the "
+                        f"EM table {lo_T:.1f}..{hi_T:.1f} C; extend the table "
+                        "or pass --allow-table-extrapolation"}
+            max_T_excursion = max(max_T_excursion, over)
+        if float(np.max(Ht_now)) > float(tab.H_grid[-1]) and \
+                not allow_table_extrapolation:
+            return {"error": f"t={t:.4g} s: |H_t| {np.max(Ht_now):.3e} A/m "
+                             "exceeds the EM table"}
         q_dof = interp_qsurf(tab, Ht_now, T_dof)
 
         qv_fv[:] = 0.0
@@ -513,40 +556,31 @@ def solve_heat_em_table(wp_vol, em_table_path,
                                  definedon=heat_flux_region).real)
         Q_input_J += q_int * float(dt)
 
-        T_vol = np.asarray(gfT.vec.FV().NumPy())
-        T_max_now = float(np.max(T_vol))
-        T_min_now = float(np.min(T_vol))
-        # T_avg is the volume mean of the FE DOFs -- with H1 order=1 on
-        # tets this is close to the mass-weighted spatial mean (off by
-        # the regular-tet correction factor 1.0 / (1 - 1/(d+1))).  Good
-        # enough as a tracking diagnostic; full mass-weighted average
-        # if the user enables --integrate-T-avg in v2.
-        T_avg_now = float(np.mean(T_vol))
+        T_vert = np.asarray(gfT.vec.FV().NumPy())[vertex_dofs_T]
+        T_max_now = float(np.max(T_vert))
+        T_avg_now = float(Integrate(gfT, wp_mesh).real) / volume
 
         t_arr.append(t)
         T_avg_hist.append(T_avg_now)
         T_max_hist.append(T_max_now)
         P_total_hist.append(q_int)
 
-        if probe_point is not None:
-            try:
-                mip = wp_mesh(*[float(c) for c in probe_point])
-                val = gfT(mip)
-                T_probe_hist.append(float(getattr(val, "real", val)))
-            except Exception:
-                T_probe_hist.append(float("nan"))
+        if probe_mip is not None:
+            T_probe_hist.append(_probe_value(gfT, probe_mip))
         _log(f"STEP:{step}/{n_steps} t={t:.3f}s I={I_now:.2f}A "
              f"P_in={q_int:.3e}W T_avg={T_avg_now:.2f}C "
              f"T_max={T_max_now:.2f}C")
 
-    T_arr_final = np.asarray(gfT.vec.FV().NumPy())
+    T_min_final, T_max_final, T_extrema = _temperature_extrema(
+        gfT, wp_mesh, fes_order)
+    T_avg_final = float(Integrate(gfT, wp_mesh).real) / volume
     heat_flux_audit = _boundary_role_audit(
         wp_mesh, heat_flux_names, q_cf=gf_q)
     convection_audit = _boundary_role_audit(wp_mesh, convection_names)
     radiation_audit = _boundary_role_audit(wp_mesh, radiation_names)
     t_total = time.perf_counter() - t0
-    _log(f"DONE:T_max={float(np.max(T_arr_final)):.2f}C "
-         f"T_avg={float(np.mean(T_arr_final)):.2f}C "
+    _log(f"DONE:T_max={T_max_final:.2f}C "
+         f"T_avg={T_avg_final:.2f}C "
          f"Q_in={Q_input_J:.4e}J t={t_total:.1f}s")
 
     # Optional CSV history.
@@ -564,12 +598,15 @@ def solve_heat_em_table(wp_vol, em_table_path,
                                 f"{Pi:.6f}", f"{Tai:.6f}", f"{Tmi:.6f}"])
             _log(f"CSV:wrote {os.path.basename(csv_output)}")
         except Exception as e:
-            _log(f"CSV_ERROR:{type(e).__name__}: {e}")
+            raise RuntimeError(f"could not write {csv_output}: "
+                               f"{type(e).__name__}: {e}") from e
 
     return {
-        "T_max_C": float(np.max(T_arr_final)),
-        "T_min_C": float(np.min(T_arr_final)),
-        "T_avg_C": float(np.mean(T_arr_final)),
+        "T_max_C": T_max_final,
+        "T_min_C": T_min_final,
+        "T_extrema": T_extrema,
+        "T_avg_C": T_avg_final,
+        "table_T_excursion_C": max_T_excursion,
         "T_initial_C": float(t_initial),
         "T_probe_history_C": T_probe_hist if probe_point is not None else None,
         "t_history_s": t_arr,
@@ -704,6 +741,9 @@ def main():
                         help=argparse.SUPPRESS)
     parser.add_argument("--probe-point", default="",
                         help="Optional 'x,y,z' [m] probe point.")
+    parser.add_argument("--allow-table-extrapolation", action="store_true",
+                        help="Clamp surface temperatures / |H_t| outside "
+                             "the EM table instead of failing.")
     parser.add_argument("--csv-output", default="",
                         help="Optional CSV of (t, I, P, T_avg, T_max).")
 
@@ -747,6 +787,7 @@ def main():
             linear_solver=args.linear_solver,
             probe_point=probe_point,
             csv_output=args.csv_output,
+            allow_table_extrapolation=args.allow_table_extrapolation,
         )
 
     calc_main(run, parser)
