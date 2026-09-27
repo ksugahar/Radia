@@ -231,6 +231,8 @@ def build_inside_cubit(
         int(surface)
         for volume in iron_volumes
         for surface in cubit.get_relatives("volume", volume, "surface")
+        if set(cubit.get_relatives("surface", surface, "volume"))
+        & (air_volumes | magnet_volumes)
     }
     _add_sideset(cubit, 1, "iron_air_interface", iron_surfaces)
 
@@ -242,18 +244,25 @@ def build_inside_cubit(
         raise RuntimeError(f"Could not load {helper}")
     kelvin_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(kelvin_module)
-    kelvin_module.add_kelvin_cubit(
+    kelvin = kelvin_module.add_kelvin_cubit(
         R=float(kelvin_radius_m),
         air_block="air",
         symmetry=["z"],
         mesh_size=float(kelvin_size_m),
         kelvin_block="kelvin",
     )
+    boundary_spec = importlib.util.spec_from_file_location(
+        "_esrf_kelvin_boundary", HERE / "build_esrf_coil_yoke_kelvin_mesh.py")
+    boundary_module = importlib.util.module_from_spec(boundary_spec)
+    boundary_spec.loader.exec_module(boundary_module)
+    removed_kelvin_faces = boundary_module._remove_kelvin_internal_sides(
+        cubit, kelvin["outer_vols"])
     air_block = _block_id(cubit, "air")
     cubit.cmd(
         f"block {air_block} add volume {' '.join(map(str, sorted(magnet_volumes)))}"
     )
     return {
+        "removed_kelvin_internal_surfaces": removed_kelvin_faces,
         "iron_volumes": sorted(iron_volumes),
         "magnet_volumes": sorted(magnet_volumes),
         "physical_air_volumes": sorted(air_volumes),
