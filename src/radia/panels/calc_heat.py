@@ -24,12 +24,9 @@ Inputs
                       is preserved by per-vertex sampling onto this
                       thermal mesh's surface.
 
-``--em-vol``          The EM .vol the qsurf-sol was computed on.
-                      Needed to reconstruct the GridFunction on the
-                      EM mesh before sampling.  Falls back to
-                      ``<qsurf-sol stem>_fem.vol`` (the file
-                      ``calc_fem_kelvin.py`` writes alongside) when
-                      omitted.
+``--em-vol``          The EM .vol the qsurf-sol was computed on (required).
+                      When the .sol has a ``.sol.json`` sidecar the mesh
+                      digest, order and EM power are verified against it.
 
 ``--q-uniform``       Alternative to qsurf-sol: a UNIFORM scalar
                       heat flux [W/m^2].  Useful for testing and
@@ -296,26 +293,33 @@ def _validate_qsurf_transfer_order(order):
 # -----------------------------------------------------------------
 
 def _build_qsurf_cf(wp_mesh, args):
-    """Return ``(q_cf, resample_fn)`` describing q_surf on the heating
-    face of the workpiece thermal mesh.
+    """Return ``(q_cf, resample_fn)``; see :func:`_build_qsurf_source`."""
+    q_cf, resample, _audit = _build_qsurf_source(wp_mesh, args)
+    return q_cf, resample
 
-    ``resample_fn(theta_rad)`` is a closure that, when called with a
-    rotation angle ``theta_rad`` (radians), updates the underlying
-    GridFunction backing ``q_cf`` so that q_surf is re-sampled with
-    the workpiece body rotated by ``+theta_rad`` around the z axis
-    relative to the EM frame.  Used by the time loop when
-    ``--rotation-rpm > 0`` on the spatial-qsurf path.
 
-    ``resample_fn`` is ``None`` for the uniform path (rotation
-    has no effect on a constant source).
+def _build_qsurf_source(wp_mesh, args):
+    """Return ``(q_cf, resample_fn, audit)`` for the heating face.
 
-    Three modes, in priority order:
-      1. ``--q-uniform`` : constant scalar everywhere on the face.
-      2. ``--qsurf-sol`` + ``--em-vol`` : load the EM-mesh GridFunction,
-         project onto wp_mesh's surface vertices.  Re-projectable.
-      3. Both omitted : raise (no heat input).
+    Modes, in priority order:
+
+    1. ``--q-uniform``: a constant flux; ``resample_fn`` is ``None``.
+    2. ``--qsurf-sol`` + ``--em-vol`` with ``--q-phi-average``: the exact
+       circumferential average of the EM source
+       (:class:`ih_thermal.AxisymmetricSurfaceProfile`); static, so
+       ``resample_fn`` is ``None``.
+    3. ``--qsurf-sol`` + ``--em-vol``: the EM source evaluated at the thermal
+       heat-flux vertices by projection onto the EM heated surface.
+       ``resample_fn(theta)`` re-evaluates it with the body rotated by
+       ``theta`` about ``--rotation-axis``.
+
+    Every thermal heat-flux vertex must lie on the EM heated surface within
+    the transfer tolerance, and the transferred power must match the EM
+    power within ``--power-tolerance``; otherwise the solve is refused.
     """
-    from ngsolve import (Mesh, H1, GridFunction, CoefficientFunction, BND)
+    from ngsolve import (H1, GridFunction, CoefficientFunction, BND,
+                         Integrate)
+    import ih_thermal
 
     if getattr(args, "q_phi_average", False) and args.q_uniform is not None:
         raise ValueError(
@@ -325,195 +329,92 @@ def _build_qsurf_cf(wp_mesh, args):
 
     if args.q_uniform is not None:
         _log(f"Q_SURF:uniform {args.q_uniform:.4e} W/m^2")
-        return CoefficientFunction(float(args.q_uniform)), None
+        return (CoefficientFunction(float(args.q_uniform)), None,
+                {"mode": "uniform"})
 
     if not args.qsurf_sol:
         raise ValueError(
             "Either --q-uniform or --qsurf-sol is required (no heat "
             "input was supplied).")
 
-    qsurf_sol = os.path.abspath(args.qsurf_sol)
-    if not os.path.isfile(qsurf_sol):
-        raise FileNotFoundError(f"--qsurf-sol not found: {qsurf_sol}")
-
     # The EM .vol that the .sol was saved against MUST be supplied
-    # explicitly.  Pre-2026-05-20 we auto-located a sibling
-    # ``<stem>_fem.vol`` when --em-vol was omitted; that silent fallback
-    # picked the wrong file when the user renamed the .sol or copied
-    # it to a directory without the sibling, and violated CLAUDE.md
-    # "No Fallbacks" / fail-fast policy.  NGSolve's .sol format is a
-    # raw coefficient vector (no embedded mesh / no embedded fes
-    # order), so the only safe contract is: both files explicitly.
+    # explicitly: NGSolve's .sol format is a raw coefficient vector (no
+    # embedded mesh / order), so the only safe contract is both files.
     if not args.em_vol:
         raise ValueError(
             "--em-vol is required when --qsurf-sol is supplied.  "
             "NGSolve .sol files do not contain mesh information, "
             "so the EM .vol that the .sol was saved against must "
-            "be passed explicitly.  Typically this is the "
-            "``<stem>_fem.vol`` file that calc_fem_kelvin.py writes "
-            "next to the ``<stem>_qsurf.sol`` -- pass that path.")
-    em_vol = os.path.abspath(args.em_vol)
-    if not os.path.isfile(em_vol):
-        raise FileNotFoundError(f"--em-vol not found: {em_vol}")
+            "be passed explicitly.")
+    _validate_qsurf_transfer_order(args.qsurf_order)
 
-    _log(f"Q_SURF:loading {os.path.basename(qsurf_sol)} on "
-         f"{os.path.basename(em_vol)}")
-
-    em_mesh = Mesh(em_vol)
-    qsurf_order = _validate_qsurf_transfer_order(args.qsurf_order)
-    fes_q_em = H1(em_mesh, order=qsurf_order)
-    gf_q_em = GridFunction(fes_q_em)
-    gf_q_em.Load(qsurf_sol)
-
-    # Project onto the wp_mesh surface vertices by point evaluation.
-    # The wp thermal mesh and the EM mesh both describe the same
-    # physical workpiece outer surface, possibly with different
-    # element sizes -- pointwise sampling handles that.
-    fes_wp_q = H1(wp_mesh, order=qsurf_order)
-    gf_wp_q = GridFunction(fes_wp_q)
-    gf_wp_q.vec[:] = 0
-
-    # Enumerate surface vertices by walking boundary elements (NGSolve
-    # does not expose "vertices on boundary X" directly).  Filter by the
-    # requested heat-flux boundaries (``el.mat`` is the BND name).
-    heat_flux_boundary_names = set(args.heat_flux_boundary_names)
-    surf_vertex_nrs = set()
-    for el in wp_mesh.Elements(BND):
-        if el.mat not in heat_flux_boundary_names:
-            continue
-        for v in el.vertices:
-            surf_vertex_nrs.add(v.nr)
-
-    # Pre-extract surface-vertex (x,y,z) coordinates once so the
-    # resample closure can apply rotation cheaply (no per-step
-    # ``wp_mesh.vertices[vnr].point`` Python overhead).
-    surf_vnrs_list = sorted(surf_vertex_nrs)
-    surf_xyz = [
-        tuple(float(c) for c in wp_mesh.vertices[vnr].point)
-        for vnr in surf_vnrs_list
-    ]
-
-    # Rotation axis selection (v4.78.0+): allow the workpiece to spin
-    # around x / y / z instead of the hardcoded +z that pre-2026-05-25
-    # silently assumed.  Workpieces exported with a horizontal axis
-    # (e.g. billet along x) would silently get the wrong physics under
-    # the previous "spin around z" assumption.
-    axis_str = getattr(args, "rotation_axis", "z") or "z"
-    axis_str = str(axis_str).lower().strip()
+    axis_str = str(getattr(args, "rotation_axis", "z") or "z").lower().strip()
     if axis_str not in ("x", "y", "z"):
         raise ValueError(
-            f"--rotation-axis must be one of x / y / z (got "
-            f"{axis_str!r}).  Workpiece spin around an arbitrary axis "
-            f"is not yet supported.")
+            f"--rotation-axis must be one of x / y / z (got {axis_str!r}).")
 
-    def _project(theta_rad: float) -> tuple[int, int]:
-        """In-place re-sampling at body-rotation angle ``theta_rad``.
+    heat_names = list(args.heat_flux_boundary_names)
+    phi_average = bool(getattr(args, "q_phi_average", False))
+    source = ih_thermal.EMHeatSource(
+        args.qsurf_sol, args.em_vol,
+        thermal_names=heat_names,
+        em_boundaries=getattr(args, "em_heat_boundaries", None) or None,
+        mode="phi-average" if phi_average else "direct",
+        axis=axis_str,
+        q_scale=float(getattr(args, "q_scale", 1.0) or 1.0),
+        transfer_tolerance=getattr(args, "transfer_tolerance", None),
+        bin_width=getattr(args, "q_phi_bin", None))
+    power_tol = float(getattr(args, "power_tolerance", None)
+                      or ih_thermal.DEFAULT_POWER_TOLERANCE)
+    _log(f"Q_SURF:{os.path.basename(source.qsurf_sol)} on "
+         f"{os.path.basename(source.em_vol)} ({source.pair_audit['provenance']}), "
+         f"EM boundaries {source.em_boundaries} ({source.boundary_rule}), "
+         f"P_EM={source.power:.6e} W")
 
-        Returns (n_ok, n_fail) for the most recent projection.  When
-        theta_rad == 0 this reproduces the original (single-shot)
-        projection used pre-2026-05-20.
+    vnrs = ih_thermal.boundary_vertex_numbers(wp_mesh, heat_names)
+    xyz = ih_thermal.mesh_vertices(wp_mesh)[vnrs]
+    gf_wp_q = GridFunction(H1(wp_mesh, order=1))
+    region = wp_mesh.Boundaries("|".join(heat_names))
 
-        Rotation axis is selected by ``args.rotation_axis`` (x / y / z,
-        default z) -- positive ``theta_rad`` is CCW viewed from the
-        positive end of the axis (right-hand rule).
-        """
-        c, s = math.cos(theta_rad), math.sin(theta_rad)
-        gf_wp_q.vec[:] = 0
-        n_ok = n_fail = 0
-        fv = gf_wp_q.vec.FV()
-        for vnr, (xb, yb, zb) in zip(surf_vnrs_list, surf_xyz):
-            # Workpiece body rotates +theta_rad around the chosen axis;
-            # compute the world coordinate of body point (xb, yb, zb).
-            if axis_str == "z":
-                xw = xb * c - yb * s
-                yw = xb * s + yb * c
-                zw = zb
-            elif axis_str == "y":
-                # Rotation around y: x'=c*x+s*z, y'=y, z'=-s*x+c*z
-                xw = xb * c + zb * s
-                yw = yb
-                zw = -xb * s + zb * c
-            else:  # axis_str == "x"
-                # Rotation around x: x'=x, y'=c*y-s*z, z'=s*y+c*z
-                xw = xb
-                yw = yb * c - zb * s
-                zw = yb * s + zb * c
-            try:
-                em_mip = em_mesh(xw, yw, zw)
-                val = gf_q_em(em_mip)
-                fv[vnr] = float(getattr(val, "real", val))
-                n_ok += 1
-            except Exception:
-                n_fail += 1
-        return n_ok, n_fail
+    def _apply(theta_rad: float) -> dict:
+        values, dist = source.values_at_xyz(xyz, theta_rad)
+        vec = gf_wp_q.vec.FV().NumPy()
+        vec[:] = 0.0
+        vec[vnrs] = values
+        power = float(Integrate(gf_wp_q, wp_mesh, BND,
+                                definedon=region).real)
+        balance = ih_thermal.power_balance(
+            power, source.power, power_tol,
+            what="thermal heat input against the EM source power",
+            scale=source.surface.magnitude_power,
+            hint=ih_thermal.TRANSFER_POWER_HINT)
+        return {"theta_rad": float(theta_rad),
+                "max_transfer_distance_m": float(dist.max()),
+                "power_balance": balance}
 
-    def _phi_average(n_angles: int) -> tuple[int, int]:
-        """Circumferential (phi) average of the spatial q_surf.
+    first = _apply(0.0)
+    audit = source.audit()
+    audit.update({"target_vertices": int(len(vnrs)),
+                  "power_tolerance": power_tol,
+                  "initial": first})
+    _log(f"Q_SURF:{source.mode} transfer to {len(vnrs)} vertices, "
+         f"max distance {first['max_transfer_distance_m']:.3e} m, "
+         f"P_thermal/P_EM - 1 = "
+         f"{first['power_balance']['relative_error']:+.3e}")
+    if phi_average:
+        return gf_wp_q, None, audit
 
-        For each surface vertex, sample the EM q_surf at ``n_angles``
-        body-rotation angles evenly spaced over 2*pi (around
-        ``args.rotation_axis``) and average over the in-EM-mesh samples,
-        producing an AXISYMMETRIC (phi-independent) q_surf written into
-        gf_wp_q.  This is the steady limit a fast-spinning workpiece
-        converges to -- computed once, without rotation time-stepping.
-        """
-        m = max(1, int(n_angles))
-        accum = [0.0] * len(surf_vnrs_list)
-        cnt = [0] * len(surf_vnrs_list)
-        for kk in range(m):
-            th = 2.0 * math.pi * kk / m
-            c, s = math.cos(th), math.sin(th)
-            for i, (xb, yb, zb) in enumerate(surf_xyz):
-                if axis_str == "z":
-                    xw = xb * c - yb * s; yw = xb * s + yb * c; zw = zb
-                elif axis_str == "y":
-                    xw = xb * c + zb * s; yw = yb; zw = -xb * s + zb * c
-                else:  # x
-                    xw = xb; yw = yb * c - zb * s; zw = yb * s + zb * c
-                try:
-                    val = gf_q_em(em_mesh(xw, yw, zw))
-                    accum[i] += float(getattr(val, "real", val))
-                    cnt[i] += 1
-                except Exception:
-                    pass
-        gf_wp_q.vec[:] = 0
-        fv = gf_wp_q.vec.FV()
-        n_ok = 0
-        for i, vnr in enumerate(surf_vnrs_list):
-            if cnt[i] > 0:
-                fv[vnr] = accum[i] / cnt[i]
-                n_ok += 1
-        return n_ok, len(surf_vnrs_list) - n_ok
-
-    # uniform / phi-average path: write an axisymmetric q once and return
-    # resample_fn=None (the time loop treats a None resampler as a static
-    # source, exactly like --q-uniform).
-    if getattr(args, "q_phi_average", False):
-        n_avg = int(getattr(args, "q_phi_average_n", 48) or 48)
-        n_ok, n_fail = _phi_average(n_avg)
-        _log(f"Q_SURF:phi-averaged (uniform/axisymmetric) {n_ok}/"
-             f"{n_ok + n_fail} surface vertices over n={n_avg} angles "
-             f"around {axis_str} -- no rotation time-stepping.")
-        if n_fail > n_ok:
-            _log("Q_SURF:WARNING majority of wp surface vertices fell "
-                 "outside the EM mesh -- check the two .vol files.")
-        return gf_wp_q, None
-
-    # Initial projection at theta=0 (original behaviour) so callers
-    # that ignore the resampler get the same q_cf they had pre-2026-05-20.
-    n_ok, n_fail = _project(0.0)
-    _log(f"Q_SURF:projected {n_ok}/{n_ok + n_fail} surface "
-         f"vertices ({n_fail} outside EM mesh, set to 0)")
-    if n_fail > n_ok:
-        _log("Q_SURF:WARNING majority of wp surface vertices fell "
-             "outside the EM mesh -- check that the two .vol files "
-             "describe the same physical workpiece geometry.")
+    worst = {"relative_error": first["power_balance"]["relative_error"]}
 
     def _resample(theta_rad: float) -> None:
-        """Public resampler — updates gf_wp_q.vec in place."""
-        _project(theta_rad)
+        rec = _apply(theta_rad)
+        rel = rec["power_balance"]["relative_error"]
+        if abs(rel) > abs(worst["relative_error"]):
+            worst["relative_error"] = rel
+            worst["theta_rad"] = rec["theta_rad"]
 
-    return gf_wp_q, _resample
+    audit["rotation_worst_power_error"] = worst
+    return gf_wp_q, _resample, audit
 
 
 # -----------------------------------------------------------------
@@ -531,7 +432,9 @@ def solve_heat(wp_vol,
                radiation_boundaries="",
                q_uniform=None, qsurf_sol="", em_vol="",
                qsurf_order=1,
-               q_phi_average=False, q_phi_average_n=48,
+               q_phi_average=False, q_phi_bin=None,
+               em_heat_boundaries="", q_scale=1.0,
+               transfer_tolerance=None, power_tolerance=None,
                dt=0.5, t_end=5.0,
                time_scheme="backward-euler",
                linear_solver="sparsecholesky",
@@ -641,9 +544,17 @@ def solve_heat(wp_vol,
     a_local.heat_flux_boundary_names = heat_flux_names
     a_local.rotation_axis = rotation_axis
     a_local.q_phi_average = q_phi_average
-    a_local.q_phi_average_n = q_phi_average_n
+    a_local.q_phi_bin = q_phi_bin
+    a_local.em_heat_boundaries = em_heat_boundaries
+    a_local.q_scale = q_scale
+    a_local.transfer_tolerance = transfer_tolerance
+    a_local.power_tolerance = power_tolerance
     heat_flux_region = wp_mesh.Boundaries(heat_flux_selector)
-    q_cf, q_resample = _build_qsurf_cf(wp_mesh, a_local)
+    try:
+        q_cf, q_resample, qsurf_projection = _build_qsurf_source(
+            wp_mesh, a_local)
+    except (ValueError, FileNotFoundError) as exc:
+        return {"error": str(exc)}
 
     # Rotation control: when --rotation-rpm > 0 AND a resampler is
     # available (spatial qsurf only -- uniform is rotation-invariant),
@@ -693,13 +604,10 @@ def solve_heat(wp_vol,
     # ------------------- Time loop -------------------
     t_arr = [0.0]
     T_probe = []
+    probe_mip = None
     if probe_point is not None:
-        try:
-            mip = wp_mesh(*[float(c) for c in probe_point])
-            T_probe.append(float(gfT(mip).real if hasattr(gfT(mip), "real")
-                                  else gfT(mip)))
-        except Exception:
-            T_probe.append(float("nan"))
+        probe_mip = _locate_probe(wp_mesh, probe_point)
+        T_probe.append(_probe_value(gfT, probe_mip))
 
     n_steps = int(math.ceil(t_end / dt))
     Q_input_J = 0.0
@@ -743,13 +651,8 @@ def solve_heat(wp_vol,
             q_int = float(heat_flux_audit["heat_input_W"])
         Q_input_J += q_int * float(dt)
         t_arr.append(t)
-        if probe_point is not None:
-            try:
-                mip = wp_mesh(*[float(c) for c in probe_point])
-                val = gfT(mip)
-                T_probe.append(float(getattr(val, "real", val)))
-            except Exception:
-                T_probe.append(float("nan"))
+        if probe_mip is not None:
+            T_probe.append(_probe_value(gfT, probe_mip))
         _log(f"STEP:{step}/{n_steps} t={t:.3f}s "
              f"T_probe={T_probe[-1] if probe_point is not None else 'n/a'}")
 
@@ -785,6 +688,14 @@ def solve_heat(wp_vol,
             vol_T = os.path.join(base_dir, f"{stem}_heat.vol").replace("\\", "/")
             save_vol_sol_pair(vol_T, sol_T, wp_mesh.ngmesh, gfT)
             T_sol_file = sol_T
+            import ih_thermal
+            ih_thermal.write_field_sidecar(
+                sol_T, mesh_path=vol_T, mesh=wp_mesh,
+                fes_order=int(fes_order),
+                quantity=ih_thermal.TEMPERATURE_QUANTITY,
+                unit=ih_thermal.TEMPERATURE_UNIT,
+                extra={"producer": "calc_heat",
+                       "t_end_s": float(t_end)})
             heat_vol_file = vol_T
             sol_entries = [
                 {"sol": sol_T, "fes": "H1",
@@ -812,14 +723,17 @@ def solve_heat(wp_vol,
                      "fes_dim": 1,
                      "name": "q_surf", "ncomp": 1})
             except Exception as e:
-                _log(f"GMSH_qsurf overlay skipped: "
-                     f"{type(e).__name__}: {e}")
+                raise RuntimeError(
+                    f"could not write the q_surf overlay: "
+                    f"{type(e).__name__}: {e}") from e
             vol2msh(msh_output, vol_T, sol_entries)
             gmsh_file = msh_output
             _log(f"GMSH:wrote {os.path.basename(msh_output)} "
                  f"({len(sol_entries)} fields)")
         except Exception as e:
-            _log(f"GMSH_ERROR:{type(e).__name__}: {e}")
+            raise RuntimeError(
+                f"thermal field export to {msh_output} failed: "
+                f"{type(e).__name__}: {e}") from e
     elif _write_solution:
         # No --msh-output requested.  Still save the T GridFunction
         # next to the wp .vol so a later evaluation pass (e.g.
@@ -835,6 +749,14 @@ def solve_heat(wp_vol,
                 base_dir, f"{stem}_heat_T.sol").replace("\\", "/")
             gfT.Save(sol_T)
             T_sol_file = sol_T
+            import ih_thermal
+            ih_thermal.write_field_sidecar(
+                sol_T, mesh_path=wp_vol, mesh=wp_mesh,
+                fes_order=int(fes_order),
+                quantity=ih_thermal.TEMPERATURE_QUANTITY,
+                unit=ih_thermal.TEMPERATURE_UNIT,
+                extra={"producer": "calc_heat",
+                       "t_end_s": float(t_end)})
             # heat_vol_file stays "" -- in this branch the wp_vol
             # itself IS the companion mesh (no separate _heat.vol
             # is written because there is no GMSH bundle to anchor).
@@ -842,7 +764,9 @@ def solve_heat(wp_vol,
                  f"(no GMSH bundle requested; load with the same "
                  f"wp_vol + H1 order={fes_order})")
         except Exception as e:
-            _log(f"T_SOL_ERROR:{type(e).__name__}: {e}")
+            raise RuntimeError(
+                f"could not save the temperature field: "
+                f"{type(e).__name__}: {e}") from e
 
     # CSV export of probe history.
     if csv_output and probe_point is not None:
@@ -855,7 +779,9 @@ def solve_heat(wp_vol,
                     w.writerow([f"{ti:.6f}", f"{Ti:.6f}"])
             _log(f"CSV:wrote {os.path.basename(csv_output)}")
         except Exception as e:
-            _log(f"CSV_ERROR:{type(e).__name__}: {e}")
+            raise RuntimeError(
+                f"could not write {csv_output}: "
+                f"{type(e).__name__}: {e}") from e
 
     t_total = time.perf_counter() - t0
     _log(f"DONE:T_max={T_max:.2f} C  Q_input={Q_input_J:.4e} J "
@@ -901,9 +827,9 @@ def solve_heat(wp_vol,
                      else ("qsurf_sol_phi_average" if q_phi_average
                            else "qsurf_sol")),
         "q_phi_average": bool(q_phi_average),
-        "q_phi_average_n": int(q_phi_average_n) if q_phi_average else 0,
-        "qsurf_sol": qsurf_sol if not q_uniform else "",
-        "em_vol": em_vol if not q_uniform else "",
+        "qsurf_projection": qsurf_projection,
+        "qsurf_sol": qsurf_sol if q_uniform is None else "",
+        "em_vol": em_vol if q_uniform is None else "",
         "T_sol_file": T_sol_file,
         "heat_vol_file": heat_vol_file,
         "msh_file": gmsh_file,
@@ -911,6 +837,29 @@ def solve_heat(wp_vol,
                      else "",
         "t_total_s": round(t_total, 2),
     }
+
+
+def _locate_probe(mesh, point):
+    """Return the mesh integration point for ``point`` or raise."""
+    try:
+        coords = [float(c) for c in point]
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"--probe-point must be x,y,z numbers: {point!r}") \
+            from exc
+    try:
+        mip = mesh(*coords)
+    except Exception as exc:                       # NGSolve raises NgException
+        raise ValueError(f"--probe-point {coords} cannot be located in the "
+                         f"thermal mesh: {exc}") from exc
+    if mip.nr < 0:
+        raise ValueError(f"--probe-point {coords} lies outside the thermal "
+                         "mesh")
+    return mip
+
+
+def _probe_value(gf, mip):
+    val = gf(mip)
+    return float(getattr(val, "real", val))
 
 
 def grad_dot(u, v):
@@ -993,9 +942,28 @@ def main():
                              "mode is simply --qsurf-sol with "
                              "--rotation-rpm 0 (the spatial q applied as-is, "
                              "non-axisymmetric).")
-    parser.add_argument("--q-phi-average-n", type=int, default=48,
-                        help="Number of azimuthal samples for "
-                             "--q-phi-average (default 48).")
+    parser.add_argument("--q-phi-average-n", default=None,
+                        help=argparse.SUPPRESS)
+    parser.add_argument("--q-phi-bin", type=float, default=None,
+                        help="Meridian bin width [m] of the exact "
+                             "--q-phi-average (default: a quarter of the "
+                             "median EM surface edge).")
+    parser.add_argument("--em-heat-boundaries", default="",
+                        help="EM boundary expression carrying q_surf.  "
+                             "Default: the .sol sidecar, else the thermal "
+                             "--heat-flux-boundaries names when they exist "
+                             "on the EM mesh.")
+    parser.add_argument("--q-scale", type=float, default=1.0,
+                        help="Multiply q_surf by this factor (for a current "
+                             "sweep, (I/I_ref)^2).  Recorded in the result.")
+    parser.add_argument("--transfer-tolerance", type=float, default=None,
+                        help="Largest allowed distance [m] from a thermal "
+                             "heat-flux vertex to the EM heated surface "
+                             "(default: a quarter of the median EM edge).")
+    parser.add_argument("--power-tolerance", type=float, default=None,
+                        help="Largest allowed relative difference between "
+                             "the thermal heat input and the EM source "
+                             "power (default 0.02).")
 
     # Time integration.
     parser.add_argument("--dt", type=float, default=0.5,
@@ -1014,14 +982,15 @@ def main():
     parser.add_argument("--fes-order", type=int, default=1,
                         help="H1 polynomial order (default 1).")
 
-    # Workpiece rotation (metadata for the 3D solver; the result is
-    # "frozen at one azimuthal configuration" -- q_surf is not
-    # rotated per timestep).  For a physically spinning workpiece in
-    # the time average use the axisym solver with phi-averaging.
+    # Workpiece rotation: with a spatial --qsurf-sol the source is
+    # re-evaluated on the rotated body every time step.
     parser.add_argument("--rotation-rpm", type=float, default=0.0,
                         help="Workpiece rotation speed [rpm] "
-                             "(default 0 = stationary).  3D solver "
-                             "treats this as metadata.")
+                             "(default 0 = stationary).  With a spatial "
+                             "--qsurf-sol the source is re-evaluated on "
+                             "the rotated body each time step; "
+                             "--q-phi-average gives its fast-rotation "
+                             "limit.")
     parser.add_argument("--rotation-axis", default="z",
                         choices=["x", "y", "z"],
                         help="Workpiece rotation axis (default z).  "
@@ -1054,6 +1023,12 @@ def main():
         if (args.q_uniform is None) and (not args.qsurf_sol):
             return {"error":
                     "Either --q-uniform or --qsurf-sol is required."}
+        if args.q_phi_average_n is not None:
+            return {"error":
+                    "--q-phi-average-n was removed: --q-phi-average now "
+                    "integrates the EM source exactly over the azimuth "
+                    "instead of sampling a fixed number of angles.  Use "
+                    "--q-phi-bin to set its meridian resolution."}
         probe_point = None
         if args.probe_point:
             try:
@@ -1082,7 +1057,11 @@ def main():
             rotation_rpm=args.rotation_rpm,
             rotation_axis=args.rotation_axis,
             q_phi_average=args.q_phi_average,
-            q_phi_average_n=args.q_phi_average_n,
+            q_phi_bin=args.q_phi_bin,
+            em_heat_boundaries=args.em_heat_boundaries,
+            q_scale=args.q_scale,
+            transfer_tolerance=args.transfer_tolerance,
+            power_tolerance=args.power_tolerance,
             probe_point=probe_point,
             msh_output=args.msh_output,
             csv_output=args.csv_output,
