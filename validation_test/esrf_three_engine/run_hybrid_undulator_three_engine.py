@@ -343,7 +343,10 @@ def _solve_mixed_omega(mesh: ng.Mesh, source, bh_table, points: np.ndarray, *,
                        nonlinear_tolerance: float,
                        nonlinear_maximum_iterations: int,
                        nonlinear_relaxation: float,
-                       source_potential_tolerance: float | None) -> tuple[np.ndarray, dict[str, object]]:
+                       source_potential_tolerance: float | None,
+                       nonlinear_method: str = "picard",
+                       bonus_intorder: int = 4,
+                       material_bonus_intorder: int | None = None) -> tuple[np.ndarray, dict[str, object]]:
     started = time.perf_counter()
     with ng.TaskManager():
         result = solve_static_electromagnet_mixed_total_reduced_omega(
@@ -359,6 +362,13 @@ def _solve_mixed_omega(mesh: ng.Mesh, source, bh_table, points: np.ndarray, *,
             nonlinear_tolerance=float(nonlinear_tolerance),
             nonlinear_max_iterations=int(nonlinear_maximum_iterations),
             nonlinear_relaxation=float(nonlinear_relaxation),
+            nonlinear_method=nonlinear_method,
+            nonlinear_material_sampling=(
+                "integration_point" if nonlinear_method == "newton" else "element_centroid"),
+            nonlinear_material_update_order=(
+                1 if nonlinear_method == "picard" and order > 1 else None),
+            bonus_intorder=bonus_intorder,
+            nonlinear_material_bonus_intorder=material_bonus_intorder,
         )
     return _evaluate_cf(result["B_cf"], mesh, points), {
         "formulation": MIXED_DOMAIN_LABEL,
@@ -368,6 +378,9 @@ def _solve_mixed_omega(mesh: ng.Mesh, source, bh_table, points: np.ndarray, *,
         "mesh_vertices": int(mesh.nv),
         "ndof": int(result["fes"].ndof),
         "nonlinear_stats": dict(result.get("nonlinear_stats", {})),
+        "nonlinear_method": nonlinear_method,
+        "bonus_intorder": bonus_intorder,
+        "material_bonus_intorder": material_bonus_intorder,
         "source_potential": dict(
             result["static_electromagnet_contract"]["source_trace"]
         ),
@@ -446,6 +459,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--nonlinear-tolerance", type=float, default=2.0e-5)
     parser.add_argument("--nonlinear-maximum-iterations", type=int, default=80)
     parser.add_argument("--nonlinear-relaxation", type=float, default=0.2)
+    parser.add_argument("--mixed-method", choices=("picard", "newton"), default="picard")
+    parser.add_argument("--mixed-bonus", type=int, default=4)
+    parser.add_argument("--mixed-material-bonus", type=int, default=None)
     parser.add_argument(
         "--hdiv-nonlinear-solver",
         choices=("picard-mass-riesz", "energy-newton", "picard-energy"),
@@ -478,6 +494,11 @@ def main(argv: list[str] | None = None) -> int:
     options = parser.parse_args(argv)
     if options.fem_order < 1:
         raise ValueError("--fem-order must be positive")
+    if options.mixed_bonus < 0:
+        raise ValueError("--mixed-bonus must be nonnegative")
+    if options.mixed_material_bonus is not None and (
+            options.mixed_method != "newton" or options.mixed_material_bonus < 0):
+        raise ValueError("--mixed-material-bonus requires Newton and a nonnegative value")
     if not 0.0 < options.hdiv_gram_eps < 1.0:
         raise ValueError("--hdiv-gram-eps must lie in (0, 1)")
     if options.hdiv_gram_backend == "exact-dense":
@@ -643,6 +664,9 @@ def main(argv: list[str] | None = None) -> int:
         nonlinear_tolerance=options.nonlinear_tolerance,
         nonlinear_maximum_iterations=options.nonlinear_maximum_iterations,
         nonlinear_relaxation=options.nonlinear_relaxation,
+        mixed_method=options.mixed_method,
+        mixed_bonus=options.mixed_bonus,
+        mixed_material_bonus=options.mixed_material_bonus,
     )
     fields: dict[str, np.ndarray] = {}
     diagnostics: dict[str, dict[str, object]] = {}
@@ -668,7 +692,10 @@ def main(argv: list[str] | None = None) -> int:
             nonlinear_tolerance=options.nonlinear_tolerance,
             nonlinear_maximum_iterations=options.nonlinear_maximum_iterations,
             nonlinear_relaxation=options.nonlinear_relaxation,
-            source_potential_tolerance=options.source_potential_tolerance)),
+            source_potential_tolerance=options.source_potential_tolerance,
+            nonlinear_method=options.mixed_method,
+            bonus_intorder=options.mixed_bonus,
+            material_bonus_intorder=options.mixed_material_bonus)),
     )
     for engine, solve in engine_specs:
         checkpoint = output.with_suffix(f".{engine}.checkpoint.json")
