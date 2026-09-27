@@ -844,9 +844,11 @@ mesh reported a 6.9e6 m^2 surface) and every later point evaluation is wrong.
   current-driven coil the surface |H_t| falls as sigma(T) falls and rises
   when the surface passes the Curie band.  In the validation case
   (``validation_test/induction_heating/coupled_curie_cylinder.py``) the true
-  power stays within +5% up to the Curie band and then rises by a third,
-  while a frozen-|H_t| table predicts +70% and a false self-limit at the
-  Curie temperature.  ``--em-table`` therefore requires
+  power stays within +5% until the surface reaches the Curie band, peaks
+  at +34% as the band passes and is back at the initial power 1 s later;
+  a frozen-|H_t| table instead rises to +53% at once and then stalls the
+  surface at the Curie temperature (767 C against 1066 C), a false
+  self-limit.  ``--em-table`` therefore requires
   ``--allow-frozen-ht`` (non-magnetic parts, or between EM re-solves), and
   ``calc_heat_with_em_table.py`` holds for non-magnetic parts only.
 * For bodies of revolution with coaxial coils use the coupled solver
