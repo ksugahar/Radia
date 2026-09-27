@@ -436,6 +436,9 @@ def solve_heat(wp_vol,
                em_heat_boundaries="", q_scale=1.0,
                transfer_tolerance=None, power_tolerance=None,
                exposure_thresholds=(), temperature_limit=None,
+               material_table="", latent_heat=0.0, latent_range=None,
+               allow_table_extrapolation=False,
+               newton_tol=1.0e-3, newton_max_iter=25,
                dt=0.5, t_end=5.0,
                time_scheme="backward-euler",
                linear_solver="sparsecholesky",
@@ -573,34 +576,78 @@ def solve_heat(wp_vol,
              f"omega={omega_mech:.4f} rad/s -- "
              f"resampling qsurf on the body frame each step.")
 
-    # ------------------- Bilinear forms -------------------
-    K_cf = CF(float(k_v))
-    rho_cp = CF(float(rho_v) * float(cp_v))
+    # ------------------- Material model -------------------
+    import ih_heat_transient
+    import ih_thermal_material
+    try:
+        if material_table:
+            thermal_material = ih_thermal_material.ThermalMaterial.from_csv(
+                material_table, rho=rho_v, latent_heat=latent_heat,
+                latent_range=latent_range,
+                allow_extrapolation=allow_table_extrapolation)
+        else:
+            if latent_heat:
+                raise ValueError("--latent-heat needs --material-table")
+            thermal_material = ih_thermal_material.ThermalMaterial.constant(
+                rho_v, cp_v, k_v)
+    except (ValueError, OSError) as exc:
+        return {"error": f"material table: {exc}"}
+    nonlinear = not thermal_material.is_constant
+    if nonlinear and time_scheme != "backward-euler":
+        return {"error": "temperature-dependent materials are integrated "
+                         "with the enthalpy backward-Euler scheme only; "
+                         "drop --time-scheme crank-nicolson"}
+    if nonlinear:
+        _log(f"MATERIAL:table {thermal_material.source} "
+             f"k {thermal_material.k.min():g}..{thermal_material.k.max():g} "
+             f"cp {thermal_material.cp.min():g}..{thermal_material.cp.max():g}"
+             f" latent {thermal_material.latent_heat:g} J/kg")
 
-    a_form = BilinearForm(fes_T, symmetric=True)
-    a_form += K_cf * grad_dot(u, v) * dx
-    if float(h_conv) != 0.0:
-        a_form += float(h_conv) * v * u * ds(convection_selector)
-    a_form.Assemble()
+    if not nonlinear:
+        # ------------------- Bilinear forms -------------------
+        K_cf = CF(float(k_v))
+        rho_cp = CF(float(rho_v) * float(cp_v))
 
-    m_form = BilinearForm(fes_T, symmetric=True)
-    m_form += rho_cp * u * v * dx
-    m_form.Assemble()
+        a_form = BilinearForm(fes_T, symmetric=True)
+        a_form += K_cf * grad_dot(u, v) * dx
+        if float(h_conv) != 0.0:
+            a_form += float(h_conv) * v * u * ds(convection_selector)
+        a_form.Assemble()
 
-    if time_scheme not in ("backward-euler", "crank-nicolson"):
-        raise ValueError(
-            f"Unsupported --time-scheme {time_scheme!r} "
-            "(expected backward-euler or crank-nicolson).")
+        m_form = BilinearForm(fes_T, symmetric=True)
+        m_form += rho_cp * u * v * dx
+        m_form.Assemble()
 
-    # mstar = M + theta * dt * K
-    theta = 1.0 if time_scheme == "backward-euler" else 0.5
-    mstar = m_form.mat.CreateMatrix()
-    mstar.AsVector().data = (
-        m_form.mat.AsVector() + (theta * float(dt)) * a_form.mat.AsVector())
-    inv = mstar.Inverse(freedofs=fes_T.FreeDofs(),
-                        inverse=linear_solver)
-    res_vec = gfT.vec.CreateVector()
-    _log(f"SOLVER:{linear_solver} ({time_scheme}, dt={dt}, t_end={t_end})")
+        if time_scheme not in ("backward-euler", "crank-nicolson"):
+            raise ValueError(
+                f"Unsupported --time-scheme {time_scheme!r} "
+                "(expected backward-euler or crank-nicolson).")
+
+        # mstar = M + theta * dt * K
+        theta = 1.0 if time_scheme == "backward-euler" else 0.5
+        mstar = m_form.mat.CreateMatrix()
+        mstar.AsVector().data = (
+            m_form.mat.AsVector() + (theta * float(dt)) * a_form.mat.AsVector())
+        inv = mstar.Inverse(freedofs=fes_T.FreeDofs(),
+                            inverse=linear_solver)
+        res_vec = gfT.vec.CreateVector()
+        _log(f"SOLVER:{linear_solver} ({time_scheme}, dt={dt}, t_end={t_end})")
+
+    else:
+        stepper = ih_heat_transient.NonlinearHeatStepper(
+            gfT, thermal_material,
+            ih_heat_transient.HeatBoundaryTerms(
+                heat_flux=heat_flux_selector,
+                convection=convection_selector if float(h_conv) else "",
+                h_conv=float(h_conv), t_ext=float(t_ext),
+                radiation=radiation_selector if float(emissivity) else "",
+                emissivity=float(emissivity)),
+            q_source=q_cf,
+            linear_solver=linear_solver,
+            newton_tol_K=float(newton_tol),
+            max_newton=int(newton_max_iter))
+        _log(f"SOLVER:{linear_solver} (enthalpy backward-euler + Newton, "
+             f"dt={dt}, t_end={t_end})")
 
     # ------------------- Time loop -------------------
     t_arr = [0.0]
@@ -634,20 +681,26 @@ def solve_heat(wp_vol,
             # body orientation.  q_cf (a GridFunction) is updated in
             # place; q_int (the integrated heat input) tracks below.
             q_resample(omega_mech * t)
-        f_form = LinearForm(fes_T)
-        f_form += q_cf * v * ds(heat_flux_selector)
-        if float(h_conv) != 0.0:
-            f_form += float(h_conv) * float(t_ext) * v \
-                * ds(convection_selector)
-        if float(emissivity) > 0.0:        # radiation (explicit, prev-step T, in K)
-            _TK = gfT + 273.15
-            f_form += -float(emissivity) * SIGMA_SB \
-                * (_TK**4 - (float(t_ext) + 273.15)**4) * v \
-                * ds(radiation_selector)
-        f_form.Assemble()
-        with TaskManager():
-            res_vec.data = f_form.vec - a_form.mat * gfT.vec
-            gfT.vec.data += float(dt) * (inv * res_vec)
+        if nonlinear:
+            try:
+                stepper.advance(float(dt))
+            except (ValueError, RuntimeError) as exc:
+                return {"error": f"t={t:.4g} s: {exc}"}
+        else:
+            f_form = LinearForm(fes_T)
+            f_form += q_cf * v * ds(heat_flux_selector)
+            if float(h_conv) != 0.0:
+                f_form += float(h_conv) * float(t_ext) * v \
+                    * ds(convection_selector)
+            if float(emissivity) > 0.0:    # radiation (explicit, prev-step T, in K)
+                _TK = gfT + 273.15
+                f_form += -float(emissivity) * SIGMA_SB \
+                    * (_TK**4 - (float(t_ext) + 273.15)**4) * v \
+                    * ds(radiation_selector)
+            f_form.Assemble()
+            with TaskManager():
+                res_vec.data = f_form.vec - a_form.mat * gfT.vec
+                gfT.vec.data += float(dt) * (inv * res_vec)
         if rotation_active:
             # q_int can drift with rotation if the EM-frame hotspot
             # only partially overlaps the wp surface at some angles.
@@ -663,6 +716,10 @@ def solve_heat(wp_vol,
             T_probe.append(_probe_value(gfT, probe_mip))
         _log(f"STEP:{step}/{n_steps} t={t:.3f}s "
              f"T_probe={T_probe[-1] if probe_point is not None else 'n/a'}")
+
+    if nonlinear:
+        Q_input_J = stepper.audit.energy_in_J
+        q_int = stepper.last_heat_input_W
 
     # Final stats use physical field samples.  Raw order>=2 H1
     # coefficients are not temperatures, and vertices alone can miss an
@@ -834,6 +891,8 @@ def solve_heat(wp_vol,
         "fes_order": int(fes_order),
         "mesh_geometry": mesh_geometry,
         "material": material,
+        "thermal_material": thermal_material.audit(),
+        "nonlinear_transient": stepper.audit.as_dict() if nonlinear else None,
         "rho_kg_m3": float(rho_v),
         "cp_J_kgK": float(cp_v),
         "k_W_mK": float(k_v),
@@ -930,6 +989,26 @@ def main():
                         help="Specific heat [J/(kg.K)] (overrides preset).")
     parser.add_argument("--k", type=float, default=None,
                         help="Conductivity [W/(m.K)] (overrides preset).")
+    parser.add_argument("--material-table", default="",
+                        help="CSV with header T_C,k_W_mK,cp_J_kgK giving "
+                             "temperature-dependent conductivity and "
+                             "specific heat (density stays --rho/preset).  "
+                             "Switches to the enthalpy Newton integrator.")
+    parser.add_argument("--latent-heat", type=float, default=0.0,
+                        help="Latent heat [J/kg] released uniformly over "
+                             "--latent-range (needs --material-table).")
+    parser.add_argument("--latent-range", default="",
+                        help="T_start,T_end [degC] of the latent release.")
+    parser.add_argument("--allow-table-extrapolation", action="store_true",
+                        help="Hold the end values of --material-table "
+                             "outside its range instead of failing; the "
+                             "largest excursion is reported.")
+    parser.add_argument("--newton-tol", type=float, default=1.0e-3,
+                        help="Newton step tolerance [K] of the nonlinear "
+                             "integrator.")
+    parser.add_argument("--newton-max-iter", type=int, default=25,
+                        help="Newton iterations per step before the step is "
+                             "halved.")
 
     # Boundary conditions.
     parser.add_argument("--h-conv", type=float, default=10.0,
@@ -1068,6 +1147,15 @@ def main():
         except ValueError:
             return {"error": "--exposure-thresholds must be comma-separated "
                              f"numbers, got {args.exposure_thresholds!r}"}
+        latent_range = None
+        if args.latent_range:
+            try:
+                latent_range = tuple(float(t) for t in
+                                     args.latent_range.split(","))
+                if len(latent_range) != 2:
+                    raise ValueError
+            except ValueError:
+                return {"error": "--latent-range must be T_start,T_end"}
         if args.q_phi_average_n is not None:
             return {"error":
                     "--q-phi-average-n was removed: --q-phi-average now "
@@ -1109,6 +1197,12 @@ def main():
             power_tolerance=args.power_tolerance,
             exposure_thresholds=thresholds,
             temperature_limit=args.temperature_limit,
+            material_table=args.material_table,
+            latent_heat=args.latent_heat,
+            latent_range=latent_range,
+            allow_table_extrapolation=args.allow_table_extrapolation,
+            newton_tol=args.newton_tol,
+            newton_max_iter=args.newton_max_iter,
             probe_point=probe_point,
             msh_output=args.msh_output,
             csv_output=args.csv_output,
