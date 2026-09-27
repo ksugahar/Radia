@@ -288,6 +288,31 @@ def test_overheating_constraint_and_material_table_reach_the_heat_solver():
     assert command[command.index("--em-heat-boundaries") + 1] == "sibc"
 
 
+def test_thermal_constraint_fields_are_visible_and_halvings_are_explicit():
+    from dataclasses import replace
+    spec = IHDesignSpec(
+        method=METHOD_THERMAL_AXISYM, wp_vol="workpiece_axisym.vol",
+        heat_source=HEAT_SRC_SPATIAL, qsurf_sol="qsurf.sol", em_vol="em.vol",
+        heat_flux_boundaries="heated", convection_boundaries="exposed")
+    visible = spec.visible_fields()
+    assert {"exposure_thresholds", "temperature_limit",
+            "thermal_material_table", "em_heat_boundaries"} <= visible
+    assert "max_halvings" not in visible          # linear solve: no Newton
+    command = spec.build_command(python="python", panels_dir="panels")
+    assert "--max-halvings" not in command
+    with pytest.raises(ValueError, match="material-table"):
+        replace(spec, max_halvings=2).build_command(
+            python="python", panels_dir="panels")
+    nonlinear = replace(spec, max_halvings=2,
+                        thermal_material_table="kcp.csv")
+    assert "max_halvings" in nonlinear.visible_fields()
+    command = nonlinear.build_command(python="python", panels_dir="panels")
+    assert command[command.index("--max-halvings") + 1] == "2"
+    with pytest.raises(ValueError, match="non-negative integer"):
+        replace(nonlinear, max_halvings=1.5) \
+            .build_command(python="python", panels_dir="panels")
+
+
 def test_a_non_numeric_temperature_limit_fails_early():
     with pytest.raises(ValueError):
         IHDesignSpec(
