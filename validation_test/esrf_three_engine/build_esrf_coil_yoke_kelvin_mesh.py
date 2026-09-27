@@ -124,6 +124,21 @@ def _add_sideset(cubit, sideset_id: int, name: str, surfaces: set[int]) -> None:
     cubit.cmd(f'sideset {sideset_id} name "{name}"')
 
 
+def _remove_kelvin_internal_sides(cubit, kelvin_volumes):
+    # The helper can label the shared faces of separate Kelvin volumes.
+    # Those are interior FE faces, not exterior boundary conditions.
+    removed_kelvin_faces = []
+    for sid in cubit.parse_cubit_list("sideset", "all"):
+        if cubit.get_exodus_entity_name("sideset", sid) != "kelvin_ext":
+            continue
+        for surface in cubit.get_sideset_surfaces(sid):
+            adjacent = set(cubit.get_relatives("surface", surface, "volume"))
+            if len(adjacent) > 1 and adjacent <= set(kelvin_volumes):
+                cubit.cmd(f"sideset {sid} remove surface {surface}")
+                removed_kelvin_faces.append(int(surface))
+    return sorted(removed_kelvin_faces)
+
+
 def _iron_air_surfaces(cubit, iron: set[int], air: set[int]) -> set[int]:
     """Return only physical iron/air faces, excluding iron partitions."""
     surfaces: set[int] = set()
@@ -299,7 +314,9 @@ def build_inside_cubit(
         mesh_size=float(kelvin_size_m),
         kelvin_block="kelvin",
     )
+    removed_kelvin_faces = _remove_kelvin_internal_sides(cubit, kelvin["outer_vols"])
     return {
+        "removed_kelvin_internal_surfaces": sorted(removed_kelvin_faces),
         "iron_volumes": sorted(iron),
         "physical_air_volumes": sorted(air),
         "iron_air_surface_count": int(len(interface)),
