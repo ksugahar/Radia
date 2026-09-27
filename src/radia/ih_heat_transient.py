@@ -83,6 +83,7 @@ class NonlinearHeatStepper:
     def __init__(self, gfT, material, boundaries: HeatBoundaryTerms, *,
                  weight=None, q_source=None,
                  q_update: Callable | None = None,
+                 q_damping=None,
                  linear_solver: str = "sparsecholesky",
                  newton_tol_K: float = 1.0e-3, max_newton: int = 25,
                  max_halvings: int = 6):
@@ -99,6 +100,9 @@ class NonlinearHeatStepper:
         # on T); q_update(gfT) refreshes it in place at every iterate.
         self.q_source = CF(0.0) if q_source is None else q_source
         self.q_update = q_update
+        # optional non-negative -dq/dT on the heat-flux boundary (Newton
+        # term of a temperature-dependent source)
+        self.q_damping = q_damping
         self._rdt = Parameter(1.0)
         self._forms = None
         self.linear_solver = linear_solver
@@ -198,6 +202,8 @@ class NonlinearHeatStepper:
         J += self.k_cf * InnerProduct(grad(u), grad(v)) * self.w * DX
         if b.heat_flux:
             R += -self.q_source * v * self.w * DS(b.heat_flux)
+            if self.q_damping is not None:
+                J += self.q_damping * u * v * self.w * DS(b.heat_flux)
         if b.h_conv and b.convection:
             R += b.h_conv * (self.gfT - b.t_ext) * v * self.w \
                 * DS(b.convection)

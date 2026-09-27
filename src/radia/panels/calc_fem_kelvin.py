@@ -1231,6 +1231,25 @@ def solve_fem(vol_file="", fes_order=1,
                            "P_total_check_W": P_total_check,
                            "frequency_Hz": float(frequency),
                            "producer": "calc_fem_kelvin"})
+                # P1 |H_t| peak amplitude, q = Re(Z_s)|H_t|^2 / 2, for the
+                # temperature-dependent surface source.
+                gf_h1 = GridFunction(H1(mesh, order=QSURF_HANDOFF_ORDER))
+                gf_h1.vec[:] = 0
+                gf_h1.Set(sqrt(At_sq) * (omega / abs(Z_s)),
+                          definedon=wp_region)
+                sol_H = os.path.join(
+                    base_dir, f"{name_stem}_Ht.sol").replace("\\", "/")
+                gf_h1.Save(sol_H)
+                sol_paths["H_t"] = sol_H
+                ih_thermal.write_field_sidecar(
+                    sol_H, mesh_path=vol_B, mesh=mesh,
+                    fes_order=QSURF_HANDOFF_ORDER,
+                    quantity=ih_thermal.HT_QUANTITY, unit=ih_thermal.HT_UNIT,
+                    boundaries=heated,
+                    extra={"frequency_Hz": float(frequency),
+                           "producer": "calc_fem_kelvin",
+                           "convention": "peak phasor amplitude, "
+                                         "q = Re(Z_s) |H_t|^2 / 2"})
                 sol_entries.append(
                     {"sol": sol_Q, "fes": "H1",
                      "fes_order": QSURF_HANDOFF_ORDER,
@@ -1300,6 +1319,7 @@ def solve_fem(vol_file="", fes_order=1,
         "P_total_check": P_total_check,
         "qsurf_sol": qsurf_sol_path,
         "qsurf_em_vol": vol_path if qsurf_sol_path else "",
+        "ht_sol": sol_paths.get("H_t", ""),
         "qsurf_order": QSURF_HANDOFF_ORDER if qsurf_sol_path else None,
         "qsurf_p1_power_W": qsurf_p1_power,
         "delta": float(delta_skin),
