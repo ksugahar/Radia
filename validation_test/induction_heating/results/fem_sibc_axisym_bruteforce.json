@@ -1,0 +1,170 @@
+{
+ "case": "3D FEM-SIBC: axisymmetric brute-force check and rotor states of a part with a through cross hole",
+ "geometry_m": {
+  "R": 0.025,
+  "H": 0.025,
+  "bore": 0.008,
+  "loop_radius": 0.035,
+  "cross_hole": 0.005,
+  "side_loop_radius": 0.012,
+  "side_loop_plane_x": 0.036,
+  "air_radius": 0.15
+ },
+ "sigma_S_m": 58000000.0,
+ "provenance": {
+  "commit": "e99bf84d0565584c551368902c344a32d8605d2d",
+  "dirty": false,
+  "source": "git-archive",
+  "sha256": {
+   "validation_test/induction_heating/fem_sibc_through_hole.py": "e74d34f8ccde949ff668f5a8399ec79d10fae962a6e86c8d11e04561429cca85",
+   "validation_test/induction_heating/fem_sibc_geometry.py": "a20dba5e0787c31e05d40cb74e6a23fd0d8b381c21b303dd8bab4704682fb9fe",
+   "validation_test/induction_heating/rotating_cross_hole_rotor_states.py": "247b4331b60586833a7f05f0588e35650c2dc93374531a010dbf82a74a12cae2",
+   "src/radia/panels/calc_fem_kelvin.py": "20029bd3525002f8ebe4f9affdb54c46ab7231ecebd30e8f1d92737ef972e4b1",
+   "src/radia/ih_axisym_coupled.py": "8c58252acdc2f5e48c15d4c7ef8a4bd42a2124af83752257afd437c18af796e9",
+   "src/radia/ih_thermal.py": "0624913eba583eac66b3fec396541c13e046c2be6ac0f8515ade40b4d4a21d57",
+   "src/radia/panels/calc_heat.py": "5e578e6004179952d14fcaf4f8110942e00d75d26d7e262cfa59d0b8553dfc7d"
+  },
+  "native_sha256": {
+   "_equation.pyd": "8a5f55684084ba65a0ef35cf4f214d2f575a76be20535ff7b76798e675ca5eac",
+   "_radia_pybind.pyd": "059eda262eff9414aebfb6ea38d332c0f2af7abcf96a2ac7dab4c127527d79dc",
+   "axifem.pyd": "0dbec7a5a4c1c04c79adc4ee349d5f3b022a02b10c145690a448af0d0748664a",
+   "cln_core.pyd": "151b423a47bf0a25bd7133684808b15d2bd293b8aafe1247ad57f9b26eef921d",
+   "peec_matrices.pyd": "f625852519b0e0d6b4f6a4096b8692d21f5e401a28e9b08e2002090dded642c1",
+   "radia_motor_rom.dll": "4fe73171237c8757c5dbc728c19877bfc1d478cad78f9c8426c4976b566bddff",
+   "sparsesolv_ngsolve.pyd": "2480855f9d4cdfc582dded7c0214d94f5a49d7b5b8e1ce593e9bd890361cf0f5"
+  },
+  "command": [
+   "python.exe",
+   "validation_test\\induction_heating\\fem_sibc_through_hole.py",
+   "--source-commit",
+   "e99bf84d0565584c551368902c344a32d8605d2d",
+   "--work",
+   "C:\\temp\\ih_fem_sibc_e99bf84d0\\work",
+   "--out",
+   "C:\\temp\\ih_fem_sibc_e99bf84d0\\result.json"
+  ],
+  "utc": "2026-09-27T14:44:39+00:00",
+  "host": "Hibino",
+  "python": "3.12.10",
+  "numpy": "2.4.3",
+  "scipy": "1.17.1",
+  "ngsolve": "6.2.2606",
+  "cpu_count": 38
+ },
+ "axisym": {
+  "10000": {
+   "skin_depth_m": 0.0006608549310080563,
+   "fem_sibc": {
+    "coarse": {
+     "P_total_W": 0.4027098747830394,
+     "ndof": 164222,
+     "runtime_s": 35.58591740002157,
+     "outer_W": 0.3717520004187251,
+     "bore_W": 1.2650678141706327e-05,
+     "ends_W": 0.029949574059713387,
+     "total_W": 0.4017142251565802
+    },
+    "fine": {
+     "P_total_W": 0.40190498493737153,
+     "ndof": 388824,
+     "runtime_s": 105.58941459999187,
+     "outer_W": 0.3780932864706378,
+     "bore_W": 7.85302445536745e-06,
+     "ends_W": 0.023442192525615524,
+     "total_W": 0.4015433320207087
+    }
+   },
+   "axisym": {
+    "shell_delta_over_3": {
+     "P_joule_W": 0.40966734674670546,
+     "power_balance_relative_error": -1.2195269284916168e-15,
+     "outer_W": 0.3836167116010138,
+     "bore_W": 7.676914095871823e-06,
+     "ends_W": 0.026042958231599904,
+     "skin_h_over_delta": 0.5410284997914965,
+     "elements": 14203
+    },
+    "shell_delta_over_6": {
+     "P_joule_W": 0.40965028298323486,
+     "power_balance_relative_error": 4.878310908934676e-15,
+     "outer_W": 0.38424323003206423,
+     "bore_W": 7.597322606995528e-06,
+     "ends_W": 0.025399455628566565,
+     "skin_h_over_delta": 0.2645806250461029,
+     "elements": 46266
+    }
+   },
+   "relative_to_axisym": {
+    "coarse": {
+     "P_joule_W": -0.016942276103540488,
+     "outer_W": -0.0325086524290793,
+     "bore_W": 0.6651495264999971,
+     "ends_W": 0.17914236028071961
+    },
+    "fine": {
+     "P_joule_W": -0.018907097999442346,
+     "outer_W": -0.01600534005742471,
+     "bore_W": 0.03365683696733823,
+     "ends_W": -0.07705925400817337
+    }
+   }
+  },
+  "150000": {
+   "skin_depth_m": 0.00017063200947021692,
+   "fem_sibc": {
+    "coarse": {
+     "P_total_W": 1.6359584369148128,
+     "ndof": 164222,
+     "runtime_s": 30.406615200045053,
+     "outer_W": 1.4949017391624455,
+     "bore_W": 5.265629011012774e-05,
+     "ends_W": 0.13655904326231239,
+     "total_W": 1.631513438714868
+    },
+    "fine": {
+     "P_total_W": 1.6269667285690566,
+     "ndof": 388824,
+     "runtime_s": 109.3530736999819,
+     "outer_W": 1.5169014449713663,
+     "bore_W": 3.3713473459154444e-05,
+     "ends_W": 0.10832993304871924,
+     "total_W": 1.625265091493545
+    }
+   },
+   "axisym": {
+    "shell_delta_over_3": {
+     "P_joule_W": 1.6363457839761204,
+     "power_balance_relative_error": 2.9852989240946346e-15,
+     "outer_W": 1.5440030963978018,
+     "bore_W": 2.010902829166955e-05,
+     "ends_W": 0.09232257855004189,
+     "skin_h_over_delta": 0.5748986872305137,
+     "elements": 60257
+    },
+    "shell_delta_over_6": {
+     "P_joule_W": 1.636266751195136,
+     "power_balance_relative_error": 6.242290151707304e-15,
+     "outer_W": 1.5444446356416681,
+     "bore_W": 2.066454476565446e-05,
+     "ends_W": 0.09180145100872031,
+     "skin_h_over_delta": 0.26569470757093294,
+     "elements": 191804
+    }
+   },
+   "relative_to_axisym": {
+    "coarse": {
+     "P_joule_W": -0.00018842543863839545,
+     "outer_W": -0.03207813043983876,
+     "bore_W": 1.5481466302439535,
+     "ends_W": 0.4875477648968807
+    },
+    "fine": {
+     "P_joule_W": -0.005683683677668583,
+     "outer_W": -0.017833718370136697,
+     "bore_W": 0.6314646096239187,
+     "ends_W": 0.18004597812325285
+    }
+   }
+  }
+ }
+}
