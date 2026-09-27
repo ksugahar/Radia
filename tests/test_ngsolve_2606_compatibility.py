@@ -101,23 +101,76 @@ def test_build_scripts_resolve_netgen_from_the_active_python_environment():
     assert "${Python3_INCLUDE_DIRS}" not in mex_includes
 
 
-def test_production_bem_uses_current_variational_operator_api():
-    deprecated = (
+# Deprecated in 2606 and removed from ngsolve.bem in 2607.
+RETIRED_BEM_OPERATORS = frozenset(
+    {
         "SingleLayerPotentialOperator",
         "DoubleLayerPotentialOperator",
         "HypersingularOperator",
-    )
+        "HelmholtzSingleLayerPotentialOperator",
+        "HelmholtzDoubleLayerPotentialOperator",
+        "HelmholtzCombinedFieldOperator",
+        "HelmholtzHypersingularOperator",
+        "MaxwellSingleLayerPotentialOperator",
+        "MaxwellSingleLayerPotentialOperatorCurl",
+        "MaxwellDoubleLayerPotentialOperator",
+    }
+)
+
+
+def test_production_bem_uses_current_variational_operator_api():
+    offenders = []
+    for path in sorted((ROOT / "src" / "radia").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module == "ngsolve.bem":
+                names = {alias.name for alias in node.names}
+            elif isinstance(node, ast.Attribute):
+                names = {node.attr}
+            else:
+                continue
+            for name in sorted(names & RETIRED_BEM_OPERATORS):
+                offenders.append(f"{path.relative_to(ROOT)}:{node.lineno}: {name}")
+    assert not offenders, "\n".join(offenders)
     for relative in ("src/radia/ngsbem_eddy.py", "src/radia/ngsbem_peec.py"):
-        source = (ROOT / relative).read_text(encoding="utf-8")
-        tree = ast.parse(source)
-        bem_imports = {
-            alias.name
-            for node in ast.walk(tree)
-            if isinstance(node, ast.ImportFrom) and node.module == "ngsolve.bem"
-            for alias in node.names
-        }
-        assert not set(deprecated).intersection(bem_imports), relative
-        assert "LaplaceSL" in source, relative
+        assert "LaplaceSL" in (ROOT / relative).read_text(encoding="utf-8"), relative
+
+
+def test_shield_bem_slp_reproduces_the_retired_maxwell_operator():
+    """The HelmholtzSL form equals the retired operator while the pin still ships it.
+
+    Delete this oracle with the NGSolve bump that removes the legacy operator.
+    """
+    import warnings
+
+    import ngsolve.bem as ngbem
+    from netgen.occ import Box, OCCGeometry, Pnt
+
+    from radia.ngsbem_eddy import ShieldBEMSIBC
+
+    box = Box(Pnt(0, 0, 0), Pnt(0.02, 0.02, 0.01))
+    mesh = ng.Mesh(OCCGeometry(box).GenerateMesh(maxh=0.01))
+    shield = ShieldBEMSIBC(mesh, sigma=3.7e7)
+    shield.assemble(intorder=4)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        legacy = ngbem.MaxwellSingleLayerPotentialOperator(
+            shield._fes, kappa=1.0, intorder=4
+        ).mat
+    active = shield._loop.active_dofs
+    x = legacy.CreateColVector()
+    y = legacy.CreateColVector()
+    reference = np.zeros((len(active), len(active)), dtype=complex)
+    for i, dof in enumerate(active):
+        x[:] = 0
+        x[dof] = 1.0
+        legacy.Mult(x, y)
+        reference[:, i] = [y[d] for d in active]
+
+    scale = np.abs(reference).max()
+    assert scale > 0
+    assert np.abs(shield._V_full - reference).max() <= 1e-12 * scale
 
 
 @pytest.mark.parametrize(

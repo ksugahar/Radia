@@ -1370,8 +1370,8 @@ class ShieldBEMSIBC:
         Args:
             intorder: Integration order for BEM quadrature
         """
-        from ngsolve import HDivSurface, BilinearForm, InnerProduct, ds
-        from ngsolve.bem import MaxwellSingleLayerPotentialOperator
+        from ngsolve import HDivSurface, BilinearForm, InnerProduct, div, ds
+        from ngsolve.bem import HelmholtzSL
 
         t0 = time.time()
 
@@ -1386,10 +1386,16 @@ class ShieldBEMSIBC:
         n_loops = self._loop.n_loops
         active_dofs = self._loop.active_dofs
 
-        # Maxwell SLP with kappa=1 (arbitrary; V_2 term vanishes in loop subspace)
-        V_op = MaxwellSingleLayerPotentialOperator(
-            self._fes, kappa=1.0, intorder=intorder)
-        V_ngmat = V_op.mat
+        # Maxwell SLP with kappa=1 (arbitrary; V_2 term vanishes in loop subspace):
+        #   kappa <G_k u, v> - (1/kappa) <G_k div u, div v>,
+        # the kernel terms of the retired MaxwellSingleLayerPotentialOperator.
+        # bonus_intorder = intorder - 2 reproduces its absolute order for RT0.
+        kappa = 1.0
+        source_ds = ds(bonus_intorder=max(0, int(intorder) - 2))
+        A_op = HelmholtzSL(u.Trace() * source_ds, kappa) * v.Trace() * ds
+        D_op = (HelmholtzSL(div(u.Trace()) * source_ds, kappa)
+                * div(v.Trace()) * ds)
+        V_ngmat = kappa * A_op.mat - (1.0 / kappa) * D_op.mat
 
         # Surface mass matrix
         M_bf = BilinearForm(self._fes)

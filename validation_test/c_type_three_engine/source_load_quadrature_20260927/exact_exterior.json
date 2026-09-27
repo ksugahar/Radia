@@ -1,0 +1,81 @@
+{
+  "schema": "radia.validation.ctype-exact-exterior-source.v1",
+  "host": "intel11",
+  "radia_version": "5.0.1",
+  "radia_module": "<local-path>/__init__.py",
+  "ngsolve": "6.2.2606",
+  "script_sha256": "69e80a7b029640d6b98b293622ed4c870235df4e2554af10cb23990fd71788f1",
+  "reference_sha256": "927727fc13a70e6f8ade64719f09c79262bb252f435af62d9795595ccdb5151e",
+  "mesh_result_sha256": "b0a653e8231a3a6cce02e76bfe48ccccbc5bb327b4f03af461123948a62972e7",
+  "coil": {
+    "authority": "ESRF Example 5 rounded rectangular solid current",
+    "current_A": -2000.0,
+    "radius_m": 0.0225,
+    "straight_x_m": 0.05,
+    "straight_y_m": 0.0625,
+    "cross_section_m": [
+      0.035,
+      0.105
+    ],
+    "centre_m": [
+      0.0,
+      0.13125,
+      0.0
+    ],
+    "closed": true,
+    "closure_gap_m": 6.938893903907228e-18,
+    "radia_object_count": 8,
+    "arc_max_segment_length_m": 0.004
+  },
+  "controls": {
+    "order": 2,
+    "bonus_intorder": 4,
+    "mu_r": 1000.0,
+    "source_trace_tolerance": 0.05
+  },
+  "acceptance": "HOLD: diagnostic, not three-engine acceptance",
+  "runs": {
+    "projected_kelvin_trace": {
+      "vs_hdiv_mmm": 0.0015129515246470374,
+      "vs_reduced_a": 0.0015490685398129676,
+      "vs_mixed_total_reduced_omega": 0.00021427848410222764,
+      "runtime_s": 133.53087799996138,
+      "source_trace": {
+        "iron_interface_boundary": "iron_air_interface",
+        "projection_order": 2,
+        "iron_relative_harmonic_norm": 0.029214186272000123,
+        "iron_relative_tangential_residual": null,
+        "reduced_source_load": "volume",
+        "total_source_load": "volume",
+        "iron_harmonic_remainder": "volume",
+        "kelvin_interface_boundary": "kelvin_int",
+        "kelvin_relative_tangential_residual": 0.0396789322472243,
+        "kelvin_exterior_source": "projected interface trace",
+        "relative_tolerance": 0.05,
+        "cut_policy": "the iron volume Hodge split retains the linked-source harmonic/cohomology field; the Kelvin jump carries the orientation-reversed exact source 0-form"
+      }
+    },
+    "exact_exterior_source": {
+      "vs_hdiv_mmm": 0.0015129555075738964,
+      "vs_reduced_a": 0.0015490015028422862,
+      "vs_mixed_total_reduced_omega": 0.00021455531925970256,
+      "runtime_s": 202.7710439999937,
+      "source_trace": {
+        "iron_interface_boundary": "iron_air_interface",
+        "projection_order": 2,
+        "iron_relative_harmonic_norm": 0.029214186272000113,
+        "iron_relative_tangential_residual": null,
+        "reduced_source_load": "volume",
+        "total_source_load": "volume",
+        "iron_harmonic_remainder": "volume",
+        "kelvin_interface_boundary": "kelvin_int",
+        "kelvin_relative_tangential_residual": null,
+        "kelvin_exterior_source": "exact pulled-back field",
+        "relative_tolerance": 0.05,
+        "cut_policy": "the iron volume Hodge split retains the linked-source harmonic/cohomology field; the Kelvin jump carries the orientation-reversed exact source 0-form"
+      }
+    }
+  },
+  "exact_vs_projected_gap_core_relative_rms": 2.7705648212465013e-07,
+  "completed": true
+}

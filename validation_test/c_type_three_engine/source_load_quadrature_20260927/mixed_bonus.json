@@ -1,0 +1,134 @@
+{
+  "schema": "radia.validation.ctype-source-load-quadrature.v1",
+  "host": "intel11",
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "radia_version": "5.0.1",
+  "radia_module": "<local-path>/__init__.py",
+  "ngsolve": "6.2.2606",
+  "threads": 6,
+  "kelvin_solver_sha256": "97e3145a6b9c7f9a996ccaa82d5900ad904950bb467559f9555da7532e17766d",
+  "script_sha256": "7eb444ad2d81494ad1373d288e4fd89fedc7789d160cbfb0428b6a910b7190ed",
+  "three_engine_sha256": "c54c680ee9730fc1a36a7b1facd0ca6afea3299f27c02465cfee2d714956caaf",
+  "reference": "c_type_20260908_linear_kelvin_after_coarse_mdx1.json",
+  "reference_sha256": "927727fc13a70e6f8ade64719f09c79262bb252f435af62d9795595ccdb5151e",
+  "mesh_result_sha256": "b0a653e8231a3a6cce02e76bfe48ccccbc5bb327b4f03af461123948a62972e7",
+  "mesh_elements": 24134,
+  "controls": {
+    "order": 2,
+    "bonus_intorder": 4,
+    "mu_r": 1000.0,
+    "inverse": "pardiso",
+    "source_trace_tolerance": 0.05,
+    "coil": {
+      "authority": "ESRF Example 5 rounded rectangular solid current",
+      "current_A": -2000.0,
+      "radius_m": 0.0225,
+      "straight_x_m": 0.05,
+      "straight_y_m": 0.0625,
+      "cross_section_m": [
+        0.035,
+        0.105
+      ],
+      "centre_m": [
+        0.0,
+        0.13125,
+        0.0
+      ],
+      "closed": true,
+      "closure_gap_m": 6.938893903907228e-18,
+      "radia_object_count": 8,
+      "arc_max_segment_length_m": 0.004
+    }
+  },
+  "acceptance": "HOLD: diagnostic, not three-engine acceptance",
+  "variants": {
+    "harness_default": {
+      "vs_hdiv_mmm": 0.0015129515246473202,
+      "vs_reduced_a": 0.0015490685398132668,
+      "vs_mixed_total_reduced_omega": 0.00021427848410084005,
+      "vs_production": 8.607600078853036e-15,
+      "runtime_s": 311.44343609997304,
+      "hodge_bonus": 4,
+      "mixed_bonus": 4,
+      "air_load": "solver",
+      "iron_relative_harmonic_norm": 0.029214186272000113
+    },
+    "air_default_vector": {
+      "vs_hdiv_mmm": 0.0015129515246473536,
+      "vs_reduced_a": 0.0015490685398109028,
+      "vs_mixed_total_reduced_omega": 0.0002142784841100436,
+      "vs_production": 1.771799738915045e-14,
+      "runtime_s": 33.64177719998406,
+      "hodge_bonus": 4,
+      "mixed_bonus": 4,
+      "air_load": "production vector (absolute order 8)",
+      "iron_relative_harmonic_norm": 0.029214186272000113
+    },
+    "mixed_b8_air_frozen": {
+      "vs_hdiv_mmm": 0.0015129567485814106,
+      "vs_reduced_a": 0.00154898033687696,
+      "vs_mixed_total_reduced_omega": 0.00021464264312250346,
+      "vs_production": 3.644536334376586e-07,
+      "runtime_s": 84.67265540000517,
+      "hodge_bonus": 4,
+      "mixed_bonus": 8,
+      "air_load": "production vector (absolute order 8)",
+      "iron_relative_harmonic_norm": 0.029214186272000113
+    },
+    "mixed_b12_air_frozen": {
+      "vs_hdiv_mmm": 0.0015129578848943127,
+      "vs_reduced_a": 0.0015489613411704122,
+      "vs_mixed_total_reduced_omega": 0.00021472111039721117,
+      "vs_production": 4.429842115851482e-07,
+      "runtime_s": 178.94275540002855,
+      "hodge_bonus": 4,
+      "mixed_bonus": 12,
+      "air_load": "production vector (absolute order 8)",
+      "iron_relative_harmonic_norm": 0.029214186272000113
+    },
+    "mixed_b16_air_frozen": {
+      "vs_hdiv_mmm": 0.001512958090617026,
+      "vs_reduced_a": 0.001548957939927512,
+      "vs_mixed_total_reduced_omega": 0.00021473516990350053,
+      "vs_production": 4.5705482200632014e-07,
+      "runtime_s": 357.9426779000205,
+      "hodge_bonus": 4,
+      "mixed_bonus": 16,
+      "air_load": "production vector (absolute order 8)",
+      "iron_relative_harmonic_norm": 0.029214186272000113
+    }
+  },
+  "production": {
+    "runtime_s": 80.95176750002429,
+    "gap_core": {
+      "vs_hdiv_mmm": 0.0015129515246469114,
+      "vs_reduced_a": 0.0015490685398153218,
+      "vs_mixed_total_reduced_omega": 0.00021427848409253685
+    },
+    "source_trace": {
+      "contract": "total_hodge",
+      "projection_order": 2,
+      "total_source_materials": [
+        "iron"
+      ],
+      "iron_relative_harmonic_norm": 0.029214186272000103,
+      "iron_relative_tangential_residual": null,
+      "reduced_source_load": "volume",
+      "total_source_load": "volume",
+      "iron_harmonic_remainder": "volume",
+      "projection_bonus_intorder": 4,
+      "kelvin_exterior_source": "projected interface trace",
+      "relative_tolerance": 0.05,
+      "kelvin_relative_tangential_residual": 0.03967893224722429,
+      "source_representation": "exact",
+      "gate_enabled": true,
+      "acceptance": "passed",
+      "gate_scope": "kelvin_trace_only",
+      "response_order": 2,
+      "lift_order_compatible": true,
+      "split_invariance_verified": false
+    }
+  },
+  "scope": "mixed bonus changes the stiffness, interface, Kelvin and iron source remainder quadrature together; the air load and the Hodge projection (B-invariant) stay at the production bonus",
+  "completed": true
+}
