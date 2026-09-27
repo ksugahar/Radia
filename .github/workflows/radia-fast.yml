@@ -45,7 +45,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          # A push may contain several commits; github.event.before must exist
+          # for the impact selector to compare the complete pushed range.
+          fetch-depth: 0
 
       - name: Create isolated fast-CI environment
         shell: pwsh
