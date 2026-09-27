@@ -534,6 +534,8 @@ def test_netgen_workflow_records_o_grid_hex_sphere_gate():
     assert "volume 1 scheme sphere" in doc
     assert "56 hexes" in doc
     assert "order-3 rel err 0.00131" in doc
+    assert "Geometric refit of the curving coefficients" in doc
+    assert "CUBIT_MESH_EXPORT_GEOMETRIC_REFIT=0" in doc
     assert "Do not call `mesh.Curve()`" in doc
     assert "coreform_cubit.com -nographics -batch" in doc
     assert "O-grid hex sphere eigenvalue gate" in doc

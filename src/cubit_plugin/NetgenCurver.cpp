@@ -7,6 +7,7 @@
 // Netgen defines: netgen::QUAD, netgen::HEX, netgen::PYRAMID, netgen::Surface
 #include <meshing/meshing.hpp>
 #include "callbackgeom.hpp"
+#include "NetgenGeometricRefit.hpp"
 
 // Avoid Cubit/Netgen name clashes by aliasing Netgen element types
 namespace ng = netgen;
@@ -1234,6 +1235,26 @@ bool NetgenCurver::curve_and_extract(int order)
   if (!curved.IsHighOrder()) {
     PRINT_WARNING("NetgenCurver: BuildCurvedElements did not produce high-order data.\n");
     return false;
+  }
+
+  // Replace Netgen's fixed-parameter L2 fit by a geometric (distance)
+  // refit; see NetgenGeometricRefit.hpp.  CUBIT_MESH_EXPORT_GEOMETRIC_REFIT=0
+  // keeps Netgen's coefficients for A/B comparison.
+  const char * refit_env = std::getenv("CUBIT_MESH_EXPORT_GEOMETRIC_REFIT");
+  if (refit_env && refit_env[0] == '0') {
+    PRINT_INFO("NetgenCurver: geometric refit disabled (Netgen L2 coefficients kept)\n");
+  } else {
+    GeometricRefitStats rs = geometric_refit(*ng_mesh_);
+    PRINT_INFO("NetgenCurver: geometric refit - edges %d/%d accepted "
+               "(%d failed, %d kept to avoid distortion), max distance %.3e -> %.3e; "
+               "faces %d/%d accepted (%d failed, %d kept to avoid distortion), "
+               "max distance %.3e -> %.3e\n",
+               rs.edges_accepted, rs.edges_tried, rs.edges_failed,
+               rs.edges_rejected_distortion,
+               rs.edge_dist_before, rs.edge_dist_after,
+               rs.faces_accepted, rs.faces_tried, rs.faces_failed,
+               rs.faces_rejected_distortion,
+               rs.face_dist_before, rs.face_dist_after);
   }
 
   // Extract curved node positions by evaluating CalcElementTransformation

@@ -61,6 +61,19 @@ public:
   DLL_HEADER bool IsElementCurved (ElementIndex ei) const;
   DLL_HEADER bool IsElementHighOrder (ElementIndex ei) const;
 
+  // cubit-mesh-export local patch: coefficient access for the plugin's
+  // geometric refit pass (src/cubit_plugin/NetgenGeometricRefit.cpp).
+  // Indices are 0-based topology edge/face numbers; call the pointer
+  // accessors only when the matching count is positive.
+  int NumEdgeCoefficients (int edgenr) const
+  { return edgecoeffsindex[edgenr+1] - edgecoeffsindex[edgenr]; }
+  Vec<3> * EdgeCoefficients (int edgenr)
+  { return &edgecoeffs[edgecoeffsindex[edgenr]]; }
+  int NumFaceCoefficients (int facenr) const
+  { return facecoeffsindex[facenr+1] - facecoeffsindex[facenr]; }
+  Vec<3> * FaceCoefficients (int facenr)
+  { return &facecoeffs[facecoeffsindex[facenr]]; }
+
 
   void CalcSegmentTransformation (double xi, SegmentIndex segnr,
 				  Point<3> & x)

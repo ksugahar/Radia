@@ -6,6 +6,14 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+- `export netgen` refits Netgen's curved edge/face coefficients by
+  minimising the distance to the CAD geometry.  Netgen's fixed-parameter L2
+  fit stalls at odd orders; on the unit sphere the 32-HEX boundary error now
+  drops from 1.2e-3 to 9.8e-7 at p=3 and from 1.8e-5 to 6.0e-9 at p=4.
+  A refit is kept only when it lowers the sampled distance without degrading
+  the Jacobian.  `CUBIT_MESH_EXPORT_GEOMETRIC_REFIT=0` keeps Netgen's
+  coefficients.
+
 ## 2.0.1 - Reproducible mesh and electrostatic comparison
 
 - Publish two-run, high-order Cubit versus Netgen/OCC geometry and
