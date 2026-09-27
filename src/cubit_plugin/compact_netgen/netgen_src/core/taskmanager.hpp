@@ -42,7 +42,31 @@ namespace ngcore
     // int nnodes;
   };
 
-  NGCORE_API extern class TaskManager * task_manager;
+  struct WorkerData
+  {
+      static constexpr int MAX_TIMERS = 8*1024;
+      std::array<TTimePoint, MAX_TIMERS> times{};
+      std::array<TTimePoint, MAX_TIMERS> flops{};
+      std::thread thread;
+      Exception * ex = nullptr;
+      void *produce_token = nullptr;
+      void *consume_token = nullptr;
+
+      WorkerData() = default;
+      ~WorkerData();
+      WorkerData(const WorkerData &) = delete;
+      WorkerData(WorkerData &&) = default;
+      WorkerData& operator=(const WorkerData &) = delete;
+      WorkerData& operator=(WorkerData &&) = default;
+  };
+
+  #ifdef WIN32
+      extern thread_local class TaskManager * task_manager;
+      NGCORE_API class TaskManager * GetTaskManager();
+  #else
+      NGCORE_API thread_local extern class TaskManager * task_manager;
+      inline class TaskManager * GetTaskManager() { return task_manager; }
+  #endif
   
   class TaskManager
   {
@@ -55,39 +79,47 @@ namespace ngcore
       atomic<int> participate{0};
     };
     
-    NGCORE_API static const function<void(TaskInfo&)> * func;
-    NGCORE_API static const function<void()> * startup_function;
-    NGCORE_API static const function<void()> * cleanup_function;
-    NGCORE_API static atomic<int> ntasks;
-    NGCORE_API static Exception * ex;
+    void * taskqueue_ptr;
+    void AddTask (const function<void(TaskInfo&)> & afunc, atomic<int> & endcnt);
+    const function<void(TaskInfo&)> * func = nullptr;
+    const function<void()> * startup_function = nullptr;
+    const function<void()> * cleanup_function = nullptr;
+    atomic<int> ntasks;
+    Exception * ex = nullptr;
 
-    NGCORE_API static atomic<int> jobnr;
+    atomic<int> jobnr;
 
-    static atomic<int> complete[8];   // max nodes
-    static atomic<int> done;
-    static atomic<int> active_workers;
-    static atomic<int> workers_on_node[8];   // max nodes
+    atomic<int> complete[8];   // max nodes
+    atomic<int> done;
+    atomic<int> active_workers;
+    atomic<int> workers_on_node[8];   // max nodes
+    std::mutex copyex_mutex;
     // Array<atomic<int>*> sync;
-    NGCORE_API static int sleep_usecs;
-    NGCORE_API static bool sleep;
+    int sleep_usecs = 100;
+    bool sleep = false;
+    std::vector<WorkerData> workers;
 
-    static NodeData *nodedata[8];
+    NodeData *nodedata[8];
 
-    static int num_nodes;
-    NGCORE_API static int num_threads;
+    int num_nodes;
+    int num_threads;
     NGCORE_API static int max_threads;
 
 
 
 #ifdef WIN32 // no exported thread_local in dlls on Windows
     static thread_local int thread_id;
+    static thread_local WorkerData *worker_data;
+    static thread_local int timer_thread_id;
 #else
     NGCORE_API static thread_local int thread_id;
+    NGCORE_API static thread_local WorkerData *worker_data;
+    NGCORE_API static thread_local int timer_thread_id;
 #endif
     NGCORE_API static bool use_paje_trace;
   public:
     
-    NGCORE_API TaskManager();
+    NGCORE_API TaskManager(int anthreads);
     NGCORE_API ~TaskManager();
 
 
@@ -105,28 +137,30 @@ namespace ngcore
       }
     void ResumeWorkers() { sleep = false; }
 
-    NGCORE_API static void SetNumThreads(int amax_threads);
+    static NGCORE_API void SetNumThreads(int amax_threads);
     static int GetMaxThreads() { return max_threads; }
-    // static int GetNumThreads() { return task_manager ? task_manager->num_threads : 1; }
-    static int GetNumThreads() { return num_threads; }
+    static int GetNumThreads() { auto *tm = GetTaskManager(); return tm ? tm->num_threads : 1; }
 #ifdef WIN32
     NGCORE_API static int GetThreadId();
+    NGCORE_API static int GetTimerThreadId();
+    NGCORE_API static WorkerData* GetWorkerData();
 #else
     static int GetThreadId() { return thread_id; }
+    static int GetTimerThreadId() { return timer_thread_id; }
+    static WorkerData* GetWorkerData() { return worker_data; }
 #endif
     int GetNumNodes() const { return num_nodes; }
 
     static void SetPajeTrace (bool use)  { use_paje_trace = use; }
     
-    NGCORE_API static bool ProcessTask();
+    NGCORE_API bool ProcessTask();
 
-    NGCORE_API static void CreateJob (const function<void(TaskInfo&)> & afunc, 
-                    int antasks = task_manager->GetNumThreads());
+    NGCORE_API static void CreateJob (const function<void(TaskInfo&)> & afunc, int antasks = -1);
 
-    static void SetStartupFunction (const function<void()> & func) { startup_function = &func; }
-    static void SetStartupFunction () { startup_function = nullptr; }
-    static void SetCleanupFunction (const function<void()> & func) { cleanup_function = &func; }
-    static void SetCleanupFunction () { cleanup_function = nullptr; }    
+    void SetStartupFunction (const function<void()> & func) { startup_function = &func; }
+    void SetStartupFunction () { startup_function = nullptr; }
+    void SetCleanupFunction (const function<void()> & func) { cleanup_function = &func; }
+    void SetCleanupFunction () { cleanup_function = nullptr; }    
 
     void Done() { done = true; }
     NGCORE_API void Loop(int thread_num);
@@ -145,41 +179,30 @@ namespace ngcore
   NGCORE_API void RunWithTaskManager (function<void()> alg);
 
   // For Python context manager
-  NGCORE_API int  EnterTaskManager ();
+  NGCORE_API int  EnterTaskManager (int anthreads = -1);
   NGCORE_API void ExitTaskManager (int num_threads);
 
   class RegionTaskManager
   {
-    int nthreads_before;
     int nthreads;
-    bool started_taskmanager;
+    // bool started_taskmanager;
 
   public:
-    RegionTaskManager(int anthreads=TaskManager::GetMaxThreads())
+    RegionTaskManager(int anthreads=-1)
         : nthreads(anthreads)
     {
-      if(task_manager || nthreads==0)
-        {
-          // already running, no need to do anything
-          started_taskmanager = false;
-          return;
-        }
-      else
-        {
-          nthreads_before = TaskManager::GetMaxThreads();
-          TaskManager::SetNumThreads(nthreads);
-          nthreads = EnterTaskManager();
-          started_taskmanager = true;
-        }
+      if(nthreads == -1) nthreads = TaskManager::GetMaxThreads();
+      auto *task_manager = GetTaskManager();
+      if(task_manager)
+         nthreads = 0;
+
+      if (nthreads > 0)
+          nthreads = EnterTaskManager(nthreads);
     }
 
     ~RegionTaskManager()
     {
-      if(started_taskmanager)
-        {
-          ExitTaskManager(nthreads);
-          TaskManager::SetNumThreads(nthreads_before);
-        }
+      ExitTaskManager(nthreads);
     }
   };
 
@@ -191,7 +214,7 @@ namespace ngcore
 
   public:
     SuspendTaskManager(int asleep_usecs=1000)
-      : tm(task_manager)
+      : tm(GetTaskManager())
     {
       if(!tm)
           return;
@@ -214,8 +237,8 @@ namespace ngcore
 
   NETGEN_INLINE int TasksPerThread (int tpt)
   {
-    // return task_manager ? tpt*task_manager->GetNumThreads() : 1;
-    return tpt*TaskManager::GetNumThreads();
+    auto *tm = GetTaskManager();
+    return tm ? tpt * tm->GetNumThreads() : 1;
   }
   
 
@@ -229,7 +252,7 @@ namespace ngcore
 
   template <typename TR, typename TFUNC>
   NETGEN_INLINE void ParallelFor (T_Range<TR> r, TFUNC f, 
-                           int antasks = TaskManager::GetNumThreads(),
+                           int antasks = -1,
                            TotalCosts costs = 1000)
   {
     // if (task_manager && costs() >= 1000)
@@ -264,7 +287,7 @@ namespace ngcore
   
   template <typename TR, typename TFUNC>
   NETGEN_INLINE void ParallelForRange (T_Range<TR> r, TFUNC f, 
-                                int antasks = TaskManager::GetNumThreads(),
+                                int antasks = -1,
                                 TotalCosts costs = 1000)
   {
     // if (task_manager && costs() >= 1000)
@@ -297,8 +320,7 @@ namespace ngcore
   }
   
   template <typename TFUNC>
-  NETGEN_INLINE void ParallelJob (TFUNC f,
-                           int antasks = TaskManager::GetNumThreads())
+  NETGEN_INLINE void ParallelJob (TFUNC f, int antasks = -1)
   {
     TaskManager::CreateJob (f, antasks);
   }
@@ -708,7 +730,7 @@ public:
     size_t GetTotalCosts() const { return total_costs; }
 
     template <typename TFUNC>
-    void Calc (size_t n, TFUNC costs, int size = task_manager ? task_manager->GetNumThreads() : 1)
+    void Calc (size_t n, TFUNC costs, int size = TaskManager::GetNumThreads())
     {
       Array<size_t> prefix (n);
 
@@ -801,8 +823,9 @@ public:
 
   // tasks must be a multiple of part.size
   template <typename TFUNC>
-  NETGEN_INLINE void ParallelFor (const Partitioning & part, TFUNC f, int tasks_per_thread = 1)
+  NETGEN_INLINE void ParallelFor (const Partitioning & part, TFUNC f, int tasks_per_thread = 2)
   {
+    auto * task_manager = GetTaskManager();
     if (task_manager)
       {
         int ntasks = tasks_per_thread * task_manager->GetNumThreads();
@@ -833,8 +856,9 @@ public:
 
   template <typename TFUNC>
   NETGEN_INLINE void ParallelForRange (const Partitioning & part, TFUNC f,
-                                int tasks_per_thread = 1, TotalCosts costs = 1000)
+                                int tasks_per_thread = 2, TotalCosts costs = 1000)
   {
+    auto * task_manager = GetTaskManager();
     if (task_manager && costs() >= 1000)
       {
         int ntasks = tasks_per_thread * task_manager->GetNumThreads();

@@ -87,6 +87,21 @@ L2 error of the 32-HEX mesh drops from 1.2e-3 to 9.8e-7 at p=3 and from
 `CUBIT_MESH_EXPORT_GEOMETRIC_REFIT=0` to export Netgen's coefficients for A/B
 comparison.
 
+### Curved pyramids and NGSolve's vectorised transformation
+
+Netgen 6.2.2604-6.2.2607 evaluates a curved pyramid in two ways: the scalar
+path blends each curved base edge with the adjacent bilinear weights, the
+vectorised path (`EvaluateMapping`, used by assembly and `Integrate`) omits
+that factor.  A pyramid with a curved base edge then does not conform with
+its neighbours: on a hex/pyramid/tet cylinder the element volumes miss
+2.4e-3 of the boundary-enclosed volume at every order >= 2, and the two
+paths differ by 1e-2.  The exported `.vol` is correct and the exporter's own
+snapshot is patched, but NGSolve up to 6.2.2607 reads it through the
+unpatched path; `export netgen` warns when curved pyramids are written.
+Prefer all-hex or all-tet elements next to curved boundaries, or compare the
+integrated volume with the CAD value (a 1 % check-vol tolerance does not
+catch a 4e-4 deficit).
+
 On Windows PowerShell, prefer `coreform_cubit.com -nographics -batch script.py`
 or the lab launcher background path when you need to wait for batch completion
 and capture logs.  `coreform_cubit.exe` can behave as a GUI stub and return

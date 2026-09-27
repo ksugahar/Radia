@@ -640,6 +640,13 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
       std::vector<int> edge_ids = CubitInterface::parse_cubit_list(
           "edge", "in curve " + std::to_string(cid));
 
+      // Netgen >= 6.2.2605 keeps geometric edge metadata in a 1-based
+      // EdgeDescriptor table.  Its surface numbers are 1-based face
+      // descriptor indices, passed to CallbackGeometry as-is.
+      ng::EdgeDescriptor ed(edgenr, fd1, fd2);
+      ed.SetIndex(fd2);
+      const int edge_descriptor_index = ng_mesh_->AddEdgeDescriptor(ed);
+
       // Get curve length for dist normalization
       RefEdge* re = cubit_mesh_export::cubit_get_ref_edge(cid);
       double crv_length = re ? re->measure() : 1.0;
@@ -669,20 +676,13 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
         ng::Segment nseg;
         nseg[0] = itn0->second;
         nseg[1] = itn1->second;
-        nseg.si = fd2;
-        nseg.edgenr = edgenr;
-        nseg.surfnr1 = fd1 - 1;  // 0-based
-        nseg.surfnr2 = fd2 - 1;
-        nseg.epgeominfo[0].edgenr = edgenr;
-        nseg.epgeominfo[0].dist = dist0;
-        nseg.epgeominfo[1].edgenr = edgenr;
-        nseg.epgeominfo[1].dist = dist1;
+        nseg.SetIndex(edge_descriptor_index);
+        nseg.EPGeomInfo(0).dist = dist0;
+        nseg.EPGeomInfo(1).dist = dist1;
         ng_mesh_->AddSegment(nseg);
       }
       edgenr++;
     }
-    if (edgenr > 1)
-      ng_mesh_->SetNCD2Names(edgenr);
     PRINT_INFO("  Phase1e2: %d edge groups added\n", edgenr - 1);
   }
 
@@ -1255,6 +1255,29 @@ bool NetgenCurver::curve_and_extract(int order)
                rs.faces_accepted, rs.faces_tried, rs.faces_failed,
                rs.faces_rejected_distortion,
                rs.face_dist_before, rs.face_dist_after);
+  }
+
+  // NGSolve's vectorised element transformation (Netgen 6.2.2604-6.2.2607)
+  // omits the blending of curved pyramid base edges, so such pyramids do
+  // not conform with their neighbours during assembly and integration
+  // (the exporter's own snapshot is patched).  Warn instead of failing:
+  // the .vol itself is correct.
+  {
+    const auto & top = ng_mesh_->GetTopology();
+    int curved_pyramids = 0;
+    for (int e = 0; e < ng_mesh_->GetNE(); e++) {
+      ng::ElementIndex ei(e);
+      if ((*ng_mesh_)[ei].GetType() != ng::PYRAMID) continue;
+      for (auto edge : top.GetEdges(ei))
+        if (curved.NumEdgeCoefficients(int(edge)) > 0) { curved_pyramids++; break; }
+    }
+    if (curved_pyramids > 0)
+      PRINT_WARNING("NetgenCurver: %d pyramids have curved edges. NGSolve up to "
+                    "6.2.2607 evaluates curved pyramids inconsistently in its "
+                    "vectorised path (volume/field errors that do not converge "
+                    "with order). Prefer an all-hex or all-tet boundary layer, "
+                    "or check the domain volume against the CAD value.\n",
+                    curved_pyramids);
   }
 
   // Extract curved node positions by evaluating CalcElementTransformation

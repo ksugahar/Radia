@@ -59,13 +59,6 @@
   #endif
 #endif
 
-// Set __host__ __device__ for all inline functions
-#ifdef __CUDACC__
-  #define NETGEN_HD __host__ __device__
-#else // __CUDACC__
-  #define NETGEN_HD
-#endif // __CUDACC__
-
 
 #ifdef __CUDACC__
 // partial override of overloaded function (Archive, MultAdd)
@@ -85,8 +78,8 @@
 #else
   #ifdef __GNUC__
     #define NETGEN_ALWAYS_INLINE __attribute__ ((__always_inline__))
-    #define NETGEN_INLINE __attribute__ ((__always_inline__)) inline NETGEN_HD
-    #define NETGEN_LAMBDA_INLINE __attribute__ ((__always_inline__)) NETGEN_HD
+    #define NETGEN_INLINE __attribute__ ((__always_inline__)) inline
+    #define NETGEN_LAMBDA_INLINE __attribute__ ((__always_inline__))
     #define NETGEN_VLA
   #else
     #define NETGEN_ALWAYS_INLINE

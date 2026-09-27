@@ -4,6 +4,7 @@
 #include "curvedelems.hpp"
 #include "basegeom.hpp"
 #include "hprefinement.hpp"
+#include "meshclass.hpp"
 
 // #include "meshing.hpp"
 // #include "../general/autodiff.hpp"
@@ -727,6 +728,45 @@ namespace netgen
 	  edgeorder[top.GetEdge (i)] = aorder;
       }
 
+    // Build offset-point map (boundary layers, z-refine) and set orders
+    // for interior offset edges/faces that would otherwise stay at order 1
+    idmap_type offset_map;
+    bool have_offset = false;
+    for (int identnr = 1; identnr <= mesh.GetIdentifications().GetMaxNr(); identnr++)
+      if (mesh.GetIdentifications().GetType(identnr) == Identifications::OFFSET_POINT)
+        {
+          idmap_type tmp;
+          mesh.GetIdentifications().GetMap(identnr, tmp);
+          if (!have_offset)
+            { offset_map = std::move(tmp); have_offset = true; }
+          else
+            for (auto pi : tmp.Range())
+              if (tmp[pi].IsValid())
+                offset_map[pi] = tmp[pi];
+        }
+
+    if (have_offset && working)
+      {
+        auto bl_valid = [&](PointIndex pi) -> bool {
+          return pi < offset_map.Range().Next() && offset_map[pi].IsValid();
+        };
+        for (int e = 0; e < nedges; e++)
+          {
+            auto [p1, p2] = top.GetEdgeVertices(e);
+            if (bl_valid(p1) || bl_valid(p2))
+              edgeorder[e] = max(edgeorder[e], aorder);
+          }
+        for (int f = 0; f < nfaces; f++)
+          {
+            auto verts = top.GetFaceVertices(f);
+            bool any_bl = false;
+            for (int k = 0; k < verts.Size(); k++)
+              if (bl_valid(verts[k])) { any_bl = true; break; }
+            if (any_bl)
+              faceorder[f] = max(faceorder[f], aorder);
+          }
+      }
+
     if (rational)
       {
         edgeorder = 2;
@@ -1025,7 +1065,9 @@ namespace netgen
     NgArray<int> swap_edge(nedges);
     NgArray<EdgePointGeomInfo> edge_gi0(nedges);
     NgArray<EdgePointGeomInfo> edge_gi1(nedges);
+    NgArray<int> edge_geoedgenr(nedges);
     use_edge = 0;
+    edge_geoedgenr = -1;
 
     if (working)
       for (SegmentIndex i = 0; i < mesh.GetNSeg(); i++)
@@ -1033,10 +1075,11 @@ namespace netgen
 	  const Segment & seg = mesh[i];
 	  int edgenr = top.GetEdge (i);
 	  use_edge[edgenr] = 1;
-	  edge_surfnr1[edgenr] = seg.surfnr1;
-	  edge_surfnr2[edgenr] = seg.surfnr2;
-	  edge_gi0[edgenr] = seg.epgeominfo[0];
-	  edge_gi1[edgenr] = seg.epgeominfo[1];
+	  edge_surfnr1[edgenr] = mesh.GetEdgeDescriptor(seg.GetIndex()).SurfNr(0);
+	  edge_surfnr2[edgenr] = mesh.GetEdgeDescriptor(seg.GetIndex()).SurfNr(1);
+	  edge_gi0[edgenr] = seg.EPGeomInfo(0);
+	  edge_gi1[edgenr] = seg.EPGeomInfo(1);
+	  edge_geoedgenr[edgenr] = mesh.GetEdgeDescriptor(seg.GetIndex()).EdgeNr();
 	  swap_edge[edgenr] = int (seg[0] > seg[1]);
 	}
 
@@ -1056,16 +1099,13 @@ namespace netgen
                   {
                     senddata.Add (proc, edge_surfnr1[e]);
                     senddata.Add (proc, edge_surfnr2[e]);
-                    senddata.Add (proc, edge_gi0[e].edgenr);
-                    senddata.Add (proc, edge_gi0[e].body);
+                    senddata.Add (proc, edge_geoedgenr[e]);
                     senddata.Add (proc, edge_gi0[e].dist);
-                    senddata.Add (proc, edge_gi0[e].u);
-                    senddata.Add (proc, edge_gi0[e].v);
-                    senddata.Add (proc, edge_gi1[e].edgenr);
-                    senddata.Add (proc, edge_gi1[e].body);
+                    senddata.Add (proc, edge_gi0[e].gi.u);
+                    senddata.Add (proc, edge_gi0[e].gi.v);
                     senddata.Add (proc, edge_gi1[e].dist);
-                    senddata.Add (proc, edge_gi1[e].u);
-                    senddata.Add (proc, edge_gi1[e].v);
+                    senddata.Add (proc, edge_gi1[e].gi.u);
+                    senddata.Add (proc, edge_gi1[e].gi.v);
                     senddata.Add (proc, swap_edge[e]);
                   }
               }
@@ -1085,16 +1125,13 @@ namespace netgen
                     use_edge[e] = 1;
                     edge_surfnr1[e] = int (recvdata[proc][cnt[proc]++]);
                     edge_surfnr2[e] = int (recvdata[proc][cnt[proc]++]);
-                    edge_gi0[e].edgenr = int (recvdata[proc][cnt[proc]++]);
-                    edge_gi0[e].body = int (recvdata[proc][cnt[proc]++]);
+                    edge_geoedgenr[e] = int (recvdata[proc][cnt[proc]++]);
                     edge_gi0[e].dist = recvdata[proc][cnt[proc]++];
-                    edge_gi0[e].u = recvdata[proc][cnt[proc]++];
-                    edge_gi0[e].v = recvdata[proc][cnt[proc]++];
-                    edge_gi1[e].edgenr = int (recvdata[proc][cnt[proc]++]);
-                    edge_gi1[e].body = int (recvdata[proc][cnt[proc]++]);
+                    edge_gi0[e].gi.u = recvdata[proc][cnt[proc]++];
+                    edge_gi0[e].gi.v = recvdata[proc][cnt[proc]++];
                     edge_gi1[e].dist = recvdata[proc][cnt[proc]++];
-                    edge_gi1[e].u = recvdata[proc][cnt[proc]++];
-                    edge_gi1[e].v = recvdata[proc][cnt[proc]++];
+                    edge_gi1[e].gi.u = recvdata[proc][cnt[proc]++];
+                    edge_gi1[e].gi.v = recvdata[proc][cnt[proc]++];
                     swap_edge[e] = recvdata[proc][cnt[proc]++];
                   }
               }
@@ -1125,9 +1162,9 @@ namespace netgen
 	  if (rational)
 	    {
 	      Vec<3> tau1 = geo.GetTangent(p1, edge_surfnr2[edgenr], edge_surfnr1[edgenr],
-                                           edge_gi0[edgenr]);
+                                           edge_gi0[edgenr], edge_geoedgenr[edgenr]);
 	      Vec<3> tau2 = geo.GetTangent(p2, edge_surfnr2[edgenr], edge_surfnr1[edgenr],
-                                           edge_gi1[edgenr]);
+                                           edge_gi1[edgenr], edge_geoedgenr[edgenr]);
 	      // p1 + alpha1 tau1 = p2 + alpha2 tau2;
 
 	      Mat<3,2> mat;
@@ -1154,7 +1191,7 @@ namespace netgen
 		  v05 /= 1 + (w-1) * 0.5;
 		  Point<3> p05 (v05), pp05(v05);
 		  geo.ProjectPointEdge(edge_surfnr1[edgenr], edge_surfnr2[edgenr], pp05,
-                                       &edge_gi0[edgenr]);
+                                       &edge_gi0[edgenr], edge_geoedgenr[edgenr]);
 		  double d = Dist (pp05, p05);
 
 		  if (d < dold)
@@ -1201,7 +1238,7 @@ namespace netgen
 		      geo.PointBetweenEdge(p1, p2, xi[j],
                                            edge_surfnr2[edgenr], edge_surfnr1[edgenr],
                                            edge_gi0[edgenr], edge_gi1[edgenr],
-                                           pp, ppgi);
+                                           pp, ppgi, edge_geoedgenr[edgenr]);
 		    }
 		  else
 		    {
@@ -1209,7 +1246,7 @@ namespace netgen
 		      geo.PointBetweenEdge(p2, p1, xi[j],
 					   edge_surfnr2[edgenr], edge_surfnr1[edgenr],
 					   edge_gi1[edgenr], edge_gi0[edgenr],
-					   pp, ppgi);
+					   pp, ppgi, edge_geoedgenr[edgenr]);
 		    }
 	    
 		  Vec<3> dist = pp - p;
@@ -1507,6 +1544,104 @@ namespace netgen
       }
 
 
+    // Prolong curvature to offset-point edges/faces (boundary layers, z-refine)
+    if (have_offset)
+      {
+        auto bl_valid = [&](PointIndex pi) -> bool {
+          return pi < offset_map.Range().Next() && offset_map[pi].IsValid();
+        };
+
+          PrintMessage (3, "Prolonging curvature to offset-point edges");
+          for (int e = 0; e < nedges; e++)
+            {
+              auto [p1, p2] = top.GetEdgeVertices(e);
+              if (!bl_valid(p1) || !bl_valid(p2)) continue;
+
+              PointIndex base_p1 = offset_map[p1];
+              PointIndex base_p2 = offset_map[p2];
+              if (base_p1 == p1 && base_p2 == p2) continue;
+
+              int base_edge = top.GetVerticesEdge(base_p1, base_p2);
+              if (base_edge < 0) continue;
+
+              int ndof = edgecoeffsindex[e+1] - edgecoeffsindex[e];
+              int base_ndof = edgecoeffsindex[base_edge+1] - edgecoeffsindex[base_edge];
+              if (base_ndof == 0 || ndof == 0) continue;
+
+              int first = edgecoeffsindex[e];
+              int base_first = edgecoeffsindex[base_edge];
+              int copy_ndof = min(ndof, base_ndof);
+
+              double base_len = Dist(mesh[base_p1], mesh[base_p2]);
+              double offset_len = Dist(mesh[p1], mesh[p2]);
+              double scale = (base_len > 1e-16) ? offset_len / base_len : 1.0;
+
+              for (int j = 0; j < copy_ndof; j++)
+                edgecoeffs[first+j] = scale * edgecoeffs[base_first+j];
+            }
+
+          PrintMessage (3, "Prolonging curvature to offset-point faces");
+          for (int f = 0; f < nfaces; f++)
+            {
+              auto verts = top.GetFaceVertices(f);
+              bool all_bl = true;
+              for (int k = 0; k < verts.Size(); k++)
+                if (!bl_valid(verts[k]))
+                  { all_bl = false; break; }
+              if (!all_bl) continue;
+
+              ArrayMem<PointIndex, 4> base_verts(verts.Size());
+              bool is_offset = false;
+              for (int k = 0; k < verts.Size(); k++)
+                {
+                  base_verts[k] = offset_map[verts[k]];
+                  if (base_verts[k] != verts[k]) is_offset = true;
+                }
+              if (!is_offset) continue;
+
+              int base_face = -1;
+              for (auto sei : top.GetVertexSurfaceElements(base_verts[0]))
+                {
+                  auto bfverts = top.GetFaceVertices(top.GetFace(sei));
+                  if (bfverts.Size() != verts.Size()) continue;
+                  bool match = true;
+                  for (int k = 0; k < base_verts.Size() && match; k++)
+                    {
+                      bool found = false;
+                      for (int l = 0; l < bfverts.Size(); l++)
+                        if (bfverts[l] == base_verts[k]) { found = true; break; }
+                      if (!found) match = false;
+                    }
+                  if (match) { base_face = top.GetFace(sei); break; }
+                }
+              if (base_face < 0) continue;
+
+              int ndof = facecoeffsindex[f+1] - facecoeffsindex[f];
+              int base_ndof = facecoeffsindex[base_face+1] - facecoeffsindex[base_face];
+              if (base_ndof == 0 || ndof == 0) continue;
+
+              int first = facecoeffsindex[f];
+              int base_first = facecoeffsindex[base_face];
+              int copy_ndof = min(ndof, base_ndof);
+
+              auto face_area = [&](FlatArray<PointIndex> fv) -> double {
+                Vec<3> e1 = mesh[fv[1]] - mesh[fv[0]];
+                Vec<3> e2 = mesh[fv[2]] - mesh[fv[0]];
+                return Cross(e1, e2).Length();
+              };
+              ArrayMem<PointIndex, 4> bv_arr(base_verts.Size());
+              for (int k = 0; k < base_verts.Size(); k++) bv_arr[k] = base_verts[k];
+              double base_area = face_area(FlatArray<PointIndex>(verts.Size(), &bv_arr[0]));
+              ArrayMem<PointIndex, 4> ov_arr(verts.Size());
+              for (int k = 0; k < verts.Size(); k++) ov_arr[k] = verts[k];
+              double offset_area = face_area(FlatArray<PointIndex>(verts.Size(), &ov_arr[0]));
+              double scale = (base_area > 1e-30) ? sqrt(offset_area / base_area) : 1.0;
+
+              for (int j = 0; j < copy_ndof; j++)
+                facecoeffs[first+j] = scale * facecoeffs[base_first+j];
+            }
+      }
+
     // compress edge and face tables
     int newbase = 0;
     for (int i = 0; i < edgeorder.Size(); i++)
@@ -1580,7 +1715,7 @@ namespace netgen
     if (mesh.coarsemesh)
       {
 	const HPRefElement & hpref_el =
-	  (*mesh.hpelements) [mesh[elnr].hp_elnr];
+	  (*mesh.hpelements) [mesh[elnr].GetHpElnr()];
         
 	return mesh.coarsemesh->GetCurvedElements().IsSegmentCurved (hpref_el.coarse_elnr);
       }
@@ -1610,7 +1745,7 @@ namespace netgen
     if (mesh.coarsemesh)
       {
 	const HPRefElement & hpref_el =
-	  (*mesh.hpelements) [mesh[elnr].hp_elnr];
+	  (*mesh.hpelements) [mesh[elnr].GetHpElnr()];
 	
 	// xi umrechnen
 	T lami[2] = { xi, 1-xi };
@@ -4379,14 +4514,21 @@ namespace netgen
                   int first = edgecoeffsindex[info.edgenrs[i]];                  
 		  int vi1 = edges[i][0], vi2 = edges[i][1];
 		  if (el[vi1] > el[vi2]) swap (vi1, vi2);
-                  
+
+                  // cubit-mesh-export local patch: blend the base-edge bubble
+                  // with lambda[vi1]+lambda[vi2] (= 1-yt for edge 0-1), as
+                  // CalcElementShapes does with (shapes[vi1]+shapes[vi2])/(1-z).
+                  // Without it the edge curvature leaks onto the opposite
+                  // base edge and the side faces, so a curved pyramid does not
+                  // conform with its neighbours in this (SIMD) path.
+                  auto blend = lambda[vi1]+lambda[vi2];
 		  CalcScaledEdgeShapeLambda (eorder, (sigma[vi1]-sigma[vi2])*(1-z),
                                              1-z,
                                              [&](int j, AutoDiff<3,T> shape)
                                              {
                                                Vec<3> coef = edgecoeffs[first+j];
                                                for (int k = 0; k < 3; k++)
-                                                 mapped_x[k] += coef(k) * shape;
+                                                 mapped_x[k] += coef(k) * (blend*shape);
                                              });
 		}
 	    }
@@ -4889,7 +5031,7 @@ namespace netgen
     if (mesh.coarsemesh)
       {
 	const HPRefElement & hpref_el =
-	  (*mesh.hpelements) [mesh[elnr].hp_elnr];
+	  (*mesh.hpelements) [mesh[elnr].GetHpElnr()];
 	
 	// xi umrechnen
 	double lami[8];
