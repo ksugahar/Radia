@@ -23,12 +23,10 @@ from pathlib import Path
 
 import numpy as np
 from ngsolve import (
-    BND, VOL, CoefficientFunction, IntegrationRule, Integrate, Mesh, TaskManager,
-    sqrt, x, y, z,
+    BND, H1, VOL, BilinearForm, CoefficientFunction, GridFunction, IntegrationRule,
+    Integrate, LinearForm, Mesh, TaskManager, cos, dx, grad, sin, sqrt, x, y, z,
 )
 from cubit_mesh_export.check import check_consistency
-
-from paper_sphere_benchmark import solve
 
 ORDERS = (1, 2, 3, 4, 5)
 FIELD_ORDERS = (1, 2, 3, 4)
@@ -74,6 +72,35 @@ def run_cubit(exe: Path, plugin_dir: Path, run_dir: Path, refit: bool, timeout: 
     return elapsed
 
 
+def solve(mesh: Mesh, order: int) -> dict:
+    """Manufactured -Delta(phi)=3*pi^2*phi of paper_sphere_benchmark.py.
+
+    The error norms are integrated at order 2p+8: NGSolve's default
+    Integrate order (5) under-integrates them from p=3 on (the hex p=3
+    field error reads 0.23 instead of 0.36).
+    """
+    phi = sin(math.pi * x) * cos(math.pi * y) * cos(math.pi * z)
+    grad_phi = CoefficientFunction((
+        math.pi * cos(math.pi * x) * cos(math.pi * y) * cos(math.pi * z),
+        -math.pi * sin(math.pi * x) * sin(math.pi * y) * cos(math.pi * z),
+        -math.pi * sin(math.pi * x) * cos(math.pi * y) * sin(math.pi * z),
+    ))
+    fes = H1(mesh, order=order, dirichlet=".*")
+    gfu = GridFunction(fes)
+    gfu.Set(phi, BND)
+    u, v = fes.TnT()
+    a = BilinearForm(grad(u) * grad(v) * dx).Assemble()
+    rhs = LinearForm((3 * math.pi ** 2 * phi) * v * dx).Assemble()
+    residual = rhs.vec - a.mat * gfu.vec
+    gfu.vec.data += a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * residual
+    dphi = grad(gfu) - grad_phi
+    q = 2 * order + 8
+    return {"ndof": fes.ndof,
+            "error_integration_order": q,
+            "phi_l2_error": float(sqrt(Integrate((gfu - phi) ** 2, mesh, order=q))),
+            "electric_field_l2_error": float(sqrt(Integrate(dphi * dphi, mesh, order=q)))}
+
+
 def geometry(mesh: Mesh, order: int) -> dict:
     r = sqrt(x * x + y * y + z * z)
     q = 2 * order + 6
@@ -113,8 +140,7 @@ def main() -> None:
                     row = {"coefficients": label, "kind": kind, "order": p, **geometry(mesh, p)}
                     if p in FIELD_ORDERS:
                         fe = solve(mesh, p)
-                        row.update(ndof=fe["ndof"], phi_l2_error=fe["phi_l2_error"],
-                                   electric_field_l2_error=fe["electric_field_l2_error"])
+                        row.update(fe)
                     gate = check_consistency(vol, strict_labels=True,
                                              required_boundaries=("outer",),
                                              required_materials=("body",))
