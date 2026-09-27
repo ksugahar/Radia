@@ -1032,6 +1032,7 @@ def solve_fem(vol_file="", fes_order=1,
     q_surf_mean = None
     q_surf_p95 = None
     P_total_check = None
+    qsurf_p1_power = None
     qsurf_sol_path = ""
     if has_wp:
         H_t_sq_cf = (omega / abs(Z_s)) ** 2 * At_sq
@@ -1077,10 +1078,13 @@ def solve_fem(vol_file="", fes_order=1,
                  f"p95={q_surf_p95:.3e} W/m^2 "
                  f"(P_check={P_total_check:.4e} vs P_total={P_total:.4e})")
         except Exception as e:
-            # Stats are best-effort.  A failure here must not break the
-            # main solve / JSON output.
-            _log(f"Q_SURF:stats failed: {type(e).__name__}: {e}")
-            gf_q = None
+            # q_surf is the thermal handoff: a result without it must not
+            # look complete.
+            raise RuntimeError(
+                f"could not build the q_surf handoff field: "
+                f"{type(e).__name__}: {e}") from e
+        qsurf_p1_power = float(
+            Integrate(gf_q, mesh, BND, definedon=wp_region).real)
 
         # Surface current density on the SIBC face.
         #
@@ -1212,6 +1216,21 @@ def solve_fem(vol_file="", fes_order=1,
                 gf_q.Save(sol_Q)
                 qsurf_sol_path = sol_Q
                 sol_paths["q_surf"] = sol_Q
+                import re as _re
+                import ih_thermal
+                heated = sorted(
+                    n for n in set(mesh.GetBoundaries())
+                    if _re.fullmatch(str(sibc_bnd), n))
+                ih_thermal.write_field_sidecar(
+                    sol_Q, mesh_path=vol_B, mesh=mesh,
+                    fes_order=QSURF_HANDOFF_ORDER,
+                    quantity=ih_thermal.QSURF_QUANTITY,
+                    unit=ih_thermal.QSURF_UNIT, boundaries=heated,
+                    extra={"P_wp_W": qsurf_p1_power,
+                           "P_total_W": float(P_total),
+                           "P_total_check_W": P_total_check,
+                           "frequency_Hz": float(frequency),
+                           "producer": "calc_fem_kelvin"})
                 sol_entries.append(
                     {"sol": sol_Q, "fes": "H1",
                      "fes_order": QSURF_HANDOFF_ORDER,
@@ -1240,11 +1259,11 @@ def solve_fem(vol_file="", fes_order=1,
             gmsh_file = msh_output
             _log(f"GMSH:wrote {os.path.basename(msh_output)}")
         except Exception as e:
-            import traceback
-            tb_text = traceback.format_exc()
-            _log(f"GMSH_ERROR:{type(e).__name__}: {e}")
-            for line in tb_text.splitlines()[-4:]:
-                _log(f"GMSH_ERROR:  {line}")
+            # The .vol/.sol pair includes the thermal q_surf handoff; losing
+            # it must fail the run instead of returning a partial result.
+            raise RuntimeError(
+                f"field export to {msh_output} failed: "
+                f"{type(e).__name__}: {e}") from e
 
     # ============================================================
     # Step 8: Result JSON
@@ -1280,7 +1299,9 @@ def solve_fem(vol_file="", fes_order=1,
         "q_surf_p95": q_surf_p95,
         "P_total_check": P_total_check,
         "qsurf_sol": qsurf_sol_path,
+        "qsurf_em_vol": vol_path if qsurf_sol_path else "",
         "qsurf_order": QSURF_HANDOFF_ORDER if qsurf_sol_path else None,
+        "qsurf_p1_power_W": qsurf_p1_power,
         "delta": float(delta_skin),
         "ndof": ndof,
         "ne": ne,

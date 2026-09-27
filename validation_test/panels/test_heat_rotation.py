@@ -12,6 +12,7 @@ import math
 import os
 import sys
 
+import numpy as np
 import pytest
 
 # Add src/radia/panels to import path for direct access to calc_heat.
@@ -160,41 +161,81 @@ def test_rotation_pi_over_2_swaps_x_to_y(synthetic_setup):
         assert val_half == pytest.approx(0.0, abs=0.05)
 
 
-def test_phi_average_uniform_of_x_is_zero(synthetic_setup):
-    """--q-phi-average (the 'uniform' / circumferential-average mode):
-    the phi-average of q_em=x around z is 0 everywhere (x = r*cos(phi)
-    integrates to 0 over a full turn).  Contrast with the no-rotation
-    mode (theta=0 projection) which keeps the LOCAL value ~1 at (1,0,0)
-    -- so this test, together with test_rotation_zero_matches_identity,
-    pins both modes the panel offers (uniform vs no-rotation)."""
+@pytest.fixture(scope="module")
+def cylinder_mesh():
+    """A body of revolution about z: radius 1, height 2, centred on z=0."""
+    from ngsolve import Mesh
+    from netgen.occ import Axes, Cylinder, OCCGeometry, Pnt, Z
+
+    solid = Cylinder(Axes(Pnt(0, 0, -1), Z), r=1.0, h=2.0)
+    return Mesh(OCCGeometry(solid).GenerateMesh(maxh=0.25))
+
+
+def _phi_average_on(mesh, expression, td):
     import calc_heat
     from types import SimpleNamespace
-    import tempfile
+    from ngsolve import H1, GridFunction
 
-    em_mesh, gf_q_em, wp_mesh = synthetic_setup
+    gf = GridFunction(H1(mesh, order=1))
+    gf.Set(expression)
+    sol = os.path.join(td, "q.sol")
+    vol = os.path.join(td, "em.vol")
+    gf.Save(sol)
+    mesh.ngmesh.Save(vol)
+    args = SimpleNamespace(
+        q_uniform=None, qsurf_sol=sol, em_vol=vol, qsurf_order=1,
+        heat_flux_boundary_names=["default"], rotation_axis="z",
+        q_phi_average=True)
+    return calc_heat._build_qsurf_source(mesh, args)
 
-    with tempfile.TemporaryDirectory() as td:
-        sol = os.path.join(td, "q.sol")
-        vol = os.path.join(td, "wp.vol")
-        gf_q_em.Save(sol)
-        em_mesh.ngmesh.Save(vol)
 
-        args = SimpleNamespace(
-            q_uniform=None, qsurf_sol=sol, em_vol=vol, qsurf_order=1,
-            heat_flux_boundary_names=["default"], rotation_axis="z",
-            q_phi_average=True, q_phi_average_n=48)
-        q_cf, resample = calc_heat._build_qsurf_cf(wp_mesh, args)
+def test_phi_average_removes_the_azimuthal_part(cylinder_mesh, tmp_path):
+    """The circumferential average of q = x (= r cos phi) is zero, and it is
+    a static source (no resampler)."""
+    from ngsolve import x
+    import ih_thermal
 
-        # phi-average produces a STATIC axisymmetric source -> NO resampler
-        # (the time loop treats this like a uniform/constant source).
-        assert resample is None
+    q_cf, resample, audit = _phi_average_on(cylinder_mesh, x, str(tmp_path))
+    assert resample is None
+    assert audit["mode"] == "phi-average"
+    side = ih_thermal.boundary_vertex_numbers(cylinder_mesh, ["default"])
+    vals = q_cf.vec.FV().NumPy()[side]
+    r = np.hypot(*ih_thermal.mesh_vertices(cylinder_mesh)[side, :2].T)
+    # |x| reaches 1 on this surface.  Away from the axis the residual is
+    # the facet asymmetry of each ring; within one element of the axis the
+    # triangles straddle it and the meridian coordinate is not linear on
+    # them, so the bound there is looser.
+    assert np.max(np.abs(vals[r > 0.25])) < 0.02
+    assert np.max(np.abs(vals)) < 0.07
 
-        # The face-centre vertex near (1,0,0): rotating it around z sweeps
-        # the unit circle (cos t, sin t, 0) -- all inside the cube -- and
-        # the mean of q_em=x=cos t over a full turn is 0.
-        best_vnr = _surf_vnr_nearest(wp_mesh, (1.0, 0.0, 0.0))
-        val_phi_avg = q_cf.vec.FV()[best_vnr]
-        assert val_phi_avg == pytest.approx(0.0, abs=0.05)
+
+def test_phi_average_keeps_an_axisymmetric_source(cylinder_mesh, tmp_path):
+    """An already axisymmetric source is reproduced and its power kept."""
+    from ngsolve import z
+    import ih_thermal
+
+    q_cf, _, audit = _phi_average_on(cylinder_mesh, 1.0 + z * z,
+                                     str(tmp_path))
+    pts = ih_thermal.mesh_vertices(cylinder_mesh)
+    side = ih_thermal.boundary_vertex_numbers(cylinder_mesh, ["default"])
+    vals = q_cf.vec.FV().NumPy()[side]
+    # The largest deviation (about 1.5 % of the value) is at the rims,
+    # where one bin of width h/4 averages across the kink between the side
+    # wall and the end cap.
+    np.testing.assert_allclose(vals, 1.0 + pts[side, 2] ** 2, atol=0.04)
+    balance = audit["initial"]["power_balance"]
+    assert abs(balance["relative_error"]) < 5e-3
+    assert audit["phi_average"]["profile_power_W"] == pytest.approx(
+        audit["source_power_W"], rel=1e-12)
+
+
+def test_phi_average_rejects_a_body_that_is_not_of_revolution(
+        synthetic_setup, tmp_path):
+    """A cube has no meaningful circumferential average about z."""
+    em_mesh, _, _ = synthetic_setup
+    from ngsolve import x
+    with pytest.raises(ValueError, match="not a body of revolution"):
+        _phi_average_on(em_mesh, x, str(tmp_path))
 
 
 def test_phi_average_requires_spatial_not_uniform(synthetic_setup):
@@ -207,6 +248,6 @@ def test_phi_average_requires_spatial_not_uniform(synthetic_setup):
     args = SimpleNamespace(
         q_uniform=1.0e6, qsurf_sol="", em_vol="", qsurf_order=1,
         heat_flux_boundary_names=["default"], rotation_axis="z",
-        q_phi_average=True, q_phi_average_n=48)
+        q_phi_average=True)
     with pytest.raises(ValueError, match="q-phi-average"):
         calc_heat._build_qsurf_cf(wp_mesh, args)

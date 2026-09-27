@@ -59,6 +59,10 @@ def _write_uniform_qsurf_cylinder(tmp_path, q_flux=10.0):
 
     cylinder = Cylinder((0.0, 0.0, 0.0), Z, r=1.0, h=1.0)
     cylinder.faces.name = "em_surface"
+    # The thermal meridian heats only the side wall, so the end caps get
+    # their own names and the EM heat boundary matches it.
+    cylinder.faces.Max(Z).name = "em_top"
+    cylinder.faces.Min(Z).name = "em_bottom"
     cylinder.solids.name = "workpiece"
     ngmesh = OCCGeometry(cylinder).GenerateMesh(maxh=0.28)
     em_vol = tmp_path / "em_cylinder.vol"
@@ -340,6 +344,7 @@ def test_axisym_qsurf_uses_boundary_projection_and_reports_coverage(tmp_path):
         em_vol=str(em_vol),
         qsurf_order=1,
         n_phi_samples=32,
+        em_heat_boundaries="em_surface",
         dt=0.1,
         t_end=0.1,
         fes_order=2,
@@ -352,36 +357,43 @@ def test_axisym_qsurf_uses_boundary_projection_and_reports_coverage(tmp_path):
         q_flux * 2.0 * math.pi * radius, rel=1.0e-8
     )
     audit = result["qsurf_projection"]
-    assert audit["evaluation_region"] == "BND"
+    assert audit["evaluation_region"] == "BND-meridian"
+    assert audit["em_heat_boundaries"] == ["em_surface"]
     assert audit["target_surface_vertices"] > 0
-    assert audit["failed_vertices"] == 0
-    assert audit["coverage_fraction"] >= 0.80
+    assert audit["max_transfer_distance_m"] < audit["transfer_tolerance_m"]
+    # The faceted EM side wall (maxh 0.28, ~22 facets) has about 0.3 % less
+    # area than the revolved meridian; the gate reports exactly that.
+    assert abs(audit["power_balance"]["relative_error"]) < 5.0e-3
+    ring = audit["pointwise_ring_check"]
+    assert ring["vertices_fully_on_source"] == audit["target_surface_vertices"]
+    assert ring["max_relative_deviation"] < 1.0e-6
 
 
 def test_axisym_qsurf_rejects_incompatible_meridian_without_fallback(tmp_path):
     em_vol, q_sol = _write_uniform_qsurf_cylinder(tmp_path)
     mesh = _slightly_offset_axisym_cylinder(radius=1.2)
 
-    with pytest.raises(ValueError, match="no zero-flux fallback"):
-        calc_heat_axisym.solve_heat_axisym(
-            "<in-memory-incompatible-meridian>",
-            material="custom",
-            rho=1.0,
-            cp=1.0,
-            k=1.0,
-            h_conv=0.0,
-            emissivity=0.0,
-            heat_flux_boundaries="heated",
-            qsurf_sol=str(q_sol),
-            em_vol=str(em_vol),
-            qsurf_order=1,
-            n_phi_samples=16,
-            dt=0.1,
-            t_end=0.1,
-            fes_order=2,
-            _wp_mesh=mesh,
-            _write_solution=False,
-        )
+    result = calc_heat_axisym.solve_heat_axisym(
+        "<in-memory-incompatible-meridian>",
+        material="custom",
+        rho=1.0,
+        cp=1.0,
+        k=1.0,
+        h_conv=0.0,
+        emissivity=0.0,
+        heat_flux_boundaries="heated",
+        qsurf_sol=str(q_sol),
+        em_vol=str(em_vol),
+        qsurf_order=1,
+        n_phi_samples=16,
+        em_heat_boundaries="em_surface",
+        dt=0.1,
+        t_end=0.1,
+        fes_order=2,
+        _wp_mesh=mesh,
+        _write_solution=False,
+    )
+    assert "not the same body of revolution" in result["error"]
 
 
 def test_3d_heat_separates_heating_and_cooling_boundaries():

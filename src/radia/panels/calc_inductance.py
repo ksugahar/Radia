@@ -1636,6 +1636,27 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             # em_vol pair is the input .vol itself -- the same mesh
             # the EM solve was on.  No separate _bem.vol needed.
             qsurf_vol_path = os.path.abspath(args.vol).replace("\\", "/")
+            # Sidecar: the boundaries whose every vertex is a workpiece
+            # vertex are the heated surface; the thermal step verifies the
+            # mesh digest and integrates q over exactly these against P_wp.
+            from radia import ih_thermal
+            from ngsolve import BND as _BND_q
+            wp_vertices = set(np.flatnonzero(vol_vec_np != 0.0).tolist())
+            if _wp_new_to_old is not None:
+                wp_vertices = set(int(v) for v in _wp_new_to_old.values())
+            heated = sorted({
+                el.mat for el in vol_mesh.Elements(_BND_q)
+                if all(v.nr in wp_vertices for v in el.vertices)})
+            ih_thermal.write_field_sidecar(
+                sol_Q, mesh_path=args.vol, mesh=vol_mesh, fes_order=1,
+                quantity=ih_thermal.QSURF_QUANTITY,
+                unit=ih_thermal.QSURF_UNIT, boundaries=heated,
+                extra={"P_wp_W": float(P_wp),
+                       "frequency_Hz": float(args.frequency),
+                       "current_A": float(getattr(args, "current", 0.0)
+                                          or 0.0),
+                       "producer": "calc_inductance",
+                       "qsurf_method": "solved-total-field-lumped-P1"})
             progress("BEM",
                 f"wrote qsurf.sol on parent vol_mesh: "
                 f"{os.path.basename(sol_Q)} "
