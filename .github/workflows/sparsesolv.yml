@@ -4,6 +4,9 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'src/radia/vim/_nonlinear.py'
+      - 'src/radia/vim/_solve.py'
+      - 'tests/test_hdiv_energy_material_consistency.py'
       - 'src/radia/vector_potential_solver.py'
       - 'src/radia/topology_optimization.py'
       - 'tests/test_vector_potential_bh_tail.py'
@@ -87,6 +90,9 @@ on:
   push:
     branches: [main]
     paths:
+      - 'src/radia/vim/_nonlinear.py'
+      - 'src/radia/vim/_solve.py'
+      - 'tests/test_hdiv_energy_material_consistency.py'
       - 'src/radia/vector_potential_solver.py'
       - 'src/radia/topology_optimization.py'
       - 'tests/test_vector_potential_bh_tail.py'

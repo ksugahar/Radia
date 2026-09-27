@@ -63,6 +63,21 @@ def test_unknown_base_selects_all_registered_impacts():
     assert 'tests/test_ci_preflight_mdx.py' in selected
 
 
+@pytest.mark.parametrize('changed', [None, ['src/radia/vim/_nonlinear.py'],
+                                    ['src/radia/vim/_solve.py']])
+def test_ngsolve_material_contract_stays_in_required_numerical_lane(changed):
+    runner = runner_module()
+    fast, _ = runner.load_profile('fast-contracts')
+    numerical, _ = runner.load_profile('solver-numerics')
+    path = 'tests/test_hdiv_energy_material_consistency.py'
+    selected = runner.select_impact_tests(fast, changed, profile_name='fast-contracts')
+    assert path not in selected
+    assert path in numerical
+    assert set(fast) <= set(selected)
+    with pytest.raises(ValueError, match='explicitly contains numerical test'):
+        runner.select_impact_tests([path], changed, profile_name='fast-contracts')
+
+
 def test_manifest_change_without_comparison_checks_all_registered_impacts():
     runner = runner_module()
     assert runner.select_impact_tests([], ['tests/test_tier_manifest.json']) == runner.select_impact_tests([], None)
