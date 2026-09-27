@@ -605,8 +605,9 @@ public:
     /// Used by ComplexHypreBasedAMS for fused Re/Im processing.
     void DualMult(const BaseVector& b1, BaseVector& x1,
                   const BaseVector& b2, BaseVector& x2) const {
-        x1 = 0;
-        x2 = 0;
+        // Every level's first pre-smoothing sweep (or the coarsest direct
+        // solve) assigns x, so the cycle needs no zeroed start.
+        if (num_smooth_ < 1) { x1 = 0; x2 = 0; }
         DualVCycle(0, b1, x1, b2, x2);
 
         if (freedofs_) {
@@ -1151,14 +1152,14 @@ private:
                 lev.inv->Mult(b2, x2);
             } else {
                 for (int s = 0; s < 10; s++)
-                    DualL1JacobiSmooth(level, b1, x1, b2, x2);
+                    DualL1JacobiSmooth(level, b1, x1, b2, x2, s == 0);
             }
             return;
         }
 
-        // Pre-smooth: fused l1-Jacobi
+        // Pre-smooth: fused l1-Jacobi (x enters as zero: the first sweep is b / l1)
         for (int s = 0; s < num_smooth_; s++)
-            DualL1JacobiSmooth(level, b1, x1, b2, x2);
+            DualL1JacobiSmooth(level, b1, x1, b2, x2, s == 0);
 
         // Fused residual
         auto& res1 = *lev.residual;
@@ -1174,8 +1175,7 @@ private:
         // Recursive dual V-cycle
         auto& ec1 = *next.correction;
         auto& ec2 = *next.correction2;
-        ec1 = 0;
-        ec2 = 0;
+        if (num_smooth_ < 1) { ec1 = 0; ec2 = 0; }
         DualVCycle(level + 1, rc1, ec1, rc2, ec2);
 
         // Fused prolongate: x += P * e_c
@@ -1188,8 +1188,23 @@ private:
 
     /// Fused l1-Jacobi smooth for two RHS: two-phase (residual then update)
     void DualL1JacobiSmooth(int level, const BaseVector& b1, BaseVector& x1,
-                            const BaseVector& b2, BaseVector& x2) const {
+                            const BaseVector& b2, BaseVector& x2,
+                            bool initially_zero = false) const {
         auto& lev = levels_[level];
+        auto fv_x1 = x1.FVDouble();
+        auto fv_x2 = x2.FVDouble();
+        int n = lev.ndof;
+        if (initially_zero) {
+            // x = 0 before the sweep: it is x = b / l1 (x is assigned, never read).
+            auto fv_b1 = b1.FVDouble();
+            auto fv_b2 = b2.FVDouble();
+            RowLoop(n, [&](size_t i) {
+                double inv_l1 = 1.0 / lev.l1_norms[i];
+                fv_x1[i] = fv_b1[i] * inv_l1;
+                fv_x2[i] = fv_b2[i] * inv_l1;
+            });
+            return;
+        }
         auto& res1 = *lev.residual;
         auto& res2 = *lev.residual2;
 
@@ -1197,16 +1212,22 @@ private:
         DualResidual(*lev.A, b1, x1, res1, b2, x2, res2, lev.ndof);
 
         // Phase 2: fused Jacobi update
-        auto fv_x1 = x1.FVDouble();
-        auto fv_x2 = x2.FVDouble();
         auto fv_r1 = res1.FVDouble();
         auto fv_r2 = res2.FVDouble();
-        int n = lev.ndof;
-        ParallelFor(n, [&](size_t i) {
+        RowLoop(n, [&](size_t i) {
             double inv_l1 = 1.0 / lev.l1_norms[i];
             fv_x1[i] += fv_r1[i] * inv_l1;
             fv_x2[i] += fv_r2[i] * inv_l1;
         });
+    }
+
+    /// Row loop of the dual V-cycle: small coarse levels run on the calling
+    /// thread, where a parallel dispatch would cost more than the rows.
+    static constexpr size_t kSerialRows = 4096;
+    template <typename F>
+    static void RowLoop(size_t n, F&& f) {
+        if (n < kSerialRows) { for (size_t i = 0; i < n; i++) f(i); }
+        else ParallelFor(n, f);
     }
 
     /// Fused residual: res = b - A*x for two RHS in single matrix pass
@@ -1217,7 +1238,7 @@ private:
         auto fv_b1 = b1.FVDouble(); auto fv_x1 = x1.FVDouble(); auto fv_r1 = res1.FVDouble();
         auto fv_b2 = b2.FVDouble(); auto fv_x2 = x2.FVDouble(); auto fv_r2 = res2.FVDouble();
 
-        ParallelFor(n, [&](size_t i) {
+        RowLoop(n, [&](size_t i) {
             auto cols = A.GetRowIndices(i);
             auto vals = A.GetRowValues(i);
             double d1 = 0, d2 = 0;
@@ -1239,7 +1260,7 @@ private:
         auto fv_x1 = x1.FVDouble(); auto fv_y1 = y1.FVDouble();
         auto fv_x2 = x2.FVDouble(); auto fv_y2 = y2.FVDouble();
 
-        ParallelFor(n, [&](size_t i) {
+        RowLoop(n, [&](size_t i) {
             auto cols = A.GetRowIndices(i);
             auto vals = A.GetRowValues(i);
             double s1 = 0, s2 = 0;
@@ -1261,7 +1282,7 @@ private:
         auto fv_g1 = g1.FVDouble(); auto fv_x1 = x1.FVDouble();
         auto fv_g2 = g2.FVDouble(); auto fv_x2 = x2.FVDouble();
 
-        ParallelFor(nrows, [&](size_t i) {
+        RowLoop(nrows, [&](size_t i) {
             auto cols = P.GetRowIndices(i);
             auto vals = P.GetRowValues(i);
             double s1 = 0, s2 = 0;

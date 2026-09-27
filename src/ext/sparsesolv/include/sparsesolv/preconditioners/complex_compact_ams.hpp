@@ -40,7 +40,8 @@ public:
         int print_level = 0,
         double correction_weight = 1.0,
         int subspace_solver = 0,
-        int num_smooth = 1)
+        int num_smooth = 1,
+        bool smoothing_only_rows = false)
         : ndof_complex_(ndof_complex > 0 ? ndof_complex : a_real_mat->Height())
     {
         // Build the real AMS hierarchy (shared for Re and Im)
@@ -48,7 +49,7 @@ public:
             a_real_mat, grad_mat, freedofs,
             coord_x, coord_y, coord_z,
             cycle_type, num_smooth, 0.25, print_level, correction_weight,
-            subspace_solver);
+            subspace_solver, false, false, false, smoothing_only_rows);
 
         // Cache accessors
         ndof_hc_ = ams_->GetNdofHC();
@@ -117,8 +118,31 @@ public:
         auto x_re = x_re_->FVDouble();
         auto x_im = x_im_->FVDouble();
 
-        // Split complex -> Re/Im and initialize solution to zero
         auto fd = ams_->GetFreeDofs();
+        if (cycle_type_ != 7 && num_smooth_ == 1) {
+            // 01210 with one sweep. The first sweep starts from x = 0, so it is
+            // x = b / l1 (no residual product), written with the Re/Im split;
+            // the last sweep writes the masked complex output directly.
+            const auto& l1 = ams_->GetL1Norms();
+            Tick();
+            ParallelFor(ndof_hc_, [&](size_t i) {
+                bool free = !fd || fd->Test(i);
+                b_re[i] = free ? fv_f[i].real() : 0.0;
+                b_im[i] = free ? fv_f[i].imag() : 0.0;
+                x_re[i] = b_re[i] / l1[i];
+                x_im[i] = b_im[i] / l1[i];
+            });
+            Tock(0);
+            FusedGradientCorrect(b_re, x_re, b_im, x_im);
+            FusedNodalCorrect(b_re, x_re, b_im, x_im);
+            FusedGradientCorrect(b_re, x_re, b_im, x_im);
+            FusedFinalSmoothInto(b_re, x_re, b_im, x_im, u.FVComplex());
+            Tock(9);
+            cycles_run_++;
+            return;
+        }
+
+        // Split complex -> Re/Im and initialize solution to zero
         ParallelFor(ndof_hc_, [&](size_t i) {
             bool free = !fd || fd->Test(i);
             b_re[i] = free ? fv_f[i].real() : 0.0;
@@ -157,7 +181,22 @@ public:
         Mult(f, u);
     }
 
+    /// Seconds per stage of the one-sweep 01210 cycle: split, gradient
+    /// residual / restrict / AMG / prolong, nodal residual / restrict / AMG /
+    /// prolong, final sweep; and the number of such cycles.
+    std::vector<double> StageSeconds() const { return std::vector<double>(t_stage_, t_stage_ + 10); }
+    long CyclesRun() const { return cycles_run_; }
+
 private:
+    mutable double t_stage_[10] = {0};
+    mutable long cycles_run_ = 0;
+    mutable std::chrono::steady_clock::time_point t_mark_;
+    void Tick() const { t_mark_ = std::chrono::steady_clock::now(); }
+    void Tock(int stage) const {
+        auto now = std::chrono::steady_clock::now();
+        t_stage_[stage] += std::chrono::duration<double>(now - t_mark_).count();
+        t_mark_ = now;
+    }
     int ndof_complex_;
     int ndof_hc_, ndof_h1_;
     double correction_weight_;
@@ -200,6 +239,31 @@ private:
                 x_im[i] += res_im[i] * inv_l1;
             });
         }
+    }
+
+    /// Last l1-Jacobi sweep written to the output: u = x + (b - A x) / l1 on
+    /// free dofs, 0 on constrained ones, in one pass over the matrix rows.
+    void FusedFinalSmoothInto(FlatVector<double> b_re, FlatVector<double> x_re,
+                              FlatVector<double> b_im, FlatVector<double> x_im,
+                              FlatVector<Complex> u) const {
+        const auto& A = ams_->GetAbc();
+        const auto& l1 = ams_->GetL1Norms();
+        auto fd = ams_->GetFreeDofs();
+        ParallelForRange(ndof_hc_, [&](IntRange range) {
+            for (auto i : range) {
+                if (fd && !fd->Test(i)) { u[i] = Complex(0.0, 0.0); continue; }
+                auto cols = A.GetRowIndices(i);
+                auto vals = A.GetRowValues(i);
+                double s_re = b_re[i], s_im = b_im[i];
+                for (int j = 0; j < cols.Size(); j++) {
+                    const int c = cols[j];
+                    const double v = vals[j];
+                    s_re -= v * x_re[c];
+                    s_im -= v * x_im[c];
+                }
+                u[i] = Complex(x_re[i] + s_re / l1[i], x_im[i] + s_im / l1[i]);
+            }
+        });
     }
 
     /// Fused residual: res = b - A*x for Re and Im in single matrix pass.
@@ -274,11 +338,13 @@ private:
 
         // Fused residual: 1 matrix pass for both Re and Im
         FusedResidual(b_re, x_re, res_re, b_im, x_im, res_im);
+        Tock(1);
 
         // Fused restrict to gradient space
         auto rG_re = rG_re_->FVDouble();
         auto rG_im = rG_im_->FVDouble();
         FusedRestrict(ams_->GetGradT(), res_re, rG_re, res_im, rG_im);
+        Tock(2);
 
         // AMG V-cycle: fused DualMult or sequential fallback
         auto* amg = ams_->GetBGAsAMG();
@@ -290,10 +356,12 @@ private:
             gG_im_->FVDouble() = 0;
             ams_->GetBG().Mult(*rG_im_, *gG_im_);
         }
+        Tock(3);
 
         // Fused prolongate
         FusedProlongate(ams_->GetGrad(), correction_weight_,
                         gG_re_->FVDouble(), x_re, gG_im_->FVDouble(), x_im);
+        Tock(4);
     }
 
     void FusedNodalCorrect(FlatVector<double> b_re, FlatVector<double> x_re,
@@ -303,15 +371,42 @@ private:
 
         // Fused residual: 1 matrix pass for both Re and Im
         FusedResidual(b_re, x_re, res_re, b_im, x_im, res_im);
+        Tock(5);
 
         // Fused restrict to all 3 Pi subspaces (from same residual)
         auto rPx_re = rPx_re_->FVDouble(); auto rPx_im = rPx_im_->FVDouble();
         auto rPy_re = rPy_re_->FVDouble(); auto rPy_im = rPy_im_->FVDouble();
         auto rPz_re = rPz_re_->FVDouble(); auto rPz_im = rPz_im_->FVDouble();
 
-        FusedRestrict(ams_->GetPixT(), res_re, rPx_re, res_im, rPx_im);
-        FusedRestrict(ams_->GetPiyT(), res_re, rPy_re, res_im, rPy_im);
-        FusedRestrict(ams_->GetPizT(), res_re, rPz_re, res_im, rPz_im);
+        const bool pi_fused = ams_->GetPiFused();
+        if (pi_fused) {
+            // One pass over the shared Pi^T pattern serves x/y/z and Re/Im.
+            const auto& Tx = ams_->GetPixT();
+            const auto& Ty = ams_->GetPiyT();
+            const auto& Tz = ams_->GetPizT();
+            ParallelForRange(ndof_h1_, [&](IntRange range) {
+                for (auto v : range) {
+                    auto cols = Tx.GetRowIndices(v);
+                    auto tx = Tx.GetRowValues(v);
+                    auto ty = Ty.GetRowValues(v);
+                    auto tz = Tz.GetRowValues(v);
+                    double xr = 0, yr = 0, zr = 0, xi = 0, yi = 0, zi = 0;
+                    for (int j = 0; j < cols.Size(); j++) {
+                        const int c = cols[j];
+                        const double re = res_re[c], im = res_im[c];
+                        xr += tx[j] * re; yr += ty[j] * re; zr += tz[j] * re;
+                        xi += tx[j] * im; yi += ty[j] * im; zi += tz[j] * im;
+                    }
+                    rPx_re[v] = xr; rPy_re[v] = yr; rPz_re[v] = zr;
+                    rPx_im[v] = xi; rPy_im[v] = yi; rPz_im[v] = zi;
+                }
+            });
+        } else {
+            FusedRestrict(ams_->GetPixT(), res_re, rPx_re, res_im, rPx_im);
+            FusedRestrict(ams_->GetPiyT(), res_re, rPy_re, res_im, rPy_im);
+            FusedRestrict(ams_->GetPizT(), res_re, rPz_re, res_im, rPz_im);
+        }
+        Tock(6);
 
         // AMG V-cycles: fused DualMult (3 calls instead of 6)
         auto* amg_x = ams_->GetBPixAsAMG();
@@ -330,8 +425,36 @@ private:
             gPz_re_->FVDouble() = 0; ams_->GetBPiz().Mult(*rPz_re_, *gPz_re_);
             gPz_im_->FVDouble() = 0; ams_->GetBPiz().Mult(*rPz_im_, *gPz_im_);
         }
+        Tock(7);
 
         // Fused prolongate all 3 corrections
+        if (pi_fused) {
+            const auto& Px = ams_->GetPix();
+            const auto& Py = ams_->GetPiy();
+            const auto& Pz = ams_->GetPiz();
+            auto gxr = gPx_re_->FVDouble(); auto gxi = gPx_im_->FVDouble();
+            auto gyr = gPy_re_->FVDouble(); auto gyi = gPy_im_->FVDouble();
+            auto gzr = gPz_re_->FVDouble(); auto gzi = gPz_im_->FVDouble();
+            const double w = correction_weight_;
+            ParallelForRange(ndof_hc_, [&](IntRange range) {
+                for (auto e : range) {
+                    auto cols = Px.GetRowIndices(e);
+                    auto px = Px.GetRowValues(e);
+                    auto py = Py.GetRowValues(e);
+                    auto pz = Pz.GetRowValues(e);
+                    double sr = 0, si = 0;
+                    for (int j = 0; j < cols.Size(); j++) {
+                        const int v = cols[j];
+                        sr += px[j] * gxr[v] + py[j] * gyr[v] + pz[j] * gzr[v];
+                        si += px[j] * gxi[v] + py[j] * gyi[v] + pz[j] * gzi[v];
+                    }
+                    x_re[e] += w * sr;
+                    x_im[e] += w * si;
+                }
+            });
+            Tock(8);
+            return;
+        }
         FusedProlongate(ams_->GetPix(), correction_weight_,
                         gPx_re_->FVDouble(), x_re, gPx_im_->FVDouble(), x_im);
         FusedProlongate(ams_->GetPiy(), correction_weight_,
