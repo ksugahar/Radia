@@ -30,6 +30,9 @@ import numpy as np
 
 REPORT_SCHEMA = "cubit-mesh-export.vol-check.v1"
 LABEL_CONTRACT_SCHEMA = "radia.vol-label-contract.v1"
+# Scalar and vectorised curved-pyramid maps, relative to the element size.
+# Consistent paths agree to round-off; the NGSolve defect gives ~1e-2.
+PYRAMID_MAP_TOLERANCE = 1.0e-8
 
 _MATERIAL_LABEL_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _BOUNDARY_LABEL_RE = re.compile(
@@ -728,6 +731,15 @@ def check_mesh_quality(mesh_or_path, *, min_scaled_jacobian=1.0e-6,
     # this keeps the quality gate on the same geometry evaluation route as
     # solver forms and Integrate().
     jacobian_cf = ng.specialcf.JacobianMatrix(3)
+    # Curved pyramids: NGSolve's vectorised map (assembly, Integrate) omits
+    # the base-edge blend that the scalar map applies (Netgen 6.2.2604 up to
+    # at least 6.2.2607).  The two paths must agree; where they do not, the
+    # installed NGSolve evaluates these pyramids wrongly.  Reported as an
+    # advisory, not a failure: the .vol itself is correct.
+    position_cf = ng.CoefficientFunction((ng.x, ng.y, ng.z))
+    pyramid_count = 0
+    inconsistent_pyramids = []
+    max_pyramid_deviation = 0.0
 
     for element in mesh.Elements(ng.VOL):
         volume_element_count += 1
@@ -736,6 +748,14 @@ def check_mesh_quality(mesh_or_path, *, min_scaled_jacobian=1.0e-6,
         trafo = mesh.GetTrafo(element)
         rule = ng.IntegrationRule(element.type, sample_order)
         mapped_points = trafo(rule)
+        if element.type == ng.ET.PYRAMID:
+            pyramid_count += 1
+            if curve_order > 1:
+                deviation = _pyramid_map_deviation(
+                    mesh, element, trafo, rule, mapped_points, position_cf)
+                max_pyramid_deviation = max(max_pyramid_deviation, deviation)
+                if not deviation <= PYRAMID_MAP_TOLERANCE:
+                    inconsistent_pyramids.append(_element_number(element))
         jacobians = np.asarray(jacobian_cf(mapped_points), dtype=float).reshape(
             -1, 3, 3
         )
@@ -834,6 +854,18 @@ def check_mesh_quality(mesh_or_path, *, min_scaled_jacobian=1.0e-6,
     if missing_boundaries:
         warnings.append("missing boundaries: " + ", ".join(missing_boundaries))
 
+    advisories = []
+    if inconsistent_pyramids:
+        advisories.append(
+            f"{len(inconsistent_pyramids)} of {pyramid_count} pyramids are curved "
+            "and NGSolve's vectorised element map disagrees with its scalar map "
+            f"(max {max_pyramid_deviation:.1e} of the element size): NGSolve "
+            f"{getattr(ng, '__version__', '?')} evaluates curved pyramids "
+            "inconsistently, so volumes and fields on them do not converge with "
+            "order. The hex/tet interface meets a curved boundary here; move it "
+            "away, or check the domain volume against the CAD value."
+        )
+
     return {
         "passed": not warnings,
         "curve_order": curve_order,
@@ -868,8 +900,32 @@ def check_mesh_quality(mesh_or_path, *, min_scaled_jacobian=1.0e-6,
         "missing_materials": missing_materials,
         "missing_boundaries": missing_boundaries,
         "adjacency": adjacency,
+        "curved_pyramid_map": {
+            "pyramid_count": pyramid_count,
+            "inconsistent_count": len(inconsistent_pyramids),
+            "inconsistent_elements": inconsistent_pyramids[:50],
+            "max_relative_deviation": max_pyramid_deviation,
+            "tolerance": PYRAMID_MAP_TOLERANCE,
+        },
         "warnings": warnings,
+        "advisories": advisories,
     }
+
+
+def _pyramid_map_deviation(mesh, element, trafo, rule, mapped_points, position_cf):
+    """Largest scalar-vs-vectorised map difference, relative to element size."""
+
+    vectorised = np.asarray(position_cf(mapped_points), dtype=float).reshape(-1, 3)
+    scalar = np.asarray(
+        [position_cf(trafo(point)) for point in rule], dtype=float
+    ).reshape(-1, 3)
+    corners = np.asarray(
+        [mesh[vertex].point for vertex in element.vertices], dtype=float
+    )
+    size = float(np.max(np.linalg.norm(corners[:, None, :] - corners[None, :, :], axis=2)))
+    if not size > 0.0:
+        return float("inf")
+    return float(np.max(np.abs(vectorised - scalar))) / size
 
 
 def _load_json_object(path, description):
@@ -1164,6 +1220,9 @@ def check_consistency(
                 )
 
     warnings = _unique_messages(warnings)
+    advisories = _unique_messages(
+        quality_result.get("advisories", []) if quality_result is not None else []
+    )
     result = {
         "schema": REPORT_SCHEMA,
         **_runtime_metadata(),
@@ -1195,6 +1254,8 @@ def check_consistency(
             "total_length_comparison": "used for the CAD gate when edges exist",
         },
         "warnings": warnings,
+        # Findings that do not fail the gate (see check_mesh_quality).
+        "advisories": advisories,
     }
     if total_edge_length is not None:
         result["total_edge_length"] = total_edge_length
@@ -1309,6 +1370,12 @@ def print_table(results):
             err_s = f"{tot['error_pct']:+.2e}%"
             flag = " ***" if abs(tot["error_pct"]) > results["threshold_pct"] else ""
             print(f"  {'TOTAL':<20s}{tot['cad']:>14.6e}  {tot['ng']:>14.6e}  {err_s}{flag}")
+        print()
+
+    if results.get("advisories"):
+        print(f"  ADVISORIES ({len(results['advisories'])}, do not fail the check):")
+        for advisory in results["advisories"]:
+            print(f"    - {advisory}")
         print()
 
     # Warnings summary
