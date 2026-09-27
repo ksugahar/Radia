@@ -182,3 +182,33 @@ def test_em_boundaries_must_be_resolvable(cylinder):
     names, how = ih_thermal.resolve_em_heat_boundaries(
         mesh, gf, requested="side|top")
     assert names == ["side", "top"] and how == "explicit"
+
+
+def test_curved_em_mesh_passes_the_sidecar_power_check(tmp_path):
+    """The EM power in the sidecar is the curved-geometry integral; the
+    check must compare like with like (flat triangles differ by ~0.3 %)."""
+    from netgen.occ import Axes, Cylinder, OCCGeometry, Pnt, Z
+    from ngsolve import BND, CF, GridFunction, H1, Integrate, Mesh
+
+    solid = Cylinder(Axes(Pnt(0, 0, 0), Z), r=0.01, h=0.02)
+    solid.faces.name = "side"
+    solid.faces.Max(Z).name = "top"
+    solid.faces.Min(Z).name = "bottom"
+    live = Mesh(OCCGeometry(solid).GenerateMesh(maxh=0.004))
+    live.Curve(2)                       # curve while the geometry is live
+    vol = str(tmp_path / "curved.vol")
+    live.ngmesh.Save(vol)
+    mesh = Mesh(vol)
+    assert mesh.GetCurveOrder() == 2
+    gf = GridFunction(H1(mesh, order=1))
+    gf.Set(CF(1.0e6), definedon=mesh.Boundaries("side"))
+    sol = str(tmp_path / "q.sol")
+    gf.Save(sol)
+    P = float(Integrate(gf, mesh, BND, definedon=mesh.Boundaries("side")))
+    ih_thermal.write_field_sidecar(
+        sol, mesh_path=vol, mesh=mesh, fes_order=1,
+        quantity=ih_thermal.QSURF_QUANTITY, unit=ih_thermal.QSURF_UNIT,
+        boundaries=["side"], extra={"P_wp_W": P})
+    src = ih_thermal.EMHeatSource(sol, vol, thermal_names=["side"])
+    assert src.sidecar_power["relative_error"] == pytest.approx(0.0, abs=1e-9)
+    assert abs(src.power_flat / src.power - 1.0) > 1e-3
