@@ -155,8 +155,8 @@ def main() -> None:
 
     # Acceptance: the refit never worsens geometry, keeps valid Jacobians,
     # removes the odd-order stall (p=3 beats p=2 by 10x) and beats Netgen at
-    # p=5 by 100x.  On these coarse meshes the refit error levels off near
-    # 1e-8 from p=4 on, so p=5 is not required to beat p=4.
+    # p=5 by 100x, and p=5 beats p=4 (it did not while the .vol writer
+    # rounded coefficients to 8 digits, before 2.1.1).
     for kind in MESHES:
         for p in ORDERS[1:]:
             new, old = pick("geometric_refit", kind, p), pick("netgen_l2", kind, p)
@@ -168,6 +168,8 @@ def main() -> None:
             raise AssertionError(f"refit {kind}: p=3 is not 10x better than p=2")
         if pick("geometric_refit", kind, 5)["radial_l2"] * 100 >= pick("netgen_l2", kind, 5)["radial_l2"]:
             raise AssertionError(f"refit {kind}: p=5 is not 100x better than Netgen p=5")
+        if pick("geometric_refit", kind, 5)["radial_l2"] >= pick("geometric_refit", kind, 4)["radial_l2"]:
+            raise AssertionError(f"refit {kind}: p=5 does not improve on p=4")
 
     result = {
         "protocol": "unit sphere; Cubit tet size 0.65 / hex sphere scheme size 0.4; "
