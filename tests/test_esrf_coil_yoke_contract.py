@@ -29,7 +29,7 @@ def contracts():
     return module
 
 
-@pytest.mark.parametrize("number,axis", ((6, 0), (7, 2)))
+@pytest.mark.parametrize("number,axis", ((5, 0), (6, 0), (7, 2)))
 def test_esrf_coil_yoke_observations_are_symmetric_gap_stencils(
     contracts, number: int, axis: int
 ):
@@ -51,5 +51,5 @@ def test_esrf_coil_yoke_observations_are_symmetric_gap_stencils(
 
 
 def test_esrf_coil_yoke_rejects_a_non_coil_case(contracts):
-    with pytest.raises(ValueError, match="6 and 7"):
-        contracts.get_case(5)
+    with pytest.raises(ValueError, match="5, 6 and 7"):
+        contracts.get_case(4)
