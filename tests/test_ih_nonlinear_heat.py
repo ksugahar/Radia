@@ -15,8 +15,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src", "radia"))
 sys.path.insert(0, os.path.join(ROOT, "src", "radia", "panels"))
 
-import ih_heat_transient as iht  # noqa: E402
-import ih_thermal_material as itm  # noqa: E402
+from radia import ih_heat_transient as iht
+from radia import ih_thermal_material as itm
 
 
 def _plate(maxh=0.004, t=0.004):

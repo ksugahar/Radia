@@ -24,9 +24,14 @@ Weak form (A = A_phi, test v, both in H1 with A = 0 on the axis)::
 with ``nu = 1 / (mu0 mu_r)``.  The natural boundary condition is
 ``H_tangential = 0``; Dirichlet boundaries are chosen by name.
 
-Every EM solve is checked against the power delivered by the coil sources,
-``P_coil = Re(j omega int_coil J* A 2 pi r) / 2``, which equals the Joule
-heat in a lossless coil and air.
+Every EM solve is checked twice.  The discrete identity
+``P_joule = P_coil = Re(j omega int_coil J* A 2 pi r) / 2`` holds for any
+Galerkin solution, so it checks the linear solve and the quadrature, not
+accuracy.  Accuracy is gated by the skin-depth resolution: every workpiece
+element within three local skin depths of the workpiece boundary must be
+no larger than ``skin_resolution`` times the local skin depth (default 1).
+Against the Bessel solution of an infinite cylinder, order 2 at a 0.25 mm
+skin depth gives +5.8 % at h/delta = 2, +0.29 % at 1 and +1e-4 at 0.5.
 
 The permeability is linear per element (no saturation).  Material data come
 from the user; nothing here is alloy data.
@@ -212,9 +217,14 @@ class AxisymEddyCurrent:
         p = self.fes.globalorder
         exact = {et: IntegrationRule(et, 2 * p + 1)
                  for et in {el.type for el in self.mesh.Elements()}}
+        # The stiffness carries 1/r: its Gauss rule has interior points
+        # only, so no quadrature point sits on the r = 0 axis.
+        interior = {et: IntegrationRule(et, 2 * p + 2)
+                    for et in {el.type for el in self.mesh.Elements()}}
         a = BilinearForm(self.fes, symmetric=True)
-        a += nu / r * (r * grad(u)[0] + u) * (r * grad(v)[0] + v) * dx
-        a += nu * r * grad(u)[1] * grad(v)[1] * dx
+        a += nu / r * (r * grad(u)[0] + u) * (r * grad(v)[0] + v) \
+            * dx(intrules=interior)
+        a += nu * r * grad(u)[1] * grad(v)[1] * dx(intrules=interior)
         a += 1j * self.omega * self.gf_sigma * r * u * v \
             * dx(definedon=self.mesh.Materials(self.workpiece),
                  intrules=exact)
@@ -225,6 +235,8 @@ class AxisymEddyCurrent:
         f.Assemble()
         self.gfA.vec.data = a.mat.Inverse(
             self.fes.FreeDofs(), inverse=self.linear_solver) * f.vec
+        if not np.all(np.isfinite(np.asarray(self.gfA.vec.FV().NumPy()))):
+            raise RuntimeError("the eddy-current solution is not finite")
         wp = self.mesh.Materials(self.workpiece)
         P_joule = float(Integrate(
             self.heat_density() * 2 * math.pi * r, self.mesh,
@@ -246,30 +258,84 @@ class AxisymEddyCurrent:
         return np.sqrt(2.0 / (self.omega * MU0 * np.asarray(mu_r)
                               * np.asarray(sigma)))
 
+    def skin_resolution(self, delta_wp):
+        """Largest h/delta over workpiece elements within three local skin
+        depths of the workpiece boundary; returns (ratio, element nr)."""
+        from scipy.spatial import cKDTree
+        if not hasattr(self, "_geom"):
+            pts = np.asarray([v.point for v in self.mesh.vertices])
+            wp_v, cent, size = set(), [], []
+            for el in self.mesh.Elements():
+                if el.mat != self.workpiece:
+                    continue
+                vv = [v.nr for v in el.vertices]
+                wp_v.update(vv)
+                P = pts[vv]
+                cent.append(P.mean(axis=0))
+                size.append(max(np.linalg.norm(P[i] - P[j])
+                                for i in range(len(vv))
+                                for j in range(i + 1, len(vv))))
+            # The eddy currents flow under the workpiece surface that faces
+            # the field: its interface with non-conducting regions.  Edges
+            # on the mesh boundary (the axis, symmetry or truncation cuts)
+            # are not such a surface.
+            wp_edges, other_edges = set(), set()
+            for el in self.mesh.Elements():
+                vv = [v.nr for v in el.vertices]
+                es = {tuple(sorted((vv[i], vv[(i + 1) % len(vv)])))
+                      for i in range(len(vv))}
+                (wp_edges if el.mat == self.workpiece else other_edges) \
+                    .update(es)
+            interface = wp_edges & other_edges
+            if not interface:
+                raise ValueError("the workpiece has no interface with a "
+                                 "non-conducting region")
+            bpts = [0.5 * (pts[a] + pts[b]) for a, b in interface]
+            self._geom = (np.asarray(cent), np.asarray(size),
+                          cKDTree(np.asarray(bpts)))
+        cent, size, tree = self._geom
+        depth, _ = tree.query(cent)
+        band = depth <= 3.0 * delta_wp
+        if not np.any(band):
+            return 0.0, -1
+        ratio = np.where(band, size / delta_wp, 0.0)
+        i = int(np.argmax(ratio))
+        return float(ratio[i]), int(self._wp[i])
+
 
 # ---------------------------------------------------------------------------
 # Coupled run
 # ---------------------------------------------------------------------------
 
-def element_mean_temperature(mesh, gfT, elements, area):
-    """Mean of gfT over each listed element."""
-    from ngsolve import Integrate
-    vals = np.asarray(Integrate(gfT, mesh, element_wise=True), float)
-    return vals[elements] / area[elements]
+def element_mean_temperature(mesh, gfT, elements):
+    """Revolved-volume mean of gfT over each listed element."""
+    from ngsolve import Integrate, x as r
+    num = np.asarray(Integrate(gfT * r, mesh, element_wise=True), float)
+    den = np.asarray(Integrate(r, mesh, element_wise=True), float)
+    return num[elements] / den[elements]
 
 
 def run_coupled(mesh, *, frequency, workpiece, coils, dirichlet,
                 em_material, thermal_material, boundaries, dt, t_end,
                 t_initial=20.0, em_every=1, em_order=2, thermal_order=2,
                 power_tolerance=1e-7, newton_tol_K=1e-3, max_newton=25,
+                max_halvings=0, skin_resolution=1.0, energy_tolerance=1e-4,
                 on_step=None, linear_solver_em="pardiso",
                 linear_solver_heat="sparsecholesky"):
-    """Staggered EM-thermal transient.  Returns ``(result, gfT, em)``."""
+    """Staggered EM-thermal transient.  Returns ``(result, gfT, em)``.
+
+    ``em_every`` (>= 1) re-solves the EM problem every that many steps; the
+    validation record shows +3.8 % (2) and +12 % (5) in the peak temperature
+    across the Curie band against every step, so values above 1 trade
+    accuracy for speed and are recorded.
+    """
     from ngsolve import CF, GridFunction, H1, x as r
-    try:
-        from . import ih_heat_transient as iht
-    except ImportError:                  # imported as a top-level module
-        import ih_heat_transient as iht
+    from . import ih_heat_transient as iht
+
+    if isinstance(em_every, bool) or int(em_every) != em_every or em_every < 1:
+        raise ValueError(f"em_every must be an integer >= 1, got {em_every!r}")
+    if not skin_resolution > 0:
+        raise ValueError("skin_resolution must be positive")
 
     em = AxisymEddyCurrent(mesh, frequency=frequency, workpiece=workpiece,
                            coils=coils, dirichlet=dirichlet, order=em_order,
@@ -283,21 +349,33 @@ def run_coupled(mesh, *, frequency, workpiece, coils, dirichlet,
         gfT, thermal_material, boundaries, weight=2 * math.pi * r,
         volume_source=Q, region=workpiece,
         linear_solver=linear_solver_heat, newton_tol_K=newton_tol_K,
-        max_newton=max_newton)
+        max_newton=max_newton, max_halvings=max_halvings)
 
     def em_update():
-        Tel = element_mean_temperature(mesh, gfT, wp_el, em._area)
+        # the table must cover every temperature in the elements, not only
+        # their means
+        em_material.evaluate(np.asarray(stepper._sampled_range()))
+        Tel = element_mean_temperature(mesh, gfT, wp_el)
         sig, mu = em_material.evaluate(Tel)
-        rec = em.solve(sig, mu)
-        if abs(rec["power_balance_relative_error"]) > power_tolerance:
-            raise RuntimeError(
-                "eddy-current power balance failed: Joule "
-                f"{rec['P_joule_W']:.6e} W vs coil {rec['P_coil_W']:.6e} W")
         delta = em.skin_depth(sig, mu)
+        ratio, worst = em.skin_resolution(delta)
+        if ratio > skin_resolution:
+            raise ValueError(
+                f"the workpiece mesh does not resolve the skin depth: element "
+                f"{worst} is {ratio:.2f} skin depths across (limit "
+                f"{skin_resolution:g}; min skin depth "
+                f"{float(delta.min()) * 1e3:.3f} mm). Refine the surface "
+                "layer of the workpiece mesh.")
+        rec = em.solve(sig, mu)
+        if not abs(rec["power_balance_relative_error"]) <= power_tolerance:
+            raise RuntimeError(
+                "eddy-current solve inconsistent: Joule "
+                f"{rec['P_joule_W']:.6e} W vs coil {rec['P_coil_W']:.6e} W")
         rec.update({"T_elem_max_C": float(Tel.max()),
                     "mu_r_min": float(mu.min()),
                     "skin_depth_min_m": float(delta.min()),
-                    "skin_depth_max_m": float(delta.max())})
+                    "skin_depth_max_m": float(delta.max()),
+                    "skin_resolution_h_over_delta": ratio})
         return rec
 
     n = int(round(float(t_end) / float(dt)))
@@ -317,9 +395,11 @@ def run_coupled(mesh, *, frequency, workpiece, coils, dirichlet,
         history.append(entry)
         if on_step is not None:
             on_step(step, entry)
+    stepper.check_energy(energy_tolerance)
     result = {
         "model": "axisymmetric volumetric eddy current + enthalpy heat, "
                  "staggered",
+        "skin_resolution_limit": float(skin_resolution),
         "frequency_Hz": float(frequency), "coils_A": dict(coils),
         "em_every": int(em_every), "dt_s": float(dt), "t_end_s": float(t_end),
         "em_order": int(em_order), "thermal_order": int(thermal_order),

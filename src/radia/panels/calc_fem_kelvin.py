@@ -39,6 +39,10 @@ from calc_common import (MU_0, NU_0, setup_paths,
                           EMMaterial, add_material_args)
 from calc_heat import QSURF_HANDOFF_ORDER
 
+# largest relative difference between the saved P1 q_surf and the solved
+# surface loss (the thermal power gate then compares against the solved loss)
+QSURF_P1_TOLERANCE = 0.02
+
 
 def _log(msg):
     """Write progress to stderr (panel reads these)."""
@@ -1085,6 +1089,15 @@ def solve_fem(vol_file="", fes_order=1,
                 f"{type(e).__name__}: {e}") from e
         qsurf_p1_power = float(
             Integrate(gf_q, mesh, BND, definedon=wp_region).real)
+        # The saved P1 handoff must carry the solved loss: its integral is
+        # checked against the exact surface integral of the solved q.
+        qsurf_p1_error = (qsurf_p1_power - P_total_check) / max(
+            abs(P_total_check), 1e-300)
+        if not abs(qsurf_p1_error) <= QSURF_P1_TOLERANCE:
+            raise RuntimeError(
+                f"the P1 q_surf handoff integrates to {qsurf_p1_power:.6e} W "
+                f"but the solved surface loss is {P_total_check:.6e} W "
+                f"({qsurf_p1_error:+.2%}); refine the workpiece surface mesh")
 
         # Surface current density on the SIBC face.
         #
@@ -1217,7 +1230,7 @@ def solve_fem(vol_file="", fes_order=1,
                 qsurf_sol_path = sol_Q
                 sol_paths["q_surf"] = sol_Q
                 import re as _re
-                import ih_thermal
+                from radia import ih_thermal
                 heated = sorted(
                     n for n in set(mesh.GetBoundaries())
                     if _re.fullmatch(str(sibc_bnd), n))
@@ -1226,9 +1239,9 @@ def solve_fem(vol_file="", fes_order=1,
                     fes_order=QSURF_HANDOFF_ORDER,
                     quantity=ih_thermal.QSURF_QUANTITY,
                     unit=ih_thermal.QSURF_UNIT, boundaries=heated,
-                    extra={"P_wp_W": qsurf_p1_power,
+                    extra={"P_wp_W": float(P_total_check),
                            "P_total_W": float(P_total),
-                           "P_total_check_W": P_total_check,
+                           "qsurf_p1_power_W": qsurf_p1_power,
                            "frequency_Hz": float(frequency),
                            "producer": "calc_fem_kelvin"})
                 # P1 |H_t| peak amplitude, q = Re(Z_s)|H_t|^2 / 2, for the

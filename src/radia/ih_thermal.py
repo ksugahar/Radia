@@ -146,16 +146,23 @@ def read_field_sidecar(sol_path: str) -> dict | None:
 
 
 def verify_field_pair(sol_path: str, mesh_path: str, mesh, fes_order: int,
-                      *, quantity: str | None = None) -> dict:
+                      *, quantity: str) -> dict:
     """Check that ``sol_path`` really belongs to ``mesh``/``fes_order``.
 
-    Returns an audit dictionary.  With a sidecar the mesh digest, order,
-    DOF count and quantity must all match.  Without one only the byte count
-    can be checked, and the audit says so.
+    The sidecar is required: the mesh digest, order, DOF count and quantity
+    must all match.  A legacy ``.sol`` without one gets a sidecar through an
+    explicit ``python -m radia.ih_thermal sidecar ...`` in which the user
+    states the pairing; nothing is inferred here.
     """
     sol_path = os.path.abspath(sol_path)
     record = read_field_sidecar(sol_path)
-    definedon = record.get("definedon") if record else None
+    if record is None:
+        raise ValueError(
+            f"{os.path.basename(sol_path)} has no {SIDECAR_SUFFIX} sidecar, so "
+            "its mesh, order and quantity cannot be verified. Write one with "
+            "'python -m radia.ih_thermal sidecar --sol ... --mesh ... "
+            "--order ... --quantity ...' after confirming the pairing.")
+    definedon = record.get("definedon")
     ndof = int(_h1(mesh, fes_order, definedon).ndof)
     size = os.path.getsize(sol_path)
     if size != 8 * ndof:
@@ -163,9 +170,6 @@ def verify_field_pair(sol_path: str, mesh_path: str, mesh, fes_order: int,
             f"{os.path.basename(sol_path)} holds {size} bytes but H1 order "
             f"{fes_order} on {os.path.basename(mesh_path)} has {ndof} DOFs "
             f"({8 * ndof} bytes); the field and mesh do not belong together")
-    if record is None:
-        return {"provenance": "size-only", "ndof": ndof,
-                "sidecar": None}
     problems = []
     if int(record["fes_order"]) != int(fes_order):
         problems.append(f"order {record['fes_order']} != {fes_order}")
@@ -177,51 +181,49 @@ def verify_field_pair(sol_path: str, mesh_path: str, mesh, fes_order: int,
                         f"was saved on ({record['mesh_file']})")
     if record["sol_sha256"] != file_sha256(sol_path):
         problems.append("field file changed after its sidecar was written")
-    if quantity is not None and record["quantity"] != quantity:
+    if record["quantity"] != quantity:
         problems.append(f"quantity {record['quantity']!r} != {quantity!r}")
     if problems:
         raise ValueError(
             f"{os.path.basename(sol_path)} does not match its sidecar: "
             + "; ".join(problems))
     return {"provenance": "sidecar-verified", "ndof": ndof,
-            "sidecar": sidecar_path(sol_path)}
+            "sidecar": sidecar_path(sol_path),
+            "quantity": record["quantity"]}
 
 
-def load_field(sol_path: str, mesh_path: str | None = None, *,
-               fes_order: int | None = None, quantity: str | None = None):
+def load_field(sol_path: str, *, quantity: str, mesh_path: str | None = None):
     """Load a saved H1 field exactly as it was written.
 
-    ``mesh_path`` and ``fes_order`` default to the sidecar values.  The mesh
-    is used as loaded: its stored geometry order is preserved and
+    The sidecar names the mesh, the order and the ``definedon`` region.
+    ``mesh_path`` relocates the mesh file only; its digest must still match.
+    The mesh is used as loaded: its stored geometry order is preserved and
     ``Mesh.Curve`` is never called (a failed ``Curve`` on a CAD-derived
     ``.vol`` corrupts the element maps while leaving the mesh usable).
 
-    Returns ``(mesh, gridfunction, audit)``.
+    Returns ``(mesh, gridfunction, audit)``; ``audit["sidecar_record"]`` is
+    the sidecar content (for ``definedon``, units, producer).
     """
-    from ngsolve import H1, GridFunction, Mesh
+    from ngsolve import GridFunction, Mesh
 
     record = read_field_sidecar(sol_path)
+    if record is None:
+        raise ValueError(
+            f"{os.path.basename(sol_path)} has no {SIDECAR_SUFFIX} sidecar; "
+            "write one with 'python -m radia.ih_thermal sidecar ...' after "
+            "confirming the pairing")
     if mesh_path is None:
-        if record is None:
-            raise ValueError(
-                f"{os.path.basename(sol_path)} has no sidecar; pass the mesh "
-                "it was saved on explicitly")
         mesh_path = record["mesh_file"]
-    if fes_order is None:
-        if record is None:
-            raise ValueError(
-                f"{os.path.basename(sol_path)} has no sidecar; pass its H1 "
-                "order explicitly")
-        fes_order = int(record["fes_order"])
+    fes_order = int(record["fes_order"])
     mesh = Mesh(mesh_path)
     audit = verify_field_pair(sol_path, mesh_path, mesh, fes_order,
                               quantity=quantity)
-    gf = GridFunction(_h1(mesh, fes_order,
-                          record.get("definedon") if record else None))
+    gf = GridFunction(_h1(mesh, fes_order, record.get("definedon")))
     gf.Load(os.path.abspath(sol_path))
     audit.update({"mesh_file": os.path.abspath(mesh_path),
                   "fes_order": int(fes_order),
-                  "mesh_curve_order": int(mesh.GetCurveOrder())})
+                  "mesh_curve_order": int(mesh.GetCurveOrder()),
+                  "sidecar_record": record})
     return mesh, gf, audit
 
 
@@ -518,6 +520,41 @@ def _cumulative_below(level, s, q, area):
     return a_out, q_out
 
 
+def _split_at_axis(pts, tris, vals, axis):
+    """Split every triangle pierced by ``axis`` into three at the piercing
+    point, with the P1 value there.  Returns new ``(pts, tris, vals)``."""
+    iu, iw, _ia = _axis_frame(axis)
+    uw = pts[:, [iu, iw]][tris]                          # (n, 3, 2)
+    a, b, c = uw[:, 0], uw[:, 1], uw[:, 2]
+    det = (b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1]) - \
+        (c[:, 0] - a[:, 0]) * (b[:, 1] - a[:, 1])
+    scale = np.max(np.abs(uw).reshape(len(tris), -1), axis=1)
+    live = np.abs(det) > 1e-12 * np.maximum(scale, 1e-300) ** 2
+    d = np.where(live, det, 1.0)          # tangent-to-axis triangles: no hit
+    l1 = (a[:, 0] * (a[:, 1] - c[:, 1]) - a[:, 1] * (a[:, 0] - c[:, 0])) / d
+    l2 = (a[:, 1] * (a[:, 0] - b[:, 0]) - a[:, 0] * (a[:, 1] - b[:, 1])) / d
+    lam = np.stack([1.0 - l1 - l2, l1, l2], axis=1)
+    # interior piercing only: at a vertex the kink is already a vertex, and on
+    # an edge the neighbouring triangle is split instead
+    eps = 1e-9
+    hit = live & np.all(lam > eps, axis=1)
+    if not np.any(hit):
+        return pts, tris, vals
+    idx = np.flatnonzero(hit)
+    lam_h = lam[idx]
+    new_pts = np.einsum("ij,ijk->ik", lam_h, pts[tris[idx]])
+    new_vals = np.einsum("ij,ij->i", lam_h, vals[tris[idx]])
+    base = len(pts)
+    p_ids = base + np.arange(len(idx))
+    t = tris[idx]
+    sub = np.concatenate([np.c_[p_ids, t[:, 0], t[:, 1]],
+                          np.c_[p_ids, t[:, 1], t[:, 2]],
+                          np.c_[p_ids, t[:, 2], t[:, 0]]])
+    keep = np.delete(tris, idx, axis=0)
+    return (np.vstack([pts, new_pts]), np.vstack([keep, sub]),
+            np.concatenate([vals, new_vals]))
+
+
 class AxisymmetricSurfaceProfile:
     """Circumferential average of a P1 surface field about a coordinate axis.
 
@@ -568,17 +605,18 @@ class AxisymmetricSurfaceProfile:
         self._dense_s = np.concatenate(dense_s)
         self._tree = cKDTree(self._dense_rz)
 
+        # The meridian coordinate is not linear on a triangle the axis
+        # pierces (it has a kink at r = 0).  Such triangles are split at the
+        # piercing point; q is P1, so the split is exact for q.
+        pts, tris, vals = _split_at_axis(pts, tris, vals, self.axis)
+
         # Meridian position of every source vertex.
         used = np.unique(tris)
         rz_v = to_meridian(pts[used], self.axis)
         d_v, idx_v = self._tree.query(rz_v)
-        # Triangles that straddle the axis are not part of the section, so
-        # vertices within one element of the axis sit up to one element
-        # from its end.
-        d_check = np.where(rz_v[:, 0] < h, np.maximum(d_v - h, 0.0), d_v)
-        self.max_sample_distance = float(d_check.max())
+        self.max_sample_distance = float(d_v.max())
         if self.max_sample_distance > self.axisymmetry_tolerance:
-            worst = int(np.argmax(d_check))
+            worst = int(np.argmax(d_v))
             raise ValueError(
                 "the source surface is not a body of revolution about the "
                 f"{self.axis} axis: source vertex (r, a) = "
@@ -642,12 +680,15 @@ class AxisymmetricSurfaceProfile:
                     bin_k = np.clip(bin_k, 0, nb - 1)
                 num = np.bincount(bin_k, weights=q_bin, minlength=nb)
                 den = np.bincount(bin_k, weights=a_bin, minlength=nb)
-            ok = den > 0
-            centres = (np.arange(nb) + 0.5) * w
-            if not np.any(ok):
-                ch.centres, ch.q = np.array([0.0, length]), np.zeros(2)
-            else:
-                ch.centres, ch.q = centres[ok], num[ok] / den[ok]
+            empty = np.flatnonzero(den <= 0)
+            if empty.size:
+                raise ValueError(
+                    f"meridian section {k} has {empty.size}/{nb} bins without "
+                    "source area (bin width "
+                    f"{w:.3e} m); the section and the source triangles "
+                    "disagree")
+            ch.centres = (np.arange(nb) + 0.5) * w
+            ch.q = num / den
             ch.power = float(num.sum())
         self.source_power = p1_surface_power(pts, tris, vals)
         self.power = float(sum(ch.power for ch in self.chains))
@@ -670,7 +711,7 @@ class AxisymmetricSurfaceProfile:
         side = np.where(side == 0.0, 1e-300, side)
         points = {}
         adjacency: dict = {}
-        for tri in tris:
+        for ti, tri in enumerate(tris):
             hits = []
             for e0, e1 in ((tri[0], tri[1]), (tri[1], tri[2]),
                            (tri[2], tri[0])):
@@ -685,10 +726,20 @@ class AxisymmetricSurfaceProfile:
                 hits.append(key)
             if len(hits) != 2:
                 continue
-            if points[hits[0]][0] <= 0 or points[hits[1]][0] <= 0:
-                continue                        # straddles the axis
-            adjacency.setdefault(hits[0], []).append(hits[1])
-            adjacency.setdefault(hits[1], []).append(hits[0])
+            (ra, za), (rb, zb) = points[hits[0]], points[hits[1]]
+            if ra <= 0 and rb <= 0:
+                continue                        # the opposite half-plane
+            a, b = hits
+            if ra <= 0 or rb <= 0:
+                # The section crosses the axis inside this triangle: it ends
+                # on the axis at the crossing point.
+                if ra <= 0:
+                    (ra, za), (rb, zb), a, b = (rb, zb), (ra, za), b, a
+                f = ra / (ra - rb)
+                b = ("axis", ti)
+                points[b] = (0.0, za + f * (zb - za))
+            adjacency.setdefault(a, []).append(b)
+            adjacency.setdefault(b, []).append(a)
         if not adjacency:
             raise ValueError("the source surface does not cross the meridian "
                              f"half-plane about the {self.axis} axis")
@@ -741,10 +792,7 @@ class AxisymmetricSurfaceProfile:
         rz = np.asarray(rz, float)
         tol = self.axisymmetry_tolerance if max_distance is None else max_distance
         chain, s, d = self.locate(rz)
-        # Points within one element of the axis are measured from the end of
-        # the section, which stops at the last triangle not crossing it.
-        slack = np.where(rz[:, 0] < self.h_median, self.h_median, 0.0)
-        bad = d > tol + slack
+        bad = d > tol
         if np.any(bad):
             worst = int(np.argmax(d))
             raise ValueError(
@@ -833,6 +881,14 @@ TRANSFER_POWER_HINT = (
 SIDECAR_POWER_TOLERANCE = 1.0e-3
 
 
+def check_tolerance(value, name, upper=0.5):
+    """A relative tolerance must satisfy 0 < value <= upper."""
+    v = float(value)
+    if not (math.isfinite(v) and 0.0 < v <= upper):
+        raise ValueError(f"{name} must lie in (0, {upper}], got {value!r}")
+    return v
+
+
 def boundaries_with_nonzero_field(mesh, gf) -> list[str]:
     """Boundary names on which a P1 field is not identically zero."""
     from ngsolve import BND
@@ -848,13 +904,12 @@ def boundaries_with_nonzero_field(mesh, gf) -> list[str]:
 
 
 def resolve_em_heat_boundaries(em_mesh, gf_em, *, requested=None,
-                               sidecar=None, thermal_names=()) -> tuple:
-    """Pick the EM boundaries that carry the heat source.
+                               sidecar=None) -> tuple:
+    """The EM boundaries that carry the heat source.
 
-    Order: explicit ``requested`` selector, the sidecar record, then the
-    thermal heat-flux names when every one of them exists on the EM mesh.
-    Anything else is an error that lists where the field is non-zero.
-    Returns ``(names, how)``.
+    They are the explicit ``requested`` selector, or else the list the EM
+    solver recorded in the sidecar.  Nothing is borrowed from the thermal
+    mesh's names.  Returns ``(names, how)``.
     """
     import re
 
@@ -873,15 +928,11 @@ def resolve_em_heat_boundaries(em_mesh, gf_em, *, requested=None,
             raise ValueError(f"sidecar boundaries {missing} are not on the EM "
                              f"mesh; available: {available}")
         return names, "sidecar"
-    names = list(thermal_names)
-    if names and all(n in available for n in names):
-        return names, "thermal-heat-flux-names"
     raise ValueError(
-        "cannot tell which EM boundaries carry q_surf: the .sol has no "
-        f"sidecar and the thermal heat-flux boundaries {names} are not all "
-        f"EM boundary names. The field is non-zero on "
-        f"{boundaries_with_nonzero_field(em_mesh, gf_em)}; pass "
-        "--em-heat-boundaries explicitly.")
+        "the q_surf sidecar records no heated EM boundaries and "
+        "--em-heat-boundaries was not given. The field is non-zero on "
+        f"{boundaries_with_nonzero_field(em_mesh, gf_em)}; state the heated "
+        "boundaries explicitly.")
 
 
 class EMHeatSource:
@@ -891,7 +942,7 @@ class EMHeatSource:
     angle) or ``"phi-average"`` (exact circumferential average).
     """
 
-    def __init__(self, qsurf_sol: str, em_vol: str, *, thermal_names=(),
+    def __init__(self, qsurf_sol: str, em_vol: str, *,
                  em_boundaries=None, qsurf_order: int = 1,
                  mode: str = "direct", axis: str = "z",
                  q_scale: float = 1.0, transfer_tolerance=None,
@@ -916,8 +967,7 @@ class EMHeatSource:
         self.em_mesh = Mesh(self.em_vol)
         self.pair_audit = verify_field_pair(
             self.qsurf_sol, self.em_vol, self.em_mesh, 1,
-            quantity=QSURF_QUANTITY if read_field_sidecar(self.qsurf_sol)
-            else None)
+            quantity=QSURF_QUANTITY)
         self.sidecar = read_field_sidecar(self.qsurf_sol)
         self.gf = GridFunction(H1(self.em_mesh, order=1))
         self.gf.Load(self.qsurf_sol)
@@ -925,7 +975,7 @@ class EMHeatSource:
             self.gf.vec.data = self.q_scale * self.gf.vec
         self.em_boundaries, self.boundary_rule = resolve_em_heat_boundaries(
             self.em_mesh, self.gf, requested=em_boundaries,
-            sidecar=self.sidecar, thermal_names=thermal_names)
+            sidecar=self.sidecar)
         self.surface = SurfaceP1Field.from_gridfunction(
             self.em_mesh, self.gf, self.em_boundaries)
         # Reference power on the mesh geometry as loaded (curved elements
@@ -936,15 +986,32 @@ class EMHeatSource:
             definedon=self.em_mesh.Boundaries("|".join(self.em_boundaries))
         ).real)
         self.power_flat = self.surface.power
-        self.sidecar_power = None
-        if self.sidecar and self.sidecar.get("P_wp_W") is not None:
-            ref = float(self.sidecar["P_wp_W"]) * self.q_scale
+        if self.sidecar.get("P_wp_W") is None:
+            raise ValueError(
+                f"{os.path.basename(self.qsurf_sol)}: the sidecar records no "
+                "EM power P_wp_W, so the heat source cannot be checked; "
+                "write the sidecar with the EM run's power")
+        if self.boundary_rule == "sidecar":
             self.sidecar_power = power_balance(
-                self.power, ref, SIDECAR_POWER_TOLERANCE,
+                self.power, float(self.sidecar["P_wp_W"]) * self.q_scale,
+                SIDECAR_POWER_TOLERANCE,
                 what="q_surf integral against the EM power in its sidecar")
+        else:
+            # explicit boundaries may be a subset of the recorded heated
+            # surface; the thermal power gate still compares like with like
+            self.sidecar_power = {"skipped": "explicit --em-heat-boundaries",
+                                  "sidecar_P_wp_W": float(
+                                      self.sidecar["P_wp_W"])}
         h = self.surface.h_median
-        self.transfer_tolerance = (float(transfer_tolerance)
-                                   if transfer_tolerance else 0.25 * h)
+        if transfer_tolerance is None:
+            self.transfer_tolerance = 0.25 * h
+        else:
+            self.transfer_tolerance = float(transfer_tolerance)
+            if not (0.0 < self.transfer_tolerance <= h):
+                raise ValueError(
+                    f"transfer tolerance must lie in (0, {h:.3e}] m (the "
+                    "median EM surface edge); a larger value would accept "
+                    f"points off the surface, got {transfer_tolerance!r}")
         self.profile = None
         if mode == "phi-average":
             self.profile = AxisymmetricSurfaceProfile(
@@ -952,8 +1019,44 @@ class EMHeatSource:
                 axis=axis, bin_width=bin_width,
                 axisymmetry_tolerance=self.transfer_tolerance)
 
+    def transfer(self, target_mesh, heat_names, gf_target, *,
+                 power_tolerance, theta: float = 0.0, weight=None,
+                 meridian: bool = False) -> dict:
+        """Write the source onto the thermal heat-flux vertices and gate it.
+
+        ``gf_target`` is an H1 order-1 GridFunction on ``target_mesh``.  For
+        an axisymmetric (r, z) thermal mesh pass ``meridian=True`` and the
+        revolution weight ``2 pi r``.  The transferred power must match the
+        EM power within ``power_tolerance`` or ``ValueError`` is raised.
+        """
+        from ngsolve import BND, CF, Integrate
+
+        tol = check_tolerance(power_tolerance, "power tolerance")
+        vnrs = boundary_vertex_numbers(target_mesh, heat_names)
+        pts = mesh_vertices(target_mesh)[vnrs]
+        if meridian:
+            values, dist = self.values_at_meridian(pts[:, :2])
+        else:
+            values, dist = self.values_at_xyz(pts, theta)
+        vec = gf_target.vec.FV().NumPy()
+        vec[:] = 0.0
+        vec[vnrs] = values
+        w = CF(1.0) if weight is None else weight
+        power = float(Integrate(gf_target * w, target_mesh, BND,
+                                definedon=target_mesh.Boundaries(
+                                    "|".join(heat_names))).real)
+        balance = power_balance(
+            power, self.power, tol,
+            what="thermal heat input against the EM source power",
+            scale=self.surface.magnitude_power, hint=TRANSFER_POWER_HINT)
+        return {"theta_rad": float(theta), "target_vertices": int(len(vnrs)),
+                "max_transfer_distance_m": float(dist.max()),
+                "power_balance": balance, "vertex_numbers": vnrs}
+
     def values_at_xyz(self, xyz: np.ndarray, theta: float = 0.0):
-        """Source values at thermal points ``xyz`` (body angle ``theta``)."""
+        """Source values at thermal points ``xyz`` (body angle ``theta``).
+
+        Ungated: use :meth:`transfer`, which also checks the power."""
         xyz = np.asarray(xyz, float)
         if self.profile is not None:
             return self.profile.evaluate_xyz(xyz, what="thermal heat-flux "
@@ -1028,6 +1131,13 @@ def scale_field_artifact(sol_path: str, out_path: str, factor: float) -> str:
 
 HT_QUANTITY = "surface_tangential_H_amplitude"
 HT_UNIT = "A/m"
+FROZEN_HT_REFUSAL = (
+    "the --em-table source freezes the EM run's |H_t|; for a ferromagnetic "
+    "workpiece it overstates heating below the Curie point and predicts a "
+    "false self-limit above it (validation_test/induction_heating/results/"
+    "coupled_curie_cylinder_frozen_ht.json). Pass --allow-frozen-ht to use "
+    "it knowingly (non-magnetic parts, or between EM re-solves), or use the "
+    "axisymmetric coupled EM-thermal solver.")
 
 
 def load_impedance_table(path: str):
@@ -1080,21 +1190,33 @@ class ImpedanceTable:
     def q(self, H, T):
         """q [W/m^2] at peak |H_t| ``H`` and temperature ``T`` (broadcast).
 
-        Below the H grid q follows the linear regime ``q ~ H^2``; above it
-        the lookup is an error unless extrapolation is allowed.
+        ``H = 0`` gives ``q = 0``.  Any other |H_t| outside the table's H
+        grid is an error unless extrapolation is allowed, in which case q
+        continues with the local ``q ~ |H_t|^2`` trend and the excursion is
+        recorded.
         """
         H = np.asarray(H, float)
+        if np.any(H < 0) or not np.all(np.isfinite(H)):
+            raise ValueError("|H_t| must be finite and non-negative")
         T = self._check_T(np.asarray(T, float))
-        Hs = np.where(H > 0, H, np.exp(self.logH[0]))
+        Hmin, Hmax = np.exp(self.logH[0]), np.exp(self.logH[-1])
+        live = H > 0
+        Hs = np.where(live, H, Hmin)
         lh = np.log(Hs)
-        if np.any(lh > self.logH[-1] + 1e-12):
+        out_lo = live & (lh < self.logH[0] - 1e-12)
+        out_hi = lh > self.logH[-1] + 1e-12
+        if np.any(out_lo) or np.any(out_hi):
             if not self.allow:
                 raise ValueError(
-                    f"|H_t| up to {float(Hs.max()):.3e} A/m exceeds the "
-                    f"impedance table ({np.exp(self.logH[-1]):.3e} A/m)")
-            self.max_H_excursion = max(self.max_H_excursion,
-                                       float(Hs.max()) / np.exp(self.logH[-1]))
-        below = lh < self.logH[0]
+                    f"|H_t| {float(H[live].min()):.3e}..{float(H.max()):.3e} "
+                    f"A/m leaves the impedance table {Hmin:.3e}..{Hmax:.3e} "
+                    "A/m; extend the table or allow extrapolation explicitly")
+            if np.any(out_hi):
+                self.max_H_excursion = max(self.max_H_excursion,
+                                           float(H.max()) / Hmax)
+            if np.any(out_lo):
+                self.max_H_excursion = max(self.max_H_excursion,
+                                           Hmin / float(H[out_lo].min()))
         lhc = np.clip(lh, self.logH[0], self.logH[-1])
         i = np.clip(np.searchsorted(self.logH, lhc) - 1, 0, len(self.logH) - 2)
         j = np.clip(np.searchsorted(self.T, T) - 1, 0, len(self.T) - 2)
@@ -1104,25 +1226,10 @@ class ImpedanceTable:
         lq = ((1 - u) * (1 - w) * L[i, j] + u * (1 - w) * L[i + 1, j]
               + (1 - u) * w * L[i, j + 1] + u * w * L[i + 1, j + 1])
         q = np.exp(lq)
-        # outside the H grid, continue with the local q ~ |H|^2 trend
-        q = np.where(below, q * np.exp(2.0 * (lh - self.logH[0])), q)
-        above = lh > self.logH[-1]
-        q = np.where(above, q * np.exp(2.0 * (lh - self.logH[-1])), q)
-        return q * (H > 0)
-
-    def invert_H(self, q, T):
-        """|H_t| that gives ``q`` at temperature ``T`` (scalar T)."""
-        q = np.asarray(q, float)
-        H = np.exp(self.logH)
-        qcol = self.q(H, np.full(len(H), float(T)))
-        lq = np.log(np.maximum(q, 1e-300))
-        out = np.exp(np.interp(lq, np.log(qcol), self.logH))
-        low = lq < np.log(qcol[0])
-        out[low] = H[0] * np.sqrt(q[low] / qcol[0])    # linear regime
-        if np.any(lq > np.log(qcol[-1]) + 1e-12):
-            raise ValueError("q_surf exceeds the impedance table at the "
-                             "reference temperature")
-        return np.where(q > 0, out, 0.0)
+        # (reached only with extrapolation allowed) q ~ |H_t|^2 outside
+        q = np.where(out_lo, q * np.exp(2.0 * (lh - self.logH[0])), q)
+        q = np.where(out_hi, q * np.exp(2.0 * (lh - self.logH[-1])), q)
+        return q * live
 
 
 class TemperatureDependentSource:
@@ -1137,8 +1244,12 @@ class TemperatureDependentSource:
     """
 
     def __init__(self, table: ImpedanceTable, q_ref, H_samples, vertex_dofs,
-                 gf_target, *, T_ref: float, H_scale: float = 1.0,
-                 gf_damping=None, dT_fd: float = 1.0):
+                 gf_target, *, T_ref: float, acknowledge_frozen_ht: bool,
+                 H_scale: float = 1.0, gf_damping=None, dT_fd: float = 1.0):
+        if acknowledge_frozen_ht is not True:
+            raise ValueError(FROZEN_HT_REFUSAL)
+        if not (math.isfinite(H_scale) and H_scale > 0):
+            raise ValueError(f"H_scale must be positive, got {H_scale!r}")
         self.table = table
         self.q_ref = np.asarray(q_ref, float)
         self.H = np.atleast_2d(np.asarray(H_samples, float))
@@ -1149,6 +1260,11 @@ class TemperatureDependentSource:
         self.T_ref = float(T_ref)
         self.s = float(H_scale)
         denom = table.q(self.H, np.full(self.H.shape, self.T_ref)).mean(axis=1)
+        dead = (denom <= 0) & (self.q_ref != 0)
+        if np.any(dead):
+            raise ValueError(
+                f"{int(dead.sum())} heat-flux vertices carry q_surf but zero "
+                "|H_t|; the |H_t| field does not belong to this source")
         self.ratio_ref = np.where(denom > 0, 1.0 / np.maximum(denom, 1e-300),
                                   0.0)
         self.T_surface_range = [np.inf, -np.inf]
@@ -1199,15 +1315,14 @@ def build_temperature_dependent_source(source: "EMHeatSource", *, table_path,
     ``source`` is the verified reference source, ``target_xyz`` the thermal
     heat-flux points (for an axisymmetric thermal mesh, ``(r, 0, z)``),
     ``q_ref`` the transferred reference values there.  ``|H_t|`` comes from
-    ``ht_sol`` (an ``_Ht.sol`` artifact on the EM mesh) or, without it, is
-    inferred from ``q_surf`` through the table at ``T_ref``.  With
+    ``ht_sol``, the ``_Ht.sol`` artifact the EM run wrote next to its
+    ``q_surf``.  With
     ``azimuths > 0`` each point takes |H_t| on that many azimuths of its
     ring (a rotating part); otherwise at the point itself.
 
-    When |H_t| comes from an artifact the table is checked against the EM
-    run: its power at ``T_ref`` must match the EM power within
-    ``consistency_tolerance``, otherwise the table does not describe the
-    material that was solved.
+    The table is checked against the EM run: its power at ``T_ref`` must
+    match the EM power within ``consistency_tolerance``, otherwise the table
+    does not describe the material that was solved.
 
     **Validity.**  The model freezes the spatial |H_t| of the EM run.  For
     a current-driven coil around a ferromagnetic workpiece that is wrong:
@@ -1221,15 +1336,12 @@ def build_temperature_dependent_source(source: "EMHeatSource", *, table_path,
     """
     from ngsolve import GridFunction, H1
 
-    if not acknowledge_frozen_ht:
-        raise ValueError(
-            "--em-table freezes the EM run's |H_t|; for a ferromagnetic "
-            "workpiece it overstates heating below the Curie point and "
-            "predicts a false self-limit above it (validation_test/"
-            "induction_heating/results/coupled_curie_cylinder_frozen_ht.json)"
-            ". Pass --allow-frozen-ht to use it knowingly (non-magnetic parts, "
-            "or between EM re-solves), or use the axisymmetric coupled "
-            "EM-thermal solver.")
+    if acknowledge_frozen_ht is not True:
+        raise ValueError(FROZEN_HT_REFUSAL)
+    consistency_tolerance = check_tolerance(consistency_tolerance,
+                                            "EM table tolerance")
+    if int(azimuths) < 0:
+        raise ValueError("azimuths must be >= 0")
     if source.q_scale != 1.0:
         raise ValueError("with a temperature-dependent source, scale the "
                          "current with --ht-scale (|H_t| ~ I), not --q-scale")
@@ -1238,32 +1350,32 @@ def build_temperature_dependent_source(source: "EMHeatSource", *, table_path,
     freq_table = float(table.table["meta"].get("frequency", 0.0))
     audit = {"table_frequency_Hz": freq_table}
     em = source.surface
-    if ht_sol:
-        pair = verify_field_pair(ht_sol, source.em_vol, source.em_mesh, 1,
-                                 quantity=HT_QUANTITY
-                                 if read_field_sidecar(ht_sol) else None)
-        gf_h = GridFunction(H1(source.em_mesh, order=1))
-        gf_h.Load(os.path.abspath(ht_sol))
-        H_v = np.asarray(gf_h.vec.FV().NumPy(), float)[:source.em_mesh.nv]
-        rec = read_field_sidecar(ht_sol) or {}
-        f_ht = rec.get("frequency_Hz")
-        if f_ht and freq_table and abs(f_ht - freq_table) > 1e-6 * f_ht:
-            raise ValueError(f"impedance table is for {freq_table:g} Hz but "
-                             f"the |H_t| field was solved at {f_ht:g} Hz")
-        q_tab = table.q(H_v, np.full(H_v.shape, float(T_ref)))
-        P_tab = p1_surface_power(em.points, em.tris, q_tab)
-        audit["consistency"] = power_balance(
-            P_tab, source.power_flat, consistency_tolerance,
-            what="impedance table at the reference temperature against the "
-                 "EM power",
-            hint="The table must be built for the material, frequency and "
-                 "|H_t| range of the EM run (same sigma, BH curve).")
-        audit["H_t_source"] = {"file": os.path.abspath(ht_sol)
-                               .replace("\\", "/"), **pair}
-    else:
-        H_v = table.invert_H(em.values, float(T_ref))
-        audit["consistency"] = None
-        audit["H_t_source"] = "inferred from q_surf through the table at T_ref"
+    if not ht_sol:
+        raise ValueError("a temperature-dependent source needs the EM run's "
+                         "|H_t| field (--ht-sol <stem>_Ht.sol)")
+    pair = verify_field_pair(ht_sol, source.em_vol, source.em_mesh, 1,
+                             quantity=HT_QUANTITY)
+    gf_h = GridFunction(H1(source.em_mesh, order=1))
+    gf_h.Load(os.path.abspath(ht_sol))
+    H_v = np.asarray(gf_h.vec.FV().NumPy(), float)[:source.em_mesh.nv]
+    rec = read_field_sidecar(ht_sol)
+    f_ht = rec.get("frequency_Hz")
+    if f_ht is None or not freq_table:
+        raise ValueError("both the impedance table and the |H_t| sidecar must "
+                         "record their frequency")
+    if abs(f_ht - freq_table) > 1e-6 * f_ht:
+        raise ValueError(f"impedance table is for {freq_table:g} Hz but "
+                         f"the |H_t| field was solved at {f_ht:g} Hz")
+    q_tab = table.q(H_v, np.full(H_v.shape, float(T_ref)))
+    P_tab = p1_surface_power(em.points, em.tris, q_tab)
+    audit["consistency"] = power_balance(
+        P_tab, source.power_flat, consistency_tolerance,
+        what="impedance table at the reference temperature against the "
+             "EM power",
+        hint="The table must be built for the material, frequency and "
+             "|H_t| range of the EM run (same sigma, BH curve).")
+    audit["H_t_source"] = {"file": os.path.abspath(ht_sol)
+                           .replace("\\", "/"), **pair}
     h_field = SurfaceP1Field(em.points, em.tris, H_v)
     xyz = np.asarray(target_xyz, float)
     if azimuths and azimuths > 0:
@@ -1283,7 +1395,74 @@ def build_temperature_dependent_source(source: "EMHeatSource", *, table_path,
     gf_damp.vec[:] = 0.0
     coupled = TemperatureDependentSource(
         table, q_ref, H_samples, dofs, gf_target, T_ref=T_ref,
-        H_scale=H_scale, gf_damping=gf_damp)
+        H_scale=H_scale, gf_damping=gf_damp, acknowledge_frozen_ht=True)
     audit.update({"H_t_range_A_m": [float(H_samples.min()),
                                     float(H_samples.max())]})
     return coupled, audit
+
+
+# ---------------------------------------------------------------------------
+# Command line: explicit sidecar for a legacy field file
+# ---------------------------------------------------------------------------
+
+_QUANTITIES = {QSURF_QUANTITY: QSURF_UNIT, HT_QUANTITY: HT_UNIT,
+               TEMPERATURE_QUANTITY: TEMPERATURE_UNIT}
+
+
+def main(argv=None) -> int:
+    """``python -m radia.ih_thermal sidecar ...``
+
+    Writes the sidecar of an existing ``.sol`` whose pairing the user
+    states: mesh file, H1 order, quantity and, for a heat source, the
+    heated EM boundaries and the EM power from the EM run's result.
+    """
+    import argparse
+    from ngsolve import Mesh
+
+    ap = argparse.ArgumentParser(prog="python -m radia.ih_thermal",
+                                 description=main.__doc__)
+    sub = ap.add_subparsers(dest="command", required=True)
+    sc = sub.add_parser("sidecar", help="write <sol>.json for a legacy .sol")
+    sc.add_argument("--sol", required=True)
+    sc.add_argument("--mesh", required=True, help="the .vol it was saved on")
+    sc.add_argument("--order", type=int, required=True)
+    sc.add_argument("--quantity", required=True, choices=sorted(_QUANTITIES))
+    sc.add_argument("--boundaries", default="",
+                    help="heated EM boundaries, '|'-separated (heat source "
+                         "and |H_t|)")
+    sc.add_argument("--p-wp", type=float, default=None,
+                    help="EM power [W] from the EM run (heat source)")
+    sc.add_argument("--frequency", type=float, default=None,
+                    help="EM frequency [Hz] (|H_t|)")
+    sc.add_argument("--definedon", default=None,
+                    help="region of a definedon temperature space")
+    sc.add_argument("--geometry", default=None,
+                    choices=("3d", "axisymmetric-rz"),
+                    help="temperature fields: 3d or axisymmetric-rz")
+    a = ap.parse_args(argv)
+    names = [b for b in a.boundaries.split("|") if b.strip()]
+    extra = {"producer": "radia.ih_thermal sidecar (user-stated pairing)"}
+    if a.quantity in (QSURF_QUANTITY, HT_QUANTITY) and not names:
+        ap.error("--boundaries is required for a surface field")
+    if a.quantity == QSURF_QUANTITY:
+        if a.p_wp is None:
+            ap.error("--p-wp (the EM run's workpiece power) is required")
+        extra["P_wp_W"] = float(a.p_wp)
+    if a.quantity == TEMPERATURE_QUANTITY:
+        if a.geometry is None:
+            ap.error("--geometry is required for a temperature field")
+        extra["geometry"] = a.geometry
+    if a.quantity == HT_QUANTITY:
+        if a.frequency is None:
+            ap.error("--frequency is required for |H_t|")
+        extra["frequency_Hz"] = float(a.frequency)
+    path = write_field_sidecar(
+        a.sol, mesh_path=a.mesh, mesh=Mesh(a.mesh), fes_order=a.order,
+        quantity=a.quantity, unit=_QUANTITIES[a.quantity], boundaries=names,
+        extra=extra, definedon=a.definedon)
+    print(path)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

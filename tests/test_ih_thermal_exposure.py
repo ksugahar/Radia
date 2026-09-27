@@ -17,7 +17,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src", "radia"))
 sys.path.insert(0, os.path.join(ROOT, "src", "radia", "panels"))
 
-import ih_thermal_post  # noqa: E402
+from radia import ih_thermal_post
 
 
 def _cube(maxh=0.2):

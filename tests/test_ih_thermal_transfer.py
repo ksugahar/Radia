@@ -17,7 +17,7 @@ import pytest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src", "radia"))
 
-import ih_thermal  # noqa: E402
+from radia import ih_thermal
 
 
 @pytest.fixture(scope="module")
@@ -49,7 +49,8 @@ def test_sidecar_round_trip_and_load(cylinder):
         fes_order=1, quantity=ih_thermal.QSURF_QUANTITY,
         unit=ih_thermal.QSURF_UNIT, boundaries=["side"],
         extra={"P_wp_W": 1.0})
-    mesh, gf, audit = ih_thermal.load_field(cylinder["sol"])
+    mesh, gf, audit = ih_thermal.load_field(
+        cylinder["sol"], quantity=ih_thermal.QSURF_QUANTITY)
     assert audit["provenance"] == "sidecar-verified"
     assert audit["mesh_curve_order"] == mesh.GetCurveOrder()
     np.testing.assert_array_equal(gf.vec.FV().NumPy(),
@@ -59,7 +60,8 @@ def test_sidecar_round_trip_and_load(cylinder):
 def test_wrong_order_is_rejected_by_size(cylinder):
     with pytest.raises(ValueError, match="do not belong together"):
         ih_thermal.verify_field_pair(cylinder["sol"], cylinder["vol"],
-                                     cylinder["mesh"], 2)
+                                     cylinder["mesh"], 2,
+                                     quantity=ih_thermal.QSURF_QUANTITY)
 
 
 def test_modified_field_is_rejected(cylinder, tmp_path):
@@ -72,7 +74,7 @@ def test_modified_field_is_rejected(cylinder, tmp_path):
     (2.0 * data).tofile(sol)
     with pytest.raises(ValueError, match="changed after its sidecar"):
         ih_thermal.verify_field_pair(str(sol), cylinder["vol"],
-                                     cylinder["mesh"], 1)
+                                     cylinder["mesh"], 1, quantity="q")
 
 
 def test_a_different_mesh_file_is_rejected(cylinder, tmp_path):
@@ -85,7 +87,8 @@ def test_a_different_mesh_file_is_rejected(cylinder, tmp_path):
         str(sol), mesh_path=cylinder["vol"], mesh=cylinder["mesh"],
         fes_order=1, quantity="q", unit="W/m^2")
     with pytest.raises(ValueError, match="mesh file digest"):
-        ih_thermal.verify_field_pair(str(sol), str(other), cylinder["mesh"], 1)
+        ih_thermal.verify_field_pair(str(sol), str(other), cylinder["mesh"], 1,
+                                     quantity="q")
 
 
 def test_scaled_artifact_carries_its_provenance(cylinder, tmp_path):
@@ -168,20 +171,49 @@ def test_power_balance_refuses_a_lossy_transfer():
                                     scale=1.0)["relative_error"] < 1e-8
 
 
-def test_em_boundaries_must_be_resolvable(cylinder):
+def test_em_boundaries_come_from_the_request_or_the_sidecar(cylinder):
+    """Nothing is borrowed from the thermal mesh's boundary names."""
     from ngsolve import GridFunction, H1, Mesh
 
-    sol = str(cylinder["dir"] / "anon.sol")
-    cylinder["gf"].Save(sol)
     mesh = Mesh(cylinder["vol"])
     gf = GridFunction(H1(mesh, order=1))
-    gf.Load(sol)
-    with pytest.raises(ValueError, match="--em-heat-boundaries"):
-        ih_thermal.resolve_em_heat_boundaries(mesh, gf,
-                                              thermal_names=["heated"])
+    gf.Load(cylinder["sol"])
+    with pytest.raises(ValueError, match="state the heated"):
+        ih_thermal.resolve_em_heat_boundaries(mesh, gf, sidecar={})
     names, how = ih_thermal.resolve_em_heat_boundaries(
         mesh, gf, requested="side|top")
     assert names == ["side", "top"] and how == "explicit"
+    names, how = ih_thermal.resolve_em_heat_boundaries(
+        mesh, gf, sidecar={"boundaries": ["side"]})
+    assert names == ["side"] and how == "sidecar"
+
+
+def test_a_field_without_a_sidecar_is_refused(cylinder, tmp_path):
+    """No byte-count-only acceptance: the pairing must be stated."""
+    sol = tmp_path / "bare.sol"
+    np.fromfile(cylinder["sol"], dtype="<f8").tofile(sol)
+    with pytest.raises(ValueError, match="no .sol.json sidecar|no .json"):
+        ih_thermal.verify_field_pair(str(sol), cylinder["vol"],
+                                     cylinder["mesh"], 1,
+                                     quantity=ih_thermal.QSURF_QUANTITY)
+    with pytest.raises(ValueError, match="sidecar"):
+        ih_thermal.load_field(str(sol), quantity=ih_thermal.QSURF_QUANTITY)
+    # the explicit adoption path
+    assert ih_thermal.main([
+        "sidecar", "--sol", str(sol), "--mesh", cylinder["vol"],
+        "--order", "1", "--quantity", ih_thermal.QSURF_QUANTITY,
+        "--boundaries", "side", "--p-wp", "1.0"]) == 0
+    assert ih_thermal.verify_field_pair(
+        str(sol), cylinder["vol"], cylinder["mesh"], 1,
+        quantity=ih_thermal.QSURF_QUANTITY)["provenance"] == \
+        "sidecar-verified"
+
+
+def test_a_field_of_another_quantity_is_refused(cylinder):
+    with pytest.raises(ValueError, match="quantity"):
+        ih_thermal.verify_field_pair(cylinder["sol"], cylinder["vol"],
+                                     cylinder["mesh"], 1,
+                                     quantity=ih_thermal.HT_QUANTITY)
 
 
 def test_curved_em_mesh_passes_the_sidecar_power_check(tmp_path):
@@ -209,6 +241,23 @@ def test_curved_em_mesh_passes_the_sidecar_power_check(tmp_path):
         sol, mesh_path=vol, mesh=mesh, fes_order=1,
         quantity=ih_thermal.QSURF_QUANTITY, unit=ih_thermal.QSURF_UNIT,
         boundaries=["side"], extra={"P_wp_W": P})
-    src = ih_thermal.EMHeatSource(sol, vol, thermal_names=["side"])
+    src = ih_thermal.EMHeatSource(sol, vol)
     assert src.sidecar_power["relative_error"] == pytest.approx(0.0, abs=1e-9)
     assert abs(src.power_flat / src.power - 1.0) > 1e-3
+
+def test_axis_split_is_exact_for_p1_fields():
+    """A triangle pierced by the axis is split at the piercing point; the
+    P1 integral is unchanged and the new vertex carries the P1 value."""
+    pts = np.array([[1.0, 0.0, 0.0], [-0.5, 0.8, 0.0], [-0.5, -0.9, 0.0],
+                    [2.0, 2.0, 0.0]])
+    tris = np.array([[0, 1, 2], [0, 3, 1]])
+    vals = np.array([1.0, 2.0, 4.0, 3.0])
+    p2, t2, v2 = ih_thermal._split_at_axis(pts, tris, vals, "z")
+    assert len(t2) == 4 and len(p2) == 5          # only the pierced one split
+    assert np.allclose(p2[4, :2], 0.0)
+    assert ih_thermal.p1_surface_power(p2, t2, v2) == pytest.approx(
+        ih_thermal.p1_surface_power(pts, tris, vals), rel=1e-14)
+    # the P1 value at the origin of the first triangle
+    lam = np.linalg.solve(np.r_[pts[tris[0], :2].T, np.ones((1, 3))],
+                          [0.0, 0.0, 1.0])
+    assert v2[4] == pytest.approx(lam @ vals[tris[0]], rel=1e-14)

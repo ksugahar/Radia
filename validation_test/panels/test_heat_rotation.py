@@ -43,12 +43,14 @@ def synthetic_setup(tmp_path_factory):
     """Build a synthetic (em_mesh, gf_q_em, wp_mesh) trio:
 
     * EM mesh = unit cube
-    * gf_q_em(x,y,z) = x      (linear in x so we can predict rotated values)
-    * wp_mesh = same unit cube (so the surf vertices land inside em_mesh)
+    * gf_q_em(x,y,z) = 2 + x  (linear in x so we can predict rotated values;
+      positive so the transferred power has a nonzero reference)
+    * wp_mesh = same cube (so the rotated surface vertices stay on the EM
+      surface; the cube maps onto itself under quarter turns about z)
 
-    A wp body point at (1,0,0) sees q_em(1,0,0)=1 at theta=0.
+    A wp body point at (1,0,0) sees q_em(1,0,0)=3 at theta=0.
     At theta=pi/2 the same body point sits at world (0,1,0), and
-    q_em(0,1,0)=0.  At theta=pi it sits at (-1,0,0), q_em=-1.
+    q_em(0,1,0)=2.  At theta=pi it sits at (-1,0,0), q_em=1.
     """
     from ngsolve import (Mesh, H1, GridFunction, x as ng_x, TaskManager)
     from netgen.occ import Box, Pnt, OCCGeometry
@@ -62,29 +64,41 @@ def synthetic_setup(tmp_path_factory):
     fes_q = H1(em_mesh, order=1)
     gf_q_em = GridFunction(fes_q)
     with TaskManager():
-        gf_q_em.Set(ng_x)  # q_em = x
+        gf_q_em.Set(2.0 + ng_x)  # q_em = 2 + x
 
         return em_mesh, gf_q_em, wp_mesh
+
+
+def _write_em_pair(mesh, gf, td):
+    """Save the EM field with the sidecar the transfer requires."""
+    from ngsolve import BND, Integrate
+    from radia import ih_thermal
+
+    sol = os.path.join(td, "q.sol")
+    vol = os.path.join(td, "em.vol")
+    gf.Save(sol)
+    mesh.ngmesh.Save(vol)
+    power = float(Integrate(gf, mesh, BND,
+                            definedon=mesh.Boundaries("default")))
+    ih_thermal.write_field_sidecar(
+        sol, mesh_path=vol, mesh=mesh, fes_order=1,
+        quantity=ih_thermal.QSURF_QUANTITY, unit=ih_thermal.QSURF_UNIT,
+        boundaries=["default"], extra={"P_wp_W": power})
+    return sol, vol
 
 
 def test_rotation_zero_matches_identity(synthetic_setup):
     """At theta=0 the rotated projection equals the original projection."""
     import calc_heat
-    from types import SimpleNamespace
 
     em_mesh, gf_q_em, wp_mesh = synthetic_setup
 
     # Save gf_q_em to a temp .sol so _build_qsurf_cf can load it.
     import tempfile
     with tempfile.TemporaryDirectory() as td:
-        sol = os.path.join(td, "q.sol")
-        vol = os.path.join(td, "wp.vol")
-        gf_q_em.Save(sol)
-        em_mesh.ngmesh.Save(vol)
-
-        args = SimpleNamespace(
-            q_uniform=None, qsurf_sol=sol, em_vol=vol, qsurf_order=1,
-            heat_flux_boundary_names=["default"])
+        sol, vol = _write_em_pair(em_mesh, gf_q_em, td)
+        args = calc_heat.qsurf_args(
+            qsurf_sol=sol, em_vol=vol, heat_flux_boundary_names=["default"])
         # The helper walks BND vertices filtered by the resolved heat-flux role
         # to enumerate surf_vertex_nrs.
         q_cf, resample = calc_heat._build_qsurf_cf(wp_mesh, args)
@@ -99,57 +113,45 @@ def test_rotation_zero_matches_identity(synthetic_setup):
         best_vnr = _surf_vnr_nearest(wp_mesh, (1.0, 0.0, 0.0))
         assert best_vnr is not None
         val_theta0 = q_cf.vec.FV()[best_vnr]
-        # At theta=0, body point (~1,0,0) ↦ world (~1,0,0), q=x≈1.
-        assert val_theta0 == pytest.approx(1.0, abs=0.05)
+        # At theta=0, body point (~1,0,0) ↦ world (~1,0,0), q=2+x≈3.
+        assert val_theta0 == pytest.approx(3.0, abs=0.05)
 
 
 def test_rotation_pi_inverts_x_signed_value(synthetic_setup):
-    """At theta=pi the q value at body (1,0,0) becomes q_em(-1,0,0)≈-1."""
+    """At theta=pi the q value at body (1,0,0) becomes q_em(-1,0,0)≈1."""
     import calc_heat
-    from types import SimpleNamespace
     import tempfile
 
     em_mesh, gf_q_em, wp_mesh = synthetic_setup
 
     with tempfile.TemporaryDirectory() as td:
-        sol = os.path.join(td, "q.sol")
-        vol = os.path.join(td, "wp.vol")
-        gf_q_em.Save(sol)
-        em_mesh.ngmesh.Save(vol)
-
-        args = SimpleNamespace(
-            q_uniform=None, qsurf_sol=sol, em_vol=vol, qsurf_order=1,
-            heat_flux_boundary_names=["default"])
+        sol, vol = _write_em_pair(em_mesh, gf_q_em, td)
+        args = calc_heat.qsurf_args(
+            qsurf_sol=sol, em_vol=vol, heat_flux_boundary_names=["default"])
         q_cf, resample = calc_heat._build_qsurf_cf(wp_mesh, args)
 
         # Locate the surface vertex nearest to body (+1, 0, 0).
         best_vnr = _surf_vnr_nearest(wp_mesh, (1.0, 0.0, 0.0))
 
         # Resample with the body rotated by pi -- the body point
-        # near (+1, 0, 0) now sits at world (-1, 0, 0) where q_em = -1.
+        # near (+1, 0, 0) now sits at world (-1, 0, 0) where q_em = 1.
         resample(math.pi)
         val_pi = q_cf.vec.FV()[best_vnr]
-        assert val_pi == pytest.approx(-1.0, abs=0.05)
+        assert val_pi == pytest.approx(1.0, abs=0.05)
 
 
 def test_rotation_pi_over_2_swaps_x_to_y(synthetic_setup):
-    """At theta=pi/2 the q value at body (1,0,0) becomes q_em(0,1,0)≈0
-    (since q_em=x and the world point at (0,1,0) has x=0)."""
+    """At theta=pi/2 the q value at body (1,0,0) becomes q_em(0,1,0)≈2
+    (since q_em=2+x and the world point at (0,1,0) has x=0)."""
     import calc_heat
-    from types import SimpleNamespace
     import tempfile
 
     em_mesh, gf_q_em, wp_mesh = synthetic_setup
 
     with tempfile.TemporaryDirectory() as td:
-        sol = os.path.join(td, "q.sol")
-        vol = os.path.join(td, "wp.vol")
-        gf_q_em.Save(sol)
-        em_mesh.ngmesh.Save(vol)
-
-        args = SimpleNamespace(
-            q_uniform=None, qsurf_sol=sol, em_vol=vol, qsurf_order=1,
-            heat_flux_boundary_names=["default"])
+        sol, vol = _write_em_pair(em_mesh, gf_q_em, td)
+        args = calc_heat.qsurf_args(
+            qsurf_sol=sol, em_vol=vol, heat_flux_boundary_names=["default"])
         q_cf, resample = calc_heat._build_qsurf_cf(wp_mesh, args)
 
         # Locate the surface vertex nearest to body (+1, 0, 0).
@@ -157,8 +159,8 @@ def test_rotation_pi_over_2_swaps_x_to_y(synthetic_setup):
 
         resample(math.pi / 2.0)
         val_half = q_cf.vec.FV()[best_vnr]
-        # At theta=pi/2, body (1,0,0) ↦ world (0,1,0), q_em = x = 0.
-        assert val_half == pytest.approx(0.0, abs=0.05)
+        # At theta=pi/2, body (1,0,0) ↦ world (0,1,0), q_em = 2 + x = 2.
+        assert val_half == pytest.approx(2.0, abs=0.05)
 
 
 @pytest.fixture(scope="module")
@@ -173,33 +175,28 @@ def cylinder_mesh():
 
 def _phi_average_on(mesh, expression, td):
     import calc_heat
-    from types import SimpleNamespace
     from ngsolve import H1, GridFunction
 
     gf = GridFunction(H1(mesh, order=1))
     gf.Set(expression)
-    sol = os.path.join(td, "q.sol")
-    vol = os.path.join(td, "em.vol")
-    gf.Save(sol)
-    mesh.ngmesh.Save(vol)
-    args = SimpleNamespace(
-        q_uniform=None, qsurf_sol=sol, em_vol=vol, qsurf_order=1,
-        heat_flux_boundary_names=["default"], rotation_axis="z",
+    sol, vol = _write_em_pair(mesh, gf, td)
+    args = calc_heat.qsurf_args(
+        qsurf_sol=sol, em_vol=vol, heat_flux_boundary_names=["default"],
         q_phi_average=True)
     return calc_heat._build_qsurf_source(mesh, args)
 
 
 def test_phi_average_removes_the_azimuthal_part(cylinder_mesh, tmp_path):
-    """The circumferential average of q = x (= r cos phi) is zero, and it is
-    a static source (no resampler)."""
+    """The circumferential average of q = 2 + x (x = r cos phi) is 2, and it
+    is a static source (no resampler)."""
     from ngsolve import x
-    import ih_thermal
-
-    q_cf, resample, audit = _phi_average_on(cylinder_mesh, x, str(tmp_path))
+    from radia import ih_thermal
+    q_cf, resample, audit = _phi_average_on(cylinder_mesh, 2.0 + x,
+                                            str(tmp_path))
     assert resample is None
     assert audit["mode"] == "phi-average"
     side = ih_thermal.boundary_vertex_numbers(cylinder_mesh, ["default"])
-    vals = q_cf.vec.FV().NumPy()[side]
+    vals = q_cf.vec.FV().NumPy()[side] - 2.0
     r = np.hypot(*ih_thermal.mesh_vertices(cylinder_mesh)[side, :2].T)
     # |x| reaches 1 on this surface.  Away from the axis the residual is
     # the facet asymmetry of each ring; within one element of the axis the
@@ -212,8 +209,7 @@ def test_phi_average_removes_the_azimuthal_part(cylinder_mesh, tmp_path):
 def test_phi_average_keeps_an_axisymmetric_source(cylinder_mesh, tmp_path):
     """An already axisymmetric source is reproduced and its power kept."""
     from ngsolve import z
-    import ih_thermal
-
+    from radia import ih_thermal
     q_cf, _, audit = _phi_average_on(cylinder_mesh, 1.0 + z * z,
                                      str(tmp_path))
     pts = ih_thermal.mesh_vertices(cylinder_mesh)
@@ -233,12 +229,10 @@ def test_phi_average_requires_spatial_not_uniform(synthetic_setup):
     """--q-phi-average + --q-uniform is contradictory (a constant is
     already azimuthally uniform) and must fail loud, per No-Fallback."""
     import calc_heat
-    from types import SimpleNamespace
 
     _em, _gf, wp_mesh = synthetic_setup
-    args = SimpleNamespace(
-        q_uniform=1.0e6, qsurf_sol="", em_vol="", qsurf_order=1,
-        heat_flux_boundary_names=["default"], rotation_axis="z",
+    args = calc_heat.qsurf_args(
+        q_uniform=1.0e6, heat_flux_boundary_names=["default"],
         q_phi_average=True)
     with pytest.raises(ValueError, match="q-phi-average"):
         calc_heat._build_qsurf_cf(wp_mesh, args)

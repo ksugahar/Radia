@@ -21,8 +21,11 @@ integration rules.  NGSolve otherwise picks the quadrature order of each
 form from its integrand, and a residual integrated more accurately than
 its matrix (a nonlinear ``H(T)`` times the axisymmetric weight ``r``) made
 the iteration diverge geometrically after the first few steps.  A step
-that does not converge is split in halves, up to ``max_halvings`` times;
-beyond that the run fails.
+that does not converge fails the run; with an explicit ``max_halvings > 0``
+the step is split in halves up to that many times and every split is
+recorded.  The temperature is checked against the material table at the
+element integration points, and the energy balance can be enforced with
+:meth:`NonlinearHeatStepper.check_energy`.
 """
 from __future__ import annotations
 
@@ -87,7 +90,7 @@ class NonlinearHeatStepper:
                  volume_source=None, region: str | None = None,
                  linear_solver: str = "sparsecholesky",
                  newton_tol_K: float = 1.0e-3, max_newton: int = 25,
-                 max_halvings: int = 6):
+                 max_halvings: int = 0):
         from ngsolve import CF, GridFunction
 
         self.gfT = gfT
@@ -132,6 +135,8 @@ class NonlinearHeatStepper:
             vertices = sorted(inside)
         self._vdofs = np.asarray([self.fes.GetDofNrs(NodeId(VERTEX, v))[0]
                                   for v in vertices])
+        self._check_boundaries_on_region(set(vertices))
+        self._range_points = self._integration_points()
         from ngsolve import IfPos
         self.k_cf, self.H_cf, self.c_cf = material.coefficient_functions(gfT)
         self.k_old, self.H_old, _ = material.coefficient_functions(self.gf_old)
@@ -157,17 +162,77 @@ class NonlinearHeatStepper:
                                 **kw),
                 lambda region: ds(region, intrules=rules[BND]))
 
+    def _check_boundaries_on_region(self, vertices):
+        """Every selected boundary element must bound the temperature region
+        (a term on a boundary the temperature does not live on is zero)."""
+        import re
+        from ngsolve import BND
+        b = self.bnd
+        for label, sel in (("heat-flux", b.heat_flux),
+                           ("convection", b.convection if b.h_conv else ""),
+                           ("radiation", b.radiation if b.emissivity else "")):
+            if not sel:
+                continue
+            pat = re.compile(str(sel))
+            off, total = set(), 0
+            for el in self.mesh.Elements(BND):
+                if not pat.fullmatch(el.mat):
+                    continue
+                total += 1
+                if not all(v.nr in vertices for v in el.vertices):
+                    off.add(el.mat)
+            if total == 0:
+                raise ValueError(f"{label} boundaries {sel!r} match no "
+                                 "boundary element")
+            if off:
+                raise ValueError(
+                    f"{label} boundaries {sorted(off)} do not bound the "
+                    f"temperature region {self.region!r}")
+
+    def _integration_points(self):
+        """Mapped volume integration points of the temperature region."""
+        import re
+        from ngsolve import VOL
+        pts = []
+        pat = re.compile(str(self.region)) if self.region else None
+        for el in self.mesh.Elements(VOL):
+            if pat is not None and not pat.fullmatch(el.mat):
+                continue
+            pts.append(self.mesh.GetTrafo(el)(self._rules[VOL][el.type]))
+        return pts
+
+    def _sampled_range(self):
+        """(min, max) of the temperature over vertices and integration
+        points of the region."""
+        T = self._nodal()
+        lo, hi = float(T.min()), float(T.max())
+        for mir in self._range_points:
+            v = np.asarray(self.gfT(mir)).reshape(-1)
+            lo, hi = min(lo, float(v.min())), max(hi, float(v.max()))
+        return lo, hi
+
+    def check_energy(self, tolerance: float = 1.0e-4) -> float:
+        """Raise when the energy balance of the run exceeds ``tolerance``."""
+        rel = self.audit.as_dict()["energy_balance_relative_error"]
+        if not abs(rel) <= tolerance:
+            raise RuntimeError(
+                "heat energy balance failed: stored "
+                f"{self.audit.energy_stored_J:.6e} J against input - loss "
+                f"{self.audit.energy_in_J - self.audit.energy_loss_J:.6e} J "
+                f"(relative {rel:+.2e}, tolerance {tolerance:.1e})")
+        return rel
+
     def _nodal(self, gf=None):
         return np.asarray((gf or self.gfT).vec.FV().NumPy())[self._vdofs]
 
     def _check_range(self):
-        T = self._nodal()
+        Tmin, Tmax = self._sampled_range()
         lo, hi = self.material.T[0], self.material.T[-1]
-        over = max(0.0, float(T.max() - hi), float(lo - T.min()))
+        over = max(0.0, Tmax - hi, lo - Tmin)
         if over > 0.0:
             if not self.material.allow_extrapolation:
                 raise ValueError(
-                    f"temperature {T.min():.1f}..{T.max():.1f} C left the "
+                    f"temperature {Tmin:.1f}..{Tmax:.1f} C left the "
                     f"material table range {lo:.1f}..{hi:.1f} C; extend the "
                     "table or allow extrapolation explicitly")
             self.audit.table_extrapolation_C = max(
@@ -193,7 +258,7 @@ class NonlinearHeatStepper:
             qin += float(Integrate(self.volume_source * self.w, self.mesh,
                                    order=self.intorder, **kw).real)
         if b.heat_flux:
-            qin = float(Integrate(q_cf * self.w, self.mesh, BND,
+            qin += float(Integrate(q_cf * self.w, self.mesh, BND,
                                   definedon=self.mesh.Boundaries(
                                       b.heat_flux),
                                   order=self.intorder).real)
@@ -285,9 +350,9 @@ class NonlinearHeatStepper:
             if depth >= self.max_halvings:
                 raise RuntimeError(
                     f"the nonlinear heat step did not converge within "
-                    f"{self.max_newton} iterations even after {depth} "
-                    f"halvings (dt={dt:.3e} s); reduce --dt or check the "
-                    "material table")
+                    f"{self.max_newton} Newton iterations (dt={dt:.3e} s, "
+                    f"{depth} of {self.max_halvings} allowed halvings used); "
+                    "reduce --dt, or allow step halving explicitly")
             self.audit.halvings += 1
             self.advance(0.5 * dt, depth + 1)
             self.advance(0.5 * dt, depth + 1)

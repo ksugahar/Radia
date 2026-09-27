@@ -73,6 +73,14 @@ def _write_uniform_qsurf_cylinder(tmp_path, q_flux=10.0):
     gf_q.Set(CF(q_flux))
     q_sol = tmp_path / "qsurf.sol"
     gf_q.Save(str(q_sol))
+    from ngsolve import BND, Integrate
+    from radia import ih_thermal
+    power = float(Integrate(gf_q, em_mesh, BND,
+                            definedon=em_mesh.Boundaries("em_surface")))
+    ih_thermal.write_field_sidecar(
+        str(q_sol), mesh_path=str(em_vol), mesh=em_mesh, fes_order=1,
+        quantity=ih_thermal.QSURF_QUANTITY, unit=ih_thermal.QSURF_UNIT,
+        boundaries=["em_surface"], extra={"P_wp_W": power})
     return em_vol, q_sol
 
 
@@ -357,15 +365,15 @@ def test_axisym_qsurf_uses_boundary_projection_and_reports_coverage(tmp_path):
         q_flux * 2.0 * math.pi * radius, rel=1.0e-8
     )
     audit = result["qsurf_projection"]
-    assert audit["evaluation_region"] == "BND-meridian"
     assert audit["em_heat_boundaries"] == ["em_surface"]
-    assert audit["target_surface_vertices"] > 0
-    assert audit["max_transfer_distance_m"] < audit["transfer_tolerance_m"]
+    assert audit["em_heat_boundary_rule"] == "explicit"
+    first = audit["initial"]
+    assert first["target_vertices"] > 0
     # The faceted EM side wall (maxh 0.28, ~22 facets) has about 0.3 % less
     # area than the revolved meridian; the gate reports exactly that.
-    assert abs(audit["power_balance"]["relative_error"]) < 5.0e-3
+    assert abs(first["power_balance"]["relative_error"]) < 5.0e-3
     ring = audit["pointwise_ring_check"]
-    assert ring["vertices_fully_on_source"] == audit["target_surface_vertices"]
+    assert ring["vertices_fully_on_source"] == first["target_vertices"]
     assert ring["max_relative_deviation"] < 1.0e-6
 
 

@@ -82,6 +82,8 @@ def solve_ih_axisym_coupled(mesh_path, *, workpiece, coils, frequency,
                             emissivity=0.0, radiation_boundaries="",
                             t_initial=20.0, dt=0.1, t_end=1.0, em_every=1,
                             em_order=2, thermal_order=2, newton_tol=1e-3,
+                            newton_max_iter=25, max_halvings=0,
+                            skin_resolution=1.0,
                             exposure_thresholds=(), temperature_limit=None,
                             depth_threshold=None, depth_boundaries="",
                             depth_span=None, temperature_output="",
@@ -89,10 +91,8 @@ def solve_ih_axisym_coupled(mesh_path, *, workpiece, coils, frequency,
     setup_paths()
     t0 = time.perf_counter()
     from ngsolve import Mesh
-    import ih_heat_transient
-    import ih_thermal
-    import ih_thermal_material
-    import ih_thermal_post
+    from radia import ih_heat_transient, ih_thermal, ih_thermal_material
+    from radia import ih_thermal_post
     from radia import ih_axisym_coupled as C
 
     if _mesh is None and not os.path.isfile(mesh_path):
@@ -149,7 +149,9 @@ def solve_ih_axisym_coupled(mesh_path, *, workpiece, coils, frequency,
                 thermal_material=th_mat, boundaries=boundaries, dt=dt,
                 t_end=t_end, t_initial=t_initial, em_every=em_every,
                 em_order=em_order, thermal_order=thermal_order,
-                newton_tol_K=newton_tol, on_step=on_step)
+                newton_tol_K=newton_tol, max_newton=newton_max_iter,
+                max_halvings=max_halvings, skin_resolution=skin_resolution,
+                on_step=on_step)
     except (ValueError, RuntimeError) as exc:
         return {"error": str(exc)}
 
@@ -178,6 +180,7 @@ def solve_ih_axisym_coupled(mesh_path, *, workpiece, coils, frequency,
             quantity=ih_thermal.TEMPERATURE_QUANTITY,
             unit=ih_thermal.TEMPERATURE_UNIT,
             extra={"producer": "calc_ih_axisym_coupled",
+                   "geometry": "axisymmetric-rz",
                    "t_end_s": float(t_end)}, definedon=workpiece)
         result["temperature_output"] = temperature_output
     result["t_total_s"] = round(time.perf_counter() - t0, 2)
@@ -225,6 +228,14 @@ def main():
     p.add_argument("--em-order", type=int, default=2)
     p.add_argument("--thermal-order", type=int, default=2)
     p.add_argument("--newton-tol", type=float, default=1e-3)
+    p.add_argument("--newton-max-iter", type=int, default=25)
+    p.add_argument("--max-halvings", type=int, default=0,
+                   help="allow a non-converged heat step to be halved up to "
+                        "this many times (default 0: fail)")
+    p.add_argument("--skin-resolution", type=float, default=1.0,
+                   help="largest element size over local skin depth in the "
+                        "workpiece surface layer (default 1: +0.3 %% against "
+                        "the Bessel solution at order 2)")
     p.add_argument("--exposure-thresholds", default="")
     p.add_argument("--temperature-limit", type=float, default=None)
     p.add_argument("--depth-threshold", type=float, default=None)
@@ -257,6 +268,8 @@ def main():
             t_initial=a.t_initial, dt=a.dt, t_end=a.t_end,
             em_every=a.em_every, em_order=a.em_order,
             thermal_order=a.thermal_order, newton_tol=a.newton_tol,
+            newton_max_iter=a.newton_max_iter, max_halvings=a.max_halvings,
+            skin_resolution=a.skin_resolution,
             exposure_thresholds=thr, temperature_limit=a.temperature_limit,
             depth_threshold=a.depth_threshold,
             depth_boundaries=a.depth_boundaries, depth_span=a.depth_span,

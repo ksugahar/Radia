@@ -982,8 +982,8 @@ def assemble_ih_operators(
                 thermal_flux = electromagnetic.heat_flux_W_per_m2
                 transfer_audit = None
                 if options.axisymmetric_thermal_vol:
-                    from types import SimpleNamespace
                     from ngsolve import Mesh
+                    from radia.panels.calc_heat import qsurf_args
                     from radia.panels.calc_heat_axisym import _build_axisym_qsurf_gf
                     thermal_source = Path(options.axisymmetric_thermal_vol).resolve()
                     thermal_contract = _contract_path("ih_thermal_axisym_v1.json")
@@ -997,8 +997,9 @@ def assemble_ih_operators(
                     mesh2d = Mesh(str(thermal_mesh))
                     if mesh2d.dim != 2:
                         raise ValueError("axisymmetric_thermal_vol requires a 2D (r,z) mesh")
-                    transfer_args = SimpleNamespace(q_uniform=None, qsurf_sol=str(electromagnetic.qsurf_solution),
-                        em_vol=str(solver_workpiece), qsurf_order=1, n_phi_samples=options.n_phi_samples)
+                    transfer_args = qsurf_args(qsurf_sol=str(electromagnetic.qsurf_solution),
+                        em_vol=str(solver_workpiece), qsurf_order=1)
+                    transfer_args.n_phi_samples = options.n_phi_samples
                     flux2d, _, transfer_audit = _build_axisym_qsurf_gf(mesh2d, [options.workpiece_label], transfer_args)
                     thermal_flux = flux2d.vec.FV().NumPy().copy()
                 thermal = _assemble_thermal_operators(

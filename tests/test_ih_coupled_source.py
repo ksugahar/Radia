@@ -18,7 +18,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src", "radia"))
 sys.path.insert(0, os.path.join(ROOT, "src", "radia", "panels"))
 
-import ih_thermal  # noqa: E402
+from radia import ih_thermal
 
 RE_Z0 = 3.0e-4          # Ohm, below the Curie band
 
@@ -61,14 +61,16 @@ def case(tmp_path_factory):
     qs, hs = str(d / "q.sol"), str(d / "Ht.sol")
     q.Save(qs)
     H.Save(hs)
-    for sol, quantity, unit in ((qs, ih_thermal.QSURF_QUANTITY,
-                                 ih_thermal.QSURF_UNIT),
-                                (hs, ih_thermal.HT_QUANTITY,
-                                 ih_thermal.HT_UNIT)):
+    from ngsolve import BND, Integrate
+    P = float(Integrate(q, mesh, BND, definedon=mesh.Boundaries("heated")))
+    for sol, quantity, unit, extra in (
+            (qs, ih_thermal.QSURF_QUANTITY, ih_thermal.QSURF_UNIT,
+             {"P_wp_W": P}),
+            (hs, ih_thermal.HT_QUANTITY, ih_thermal.HT_UNIT,
+             {"frequency_Hz": 7000.0})):
         ih_thermal.write_field_sidecar(
             sol, mesh_path=vol, mesh=mesh, fes_order=1, quantity=quantity,
-            unit=unit, boundaries=["heated"],
-            extra={"frequency_Hz": 7000.0})
+            unit=unit, boundaries=["heated"], extra=extra)
     return {"dir": d, "vol": vol, "q": qs, "ht": hs, "mesh": mesh}
 
 
@@ -81,7 +83,8 @@ def _solve(case, table, **kw):
                 _write_solution=False)
     args.update(kw)
     if table:
-        args.update(em_table=table, ht_sol=case["ht"], allow_frozen_ht=True)
+        args.update(em_table=table, ht_sol=case["ht"], allow_frozen_ht=True,
+                    em_reference_temperature=20.0)
     return calc_heat.solve_heat("<plate>", **args)
 
 
@@ -119,7 +122,7 @@ def test_frozen_ht_needs_an_explicit_acknowledgement(case):
         heat_flux_boundaries="heated", qsurf_sol=case["q"],
         em_vol=case["vol"], dt=0.25, t_end=0.25, fes_order=1,
         _wp_mesh=Mesh(case["vol"]), _write_solution=False, em_table=table,
-        ht_sol=case["ht"])
+        ht_sol=case["ht"], em_reference_temperature=20.0)
     assert "--allow-frozen-ht" in result["error"]
     assert "coupled_curie_cylinder_frozen_ht" in result["error"]
 
@@ -167,13 +170,16 @@ def test_axisymmetric_solver_uses_ring_samples(tmp_path):
     qs, hs = str(tmp_path / "q.sol"), str(tmp_path / "Ht.sol")
     q.Save(qs)
     H.Save(hs)
-    for sol, quantity, unit in ((qs, ih_thermal.QSURF_QUANTITY,
-                                 ih_thermal.QSURF_UNIT),
-                                (hs, ih_thermal.HT_QUANTITY,
-                                 ih_thermal.HT_UNIT)):
+    from ngsolve import BND, Integrate
+    P = float(Integrate(q, mesh, BND, definedon=mesh.Boundaries("side")))
+    for sol, quantity, unit, extra in (
+            (qs, ih_thermal.QSURF_QUANTITY, ih_thermal.QSURF_UNIT,
+             {"P_wp_W": P}),
+            (hs, ih_thermal.HT_QUANTITY, ih_thermal.HT_UNIT,
+             {"frequency_Hz": 7000.0})):
         ih_thermal.write_field_sidecar(
             sol, mesh_path=vol, mesh=mesh, fes_order=1, quantity=quantity,
-            unit=unit, boundaries=["side"], extra={"frequency_Hz": 7000.0})
+            unit=unit, boundaries=["side"], extra=extra)
     geo = SplineGeometry()
     geo.AddRectangle((0, 0), (0.02, 0.01), bcs=("bottom", "side", "top",
                                                   "axis"))
@@ -185,7 +191,8 @@ def test_axisymmetric_solver_uses_ring_samples(tmp_path):
                   _write_solution=False)
     fixed = calc_heat_axisym.solve_heat_axisym("<m>", **common)
     coupled = calc_heat_axisym.solve_heat_axisym(
-        "<m>", em_table=table, ht_sol=hs, allow_frozen_ht=True, **common)
+        "<m>", em_table=table, ht_sol=hs, allow_frozen_ht=True,
+        em_reference_temperature=20.0, **common)
     assert "error" not in coupled, coupled
     tds = coupled["qsurf_projection"]["temperature_dependent_source"]
     assert tds["azimuth_samples"] == 64
