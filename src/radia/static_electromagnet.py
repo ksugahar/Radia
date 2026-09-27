@@ -177,8 +177,8 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     nonlinear_progress_callback=None,
     inverse: str = "pardiso",
     bonus_intorder: int = 4,
-    reduced_source_load: str = "volume",
-    total_source_load: str = "volume",
+    reduced_source_load: str = "auto",
+    total_source_load: str = "auto",
     source_representation: str = "exact",
     source_interpolation_order: int = 2,
 ) -> dict[str, object]:
@@ -227,9 +227,19 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     their at-least-order-two projection default.
 
     ``reduced_source_load`` / ``total_source_load`` select how the coil
-    source enters the load: ``"volume"`` (default) integrates ``H_s`` over the
+    source enters the load: ``"volume"`` integrates ``H_s`` over the
     region, ``"surface_flux"`` uses the equal boundary normal-flux form
     (``div H_s = 0``) and evaluates the source on faces only.
+
+    ``"auto"`` (default) chooses ``"surface_flux"`` for B-H iron under
+    ``total_hodge`` with a ``source_trace_tolerance``, and ``"volume"``
+    otherwise.  If the surface Hodge gate then fails (a source that links the
+    iron), the total load falls back to ``"volume"``.  The reason is recorded
+    in ``source_trace["load_selection"]``.  The volume route's lift lies in
+    the response space, which makes it split-invariant: in the iron it is
+    algebraically reduced potential, so it carries the Simkin-Trowbridge
+    cancellation error.  That error is 0.2-0.4 % on the ESRF C-type example
+    at P2.  The gated surface route keeps total Omega in the iron.
     ``total_source_load="surface_flux"`` requires the ``total_hodge``
     contract and ``source_trace_tolerance``, which then also gates the iron
     boundary tangential residual: a linked source that the surface form cannot
@@ -256,8 +266,18 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
 
     for name, value in (("reduced_source_load", reduced_source_load),
                         ("total_source_load", total_source_load)):
-        if value not in SOURCE_LOADS:
-            raise ValueError(f"{name} must be one of {SOURCE_LOADS}; got {value!r}")
+        if value != "auto" and value not in SOURCE_LOADS:
+            raise ValueError(f"{name} must be 'auto' or one of {SOURCE_LOADS}; got {value!r}")
+    # "auto": the gated surface-flux route for B-H iron under total_hodge
+    # (remainder-free, see the docstring), the volume load otherwise.
+    gated_surface = (bh_table is not None and source_potential_contract == "total_hodge"
+                     and source_trace_tolerance is not None and source_representation == "exact")
+    load_selection = {"requested": {"reduced": reduced_source_load, "total": total_source_load}}
+    total_auto = total_source_load == "auto"
+    if reduced_source_load == "auto":
+        reduced_source_load = "surface_flux" if gated_surface else "volume"
+    if total_auto:
+        total_source_load = "surface_flux" if gated_surface else "volume"
     if total_source_load == "surface_flux" and source_potential_contract != "total_hodge":
         raise ValueError("total_source_load='surface_flux' requires source_potential_contract='total_hodge'")
     if source_representation not in ("exact", "nodal"):
@@ -373,16 +393,28 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
             name for name in domain.total_materials
             if name not in domain.kelvin_materials
         )
-        source_hodge = project_source_total_hodge(
-            mesh,
-            total_load_h,
-            total_source_materials,
-            order=int(source_projection_order),
-            bonus_intorder=bonus_intorder,
-            source_load=total_source_load,
-            tangential_tolerance=(source_trace_tolerance
-                                  if total_source_load == "surface_flux" else None),
-        )
+        def hodge(load):
+            return project_source_total_hodge(
+                mesh,
+                total_load_h,
+                total_source_materials,
+                order=int(source_projection_order),
+                bonus_intorder=bonus_intorder,
+                source_load=load,
+                tangential_tolerance=(source_trace_tolerance
+                                      if load == "surface_flux" else None),
+            )
+
+        try:
+            source_hodge = hodge(total_source_load)
+        except RuntimeError as exc:
+            # An auto request falls back only on the gate itself: a source
+            # that links the iron needs the volume harmonic remainder.
+            if not (total_auto and "boundary tangential residual" in str(exc)):
+                raise
+            load_selection["total_fallback"] = str(exc)
+            total_source_load = "volume"
+            source_hodge = hodge(total_source_load)
         # The exact pulled-back exterior source needs no interface trace at
         # all, so the projection is skipped rather than computed and dropped.
         kelvin_trace = (
@@ -535,6 +567,8 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
             **common,
         )
     source_diagnostics["source_representation"] = source_representation
+    source_diagnostics["load_selection"] = {
+        **load_selection, "reduced": reduced_source_load, "total": total_source_load}
     if interpolation:
         source_diagnostics["interpolation"] = interpolation
     trace_gate_applied = source_trace_tolerance is not None and (
