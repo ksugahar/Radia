@@ -63,6 +63,13 @@ def file_sha256(path: str, chunk: int = 1 << 20) -> str:
     return digest.hexdigest()
 
 
+def _h1(mesh, order, definedon=None):
+    from ngsolve import H1
+    if definedon:
+        return H1(mesh, order=int(order), definedon=definedon)
+    return H1(mesh, order=int(order))
+
+
 def sidecar_path(sol_path: str) -> str:
     """Return the sidecar path that belongs to ``sol_path``."""
     return os.fspath(sol_path) + SIDECAR_SUFFIX
@@ -71,7 +78,8 @@ def sidecar_path(sol_path: str) -> str:
 def write_field_sidecar(sol_path: str, *, mesh_path: str, mesh, fes_order: int,
                         quantity: str, unit: str, space: str = "H1",
                         boundaries: Sequence[str] | None = None,
-                        extra: dict | None = None) -> str:
+                        extra: dict | None = None,
+                        definedon: str | None = None) -> str:
     """Write ``<sol_path>.json`` describing a saved H1 GridFunction.
 
     ``mesh`` is the NGSolve mesh the field was saved on and ``mesh_path`` the
@@ -88,7 +96,7 @@ def write_field_sidecar(sol_path: str, *, mesh_path: str, mesh, fes_order: int,
         raise FileNotFoundError(f"field file not found: {sol_path}")
     if not os.path.isfile(mesh_path):
         raise FileNotFoundError(f"mesh file not found: {mesh_path}")
-    ndof = int(H1(mesh, order=int(fes_order)).ndof)
+    ndof = int(_h1(mesh, fes_order, definedon).ndof)
     size = os.path.getsize(sol_path)
     if size != 8 * ndof:
         raise ValueError(
@@ -110,6 +118,7 @@ def write_field_sidecar(sol_path: str, *, mesh_path: str, mesh, fes_order: int,
         "mesh_dim": int(mesh.dim),
         "mesh_curve_order": int(mesh.GetCurveOrder()),
         "boundaries": list(boundaries or []),
+        "definedon": definedon,
     }
     if extra:
         overlap = set(extra) & set(record)
@@ -144,17 +153,16 @@ def verify_field_pair(sol_path: str, mesh_path: str, mesh, fes_order: int,
     DOF count and quantity must all match.  Without one only the byte count
     can be checked, and the audit says so.
     """
-    from ngsolve import H1
-
     sol_path = os.path.abspath(sol_path)
-    ndof = int(H1(mesh, order=int(fes_order)).ndof)
+    record = read_field_sidecar(sol_path)
+    definedon = record.get("definedon") if record else None
+    ndof = int(_h1(mesh, fes_order, definedon).ndof)
     size = os.path.getsize(sol_path)
     if size != 8 * ndof:
         raise ValueError(
             f"{os.path.basename(sol_path)} holds {size} bytes but H1 order "
             f"{fes_order} on {os.path.basename(mesh_path)} has {ndof} DOFs "
             f"({8 * ndof} bytes); the field and mesh do not belong together")
-    record = read_field_sidecar(sol_path)
     if record is None:
         return {"provenance": "size-only", "ndof": ndof,
                 "sidecar": None}
@@ -208,7 +216,8 @@ def load_field(sol_path: str, mesh_path: str | None = None, *,
     mesh = Mesh(mesh_path)
     audit = verify_field_pair(sol_path, mesh_path, mesh, fes_order,
                               quantity=quantity)
-    gf = GridFunction(H1(mesh, order=int(fes_order)))
+    gf = GridFunction(_h1(mesh, fes_order,
+                          record.get("definedon") if record else None))
     gf.Load(os.path.abspath(sol_path))
     audit.update({"mesh_file": os.path.abspath(mesh_path),
                   "fes_order": int(fes_order),
@@ -990,7 +999,8 @@ def scale_field_artifact(sol_path: str, out_path: str, factor: float) -> str:
     extra = {k: v for k, v in record.items() if k not in {
         "schema", "quantity", "unit", "space", "fes_order", "ndof",
         "sol_file", "sol_sha256", "mesh_file", "mesh_sha256", "mesh_nv",
-        "mesh_ne", "mesh_dim", "mesh_curve_order", "boundaries"}}
+        "mesh_ne", "mesh_dim", "mesh_curve_order", "boundaries",
+        "definedon"}}
     if extra.get("P_wp_W") is not None:
         extra["P_wp_W"] = float(extra["P_wp_W"]) * float(factor)
     extra["scaled_from"] = {"sol_file": record["sol_file"],
@@ -1001,7 +1011,8 @@ def scale_field_artifact(sol_path: str, out_path: str, factor: float) -> str:
     return write_field_sidecar(
         out_path, mesh_path=record["mesh_file"], mesh=mesh,
         fes_order=record["fes_order"], quantity=record["quantity"],
-        unit=record["unit"], boundaries=record["boundaries"], extra=extra)
+        unit=record["unit"], boundaries=record["boundaries"], extra=extra,
+        definedon=record.get("definedon"))
 
 # ---------------------------------------------------------------------------
 # Temperature-dependent surface source (local surface-impedance model)
