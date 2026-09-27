@@ -229,10 +229,12 @@ class IHDesignSpec:
     # example the solidus of the alloy), exceeded / excess / volume above.
     exposure_thresholds: str = ""
     temperature_limit: str = ""
-    # Temperature-dependent k, cp (CSV T_C,k_W_mK,cp_J_kgK) and the EM
-    # boundaries that carry q_surf when their names differ from the thermal
-    # heat-flux boundaries.
+    # Temperature-dependent k, cp (CSV T_C,k_W_mK,cp_J_kgK); a step that does
+    # not converge is an error unless max_halvings allows explicit halvings.
     thermal_material_table: str = ""
+    max_halvings: int = 0
+    # EM boundaries that carry q_surf.  Empty uses the boundaries recorded in
+    # the q_surf sidecar; thermal boundary names are never borrowed.
     em_heat_boundaries: str = ""
 
     # Repairs applied by normalize_geometry_roles, newest last.  Kept on
@@ -383,14 +385,18 @@ class IHDesignSpec:
                 "thermal_material", "override_kcprho", "rho", "cp", "k",
                 "h_conv", "t_ext", "emissivity", "t_init", "time_scheme",
                 "dt", "t_end", "linear_solver", "thermal_fes_order",
-                "probe_point", "csv_output",
+                "probe_point", "csv_output", "exposure_thresholds",
+                "temperature_limit", "thermal_material_table",
             })
+            if self.thermal_material_table:
+                fields.add("max_halvings")
             if self.method != METHOD_THERMAL_3D_STATIC:
                 fields.update({"rotation_rpm", "rotation_axis"})
             if self.heat_source == HEAT_SRC_UNIFORM:
                 fields.add("q_uniform")
             else:
-                fields.update({"qsurf_sol", "em_vol", "qsurf_order"})
+                fields.update({"qsurf_sol", "em_vol", "qsurf_order",
+                               "em_heat_boundaries"})
                 if self.method == METHOD_THERMAL_AXISYM:
                     fields.add("n_phi_samples")
                 else:
@@ -831,6 +837,15 @@ class IHDesignSpec:
             cmd += ["--temperature-limit", str(self.temperature_limit).strip()]
         if self.thermal_material_table:
             cmd += ["--material-table", self.thermal_material_table]
+        if isinstance(self.max_halvings, bool) or \
+                int(self.max_halvings) != self.max_halvings or \
+                self.max_halvings < 0:
+            raise ValueError("max_halvings must be a non-negative integer")
+        if self.max_halvings:
+            if not self.thermal_material_table:
+                raise ValueError("max_halvings applies to the nonlinear "
+                                 "(material-table) heat solve only")
+            cmd += ["--max-halvings", str(int(self.max_halvings))]
         probe = self.probe_point.strip()
         if probe:
             cmd += ["--probe-point", probe]
