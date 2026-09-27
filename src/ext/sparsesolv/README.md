@@ -104,7 +104,20 @@ complex HCurl solution against its true residual and a direct solve.
 
 AMS accepts only a lowest-order HCurl space (`order=1, nograds=True`); any
 other space raises `RuntimeError`.  For `order >= 2` use NGSolve's `bddc`
-preconditioner.
+preconditioner.  Its wirebasket (coarse) problem is the lowest-order edge
+block, and importing this module registers AMS for it:
+
+```python
+import radia.sparsesolv_ngsolve as ssn
+pre = Preconditioner(a, "bddc", coarsetype="sparsesolv_ams", coarseflags={"cycles": 4})
+with TaskManager():
+    a.Assemble()          # the wirebasket AMS is built here
+    inv = ssn.COCRSolver(a.mat, pre, freedofs=fes.FreeDofs(), tol=1e-8)
+```
+
+HCurl also puts the face dofs of badly shaped faces into the wirebasket;
+AMS then only smooths them.  Returning them to `COUPLING_TYPE.INTERFACE_DOF`
+before building BDDC is faster (`validation_test/sparsesolv/hiruma/`).
 
 ## Performance
 

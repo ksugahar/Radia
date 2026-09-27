@@ -269,14 +269,22 @@ algorithm limitation: HYPRE supports high-order Nedelec discretizations when
 the caller supplies compatible discrete-gradient and interpolation matrices.
 See https://hypre.readthedocs.io/en/latest/solvers-ams.html#high-order-discretizations .
 
-**Using AMS as the BDDC coarse solver was built and measured — it is a
-TRADE-OFF in the reported configuration.** Substituting AMS in the tested
-coarse-solver construction reportedly gives **memory −63% but solve time +58%**
-at 1.46M dof. A direct factorization amortizes setup across repeated solves;
-an iterative coarse solve can require several cycles on each outer iteration.
-AMS used as a Krylov preconditioner is also applied repeatedly, not just once.
-Coarse-space compatibility must be checked explicitly; a percentage of edge
-DOFs does not establish equivalence to the full lowest-order space.
+**AMS as the BDDC wirebasket (coarse) solver: measured faster at p=2.**
+At order 2 the HCurl wirebasket is the lowest-order edge block, and importing
+sparsesolv registers `coarsetype="sparsesolv_ams"` for NGSolve's BDDC
+(`coarseflags={"cycles": 4}`). On the Hiruma 30 kHz problem (p=2, eps*nu mass
+1e-6, COCR 1e-8, mdx1, 8 threads, 2026-09-27) wall time against the direct
+wirebasket factorization: 680k dof 174 s -> 77 s (11.6 -> 1.3 GB), 865k dof
+268 s -> 151 s (15.8 -> 1.6 GB); at 1.46M dof the direct factorization
+terminated the process (0xC0000409) and AMS solved it in 193 s / 2.6 GB.
+Evidence and the settings that did not help: `validation_test/sparsesolv/hiruma/`.
+It needs more outer iterations (594 vs 217 at 680k), and the coarse AMS runs
+on every outer iteration, not just once, so the gain comes from the removed
+factorization and its triangular solves. Use k>=2 cycles (one
+cycle did not converge), no surrogate shift beyond the system's own mass, and
+return HCurl's badly-shaped-face wirebasket dofs to the interface (AMS only
+smooths them). An earlier, unrecorded 2026-09-08 configuration reported
+memory -63% / time +58%; its script and inputs were not kept.
 
 The tested ICCG coarse configuration reportedly failed to converge in 1000
 iterations. Do not generalize that result to every IC construction. No measured
