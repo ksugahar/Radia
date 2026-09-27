@@ -212,8 +212,11 @@ mesh) AND surface projection via ACIS kernel.
 | Torus tet | 5191t | -2.68e-02% | -2.08e-05% | OK |
 | Mixed (tet+hex+wedge) | 1719 | -2.32e-02% | -8.92e-07% | OK |
 
-**All element types** (tet, hex, wedge) p-converge to machine precision at p=5.
-Hex face bubbles and prism curving both work in 6.2.2603.
+These are volume errors, which hide the odd-order stall: Netgen's own
+fixed-parameter fit gains almost nothing from p=2 to p=3 or from p=4 to
+p=5 in boundary distance. Since 2.1.0 the exporter refits the coefficients
+to the CAD geometry (`netgen_workflow_guide`, "Geometric refit of the curving coefficients"), and
+the snapshot is Netgen 6.2.2607; `.vol` output needs NGSolve 6.2.2605+.
 curvedelements Save/Load roundtrip works out of the box.
 
 ## Multi-Surface Topology Warning

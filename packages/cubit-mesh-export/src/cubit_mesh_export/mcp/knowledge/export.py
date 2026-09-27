@@ -220,9 +220,23 @@ to delegate surface projection to Cubit's ACIS kernel:
 2. Creates 1st order netgen.meshing.Mesh
 3. Registers CallbackGeometry with ACIS surface projection
 4. Calls BuildCurvedElements(order) using the CallbackGeometry
-5. Writes .vol with curvedelements section + companion .vol.json
+5. Refits the edge/face coefficients to the ACIS geometry (since 2.1.0)
+6. Writes .vol with curvedelements section + companion .vol.json
 
 No STEP files, no OCC geometry, no SetGeomInfo needed.
+
+## Refit, compatibility and warnings (2.1.0)
+
+- Step 5 fixes Netgen's odd-order stall; the export log prints the
+  accepted/tried refit counts.  `CUBIT_MESH_EXPORT_GEOMETRIC_REFIT=0` keeps
+  Netgen's coefficients (A/B comparison only).
+- The `.vol` carries `edgesegmentsgi3` and needs NGSolve 6.2.2605 or newer.
+- A warning about curved pyramids means the hex/tet transition interface
+  meets a curved boundary; NGSolve up to 6.2.2607 evaluates those pyramids
+  inconsistently.  See `netgen_workflow_guide` ("Curved pyramids").
+- MCP batch sessions load the plugin installed in Cubit's `plugins`
+  directory; after an upgrade, `cubit-plugin-install` must have run for the
+  new behaviour to appear there.
 
 ## Key Design Decision
 
