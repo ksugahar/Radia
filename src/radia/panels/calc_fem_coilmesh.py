@@ -523,15 +523,12 @@ def solve_fem_coilmesh(vol, frequency, I_target,
             P_total_check = float(
                 Integrate(q_surf_cf, mesh, BND, definedon=wp_region).real)
             q_surf_mean = P_total_check / max(A_wp, 1e-30)
-            # H1 scalar field; non-wp DOFs remain at 0 by .Set's
-            # definedon=wp_region restriction.  Thermal Phase B loads
-            # this same .sol as the Neumann BC source.
-            # fixed P1 cross-mesh handoff (as calc_fem_kelvin): higher-order
-            # H1 coefficients are hierarchical, not vertex values
-            fes_q = H1(mesh, order=1)
-            gf_q = GridFunction(fes_q)
-            gf_q.vec[:] = 0
-            gf_q.Set(q_surf_cf, definedon=wp_region)
+            # P1 cross-mesh handoff by the lumped L2 projection (as
+            # calc_fem_kelvin): power-conserving and non-negative; zero off
+            # the workpiece surface
+            from radia import ih_thermal
+            gf_q, on_wp = ih_thermal.lumped_surface_p1(mesh, q_surf_cf,
+                                                       wp_region)
             qsurf_p1_power = float(
                 Integrate(gf_q, mesh, BND, definedon=wp_region).real)
             p1_error = (qsurf_p1_power - P_total_check) / max(
@@ -541,13 +538,7 @@ def solve_fem_coilmesh(vol, frequency, I_target,
                     f"the P1 q_surf handoff integrates to {qsurf_p1_power:.6e}"
                     f" W but the solved surface loss is {P_total_check:.6e} W "
                     f"({p1_error:+.2%}); refine the workpiece surface mesh")
-            # Stats via mask trick (matches calc_fem_kelvin).
-            mask_gf = GridFunction(fes_q)
-            mask_gf.vec[:] = 0
-            mask_gf.Set(CF(1.0), definedon=wp_region)
-            mask_arr = np.asarray(mask_gf.vec.FV().NumPy())
             q_arr = np.asarray(gf_q.vec.FV().NumPy())
-            on_wp = mask_arr > 0.5
             if np.any(on_wp):
                 vals = q_arr[on_wp]
                 q_surf_max = float(np.max(vals))

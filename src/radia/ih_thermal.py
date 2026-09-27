@@ -1328,6 +1328,34 @@ class RotatingSurfaceSource:
                 "build_s": round(self.build_s, 3)}
 
 
+def lumped_surface_p1(mesh, q_cf, region, *, bonus_intorder=4):
+    """P1 handoff of a surface loss density by the lumped L2 projection.
+
+    ``q_i = int(q phi_i) / int(phi_i)`` over the ``region`` boundary
+    (a ``mesh.Boundaries`` region).  It conserves the integral of ``q``
+    exactly and keeps ``q >= 0``, also where ``q`` is singular at convex
+    edges, where an interpolating ``Set`` overshoots.  Off the region the
+    field is zero.  Returns ``(gf, on_region_mask)``.
+    """
+    from ngsolve import GridFunction, H1, LinearForm, ds
+    fes = H1(mesh, order=1)
+    gf = GridFunction(fes)
+    _, v = fes.TnT()
+    num_lf = LinearForm(fes)
+    num_lf += q_cf * v * ds(definedon=region, bonus_intorder=bonus_intorder)
+    num_lf.Assemble()
+    den_lf = LinearForm(fes)
+    den_lf += v * ds(definedon=region)
+    den_lf.Assemble()
+    num = np.asarray(num_lf.vec.FV().NumPy()).real
+    den = np.asarray(den_lf.vec.FV().NumPy()).real
+    on = den > 0
+    vals = np.zeros_like(den)
+    vals[on] = num[on] / den[on]
+    gf.vec.FV().NumPy()[:] = vals
+    return gf, on
+
+
 def scale_field_artifact(sol_path: str, out_path: str, factor: float) -> str:
     """Write ``factor * field`` with a sidecar recording the scaling.
 

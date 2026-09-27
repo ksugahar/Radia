@@ -63,7 +63,8 @@ def solve_fem(vol_file="", fes_order=1,
               peec_nwinc=1,
               peec_nhinc=1,
               peec_n_peri=0,
-              esim_per_panel=False):
+              esim_per_panel=False,
+              filaments=None):
     """3D FEM-SIBC solver for .vol mesh.
 
     Args:
@@ -88,6 +89,10 @@ def solve_fem(vol_file="", fes_order=1,
         shift_eps: Shifted preconditioner eps (AMS/ICCG, add eps*nu*u*v*dx to prec)
         nthreads: TaskManager thread count (0=auto, 1=single thread)
         msh_output: Optional GMSH .msh output path
+        filaments: ``(paths, currents)`` given directly instead of
+            ``peec_step``: each path a sequence of ``(p1, p2)`` segments [m],
+            each current the complex filament current [A]; all paths carry
+            the same series current, whose magnitude replaces ``I_total``.
 
     Returns:
         dict with P_total, L, Z_s, H_t_rms, etc.
@@ -218,9 +223,16 @@ def solve_fem(vol_file="", fes_order=1,
     if has_wp:
         _log(f"SIBC:boundary={sibc_bnd}, approach={'hole' if is_hole else 'interface'}")
 
-    use_peec = bool(peec_step and os.path.isfile(peec_step))
+    if filaments is not None and peec_step:
+        return {"error": "give the coil either as --peec-step or as "
+                         "filaments, not both"}
+    if peec_step and not os.path.isfile(peec_step):
+        return {"error": f"--peec-step not found: {peec_step}"}
+    use_peec = bool(peec_step) or filaments is not None
 
-    if use_peec:
+    if filaments is not None:
+        _log("SOURCE:filaments given directly")
+    elif use_peec:
         _log(f"SOURCE:PEEC filament from {peec_step}")
     else:
         return {"error":
@@ -382,8 +394,24 @@ def solve_fem(vol_file="", fes_order=1,
         from radia.coil_from_cad import filaments_from_step
         from ngsolve import ElementId
 
-        _log("PEEC:building topology")
-        if peec_n_peri > 0:
+        if filaments is not None:
+            fil_paths, fil_currents = filaments
+            fil_paths = [[(np.asarray(a, float), np.asarray(b, float))
+                          for a, b in path] for path in fil_paths]
+            fil_currents = [complex(c) for c in fil_currents]
+            if len(fil_paths) != len(fil_currents) or not fil_paths:
+                return {"error": "filaments: one current per path is required"}
+            if any(abs(c - fil_currents[0]) > 1e-12 * abs(fil_currents[0])
+                   for c in fil_currents):
+                return {"error": "filaments: the paths must carry one series "
+                                 "current (the inductance is per that current)"}
+            I_total = abs(fil_currents[0])
+            topo = {}
+        else:
+            _log("PEEC:building topology")
+        if filaments is not None:
+            pass
+        elif peec_n_peri > 0:
             # Perimeter-only placement (thin-skin, dispatch path 2b
             # with circle-edge centers).  Use this for 3turn helix
             # / racetrack STEPs where the walker fails on seed plane.
@@ -394,7 +422,10 @@ def solve_fem(vol_file="", fes_order=1,
             topo = filaments_from_step(peec_step, sigma=peec_sigma,
                                         nwinc=peec_nwinc, nhinc=peec_nhinc)
 
-        if "filament_paths" in topo:
+        if filaments is not None:
+            _log(f"PEEC:{len(fil_paths)} given filaments, "
+                 f"{sum(len(p) for p in fil_paths)} segments")
+        elif "filament_paths" in topo:
             fil_paths = topo["filament_paths"]
             n_fil = topo.get("n_loop", len(fil_paths))
             if n_fil == 1:
@@ -448,15 +479,11 @@ def solve_fem(vol_file="", fes_order=1,
                     continue
                 for q in range(n_quad_line):
                     pt = p1a + t01[q] * dl
-                    try:
-                        mp = mesh(*pt)
-                        elnr = mp.nr
-                        if elnr < 0:
-                            raise ValueError("outside mesh")
-                        el = mesh[ElementId(VOL, elnr)]
-                    except Exception:
+                    mp = mesh(*pt)
+                    if mp.nr < 0:
                         n_skip += 1
                         continue
+                    el = mesh[ElementId(VOL, mp.nr)]
                     dofs = fes.GetDofNrs(el)
                     for d in dofs:
                         if d < 0:
@@ -496,12 +523,13 @@ def solve_fem(vol_file="", fes_order=1,
                     f"does NOT require the coil to be inside the "
                     f"workpiece mesh.")
             }
-        if n_quad_total > 0 and n_skip > 0:
-            pct = 100.0 * n_skip / n_quad_total
-            _log(f"PEEC:WARN {pct:.1f}% of quadrature points are "
-                 f"outside the workpiece mesh ({n_skip}/"
-                 f"{n_quad_total}).  The coil may extend beyond the "
-                 f"air region; check .vol geometry.")
+        if n_skip > 0:
+            # a coil partly outside the mesh is a different, weaker source;
+            # it is not solved
+            return {"error": (
+                f"{n_skip}/{n_quad_total} filament quadrature points lie "
+                f"outside the mesh; the coil must lie wholly inside the air "
+                f"region of {os.path.basename(vol_file)}")}
         _log(f"PEEC:line-integral RHS assembled ({t_li:.1f}s, "
              f"{n_skip} skipped)")
         # Mark as total-field (no A_s to add later)
@@ -1047,30 +1075,27 @@ def solve_fem(vol_file="", fes_order=1,
             Integrate(q_surf_cf, mesh, BND, definedon=wp_region).real)
         q_surf_mean = P_total_check / max(A_wp, 1e-30)
 
-        # Project to a global P1 H1 GridFunction for stats + .sol storage.
-        # Set on the workpiece boundary only; the rest of the field is
-        # zero and tells the loader (Phase B thermal) which DOFs are
-        # active.  The handoff is deliberately P1 even when the EM solve is
-        # higher order: Phase B transfers it between nonmatching meshes by
-        # physical surface-vertex sampling, while higher-order NGSolve H1
-        # coefficients are hierarchical and cannot be reconstructed from
-        # vertex samples alone.
+        # P1 handoff on the workpiece surface by the lumped L2 projection
+        # q_i = int(q phi_i) / int(phi_i): it conserves the solved loss
+        # exactly and stays non-negative, also where q is singular at convex
+        # edges (interpolating Set overshoots there).  The field is zero off
+        # the surface.  The handoff is P1 even when the EM solve is higher
+        # order: the thermal side transfers it between nonmatching meshes by
+        # surface-vertex values, and higher-order H1 coefficients are
+        # hierarchical, not vertex values.
         try:
-            fes_q = H1(mesh, order=QSURF_HANDOFF_ORDER)
-            gf_q = GridFunction(fes_q)
-            gf_q.vec[:] = 0
-            gf_q.Set(q_surf_cf, definedon=wp_region)
+            from radia import ih_thermal
+            if QSURF_HANDOFF_ORDER != 1:
+                raise RuntimeError("the q_surf handoff is P1")
+            gf_q, on = ih_thermal.lumped_surface_p1(mesh, q_surf_cf,
+                                                    wp_region)
 
             # Stats on the boundary DOFs.  Workpiece-surface vertices
             # are exactly the H1 DOFs whose value Set populated; we
             # tag them via the scalar 1 mask trick so the stats do not
             # depend on a numerical zero threshold.
-            mask_gf = GridFunction(fes_q)
-            mask_gf.vec[:] = 0
-            mask_gf.Set(CF(1.0), definedon=wp_region)
-            mask_arr = np.asarray(mask_gf.vec.FV().NumPy())
             q_arr = np.asarray(gf_q.vec.FV().NumPy())
-            on_wp = mask_arr > 0.5
+            on_wp = on
             if np.any(on_wp):
                 vals = q_arr[on_wp]
                 q_surf_max = float(np.max(vals))
@@ -1112,38 +1137,31 @@ def solve_fem(vol_file="", fes_order=1,
         # views, so for v1 the time-snapshot is enough.
         gf_J = None
         gf_J_vec = None
-        try:
-            J_mag_cf = sqrt(At_sq) * (omega / abs(Z_s))
-            fes_J = H1(mesh, order=fes_order)
-            gf_J = GridFunction(fes_J)
-            gf_J.vec[:] = 0
-            gf_J.Set(J_mag_cf, definedon=wp_region)
-        except Exception as e:
-            _log(f"J_SURF:scalar gen failed: {type(e).__name__}: {e}")
-        try:
-            from ngsolve import specialcf as _scf
-            n_bnd_v = _scf.normal(3)
-            # Tangential A as complex 3D CF.
-            A_dot_n = sum(A_eval[i] * n_bnd_v[i] for i in range(3))
-            A_t_vec = CF(tuple(
-                A_eval[i] - A_dot_n * n_bnd_v[i] for i in range(3)))
-            # -j*omega/Z_s = -j*omega*conj(Z_s)/|Z_s|^2
-            # Re(-j*omega/Z_s) = -omega*Im(Z_s)/|Z_s|^2
-            # Im(-j*omega/Z_s) = -omega*Re(Z_s)/|Z_s|^2
-            zs_sq = Z_s.real ** 2 + Z_s.imag ** 2
-            re_coef = -omega * Z_s.imag / zs_sq
-            im_coef = -omega * Z_s.real / zs_sq
-            # Re(J_s) = re_coef*Re(A_t) - im_coef*Im(A_t)
-            J_s_re_cf = CF(tuple(
-                re_coef * A_t_vec[i].real - im_coef * A_t_vec[i].imag
-                for i in range(3)))
-            fes_J_vec = H1(mesh, order=fes_order, dim=3)
-            gf_J_vec = GridFunction(fes_J_vec)
-            gf_J_vec.vec[:] = 0
-            gf_J_vec.Set(J_s_re_cf, definedon=wp_region)
-        except Exception as e:
-            _log(f"J_SURF:vector gen failed: {type(e).__name__}: {e}")
-            gf_J_vec = None
+        J_mag_cf = sqrt(At_sq) * (omega / abs(Z_s))
+        fes_J = H1(mesh, order=fes_order)
+        gf_J = GridFunction(fes_J)
+        gf_J.vec[:] = 0
+        gf_J.Set(J_mag_cf, definedon=wp_region)
+        from ngsolve import specialcf as _scf
+        n_bnd_v = _scf.normal(3)
+        # Tangential A as complex 3D CF.
+        A_dot_n = sum(A_eval[i] * n_bnd_v[i] for i in range(3))
+        A_t_vec = CF(tuple(
+            A_eval[i] - A_dot_n * n_bnd_v[i] for i in range(3)))
+        # -j*omega/Z_s = -j*omega*conj(Z_s)/|Z_s|^2
+        # Re(-j*omega/Z_s) = -omega*Im(Z_s)/|Z_s|^2
+        # Im(-j*omega/Z_s) = -omega*Re(Z_s)/|Z_s|^2
+        zs_sq = Z_s.real ** 2 + Z_s.imag ** 2
+        re_coef = -omega * Z_s.imag / zs_sq
+        im_coef = -omega * Z_s.real / zs_sq
+        # Re(J_s) = re_coef*Re(A_t) - im_coef*Im(A_t)
+        J_s_re_cf = CF(tuple(
+            re_coef * A_t_vec[i].real - im_coef * A_t_vec[i].imag
+            for i in range(3)))
+        fes_J_vec = H1(mesh, order=fes_order, dim=3)
+        gf_J_vec = GridFunction(fes_J_vec)
+        gf_J_vec.vec[:] = 0
+        gf_J_vec.Set(J_s_re_cf, definedon=wp_region)
     else:
         gf_q = None
         gf_J = None
@@ -1181,20 +1199,7 @@ def solve_fem(vol_file="", fes_order=1,
                     tuple(curl_A[i].real for i in range(3)))
             fes_B = HDiv(mesh, order=1)
             gf_B = GridFunction(fes_B)
-            try:
-                gf_B.Set(B_cf)
-            except Exception:
-                # Some AC problems resist Set on HDiv — fall back to
-                # vertex-eval + H1 dim=3 GridFunction.
-                fes_B = H1(mesh, order=1, dim=3)
-                gf_B = GridFunction(fes_B)
-                for vi, v in enumerate(mesh.vertices):
-                    pt = mesh(*v.point)
-                    val = B_cf(pt)
-                    if hasattr(val, "__len__"):
-                        for k in range(3):
-                            gf_B.vec.FV()[vi * 3 + k] = float(
-                                getattr(val[k], "real", val[k]))
+            gf_B.Set(B_cf)
             vol_B = os.path.join(base_dir, f"{name_stem}_fem.vol").replace("\\", "/")
             sol_B = os.path.join(base_dir, f"{name_stem}_B.sol").replace("\\", "/")
             save_vol_sol_pair(vol_B, sol_B, mesh.ngmesh, gf_B)
@@ -1246,10 +1251,11 @@ def solve_fem(vol_file="", fes_order=1,
                            "producer": "calc_fem_kelvin"})
                 # P1 |H_t| peak amplitude, q = Re(Z_s)|H_t|^2 / 2, for the
                 # temperature-dependent surface source.
+                # from the saved q at each vertex, so q = Re(Z_s)|H_t|^2/2
+                # holds exactly on the handoff
                 gf_h1 = GridFunction(H1(mesh, order=QSURF_HANDOFF_ORDER))
-                gf_h1.vec[:] = 0
-                gf_h1.Set(sqrt(At_sq) * (omega / abs(Z_s)),
-                          definedon=wp_region)
+                gf_h1.vec.FV().NumPy()[:] = np.sqrt(np.maximum(
+                    2.0 * np.asarray(gf_q.vec.FV().NumPy()) / Z_s.real, 0.0))
                 sol_H = os.path.join(
                     base_dir, f"{name_stem}_Ht.sol").replace("\\", "/")
                 gf_h1.Save(sol_H)
@@ -1399,7 +1405,7 @@ def build_argparser():
                              "cell solve per H1 workpiece-boundary DOF "
                              "using a per-DOF |H_t| extracted from the "
                              "Karl-iter solution.  Resolves spatial "
-                             "saturation pattern; ~N_bnd_dofs × cell-solve "
+                             "saturation pattern; ~N_bnd_dofs x cell-solve "
                              "cost per Karl iter.")
     parser.add_argument("--solver", default="auto",
                         choices=["auto", "pardiso", "bddc", "iccg", "ams"],
