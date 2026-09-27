@@ -416,3 +416,18 @@ def test_coil_yoke_picard_state_roundtrip_is_explicitly_partial(tmp_path, monkey
     with pytest.raises(RuntimeError, match="state contract changed"):
         runner._read_state(path, dict(contract, engine="reduced_a"))
     assert runner._read_state(tmp_path / "missing.json", contract) is None
+
+def test_kelvin_boundary_removes_only_same_region_partition_faces():
+    builder = _coil_yoke_builder_module()
+    class Cubit:
+        def __init__(self): self.commands = []
+        def parse_cubit_list(self, kind, selection): return (1, 2)
+        def get_exodus_entity_name(self, kind, sid):
+            return 'kelvin_ext' if sid == 2 else 'iron_air_interface'
+        def get_sideset_surfaces(self, sid): return (10, 11, 12)
+        def get_relatives(self, kind, sid, target):
+            return {10: (20,), 11: (20, 21), 12: (20, 30)}[sid]
+        def cmd(self, command): self.commands.append(command)
+    cubit = Cubit()
+    assert builder._remove_kelvin_internal_sides(cubit, (20, 21)) == [11]
+    assert cubit.commands == ['sideset 2 remove surface 11']
