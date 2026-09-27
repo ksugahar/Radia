@@ -276,7 +276,9 @@ class _EnergyMaterialQuadrature:
             raise ValueError("vim.Solve: inverse BH needs a positive finite zero-field tangent")
         self.initial_reluctivity = self.mesh.MaterialCF(initial_slopes)
         self.field = self.secant * self.m_field
-        self.tangent = ng.CF(tuple(self.tensor_samples[i] for i in range(9)), dims=(3, 3))
+        # Keep one grid-function evaluation per quadrature point. Extracting
+        # nine components separately evaluates the same tensor nine times.
+        self.tangent = self.tensor_samples.Reshape((3, 3))
 
     def bilinear_integrator(self, form):
         # NGSolve 6.2.2606 tensor IntegrationRuleSpace evaluation needs the
