@@ -23,10 +23,13 @@ data.  Output: results/coupled_curie_cylinder_frozen_ht.json.
 from __future__ import annotations
 
 import argparse
+import datetime
+import hashlib
 import json
 import math
 import os
 import platform
+import subprocess
 import sys
 import time
 
@@ -56,17 +59,31 @@ def em_material():
                              source="illustrative carbon-steel-like")
 
 
-def build_mesh(maxh_skin=6e-5, maxh_wp=1.5e-3, maxh_air=0.01, skin=1.5e-3):
+def build_mesh(maxh_skin=6e-5, maxh_wp=5e-4, maxh_air=0.01, skin=1.5e-3):
+    """Surface layer of thickness ``skin`` on the side wall and both end
+    faces, meshed at ``maxh_skin``.  The coupled solver requires h <= delta
+    within three skin depths of the interface; ``maxh_wp <= skin / 3`` makes
+    the core satisfy that whenever the band reaches it."""
     from netgen.occ import Glue, MoveTo, OCCGeometry, X, Y
     from ngsolve import Mesh
 
-    core = MoveTo(0, -H_WP / 2).Rectangle(R_WP - skin, H_WP).Face()
+    if maxh_wp > skin / 3.0 or maxh_skin > skin:
+        raise ValueError("maxh_wp must be <= skin/3 and maxh_skin <= skin")
+    r_in = R_WP - skin
+    core = MoveTo(0, -H_WP / 2 + skin).Rectangle(r_in, H_WP - 2 * skin).Face()
     core.faces.name = "wp"
     core.edges.Min(X).name = "axis"
     core.maxh = maxh_wp
-    shell = MoveTo(R_WP - skin, -H_WP / 2).Rectangle(skin, H_WP).Face()
+    shell = MoveTo(r_in, -H_WP / 2).Rectangle(skin, H_WP).Face()
     shell.faces.name = "wp"
     shell.maxh = maxh_skin
+    caps = []
+    for z0 in (-H_WP / 2, H_WP / 2 - skin):
+        cap = MoveTo(0, z0).Rectangle(r_in, skin).Face()
+        cap.faces.name = "wp"
+        cap.edges.Min(X).name = "axis"
+        cap.maxh = maxh_skin
+        caps.append(cap)
     coil = MoveTo(COIL_R0, -COIL_H / 2).Rectangle(COIL_R1 - COIL_R0,
                                                    COIL_H).Face()
     coil.faces.name = "coil"
@@ -77,9 +94,54 @@ def build_mesh(maxh_skin=6e-5, maxh_wp=1.5e-3, maxh_air=0.01, skin=1.5e-3):
     air.edges.Min(X).name = "axis"
     air.edges.Max(Y).name = "top"
     air.edges.Min(Y).name = "bot"
-    air = air - core - shell - coil
-    return Mesh(OCCGeometry(Glue([air, core, shell, coil]), dim=2)
+    air = air - core - shell - caps[0] - caps[1] - coil
+    return Mesh(OCCGeometry(Glue([air, core, shell, *caps, coil]), dim=2)
                 .GenerateMesh(maxh=maxh_air))
+
+
+def provenance(argv, source_commit):
+    """Commit, dirty state, and hashes of this script and the modules used.
+
+    In a git checkout the commit is read (and must equal ``source_commit``
+    when that is given).  A copy made with ``git archive`` has no .git and
+    must name its commit with ``--source-commit``; it is clean by
+    construction."""
+    def git(*args):
+        return subprocess.run(["git", *args], cwd=ROOT, capture_output=True,
+                              text=True, check=True).stdout.strip()
+    files = [os.path.abspath(__file__)] + [
+        os.path.join(ROOT, "src", "radia", name) for name in (
+            "ih_axisym_coupled.py", "ih_heat_transient.py",
+            "ih_thermal_material.py", "ih_thermal.py", "em_material.py")] + [
+        os.path.join(ROOT, "src", "radia", "panels", "calc_heat_axisym.py")]
+    hashes = {}
+    for f in files:
+        with open(f, "rb") as fh:
+            hashes[os.path.relpath(f, ROOT).replace("\\", "/")] = \
+                hashlib.sha256(fh.read()).hexdigest()
+    import ngsolve
+    import scipy
+    if os.path.exists(os.path.join(ROOT, ".git")):
+        commit = git("rev-parse", "HEAD")
+        dirty = bool(git("status", "--porcelain", "--", "src",
+                         "validation_test/induction_heating"))
+        if source_commit and source_commit != commit:
+            raise SystemExit(f"--source-commit {source_commit} is not the "
+                             f"checkout's HEAD {commit}")
+        source = "git-checkout"
+    else:
+        if not source_commit:
+            raise SystemExit("this copy has no .git; pass --source-commit "
+                             "(the commit it was archived from)")
+        commit, dirty, source = source_commit, False, "git-archive"
+    return {"commit": commit, "dirty": dirty, "source": source,
+            "sha256": hashes,
+            "command": [os.path.basename(sys.executable), *argv],
+            "utc": datetime.datetime.now(datetime.timezone.utc).isoformat(
+                timespec="seconds"),
+            "host": platform.node(), "python": platform.python_version(),
+            "numpy": np.__version__, "scipy": scipy.__version__,
+            "ngsolve": ngsolve.__version__, "cpu_count": os.cpu_count()}
 
 
 def wall_source(em, zs):
@@ -128,7 +190,11 @@ def route_a(mesh, frequency, current, dt, t_end, em_every):
                 max(abs(h["power_balance_relative_error"])
                     for h in result["em_history"]),
             "skin_depth_final_max_m":
-                result["em_history"][-1]["skin_depth_max_m"]}
+                result["em_history"][-1]["skin_depth_max_m"],
+            "skin_resolution_max_h_over_delta":
+                max(h["skin_resolution_h_over_delta"]
+                    for h in result["em_history"]),
+            "em_solves": len(result["em_history"])}
 
 
 def impedance_table(path, frequency):
@@ -146,7 +212,7 @@ def impedance_table(path, frequency):
                                          "model": "linear planar SIBC"})))
 
 
-def route_b(workdir, zs, q0, h0, frequency, dt, t_end):
+def route_b(workdir, zs, q0, h0, frequency, dt, t_end, P0):
     import calc_heat_axisym
     import ih_thermal
     from netgen.geom2d import SplineGeometry
@@ -172,14 +238,19 @@ def route_b(workdir, zs, q0, h0, frequency, dt, t_end):
     hs = os.path.join(workdir, "q_Ht.sol")
     q.Save(qs)
     h.Save(hs)
-    for sol, quantity, unit in ((qs, ih_thermal.QSURF_QUANTITY,
-                                 ih_thermal.QSURF_UNIT),
-                                (hs, ih_thermal.HT_QUANTITY,
-                                 ih_thermal.HT_UNIT)):
+    from ngsolve import BND, Integrate
+    # the wall source carries the side-wall part of the route A power (the
+    # end faces are not heated in route B)
+    P_side = float(Integrate(q, em, BND, definedon=em.Boundaries("side")))
+    for sol, quantity, unit, extra in (
+            (qs, ih_thermal.QSURF_QUANTITY, ih_thermal.QSURF_UNIT,
+             {"P_wp_W": P_side}),
+            (hs, ih_thermal.HT_QUANTITY, ih_thermal.HT_UNIT,
+             {"frequency_Hz": frequency})):
         ih_thermal.write_field_sidecar(
             sol, mesh_path=vol, mesh=em, fes_order=1, quantity=quantity,
             unit=unit, boundaries=["side"],
-            extra={"frequency_Hz": frequency, "producer": "route A wall"})
+            extra={**extra, "producer": "route A wall"})
     table = os.path.join(workdir, "sibc_table.npz")
     impedance_table(table, frequency)
     geo = SplineGeometry()
@@ -195,6 +266,7 @@ def route_b(workdir, zs, q0, h0, frequency, dt, t_end):
     for label, extra in (("fixed_source", {}),
                          ("frozen_ht_table", {"em_table": table, "ht_sol": hs,
                                               "em_table_azimuths": 8,
+                                              "em_reference_temperature": T0,
                                               "allow_frozen_ht": True})):
         res = calc_heat_axisym.solve_heat_axisym("<meridian>", **common,
                                                  **extra)
@@ -202,7 +274,10 @@ def route_b(workdir, zs, q0, h0, frequency, dt, t_end):
             raise RuntimeError(f"route B {label}: {res['error']}")
         out[label] = {"t_s": res["t_history_s"][1:],
                       "T_max_C": res["T_max_history_C"][1:],
+                      "P_W": res["heat_input_history_W"],
                       "Q_input_J": res["Q_input_J"]}
+    out["wall_power_W"] = P_side
+    out["wall_fraction_of_P0"] = P_side / P0
     return out
 
 
@@ -218,7 +293,10 @@ def main():
         HERE, "results", "coupled_curie_cylinder_frozen_ht.json"))
     ap.add_argument("--work", default=os.path.join(
         os.environ.get("TEMP", "C:\\temp"), "coupled_curie_cylinder"))
+    ap.add_argument("--source-commit", default="",
+                    help="commit a git-archive copy was made from")
     a = ap.parse_args()
+    prov = provenance(sys.argv, a.source_commit)
     os.makedirs(a.work, exist_ok=True)
     mesh = build_mesh()
     ladder = [(float(p.split(":")[0]), int(p.split(":")[1]))
@@ -233,8 +311,7 @@ def main():
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     partial = a.out + ".route_A.json"
     with open(partial, "w", encoding="utf-8") as fh:     # keep A if B fails
-        json.dump({"route_A_ladder": runs, "host": platform.node()}, fh,
-                  indent=1)
+        json.dump({"route_A_ladder": runs, "provenance": prov}, fh, indent=1)
     em = C.AxisymEddyCurrent(mesh, frequency=a.frequency, workpiece="wp",
                              coils={"coil": a.current},
                              dirichlet="axis|outer|top|bot")
@@ -242,9 +319,9 @@ def main():
     rec0 = em.solve(s0, m0)
     zs = np.linspace(-H_WP / 2 * 0.95, H_WP / 2 * 0.95, 41)
     q0, h0 = wall_source(em, zs)
-    rb = route_b(a.work, zs, q0, h0, a.frequency, ladder[0][0], a.t_end)
+    rb = route_b(a.work, zs, q0, h0, a.frequency, ladder[0][0], a.t_end,
+                 rec0["P_joule_W"])
     finest = min(runs, key=lambda r: r["dt_s"] * r["em_every"])
-    import ngsolve
     result = {
         "case": "coaxial coil around a steel-like cylinder through the "
                 "Curie band",
@@ -262,8 +339,9 @@ def main():
         "route_B_surface": rb,
         "wall_source_T0": {"z_m": zs.tolist(), "q_W_m2": q0.tolist(),
                            "Ht_A_m": h0.tolist()},
-        "host": platform.node(), "python": platform.python_version(),
-        "ngsolve": ngsolve.__version__,
+        "mesh": {"vertices": mesh.nv, "elements": mesh.ne,
+                 "workpiece_elements": len(em.workpiece_elements)},
+        "provenance": prov,
     }
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as fh:
@@ -277,7 +355,8 @@ def main():
         print(f"t={t:.1f}s  route A T_max={ref['T_max_C'][iA]:.0f} C "
               f"(P={ref['P_W'][iA]:.0f} W)  fixed q: "
               f"{rb['fixed_source']['T_max_C'][iB]:.0f} C  frozen |H_t|: "
-              f"{rb['frozen_ht_table']['T_max_C'][iB]:.0f} C")
+              f"{rb['frozen_ht_table']['T_max_C'][iB]:.0f} C "
+              f"(P={rb['frozen_ht_table']['P_W'][iB]:.0f} W)")
     print("wrote", a.out)
 
 
