@@ -3,6 +3,7 @@ import ast
 import importlib.util
 import json
 import os
+import re
 import runpy
 import shutil
 import sys
@@ -565,3 +566,19 @@ def test_distribution_metadata_matches_the_only_supported_native_wheel():
     assert project["requires-python"] == ">=3.12,<3.13"
     assert "Programming Language :: Python :: 3.12" in project["classifiers"]
     assert "Operating System :: Microsoft :: Windows" in project["classifiers"]
+
+
+def test_native_module_version_matches_the_distribution():
+    # The .pyd reported 2.0.0 through the 2.0.1 release.  Keeping the literal
+    # in the native source means a version bump changes the recorded source
+    # digest, so the payload cannot ship without a rebuild.
+    package_root = PROJECT_ROOT / "packages" / "cubit-mesh-export"
+    version = tomllib.loads(
+        (package_root / "pyproject.toml").read_text(encoding="utf-8")
+    )["project"]["version"]
+    init = (package_root / "src" / "cubit_mesh_export" / "__init__.py").read_text(
+        encoding="utf-8")
+    pybind = (PROJECT_ROOT / "src" / "cubit_plugin"
+              / "cubit_mesh_export_pybind.cpp").read_text(encoding="utf-8")
+    assert f'__version__ = "{version}"' in init
+    assert re.findall(r'm\.attr\("__version__"\) = "([^"]+)"', pybind) == [version]
