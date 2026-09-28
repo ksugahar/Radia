@@ -3,7 +3,14 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
-## Unreleased
+## 5.0.3 - HDiv validation and solver maintenance
+
+Release candidate; exact native/MEX artifacts and four-machine acceptance
+remain required before publication.
+
+- Conforming HDiv mass-Riesz solves use NGSolve SparseCholesky. Local dense
+  Cholesky blocks remain unchanged. True residuals, cache replacement, batched
+  right-hand sides and non-SPD rejection are protected by numerical CI.
 
 - Arc-current quadrature now has fixed production tolerances (relative
   `1e-9`, absolute scale `1e-12`). The validated far-interval Gauss shortcut
