@@ -24,9 +24,9 @@ def test_matlab_setup_checks_the_native_ngsolve_abi_and_mkl_dispatcher() -> None
     with (ROOT / "pyproject.toml").open("rb") as stream:
         dependencies = tomllib.load(stream)["project"]["dependencies"]
 
-    assert 'value = "6.2.2606";' in expected
-    assert "ngsolve==6.2.2606" in dependencies
-    assert "netgen-mesher==6.2.2606" in dependencies
+    version = re.search(r'value\s*=\s*"([0-9.]+)";', expected).group(1)
+    assert f"ngsolve=={version}" in dependencies
+    assert f"netgen-mesher=={version}" in dependencies
     assert 'setenv("MKL_THREADING_LAYER", "SEQUENTIAL")' in setup
     assert '"mkl_threading_layer_requested"' in setup
     assert '"mkl_threading_layer",' not in setup
