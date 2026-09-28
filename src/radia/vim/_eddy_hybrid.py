@@ -11031,6 +11031,15 @@ class TopologyAwareHybridVIM:
             raise ValueError("rhs was not assembled; pass port_vector_potentials")
         return HCurlEddyCLNFromVIM(self.system, self.rhs)
 
+    def foster_model(self):
+        """Return the Foster modal model for the assembled physical ports."""
+
+        if self.rhs is None:
+            raise ValueError("rhs was not assembled; pass port_vector_potentials")
+        from ._eddy_foster import HCurlEddyFosterModelFromVIM
+
+        return HCurlEddyFosterModelFromVIM(self.system, self.rhs)
+
     def couple_hdiv_mmm(
         self,
         magnetization_basis: SampledMagnetizationBasis,

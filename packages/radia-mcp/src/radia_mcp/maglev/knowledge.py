@@ -528,13 +528,15 @@ CLN-vs-full convergence is convention-independent (golden locks
 `F_z(dZ=0) = -2.1928 N`).  See `radia_mcp.mor` mor_cln (applications) for the
 same example from the CLN-theory side.
 
-**HCurl Eddy Bubble and CLN are a serial two-level ROM.**  HCurl Eddy Bubble
-reduces the high-order spatial current space while preserving face-adjacency
-classes and conductor-cycle bridges.  The resulting passive `R`, `L`, and
-vector-potential port `P` are then the CLN descriptor used for frequency,
-time, and constant-basis movement coupling.  Radia exposes this handoff as
-`radia.vim.HCurlEddyCLNFromVIM`; position interpolation is
-`radia.maglev.MovingHCurlCLNFamily`.
+**HCurl Eddy Bubble and the Foster modal form are a serial two-level ROM.**
+HCurl Eddy Bubble reduces the high-order spatial current space while
+preserving face-adjacency classes and conductor-cycle bridges.  The resulting
+passive `R`, `L`, and vector-potential port `P` are diagonalised by
+`R v = lambda L v`; the Foster modes (real poles `-lambda`) carry frequency,
+time, and fixed-mesh movement coupling.  Radia exposes this handoff as
+`radia.vim.HCurlEddyFosterModelFromVIM`; position interpolation is
+`radia.maglev.MovingHCurlFosterFamily`, which requires one shared `R`/`L`
+pair and interpolates only the port matrix.
 
 The HCurl Eddy Bubble parent-space reduction covers all NGSolve HCurl cell
 families at p=6: 3-D TET, HEX, PRISM/WEDGE, and PYRAMID use face adjacency and
