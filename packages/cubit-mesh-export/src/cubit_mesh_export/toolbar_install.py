@@ -396,15 +396,60 @@ def _verify_existing_toolbar_installations(all_users=False):
     return issues
 
 
+STARTUP_RESOLVER_MARKER = "# cubit-mesh-export: resolve the installed package at startup"
+
+
 def _generate_startup_script(panels_dir, *, all_users=False):
-    """Generate the Cubit-played Python shim outside the package tree."""
+    """Generate the Cubit-played Python shim outside the package tree.
+
+    The shim must not depend on the directory the package was installed
+    from: release checkouts are versioned and removed after an upgrade, and
+    a baked path then breaks every profile's Cubit start with
+    FileNotFoundError.  At each start it asks the recorded interpreter where
+    ``cubit_mesh_export`` is installed now (``find_spec`` does not import the
+    package) and falls back to the install-time path only if that fails.
+    """
     register_path = os.path.join(panels_dir, "register_toolbar.py").replace("\\", "/")
     startup_root = _startup_dir(all_users=all_users)
     os.makedirs(startup_root, exist_ok=True)
     startup_path = os.path.join(startup_root, "startup.py")
 
+    # Cubit plays this file line by line, so every statement is one line;
+    # the resolver is one exec() of a multi-line string.
+    body = (
+        "import subprocess\n"
+        "def _cme_register_path():\n"
+        "    py = os.environ.get('CUBIT_MESH_EXPORT_PYTHON', '')\n"
+        "    probe = ('import importlib.util as u, os; s = u.find_spec(\"cubit_mesh_export\"); '\n"
+        "             'print(os.path.join(os.path.dirname(s.origin), \"cubit_gui\", \"register_toolbar.py\") '\n"
+        "             'if s and s.origin else \"\")')\n"
+        "    try:\n"
+        "        out = subprocess.run([py, '-c', probe], capture_output=True, text=True, timeout=60,\n"
+        "                             creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)).stdout.strip()\n"
+        "    except Exception:\n"
+        "        out = ''\n"
+        "    if out and os.path.isfile(out):\n"
+        "        return out\n"
+        f"    if os.path.isfile(r'{register_path}'):\n"
+        f"        return r'{register_path}'\n"
+        "    return None\n"
+        "_cme_path = _cme_register_path()\n"
+        "if _cme_path is None:\n"
+        "    print('[cubit-mesh-export] toolbar not registered: cubit_mesh_export was not found '\n"
+        "          'through ' + repr(os.environ.get('CUBIT_MESH_EXPORT_PYTHON')) + '; run '\n"
+        "          'cubit-plugin-install --all-users from the Python environment that has it')\n"
+        "else:\n"
+        "    __file__ = _cme_path\n"
+        "    try:\n"
+        "        with open(_cme_path, encoding='utf-8') as _cme_file:\n"
+        "            _cme_source = _cme_file.read()\n"
+        "        exec(compile(_cme_source, _cme_path, 'exec'))\n"
+        "    except Exception:\n"
+        "        import traceback; traceback.print_exc()\n"
+    )
     content = (
         "#!python\n"
+        f"{STARTUP_RESOLVER_MARKER}\n"
         f"import os; os.environ.setdefault('CUBIT_MESH_EXPORT_PYTHON', {sys.executable!r})\n"
         "import sys, os, glob; "
         "_cb = os.path.dirname(os.path.abspath(os.path.join("
@@ -413,12 +458,8 @@ def _generate_startup_script(panels_dir, *, all_users=False):
         "_sp = glob.glob(os.path.join(_cb, \"python*\", \"lib\", "
         "\"site-packages\")) + glob.glob(os.path.join(_cb, \"python*\", "
         "\"lib\", \"python*\", \"site-packages\")); "
-        "sys.path.insert(0, _sp[0]) if _sp and _sp[0] not in sys.path else None; "
-        f"__file__ = r\"{register_path}\"; "
-        "exec(\"try:\\n"
-        f" exec(open(r'{register_path}', encoding='utf-8').read())\\n"
-        "except Exception as e:\\n"
-        " import traceback; traceback.print_exc()\")\n"
+        "sys.path.insert(0, _sp[0]) if _sp and _sp[0] not in sys.path else None\n"
+        f"exec({body!r})\n"
     )
 
     with open(startup_path, "w", encoding="utf-8") as f:

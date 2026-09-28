@@ -163,6 +163,64 @@ def test_panel_startup_shim_is_generated_outside_package(monkeypatch, tmp_path):
     assert str(panels_dir).replace("\\", "/") in text
 
 
+def _play_like_cubit(startup: Path) -> dict:
+    """Run a startup shim the way Cubit plays it: one statement per line."""
+    lines = startup.read_text(encoding="utf-8").splitlines()
+    assert lines[0] == "#!python"
+    namespace = {"__name__": "__cubit_play__"}
+    for line in lines[1:]:
+        if line.strip():
+            exec(compile(line, str(startup), "exec"), namespace)
+    return namespace
+
+
+def _fake_package(root: Path, marker: Path) -> Path:
+    gui = root / "cubit_mesh_export" / "cubit_gui"
+    gui.mkdir(parents=True)
+    (root / "cubit_mesh_export" / "__init__.py").write_text("", encoding="utf-8")
+    register = gui / "register_toolbar.py"
+    register.write_text(
+        f"with open({str(marker)!r}, 'w', encoding='utf-8') as f:\n    f.write(__file__)\n",
+        encoding="utf-8")
+    return register
+
+
+def test_panel_startup_survives_removal_of_the_install_checkout(monkeypatch, tmp_path):
+    # 2026-09-28: every student profile on 100 failed at Cubit start with
+    # FileNotFoundError because the startup shim named a versioned release
+    # checkout that had since been removed.  The shim must find the package
+    # where it is installed now.
+    install_panels = _load_install_panels()
+    monkeypatch.setattr(install_panels.sys, "platform", "win32")
+    _patch_windows_env(monkeypatch, tmp_path)
+    marker = tmp_path / "registered.txt"
+
+    old = _fake_package(tmp_path / "release-2.0.1", marker)
+    startup = Path(install_panels._generate_startup_script(
+        str(old.parent), all_users=True))
+    shutil.rmtree(tmp_path / "release-2.0.1")
+    current = _fake_package(tmp_path / "release-2.1.2", marker)
+
+    monkeypatch.setenv("CUBIT_MESH_EXPORT_PYTHON", sys.executable)
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path / "release-2.1.2"))
+    _play_like_cubit(startup)
+
+    assert Path(marker.read_text(encoding="utf-8")) == current
+
+
+def test_panel_startup_reports_a_missing_package(monkeypatch, tmp_path, capsys):
+    install_panels = _load_install_panels()
+    monkeypatch.setattr(install_panels.sys, "platform", "win32")
+    _patch_windows_env(monkeypatch, tmp_path)
+    startup = Path(install_panels._generate_startup_script(
+        str(tmp_path / "removed" / "cubit_gui"), all_users=True))
+
+    monkeypatch.setenv("CUBIT_MESH_EXPORT_PYTHON", str(tmp_path / "no-python.exe"))
+    _play_like_cubit(startup)
+
+    assert "cubit-plugin-install --all-users" in capsys.readouterr().out
+
+
 def test_install_panels_writes_and_verifies_current_user(monkeypatch, tmp_path):
     install_panels = _load_install_panels()
 
