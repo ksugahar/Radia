@@ -356,10 +356,10 @@ def test_lowest_order_gradient_equals_create_gradient():
         LowestOrderGradient(HCurl(mesh, order=1))
 
 
-def _bddc_order2_solve(coarse, complex_system, face_wirebasket=False, **coarseflags):
+def _bddc_order2_solve(coarse, complex_system, face_wirebasket=False, order=2, **coarseflags):
     import radia.sparsesolv_ngsolve as ssn
     mesh = Mesh(unit_cube.GenerateMesh(maxh=0.2))
-    space = HCurl(mesh, order=2, nograds=True, dirichlet=".*", complex=complex_system)
+    space = HCurl(mesh, order=order, nograds=True, dirichlet=".*", complex=complex_system)
     if face_wirebasket:
         # As HCurl does on badly shaped faces: some face dofs join the wirebasket.
         for dof in range(mesh.nedge, space.ndof, 7):
@@ -400,13 +400,15 @@ def test_bddc_wirebasket_ams_matches_direct_coarse_solve(complex_system, face_wi
     assert diff ** 0.5 < 1e-8 * norm ** 0.5
 
 
-@pytest.mark.parametrize("coarseflags", [{"lean_coarse": 0}, {"cycles": 2}])
+@pytest.mark.parametrize("coarseflags", [{"lean_coarse": 0}, {"cycles": 2}, {"order": 3}])
 def test_bddc_wirebasket_ams_variants_match_direct_coarse_solve(coarseflags):
     # lean_coarse=0 keeps the sparse coarsest factorizations (the default
     # solves small coarsest levels densely). Both stay fixed symmetric operators.
     import radia.sparsesolv_ngsolve as ssn
-    mesh, direct, _ = _bddc_order2_solve("direct", True)
-    _, ams, iterations = _bddc_order2_solve("sparsesolv_ams", True, **coarseflags)
+    coarseflags = dict(coarseflags)
+    order = coarseflags.pop("order", 2)  # order 3: the wirebasket is still the edge block
+    mesh, direct, _ = _bddc_order2_solve("direct", True, order=order)
+    _, ams, iterations = _bddc_order2_solve("sparsesolv_ams", True, order=order, **coarseflags)
     assert iterations > 0
     levels = _bddc_order2_solve.stats["amg_levels"]
     coarsest = {name: rows[-1][3] for name, rows in levels.items()}
