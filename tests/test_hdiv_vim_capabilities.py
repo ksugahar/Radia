@@ -19,6 +19,13 @@ def test_capability_table_is_dimension_and_topology_explicit():
     assert table[(3, "tet", 2)] == ((1, 2), 2)
     assert table[(3, "hex", 2)] == ((1, 2), 2)
     assert table[(3, "wedge", 2)] == ((1, 2), 2)
+    # Broken RT0 builds the topology operator but is not a solve order.
+    solve_orders = {
+        (c.dimension, c.topology, c.hdiv_order): c.production_solve
+        for c in hdiv_capabilities()}
+    assert solve_orders[(3, "tet", 0)] is False
+    assert solve_orders[(3, "hex", 0)] is False
+    assert all(value for key, value in solve_orders.items() if key[2] > 0)
 
 
 def test_configuration_validation_has_no_global_p_plus_one_rule():

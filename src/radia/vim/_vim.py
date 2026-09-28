@@ -63,7 +63,14 @@ def _volume_vertex_counts(mesh):
 
 
 def _curve_mesh(mesh, order):
-    """Apply Curve after satisfying NGSolve 6.2.2606 edge descriptors."""
+    """Apply Curve after satisfying NGSolve 6.2.2606 edge descriptors.
+
+    A mesh already curved to ``order`` or higher is left alone: a loaded
+    high-order ``.vol`` has no CAD callback, so a second ``Curve`` would
+    replace its stored geometry instead of refining it.
+    """
+    if int(mesh.GetCurveOrder()) >= int(order):
+        return
     ngmesh = mesh.ngmesh
     if not ngmesh.EdgeDescriptors():
         if ngmesh.dim == 2:
@@ -519,12 +526,23 @@ def _broken_tet_face_charge_basis(fes, p):
     jump_moments = _csr(jump)
 
     # Physical monomial moments are assembled by NGSolve.  Restricting these
-    # global polynomials to one affine triangle and changing to the C++ local
+    # polynomials to one affine triangle and changing to the C++ local
     # (xi,eta) monomials is geometry algebra, not an FE-basis reimplementation.
+    # The monomials are centred on each facet: global x**i on a facet far
+    # from the origin makes the change of basis cancel (|x|/size)**p.
+    facets = list(mesh.facets)
+    centre_space = ng.FacetFESpace(mesh, order=0)
+    centres = [ng.GridFunction(centre_space) for _ in range(3)]
+    for facet in facets:
+        dofs = centre_space.GetDofNrs(facet)
+        centre = np.mean([mesh[v].point for v in facet.vertices], axis=0)
+        for axis in range(3):
+            centres[axis].vec[dofs[0]] = float(centre[axis])
     xyz_mons = _monos_vol(int(p))
     moment_vectors = []
     for i, j, k in xyz_mons:
-        physical_monomial = ng.x ** i * ng.y ** j * ng.z ** k
+        physical_monomial = ((ng.x - centres[0]) ** i * (ng.y - centres[1]) ** j
+                             * (ng.z - centres[2]) ** k)
         linear = ng.LinearForm(facet_space)
         linear += physical_monomial * q * ng.dx(
             element_boundary=True, bonus_intorder=moment_bonus)
@@ -537,7 +555,6 @@ def _broken_tet_face_charge_basis(fes, p):
         for facet in el.facets:
             owner_count[int(facet.nr)] += 1
 
-    facets = list(mesh.facets)
     mons = _monos_surf(int(p))
     ref_points, _ = _tri_ref(max(int(p) + 1, 2))
     Q = np.asarray([[x ** i * y ** j for i, j in mons]
@@ -569,7 +586,7 @@ def _broken_tet_face_charge_basis(fes, p):
         # desired jump.
         D = np.column_stack([values[dofs] / owners
                              for values in moment_vectors])
-        physical_points = (vertices[0][None, :]
+        physical_points = (vertices[0][None, :] - vertices.mean(axis=0)[None, :]
                            + ref_points[:, 0, None]
                            * (vertices[1] - vertices[0])[None, :]
                            + ref_points[:, 1, None]

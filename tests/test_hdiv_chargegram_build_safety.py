@@ -75,9 +75,11 @@ def test_antisymmetric_fixed_plane_negative_roundoff_remains_buildable():
     # The exact folded self-energy is zero, but floating-point evaluation may
     # approach zero from either side. Keep a fixture that lands on the negative
     # side so the image-cancellation guard cannot regress to d == 0 or d >= 0.
+    # The sign is a last-ulp accident of the build; this face lands at -2.8e-17
+    # and -5.6e-17 on the two measured builds.
     on_plane = np.array(
-        [[0.0, -0.7053, 0.9186], [0.0, -0.4457, -0.1660],
-         [0.0, 0.9758, -0.6317]],
+        [[0.0, 0.3853, -0.6530], [0.0, -0.7347, -0.9476],
+         [0.0, 0.6928, 0.7855]],
         dtype=np.float64,
     )
     off_plane = np.array(

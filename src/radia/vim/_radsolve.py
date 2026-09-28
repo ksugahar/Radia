@@ -118,6 +118,14 @@ def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, ve
     if (mu_r is None) == (bh_table is None):
         raise ValueError("vim.MeshSoftIron: give exactly one of mu_r (linear) or bh_table (nonlinear)")
     vertices = _mesh_element_vertices(mesh, material_filter=material_filter)
+    # rad.Solve dispatches vim.Solve on the whole registered mesh, so a filter
+    # that drops elements could never be solved (and would fail only at
+    # rad.Solve with an element-count mismatch).  Reject it here.
+    if material_filter is not None and len(vertices) != int(mesh.ne):
+        raise NotImplementedError(
+            "vim.MeshSoftIron: material_filter selected %d of %d volume elements; the HDiv "
+            "solve uses the whole mesh, so give the iron region its own mesh"
+            % (len(vertices), int(mesh.ne)))
     order = int(order)
     from ._capabilities import validate_hdiv_configuration
     validate_hdiv_configuration(

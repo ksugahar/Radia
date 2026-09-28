@@ -27,18 +27,27 @@ class HDivFieldEvaluator {
 public:
     enum class Algorithm { Auto, Direct, Tree };
 
+    // Polynomial sources (this and the factories below) may carry one
+    // expansion origin per volume/surface record, 3 values each.  Their
+    // coefficients are then monomials of (x - origin): expanding a cell's
+    // density about a distant global origin cancels (|origin|/size)^degree.
+    // Empty origin vectors keep global-coordinate coefficients.
     static std::shared_ptr<HDivFieldEvaluator> FromTet(
         std::vector<double> volume,
         std::vector<double> surface,
         std::vector<int> image_masks,
         std::vector<double> image_signs,
-        const FieldEvaluatorOptions& options = {});
+        const FieldEvaluatorOptions& options = {},
+        std::vector<double> volume_origins = {},
+        std::vector<double> surface_origins = {});
     static std::shared_ptr<HDivFieldEvaluator> FromPolynomialTet(
         std::vector<double> volume,
         std::vector<double> surface,
         std::vector<int> image_masks,
         std::vector<double> image_signs,
-        const FieldEvaluatorOptions& options = {});
+        const FieldEvaluatorOptions& options = {},
+        std::vector<double> volume_origins = {},
+        std::vector<double> surface_origins = {});
     // Affine BDM3 path. Both volume and surface densities are retained as
     // total-degree <= 3 physical polynomials. The BDM3 volume charge only
     // reaches degree two, but sharing the 20-coefficient record keeps one
@@ -50,7 +59,9 @@ public:
         std::vector<double> surface,
         std::vector<int> image_masks,
         std::vector<double> image_signs,
-        const FieldEvaluatorOptions& options = {});
+        const FieldEvaluatorOptions& options = {},
+        std::vector<double> volume_origins = {},
+        std::vector<double> surface_origins = {});
     // Affine HEX BDM2 path after the canonical 6-TET / 2-TRI split.
     // volume: [12 vertex coordinates, 84 total-degree <= 6 coefficients]
     // surface: [9 vertex coordinates, 35 total-degree <= 4 coefficients]
@@ -59,7 +70,9 @@ public:
         std::vector<double> surface,
         std::vector<int> image_masks,
         std::vector<double> image_signs,
-        const FieldEvaluatorOptions& options = {});
+        const FieldEvaluatorOptions& options = {},
+        std::vector<double> volume_origins = {},
+        std::vector<double> surface_origins = {});
 
     static std::shared_ptr<HDivFieldEvaluator> FromCloud(
         std::vector<double> xyz,

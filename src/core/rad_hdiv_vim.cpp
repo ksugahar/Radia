@@ -106,6 +106,171 @@ static inline void   v3cross(const double a[3], const double b[3], double o[3])
 { o[0]=a[1]*b[2]-a[2]*b[1]; o[1]=a[2]*b[0]-a[0]*b[2]; o[2]=a[0]*b[1]-a[1]*b[0]; }
 static inline double v3nrm(const double a[3]) { return std::sqrt(v3dot(a,a)); }
 
+// ---- well-separated targets: source quadrature instead of the closed forms ----
+// The closed-form polynomial field kernels below recur in the target frame
+// (upward edge recurrence in d^2, in-plane recurrence in h^2, binomial
+// re-expansion about the edge foot point).  Each step cancels terms that grow
+// like (distance/size)^2, so a degree-six HEX BDM2 source loses all digits
+// thirty cell sizes away.  There the integrand is smooth, and a collapsed
+// Gauss-Legendre rule sized by the Bernstein-ellipse rate of the nearest
+// kernel singularity is accurate to rounding.
+namespace {
+
+constexpr int FAR_MAX_NODES = 24;
+// Targets closer than this multiple of the source circumradius keep the
+// closed forms, which are accurate to about 1e-11 there.
+constexpr double FAR_RATIO = 2.0;
+// Half of ln(1e14): ellipse^(-2n) <= 1e-14.  A 1e-16 target measured the
+// same field error, which the charge-neutral cancellation bounds instead.
+constexpr double FAR_DIGITS = 16.1;
+
+struct GaussLegendreTable {
+    double x[FAR_MAX_NODES + 1][FAR_MAX_NODES];
+    double w[FAR_MAX_NODES + 1][FAR_MAX_NODES];
+    GaussLegendreTable() {
+        for (int n = 1; n <= FAR_MAX_NODES; ++n) {
+            for (int i = 0; i < n; ++i) {
+                double t = std::cos(PI*(i + 0.75)/(n + 0.5));
+                double derivative = 1.0;
+                for (int iteration = 0; iteration < 100; ++iteration) {
+                    double p0 = 1.0, p1 = t;
+                    for (int k = 2; k <= n; ++k) {
+                        const double p2 = ((2.0*k - 1.0)*t*p1 - (k - 1.0)*p0)/k;
+                        p0 = p1; p1 = p2;
+                    }
+                    derivative = n*(t*p1 - p0)/(t*t - 1.0);
+                    const double step = p1/derivative;
+                    t -= step;
+                    if (std::fabs(step) < 1e-16) break;
+                }
+                // Map [-1,1] to [0,1]: halve the weight.
+                x[n][i] = 0.5*(1.0 - t);
+                w[n][i] = 1.0/((1.0 - t*t)*derivative*derivative);
+            }
+        }
+    }
+};
+
+const GaussLegendreTable& FarGauss()
+{
+    static const GaussLegendreTable table;
+    return table;
+}
+
+// Ratio of target distance to source circumradius, both from the centroid.
+double FarRatio(const double (*V)[3], int N, const double r[3])
+{
+    double center[3] = {0.0, 0.0, 0.0};
+    for (int i = 0; i < N; ++i)
+        for (int k = 0; k < 3; ++k) center[k] += V[i][k]/N;
+    double radius2 = 0.0;
+    for (int i = 0; i < N; ++i) {
+        double d2 = 0.0;
+        for (int k = 0; k < 3; ++k) d2 += (V[i][k] - center[k])*(V[i][k] - center[k]);
+        radius2 = std::max(radius2, d2);
+    }
+    double distance2 = 0.0;
+    for (int k = 0; k < 3; ++k) distance2 += (r[k] - center[k])*(r[k] - center[k]);
+    if (!(radius2 > 0.0)) return 0.0;
+    return std::sqrt(distance2/radius2);
+}
+
+// Gauss points per collapsed direction for a total-degree `degree` density,
+// or 0 to keep the closed form.  The integrand is analytic inside the
+// Bernstein ellipse through the kernel singularity, so the error falls like
+// ellipse^(-2n); the extra points integrate the density and collapse factors.
+int FarNodes(double ratio, int degree)
+{
+    if (!(ratio >= FAR_RATIO)) return 0;
+    const double ellipse = ratio + std::sqrt(ratio*ratio - 1.0);
+    const int kernel = static_cast<int>(std::ceil(FAR_DIGITS/std::log(ellipse)));
+    // A Gauss rule of n points integrates degree 2n-1 exactly.  The density
+    // times the collapse factors has degree `degree + 2` in the first
+    // collapsed direction, so only the remaining 2n - degree - 2 orders of the
+    // kernel's Taylor series converge; they must also beat the cancellation
+    // between monomial fields that sum to a charge-neutral element.
+    const int n = kernel + (degree + 3)/2;
+    return std::min(n, FAR_MAX_NODES);
+}
+
+// Monomials x^alpha through `degree` in PotentialMomentIndex order.
+int FarMonomials(const double x[3], int degree, double* monomial)
+{
+    double px[7], py[7], pz[7];
+    px[0] = py[0] = pz[0] = 1.0;
+    for (int p = 1; p <= degree; ++p) {
+        px[p] = px[p-1]*x[0]; py[p] = py[p-1]*x[1]; pz[p] = pz[p-1]*x[2];
+    }
+    int index = 0;
+    for (int total = 0; total <= degree; ++total)
+        for (int ax = 0; ax <= total; ++ax)
+            for (int ay = 0; ay <= total-ax; ++ay)
+                monomial[index++] = px[ax]*py[ay]*pz[total-ax-ay];
+    return index;
+}
+
+// Field of every physical monomial through `degree` (PotentialMomentIndex
+// order) from a flat tetrahedron: out[i] += INT_T x^alpha_i (r-x)/|r-x|^3.
+void TetFarMonomialFields(const double V[4][3], const double r[3], int degree,
+                          int n, double (*out)[3])
+{
+    const auto& gauss = FarGauss();
+    const double e1[3] = {V[1][0]-V[0][0], V[1][1]-V[0][1], V[1][2]-V[0][2]};
+    const double e2[3] = {V[2][0]-V[0][0], V[2][1]-V[0][1], V[2][2]-V[0][2]};
+    const double e3[3] = {V[3][0]-V[0][0], V[3][1]-V[0][1], V[3][2]-V[0][2]};
+    double c23[3]; v3cross(e2, e3, c23);
+    const double jacobian = std::fabs(v3dot(e1, c23));
+    double monomial[84];
+    for (int iu = 0; iu < n; ++iu)
+        for (int iv = 0; iv < n; ++iv)
+            for (int iw = 0; iw < n; ++iw) {
+                const double u = gauss.x[n][iu], v = gauss.x[n][iv], w = gauss.x[n][iw];
+                const double l1 = u, l2 = (1.0-u)*v, l3 = (1.0-u)*(1.0-v)*w;
+                double x[3];
+                for (int k = 0; k < 3; ++k)
+                    x[k] = V[0][k] + l1*e1[k] + l2*e2[k] + l3*e3[k];
+                const double d[3] = {r[0]-x[0], r[1]-x[1], r[2]-x[2]};
+                const double d2 = v3dot(d, d);
+                const double weight = gauss.w[n][iu]*gauss.w[n][iv]*gauss.w[n][iw]
+                    *jacobian*(1.0-u)*(1.0-u)*(1.0-v)/(d2*std::sqrt(d2));
+                const int count = FarMonomials(x, degree, monomial);
+                for (int i = 0; i < count; ++i) {
+                    const double scale = weight*monomial[i];
+                    for (int k = 0; k < 3; ++k) out[i][k] += scale*d[k];
+                }
+            }
+}
+
+// Triangle analogue: out[i] += INT_T x^alpha_i (r-x)/|r-x|^3 dS.
+void TriFarMonomialFields(const double V[3][3], const double r[3], int degree,
+                          int n, double (*out)[3])
+{
+    const auto& gauss = FarGauss();
+    const double e1[3] = {V[1][0]-V[0][0], V[1][1]-V[0][1], V[1][2]-V[0][2]};
+    const double e2[3] = {V[2][0]-V[0][0], V[2][1]-V[0][1], V[2][2]-V[0][2]};
+    double normal[3]; v3cross(e1, e2, normal);
+    const double jacobian = v3nrm(normal);
+    double monomial[84];
+    for (int iu = 0; iu < n; ++iu)
+        for (int iv = 0; iv < n; ++iv) {
+            const double u = gauss.x[n][iu], v = gauss.x[n][iv];
+            const double l1 = u, l2 = (1.0-u)*v;
+            double x[3];
+            for (int k = 0; k < 3; ++k) x[k] = V[0][k] + l1*e1[k] + l2*e2[k];
+            const double d[3] = {r[0]-x[0], r[1]-x[1], r[2]-x[2]};
+            const double d2 = v3dot(d, d);
+            const double weight = gauss.w[n][iu]*gauss.w[n][iv]
+                *jacobian*(1.0-u)/(d2*std::sqrt(d2));
+            const int count = FarMonomials(x, degree, monomial);
+            for (int i = 0; i < count; ++i) {
+                const double scale = weight*monomial[i];
+                for (int k = 0; k < 3; ++k) out[i][k] += scale*d[k];
+            }
+        }
+}
+
+} // namespace
+
 // Exact INT_T 1/|r-r'| dA' over a flat triangle (V0,V1,V2) at obs r -- the Wilton/Graglia analytic
 // triangle potential (Wilton-Rao-Glisson, IEEE TAP 32(3):276, 1984).  Pure 1/r integral (NO 1/4pi).
 // Port of examples reference radia.vim._core.tri_potential (scalar form); same edge formula as
@@ -1480,6 +1645,13 @@ void TetVolFieldCubic(const double V[4][3], const double r[3],
                       const double coefficient[20], double out[3])
 {
     out[0]=out[1]=out[2]=0.0;
+    if(const int n=FarNodes(FarRatio(V,4,r),3)){
+        double basis[20][3]={};
+        TetFarMonomialFields(V,r,3,n,basis);
+        for(int index=0;index<20;++index)
+            for(int k=0;k<3;++k)out[k]+=coefficient[index]*basis[index][k];
+        return;
+    }
     double cen[3]={0,0,0};
     for(int i=0;i<4;++i)for(int k=0;k<3;++k)cen[k]+=0.25*V[i][k];
     static const int FACES[4][3]={{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
@@ -1526,6 +1698,10 @@ void TetVolFieldCubicBasis(const double V[4][3], const double r[3],
 {
     for(int index=0;index<20;++index)
         for(int k=0;k<3;++k)out[index][k]=0.0;
+    if(const int n=FarNodes(FarRatio(V,4,r),3)){
+        TetFarMonomialFields(V,r,3,n,out);
+        return;
+    }
     double cen[3]={0,0,0};
     for(int i=0;i<4;++i)for(int k=0;k<3;++k)cen[k]+=0.25*V[i][k];
     static const int FACES[4][3]={{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
@@ -1570,6 +1746,10 @@ void TetVolFieldBasisUpTo6(const double V[4][3], const double r[3],
 {
     for(int index=0;index<84;++index)
         for(int k=0;k<3;++k)out[index][k]=0.0;
+    if(const int n=FarNodes(FarRatio(V,4,r),6)){
+        TetFarMonomialFields(V,r,6,n,out);
+        return;
+    }
     double cen[3]={0,0,0};
     for(int i=0;i<4;++i)for(int k=0;k<3;++k)cen[k]+=0.25*V[i][k];
     static const int FACES[4][3]={{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
@@ -1758,6 +1938,15 @@ void QuadTriField(const double V[3][3], const double r[3], double sigma0,
 void CubicTriField(const double V[3][3], const double r[3],
                    const double coefficient[20], double out[3])
 {
+    if(const int n=FarNodes(FarRatio(V,3,r),3)){
+        double basis[20][3]={};
+        TriFarMonomialFields(V,r,3,n,basis);
+        for(int k=0;k<3;++k){
+            out[k]=0.0;
+            for(int index=0;index<20;++index)out[k]+=coefficient[index]*basis[index][k];
+        }
+        return;
+    }
     const double zero_vertices[3][3] = {};
     for(int axis=0;axis<3;++axis){
         double direction_vector[3] = {};
@@ -1777,6 +1966,12 @@ void CubicTriField(const double V[3][3], const double r[3],
 void TriFieldBasisUpTo4(const double V[3][3], const double r[3],
                         double out[35][3])
 {
+    if(const int n=FarNodes(FarRatio(V,3,r),4)){
+        for(int index=0;index<35;++index)
+            for(int k=0;k<3;++k)out[index][k]=0.0;
+        TriFarMonomialFields(V,r,4,n,out);
+        return;
+    }
     const double zero_vertices[3][3]={};
     for(int axis=0;axis<3;++axis){
         double direction_vector[3]={};direction_vector[axis]=1.0;
@@ -1792,6 +1987,10 @@ void QuadTriFieldBasis(const double V[3][3], const double r[3],
 {
     for(int index=0;index<10;++index)
         for(int k=0;k<3;++k)out[index][k]=0.0;
+    if(const int nodes=FarNodes(FarRatio(V,3,r),2)){
+        TriFarMonomialFields(V,r,2,nodes,out);
+        return;
+    }
     double e1u[3],e2u[3],n[3];
     for (int k=0;k<3;k++){ e1u[k]=V[1][k]-V[0][k]; e2u[k]=V[2][k]-V[0][k]; }
     v3cross(e1u,e2u,n); double nl=v3nrm(n);

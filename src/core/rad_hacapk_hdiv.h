@@ -587,6 +587,14 @@ public:
     std::vector<double> ApplyConfiguredLinearMaterialOperatorMany(
         double inv_chi, const std::vector<double>& x, int nrhs,
         bool respect_constraints = true);
+    // Throw unless every row of the constrained solve A x = b meets
+    // ||b - A x|| <= max(5 tol, 1e-12) ||b||.  The batched multi-RHS solver
+    // reports per-row iteration counts, not convergence, so callers that
+    // consume its solutions internally must check them here.
+    void CheckConfiguredSolveResiduals(
+        double inv_chi, const std::vector<double>& rhs,
+        const std::vector<double>& solutions, int nrhs, double tol,
+        const char* where);
     // Exact row-major element-local blocks of A=inv_chi*M+B^T*G*B for a
     // packed candidate-DOF list.  block_offsets partitions candidate_dofs;
     // the returned values concatenate square blocks in that order.  Only the
@@ -714,27 +722,6 @@ public:
     std::shared_ptr<rad_planar_charges::PlanarFieldEvaluator> CreateConfiguredPlanarFieldEvaluator(
         const std::vector<double>& magnetization) const;
     std::vector<std::pair<std::string, double>> LastSolveTimings() const;
-
-    // M3 (the NONLINEAR solve in C++): scalar-chi Picard for the isotropic nonlinear demag.
-    // Each Picard step is a mass-Riesz SolveLinearMaterial solve of
-    // ((1/chi) M_mass + B^T G B) m = H0*(M_mass mu),
-    // then chi <- 0.5 chi + 0.5*chi_sec(|H|) with the closed-form saturating curve
-    //   M(H) = chi0 H / (1 + chi0 |H|/Msat)   ->   chi_sec(|H|) = chi0/(1 + chi0|H|/Msat),
-    // and the scalar self-consistent field H = H0 - Dscal*M_avg, Dscal = mu.(B^T G B mu)/denom,
-    // M_avg = mu.(M_mass m)/denom.  Converges to the scalar fixed point M_avg = M(H0 - Dscal*M_avg)
-    // -- the full nonlinear physics for an isotropic body, with NO NGSolve per iteration (the
-    // per-element tensor-tangent refinement for non-uniform M stays NGSolve).  All sparse inputs as in
-    // SolveLinearMaterial; Mmass_diag + N_diag are retained for API compatibility / diagnostics, but the
-    // active preconditioner is the exact mass-Riesz map, matching the production tet Picard path.
-    struct PicardResult { std::vector<double> m; double Mavg; double chi; double Dscal; int iters; };
-    PicardResult SolveNonlinearPicard(
-        const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
-        const std::vector<double>& B_data, int n_face,
-        const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
-        const std::vector<double>& Mmass_diag, const std::vector<double>& N_diag,
-        const std::vector<double>& mu, double denom,
-        double chi0, double Msat, double H0,
-        int picard_iters, double cg_tol, int cg_maxit);
 
 protected:
     void OnBuildStarting(const RadHACApKParams& params) override;
@@ -976,9 +963,13 @@ private:
     std::vector<unsigned char> m_hexAffineCell;              // [n_el] true when the Q2 lattice is affine
     int m_hexAffineOrder = 1, m_hexAffineMonoCount = 8, m_hexAffinePolyCount = 20;
     std::vector<double> m_hexAffineCoeff;                    // [n_el*mono*moment], BDM1 8x20; BDM2 27x84
+    // Affine coefficients are monomials of (x - center); the analytic moments
+    // see the source and target translated by the same center.
+    std::vector<double> m_hexAffineCenter;                   // [n_el*3] Q2 map of the reference cell center
     std::vector<unsigned char> m_quadAffineFace;             // [n_bf] true when the Q2 face lattice is affine
     int m_quadAffineMonoCount = 4, m_quadAffinePolyCount = 10;
     std::vector<double> m_quadAffineCoeff;                   // [n_bf*mono*moment], BDM1 4x10; BDM2 9x35
+    std::vector<double> m_quadAffineCenter;                  // [n_bf*3] Q2 map of the reference face center
     bool m_hexUniformAffineCells = false;                    // same affine cell map for every cell -> translation block cache
     std::vector<int> m_hexCellLattice;                       // [n_el*3] integer lattice coordinate for uniform affine cells
     bool m_hexUniformTransHosts = false;                      // cell/face hosts are translated template copies
@@ -1446,6 +1437,9 @@ private:
     std::vector<std::vector<double>>          m_srcval_lo; // [n] PRECOMPUTED m_src(y_q) at the FIXED m_inP_lo points (for QuadDotFar)
     double EvalMono(int charge, const double p[3]) const;   // charge's monomial at physical p (host ref-coord map)
     void InitHOPolynomialCoefficients();                    // flat order<=2 reference monomials -> physical A/B/C
+    // Vertex centroid of a flat TET cell (kind 0) or face host; A/B/C are
+    // polynomials of x minus this point.
+    void HOHostCentroid(int kind, int host, double center[3]) const;
     void PhiInnerHOHostVec(int kind, int host, const double p[3],
                            const std::vector<int>& charges, double* values) const;
     void PhiInnerHOCurvedHostVec(int kind, int host, const double p[3],
