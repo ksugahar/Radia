@@ -480,8 +480,8 @@ def test_distribution_ci_packages_the_exact_candidate_binaries():
     assert any(required_test_dependencies <= set(args) for args in install_commands)
     assert "_native_provenance.py" in workflow
     assert "verify --repo-root . --package-dir $destination" in workflow
-    assert '"netgen-mesher==6.2.2606"' in workflow
-    assert '"ngsolve==6.2.2606"' in workflow
+    assert '"netgen-mesher==6.2.2607"' in workflow
+    assert '"ngsolve==6.2.2607"' in workflow
     assert "cubit_mesh_export/cubit_mesh_export.ccm" in workflow
     assert "cubit_mesh_export/cubit_mesh_curver.pyd" in workflow
     assert "tests\\test_cubit_menu_startup.py" in workflow
