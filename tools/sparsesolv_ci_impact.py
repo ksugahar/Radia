@@ -17,7 +17,6 @@ NATIVE_PATHS = (
     'src/core/rad_arc_current.cpp',
     'src/core/rad_ngsolve_radia_field.h',
     'src/core/rad_parallel.h',
-    'tests/test_arc_field_tolerance.py',
     'tests/test_arc_far_rule.py',
     'tests/test_radiafield_cache_parallel.py',
     'tests/test_radiafield_memoize.py',

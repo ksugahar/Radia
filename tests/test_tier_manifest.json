@@ -190,7 +190,6 @@
         "tests/test_c_type_p1_box_lane.py",
         "tests/test_meshed_current.py",
         "tests/test_p1_newton.py",
-        "tests/test_arc_field_tolerance.py",
         "tests/test_arc_far_rule.py",
         "tests/test_radiafield_cache_parallel.py",
         "tests/test_radiafield_memoize.py",
