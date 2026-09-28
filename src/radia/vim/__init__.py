@@ -230,6 +230,12 @@ from ._hcurl_planar_interaction import (  # noqa: F401
 from ._matlab_bridge import (  # noqa: F401
     ExportHCurlEddyCLNJSON,
     ExportHCurlEddyCLNFamilyJSON,
+    ExportHCurlEddyFosterJSON,
+    ExportHCurlEddyFosterFamilyJSON,
+)
+from ._eddy_foster import (  # noqa: F401
+    HCurlEddyFosterModel,
+    HCurlEddyFosterModelFromVIM,
 )
 from ._slab_eddy import (  # noqa: F401  (exact 1-D HDiv-MMM/HCurl-eddy validation reduction)
     ConductiveSlab,
@@ -412,6 +418,8 @@ __all__ = [
     "HCurlPlanarVolumeInteraction", "NgsolveHCurlPlanarVolumeInteraction",
     "HCurlEddyCLNModel", "HCurlEddyCLNFromVIM",
     "ExportHCurlEddyCLNJSON", "ExportHCurlEddyCLNFamilyJSON",
+    "HCurlEddyFosterModel", "HCurlEddyFosterModelFromVIM",
+    "ExportHCurlEddyFosterJSON", "ExportHCurlEddyFosterFamilyJSON",
     "CurrentMagneticFluxDensitySamples", "MagnetizationCurrentCoupling",
     "EVRSTMethodAlgebra", "ReducedPortAdmittance", "ReducedPortImpedance",
     "SharedMeshMaterialModel", "HCurlVIMHDivMMMSolution",
