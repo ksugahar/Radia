@@ -162,8 +162,8 @@ def part1(work, freqs, meshes, current):
         for label, (mp, mr) in meshes.items():
             vol = os.path.join(work, f"tube_{label}.vol")
             if not os.path.isfile(vol):
-                G.air_mesh(G.cylinder_part(R, H, bore=BORE), r_air=R_AIR,
-                           ring_r=RING_R, ring_h=RING_H, maxh_part=mp,
+                G.air_mesh(lambda: G.cylinder_part(R, H, bore=BORE),
+                           r_air=R_AIR, ring_r=RING_R, ring_h=RING_H, maxh_part=mp,
                            maxh_ring=mr, maxh_far=0.04).ngmesh.Save(vol)
             res = fem_solve(vol, f"tube_{label}_{int(f)}", f,
                             G.loop_paths((0, 0, 0), (0, 0, 1), LOOP_R),
@@ -190,7 +190,8 @@ def part1(work, freqs, meshes, current):
 
 def part2(work, f, ns, current, maxh, hole_maxh, tol, thermal_maxh, heat):
     from rotating_cross_hole_rotor_states import average_source, heat_run, rel
-    part = G.cylinder_part(R, H, cross_hole=CROSS, hole_maxh=hole_maxh)
+    def part():
+        return G.cylinder_part(R, H, cross_hole=CROSS, hole_maxh=hole_maxh)
     sets, out = {}, {"frequency_Hz": f, "runs": {},
                      "em_maxh_m": {"part": maxh[0], "ring": maxh[1],
                                    "hole_walls": hole_maxh}}
@@ -322,22 +323,26 @@ def main():
            "sigma_S_m": SIGMA, "provenance": prov}
     partial = a.out + ".partial.json"
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
-    if "axisym" in parts:
-        meshes = {m.split(":")[0]: (float(m.split(":")[1]),
-                                    float(m.split(":")[2]))
-                  for m in a.axisym_meshes.split(",")}
-        out["axisym"] = part1(a.work, [float(v) for v in
-                                       a.frequencies.split(",")],
-                              meshes, a.current)
+    unknown = set(parts) - {"axisym", "rotation"}
+    if unknown:
+        raise SystemExit(f"unknown parts {sorted(unknown)}")
+    for name in parts:              # in the order given, each saved at once
+        if name == "axisym":
+            meshes = {m.split(":")[0]: (float(m.split(":")[1]),
+                                        float(m.split(":")[2]))
+                      for m in a.axisym_meshes.split(",")}
+            out["axisym"] = part1(a.work, [float(v) for v in
+                                           a.frequencies.split(",")],
+                                  meshes, a.current)
+        else:
+            mh = [float(v) for v in a.rotation_maxh.split(":")]
+            out["rotation"] = part2(
+                a.work, a.rotation_frequency,
+                [int(v) for v in a.n_states.split(",")], a.rotation_current,
+                mh, a.hole_maxh, a.angle_step_tolerance, a.thermal_maxh,
+                {"rpm": a.rpm, "dt": a.dt, "t_end": a.t_end})
         with open(partial, "w", encoding="utf-8") as fh:
             json.dump(out, fh, indent=1)
-    if "rotation" in parts:
-        mh = [float(v) for v in a.rotation_maxh.split(":")]
-        out["rotation"] = part2(
-            a.work, a.rotation_frequency,
-            [int(v) for v in a.n_states.split(",")], a.rotation_current, mh,
-            a.hole_maxh, a.angle_step_tolerance, a.thermal_maxh,
-            {"rpm": a.rpm, "dt": a.dt, "t_end": a.t_end})
     with open(a.out, "w", encoding="utf-8") as fh:
         json.dump(out, fh, indent=1)
     if os.path.exists(partial):
