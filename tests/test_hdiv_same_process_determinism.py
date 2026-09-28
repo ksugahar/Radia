@@ -1,6 +1,6 @@
 """Fast same-process state-isolation contract for the HDiv-VIM production solve.
 
-The C++ Gram, PARDISO, TaskManager, and Python backend registry must survive
+The C++ Gram, sparsecholesky, TaskManager, and Python backend registry must survive
 alternating solves without a rerun or a fresh Python interpreter.
 """
 import numpy as np
@@ -55,7 +55,18 @@ def test_alternating_linear_solves_are_same_process_deterministic():
         assert current["iters"] == first["iters"]
 
 
-def test_alternating_nonlinear_solves_are_bitwise_deterministic():
+@pytest.fixture(params=[1, 2])
+def nonlinear_threads(request):
+    from radia import _radia_pybind as native
+    previous = native.HLUMaxThreads()
+    ng.SetNumThreads(request.param)
+    try:
+        yield request.param
+    finally:
+        ng.SetNumThreads(previous)
+
+
+def test_alternating_nonlinear_solves_preserve_state(nonlinear_threads):
     mesh_a = ng.Mesh(OCCGeometry(Box(Pnt(0, 0, 0), Pnt(1, 1, 1))).GenerateMesh(maxh=0.7))
     mesh_b = ng.Mesh(OCCGeometry(Box(Pnt(0, 0, 0), Pnt(1.2, 0.8, 1.0))).GenerateMesh(maxh=0.7))
 
@@ -63,7 +74,14 @@ def test_alternating_nonlinear_solves_are_bitwise_deterministic():
     _solve_nonlinear(mesh_b, (800.0, 0.0, 0.0))
     second = _solve_nonlinear(mesh_a, (0.0, 0.0, 1000.0))
 
-    np.testing.assert_array_equal(second["_coefficients"], first["_coefficients"])
-    np.testing.assert_array_equal(second["M_avg"], first["M_avg"])
+    for key in ("_coefficients", "M_avg"):
+        if nonlinear_threads == 1:
+            np.testing.assert_array_equal(second[key], first[key])
+        else:
+            # SparseCholesky's parallel reductions need not be bitwise ordered.
+            # Bound the vector difference well below the 1e-9 solve tolerance;
+            # componentwise relative checks are ill-conditioned at symmetry zeros.
+            delta = np.linalg.norm(second[key] - first[key])
+            assert delta / np.linalg.norm(first[key]) < 1e-12
     assert second["iters"] == first["iters"]
     assert second["linear_solver"] == first["linear_solver"] == "energy-newton-cpp"

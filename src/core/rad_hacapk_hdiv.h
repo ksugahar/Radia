@@ -50,7 +50,7 @@ struct RadHACApKSymmetricLeafQuadraticReport {
 };
 
 // Persistent exact HDiv mass factor for the MASS RIESZ preconditioner, cached
-// across solves.  Broken spaces use local dense blocks; general masses use PARDISO.
+// across solves.  Broken spaces use local dense blocks; general masses use sparsecholesky.
 struct RadMassRieszCache;
 
 //-------------------------------------------------------------------------
@@ -506,7 +506,7 @@ public:
     // mass_riesz=false: diagonal-Jacobi PCG (z = r/prec).  mass_riesz=true (the DEFAULT 'auto' path):
     // PCG preconditioned by an exact factor of the HDiv mass M_mass (z = M_mass^{-1} r, the MASS
     // RIESZ map) built from the COO (mI,mJ,mV).  Broken-space element blocks use TaskManager-parallel
-    // dense Cholesky; a connected conforming mass uses PARDISO.  This gives ~3-5x fewer iters and
+    // dense Cholesky; a connected conforming mass uses sparsecholesky.  This gives ~3-5x fewer iters and
     // nearly mu_r-flat behavior; `prec` is
     // then ignored.  Moves the whole linear demag solve (H-matvec + mass solve + Krylov) into C++.
     // The factor is PERSISTENT on the object (m_massRieszCache, exact-COO key): constant-mass chains --

@@ -48,3 +48,20 @@ this directory: `test_hdiv_hacapk_gram_performance.py`,
 `test_hdiv_vim_operator.py`, `test_hdiv_vim_symmetric_outer_quad.py`,
 `test_hdiv_vim_wedge_rt1_chargegram_smoke.py`, `test_soft_iron_shapes.py`,
 `test_planar_materials.py`, and `test_hdiv_radsolve_dispatch.py`.
+
+## Mass Riesz sparse factor
+
+The connected conforming mass now uses NGSolve `SparseCholesky`, with no
+PARDISO fallback. Element-local dense Cholesky blocks remain unchanged.
+Duplicate COO entries are combined in input order before parallel assembly;
+the exact mass cache key and batched row-major right-hand-side contract remain.
+Non-positive or non-finite factors fail explicitly.
+
+`results_hdiv_sparsecholesky_20260928.json` records 7 focused contracts and
+235 extended tests passing on mdx1. They cover actual mass residuals, cache
+updates, multiple right-hand sides, non-SPD rejection, nonlinear solves,
+multiple materials and topology optimization. These are working-tree build
+checks, not exact release-artifact acceptance or production-scale timing.
+Serial nonlinear repeat solves remain bitwise identical. Parallel reduction
+order may differ; the repeated-solution vector difference must be below
+1e-12 relative norm, compared with a 1e-9 nonlinear solve tolerance.

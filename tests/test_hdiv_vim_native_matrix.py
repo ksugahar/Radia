@@ -76,3 +76,62 @@ def test_demag_operator_is_native_ngsolve_matrix_and_matches_configured_apply():
                        rtol=1e-12, atol=1e-15)
     assert np.allclose(transposed.FV().NumPy(), -0.2 - 0.3 * reference,
                        rtol=1e-12, atol=1e-15)
+
+
+@pytest.mark.parametrize("maxh", [0.7, 0.4])
+def test_conforming_mass_riesz_residual_cache_update_and_batched_solve(maxh):
+    """A connected conforming mass exercises the sparse factor, not local blocks."""
+    mesh = ng.Mesh(unit_cube.GenerateMesh(maxh=maxh))
+    fes = ng.HDiv(mesh, order=1)
+    rng = np.random.default_rng(20260928)
+    exact = rng.normal(size=(3, fes.ndof))
+    with ng.TaskManager():
+        operator = DemagOperator(fes, eps=1e-10)
+        gram = operator._G
+        trial, test = fes.TnT()
+        mass = ng.BilinearForm(fes)
+        mass += trial * test * ng.dx
+        mass.Assemble()
+        rows, cols, values = mass.mat.COO()
+        from scipy.sparse import coo_matrix
+        matrix = coo_matrix((values, (rows, cols)), shape=(fes.ndof, fes.ndof)).tocsr()
+        # Repeat a factor application, then change its actual matrix. Compare
+        # true mass residuals, not the outer Krylov solver's reported residual.
+        for scale in (1.0, 1.0, 0.3):
+            gram.configure_geometry_mass_matrix(
+                np.asarray(rows, dtype=np.int32), np.asarray(cols, dtype=np.int32),
+                np.asarray(values, dtype=np.float64) * scale, fes.ndof)
+            for expected in exact:
+                rhs = np.asarray(scale * (matrix @ expected))
+                solved = np.asarray(gram.apply_configured_mass_riesz(rhs))
+                residual = scale * (matrix @ solved) - rhs
+                assert np.linalg.norm(residual) / np.linalg.norm(rhs) < 2e-12
+                np.testing.assert_allclose(solved, expected, rtol=2e-10, atol=2e-11)
+        gram.configure_geometry_mass_matrix(
+            np.asarray(rows, dtype=np.int32), np.asarray(cols, dtype=np.int32),
+            np.asarray(values, dtype=np.float64), fes.ndof)
+        rhs = np.array([gram.apply_configured_linear_material_operator(0.2, x)
+                        for x in exact])
+        solved = gram.solve_configured_linear_material_auto_prec_many(
+            0.2, rhs, tol=1e-11, maxit=5000, mass_riesz=True)
+        np.testing.assert_allclose(solved["m"], exact, rtol=2e-8, atol=2e-9)
+        for x, f in zip(solved["m"], rhs):
+            residual = np.asarray(gram.apply_configured_linear_material_operator(0.2, x)) - f
+            assert np.linalg.norm(residual) / np.linalg.norm(f) < 2e-11
+
+
+def test_conforming_mass_riesz_rejects_non_spd_mass():
+    mesh = ng.Mesh(unit_cube.GenerateMesh(maxh=0.7))
+    fes = ng.HDiv(mesh, order=1)
+    with ng.TaskManager():
+        operator = DemagOperator(fes, eps=1e-10)
+        trial, test = fes.TnT()
+        mass = ng.BilinearForm(fes)
+        mass += trial * test * ng.dx
+        mass.Assemble()
+        rows, cols, values = mass.mat.COO()
+        operator._G.configure_geometry_mass_matrix(
+            np.asarray(rows, dtype=np.int32), np.asarray(cols, dtype=np.int32),
+            -np.asarray(values, dtype=np.float64), fes.ndof)
+        with pytest.raises(RuntimeError, match="SPD|positive definite"):
+            operator._G.apply_configured_mass_riesz(np.ones(fes.ndof))

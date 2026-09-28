@@ -66,7 +66,7 @@ def test_per_region_equal_mu_matches_scalar():
 def test_per_region_default_is_cpp_symmetric_cg():
     """Per-region linear (RT1) uses the all-C++ SYMMETRIC mass-Riesz CG on the Galerkin system
     (M_{1/chi} + N) m = M_mass h_ext.  W = M_{1/chi} remains the system mass while the immutable geometry
-    mass is the Riesz preconditioner, so nonlinear/material updates cannot perturb the PARDISO Riesz map.
+    mass is the Riesz preconditioner, so nonlinear/material updates cannot perturb the sparsecholesky Riesz map.
     The per-region path's correctness is locked by
     test_per_region_equal_mu_matches_scalar; the legacy form-1 cross-check is retired.
     """

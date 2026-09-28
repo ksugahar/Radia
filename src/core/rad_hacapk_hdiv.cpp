@@ -35,55 +35,25 @@ int HACApK_matvec_mkl_threads_get(void);
 
 #ifdef HAVE_LAPACK
 #include "rad_hex_far_product.h"
-#include "mkl_pardiso.h"          // PARDISO sparse-direct factor of the HDiv mass for the MASS RIESZ precond
+#include <la.hpp>                // NGSolve sparsecholesky for the MASS RIESZ preconditioner
 #include "mkl_cblas.h"            // row-major cluster-space dense contractions
 #include "mkl_lapacke.h"          // small cluster Rayleigh--Ritz eigensolve
 namespace {
-// PARDISO is entered from the Python-facing solve while NGSolve may already
-// own a TaskManager pool.  MKL's process-wide thread setting is insufficient
-// here: NGSolve or another MKL caller can replace it between factor and solve.
-// Use MKL's per-calling-thread setting and restore the previous local value.
-class PardisoMKLThreadGuard {
-    int saved_;
-public:
-    explicit PardisoMKLThreadGuard(int nthreads)
-        : saved_(mkl_set_num_threads_local(std::max(1, nthreads))) {}
-    ~PardisoMKLThreadGuard() { mkl_set_num_threads_local(saved_); }
-    PardisoMKLThreadGuard(const PardisoMKLThreadGuard&) = delete;
-    PardisoMKLThreadGuard& operator=(const PardisoMKLThreadGuard&) = delete;
-};
-
 // Persistent exact MASS RIESZ factor.  Broken HDiv masses are element-block
 // diagonal, so small connected components use TaskManager-parallel dense
-// Cholesky solves.  General conforming masses retain the PARDISO SPD path.
+// Cholesky solves.  General conforming masses retain the sparsecholesky SPD path.
 struct MassRieszFactor {
-    void* pt[64];
-    MKL_INT iparm[64];
-    MKL_INT n = 0, mtype = 2, maxfct = 1, mnum = 1, msglvl = 0;
-    std::vector<MKL_INT> ia, ja;     // upper-triangular CSR, 0-based (iparm[34]=1); columns ascending
-    std::vector<double>  a;
+    int n = 0;
+    std::shared_ptr<ngla::SparseMatrixSymmetric<double>> sparse_mass;
+    std::shared_ptr<ngla::SparseCholesky<double>> sparse_factor;
     std::vector<int> local_offsets, local_dofs;
     std::vector<size_t> local_factor_offsets;
     std::vector<double> local_factors;
     int local_max_block = 0;
     bool local_factored = false;
-    bool factored = false;
-    MassRieszFactor() { for (int i = 0; i < 64; ++i) { pt[i] = nullptr; iparm[i] = 0; } }
+    MassRieszFactor() = default;
     MassRieszFactor(const MassRieszFactor&) = delete;
     MassRieszFactor& operator=(const MassRieszFactor&) = delete;
-    ~MassRieszFactor() {
-        if (factored && !local_factored) {
-            // PARDISO is called from the HDiv Krylov loop while an NGSolve
-            // TaskManager may be active.  Suspend its workers while PARDISO
-            // owns the configured thread count; this avoids nested pools while
-            // retaining parallel sparse factor/solve performance.
-            ngcore::SuspendTaskManager stm;
-            PardisoMKLThreadGuard mkl_guard(radia::GetMaxThreads());
-            MKL_INT phase = -1, nrhs = 1, idum = 0, error = 0; double ddum = 0.0;
-            pardiso(pt, &maxfct, &mnum, &mtype, &phase, &n, &ddum, ia.data(), ja.data(),
-                    &idum, &nrhs, iparm, &msglvl, &ddum, &ddum, &error);
-        }
-    }
 
     bool TryFactorLocalBlocks(const std::vector<int>& mI,
                               const std::vector<int>& mJ,
@@ -272,96 +242,77 @@ struct MassRieszFactor {
     }
     int LocalMaxBlock() const { return local_factored ? local_max_block : 0; }
 
-    // Assemble the upper-triangular CSR from the symmetric mass COO and factor (analyze phase 11 +
-    // numeric phase 22).  Returns false on a PARDISO error (caller raises -- No-Fallbacks: a non-SPD
-    // mass would be a setup bug, not a soft condition to paper over).
+    // Preserve the old symmetric-COO contract: use its upper triangle once,
+    // transposed into NGSolve's lower-triangular symmetric storage. Sum duplicate
+    // entries in input order before NGSolve's parallel COO assembly, whose
+    // atomic duplicate additions otherwise depend on worker scheduling.
+    // No alternative sparse solver is selected on failure.
     bool Factor(const std::vector<int>& mI, const std::vector<int>& mJ,
                 const std::vector<double>& mV, int n_face) {
         n = n_face;
         if (TryFactorLocalBlocks(mI, mJ, mV, n_face)) {
-            factored = true;
             return true;
         }
-        ngcore::SuspendTaskManager stm;
-        PardisoMKLThreadGuard mkl_guard(radia::GetMaxThreads());
-        std::vector<std::map<int, double>> row((size_t)n_face);   // std::map keeps columns ascending
+        std::vector<std::map<int, double>> entries(static_cast<size_t>(n));
+        ngcore::Array<int> rows, cols;
+        ngcore::Array<double> values;
         for (size_t k = 0; k < mV.size(); ++k) {
-            int i = mI[k], j = mJ[k];
-            if (i < 0 || i >= n_face || j < 0 || j >= n_face) continue;
-            if (j < i) continue;                                 // upper triangle only (M_mass symmetric)
-            row[(size_t)i][j] += mV[k];                           // merge any duplicate COO entries
+            const int i = mI[k], j = mJ[k];
+            if (i < 0 || i >= n || j < i || j >= n) continue;
+            if (!std::isfinite(mV[k]))
+                throw std::runtime_error("MassRieszFactor: non-finite mass entry");
+            entries[static_cast<size_t>(j)][i] += mV[k];
         }
-        ia.assign((size_t)n_face + 1, 0);
-        for (int i = 0; i < n_face; ++i)
-            ia[(size_t)i + 1] = ia[(size_t)i] + (MKL_INT)row[(size_t)i].size();
-        MKL_INT nnz = ia[(size_t)n_face];
-        ja.assign((size_t)nnz, 0); a.assign((size_t)nnz, 0.0);
-        MKL_INT k = 0;
-        for (int i = 0; i < n_face; ++i)
-            for (const auto& kv : row[(size_t)i]) { ja[(size_t)k] = (MKL_INT)kv.first; a[(size_t)k] = kv.second; ++k; }
-        pardisoinit(pt, &mtype, iparm);
-        // PARDISO's own worker pool must not overlap the surrounding NGSolve
-        // TaskManager.  iparm[2] is the C zero-based slot for the documented
-        // number-of-processors control (Fortran iparm(3)).  The workers are
-        // suspended above, so PARDISO may use the configured Radia count.
-        iparm[2] = std::max<MKL_INT>(1, (MKL_INT)radia::GetMaxThreads());
-        iparm[34] = 1;                                           // 0-based (C) indexing
-        MKL_INT phase = 11, nrhs = 1, idum = 0, error = 0; double ddum = 0.0;
-        pardiso(pt, &maxfct, &mnum, &mtype, &phase, &n, a.data(), ia.data(), ja.data(),
-                &idum, &nrhs, iparm, &msglvl, &ddum, &ddum, &error);
-        if (error == 0) {
-            phase = 22;
-            pardiso(pt, &maxfct, &mnum, &mtype, &phase, &n, a.data(), ia.data(), ja.data(),
-                    &idum, &nrhs, iparm, &msglvl, &ddum, &ddum, &error);
-        }
-        if (error != 0) return false;
-        factored = true;
+        for (int row = 0; row < n; ++row)
+            for (const auto& entry : entries[static_cast<size_t>(row)]) {
+                rows.Append(row); cols.Append(entry.first); values.Append(entry.second);
+            }
+        ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+        auto coo = ngla::SparseMatrixTM<double>::CreateFromCOO(
+            rows, cols, values, n, n);
+        sparse_mass = std::make_shared<ngla::SparseMatrixSymmetric<double>>(*coo);
+        sparse_mass->SetSPD(true);
+        sparse_factor = std::make_shared<ngla::SparseCholesky<double>>(sparse_mass);
+        // NGSolve stores inverse diagonal factors; positivity and finiteness
+        // preserve the SPD preconditioner contract even if factorization only
+        // emits a diagnostic for an invalid matrix.
+        for (double value : sparse_factor->GetDiag())
+            if (!(value > 0.0) || !std::isfinite(value))
+                throw std::runtime_error("MassRieszFactor: sparsecholesky mass is not SPD");
         return true;
     }
-    void Solve(const double* rhs, double* x) {                   // M_mass x = rhs (phase 33, single rhs)
+    void Solve(const double* rhs, double* x) {
         if (local_factored) {
             SolveLocalMany(rhs, x, 1);
             return;
         }
-        ngcore::SuspendTaskManager stm;
-        PardisoMKLThreadGuard mkl_guard(radia::GetMaxThreads());
-        MKL_INT phase = 33, nrhs = 1, idum = 0, error = 0;
-        pardiso(pt, &maxfct, &mnum, &mtype, &phase, &n, a.data(), ia.data(), ja.data(),
-                &idum, &nrhs, iparm, &msglvl, const_cast<double*>(rhs), x, &error);
-        if (error != 0)
-            throw std::runtime_error(
-                "MassRieszPardiso: PARDISO solve phase (33) failed with error " + std::to_string((long long)error)
-                + " for n = " + std::to_string((long long)n)
-                + " (MKL codes: -2 out of memory, -4 zero pivot, -10 no license; the Q-mag BDM2 h10 mesh, "
-                  "~200k unknowns next to a 20 GB Gram on the 60 GB hibino, died here on 2026-09-07)");
+        if (!sparse_factor)
+            throw std::runtime_error("MassRieszFactor: sparsecholesky factor is unavailable");
+        ngla::VFlatVector<double> input(n, const_cast<double*>(rhs)), output(n, x);
+        ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+        sparse_factor->Mult(input, output);
+        for (int i = 0; i < n; ++i)
+            if (!std::isfinite(x[i]))
+                throw std::runtime_error("MassRieszFactor: non-finite sparsecholesky solution");
     }
     void SolveMany(const double* rhs, double* x, int rhs_count) {
-        // PARDISO stores dense right-hand sides column-major [n][nrhs].
-        // Radia's public row-major [nrhs][n] buffer is byte-identical: each
-        // right-hand side is one contiguous PARDISO column.
         if (rhs_count < 1)
-            throw std::runtime_error(
-                "MassRieszFactor: rhs_count must be positive");
+            throw std::runtime_error("MassRieszFactor: rhs_count must be positive");
         if (local_factored) {
             SolveLocalMany(rhs, x, rhs_count);
             return;
         }
-        ngcore::SuspendTaskManager stm;
-        PardisoMKLThreadGuard mkl_guard(radia::GetMaxThreads());
-        MKL_INT phase = 33, nrhs = static_cast<MKL_INT>(rhs_count);
-        MKL_INT idum = 0, error = 0;
-        pardiso(pt, &maxfct, &mnum, &mtype, &phase, &n, a.data(),
-                ia.data(), ja.data(), &idum, &nrhs, iparm, &msglvl,
-                const_cast<double*>(rhs), x, &error);
-        if (error != 0)
-            throw std::runtime_error(
-                "MassRieszPardiso: batched PARDISO solve phase failed");
+        // The public buffer is row-major [nrhs][n]. Each solve uses NGSolve's
+        // caller-owned worker pool; do not nest parallel RHS tasks around it.
+        for (int k = 0; k < rhs_count; ++k)
+            Solve(rhs + static_cast<size_t>(k)*n, x + static_cast<size_t>(k)*n);
     }
+
 };
 } // namespace
 
 // Definition of the .h-forward-declared persistent factor holder (SINGLE entry on RadHACApKChargeGram):
-// the selected local/PARDISO factor plus the exact COO arrays it was built from.  A solve call whose (n_face, mI, mJ, mV)
+// the selected local/sparsecholesky factor plus the exact COO arrays it was built from.  A solve call whose (n_face, mI, mJ, mV)
 // compares EQUAL element-wise reuses the factor; any difference rebuilds and replaces the entry.  Only this
 // translation unit sees the complete type (the members use the TU-local MassRieszFactor above).
 struct RadMassRieszCache {
@@ -394,7 +345,7 @@ std::shared_ptr<RadMassRieszCache> RadHACApKChargeGram::EnsureMassRieszFactor(
     auto built = std::make_shared<RadMassRieszCache>();
     if (!built->factor.Factor(mI, mJ, mV, n_face))
         throw std::runtime_error(std::string(caller) +
-            ": PARDISO SPD factor of the HDiv mass (mass Riesz preconditioner) failed");
+            ": sparsecholesky SPD factor of the HDiv mass (mass Riesz preconditioner) failed");
     built->keyN = n_face; built->keyI = mI; built->keyJ = mJ; built->keyV = mV;
     if (factor_s_accum)
         *factor_s_accum += std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
@@ -9587,15 +9538,12 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
 #ifdef HAVE_LAPACK
     // The solve is entered from an active NGSolve TaskManager.  Keep MKL's
-    // process setting serial for the non-PARDISO part of this solve; each
-    // PARDISO phase temporarily installs its configured local thread count
-    // while SuspendTaskManager keeps the NGSolve workers asleep.  HACApK's
-    // outer matvec therefore remains TaskManager-parallel without nested
-    // worker pools, while the sparse factor/solve can still scale.
+    // process setting serial for BLAS calls. SparseCholesky and HACApK use
+    // the existing NGSolve worker pool without a nested MKL pool.
     radia::MKLThreadGuard solve_mkl_guard(1);
 #endif
     // MASS RIESZ preconditioner (the default 'auto' path): z = M_geometry^{-1} r via the persistent exact
-    // local-block/PARDISO factor of the immutable HDiv geometry mass.  A material-weighted Galerkin system
+    // local-block/sparsecholesky factor of the immutable HDiv geometry mass.  A material-weighted Galerkin system
     // still applies its caller-supplied W + N exactly; only its Riesz map stays fixed.  This preserves the
     // SPD preconditioning contract through nonlinear/tangent updates and avoids refactoring W every step.
     // When mass_riesz is false the legacy diagonal Jacobi z = r/prec is used (linear_solver="cpp-cg").
@@ -9645,7 +9593,7 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     }
 #else
     if (mass_riesz)
-        throw std::runtime_error("SolveLinearMaterial: mass Riesz preconditioner requires MKL PARDISO "
+        throw std::runtime_error("SolveLinearMaterial: mass Riesz preconditioner requires NGSolve sparsecholesky with LAPACK "
                                  "(HAVE_LAPACK)");
 #endif
     DeterministicCSR local_mass;
@@ -10038,7 +9986,7 @@ std::vector<double> RadHACApKChargeGram::ApplyMassRiesz(
         for (int i = 0; i < n_face; ++i) if (m_operatorConstrained[(size_t)i]) x[(size_t)i] = 0.0;
     return x;
 #else
-    throw std::runtime_error("ApplyMassRiesz requires MKL PARDISO (HAVE_LAPACK)");
+    throw std::runtime_error("ApplyMassRiesz requires NGSolve sparsecholesky with LAPACK (HAVE_LAPACK)");
 #endif
 }
 
@@ -11590,7 +11538,7 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
     if (mass_riesz)
         throw std::runtime_error(
             "SolveConfiguredLinearMaterialAutoPrecMany: mass Riesz requires "
-            "MKL PARDISO (HAVE_LAPACK)");
+            "NGSolve sparsecholesky with LAPACK (HAVE_LAPACK)");
 #endif
 
     auto dot = [&](const double* a, const double* b) {

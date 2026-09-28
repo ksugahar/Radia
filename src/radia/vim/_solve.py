@@ -37,7 +37,7 @@ H-matvec is the only O(N log N) cost.
 ## Linear solve dispatch -- SYMMETRIC C++ CG (symmetric HACApK)
 For the common scalar-mu_r case, `linear_solver="auto"` (the DEFAULT) solves the SPD +N system
 `((1/chi)M_mass + N) m = M_mass h_ext` by CG, preconditioned with the FULL BDM1 H(div) mass inverse
-`M_mass^{-1}` (the MASS RIESZ map), ENTIRELY in C++ (PARDISO mass factor + C++ Krylov, no Python glue).
+`M_mass^{-1}` (the MASS RIESZ map), ENTIRELY in C++ (sparsecholesky mass factor + C++ Krylov, no Python glue).
 CG is used because the charge-Gram is applied via the EXACTLY-SYMMETRIC H-matvec (`matvec_sym`): the
 HACApK H-matrix stores both (I,J) and (J,I) leaf blocks but ACA-truncates them INDEPENDENTLY, so the
 GENERAL matvec is only approximately symmetric; `matvec_sym` instead applies the UPPER-triangular leaves
@@ -276,7 +276,7 @@ def _resolve_highorder_preconditioner(preconditioner, *, nonlinear, nonlinear_so
     """Resolve the production preconditioner policy for BDM1/BDM2 HDiv-VIM.
 
     The diagonal W+N preconditioner is dramatically faster for large hex/wedge nonlinear scaling runs because
-    it avoids one PARDISO phase-33 mass solve per CG iteration.  Small tet problems still favor the exact
+    it avoids one sparsecholesky mass solve per CG iteration.  Small tet problems still favor the exact
     mass-Riesz map.  Keep the policy local and explicit so the user can still force either branch.
     """
     if preconditioner != "auto":
@@ -399,9 +399,9 @@ def _solve_linear_mass_riesz_cpp(H, n_face, h_ext, chi, tol, maxit):
     is the default again (Sugahara 2026-06-27, "対称HACApKを実装しよう。CGがいいね"): the symmetric Gram
     makes CG robust BY CONSTRUCTION at all N -- it removes the asymmetry failure mode that motivated the
     earlier solver retreat (the spurious antisymmetric part of the GENERAL ACA matvec).  Mass-Riesz precond
-    via a PARDISO SPD factor of the HDiv mass (eigenvalues vs M_mass are (1/chi)+d, d in [0,1], bounded ->
+    via a sparsecholesky SPD factor of the HDiv mass (eigenvalues vs M_mass are (1/chi)+d, d in [0,1], bounded ->
     ~3-5x fewer iters than diagonal Jacobi).  The whole Krylov loop (O(N log N) symmetric H-matvec +
-    per-iteration PARDISO mass solve + vector ops) runs in C++ -- no Python per-iteration glue, no splu.
+    per-iteration sparsecholesky mass solve + vector ops) runs in C++ -- no Python per-iteration glue, no splu.
     The symmetric matvec is also ~1.4x FASTER than the general one (it skips the lower-triangle leaves).
     `H.solve_configured_linear_material_mass_riesz(..., symmetric=True)` is the default; pass
     symmetric=False only to
@@ -446,9 +446,9 @@ def _solve_linear_W_cpp(H, W, n_face, h_ext, tol, maxit):
     by symmetric mass-Riesz CG.  W = M_{1/chi} = INT (1/chi(x)) u.v dx is the SYSTEM mass; the immutable
     geometry mass M_mass is the Riesz preconditioner.  Passing W as the 'mass' COO with inv_chi=1.0 makes
     the C++ kernel (`solve_configured_linear_material_mass_riesz`, symmetric=True) compute
-    A = W + B^T G B while preconditioning with M_mass^{-1} (PARDISO).  Keeping the Riesz map material-
+    A = W + B^T G B while preconditioning with M_mass^{-1} (sparsecholesky).  Keeping the Riesz map material-
     independent is the same stable C++ CG contract as the uniform path and lets nonlinear tangent updates
-    reuse its factor.  The whole Krylov loop runs in C++ (symmetric charge-Gram H-matvec + PARDISO solve
+    reuse its factor.  The whole Krylov loop runs in C++ (symmetric charge-Gram H-matvec + sparsecholesky solve
     + vector ops).
     Python declares W and the geometric mass as NGSolve forms; NGSolve assembles them in C++, pybind extracts
     their native sparse matrices directly, and the persistent C++ operator applies the geometric-mass RHS.
@@ -1337,10 +1337,10 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, c
     and its Hessian (the Newton Jacobian) is SYMMETRIC
       J = W_tan + N,  W_tan = INT nu_d u.v dx  (nu_d = dH/dM = (dM/dH)^-1 differential reluctivity tensor),
     so each Newton step  (W_tan + N) dm = -R  is solved by the EXISTING C++ symmetric W-CG
-    (`solve_configured_linear_material_mass_riesz`: W = W_tan as both the system mass AND the mass-Riesz PARDISO
+    (`solve_configured_linear_material_mass_riesz`: W = W_tan as both the system mass AND the mass-Riesz sparsecholesky
     preconditioner; N via the symmetric charge-Gram H-matvec).  For large exploratory scaling runs,
     `inner_preconditioner="jacobi"` switches only the inner W-CG preconditioner to the exact diagonal of
-    (W+N), avoiding per-CG PARDISO phase-33 solves.  No SciPy linear solve and no M_mass^-1 are used.
+    (W+N), avoiding per-CG sparsecholesky solves.  No SciPy linear solve and no M_mass^-1 are used.
 
     Globalization: a chi0 (zero-field) LINEAR W-CG warmstart; an Armijo line search on the CONVEX ENERGY E
     (the merit -- ||R|| stalls in saturation where the inverse-BH

@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "host": "mdx1",
+  "python": "3.12.10",
+  "ngsolve": "6.2.2606",
+  "source_base": "e6b5f9cca421b13469e24044380b9b22f60194e2",
+  "source_state": "working-tree sparsecholesky patch; not a release artifact",
+  "compiled_mass_source_sha256": "2ca25a989b04b5b8ebb46804e0a6b9c2a4aa2f0805074b3c55c5390f012451e4",
+  "native_sha256": "8a351323427b8d996f2ce3acfed82451904259a373b9e25ea94e26187d0cb4f5",
+  "default_threads": 1,
+  "nonlinear_reproducibility_threads": [
+    1,
+    2
+  ],
+  "runs": [
+    {
+      "name": "sparsecholesky-contracts-final",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "elapsed_seconds": 17.468
+    },
+    {
+      "name": "sparsecholesky-acceptance",
+      "tests": 235,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "elapsed_seconds": 329.48
+    }
+  ],
+  "acceptance": {
+    "mass_true_relative_residual": 2e-12,
+    "batched_true_relative_residual": 2e-11,
+    "serial_reproducibility": "bitwise",
+    "parallel_reproducibility_relative_vector_norm": 1e-12,
+    "non_spd_mass": "must raise"
+  },
+  "timing_accepted": false,
+  "release_accepted": false
+}
