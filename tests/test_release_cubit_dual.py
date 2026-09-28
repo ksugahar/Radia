@@ -17,7 +17,25 @@ def test_worker_compiles_and_targets_only_dual():
     assert dual.TARGETS == ('lab', '100')
     assert "'-e', str(package)" in dual.WORKER
     assert 'pip\', \'uninstall' not in dual.WORKER
-    assert 'taskkill' not in dual.WORKER
+    # Cubit is closed only on explicit request, and then everything closed
+    # is recorded in the receipt.
+    head, forced = dual.WORKER.split("if cfg.get('force_close_cubit')", 1)
+    assert 'taskkill' not in head
+    assert "result['force_closed_cubit']" in forced
+
+
+def test_force_and_run_from_are_explicit_options():
+    args = dual.build_parser().parse_args([
+        '--action', 'deploy', '--wheel', 'w.whl', '--source-sha', 'a' * 40,
+        '--source-root-lab', r'C:\\release-dual\\x', '--source-root-100', r'W:\\x',
+        '--evidence-lab', r'C:\\temp\\e', '--evidence-100', r'C:\\temp\\e'])
+    assert args.run_from == 'lab' and args.force_close_cubit is False
+    args = dual.build_parser().parse_args([
+        '--action', 'deploy', '--wheel', 'w.whl', '--source-sha', 'a' * 40,
+        '--source-root-lab', r'C:\\release-dual\\x', '--source-root-100', r'W:\\x',
+        '--evidence-lab', r'C:\\temp\\e', '--evidence-100', r'C:\\temp\\e',
+        '--run-from', '100', '--force-close-cubit'])
+    assert args.run_from == '100' and args.force_close_cubit is True
 
 
 def test_student_host_registers_every_profile():

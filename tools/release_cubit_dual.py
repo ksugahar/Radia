@@ -155,6 +155,26 @@ try:
     cubit_dir = installer._find_cubit_dir()
     if cubit_dir is None:
         raise RuntimeError('Supported Cubit installation missing')
+    # Forced deployment (explicit --force-close-cubit only): close every
+    # running Cubit GUI, whoever owns it, and record whose it was.  Unsaved
+    # work in those sessions is lost; without the flag an open Cubit stops
+    # the deployment.
+    if cfg.get('force_close_cubit') and cfg['action'] in ('preflight', 'deploy'):
+        import csv, time
+        listing = command(['tasklist', '/FI', 'IMAGENAME eq coreform_cubit.exe',
+                           '/FO', 'CSV', '/NH', '/V'])
+        closed = [dict(pid=int(row[1]), session=row[2], user=row[6])
+                  for row in csv.reader(listing.splitlines())
+                  if len(row) > 6 and row[0].lower() == 'coreform_cubit.exe']
+        for proc in closed:
+            subprocess.run(['taskkill', '/F', '/PID', str(proc['pid'])],
+                           capture_output=True, text=True)
+        result['force_closed_cubit'] = result.get('force_closed_cubit', []) + closed
+        for _ in range(60):
+            ok, issues = installer.preflight(cubit_dir, verbose=False)
+            if ok:
+                break
+            time.sleep(1)
     ok, issues = installer.preflight(cubit_dir, verbose=False)
     if not ok:
         raise RuntimeError(str(issues))
@@ -214,7 +234,12 @@ def run(args):
     import tomllib
     contract = wheel_contract(args.wheel)
     contract.update(schema=SCHEMA, source_sha=args.source_sha)
-    root = Path(args.source_root_lab)
+    # The host running this command executes its own target locally and
+    # reaches the other through its ssh alias ('lab' or '100').
+    run_from = getattr(args, 'run_from', 'lab')
+    roots = {'lab': args.source_root_lab, '100': args.source_root_100}
+    evidence = {'lab': args.evidence_lab, '100': args.evidence_100}
+    root = Path(roots[run_from])
     metadata = tomllib.loads((root / 'packages/cubit-mesh-export/pyproject.toml').read_text(encoding='utf-8'))
     contract['dependencies'] = {name: next(d.split('==')[1] for d in metadata['project']['dependencies']
                                               if d.startswith(name + '=='))
@@ -226,7 +251,7 @@ def run(args):
         if p.stdout.strip() != args.source_sha:
             raise ValueError('Tag does not identify selected source')
         verify_published('cubit-mesh-export', contract)
-    output = Path(args.evidence_lab)
+    output = Path(evidence[run_from])
     output.mkdir(parents=True, exist_ok=True)
     # Both preflights finish before either install starts.
     phases = ['preflight', 'deploy'] if args.action == 'deploy' else [args.action]
@@ -237,17 +262,24 @@ def run(args):
                 if not check_receipt(receipt, contract, target):
                     raise ValueError('Missing or stale dual receipt: ' + target)
             cfg = dict(contract, target=target, action='verify' if phase == 'done' else phase,
-                       source_root=args.source_root_lab if target == 'lab' else args.source_root_100,
-                       output=str(Path(args.evidence_lab if target == 'lab' else args.evidence_100) / target))
+                       source_root=roots[target], output=str(Path(evidence[target]) / target),
+                       force_close_cubit=bool(getattr(args, 'force_close_cubit', False)))
             encoded = base64.b64encode(json.dumps(cfg).encode()).decode()
-            command = [sys.executable, '-', encoded] if target == 'lab' else [
-                'ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', '100', 'python', '-', encoded]
+            command = [sys.executable, '-', encoded] if target == run_from else [
+                'ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', target, 'python', '-', encoded]
             p = subprocess.run(command, input=WORKER, text=True, encoding='utf-8',
-                               errors='replace', capture_output=True, timeout=1200)
+                               errors='replace', capture_output=True, timeout=1800)
             lines = [line for line in p.stdout.splitlines() if line.startswith('CUBIT_DUAL_RESULT=')]
             if not lines:
                 raise RuntimeError(target + ': no worker receipt\n' + p.stderr[-3000:])
             result = json.loads(lines[-1].partition('=')[2])
+            if target != run_from:
+                # Keep the remote receipt beside the local one; 'done' reads both here.
+                (output / target).mkdir(parents=True, exist_ok=True)
+                (output / target / (cfg['action'] + '.json')).write_text(
+                    json.dumps(result, indent=2), encoding='utf-8')
+            for proc in result.get('force_closed_cubit', []):
+                print(f"{phase} {target}: force-closed Cubit pid={proc['pid']} user={proc['user']}", flush=True)
             print(f"{phase} {target}: {'PASS' if result['passed'] else 'FAIL'}", flush=True)
             if p.returncode or not result['passed']:
                 raise RuntimeError(result.get('error', 'worker failed'))
@@ -271,6 +303,13 @@ def build_parser():
     parser.add_argument("--source-root-100", required=True)
     parser.add_argument("--evidence-lab", required=True)
     parser.add_argument("--evidence-100", required=True)
+    parser.add_argument("--run-from", choices=TARGETS, default="lab",
+                        help="host running this command; the other target is reached "
+                             "through its ssh alias ('lab' or '100')")
+    parser.add_argument("--force-close-cubit", action="store_true",
+                        help="close every running Cubit GUI on both targets before "
+                             "preflight (unsaved work in them is lost); recorded in "
+                             "each receipt")
     return parser
 
 
