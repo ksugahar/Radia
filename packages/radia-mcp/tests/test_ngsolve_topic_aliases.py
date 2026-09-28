@@ -34,3 +34,14 @@ def test_generic_leakage_and_drum_aliases_keep_their_existing_public_meaning():
     assert "magnetic circuit" in get_ngsolve_documentation(
         "magnetic_circuit_leakage"
     ).lower()
+
+
+def test_direct_solver_guidance_is_explicit_and_keeps_mkl_scope_separate():
+    doc = get_ngsolve_documentation("solvers")
+    assert 'inverse="sparsecholesky"' in doc
+    assert 'inverse="pardiso"' not in doc
+    assert 'inverse="umfpack"' not in doc
+    assert "no automatic backend fallback" in doc
+    assert "MATLAB MEX" in doc
+    assert "BLAS/LAPACK and FFT" in doc
+    assert "true-residual validation" in doc

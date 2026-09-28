@@ -4873,9 +4873,11 @@ void NGSolveMatrixInverse(int nlhs, mxArray* plhs[], int nrhs,
         BadArgument("NGSolve matrix has no FESpace for free-DoF inversion");
     ngcore::RegionTaskManager task_manager;
     auto free_dofs = matrix.fespace->GetFreeDofs(false);
+    // Never inherit NGSolve's process-wide default or fall back to PARDISO.
+    matrix.matrix->SetInverseType("sparsecholesky");
     auto inverse = matrix.matrix->InverseMatrix(free_dofs);
     plhs[0] = Uint64Output(RegisterMatrix(MakeNGSolveMatrixHandle(
-        std::move(inverse), matrix.fespace, "inverse(" + matrix.kind + ")")));
+        std::move(inverse), matrix.fespace, "sparsecholesky(" + matrix.kind + ")")));
 }
 
 void HCurlEddyNativeBasis(int nlhs, mxArray* plhs[], int nrhs,
@@ -4929,6 +4931,7 @@ void HCurlEddyNativeBasis(int nlhs, mxArray* plhs[], int nrhs,
     // The unit-shifted eddy operator is positive definite: mass + curl-curl.
     // This keeps the HCurl gradient kernel controlled while leaving the
     // physical frequency/material scaling as an explicit future contract.
+    system->SetInverseType("sparsecholesky");
     std::shared_ptr<ngla::BaseMatrix> inverse =
         system->InverseMatrix(free_dofs);
     std::vector<std::vector<double>> current;
