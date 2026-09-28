@@ -3374,10 +3374,8 @@ T-Omega (`H = T - grad(Omega)`) needs `Omega_s` itself, so use
 potential route is regular at the Kelvin centre and is exactly consistent with
 the matching field rule, so T-Omega + Kelvin works.
 
-The design note
-`validation_test/maglev/research_cln/ngsolve_validation/
-cuboid_521_T_Omega_Kelvin_design.md` proposes the Convention-B-shaped scalar
-rule `-(rho'/R)^2 Omega_s(local)`.  That proposal is superseded: it is not a
+An earlier design note proposed the Convention-B-shaped scalar rule
+`-(rho'/R)^2 Omega_s(local)`.  That proposal is superseded: it is not a
 0-form pullback and is wrong by 4/3.
 
 ## Why the minus sign, and which quantities take it
