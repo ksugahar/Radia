@@ -24,7 +24,8 @@ Available topics: overview, development, ci_compute, release, mcp_release, cubit
 Regular GitHub Actions CI uses the `mdx` runner label. LAB is not a CI runner.
 Validation studies run on hibino first, or on mdx only when hibino is
 unavailable and the mdx CI queue is idle. They are not part of every
-source-change CI run.
+source-change CI run. An idle LAB may also run tests and validation, but never
+timing or performance measurements.
 
 ## development
 
@@ -46,7 +47,8 @@ installs the exact NGSolve/Netgen pins and `mkl-devel`, builds from the checked
 commit, and retains the resulting artifact as CI evidence. Normal CI runs only
 compact impact-selected regression tests from changed package paths. Solver studies,
 benchmarks, paper data, and machine comparisons belong to `validation_test/`
-and run on hibino first, with mdx reserved as an idle-CI fallback.
+and run on hibino first, with mdx reserved as an idle-CI fallback and an idle
+LAB allowed for anything except timing.
 
 ## release
 
