@@ -235,7 +235,7 @@ without mutation, while `update` advances `x=A*x+B*u` exactly once per sample.
 `snapshot` and `restore` back the Level-2 S-Function `CustomSimState`; `step`
 retains the atomic output-plus-update behavior for standalone diagnosis.
 `reset`, `info`, and `destroy` complete the handle lifecycle.
-`radia.simulink.buildHCurlEddyCLNModel(..., Block="radia-mex")` uses this path.
+`radia.simulink.buildHCurlEddyFosterModel(..., Block="radia-mex")` uses this path.
 Induction heating does not: its distributed Eddy and Thermal fields are owned
 by `radia_ih_eddy_sfun` and `radia_ih_thermal_sfun`, respectively. The former
 IH LUT and lumped state-space builders have been removed.

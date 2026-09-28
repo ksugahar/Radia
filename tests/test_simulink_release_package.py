@@ -182,7 +182,7 @@ def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
     assert manifest["python_fallback_per_step"] is False
     assert manifest["backend"] == "application-specific"
     assert manifest["ih_backend"] == "matlab-level2+radia-mex-handles"
-    assert manifest["maglev_backend"] == "matlab-level2-common-basis-cln"
+    assert manifest["maglev_backend"] == "matlab-level2-shared-mode-foster"
     assert manifest["reactor_backend"] == \
         "matlab-level2+radia-mex-handle"
     assert manifest["reactor_surrogate"] is False

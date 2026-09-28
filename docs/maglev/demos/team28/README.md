@@ -180,10 +180,11 @@ The committed structural acceptance builds a real 3-D disk mesh and obtains:
 | selected SIBC modes | 0 |
 | estimated retained modes | 136 (0.596%) |
 
-`radia.vim.HCurlEddyCLNFromVIM` is the handoff from the spatially reduced VIM
-to the passive CLN descriptor.  `radia.maglev.MovingHCurlCLNFamily` enforces
-the constant-basis condition before interpolating `R(z)`, `L(z)`, and `P(z)`;
-the convex interpolation preserves passivity.
+`radia.vim.HCurlEddyFosterModelFromVIM` is the handoff from the spatially
+reduced VIM to the passive Foster modal form.  `radia.maglev.MovingHCurlFosterFamily`
+requires one shared `R`/`L` pair (the disk is meshed once), so one Foster mode
+set serves every height and only the port matrix `P(z)` is interpolated; every
+interpolated model stays passive.
 
 The fixed-position 3-D HCurl-VIM force gate now passes without a kernel
 epsilon.  Each reduced `curl(T)` mode is projected exactly to degree-5

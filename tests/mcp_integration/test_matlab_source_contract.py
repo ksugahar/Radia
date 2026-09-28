@@ -360,9 +360,11 @@ def test_optuna_simulink_contract_is_table_backed():
     assert team28["artifact_gate"].endswith(
         "team28_cycle_averaged_motion_gate"
     )
-    assert contract["hcurl_eddy_cln"]["mex_kernel"] == "hybrid_vim.solve"
-    assert contract["hcurl_eddy_cln"]["moving_family"].startswith("ExportHCurlEddyCLNFamilyJSON")
-    native_family = contract["hcurl_eddy_cln"]["native_motor_angle_family"]
+    foster = contract["hcurl_eddy_foster"]
+    assert foster["moving_family"].startswith("ExportHCurlEddyFosterFamilyJSON")
+    assert "no MEX kernel" in foster["harmonic_solve"]
+    assert "instantaneous K*z(t)*i(t)" in foster["force"]
+    native_family = foster["native_motor_angle_family"]
     assert native_family["matlab_factory"] == "radia.simulink.makeMotorAngleFamily"
     assert native_family["simulink_builder"] == (
         "radia.simulink.buildMotorAngleFamilyModel"

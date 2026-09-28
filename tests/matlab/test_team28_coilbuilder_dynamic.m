@@ -13,7 +13,7 @@ end
 
 function testValidatedCoilBuilderLUT(testCase)
 lut = radia.simulink.makeTeam28CoilBuilderLUT();
-verifyEqual(testCase, lut.schema, "radia.team28.cln_lut.v1");
+verifyEqual(testCase, lut.schema, "radia.team28.lift_lut.v1");
 verifyTrue(testCase, lut.source_validation_passed);
 verifyEqual(testCase, lut.family_state_order, 3);
 verifyEqual(testCase, lut.family_snapshot_count, 25);
@@ -29,9 +29,9 @@ verifyEmpty(testCase, regexp(lut.source_file, ...
 verifyTrue(testCase, startsWith(replace(lut.source_file, "\", "/"), ...
     "validation_test/maglev/"));
 verifyTrue(testCase, all(diff(lut.height_offset_m) > 0));
-[force_N, lift_N] = radia.simulink.evaluateTeam28CLNForce(lut, 0.0, 20.0);
+[force_N, lift_N] = radia.simulink.evaluateTeam28LiftForce(lut, 0.0, 20.0);
 verifyEqual(testCase, force_N, -lift_N, "AbsTol", 1e-12);
-verifyEqual(testCase, lift_N, 1.1019289804974595, "AbsTol", 1e-12);
+verifyEqual(testCase, lift_N, 1.101864686332624, "AbsTol", 1e-12);
 end
 
 function testMechanicalContractHasStableEquilibrium(testCase)
@@ -54,7 +54,7 @@ verifyFalse(testCase, plant.damping_identified_from_measurement);
 verifyEqual(testCase, plant.force_family_snapshot_count, 25);
 verifyEqual(testCase, plant.eddy_state_order, 3);
 verifyLessThan(testCase, abs(plant.equilibrium_absolute_bottom_m - ...
-    0.0110555366063325), 1e-12);
+    0.011055189682886258), 1e-12);
 end
 
 function testSavedModelUsesLevel2BlockAndUpdates(testCase)
@@ -73,7 +73,7 @@ block = "radia_team28_coilbuilder_dynamic/" + ...
 verifyEqual(testCase, string(get_param(block, "BlockType")), ...
     "M-S-Function");
 verifyEqual(testCase, string(get_param(block, "FunctionName")), ...
-    "radia_team28_cln_lut_sfunction");
+    "radia_team28_lift_lut_sfunction");
 verifyEqual(testCase, string(get_param(block, "Parameters")), ...
     "radia_team28_coilbuilder_lut");
 set_param("radia_team28_coilbuilder_dynamic", ...
