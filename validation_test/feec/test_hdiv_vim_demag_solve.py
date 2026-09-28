@@ -72,7 +72,7 @@ def test_default_symmetric_cg_matches_explicit_name(mu_r):
         cg = Solve(mesh, mu_r, _HEXT, linear_solver="cpp-cg")    # explicit alias
     assert auto["linear_solver"] == "mass-riesz-cg"
     assert cg["linear_solver"] == "mass-riesz-cg"
-    # Independent TaskManager/PARDISO/CG runs can differ by last-bit reduction order.
+    # Independent TaskManager/sparsecholesky/CG runs can differ by last-bit reduction order.
     assert abs(auto["M_avg"][2] - cg["M_avg"][2]) < 5e-9, "auto must equal the explicit cpp-cg alias"
 
 
