@@ -125,6 +125,9 @@
     ],
     "tools/sparsesolv_ci_impact.py": [
       "tests/test_sparsesolv_ci_contract.py"
+    ],
+    "src/radia/patch_recovery.py": [
+      "tests/test_patch_recovery.py"
     ]
   },
   "profiles": {
@@ -206,7 +209,8 @@
         "tests/test_accelerator_lie_topopt.py",
         "tests/test_topology_optimization.py",
         "tests/test_vim_eddy_hybrid.py",
-        "tests/test_vim_coupled_weak_vs_monolithic.py"
+        "tests/test_vim_coupled_weak_vs_monolithic.py",
+        "tests/test_patch_recovery.py"
       ]
     },
     "sparsesolv": {

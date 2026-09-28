@@ -67,6 +67,8 @@ NATIVE_PATHS = (
     "src/radia/axisym_measure.py",
     "src/radia/sibc_corner_patch.py",
     "src/radia/mixed_omega_newton.py",
+    "src/radia/patch_recovery.py",
+    "tests/test_patch_recovery.py",
     "src/radia/p1_newton.py",
     "tests/test_p1_newton.py",
     "src/radia/meshed_current.py",
