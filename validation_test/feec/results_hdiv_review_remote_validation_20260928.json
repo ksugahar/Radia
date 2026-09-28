@@ -1,0 +1,168 @@
+{
+  "schema": "radia.hdiv-review-remote-validation/v1",
+  "date": "2026-09-28",
+  "purpose": "Full tests/ and validation_test/feec run of the HDiv-MMM review fixes, then a base-vs-fixed triage of every validation failure.",
+  "full_run": {
+    "host": "mdx1",
+    "python": "3.12.10",
+    "versions_ngsolve_numpy_scipy": [
+      "6.2.2606",
+      "2.4.3",
+      "1.17.1"
+    ],
+    "source_commit": "4230cdb7c4c9fe53436abcd7929c454459dbcb4a",
+    "integrated_as": "a9c6351d1",
+    "native_sha256": "fceddb1961c11148901b485364b986c039a3bb11bacd6860679bb54d1eabc463",
+    "lanes": {
+      "tests": {
+        "paths": [
+          "tests"
+        ],
+        "exit_code": 1,
+        "wall_s": 2642.7,
+        "counts": {
+          "failed": 139,
+          "passed": 4077,
+          "skipped": 118,
+          "errors": 39
+        }
+      },
+      "validation_feec": {
+        "paths": [
+          "validation_test/feec"
+        ],
+        "exit_code": 1,
+        "wall_s": 6598.8,
+        "counts": {
+          "failed": 13,
+          "passed": 311,
+          "skipped": 2,
+          "xfailed": 1
+        }
+      }
+    },
+    "tests_lane_failures_by_module": {
+      "": 8,
+      "TestStepToPeecInductance": 2,
+      "test_ams_internal_setup_parallel": 1,
+      "test_b3d_shim_wire_traversal": 3,
+      "test_beak_fin_generator_reach": 4,
+      "test_c_type_p1_box_lane": 31,
+      "test_cli": 1,
+      "test_conversions": 29,
+      "test_cubit_installers": 1,
+      "test_cubit_menu_startup": 1,
+      "test_cubit_standalone_gui": 1,
+      "test_default_path_unit_contract": 2,
+      "test_eddy_cross_epsilon": 1,
+      "test_export_filaments_msh": 5,
+      "test_fin_peec_branch_mutual": 4,
+      "test_fin_sweep": 7,
+      "test_gmsh_only_output_policy": 1,
+      "test_lie_kernel_parameter_jacobians": 1,
+      "test_md2html_legacy_cli": 3,
+      "test_meshed_current": 5,
+      "test_p1_newton": 10,
+      "test_p2_curved_magsta": 1,
+      "test_peec_collinear_mutual": 2,
+      "test_peec_fin_topology": 2,
+      "test_peec_proximity_cross_section": 4,
+      "test_periodic_h1_faces": 27,
+      "test_policy_lint_execution_failure": 1,
+      "test_pwsh_capture_encoding": 1,
+      "test_release_acceptance_hosts_shared": 2,
+      "test_release_cubit_dual": 1,
+      "test_repo_msh_assets": 2,
+      "test_sheet_metal_optimization": 1,
+      "test_simulink_release_package": 3,
+      "test_vim_coupled_weak_vs_monolithic": 4,
+      "test_vim_eddy_hybrid": 5,
+      "test_vim_h1_hodge_operator": 1
+    },
+    "tests_lane_classification": "environment: no .git in the archive, optional modules absent (OCP, build123d, schemdraw, trimesh, cubit toolbar), RadiaOnly build without sparsesolv_ngsolve/axifem/PEEC natives; review-caused: test_lie_kernel_parameter_jacobians (fixed in this commit)",
+    "validation_feec_failures": [
+      "validation_test.feec.test_hdiv_hacapk_gram_performance::test_hex_chargegram_hacapk_build_enters_lowrank_regime",
+      "validation_test.feec.test_hdiv_vim_curved_ima_roundoff::test_curved_rt2_material_solve_and_field_match_full_model_to_roundoff",
+      "validation_test.feec.test_hdiv_vim_hex_rt1_chargegram::test_hex_rt1_hmatrix_matvec_matches_entry_oracle",
+      "validation_test.feec.test_hdiv_vim_hex_rt1_chargegram::test_hex_rt1_image_fold_increases_positive_entry_and_matvec",
+      "validation_test.feec.test_hdiv_vim_operator::test_demagoperator_factor_rt1_rt2",
+      "validation_test.feec.test_hdiv_vim_symmetric_outer_quad::test_outer_rule_dispatch",
+      "validation_test.feec.test_hdiv_vim_symmetric_outer_quad::test_symmetric_nonlinear_matches_product",
+      "validation_test.feec.test_hdiv_vim_wedge_rt1_chargegram_smoke::test_wedge_rt1_entry_oracle_is_positive",
+      "validation_test.feec.test_hdiv_vim_wedge_rt1_chargegram_smoke::test_wedge_rt1_hmatrix_matvec_matches_entry_oracle",
+      "validation_test.feec.test_hdiv_vim_wedge_rt1_chargegram_smoke::test_wedge_rt1_image_fold_increases_positive_entry_and_matvec",
+      "validation_test.feec.test_hdiv_vim_wedge_rt1_chargegram_smoke::test_wedge_rt1_image_masks_and_signs_must_match",
+      "validation_test.feec.test_soft_iron_shapes::test_hex_antisymmetric_image_plane_matches_full_cube",
+      "validation_test.feec.test_soft_iron_shapes::test_multiple_irons_auto_fails_loud"
+    ]
+  },
+  "triage": {
+    "host": "mdx2",
+    "python": "3.12.10",
+    "lanes": {
+      "base_98de8de89": {
+        "source_commit": "98de8de89f64559cb2d4a0776e5074ccfcb9634d",
+        "native_sha256": "9279dce4c647833276338e5e8ed785033acd0636c43c4331b8302fd8eae116d4",
+        "versions": "6.2.2606 2.4.3 1.17.1 C:\\temp\\hdiv-review-triage-20260928\\base\\src\\radia\\__init__.py",
+        "paths": [
+          "validation_test/feec/test_hdiv_hacapk_gram_performance.py::test_hex_chargegram_hacapk_build_enters_lowrank_regime",
+          "validation_test/feec/test_hdiv_vim_curved_ima_roundoff.py",
+          "validation_test/feec/test_hdiv_vim_hex_rt1_chargegram.py",
+          "validation_test/feec/test_hdiv_vim_operator.py::test_demagoperator_factor_rt1_rt2",
+          "validation_test/feec/test_hdiv_vim_symmetric_outer_quad.py",
+          "validation_test/feec/test_hdiv_vim_wedge_rt1_chargegram_smoke.py",
+          "validation_test/feec/test_soft_iron_shapes.py",
+          "tests/test_lie_kernel_parameter_jacobians.py",
+          "tests/test_accelerator_lie_topopt.py"
+        ],
+        "exit_code": 1,
+        "wall_s": 87.6,
+        "counts": {
+          "failed": 12,
+          "passed": 36
+        }
+      },
+      "main_fixed": {
+        "source_commit": "d7df4492e9facfa1fccbaf9f26803d14340c6d1d +overlay:src/radia/accelerator_lie_topopt.py,validation_test/feec/test_hdiv_vim_symmetric_outer_quad.py,validation_test/feec/test_soft_iron_shapes.py",
+        "native_sha256": "400d87a1721aa95043291e8923e4a5b0a889bb9cf1fbb42270684d47957c0930",
+        "versions": "6.2.2606 2.4.3 1.17.1 C:\\temp\\hdiv-review-triage-20260928\\main\\src\\radia\\__init__.py",
+        "paths": [
+          "validation_test/feec/test_hdiv_hacapk_gram_performance.py::test_hex_chargegram_hacapk_build_enters_lowrank_regime",
+          "validation_test/feec/test_hdiv_vim_curved_ima_roundoff.py",
+          "validation_test/feec/test_hdiv_vim_hex_rt1_chargegram.py",
+          "validation_test/feec/test_hdiv_vim_operator.py::test_demagoperator_factor_rt1_rt2",
+          "validation_test/feec/test_hdiv_vim_symmetric_outer_quad.py",
+          "validation_test/feec/test_hdiv_vim_wedge_rt1_chargegram_smoke.py",
+          "validation_test/feec/test_soft_iron_shapes.py",
+          "tests/test_lie_kernel_parameter_jacobians.py",
+          "tests/test_accelerator_lie_topopt.py"
+        ],
+        "exit_code": 1,
+        "wall_s": 89.3,
+        "counts": {
+          "failed": 11,
+          "passed": 38
+        }
+      }
+    },
+    "preexisting_on_base_and_fixed": [
+      "validation_test.feec.test_hdiv_hacapk_gram_performance::test_hex_chargegram_hacapk_build_enters_lowrank_regime",
+      "validation_test.feec.test_hdiv_vim_curved_ima_roundoff::test_curved_rt2_material_solve_and_field_match_full_model_to_roundoff",
+      "validation_test.feec.test_hdiv_vim_hex_rt1_chargegram::test_hex_rt1_hmatrix_matvec_matches_entry_oracle",
+      "validation_test.feec.test_hdiv_vim_hex_rt1_chargegram::test_hex_rt1_image_fold_increases_positive_entry_and_matvec",
+      "validation_test.feec.test_hdiv_vim_operator::test_demagoperator_factor_rt1_rt2",
+      "validation_test.feec.test_hdiv_vim_symmetric_outer_quad::test_outer_rule_dispatch",
+      "validation_test.feec.test_hdiv_vim_wedge_rt1_chargegram_smoke::test_wedge_rt1_entry_oracle_is_positive",
+      "validation_test.feec.test_hdiv_vim_wedge_rt1_chargegram_smoke::test_wedge_rt1_hmatrix_matvec_matches_entry_oracle",
+      "validation_test.feec.test_hdiv_vim_wedge_rt1_chargegram_smoke::test_wedge_rt1_image_fold_increases_positive_entry_and_matvec",
+      "validation_test.feec.test_hdiv_vim_wedge_rt1_chargegram_smoke::test_wedge_rt1_image_masks_and_signs_must_match",
+      "validation_test.feec.test_soft_iron_shapes::test_multiple_irons_auto_fails_loud"
+    ],
+    "fixed_by_this_commit": [
+      "validation_test.feec.test_hdiv_vim_symmetric_outer_quad::test_symmetric_nonlinear_matches_product",
+      "validation_test.feec.test_soft_iron_shapes::test_hex_antisymmetric_image_plane_matches_full_cube",
+      "tests.test_lie_kernel_parameter_jacobians::test_spoly_fourth_order_in_segment_s_dependence"
+    ],
+    "new_on_fixed": []
+  }
+}

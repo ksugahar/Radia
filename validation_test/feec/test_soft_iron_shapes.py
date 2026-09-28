@@ -123,13 +123,14 @@ def test_hex_antisymmetric_image_plane_matches_full_cube():
         half = _hexbox(-A, A, -A, A, 0.0, A, 2, 2, 1)
         r_full = vim.Solve(full, mu_r=MU_R, H_ext=Hz)
         r_half = vim.Solve(half, mu_r=MU_R, H_ext=Hz, image='-z')     # z perpendicular to Hz -> '-'
-        r_sym = vim.Solve(half, mu_r=MU_R, H_ext=Hz, image='+x')      # x parallel to Hz -> '+' (still OK)
+        # the half cube spans x in [-A, A], so an x=0 image would overlap its own mirror
+        with pytest.raises(ValueError, match="crosses the image plane x=0"):
+            vim.Solve(half, mu_r=MU_R, H_ext=Hz, image='+x')
     rel_mz = abs(r_half["M_avg"][2] - r_full["M_avg"][2]) / max(abs(r_full["M_avg"][2]), 1e-30)
     assert rel_mz < 5e-3, \
         f"hex half image='-z' Mz {r_half['M_avg'][2]:.6g} != full {r_full['M_avg'][2]:.6g} (rel {rel_mz:.2e})"
     assert abs(r_half["demag"] - r_full["demag"]) < 5e-3, \
         f"hex half image='-z' demag {r_half['demag']:.6g} != full {r_full['demag']:.6g}"
-    assert "demag" in r_sym
     rad.UtiDelAll()
 
 

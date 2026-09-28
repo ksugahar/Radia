@@ -97,9 +97,10 @@ def test_symmetric_reproduces_product_demag_and_psd(monkeypatch):
     assert abs(w_sym[-1] - w_prod[-1]) <= 5e-3 * abs(w_prod[-1]), "dominant demag eigenvalue drifted"
 
 
-# realistic saturating BH table (mu_r ~ 4000 low, sat ~2.2 T) for the nonlinear equivalence lock
+# realistic saturating BH table (mu_r ~ 4000 low, Msat ~1.72e6 A/m) for the nonlinear equivalence lock;
+# M = B/mu0 - H keeps rising through the tail (dB/dH >= mu0), so the table passes the B-H contract
 _H = np.array([0, 50, 100, 200, 500, 1e3, 2e3, 5e3, 1e4, 3e4, 1e5, 3e5, 1e6])
-_B = np.array([0, 0.30, 0.60, 1.0, 1.45, 1.7, 1.9, 2.0, 2.05, 2.1, 2.15, 2.25, 2.5])
+_B = np.array([0, 0.30, 0.60, 1.0, 1.45, 1.7, 1.9, 2.0, 2.05, 2.1, 2.27, 2.53, 3.42])
 _BH = np.column_stack([_H, _B]).tolist()
 _MSAT = _B[-1] / (4e-7 * np.pi) - _H[-1]
 
