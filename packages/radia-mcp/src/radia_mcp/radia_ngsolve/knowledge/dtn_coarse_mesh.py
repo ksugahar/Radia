@@ -2968,17 +2968,16 @@ DTN_COARSE_MESH_DTN_TO_CLN = r"""
 #
 # PRODUCTION API (adopted 2026-06-20): `radia.open_boundary` (radia wheel), TWO paths:
 #   import radia.open_boundary as ob
-#   # (1) dtn_cln -- exact closed-form SEPARABLE (pure numpy/scipy):
+#   # (1) dtn_exact -- exact closed-form SEPARABLE (pure numpy/scipy):
 #   ob.eddy_dtn(n, s, R0, mu_sigma)        # exact eddy/diffusion DtN per multipole
-#   ob.cauer_ladder(n); ob.eval_ladder(..) # finite identity in the sqrt(s) variable
 #   ob.companion_poles(n)                 # inspect the variable convention before time realization
 #   # (2) kelvin_dtn -- Kelvin-BUILT material-aware / NON-separable:
 #   ob.kelvin_fem_radial_dtn(n, s)         # Kelvin-FEM BUILDS the DtN, no DC floor (numpy)
 #   ob.kelvin_dtn_matrix(mesh, p, s, nu=, sigma=); ob.steklov_spectrum(S, Mg)  # NGSolve,
 #                                          #   arbitrary-shape / iron-exterior DtN ladder
 #                                          #   (point-group split: cube O_h, square C4v)
-#   ob.band_cln_fit(s_band, dtn, stages)   # convergent band-CLN for the non-separable case
-# Goldens tests/open_boundary/{test_dtn_cln,test_kelvin_dtn}.py; example docs/open_boundary/demo_dtn_cln_usage.py.
+#   ob.band_rational_fit(s_band, dtn, stages)  # convergent band fit for the non-separable case
+# Goldens validation_test/open_boundary/{test_dtn_exact,test_kelvin_dtn}.py; example docs/open_boundary/demo_dtn_cln_usage.py.
 # SHOWCASE NOTEBOOK docs/open_boundary/open_boundary_demo.ipynb (DtN symbol, CLN ladder,
 #   companion poles, sqrt(s) ladder, Kelvin-FEM DtN build -- executed + rendered).
 # Diffusion qualification: a rational identity in q=sqrt(s) is not a rational

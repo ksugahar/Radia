@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
-"""Kelvin-built exterior DtN open boundary -> CLN (the material-aware / non-separable
-companion of the closed-form `dtn_cln`).
+"""Kelvin-built exterior DtN open boundary (the material-aware / non-separable
+companion of the closed-form `dtn_exact`).
 
-WHAT THIS IS.  Where `dtn_cln` realises the EXACT closed-form DtN of a separable
+WHAT THIS IS.  Where `dtn_exact` gives the EXACT closed-form DtN of a separable
 (spherical) homogeneous exterior, this module **BUILDS** the exterior DtN by a
 Kelvin-transformed FEM and Schur-condensation -- so it carries an arbitrary
 (NON-separable) truncation shape AND a MATERIAL exterior (iron shield / layered /
 inhomogeneous), which a closed-form symbol cannot.  The physical DtN ladder is the
 generalised Steklov eigenproblem `(S, M_Gamma)`; for a non-separable shape it is a
-convergent BAND approximation in `q = sqrt(s)` (a few-stage CLN), verified by the
+convergent BAND approximation in `q = sqrt(s)` (a low-degree rational fit), verified by the
 point-group SPLITTING of the sphere's degeneracies (square: C4v; cube: O_h).
 
 HONEST PROVENANCE (the crux -- 3 layers, do not overclaim; full record in the MCP
@@ -30,13 +30,13 @@ topic kelvin_transformation(topic="material_exterior")):
 VERIFIED (`validation_test/open_boundary/test_kelvin_dtn.py`, ported from the
 Kelvin DtN research demos and maintained as executable validation):
   * the radial Kelvin (R/rho')^2-weighted ball reproduces the closed-form
-    `dtn_cln.eddy_dtn` per multipole (the "Kelvin BUILDS the exact DtN" check);
+    `dtn_exact.eddy_dtn` per multipole (the "Kelvin BUILDS the exact DtN" check);
   * the generalised Steklov ladder of a NON-separable cube is O_h-split (the l=2
     quintet -> E_g doublet + T_2g triplet = 2+3, the l=1 dipole stays a degenerate
     triplet) and mesh-convergent -- an analytic-free correctness proof;
-  * a few-stage CLN in sqrt(s) reduces the built DtN over the DC->evanescent band.
+  * a low-degree rational fit in sqrt(s) reduces the built DtN over the DC->evanescent band.
 
-SCOPE.  Same island as `dtn_cln`: COMPACT / quasi-spherical MQS.  Kelvin is
+SCOPE.  Same island as `dtn_exact`: COMPACT / quasi-spherical MQS.  Kelvin is
 sphere-locked (Liouville), so an elongated truncation wastes the spherical shell
 (a box CFS-PML hugs better); genuine wave radiation is outside radia's MQS scope.
 See docs/open_boundary/OPEN_BOUNDARY_MAP.md.
@@ -47,7 +47,7 @@ __all__ = [
     "kelvin_fem_radial_dtn",
     "kelvin_dtn_matrix",
     "steklov_spectrum",
-    "band_cln_fit",
+    "band_rational_fit",
 ]
 
 # 3-point Gauss-Legendre on [-1, 1]
@@ -110,7 +110,7 @@ def kelvin_fem_radial_dtn(n, s, R0=1.0, Rmid=3.0, h_in=0.01, h_kel=0.02):
     """Eddy DtN eigenvalue at R0 for multipole n, BUILT by a radial Kelvin-FEM:
     inner (K + s M) on [R0, Rmid] + a (R/rho')^2-weighted Kelvin-ball static tail
     on r' in [0, Rmid] (the compactified exterior), GND at the Kelvin centre.
-    Reproduces the closed-form `dtn_cln.eddy_dtn` -- the "Kelvin BUILDS the exact
+    Reproduces the closed-form `dtn_exact.eddy_dtn` -- the "Kelvin BUILDS the exact
     DtN" check (separable / homogeneous case)."""
     inner = np.linspace(R0, Rmid, int(round((Rmid - R0) / h_in)) + 1)
     Ki, Mi = _assemble_inner(inner, n)
@@ -191,11 +191,12 @@ def steklov_spectrum(S, Mg):
     return eigh(0.5 * (S + S.T).real, np.asarray(Mg).real)
 
 
-def band_cln_fit(s_band, dtn_values, stages):
+def band_rational_fit(s_band, dtn_values, stages):
     """Fit a built (non-separable) DtN over a band to a rational function in
-    q = sqrt(s) of the given number of `stages` (the convergent band-CLN).  Returns
-    (fit_values, nrmse).  Exact closed-form ladders (separable) are in dtn_cln; this
-    is the NON-separable convergent approximation."""
+    q = sqrt(s) with `stages` numerator and denominator coefficients (a linearised
+    least-squares rational fit).  Returns (fit_values, nrmse).  Exact closed-form
+    symbols (separable) are in dtn_exact; this is the NON-separable convergent
+    approximation."""
     s_band = np.asarray(s_band, dtype=complex)
     G = np.asarray(dtn_values, dtype=complex)
     q = np.sqrt(s_band)
