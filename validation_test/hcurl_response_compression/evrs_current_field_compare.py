@@ -15,7 +15,7 @@ mechanism, not a production motor benchmark.
 
 Run from the repository root:
 
-    python validation_test/cln/evrs_current_field_compare.py
+    python validation_test/hcurl_response_compression/evrs_current_field_compare.py
 """
 
 from __future__ import annotations
