@@ -757,10 +757,8 @@ def make_reduced_potential_scalar_cf(mesh, Phi_inner_factory, R_K, offset,
             R_K=R_K, offset=offset, kelvin_mats=("kelvin",))
 
     See:
-        docs/kelvin/KELVIN_TRANSFORMATION.md 7.4 (rule), 7.6 (A vs B)
-        validation_test/maglev/research_cln/ngsolve_validation/
-            cuboid_521_T_Omega_Kelvin_design.md (the T-Omega route that
-            requires this 0-form variant)
+        docs/kelvin/KELVIN_TRANSFORMATION.md 7.4 (rule), 7.6 (A vs B);
+        the T-Omega route is the one that requires this 0-form variant.
     """
     from ngsolve import x, y, z
 
