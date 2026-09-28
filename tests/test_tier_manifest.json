@@ -199,6 +199,8 @@
         "tests/test_reduced_a_source_materialization.py",
         "tests/test_hdiv_response_contract.py",
         "tests/test_hdiv_chargegram_build_safety.py",
+        "tests/test_hdiv_vim_native_matrix.py",
+        "tests/test_hdiv_same_process_determinism.py",
         "tests/feec/test_hdiv_hex_nonconforming_touching_pair.py",
         "tests/feec/test_hdiv_jacobi_diagonal_fail_loud.py",
         "tests/test_three_engine_energy.py",

@@ -1,7 +1,7 @@
 """Golden: symmetric energy-Newton is the default nonlinear HDiv-VIM solver.
 
 The nonlinear inner Newton step is solved by the C++ symmetric W-CG
-(configured C++ linear-material solve, W = the differential-reluctivity tangent mass, mass-Riesz PARDISO, N
+(configured C++ linear-material solve, W = the differential-reluctivity tangent mass, mass-Riesz sparsecholesky, N
 H-matvec). Python orchestrates the outer iteration and NGSolve assembles material
 terms. Co-energy line searches accept evaluated descending steps; convergence
 requires the true assembled nonlinear residual, including at deep saturation.

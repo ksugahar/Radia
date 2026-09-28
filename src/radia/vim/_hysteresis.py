@@ -381,7 +381,7 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
     polarization iteration (constant SPD LHS nu0*M_mass + N, lagged vector
     polarization source) with the hysteresis material evaluated from the
     per-element COMMITTED states, then commits the converged flux density.
-    The constant system's mass-Riesz PARDISO factor is warmed up during setup
+    The constant system's mass-Riesz sparsecholesky factor is warmed up during setup
     (booked in t_setup_s), so per-step wall times measure the reuse regime.
 
     Parameters
@@ -592,7 +592,7 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
                 "tighten gram_eps or raise maxit." % (maxit, n_face))
         return np.asarray(res["m"], float), it
 
-    # FACTOR WARMUP: the persistent mass-Riesz PARDISO factor of the constant mass is
+    # FACTOR WARMUP: the persistent mass-Riesz sparsecholesky factor of the constant mass is
     # built here (a zero-RHS solve converges in 0 CG iterations), so the one-time
     # analyze+factor lands in t_setup_s instead of the first step's t_step_s.
     if not operator_reused:

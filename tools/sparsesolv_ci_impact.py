@@ -33,6 +33,8 @@ NATIVE_PATHS = (
     "tests/matlab/test_hacapk_rank_cap.m",
     "src/ext/HACApK/**",
     "tests/test_hdiv_chargegram_build_safety.py",
+    "tests/test_hdiv_vim_native_matrix.py",
+    "tests/test_hdiv_same_process_determinism.py",
     'src/radia/vector_potential_solver.py',
     'src/radia/topology_optimization.py',
     'src/core/rad_hdiv*',
