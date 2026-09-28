@@ -13,11 +13,19 @@ diagnostic (Fenchel gap), rather than forced to zero algebraically. For HDiv,
 B inside iron includes magnetization: B = mu0 (H_source + H_demag + M).
 The gap-field shortcut B = mu0 H is invalid inside iron.
 
-**These are finite physical-volume integrals, not all-space energies.** The
-Kelvin exterior is excluded explicitly. Exterior pullback, exterior-domain
-coverage and integration-order convergence must be validated before these
-observables can replace the existing accuracy gate. In particular, an iron-only
-integral or a sum over gap observation points is not an open-boundary energy.
+The coil-yoke driver includes the Kelvin exterior: it maps quadrature points
+to physical exterior points and multiplies volume weights by (R/rho)^6.
+Mixed Omega uses the documented H and B form pullbacks. Reduced-A transforms
+only curl(A_reaction), then adds the source evaluated at the physical point.
+HDiv evaluates its physical field directly. A dipole's analytic exterior
+energy tests the volume Jacobian and the Omega field pullbacks.
+
+Calling the observer without an explicit Kelvin map instead returns a clearly
+labeled finite-volume partial integral. A Kelvin-only mesh excludes the physical
+interior and is also partial. Integration-order and mesh/domain convergence must
+still be measured on each real model before these observables replace the
+existing accuracy gate. An iron-only integral or a sum over gap observation
+points is not an open-boundary energy.
 Permanent magnets, hysteresis, anisotropic laws and image-reduced iron meshes
 are not supported by this observer and must not be relabeled as this contract.
 

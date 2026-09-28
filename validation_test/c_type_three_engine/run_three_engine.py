@@ -412,7 +412,7 @@ def solve_reduced_a(
     field = evaluate_cf(solver.get_B(), mesh, points)
     solve_runtime = time.perf_counter() - started
     energy_started = time.perf_counter()
-    energy = energy_observer.fem(mesh, solver.get_B(), solver.get_H()) if energy_observer else None
+    energy = energy_observer.reduced_a(solver, coil) if energy_observer else None
     return field, {
         "energy_observables": energy,
         "energy_evaluation_s": time.perf_counter() - energy_started,
@@ -524,7 +524,7 @@ def solve_omega(
     source_trace = result["static_electromagnet_contract"]["source_trace"]
     solve_runtime = time.perf_counter() - started
     energy_started = time.perf_counter()
-    energy = energy_observer.fem(mesh, result["B_cf"], result["H_cf"]) if energy_observer else None
+    energy = energy_observer.omega(mesh, result["B_cf"], result["H_cf"]) if energy_observer else None
     return field, {
         "energy_observables": energy,
         "energy_evaluation_s": time.perf_counter() - energy_started,
