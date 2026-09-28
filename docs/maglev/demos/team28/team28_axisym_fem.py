@@ -69,6 +69,16 @@ def build_mesh():
 
 
 def solve_force():
+    """Legacy TEAM 28 surface integral Re[B_r J_t] at dZ=0 (2x the physical force)."""
+    return solve_force_pair()[0]
+
+
+def solve_force_pair():
+    """Return (legacy integral, physical time-averaged force) at dZ=0.
+
+    The legacy lab integral is Re[B_r J_t]; the physical time-averaged Lorentz
+    force is -(1/2) Re[J_t conj(B_r)], half of it in magnitude.
+    """
     ngsglobals.msg_level = 0
     mesh = build_mesh()
     print("materials:", mesh.GetMaterials())
@@ -117,7 +127,10 @@ def solve_force():
         fz = Integrate(
             (real(gfB1[0]) * real(gfJt) - imag(gfB1[0]) * imag(gfJt))
             * (2 * pi * x) * dx(mesh.Materials("Al")), mesh)
-    return float(real(fz))
+        f_phys = -0.5 * Integrate(
+            (real(gfJt) * real(gfB1[0]) + imag(gfJt) * imag(gfB1[0]))
+            * (2 * pi * x) * dx(mesh.Materials("Al")), mesh)
+    return float(real(fz)), float(real(f_phys))
 
 
 if __name__ == "__main__":
