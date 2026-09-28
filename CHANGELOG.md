@@ -5,8 +5,9 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## 5.0.3 - HDiv validation and solver maintenance
 
-Release candidate; exact native/MEX artifacts and four-machine acceptance
-remain required before publication.
+Published 2026-09-28 after exact tag-wheel and Simulink/MEX acceptance on
+LAB, 100, mdx1 and mdx2. Deployment status is tracked separately from
+artifact acceptance by `release_quad done`.
 
 - Conforming HDiv mass-Riesz solves use NGSolve SparseCholesky. Local dense
   Cholesky blocks remain unchanged. True residuals, cache replacement, batched
