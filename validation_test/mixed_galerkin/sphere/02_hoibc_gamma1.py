@@ -158,7 +158,7 @@ def summary() -> dict:
     wall = (SWEEP > WALL_BAND_HZ[0]) & (SWEEP < WALL_BAND_HZ[1])
     return {
         "case": "sphere_hoibc_gamma1",
-        "description": "rank-1 CLN bulk + planar SIBC, with and without gamma_1",
+        "description": "rank-1 Krylov(s=0) bulk + planar SIBC, with and without gamma_1",
         "metric": METRIC,
         "geometry": {"a_m": A, "sigma_S_per_m": SIGMA, "mu_H_per_m": MU,
                      "gamma_1": float(-1.0 / A)},

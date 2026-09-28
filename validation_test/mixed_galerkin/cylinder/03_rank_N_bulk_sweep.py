@@ -171,7 +171,7 @@ def summary() -> dict:
         }
     return {
         "case": "cylinder_bulk_tower", "validation_status": "HOLD",
-        "description": "rank-N CLN bulk + one surface DOF; numerical acceptance pending",
+        "description": "rank-N Krylov(s=0) bulk + one surface DOF; numerical acceptance pending",
         "metric": METRIC,
         "geometry": {"a_m": A_NUM, "sigma_S_per_m": SIGMA, "mu_H_per_m": MU},
         "sweep": {"f_lo_hz": float(SWEEP[0]), "f_hi_hz": float(SWEEP[-1]),
