@@ -121,7 +121,7 @@ def summary() -> dict:
     wall = (SWEEP > WALL_BAND_HZ[0]) & (SWEEP < WALL_BAND_HZ[1])
     return {
         "case": "square2d_corner_envelope",
-        "description": "rank-1 CLN bulk + tensor corner-aware surface envelope",
+        "description": "rank-1 Krylov(s=0) bulk + tensor corner-aware surface envelope",
         "metric": METRIC,
         "geometry": {"L_m": L, "sigma_S_per_m": SIGMA, "mu_H_per_m": MU},
         "sweep": {"f_lo_hz": float(SWEEP[0]), "f_hi_hz": float(SWEEP[-1]),
