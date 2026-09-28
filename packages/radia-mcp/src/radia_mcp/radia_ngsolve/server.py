@@ -914,16 +914,6 @@ def urn_fit(data_csv: str, freq_col: int = 0, real_col: int = 1,
         n_epochs, n_restarts, spice_out)
 
 
-
-
-
-
-
-
-
-
-
-
 @mcp.tool(
     annotations=ToolAnnotations(
         readOnlyHint=True,
@@ -1233,7 +1223,7 @@ def kelvin_transformation(topic: str = "all") -> str:
                                (source order p*=ceil(ln eps/ln(d_max/R)),
                                geometry floor (h/R)^2k, eccentric/multi-body,
                                the A-form centre, the apparatus design calc)
-                               + the non-separable build + DtN boundary realization
+                               + the non-separable build + DtN->CLN arc
                                (square C4v / cube O_h, 2D conformal disk)
             "identify"       - Periodic boundary Identify() best practices
             "tips"           - Common mistakes and performance tips
@@ -1740,7 +1730,7 @@ def dtn_coarse_mesh(topic: str = "all") -> str:
                              vector single-layer L=mu0 J^T(LaplaceSL)J (a different
                              operator with no -(n+1)/R ladder)
             "method_map"   - UNIFIED open-boundary map: Kelvin / BEM / PML / IABC /
-                             modal reduction on the three selection axes (frequency / geometry /
+                             CLN on the three selection axes (frequency / geometry /
                              space-vs-time) + the no-free-lunch modal axis + the
                              selection table. Audit-verified anchors.
                              doc: docs/open_boundary/OPEN_BOUNDARY_MAP.md
@@ -2033,8 +2023,6 @@ def _selftest():
         print("Self-test PASSED")
     else:
         print("SKIP: No fixtures found.")
-
-
 
 
 @_validation.tool()
@@ -4677,22 +4665,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
-# References retained from removed tool documentation:
-# Canonical bibliography key: Kuriyama2019
-# Canonical bibliography key: Nagamine2026
-# Canonical bibliography key: HirumaXFEM2023
-# Sugahara, Nagamine, Hane (2026), IEEE Transactions on Magnetics submission; original short citation.
-
-# Sugahara, IGTE 2026, expansion-point/SIBC theory; original short attribution, publication details unverified.
-
-# Canonical bibliography key: Kameari2018
-
-# Method attribution retained: Kameari and Tanimoto.
-
-# Canonical bibliography key: Stoll1974
-
-# Canonical bibliography key: Sugahara2017team28
-
-# Method attributions retained: Nagamine and Hiruma.

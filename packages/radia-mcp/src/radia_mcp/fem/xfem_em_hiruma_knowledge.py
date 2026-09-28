@@ -19,7 +19,6 @@ from solid-mechanics / fracture XFEM (Jafari et al. 2021):
 Reference paper (lab archive):
     Hiruma et al., "Extended Finite Element Method for Eddy-Current
     Problems with Surface Skin Effect", IEEE Trans. Magn. 59(5), 2023.
-    Same Igarashi/Hiruma group as Hiruma 2020 CLN-A formulation.
 
 Differences from solid-mechanics XFEM (Belytschko-Black 1999):
     No Heaviside / level-set / crack tracking.  The enrichment is
@@ -33,7 +32,7 @@ Lab files (Sugahara research line, beta-1 Phase 1-4 benchmark):
         phase2 - NGSolve EM-XFEM impl.
         phase3 - Pade-based Schur (deprecated predecessor)
         phase3b - Galerkin-Krylov ROM
-        phase4 - XFEM-CLN stacking test (Hankel conditioning)
+        phase4 - Krylov-moment Hankel conditioning, CFEM vs XFEM
 
 All text is ASCII (cp932-safe) and in English.
 """
@@ -108,9 +107,9 @@ Do NOT use EM-XFEM if:
   (a) you need a frequency sweep or time-domain transient.  The
       enrichment psi depends on omega via gamma, so each omega
       requires a different XFEM space.  See `decision_table` topic.
-  (b) you want SPICE export of a Cauer ladder.  EM-XFEM lives at the
-      FE level; it does NOT combine usefully with canonical CLN
-      extraction (see `cln_stacking_negative` topic).
+  (b) you want a reduced model for SPICE export.  EM-XFEM lives at the
+      FE level; its omega-dependent enrichment does not give one
+      frequency-independent reduced basis (see `enrichment_function`).
   (c) DC or near-DC accuracy is needed.  Use canonical CFEM-SIBC or
       standard FEM; EM-XFEM is targeted at the skin-band.
 
@@ -120,9 +119,6 @@ Do NOT use EM-XFEM if:
        EM-XFEM as an FE-level technique
   - Solid-mechanics / fracture XFEM (Jafari et al. 2021): a separate
        family of XFEM for crack growth — different problem, same name
-  - `radia_mcp.radia_ngsolve.cln_sibc_orthogonal`:
-       decision framework: when XFEM vs SIBC vs augmented CLN
-       (topic 'xfem_vs_sibc')
   - validation_test/hiruma_xfem_comparison/:
        reproducible benchmark (Phase 1-4)
 
@@ -198,7 +194,7 @@ For a single-omega FE solve this is fine (just re-evaluate psi for the
 new omega).  For:
   - frequency sweeps: each omega requires a fresh FE basis -> no ROM
   - time-domain transients: omega is undefined in the time domain
-  - model order reduction (CLN, Multi-K): need static K_0, M -> psi
+  - model order reduction (Krylov / PRIMA projection): need static K_0, M -> psi
     must be FROZEN at one reference omega_ref
 
 The freezing strategy is:
@@ -388,29 +384,29 @@ electrically).  This is different from a port-driven problem where
 the excitation enters through a small portion of the boundary
 (Dirichlet on a face or Neumann surface current).
 
-The augmented-CLN ROM construction (Sugahara 2026 Paper I, Theorem 1)
+The Schur-augmented ROM construction (Sugahara 2026 Paper I, Theorem 1)
 adds the sqrt(s) Schur block to a rational base ROM Y_R(s).  The
-preserved-asymptote claim requires Y_CLN(s -> infinity) -> 0.  In the
+preserved-asymptote claim requires Y_R(s -> infinity) -> 0.  In the
 **discrete FE setting** this is
 
-    Y_CLN(infty) = sigma * (|Omega| - b_r^T M_r^{-1} b_r)
+    Y_R(infty) = sigma * (|Omega| - b_r^T M_r^{-1} b_r)
 
 with b the FE source vector and (K_0, M, b_r, M_r) the projected
 quantities.  For a port-driven b, the discrete ratio
 b_r^T M_r^{-1} b_r / |Omega| converges to the boundary port area as
-the mesh refines, giving Y_CLN(infty) -> 0 (the algebraic decay
+the mesh refines, giving Y_R(infty) -> 0 (the algebraic decay
 becomes exponential).  For a volume-source J_0 b, the residual
 decays only **algebraically** with mesh size.
 
 Beta-1 Phase 3 verified on Hiruma cylinder:
 
-| Mesh       | DOF   | Y_CLN(infty) | augmented-CLN r(10^12 Hz) |
+| Mesh       | DOF   | Y_R(infty)   | augmented ROM r(10^12 Hz) |
 |------------|-------|--------------|---------------------------|
 | maxh=R/3.5 | 44    | 53           | 1.0 -> 239 (collapses)    |
 | maxh=R/10  | 393   | 19           | improved but still wrong  |
 | maxh=R/30  | 3558  | 13           | algebraic decay only      |
 
-So the augmented-CLN single-DOF SIBC asymptote claim **fails** for
+So the augmented-ROM single-DOF SIBC asymptote claim **fails** for
 volume-source on the Hiruma cylinder.  This is NOT a contradiction
 with Paper 1 Theorem 1 -- Theorem 1's hypothesis (port-driven) is
 violated.
@@ -430,118 +426,22 @@ CFEM cannot do without prohibitive mesh refinement.
 
 ## When the volume-source scope matters
 
-The volume-source structural problem (Y_CLN(infty) != 0 for canonical
-CFEM-CLN) is generic to ANY problem with uniform-driver J_0 in the
+The volume-source structural problem (Y_R(infty) != 0 for a canonical
+CFEM rational ROM) is generic to ANY problem with uniform-driver J_0 in the
 conductor body:
   - Induction heating workpiece (uniform J_0 = sigma E_z applied)
   - Hiruma 2023 paper cylinder
   - Field-from-conductor calculations
 
-Port-driven problems (no Y_CLN(infty) issue):
+Port-driven problems (no Y_R(infty) issue):
   - Boundary-current SIBC drive
   - Cuboid Y(s) of Paper 1 Sec V (port-area-supported b)
-  - Multi-conductor BEM-CLN driven from external coils
+  - Multi-conductor BEM models driven from external coils
   - Most engineering coil-and-load configurations
 
 The bottom line: if your source is uniform inside the conductor,
-the **EM-XFEM at FE level** is the right tool, NOT the augmented-CLN
+the **EM-XFEM at FE level** is the right tool, NOT the Schur-augmented
 ROM alone.
-"""
-
-
-# ---------------------------------------------------------------------------
-# CLN STACKING (NEGATIVE RESULT)
-# ---------------------------------------------------------------------------
-
-CLN_STACKING_NEGATIVE = r"""
-# XFEM + canonical CLN stacking: does NOT extend Hankel conditioning
-
-## The tempting hypothesis
-
-If XFEM at the FE level captures skin modes that CFEM cannot, and
-canonical CLN extraction breaks at N ~ 4 in float64 because of the
-Hankel-QD breakdown amplified by the skin-mode contribution to
-moments, then stacking XFEM + canonical CLN might extend the
-float64 reliability of high-N rung extraction.
-
-This was tested in beta-1 Phase 4 (2026-05-25).
-
-## Setup
-
-- Static (frozen) XFEM enrichment: psi(x) = exp(-xi/delta_ref) with
-  delta_ref = sqrt(2/(omega_wall * mu * sigma)) at the wall-band
-  center.
-- Cylinder a=5mm, sigma=1e6 S/m, 44-vertex mesh.
-- CFEM (24 free DOFs) vs XFEM (48 free DOFs, +24 enrichment).
-- Compute Krylov moments mu_n = b^T (K_0^{-1} sigma M)^n K_0^{-1} b
-  for n = 0..19.
-- Form Hankel matrices H_N, compute condition numbers kappa(H_N).
-
-## Results
-
-| N  | kappa_CFEM(H_N)  | kappa_XFEM(H_N)  | Ratio | Float64 OK? |
-|----|------------------|------------------|-------|-------------|
-| 2  | 1.15e+11         | 7.71e+10         | 1.5   | marginal both |
-| 3  | 2.93e+23         | 5.49e+22         | 5.3   | NO both      |
-| 5  | 3.19e+48         | 7.90e+47         | 4.0   | NO           |
-| 10 | 2.18e+101        | 1.02e+100        | 21.5  | NO           |
-
-**Both break at N=3.  XFEM gives at most 1-21x improvement in kappa,
-which is NOT enough to extend the float64 stage limit beyond N=2-3.**
-
-Krylov moments are nearly identical between CFEM and XFEM:
-  mu_0:  4.677e-3 (CFEM) vs 4.689e-3 (XFEM) -- 0.3% diff
-  mu_9:  3.51e-45 vs 3.64e-45 -- 4% diff
-
-## Why the hypothesis was wrong
-
-The Krylov sequence at s = 0 weights eigenmodes by tau_k^n:
-
-    v_n = (K_0^{-1} sigma M)^n K_0^{-1} b = sum_k g_k * tau_k^n * phi_k
-
-**High-k skin modes have tiny tau_k**, so their contribution to
-Krylov vectors is **exponentially damped**.  The XFEM-enriched DOFs
-that capture these high-k modes contribute negligibly to canonical
-CLN moments at s = 0.
-
-The Hankel ill-conditioning is set by the **bulk eigenvalue spread**,
-which CFEM and XFEM capture identically (low-k modes are well-resolved
-on the coarse mesh; XFEM only adds high-k DOFs that don't help here).
-
-## Implication for the radia-mcp decision layer
-
-- XFEM utility = FE-level skin-layer resolution + volume-source FE
-  residual cure (Phase 2, Phase 3).
-- XFEM utility is NOT canonical CLN moment-matching stage stability.
-  Paper 1 Sec VI's "N <= 4 float64 limit" stands even when XFEM is
-  stacked.
-- For broadband accuracy with reliable circuit identification:
-    1. Multi-K (Kuriyama 2019) at lower stage, K_0-MGS on multi-point
-       Krylov sidesteps Hankel ill-conditioning -- but loses canonical
-       Cauer identity (Krylov POD).
-    2. Foster-of-Cauers (Sugahara 2026 Paper II): low-N Cauer macro +
-       diffusive Foster terminator at the surface.
-    3. MPFR + INTLAB (Nagamine 2026): keep canonical Cauer but pay
-       192-bit precision cost.
-  XFEM-CLN stacking is NOT among these.
-
-## Why a NEGATIVE result is useful
-
-The 2026-05-25 user instinct that this hypothesis was worth testing
-("XFEM-CLN したら高段で CLN が壊れにくいとかいう特性がでるなら、
-それは知見だなぁ") was correct.  The experiment is clean and
-falsifiable, and the verdict is unambiguous.
-
-XFEM's role is now precisely circumscribed:
-  - FE level: yes, skin layer + volume-source FE residual
-  - ROM level: no, does not improve canonical CLN stage stability
-
-## Files
-
-    validation_test/hiruma_xfem_comparison/hiruma_xfem_comparison.ipynb   (Phase 4 section)
-    validation_test/hiruma_xfem_comparison/phase4_xfem_hankel_conditioning.png
-    validation_test/hiruma_xfem_comparison/phase4_xfem_hankel_results.json
-    memory/project_xfem_cln_hankel_no_improvement.md
 """
 
 
@@ -559,8 +459,7 @@ DECISION_TABLE = r"""
 | FE level: skin-layer resolution at high f | YES | Hiruma 2023 original use |
 | FE level: volume-source FE residual cure (Y_FE(infty) -> 0) | YES | Phase 2 / Phase 3 |
 | FE level: sharp-edge geometry without prohibitive mesh refinement | YES (if needed) | with edge enrichment too |
-| ROM level: canonical CLN Hankel-QD stability | NO | Phase 4 verified |
-| ROM level: float64 high-N stage extension | NO | Phase 4 verified |
+| ROM level: conditioning of s=0 Krylov-moment Hankel matrices | NO | Phase 4: 1.5-21x only |
 
 ## Use-case decision tree
 
@@ -571,15 +470,16 @@ Q1. Do you need spatial field distribution at one (or a few) frequencies?
 
 Q2. Frequency sweep / time-domain / SPICE export?
      YES -> XFEM does not give a ROM directly; route to:
-                * Multi-K + Schur (Paper 1 Sec V.G) for port-driven
-                * Foster-of-Cauers for time-domain SPICE
+                * Krylov (PRIMA) ROM + sqrt(s) Schur (Paper 1 Sec V.G) for port-driven
+                * Foster + SIBC (bulk Foster modes + surface impedance) for
+                  time-domain SPICE
      NO  -> continue.
 
 Q3. Is the source uniform inside the conductor (volume-source)?
      YES -> XFEM at FE level cures the FE residual (Y_FE_XFEM(infty) -> 0).
-            Then optionally extract a ROM, but it will no longer be
-            canonical CLN -- it lives in the XFEM-enriched space.
-     NO (port-driven) -> XFEM optional.  Augmented CLN ROM works
+            Then optionally extract a ROM; it lives in the
+            XFEM-enriched space.
+     NO (port-driven) -> XFEM optional.  A Schur-augmented ROM works
                          standalone for SIBC asymptote (Paper 1 Sec V).
 
 Q4. Pure industrial high-f only (DC accuracy not needed)?
@@ -593,9 +493,9 @@ Q4. Pure industrial high-f only (DC accuracy not needed)?
 |------------------------------------------------------|------------------|
 | Single-freq 3D + volume source + corner detail       | EM-XFEM (Hiruma) |
 | Single-freq 3D + port-driven + smooth geometry       | CFEM-SIBC        |
-| Frequency sweep + port-driven                        | Augmented CLN    |
-| Time-domain transient + port-driven                  | Augmented CLN    |
-| Multi-conductor IH coil + workpiece                  | BEM-CLN + Augmented CLN per element (Paper II) |
+| Frequency sweep + port-driven                        | Foster + SIBC    |
+| Time-domain transient + port-driven                  | Foster + SIBC    |
+| Multi-conductor IH coil + workpiece                  | Foster + SIBC per conductor |
 | Plain industrial high-f, no DC                       | classical SIBC   |
 | Crack growth (mechanical XFEM, not EM)               | fracture XFEM (Jafari et al. 2021) — different problem |
 """
@@ -821,7 +721,7 @@ repo:/validation_test/hiruma_xfem_comparison/
     hiruma_xfem_comparison.ipynb            - consolidated Phase 1-4 notebook
         (sections: phase1 CFEM baseline; phase2 Hiruma XFEM enrichment;
          phase3 sqrt(s) Schur [deprecated Pade predecessor]; phase3b
-         Galerkin-Krylov augmented CLN; phase4 XFEM-CLN Hankel conditioning)
+         Galerkin-Krylov Schur-augmented ROM; phase4 Krylov-moment Hankel conditioning)
     results_phase1.json                     - Phase 1 numerical output
     phase4_xfem_hankel_results.json         - Phase 4 numerical output
     phase4_xfem_hankel_conditioning.png     - Phase 4 figure
@@ -845,18 +745,18 @@ cd repo:/validation_test/hiruma_xfem_comparison/
 # Run all Phase 1-4 sections (consolidated notebook, ~19 s total)
 jupyter nbconvert --to notebook --execute --inplace hiruma_xfem_comparison.ipynb
 # sections: phase1 CFEM baseline vs Bessel; phase2 Hiruma EM-XFEM enrichment;
-# phase3b augmented CLN Galerkin-Krylov (phase3 = deprecated Pade predecessor);
-# phase4 XFEM-CLN Hankel conditioning -> phase4_xfem_hankel_conditioning.png + .json
+# phase3b Schur-augmented Galerkin-Krylov ROM (phase3 = deprecated Pade predecessor);
+# phase4 Krylov-moment Hankel conditioning -> phase4_xfem_hankel_conditioning.png + .json
 ```
 
 ## Expected outputs
 
 - Phase 1: CFEM fine = 0.04% vs Bessel at r/delta=15; coarse = +85.89%.
 - Phase 2: XFEM 88-DOF = +0.14% at r/delta=15.
-- Phase 3b: Y_CLN(infty) = 53/19/13 for mesh = R/3.5/R/10/R/30
-  (algebraic decay, augmented CLN r(10^12) collapses for volume-source).
-- Phase 4: CFEM and XFEM Hankel kappa both break at N=3 (1.5-21x XFEM
-  improvement, not enough to extend the float64 stage limit).
+- Phase 3b: Y_R(infty) = 53/19/13 for mesh = R/3.5/R/10/R/30
+  (algebraic decay, augmented ROM r(10^12) collapses for volume-source).
+- Phase 4: CFEM and XFEM moment-Hankel kappa both exceed float64 range at
+  N=3 (only 1.5-21x XFEM improvement).
 
 ## Citing this work
 
@@ -880,8 +780,7 @@ TOPICS = {
     "enrichment_function":   "psi(x) = exp(-gamma*xi); frequency dependence; freezing for ROM",
     "ngsolve_implementation":"NGSolve compound H1 x H1 pattern, three pitfalls",
     "cylinder_validation":   "Phase 2: 88-DOF reproduction of Hiruma 2023 (0.14% at r/delta=15)",
-    "volume_source_scope":   "Phase 3: XFEM cures volume-source FE residual that breaks augmented CLN",
-    "cln_stacking_negative": "Phase 4: XFEM does NOT extend canonical CLN Hankel-QD stability (verified)",
+    "volume_source_scope":   "Phase 3: XFEM cures volume-source FE residual that breaks the Schur-augmented ROM",
     "decision_table":        "When to use EM-XFEM: layer / use-case / application map",
     "ngsxfem_relation":      "ngsxfem library (cut-FEM XFEM) vs Hiruma PUFEM EM-XFEM",
     "reproduction":          "How to run Phase 1-4 benchmarks; expected outputs",
@@ -916,9 +815,7 @@ def get_em_xfem_knowledge(topic: str = "overview") -> str:
         ngsolve_implementation  - Compound H1 x H1 pattern, pitfalls
         cylinder_validation     - Phase 2: 0.14% at r/delta=15, 88 DOF
         volume_source_scope     - Phase 3: cures FE residual that breaks
-                                  augmented CLN on volume-source
-        cln_stacking_negative   - Phase 4: XFEM does NOT extend canonical
-                                  CLN Hankel-QD stability (rejected)
+                                  the Schur-augmented ROM on volume-source
         decision_table          - When to use EM-XFEM (layer / use case)
         reproduction            - How to run Phase 1-4 benchmarks
         lab_files               - Paths to scripts and figures
@@ -935,9 +832,6 @@ def get_em_xfem_knowledge(topic: str = "overview") -> str:
         return CYLINDER_VALIDATION
     if t in ("volume_source_scope", "phase3", "volume_source", "scope"):
         return VOLUME_SOURCE_SCOPE
-    if t in ("cln_stacking_negative", "phase4", "cln_stacking", "stacking",
-             "hankel", "negative"):
-        return CLN_STACKING_NEGATIVE
     if t in ("decision_table", "decision", "when_to_use", "use_case"):
         return DECISION_TABLE
     if t in ("ngsxfem_relation", "ngsxfem", "cut_fem", "cutfem", "lehrenfeld"):
@@ -953,7 +847,6 @@ def get_em_xfem_knowledge(topic: str = "overview") -> str:
             NGSOLVE_IMPLEMENTATION,
             CYLINDER_VALIDATION,
             VOLUME_SOURCE_SCOPE,
-            CLN_STACKING_NEGATIVE,
             DECISION_TABLE,
             NGSXFEM_RELATION,
             REPRODUCTION,

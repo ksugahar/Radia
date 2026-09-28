@@ -9,14 +9,13 @@ Meissner/pinning, diamagnetic, Earnshaw + loopholes, force computation).
 Headline content is the lab's own Radia-based maglev research line
 (CAE-AI Lab, Yano + Sugahara): Radia IEM <-> reduced-potential FEM weak
 coupling for moving-magnet eddy-current force (topic radia_iem_fem) and
-Cauer Ladder Network model-order reduction for real-time control-coupled
-maglev (topic cln_mor_control).  The former linear-drive material
+TEAM 28 reduced-order models for control-coupled maglev (Krylov/PRIMA,
+Foster modal form; topic team28_dynamic_scope).  The former linear-drive material
 (LIM/LSM, end effects) was removed; the former separate
 radia_mcp.levitation server was consolidated into this one.
 
 Cross-references:
 - `radia_mcp.ih` — induction heating (EML = levitation + IH together)
-- `radia_mcp.mor` (mor_cln) — Cauer Ladder Network MOR theory
 - `radia_mcp.fem` (potential_formulations) — A-phi / T-Omega / A-T gauges
 - `radia_mcp.team_benchmark.force_motion.problem_28` — TEAM 28 levitation benchmark
 - `radia_mcp.force` — shared force methods, sample integration, validation
@@ -49,12 +48,11 @@ def maglev(topic: str = "overview") -> str:
 
     Args:
         topic: One of:
-          maglev systems + the lab's Radia/CLN research --
+          maglev systems + the lab's Radia research --
             "overview"            - Unified maglev landscape (DEFAULT)
             "radia_iem_fem"       - Radia IEM <-> reduced-potential FEM weak coupling (Yano)
-            "cln_mor_control"     - Cauer Ladder Network MOR for control-coupled maglev (Yano)
-            "team28_dynamic_scope"- 50 Hz cycle-average mechanical motion vs full EM transient
-            "physical_tensor_rom" - Physical polarizability tensor alpha(s) as a passive LTI (AAA+NNLS; Kameari+Kelvin breakdown)
+            "team28_dynamic_scope"- TEAM 28 reduced models + 50 Hz cycle-average motion scope
+            "physical_tensor_rom" - Physical polarizability tensor alpha(s) as a passive LTI (AAA+NNLS; eigen-accumulation breakdown)
             "pm_maglev_zero_power"- Passive PM levitation, Maxwell-Earnshaw
             "eddy_current_maglev" - Eddy-current EDS, Kansai 2D model, Arago
             "sumitomo_heavy_industrial" - JP 7-327337 PM bearing + JP 2007-215264 mover
@@ -192,7 +190,7 @@ _validation.install()
 register_status_tool(
     mcp,
     server_name='mcp-server-maglev',
-    description='Magnetic levitation, UNIFIED: maglev systems (EMS/EDS/PM/SC/Halbach) + levitation FORCE physics (induction/EML/AMB/superconducting/diamagnetic/Earnshaw/force-computation). Lab research line: Radia IEM<->FEM weak coupling + Cauer Ladder Network MOR for control-coupled maglev (Yano, CAE-AI).',
+    description='Magnetic levitation, UNIFIED: maglev systems (EMS/EDS/PM/SC/Halbach) + levitation FORCE physics (induction/EML/AMB/superconducting/diamagnetic/Earnshaw/force-computation). Lab research line: Radia IEM<->FEM weak coupling + Krylov/Foster reduced models for control-coupled maglev (Yano, CAE-AI).',
     subpackage='radia_mcp.maglev',
     related_servers=["force", "mor", "motor", "ih"],
 )

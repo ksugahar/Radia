@@ -1,4 +1,4 @@
-"""Magnetic levitation knowledge.
+"""Magnetic levitation knowledge (incl. the lab's Radia-IEM maglev research).
 
 Scope: MAGNETIC LEVITATION, unified -- both the maglev SYSTEMS (EMS/EDS
 trains, SCMaglev, Halbach/Inductrack, magnetic wheels, PM/SC bearings)
@@ -9,6 +9,9 @@ former linear-drive (LIM/LSM, end-effect) material was removed.  (The
 force-physics half was previously a separate radia_mcp.levitation server;
 it was consolidated into this one server.)
 
+The lab's own maglev research line (CAE-AI Lab, Yano Takaaki + Sugahara)
+is the headline content -- topic `radia_iem_fem` (with the TEAM 28
+reduced-model scope in `team28_dynamic_scope`), distilled from:
   - Yano & Sugahara, conf. digest E-3-1 "Construction of an IEM-FEM
     hybrid computation method toward high-accuracy magnetic levitation
     analysis" (CAE-AI Lab) -- Radia IEM (HDiv-VIM) <-> reduced-potential
@@ -56,18 +59,17 @@ NOT read on this pass (size budget):
 Sections marked "(open literature)" are textbook-level summaries
 included so the knowledge file is self-contained; cross-check
 against the unread lab PDFs when those become accessible.
-
-References (retained):
-  - T. Matsuo, "Cauer Ladder Network Representation with Constant Basis Functions for Eddy Current Problems Involving Conductor Movement", COMPUMAG 2023 (Paper
 """
 
 
 # Authoritative topic enum for the dispatcher tool (wired into
 # `maglev_topics()` via common.register_topics_tool).
 TOPICS: dict[str, str] = {
+    "overview": "Magnetic levitation -- systems (EMS/EDS/PM/SC/Halbach) + force physics (induction/EML/AMB/SC/diamagnetic/Earnshaw) + the lab's Radia-IEM research line",
+    # -- maglev systems + the lab's Radia research --
     "radia_iem_fem": "Radia IEM (HDiv-VIM) <-> reduced-potential FEM weak coupling for moving-magnet eddy-current levitation force; A-phi (A_ext) / T-Omega (B_ext); no re-mesh on magnet motion; rotating-magnet-over-plate cross-validation tightens to ~0.1% at order=2; the Lorentz-force HDiv(J=curl T) function-space pitfall + verified NGSolve recipe (Yano bachelor, lab research)",
-    "team28_dynamic_scope": "TEAM 28 Simulink scope: validated 50 Hz cycle-averaged force-height LUT plus slow mechanical motion; not a carrier-resolved electromagnetic transient, motion-EMF model, or identified damping law",
-    "physical_tensor_rom": "Physical (exterior-matched) polarizability tensor alpha(s) as a passive, stable LTI: AAA discovers the Stoll poles + NNLS passive residues, fitting the per-frequency 3D HCurl tensor; Kameari+Kelvin accumulation BREAKS DOWN for the general 3D body (rom_fit.py, lab research)",
+    "team28_dynamic_scope": "TEAM 28 reduced models: measured-height benchmark (11.0 vs 11.5 mm), force-convention gotcha, HCurl Eddy Bubble + Foster modal ROM, and the Simulink scope (validated 50 Hz cycle-averaged force-height LUT plus slow mechanical motion; not a carrier-resolved electromagnetic transient, motion-EMF model, or identified damping law)",
+    "physical_tensor_rom": "Physical (exterior-matched) polarizability tensor alpha(s) as a passive, stable LTI: AAA discovers the Stoll poles + NNLS passive residues, fitting the per-frequency 3D HCurl tensor; eigen-accumulation with a Kelvin boundary BREAKS DOWN for the general 3D body (rom_fit.py, lab research)",
     "pm_maglev_zero_power": "Zero-power passive PM levitation: Maxwell-Earnshaw constraint, axial PM bearings, halbach diamagnetism",
     "eddy_current_maglev": "Eddy-current EDS: Arago-disk physics, magnetic wheels (Fujii/Kansai 2D model), Inductrack",
     "sumitomo_heavy_industrial": "Sumitomo Heavy patents: PM axial bearing with brake ring (JP 7-327337); planar eddy-current mover (JP 2007-215264)",
@@ -90,12 +92,14 @@ TOPICS: dict[str, str] = {
 OVERVIEW = r"""
 # Magnetic levitation landscape
 
-> **POLICY (analysis method)**: solve maglev with **Radia (IEM) + > NGSolve
-(FEM) weak coupling**, NOT standalone FEM. Pure FEM must mesh > the large
-PM<->conductor air gap and RE-MESH on every magnet move; > Radia supplies the
-open-boundary external field analytically (no air > mesh) and NGSolve reduced-
-potential FEM solves only the eddy reaction > field. Mirrors the project >
-CLAUDE.md policy "Maglev Analysis: Radia + NGSolve, Not FEM Alone".
+> **POLICY (analysis method)**: solve maglev with **Radia (IEM) +
+> NGSolve (FEM) weak coupling**, NOT standalone FEM.  Pure FEM must mesh
+> the large PM<->conductor air gap and RE-MESH on every magnet move;
+> Radia supplies the open-boundary external field analytically (no air
+> mesh) and NGSolve reduced-potential FEM solves only the eddy reaction
+> field.  See topics `radia_iem_fem` (the weak coupling) and
+> `team28_dynamic_scope` (reduced models for control).  Mirrors the project
+> CLAUDE.md policy "Maglev Analysis: Radia + NGSolve, Not FEM Alone".
 
 ## Levitation principles
 
@@ -119,6 +123,7 @@ conductor** -- with two complementary methods built on Radia + NGSolve:
 | Topic | What | Why it matters for maglev |
 |-------|------|----------------------------|
 | `radia_iem_fem`   | Radia IEM (HDiv-VIM) computes the open-boundary external field; reduced-potential FEM computes only the eddy reaction field; weak-coupled, fed back to demagnetisation | The magnet MOVES -> only the external field updates, **no re-mesh** of the air gap; IEM removes the air-region discretisation error |
+| `team28_dynamic_scope` | Krylov (PRIMA) projection and the HCurl Eddy Bubble + Foster modal form turn the 3D eddy-current model into a compact passive state-space model | Control-in-the-loop maglev design without a per-step full FEM; TEAM 28 benchmark |
 
 These are validated on the standard eddy-current benchmarks: the
 eddy-current FORCE/loss solver against TEAM Problem 7 (the canonical
@@ -130,6 +135,8 @@ electrodynamic levitation device).
 
 - **Radia-IEM + FEM weak coupling** for moving-magnet eddy-current force
   (Yano & Sugahara) -- topic `radia_iem_fem`
+- **Reduced-order models** for control-coupled maglev (Krylov/PRIMA,
+  Foster modal form) -- topic `team28_dynamic_scope`
 - **Magnetic-wheel EDS** -- Kansai-Univ collaboration (Saiki et al. 2021)
 - **PM axial bearings** -- Sumitomo Heavy lineage (heavy-industrial)
 - **Bearingless motor + WPT** (cross-link `radia_mcp.motor`, `radia_mcp.pcb`)
@@ -359,6 +366,8 @@ Fixes that WORK (all in the matured runs):
 
 ## The magnetic-Reynolds crossover: do you even NEED the eddy FEM?
 
+Before reaching for the FEM (or a reduced-order model of it), check the magnetic
+Reynolds number of the conductor:
 
 ```
   Rm = mu0 * sigma * omega * L^2      (L = conductor size, omega = field-change rate)
@@ -372,15 +381,62 @@ Three regimes (verified on the rotating-magnet plate,
 | Rm | reaction vs source | what to compute J / force / loss with |
 |----|--------------------|----------------------------------------|
 | `<~ 0.1` | negligible (<~1%) | **kinematic source-only**: `J = -sigma dA_s/dt` straight from the Radia analytic field -- NO per-step FEM at all |
+| `~ 0.1 .. 1` | a few % | full-FEM or a reduced model if you need that accuracy |
+| `>~ 1` | significant (>%-level) | the reaction matters -- full-FEM, and a Krylov/Foster reduced model to make it fast |
 
-**Yano's actual rotating-magnet case is Rm ~ 0.016** (1 mm magnet, ~1 Hz, 0.5
-mm Cu plate; skin depth ~66 mm >> 0.5 mm). Measured: the source-only `J =
--sigma dA_s/dt` reproduces the full-FEM Lorentz force to **0.035%** -- so the
-entire per-step eddy FEM (which Yano's study ran) computes a ~0.03%
-correction.
+**Yano's actual rotating-magnet case is Rm ~ 0.016** (1 mm magnet, ~1 Hz,
+0.5 mm Cu plate; skin depth ~66 mm >> 0.5 mm).  Measured: the source-only
+`J = -sigma dA_s/dt` reproduces the full-FEM Lorentz force to **0.035%** --
+so the entire per-step eddy FEM (which Yano's study ran) computes a ~0.03%
+correction.  **The dramatic speed-up for that problem is simply to drop the
+FEM and evaluate J / F / P from the analytic Radia source.**  The crossover
+script sweeps the motion speed to push Rm from 0.016 to 16: source-only
+Lorentz-force error grows 0.035% -> 20%, while a block-Krylov reduced model
+(see "Moving-source reduced basis" below) reproduces the full-FEM to <~ 0.3%
+across the whole range (1e-6 at low Rm, 0.25% at Rm ~ 16) -- but a dynamic
+reduction only *earns its keep* above Rm ~ 1 (faster motion, thicker / more
+conductive rails, kHz drive, the TEAM 28 Al disk).  Do NOT present a
+reduction of a low-Rm problem as a dynamic-reduction success -- there the
+outputs are source-determined and any faithful reduction looks "exact" for
+the wrong reason.
 
-**The real high-Rm anchor at the other end of this crossover is TEAM 28** (`Rm
-~ 57` at the in-plane current-loop scale; the lift IS the eddy reaction).
+**The real high-Rm anchor at the other end of this crossover is TEAM 28**
+(`Rm ~ 57` at the in-plane current-loop scale; the lift IS the eddy reaction).
+There a 6-stage Krylov reduction reproduces the full-FEM levitation force and
+the equilibrium height matches the **published measured 11.5 mm to 4%** -- see
+`team28_dynamic_scope` ("External-benchmark validation").  So the crossover has
+two REAL anchors: low-Rm Yano (kinematic, no reduction needed) and high-Rm
+TEAM 28 (dynamic reduction essential, validated against the published
+benchmark).
+
+## Moving-source reduced basis (a 2-parameter generalization)
+
+For single-parameter motion (the gap `z_gap`) the source field `A_s(z_gap)`
+stays inside the span of a few basis vectors built from the coil source, so
+the motion enters only the right-hand-side expansion coefficients.  For a
+source whose spatial pattern moves over the conductor in MORE than one
+parameter (e.g. a magnet that translates AND rotates over a plate), a
+single-seed basis no longer spans the source variation.  The generalization,
+verified in `docs/maglev/demos/rotating_magnet_eddy.py`:
+1. **SVD-pre-evaluate the source rank**: POD the source field over the
+   conductor across the trajectory -> M dominant spatial modes (M ~ 16 for
+   the rotating magnet over a 12 mm plate; the moving localized hot-spot is
+   the reason it is not rank-3).
+2. **Block-Krylov over the TRANSIENT iteration matrix** `A_sys^-1 M`
+   (`A_sys = M_sigma + dt*K`, NOT `K^-1 M` -- in the A-phi system K is
+   singular on the phi block): seeds `A_sys^-1 g_m`, stages
+   `(A_sys^-1 M)^p`.  This is the reachable subspace of the time-stepped
+   solution; deflate/orthonormalize (the conductor modes are SHARED across
+   the M seeds, so the reduced state is ~16-25, NOT M x stages).
+3. Galerkin-project: `M_r = V^T M V`, `A_r = V^T A_sys V`; the reduced
+   transient is an M x M solve per step (~1000x less than the full back-sub).
+
+**Honest status (do NOT over-claim).**  This POD-seeded block-Krylov
+construction is demonstrated ONLY on the LOW-Rm rotating-magnet plate
+(`Rm ~ 0.016`), where -- per the crossover -- a reduction buys nothing because
+the output is source-determined, and it is cross-checked only against our OWN
+full-FEM, NOT against an external reference.  Treat it as exploratory until it
+is exercised at high Rm against an external benchmark.
 
 ## Mapping to the Radia / NGSolve stack
 
@@ -405,12 +461,11 @@ correction.
 - `radia_mcp.fem` (potential_formulations) -- A-phi / T-Omega / A-T gauges
 - `radia_mcp.radia_ngsolve` -- Radia field -> NGSolve coupling
 - `radia_mcp.team_benchmark.force_motion.problem_28` -- TEAM 28 validation
+- topic `team28_dynamic_scope` -- reduced models of the SAME eddy-current problem for control
 - topic `eddy_current_maglev` -- the moving-magnet-over-plate physics
 - Refs: Chadebec et al. 2006 (IEM open boundary); Biro 2000 (reduced
   potential A-phi / T-Omega); Yano & Sugahara digest E-3-1.
 """
-
-
 
 
 TEAM28_DYNAMIC_SCOPE = r"""
@@ -440,20 +495,216 @@ settles perfectly.  To cross that boundary, advance position-dependent
 electromagnetic states and the mechanical state together, include the motion
 derivative terms, and independently validate current, force, energy, and
 motion histories.
+
+## Verified in-repo: reduced levitation FORCE + EXTERNAL benchmark (2026-06-20)
+
+A worked, verified example lives in `docs/maglev/demos/team28/`.  The
+coil-driven axisymmetric eddy problem is `(K + s*N) X = F` (K = s-independent
+magnetostatic operator, N = conductivity term, F = coil source); the reduction
+is a congruence projection onto the orthonormalised Krylov subspace built from
+the COIL SOURCE (`V0 = K^-1 F`, `V_{k+1} = orthonormalise(K^-1 (N V_k))`,
+PRIMA-type).  A **6-stage reduction reproduces the full-FEM levitation force vs
+height** to max |reduced-full| = 5e-4 N (stage 3 = 0.14%, stage 5 = 0.000%);
+the repo full-FEM matches the lab axisymmetric ground truth to 0.01%.
+
+**External-benchmark validation (the honest high-Rm anchor).**  TEAM 28 is a
+genuinely HIGH-Rm levitation problem -- `Rm ~ 57` at the in-plane
+current-loop scale (disk R=65mm; the through-thickness Rm is only ~0.12) -- so
+the lift IS the eddy reaction, exactly the regime where a dynamic reduction
+earns its keep (contrast the LOW-Rm rotating-magnet plate in `radia_iem_fem`,
+Rm ~ 0.016, where the reaction is a ~0.03% correction and a reduction buys
+nothing).  The physically-correct levitation equilibrium (where the
+time-averaged lift == disk weight 1.055 N) lands at absolute disk-bottom
+height **z = 11.0 mm**, matching the **published measured steady-state
+levitation height z = 11.5 mm** (Karl-Fetzer-Kurz-Lehner-Rucker, the official
+TEAM 28 definition; laser triangulation, 4-measurement average) to **4%**.
+
+**Prior art -- this is an OPEN REPRODUCTION, not a first.**  Motion-coupled
+TEAM 28 levitation with a reduced circuit model was already published by
+K. Sugahara, N. Tanimoto, Y. Takahashi, T. Matsuo, COMPUMAG 2023 (Paper ID
+324): the full transient levitation height `z(t)` (Matlab/Simulink, 20000
+steps) vs measurement.  The radia `docs/maglev/demos/team28/` is an OPEN,
+pip-installable, NGSolve + golden-tested reproduction of a frequency-domain
+slice of that published result -- reproducible-open value, NOT novelty.
+
+**Force-convention gotcha (caught by the published 11.5 mm).**  The TEAM 28
+surface force integral `Re[B_r J_t]` (and the lab .mat `Fz1`) is EXACTLY 2x the
+physical time-averaged Lorentz force `<f_z> = -(1/2) Re[J_t conj(B_r)]`
+(verified ratio 1.9998; the Im*Im cross term ~6e-5).  The disk floats where the
+PHYSICAL lift == weight, i.e. `F_z/2 == 1.055 N`.  Balancing the 2x integral
+against the 1x weight gives a spurious equilibrium 14.9 mm -- ABOVE the
+measured 11.5 mm, which is the unphysical tell -- so use `F_z/2`.  The
+reduced-vs-full convergence is convention-independent (golden locks
+`F_z(dZ=0) = -2.1928 N`).
+
+## HCurl Eddy Bubble + Foster modal ROM
+
+**HCurl Eddy Bubble and the Foster modal form are a serial two-level ROM.**
+HCurl Eddy Bubble reduces the high-order spatial current space while
+preserving face-adjacency classes and conductor-cycle bridges.  The resulting
+passive `R`, `L`, and vector-potential port `P` are diagonalised by
+`R v = lambda L v`; the Foster modes (real poles `-lambda`) carry frequency,
+time, and fixed-mesh movement coupling.  Radia exposes this handoff as
+`radia.vim.HCurlEddyFosterModelFromVIM`; position interpolation is
+`radia.maglev.MovingHCurlFosterFamily`, which requires one shared `R`/`L`
+pair and interpolates only the port matrix.
+
+The HCurl Eddy Bubble parent-space reduction covers all NGSolve HCurl cell
+families at p=6: 3-D TET, HEX, PRISM/WEDGE, and PYRAMID use face adjacency and
+three-component `curl(T)`; 2-D TRIG and QUAD use edge adjacency and
+out-of-plane `Jz`.  `NgsolveHCurlCellFamilies` records pure or mixed-family
+meshes.  The dimensionally matched epsilon-free interactions are analytic
+tetrahedron moments for TET, canonical affine sub-tetrahedra (6/3/2) for
+HEX/WEDGE/PYRAMID, and the planar `-log(r)/(2*pi)` H-matrix interaction for
+TRIG/QUAD.  The 2-D path never falls back to the sampled 3-D Laplace kernel and
+reports net current so the return-current/gauge convention remains explicit.
+
+The high-order non-tet Gram uses a stable tetrahedral Bernstein fit, exact
+conversion to reference monomials, and analytic Newton-potential moments
+through total degree 18.  Automatic degrees are p-1 for TET, 2p for WEDGE,
+and 3p for HEX/PYRAMID.  At p=6, HEX degree 18 has projection residual
+1.90e-11, WEDGE degree 12 has 1.77e-13, and PYRAMID degree 18 has 4.72e-5 on
+the canonical 6/3/2 sub-tetrahedra.  All produce positive epsilon-free Gram
+blocks.  The p=6 HEX 15- versus 125-point outer rules differ by 1.09e-4, so
+`outer_quad=5` is the explicit convergence check above the default 15-point
+rule.
+
+PYRAMID is the qualified case: its HCurl apex modes are rational, not finite
+polynomials.  The default projection tolerance is 1e-4.  For a strict 1e-8
+projection, apex-only midpoint refinement reaches 9.34e-9 at level 8 with 114
+leaf tetrahedra; this remains opt-in because projection and H-matrix setup grow
+with the refined leaf basis.  Geometry, projection, leaf count, and compressed
+charge count remain hard gates.
+
+P2 curved tetrahedra use a separate exact-geometry path.  The curl-Piola
+reference density `K(xi)=curl(T)(X(xi))*abs(det(dX/dxi))` contains the physical
+measure, so the C++ curved high-order Gram omits the Jacobian factor from both
+integrals while retaining the exact P2 map in the Laplace distance.  The
+102-tet p=2 curved-sphere regression has 1020 scalar reference charges,
+projection residual 4.55e-16, geometry residual 3.55e-16, and a positive
+epsilon-free Gram.  Curved production defaults to a 125-point outer rule and
+an eight-point one-dimensional Duffy rule.
+
+HACApK scope must be stated precisely.  It is now the default end-to-end HCurl
+interaction operator for affine and residual-controlled TET/HEX/WEDGE/PYRAMID,
+exact P2 curved tetrahedra, and the planar-log path.  The affine path uses
+rank-revealing QR per leaf to select original current-component polynomials;
+it does not rotate ill-conditioned degree-18 monomial coefficients.  The
+scalar charge count is bounded by `3 * reduced_modes * leaf_tets`, rather than
+`monomials * leaf_tets`: one p=6 HEX changes 7980 monomial charges to 18 for
+one response mode or 144 for eight modes.  C++ stores all three CSR maps and
+applies `sum_c B_c^T G_HACApK B_c` in one native call.  The final reduced
+inductance matrix is not materialized.  Symmetrized high-order host-pair blocks
+also cache the reverse transpose, while self-host blocks reuse one directed
+integration, removing duplicate matrix-build work without changing entries.
+
+`AssembleHybridVIM` keeps H-matrix-backed diagonal blocks, and
+`HybridVIMSystem.solve` applies `R + sL + Zs M_surface` through matrix-free
+GMRES.  `matrix_free=False`, `to_dense()`, Schur complements, and mixed
+Galerkin orthogonalization are explicit small-ROM verification or condensation
+paths.  They are not the default production solve path.
+
+`HACApKSampledLaplaceInteraction` also removes the former dense cross-block
+remainder.  One stable sampled Laplace H-matrix spans the HCurl volume,
+conductor-cycle bridge, and surface-Omega/SIBC quadrature points; native C++
+component CSR maps project it to every reciprocal reduced cross block in one
+`sum_c B_c^T G B_c` apply.  With `cross_only=True`, the sampled reduced
+diagonal is cancelled and replaced by a selected high-order diagonal operator;
+`diagonal_bases` limits that override to, for example, the HCurl volume basis.
+The production construction uses a full stable scalar Gram plus small reduced
+diagonal corrections.  It does not place partition zeros inside ACA.  A
+projected VIM/BEM implementation can supply the same matrix-free
+`build_operator(bases)` contract, with `operator_scope="full"` or `"cross"`.
+
+Do not extend this statement to HDiv-HCurl isomorphism.  HDiv-MMM keeps a
+separate BDM magnetic-charge Gram; HCurl Eddy Bubble keeps a vector-current
+Gram.  Their Piola maps, physical quantities, and de Rham roles differ.
+HDiv-HCurl coupling is a separate rectangular field operator, not another
+block of the same H-matrix.
+
+Warped or curved non-tet cells use uniform h refinement until both current and
+piecewise-affine geometry residuals pass.  A warped HEX regression reaches
+current residual 8.63e-6 and geometry residual 6.84e-3 at 48 leaves.  Work is
+guarded by leaf count and compressed charge count.  Requirements above
+degree 18 are not rejected: p=7 HEX formally requires degree 21, is capped at
+analytic degree 18, and passes the default gate at residual 3.54e-5; a tighter
+gate activates uniform h refinement.  This makes p=6 a studied choice rather
+than an implementation ceiling.
+
+TEAM 28 also demonstrates why adjacency alone must not select SIBC.  Every
+exterior disk face touches air, but at 50 Hz the aluminium skin depth is
+12.21 mm while the disk thickness is 3 mm (`t/delta=0.246`).  The
+`EddySIBCApplicability` gate therefore selects volumetric HCurl-VIM and zero
+SIBC modes.  On the committed coarse 3-D disk mesh, HCurl(p=6) has 22,814 DoF;
+EVRS rank 6 plus 130 conductor-graph cycle modes gives 136 estimated retained
+modes (0.596%).  This is the topology-preserving a priori plan.  The final
+mixed-Galerkin/EVRS response basis for the three TEAM excitation ports has
+rank 3.
+
+The epsilon-free fixed-position 3-D HCurl-VIM force gate passes on mdx.  The
+analytic affine-tetrahedron self interaction (reference moments through degree
+6) gives physical Fz = 1.101889, 1.098167, and 1.092733 N on 25, 20, and 15 mm
+meshes, versus 1.096266 N; the maximum error is 0.513%.  Projection residuals
+are below 3.4e-15, the largest transverse-force ratio is 0.165%, and changing
+the smooth outer rule from 15 to 125 points changes force by 0.0197%.  No
+kernel epsilon is used.  The independent 25-position reference force target
+also passes, so the spatial and temporal ROM levels each have an acceptance gate.
+
+Do not overclaim the remaining boundary: the same 3-D HCurl basis has not yet
+driven the complete moving-position sweep.  P2 TET geometry is exact; curved
+non-tet geometry remains residual-controlled rather than a native parent-cell
+Duffy kernel.  Durable records are
+`validation_test/maglev/team28_hcurl_vim_force_summary.json` and
+`validation_test/maglev/team28_hcurl_eddy_bubble_summary.json`.
+
+## Mapping to the Radia / NGSolve stack
+
+| Role | Tool |
+|------|------|
+| Radia transient / reduced-order core | radia `analysis` and `lanczos_reduction` (PRIMA) |
+| Foster modal eddy model | `radia.vim.HCurlEddyFosterModel` / `HCurlEddyFosterModelFromVIM` |
+| moving-position family | `radia.maglev.MovingHCurlFosterFamily` |
+| eddy-current FEM being reduced | A-phi / T-Omega / A-T -- topic `radia_iem_fem` |
+| gauge formulations | `radia_mcp.fem` (potential_formulations) |
+| benchmark | TEAM 28 (`radia_mcp.team_benchmark.force_motion.problem_28`) |
+
+## Cross-references
+
+- topic `radia_iem_fem` -- the eddy-current FEM and the magnetic-Reynolds crossover
+- `radia_mcp.fem` (potential_formulations) -- A-phi / T-Omega / A-T
+- `radia_mcp.team_benchmark.force_motion.problem_28` -- TEAM 28
+- Refs: Odabasioglu, Celik & Pileggi 1998 (PRIMA); Karl, Fetzer, Kurz,
+  Lehner & Rucker (TEAM 28 definition and measurement); Sugahara, Tanimoto,
+  Takahashi & Matsuo, COMPUMAG 2023 (motion-coupled TEAM 28 levitation).
 """
 
 
 PHYSICAL_TENSOR_ROM = r"""
+# Physical polarizability tensor alpha(s) as a passive, stable LTI
+*(Lab research: radia.levitation, the "physical Stoll spectrum -> LTI"
+route; src/radia/levitation/mixed_galerkin/rom_fit.py, 2026-06-20.)*
 
 The maglev FORCE on a moving conductor is F ~ Re[alpha(s)] grad(B^2); the
 conductor is fully described, per direction, by its eddy-current
-polarizability alpha_i(s). For control-in-the-loop simulation we want alpha(s)
-as a PASSIVE, STABLE state-space LTI (drops into Simulink / SPICE), NOT a per-
-frequency solve.
+polarizability alpha_i(s).  For control-in-the-loop simulation we want
+alpha(s) as a PASSIVE, STABLE state-space LTI (drops into Simulink /
+SPICE), NOT a per-frequency solve.  This is the maglev counterpart of the
+port reduced model (Foster modal form, topic `team28_dynamic_scope`): there
+the object is a port admittance Z(s); here it is the open-boundary
+polarizability TENSOR alpha_ij(s) of an isolated body in free space.
 
-## The honest obstacle: Kameari + Kelvin accumulation BREAKS DOWN here
+## The honest obstacle: eigen-accumulation with a Kelvin boundary BREAKS DOWN here
 
-So the physical-tensor LTI is NOT obtained by eigen-accumulation.
+The natural idea -- get the physical (exterior-matched, free-decay /
+Stoll) eddy spectrum by an A-T accumulation recurrence with a Kelvin open
+boundary -- DOES NOT WORK for a general 3D isolated-conductor-in-vacuum
+body: even with the two known bug fixes applied, the iteration sign-flips
+the first inductance at stage 1 and the Schmidt energy norm grows x15.  This
+is structural for the HCurl + vacuum-coupled BC class (the A_ext gauge is
+unbounded at infinity).  The accumulation reproduces the Stoll spectrum to
+0.000% ONLY for the SPHERE (the special chi-susceptibility case) and for
+AXISYM bodies -- NOT for the general 3D tensor.  So the physical-tensor LTI
+is NOT obtained by eigen-accumulation.
 
 ## The verified route: AAA + NNLS sample fit of the per-frequency tensor
 
@@ -540,6 +791,8 @@ MIMO LTI).
   poles are an approximation basis, NOT individually physical.
 - The fit is only as accurate as the per-frequency FEM data it consumes
   (~2-3% for a general body; the analytic sphere is the exact anchor).
+- These are FOSTER poles tau_n (physical decay times), not continued-fraction
+  rung time constants (systematic ~-6-8% offset; compare like-with-like).
 - This is the EXTERIOR-MATCHED physical tensor.  The mixed-Galerkin bulk
   Foster (bulk_foster_via_eigen / bulk_foster_vector_via_eigen) uses the
   INTERIOR-PEC eigenmodes -- a different, interior model; a SIBC tail
@@ -549,6 +802,8 @@ MIMO LTI).
   (gauge + singular-M + open boundary).  The sample fit is the robust route.
 
 ## Cross-references
+- topic `team28_dynamic_scope` -- the port Foster modal model this mirrors
+  for the open-boundary polarizability tensor
 - topic `force_computation` -- F ~ Re[alpha] grad(B^2) the LTI feeds
 - Refs: Landau-Lifshitz ECM sec. 59 (sphere alpha = 4 pi a^3 G(x));
   Stoll 1974 (Bessel eddy spectrum); Nakata-Berthier / Gustavsen 1999
@@ -1801,6 +2056,26 @@ H(x) before committing to a coil-geometry optimisation.
 def get_knowledge(topic: str = "overview") -> str:
     """Dispatch magnetic-levitation topics.
 
+    Topics:
+        overview                  - Magnetic levitation landscape + lab research (DEFAULT)
+        radia_iem_fem             - Radia IEM <-> reduced-potential FEM weak coupling (Yano)
+        team28_dynamic_scope      - TEAM 28 reduced models + cycle-averaged motion scope
+        physical_tensor_rom       - Physical polarizability tensor alpha(s) as a passive LTI (AAA+NNLS)
+        pm_maglev_zero_power      - Passive PM levitation, Maxwell-Earnshaw
+        eddy_current_maglev       - Eddy-current EDS, Kansai 2D model, Arago
+        sumitomo_heavy_industrial - JP 7-327337 PM bearing + JP 2007-215264 planar mover
+        kansai_research           - Saiki/Fujii magnetic-wheel lineage
+        scmaglev_eds              - SCMaglev (Chuo Shinkansen) -- SC-EDS levitation
+        halbach_arrays            - Halbach + Inductrack
+        induction_levitation      - Eddy-current (AC) lift: jumping/Thomson ring
+        eml_melting               - Electromagnetic levitation melting (ties to IH)
+        magnetic_bearings         - AMB force-current-displacement, neg. stiffness
+        superconducting           - Meissner vs flux pinning, HTS bulk, frozen image
+        diamagnetic               - grad(B^2) levitation, graphite/water-frog
+        earnshaw_stability        - Earnshaw's theorem + its 5 loopholes
+        force_computation         - Maxwell stress / virtual work / time-avg J x B
+        benchmarks                - TEAM 28, jumping-ring analytic, EML lift coeff
+        all                       - Everything
     """
     topic = topic.lower().strip()
 

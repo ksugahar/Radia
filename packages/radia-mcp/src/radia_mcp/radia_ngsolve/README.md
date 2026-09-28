@@ -2,8 +2,8 @@
 
 **30 MCP tools** — second-largest subpackage. Covers the lab's
 production Radia + NGSolve workflow: Kelvin transformation, sparse
-solvers (Compact AMS via radia.sparsesolv_ngsolve), Cauer Ladder
-Network reduction, PEEC inductance, ngsolve.bem, HDiv-VIM, plus
+solvers (Compact AMS via radia.sparsesolv_ngsolve), PEEC
+inductance, ngsolve.bem, HDiv-VIM, plus
 the closed-form analytical formula bank (Wakao-Igarashi-Fujiwara-
 Kameari Part 1-9, cuboid average B, Bessel impedance).
 
@@ -31,7 +31,6 @@ mcp-server-radia-ngsolve             # stdio server
 | **PEEC inductance** | `peec_inductance`, `peec_filament_dispatch` |
 | **HDiv-VIM** | `hdiv_vim` (Radia soft-iron demag, charge-Gram H-matrix, Reduced FEM coupling) |
 | **sparsesolv** | `compact_ams_preconditioner`, `cocr_solver` (HYPRE-free, TaskManager-native) |
-| **CLN SIBC orthogonal** | `cln_sibc_orthogonal` — Hierarchical Cauer SIBC (lab specialty) |
 | **Mesh + I/O** | `netgen_workflow`, `vol_format_inspect`, `vol_file_lint` |
 | **lint / QA** | `radia_ngsolve_lint` |
 | **bibliography** | `radia_ngsolve_bibliography_index` |
@@ -56,14 +55,6 @@ Closed-form reference layer covering:
 Use this **before** running any new FE simulation — gives a
 ballpark + sanity check.
 
-## Lab specialty: CLN orthogonal SIBC
-
-The `cln_sibc_orthogonal` topic surfaces the lab's Cauer Ladder
-Network surface impedance work (Kameari-Ebrahimi-Sugahara-Shindo-
-Matsuo 2018 IEEE TMAG canonical paper + Hane-Nakamura 2020 dynamic
-hysteresis + Hierarchical Cauer SIBC). This is the only place this
-material is curated in MCP-readable form.
-
 ## radia-coupled vs radia-free
 
 This server uses `import radia` in 4 places inside knowledge module
@@ -86,7 +77,7 @@ For pure documentation use, install with `pip install radia-mcp`
 - `mcp-server-bem` — RWG, EFIE/MFIE, Loop-Star, Calderón, Radia
   HDiv-VIM, HACApK, FEM-BEM hybrid
 - `mcp-server-matrix-solvers` — Krylov + preconditioner theory
-- `mcp-server-mor` — Cauer Ladder Network model-order reduction
+- `mcp-server-mor` — model-order reduction (PRIMA, POD, Foster modal form)
 - `mcp-server-peec` — PEEC filament/panel, FastHenry, HOIBC
 - `mcp-server-differential-forms` — k-form / de Rham math foundations
 

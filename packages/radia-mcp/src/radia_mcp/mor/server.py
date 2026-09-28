@@ -1,7 +1,9 @@
 """
 MOR (Model Order Reduction) MCP Server (radia_mcp.mor)
 
-Knowledge layer for eddy-current FEM model order reduction.
+Knowledge layer for model order reduction: the systematic MOR taxonomy
+(projection / POD / Krylov-PRIMA / system-theoretic / data-driven,
+hyperreduction) and the MOR bibliography.
 
 Usage:
     mcp-server-mor              # Start MCP server (stdio)
@@ -15,7 +17,6 @@ from radia_mcp.common import register_status_tool
 
 from .systematic_knowledge import get_systematic_mor_knowledge
 
-
 try:
     from .bibliography_index_knowledge import get_bibliography_index
 except ImportError:
@@ -24,8 +25,6 @@ except ImportError:
 
 
 mcp = FastMCP("mcp-server-mor")
-
-
 
 
 @mcp.tool()
@@ -60,21 +59,10 @@ def mor_bibliography(query: str = "") -> str:
     return get_bibliography_index(query)
 
 
-
-
-
-
-
-
-
-
-
-
-
 register_status_tool(
     mcp,
     server_name='mcp-server-mor',
-    description='Model Order Reduction: PRIMA, hyperreduction (DEIM)',
+    description='Model Order Reduction: POD, PRIMA/Krylov, hyperreduction (DEIM)',
     subpackage='radia_mcp.mor',
     related_servers=["radia-ngsolve", "rna-mec"],
 )
@@ -95,17 +83,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-# References retained from removed tool documentation:
-# Canonical bibliography key: Koester2021PGDCLN
-# Canonical bibliography key: Kuriyama2019
-# Canonical bibliography key: Sugahara2024hysteresis
-# Sugahara (2017), voltage-source formulation; original short citation.
-# Matsuo (2018c), matrix-form formulation; original short citation.
-
-# CEFC 2022, verified-arithmetic element extraction; original short reference, authors not specified.
-
-# Canonical bibliography key: Kameari2018
-
-# Method attribution retained: Kameari and Tanimoto.

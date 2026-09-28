@@ -39,11 +39,9 @@ Layout:
                             Zochowski topological derivative; IPM motor cogging-
                             torque minimization case study. Distilled from
                             arXiv:1501.04752 + Gangl PhD thesis Part I/II.
-  radia_mcp.mor           — Model Order Reduction, centered on **Cauer Ladder
-                            Network (CLN)** — a LAB SPECIALTY where Sugahara is
-                            co-author on the canonical papers (Kameari-Ebrahimi-
-                            Sugahara-Shindo-Matsuo 2018 et seq). General MOR +
-                            CLN basic + multi-expansion + nonlinear + applications.
+  radia_mcp.mor           — Model Order Reduction: systematic taxonomy (POD,
+                            PRIMA/Krylov, balanced truncation, data-driven,
+                            hyperreduction) and the MOR bibliography.
   radia_mcp.pinn          — Physics-Informed Neural Networks (Raissi 2019) and
                             Gaussian Processes (Raissi 2017, Pförtner 2023) for
                             Maxwell's equations. Inverse problems, multi-fidelity,
