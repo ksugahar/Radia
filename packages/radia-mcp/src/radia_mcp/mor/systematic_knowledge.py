@@ -698,14 +698,13 @@ SOFTWARE_LAB = """\
 
 ### Lab-specific tooling
 
-The Sugahara lab has in-house CLN implementation at
-`radia/lanczos_reduction.py` (CLAUDE.md "PRIMA Model Order
-Reduction" section).  Key classes:
+The Sugahara lab has an in-house PRIMA implementation at
+`radia/lanczos_reduction.py`.  Key classes:
 
 ```
-SPICEExtractionConfig     - configuration object
-PRIMASchurExtractor       - PRIMA + Schur complement for coupling
-LoopStarMagneticCoupled  - magnetic-magnetic-material coupling layer
+LanczosReducer            - Krylov basis with re-orthogonalization
+LoopStarMagneticPRIMA     - loop/star/magnetic congruence reduction
+LCResonantPRIMA           - resonant (RLC) PRIMA
 ```
 
 ### Recommended workflow
@@ -713,7 +712,7 @@ LoopStarMagneticCoupled  - magnetic-magnetic-material coupling layer
 For new MOR work in radia + NGSolve:
 
 1. **Prototype** in pyMOR (Python, fast iteration)
-2. **Production** in `radia.lanczos_reduction` if CLN-specific, else
+2. **Production** in `radia.lanczos_reduction` for PEEC PRIMA, else
    write a custom NGSolve + numpy implementation
 3. **Benchmark** against MOR Wiki test cases when applicable
 
@@ -749,7 +748,7 @@ LAB_RECOMMENDATION = """\
 ```
 Is the system LINEAR (no nu(B))?
   YES → Is it PEEC-discretized (coil-only or coil-conductor)?
-    YES → CLN (radia.lanczos_reduction)
+    YES → PRIMA (radia.lanczos_reduction)
     NO  → POD or PRIMA depending on input/output count
   NO  → Is it MOR for a CONTROL loop (real-time)?
     YES → Combine FE + CLN with a lookup table for nonlinear iron

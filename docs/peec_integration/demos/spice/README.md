@@ -6,7 +6,6 @@ PRIMA model order reduction with SPICE netlist and Verilog-A export.
 
 | File | Description |
 |------|-------------|
-| `demo_prima_spice_export.py` | Export PRIMA reduced model as SPICE netlist or Verilog-A |
 | `demo_veriloga_export.py` | Verilog-A export demo |
 | `demo_dowell_spice.py` | Dowell skin-effect SPICE model |
 | `prima_with_dowell_correction.py` | PRIMA(DC) + Dowell correction verification |
@@ -39,12 +38,5 @@ Numerical PRIMA/Dowell evidence is maintained under
 ## Usage
 
 ```bash
-# SPICE netlist export
-python demo_prima_spice_export.py
-
-# Verilog-A export
-python demo_prima_spice_export.py --verilog-a
-
-# Set Lanczos order
-python demo_prima_spice_export.py --lanczos 10
+python demo_veriloga_export.py
 ```

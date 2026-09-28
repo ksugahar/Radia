@@ -464,7 +464,7 @@ SHOWCASE NOTEBOOK `docs/peec/dowell_surface_impedance_demo.ipynb` (companion to
 normalized thickness `xi=a/delta`, a copper-foil `Z(f)` sweep, the Dowell `coth`
 (`H(a)=0`) vs ESIM `tanh` (`dH/dz(a)=0`) boundary comparison, a round-wire Bessel
 cross-section comparison, and continued-fraction (1st/2nd-order) truncation
-accuracy. (The full continued-fraction + PRIMA-ladder derivation is in
+accuracy. (The full Dowell continued-fraction derivation is in
 `docs/peec_integration/peec_showcase.ipynb`.)
 
 ## ESIM (Effective Surface Impedance Method)
@@ -504,77 +504,45 @@ PEEC_PRIMA = """
 ## Overview
 
 PRIMA (Passive Reduced-order Interconnect Macromodeling Algorithm) reduces
-the full PEEC system to a small equivalent circuit suitable for SPICE.
-
-Uses Lanczos tridiagonalization (NOT Arnoldi) -> RL ladder network directly.
+the full PEEC system by a congruence projection onto the Krylov space of the
+port vectors.  The reduced model is kept as projected matrices; it is evaluated
+through the port Schur complement and is not synthesised into an equivalent
+circuit.
 
 ### Reduction Pipeline
 
 ```
 Full system: [Z_LL, Z_LS, Z_LM; ...] (N DOFs)
-  -> Lanczos on L: L = Q @ T @ Q^T  (T tridiagonal, k << N)
-  -> Transform: Z' = Q^T @ Z @ Q
-  -> Schur complement: eliminate internal nodes
-  -> SPICE netlist: RL ladder + mutual inductors
+  -> Krylov basis Q from the port vectors (Q'RQ = I, k << N)
+  -> Congruence: R_r = Q'RQ, L_r = Q'LQ (symmetric, definite -> passive)
+  -> Port Schur complement: Z_port(s)
 ```
 
 ## Usage
 
 ```python
-from radia.lanczos_reduction import (
-    LanczosReducer, PRIMASchurExtractor, SPICEExtractionConfig
-)
+from radia.lanczos_reduction import LanczosReducer
 
-# Configure extraction
-config = SPICEExtractionConfig(
-    n_moments=20,       # Number of Lanczos vectors
-    tol=1e-6,           # Truncation tolerance
-)
-
-# Reduce inductance matrix
-reducer = LanczosReducer(tol=config.tol)
-result = reducer.lanczos_symmetric(L, k=config.n_moments)
-# result.T  = tridiagonal matrix (alpha, beta)
-# result.Q  = orthonormal basis
-
-# Schur complement for port extraction
-extractor = PRIMASchurExtractor(topo, config)
-circuit = extractor.extract()
-# circuit: SparseCircuit with resistors, inductors, capacitors, ports
+reducer = LanczosReducer(tol=1e-12)
+result = reducer.lanczos_generalized(L, R, k=20, v0=port_vector)
+Q = result.Q                  # R-orthonormal Krylov basis, Q[:, 0] || port_vector
+R_r, L_r = Q.T @ R @ Q, Q.T @ L @ Q
 ```
 
-## SparseCircuit Structure
-
-```python
-circuit.resistors      # [(node1, node2, R), ...]
-circuit.inductors      # [(node1, node2, L), ...]
-circuit.capacitors     # [(node1, node2, C), ...]
-circuit.mutual_inductors  # [(L1+, L1-, L2+, L2-, M), ...]
-circuit.port_nodes     # [(pos, neg), ...] for each port
-```
-
-## SPICE Netlist Output
-
-The SparseCircuit can be exported to SPICE format (LTspice, ngspice compatible):
-
-```
-* PEEC Reduced Model
-R1 n1 n2 1.23e-3
-L1 n2 n3 4.56e-9
-K1 L1 L2 0.85
-C1 n3 0 7.89e-12
-.ends
-```
+`radia.analysis.PEECAnalysisSolver` uses exactly this projection for the
+series PEEC port (port_vector = ones), where the reduced series impedance is
+exact.  `LoopStarMagneticPRIMA`, `LCResonantPRIMA`, `SecondOrderArnoldi` and
+`RationalKrylovLC` reduce loop/star/magnetic and second-order systems the same
+way.
 
 ## Key Classes
 
 | Class | Purpose |
 |-------|---------|
-| `LanczosReducer` | Lanczos tridiagonalization with re-orthogonalization |
-| `LanczosResult` | Result: Q (basis), alpha/beta (tridiagonal), T, rank |
-| `PRIMASchurExtractor` | Port impedance extraction via Schur complement |
-| `SPICEExtractionConfig` | Configuration (n_moments, tol) |
-| `SparseCircuit` | Circuit netlist (R, L, C, M, ports) |
+| `LanczosReducer` | Krylov basis with full re-orthogonalization (optional start vector) |
+| `LanczosResult` | Result: Q (basis), alpha/beta, projected T, rank |
+| `LoopStarMagneticPRIMA` | Loop-star-magnetic block reduction and port Schur impedance |
+| `LCResonantPRIMA`, `SecondOrderArnoldi`, `RationalKrylovLC` | Resonant / second-order / multi-shift reductions |
 | Magnetic-material coupling | Retired from PEEC; use HDiv-VIM / reduced FEM |
 
 ## References

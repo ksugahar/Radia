@@ -12,8 +12,7 @@ Supports:
   - conductor PEEC extraction; magnetic-material coupling is application-specific
   - Multi-filament (nwinc/nhinc) for skin/proximity effect
   - Multi-port Z-parameter extraction
-  - SPICE netlist output (PRIMA Lanczos MOR)
-
+  
 IMPORTANT: NGSolve import not needed for basic PEEC (only for BEM shield).
 """
 
@@ -38,8 +37,7 @@ def _log(msg):
 
 def solve_peec(inp_file="", inp_text="",
                freq_min=1e3, freq_max=1e9, n_freq=50,
-               solver_method=0, solver_prec=1e-4, solver_maxiter=1000,
-               spice_output=""):
+               solver_method=0, solver_prec=1e-4, solver_maxiter=1000):
     """PEEC solver: FastHenry .inp -> impedance extraction.
 
     Args:
@@ -52,7 +50,6 @@ def solve_peec(inp_file="", inp_text="",
             by HDiv-VIM / reduced-FEM workflows, not this PEEC panel.
         solver_prec: Solver precision
         solver_maxiter: Max solver iterations
-        spice_output: Optional SPICE netlist output path
 
     Returns:
         dict with freqs, Z, L, R, topology info, etc.
@@ -152,47 +149,6 @@ def solve_peec(inp_file="", inp_text="",
     R_dc = float(R_arr[0]) if len(R_arr) > 0 else 0
     _log(f"RESULT:L_DC={L_dc*1e9:.4f} nH, R_DC={R_dc*1e3:.4f} mOhm")
 
-    # ============================================================
-    # Step 3: Optional SPICE extraction
-    # ============================================================
-    spice_file = ""
-    if spice_output:
-        try:
-            from lanczos_reduction import SPICEExtractionConfig, PRIMASchurExtractor
-            config = SPICEExtractionConfig(
-                n_lanczos_loop=min(20, n_loops),
-                port_indices=list(range(n_ports)),
-                f_min=float(freqs[0]),
-                f_max=float(freqs[-1]),
-                n_freq=min(50, len(freqs)),
-            )
-            builder = parser.to_peec_builder()
-            topo = builder.build_topology(include_star=True)
-
-            extractor = PRIMASchurExtractor(config)
-            R_mat = np.diag(topo['R']) if topo['R'].ndim == 1 else topo['R']
-            P_mat = topo.get('P', np.zeros((1, 1)))
-            K_LS = topo.get('M_LS', np.zeros((len(topo['R']), max(1, P_mat.shape[0]))))
-            n_L = len(topo['R'])
-
-            mor_result = extractor.extract(
-                L=topo['L'], R=R_mat, P=P_mat,
-                Z_MM=np.zeros((1, 1)), Z_DD=np.zeros((1, 1)),
-                Z_CC=np.zeros((1, 1)),
-                K_LM=np.zeros((n_L, 1)), K_LD=np.zeros((n_L, 1)),
-                K_LC=np.zeros((n_L, 1)), K_LS=K_LS,
-                frequencies=freqs,
-            )
-
-            netlist = mor_result.get('netlist', '')
-            if netlist:
-                with open(spice_output, 'w') as f:
-                    f.write(netlist)
-                spice_file = spice_output
-                _log(f"SPICE:{spice_output}")
-        except Exception as e:
-            _log(f"SPICE:extraction failed: {e}")
-
     t_total = time.perf_counter() - t_total_start
 
     # Build result (JSON-serializable)
@@ -211,7 +167,6 @@ def solve_peec(inp_file="", inp_text="",
         "has_magnetic": has_magnetic,
         "t_solve": t_solve,
         "t_total": t_total,
-        "spice_file": spice_file,
     }
 
     return result_dict
@@ -236,8 +191,6 @@ def build_argparser():
     parser.add_argument("--solver-method", type=int, default=0,
                         choices=[0, 1, 2],
                         help="Retained option; magnetic-material PEEC coupling is retired")
-    parser.add_argument("--spice-output", default="",
-                        help="SPICE netlist output path")
     parser.add_argument("--output", default="",
                         help="JSON output file")
     return parser
@@ -253,7 +206,6 @@ def main():
             freq_max=args.freq_max,
             n_freq=args.n_freq,
             solver_method=args.solver_method,
-            spice_output=args.spice_output,
         )
 
     calc_main(run, parser)
