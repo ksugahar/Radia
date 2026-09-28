@@ -19,8 +19,8 @@ def test_team28_p6_hcurl_eddy_bubble_plan_and_reference_record():
     assert result["checks"][
         "p6_planned_reduction_estimate_below_one_percent"
     ] is True
-    assert result["cln_reference_acceptance"]["cln_vs_full_fem"][
+    assert result["reference_acceptance"]["full_fem_vs_reference"][
         "max_abs_error_N"
-    ] < 5.0e-6
+    ] < 5.0e-4
     # Numerical force acceptance is checked by its record test and the live
     # validation lane, not by asserting the same copied summary here.

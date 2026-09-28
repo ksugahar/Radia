@@ -368,7 +368,7 @@ def compute_lorentz_force_via_hcurl_vim(
 ):
     """Return the quantitative 3-D HCurl-VIM conductor force in newtons.
 
-    ``model`` is a :class:`radia.vim.HCurlEddyCLNModel`; ``current_basis`` is
+    ``model`` is a :class:`radia.vim.HCurlEddyFosterModel`; ``current_basis`` is
     its sampled three-dimensional divergence-free current basis, and ``B`` is
     the incident-field phasor sampled at the same quadrature points.  The
     open-boundary VIM interaction and model construction remain solver-owned;

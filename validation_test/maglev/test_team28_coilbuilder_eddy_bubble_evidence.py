@@ -8,7 +8,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent
 RESULT = HERE / "team28_coilbuilder_eddy_bubble_results.json"
-EXCHANGE = HERE / "team28_coilbuilder_hcurl_eddy_cln.json"
+EXCHANGE = HERE / "team28_coilbuilder_hcurl_eddy_foster.json"
 MATLAB_RESULT = HERE / "team28_coilbuilder_matlab_results.json"
 
 
@@ -32,7 +32,8 @@ def test_team28_coilbuilder_eddy_bubble_artifact_is_complete():
 def test_team28_matlab_exchange_identifies_coilbuilder_source():
     payload = json.loads(EXCHANGE.read_text(encoding="utf-8"))
 
-    assert payload["schema"] == "radia.hcurl.eddy_cln.exchange.v1"
+    assert payload["schema"] == "radia.hcurl.eddy_foster.exchange.v1"
+    assert payload["decay_rates"]["shape"] == [3]
     assert payload["state_order"] == 3
     assert payload["port_count"] == 1
     assert payload["metadata"]["coil_source"] == "radia.coil_builder.CoilBuilder"

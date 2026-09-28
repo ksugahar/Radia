@@ -239,9 +239,9 @@ def run_case(maxh_m, outer_quad, export_model=None):
         interaction=interaction,
     )
     rhs = vim.ExternalVectorPotentialRHS(basis.current_basis, unit_external_a)
-    cln_model = vim.HCurlEddyCLNFromVIM(system, rhs)
+    foster_model = vim.HCurlEddyFosterModelFromVIM(system, rhs)
     s = 2.0j * np.pi * FREQUENCY_HZ
-    coefficients = cln_model.solve_vector_potential_drive(s, REFERENCE_COIL_CURRENT_A)
+    coefficients = foster_model.solve_vector_potential_drive(s, REFERENCE_COIL_CURRENT_A)
     current = np.einsum("a,aik->ik", coefficients, basis.current_basis.modes)
     force = 0.5 * np.sum(
         basis.current_basis.weights[:, None]
@@ -260,8 +260,8 @@ def run_case(maxh_m, outer_quad, export_model=None):
         (1, 0),
     )[:, :, None]
     if export_model is not None:
-        vim.ExportHCurlEddyCLNJSON(
-            cln_model,
+        vim.ExportHCurlEddyFosterJSON(
+            foster_model,
             export_model,
             force_operator=force_operator,
             metadata={
@@ -288,19 +288,14 @@ def run_case(maxh_m, outer_quad, export_model=None):
         "magnitude_relative_error": float(relative_error),
         "transverse_force_ratio": transverse_ratio,
         "interaction": _measured_interaction_diagnostics(interaction),
-        "cln_handoff": cln_model.diagnostics(),
+        "foster_handoff": foster_model.diagnostics(),
         "eddy_bubble": basis.eddy_bubbling.diagnostics(),
         "elapsed_seconds": time.perf_counter() - started,
     }
 
 
 def _height_offsets_mm_from_reference():
-    sweep_file = (
-        HERE
-        / "demos"
-        / "team28"
-        / "team28_cln_sweep_results.json"
-    )
+    sweep_file = HERE / "team28_axisym_fem_height_sweep.json"
     with sweep_file.open("r", encoding="utf-8") as stream:
         return [float(value) for value in json.load(stream)["dZ_mm"]]
 
@@ -344,7 +339,7 @@ def run_height_sweep(
         unit_external_a = external_a / REFERENCE_COIL_CURRENT_A
         unit_external_b = external_b / REFERENCE_COIL_CURRENT_A
         rhs = vim.ExternalVectorPotentialRHS(basis.current_basis, unit_external_a)
-        model = vim.HCurlEddyCLNFromVIM(system, rhs)
+        model = vim.HCurlEddyFosterModelFromVIM(system, rhs)
         s = 2.0j * np.pi * FREQUENCY_HZ
         coefficients = model.solve_vector_potential_drive(
             s,
@@ -377,7 +372,7 @@ def run_height_sweep(
         )
         physical_forces.append(force.tolist())
     if export_family is not None:
-        vim.ExportHCurlEddyCLNFamilyJSON(
+        vim.ExportHCurlEddyFosterFamilyJSON(
             snapshots,
             export_family,
             metadata={
@@ -388,7 +383,7 @@ def run_height_sweep(
                 "parent_order": 6,
                 "reference_disk_bottom_m": 0.0108,
                 "height_coordinate": "offset from the reference disk position",
-                "state_basis": "common p=6 local disk basis",
+                "state_basis": "common p=6 local disk basis, one shared Foster mode set",
             },
         )
     return {
@@ -455,10 +450,10 @@ def run(maxh_values, outer_quad=4, outer_check=None, export_model=None):
         "no_kernel_epsilon": all(
             case["interaction"]["kernel_epsilon_m"] is None for case in cases
         ),
-        "all_hcurl_to_cln_handoffs_passive": all(
-            case["cln_handoff"]["passive"]
-            and case["cln_handoff"]["state_order"] == case["evrs_rank"]
-            and case["cln_handoff"]["port_count"] == 1
+        "all_hcurl_to_foster_handoffs_passive": all(
+            case["foster_handoff"]["passive"]
+            and case["foster_handoff"]["state_order"] == case["evrs_rank"]
+            and case["foster_handoff"]["port_count"] == 1
             for case in cases
         ),
     }

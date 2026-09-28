@@ -1,20 +1,20 @@
-"""TEAM 28 acceptance summary for HCurl Eddy Bubble + CLN.
+"""TEAM 28 acceptance summary for HCurl Eddy Bubble + Foster.
 
-This validation locks four independent facts:
+This validation locks five independent facts:
 
 1. The 3 mm aluminium disk at 50 Hz is volumetric (skin depth about 12.2 mm),
    even though every exterior face is adjacent to air.
 2. A real p=6 HCurl disk mesh can be reduced by EVRS plus the conductor-graph
    cycle basis while retaining the loop bridge class.
-3. The existing full-FEM/6-stage-CLN TEAM 28 force curve is a stable numerical
-   acceptance target for the new route.
+3. The full axisymmetric FEM force-height sweep agrees with the independent
+   lab regression, so it is a stable acceptance target.
 4. The epsilon-free affine-tetrahedron HCurl-VIM interaction reproduces the
    physical force at the reference position on three meshes, with an
    independent outer-quadrature check.
+5. The 25-position moving 3-D HCurl family (one shared Foster mode set)
+   follows the full-FEM lift curve.
 
-The fixed-position 3-D force and the 25-position CLN curve are separate gates.
-An end-to-end moving 3-D sweep and curved-tetrahedron moments remain explicit
-production gates.
+Curved-tetrahedron moments remain an explicit production gate.
 """
 
 from __future__ import annotations
@@ -33,8 +33,9 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[1]
 SRC = REPO_ROOT / "src"
-TEAM28_JSON = HERE / "demos" / "team28" / "team28_cln_sweep_results.json"
+TEAM28_JSON = HERE / "team28_axisym_fem_height_sweep.json"
 TEAM28_HCURL_FORCE_JSON = HERE / "team28_hcurl_vim_force_summary.json"
+TEAM28_FAMILY_JSON = HERE / "team28_coilbuilder_height_family_results.json"
 DEFAULT_OUTPUT = HERE / "team28_hcurl_eddy_bubble_summary.json"
 
 if str(SRC) not in sys.path:
@@ -45,12 +46,18 @@ import radia.vim as vim
 from radia.maglev import PositionForceCurve
 
 
-def _team28_curves(data):
+def _team28_curves(data, family):
     position = np.asarray(data["dZ_mm"], dtype=float) * 1.0e-3
+    rows = family["details"]["height_family"]
     return {
-        "full_fem": PositionForceCurve(position, data["fz_full_N"], "full-fem"),
-        "cln": PositionForceCurve(position, data["fz_cln_N"], "cln-6-stage"),
-        "reference": PositionForceCurve(position, data["fz_lab_N"], "reference"),
+        "full_fem": PositionForceCurve(position, data["legacy_N"], "full-fem"),
+        "reference": PositionForceCurve(position, data["lab_legacy_N"], "reference"),
+        "full_fem_physical": PositionForceCurve(
+            position, data["upward_physical_N"], "full-fem-physical-time-average"),
+        "foster_family_physical": PositionForceCurve(
+            np.asarray([row["height_offset_m"] for row in rows]),
+            [row["upward_force_N"] for row in rows],
+            "hcurl-foster-family-physical-time-average"),
     }
 
 
@@ -92,16 +99,14 @@ def run(maxh_m: float = 0.025, evrs_rank: int = 6) -> dict[str, object]:
         source = json.load(stream)
     with TEAM28_HCURL_FORCE_JSON.open("r", encoding="utf-8") as stream:
         hcurl_force = json.load(stream)
-    curves = _team28_curves(source)
-    cln_vs_full = curves["cln"].compare(curves["full_fem"])
-    cln_vs_reference = curves["cln"].compare(curves["reference"])
+    with TEAM28_FAMILY_JSON.open("r", encoding="utf-8") as stream:
+        family = json.load(stream)
+    curves = _team28_curves(source, family)
+    full_vs_reference = curves["full_fem"].compare(curves["reference"])
+    family_vs_full = curves["foster_family_physical"].compare(curves["full_fem_physical"])
 
-    physical_force = PositionForceCurve(
-        curves["cln"].positions_m,
-        0.5 * curves["cln"].force_N,
-        "cln-physical-time-average",
-    )
-    equilibrium = physical_force.crossings(-float(source["disk_weight_N"]))
+    physical_force = curves["full_fem_physical"]
+    equilibrium = physical_force.crossings(float(source["disk_weight_N"]))
     equilibrium_dz_m = float(equilibrium[0]) if equilibrium.size else None
     equilibrium_abs_height_m = (
         10.8e-3 + equilibrium_dz_m
@@ -129,12 +134,15 @@ def run(maxh_m: float = 0.025, evrs_rank: int = 6) -> dict[str, object]:
         "p6_planned_reduction_estimate_below_one_percent": (
             p6["reduction_plan"]["estimated_reduction_ratio"] < 0.01
         ),
-        "cln_force_curve_matches_full_fem_below_5uN": (
-            cln_vs_full["max_abs_error_N"] < 5.0e-6
+        "full_fem_sweep_passed_its_own_gates": bool(source["pass"]),
+        "full_fem_force_curve_matches_reference_below_0p5mN": (
+            full_vs_reference["max_abs_error_N"] < 5.0e-4
         ),
-        "cln_force_curve_matches_reference_below_0p5mN": (
-            cln_vs_reference["max_abs_error_N"] < 5.0e-4
+        "foster_family_lift_matches_full_fem_below_2_percent_of_peak": (
+            family_vs_full["max_abs_error_N"]
+            < 0.02 * float(np.max(np.abs(curves["full_fem_physical"].force_N)))
         ),
+        "foster_family_passed_its_own_gates": bool(family["pass"]),
         "physical_equilibrium_found": equilibrium_abs_height_m is not None,
         "physical_equilibrium_within_10_percent_of_11p5mm": (
             equilibrium_abs_height_m is not None
@@ -161,7 +169,7 @@ def run(maxh_m: float = 0.025, evrs_rank: int = 6) -> dict[str, object]:
             "conductivity_S_per_m": 3.4e7,
             "parent_hcurl_order": 6,
             "evrs_rank": int(evrs_rank),
-            "force_convention": "stored force is 2x physical time-average",
+            "force_convention": "legacy integral is -2x the physical time-average",
         },
         "surface_model": {
             **sibc.diagnostics(),
@@ -170,10 +178,11 @@ def run(maxh_m: float = 0.025, evrs_rank: int = 6) -> dict[str, object]:
             "volumetric_boundary_face_count": candidate_faces - selected_sibc_faces,
         },
         "p6_spatial_reduction": p6,
-        "cln_reference_acceptance": {
-            "cln_stages": int(source["cln_stages"]),
-            "cln_vs_full_fem": cln_vs_full,
-            "cln_vs_reference": cln_vs_reference,
+        "reference_acceptance": {
+            "full_fem_sweep_file": TEAM28_JSON.name,
+            "full_fem_vs_reference": full_vs_reference,
+            "foster_family_file": TEAM28_FAMILY_JSON.name,
+            "foster_family_vs_full_fem": family_vs_full,
             "equilibrium_dz_m": equilibrium_dz_m,
             "equilibrium_abs_height_m": equilibrium_abs_height_m,
             "published_steady_height_m": 11.5e-3,
@@ -205,9 +214,8 @@ def run(maxh_m: float = 0.025, evrs_rank: int = 6) -> dict[str, object]:
         "structural_and_reference_acceptance_passed": all(checks.values()),
         "hcurl_vim_force_acceptance_complete": hcurl_force_passed,
         "next_numeric_gate": (
-            "Run the same HCurl-VIM basis through the 25-position moving CLN "
-            "sweep, then keep the reduced HCurl operator in HACApK form instead "
-            "of materializing its final dense matrix"
+            "Keep the reduced HCurl operator in HACApK form instead of "
+            "materializing its final dense matrix"
         ),
     }
 

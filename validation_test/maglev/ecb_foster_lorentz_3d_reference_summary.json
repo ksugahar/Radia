@@ -1,17 +1,17 @@
 {
   "schema": "radia.maglev.ecb-foster-lorentz-3d-reference.v1",
-  "generated_at_utc": "2026-09-11T04:12:00.052858+00:00",
+  "generated_at_utc": "2026-09-28T11:57:01.233321+00:00",
   "runtime": {
     "host": "mdx2",
     "python_version": "3.12.10",
-    "radia_version": "4.95.91",
+    "radia_version": "5.0.2",
     "ngsolve_version": "6.2.2606",
     "numpy_version": "2.4.3",
     "scipy_version": "1.17.1"
   },
   "source_sha256": {
-    "validation_script": "aa681120d7432e99e6730bd6763918c25709bbd32ec76cce309a0e19cd1dd04b",
-    "lorentz_module": "7a0dd36bae30fe3e371afe80ff1b53e64934e9ba44837bd66b3871a79f91d425"
+    "validation_script": "5bed69f541886b5f7c07f2cc0a3215ba17d61d5f449368129e86c4b5eab43c5a",
+    "lorentz_module": "d5538b75aee0b0d6b5d4dd1e28139784d19b620871fc926ec0ae243e325e7c8e"
   },
   "problem": {
     "plate_m": [
@@ -44,47 +44,47 @@
         {
           "frequency_hz": 50.0,
           "force_N": [
-            -7.486626745422874e-05,
-            0.00010046990551526791,
-            -0.30713468130065025
+            -7.48662674544345e-05,
+            0.00010046990551566063,
+            -0.30713468130066857
           ],
           "torque_Nm": [
-            5.456988104893617e-07,
-            -1.3589486358039793e-07,
-            3.859721149539756e-06
+            5.456988104890322e-07,
+            -1.3589486358051175e-07,
+            3.859721149550486e-06
           ],
-          "horizontal_to_vertical_ratio": 0.0004079522637721973,
-          "torque_to_force_length_ratio": 0.0001269955761621244
+          "horizontal_to_vertical_ratio": 0.0004079522637735985,
+          "torque_to_force_length_ratio": 0.0001269955761624612
         },
         {
           "frequency_hz": 500.0,
           "force_N": [
-            0.000636723372555863,
-            -0.0006737046156239124,
-            -6.6431862725951385
+            0.0006367233725567601,
+            -0.0006737046156231769,
+            -6.643186272594905
           ],
           "torque_Nm": [
-            4.27325586787595e-06,
-            1.1200766020119272e-06,
-            -3.855135931407548e-05
+            4.2732558678815744e-06,
+            1.120076601979008e-06,
+            -3.8551359314149625e-05
           ],
-          "horizontal_to_vertical_ratio": 0.00013953867721751967,
-          "torque_to_force_length_ratio": 5.8411189886626124e-05
+          "horizontal_to_vertical_ratio": 0.00013953867721753688,
+          "torque_to_force_length_ratio": 5.841118988673856e-05
         },
         {
           "frequency_hz": 5000.0,
           "force_N": [
-            0.004506819036662645,
-            -0.0072958771415210216,
-            -8.376336216751271
+            0.004506819036672473,
+            -0.007295877141532998,
+            -8.376336216750781
           ],
           "torque_Nm": [
-            -9.8403311108013e-05,
-            1.1778379485287711e-05,
-            -0.00017994553416629603
+            -9.840331110821315e-05,
+            1.1778379485363758e-05,
+            -0.00017994553416668757
           ],
-          "horizontal_to_vertical_ratio": 0.0010237911623820796,
-          "torque_to_force_length_ratio": 0.0002452528992682633
+          "horizontal_to_vertical_ratio": 0.0010237911623839726,
+          "torque_to_force_length_ratio": 0.00024525289926880683
         }
       ],
       "passive": true,
@@ -95,7 +95,7 @@
         "cell_count": 431,
         "mode_count": 3,
         "polynomial_degree": 2,
-        "projection_relative_residual": 4.4294052115582705e-15,
+        "projection_relative_residual": 4.466929162126832e-15,
         "projection_tolerance": 1e-09,
         "projection_quadrature_points": 125,
         "outer_quadrature_points": 125,
@@ -126,15 +126,45 @@
             "n_dense": 1954,
             "max_rank": 53,
             "compression": 0.2520634339584496,
-            "build_time": 68.2608338,
+            "build_time": 21.5887229,
             "memory_mb": 28.936065673828125,
             "dense_memory_mb": 114.79676055908203,
+            "build_prep_s": 0.1109339,
+            "build_cluster_s": 0.00038029998540878296,
+            "build_leafgen_s": 0.00037729996256530285,
+            "build_fill_s": 21.476536800037138,
+            "build_diag_s": 0.0377587,
             "hex_cache_stats_enabled": 0.0,
             "hex_block_cache_limit": 200000.0,
             "hex_trans_cache_enabled": 1.0,
+            "hex_congruent_cache_enabled": 1.0,
+            "hex_congruent_ready": 0.0,
+            "hex_congruent_templates": 0.0,
+            "hex_congruent_hosts": 0.0,
             "hex_far_one_sided_threshold": 0.0,
             "hex_affine_exact_near_factor": 1.0,
             "hex_distorted_far_factor": 1.0,
+            "hex_near_inner_exact": 1.0,
+            "hex_near_inner_host_cone": 1.0,
+            "hex_near_sinh_min_width": 0.001,
+            "hex_near_sinh_max_width": 1.0,
+            "hex_pair_duffy_enabled": 1.0,
+            "hex_affine_cells": 0.0,
+            "hex_cells": 0.0,
+            "quad_affine_faces": 0.0,
+            "quad_faces": 0.0,
+            "hex_glpair_n": 0.0,
+            "hex_glpair_affine_n": 0.0,
+            "hex_glpair_w_n": 0.0,
+            "hex_glpair_affine_w_n": 0.0,
+            "hex_pair_nonconforming": 0.0,
+            "hex_pair_anisotropy_graded": 0.0,
+            "hex_exponential_rule_max_anisotropy": 12.0,
+            "hex_cluster_radius_enabled": 1.0,
+            "hex_glnear_n": 0.0,
+            "hex_glout_n": 0.0,
+            "hex_glin_n": 0.0,
+            "hex_glin_self_n": 0.0,
             "curved_direct_enabled": 1.0,
             "hex_blk_affine_near": 0.0,
             "hex_blk_affine_far": 0.0,
@@ -149,6 +179,7 @@
             "hex_general_shared_lookups": 0.0,
             "hex_general_shared_hits": 0.0,
             "hex_general_shared_misses": 0.0,
+            "hex_general_shared_entries": 0.0,
             "wedge_far_one_sided_threshold": 0.0,
             "wedge_trans_cache_scope": 2.0,
             "wedge_trans_cache_enabled": 1.0,
@@ -156,6 +187,7 @@
             "ho_analytic_block_available": 1.0,
             "ho_analytic_block_enabled": 1.0,
             "ho_image_block_enabled": 1.0,
+            "ho_image_far_enabled": 1.0,
             "hmatvec_stats_enabled": 0.0,
             "hmatvec_mkl_threads": 1.0,
             "nonproduction_numerical_override_active": 0.0,
@@ -181,6 +213,9 @@
             "ho_sym_block_hits": 0.0,
             "ho_sym_block_misses": 0.0,
             "ho_sym_block_clears": 0.0,
+            "ho_image_far_entries": 0.0,
+            "ho_image_block_entries": 0.0,
+            "ho_image_scalar_entries": 0.0,
             "hex_block_hit_rate": 0.0,
             "hex_trans_block_hit_rate": 0.0,
             "hex_sym_block_hit_rate": 0.0,
@@ -193,7 +228,7 @@
         "kernel_epsilon_m": null,
         "geometry": "affine-tetrahedron"
       },
-      "elapsed_seconds": 70.08655279999948
+      "elapsed_seconds": 23.181840799981728
     },
     {
       "maxh_m": 0.012,
@@ -208,47 +243,47 @@
         {
           "frequency_hz": 50.0,
           "force_N": [
-            0.0001453756616786052,
-            8.137038076363251e-05,
-            -0.30711348173281444
+            0.00014537566163751758,
+            8.137038073406013e-05,
+            -0.3071134817321263
           ],
           "torque_Nm": [
-            6.215867308860838e-07,
-            4.76043081853332e-07,
-            1.711210563428504e-07
+            6.215867306418534e-07,
+            4.7604308170754025e-07,
+            1.711210569982475e-07
           ],
-          "horizontal_to_vertical_ratio": 0.0005424671827278093,
-          "torque_to_force_length_ratio": 2.6095148120922683e-05
+          "horizontal_to_vertical_ratio": 0.0005424671825652509,
+          "torque_to_force_length_ratio": 2.6095148116550034e-05
         },
         {
           "frequency_hz": 500.0,
           "force_N": [
-            0.0011066436939172178,
-            0.00317501787345928,
-            -6.642165090659113
+            0.0011066436933894878,
+            0.0031750178733527274,
+            -6.642165090669158
           ],
           "torque_Nm": [
-            1.13626061073987e-05,
-            6.3211060033760015e-06,
-            -7.997697554679254e-07
+            1.1362606103391147e-05,
+            6.3211060019259624e-06,
+            -7.997697594906335e-07
           ],
-          "horizontal_to_vertical_ratio": 0.0005062129800205906,
-          "torque_to_force_length_ratio": 1.961270229573919e-05
+          "horizontal_to_vertical_ratio": 0.0005062129799785273,
+          "torque_to_force_length_ratio": 1.9612702289759453e-05
         },
         {
           "frequency_hz": 5000.0,
           "force_N": [
-            -0.02565351279319378,
-            -0.032587915418019336,
-            -8.386536494771727
+            -0.025653512784731058,
+            -0.032587915412900924,
+            -8.386536494785602
           ],
           "torque_Nm": [
-            -0.0001629901686107996,
-            -9.938451997339484e-05,
-            -2.002140943033056e-05
+            -0.00016299016855136778,
+            -9.938451994502564e-05,
+            -2.0021409460891507e-05
           ],
-          "horizontal_to_vertical_ratio": 0.004945281800683915,
-          "torque_to_force_length_ratio": 0.00022887605586299872
+          "horizontal_to_vertical_ratio": 0.004945281799572015,
+          "torque_to_force_length_ratio": 0.00022887605578873163
         }
       ],
       "passive": true,
@@ -259,7 +294,7 @@
         "cell_count": 431,
         "mode_count": 6,
         "polynomial_degree": 2,
-        "projection_relative_residual": 4.769366913168907e-15,
+        "projection_relative_residual": 4.781333480815321e-15,
         "projection_tolerance": 1e-09,
         "projection_quadrature_points": 125,
         "outer_quadrature_points": 125,
@@ -275,13 +310,13 @@
           "local_rank_max": 10,
           "local_rank_sum": 4310,
           "local_rank_algorithm": "pivoted-qr-original-columns",
-          "local_rank_relative_truncation_error": 2.1740522244809543e-15,
+          "local_rank_relative_truncation_error": 2.1926893233216596e-15,
           "operator": "sum-component-BtGB",
           "matrix_free": true,
           "mode_count": 6,
           "charge_count": 4310,
-          "charge_map_entries": 77487,
-          "charge_map_bytes": 981568,
+          "charge_map_entries": 77485,
+          "charge_map_bytes": 981544,
           "charge_map_backend": "native-cpp-component-csr",
           "hmatrix": {
             "n_dof": 4310,
@@ -289,16 +324,46 @@
             "n_lowrank": 672,
             "n_dense": 1954,
             "max_rank": 56,
-            "compression": 0.24262143291648947,
-            "build_time": 68.10609980000001,
-            "memory_mb": 34.3853759765625,
+            "compression": 0.24259343995779523,
+            "build_time": 21.277899,
+            "memory_mb": 34.38140869140625,
             "dense_memory_mb": 141.72439575195312,
+            "build_prep_s": 0.1105372,
+            "build_cluster_s": 0.00036639999598264694,
+            "build_leafgen_s": 0.00037649995647370815,
+            "build_fill_s": 21.166143900016323,
+            "build_diag_s": 0.07233730000000001,
             "hex_cache_stats_enabled": 0.0,
             "hex_block_cache_limit": 200000.0,
             "hex_trans_cache_enabled": 1.0,
+            "hex_congruent_cache_enabled": 1.0,
+            "hex_congruent_ready": 0.0,
+            "hex_congruent_templates": 0.0,
+            "hex_congruent_hosts": 0.0,
             "hex_far_one_sided_threshold": 0.0,
             "hex_affine_exact_near_factor": 1.0,
             "hex_distorted_far_factor": 1.0,
+            "hex_near_inner_exact": 1.0,
+            "hex_near_inner_host_cone": 1.0,
+            "hex_near_sinh_min_width": 0.001,
+            "hex_near_sinh_max_width": 1.0,
+            "hex_pair_duffy_enabled": 1.0,
+            "hex_affine_cells": 0.0,
+            "hex_cells": 0.0,
+            "quad_affine_faces": 0.0,
+            "quad_faces": 0.0,
+            "hex_glpair_n": 0.0,
+            "hex_glpair_affine_n": 0.0,
+            "hex_glpair_w_n": 0.0,
+            "hex_glpair_affine_w_n": 0.0,
+            "hex_pair_nonconforming": 0.0,
+            "hex_pair_anisotropy_graded": 0.0,
+            "hex_exponential_rule_max_anisotropy": 12.0,
+            "hex_cluster_radius_enabled": 1.0,
+            "hex_glnear_n": 0.0,
+            "hex_glout_n": 0.0,
+            "hex_glin_n": 0.0,
+            "hex_glin_self_n": 0.0,
             "curved_direct_enabled": 1.0,
             "hex_blk_affine_near": 0.0,
             "hex_blk_affine_far": 0.0,
@@ -313,6 +378,7 @@
             "hex_general_shared_lookups": 0.0,
             "hex_general_shared_hits": 0.0,
             "hex_general_shared_misses": 0.0,
+            "hex_general_shared_entries": 0.0,
             "wedge_far_one_sided_threshold": 0.0,
             "wedge_trans_cache_scope": 2.0,
             "wedge_trans_cache_enabled": 1.0,
@@ -320,6 +386,7 @@
             "ho_analytic_block_available": 1.0,
             "ho_analytic_block_enabled": 1.0,
             "ho_image_block_enabled": 1.0,
+            "ho_image_far_enabled": 1.0,
             "hmatvec_stats_enabled": 0.0,
             "hmatvec_mkl_threads": 1.0,
             "nonproduction_numerical_override_active": 0.0,
@@ -345,6 +412,9 @@
             "ho_sym_block_hits": 0.0,
             "ho_sym_block_misses": 0.0,
             "ho_sym_block_clears": 0.0,
+            "ho_image_far_entries": 0.0,
+            "ho_image_block_entries": 0.0,
+            "ho_image_scalar_entries": 0.0,
             "hex_block_hit_rate": 0.0,
             "hex_trans_block_hit_rate": 0.0,
             "hex_sym_block_hit_rate": 0.0,
@@ -357,7 +427,7 @@
         "kernel_epsilon_m": null,
         "geometry": "affine-tetrahedron"
       },
-      "elapsed_seconds": 70.40299969998887
+      "elapsed_seconds": 23.572362299950328
     },
     {
       "maxh_m": 0.008,
@@ -372,47 +442,47 @@
         {
           "frequency_hz": 50.0,
           "force_N": [
-            -0.00014287424678746384,
-            0.00041422078282300117,
-            -0.3071328353318161
+            -0.0001428742471124561,
+            0.0004142207835640338,
+            -0.3071328353467841
           ],
           "torque_Nm": [
-            -2.6566580839511706e-07,
-            7.017243412197392e-07,
-            -4.956158550036195e-06
+            -2.656658078247724e-07,
+            7.017243404432191e-07,
+            -4.95615855879811e-06
           ],
-          "horizontal_to_vertical_ratio": 0.00142664268040666,
-          "torque_to_force_length_ratio": 0.0001632073733354122
+          "horizontal_to_vertical_ratio": 0.0014266426829630402,
+          "torque_to_force_length_ratio": 0.0001632073736050016
         },
         {
           "frequency_hz": 500.0,
           "force_N": [
-            0.0012724878713362428,
-            -0.004260853296603199,
-            -6.643531547945235
+            0.0012724878729483164,
+            -0.00426085330301498,
+            -6.643531547743485
           ],
           "torque_Nm": [
-            -3.958726437279588e-06,
-            -4.858260595987096e-06,
-            4.695022998305099e-05
+            -3.9587264198921935e-06,
+            -4.85826064580178e-06,
+            4.6950230145366987e-05
           ],
-          "horizontal_to_vertical_ratio": 0.0006693439150897275,
-          "torque_to_force_length_ratio": 7.129737658252763e-05
+          "horizontal_to_vertical_ratio": 0.0006693439161042489,
+          "torque_to_force_length_ratio": 7.129737683237015e-05
         },
         {
           "frequency_hz": 5000.0,
           "force_N": [
-            0.008879090667060188,
-            -0.021202562007509588,
-            -8.374037981912444
+            0.008879090694516159,
+            -0.021202562052967056,
+            -8.37403798146673
           ],
           "torque_Nm": [
-            4.8700600514564e-05,
-            -4.038883078993504e-05,
-            0.0002092898663653367
+            4.8700600404583924e-05,
+            -4.038883040392204e-05,
+            0.00020928986620109204
           ],
-          "horizontal_to_vertical_ratio": 0.0027449920380908685,
-          "torque_to_force_length_ratio": 0.000261097606138856
+          "horizontal_to_vertical_ratio": 0.0027449920445105,
+          "torque_to_force_length_ratio": 0.00026109760585060434
         }
       ],
       "passive": true,
@@ -423,7 +493,7 @@
         "cell_count": 745,
         "mode_count": 6,
         "polynomial_degree": 2,
-        "projection_relative_residual": 4.315086326783196e-15,
+        "projection_relative_residual": 4.33600993777941e-15,
         "projection_tolerance": 1e-09,
         "projection_quadrature_points": 125,
         "outer_quadrature_points": 81,
@@ -439,30 +509,60 @@
           "local_rank_max": 10,
           "local_rank_sum": 7450,
           "local_rank_algorithm": "pivoted-qr-original-columns",
-          "local_rank_relative_truncation_error": 2.5552684570749023e-15,
+          "local_rank_relative_truncation_error": 2.4019775522839283e-15,
           "operator": "sum-component-BtGB",
           "matrix_free": true,
           "mode_count": 6,
           "charge_count": 7450,
-          "charge_map_entries": 133970,
-          "charge_map_bytes": 1697044,
+          "charge_map_entries": 133963,
+          "charge_map_bytes": 1696960,
           "charge_map_backend": "native-cpp-component-csr",
           "hmatrix": {
             "n_dof": 7450,
             "n_leaves": 5272,
             "n_lowrank": 1802,
             "n_dense": 3470,
-            "max_rank": 59,
-            "compression": 0.17171118418089276,
-            "build_time": 88.5976964,
-            "memory_mb": 72.711181640625,
+            "max_rank": 62,
+            "compression": 0.1721277419936039,
+            "build_time": 52.446015100000004,
+            "memory_mb": 72.8875732421875,
             "dense_memory_mb": 423.4504699707031,
+            "build_prep_s": 0.0965136,
+            "build_cluster_s": 0.0006954999989829957,
+            "build_leafgen_s": 0.0007796999998390675,
+            "build_fill_s": 52.34727980004391,
+            "build_diag_s": 0.047881900000000005,
             "hex_cache_stats_enabled": 0.0,
             "hex_block_cache_limit": 200000.0,
             "hex_trans_cache_enabled": 1.0,
+            "hex_congruent_cache_enabled": 1.0,
+            "hex_congruent_ready": 0.0,
+            "hex_congruent_templates": 0.0,
+            "hex_congruent_hosts": 0.0,
             "hex_far_one_sided_threshold": 0.0,
             "hex_affine_exact_near_factor": 1.0,
             "hex_distorted_far_factor": 1.0,
+            "hex_near_inner_exact": 1.0,
+            "hex_near_inner_host_cone": 1.0,
+            "hex_near_sinh_min_width": 0.001,
+            "hex_near_sinh_max_width": 1.0,
+            "hex_pair_duffy_enabled": 1.0,
+            "hex_affine_cells": 0.0,
+            "hex_cells": 0.0,
+            "quad_affine_faces": 0.0,
+            "quad_faces": 0.0,
+            "hex_glpair_n": 0.0,
+            "hex_glpair_affine_n": 0.0,
+            "hex_glpair_w_n": 0.0,
+            "hex_glpair_affine_w_n": 0.0,
+            "hex_pair_nonconforming": 0.0,
+            "hex_pair_anisotropy_graded": 0.0,
+            "hex_exponential_rule_max_anisotropy": 12.0,
+            "hex_cluster_radius_enabled": 1.0,
+            "hex_glnear_n": 0.0,
+            "hex_glout_n": 0.0,
+            "hex_glin_n": 0.0,
+            "hex_glin_self_n": 0.0,
             "curved_direct_enabled": 1.0,
             "hex_blk_affine_near": 0.0,
             "hex_blk_affine_far": 0.0,
@@ -477,6 +577,7 @@
             "hex_general_shared_lookups": 0.0,
             "hex_general_shared_hits": 0.0,
             "hex_general_shared_misses": 0.0,
+            "hex_general_shared_entries": 0.0,
             "wedge_far_one_sided_threshold": 0.0,
             "wedge_trans_cache_scope": 2.0,
             "wedge_trans_cache_enabled": 1.0,
@@ -484,6 +585,7 @@
             "ho_analytic_block_available": 1.0,
             "ho_analytic_block_enabled": 1.0,
             "ho_image_block_enabled": 1.0,
+            "ho_image_far_enabled": 1.0,
             "hmatvec_stats_enabled": 0.0,
             "hmatvec_mkl_threads": 1.0,
             "nonproduction_numerical_override_active": 0.0,
@@ -509,6 +611,9 @@
             "ho_sym_block_hits": 0.0,
             "ho_sym_block_misses": 0.0,
             "ho_sym_block_clears": 0.0,
+            "ho_image_far_entries": 0.0,
+            "ho_image_block_entries": 0.0,
+            "ho_image_scalar_entries": 0.0,
             "hex_block_hit_rate": 0.0,
             "hex_trans_block_hit_rate": 0.0,
             "hex_sym_block_hit_rate": 0.0,
@@ -521,7 +626,7 @@
         "kernel_epsilon_m": null,
         "geometry": "affine-tetrahedron"
       },
-      "elapsed_seconds": 92.15490809999756
+      "elapsed_seconds": 55.68743970000651
     }
   ],
   "legacy_all_boundary_scalar_row": {
@@ -559,7 +664,7 @@
         ]
       }
     ],
-    "elapsed_seconds": 4.090257700008806
+    "elapsed_seconds": 4.172901800018735
   },
   "thin_plate_direct_rows": [
     {
@@ -597,7 +702,7 @@
           ]
         }
       ],
-      "elapsed_seconds": 7.952993100014282
+      "elapsed_seconds": 8.650191400025506
     },
     {
       "mesh_counts": [
@@ -634,63 +739,63 @@
           ]
         }
       ],
-      "elapsed_seconds": 571.442034799984
+      "elapsed_seconds": 621.9278871000279
     }
   ],
   "comparisons": [
     {
       "frequency_hz": 50.0,
       "three_d_force_N": [
-        -0.00014287424678746384,
-        0.00041422078282300117,
-        -0.3071328353318161
+        -0.0001428742471124561,
+        0.0004142207835640338,
+        -0.3071328353467841
       ],
       "thin_plate_force_N": [
         -5.629703898763221e-17,
         4.651957885879821e-16,
         -0.4998441666050254
       ],
-      "lift_relative_difference": 0.6274527146047746
+      "lift_relative_difference": 0.6274527145254616
     },
     {
       "frequency_hz": 500.0,
       "three_d_force_N": [
-        0.0012724878713362428,
-        -0.004260853296603199,
-        -6.643531547945235
+        0.0012724878729483164,
+        -0.00426085330301498,
+        -6.643531547743485
       ],
       "thin_plate_force_N": [
         2.904708910195491e-16,
         -8.248322137067651e-17,
         -0.8931641857904307
       ],
-      "lift_relative_difference": 0.865558825250604
+      "lift_relative_difference": 0.8655588252465213
     },
     {
       "frequency_hz": 5000.0,
       "three_d_force_N": [
-        0.008879090667060188,
-        -0.021202562007509588,
-        -8.374037981912444
+        0.008879090694516159,
+        -0.021202562052967056,
+        -8.37403798146673
       ],
       "thin_plate_force_N": [
         4.277533324293162e-16,
         2.712453606992446e-17,
         -0.9175879987242168
       ],
-      "lift_relative_difference": 0.8904246672028278
+      "lift_relative_difference": 0.8904246671969955
     }
   ],
   "convergence": {
     "three_d_rank_lift_relative_differences": [
-      6.902845070877461e-05,
-      0.00015374232981058,
-      0.0012162682445625572
+      6.902845300915672e-05,
+      0.00015374232826315115,
+      0.001216268246273411
     ],
     "three_d_mesh_lift_relative_differences": [
-      6.301377376594086e-05,
-      0.00020568236581108845,
-      0.0014925311882127978
+      6.301382473783423e-05,
+      0.0002056823339374736,
+      0.0014925312431748328
     ],
     "scalar_mesh_lift_relative_differences": [
       4.7877284061970116e-05,
@@ -704,7 +809,7 @@
     "scalar_model_status": "rejected-for-quantitative-3d-force",
     "recommended_backend": "hcurl_vim",
     "foster_scope": "fast-reduced-solve-of-the-scalar-local-reaction-model-only",
-    "minimum_scalar_vs_3d_lift_relative_difference": 0.6274527146047746,
+    "minimum_scalar_vs_3d_lift_relative_difference": 0.6274527145254616,
     "experiment_status": "not-run-no-measurement-dataset-supplied"
   },
   "checks": {
