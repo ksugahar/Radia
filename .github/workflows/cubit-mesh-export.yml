@@ -157,7 +157,7 @@ jobs:
           python -m compileall -q packages\cubit-mesh-export\src
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m pip install setuptools pytest psutil numpy `
-            "netgen-mesher==6.2.2606" "ngsolve==6.2.2606"
+            "netgen-mesher==6.2.2607" "ngsolve==6.2.2607"
           $env:PYTHONPATH = 'packages\cubit-mesh-export\src'
           python -m pytest tests\test_cubit_installers.py `
             tests\test_cubit_mesh_quality.py `

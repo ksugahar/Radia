@@ -20,7 +20,7 @@ TARGETS = (
 def test_native_build_guard_propagates_failure(tmp_path, target, exit_code):
     source = (ROOT / "Build.ps1").read_text(encoding="utf-8-sig")
     match = re.search(
-        rf'"\$CMAKE_EXE" --build [^\n]*--target {target} -j\n'
+        rf'"\$CMAKE_EXE" --build [^\n]*--target {target} -j \$BuildJobs\n'
         r'(?P<guard>\s*if errorlevel 1 \([^)]*\))', source,
     )
     assert match, f"missing immediate failure guard for {target}"

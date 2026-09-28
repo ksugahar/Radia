@@ -32,6 +32,8 @@
 #==============================================================================
 
 param(
+    [ValidateRange(1, 64)]
+    [int]$BuildJobs = 4,           # bound compiler memory on shared CI hosts
     [switch]$Rebuild,
     [switch]$Test,
     [switch]$Verbose,
@@ -134,7 +136,7 @@ $BuildCubitPlugin = [bool]($CubitInstallDir -and
     (Test-Path (Join-Path $CubitInstallDir "cmake\CubitConfig.cmake")))
 Write-Host "Cubit native targets enabled: $BuildCubitPlugin" -ForegroundColor Gray
 
-# Intel MKL 2026 (required for BLAS/LAPACK and HACApK/PARDISO). The selected
+# Intel MKL 2026 (required for BLAS/LAPACK and HACApK). The selected
 # Python environment is authoritative; MKLROOT is an explicit fallback only.
 if ($OptunaMexOnly) {
     $INTEL_MKL = ""
@@ -410,7 +412,7 @@ if /I "%OPTUNA_MEX_ONLY%"=="True" (
     echo ========================================
     echo   Building lightweight Optuna MEX target
     echo ========================================
-    "$CMAKE_EXE" --build . --config Release --target optuna_mex -j
+    "$CMAKE_EXE" --build . --config Release --target optuna_mex -j $BuildJobs
     if errorlevel 1 (
         echo ERROR: optuna_mex target build failed
         exit /b 1
@@ -425,12 +427,12 @@ if /I "%MATLAB_MEX_ONLY%"=="True" (
     echo ========================================
     echo   Building MATLAB MEX targets
     echo ========================================
-    "$CMAKE_EXE" --build . --config Release --target optuna_mex -j
+    "$CMAKE_EXE" --build . --config Release --target optuna_mex -j $BuildJobs
     if errorlevel 1 (
         echo ERROR: optuna_mex target build failed
         exit /b 1
     )
-    "$CMAKE_EXE" --build . --config Release --target radia_mex -j
+    "$CMAKE_EXE" --build . --config Release --target radia_mex -j $BuildJobs
     if errorlevel 1 (
         echo ERROR: radia_mex target build failed
         exit /b 1
@@ -444,7 +446,7 @@ echo.
 echo ========================================
 echo   Building _radia_pybind
 echo ========================================
-"$CMAKE_EXE" --build . --config Release --target _radia_pybind -j
+"$CMAKE_EXE" --build . --config Release --target _radia_pybind -j $BuildJobs
 if errorlevel 1 (
     echo ERROR: _radia_pybind build failed
     exit /b 1
@@ -455,12 +457,12 @@ if /I "%RUN_CPP_TESTS%"=="True" (
     echo ========================================
     echo   Running fast C++ kernel tests
     echo ========================================
-    "$CMAKE_EXE" --build . --config Release --target test_rad_beam_transfer -j
+    "$CMAKE_EXE" --build . --config Release --target test_rad_beam_transfer -j $BuildJobs
     if errorlevel 1 (
         echo ERROR: beam-transfer C++ test build failed
         exit /b 1
     )
-    "$CMAKE_EXE" --build . --config Release --target test_rad_beam_dynamics -j
+    "$CMAKE_EXE" --build . --config Release --target test_rad_beam_dynamics -j $BuildJobs
     if errorlevel 1 (
         echo ERROR: beam-dynamics C++ test build failed
         exit /b 1
@@ -482,7 +484,7 @@ echo.
 echo ========================================
 echo   Building radia_motor_rom C ABI
 echo ========================================
-"$CMAKE_EXE" --build . --config Release --target radia_motor_rom -j
+"$CMAKE_EXE" --build . --config Release --target radia_motor_rom -j $BuildJobs
 if errorlevel 1 (
     echo ERROR: radia_motor_rom build failed
     exit /b 1
@@ -492,7 +494,7 @@ echo.
 echo ========================================
 echo   Building peec_matrices
 echo ========================================
-"$CMAKE_EXE" --build . --config Release --target peec_matrices -j
+"$CMAKE_EXE" --build . --config Release --target peec_matrices -j $BuildJobs
 if errorlevel 1 (
     echo ERROR: peec_matrices build failed
     exit /b 1
@@ -502,7 +504,7 @@ echo.
 echo ========================================
 echo   Building sparsesolv_ngsolve
 echo ========================================
-"$CMAKE_EXE" --build . --config Release --target sparsesolv_ngsolve -j
+"$CMAKE_EXE" --build . --config Release --target sparsesolv_ngsolve -j $BuildJobs
 if errorlevel 1 (
     echo ERROR: sparsesolv_ngsolve build failed
     exit /b 1
@@ -512,7 +514,7 @@ echo.
 echo ========================================
 echo   Building axifem
 echo ========================================
-"$CMAKE_EXE" --build . --config Release --target axifem -j
+"$CMAKE_EXE" --build . --config Release --target axifem -j $BuildJobs
 if errorlevel 1 (
     echo ERROR: axifem build failed
     exit /b 1
@@ -522,7 +524,7 @@ echo.
 echo ========================================
 echo   Building _equation (LaTeX equations)
 echo ========================================
-"$CMAKE_EXE" --build . --config Release --target _equation -j
+"$CMAKE_EXE" --build . --config Release --target _equation -j $BuildJobs
 if errorlevel 1 (
     echo ERROR: _equation build failed
     exit /b 1
@@ -558,7 +560,7 @@ if /I "$BuildCubitPlugin"=="True" (
         echo ERROR: cubit_mesh_curver configuration failed
         exit /b 1
     )
-    "$CMAKE_EXE" --build . --config Release --target cubit_mesh_curver -j
+    "$CMAKE_EXE" --build . --config Release --target cubit_mesh_curver -j $BuildJobs
     if errorlevel 1 (
         echo ERROR: cubit_mesh_curver build failed
         exit /b 1
@@ -582,7 +584,7 @@ if /I "$BuildCubitPlugin"=="True" (
         echo ERROR: cubit_mesh_export_ccm configuration failed
         exit /b 1
     )
-    "$CMAKE_EXE" --build . --config Release --target cubit_mesh_export_ccm -j
+    "$CMAKE_EXE" --build . --config Release --target cubit_mesh_export_ccm -j $BuildJobs
     if errorlevel 1 (
         echo ERROR: cubit_mesh_export_ccm build failed
         exit /b 1
