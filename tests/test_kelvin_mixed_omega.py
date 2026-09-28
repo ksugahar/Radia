@@ -864,22 +864,32 @@ def test_projected_picard_iron_updates_never_evaluate_the_air_source():
 
 
 def test_source_projection_diagnostics_survive_many_threads():
-    """Integrate's fixed 10 MB/nthreads heap overflowed at 76 threads, bonus 12."""
-    import ngsolve as ng
-    from radia.kelvin_solver import project_source_total_hodge
+    """Exercise the fixed heap share without changing the suite's thread count."""
+    import subprocess
+    import sys
+    from pathlib import Path
 
-    import os
-
-    mesh, h_source, _, _ = _picard_case(maxh=0.35)
-    ng.SetNumThreads(76)  # more threads than cores is fine; the heap share is what fails
-    try:
-        with ng.TaskManager():
-            many = project_source_total_hodge(mesh, h_source, ("total",), order=2, bonus_intorder=12)
-    finally:
-        ng.SetNumThreads(os.cpu_count() or 1)  # NGSolve has no getter; its default is the core count
+    # NGSolve has no public getter for the caller's configured thread count.
+    # Keep the stress setting in a child instead of guessing how to restore it.
+    script = r"""
+import runpy, sys
+import ngsolve as ng
+import numpy as np
+from radia.kelvin_solver import project_source_total_hodge
+case = runpy.run_path(sys.argv[1])["_picard_case"]
+mesh, source, _, _ = case(maxh=0.35)
+values = []
+for threads in (1, 76):
+    ng.SetNumThreads(threads)
     with ng.TaskManager():
-        few = project_source_total_hodge(mesh, h_source, ("total",), order=2, bonus_intorder=12)
-    assert many["relative_harmonic_norm"] == pytest.approx(few["relative_harmonic_norm"], rel=1e-10)
+        result = project_source_total_hodge(mesh, source, ("total",), order=2, bonus_intorder=12)
+    values.append(result["relative_harmonic_norm"])
+np.testing.assert_allclose(values[0], values[1], rtol=1e-10, atol=0.)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(Path(__file__).resolve())],
+        capture_output=True, text=True, timeout=120, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_mixed_omega_projected_material_state_validates_resume_shape():
