@@ -1,7 +1,11 @@
-function hcurlEddyCLNFamilySFunction(block)
-%HCURLEDDYCLNFAMILYSFUNCTION Moving common-basis HCurl CLN block.
+function hcurlEddyFosterFamilySFunction(block)
+%HCURLEDDYFOSTERFAMILYSFUNCTION Moving shared-mode Foster HCurl block.
 %   Input layout: [minus_dI_dt(port_count); height_m; coil_current(port_count)].
 %   Output layout: [port_response(port_count); force_x; force_y; force_z].
+%   The discrete state matrix is shared by every height; Outputs reads the
+%   modal state and Update advances it with the height-interpolated input.
+%   force is the instantaneous product K*z(t)*i(t); its cycle average is the
+%   phasor time-average force.
 
 setup(block);
 end
@@ -11,7 +15,6 @@ block.NumDialogPrms = 1;
 family = block.DialogPrm(1).Data;
 validateFamily(family);
 nPort = family.port_count;
-nState = family.state_order;
 
 block.NumInputPorts = 1;
 block.NumOutputPorts = 1;
@@ -36,7 +39,7 @@ end
 function postPropagationSetup(block)
 family = block.DialogPrm(1).Data;
 block.NumDworks = 1;
-block.Dwork(1).Name = "state";
+block.Dwork(1).Name = "modal_state";
 block.Dwork(1).Dimensions = family.state_order;
 block.Dwork(1).DatatypeID = 0;
 block.Dwork(1).Complexity = "Real";
@@ -45,20 +48,18 @@ end
 
 function initializeConditions(block)
 family = block.DialogPrm(1).Data;
-block.Dwork(1).Data = family.models{1}.x0(:);
+block.Dwork(1).Data = family.x0(:);
 end
 
 function outputs(block)
 family = block.DialogPrm(1).Data;
 u = double(block.InputPort(1).Data(:));
 nPort = family.port_count;
-height = u(nPort + 1);
-coilCurrent = u(nPort + 2:end);
-x = double(block.Dwork(1).Data(:));
-model = radia.simulink.interpolateHCurlEddyCLNFamily( ...
-    family, height, BuildStateSpace=false);
-response = model.Cd * x + model.Dd * u(1:nPort);
-force = radia.simulink.evaluateHCurlEddyCLNForce(model, x, coilCurrent);
+model = radia.simulink.interpolateHCurlEddyFosterFamily(family, u(nPort + 1));
+z = double(block.Dwork(1).Data(:));
+response = model.Cd * z + model.Dd * u(1:nPort);
+force = radia.internal.hcurlEddyFosterInstantaneousForce( ...
+    model.force_operator, z, u(nPort + 2:end));
 block.OutputPort(1).Data = [response(:); force(:)];
 end
 
@@ -66,23 +67,22 @@ function update(block)
 family = block.DialogPrm(1).Data;
 u = double(block.InputPort(1).Data(:));
 nPort = family.port_count;
-height = u(nPort + 1);
-model = radia.simulink.interpolateHCurlEddyCLNFamily( ...
-    family, height, BuildStateSpace=false);
-x = double(block.Dwork(1).Data(:));
-block.Dwork(1).Data = model.Ad * x + model.Bd * u(1:nPort);
+model = radia.simulink.interpolateHCurlEddyFosterFamily(family, u(nPort + 1));
+z = double(block.Dwork(1).Data(:));
+block.Dwork(1).Data = model.Ad * z + model.Bd * u(1:nPort);
 end
 
 function validateFamily(family)
 if ~isstruct(family) || ~isfield(family, "schema") || ...
-        family.schema ~= "radia.hcurl.eddy_cln.family.v1" || ...
-        ~isfield(family, "models") || family.snapshot_count < 1
-    error("radia:simulink:HCurlCLNFamily", ...
-        "The S-function parameter must be a loaded HCurl CLN family.");
+        family.schema ~= "radia.hcurl.eddy_foster.family.v1" || ...
+        ~isfield(family, "shared_modes") || ~family.shared_modes || ...
+        family.snapshot_count < 1
+    error("radia:simulink:HCurlFosterFamily", ...
+        "The S-function parameter must be a loaded Foster HCurl family.");
 end
-if numel(family.models) ~= family.snapshot_count || ...
-        family.state_order < 1 || family.port_count < 1
-    error("radia:simulink:HCurlCLNFamily", ...
-        "The HCurl CLN family dimensions are inconsistent.");
+if family.state_order < 1 || family.port_count < 1 || ...
+        numel(family.positions_m) ~= family.snapshot_count
+    error("radia:simulink:HCurlFosterFamily", ...
+        "The Foster HCurl family dimensions are inconsistent.");
 end
 end

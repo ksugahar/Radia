@@ -107,14 +107,14 @@
       "block": "radia_simulink_library/Applications/Magnetic Levitation",
       "sample": "matlab/radia_maglev.slx",
       "generator": "radia.simulink.buildMagLevModel",
-      "design": "radia.maglev.MovingHCurlCLNFamily",
-      "backend": "matlab-level2-common-basis-cln",
-      "backend_policy": "A readable Level-2 MATLAB S-Function advances a shared-coordinate, position-dependent HCurl/CLN reduced state and evaluates the exported Lorentz-force operator. Family assembly occurs before simulation and Python is never called per step.",
+      "design": "radia.maglev.MovingHCurlFosterFamily",
+      "backend": "matlab-level2-shared-mode-foster",
+      "backend_policy": "A readable Level-2 MATLAB S-Function advances a position-dependent HCurl reduced state in Foster modal form with one mode set shared by every height and evaluates the exported modal Lorentz-force operator. Family assembly occurs before simulation and Python is never called per step.",
       "optimization_scope": "control optimization only; material topology optimization belongs to radia-em",
       "notebook": null,
       "headless": [
         "src/radia/vim/_matlab_bridge.py",
-        "src/radia/maglev/position_cln.py"
+        "src/radia/maglev/position_foster.py"
       ]
     },
     {

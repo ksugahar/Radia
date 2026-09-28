@@ -1,0 +1,16 @@
+function validateHCurlEddyFosterModel(model)
+%VALIDATEHCURLEDDYFOSTERMODEL Fail loudly unless MODEL is a Foster contract.
+
+required = ["schema", "decay_rates", "modal_port_rhs", "force_operator", ...
+    "Ad", "Bd", "Cd", "Dd", "x0", "sample_time_s", "state_order", "port_count"];
+if ~isstruct(model) || ~all(isfield(model, cellstr(required))) || ...
+        string(model.schema) ~= "radia.hcurl.eddy_foster.state_space.v1"
+    error("radia:simulink:HCurlFosterModel", ...
+        "model must come from makeHCurlEddyFosterModel or loadHCurlEddyFosterModel.");
+end
+if numel(model.decay_rates) ~= model.state_order || ...
+        ~isequal(size(model.modal_port_rhs), [model.state_order, model.port_count])
+    error("radia:simulink:HCurlFosterModel", ...
+        "Foster model dimensions are inconsistent.");
+end
+end

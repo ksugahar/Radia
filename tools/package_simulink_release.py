@@ -300,7 +300,7 @@ def build_package(
             "files": files,
         }
         if full_library:
-            manifest["maglev_backend"] = "matlab-level2-common-basis-cln"
+            manifest["maglev_backend"] = "matlab-level2-shared-mode-foster"
             manifest["reactor_backend"] = (
                 "matlab-level2+radia-mex-handle"
             )

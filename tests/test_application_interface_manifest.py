@@ -73,7 +73,7 @@ def test_application_manifest_has_no_notebook_workbenches():
     )
 
     maglev = applications["radia-maglev"]
-    assert maglev["backend"] == "matlab-level2-common-basis-cln"
+    assert maglev["backend"] == "matlab-level2-shared-mode-foster"
     assert maglev["sample"] == "matlab/radia_maglev.slx"
     assert "never called per step" in maglev["backend_policy"]
     assert maglev["optimization_scope"].startswith("control optimization only")
