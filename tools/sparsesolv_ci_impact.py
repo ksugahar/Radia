@@ -10,6 +10,15 @@ import tomllib
 
 # Checked against both workflow trigger lists by the lightweight contract suite.
 NATIVE_PATHS = (
+    'src/radia/ih*.py',
+    'src/radia/panels/calc_heat*.py',
+    'src/radia/panels/calc_ih_axisym_coupled.py',
+    'src/radia/panels/calc_fem_kelvin.py',
+    'src/radia/panels/calc_fem_coilmesh.py',
+    'tests/test_ih_*.py',
+    'validation_test/induction_heating/test_fem_ams_parity.py',
+    'validation_test/induction_heating/fem_sibc_geometry.py',
+
     'src/radia/vim/_nonlinear.py',
     'src/radia/vim/_solve.py',
     'tests/test_hdiv_energy_material_consistency.py',

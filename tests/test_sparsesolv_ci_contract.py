@@ -196,6 +196,8 @@ def test_mixed_manifest_and_runtime_dependency_change_still_runs():
     "src/radia/mixed_omega_newton.py", "src/radia/eddy_aphi.py",
     "src/radia/eddy_axisym_ring.py", "src/radia/sibc_corner_patch.py",
     "src/radia/vector_potential_solver.py", "src/radia/topology_optimization.py",
+    "src/radia/ih_thermal.py", "src/radia/ih_axisym_coupled.py",
+    "src/radia/panels/calc_fem_kelvin.py",
 ])
 def test_numerical_source_changes_select_built_ngsolve_lane(source):
     assert IMPACT.native_required("push", {"before": "a" * 40},
@@ -206,6 +208,15 @@ def test_numerical_source_changes_select_built_ngsolve_lane(source):
     assert "--profile solver-numerics" in numerical["run"]
     assert numerical["env"]["RADIA_TESTS_ALLOW_PARTIAL"] == "0"
     assert "find('skipped') is None" in numerical["run"]
+
+
+def test_ih_thermal_and_complex_ams_contracts_run_with_ngsolve():
+    profiles = json.loads((ROOT / "tests/test_tier_manifest.json").read_text())["profiles"]
+    required = {"tests/test_ih_axisym_coupled.py", "tests/test_ih_thermal_transfer.py",
+                "tests/test_ih_thermal_exposure.py",
+                "validation_test/induction_heating/test_fem_ams_parity.py"}
+    assert required <= set(profiles["solver-numerics"]["paths"])
+    assert required.isdisjoint(profiles["fast-contracts"]["paths"])
 
 
 def test_numerical_tier_changes_cannot_skip_native_lane():

@@ -180,7 +180,7 @@
       ]
     },
     "solver-numerics": {
-      "description": "Required NGSolve contracts for mixed Omega, HDiv/topology, eddy currents and SIBC; no partial dependency run.",
+      "description": "Required NGSolve contracts for mixed Omega, HDiv/topology, eddy currents, SIBC and IH thermal coupling; no partial dependency run.",
       "max_elapsed_seconds": 600,
       "paths": [
         "tests/test_eddy_aphi_contract.py",
@@ -217,7 +217,17 @@
         "tests/test_topology_optimization.py",
         "tests/test_vim_eddy_hybrid.py",
         "tests/test_vim_coupled_weak_vs_monolithic.py",
-        "tests/test_patch_recovery.py"
+        "tests/test_patch_recovery.py",
+        "tests/test_ih_axisym_coupled.py",
+        "tests/test_ih_case_depth.py",
+        "tests/test_ih_cli_flags.py",
+        "tests/test_ih_coupled_source.py",
+        "tests/test_ih_geometry_roles.py",
+        "tests/test_ih_holes.py",
+        "tests/test_ih_nonlinear_heat.py",
+        "tests/test_ih_thermal_exposure.py",
+        "tests/test_ih_thermal_transfer.py",
+        "validation_test/induction_heating/test_fem_ams_parity.py"
       ]
     },
     "sparsesolv": {
