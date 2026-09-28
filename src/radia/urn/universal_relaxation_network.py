@@ -3825,7 +3825,6 @@ Universal Relaxation Network capabilities:
 
 3. SPICE CIRCUIT GENERATION:
    - Foster synthesis (parallel RLC branches)
-   - Cauer synthesis (cascade ladder networks)
    - Ready for circuit simulation
 
 4. UNCERTAINTY QUANTIFICATION:
