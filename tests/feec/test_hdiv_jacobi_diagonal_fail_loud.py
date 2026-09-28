@@ -76,3 +76,36 @@ def test_nonfinite_scalar_pcg_cannot_report_convergence(value, target):
     # check masking the NaN-to-zero norm regression.
     with ng.TaskManager(), pytest.raises(RuntimeError, match="non-finite .*norm"):
         G.solve_configured_linear_material_auto_prec(1.0, rhs, 1e-8, 0, x0=initial)
+
+
+def test_indefinite_operator_with_positive_jacobi_diagonal_raises_in_batched_pcg():
+    """Batched multi-RHS PCG keeps the scalar SPD contract (2026-09-28 review).
+
+    The Jacobi diagonal stays positive, but a rank-1 shift of the mass matrix moves the smallest
+    eigenvalue of inv_chi*M + B^T G B to -1 % of its magnitude.  The batched recurrence must report
+    the SPD violation instead of stepping along non-positive curvature.  This locks the contract; the
+    pre-fix build reached the same error through its scalar finish on this fixture.
+    """
+    sp = pytest.importorskip("scipy.sparse")
+    mesh = MakeStructured3DMesh(hexes=True, nx=2, ny=2, nz=1)
+    with ng.TaskManager():
+        fes = ng.HDiv(mesh, order=1)
+        B, G, M, _ = V._build_charge_gram_hex(fes, eps=1e-10)
+        Bs = sp.csr_matrix(B)
+        n_face = Bs.shape[1]
+        G.configure_charge_map(np.ascontiguousarray(Bs.indptr, np.int32),
+                               np.ascontiguousarray(Bs.indices, np.int32),
+                               np.ascontiguousarray(Bs.data, float), int(n_face))
+    Bd = Bs.toarray()
+    N = np.column_stack([Bd.T @ np.asarray(G.matvec_sym(Bd[:, j].tolist()), float)
+                         for j in range(n_face)])
+    mass = sp.csr_matrix(M).toarray()
+    lam, vec = np.linalg.eigh(mass + 0.5*(N + N.T))
+    assert lam[0] > 0.0
+    shifted = mass - 1.01*lam[0]*np.outer(vec[:, 0], vec[:, 0])
+    operator = shifted + 0.5*(N + N.T)
+    assert np.min(np.diag(operator)) > 0.0 and np.linalg.eigvalsh(operator)[0] < 0.0
+    _configure_mass(G, sp.coo_matrix(shifted), n_face)
+    rhs = np.ascontiguousarray(np.random.default_rng(7).standard_normal((2, n_face)))
+    with ng.TaskManager(), pytest.raises(RuntimeError, match="not SPD"):
+        G.solve_configured_linear_material_auto_prec_many(1.0, rhs, 1e-10, 2000)
