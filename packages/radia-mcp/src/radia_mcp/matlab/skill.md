@@ -5,10 +5,10 @@ owns generic model inspection, editing, checking, and testing. This
 package adds the Radia/NGSolve MEX capability contract, support for the
 table-backed `radia-optuna` MATLAB layer with `SimulinkRunner`, and 43 generic ML/RL
 gates backed by 86 self-contained MATLAB functions. The Simulink surface also
-contains the validated 50 Hz TEAM 28 six-stage CLN force LUT and a numeric
-HCurl Eddy Bubble/CLN reduced-state bridge. The bridge consumes trusted R/L/P
-matrices, uses the existing `hybrid_vim.solve` MEX kernel for harmonic solves,
-and builds a passive discrete state-space model; NGSolve remains the owner of
+contains the validated 50 Hz TEAM 28 full-FEM force-height LUT and a numeric
+HCurl Eddy Bubble reduced-state bridge in Foster modal form. The bridge
+consumes trusted decay rates and modal inputs, solves harmonics in the
+diagonal modal form, and builds a passive discrete state-space model; NGSolve remains the owner of
 mesh assembly, high-order geometry, and DoF orientation. Acoustic FEM/BEM
 remains separate.
 
@@ -95,9 +95,9 @@ the accepted scope is `cycle_averaged_mechanical_motion`, not
 `full_electromagnetic_transient`.
 
 The first high-level Python-free assembly path is
-`radia.ngsolve.hcurl_eddy_cln_model`. It calls the MEX-native HCurl response
+`radia.ngsolve.hcurl_eddy_foster_model`. It calls the MEX-native HCurl response
 reduction on a `.vol` mesh, returns `M_r = V' M V`, `K_r = V' K V`, and
-`P_r = V' ports`, and forms a local diffusion CLN model with user-supplied
+`P_r = V' ports`, and forms a local diffusion Foster model with user-supplied
 conductivity and reluctivity. This is the MATLAB/Simulink route for the
 high-order local FE projection; it is intentionally distinct from the full
 HCurl-VIM Laplace/BEM inductance and rationalized SIBC path.

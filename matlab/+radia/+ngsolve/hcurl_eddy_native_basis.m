@@ -1,6 +1,6 @@
-function out = hcurl_eddy_cln_native_basis(vol_path, order, ports, steps, options)
-%HCURL_EDDY_CLN_NATIVE_BASIS Build a native C++ HCurl response basis.
-%   OUT = radia.ngsolve.hcurl_eddy_cln_native_basis(VOL_PATH, ORDER, PORTS,
+function out = hcurl_eddy_native_basis(vol_path, order, ports, steps, options)
+%HCURL_EDDY_NATIVE_BASIS Build a native C++ HCurl response basis.
+%   OUT = radia.ngsolve.hcurl_eddy_native_basis(VOL_PATH, ORDER, PORTS,
 %   STEPS) calls the radia_mex gateway directly. NGSolve owns mesh loading,
 %   HCurl orientation, sparse assembly, free-DoF handling, and factorization;
 %   the MEX gateway performs the response compression without Python. The
@@ -22,6 +22,6 @@ if ndims(ports) ~= 2
 end
 
 out = radia.internal.callMex( ...
-    'hcurl.eddy_cln.native_basis', char(vol_path), order, ports, steps, ...
+    'hcurl.eddy.native_basis', char(vol_path), order, ports, steps, ...
     options.no_grads, options.rtol);
 end
