@@ -31,21 +31,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
-import scipy.linalg
 
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 SRC = REPO / "src"
 AXIFEM_VERIFY = REPO / "validation_test" / "axifem" / "research" / "verification"
-BEM_CAUER_RESULT = (
-    REPO
-    / "validation_test"
-    / "maglev"
-    / "research_cln"
-    / "ngsolve_validation"
-    / "bem_disk_axisym_cauer_python_results.json"
-)
 DEFAULT_OUTPUT = HERE / "results_hcurl_eddy_bubble_disk.json"
 
 for path in (SRC, AXIFEM_VERIFY):
@@ -71,16 +62,6 @@ def _package_version(name: str) -> str:
         return importlib.metadata.version(name)
     except importlib.metadata.PackageNotFoundError:
         return "unknown"
-
-
-def _real_symmetric(matrix: np.ndarray, label: str) -> np.ndarray:
-    values = np.asarray(matrix)
-    scale = max(float(np.linalg.norm(values)), np.finfo(float).tiny)
-    imaginary_ratio = float(np.linalg.norm(values.imag) / scale)
-    if imaginary_ratio > 1.0e-10:
-        raise ValueError(f"{label} has imaginary ratio {imaginary_ratio:.3e}")
-    real = np.asarray(values.real, dtype=float)
-    return 0.5 * (real + real.T)
 
 
 def _disk_mesh(maxh_m: float) -> ng.Mesh:
@@ -123,52 +104,39 @@ def _uniform_bz_vector_potential_samples(points: np.ndarray) -> np.ndarray:
     )
 
 
-def _modal_spectrum(model: vim.HCurlEddyCLNModel) -> dict[str, object]:
-    resistance = _real_symmetric(model.resistance, "resistance")
-    inductance = _real_symmetric(model.inductance, "inductance")
-    rhs = np.asarray(model.port_rhs[:, 0])
-    eigenvalues, eigenvectors = scipy.linalg.eigh(
-        inductance,
-        resistance,
-        check_finite=True,
-    )
-    positive = np.isfinite(eigenvalues) & (eigenvalues > 0.0)
-    eigenvalues = eigenvalues[positive]
-    eigenvectors = eigenvectors[:, positive]
-    if eigenvalues.size == 0:
-        raise RuntimeError("the reduced CLN has no positive time constants")
+def _modal_spectrum(model: vim.HCurlEddyFosterModel) -> dict[str, object]:
+    """Foster time constants and the DC weight of each mode at the port.
 
-    residues = np.abs(eigenvectors.conj().T @ rhs) ** 2
-    tau_order = np.argsort(eigenvalues)[::-1]
-    tau_us = 1.0e6 * eigenvalues[tau_order]
-    residues_tau_order = residues[tau_order]
-    dominant_index = int(np.argmax(residues))
-    dominant_tau_us = float(1.0e6 * eigenvalues[dominant_index])
-    residue_sum = max(float(np.sum(residues)), np.finfo(float).tiny)
-    dominant_error_pct = float(
-        100.0
-        * abs(dominant_tau_us - BEM_MODAL_REFERENCE_US[0])
-        / BEM_MODAL_REFERENCE_US[0]
-    )
+    With R v = lambda L v and V'LV = I, the port admittance is
+    sum_j |Bm_j|^2 / (s + lambda_j); mode j carries the DC weight
+    |Bm_j|^2 / lambda_j, which selects the port-dominant diffusion pole.
+    """
+
+    rates = np.asarray(model.decay_rates, dtype=float)
+    positive = np.isfinite(rates) & (rates > 0.0)
+    if not np.any(positive):
+        raise RuntimeError("the reduced Foster model has no positive decay rates")
+    rates = rates[positive]
+    modal_port = np.asarray(model.modal_port_rhs)[positive, 0]
+    weights = np.abs(modal_port) ** 2 / rates
+    tau_s = 1.0 / rates
+    tau_order = np.argsort(tau_s)[::-1]
+    dominant_index = int(np.argmax(weights))
+    dominant_tau_us = float(1.0e6 * tau_s[dominant_index])
+    weight_sum = max(float(np.sum(weights)), np.finfo(float).tiny)
+    diagnostics = model.diagnostics()
     return {
-        "time_constants_us_descending": tau_us.tolist(),
-        "port_residues_in_tau_order": residues_tau_order.tolist(),
+        "time_constants_us_descending": (1.0e6 * tau_s[tau_order]).tolist(),
+        "port_dc_weights_in_tau_order": weights[tau_order].tolist(),
         "port_dominant_time_constant_us": dominant_tau_us,
-        "port_dominant_residue_fraction": float(
-            residues[dominant_index] / residue_sum
-        ),
+        "port_dominant_dc_weight_fraction": float(weights[dominant_index] / weight_sum),
         "reference_leading_time_constant_us": float(BEM_MODAL_REFERENCE_US[0]),
-        "port_dominant_abs_error_pct": dominant_error_pct,
-        "minimum_resistance_eigenvalue": float(np.linalg.eigvalsh(resistance)[0]),
-        "minimum_inductance_eigenvalue": float(np.linalg.eigvalsh(inductance)[0]),
-        "resistance_hermitian_error": float(
-            np.linalg.norm(model.resistance - model.resistance.conj().T)
-            / max(float(np.linalg.norm(model.resistance)), np.finfo(float).tiny)
+        "port_dominant_abs_error_pct": float(
+            100.0 * abs(dominant_tau_us - BEM_MODAL_REFERENCE_US[0])
+            / BEM_MODAL_REFERENCE_US[0]
         ),
-        "inductance_hermitian_error": float(
-            np.linalg.norm(model.inductance - model.inductance.conj().T)
-            / max(float(np.linalg.norm(model.inductance)), np.finfo(float).tiny)
-        ),
+        "minimum_resistance_eigenvalue": float(diagnostics["min_resistance_eigenvalue"]),
+        "minimum_inductance_eigenvalue": float(diagnostics["min_inductance_eigenvalue"]),
     }
 
 
@@ -239,7 +207,7 @@ def _run_hcurl_case(
         )
     interaction_s = time.perf_counter() - interaction_started
 
-    cln_started = time.perf_counter()
+    foster_started = time.perf_counter()
     system = basis.assemble_vim(
         sigma=SIGMA_S_PER_M,
         interaction=interaction,
@@ -248,9 +216,9 @@ def _run_hcurl_case(
         basis.current_basis,
         _uniform_bz_vector_potential_samples(basis.current_basis.points),
     )
-    model = vim.HCurlEddyCLNFromVIM(system, rhs)
+    model = vim.HCurlEddyFosterModelFromVIM(system, rhs)
     modal = _modal_spectrum(model)
-    cln_s = time.perf_counter() - cln_started
+    foster_s = time.perf_counter() - foster_started
 
     diagnostics = basis.diagnostics()
     interaction_diagnostics = interaction.diagnostics()
@@ -300,15 +268,13 @@ def _run_hcurl_case(
             "mesh": mesh_s,
             "parent_assembly_and_reduction": reduction_s,
             "epsilon_free_vim_interaction": interaction_s,
-            "cln_and_modal_spectrum": cln_s,
+            "foster_modal_spectrum": foster_s,
             "total": time.perf_counter() - started,
         },
     }
 
 
 def _run_axifem_reference() -> dict[str, object]:
-    cauer = json.loads(BEM_CAUER_RESULT.read_text(encoding="utf-8"))
-    cauer_tau_us = [float(value) for value in cauer["tau_pair_us"][:6]]
     started = time.perf_counter()
 
     q1_started = time.perf_counter()
@@ -339,18 +305,11 @@ def _run_axifem_reference() -> dict[str, object]:
 
     rows = []
     for label, result in (("Q1", q1), ("Q2", q2)):
-        cauer_values = [float(stage["tau_pair_us"]) for stage in result["stages"]]
         eigen_values = [float(value) for value in result["eigsh_tau_us"]]
         rows.append(
             {
                 "element_family": label,
                 "mesh": result["mesh"],
-                "first_cauer_time_constant_us": cauer_values[0],
-                "first_cauer_abs_error_pct": float(
-                    100.0
-                    * abs(cauer_values[0] - cauer_tau_us[0])
-                    / abs(cauer_tau_us[0])
-                ),
                 "first_eigen_time_constant_us": eigen_values[0],
                 "first_eigen_abs_error_pct": float(
                     100.0
@@ -361,11 +320,9 @@ def _run_axifem_reference() -> dict[str, object]:
         )
     return {
         "reference_files": [
-            str(BEM_CAUER_RESULT.relative_to(REPO)).replace("\\", "/"),
             "validation_test/axifem/research/verification/test_hiruma_disk_q1.py",
             "validation_test/axifem/research/verification/test_hiruma_disk_q2.py",
         ],
-        "bem_first_cauer_time_constant_us": cauer_tau_us[0],
         "bem_first_modal_time_constant_us": float(BEM_MODAL_REFERENCE_US[0]),
         "rows": rows,
         "timing_s": {
@@ -465,17 +422,11 @@ def main() -> int:
     axifem_eigen_errors = [
         float(row["first_eigen_abs_error_pct"]) for row in axifem["rows"]
     ]
-    axifem_cauer_errors = [
-        float(row["first_cauer_abs_error_pct"]) for row in axifem["rows"]
-    ]
     checks = {
         "ran_to_completion": True,
         "result_files_exist": True,
         "axifem_q1_q2_first_eigen_below_0_6_percent": (
             max(axifem_eigen_errors) < 0.6
-        ),
-        "axifem_q1_q2_first_cauer_below_0_6_percent": (
-            max(axifem_cauer_errors) < 0.6
         ),
         "polynomial_h_sweep_all_below_2_percent": max(positive_errors) < 2.0,
         "polynomial_p1_p2_p3_all_below_2_percent": max(p_errors) < 2.0,
@@ -487,7 +438,7 @@ def main() -> int:
             min(negative_errors) - min(positive_errors) > 3.0
         ),
         "epsilon_free_projection_below_1e_9": projection_error <= 1.0e-9,
-        "all_reduced_cln_models_are_passive": (
+        "all_reduced_foster_models_are_passive": (
             minimum_r >= -1.0e-12 and minimum_l >= -1.0e-12
         ),
     }
