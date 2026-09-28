@@ -3,9 +3,7 @@
 Distilled from the 3-volume MOR Handbook in the Sugahara lab library
 (Volumes 1+2+3 totaling 1221 pages, deGruyter 2020-2021, edited by
 Benner-Grivet-Talocia-Quarteroni-Rozza-Schilders-Silveira), plus the
-Kiss-Orosz 2024 Energies review specifically for rotating machines,
-plus the Sugahara-Wakao CLN papers already covered in
-`radia_mcp.mor.cln_knowledge`.
+Kiss-Orosz 2024 Energies review specifically for rotating machines.
 
 Coverage:
   mor_taxonomy          — the full MOR landscape, three families
@@ -16,10 +14,9 @@ Coverage:
   system_theoretic_bt   — Balanced Truncation, Hankel norm (Vol 1 Ch 2)
   data_driven_dmd_oi    — DMD, Operator Inference, Loewner (Vol 1 Ch 6, Vol 2 Ch 7)
   parametric_pmor       — Parametric MOR (Vol 2 Ch 1)
-  cln_sugahara          — CLN cross-reference + lab heritage
   em_specific_ioan      — Ioan Ch 5 EM-specific MOR (Vol 3)
   rotating_machines_kiss_orosz_2024 — recent review specifically
-                          for motors (POD/PGD/OIM/CLN comparison)
+                          for motors (POD/PGD/OIM comparison)
   software_lab          — MOR software (Vol 3 Ch 13) + lab tools
   lab_recommendation    — decision guide for radia + NGSolve use
 """
@@ -51,7 +48,7 @@ Solve the reduced system, recover full solution as u = V u_r.
 | Krylov / Arnoldi | K^{-1}M iteration around expansion point | Vol 1 Ch 3 |
 | Lanczos (symmetric) | Three-term recurrence | Vol 1 Ch 3 |
 | PGD | Separable greedy expansion | Vol 2 Ch 3 |
-| **CLN** (Sugahara) | Lanczos on PEEC + magnetic coupling | `cln_knowledge` |
+| PRIMA | Block-Arnoldi Krylov basis + congruence projection (passive) | `radia.lanczos_reduction` |
 
 ### Family 2: System-theoretic MOR (intrusive, knows transfer function)
 
@@ -190,12 +187,16 @@ where M_inv = (s_0 I - A)^{-1}.
 **Lanczos** for symmetric A:
 - Three-term recurrence (more efficient than Arnoldi)
 - Produces a tridiagonal reduced operator T_r
-- This is the algorithm used in **CLN** (Sugahara/Wakao)
 
 **Two-sided Lanczos** for asymmetric A with both inputs and outputs:
 - Builds V (for state) and W (for output), with W^T V = I_r
 - Produces tridiagonal T_r
-- Used in **PRIMA** (Padé via Lanczos, Odabasioglu et al. 1998)
+- Used in **PVL** (Padé via Lanczos, Feldmann and Freund 1995)
+
+**PRIMA** (Odabasioglu, Celik and Pileggi 1998): block Arnoldi basis
+from the port vectors, then the congruence Q' A Q of the original
+matrices, which preserves symmetry and definiteness and therefore
+passivity.
 
 ### Multipoint expansion (rational Krylov)
 
@@ -217,15 +218,13 @@ optimizes the expansion points for H_2 optimality.
 For LTI systems with O(10^6) DOFs, moment-matching reaches r ~ 30
 with ~30 PARDISO back-substitutions — minutes, not hours.
 
-### Connection to CLN (Sugahara)
+### Radia implementation
 
-CLN is essentially **Lanczos applied to the PEEC LR-Hamiltonian-coupled
-system** with specific physical interpretation of the reduced
-tridiagonal matrix as a **Cauer ladder circuit** (R-L cells in
-series + parallel).  This makes the reduced model directly usable
-in SPICE-style circuit simulators.
-
-See `radia_mcp.mor.cln_knowledge` for the lab's CLN implementation.
+`radia.lanczos_reduction` implements PRIMA for PEEC loop/star/magnetic
+systems and `radia.analysis` uses it for the series PEEC port.  The
+reduced model stays as projected matrices evaluated through the port
+Schur complement; it can drive a circuit or system simulator as a
+state-space block.
 """
 
 PGD = """\
@@ -499,66 +498,6 @@ The reduced model can then drive an outer optimization loop
 (genetic algorithm, gradient descent) at real-time speed.
 """
 
-CLN_SUGAHARA = """\
-## CLN (Cauer Ladder Network) — Sugahara/Wakao lab specialty
-
-Cross-reference to `radia_mcp.mor.cln_knowledge` which has the
-full lab-specific treatment.
-
-### Quick summary in MOR taxonomy
-
-CLN sits in **Family 1 (projection-based)** as a SPECIALIZED
-Lanczos variant:
-
-- Two-sided Lanczos applied to the PEEC + magnetic-coupling system
-- Reduced model is **structurally a tridiagonal R-L state-space**
-  with physical R, L coefficients
-- Tridiagonality is the structural fingerprint of Lanczos; the
-  physical interpretation as **R-L ladder** is the lab insight
-
-### Why CLN is special
-
-Generic Lanczos gives an abstract reduced (A_r, B_r, C_r) with no
-particular structure beyond tridiagonality.  CLN's contribution is
-showing that for **PEEC-discretized magnetic-conductor systems**:
-
-1. The Lanczos reduction PRESERVES energy / passivity (provable)
-2. The reduced state variables have INTERPRETABLE units (currents
-   through ladder branches)
-3. The reduced system is directly EXPRESSIBLE as a SPICE netlist
-   without further translation
-
-This makes CLN the natural pre-processing step for **circuit-
-simulator-coupled** motor / power-electronics analysis.
-
-### Sugahara contributions (multiple papers)
-
-The Sugahara lab has co-authored at least 5+ CLN papers:
-- Original CLN for PEEC matrices
-- Extension to magnetic-material coupled systems
-- Combined CLN+SIBC for IH workpieces
-- Verified-arithmetic CLN (DD precision, double-double)
-- 3D CLN extensions
-
-Cross-reference `radia_mcp.mor.cln_knowledge` for detailed
-formulations and CLAUDE.md "PRIMA Model Order Reduction" for the
-production implementation in `radia/lanczos_reduction.py`.
-
-### Position in the MOR taxonomy (CLN as a research-niche)
-
-| Aspect | Generic Lanczos | CLN (Sugahara) |
-|--------|------------------|----------------|
-| Reduced structure | Tridiagonal | Tridiagonal |
-| Physical interpretation | None | R-L ladder |
-| Passivity guarantee | No (without effort) | Yes (built in) |
-| SPICE export | Manual | Automatic |
-| Verification arithmetic | Standard FP | DD/Interval supported |
-| Lab application | None | IH, transformer, motor coil |
-
-CLN is **not a competitor** to POD/RB for general MOR — it's a
-specialized tool for the PEEC-discretized circuit-coupled regime.
-"""
-
 EM_SPECIFIC_IOAN = """\
 ## EM-specific MOR — Ioan et al. (Vol 3 Ch 5, 56 pages)
 
@@ -614,12 +553,11 @@ for EM.
 
 For radia + NGSolve MOR work, follow Ioan's structure-preservation
 guidance:
-- For PEEC reduction → use the Sugahara CLN (which IS PRIMA + ladder
-  realization)
+- For PEEC reduction → use PRIMA (congruence projection, passive)
 - For FE eddy-current reduction → use POD + DEIM (Hollaus 2023)
 - For parametric design → use RB / PGD
 
-This module + `cln_sugahara` + `hyperreduction` topics give the
+This module + `projection_krylov` + `hyperreduction` topics give the
 combined picture.
 """
 
@@ -648,34 +586,28 @@ The paper systematically reviews:
 | POD | ✓ | extensive |
 | PGD | ✓ | extensive |
 | OIM (Orthogonal Interpolation Method) | ✓ | moderate |
-| **CLN (Cauer Ladder Network)** | ✓ | dedicated section |
 | Krylov / moment-matching | (implied) | brief |
 | RB | (implied) | brief |
 | Balanced truncation | not in keywords | minimal |
 | DMD / OI | not in keywords | minimal |
-
-CLN being in the abstract keywords is significant: it confirms CLN
-has reached canonical-method status in the rotating-machine MOR
-literature.
 
 ### Practical conclusions (paper's perspective)
 
 1. **No published industrial real-time MOR implementation** (as of
    2024).  Gap between academic methods and production deployment.
 2. **POD + DEIM is mature** for offline parametric design.
-3. **CLN is the right tool** for control-loop-coupled simulation
-   where the reduced model must talk to a circuit simulator.
+3. **Circuit-coupled reduced models** are needed for control-loop
+   simulation where the reduced model must talk to a circuit simulator.
 4. **PGD is under-utilized** despite theoretical advantages — has
    not crossed the academic-industrial gap.
 
 ### Lab implication
 
-The Sugahara lab is **already practicing what Kiss-Orosz 2024
-recommend** for the control-loop-coupled case (CLN).  The
-gap-of-2024 (no published industrial implementation) is an
+The gap-of-2024 (no published industrial implementation) is an
 **opportunity**:
 
-- Take CLN out of the lab and into a production motor controller
+- Take a passive projection-based (PRIMA / Foster modal) reduced model
+  into a production motor controller
 - Pair with Lange-Henrotte-Hameyer transient framework
   (`calc_motor_transient.py`) for the offline FE side
 - Result: end-to-end open-source motor control simulation toolchain
@@ -751,7 +683,7 @@ Is the system LINEAR (no nu(B))?
     YES → PRIMA (radia.lanczos_reduction)
     NO  → POD or PRIMA depending on input/output count
   NO  → Is it MOR for a CONTROL loop (real-time)?
-    YES → Combine FE + CLN with a lookup table for nonlinear iron
+    YES → Combine a projection-based reduced FE model with a lookup table for nonlinear iron
     NO  → POD + DEIM (offline parametric study)
 ```
 
@@ -759,13 +691,13 @@ Is the system LINEAR (no nu(B))?
 
 | Application | Recommended MOR | Notes |
 |-------------|------------------|-------|
-| IH coil + workpiece (linear) | CLN | Sugahara specialty |
-| IH coil + workpiece (nonlinear via ESIM) | CLN + ESIM lookup | Frequency-domain |
-| Transformer characterization | CLN or RB | depends on # ports |
+| IH coil + workpiece (linear) | Foster modal / PRIMA | frequency and time domain |
+| IH coil + workpiece (nonlinear via ESIM) | Foster modal + ESIM lookup | Frequency-domain |
+| Transformer characterization | PRIMA or RB | depends on # ports |
 | Motor parametric design | POD + DEIM | Hollaus 2023 reference |
-| Motor real-time control | FE → CLN → SPICE | Kiss-Orosz 2024 gap-closer |
+| Motor real-time control | FE → PRIMA / Foster → state-space block | Kiss-Orosz 2024 gap-closer |
 | Accelerator magnet field map | Direct evaluation | no MOR needed (small N) |
-| EMC / EMI cable + motor | CLN + BEM (ngsolve.bem) | Helmholtz at high f |
+| EMC / EMI cable + motor | PRIMA + BEM (ngsolve.bem) | Helmholtz at high f |
 
 ### What is NOT in scope
 
@@ -794,7 +726,6 @@ SECTIONS = {
     "system_theoretic_bt": SYSTEM_THEORETIC_BT,
     "data_driven_dmd_oi": DATA_DRIVEN_DMD_OI,
     "parametric_pmor": PARAMETRIC_PMOR,
-    "cln_sugahara": CLN_SUGAHARA,
     "em_specific_ioan": EM_SPECIFIC_IOAN,
     "rotating_machines_kiss_orosz_2024": ROTATING_MACHINES_KISS_OROSZ_2024,
     "software_lab": SOFTWARE_LAB,

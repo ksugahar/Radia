@@ -207,16 +207,6 @@ from .knowledge.release_workflow import get_release_workflow_documentation
 from .knowledge.loop_learning import get_loop_learning_documentation
 from .knowledge.basis_functions import get_basis_functions_documentation
 from .knowledge.taskmanager import get_taskmanager_knowledge
-from .knowledge.cln_sibc_orthogonal import (
-    get_cln_sibc_orthogonal_documentation,
-    get_cln_sibc_orthogonal_section,
-)
-from .knowledge.cln_3d import (
-    get_cln_3d_documentation,
-    get_cln_3d_notebook,
-)
-from .knowledge.bem_cln import get_bem_cln_documentation
-from .knowledge.cln_sphere_dd import get_cln_sphere_dd_documentation
 from .knowledge.hdiv_vim import get_hdiv_vim_documentation
 from .knowledge.magnetostatic_2d_parity import get_magnetostatic_2d_parity_documentation
 from .knowledge.fem_bem_schur import get_fem_bem_schur_documentation
@@ -922,213 +912,6 @@ def urn_fit(data_csv: str, freq_col: int = 0, real_col: int = 1,
         data_csv, freq_col, real_col, imag_col, delimiter, skip_rows,
         n_debye, n_cole_cole, n_warburg, n_cole_davidson, sparsity_weight,
         n_epochs, n_restarts, spice_out)
-
-
-@mcp.tool()
-def cln_3d(topic: str = "all") -> str:
-    """
-    Get 3D Cauer Ladder Network (CLN) / Kameari-Tanimoto iteration
-    documentation for eddy current analysis with NGSolve.
-
-    Captures Tanimoto-Kameari iterative methods from the master's thesis
-    + production code (public-safe curated corpus, ~25 notebooks):
-      - A-T formulation (primary)
-      - T-Ω formulation (H1 confined to conductor)
-      - A-Φ formulation (HCurl + H1 mixed)
-      - Constraint variants: penalty stabilization, explicit Coulomb gauge
-      - Production solvers: SparseSolvPy ICCG, accICCG, NGSolve CG, direct
-
-    Each formulation produces a Cauer-II ladder {R_n, L_n} via Schmidt
-    orthogonalization on impressed J source. Validated against
-    cylindrical TM-mode analytical R/L for n=0..9.
-
-    Open research: Kameari + Kelvin transformation combination (3D
-    HCurl A-formulation hits ~25× discrepancy with mpmath BEM Foster
-    target due to A_ext gauge being unbounded at infinity; future
-    work includes T-Ω with reduced-Ω = -H_0·z + Ω_r).
-
-    Args:
-        topic: Documentation topic. Options:
-            "all"           - Complete documentation
-            "overview"      - Mathematical foundation, three formulations
-            "notebooks"     - Index of 修論 / 定式_誤差検証 / 静止器回転機用
-            "formulas"      - Cauer-II synthesis, drift diagnostic,
-                              bonus_intorder critical setting
-    """
-    full_doc = get_cln_3d_documentation()
-    if topic == "all":
-        return full_doc
-    sections = {
-        "overview": "OVERVIEW",
-        "notebooks": "NOTEBOOK_INDEX",
-        "formulas": "KEY_FORMULAS",
-    }
-    if topic in sections:
-        # Split on H2 markdown headers as section breaks
-        from .knowledge import cln_3d
-        if topic == "overview":
-            return cln_3d.CLN_3D_OVERVIEW
-        if topic == "notebooks":
-            return cln_3d.CLN_3D_NOTEBOOK_INDEX
-        if topic == "formulas":
-            return cln_3d.CLN_3D_KEY_FORMULAS
-    return full_doc
-
-
-@mcp.tool()
-def bem_cln(topic: str = "all") -> str:
-    """
-    Get BEM-CLN (per-element multipole CLN with Schur-F termination)
-    documentation: multi-conductor extension of single-conductor
-    Schur-F CLN, using polarizability alpha(s) and integral-equation
-    Green's function coupling.
-
-    Backs Sugahara, Nagamine, Hane (2026) IEEE Trans Mag submission,
-    sections V.G (DOF accounting) and V.H (verification).
-
-    Key features:
-      - polarizability alpha(s) = V - Y_cln(s) / sigma (DC = 0, PEC = V built in)
-      - 2D coupling: 1/D^2, 3D coupling: mu_0 / (4 pi D^3)
-      - bounded alpha -> no phenomenological saturation factor needed
-      - per-element DOF = N_Cauer + 1; total = N (N_Cauer + 1)
-
-    Args:
-        topic: Documentation section. Options:
-            "all"           - Complete documentation
-            "overview"      - Framework summary, DOF accounting
-            "2d_rigorous"   - Phase 2.5 canonical 2D rigorous
-            "3d"            - Phase 3 B rigorous 3D cuboid extension
-            "scripts"       - Index of Mathematica verification scripts
-    """
-    if topic == "all":
-        return get_bem_cln_documentation()
-    from .knowledge import bem_cln as bcln
-    if topic == "overview":
-        return bcln.BEM_CLN_OVERVIEW
-    if topic == "2d_rigorous":
-        return bcln.BEM_CLN_2D_RIGOROUS
-    if topic == "3d":
-        return bcln.BEM_CLN_3D
-    if topic == "scripts":
-        return bcln.BEM_CLN_NOTEBOOK_INDEX
-    return get_bem_cln_documentation()
-
-
-@mcp.tool()
-def cln_sibc_orthogonal(section: str = "all") -> str:
-    """
-    Get CLN expansion-point + SIBC orthogonal-residual theory documentation.
-
-    New theory established 2026-05-16 in IGTE 2026 Sugahara work:
-    a small number N of Cauer ladder stages plus the SIBC analytical
-    asymptote span the full eddy-current frequency response via
-    Foster eigenmode L^2-orthogonality:
-
-        L^2(Ω) = span{φ_0, ..., φ_{N-1}} ⊕ span{φ_N, φ_{N+1}, ...}
-        Y_exact(jω) = Y_CLN^N(jω) + Y_SIBC^⊥(jω)
-        Y_SIBC^⊥(jω) -> K_SIBC (jω)^{-1/2}  as  ω -> ∞
-
-    K_SIBC = √(σ/μ) × geometric factor (slab=1, 2D prism=perimeter,
-    3D body=surface integral with edge/corner corrections).  This
-    avoids the precision frontier of high-stage Cauer extraction
-    (Nagamine et al. 2026 verified interval arithmetic shows
-    ~60×/stage interval growth even with 192-bit MPFR + affine).
-
-    Verified analytically with Mathematica on:
-      - 1D slab (c = 1 mm Cu)
-      - 2D rectangular prism (17.72 × 2 mm, Dirichlet A_z = 0)
-
-    Open: 2D square (Nagamine geometry, degeneracy bundling) and
-    3D cuboid (HDivDivFreeHex + Green's theorem on surface integrals).
-
-    Companion to Nagamine, Yamaguchi, Sugahara, Hiruma, Mifune,
-    Matsuo (JJIAM 2026 submitted) verified 2D square prism Cauer
-    extraction — Nagamine = high-N verified rungs, this theory =
-    small-N + SIBC asymptote.
-
-    Args:
-        section: Documentation section to return:
-            "list"           - list available sections
-            "overview"       - one-page summary of the construction
-            "matsuo"         - relation to Matsuo SA-26-014 expansion point
-            "kuriyama"       - Kuriyama 2019 multi-expansion canonical method
-            "math"           - derivation, orthogonality, asymptote
-            "verification"   - Mathematica results (1D slab + 2D rectangle)
-            "nagamine"       - link to Nagamine 2026 verified extraction
-            "outlook"        - 2D Nagamine square + 3D cuboid completion path
-            "xfem_vs_sibc"   - XFEM (Hiruma 2023) / classical SIBC /
-                               augmented CLN decision framework, with
-                               port-driven scope and stacking strategy
-                               for volume-source problems
-            "all"            - full documentation (default)
-
-    Returns:
-        Markdown text of the requested section.
-    """
-    if section == "all":
-        return get_cln_sibc_orthogonal_documentation()
-    return get_cln_sibc_orthogonal_section(section)
-
-
-@mcp.tool()
-def cln_3d_notebook(name: str = "list") -> str:
-    """
-    Retrieve Tanimoto's raw 3D CLN notebook Python code.
-
-    Provides direct access to the canonical Python code from Tanimoto's
-    master's thesis + production notebooks at public-safe curated corpus
-    Use this when you need to see the actual implementation details
-    (HCurl space construction, Kameari iteration loop, ICCG solver
-    invocation, output extraction, etc.).
-
-    Args:
-        name: Notebook identifier. Options:
-            "list"       - List available notebooks with file sizes
-            "AT"         - A-T formulation (primary 修論 reference,
-                           cylinder, 10-stage Kameari, SparseSolvPy ICCG)
-            "T_Omega"    - T-Ω formulation (HCurl × H1 with Ω confined
-                           to conductor)
-            "APhi"       - A-Φ formulation (HCurl + H1, body current
-                           via σ∇Φ)
-            "2D"         - 2D scalar reference (pedagogical, Kameari
-                           formula validation)
-            "production" - 2024-09-17 production: A + ICCG with inline
-                           gauge correction, accICCG params, type1 HCurl
-
-    Returns:
-        Full Python script content (~3-9 KB each), or list of available.
-    """
-    return get_cln_3d_notebook(name)
-
-
-@mcp.tool()
-def cln_sphere_dd_pipeline() -> str:
-    """
-    Get the Sphere DD (double-double, ~32 digit) VIM Cauer Ladder Network
-    extraction pipeline reference.
-
-    Verified-arithmetic CLN extractor demonstrated on the canonical Cu
-    sphere benchmark (R=10mm, sigma=5.8e7 S/m, uniform B_z=1T). Pure
-    Python/CuPy implementation of the entire VIM-CLN chain in DD
-    precision: kernel evaluation (mpmath elliptic K(m), E(m) at 40 digit
-    via dd_axisym_kernel.py), DD K/M/b assembly with multiprocessing
-    (dd_sphere_axisym_mp.py), mpmath Cholesky-based generalized eigh
-    at dps=35-50, and verified-interval Hankel-Pade Cauer extraction
-    (mpmath.iv at 80 digit).
-
-    Reaches DD precision floor K_lo/K_hi = 1.1e-16 across all matrix
-    entries (the entire 14 trailing decimal digits below FP64 are
-    correctly captured), with verified-interval relative width < 1e-30
-    on all extracted Cauer rungs.
-
-    Returns:
-        Markdown documentation covering algorithm steps, sigma-rescaling
-        for canonical normalization, multiprocessing speedup, file
-        inventory, production scaling estimates, key implementation
-        lessons, and cross-references to Nagamine, Stoll, Hiruma,
-        Sugahara TEAM 28.
-    """
-    return get_cln_sphere_dd_documentation()
 
 
 @mcp.tool(
@@ -2240,8 +2023,6 @@ def _selftest():
         print("Self-test PASSED")
     else:
         print("SKIP: No fixtures found.")
-
-
 
 
 @_validation.tool()
@@ -4859,7 +4640,7 @@ _validation.install()
 register_status_tool(
     mcp,
     server_name='mcp-server-radia-ngsolve',
-    description='Radia + NGSolve: Kelvin / sparsesolv / CLN / PEEC / analytical formulas / lint',
+    description='Radia + NGSolve: Kelvin / sparsesolv / PEEC / analytical formulas / lint',
     subpackage='radia_mcp.radia_ngsolve',
     related_servers=["fem", "bem", "force", "matrix-solvers"],
     optional_deps=["radia", "ngsolve"],

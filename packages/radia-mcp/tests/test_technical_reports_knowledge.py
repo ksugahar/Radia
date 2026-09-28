@@ -7,7 +7,7 @@ from radia_mcp.radia_ngsolve.knowledge.technical_reports import (
 
 def test_report_topics_expose_actionable_guidance():
     open_boundary = get_technical_reports_documentation("open_boundary")
-    mor = get_technical_reports_documentation("cln")
+    mor = get_technical_reports_documentation("mor")
     optimization = get_technical_reports_documentation("ai")
 
     assert "Strategic Dual Image" in open_boundary

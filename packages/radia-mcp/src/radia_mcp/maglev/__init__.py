@@ -11,8 +11,9 @@ separate radia_mcp.levitation server was consolidated into this one):
 - The lab's Radia-based maglev research line (CAE-AI Lab, Yano + Sugahara):
   * radia_iem_fem   -- Radia IEM (HDiv-VIM) <-> reduced-potential FEM weak
     coupling for moving-magnet eddy-current levitation force
-  * cln_mor_control -- Cauer Ladder Network model-order reduction for
-    real-time control-coupled maglev (TEAM 28, ~1/500 speedup)
+  * team28_dynamic_scope -- TEAM 28 reduced models (Krylov/PRIMA
+    projection, HCurl Eddy Bubble + Foster modal form) and the
+    cycle-averaged motion scope
 
 The former linear-drive (LIM/LSM, end-effect) material was removed.
 """

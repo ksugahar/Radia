@@ -50,7 +50,7 @@ electromagnetic CAE:
 
 ## Radia implementation posture
 
-Use the existing NGSolve-native Kelvin, CLN/MOR, material, force, motor, and
+Use the existing NGSolve-native Kelvin, MOR, material, force, motor, and
 HDiv/VIM knowledge tools for detailed API guidance.  This topic is the report
 level map: it explains why a method is chosen and what must be checked before
 promoting it into a panel, MCP workflow, or public result.
@@ -204,38 +204,43 @@ curve.  The result should expose which terms are modeled and which are not.
 """
 
 MOR = r"""
-# Model reduction, CLN, and circuit coupling
+# Model reduction and circuit coupling
 
 The reports use model reduction to turn repeated field solves into small
 multiport networks.  The reduction is valuable only when ports and validity
-conditions remain explicit.
+conditions remain explicit.  In Radia the maintained reduction routes are the
+PRIMA congruence projection (``radia.lanczos_reduction``, the PRIMA series
+PEEC model in ``radia.analysis``), POD, and the Foster modal form
+(``radia.vim.HCurlEddyFosterModel``: diagonalisation ``R v = lambda L v``).
 
-## Multiport CLN
+## Multiport reduced networks
 
-The multiport Cauer ladder represents a field region by port voltage/current
+A multiport reduced model represents a field region by port voltage/current
 relations.  Multiple expansion points extend one reduced model over a wider
 frequency range than one local expansion.  A useful record contains the port
 ordering, expansion points, retained order, passivity constraints, source and
 load convention, and a comparison against the unreduced field solve.
 
-## Nonlinear CLN
+## Nonlinear reduced models
 
-For saturation, the report parameterizes the ladder basis by a state such as
-the first ladder current and obtains fixed-state bases from static field
+For saturation, the report parameterizes the reduced basis by a state such as
+the first port current and obtains fixed-state bases from static field
 solutions.  The nonlinear workflow sweeps the state, solves the field problem
 at those states, and interpolates or selects the corresponding reduced model.
-Do not use a linear CLN outside the reluctivity range used to construct it.
+Do not use a linear reduced model outside the reluctivity range used to
+construct it.
 
 ## Lanczos relationship
 
-The report explains CLN as a circuit interpretation of Lanczos reduction for
-two Hermitian operators.  The tridiagonal and diagonal structures are useful
-for checking implementation consistency, but they do not remove the need to
-check symmetry, positive-real/passive behavior, port units, and residual error.
+The report relates the reduced circuit to Lanczos reduction for two Hermitian
+operators.  The tridiagonal (Lanczos) and diagonal (Foster modal) structures
+are useful for checking implementation consistency, but they do not remove the
+need to check symmetry, positive-real/passive behavior, port units, and
+residual error.
 
 ## Identification and sensitivities
 
-An R/L ladder can be identified from FEM or measured impedance under
+An R/L network can be identified from FEM or measured impedance under
 nonnegative/passive constraints.  Adjoint sensitivities are preferable to a
 blind global search when a parameter gradient is available.  Complex-valued
 derivatives need an explicit real/imaginary convention; otherwise a fit can
@@ -259,7 +264,7 @@ states.  The choice is a modeling tradeoff, not just a mesh option.
 The reduced Darwin system can be constrained and nonsymmetric.  The report
 uses nonsymmetric Arnoldi reduction and solves symmetric subblocks by
 back-substitution, followed by a scalar correction enforcing the Coulomb-type
-gauge.  Do not assume a symmetric CLN implementation applies unchanged to
+gauge.  Do not assume a symmetric reduction implementation applies unchanged to
 this system.
 
 ## MOR validation gate
@@ -418,8 +423,9 @@ thermal limits, and optimization into a virtual-motor workflow.
 ## Model fidelity choices
 
 Reluctance networks and one-dimensional magnetic circuits are useful for rapid
-screening.  Frozen-permeability field models, multiport CLN, Cauer winding
-models, and semi-implicit plant circuits extend the operating range.  Choose
+screening.  Frozen-permeability field models, multiport reduced networks,
+reduced winding models, and semi-implicit plant circuits extend the operating
+range.  Choose
 the model from the output required: average torque, torque ripple, transient
 current, strand loss, iron loss, temperature, or fault behavior.
 
@@ -454,7 +460,7 @@ Use the detailed topic tool named below after reading the report-level gate.
 |---|---|
 | Kelvin open boundary and periodic matching | ``kelvin_transformation`` and ``kelvin_identify_post_hoc`` |
 | FEM/BEM and open-boundary comparison | ``ngsolve_usage`` and ``fem_bem_schur`` |
-| CLN, Cauer, expansion points, MOR | ``cln_sibc_orthogonal``, ``cln_3d``, ``bem_cln``, ``cln_sphere_dd`` |
+| Model reduction, expansion points, MOR | ``mor_systematic`` and ``mor_bibliography`` |
 | Hysteresis, FORC, play, field separation | ``magnetic_materials_hysteresis`` and the hysteresis-ID topics |
 | HDiv/VIM and NGSolve-native spaces | ``hdiv_vim`` and ``ngsolve_usage`` |
 | Force error and independent checks | ``force_validation`` |
@@ -482,7 +488,7 @@ electromagnetic-analysis collection:
 - 2020-03: advanced accuracy technology, including homogenization, loss, MOR,
   high-performance FEM, and optimization.
 - 2022-12 and 2023-05: advanced application technology, with dedicated
-  chapters on materials, CLN/MOR, optimization, HPC, force, and applications.
+  chapters on materials, MOR, optimization, HPC, force, and applications.
 - 2025-04: motor modeling, loss, thermal/structural constraints, and AI/ML
   optimization.
 - 2013-2015 Radiation Science collections: historical neighboring work on
@@ -508,8 +514,6 @@ TOPICS = {
     "hysteresis": MATERIALS,
     "loss": MATERIALS,
     "mor": MOR,
-    "cln": MOR,
-    "cauer": MOR,
     "optimization": OPTIMIZATION,
     "optimisation": OPTIMIZATION,
     "ai": OPTIMIZATION,

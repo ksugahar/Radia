@@ -626,9 +626,7 @@ def fem_xfem_em_hiruma(topic: str = "overview") -> str:
                                        product-rule, enrichment scope)
             "cylinder_validation"    - Phase 2: 0.14% at r/delta=15, 88 DOFs
             "volume_source_scope"    - Phase 3: cures FE residual that breaks
-                                       augmented CLN on volume-source
-            "cln_stacking_negative"  - Phase 4: XFEM does NOT extend canonical
-                                       CLN Hankel-QD stability (rejected)
+                                       the Schur-augmented ROM on volume-source
             "decision_table"         - When to use EM-XFEM: layer + use case
             "ngsxfem_relation"       - vs the ngsxfem library (cut-FEM XFEM,
                                        Lehrenfeld et al.); when ngsxfem WOULD
@@ -697,7 +695,7 @@ def fem_nonconforming_mesh_coupling(topic: str = "overview") -> str:
                                   brake
             "lab_scenarios"     - Sugahara Lab adoption priority
                                   (rotor-stator > accelerator shim >
-                                  IH coil > BEM-CLN)
+                                  IH coil > BEM coupling)
             "bibliography"      - 33-PDF catalog organized by subfolder
             "all"               - Everything (~30 KB)
 

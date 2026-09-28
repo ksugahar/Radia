@@ -38,10 +38,9 @@ TOPICS: dict[str, str] = {
     "nodal_vs_mesh_analysis": "Derbas 2009: nodal (KCL) vs mesh (KVL), Jacobian conditioning",
     "reluctance_network_construction": "Flux tube discretization, claw-pole example, area selection",
     "lumped_extraction_fea": "Inductance L/M extraction from FEM, conductor segmentation",
-    "cauer_ladder_rna": "CLN representation of eddy-current fields, Kameari 2018, Hane play+Cauer",
     "rna_magnetic_coupling": "RNA + legacy integral leakage correction, Janet transformer, current transformer",
     "electromechanical_coupling": "TEAM-28 levitation, Runge-Kutta ODE, dL/dz force",
-    "team28_reduced_model": "TEAM-28 reduced model in depth, 85h FEM -> 1h CLN+segmentation",
+    "team28_reduced_model": "TEAM-28 reduced model in depth, 85h FEM -> 1h RNA+segmentation",
     "topology_optimization": "RNA + AVM (adjoint variable method), SIMP, magnetic actuator TO",
     "dynamic_hysteresis": "Play + Cauer dynamic hysteresis MEC (lab specialty)",
     "vs_pec_peec": "RNA vs PEEC vs PEC (partial element equivalent circuit) terminology",
@@ -86,7 +85,7 @@ the network becomes a nonlinear algebraic system.
 | Leakage flux (3D)                     | difficult        | natural        |
 | Optimization (sensitivity / TO)       | fast             | slow           |
 | Population-based design (10^6 calls)  | only choice      | infeasible     |
-| Frequency sweep with eddy currents    | Cauer ladder OK  | per-freq FEM   |
+| Frequency sweep with eddy currents    | reduced RL OK    | per-freq FEM   |
 | Multi-physics with mechanical motion  | natural (ODE)    | re-mesh per dt |
 
 RNA loses spatial detail; FEM loses speed and lumped-port intuition.
@@ -138,7 +137,6 @@ Hysteresis-focused (`public-safe curated corpus`):
 - `radia_mcp.magnetic_materials.hysteresis_models.play` -- Play model
 - `radia_mcp.magnetic_materials.hysteresis_models.lab_core` -- Energy /
   Play core (Tohoku-Kindai lineage)
-- `radia_mcp.mor.systematic.cln` -- Cauer Ladder Network (CLN) MOR
 - `radia_mcp.motor.calc_motor_transient` -- time-stepping framework
 """
 
@@ -230,14 +228,15 @@ behaviour -- see topic `nodal_vs_mesh_analysis`.
   around the corner of a transformer.  Needs RNA plus a calibrated
   integral leakage correction, RNA + FEM, or the current Radia HDiv-VIM path.
 - **Eddy currents in a conductor of arbitrary cross-section** --
-  needs Cauer ladder (Kameari 2018) or per-segment lumped extraction
-  from FEM (Lee 2005, TEAM-28).
+  needs a reduced-order eddy model (Krylov/PRIMA projection, POD, or
+  the Foster modal form) or per-segment lumped extraction from FEM
+  (Lee 2005, TEAM-28).
 - **Detailed force distribution on a moving armature** -- needs FEM or
   a fine RNA mesh with Maxwell-stress tensor evaluation.
 
-These limitations motivate the four hybrid approaches documented in
-the other topics: nodal-vs-mesh, RNA + FEA extraction, RNA + calibrated
-integral leakage coupling, and RNA + Cauer ladder.
+These limitations motivate the hybrid approaches documented in the
+other topics: nodal-vs-mesh, RNA + FEA extraction, RNA + calibrated
+integral leakage coupling, and the Play + Cauer dynamic hysteresis MEC.
 """
 
 
@@ -485,13 +484,12 @@ as constants in the network solve.  This is the bridge between
 high-accuracy electromagnetic field analysis (FEM) and high-speed
 RNA / circuit simulation.
 
-Two canonical sources:
+Canonical source:
 
   - Lee, Lee, Choi, Park, "Reduced Modeling of Eddy Current-Driven
     Electromechanical System Using Conductor Segmentation and Circuit
     Parameters Extracted by FEA", IEEE Trans. Magn. 41(5), 1448-1451,
     2005.  (TEAM Workshop Problem 28.)
-  - Kameari et al. 2018 -- CLN extraction (covered in `cauer_ladder_rna`).
 
 ## The Lee 2005 procedure (TEAM-28)
 
@@ -603,136 +601,6 @@ by:
 The extraction itself is parallel-embarrassing: each operating point
 is independent.  This is the bedrock of FEA-extracted RNA libraries
 for power electronics and electric machine design.
-"""
-
-
-CAUER_LADDER_RNA = r"""
-# Cauer Ladder Network (CLN) representation of eddy-current fields
-
-The Cauer Ladder Network (CLN) is a continued-fraction expansion of a
-linear eddy-current impedance Z(s) into a ladder of alternating
-resistors and inductors:
-
-    Z(s) = R_0 + 1 / ( L_1 s + 1 / ( R_2 + 1 / ( L_3 s + ... )))     (1)
-
-This represents the input impedance of a 1-port eddy-current device
-as a low-order RL ladder, exactly to within truncation error.  CLN
-turns out to be a DRAMATIC model-order reduction tool for both 1D
-laminated sheets and full 3D FEM eddy-current problems.
-
-The seminal extension to 3D FEM is:
-
-  Kameari, Ebrahimi, Sugahara, Shindo, Matsuo, "Cauer Ladder Network
-  Representation of Eddy-Current Fields for Model Order Reduction
-  Using Finite-Element Method", IEEE Trans. Magn. 54(3), 7201804,
-  2018.
-
-## CLN as MOR for full 3D FEM
-
-The Maxwell eddy-current equations (rotH = sigma E, rotE = -d(muH)/dt)
-are decomposed into a sequence of static E-mode and static H-mode
-fields, with weights e_{2n}(t) and h_{2n+1}(t) governed by Kirchhoff
-laws of the CLN:
-
-    E = sum_n e_{2n}(t) E_{2n}                                       (2)
-    H = sum_n h_{2n+1}(t) H_{2n+1}                                   (3)
-
-The modes are extracted recursively:
-
-    Step 0:  Solve static E_0 (1 V applied), compute R_0 = 1/(sigma E_0)^2
-    Step 1:  Solve magnetic mode H_{2n-1} from  rot(H_{2n-1}) = R_{2n-2} sigma E_{2n-2}
-             Compute L_{2n-1} = mu H_{2n-1}^2
-    Step 2:  Solve electric mode E_{2n} from  rot(E_{2n}) = -(1/L_{2n-1}) mu H_{2n-1}
-             Compute R_{2n} = 1 / (sigma E_{2n})^2
-    Step 3:  Solve CLN in frequency or time
-    Step 4:  Reconstruct E, H by superposition
-
-This requires only N (a few) STATIC FEM solves and gives the full
-frequency response over a wide band, plus the full time response under
-arbitrary excitation, with no per-frequency solve and no per-time-
-step solve.
-
-## Performance (Kameari 2018 Table II)
-
-3D nonlinear DC-DC converter inductor, 104k elements, 109k nodes:
-
-| Method                            | CPU time          | Speedup   |
-|-----------------------------------|-------------------|-----------|
-| Full transient FEM (800 steps)    | ~hours            | 1x        |
-| CLN, 1 stage                      | ~tens of seconds  | ~100x     |
-| CLN, 5 stages (high freq)         | ~minute           | ~50x      |
-
-Even 1-stage CLN gives accurate steady-state current; 2-stage CLN is
-indistinguishable from FEM up to 1 MHz.
-
-## CLN + Play hysteresis for PWM iron loss (Hane 2020)
-
-Hane, Nakamura, "Dynamic Hysteresis Modeling for Magnetic Circuit
-Analysis by Incorporating Play Model and Cauer's Equivalent Circuit
-Theory", IEEE Trans. Magn., DOI 10.1109/TMAG.2020.3004355, 2020.
-
-The PWM-driven minor-loop iron loss problem combines TWO effects:
-  1. Hysteresis (modeled by Play model)
-  2. Eddy-current skin effect inside the laminated sheet
-
-The Play model alone is fine at the fundamental but misses the
-HF carrier minor loops (which see a shrunken eddy-current path
-because the skin depth is now < lamination thickness).  Hane's
-solution:
-
-    Replace the single eddy-current inductance L_1 in the previous
-    Play-based MEC with a Cauer-I ladder (R_0, L_1, R_2, L_3, ...)
-    derived from the sheet's 1D cell problem.
-
-Cauer parameters (Hane eq. 2-3):
-
-    L_2n+1 = mu * geometric_factor                                   (1)
-    R_2n   = 4 / (sigma d^2)                                         (2)
-
-where d is the lamination thickness, sigma the conductivity, and mu
-the differential permeability evaluated on the centerline of the DC
-hysteresis loop at B_m = 1 T (Hane uses the dc-1T BH operating point
-as the linearization point for the eddy-current ladder; this is a key
-empirical recipe in the paper).
-
-The ladder is truncated at 2 stages for the practical PWM-driven
-silicon-steel ring core; this captures the skin effect at 1-2 kHz
-carrier with adequate accuracy.  Hane shows experimental validation
-on grain-oriented and non-oriented Si-Fe rings.
-
-## Combined Play + Cauer + RNA recipe (Hane 1912 lab paper)
-
-The Tohoku-Kindai "1912" paper extends Hane 2020 by embedding the
-Play + Cauer MEC into a multi-branch RNA for a permanent-magnet
-motor / variable inductor.  Per-branch structure:
-
-    Branch i = [ Play hysterons + Cauer ladder ] in series
-
-Each branch's instantaneous BH state evolves via:
-  - Play model O(K) forward evaluation (B -> H), K play operators
-  - Cauer ladder feeding the skin-effect-corrected eddy current
-  - Anomalous eddy-current loss as a separate dependent source
-
-In the time loop:
-  1. Update winding currents (from external SPICE circuit)
-  2. Solve nonlinear KCL with current B-H tangents
-  3. Update Play state on every branch
-  4. Update Cauer state on every branch
-  5. Compute total flux + per-branch loss breakdown (hysteresis +
-     classical eddy + anomalous eddy)
-
-This is the **complete dynamic hysteresis MEC** of the Sugahara-
-Nakamura-Hane lineage, and is the most physically detailed RNA
-available for PWM iron-loss prediction.
-
-## Cross-references
-
-- `radia_mcp.mor.systematic.cln` -- the general CLN MOR knowledge for
-  arbitrary 3D FEM problems (Kameari 2018 and successors).
-- `radia_mcp.magnetic_materials.hysteresis_models.play` -- Play model
-  forward / inverse evaluation.
-- public-safe curated corpus -- 30+ Cauer / CLN
-  papers (Sato/Igarashi, Matsuo, Shindo, Eskandari, etc.).
 """
 
 
@@ -1075,9 +943,9 @@ GETS WRONG:
   domain ROM at several geometry positions (z = z1, z2, ...) and
   interpolate the ROM matrices.  Fast at runtime, but ROM construction
   per z point is expensive.
-- **RL ladder for translational motion**: Generalises Lee 2005 by
-  expressing the position dependence of L(z), M(z) AS A CAUER LADDER
-  in z (instead of cubic spline).  Useful for systems with many
+- **RL ladder for translational motion** (literature): generalises
+  Lee 2005 by replacing the cubic-spline L(z), M(z) tables with a
+  position-dependent RL circuit.  Useful for systems with many
   position-dependent eddy current loops.
 
 ## Take-home for RNA / MEC practitioners
@@ -1086,8 +954,8 @@ GETS WRONG:
    well-defined segments), Lee 2005 RNA + segmentation is hands-down
    the most efficient and easiest to maintain method.
 2. If the geometry is so complex that you cannot identify the
-   dominant eddy-current loops a-priori, switch to POD or Cauer
-   ladder MOR (Kameari 2018) -- the modes are extracted automatically.
+   dominant eddy-current loops a-priori, switch to POD or a Krylov
+   (PRIMA) projection -- the modes are extracted automatically.
 3. If you need TILT / PITCH / YAW dynamics, you cannot use an
    axisymmetric formulation and must go to full 3D FEM + 6-DOF rigid
    body dynamics.  TEAM-28 itself does not require this.
@@ -1095,7 +963,6 @@ GETS WRONG:
 ## Cross-references
 
 - `electromechanical_coupling` topic -- general state-space recipe.
-- `cauer_ladder_rna` topic -- CLN MOR for eddy-current fields.
 - `radia_mcp.mor.snapshot.pod` -- POD MOR for parametric problems.
 """
 
@@ -1364,7 +1231,6 @@ the Tohoku-Kindai collaboration.
 
 ## Cross-references
 
-- `cauer_ladder_rna` topic -- the Cauer ladder by itself.
 - `radia_mcp.magnetic_materials.hysteresis_models.play` -- Play model
   forward / inverse evaluation API.
 - `radia_mcp.magnetic_materials.hysteresis_models.lab_core` -- the
@@ -1486,7 +1352,6 @@ def get_knowledge(topic: str = "overview") -> str:
         nodal_vs_mesh_analysis
         reluctance_network_construction
         lumped_extraction_fea
-        cauer_ladder_rna
         rna_magnetic_coupling
         electromechanical_coupling
         team28_reduced_model
@@ -1509,9 +1374,6 @@ def get_knowledge(topic: str = "overview") -> str:
         "fea_extraction": "lumped_extraction_fea",
         "lumped_extraction": "lumped_extraction_fea",
         "lee": "lumped_extraction_fea",
-        "cauer": "cauer_ladder_rna",
-        "cln": "cauer_ladder_rna",
-        "kameari": "cauer_ladder_rna",
         "rna_magnetic": "rna_magnetic_coupling",
         "transformer": "rna_magnetic_coupling",
         "janet": "rna_magnetic_coupling",
@@ -1538,7 +1400,6 @@ def get_knowledge(topic: str = "overview") -> str:
         "nodal_vs_mesh_analysis": NODAL_VS_MESH_ANALYSIS,
         "reluctance_network_construction": RELUCTANCE_NETWORK_CONSTRUCTION,
         "lumped_extraction_fea": LUMPED_EXTRACTION_FEA,
-        "cauer_ladder_rna": CAUER_LADDER_RNA,
         "rna_magnetic_coupling": RNA_MAGNETIC_COUPLING,
         "electromechanical_coupling": ELECTROMECHANICAL_COUPLING,
         "team28_reduced_model": TEAM28_REDUCED_MODEL,
@@ -1555,7 +1416,6 @@ def get_knowledge(topic: str = "overview") -> str:
             "nodal_vs_mesh_analysis",
             "reluctance_network_construction",
             "lumped_extraction_fea",
-            "cauer_ladder_rna",
             "rna_magnetic_coupling",
             "electromechanical_coupling",
             "team28_reduced_model",

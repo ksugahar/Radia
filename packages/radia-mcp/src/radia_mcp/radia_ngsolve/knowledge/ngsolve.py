@@ -2331,8 +2331,8 @@ for n in range(N):
     J_history.append(J_n_cf)                    # safe: snap never mutates
 ```
 
-**Symptom**: in iterative schemes (Kameari accumulation CLN, Picard
-non-linear loops, time stepping that reuses prior states), `stage 0`
+**Symptom**: in iterative schemes (Krylov-type accumulation recurrences,
+Picard non-linear loops, time stepping that reuses prior states), `stage 0`
 matches the analytical answer to machine precision, but `stage 1+`
 returns wrong-sign or wildly wrong values that look like algorithmic
 divergence — when in fact the prior `J_n_cf` expressions are silently
@@ -2340,9 +2340,9 @@ re-evaluating against the *current* (updated) `gf_acc`, not the
 `gf_acc` value at the time the CF was built.
 
 **Verified failure mode** (2026-05-10, Cu sphere a=10mm, B0=1T, 3D
-Kameari + Kelvin):
-- Without snapshot: τ_0 = 693.95 μs (matches Stoll Cauer-I 694.14
-  to 0.027 %), τ_1 = −796 μs (sign flip; analytical 154.6 μs),
+accumulation recurrence + Kelvin):
+- Without snapshot: τ_0 = 693.95 μs (matches the analytical Stoll
+  reference 694.14 to 0.027 %), τ_1 = −796 μs (sign flip; analytical 154.6 μs),
   stages 2+ diverge by orders of magnitude.
 - With snapshot: τ_0 = 693.95 (−0.027 %), τ_1 = 154.46 (−0.094 %),
   τ_2 = 63.45 (−0.97 %), τ_3 = 33.08 (−4.06 %); stage 4 hits the
@@ -2353,11 +2353,6 @@ but breaks at stage 1+, suspect this trap before suspecting H-H
 projection, gauge fixing, ORDER, Schmidt orthogonalisation, or
 solver tolerance. None of those help if the GridFunction the CFs
 refer to keeps mutating beneath them.
-
-**Cross-references**:
-- `cln_3d.py` knowledge — Kameari accumulation snapshot pattern
-- public-safe curated corpus
-  cln_team28_kelvin.py — reference fix in `Apot_acc -> snap_acc`
 """
 
 NGSOLVE_LINALG = """
@@ -5184,50 +5179,18 @@ interfaces, either:
 """
 
 
-NGSOLVE_CLN_CAUER = r"""
-# Cauer Ladder Network (CLN) Validation in NGSolve
+NGSOLVE_EDDY_REDUCED_VALIDATION = r"""
+# Eddy-current reduced-model validation in NGSolve
 
-CLN is a model-order-reduction technique for eddy current problems
-(Kameari et al. 2018, Köster et al. 2021). The full-order eddy current
-PDE is approximated by an infinite RL ladder, with each rung representing
-an eigenmode of the diffusion operator.
+Reduced eddy-current models (Krylov/PRIMA projection, POD, Foster modal
+form) must be validated against the full-order harmonic solve and, where
+available, an analytical eigenfunction (Foster) expansion.
 
-## Two flavors of CLN
-
-| Flavor | Excitation | Method | NGSolve fit |
+| Route | Excitation | Method | NGSolve fit |
 |---|---|---|---|
-| **Köster A-T recursion** | voltage-driven coil | static A-T alternating recursion | YES (Köster 2021 §III.B) |
-| **Direct frequency sweep** | any (incl. external B) | solve harmonic eddy current at each ω | YES (standard FEM) |
+| **Direct frequency sweep** | any (incl. external B) | solve harmonic eddy current at each omega | YES (standard FEM) |
+| **Foster modal form** | any | eigenpairs of the diffusion operator (PINVIT) | YES (order >= 3, `nograds=True`) |
 | **Eigenvalue + Foster sum** | any | analytical eigenfunction expansion | analytical only |
-
-**Key insight**: Köster's A-T recursion **does not directly apply to
-"isolated conductor in external B" (Case B)** because there is no
-terminal voltage. For Case B validation, use direct frequency sweep
-and compare with analytical Foster sum.
-
-## Köster A-T recursion (voltage-driven)
-
-For voltage-driven coil + conductor problems, recursive static problems:
-
-```python
-# Stage 0: T_0 with H_s × n BC from Biot-Savart of impressed coil
-fes_T = HCurl(mesh, order=2,
-              definedon=mesh.Materials("conductor"),
-              dirichlet="conductor_surface",
-              nograds=True)
-# Solve: ⟨σ⁻¹ curl T̃_0, curl v⟩_C = 0
-#   with essential BC T̃_0 × n = H_s × n on Γ_NC
-
-# Stage n: T̃_(n+1) with BC T̃_(n+1) × n = -T_n × n  (KEY for orthogonality)
-# RHS: ⟨σ⁻¹ curl T̃_(n+1), curl v⟩ = -⟨L_n⁻¹ A_n, curl v⟩
-
-# Stage n: A_n on full domain
-fes_A = HCurl(mesh, order=2, dirichlet="outer_box", nograds=True)
-# Solve: ⟨μ⁻¹ curl Ã_n, curl w⟩_Ω = R_n ⟨T_n, curl w⟩_Ω
-
-# Each stage: R_n = ⟨σ⁻¹ curl T_n, curl T_n⟩_C
-#             L_n = ⟨μ⁻¹ curl A_n, curl A_n⟩_Ω
-```
 
 ## Element-by-element preconditioning
 
@@ -5245,7 +5208,7 @@ solvers.CG(sol=gf.vec, rhs=f.vec, mat=a.mat, pre=c.mat,
 
 Avoids global LU/sparse direct solver. Suitable for large 3D problems.
 
-## Direct frequency sweep validation (Case B: external B field)
+## Direct frequency sweep validation (isolated conductor in external B)
 
 For uniform external B_z on isolated cuboid, validate the analytical
 Foster sum P(ω)/B_0² = (ω²/2) Re[Y_eq(jω)] by direct FEM:
@@ -5333,78 +5296,25 @@ fes = HCurl(mesh, order=2, dirichlet="...", nograds=True)
 ```
 Otherwise CG/GMRes can't converge.
 
-## Reference implementations
-
-- **Tanimoto's penalty CLN**: `public-safe curated corpus
-  20231211_A_(Penalty)_CLN.ipynb` — A-formulation cylinder example
-- **Tanimoto's gauge CLN**: `..._A_gauge_CLN.ipynb` — adds H1 gauge
-  potential for div-free A
-- **Cuboid Case B validation**: `public-safe curated corpus
-  2026_04_01_長方形CLN/ngsolve_validation/cuboid_CaseB_freq_sweep.py`
-  — direct frequency sweep, agrees with Mathematica Foster sum
-  (1 Hz - 100 kHz, <10% error with N_modes=21 truncation)
-
-## References
-
-- A. Kameari, H. Ebrahimi, K. Sugahara, Y. Shindo, T. Matsuo,
-  "Cauer ladder network representation of eddy-current fields...",
-  IEEE Trans. Magn. 54(3), 7201804 (2018).
-- N. Köster, O. König, O. Bíró, "Proper Generalized Decomposition
-  with Cauer Ladder Network Applied to Eddy Current Problems",
-  IEEE Trans. Magn. 57(6), 6300904 (2021).
-- H. Ebrahimi, K. Sugahara, T. Matsuo, H. Kaimori, A. Kameari,
-  "Modal decomposition of 3-D quasi-static Maxwell equations by
-  Cauer ladder network representation", IEEE Trans. Magn. 56(3),
-  7513004 (2020).
-
 ## Validation findings (cuboid + cube, 2026-04-27)
 
 ### EBE-only solve does NOT converge for general 3D problems
 
-Bíró (verbal): "EBE preconditioning alone is sufficient."
-Niels (verbal): "Sometimes works, sometimes doesn't."
+Applying `Preconditioner(a, "local")` ONCE (no CG iteration) to a
+5x2x20 mm Cu cuboid + air static sub-problem gives the DC resistance off
+by 22 orders of magnitude.  The HCurl local block on tetrahedra shares
+edges with neighbors, so the block-diagonal inverse does not capture global
+coupling.
 
-**Empirical**: For a 5x2x20 mm Cu cuboid + air with Köster A-T recursion,
-applying `Preconditioner(a, "local")` ONCE (no CG iteration) gives R_0
-off by 22 orders of magnitude. The HCurl local block on tetrahedra
-shares edges with neighbors, so block-diagonal inverse doesn't capture
-global coupling.
+**Recommendation**: Always wrap with CG or GMRes when using the "local"
+preconditioner.  EBE-only is suitable for very specific symmetric problems
+(1D axisymmetric, quasi-1D) but not general 3D.
 
-**Recommendation**: Always wrap with CG or GMRes when using "local"
-preconditioner. EBE-only is suitable for very specific symmetric
-problems (1D axisymmetric, quasi-1D) but not general 3D.
+### DC check (1mm Cu cube, all-Dirichlet)
 
-### Köster A-T is voltage-driven-coil-only
-
-Köster's Eq. (8) BC `T_tilde_n × n = -T_(n-1) × n on Gamma_NC` plus
-T_0 BC `T_0 × n = H_s × n` (Biot-Savart from impressed coil) assume
-a coil source. For "isolated conductor in external uniform B field"
-(Case B), there's no terminal voltage, so Köster's recursion does
-not directly apply. Use:
-  - **Direct frequency sweep**: solve harmonic eddy current at each ω
-  - **Kameari A-only iterative basis** (original, Tanimoto pattern)
-
-### Stage 0 exact validation (1mm Cu cube, Case A all-Dirichlet)
-
-NGSolve Kameari recursion vs Mathematica analytical:
-
-| Quantity | Mathematica | NGSolve | Match |
-|---|---|---|---|
-| `R_0` | `1/(σV) = 17.24 Ω` | 17.24 Ω | 4-digit ✓ |
-| `L_0` | (need conversion) | 2.56 µH | (different topology) |
-
-R_0 matches exactly because both compute the same Y_eq(0) = σ V_C
-(Parseval identity for constant-1 expansion in eigenbasis).
-
-### Higher stages numerically unstable
-
-Kameari's J update `J_(n+1) = J_n - σ A_n / L_n` accumulates roundoff.
-For cube at h=100µm, order=1: L_1 came out NEGATIVE (catastrophic
-cancellation). Remedies:
-  - Higher polynomial order (3+) with refined mesh
-  - Explicit Coulomb gauge (Tanimoto's H1 potential pattern)
-  - WorkingPrecision = 50 in symbolic computation (Mathematica), then
-    transfer to NGSolve as exact rational coefficients
+The DC resistance `R_0 = 1/(sigma V) = 17.24 Ohm` matches Mathematica to 4
+digits because both compute the same Y_eq(0) = sigma V_C (Parseval identity
+for the constant-1 expansion in the eigenbasis).
 
 ### Verified arithmetic with Mathematica Interval[]
 
@@ -5415,68 +5325,52 @@ Y(0) Parseval exact = 0.05800 S·m²
 Y(0) Interval sum (N=21^3) = [0.05486, 0.05486]
 Truncation deficit: 5.42% with N=21 truncation
 ```
-Combine with NGSolve discretization for end-to-end verified Cauer
-ladder values.
+Combine with NGSolve discretization for end-to-end verified reduced-model
+values.
 
 ## EBE compatibility for div A = 0 / div T = 0 enforcement
 
-Köster orthogonality theorem requires div(curl T) = 0 i.e. T must be
-div-free. Standard methods to enforce:
+Krylov recurrences and eigensolves on HCurl need a div-free basis.
+Standard methods to enforce it:
 
 | Method | EBE compatible? | Cost | Exactness |
 |---|---|---|---|
-| Tokumasu penalty (γ‖div u‖²) | YES (same matrix) | +1 term | Approx (γ tuning) |
+| Tokumasu penalty (gamma ||div u||^2) | YES (same matrix) | +1 term | Approx (gamma tuning) |
 | Helmholtz-Hodge projection | NO (extra H1 Poisson) | +1 global solve | Exact |
 | Tree-cotree gauge | YES | O(N) preprocess | Exact |
-| Gram-Schmidt re-orthogonalization | YES (inner products only) | O(N²) inner products | Recovers orthogonality but residual noise |
+| Gram-Schmidt re-orthogonalization | YES (inner products only) | O(N^2) inner products | Recovers orthogonality but residual noise |
 | `nograds=True` (NGSolve) | YES | None | Removes high-order grads only |
 | A-V mixed with Lagrange multiplier | NO (mixed system) | 2x DoF | Exact |
-| PINVIT direct eigensolve | YES (Krylov + EBE pre) | similar to CG | Exact (with order ≥ 3) |
+| PINVIT direct eigensolve | YES (Krylov + EBE pre) | similar to CG | Exact (with order >= 3) |
 
-### Empirical findings (1mm Cu cube validation)
-
-- **Stage 0**: R_0 = 17.24 Ω with EBE+CG matches Mathematica
-  Y_eq(0) = σV exactly to 4 digits.
-- **Stage 1+**: Kameari iteration `J_(n+1) = J_n - σA_n/L_n` suffers
-  from cancellation error. Result: L_1 < 0 (unphysical), L grows
-  by 10^20 per stage.
-- **Gram-Schmidt fix attempt**: Restores orthogonality (GS coef ~ 1e-9)
-  but residual J vector itself becomes noise-dominated, breaking
-  subsequent stages.
-- **PINVIT eigensolve at order=1**: Smallest eigenvalues are gradient
-  kernel pollution (1e-4 instead of physical 4e5). Needs order≥3 +
-  nograds=True to eliminate.
+- **PINVIT eigensolve at order=1**: the smallest eigenvalues are gradient
+  kernel pollution (1e-4 instead of physical 4e5).  Needs order >= 3 +
+  `nograds=True` to eliminate.
 
 ### Recommendation
 
-For **practical robust validation** of CLN circuit constants:
+For **robust Foster modal validation**:
 1. Use NGSolve `HCurl(order=3, nograds=True, dirichlet="all_boundary")`
 2. PINVIT for direct eigenvalue/eigenvector extraction
-3. Compute R_n = 1/(σ|β_n|²), L_n = μ/(λ_n²|β_n|²) per mode
+3. Compute the per-mode Foster constants R_n = 1/(sigma|beta_n|^2),
+   L_n = mu/(lambda_n^2 |beta_n|^2)
 4. This is fully EBE compatible (PINVIT + EBE preconditioner)
-
-For **strict-EBE Kameari iteration**: tree-cotree gauge required
-for higher-stage stability. Implementation: build spanning tree of
-mesh edges, mask tree edge DoFs to zero. Non-trivial in 3D.
-
-For **simple robust** (accepting non-EBE): Tanimoto's gauge_CLN
-pattern (Helmholtz-Hodge auxiliary H1 Poisson per stage) works well.
 
 ## Tree-cotree gauge: WINNING APPROACH (verified 2026-04-27)
 
-**Problem**: `nograds=True` removes only HIGHER-ORDER (p≥2) gradient
-bubbles. Lowest-order vertex gradients ∇(linear hat) remain in the
-HCurl basis → curl-curl operator has gradient kernel → Kameari
-iteration explodes at Stage 1+ (L_n flips negative, grows to 10^21).
+**Problem**: `nograds=True` removes only HIGHER-ORDER (p>=2) gradient
+bubbles.  Lowest-order vertex gradients grad(linear hat) remain in the
+HCurl basis -> the curl-curl operator has a gradient kernel -> a Krylov-type
+accumulation recurrence explodes after stage 0.
 
 **Solution**: Tree-cotree gauge via mesh edge spanning tree.
 
-| Method | EBE pure? | Stable stages | Cost/stage | Comments |
-|---|---|---|---|---|
-| Plain Kameari | YES | 0 | 1× | Fails immediately |
-| Gram-Schmidt re-orthog | YES | 0 | 1× + ⟨,⟩ | Restores orthogonality but residual = noise |
-| Helmholtz-Hodge | NO | 3 | **2×** | Tanimoto's gauge_CLN.ipynb pattern |
-| **Tree-cotree gauge** | **YES** | **5+** | **1×** + 1-time BFS | **WINNER** |
+| Method | EBE pure? | Stable recurrence stages | Cost/stage |
+|---|---|---|---|
+| No gauge | YES | 0 | 1x |
+| Gram-Schmidt re-orthog | YES | 0 | 1x + inner products |
+| Helmholtz-Hodge | NO | 3 | **2x** |
+| **Tree-cotree gauge** | **YES** | **5+** | **1x** + 1-time BFS |
 
 ### Implementation
 
@@ -5513,45 +5407,7 @@ for edge_nr in build_spanning_tree(mesh):
     dofs = fes.GetDofNrs(edge)
     if dofs and free[dofs[0]]:  # lowest-order DoF on this edge
         free[dofs[0]] = False    # tree edge = essential 0
-
-# Each Kameari stage: curl-curl in cotree subspace + ACCUMULATED Apotential
-# (Tanimoto pattern, validated against analytic Cauer-I for both circular and
-#  rectangular cross sections — see public-safe curated corpus)
-Apot = None
-for n in range(N_STAGES):
-    a = BilinearForm(fes); a += (1/mu) * curl(u) * curl(v) * dx
-    pre = Preconditioner(a, "local")  # EBE
-    f = LinearForm(fes); f += J * v * dx
-    a.Assemble(); f.Assemble()
-    inv = a.mat.Inverse(freedofs=free, inverse="sparsecholesky")
-    gfA.vec.data = inv * f.vec
-    R_n = 1/Integrate(J*J/sigma * dx, mesh)
-    Apot = R_n*gfA if Apot is None else Apot + R_n*gfA  # accumulated, weighted by R
-    L_n = R_n * Integrate(J * Apot * dx, mesh)          # = R_n * <J_n, Σ R_k A_k>
-    J = J - sigma * Apot / L_n                           # subtract accumulated, not bare A_n
 ```
-
-### CRITICAL: L formula — accumulated A, NOT bare A
-
-A common mistake (which I made initially!) is to compute
-`L_n = R_n * <J_n, A_n>` and update `J -= σ A_n/L_n` using only the **current**
-stage's potential A_n. This **does not** reproduce the analytic Cauer-I ladder
-of Z(s). The correct Tanimoto formula uses the **R-weighted accumulated**
-potential `Apot_n = Σ_(k≤n) R_k A_k`:
-
-```
-L_n = R_n · ⟨J_n, Apot_n⟩      # Tanimoto, validated
-J_(n+1) = J_n - σ · Apot_n / L_n   # subtract accumulated potential
-```
-
-Empirical verification (5×2×1 mm Cu, Stage 0):
-- Wrong formula `L = R·⟨J,A⟩`: L_0 = 4.67 µH (3D) / 18.16 nH/m (2D) — does
-  NOT match Mathematica Cauer-I analytic
-- Correct formula `L = R²·⟨J,A⟩` (= Tanimoto for stage 0): L_0 = 8.05 µH /
-  31.34 nH/m — **matches Mathematica analytic limit μ·Σ(β²/λ²)/V² to 0.05%**
-
-For stage 1+ the accumulation matters because J_(n+1) needs to be subtracted
-against the cumulative response, not just the latest mode.
 
 ### Why it works
 
@@ -5565,24 +5421,10 @@ against the cumulative response, not just the latest mode.
 ### Geometry caveat: a ≠ b ≠ c required
 
 For cube (a=b=c), eigenvalues λ²(mx,my,mz) = (mx²+my²+mz²)π²/a² have
-heavy degeneracy: (1,1,3)=(1,3,1)=(3,1,1) all give same λ². Kameari/PINVIT
-cannot distinguish degenerate modes → mode mixing → bad convergence.
+heavy degeneracy: (1,1,3)=(1,3,1)=(3,1,1) all give same λ². Eigen and Krylov
+solvers cannot distinguish degenerate modes → mode mixing → bad convergence.
 
 **Use a ≠ b ≠ c** (e.g., 5×2×1 mm cuboid) for clean validation.
-
-### Verified result — 2D rectangular bar, 5×2 mm Cu (Case A, per unit length)
-
-With the **corrected Tanimoto formula** (accumulated Apotential):
-
-- **Stage 0**: NGSolve R_0 = 1.7241×10⁻³ Ω/m = 1/(σab) analytic — exact match
-- **Stage 0**: NGSolve L_0 = 31.34 nH/m = Mathematica analytic μ·Σ(β²/λ²)/(ab)²
-  = 31.32 nH/m — **0.05% match**
-- **Stages 0–11**: all positive R_n, L_n with Tanimoto-pattern J update
-
-Use this as the canonical CLN validation case. The 3D 5×2×1 mm cuboid case
-in `cuboid_521_treecotree_extended.py` was using the **incorrect** L formula
-(no accumulation) — needs to be re-run with the Tanimoto pattern for proper
-coefficient-by-coefficient comparison against analytic Cauer-I.
 
 ### NGSolve `CreateGradient`: building block
 
@@ -5592,11 +5434,6 @@ G_matrix, fes_H1 = fes_HCurl.CreateGradient()
 # Image of G in HCurl = gradient subspace = curl-curl kernel
 # tree-cotree picks one HCurl edge per H1 vertex (column of G)
 ```
-
-### Reference files
-
-- `public-safe curated corpus`
-- `public-safe curated corpus`
 """
 
 
@@ -7882,14 +7719,10 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
         "fuse": NGSOLVE_BOOLEAN_POLICY,
         "compound": NGSOLVE_BOOLEAN_POLICY,
         "trampoline": NGSOLVE_BOOLEAN_POLICY,
-        "cln": NGSOLVE_CLN_CAUER,
-        "cauer": NGSOLVE_CLN_CAUER,
-        "ladder": NGSOLVE_CLN_CAUER,
-        "mor": NGSOLVE_CLN_CAUER,
-        "eddy_current_mor": NGSOLVE_CLN_CAUER,
-        "tree_cotree": NGSOLVE_CLN_CAUER,
-        "treecotree_gauge": NGSOLVE_CLN_CAUER,
-        "kameari": NGSOLVE_CLN_CAUER,
+        "mor": NGSOLVE_EDDY_REDUCED_VALIDATION,
+        "eddy_current_mor": NGSOLVE_EDDY_REDUCED_VALIDATION,
+        "tree_cotree": NGSOLVE_EDDY_REDUCED_VALIDATION,
+        "treecotree_gauge": NGSOLVE_EDDY_REDUCED_VALIDATION,
     }
 
     topic = topic.lower().strip()
