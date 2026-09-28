@@ -7474,180 +7474,6 @@ class HybridVIMSystem:
         }
 
 
-@dataclass(frozen=True)
-class HCurlEddyCLNModel:
-    """Passive CLN/EVRS descriptor produced by an HCurl Eddy Bubble VIM.
-
-    The spatial reduction has already happened in the high-order HCurl parent
-    space.  This object is the temporal/frequency coupling contract
-
-    ``(R + s L + Zs(s) M_surface) c = P u``.
-
-    For a coil current ``i`` whose incident vector potential is represented by
-    ``P i``, Faraday excitation is ``u = -s i``.  A nonzero SIBC block remains
-    a DtN termination and must be rationalized separately before ordinary
-    state-space export.
-    """
-
-    resistance: np.ndarray
-    inductance: object
-    surface_mass: np.ndarray
-    port_rhs: np.ndarray
-    basis_names: tuple[str, ...] = ()
-    blocks: dict[str, tuple[int, int]] | None = None
-
-    def __post_init__(self) -> None:
-        resistance = np.asarray(self.resistance)
-        inductance = np.asarray(self.inductance)
-        surface_mass = np.asarray(self.surface_mass)
-        if resistance.ndim != 2 or resistance.shape[0] != resistance.shape[1]:
-            raise ValueError("resistance must be square")
-        if inductance.shape != resistance.shape:
-            raise ValueError("inductance must match resistance")
-        if surface_mass.shape != resistance.shape:
-            raise ValueError("surface_mass must match resistance")
-        if not (
-            np.all(np.isfinite(resistance))
-            and np.all(np.isfinite(inductance))
-            and np.all(np.isfinite(surface_mass))
-        ):
-            raise ValueError("CLN matrices must contain only finite values")
-        ports = _port_rhs_matrix(self.port_rhs, resistance.shape[0])
-        names = _mode_names(self.basis_names or None, resistance.shape[0])
-        blocks = {} if self.blocks is None else dict(self.blocks)
-        for name, bounds in blocks.items():
-            if len(bounds) != 2:
-                raise ValueError(f"block {name!r} must contain (start, stop)")
-            start, stop = (int(bounds[0]), int(bounds[1]))
-            if start < 0 or stop < start or stop > resistance.shape[0]:
-                raise ValueError(f"block {name!r} is out of range")
-            blocks[name] = (start, stop)
-        object.__setattr__(self, "resistance", np.array(resistance, copy=True))
-        object.__setattr__(self, "inductance", np.array(inductance, copy=True))
-        object.__setattr__(self, "surface_mass", np.array(surface_mass, copy=True))
-        object.__setattr__(self, "port_rhs", np.array(ports, copy=True))
-        object.__setattr__(self, "basis_names", names)
-        object.__setattr__(self, "blocks", blocks)
-
-    @property
-    def state_order(self) -> int:
-        return int(self.resistance.shape[0])
-
-    @property
-    def port_count(self) -> int:
-        return int(self.port_rhs.shape[1])
-
-    @property
-    def has_sibc_termination(self) -> bool:
-        return bool(np.linalg.norm(self.surface_mass) > 1.0e-14)
-
-    def impedance(self, s, *, surface_impedance=0.0) -> np.ndarray:
-        s = complex(s)
-        if not (np.isfinite(s.real) and np.isfinite(s.imag)):
-            raise ValueError("s must be finite")
-        return (
-            self.resistance
-            + s * self.inductance
-            + _surface_impedance_term(self.surface_mass, surface_impedance)
-        )
-
-    def solve(self, s, drive, *, surface_impedance=0.0) -> np.ndarray:
-        """Solve for reduced current coefficients under generalized drive."""
-
-        values = np.asarray(drive)
-        vector_drive = values.ndim <= 1
-        if values.ndim == 0:
-            if self.port_count != 1:
-                raise ValueError(
-                    f"scalar drive is valid only for one port, not {self.port_count}"
-                )
-            values = values.reshape(1, 1)
-        elif values.ndim == 1:
-            values = values[:, np.newaxis]
-        if values.ndim != 2 or values.shape[0] != self.port_count:
-            raise ValueError(f"drive must have shape ({self.port_count}, n_cases)")
-        solved = _solve_reduced_linear(
-            self.impedance(s, surface_impedance=surface_impedance),
-            self.port_rhs @ values,
-        )
-        return solved[:, 0] if vector_drive else solved
-
-    def solve_vector_potential_drive(
-        self,
-        s,
-        coil_current,
-        *,
-        surface_impedance=0.0,
-    ) -> np.ndarray:
-        """Solve ``(R+sL+ZsMs)c = -s P i`` for coil current ``i``."""
-
-        return self.solve(
-            s,
-            -complex(s) * np.asarray(coil_current),
-            surface_impedance=surface_impedance,
-        )
-
-    def port_admittance(self, s, *, surface_impedance=0.0) -> np.ndarray:
-        z = self.impedance(s, surface_impedance=surface_impedance)
-        response = _solve_reduced_linear(z, self.port_rhs)
-        return self.port_rhs.conj().T @ response
-
-    def derivative_input_state_space(self) -> dict[str, np.ndarray]:
-        """Return ``c_dot=A c+B u``, ``y=C c`` for ``u=-i_dot``."""
-
-        if self.has_sibc_termination:
-            raise ValueError(
-                "SIBC termination must be rationalized before state-space export"
-            )
-        a = -np.linalg.solve(self.inductance, self.resistance)
-        b = np.linalg.solve(self.inductance, self.port_rhs)
-        c = self.port_rhs.conj().T
-        d = np.zeros(
-            (self.port_count, self.port_count),
-            dtype=np.result_type(a, b, c),
-        )
-        return {"A": a, "B": b, "C": c, "D": d}
-
-    def diagnostics(self, *, passive_tol: float = 1.0e-10) -> dict[str, object]:
-        rmin = _min_hermitian_eigenvalue(self.resistance)
-        lmin = _min_hermitian_eigenvalue(self.inductance)
-        smin = _min_hermitian_eigenvalue(self.surface_mass)
-        return {
-            "state_order": self.state_order,
-            "port_count": self.port_count,
-            "blocks": {
-                name: [start, stop]
-                for name, (start, stop) in (self.blocks or {}).items()
-            },
-            "input_convention": "u=-d(coil_current)/dt for vector-potential ports",
-            "has_sibc_termination": self.has_sibc_termination,
-            "finite_rl_state_space": not self.has_sibc_termination,
-            "min_resistance_eigenvalue": rmin,
-            "min_inductance_eigenvalue": lmin,
-            "min_surface_mass_eigenvalue": smin,
-            "passive": (
-                rmin >= -passive_tol
-                and lmin >= -passive_tol
-                and smin >= -passive_tol
-            ),
-        }
-
-
-def HCurlEddyCLNFromVIM(system: HybridVIMSystem, rhs) -> HCurlEddyCLNModel:
-    """Create the CLN coupling descriptor from an HCurl Eddy Bubble VIM."""
-
-    if not isinstance(system, HybridVIMSystem):
-        raise TypeError("system must be a HybridVIMSystem")
-    return HCurlEddyCLNModel(
-        resistance=system.resistance,
-        inductance=system.inductance,
-        surface_mass=system.surface_mass,
-        port_rhs=rhs,
-        basis_names=system.basis_names,
-        blocks=system.blocks,
-    )
-
-
 def ReducedPortAdmittance(
     system: HybridVIMSystem,
     s,
@@ -11024,13 +10850,6 @@ class TopologyAwareHybridVIM:
             **kwargs,
         )
 
-    def cln_model(self) -> HCurlEddyCLNModel:
-        """Return the CLN/EVRS descriptor for the assembled physical ports."""
-
-        if self.rhs is None:
-            raise ValueError("rhs was not assembled; pass port_vector_potentials")
-        return HCurlEddyCLNFromVIM(self.system, self.rhs)
-
     def foster_model(self):
         """Return the Foster modal model for the assembled physical ports."""
 
@@ -11882,8 +11701,6 @@ __all__ = [
     "BuildLocalESIMSurfaceLUT",
     "ValidateLocalESIMSurfaceLUT",
     "HybridVIMSystem",
-    "HCurlEddyCLNModel",
-    "HCurlEddyCLNFromVIM",
     "AssembleHybridVIM",
     "AssembleSurfaceImpedanceGram",
     "SolveLocalESIMSurfaceVIM",
