@@ -2363,8 +2363,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         if not np.all(np.isfinite(initial)) or np.any(initial < 1.0):
             raise ValueError("per-element mu_r_initial must be finite and >= 1")
         mu_r_current = initial.astype(float, copy=True)
-    from scipy.interpolate import PchipInterpolator
-    zero_field_mu_r = float(PchipInterpolator(
+    from radia.bh_law import monotone_bh_pchip
+    zero_field_mu_r = float(monotone_bh_pchip(
         bh_array[:, 0], bh_array[:, 1]).derivative()(0.0)) / MU_0
     if not math.isfinite(zero_field_mu_r) or zero_field_mu_r < 1.0:
         raise ValueError("bh_table origin tangent must be finite and >= vacuum permeability")
@@ -3046,7 +3046,7 @@ def _solve_mixed_omega_pointwise_picard(
         bh_interpolation, progress_callback, reduced_source_load="volume"):
     """P1 secant Picard with the coefficient evaluated by volume quadrature."""
     from ngsolve import IfPos, sqrt
-    from scipy.interpolate import PchipInterpolator
+    from radia.bh_law import monotone_bh_pchip
     from radia.scalar_potential_solver import (
         _build_bh_coefficient_function,
         _build_bh_linear_spline_coefficient_function,
@@ -3059,7 +3059,7 @@ def _solve_mixed_omega_pointwise_picard(
     if initial.ndim != 0 or not math.isfinite(float(initial)) or float(initial) <= 0:
         raise ValueError("integration_point mu_r_initial must be a positive scalar")
     if bh_interpolation == "pchip":
-        origin_mu = float(PchipInterpolator(
+        origin_mu = float(monotone_bh_pchip(
             bh_array[:, 0], bh_array[:, 1]).derivative()(0.))
     else:
         origin_mu = float((bh_array[1, 1] - bh_array[0, 1])

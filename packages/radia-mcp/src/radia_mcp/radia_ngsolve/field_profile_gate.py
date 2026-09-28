@@ -78,27 +78,41 @@ def build_constitutive_comparison_candidate(
             return 3.0 * d0
         return value
 
-    if len(table) == 2:
-        pchip_derivatives = [slopes[0], slopes[0]]
-    else:
-        pchip_derivatives = [
-            endpoint_slope(widths[0], widths[1], slopes[0], slopes[1])
-        ]
+    def node_derivatives(secants):
+        if len(table) == 2:
+            return [secants[0], secants[0]]
+        derivatives = [endpoint_slope(widths[0], widths[1], secants[0], secants[1])]
         for index in range(1, len(table) - 1):
-            left_slope = slopes[index - 1]
-            right_slope = slopes[index]
+            left_slope = secants[index - 1]
+            right_slope = secants[index]
             if left_slope * right_slope <= 0.0:
-                pchip_derivatives.append(0.0)
+                derivatives.append(0.0)
             else:
                 left_weight = 2.0 * widths[index] + widths[index - 1]
                 right_weight = widths[index] + 2.0 * widths[index - 1]
-                pchip_derivatives.append(
+                derivatives.append(
                     (left_weight + right_weight)
                     / (left_weight / left_slope + right_weight / right_slope)
                 )
-        pchip_derivatives.append(
-            endpoint_slope(widths[-1], widths[-2], slopes[-1], slopes[-2])
+        derivatives.append(
+            endpoint_slope(widths[-1], widths[-2], secants[-1], secants[-2])
         )
+        return derivatives
+
+    # Radia's production law interpolates the magnetization M = B/mu0 - H by
+    # monotone PCHIP when the tabulated M rises, and B itself otherwise.
+    m_tab = [b / mu_0 - h for h, b in zip(h_tab, b_tab)]
+    m_scale = max(1.0, max(abs(value) for value in m_tab))
+    magnetization_rises = all(
+        right - left >= -1.0e-9 * m_scale for left, right in zip(m_tab, m_tab[1:])
+    )
+    if magnetization_rises:
+        m_secants = [slope / mu_0 - 1.0 for slope in slopes]
+        pchip_derivatives = [
+            mu_0 * (1.0 + value) for value in node_derivatives(m_secants)
+        ]
+    else:
+        pchip_derivatives = node_derivatives(slopes)
 
     pchip_coefficients = []
     for index, secant in enumerate(slopes):

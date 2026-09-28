@@ -7,6 +7,7 @@ import argparse
 import ast
 import hashlib
 import importlib.metadata
+import importlib.util
 import json
 from math import pi
 from pathlib import Path
@@ -27,7 +28,11 @@ def load_curve_helpers(source=SOURCE):
              (isinstance(node, ast.FunctionDef) and node.name in functions)
              or (isinstance(node, ast.Assign) and any(
                  isinstance(target, ast.Name) and target.id in constants for target in node.targets))]
-    namespace = {'np': np, 'pi': pi}
+    # The shared B(H) interpolant is loaded from its file, without the radia package import.
+    law_spec = importlib.util.spec_from_file_location('radia_bh_law', ROOT / 'src/radia/bh_law.py')
+    law = importlib.util.module_from_spec(law_spec)
+    law_spec.loader.exec_module(law)
+    namespace = {'np': np, 'pi': pi, 'monotone_bh_pchip': law.monotone_bh_pchip}
     exec(compile(ast.Module(body=nodes, type_ignores=[]), str(source), 'exec'), namespace)
     for name in functions | constants:
         if name not in namespace:

@@ -10,13 +10,18 @@ def test_build_comparison_candidate_matches_pchip_and_energy_identity():
     table = [[0.0, 0.0], [100.0, 0.5], [1000.0, 1.4], [10000.0, 1.7]]
     h_values = [0.0, 50.0, 500.0, 10000.0, 20000.0]
     candidate = build_constitutive_comparison_candidate(table, h_values)
-    pchip = PchipInterpolator(
-        [row[0] for row in table], [row[1] for row in table], extrapolate=False
+    # Radia's law: monotone PCHIP of the rising magnetization M = B/mu0 - H.
+    mu_0 = 4.0e-7 * math.pi
+    magnetization = PchipInterpolator(
+        [row[0] for row in table], [row[1] / mu_0 - row[0] for row in table],
+        extrapolate=False,
     )
-    expected_inside = [float(pchip(value)) for value in h_values[:-1]]
+    expected_inside = [
+        mu_0 * (value + float(magnetization(value))) for value in h_values[:-1]
+    ]
     assert candidate["identity"]["constitutive_interpolation"] == "monotone_pchip"
     assert candidate["identity"]["solver_runtime_mode"] is True
-    assert candidate["B_T"][:-1] == pytest.approx(expected_inside, rel=1.0e-14)
+    assert candidate["B_T"][:-1] == pytest.approx(expected_inside, rel=1.0e-12)
     assert candidate["B_T"][-1] == pytest.approx(
         table[-1][1] + 4.0e-7 * math.pi * (h_values[-1] - table[-1][0])
     )

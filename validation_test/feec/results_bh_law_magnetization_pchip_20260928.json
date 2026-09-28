@@ -1,0 +1,151 @@
+{
+  "schema": "radia.bh-law-magnetization-pchip/v1",
+  "date": "2026-09-28",
+  "decision": "User asked for the most robust B-H interpolation. Production law = monotone PCHIP of M = B/mu0 - H when the tabulated M rises (dB/dH >= mu0 guaranteed), else PCHIP of B(H); Akima not adopted (not monotone).",
+  "table_comparison": {
+    "note": "min dB/dH over a dense H grid, in units of mu0; max |B| difference between PCHIP of B and PCHIP of M, in tesla",
+    "tables": {
+      "esrf3": {
+        "rows": 33,
+        "data_M_monotone": true,
+        "pchipB_min_dBdH_over_mu0": 0.6896478609708288,
+        "pchipB_fraction_dBdH_below_mu0": 0.09017274568135797,
+        "pchipM_min_dBdH_over_mu0": 1.0,
+        "akimaB_min_dBdH_over_mu0": 0.689647860970829,
+        "max_abs_B_difference_T": 0.0017124845363105656,
+        "max_rel_mu_diff_B_vs_M": 0.3103521390291712
+      },
+      "esrf5": {
+        "rows": 221,
+        "data_M_monotone": true,
+        "pchipB_min_dBdH_over_mu0": 1.1574255564756122,
+        "pchipB_fraction_dBdH_below_mu0": 0.0,
+        "pchipM_min_dBdH_over_mu0": 1.157425556475612,
+        "akimaB_min_dBdH_over_mu0": 1.157631524289312,
+        "max_abs_B_difference_T": 1.0720975156530699e-05,
+        "max_rel_mu_diff_B_vs_M": 0.059948901901981905
+      },
+      "esrf6": {
+        "rows": 221,
+        "data_M_monotone": true,
+        "pchipB_min_dBdH_over_mu0": 1.1574255564756122,
+        "pchipB_fraction_dBdH_below_mu0": 0.0,
+        "pchipM_min_dBdH_over_mu0": 1.157425556475612,
+        "akimaB_min_dBdH_over_mu0": 1.157631524289312,
+        "max_abs_B_difference_T": 1.0720975156530699e-05,
+        "max_rel_mu_diff_B_vs_M": 0.04113841111769832
+      },
+      "esrf7": {
+        "rows": 34,
+        "data_M_monotone": true,
+        "pchipB_min_dBdH_over_mu0": 0.0,
+        "pchipB_fraction_dBdH_below_mu0": 0.0112747181320467,
+        "pchipM_min_dBdH_over_mu0": 1.0,
+        "akimaB_min_dBdH_over_mu0": 0.9992499999999961,
+        "max_abs_B_difference_T": 0.0006632779517463661,
+        "max_rel_mu_diff_B_vs_M": 1.0
+      },
+      "sym_outer_quad_old": {
+        "rows": 13,
+        "data_M_monotone": false,
+        "pchipB_min_dBdH_over_mu0": 0.19578584269241067,
+        "pchipB_fraction_dBdH_below_mu0": 0.589835254118647,
+        "pchipM_min_dBdH_over_mu0": 0.1957858426924113,
+        "akimaB_min_dBdH_over_mu0": 0.22736420441699315,
+        "max_abs_B_difference_T": 0.0021808321108132134,
+        "max_rel_mu_diff_B_vs_M": 0.15991656217014738
+      },
+      "planar_fixture": {
+        "rows": 5,
+        "data_M_monotone": true,
+        "pchipB_min_dBdH_over_mu0": -5.392379220688742e-15,
+        "pchipB_fraction_dBdH_below_mu0": 0.02527436814079648,
+        "pchipM_min_dBdH_over_mu0": 1.0,
+        "akimaB_min_dBdH_over_mu0": -164.60671915732848,
+        "max_abs_B_difference_T": 0.00571880439083472,
+        "max_rel_mu_diff_B_vs_M": 1.0000000000000053
+      },
+      "steel_coarse": {
+        "rows": 9,
+        "data_M_monotone": true,
+        "pchipB_min_dBdH_over_mu0": 0.0,
+        "pchipB_fraction_dBdH_below_mu0": 0.1672958176045599,
+        "pchipM_min_dBdH_over_mu0": 1.0,
+        "akimaB_min_dBdH_over_mu0": 0.09947183943243633,
+        "max_abs_B_difference_T": 0.037841963554956504,
+        "max_rel_mu_diff_B_vs_M": 1.0
+      }
+    }
+  },
+  "validation": {
+    "host": "mdx1",
+    "python": "3.12.10",
+    "base_commit": "cc211d1816aa9611b8e695d4c0f7a37a60e0a802",
+    "trees": {
+      "new": {
+        "source": "9409efa7aae11bd4756a2bb8fe373e454a120343 +overlay:packages/radia-mcp/src/radia_mcp/radia_ngsolve/field_profile_gate.py,src/radia/kelvin_solver.py,src/radia/planar_materials.py,src/radia/scalar_potential_solver.py,src/radia/vim/_nonlinear.py,tests/test_hdiv_bh_table_saturation_contract.py,tests/test_tier_manifest.json,validation_test/feec/bh_saturation_audit.py,src/radia/bh_law.py,tests/test_bh_law.py",
+        "native_sha256": "59c9036aff577d452d0df82f9369fb94d6695f492a4376f1cb54752505e70018"
+      },
+      "base": {
+        "source": "9409efa7aae11bd4756a2bb8fe373e454a120343",
+        "native_sha256": "59c9036aff577d452d0df82f9369fb94d6695f492a4376f1cb54752505e70018"
+      }
+    },
+    "lanes": {
+      "fast": {
+        "paths": 9,
+        "new": {
+          "exit_code": 1,
+          "wall_s": 20.0,
+          "failed": [
+            "packages.radia-mcp.tests.test_field_profile_gate::test_build_comparison_candidate_matches_pchip_and_energy_identity",
+            "packages.radia-mcp.tests.test_constitutive_candidate_scipy::test_build_comparison_candidate_matches_pchip_and_energy_identity"
+          ],
+          "tail": [
+            "FAILED packages/radia-mcp/tests/test_field_profile_gate.py::test_build_comparison_candidate_matches_pchip_and_energy_identity",
+            "FAILED packages/radia-mcp/tests/test_constitutive_candidate_scipy.py::test_build_comparison_candidate_matches_pchip_and_energy_identity",
+            "======================= 2 failed, 148 passed in 12.36s ========================"
+          ]
+        },
+        "base_rerun_failed": []
+      },
+      "solver_numerics": {
+        "paths": 35,
+        "new": {
+          "exit_code": 1,
+          "wall_s": 511.1,
+          "failed": [
+            "tests.test_c_type_p1_box_lane::test_total_a_zero_source_shortcut_is_bit_identical"
+          ],
+          "tail": [
+            "=========================== short test summary info ===========================",
+            "FAILED tests/test_c_type_p1_box_lane.py::test_total_a_zero_source_shortcut_is_bit_identical",
+            "================== 1 failed, 569 passed in 509.74s (0:08:29) =================="
+          ]
+        },
+        "base_rerun_failed": [
+          "tests.test_c_type_p1_box_lane::test_total_a_zero_source_shortcut_is_bit_identical"
+        ]
+      },
+      "hdiv_regression": {
+        "paths": 76,
+        "new": {
+          "exit_code": 0,
+          "wall_s": 2023.9,
+          "failed": [],
+          "tail": [
+            "",
+            "-- generated xml file: C:\\temp\\bhlaw-20260928\\new_hdiv_regression.junit.xml ---",
+            "================= 338 passed, 1 xfailed in 2022.39s (0:33:42) ================="
+          ]
+        },
+        "base_rerun_failed": null
+      }
+    },
+    "after_oracle_update": "the two radia-mcp candidate-oracle tests (B-PCHIP expectations) were rewritten to an independent M-PCHIP SciPy oracle; 78 passed on mdx1",
+    "preexisting": [
+      "tests/test_c_type_p1_box_lane.py::test_total_a_zero_source_shortcut_is_bit_identical (1e-12 relative, fails identically on the unchanged tree)"
+    ],
+    "not_run": "ESRF/three-engine campaign evidence was not recomputed; their recorded runs used PCHIP of B"
+  }
+}
