@@ -334,7 +334,7 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_equivalence_source.cpp    # Equivalence-theorem near-field source (Schelkunoff/Love static H, Phase A)
 	${CORE_DIR}/rad_average_field.cpp         # Closed-form average B over a target box (Wakao Part 6 §7)
 	${CORE_DIR}/rad_stream_function.cpp       # (ACA+)+TSVD stream-function solver (HACApK ACA+ + TSVD recompression)
-	${CORE_DIR}/rad_evrs_tmethod.cpp          # EVRS/T-method algebra kernel (T --curl--> J, reduced VIM/CLN projection)
+	${CORE_DIR}/rad_evrs_tmethod.cpp          # EVRS/T-method algebra kernel (T --curl--> J, reduced VIM projection)
 	${CORE_DIR}/rad_hybrid_vim_schur.cpp      # Complex Schur/SIBC helper kernels for hybrid VIM / mixed Galerkin reduction
 	${CORE_DIR}/rad_motor_rom_c.cpp           # Angle-periodic motor ROM C ABI
 	${CORE_DIR}/rad_beam_transfer.cpp         # Distributed canonical R/T/U transfer attribution
@@ -636,90 +636,6 @@ if(WIN32 AND USE_MKL_FOUND)
 endif()
 
 message(STATUS "peec_matrices module configured")
-
-# ========================================
-# CLN Core Python Module (cln_core.pyd)
-# ========================================
-# Lanczos algorithm for PEEC model order reduction
-# CLN I form: R_diag (diagonal) + L_tridiag (tridiagonal)
-
-set(CLN_CORE_SOURCES
-	${LIB_DIR}/rad_cln_api.cpp
-	${CORE_DIR}/rad_cln.cpp
-)
-
-pybind11_add_module(cln_core
-	${CLN_CORE_SOURCES}
-)
-
-# Add include directories
-target_include_directories(cln_core PRIVATE
-	${CORE_DIR}
-)
-
-# Add compile definitions
-target_compile_definitions(cln_core PRIVATE
-	_CRT_SECURE_NO_WARNINGS
-	$<$<CONFIG:Debug>:_DEBUG>
-	$<$<CONFIG:Release>:NDEBUG>
-	$<$<PLATFORM_ID:Windows>:WIN32>
-)
-
-# Intel MKL for LAPACK operations (required for Lanczos)
-if(WIN32 AND USE_MKL_FOUND)
-	target_link_libraries(cln_core PRIVATE ${BLAS_LIB})
-	target_include_directories(cln_core PRIVATE ${BLAS_INCLUDE_DIR})
-	target_compile_definitions(cln_core PRIVATE HAVE_LAPACK)
-	message(STATUS "Using Intel MKL for cln_core: ${BLAS_LIB}")
-endif()
-
-# Link Windows system libraries
-if(WIN32)
-	target_link_libraries(cln_core PRIVATE version.lib)
-	if(MSVC)
-		target_link_options(cln_core PRIVATE /NODEFAULTLIB:LIBCMT)
-	endif()
-endif()
-
-# Parallelization: NGSolve TaskManager (via ngstd)
-target_link_libraries(cln_core PRIVATE ngstd)
-target_include_directories(cln_core BEFORE PRIVATE ${NGSOLVE_BUNDLED_INC} ${NGSOLVE_COMPAT_INC} ${Netgen_INCLUDE_DIRS} ${NGSolve_INCLUDE_DIRS})
-
-# Compiler-specific flags
-if(MSVC)
-	target_compile_options(cln_core PRIVATE
-		/O2
-		/fp:fast
-		/W0
-		/wd4244
-		/wd4267
-	)
-	message(STATUS "Using MSVC compiler for cln_core")
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
-	target_compile_options(cln_core PRIVATE /O3 /fp:fast /W0)
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-	target_compile_options(cln_core PRIVATE
-		-Wno-conversion
-		-Wno-sign-conversion
-	)
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-	target_compile_options(cln_core PRIVATE
-		-Wno-conversion
-		-Wno-sign-conversion
-	)
-endif()
-
-# Post-build: Copy required DLLs
-if(WIN32 AND USE_MKL_FOUND)
-	add_custom_command(TARGET cln_core POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			"${MKL_RT_DLL}"
-			"$<TARGET_FILE_DIR:cln_core>"
-		COMMENT "Copying mkl_rt.3.dll for cln_core"
-	)
-endif()
-
-message(STATUS "cln_core module configured")
 
 # ========================================
 # Radia pybind11 Module (_radia_pybind.pyd)

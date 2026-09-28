@@ -2705,7 +2705,6 @@ RADIA_BUILD_AND_RELEASE = """
 Build.ps1 (MSVC + MKL + NGSolve)
   |-> _radia_pybind.pyd       (main C++ extension, required)
   |-> peec_matrices.pyd        (PEEC matrix assembly, required in full build)
-  |-> cln_core.pyd             (Lanczos MOR, optional)
   |-> sparsesolv_ngsolve.pyd   (NGSolve sparse solvers, optional)
   |-> axifem.pyd               (axisymmetric FE, optional)
   |-> radia_mex / optuna_mex   (MATLAB gateways)
@@ -2811,7 +2810,6 @@ src/radia/
   __init__.py           # DLL path setup + re-export
   _radia_pybind.pyd     # Main C++ extension (required)
   peec_matrices.pyd     # PEEC matrix assembly (optional)
-  cln_core.pyd          # CLN transient solver (optional)
   *.py                  # Python utility modules
   # NO .dll files (MKL loaded from pip install location)
 ```

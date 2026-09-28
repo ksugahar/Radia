@@ -176,7 +176,7 @@ mcp-ltspice = "radia.ltspice.mcp_server:main"
 # shipped + deployed SOLELY by the cubit-mesh-export package, so radia and
 # cubit-mesh-export release fully independently.  "*.ccm" is dropped here;
 # cubit_mesh_curver.pyd is excluded below (the "*.pyd" glob ships only
-# _radia_pybind.pyd / cln_core.pyd / peec_matrices.pyd /
+# _radia_pybind.pyd / peec_matrices.pyd /
 # sparsesolv_ngsolve.pyd).
 # Eqnedit64 is built and released independently from tools/eqnedit64.  The
 # radia wheel contains only the headless TeX/Office module, not another GUI.

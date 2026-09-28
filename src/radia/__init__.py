@@ -130,7 +130,7 @@ except ImportError:
 # (2026-03-22). Use NGSolve + GmshPostExport for visualization and the thin
 # radia.xsuite_bridge adapter to CERN Xsuite for magnetic-field tracking.
 
-# Analysis Framework: Static, Frequency Response, Transient (CLN)
+# Analysis Framework: Static, Frequency Response, Transient (PRIMA)
 # Unified interface for electromagnetic analysis
 try:
     from .analysis import (
