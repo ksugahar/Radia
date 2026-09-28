@@ -51,3 +51,33 @@ at 89 % CPU, so its time may be inflated.
 Not run: the A-V round wire (a compound HCurl x H1 space) and the Kelvin
 sphere (a periodic space).  The wirebasket AMS requires an HCurl space whose
 lowest-order dofs are numbered by edge and fails loudly when they are not.
+
+## Order 3 (`summary_20260928_p3.json`)
+
+At order 3 the wirebasket is still the lowest-order edge block (the new
+cell dofs are local), so the same `sparsesolv_ams` applies.  Same host split
+and binary; `--order 3`:
+
+| case | dofs | coarse | iterations | setup s | solve s | peak GB | vs reference |
+|---|---|---|---|---|---|---|---|
+| sphere 700 Hz | 293,071 | direct | 103 | 70.9 | 28.7 | 9.3 | loss 0.16 % |
+| sphere 700 Hz | 293,071 | direct, edge wirebasket | 85 | 71.7 | 23.4 | 9.3 | loss 0.16 % |
+| sphere 700 Hz | 293,071 | AMS | 62 | 0.9 | 2.9 | 0.78 | loss 0.16 % |
+| sphere 700 Hz | 949,723 | direct (both wirebaskets) | fails: bad allocation during Assemble | | | | |
+| sphere 700 Hz | 949,723 | AMS | 67 | 2.6 | 10.8 | 2.2 | loss 0.14 % |
+| disk 10 kHz | 582,178 | direct | 174 | 213.3 | 117.0 | 19.8 | Bz 0.88 % |
+| disk 10 kHz | 582,178 | direct, edge wirebasket | 171 | 210.0 | 108.8 | 21.4 | Bz 0.88 % |
+| disk 10 kHz | 582,178 | AMS | 101 | 1.7 | 9.6 | 1.4 | Bz 0.88 % |
+| plate 1 kHz | 318,700 | direct | 93 | 9.8 | 10.6 | 2.9 | - |
+| plate 1 kHz | 318,700 | direct, edge wirebasket | 77 | 9.6 | 8.8 | 2.8 | - |
+| plate 1 kHz | 318,700 | AMS | 52 | 1.1 | 2.7 | 0.77 | loss = direct to 5e-13 |
+| plate 1 kHz | 1,435,724 | direct (both wirebaskets) | fails: bad allocation during Assemble | | | | |
+| plate 1 kHz | 1,435,724 | AMS | 53 | 4.6 | 12.5 | 3.2 | - |
+
+The coarse solvers again give the same field.  At order 3 AMS also needs
+fewer outer iterations than the direct wirebasket inverse (62 vs 85-103, 101
+vs 171-174, 52 vs 77-93), and it is 5-29x faster where the direct solver
+runs at all; the two largest meshes (0.95M and 1.44M dofs) exceed the direct
+solver's memory on mdx2 (about 45 GB free) and solve with AMS in 13-17 s.
+The disk error against the axisymmetric reference drops from 1.37-1.97 %
+(order 2) to 0.88 %.
