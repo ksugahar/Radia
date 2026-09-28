@@ -863,6 +863,25 @@ def test_projected_picard_iron_updates_never_evaluate_the_air_source():
     np.testing.assert_allclose(fields[1], fields[0], rtol=1e-9, atol=1e-18)
 
 
+def test_source_projection_diagnostics_survive_many_threads():
+    """Integrate's fixed 10 MB/nthreads heap overflowed at 76 threads, bonus 12."""
+    import ngsolve as ng
+    from radia.kelvin_solver import project_source_total_hodge
+
+    import os
+
+    mesh, h_source, _, _ = _picard_case(maxh=0.35)
+    ng.SetNumThreads(76)  # more threads than cores is fine; the heap share is what fails
+    try:
+        with ng.TaskManager():
+            many = project_source_total_hodge(mesh, h_source, ("total",), order=2, bonus_intorder=12)
+    finally:
+        ng.SetNumThreads(os.cpu_count() or 1)  # NGSolve has no getter; its default is the core count
+    with ng.TaskManager():
+        few = project_source_total_hodge(mesh, h_source, ("total",), order=2, bonus_intorder=12)
+    assert many["relative_harmonic_norm"] == pytest.approx(few["relative_harmonic_norm"], rel=1e-10)
+
+
 def test_mixed_omega_projected_material_state_validates_resume_shape():
     mesh, h_source, potential, bh_table = _picard_case()
     solved = _picard_solve(
