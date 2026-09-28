@@ -39,6 +39,10 @@ from calc_common import (MU_0, NU_0, setup_paths,
                           EMMaterial, add_material_args)
 from calc_heat import QSURF_HANDOFF_ORDER
 
+# largest relative difference between the saved P1 q_surf and the solved
+# surface loss (the thermal power gate then compares against the solved loss)
+QSURF_P1_TOLERANCE = 0.02
+
 
 def _log(msg):
     """Write progress to stderr (panel reads these)."""
@@ -51,7 +55,7 @@ def solve_fem(vol_file="", fes_order=1,
               formulation="total",
               I_total=1.0, half_thickness=0.005,
               max_iter=15, tol=1e-3, relax=0.5,
-              solver="pardiso", reg=1e-6, shift_eps=1e-6,
+              solver="auto", reg=1e-6, shift_eps=1e-6,
               nthreads=0,
               msh_output="",
               peec_step="",
@@ -59,7 +63,8 @@ def solve_fem(vol_file="", fes_order=1,
               peec_nwinc=1,
               peec_nhinc=1,
               peec_n_peri=0,
-              esim_per_panel=False):
+              esim_per_panel=False,
+              filaments=None):
     """3D FEM-SIBC solver for .vol mesh.
 
     Args:
@@ -78,16 +83,22 @@ def solve_fem(vol_file="", fes_order=1,
         max_iter: Max Karl iterations
         tol: Z_s convergence tolerance
         relax: Under-relaxation (0-1)
-        solver: "pardiso" (direct), "bddc" (iterative), "iccg" (shifted IC+CG),
+        solver: "sparsecholesky" (direct), "bddc" (iterative), "iccg" (shifted IC+CG),
                 "ams" (Compact AMS+COCR)
         reg: Gauge regularization parameter (add reg*nu0*u*v*dx to system)
         shift_eps: Shifted preconditioner eps (AMS/ICCG, add eps*nu*u*v*dx to prec)
         nthreads: TaskManager thread count (0=auto, 1=single thread)
         msh_output: Optional GMSH .msh output path
+        filaments: ``(paths, currents)`` given directly instead of
+            ``peec_step``: each path a sequence of ``(p1, p2)`` segments [m],
+            each current the complex filament current [A]; all paths carry
+            the same series current, whose magnitude replaces ``I_total``.
 
     Returns:
         dict with P_total, L, Z_s, H_t_rms, etc.
     """
+    if solver not in {"auto", "sparsecholesky", "ams", "iccg", "bddc"}:
+        raise ValueError(f"unsupported FEM solver: {solver!r}")
     if mat is None:
         mat = EMMaterial.from_name("steel")
     sigma = mat.sigma
@@ -124,9 +135,8 @@ def solve_fem(vol_file="", fes_order=1,
         curve_order = mesh.ngmesh.GetCurveOrder()
     except Exception:
         curve_order = 1
-    # Resolve solver=auto: ams for fes_order=1 (Compact AMS+COCR is the
-    # cheapest preconditioner for HCurl order-1 AC), bddc for higher
-    # orders (CompactAMS auxiliary space requires order-1).
+    # Resolve the supported HCurl policy: AMS for order 1 and BDDC+AMS
+    # for higher orders. Small problems need not be faster than direct solves.
     if solver == "auto":
         solver = "ams" if fes_order == 1 else "bddc"
         _log(f"SOLVER:auto -> {solver} (fes_order={fes_order})")
@@ -214,9 +224,16 @@ def solve_fem(vol_file="", fes_order=1,
     if has_wp:
         _log(f"SIBC:boundary={sibc_bnd}, approach={'hole' if is_hole else 'interface'}")
 
-    use_peec = bool(peec_step and os.path.isfile(peec_step))
+    if filaments is not None and peec_step:
+        return {"error": "give the coil either as --peec-step or as "
+                         "filaments, not both"}
+    if peec_step and not os.path.isfile(peec_step):
+        return {"error": f"--peec-step not found: {peec_step}"}
+    use_peec = bool(peec_step) or filaments is not None
 
-    if use_peec:
+    if filaments is not None:
+        _log("SOURCE:filaments given directly")
+    elif use_peec:
         _log(f"SOURCE:PEEC filament from {peec_step}")
     else:
         return {"error":
@@ -378,8 +395,24 @@ def solve_fem(vol_file="", fes_order=1,
         from radia.coil_from_cad import filaments_from_step
         from ngsolve import ElementId
 
-        _log("PEEC:building topology")
-        if peec_n_peri > 0:
+        if filaments is not None:
+            fil_paths, fil_currents = filaments
+            fil_paths = [[(np.asarray(a, float), np.asarray(b, float))
+                          for a, b in path] for path in fil_paths]
+            fil_currents = [complex(c) for c in fil_currents]
+            if len(fil_paths) != len(fil_currents) or not fil_paths:
+                return {"error": "filaments: one current per path is required"}
+            if any(abs(c - fil_currents[0]) > 1e-12 * abs(fil_currents[0])
+                   for c in fil_currents):
+                return {"error": "filaments: the paths must carry one series "
+                                 "current (the inductance is per that current)"}
+            I_total = abs(fil_currents[0])
+            topo = {}
+        else:
+            _log("PEEC:building topology")
+        if filaments is not None:
+            pass
+        elif peec_n_peri > 0:
             # Perimeter-only placement (thin-skin, dispatch path 2b
             # with circle-edge centers).  Use this for 3turn helix
             # / racetrack STEPs where the walker fails on seed plane.
@@ -390,7 +423,10 @@ def solve_fem(vol_file="", fes_order=1,
             topo = filaments_from_step(peec_step, sigma=peec_sigma,
                                         nwinc=peec_nwinc, nhinc=peec_nhinc)
 
-        if "filament_paths" in topo:
+        if filaments is not None:
+            _log(f"PEEC:{len(fil_paths)} given filaments, "
+                 f"{sum(len(p) for p in fil_paths)} segments")
+        elif "filament_paths" in topo:
             fil_paths = topo["filament_paths"]
             n_fil = topo.get("n_loop", len(fil_paths))
             if n_fil == 1:
@@ -444,15 +480,11 @@ def solve_fem(vol_file="", fes_order=1,
                     continue
                 for q in range(n_quad_line):
                     pt = p1a + t01[q] * dl
-                    try:
-                        mp = mesh(*pt)
-                        elnr = mp.nr
-                        if elnr < 0:
-                            raise ValueError("outside mesh")
-                        el = mesh[ElementId(VOL, elnr)]
-                    except Exception:
+                    mp = mesh(*pt)
+                    if mp.nr < 0:
                         n_skip += 1
                         continue
+                    el = mesh[ElementId(VOL, mp.nr)]
                     dofs = fes.GetDofNrs(el)
                     for d in dofs:
                         if d < 0:
@@ -492,12 +524,13 @@ def solve_fem(vol_file="", fes_order=1,
                     f"does NOT require the coil to be inside the "
                     f"workpiece mesh.")
             }
-        if n_quad_total > 0 and n_skip > 0:
-            pct = 100.0 * n_skip / n_quad_total
-            _log(f"PEEC:WARN {pct:.1f}% of quadrature points are "
-                 f"outside the workpiece mesh ({n_skip}/"
-                 f"{n_quad_total}).  The coil may extend beyond the "
-                 f"air region; check .vol geometry.")
+        if n_skip > 0:
+            # a coil partly outside the mesh is a different, weaker source;
+            # it is not solved
+            return {"error": (
+                f"{n_skip}/{n_quad_total} filament quadrature points lie "
+                f"outside the mesh; the coil must lie wholly inside the air "
+                f"region of {os.path.basename(vol_file)}")}
         _log(f"PEEC:line-integral RHS assembled ({t_li:.1f}s, "
              f"{n_skip} skipped)")
         # Mark as total-field (no A_s to add later)
@@ -618,7 +651,7 @@ def solve_fem(vol_file="", fes_order=1,
                                  f"(got {fes_order}); use solver=bddc for p>=2"}
             if not (omega > 0):
                 return {"error": "solver=ams requires AC (frequency>0). "
-                                 "For DC use solver=bddc or pardiso."}
+                                 "For DC use solver=bddc or sparsecholesky."}
             if has_kelvin and has_kelvin_periodic:
                 return {"error": "solver=ams is not supported with "
                                  "Periodic Kelvin BC. Use bddc."}
@@ -711,7 +744,7 @@ def solve_fem(vol_file="", fes_order=1,
                         f"(workpiece is a hole, no volumetric "
                         f"conductor mass).  Re-run with "
                         f"--solver bddc (iterative, supports any "
-                        f"order) or --solver pardiso (direct, "
+                        f"order) or --solver sparsecholesky (direct, "
                         f"memory-heavy).  Tracked: AMS works for "
                         f"problems with a volumetric conductor "
                         f"(non-SIBC).")
@@ -730,18 +763,24 @@ def solve_fem(vol_file="", fes_order=1,
             iccg.auto_shift = True
             gfu.vec.data = iccg * rhs_vec
         elif solver == "bddc":
-            pre = Preconditioner(a_bf, "bddc")
+            if has_kelvin and has_kelvin_periodic:
+                raise ValueError("BDDC+AMS is not validated for Periodic Kelvin; "
+                                 "select sparsecholesky explicitly")
+            import radia.sparsesolv_ngsolve as ssn
+            pre = Preconditioner(a_bf, "bddc", coarsetype="sparsesolv_ams")
             a_bf.Assemble()
             # BVP reads f_lf.vec; for PEEC, rhs_vec includes the Robin
             # surface term from A_s. Copy into f_lf.vec if they differ.
             if rhs_vec is not f_lf.vec:
                 f_lf.vec.data = rhs_vec
             with TaskManager():
-                from ngsolve import solvers
-                solvers.BVP(bf=a_bf, lf=f_lf, gf=gfu,
-                            pre=pre, maxsteps=500, tol=1e-8)
+                cocr = ssn.COCRSolver(a_bf.mat, pre,
+                                     freedofs=fes.FreeDofs(),
+                                     maxiter=500, tol=1e-10, printrates=False)
+                gfu.vec.data = cocr * rhs_vec
+            _log(f"BDDC+AMS:COCR iters={cocr.iterations}")
         else:
-            # pardiso (direct)
+            # sparsecholesky (direct)
             if formulation == "scattered" and has_wp and abs(robin) > 0:
                 # Scattered-field two-step solve:
                 #   Step 1: A_inc = free-space solution (no Robin)
@@ -766,7 +805,7 @@ def solve_fem(vol_file="", fes_order=1,
                 gfu_inc = GridFunction(fes)
                 with TaskManager():
                     gfu_inc.vec.data = a_free.mat.Inverse(
-                        fes.FreeDofs(), inverse="pardiso") * rhs_vec
+                        fes.FreeDofs(), inverse="sparsecholesky") * rhs_vec
                 _log(f"SCATTERED:A_inc solved")
 
                 # Step 2: A_scat with Robin
@@ -778,7 +817,7 @@ def solve_fem(vol_file="", fes_order=1,
                 gfu_scat = GridFunction(fes)
                 with TaskManager():
                     gfu_scat.vec.data = a_bf.mat.Inverse(
-                        fes.FreeDofs(), inverse="pardiso") * f_scat.vec
+                        fes.FreeDofs(), inverse="sparsecholesky") * f_scat.vec
                 _log(f"SCATTERED:A_scat solved")
 
                 # Total field
@@ -788,7 +827,30 @@ def solve_fem(vol_file="", fes_order=1,
                 a_bf.Assemble()
                 with TaskManager():
                     gfu.vec.data = a_bf.mat.Inverse(
-                        fes.FreeDofs(), inverse="pardiso") * rhs_vec
+                        fes.FreeDofs(), inverse="sparsecholesky") * rhs_vec
+
+        if solver in {"ams", "bddc"}:
+            solver_label = "AMS" if solver == "ams" else "BDDC+AMS"
+            residual = rhs_vec.CreateVector()
+            residual.data = rhs_vec - a_bf.mat * gfu.vec
+            free = np.asarray(list(fes.FreeDofs()), dtype=bool)
+            relative_residual = float(np.linalg.norm(residual.FV().NumPy()[free]) /
+                max(np.linalg.norm(rhs_vec.FV().NumPy()[free]), 1e-30))
+            for correction_step in range(3):
+                if not np.isfinite(relative_residual) or relative_residual <= 1e-7:
+                    break
+                correction_rhs = rhs_vec.CreateVector()
+                correction_norm = float(np.linalg.norm(residual.FV().NumPy()[free]))
+                correction_rhs.data = (1.0 / correction_norm) * residual
+                with TaskManager():
+                    gfu.vec.data += correction_norm * (cocr * correction_rhs)
+                residual.data = rhs_vec - a_bf.mat * gfu.vec
+                relative_residual = float(np.linalg.norm(residual.FV().NumPy()[free]) /
+                    max(np.linalg.norm(rhs_vec.FV().NumPy()[free]), 1e-30))
+                _log(f"{solver_label} true-residual correction {correction_step}: {relative_residual:.16e}")
+            if not np.isfinite(relative_residual) or relative_residual > 1e-7:
+                raise RuntimeError(f"{solver_label} true relative residual {relative_residual:.3e}")
+            _log(f"{solver_label}:true relative residual={relative_residual:.3e}")
 
         t_solve_iter = time.perf_counter() - t0_iter
 
@@ -1032,6 +1094,7 @@ def solve_fem(vol_file="", fes_order=1,
     q_surf_mean = None
     q_surf_p95 = None
     P_total_check = None
+    qsurf_p1_power = None
     qsurf_sol_path = ""
     if has_wp:
         H_t_sq_cf = (omega / abs(Z_s)) ** 2 * At_sq
@@ -1042,30 +1105,27 @@ def solve_fem(vol_file="", fes_order=1,
             Integrate(q_surf_cf, mesh, BND, definedon=wp_region).real)
         q_surf_mean = P_total_check / max(A_wp, 1e-30)
 
-        # Project to a global P1 H1 GridFunction for stats + .sol storage.
-        # Set on the workpiece boundary only; the rest of the field is
-        # zero and tells the loader (Phase B thermal) which DOFs are
-        # active.  The handoff is deliberately P1 even when the EM solve is
-        # higher order: Phase B transfers it between nonmatching meshes by
-        # physical surface-vertex sampling, while higher-order NGSolve H1
-        # coefficients are hierarchical and cannot be reconstructed from
-        # vertex samples alone.
+        # P1 handoff on the workpiece surface by the lumped L2 projection
+        # q_i = int(q phi_i) / int(phi_i): it conserves the solved loss
+        # exactly and stays non-negative, also where q is singular at convex
+        # edges (interpolating Set overshoots there).  The field is zero off
+        # the surface.  The handoff is P1 even when the EM solve is higher
+        # order: the thermal side transfers it between nonmatching meshes by
+        # surface-vertex values, and higher-order H1 coefficients are
+        # hierarchical, not vertex values.
         try:
-            fes_q = H1(mesh, order=QSURF_HANDOFF_ORDER)
-            gf_q = GridFunction(fes_q)
-            gf_q.vec[:] = 0
-            gf_q.Set(q_surf_cf, definedon=wp_region)
+            from radia import ih_thermal
+            if QSURF_HANDOFF_ORDER != 1:
+                raise RuntimeError("the q_surf handoff is P1")
+            gf_q, on = ih_thermal.lumped_surface_p1(mesh, q_surf_cf,
+                                                    wp_region)
 
             # Stats on the boundary DOFs.  Workpiece-surface vertices
             # are exactly the H1 DOFs whose value Set populated; we
             # tag them via the scalar 1 mask trick so the stats do not
             # depend on a numerical zero threshold.
-            mask_gf = GridFunction(fes_q)
-            mask_gf.vec[:] = 0
-            mask_gf.Set(CF(1.0), definedon=wp_region)
-            mask_arr = np.asarray(mask_gf.vec.FV().NumPy())
             q_arr = np.asarray(gf_q.vec.FV().NumPy())
-            on_wp = mask_arr > 0.5
+            on_wp = on
             if np.any(on_wp):
                 vals = q_arr[on_wp]
                 q_surf_max = float(np.max(vals))
@@ -1077,10 +1137,22 @@ def solve_fem(vol_file="", fes_order=1,
                  f"p95={q_surf_p95:.3e} W/m^2 "
                  f"(P_check={P_total_check:.4e} vs P_total={P_total:.4e})")
         except Exception as e:
-            # Stats are best-effort.  A failure here must not break the
-            # main solve / JSON output.
-            _log(f"Q_SURF:stats failed: {type(e).__name__}: {e}")
-            gf_q = None
+            # q_surf is the thermal handoff: a result without it must not
+            # look complete.
+            raise RuntimeError(
+                f"could not build the q_surf handoff field: "
+                f"{type(e).__name__}: {e}") from e
+        qsurf_p1_power = float(
+            Integrate(gf_q, mesh, BND, definedon=wp_region).real)
+        # The saved P1 handoff must carry the solved loss: its integral is
+        # checked against the exact surface integral of the solved q.
+        qsurf_p1_error = (qsurf_p1_power - P_total_check) / max(
+            abs(P_total_check), 1e-300)
+        if not abs(qsurf_p1_error) <= QSURF_P1_TOLERANCE:
+            raise RuntimeError(
+                f"the P1 q_surf handoff integrates to {qsurf_p1_power:.6e} W "
+                f"but the solved surface loss is {P_total_check:.6e} W "
+                f"({qsurf_p1_error:+.2%}); refine the workpiece surface mesh")
 
         # Surface current density on the SIBC face.
         #
@@ -1095,38 +1167,31 @@ def solve_fem(vol_file="", fes_order=1,
         # views, so for v1 the time-snapshot is enough.
         gf_J = None
         gf_J_vec = None
-        try:
-            J_mag_cf = sqrt(At_sq) * (omega / abs(Z_s))
-            fes_J = H1(mesh, order=fes_order)
-            gf_J = GridFunction(fes_J)
-            gf_J.vec[:] = 0
-            gf_J.Set(J_mag_cf, definedon=wp_region)
-        except Exception as e:
-            _log(f"J_SURF:scalar gen failed: {type(e).__name__}: {e}")
-        try:
-            from ngsolve import specialcf as _scf
-            n_bnd_v = _scf.normal(3)
-            # Tangential A as complex 3D CF.
-            A_dot_n = sum(A_eval[i] * n_bnd_v[i] for i in range(3))
-            A_t_vec = CF(tuple(
-                A_eval[i] - A_dot_n * n_bnd_v[i] for i in range(3)))
-            # -j*omega/Z_s = -j*omega*conj(Z_s)/|Z_s|^2
-            # Re(-j*omega/Z_s) = -omega*Im(Z_s)/|Z_s|^2
-            # Im(-j*omega/Z_s) = -omega*Re(Z_s)/|Z_s|^2
-            zs_sq = Z_s.real ** 2 + Z_s.imag ** 2
-            re_coef = -omega * Z_s.imag / zs_sq
-            im_coef = -omega * Z_s.real / zs_sq
-            # Re(J_s) = re_coef*Re(A_t) - im_coef*Im(A_t)
-            J_s_re_cf = CF(tuple(
-                re_coef * A_t_vec[i].real - im_coef * A_t_vec[i].imag
-                for i in range(3)))
-            fes_J_vec = H1(mesh, order=fes_order, dim=3)
-            gf_J_vec = GridFunction(fes_J_vec)
-            gf_J_vec.vec[:] = 0
-            gf_J_vec.Set(J_s_re_cf, definedon=wp_region)
-        except Exception as e:
-            _log(f"J_SURF:vector gen failed: {type(e).__name__}: {e}")
-            gf_J_vec = None
+        J_mag_cf = sqrt(At_sq) * (omega / abs(Z_s))
+        fes_J = H1(mesh, order=fes_order)
+        gf_J = GridFunction(fes_J)
+        gf_J.vec[:] = 0
+        gf_J.Set(J_mag_cf, definedon=wp_region)
+        from ngsolve import specialcf as _scf
+        n_bnd_v = _scf.normal(3)
+        # Tangential A as complex 3D CF.
+        A_dot_n = sum(A_eval[i] * n_bnd_v[i] for i in range(3))
+        A_t_vec = CF(tuple(
+            A_eval[i] - A_dot_n * n_bnd_v[i] for i in range(3)))
+        # -j*omega/Z_s = -j*omega*conj(Z_s)/|Z_s|^2
+        # Re(-j*omega/Z_s) = -omega*Im(Z_s)/|Z_s|^2
+        # Im(-j*omega/Z_s) = -omega*Re(Z_s)/|Z_s|^2
+        zs_sq = Z_s.real ** 2 + Z_s.imag ** 2
+        re_coef = -omega * Z_s.imag / zs_sq
+        im_coef = -omega * Z_s.real / zs_sq
+        # Re(J_s) = re_coef*Re(A_t) - im_coef*Im(A_t)
+        J_s_re_cf = CF(tuple(
+            re_coef * A_t_vec[i].real - im_coef * A_t_vec[i].imag
+            for i in range(3)))
+        fes_J_vec = H1(mesh, order=fes_order, dim=3)
+        gf_J_vec = GridFunction(fes_J_vec)
+        gf_J_vec.vec[:] = 0
+        gf_J_vec.Set(J_s_re_cf, definedon=wp_region)
     else:
         gf_q = None
         gf_J = None
@@ -1164,20 +1229,7 @@ def solve_fem(vol_file="", fes_order=1,
                     tuple(curl_A[i].real for i in range(3)))
             fes_B = HDiv(mesh, order=1)
             gf_B = GridFunction(fes_B)
-            try:
-                gf_B.Set(B_cf)
-            except Exception:
-                # Some AC problems resist Set on HDiv — fall back to
-                # vertex-eval + H1 dim=3 GridFunction.
-                fes_B = H1(mesh, order=1, dim=3)
-                gf_B = GridFunction(fes_B)
-                for vi, v in enumerate(mesh.vertices):
-                    pt = mesh(*v.point)
-                    val = B_cf(pt)
-                    if hasattr(val, "__len__"):
-                        for k in range(3):
-                            gf_B.vec.FV()[vi * 3 + k] = float(
-                                getattr(val[k], "real", val[k]))
+            gf_B.Set(B_cf)
             vol_B = os.path.join(base_dir, f"{name_stem}_fem.vol").replace("\\", "/")
             sol_B = os.path.join(base_dir, f"{name_stem}_B.sol").replace("\\", "/")
             save_vol_sol_pair(vol_B, sol_B, mesh.ngmesh, gf_B)
@@ -1212,6 +1264,41 @@ def solve_fem(vol_file="", fes_order=1,
                 gf_q.Save(sol_Q)
                 qsurf_sol_path = sol_Q
                 sol_paths["q_surf"] = sol_Q
+                import re as _re
+                from radia import ih_thermal
+                heated = sorted(
+                    n for n in set(mesh.GetBoundaries())
+                    if _re.fullmatch(str(sibc_bnd), n))
+                ih_thermal.write_field_sidecar(
+                    sol_Q, mesh_path=vol_B, mesh=mesh,
+                    fes_order=QSURF_HANDOFF_ORDER,
+                    quantity=ih_thermal.QSURF_QUANTITY,
+                    unit=ih_thermal.QSURF_UNIT, boundaries=heated,
+                    extra={"P_wp_W": float(P_total_check),
+                           "P_total_W": float(P_total),
+                           "qsurf_p1_power_W": qsurf_p1_power,
+                           "frequency_Hz": float(frequency),
+                           "producer": "calc_fem_kelvin"})
+                # P1 |H_t| peak amplitude, q = Re(Z_s)|H_t|^2 / 2, for the
+                # temperature-dependent surface source.
+                # from the saved q at each vertex, so q = Re(Z_s)|H_t|^2/2
+                # holds exactly on the handoff
+                gf_h1 = GridFunction(H1(mesh, order=QSURF_HANDOFF_ORDER))
+                gf_h1.vec.FV().NumPy()[:] = np.sqrt(np.maximum(
+                    2.0 * np.asarray(gf_q.vec.FV().NumPy()) / Z_s.real, 0.0))
+                sol_H = os.path.join(
+                    base_dir, f"{name_stem}_Ht.sol").replace("\\", "/")
+                gf_h1.Save(sol_H)
+                sol_paths["H_t"] = sol_H
+                ih_thermal.write_field_sidecar(
+                    sol_H, mesh_path=vol_B, mesh=mesh,
+                    fes_order=QSURF_HANDOFF_ORDER,
+                    quantity=ih_thermal.HT_QUANTITY, unit=ih_thermal.HT_UNIT,
+                    boundaries=heated,
+                    extra={"frequency_Hz": float(frequency),
+                           "producer": "calc_fem_kelvin",
+                           "convention": "peak phasor amplitude, "
+                                         "q = Re(Z_s) |H_t|^2 / 2"})
                 sol_entries.append(
                     {"sol": sol_Q, "fes": "H1",
                      "fes_order": QSURF_HANDOFF_ORDER,
@@ -1240,11 +1327,11 @@ def solve_fem(vol_file="", fes_order=1,
             gmsh_file = msh_output
             _log(f"GMSH:wrote {os.path.basename(msh_output)}")
         except Exception as e:
-            import traceback
-            tb_text = traceback.format_exc()
-            _log(f"GMSH_ERROR:{type(e).__name__}: {e}")
-            for line in tb_text.splitlines()[-4:]:
-                _log(f"GMSH_ERROR:  {line}")
+            # The .vol/.sol pair includes the thermal q_surf handoff; losing
+            # it must fail the run instead of returning a partial result.
+            raise RuntimeError(
+                f"field export to {msh_output} failed: "
+                f"{type(e).__name__}: {e}") from e
 
     # ============================================================
     # Step 8: Result JSON
@@ -1261,6 +1348,8 @@ def solve_fem(vol_file="", fes_order=1,
             _log(f"PEEC:L_peec={L_peec*1e9:.3f}nH (Z_port)")
 
     result = {
+        "linear_solver": solver,
+        "linear_true_relative_residual": relative_residual if solver in {"ams", "bddc"} else None,
         "P_total": float(P_total),
         "Q_total": float(Q_total),
         "L": float(L),
@@ -1280,7 +1369,10 @@ def solve_fem(vol_file="", fes_order=1,
         "q_surf_p95": q_surf_p95,
         "P_total_check": P_total_check,
         "qsurf_sol": qsurf_sol_path,
+        "qsurf_em_vol": vol_path if qsurf_sol_path else "",
+        "ht_sol": sol_paths.get("H_t", ""),
         "qsurf_order": QSURF_HANDOFF_ORDER if qsurf_sol_path else None,
+        "qsurf_p1_power_W": qsurf_p1_power,
         "delta": float(delta_skin),
         "ndof": ndof,
         "ne": ne,
@@ -1345,12 +1437,12 @@ def build_argparser():
                              "cell solve per H1 workpiece-boundary DOF "
                              "using a per-DOF |H_t| extracted from the "
                              "Karl-iter solution.  Resolves spatial "
-                             "saturation pattern; ~N_bnd_dofs × cell-solve "
+                             "saturation pattern; ~N_bnd_dofs x cell-solve "
                              "cost per Karl iter.")
     parser.add_argument("--solver", default="auto",
-                        choices=["auto", "pardiso", "bddc", "iccg", "ams"],
+                        choices=["auto", "sparsecholesky", "bddc", "iccg", "ams"],
                         help="auto: ams for fes-order=1, bddc otherwise. "
-                             "pardiso (direct), bddc (iterative), "
+                             "sparsecholesky (direct), bddc (iterative), "
                              "iccg (shifted IC+CG), ams (Compact AMS+COCR)")
     parser.add_argument("--reg", type=float, default=1e-6,
                         help="Gauge regularization (add reg*nu0*u*v*dx)")

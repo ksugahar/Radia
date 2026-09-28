@@ -1816,6 +1816,10 @@ gf_q = GridFunction(fes_q)
 gf_q.vec[:] = 0                          # interior DOFs stay 0
 gf_q.Set(q_surf_cf, definedon=wp_region) # only boundary DOFs touched
 gf_q.Save("q.sol")                       # raw coefficient vector
+ih_thermal.write_field_sidecar(          # radia: q.sol.json, required
+    "q.sol", mesh_path="em.vol", mesh=mesh, fes_order=1,
+    quantity=ih_thermal.QSURF_QUANTITY, unit=ih_thermal.QSURF_UNIT,
+    boundaries=["sibc"], extra={"P_wp_W": P_wp})
 ```
 
 `wp_region = mesh.Boundaries("sibc")` is a Region; passing it to
@@ -1824,17 +1828,20 @@ DOFs that live on that boundary get populated.  The Radia IH handoff is
 deliberately P1 because its downstream nonmatching-mesh transfer samples
 physical surface vertices.  Interior bubbles stay 0.
 
-Load side (Consumer; e.g. `calc_heat.py` Phase B):
+Load side (Consumer; e.g. `calc_heat.py`).  In Radia, load through the
+sidecar, which verifies the mesh file digest, order, DOF count and quantity
+before `Load` (a raw `Load` of the wrong pair succeeds silently):
 
 ```python
-em_mesh = Mesh("em.vol")                  # MUST be passed explicitly --
-                                          # .sol is mesh-free.
-fes_q_em = H1(em_mesh, order=1)           # fixed producer/consumer contract.
-gf_q_em = GridFunction(fes_q_em)
-gf_q_em.Load("q.sol")
+from radia import ih_thermal
+em_mesh, gf_q_em, audit = ih_thermal.load_field(
+    "q.sol", quantity=ih_thermal.QSURF_QUANTITY, mesh_path="em.vol")
 ```
 
-THREE contracts that must hold:
+A `.sol` without its sidecar is an error; adopt a trusted legacy pair
+explicitly with `python -m radia.ih_thermal sidecar ...`.
+
+THREE contracts that must hold (the sidecar checks them):
 
 1. The EM .vol companion MUST be passed alongside the .sol; the .sol
    has no mesh.  Auto-locating siblings by filename convention is a
@@ -1850,16 +1857,20 @@ THREE contracts that must hold:
    Otherwise the interior DOFs carry whatever the previous state was;
    downstream consumers expect interior=0.
 
-Point-evaluating the loaded GF at boundary face vertices:
+Evaluating the loaded GF at the surface vertices of ANOTHER mesh: do not
+point-evaluate with `em_mesh(*p)`.  An independently faceted surface
+vertex lies slightly inside or outside the EM mesh, and `em_mesh(*p)` then
+finds no element or a neighbour in the air.  Project onto the EM heated
+triangles instead, with a distance gate, and check the transferred power:
 
 ```python
-# wp_surf_point is a body-frame surface vertex coord.  em_mesh(...)
-# returns a volume MeshPoint inside the element touching the boundary.
-em_mip = em_mesh(*wp_surf_point)
-val = gf_q_em(em_mip)
+src = ih_thermal.EMHeatSource("q.sol", "em.vol")   # boundaries, P_wp_W
+rec = src.transfer(thermal_mesh, ["heated"], gf_thermal_q,
+                   power_tolerance=0.02)           # raises when off-surface
 ```
 
-WHY THIS WORKS WITHOUT `.Trace()`: at a face point on a boundary
+Point evaluation of the GF on its OWN mesh at a face point is fine.  WHY
+THIS WORKS WITHOUT `.Trace()`: at a face point on a boundary
 element, the H1 volume basis decomposition is
 ``v_total = sum(boundary_DOFs * boundary_shape_fns)
          + sum(interior_DOFs * interior_bubbles)``.

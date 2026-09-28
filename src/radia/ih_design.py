@@ -92,9 +92,12 @@ PEEC_SOLVERS = {
     },
 }
 FEM_SOLVERS = {
-    "pardiso (direct)": "pardiso",
+    "auto": "auto",
+    "Automatic (AMS / BDDC+AMS)": "auto",
+    "sparsecholesky (direct)": "sparsecholesky",
     "AMS (iterative, p=1)": "ams",
     "BDDC (iterative, p>=2)": "bddc",
+    "BDDC+AMS (iterative, p>=2)": "bddc",
     "iccg (fallback)": "iccg",
 }
 
@@ -214,6 +217,9 @@ class IHDesignSpec:
     k: str = "46.6"
     rotation_rpm: float = 0.0
     rotation_axis: str = "z"
+    # One EM solution per rotor angle (radia.ih-rotor-states/1) for a
+    # rotating part that is not a body of revolution; replaces qsurf_sol.
+    rotor_states: str = ""
     h_conv: str = "10"
     t_ext: str = "20"
     emissivity: str = "0"
@@ -224,6 +230,18 @@ class IHDesignSpec:
     linear_solver: str = "sparsecholesky"
     probe_point: str = ""
     csv_output: str = ""
+    # Overheating as an optimisation constraint: the heat result reports
+    # the volume above each threshold and, for temperature_limit (for
+    # example the solidus of the alloy), exceeded / excess / volume above.
+    exposure_thresholds: str = ""
+    temperature_limit: str = ""
+    # Temperature-dependent k, cp (CSV T_C,k_W_mK,cp_J_kgK); a step that does
+    # not converge is an error unless max_halvings allows explicit halvings.
+    thermal_material_table: str = ""
+    max_halvings: int = 0
+    # EM boundaries that carry q_surf.  Empty uses the boundaries recorded in
+    # the q_surf sidecar; thermal boundary names are never borrowed.
+    em_heat_boundaries: str = ""
 
     # Repairs applied by normalize_geometry_roles, newest last.  Kept on
     # the spec so the Simulink runner / MCP callers can surface them.
@@ -373,14 +391,21 @@ class IHDesignSpec:
                 "thermal_material", "override_kcprho", "rho", "cp", "k",
                 "h_conv", "t_ext", "emissivity", "t_init", "time_scheme",
                 "dt", "t_end", "linear_solver", "thermal_fes_order",
-                "probe_point", "csv_output",
+                "probe_point", "csv_output", "exposure_thresholds",
+                "temperature_limit", "thermal_material_table",
             })
+            if self.thermal_material_table:
+                fields.add("max_halvings")
             if self.method != METHOD_THERMAL_3D_STATIC:
                 fields.update({"rotation_rpm", "rotation_axis"})
+                if (self.method != METHOD_THERMAL_AXISYM
+                        and self.heat_source != HEAT_SRC_UNIFORM):
+                    fields.add("rotor_states")
             if self.heat_source == HEAT_SRC_UNIFORM:
                 fields.add("q_uniform")
             else:
-                fields.update({"qsurf_sol", "em_vol", "qsurf_order"})
+                fields.update({"qsurf_sol", "em_vol", "qsurf_order",
+                               "em_heat_boundaries"})
                 if self.method == METHOD_THERMAL_AXISYM:
                     fields.add("n_phi_samples")
                 else:
@@ -499,7 +524,19 @@ class IHDesignSpec:
         )
 
     def _fem_solver(self) -> str:
-        return FEM_SOLVERS.get(self.solver, "pardiso")
+        # The shared design defaults to a BEM preset. Switching the method
+        # selects the FE method's default, rather than forcing a direct solve.
+        if self.solver in PEEC_SOLVERS:
+            selected = "auto"
+        elif self.solver in FEM_SOLVERS:
+            selected = FEM_SOLVERS[self.solver]
+        else:
+            raise ValueError(f"Unknown FEM solver: {self.solver}")
+        if self.method == METHOD_FEM_FULL:
+            if selected not in {"auto", "sparsecholesky"}:
+                raise ValueError("volumetric A-V coil solve supports only sparsecholesky")
+            return "sparsecholesky"
+        return selected
 
     def _build_inductance_command(
         self,
@@ -779,7 +816,18 @@ class IHDesignSpec:
         if self.heat_source == HEAT_SRC_UNIFORM:
             cmd += ["--q-uniform", self.q_uniform]
         else:
-            if not (self.qsurf_sol and self.em_vol):
+            if self.rotor_states:
+                if is_axisym or self.method == METHOD_THERMAL_3D_STATIC:
+                    raise ValueError("rotor_states describes a rotating 3D "
+                                     "part; use the rotating 3D thermal "
+                                     "method")
+                if self.qsurf_sol or self.em_vol or self.q_phi_average:
+                    raise ValueError("rotor_states lists its own EM "
+                                     "solutions; leave qsurf_sol, em_vol and "
+                                     "q_phi_average unset")
+                if not float(self.rotation_rpm) > 0:
+                    raise ValueError("rotor_states needs rotation_rpm > 0")
+            elif not (self.qsurf_sol and self.em_vol):
                 raise ValueError(
                     "Spatial qsurf mode requires a qsurf .sol and its companion EM .vol."
                 )
@@ -788,11 +836,15 @@ class IHDesignSpec:
                     "Spatial cross-mesh qsurf currently requires "
                     "qsurf_order=1; higher-order H1 transfer is not a "
                     "vertex-sampling contract.")
-            cmd += [
-                "--qsurf-sol", self.qsurf_sol,
-                "--em-vol", self.em_vol,
-                "--qsurf-order", str(self.qsurf_order),
-            ]
+            if self.rotor_states:
+                cmd += ["--rotor-states", self.rotor_states,
+                        "--qsurf-order", str(self.qsurf_order)]
+            else:
+                cmd += [
+                    "--qsurf-sol", self.qsurf_sol,
+                    "--em-vol", self.em_vol,
+                    "--qsurf-order", str(self.qsurf_order),
+                ]
             if is_axisym:
                 if isinstance(self.n_phi_samples, bool):
                     raise ValueError(
@@ -812,6 +864,24 @@ class IHDesignSpec:
             elif self.q_phi_average:
                 cmd += ["--q-phi-average"]
 
+        if self.heat_source != HEAT_SRC_UNIFORM and self.em_heat_boundaries:
+            cmd += ["--em-heat-boundaries", self.em_heat_boundaries]
+        if self.exposure_thresholds.strip():
+            cmd += ["--exposure-thresholds", self.exposure_thresholds.strip()]
+        if str(self.temperature_limit).strip():
+            float(self.temperature_limit)          # fail early on bad input
+            cmd += ["--temperature-limit", str(self.temperature_limit).strip()]
+        if self.thermal_material_table:
+            cmd += ["--material-table", self.thermal_material_table]
+        if isinstance(self.max_halvings, bool) or \
+                int(self.max_halvings) != self.max_halvings or \
+                self.max_halvings < 0:
+            raise ValueError("max_halvings must be a non-negative integer")
+        if self.max_halvings:
+            if not self.thermal_material_table:
+                raise ValueError("max_halvings applies to the nonlinear "
+                                 "(material-table) heat solve only")
+            cmd += ["--max-halvings", str(int(self.max_halvings))]
         probe = self.probe_point.strip()
         if probe:
             cmd += ["--probe-point", probe]

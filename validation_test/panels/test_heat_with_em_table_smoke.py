@@ -46,9 +46,11 @@ class TestCurrentTrajectory:
         assert I(60.0) == 50.0
         # Linear interp midpoint.
         assert abs(I(15.0) - 150.0) < 1e-9
-        # Clamp below and above.
-        assert I(-10.0) == 100.0
-        assert I(99999.0) == 50.0
+        # A time outside the trajectory is an error, not a held end value.
+        with pytest.raises(ValueError, match="outside --coil-current-csv"):
+            I(-10.0)
+        with pytest.raises(ValueError, match="outside --coil-current-csv"):
+            I(99999.0)
 
     def test_csv_bad_shape_raises(self, tmp_path):
         csv = tmp_path / "bad.csv"

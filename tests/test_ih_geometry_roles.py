@@ -16,9 +16,36 @@ from radia.ih_design import (
     IHDesignSpec,
     METHOD_BEMA_BEM,
     METHOD_PEEC_BEM,
+    METHOD_PEEC_FEM_KELVIN,
+    METHOD_FEM_FULL,
     METHOD_THERMAL_AXISYM,
     METHOD_THERMAL_3D_STATIC,
 )
+
+
+@pytest.mark.parametrize("order", [1, 2, 3])
+def test_hcurl_design_preserves_automatic_ams_selection(order):
+    command = IHDesignSpec(method=METHOD_PEEC_FEM_KELVIN,
+                           wp_vol="workpiece.vol", peec_step="coil.step",
+                           fes_order=order).build_command(python="python", panels_dir="panels")
+    assert command[command.index("--solver") + 1] == "auto"
+
+
+def test_compound_av_design_uses_direct_and_rejects_unsupported_ams():
+    spec = IHDesignSpec(method=METHOD_FEM_FULL)
+    assert spec._fem_solver() == "sparsecholesky"
+    spec.solver = "AMS (iterative, p=1)"
+    with pytest.raises(ValueError, match="A-V"):
+        spec._fem_solver()
+
+
+def test_hcurl_design_honours_direct_choice_and_rejects_unknown_solver():
+    spec = IHDesignSpec(method=METHOD_PEEC_FEM_KELVIN,
+                        solver="sparsecholesky (direct)")
+    assert spec._fem_solver() == "sparsecholesky"
+    spec.solver = "misspelled"
+    with pytest.raises(ValueError, match="Unknown FEM solver"):
+        spec._fem_solver()
 
 
 def test_swapped_wp_vol_and_peec_step_are_repaired():
@@ -266,3 +293,80 @@ def test_spatial_qsurf_high_order_is_rejected_before_command_execution():
     )
     with pytest.raises(ValueError, match="qsurf_order=1"):
         spec.build_command(python="python", panels_dir="panels")
+
+
+def test_overheating_constraint_and_material_table_reach_the_heat_solver():
+    command = IHDesignSpec(
+        method=METHOD_THERMAL_AXISYM,
+        wp_vol="workpiece_axisym.vol",
+        heat_source=HEAT_SRC_SPATIAL,
+        qsurf_sol="qsurf.sol",
+        em_vol="em.vol",
+        em_heat_boundaries="sibc",
+        heat_flux_boundaries="heated",
+        convection_boundaries="exposed",
+        exposure_thresholds="850,1400",
+        temperature_limit="1450",
+        thermal_material_table="steel_kcp.csv",
+    ).build_command(python="python", panels_dir="panels")
+    assert command[command.index("--temperature-limit") + 1] == "1450"
+    assert command[command.index("--exposure-thresholds") + 1] == "850,1400"
+    assert command[command.index("--material-table") + 1] == "steel_kcp.csv"
+    assert command[command.index("--em-heat-boundaries") + 1] == "sibc"
+
+
+def test_thermal_constraint_fields_are_visible_and_halvings_are_explicit():
+    from dataclasses import replace
+    spec = IHDesignSpec(
+        method=METHOD_THERMAL_AXISYM, wp_vol="workpiece_axisym.vol",
+        heat_source=HEAT_SRC_SPATIAL, qsurf_sol="qsurf.sol", em_vol="em.vol",
+        heat_flux_boundaries="heated", convection_boundaries="exposed")
+    visible = spec.visible_fields()
+    assert {"exposure_thresholds", "temperature_limit",
+            "thermal_material_table", "em_heat_boundaries"} <= visible
+    assert "max_halvings" not in visible          # linear solve: no Newton
+    command = spec.build_command(python="python", panels_dir="panels")
+    assert "--max-halvings" not in command
+    with pytest.raises(ValueError, match="material-table"):
+        replace(spec, max_halvings=2).build_command(
+            python="python", panels_dir="panels")
+    nonlinear = replace(spec, max_halvings=2,
+                        thermal_material_table="kcp.csv")
+    assert "max_halvings" in nonlinear.visible_fields()
+    command = nonlinear.build_command(python="python", panels_dir="panels")
+    assert command[command.index("--max-halvings") + 1] == "2"
+    with pytest.raises(ValueError, match="non-negative integer"):
+        replace(nonlinear, max_halvings=1.5) \
+            .build_command(python="python", panels_dir="panels")
+
+
+def test_rotor_states_reach_the_rotating_heat_solver():
+    from dataclasses import replace
+    from radia.ih_design import METHOD_THERMAL_3D_ROTATING
+    spec = IHDesignSpec(
+        method=METHOD_THERMAL_3D_ROTATING, wp_vol="workpiece.vol",
+        heat_source=HEAT_SRC_SPATIAL, rotor_states="rotor.json",
+        rotation_rpm=60.0, heat_flux_boundaries="heated",
+        convection_boundaries="exposed")
+    assert "rotor_states" in spec.visible_fields()
+    command = spec.build_command(python="python", panels_dir="panels")
+    assert command[command.index("--rotor-states") + 1] == "rotor.json"
+    assert "--qsurf-sol" not in command
+    for bad, match in (({"qsurf_sol": "q.sol"}, "leave qsurf_sol"),
+                       ({"rotation_rpm": 0.0}, "rotation_rpm > 0"),
+                       ({"method": METHOD_THERMAL_AXISYM,
+                         "wp_vol": "workpiece_axisym.vol"}, "rotating 3D")):
+        with pytest.raises(ValueError, match=match):
+            replace(spec, **bad).build_command(python="python",
+                                               panels_dir="panels")
+
+
+def test_a_non_numeric_temperature_limit_fails_early():
+    with pytest.raises(ValueError):
+        IHDesignSpec(
+            method=METHOD_THERMAL_3D_STATIC,
+            wp_vol="workpiece.vol",
+            heat_flux_boundaries="heated",
+            convection_boundaries="exposed",
+            temperature_limit="hot",
+        ).build_command(python="python", panels_dir="panels")
