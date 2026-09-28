@@ -1104,3 +1104,22 @@ def test_trace_without_tolerance_is_not_accepted():
         with pytest.raises(ValueError, match='positive and finite'):
             project_source_interface_potential(
                 mesh, ng.CF((0, 0, 1)), 'source_total_interface', relative_tolerance=tolerance)
+
+
+def test_sparse_direct_saddle_solve_never_accepts_nonfinite_values():
+    import ngsolve as ng
+    from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_kelvin
+    mesh, source, potential, _ = _picard_case(maxh=0.7)
+    try:
+        with ng.TaskManager():
+            result = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+                mesh, source, potential, 1., (3., 0., 0.),
+                mu_r_by_material={"reduced": 1., "total": 1000.},
+                reduced_materials=("reduced",), total_materials=("total",),
+                interface_boundary="source_total_interface", order=1,
+                dirichlet_bbbnd="outer", inverse="sparsecholesky")
+    except RuntimeError as exc:
+        assert "non-finite solution" in str(exc)
+    else:
+        assert np.isfinite(result["solution"].vec.FV().NumPy()).all()
+        assert result["linear_residual"]["free_dofs"]["relative"] < 1e-8
