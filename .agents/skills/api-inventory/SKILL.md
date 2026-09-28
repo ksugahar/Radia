@@ -8,7 +8,7 @@ description: "Take inventory of the radia package's proprietary Python and pybin
 The radia API surface is large (~200 pybind `.def` in `src/lib/radia_pybind.cpp`
 + ~95 top-level python modules under `src/radia/` + subpackages
 `vim/bem/open_boundary/maglev/analytical_formulas/tools` + the
-`axifem/cln_core/peec_matrices/sparsesolv_ngsolve` `.pyd`s). The
+`axifem/peec_matrices/sparsesolv_ngsolve` `.pyd`s). The
 **"Reduce Proprietary API Surface"** policy (CLAUDE.md / AGENTS.md, 2026-06-19)
 wants it driven toward a **2-layer shape**:
 

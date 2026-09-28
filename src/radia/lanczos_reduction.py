@@ -202,7 +202,8 @@ class LanczosReducer:
         )
 
     def lanczos_generalized(self, L: np.ndarray, R: np.ndarray,
-                            k: int = None) -> LanczosResult:
+                            k: int = None,
+                            v0: np.ndarray = None) -> LanczosResult:
         """
         Lanczos for generalized eigenvalue problem: L @ v = lambda @ R @ v
 
@@ -216,6 +217,8 @@ class LanczosReducer:
             L: Inductance matrix (symmetric positive definite)
             R: Resistance matrix (symmetric positive definite)
             k: Number of Lanczos vectors
+            v0: Starting vector in the original coordinates (default:
+                random); the first column of the returned Q is parallel to it
 
         Returns:
             LanczosResult for the transformed problem
@@ -229,7 +232,8 @@ class LanczosReducer:
             # Simple scaling
             R_sqrt_inv = np.diag(1.0 / np.sqrt(np.diag(R)))
             A = R_sqrt_inv @ L @ R_sqrt_inv
-            result = self.lanczos_symmetric(A, k)
+            start = None if v0 is None else np.sqrt(np.diag(R)) * v0
+            result = self.lanczos_symmetric(A, k, v0=start)
             # Transform back: Q_original = R_sqrt_inv @ Q
             result.Q = R_sqrt_inv @ result.Q
             return result
@@ -239,7 +243,8 @@ class LanczosReducer:
                 C = linalg.cholesky(R, lower=True)
                 C_inv = linalg.solve_triangular(C, np.eye(n), lower=True)
                 A = C_inv @ L @ C_inv.T
-                result = self.lanczos_symmetric(A, k)
+                start = None if v0 is None else C.T @ v0
+                result = self.lanczos_symmetric(A, k, v0=start)
                 result.Q = C_inv.T @ result.Q
                 return result
             except linalg.LinAlgError:
