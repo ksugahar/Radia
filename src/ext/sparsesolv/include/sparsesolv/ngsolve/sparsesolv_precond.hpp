@@ -163,6 +163,8 @@ public:
     int VHeight() const override { return static_cast<int>(height_); }
     int VWidth() const override { return static_cast<int>(width_); }
 
+    VecFormat RowFormat() const override { return mat_->RowFormat(); }
+    VecFormat ColFormat() const override { return mat_->ColFormat(); }
     AutoVector CreateRowVector() const override {
         return mat_->CreateRowVector();
     }
