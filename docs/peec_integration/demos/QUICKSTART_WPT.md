@@ -40,31 +40,20 @@ print(f"Impedance: {abs(Z_total)*1000:.3f} mOhm")
 print(f"Phase: {np.angle(Z_total, deg=True):.1f} deg")
 ```
 
-## 2. Generate SPICE Model
+## 2. PRIMA-Reduced Frequency and Time Response
 
-```bash
-# Generate SPICE netlist
-python spice/demo_prima_spice_export.py
+```python
+from radia.analysis import UnifiedAnalysis
 
-# Output files:
-#   wire_full.sp  - Full PEEC model
-#   wire_prima.sp - PRIMA-reduced model (recommended)
+analysis = UnifiedAnalysis()
+analysis.set_peec_model(L, R, reduction_order=5)   # PRIMA congruence projection
+sweep = analysis.frequency_sweep(np.logspace(3, 7, 100))
+step = analysis.transient(np.linspace(0.0, 1e-3, 1001), lambda t: 1.0, "voltage")
 ```
 
-## 3. Simulate in LTspice/ngspice
-
-```spice
-* Include generated subcircuit
-.include wire_prima.sp
-
-* Test circuit
-Xcoil port_in port_out WIRE_PRIMA
-Vin port_in 0 AC 1
-
-* AC analysis
-.AC DEC 100 1k 10MEG
-.END
-```
+The reduced model is kept as projected matrices (`Q'RQ`, `Q'LQ`).  For a
+circuit or system simulator, use it as a state-space block (for example the
+Radia Simulink state-space blocks) rather than a synthesised netlist.
 
 ## Key Parameters for WPT Design
 

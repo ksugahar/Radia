@@ -108,7 +108,6 @@ has already passed the bibliography audit.
 - [PEEC_CONDUCTOR_MODELING_GUIDE.md](peec/PEEC_CONDUCTOR_MODELING_GUIDE.md) - Conductor modeling via `coil_from_cad.py` (5-predicate classification dispatch, RMF, adaptive resampling, cap-centroid endpoint anchoring -- updated for v4.55.0)
 - [PEEC_SHIELD_CONDUCTOR.md](peec/PEEC_SHIELD_CONDUCTOR.md) - Shield conductor modeling (`peec_shield.py`)
 - [PEEC_SURFACE_IMPEDANCE.md](peec/PEEC_SURFACE_IMPEDANCE.md) - Surface impedance formulation and SPICE export
-- [NPORT_BLOCK_LANCZOS_SPICE.md](peec/NPORT_BLOCK_LANCZOS_SPICE.md) - N-port Block Lanczos algorithm for SPICE-compatible circuit extraction
 - [ltspice/README.md](ltspice/README.md) - Built-in `radia.ltspice` conversion, topology gates, CLI, MCP, and MATLAB bridge
 - [PEEC/BEM-A convergence validation](../validation_test/peec_bema_convergence/) - Result-bearing 3turnCoil convergence evidence.
 - [PEEC solver benchmark validation](../validation_test/solver_benchmarks/README.md) - Dense Ruehli vs HACApK timing, scaling, and crossover evidence kept outside the public demo corpus.

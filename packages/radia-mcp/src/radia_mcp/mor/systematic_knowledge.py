@@ -594,12 +594,13 @@ SOFTWARE_LAB = """\
 
 ### Lab-specific tooling
 
-Key classes:
+The Sugahara lab has an in-house PRIMA implementation at
+`radia/lanczos_reduction.py`.  Key classes:
 
 ```
-SPICEExtractionConfig     - configuration object
-PRIMASchurExtractor       - PRIMA + Schur complement for coupling
-LoopStarMagneticCoupled  - magnetic-magnetic-material coupling layer
+LanczosReducer            - Krylov basis with re-orthogonalization
+LoopStarMagneticPRIMA     - loop/star/magnetic congruence reduction
+LCResonantPRIMA           - resonant (RLC) PRIMA
 ```
 
 ### Recommended workflow
@@ -607,6 +608,8 @@ LoopStarMagneticCoupled  - magnetic-magnetic-material coupling layer
 For new MOR work in radia + NGSolve:
 
 1. **Prototype** in pyMOR (Python, fast iteration)
+2. **Production** in `radia.lanczos_reduction` for PEEC PRIMA, else
+   write a custom NGSolve + numpy implementation
 3. **Benchmark** against MOR Wiki test cases when applicable
 
 ### Integration points with radia / NGSolve
@@ -639,7 +642,9 @@ LAB_RECOMMENDATION = """\
 ### Decision flowchart for a new MOR project
 
 ``` Is the system LINEAR (no nu(B))? YES → Is it PEEC-discretized (coil-only
-or coil-conductor)?
+or coil-conductor)? YES → PRIMA (radia.lanczos_reduction) NO  → POD or PRIMA
+depending on input/output count NO  → Is it MOR for a CONTROL loop (real-
+time)?
 
 ### Method-by-application matrix
 

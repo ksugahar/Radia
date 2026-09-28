@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import sys
 
-from .panel_design_common import append_value, calc_script, json_output
+from .panel_design_common import calc_script, json_output
 
 
 PCB_SOLVERS = (("LU", 0), ("BiCGSTAB", 1), ("HACApK", 2))
@@ -18,12 +18,11 @@ class PCBDesignSpec:
     freq_max: str = "1e9"
     n_freq: int = 50
     solver_method: int = 0
-    spice_output: str = ""
 
     def visible_fields(self) -> set[str]:
         return {
             "inp", "freq_min", "freq_max", "n_freq",
-            "solver_method", "spice_output",
+            "solver_method",
         }
 
     def missing_required_inputs(self) -> list[str]:
@@ -45,5 +44,4 @@ class PCBDesignSpec:
             "--solver-method", str(self.solver_method),
             "--output", json_output(self.inp, "_pcb_peec"),
         ]
-        append_value(cmd, "--spice-output", self.spice_output)
         return cmd
