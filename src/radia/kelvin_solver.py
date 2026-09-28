@@ -1070,7 +1070,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     representative before they provide such a single-valued trace.
 
     The formulation has an interface Lagrange multiplier and is symmetric
-    indefinite, so the default direct PARDISO solve is deliberate.  The
+    indefinite. Its legacy direct default remains a migration task until
+    a validated SparseCholesky-based saddle solve is available. The
     returned field is continuous in the physical tangential/normal sense but
     not represented as one global H1 GridFunction.
 
@@ -1573,6 +1574,11 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         def apply_inverse():
             solution.vec.data += inverse_mat * residual
         timed_phase("backsolve", apply_inverse)
+
+    if not np.isfinite(solution.vec.FV().NumPy()).all():
+        raise RuntimeError(
+            f"mixed Omega direct inverse {inverse!r} produced a non-finite solution; "
+            "the saddle-point factorization is unsupported or failed (no fallback)")
 
     # A direct solve has no iteration history, but it still has a residual.
     # r = b - A x on the system that was ACTUALLY solved -- non-zero Dirichlet

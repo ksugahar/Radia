@@ -36,50 +36,14 @@ MU_0 = 4 * np.pi * 1e-7
 DEFAULT_GAUGE_EPSILON = 1.0e-6
 LINEAR_RELATIVE_RESIDUAL_LIMIT = 1.0e-6
 
-# The inverse type radia's direct HCurl solves ask NGSolve for.
-DIRECT_INVERSE_TYPE = "radia_pardisospd_metis"
-_direct_inverse_registered = False
+# Direct FE solves use NGSolve's native factorization, without a fallback.
+DIRECT_INVERSE_TYPE = "sparsecholesky"
 
 
 def direct_inverse_type(solver="direct"):
-    """Return the NGSolve inverse-type name of radia's direct HCurl solve.
-
-    Explicit ``solver="sparsecholesky"`` returns the NGSolve native inverse
-    without registering or loading PARDISO. The default is unchanged.
-
-    NGSolve's pip PARDISO wrapper (``ngsolve.solvers.mkl_pardiso``) hard-codes
-    the minimum-degree ordering (``iparm[1] = 0``) and overwrites the
-    ``params`` it is handed, so the ordering cannot be chosen through its
-    interface.  On three-dimensional HCurl systems that ordering fills far
-    more than METIS nested dissection.  Measured on the C-type gap family
-    (2026-09-12, order-1 reduced-A, peak process memory): the shipped default
-    took 1.40 GB at 124 k unknowns against 0.88 GB with METIS and the SPD
-    matrix type, ran out of memory at about 1.5 M unknowns on 57 GB and at
-    4.1 M on 220 GB, while METIS with the SPD type factorised the 4.1 M
-    system in 54 GB and 200 s; the solutions agree to 1e-11.
-
-    radia therefore registers, on first use, its own subclass of the
-    wrapper's SPD solver that switches the ordering to METIS after
-    construction -- through the wrapper's own attribute and NGSolve's own
-    ``RegisterInverseType``.  The SPD type is what the gauged curl-curl
-    systems of this module are; a matrix that is not SPD makes PARDISO fail
-    loudly.  Without the wrapper's PARDISO the construction raises the
-    wrapper's own error.
-    """
-    if solver == "sparsecholesky":
-        return "sparsecholesky"
-    global _direct_inverse_registered
-    if not _direct_inverse_registered:
-        from ngsolve import la as ngla
-        from ngsolve.solvers.mkl_pardiso import MKLPardisoSPD
-
-        class _PardisoSPDMetis(MKLPardisoSPD):
-            def __init__(self, *args, **kwargs):
-                super().__init__(*args, **kwargs)
-                self._params[1] = 2        # METIS nested dissection
-
-        ngla.RegisterInverseType(DIRECT_INVERSE_TYPE, _PardisoSPDMetis)
-        _direct_inverse_registered = True
+    """Resolve a direct solver request without loading another backend."""
+    if solver not in ("direct", "sparsecholesky"):
+        raise ValueError("direct solver must be 'direct' or 'sparsecholesky'")
     return DIRECT_INVERSE_TYPE
 
 
@@ -898,7 +862,7 @@ class VectorPotentialSolver:
                 w.data = inv * r
             else:
                 inv = a.mat.Inverse(fes.FreeDofs(),
-                                    inverse=('sparsecholesky' if solver == 'sparsecholesky' else 'pardiso'))
+                                    inverse=direct_inverse_type(solver))
                 w.data = inv * r
 
             err = InnerProduct(w, r)
@@ -1144,7 +1108,7 @@ class VectorPotentialSolver:
 
         if verbose:
             solver_names = {'ams': 'AMS+CG', 'bddc': 'BDDC+CG',
-                            'direct': 'PARDISO SPD', 'sparsecholesky': 'SparseCholesky'}
+                            'direct': 'SparseCholesky', 'sparsecholesky': 'SparseCholesky'}
             print(f"  Picard iteration (solver: {solver_names.get(solver, solver)}):")
 
         for it in range(maxiter):
@@ -1464,7 +1428,7 @@ class VectorPotentialSolver:
                 A_gf.vec.data = inv * f.vec
             else:
                 A_gf.vec.data = a.mat.Inverse(
-                    fes.FreeDofs(), inverse=('sparsecholesky' if solver_type == 'sparsecholesky' else 'pardiso')) * f.vec
+                    fes.FreeDofs(), inverse=direct_inverse_type(solver_type)) * f.vec
 
             # B = B_s + curl(A_r) at centroids
             B_total_cf = self._B_source_cf + curl(A_gf)
