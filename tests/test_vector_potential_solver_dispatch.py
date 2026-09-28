@@ -29,6 +29,14 @@ def selector(order):
     return value
 
 
+def test_explicit_sparsecholesky_does_not_register_pardiso(monkeypatch):
+    monkeypatch.setitem(sys.modules, "ngsolve.solvers.mkl_pardiso", None)
+    assert MODULE.direct_inverse_type("sparsecholesky") == "sparsecholesky"
+    value = selector(2)
+    value._kelvin_region = "kelvin"
+    assert value._select_solver(1_000_000, "sparsecholesky") == "sparsecholesky"
+
+
 @pytest.mark.parametrize("source_kind", ["radia", "callback"])
 def test_switching_source_discards_previous_kelvin_source(monkeypatch, source_kind):
     ng = types.ModuleType("ngsolve")
