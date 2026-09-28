@@ -619,7 +619,7 @@
       "current": "Motor ROM, TEAM 28 CLN artifacts, native state-space stepping, and production Simulink applications exist.",
       "next_native_boundary": "Stable operating-point/model artifact loaders and native model initialization for Motor and MagLev blocks.",
       "retained_python_boundary": "One-time design sweeps, NGSolve model generation, and research validation.",
-      "gate": ["tests/matlab/test_simulink_workflow.m", "tests/test_team28_cln_golden.py"]
+      "gate": ["tests/matlab/test_simulink_workflow.m", "tests/test_team28_golden.py"]
     },
     {
       "priority": 7,
