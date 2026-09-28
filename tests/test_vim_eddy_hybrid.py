@@ -2738,6 +2738,14 @@ def test_ngsolve_topology_aware_hybrid_vim_builder_returns_tri_block_system():
     assert info["system"]["passive_blocks"] is True
     assert info["reduction_plan"]["loop_bridge_reduction_strategy"] == "cycle-basis"
     assert info["reduction_plan"]["estimated_reduced_modes"] == built.system.n_modes
+    foster = built.foster_model()
+    assert isinstance(foster, vim.HCurlEddyFosterModel)
+    s = 2j * np.pi * 50.0
+    np.testing.assert_allclose(
+        foster.solve(s, np.array([1.0, 0.0])),
+        np.linalg.solve(built.system.impedance(s), built.rhs[:, 0]),
+        rtol=1.0e-10,
+    )
 
     without_bridges = vim.NgsolveTopologyAwareHybridVIM(
         mesh,
