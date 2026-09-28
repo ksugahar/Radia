@@ -2,7 +2,7 @@
 //
 // Element-matrix formulas ported from the validated Python fixtures under
 // tests/axifem/_reference_python/ (research copies are retained under
-// validation_test/maglev/research_cln/axifem/):
+// validation_test/axifem/research/prototypes/):
 //   axifem_quad.py
 //     _element_matrices_quad_closed_form  (Q1 stiffness)
 //     element_sigma_mass_quad             (Q1 sigma mass)

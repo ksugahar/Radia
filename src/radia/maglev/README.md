@@ -81,7 +81,6 @@ lab Sample Promotion Ladder: tests -> examples -> panels).  Contents:
 | Subdir | What |
 |--------|------|
 | `validation_test/maglev/research_cln/ngsolve_validation/` | NGSolve FEM verification sweeps (dated `*_results.json` snapshots, one-off probe scripts) |
-| `validation_test/maglev/research_cln/axifem/` | Historical Henrotte-basis axifem prototype corpus; canonical artifacts now live under `docs/axifem/`, `tests/axifem/`, and `validation_test/axifem/` |
 | `validation_test/maglev/research_cln/multiconn_loop_method/` | T-Omega multiply-connected bath-plate notebook |
 | `validation_test/maglev/research_cln/tanimoto_canonical/` | Tanimoto canonical CLN notebooks (A-phi / A-T / T-Omega) |
 | `validation_test/maglev/research_cln/*.wls` | Schur-F / CF / quadrupole / polarizability symbolic derivations |
