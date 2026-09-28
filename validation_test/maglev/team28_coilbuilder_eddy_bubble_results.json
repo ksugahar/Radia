@@ -1,8 +1,8 @@
 {
-  "radia_version": "4.95.48",
+  "radia_version": "5.0.2",
   "schema": "cae-ai-lab.solver-run.v1",
-  "created_at_utc": "2026-08-06T10:38:32.391258+00:00",
-  "case": "TEAM 28 CoilBuilder coupled to HCurl eddy-bubble CLN",
+  "created_at_utc": "2026-09-28T11:41:47.863695+00:00",
+  "case": "TEAM 28 CoilBuilder coupled to HCurl eddy-bubble Foster model",
   "solver": "radia-ngsolve",
   "source_artifact": "validation_test/maglev/team28_coilbuilder_eddy_bubble.py",
   "pass": true,
@@ -10,11 +10,11 @@
     "command": "python validation_test/maglev/team28_coilbuilder_eddy_bubble.py",
     "workdir": ".",
     "exit_code": 0,
-    "duration_s": 15.529571100021712
+    "duration_s": 28.187933600042015
   },
   "result_files": [
     "validation_test/maglev/team28_coilbuilder_eddy_bubble_results.json",
-    "validation_test/maglev/team28_coilbuilder_hcurl_eddy_cln.json"
+    "validation_test/maglev/team28_coilbuilder_hcurl_eddy_foster.json"
   ],
   "checks": {
     "ran_to_completion": true,
@@ -25,7 +25,7 @@
     "flux_density_matches_filament_reference_below_0p1_percent": true,
     "interaction_projection_residual_below_1e-10": true,
     "reduced_inductance_block_positive": true,
-    "cln_handoff_passive": true,
+    "foster_handoff_passive": true,
     "upward_force_matches_reference_below_one_percent": true,
     "transverse_force_below_half_percent": true,
     "linear_model_force_scales_with_current_squared": true,
@@ -40,36 +40,36 @@
     "projection_residual_max": 1e-10
   },
   "errors": {
-    "max_rel": 0.005165646516112803,
-    "max_abs": 0.0056629229409495
+    "max_rel": 0.005106998037864712,
+    "max_abs": 0.005598628604918776
   },
   "tool_versions": {
     "python": "3.12.10",
-    "radia": "4.95.48",
-    "ngsolve": "6.2.2604",
-    "numpy": "2.4.6"
+    "radia": "5.0.2",
+    "ngsolve": "6.2.2606",
+    "numpy": "2.4.3"
   },
   "timing_breakdown_s": {
-    "mesh_and_eddy_basis": 2.744251500000246,
-    "coilbuilder_and_field_cross_check": 2.81234659999609,
-    "vim_and_cln_assembly": 9.93291880004108,
-    "harmonic_solve_force_and_export": 0.00109479995444417,
-    "write_results": 0.0006152000278234482
+    "mesh_and_eddy_basis": 5.072797700006049,
+    "coilbuilder_and_field_cross_check": 5.205051500000991,
+    "vim_and_foster_assembly": 17.79601069999626,
+    "harmonic_solve_force_and_export": 0.004918499966152012,
+    "write_results": 0.00418109999736771
   },
   "verification": {
-    "method": "independent winding-pack field quadrature, passive CLN gates, stored TEAM force, symmetry, and current-squared scaling",
+    "method": "independent winding-pack field quadrature, passive Foster gates, stored TEAM force, symmetry, and current-squared scaling",
     "command": "pytest -q tests/test_team28_coilbuilder_source.py validation_test/maglev/test_team28_coilbuilder_eddy_bubble_evidence.py"
   },
   "environment": {
-    "platform": "Windows-2022Server-10.0.20348-SP0"
+    "platform": "Windows-11-10.0.26200-SP0"
   },
   "details": {
     "timing_breakdown_s": {
-      "mesh_and_eddy_basis": 2.744251500000246,
-      "coilbuilder_and_field_cross_check": 2.81234659999609,
-      "vim_and_cln_assembly": 9.93291880004108,
-      "harmonic_solve_force_and_export": 0.00109479995444417,
-      "write_results": 0.0006152000278234482
+      "mesh_and_eddy_basis": 5.072797700006049,
+      "coilbuilder_and_field_cross_check": 5.205051500000991,
+      "vim_and_foster_assembly": 17.79601069999626,
+      "harmonic_solve_force_and_export": 0.004918499966152012,
+      "write_results": 0.00418109999736771
     },
     "problem": {
       "frequency_hz": 50.0,
@@ -91,6 +91,7 @@
         2.143131898507868e-17
       ],
       "arc_max_segment_length_m": 0.002,
+      "height_offset_m": 0.0,
       "coils": [
         {
           "name": "inner",
@@ -114,8 +115,10 @@
       "field_cross_check": {
         "reference": "Gauss-integrated circular-filament winding pack",
         "sample_count": 49032,
-        "vector_potential_relative_l2": 7.328613757566348e-05,
-        "flux_density_relative_l2": 0.0002092079617480215,
+        "reference_radial_order": 10,
+        "reference_axial_order": 14,
+        "vector_potential_relative_l2": 7.328613757566356e-05,
+        "flux_density_relative_l2": 0.00020920796174802154,
         "flux_density_max_pointwise_over_reference_max": 0.0005671831905903459
       }
     },
@@ -132,11 +135,11 @@
         "cell_count": 227,
         "mode_count": 3,
         "polynomial_degree": 5,
-        "projection_relative_residual": 3.2948629784131636e-15,
+        "projection_relative_residual": 3.4994907731784e-15,
         "projection_tolerance": 1e-10,
         "projection_quadrature_points": 343,
         "outer_quadrature_points": 15,
-        "max_vandermonde_condition": 142964.9376199077,
+        "max_vandermonde_condition": 142964.93761990772,
         "mu_H_per_m": 1.2566370614359173e-06,
         "minimum_eigenvalue_H": null,
         "maximum_eigenvalue_H": null,
@@ -161,20 +164,75 @@
             "n_leaves": 1399,
             "n_lowrank": 372,
             "n_dense": 1027,
-            "max_rank": 10,
-            "compression": 0.21680348282843964,
-            "build_time": 6.8064539,
-            "memory_mb": 6.903877258300781,
+            "max_rank": 157,
+            "compression": 0.6842554677948339,
+            "build_time": 6.3990121,
+            "memory_mb": 21.789390563964844,
             "dense_memory_mb": 31.84394073486328,
+            "build_prep_s": 0.20735510000000001,
+            "build_cluster_s": 0.0003491000388748944,
+            "build_leafgen_s": 0.0002695999573916197,
+            "build_fill_s": 6.190596400003415,
+            "build_diag_s": 0.0396007,
             "hex_cache_stats_enabled": 0.0,
+            "hex_block_cache_limit": 200000.0,
+            "hex_trans_cache_enabled": 1.0,
+            "hex_congruent_cache_enabled": 1.0,
+            "hex_congruent_ready": 0.0,
+            "hex_congruent_templates": 0.0,
+            "hex_congruent_hosts": 0.0,
             "hex_far_one_sided_threshold": 0.0,
             "hex_affine_exact_near_factor": 1.0,
+            "hex_distorted_far_factor": 1.0,
+            "hex_near_inner_exact": 1.0,
+            "hex_near_inner_host_cone": 1.0,
+            "hex_near_sinh_min_width": 0.001,
+            "hex_near_sinh_max_width": 1.0,
+            "hex_pair_duffy_enabled": 1.0,
+            "hex_affine_cells": 0.0,
+            "hex_cells": 0.0,
+            "quad_affine_faces": 0.0,
+            "quad_faces": 0.0,
+            "hex_glpair_n": 0.0,
+            "hex_glpair_affine_n": 0.0,
+            "hex_glpair_w_n": 0.0,
+            "hex_glpair_affine_w_n": 0.0,
+            "hex_pair_nonconforming": 0.0,
+            "hex_pair_anisotropy_graded": 0.0,
+            "hex_exponential_rule_max_anisotropy": 12.0,
+            "hex_cluster_radius_enabled": 1.0,
+            "hex_glnear_n": 0.0,
+            "hex_glout_n": 0.0,
+            "hex_glin_n": 0.0,
+            "hex_glin_self_n": 0.0,
+            "curved_direct_enabled": 1.0,
+            "hex_blk_affine_near": 0.0,
+            "hex_blk_affine_far": 0.0,
+            "hex_blk_distorted_far": 0.0,
+            "hex_blk_general_near": 0.0,
+            "hex_blk_general_far": 0.0,
+            "hex_s_affine_near": 0.0,
+            "hex_s_affine_far": 0.0,
+            "hex_s_distorted_far": 0.0,
+            "hex_s_general_near": 0.0,
+            "hex_s_general_far": 0.0,
+            "hex_general_shared_lookups": 0.0,
+            "hex_general_shared_hits": 0.0,
+            "hex_general_shared_misses": 0.0,
+            "hex_general_shared_entries": 0.0,
             "wedge_far_one_sided_threshold": 0.0,
             "wedge_trans_cache_scope": 2.0,
             "wedge_trans_cache_enabled": 1.0,
             "ho_far_one_sided_enabled": 0.0,
             "ho_analytic_block_available": 1.0,
             "ho_analytic_block_enabled": 1.0,
+            "ho_image_block_enabled": 1.0,
+            "ho_image_far_enabled": 1.0,
+            "hmatvec_stats_enabled": 0.0,
+            "hmatvec_mkl_threads": 1.0,
+            "nonproduction_numerical_override_active": 0.0,
+            "nondefault_performance_override_active": 0.0,
+            "release_claim_eligible": 1.0,
             "hex_block_lookups": 0.0,
             "hex_block_hits": 0.0,
             "hex_block_misses": 0.0,
@@ -195,6 +253,9 @@
             "ho_sym_block_hits": 0.0,
             "ho_sym_block_misses": 0.0,
             "ho_sym_block_clears": 0.0,
+            "ho_image_far_entries": 0.0,
+            "ho_image_block_entries": 0.0,
+            "ho_image_scalar_entries": 0.0,
             "hex_block_hit_rate": 0.0,
             "hex_trans_block_hit_rate": 0.0,
             "hex_sym_block_hit_rate": 0.0,
@@ -207,9 +268,10 @@
         "kernel_epsilon_m": null,
         "geometry": "affine-tetrahedron"
       },
-      "cln_handoff": {
+      "foster_handoff": {
         "state_order": 3,
         "port_count": 1,
+        "form": "foster_modal",
         "blocks": {
           "volume": [
             0,
@@ -219,8 +281,10 @@
         "input_convention": "u=-d(coil_current)/dt for vector-potential ports",
         "has_sibc_termination": false,
         "finite_rl_state_space": true,
-        "min_resistance_eigenvalue": 2.9411764705882328e-08,
-        "min_inductance_eigenvalue": 1.016750888291066e-12,
+        "min_decay_rate": 695.1395087634987,
+        "max_decay_rate": 28813.957471707632,
+        "min_resistance_eigenvalue": 2.941176470588233e-08,
+        "min_inductance_eigenvalue": 1.0207471408521977e-12,
         "min_surface_mass_eigenvalue": 0.0,
         "passive": true
       },
@@ -318,47 +382,47 @@
     "observables": {
       "target_upward_force_N": 1.0962660575565093,
       "reference_current_force_N": [
-        -0.0018085686486911004,
-        0.00016237940698321244,
-        1.1019289804974588
+        -0.001808007507553322,
+        0.00016234167343802077,
+        1.101864686161428
       ],
-      "upward_force_relative_error": 0.005165646516112803,
-      "transverse_force_ratio": 0.0016478770733304525,
-      "joule_loss_W": 13.741045870149236,
-      "magnetic_energy_J": 0.006060091151866651,
+      "upward_force_relative_error": 0.005106998037864712,
+      "transverse_force_ratio": 0.0016474629407263498,
+      "joule_loss_W": 13.74121761437457,
+      "magnetic_energy_J": 0.006059634885492737,
       "current_sweep": [
         {
           "coil_current_A": 10.0,
           "force_N": [
-            -0.0004521421621727751,
-            4.059485174580311e-05,
-            0.2754822451243647
+            -0.0004520018768883305,
+            4.058541835950519e-05,
+            0.275466171540357
           ],
-          "upward_force_N": 0.2754822451243647,
-          "force_per_current_squared_N_per_A2": 0.002754822451243647
+          "upward_force_N": 0.275466171540357,
+          "force_per_current_squared_N_per_A2": 0.00275466171540357
         },
         {
           "coil_current_A": 20.0,
           "force_N": [
-            -0.0018085686486911004,
-            0.00016237940698321244,
-            1.1019289804974588
+            -0.001808007507553322,
+            0.00016234167343802077,
+            1.101864686161428
           ],
-          "upward_force_N": 1.1019289804974588,
-          "force_per_current_squared_N_per_A2": 0.002754822451243647
+          "upward_force_N": 1.101864686161428,
+          "force_per_current_squared_N_per_A2": 0.00275466171540357
         },
         {
           "coil_current_A": 30.0,
           "force_N": [
-            -0.0040692794595549725,
-            0.0003653536657122277,
-            2.4793402061192813
+            -0.0040680168919949725,
+            0.00036526876523554645,
+            2.4791955438632125
           ],
-          "upward_force_N": 2.4793402061192813,
-          "force_per_current_squared_N_per_A2": 0.002754822451243646
+          "upward_force_N": 2.4791955438632125,
+          "force_per_current_squared_N_per_A2": 0.0027546617154035695
         }
       ],
-      "force_over_current_squared_relative_spread": 4.722782066754459e-16
+      "force_over_current_squared_relative_spread": 1.5743525477888512e-16
     },
     "checks": {
       "coilbuilder_created_two_closed_counter_wound_coils": true,
@@ -366,7 +430,7 @@
       "flux_density_matches_filament_reference_below_0p1_percent": true,
       "interaction_projection_residual_below_1e-10": true,
       "reduced_inductance_block_positive": true,
-      "cln_handoff_passive": true,
+      "foster_handoff_passive": true,
       "upward_force_matches_reference_below_one_percent": true,
       "transverse_force_below_half_percent": true,
       "linear_model_force_scales_with_current_squared": true,

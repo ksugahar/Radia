@@ -4,7 +4,7 @@ The two counter-wound TEAM 28 winding packs are built with the public
 ``CoilBuilder`` API.  Their incident vector potential and flux density are
 first checked against an independent Gauss-integrated circular-filament
 reference.  The verified fields then drive the existing p=6 HCurl
-eddy-bubble/VIM model and its passive CLN export for MATLAB.
+eddy-bubble/VIM model and its passive Foster modal export for MATLAB.
 
 The default case is validation-class work.  It intentionally keeps the coil
 source, field cross-check, spatial reduction, solve, force evaluation, and
@@ -39,7 +39,7 @@ from team28_hcurl_vim_force import (
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent
 DEFAULT_OUTPUT = HERE / "team28_coilbuilder_eddy_bubble_results.json"
-DEFAULT_EXCHANGE = HERE / "team28_coilbuilder_hcurl_eddy_cln.json"
+DEFAULT_EXCHANGE = HERE / "team28_coilbuilder_hcurl_eddy_foster.json"
 
 COIL_SPECS = (
     {
@@ -253,7 +253,7 @@ def run_case(
     arc_max_segment_length_m=0.002,
     exchange_file=DEFAULT_EXCHANGE,
 ):
-    """Run the coupled source, eddy-bubble, CLN, and force validation."""
+    """Run the coupled source, eddy-bubble, Foster, and force validation."""
 
     timings = {}
     stage = time.perf_counter()
@@ -282,9 +282,9 @@ def run_case(
     unit_external_a = external_a / REFERENCE_COIL_CURRENT_A
     unit_external_b = external_b / REFERENCE_COIL_CURRENT_A
     rhs = vim.ExternalVectorPotentialRHS(basis.current_basis, unit_external_a)
-    cln_model = vim.HCurlEddyCLNFromVIM(system, rhs)
+    foster_model = vim.HCurlEddyFosterModelFromVIM(system, rhs)
     force_operator = _force_operator(basis.current_basis, unit_external_b)
-    timings["vim_and_cln_assembly"] = time.perf_counter() - stage
+    timings["vim_and_foster_assembly"] = time.perf_counter() - stage
 
     stage = time.perf_counter()
     s = 2.0j * np.pi * FREQUENCY_HZ
@@ -292,7 +292,7 @@ def run_case(
     force_rows = []
     reference_coefficients = None
     for current_A in currents_A:
-        coefficients = cln_model.solve_vector_potential_drive(s, current_A)
+        coefficients = foster_model.solve_vector_potential_drive(s, current_A)
         if current_A == REFERENCE_COIL_CURRENT_A:
             reference_coefficients = coefficients
         force_N = _evaluate_force(force_operator, coefficients, current_A)
@@ -322,7 +322,7 @@ def run_case(
         * np.real(
             np.vdot(
                 reference_coefficients,
-                cln_model.resistance @ reference_coefficients,
+                foster_model.resistance @ reference_coefficients,
             )
         )
     )
@@ -331,12 +331,12 @@ def run_case(
         * np.real(
             np.vdot(
                 reference_coefficients,
-                cln_model.inductance @ reference_coefficients,
+                foster_model.inductance @ reference_coefficients,
             )
         )
     )
-    vim.ExportHCurlEddyCLNJSON(
-        cln_model,
+    vim.ExportHCurlEddyFosterJSON(
+        foster_model,
         exchange_file,
         force_operator=force_operator,
         metadata={
@@ -356,7 +356,7 @@ def run_case(
 
     field_check = coil_report["field_cross_check"]
     interaction_report = interaction.diagnostics()
-    cln_report = cln_model.diagnostics()
+    foster_report = foster_model.diagnostics()
     checks = {
         "coilbuilder_created_two_closed_counter_wound_coils": bool(
             coil_report["coil_count"] == 2
@@ -373,8 +373,8 @@ def run_case(
         "interaction_projection_residual_below_1e-10": bool(
             interaction_report["projection_relative_residual"] < 1.0e-10
         ),
-        "reduced_inductance_block_positive": bool(cln_report["min_inductance_eigenvalue"] > 0.0),
-        "cln_handoff_passive": bool(cln_report["passive"]),
+        "reduced_inductance_block_positive": bool(foster_report["min_inductance_eigenvalue"] > 0.0),
+        "foster_handoff_passive": bool(foster_report["passive"]),
         "upward_force_matches_reference_below_one_percent": bool(
             reference_force[2] > 0.0 and force_relative_error < 0.01
         ),
@@ -405,7 +405,7 @@ def run_case(
             "runtime_reduction_ratio": float(basis.rank / fes.ndof),
             "current_sample_count": int(basis.current_basis.n_samples),
             "interaction": interaction_report,
-            "cln_handoff": cln_report,
+            "foster_handoff": foster_report,
             "eddy_bubble": basis.eddy_bubbling.diagnostics(),
         },
         "observables": {
@@ -437,7 +437,7 @@ def _make_success_artifact(details, output_file, exchange_file, duration_s):
         "radia_version": getattr(radia, "__version__", "unknown"),
         "schema": "cae-ai-lab.solver-run.v1",
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
-        "case": "TEAM 28 CoilBuilder coupled to HCurl eddy-bubble CLN",
+        "case": "TEAM 28 CoilBuilder coupled to HCurl eddy-bubble Foster model",
         "solver": "radia-ngsolve",
         "source_artifact": _repo_path(__file__),
         "pass": bool(all(checks.values())),
@@ -475,7 +475,7 @@ def _make_success_artifact(details, output_file, exchange_file, duration_s):
         "timing_breakdown_s": details["timing_breakdown_s"],
         "verification": {
             "method": (
-                "independent winding-pack field quadrature, passive CLN gates, "
+                "independent winding-pack field quadrature, passive Foster gates, "
                 "stored TEAM force, symmetry, and current-squared scaling"
             ),
             "command": (
@@ -496,7 +496,7 @@ def _make_failure_artifact(error, duration_s):
         "radia_version": getattr(radia, "__version__", "unknown"),
         "schema": "cae-ai-lab.solver-run.v1",
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
-        "case": "TEAM 28 CoilBuilder coupled to HCurl eddy-bubble CLN",
+        "case": "TEAM 28 CoilBuilder coupled to HCurl eddy-bubble Foster model",
         "solver": "radia-ngsolve",
         "pass": False,
         "run": {
@@ -512,7 +512,7 @@ def _make_failure_artifact(error, duration_s):
         "failure": {
             "stage": "solve",
             "message": f"{type(error).__name__}: {error}",
-            "next_action": "inspect the failing source, basis, or CLN validation stage",
+            "next_action": "inspect the failing source, basis, or Foster validation stage",
         },
     }
 

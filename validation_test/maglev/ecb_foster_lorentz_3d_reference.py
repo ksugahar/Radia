@@ -247,7 +247,7 @@ def _build_hcurl_vim(*, maxh_m, order, steps, outer_quad, x_pm=0.0):
     system = basis.assemble_vim(sigma=SIGMA, interaction=interaction)
     external_a, external_b = dipole_fields(basis.current_basis.points, x_pm=x_pm)
     rhs = vim.ExternalVectorPotentialRHS(basis.current_basis, external_a)
-    model = vim.HCurlEddyCLNFromVIM(system, rhs)
+    model = vim.HCurlEddyFosterModelFromVIM(system, rhs)
     return ng, mesh, fes, basis, interaction, model, external_b
 
 

@@ -1,13 +1,13 @@
 {
   "schema": "radia.team28.hcurl-eddy-bubble-acceptance.v1",
-  "generated_at_utc": "2026-07-17T11:14:17.926778+00:00",
+  "generated_at_utc": "2026-09-28T11:57:47.891738+00:00",
   "runtime": {
-    "hostname": "lab",
+    "hostname": "intel11",
     "python_version": "3.12.10",
     "platform": "Windows-2022Server-10.0.20348-SP0",
-    "radia_version": "4.95.17",
-    "ngsolve_version": "6.2.2604",
-    "elapsed_seconds_lab_smoke": 0.5574151000473648
+    "radia_version": "5.0.2",
+    "ngsolve_version": "6.2.2606",
+    "elapsed_seconds_lab_smoke": 0.3337753000087105
   },
   "problem": {
     "name": "TEAM Workshop Problem 28",
@@ -17,7 +17,7 @@
     "conductivity_S_per_m": 34000000.0,
     "parent_hcurl_order": 6,
     "evrs_rank": 6,
-    "force_convention": "stored force is 2x physical time-average"
+    "force_convention": "legacy integral is -2x the physical time-average"
   },
   "surface_model": {
     "frequency_hz": 50.0,
@@ -121,26 +121,27 @@
       "conservative_structural_keep_fraction": 0.5024984658543
     }
   },
-  "cln_reference_acceptance": {
-    "cln_stages": 6,
-    "cln_vs_full_fem": {
-      "candidate": "cln-6-stage",
-      "reference": "full-fem",
-      "sample_count": 25,
-      "max_abs_error_N": 1.1706156328727957e-06,
-      "rms_error_N": 4.836171610609956e-07,
-      "max_abs_error_normalized": 1.7791281083085482e-07
-    },
-    "cln_vs_reference": {
-      "candidate": "cln-6-stage",
+  "reference_acceptance": {
+    "full_fem_sweep_file": "team28_axisym_fem_height_sweep.json",
+    "full_fem_vs_reference": {
+      "candidate": "full-fem",
       "reference": "reference",
       "sample_count": 25,
-      "max_abs_error_N": 0.00046566481791993075,
-      "rms_error_N": 0.0002270847269620396,
-      "max_abs_error_normalized": 7.077618292244442e-05
+      "max_abs_error_N": 0.0004655511338810814,
+      "rms_error_N": 0.00022707960377367162,
+      "max_abs_error_normalized": 7.075890413731973e-05
     },
-    "equilibrium_dz_m": 0.0002385951717095344,
-    "equilibrium_abs_height_m": 0.011038595171709535,
+    "foster_family_file": "team28_coilbuilder_height_family_results.json",
+    "foster_family_vs_full_fem": {
+      "candidate": "hcurl-foster-family-physical-time-average",
+      "reference": "full-fem-physical-time-average",
+      "sample_count": 25,
+      "max_abs_error_N": 0.02687220267949808,
+      "rms_error_N": 0.009255915545796746,
+      "max_abs_error_normalized": 0.008169937318232451
+    },
+    "equilibrium_dz_m": 0.00023940798736756888,
+    "equilibrium_abs_height_m": 0.011039407987367569,
     "published_steady_height_m": 0.0115
   },
   "reduced_mode_summary": {
@@ -153,11 +154,11 @@
   },
   "hcurl_vim_force_acceptance": {
     "result_file": "team28_hcurl_vim_force_summary.json",
-    "generated_at_utc": "2026-07-17T11:13:52.621410+00:00",
-    "validation_host": "mdx",
+    "generated_at_utc": "2026-09-28T11:44:42.387590+00:00",
+    "validation_host": "mdx2",
     "mesh_case_count": 3,
-    "maximum_force_relative_error": 0.005129236545245354,
-    "outer_quadrature_relative_force_change": 0.00019733537536860055,
+    "maximum_force_relative_error": 0.005129236519677127,
+    "outer_quadrature_relative_force_change": 0.00019733545232909143,
     "checks": {
       "all_projection_residuals_below_1e-10": true,
       "all_inductance_blocks_positive": true,
@@ -165,7 +166,7 @@
       "all_transverse_force_ratios_below_half_percent": true,
       "all_runtime_reductions_below_one_percent": true,
       "no_kernel_epsilon": true,
-      "all_hcurl_to_cln_handoffs_passive": true,
+      "all_hcurl_to_foster_handoffs_passive": true,
       "outer_quadrature_change_below_0p1_percent": true
     }
   },
@@ -176,13 +177,15 @@
     "disk_conductor_is_connected": true,
     "cycle_bridge_basis_is_nonempty": true,
     "p6_planned_reduction_estimate_below_one_percent": true,
-    "cln_force_curve_matches_full_fem_below_5uN": true,
-    "cln_force_curve_matches_reference_below_0p5mN": true,
+    "full_fem_sweep_passed_its_own_gates": true,
+    "full_fem_force_curve_matches_reference_below_0p5mN": true,
+    "foster_family_lift_matches_full_fem_below_2_percent_of_peak": true,
+    "foster_family_passed_its_own_gates": true,
     "physical_equilibrium_found": true,
     "physical_equilibrium_within_10_percent_of_11p5mm": true,
     "fixed_position_3d_hcurl_vim_force_passed": true
   },
   "structural_and_reference_acceptance_passed": true,
   "hcurl_vim_force_acceptance_complete": true,
-  "next_numeric_gate": "Run the same HCurl-VIM basis through the 25-position moving CLN sweep, then keep the reduced HCurl operator in HACApK form instead of materializing its final dense matrix"
+  "next_numeric_gate": "Keep the reduced HCurl operator in HACApK form instead of materializing its final dense matrix"
 }
