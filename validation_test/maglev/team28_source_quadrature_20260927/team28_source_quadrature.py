@@ -164,8 +164,8 @@ def main():
             basis.current_basis.points, coil_current_A=current,
             arc_max_segment_length_m=args.arc_max_segment_length, height_offset_m=offset)
         rhs = vim.ExternalVectorPotentialRHS(basis.current_basis, a / current)
-        model = vim.HCurlEddyCLNFromVIM(system, rhs)
-        coefficients = np.asarray(model.solve_vector_potential_drive(s, current))
+        # Reduced harmonic solve (R + sL) c = -s P i, Faraday drive of coil current i.
+        coefficients = np.linalg.solve(system.impedance(s), -s * rhs * current)
         operator = force_operator(basis.current_basis, b / current)
         return 0.5 * np.real(operator @ coefficients * np.conj(current))
 
