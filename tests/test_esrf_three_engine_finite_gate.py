@@ -223,3 +223,25 @@ def test_checkpoint_roundtrip(gate, tmp_path):
     diag = {"nonlinear": True, "nonlinear_stats": {"converged": True}}
     gate["_write_checkpoint"](path, contract, np.ones((2, 3)), diag, {})
     np.testing.assert_array_equal(gate["_read_checkpoint"](path, contract)[0], np.ones((2, 3)))
+
+@pytest.mark.parametrize("installed", [False, True])
+def test_runtime_identity_handles_missing_editable_distribution_path(tmp_path, installed):
+    from types import SimpleNamespace
+    module = tmp_path / "live" / "__init__.py"
+    module.parent.mkdir()
+    module.write_text("# live package\n")
+    distribution_path = module if installed else tmp_path / "missing" / "__init__.py"
+    distribution = SimpleNamespace(version="test", locate_file=lambda name: distribution_path,
+        read_text=lambda name: json.dumps({"dir_info": {"editable": not installed}}))
+    ns = dict(Path=Path, json=json, rad=SimpleNamespace(__file__=str(module)),
+              SOURCE_PACKAGE=tmp_path / "not-a-checkout",
+              importlib=SimpleNamespace(metadata=SimpleNamespace(distribution=lambda name: distribution)))
+    function = next(n for n in ast.parse(RUNNER.read_text(encoding="utf-8")).body
+                    if isinstance(n, ast.FunctionDef) and n.name == "_runtime_identity")
+    exec(compile(ast.Module(body=[function], type_ignores=[]), str(RUNNER), "exec"), ns)
+    assert ns["_runtime_identity"]()["installed_import"] is installed
+    if installed:
+        assert ns["_runtime_identity"](True)["installed_import"] is True
+    else:
+        with pytest.raises(RuntimeError, match="--require-wheel rejects"):
+            ns["_runtime_identity"](True)

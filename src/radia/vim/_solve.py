@@ -1310,6 +1310,10 @@ def _solve_nonlinear_picard_mass_riesz_cpp(mesh, fes, bh_table, H, n_face, h_ext
                 _capture_nonlinear_solve_stats(stats)
                 return m, nit
         nu = relax * nu_new + (1.0 - relax) * nu
+    if nit:
+        # Report the last iterate, even if an earlier finite residual was checked.
+        relative_residual = float(np.linalg.norm(
+            _apply(_W_matrix(nu_new), m) - _apply(W_current, m))) / rhs_norm
     stats["nonlinear_final_rel_step"] = float(rel_step)
     stats["nonlinear_final_relative_residual"] = relative_residual
     stats["nonlinear_converged_final_stage"] = False
