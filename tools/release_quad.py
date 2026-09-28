@@ -1650,10 +1650,10 @@ def _verify_remote_editable(ssh_host, label, expected=None, report=None):
     argv = ["--json", "verify"]
     if expected is None:
         for item in _explicit_100_expectations():
-            argv.extend(["--expect", item])
+            argv.extend(["--package", item.split("=", 1)[0], "--expect", item])
     else:
         for pkg, path in expected:
-            argv.extend(["--expect", f"{pkg}={path}"])
+            argv.extend(["--package", pkg, "--expect", f"{pkg}={path}"])
     rc, remote_report, text = _remote_editable_intent(ssh_host, argv)
     if remote_report is None:
         fail(f"{label} editable verify returned no report (exit {rc})")
