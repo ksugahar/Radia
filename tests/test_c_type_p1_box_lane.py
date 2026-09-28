@@ -18,6 +18,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -512,13 +513,19 @@ def test_total_a_zero_source_shortcut_is_bit_identical(box_mesh):
     # Form-assembled residual on both sides: this pins the zero-source shortcut
     # alone (the direct SPD factorisation of the eps=1e-6 gauged Jacobian is
     # round-off sensitive, so both runs must follow the same arithmetic).
+    # One thread: the parallel sparsecholesky factorisation reorders its sums
+    # run to run, so even two identical runs differ by 1e-13 with TaskManager.
     fast = module.TotalAP1Box(box_mesh, current, algebraic_residual=False, **settings)
     generic = module.TotalAP1Box(box_mesh, current, zero_source=False,
                                  algebraic_residual=False, **settings)
     assert fast.zero_source and not generic.zero_source
     np.testing.assert_array_equal(fast.source_at_centroids, generic.source_at_centroids)
-    field_fast, stats_fast, _ = fast.run_newton(law, **options)
-    field_generic, stats_generic, _ = generic.run_newton(law, **options)
+    ng.SetNumThreads(1)
+    try:
+        field_fast, stats_fast, _ = fast.run_newton(law, **options)
+        field_generic, stats_generic, _ = generic.run_newton(law, **options)
+    finally:
+        ng.SetNumThreads(int(os.environ.get("RADIA_TEST_NGSOLVE_THREADS", os.cpu_count() or 1)))
     assert stats_fast["converged"] and stats_generic["converged"]
     np.testing.assert_array_equal(field_fast, field_generic)
 
