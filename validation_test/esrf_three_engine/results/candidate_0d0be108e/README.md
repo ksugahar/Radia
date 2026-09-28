@@ -30,5 +30,9 @@ application check on all four hosts through their existing official MATLAB
 MCP sessions, including the nonlinear HDiv reactor and electromagnet topology
 optimization. Package SHA-256:
 `6ffc8ecb0aa20d0356e9bd9bec0c897468f4cef2fe6b54bb7d472c1d842e2a20`.
-Publication and deployed `release_quad done` are recorded separately after
-these candidate checks.
+[Promotion run 36428106261](https://github.com/ksugahar/Radia/actions/runs/36428106261)
+passed and published these exact bytes to PyPI. The matching wheel and
+Simulink ZIP are attached to [v5.0.3](https://github.com/ksugahar/Radia/releases/tag/v5.0.3).
+Artifact acceptance is complete. Deployed `release_quad done` remains a
+separate gate; at publication LAB/mdx1/mdx2 were updated, while 100 was
+waiting for existing MCP consumers to release the old binaries.
