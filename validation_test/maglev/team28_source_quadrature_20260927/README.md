@@ -14,7 +14,8 @@ and the force `int J x B_ext` are sampled on bases with `intorder` 14 and 18
 built from the same mesh, parent space and ports; their response vectors
 match the production ones to 1.3e-12, so only the source quadrature changes.
 The disk moves towards the coil through the field-evaluation offset with the
-mesh fixed.  At the nominal gap the production sampling reproduces the
+mesh fixed.  Each case solves the reduced harmonic system
+`(R + sL) c = -s P i` directly.  At the nominal gap the production sampling reproduces the
 stored lane to 3.8e-5 (that lane was produced by release 4.95.48).
 
 | gap | Fz (order 18) | order 10 relative error | order 14 |
