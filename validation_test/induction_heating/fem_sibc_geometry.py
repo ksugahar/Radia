@@ -6,6 +6,11 @@ A ring region around the part, invariant under rotation about z, is meshed
 finer, so turning the part (world frame) or the coil (body frame) sees the
 same mesh quality.  Meshes are curved to order 2 before saving; the .vol
 keeps the curved elements.
+
+``air_mesh`` takes a function that builds the part, and builds it afresh:
+meshing a part shape changes its state, so re-using one shape object gives
+a different mesh the second time (measured: 19507 against 19442 elements
+for the same inputs).
 """
 from __future__ import annotations
 
@@ -31,13 +36,17 @@ def cylinder_part(R, H, *, bore=0.0, cross_hole=0.0, hole_maxh=None):
     return part
 
 
-def air_mesh(part, *, angle=0.0, r_air, ring_r, ring_h, maxh_part,
+def air_mesh(make_part, *, angle=0.0, r_air, ring_r, ring_h, maxh_part,
              maxh_ring, maxh_far, order=2):
-    """Curved air mesh with ``part`` (turned by ``angle`` about z) as a
-    hole: boundaries ``sibc`` (the part) and ``outer``."""
+    """Curved air mesh with the part ``make_part()`` (turned by ``angle``
+    about z) as a hole: boundaries ``sibc`` (the part) and ``outer``."""
     from netgen.occ import Axes, Axis, Cylinder, Glue, OCCGeometry, Pnt, \
         Sphere, Z
     from ngsolve import Mesh
+    if not callable(make_part):
+        raise TypeError("air_mesh needs a function that builds the part; a "
+                        "shape that was meshed before gives another mesh")
+    part = make_part()
     if angle:
         part = part.Rotate(Axis((0, 0, 0), Z), math.degrees(angle))
     part.faces.name = "sibc"
