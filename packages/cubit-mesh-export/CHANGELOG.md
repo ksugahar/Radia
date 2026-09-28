@@ -4,6 +4,18 @@ All notable changes to `cubit-mesh-export` — the high-order curved
 mesh export package for Coreform Cubit (Netgen / GMSH / Nastran /
 VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
+## 2.1.2 - Startup that survives removed release checkouts
+
+- The Cubit startup script no longer depends on the directory the package
+  was installed from.  At each Cubit start it asks the recorded Python where
+  `cubit_mesh_export` is installed now and runs that `register_toolbar.py`
+  (the install-time path is only a fallback); if the package cannot be found
+  it prints how to re-register instead of a traceback.  Before, removing a versioned release checkout made every
+  profile fail with `FileNotFoundError` at Cubit start.
+- The LAB/100 release-dual registers the toolbar for every profile on 100
+  (`--all-users`) and its receipt requires it; it registered only the
+  deploying account, leaving student profiles on a retired startup file.
+
 ## 2.1.1 - Full-precision curving and order-5 refit
 
 - `.vol` files store the curving coefficients with 17 significant digits.
