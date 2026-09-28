@@ -4,7 +4,6 @@
 #include <array>
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>
 #include <stdexcept>
 
 namespace RadArcSection {
@@ -101,21 +100,14 @@ template<class F> Vec Gauss4(const F& f, double lo, double hi)
     return result;
 }
 
-// Default relative tolerance of the adaptive angular quadrature (round-off level).
-constexpr double DefaultRelTol = 1.e-9;
-
-// Absolute tolerance scale that accompanies a relative tolerance. The default
-// keeps the historical constant exactly so default results are bit-identical.
-inline double AbsTolScale(double rtol)
-{
-    if(!(std::isfinite(rtol) && rtol >= 1.e-12 && rtol <= 1.e-3))
-        throw std::invalid_argument("Arc quadrature relative tolerance must lie in [1e-12, 1e-3]");
-    return rtol == DefaultRelTol ? 1.e-12 : 1.e-3*rtol;
-}
+// Fixed accuracy of the angular quadrature: relative 1e-9 (round-off level
+// of the section kernel) plus an absolute part of 1e-12 x section size x
+// interval.  It is not user-adjustable.
+constexpr double RelTol = 1.e-9;
+constexpr double AbsTolScale = 1.e-12;
 
 template<class F> Vec Refine(const F& f, double lo, double hi,
-                            const Vec& coarse, double atol, int depth,
-                            double rtol = DefaultRelTol)
+                            const Vec& coarse, double atol, int depth)
 {
     const double mid=(lo+hi)/2;
     const Vec left=Gauss4(f,lo,mid), right=Gauss4(f,mid,hi);
@@ -128,10 +120,10 @@ template<class F> Vec Refine(const F& f, double lo, double hi,
         error=std::max(error,std::abs(fine[k]-coarse[k]));
         magnitude=std::max(magnitude,std::abs(fine[k]));
     }
-    if(error<=atol+rtol*magnitude) return fine;
+    if(error<=atol+RelTol*magnitude) return fine;
     if(depth==0) throw std::runtime_error("Arc section integral did not converge");
-    const Vec a=Refine(f,lo,mid,left,atol/2,depth-1,rtol);
-    const Vec b=Refine(f,mid,hi,right,atol/2,depth-1,rtol);
+    const Vec a=Refine(f,lo,mid,left,atol/2,depth-1);
+    const Vec b=Refine(f,mid,hi,right,atol/2,depth-1);
     for(int k=0;k<3;++k) fine[k]=a[k]+b[k];
     return fine;
 }
@@ -167,17 +159,6 @@ inline const LegendreRule& Legendre(int n)
         return table;
     }();
     return rules[n];
-}
-
-// RADIA_ARC_FAR_RULE=0 keeps the adaptive rule everywhere, so the fixed far
-// rule can be compared against it in a separate process.  Read once.
-inline bool FarRuleEnabled()
-{
-    static const bool enabled = [] {
-        const char* value = std::getenv("RADIA_ARC_FAR_RULE");
-        return !(value && value[0] == '0');
-    }();
-    return enabled;
 }
 
 // Fixed-rule order for one azimuthal piece [lo, hi] of the section integral,
@@ -282,9 +263,8 @@ inline Vec FullCircleAxis(double r, double z, double ri, double ro, double h)
 }
 
 inline Vec Field(double r, double z, double ri, double ro, double h,
-                 double lo, double hi, double rtol = DefaultRelTol)
+                 double lo, double hi)
 {
-    const double atol_scale=AbsTolScale(rtol);
     const double pi=3.14159265358979323846;
     const double span=hi-lo;
     lo=std::remainder(lo,2*pi);
@@ -310,7 +290,7 @@ inline Vec Field(double r, double z, double ri, double ro, double h,
         const double next=(std::floor(lo/pi)+1)*pi;
         const double end=std::min(hi,std::min(lo+pi/2,next));
         if(end<=lo) throw std::runtime_error("Arc integration interval collapsed");
-        if(const int fixed = FarRuleEnabled() ? FarPieceOrder(r,z,ri,ro,h,lo,end) : 0) {
+        if(const int fixed = FarPieceOrder(r,z,ri,ro,h,lo,end)) {
             // Accept the fixed rule only under the adaptive rule's criterion,
             // estimated from the n and n + 4 point results; else refine below.
             auto smooth=[=](double phi){return Section(phi,r,z,ri,ro,h);};
@@ -323,7 +303,7 @@ inline Vec Field(double r, double z, double ri, double ro, double h,
                 error=std::max(error,std::abs(fine[k]-coarse[k]));
                 magnitude=std::max(magnitude,std::abs(fine[k]));
             }
-            if(finite && error<=atol_scale*std::max(ro,h)*(end-lo)+rtol*magnitude) {
+            if(finite && error<=AbsTolScale*std::max(ro,h)*(end-lo)+RelTol*magnitude) {
                 for(int k=0;k<3;++k) result[k]+=fine[k];
                 lo=end;
                 continue;
@@ -337,7 +317,7 @@ inline Vec Field(double r, double z, double ri, double ro, double h,
             // The far moment kernel has no endpoint peak; retain its smooth rule.
             auto smooth=[=](double phi){return Section(phi,r,z,ri,ro,h);};
             value=Refine(smooth,lo,end,Gauss4(smooth,lo,end),
-                         atol_scale*std::max(ro,h)*(end-lo),20,rtol);
+                         AbsTolScale*std::max(ro,h)*(end-lo),20);
         } else for(int side=0;side<2;++side) {
             const double endpoint=std::remainder(side==0 ? lo : end,2*pi);
             auto regular=[=](double t) {
@@ -347,7 +327,7 @@ inline Vec Field(double r, double z, double ri, double ro, double h,
                 return v;
             };
             const Vec part=Refine(regular,0.,1.,Gauss4(regular,0.,1.),
-                                  atol_scale*std::max(ro,h)*half,20,rtol);
+                                  AbsTolScale*std::max(ro,h)*half,20);
             for(int k=0;k<3;++k) value[k]+=part[k];
         }
         for(int k=0;k<3;++k) result[k]+=value[k];
