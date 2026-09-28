@@ -114,7 +114,7 @@ conductor/source reaction pair in the common peak-phasor schema.  The older
 local-reaction approximation.  Independent 3-D evidence rejects that scalar
 model quantitatively; `compute_lorentz_force_via_foster_verified` can control
 its high-frequency truncation but cannot repair its physical-model error.
-`PositionForceCurve.force_result_at` converts a CLN position-force
+`PositionForceCurve.force_result_at` converts a sampled position-force
 interpolation into the same common result schema.
 """
 
