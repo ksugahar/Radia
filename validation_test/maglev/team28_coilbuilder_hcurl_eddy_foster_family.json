@@ -1,0 +1,1461 @@
+{
+  "schema": "radia.hcurl.eddy_foster.family.v1",
+  "shared_modes": true,
+  "height_unit": "m",
+  "sample_time_s": 1e-05,
+  "state_order": 3,
+  "port_count": 1,
+  "decay_rates": {
+    "shape": [
+      3
+    ],
+    "values": [
+      695.1395088500349,
+      1934.161700569395,
+      28813.957482439117
+    ]
+  },
+  "interpolation_default": "linear",
+  "extrapolation_default": "error",
+  "metadata": {
+    "benchmark": "TEAM 28 electrodynamic levitation",
+    "frequency_hz": 50.0,
+    "coil_current_reference_A": 20.0,
+    "conductivity_S_per_m": 34000000.0,
+    "coil_source": "radia.coil_builder.CoilBuilder",
+    "coil_count": 2,
+    "winding_directions": "counter-wound",
+    "parent_space": "HCurl",
+    "parent_order": 6,
+    "height_coordinate": "offset from 10.8 mm disk-bottom reference",
+    "state_basis": "common p=6 local disk EVRS basis, one shared Foster mode set",
+    "force_convention": "positive z is upward physical time-average force"
+  },
+  "snapshots": [
+    {
+      "height_m": -0.007,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            -0.03132623278980214,
+            -0.037708833672411436,
+            -0.013436999205533522
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.009684002648774613,
+            -0.0510907433142053,
+            0.004005240897217622,
+            -0.00047530081014716393,
+            0.003159191755424991,
+            -0.0006769732216204375,
+            2.843406697985465,
+            1.518106353001548,
+            0.8514066234346336
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": -0.007,
+        "height_offset_mm": -7.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": -0.006,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            -0.02856970464581872,
+            -0.03623004288587317,
+            -0.012608803495181183
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.00927061193307447,
+            -0.048819753410322686,
+            0.003947160631072038,
+            -0.0004528056072342134,
+            0.0030213609058215587,
+            -0.0006292885800133461,
+            2.6713090386147047,
+            1.4405118846387177,
+            0.8052697965986761
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": -0.006,
+        "height_offset_mm": -6.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": -0.005,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            -0.02598038078602422,
+            -0.034825886494705964,
+            -0.011825871414495362
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.008870993140492844,
+            -0.046636534753765745,
+            0.003867550619775359,
+            -0.000431552489887145,
+            0.002886501378176892,
+            -0.0005859265719671354,
+            2.508913930225988,
+            1.3686934357479736,
+            0.7608965057784329
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": -0.005,
+        "height_offset_mm": -5.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": -0.004,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            -0.02354880849195528,
+            -0.03349099237421916,
+            -0.011086393084684384
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.00848640595624289,
+            -0.0445420382283729,
+            0.0037715173764842225,
+            -0.0004113737294916591,
+            0.0027561349395671293,
+            -0.0005462710098699035,
+            2.355724467422567,
+            1.3018705471561776,
+            0.718374076535943
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": -0.004,
+        "height_offset_mm": -4.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": -0.003,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            -0.02126602373272901,
+            -0.032220692311565664,
+            -0.010388488219161197
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.008117502871204744,
+            -0.04253738020544603,
+            0.003663586713482871,
+            -0.0003922123534207547,
+            0.0026309507727603214,
+            -0.0005099222329975424,
+            2.21126016575619,
+            1.2394105845728884,
+            0.6777555687995456
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": -0.003,
+        "height_offset_mm": -3.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": -0.002,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            -0.019123534591978377,
+            -0.03101088909081614,
+            -0.00973024022817363
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.007764554328568088,
+            -0.04062297452344969,
+            0.003547658725002959,
+            -0.0003740382966184609,
+            0.0025112387918509293,
+            -0.000476561220460674,
+            2.075057413690002,
+            1.180799805542965,
+            0.6390612581922731
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": -0.002,
+        "height_offset_mm": -2.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": -0.001,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            -0.017113303976147885,
+            -0.02985794992971355,
+            -0.009109726447881383
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.007427565761086951,
+            -0.03879833190304167,
+            0.00342695579649842,
+            -0.00035682487986061844,
+            0.002397079720665847,
+            -0.0004459193189195757,
+            1.9466703143433641,
+            1.125619503341549,
+            0.6022840082878607
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": -0.001,
+        "height_offset_mm": -1.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": 0.0,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            -0.015227731524963362,
+            -0.028758621479355307,
+            -0.008525042586565813
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.007106350720384241,
+            -0.037062119718884116,
+            0.0033040549250521398,
+            -0.00034054279698888303,
+            0.0022884351808919986,
+            -0.0004177647130002295,
+            1.8256713955612662,
+            1.073526625724704,
+            0.5673951580234529
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": 0.0,
+        "height_offset_mm": 0.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": 0.001,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            -0.01345963494380914,
+            -0.027709962251847454,
+            -0.0079743215328435
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.006800582252637056,
+            -0.035412308634213956,
+            0.003180966052195913,
+            -0.00032515924255834054,
+            0.002185194484404225,
+            -0.0003918930711172077,
+            1.7116520479383017,
+            1.0242381862210577,
+            0.5343498198349227
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": 0.001,
+        "height_offset_mm": 1.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": 0.002,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            -0.011802231039043029,
+            -0.026709289016820785,
+            -0.007455747292494699
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.0065098314104810925,
+            -0.03384633374499143,
+            0.0030592229754588226,
+            -0.00031063846538549546,
+            0.0020872013676783824,
+            -0.00036812089257563807,
+            1.604222685015967,
+            0.9775188107974594,
+            0.5030913117987248
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": 0.002,
+        "height_offset_mm": 2.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": 0.003,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            -0.010249116717039153,
+            -0.025754134330169494,
+            -0.0069675649249111024
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.006233597058377541,
+            -0.03236124218765849,
+            0.0029399700292664596,
+            -0.00029694261851179383,
+            0.001994270643608663,
+            -0.00034628100841708456,
+            1.5030126631416618,
+            0.9331708367464429,
+            0.47355473997774755
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": 0.003,
+        "height_offset_mm": 3.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": 0.004,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            -0.008794250163940961,
+            -0.024842212897613885,
+            -0.006508087278505628
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.005971329237440817,
+            -0.030953818365157416,
+            0.0028240381412320335,
+            -0.0002840325752889171,
+            0.0019061993048023554,
+            -0.0003262196424576897,
+            1.4076700079189859,
+            0.891026469012828,
+            0.44566983865149296
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": 0.004,
+        "height_offset_mm": 4.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": 0.005,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            -0.007431932376910769,
+            -0.02397139492705326,
+            -0.006075699204922358
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.005722447518304608,
+            -0.02962068594958342,
+            0.0027120089023288285,
+            -0.000271868629768148,
+            0.001822774285651267,
+            -0.00030779450614325227,
+            1.3178609916468291,
+            0.850941584731765,
+            0.41936319272898015
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": 0.005,
+        "height_offset_mm": 5.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": 0.006,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            -0.006156789176215951,
+            -0.023139684994083275,
+            -0.0056688598111633666
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.005486355355747463,
+            -0.02835838886227528,
+            0.0026042673816187665,
+            -0.00026041107369544406,
+            0.0017437780461202906,
+            -0.0002908735387477078,
+            1.2332695999921202,
+            0.812790852493845,
+            0.3945599572655354
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": 0.006,
+        "height_offset_mm": 6.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": 0.007,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            -0.004963753792587543,
+            -0.02234520524550602,
+            -0.005286103201929106
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.0052624512224473795,
+            -0.027163454325066127,
+            0.002501045124287577,
+            -0.0002496206617280266,
+            0.0016689926441865784,
+            -0.000275334034372931,
+            1.1535969194988618,
+            0.7764638969647681,
+            0.3711851723840492
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": 0.007,
+        "height_offset_mm": 7.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": 0.008,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            -0.003848050095779735,
+            -0.021586182007668212,
+            -0.004926038074756466
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.005050137143804821,
+            -0.026032441083707305,
+            0.002402454883827021,
+            -0.00023945897967852863,
+            0.001598202712324028,
+            -0.00026106199320244177,
+            1.0785604714781236,
+            0.7418622924550169,
+            0.34916475493564525
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": 0.008,
+        "height_offset_mm": 8.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": 0.009000000000000001,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            -0.0028051765073765283,
+            -0.020860935060520325,
+            -0.004587346456929383
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.004848825140371649,
+            -0.024961975583309252,
+            0.002308518520096095,
+            -0.00022988872955922223,
+            0.001531197615998713,
+            -0.00024795159882600197,
+            1.0078935126444248,
+            0.7088972122178924,
+            0.3284262331742089
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": 0.009000000000000001,
+        "height_offset_mm": 9.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": 0.01,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            -0.0018308906227489975,
+            -0.020167868993421916,
+            -0.004268781813393543
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.004657941992939192,
+            -0.023948778466938263,
+            0.0022191893042327157,
+            -0.00022087394371314207,
+            0.0014677729910093096,
+            -0.00023590476410355286,
+            0.9413443185558081,
+            0.6774875951837303,
+            0.30889927804831074
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": 0.01,
+        "height_offset_mm": 10.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": 0.011,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            -0.0009211945528324217,
+            -0.019505466182431735,
+            -0.003969166706688967
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.004476932670037684,
+            -0.022989683368911714,
+            0.0021343696737083978,
+            -0.00021238013881778506,
+            0.0014077318047421758,
+            -0.0002248307130276347,
+            0.8786754623843861,
+            0.6475587199647792,
+            0.2905160742946176
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": 0.011,
+        "height_offset_mm": 11.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": 0.012,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            -7.232098535109625e-05,
+            -0.018872281027282885,
+            -0.0036873901511164198
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.0043052626951844124,
+            -0.02208164961912928,
+            0.002053925301262669,
+            -0.0002043744194213341,
+            0.0013508850512827734,
+            -0.00021464558114278628,
+            0.8196630986722415,
+            0.6190410985438751,
+            0.27321156603492647
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": 0.012,
+        "height_offset_mm": 12.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": 0.013000000000000001,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            0.000719280043333722,
+            -0.01826693516445085,
+            -0.0034224047722099804
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.0041424196793365346,
+            -0.021221770172288892,
+            0.001977696186577226,
+            -0.00019682553958175,
+            0.0012970521651493503,
+            -0.00020527202604707874,
+            0.7640962594037548,
+            0.5918696201441818,
+            0.25692360470403314
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": 0.013000000000000001,
+        "height_offset_mm": 13.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": 0.014,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            0.0014569536809390727,
+            -0.017688113434725834,
+            -0.0031732238576383277
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.003987914201088066,
+            -0.020407275823651892,
+            0.001905505349585505,
+            -0.00018970393019488197,
+            0.0012460612196678509,
+            -0.00019663884462630242,
+            0.7117761678538128,
+            0.5659828902365787,
+            0.2415930215754691
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": 0.014,
+        "height_offset_mm": 14.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": 0.015,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            0.0021438521164062196,
+            -0.017134560432755616,
+            -0.0029389183657149176
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.003841280181828751,
+            -0.01963553656554839,
+            0.0018371655964831471,
+            -0.0001829816986858856,
+            0.0011977489617884622,
+            -0.00018868059658096826,
+            0.6625155741699655,
+            0.5413227211825004,
+            0.22716364266011208
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": 0.015,
+        "height_offset_mm": 15.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": 0.016,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            0.0027829457846817256,
+            -0.016605077504753988,
+            -0.002718613941800827
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.0037020748740998195,
+            -0.018904060769107237,
+            0.0017724847409676073,
+            -0.00017663260681607924,
+            0.0011519607240022148,
+            -0.00018133723526500222,
+            0.6161381154491529,
+            0.5178337402094905,
+            0.21358226012841766
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": 0.016,
+        "height_offset_mm": 16.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    },
+    {
+      "height_m": 0.017,
+      "state_order": 3,
+      "port_count": 1,
+      "input_convention": "u=-d(coil_current)/dt",
+      "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+      "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+      "has_sibc_termination": false,
+      "basis_names": [
+        "volume_current_gram_0",
+        "volume_current_gram_1",
+        "volume_current_gram_2"
+      ],
+      "blocks": {
+        "volume": [
+          0,
+          3
+        ]
+      },
+      "arrays": {
+        "modal_port_rhs": {
+          "shape": [
+            3,
+            1
+          ],
+          "values": [
+            0.0033770339446044613,
+            -0.016098520091073324,
+            -0.002511487980243289
+          ]
+        },
+        "modal_force_operator": {
+          "shape": [
+            3,
+            3,
+            1
+          ],
+          "values": [
+            0.003569878557773792,
+            -0.01821049273762825,
+            0.0017112695906440463,
+            -0.00017063203157166237,
+            0.0011085502454034899,
+            -0.00017455374754899992,
+            0.5724777021186763,
+            0.49546308773693015,
+            0.2007985714851132
+          ]
+        }
+      },
+      "metadata": {
+        "height_offset_m": 0.017,
+        "height_offset_mm": 17.0,
+        "coil_source": "radia.coil_builder.CoilBuilder"
+      },
+      "sample_time_s": 1e-05
+    }
+  ]
+}
