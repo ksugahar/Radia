@@ -270,8 +270,8 @@ the caller supplies compatible discrete-gradient and interpolation matrices.
 See https://hypre.readthedocs.io/en/latest/solvers-ams.html#high-order-discretizations .
 
 **AMS as the BDDC wirebasket (coarse) solver: measured faster at p=2.**
-At order 2 the HCurl wirebasket is the lowest-order edge block, and importing
-sparsesolv registers `coarsetype="sparsesolv_ams"` for NGSolve's BDDC
+The tested runs restrict the HCurl wirebasket to lowest-order edges; the
+default wirebasket may also contain face dofs. Importing sparsesolv registers `coarsetype="sparsesolv_ams"` for NGSolve's BDDC
 (`coarseflags={"cycles": 4}`). On the Hiruma 30 kHz problem (p=2, eps*nu mass
 1e-6, COCR 1e-8, mdx1, 8 threads, 2026-09-27) wall time against the direct
 wirebasket factorization: 680k dof 174 s -> 77 s (11.6 -> 1.3 GB), 865k dof
@@ -296,7 +296,8 @@ the actual operator before excluding those methods.
 |---------|----------------|
 | Real spd HCurl curl-curl + mass, **p=1** | ✓ + CG |
 | Complex sym HCurl (eddy current MQS), **p=1** | ✓ + COCR ★ |
-| Same but **p=2 or higher** | This coordinate-based recipe is not validated; prefer tested `bddc` or a separately validated high-order AMS interface |
+| Same but **p=2 or p=3** | Use validated BDDC `coarsetype="sparsesolv_ams"`; standalone coordinate-based AMS on the full high-order space is not validated |
+| Same but **p>=4**, compound or periodic spaces | Not validated by the BDDC campaigns |
 | HCurl with air region (σ=0) | ✓ + shifted preconditioner (see em_specific) |
 | HDiv (flux variable) | Use ADS — same paper, dual construction |
 | HCurl helmholtz (high freq) | NOT a lab use case (Laplace kernel only) |
