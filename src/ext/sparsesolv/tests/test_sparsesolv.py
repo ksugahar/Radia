@@ -358,7 +358,8 @@ def test_lowest_order_gradient_equals_create_gradient():
 
 def _bddc_order2_solve(coarse, complex_system, face_wirebasket=False, order=2, **coarseflags):
     import radia.sparsesolv_ngsolve as ssn
-    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.2))
+    # Keep p=3 interior modes; production-size evidence lives in validation_test/.
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.35 if order == 3 else 0.2))
     space = HCurl(mesh, order=order, nograds=True, dirichlet=".*", complex=complex_system)
     if face_wirebasket:
         # As HCurl does on badly shaped faces: some face dofs join the wirebasket.
