@@ -10,7 +10,7 @@ at the physical harmonic coupling scales (magnetic row `-K/mu0`, eddy row
 | `test_sphere_alpha_lane.py` | exact complex polarizability `alpha(omega)` of a conducting permeable sphere (`radia.analytical_formulas.sphere_complex_polarizability`) | eddy-branch transition shape (mu_r=1), coupled static + transition (mu_r=100), vanishing DC current from a static magnetization |
 | `test_torus_cohomology_tau.py` | short-circuited ring law `(R+sL) I = -s Phi_ext` with the closed-form ring R and L evaluated on the MEASURED mesh cross-section | the genus-1 (H1 cohomology) loop class: single-pole shape, the CALIBRATION-FREE time constant `tau = L/R`, flux-freeze plateau, and the cycle-class DC zero |
 | `test_hdiv_hcurl_transient_validation.py` | eleven-step moving manufactured transient with a changing magnetic operator | production-form snapshot/artifact contract, Joule-loss observables, and the discrete energy-balance gate |
-| `validate_hcurl_eddy_bubble_disk.py` | public axisymmetric BEM modal spectrum plus live Q1/Q2 `radia.axifem` checks | 3-D TET HCurl eddy-bubble h/p convergence, passive CLN extraction, and the response-basis completeness gate |
+| `validate_hcurl_eddy_bubble_disk.py` | public axisymmetric BEM modal spectrum plus live Q1/Q2 `radia.axifem` checks | 3-D TET HCurl eddy-bubble h/p convergence, passive Foster modal extraction, and the response-basis completeness gate |
 | `validate_magnetic_conductor_disk.py` | regenerated mapped-HEX mesh plus axisymmetric Q2 and full 3-D HCurl references | quick/full live replay of the magnetic-conductor adjudication without tracking `.vol` files |
 | `validate_mapped_hex_bdm2_production.py` | q9/q12 versus q10/q16 open-boundary ChargeGram on a reflection-symmetric non-affine trilinear HEX body | physical spectrum, linear/nonlinear material solves, independent full/reduced IMA solves, and the prescribed-source `<10 eps` field contract; use hibino first or idle-CI mdx |
 | `validate_mapped_hex_bdm2_quadrature_reference.py` | q10/q16 versus q11/q20 on the same mapped BDM2 body | expensive independent reference for the q9/q12 production quadrature decision; use hibino first or idle-CI mdx |
@@ -43,8 +43,9 @@ tightening):
 * The conducting-disk lane freezes a useful negative control: one uniform
   vector-potential port remains about 5% wrong when only Krylov depth is
   increased.  The accepted lane uses `A`, `r^2 A`, `r^4 A`, and `z^2 A` as
-  training ports, then identifies the physical pole by port residue rather
-  than selecting the numerically largest time constant.  Spatial h-refinement
+  training ports, then identifies the physical pole by its DC weight at the
+  port (Foster residue over decay rate) rather than selecting the numerically
+  largest time constant.  Spatial h-refinement
   is not a substitute for response-basis enrichment.
 * The magnetic-conductor adjudication is deliberately bounded.  The fine
   axisymmetric Q2 reference and full 3-D HCurl A-form agree within 2%, and the
