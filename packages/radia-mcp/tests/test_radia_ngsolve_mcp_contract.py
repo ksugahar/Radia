@@ -283,7 +283,7 @@ def test_hdiv_vim_passes_real_stdio_initialize_list_call():
 
     assert result["server_name"] == "mcp-server-radia-ngsolve"
     assert result["protocol_version"]
-    assert 40 <= result["tool_count"] < 100
+    assert 35 <= result["tool_count"] < 100
     assert result["listed"] is True
     assert result["is_error"] is False
     assert result["nonlinear_gate_discovered"] is True

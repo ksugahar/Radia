@@ -1585,10 +1585,10 @@ mesh = Mesh(OCCGeometry(rect, dim=2).GenerateMesh(maxh=1))
 ```python
 # WRONG - preconditioner doesn't see element matrices
 a.Assemble()
-c = Preconditioner(a, \"bddc\")  # Too late!
+c = Preconditioner(a, "bddc")  # Too late!
 
 # CORRECT - register before assembly
-c = Preconditioner(a, \"bddc\")
+c = Preconditioner(a, "bddc")
 a.Assemble()
 ```
 
@@ -1632,36 +1632,36 @@ V = LaplaceSL(j_trial.Trace() * ds) * j_test.Trace() * ds
 
 ```python
 # WRONG - singular system for curl-curl
-fes = HCurl(mesh, order=2, dirichlet=\"outer\")
+fes = HCurl(mesh, order=2, dirichlet="outer")
 
 # CORRECT - removes gradient null space
-fes = HCurl(mesh, order=2, dirichlet=\"outer\", nograds=True)
+fes = HCurl(mesh, order=2, dirichlet="outer", nograds=True)
 ```
 
 ## 9. GridFunction.Set() vs Direct Assignment
 
 ```python
 # CORRECT - projects function onto FE space
-gfu.Set(sin(x)*cos(y), definedon=mesh.Materials(\"domain\"))
+gfu.Set(sin(x)*cos(y), definedon=mesh.Materials("domain"))
 
 # CORRECT - set with BND flag for Dirichlet
 gfu.Set(x, BND)
 
 # WRONG - BND only sets on Dirichlet-marked boundaries
-gfu.Set(x, BND)  # Only sets on dirichlet=\"...\" boundaries!
+gfu.Set(x, BND)  # Only sets on dirichlet="..." boundaries!
 
 # To set on ALL boundaries:
-gfu.Set(x, mesh.Boundaries(\".*\"))
+gfu.Set(x, mesh.Boundaries(".*"))
 ```
 
 ## 10. Complex Spaces
 
 ```python
 # For eddy current / time-harmonic: MUST use complex=True
-fes = HCurl(mesh, order=2, complex=True, dirichlet=\"outer\")
+fes = HCurl(mesh, order=2, complex=True, dirichlet="outer")
 
 # WRONG - real space for complex problem
-fes = HCurl(mesh, order=2, dirichlet=\"outer\")
+fes = HCurl(mesh, order=2, dirichlet="outer")
 a += 1j * omega * sigma * u * v * dx  # Will fail or give wrong results!
 ```
 
@@ -1669,7 +1669,7 @@ a += 1j * omega * sigma * u * v * dx  # Will fail or give wrong results!
 
 ```python
 # Material names must match EXACTLY
-mu_r = mesh.MaterialCF({\"core\": 1000}, default=1)
+mu_r = mesh.MaterialCF({"core": 1000}, default=1)
 
 # Check available materials:
 print(mesh.GetMaterials())  # ['air', 'core', 'coil']
@@ -1694,8 +1694,8 @@ This is an NGSolve API example. Use `GmshPostExport` for Radia-owned output.
 ```python
 # Export to VTK for ParaView
 vtk = VTKOutput(mesh, coefs=[gfu, curl(gfu)],
-                names=[\"A\", \"B\"],
-                filename=\"output\",
+                names=["A", "B"],
+                filename="output",
                 subdivision=2)
 vtk.Do()
 ```
@@ -1720,7 +1720,7 @@ term does nothing.
 ## 15. curl(E) Has No Trace on Edges in HCurl (Forum: Thread 3757)
 
 ```python
-# WRONG - \"don't know how I shall evaluate\" error
+# WRONG - "don't know how I shall evaluate" error
 line_integral = Integrate(curl(E), mesh, definedon=edge)
 
 # CORRECT - interpolate H field first, then integrate
@@ -1815,10 +1815,10 @@ fes_q = H1(mesh, order=1)                # fixed cross-mesh handoff order
 gf_q = GridFunction(fes_q)
 gf_q.vec[:] = 0                          # interior DOFs stay 0
 gf_q.Set(q_surf_cf, definedon=wp_region) # only boundary DOFs touched
-gf_q.Save(\"q.sol\")                       # raw coefficient vector
+gf_q.Save("q.sol")                       # raw coefficient vector
 ```
 
-`wp_region = mesh.Boundaries(\"sibc\")` is a Region; passing it to
+`wp_region = mesh.Boundaries("sibc")` is a Region; passing it to
 `.Set(definedon=...)` triggers a boundary projection -- only the H1
 DOFs that live on that boundary get populated.  The Radia IH handoff is
 deliberately P1 because its downstream nonmatching-mesh transfer samples
@@ -1827,11 +1827,11 @@ physical surface vertices.  Interior bubbles stay 0.
 Load side (Consumer; e.g. `calc_heat.py` Phase B):
 
 ```python
-em_mesh = Mesh(\"em.vol\")                  # MUST be passed explicitly --
+em_mesh = Mesh("em.vol")                  # MUST be passed explicitly --
                                           # .sol is mesh-free.
 fes_q_em = H1(em_mesh, order=1)           # fixed producer/consumer contract.
 gf_q_em = GridFunction(fes_q_em)
-gf_q_em.Load(\"q.sol\")
+gf_q_em.Load("q.sol")
 ```
 
 THREE contracts that must hold:
@@ -1840,7 +1840,7 @@ THREE contracts that must hold:
    has no mesh.  Auto-locating siblings by filename convention is a
    silent-fallback footgun (`<stem>_fem.vol` next to `<stem>_qsurf.sol`
    was the convention; tightened to required 2026-05-20 per
-   CLAUDE.md \"No Fallbacks\").
+   CLAUDE.md "No Fallbacks").
 2. The Radia IH handoff FES order is fixed to 1 on both sides.  No header
    in .sol means a mismatch loads garbage silently (no NGSolve error), and
    higher-order H1 coefficients are hierarchical rather than vertex values.
@@ -1875,8 +1875,8 @@ WHEN YOU **DO** NEED `.Trace()`:
   outside `ds(...)`:
   ``q_trace_cf = gf_q_em.Trace()``  -- valid only on boundaries.
 * Wiring into HDivSurface BEM operators (LaplaceSL / HelmholtzSL --
-  see Section 18 above): ``j_trial.Trace() * ds(\"conductor\")`` etc.
-* Coulomb-gauge coupling: ``Cross(grad(u).Trace(), n) * ds(\"coupling\")``.
+  see Section 18 above): ``j_trial.Trace() * ds("conductor")`` etc.
+* Coulomb-gauge coupling: ``Cross(grad(u).Trace(), n) * ds("coupling")``.
 
 For LinearForm assembly with surface integrals, `.Trace()` is implicit
 in `ds(label)`:
@@ -1920,7 +1920,7 @@ Use SurfaceL2 as Lagrange multiplier space for matching HDiv normals:
 ```python
 # SurfaceL2 is the proper space for HDiv normal-trace continuity
 fes_lambda = SurfaceL2(mesh, order=order,
-                       definedon=mesh.Boundaries(\"interface\"))
+                       definedon=mesh.Boundaries("interface"))
 ```
 
 ## 21. type1=True for Nedelec Elements (EMPY)
@@ -1971,11 +1971,11 @@ and use ZRefine to create a single element layer:
 ```python
 # Geometry: identify top and bottom
 iron.faces.Min(Z).Identify(
-    iron.faces.Max(Z), \"bot-top\", type=IdentificationType.CLOSESURFACES)
+    iron.faces.Max(Z), "bot-top", type=IdentificationType.CLOSESURFACES)
 
 # Mesh: single z-layer
 ngmesh = OCCGeometry(geo).GenerateMesh(maxh=0.1)
-ngmesh.ZRefine(\"bot-top\", [])  # Empty list = no intermediate layers
+ngmesh.ZRefine("bot-top", [])  # Empty list = no intermediate layers
 mesh = Mesh(ngmesh).Curve(1)
 ```
 
@@ -2128,7 +2128,7 @@ gradmat, fesh1 = fes.CreateGradient()
 gradmattrans = gradmat.CreateTranspose()
 math1 = gradmattrans @ m.mat @ gradmat
 math1[0,0] += 1  # Pin one DOF
-invh1 = math1.Inverse(inverse=\"sparsecholesky\")
+invh1 = math1.Inverse(inverse="sparsecholesky")
 
 # Projected preconditioner
 proj = IdentityMatrix() - gradmat @ invh1 @ gradmattrans @ m.mat
@@ -2209,7 +2209,7 @@ elements, leading to incorrect results or excessive memory usage.
 
 ```python
 # Space restricted to subdomain has many UNUSED_DOF entries
-fes1 = H1(mesh, definedon=\"conductor\")
+fes1 = H1(mesh, definedon="conductor")
 print(fes1.ndof)  # Same as full mesh ndof (many unused)
 
 # CORRECT - use Compress() to remove unused DOFs
@@ -2256,8 +2256,8 @@ fes = HCurl(mesh, order=3, complex=True) * N
 # Bilinear form with circuit equation
 a = BilinearForm(fes)
 a += nu * curl(A) * curl(v) * dx           # EM equation
-a += I * J_coil * v * dx(\"coil\")           # Current source
-a += A * J_coil * w * dx(\"coil\")           # Flux linkage
+a += I * J_coil * v * dx("coil")           # Current source
+a += A * J_coil * w * dx("coil")           # Flux linkage
 a += R * I * w * dx                         # Resistance
 
 # I (current) is solved simultaneously with A (vector potential)
@@ -2273,7 +2273,7 @@ The coil current is unknown and coupled to the field via flux linkage.
 geo = iron + air  # Single material, no interface!
 
 # CORRECT: Glue preserves internal interface
-geo = Glue([iron, air])  # dx(\"iron\") and dx(\"air\") work
+geo = Glue([iron, air])  # dx("iron") and dx("air") work
 
 # CORRECT: Use - for subtraction (different from fusion)
 air = Sphere(...) - iron  # Air = Sphere minus iron region
@@ -2285,11 +2285,11 @@ air = Sphere(...) - iron  # Air = Sphere minus iron region
 import pickle
 
 # Save mesh + solution
-with open(\"solution.pkl\", \"wb\") as f:
+with open("solution.pkl", "wb") as f:
     pickle.dump([mesh, gfu], f)
 
 # Load (shared references preserved: gfu.space.mesh == mesh)
-with open(\"solution.pkl\", \"rb\") as f:
+with open("solution.pkl", "rb") as f:
     mesh2, gfu2 = pickle.load(f)
 
 # CoefficientFunction expression trees also supported
@@ -2308,26 +2308,31 @@ copy, of the GridFunction's data. Re-assigning `gf.vec.data` between
 uses silently changes the value of every CF that references it.
 
 ```python
-# WRONG: stored expressions share the mutable GridFunction.
+# WRONG — gf_acc is updated in the loop, every prior expression breaks
 gf_acc = GridFunction(fes)
 gf_acc.vec[:] = 0.0
-history = []
+state_history = []                        # list of CFs we want to keep
 for n in range(N):
-    gf_acc.vec.data += increment.vec
-    history.append(gf_acc)
+    ...
+    gf_acc.vec.data += increment.vec        # MUTATES the SHARED gf_acc
+    proj_cf = gf_acc - grad(phi_acc_n)         # CF holds a REFERENCE
+    state_cf = state_cf + proj_cf    # captures gf_acc by ref
+    state_history.append(state_cf)                    # later evaluations see
+                                                # the LATEST gf_acc value!
 
-# CORRECT: copy the values into a fresh GridFunction.
-gf_acc.vec[:] = 0.0
-history = []
+# CORRECT — snapshot to a fresh GridFunction each iteration
 for n in range(N):
+    ...
     gf_acc.vec.data += increment.vec
-    snap = GridFunction(fes, name=f\"snap_{n}\")
-    snap.vec.data = gf_acc.vec
-    history.append(snap)
+    snap = GridFunction(fes, name=f"snap_{n}")  # fresh object
+    snap.vec.data = gf_acc.vec                  # explicit copy
+    proj_cf = snap - grad(phi_acc_n)            # frozen reference
+    state_cf = state_cf + proj_cf
+    state_history.append(state_cf)                    # safe: snap never mutates
 ```
 
-**Symptom**: in iterative schemes (Kameari accumulation CLN, Picard
-non-linear loops, time stepping that reuses prior states), `stage 0`
+**Symptom**: in iterative schemes (Krylov-type accumulation recurrences,
+Picard non-linear loops, time stepping that reuses prior states), `stage 0`
 matches the analytical answer to machine precision, but `stage 1+`
 returns wrong-sign or wildly wrong values that look like algorithmic
 divergence — when in fact the prior `J_n_cf` expressions are silently
@@ -2335,9 +2340,9 @@ re-evaluating against the *current* (updated) `gf_acc`, not the
 `gf_acc` value at the time the CF was built.
 
 **Verified failure mode** (2026-05-10, Cu sphere a=10mm, B0=1T, 3D
-Kameari + Kelvin):
-- Without snapshot: τ_0 = 693.95 μs (matches Stoll Cauer-I 694.14
-  to 0.027 %), τ_1 = −796 μs (sign flip; analytical 154.6 μs),
+accumulation recurrence + Kelvin):
+- Without snapshot: τ_0 = 693.95 μs (matches the analytical Stoll
+  reference 694.14 to 0.027 %), τ_1 = −796 μs (sign flip; analytical 154.6 μs),
   stages 2+ diverge by orders of magnitude.
 - With snapshot: τ_0 = 693.95 (−0.027 %), τ_1 = 154.46 (−0.094 %),
   τ_2 = 63.45 (−0.97 %), τ_3 = 33.08 (−4.06 %); stage 4 hits the
@@ -2348,11 +2353,6 @@ but breaks at stage 1+, suspect this trap before suspecting H-H
 projection, gauge fixing, ORDER, Schmidt orthogonalisation, or
 solver tolerance. None of those help if the GridFunction the CFs
 refer to keeps mutating beneath them.
-
-**Cross-references**:
-- `cln_3d.py` knowledge — Kameari accumulation snapshot pattern
-- public-safe curated corpus
-  cln_team28_kelvin.py — reference fix in `Apot_acc -> snap_acc`
 """
 
 NGSOLVE_LINALG = """
@@ -5179,50 +5179,28 @@ interfaces, either:
 """
 
 
-NGSOLVE_CLN_CAUER = """
-# Cauer Ladder Network (CLN) Validation in NGSolve
+NGSOLVE_EDDY_REDUCED_VALIDATION = r"""
+# Eddy-current reduced-model validation in NGSolve
 
-CLN is a model-order-reduction technique for eddy current problems
-(Kameari et al. 2018, Köster et al. 2021). The full-order eddy current
-PDE is approximated by an infinite RL ladder, with each rung representing
-an eigenmode of the diffusion operator.
+Reduced eddy-current models (Krylov/PRIMA projection, POD, Foster modal
+form) must be validated against the full-order harmonic solve and, where
+available, an analytical eigenfunction (Foster) expansion.
 
-## Two flavors of CLN
-
-| Flavor | Excitation | Method | NGSolve fit |
+| Route | Excitation | Method | NGSolve fit |
 |---|---|---|---|
-| **Köster A-T recursion** | voltage-driven coil | static A-T alternating recursion | YES (Köster 2021 §III.B) |
-| **Direct frequency sweep** | any (incl. external B) | solve harmonic eddy current at each ω | YES (standard FEM) |
+| **Direct frequency sweep** | any (incl. external B) | solve harmonic eddy current at each omega | YES (standard FEM) |
+| **Foster modal form** | any | eigenpairs of the diffusion operator (PINVIT) | YES (order >= 3, `nograds=True`) |
 | **Eigenvalue + Foster sum** | any | analytical eigenfunction expansion | analytical only |
-
-**Key insight**: Köster's A-T recursion **does not directly apply to
-\"isolated conductor in external B\" (Case B)** because there is no
-terminal voltage. For Case B validation, use direct frequency sweep
-and compare with analytical Foster sum.
-
-## Köster A-T recursion (voltage-driven)
-
-For voltage-driven coil + conductor problems, recursive static problems:
-
-```python
-# Independent conductor and full-domain spaces retained.
-fes_T = HCurl(mesh, order=2,
-              definedon=mesh.Materials(\"conductor\"),
-              dirichlet=\"conductor_surface\",
-              nograds=True)
-fes_A = HCurl(mesh, order=2, dirichlet=\"outer_box\", nograds=True)
-# Historical alternating field-recurrence construction retired.
-```
 
 ## Element-by-element preconditioning
 
-For each static sub-problem, NGSolve `Preconditioner(a, \"local\")` gives
+For each static sub-problem, NGSolve `Preconditioner(a, "local")` gives
 a block-Jacobi (element-by-element) preconditioner. Use with CG:
 
 ```python
 a = BilinearForm(fes_T)
-a += sigma_inv * curl(u) * curl(v) * dx(\"conductor\")
-c = Preconditioner(a, type=\"local\")
+a += sigma_inv * curl(u) * curl(v) * dx("conductor")
+c = Preconditioner(a, type="local")
 # CG with local preconditioner = element-by-element iteration
 solvers.CG(sol=gf.vec, rhs=f.vec, mat=a.mat, pre=c.mat,
            tol=1e-8, maxsteps=10000)
@@ -5230,13 +5208,13 @@ solvers.CG(sol=gf.vec, rhs=f.vec, mat=a.mat, pre=c.mat,
 
 Avoids global LU/sparse direct solver. Suitable for large 3D problems.
 
-## Direct frequency sweep validation (Case B: external B field)
+## Direct frequency sweep validation (isolated conductor in external B)
 
 For uniform external B_z on isolated cuboid, validate the analytical
 Foster sum P(ω)/B_0² = (ω²/2) Re[Y_eq(jω)] by direct FEM:
 
 ```python
-fes = HCurl(mesh, order=2, dirichlet=\"conductor_surface\",
+fes = HCurl(mesh, order=2, dirichlet="conductor_surface",
             complex=True, nograds=True)
 u, v = fes.TnT()
 
@@ -5246,7 +5224,7 @@ A_ext = CoefficientFunction((-B0/2 * y, B0/2 * x, 0))  # uniform B_z gauge
 a = BilinearForm(fes, symmetric=False)
 a += (1/mu0) * curl(u) * curl(v) * dx
 a += 1j * omega * sigma * u * v * dx
-c = Preconditioner(a, type=\"local\")
+c = Preconditioner(a, type="local")
 
 f = LinearForm(fes)
 f += -1j * omega * sigma * A_ext * v * dx
@@ -5314,82 +5292,29 @@ Use GMRes (not CG) for non-Hermitian complex systems.
 The curl-curl operator has gradient-field nullspace. Use
 `nograds=True` to remove gradient DOFs from the FE space:
 ```python
-fes = HCurl(mesh, order=2, dirichlet=\"...\", nograds=True)
+fes = HCurl(mesh, order=2, dirichlet="...", nograds=True)
 ```
 Otherwise CG/GMRes can't converge.
-
-## Reference implementations
-
-- **Tanimoto's penalty CLN**: `public-safe curated corpus
-  20231211_A_(Penalty)_CLN.ipynb` — A-formulation cylinder example
-- **Tanimoto's gauge CLN**: `..._A_gauge_CLN.ipynb` — adds H1 gauge
-  potential for div-free A
-- **Cuboid Case B validation**: `public-safe curated corpus
-  2026_04_01_長方形CLN/ngsolve_validation/cuboid_CaseB_freq_sweep.py`
-  — direct frequency sweep, agrees with Mathematica Foster sum
-  (1 Hz - 100 kHz, <10% error with N_modes=21 truncation)
-
-## References
-
-- A. Kameari, H. Ebrahimi, K. Sugahara, Y. Shindo, T. Matsuo,
-  \"Cauer ladder network representation of eddy-current fields...\",
-  IEEE Trans. Magn. 54(3), 7201804 (2018).
-- N. Köster, O. König, O. Bíró, \"Proper Generalized Decomposition
-  with Cauer Ladder Network Applied to Eddy Current Problems\",
-  IEEE Trans. Magn. 57(6), 6300904 (2021).
-- H. Ebrahimi, K. Sugahara, T. Matsuo, H. Kaimori, A. Kameari,
-  \"Modal decomposition of 3-D quasi-static Maxwell equations by
-  Cauer ladder network representation\", IEEE Trans. Magn. 56(3),
-  7513004 (2020).
 
 ## Validation findings (cuboid + cube, 2026-04-27)
 
 ### EBE-only solve does NOT converge for general 3D problems
 
-Bíró (verbal): \"EBE preconditioning alone is sufficient.\"
-Niels (verbal): \"Sometimes works, sometimes doesn't.\"
+Applying `Preconditioner(a, "local")` ONCE (no CG iteration) to a
+5x2x20 mm Cu cuboid + air static sub-problem gives the DC resistance off
+by 22 orders of magnitude.  The HCurl local block on tetrahedra shares
+edges with neighbors, so the block-diagonal inverse does not capture global
+coupling.
 
-**Empirical**: For a 5x2x20 mm Cu cuboid + air with Köster A-T recursion,
-applying `Preconditioner(a, \"local\")` ONCE (no CG iteration) gives R_0
-off by 22 orders of magnitude. The HCurl local block on tetrahedra
-shares edges with neighbors, so block-diagonal inverse doesn't capture
-global coupling.
+**Recommendation**: Always wrap with CG or GMRes when using the "local"
+preconditioner.  EBE-only is suitable for very specific symmetric problems
+(1D axisymmetric, quasi-1D) but not general 3D.
 
-**Recommendation**: Always wrap with CG or GMRes when using \"local\"
-preconditioner. EBE-only is suitable for very specific symmetric
-problems (1D axisymmetric, quasi-1D) but not general 3D.
+### DC check (1mm Cu cube, all-Dirichlet)
 
-### Köster A-T is voltage-driven-coil-only
-
-Köster's Eq. (8) BC `T_tilde_n × n = -T_(n-1) × n on Gamma_NC` plus
-T_0 BC `T_0 × n = H_s × n` (Biot-Savart from impressed coil) assume
-a coil source. For \"isolated conductor in external uniform B field\"
-(Case B), there's no terminal voltage, so Köster's recursion does
-not directly apply. Use:
-  - **Direct frequency sweep**: solve harmonic eddy current at each ω
-  - **Kameari A-only iterative basis** (original, Tanimoto pattern)
-
-### Stage 0 exact validation (1mm Cu cube, Case A all-Dirichlet)
-
-NGSolve Kameari recursion vs Mathematica analytical:
-
-| Quantity | Mathematica | NGSolve | Match |
-|---|---|---|---|
-| `R_0` | `1/(σV) = 17.24 Ω` | 17.24 Ω | 4-digit ✓ |
-| `L_0` | (need conversion) | 2.56 µH | (different topology) |
-
-R_0 matches exactly because both compute the same Y_eq(0) = σ V_C
-(Parseval identity for constant-1 expansion in eigenbasis).
-
-### Higher stages numerically unstable
-
-Kameari's J update (historical field update retired) accumulates roundoff.
-For cube at h=100µm, order=1: L_1 came out NEGATIVE (catastrophic
-cancellation). Remedies:
-  - Higher polynomial order (3+) with refined mesh
-  - Explicit Coulomb gauge (Tanimoto's H1 potential pattern)
-  - WorkingPrecision = 50 in symbolic computation (Mathematica), then
-    transfer to NGSolve as exact rational coefficients
+The DC resistance `R_0 = 1/(sigma V) = 17.24 Ohm` matches Mathematica to 4
+digits because both compute the same Y_eq(0) = sigma V_C (Parseval identity
+for the constant-1 expansion in the eigenbasis).
 
 ### Verified arithmetic with Mathematica Interval[]
 
@@ -5400,68 +5325,52 @@ Y(0) Parseval exact = 0.05800 S·m²
 Y(0) Interval sum (N=21^3) = [0.05486, 0.05486]
 Truncation deficit: 5.42% with N=21 truncation
 ```
-Combine with NGSolve discretization for end-to-end verified Cauer
-ladder values.
+Combine with NGSolve discretization for end-to-end verified reduced-model
+values.
 
 ## EBE compatibility for div A = 0 / div T = 0 enforcement
 
-Köster orthogonality theorem requires div(curl T) = 0 i.e. T must be
-div-free. Standard methods to enforce:
+Krylov recurrences and eigensolves on HCurl need a div-free basis.
+Standard methods to enforce it:
 
 | Method | EBE compatible? | Cost | Exactness |
 |---|---|---|---|
-| Tokumasu penalty (γ‖div u‖²) | YES (same matrix) | +1 term | Approx (γ tuning) |
+| Tokumasu penalty (gamma ||div u||^2) | YES (same matrix) | +1 term | Approx (gamma tuning) |
 | Helmholtz-Hodge projection | NO (extra H1 Poisson) | +1 global solve | Exact |
 | Tree-cotree gauge | YES | O(N) preprocess | Exact |
-| Gram-Schmidt re-orthogonalization | YES (inner products only) | O(N²) inner products | Recovers orthogonality but residual noise |
+| Gram-Schmidt re-orthogonalization | YES (inner products only) | O(N^2) inner products | Recovers orthogonality but residual noise |
 | `nograds=True` (NGSolve) | YES | None | Removes high-order grads only |
 | A-V mixed with Lagrange multiplier | NO (mixed system) | 2x DoF | Exact |
-| PINVIT direct eigensolve | YES (Krylov + EBE pre) | similar to CG | Exact (with order ≥ 3) |
+| PINVIT direct eigensolve | YES (Krylov + EBE pre) | similar to CG | Exact (with order >= 3) |
 
-### Empirical findings (1mm Cu cube validation)
-
-- **Stage 0**: R_0 = 17.24 Ω with EBE+CG matches Mathematica
-  Y_eq(0) = σV exactly to 4 digits.
-- **Stage 1+**: Kameari iteration (historical field update retired) suffers
-  from cancellation error. Result: L_1 < 0 (unphysical), L grows
-  by 10^20 per stage.
-- **Gram-Schmidt fix attempt**: Restores orthogonality (GS coef ~ 1e-9)
-  but residual J vector itself becomes noise-dominated, breaking
-  subsequent stages.
-- **PINVIT eigensolve at order=1**: Smallest eigenvalues are gradient
-  kernel pollution (1e-4 instead of physical 4e5). Needs order≥3 +
-  nograds=True to eliminate.
+- **PINVIT eigensolve at order=1**: the smallest eigenvalues are gradient
+  kernel pollution (1e-4 instead of physical 4e5).  Needs order >= 3 +
+  `nograds=True` to eliminate.
 
 ### Recommendation
 
-For **practical robust validation** of CLN circuit constants:
-1. Use NGSolve `HCurl(order=3, nograds=True, dirichlet=\"all_boundary\")`
+For **robust Foster modal validation**:
+1. Use NGSolve `HCurl(order=3, nograds=True, dirichlet="all_boundary")`
 2. PINVIT for direct eigenvalue/eigenvector extraction
-3. Compute R_n = 1/(σ|β_n|²), L_n = μ/(λ_n²|β_n|²) per mode
+3. Compute the per-mode Foster constants R_n = 1/(sigma|beta_n|^2),
+   L_n = mu/(lambda_n^2 |beta_n|^2)
 4. This is fully EBE compatible (PINVIT + EBE preconditioner)
-
-For **strict-EBE Kameari iteration**: tree-cotree gauge required
-for higher-stage stability. Implementation: build spanning tree of
-mesh edges, mask tree edge DoFs to zero. Non-trivial in 3D.
-
-For **simple robust** (accepting non-EBE): Tanimoto's gauge_CLN
-pattern (Helmholtz-Hodge auxiliary H1 Poisson per stage) works well.
 
 ## Tree-cotree gauge: WINNING APPROACH (verified 2026-04-27)
 
-**Problem**: `nograds=True` removes only HIGHER-ORDER (p≥2) gradient
-bubbles. Lowest-order vertex gradients ∇(linear hat) remain in the
-HCurl basis → curl-curl operator has gradient kernel → Kameari
-iteration explodes at Stage 1+ (L_n flips negative, grows to 10^21).
+**Problem**: `nograds=True` removes only HIGHER-ORDER (p>=2) gradient
+bubbles.  Lowest-order vertex gradients grad(linear hat) remain in the
+HCurl basis -> the curl-curl operator has a gradient kernel -> a Krylov-type
+accumulation recurrence explodes after stage 0.
 
 **Solution**: Tree-cotree gauge via mesh edge spanning tree.
 
-| Method | EBE pure? | Stable stages | Cost/stage | Comments |
-|---|---|---|---|---|
-| Plain Kameari | YES | 0 | 1× | Fails immediately |
-| Gram-Schmidt re-orthog | YES | 0 | 1× + ⟨,⟩ | Restores orthogonality but residual = noise |
-| Helmholtz-Hodge | NO | 3 | **2×** | Tanimoto's gauge_CLN.ipynb pattern |
-| **Tree-cotree gauge** | **YES** | **5+** | **1×** + 1-time BFS | **WINNER** |
+| Method | EBE pure? | Stable recurrence stages | Cost/stage |
+|---|---|---|---|
+| No gauge | YES | 0 | 1x |
+| Gram-Schmidt re-orthog | YES | 0 | 1x + inner products |
+| Helmholtz-Hodge | NO | 3 | **2x** |
+| **Tree-cotree gauge** | **YES** | **5+** | **1x** + 1-time BFS |
 
 ### Implementation
 
@@ -5491,22 +5400,14 @@ def build_spanning_tree(mesh):
     return tree_edges  # ≈ nv-1 edges
 
 # ONE-TIME setup
-fes = HCurl(mesh, order=2, dirichlet=\"conductor_surface\", nograds=True)
+fes = HCurl(mesh, order=2, dirichlet="conductor_surface", nograds=True)
 free = BitArray(fes.FreeDofs())
 for edge_nr in build_spanning_tree(mesh):
     edge = mesh.edges[edge_nr]
     dofs = fes.GetDofNrs(edge)
     if dofs and free[dofs[0]]:  # lowest-order DoF on this edge
         free[dofs[0]] = False    # tree edge = essential 0
-
-# Historical Kameari/Tanimoto field-recurrence driver retired.
-# Independent spanning-tree construction and gauge setup are retained.
 ```
-
-### Historical field recurrence retired
-
-Tanimoto attribution retained; the stage coefficient and update recipe is removed.
-The independent analytical modal expression μ·Σ(β²/λ²)/V² is retained as a reference.
 
 ### Why it works
 
@@ -5520,24 +5421,10 @@ The independent analytical modal expression μ·Σ(β²/λ²)/V² is retained as
 ### Geometry caveat: a ≠ b ≠ c required
 
 For cube (a=b=c), eigenvalues λ²(mx,my,mz) = (mx²+my²+mz²)π²/a² have
-heavy degeneracy: (1,1,3)=(1,3,1)=(3,1,1) all give same λ². Kameari/PINVIT
-cannot distinguish degenerate modes → mode mixing → bad convergence.
+heavy degeneracy: (1,1,3)=(1,3,1)=(3,1,1) all give same λ². Eigen and Krylov
+solvers cannot distinguish degenerate modes → mode mixing → bad convergence.
 
 **Use a ≠ b ≠ c** (e.g., 5×2×1 mm cuboid) for clean validation.
-
-### Verified result — 2D rectangular bar, 5×2 mm Cu (Case A, per unit length)
-
-With the **corrected Tanimoto formula** (accumulated Apotential):
-
-- **Stage 0**: NGSolve R_0 = 1.7241×10⁻³ Ω/m = 1/(σab) analytic — exact match
-- **Stage 0**: NGSolve L_0 = 31.34 nH/m = Mathematica analytic μ·Σ(β²/λ²)/(ab)²
-  = 31.32 nH/m — **0.05% match**
-- **Stages 0–11**: all positive R_n, L_n with Tanimoto-pattern J update
-
-Use this as the canonical CLN validation case. The 3D 5×2×1 mm cuboid case
-in `cuboid_521_treecotree_extended.py` was using the **incorrect** L formula
-(no accumulation) — needs to be re-run with the Tanimoto pattern for proper
-coefficient-by-coefficient comparison against analytic Cauer-I.
 
 ### NGSolve `CreateGradient`: building block
 
@@ -5547,11 +5434,6 @@ G_matrix, fes_H1 = fes_HCurl.CreateGradient()
 # Image of G in HCurl = gradient subspace = curl-curl kernel
 # tree-cotree picks one HCurl edge per H1 vertex (column of G)
 ```
-
-### Reference files
-
-- `public-safe curated corpus`
-- `public-safe curated corpus`
 """
 
 
@@ -7837,14 +7719,10 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
         "fuse": NGSOLVE_BOOLEAN_POLICY,
         "compound": NGSOLVE_BOOLEAN_POLICY,
         "trampoline": NGSOLVE_BOOLEAN_POLICY,
-        "cln": NGSOLVE_CLN_CAUER,
-        "cauer": NGSOLVE_CLN_CAUER,
-        "ladder": NGSOLVE_CLN_CAUER,
-        "mor": NGSOLVE_CLN_CAUER,
-        "eddy_current_mor": NGSOLVE_CLN_CAUER,
-        "tree_cotree": NGSOLVE_CLN_CAUER,
-        "treecotree_gauge": NGSOLVE_CLN_CAUER,
-        "kameari": NGSOLVE_CLN_CAUER,
+        "mor": NGSOLVE_EDDY_REDUCED_VALIDATION,
+        "eddy_current_mor": NGSOLVE_EDDY_REDUCED_VALIDATION,
+        "tree_cotree": NGSOLVE_EDDY_REDUCED_VALIDATION,
+        "treecotree_gauge": NGSOLVE_EDDY_REDUCED_VALIDATION,
     }
 
     topic = topic.lower().strip()
@@ -7867,12 +7745,9 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
             suffix = f", +{len(aliases) - 3} more" if len(aliases) > 3 else ""
             lines.append(f"- {name}" + (f" (aliases: {preview}{suffix})" if aliases else ""))
         lines.append('Legacy ngsolve_usage(topic="all") returns the full, very large corpus.')
-        return """
-""".join(lines)
+        return "\n".join(lines)
     if topic == "all":
-        return """
-
-""".join(topics.values())
+        return "\n\n".join(topics.values())
     elif topic in topics:
         return topics[topic]
     else:

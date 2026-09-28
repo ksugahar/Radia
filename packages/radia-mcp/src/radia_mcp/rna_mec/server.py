@@ -7,7 +7,6 @@ Distilled from public-safe curated corpus (17 files, lab Sugahara 田中/羽根 
 Cross-references:
 - `radia_mcp.radia_ngsolve.hdiv_vim` — magnetic-material field coupling
 - `radia_mcp.magnetic_materials.hysteresis_models.lab_core` — Play model
-- `radia_mcp.mor.systematic.cln` — Cauer ladder for eddy
 
 Usage:
     mcp-server-rna-mec              # stdio
@@ -33,7 +32,6 @@ def rna_mec(topic: str = "overview") -> str:
             "nodal_vs_mesh_analysis"         - Derbas 2009: KCL vs KVL, Jacobian
             "reluctance_network_construction" - flux tube, claw-pole example
             "lumped_extraction_fea"          - L, M from FEA (Lee 2005 TEAM-28)
-            "cauer_ladder_rna"               - CLN for eddy-current MOR (Kameari 2018)
             "rna_magnetic_coupling"               - Janet 2004-2005 mixed method, CT
             "electromechanical_coupling"     - State-space RNA + ODE (RK4)
             "team28_reduced_model"           - TEAM-28 in depth, 85h -> 1h speedup

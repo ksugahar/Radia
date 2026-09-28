@@ -45,6 +45,7 @@ TOPICS: dict[str, str] = {
     "lumped_extraction_fea": "Inductance L/M extraction from FEM, conductor segmentation",
     "rna_magnetic_coupling": "RNA + legacy integral leakage correction, Janet transformer, current transformer",
     "electromechanical_coupling": "TEAM-28 levitation, Runge-Kutta ODE, dL/dz force",
+    "team28_reduced_model": "TEAM-28 reduced model in depth, 85h FEM -> 1h RNA+segmentation",
     "topology_optimization": "RNA + AVM (adjoint variable method), SIMP, magnetic actuator TO",
     "vs_pec_peec": "RNA vs PEEC vs PEC (partial element equivalent circuit) terminology",
     "all": "All topics concatenated",
@@ -88,6 +89,7 @@ the network becomes a nonlinear algebraic system.
 | Leakage flux (3D)                     | difficult        | natural        |
 | Optimization (sensitivity / TO)       | fast             | slow           |
 | Population-based design (10^6 calls)  | only choice      | infeasible     |
+| Frequency sweep with eddy currents    | reduced RL OK    | per-freq FEM   |
 | Multi-physics with mechanical motion  | natural (ODE)    | re-mesh per dt |
 
 RNA loses spatial detail; FEM loses speed and lumped-port intuition.
@@ -227,6 +229,10 @@ behaviour -- see topic `nodal_vs_mesh_analysis`.
 - **3D leakage with no obvious flux tube** -- e.g. quick stray field
   around the corner of a transformer.  Needs RNA plus a calibrated
   integral leakage correction, RNA + FEM, or the current Radia HDiv-VIM path.
+- **Eddy currents in a conductor of arbitrary cross-section** --
+  needs a reduced-order eddy model (Krylov/PRIMA projection, POD, or
+  the Foster modal form) or per-segment lumped extraction from FEM
+  (Lee 2005, TEAM-28).
 - **Detailed force distribution on a moving armature** -- needs FEM or
   a fine RNA mesh with Maxwell-stress tensor evaluation.
 
@@ -477,13 +483,12 @@ as constants in the network solve.  This is the bridge between
 high-accuracy electromagnetic field analysis (FEM) and high-speed
 RNA / circuit simulation.
 
-Two canonical sources:
+Canonical source:
 
   - Lee, Lee, Choi, Park, "Reduced Modeling of Eddy Current-Driven
     Electromechanical System Using Conductor Segmentation and Circuit
     Parameters Extracted by FEA", IEEE Trans. Magn. 41(5), 1448-1451,
     2005.  (TEAM Workshop Problem 28.)
-  - Kameari et al.
 
 ## The Lee 2005 procedure (TEAM-28)
 
@@ -596,8 +601,6 @@ The extraction itself is parallel-embarrassing: each operating point
 is independent.  This is the bedrock of FEA-extracted RNA libraries
 for power electronics and electric machine design.
 """
-
-
 
 
 RNA_MAGNETIC_COUPLING = r"""
@@ -935,13 +938,19 @@ GETS WRONG:
   domain ROM at several geometry positions (z = z1, z2, ...) and
   interpolate the ROM matrices.  Fast at runtime, but ROM construction
   per z point is expensive.
-- Useful for systems with many position-dependent eddy current loops.
+- **RL ladder for translational motion** (literature): generalises
+  Lee 2005 by replacing the cubic-spline L(z), M(z) tables with a
+  position-dependent RL circuit.  Useful for systems with many
+  position-dependent eddy current loops.
 
 ## Take-home for RNA / MEC practitioners
 
 1. If a small number of eddy-current loops dominate the motion (a few
    well-defined segments), Lee 2005 RNA + segmentation is hands-down
    the most efficient and easiest to maintain method.
+2. If the geometry is so complex that you cannot identify the
+   dominant eddy-current loops a-priori, switch to POD or a Krylov
+   (PRIMA) projection -- the modes are extracted automatically.
 3. If you need TILT / PITCH / YAW dynamics, you cannot use an
    axisymmetric formulation and must go to full 3D FEM + 6-DOF rigid
    body dynamics.  TEAM-28 itself does not require this.
@@ -1176,6 +1185,19 @@ In radia_mcp: see `radia_mcp.radia_ngsolve.hdiv_vim`.
 def get_knowledge(topic: str = "overview") -> str:
     """Dispatch RNA / MEC topics.
 
+    Topics (see TOPICS dict for one-line summaries):
+        overview                       (DEFAULT)
+        mec_basics
+        nodal_vs_mesh_analysis
+        reluctance_network_construction
+        lumped_extraction_fea
+        rna_magnetic_coupling
+        electromechanical_coupling
+        team28_reduced_model
+        topology_optimization
+        dynamic_hysteresis
+        vs_pec_peec
+        all
     """
     topic = topic.lower().strip()
     aliases = {

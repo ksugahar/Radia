@@ -1444,8 +1444,7 @@ O(N · staircase_length).
    Visualization Information Society Symposium 2007, C207
 - S. Wolfram, "Cellular Automata", 1984 (Rule 30 + classification)
 - Cross-ref MCP: `magnetic_materials_hysteresis('preisach')`
-   for the analytical Preisach form;
-   `mor_cln('overview')` for Saito lab's CLN reduction
+   for the analytical Preisach form
 """
 
 
@@ -3490,8 +3489,7 @@ future Cubit plugin SPICE-export feature.
    hysteresis loops", Int. J. Eng. Sci. 9:435-450, 1971.
 
 Cross-ref: `bobbio_1997_unification` (ferroresonance with play
-model), `cellular_automaton` (Saito Hosei), `mor_cln` MCP topic
-(Cauer Ladder Network, same Saito lineage), `catalog` (model
+model), `cellular_automaton` (Saito Hosei), `catalog` (model
 landscape).
 """
 

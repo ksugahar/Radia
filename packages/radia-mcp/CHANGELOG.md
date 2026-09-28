@@ -7,6 +7,23 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+### Removed
+
+- The Cauer-ladder-network tools and topics: `mor_cln`, `mor_cln_practice`,
+  `mor_cln_multiport`, `mor_cln_advanced`, `mor_cln_specialty`,
+  `mor_cln_collab` (MOR server), `cln_3d`, `bem_cln`, `cln_sibc_orthogonal`,
+  `cln_3d_notebook`, `cln_sphere_dd_pipeline` (radia-ngsolve server), the MagLev
+  `cln_mor_control`, RNA-MEC `cauer_ladder_rna` and FEM `cln_stacking_negative`
+  topics, their knowledge modules, and the Mathematica QD Cauer-ladder asset.
+  Reduced models are described through POD, PRIMA (congruence projection) and
+  the Foster modal form.
+
+### Changed
+
+- `mor_systematic`: the CLN topic is removed, PVL is attributed to Feldmann
+  and Freund (1995) and PRIMA is described as the block-Arnoldi congruence
+  projection; application recommendations use PRIMA / Foster modal models.
+
 ### Added
 
 - `force("source_quadrature")`: quadrature of an analytic source field on

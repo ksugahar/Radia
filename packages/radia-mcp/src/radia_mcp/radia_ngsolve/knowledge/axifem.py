@@ -16,7 +16,7 @@ Read this when:
   axis-touching elements.
 * Comparing `axihenrotte p=k` to NGSolve `H1 order=k` and wondering why
   the latter loses 5–10 % accuracy near the symmetry axis.
-* Cross-validating a Cauer-ladder / Hiruma 3-term workflow against BEM.
+* Cross-validating a reduced eddy-current model (Hiruma 3-term Lanczos) against BEM.
 * Implementing a new FEM panel that needs the `1/r`-weighted axisymmetric
   weak form integrated in closed form rather than by Gauss quadrature.
 
@@ -464,46 +464,34 @@ AXIFEM_VALIDATION = """\
 * `validation_test/axifem/research/verification/test_hiruma_disk_q2.py` — full disk Cu disk
   eddy-current Hiruma 3-term, expects τ₁ ≈ 223.7 µs.
 
-## Cauer-ladder cross-validation against BEM (Phase 3-(3), Nagamine pipeline)
+## Lanczos stage time constants vs BEM (Phase 3-(3))
 
-The Cauer ladder for the eddy-current problem follows Nagamine et al. 2026:
+The eddy-current comparison endpoint is the set of per-stage time constants
+of the reduced tridiagonal (Lanczos) model of the disk:
 
-  in --R_0--+--R_2--+--R_4--+- ...
-            |       |       |
-           L_1     L_3     L_5  ...
-            |       |       |
-           gnd     gnd     gnd
+    tau_pair[k] = lambda_{2k+1} * lambda_{2k+2}
 
-R_{2k} (k = 0, 1, 2, ...) are the *series* resistors (even subscripts) and
-L_{2k+1} are the *shunt* inductors (odd subscripts). Per-pair time constant:
-    tau_pair[k] = L_{2k+1} / R_{2k}.
+Two independent routes produce the same quantities:
 
-Two paths to the same ladder:
-
-  (A) Nagamine BEM-Foster pipeline (independent reference):
-      Mathematica bem_disk_axisym_cauer.wls computes 50 Foster eigenvalues
-      and amplitudes on a 1920-element ring mesh, 20 alpha_n moments are
-      derived, and Python disk_bem_cauer.py applies a 50-digit mpmath
-      classical Cauer extraction. This is the mathematical equivalent of
-      Nagamine's QD + equivalence-transform pipeline (Fig. 5 of his
-      paper); we do NOT implement the verified-interval-arithmetic
-      part, so our values are high-precision floats, not interval-
-      rigorous bounds.
+  (A) BEM-Foster reference (Nagamine pipeline): Mathematica computes 50
+      Foster eigenvalues and amplitudes on a 1920-element ring mesh, 20
+      moments alpha_n are derived, and a 50-digit mpmath continued-fraction
+      (Lanczos-equivalent) extraction reads off the stage constants.  We do
+      NOT implement the verified-interval-arithmetic part, so the values are
+      high-precision floats, not interval-rigorous bounds.
 
   (B) Differential-equation Henrotte FE + Hiruma 3-term Lanczos:
-      C++ axihenrotte at order=1 / order=2, with Hiruma's 3-term
-      recurrence reading off Cauer R, L coefficients directly:
-          lambda_{2k+1} = w_{2k+1}^T K w_{2k+1} = 1 / R_{2k}    (conductance)
-          lambda_{2k+2} = w_{2k+2}^T M w_{2k+2} =     L_{2k+1}  (inductance)
-      so tau_pair[k] = lambda_{2k+1} * lambda_{2k+2}.
+      C++ axihenrotte at order=1 / order=2, with the 3-term recurrence
+      reading off the tridiagonal coefficients directly:
+          lambda_{2k+1} = w_{2k+1}^T K w_{2k+1}   (conductance-like)
+          lambda_{2k+2} = w_{2k+2}^T M w_{2k+2}   (inductance-like)
 
-The Foster-amplitude normalisation differs between BEM and FE, so the
-absolute R, L values differ by a common scale factor. The ratio
-tau_pair[k] = L_{2k+1}/R_{2k} is normalisation-invariant and is the
-comparison endpoint:
+The Foster-amplitude normalisation differs between BEM and FE, so absolute
+coefficients differ by a common scale factor; tau_pair[k] is
+normalisation-invariant and is the comparison endpoint:
 
 ```
-k   BEM Cauer    p=2 fine    p=1 very-fine    p=2/BEM gap    p=1/BEM gap
+k   BEM ref      p=2 fine    p=1 very-fine    p=2/BEM gap    p=1/BEM gap
 0   219.32 us    218.71      218.05          -0.28 %        -0.58 %
 1    78.65       78.12        77.77          -0.68 %        -1.12 %
 2    40.04       39.54        39.37          -1.24 %        -1.66 %
@@ -512,68 +500,48 @@ k   BEM Cauer    p=2 fine    p=1 very-fine    p=2/BEM gap    p=1/BEM gap
 5    14.70       13.12        13.01         -10.77 %       -11.50 %
 ```
 
-axihenrotte p=2 beats axihenrotte p=1 at every k (closer to the BEM
-Cauer reference). The high-mode (k >= 4) divergence is the combined
-effect of FE basis-order error at higher modes plus numerical
-conditioning of the Cauer extraction at high stages (BEM itself starts
-producing negative tau for k >= 6, addressed in Nagamine's verified-
-interval pipeline which we have not implemented).
+axihenrotte p=2 beats axihenrotte p=1 at every k.  The high-mode (k >= 4)
+divergence is the combined effect of FE basis-order error at higher modes
+plus the numerical conditioning of high-stage moment extraction (BEM itself
+starts producing negative tau for k >= 6).
 
-Reference:
+Reference (citation):
   Nagamine, Yamaguchi, Sugahara, Hiruma, Mifune, Matsuo, "Verified
   Numerical Computations of the Cauer Network Representation of a Square
   Prism Conductor", manuscript 2026-05-04 (Japan J. Industrial Appl.
   Math. submission).
 
 Test: `validation_test/axifem/research/verification/test_3way_cauer_cross_validation.py`
-Reference data (separate working tree, not in this repo):
-  public-safe curated corpus
-    bem_disk_axisym_cauer.wls     (Mathematica BEM + Foster amplitudes)
-    disk_bem_cauer.py             (Python mpmath Cauer-I CFE)
-    bem_disk_axisym_cauer.json
-    bem_disk_axisym_cauer_python_results.json
 
-## Hiruma 3-term ≠ Stoll χ-Foster Cauer-I (verified 2026-05-10)
+## Moment convention matters (verified 2026-05-10)
 
-The Hiruma 3-term Lanczos recurrence used here computes Cauer-I rungs of
-  f_H(s) = bᵀ·(K - sM)⁻¹·b
-which is the **Krylov-Padé impedance** representation. This is NOT the
-same generating function as Sugahara/Kameari accumulation, which expands
-  f_K(s) = uᵀ·M·(sM - K)⁻¹·M·u  with u = M⁻¹·b
-giving the **χ-Foster (susceptibility)** Cauer-I — the one that matches
-analytical Stoll Bessel for sphere and Stoll-equivalent BEM-Foster.
+The Hiruma 3-term Lanczos recurrence works on the impedance-form generating
+function
+  f_H(s) = bT (K - sM)^-1 b,        alpha_n^H = bT (K^-1 M)^n K^-1 b
+(Krylov-Pade impedance).  The susceptibility form
+  f_S(s) = uT M (sM - K)^-1 M u,    alpha_n^S = uT M (K^-1 M)^n u,  u = M^-1 b
+is the one that matches the analytical Stoll Bessel spectrum of the sphere
+and the Stoll-equivalent BEM-Foster reference.
 
-Sphere ground truth (Cu a=10 mm, B₀=1 T uniform; Mathematica Hankel-Padé
-240 digits on Stoll spectrum):
-  k=0  Stoll/Kameari τ = 694.142 μs  Hiruma 3-term τ = 728.85  (+5.0%)
-  k=1  Stoll/Kameari τ = 154.604 μs  Hiruma 3-term τ = 171.51  (+10.9%)
-  k=2  Stoll/Kameari τ =  64.075 μs  Hiruma 3-term τ =  71.68  (+11.9%)
+Sphere ground truth (Cu a=10 mm, B0=1 T uniform; Mathematica Hankel-Pade
+240 digits on the Stoll spectrum):
+  k=0  susceptibility form tau = 694.142 us   impedance form tau = 728.85  (+5.0%)
+  k=1  susceptibility form tau = 154.604 us   impedance form tau = 171.51  (+10.9%)
+  k=2  susceptibility form tau =  64.075 us   impedance form tau =  71.68  (+11.9%)
 
-Implication for axifem: the τ₁ ≈ 223.7 μs cylinder reference (Hiruma) is
-in the **Hiruma convention** and should not be mixed with BEM-Foster Cauer
-values (which are in the Stoll/χ-Foster convention) without conversion.
+Implication for axifem: the tau_1 ~ 223.7 us cylinder reference (Hiruma) is
+in the impedance convention and must not be mixed with BEM-Foster values
+(Stoll/susceptibility convention) without switching the moment formula.
 
-To convert Hiruma matrices → Kameari/Stoll Cauer-I, swap the moment
-formula:
-  α_n^Kameari = uᵀ M (K⁻¹M)ⁿ u   (u = M⁻¹·b)
-  α_n^Hiruma  = bᵀ (K⁻¹M)ⁿ K⁻¹ b
-then run identical Hankel-Padé continued-fraction extraction.
-
-POLICY (2026-05-10): Project repository (CauerLadderNetwork) has dropped
-Hiruma in favour of Kameari accumulation as the canonical extractor. The
-axifem package retains its Hiruma routine for legacy verification, but
-**new tests should target Kameari accumulation** so τ values are directly
-comparable to Stoll analytical and BEM-Foster.
-
-## Henrotte + Kelvin + CLN — workflow composition
+## Henrotte + Kelvin + reduced model -- workflow composition
 
 The full eddy-current workflow on axisymmetric problems composes three pieces;
 each is documented in its own knowledge file but the *combination* is the
 intended canonical use:
 
-  Henrotte axisym FE basis  +  z-offset Kelvin (or finite air box)  +  CLN extraction
+  Henrotte axisym FE basis  +  z-offset Kelvin (or finite air box)  +  reduced model
 
-* **Henrotte basis** (this file): polynomial in `s = r²` for `ψ = 2π r A_φ`.
+* **Henrotte basis** (this file): polynomial in `s = r^2` for `psi = 2 pi r A_phi`.
   Produces `K`, `M` matrices in axisym geometry without `1/r`-Gauss errors
   near the axis.
 
@@ -581,7 +549,7 @@ intended canonical use:
   The canonical 2D axisym z-offset Kelvin transformation now works
   end-to-end with `axihenrotte`. The historical blocker was that the
   `AxiHenrotteFESpace` did not expose enough `GetDofNrs(...)` overloads
-  for `ngsolve.Periodic` to identify the `kelvin_int ↔ kelvin_ext` DOF
+  for `ngsolve.Periodic` to identify the `kelvin_int <-> kelvin_ext` DOF
   pairs; that gap was closed by adding the `NodeId` /
   `GetVertexDofNrs` / `GetEdgeDofNrs` / `GetFaceDofNrs` overloads, after
   which the same recipe used for `H1` axisym Kelvin works for
@@ -596,57 +564,56 @@ intended canonical use:
 
   Verified on Cu sphere R=10 mm (Stoll Bessel ground truth):
 
-  | mesh / curve            | τ₁ (µs) | gap to Stoll |
-  |-------------------------|---------|--------------|
-  | Stoll analytical        | 738.48  | —            |
-  | axifem p=2 + Kelvin    | 738.47  | -0.001 %     |
-  | + Curve(2)              | 738.69  | +0.028 %     |
+  | mesh / curve            | tau_1 (us) | gap to Stoll |
+  |-------------------------|------------|--------------|
+  | Stoll analytical        | 738.48     | --           |
+  | axifem p=2 + Kelvin     | 738.47     | -0.001 %     |
+  | + Curve(2)              | 738.69     | +0.028 %     |
 
-  This is the new canonical configuration for sphere/disk/cuboid axisym
-  Cauer-ladder validation — see `kelvin` topic for full recipe and the
-  documented `Periodic`-wrapping caveats.
+  This is the canonical configuration for sphere/disk/cuboid axisym
+  eddy-current decay-time validation -- see `kelvin` topic for the full
+  recipe and the documented `Periodic`-wrapping caveats.
 
-  The finite air-box truncation (`A_φ = 0` on outer rectangle) remains
+  The finite air-box truncation (`A_phi = 0` on outer rectangle) remains
   valid and is still useful when you want to avoid building the Kelvin
-  half-disc; convergence is just much slower (need R_air, Z_air ≈
-  25×–50× the conductor extent for < 1 %).
+  half-disc; convergence is just much slower (need R_air, Z_air ~
+  25x-50x the conductor extent for < 1 %).
 
-* **CLN extraction** (`cln_3d.py` + `cln_notebooks/`): once you have
-  `K, M, b` from the Henrotte assembly, choose a convention:
-  - Hiruma 3-term Lanczos (Krylov-Padé impedance), or
-  - Kameari accumulation (χ-Foster susceptibility, project canonical
-    since 2026-05-10),
-  and run the same Hankel-Padé continued-fraction Cauer extraction.
+* **Reduced model**: once you have `K, M, b` from the Henrotte assembly,
+  reduce with a Krylov projection (Hiruma 3-term Lanczos, or the PRIMA
+  congruence projection in `radia.lanczos_reduction`) or the Foster modal
+  form (generalized eigenproblem on `K, M`), and state the moment
+  convention (impedance vs susceptibility form, above) explicitly.
 
 Cross-validation reference (2026-05-10, Cu disk R=10 mm, t=2 mm,
-σ=5.8e7, B₀=1 T, leading Cauer rung τ_pair[0]):
+sigma=5.8e7, B0=1 T, leading stage time constant tau_pair[0]):
 
-| method                              | τ_pair[0] [μs] | gap to BEM |
-|-------------------------------------|----------------|------------|
-| BEM-Foster v3 (Nagamine pipeline)   | 219.32 (ref)   | —          |
-| axihenrotte p=2 (Hiruma 3-term)     | 218.71         | -0.28 %    |
-| axihenrotte p=1 very-fine (Hiruma)  | 218.05         | -0.58 %    |
-| 3D HCurl (NGSolve + Kelvin)         | ≈ 218.7        | < 1 %      |
-| Cylinder axisym VIM (144 cells)     | 211.85         | -3.4 %     |
+| method                              | tau_pair[0] [us] | gap to BEM |
+|-------------------------------------|------------------|------------|
+| BEM-Foster v3 (Nagamine pipeline)   | 219.32 (ref)     | --         |
+| axihenrotte p=2 (Hiruma 3-term)     | 218.71           | -0.28 %    |
+| axihenrotte p=1 very-fine (Hiruma)  | 218.05           | -0.58 %    |
+| 3D HCurl (NGSolve + Kelvin)         | ~ 218.7          | < 1 %      |
+| Cylinder axisym VIM (144 cells)     | 211.85           | -3.4 %     |
 
 The Cylinder VIM is run at a single coarse grid as a sanity check, not for
 high accuracy; the axifem `p=2` Q-element remains the recommended
-production path for axisym Cu eddy-current Cauer extraction.
+production path for axisym Cu eddy-current reduced-model extraction.
 
-The same workflow on Cu sphere R=10 mm (Stoll Bessel ground truth, τ₁ = μ₀ σ R² / π² = 738.48 µs):
+The same workflow on Cu sphere R=10 mm (Stoll Bessel ground truth, tau_1 = mu0 sigma R^2 / pi^2 = 738.48 us):
 
-| method                              | τ_pair[0] [μs] | gap to Stoll |
-|-------------------------------------|----------------|--------------|
-| Stoll analytical (μ₀ σ R²/π²)       | 738.48 (ref)   | —            |
-| **axifem p=2 + z-offset Kelvin**   | **738.47**     | **-0.001 %** |
-| axifem p=2 + Kelvin + Curve(2)     | 738.69         | +0.028 %     |
-| 3D HCurl (NGSolve + Kelvin)         | ≈ 694          | 0.027 % at L₁ (Stoll τ=694 convention) |
-| Sphere axisym VIM (480 cells)       | 708.4          | +2.07 %      |
+| method                              | tau_pair[0] [us] | gap to Stoll |
+|-------------------------------------|------------------|--------------|
+| Stoll analytical (mu0 sigma R^2/pi^2) | 738.48 (ref)   | --           |
+| **axifem p=2 + z-offset Kelvin**    | **738.47**       | **-0.001 %** |
+| axifem p=2 + Kelvin + Curve(2)      | 738.69           | +0.028 %     |
+| 3D HCurl (NGSolve + Kelvin)         | ~ 694            | 0.027 % at L1 (Stoll tau=694 convention) |
+| Sphere axisym VIM (480 cells)       | 708.4            | +2.07 %      |
 
 The axifem + Kelvin result is the closest to Stoll across all available
 axisym/3D methods on this benchmark (machine-precision agreement on the
-leading rung). See `axifem_documentation(topic="kelvin")` for the full
-canonical recipe (Phase B3, commit 81f6415f).
+leading time constant). See `axifem_documentation(topic="kelvin")` for the
+full canonical recipe (Phase B3, commit 81f6415f).
 
 ## Hessian-of-W convention (load-bearing)
 

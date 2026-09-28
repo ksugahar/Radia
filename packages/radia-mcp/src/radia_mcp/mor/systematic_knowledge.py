@@ -1,6 +1,24 @@
 """Systematic MOR (Model Order Reduction) knowledge for radia_mcp.mor.
 
+Distilled from the 3-volume MOR Handbook in the Sugahara lab library
+(Volumes 1+2+3 totaling 1221 pages, deGruyter 2020-2021, edited by
+Benner-Grivet-Talocia-Quarteroni-Rozza-Schilders-Silveira), plus the
+Kiss-Orosz 2024 Energies review specifically for rotating machines.
 
+Coverage:
+  mor_taxonomy          — the full MOR landscape, three families
+  projection_pod_rb     — POD + Reduced Basis (Vol 2 Ch 2, 4)
+  projection_krylov     — Krylov / moment-matching (Vol 1 Ch 3)
+  pgd                   — Proper Generalized Decomposition (Vol 2 Ch 3)
+  hyperreduction        — DEIM / EIM / hyper-reduction (Vol 2 Ch 5)
+  system_theoretic_bt   — Balanced Truncation, Hankel norm (Vol 1 Ch 2)
+  data_driven_dmd_oi    — DMD, Operator Inference, Loewner (Vol 1 Ch 6, Vol 2 Ch 7)
+  parametric_pmor       — Parametric MOR (Vol 2 Ch 1)
+  em_specific_ioan      — Ioan Ch 5 EM-specific MOR (Vol 3)
+  rotating_machines_kiss_orosz_2024 — recent review specifically
+                          for motors (POD/PGD/OIM comparison)
+  software_lab          — MOR software (Vol 3 Ch 13) + lab tools
+  lab_recommendation    — decision guide for radia + NGSolve use
 """
 
 from __future__ import annotations
@@ -30,6 +48,7 @@ Solve the reduced system, recover full solution as u = V u_r.
 | Krylov / Arnoldi | K^{-1}M iteration around expansion point | Vol 1 Ch 3 |
 | Lanczos (symmetric) | Three-term recurrence | Vol 1 Ch 3 |
 | PGD | Separable greedy expansion | Vol 2 Ch 3 |
+| PRIMA | Block-Arnoldi Krylov basis + congruence projection (passive) | `radia.lanczos_reduction` |
 
 ### Family 2: System-theoretic MOR (intrusive, knows transfer function)
 
@@ -172,7 +191,12 @@ where M_inv = (s_0 I - A)^{-1}.
 **Two-sided Lanczos** for asymmetric A with both inputs and outputs:
 - Builds V (for state) and W (for output), with W^T V = I_r
 - Produces tridiagonal T_r
-- Used in **PRIMA** (Padé via Lanczos, Odabasioglu et al. 1998)
+- Used in **PVL** (Padé via Lanczos, Feldmann and Freund 1995)
+
+**PRIMA** (Odabasioglu, Celik and Pileggi 1998): block Arnoldi basis
+from the port vectors, then the congruence Q' A Q of the original
+matrices, which preserves symmetry and definiteness and therefore
+passivity.
 
 ### Multipoint expansion (rational Krylov)
 
@@ -194,6 +218,13 @@ optimizes the expansion points for H_2 optimality.
 For LTI systems with O(10^6) DOFs, moment-matching reaches r ~ 30
 with ~30 PARDISO back-substitutions — minutes, not hours.
 
+### Radia implementation
+
+`radia.lanczos_reduction` implements PRIMA for PEEC loop/star/magnetic
+systems and `radia.analysis` uses it for the series PEEC port.  The
+reduced model stays as projected matrices evaluated through the port
+Schur complement; it can drive a circuit or system simulator as a
+state-space block.
 """
 
 PGD = """\
@@ -467,7 +498,6 @@ The reduced model can then drive an outer optimization loop
 (genetic algorithm, gradient descent) at real-time speed.
 """
 
-
 EM_SPECIFIC_IOAN = """\
 ## EM-specific MOR — Ioan et al. (Vol 3 Ch 5, 56 pages)
 
@@ -523,9 +553,12 @@ for EM.
 
 For radia + NGSolve MOR work, follow Ioan's structure-preservation
 guidance:
+- For PEEC reduction → use PRIMA (congruence projection, passive)
 - For FE eddy-current reduction → use POD + DEIM (Hollaus 2023)
 - For parametric design → use RB / PGD
 
+This module + `projection_krylov` + `hyperreduction` topics give the
+combined picture.
 """
 
 ROTATING_MACHINES_KISS_OROSZ_2024 = """\
@@ -558,12 +591,13 @@ The paper systematically reviews:
 | Balanced truncation | not in keywords | minimal |
 | DMD / OI | not in keywords | minimal |
 
-
 ### Practical conclusions (paper's perspective)
 
 1. **No published industrial real-time MOR implementation** (as of
    2024).  Gap between academic methods and production deployment.
 2. **POD + DEIM is mature** for offline parametric design.
+3. **Circuit-coupled reduced models** are needed for control-loop
+   simulation where the reduced model must talk to a circuit simulator.
 4. **PGD is under-utilized** despite theoretical advantages — has
    not crossed the academic-industrial gap.
 
@@ -572,6 +606,8 @@ The paper systematically reviews:
 The gap-of-2024 (no published industrial implementation) is an
 **opportunity**:
 
+- Take a passive projection-based (PRIMA / Foster modal) reduced model
+  into a production motor controller
 - Pair with Lange-Henrotte-Hameyer transient framework
   (`calc_motor_transient.py`) for the offline FE side
 - Result: end-to-end open-source motor control simulation toolchain
@@ -641,17 +677,27 @@ LAB_RECOMMENDATION = """\
 
 ### Decision flowchart for a new MOR project
 
-``` Is the system LINEAR (no nu(B))? YES → Is it PEEC-discretized (coil-only
-or coil-conductor)? YES → PRIMA (radia.lanczos_reduction) NO  → POD or PRIMA
-depending on input/output count NO  → Is it MOR for a CONTROL loop (real-
-time)?
+```
+Is the system LINEAR (no nu(B))?
+  YES → Is it PEEC-discretized (coil-only or coil-conductor)?
+    YES → PRIMA (radia.lanczos_reduction)
+    NO  → POD or PRIMA depending on input/output count
+  NO  → Is it MOR for a CONTROL loop (real-time)?
+    YES → Combine a projection-based reduced FE model with a lookup table for nonlinear iron
+    NO  → POD + DEIM (offline parametric study)
+```
 
 ### Method-by-application matrix
 
 | Application | Recommended MOR | Notes |
 |-------------|------------------|-------|
+| IH coil + workpiece (linear) | Foster modal / PRIMA | frequency and time domain |
+| IH coil + workpiece (nonlinear via ESIM) | Foster modal + ESIM lookup | Frequency-domain |
+| Transformer characterization | PRIMA or RB | depends on # ports |
 | Motor parametric design | POD + DEIM | Hollaus 2023 reference |
+| Motor real-time control | FE → PRIMA / Foster → state-space block | Kiss-Orosz 2024 gap-closer |
 | Accelerator magnet field map | Direct evaluation | no MOR needed (small N) |
+| EMC / EMI cable + motor | PRIMA + BEM (ngsolve.bem) | Helmholtz at high f |
 
 ### What is NOT in scope
 

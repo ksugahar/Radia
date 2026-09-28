@@ -59,7 +59,7 @@ CATALOG: dict[str, dict[str, Any]] = {
     "radia-ngsolve": {
         "subpackage": "radia_mcp.radia_ngsolve",
         "entry_point": "mcp-server-radia-ngsolve",
-        "description": "Radia + NGSolve: Kelvin / sparsesolv / CLN / PEEC / "
+        "description": "Radia + NGSolve: Kelvin / sparsesolv / PEEC / "
                        "analytical formulas / lint",
         "primary_tools": ["kelvin_transformation", "ngsolve_usage",
                             "analytical_formulas", "peec_inductance"],
@@ -209,7 +209,7 @@ CATALOG: dict[str, dict[str, Any]] = {
     "mor": {
         "subpackage": "radia_mcp.mor",
         "entry_point": "mcp-server-mor",
-        "description": "Model Order Reduction: PRIMA, Cauer Ladder Network, "
+        "description": "Model Order Reduction: POD, PRIMA/Krylov, "
                        "hyperreduction (DEIM)",
         "primary_tools": ["mor_usage"],
         "related": ["data-assimilation", "radia-ngsolve", "rna-mec"],
@@ -458,8 +458,8 @@ CATALOG: dict[str, dict[str, Any]] = {
                        "(EMS/EDS/PM/SC/Halbach) + levitation FORCE physics "
                        "(induction/EML/AMB/superconducting/diamagnetic/"
                        "Earnshaw/force-computation). Lab research: Radia "
-                       "IEM<->FEM weak coupling + Cauer Ladder Network MOR "
-                       "for control-coupled maglev (Yano, CAE-AI).",
+                       "IEM<->FEM weak coupling + Foster modal reduced "
+                       "models for control-coupled maglev.",
         "primary_tools": ["maglev"],
         "related": ["force", "motor", "pcb"],
         "tags": ["application"],
