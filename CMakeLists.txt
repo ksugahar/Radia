@@ -870,7 +870,6 @@ if(RADIA_BUILD_MATLAB_MEX)
 			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_transport.cpp
 			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_thermal.cpp
 			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_nonlinear_reactor_runtime.cpp
-			${CORE_DIR}/rad_cln.cpp
 			${RADIA_CORE_SOURCES}
 			${EXT_DIR}/axifem/axi_henrotte_numeric.cpp
 			${EXT_DIR}/auxparse/auxparse.cpp
