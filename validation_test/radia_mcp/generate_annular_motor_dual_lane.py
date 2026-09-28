@@ -261,7 +261,7 @@ def _run_hdiv(identity_sha256: str) -> tuple[dict[str, object], list[str]]:
     output = TEMP_DIR / "hdiv_mmm_hcurl_eddy_bubble_raw.json"
     command = [
         sys.executable,
-        str(ROOT / "validation_test" / "cln" / "hcurl_vim_hdiv_mmm_end_to_end.py"),
+        str(ROOT / "validation_test" / "hcurl_response_compression" / "hcurl_vim_hdiv_mmm_end_to_end.py"),
         "--geometry",
         "annular-motor",
         "--axial-length",
@@ -555,7 +555,7 @@ def main() -> int:
             "source_sha256": _sha_file(
                 ROOT
                 / "validation_test"
-                / "cln"
+                / "hcurl_response_compression"
                 / "hcurl_vim_hdiv_mmm_end_to_end.py"
             ),
         },
