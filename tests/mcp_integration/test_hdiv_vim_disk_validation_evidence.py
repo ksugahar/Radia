@@ -36,7 +36,7 @@ def test_disk_validation_evidence_freezes_h_and_p_positive_controls():
     assert max(row["modal"]["port_dominant_abs_error_pct"] for row in h_rows) < 2.0
     assert max(row["modal"]["port_dominant_abs_error_pct"] for row in p_rows) < 2.0
     assert all(
-        row["modal"]["port_dominant_residue_fraction"] > 0.85
+        row["modal"]["port_dominant_dc_weight_fraction"] > 0.85
         for row in h_rows + p_rows
     )
     assert all(
