@@ -5,6 +5,16 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Arc-current quadrature now has fixed production tolerances (relative
+  `1e-9`, absolute scale `1e-12`). The validated far-interval Gauss shortcut
+  is always enabled and falls back to adaptive integration when its paired
+  rules disagree. The experimental `PrcArc` option, `--arc-rel-tol` validation
+  switch and `RADIA_ARC_FAR_RULE` environment switch have been removed.
+- HDiv validation now follows the supported WEDGE field quadrature, symmetric
+  outer rules and coupled multi-iron dispatch. The HEX compression gate uses
+  a sufficiently large grid without disabling the production support-radius
+  safeguard. Full/image comparisons retain explicit roundoff tolerances;
+  these checks do not establish accuracy or speed for every ESRF model.
 - The high-level mixed total/reduced Omega API now accepts `auto` source
   loads by default. With B-H material, exact source representation,
   `total_hodge`, and an explicit trace tolerance, it selects surface flux.
