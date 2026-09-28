@@ -1,0 +1,74 @@
+{
+  "schema": "radia.hcurl.eddy_foster.exchange.v1",
+  "decay_rates": {
+    "shape": [
+      3
+    ],
+    "values": [
+      695.1395087634987,
+      1934.1617007489033,
+      28813.957471707632
+    ]
+  },
+  "state_order": 3,
+  "port_count": 1,
+  "input_convention": "u=-d(coil_current)/dt",
+  "state_convention": "z_dot=-diag(decay_rates)*z+modal_port_rhs*u, y=modal_port_rhs'*z",
+  "force_convention": "F=0.5*real(sum(K(k,j,b)*z(j)*conj(i(b)))) in modal coordinates",
+  "has_sibc_termination": false,
+  "basis_names": [
+    "volume_current_gram_0",
+    "volume_current_gram_1",
+    "volume_current_gram_2"
+  ],
+  "blocks": {
+    "volume": [
+      0,
+      3
+    ]
+  },
+  "arrays": {
+    "modal_port_rhs": {
+      "shape": [
+        3,
+        1
+      ],
+      "values": [
+        -0.015227731518808331,
+        -0.028758621488947828,
+        -0.008525042555514372
+      ]
+    },
+    "modal_force_operator": {
+      "shape": [
+        3,
+        3,
+        1
+      ],
+      "values": [
+        0.007106350726740126,
+        -0.037062119716792616,
+        0.003304054955571283,
+        -0.000340542797388565,
+        0.0022884351807999546,
+        -0.0004177647148591446,
+        1.8256713952547827,
+        1.0735266267374315,
+        0.5673951564973627
+      ]
+    }
+  },
+  "metadata": {
+    "benchmark": "TEAM 28 electrodynamic levitation",
+    "frequency_hz": 50.0,
+    "coil_current_reference_A": 20.0,
+    "conductivity_S_per_m": 34000000.0,
+    "coil_source": "radia.coil_builder.CoilBuilder",
+    "coil_count": 2,
+    "winding_directions": "counter-wound",
+    "force_operator_units": "N per reduced coefficient and ampere port current",
+    "parent_space": "HCurl",
+    "parent_order": 6
+  },
+  "sample_time_s": 1e-05
+}

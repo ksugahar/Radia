@@ -24,9 +24,9 @@ def test_team28_p6_hcurl_vim_force_acceptance_record():
     assert all(case["parent_ndof"] > 20_000 for case in result["cases"])
     assert all(case["evrs_rank"] == 3 for case in result["cases"])
     assert all(
-        case["cln_handoff"]["state_order"] == 3
-        and case["cln_handoff"]["port_count"] == 1
-        and case["cln_handoff"]["passive"] is True
+        case["foster_handoff"]["state_order"] == 3
+        and case["foster_handoff"]["port_count"] == 1
+        and case["foster_handoff"]["passive"] is True
         for case in result["cases"]
     )
     assert all(
