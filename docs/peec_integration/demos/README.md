@@ -51,8 +51,6 @@ cd docs/peec_integration/demos
 # PRIMA + Dowell correction verification
 python spice/prima_with_dowell_correction.py
 
-# PEEC + PRIMA SPICE export
-python spice/demo_prima_spice_export.py
 
 # result-saved public notebook
 jupyter notebook ../peec_showcase.ipynb
@@ -124,12 +122,10 @@ Z_mag(s)  = R_mag(omega) + s * L_mag                           [magnetic: Dowell
 
 See `coil/coil_on_magnetic_core_peec.py` for implementation.
 
-## SPICE / Verilog-A Export
+## Verilog-A Export
 
 ```bash
-python spice/demo_prima_spice_export.py              # SPICE netlist
-python spice/demo_prima_spice_export.py --verilog-a   # Verilog-A
-python spice/demo_prima_spice_export.py --lanczos 10  # Set Lanczos order
+python spice/demo_veriloga_export.py
 ```
 
 | Format | Extension | Compatibility | Use case |
