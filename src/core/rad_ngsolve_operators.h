@@ -51,6 +51,8 @@ public:
 
     int VHeight() const override { return ndof_; }
     int VWidth() const override { return ndof_; }
+    ngla::VecFormat RowFormat() const override { return ngla::VVectorFormat<double>(VWidth()); }
+    ngla::VecFormat ColFormat() const override { return ngla::VVectorFormat<double>(VHeight()); }
     ngla::AutoVector CreateRowVector() const override {
         return std::make_unique<ngla::VVector<double>>(ndof_);
     }
@@ -90,6 +92,8 @@ public:
         return static_cast<int>(inverse_diagonal_.size());
     }
     bool IsComplex() const override { return true; }
+    ngla::VecFormat RowFormat() const override { return ngla::VVectorFormat<ngcore::Complex>(VWidth()); }
+    ngla::VecFormat ColFormat() const override { return ngla::VVectorFormat<ngcore::Complex>(VHeight()); }
     ngla::AutoVector CreateRowVector() const override {
         return std::make_unique<ngla::VVector<ngcore::Complex>>(VHeight());
     }
@@ -145,6 +149,8 @@ public:
     int VHeight() const override { return reduced_size_; }
     int VWidth() const override { return reduced_size_; }
     bool IsComplex() const override { return true; }
+    ngla::VecFormat RowFormat() const override { return ngla::VVectorFormat<ngcore::Complex>(VWidth()); }
+    ngla::VecFormat ColFormat() const override { return ngla::VVectorFormat<ngcore::Complex>(VHeight()); }
     ngla::AutoVector CreateRowVector() const override {
         return std::make_unique<ngla::VVector<ngcore::Complex>>(reduced_size_);
     }
@@ -160,8 +166,8 @@ private:
         if (parent_->IsComplex()) {
             auto parent_x = parent_->CreateColVector();
             auto parent_y = parent_->CreateRowVector();
-            auto xv = parent_x.FVComplex();
-            auto yv = parent_y.FVComplex();
+            auto xv = parent_x.FV<ngcore::Complex>();
+            auto yv = parent_y.FV<ngcore::Complex>();
             for (int i = 0; i < parent_size_; ++i) xv[i] = input[i];
             parent_->Mult(*parent_x, *parent_y);
             for (int i = 0; i < parent_size_; ++i) output[i] = yv[i];
@@ -244,6 +250,8 @@ public:
     int VHeight() const override { return size_; }
     int VWidth() const override { return size_; }
     bool IsComplex() const override { return true; }
+    ngla::VecFormat RowFormat() const override { return ngla::VVectorFormat<ngcore::Complex>(VWidth()); }
+    ngla::VecFormat ColFormat() const override { return ngla::VVectorFormat<ngcore::Complex>(VHeight()); }
     ngla::AutoVector CreateRowVector() const override {
         return std::make_unique<ngla::VVector<ngcore::Complex>>(size_);
     }
@@ -287,8 +295,8 @@ private:
         if (term.matrix->IsComplex()) {
             auto term_x = term.matrix->CreateColVector();
             auto term_y = term.matrix->CreateRowVector();
-            auto xv = term_x.FVComplex();
-            auto yv = term_y.FVComplex();
+            auto xv = term_x.FV<ngcore::Complex>();
+            auto yv = term_y.FV<ngcore::Complex>();
             for (int i = 0; i < size; ++i) xv[i] = x[term.start + i];
             term.matrix->Mult(*term_x, *term_y);
             for (int i = 0; i < size; ++i)

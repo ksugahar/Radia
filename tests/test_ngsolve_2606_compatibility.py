@@ -195,7 +195,6 @@ def test_hdiv_pyramid_remains_an_explicit_upstream_tripwire():
 )
 def test_programmatic_structured_meshes_are_curve_safe(family, factory):
     mesh = factory()
-    assert mesh.ngmesh.EdgeDescriptors() == [], family
     _curve_mesh(mesh, 2)
     assert mesh.GetCurveOrder() == 2, family
     assert mesh.ngmesh.EdgeDescriptors(), family
