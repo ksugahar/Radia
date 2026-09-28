@@ -13,12 +13,14 @@ from . import ecb
 from . import simulink
 from .position_cln import MovingHCurlCLNFamily
 from .position_force import PositionForceCurve
+from .position_foster import MovingHCurlFosterFamily
 
 __all__ = [
     "mixed_galerkin",
     "ecb",
     "simulink",
     "MovingHCurlCLNFamily",
+    "MovingHCurlFosterFamily",
     "PositionForceCurve",
     "__version__",
 ]
