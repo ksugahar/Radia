@@ -82,6 +82,9 @@ may depend on Cubit, but Cubit users do not install Radia to use MCP.
 Cubit-side Python helpers (`cubit_helpers/add_kelvin.py`,
 `cubit_helpers/auto_kelvin_entry.py`) into your Coreform Cubit 2025.12 profile.
 Use `cubit-plugin-install --all-users` for a shared lab machine.
+The generated Cubit startup script finds the installed package at every Cubit
+start through the recorded Python, so a versioned checkout it was installed
+from can be removed after the next release is installed.
 
 For a standalone round-trip check, supply your own Cubit journal:
 
