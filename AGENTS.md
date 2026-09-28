@@ -174,7 +174,7 @@ Do not install or run Cubit on mdx1/mdx2 in either release lane. This boundary
 does not prohibit Cubit-independent checker unit tests in isolated CI
 environments. Existing installations are not silently removed.
 hibino remains a computation host and is not a release-quad acceptance target.
-Long solver work should use hibino first when it is available and may use mdx
+Long solver work should use hibino first when it is available, mdx
 only when the mdx CI queue is idle.
 
 MATLAB-capable runner services must use a MATLAB-authenticated account and pass
@@ -213,19 +213,20 @@ LAB-owned mapped drives or the workgroup share. Do not restore that dependency.
 
 ### Compute Host Routing
 
-**POLICY (2026-09-08)**: Run solver-heavy validation, optimization, scaling,
+**POLICY (2026-09-28)**: Run solver-heavy validation, optimization, scaling,
 memory, and timing work on hibino when it is **already running and idle**.
 hibino is a SPOT instance: starting it is a human action, not an agent one.
 Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes hibino hostname` — ICMP is
 blocked, so `ping` reports a false "down" — then check for a running python
 job, because hibino takes one heavy job at a time. Otherwise use whichever of
 mdx1/mdx2 is idle, after checking both its CI runner and its job queue are idle.
+An idle LAB may also run tests and validation, never timing work.
 Compute work must never delay or destabilize CI/preflight.
 Historical mdx measurements remain valid provenance. Record host, runtime,
-versions, and measured quantities in validation JSON.
+versions and results in validation JSON.
 
 Core count does not imply speed; settle quadrature and thread settings first.
-hibino offers 230 GB memory without a pagefile, not guaranteed speedup.
+hibino has 230 GB memory, no pagefile and no guaranteed speedup.
 
 **POLICY**: 全てのベンチマークスクリプトは機械可読な JSON 結果を保存すること。
 
