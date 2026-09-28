@@ -132,3 +132,10 @@ def test_2d_fail_loud_contract():
             Solve(mesh, {"default": 1000.0}, H)
         with pytest.raises(ValueError, match="EXACTLY ONE"):
             Solve(mesh, 1000.0, H, bh_table=_bh_table())
+        # Cyclic images and energy-Newton controls have no planar
+        # implementation; dropping them solved one sector as an isolated body.
+        with pytest.raises(ValueError, match="image_cyclic is not supported"):
+            Solve(mesh, 1000.0, H, image_cyclic=8)
+        with pytest.raises(ValueError, match="nonlinear_solver is not supported"):
+            Solve(mesh, None, H, bh_table=_bh_table(),
+                  nonlinear_solver="picard-mass-riesz")

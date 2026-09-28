@@ -50,7 +50,8 @@ def test_rt1_is_the_default_order_and_solves():
 
 def test_rt1_nonlinear_solves():
     """Flat BDM1 nonlinear (the energy-Newton on the high-order Gram) runs at the default order."""
-    BH = [[0.0, 0.0], [500.0, 1.3], [5000.0, 1.85], [5e5, 2.4]]
+    # dB/dH >= mu0 throughout: a falling-M tail now warns (see bh_table checks).
+    BH = [[0.0, 0.0], [500.0, 1.3], [5000.0, 1.85], [5e5, 2.5]]
     mesh = _sphere()
     with ng.TaskManager():
         r = Solve(mesh, bh_table=BH, H_ext=_HEXT)

@@ -17,6 +17,9 @@ class HDivCapability:
     hdiv_order: int
     geometry_orders: tuple[int, ...]
     recommended_geometry_order: int
+    # False for spaces that build a charge operator but are not a vim.Solve
+    # order (broken RT0, the material-topology space).
+    production_solve: bool = True
 
 
 _CAPABILITIES = (
@@ -31,10 +34,10 @@ _CAPABILITIES = (
     # the operator space of radia.topology_optimization (DemagOperator on
     # HDiv(order=0, discontinuous=True)) and NOT a production solve order:
     # vim.Solve refuses order 0.  The body-fitted solve is BDM1/BDM2.
-    HDivCapability(3, "tet", 0, (1,), 1),
+    HDivCapability(3, "tet", 0, (1,), 1, production_solve=False),
     HDivCapability(3, "tet", 1, (1, 2), 2),
     HDivCapability(3, "tet", 2, (1, 2), 2),
-    HDivCapability(3, "hex", 0, (1,), 1),
+    HDivCapability(3, "hex", 0, (1,), 1, production_solve=False),
     HDivCapability(3, "hex", 1, (1, 2), 2),
     HDivCapability(3, "hex", 2, (1, 2), 2),
     HDivCapability(3, "wedge", 1, (1, 2), 2),

@@ -22,6 +22,7 @@
 #include <limits>
 #include <mutex>
 #include <stdexcept>
+#include <string>
 #include <utility>
 #include "rad_parallel.h"
 
@@ -124,10 +125,11 @@ double ComputeEntry(int i, int j) {
     // RadHACApKBase::ComputeSystemEntry so that each HDiv, PEEC, or BEM
     // subclass can store exactly what HACApK needs.
 
-    if (g_currentManager == nullptr) {
-        std::cerr << "[HACApK] Error: g_currentManager is null in ComputeEntry" << std::endl;
-        return 0.0;
-    }
+    // A missing manager or an out-of-range index is a build defect.  Returning
+    // zero would silently replace an operator entry; the throw is captured by
+    // cHACApK_entry_ij and rethrown on the build thread after the fill.
+    if (g_currentManager == nullptr)
+        throw std::logic_error("HACApK ComputeEntry: no current H-matrix manager");
 
     int ndof = g_currentManager->GetNDOF();
 
@@ -135,11 +137,10 @@ double ComputeEntry(int i, int j) {
     int i0 = i - 1;
     int j0 = j - 1;
 
-    if (i0 < 0 || i0 >= ndof || j0 < 0 || j0 >= ndof) {
-        std::cerr << "[HACApK] Error: Invalid DOF indices: i0=" << i0
-                  << " j0=" << j0 << " ndof=" << ndof << std::endl;
-        return 0.0;
-    }
+    if (i0 < 0 || i0 >= ndof || j0 < 0 || j0 >= ndof)
+        throw std::out_of_range(
+            "HACApK ComputeEntry: DOF index (" + std::to_string(i0) + ", "
+            + std::to_string(j0) + ") outside ndof " + std::to_string(ndof));
 
     return g_currentManager->ComputeSystemEntry(i0, j0);
 }

@@ -4,6 +4,7 @@ The public nonlinear entry point is :func:`radia.vim.Solve`.  This module
 contains the constitutive curves and consistent tangent helpers consumed by
 ``radia.vim._solve``; it contains constitutive helpers only.
 """
+import warnings
 from math import pi
 
 import numpy as np
@@ -85,6 +86,36 @@ def _validate_bh_table(table, *, context="vim.Solve"):
             raise ValueError(f"{label} H values must be strictly increasing")
         if np.any(np.diff(arr[:, 1]) < -1e-12 * scale_b):
             raise ValueError(f"{label} B values must be non-decreasing")
+
+
+def _bh_table_falling_magnetization(table, *, context="vim.Solve"):
+    """Warn about, and return, table rows where M = B/mu0 - H falls.
+
+    Soft iron has dB/dH >= mu0.  Where a table's slope drops below mu0 the
+    inverse (energy) law keeps only the rising part of M(H) and caps M at the
+    last row, so the solve saturates at a lower H than the table states.  Such
+    tables stay accepted -- the saturation audit keeps one as a deliberate
+    stress fixture -- but the cap is reported instead of applied silently.
+    Returns ``{region: [H_low, H_high]}`` for the first falling interval of
+    each affected table (region ``None`` for a single table), or ``None``.
+    """
+    tables = table if isinstance(table, dict) else {None: table}
+    falling = {}
+    for region, values in tables.items():
+        arr = np.asarray(values, dtype=float)
+        magnetization = arr[:, 1] / _MU0 - arr[:, 0]
+        scale_m = max(1.0, float(np.max(np.abs(magnetization))))
+        rows = np.flatnonzero(np.diff(magnetization) < -1e-9 * scale_m)
+        if rows.size:
+            row = int(rows[0])
+            interval = [float(arr[row, 0]), float(arr[row + 1, 0])]
+            falling[region] = interval
+            label = f"{context}: bh_table" if region is None else f"{context}: bh_table[{region!r}]"
+            warnings.warn(
+                f"{label} magnetization M=B/mu0-H falls between H={interval[0]:g} and "
+                f"H={interval[1]:g} A/m (dB/dH < mu0); the nonlinear law caps M at the "
+                f"last row, below the interpolated peak", RuntimeWarning, stacklevel=3)
+    return falling or None
 
 
 def _bh_table_funcs(Harr, Barr):

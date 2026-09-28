@@ -159,6 +159,8 @@ def solve_coupled(bodies, H_ext=None, *, tol=1.0e-6, maxit=50):
     results = [None] * len(bodies)
     solver_pairs = [_make_solver(body) for body in bodies]
     relative_step = float("inf")
+    previous_step = None
+    error_estimate = float("inf")
     history = []
     for iteration in range(1, maxit + 1):
         previous = [
@@ -190,19 +192,33 @@ def solve_coupled(bodies, H_ext=None, *, tol=1.0e-6, maxit=50):
                 delta_squared += delta*delta
                 scale_squared += scale*scale
             relative_step = np.sqrt(delta_squared/max(scale_squared, 1.0e-300))
+            # A small step alone is not convergence when the block
+            # contraction q is close to one: the remaining error is about
+            # step*q/(1-q).  Estimate q from consecutive steps and require
+            # both to meet tol.
+            if previous_step is not None and previous_step > 0.0:
+                contraction = relative_step/previous_step
+                error_estimate = (relative_step*contraction/(1.0-contraction)
+                                  if contraction < 1.0 else float("inf"))
+            elif relative_step == 0.0:
+                error_estimate = 0.0
+            previous_step = relative_step
             history.append(dict(
                 iteration=iteration, relative_step=float(relative_step),
+                estimated_relative_error=float(error_estimate),
                 body_relative_steps=body_steps))
-            if relative_step < tol:
+            if relative_step < tol and error_estimate < tol:
                 break
     else:
         raise RuntimeError(
             "vim.SolveCoupled did not converge in %d block iterations "
-            "(relative step %.3e > %.3e)" % (maxit, relative_step, tol))
+            "(relative step %.3e, estimated error %.3e, tol %.3e)"
+            % (maxit, relative_step, error_estimate, tol))
 
     return dict(
         bodies=tuple(results), body_names=tuple(names), iterations=int(iteration),
-        relative_step=float(relative_step), converged=True,
+        relative_step=float(relative_step),
+        estimated_relative_error=float(error_estimate), converged=True,
         block_solver="gauss-seidel", convergence_history=history,
         permanent_magnet_body_count=sum(body.B_r is not None for body in bodies),
         nonlinear_iron_body_count=sum(body.bh_table is not None for body in bodies),

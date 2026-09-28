@@ -68,6 +68,11 @@ EnergyStopMaterial::EnergyStopMaterial(
         if (!finite(table.r.front()) || std::abs(table.r.front()) > 1.0e-14 ||
             !finite(table.g.front()) || std::abs(table.g.front()) > 1.0e-12 * scale)
             throw std::invalid_argument("EnergyStopMaterial: every table must start at r=0, g=0");
+        // Pin the accepted roundoff-level origin exactly: Interpolate reads
+        // the interval below upper_bound(radius), which must exist for every
+        // radius > 0, including one below a slightly positive first sample.
+        table.r.front() = 0.0;
+        table.g.front() = 0.0;
 
         for (std::size_t i = 1; i < table.r.size(); ++i) {
             if (!finite(table.r[i]) || !finite(table.g[i]) ||

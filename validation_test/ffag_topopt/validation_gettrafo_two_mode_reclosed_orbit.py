@@ -709,6 +709,19 @@ def run(args):
             <= args.independent_tangent_tolerance),
         "optimizer_finite_difference_not_used": True,
     }
+    if args.jacobian_regression_step_mm > 0.0:
+        # The regression was computed for this run, so it is an acceptance
+        # gate, not only a diagnostic: a broken analytic derivative fails.
+        regression_errors = [
+            error
+            for item in linearization_records
+            if "finite_difference_regression" in item
+            for error in item["finite_difference_regression"][
+                "per_mode_relative_l2_error"]]
+        gates["analytic_response_jacobian_matches_finite_difference"] = bool(
+            regression_errors
+            and all(np.isfinite(error) for error in regression_errors)
+            and max(regression_errors) <= args.jacobian_regression_tolerance)
     diagnostics = {
         # The target amplitudes only manufacture a feasible map.  They are not
         # an optimizer objective, and a finite response band admits alternate
@@ -856,6 +869,10 @@ def parse_args(argv=None):
                         default=2.0e-10)
     parser.add_argument("--jacobian-regression-step-mm", type=float,
                         default=0.0)
+    # Forward-difference agreement required of every analytic response-map
+    # column when the regression runs (its truncation error is O(step)).
+    parser.add_argument("--jacobian-regression-tolerance", type=float,
+                        default=1.0e-2)
     parser.add_argument("--spatial-gradient-regression-step-m", type=float,
                         default=1.0e-5)
     parser.add_argument("--diagnostic-only", action="store_true")
@@ -891,6 +908,7 @@ def parse_args(argv=None):
                 and len(args.initial_parameters_mm)
                 != len(args.target_amplitude_mm))
             or args.jacobian_regression_step_mm < 0.0
+            or not args.jacobian_regression_tolerance > 0.0
             or args.spatial_gradient_regression_step_m <= 0.0
             or args.segments < 8
             or (args.variational_stations-1) % args.segments != 0

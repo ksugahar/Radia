@@ -2293,7 +2293,12 @@ def _accept_deep_restoration(violation, violation_new, band, volume_ok):
     total_new = float(np.sum(normalized_new))
     progress = (worst_new < 0.995 * worst
                 or (worst_new < worst and total_new < 0.995 * total))
-    return bool(progress or np.all(normalized_new <= 1.25))
+    # Landing inside the ascent acceptance zone ends restoration: deep
+    # restoration starts only above that zone, so this is always progress.
+    # The former 1.25-band clause also accepted steps that worsened the
+    # maximum between the zone and 1.25 bands and could cycle.
+    return bool(progress
+                or np.all(normalized_new <= 1.0 + _BAND_ACCEPT_OVERSHOOT))
 
 
 def _solve_minimax_lp_update(density, gradients, violation, band,
