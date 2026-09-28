@@ -2326,7 +2326,8 @@ belong to the same nonlinear state.
 The material field is assembled and evaluated as an NGSolve
 ``CoefficientFunction`` on the selected finite-element space and is integrated
 with NGSolve quadrature.  The current Radia table adapter constructs that
-coefficient function from monotone PCHIP B(H) segments and continues beyond
+coefficient function from the shared `radia.bh_law` segments (monotone PCHIP of
+M = B/mu0 - H when the table's M rises, so dB/dH >= mu0) and continues beyond
 the last knot with vacuum slope.  Therefore equal B-H knots from another
 solver are not yet an equal constitutive law: bind the table digest,
 interpolation, extrapolation, and anisotropy contract explicitly.

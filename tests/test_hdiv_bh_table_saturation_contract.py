@@ -51,15 +51,16 @@ def test_constant_zero_m_is_not_negative_susceptibility():
     assert report['inverse_error'] is not None
 
 
-def test_monotone_node_m_does_not_guarantee_monotone_pchip_b():
+def test_monotone_node_m_gives_monotone_interpolated_m():
+    """PCHIP of B(H) let M fall between these rising nodes (chi < -0.1); the law now interpolates M."""
     h = np.array([0., 1., 2., 3.])
     b = MU0 * np.array([0., 2., 3., 4.])
     assert np.all(np.diff(b / MU0 - h) >= -1e-14)
     report = AUDIT.saturation_report(np.column_stack((h, b)))
     assert report['first_decreasing_node_interval'] is None
-    assert report['interpolated_M_nondecreasing'] is False
-    assert report['minimum_interpolated_chi'] < -.1
-    assert report['peak_M_Am'] > report['endpoint_M_Am']
+    assert report['interpolated_M_nondecreasing'] is True
+    assert report['minimum_interpolated_chi'] >= -1e-12
+    assert report['peak_M_Am'] == pytest.approx(report['endpoint_M_Am'])
 
 
 @pytest.mark.parametrize('table', [[[0, 0], [0, 1]], [[0, 0], [1, float('nan')]]])
