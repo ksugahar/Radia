@@ -77,6 +77,11 @@ CALLER_EXCLUDE = [
     "**/*.ipynb",
 ]
 LANE_HELPERS = {
+    # Imported model/ROM helpers; run_* and check_* drivers own TaskManager.
+    "validation_test/surface_rom_team10/aphi_model.py",
+    "validation_test/surface_rom_team10/ecsw.py",
+    "validation_test/surface_rom_team10/rom_aphi.py",
+    "validation_test/surface_rom_team10/team13_model.py",
     "validation_test/eddy_current_analytical_validation/axisym_sibc_reference.py",
     "validation_test/omega_quadrature/ctype.py",
     "validation_test/omega_quadrature/esrf6.py",

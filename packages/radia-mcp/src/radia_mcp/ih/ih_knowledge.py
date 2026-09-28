@@ -529,7 +529,7 @@ Q = 0.5 * sigma * InnerProduct(E, Conj(E)).real
 | BDDC | CG | Standard, symmetric-like | Fastest for well-conditioned |
 | BDDC | GMRes | Non-symmetric systems | More robust, slightly slower |
 | local | CG | Small problems | Simple but slow for large DOF |
-| (none) | Direct (PARDISO) | Debug/small problems | Exact but O(n^2) memory |
+| (none) | Direct (SparseCholesky) | Debug/small problems | Exact but O(n^2) memory |
 
 **Typical performance** (mesh with ~222k elements, ~1.7M DOFs):
 - Matrix assembly: ~400 sec
@@ -2066,9 +2066,10 @@ Non-obvious features:
 
 3. **Linear solver** per-method:
    - PEEC+BEM: Dense LU (small) / HACApK (large, O(N log N))
-   - FEM A-V: pardiso / shifted AMS (p=1) / BDDC (p>=2) / iccg
+   - FEM A-V: sparsecholesky / shifted AMS (p=1) / BDDC (p>=2) / iccg
    `shifted_ams` and `hacapk` are CLI-plumbed but WIP (calc returns
-   error).  `pardiso` + `dense` are the tested paths.
+   error).  The direct FE route is explicitly `sparsecholesky`; historical direct results
+   do not certify this migration. Validate true residuals on each formulation.
 
 4. **.vol label validation** on load via `inspect_vol_labels`: status
    label shows 'OK' (green), 'warn' (amber, e.g. missing kelvin),
@@ -2144,7 +2145,7 @@ gf_A, gf_phi = gfu.components
 gf_phi.Set(CF(1), definedon=mesh.Boundaries("source"))
 r = gfu.vec.CreateVector()
 r.data = -a.mat * gfu.vec
-gfu.vec.data += a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * r
+gfu.vec.data += a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * r
 
 # Post-normalization to I_total
 s_eddy = 1j * omega
@@ -2165,7 +2166,7 @@ gfu.vec.data = complex(scale) * gfu.vec
 2. **phi defined only on conductor** (`definedon="coil"`). If defined globally,
    the unconstrained phi in air breaks the solution (A becomes pure gradient,
    curl(A)=0 trivial solution).
-3. **Periodic Kelvin + pardiso works**. BDDC+CG diverges without additional
+3. **Periodic Kelvin direct solves require residual validation**. BDDC+CG diverges without additional
    regularization (needs careful preconditioner design for saddle-point system).
 4. **GND nodeset does NOT constrain HCurl** — Dirichlet on HCurl works only
    on sidesets (boundary faces), not nodesets (vertices). Regularization term
