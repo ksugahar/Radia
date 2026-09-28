@@ -9,6 +9,13 @@
   ],
   "rules": [
     {
+      "id": "shared-bh-interpolation",
+      "patterns": ["bh_law.py"],
+      "classification": "private/not-applicable",
+      "matlab": [],
+      "notes": "Shared constitutive interpolation helper consumed by the Python solver implementations behind the existing MATLAB batch entry points. It constructs B(H) polynomial coefficients; it is not a standalone MATLAB API or a claim of native MEX constitutive parity."
+    },
+    {
       "id": "patch-recovery",
       "patterns": [
         "patch_recovery.py"
