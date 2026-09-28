@@ -73,12 +73,14 @@ shared or production storage, and never automatically file an upstream issue or
 pull request. Public attribution is: "Optuna, the Optuna logo and any related
 marks are trademarks of Preferred Networks, Inc."
 
-For a reusable file exchange, call `radia.vim.ExportHCurlEddyCLNJSON` from
+For a reusable file exchange, call `radia.vim.ExportHCurlEddyFosterJSON` from
 the NGSolve/Python side and load it with
-`radia.simulink.loadHCurlEddyCLNModel`. An optional reduced force operator is
-evaluated by `radia.simulink.evaluateHCurlEddyCLNForce`. The Team28 export
-driver is `validation_test/maglev/team28_hcurl_vim_force.py --export-model`;
-the first p=6 case becomes a MATLAB-readable exchange file. This is a
+`radia.simulink.loadHCurlEddyFosterModel`. The exchange holds the Foster
+decay rates, the modal input matrix and, optionally, the modal force
+operator; `radia.simulink.solveHCurlEddyFosterHarmonic` and
+`radia.simulink.evaluateHCurlEddyFosterForce` give the phasor response and
+time-average force. The Team28 export driver is
+`validation_test/maglev/team28_coilbuilder_eddy_bubble.py`. This is a
 numeric reduced-model bridge, not a MATLAB reimplementation of NGSolve mesh
 assembly.
 
@@ -100,11 +102,14 @@ conductivity and reluctivity. This is the MATLAB/Simulink route for the
 high-order local FE projection; it is intentionally distinct from the full
 HCurl-VIM Laplace/BEM inductance and rationalized SIBC path.
 
-For moving coupling, use `radia.vim.ExportHCurlEddyCLNFamilyJSON` with a
-strictly ordered height coordinate and a common reduced state basis. MATLAB
-loads it with `radia.simulink.loadHCurlEddyCLNFamily`, evaluates the selected
-snapshot through `radia.simulink.interpolateHCurlEddyCLNFamily`, and exposes
-the result through `buildHCurlEddyCLNFamilyModel`. The default policy is
+For moving coupling, use `radia.vim.ExportHCurlEddyFosterFamilyJSON` with a
+strictly ordered height coordinate and one shared reduced R/L pair, so one
+Foster mode set serves every height. MATLAB loads it with
+`radia.simulink.loadHCurlEddyFosterFamily`, evaluates the selected snapshot
+through `radia.simulink.interpolateHCurlEddyFosterFamily` (only the modal
+input and force operators move), and exposes the result through
+`buildHCurlEddyFosterFamilyModel`. The block force is the instantaneous
+product `K*z(t)*i(t)`, whose cycle average is the phasor time-average force. The default policy is
 linear interpolation with an error outside the sampled height range; clamping
 and PCHIP are explicit opt-ins. Python/NGSolve is therefore a preprocessing
 dependency for assembling the family, not a runtime dependency for MATLAB or

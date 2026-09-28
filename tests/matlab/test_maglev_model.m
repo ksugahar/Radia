@@ -1,5 +1,5 @@
 function tests = test_maglev_model
-%TEST_MAGLEV_MODEL Verify the standalone moving HCurl/CLN MagLev model.
+%TEST_MAGLEV_MODEL Verify the standalone moving Foster HCurl MagLev model.
 tests = functiontests(localfunctions);
 end
 
@@ -23,14 +23,48 @@ if isfolder(testCase.TestData.FileGenRoot)
 end
 end
 
-function testSmokeFamilyIsPassiveAndPositionDependent(testCase)
+function testSmokeFamilySharesModesAndMovesPorts(testCase)
 family = radia.simulink.makeMagLevSmokeFamily(SampleTime_s=1.0e-3);
-verifyEqual(testCase, family.schema, "radia.hcurl.eddy_cln.family.v1");
-verifyTrue(testCase, family.shared_state_basis);
+verifyEqual(testCase, family.schema, "radia.hcurl.eddy_foster.family.v1");
+verifyTrue(testCase, family.shared_modes);
 verifyEqual(testCase, family.snapshot_count, 2);
 verifyEqual(testCase, family.sample_time_s, 1.0e-3, "AbsTol", 0);
-verifyNotEqual(testCase, family.models{1}.Ad, family.models{2}.Ad);
-verifyTrue(testCase, all(cellfun(@(model) model.passive, family.models)));
+verifyGreaterThan(testCase, min(family.decay_rates), 0);
+verifyEqual(testCase, diag(family.Ad), exp(-family.decay_rates * 1.0e-3), ...
+    "RelTol", 1e-15);
+verifyNotEqual(testCase, family.modal_port_rhs(:,:,1), family.modal_port_rhs(:,:,2));
+middle = radia.simulink.interpolateHCurlEddyFosterFamily(family, 0.005);
+verifyEqual(testCase, middle.modal_port_rhs, ...
+    0.5 * (family.modal_port_rhs(:,:,1) + family.modal_port_rhs(:,:,2)), "AbsTol", 1e-15);
+verifyEqual(testCase, middle.Ad, family.Ad, "AbsTol", 0);
+verifyError(testCase, @() radia.simulink.interpolateHCurlEddyFosterFamily( ...
+    family, 0.02), "radia:simulink:HCurlFosterExtrapolation");
+end
+
+function testTimeDomainForceAveragesToHarmonicForce(testCase)
+% Instantaneous block force K*z(t)*i(t) must average to the phasor force.
+root = fileparts(fileparts(fileparts(mfilename("fullpath"))));
+familyFile = fullfile(root, "validation_test", "maglev", ...
+    "team28_coilbuilder_hcurl_eddy_foster_family.json");
+sampleTime = 1.0e-5;
+family = radia.simulink.loadHCurlEddyFosterFamily(familyFile, SampleTime_s=sampleTime);
+model = radia.simulink.interpolateHCurlEddyFosterFamily(family, 0.0);
+omega = 2 * pi * 50;
+amplitude = 20;
+steps = round(0.1 / sampleTime);
+z = zeros(family.state_order, 1);
+lift = zeros(steps, 1);
+for k = 1:steps
+    t = (k - 1) * sampleTime;
+    force = radia.internal.hcurlEddyFosterInstantaneousForce( ...
+        model.force_operator, z, amplitude * sin(omega * t));
+    lift(k) = force(3);
+    z = model.Ad * z + model.Bd * (-amplitude * omega * cos(omega * t));
+end
+period = round(0.02 / sampleTime);
+harmonic = radia.simulink.evaluateHCurlEddyFosterForce(model, ...
+    radia.simulink.solveHCurlEddyFosterHarmonic(model, 50, amplitude), amplitude);
+verifyEqual(testCase, mean(lift(end - 2 * period + 1:end)), harmonic(3), "RelTol", 1e-2);
 end
 
 function testBuilderCreatesRunnableModel(testCase)
@@ -56,10 +90,10 @@ familyExpression = ...
 set_param(plant, "family", familyExpression);
 radia.simulink.onMagLevBlockFamilyChanged(plant);
 verifyEqual(testCase, string(get_param( ...
-    plant + "/Moving HCurl CLN", "Parameters")), familyExpression);
+    plant + "/Moving HCurl Foster", "Parameters")), familyExpression);
 verifyEqual(testCase, string(get_param( ...
-    plant + "/Moving HCurl CLN", "FunctionName")), ...
-    "radia_hcurl_eddy_cln_family_sfunction");
+    plant + "/Moving HCurl Foster", "FunctionName")), ...
+    "radia_hcurl_eddy_foster_family_sfunction");
 ports = get_param(plant, "PortHandles");
 verifyEqual(testCase, numel(ports.Inport), 3);
 verifyEqual(testCase, numel(ports.Outport), 2);
@@ -113,8 +147,8 @@ load_system(modelPath);
 cleanup = onCleanup(@() closeIfLoaded("radia_maglev"));
 set_param("radia_maglev", "SimulationCommand", "update");
 verifyEqual(testCase, string(get_param( ...
-    "radia_maglev/MagLev Plant/Moving HCurl CLN", "FunctionName")), ...
-    "radia_hcurl_eddy_cln_family_sfunction");
+    "radia_maglev/MagLev Plant/Moving HCurl Foster", "FunctionName")), ...
+    "radia_hcurl_eddy_foster_family_sfunction");
 verifyEqual(testCase, string(get_param( ...
     "radia_maglev/MagLev Parameters", "Mask")), "on");
 clear cleanup

@@ -8,7 +8,7 @@ end
 expression = string(get_param(blockPath, "family"));
 if strlength(strtrim(expression)) == 0
     error("radia:simulink:MagLevFamily", ...
-        "Common-basis CLN family expression must not be empty.");
+        "Shared-mode Foster family expression must not be empty.");
 end
 % Force Simulink to materialize the mask workspace before changing a child
 % S-Function parameter. Without this call, set_param evaluates the new
@@ -20,6 +20,6 @@ if isempty(mask)
         "The MagLev plant must remain a masked subsystem.");
 end
 mask.getWorkspaceVariables;
-set_param(blockPath + "/Moving HCurl CLN", ...
+set_param(blockPath + "/Moving HCurl Foster", ...
     "Parameters", char(expression));
 end

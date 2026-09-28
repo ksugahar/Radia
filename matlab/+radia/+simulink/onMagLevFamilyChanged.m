@@ -17,7 +17,7 @@ end
 
 workspace = get_param(modelName, "ModelWorkspace");
 if strlength(strtrim(familyFile)) > 0
-    family = radia.simulink.loadHCurlEddyCLNFamily( ...
+    family = radia.simulink.loadHCurlEddyFosterFamily( ...
         familyFile, SampleTime_s=sampleTime, ...
         Interpolation=interpolation, Extrapolation=extrapolation);
 else
@@ -38,20 +38,13 @@ set_param(modelName, "SimulationCommand", "update");
 end
 
 function family = resampleFamily(family, sampleTime)
-models = family.models;
-for index = 1:numel(models)
-    old = models{index};
-    updated = radia.simulink.makeHCurlEddyCLNModel( ...
-        old.resistance, old.inductance, old.port_rhs, ...
-        SampleTime_s=sampleTime, InitialState=old.x0);
-    preserved = ["height_m", "exchange_schema", "force_operator", "metadata"];
-    for fieldName = preserved
-        if isfield(old, fieldName)
-            updated.(fieldName) = old.(fieldName);
-        end
-    end
-    models{index} = updated;
-end
-family.models = models;
-family.sample_time_s = sampleTime;
+% Only the zero-order hold depends on the sample time; the shared Foster
+% modes and the height-indexed operators are unchanged.
+updated = radia.simulink.makeHCurlEddyFosterFamily(family.positions_m, ...
+    family.decay_rates, family.modal_port_rhs, family.force_operator, ...
+    SampleTime_s=sampleTime, Interpolation=family.interpolation, ...
+    Extrapolation=family.extrapolation, InitialState=family.x0);
+updated.source_file = family.source_file;
+updated.metadata = family.metadata;
+family = updated;
 end

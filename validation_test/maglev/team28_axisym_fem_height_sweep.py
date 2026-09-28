@@ -96,6 +96,8 @@ def run():
         "height_datum": "dZ offset from the 10.8 mm disk-bottom position",
         "force_note": "legacy_N is the TEAM 28 integral Re[B_r J_t] = 2x the physical "
                       "time-averaged force; upward_physical_N is the physical lift",
+        "frequency_Hz": float(model.FREQ),
+        "coil_current_peak_A": float(model.I1),
         "disk_weight_N": DISK_WEIGHT_N,
         "dZ_mm": list(DZ_MM),
         "legacy_N": legacy.tolist(),

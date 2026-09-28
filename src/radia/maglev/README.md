@@ -116,10 +116,10 @@ is added, it should be treated as an independent extraction cross-check of the
 The packaged `matlab/radia_maglev.slx` model is the human-facing dynamic
 interface. Open it with `radia.simulink.openMagLev()`. Its masked MagLev plant
 accepts `-dI/dt`, mechanical height, and coil current, then advances a
-common-basis HCurl/CLN family and returns the induced port response and the
+shared-mode Foster HCurl family and returns the induced port response and the
 three-component Lorentz force. The tracked model carries diagnostic smoke data;
 replace that data with a family exported by
-`radia.vim.ExportHCurlEddyCLNFamilyJSON` for engineering use. Python is not
+`radia.vim.ExportHCurlEddyFosterFamilyJSON` for engineering use. Python is not
 called during a Simulink time step.
 
 For fixed-position diagnostics, export the polarizability as a continuous-time
