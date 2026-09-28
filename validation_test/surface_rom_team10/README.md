@@ -176,6 +176,53 @@ Source: `results/team10_pattern_select_p3_sel42.json`, hibino.
   therefore compare the pool against this floor rather than against a fixed
   number.  That rule is not calibrated yet.
 
+### 6. Stop-rule calibration
+
+Source: `results/team10_stop_calibration_p3.json`, `run_stop_calibration.py`,
+hibino, 4766 s.
+
+- **Training sets:** `c1_rise` plus every subset of 0-2 pool members, 29 sets.
+- **Bases:** each set is scored with both the (4, 2) and the (8, 4) basis.
+  The same basis serves selection and production.
+- **Stop quantity:** the largest eta over the pool members that are not
+  trained.
+- **Truth:** the worst of the three test errors.
+
+| basis | worst < 10 % | 10-20 % | >= 20 % | corr(log eta, log err), all / below 20 % |
+|---|---|---|---|---|
+| (4, 2) | 14 | 8 | 7 | 0.67 / 0.51 |
+| (8, 4) | 18 | 4 | 7 | 0.82 / 0.22 |
+
+Rule A stops when the largest pool eta is below tau.  "Stops" counts the
+sets on which the rule stops; the other columns describe those sets.
+
+| tau | (4, 2): stops / at >= 10 % / worst stopped | (8, 4): stops / at >= 10 % / worst stopped |
+|---|---|---|
+| 0.10 | 0 / 0 / - | 5 / 0 / 7.3 % |
+| 0.20 | 2 / 1 / 10.1 % | 14 / 2 / 10.5 % |
+| 0.25 | 13 / 3 / 16.9 % | 14 / 2 / 10.5 % |
+| 0.50 | 16 / 3 / 16.9 % | 18 / 3 / 11.6 % |
+| 1.00 | 19 / 5 / 16.9 % | 22 / 4 / 13.5 % |
+
+- **Gross failures:** eta separates them reliably.  Every set with a test
+  error of 20 % or more has pool eta >= 1.0 (the web coil is untrained), so no
+  tau <= 1.0 ever stops on one.
+- **The 10 % line:** eta does not resolve it.  Below 20 % the correlation is
+  weak, and near 10 % the error depends on which patterns share the small
+  basis.  At (4, 2), every set that holds `c1_rise_half` ends at 13-17 %: a
+  low-amplitude pattern spends part of a 12-column basis.
+- **Safe thresholds at 10 %:** no false stop with tau = 0.195 at (4, 2), which
+  stops 1 of 14 passing sets, and tau = 0.11 at (8, 4), which stops 5 of 18.
+- **Rule B:** the ratio to the training floor is not better.  Its safe values
+  (1.79 and 0.93) stop 4 and 2 passing sets.
+- **Resulting rule:**
+  - select until the largest pool eta < 0.5; this is a coverage guarantee
+    (no missing pattern), and the worst stopped set was 17 %;
+  - use the (8, 4) basis with tau = 0.1 when 10 % must hold without an exact
+    check.
+  - These thresholds come from one geometry and pool.  The premise that the
+    tests resemble the pool is untested beyond it.
+
 ## Limits
 
 - **Where the advantage holds:** only with a changing excitation pattern.
