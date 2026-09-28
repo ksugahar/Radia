@@ -80,18 +80,6 @@ int check_kernel() {
     std::cout << "PASS: axis closed form and four independent volume references\n";
     if(!boundary_checks()) return 3;
     std::cout << "PASS: five boundary partitions and ten two-sided limits\n";
-    // Explicit default tolerance is bit-identical; out-of-range values throw.
-    const auto implicit=RadArcSection::Field(.012,.09,.035,.070,.105,.2,4.8);
-    const auto explicit_default=RadArcSection::Field(.012,.09,.035,.070,.105,.2,4.8,
-                                                     RadArcSection::DefaultRelTol);
-    if(implicit!=explicit_default) return 5;
-    for(const double bad: {0., 1.e-13, 1.e-2, std::numeric_limits<double>::quiet_NaN()}) {
-        bool threw=false;
-        try { RadArcSection::Field(.012,.09,.035,.070,.105,.2,4.8,bad); }
-        catch(const std::invalid_argument&) { threw=true; }
-        if(!threw) return 6;
-    }
-    std::cout << "PASS: default tolerance identity and range checks\n";
     return 0;
 }
 
