@@ -35,7 +35,8 @@ import numpy as np
 
 from ngsolve import (H1, HCurl, BilinearForm, LinearForm, GridFunction,
                       Periodic, Compress, CoefficientFunction, TaskManager,
-                      curl, dx, ds, grad, InnerProduct, Conj, Integrate)
+                      curl, dx, ds, grad, InnerProduct, Conj, Integrate,
+                      NumberSpace)
 
 from radia.kelvin_material import make_kelvin_mu_cf, make_kelvin_nu_cf, MU_0, NU_0, _is_kelvin_material
 
@@ -130,6 +131,24 @@ def _assemble_and_solve(a_bf, f_lf, fes, inverse="pardiso"):
     return gfu
 
 
+
+def _measure_integral(mesh, integrand, measure, *, boundary):
+    """``int integrand d(measure)`` by linear-form assembly, not ``Integrate``.
+
+    NGSolve's ``Integrate`` gives each thread a fixed 10 MB / nthreads local
+    heap that ``SetHeapSize`` does not change; at a high quadrature bonus it
+    overflows at many threads (ESRF Example 6 at 38 threads: "Local Heap
+    overflow, integrate-lh, Size: 263157").  Assembly uses the adjustable
+    assembly heap.  A NumberSpace test function is the constant one, so the
+    assembled entry is the integral itself.
+    """
+    space = NumberSpace(mesh)
+    test = space.TestFunction()
+    form = LinearForm(space)
+    form += integrand * (test.Trace() if boundary else test) * measure
+    form.Assemble()
+    return float(form.vec[0])
+
 def project_source_interface_potential(
         mesh, H_s, interface_boundary, *, order=2, inverse="pardiso",
         gauge_epsilon=1.0e-12, relative_tolerance=None):
@@ -189,10 +208,10 @@ def project_source_interface_potential(
         fes.FreeDofs(), inverse=inverse) * f_lf.vec
 
     residual = grad(potential_gf).Trace() + H_tangential
-    residual_norm = float(math.sqrt(Integrate(
-        InnerProduct(residual, residual) * d_interface, mesh)))
-    source_norm = float(math.sqrt(Integrate(
-        InnerProduct(H_tangential, H_tangential) * d_interface, mesh)))
+    residual_norm = float(math.sqrt(_measure_integral(
+        mesh, InnerProduct(residual, residual), d_interface, boundary=True)))
+    source_norm = float(math.sqrt(_measure_integral(
+        mesh, InnerProduct(H_tangential, H_tangential), d_interface, boundary=True)))
     relative_residual = residual_norm / max(source_norm, 1.0e-30)
     if relative_tolerance is not None and relative_residual > float(relative_tolerance):
         raise RuntimeError(
@@ -270,10 +289,10 @@ def project_source_physical_potential(
         fes.FreeDofs(), inverse=inverse) * f_lf.vec
 
     residual = grad(potential_gf) + H_s
-    residual_norm = float(math.sqrt(Integrate(
-        InnerProduct(residual, residual) * d_physical, mesh)))
-    source_norm = float(math.sqrt(Integrate(
-        InnerProduct(H_s, H_s) * d_physical, mesh)))
+    residual_norm = float(math.sqrt(_measure_integral(
+        mesh, InnerProduct(residual, residual), d_physical, boundary=False)))
+    source_norm = float(math.sqrt(_measure_integral(
+        mesh, InnerProduct(H_s, H_s), d_physical, boundary=False)))
     relative_residual = residual_norm / max(source_norm, 1.0e-300)
     if relative_tolerance is not None and relative_residual > float(relative_tolerance):
         raise RuntimeError(
@@ -400,12 +419,12 @@ def outward_source_flux_form(mesh, H_s, signs, test_trace, *, bonus_intorder, sc
     measure = ds(definedon=mesh.Boundaries("|".join(sorted(signs))),
                  bonus_intorder=int(bonus_intorder))
     outward = sign * InnerProduct(H_s, specialcf.normal(mesh.dim))
-    area = float(Integrate(CoefficientFunction(1.0) * measure, mesh))
+    area = float(_measure_integral(mesh, CoefficientFunction(1.0), measure, boundary=True))
     from ngsolve import IfPos
 
     # Same measure as the assembly, so the removed mean cancels its net load.
-    net = float(Integrate(outward * measure, mesh))
-    absolute = float(Integrate(IfPos(outward, outward, -outward) * measure, mesh))
+    net = float(_measure_integral(mesh, outward, measure, boundary=True))
+    absolute = float(_measure_integral(mesh, IfPos(outward, outward, -outward), measure, boundary=True))
     mean = net / area
     form = float(scale) * (outward - mean) * test_trace * measure
     return form, {"mean_outward_flux": mean, "net_outward_flux": net,
@@ -635,10 +654,10 @@ def project_source_total_hodge(
         source_t = H_s - InnerProduct(H_s, normal) * normal
         residual_t = source_t + grad(potential_gf).Trace()
         residual_t = residual_t - InnerProduct(residual_t, normal) * normal
-        residual_norm = float(math.sqrt(Integrate(
-            InnerProduct(residual_t, residual_t) * d_boundary, mesh)))
-        source_t_norm = float(math.sqrt(Integrate(
-            InnerProduct(source_t, source_t) * d_boundary, mesh)))
+        residual_norm = float(math.sqrt(_measure_integral(
+            mesh, InnerProduct(residual_t, residual_t), d_boundary, boundary=True)))
+        source_t_norm = float(math.sqrt(_measure_integral(
+            mesh, InnerProduct(source_t, source_t), d_boundary, boundary=True)))
         relative_t = residual_norm / max(source_t_norm, 1.0e-300)
         if relative_t > float(tangential_tolerance):
             raise RuntimeError(
@@ -661,10 +680,10 @@ def project_source_total_hodge(
             "bonus_intorder": int(bonus_intorder),
             "source_load": source_load,
         }
-    harmonic_norm = float(math.sqrt(Integrate(
-        InnerProduct(harmonic_field, harmonic_field) * d_total, mesh)))
-    source_norm = float(math.sqrt(Integrate(
-        InnerProduct(H_s, H_s) * d_total, mesh)))
+    harmonic_norm = float(math.sqrt(_measure_integral(
+        mesh, InnerProduct(harmonic_field, harmonic_field), d_total, boundary=False)))
+    source_norm = float(math.sqrt(_measure_integral(
+        mesh, InnerProduct(H_s, H_s), d_total, boundary=False)))
     return {
         "potential": potential_gf,
         "harmonic_field": harmonic_field,
