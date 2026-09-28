@@ -32,7 +32,7 @@ must not be cited as measured frequency-domain accuracy.
 - **Ferrite (PC47, PC50, PC200)**: URN achieves 39-66% lower error on materials with Cole-Cole relaxation
 - **Ferrite (PC95)**: VF outperforms URN (-49%) on near-ideal Debye behavior
 - **Legacy Attention Study**: older validation notebooks include an attention
-  ablation; SA/RM work now focuses on attention-free CLN peeling.
+  ablation; SA/RM work now uses the attention-free Y-domain dictionary.
 - **Honest Assessment**: URN's advantage emerges when fractional-order dynamics dominate
 
 ## Directory Structure
@@ -103,7 +103,7 @@ The undocumented NASA frequency axis remains a separate blocker to interpreting
 relaxation times, irrespective of the number of bases.
 
 The current SA/RM-2026 research route starts from a single-layer, attention-free
-**34-basis Y-domain dictionary**, not the earlier 22-basis or CLN-peeling route.
+**34-basis Y-domain dictionary**, not the earlier 22-basis route.
 Its engineering objective is a compact passive response within a caller-owned
 measurement error budget, rather than the smallest possible training residual.
 Ten or twelve retained bases are comparison points, not lower bounds: even ten
@@ -143,132 +143,11 @@ treat digitized points as approximate. Use original measurement data for
 quantitative claims; figure-extracted points are suitable only for qualitative
 workflow checks.
 
-The Cauer and CLN-peeling sections below preserve historical alternatives.
-They are not the adopted SA/RM single-layer reduction recommendation.
 
 See [`model_inventory.md`](model_inventory.md) for candidate models beyond the
 original 22-basis dictionary, including parallel-RLC anti-resonance branches,
 skin/proximity ladders, Havriliak-Negami relaxation, DRT diagnostics, and
 passive rational macromodeling.
-
-## Cauer-Ladder Direction
-
-For SA/RM review work, Radia also includes an experimental differentiable
-Cauer-ladder candidate:
-
-```python
-from radia.urn import (
-    CauerLadderURNConfig,
-    train_cauer_ladder_alternating,
-    train_cauer_ladder_progressive,
-)
-
-cfg = CauerLadderURNConfig.twenty_two_parameter_candidate()
-model = train_cauer_ladder_alternating(freq_hz, Z_measured, cfg)
-Z_fit = model.predict(freq_hz)
-sections = model.parameter_summary()
-```
-
-The ladder evaluates a positive continued fraction,
-`Z_k = R_k + s L_k + 1/(G_k + s C_k + 1/Z_{k+1})`, using PyTorch autograd.
-A six-section ladder has 24 positive parameters, close to the 22-basis
-Y-domain dictionary, but it can represent pole-zero/anti-resonance behavior
-through series/parallel nesting rather than by adding many parallel basis
-functions.
-
-`train_cauer_ladder_alternating` alternates direct impedance-domain updates for
-the series elements (`R,L`) with direct admittance-domain updates for the shunt elements
-(`G,C`).  Blocks that make the combined Z/Y objective unstable are rolled back
-and retried with a lower learning rate.  This follows the review idea that some
-parameters are better identified in impedance form while others are better
-identified in admittance form.
-
-There is also an experimental `use_peeling_initialization=True` mode that tries
-to initialize the ladder by alternately peeling series impedance and shunt
-admittance terms.  Early checks on the PDF-extracted SA/RM curves show that
-naive peeling is not yet reliable; direct alternating optimization is the safer
-baseline for now.
-
-For harder resonance/anti-resonance data, use the pole-zero assisted path:
-
-```python
-from radia.urn import (
-    CauerLadderURNConfig,
-    fit_rational_pole_zero,
-    train_cauer_ladder_tail_then_polish,
-)
-
-cfg = CauerLadderURNConfig.twenty_two_parameter_candidate(
-    use_rational_initialization=True,
-    use_least_squares_polish=True,
-    frozen_outer_sections=2,
-)
-teacher = fit_rational_pole_zero(freq_hz, Z_measured, order=6)
-model = train_cauer_ladder_tail_then_polish(freq_hz, Z_measured, cfg)
-```
-
-This first builds a small pole-zero rational teacher, distills that response
-into positive Cauer parameters by nonlinear least squares, trains the inner
-ladder with the outer sections frozen, and finally polishes all sections.
-
-## CLN Peeling Direction
-
-`train_cln_peeling_urn` implements paired-basis CLN peeling.  Stage ``n``
-represents the current driving-point impedance as an even series branch plus an
-odd shunt branch loaded by the next tail:
-
-```text
-R_n = Z_2n + (Z_2n+1 || R_n+1)
-```
-
-One 22-basis composite fit supplies the physical basis shapes of the pair; the
-fitted coefficients are split continuously between the even and odd branches
-(soft split ``a_2n,k = a_k p_k``, ``a_2n+1,k = a_k (1 - p_k)``) while a fresh
-22-basis lookahead model represents ``R_n+1``.  Accepted pairs are frozen and
-the measured tail is peeled by the exact inverse map
-``R_n+1 = [1/(R_n - Z_2n) - 1/Z_2n+1]^-1``; earlier stages are never
-re-trained (no global polish).
-
-```python
-from radia.urn import CLNPeelingConfig, train_cln_peeling_urn
-
-cfg = CLNPeelingConfig(n_stages=2)
-model = train_cln_peeling_urn(freq_hz, Z_measured, cfg)
-Z_lookahead = model.predict_terminated(freq_hz, termination="lookahead")
-audit = model.audit_passivity()  # dense-grid positive-real audit
-```
-
-Evaluation policy: report the ``termination="lookahead"`` S-domain RMSE (the
-learned physical tail) together with the dense-grid ``audit_passivity()``
-report.  ``termination="stored"`` re-inserts the exactly peeled measurement
-residue, reconstructs the training grid to machine precision by construction,
-and is only defined on the training grid -- it is an identity check and must
-never be quoted as fit accuracy.  All terminations except ``stored`` accept an
-arbitrary frequency grid, which is what the audit uses for interpolation and
-extrapolation checks.
-
-### Stage-wise trust region (2026-07-27)
-
-The exact peel amplifies measurement error wherever ``R_n - Z_2n`` cancels,
-and it produces sign-unstable spikes wherever the peeled tail admittance
-``1/(R_n - Z_2n) - 1/Z_2n+1`` nearly vanishes: in such parallel-resonance
-bands the tail barely loads the ladder, so its peeled value is amplified noise.
-On the SA/RM PCB coil the 1.36--1.49 MHz self-resonance band produced a
--59.7 kOhm negative-real spike in ``R_1`` (median ``|R_1|`` is 56 Ohm), which
-no passive dictionary can represent; the second stage was rejected with
-``min_parallel_real_normalized = -1063`` no matter what the series branch did.
-
-Each stage therefore assigns a per-frequency trust weight to its peeled tail,
-built from the relative series cancellation and the peeled-tail admittance
-magnitude (config fields ``denominator_margin_relative`` and
-``tail_admittance_margin_relative``).  The next stage fits its composite seed
-and pair split with those weights, and its acceptance gates use trusted points
-only (``min_parallel_real_trusted``, ``min_tail_admittance_real_trusted``,
-``seed/parent_s_rmse_trusted``) plus a ``trusted_fraction >=
-min_trusted_fraction`` gate; inherited weights multiply stage by stage.  A
-``denominator_margin_relative`` hinge in the pair loss additionally discourages
-the current stage from manufacturing new cancellation bands.  The stored exact
-tail is never modified, so identity reconstruction is untouched.
 
 ## Convolution Quadrature Bridge
 
