@@ -74,6 +74,8 @@ on:
       - 'src/matlab/radia_mex.cpp'
       - 'matlab/+radia/+internal/callMex.m'
       - 'matlab/+radia/setup.m'
+      - 'tests/matlab/test_ngsolve_sparsecholesky.m'
+      - 'matlab/+radia/+ngsolve/Matrix.m'
       - 'tests/matlab/test_mex_runtime_setup.m'
       - 'src/core/rad_beam_transfer.*'
       - 'src/lib/rad_beam_transfer_pybind.*'
@@ -177,6 +179,8 @@ on:
       - 'src/matlab/radia_mex.cpp'
       - 'matlab/+radia/+internal/callMex.m'
       - 'matlab/+radia/setup.m'
+      - 'tests/matlab/test_ngsolve_sparsecholesky.m'
+      - 'matlab/+radia/+ngsolve/Matrix.m'
       - 'tests/matlab/test_mex_runtime_setup.m'
       - 'src/core/rad_beam_transfer.*'
       - 'src/lib/rad_beam_transfer_pybind.*'
@@ -263,7 +267,7 @@ jobs:
           $required = $diffFailed -or '${{ github.event_name }}' -eq 'workflow_dispatch'
           $required = $required -or [bool]($changed -match '^(src/ext/HACApK/|src/core/rad_hacapk|matlab/\+radia/HACApKChargeGram\.m|tests/matlab/test_hacapk_rank_cap\.m|src/ext/sparsesolv/|src/matlab/|matlab/\+radia/\+sparsesolv/|tests/matlab/.*sparsesolv|validation_test/ngsolve_matlab_parity/run_sparsesolv|CMakeLists.txt|Build.ps1|\.github/workflows/sparsesolv.yml)')
           $required = $required -or [bool]($changed -match '^matlab/(python_api_parity_manifest.json|\+radia/\+python/(sparsesolv|electromagnetValidation|esrfExamples|staticElectromagnet)\.m)')
-          $required = $required -or [bool]($changed -match '^(matlab/\+radia/(setup\.m|\+internal/callMex\.m)|tests/matlab/test_mex_runtime_setup\.m)$')
+          $required = $required -or [bool]($changed -match '^(matlab/\+radia/(setup\.m|\+internal/callMex\.m)|tests/matlab/test_mex_runtime_setup\.m|tests/matlab/test_ngsolve_sparsecholesky\.m|matlab/\+radia/\+ngsolve/Matrix\.m)$')
           $required = $required -or [bool]($changed -match '^(src/(core/rad_beam_transfer|lib/rad_beam_transfer_pybind|matlab/radia_beam_mex_commands|radia/beam\.py)|matlab/\+radia/\+beam/(canonicalBodyHamiltonianJet|propagateVariationalMap)\.m|tests/matlab/(test_beam_transfer_mex\.m|beam_transfer_python_reference\.py)|validation_test/accelerator/benchmark_beam_transfer_mex_python\.py)')
           $required = $required -or ($changed -contains 'tools/native_build_provenance.ps1')
           $required = $required -or [bool]($changed -match '^(src/core/rad_ngsolve_radia_field\.h|matlab/\+radia/RadiaField\.m|tests/matlab/test_radiafield_mex\.m)$')
