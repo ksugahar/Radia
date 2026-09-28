@@ -142,7 +142,7 @@ def summary() -> dict:
     wall = (SWEEP > WALL_BAND_HZ[0]) & (SWEEP < WALL_BAND_HZ[1])
     return {
         "case": "cylinder_planar_sibc",
-        "description": "rank-1 CLN bulk + 1 planar-SIBC surface DOF",
+        "description": "rank-1 Krylov(s=0) bulk + 1 planar-SIBC surface DOF",
         "metric": METRIC,
         "geometry": {"a_m": A, "sigma_S_per_m": SIGMA, "mu_H_per_m": MU},
         "sweep": {"f_lo_hz": float(SWEEP[0]), "f_hi_hz": float(SWEEP[-1]),

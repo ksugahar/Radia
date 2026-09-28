@@ -169,7 +169,7 @@ def summary() -> dict:
         }
     return {
         "case": "cylinder_senior_tower",
-        "description": "rank-1 CLN bulk + N surface DOF (N-1 Senior terms)",
+        "description": "rank-1 Krylov(s=0) bulk + N surface DOF (N-1 Senior terms)",
         "metric": METRIC,
         "geometry": {"a_m": A, "sigma_S_per_m": SIGMA, "mu_H_per_m": MU},
         "sweep": {"f_lo_hz": float(SWEEP[0]), "f_hi_hz": float(SWEEP[-1]),
