@@ -24,9 +24,9 @@ Key features relevant to electromagnetic simulation:
 ## Installation
 
 ```bash
-pip install ngsolve==6.2.2606 netgen-mesher==6.2.2606
+pip install ngsolve==6.2.2607 netgen-mesher==6.2.2607
 # Radia pins both packages together because its native extensions use their C++ ABI.
-# NGSolve 6.2.2606 uses ngsolve-openblas; Radia's own HACApK kernels use
+# NGSolve 6.2.2607 uses ngsolve-openblas; Radia's own HACApK kernels use
 # the separately installed MKL 2026 runtime. Do not reuse Radia binaries built
 # against NGSolve 6.2.2604.
 # The Periodic BC regression in 6.2.2406--6.2.2501 is fixed in this release.

@@ -31,7 +31,7 @@ MakeStructured3DMesh = _mesh_helpers.MakeStructured3DMesh
 from radia.vim._vim import _curve_mesh
 
 ROOT = Path(__file__).resolve().parents[1]
-PINNED_VERSION = "6.2.2606"
+PINNED_VERSION = "6.2.2607"
 
 
 def _dependencies(path: Path) -> set[str]:
@@ -134,43 +134,6 @@ def test_production_bem_uses_current_variational_operator_api():
     assert not offenders, "\n".join(offenders)
     for relative in ("src/radia/ngsbem_eddy.py", "src/radia/ngsbem_peec.py"):
         assert "LaplaceSL" in (ROOT / relative).read_text(encoding="utf-8"), relative
-
-
-def test_shield_bem_slp_reproduces_the_retired_maxwell_operator():
-    """The HelmholtzSL form equals the retired operator while the pin still ships it.
-
-    Delete this oracle with the NGSolve bump that removes the legacy operator.
-    """
-    import warnings
-
-    import ngsolve.bem as ngbem
-    from netgen.occ import Box, OCCGeometry, Pnt
-
-    from radia.ngsbem_eddy import ShieldBEMSIBC
-
-    box = Box(Pnt(0, 0, 0), Pnt(0.02, 0.02, 0.01))
-    mesh = ng.Mesh(OCCGeometry(box).GenerateMesh(maxh=0.01))
-    shield = ShieldBEMSIBC(mesh, sigma=3.7e7)
-    shield.assemble(intorder=4)
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        legacy = ngbem.MaxwellSingleLayerPotentialOperator(
-            shield._fes, kappa=1.0, intorder=4
-        ).mat
-    active = shield._loop.active_dofs
-    x = legacy.CreateColVector()
-    y = legacy.CreateColVector()
-    reference = np.zeros((len(active), len(active)), dtype=complex)
-    for i, dof in enumerate(active):
-        x[:] = 0
-        x[dof] = 1.0
-        legacy.Mult(x, y)
-        reference[:, i] = [y[d] for d in active]
-
-    scale = np.abs(reference).max()
-    assert scale > 0
-    assert np.abs(shield._V_full - reference).max() <= 1e-12 * scale
 
 
 @pytest.mark.parametrize(
