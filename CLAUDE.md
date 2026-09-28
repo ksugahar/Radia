@@ -50,6 +50,12 @@ Prefer established public abstractions over proprietary plumbing.
   mode counts from error/convergence in the operating band, not naming alone.
 
 - Use SI units; magnetization is A/m.
+- FE direct solves use NGSolve `sparsecholesky`. Do not select PARDISO by
+  default or use it as an automatic fallback, including direct subsolves.
+  Existing PARDISO paths are migration debt: validate replacements with true
+  residuals and representative problem sizes before claiming migration complete.
+  Unsupported matrix structure or factorization failure is a visible blocker;
+  do not alter the operator or relax acceptance to conceal it.
 - Compare vector fields with `norm(B1 - B2)`; ESRF coil-yoke HDiv/FEM validation defaults to 1 % relative RMS on its declared core stencil, separately from solver convergence.
 - Radia C++ matrix storage is row-major unless an external API owns the layout.
 - Radia core Green functions remain Laplace/MQS/Darwin kernels.

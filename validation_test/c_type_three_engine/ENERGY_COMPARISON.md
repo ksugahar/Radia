@@ -40,8 +40,19 @@ waiting for reduced-A. Subset output is explicitly marked as partial, not a
 successful three-engine comparison. New energy runs have a distinct checkpoint
 contract: old B-observation checkpoints cannot supply energy integrals.
 
-For the direct reduced-A comparison, `--reduced-a-solver sparsecholesky`
-selects NGSolve SparseCholesky explicitly. It does not silently substitute
-PARDISO or AMS; existing direct/default behavior is preserved. A small-system
-test covers both linear and Picard field equivalence and the residual contract.
-Large-system memory and factorization behavior still require measurement.
+For the direct reduced-A comparison, `--reduced-a-solver direct` and
+`--reduced-a-solver sparsecholesky` both select NGSolve SparseCholesky.
+PARDISO is not an automatic alternative. Mixed Omega is a remaining migration
+task: its multiplier system produced
+non-finite values in a small SparseCholesky trial. A guard now rejects such
+values immediately; its existing backend defaults are not yet migrated.
+Small-system and nonlinear regression checks do not establish large-system readiness: an ESRF case 3 matrix assembled
+successfully but its SparseCholesky factorization terminated with an access
+violation under NGSolve 6.2.2606 on Windows, both inside and outside TaskManager.
+No residual or nonlinear acceptance was obtained for that case.
+
+Repository policy also covers direct subsolves. Existing PARDISO use elsewhere,
+including the native HDiv mass factor and older application runners, remains
+migration debt until the replacement's residual, matrix-structure support and
+representative-size checks pass. This change does not claim those paths have
+already been migrated.

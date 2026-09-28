@@ -134,9 +134,8 @@ def test_reduced_a_nonlinear_direct_path_is_symmetric_and_residual_checked():
     assert "eps=DEFAULT_GAUGE_EPSILON" in nonlinear
     assert "physical_gauge_coeff = physical_eps * nu_air" in nonlinear
     assert "kelvin_gauge_coeff" in nonlinear
-    # radia's own SPD PARDISO with METIS ordering (the shipped wrapper forces
-    # minimum degree); the registered name is DIRECT_INVERSE_TYPE
-    assert "inverse=direct_inverse_type()" in nonlinear
+    # Direct FE solves resolve through the native SparseCholesky selector.
+    assert "inverse=direct_inverse_type(solver)" in nonlinear
     assert "inverse='pardisospd'" not in nonlinear
     assert "maximum_linear_relative_residual" in nonlinear
     assert "reduced-A linear solve failed its relative-residual" in nonlinear
