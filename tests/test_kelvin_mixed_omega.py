@@ -863,6 +863,17 @@ def test_projected_picard_iron_updates_never_evaluate_the_air_source():
     np.testing.assert_allclose(fields[1], fields[0], rtol=1e-9, atol=1e-18)
 
 
+@pytest.mark.parametrize("name,kwargs", [
+    ("project_source_interface_potential", {"interface_boundary": "interface"}),
+    ("project_source_physical_potential", {"physical_materials": ("total",)}),
+    ("project_source_total_hodge", {"total_source_materials": ("total",)}),
+])
+def test_source_projections_reject_retired_direct_backend_before_mesh_access(name, kwargs):
+    import radia.kelvin_solver as kelvin
+    with pytest.raises(ValueError, match="sparsecholesky"):
+        getattr(kelvin, name)(None, None, inverse="pardiso", **kwargs)
+
+
 def test_source_projection_diagnostics_survive_many_threads():
     """Exercise the fixed heap share without changing the suite's thread count."""
     import subprocess
@@ -883,6 +894,8 @@ for threads in (1, 76):
     ng.SetNumThreads(threads)
     with ng.TaskManager():
         result = project_source_total_hodge(mesh, source, ("total",), order=2, bonus_intorder=12)
+        assert result["inverse"] == "sparsecholesky"
+        assert result["linear_true_relative_residual"] < 1e-8
     values.append(result["relative_harmonic_norm"])
 np.testing.assert_allclose(values[0], values[1], rtol=1e-10, atol=0.)
 """
