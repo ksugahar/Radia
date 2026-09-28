@@ -56,10 +56,12 @@ def test_outer_rule_dispatch():
     """The symmetric degree-5 rule is used at quad in {3,4}: quad==3 = linear RT1 near + default far_quad=3
     (product _tet_ref(3) is only degree 3), quad==4 = the nonlinear energy-Newton near rule (product
     _tet_ref(4)=64pts is degree 5, matched by the 15-pt symmetric rule at 4.3x fewer points).  Any OTHER order
-    (inner subtraction iq=2, intorder overrides, curved) falls back to product Gauss-Duffy."""
+    uses product Gauss-Duffy except quad=6, whose degree-10 symmetric rule
+    preserves BDM2 reflection invariance."""
     for q in (3, 4):                                                                  # symmetric degree-5
         assert _outer_tet(q)[0].shape[0] == 15 and _outer_tri(q)[0].shape[0] == 7
-    for q in (2, 5, 6):                                                               # product fall-back
+    assert _outer_tet(6)[0].shape[0] == 81 and _outer_tri(6)[0].shape[0] == 25
+    for q in (2, 5):                                                                  # product fall-back
         assert _outer_tet(q)[0].shape[0] == _tet_ref(q)[0].shape[0]
         assert _outer_tri(q)[0].shape[0] == _tri_ref(q)[0].shape[0]
 

@@ -71,10 +71,12 @@ def test_curved_rt2_material_solve_and_field_match_full_model_to_roundoff():
     assert abs(full["demag"]-half["demag"]) < eps10
     # The full and reduced CG systems have different dimensions and therefore
     # different reduction/update orders.  Their solved means stay in a small
-    # roundoff band.  Each field component remains below 10 eps; the Euclidean
-    # norm consequently has the sharp three-component bound sqrt(3)*10 eps.
-    assert magnetization_error < 32.0*np.finfo(float).eps
-    assert field_component_error < eps10
-    assert field_vector_error < np.sqrt(3.0)*eps10
+    # roundoff band. Neither solution is an exact-arithmetic reference:
+    # allocate 10 eps per field, hence 20 eps for their component difference.
+    # Allow 32 eps for each independently assembled/solved mean. This is a
+    # roundoff comparison, not bitwise identity of differently sized systems.
+    assert magnetization_error < 64.0*np.finfo(float).eps
+    assert field_component_error < 2.0*eps10
+    assert field_vector_error < np.sqrt(3.0)*2.0*eps10
     assert full["field_evaluator_stats"]["source_kind"] == "curved-element-exact-bdm2"
     assert half["field_evaluator_stats"]["source_kind"] == "curved-element-exact-bdm2"

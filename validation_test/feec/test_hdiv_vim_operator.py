@@ -37,7 +37,7 @@ def test_demagoperator_factor_rt1_rt2():
             for p in (1, 2)
         }
         with pytest.raises(ValueError, match="order in"):
-            DemagOperator(ng.HDiv(mesh, order=0), eps=1e-7)
+            DemagOperator(ng.HDiv(mesh, order=3), eps=1e-7)
     assert all(0.31 < value < 0.345 for value in values.values()), values
     assert abs(values[2] - 1.0 / 3.0) < abs(values[1] - 1.0 / 3.0), values
     assert abs(values[2] - values[1]) < 2e-3, values
