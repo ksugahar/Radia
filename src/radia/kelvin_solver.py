@@ -149,8 +149,27 @@ def _measure_integral(mesh, integrand, measure, *, boundary):
     form.Assemble()
     return float(form.vec[0])
 
+def _solve_source_projection(a_bf, f_lf, fes, potential_gf, inverse):
+    """Solve the gauged H1 projection and check its algebraic residual."""
+    if inverse != "sparsecholesky":
+        raise ValueError("source projection requires inverse='sparsecholesky'")
+    freedofs = fes.FreeDofs()
+    potential_gf.vec.data = a_bf.mat.Inverse(
+        freedofs, inverse="sparsecholesky") * f_lf.vec
+    residual = f_lf.vec.CreateVector()
+    residual.data = f_lf.vec - a_bf.mat * potential_gf.vec
+    free = np.fromiter((bool(v) for v in freedofs), dtype=bool, count=fes.ndof)
+    solution = potential_gf.vec.FV().NumPy()[free]
+    rhs = f_lf.vec.FV().NumPy()[free]
+    relative = float(np.linalg.norm(residual.FV().NumPy()[free]) /
+                     max(float(np.linalg.norm(rhs)), 1e-300))
+    if not np.all(np.isfinite(solution)) or not math.isfinite(relative) or relative > 1e-8:
+        raise RuntimeError(f"source projection true relative residual {relative:.3e} exceeds 1e-8")
+    return relative
+
+
 def project_source_interface_potential(
-        mesh, H_s, interface_boundary, *, order=2, inverse="pardiso",
+        mesh, H_s, interface_boundary, *, order=2, inverse="sparsecholesky",
         gauge_epsilon=1.0e-12, relative_tolerance=None):
     """Project the scalar source-potential trace on a source/total interface.
 
@@ -173,6 +192,8 @@ def project_source_interface_potential(
     """
     from ngsolve import specialcf
 
+    if inverse != "sparsecholesky":
+        raise ValueError("source projection requires inverse='sparsecholesky'")
     if interface_boundary not in mesh.GetBoundaries():
         raise ValueError(
             f"interface_boundary={interface_boundary!r} is not a mesh boundary")
@@ -204,8 +225,7 @@ def project_source_interface_potential(
     a_bf.Assemble()
     f_lf.Assemble()
     potential_gf = GridFunction(fes, name="source_interface_potential")
-    potential_gf.vec.data = a_bf.mat.Inverse(
-        fes.FreeDofs(), inverse=inverse) * f_lf.vec
+    linear_residual = _solve_source_projection(a_bf, f_lf, fes, potential_gf, inverse)
 
     residual = grad(potential_gf).Trace() + H_tangential
     residual_norm = float(math.sqrt(_measure_integral(
@@ -221,6 +241,8 @@ def project_source_interface_potential(
             "cut/cohomology source representation")
     return {
         "potential": potential_gf,
+        "linear_true_relative_residual": linear_residual,
+        "inverse": "sparsecholesky",
         "fes": fes,
         "relative_tangential_residual": relative_residual,
         "tangential_residual_norm": residual_norm,
@@ -231,7 +253,7 @@ def project_source_interface_potential(
 
 
 def project_source_physical_potential(
-        mesh, H_s, physical_materials, *, order=2, inverse="pardiso",
+        mesh, H_s, physical_materials, *, order=2, inverse="sparsecholesky",
         gauge_epsilon=1.0e-12, relative_tolerance=None):
     """Project one globally consistent source scalar potential in physical space.
 
@@ -253,6 +275,8 @@ def project_source_physical_potential(
     traces consumed by the mixed solver.  The caller owns the surrounding
     :class:`ngsolve.TaskManager` region.
     """
+    if inverse != "sparsecholesky":
+        raise ValueError("source projection requires inverse='sparsecholesky'")
     names = tuple(str(name) for name in physical_materials)
     if not names or len(names) != len(set(names)) or any(not name for name in names):
         raise ValueError("physical_materials must contain unique non-empty names")
@@ -285,8 +309,7 @@ def project_source_physical_potential(
     a_bf.Assemble()
     f_lf.Assemble()
     potential_gf = GridFunction(fes, name="physical_source_potential")
-    potential_gf.vec.data = a_bf.mat.Inverse(
-        fes.FreeDofs(), inverse=inverse) * f_lf.vec
+    linear_residual = _solve_source_projection(a_bf, f_lf, fes, potential_gf, inverse)
 
     residual = grad(potential_gf) + H_s
     residual_norm = float(math.sqrt(_measure_integral(
@@ -304,6 +327,8 @@ def project_source_physical_potential(
         )
     return {
         "potential": potential_gf,
+        "linear_true_relative_residual": linear_residual,
+        "inverse": "sparsecholesky",
         "fes": fes,
         "relative_volume_residual": relative_residual,
         "volume_residual_norm": residual_norm,
@@ -571,7 +596,7 @@ def _uniform_permeability(mesh, mu_cf, materials, mu_r_by_material, *, role):
 
 
 def project_source_total_hodge(
-        mesh, H_s, total_source_materials, *, order=2, inverse="pardiso",
+        mesh, H_s, total_source_materials, *, order=2, inverse="sparsecholesky",
         gauge_epsilon=1.0e-12, bonus_intorder=4, source_load="volume",
         tangential_tolerance=None):
     """Split a linked source inside total-potential materials.
@@ -598,6 +623,8 @@ def project_source_total_hodge(
     ``|n x (H_s + grad Phi_s)| / |n x H_s|`` exceeds it, which is what a
     linked source produces.  The volume norms are not evaluated in this mode.
     """
+    if inverse != "sparsecholesky":
+        raise ValueError("source projection requires inverse='sparsecholesky'")
     _check_source_load("source_load", source_load)
     if source_load == "surface_flux" and (
             tangential_tolerance is None or not math.isfinite(float(tangential_tolerance))
@@ -641,8 +668,7 @@ def project_source_total_hodge(
     a_bf.Assemble()
     f_lf.Assemble()
     potential_gf = GridFunction(fes, name="total_source_potential")
-    potential_gf.vec.data = a_bf.mat.Inverse(
-        fes.FreeDofs(), inverse=inverse) * f_lf.vec
+    linear_residual = _solve_source_projection(a_bf, f_lf, fes, potential_gf, inverse)
 
     harmonic_field = H_s + grad(potential_gf)
     if source_load == "surface_flux":
@@ -667,6 +693,8 @@ def project_source_total_hodge(
                 "source_load='volume', which retains the harmonic remainder")
         return {
             "potential": potential_gf,
+            "linear_true_relative_residual": linear_residual,
+            "inverse": "sparsecholesky",
             "harmonic_field": harmonic_field,
             "fes": fes,
             "relative_harmonic_norm": None,
@@ -686,6 +714,8 @@ def project_source_total_hodge(
         mesh, InnerProduct(H_s, H_s), d_total, boundary=False)))
     return {
         "potential": potential_gf,
+        "linear_true_relative_residual": linear_residual,
+        "inverse": "sparsecholesky",
         "harmonic_field": harmonic_field,
         "fes": fes,
         "relative_harmonic_norm": harmonic_norm / max(source_norm, 1.0e-300),
