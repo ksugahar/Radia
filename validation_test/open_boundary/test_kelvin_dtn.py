@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 """Golden tests for radia.open_boundary.kelvin_dtn (the Kelvin-built material-aware /
-non-separable DtN -> CLN), ported from the verified Kelvin DtN research demos
+non-separable DtN and its band reduction), ported from the verified Kelvin DtN research demos
 and now maintained as the executable public validation surface.
 
 Two tiers:
   * PURE-NUMPY (always run): the radial Kelvin (R/rho')^2-weighted FEM BUILDS the
-    eddy DtN and reproduces the closed-form dtn_cln.eddy_dtn (to act6_01's verified
-    ~5e-2 over DC->evanescent) with NO DC closure floor; the band-CLN reduces it.
+    eddy DtN and reproduces the closed-form dtn_exact.eddy_dtn (to act6_01's verified
+    ~5e-2 over DC->evanescent) with NO DC closure floor; a band rational fit reduces it.
   * NGSOLVE (importorskip): the arbitrary-shape Schur DtN matrix + the generalised
     Steklov ladder of a NON-separable cube is O_h-split (l=2 -> E_g(2)+T_2g(3) = 2+3,
-    l=1 dipole degenerate) -- an analytic-free correctness proof -- and band-CLN-reducible.
+    l=1 dipole degenerate) -- an analytic-free correctness proof -- and band-reducible by a rational fit.
 """
 import numpy as np
 import pytest
@@ -43,12 +43,12 @@ def test_kelvin_fem_has_no_dc_closure_floor():
         f"Kelvin DC err {dc_err:.1e} should be far below the truncated-FEM floor {trunc_floor:.1e}"
 
 
-def test_band_cln_fit_reduces_eddy_dtn():
-    """band_cln_fit reduces a (synthetic) eddy DtN over the band to a few sqrt(s) stages."""
+def test_band_rational_fit_reduces_eddy_dtn():
+    """band_rational_fit reduces a (synthetic) eddy DtN over the band to a low-degree fit in sqrt(s)."""
     s_band = 1j * np.logspace(-2, 2, 12)
     G = np.array([ob.eddy_dtn(2, s) for s in s_band])
-    _, nrmse = ob.band_cln_fit(s_band, G, 4)
-    assert nrmse < 1e-2, f"band-CLN (4 stages) did not reduce the DtN ({nrmse:.1e})"
+    _, nrmse = ob.band_rational_fit(s_band, G, 4)
+    assert nrmse < 1e-2, f"band rational fit (4 stages) did not reduce the DtN ({nrmse:.1e})"
 
 
 # ------------------------------ NGSolve tier -------------------------------
@@ -82,8 +82,8 @@ def test_cube_dtn_is_Oh_split():
     assert {kgap, 5 - kgap} == {2, 3}, "O_h must split l=2 into a 2+3 pattern (E_g + T_2g)"
 
 
-def test_cube_dipole_dtn_band_cln():
-    """The built cube dipole DtN interpolates DC->evanescent and a few-stage CLN
+def test_cube_dipole_dtn_band_rational_fit():
+    """The built cube dipole DtN interpolates DC->evanescent and a low-degree rational fit
     in sqrt(s) reduces it over the band."""
     pytest.importorskip("ngsolve")
     from ngsolve import TaskManager
@@ -99,5 +99,5 @@ def test_cube_dipole_dtn_band_cln():
             Rs.append(complex(v0 @ Sv @ v0) / complex(v0 @ Mgv @ v0))
     Rs = np.array(Rs)
     assert abs(Rs[0].imag) < 5e-2 and abs(Rs[-1].imag) > 0.1, "Im(DtN) must grow DC->evanescent"
-    _, nrmse = ob.band_cln_fit(band, Rs, 6)
-    assert nrmse < 2e-2, f"a few-stage CLN must reduce the cube dipole eddy DtN ({nrmse:.1e})"
+    _, nrmse = ob.band_rational_fit(band, Rs, 6)
+    assert nrmse < 2e-2, f"a low-degree rational fit must reduce the cube dipole eddy DtN ({nrmse:.1e})"
