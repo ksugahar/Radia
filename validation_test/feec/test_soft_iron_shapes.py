@@ -87,26 +87,13 @@ def test_soft_iron_box_input_validation():
 
 
 # --------------------------------------------------------------------------------------------------
-# Review fixes (2026-07-05): multi-iron fail-loud, hex/wedge antisymmetric-plane IMA, PM constructors.
+# Shape contracts: hex/wedge antisymmetric-plane IMA and PM constructors.
+# Multi-iron auto dispatch is covered by test_hdiv_radsolve_dispatch.py.
 
 def _hexbox(x0, x1, y0, y1, z0, z1, nx, ny, nz):
     from ngsolve.meshes import MakeStructured3DMesh
     return MakeStructured3DMesh(hexes=True, nx=nx, ny=ny, nz=nz,
                                 mapping=lambda X, Y, Z: (x0 + (x1 - x0) * X, y0 + (y1 - y0) * Y, z0 + (z1 - z0) * Z))
-
-
-def test_multiple_irons_auto_fails_loud():
-    """rad.Solve(auto) FAILS LOUD on a multi-iron container (No-Fallbacks)."""
-    from radia.vim import _radsolve
-    rad.UtiDelAll(); _radsolve.clear_registry()
-    with ng.TaskManager():
-        i1 = vim.soft_iron_box(center=(-2 * A, 0, 0), size=(A, A, A), mu_r=MU_R, nsub=2)
-        i2 = vim.soft_iron_box(center=(2 * A, 0, 0), size=(A, A, A), mu_r=MU_R, nsub=2)
-        cont = rad.ObjCnt([i1, i2])
-        assert _radsolve.registered_iron_count(cont) == 2
-        with pytest.raises(ValueError, match="multiple mesh-backed soft irons"):
-            rad.Solve(cont, 1e-6, 100, 0)
-    rad.UtiDelAll(); _radsolve.clear_registry()
 
 
 def test_hex_antisymmetric_image_plane_matches_full_cube():

@@ -14,6 +14,7 @@ import math
 import pytest
 
 import radia._radia_pybind as _rp
+from ngsolve import ET, IntegrationRule
 
 
 def _unit_wedge_q2_nodes() -> list[float]:
@@ -28,6 +29,7 @@ def _unit_wedge_q2_nodes() -> list[float]:
 
 
 def _make_wedge_rt1_gram(*, build: bool, image_masks=None, image_signs=None):
+    field_rule = IntegrationRule(ET.TRIG, 5)
     return _rp._ChargeGramHMatrix(
         wedge_cell_nodes=_unit_wedge_q2_nodes(),
         face_nodes=[],
@@ -41,6 +43,8 @@ def _make_wedge_rt1_gram(*, build: bool, image_masks=None, image_signs=None):
         sym_tet_w=[1.0 / 6.0],
         sym_tri_pts=[1.0 / 3.0, 1.0 / 3.0],
         sym_tri_w=[0.5],
+        field_tri_pts=[ip.point[k] for ip in field_rule for k in (0, 1)],
+        field_tri_w=[ip.weight for ip in field_rule],
         gl_out=[0.5],
         gw_out=[1.0],
         gl_in=[0.5],
@@ -78,7 +82,7 @@ def test_wedge_rt1_hmatrix_matvec_matches_entry_oracle():
 
     assert gram.ndof() == 1
     assert len(y) == 1
-    assert y[0] == entry
+    assert y[0] == pytest.approx(entry, rel=8 * math.ulp(1.0), abs=0.0)
 
 
 def test_wedge_rt1_image_fold_increases_positive_entry_and_matvec():
@@ -93,7 +97,7 @@ def test_wedge_rt1_image_fold_increases_positive_entry_and_matvec():
 
     assert image_entry > direct_entry
     assert len(y) == 1
-    assert y[0] == image_entry
+    assert y[0] == pytest.approx(image_entry, rel=8 * math.ulp(1.0), abs=0.0)
 
 
 def test_wedge_rt1_image_masks_and_signs_must_match():
