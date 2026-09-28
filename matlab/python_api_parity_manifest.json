@@ -9,6 +9,18 @@
   ],
   "rules": [
     {
+      "id": "patch-recovery",
+      "patterns": [
+        "patch_recovery.py"
+      ],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": [
+        "matlab/+radia/+python/patchRecovery.m"
+      ],
+      "notes": "Opt-in batch postprocessing of affine P1 tetrahedral gradients. Preserves original solution fields; no claim of superconvergence, equilibrium preservation, or solver acceleration. Uses the shared Python implementation."
+    },
+    {
       "id": "picard-acceleration",
       "patterns": ["picard_acceleration.py"],
       "classification": "python-fallback",
