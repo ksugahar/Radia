@@ -91,6 +91,7 @@ NATIVE_PATHS = (
 
     "src/ext/sparsesolv/**", "src/matlab/radia_mex.cpp",
     "matlab/+radia/+internal/callMex.m", "matlab/+radia/setup.m",
+    "tests/matlab/test_ngsolve_sparsecholesky.m", "matlab/+radia/+ngsolve/Matrix.m",
     "tests/matlab/test_mex_runtime_setup.m", "matlab/+radia/+sparsesolv/**",
     "matlab/+radia/+python/sparsesolv.m", "matlab/+radia/+python/electromagnetValidation.m",
     "matlab/+radia/+python/esrfExamples.m", "matlab/+radia/+python/staticElectromagnet.m",
