@@ -500,16 +500,6 @@ if errorlevel 1 (
 
 echo.
 echo ========================================
-echo   Building cln_core
-echo ========================================
-"$CMAKE_EXE" --build . --config Release --target cln_core -j
-if errorlevel 1 (
-    echo ERROR: cln_core build failed
-    exit /b 1
-)
-
-echo.
-echo ========================================
 echo   Building sparsesolv_ngsolve
 echo ========================================
 "$CMAKE_EXE" --build . --config Release --target sparsesolv_ngsolve -j
@@ -678,8 +668,7 @@ try {
     )
     if (-not $RadiaOnly) {
         $modules += @(
-            @{ src = "peec_matrices.cp312-win_amd64.pyd"; dst = "peec_matrices.pyd"; required = $true },
-            @{ src = "cln_core.cp312-win_amd64.pyd";      dst = "cln_core.pyd";      required = $false }
+            @{ src = "peec_matrices.cp312-win_amd64.pyd"; dst = "peec_matrices.pyd"; required = $true }
         )
     }
 
@@ -817,7 +806,6 @@ try {
                 if (-not $RadiaOnly) {
                     $installList += @(
                         'peec_matrices.pyd',
-                        'cln_core.pyd',
                         'radia_motor_rom.dll'
                     )
                 }

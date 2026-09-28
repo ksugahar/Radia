@@ -10,7 +10,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGETS = (
-    "cln_core", "sparsesolv_ngsolve", "axifem", "_equation",
+    "sparsesolv_ngsolve", "axifem", "_equation",
     "cubit_mesh_curver", "cubit_mesh_export_ccm",
 )
 

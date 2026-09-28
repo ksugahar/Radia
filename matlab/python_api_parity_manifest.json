@@ -662,12 +662,6 @@
       "fallback": "matlab/+radia/+python/electromagnetics.m"
     },
     {
-      "python": "cln_core.pyd",
-      "classification": "native-mex",
-      "matlab": "radia_mex.mexw64",
-      "status": "focused-native-commands"
-    },
-    {
       "python": "peec_matrices.pyd",
       "classification": "native-mex",
       "matlab": "radia_mex.mexw64",

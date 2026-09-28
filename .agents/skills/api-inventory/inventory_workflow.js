@@ -82,7 +82,7 @@ const AREA_SCHEMA = {
 
 const AREAS = [
   { key: 'pybind-core', focus:
-    'The C++ pybind surface re-exported by `import radia`. Read src/lib/radia_pybind.cpp (~172 .def), src/lib/radentry.cpp, src/lib/rad_cln_api.cpp, src/lib/rad_peec_matrices_api.cpp. Group by family: Obj* (geometry primitives & containers), Fld*/field eval, Mat* (materials), Rlx*/Solve/SolverConfig, Uti*, Drw*/drawing, RadiaField CF, IMA, background, PEEC api, CLN api. Decide bucket per family.' },
+    'The C++ pybind surface re-exported by `import radia`. Read src/lib/radia_pybind.cpp (~172 .def), src/lib/radentry.cpp, src/lib/rad_peec_matrices_api.cpp. Group by family: Obj* (geometry primitives & containers), Fld*/field eval, Mat* (materials), Rlx*/Solve/SolverConfig, Uti*, Drw*/drawing, RadiaField CF, IMA, background, PEEC api. Decide bucket per family.' },
   { key: 'py-core-methods', focus:
     'Top-level python METHOD/solver modules under src/radia/. Read: kelvin_solver.py kelvin_source.py kelvin_material.py kelvin_geometry.py kelvin_validate.py kelvin_identify_ngsolve.py scalar_potential_solver.py vector_potential_solver.py dielectric_solver.py equivalence_source.py cohomology.py cohomology_cut.py infinite_element.py biot_savart.py analytical_magnet.py cylindrical_magnet.py round_bodies.py ima_field.py clebsch_potential.py em_material.py energy_play_model.py hysteresis_io.py netgen_mesh_import.py gmsh_post_export.py soft_iron.py step_mesh_builder.py scalar_bie_sibc.py. Categorize each module group.' },
   { key: 'py-peec-esim-coil', focus:
@@ -90,7 +90,7 @@ const AREAS = [
   { key: 'py-apps-panels', focus:
     'Application / analysis Python under src/radia/. Read: analysis.py em_design.py ih_design.py ih_optimize.py ih_pipeline.py ih_claude_proposer.py motor_design.py pcb_design.py streamfunction_design.py streamfunction_volume.py stream_function.py radia_ngsolve.py setup_cubit.py _b3d_shim.py. Notebook workbenches and desktop application panels are retired and must not be restored. Categorize remaining files (most are application layer, not core proprietary methods).' },
   { key: 'subpackages-pyd', focus:
-    'radia subpackages + compiled submodule .pyds. Read src/radia/__init__.py (the re-export hub + 2-layer wrappers Solve/ObjCnt/SolverConfig/UtiDelAll/SoftIron/set_demag_backend) and survey subpackages: src/radia/vim/ (HDiv-VIM), src/radia/bem/, src/radia/open_boundary/, src/radia/maglev/, src/radia/analytical_formulas/, src/radia/tools/. Plus the .pyd modules: axifem.pyd, cln_core.pyd, peec_matrices.pyd, sparsesolv_ngsolve.pyd. Categorize each subpackage/submodule as a family.' },
+    'radia subpackages + compiled submodule .pyds. Read src/radia/__init__.py (the re-export hub + 2-layer wrappers Solve/ObjCnt/SolverConfig/UtiDelAll/SoftIron/set_demag_backend) and survey subpackages: src/radia/vim/ (HDiv-VIM), src/radia/bem/, src/radia/open_boundary/, src/radia/maglev/, src/radia/analytical_formulas/, src/radia/tools/. Plus the .pyd modules: axifem.pyd, peec_matrices.pyd, sparsesolv_ngsolve.pyd. Categorize each subpackage/submodule as a family.' },
 ]
 
 phase('Inventory')

@@ -730,7 +730,7 @@ what makes the 3D multiport CLN accurate.
 | Role | Tool |
 |------|------|
 | CLN / Cauer ladder MOR theory | `radia_mcp.mor` (mor_cln, mor_cln_multiport) |
-| Radia transient / reduced-order core | radia `cln_core`, `lanczos_reduction` (PRIMA) |
+| Radia transient / reduced-order core | radia `analysis` and `lanczos_reduction` (PRIMA) |
 | eddy-current FEM the CLN reduces | A-phi / T-Omega / A-T -- topic `radia_iem_fem` |
 | gauge formulations | `radia_mcp.fem` (potential_formulations) |
 | benchmark | TEAM 28 (`radia_mcp.team_benchmark.force_motion.problem_28`) |

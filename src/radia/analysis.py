@@ -4,17 +4,17 @@ Unified Analysis Framework for Radia
 This module provides a unified interface for electromagnetic analysis:
 - Static analysis (DC)
 - Frequency response analysis (AC sweep)
-- Transient analysis (CLN time-domain)
+- Transient analysis (PRIMA-reduced time domain)
 
 The framework supports:
 - PEEC conductor models with skin effect
-- CLN (Cauer Ladder Network) model order reduction
+- PRIMA congruence projection of the PEEC R/L pair onto the port Krylov space
 
 References:
     [1] A.E. Ruehli, "Equivalent Circuit Models for Three-Dimensional
         Multiconductor Systems", IEEE Trans. MTT, Vol. 22, No. 3, 1974.
-    [2] P. Feldmann, R.W. Freund, "Efficient Linear Circuit Analysis by
-        Pade Approximation via the Lanczos Process", IEEE TCAD, Vol. 14, 1995.
+    [2] A. Odabasioglu, M. Celik, L.T. Pileggi, "PRIMA: Passive Reduced-order
+        Interconnect Macromodeling Algorithm", IEEE TCAD, Vol. 17, 1998.
     [3] K. Hollaus, "Transient Analysis of Electromagnetic Fields",
         TU Wien, 2003.
 
@@ -228,16 +228,20 @@ class AnalysisSolver(ABC):
 
 class PEECAnalysisSolver(AnalysisSolver):
     """
-    PEEC-based analysis solver with CLN model order reduction.
+    PEEC-based analysis solver with PRIMA model order reduction.
 
     Supports:
     - Static DC analysis
     - Frequency response with skin effect (Dowell or SIBC)
-    - Transient analysis using CLN (Cauer Ladder Network)
+    - Transient analysis of the PRIMA-reduced series model
     - Loop-Star decomposition for low-frequency stability
 
-    The CLN method represents the frequency-dependent impedance as a
-    continued fraction expansion, enabling efficient time-domain simulation.
+    The segments are connected in series, so every segment carries the port
+    current: i = b*I with b = ones.  PRIMA projects R and L onto the Krylov
+    space started from b (R-orthonormal basis Q, R_r = Q'RQ, L_r = Q'LQ).
+    Because b lies in span(Q), the reduced series impedance
+    c'(R_r + s L_r) c with b = Q c equals b'(R + s L) b exactly; no ladder
+    network is synthesised.
 
     Loop-Star Decomposition:
         The current I can be decomposed into:
@@ -277,9 +281,9 @@ class PEECAnalysisSolver(AnalysisSolver):
         self._n_loops = 0  # Number of Loop DOFs
         self._n_stars = 0  # Number of Star DOFs
 
-        # CLN parameters
-        self._cln_order = 5  # Lanczos iterations
-        self._cln_result = None
+        # PRIMA reduction parameters
+        self._reduction_order = 5  # Krylov dimension
+        self._reduced = None
 
         # Skin effect parameters
         self._sigma = 5.8e7  # Conductivity [S/m] (copper default)
@@ -308,11 +312,11 @@ class PEECAnalysisSolver(AnalysisSolver):
         self._M_LS = np.asarray(M_LS) if M_LS is not None else None
         self._is_built = False
 
-    def set_cln_order(self, order: int):
-        """Set the CLN model order (number of Lanczos iterations)."""
-        if order < 1:
-            raise ValueError("CLN order must be >= 1")
-        self._cln_order = order
+    def set_reduction_order(self, order: int):
+        """Set the PRIMA Krylov dimension used by build()."""
+        if int(order) != order or order < 1:
+            raise ValueError("reduction order must be a positive integer")
+        self._reduction_order = int(order)
         self._is_built = False
 
     def set_conductivity(self, sigma: float):
@@ -437,129 +441,55 @@ class PEECAnalysisSolver(AnalysisSolver):
         return np.eye(n_edges)  # Identity for now
 
     def build(self) -> bool:
-        """Build CLN model from PEEC matrices."""
+        """Build the PRIMA-reduced series model from the PEEC matrices.
+
+        Fails loudly on non-symmetric or indefinite input instead of
+        substituting another reduction.
+        """
         if self._L is None or self._R is None:
             raise ValueError("PEEC matrices not set. Call set_peec_matrices() first.")
+        from .lanczos_reduction import LanczosReducer
 
-        try:
-            # Import CLN module
-            try:
-                from . import cln_core
-            except ImportError:
-                import cln_core
-
-            # Perform Lanczos reduction
-            # Ensure matrices are contiguous float64
-            L = np.ascontiguousarray(self._L, dtype=np.float64)
-            R = np.ascontiguousarray(self._R, dtype=np.float64)
-
-            # Handle diagonal R matrix
-            if R.ndim == 1:
-                R_diag = R
-            else:
-                R_diag = np.diag(R)
-
-            self._cln_result = cln_core.lanczos(R_diag, L, self._cln_order)
-            self._is_built = True
-            return True
-
-        except Exception as e:
-            # Fallback: use Python implementation
-            self._cln_result = self._lanczos_python(self._R, self._L, self._cln_order)
-            self._is_built = True
-            return True
-
-    def _lanczos_python(self, R: np.ndarray, L: np.ndarray,
-                        n_iter: int) -> dict:
-        """
-        Pure Python Lanczos algorithm for CLN reduction.
-
-        The Lanczos process transforms the generalized eigenvalue problem
-            L * x = lambda * R * x
-        into tridiagonal form using R-orthogonal basis vectors.
-
-        For the impedance Z(s) = R + s*L, the CLN representation is:
-            Z(s) = R_tot + s * L_0 / (1 + s*L_1/R_1 / (1 + ...))
-
-        This enables O(n) frequency sweep via continued fraction evaluation.
-
-        Reference: Feldmann & Freund, IEEE TCAD, Vol. 14, 1995.
-        """
+        L = np.asarray(self._L, dtype=np.float64)
+        R = np.asarray(self._R, dtype=np.float64)
+        if R.ndim == 1:
+            R = np.diag(R)
         n = L.shape[0]
+        if L.shape != (n, n) or R.shape != (n, n):
+            raise ValueError("L and R must be square matrices of the same size")
+        for name, matrix in (("L", L), ("R", R)):
+            scale = max(float(np.linalg.norm(matrix)), np.finfo(float).tiny)
+            if float(np.linalg.norm(matrix - matrix.T)) > 1.0e-10 * scale:
+                raise ValueError(f"{name} must be symmetric")
+        try:
+            np.linalg.cholesky(R)
+        except np.linalg.LinAlgError as error:
+            raise ValueError("R must be symmetric positive definite") from error
 
-        # Ensure R is diagonal
-        if R.ndim == 2:
-            R_diag = np.diag(R)
-        else:
-            R_diag = R.copy()
-
-        # Total DC resistance (scalar sum for series model)
-        R_total = np.sum(R_diag)
-
-        # Total DC inductance (sum of all L elements for series model)
-        L_total = np.sum(L)
-
-        # Initialize Lanczos vectors
-        Q = np.zeros((n, n_iter + 1))
-        alpha = np.zeros(n_iter)
-        beta = np.zeros(n_iter + 1)
-
-        # Starting vector: proportional to unit current distribution
-        # For series connection, all segments carry same current
-        q = np.ones(n)
-        # R-normalize: ||q||_R = sqrt(q^T * R * q) = 1
-        norm_R = np.sqrt(q @ (R_diag * q))
-        if norm_R > 1e-14:
-            q = q / norm_R
-        Q[:, 0] = q
-
-        # Lanczos iteration with R-orthogonalization
-        # This produces: Q^T * R * Q = I (identity)
-        #                Q^T * L * Q = T (tridiagonal)
-        for j in range(n_iter):
-            # w = L * q_j (not R^{-1}*L for standard Lanczos)
-            w = L @ Q[:, j]
-
-            # alpha_j = q_j^T * R * (L * q_j) / (q_j^T * R * q_j)
-            # But since q_j is R-normalized: q_j^T * R * q_j = 1
-            alpha[j] = Q[:, j] @ w  # Rayleigh quotient for L
-
-            # Orthogonalize: w = w - alpha_j * R * q_j - beta_j * R * q_{j-1}
-            w = w - alpha[j] * (R_diag * Q[:, j])
-            if j > 0:
-                w = w - beta[j] * (R_diag * Q[:, j-1])
-
-            # beta_{j+1} = ||w||_{R^{-1}} = sqrt(w^T * R^{-1} * w)
-            # For efficiency, compute: w^T * (w / R_diag)
-            with np.errstate(divide='ignore', invalid='ignore'):
-                R_inv_diag = np.where(R_diag > 1e-30, 1.0 / R_diag, 0.0)
-            beta_sq = w @ (R_inv_diag * w)
-            beta[j+1] = np.sqrt(max(beta_sq, 0.0))
-
-            if beta[j+1] < 1e-14:
-                # Early termination (invariant subspace found)
-                n_iter = j + 1
-                break
-
-            # q_{j+1} = R^{-1} * w / beta_{j+1}
-            Q[:, j+1] = (R_inv_diag * w) / beta[j+1]
-
-        # Build tridiagonal representation
-        # T = Q^T * L * Q (tridiagonal)
-        L_tridiag = np.diag(alpha[:n_iter])
-        for j in range(n_iter - 1):
-            L_tridiag[j, j+1] = beta[j+1]
-            L_tridiag[j+1, j] = beta[j+1]
-
-        return {
-            'R_total': R_total,      # Total DC resistance
-            'L_total': L_total,      # Total DC inductance
-            'L_tridiag': L_tridiag,  # Reduced L matrix (tridiagonal)
-            'Q': Q[:, :n_iter],
-            'alpha': alpha[:n_iter],
-            'beta': beta[1:n_iter+1],
-            'n_iter': n_iter
+        port = np.ones(n)
+        order = min(self._reduction_order, n)
+        result = LanczosReducer(tol=1.0e-12).lanczos_generalized(L, R, order, v0=port)
+        Q = result.Q
+        R_r = Q.T @ R @ Q
+        L_r = Q.T @ L @ Q
+        if float(np.linalg.norm(R_r - np.eye(Q.shape[1]))) > 1.0e-8:
+            raise RuntimeError("PRIMA basis lost R-orthonormality")
+        coefficients = Q.T @ (R @ port)
+        residual = float(np.linalg.norm(Q @ coefficients - port) / np.linalg.norm(port))
+        if residual > 1.0e-10:
+            raise RuntimeError(
+                f"series port vector is not in the PRIMA basis (residual {residual:.3e})")
+        self._reduced = {
+            "Q": Q,
+            "R_reduced": R_r,
+            "L_reduced": L_r,
+            "port_coefficients": coefficients,
+            "order": int(Q.shape[1]),
+            "R_series": float(coefficients @ R_r @ coefficients),
+            "L_series": float(coefficients @ L_r @ coefficients),
         }
+        self._is_built = True
+        return True
 
     def solve_static(self) -> StaticResult:
         """
@@ -603,15 +533,10 @@ class PEECAnalysisSolver(AnalysisSolver):
 
     def solve_frequency(self, frequencies: np.ndarray) -> FrequencyResult:
         """
-        Perform frequency response analysis using CLN.
+        Perform frequency response analysis of the PRIMA-reduced series model.
 
-        The CLN impedance is computed using the Lanczos-reduced model:
-            Z(s) = R_dc + s * L_eff(s)
-
-        where L_eff(s) is the effective inductance from the tridiagonal system.
-
-        At DC (s=0): Z = R_dc
-        At high frequency: Z ~ R_dc + j*omega*L_dc
+        The series port impedance is Z(s) = c'(R_r + s L_r) c, which equals
+        b'(R + s L) b for the series port vector b.
 
         With optional Dowell correction for skin effect:
             Z(s) = R_dc * F_R(xi) + j*omega*L_dc * F_L(xi)
@@ -619,8 +544,7 @@ class PEECAnalysisSolver(AnalysisSolver):
         where xi = h / delta, delta = sqrt(2 / (omega*mu*sigma))
 
         Reference:
-            Feldmann & Freund, "Efficient Linear Circuit Analysis by Pade
-            Approximation via the Lanczos Process", IEEE TCAD, 1995.
+            Odabasioglu, Celik, Pileggi, "PRIMA", IEEE TCAD, 1998.
         """
         import time
         t_start = time.time()
@@ -631,18 +555,9 @@ class PEECAnalysisSolver(AnalysisSolver):
         frequencies = np.asarray(frequencies)
         n_freq = len(frequencies)
 
-        # Get CLN parameters
-        if isinstance(self._cln_result, dict):
-            R_total = self._cln_result.get('R_total', 0.0)
-            L_total = self._cln_result.get('L_total', 0.0)
-            L_tridiag = self._cln_result['L_tridiag']
-            n_cln = self._cln_result['n_iter']
-        else:
-            # Fallback for C++ module result
-            R_total = getattr(self._cln_result, 'R_total', np.sum(self._R))
-            L_total = getattr(self._cln_result, 'L_total', np.sum(self._L))
-            L_tridiag = np.asarray(self._cln_result.L_tridiag)
-            n_cln = len(L_tridiag)
+        R_total = self._reduced["R_series"]
+        L_total = self._reduced["L_series"]
+        order = self._reduced["order"]
 
         # Compute impedance at each frequency
         Z = np.zeros(n_freq, dtype=complex)
@@ -656,10 +571,7 @@ class PEECAnalysisSolver(AnalysisSolver):
             else:
                 s = 1j * omega
 
-                # Evaluate Z(s) using the CLN tridiagonal model
-                # Z(s) = R_total + s * e1^T * (I + s*T)^{-1} * e1 * L_total
-                # where T is the normalized tridiagonal matrix
-                Z[i] = self._evaluate_cln_impedance_v2(s, R_total, L_total, L_tridiag)
+                Z[i] = R_total + s * L_total
 
                 # Apply Dowell correction if enabled
                 if self._use_dowell and self._conductor_height is not None:
@@ -682,7 +594,7 @@ class PEECAnalysisSolver(AnalysisSolver):
             analysis_type=AnalysisType.FREQUENCY,
             solver_type=SolverType.PEEC,
             success=True,
-            message=f"Frequency sweep completed ({n_freq} points, CLN order={n_cln})",
+            message=f"Frequency sweep completed ({n_freq} points, PRIMA order={order})",
             computation_time=t_elapsed,
             frequencies=frequencies,
             impedance=Z,
@@ -690,81 +602,6 @@ class PEECAnalysisSolver(AnalysisSolver):
             reactance=X_array,
             inductance=L_array
         )
-
-    def _evaluate_cln_impedance(self, s: complex,
-                                 R_diag: np.ndarray,
-                                 L_tridiag: np.ndarray) -> complex:
-        """
-        Evaluate CLN impedance at complex frequency s (legacy method).
-
-        Uses backward recursion for continued fraction:
-            Z_n = R_n + s*L_nn
-            Z_k = R_k + s*L_kk + (s*L_k,k+1)^2 / Z_{k+1}
-
-        Note: This is kept for backward compatibility. Use _evaluate_cln_impedance_v2
-        for the improved Lanczos-based evaluation.
-        """
-        n = len(R_diag)
-
-        if n == 1:
-            return R_diag[0] + s * L_tridiag[0, 0]
-
-        # Backward recursion
-        Z = R_diag[n-1] + s * L_tridiag[n-1, n-1]
-
-        for k in range(n-2, -1, -1):
-            L_kk = L_tridiag[k, k]
-            L_k_kp1 = L_tridiag[k, k+1] if k < n-1 else 0.0
-
-            Z_self = R_diag[k] + s * L_kk
-            coupling = (s * L_k_kp1) ** 2 / Z if abs(Z) > 1e-30 else 0.0
-            Z = Z_self + coupling
-
-        return Z
-
-    def _evaluate_cln_impedance_v2(self, s: complex,
-                                    R_total: float,
-                                    L_total: float,
-                                    L_tridiag: np.ndarray) -> complex:
-        """
-        Evaluate CLN impedance at complex frequency s using direct RL model.
-
-        For a simple series RL circuit:
-            Z(s) = R + s*L
-
-        The CLN (Lanczos) reduction captures the frequency-dependent
-        inductance variation, but for this simplified model we use:
-
-        Z(s) = R_total + s * L_eff
-
-        where L_eff is the effective inductance from the tridiagonal system.
-
-        At DC (s->0): Z = R_total
-        At high freq (s->inf): Z ~ s * L_total
-
-        The tridiagonal matrix from Lanczos captures the mode structure,
-        but for total impedance the key values are:
-        - R_total: sum of resistances (series)
-        - L_total: effective total inductance
-
-        Parameters:
-            s: Complex frequency (j*omega)
-            R_total: Total DC resistance [Ohm]
-            L_total: Total DC inductance [H]
-            L_tridiag: Tridiagonal inductance matrix from Lanczos
-
-        Returns:
-            Complex impedance Z(s)
-        """
-        # For this implementation, we use the direct RL model
-        # The CLN tridiagonal structure would be used for more complex
-        # frequency-dependent effects (skin effect, proximity effect)
-        # which are handled separately by the Dowell correction.
-
-        # Simple series RL impedance
-        Z = R_total + s * L_total
-
-        return Z
 
     def _apply_dowell_correction(self, Z_dc: complex, freq: float) -> complex:
         """
@@ -839,8 +676,8 @@ class PEECAnalysisSolver(AnalysisSolver):
 
         # Check if Loop-Star matrices are set
         if self._L_LL is None or self._R_LL is None:
-            # Fallback to standard CLN method
-            return self.solve_frequency(frequencies)
+            raise ValueError(
+                "Loop-Star matrices not set. Call set_loop_star_matrices() first.")
 
         frequencies = np.asarray(frequencies)
         n_freq = len(frequencies)
@@ -1261,20 +1098,13 @@ class PEECAnalysisSolver(AnalysisSolver):
                         excitation: Callable[[float], float],
                         v_or_i: str = 'v') -> TransientResult:
         """
-        Perform transient analysis using CLN state-space model.
+        Perform transient analysis of the PRIMA-reduced series model.
 
-        The CLN model transforms the frequency-domain impedance into
-        a state-space representation suitable for time-domain simulation:
-
-            dx/dt = A*x + B*u
-            y = C*x + D*u
-
-        where x is the internal state vector, u is the excitation,
-        and y is the response (current or voltage).
-
-        For an RL circuit: L*di/dt + R*i = v
-        State-space: di/dt = -R/L * i + 1/L * v
-                     A = -R/L (scalar or matrix for CLN)
+        The series constraint i = b*I leaves one state, the port current I:
+            L_s dI/dt + R_s I = v,   R_s = c'R_r c,  L_s = c'L_r c,
+        which equals b'Rb and b'Lb.  Voltage excitation is integrated with
+        backward Euler (first order, unconditionally stable); current
+        excitation returns v = R_s I + L_s dI/dt.
 
         Parameters:
             time: Time points [s]
@@ -1286,96 +1116,35 @@ class PEECAnalysisSolver(AnalysisSolver):
 
         if not self._is_built:
             self.build()
+        if v_or_i not in ('v', 'i'):
+            raise ValueError("v_or_i must be 'v' or 'i'")
 
-        time_array = np.asarray(time)
+        time_array = np.asarray(time, dtype=float)
+        if time_array.ndim != 1 or np.any(np.diff(time_array) <= 0.0):
+            raise ValueError("time must be a strictly increasing 1-D array")
         n_time = len(time_array)
+        R_s = self._reduced["R_series"]
+        L_s = self._reduced["L_series"]
+        if not (R_s > 0.0 and L_s > 0.0):
+            raise ValueError("the series model needs positive R and L")
 
-        # Get CLN parameters
-        if isinstance(self._cln_result, dict):
-            R_total = self._cln_result.get('R_total', 0.0)
-            L_total = self._cln_result.get('L_total', 0.0)
-            L_tridiag = self._cln_result['L_tridiag']
-            n_states = self._cln_result['n_iter']
-        else:
-            R_total = getattr(self._cln_result, 'R_total', np.sum(self._R))
-            L_total = getattr(self._cln_result, 'L_total', np.sum(self._L))
-            L_tridiag = np.asarray(self._cln_result.L_tridiag)
-            n_states = len(L_tridiag)
-
-        # Build state-space matrices for CLN
-        # The CLN state-space uses the tridiagonal inductance matrix
-        # State: x = internal CLN state variables
-        # For voltage excitation: L*dx/dt + R*x = v (in reduced space)
-
-        # Time constant tau = L/R
-        if abs(R_total) > 1e-30:
-            tau = L_total / R_total
-        else:
-            tau = 1.0
-
-        # Normalized system: tau * T * dx/dt + x = (1/R) * v
-        # where T = L_tridiag / L_total (normalized tridiagonal)
-
-        if abs(L_total) > 1e-30:
-            T_norm = L_tridiag / L_total
-        else:
-            T_norm = np.eye(n_states)
-
-        # State-space: dx/dt = -T_norm^{-1} * x / tau + T_norm^{-1} * v / (R * tau)
-        try:
-            T_inv = np.linalg.inv(T_norm)
-        except np.linalg.LinAlgError:
-            T_inv = np.linalg.pinv(T_norm)
-
-        # A = -T_inv / tau
-        # B = T_inv / (R_total * tau) for voltage input
-        A = -T_inv / tau
-        B = T_inv[:, 0] / (R_total * tau) if abs(R_total) > 1e-30 else T_inv[:, 0] / tau
-        C = np.zeros(n_states)
-        C[0] = 1.0  # Output is first state (proportional to current)
-
-        # Initialize state and output arrays
-        x = np.zeros(n_states)
         current = np.zeros(n_time)
         voltage = np.zeros(n_time)
-        flux = np.zeros(n_time)
-
-        # Time integration using Backward Euler (implicit, stable)
         for i, t in enumerate(time_array):
-            u = excitation(t)
-
+            u = float(excitation(t))
             if v_or_i == 'v':
                 voltage[i] = u
+                if i > 0:
+                    dt = time_array[i] - time_array[i - 1]
+                    current[i] = (current[i - 1] + dt * u / L_s) / (1.0 + dt * R_s / L_s)
             else:
                 current[i] = u
-
-            if i > 0:
-                dt = time_array[i] - time_array[i-1]
-
-                # Backward Euler: (I - dt*A)*x_new = x_old + dt*B*u
-                I_minus_dtA = np.eye(n_states) - dt * A
-                rhs = x + dt * B * u
-
-                try:
-                    x = np.linalg.solve(I_minus_dtA, rhs)
-                except np.linalg.LinAlgError:
-                    x = np.linalg.lstsq(I_minus_dtA, rhs, rcond=None)[0]
-
-            if v_or_i == 'v':
-                # Current is proportional to first state
-                # i = v/R at DC, scaled by CLN transfer function at AC
-                current[i] = C @ x
-            else:
-                # For current excitation, compute voltage
-                voltage[i] = R_total * current[i] + L_total * (
-                    (current[i] - current[i-1]) / (time_array[i] - time_array[i-1])
-                    if i > 0 else 0.0
-                )
-
-            # Flux linkage: psi = L * i
-            flux[i] = L_total * current[i]
-
-        # Power
+                derivative = 0.0
+                if i > 0:
+                    derivative = (current[i] - current[i - 1]) / (
+                        time_array[i] - time_array[i - 1])
+                voltage[i] = R_s * current[i] + L_s * derivative
+        flux = L_s * current
         power = voltage * current
 
         t_elapsed = time_module.time() - t_start
@@ -1430,7 +1199,7 @@ class UnifiedAnalysis:
     def set_peec_model(self, L: np.ndarray, R: np.ndarray,
                        P: Optional[np.ndarray] = None,
                        M_LS: Optional[np.ndarray] = None,
-                       cln_order: int = 5):
+                       reduction_order: int = 5):
         """
         Configure PEEC model for analysis.
 
@@ -1439,10 +1208,10 @@ class UnifiedAnalysis:
             R: Resistance matrix or diagonal [Ohm]
             P: Potential coefficient matrix [1/F] (optional)
             M_LS: Loop-Star coupling matrix (optional)
-            cln_order: CLN model order (default: 5)
+            reduction_order: PRIMA Krylov dimension (default: 5)
         """
         self._solver.set_peec_matrices(L, R, P, M_LS)
-        self._solver.set_cln_order(cln_order)
+        self._solver.set_reduction_order(reduction_order)
         self._is_configured = True
 
     def set_skin_effect(self, sigma: float = 5.8e7,
@@ -1483,7 +1252,7 @@ class UnifiedAnalysis:
                   excitation: Callable[[float], float],
                   excitation_type: str = 'voltage') -> TransientResult:
         """
-        Perform transient analysis using CLN method.
+        Perform transient analysis of the PRIMA-reduced series model.
 
         Parameters:
             time: Time points [s]
