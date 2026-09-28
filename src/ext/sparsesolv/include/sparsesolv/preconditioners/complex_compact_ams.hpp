@@ -104,6 +104,8 @@ public:
     int VWidth() const override { return ndof_complex_; }
     bool IsComplex() const override { return true; }
 
+    VecFormat RowFormat() const override { return VVectorFormat<Complex>(VWidth()); }
+    VecFormat ColFormat() const override { return VVectorFormat<Complex>(VHeight()); }
     AutoVector CreateRowVector() const override {
         return std::make_unique<VVector<Complex>>(ndof_complex_);
     }
