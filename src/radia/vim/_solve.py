@@ -662,8 +662,8 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
             if _val != _default:
                 raise ValueError("vim.Solve (2D): %s is not supported by the planar layer "
                                  "(got %r; leave it at %r)" % (_nm, _val, _default))
-        # Same public soft-iron table contract as 3D; the planar law reads it
-        # through its own piecewise-linear M(H), so validate before it does.
+        # Same public soft-iron table contract and PCHIP B(H) law as 3D
+        # (planar_materials.law_from_table), so validate before it reads it.
         # The planar law anchors a table that starts above H=0 at the origin
         # (planar_materials.hm_arrays); apply the same anchor before checking.
         planar_falling = None
