@@ -1223,7 +1223,7 @@ def kelvin_transformation(topic: str = "all") -> str:
                                (source order p*=ceil(ln eps/ln(d_max/R)),
                                geometry floor (h/R)^2k, eccentric/multi-body,
                                the A-form centre, the apparatus design calc)
-                               + the non-separable build + DtN->CLN arc
+                               + the non-separable DtN build + band rational fit
                                (square C4v / cube O_h, 2D conformal disk)
             "identify"       - Periodic boundary Identify() best practices
             "tips"           - Common mistakes and performance tips
@@ -1730,10 +1730,16 @@ def dtn_coarse_mesh(topic: str = "all") -> str:
                              vector single-layer L=mu0 J^T(LaplaceSL)J (a different
                              operator with no -(n+1)/R ladder)
             "method_map"   - UNIFIED open-boundary map: Kelvin / BEM / PML / IABC /
-                             CLN on the three selection axes (frequency / geometry /
-                             space-vs-time) + the no-free-lunch modal axis + the
-                             selection table. Audit-verified anchors.
+                             continued-fraction NRBC on the three selection axes
+                             (frequency / geometry / space-vs-time) + the
+                             no-free-lunch modal axis + the selection table.
+                             Audit-verified anchors.
                              doc: docs/open_boundary/OPEN_BOUNDARY_MAP.md
+            "dtn_continued_fraction" - Exact open boundary as the exact DtN symbol,
+                             its terminating continued fraction (n+1 partial
+                             quotients in q=sqrt(s)); distinguish q-plane roots
+                             from physical-time poles and finite-band diffusion
+                             memory fits; radia.open_boundary API.
     """
     return get_dtn_coarse_mesh_documentation(topic)
 

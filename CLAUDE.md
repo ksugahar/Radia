@@ -42,12 +42,10 @@ Prefer established public abstractions over proprietary plumbing.
 - Keep two genuinely independent analysis routes for important models when
   feasible.
 ### Numerical Rules
-- Name eigenmode-bulk/surface coupling **Foster + SIBC**; use **CLN + SIBC**
-  for an actual CLN/Krylov bulk basis. Do not call these scalar enriched-space
-  models "mixed Galerkin". Legacy API/path identifiers remain compatible.
-- Foster + SIBC is the production default for this bulk/surface method.
-  CLN remains a comparison route, not a required migration. Decide retained
-  mode counts from error/convergence in the operating band, not naming alone.
+- Use Foster modal models or PRIMA projection for electromagnetic reduction.
+  Retired CLN/Cauer circuit APIs are not production or comparison routes.
+  Analytic DtN continued fractions are boundary symbols, not circuit models.
+  Choose reduced orders by measured error over the operating band.
 
 - Use SI units; magnetization is A/m.
 - Python/MATLAB MEX direct FE solves/subsolves explicitly use `sparsecholesky`, never PARDISO fallback.

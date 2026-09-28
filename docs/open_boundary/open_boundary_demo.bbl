@@ -18,18 +18,6 @@ Emil {Warburg}.
   wechselstrom.
 \newblock {\em Annalen der Physik}, 303(3):493--499, 1899.
 
-\bibitem{cauer1958synthesis}
-Wilhelm {Cauer}.
-\newblock {\em Synthesis of Linear Communication Networks}.
-\newblock McGraw-Hill, 1958.
-
-\bibitem{Kameari2018}
-Akihisa {Kameari}, Hassan {Ebrahimi}, Kengo {Sugahara}, Yuji {Shindo}, and
-  Tetsuji {Matsuo}.
-\newblock Cauer ladder network representation of eddy-current fields for model
-  order reduction using finite-element method.
-\newblock {\em IEEE Transactions on Magnetics}, 54(3):1–4, Mar 2018.
-
 \bibitem{freeman1988novel}
 EM~{Freeman} and DA~{Lowther}.
 \newblock A novel mapping technique for open boundary finite element solutions

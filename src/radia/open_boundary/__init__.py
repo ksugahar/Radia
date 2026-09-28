@@ -5,8 +5,9 @@ A radia CORE method (ships in the radia wheel; pure Python on numpy/scipy).  For
 SEPARABLE truncation (sphere / circle) `dtn_exact` evaluates the EXACT exterior
 Dirichlet-to-Neumann symbol per multipole -- a reverse-Bessel rational function in
 s (wave) or q = sqrt(s) (magneto-quasistatic eddy / diffusion) -- together with its
-passive, stable companion poles for a transient Robin boundary and a passive
-Foster-form realisation of the sqrt(s) diffusion memory.  `kelvin_dtn` BUILDS the
+reverse-Bessel roots in the appropriate frequency variable and a passive
+pole-residue (Foster-form) fit of the sqrt(s) diffusion memory; `dtn_continued_fraction`
+gives the terminating continued-fraction form of the same symbol.  `kelvin_dtn` BUILDS the
 DtN of a non-separable or material exterior by Kelvin-transformed FEM and reduces
 it over a band with a low-degree rational fit.
 
@@ -19,11 +20,9 @@ Quick start::
     import radia.open_boundary as ob
     # exact eddy/diffusion DtN of multipole n=2 at a sphere R0, s = i*omega
     g = ob.eddy_dtn(2, 1j * 50.0, R0=0.1, mu_sigma=4e-7 * 3.14159 * 1e6)
-    # time-domain Robin realisation: one auxiliary ODE per companion pole (Re<0):
+    # Reverse-Bessel q-plane roots; not diffusion physical-time ODE rates:
     poles = ob.companion_poles(2)
 
-`cauer_ladder` / `eval_ladder` (module `dtn_cln`) are still exported and are
-scheduled for removal with the repository's Cauer-ladder code.
 """
 from .dtn_exact import (  # noqa: F401
     reverse_bessel_theta,
@@ -32,12 +31,12 @@ from .dtn_exact import (  # noqa: F401
     eddy_dtn_rational_q,
     wave_dtn,
     companion_poles,
-    sqrt_s_passive_ladder,
-    eval_sqrt_ladder,
+    sqrt_s_passive_poles,
+    eval_sqrt_poles,
 )
-from .dtn_cln import (  # noqa: F401
-    cauer_ladder,
-    eval_ladder,
+from .dtn_continued_fraction import (  # noqa: F401
+    continued_fraction_stages,
+    eval_continued_fraction,
 )
 from .kelvin_dtn import (  # noqa: F401
     kelvin_fem_radial_dtn,
@@ -54,11 +53,11 @@ __all__ = [
     "eddy_dtn_rational_q",
     "wave_dtn",
     "companion_poles",
-    "sqrt_s_passive_ladder",
-    "eval_sqrt_ladder",
-    # dtn_cln -- Cauer realisation, scheduled for removal
-    "cauer_ladder",
-    "eval_ladder",
+    "sqrt_s_passive_poles",
+    "eval_sqrt_poles",
+    # dtn_continued_fraction -- terminating continued fraction of the eddy DtN
+    "continued_fraction_stages",
+    "eval_continued_fraction",
     # kelvin_dtn -- Kelvin-built material-aware / non-separable DtN
     "kelvin_fem_radial_dtn",
     "kelvin_dtn_matrix",

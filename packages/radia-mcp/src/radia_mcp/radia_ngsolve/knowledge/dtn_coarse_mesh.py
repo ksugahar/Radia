@@ -63,53 +63,62 @@ you refine).  The question this module answers:
 Yes.  The accuracy is a **spectral** fact about the discrete
 Dirichlet-to-Neumann operator, visible without ever solving the field problem.
 
-## Sugahara-lab / Radia open-boundary POLICY: exact-operator -> CLN, NOT PML (refined 2026-06-21)
+## Sugahara-lab / Radia open-boundary POLICY: the exact DtN operator, NOT PML (refined 2026-06-21)
 
-Radia is Laplace-kernel / MQS-Darwin.  The lab closes the exterior with the **exact-operator
--> CLN** route; **PML / CFS-PML are NOT a solving method here** -- they are kept only as the
-benchmark FOIL measured on the DtN yardstick (act7_22_dtn_spectrum_consolidated + the real NGSolve
-FEM+PML act7_24_ngsolve_fem_pml_highfreq_dtn).  The IABC absorbing-shell METHOD is likewise RETIRED
-(2026-06-20, act7_20_impedance_vs_kelvin_dtn_cln: strictly dominated by exact DtN->CLN in this scope;
-kept as the comparison/research record only).  Pick the method by WHAT THE BOUNDARY OPERATOR IS
-(and note the two axes differ -- Kelvin = the SPATIAL boundary, CLN = the TEMPORAL / s axis):
+Radia is Laplace-kernel / MQS-Darwin.  The lab closes the exterior with the **exact exterior
+DtN operator**: Kelvin for the static air boundary, and -- where the boundary operator depends
+on s -- the exact DtN symbol, its terminating continued fraction, or its auxiliary-ODE /
+companion-pole realisation (the classical continued-fraction non-reflecting / absorbing BC).
+**PML / CFS-PML are NOT a solving method here** -- they are kept only as the benchmark FOIL
+measured on the DtN yardstick (act7_22_dtn_spectrum_consolidated + the real NGSolve FEM+PML
+act7_24_ngsolve_fem_pml_highfreq_dtn).  The IABC absorbing-shell METHOD is likewise RETIRED
+(2026-06-20, act7_20 (impedance-shell route vs the Kelvin-built exact DtN): strictly dominated
+by the exact DtN in this scope; kept as the comparison/research record only).  Pick the method
+by WHAT THE BOUNDARY OPERATOR IS (and note the two axes differ -- Kelvin = the SPATIAL
+boundary; the continued fraction / pole realisation = the TEMPORAL / s axis):
 
   - **non-radiating AIR truncation (the usual outer boundary) -> KELVIN ALONE.**  Air is
-    non-conducting, so the boundary DtN is the omega-INDEPENDENT static Laplace ladder
+    non-conducting, so the boundary DtN is the omega-INDEPENDENT static Laplace spectrum
     -(n+1)/R (3D; -n/R 2D) -- a sparse SPD conformal-compactification FEM, parameter-free,
-    carrying exterior material.  NOTHING is s-dependent here -> **CLN has no job at the air
-    boundary** (Kelvin imposes the same operator for every omega).  Verified: Kelvin is the
-    single best low-freq choice vs an absorbing BC (act7_18_lowfreq_kelvin_vs_iabc) and vs
-    BEM/PML/ballooning on cost x accuracy (act7_21_lowfreq_openbc_4way).  The SA / Hachinohe
+    carrying exterior material.  NOTHING is s-dependent here -> **no s-realisation is needed
+    at the air boundary** (Kelvin imposes the same operator for every omega).  Verified: Kelvin
+    is the single best low-freq choice vs an absorbing BC (act7_18_lowfreq_kelvin_vs_iabc) and
+    vs BEM/PML/ballooning on cost x accuracy (act7_21_lowfreq_openbc_4way).  The SA / Hachinohe
     paper's regime.
 
   - **conducting / diffusive boundary (SIBC = a semi-infinite conductor interior; sqrt(s))
-    -> multipole-Zs -> CLN.**  HERE the boundary operator IS s-dependent: a passive sqrt(s)
-    (Warburg) DtN, EXACTLY rational in q=sqrt(s) (reverse-Bessel poles) -> a Robin BC + a
-    finite Cauer / CLN ladder (topic="dtn_to_cln"; act6_02_cln_dtn_cauer,
+    -> exact multipole DtN symbol -> continued fraction.**  HERE the boundary operator IS
+    s-dependent: a passive sqrt(s) diffusion DtN (the sqrt(s) impedance of Warburg 1899),
+    EXACTLY rational in q=sqrt(s) (reverse-Bessel poles) -> a Robin BC whose symbol is a
+    continued fraction in q that terminates after n+1 partial quotients
+    (topic="dtn_continued_fraction"; act6_02 (exact continued fraction of the eddy DtN),
     act6_12_iabc_diffusion_timedomain).  A SEPARABLE conductor (half-space / sphere) uses the
-    analytic sqrt(s) impedance -> CLN; **Kelvin-BUILT -> CLN only for an arbitrary NON-separable
-    conductor** (act6_01_kelvin_fem_eddy_dtn, rare).  Evanescent for EVERY omega (no propagating
-    regime to absorb) -> CLN beats even CFS-PML (act6_09_cln_vs_pml) -- NOT PML.
+    analytic sqrt(s) symbol; **a Kelvin-BUILT DtN + band rational fit only for an arbitrary
+    NON-separable conductor** (act6_01_kelvin_fem_eddy_dtn, rare).  Evanescent for EVERY omega
+    (no propagating regime to absorb) -> the exact DtN beats even CFS-PML (act6_09 (exact DtN
+    vs CFS-PML in the eddy band)) -- NOT PML.
 
-  - **radiation (finite real kR; Helmholtz wave) -> Grote-Keller -> CLN.**  The exterior DtN
+  - **radiation (finite real kR; Helmholtz wave) -> Grote-Keller exact NRBC.**  The exterior DtN
     turns COMPLEX -- Lambda_n(kR) = kR h_n^(1)'(kR)/h_n^(1)(kR), Im = radiation -- but it is
     STILL rational (reverse-Bessel in iz), so the lab realises it as the exact Grote-Keller
-    NRBC = a pole / Cauer (CLN) ladder + auxiliary ODEs (act6_11_exact_dtn_fetd; and the
-    extended-Kelvin HOIBC act7_05_fe_kelvin_hoibc / act7_07_threeway_kelvin_pml_bemfem) --
-    NOT a PML.  PRIOR ART (Grote-Keller 1995/96/98, Hagstrom-Warburton, Guddati, Birk,
-    Cauer-Foster, Kameari-Sugahara 2018) -> adopted as a CAPABILITY, not a novelty claim.
+    NRBC = companion poles + auxiliary ODEs (act6_11_exact_dtn_fetd; and the extended-Kelvin
+    HOIBC act7_05_fe_kelvin_hoibc / act7_07_threeway_kelvin_pml_bemfem) -- NOT a PML.
+    PRIOR ART (Grote-Keller 1995/96/98; Hagstrom-Warburton continued-fraction / complete
+    radiation BCs; Guddati; Birk) -> adopted as a CAPABILITY, not a novelty claim.
 
-  - **KEY (do not conflate the two axes):** Kelvin = the SPATIAL boundary (static air);
-    CLN = the TEMPORAL / s axis, and ONLY a conducting boundary or radiation is s-dependent.
-    So "Kelvin -> CLN" COMBINED is ~never needed in the non-radiating regime (the air boundary
-    is static -> Kelvin alone); CLN earns its keep at the conductor SIBC or in radiation.
+  - **KEY (do not conflate the two axes):** Kelvin = the SPATIAL boundary (static air); the
+    continued fraction / pole realisation = the TEMPORAL / s axis, and ONLY a conducting
+    boundary or radiation is s-dependent.  So the air boundary needs Kelvin alone; the s-axis
+    realisation earns its keep at the conductor SIBC or in radiation.  Where a DtN is BUILT
+    (Kelvin-FEM / BEM) for a non-separable s-dependent boundary, a band rational
+    (pole-residue) fit or the continued fraction compresses the s-dependence of the built DtN.
 
   - **HONEST SCOPE (no overclaim):** principled for the lab's MQS-magnetics class (compact /
     quasi-spherical; mostly evanescent; separable radiation).  Exact for separable; an arbitrary
-    non-separable radiating / conducting boundary = build (Kelvin-FEM / BEM) then CLN band-fit
-    (approximate).  PML's GENERALITY (antennas / scattering / arbitrary radiating geometry) is
-    for problem classes OUTSIDE the lab -- "no PML" is domain-appropriate, not "PML universally
-    bad."
+    non-separable radiating / conducting boundary = build (Kelvin-FEM / BEM) then a band
+    rational fit (approximate).  PML's GENERALITY (antennas / scattering / arbitrary radiating
+    geometry) is for problem classes OUTSIDE the lab -- "no PML" is domain-appropriate, not
+    "PML universally bad."
 
 ## Radia policy: Kelvin for COMPACT geometry, PML/BEM for high aspect ratio
 
@@ -823,14 +832,14 @@ truncation is ~1% off, an isoparametric (curved) one reaches 5-6 digits.  (Past 
 it plateaus ~1e-5: the residual conformal-weight quadrature / energy-quotient limit.)
 Maintained summary: `docs/kelvin/DTN_SPECTRUM_COARSE_MESH.md`.
 
-## Connection to Cauer Ladder Network (CLN): both are spectral closures
+## Connection to the continued-fraction open boundary: one symbol, two variables
 
-The DtN eigenvalue ladder -(n+1)/R is a SPECTRAL object of the same kind as the
-Cauer-Ladder-Network (CLN) eigenmode decomposition: each characterises a closure by
-how it transmits the modes a source excites.  CLN folds the INTERIOR response by
-circuit order {R_n, L_n}; the Kelvin closure folds the EXTERIOR response by element
-order p.  Same idea -- decompose the physics into eigenmodes and resolve only the
-modes that matter -- applied to the interior network vs the open boundary.
+The DtN eigenvalue spectrum -(n+1)/R is the s->0 limit of the same per-mode symbol that
+the continued-fraction boundary evaluates in the frequency domain (topic="dtn_continued_fraction").  The
+Kelvin closure resolves the SPATIAL modes of that symbol by element order p; the
+terminating continued fraction in q=sqrt(s) (n+1 partial quotients) resolves its
+s-dependence mode by mode.  Both are spectral closures -- decompose the exterior into
+modes and resolve only the modes the source excites.
 
 ## Corollary: the exterior VOLUME mesh is irrelevant -- only Gamma matters (p>=n)
 
@@ -2337,24 +2346,24 @@ VERIFIED RESULTS (n=1..6 unless noted, all asserted to the tolerance shown):
     Matches scipy DtN to 1.9e-15; the z_j are exactly the zeros of h_n^{(1)} (|h_n(z_j)|/|h_n(1)|=5e-16).
   - THREE INDEPENDENT pole sets agree to 1e-15: sympy roots(theta_n), the scipy spherical-Hankel zeros,
     and scipy.signal.besselap (the analog BESSEL/THOMSON filter). => the spherical open boundary's poles
-    ARE Bessel-filter poles; the time-domain open boundary is a BESSEL-FILTER NETWORK per mode.
+    ARE Bessel-filter poles; the time-domain open boundary is one BESSEL-FILTER POLE SET per mode.
   - TIME-DOMAIN realization (Grote-Keller form, R=c=1): with g = R d_r u the DtN output,
         g(t) = -du/dt - u + sum_j psi_j ;   dpsi_j/dt = -i z_j (psi_j + u)   (one local ODE per pole).
     Reproduces Lambda_n(z) ALGEBRAICALLY for any tone (3.6e-16) and by TRANSIENT integration from rest
     (solve_ivp, converges to the exact DtN, 9.8e-11). LOCAL in time (ODEs), nonlocal only across the
     surface harmonic index -- exactly the Grote-Keller exact nonreflecting BC structure.
   - STABILITY/CAUSALITY: relaxation rates lambda_j = -i z_j = roots(theta_n) = Bessel filter poles, all
-    Re < 0 (worst -1.0) => the auxiliary network decays (passive, causal).
+    Re < 0 (worst -1.0) => the auxiliary ODEs decay (passive, causal).
   - n POLES <-> multipole order n: the DtN datasheet (order = multipole reach) expressed in the TIME
     DOMAIN; the N-pole truncation is the time-domain analog of the N-shell / N-rung frequency datasheet.
 READING FOR IABC (analysis, consistent with the deferral above): IABC's N nested shells approximate this
-exact N-pole rational DtN, so a "time-domain IABC" is naturally an N-pole Bessel-filter network per mode
+exact N-pole rational DtN, so a "time-domain IABC" is naturally an N-pole Bessel-filter pole set per mode
 (N auxiliary ODEs); dispersive shell media would be realized by the standard ADE/recursive-convolution
 route. PRIOR ART (cite, do NOT claim): the rational/pole-residue exact sphere DtN and its local-in-time
 auxiliary realization is Grote & Keller (1995) / Hagstrom; reverse-Bessel-polynomial == Bessel/Thomson
-filter poles is classical network synthesis. NEW FRAMING (ours, modest): reading IABC's shells AS this
+filter poles is classical filter theory. NEW FRAMING (ours, modest): reading IABC's shells AS this
 pole set + the Kelvin/DtN-datasheet linkage; the verified contribution here is the time-domain CORE
-(pole-residue + Bessel-network + auxiliary ODEs), NOT IABC's exact shell constants. (Lit survey
+(pole-residue + Bessel-filter poles + auxiliary ODEs), NOT IABC's exact shell constants. (Lit survey
 CONFIRMED this positioning: Grote-Keller 1995/1996 + Thompson&Huan 2000 establish the rational-per-mode
 DtN + local-in-time auxiliary-ODE scaffolding and even the explicit tridiagonal n x n A_n with p_n=n
 auxiliaries per degree n; they do NOT make the Bessel/Thomson-filter-pole identification nor the
@@ -2395,7 +2404,7 @@ THE ELEGANT REFORMULATION (all asserted):
      weight, NOT the vector (a/r)^2 TO medium of act7_04_transformation_optics_impedance); only the full Kelvin inversion (N->infinity
      graded medium) or an anisotropic PML matches every mode. So N-shell IABC = an N-section impedance
      transformer in the MODE variable = the STATIC sibling of act6_10_iabc_time_domain's time-domain Bessel-filter
-     network. CITE-DON'T-CLAIM (overclaim corrected 2026-06-15 after the lit survey): "Kelvin = the
+     pole set. CITE-DON'T-CLAIM (overclaim corrected 2026-06-15 after the lit survey): "Kelvin = the
      shell-collapse / N->infinity limit" is PRIOR ART -- Brunotte-Meunier-Imhoff 1992 for the exact
      spatial shell map (r_e->0 IS the sphere inversion), and Meeker himself frames IABC as
      Kelvin-transform-derived. So the N->infinity-Kelvin link is NOT our novelty. The defensible-new
@@ -2433,10 +2442,10 @@ graded four candidate directions; cite-don't-claim / defensible-new / overclaim-
  D. TIME-DOMAIN / eddy-current (parabolic) IABC -- PARTIAL but HIGHEST novelty, LOWEST footing (plan
     only; the user's destination). No work fuses (nested-shell open boundary)+(parabolic diffusion)+
     (complex-shell via ADE/recursive convolution). CITE-DISTINGUISH: Valdivieso-Meunier-Ramdane-
-    Gyselinck 2020 (Foster networks + recursive convolution, complex-mu) and time-domain SIBC-by-RC
-    (Yuferev/Ida) -- both use the ADE/RC machinery but for INTERIOR material / conductor truncation, NOT
+    Gyselinck 2020 (Foster partial fractions + recursive convolution, complex-mu) and time-domain SIBC
+    (Yuferev/Ida) -- both use the ADE/recursive-convolution machinery but for INTERIOR material / conductor truncation, NOT
     the open exterior boundary; explicitly parabolic, NOT Grote-Keller/PML (hyperbolic). act6_10_iabc_time_domain's
-    Bessel/Thomson pole network is the constructive engine (the closed-form poles the ADE auxiliaries
+    Bessel/Thomson pole set is the constructive engine (the closed-form poles the ADE auxiliaries
     realize). GATE on a transient sphere/cylinder-diffusion benchmark before any claim.
  RANKING (novelty x verified-footing x SA-fit): A > C > B > D. Architecture: Paper #1 = A spine + C
  design payoff + B as one rigor section ("spectral transfer-matrix theory of IABC: closed-form
@@ -2448,7 +2457,7 @@ graded four candidate directions; cite-don't-claim / defensible-new / overclaim-
 TIME-DOMAIN HIGH-FREQUENCY IABC + DtN COST (act7_15_iabc_timedomain_cost, VERIFIED 2026-06-15; user: "the time-domain
 representation of the high-frequency IABC would be good; show its DtN is cost-superior; of course
 time-domain FEM-BEM is most accurate"). This is development-direction D's WAVE (hyperbolic) branch and
-fuses act6_10_iabc_time_domain (exact pole network) with the IABC reading. RESULTS (all asserted):
+fuses act6_10_iabc_time_domain (exact pole set) with the IABC reading. RESULTS (all asserted):
  (A) The exact exterior DtN per mode is the rational n-pole Lambda_n(z)=iz-1+sum z_j/(z-z_j) (act6_10_iabc_time_domain);
      its time domain = n LOCAL auxiliary ODEs (Grote-Keller). This is what a TIME-DOMAIN FEM-BEM
      reproduces -> MOST ACCURATE but the DtN is DENSE on Gamma + a temporal CONVOLUTION (history).
@@ -2495,23 +2504,23 @@ VERIFIED (all asserted):
      finite-pole fit error FLOORS algebraically (M=2..32 -> 0.14..4.9e-3, never ~1e-15). THE KEY
      CONTRAST vs the WAVE DtN (act7_15_iabc_timedomain_cost, rational, finite n poles, EXACT at M=n): magnetic diffusion has
      no finite exact pole set -- its DtN spectrum literally shows the diffusion memory.
- (C) TIME-DOMAIN IABC = a Foster M-pole fit d + sum r_j s/(s+p_j) (real poles p_j>0 = passive RL
-     ladder) over a frequency band: stable; band error decreases OVERALL with M (not step-monotone --
+ (C) TIME-DOMAIN IABC = a Foster M-pole fit d + sum r_j s/(s+p_j) (real poles p_j>0, r_j>=0 = passive
+     pole sum) over a frequency band: stable; band error decreases OVERALL with M (not step-monotone --
      the simple fixed-log-pole fit is sub-optimal; a vector-fit would be monotone/better). The M
      auxiliary ODEs psi_j'=p_j(u-psi_j), g=(d+sum r_j)u - sum r_j psi_j reproduce it by transient
-     integration (3.8e-9) = a recursive-convolution / RL-ladder realization.
+     integration (3.8e-9) = a recursive-convolution / auxiliary-ODE realization.
  (D) cost-accuracy datasheet: band rel.err vs M (=#poles=#aux ODEs/mode). Structural cost: time-domain
      FEM-BEM = the EXACT diffusion DtN (dense Gamma + FULL t^{-1/2} history convolution) = most
      accurate, costliest; parabolic IABC = M aux ODEs/mode, local+sparse = cheap, band-limited.
-PRIOR ART (cite, not claim): the sqrt(s*mu*sigma) SIBC + Foster/Cauer + recursive-convolution
+PRIOR ART (cite, not claim): the sqrt(s*mu*sigma) SIBC + partial-fraction (Foster) + recursive-convolution
 time-domain realization is the eddy-current SIBC literature -- Valdivieso-Meunier-Ramdane-Gyselinck
-(IEEE T-Magn 2020, Foster networks + recursive convolution) and time-domain SIBC (Yuferev & Ida) --
+(IEEE T-Magn 2020, Foster partial fractions + recursive convolution) and time-domain SIBC (Yuferev & Ida) --
 but for INTERIOR material / conductor truncation. Defensible-new = the per-mode DIFFUSION DtN SPECTRUM
 (static-ladder <-> sqrt(s) SIBC interpolation) read as an open-boundary IABC + the cost datasheet + the
 wave(finite-pole)-vs-diffusion(branch-cut) contrast, in the SA/Kelvin context. Cost STRUCTURAL, not
-wall-clock. ARC NOW CLOSED: act6_10_iabc_time_domain (exact = Bessel pole net) -> act7_14_iabc_static_elegant (static IABC, elegant closed
+wall-clock. ARC NOW CLOSED: act6_10_iabc_time_domain (exact = Bessel pole set) -> act7_14_iabc_static_elegant (static IABC, elegant closed
 form) -> act7_15_iabc_timedomain_cost (high-freq/wave IABC = reduced rational, finite poles) -> act6_12_iabc_diffusion_timedomain (eddy-current/
-diffusion IABC = Foster ladder, branch cut). NEXT (deferred): harden the cost claim with a real
+diffusion IABC = Foster pole sum, branch cut). NEXT (deferred): harden the cost claim with a real
 time-domain FE solve (M-aux-ODE boundary vs large-truncation/FEM-BEM reference), and a free-pole
 vector fit for monotone optimal M.
 
@@ -2591,19 +2600,19 @@ time-domain form -- by WLS-designing a passive wideband absorber up front, NOT b
 narrowband non-passive optimum dispersively. PRIOR ART: matched/graded (Jaumann) wideband absorbers +
 Chebyshev/LS multilayer design are classical (Collin; Orfanidi); the contribution is applying
 WLS+width+passivity to the IABC truncation. UPDATED time-domain map: low-freq=Kelvin (exact, act7_18_lowfreq_kelvin_vs_iabc);
-eddy-current/diffusion=passive sqrt(s) SIBC Foster ladder (act6_12_iabc_diffusion_timedomain); HIGH-FREQ wave IABC=WLS wideband
+eddy-current/diffusion=passive sqrt(s) SIBC Foster pole sum (act6_12_iabc_diffusion_timedomain); HIGH-FREQ wave IABC=WLS wideband
 passive constant shells (act7_16_wideband_iabc) -- the act7_19_highfreq_iabc_revisited "hard/non-passive" verdict applies only to the
 exact-null route, NOT to the WLS-wideband route, which is clean.
 
 URN (UNIVERSAL RELAXATION NETWORK) as the time-domain REALIZATION layer -- integration assessment
 (VERIFIED 2026-06-15; user pointed to the existing impl docs/universal_relaxation_network, IEEE
 Access paper). WHAT URN IS: a KAN-inspired fitter that represents a complex frequency response Z(omega)
-as a SPARSE sum of CIRCUIT-COMPATIBLE PASSIVE basis functions (Debye, Cole-Cole/Davidson, Havriliak-
-Negami, CPE, Warburg=1/sqrt(jw), skin-effect~sqrt(jw), RLC resonance, viscoelastic), each with a direct
-RLC-ladder / SPICE equivalent (generate_spice_netlist) -> the fit IS a passive, causal, time-domain
+as a SPARSE sum of PASSIVE relaxation basis functions (Debye, Cole-Cole/Davidson, Havriliak-
+Negami, CPE, Warburg=1/sqrt(jw), skin-effect~sqrt(jw), damped resonance, viscoelastic), each with a direct
+local-in-time auxiliary-ODE form -> the fit IS a passive, causal, time-domain
 realization. L1-sparse model selection + frequency-attention; benchmarked vs vector fitting; validated
 on NASA-battery EIS and TDK-ferrite mu(omega). API: train_urn(freqs, Z_data, config)->model.
-ROLE FOR US: the passive, circuit/SPICE-realizable TIME-DOMAIN realization layer for dispersive
+ROLE FOR US: the passive, auxiliary-ODE TIME-DOMAIN realization layer for dispersive
 frequency responses -- the answer to "the explicit frequency dependence is fine, can URN handle it?".
 VERIFIED (torch 2.11 in the worktree):
   * URN runs on our targets. Fast-config (1200-1500 epochs) fits are MODERATE: the eddy-current/
@@ -2617,14 +2626,14 @@ VERIFIED (torch 2.11 in the worktree):
     So NO passive URN model can realize the exact-null shell -- the act7_19_highfreq_iabc_revisited obstruction, seen again.
     URN realizes the PASSIVE responses: the magnetic mu(omega), the act7_16_wideband_iabc WLS-wideband design, and
     (natively, via Warburg/skin = sqrt(jw)) the eddy-current/diffusion DtN/SIBC of act6_12_iabc_diffusion_timedomain.
-NET: the clean time-domain high-freq path = WLS-wideband PASSIVE design (act7_16_wideband_iabc) realized as a circuit
+NET: the clean time-domain high-freq path = WLS-wideband PASSIVE design (act7_16_wideband_iabc) realized as auxiliary ODEs
 by URN; the dispersive route needs PASSIVE materials (URN's domain), which the exact-null optimum is
 not. BOUNDARY: URN lives in the public Radia repo under src/radia/urn/ with
 result-bearing docs and validation_test/universal_relaxation_network/ evidence,
 not in the commercial converters. It is the user's own method and is fine to
-use/cite. NEXT (deferred, user's call): push URN to a tight (<~2%) circuit
+use/cite. NEXT (deferred, user's call): push URN to a tight (<~2%) passive
 fit on a chosen PASSIVE target (asymptote-subtracted diffusion DtN is the best showcase: Warburg/skin =
-sqrt(jw) is native), then emit the SPICE/ADE for an actual time-domain run.
+sqrt(jw) is native), then emit the ADE for an actual time-domain run.
 
 PASSIVE DISPERSIVE (URN/Debye) SHELL = the time-domain IABC, and it BEATS the constant shell
 (act7_17_dispersive_iabc, VERIFIED 2026-06-15; user: "jointly optimize {URN fit + layer thickness + complex eps,mu}
@@ -2660,7 +2669,7 @@ VERIFIED (band kR in [2,8], 4:1):
     wideband IABC does NOT expand it -- it fits a low-order passive relaxation model to the per-mode
     reflection instead. So the Hankel CF is the reference target, not a required ingredient.
 NET (final time-domain map): LOW-FREQ = Kelvin, exact & parameter-free (act7_18_lowfreq_kelvin_vs_iabc). EDDY-CURRENT/
-DIFFUSION = passive sqrt(s) SIBC, Foster/URN-Warburg realizable (act6_12_iabc_diffusion_timedomain). HIGH-FREQ WAVE = a passive
+DIFFUSION = passive sqrt(s) SIBC, Foster / URN sqrt(jw)-basis realizable (act6_12_iabc_diffusion_timedomain). HIGH-FREQ WAVE = a passive
 DISPERSIVE matched shell (URN/Debye), jointly optimized with thickness over the band: passive, causal,
 ADE-trivial, and ~6-13x better than the constant shell (act7_17_dispersive_iabc) -- this is the practical time-domain
 high-freq IABC. The exact lossless route (Hankel CF / Grote-Keller finite-pole, act6_10_iabc_time_domain) remains the
@@ -2850,35 +2859,41 @@ the .vol. Guarded by the static lint rule `ngsolve-curve-after-vol-import`.
 
 
 DTN_COARSE_MESH_METHOD_MAP = r"""
-# Open-boundary method map -- Kelvin / BEM / PML / IABC / CLN
+# Open-boundary method map -- Kelvin / BEM / PML / IABC / continued-fraction NRBC
 
 Full doc: docs/open_boundary/OPEN_BOUNDARY_MAP.md. They all realize ONE operator
 -- the exterior DtN Lambda_ext on Gamma -- which is reverse-Bessel RATIONAL per
 mode (poles = Bessel/Thomson filter poles; act6_10_iabc_time_domain 1e-15).
 
 ## Three axes that select the method
-1. FREQUENCY (kR): quasi-static kR->0 = real ladder -(n+1)/R -> KELVIN (spatial)
-   or its CLN time-domain realization; radiating finite-kR = complex Hankel DtN
-   -> IABC / PML / extended-Kelvin. Wave is rational in s, diffusion in sqrt(s),
-   SAME reverse-Bessel poles (act6_02_cln_dtn_cauer).
+1. FREQUENCY (kR): quasi-static kR->0 = real spectrum -(n+1)/R -> KELVIN (spatial)
+   or the continued-fraction / auxiliary-ODE time-domain realisation of the exact
+   DtN symbol; radiating finite-kR = complex Hankel DtN -> IABC / PML /
+   extended-Kelvin. Wave is rational in s, diffusion in sqrt(s), SAME
+   reverse-Bessel poles (act6_02, exact continued fraction of the eddy DtN).
 2. GEOMETRY (truncation shape): Kelvin inversion is SPHERE-LOCKED (Liouville; the
-   BODY inside is arbitrary). CLN/IABC/BEM are surface-free; CLN is finite-exact
-   ONLY on a separable surface (sphere=rational, n+1 stages), convergent-approx on
+   BODY inside is arbitrary). The continued-fraction NRBC / IABC / BEM are
+   surface-free; the continued fraction is finite-exact ONLY on a separable surface
+   (sphere=rational, n+1 partial quotients), a convergent approximation on
    cylinder/cube. Elongated body: sphere wastes air, a cylinder hugs.
 3. SPACE vs TIME: KELVIN = spatial operator FACTORY (builds the sparse DtN,
-   arbitrary body + iron, no Green's function); CLN = temporal operator REDUCER
-   (compresses the DtN's s-dependence to a Cauer ladder). They COMPOSE.
+   arbitrary body + iron, no Green's function); a band rational (pole-residue) fit
+   or the continued fraction compresses the s-dependence of the built DtN into a
+   few auxiliary ODEs. They COMPOSE.
 
 ## No free lunch (modal axis)
-Every method truncates the multipole ladder at finite n_max (Kelvin p>=n, BEM
-surface Nyquist, CLN n_max + stages). Universal; the source multipole content
-sets n_max. CLN "exact" = exact per-mode impedance synthesis over a FINITE set.
+Every method truncates the multipole spectrum at finite n_max (Kelvin p>=n, BEM
+surface Nyquist, continued fraction n_max modes x partial quotients). Universal;
+the source multipole content sets n_max. An "exact" continued fraction is the exact
+per-mode DtN symbol over a FINITE multipole set.
 
 ## Selection map
-- separable + transient          -> CLN alone (beats PML; act6_05_cln_fetd_reflection/xx6)
+- separable + transient          -> exact DtN symbol: continued fraction / companion
+                                    poles (beats PML; act6_05, transient reflection)
 - separable + static             -> analytic DtN / Kelvin (Kelvin exactness = elegance)
 - arbitrary body + iron + static -> KELVIN (only sparse Green-free factory; SA paper)
-- arbitrary + iron + transient   -> Kelvin BUILDS + CLN REDUCES
+- arbitrary + iron + transient   -> Kelvin BUILDS the DtN; a band rational fit
+                                    compresses its s-dependence
 - radiating (finite kR)          -> IABC / PML / extended-Kelvin
 
 ## Measured anchors (audit-verified 2026-06-19)
@@ -2886,12 +2901,14 @@ sets n_max. CLN "exact" = exact per-mode impedance synthesis over a FINITE set.
   p-vs-h ~1000x, R/a~2.78, corner 0.357/0.661, DeltaDoF 58->1/45; 2D -n/R).
 - IABC exact-DtN (wave): act6_10_iabc_time_domain (DtN poles = Bessel filter, 1e-15), act6_11_exact_dtn_fetd
   (FETD reflection O(h^2) 5.7e-4->3.6e-5, x2471 vs Sommerfeld-1, passive).
-- CLN (diffusion): act6_02_cln_dtn_cauer (Cauer in sqrt(s) EXACT n+1 stages 1e-16 vs Foster
-  floor 1.7e-3), act6_04_cln_mor_radial_eddy (700-DOF eddy FEM -> N=16 ladder, ~43x, SPD stable),
-  act6_05_cln_fetd_reflection (transient reflection 9.9e-7, 62659x vs Dirichlet), act6_09_cln_vs_pml (CLN 8
-  online DOF vs CFS-PML 128 at matched NRMSE 1.46e-4 = 16x fewer + 53189x better
-  cond@DC, DC-exact). NON-CLAIM: propagating waves are PML's home; arbitrary
-  geometry needs Kelvin + CLN.
+- Exact DtN, diffusion: act6_02 (exact continued fraction of the eddy DtN in sqrt(s),
+  EXACT at n+1 partial quotients 1e-16 vs a Foster pole fit in s floor 1.7e-3),
+  act6_04 (Lanczos/PVL Krylov reduction of a 700-DOF radial eddy FEM exterior -> 16
+  real negative poles, ~43x, SPD stable), act6_05 (transient reflection 9.9e-7,
+  62659x vs Dirichlet), act6_09 (exact DtN vs CFS-PML: 8 online DOF vs CFS-PML 128
+  at matched NRMSE 1.46e-4 = 16x fewer + 53189x better cond@DC, DC-exact).
+  NON-CLAIM: propagating waves are PML's home; arbitrary geometry needs a
+  Kelvin-built DtN + band rational fit.
 
 ## The CONSOLIDATED measured comparison (act7_22_dtn_spectrum_consolidated; 2026-06-21)
 
@@ -2949,179 +2966,44 @@ coarser than BEM's ~1e-5 = volume + PML-truncation error).  So BOTH NGSolve high
 AND Helmholtz BEM) ARE on the DtN yardstick (not proxies) -- the working high-freq tools the
 DtN-spectrum ranks.
 
-Companions: kelvin_transformation(topic="mesh_control"), dtn_coarse_mesh(topic="dtn_to_cln"),
-mor_cln(...).  (The `iabc` MCP tool was RETIRED 2026-06-20; the exact-impedance/Zs
--> DtN -> CLN content moved here to topic="dtn_to_cln".  IABC is kept only as the
-comparison / negative-result record above + the act7 demos.)
+Companions: kelvin_transformation(topic="mesh_control"),
+dtn_coarse_mesh(topic="dtn_continued_fraction").  (The `iabc` MCP tool was RETIRED
+2026-06-20; the exact-impedance / Zs -> exact DtN content moved here to
+topic="dtn_continued_fraction".  IABC is kept only as the comparison /
+negative-result record above + the act7 demos.)
 """
 
 
-DTN_COARSE_MESH_DTN_TO_CLN = r"""
-# Exact open boundary as DtN -> CLN (the exact-impedance / Zs route)
-#
-# RELOCATED from the retired `iabc` topic (2026-06-20): the IABC absorbing-shell
-# METHOD is retired in radia (act7_20: Kelvin-DtN-CLN strictly dominates it in the
-# MQS / eddy / static scope; IABC's only niche is high-freq RADIATION = outside
-# radia's Laplace-kernel scope).  This DtN->CLN realisation of the exact impedance
-# boundary is the part that is KEPT; IABC survives only as the comparison record
-# (the act7 demos).  Open-boundary SELECTOR: docs/open_boundary/OPEN_BOUNDARY_MAP.md.
-#
-# PRODUCTION API (adopted 2026-06-20): `radia.open_boundary` (radia wheel), TWO paths:
-#   import radia.open_boundary as ob
-#   # (1) dtn_exact -- exact closed-form SEPARABLE (pure numpy/scipy):
-#   ob.eddy_dtn(n, s, R0, mu_sigma)        # exact eddy/diffusion DtN per multipole
-#   ob.companion_poles(n)                 # inspect the variable convention before time realization
-#   # (2) kelvin_dtn -- Kelvin-BUILT material-aware / NON-separable:
-#   ob.kelvin_fem_radial_dtn(n, s)         # Kelvin-FEM BUILDS the DtN, no DC floor (numpy)
-#   ob.kelvin_dtn_matrix(mesh, p, s, nu=, sigma=); ob.steklov_spectrum(S, Mg)  # NGSolve,
-#                                          #   arbitrary-shape / iron-exterior DtN ladder
-#                                          #   (point-group split: cube O_h, square C4v)
-#   ob.band_rational_fit(s_band, dtn, stages)  # convergent band fit for the non-separable case
-# Goldens validation_test/open_boundary/{test_dtn_exact,test_kelvin_dtn}.py; example docs/open_boundary/demo_dtn_cln_usage.py.
-# SHOWCASE NOTEBOOK docs/open_boundary/open_boundary_demo.ipynb (DtN symbol, CLN ladder,
-#   companion poles, sqrt(s) ladder, Kelvin-FEM DtN build -- executed + rendered).
-# Diffusion qualification: a rational identity in q=sqrt(s) is not a rational
-# transfer function in the physical Laplace variable s. A finite q-ladder alone
-# does not supply an exact finite physical-time ODE. Diffusion memory needs
-# convolution/fractional treatment or a separately validated band-limited s-fit.
-# Poles in q must not be read as physical-time decay rates. Saved algebraic
-# assertions do not establish unconditional timestep stability or PML superiority.
-# PROVENANCE (3 layers -- see kelvin_transformation(topic="material_exterior")):
-#   separable Zs-DtN-CLN = Grote-Keller / Hagstrom-Warburton continued-fraction ABCs /
-#     Warburg-Cauer / Kameari CLN (classical);
-#   Kelvin open boundary with AIR exterior + interior material = Freeman-Lowther 1988/89
-#     (FEMM); transforming sigma under a conformal map = transformation optics /
-#     Ward-Pendry 1996 (DC sigma cloaks) -- both classical;
-#   Sugahara's own contributions = the VALIDATED FUSIONS: (i) Kelvin inversion as an
-#     exact open boundary with the sigma-CONFORMAL transform so a CONDUCTOR crosses the
-#     truncation, eddy-current-testing-validated (IEEE Magnetics 2022); (ii) the Kelvin
-#     material-aware DtN as an INVERSE-DESIGN kernel (SF-with-iron, conf ~0.83, self-
-#     check pending).  The building blocks are classical; the validated fusion is the
-#     contribution.  This module is the verified reusable operator, not a paper claim.
+DTN_COARSE_MESH_DTN_CONTINUED_FRACTION = r"""
+# Separable diffusion DtN: analytic continued fraction
 
-The cleanest time-domain open boundary uses NO absorbing shell at all.  An
-absorbing shell + PEC only presents an effective surface impedance = the exact exterior
-Dirichlet-to-Neumann (DtN) symbol G_l(omega) at the truncation sphere.  Realise
-THAT impedance directly as a Robin BC + auxiliary ODEs, instead of via a
-fictitious lossy material (which is high-Q and does NOT causalise -- a
-per-omega lossy material is non-passive in the time domain).
+For a spherical truncation the multipole symbol is rational in
+q = R0*sqrt(s*mu_sigma). `radia.open_boundary.eddy_dtn` evaluates it;
+`continued_fraction_stages` and `eval_continued_fraction` give the terminating
+Euclidean continued fraction in q. This is an analytic boundary operator,
+not a CLN circuit-reduction route or a substitute for PRIMA.
 
-Air (wave) exterior: G_l is EXACTLY RATIONAL in s (outgoing h_l^{(2)} =
-e^{-jx}/x * polynomial(1/x), so e^{-jx} cancels in the log-derivative):
-    R0*G_l(s) = -s - 1 - N_l(s)/Q_l(s),   Q_l = reverse Bessel polynomial,
-    deg l, ALL roots Re<0.
-      l=1:  -s - 1 - 1/(s+1)                          pole s=-1
-      l=2:  -s - 1 - 3(s+2)/(s^2+3s+3)                poles -1.5 +- 0.866 j
-      l=3:  -s - 1 - 3(2s^2+10s+15)/(s^3+6s^2+15s+15) poles -2.32, -1.84+-1.75 j
-    s->0 gives the static -(l+1)/R0; s->inf gives the Sommerfeld -s/c.
-    => seamless DC -> evanescent -> radiation BY CONSTRUCTION (no fitting).
+The distinction between q and s is essential. A finite expression in sqrt(s)
+is not an exact finite-dimensional physical-time ODE. `companion_poles` returns
+reverse-Bessel roots: those are q-plane roots for diffusion, not its temporal
+relaxation rates. Their negative real parts do not alone prove passivity or
+unconditional stability of a discretised coupled solver.
 
-Time-domain realisation: each mode l = one l-state companion auxiliary-ODE
-system (controllable-canonical realisation of N_l/Q_l) + a boundary time
-derivative (the -s) + a constant (the -1), folded into Newmark-beta.  Poles
-Re<0 + dissipative boundary => UNCONDITIONALLY STABLE, reflection zero up to
-discretisation.  VERIFIED by a 1D radial FETD solve (Newmark-beta, R0=c=1,
-act6_11_exact_dtn_fetd.py): realising the exact DtN as a Robin BC + l companion
-auxiliary ODEs, the spurious reflection (truncated solve vs a free-space
-reference on the SAME interior mesh) falls as O(h^2) for l=1,2,3 -- ~5.7e-4,
-~1.4e-4, ~3.6e-5 on 100/200/400-element radial meshes (clean x4 per h-halving)
--- i.e. it is reflectionless in the continuum (discretisation-limited only).  It
-beats a 1st-order Sommerfeld boundary on the same mesh by ~2000x, and the
-interior energy drains to machine precision (~1e-16 of peak) without ever
-growing => passive.  This is the right vehicle for "seamless, stable, transient
-open boundary": realise the exact PASSIVE boundary response, do not causalise a
-material.  (The DtN symbol / pole realisation itself is verified separately in
-act6_10_iabc_time_domain.py.)
+`sqrt_s_passive_poles` fits sum(g_m*s/(s+p_m)), with nonnegative residues and
+positive p_m, over the supplied frequency samples. Record that band, fit error,
+and retained state count; validate held-out frequencies and transient response
+before using the reduced model. Do not promote sampled fit error to a global
+bound. A general band rational fit does not automatically preserve passivity.
 
-IMPORTANT (prior art, state it): for a SEPARABLE boundary (sphere / cylinder /
-half-space) this exact rational radiation BC is the classical Grote-Keller /
-Bayliss-Turkel / Hagstrom-Warburton exact / high-order radiation condition --
-reflectionless, and it does outperform a PML there, but that is established and
-it does NOT generalise to arbitrary geometry (which is exactly where PML is
-used).  So this is NOT "beating PML" in general.  The IABC-specific value is the
-bridge "IABC shell == this exact termination impedance" and its PASSIVE
-EQUIVALENT-CIRCUIT (relaxation-network / TLM) realisation -- fit/synthesise with
-the `urn` / `urn_fit` tools.
+For nonseparable geometries use `kelvin_dtn_matrix` / `steklov_spectrum` to
+build the discrete exterior operator. Spatial truncation, FEM discretisation,
+and frequency reduction introduce separate errors. There is no general claim
+that this route outperforms PML or needs fewer states at matched accuracy.
 
-Lossy / conductive (eddy-current / diffusion) exterior: G_l is NOT rational in s
-(a sqrt(s) branch cut) -- BUT it IS EXACTLY RATIONAL in q=sqrt(s), with the SAME
-reverse Bessel poles as the wave case above (gamma=ik -> gamma=sqrt(s)):
-    G_n(s) = -s a^2 theta_{n-1}(a sqrt(s)) / theta_n(a sqrt(s)) - (n+1).
-So a Cauer / CLN continued fraction IN q realises it EXACTLY with n+1 stages and
-WELL-CONDITIONED (coeff spread ~1-30) -- decisively beating a Foster fit in s
-(which floors ~1e-3 at 32 states and ill-conditions to ~1e5) and the URN (which
-plateaus ~1.7e-2; URN's edge is measured/multi-mechanism data, not a clean
-analytic DtN).  This promotes the lab CLN (Kameari-Sugahara eddy-current MOR) to
-the open BOUNDARY itself; the sqrt(s) diffusion-memory element is realised by the
-finite eddy-current ladder (real negative poles -> stable, finite auxiliary ODEs).
-VERIFIED two ways: act6_02_cln_dtn_cauer.py (the EXACT Cauer in q=sqrt(s), n+1
-stages -- the structural/unification result; wave realisation = act6_10/act6_11) and
-act6_04_cln_mor_radial_eddy.py (the GENUINE lab CLN: a Lanczos/PVL MOR of a
-~700-DOF radial eddy-current FEM down to a COMPACT ~16-stage INTEGER-ORDER Cauer
-ladder reproducing G_n, monotone convergence, SPD => real negative poles =>
-directly time-domain + stable -- the practical eddy-current open boundary).  And
-act6_05_cln_fetd_reflection.py USES it as a TRANSIENT open boundary: a Crank-
-Nicolson eddy-current diffusion FETD with the exterior Krylov-substructured to
-~16 DOFs gives ~1e-6 spurious reflection (vs ~6-11% for Dirichlet/Neumann
-truncation), monotone in the stage count, across n=1,2,3 -- the diffusive analog
-of act6_11's wave reflection test.  So the reverse-Bessel/CLN open boundary is
-reflectionless in time for BOTH the wave and the diffusion regime.
-
-CLN vs PML (head-to-head, act6_09_cln_vs_pml.py): the eddy-current/diffusion
-exterior is EVANESCENT for every s=i*omega and STATIC as omega->0 -- this whole
-band IS the "DC-to-evanescent" regime (the operator's entire physical range; a
-pure diffusion operator has NO propagating regime).  SCOPED CLAIM (measured,
-NOT a blanket "CLN beats PML"): in the DC-to-evanescent regime CLN OUTPERFORMS
-PML, and -- crucially -- it is tested against the CFS-PML (complex-frequency-
-shifted, beta=1+sigma/(alpha+sqrt(s))) that was invented precisely for evanescent
-/ low-frequency absorption:
- (a) ONLINE-DOF efficiency: CLN reaches NRMSE 2e-4 in ~8 ladder DOF (the exterior
-     FEM is reduced away OFFLINE) vs CFS-PML's ~128 LIVE layer DOF -- ~16x fewer
-     online DOF (exponential MOR of the exact operator vs an algebraic layer).
- (b) accuracy is a reduced-away CLOSURE knob, not a fixed-layer limit: CLN's floor
-     tracks the truncation (R0/Rfar)^(2n+1) (Rfar 8/20/50 -> 2.4e-3/1.5e-4/3.3e-5)
-     while N-to-floor stays ~O(10) (a 4900-DOF exterior -> 11-state ladder) -- and
-     CLN is DC-exact (omega->0 rel.err 4e-5 vs CFS-PML 6e-4, vanilla PML 2e-2).
- (c) conditioning toward DC: vanilla PML 1+sigma/sqrt(s) BLOWS UP (cond 2.3e4 at
-     omega=1e-4).  CFS-PML removes that blowup ONLY at modest accuracy (cond ~2e3
-     at M=32) -- but the DECISIVE matched-accuracy scorecard: at EQUAL NRMSE
-     (~1.5e-4) CFS-PML needs a thick/strong layer (M=128, sigma=16) whose
-     conditioning RETURNS to ~5e4, so in the chosen arena CLN wins ALL THREE axes
-     at once -- 16x fewer online DOF (8 vs 128) AND a ~5e4x better-conditioned aux
-     block (~1 vs ~5e4) at the same accuracy.  CLN has no accuracy<->conditioning
-     tradeoff.
-HONEST NON-CLAIMS: this is NOT PML's home (propagating waves = the WAVE operator,
-act6_10/act7_08; there high-freq vacuum -> PML, and at high omega the table shows PML
-better conditioned than CLN).  And the geometry is separable (radial), so [b]'s
-"grow the far domain" is just "raise Rfar"; arbitrary geometry needs a Kelvin /
-large-domain exterior FEM reduced by CLN -- the radial case is the proof of
-mechanism, not a general-geometry benchmark.
-
-# Kelvin-DtN-CLN vs impedance-DtN-CLN -- which performs better? (act7_20_impedance_vs_kelvin_dtn_cln.py)
-
-The DIRECT head-to-head, both pipelines on the SAME four axes (accuracy / stages /
-conditioning / passivity) for the sphere eddy-current DtN, per multipole.  Both
-realise the SAME sqrt(s) (Warburg / constant-phase) operator; the difference is the
-VARIABLE the finite ladder lives in:
-  Kelvin-DtN-CLN    : Kelvin reaches the EXACT operator -> a Cauer continued fraction
-                      in q=sqrt(s) (the NATURAL variable) -> EXACT at n+1 stages,
-                      well-conditioned (spread ~1-30), passive (reverse-Bessel roots
-                      Re<0).  MEASURED exact for EVERY multipole, not just the dipole:
-                      n=1..6 each ~1e-16 (act6_02_cln_dtn_cauer.py).
-  impedance-DtN-CLN : a lumped impedance network is rational in s (the RLC variable)
-                      and hits the WARBURG WALL -- a finite RLC ladder cannot be
-                      sqrt(s), so it FLOORS (~1.7e-3) and ILL-CONDITIONS (spread ~1e5)
-                      at every n; OR an N-section nested-shell transformer (the IABC)
-                      needs N parameters for N modes and ill-conditions ~1-1.5
-                      decade/shell (2.6e1 -> 2.4e7, N=2..6; act7_18_lowfreq_kelvin_vs_iabc.py).
-VERDICT (within Radia's MQS / eddy / static = Laplace-kernel scope): Kelvin-DtN-CLN
-wins on ALL FOUR axes.  The impedance route's home is the HIGH-FREQUENCY RADIATION
-regime (Helmholtz, OUTSIDE Radia's scope), where the DtN is complex/radiating and
-Kelvin's static real-axis ladder does not apply (HOIBC/IABC: act7_19_highfreq_iabc_revisited).
-NON-CLAIM: for the SPHERE the EXACT exterior DtN is ONE operator -- an exact-DtN-as-
-Robin (Grote-Keller, act6_11_exact_dtn_fetd.py) EQUALS the Kelvin DtN -> the SAME CLN;
-the gap measured is specifically the impedance APPROXIMATION (s-network / finite
-shells) vs Kelvin's exact operator in the diffusion regime.
+Public checks: `validation_test/open_boundary/test_dtn_exact.py` and
+`test_dtn_continued_fraction.py`. Selection guidance and limitations:
+`docs/open_boundary/OPEN_BOUNDARY_MAP.md`. Linear dynamical model reduction
+uses the separate PRIMA/Foster workflow, with its own full-order comparisons.
 """
 
 
@@ -3137,7 +3019,7 @@ def get_dtn_coarse_mesh_documentation(topic: str = "all") -> str:
         "datasheet": DTN_COARSE_MESH_DATASHEET,
         "symmetry_hex": DTN_COARSE_MESH_SYMMETRY_HEX,
         "method_map": DTN_COARSE_MESH_METHOD_MAP,
-        "dtn_to_cln": DTN_COARSE_MESH_DTN_TO_CLN,
+        "dtn_continued_fraction": DTN_COARSE_MESH_DTN_CONTINUED_FRACTION,
     }
     if topic == "all":
         return "\n\n".join(topics.values())
