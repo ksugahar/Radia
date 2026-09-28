@@ -43,7 +43,7 @@ FREQ = 50.0
 mu0 = 4 * pi * 1e-7
 
 
-def build_mesh():
+def build_mesh(disk_bottom_m=aluminium_z):
     semicircle = []
     abc = linspace(1, 1.1, 5)
     for n in range(len(abc)):
@@ -62,7 +62,7 @@ def build_mesh():
         .Rectangle(coil_1_w, coil_1_h).Face(); coil_1.bc('Coil_1')
     coil_2 = MoveTo(coil_2_r - coil_2_w / 2, -coil_2_h) \
         .Rectangle(coil_2_w, coil_2_h).Face(); coil_2.bc('Coil_2')
-    al = MoveTo(0, aluminium_z).Rectangle(aluminium_w, aluminium_h).Face()
+    al = MoveTo(0, disk_bottom_m).Rectangle(aluminium_w, aluminium_h).Face()
     al.bc('Al')
     shape = Glue(semicircle + [coil_1, coil_2, al])
     return Mesh(OCCGeometry(shape, dim=2).GenerateMesh(maxh=0.005))
@@ -73,15 +73,16 @@ def solve_force():
     return solve_force_pair()[0]
 
 
-def solve_force_pair():
-    """Return (legacy integral, physical time-averaged force) at dZ=0.
+def solve_force_pair(dz_m=0.0):
+    """Return (legacy integral, physical time-averaged force) at offset ``dz_m``.
 
-    The legacy lab integral is Re[B_r J_t]; the physical time-averaged Lorentz
-    force is -(1/2) Re[J_t conj(B_r)], half of it in magnitude.
+    ``dz_m`` moves the disk bottom from its 10.8 mm dZ=0 position; each height
+    is a fresh mesh and full solve.  The legacy lab integral is Re[B_r J_t];
+    the physical time-averaged Lorentz force is -(1/2) Re[J_t conj(B_r)],
+    half of it in magnitude.
     """
     ngsglobals.msg_level = 0
-    mesh = build_mesh()
-    print("materials:", mesh.GetMaterials())
+    mesh = build_mesh(aluminium_z + float(dz_m))
 
     p = 2
     fesPhi = H1(mesh, order=p, dirichlet="outer", complex=True)
