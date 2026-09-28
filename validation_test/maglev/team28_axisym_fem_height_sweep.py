@@ -88,7 +88,7 @@ def run():
         },
         "source_sha256": {
             str(path.relative_to(REPO_ROOT)).replace("\\", "/"):
-                hashlib.sha256(path.read_bytes()).hexdigest()
+                hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
             for path in (MODEL, Path(__file__).resolve())
         },
         "method": "axisymmetric mixed phi-B full FEM, p=2, anisotropic-nu "
