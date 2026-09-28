@@ -139,6 +139,7 @@ classdef Matrix < handle
         end
 
         function result = inverse(obj)
+            %INVERSE Free-DoF SparseCholesky factorization; no backend fallback.
             obj.assertAlive();
             nativeHandle = radia.internal.callMex( ...
                 'ngsolve.matrix.inverse', obj.NativeHandle);

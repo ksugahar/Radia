@@ -101,6 +101,8 @@ public:
     int VHeight() const override { return int(ndof_); }
     int VWidth() const override { return int(ndof_); }
     bool IsComplex() const override { return std::is_same_v<SCAL, Complex>; }
+    VecFormat RowFormat() const override { return VVectorFormat<SCAL>(VWidth()); }
+    VecFormat ColFormat() const override { return VVectorFormat<SCAL>(VHeight()); }
     AutoVector CreateRowVector() const override { return make_unique<VVector<SCAL>>(ndof_); }
     AutoVector CreateColVector() const override { return make_unique<VVector<SCAL>>(ndof_); }
 

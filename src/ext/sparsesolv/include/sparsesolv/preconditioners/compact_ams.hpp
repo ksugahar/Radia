@@ -176,6 +176,8 @@ public:
     int VWidth() const override { return ndof_hc_; }
     bool IsComplex() const override { return false; }
 
+    VecFormat RowFormat() const override { return mat_->RowFormat(); }
+    VecFormat ColFormat() const override { return mat_->ColFormat(); }
     AutoVector CreateRowVector() const override { return mat_->CreateRowVector(); }
     AutoVector CreateColVector() const override { return mat_->CreateColVector(); }
 

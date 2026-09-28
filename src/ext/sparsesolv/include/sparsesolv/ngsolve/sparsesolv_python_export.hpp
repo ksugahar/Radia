@@ -185,7 +185,7 @@ public:
     if (!(tolerance > 0.0 && tolerance < 1.0) || maxiter < 1)
       throw py::value_error("NativePCG.Solve: tolerance in (0, 1) and maxiter >= 1 required");
     auto fb = b.FVDouble(), fx = x.FVDouble();
-    auto r = r_.FVDouble(), z = z_.FVDouble(), p = p_.FVDouble(), q = q_.FVDouble();
+    auto r = r_.FV<double>(), z = z_.FV<double>(), p = p_.FV<double>(), q = q_.FV<double>();
     const bool masked = bool(free_);
     auto is_free = [&](size_t i) { return !masked || free_->Test(i); };
     ParallelFor(n_, [&](size_t i) { fx[i] = 0.0; r[i] = is_free(i) ? fb[i] : 0.0; });

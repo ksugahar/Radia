@@ -158,7 +158,8 @@ def _runtime_identity(require_wheel: bool = False) -> dict[str, object]:
     installed_module = Path(distribution.locate_file("radia/__init__.py")).resolve()
     editable = bool(direct_url.get("dir_info", {}).get("editable", False))
     source_checkout = (SOURCE_PACKAGE / "__init__.py").is_file()
-    installed_import = module.samefile(installed_module)
+    # An editable install has no package file at its locate_file() path.
+    installed_import = installed_module.is_file() and module.samefile(installed_module)
     if require_wheel and (editable or source_checkout or not installed_import):
         raise RuntimeError(
             "--require-wheel rejects editable, source-checkout, or mixed Radia imports"

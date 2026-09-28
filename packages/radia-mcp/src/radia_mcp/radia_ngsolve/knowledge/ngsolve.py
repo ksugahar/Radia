@@ -24,9 +24,9 @@ Key features relevant to electromagnetic simulation:
 ## Installation
 
 ```bash
-pip install ngsolve==6.2.2606 netgen-mesher==6.2.2606
+pip install ngsolve==6.2.2607 netgen-mesher==6.2.2607
 # Radia pins both packages together because its native extensions use their C++ ABI.
-# NGSolve 6.2.2606 uses ngsolve-openblas; Radia's own HACApK/PARDISO kernels use
+# NGSolve 6.2.2607 uses ngsolve-openblas; Radia's own HACApK kernels use
 # the separately installed MKL 2026 runtime. Do not reuse Radia binaries built
 # against NGSolve 6.2.2604.
 # The Periodic BC regression in 6.2.2406--6.2.2501 is fixed in this release.
@@ -65,19 +65,15 @@ gfu = GridFunction(fes)
 gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 ```
 
-## Available Direct Solvers
+## Radia direct-solver policy
 
-| Solver | Flag | Notes |
-|--------|------|-------|
-| UMFPACK | `inverse="umfpack"` | Default, single-threaded, robust |
-| PARDISO | `inverse="pardiso"` | Multi-threaded (MKL), 4-8x faster |
-| Sparse Cholesky | `inverse="sparsecholesky"` | SPD matrices only |
-| MUMPS | `inverse="mumps"` | Distributed memory (MPI) |
+Use `inverse="sparsecholesky"` explicitly for supported real symmetric and complex
+symmetric FE systems. Do not select PARDISO or silently fall back to another
+backend. Validate the true residual on free DoFs; unsupported, singular or failed
+factorizations must report failure. Do not change the operator to hide a failure.
+MATLAB `radia.ngsolve.Matrix.inverse()` explicitly selects the same native backend
+without Python. MKL remains for dense BLAS/LAPACK and FFT, not FE solver selection.
 
-**Tip**: For production runs, always use PARDISO if available:
-```python
-gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f.vec
-```
 """
 
 NGSOLVE_FE_SPACES = """
@@ -276,9 +272,9 @@ a += 1/MU_0 * curl(u) * curl(v) * dx
 a += 1j * omega * sigma * u * v * dx("conductor")
 a.Assemble()
 
-# Solve with PARDISO (complex direct)
+# Solve with SparseCholesky (complex symmetric)
 gfu = GridFunction(fes)
-gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f.vec
+gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 ```
 
 ## Nonlinear B-H Curve (Newton Method)
@@ -306,7 +302,7 @@ gfu = GridFunction(fes)
 for it in range(20):
     a.Apply(gfu.vec, res)
     a.AssembleLinearization(gfu.vec)
-    inv = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso")
+    inv = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
     du = inv * res
     gfu.vec.data -= du
     err = sqrt(abs(InnerProduct(du, res)))
@@ -332,27 +328,16 @@ NGSOLVE_SOLVERS = """
 ## Direct Solvers
 
 ```python
-# UMFPACK (default, single-threaded)
-gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * f.vec
-
-# PARDISO (multi-threaded, MKL, 4-8x faster)
-gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f.vec
-
-# Sparse Cholesky (SPD only, efficient)
+# Explicit Radia backend; no automatic backend fallback.
 gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 ```
 
-### PARDISO vs UMFPACK
-
-| Feature | PARDISO | UMFPACK |
-|---------|---------|---------|
-| Threading | Multi-threaded (MKL) | Single-threaded |
-| Speed | 4-8x faster | Baseline |
-| Complex | Yes | Yes |
-| Availability | Requires MKL | Always available |
-| Stability | Excellent | Excellent |
-
-**Rule**: Use PARDISO for production, UMFPACK for debugging.
+Real symmetric and complex symmetric problems require true-residual validation.
+This is not a general nonsymmetric solver or a guarantee for arbitrary indefinite
+systems. A failed factorization is an error; choose an explicitly validated
+iterative formulation when direct factorization is unsuitable.
+MATLAB MEX uses the same explicit SparseCholesky choice. MKL is still needed for
+Radia's dense BLAS/LAPACK and FFT kernels.
 
 ## Iterative Solvers
 
@@ -386,12 +371,12 @@ solvers.MinRes(mat=a.mat, rhs=f.vec, sol=gfu.vec,
 
 | System Type | Direct | Iterative |
 |-------------|--------|-----------|
-| SPD (Poisson, curl-curl) | sparsecholesky/pardiso | CG + BDDC |
-| Symmetric indefinite (saddle point) | pardiso/umfpack | MinRes + block precond |
-| Non-symmetric (Navier-Stokes) | pardiso/umfpack | GMRes |
-| Complex symmetric (eddy current) | pardiso | CG + BDDC (complex) |
+| SPD (Poisson, curl-curl) | sparsecholesky | CG + BDDC |
+| Symmetric indefinite (saddle point) | No general direct route; validate formulation | MinRes + block precond |
+| Non-symmetric (Navier-Stokes) | No general direct route; validate formulation | GMRes |
+| Complex symmetric (eddy current) | sparsecholesky, validate residual | COCR/GMRES + suitable preconditioner |
 | BEM dense | N/A | GMRes + Calderon precond |
-| Small (<10K DOF) | pardiso | Not needed |
+| Small (<10K DOF) | sparsecholesky for supported symmetric systems | Problem-dependent |
 | Large (>100K DOF) | May run out of memory | BDDC + AMG |
 
 ## Eigenvalue Problems
@@ -1302,7 +1287,7 @@ def newton_solve(gfu, a, fes, tol=1e-10, maxiter=20, damping=1.0):
         a.Apply(gfu.vec, res)
         a.AssembleLinearization(gfu.vec)
 
-        inv = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso")
+        inv = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
         du.data = inv * res
 
         gfu.vec.data -= damping * du
@@ -3839,7 +3824,7 @@ M = number of subdomains (super-linear reduction for direct solvers).
 
 | Problem Size | Recommendation |
 |-------------|----------------|
-| < 50K DOFs | Direct solver (PARDISO/UMFPACK) |
+| < 50K DOFs | SparseCholesky for supported symmetric systems |
 | 50K - 500K DOFs | BDDC + CG/GMRes |
 | 500K - 5M DOFs | BDDC + AMG coarse + TaskManager |
 | > 5M DOFs | MPI parallel BDDC + METIS partitioning |

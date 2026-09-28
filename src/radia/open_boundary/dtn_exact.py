@@ -6,9 +6,10 @@ DtN diagonalises in spherical (cylindrical) harmonics; each multipole n has a
 scalar frequency symbol that is EXACTLY a reverse-Bessel rational function -- in s
 for the wave (Helmholtz) exterior, in q=sqrt(s) for the magneto-quasistatic (eddy /
 diffusion) exterior, with the SAME poles roots(theta_n).  This module evaluates
-those symbols, their poles (the Grote-Keller companion auxiliary-ODE rates of a
-transient Robin open boundary), and a passive Foster-form realisation of the
-sqrt(s) diffusion memory.
+those symbols and reverse-Bessel roots. Wave and diffusion use different
+frequency variables: diffusion roots are in q, not physical-time s poles.
+The positive-residue approximation of sqrt(s) is a finite-band approximation,
+not an exact finite-dimensional realisation of diffusion memory.
 
 SCOPE.  This is the right tool for COMPACT / quasi-spherical, MAGNETO-QUASI-STATIC
 problems where an EXACT, DC-well-conditioned open boundary is wanted.  It is not
@@ -22,10 +23,9 @@ NOT NOVEL (cite, do not claim).  The exact rational radiation DtN + local
 auxiliary-ODE realisation is Grote-Keller (SIAM J. Appl. Math. 1995) /
 Hagstrom-Warburton (complete radiation BCs).
 
-VERIFIED by `validation_test/open_boundary/test_dtn_exact.py`: the wave (in s) and
-diffusion (in sqrt(s)) DtN share the poles roots(theta_n); the companion rates all
-have Re<0 (passive, unconditionally stable); the sqrt(s) Foster realisation is
-passive with real negative poles; G_n is bounded in Re(s)>0.
+The tests compare the frequency symbols and fitted responses on specified
+samples. Negative root real parts alone do not prove passivity, global error
+bounds, or unconditional stability of a time-discretised coupled problem.
 
 UNITS.  radia is meters / SI.  R0 = truncation radius (m); mu_sigma = mu*sigma
 (the MQS diffusion coefficient) so the eddy wavenumber is gamma = sqrt(s*mu_sigma)
@@ -39,7 +39,7 @@ from scipy.special import hankel1, kv
 __all__ = [
     "reverse_bessel_theta", "reverse_bessel_roots",
     "eddy_dtn", "eddy_dtn_rational_q", "wave_dtn",
-    "companion_poles", "sqrt_s_passive_ladder", "eval_sqrt_ladder",
+    "companion_poles", "sqrt_s_passive_poles", "eval_sqrt_poles",
 ]
 
 
@@ -57,7 +57,7 @@ def reverse_bessel_theta(n):
 
 def reverse_bessel_roots(n):
     """Roots of theta_n (all Re<0 for n>=1): the shared poles of the wave (in s)
-    and the diffusion (in q=sqrt(s)) exterior DtN, and the companion-ODE rates."""
+    and the diffusion (in q=sqrt(s)) exterior DtN; these are different variables."""
     if n == 0:
         return np.array([], dtype=complex)
     return np.roots(reverse_bessel_theta(n)[::-1].copy()).astype(complex)
@@ -108,20 +108,19 @@ def eddy_dtn_rational_q(n):
 # transient Robin realisation: companion auxiliary ODEs (Grote-Keller form)
 # ---------------------------------------------------------------------------
 def companion_poles(n):
-    """Relaxation rates of the auxiliary ODEs for the TIME-DOMAIN Robin realisation
-    of the exterior DtN (Grote-Keller form): lambda_j = roots(theta_n), all Re<0
-    => passive, unconditionally stable.  For the wave exterior (R0 = c = 1):
-        g(t)      = -du/dt - u + sum_j psi_j ,   u = field trace at the truncation,
-        dpsi_j/dt =  lambda_j ( psi_j + u ) ,    one first-order ODE per pole.
-    (Verified by the companion-pole gate in
-    `validation_test/open_boundary/test_dtn_exact.py`.)"""
+    """Return reverse-Bessel roots (dimensionless wave companion rates).
+
+    For diffusion these are q-plane roots, q=R0*sqrt(s*mu_sigma), not
+    physical-time ODE rates. Re(root)<0 does not by itself establish
+    passivity or unconditional stability of any time-stepping scheme.
+    """
     return reverse_bessel_roots(n)
 
 
 # ---------------------------------------------------------------------------
 # finite PASSIVE realisation of the sqrt(s) diffusion-memory element
 # ---------------------------------------------------------------------------
-def sqrt_s_passive_ladder(omega, K):
+def sqrt_s_passive_poles(omega, K):
     """Fit sqrt(s) ~ sum_m g_m * s/(s + p_m) with g_m >= 0 (passive) and p_m
     log-spaced over the band omega -- the time-domain realisation of the diffusion
     memory.  Each term is one first-order ODE; the real poles -p_m < 0 => stable.
@@ -140,7 +139,7 @@ def sqrt_s_passive_ladder(omega, K):
     return g, p, nrmse
 
 
-def eval_sqrt_ladder(g, p, s):
-    """Evaluate the passive sqrt(s) ladder sum_m g_m s/(s+p_m) at s."""
+def eval_sqrt_poles(g, p, s):
+    """Evaluate the passive sqrt(s) pole-residue sum sum_m g_m s/(s+p_m) at s."""
     s = complex(s)
     return np.sum(g * s / (s + p))

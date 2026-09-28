@@ -14,6 +14,12 @@ import pytest
 
 ng = pytest.importorskip("ngsolve")
 
+# The curl part of the manufactured source has total polynomial degree 11.
+# The P1 default quadrature does not integrate it exactly: on the 2607 mesh
+# it leaves a 1e-6 volume/surface discrepancy. Resolve source quadrature when
+# checking the divergence identity, independently of the FE solution order.
+SOURCE_BONUS_INTORDER = 8
+
 
 def _mesh(maxh):
     from netgen.occ import Box, Glue, OCCGeometry, Pnt, X
@@ -80,13 +86,15 @@ def test_surface_flux_load_matches_the_volume_load(order):
     common = dict(mu_r_by_material={"reduced": 1.0, "total": 50.0},
                   reduced_materials=("reduced",), total_materials=("total",),
                   interface_boundary="source_total_interface", order=order,
+                  bonus_intorder=SOURCE_BONUS_INTORDER,
                   dirichlet_bbbnd="outer", return_system=True,
                   total_source_materials=("total",))
     with ng.TaskManager():
-        volume_hodge = project_source_total_hodge(mesh, source, ("total",), order=order)
+        volume_hodge = project_source_total_hodge(
+            mesh, source, ("total",), order=order, bonus_intorder=SOURCE_BONUS_INTORDER)
         surface_hodge = project_source_total_hodge(
             mesh, source, ("total",), order=order, source_load="surface_flux",
-            tangential_tolerance=0.2)
+            tangential_tolerance=0.2, bonus_intorder=SOURCE_BONUS_INTORDER)
         volume = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             mesh, source, volume_hodge["potential"], 1.0, (3.0, 0.0, 0.0),
             total_source_h=volume_hodge["harmonic_field"], **common)
@@ -187,7 +195,8 @@ def _nonlinear_solve(case, lane, load):
     mesh, source, potential, table = case
     common = dict(bh_table=table, nonlinear_materials=("total",), reduced_materials=("reduced",),
                   total_materials=("total",), interface_boundary="source_total_interface",
-                  dirichlet_bbbnd="GND", kelvin_mats=(), reduced_source_load=load)
+                  dirichlet_bbbnd="GND", kelvin_mats=(), reduced_source_load=load,
+                  bonus_intorder=SOURCE_BONUS_INTORDER)
     with ng.TaskManager():
         if lane.startswith("newton"):
             return solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
