@@ -19,6 +19,7 @@ import numpy as np
 
 import radia
 import radia.vim as vim
+from radia.maglev import MovingHCurlFosterFamily
 
 from team28_coilbuilder_eddy_bubble import (
     REPO_ROOT,
@@ -36,19 +37,19 @@ from team28_hcurl_vim_force import (
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_RESULT = HERE / "team28_coilbuilder_height_family_results.json"
-DEFAULT_FAMILY = HERE / "team28_coilbuilder_hcurl_eddy_cln_family.json"
-REFERENCE_CURVE = (
-    HERE / "demos" / "team28" / "team28_cln_sweep_results.json"
-)
+DEFAULT_FAMILY = HERE / "team28_coilbuilder_hcurl_eddy_foster_family.json"
+REFERENCE_CURVE = HERE / "team28_axisym_fem_height_sweep.json"
 DEFAULT_HEIGHT_OFFSETS_MM = tuple(range(-7, 18))
 DISK_WEIGHT_N = 1.055
 
 
 def _load_reference_curve(height_offsets_mm):
     payload = json.loads(REFERENCE_CURVE.read_text(encoding="utf-8"))
+    if not payload["pass"]:
+        raise RuntimeError(f"{REFERENCE_CURVE.name} is not a passing full-FEM sweep")
     stored = {
-        float(height): -0.5 * float(force)
-        for height, force in zip(payload["dZ_mm"], payload["fz_cln_N"])
+        float(height): float(force)
+        for height, force in zip(payload["dZ_mm"], payload["upward_physical_N"])
     }
     return np.asarray([stored[float(value)] for value in height_offsets_mm])
 
@@ -131,7 +132,7 @@ def run_family(
             basis.current_basis,
             unit_external_a,
         )
-        model = vim.HCurlEddyCLNFromVIM(system, rhs)
+        model = vim.HCurlEddyFosterModelFromVIM(system, rhs)
         force_operator = _force_operator(basis.current_basis, unit_external_b)
         coefficients = model.solve_vector_potential_drive(
             s,
@@ -168,7 +169,11 @@ def run_family(
     timings["coilbuilder_height_sweep_and_solves"] = time.perf_counter() - stage
 
     stage = time.perf_counter()
-    vim.ExportHCurlEddyCLNFamilyJSON(
+    family = MovingHCurlFosterFamily(
+        positions_m=offsets_m,
+        models=tuple(snapshot["model"] for snapshot in snapshots),
+    )
+    vim.ExportHCurlEddyFosterFamilyJSON(
         snapshots,
         family_file,
         metadata={
@@ -182,7 +187,7 @@ def run_family(
             "parent_space": "HCurl",
             "parent_order": 6,
             "height_coordinate": "offset from 10.8 mm disk-bottom reference",
-            "state_basis": "common p=6 local disk EVRS basis",
+            "state_basis": "common p=6 local disk EVRS basis, one shared Foster mode set",
             "force_convention": "positive z is upward physical time-average force",
         },
     )
@@ -208,8 +213,11 @@ def run_family(
         "all_snapshots_share_rank_three_state_basis": bool(
             basis.rank == 3 and all(snapshot["model"].state_order == 3 for snapshot in snapshots)
         ),
-        "all_cln_snapshots_passive": bool(
+        "all_foster_snapshots_passive": bool(
             all(snapshot["model"].diagnostics()["passive"] for snapshot in snapshots)
+        ),
+        "all_snapshots_share_one_foster_mode_set": bool(
+            family.diagnostics()["shared_modes"] and np.all(family.decay_rates > 0.0)
         ),
         "all_coilbuilder_A_checks_below_0p1_percent": bool(max(field_a_errors) < 1.0e-3),
         "all_coilbuilder_B_checks_below_0p5_percent": bool(max(field_b_errors) < 5.0e-3),
@@ -243,7 +251,7 @@ def run_family(
         },
         "height_family": rows,
         "curve_comparison": {
-            "reference": "stored TEAM 28 physical force-height regression",
+            "reference": "team28_axisym_fem_height_sweep.json (full axisymmetric FEM)",
             "reference_upward_force_N": reference_lift.tolist(),
             "predicted_upward_force_N": predicted_lift.tolist(),
             "normalized_max_absolute_error": normalized_max_abs_error,
@@ -304,8 +312,9 @@ def make_artifact(details, result_file, family_file, duration_s):
         "timing_breakdown_s": details["timing_breakdown_s"],
         "verification": {
             "method": (
-                "common-basis identity, source-field quadrature, stored force-height "
-                "regression, monotonicity, passivity, and force-weight equilibrium"
+                "common-basis identity, shared Foster modes, source-field quadrature, "
+                "full-FEM force-height sweep, monotonicity, passivity, and "
+                "force-weight equilibrium"
             ),
             "command": (
                 "pytest -q validation_test/maglev/"

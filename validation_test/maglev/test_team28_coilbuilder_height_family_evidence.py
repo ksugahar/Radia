@@ -8,7 +8,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent
 RESULT = HERE / "team28_coilbuilder_height_family_results.json"
-FAMILY = HERE / "team28_coilbuilder_hcurl_eddy_cln_family.json"
+FAMILY = HERE / "team28_coilbuilder_hcurl_eddy_foster_family.json"
 
 
 def test_coilbuilder_height_family_is_validated_and_replayable():
@@ -30,8 +30,10 @@ def test_coilbuilder_height_family_is_validated_and_replayable():
 def test_family_exchange_declares_common_coilbuilder_basis():
     payload = json.loads(FAMILY.read_text(encoding="utf-8"))
 
-    assert payload["schema"] == "radia.hcurl.eddy_cln.family.v1"
-    assert payload["shared_state_basis"] is True
+    assert payload["schema"] == "radia.hcurl.eddy_foster.family.v1"
+    assert payload["shared_modes"] is True
+    assert payload["decay_rates"]["shape"] == [3]
+    assert min(payload["decay_rates"]["values"]) > 0.0
     assert len(payload["snapshots"]) == 25
     assert payload["state_order"] == 3
     assert payload["metadata"]["coil_source"] == "radia.coil_builder.CoilBuilder"
