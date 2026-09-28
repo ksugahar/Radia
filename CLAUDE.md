@@ -1,6 +1,6 @@
 # Claude Code - Radia Project Policy
 
-Keep active rules here; details belong in source, tests, package docs, skills and `radia-mcp` knowledge. Historical investigations remain in Git history.
+Historical investigations remain in Git history.
 ## Mission
 Radia is an AI-native electromagnetic CAE platform, not another standalone solver.
 AI designs; Radia provides the engineering platform. Extend NGSolve only for missing engineering capability.
@@ -50,7 +50,8 @@ Prefer established public abstractions over proprietary plumbing.
   mode counts from error/convergence in the operating band, not naming alone.
 
 - Use SI units; magnetization is A/m.
-- Direct FE solves/subsolves use `sparsecholesky`, never automatic PARDISO fallback.
+- Python/MATLAB MEX direct FE solves/subsolves explicitly use `sparsecholesky`, never PARDISO fallback.
+  MKL serves dense BLAS/LAPACK/FFT, not FE solver selection.
   Validate migration with true residuals and representative sizes; expose failures without changing operators or acceptance.
 - Compare vector fields with `norm(B1 - B2)`; ESRF coil-yoke HDiv/FEM validation defaults to 1 % relative RMS on its declared core stencil, separately from solver convergence.
 - Radia C++ matrix storage is row-major unless an external API owns the layout.
