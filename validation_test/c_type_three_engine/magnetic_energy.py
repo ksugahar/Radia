@@ -1,7 +1,7 @@
 """Common physical-volume energy quadrature for current-excited comparisons.
 
-This is a diagnostic, not a solver objective. Kelvin cells are excluded:
-the returned finite-domain integral must not be called an all-space energy.
+This is a diagnostic, not a solver objective. An explicit Kelvin map includes
+the exterior; without it the result is a finite-domain partial integral.
 Permanent magnets, hysteresis and anisotropy need different energy contracts.
 """
 from __future__ import annotations
@@ -88,18 +88,15 @@ def compare_energy(records):
 
 
 class PhysicalVolumeEnergy:
-    """Sample all engines on one FEM quadrature, excluding Kelvin exterior.
-
-    Increasing quadrature order and the physical domain must be studied before
-    treating these partial integrals as converged open-boundary energies.
-    """
-    def __init__(self, mesh, bh_table, order, *, iron="iron", exterior="kelvin"):
+    """Common FEM quadrature with an optional physical exterior pullback."""
+    def __init__(self, mesh, bh_table, order, *, iron="iron", exterior="kelvin",
+                 kelvin_center=None, kelvin_radius=None, physical_center=(0., 0., 0.)):
         import ngsolve as ng
         from ngsolve.comp import IntegrationRuleSpace
         if type(order) is not int or order < 1:
             raise ValueError("positive integration order required")
         names = tuple(mesh.GetMaterials())
-        if iron not in names or set(names) - {iron, exterior, "air"}:
+        if set(names) - {iron, exterior, "air"}:
             raise ValueError("energy observer supports only iron/air/Kelvin current-excited meshes")
         with ng.TaskManager():
             space = IntegrationRuleSpace(mesh, order=order)
@@ -112,20 +109,48 @@ class PhysicalVolumeEnergy:
             ids = ng.GridFunction(space)
             ids.Interpolate(mesh.MaterialCF({name: i for i, name in enumerate(names)}))
         labels = np.array(names)[np.rint(ids.vec.FV().NumPy()).astype(int)]
-        keep = labels != exterior
-        self.points = coords.vec.FV().NumPy().reshape(3, space.ndof).T[keep].copy()
+        include_exterior = kelvin_center is not None and kelvin_radius is not None
+        if (kelvin_center is None) != (kelvin_radius is None):
+            raise ValueError("Kelvin centre and radius must be supplied together")
+        if include_exterior and exterior not in names:
+            raise ValueError("explicit exterior map requires a Kelvin mesh region")
+        keep = np.ones(len(labels), dtype=bool) if include_exterior else labels != exterior
+        self.computational_points = coords.vec.FV().NumPy().reshape(3, space.ndof).T[keep].copy()
+        self.points = self.computational_points.copy()
         self.weights = weight.vec.FV().NumPy()[keep].copy()
         self.regions = labels[keep]
+        self.exterior = self.regions == exterior
+        self.kelvin_center = kelvin_center
+        self.kelvin_radius = kelvin_radius
+        self.physical_center = physical_center
+        if include_exterior:
+            from radia.kelvin_source import kelvin_computational_to_physical
+            if not np.isfinite(kelvin_radius) or kelvin_radius <= 0:
+                raise ValueError("positive Kelvin radius required")
+            delta = self.points[self.exterior] - np.asarray(kelvin_center)
+            rho = np.linalg.norm(delta, axis=1)
+            if np.any(rho <= 0) or np.any(rho > kelvin_radius*(1+1e-10)):
+                raise ValueError(f"Kelvin quadrature radii [{rho.min()}, {rho.max()}] outside (0, {kelvin_radius}]")
+            self.points[self.exterior] = kelvin_computational_to_physical(
+                self.points[self.exterior], kelvin_center, physical_center, kelvin_radius)
+            self.weights[self.exterior] *= (kelvin_radius / rho)**6
         self.iron = iron
-        self.laws = {iron: np.asarray(bh_table).tolist(), "air": 1.0}
+        self.laws = {iron: np.asarray(bh_table).tolist(), "air": 1.0, exterior: 1.0}
         digest = hashlib.sha256()
         for array in (self.points, self.weights):
             digest.update(np.asarray(array, dtype="<f8").tobytes())
         digest.update(json.dumps(self.regions.tolist()).encode())
         self.contract = {
             "schema": "radia.validation.physical-volume-energy.v1",
-            "scope": "physical_mesh_volume_only", "all_space_energy": False,
-            "excluded": [exterior, "exterior_tail"], "quadrature_order": order,
+            "scope": ("physical_and_kelvin_exterior" if np.any(labels != exterior) else "kelvin_exterior_only")
+                     if include_exterior else "physical_mesh_volume_only",
+            "all_space_energy": bool(include_exterior and np.any(labels != exterior)),
+            "quadrature_convergence_verified": False,
+            "excluded": ([] if np.any(labels != exterior) else ["physical_interior"])
+                        if include_exterior else [exterior, "exterior_tail"],
+            "kelvin_center_m": list(kelvin_center) if include_exterior else None,
+            "physical_center_m": list(physical_center), "kelvin_radius_m": kelvin_radius,
+            "quadrature_order": order,
             "quadrature_sha256": digest.hexdigest(), "points": len(self.points),
             "laws": self.laws, "law_interpolation": "pchip_with_vacuum_slope_tail",
         }
@@ -135,8 +160,39 @@ class PhysicalVolumeEnergy:
             B, H, self.weights, self.regions, self.laws)}
 
     def fem(self, mesh, B, H):
+        if np.any(self.exterior):
+            raise ValueError("choose the formulation-specific exterior field adapter")
         mapped = mesh(*self.points.T)
         return self._record(np.asarray(B(mapped)), np.asarray(H(mapped)))
+
+    def _exterior_form(self, values, form):
+        from radia.kelvin_source import kelvin_solution_to_physical
+        return kelvin_solution_to_physical(
+            values, self.points[self.exterior], kelvin_center=self.kelvin_center,
+            physical_center=self.physical_center, radius=self.kelvin_radius, form=form)
+
+    def omega(self, mesh, B, H):
+        mapped = mesh(*self.computational_points.T)
+        b, h = np.asarray(B(mapped)).copy(), np.asarray(H(mapped)).copy()
+        if np.any(self.exterior):
+            b[self.exterior] = self._exterior_form(b[self.exterior], "flux_density")
+            h[self.exterior] = self._exterior_form(h[self.exterior], "field_strength")
+        return self._record(b, h)
+
+    def reduced_a(self, solver, coil):
+        import ngsolve as ng
+        import radia as rad
+        mapped = solver.mesh(*self.computational_points.T)
+        b = np.asarray(solver.get_B()(mapped)).copy()
+        h = np.asarray(solver.get_H()(mapped)).copy()
+        if np.any(self.exterior):
+            # Only the reaction curl is in the Kelvin frame. Add the actual
+            # source at physical exterior points after transforming it.
+            reaction = np.asarray(ng.curl(solver.get_A())(mapped))[self.exterior]
+            b[self.exterior] = self._exterior_form(reaction, "flux_density")
+            b[self.exterior] += np.asarray(rad.Fld(coil, "b", self.points[self.exterior]))
+            h[self.exterior] = b[self.exterior] / MU0
+        return self._record(b, h)
 
     def hdiv(self, result, coil):
         import ngsolve as ng
