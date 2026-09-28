@@ -50,9 +50,8 @@ Prefer established public abstractions over proprietary plumbing.
   mode counts from error/convergence in the operating band, not naming alone.
 
 - Use SI units; magnetization is A/m.
-- FE direct solves and direct subsolves use NGSolve `sparsecholesky`; no default or automatic PARDISO fallback.
-  Existing PARDISO paths remain migration debt until true-residual and representative-size checks pass.
-  Report unsupported matrices or factorization failures; never alter the operator or relax acceptance to hide them.
+- Direct FE solves/subsolves use `sparsecholesky`, never automatic PARDISO fallback.
+  Validate migration with true residuals and representative sizes; expose failures without changing operators or acceptance.
 - Compare vector fields with `norm(B1 - B2)`; ESRF coil-yoke HDiv/FEM validation defaults to 1 % relative RMS on its declared core stencil, separately from solver convergence.
 - Radia C++ matrix storage is row-major unless an external API owns the layout.
 - Radia core Green functions remain Laplace/MQS/Darwin kernels.
@@ -86,9 +85,8 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 - Verify the interpreter and actual import path after repointing. Report each
   client's live loaded source separately; reload/reconnect affected clients as
   needed. Unknown or mixed evidence must stay unverified.
-- Solver/native numerical acceptance is unchanged. Keep release installation
-  tests isolated from development; see the
-  [Shared MCP runtime policy](packages/radia-mcp/docs/operations/mcp-runtime-policy.md).
+- Keep solver release tests isolated from development; numerical gates are unchanged.
+  See [Shared MCP runtime policy](packages/radia-mcp/docs/operations/mcp-runtime-policy.md).
 
 ### Canonical Bibliography
 
@@ -143,12 +141,10 @@ solver boundary is a checked `.vol` regardless of the creation route.
   validation inputs may produce a visible skip. Heavier `.vol` work
   belongs to `validation_test/`, and `docs/**/*.ipynb` may show the Cubit
   generation step.
-- Only `cubit-mesh-export` launches the Cubit GUI and owns Cubit GUI tests on licensed hosts;
-  Radia solver/application/validation/CI lanes must not launch it or duplicate those tests.
+- Only `cubit-mesh-export` owns Cubit GUI launches/tests on licensed hosts; Radia lanes must not duplicate them.
 - Prefer Cubit APREPRO/Python batch for production/validation CAD and meshes;
   consider Sculpt for suitable HEX domains; build123d/Netgen alternatives must be explicit.
-- Radia normally reads checked `.vol` files. Generation uses APREPRO or Cubit's Python API
-  in batch/headless mode with `cubit-mesh-export` owning export; CI remains fixture-only.
+- Radia reads checked `.vol` files; CI uses fixtures. Generate headlessly via APREPRO/Python and export through `cubit-mesh-export`.
 - `cubit_mesh_export.mcp` owns Cubit MCP/APIs without Radia; each distribution owns its runtime helpers and requires neither the other MCP package nor a shared private distribution.
   Radia may depend on Cubit for applicable workflows and prefers it when licensed; build123d + Netgen is the explicit alternative. MCP handoff is artifact-only, never GUI control.
 - Every solver-bound `.vol` passes `check-vol` with its versioned label
