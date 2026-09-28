@@ -94,8 +94,8 @@ def test_gauged_system_residual_matches_the_shipped_wrapper():
 def test_direct_paths_ask_for_the_registered_type():
     import inspect
     source = inspect.getsource(vps.VectorPotentialSolver.solve_linear)
-    assert "inverse=direct_inverse_type()" in source
+    assert "inverse=direct_inverse_type(solver)" in source
     assert "a.mat.Inverse(fes.FreeDofs())" not in source
     picard = inspect.getsource(vps.VectorPotentialSolver.solve_nonlinear)
-    assert "inverse=direct_inverse_type()" in picard
+    assert "inverse=direct_inverse_type(solver)" in picard
     assert "inverse='pardisospd'" not in picard

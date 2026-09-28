@@ -25,6 +25,8 @@ NATIVE_PATHS = (
     'matlab/+radia/RadiaField.m',
     'tests/matlab/test_radiafield_mex.m',
     'tests/test_mixed_omega_source_load.py',
+    'tests/test_three_engine_energy.py',
+    'validation_test/c_type_three_engine/magnetic_energy.py',
 
     "tests/test_ams_internal_setup_parallel.py",
     "src/core/rad_hacapk*",

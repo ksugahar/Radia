@@ -41,8 +41,11 @@ DIRECT_INVERSE_TYPE = "radia_pardisospd_metis"
 _direct_inverse_registered = False
 
 
-def direct_inverse_type():
+def direct_inverse_type(solver="direct"):
     """Return the NGSolve inverse-type name of radia's direct HCurl solve.
+
+    Explicit ``solver="sparsecholesky"`` returns the NGSolve native inverse
+    without registering or loading PARDISO. The default is unchanged.
 
     NGSolve's pip PARDISO wrapper (``ngsolve.solvers.mkl_pardiso``) hard-codes
     the minimum-degree ordering (``iparm[1] = 0``) and overwrites the
@@ -63,6 +66,8 @@ def direct_inverse_type():
     loudly.  Without the wrapper's PARDISO the construction raises the
     wrapper's own error.
     """
+    if solver == "sparsecholesky":
+        return "sparsecholesky"
     global _direct_inverse_registered
     if not _direct_inverse_registered:
         from ngsolve import la as ngla
@@ -616,7 +621,8 @@ class VectorPotentialSolver:
             Dimensionless gauge regularization strength in physical regions.
         solver : str
             'auto' (AMS if available, else BDDC for large, direct for small),
-            'ams' (Chebyshev AMS + TaskManager), 'bddc', or 'direct'. Kelvin
+            'ams' (Chebyshev AMS + TaskManager), 'bddc', 'sparsecholesky',
+            or 'direct'. Kelvin
             systems use direct below 200,001 DOFs and BDDC above that limit;
             their Periodic high-order space does not support the current AMS
             auxiliary-space construction.
@@ -697,7 +703,7 @@ class VectorPotentialSolver:
             iterations = getattr(inv, 'iterations', None)
         else:
             self._A_gf.vec.data = (
-                a.mat.Inverse(fes.FreeDofs(), inverse=direct_inverse_type())
+                a.mat.Inverse(fes.FreeDofs(), inverse=direct_inverse_type(solver))
                 * f.vec)
 
         solution_values = np.asarray(self._A_gf.vec.FV().NumPy())
@@ -719,7 +725,7 @@ class VectorPotentialSolver:
             )
         self._last_linear_stats = {
             'solver': solver,
-            'direct_inverse': (direct_inverse_type()
+            'direct_inverse': (direct_inverse_type(solver)
                                if solver not in ('ams', 'bddc') else None),
             'ndof': int(fes.ndof),
             'iterations': (int(iterations) if iterations is not None else None),
@@ -760,7 +766,7 @@ class VectorPotentialSolver:
         verbose : bool
             Print iteration progress.
         solver : str
-            'auto', 'ams', 'bddc', or 'direct'.
+            'auto', 'ams', 'bddc', 'sparsecholesky', or 'direct'.
         eps : float
             Dimensionless gauge regularization strength.
         """
@@ -892,7 +898,7 @@ class VectorPotentialSolver:
                 w.data = inv * r
             else:
                 inv = a.mat.Inverse(fes.FreeDofs(),
-                                    inverse='pardiso')
+                                    inverse=('sparsecholesky' if solver == 'sparsecholesky' else 'pardiso'))
                 w.data = inv * r
 
             err = InnerProduct(w, r)
@@ -1014,7 +1020,7 @@ class VectorPotentialSolver:
         verbose : bool
             Print iteration progress.
         solver : str
-            'auto', 'ams', 'bddc', or 'direct'.
+            'auto', 'ams', 'bddc', 'sparsecholesky', or 'direct'.
         eps : float
             Dimensionless gauge regularization strength in physical regions.
         kelvin_eps : float, optional
@@ -1138,7 +1144,7 @@ class VectorPotentialSolver:
 
         if verbose:
             solver_names = {'ams': 'AMS+CG', 'bddc': 'BDDC+CG',
-                            'direct': 'PARDISO SPD'}
+                            'direct': 'PARDISO SPD', 'sparsecholesky': 'SparseCholesky'}
             print(f"  Picard iteration (solver: {solver_names.get(solver, solver)}):")
 
         for it in range(maxiter):
@@ -1184,7 +1190,7 @@ class VectorPotentialSolver:
                 A_gf.vec.data = inv * f.vec
             else:
                 A_gf.vec.data = a.mat.Inverse(
-                    fes.FreeDofs(), inverse=direct_inverse_type()) * f.vec
+                    fes.FreeDofs(), inverse=direct_inverse_type(solver)) * f.vec
 
             linear_residual = f.vec.CreateVector()
             linear_residual.data = f.vec - a.mat * A_gf.vec
@@ -1282,8 +1288,8 @@ class VectorPotentialSolver:
             'tolerance': float(tol),
             'maximum_iterations': int(maxiter),
             'maximum_linear_relative_residual': maximum_linear_relative_residual,
-            'direct_inverse': (direct_inverse_type()
-                               if solver == 'direct' else None),
+            'direct_inverse': (direct_inverse_type(solver)
+                               if solver in ('direct', 'sparsecholesky') else None),
             'solver': solver,
             'physical_gauge_epsilon': physical_eps,
             'kelvin_gauge_epsilon': resolved_kelvin_eps,
@@ -1348,7 +1354,7 @@ class VectorPotentialSolver:
         verbose : bool
             Print iteration progress.
         solver : str
-            'auto', 'ams', 'bddc', or 'direct'.
+            'auto', 'ams', 'bddc', 'sparsecholesky', or 'direct'.
         relax : float
             Under-relaxation for R update (0.0 = full step, 0.5 = half).
         """
@@ -1458,7 +1464,7 @@ class VectorPotentialSolver:
                 A_gf.vec.data = inv * f.vec
             else:
                 A_gf.vec.data = a.mat.Inverse(
-                    fes.FreeDofs(), inverse='pardiso') * f.vec
+                    fes.FreeDofs(), inverse=('sparsecholesky' if solver_type == 'sparsecholesky' else 'pardiso')) * f.vec
 
             # B = B_s + curl(A_r) at centroids
             B_total_cf = self._B_source_cf + curl(A_gf)
