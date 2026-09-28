@@ -136,6 +136,29 @@ def test_remote_verify_passes_explicit_expectations_only_with_the_release_overri
                    for arg in argv)
 
 
+@pytest.mark.parametrize("explicit", [False, True])
+def test_solver_remote_verify_does_not_expand_to_other_recorded_products(monkeypatch, explicit):
+    """Exercise the remote CLI parser: --expect alone does not limit packages."""
+    source = "W:/release/radia"
+    monkeypatch.setenv(release_quad.EDITABLE_REPO_100_ENV, source)
+    selected = []
+    result = _remote_ok({"match": 1, "drift": 0, "unverified": 0})[1]
+
+    def verify(packages, expectations, **kwargs):
+        selected.extend(packages)
+        assert expectations == {"radia": source}
+        return result
+
+    def remote(host, argv):
+        assert intent.main(argv) == 0
+        return 0, result, ""
+
+    monkeypatch.setattr(intent, "verify", verify)
+    monkeypatch.setattr(release_quad, "_remote_editable_intent", remote)
+    assert release_quad._verify_100_editable([("radia", source)] if explicit else None) == 0
+    assert selected == ["radia"]
+
+
 def test_remote_verify_counts_unverified_and_drift(monkeypatch):
     report = {}
     monkeypatch.setattr(release_quad, "_remote_editable_intent",
