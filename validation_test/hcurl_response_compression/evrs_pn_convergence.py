@@ -9,7 +9,7 @@ research observable concrete:
 
 Run from the repository root:
 
-    python validation_test/cln/evrs_pn_convergence.py
+    python validation_test/hcurl_response_compression/evrs_pn_convergence.py
 """
 
 from __future__ import annotations

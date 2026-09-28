@@ -17,7 +17,7 @@ compute host.
 
 Run from the repository root:
 
-    python validation_test/cln/evrs_sibc_mixed_schur.py
+    python validation_test/hcurl_response_compression/evrs_sibc_mixed_schur.py
 """
 
 from __future__ import annotations

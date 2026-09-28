@@ -183,8 +183,8 @@ LANES: dict[str, MotorValidationLane] = {
         public_evidence=(
             "analytic sign/scale checks",
             "tests/test_vim_eddy_hybrid.py::test_eddy_bubble_hcurl_basis_is_vim_and_hdiv_mmm_ready",
-            "validation_test/cln/hcurl_vim_hdiv_mmm_end_to_end.py",
-            "validation_test/cln/planar_hdiv_mmm_response_smoke.py",
+            "validation_test/hcurl_response_compression/hcurl_vim_hdiv_mmm_end_to_end.py",
+            "validation_test/hcurl_response_compression/planar_hdiv_mmm_response_smoke.py",
             "stored public-safe regression artifacts",
         ),
         private_reference_sources=(
@@ -292,7 +292,7 @@ RUNBOOK = """\
 For a Radia HDiv-MMM + HCurl eddy-bubble slot:
 
 ```powershell
-python validation_test\\cln\\hcurl_vim_hdiv_mmm_end_to_end.py
+python validation_test\\hcurl_response_compression\\hcurl_vim_hdiv_mmm_end_to_end.py
 python -m pytest tests\\test_vim_eddy_hybrid.py -q
 ```
 
