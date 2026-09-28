@@ -149,7 +149,7 @@
     "not_run": "ESRF/three-engine campaign evidence was not recomputed; their recorded runs used PCHIP of B"
   },
   "accepted_esrf_evidence_impact": {
-    "method": "table-level bound, no re-run: max |B_new - B_old| / B_old over H in (0, H_max] on a 200001-point geometric grid",
+    "method": "Sampled constitutive-curve comparison only: max |B_new(H)-B_old(H)|/B_old(H) on a 200001-point geometric grid in (0,H_max]. This is neither a certified supremum over all H nor a bound on the solved nonlinear field or energy.",
     "max_relative_B_change": {
       "esrf5": 8.25e-07,
       "esrf6": 3.27e-06,
@@ -161,8 +161,11 @@
       "maximum_core_pairwise_relative_rms": 0.007818270599124209,
       "gate": 0.01,
       "margin": 0.002181729400875791,
-      "conclusion": "the constitutive change (3.3e-6) is ~700x below the remaining gate margin; not re-run"
+      "conclusion": "The historical run remains evidence for its recorded B-PCHIP implementation only. The small sampled constitutive difference suggests low impact, but does not certify the new-law three-engine gate. No new-law solve or sensitivity bound was obtained.",
+      "new_law_status": "not_revalidated",
+      "required_evidence": "Recompute the three-engine acceptance with the new law and exact implementation identities, or supply a justified problem-level perturbation bound. Record magnetic energy/coenergy as well as the existing field agreement gate."
     },
-    "cases_3_and_7": "no accepted three-engine evidence exists (v5.0.3 README: case 7 and the case 3 direct-factorization failure remain separate work); nothing to re-verify"
+    "cases_3_and_7": "No accepted three-engine evidence is available to replay. These remain unvalidated cases; absence of earlier acceptance is not evidence that the new law passes.",
+    "release_acceptance_scope": "The four-host 5.0.3 wheel and MEX/Simulink results apply to source 0d0be108e, before 115d213aa. They do not validate this subsequent material-law change. The later cc211d181 Foster MEX build and nine tests also precede this law change."
   }
 }
