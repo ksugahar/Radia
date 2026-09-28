@@ -52,11 +52,24 @@ public:
     // Reject caller-owned regions before touching matrix state. Setup owns
     // bounded internal regions, excluding coarse direct factorization.
     static void RequireSerialSetup() {
-        if (ngcore::GetTaskManager() != nullptr)
+        if (ngcore::GetTaskManager() != nullptr && ActiveTaskManagerSetups() == 0)
             throw std::runtime_error(
                 "AMS construction and Update must run outside ngsolve.TaskManager; "
                 "leave the TaskManager context before setup, then re-enter for the solve.");
     }
+
+    /// Setups that run inside a caller-owned TaskManager on purpose: an NGSolve
+    /// preconditioner (the BDDC wirebasket solver) is built during
+    /// BilinearForm.Assemble, which the caller runs inside TaskManager. The
+    /// setup's own regions then join the active one instead of opening one.
+    static int& ActiveTaskManagerSetups() {
+        static int count = 0;
+        return count;
+    }
+    struct AllowActiveTaskManagerSetup {
+        AllowActiveTaskManagerSetup() { ActiveTaskManagerSetups()++; }
+        ~AllowActiveTaskManagerSetup() { ActiveTaskManagerSetups()--; }
+    };
 
     /// @param mat       HCurl system matrix (SparseMatrix<double>)
     /// @param grad      Discrete gradient G (H1 -> HCurl)
@@ -82,13 +95,16 @@ public:
                int subspace_solver = 0,
                bool beta_zero = false,
                bool reuse_hierarchy = false,
-               bool mixed_precision = false)
+               bool mixed_precision = false,
+               bool smoothing_only_rows = false,
+               bool lean_coarse = false)
         : mat_(mat), grad_(grad), freedofs_(freedofs),
           ndof_hc_(mat->Height()), ndof_h1_(grad->Width()),
           cycle_type_(cycle_type), num_smooth_(num_smooth),
           print_level_(print_level), correction_weight_(correction_weight),
           subspace_solver_(subspace_solver), amg_theta_(amg_theta), beta_zero_(beta_zero),
-          reuse_hierarchy_(reuse_hierarchy), mixed_precision_(mixed_precision)
+          reuse_hierarchy_(reuse_hierarchy), mixed_precision_(mixed_precision),
+          smoothing_only_rows_(smoothing_only_rows), lean_coarse_(lean_coarse)
     {
         RequireSerialSetup();
         if (mixed_precision_ && !beta_zero_)
@@ -108,7 +124,8 @@ public:
     /// vertices.  An order>=2 space with nograds=True still has one gradient
     /// column per vertex, so the coordinate-size check above cannot see it, but
     /// its non-edge rows are empty: those dofs would get smoothing only and the
-    /// preconditioner would silently degrade instead of failing.  Reject it.
+    /// preconditioner would silently degrade instead of failing.  Reject it,
+    /// unless the caller declares such smoothing-only rows on purpose.
     void RequireLowestOrderGradient() const {
         if (grad_->Height() != ndof_hc_)
             throw std::runtime_error(
@@ -121,7 +138,7 @@ public:
             int nonzeros = 0;
             for (int j = 0; j < vals.Size(); j++)
                 if (vals[j] != 0.0) nonzeros++;
-            if (nonzeros != 2) bad++;
+            if (nonzeros != 2 && !(smoothing_only_rows_ && nonzeros == 0)) bad++;
         }
         if (bad > 0)
             throw std::runtime_error(
@@ -194,6 +211,8 @@ public:
     bool GetBetaZero() const { return beta_zero_; }
     bool GetReuseHierarchy() const { return reuse_hierarchy_; }
     bool GetMixedPrecision() const { return mixed_precision_; }
+    /// Pi_x/y/z (and their transposes) share one pattern: one pass serves all three.
+    bool GetPiFused() const { return pi_fused_; }
     int GetHierarchyRefreshes() const { return hierarchy_refreshes_; }
     int GetInPlaceUpdates() const { return in_place_updates_; }
     int GetSetupWorkers() const { return setup_workers_; }
@@ -330,6 +349,12 @@ private:
     const bool beta_zero_; // Pure curl-curl: omit G correction and its hierarchy.
     const bool reuse_hierarchy_; // Update(): frozen AMG coarsening, refreshed Galerkin matrices.
     const bool mixed_precision_; // Residual SpMVs inside the cycle read float32 value mirrors.
+    // Empty gradient rows are dofs outside the edge space (e.g. BDDC wirebasket
+    // face dofs): the fine smoother covers them, the auxiliary spaces do not.
+    const bool smoothing_only_rows_;
+    // Auxiliary AMGs stop coarsening where it stalls and solve a small coarsest
+    // level with a dense inverse (CompactAMG::SetLeanCoarse).
+    const bool lean_coarse_;
     std::vector<float> abc_values_f_;  // float32 mirror of A_bc_ (mixed precision only)
     std::vector<float> pi_values_f_, pit_values_f_;  // interleaved Pi / Pi^T values (mixed, fused)
     int hierarchy_refreshes_ = 0;
@@ -631,7 +656,11 @@ private:
                 // reuse_hierarchy: coarse matrices from the native Galerkin product
                 // (the refresh path's numeric pass then runs on those patterns).
                 for (auto& amg : {amg_G, amg_Pix, amg_Piy, amg_Piz})
-                    if (amg) { amg->SetNativeGalerkin(reuse_hierarchy_); amg->SetMixedPrecision(mixed_precision_); }
+                    if (amg) {
+                        amg->SetNativeGalerkin(reuse_hierarchy_);
+                        amg->SetMixedPrecision(mixed_precision_);
+                        if (lean_coarse_) amg->SetLeanCoarse(0.8, 1024);
+                    }
             }
 
             t0 = std::chrono::high_resolution_clock::now();

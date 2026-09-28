@@ -23,6 +23,7 @@
 #include "sparsesolv/preconditioners/compact_amg.hpp"
 #include "sparsesolv/preconditioners/compact_ams.hpp"
 #include "sparsesolv/preconditioners/complex_compact_ams.hpp"
+#include "sparsesolv/ngsolve/ams_wirebasket.hpp"
 
 
 namespace py = pybind11;
@@ -1075,23 +1076,8 @@ print_level : int
       if (mismatched)
         throw py::value_error("LowestOrderGradient: HCurl dofs are not numbered by edge ("
                               + std::to_string(mismatched.load()) + " edges differ)");
-      Array<int> counts(nedge);
-      counts = 2;
-      auto gradient = make_shared<SparseMatrix<double>>(counts, int(nv));
-      ParallelFor(nedge, [&](size_t e) {
-        auto pnums = ma->GetEdgePNums(e);
-        const int first = pnums[0], second = pnums[1];
-        auto columns = gradient->GetRowIndices(e);
-        auto values = gradient->GetRowValues(e);
-        if (first < second) {
-          columns[0] = first;  values[0] = -1.0;
-          columns[1] = second; values[1] = 1.0;
-        } else {
-          columns[0] = second; values[0] = 1.0;
-          columns[1] = first;  values[1] = -1.0;
-        }
-      });
-      return gradient;
+      (void)nv;
+      return shared_ptr<BaseMatrix>(BuildLowestOrderGradient(*ma));
     },
     py::arg("fes"),
     R"raw_string(
@@ -1491,6 +1477,62 @@ cycle_type : int
   AMS cycle type (1=01210, 7=0201020, default=1).
 print_level : int
   Verbosity (0=silent, default=0).
+)raw_string");
+
+  RegisterAMSWirebasket();
+  m.def("AMSCoarseStats", []() {
+      const auto& s = GetAMSWirebasketStats();
+      py::dict d;
+      d["builds"] = s.builds;
+      d["n_edges"] = s.n_edges;
+      d["n_extra"] = s.n_extra;
+      d["cycles"] = s.cycles;
+      d["n_free"] = s.n_free;
+      d["n_vertices"] = s.n_vertices;
+      d["complex"] = s.complex;
+      d["extract_s"] = s.extract_s;
+      d["setup_s"] = s.setup_s;
+      d["applies"] = s.applies;
+      d["apply_s"] = s.apply_s;
+      if (auto ams = s.complex_ams.lock()) {
+        const char* names[10] = {"split", "grad_residual", "grad_restrict", "grad_amg",
+                                 "grad_prolong", "nodal_residual", "nodal_restrict",
+                                 "nodal_amg", "nodal_prolong", "final_sweep"};
+        auto sec = ams->StageSeconds();
+        py::dict stages;
+        for (int k = 0; k < 10; k++) stages[names[k]] = sec[k];
+        d["cycle_stage_s"] = stages;
+        d["cycles_run"] = ams->CyclesRun();
+        py::dict amg_levels;
+        const auto& real = ams->Real();
+        const std::pair<const char*, CompactAMG*> amgs[4] = {
+            {"G", real.GetBGAsAMG()}, {"Px", real.GetBPixAsAMG()},
+            {"Py", real.GetBPiyAsAMG()}, {"Pz", real.GetBPizAsAMG()}};
+        for (const auto& [name, amg] : amgs) {
+          if (!amg) continue;
+          py::list rows;
+          for (const auto& row : amg->DualLevelProfile())
+            rows.append(py::make_tuple(int(row[0]), int(row[1]), row[2], int(row[3])));
+          amg_levels[name] = rows;
+        }
+        d["amg_levels"] = amg_levels;
+      }
+      return d;
+    },
+    R"raw_string(
+Counters of the most recent BDDC wirebasket AMS (coarsetype="sparsesolv_ams").
+
+Importing this module registers "sparsesolv_ams" with NGSolve's preconditioner
+classes. For an HCurl BilinearForm, Preconditioner(a, "bddc",
+coarsetype="sparsesolv_ams", coarseflags={...}) replaces the direct wirebasket
+inverse by Compact AMS on the lowest-order edge block. coarseflags: cycles
+(k AMS cycles as k stationary steps on the wirebasket system, default 1),
+lean_coarse (default 1: auxiliary AMGs stop where coarsening stalls and solve
+a coarsest level of at most 1024 rows densely when that reproduces a test
+vector; 0 keeps sparse Cholesky),
+cycle_type, num_smooth, print_level, eps (relative diagonal shift of the AMS
+surrogate), beta_zero and mixed_precision (real systems only). A complex
+wirebasket matrix S uses the real surrogate Re S + Im S.
 )raw_string");
 
   m.def("has_compact_ams", []() { return true; },
