@@ -972,9 +972,15 @@ def formal_symplectic_residual(R, T, U) -> FormalSymplecticResidual:
 
 
 # Scale-free acceptance of the reconstructed symplectic residual.  The measured
-# plateau is 1.2e-14 and the near-identity floor 6.0e-13, so 1e-10 keeps a
-# 167x margin while still rejecting a broken factorization.
+# plateau is 1.2e-14 and the near-identity floor 6.0e-13, so the 1e-10 floor
+# keeps a 167x margin while still rejecting a broken factorization.  A truncated
+# (coarse-step) map carries a symplectic defect of its own truncation size, so
+# the gate follows the caller's factorization tolerance above the floor.
 _NORMALIZED_SYMPLECTIC_RESIDUAL_GATE = 1.0e-10
+
+
+def _normalized_symplectic_residual_gate(tolerance: float) -> float:
+    return max(_NORMALIZED_SYMPLECTIC_RESIDUAL_GATE, float(tolerance))
 
 
 def normalized_symplectic_residual(factorization) -> float:
@@ -2182,7 +2188,7 @@ def third_order_lie_map_from_multipoles(
         factorization.maximum_generator_symmetry_defect > tolerance
         or factorization.relative_reconstruction_error > tolerance
         or normalized_symplectic_residual(factorization)
-        > _NORMALIZED_SYMPLECTIC_RESIDUAL_GATE
+        > _normalized_symplectic_residual_gate(tolerance)
     ):
         raise RuntimeError(
             "Hamiltonian map failed the Dragt-Finn integrability/projection gate"
@@ -2347,7 +2353,7 @@ def fourth_order_lie_map_from_multipoles(
         factorization.maximum_generator_symmetry_defect > tolerance
         or factorization.relative_reconstruction_error > tolerance
         or normalized_symplectic_residual(factorization)
-        > _NORMALIZED_SYMPLECTIC_RESIDUAL_GATE
+        > _normalized_symplectic_residual_gate(tolerance)
     ):
         raise RuntimeError(
             "Hamiltonian map failed the fourth-order Dragt-Finn gate"
@@ -2731,7 +2737,7 @@ def _fourth_order_lie_map_from_vector_potential_polynomials(
         factorization.maximum_generator_symmetry_defect > tolerance
         or factorization.relative_reconstruction_error > tolerance
         or normalized_symplectic_residual(factorization)
-        > _NORMALIZED_SYMPLECTIC_RESIDUAL_GATE
+        > _normalized_symplectic_residual_gate(tolerance)
     ):
         raise RuntimeError(
             "direct A-map failed the fourth-order Dragt-Finn gate: "
@@ -2741,7 +2747,7 @@ def _fourth_order_lie_map_from_vector_potential_polynomials(
             f"{factorization.relative_reconstruction_error:.17g}, "
             "normalized_symplectic_residual="
             f"{normalized_symplectic_residual(factorization):.17g} "
-            f"(gate {_NORMALIZED_SYMPLECTIC_RESIDUAL_GATE:.1e}), "
+            f"(gate {_normalized_symplectic_residual_gate(tolerance):.1e}), "
             f"factorization_tolerance={tolerance:.17g}"
         )
     transfer = FourthOrderLieMap(
