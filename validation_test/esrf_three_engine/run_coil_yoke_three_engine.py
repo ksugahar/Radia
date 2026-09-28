@@ -398,7 +398,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--engines", nargs="+", choices=("hdiv_mmm", "reduced_a", "mixed_total_reduced_omega"),
                         default=None, help="Run selected engines independently; subset is not three-engine acceptance")
     parser.add_argument("--energy-quadrature-order", type=int, default=None,
-                        help="Record common finite physical-volume energy/coenergy; excludes Kelvin tail")
+                        help="Record common energy/coenergy including Kelvin exterior quadrature")
     parser.add_argument("--hdiv-order", choices=(1, 2), type=int, default=2)
     parser.add_argument("--fem-order", type=int, default=2)
     parser.add_argument("--hdiv-gram-eps", type=float, default=1.0e-12)
@@ -572,7 +572,9 @@ def main(argv: list[str] | None = None) -> int:
         energy_spec.loader.exec_module(energy_module)
         if options.hdiv_image is not None:
             raise ValueError("energy quadrature currently requires a full iron mesh")
-        energy_observer = energy_module.PhysicalVolumeEnergy(fem_mesh, bh_table, options.energy_quadrature_order)
+        energy_observer = energy_module.PhysicalVolumeEnergy(
+            fem_mesh, bh_table, options.energy_quadrature_order,
+            kelvin_center=kelvin_center, kelvin_radius=case.kelvin_radius_m)
         common["energy_contract"] = energy_observer.contract
         common["energy_implementation_sha256"] = _sha256(energy_path)
     fields: dict[str, np.ndarray] = {}

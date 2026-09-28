@@ -75,6 +75,34 @@ def test_scalar_ordering_requires_the_same_domain_contract():
         energy.compare_energy(records)
 
 
+def test_kelvin_exterior_dipole_energy_and_field_pullback():
+    from netgen.occ import OCCGeometry, Sphere, Pnt
+    from radia.kelvin_source import kelvin_solution_to_computational
+    shape = Sphere(Pnt(0, 0, 0), 1).mat("kelvin")
+    mesh = ng.Mesh(OCCGeometry(shape).GenerateMesh(maxh=.3))
+    mesh.Curve(2)
+    observer = energy.PhysicalVolumeEnergy(
+        mesh, [[0., 0.], [1., energy.MU0]], 6,
+        kelvin_center=(0., 0., 0.), kelvin_radius=1.)
+    radii = np.linalg.norm(observer.points, axis=1)
+    n = observer.points / radii[:, None]
+    H = (3*n*n[:, 2, None] - np.array([0., 0., 1.])) / (4*np.pi*radii[:, None]**3)
+    B = energy.MU0*H
+    direct = observer._record(B, H)
+    # Integral of the dipole's vacuum energy outside radius R=1, m=1.
+    assert direct["energy_J"] == pytest.approx(energy.MU0/(12*np.pi), rel=.005)
+    def computational(values, form):
+        value = kelvin_solution_to_computational(
+            values, observer.computational_points, kelvin_center=(0., 0., 0.),
+            physical_center=(0., 0., 0.), radius=1., form=form)
+        return lambda mapped: value
+    transformed = observer.omega(mesh, computational(B, "flux_density"), computational(H, "field_strength"))
+    assert transformed["energy_J"] == pytest.approx(direct["energy_J"], rel=1e-12)
+    assert transformed["coenergy_J"] == pytest.approx(direct["energy_J"], rel=1e-12)
+    assert transformed["contract"]["scope"] == "kelvin_exterior_only"
+    assert transformed["contract"]["all_space_energy"] is False
+
+
 @pytest.mark.parametrize("method", ["linear", "picard"])
 def test_reduced_a_explicit_sparsecholesky_matches_direct_field(method):
     from netgen.occ import unit_cube
@@ -100,3 +128,4 @@ def test_reduced_a_explicit_sparsecholesky_matches_direct_field(method):
             assert stats["direct_inverse"] == backend
         fields.append(np.array(solver.get_B()(mesh(.3, .4, .5))))
     assert np.linalg.norm(fields[0] - fields[1]) < 1e-8
+

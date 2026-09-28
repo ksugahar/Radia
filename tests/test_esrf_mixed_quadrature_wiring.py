@@ -152,7 +152,7 @@ def test_actual_runner_call_and_checkpoint_settings():
     ns = {"engines": SimpleNamespace(solve_omega=solve), "options": options, "fem_mesh": None,
           "coil": 7, "bh_table": "BH", "mixed_nonlinear_maximum_iterations": 80,
           "kelvin_center": (0, 0, 0), "case": SimpleNamespace(kelvin_radius_m=.16),
-          "field_points": np.ones((2, 3)), "np": np}
+          "field_points": np.ones((2, 3)), "np": np, "energy_observer": None}
     compile_functions([caller], ns)
     assert ns["run_mixed"](None) == "result"
     assert calls["source_projection_order"] == 3
