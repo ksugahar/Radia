@@ -407,6 +407,11 @@ public:
             for (int i = 0; i < cur.ndof; i++)
                 if (cf_marker[i] == 1) nc++;
 
+            // Lean coarse levels: once coarsening stalls on a small level, solve it
+            // directly instead of stacking levels that barely shrink.
+            if (stall_ratio_ > 0 && cur.ndof <= min_coarse_ * 10 && nc > stall_ratio_ * cur.ndof)
+                break;
+
             if (nc == 0 || nc >= cur.ndof) {
                 if (print_level_ > 0) {
                     long long total_strong = 0;
@@ -458,11 +463,7 @@ public:
         // Coarsest level: direct solver
         auto& coarsest = levels_.back();
         auto t_factor = std::chrono::steady_clock::now();
-        if (coarsest.ndof <= min_coarse_ * 10) {
-            // Use sparse Cholesky for coarsest level
-            coarsest.A->SetInverseType("sparsecholesky");
-            coarsest.inv = coarsest.A->InverseMatrix(shared_ptr<BitArray>(nullptr));
-        }
+        if (coarsest.ndof <= min_coarse_ * 10) FactorCoarsest();
         // else: just use smoother at coarsest level too
         setup_phase_s_[6] += std::chrono::duration<double>(std::chrono::steady_clock::now() - t_factor).count();
 
@@ -513,11 +514,7 @@ public:
             ComputeL1Norms(*next.A, next.l1_norms);
         }
         }
-        auto& coarsest = levels_.back();
-        if (coarsest.inv) {
-            coarsest.A->SetInverseType("sparsecholesky");
-            coarsest.inv = coarsest.A->InverseMatrix(shared_ptr<BitArray>(nullptr));
-        }
+        if (HasCoarseSolve(levels_.back())) FactorCoarsest();
         MirrorLevels();
         refresh_count_++;
     }
@@ -552,11 +549,7 @@ public:
             flags = std::move(next_flags);
         }
         }
-        auto& coarsest = levels_.back();
-        if (coarsest.inv && coarsest_changed) {
-            coarsest.A->SetInverseType("sparsecholesky");
-            coarsest.inv = coarsest.A->InverseMatrix(shared_ptr<BitArray>(nullptr));
-        }
+        if (HasCoarseSolve(levels_.back()) && coarsest_changed) FactorCoarsest();
         refresh_count_++;
         return true;
     }
@@ -567,6 +560,14 @@ public:
     void SetNativeGalerkin(bool on) { native_galerkin_ = on; }
     /// V-cycle residuals read float32 mirrors of the level matrices (set before Setup).
     void SetMixedPrecision(bool on) { mixed_precision_ = on; }
+    /// Lean coarse levels (set before Setup): stop coarsening on a level of at
+    /// most 10 * min_coarse rows once a step keeps more than stall_ratio of its
+    /// rows, and solve a coarsest level of at most dense_max rows with a dense
+    /// inverse (one parallel product for both right-hand sides of DualMult).
+    void SetLeanCoarse(double stall_ratio, int dense_max) {
+        stall_ratio_ = stall_ratio;
+        dense_coarse_max_ = dense_max;
+    }
     /// Accumulated Setup phases: strength, coarsening, interpolation,
     /// transpose, Galerkin, l1 norms + work vectors, coarsest factorization.
     const std::array<double, 7>& SetupPhases() const { return setup_phase_s_; }
@@ -605,8 +606,9 @@ public:
     /// Used by ComplexHypreBasedAMS for fused Re/Im processing.
     void DualMult(const BaseVector& b1, BaseVector& x1,
                   const BaseVector& b2, BaseVector& x2) const {
-        x1 = 0;
-        x2 = 0;
+        // Every level's first pre-smoothing sweep (or the coarsest direct
+        // solve) assigns x, so the cycle needs no zeroed start.
+        if (num_smooth_ < 1) { x1 = 0; x2 = 0; }
         DualVCycle(0, b1, x1, b2, x2);
 
         if (freedofs_) {
@@ -623,10 +625,24 @@ public:
     }
 
     int NumLevels() const { return (int)levels_.size(); }
+
+    /// Per level of the dual V-cycle: {rows, nonzeros, seconds spent on the
+    /// level itself (recursion excluded), coarsest solve: 0 none, 1 sparse, 2 dense}.
+    std::vector<std::array<double, 4>> DualLevelProfile() const {
+        std::vector<std::array<double, 4>> out;
+        for (size_t l = 0; l < levels_.size(); l++)
+            out.push_back({double(levels_[l].ndof), double(levels_[l].A->NZE()),
+                           l < dual_level_s_.size() ? dual_level_s_[l] : 0.0,
+                           !levels_[l].dense_inv.empty() ? 2.0 : (levels_[l].inv ? 1.0 : 0.0)});
+        return out;
+    }
     int SetupWorkers() const { return setup_workers_; }
 
 private:
     mutable int setup_workers_ = 0;
+    mutable std::vector<double> dual_level_s_;
+    double stall_ratio_ = 0.0;   // 0: coarsen down to min_coarse (default)
+    int dense_coarse_max_ = 0;   // 0: sparse Cholesky on the coarsest level (default)
     int refresh_count_ = 0;
     bool native_galerkin_ = false;
     bool mixed_precision_ = false;
@@ -643,6 +659,7 @@ private:
         int ndof = 0;
         std::vector<double> l1_norms;
         std::vector<float> values_f;  // float32 mirror of A (mixed precision only)
+        std::vector<double> dense_inv;  // row-major inverse of A (lean coarsest level only)
 
         // Work vectors (mutable for const Mult)
         mutable std::unique_ptr<VVector<double>> residual;
@@ -1097,6 +1114,150 @@ private:
 
     /// Level residual; with mixed precision A's values come from the level's
     /// float32 mirror (vectors and accumulation stay double).
+    static bool HasCoarseSolve(const Level& lev) { return lev.inv || !lev.dense_inv.empty(); }
+
+    /// Factor the coarsest level: a dense inverse for a lean coarsest level of
+    /// at most dense_coarse_max_ rows, sparse Cholesky otherwise.
+    void FactorCoarsest() {
+        auto& c = levels_.back();
+        if (dense_coarse_max_ > 0 && c.ndof <= dense_coarse_max_) {
+            // Empty rows (a coarse node without stiffness) solve to zero, as the
+            // sparse factorization treats them; the rest is inverted densely. A
+            // zero diagonal on a coupled row falls back to sparse Cholesky.
+            const int n = c.ndof;
+            std::vector<int> keep;
+            bool coupled_zero = false;
+            for (int i = 0; i < n; i++) {
+                auto cols = c.A->GetRowIndices(i);
+                auto vals = c.A->GetRowValues(i);
+                double diag = 0, off = 0;
+                for (int j = 0; j < cols.Size(); j++)
+                    (cols[j] == i ? diag : off) += std::abs(vals[j]);
+                if (diag > 0) keep.push_back(i);
+                else if (off > 0) coupled_zero = true;
+            }
+            if (!coupled_zero && !keep.empty()) {
+                const int m = int(keep.size());
+                std::vector<int> pos(n, -1);
+                for (int k = 0; k < m; k++) pos[keep[k]] = k;
+                Matrix<double> dense(m, m);
+                dense = 0.0;
+                for (int k = 0; k < m; k++) {
+                    auto cols = c.A->GetRowIndices(keep[k]);
+                    auto vals = c.A->GetRowValues(keep[k]);
+                    for (int j = 0; j < cols.Size(); j++)
+                        if (pos[cols[j]] >= 0) dense(k, pos[cols[j]]) = vals[j];
+                }
+                // A zero row-sum matrix (the gradient space keeps the constant in its
+                // kernel) is inverted as A + s 1 1^T / m: the exact pseudo-inverse on
+                // the right-hand sides it receives, which have no constant part.
+                bool constant_kernel = true;
+                double diag_mean = 0;
+                for (int k = 0; k < m && constant_kernel; k++) {
+                    double sum = 0, abs_sum = 0;
+                    for (int j = 0; j < m; j++) { sum += dense(k, j); abs_sum += std::abs(dense(k, j)); }
+                    if (std::abs(sum) > 1e-8 * abs_sum) constant_kernel = false;
+                    diag_mean += dense(k, k) / m;
+                }
+                Matrix<double> orig = dense;
+                if (constant_kernel)
+                    for (int a = 0; a < m; a++)
+                        for (int b = 0; b < m; b++) dense(a, b) += diag_mean / m;
+                bool inverted = ParallelGaussJordanInverse(dense);
+                // Accept the dense inverse only if it reproduces a test vector.
+                Vector<double> xt(m), bt(m), yt(m);
+                for (int k = 0; k < m; k++) xt(k) = std::sin(1.0 + 0.7 * k);
+                if (constant_kernel) {
+                    double mean = 0;
+                    for (int k = 0; k < m; k++) mean += xt(k) / m;
+                    for (int k = 0; k < m; k++) xt(k) -= mean;
+                }
+                bt = orig * xt;
+                yt = dense * bt;
+                double dx = 0, nx = 0;
+                for (int k = 0; k < m; k++) { dx += (yt(k) - xt(k)) * (yt(k) - xt(k)); nx += xt(k) * xt(k); }
+                if (!inverted || !(dx <= 1e-12 * nx)) {
+                    // Not reproduced (a nearly singular level): sparse Cholesky.
+                    SparseCoarsest(c);
+                    return;
+                }
+                c.dense_inv.assign(size_t(n) * n, 0.0);
+                for (int a = 0; a < m; a++)
+                    for (int b = 0; b < m; b++)
+                        c.dense_inv[size_t(keep[a]) * n + keep[b]] = dense(a, b);
+                c.inv = nullptr;
+                return;
+            }
+        }
+        SparseCoarsest(c);
+    }
+
+    /// Sparse Cholesky of the coarsest level (kept as the factorization: storing
+    /// its operator densely diverged on a nearly singular gradient level).
+    void SparseCoarsest(Level& c) {
+        std::vector<double>().swap(c.dense_inv);
+        c.A->SetInverseType("sparsecholesky");
+        c.inv = c.A->InverseMatrix(shared_ptr<BitArray>(nullptr));
+    }
+
+    /// In-place Gauss-Jordan inverse without pivoting (the coarse matrices are
+    /// symmetric positive definite), each pivot step's row updates in parallel
+    /// on the caller's TaskManager: no external BLAS threads compete with it.
+    /// Returns false on a non-positive pivot.
+    static bool ParallelGaussJordanInverse(Matrix<double>& a) {
+        const int n = int(a.Height());
+        for (int k = 0; k < n; k++) {
+            const double pivot = a(k, k);
+            if (!(pivot > 0)) return false;
+            const double inv = 1.0 / pivot;
+            for (int j = 0; j < n; j++) if (j != k) a(k, j) *= inv;
+            a(k, k) = inv;
+            ParallelForRange(n, [&](IntRange range) {
+                for (auto i : range) {
+                    if (int(i) == k) continue;
+                    const double f = a(i, k);
+                    if (f == 0.0) continue;
+                    double* row = &a(i, 0);
+                    const double* prow = &a(k, 0);
+                    for (int j = 0; j < n; j++) row[j] -= f * prow[j];
+                    row[k] = -f * inv;
+                }
+            });
+        }
+        return true;
+    }
+
+    /// x = A^-1 b (and x2 = A^-1 b2) with the dense coarsest inverse, rows in parallel.
+    static void DenseSolve(const Level& lev, const BaseVector& b, BaseVector& x,
+                           const BaseVector* b2, BaseVector* x2) {
+        const int n = lev.ndof;
+        const double* M = lev.dense_inv.data();
+        auto fb = b.FVDouble();
+        auto fx = x.FVDouble();
+        if (b2) {
+            auto fb2 = b2->FVDouble();
+            auto fx2 = x2->FVDouble();
+            ParallelForRange(n, [&](IntRange range) {
+                for (auto i : range) {
+                    const double* row = M + size_t(i) * n;
+                    double s1 = 0, s2 = 0;
+                    for (int j = 0; j < n; j++) { s1 += row[j] * fb[j]; s2 += row[j] * fb2[j]; }
+                    fx[i] = s1;
+                    fx2[i] = s2;
+                }
+            });
+        } else {
+            ParallelForRange(n, [&](IntRange range) {
+                for (auto i : range) {
+                    const double* row = M + size_t(i) * n;
+                    double s = 0;
+                    for (int j = 0; j < n; j++) s += row[j] * fb[j];
+                    fx[i] = s;
+                }
+            });
+        }
+    }
+
     void LevelResidual(const Level& lev, const BaseVector& b, const BaseVector& x,
                        BaseVector& res) const {
         ResidualWithValues(*lev.A, mixed_precision_ ? lev.values_f.data() : nullptr, b, x, res);
@@ -1143,22 +1304,32 @@ private:
     void DualVCycle(int level, const BaseVector& b1, BaseVector& x1,
                     const BaseVector& b2, BaseVector& x2) const {
         auto& lev = levels_[level];
+        if (dual_level_s_.size() != levels_.size()) dual_level_s_.assign(levels_.size(), 0.0);
+        auto t_level = std::chrono::steady_clock::now();
+        auto charge = [&]() {
+            auto now = std::chrono::steady_clock::now();
+            dual_level_s_[level] += std::chrono::duration<double>(now - t_level).count();
+            t_level = now;
+        };
 
         if (level == (int)levels_.size() - 1) {
             // Coarsest level: direct solve (sequential, tiny problem)
-            if (lev.inv) {
+            if (!lev.dense_inv.empty()) {
+                DenseSolve(lev, b1, x1, &b2, &x2);
+            } else if (lev.inv) {
                 lev.inv->Mult(b1, x1);
                 lev.inv->Mult(b2, x2);
             } else {
                 for (int s = 0; s < 10; s++)
-                    DualL1JacobiSmooth(level, b1, x1, b2, x2);
+                    DualL1JacobiSmooth(level, b1, x1, b2, x2, s == 0);
             }
+            charge();
             return;
         }
 
-        // Pre-smooth: fused l1-Jacobi
+        // Pre-smooth: fused l1-Jacobi (x enters as zero: the first sweep is b / l1)
         for (int s = 0; s < num_smooth_; s++)
-            DualL1JacobiSmooth(level, b1, x1, b2, x2);
+            DualL1JacobiSmooth(level, b1, x1, b2, x2, s == 0);
 
         // Fused residual
         auto& res1 = *lev.residual;
@@ -1174,9 +1345,10 @@ private:
         // Recursive dual V-cycle
         auto& ec1 = *next.correction;
         auto& ec2 = *next.correction2;
-        ec1 = 0;
-        ec2 = 0;
+        if (num_smooth_ < 1) { ec1 = 0; ec2 = 0; }
+        charge();
         DualVCycle(level + 1, rc1, ec1, rc2, ec2);
+        t_level = std::chrono::steady_clock::now();
 
         // Fused prolongate: x += P * e_c
         DualMultAdd(*lev.P, ec1, x1, ec2, x2, lev.P->Height());
@@ -1184,12 +1356,28 @@ private:
         // Post-smooth: fused l1-Jacobi
         for (int s = 0; s < num_smooth_; s++)
             DualL1JacobiSmooth(level, b1, x1, b2, x2);
+        charge();
     }
 
     /// Fused l1-Jacobi smooth for two RHS: two-phase (residual then update)
     void DualL1JacobiSmooth(int level, const BaseVector& b1, BaseVector& x1,
-                            const BaseVector& b2, BaseVector& x2) const {
+                            const BaseVector& b2, BaseVector& x2,
+                            bool initially_zero = false) const {
         auto& lev = levels_[level];
+        auto fv_x1 = x1.FVDouble();
+        auto fv_x2 = x2.FVDouble();
+        int n = lev.ndof;
+        if (initially_zero) {
+            // x = 0 before the sweep: it is x = b / l1 (x is assigned, never read).
+            auto fv_b1 = b1.FVDouble();
+            auto fv_b2 = b2.FVDouble();
+            RowLoop(n, [&](size_t i) {
+                double inv_l1 = 1.0 / lev.l1_norms[i];
+                fv_x1[i] = fv_b1[i] * inv_l1;
+                fv_x2[i] = fv_b2[i] * inv_l1;
+            });
+            return;
+        }
         auto& res1 = *lev.residual;
         auto& res2 = *lev.residual2;
 
@@ -1197,16 +1385,23 @@ private:
         DualResidual(*lev.A, b1, x1, res1, b2, x2, res2, lev.ndof);
 
         // Phase 2: fused Jacobi update
-        auto fv_x1 = x1.FVDouble();
-        auto fv_x2 = x2.FVDouble();
         auto fv_r1 = res1.FVDouble();
         auto fv_r2 = res2.FVDouble();
-        int n = lev.ndof;
-        ParallelFor(n, [&](size_t i) {
+        RowLoop(n, [&](size_t i) {
             double inv_l1 = 1.0 / lev.l1_norms[i];
             fv_x1[i] += fv_r1[i] * inv_l1;
             fv_x2[i] += fv_r2[i] * inv_l1;
         });
+    }
+
+    /// Row loop of the dual V-cycle: a loop touching fewer than kSerialWork
+    /// entries runs on the calling thread, where a parallel dispatch would cost
+    /// more than the work (work = matrix nonzeros, or rows for vector updates).
+    static constexpr size_t kSerialWork = 16384;
+    template <typename F>
+    static void RowLoop(size_t n, F&& f, size_t work = 0) {
+        if ((work ? work : n) < kSerialWork) { for (size_t i = 0; i < n; i++) f(i); }
+        else ParallelFor(n, f);
     }
 
     /// Fused residual: res = b - A*x for two RHS in single matrix pass
@@ -1217,7 +1412,7 @@ private:
         auto fv_b1 = b1.FVDouble(); auto fv_x1 = x1.FVDouble(); auto fv_r1 = res1.FVDouble();
         auto fv_b2 = b2.FVDouble(); auto fv_x2 = x2.FVDouble(); auto fv_r2 = res2.FVDouble();
 
-        ParallelFor(n, [&](size_t i) {
+        RowLoop(n, [&](size_t i) {
             auto cols = A.GetRowIndices(i);
             auto vals = A.GetRowValues(i);
             double d1 = 0, d2 = 0;
@@ -1229,7 +1424,7 @@ private:
             }
             fv_r1[i] = fv_b1[i] - d1;
             fv_r2[i] = fv_b2[i] - d2;
-        });
+        }, A.NZE());
     }
 
     /// Fused SpMV: y = A*x for two RHS in single matrix pass
@@ -1239,7 +1434,7 @@ private:
         auto fv_x1 = x1.FVDouble(); auto fv_y1 = y1.FVDouble();
         auto fv_x2 = x2.FVDouble(); auto fv_y2 = y2.FVDouble();
 
-        ParallelFor(n, [&](size_t i) {
+        RowLoop(n, [&](size_t i) {
             auto cols = A.GetRowIndices(i);
             auto vals = A.GetRowValues(i);
             double s1 = 0, s2 = 0;
@@ -1251,7 +1446,7 @@ private:
             }
             fv_y1[i] = s1;
             fv_y2[i] = s2;
-        });
+        }, A.NZE());
     }
 
     /// Fused MultAdd: x += P*g for two RHS in single matrix pass
@@ -1261,7 +1456,7 @@ private:
         auto fv_g1 = g1.FVDouble(); auto fv_x1 = x1.FVDouble();
         auto fv_g2 = g2.FVDouble(); auto fv_x2 = x2.FVDouble();
 
-        ParallelFor(nrows, [&](size_t i) {
+        RowLoop(nrows, [&](size_t i) {
             auto cols = P.GetRowIndices(i);
             auto vals = P.GetRowValues(i);
             double s1 = 0, s2 = 0;
@@ -1273,7 +1468,7 @@ private:
             }
             fv_x1[i] += s1;
             fv_x2[i] += s2;
-        });
+        }, P.NZE());
     }
 
     // =====================================================================
@@ -1284,7 +1479,9 @@ private:
 
         // Coarsest level: direct solve or just smooth
         if (level == (int)levels_.size() - 1) {
-            if (lev.inv) {
+            if (!lev.dense_inv.empty()) {
+                DenseSolve(lev, b, x, nullptr, nullptr);
+            } else if (lev.inv) {
                 lev.inv->Mult(b, x);
             } else {
                 // Fall back to l1-Jacobi smoothing

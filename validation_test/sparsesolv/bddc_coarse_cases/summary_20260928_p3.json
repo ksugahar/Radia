@@ -1,0 +1,242 @@
+{
+  "schema": "radia.validation.sparsesolv-bddc-coarse-cases-p3-summary.v1",
+  "binary_sha256": "126CB410B063E05D9DD8BE180398E7C5CF93291D04D1E759F995A7AFA8B30386",
+  "order": 3,
+  "commit": "41a044187",
+  "threads": 8,
+  "rows": [
+    {
+      "file": "mdx1_20260928_p3_disk_1e4_ams.json",
+      "case": "disk",
+      "order": 3,
+      "ndof": 582178,
+      "coarse": "sparsesolv_ams",
+      "edge_wirebasket": true,
+      "iterations": 101,
+      "setup_s": 1.698,
+      "solve_s": 9.564,
+      "peak_mb": 1429.0,
+      "loss_w": 1.738829851861325e-08,
+      "reference": {
+        "bz_average": [
+          0.95172,
+          -0.11536
+        ],
+        "source": "axisymmetric Q2 (stored)",
+        "bz_relative_error": 0.00883950880337812
+      }
+    },
+    {
+      "file": "mdx1_20260928_p3_disk_1e4_direct.json",
+      "case": "disk",
+      "order": 3,
+      "ndof": 582178,
+      "coarse": "direct",
+      "edge_wirebasket": false,
+      "iterations": 174,
+      "setup_s": 213.311,
+      "solve_s": 117.009,
+      "peak_mb": 19754.9,
+      "loss_w": 1.73882985175198e-08,
+      "reference": {
+        "bz_average": [
+          0.95172,
+          -0.11536
+        ],
+        "source": "axisymmetric Q2 (stored)",
+        "bz_relative_error": 0.008839508988135817
+      }
+    },
+    {
+      "file": "mdx1_20260928_p3_disk_1e4_direct_edgewb.json",
+      "case": "disk",
+      "order": 3,
+      "ndof": 582178,
+      "coarse": "direct",
+      "edge_wirebasket": true,
+      "iterations": 171,
+      "setup_s": 210.04,
+      "solve_s": 108.825,
+      "peak_mb": 21352.1,
+      "loss_w": 1.7388298514976814e-08,
+      "reference": {
+        "bz_average": [
+          0.95172,
+          -0.11536
+        ],
+        "source": "axisymmetric Q2 (stored)",
+        "bz_relative_error": 0.008839508862023195
+      }
+    },
+    {
+      "file": "mdx2_20260928_p3_plate_1e3_ams.json",
+      "case": "plate",
+      "order": 3,
+      "ndof": 1435724,
+      "coarse": "sparsesolv_ams",
+      "edge_wirebasket": true,
+      "iterations": 53,
+      "setup_s": 4.594,
+      "solve_s": 12.458,
+      "peak_mb": 3224.8,
+      "loss_w": 9222.546447066103,
+      "reference": {
+        "source": "direct wirebasket run of the same system"
+      }
+    },
+    {
+      "file": "mdx2_20260928_p3_sphere_700_ams.json",
+      "case": "sphere",
+      "order": 3,
+      "ndof": 949723,
+      "coarse": "sparsesolv_ams",
+      "edge_wirebasket": true,
+      "iterations": 67,
+      "setup_s": 2.649,
+      "solve_s": 10.779,
+      "peak_mb": 2229.0,
+      "loss_w": 463.6151847991147,
+      "reference": {
+        "loss_w": 462.9831702285341,
+        "a_over_delta": 2.001764068725952,
+        "source": "Smythe dipole moment",
+        "loss_relative_error": 0.0013650918893414543
+      }
+    },
+    {
+      "file": "mdx2_20260928_p3s_plate_1e3_ams.json",
+      "case": "plate",
+      "order": 3,
+      "ndof": 318700,
+      "coarse": "sparsesolv_ams",
+      "edge_wirebasket": true,
+      "iterations": 52,
+      "setup_s": 1.091,
+      "solve_s": 2.663,
+      "peak_mb": 774.8,
+      "loss_w": 9216.73688338477,
+      "reference": {
+        "source": "direct wirebasket run of the same system"
+      }
+    },
+    {
+      "file": "mdx2_20260928_p3s_plate_1e3_direct.json",
+      "case": "plate",
+      "order": 3,
+      "ndof": 318700,
+      "coarse": "direct",
+      "edge_wirebasket": false,
+      "iterations": 93,
+      "setup_s": 9.78,
+      "solve_s": 10.615,
+      "peak_mb": 2882.7,
+      "loss_w": 9216.736883389365,
+      "reference": {
+        "source": "direct wirebasket run of the same system"
+      }
+    },
+    {
+      "file": "mdx2_20260928_p3s_plate_1e3_direct_edgewb.json",
+      "case": "plate",
+      "order": 3,
+      "ndof": 318700,
+      "coarse": "direct",
+      "edge_wirebasket": true,
+      "iterations": 77,
+      "setup_s": 9.585,
+      "solve_s": 8.814,
+      "peak_mb": 2813.4,
+      "loss_w": 9216.73688338149,
+      "reference": {
+        "source": "direct wirebasket run of the same system"
+      }
+    },
+    {
+      "file": "mdx2_20260928_p3s_sphere_700_ams.json",
+      "case": "sphere",
+      "order": 3,
+      "ndof": 293071,
+      "coarse": "sparsesolv_ams",
+      "edge_wirebasket": true,
+      "iterations": 62,
+      "setup_s": 0.939,
+      "solve_s": 2.855,
+      "peak_mb": 780.7,
+      "loss_w": 463.7220612168241,
+      "reference": {
+        "loss_w": 462.9831702285341,
+        "a_over_delta": 2.001764068725952,
+        "source": "Smythe dipole moment",
+        "loss_relative_error": 0.0015959348758298702
+      }
+    },
+    {
+      "file": "mdx2_20260928_p3s_sphere_700_direct.json",
+      "case": "sphere",
+      "order": 3,
+      "ndof": 293071,
+      "coarse": "direct",
+      "edge_wirebasket": false,
+      "iterations": 103,
+      "setup_s": 70.881,
+      "solve_s": 28.715,
+      "peak_mb": 9319.1,
+      "loss_w": 463.7220612152375,
+      "reference": {
+        "loss_w": 462.9831702285341,
+        "a_over_delta": 2.001764068725952,
+        "source": "Smythe dipole moment",
+        "loss_relative_error": 0.0015959348724029346
+      }
+    },
+    {
+      "file": "mdx2_20260928_p3s_sphere_700_direct_edgewb.json",
+      "case": "sphere",
+      "order": 3,
+      "ndof": 293071,
+      "coarse": "direct",
+      "edge_wirebasket": true,
+      "iterations": 85,
+      "setup_s": 71.661,
+      "solve_s": 23.416,
+      "peak_mb": 9313.7,
+      "loss_w": 463.72206120993917,
+      "reference": {
+        "loss_w": 462.9831702285341,
+        "a_over_delta": 2.001764068725952,
+        "source": "Smythe dipole moment",
+        "loss_relative_error": 0.0015959348609590667
+      }
+    }
+  ],
+  "direct_failures": [
+    {
+      "label": "p3_plate_1e3_direct",
+      "host": "mdx2",
+      "error": "bad allocation in the BDDC direct wirebasket preconditioner during Assemble"
+    },
+    {
+      "label": "p3_plate_1e3_direct_edgewb",
+      "host": "mdx2",
+      "error": "bad allocation in the BDDC direct wirebasket preconditioner during Assemble"
+    },
+    {
+      "label": "p3_sphere_700_direct",
+      "host": "mdx2",
+      "error": "bad allocation in the BDDC direct wirebasket preconditioner during Assemble"
+    },
+    {
+      "label": "p3_sphere_700_direct_edgewb",
+      "host": "mdx2",
+      "error": "bad allocation in the BDDC direct wirebasket preconditioner during Assemble"
+    }
+  ],
+  "failure_sizes": {
+    "p3_sphere_700": 949723,
+    "p3_plate_1e3": 1435724
+  },
+  "campaign_logs": {
+    "mdx1": "start p3_disk_1e4_direct cpu%=1.8 2026-09-28T12:51:18.1664003+09:00\nend p3_disk_1e4_direct exit=0 2026-09-28T12:56:55.9015005+09:00\nstart p3_disk_1e4_direct_edgewb cpu%=6.2 2026-09-28T12:56:58.9462868+09:00\nend p3_disk_1e4_direct_edgewb exit=0 2026-09-28T13:02:26.4268371+09:00\nstart p3_disk_1e4_ams cpu%=3.1 2026-09-28T13:02:29.4717600+09:00\nend p3_disk_1e4_ams exit=0 2026-09-28T13:02:46.9792439+09:00\ncampaign done\n",
+    "mdx2": "start p3_sphere_700_direct cpu%=4.4 2026-09-28T12:51:16.0547406+09:00\nend p3_sphere_700_direct exit=1 2026-09-28T12:51:34.8152917+09:00\nstart p3_sphere_700_direct_edgewb cpu%=4.9 2026-09-28T12:51:37.8499067+09:00\nend p3_sphere_700_direct_edgewb exit=1 2026-09-28T12:51:58.3214253+09:00\nstart p3_sphere_700_ams cpu%=4.4 2026-09-28T12:52:01.3543111+09:00\nend p3_sphere_700_ams exit=0 2026-09-28T12:52:25.3748322+09:00\nstart p3_plate_1e3_direct cpu%=6.1 2026-09-28T12:52:28.4183099+09:00\nend p3_plate_1e3_direct exit=1 2026-09-28T12:52:51.4719572+09:00\nstart p3_plate_1e3_direct_edgewb cpu%=4.9 2026-09-28T12:52:54.4932990+09:00\nend p3_plate_1e3_direct_edgewb exit=1 2026-09-28T12:53:23.4165032+09:00\nstart p3_plate_1e3_ams cpu%=5.3 2026-09-28T12:53:26.4363080+09:00\nend p3_plate_1e3_ams exit=0 2026-09-28T12:53:57.1825492+09:00\ncampaign done\nstart p3s_sphere_700_direct cpu%=13.6 2026-09-28T12:54:52.2901321+09:00\nend p3s_sphere_700_direct exit=0 2026-09-28T12:56:35.2667581+09:00\nstart p3s_sphere_700_direct_edgewb cpu%=12.2 2026-09-28T12:56:38.3037700+09:00\nend p3s_sphere_700_direct_edgewb exit=0 2026-09-28T12:58:17.2381123+09:00\nstart p3s_sphere_700_ams cpu%=12.6 2026-09-28T12:58:20.2677167+09:00\nend p3s_sphere_700_ams exit=0 2026-09-28T12:58:27.9730181+09:00\nstart p3s_plate_1e3_direct cpu%=12.1 2026-09-28T12:58:31.0113512+09:00\nend p3s_plate_1e3_direct exit=0 2026-09-28T12:58:54.3355034+09:00\nstart p3s_plate_1e3_direct_edgewb cpu%=12 2026-09-28T12:58:57.3710953+09:00\nend p3s_plate_1e3_direct_edgewb exit=0 2026-09-28T12:59:19.9372967+09:00\nstart p3s_plate_1e3_ams cpu%=14.2 2026-09-28T12:59:22.9812290+09:00\nend p3s_plate_1e3_ams exit=0 2026-09-28T12:59:30.8839668+09:00\nsmall done\n"
+  }
+}
