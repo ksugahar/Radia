@@ -216,6 +216,128 @@ vs Full FEM, half_thickness for non-cylindrical workpieces, etc.) call
 """
 
 
+EVRS_COUPLING = """
+# Production HCurl EVRS + local ESIM-SIBC coupling
+
+This is the current Radia production interpretation of the SIBC bridge.  It is
+separate from the deprecated scalar Warburg closure found in older SIBC
+documentation.
+
+## Topology-aware space
+
+Start from a high-order NGSolve `HCurl(p)` parent space and classify every
+conductor face by its neighboring materials:
+
+- conductor-air/exterior: eligible for surface-Omega/SIBC modes;
+- conductor-conductor: retain conductive graph-cycle bridge modes;
+- conductor-insulator: retain a non-SIBC blocking trace;
+- ordinary conductor interior: compress by the Eddy-Visible Response Space
+  (EVRS), then quotient directions carrying no independent `curl(T)` current.
+
+Thus `p` controls parent-space admissibility near corners and edges, while the
+retained EVRS rank controls reduced-model size.  An SIBC face is never
+inferred merely from being a boundary face.
+
+## Local ESIM surface operator
+
+For a nonlinear magnetic conductor, solve the one-dimensional normal ESIM cell
+at the local tangential-field magnitude and tabulate
+`Z_s^ESIM(|H_t|,s)`.  Do not replace those values by their surface average.
+For surface-current modes `K_m`, assemble
+
+    [G_Gamma(Z_s)]_mn = int_Gamma Z_s(x,s) K_m(x) . K_n(x) dGamma.
+
+Radia exposes this contract as `SurfaceImpedanceGram` and
+`AssembleSurfaceImpedanceGram`.  The latter projects per-quadrature-sample
+impedances and checks the surface basis and weights.  If
+`Re Z_s(x,s) >= 0` pointwise, the Hermitian dissipative part of the Gram is
+positive semidefinite.  Passing an unnamed array as if it were a modal diagonal
+is rejected because it would hide the required surface projection.
+
+`LocalESIMSurfaceModel` owns the validated BH curve and SciPy one-dimensional
+cell controls. `SolveLocalESIMSurfaceVIM`, or
+`TopologyAwareHybridVIM.solve_local_esim`, runs the fail-loud HCurl outer loop
+for exactly one physical excitation.  For a fixed bulk HDiv magnetic operator,
+`CoupledHDivHybridVIMSystem.solve_frequency_local_esim` runs the same update
+around the complete magnetic/current mixed solve and returns
+`CoupledHDivHCurlLocalESIMSolution`. The returned fields and
+`SurfaceImpedanceGram` always belong to the same linearization point.
+
+For design sweeps, `BuildLocalESIMSurfaceLUT` solves the cell grid offline and
+`LocalESIMSurfaceLUT` persists `Z_s(f,|H_t|)` in a pickle-free NPZ archive.
+Attach a loaded table with `LocalESIMSurfaceModel.with_lut`. The online Karl
+iteration then reports `cell_solve_count = 0`. Interpolation is bilinear in
+log-frequency and log-field for `log(|Z_s|)` and continuous impedance phase;
+extrapolation is forbidden. A SHA-256 material/cell signature rejects reuse with
+a different BH curve, conductivity, or numerical cell setup. Establish LUT
+adequacy by field/frequency node refinement. Add state
+dimensions, rather than forcing a two-dimensional LUT, for hysteresis,
+temperature-dependent data not already represented by BH/sigma, rotational
+magnetization, or multidimensional corner cells.
+`ValidateLocalESIMSurfaceLUT` automates this check with direct cell solves at
+field midpoints and at both stored and midpoint frequencies; choose the table
+density from its reported maximum relative interpolation error.
+
+The nonlinear solve uses an outer Karl iteration:
+
+1. solve the reduced HCurl system for the current local surface Gram;
+2. recover the solution-shaped `|H_t|` profile on conductor-air faces;
+3. interpolate the converged ESIM cell table;
+4. rebuild `G_Gamma(Z_s)` and repeat to the impedance-change tolerance.
+
+The converged Gram is solved directly inside the fixed-operator
+HDiv-MMM/HCurl coupling. Do not overclaim the scope:
+`NgsolveBDMEddyBubbleVIM` currently builds the BDM-MMM response reduction from
+scalar `mu_r`. A simultaneous constitutive iteration that updates an ordinary
+nonlinear HDiv magnetic operator together with the local ESIM Gram is still an integration task.
+
+## Exact bulk/surface Schur elimination
+
+Partition the reduced operator into eliminated ordinary bulk coordinates `b`
+and retained HDiv/bridge/SIBC coordinates `k`:
+
+    A = [[A_bb, A_bk], [A_kb, A_kk]].
+
+The frequency-specific trial and test maps are
+
+    P_trial = [-A_bb^-1 A_bk; I],
+    P_test  = [-A_bb^-T A_kb^T; I],
+    P_test^T A P_trial = A_kk - A_kb A_bb^-1 A_bk.
+
+For a nonzero eliminated-block right-hand side, reconstruction is affine:
+
+    x = P_trial c + [A_bb^-1 f_b; 0],
+    rhs_reduced = P_test^T f.
+
+Omitting the particular lift loses the directly excited bulk field even though
+the Schur matrix itself is correct.  `MixedGalerkinOrthogonalization.solve`
+(a legacy identifier) implements the complete affine reconstruction.
+
+## Recorded p=6 broadband gate
+
+`validation_test/cln/evrs_esim_sibc_mixed_notched_p6.json` records an mdx run
+on a re-entrant notched conductor from 1 kHz to 1 MHz:
+
+- 3557 active parent-HCurl DoFs;
+- Krylov depth 8: 10 parent-T responses -> 8 current-Gram bulk modes;
+- 14 conductor-cycle modes + 3 exterior-SIBC modes;
+- 25 retained eddy coordinates, 0.703% of the parent DoFs;
+- local-ESIM port difference from depth 22: at most 4.95e-8;
+- coupled bulk/surface port difference from the direct reduced solve: at most 6.44e-16;
+- uniform ESIM vs local ESIM: 0.229%--0.655%;
+- linear SIBC vs local ESIM: 6.98%--38.31%;
+- the 4-by-96 LUT has maximum direct-midpoint relative error 8.17e-4;
+- all 16 outer solves converged in 10--17 updates with passive local Grams;
+- every online outer update used the LUT and performed zero cell solves.
+
+The linear-to-ESIM difference is a constitutive-model comparison, not an error
+estimate.  Use local ESIM-SIBC when the high-frequency layer is thin and locally
+one-dimensional.  Retain volume EVRS/VIM for low-frequency penetration,
+genuinely three-dimensional edge/corner current, or rotational/hysteretic state
+outside the ESIM cell model.
+"""
+
+
 def get_esim_documentation(topic: str = "all") -> str:
     """Return ESIM documentation for the requested topic."""
     topics = {
@@ -223,10 +345,12 @@ def get_esim_documentation(topic: str = "all") -> str:
         "cell_problem": CELL_PROBLEM,
         "karl_iteration": KARL_ITERATION,
         "module_api": MODULE_API,
+        "evrs_coupling": EVRS_COUPLING,
     }
     if topic == "all":
         return "\n\n".join(topics[k] for k in ("overview", "cell_problem",
-                                                "karl_iteration", "module_api"))
+                                                "karl_iteration", "module_api",
+                                                "evrs_coupling"))
     if topic not in topics:
         return (f"Unknown topic '{topic}'. Available: {', '.join(topics)}, "
                 f"or 'all' for everything.")
