@@ -14,7 +14,7 @@ def test_full_fem_height_sweep_is_fresh_and_passes():
     assert payload["pass"] is True
     assert all(payload["checks"].values())
     for relative, digest in payload["source_sha256"].items():
-        assert hashlib.sha256((REPO_ROOT / relative).read_bytes()).hexdigest() == digest, relative
+        assert hashlib.sha256((REPO_ROOT / relative).read_bytes().replace(b"\r\n", b"\n")).hexdigest() == digest, relative
     assert payload["dZ_mm"] == list(range(-7, 18))
     assert payload["max_abs_legacy_minus_lab_N"] < 1.0e-3
     assert 0.2 < payload["equilibrium_dZ_mm"] < 0.3
