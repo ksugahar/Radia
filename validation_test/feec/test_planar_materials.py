@@ -19,9 +19,32 @@ def test_law_from_table_basics():
         or True                                                # M = B/mu0 - H (0-anchored)
     M_of_h, chi_sec, c0 = pm.law_from_table(BH)
     assert c0 == chi0 and chi0 > 0
-    # initial slope + saturation clamp beyond Hmax
-    assert abs(chi_sec(np.array([50.0]))[0] - chi0) < 1e-9    # below the first knee -> chi0
+    assert np.allclose(M_of_h(H), M, rtol=1e-12, atol=1e-6)   # the curve passes through every row
     assert np.isclose(M_of_h(np.array([1e9]))[0], M[-1])      # clamps at Msat beyond Hmax
+    h = np.array([1e-9, 50.0, 800.0])
+    assert np.allclose(chi_sec(h), M_of_h(h) / h)             # secant of the same curve
+    assert np.isfinite(chi_sec(np.array([0.0]))[0]) and chi_sec(np.array([0.0]))[0] > 0
+
+
+def test_planar_law_is_the_3d_pchip_law():
+    """2D and 3D read one soft-iron law: PCHIP B(H), saturated at M[-1] beyond the table."""
+    pytest.importorskip("ngsolve")
+    from radia.vim._nonlinear import _bh_table_funcs
+    H, B = np.asarray(BH).T
+    Mof3, _, _, _, _ = _bh_table_funcs(H, B)
+    M_of_h, _, _ = pm.law_from_table(BH)
+    h = np.concatenate([np.linspace(0.0, 20000.0, 401), [3e4, 1e6]])
+    assert np.allclose(M_of_h(h), [Mof3(x) for x in h], rtol=1e-13, atol=1e-6)
+
+
+def test_planar_law_is_c1_at_table_rows():
+    """PCHIP keeps dM/dH continuous at a row; the old piecewise-linear M(H) jumped there."""
+    M_of_h, _, _ = pm.law_from_table(BH)
+    for row in (200.0, 800.0, 3000.0):
+        d = 1e-3
+        left = (M_of_h(np.array([row])) - M_of_h(np.array([row - d])))[0] / d
+        right = (M_of_h(np.array([row + d])) - M_of_h(np.array([row])))[0] / d
+        assert abs(left - right) <= 1e-4 * max(abs(left), abs(right))
 
 
 def test_bad_tables_fail_loud():
@@ -39,7 +62,9 @@ def test_per_region_law_and_chi():
     M_of_h, chi_sec, chi0_e = pm.per_region_law(mats, {"a": BH, "b": BH_B})
     assert chi0_e.shape == (5,) and np.all(chi0_e[:2] == chi0_e[0]) and np.all(chi0_e[2:] == chi0_e[2])
     h = np.full(5, 50.0)
-    assert np.allclose(chi_sec(h), chi0_e)                    # both regions linear at low h
+    _, sec_a, _ = pm.law_from_table(BH)
+    _, sec_b, _ = pm.law_from_table(BH_B)
+    assert np.allclose(chi_sec(h), np.r_[sec_a(h[:2]), sec_b(h[2:])])   # each element reads its region
     chi = pm.per_region_chi(mats, {"a": 1000.0, "b": 500.0})
     assert np.allclose(chi[:2], 999.0) and np.allclose(chi[2:], 499.0)
     with pytest.raises(ValueError):

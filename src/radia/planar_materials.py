@@ -38,20 +38,34 @@ def hm_arrays(bh_table):
     return H, M, M[1] / H[1]
 
 
-def law_from_table(bh_table):
-    """[[H,B],...] -> (M_of_h, chi_sec, chi0).  M_of_h(h)=interp with saturation clamp beyond Hmax;
-    chi_sec(h)=M(h)/h secant susceptibility (chi0 below the first knee)."""
-    H, M, chi0 = hm_arrays(bh_table)
+def _pchip_magnetization(H, M):
+    """(M_of_h, chi_sec) of the production soft-iron law: PCHIP B(H) through the table, M = B/mu0 - h,
+    saturated at M[-1] beyond Hmax -- the law of the 3D HDiv-VIM and the FEM routes.  PCHIP keeps a
+    non-decreasing B(H) monotone without overshoot and gives a C1 curve; chi_sec(0) is its limit."""
+    from scipy.interpolate import PchipInterpolator
+    B = PchipInterpolator(H, MU0 * (H + M))
+    chi_origin = float(B.derivative()(0.0)) / MU0 - 1.0
+    Hmax, Mmax = float(H[-1]), float(M[-1])
 
     def M_of_h(h):
-        return np.interp(h, H, M)                      # clamps at M[-1] beyond Hmax (saturation)
+        h = np.asarray(h, float)
+        a = np.minimum(h, Hmax)
+        return np.where(h > Hmax, Mmax, B(a) / MU0 - a)
 
     def chi_sec(h):
         h = np.asarray(h, float)
-        out = np.full_like(h, chi0)
-        big = h >= H[1]
-        out[big] = np.interp(h[big], H, M) / h[big]
+        out = np.full_like(h, chi_origin)
+        big = h > 1e-12 * Hmax
+        out[big] = M_of_h(h[big]) / h[big]
         return out
+    return M_of_h, chi_sec
+
+
+def law_from_table(bh_table):
+    """[[H,B],...] -> (M_of_h, chi_sec, chi0).  M_of_h is the PCHIP B(H) law saturated beyond Hmax,
+    chi_sec(h)=M(h)/h its secant susceptibility; chi0 = M[1]/H[1] is the first-row secant."""
+    H, M, chi0 = hm_arrays(bh_table)
+    M_of_h, chi_sec = _pchip_magnetization(H, M)
     return M_of_h, chi_sec, chi0
 
 
@@ -90,7 +104,7 @@ def per_region_law(mats, bh_dict):
     M_of_h / chi_sec take a per-element h array and dispatch region-by-region."""
     check_regions(mats, bh_dict, "bh_table")
     rid = region_ids(mats)
-    law = {name: hm_arrays(bh_dict[name]) for name in rid}
+    law = {name: law_from_table(bh_dict[name]) for name in rid}
     chi0_e = np.empty(len(mats))
     for name, ids in rid.items():
         chi0_e[ids] = law[name][2]
@@ -98,18 +112,13 @@ def per_region_law(mats, bh_dict):
     def M_of_h(h):
         out = np.empty(len(mats))
         for name, ids in rid.items():
-            H, M, _ = law[name]
-            out[ids] = np.interp(h[ids], H, M)
+            out[ids] = law[name][0](h[ids])
         return out
 
     def chi_sec(h):
         out = np.empty(len(mats))
         for name, ids in rid.items():
-            H, M, c0 = law[name]
-            hi = h[ids]; ci = np.full_like(hi, c0)
-            big = hi >= H[1]
-            ci[big] = np.interp(hi[big], H, M) / hi[big]
-            out[ids] = ci
+            out[ids] = law[name][1](h[ids])
         return out
     return M_of_h, chi_sec, chi0_e
 
