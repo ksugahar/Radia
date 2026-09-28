@@ -5,8 +5,8 @@ charges = -div M on tri/quad cells + M.n on boundary edges, kernel -ln(r)/(2 pi)
 matrix-free demag operator N = B^T G B.
 
 * ``PlanarDemagBody`` -- C++ matrix-free N, a sparse per-element averaging operator, the
-  per-element secant-chi weighted mass, linear and nonlinear (scalar-chi Picard + safeguarded Anderson(1),
-  the 2D twin of the C++ tet ``SolveNonlinearPicard``) solves, analytic exterior field evaluation
+  per-element secant-chi weighted mass, linear and nonlinear (scalar-chi Picard + safeguarded Anderson(1))
+  solves, analytic exterior field evaluation
   from the charge quadrature clouds, and volume-average magnetization.
 * ``maxwell_torque_circle`` -- Maxwell-stress torque on a circle in air (real fields, or complex
   phasors -> the TIME-AVERAGED torque).
@@ -155,9 +155,26 @@ class PlanarDemagBody:
         return np.asarray(result["m"], dtype=float)
 
     def project(self, H_cf):
-        """HDiv-interpolate a (2-component) CoefficientFunction -> coefficient vector."""
+        """Galerkin (L2) projection of a 2-component CoefficientFunction.
+
+        Solves M a = INT H.v dx on the HDiv space, as the 3D path does.
+        ``GridFunction.Set`` interpolates instead, which is not Galerkin
+        consistent where a magnet field is discontinuous at touching iron.
+        """
+        u, v = self.fes.TnT()
+        if getattr(self, "_projection_inverse", None) is None:
+            # The geometry mass is fixed for the body; factor it once.
+            mass = ng.BilinearForm(self.fes)
+            mass += u * v * ng.dx
+            mass.Assemble()
+            self._projection_mass = mass
+            self._projection_inverse = mass.mat.Inverse(
+                self.fes.FreeDofs(), inverse="sparsecholesky")
+        load = ng.LinearForm(self.fes)
+        load += H_cf * v * ng.dx
+        load.Assemble()
         gf = ng.GridFunction(self.fes)
-        gf.Set(H_cf)
+        gf.vec.data = self._projection_inverse * load.vec
         return gf.vec.FV().NumPy().copy()
 
     def weighted_mass(self, invchi_e):

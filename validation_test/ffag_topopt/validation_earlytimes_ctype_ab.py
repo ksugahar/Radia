@@ -1308,8 +1308,10 @@ def parser():
     result.add_argument(
         "--lie-reference-orbit-tolerance", type=float, default=3.0e-6
     )
+    # The symplectic gate is scale-normalized now, so the two relative
+    # factorization conditions no longer need a loosened tolerance.
     result.add_argument(
-        "--lie-factorization-tolerance", type=float, default=1.0e-6
+        "--lie-factorization-tolerance", type=float, default=1.0e-8
     )
     return result
 

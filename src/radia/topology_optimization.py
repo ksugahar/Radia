@@ -171,14 +171,19 @@ def sample_production_gettrafo_displacements(fes, displacement_modes, charge_bas
         raise NotImplementedError(f"production GetTrafo sampling does not support {family}")
 
     def sample(hosts):
-        result=[]
-        for nodes in hosts:
-            mapped=[mesh(*point) for point in nodes]
-            values=[]
-            for field in modes:
-                values.append(np.array([field(point) for point in mapped],dtype=float))
-            result.append(np.asarray(values,dtype=float).reshape(len(modes),len(nodes),3))
-        return tuple(result)
+        # One vectorized mesh lookup and one field evaluation per mode for
+        # every node of every host; hosts may differ in node count (WEDGE).
+        if not hosts:
+            return ()
+        counts=[len(nodes) for nodes in hosts]
+        points=np.concatenate([np.asarray(nodes,dtype=float).reshape(-1,3)
+                               for nodes in hosts])
+        mapped=mesh(points[:,0],points[:,1],points[:,2])
+        values=np.stack([np.asarray(field(mapped),dtype=float).reshape(-1,3)
+                         for field in modes])
+        splits=np.cumsum(counts)[:-1]
+        return tuple(np.ascontiguousarray(block)
+                     for block in np.split(values,splits,axis=1))
     current_deformation=(getattr(mesh,"deformation",None)
                          if reference_sampling else None)
     if current_deformation is not None:

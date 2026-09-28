@@ -21,7 +21,9 @@ extern "C" {
 #include <cstdint>
 #include <chrono>
 #include <cstdlib>
+#include <cstdio>
 #include <limits>
+#include <string>
 
 extern "C" {
 void HACApK_matvec_stats_reset(void);
@@ -1748,6 +1750,17 @@ double RadHACApKChargeGram::EvalMono(int charge, const double p[3]) const
     return rad_ipow(l0, e[0]) * rad_ipow(l1, e[1]);
 }
 
+void RadHACApKChargeGram::HOHostCentroid(int kind, int host, double center[3]) const
+{
+    const int n = kind == 0 ? 4 : 3;
+    const double* V = kind == 0 ? &m_cellV[(size_t)host*12] : &m_faceV[(size_t)host*9];
+    for (int k = 0; k < 3; ++k) {
+        center[k] = 0.0;
+        for (int i = 0; i < n; ++i) center[k] += V[3*i+k];
+        center[k] /= n;
+    }
+}
+
 void RadHACApKChargeGram::InitHOPolynomialCoefficients()
 {
     m_hoPolyDegree.assign((size_t)m_n, 0);
@@ -1776,15 +1789,20 @@ void RadHACApKChargeGram::InitHOPolynomialCoefficients()
         // degree-four triangle moment ladder, so they need no cubic cache.
         if (deg > 2) continue;
 
+        // A + B.y + y^T C y is a polynomial of y = x - host centroid (see
+        // HOHostCentroid); global coordinates would cancel (|x|/size)^deg.
         double beta[3][3] = {{0,0,0},{0,0,0},{0,0,0}}, V0[3];
         int ncoord;
+        double center[3];
+        HOHostCentroid(m_kind[src], host, center);
         if (m_kind[src] == 0) {
             const double* V = &m_cellV[(size_t)host*12];
             const double* Inv = &m_cellInv[(size_t)host*9];
             for (int i = 0; i < 3; ++i) {
                 beta[i][0]=Inv[3*i]; beta[i][1]=Inv[3*i+1]; beta[i][2]=Inv[3*i+2];
             }
-            V0[0]=V[0]; V0[1]=V[1]; V0[2]=V[2]; ncoord = 3;
+            for (int k=0;k<3;++k) V0[k]=V[k]-center[k];
+            ncoord = 3;
         } else {
             const double* V = &m_faceV[(size_t)host*9];
             const double* Gi = &m_faceGinv[(size_t)host*4];
@@ -1794,7 +1812,8 @@ void RadHACApKChargeGram::InitHOPolynomialCoefficients()
                 beta[0][k]=Gi[0]*a1[k]+Gi[1]*a2[k];
                 beta[1][k]=Gi[2]*a1[k]+Gi[3]*a2[k];
             }
-            V0[0]=V[0]; V0[1]=V[1]; V0[2]=V[2]; ncoord = 2;
+            for (int k=0;k<3;++k) V0[k]=V[k]-center[k];
+            ncoord = 2;
         }
 
         double facA[2], facB[2][3]; int nf = 0;
@@ -1858,22 +1877,25 @@ double RadHACApKChargeGram::PhiAtHO_Analytic(int src, const double p[3]) const
         PhiInnerHOHostVec(m_kind[src], host, p, one, &value);
         return value;
     }
+    double center[3];
+    HOHostCentroid(m_kind[src], host, center);
+    const double lp[3] = {p[0]-center[0], p[1]-center[1], p[2]-center[2]};
     if (m_kind[src] == 0) {                                  // cell: degree <= 1 for order<=2 (no TetMoment2 needed)
         double V[4][3]; const double* s=&m_cellV[(size_t)host*12];
-        for (int i=0;i<4;++i) for (int k=0;k<3;++k) V[i][k]=s[3*i+k];
-        const double I0 = rad_hdiv::PhiTet(V, p);
+        for (int i=0;i<4;++i) for (int k=0;k<3;++k) V[i][k]=s[3*i+k]-center[k];
+        const double I0 = rad_hdiv::PhiTet(V, lp);
         if (deg == 0) return A * I0;
-        double M1[3]; rad_hdiv::TetMoment1(V, p, M1);
+        double M1[3]; rad_hdiv::TetMoment1(V, lp, M1);
         return A*I0 + B[0]*M1[0] + B[1]*M1[1] + B[2]*M1[2];
     }
     double V[3][3]; const double* s=&m_faceV[(size_t)host*9];
-    for (int i=0;i<3;++i) for (int k=0;k<3;++k) V[i][k]=s[3*i+k];
-    const double I0 = rad_hdiv::TriPotential(V, p);
+    for (int i=0;i<3;++i) for (int k=0;k<3;++k) V[i][k]=s[3*i+k]-center[k];
+    const double I0 = rad_hdiv::TriPotential(V, lp);
     if (deg == 0) return A * I0;
-    double M1[3]; rad_hdiv::TriMoment1(V, p, M1);
+    double M1[3]; rad_hdiv::TriMoment1(V, lp, M1);
     double res = A*I0 + B[0]*M1[0] + B[1]*M1[1] + B[2]*M1[2];
     if (deg >= 2) {
-        double M2[3][3]; rad_hdiv::TriMoment2(V, p, M2);
+        double M2[3][3]; rad_hdiv::TriMoment2(V, lp, M2);
         for (int k=0;k<3;++k) for (int l=0;l<3;++l) res += C[3*k+l]*M2[k][l];
     }
     return res;
@@ -1927,10 +1949,16 @@ void RadHACApKChargeGram::PhiInnerHOHostVec(
             return;
         }
 
+        // Expand about the face centroid: the forms below are built from the
+        // translated vertices, so both use one frame and stay O(1) far from
+        // the global origin.
         double V[3][3]; const double* stored = &m_faceV[(size_t)host*9];
-        for (int i=0;i<3;++i) for (int k=0;k<3;++k) V[i][k]=stored[3*i+k];
+        double center[3] = {0.0, 0.0, 0.0};
+        for (int i=0;i<3;++i) for (int k=0;k<3;++k) center[k]+=stored[3*i+k]/3.0;
+        for (int i=0;i<3;++i) for (int k=0;k<3;++k) V[i][k]=stored[3*i+k]-center[k];
+        const double local_p[3] = {p[0]-center[0], p[1]-center[1], p[2]-center[2]};
         double moments[35] = {};
-        rad_hdiv::TriPotentialMomentsUpTo4(V, p, moments);
+        rad_hdiv::TriPotentialMomentsUpTo4(V, local_p, moments);
 
         const double* Gi = &m_faceGinv[(size_t)host*4];
         double edge[2][3];
@@ -1986,17 +2014,20 @@ void RadHACApKChargeGram::PhiInnerHOHostVec(
     }
 
     double I0, M1[3] = {0,0,0}, M2[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
+    double center[3];
+    HOHostCentroid(kind, host, center);
+    const double lp[3] = {p[0]-center[0], p[1]-center[1], p[2]-center[2]};
     if (kind == 0) {
         double V[4][3]; const double* stored = &m_cellV[(size_t)host*12];
-        for (int i=0;i<4;++i) for (int k=0;k<3;++k) V[i][k]=stored[3*i+k];
-        I0 = rad_hdiv::PhiTet(V, p);
-        if (max_degree >= 1) rad_hdiv::TetMoment1(V, p, M1);
+        for (int i=0;i<4;++i) for (int k=0;k<3;++k) V[i][k]=stored[3*i+k]-center[k];
+        I0 = rad_hdiv::PhiTet(V, lp);
+        if (max_degree >= 1) rad_hdiv::TetMoment1(V, lp, M1);
     } else {
         double V[3][3]; const double* stored = &m_faceV[(size_t)host*9];
-        for (int i=0;i<3;++i) for (int k=0;k<3;++k) V[i][k]=stored[3*i+k];
-        I0 = rad_hdiv::TriPotential(V, p);
-        if (max_degree >= 1) rad_hdiv::TriMoment1(V, p, M1);
-        if (max_degree >= 2) rad_hdiv::TriMoment2(V, p, M2);
+        for (int i=0;i<3;++i) for (int k=0;k<3;++k) V[i][k]=stored[3*i+k]-center[k];
+        I0 = rad_hdiv::TriPotential(V, lp);
+        if (max_degree >= 1) rad_hdiv::TriMoment1(V, lp, M1);
+        if (max_degree >= 2) rad_hdiv::TriMoment2(V, lp, M2);
     }
 
     for (size_t local = 0; local < charges.size(); ++local) {
@@ -3211,6 +3242,23 @@ static void HexPolyMulLinearDirectional(double* poly,double* dpoly,int& deg,
     ++deg;for(int i=0;i<ncoeff;++i){poly[i]=tmp[i];dpoly[i]=dtmp[i];}
 }
 
+// Re-express lin[0] + lin[1:4].x as a form in y = x - origin.  Physical
+// polynomials built from shifted forms stay O(1) on cells far from the
+// global origin instead of cancelling (|origin|/size)^degree.
+static void ShiftAffineForm(double lin[4], const double origin[3])
+{
+    lin[0] += lin[1]*origin[0] + lin[2]*origin[1] + lin[3]*origin[2];
+}
+
+// Tangent of ShiftAffineForm when the origin moves with the geometry.
+static void ShiftAffineFormDirectional(double lin[4], double dlin[4],
+                                       const double origin[3], const double dorigin[3])
+{
+    dlin[0] += dlin[1]*origin[0] + dlin[2]*origin[1] + dlin[3]*origin[2]
+             + lin[1]*dorigin[0] + lin[2]*dorigin[1] + lin[3]*dorigin[2];
+    ShiftAffineForm(lin, origin);
+}
+
 static bool HexAffineInverseForms(const double* nd27, double lin[3][4], double& inv_abs_det)
 {
     const double* o = &nd27[0];
@@ -3589,11 +3637,16 @@ RadHACApKChargeGram::RadHACApKChargeGram(
                             *(2*m_hexAffineOrder + 3)/6;
     m_hexAffineCell.assign((size_t)n_el, 0);
     m_hexAffineCoeff.assign((size_t)n_el * m_hexAffineMonoCount * m_hexAffinePolyCount, 0.0);
+    m_hexAffineCenter.assign((size_t)n_el*3, 0.0);
     if (HEX_USE_AFFINE_EXACT_CELL_INNER) {
         for (int c = 0; c < n_el; ++c) {
             double lin[3][4], inv_abs_det = 0.0;
             if (!HexAffineInverseForms(&m_hexNodes[(size_t)c*81], lin, inv_abs_det)) continue;
             m_hexAffineCell[c] = 1;
+            double* center = &m_hexAffineCenter[(size_t)c*3];
+            const double reference_center[3] = {0.5, 0.5, 0.5};
+            HexQ2MapX(&m_hexNodes[(size_t)c*81], reference_center, center);
+            for (int axis = 0; axis < 3; ++axis) ShiftAffineForm(lin[axis], center);
             for (int ez = 0; ez <= m_hexAffineOrder; ++ez)
               for (int ey = 0; ey <= m_hexAffineOrder; ++ey)
                for (int ex = 0; ex <= m_hexAffineOrder; ++ex) {
@@ -3615,10 +3668,15 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     }
     m_quadAffineFace.assign((size_t)n_bf, 0);
     m_quadAffineCoeff.assign((size_t)n_bf * m_quadAffineMonoCount * m_quadAffinePolyCount, 0.0);
+    m_quadAffineCenter.assign((size_t)n_bf*3, 0.0);
     for (int f = 0; f < n_bf; ++f) {
         double lin[2][4], inv_surface_jac = 0.0;
         if (!QuadAffineInverseForms(&m_quadNodes[(size_t)f*27], lin, inv_surface_jac)) continue;
         m_quadAffineFace[f] = 1;
+        double* center = &m_quadAffineCenter[(size_t)f*3];
+        const double reference_center[2] = {0.5, 0.5};
+        QuadQ2MapX(&m_quadNodes[(size_t)f*27], reference_center, center);
+        for (int axis = 0; axis < 2; ++axis) ShiftAffineForm(lin[axis], center);
         for (int ev = 0; ev <= m_hexAffineOrder; ++ev)
           for (int eu = 0; eu <= m_hexAffineOrder; ++eu) {
             const int mono = eu + affineAxisCount*ev;
@@ -4540,12 +4598,14 @@ void RadHACApKChargeGram::PhiInnerHexAffineCellSubVec(int hS, int subB, const do
 {
     const size_t sid = (size_t)hS*6 + subB;
     const double* sv = &m_cellSubV[sid*4*3];
+    const double* center = &m_hexAffineCenter[(size_t)hS*3];
     double V[4][3];
     for (int i = 0; i < 4; ++i)
-        for (int k = 0; k < 3; ++k) V[i][k] = sv[3*i + k];
+        for (int k = 0; k < 3; ++k) V[i][k] = sv[3*i + k] - center[k];
+    const double local_p[3] = {p[0]-center[0], p[1]-center[1], p[2]-center[2]};
     double moments[HEX_AFFINE_POLY_N];
-    if (m_hexAffineOrder == 1) rad_hdiv::TetPotentialMomentsUpTo3(V, p, moments);
-    else                       rad_hdiv::TetPotentialMomentsUpTo6(V, p, moments);
+    if (m_hexAffineOrder == 1) rad_hdiv::TetPotentialMomentsUpTo3(V, local_p, moments);
+    else                       rad_hdiv::TetPotentialMomentsUpTo6(V, local_p, moments);
     for (int ls = 0; ls < (int)srcG.size(); ++ls) {
         const int* e = &m_expo[(size_t)3*srcG[ls]];
         const int axisCount = m_hexAffineOrder + 1;
@@ -4564,14 +4624,16 @@ void RadHACApKChargeGram::PhiInnerHexAffineFaceSubVec(int hS, int subB, const do
     // polynomials (degree <= 4) once in the constructor and apply the same analytic surface-moment
     // strategy used by the flat-TET BDM2 path.
     const int* tv = QUADREF_TRIS[subB];
+    const double* center = &m_quadAffineCenter[(size_t)hS*3];
     double V[3][3];
     for (int i = 0; i < 3; ++i) {
         const double* v = &m_faceSubV[(((size_t)hS * 2 + subB) * 3 + i) * 3];
-        for (int k = 0; k < 3; ++k) V[i][k] = v[k];
+        for (int k = 0; k < 3; ++k) V[i][k] = v[k] - center[k];
     }
+    const double local_p[3] = {p[0]-center[0], p[1]-center[1], p[2]-center[2]};
     double moments[QUAD_AFFINE_POLY_N];
-    if (m_hexAffineOrder == 1) rad_hdiv::TriPotentialMomentsUpTo2(V, p, moments);
-    else                       rad_hdiv::TriPotentialMomentsUpTo4(V, p, moments);
+    if (m_hexAffineOrder == 1) rad_hdiv::TriPotentialMomentsUpTo2(V, local_p, moments);
+    else                       rad_hdiv::TriPotentialMomentsUpTo4(V, local_p, moments);
     for (int ls = 0; ls < (int)srcG.size(); ++ls) {
         const int* e = &m_expo[(size_t)3*srcG[ls]];
         const int axisCount = m_hexAffineOrder + 1;
@@ -5089,9 +5151,13 @@ void RadHACApKChargeGram::DPhiInnerHexSubVec(int kindS,int hS,int subB,
     if(!cell&&hS<(int)m_quadAffineFace.size()&&m_quadAffineFace[hS]){
         const double* nd=&m_quadNodes[(size_t)hS*27];double lin[2][4],dlin[2][4],invj=0,dinvj=0;
         if(!QuadAffineInverseFormsDirectional(nd,velocity,lin,dlin,invj,dinvj))throw std::logic_error("affine HEX face derivative has a singular geometry map");
+        // Same centered frame as m_quadAffineCoeff; the center moves with the face.
+        const double* center=&m_quadAffineCenter[(size_t)hS*3];double dcenter[3];{const double uvc[2]={0.5,0.5};QuadQ2MapX(velocity,uvc,dcenter);}
+        for(int k=0;k<2;++k)ShiftAffineFormDirectional(lin[k],dlin[k],center,dcenter);
         const int np=m_quadAffinePolyCount,axis=m_hexAffineOrder+1;const int* tv=QUADREF_TRIS[subB];double V[3][3],dV[3][3];
-        for(int a=0;a<3;++a){const double uv[2]={QUADREF_V[tv[a]][0],QUADREF_V[tv[a]][1]};QuadQ2MapX(nd,uv,V[a]);QuadQ2MapX(velocity,uv,dV[a]);}
-        double mv[QUAD_AFFINE_POLY_N]={},dm[QUAD_AFFINE_POLY_N]={};if(m_hexAffineOrder==1)rad_hdiv::TriPotentialMomentsDirectionalUpTo2(V,dV,p,dp,mv,dm);else rad_hdiv::TriPotentialMomentsDirectionalUpTo4(V,dV,p,dp,mv,dm);
+        for(int a=0;a<3;++a){const double uv[2]={QUADREF_V[tv[a]][0],QUADREF_V[tv[a]][1]};QuadQ2MapX(nd,uv,V[a]);QuadQ2MapX(velocity,uv,dV[a]);for(int k=0;k<3;++k){V[a][k]-=center[k];dV[a][k]-=dcenter[k];}}
+        const double lp[3]={p[0]-center[0],p[1]-center[1],p[2]-center[2]},ldp[3]={dp[0]-dcenter[0],dp[1]-dcenter[1],dp[2]-dcenter[2]};
+        double mv[QUAD_AFFINE_POLY_N]={},dm[QUAD_AFFINE_POLY_N]={};if(m_hexAffineOrder==1)rad_hdiv::TriPotentialMomentsDirectionalUpTo2(V,dV,lp,ldp,mv,dm);else rad_hdiv::TriPotentialMomentsDirectionalUpTo4(V,dV,lp,ldp,mv,dm);
         for(int ls=0;ls<(int)srcG.size();++ls){const int* e=&m_expo[(size_t)3*srcG[ls]];double poly[HEX_AFFINE_POLY_N]={},dpoly[HEX_AFFINE_POLY_N]={};int deg=0;poly[0]=1;for(int q=0;q<e[0];++q)HexPolyMulLinearDirectional(poly,dpoly,deg,lin[0],dlin[0],np);for(int q=0;q<e[1];++q)HexPolyMulLinearDirectional(poly,dpoly,deg,lin[1],dlin[1],np);const int mono=e[0]+axis*e[1];const double* coeff=&m_quadAffineCoeff[((size_t)hS*m_quadAffineMonoCount+mono)*np];for(int k=0;k<np;++k){const double dc=dinvj*poly[k]+invj*dpoly[k];dinn[ls]+=dc*mv[k]+coeff[k]*dm[k];}}
         return;
     }
@@ -5157,10 +5223,13 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexDirectionalDerivative(
         // leaving them on the cloud rule kept 1.0e-4 of the dilation
         // identity on exactly those three pairs after the touching ones
         // were routed.
+        // Touching pairs without a conforming shared entity take the graded
+        // family below, as in the primal dispatch.
         const int rt=tg[0],rs=sg[0];
         const double d[3]={m_cent[3*rt]-m_cent[3*rs],m_cent[3*rt+1]-m_cent[3*rs+1],
                            m_cent[3*rt+2]-m_cent[3*rs+2]};
-        if(std::sqrt(d[0]*d[0]+d[1]*d[1]+d[2]*d[2])
+        if(!HexHostsTouch(kindT,hT,kindS,hS,0)
+                &&std::sqrt(d[0]*d[0]+d[1]*d[1]+d[2]*d[2])
                 <=m_near_grade*(m_size[rt]+m_size[rs]))
             return QuadBlockHexProductN(kindT,hT,kindS,hS,0,velocityT,velocityS);
     }
@@ -5609,7 +5678,9 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
     // BDM1 NON-touching pairs inside the near band: the plain product rule with the pair point count
     // (the graded cloud + fan inner of that band was the largest remaining error class on ESRF #6:
     // +2.9e-3 of a -5e-3 mode's energy moved when the band rules were refined, 2026-09-06).
-    if (m_hexAffineOrder == 1 && HexPairDuffyEnabled() && exponential_ok
+    // A touching pair without a conforming shared entity (hanging node) has a singular integrand on
+    // the contact, so it continues to the graded near family instead of the plain product.
+    if (m_hexAffineOrder == 1 && HexPairDuffyEnabled() && exponential_ok && !touching_hosts
             && sep <= m_near_grade*(m_size[repA] + m_size[repB]))
         return timed(m_hexBlkGeneralNear, m_hexNsGeneralNear,
                      [&]{ return QuadBlockHexProductN(kindT, hT, kindS, hS, img); });
@@ -6748,6 +6819,10 @@ std::vector<double> RadHACApKChargeGram::HexFaceSelfBlockDirectionalDerivative(
         double lin[2][4],dlin[2][4],invj=0,dinvj=0;
         if(!QuadAffineInverseFormsDirectional(nd,node_velocity.data(),lin,dlin,invj,dinvj))
             throw std::logic_error("affine HEX face derivative has a singular geometry map");
+        // Same centered frame as m_quadAffineCoeff; the center moves with the face.
+        const double* center=&m_quadAffineCenter[(size_t)host*3];double dcenter[3];
+        {const double uvc[2]={0.5,0.5};QuadQ2MapX(node_velocity.data(),uvc,dcenter);}
+        for(int k=0;k<2;++k)ShiftAffineFormDirectional(lin[k],dlin[k],center,dcenter);
         const int axisCount=m_hexAffineOrder+1,np=m_quadAffinePolyCount;
         std::vector<double> dcoeff((size_t)n*np,0.0);
         for(int ls=0;ls<n;++ls){const int* e=&m_expo[(size_t)3*g[ls]];double poly[HEX_AFFINE_POLY_N]={},dp[HEX_AFFINE_POLY_N]={};int deg=0;poly[0]=1;
@@ -6758,9 +6833,10 @@ std::vector<double> RadHACApKChargeGram::HexFaceSelfBlockDirectionalDerivative(
         const int nq=(int)m_glOut.size();double xi[3]={0,0,0};
         for(int iy=0;iy<nq;++iy){xi[1]=m_glOut[iy];for(int ix=0;ix<nq;++ix){xi[0]=m_glOut[ix];
             const double uv[2]={xi[0],xi[1]};double p[3],dpnt[3];QuadQ2MapX(nd,uv,p);QuadQ2MapX(node_velocity.data(),uv,dpnt);
+            for(int k=0;k<3;++k){p[k]-=center[k];dpnt[k]-=dcenter[k];}
             std::fill(dinn.begin(),dinn.end(),0.0);
             for(int sub=0;sub<2;++sub){const int* tv=QUADREF_TRIS[sub];double V[3][3],dV[3][3];
-                for(int a=0;a<3;++a){const double ruv[2]={QUADREF_V[tv[a]][0],QUADREF_V[tv[a]][1]};QuadQ2MapX(nd,ruv,V[a]);QuadQ2MapX(node_velocity.data(),ruv,dV[a]);}
+                for(int a=0;a<3;++a){const double ruv[2]={QUADREF_V[tv[a]][0],QUADREF_V[tv[a]][1]};QuadQ2MapX(nd,ruv,V[a]);QuadQ2MapX(node_velocity.data(),ruv,dV[a]);for(int k=0;k<3;++k){V[a][k]-=center[k];dV[a][k]-=dcenter[k];}}
                 double mv[QUAD_AFFINE_POLY_N]={},dm[QUAD_AFFINE_POLY_N]={};
                 if(m_hexAffineOrder==1)rad_hdiv::TriPotentialMomentsDirectionalUpTo2(V,dV,p,dpnt,mv,dm);
                 else rad_hdiv::TriPotentialMomentsDirectionalUpTo4(V,dV,p,dpnt,mv,dm);
@@ -8799,6 +8875,7 @@ void RadHACApKChargeGram::PhiInnerWedgeSiteVec(int kindS, int hS, int subB, cons
 
 static bool WedgeQuadAffineCoefficients(const double* nodes,const double* velocity,
                                         int eu,int ev,int order,double* coeff,double* derivative);
+static void WedgeQuadCenter(const double* nodes,const double* velocity,double center[3],double dcenter[3]);
 
 // Far field point -> cheap cached far cloud; else -> the static-site radial.  Mirror of PhiInnerHexSubVec.
 void RadHACApKChargeGram::PhiInnerWedgeSubVec(int kindS, int hS, int subB, const double p[3],
@@ -8815,10 +8892,12 @@ void RadHACApKChargeGram::PhiInnerWedgeSubVec(int kindS, int hS, int subB, const
         if (WedgeQuadAffineCoefficients(qnd,nullptr,0,0,1,probe,nullptr)) {
             int order=1;for(int charge:srcG){const int*e=&m_expo[(size_t)3*charge];order=std::max({order,e[0],e[1]});}
             const int np=(2*order+1)*(2*order+2)*(2*order+3)/6;
+            double center[3];WedgeQuadCenter(qnd,nullptr,center,nullptr);
             const int*tv=QUADREF_TRIS[subB];double V[3][3];
-            for(int a=0;a<3;++a){const double uv[2]={QUADREF_V[tv[a]][0],QUADREF_V[tv[a]][1]};QuadQ2MapX(qnd,uv,V[a]);}
+            for(int a=0;a<3;++a){const double uv[2]={QUADREF_V[tv[a]][0],QUADREF_V[tv[a]][1]};QuadQ2MapX(qnd,uv,V[a]);for(int k=0;k<3;++k)V[a][k]-=center[k];}
+            const double lp[3]={p[0]-center[0],p[1]-center[1],p[2]-center[2]};
             double moments[QUAD_AFFINE_POLY_N]={};
-            if(order==1)rad_hdiv::TriPotentialMomentsUpTo2(V,p,moments);else rad_hdiv::TriPotentialMomentsUpTo4(V,p,moments);
+            if(order==1)rad_hdiv::TriPotentialMomentsUpTo2(V,lp,moments);else rad_hdiv::TriPotentialMomentsUpTo4(V,lp,moments);
             for(int j=0;j<(int)srcG.size();++j){const int*e=&m_expo[(size_t)3*srcG[j]];double coeff[QUAD_AFFINE_POLY_N]={};WedgeQuadAffineCoefficients(qnd,nullptr,e[0],e[1],order,coeff,nullptr);for(int k=0;k<np;++k)inn[j]+=coeff[k]*moments[k];}
             return;
         }
@@ -8848,12 +8927,23 @@ void RadHACApKChargeGram::PhiInnerWedgeSubVec(int kindS, int hS, int subB, const
     }
 }
 
+// Center (and its velocity) of an affine WEDGE quad face: the coefficients
+// below are monomials of x minus this point, and every caller translates the
+// face and target by it before the analytic moments.
+static void WedgeQuadCenter(const double* nodes,const double* velocity,double center[3],double dcenter[3])
+{
+    const double uv[2]={0.5,0.5};
+    RadHACApKChargeGram::QuadQ2MapX(nodes,uv,center);
+    if(dcenter){if(velocity)RadHACApKChargeGram::QuadQ2MapX(velocity,uv,dcenter);else dcenter[0]=dcenter[1]=dcenter[2]=0.0;}
+}
+
 static bool WedgeQuadAffineCoefficients(const double* nodes,const double* velocity,
                                         int eu,int ev,int order,double* coeff,double* derivative)
 {
     double lin[2][4],invj=0;const int np=(2*order+1)*(2*order+2)*(2*order+3)/6;
-    if(!velocity){if(!QuadAffineInverseForms(nodes,lin,invj))return false;double poly[HEX_AFFINE_POLY_N]={};int deg=0;poly[0]=1;for(int q=0;q<eu;++q)HexPolyMulLinear(poly,deg,lin[0],np);for(int q=0;q<ev;++q)HexPolyMulLinear(poly,deg,lin[1],np);for(int k=0;k<np;++k)coeff[k]=invj*poly[k];return true;}
-    double dlin[2][4],dinvj=0;if(!QuadAffineInverseFormsDirectional(nodes,velocity,lin,dlin,invj,dinvj))return false;double poly[HEX_AFFINE_POLY_N]={},dpoly[HEX_AFFINE_POLY_N]={};int deg=0;poly[0]=1;for(int q=0;q<eu;++q)HexPolyMulLinearDirectional(poly,dpoly,deg,lin[0],dlin[0],np);for(int q=0;q<ev;++q)HexPolyMulLinearDirectional(poly,dpoly,deg,lin[1],dlin[1],np);for(int k=0;k<np;++k){coeff[k]=invj*poly[k];derivative[k]=dinvj*poly[k]+invj*dpoly[k];}return true;
+    double center[3],dcenter[3];WedgeQuadCenter(nodes,velocity,center,dcenter);
+    if(!velocity){if(!QuadAffineInverseForms(nodes,lin,invj))return false;for(int k=0;k<2;++k)ShiftAffineForm(lin[k],center);double poly[HEX_AFFINE_POLY_N]={};int deg=0;poly[0]=1;for(int q=0;q<eu;++q)HexPolyMulLinear(poly,deg,lin[0],np);for(int q=0;q<ev;++q)HexPolyMulLinear(poly,deg,lin[1],np);for(int k=0;k<np;++k)coeff[k]=invj*poly[k];return true;}
+    double dlin[2][4],dinvj=0;if(!QuadAffineInverseFormsDirectional(nodes,velocity,lin,dlin,invj,dinvj))return false;for(int k=0;k<2;++k)ShiftAffineFormDirectional(lin[k],dlin[k],center,dcenter);double poly[HEX_AFFINE_POLY_N]={},dpoly[HEX_AFFINE_POLY_N]={};int deg=0;poly[0]=1;for(int q=0;q<eu;++q)HexPolyMulLinearDirectional(poly,dpoly,deg,lin[0],dlin[0],np);for(int q=0;q<ev;++q)HexPolyMulLinearDirectional(poly,dpoly,deg,lin[1],dlin[1],np);for(int k=0;k<np;++k){coeff[k]=invj*poly[k];derivative[k]=dinvj*poly[k]+invj*dpoly[k];}return true;
 }
 
 void RadHACApKChargeGram::DPhiInnerWedgeSubVec(int kindS,int hS,int subB,const double p[3],const double dp[3],
@@ -8864,8 +8954,10 @@ void RadHACApKChargeGram::DPhiInnerWedgeSubVec(int kindS,int hS,int subB,const d
         const double*qnd=&m_wFaceNodes[(size_t)hS*27];double probe[QUAD_AFFINE_POLY_N]={};
         if(WedgeQuadAffineCoefficients(qnd,nullptr,0,0,1,probe,nullptr)){
             int order=1;for(int charge:srcG){const int*e=&m_expo[(size_t)3*charge];order=std::max({order,e[0],e[1]});}const int np=(2*order+1)*(2*order+2)*(2*order+3)/6;
-            const int*tv=QUADREF_TRIS[subB];double V[3][3],dV[3][3];for(int a=0;a<3;++a){const double uv[2]={QUADREF_V[tv[a]][0],QUADREF_V[tv[a]][1]};QuadQ2MapX(qnd,uv,V[a]);QuadQ2MapX(velocity,uv,dV[a]);}
-            double mv[QUAD_AFFINE_POLY_N]={},dm[QUAD_AFFINE_POLY_N]={};if(order==1)rad_hdiv::TriPotentialMomentsDirectionalUpTo2(V,dV,p,dp,mv,dm);else rad_hdiv::TriPotentialMomentsDirectionalUpTo4(V,dV,p,dp,mv,dm);
+            double center[3],dcenter[3];WedgeQuadCenter(qnd,velocity,center,dcenter);
+            const int*tv=QUADREF_TRIS[subB];double V[3][3],dV[3][3];for(int a=0;a<3;++a){const double uv[2]={QUADREF_V[tv[a]][0],QUADREF_V[tv[a]][1]};QuadQ2MapX(qnd,uv,V[a]);QuadQ2MapX(velocity,uv,dV[a]);for(int k=0;k<3;++k){V[a][k]-=center[k];dV[a][k]-=dcenter[k];}}
+            const double lp[3]={p[0]-center[0],p[1]-center[1],p[2]-center[2]},ldp[3]={dp[0]-dcenter[0],dp[1]-dcenter[1],dp[2]-dcenter[2]};
+            double mv[QUAD_AFFINE_POLY_N]={},dm[QUAD_AFFINE_POLY_N]={};if(order==1)rad_hdiv::TriPotentialMomentsDirectionalUpTo2(V,dV,lp,ldp,mv,dm);else rad_hdiv::TriPotentialMomentsDirectionalUpTo4(V,dV,lp,ldp,mv,dm);
             for(int j=0;j<(int)srcG.size();++j){const int*e=&m_expo[(size_t)3*srcG[j]];double c[QUAD_AFFINE_POLY_N]={},dc[QUAD_AFFINE_POLY_N]={};WedgeQuadAffineCoefficients(qnd,velocity,e[0],e[1],order,c,dc);for(int k=0;k<np;++k)dinn[j]+=dc[k]*mv[k]+c[k]*dm[k];}return;
         }
     }
@@ -8889,8 +8981,10 @@ void RadHACApKChargeGram::PhiInnerWedgeRadialVec(int kindS, int hS, int subB, co
         if(WedgeQuadAffineCoefficients(qnd,nullptr,0,0,1,probe,nullptr)){
             int order=1;for(int charge:srcG){const int*e=&m_expo[(size_t)3*charge];order=std::max({order,e[0],e[1]});}
             const int np=(2*order+1)*(2*order+2)*(2*order+3)/6;
-            const int*tv=QUADREF_TRIS[subB];double V[3][3];for(int a=0;a<3;++a){const double uv[2]={QUADREF_V[tv[a]][0],QUADREF_V[tv[a]][1]};QuadQ2MapX(qnd,uv,V[a]);}
-            double moments[QUAD_AFFINE_POLY_N]={};if(order==1)rad_hdiv::TriPotentialMomentsUpTo2(V,p,moments);else rad_hdiv::TriPotentialMomentsUpTo4(V,p,moments);
+            double center[3];WedgeQuadCenter(qnd,nullptr,center,nullptr);
+            const int*tv=QUADREF_TRIS[subB];double V[3][3];for(int a=0;a<3;++a){const double uv[2]={QUADREF_V[tv[a]][0],QUADREF_V[tv[a]][1]};QuadQ2MapX(qnd,uv,V[a]);for(int k=0;k<3;++k)V[a][k]-=center[k];}
+            const double lp[3]={p[0]-center[0],p[1]-center[1],p[2]-center[2]};
+            double moments[QUAD_AFFINE_POLY_N]={};if(order==1)rad_hdiv::TriPotentialMomentsUpTo2(V,lp,moments);else rad_hdiv::TriPotentialMomentsUpTo4(V,lp,moments);
             for(int j=0;j<(int)srcG.size();++j){const int*e=&m_expo[(size_t)3*srcG[j]];double coeff[QUAD_AFFINE_POLY_N]={};WedgeQuadAffineCoefficients(qnd,nullptr,e[0],e[1],order,coeff,nullptr);for(int k=0;k<np;++k)inn[j]+=coeff[k]*moments[k];}
             return;
         }
@@ -9106,8 +9200,9 @@ std::vector<double> RadHACApKChargeGram::WedgeFaceSelfBlockDirectionalDerivative
         for(int j=0;j<n;++j){const int*e=&m_expo[(size_t)3*g[j]];if(!WedgeQuadAffineCoefficients(nd,vel.data(),e[0],e[1],order,&coeff[(size_t)j*np],&dc[(size_t)j*np]))throw std::logic_error("affine WEDGE quad face derivative has a singular geometry map");}
         for(int sa=0;sa<2;++sa){const size_t ia=(size_t)host*2+sa;const double*va=&m_wFaceSubV[ia*9],*ca=&m_wFaceSubC[ia*3];for(int sb=0;sb<2;++sb){const size_t ib=(size_t)host*2+sb;const double*cb=&m_wFaceSubC[ib*3];const double tie=1e-13*(m_wFaceSubS[ia]+m_wFaceSubS[ib]+1.0)*(m_wFaceSubS[ia]+m_wFaceSubS[ib]+1.0);int corner=0;double best=1e300;for(int i=0;i<3;++i){const double x=va[3*i]-cb[0],y=va[3*i+1]-cb[1],z=va[3*i+2]-cb[2],d=x*x+y*y+z*z;if(d<best-tie){best=d;corner=i;}}const double x=ca[0]-cb[0],y=ca[1]-cb[1],z=ca[2]-cb[2];const bool near=std::sqrt(x*x+y*y+z*z)<=m_near_grade*(m_wFaceSubS[ia]+m_wFaceSubS[ib]);std::shared_ptr<const HexQuadCloud>oc;
             if(near)oc=HexGetCloud(m_build_id,HexCloudKey(1,true,true,host,sa,corner),[&](HexQuadCloud&c){std::vector<double>b,w;HexDuffyBary(2,corner,m_glOut,m_gwOut,b,w);WedgeBuildCloud(nd,1,1,sa,b.data(),w.data(),(int)w.size(),true,c);});else oc=HexGetCloud(m_build_id,HexCloudKey(1,true,false,host,sa,3),[&](HexQuadCloud&c){WedgeBuildCloud(nd,1,1,sa,m_symTriP.data(),m_symTriW.data(),(int)m_symTriW.size(),false,c);});
-            const int*tv=QUADREF_TRIS[sb];double V[3][3],dV[3][3];for(int a=0;a<3;++a){const double r[2]={QUADREF_V[tv[a]][0],QUADREF_V[tv[a]][1]};QuadQ2MapX(nd,r,V[a]);QuadQ2MapX(vel.data(),r,dV[a]);}
-            for(int q=0;q<(int)oc->wgeo.size();++q){const double*xi=&oc->xi[3*q],p[3]={oc->pts[3*q],oc->pts[3*q+1],oc->pts[3*q+2]},uv[2]={xi[0],xi[1]};double dp[3];QuadQ2MapX(vel.data(),uv,dp);double mv[QUAD_AFFINE_POLY_N]={},dm[QUAD_AFFINE_POLY_N]={};if(order==1)rad_hdiv::TriPotentialMomentsDirectionalUpTo2(V,dV,p,dp,mv,dm);else rad_hdiv::TriPotentialMomentsDirectionalUpTo4(V,dV,p,dp,mv,dm);std::fill(inner.begin(),inner.end(),0);for(int j=0;j<n;++j)for(int k=0;k<np;++k)inner[j]+=dc[(size_t)j*np+k]*mv[k]+coeff[(size_t)j*np+k]*dm[k];for(int i=0;i<n;++i){const double w=oc->wgeo[q]*HexMonoEval(g[i],xi);for(int j=0;j<n;++j)out[(size_t)i*n+j]+=w*inner[j];}}
+            double center[3],dcenter[3];WedgeQuadCenter(nd,vel.data(),center,dcenter);
+            const int*tv=QUADREF_TRIS[sb];double V[3][3],dV[3][3];for(int a=0;a<3;++a){const double r[2]={QUADREF_V[tv[a]][0],QUADREF_V[tv[a]][1]};QuadQ2MapX(nd,r,V[a]);QuadQ2MapX(vel.data(),r,dV[a]);for(int k=0;k<3;++k){V[a][k]-=center[k];dV[a][k]-=dcenter[k];}}
+            for(int q=0;q<(int)oc->wgeo.size();++q){const double*xi=&oc->xi[3*q],p[3]={oc->pts[3*q]-center[0],oc->pts[3*q+1]-center[1],oc->pts[3*q+2]-center[2]},uv[2]={xi[0],xi[1]};double dp[3];QuadQ2MapX(vel.data(),uv,dp);for(int k=0;k<3;++k)dp[k]-=dcenter[k];double mv[QUAD_AFFINE_POLY_N]={},dm[QUAD_AFFINE_POLY_N]={};if(order==1)rad_hdiv::TriPotentialMomentsDirectionalUpTo2(V,dV,p,dp,mv,dm);else rad_hdiv::TriPotentialMomentsDirectionalUpTo4(V,dV,p,dp,mv,dm);std::fill(inner.begin(),inner.end(),0);for(int j=0;j<n;++j)for(int k=0;k<np;++k)inner[j]+=dc[(size_t)j*np+k]*mv[k]+coeff[(size_t)j*np+k]*dm[k];for(int i=0;i<n;++i){const double w=oc->wgeo[q]*HexMonoEval(g[i],xi);for(int j=0;j<n;++j)out[(size_t)i*n+j]+=w*inner[j];}}
         }}FinishWedgeSelfDerivative(out,n);return out;
     }
     for(int sa=0;sa<ns;++sa){const size_t ia=(size_t)host*2+sa;const double*va=&m_wFaceSubV[ia*9],*ca=&m_wFaceSubC[ia*3];for(int sb=0;sb<ns;++sb){const size_t ib=(size_t)host*2+sb;const double*cb=&m_wFaceSubC[ib*3];int corner=0;double best=1e300;for(int i=0;i<3;++i){const double x=va[3*i]-cb[0],y=va[3*i+1]-cb[1],z=va[3*i+2]-cb[2],d=x*x+y*y+z*z;if(d<best){best=d;corner=i;}}const double x=ca[0]-cb[0],y=ca[1]-cb[1],z=ca[2]-cb[2];const bool near=std::sqrt(x*x+y*y+z*z)<=m_near_grade*(m_wFaceSubS[ia]+m_wFaceSubS[ib]);std::shared_ptr<const HexQuadCloud>oc;
@@ -10805,6 +10900,107 @@ RadHACApKChargeGram::ConfiguredLinearMaterialCandidateClusters(
     return labels;
 }
 
+#ifdef HAVE_LAPACK
+// Thin TSVD of the row-major [rows][n_face] candidate coupling A_aE.  Returns
+// the retained rank and its orthonormal right-singular rows in solve_rhs.
+// A singular value is retained above both the relative cutoff and an absolute
+// floor tied to the candidate block A_EE, so roundoff-level coupling is rank
+// zero instead of a full set of wasted solves.  Non-finite coupling fails.
+static int CouplingTruncatedSvd(
+    const std::vector<double>& coupling, int rows, int n_face,
+    const std::vector<double>& candidate_block, double tol,
+    std::vector<double>& solve_rhs, std::vector<double>& left_singular,
+    std::vector<double>& singular_values, double& truncation_error,
+    const char* where)
+{
+    double coupling_square = 0.0;
+    for (double value : coupling) coupling_square += value*value;
+    double block_square = 0.0;
+    for (double value : candidate_block) block_square += value*value;
+    if (!std::isfinite(coupling_square) || !std::isfinite(block_square))
+        throw std::runtime_error(std::string(where) + ": non-finite candidate coupling");
+    const double absolute_floor = 1.0e-14*std::sqrt(block_square);
+    truncation_error = 0.0;
+    solve_rhs.clear();
+    left_singular.clear();
+    singular_values.clear();
+    if (!(std::sqrt(coupling_square) > absolute_floor)) {
+        truncation_error = coupling_square > 0.0 ? 1.0 : 0.0;
+        return 0;
+    }
+    std::vector<double> factor_input = coupling;
+    singular_values.assign(static_cast<size_t>(rows), 0.0);
+    left_singular.assign(static_cast<size_t>(rows)*rows, 0.0);
+    std::vector<double> right_singular(static_cast<size_t>(rows)*n_face, 0.0);
+    const int info = LAPACKE_dgesdd(
+        LAPACK_ROW_MAJOR, 'S', rows, n_face, factor_input.data(), n_face,
+        singular_values.data(), left_singular.data(), rows,
+        right_singular.data(), n_face);
+    if (info != 0)
+        throw std::runtime_error(std::string(where) + ": coupling TSVD failed");
+    factor_input.clear(); factor_input.shrink_to_fit();
+    const double cutoff = std::max(
+        std::max(1.0e-13, 1.0e-2*tol)*singular_values.front(), absolute_floor);
+    int rank = 0;
+    double total_square = 0.0, discarded_square = 0.0;
+    for (double value : singular_values) {
+        total_square += value*value;
+        if (value > cutoff) ++rank;
+        else discarded_square += value*value;
+    }
+    // dgesdd orders singular values descending, so the retained rows lead.
+    right_singular.resize(static_cast<size_t>(rank)*n_face);
+    solve_rhs.swap(right_singular);
+    truncation_error = std::sqrt(discarded_square/total_square);
+    return rank;
+}
+#endif
+
+void RadHACApKChargeGram::CheckConfiguredSolveResiduals(
+    double inv_chi, const std::vector<double>& rhs,
+    const std::vector<double>& solutions, int nrhs, double tol,
+    const char* where)
+{
+    if (nrhs < 1) return;
+    const size_t n_face = static_cast<size_t>(m_operatorNFace);
+    const std::vector<double> applied = ApplyConfiguredLinearMaterialOperatorMany(
+        inv_chi, solutions, nrhs, /*respect_constraints=*/true);
+    const double limit = std::max(5.0*tol, 1.0e-12);
+    int failures = 0;
+    std::string evidence;
+    for (int row = 0; row < nrhs; ++row) {
+        // The solver projects constrained faces out of b; the operator
+        // returns zero there, so only free faces carry a residual.
+        double residual2 = 0.0, rhs2 = 0.0;
+        for (size_t face = 0; face < n_face; ++face) {
+            if (m_operatorConstrained[face]) continue;
+            const size_t index = static_cast<size_t>(row)*n_face+face;
+            const double difference = rhs[index]-applied[index];
+            residual2 += difference*difference;
+            rhs2 += rhs[index]*rhs[index];
+        }
+        const double relative = std::sqrt(residual2)/std::max(
+            std::sqrt(rhs2), std::numeric_limits<double>::min());
+        if (!(relative <= limit)) {
+            if (failures < 8) {
+                char entry[64];
+                std::snprintf(entry, sizeof(entry), "%smode %d=%.3e",
+                              failures ? ", " : "", row, relative);
+                evidence += entry;
+            }
+            ++failures;
+        }
+    }
+    if (failures) {
+        char tail[96];
+        std::snprintf(tail, sizeof(tail), "; %d of %d modes; limit=%.3e)",
+                      failures, nrhs, limit);
+        throw std::runtime_error(
+            std::string(where) + ": coupling-mode solve did not meet its "
+            "checked relative residual (" + evidence + tail);
+    }
+}
+
 RadHACApKChargeGram::CandidateSchurReduction
 RadHACApKChargeGram::ReduceConfiguredCandidateSchur(
     double inv_chi, const std::vector<int>& candidate_dofs,
@@ -10858,8 +11054,16 @@ RadHACApKChargeGram::ReduceConfiguredCandidateSchur(
     result.operator_s = std::chrono::duration<double>(
         Clock::now()-operator_started).count();
 
+    // Keep only the candidate block A_EE; the full columns become A_aE in
+    // place, so no second nc x n_face copy is held.
+    std::vector<double> candidate_block(static_cast<size_t>(nc)*nc, 0.0);
+    for (int p = 0; p < nc; ++p)
+        for (int q = 0; q < nc; ++q)
+            candidate_block[static_cast<size_t>(p)*nc+q] =
+                columns[static_cast<size_t>(q)*n_face+
+                        candidate_dofs[static_cast<size_t>(p)]];
     // A_aE in row-major [candidate][face], with inactive rows projected out.
-    std::vector<double> coupling = columns;
+    std::vector<double> coupling = std::move(columns);
     {
         ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
         ngcore::ParallelFor(
@@ -10878,50 +11082,17 @@ RadHACApKChargeGram::ReduceConfiguredCandidateSchur(
     // rows, then reconstruct A_aa^-1 A_aE.  This is algebraically exact for the
     // retained row space and keeps the final whole-element full solve as the
     // physical acceptance gate.
-    std::vector<double> solve_rhs = coupling;
     std::vector<double> left_singular;
     std::vector<double> singular_values;
     int coupling_rank = nc;
 #ifdef HAVE_LAPACK
-    {
-        double coupling_square = 0.0;
-        for (double value : coupling) coupling_square += value*value;
-        if (coupling_square == 0.0) {
-            coupling_rank = 0;
-            solve_rhs.clear();
-        }
-        else {
-            std::vector<double> factor_input = coupling;
-            singular_values.assign(static_cast<size_t>(nc), 0.0);
-            left_singular.assign(static_cast<size_t>(nc)*nc, 0.0);
-            std::vector<double> right_singular(
-                static_cast<size_t>(nc)*n_face, 0.0);
-            const int info = LAPACKE_dgesdd(
-                LAPACK_ROW_MAJOR, 'S', nc, n_face, factor_input.data(), n_face,
-                singular_values.data(), left_singular.data(), nc,
-                right_singular.data(), n_face);
-            if (info != 0)
-                throw std::runtime_error(
-                    "ReduceConfiguredCandidateSchur: coupling TSVD failed");
-            const double scale = singular_values.front();
-            const double relative_cutoff = std::max(1.0e-13, 1.0e-2*tol);
-            coupling_rank = 0;
-            double total_square = 0.0, discarded_square = 0.0;
-            for (double value : singular_values) total_square += value*value;
-            for (int mode = 0; mode < nc; ++mode) {
-                const double value = singular_values[static_cast<size_t>(mode)];
-                if (value > relative_cutoff*scale)
-                    ++coupling_rank;
-                else
-                    discarded_square += value*value;
-            }
-            solve_rhs.assign(
-                right_singular.begin(),right_singular.begin()+
-                static_cast<size_t>(coupling_rank)*n_face);
-            result.coupling_relative_truncation_error =
-                std::sqrt(discarded_square/total_square);
-        }
-    }
+    std::vector<double> solve_rhs;
+    coupling_rank = CouplingTruncatedSvd(
+        coupling, nc, n_face, candidate_block, tol, solve_rhs, left_singular,
+        singular_values, result.coupling_relative_truncation_error,
+        "ReduceConfiguredCandidateSchur");
+#else
+    const std::vector<double>& solve_rhs = coupling;
 #endif
     result.coupling_rank = coupling_rank;
     std::vector<double> solved_modes(
@@ -10947,6 +11118,9 @@ RadHACApKChargeGram::ReduceConfiguredCandidateSchur(
             result.coupling_mode_iterations.end(),
             iterations.begin(), iterations.end());
     }
+    CheckConfiguredSolveResiduals(
+        inv_chi, solve_rhs, solved_modes, coupling_rank, tol,
+        "ReduceConfiguredCandidateSchur");
     // ``iters`` predates coupling compression and is candidate-length public
     // output.  Keep its shape stable as a conservative upper-bound summary;
     // exact retained-mode counts are exposed separately.
@@ -10977,12 +11151,7 @@ RadHACApKChargeGram::ReduceConfiguredCandidateSchur(
         Clock::now()-solve_started).count();
 
     const auto contraction_started = Clock::now();
-    result.schur.assign(static_cast<size_t>(nc)*nc, 0.0);
-    for (int p = 0; p < nc; ++p)
-        for (int q = 0; q < nc; ++q)
-            result.schur[static_cast<size_t>(p)*nc+q] =
-                columns[static_cast<size_t>(q)*n_face+
-                        candidate_dofs[static_cast<size_t>(p)]];
+    result.schur = std::move(candidate_block);
     result.rhs.resize(static_cast<size_t>(nc));
     result.response.assign(static_cast<size_t>(n_response)*nc, 0.0);
     for (int p = 0; p < nc; ++p) {
@@ -11122,7 +11291,23 @@ RadHACApKChargeGram::ReduceConfiguredCandidateDirectionalSchur(
     result.operator_s = std::chrono::duration<double>(
         Clock::now()-operator_started).count();
 
-    std::vector<double> coupling = columns;
+    // Keep only V^T A V and the unit directions; the full columns become
+    // A_aE in place and the dense basis is released.
+    std::vector<double> scaled_direction(candidate_dofs.size(), 0.0);
+    std::vector<double> candidate_block(static_cast<size_t>(n_block)*n_block, 0.0);
+    for (int p = 0; p < n_block; ++p)
+        for (int local = block_offsets[static_cast<size_t>(p)];
+             local < block_offsets[static_cast<size_t>(p)+1]; ++local) {
+            const int dof = candidate_dofs[static_cast<size_t>(local)];
+            const double weight = basis[static_cast<size_t>(p)*n_face+dof];
+            scaled_direction[static_cast<size_t>(local)] = weight;
+            for (int q = 0; q < n_block; ++q)
+                candidate_block[static_cast<size_t>(p)*n_block+q] +=
+                    weight*columns[static_cast<size_t>(q)*n_face+dof];
+        }
+    basis.clear(); basis.shrink_to_fit();
+
+    std::vector<double> coupling = std::move(columns);
     {
         ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
         ngcore::ParallelFor(
@@ -11134,51 +11319,18 @@ RadHACApKChargeGram::ReduceConfiguredCandidateDirectionalSchur(
     }
 
     const auto solve_started = Clock::now();
-    std::vector<double> solve_rhs = coupling;
     std::vector<double> left_singular;
     std::vector<double> singular_values;
     int coupling_rank = n_block;
 #ifdef HAVE_LAPACK
-    {
-        double coupling_square = 0.0;
-        for (double value : coupling) coupling_square += value*value;
-        if (coupling_square == 0.0) {
-            coupling_rank = 0;
-            solve_rhs.clear();
-        }
-        else {
-            std::vector<double> factor_input = coupling;
-            singular_values.assign(static_cast<size_t>(n_block), 0.0);
-            left_singular.assign(
-                static_cast<size_t>(n_block)*n_block, 0.0);
-            std::vector<double> right_singular(
-                static_cast<size_t>(n_block)*n_face, 0.0);
-            const int info = LAPACKE_dgesdd(
-                LAPACK_ROW_MAJOR, 'S', n_block, n_face,
-                factor_input.data(), n_face, singular_values.data(),
-                left_singular.data(), n_block, right_singular.data(), n_face);
-            if (info != 0)
-                throw std::runtime_error(
-                    "ReduceConfiguredCandidateDirectionalSchur: coupling TSVD failed");
-            const double scale = singular_values.front();
-            const double relative_cutoff = std::max(1.0e-13, 1.0e-2*tol);
-            coupling_rank = 0;
-            double total_square = 0.0, discarded_square = 0.0;
-            for (double value : singular_values) total_square += value*value;
-            for (int mode = 0; mode < n_block; ++mode) {
-                const double value = singular_values[static_cast<size_t>(mode)];
-                if (value > relative_cutoff*scale)
-                    ++coupling_rank;
-                else
-                    discarded_square += value*value;
-            }
-            solve_rhs.assign(
-                right_singular.begin(), right_singular.begin()+
-                static_cast<size_t>(coupling_rank)*n_face);
-            result.coupling_relative_truncation_error =
-                std::sqrt(discarded_square/total_square);
-        }
-    }
+    std::vector<double> solve_rhs;
+    coupling_rank = CouplingTruncatedSvd(
+        coupling, n_block, n_face, candidate_block, tol, solve_rhs,
+        left_singular, singular_values,
+        result.coupling_relative_truncation_error,
+        "ReduceConfiguredCandidateDirectionalSchur");
+#else
+    const std::vector<double>& solve_rhs = coupling;
 #endif
     result.coupling_rank = coupling_rank;
     std::vector<double> solved_modes(
@@ -11205,6 +11357,9 @@ RadHACApKChargeGram::ReduceConfiguredCandidateDirectionalSchur(
             result.coupling_mode_iterations.end(),
             iterations.begin(), iterations.end());
     }
+    CheckConfiguredSolveResiduals(
+        inv_chi, solve_rhs, solved_modes, coupling_rank, tol,
+        "ReduceConfiguredCandidateDirectionalSchur");
     const int iteration_upper_bound = result.coupling_mode_iterations.empty()
         ? 0 : *std::max_element(result.coupling_mode_iterations.begin(),
                                 result.coupling_mode_iterations.end());
@@ -11234,24 +11389,21 @@ RadHACApKChargeGram::ReduceConfiguredCandidateDirectionalSchur(
         Clock::now()-solve_started).count();
 
     const auto contraction_started = Clock::now();
-    result.schur.assign(static_cast<size_t>(n_block)*n_block, 0.0);
+    result.schur = std::move(candidate_block);
     result.rhs.assign(static_cast<size_t>(n_block), 0.0);
     result.response.assign(static_cast<size_t>(n_response)*n_block, 0.0);
     for (int p = 0; p < n_block; ++p) {
-        const double* vp = basis.data()+static_cast<size_t>(p)*n_face;
         const double* cp = coupling.data()+static_cast<size_t>(p)*n_face;
         double projected_rhs = 0.0;
         for (int local = block_offsets[static_cast<size_t>(p)];
              local < block_offsets[static_cast<size_t>(p)+1]; ++local) {
             const int dof = candidate_dofs[static_cast<size_t>(local)];
-            projected_rhs += vp[dof]*rhs[static_cast<size_t>(dof)];
-            for (int q = 0; q < n_block; ++q)
-                result.schur[static_cast<size_t>(p)*n_block+q] +=
-                    vp[dof]*columns[static_cast<size_t>(q)*n_face+dof];
+            const double weight = scaled_direction[static_cast<size_t>(local)];
+            projected_rhs += weight*rhs[static_cast<size_t>(dof)];
             for (int output = 0; output < n_response; ++output)
                 result.response[static_cast<size_t>(output)*n_block+p] +=
                     response_matrix[static_cast<size_t>(output)*n_face+dof]*
-                    vp[dof];
+                    weight;
         }
         for (int face = 0; face < n_face; ++face)
             projected_rhs -= cp[face]*state[static_cast<size_t>(face)];
@@ -12040,7 +12192,11 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
             bool breakdown = false;
             for (int row : active) {
                 const double denominator = row_dot(pvec, apvec, row, row);
-                if (denominator == 0.0 || !std::isfinite(denominator)) {
+                // Same SPD contract as SolveLinearMaterial: a non-positive
+                // curvature is breakdown, not a step.  After one true-residual
+                // restart the row falls back to the scalar solver, which
+                // reports the indefiniteness explicitly.
+                if (!(denominator > 0.0) || !std::isfinite(denominator)) {
                     breakdown = true;
                     break;
                 }
@@ -12123,10 +12279,9 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
 
         if (scalar_fallback && !active.empty()) {
             // Preserve every batched update as the seed if a recurrence
-            // becomes zero or non-finite, then hand only the unfinished rows
-            // to the mature scalar true-residual CG path.  ACA-compressed
-            // systems may have roundoff-scale negative Rayleigh quotients;
-            // those remain valid finite CG steps, matching the scalar path.
+            // becomes non-positive or non-finite, then hand only the
+            // unfinished rows to the mature scalar true-residual CG path,
+            // which applies the same curvature contract and fails loudly.
             collect_hmatvec_stats();
             SolveTiming combined = m_lastSolveTiming;
             const int remaining_iterations = std::max(
@@ -12263,6 +12418,11 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
         const double scale = std::max(1.0e-300,
             *std::max_element(eigenvalues.begin(), eigenvalues.end()));
         const double floor = 1.0e-13*scale;
+        // An SPD system has no negative block curvature beyond roundoff.
+        // Stop the shared startup instead of dropping the direction; the
+        // scalar finish then applies its explicit SPD check.
+        if (*std::min_element(eigenvalues.begin(), eigenvalues.end()) < -1.0e-10*scale)
+            throw ZeroNumericalRank(std::string(who)+" (negative curvature)");
         std::vector<double> transformed(static_cast<size_t>(dim)*dim, 0.0);
         std::vector<double> result(static_cast<size_t>(dim)*dim, 0.0);
         int rank = 0;
@@ -12517,7 +12677,10 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
 
         std::vector<double> cell_forms(static_cast<size_t>(m_n_el)*12);
         std::vector<double> cell_inv_jac(static_cast<size_t>(m_n_el));
+        // Corners and polynomial forms are stored relative to each host's
+        // center; evaluate_base translates the target by the same center.
         std::vector<double> cell_corners(static_cast<size_t>(m_n_el)*24);
+        std::vector<double> cell_centers(static_cast<size_t>(m_n_el)*3, 0.0);
         for (int host = 0; host < m_n_el; ++host) {
             const double* nodes = &m_hexNodes[static_cast<size_t>(host)*81];
             double forms[3][4], inv_jac = 0.0;
@@ -12525,20 +12688,27 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
                 throw std::runtime_error(
                     "ConfiguredFieldFunctionalRows: exact HEX rows require "
                     "flat affine Q1 geometry");
+            double corners[8][3];
+            double* center = &cell_centers[static_cast<size_t>(host)*3];
+            for (int vertex = 0; vertex < 8; ++vertex) {
+                double J[3][3];
+                HexQ2Map(nodes, HEXREF_V[vertex], corners[vertex], J);
+                for (int k = 0; k < 3; ++k) center[k] += 0.125*corners[vertex][k];
+            }
+            for (int axis = 0; axis < 3; ++axis) ShiftAffineForm(forms[axis], center);
             std::copy_n(&forms[0][0], 12,
                         &cell_forms[static_cast<size_t>(host)*12]);
             cell_inv_jac[static_cast<size_t>(host)] = inv_jac;
-            for (int vertex = 0; vertex < 8; ++vertex) {
-                double X[3], J[3][3];
-                HexQ2Map(nodes, HEXREF_V[vertex], X, J);
-                std::copy_n(X, 3,
-                    &cell_corners[(static_cast<size_t>(host)*8+vertex)*3]);
-            }
+            for (int vertex = 0; vertex < 8; ++vertex)
+                for (int k = 0; k < 3; ++k)
+                    cell_corners[(static_cast<size_t>(host)*8+vertex)*3+k] =
+                        corners[vertex][k]-center[k];
         }
 
         std::vector<double> face_forms(static_cast<size_t>(m_hex_n_bf)*8);
         std::vector<double> face_inv_jac(static_cast<size_t>(m_hex_n_bf));
         std::vector<double> face_corners(static_cast<size_t>(m_hex_n_bf)*12);
+        std::vector<double> face_centers(static_cast<size_t>(m_hex_n_bf)*3, 0.0);
         for (int host = 0; host < m_hex_n_bf; ++host) {
             const double* nodes = &m_quadNodes[static_cast<size_t>(host)*27];
             double forms[2][4], inv_jac = 0.0;
@@ -12546,15 +12716,21 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
                 throw std::runtime_error(
                     "ConfiguredFieldFunctionalRows: exact HEX rows require "
                     "flat affine quad facets");
+            double corners[4][3];
+            double* center = &face_centers[static_cast<size_t>(host)*3];
+            for (int vertex = 0; vertex < 4; ++vertex) {
+                double T[3][2];
+                QuadQ2Map(nodes, QUADREF_V[vertex], corners[vertex], T);
+                for (int k = 0; k < 3; ++k) center[k] += 0.25*corners[vertex][k];
+            }
+            for (int axis = 0; axis < 2; ++axis) ShiftAffineForm(forms[axis], center);
             std::copy_n(&forms[0][0], 8,
                         &face_forms[static_cast<size_t>(host)*8]);
             face_inv_jac[static_cast<size_t>(host)] = inv_jac;
-            for (int vertex = 0; vertex < 4; ++vertex) {
-                double X[3], T[3][2];
-                QuadQ2Map(nodes, QUADREF_V[vertex], X, T);
-                std::copy_n(X, 3,
-                    &face_corners[(static_cast<size_t>(host)*4+vertex)*3]);
-            }
+            for (int vertex = 0; vertex < 4; ++vertex)
+                for (int k = 0; k < 3; ++k)
+                    face_corners[(static_cast<size_t>(host)*4+vertex)*3+k] =
+                        corners[vertex][k]-center[k];
         }
 
         std::vector<std::vector<std::pair<int, double>>> charge_by_face(
@@ -12625,7 +12801,14 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
                 :m_faceCharges[static_cast<size_t>(host)];
             if(host_charges.empty())return;
             const int n_basis=volume?n_volume_basis:n_facet_basis;
-            auto evaluate_base=[&](const double target[3],double out[84][3]){
+            const double* host_center=volume
+                ?&cell_centers[static_cast<size_t>(host)*3]
+                :&face_centers[static_cast<size_t>(host)*3];
+            auto evaluate_base=[&](const double global_target[3],double out[84][3]){
+                const double target[3]={
+                    global_target[0]-host_center[0],
+                    global_target[1]-host_center[1],
+                    global_target[2]-host_center[2]};
                 double correction[84][3]={};
                 for(int index=0;index<84;++index)
                     for(int k=0;k<3;++k)out[index][k]=0.0;
@@ -12718,9 +12901,9 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
         std::vector<double> output(
             static_cast<size_t>(n_rows)*m_operatorNFace,0.0);
         ngcore::ParallelFor(
-            ngcore::IntRange(n_rows*m_operatorNFace),[&](int linear){
-                const int face=linear%m_operatorNFace;
-                const int row=linear/m_operatorNFace;
+            ngcore::IntRange(static_cast<size_t>(n_rows)*m_operatorNFace),[&](size_t linear){
+                const int face=static_cast<int>(linear%static_cast<size_t>(m_operatorNFace));
+                const int row=static_cast<int>(linear/static_cast<size_t>(m_operatorNFace));
                 double sum=0.0,correction=0.0;
                 for(const auto& item:charge_by_face[static_cast<size_t>(face)]){
                     const double term=item.second*charge_rows[
@@ -12737,6 +12920,11 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
     if (!m_highorder || m_curved || m_wedgemode)
         throw std::runtime_error(
             "ConfiguredFieldFunctionalRows: exact sparse observation rows currently require flat affine TET geometry");
+    // The rows below read each charge as one reference monomial m_expo; an
+    // arbitrary polynomial combination would be silently truncated to it.
+    if (m_polyCombo)
+        throw std::runtime_error(
+            "ConfiguredFieldFunctionalRows: polynomial-combination charges are not supported");
     for (int a = 0; a < m_ndof; ++a) {
         const int* e = &m_expo[static_cast<size_t>(3*a)];
         const int degree = e[0]+e[1]+e[2];
@@ -12764,117 +12952,186 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
         }
     }
 
-    std::vector<double> output(
-        static_cast<size_t>(n_rows)*m_operatorNFace, 0.0);
+    // Every charge is one reference monomial on its host.  Express it once as
+    // a physical polynomial about the host centroid (volume: rho0 + g.y,
+    // facet: sigma0 + s.y + y^T S y), evaluate each host's field basis once
+    // per observation, and contract the unit-charge rows with the sparse
+    // charge map last.  A face column shares the charges of its neighbouring
+    // hosts, so this avoids re-evaluating every host once per face.
+    std::vector<double> charge_coefficients(static_cast<size_t>(m_ndof)*10, 0.0);
+    std::vector<double> host_origin(static_cast<size_t>(m_ndof)*3, 0.0);
+    for (int a = 0; a < m_ndof; ++a) {
+        const int host = m_host[static_cast<size_t>(a)];
+        const int* e = &m_expo[static_cast<size_t>(3*a)];
+        double* coefficient = &charge_coefficients[static_cast<size_t>(a)*10];
+        double* origin = &host_origin[static_cast<size_t>(a)*3];
+        if (m_kind[static_cast<size_t>(a)] == 0) {
+            const double* vertices = &m_cellV[static_cast<size_t>(host)*12];
+            for (int vertex = 0; vertex < 4; ++vertex)
+                for (int k = 0; k < 3; ++k) origin[k] += 0.25*vertices[3*vertex+k];
+            if (e[0]+e[1]+e[2] == 0) {
+                coefficient[0] = 1.0;
+            } else {
+                const int axis = e[0] ? 0 : (e[1] ? 1 : 2);
+                const double* inv = &m_cellInv[static_cast<size_t>(host)*9];
+                for (int k = 0; k < 3; ++k) {
+                    int exponent[3] = {0, 0, 0};
+                    exponent[k] = 1;
+                    coefficient[HexPolyIdx(exponent[0],exponent[1],exponent[2])] =
+                        inv[3*axis+k];
+                    coefficient[0] -= inv[3*axis+k]*(vertices[k]-origin[k]);
+                }
+            }
+            continue;
+        }
+        const double* vertices = &m_faceV[static_cast<size_t>(host)*9];
+        for (int vertex = 0; vertex < 3; ++vertex)
+            for (int k = 0; k < 3; ++k) origin[k] += vertices[3*vertex+k]/3.0;
+        const double local0[3] = {
+            vertices[0]-origin[0], vertices[1]-origin[1], vertices[2]-origin[2]};
+        const double e1[3] = {
+            vertices[3]-vertices[0], vertices[4]-vertices[1], vertices[5]-vertices[2]};
+        const double e2[3] = {
+            vertices[6]-vertices[0], vertices[7]-vertices[1], vertices[8]-vertices[2]};
+        const double* gi = &m_faceGinv[static_cast<size_t>(host)*4];
+        double L[2][4];
+        for (int form = 0; form < 2; ++form) {
+            for (int k = 0; k < 3; ++k)
+                L[form][k+1] = gi[2*form]*e1[k]+gi[2*form+1]*e2[k];
+            L[form][0] = -(L[form][1]*local0[0]+L[form][2]*local0[1]+L[form][3]*local0[2]);
+        }
+        double polynomial[HEX_AFFINE_POLY_N] = {};
+        polynomial[0] = 1.0;
+        int degree = 0;
+        for (int power = 0; power < e[0]; ++power) HexPolyMulLinear(polynomial, degree, L[0], 10);
+        for (int power = 0; power < e[1]; ++power) HexPolyMulLinear(polynomial, degree, L[1], 10);
+        std::copy_n(polynomial, 10, coefficient);
+    }
+
+    std::vector<std::vector<int>> cell_charges(static_cast<size_t>(m_n_el));
+    std::vector<std::vector<int>> face_charges(m_faceV.size()/9);
+    for (int a = 0; a < m_ndof; ++a) {
+        auto& group = m_kind[static_cast<size_t>(a)] == 0
+            ? cell_charges[static_cast<size_t>(m_host[static_cast<size_t>(a)])]
+            : face_charges[static_cast<size_t>(m_host[static_cast<size_t>(a)])];
+        group.push_back(a);
+    }
+    struct WeightedRow { int row; double value[3]; };
+    std::vector<std::vector<WeightedRow>> rows_by_observation(
+        static_cast<size_t>(n_observations));
+    for (int row = 0; row < n_rows; ++row)
+        for (int observation = 0; observation < n_observations; ++observation) {
+            const size_t offset = (static_cast<size_t>(row)*n_observations+observation)*3;
+            if (weights[offset] != 0.0 || weights[offset+1] != 0.0 || weights[offset+2] != 0.0)
+                rows_by_observation[static_cast<size_t>(observation)].push_back(
+                    {row, {weights[offset], weights[offset+1], weights[offset+2]}});
+        }
+
     constexpr double inv_four_pi =
         0.079577471545947667884441881686257181;
+    std::vector<double> charge_rows(static_cast<size_t>(n_rows)*m_ndof, 0.0);
+    const int n_cells = static_cast<int>(cell_charges.size());
+    const int n_hosts = n_cells+static_cast<int>(face_charges.size());
     ngcore::RegionTaskManager task_manager;
-    ngcore::ParallelFor(ngcore::IntRange(m_operatorNFace), [&](int face) {
-        const auto& column = charge_by_face[static_cast<size_t>(face)];
-        if (column.empty()) return;
-        std::vector<double> volume;
-        std::vector<double> surface;
-        volume.reserve(column.size()*16);
-        surface.reserve(column.size()*22);
-        for (const auto& item : column) {
-            const int a = item.first;
-            const double coefficient = item.second;
-            const int host = m_host[static_cast<size_t>(a)];
-            const int* e = &m_expo[static_cast<size_t>(3*a)];
-            if (m_kind[static_cast<size_t>(a)] == 0) {
-                const size_t offset = volume.size();
-                volume.resize(offset+16, 0.0);
-                double* block = volume.data()+offset;
-                std::copy_n(&m_cellV[static_cast<size_t>(host)*12], 12, block);
-                const int degree = e[0]+e[1]+e[2];
-                if (degree == 0) {
-                    block[12] = coefficient;
-                } else {
-                    const int axis = e[0] ? 0 : (e[1] ? 1 : 2);
-                    const double* inv = &m_cellInv[static_cast<size_t>(host)*9];
-                    double gradient[3] = {
-                        coefficient*inv[3*axis],
-                        coefficient*inv[3*axis+1],
-                        coefficient*inv[3*axis+2]
-                    };
-                    block[12] = -(gradient[0]*block[0] +
-                                  gradient[1]*block[1] +
-                                  gradient[2]*block[2]);
-                    for (int k = 0; k < 3; ++k) block[13+k] = gradient[k];
-                }
-                continue;
-            }
-
-            const size_t offset = surface.size();
-            surface.resize(offset+22, 0.0);
-            double* block = surface.data()+offset;
-            const double* vertices =
-                &m_faceV[static_cast<size_t>(host)*9];
-            std::copy_n(vertices, 9, block);
-            const double e1[3] = {
-                vertices[3]-vertices[0], vertices[4]-vertices[1],
-                vertices[5]-vertices[2]};
-            const double e2[3] = {
-                vertices[6]-vertices[0], vertices[7]-vertices[1],
-                vertices[8]-vertices[2]};
-            const double* gi =
-                &m_faceGinv[static_cast<size_t>(host)*4];
-            double L[2][3];
-            for (int k = 0; k < 3; ++k) {
-                L[0][k] = gi[0]*e1[k]+gi[1]*e2[k];
-                L[1][k] = gi[2]*e1[k]+gi[3]*e2[k];
-            }
-            const double b[2] = {
-                -(L[0][0]*vertices[0]+L[0][1]*vertices[1]+L[0][2]*vertices[2]),
-                -(L[1][0]*vertices[0]+L[1][1]*vertices[1]+L[1][2]*vertices[2])
-            };
-            const int i = e[0], j = e[1];
-            if (i == 0 && j == 0) {
-                block[9] = coefficient;
-            } else if (i+j == 1) {
-                const int axis = i ? 0 : 1;
-                block[9] = coefficient*b[axis];
-                for (int k = 0; k < 3; ++k)
-                    block[10+k] = coefficient*L[axis][k];
+    ngcore::ParallelFor(ngcore::IntRange(n_hosts), [&](int combined_host) {
+        const bool volume = combined_host < n_cells;
+        const int host = volume ? combined_host : combined_host-n_cells;
+        const auto& charges = volume ? cell_charges[static_cast<size_t>(host)]
+                                     : face_charges[static_cast<size_t>(host)];
+        if (charges.empty()) return;
+        const double* origin = &host_origin[static_cast<size_t>(charges.front())*3];
+        double local_vertices[4][3] = {};
+        const double* stored = volume ? &m_cellV[static_cast<size_t>(host)*12]
+                                      : &m_faceV[static_cast<size_t>(host)*9];
+        for (int vertex = 0; vertex < (volume ? 4 : 3); ++vertex)
+            for (int k = 0; k < 3; ++k)
+                local_vertices[vertex][k] = stored[3*vertex+k]-origin[k];
+        // Field of each basis monomial (PotentialMomentIndex order): volume
+        // charges reach degree one, facet charges degree two.
+        auto evaluate_basis = [&](const double global_target[3], double basis[20][3]) {
+            const double target[3] = {
+                global_target[0]-origin[0], global_target[1]-origin[1],
+                global_target[2]-origin[2]};
+            if (volume) {
+                rad_hdiv::TetVolFieldCubicBasis(local_vertices, target, basis);
             } else {
-                const int first = i == 2 ? 0 : (j == 2 ? 1 : 0);
-                const int second = i == 2 ? 0 : (j == 2 ? 1 : 1);
-                block[9] = coefficient*b[first]*b[second];
-                for (int k = 0; k < 3; ++k)
-                    block[10+k] = coefficient*(
-                        b[first]*L[second][k]+b[second]*L[first][k]);
-                for (int r = 0; r < 3; ++r)
-                    for (int c = 0; c < 3; ++c)
-                        block[13+3*r+c] = first == second
-                            ? coefficient*L[first][r]*L[first][c]
-                            : 0.5*coefficient*(
-                                L[first][r]*L[second][c]+L[second][r]*L[first][c]);
+                double triangle[3][3];
+                for (int vertex = 0; vertex < 3; ++vertex)
+                    for (int k = 0; k < 3; ++k) triangle[vertex][k] = local_vertices[vertex][k];
+                double quadratic[10][3];
+                rad_hdiv::QuadTriFieldBasis(triangle, target, quadratic);
+                for (int index = 0; index < 10; ++index)
+                    for (int k = 0; k < 3; ++k) basis[index][k] = quadratic[index][k];
+            }
+        };
+        const int n_basis = volume ? 4 : 10;
+        std::vector<double> sums(charges.size()*static_cast<size_t>(n_rows), 0.0);
+        std::vector<double> corrections(sums.size(), 0.0);
+        for (int observation = 0; observation < n_observations; ++observation) {
+            const auto& weighted_rows = rows_by_observation[static_cast<size_t>(observation)];
+            if (weighted_rows.empty()) continue;
+            const double* target = &observations[static_cast<size_t>(observation)*3];
+            double total[20][3];
+            evaluate_basis(target, total);
+            for (size_t image = 0; image < m_image_masks.size(); ++image) {
+                // E_{T(sigma)}(x) = T E_sigma(T^-1 x).
+                const int img = static_cast<int>(image)+1;
+                double reflected[3];
+                ImageEvalPoint(img, target, reflected);
+                double term[20][3];
+                evaluate_basis(reflected, term);
+                for (int index = 0; index < n_basis; ++index) {
+                    double mapped[3];
+                    ImageApplyVector(img, term[index], mapped);
+                    for (int k = 0; k < 3; ++k)
+                        total[index][k] += m_image_signs[image]*mapped[k];
+                }
+            }
+            for (const auto& weighted : weighted_rows) {
+                double projected[10];
+                for (int index = 0; index < n_basis; ++index)
+                    projected[index] = weighted.value[0]*total[index][0]
+                        + weighted.value[1]*total[index][1]
+                        + weighted.value[2]*total[index][2];
+                for (size_t local = 0; local < charges.size(); ++local) {
+                    const double* coefficient =
+                        &charge_coefficients[static_cast<size_t>(charges[local])*10];
+                    double term = 0.0;
+                    for (int index = 0; index < n_basis; ++index)
+                        term += coefficient[index]*projected[index];
+                    const size_t slot = local*static_cast<size_t>(n_rows)+weighted.row;
+                    const double next = sums[slot]+term;
+                    corrections[slot] += std::fabs(sums[slot]) >= std::fabs(term)
+                        ? (sums[slot]-next)+term : (term-next)+sums[slot];
+                    sums[slot] = next;
+                }
             }
         }
-        auto evaluator = rad_hdiv::HDivFieldEvaluator::FromTet(
-            std::move(volume), std::move(surface),
-            m_image_masks, m_image_signs);
-        evaluator->SetImageRotations(m_image_rot_angle);
-        std::vector<double> field(observations.size());
-        evaluator->EvaluateSerial(
-            observations.data(), static_cast<size_t>(n_observations),
-            field.data(), rad_hdiv::HDivFieldEvaluator::Algorithm::Direct);
-        for (int row = 0; row < n_rows; ++row) {
-            double value = 0.0;
-            double correction = 0.0;
-            const size_t offset =
-                static_cast<size_t>(row)*observations.size();
-            for (size_t index = 0; index < observations.size(); ++index) {
-                const double term = weights[offset+index]*field[index];
-                const double next = value+term;
-                correction += std::fabs(value) >= std::fabs(term)
-                    ? (value-next)+term : (term-next)+value;
-                value = next;
+        for (size_t local = 0; local < charges.size(); ++local)
+            for (int row = 0; row < n_rows; ++row) {
+                const size_t slot = local*static_cast<size_t>(n_rows)+row;
+                charge_rows[static_cast<size_t>(row)*m_ndof+charges[local]] =
+                    sums[slot]+corrections[slot];
             }
-            output[static_cast<size_t>(row)*m_operatorNFace+face] =
-                inv_four_pi*(value+correction);
-        }
     });
+
+    std::vector<double> output(
+        static_cast<size_t>(n_rows)*m_operatorNFace, 0.0);
+    ngcore::ParallelFor(
+        ngcore::IntRange(static_cast<size_t>(n_rows)*m_operatorNFace), [&](size_t linear) {
+            const int face = static_cast<int>(linear%static_cast<size_t>(m_operatorNFace));
+            const int row = static_cast<int>(linear/static_cast<size_t>(m_operatorNFace));
+            double sum = 0.0, correction = 0.0;
+            for (const auto& item : charge_by_face[static_cast<size_t>(face)]) {
+                const double term = item.second*charge_rows[
+                    static_cast<size_t>(row)*m_ndof+item.first];
+                const double next = sum+term;
+                correction += std::fabs(sum) >= std::fabs(term)
+                    ? (sum-next)+term : (term-next)+sum;
+                sum = next;
+            }
+            output[linear] = inv_four_pi*(sum+correction);
+        });
     return output;
 }
 
@@ -12949,9 +13206,9 @@ RadHACApKChargeGram::ConfiguredFieldFunctionalRowsDirectionalDerivative(
     constexpr double inv_four_pi=0.079577471545947667884441881686257181;
     const double zero_direction[3]={0.0,0.0,0.0};
     ngcore::RegionTaskManager task_manager;
-    ngcore::ParallelFor(ngcore::IntRange(n_modes*m_ndof),[&](int linear){
-        const int mode=linear/m_ndof;
-        const int a=linear-mode*m_ndof;
+    ngcore::ParallelFor(ngcore::IntRange(static_cast<size_t>(n_modes)*m_ndof),[&](size_t linear){
+        const int mode=static_cast<int>(linear/static_cast<size_t>(m_ndof));
+        const int a=static_cast<int>(linear%static_cast<size_t>(m_ndof));
         const int host=m_host[static_cast<size_t>(a)];
         const int* exponent=&m_expo[static_cast<size_t>(3*a)];
         const double rate=rates[static_cast<size_t>(mode)*m_ndof+a];
@@ -13110,11 +13367,11 @@ RadHACApKChargeGram::ConfiguredFieldFunctionalRowsDirectionalDerivative(
         }
     std::vector<double> output(
         static_cast<size_t>(n_modes)*n_rows*m_operatorNFace,0.0);
-    ngcore::ParallelFor(ngcore::IntRange(n_modes*n_rows*m_operatorNFace),[&](int linear){
-        const int face=linear%m_operatorNFace;
-        const int outer=linear/m_operatorNFace;
-        const int row=outer%n_rows;
-        const int mode=outer/n_rows;
+    ngcore::ParallelFor(ngcore::IntRange(static_cast<size_t>(n_modes)*n_rows*m_operatorNFace),[&](size_t linear){
+        const int face=static_cast<int>(linear%static_cast<size_t>(m_operatorNFace));
+        const size_t outer=linear/static_cast<size_t>(m_operatorNFace);
+        const int row=static_cast<int>(outer%static_cast<size_t>(n_rows));
+        const int mode=static_cast<int>(outer/static_cast<size_t>(n_rows));
         double sum=0.0,correction=0.0;
         for(const auto& item:charge_by_face[static_cast<size_t>(face)]){
             const double term=item.second*charge_rows[
@@ -13220,17 +13477,27 @@ RadHACApKChargeGram::ConfiguredFieldValuesShapeDerivative(
         double slope[3]{}, dslope[3]{};
         double hessian[3][3]{}, dhessian[3][3]{};
     };
-    std::vector<VolumeSource> volumes(
-        static_cast<size_t>(n_modes)*m_ndof);
-    std::vector<SurfaceSource> surfaces(
-        static_cast<size_t>(n_modes)*m_ndof);
+    // One source record per (mode, charge) of its own kind only: a charge is
+    // either a volume or a surface source, never both.
     std::vector<unsigned char> is_volume(static_cast<size_t>(m_ndof));
+    std::vector<int> packed(static_cast<size_t>(m_ndof));
+    int n_volume = 0, n_surface = 0;
+    for (int a = 0; a < m_ndof; ++a) {
+        const bool volume = m_kind[static_cast<size_t>(a)] == 0;
+        is_volume[static_cast<size_t>(a)] = volume ? 1 : 0;
+        packed[static_cast<size_t>(a)] = volume ? n_volume++ : n_surface++;
+    }
+    std::vector<VolumeSource> volumes(static_cast<size_t>(n_modes)*n_volume);
+    std::vector<SurfaceSource> surfaces(static_cast<size_t>(n_modes)*n_surface);
+    auto source_slot = [&](int mode, int a) {
+        return static_cast<size_t>(mode)*(is_volume[static_cast<size_t>(a)] ? n_volume : n_surface)
+            + static_cast<size_t>(packed[static_cast<size_t>(a)]);
+    };
 
     for (int a = 0; a < m_ndof; ++a) {
         const int* exponent = &m_expo[static_cast<size_t>(3*a)];
         const int degree = exponent[0]+exponent[1]+exponent[2];
-        const bool volume = m_kind[static_cast<size_t>(a)] == 0;
-        is_volume[static_cast<size_t>(a)] = volume ? 1 : 0;
+        const bool volume = is_volume[static_cast<size_t>(a)] != 0;
         if ((volume && degree > 1) || (!volume && degree > 2))
             throw std::runtime_error(
                 "ConfiguredFieldValuesShapeDerivative: unsupported charge degree");
@@ -13240,7 +13507,7 @@ RadHACApKChargeGram::ConfiguredFieldValuesShapeDerivative(
             const double coefficient = charge[static_cast<size_t>(a)];
             const double dcoefficient = dcharge[linear];
             if (volume) {
-                VolumeSource& source = volumes[linear];
+                VolumeSource& source = volumes[source_slot(mode, a)];
                 const double* vertices = &m_cellV[static_cast<size_t>(host)*12];
                 const double* velocity = &cell_velocity[
                     (static_cast<size_t>(mode)*n_cells+host)*12];
@@ -13277,7 +13544,7 @@ RadHACApKChargeGram::ConfiguredFieldValuesShapeDerivative(
                     }
                 }
             } else {
-                SurfaceSource& source = surfaces[linear];
+                SurfaceSource& source = surfaces[source_slot(mode, a)];
                 const double* vertices = &m_faceV[static_cast<size_t>(host)*9];
                 const double* velocity = &face_velocity[
                     (static_cast<size_t>(mode)*n_faces+host)*9];
@@ -13377,9 +13644,9 @@ RadHACApKChargeGram::ConfiguredFieldValuesShapeDerivative(
         static_cast<size_t>(n_modes)*observations.size(), 0.0);
     ngcore::RegionTaskManager task_manager;
     ngcore::ParallelFor(
-        ngcore::IntRange(n_modes*n_observations), [&](int linear) {
-            const int mode = linear/n_observations;
-            const int observation = linear-mode*n_observations;
+        ngcore::IntRange(static_cast<size_t>(n_modes)*n_observations), [&](size_t linear) {
+            const int mode = static_cast<int>(linear/static_cast<size_t>(n_observations));
+            const int observation = static_cast<int>(linear%static_cast<size_t>(n_observations));
             const double* target = &observations[
                 static_cast<size_t>(observation)*3];
             double sum[3]{}, correction[3]{};
@@ -13393,8 +13660,7 @@ RadHACApKChargeGram::ConfiguredFieldValuesShapeDerivative(
                 }
             };
             for (int a = 0; a < m_ndof; ++a) {
-                const size_t source_index =
-                    static_cast<size_t>(mode)*m_ndof+a;
+                const size_t source_index = source_slot(mode, a);
                 auto evaluate = [&](const double point[3], double value[3]) {
                     double base_value[3];
                     if (is_volume[static_cast<size_t>(a)]) {
@@ -13477,12 +13743,24 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
         const int n_faces = static_cast<int>(m_faceV.size()/9);
         std::vector<double> volume(static_cast<size_t>(n_cells)*32, 0.0);
         std::vector<double> surface(static_cast<size_t>(n_faces)*29, 0.0);
-        for (int host = 0; host < n_cells; ++host)
+        std::vector<double> volume_origins(static_cast<size_t>(n_cells)*3, 0.0);
+        std::vector<double> surface_origins(static_cast<size_t>(n_faces)*3, 0.0);
+        for (int host = 0; host < n_cells; ++host) {
             std::copy_n(&m_cellV[static_cast<size_t>(host)*12], 12,
                         &volume[static_cast<size_t>(host)*32]);
-        for (int host = 0; host < n_faces; ++host)
+            for (int vertex = 0; vertex < 4; ++vertex)
+                for (int k = 0; k < 3; ++k)
+                    volume_origins[static_cast<size_t>(host)*3+k] +=
+                        0.25*m_cellV[static_cast<size_t>(host)*12+3*vertex+k];
+        }
+        for (int host = 0; host < n_faces; ++host) {
             std::copy_n(&m_faceV[static_cast<size_t>(host)*9], 9,
                         &surface[static_cast<size_t>(host)*29]);
+            for (int vertex = 0; vertex < 3; ++vertex)
+                for (int k = 0; k < 3; ++k)
+                    surface_origins[static_cast<size_t>(host)*3+k] +=
+                        m_faceV[static_cast<size_t>(host)*9+3*vertex+k]/3.0;
+        }
 
         for (int charge_id = 0; charge_id < m_ndof; ++charge_id) {
             const double coefficient = charge[static_cast<size_t>(charge_id)];
@@ -13495,13 +13773,14 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
             if (m_kind[static_cast<size_t>(charge_id)] == 0) {
                 const double* vertices = &m_cellV[static_cast<size_t>(host)*12];
                 const double* inverse = &m_cellInv[static_cast<size_t>(host)*9];
+                const double* origin = &volume_origins[static_cast<size_t>(host)*3];
                 form_count = 3;
                 for (int axis = 0; axis < 3; ++axis) {
                     for (int k = 0; k < 3; ++k)
                         forms[axis][k+1] = inverse[3*axis+k];
-                    forms[axis][0] = -(forms[axis][1]*vertices[0]
-                                          +forms[axis][2]*vertices[1]
-                                          +forms[axis][3]*vertices[2]);
+                    forms[axis][0] = -(forms[axis][1]*(vertices[0]-origin[0])
+                                          +forms[axis][2]*(vertices[1]-origin[1])
+                                          +forms[axis][3]*(vertices[2]-origin[2]));
                 }
                 polynomial = &volume[static_cast<size_t>(host)*32+12];
             } else {
@@ -13516,10 +13795,11 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
                     forms[0][k+1] = inverse[0]*edge1[k]+inverse[1]*edge2[k];
                     forms[1][k+1] = inverse[2]*edge1[k]+inverse[3]*edge2[k];
                 }
+                const double* origin = &surface_origins[static_cast<size_t>(host)*3];
                 for (int axis = 0; axis < 2; ++axis)
-                    forms[axis][0] = -(forms[axis][1]*vertices[0]
-                                          +forms[axis][2]*vertices[1]
-                                          +forms[axis][3]*vertices[2]);
+                    forms[axis][0] = -(forms[axis][1]*(vertices[0]-origin[0])
+                                          +forms[axis][2]*(vertices[1]-origin[1])
+                                          +forms[axis][3]*(vertices[2]-origin[2]));
                 polynomial = &surface[static_cast<size_t>(host)*29+9];
             }
             double mode[20] = {};
@@ -13533,7 +13813,8 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
         }
         auto evaluator = rad_hdiv::HDivFieldEvaluator::FromCubicPolynomialTet(
             std::move(volume), std::move(surface),
-            m_image_masks, m_image_signs, options);
+            m_image_masks, m_image_signs, options,
+            std::move(volume_origins), std::move(surface_origins));
         evaluator->SetImageRotations(m_image_rot_angle);
         return evaluator;
     }
@@ -13542,12 +13823,24 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
         const int n_faces = static_cast<int>(m_faceV.size()/9);
         std::vector<double> volume(static_cast<size_t>(n_cells)*16, 0.0);
         std::vector<double> surface(static_cast<size_t>(n_faces)*22, 0.0);
-        for (int c = 0; c < n_cells; ++c)
+        std::vector<double> volume_origins(static_cast<size_t>(n_cells)*3, 0.0);
+        std::vector<double> surface_origins(static_cast<size_t>(n_faces)*3, 0.0);
+        for (int c = 0; c < n_cells; ++c) {
             std::copy_n(&m_cellV[static_cast<size_t>(c)*12], 12,
                         &volume[static_cast<size_t>(c)*16]);
-        for (int f = 0; f < n_faces; ++f)
+            for (int vertex = 0; vertex < 4; ++vertex)
+                for (int k = 0; k < 3; ++k)
+                    volume_origins[static_cast<size_t>(c)*3+k] +=
+                        0.25*m_cellV[static_cast<size_t>(c)*12+3*vertex+k];
+        }
+        for (int f = 0; f < n_faces; ++f) {
             std::copy_n(&m_faceV[static_cast<size_t>(f)*9], 9,
                         &surface[static_cast<size_t>(f)*22]);
+            for (int vertex = 0; vertex < 3; ++vertex)
+                for (int k = 0; k < 3; ++k)
+                    surface_origins[static_cast<size_t>(f)*3+k] +=
+                        m_faceV[static_cast<size_t>(f)*9+3*vertex+k]/3.0;
+        }
 
         for (int a = 0; a < m_ndof; ++a) {
             const double coefficient = charge[static_cast<size_t>(a)];
@@ -13556,6 +13849,7 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
             const int* e = &m_expo[static_cast<size_t>(3*a)];
             if (m_kind[static_cast<size_t>(a)] == 0) {
                 double* out = &volume[static_cast<size_t>(host)*16];
+                const double* origin = &volume_origins[static_cast<size_t>(host)*3];
                 const int degree = e[0] + e[1] + e[2];
                 if (degree == 0) {
                     out[12] += coefficient;
@@ -13567,7 +13861,9 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
                         coefficient*inv[3*axis + 1],
                         coefficient*inv[3*axis + 2]
                     };
-                    out[12] -= gradient[0]*out[0] + gradient[1]*out[1] + gradient[2]*out[2];
+                    out[12] -= gradient[0]*(out[0]-origin[0])
+                             + gradient[1]*(out[1]-origin[1])
+                             + gradient[2]*(out[2]-origin[2]);
                     for (int k = 0; k < 3; ++k) out[13+k] += gradient[k];
                 }
                 continue;
@@ -13575,6 +13871,7 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
 
             double* out = &surface[static_cast<size_t>(host)*22];
             const double* vertices = &m_faceV[static_cast<size_t>(host)*9];
+            const double* origin = &surface_origins[static_cast<size_t>(host)*3];
             const double e1[3] = {vertices[3]-vertices[0], vertices[4]-vertices[1], vertices[5]-vertices[2]};
             const double e2[3] = {vertices[6]-vertices[0], vertices[7]-vertices[1], vertices[8]-vertices[2]};
             const double* gi = &m_faceGinv[static_cast<size_t>(host)*4];
@@ -13583,9 +13880,11 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
                 L[0][k] = gi[0]*e1[k] + gi[1]*e2[k];
                 L[1][k] = gi[2]*e1[k] + gi[3]*e2[k];
             }
+            const double local0[3] = {
+                vertices[0]-origin[0], vertices[1]-origin[1], vertices[2]-origin[2]};
             const double b[2] = {
-                -(L[0][0]*vertices[0] + L[0][1]*vertices[1] + L[0][2]*vertices[2]),
-                -(L[1][0]*vertices[0] + L[1][1]*vertices[1] + L[1][2]*vertices[2])
+                -(L[0][0]*local0[0] + L[0][1]*local0[1] + L[0][2]*local0[2]),
+                -(L[1][0]*local0[0] + L[1][1]*local0[1] + L[1][2]*local0[2])
             };
             const int i = e[0], j = e[1];
             if (i == 0 && j == 0) {
@@ -13609,7 +13908,8 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
             }
         }
         auto evaluator = rad_hdiv::HDivFieldEvaluator::FromTet(
-            std::move(volume), std::move(surface), m_image_masks, m_image_signs, options);
+            std::move(volume), std::move(surface), m_image_masks, m_image_signs, options,
+            std::move(volume_origins), std::move(surface_origins));
         evaluator->SetImageRotations(m_image_rot_angle);
         return evaluator;
     }
@@ -13636,6 +13936,8 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
     if (analytic_hex) {
         std::vector<double> volume;
         std::vector<double> surface;
+        std::vector<double> volume_origins;
+        std::vector<double> surface_origins;
         const size_t volume_stride = high_order_hex ? 96 : 32;
         const size_t surface_stride = high_order_hex ? 44 : 22;
         volume.reserve(static_cast<size_t>(m_n_el)*6*volume_stride);
@@ -13648,10 +13950,14 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
                 break;
             }
             double corners[8][3];
+            double center[3] = {0.0, 0.0, 0.0};
             for (int vertex = 0; vertex < 8; ++vertex) {
                 double J[3][3];
                 HexQ2Map(nodes, HEXREF_V[vertex], corners[vertex], J);
+                for (int axis = 0; axis < 3; ++axis)
+                    center[axis] += 0.125*corners[vertex][axis];
             }
+            for (int axis = 0; axis < 3; ++axis) ShiftAffineForm(forms[axis], center);
             double polynomial[84] = {};
             for (int charge_id : m_cellCharges[static_cast<size_t>(host)]) {
                 const double factor = charge[static_cast<size_t>(charge_id)]*inv_jac;
@@ -13677,6 +13983,7 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
                             corners[HEXREF_TETS[sub][local]][axis];
                 std::copy_n(polynomial,high_order_hex ? 84 : 20,
                             volume.data()+offset+12);
+                volume_origins.insert(volume_origins.end(), center, center+3);
             }
         }
 
@@ -13688,10 +13995,14 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
                 break;
             }
             double corners[4][3];
+            double center[3] = {0.0, 0.0, 0.0};
             for (int vertex = 0; vertex < 4; ++vertex) {
                 double T[3][2];
                 QuadQ2Map(nodes, QUADREF_V[vertex], corners[vertex], T);
+                for (int axis = 0; axis < 3; ++axis)
+                    center[axis] += 0.25*corners[vertex][axis];
             }
+            for (int axis = 0; axis < 2; ++axis) ShiftAffineForm(forms[axis], center);
             double polynomial[35] = {};
             for (int charge_id : m_faceCharges[static_cast<size_t>(host)]) {
                 const double factor = charge[static_cast<size_t>(charge_id)]*inv_jac;
@@ -13736,6 +14047,7 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
                                 ?coefficient:0.5*coefficient;
                         }
                 }
+                surface_origins.insert(surface_origins.end(), center, center+3);
             }
         }
         if (analytic_hex) {
@@ -13743,10 +14055,12 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
                 auto evaluator = high_order_hex
                     ?rad_hdiv::HDivFieldEvaluator::FromSexticQuarticPolynomialTet(
                         std::move(volume),std::move(surface),m_image_masks,
-                        m_image_signs,options)
+                        m_image_signs,options,std::move(volume_origins),
+                        std::move(surface_origins))
                     :rad_hdiv::HDivFieldEvaluator::FromPolynomialTet(
                         std::move(volume),std::move(surface),m_image_masks,
-                        m_image_signs,options);
+                        m_image_signs,options,std::move(volume_origins),
+                        std::move(surface_origins));
                 evaluator->SetImageRotations(m_image_rot_angle);
                 return evaluator;
             }
@@ -14102,82 +14416,3 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::LastSolveTiming
     };
 }
 
-RadHACApKChargeGram::PicardResult RadHACApKChargeGram::SolveNonlinearPicard(
-    const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
-    const std::vector<double>& B_data, int n_face,
-    const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
-    const std::vector<double>& Mmass_diag, const std::vector<double>& N_diag,
-    const std::vector<double>& mu, double denom,
-    double chi0, double Msat, double H0,
-    int picard_iters, double cg_tol, int cg_maxit)
-{
-    const int n_charge = (int)B_indptr.size() - 1;
-    // TaskManager self-wrap (AGENTS.md "Parallelization: NGSolve TaskManager"): one region around the
-    // whole Picard loop (inner CG matvecs) -> parallel without a caller `with TaskManager()`.
-    ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
-    const bool configured_charge_map = m_operatorChargeConfigured &&
-        &B_indptr == &m_operatorBIndptr && &B_indices == &m_operatorBIndices &&
-        &B_data == &m_operatorBData && m_operatorBTIndptr.size() == (size_t)n_face + 1;
-    DeterministicCSR local_bt;
-    if (!configured_charge_map)
-        local_bt = BuildDeterministicTransposeCSR(
-            B_indptr, B_indices, B_data, n_charge, n_face, "SolveNonlinearPicard");
-    const std::vector<int>& bt_indptr = configured_charge_map
-        ? m_operatorBTIndptr : local_bt.indptr;
-    const std::vector<int>& bt_indices = configured_charge_map
-        ? m_operatorBTIndices : local_bt.indices;
-    const std::vector<double>& bt_data = configured_charge_map
-        ? m_operatorBTData : local_bt.data;
-    const DeterministicCSR mass = BuildDeterministicRowCSR(
-        mI, mJ, mV, n_face, "SolveNonlinearPicard");
-    auto mmass_apply = [&](const std::vector<double>& x, std::vector<double>& y) {  // y = M_mass x
-        ApplyDeterministicCSR(mass.indptr, mass.indices, mass.data, x, y);
-    };
-    auto N_apply = [&](const std::vector<double>& x, std::vector<double>& y) {        // y = B^T G (B x)
-        std::vector<double> q((size_t)n_charge, 0.0), Gq((size_t)n_charge, 0.0);
-        ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
-            double s = 0.0;
-            for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) s += B_data[k] * x[B_indices[k]];
-            q[a] = s;
-        });
-        MatVecSym(q, Gq);
-        ApplyDeterministicCSR(bt_indptr, bt_indices, bt_data, Gq, y);
-    };
-    std::vector<double> dot_partial;
-    auto dot = [&](const std::vector<double>& a, const std::vector<double>& b) {
-        return DeterministicDot(a, b, dot_partial);
-    };
-    // b0 = M_mass mu ; Dscal = mu.(N mu)/denom (the uniform-mode demag factor, Rayleigh quotient).
-    std::vector<double> b0, Nmu, mass_m, rhs((size_t)n_face), prec((size_t)n_face);
-    mmass_apply(mu, b0);
-    N_apply(mu, Nmu);
-    double Dscal = dot(mu, Nmu);
-    Dscal /= denom;
-
-    std::vector<double> m((size_t)n_face, 0.0);
-    double chi = chi0, Mavg = 0.0, Mprev = 0.0;
-    int it = 0, done = 0;
-    for (; it < picard_iters; ++it) {
-        const double inv_chi = 1.0 / chi;
-        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) {
-            prec[f] = inv_chi * Mmass_diag[f] + N_diag[f];
-            rhs[f]  = H0 * b0[f];
-        });
-        int cg_iters = 0;
-        m = SolveLinearMaterial(B_indptr, B_indices, B_data, n_face, mI, mJ, mV,
-                                inv_chi, prec, rhs, cg_tol, cg_maxit, cg_iters,
-                                /*mass_riesz=*/true, /*symmetric=*/true);
-        mmass_apply(m, mass_m);
-        Mavg = dot(mu, mass_m);
-        Mavg /= denom;
-        const double Hi = H0 - Dscal * Mavg;
-        const double chi_sec = chi0 / (1.0 + chi0 * std::fabs(Hi) / Msat);   // M(H)=chi0 H/(1+chi0|H|/Msat)
-        chi = 0.5 * chi + 0.5 * chi_sec;
-        done = it + 1;
-        if (it > 0 && std::fabs(Mavg - Mprev) < 1e-10 * (std::fabs(Mavg) + 1e-30)) break;
-        Mprev = Mavg;
-    }
-    PicardResult r;
-    r.m = m; r.Mavg = Mavg; r.chi = chi; r.Dscal = Dscal; r.iters = done;
-    return r;
-}

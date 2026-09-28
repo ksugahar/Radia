@@ -884,6 +884,14 @@ def test_native_bdm1_candidate_schur_tsvd_solves_only_charge_coupling_rank():
         solve_batch_size=128,mass_riesz=True)
     assert len(raw["iters"])==candidate_width
     assert len(raw["coupling_mode_iters"])==raw["coupling_rank"]
+    # The batched coupling solve reports iteration counts only; a mode that
+    # runs out of iterations must not reach the Schur values and ranking.
+    import pytest
+    with pytest.raises(RuntimeError,match="coupling-mode solve did not meet"):
+        gram.reduce_configured_candidate_schur(
+            .2,candidate_dofs,rhs,np.zeros(fes.ndof),response_matrix,
+            np.zeros_like(response_matrix),tol=1e-12,maxit=1,
+            solve_batch_size=128,mass_riesz=True)
     exact_state,exact_response,_=solve_hdiv_mmm_active_elements(
         charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
         response_matrix=response_matrix,

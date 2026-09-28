@@ -2408,10 +2408,17 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
             curvature_sign=objective.curvature_sign,
             gradient_sign=objective.gradient_sign,
             max_iterations=0, **baseline_options)
+    # The physical source scale includes a calibration applied inside the
+    # accepted generation (source_calibration_rows in generation_options);
+    # without it the reported scale would not reproduce the returned state.
+    accepted_scale = float(accepted_result.generation.source_scale)
+    if not np.isfinite(accepted_scale) or accepted_scale <= 0.0:
+        raise RuntimeError(
+            "material source calibration returned an invalid scale")
     return FFAGFixedOrbitHDivMMMTopologyResult(
-        target_family, scale, accepted_result, tuple(optics_history),
-        termination_reason, float(initial_max_band_ratio),
-        tuple(map_trust_history))
+        target_family, scale*accepted_scale, accepted_result,
+        tuple(optics_history), termination_reason,
+        float(initial_max_band_ratio), tuple(map_trust_history))
 
 
 def optimize_ffag_hdiv_mmm_from_design_orbits(

@@ -59,10 +59,13 @@ double Det(const Vec& a, const Vec& b, const Vec& c) {
     return Dot(a, Cross(b, c));
 }
 
+// Polynomial coefficients are monomials of (x - origin).  The kernels see the
+// source and the target translated by the same origin.
 struct TetSource {
     double v[4][3]{};
     double coefficient[84]{};
     int degree = 3;
+    double origin[3]{};
 };
 
 struct TriSource {
@@ -70,13 +73,23 @@ struct TriSource {
     double sigma0 = 0.0;
     double slope[3]{};
     double hessian[3][3]{};
+    double origin[3]{};
 };
 
 struct CubicTriSource {
     double v[3][3]{};
     double coefficient[35]{};
     int degree = 3;
+    double origin[3]{};
 };
+
+template <std::size_t N>
+void Translate(const double (&v)[N][3], const double origin[3], const double r[3],
+               double (&local_v)[N][3], double local_r[3]) {
+    for (std::size_t i = 0; i < N; ++i)
+        for (int k = 0; k < 3; ++k) local_v[i][k] = v[i][k] - origin[k];
+    for (int k = 0; k < 3; ++k) local_r[k] = r[k] - origin[k];
+}
 
 struct CurvedTetSource {
     double nodes[10][3]{};
@@ -160,7 +173,7 @@ double TetDensity(const TetSource& source, const Vec& x) {
     for (int axis = 0; axis < 3; ++axis) {
         powers[axis][0] = 1.0;
         for (int degree = 1; degree <= source.degree; ++degree)
-            powers[axis][degree] = powers[axis][degree-1]*x[axis];
+            powers[axis][degree] = powers[axis][degree-1]*(x[axis]-source.origin[axis]);
     }
     double value=0.0;
     for(int total=0;total<=source.degree;++total)
@@ -241,10 +254,11 @@ SourceAtom MakeTriAtom(const TriSource& source, std::size_t index) {
         Vec x{};
         for (int k = 0; k < 3; ++k)
             x[k] = l0*source.v[0][k] + l1*source.v[1][k] + l2*source.v[2][k];
-        double sigma = source.sigma0 + source.slope[0]*x[0]
-                     + source.slope[1]*x[1] + source.slope[2]*x[2];
+        const Vec y = {x[0]-source.origin[0], x[1]-source.origin[1], x[2]-source.origin[2]};
+        double sigma = source.sigma0 + source.slope[0]*y[0]
+                     + source.slope[1]*y[1] + source.slope[2]*y[2];
         for (int i = 0; i < 3; ++i) for (int j = 0; j < 3; ++j)
-            sigma += x[i]*source.hessian[i][j]*x[j];
+            sigma += y[i]*source.hessian[i][j]*y[j];
         const double weight = GL_W[iu]*GL_W[iv]*jacobian*(1.0-u);
         AddMoment(atom, x, sigma*weight);
     }
@@ -271,7 +285,7 @@ SourceAtom MakeCubicTriAtom(const CubicTriSource& source, std::size_t index) {
         for (int axis = 0; axis < 3; ++axis) {
             powers[axis][0] = 1.0;
             for (int degree = 1; degree <= source.degree; ++degree)
-                powers[axis][degree] = powers[axis][degree-1]*x[axis];
+                powers[axis][degree] = powers[axis][degree-1]*(x[axis]-source.origin[axis]);
         }
         double sigma = 0.0;
         for(int total=0;total<=source.degree;++total)
@@ -591,12 +605,14 @@ struct HDivFieldEvaluator::Impl {
     void AddExact(const SourceAtom& atom, const double r[3], double out[3]) const {
         if (atom.kind == SourceKind::Tet) {
             const TetSource& source = tets[atom.index];
+            double v[4][3], local_r[3];
+            Translate(source.v, source.origin, r, v, local_r);
             double value[3]{};
             if (source.degree <= 3) {
-                TetVolFieldCubic(source.v, r, source.coefficient, value);
+                TetVolFieldCubic(v, local_r, source.coefficient, value);
             } else {
                 double basis[84][3];
-                TetVolFieldBasisUpTo6(source.v, r, basis);
+                TetVolFieldBasisUpTo6(v, local_r, basis);
                 for (int index = 0; index < 84; ++index)
                     for (int k = 0; k < 3; ++k)
                         value[k] += source.coefficient[index]*basis[index][k];
@@ -604,17 +620,21 @@ struct HDivFieldEvaluator::Impl {
             for (int k = 0; k < 3; ++k) out[k] += value[k];
         } else if (atom.kind == SourceKind::Triangle) {
             const TriSource& source = triangles[atom.index];
+            double v[3][3], local_r[3];
+            Translate(source.v, source.origin, r, v, local_r);
             double value[3];
-            QuadTriField(source.v, r, source.sigma0, source.slope, source.hessian, value);
+            QuadTriField(v, local_r, source.sigma0, source.slope, source.hessian, value);
             for (int k = 0; k < 3; ++k) out[k] += value[k];
         } else if (atom.kind == SourceKind::CubicTriangle) {
             const CubicTriSource& source = cubic_triangles[atom.index];
+            double v[3][3], local_r[3];
+            Translate(source.v, source.origin, r, v, local_r);
             double value[3]{};
             if (source.degree <= 3) {
-                CubicTriField(source.v, r, source.coefficient, value);
+                CubicTriField(v, local_r, source.coefficient, value);
             } else {
                 double basis[35][3];
-                TriFieldBasisUpTo4(source.v, r, basis);
+                TriFieldBasisUpTo4(v, local_r, basis);
                 for (int index = 0; index < 35; ++index)
                     for (int k = 0; k < 3; ++k)
                         value[k] += source.coefficient[index]*basis[index][k];
@@ -661,8 +681,10 @@ struct HDivFieldEvaluator::Impl {
             const double zero_gradient[3]{};
             double field[3];
             double term[3];
+            double v[4][3], local_r[3];
+            Translate(source.v, source.origin, r, v, local_r);
             TetVolFieldLinearDirectional(
-                source.v, zero_v4, r, direction,
+                v, zero_v4, local_r, direction,
                 source.coefficient[0], 0.0,
                 gradient, zero_gradient, field, term);
             for (int axis = 0; axis < 3; ++axis)
@@ -673,8 +695,10 @@ struct HDivFieldEvaluator::Impl {
             const double zero_hessian[3][3]{};
             double field[3];
             double term[3];
+            double v[3][3], local_r[3];
+            Translate(source.v, source.origin, r, v, local_r);
             QuadTriFieldDirectional(
-                source.v, zero_v3, r, direction,
+                v, zero_v3, local_r, direction,
                 source.sigma0, 0.0, source.slope, zero_slope,
                 source.hessian, zero_hessian, field, term);
             for (int axis = 0; axis < 3; ++axis)
@@ -786,39 +810,15 @@ struct HDivFieldEvaluator::Impl {
         if (algorithm == HDivFieldEvaluator::Algorithm::Tree) {
             AddTree(0, r, out);
         } else {
+            // Every source owns exactly one atom, and AddExact dispatches on
+            // the source degree.  Summing per source kind here once called
+            // the cubic kernels unconditionally and dropped the degree 4-6
+            // terms of affine HEX BDM2 sources.
             CompensatedVec3 accumulated;
-            for (const TetSource& source : tets) {
-                double value[3]; TetVolFieldCubic(source.v, r, source.coefficient, value);
-                accumulated.Add(value);
-            }
-            for (const TriSource& source : triangles) {
-                double value[3]; QuadTriField(source.v, r, source.sigma0, source.slope, source.hessian, value);
-                accumulated.Add(value);
-            }
-            for (const CubicTriSource& source : cubic_triangles) {
-                double value[3]; CubicTriField(source.v, r, source.coefficient, value);
-                accumulated.Add(value);
-            }
-            for (const CurvedTetSource& source : curved_tets) {
+            for (const SourceAtom& atom : atoms) {
                 double value[3] = {0.0, 0.0, 0.0};
-                AddCurvedTet(source, r, value);
+                AddExact(atom, r, value);
                 accumulated.Add(value);
-            }
-            for (const CurvedTriSource& source : curved_triangles) {
-                double value[3] = {0.0, 0.0, 0.0};
-                AddCurvedTriangle(source, r, value);
-                accumulated.Add(value);
-            }
-            for (const PointSource& source : points) {
-                const double dx = r[0]-source.position[0];
-                const double dy = r[1]-source.position[1];
-                const double dz = r[2]-source.position[2];
-                const double r2 = dx*dx + dy*dy + dz*dz;
-                if (r2 <= 1e-300) continue;
-                const double scale = source.strength/(r2*std::sqrt(r2));
-                accumulated.Add(0, scale*dx);
-                accumulated.Add(1, scale*dy);
-                accumulated.Add(2, scale*dz);
             }
             accumulated.Store(out);
         }
@@ -973,12 +973,32 @@ void HDivFieldEvaluator::SetImageRotations(std::vector<double> angles)
 
 HDivFieldEvaluator::~HDivFieldEvaluator() = default;
 
+namespace {
+// One origin per record, or none (global coefficients).
+void CheckOrigins(const std::vector<double>& origins, std::size_t records,
+                  const char* name) {
+    if (!origins.empty() && origins.size() != 3*records)
+        throw std::invalid_argument(std::string(name) + ": origin count mismatch");
+    for (double value : origins)
+        if (!std::isfinite(value))
+            throw std::invalid_argument(std::string(name) + ": origins must be finite");
+}
+
+void CopyOrigin(const std::vector<double>& origins, std::size_t record, double origin[3]) {
+    for (int k = 0; k < 3; ++k)
+        origin[k] = origins.empty() ? 0.0 : origins[3*record+k];
+}
+}
+
 std::shared_ptr<HDivFieldEvaluator> HDivFieldEvaluator::FromTet(
     std::vector<double> volume, std::vector<double> surface,
     std::vector<int> image_masks, std::vector<double> image_signs,
-    const FieldEvaluatorOptions& options) {
+    const FieldEvaluatorOptions& options,
+    std::vector<double> volume_origins, std::vector<double> surface_origins) {
     if (volume.size()%16 != 0 || surface.size()%22 != 0)
         throw std::invalid_argument("HDivFieldEvaluator.from_tet: volume/surface shape mismatch");
+    CheckOrigins(volume_origins, volume.size()/16, "HDivFieldEvaluator.from_tet");
+    CheckOrigins(surface_origins, surface.size()/22, "HDivFieldEvaluator.from_tet");
     auto impl = std::make_unique<Impl>();
     impl->options = options;
     impl->ValidateOptions();
@@ -993,6 +1013,7 @@ std::shared_ptr<HDivFieldEvaluator> HDivFieldEvaluator::FromTet(
         source.coefficient[PolynomialIndex(1,0,0)] = block[13];
         source.coefficient[PolynomialIndex(0,1,0)] = block[14];
         source.coefficient[PolynomialIndex(0,0,1)] = block[15];
+        CopyOrigin(volume_origins, e, source.origin);
         impl->atoms.push_back(MakeTetAtom(source, e));
     }
     impl->triangles.resize(surface.size()/22);
@@ -1003,6 +1024,7 @@ std::shared_ptr<HDivFieldEvaluator> HDivFieldEvaluator::FromTet(
         source.sigma0 = block[9];
         for (int k = 0; k < 3; ++k) source.slope[k] = block[10+k];
         for (int i = 0; i < 3; ++i) for (int k = 0; k < 3; ++k) source.hessian[i][k] = block[13+3*i+k];
+        CopyOrigin(surface_origins, e, source.origin);
         impl->atoms.push_back(MakeTriAtom(source, e));
     }
     impl->BuildTree();
@@ -1012,10 +1034,13 @@ std::shared_ptr<HDivFieldEvaluator> HDivFieldEvaluator::FromTet(
 std::shared_ptr<HDivFieldEvaluator> HDivFieldEvaluator::FromPolynomialTet(
     std::vector<double> volume, std::vector<double> surface,
     std::vector<int> image_masks, std::vector<double> image_signs,
-    const FieldEvaluatorOptions& options) {
+    const FieldEvaluatorOptions& options,
+    std::vector<double> volume_origins, std::vector<double> surface_origins) {
     if (volume.size()%32 != 0 || surface.size()%22 != 0)
         throw std::invalid_argument(
             "HDivFieldEvaluator.from_polynomial_tet: volume/surface shape mismatch");
+    CheckOrigins(volume_origins, volume.size()/32, "HDivFieldEvaluator.from_polynomial_tet");
+    CheckOrigins(surface_origins, surface.size()/22, "HDivFieldEvaluator.from_polynomial_tet");
     auto impl = std::make_unique<Impl>();
     impl->options = options;
     impl->ValidateOptions();
@@ -1028,6 +1053,7 @@ std::shared_ptr<HDivFieldEvaluator> HDivFieldEvaluator::FromPolynomialTet(
         for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k)
             source.v[i][k] = block[3*i+k];
         std::copy_n(block+12,20,source.coefficient);
+        CopyOrigin(volume_origins, e, source.origin);
         impl->atoms.push_back(MakeTetAtom(source,e));
     }
     impl->triangles.resize(surface.size()/22);
@@ -1040,6 +1066,7 @@ std::shared_ptr<HDivFieldEvaluator> HDivFieldEvaluator::FromPolynomialTet(
         for (int k = 0; k < 3; ++k) source.slope[k] = block[10+k];
         for (int i = 0; i < 3; ++i) for (int k = 0; k < 3; ++k)
             source.hessian[i][k] = block[13+3*i+k];
+        CopyOrigin(surface_origins, e, source.origin);
         impl->atoms.push_back(MakeTriAtom(source,e));
     }
     impl->BuildTree();
@@ -1049,10 +1076,13 @@ std::shared_ptr<HDivFieldEvaluator> HDivFieldEvaluator::FromPolynomialTet(
 std::shared_ptr<HDivFieldEvaluator> HDivFieldEvaluator::FromCubicPolynomialTet(
     std::vector<double> volume, std::vector<double> surface,
     std::vector<int> image_masks, std::vector<double> image_signs,
-    const FieldEvaluatorOptions& options) {
+    const FieldEvaluatorOptions& options,
+    std::vector<double> volume_origins, std::vector<double> surface_origins) {
     if (volume.size()%32 != 0 || surface.size()%29 != 0)
         throw std::invalid_argument(
             "HDivFieldEvaluator.from_cubic_polynomial_tet: volume/surface shape mismatch");
+    CheckOrigins(volume_origins, volume.size()/32, "HDivFieldEvaluator.from_cubic_polynomial_tet");
+    CheckOrigins(surface_origins, surface.size()/29, "HDivFieldEvaluator.from_cubic_polynomial_tet");
     auto impl = std::make_unique<Impl>();
     impl->options = options;
     impl->ValidateOptions();
@@ -1065,6 +1095,7 @@ std::shared_ptr<HDivFieldEvaluator> HDivFieldEvaluator::FromCubicPolynomialTet(
         for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k)
             source.v[i][k] = block[3*i+k];
         std::copy_n(block+12,20,source.coefficient);
+        CopyOrigin(volume_origins, e, source.origin);
         impl->atoms.push_back(MakeTetAtom(source,e));
     }
     impl->cubic_triangles.resize(surface.size()/29);
@@ -1075,6 +1106,7 @@ std::shared_ptr<HDivFieldEvaluator> HDivFieldEvaluator::FromCubicPolynomialTet(
         for (int i = 0; i < 3; ++i) for (int k = 0; k < 3; ++k)
             source.v[i][k] = block[3*i+k];
         std::copy_n(block+9,20,source.coefficient);
+        CopyOrigin(surface_origins, e, source.origin);
         impl->atoms.push_back(MakeCubicTriAtom(source,e));
     }
     impl->BuildTree();
@@ -1085,11 +1117,16 @@ std::shared_ptr<HDivFieldEvaluator>
 HDivFieldEvaluator::FromSexticQuarticPolynomialTet(
     std::vector<double> volume, std::vector<double> surface,
     std::vector<int> image_masks, std::vector<double> image_signs,
-    const FieldEvaluatorOptions& options) {
+    const FieldEvaluatorOptions& options,
+    std::vector<double> volume_origins, std::vector<double> surface_origins) {
     if (volume.size()%96 != 0 || surface.size()%44 != 0)
         throw std::invalid_argument(
             "HDivFieldEvaluator.from_sextic_quartic_polynomial_tet: "
             "volume/surface shape mismatch");
+    CheckOrigins(volume_origins, volume.size()/96,
+                 "HDivFieldEvaluator.from_sextic_quartic_polynomial_tet");
+    CheckOrigins(surface_origins, surface.size()/44,
+                 "HDivFieldEvaluator.from_sextic_quartic_polynomial_tet");
     auto impl = std::make_unique<Impl>();
     impl->options = options;
     impl->ValidateOptions();
@@ -1102,6 +1139,7 @@ HDivFieldEvaluator::FromSexticQuarticPolynomialTet(
         for (int i = 0; i < 4; ++i)
             for (int k = 0; k < 3; ++k) source.v[i][k] = block[3*i+k];
         std::copy_n(block+12,84,source.coefficient);
+        CopyOrigin(volume_origins, e, source.origin);
         impl->atoms.push_back(MakeTetAtom(source,e));
     }
     impl->cubic_triangles.resize(surface.size()/44);
@@ -1112,6 +1150,7 @@ HDivFieldEvaluator::FromSexticQuarticPolynomialTet(
         for (int i = 0; i < 3; ++i)
             for (int k = 0; k < 3; ++k) source.v[i][k] = block[3*i+k];
         std::copy_n(block+9,35,source.coefficient);
+        CopyOrigin(surface_origins, e, source.origin);
         impl->atoms.push_back(MakeCubicTriAtom(source,e));
     }
     impl->BuildTree();

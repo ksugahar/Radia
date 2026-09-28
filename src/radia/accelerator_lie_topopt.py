@@ -971,6 +971,36 @@ def formal_symplectic_residual(R, T, U) -> FormalSymplecticResidual:
     )
 
 
+# Scale-free acceptance of the reconstructed symplectic residual.  The measured
+# plateau is 1.2e-14 and the near-identity floor 6.0e-13, so 1e-10 keeps a
+# 167x margin while still rejecting a broken factorization.
+_NORMALIZED_SYMPLECTIC_RESIDUAL_GATE = 1.0e-10
+
+
+def normalized_symplectic_residual(factorization) -> float:
+    """Reconstructed symplectic residual divided by each degree's own scale.
+
+    The coefficient residual of degree k is a sum of products of the map
+    tensors, so its natural size is |R|^2 (constant), |R||T| (linear),
+    max(|R||U|, |T|^2) (quadratic) and max(|R||V|, |T||U|) (cubic), with |.|
+    the largest absolute entry.  The unnormalized maximum instead grows with
+    the fringe strength of the design and rejected valid maps.
+    """
+    residual = factorization.reconstructed_symplectic_residual
+    size = lambda array: float(np.max(np.abs(array), initial=0.0))
+    tiny = np.finfo(float).tiny
+    r, t, u = size(factorization.R), size(factorization.T), size(factorization.U)
+    ratios = [
+        residual.constant/max(r*r, tiny),
+        residual.linear/max(r*t, tiny),
+        residual.quadratic/max(r*u, t*t, tiny),
+    ]
+    if hasattr(residual, "cubic"):
+        v = size(factorization.V)
+        ratios.append(residual.cubic/max(r*v, t*u, tiny))
+    return float(max(ratios))
+
+
 @dataclass(frozen=True)
 class FormalFourthOrderSymplecticResidual:
     """Coefficient residual of ``D M.T J D M = J`` through cubic degree."""
@@ -2151,8 +2181,8 @@ def third_order_lie_map_from_multipoles(
     if (
         factorization.maximum_generator_symmetry_defect > tolerance
         or factorization.relative_reconstruction_error > tolerance
-        or factorization.reconstructed_symplectic_residual.maximum
-        > 20.0 * max(tolerance, np.finfo(float).eps)
+        or normalized_symplectic_residual(factorization)
+        > _NORMALIZED_SYMPLECTIC_RESIDUAL_GATE
     ):
         raise RuntimeError(
             "Hamiltonian map failed the Dragt-Finn integrability/projection gate"
@@ -2316,8 +2346,8 @@ def fourth_order_lie_map_from_multipoles(
     if (
         factorization.maximum_generator_symmetry_defect > tolerance
         or factorization.relative_reconstruction_error > tolerance
-        or factorization.reconstructed_symplectic_residual.maximum
-        > 30.0 * max(tolerance, np.finfo(float).eps)
+        or normalized_symplectic_residual(factorization)
+        > _NORMALIZED_SYMPLECTIC_RESIDUAL_GATE
     ):
         raise RuntimeError(
             "Hamiltonian map failed the fourth-order Dragt-Finn gate"
@@ -2700,8 +2730,8 @@ def _fourth_order_lie_map_from_vector_potential_polynomials(
     if (
         factorization.maximum_generator_symmetry_defect > tolerance
         or factorization.relative_reconstruction_error > tolerance
-        or factorization.reconstructed_symplectic_residual.maximum
-        > 30.0 * max(tolerance, np.finfo(float).eps)
+        or normalized_symplectic_residual(factorization)
+        > _NORMALIZED_SYMPLECTIC_RESIDUAL_GATE
     ):
         raise RuntimeError(
             "direct A-map failed the fourth-order Dragt-Finn gate: "
@@ -2709,8 +2739,9 @@ def _fourth_order_lie_map_from_vector_potential_polynomials(
             f"{factorization.maximum_generator_symmetry_defect:.17g}, "
             "relative_reconstruction_error="
             f"{factorization.relative_reconstruction_error:.17g}, "
-            "reconstructed_symplectic_residual="
-            f"{factorization.reconstructed_symplectic_residual.maximum:.17g}, "
+            "normalized_symplectic_residual="
+            f"{normalized_symplectic_residual(factorization):.17g} "
+            f"(gate {_NORMALIZED_SYMPLECTIC_RESIDUAL_GATE:.1e}), "
             f"factorization_tolerance={tolerance:.17g}"
         )
     transfer = FourthOrderLieMap(
@@ -5834,6 +5865,9 @@ def fourth_order_lie_map_p_convergence(
                     error=str(error),
                 )
             )
+            # A failed order breaks the ladder: the next order must not be
+            # compared with the one before the gap and certified converged.
+            previous = None
             continue
         changes = {}
         if previous is not None:
@@ -5866,7 +5900,12 @@ def fourth_order_lie_map_p_convergence(
                 )
                 for name in compared
             }
-        maximum_change = max(changes.values(), default=float("inf"))
+        # max() skips a NaN that is not first; a non-finite change is never
+        # convergence.
+        maximum_change = (
+            max(changes.values(), default=float("inf"))
+            if all(np.isfinite(value) for value in changes.values())
+            else float("inf"))
         converged_pair = maximum_change <= 1.0
         fit_residual = float(
             np.max(

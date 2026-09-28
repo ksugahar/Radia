@@ -620,6 +620,125 @@ def test_native_affine_hex_bdm2_field_functional_rows_match_exact_batch():
     np.testing.assert_allclose(far_row,reciprocal,rtol=3e-8,atol=3e-10)
 
 
+def test_native_affine_hex_bdm2_direct_field_is_batch_size_invariant():
+    """A large direct batch keeps the degree 4-6 HEX BDM2 charge terms.
+
+    Batches at least as large as the worker pool take the point-parallel
+    direct sum instead of the atom-parallel one used for a few points, and
+    the automatic tree probe compares against that sum.
+    """
+    from ngsolve.meshes import MakeStructured3DMesh
+
+    mesh=MakeStructured3DMesh(
+        hexes=True,nx=1,ny=1,nz=1,
+        mapping=lambda x,y,z:(1.1*x-.15*y,.8*y+.08*z,.55*z))
+    fes=ng.HDiv(mesh,order=2,discontinuous=True)
+    points=np.array([
+        [.31,.17,.73],
+        [1.04,.42,.61],
+        [-.22,.29,.36],
+    ],dtype=float)
+    batch=np.vstack([points]+[points+5.0+shift for shift in range(40)])
+    coefficients=np.random.default_rng(20260830).normal(size=fes.ndof)
+    with TaskManager():
+        problem=DensityAdjointVIM(
+            fes,eps=1e-12,internal_interfaces=True)
+        evaluator=problem.demag._G.create_field_evaluator(coefficients)
+        small=np.asarray(evaluator.field(points,"direct"))
+        direct=np.asarray(evaluator.field(batch,"direct"))
+        tree=np.asarray(evaluator.field(batch,"tree"))
+    np.testing.assert_allclose(direct[:3],small,rtol=1e-12,atol=1e-12)
+    np.testing.assert_allclose(tree[:3],small,rtol=1e-12,atol=1e-12)
+
+
+def _single_cell_field_and_rows(hexes,order,offset,points):
+    from ngsolve.meshes import MakeStructured3DMesh
+
+    mesh=MakeStructured3DMesh(
+        hexes=hexes,nx=1,ny=1,nz=1,
+        mapping=lambda x,y,z:(offset+1.1*x-.15*y,.8*y+.08*z,.55*z))
+    fes=ng.HDiv(mesh,order=order,discontinuous=True)
+    coefficients=np.random.default_rng(1).normal(size=fes.ndof)
+    weights=np.zeros((3*len(points),len(points),3))
+    for index in range(len(points)):
+        for axis in range(3):
+            weights[3*index+axis,index,axis]=1.0
+    with TaskManager():
+        problem=DensityAdjointVIM(
+            fes,eps=1e-12,internal_interfaces=True)
+        evaluator=problem.demag._G.create_field_evaluator(coefficients)
+        field=np.vstack([
+            np.asarray(evaluator.field(point[None,:],"direct"))[0]
+            for point in points])/(4.0*np.pi)
+        rows=np.asarray(problem.demag._G.configured_field_functional_rows(
+            points,weights))@coefficients
+    return fes,coefficients,field,rows.reshape(-1,3)
+
+
+@pytest.mark.parametrize("hexes,order",[(True,2),(False,2)])
+def test_native_polynomial_field_is_accurate_far_from_the_source(hexes,order):
+    """Distant targets keep the field of a single BDM2 cell.
+
+    The closed-form moment recurrences cancel like (distance/size)^2 per
+    step; thirty cell sizes away they lost every digit of a HEX BDM2 cell.
+    """
+    points=np.array([[.5,.4,.55+distance] for distance in (1.0,30.0,100.0)])
+    fes,coefficients,field,rows=_single_cell_field_and_rows(
+        hexes,order,0.0,points)
+    reference=np.zeros_like(field)
+    with TaskManager():
+        for index,point in enumerate(points):
+            for axis in range(3):
+                reference[index,axis]=field_functional_load(
+                    fes,point[None,:],np.array([1.0]),axis=axis,scale=1.0,
+                    bonus_intorder=30).vec.FV().NumPy()@coefficients
+    scale=np.linalg.norm(reference,axis=1)[:,None]
+    np.testing.assert_array_less(np.abs(field-reference)/scale,1e-9)
+    np.testing.assert_array_less(np.abs(rows-reference)/scale,1e-9)
+
+
+@pytest.mark.parametrize("hexes,order",[(True,2),(False,2)])
+def test_native_polynomial_field_is_translation_invariant(hexes,order):
+    """A cell far from the global origin keeps its field.
+
+    Global-coordinate polynomial coefficients cancel (|origin|/size)^degree;
+    before the local expansion frame, 1000 cell sizes cost a TET BDM2 cell
+    a relative 8e-2 fifty cell sizes away.
+    """
+    relative=np.array([[.5,.4,.55+distance] for distance in (.5,5.0,50.0)])
+    offset=np.array([1000.0,0.0,0.0])
+    _,_,field0,rows0=_single_cell_field_and_rows(hexes,order,0.0,relative)
+    _,_,field1,rows1=_single_cell_field_and_rows(
+        hexes,order,offset[0],relative+offset)
+    scale=np.linalg.norm(field0,axis=1)[:,None]
+    np.testing.assert_array_less(np.abs(field1-field0)/scale,1e-9)
+    np.testing.assert_array_less(np.abs(rows1-rows0)/scale,1e-9)
+
+
+@pytest.mark.parametrize("hexes",[True,False])
+def test_charge_gram_solve_is_translation_invariant(hexes):
+    """The analytic charge-Gram near inner expands about each host.
+
+    Global-coordinate affine coefficients left a 2x2x2 HEX BDM2 solve
+    moved 1000 cell sizes 8.8e-7 away from the same solve at the origin.
+    """
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia import vim
+
+    def magnetization(offset):
+        mesh=MakeStructured3DMesh(
+            hexes=hexes,nx=2,ny=2,nz=2,
+            mapping=lambda x,y,z:(offset+1.1*x-.15*y,.8*y+.08*z,.55*z))
+        with TaskManager():
+            result=vim.Solve(mesh,mu_r=50.0,H_ext=ng.CF((0.3,0.2,1.0)),
+                             order=2)
+        return np.asarray(result["M"])
+
+    origin=magnetization(0.0)
+    moved=magnetization(1000.0)
+    assert np.linalg.norm(moved-origin)<=1e-10*np.linalg.norm(origin)
+
+
 def test_native_flat_tet_field_rows_are_finite_on_coplanar_panel_extension():
     """A point in a face plane but outside the face has a finite field.
 
@@ -1011,6 +1130,12 @@ def test_deep_restoration_allows_active_worst_row_to_change():
         np.array([5.0, -8.0]), np.array([1.0, -8.1]), band, True)
     assert not _accept_deep_restoration(
         np.array([5.0, -8.0]), np.array([4.0, -7.0]), band, False)
+    # Between the acceptance zone and 1.25 bands a worse maximum is not
+    # restoration progress; landing inside the zone is.
+    assert not _accept_deep_restoration(
+        np.array([1.15, 0.2]), np.array([1.24, 0.1]), band, True)
+    assert _accept_deep_restoration(
+        np.array([1.15, 0.2]), np.array([1.09, 1.08]), band, True)
 
 
 def test_deep_restoration_minimax_lp_uses_common_epigraph_cap():

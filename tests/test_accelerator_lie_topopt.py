@@ -500,6 +500,27 @@ def test_factorization_reports_and_repairs_a_non_hamiltonian_quadratic_map():
     assert factors.reconstructed_symplectic_residual.maximum < 2.0e-16
 
 
+def test_symplectic_gate_is_normalized_by_each_degree_scale():
+    """The gate must not grow with the map's own coefficient size."""
+    from types import SimpleNamespace
+
+    from radia.accelerator_lie_topopt import (
+        formal_symplectic_residual, normalized_symplectic_residual)
+
+    for scale in (1.0, 1.0e4, 1.0e8):
+        T = np.zeros((6, 6, 6))
+        T[0, 0, 0] = scale
+        factors = dragt_finn_factorize_third_order(
+            np.eye(6), T, np.zeros((6, 6, 6, 6)))
+        assert normalized_symplectic_residual(factors) < 1.0e-12
+    # The raw non-Hamiltonian map is not symplectic at any scale.
+    raw = SimpleNamespace(
+        R=np.eye(6), T=T, U=np.zeros((6, 6, 6, 6)),
+        reconstructed_symplectic_residual=formal_symplectic_residual(
+            np.eye(6), T, np.zeros((6, 6, 6, 6))))
+    assert normalized_symplectic_residual(raw) > 0.1
+
+
 def test_finite_amplitude_dragt_finn_application_is_symplectic():
     raw = np.array([0.2, 1.0, 0.3, 2.0, 0.7, 4.0, -3.0])
     transfer = third_order_lie_map_from_multipoles(

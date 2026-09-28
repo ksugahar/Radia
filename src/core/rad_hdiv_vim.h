@@ -41,8 +41,8 @@ void TetField(const double V[4][3], const double P[3], double out[3]);
 void TriMoment1(const double V[3][3], const double r[3], double out[3]);          /* INT_T r'/R dS' */
 void TriMoment2(const double V[3][3], const double r[3], double out[3][3]);       /* INT_T r'(x)r'/R dS' */
 void TetMoment1(const double V[4][3], const double r[3], double out[3]);          /* INT_V r'/R dV' */
-/* Forward directional derivative of the same closed-form PhiTet/TetMoment1
- * path.  value/direction use moment ordering [1,x,y,z]. */
+/* Forward directional derivative of the Newton-potential moments through
+ * degree one.  value/direction use PotentialMomentIndex ordering [1,z,y,x]. */
 void TetPotentialMomentsDirectionalUpTo1(
     const double V[4][3], const double dV[4][3], const double r[3], const double dr[3],
     double value[4], double direction[4]);

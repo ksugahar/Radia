@@ -118,7 +118,7 @@ from ._vim import (
 from ._capabilities import validate_hdiv_configuration
 from ._nonlinear import (_bh_table_funcs, _table_tensor_tangent, _table_tensor_tangent_multi,
                          _bh_inverse_funcs, _reluctivity_tangent, _reluctivity_tangent_multi,
-                         _validate_bh_table)
+                         _validate_bh_table, _bh_table_falling_magnetization)
 
 
 class _OperatorBackedResult(dict):
@@ -214,14 +214,27 @@ def _hdiv_space_with_image_constraints(
                 "vim.Solve: mesh identifications did not identify any HDiv "
                 "trace DoFs on the cyclic sector faces")
         base = ng.Compress(periodic, active)
+    scale = max((abs(float(value))
+                 for vertex in mesh.vertices for value in vertex.point), default=1.0)
+    plane_tol = 128.0 * np.finfo(float).eps * max(scale, 1.0)
+    image_axes = sorted({int(axis) for axis, _sign in image_planes})
+    if image_axes:
+        # Every image plane (either sign) must bound the reduced mesh: a mesh
+        # that crosses a plane overlaps its own mirror image, which is then
+        # counted twice without any error.  A gap to a '-' plane is valid.
+        points = np.asarray([vertex.point for vertex in mesh.vertices], dtype=float)
+        for axis in image_axes:
+            lowest, highest = float(np.min(points[:, axis])), float(np.max(points[:, axis]))
+            if lowest < -plane_tol and highest > plane_tol:
+                raise ValueError(
+                    "vim.Solve: the reduced mesh crosses the image plane %s=0 "
+                    "(%s spans [%g, %g]); it must lie on one side of every image plane"
+                    % ("xyz"[axis], "xyz"[axis], lowest, highest))
     constrained_axes = tuple(sorted({int(axis) for axis, sign in image_planes
                                      if float(sign) > 0.0}))
     if not constrained_axes:
         return base, (), periodic_slave_dofs
 
-    scale = max((abs(float(value))
-                 for vertex in mesh.vertices for value in vertex.point), default=1.0)
-    plane_tol = 128.0 * np.finfo(float).eps * max(scale, 1.0)
     axis_dofs = {axis: set() for axis in constrained_axes}
     for element in mesh.Elements(ng.BND):
         coordinates = np.asarray([mesh.vertices[v.nr].point for v in element.vertices], dtype=float)
@@ -628,6 +641,43 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
         if gram_backend != "hmat":
             raise ValueError("vim.Solve (2D): gram_backend must be 'hmat' (got %r)"
                              % (gram_backend,))
+        # The planar layer has no cyclic images, periodic seams, energy-Newton
+        # controls or HEX pair rules.  Dropping them would solve one sector as
+        # an isolated body, or with a different nonlinear method, and report
+        # success.
+        for _nm, _val, _default in (
+                ("image_cyclic", image_cyclic, None),
+                ("image_cyclic_alternating", image_cyclic_alternating, False),
+                ("cyclic_periodic_boundaries", cyclic_periodic_boundaries, None),
+                ("nonlinear_solver", nonlinear_solver, "energy-newton"),
+                ("newton_inner_tol", newton_inner_tol, "auto"),
+                ("newton_warmstart", newton_warmstart, "linear"),
+                ("newton_continuation", newton_continuation, 1),
+                ("newton_reuse_tangent_steps", newton_reuse_tangent_steps, 1),
+                ("newton_cg_x0", newton_cg_x0, False),
+                ("leaf", leaf, 64),
+                ("curve_gauss", curve_gauss, 8),
+                ("hex_glpair_n", hex_glpair_n, None),
+                ("hex_glpair_affine_n", hex_glpair_affine_n, None)):
+            if _val != _default:
+                raise ValueError("vim.Solve (2D): %s is not supported by the planar layer "
+                                 "(got %r; leave it at %r)" % (_nm, _val, _default))
+        # Same public soft-iron table contract as 3D; the planar law reads it
+        # through its own piecewise-linear M(H), so validate before it does.
+        # The planar law anchors a table that starts above H=0 at the origin
+        # (planar_materials.hm_arrays); apply the same anchor before checking.
+        planar_falling = None
+        if bh_table is not None:
+            def _anchored(values):
+                arr = np.asarray(values, dtype=float)
+                if arr.ndim == 2 and arr.shape[1] == 2 and arr.shape[0] and arr[0, 0] > 0.0:
+                    arr = np.vstack([[0.0, 0.0], arr])
+                return arr.tolist()
+            anchored = ({name: _anchored(values) for name, values in bh_table.items()}
+                        if isinstance(bh_table, dict) else _anchored(bh_table))
+            _validate_bh_table(anchored, context="vim.Solve (2D)")
+            planar_falling = _bh_table_falling_magnetization(
+                anchored, context="vim.Solve (2D)")
         from ._vim2d import solve_planar_demag
         result = solve_planar_demag(
             mesh, mu_r=mu_r, H_ext=H_ext, bh_table=bh_table, magnets=magnets,
@@ -635,6 +685,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
             nl_tol=nl_tol, nl_maxit=nl_maxit,
             image_masks=image_masks, image_signs=image_signs)
         result["image"] = image
+        result["bh_table_falling_magnetization"] = planar_falling
         if linear_recoil_pm:
             result["permanent_magnet_model"] = "linear-recoil"
             result["permanent_magnet_level"] = 2
@@ -663,8 +714,10 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                          % (sorted(_PRECONDITIONERS), preconditioner))
     if (mu_r is None) == (bh_table is None):
         raise ValueError("vim.Solve: provide EXACTLY ONE of mu_r (linear) or bh_table (nonlinear)")
+    bh_falling_magnetization = None
     if bh_table is not None:
         _validate_bh_table(bh_table)
+        bh_falling_magnetization = _bh_table_falling_magnetization(bh_table)
 
     # AUTO-MATCH: a CURVED mesh (mesh.GetCurveOrder()>=2) needs a Gram built on the SAME curved geometry as
     # B/M_mass, else N=B^T G B (straight Gram) is geometry-inconsistent and the demag DRIFTS with geometry order
@@ -700,6 +753,8 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                               image_cyclic_alternating=image_cyclic_alternating,
                               cyclic_periodic_boundaries=cyclic_periodic_boundaries,
                               hex_glpair_n=hex_glpair_n, hex_glpair_affine_n=hex_glpair_affine_n)
+    # {region: [H_low, H_high]} where the table's M = B/mu0 - H falls, else None.
+    result["bh_table_falling_magnetization"] = bh_falling_magnetization
     if linear_recoil_pm:
         result["permanent_magnet_model"] = "linear-recoil"
         result["permanent_magnet_level"] = 2
@@ -1046,6 +1101,19 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
                 if ((-_s) if _c == _a else _s) < 0:      # component c odd across plane a -> cancels in full domain
                     M_avg[_c] = 0.0
                     break
+    if image_rot_angle:
+        # image_cyclic=N: the full ring is the solved sector plus its N-1
+        # rotated (and, alternating, sign-flipped) copies of equal volume, so
+        # the physical average is their mean -- in-plane components cancel
+        # around a ring, and every component for most alternating patterns.
+        total = M_avg_reduced.copy()
+        for _sign, _angle in zip(image_signs, image_rot_angle):
+            _c, _s = math.cos(_angle), math.sin(_angle)
+            total += _sign*np.array([
+                _c*M_avg_reduced[0] - _s*M_avg_reduced[1],
+                _s*M_avg_reduced[0] + _c*M_avg_reduced[1],
+                M_avg_reduced[2]])
+        M_avg = total/(len(image_rot_angle) + 1)
     out = _OperatorBackedResult(
                M=M_el, M_avg=M_avg, gfM=gfM, iters=int(iters), demag=D, ndof=n_face, n_el=n_el,
                n_charge=n_charge, nonlinear=bh_table is not None, linear_solver=solver_used,
@@ -1083,7 +1151,7 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
         out["nonlinear_solve_stats"] = dict(_LAST_NONLINEAR_SOLVE_STATS)
         for _k, _v in _LAST_NONLINEAR_SOLVE_STATS.items():
             out.setdefault(_k, _v)
-    if image is not None:
+    if image is not None or image_rot_angle:
         out["M_avg_reduced"] = M_avg_reduced
     if hmat_stats is not None:
         out["hmat_stats"] = hmat_stats
@@ -1208,10 +1276,21 @@ def _solve_nonlinear_picard_mass_riesz_cpp(mesh, fes, bh_table, H, n_face, h_ext
     # Damping the material coefficient rather than the solved field keeps every outer step an SPD Galerkin
     # solve while avoiding saturation ping-pong on steep tables.
     relax = 0.7
+
+    def _apply(matrix, values):
+        vector = matrix.CreateRowVector()
+        vector.FV().NumPy()[:] = values
+        result = matrix.CreateColVector()
+        matrix.Mult(vector, result)
+        return np.asarray(result.FV().NumPy(), dtype=float).copy()
+
+    rhs_norm = float(np.linalg.norm(np.asarray(rhs_src, dtype=float))) + 1e-300
+    relative_residual = float("inf")
     for it in range(int(nl_maxit)):
         nit = it + 1
+        W_current = _W_matrix(nu)
         m_new, inner_iterations = _solve_W(
-            _W_matrix(nu), x0=m if it > 0 else None
+            W_current, x0=m if it > 0 else None
         )
         stats["nonlinear_picard_iters"] += 1
         stats["nonlinear_linear_inner_iters"] += int(inner_iterations)
@@ -1219,22 +1298,28 @@ def _solve_nonlinear_picard_mass_riesz_cpp(mesh, fes, bh_table, H, n_face, h_ext
         m = m_new
         nu_new = np.maximum(_nu_sec_all(_Mmag(m)), 1e-30)
         if rel_step < nl_tol:
-            stats["nonlinear_final_rel_step"] = float(rel_step)
-            stats["nonlinear_converged_final_stage"] = True
-            _capture_nonlinear_solve_stats(stats)
-            return m, nit
+            # A contraction close to one makes a tiny step coexist with a
+            # large error.  The inner solve satisfies (W(nu) + N) m = b, so
+            # the nonlinear residual at m is (W(nu(m)) - W(nu)) m.
+            relative_residual = float(np.linalg.norm(
+                _apply(_W_matrix(nu_new), m) - _apply(W_current, m))) / rhs_norm
+            if relative_residual <= nl_tol:
+                stats["nonlinear_final_rel_step"] = float(rel_step)
+                stats["nonlinear_final_relative_residual"] = relative_residual
+                stats["nonlinear_converged_final_stage"] = True
+                _capture_nonlinear_solve_stats(stats)
+                return m, nit
         nu = relax * nu_new + (1.0 - relax) * nu
-    if not require_convergence:
-        stats["nonlinear_final_rel_step"] = float(rel_step)
-        stats["nonlinear_converged_final_stage"] = False
-        _capture_nonlinear_solve_stats(stats)
-        return m, nit
     stats["nonlinear_final_rel_step"] = float(rel_step)
+    stats["nonlinear_final_relative_residual"] = relative_residual
     stats["nonlinear_converged_final_stage"] = False
     _capture_nonlinear_solve_stats(stats)
-    raise RuntimeError("vim.Solve (Picard mass-Riesz): did NOT converge -- rel step=%.2e > "
-                       "nl_tol=%.1e after %d iters.  Try nonlinear_solver='energy-newton' for the robust "
-                       "co-energy Newton path." % (rel_step, nl_tol, nit))
+    if not require_convergence:
+        return m, nit
+    raise RuntimeError("vim.Solve (Picard mass-Riesz): did NOT converge -- rel step=%.2e, "
+                       "relative residual=%.2e, nl_tol=%.1e after %d iters.  Try "
+                       "nonlinear_solver='energy-newton' for the robust co-energy Newton path."
+                       % (rel_step, relative_residual, nl_tol, nit))
 
 
 def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, cg_maxit,
