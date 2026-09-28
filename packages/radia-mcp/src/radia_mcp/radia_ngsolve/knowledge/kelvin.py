@@ -42,8 +42,8 @@ Reference docs (consolidated 2026-05-04):
     charge-conservation diagnosis; saved notebook output)
   docs/kelvin/ARCHIVE_RETIREMENT.md (routing table from former full-source
     archives to maintained docs, src/radia APIs, and validation_test lanes)
-  src/radia/open_boundary + validation_test/open_boundary (production DtN/CLN
-    behavior and executable validation)
+  src/radia/open_boundary + validation_test/open_boundary (production exact-DtN
+    / continued-fraction behavior and executable validation)
 """
 
 KELVIN_OVERVIEW = """
@@ -3109,25 +3109,27 @@ the order-1 h-path is only 1.2e-2 at ndof=135.  n=3: p=1,2 (<n) 4.4e-1 / 9.7e-3
 ~768 in 3D).  NOTE pillars 4 (optimal R/a, the magnetized SQUARE) and 5 (corner
 rates, the L-shape) are ALREADY 2D demos -- so all six pillars hold in 2D.
 
-## Arbitrary (non-separable) bodies + the dimensional weight rule (DtN->CLN arc)
+## Arbitrary (non-separable) bodies + the dimensional weight rule (build the DtN, then compress it)
 
 Beyond a sphere, the Kelvin-FEM does not merely CLOSE the boundary -- it BUILDS
-the exterior (eddy-current) DtN operator of a genuinely NON-separable body, which
-a CLN model-order reduction then compresses.  Verified analytic-free by SYMMETRY
-(the static Steklov ladder, the generalized eigenproblem (S, Mg) on Gamma, splits
-the sphere's l-fold degeneracies by the body's point group):
+the exterior (eddy-current) DtN operator of a genuinely NON-separable body, whose
+s-dependence a band rational (pole-residue) fit then compresses.  Verified
+analytic-free by SYMMETRY (the static Steklov spectrum, the generalized
+eigenproblem (S, Mg) on Gamma, splits the sphere's l-fold degeneracies by the
+body's point group):
 
-  - `act6_06_square_eddy_dtn_to_cln` (2D SQUARE, C4v): the m=1 dipole doublet is PRESERVED while the
+  - act6_06 (2D SQUARE eddy DtN, C4v): the m=1 dipole doublet is PRESERVED while the
     m=2 quadrupole SPLITS (B1 != B2, by ~0.52) -- the C4v signature.
-  - `act6_07_cube_eddy_dtn_to_cln` (3D CUBE, O_h): the l=1 dipole stays a ~degenerate TRIPLET
+  - act6_07 (3D CUBE eddy DtN, O_h): the l=1 dipole stays a ~degenerate TRIPLET
     (T_1u, spread ~0.002) while the l=2 quadrupole quintet SPLITS 2+3
     (E_g doublet + T_2g triplet, by ~0.50) -- the O_h signature.
   Both are mesh-convergent; the dipole-mode DtN interpolates DC -> evanescent
-  (real static rung -> sqrt(s) growth), and a few-stage CLN-in-sqrt(s) reduces it.
+  (real static eigenvalue -> sqrt(s) growth), and a few-stage rational fit in
+  sqrt(s) compresses it.
   `act6_01_kelvin_fem_eddy_dtn` is the radial proof-of-mechanism (a sphere, so the analytic DtN
-  checks the FEM build) and `act6_03_dtn_to_cln_wideband` is the separable-analytic band-unlimited
-  end (the 3D sphere DtN is EXACTLY rational in q=sqrt(s) -- reverse-Bessel -- so
-  the CLN is machine-exact at n+1 stages).
+  checks the FEM build) and act6_03 (wideband exact continued fraction) is the separable-analytic
+  band-unlimited end (the 3D sphere DtN is EXACTLY rational in q=sqrt(s) -- reverse-Bessel -- so
+  its continued fraction is machine-exact at n+1 partial quotients).
 
 THE DIMENSIONAL WEIGHT RULE (the crisp practical takeaway -- and fully consistent
 with the Nagamine 2D-cylindrical tensor "in-plane identity slots" note above):
@@ -3146,7 +3148,7 @@ with the Nagamine 2D-cylindrical tensor "in-plane identity slots" note above):
     applying the 3D weight (R/rho')^2 in a 2D disk MISSES the ladder -m (m=1 by
     ~30%, m=2 by ~6%) -- proving 2D genuinely needs no weight.
   - CAVEAT (band, not static): the 2D cylindrical K_m is NOT exactly rational in
-    sqrt(s) (unlike the 3D sphere's reverse-Bessel), so the 2D CLN is a band
+    sqrt(s) (unlike the 3D sphere's reverse-Bessel), so the 2D rational fit is a band
     APPROXIMATION, not machine-exact.
 
 ## Mesh-adequacy criterion (SOURCE side): required p from eccentricity
@@ -3266,7 +3268,7 @@ Kelvin Transformation, IEICE Trans. Electron. 2024) and a periodic Kelvin (2013)
 
 This is the formulation basis for radia.open_boundary.kelvin_dtn's MATERIAL-aware
 (nu, sigma) exterior DtN: the (a/r)^4 sigma / (a/r)^2 mu weights come from this
-conformal derivation.  See dtn_coarse_mesh(topic="dtn_to_cln") +
+conformal derivation.  See dtn_coarse_mesh(topic="dtn_continued_fraction") +
 docs/open_boundary/OPEN_BOUNDARY_MAP.md.
 
 References (cite): Ward & Pendry, J. Mod. Opt. 43 (1996); Freeman & Lowther, IEEE
