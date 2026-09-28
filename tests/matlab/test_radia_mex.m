@@ -747,14 +747,14 @@ after = radia.apiInfo();
 verifyEqual(testCase, after.handle_count, before.handle_count);
 end
 
-function testNativeHCurlEddyCLNBasis(testCase)
+function testNativeHCurlEddyBasis(testCase)
 meshPath = testCase.TestData.meshPath;
 [~, parent] = radia.ngsolve.matrix_dump(meshPath, "hcurl", 2, "mass");
 ports = zeros(parent.dof_count, 3);
 ports(1, 1) = 1;
 ports(2, 2) = 1;
 
-result = radia.ngsolve.hcurl_eddy_cln_native_basis( ...
+result = radia.ngsolve.hcurl_eddy_native_basis( ...
     meshPath, 2, ports, 2);
 verifyEqual(testCase, result.dof_count, parent.dof_count);
 verifySize(testCase, result.free_dofs, [1, parent.dof_count]);
@@ -766,7 +766,7 @@ verifyEqual(testCase, string(result.operator), "mass+curlcurl");
 verifyTrue(testCase, all(isfinite(result.vectors), "all"));
 end
 
-function testNativeHCurlEddyCLNModelProjection(testCase)
+function testNativeHCurlEddyFosterModelProjection(testCase)
 meshPath = testCase.TestData.meshPath;
 order = 6;
 [parentMass, parentMassInfo] = radia.ngsolveMatrix( ...
@@ -776,13 +776,13 @@ ports = zeros(parentMassInfo.dof_count, 2);
 ports(1, 1) = 1;
 ports(2, 2) = 1;
 
-model = radia.ngsolve.hcurl_eddy_cln_model( ...
+model = radia.ngsolve.hcurl_eddy_foster_model( ...
     meshPath, order, ports, 2, Conductivity=2.5, Reluctivity=3.0);
 basis = model.native_basis;
 V = basis.vectors;
 
 verifyEqual(testCase, string(model.assembly_schema), ...
-    "radia.hcurl.eddy_cln.native_diffusion.v1");
+    "radia.hcurl.eddy_foster.native_diffusion.v1");
 verifyEqual(testCase, model.state_order, basis.rank);
 verifyEqual(testCase, model.port_count, size(ports, 2));
 expectedMassGram = V' * parentMass * V;
@@ -791,8 +791,21 @@ expectedPortRHS = V' * ports;
 verifyLessThan(testCase, norm(basis.mass_gram - expectedMassGram, "fro"), 1e-10);
 verifyLessThan(testCase, norm(basis.curlcurl_gram - expectedCurlCurlGram, "fro"), 1e-10);
 verifyLessThan(testCase, norm(basis.port_rhs - expectedPortRHS, "fro"), 1e-12);
-verifyLessThan(testCase, norm(model.resistance - 3.0 * basis.curlcurl_gram, "fro"), 1e-12);
-verifyLessThan(testCase, norm(model.inductance - 2.5 * basis.mass_gram, "fro"), 1e-12);
+verifyLessThan(testCase, norm(model.resistance - 3.0 * basis.curlcurl_gram, "fro"), ...
+    1e-12 * max(1, norm(model.resistance, "fro")));
+verifyLessThan(testCase, norm(model.inductance - 2.5 * basis.mass_gram, "fro"), ...
+    1e-12 * max(1, norm(model.inductance, "fro")));
+
+% The Foster modes diagonalise the reduced pair and reproduce its solve.
+W = model.modes;
+n = model.state_order;
+verifyLessThan(testCase, norm(W' * model.inductance * W - eye(n), "fro"), 1e-9);
+verifyLessThan(testCase, norm(W' * model.resistance * W - diag(model.decay_rates), "fro"), ...
+    1e-9 * max(1, max(model.decay_rates)));
+s = 1i * 2 * pi * 50;
+direct = (model.resistance + s * model.inductance) \ (-s * basis.port_rhs * [1; 2]);
+z = radia.simulink.solveHCurlEddyFosterHarmonic(model, 50, [1; 2]);
+verifyLessThan(testCase, norm(W * z - direct) / norm(direct), 1e-9);
 verifyTrue(testCase, model.passive);
 verifyTrue(testCase, all(isfinite(model.Ad), "all"));
 verifyTrue(testCase, all(isfinite(model.Bd), "all"));
@@ -917,48 +930,6 @@ verifyEqual(testCase, actual, expected, "AbsTol", 1e-14);
 A = [3 + 1i, 0.2; -0.1i, 2 - 0.4i];
 b = [1 + 0.5i; -0.2 + 1i];
 verifyEqual(testCase, radia.denseSolve(A, b), A \ b, "AbsTol", 1e-14);
-end
-
-function testCLNReductionKernels(testCase)
-K = [2, 0.1; 0.1, 1];
-N = [3, 0.2; 0.2, 1.5];
-reduced = radia.clnLanczos(K, N, 2, 1e-30);
-verifyEqual(testCase, reduced.n_input, 2);
-verifyEqual(testCase, reduced.n_output, 2);
-verifySize(testCase, reduced.Q, [2, 2]);
-verifySize(testCase, reduced.R_diag, [2, 2]);
-verifySize(testCase, reduced.L_tridiag, [2, 2]);
-verifyTrue(testCase, all(isfinite([reduced.Q, reduced.R_diag, reduced.L_tridiag]), "all"));
-
-diagValues = [4, 2, 1];
-T = radia.clnBuildTridiagonal(diagValues);
-verifyEqual(testCase, diag(T), [6; 3; 1], "AbsTol", 1e-14);
-verifyEqual(testCase, T(1, 2), -diagValues(2), "AbsTol", 1e-14);
-verifyEqual(testCase, T(2, 3), -diagValues(3), "AbsTol", 1e-14);
-
-frequency = 1000;
-s = 1i * 2 * pi * frequency;
-rhs = [1; 0];
-solution = (reduced.R_diag + s * reduced.L_tridiag) \ rhs;
-expectedZ = 1 / solution(1);
-verifyEqual(testCase, radia.clnImpedance( ...
-    reduced.R_diag, reduced.L_tridiag, frequency), expectedZ, "RelTol", 1e-12);
-verifySize(testCase, radia.clnImpedanceSweep( ...
-    reduced.R_diag, reduced.L_tridiag, [0, frequency]), [2, 1]);
-
-Q = [1, 0; 0, 1; 1, 1];
-M = [1, 2; 3, 4; 5, 6];
-verifyEqual(testCase, radia.clnTransformCoupling(Q, M), Q' * M, "AbsTol", 1e-14);
-verifyEqual(testCase, radia.clnTransformPort(Q, [2; 3; 4]), Q' * [2; 3; 4], ...
-    "AbsTol", 1e-14);
-
-P = [1, 2, 3; 2, 4, 6; 3, 6, 9];
-aca = radia.clnAcaCompress(P, 1e-10, 3);
-verifyEqual(testCase, aca.n, 3);
-verifyGreaterThanOrEqual(testCase, aca.k, 1);
-verifyLessThanOrEqual(testCase, aca.k, 3);
-verifyTrue(testCase, aca.converged);
-verifyEqual(testCase, aca.U * aca.V', P, "RelTol", 1e-8);
 end
 
 function testEVRSTMethodAlgebra(testCase)

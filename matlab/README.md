@@ -516,7 +516,7 @@ an independent NGSolve `BaseVector`; `setZero`, `scale`, `axpy`, `dot`, and
 MATLAB observation or control boundary. This keeps the iteration loop free of
 per-step DoF-array copies while preserving a clear MATLAB escape hatch.
 
-For the first native HCurl Eddy Bubble/CLN bridge, MATLAB can call the C++
+For the native HCurl Eddy Bubble bridge, MATLAB can call the C++
 NGSolve path directly. No Python process is involved:
 
 ```matlab
@@ -524,7 +524,7 @@ NGSolve path directly. No Python process is involved:
 ports = zeros(info.dof_count, 2);
 ports(1, 1) = 1;
 ports(2, 2) = 1;
-basis = radia.ngsolve.hcurl_eddy_cln_native_basis( ...
+basis = radia.ngsolve.hcurl_eddy_native_basis( ...
     "model.vol", 6, ports, 4);
 ```
 
@@ -536,16 +536,17 @@ receives only numeric arrays and metadata (`vectors`, `free_dofs`, `rank`, and
 and `port_rhs`, with the explicit projections `V'*M*V`, `V'*K*V`, and
 `V'*ports`.
 
-For a Python-free local HCurl diffusion CLN model, use the high-level builder:
+For a Python-free local HCurl diffusion Foster model, use the high-level builder:
 
 ```matlab
-model = radia.ngsolve.hcurl_eddy_cln_model( ...
+model = radia.ngsolve.hcurl_eddy_foster_model( ...
     "model.vol", 6, ports, 4, ...
     Conductivity=5.8e7, Reluctivity=1/(4*pi*1e-7));
 ```
 
-This forms `R = Reluctivity*K_r` and `L = Conductivity*M_r`, then creates the
-same passive discrete state-space contract used by Simulink. It is a local FE
+This forms `R = Reluctivity*K_r` and `L = Conductivity*M_r`, diagonalises
+them by `R*w = lambda*L*w` with `W'*L*W = I`, and returns the same passive
+Foster state-space contract used by Simulink (`model.modes` holds `W`). It is a local FE
 diffusion projection. The VIM external Laplace/BEM inductance, topology-aware
 surface/bridge eddy-bubble classification, and frequency-dependent SIBC DtN
 rationalization remain separate explicit stages; they are not inferred from
@@ -627,8 +628,6 @@ field-sensitive refinement.
 - B-input `radia.EnergyStopMaterial` with checked native-handle lifetime
 - complex dense solve and bulk/surface Schur complement (Foster + SIBC for eigenmode bulk)
 - skin impedance and SIBC tail/termination kernels
-- CLN Lanczos reduction, tridiagonal construction, impedance sweeps,
-  loop-star coupling transforms, and ACA/SVD star compression
 - PEEC filament geometry with a stateful HACApK inductance manager
 - monopole HDiv charge-Gram H-matrix with regular, transpose, and symmetric matvecs
 - persistent numeric HDiv/planar field evaluators for tet, curved-tet, cloud, and planar sources
@@ -1456,7 +1455,7 @@ The executable parity audit compares three pybind11 surfaces with the
 `radia_mex` command table: 100 mapped public top-level names, 21
 underscore-prefixed numerical kernels, and 128 stateful class members in the
 mapped contract.
-All 249 mapped entries are covered by the current 366-command gateway. The
+All 249 mapped entries are covered by the current 359-command gateway. The
 independent 21-command
 `optuna_mex` owns only its two API commands and 19 optimizer kernels. Three
 internal mesh/test helpers are

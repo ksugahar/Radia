@@ -6,7 +6,6 @@
 #include "rad_biot_savart_filaments.h"
 #include "rad_biot_savart_surface.h"
 #include "rad_bem_galerkin.h"
-#include "rad_cln.h"
 #include "rad_hacapk_bem.h"
 #include "rad_hacapk_hdiv.h"
 #include "rad_hacapk_peec.h"
@@ -1551,7 +1550,7 @@ mxArray* Commands() {
         "beam.lie.apply_dragt_finn_batch",
         "beam.orbit.track_reference_3d",
         "beam.orbit.track_reference_to_plane",
-        "hcurl.eddy_cln.native_basis",
+        "hcurl.eddy.native_basis",
         "hcurl.topopt.operator.create", "hcurl.topopt.operator.destroy",
         "hcurl.topopt.operator.info", "hcurl.topopt.operator.matvec",
         "hcurl.topopt.operator.to_dense",
@@ -1569,9 +1568,7 @@ mxArray* Commands() {
         "energy_stop.stored_energy", "hybrid_vim.solve", "hybrid_vim.schur",
         "hybrid_vim.skin_impedance", "hybrid_vim.sibc_admittance_tail",
         "hybrid_vim.sibc_termination_impedance",
-        "hybrid_vim.sibc_termination_admittance", "cln.lanczos",
-        "cln.build_tridiagonal", "cln.impedance", "cln.impedance_sweep",
-        "cln.transform_coupling", "cln.transform_port", "cln.aca_compress",
+        "hybrid_vim.sibc_termination_admittance",
         "evrs.tmethod",
         "hcurl.tet_reduced_gram",
         "hdiv.affine_cell_self_energy_shape_derivative",
@@ -4881,11 +4878,11 @@ void NGSolveMatrixInverse(int nlhs, mxArray* plhs[], int nrhs,
         std::move(inverse), matrix.fespace, "inverse(" + matrix.kind + ")")));
 }
 
-void HCurlEddyCLNNativeBasis(int nlhs, mxArray* plhs[], int nrhs,
-                             const mxArray* prhs[]) {
+void HCurlEddyNativeBasis(int nlhs, mxArray* plhs[], int nrhs,
+                          const mxArray* prhs[]) {
     if ((nrhs < 5 || nrhs > 7) || nlhs != 1)
         BadArgument(
-            "usage: out = radia_mex('hcurl.eddy_cln.native_basis', "
+            "usage: out = radia_mex('hcurl.eddy.native_basis', "
             "vol_path, order, ports, steps [, nograds [, rtol]])");
 
     const std::string path = Text(prhs[1], "vol_path");
@@ -4914,7 +4911,7 @@ void HCurlEddyCLNNativeBasis(int nlhs, mxArray* plhs[], int nrhs,
         BadArgument("ports row count must equal the HCurl DoF count");
 
     ngstd::LocalHeap local_heap(
-        NGSolveAssemblyHeapBytes(1 << 26), "radia_matlab_hcurl_eddy_cln");
+        NGSolveAssemblyHeapBytes(1 << 26), "radia_matlab_hcurl_eddy");
     auto mass_assembly = AssembleNGSolveSparse(
         fespace, "hcurl", "mass", "radia_hcurl_eddy_mass", local_heap);
     auto mass = mass_assembly.matrix;
@@ -5009,7 +5006,7 @@ void HCurlEddyCLNNativeBasis(int nlhs, mxArray* plhs[], int nrhs,
     }
 
     // Export the reduced FE operators together with the response basis.  The
-    // MATLAB side can therefore form a CLN model without rebuilding the
+    // MATLAB side can therefore form a Foster model without rebuilding the
     // high-order NGSolve space or copying the parent sparse matrices through
     // Python.  The system operator is M + K, so subtracting the separately
     // applied mass matrix gives the curl-curl block K without another global
@@ -6595,137 +6592,6 @@ void HybridScalar(const std::string& command, int nlhs, mxArray* plhs[],
             Scalar(prhs[3], "d"));
     }
     plhs[0] = ComplexScalarOutput(result);
-}
-
-void CLNLanczos(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
-    if ((nrhs < 3 || nrhs > 5) || nlhs != 1)
-        BadArgument("usage: result = radia_mex('cln.lanczos', K, N [, n_iter [, tol]])");
-    std::size_t kr = 0, kc = 0, nr = 0, nc = 0;
-    const auto K = RealMatrix(prhs[1], kr, kc, "K");
-    const auto N = RealMatrix(prhs[2], nr, nc, "N");
-    if (kr == 0 || kr != kc || nr != kr || nc != kc)
-        BadArgument("K and N must be non-empty square matrices of the same size");
-    const int n = MatrixDimension(kr, "K");
-    const int n_iter = nrhs >= 4 ? IntegerScalar(prhs[3], "n_iter") : -1;
-    const double tol = nrhs >= 5 ? Scalar(prhs[4], "tol") : 1e-30;
-    const auto result = radia::cln::lanczos(K.data(), N.data(), n, n_iter, tol);
-
-    const char* fields[] = {
-        "L", "R", "Q", "R_diag", "L_tridiag", "n_input", "n_output", "converged"};
-    plhs[0] = mxCreateStructMatrix(1, 1, 8, fields);
-    mxSetField(plhs[0], 0, "L", RealColumn(result.L));
-    mxSetField(plhs[0], 0, "R", RealColumn(result.R));
-    mxSetField(plhs[0], 0, "Q", RealMatrixOutput(
-        result.Q, static_cast<std::size_t>(result.n_input),
-        static_cast<std::size_t>(result.n_output)));
-    mxSetField(plhs[0], 0, "R_diag", RealMatrixOutput(
-        result.R_diag, static_cast<std::size_t>(result.n_output),
-        static_cast<std::size_t>(result.n_output)));
-    mxSetField(plhs[0], 0, "L_tridiag", RealMatrixOutput(
-        result.L_tridiag, static_cast<std::size_t>(result.n_output),
-        static_cast<std::size_t>(result.n_output)));
-    mxSetField(plhs[0], 0, "n_input", mxCreateDoubleScalar(result.n_input));
-    mxSetField(plhs[0], 0, "n_output", mxCreateDoubleScalar(result.n_output));
-    mxSetField(plhs[0], 0, "converged", mxCreateLogicalScalar(result.converged));
-}
-
-void CLNBuildTridiagonal(int nlhs, mxArray* plhs[], int nrhs,
-                         const mxArray* prhs[]) {
-    CheckArity(nrhs, 2, nlhs, 1,
-               "T = radia_mex('cln.build_tridiagonal', diag)");
-    const auto diag = RealVector(prhs[1], "diag");
-    if (diag.empty())
-        BadArgument("diag must be non-empty");
-    const int n = MatrixDimension(diag.size(), "diag");
-    plhs[0] = RealMatrixOutput(radia::cln::build_tridiagonal(diag.data(), n), n, n);
-}
-
-void CLNImpedance(int nlhs, mxArray* plhs[], int nrhs,
-                  const mxArray* prhs[]) {
-    CheckArity(nrhs, 4, nlhs, 1,
-               "Z = radia_mex('cln.impedance', R_diag, L_tridiag, freq)");
-    std::size_t rr = 0, rc = 0, lr = 0, lc = 0;
-    const auto R = RealMatrix(prhs[1], rr, rc, "R_diag");
-    const auto L = RealMatrix(prhs[2], lr, lc, "L_tridiag");
-    if (rr == 0 || rr != rc || lr != rr || lc != rc)
-        BadArgument("R_diag and L_tridiag must be non-empty square matrices of the same size");
-    plhs[0] = ComplexScalarOutput(radia::cln::compute_cln_impedance(
-        R.data(), L.data(), MatrixDimension(rr, "R_diag"),
-        Scalar(prhs[3], "freq")));
-}
-
-void CLNImpedanceSweep(int nlhs, mxArray* plhs[], int nrhs,
-                       const mxArray* prhs[]) {
-    CheckArity(nrhs, 4, nlhs, 1,
-               "Z = radia_mex('cln.impedance_sweep', R_diag, L_tridiag, freqs)");
-    std::size_t rr = 0, rc = 0, lr = 0, lc = 0;
-    const auto R = RealMatrix(prhs[1], rr, rc, "R_diag");
-    const auto L = RealMatrix(prhs[2], lr, lc, "L_tridiag");
-    const auto freqs = RealVector(prhs[3], "freqs");
-    if (rr == 0 || rr != rc || lr != rr || lc != rc)
-        BadArgument("R_diag and L_tridiag must be non-empty square matrices of the same size");
-    if (freqs.size() > static_cast<std::size_t>(std::numeric_limits<int>::max()))
-        BadArgument("freqs is too large");
-    std::vector<Complex> result(freqs.size());
-    radia::cln::compute_cln_impedance_sweep(
-        R.data(), L.data(), MatrixDimension(rr, "R_diag"), freqs.data(),
-        static_cast<int>(freqs.size()), result.data());
-    plhs[0] = ComplexMatrixOutput(result, freqs.size(), 1);
-}
-
-void CLNTransformCoupling(int nlhs, mxArray* plhs[], int nrhs,
-                           const mxArray* prhs[]) {
-    CheckArity(nrhs, 3, nlhs, 1,
-               "M = radia_mex('cln.transform_coupling', Q, M_LS)");
-    std::size_t qr = 0, qc = 0, mr = 0, mc = 0;
-    const auto Q = RealMatrix(prhs[1], qr, qc, "Q");
-    const auto M = RealMatrix(prhs[2], mr, mc, "M_LS");
-    if (qr == 0 || qc == 0 || mr != qr)
-        BadArgument("Q and M_LS have incompatible dimensions");
-    const int n_loop = MatrixDimension(qr, "Q");
-    const int n_reduced = MatrixDimension(qc, "Q columns");
-    const int n_star = MatrixDimension(mc, "M_LS columns");
-    plhs[0] = RealMatrixOutput(radia::cln::transform_coupling(
-        Q.data(), M.data(), n_loop, n_reduced, n_star), qc, mc);
-}
-
-void CLNTransformPort(int nlhs, mxArray* plhs[], int nrhs,
-                      const mxArray* prhs[]) {
-    CheckArity(nrhs, 3, nlhs, 1,
-               "v = radia_mex('cln.transform_port', Q, port)");
-    std::size_t qr = 0, qc = 0;
-    const auto Q = RealMatrix(prhs[1], qr, qc, "Q");
-    const auto port = RealVector(prhs[2], "port");
-    if (qr == 0 || qc == 0 || port.size() != qr)
-        BadArgument("Q and port have incompatible dimensions");
-    plhs[0] = RealColumn(radia::cln::transform_port_vector(
-        Q.data(), port.data(), MatrixDimension(qr, "Q"),
-        MatrixDimension(qc, "Q columns")));
-}
-
-void CLNACACompress(int nlhs, mxArray* plhs[], int nrhs,
-                    const mxArray* prhs[]) {
-    if ((nrhs < 2 || nrhs > 4) || nlhs != 1)
-        BadArgument("usage: result = radia_mex('cln.aca_compress', P [, eps [, kmax]])");
-    std::size_t pr = 0, pc = 0;
-    const auto P = RealMatrix(prhs[1], pr, pc, "P");
-    if (pr == 0 || pr != pc)
-        BadArgument("P must be a non-empty square matrix");
-    const double eps = nrhs >= 3 ? Scalar(prhs[2], "eps") : 1e-4;
-    const int kmax = nrhs >= 4 ? IntegerScalar(prhs[3], "kmax") : -1;
-    const auto result = radia::cln::aca_compress(
-        P.data(), MatrixDimension(pr, "P"), eps, kmax);
-    const char* fields[] = {"U", "V", "n", "k", "compression_ratio", "converged"};
-    plhs[0] = mxCreateStructMatrix(1, 1, 6, fields);
-    mxSetField(plhs[0], 0, "U", RealMatrixOutput(
-        result.U, static_cast<std::size_t>(result.n), static_cast<std::size_t>(result.k)));
-    mxSetField(plhs[0], 0, "V", RealMatrixOutput(
-        result.V, static_cast<std::size_t>(result.n), static_cast<std::size_t>(result.k)));
-    mxSetField(plhs[0], 0, "n", mxCreateDoubleScalar(result.n));
-    mxSetField(plhs[0], 0, "k", mxCreateDoubleScalar(result.k));
-    mxSetField(plhs[0], 0, "compression_ratio",
-               mxCreateDoubleScalar(result.compression_ratio));
-    mxSetField(plhs[0], 0, "converged", mxCreateLogicalScalar(result.converged));
 }
 
 void EVRSTMethodAlgebra(int nlhs, mxArray* plhs[], int nrhs,
@@ -12591,8 +12457,8 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
                    "radia_mex('ngsolve.vector.destroy', handle)");
         DestroyVector(Handle(prhs[1]));
     }
-    else if (command == "hcurl.eddy_cln.native_basis")
-        HCurlEddyCLNNativeBasis(nlhs, plhs, nrhs, prhs);
+    else if (command == "hcurl.eddy.native_basis")
+        HCurlEddyNativeBasis(nlhs, plhs, nrhs, prhs);
     else if (command == "energy_stop.create")
         EnergyCreate(nlhs, plhs, nrhs, prhs);
     else if (command == "energy_stop.destroy") {
@@ -12617,20 +12483,6 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
              command == "hybrid_vim.sibc_termination_impedance" ||
              command == "hybrid_vim.sibc_termination_admittance")
         HybridScalar(command, nlhs, plhs, nrhs, prhs);
-    else if (command == "cln.lanczos")
-        CLNLanczos(nlhs, plhs, nrhs, prhs);
-    else if (command == "cln.build_tridiagonal")
-        CLNBuildTridiagonal(nlhs, plhs, nrhs, prhs);
-    else if (command == "cln.impedance")
-        CLNImpedance(nlhs, plhs, nrhs, prhs);
-    else if (command == "cln.impedance_sweep")
-        CLNImpedanceSweep(nlhs, plhs, nrhs, prhs);
-    else if (command == "cln.transform_coupling")
-        CLNTransformCoupling(nlhs, plhs, nrhs, prhs);
-    else if (command == "cln.transform_port")
-        CLNTransformPort(nlhs, plhs, nrhs, prhs);
-    else if (command == "cln.aca_compress")
-        CLNACACompress(nlhs, plhs, nrhs, prhs);
     else if (command == "evrs.tmethod")
         EVRSTMethodAlgebra(nlhs, plhs, nrhs, prhs);
     else if (command == "hcurl.tet_reduced_gram")

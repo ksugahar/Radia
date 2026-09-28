@@ -21,7 +21,7 @@ silently dropped from the count.
 | Covered mapped MEX names | 100 |
 | Underscore numerical kernels | 21 / 21 covered |
 | Stateful pybind11 class surface | 128 / 128 covered |
-| Radia MEX gateway commands | 366 |
+| Radia MEX gateway commands | 359 |
 | Optuna MEX gateway commands | 21 |
 | MATLAB Optuna classes | 95 |
 | MATLAB Optuna functions | 90 |
@@ -115,9 +115,9 @@ MATLAB receives numeric or value-type contracts at the boundary:
   HCurl, and HDiv spaces, plus their native BaseVector views
 - `ngsolve.linear_form.create_boundary_from_coefficient` for real/complex
   boundary right-hand sides using NGSolve trace mappings
-- `hcurl.eddy_cln.native_basis` for direct C++ HCurl response-basis generation
-- `radia.ngsolve.hcurl_eddy_cln_model` for a Python-free native HCurl
-  response projection and local diffusion CLN state-space model
+- `hcurl.eddy.native_basis` for direct C++ HCurl response-basis generation
+- `radia.ngsolve.hcurl_eddy_foster_model` for a Python-free native HCurl
+  response projection and local diffusion Foster state-space model
 - `simulink.state_space.*` for persistent native discrete state-space handles
   used by Simulink without Python or per-step state-vector copies
 - `hdiv.field_evaluator.*` for persistent tet, curved-tet, and source-cloud
@@ -153,8 +153,8 @@ The canonical MATLAB names mirror the snake_case MEX/Python names:
 | `radia.HDivFieldEvaluator.coefficientFunction` | `hdiv.field_evaluator.as_coefficient` |
 | `radia.PlanarFieldEvaluator.coefficientFunction` | `hdiv.planar_evaluator.as_coefficient` |
 | `radia.HACApKChargeGramDerivative` | `hacapk.charge_gram_derivative.*` |
-| `radia.ngsolve.hcurl_eddy_cln_native_basis` | `hcurl.eddy_cln.native_basis` |
-| `radia.ngsolve.hcurl_eddy_cln_model` | `hcurl.eddy_cln.native_basis` + native CLN projection |
+| `radia.ngsolve.hcurl_eddy_native_basis` | `hcurl.eddy.native_basis` |
+| `radia.ngsolve.hcurl_eddy_foster_model` | `hcurl.eddy.native_basis` + native projection and Foster diagonalisation |
 | `radia.hcurl.tet_reduced_gram` | `hcurl.tet_reduced_gram` |
 
 Older names such as `radia.spaceInfo`, `radia.ngsolveMatrix`, and
@@ -273,12 +273,12 @@ including complex volume and boundary forms, are supported through
 `create_from_coefficient` and `create_boundary_from_coefficient`, retaining
 NGSolve's native test-function and trace mappings.
 
-`radia.ngsolve.hcurl_eddy_cln_model` is the first high-level native assembly
+`radia.ngsolve.hcurl_eddy_foster_model` is the first high-level native assembly
 path. It calls the C++ HCurl response reduction and returns the exact reduced
 projections `M_r = V' M V`, `K_r = V' K V`, and `P_r = V' ports`, then forms
 `R = reluctivity*K_r` and `L = conductivity*M_r` for the local HCurl diffusion
-convention. This gives MATLAB and Simulink a Python-free high-order FE/CLN
-workflow. It is deliberately not advertised as the full HCurl-VIM path: the
+convention, and diagonalises the pair into the Foster modal form. This gives
+MATLAB and Simulink a Python-free high-order FE/Foster workflow. It is deliberately not advertised as the full HCurl-VIM path: the
 external Laplace/BEM inductance, topology-aware eddy-bubble surface/bridge
 classification, and frequency-dependent SIBC DtN rationalization remain
 separate production stages.
