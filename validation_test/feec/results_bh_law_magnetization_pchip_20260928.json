@@ -147,5 +147,22 @@
       "tests/test_c_type_p1_box_lane.py::test_total_a_zero_source_shortcut_is_bit_identical (1e-12 relative, fails identically on the unchanged tree)"
     ],
     "not_run": "ESRF/three-engine campaign evidence was not recomputed; their recorded runs used PCHIP of B"
+  },
+  "accepted_esrf_evidence_impact": {
+    "method": "table-level bound, no re-run: max |B_new - B_old| / B_old over H in (0, H_max] on a 200001-point geometric grid",
+    "max_relative_B_change": {
+      "esrf5": 8.25e-07,
+      "esrf6": 3.27e-06,
+      "esrf7": 0.000309,
+      "esrf3": 0.000744
+    },
+    "case6_acceptance": {
+      "record": "validation_test/esrf_three_engine/results/candidate_4d85e72cc/case6_fem_repaired_acceptance.json",
+      "maximum_core_pairwise_relative_rms": 0.007818270599124209,
+      "gate": 0.01,
+      "margin": 0.002181729400875791,
+      "conclusion": "the constitutive change (3.3e-6) is ~700x below the remaining gate margin; not re-run"
+    },
+    "cases_3_and_7": "no accepted three-engine evidence exists (v5.0.3 README: case 7 and the case 3 direct-factorization failure remain separate work); nothing to re-verify"
   }
 }
