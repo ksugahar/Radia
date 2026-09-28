@@ -2,10 +2,10 @@
 """Golden tests for the exact separable DtN symbols in radia.open_boundary.
 
   - the wave (in s) and diffusion (in sqrt(s)) DtN share the SAME poles roots(theta_n);
-  - the companion auxiliary-ODE rates are roots(theta_n), all Re<0 => passive/stable;
+  - the companion auxiliary-ODE rates are roots(theta_n), all Re<0; no timestep stability inference;
   - a Foster fit in s FLOORS + ILL-CONDITIONS (the structural contrast);
-  - the sqrt(s) passive ladder has real negative poles (stable);
-  - the eddy DtN is analytic/bounded in Re(s)>0 (no RHP pole => passive).
+  - the sqrt(s) passive pole-residue fit has real negative poles (stable);
+  - the eddy DtN is analytic/bounded in Re(s)>0 (sampled right-half-plane regularity).
 """
 import numpy as np
 import pytest
@@ -63,11 +63,11 @@ def test_foster_in_s_floors_and_illconditions(n):
     assert sp32 > 1e4, f"n={n}: Foster should ill-condition (spread {sp32:.1e})"
 
 
-def test_sqrt_s_passive_ladder_stable():
-    """The sqrt(s) memory ladder has real positive p (poles -p<0 => stable) + fits."""
-    g, p, nrmse = ob.sqrt_s_passive_ladder(OMEGA, 12)
-    assert np.all(p > 0.0), "sqrt(s) ladder pole not in LHP"
-    assert np.all(g >= 0.0), "sqrt(s) ladder not passive (g_m<0)"
+def test_sqrt_s_passive_poles_stable():
+    """The sqrt(s) memory fit has real positive p (poles -p<0 => stable) + fits."""
+    g, p, nrmse = ob.sqrt_s_passive_poles(OMEGA, 12)
+    assert np.all(p > 0.0), "sqrt(s) fit pole not in LHP"
+    assert np.all(g >= 0.0), "sqrt(s) fit not passive (g_m<0)"
     assert nrmse < 5e-2
 
 
