@@ -1,6 +1,6 @@
 """validate_q2_codegen.py — Verify the JSON closed-form Q2 element matrices
 agree with the high-order Gauss prototype
-(validation_test/maglev/research_cln/axifem/axifem_quad_q2.py).
+(validation_test/axifem/research/prototypes/axifem_quad_q2.py).
 
 Procedure:
   1. Load reference numerical values produced by codegen_q2_henrotte.py from
@@ -23,7 +23,7 @@ from pathlib import Path
 import numpy as np
 from scipy.linalg import eigh
 
-PROTO = Path(__file__).resolve().parents[2] / "maglev" / "research_cln" / "axifem"
+PROTO = Path(__file__).resolve().parent / "prototypes"
 sys.path.insert(0, str(PROTO))
 
 from axifem_quad_q2 import (  # type: ignore

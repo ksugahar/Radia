@@ -67,11 +67,11 @@ def test_axifem_element_evidence_notebook_is_result_bearing():
 
 @pytest.mark.parametrize('source,names,expected', [
     ('axifem/research/validate_q2_codegen.py', ['PROTO'],
-     {'PROTO': 'maglev/research_cln/axifem'}),
+     {'PROTO': 'axifem/research/prototypes'}),
     ('axifem/research/verification/test_3way_cauer_cross_validation.py', ['BEM_DIR', 'BEM_REF'],
      {'BEM_REF': 'maglev/research_cln/ngsolve_validation/bem_disk_axisym_cauer_python_results.json'}),
     ('axifem/research/verification/test_hiruma_disk.py', ['BEM_TAU_REF_PATH'],
-     {'BEM_TAU_REF_PATH': 'maglev/research_cln/ngsolve_validation/bem_disk_axisym_v3_refined.json'}),
+     {'BEM_TAU_REF_PATH': 'axifem/research/bem_disk/bem_disk_axisym_v3_refined.json'}),
     ('maglev/research_cln/ngsolve_validation/disk_bem_cauer.py', ['_VERIF', 'Q1_JSON', 'Q2_JSON'],
      {'Q1_JSON': 'axifem/research/verification/test_hiruma_disk_q1_results.json',
       'Q2_JSON': 'axifem/research/verification/test_hiruma_disk_q2_results.json'}),
@@ -93,5 +93,5 @@ def test_research_reference_paths_follow_a_relocated_checkout(tmp_path, monkeypa
         # JSON results can be regenerated; their owning directories must ship.
         target = validation / relative
         assert (target.parent if target.suffix else target).is_dir()
-    assert (validation / 'maglev/research_cln/axifem/axifem_quad_q2.py').is_file()
+    assert (validation / 'axifem/research/prototypes/axifem_quad_q2.py').is_file()
     assert (validation / 'maglev/research_cln/ngsolve_validation/bem_disk_axisym_cauer.wls').is_file()

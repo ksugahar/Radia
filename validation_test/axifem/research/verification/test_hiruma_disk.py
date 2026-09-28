@@ -32,7 +32,7 @@ B0 = 1.0  # imposed axial flux density [T]
 
 BEM_TAU_REF_PATH = os.path.normpath(os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
-    "..", "..", "..", "maglev", "research_cln", "ngsolve_validation",
+    "..", "bem_disk",
     "bem_disk_axisym_v3_refined.json",
 ))
 

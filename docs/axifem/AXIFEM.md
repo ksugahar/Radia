@@ -301,7 +301,7 @@ K_V = T · V⁻ᵀ · K_phi · V⁻¹ · T,    T = diag(2π r_node)
 ```
 
 with `K_phi` provided in *closed form* by the Mathematica derivation
-(`validation_test/maglev/research_cln/axifem/derive_quad_q2_henrotte.wls`
+(`validation_test/axifem/research/prototypes/derive_quad_q2_henrotte.wls`
 → `q2_henrotte_generated.hpp`).
 
 ### Q2 curved quad status
@@ -338,11 +338,11 @@ matrices must keep the Hessian convention.
 
 ## Cross-validation references (per-element, machine precision)
 
-* `validation_test/maglev/research_cln/axifem/axifem_quad.py` (shipped test
+* `validation_test/axifem/research/prototypes/axifem_quad.py` (shipped test
   fixture: `tests/axifem/_reference_python/axifem_quad.py`) — validated
   Python prototype for `p=1`, gives τ₁ = 223.06 µs on the Cu disk (matches
   BEM v3 to 0.55 %).
-* `validation_test/maglev/research_cln/axifem/axifem_quad_q2.py` — Python
+* `validation_test/axifem/research/prototypes/axifem_quad_q2.py` — Python
   `p=2` Gauss-8×8 prototype; agrees
   with the Mathematica closed form to ~ 3.4 × 10⁻⁸ relative.
 * `validation_test/axifem/research/validate_q2_codegen.py` — runs both at the
@@ -393,7 +393,7 @@ were removed when axifem was absorbed into the radia wheel
 mathematical derivation behind the C++ source.
 
 The imported Mathematica derivation is tracked under
-[`validation_test/maglev/research_cln/axifem/`](../../validation_test/maglev/research_cln/axifem/)
+[`validation_test/axifem/research/prototypes/`](../../validation_test/axifem/research/prototypes/)
 (`derive_quad_q2_henrotte.wls` and `quad_q2_henrotte_matrices.json`).
 If the upstream JSON changes, regenerate `q2_henrotte_generated.hpp`, copy it
 into `src/ext/axifem/`, and run
