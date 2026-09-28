@@ -468,7 +468,7 @@ def main(argv: list[str] | None = None) -> int:
         default="picard-mass-riesz",
         help="explicit nonlinear HDiv solver; Picard mass-Riesz is the forward validation baseline",
     )
-    parser.add_argument("--reduced-a-solver", choices=("direct", "bddc", "ams", "auto"), default="direct")
+    parser.add_argument("--reduced-a-solver", choices=("direct", "sparsecholesky", "bddc", "ams", "auto"), default="direct")
     parser.add_argument("--source-potential-tolerance", type=float, default=None)
     parser.add_argument(
         "--source-tree-theta",

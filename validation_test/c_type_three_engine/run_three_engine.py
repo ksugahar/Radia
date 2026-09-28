@@ -279,6 +279,7 @@ def solve_hdiv(
     nonlinear_maximum_iterations: int,
     points: np.ndarray,
     image: str | None = None,
+    energy_observer=None,
 ) -> tuple[np.ndarray, dict[str, object]]:
     started = time.perf_counter()
     source_h = rad.RadiaField(coil, "h")
@@ -326,7 +327,12 @@ def solve_hdiv(
         for key in timing_keys
         if result.get(key) is not None
     }
+    solve_runtime = time.perf_counter() - started
+    energy_started = time.perf_counter()
+    energy = energy_observer.hdiv(result, coil) if energy_observer else None
     return field, {
+        "energy_observables": energy,
+        "energy_evaluation_s": time.perf_counter() - energy_started,
         "formulation": "HDiv-MMM",
         "discretization": "BDM%d" % order,
         "open_boundary": "Coulomb charge Gram; iron-only mesh",
@@ -341,7 +347,7 @@ def solve_hdiv(
         "timings": timings,
         "hmat_stats": dict(result.get("hmat_stats") or {}),
         "image": image,
-        "runtime_s": float(time.perf_counter() - started),
+        "runtime_s": solve_runtime,
     }
 
 
@@ -363,6 +369,7 @@ def solve_reduced_a(
     anderson_depth: int = 0,
     nu_initial=None,
     observation_points=None,
+    energy_observer=None,
 ) -> tuple[np.ndarray, dict[str, object]]:
     """HCurl reduced-A on the Kelvin mesh.
 
@@ -403,7 +410,12 @@ def solve_reduced_a(
                 dirichlet="GND", solver=linear_solver
             )
     field = evaluate_cf(solver.get_B(), mesh, points)
+    solve_runtime = time.perf_counter() - started
+    energy_started = time.perf_counter()
+    energy = energy_observer.fem(mesh, solver.get_B(), solver.get_H()) if energy_observer else None
     return field, {
+        "energy_observables": energy,
+        "energy_evaluation_s": time.perf_counter() - energy_started,
         "formulation": "HCurl reduced-A",
         "open_boundary": "periodic spherical Kelvin transform",
         "source_contract": "vacuum source removed; iron contrast RHS only",
@@ -420,7 +432,7 @@ def solve_reduced_a(
             "continuation" if nonlinear else None
         ),
         "nonlinear_stats": getattr(solver, "_last_nonlinear_stats", {}),
-        "runtime_s": float(time.perf_counter() - started),
+        "runtime_s": solve_runtime,
     }
 
 
@@ -449,6 +461,7 @@ def solve_omega(
     material_bonus_intorder: int | None = None,
     source_load: str = "volume",
     progress_callback=None,
+    energy_observer=None,
 ) -> tuple[np.ndarray, dict[str, object]]:
     """Run the mixed total/reduced Omega route on the Kelvin mesh.
 
@@ -509,7 +522,12 @@ def solve_omega(
         )
     field = evaluate_cf(result["B_cf"], mesh, points)
     source_trace = result["static_electromagnet_contract"]["source_trace"]
+    solve_runtime = time.perf_counter() - started
+    energy_started = time.perf_counter()
+    energy = energy_observer.fem(mesh, result["B_cf"], result["H_cf"]) if energy_observer else None
     return field, {
+        "energy_observables": energy,
+        "energy_evaluation_s": time.perf_counter() - energy_started,
         "formulation": "H1 mixed total/reduced Omega",
         "open_boundary": "periodic spherical Kelvin transform",
         "source_contract": (
@@ -553,7 +571,7 @@ def solve_omega(
         "ndof": int(result["fes"].ndof),
         "nonlinear": nonlinear,
         "nonlinear_stats": result.get("nonlinear_stats", {}),
-        "runtime_s": float(time.perf_counter() - started),
+        "runtime_s": solve_runtime,
     }
 
 
@@ -585,7 +603,7 @@ def main() -> None:
     parser.add_argument("--fem-order", type=int, default=2)
     parser.add_argument(
         "--reduced-a-solver",
-        choices=("direct", "bddc", "ams", "auto"),
+        choices=("direct", "sparsecholesky", "bddc", "ams", "auto"),
         default="direct",
     )
     parser.add_argument("--reduced-a-relax", type=float, default=0.1)

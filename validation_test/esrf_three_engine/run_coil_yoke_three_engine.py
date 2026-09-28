@@ -395,6 +395,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fem-mesh", type=Path, required=True)
     parser.add_argument("--fem-mesh-report", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--engines", nargs="+", choices=("hdiv_mmm", "reduced_a", "mixed_total_reduced_omega"),
+                        default=None, help="Run selected engines independently; subset is not three-engine acceptance")
+    parser.add_argument("--energy-quadrature-order", type=int, default=None,
+                        help="Record common finite physical-volume energy/coenergy; excludes Kelvin tail")
     parser.add_argument("--hdiv-order", choices=(1, 2), type=int, default=2)
     parser.add_argument("--fem-order", type=int, default=2)
     parser.add_argument("--hdiv-gram-eps", type=float, default=1.0e-12)
@@ -403,7 +407,7 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Explicit HDiv IMA mirror contract, for example --hdiv-image=-x-y for one ESRF quadrupole pole.",
     )
-    parser.add_argument("--reduced-a-solver", choices=("direct", "bddc", "ams", "auto"), default="direct")
+    parser.add_argument("--reduced-a-solver", choices=("direct", "sparsecholesky", "bddc", "ams", "auto"), default="direct")
     parser.add_argument("--reduced-a-relaxation", type=float, default=0.1)
     parser.add_argument("--nonlinear-tolerance", type=float, default=2.0e-5)
     parser.add_argument("--nonlinear-maximum-iterations", type=int, default=80)
@@ -559,6 +563,18 @@ def main(argv: list[str] | None = None) -> int:
         observation_half_width_m=float(options.observation_half_width),
         observation_quadrature="tensor_gauss_2x2x2",
     )
+    energy_observer = None
+    energy_module = None
+    if options.energy_quadrature_order is not None:
+        energy_path = CTYPE_RUNNER_PATH.with_name("magnetic_energy.py")
+        energy_spec = importlib.util.spec_from_file_location("_radia_energy_validation", energy_path)
+        energy_module = importlib.util.module_from_spec(energy_spec)
+        energy_spec.loader.exec_module(energy_module)
+        if options.hdiv_image is not None:
+            raise ValueError("energy quadrature currently requires a full iron mesh")
+        energy_observer = energy_module.PhysicalVolumeEnergy(fem_mesh, bh_table, options.energy_quadrature_order)
+        common["energy_contract"] = energy_observer.contract
+        common["energy_implementation_sha256"] = _sha256(energy_path)
     fields: dict[str, np.ndarray] = {}
     diagnostics: dict[str, dict[str, object]] = {}
 
@@ -574,6 +590,7 @@ def main(argv: list[str] | None = None) -> int:
             nonlinear_maximum_iterations=options.nonlinear_maximum_iterations,
             points=field_points,
             image=options.hdiv_image,
+            energy_observer=energy_observer,
         )
 
     def run_reduced_a(state):
@@ -594,6 +611,7 @@ def main(argv: list[str] | None = None) -> int:
             anderson_depth=options.reduced_a_anderson_depth,
             nu_initial=None if state is None else np.asarray(state["nu_elements"], dtype=float),
             observation_points=field_points,
+            energy_observer=energy_observer,
         )
 
     def run_mixed(state):
@@ -621,6 +639,7 @@ def main(argv: list[str] | None = None) -> int:
             mu_r_initial=(1000.0 if state is None
                           else np.asarray(state["mu_r_elements"], dtype=float)),
             observation_points=field_points,
+            energy_observer=energy_observer,
         )
 
     # (engine, solve(state), per-element state key or None)
@@ -688,6 +707,8 @@ def main(argv: list[str] | None = None) -> int:
         output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         return 0
     for name, solve, state_key in solver_specs:
+        if options.engines is not None and name not in options.engines:
+            continue
         checkpoint = output.with_suffix(f".{name}.checkpoint.json")
         state_path = output.with_suffix(f".{name}.state.json")
         contract = _checkpoint_contract(
@@ -745,6 +766,14 @@ def main(argv: list[str] | None = None) -> int:
                           provenance(name))
         if state_path.is_file():
             state_path.unlink()
+    if len(diagnostics) != 3:
+        output.write_text(json.dumps({
+            "schema": "radia.validation.esrf-coil-yoke-partial.v1",
+            "three_engine_acceptance": False, "case": int(case.number),
+            "engines": diagnostics, "fields_T": {name: value.tolist() for name, value in fields.items()},
+            "shared_input_contract": common,
+        }, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+        return 0
     formulation_contract = require_static_electromagnet_three_engine_contract(diagnostics)
     all_points = np.ones(len(points), dtype=bool)
     core = core_selector(case.number, points)
@@ -754,7 +783,11 @@ def main(argv: list[str] | None = None) -> int:
     nonlinear_converged = all(
         _is_converged_result(row, name, common["nonlinear"]) for name, row in diagnostics.items())
     passed = nonlinear_converged and fields_agree
+    energy_comparison = (energy_module.compare_energy({
+        name: row["energy_observables"] for name, row in diagnostics.items()
+    }) if energy_observer else None)
     result = {
+        "energy_comparison": energy_comparison,
         "schema": "radia.validation.esrf-coil-yoke-three-engine.v2",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "passed": bool(passed),
