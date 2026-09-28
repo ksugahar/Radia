@@ -48,7 +48,7 @@ NU_0 = 1.0 / MU_0
 def solve_fem_coilmesh(vol, frequency, I_target,
                        coil_sigma,
                        wp_sigma, wp_mu_r, half_thickness,
-                       fes_order=1, solver="pardiso",
+                       fes_order=1, solver="sparsecholesky",
                        sibc_bnd="sibc",
                        source_bnd="source", sink_bnd="sink",
                        coil_mat="coil",
@@ -68,6 +68,8 @@ def solve_fem_coilmesh(vol, frequency, I_target,
     and ``Z_s_wp`` is refreshed by ``esim.solve(H_t_rms)``.  ``bh_file``
     is required for ESIM (a 2-column ``H[A/m] B[T]`` table).
     """
+    if solver != "sparsecholesky":
+        raise ValueError("volumetric A-V coil solve supports only sparsecholesky")
     import radia  # noqa: F401  DLL path setup
 
     from ngsolve import (Mesh, HCurl, H1, Periodic, BilinearForm, LinearForm,
@@ -523,20 +525,22 @@ def solve_fem_coilmesh(vol, frequency, I_target,
             P_total_check = float(
                 Integrate(q_surf_cf, mesh, BND, definedon=wp_region).real)
             q_surf_mean = P_total_check / max(A_wp, 1e-30)
-            # H1 scalar field; non-wp DOFs remain at 0 by .Set's
-            # definedon=wp_region restriction.  Thermal Phase B loads
-            # this same .sol as the Neumann BC source.
-            fes_q = H1(mesh, order=fes_order)
-            gf_q = GridFunction(fes_q)
-            gf_q.vec[:] = 0
-            gf_q.Set(q_surf_cf, definedon=wp_region)
-            # Stats via mask trick (matches calc_fem_kelvin).
-            mask_gf = GridFunction(fes_q)
-            mask_gf.vec[:] = 0
-            mask_gf.Set(CF(1.0), definedon=wp_region)
-            mask_arr = np.asarray(mask_gf.vec.FV().NumPy())
+            # P1 cross-mesh handoff by the lumped L2 projection (as
+            # calc_fem_kelvin): power-conserving and non-negative; zero off
+            # the workpiece surface
+            from radia import ih_thermal
+            gf_q, on_wp = ih_thermal.lumped_surface_p1(mesh, q_surf_cf,
+                                                       wp_region)
+            qsurf_p1_power = float(
+                Integrate(gf_q, mesh, BND, definedon=wp_region).real)
+            p1_error = (qsurf_p1_power - P_total_check) / max(
+                abs(P_total_check), 1e-300)
+            if not abs(p1_error) <= 0.02:
+                raise RuntimeError(
+                    f"the P1 q_surf handoff integrates to {qsurf_p1_power:.6e}"
+                    f" W but the solved surface loss is {P_total_check:.6e} W "
+                    f"({p1_error:+.2%}); refine the workpiece surface mesh")
             q_arr = np.asarray(gf_q.vec.FV().NumPy())
-            on_wp = mask_arr > 0.5
             if np.any(on_wp):
                 vals = q_arr[on_wp]
                 q_surf_max = float(np.max(vals))
@@ -549,8 +553,9 @@ def solve_fem_coilmesh(vol, frequency, I_target,
                      f"p95={q_surf_p95:.3e} W/m^2 "
                      f"(P_check={P_total_check:.4e} vs P_total={P_total:.4e})")
         except Exception as e:
-            progress("FEM", f"Q_SURF stats failed: {type(e).__name__}: {e}")
-            gf_q = None
+            raise RuntimeError(
+                f"could not build the q_surf handoff field: "
+                f"{type(e).__name__}: {e}") from e
         # |J_s| = |H_t| on wp surface (scalar) and Re(J_s) (vector).
         gf_J = None
         gf_J_vec = None
@@ -616,8 +621,20 @@ def solve_fem_coilmesh(vol, frequency, I_target,
                                       f"{name_stem}_qsurf.sol").replace("\\", "/")
                 gf_q.Save(sol_Q)
                 qsurf_sol_path = sol_Q
+                import re as _re
+                from radia import ih_thermal
+                heated = sorted(n for n in set(mesh.GetBoundaries())
+                                if _re.fullmatch(str(sibc_bnd), n))
+                ih_thermal.write_field_sidecar(
+                    sol_Q, mesh_path=vol_B, mesh=mesh, fes_order=1,
+                    quantity=ih_thermal.QSURF_QUANTITY,
+                    unit=ih_thermal.QSURF_UNIT, boundaries=heated,
+                    extra={"P_wp_W": float(P_total_check),
+                           "qsurf_p1_power_W": qsurf_p1_power,
+                           "frequency_Hz": float(frequency),
+                           "producer": "calc_fem_coilmesh"})
                 sol_entries.append(
-                    {"sol": sol_Q, "fes": "H1", "fes_order": fes_order,
+                    {"sol": sol_Q, "fes": "H1", "fes_order": 1,
                      "fes_dim": 1, "name": "q_surf", "ncomp": 1})
             if gf_J is not None:
                 sol_J = _os.path.join(base_dir,
@@ -640,8 +657,11 @@ def solve_fem_coilmesh(vol, frequency, I_target,
                      f"({len(sol_entries)} views: "
                      f"{', '.join(e['name'] for e in sol_entries)})")
         except Exception as e:
-            msh_export_error = f"{type(e).__name__}: {e}"
-            progress("FEM", f"GMSH export failed: {msh_export_error}")
+            # the export carries the thermal q_surf handoff; a partial
+            # result must not look complete
+            raise RuntimeError(
+                f"field export to {msh_output} failed: "
+                f"{type(e).__name__}: {e}") from e
 
     result = {
         "status": "ok",
@@ -716,9 +736,8 @@ def build_argparser():
                         help="Workpiece relative permeability")
     parser.add_argument("--half-thickness", type=float, default=0.01)
     parser.add_argument("--fes-order", type=int, default=1)
-    parser.add_argument("--solver", default="pardiso",
-                        choices=["pardiso", "bddc", "iccg", "ams",
-                                  "shifted_ams"])
+    parser.add_argument("--solver", default="sparsecholesky",
+                        choices=["sparsecholesky"])
     parser.add_argument("--impedance-model", default="sibc",
                         choices=["sibc", "esim"],
                         help="sibc: linear Dowell (production). "
@@ -793,12 +812,6 @@ def main():
             return {
                 "error": "--impedance-model esim requires --bh-file "
                          "with a 2-column BH curve (H[A/m], B[T])."
-            }
-        if args.solver == "shifted_ams":
-            return {
-                "error": "shifted_ams solver is not yet wired into "
-                         "calc_fem_coilmesh. Use pardiso (direct) or "
-                         "bddc (iterative p>=2) for now."
             }
         result = solve_fem_coilmesh(
             vol=args.vol,

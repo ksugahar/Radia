@@ -19,20 +19,15 @@ Geometry convention
 
 q_surf cross-mesh transfer
 --------------------------
-The EM .vol from calc_fem_kelvin is 3D.  For each surface vertex
-(r, z) on the axisym mesh we sample the 3D GridFunction on its boundary at
-multiple azimuth angles (default 128) around the circle (r*cos(phi),
-r*sin(phi), z) and average.  When the EM model is also rotationally
-symmetric (the typical IH solenoid) the values agree across phi
-within numerical noise; when it is not (gapped torus) the average
-is the right physical quantity for the axisym thermal model.
-
-Boundary evaluation is essential here.  Independently generated 2D and 3D
-meshes generally describe the same CAD surface with slightly different
-facets.  Volume-point lookup can therefore reject a valid surface point and
-used to leave the corresponding thermal flux node silently at zero.  The
-transfer now projects through NGSolve's boundary point locator, records its
-coverage, and fails if the two surfaces are not compatible.
+The EM .vol is 3D.  Its heated surface is averaged exactly over the azimuth
+by :class:`ih_thermal.AxisymmetricSurfaceProfile`: each EM triangle is cut
+at meridian arc-length bin edges and integrated, so the average conserves
+the EM power and has no azimuthal sampling error.  Each heat-flux vertex of
+the (r, z) mesh takes the profile value at its meridian position; a vertex
+farther than the transfer tolerance from the EM meridian is an error, and
+so is a revolved heat input that differs from the EM power by more than
+``--power-tolerance``.  ``--n-phi-samples`` now drives an independent
+pointwise ring check that is reported alongside.
 
 Output schema mirrors calc_heat.py so the Heat panel does not need
 to know which solver produced the JSON.
@@ -64,6 +59,10 @@ from calc_heat import (  # noqa: E402
     _resolve_boundary_role,
     _resolve_material,
     _input_mesh_geometry_audit,
+    _locate_probe,
+    _probe_value,
+    _reject_options_with_uniform,
+    qsurf_args,
     _temperature_extrema,
     _validate_qsurf_transfer_order,
 )
@@ -119,176 +118,127 @@ def _reject_axis_boundary_roles(mesh, role_specs):
 # -----------------------------------------------------------------
 
 def _build_axisym_qsurf_gf(wp_mesh, heat_flux_boundary_names, args):
-    """Return an H1 GridFunction on the axisym mesh whose values on
-    ``heat_flux_boundary_names`` are the phi-averaged 3D q_surf.
+    """Return ``(gf, q_cf, audit)`` for the axisymmetric heating boundary.
+
+    The 3D EM source is averaged exactly over the azimuth
+    (:class:`ih_thermal.AxisymmetricSurfaceProfile`) and evaluated at the
+    meridian position of each heat-flux vertex.  Every vertex must lie on
+    the EM meridian within the transfer tolerance and the revolved heat
+    input must match the EM power within ``power_tolerance``.
+
+    ``args.n_phi_samples`` sets an independent check: the source is also
+    sampled pointwise on ``n_phi_samples`` azimuths through each vertex and
+    the ring mean is compared with the profile (reported, not enforced,
+    because pointwise sampling aliases narrow azimuthal features).
 
     A scalar ``--q-uniform`` short-circuits the projection.
     """
-    from ngsolve import (Mesh, H1, GridFunction, CoefficientFunction, BND)
+    from ngsolve import H1, GridFunction, CoefficientFunction, x as r_coord
+    from radia import ih_thermal
 
     if args.q_uniform is not None:
+        _reject_options_with_uniform(args)
         _log(f"Q_SURF:uniform {args.q_uniform:.4e} W/m^2")
-        return (
-            None,
-            CoefficientFunction(float(args.q_uniform)),
-            {
-                "mode": "uniform",
-                "evaluation_region": "not-applicable",
-                "n_phi_samples": 0,
-                "target_surface_vertices": 0,
-                "requested_samples": 0,
-                "accepted_samples": 0,
-                "coverage_fraction": 1.0,
-                "fully_sampled_vertices": 0,
-                "partially_sampled_vertices": 0,
-                "failed_vertices": 0,
-                "minimum_samples_per_vertex": 0,
-            },
-        )
+        return (None, CoefficientFunction(float(args.q_uniform)),
+                {"mode": "uniform"})
 
     if not args.qsurf_sol:
         raise ValueError(
             "Either --q-uniform or --qsurf-sol is required.")
-
-    qsurf_sol = os.path.abspath(args.qsurf_sol)
-    if not os.path.isfile(qsurf_sol):
-        raise FileNotFoundError(f"--qsurf-sol not found: {qsurf_sol}")
-
-    # --em-vol must be explicit (NGSolve .sol is a coefficient vector
-    # only -- no embedded mesh); see calc_heat.py for the rationale and
-    # the 2026-05-20 contract tightening.
     if not args.em_vol:
         raise ValueError(
             "--em-vol is required when --qsurf-sol is supplied.  "
             "NGSolve .sol files do not contain mesh information, "
             "so the EM .vol that the .sol was saved against must "
             "be passed explicitly.")
-    em_vol = os.path.abspath(args.em_vol)
-    if not os.path.isfile(em_vol):
-        raise FileNotFoundError(f"--em-vol not found: {em_vol}")
+    _validate_qsurf_transfer_order(args.qsurf_order)
 
-    _log(f"Q_SURF:loading {os.path.basename(qsurf_sol)} on "
-         f"{os.path.basename(em_vol)}")
-
-    em_mesh = Mesh(em_vol)
-    qsurf_order = _validate_qsurf_transfer_order(args.qsurf_order)
-    fes_q_em = H1(em_mesh, order=qsurf_order)
-    gf_q_em = GridFunction(fes_q_em)
-    gf_q_em.Load(qsurf_sol)
-
-    # Build axisym GridFunction.  Order matches qsurf order so the
-    # round trip preserves the spatial detail of the EM solve.
-    fes_wp_q = H1(wp_mesh, order=qsurf_order)
-    gf_wp_q = GridFunction(fes_wp_q)
-    gf_wp_q.vec[:] = 0
-
-    if isinstance(args.n_phi_samples, bool):
+    n_phi = args.n_phi_samples
+    if isinstance(n_phi, bool) or not isinstance(n_phi, int) or n_phi < 1:
         raise ValueError("--n-phi-samples must be a positive integer")
-    try:
-        n_phi = int(args.n_phi_samples)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(
-            "--n-phi-samples must be a positive integer"
-        ) from exc
-    if n_phi < 1 or str(n_phi) != str(args.n_phi_samples).strip():
-        raise ValueError("--n-phi-samples must be a positive integer")
-    phis = [2 * math.pi * k / n_phi for k in range(n_phi)]
 
-    surf_vertex_nrs = set()
-    for el in wp_mesh.Elements(BND):
-        if el.mat not in heat_flux_boundary_names:
-            continue
-        for v in el.vertices:
-            surf_vertex_nrs.add(v.nr)
+    names = sorted(heat_flux_boundary_names)
+    source = ih_thermal.EMHeatSource(
+        args.qsurf_sol, args.em_vol,
+        em_boundaries=args.em_heat_boundaries or None,
+        mode="phi-average", axis="z", q_scale=float(args.q_scale),
+        transfer_tolerance=args.transfer_tolerance, bin_width=args.q_phi_bin)
+    power_tol = (ih_thermal.DEFAULT_POWER_TOLERANCE
+                 if args.power_tolerance is None else args.power_tolerance)
+    _log(f"Q_SURF:{os.path.basename(source.qsurf_sol)} on "
+         f"{os.path.basename(source.em_vol)}, EM boundaries "
+         f"{source.em_boundaries} ({source.boundary_rule}), "
+         f"P_EM={source.power:.6e} W")
 
-    n_full = 0
-    n_partial = 0
-    n_fail = 0
-    accepted_samples = 0
-    minimum_samples = n_phi if surf_vertex_nrs else 0
-    failed_coordinates = []
-    for vnr in surf_vertex_nrs:
-        v = wp_mesh.vertices[vnr]
-        # 2D mesh stores axisym coords as (r, z, 0).
-        r, z = float(v.point[0]), float(v.point[1])
-        accum = 0.0
-        n_local = 0
-        for phi in phis:
-            x3, y3, z3 = r * math.cos(phi), r * math.sin(phi), z
-            try:
-                # q_surf is a boundary field.  Independent 2D and 3D
-                # meshes usually have slightly different facets even when
-                # they came from the same CAD body, so volume lookup is not
-                # a valid surface-to-surface transfer.
-                em_mip = em_mesh(x3, y3, z3, BND)
-                val = gf_q_em(em_mip)
-                accum += float(getattr(val, "real", val))
-                n_local += 1
-            except Exception:
-                # Individual misses are counted below.  A missing target
-                # vertex or poor global coverage is an error, never a
-                # zero-flux fallback.
-                continue
-        accepted_samples += n_local
-        minimum_samples = min(minimum_samples, n_local)
-        if n_local > 0:
-            gf_wp_q.vec.FV()[vnr] = accum / n_local
-            if n_local == n_phi:
-                n_full += 1
-            else:
-                n_partial += 1
-        else:
-            n_fail += 1
-            if len(failed_coordinates) < 5:
-                failed_coordinates.append([r, z])
+    gf_wp_q = GridFunction(H1(wp_mesh, order=1))
+    first = source.transfer(wp_mesh, names, gf_wp_q,
+                            power_tolerance=power_tol, meridian=True,
+                            weight=2.0 * math.pi * r_coord)
+    vnrs = first.pop("vertex_numbers")
+    rz = ih_thermal.mesh_vertices(wp_mesh)[vnrs][:, :2]
+    values = np.asarray(gf_wp_q.vec.FV().NumPy())[vnrs]
 
-    target_vertices = len(surf_vertex_nrs)
-    requested_samples = target_vertices * n_phi
-    coverage = (
-        accepted_samples / requested_samples
-        if requested_samples else 0.0
-    )
-    audit = {
-        "mode": "phi-averaged-3d-boundary",
-        "evaluation_region": "BND",
-        "n_phi_samples": n_phi,
-        "target_surface_vertices": target_vertices,
-        "requested_samples": requested_samples,
-        "accepted_samples": accepted_samples,
-        "coverage_fraction": coverage,
-        "fully_sampled_vertices": n_full,
-        "partially_sampled_vertices": n_partial,
-        "failed_vertices": n_fail,
-        "minimum_samples_per_vertex": minimum_samples,
-    }
-    _log(
-        f"Q_SURF:phi-averaged boundary transfer: vertices="
-        f"{target_vertices - n_fail}/{target_vertices}, samples="
-        f"{accepted_samples}/{requested_samples} ({coverage:.1%}), "
-        f"n_phi={n_phi}"
-    )
-    if target_vertices == 0:
-        raise ValueError(
-            "The selected heat-flux boundaries contain no boundary vertices."
-        )
-    if n_fail:
-        raise ValueError(
-            "Axisymmetric q_surf transfer could not locate the 3D EM "
-            f"boundary for {n_fail}/{target_vertices} thermal boundary "
-            f"vertices (first (r,z) coordinates: {failed_coordinates}). "
-            "The 2D thermal meridian must describe the same physical "
-            "workpiece surface as --em-vol; no zero-flux fallback was "
-            "applied."
-        )
-    if coverage < 0.80:
-        raise ValueError(
-            "Axisymmetric q_surf boundary-transfer coverage is only "
-            f"{coverage:.1%} ({accepted_samples}/{requested_samples} "
-            "azimuth samples). The 2D thermal meridian does not match the "
-            "3D EM workpiece closely enough; no partial-transfer fallback "
-            "was applied."
-        )
+    # Independent pointwise ring check (reported; pointwise sampling aliases
+    # narrow azimuthal features, so it is not a gate).
+    phis = 2.0 * math.pi * np.arange(n_phi) / n_phi
+    ring = np.c_[
+        (rz[:, :1] * np.cos(phis)[None, :]).ravel(),
+        (rz[:, :1] * np.sin(phis)[None, :]).ravel(),
+        np.repeat(rz[:, 1], n_phi)]
+    tri, lam, d_ring = source.surface.locate(ring)
+    ring_vals = np.einsum("ij,ij->i", lam,
+                          source.surface.values[source.surface.tris[tri]])
+    inside = (d_ring <= source.transfer_tolerance).reshape(-1, n_phi)
+    ring_vals = ring_vals.reshape(-1, n_phi)
+    full = inside.all(axis=1)
+    scale = max(float(np.max(np.abs(values))), 1e-300)
+    ring_dev = (float(np.max(np.abs(ring_vals[full].mean(axis=1)
+                                    - values[full])) / scale)
+                if np.any(full) else None)
 
+    audit = source.audit()
+    audit.update({
+        "power_tolerance": float(power_tol),
+        "initial": first,
+        "pointwise_ring_check": {
+            "n_phi_samples": n_phi,
+            "vertices_fully_on_source": int(full.sum()),
+            "vertices": int(len(vnrs)),
+            "max_relative_deviation": ring_dev,
+        },
+    })
+    _log(f"Q_SURF:phi-average to {len(vnrs)} vertices, max distance "
+         f"{first['max_transfer_distance_m']:.3e} m, revolved P/P_EM - 1 = "
+         f"{first['power_balance']['relative_error']:+.3e}, pointwise "
+         f"{n_phi}-azimuth ring check "
+         f"{ring_dev if ring_dev is None else f'{ring_dev:.3e}'}")
+    if args.em_table:
+        if args.em_reference_temperature is None:
+            raise ValueError("--em-reference-temperature (the workpiece "
+                             "temperature of the EM run) is required with "
+                             "--em-table")
+        coupled, coupled_audit = ih_thermal.build_temperature_dependent_source(
+            source, table_path=args.em_table,
+            target_xyz=np.c_[rz[:, 0], np.zeros(len(rz)), rz[:, 1]],
+            q_ref=values.copy(), gf_target=gf_wp_q, dofs=vnrs,
+            T_ref=float(args.em_reference_temperature),
+            H_scale=float(args.ht_scale), ht_sol=args.ht_sol,
+            azimuths=int(args.em_table_azimuths),
+            allow_extrapolation=bool(args.allow_em_table_extrapolation),
+            consistency_tolerance=args.em_table_tolerance,
+            acknowledge_frozen_ht=bool(args.allow_frozen_ht))
+        audit["temperature_dependent_source"] = coupled_audit
+        audit["_coupled"] = coupled
+        _log(f"Q_SURF:temperature-dependent source from "
+             f"{os.path.basename(args.em_table)} (T_ref="
+             f"{float(args.em_reference_temperature):g} C, |H_t| "
+             f"{coupled_audit['H_t_range_A_m'][0]:.3e}.."
+             f"{coupled_audit['H_t_range_A_m'][1]:.3e} A/m)")
+    else:
+        for attr, flag in (("ht_sol", "--ht-sol"),
+                           ("allow_frozen_ht", "--allow-frozen-ht")):
+            if getattr(args, attr):
+                raise ValueError(f"{flag} only applies with --em-table")
     return gf_wp_q, gf_wp_q, audit
 
 
@@ -304,6 +254,21 @@ def solve_heat_axisym(wp_vol,
                       radiation_boundaries="",
                       q_uniform=None, qsurf_sol="", em_vol="",
                       qsurf_order=1, n_phi_samples=128,
+                      em_heat_boundaries="", q_scale=1.0,
+                      transfer_tolerance=None, power_tolerance=None,
+                      q_phi_bin=None,
+                      exposure_thresholds=(), temperature_limit=None,
+                      material_table="", latent_heat=0.0,
+                      em_table="", ht_sol="", ht_scale=1.0,
+                      em_reference_temperature=None,
+                      em_table_azimuths=64,
+                      allow_em_table_extrapolation=False,
+                      em_table_tolerance=0.05,
+                      allow_frozen_ht=False,
+                      latent_range=None,
+                      allow_table_extrapolation=False,
+                      newton_tol=1.0e-3, newton_max_iter=25,
+                      max_halvings=0,
                       dt=0.5, t_end=5.0,
                       time_scheme="backward-euler",
                       linear_solver="sparsecholesky",
@@ -395,10 +360,9 @@ def solve_heat_axisym(wp_vol,
     # value for the JSON output; the solve itself is unchanged
     # (rotation is implicit in the axisymmetric assumption).
     if float(rotation_rpm) > 0.0:
-        _log(f"ROTATION:rpm={float(rotation_rpm):g} axisym -- "
-             f"phi-averaging over {int(n_phi_samples)} samples "
-             "models the long-time-average heat input from a "
-             "spinning workpiece.")
+        _log(f"ROTATION:rpm={float(rotation_rpm):g} axisym -- the exact "
+             "circumferential average models the long-time-average heat "
+             "input from a spinning workpiece.")
 
     # Standard NGSolve H1 + 2 pi r weighting (FEMM-canonical; matches
     # the heat solver in FEMM's hsolv/prob1big.cpp -- standard P1
@@ -442,62 +406,129 @@ def solve_heat_axisym(wp_vol,
              "--fes-order 2 (the default) unless you are "
              "deliberately reproducing an order-1 result.")
 
-    class _Args:
-        pass
-    a_local = _Args()
-    a_local.q_uniform = q_uniform
-    a_local.qsurf_sol = qsurf_sol
-    a_local.em_vol = em_vol
-    a_local.qsurf_order = qsurf_order
+    a_local = qsurf_args(
+        q_uniform=q_uniform, qsurf_sol=qsurf_sol, em_vol=em_vol,
+        qsurf_order=qsurf_order, q_phi_bin=q_phi_bin,
+        em_heat_boundaries=em_heat_boundaries, q_scale=q_scale,
+        transfer_tolerance=transfer_tolerance,
+        power_tolerance=power_tolerance, em_table=em_table, ht_sol=ht_sol,
+        ht_scale=ht_scale, em_reference_temperature=em_reference_temperature,
+        em_table_azimuths=em_table_azimuths,
+        allow_em_table_extrapolation=allow_em_table_extrapolation,
+        em_table_tolerance=em_table_tolerance,
+        allow_frozen_ht=allow_frozen_ht)
     a_local.n_phi_samples = n_phi_samples
-    gf_q, q_cf, qsurf_projection = _build_axisym_qsurf_gf(
-        wp_mesh, set(heat_flux_names), a_local)
+    try:
+        gf_q, q_cf, qsurf_projection = _build_axisym_qsurf_gf(
+            wp_mesh, set(heat_flux_names), a_local)
+    except (ValueError, FileNotFoundError) as exc:
+        return {"error": str(exc)}
+    coupled = qsurf_projection.pop("_coupled", None)
 
-    # ------- Bilinear forms (axisym weight = 2*pi*r) -------
-    # ``r_coord`` is NGSolve's x global coordinate (= radial coord).
-    weight = 2 * math.pi * r_coord
-    K_cf = CF(float(k_v))
-    rho_cp = CF(float(rho_v) * float(cp_v))
-
-    a_form = BilinearForm(fes_T, symmetric=True)
-    a_form += K_cf * InnerProduct(grad(u), grad(v)) * weight * dx
-    if float(h_conv) != 0.0:
-        a_form += float(h_conv) * v * u * weight * ds(convection_selector)
-
-    m_form = BilinearForm(fes_T, symmetric=True)
-    m_form += rho_cp * u * v * weight * dx
+    # Uniform initial state.  ``gfT.vec[:] = T0`` is WRONG for order >= 2:
+    # the hierarchical H1 edge/face coefficients are not nodal
+    # temperatures, so a constant coefficient vector is not a constant
+    # field.  Set() interpolates the constant exactly at every order.
     with TaskManager():
-        # Uniform initial state.  ``gfT.vec[:] = T0`` is WRONG for
-        # order >= 2: the hierarchical H1 edge/face coefficients are
-        # not nodal temperatures, so a constant coefficient vector is
-        # not a constant field.  Set() interpolates the constant
-        # exactly at every order.
         gfT.Set(CF(float(t_initial)))
-        a_form.Assemble()
-        m_form.Assemble()
+    weight = 2 * math.pi * r_coord
 
-    if time_scheme not in ("backward-euler", "crank-nicolson"):
-        raise ValueError(
-            f"Unsupported --time-scheme {time_scheme!r}.")
-    theta = 1.0 if time_scheme == "backward-euler" else 0.5
+    from radia import ih_heat_transient
+    from radia import ih_thermal_material
+    try:
+        if material_table:
+            thermal_material = ih_thermal_material.ThermalMaterial.from_csv(
+                material_table, rho=rho_v, latent_heat=latent_heat,
+                latent_range=latent_range,
+                allow_extrapolation=allow_table_extrapolation)
+        else:
+            if latent_heat:
+                raise ValueError("--latent-heat needs --material-table")
+            thermal_material = ih_thermal_material.ThermalMaterial.constant(
+                rho_v, cp_v, k_v)
+    except (ValueError, OSError) as exc:
+        return {"error": f"material table: {exc}"}
+    nonlinear = (not thermal_material.is_constant) or coupled is not None
+    if nonlinear and time_scheme != "backward-euler":
+        return {"error": "temperature-dependent materials are integrated "
+                         "with the enthalpy backward-Euler scheme only; "
+                         "drop --time-scheme crank-nicolson"}
 
-    mstar = m_form.mat.CreateMatrix()
-    mstar.AsVector().data = (
-        m_form.mat.AsVector() + (theta * float(dt)) * a_form.mat.AsVector())
-    inv = mstar.Inverse(freedofs=fes_T.FreeDofs(),
-                         inverse=linear_solver)
-    res_vec = gfT.vec.CreateVector()
-    _log(f"SOLVER:{linear_solver} ({time_scheme}, dt={dt}, t_end={t_end})")
+    if not nonlinear:
+        # ------- Bilinear forms (axisym weight = 2*pi*r) -------
+        # ``r_coord`` is NGSolve's x global coordinate (= radial coord).
+        weight = 2 * math.pi * r_coord
+        K_cf = CF(float(k_v))
+        rho_cp = CF(float(rho_v) * float(cp_v))
+
+        a_form = BilinearForm(fes_T, symmetric=True)
+        a_form += K_cf * InnerProduct(grad(u), grad(v)) * weight * dx
+        if float(h_conv) != 0.0:
+            a_form += float(h_conv) * v * u * weight * ds(convection_selector)
+
+        m_form = BilinearForm(fes_T, symmetric=True)
+        m_form += rho_cp * u * v * weight * dx
+        with TaskManager():
+            a_form.Assemble()
+            m_form.Assemble()
+
+        if time_scheme not in ("backward-euler", "crank-nicolson"):
+            raise ValueError(
+                f"Unsupported --time-scheme {time_scheme!r}.")
+        theta = 1.0 if time_scheme == "backward-euler" else 0.5
+
+        mstar = m_form.mat.CreateMatrix()
+        mstar.AsVector().data = (
+            m_form.mat.AsVector() + (theta * float(dt)) * a_form.mat.AsVector())
+        inv = mstar.Inverse(freedofs=fes_T.FreeDofs(),
+                             inverse=linear_solver)
+        res_vec = gfT.vec.CreateVector()
+        _log(f"SOLVER:{linear_solver} ({time_scheme}, dt={dt}, t_end={t_end})")
+
+    else:
+        stepper = ih_heat_transient.NonlinearHeatStepper(
+            gfT, thermal_material,
+            ih_heat_transient.HeatBoundaryTerms(
+                heat_flux=heat_flux_selector,
+                convection=convection_selector if float(h_conv) else "",
+                h_conv=float(h_conv), t_ext=float(t_ext),
+                radiation=radiation_selector if float(emissivity) else "",
+                emissivity=float(emissivity)),
+            weight=weight, q_source=q_cf,
+            q_update=(None if coupled is None else
+                      (lambda g: coupled.update(g, coupled_T_dofs))),
+            q_damping=None if coupled is None else coupled.gf_damping,
+            linear_solver=linear_solver,
+            newton_tol_K=float(newton_tol),
+            max_newton=int(newton_max_iter),
+            max_halvings=int(max_halvings))
+        if coupled is not None:
+            from ngsolve import NodeId as _NodeId, VERTEX as _VERTEX
+            coupled_T_dofs = np.asarray([
+                fes_T.GetDofNrs(_NodeId(_VERTEX, int(vn)))[0]
+                for vn in coupled.dofs])
+            try:
+                coupled.update(gfT, coupled_T_dofs)
+            except ValueError as exc:
+                return {"error": str(exc)}
+        _log(f"SOLVER:{linear_solver} (enthalpy backward-euler + Newton, "
+             f"dt={dt}, t_end={t_end})")
 
     # ------- Time loop -------
     t_arr = [0.0]
     T_probe = []
+    probe_mip = None
     if probe_point is not None:
         try:
-            mip = wp_mesh(*[float(c) for c in probe_point])
-            T_probe.append(float(getattr(gfT(mip), "real", gfT(mip))))
-        except Exception:
-            T_probe.append(float("nan"))
+            probe_mip = _locate_probe(wp_mesh, probe_point)
+        except ValueError as exc:
+            return {"error": str(exc)}
+        T_probe.append(_probe_value(gfT, probe_mip))
+    from ngsolve import NodeId, VERTEX
+    vertex_dofs_T = np.asarray([
+        fes_T.GetDofNrs(NodeId(VERTEX, vtx.nr))[0]
+        for vtx in wp_mesh.vertices])
+    T_max_history = [float(t_initial)]
 
     n_steps = int(math.ceil(t_end / dt))
 
@@ -513,40 +544,71 @@ def solve_heat_axisym(wp_vol,
     _log(f"Q_SURF:int q dA = {q_int:.4e} W (axisym area "
          f"{A_surf_axisym:.4e} m^2)")
     Q_input_J = 0.0
+    heat_input_history = []            # W, per step (end-of-step source)
 
     for step in range(1, n_steps + 1):
         t = step * float(dt)
-        f_form = LinearForm(fes_T)
-        f_form += q_cf * v * weight * ds(heat_flux_selector)
-        if float(h_conv) != 0.0:
-            f_form += float(h_conv) * float(t_ext) * v * weight \
-                * ds(convection_selector)
-        if float(emissivity) > 0.0:        # radiation (explicit, prev-step T, in K)
-            _TK = gfT + 273.15
-            f_form += -float(emissivity) * SIGMA_SB \
-                * (_TK**4 - (float(t_ext) + 273.15)**4) * v * weight \
-                * ds(radiation_selector)
-        with TaskManager():
-            f_form.Assemble()
-            res_vec.data = f_form.vec - a_form.mat * gfT.vec
-            gfT.vec.data += float(dt) * (inv * res_vec)
-        Q_input_J += q_int * float(dt)
-        t_arr.append(t)
-        if probe_point is not None:
+        if nonlinear:
             try:
-                mip = wp_mesh(*[float(c) for c in probe_point])
-                val = gfT(mip)
-                T_probe.append(float(getattr(val, "real", val)))
-            except Exception:
-                T_probe.append(float("nan"))
+                with TaskManager():
+                    stepper.advance(float(dt))
+            except (ValueError, RuntimeError) as exc:
+                return {"error": f"t={t:.4g} s: {exc}"}
+        else:
+            f_form = LinearForm(fes_T)
+            f_form += q_cf * v * weight * ds(heat_flux_selector)
+            if float(h_conv) != 0.0:
+                f_form += float(h_conv) * float(t_ext) * v * weight \
+                    * ds(convection_selector)
+            if float(emissivity) > 0.0:    # radiation (explicit, prev-step T, in K)
+                _TK = gfT + 273.15
+                f_form += -float(emissivity) * SIGMA_SB \
+                    * (_TK**4 - (float(t_ext) + 273.15)**4) * v * weight \
+                    * ds(radiation_selector)
+            with TaskManager():
+                f_form.Assemble()
+                res_vec.data = f_form.vec - a_form.mat * gfT.vec
+                gfT.vec.data += float(dt) * (inv * res_vec)
+        Q_input_J += q_int * float(dt)
+        heat_input_history.append(float(stepper.last_heat_input_W)
+                                  if nonlinear else q_int)
+        t_arr.append(t)
+        T_max_history.append(
+            float(np.max(gfT.vec.FV().NumPy()[vertex_dofs_T])))
+        if probe_mip is not None:
+            T_probe.append(_probe_value(gfT, probe_mip))
         _log(f"STEP:{step}/{n_steps} t={t:.3f}s "
              f"T_probe={T_probe[-1] if probe_point is not None else 'n/a'}")
+
+    if nonlinear:
+        try:
+            stepper.check_energy()
+        except RuntimeError as exc:
+            return {"error": str(exc)}
+        Q_input_J = stepper.audit.energy_in_J
+        q_int = stepper.last_heat_input_W
+    if coupled is not None:
+        qsurf_projection["temperature_dependent_source"].update(
+            coupled.audit())
 
     # Raw order>=2 H1 coefficients are not temperatures, and vertices
     # alone can miss a higher-order field extremum.
     T_min, T_max, T_extrema = _temperature_extrema(
         gfT, wp_mesh, fes_order
     )
+    from radia import ih_thermal_post
+    thresholds = sorted(set(float(t) for t in (exposure_thresholds or ())))
+    if temperature_limit is not None:
+        thresholds = sorted(set(thresholds) | {float(temperature_limit)})
+    thermal_exposure = ih_thermal_post.thermal_exposure(
+        wp_mesh, gfT, thresholds, axisymmetric=True)
+    limit_record = (ih_thermal_post.limit_check(thermal_exposure,
+                                                temperature_limit)
+                    if temperature_limit is not None else None)
+    for entry in thermal_exposure["thresholds"]:
+        _log(f"EXPOSURE:T>{entry['T_C']:g} C volume "
+             f"{entry['volume_m3'] * 1e9:.3f} mm^3 "
+             f"({entry['volume_fraction']:.3%})")
     # Physical volume mean.  The computational mesh is a meridian section,
     # so both numerator and denominator require the same 2*pi*r Jacobian.
     revolved_volume = float(Integrate(weight, wp_mesh))
@@ -573,6 +635,15 @@ def solve_heat_axisym(wp_vol,
             vol_T = os.path.join(base_dir, f"{stem}_heat.vol").replace("\\", "/")
             save_vol_sol_pair(vol_T, sol_T, wp_mesh.ngmesh, gfT)
             T_sol_file = sol_T
+            from radia import ih_thermal
+            ih_thermal.write_field_sidecar(
+                sol_T, mesh_path=vol_T, mesh=wp_mesh,
+                fes_order=int(fes_order),
+                quantity=ih_thermal.TEMPERATURE_QUANTITY,
+                unit=ih_thermal.TEMPERATURE_UNIT,
+                extra={"producer": "calc_heat_axisym",
+                       "geometry": "axisymmetric-rz",
+                       "t_end_s": float(t_end)})
             heat_vol_file = vol_T
             sol_entries = [
                 {"sol": sol_T, "fes": "H1",
@@ -594,14 +665,17 @@ def solve_heat_axisym(wp_vol,
                      "fes_dim": 1,
                      "name": "q_surf", "ncomp": 1})
             except Exception as e:
-                _log(f"GMSH_qsurf overlay skipped: "
-                     f"{type(e).__name__}: {e}")
+                raise RuntimeError(
+                    f"could not write the q_surf overlay: "
+                    f"{type(e).__name__}: {e}") from e
             vol2msh(msh_output, vol_T, sol_entries)
             gmsh_file = msh_output
             _log(f"GMSH:wrote {os.path.basename(msh_output)} "
                  f"({len(sol_entries)} fields, 2D axisym)")
         except Exception as e:
-            _log(f"GMSH_ERROR:{type(e).__name__}: {e}")
+            raise RuntimeError(
+                f"thermal field export to {msh_output} failed: "
+                f"{type(e).__name__}: {e}") from e
     elif _write_solution:
         # No --msh-output: still save T.sol alongside wp_vol so a
         # later evaluation pass can reload it (mirrors qsurf.sol
@@ -613,11 +687,22 @@ def solve_heat_axisym(wp_vol,
                 base_dir, f"{stem}_heat_T.sol").replace("\\", "/")
             gfT.Save(sol_T)
             T_sol_file = sol_T
+            from radia import ih_thermal
+            ih_thermal.write_field_sidecar(
+                sol_T, mesh_path=wp_vol, mesh=wp_mesh,
+                fes_order=int(fes_order),
+                quantity=ih_thermal.TEMPERATURE_QUANTITY,
+                unit=ih_thermal.TEMPERATURE_UNIT,
+                extra={"producer": "calc_heat_axisym",
+                       "geometry": "axisymmetric-rz",
+                       "t_end_s": float(t_end)})
             _log(f"T_SOL:wrote {os.path.basename(sol_T)} "
                  f"(no GMSH bundle requested; load with the same "
                  f"wp_vol + H1 order={fes_order}, axisym 2D)")
         except Exception as e:
-            _log(f"T_SOL_ERROR:{type(e).__name__}: {e}")
+            raise RuntimeError(
+                f"could not save the temperature field: "
+                f"{type(e).__name__}: {e}") from e
 
     if csv_output and probe_point is not None:
         try:
@@ -629,7 +714,9 @@ def solve_heat_axisym(wp_vol,
                     w.writerow([f"{ti:.6f}", f"{Ti:.6f}"])
             _log(f"CSV:wrote {os.path.basename(csv_output)}")
         except Exception as e:
-            _log(f"CSV_ERROR:{type(e).__name__}: {e}")
+            raise RuntimeError(
+                f"could not write {csv_output}: "
+                f"{type(e).__name__}: {e}") from e
 
     t_total = time.perf_counter() - t0
     _log(f"DONE:T_max={T_max:.2f} C  Q_input={Q_input_J:.4e} J "
@@ -644,6 +731,7 @@ def solve_heat_axisym(wp_vol,
         "T_probe_history_C": T_probe if probe_point is not None else None,
         "t_history_s": t_arr,
         "Q_input_J": Q_input_J,
+        "heat_input_history_W": heat_input_history,
         "q_surf_int_W": q_int,
         "surface_area_m2": A_surf_axisym,
         "n_steps": n_steps,
@@ -658,7 +746,12 @@ def solve_heat_axisym(wp_vol,
         "revolved_volume_m3": revolved_volume,
         "n_phi_samples": int(n_phi_samples),
         "qsurf_projection": qsurf_projection,
+        "thermal_exposure": thermal_exposure,
+        "temperature_limit": limit_record,
+        "T_max_history_C": T_max_history,
         "material": material,
+        "thermal_material": thermal_material.audit(),
+        "nonlinear_transient": stepper.audit.as_dict() if nonlinear else None,
         "rho_kg_m3": float(rho_v),
         "cp_J_kgK": float(cp_v),
         "k_W_mK": float(k_v),
@@ -713,6 +806,61 @@ def main():
                         help="Density [kg/m^3] (overrides preset).")
     parser.add_argument("--cp", type=float, default=None,
                         help="Specific heat [J/(kg.K)] (overrides preset).")
+    parser.add_argument("--em-table", default="",
+                        help="(|H_t|, T) surface-impedance table from "
+                             "calc_em_table.py.  Makes q_surf follow the "
+                             "local surface temperature: q = q_EM * "
+                             "q_tab(s|H_t|, T) / q_tab(|H_t|, T_ref).")
+    parser.add_argument("--ht-sol", default="",
+                        help="|H_t| field (_Ht.sol) of the EM run on "
+                             "--em-vol.  Without it |H_t| is inferred from "
+                             "q_surf through the table at T_ref, and the "
+                             "table-vs-EM consistency check is skipped.")
+    parser.add_argument("--ht-scale", type=float, default=1.0,
+                        help="Scale of |H_t| (coil current ratio I/I_ref) "
+                             "for --em-table.")
+    parser.add_argument("--em-reference-temperature", type=float,
+                        default=None,
+                        help="Workpiece temperature [degC] of the EM run "
+                             "(default: --t-initial).")
+    parser.add_argument("--em-table-azimuths", type=int, default=64,
+                        help="Azimuths of |H_t| per ring for --em-table.")
+    parser.add_argument("--allow-em-table-extrapolation",
+                        action="store_true",
+                        help="Clamp temperatures / |H_t| outside --em-table "
+                             "instead of failing; excursions are reported.")
+    parser.add_argument("--allow-frozen-ht", action="store_true",
+                        help="Acknowledge that --em-table freezes the EM "
+                             "run's |H_t| (invalid for a ferromagnetic part "
+                             "crossing its Curie band; see the validation "
+                             "record coupled_curie_cylinder_frozen_ht.json).")
+    parser.add_argument("--em-table-tolerance", type=float, default=0.05,
+                        help="Allowed relative power difference between the "
+                             "table at T_ref and the EM run (with --ht-sol).")
+    parser.add_argument("--material-table", default="",
+                        help="CSV with header T_C,k_W_mK,cp_J_kgK giving "
+                             "temperature-dependent conductivity and "
+                             "specific heat (density stays --rho/preset).  "
+                             "Switches to the enthalpy Newton integrator.")
+    parser.add_argument("--latent-heat", type=float, default=0.0,
+                        help="Latent heat [J/kg] released uniformly over "
+                             "--latent-range (needs --material-table).")
+    parser.add_argument("--latent-range", default="",
+                        help="T_start,T_end [degC] of the latent release.")
+    parser.add_argument("--allow-table-extrapolation", action="store_true",
+                        help="Hold the end values of --material-table "
+                             "outside its range instead of failing; the "
+                             "largest excursion is reported.")
+    parser.add_argument("--newton-tol", type=float, default=1.0e-3,
+                        help="Newton step tolerance [K] of the nonlinear "
+                             "integrator.")
+    parser.add_argument("--newton-max-iter", type=int, default=25,
+                        help="Newton iterations per step; a step that does "
+                             "not converge fails the run.")
+    parser.add_argument("--max-halvings", type=int, default=0,
+                        help="Allow a non-converged step to be split in "
+                             "halves up to this many times (default 0: "
+                             "fail).  Every split is recorded.")
     parser.add_argument("--k", type=float, default=None,
                         help="Conductivity [W/(m.K)] (overrides preset).")
     parser.add_argument("--h-conv", type=float, default=10.0)
@@ -733,16 +881,44 @@ def main():
                              "removed 2026-05-20.")
     parser.add_argument("--qsurf-order", type=int, default=1)
     parser.add_argument("--n-phi-samples", type=int, default=128,
-                        help="Azimuth samples for phi-averaging the 3D "
-                             "qsurf onto the axisym mesh (default 128).  "
-                             "Use 1 if you know the EM problem is "
-                             "exactly rotationally symmetric.")
+                        help="Azimuths of the independent pointwise ring "
+                             "check reported next to the exact "
+                             "circumferential average (default 128).")
+    parser.add_argument("--exposure-thresholds", default="",
+                        help="Comma-separated temperatures [degC]; the "
+                             "result reports the volume above each, where "
+                             "it is and how it is distributed.")
+    parser.add_argument("--temperature-limit", type=float, default=None,
+                        help="Temperature limit [degC] (for example the "
+                             "solidus of the workpiece alloy).  The result "
+                             "reports whether and by how much it is "
+                             "exceeded, as a constraint for optimisers.")
+    parser.add_argument("--q-phi-bin", type=float, default=None,
+                        help="Meridian bin width [m] of the circumferential "
+                             "average (default: a quarter of the median EM "
+                             "surface edge).")
+    parser.add_argument("--em-heat-boundaries", default="",
+                        help="EM boundary expression carrying q_surf.  "
+                             "Default: the .sol sidecar, else the thermal "
+                             "heat-flux names when they exist on the EM "
+                             "mesh.")
+    parser.add_argument("--q-scale", type=float, default=1.0,
+                        help="Multiply q_surf by this factor (for a current "
+                             "sweep, (I/I_ref)^2).  Recorded in the result.")
+    parser.add_argument("--transfer-tolerance", type=float, default=None,
+                        help="Largest allowed distance [m] from a thermal "
+                             "heat-flux vertex to the EM meridian "
+                             "(default: a quarter of the median EM edge).")
+    parser.add_argument("--power-tolerance", type=float, default=None,
+                        help="Largest allowed relative difference between "
+                             "the revolved heat input and the EM power "
+                             "(default 0.02).")
     parser.add_argument("--dt", type=float, default=0.5)
     parser.add_argument("--t-end", type=float, default=5.0)
     parser.add_argument("--time-scheme", default="backward-euler",
                         choices=["backward-euler", "crank-nicolson"])
     parser.add_argument("--linear-solver", default="sparsecholesky",
-                        choices=["sparsecholesky", "umfpack", "pardiso"])
+                        choices=["sparsecholesky"])
     parser.add_argument("--fes-order", type=int, default=2,
                         help="H1 polynomial order (default 2).  Order 1 "
                              "cannot represent dT/dr = 0 at the r = 0 "
@@ -760,6 +936,22 @@ def main():
     parser.add_argument("--csv-output", default="")
 
     def run(args):
+        latent_range = None
+        if args.latent_range:
+            try:
+                latent_range = tuple(float(t) for t in
+                                     args.latent_range.split(","))
+                if len(latent_range) != 2:
+                    raise ValueError
+            except ValueError:
+                return {"error": "--latent-range must be T_start,T_end"}
+        try:
+            thresholds = [float(t) for t in
+                          str(args.exposure_thresholds).split(",")
+                          if t.strip()]
+        except ValueError:
+            return {"error": "--exposure-thresholds must be comma-separated "
+                             f"numbers, got {args.exposure_thresholds!r}"}
         if args.surface_label is not None:
             return {"error":
                     "--surface-label was removed because it coupled heat "
@@ -798,6 +990,28 @@ def main():
             em_vol=args.em_vol,
             qsurf_order=args.qsurf_order,
             n_phi_samples=args.n_phi_samples,
+            em_heat_boundaries=args.em_heat_boundaries,
+            q_scale=args.q_scale,
+            transfer_tolerance=args.transfer_tolerance,
+            power_tolerance=args.power_tolerance,
+            q_phi_bin=args.q_phi_bin,
+            exposure_thresholds=thresholds,
+            temperature_limit=args.temperature_limit,
+            material_table=args.material_table,
+            em_table=args.em_table,
+            ht_sol=args.ht_sol,
+            ht_scale=args.ht_scale,
+            em_reference_temperature=args.em_reference_temperature,
+            em_table_azimuths=args.em_table_azimuths,
+            allow_em_table_extrapolation=args.allow_em_table_extrapolation,
+            em_table_tolerance=args.em_table_tolerance,
+            allow_frozen_ht=args.allow_frozen_ht,
+            latent_heat=args.latent_heat,
+            latent_range=latent_range,
+            allow_table_extrapolation=args.allow_table_extrapolation,
+            newton_tol=args.newton_tol,
+            newton_max_iter=args.newton_max_iter,
+            max_halvings=args.max_halvings,
             dt=args.dt, t_end=args.t_end,
             time_scheme=args.time_scheme,
             linear_solver=args.linear_solver,

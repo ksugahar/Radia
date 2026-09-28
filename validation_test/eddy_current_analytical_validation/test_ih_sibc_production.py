@@ -30,6 +30,8 @@ def test_production_workpiece_heat_and_reaction(tmp_path, bore, backend):
             face.name = 'sibc'
         fixture = ng.Mesh(OCCGeometry(Glue(list(body.faces))).GenerateMesh(maxh=.003))
         label = str(tmp_path/'in_memory.vol')
+        # the q_surf sidecar records the digest of the mesh file it belongs to
+        fixture.ngmesh.Save(label)
         args = calc.build_argparser().parse_args([
             '--coil-solver','peec','--coil-step','not-used.step','--vol',label,
             '--wp-label','sibc','--frequency','1000','--current','1',
@@ -52,6 +54,13 @@ def test_production_workpiece_heat_and_reaction(tmp_path, bore, backend):
         assert np.min(saved.vec.FV().NumPy()) >= 0
         power = ng.Integrate(saved,fixture,ng.BND)
         assert power == pytest.approx(result['P_wp'],rel=1e-10)
+        from radia import ih_thermal
+        pair = ih_thermal.verify_field_pair(result['qsurf_sol'], label, fixture, 1,
+                                            quantity=ih_thermal.QSURF_QUANTITY)
+        assert pair['provenance'] == 'sidecar-verified'
+        record = ih_thermal.read_field_sidecar(result['qsurf_sol'])
+        assert record['boundaries'] == ['sibc']
+        assert record['P_wp_W'] == pytest.approx(result['P_wp'], rel=1e-10)
         mesh_text = (tmp_path/'heat.msh').read_text()
         assert '$MeshFormat\n4.1' in mesh_text.replace('\r\n','\n')
         assert 'q_surf_W_per_m2' in mesh_text
