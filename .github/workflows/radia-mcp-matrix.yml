@@ -238,7 +238,7 @@ jobs:
           python -m pip install -e "packages/radia-mcp[maintenance]" "tomli; python_version < '3.11'"
           if [[ "$RUN_TESTS" == "true" ]]; then
             # CSV and HDF5 report contracts need their data libraries, not a solver.
-            python -m pip install pytest numpy h5py
+            python -m pip install pytest numpy scipy h5py
           fi
 
       - name: Prepare impact-scoped test plan
