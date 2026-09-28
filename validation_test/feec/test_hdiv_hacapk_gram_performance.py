@@ -26,13 +26,15 @@ def _hex_cube(n):
 
 
 def test_hex_chargegram_hacapk_build_enters_lowrank_regime():
-    """A 4^3 hex RT1 cube is large enough for HACApK ACA leaves and still small enough for validation."""
+    """An 8^3 cube has separated supports under the production radius guard."""
     with ng.TaskManager():
-        res = Solve(_hex_cube(4), mu_r=1000.0,
+        res = Solve(_hex_cube(8), mu_r=1000.0,
                     H_ext=ng.CoefficientFunction((0.0, 0.0, 1.0e4)),
                     gram_eps=1.0e-4)
     st = res["hmat_stats"]
     assert res["n_charge"] == st["n_dof"]
+    assert st["hex_cluster_radius_enabled"] == 1.0
+    assert st["release_claim_eligible"] == 1.0
     assert st["n_lowrank"] > 0, f"HACApK never entered low-rank mode: {st}"
     assert st["compression"] < 0.98, f"HACApK compression unexpectedly weak: {st}"
     assert st["memory_mb"] <= st["dense_memory_mb"], f"HACApK memory stats inverted: {st}"

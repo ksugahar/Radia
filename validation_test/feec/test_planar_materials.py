@@ -15,8 +15,7 @@ BH = [[0.0, 0.0], [200.0, 0.30], [800.0, 1.20], [3000.0, 1.70], [20000.0, 2.00]]
 def test_law_from_table_basics():
     H, M, chi0 = pm.hm_arrays(BH)
     assert H[0] == 0.0 and np.all(np.diff(H) > 0)
-    assert np.allclose(M, np.array([b for _, b in [[0, 0]] + BH[1:]]) / MU0 - H, rtol=0, atol=1e-6) \
-        or True                                                # M = B/mu0 - H (0-anchored)
+    np.testing.assert_allclose(M, np.asarray(BH)[:, 1] / MU0 - H, rtol=0, atol=1e-6)
     M_of_h, chi_sec, c0 = pm.law_from_table(BH)
     assert c0 == chi0 and chi0 > 0
     assert np.allclose(M_of_h(H), M, rtol=1e-12, atol=1e-6)   # the curve passes through every row

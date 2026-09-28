@@ -74,7 +74,8 @@ def test_hex_rt1_hmatrix_matvec_matches_entry_oracle():
 
     assert gram.ndof() == 1
     assert len(y) == 1
-    assert y[0] == entry
+    # Symmetric assembly and direct evaluation can differ by a few rounding units.
+    assert y[0] == pytest.approx(entry, rel=8 * math.ulp(1.0), abs=0.0)
 
 
 def test_hex_rt1_image_fold_increases_positive_entry_and_matvec():
@@ -94,7 +95,7 @@ def test_hex_rt1_image_fold_increases_positive_entry_and_matvec():
 
     assert image_entry > direct_entry
     assert len(y) == 1
-    assert y[0] == image_entry
+    assert y[0] == pytest.approx(image_entry, rel=8 * math.ulp(1.0), abs=0.0)
 
 
 def test_hex_rt1_image_masks_and_signs_must_match():
