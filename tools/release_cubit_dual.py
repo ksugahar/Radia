@@ -124,6 +124,10 @@ def recover_scratch(text):
         if scratch.exists():
             raise RuntimeError('Smoke scratch cleanup failed')
 
+# 100 is the student host: every profile's .cubit must load the release,
+# not only the deploying Administrator's (2026-09-28 stale-startup incident).
+profile_scope = ['--all-users'] if cfg['target'] == '100' else []
+result['profile_scope'] = profile_scope
 before = preserved()
 try:
     git = ['git', '-c', 'safe.directory=' + str(root), '-C', str(root)]
@@ -157,7 +161,7 @@ try:
     if cfg['action'] == 'deploy':
         command([sys.executable, '-m', 'pip', 'install', '--no-deps', '--no-build-isolation',
                  '-e', str(package)], 180)
-        command([sys.executable, '-m', 'cubit_mesh_export.install'], 180)
+        command([sys.executable, '-m', 'cubit_mesh_export.install', *profile_scope], 180)
     if cfg['action'] != 'preflight':
         probe = "import json,pathlib,importlib.metadata as m,cubit_mesh_export as c;d=m.distribution('cubit-mesh-export');print(json.dumps(dict(version=c.__version__,file=str(pathlib.Path(c.__file__).resolve()),direct_url=json.loads(d.read_text('direct_url.json')))))"
         identity = json.loads(command([sys.executable, '-c', probe]).strip())
@@ -171,7 +175,7 @@ try:
         cli = Path(sysconfig.get_path('scripts')) / 'mcp-server-cubit.exe'
         command([str(cli), '--selftest'], 120)
         result['mcp_cli_selftest'] = True
-        command([sys.executable, '-m', 'cubit_mesh_export.install', '--verify-only'], 120)
+        command([sys.executable, '-m', 'cubit_mesh_export.install', '--verify-only', *profile_scope], 120)
     if cfg['action'] == 'deploy':
         for module, arguments in [('smoke_test', ['--keep']),
                 ('toolbar_smoke', ['--restarts', '2', '--keep', '--report-json', str(out / 'gui.json')])]:
@@ -199,6 +203,7 @@ sys.exit(0 if result['passed'] else 1)
 def check_receipt(receipt, contract, target):
     expected = dict(schema=SCHEMA, target=target, source_sha=contract['source_sha'],
                     version=contract['version'], wheel_sha256=contract['wheel_sha256'])
+    expected['profile_scope'] = ['--all-users'] if target == '100' else []
     return (all(receipt.get(k) == v for k, v in expected.items())
             and all(receipt.get(k) is True for k in
                     ('passed', 'unrelated_packages_unchanged', 'smoke_test', 'toolbar_smoke',

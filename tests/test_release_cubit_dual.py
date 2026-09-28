@@ -20,6 +20,20 @@ def test_worker_compiles_and_targets_only_dual():
     assert 'taskkill' not in dual.WORKER
 
 
+def test_student_host_registers_every_profile():
+    # 100 serves many student accounts; registering only the deploying
+    # Administrator left every other profile loading a removed checkout.
+    assert "profile_scope = ['--all-users'] if cfg['target'] == '100' else []" in dual.WORKER
+    assert "'cubit_mesh_export.install', *profile_scope]" in dual.WORKER
+    assert "'--verify-only', *profile_scope]" in dual.WORKER
+    contract = dict(version='1.0.2', source_sha='a' * 40, wheel_sha256='b' * 64)
+    receipt = dict(contract, schema=dual.SCHEMA, target='100', passed=True,
+                   unrelated_packages_unchanged=True, smoke_test=True, toolbar_smoke=True,
+                   mcp_selftest=True, mcp_cli_selftest=True, profile_scope=['--all-users'])
+    assert dual.check_receipt(receipt, contract, '100')
+    assert not dual.check_receipt(dict(receipt, profile_scope=[]), contract, '100')
+
+
 def test_dedicated_cli_owns_release_dual_entrypoint():
     args = dual.build_parser().parse_args([
         '--action', 'preflight',
@@ -38,7 +52,7 @@ def test_receipt_requires_every_acceptance_field():
     contract = dict(version='1.0.2', source_sha='a' * 40, wheel_sha256='b' * 64)
     receipt = dict(contract, schema=dual.SCHEMA, target='lab', passed=True,
                    unrelated_packages_unchanged=True, smoke_test=True, toolbar_smoke=True,
-                   mcp_selftest=True, mcp_cli_selftest=True)
+                   mcp_selftest=True, mcp_cli_selftest=True, profile_scope=[])
     assert dual.check_receipt(receipt, contract, 'lab')
     for key in receipt:
         damaged = {k: v for k, v in receipt.items() if k != key}
