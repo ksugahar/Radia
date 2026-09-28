@@ -39,11 +39,11 @@ def hm_arrays(bh_table):
 
 
 def _pchip_magnetization(H, M):
-    """(M_of_h, chi_sec) of the production soft-iron law: PCHIP B(H) through the table, M = B/mu0 - h,
-    saturated at M[-1] beyond Hmax -- the law of the 3D HDiv-VIM and the FEM routes.  PCHIP keeps a
-    non-decreasing B(H) monotone without overshoot and gives a C1 curve; chi_sec(0) is its limit."""
-    from scipy.interpolate import PchipInterpolator
-    B = PchipInterpolator(H, MU0 * (H + M))
+    """(M_of_h, chi_sec) of the production soft-iron law (radia.bh_law, shared with the 3D HDiv-VIM and
+    the FEM routes), M = B/mu0 - h, saturated at M[-1] beyond Hmax.  Monotone PCHIP of a rising M keeps
+    dM/dH >= 0 without overshoot and gives a C1 curve; chi_sec(0) is its limit."""
+    from radia.bh_law import monotone_bh_pchip
+    B = monotone_bh_pchip(H, MU0 * (H + M))
     chi_origin = float(B.derivative()(0.0)) / MU0 - 1.0
     Hmax, Mmax = float(H[-1]), float(M[-1])
 

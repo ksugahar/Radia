@@ -8,6 +8,11 @@
       "tests/test_hdiv_energy_material_consistency.py",
       "tests/test_hdiv_bh_table_saturation_contract.py"
     ],
+    "src/radia/bh_law.py": [
+      "tests/test_bh_law.py",
+      "tests/test_hdiv_energy_material_consistency.py",
+      "tests/test_hdiv_bh_table_saturation_contract.py"
+    ],
     "src/radia/panels/samples/em_sample_bh.txt": [
       "tests/test_hdiv_bh_table_saturation_contract.py"
     ],
@@ -202,6 +207,7 @@
         "tests/test_hdiv_vim_native_matrix.py",
         "tests/test_hdiv_same_process_determinism.py",
         "tests/feec/test_hdiv_hex_nonconforming_touching_pair.py",
+        "tests/test_bh_law.py",
         "tests/feec/test_hdiv_jacobi_diagonal_fail_loud.py",
         "tests/test_three_engine_energy.py",
         "tests/test_hdiv_vim_bh_validation.py",

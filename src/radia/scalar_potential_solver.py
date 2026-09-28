@@ -50,7 +50,7 @@ def _build_bh_interpolator(bh_data):
     sample, B continues with the vacuum slope so magnetization remains
     constant instead of following an arbitrary polynomial extrapolation.
     """
-    from scipy.interpolate import PchipInterpolator
+    from radia.bh_law import monotone_bh_pchip
 
     bh = np.asarray(bh_data, dtype=float)
     if bh.ndim != 2 or bh.shape[1] < 2 or bh.shape[0] < 2:
@@ -64,7 +64,7 @@ def _build_bh_interpolator(bh_data):
     if np.any(np.diff(B_tab) < 0.0):
         raise ValueError("bh_data B values must be non-decreasing")
 
-    interpolator = PchipInterpolator(H_tab, B_tab, extrapolate=False)
+    interpolator = monotone_bh_pchip(H_tab, B_tab, extrapolate=False)
     H_max = float(H_tab[-1])
     B_max = float(B_tab[-1])
 
@@ -124,7 +124,7 @@ def _build_bh_coefficient_function(H_magnitude, bh_data):
     """Return the monotone-PCHIP B(H) law as an NGSolve coefficient function."""
 
     from ngsolve import IfPos
-    from scipy.interpolate import PchipInterpolator
+    from radia.bh_law import monotone_bh_pchip
 
     bh = np.asarray(bh_data, dtype=float)
     if bh.ndim != 2 or bh.shape[1] < 2 or bh.shape[0] < 2:
@@ -138,7 +138,7 @@ def _build_bh_coefficient_function(H_magnitude, bh_data):
     if np.any(np.diff(B_tab) < 0.0):
         raise ValueError("bh_data B values must be non-decreasing")
 
-    pchip = PchipInterpolator(H_tab, B_tab, extrapolate=False)
+    pchip = monotone_bh_pchip(H_tab, B_tab, extrapolate=False)
     coefficients = np.asarray(pchip.c, dtype=float)
     H_cf = H_magnitude
     result = float(B_tab[-1]) + MU_0 * (H_cf - float(H_tab[-1]))
@@ -156,7 +156,7 @@ def _build_bh_coefficient_function(H_magnitude, bh_data):
 
 def _build_bh_coenergy_interpolator(bh_data):
     """Return coenergy density ``integral_0^H B(h) dh`` in J/m3."""
-    from scipy.interpolate import PchipInterpolator
+    from radia.bh_law import monotone_bh_pchip
 
     bh = np.asarray(bh_data, dtype=float)
     if bh.ndim != 2 or bh.shape[1] < 2 or bh.shape[0] < 2:
@@ -170,7 +170,7 @@ def _build_bh_coenergy_interpolator(bh_data):
     if np.any(np.diff(B_tab) < 0.0):
         raise ValueError("bh_data B values must be non-decreasing")
 
-    pchip = PchipInterpolator(H_tab, B_tab, extrapolate=False)
+    pchip = monotone_bh_pchip(H_tab, B_tab, extrapolate=False)
     primitive = pchip.antiderivative()
     H_min = float(H_tab[0])
     H_max = float(H_tab[-1])
@@ -199,7 +199,7 @@ def sample_bh_constitutive_response(bh_data, h_values):
     cross-solver validation: equal table digests alone do not establish equal
     differential permeability, energy, or saturation-tail behavior.
     """
-    from scipy.interpolate import PchipInterpolator
+    from radia.bh_law import monotone_bh_pchip
 
     bh = np.asarray(bh_data, dtype=float)
     if bh.ndim != 2 or bh.shape[1] < 2 or bh.shape[0] < 2:
@@ -222,7 +222,7 @@ def sample_bh_constitutive_response(bh_data, h_values):
     if np.any(np.diff(grid) <= 0.0):
         raise ValueError("h_values must be strictly increasing")
 
-    pchip = PchipInterpolator(H_tab, B_tab, extrapolate=False)
+    pchip = monotone_bh_pchip(H_tab, B_tab, extrapolate=False)
     derivative = pchip.derivative()
     coenergy_of_H = _build_bh_coenergy_interpolator(bh)
     H_min = float(H_tab[0])
@@ -290,7 +290,7 @@ def sample_bh_constitutive_response(bh_data, h_values):
 def _build_bh_coenergy_coefficient_function(H_magnitude, bh_data):
     """Return the exact piecewise-PCHIP H-potential as an NGSolve CF."""
     from ngsolve import IfPos
-    from scipy.interpolate import PchipInterpolator
+    from radia.bh_law import monotone_bh_pchip
 
     bh = np.asarray(bh_data, dtype=float)
     if bh.ndim != 2 or bh.shape[1] < 2 or bh.shape[0] < 2:
@@ -305,7 +305,7 @@ def _build_bh_coenergy_coefficient_function(H_magnitude, bh_data):
         raise ValueError("bh_data B values must be non-decreasing")
 
     coefficients = np.asarray(
-        PchipInterpolator(H_tab, B_tab, extrapolate=False).c, dtype=float
+        monotone_bh_pchip(H_tab, B_tab, extrapolate=False).c, dtype=float
     )
     cumulative = [float(B_tab[0]) * float(H_tab[0])]
     for interval in range(len(H_tab) - 1):
@@ -362,7 +362,7 @@ def _build_bh_spline_law(bh_data, *, tail_factor=1.0e3):
     the co-energy density ``integral_0^|H| B dh``.
     """
     from ngsolve import BSpline, IfPos
-    from scipy.interpolate import PchipInterpolator
+    from radia.bh_law import monotone_bh_pchip
 
     bh = np.asarray(bh_data, dtype=float)
     if bh.ndim != 2 or bh.shape[1] < 2 or bh.shape[0] < 2:
@@ -380,7 +380,7 @@ def _build_bh_spline_law(bh_data, *, tail_factor=1.0e3):
     if not float(tail_factor) > 1.0:
         raise ValueError("tail_factor must exceed 1")
 
-    slope = PchipInterpolator(H_tab, B_tab, extrapolate=False).derivative()
+    slope = monotone_bh_pchip(H_tab, B_tab, extrapolate=False).derivative()
     H_max = float(H_tab[-1])
     B_max = float(B_tab[-1])
     H_limit = float(tail_factor) * H_max

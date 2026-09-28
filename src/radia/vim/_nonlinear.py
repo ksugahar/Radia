@@ -10,6 +10,8 @@ from math import pi
 import numpy as np
 import ngsolve as ng
 
+from radia.bh_law import monotone_bh_pchip
+
 
 def _bh_curve(chi0, Msat):
     """Saturating M(H) = chi0 H / (1 + chi0|H|/Msat): slope chi0 at H=0, asymptote +-Msat."""
@@ -119,17 +121,17 @@ def _bh_table_falling_magnetization(table, *, context="vim.Solve"):
 
 
 def _bh_table_funcs(Harr, Barr):
-    """Build M(H) + the PCHIP B(H)/B'(H) from a REAL [[H,B]] table (the same data Radia's MatSatIsoTab
-    consumes): monotone C1 interpolation -> smooth dM/dH for Newton.  M(H) = B(|H|)/mu0 - |H|.
+    """Build M(H) + the production B(H)/B'(H) from a REAL [[H,B]] table (the same data Radia's MatSatIsoTab
+    consumes): monotone C1 interpolation of M (radia.bh_law) -> smooth dM/dH >= 0 for Newton when the
+    tabulated M rises.  M(H) = B(|H|)/mu0 - |H|.
 
     BEYOND the table (|H| > H_max) the curve SATURATES: B extends with slope mu0 (mu_r -> 1), so
     M -> M(H_max) = const and dM/dH -> 0 -- the physical saturation, matching Radia's MatSatIsoTab
     linear-B extension.  (Without this, PCHIP polynomial extrapolation blows up: M >> M_sat.)
     Returns (Mof, Bpch, Bder, Hmax, Mmax)."""
-    from scipy.interpolate import PchipInterpolator
     Harr = np.asarray(Harr, float)
     Barr = np.asarray(Barr, float)
-    Bpch = PchipInterpolator(Harr, Barr)
+    Bpch = monotone_bh_pchip(Harr, Barr)
     Bder = Bpch.derivative()
     Hmax = float(Harr[-1])
     Mmax = float(Bpch(Hmax) / _MU0 - Hmax)
