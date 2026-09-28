@@ -100,3 +100,25 @@ def test_shared_hdiv_runner_checks_actual_residual(residual, mode, exhausted, ex
         order=1, gram_eps=1e-12, nonlinear_tolerance=2e-5, nonlinear_maximum_iterations=80,
         points=np.zeros((1, 3)))
     assert diagnostics['nonlinear_stats']['converged'] is expected
+
+@pytest.mark.parametrize("old_residual", [float("inf"), 1e-12])
+def test_picard_exhaustion_refreshes_last_material_defect(old_residual):
+    source = Path(__file__).resolve().parents[1] / "src/radia/vim/_solve.py"
+    tree = ast.parse(source.read_text(encoding="utf-8"))
+    outer = next(n for n in tree.body if isinstance(n, ast.FunctionDef)
+                 and n.name == "_solve_nonlinear_picard_mass_riesz_cpp")
+    start = next(i for i, n in enumerate(outer.body) if isinstance(n, ast.If)
+                 and isinstance(n.test, ast.Name) and n.test.id == "nit")
+    wrapper = ast.parse("def finish():\n    pass\n").body[0]
+    wrapper.body = outer.body[start:]
+    captured = []
+    ns = dict(np=np, nit=2, relative_residual=old_residual, m=np.array([2.]),
+              nu_new=3., W_current=1., rhs_norm=2., rel_step=.5, stats={},
+              _W_matrix=lambda nu: nu, _apply=lambda matrix, vector: matrix*vector,
+              _capture_nonlinear_solve_stats=lambda stats: captured.append(dict(stats)),
+              require_convergence=False)
+    exec(compile(ast.fix_missing_locations(ast.Module(body=[wrapper], type_ignores=[])),
+                 str(source), "exec"), ns)
+    ns["finish"]()
+    assert captured[0]["nonlinear_final_relative_residual"] == 2.
+    assert captured[0]["nonlinear_converged_final_stage"] is False
