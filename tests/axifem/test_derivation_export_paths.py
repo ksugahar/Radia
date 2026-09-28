@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-DERIVATIONS = ROOT / "validation_test/maglev/research_cln/axifem"
+DERIVATIONS = ROOT / "validation_test/axifem/research/prototypes"
 
 
 def test_axifem_reference_links_resolve_inside_repository():
