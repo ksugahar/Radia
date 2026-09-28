@@ -69,8 +69,13 @@ def main():
             u, v = fes.TnT()
             w = 2*np.pi*ng.x
             volume = ng.Integrate(w, mesh)
-            args = SimpleNamespace(q_uniform=None, qsurf_sol=str(base.QFILES[case]),
-                                   em_vol=str(base.VOL3), qsurf_order=1, n_phi_samples=128)
+            # The received .sol files need a sidecar stating their pairing:
+            # python -m radia.ih_thermal sidecar --sol ... --mesh ... --order 1
+            #     --quantity surface_loss_density --boundaries sibc --p-wp ...
+            from radia.panels.calc_heat import qsurf_args
+            args = qsurf_args(qsurf_sol=str(base.QFILES[case]),
+                              em_vol=str(base.VOL3), qsurf_order=1)
+            args.n_phi_samples = 128
             qgf, q, transfer = base.calc_heat_axisym._build_axisym_qsurf_gf(
                 mesh, {'inner', 'outer'}, args)
             qgf.Save(str(OUT / f'{case}_q.sol'))

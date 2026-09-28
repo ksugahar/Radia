@@ -56,17 +56,14 @@ Workflow once this script is played in Cubit (GUI or batch):
 
     # Step 4: FEM-Kelvin workpiece P_wp + R_wp from the .vol.
     # `_fem_kelvin.json` suffix matches the .gitignore convention.
-    # NOTE: --solver pardiso is REQUIRED for Periodic Kelvin BC.
-    # The default `auto` selects `ams` which raises
-    # "ams is not supported with Periodic Kelvin BC", and `bddc`
-    # produces a NaN HCurl solution on this geometry (see
-    # memory project_calc_fem_kelvin_bddc_periodic_nan_2026_05_13).
+    # Use an explicit SparseCholesky direct solve for this periodic case.
+    # AMS / BDDC+AMS support for Periodic Kelvin is not validated.
     python -m radia.panels.calc_fem_kelvin \
         --vol ih_fem_kelvin_demo.vol \
         --peec-step ih_fem_kelvin_demo_coil.step \
         --frequency 50000 \
         --material copper \
-        --solver pardiso \
+        --solver sparsecholesky \
         --output ih_fem_kelvin_demo_fem_kelvin.json
 
 Steps 3 and 4 produce the two halves of the PEEC + FEM-Kelvin result:
@@ -260,8 +257,8 @@ print("  python -m radia.panels.calc_inductance "
 print("  python -m radia.panels.calc_fem_kelvin "
       "--vol ih_fem_kelvin_demo.vol "
       "--peec-step ih_fem_kelvin_demo_coil.step "
-      "--frequency 50000 --material copper --solver pardiso "
+      "--frequency 50000 --material copper --solver sparsecholesky "
       "--output ih_fem_kelvin_demo_fem_kelvin.json")
 print()
-print("(--solver pardiso is REQUIRED for Periodic Kelvin BC: auto -> ams")
-print(" raises, and bddc produces a NaN HCurl solution on this geometry.)")
+print("(Periodic Kelvin: use --solver sparsecholesky explicitly;")
+print(" AMS / BDDC+AMS support is not validated.)")

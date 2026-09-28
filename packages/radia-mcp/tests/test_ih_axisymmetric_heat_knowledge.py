@@ -2,6 +2,22 @@ from radia_mcp.ih.ih_knowledge import get_induction_heating_documentation
 from radia_mcp.radia_ngsolve.knowledge.axifem import get_axifem_documentation
 
 
+def test_ih_solver_priority_distinguishes_hcurl_compound_and_thermal_spaces():
+    text = get_induction_heating_documentation("peec_bem_sibc")
+    assert "prefer AMS for p=1" in text
+    assert "BDDC with AMS coarse solve" in text
+    assert "Compound A-V" in text
+    assert "Scalar thermal H1" in text
+    assert "not a speed advantage" in text
+    assert "true relative residual gate of 1e-7" in text
+    assert "pardiso" not in text.lower()
+    compound = get_induction_heating_documentation("av_coil_sigma")
+    assert 'inverse="sparsecholesky"' in compound
+    assert "Periodic Kelvin requires separate validation" in compound
+    assert "pardiso" not in compound.lower()
+    assert "pardiso" not in get_induction_heating_documentation("all").lower()
+
+
 def test_ih_thermal_knowledge_keeps_em_and_heat_spaces_separate():
     thermal = get_induction_heating_documentation("thermal")
     normalized = " ".join(thermal.split())
@@ -80,10 +96,23 @@ def test_ih_thermal_knowledge_prefers_axisym_and_audits_3d_handoff():
     assert "experiment constraint, not a formulation requirement" in normalized
     assert "separately generated 2D ``(r,z)`` workpiece mesh" in normalized
     assert "``Curve()`` changes geometry order, not dimension" in normalized
-    assert "boundary point locator (``BND``)" in normalized
-    assert "default is 128 azimuth samples" in normalized
+    assert "cut at meridian arc-length bin" in normalized
+    assert "conserves the EM power" in normalized
+    assert "``--n-phi-samples`` (default 128)" in normalized
+    assert "--power-tolerance" in normalized
     assert "``qsurf_projection``" in thermal
     assert "no zero-flux fallback" in normalized
+
+
+def test_ih_thermal_knowledge_warns_against_frozen_ht_for_magnetic_parts():
+    thermal = get_induction_heating_documentation("thermal")
+    normalized = " ".join(thermal.split())
+
+    assert "Do not freeze |H_t| for ferromagnetic workpieces" in normalized
+    assert "--allow-frozen-ht" in normalized
+    assert "calc_ih_axisym_coupled.py" in normalized
+    assert "ih_thermal.load_field" in normalized
+    assert "beyond_span" in normalized
 
 
 def test_ih_reciprocity_and_heat_manual_does_not_certify_old_approximations():
