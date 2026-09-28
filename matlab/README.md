@@ -468,7 +468,7 @@ A = matrix.sparse();              % optional MATLAB snapshot
 x = matrix.vector();
 x.setValues(ones(matrix.Cols, 1));
 y = matrix.matvec(x);             % native BaseVector result
-inverse = matrix.inverse();       % free-DoF inverse handle
+inverse = matrix.inverse();       % free-DoF SparseCholesky handle (no backend fallback)
 ```
 
 `Mesh`, `FESpace`, `BilinearForm`, and `Matrix` use checked `uint64` handles;

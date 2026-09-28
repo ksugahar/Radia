@@ -23,10 +23,10 @@ classifiers = [
 ]
 dependencies = [
     "mcp>=1.20.0,<2",
-    # The bundled native curver uses Netgen's C++ ABI. Keep both packages on
-    # the exact version used to build the wheel and deployed Cubit DLLs.
-    "netgen-mesher==6.2.2606",
-    "ngsolve==6.2.2606",
+    # The Python native curver uses the external Netgen C++ ABI; pin its runtime.
+    # The Cubit .ccm embeds Compact Netgen and is independent of this runtime.
+    "netgen-mesher==6.2.2607",
+    "ngsolve==6.2.2607",
     "numpy",
 ]
 

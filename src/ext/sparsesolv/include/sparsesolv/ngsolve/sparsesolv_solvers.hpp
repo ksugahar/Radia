@@ -160,6 +160,8 @@ public:
     bool IsComplex() const override { return mat_->IsComplex(); }
     int VHeight() const override { return static_cast<int>(height_); }
     int VWidth() const override { return static_cast<int>(width_); }
+    VecFormat RowFormat() const override { return mat_->RowFormat(); }
+    VecFormat ColFormat() const override { return mat_->ColFormat(); }
     AutoVector CreateRowVector() const override { return mat_->CreateRowVector(); }
     AutoVector CreateColVector() const override { return mat_->CreateColVector(); }
 
@@ -369,6 +371,8 @@ public:
 
     int VHeight() const override { return mat_->VHeight(); }
     int VWidth() const override { return mat_->VWidth(); }
+    VecFormat RowFormat() const override { return mat_->RowFormat(); }
+    VecFormat ColFormat() const override { return mat_->ColFormat(); }
     AutoVector CreateRowVector() const override { return mat_->CreateRowVector(); }
     AutoVector CreateColVector() const override { return mat_->CreateColVector(); }
     bool IsComplex() const override { return mat_->IsComplex(); }
@@ -554,6 +558,8 @@ public:
 
     int VHeight() const override { return mat_->VHeight(); }
     int VWidth() const override { return mat_->VWidth(); }
+    VecFormat RowFormat() const override { return mat_->RowFormat(); }
+    VecFormat ColFormat() const override { return mat_->ColFormat(); }
     AutoVector CreateRowVector() const override { return mat_->CreateRowVector(); }
     AutoVector CreateColVector() const override { return mat_->CreateColVector(); }
     bool IsComplex() const override { return mat_->IsComplex(); }

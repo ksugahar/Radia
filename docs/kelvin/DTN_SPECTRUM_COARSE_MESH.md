@@ -16,7 +16,7 @@ in §10.
 > rotating-machine cross-section case.
 
 **See also:** the cross-cutting [Open-Boundary Method Map](../open_boundary/OPEN_BOUNDARY_MAP.md)
-— Kelvin / BEM / PML / IABC / CLN on the frequency / geometry / space-vs-time axes
+— Kelvin / BEM / PML / IABC / the continued-fraction NRBC on the frequency / geometry / space-vs-time axes
 (this document is its **Kelvin / spatial** anchor).
 
 ---
@@ -512,15 +512,15 @@ mostly its coarser element count, not worse geometry. So "hex lowers the floor /
 is **not** supported. **Tet stays the practical default** (simpler, handles symmetry sectors);
 high-order hex's strength stays sweepable bodies.)*
 
-### Connection to the Cauer Ladder Network (CLN)
+### Connection to the continued-fraction open boundary
 
-The `−(n+1)/R` DtN eigenvalue ladder is a **spectral** object of the same kind as
-the Cauer-Ladder-Network (CLN) eigenmode decomposition: each characterises a
-closure by how it transmits the modes a source excites. CLN folds the **interior**
-response by circuit order `{R_n, L_n}`; the Kelvin closure folds the **exterior**
-response by element order `p`. Same idea — decompose the physics into eigenmodes
-and resolve only the modes that matter — applied to the interior network vs the
-open boundary.
+The `−(n+1)/R` DtN eigenvalue spectrum is the `s → 0` limit of the same per-mode
+symbol that the continued-fraction open boundary realises in time
+(`dtn_coarse_mesh(topic="dtn_continued_fraction")`). The Kelvin closure resolves
+the **spatial** modes of that symbol by element order `p`; the terminating
+continued fraction in `q = √s` (`n+1` partial quotients) resolves its
+`s`-dependence mode by mode. Both are spectral closures — decompose the exterior
+into modes and resolve only the modes the source excites.
 
 ### The two scalar readouts: capacitance (n=0) and external inductance (n=1)
 
@@ -596,13 +596,13 @@ MCP knowledge tool for the live recipe.
   `act0_04_hp_lshape_corner`, `act2_08_budget_dofcost`, …); the **mesh-adequacy criterion**
   `act2_04_adequacy_eccentric_multibody` (source `p*`), `act2_05_geometry_floor_law` (geometry `(h/R)^{2k}`), `act2_06_eccentric_fem_endtoend`
   (eccentric, FEM end-to-end), `act3_04_aform_center_singularity` (A-form centre), `act2_07_apparatus_design_calc`
-  (reactor-leg design calc); and the **non-separable build + DtN→CLN arc**
-  `act6_06_square_eddy_dtn_to_cln`/`act6_07_cube_eddy_dtn_to_cln` (square C4v / cube O_h, FEM-built eddy DtN), `act6_08_disk2d_kelvin_eddy_dtn`
-  (2-D conformal Kelvin disk, no weight); the **temporal CLN realisation**
-  `act6_02_cln_dtn_cauer` (the eddy DtN = a Cauer continued fraction **in `√s`**,
-  EXACT at `n+1` stages for **every** multipole `n=1..6`, each `~1e-16`) and the
-  head-to-head `act7_20_impedance_vs_kelvin_dtn_cln` (Kelvin-DtN-CLN beats the
-  impedance route on all four axes in the MQS scope) — full temporal treatment in
+  (reactor-leg design calc); and the **non-separable DtN build + band rational fit**
+  `act6_06` / `act6_07` (square C4v / cube O_h, FEM-built eddy DtN), `act6_08_disk2d_kelvin_eddy_dtn`
+  (2-D conformal Kelvin disk, no weight); the **temporal continued-fraction realisation**
+  `act6_02` (exact continued fraction of the eddy DtN **in `√s`**, EXACT at `n+1`
+  partial quotients for **every** multipole `n=1..6`, each `~1e-16`) and the
+  head-to-head `act7_20` (impedance-shell route vs the Kelvin-built exact DtN; the
+  exact DtN wins on all four axes in the MQS scope) — full temporal treatment in
   [`OPEN_BOUNDARY_MAP.md` §5](../open_boundary/OPEN_BOUNDARY_MAP.md). See the directory
   [`ARCHIVE_RETIREMENT.md`](ARCHIVE_RETIREMENT.md).
 - **Tests:**
@@ -619,6 +619,9 @@ MCP knowledge tool for the live recipe.
 1. A. Kameari, open-boundary / Kelvin-transformation magnetostatics (the
    coarse-mesh accuracy demonstration reframed here).
 2. See [KELVIN_TRANSFORMATION.md](KELVIN_TRANSFORMATION.md) for the Kelvin map,
-   Jacobian, material modulation, and full FEM workflow, and
-   [../cln/CAUER_LADDER_NETWORK.md](../cln/CAUER_LADDER_NETWORK.md) for Kelvin
-   transformation coupling within the Cauer Ladder Network.
+   Jacobian, material modulation, and full FEM workflow.
+3. M. J. Grote and J. B. Keller, exact non-reflecting boundary conditions
+   (SIAM J. Appl. Math., 1995), and T. Hagstrom and T. Warburton,
+   continued-fraction / complete radiation boundary conditions — the prior art for
+   the continued-fraction open boundary in
+   [`OPEN_BOUNDARY_MAP.md`](../open_boundary/OPEN_BOUNDARY_MAP.md).

@@ -1,0 +1,27 @@
+{
+  "ngsolve": "6.2.2607",
+  "host": "mdx1",
+  "bonus_intorder": 10,
+  "thresholds": {
+    "direct_relative_l2": 1e-10,
+    "local_expansion_relative_l2": 1e-08
+  },
+  "passed": true,
+  "results": [
+    {
+      "distance": 0.1,
+      "direct_relative_l2": 2.0597263079209208e-13,
+      "local_expansion_relative_l2": 2.0852898222442245e-10
+    },
+    {
+      "distance": 0.001,
+      "direct_relative_l2": 2.819507838783645e-13,
+      "local_expansion_relative_l2": 1.1313902324558815e-10
+    },
+    {
+      "distance": 1e-06,
+      "direct_relative_l2": 2.817739870353128e-13,
+      "local_expansion_relative_l2": 1.0741654653558532e-10
+    }
+  ]
+}

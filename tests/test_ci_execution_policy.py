@@ -404,6 +404,6 @@ def test_ngsolve_mcp_install_guidance_matches_native_dependency_pin():
         / "ngsolve.py"
     ).read_text(encoding="utf-8")
 
-    assert "ngsolve==6.2.2606 netgen-mesher==6.2.2606" in knowledge
-    assert "NGSolve 6.2.2606 uses ngsolve-openblas" in knowledge
+    assert "ngsolve==6.2.2607 netgen-mesher==6.2.2607" in knowledge
+    assert "NGSolve 6.2.2607 uses ngsolve-openblas" in knowledge
     assert "Version 6.2.2604 includes: MKL" not in knowledge
