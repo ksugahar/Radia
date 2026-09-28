@@ -196,8 +196,6 @@ from ._eddy_hybrid import (  # noqa: F401  (reduced HCurl/T + surface-Omega/SIBC
     LocalESIMSurfaceSolution,
     CoupledHDivHCurlLocalESIMSolution,
     HybridVIMSystem,
-    HCurlEddyCLNModel,
-    HCurlEddyCLNFromVIM,
     AssembleHybridVIM,
     AssembleSurfaceImpedanceGram,
     BuildLocalESIMSurfaceLUT,
@@ -228,8 +226,6 @@ from ._hcurl_planar_interaction import (  # noqa: F401
     NgsolveHCurlPlanarVolumeInteraction,
 )
 from ._matlab_bridge import (  # noqa: F401
-    ExportHCurlEddyCLNJSON,
-    ExportHCurlEddyCLNFamilyJSON,
     ExportHCurlEddyFosterJSON,
     ExportHCurlEddyFosterFamilyJSON,
 )
@@ -416,8 +412,6 @@ __all__ = [
     "NgsolveHCurlTetVolumeInteraction", "NgsolveHCurlCellVolumeInteraction",
     "SampleNgsolveHCurlCellSubtetVelocities",
     "HCurlPlanarVolumeInteraction", "NgsolveHCurlPlanarVolumeInteraction",
-    "HCurlEddyCLNModel", "HCurlEddyCLNFromVIM",
-    "ExportHCurlEddyCLNJSON", "ExportHCurlEddyCLNFamilyJSON",
     "HCurlEddyFosterModel", "HCurlEddyFosterModelFromVIM",
     "ExportHCurlEddyFosterJSON", "ExportHCurlEddyFosterFamilyJSON",
     "CurrentMagneticFluxDensitySamples", "MagnetizationCurrentCoupling",
