@@ -65,3 +65,12 @@ checks, not exact release-artifact acceptance or production-scale timing.
 Serial nonlinear repeat solves remain bitwise identical. Parallel reduction
 order may differ; the repeated-solution vector difference must be below
 1e-12 relative norm, compared with a 1e-9 nonlinear solve tolerance.
+
+## Broad regression baseline
+
+The committed repair baseline `e6b5f9cca` passed 397 of 398 selected HDiv
+checks on mdx2. The remaining check is the explicit expected failure for
+HDiv pyramids in the pinned NGSolve 6.2.2606 runtime; pyramid support is
+not claimed. See `results_hdiv_regression_20260928.json` for the exact list.
+This broad run predates the sparse-factor replacement above; its counts
+must not be presented as verification of the replacement or a release wheel.
