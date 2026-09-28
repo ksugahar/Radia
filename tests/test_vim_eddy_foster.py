@@ -163,3 +163,22 @@ def test_foster_model_from_vim_system_copies_the_reduced_blocks():
     np.testing.assert_allclose(
         model.solve(s, np.ones(2)),
         np.linalg.solve(system.impedance(s), port @ np.ones(2)), rtol=1e-10, atol=0)
+    np.testing.assert_allclose(model.port_admittance(s), system.port_admittance(s, port),
+                               rtol=1e-10, atol=0)
+    # Faraday drive: (R + sL) c = -s P i for the coil-current phasor i.
+    np.testing.assert_allclose(
+        model.solve_vector_potential_drive(s, np.ones(2)),
+        np.linalg.solve(system.impedance(s), -s * (port @ np.ones(2))), rtol=1e-10, atol=0)
+
+
+def test_foster_exchange_rejects_sibc_models_and_duplicate_heights(tmp_path):
+    resistance, inductance, port = _system(seed=19)
+    n = resistance.shape[0]
+    sibc = _model(resistance, inductance, port, surface_mass=np.eye(n))
+    with pytest.raises(ValueError, match="rationalized"):
+        vim.ExportHCurlEddyFosterJSON(sibc, tmp_path / "sibc.json")
+    model = _model(resistance, inductance, port)
+    with pytest.raises(ValueError, match="strictly increasing"):
+        vim.ExportHCurlEddyFosterFamilyJSON(
+            [{"height_m": 0.0, "model": model}, {"height_m": 0.0, "model": model}],
+            tmp_path / "duplicate.json")

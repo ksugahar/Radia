@@ -380,118 +380,6 @@ def test_ngsolve_bem_laplace_sl_projection_stays_as_base_matrix():
     assert operator.stats()["backend"] == "ngsolve-base-matrix"
 
 
-def test_hcurl_eddy_cln_model_preserves_vim_response_and_faraday_drive():
-    system = vim.HybridVIMSystem(
-        resistance=np.array([[2.0]]),
-        inductance=np.array([[3.0]]),
-        surface_mass=np.array([[0.0]]),
-        basis_names=("eddy0",),
-        blocks={"volume": (0, 1), "surface": (1, 1)},
-    )
-    port = np.array([[4.0]])
-    model = vim.HCurlEddyCLNFromVIM(system, port)
-    s = 1j * 7.0
-
-    np.testing.assert_allclose(model.port_admittance(s), system.port_admittance(s, port))
-    expected_current = (-s * 4.0) / (2.0 + 3.0 * s)
-    np.testing.assert_allclose(
-        model.solve_vector_potential_drive(s, 1.0),
-        np.array([expected_current]),
-    )
-    state = model.derivative_input_state_space()
-    np.testing.assert_allclose(state["A"], [[-2.0 / 3.0]])
-    np.testing.assert_allclose(state["B"], [[4.0 / 3.0]])
-    np.testing.assert_allclose(state["C"], [[4.0]])
-    np.testing.assert_allclose(state["D"], [[0.0]])
-    assert model.diagnostics()["passive"] is True
-    assert model.diagnostics()["finite_rl_state_space"] is True
-
-
-def test_hcurl_eddy_cln_model_requires_sibc_rationalization_for_state_space():
-    model = vim.HCurlEddyCLNModel(
-        resistance=np.array([[1.0]]),
-        inductance=np.array([[1.0]]),
-        surface_mass=np.array([[2.0]]),
-        port_rhs=np.array([[1.0]]),
-    )
-
-    assert model.has_sibc_termination is True
-    with pytest.raises(ValueError, match="rationalized"):
-        model.derivative_input_state_space()
-
-
-def test_hcurl_eddy_cln_matlab_exchange_preserves_row_major_matrices(tmp_path):
-    model = vim.HCurlEddyCLNModel(
-        resistance=np.array([[2.0, 0.1], [0.1, 1.0]]),
-        inductance=np.array([[3.0, 0.2], [0.2, 2.0]]),
-        surface_mass=np.zeros((2, 2)),
-        port_rhs=np.array([[1.0], [0.5]]),
-        basis_names=("eddy0", "eddy1"),
-        blocks={"volume": (0, 2)},
-    )
-    force_operator = np.arange(6.0).reshape(3, 2, 1)
-    destination = vim.ExportHCurlEddyCLNJSON(
-        model,
-        tmp_path / "hcurl_exchange.json",
-        force_operator=force_operator,
-        metadata={"frequency_hz": 50.0},
-    )
-    payload = json.loads(destination.read_text(encoding="utf-8"))
-
-    assert payload["schema"] == "radia.hcurl.eddy_cln.exchange.v1"
-    assert payload["arrays"]["resistance"]["shape"] == [2, 2]
-    np.testing.assert_allclose(
-        np.asarray(payload["arrays"]["resistance"]["values"]).reshape(2, 2),
-        model.resistance,
-    )
-    assert payload["arrays"]["force_operator"]["shape"] == [3, 2, 1]
-    np.testing.assert_allclose(
-        payload["arrays"]["force_operator"]["values"],
-        force_operator.ravel(order="C"),
-    )
-    assert payload["metadata"]["frequency_hz"] == 50.0
-
-    sibc_model = vim.HCurlEddyCLNModel(
-        resistance=np.eye(1),
-        inductance=np.eye(1),
-        surface_mass=np.ones((1, 1)),
-        port_rhs=np.ones((1, 1)),
-    )
-    with pytest.raises(ValueError, match="rationalized"):
-        vim.ExportHCurlEddyCLNJSON(sibc_model, tmp_path / "sibc.json")
-
-
-def test_hcurl_eddy_cln_family_exchange_requires_common_sorted_state_basis(tmp_path):
-    def make_model(scale):
-        return vim.HCurlEddyCLNModel(
-            resistance=scale * np.eye(1),
-            inductance=np.eye(1),
-            surface_mass=np.zeros((1, 1)),
-            port_rhs=np.ones((1, 1)),
-        )
-
-    destination = vim.ExportHCurlEddyCLNFamilyJSON(
-        [
-            {"height_m": 1.0, "model": make_model(2.0)},
-            {"height_m": -1.0, "model": make_model(1.0)},
-        ],
-        tmp_path / "hcurl_family.json",
-    )
-    payload = json.loads(destination.read_text(encoding="utf-8"))
-    assert payload["schema"] == "radia.hcurl.eddy_cln.family.v1"
-    assert [item["height_m"] for item in payload["snapshots"]] == [-1.0, 1.0]
-    assert payload["shared_state_basis"] is True
-
-    with pytest.raises(ValueError, match="strictly increasing"):
-        vim.ExportHCurlEddyCLNFamilyJSON(
-            [
-                {"height_m": 0.0, "model": make_model(1.0)},
-                {"height_m": 0.0, "model": make_model(2.0)},
-            ],
-            tmp_path / "duplicate.json",
-        )
-
-
 def test_surface_omega_basis_builds_tangential_current():
     points = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
     weights = np.array([0.5, 0.5])
@@ -2239,8 +2127,6 @@ def test_hybrid_vim_public_names_are_exported():
         "EVRSTMethodAlgebra",
         "ReducedPortAdmittance",
         "ReducedPortImpedance",
-        "HCurlEddyCLNModel",
-        "HCurlEddyCLNFromVIM",
         "SharedMeshMaterialModel",
         "CoupledHDivEVRSSystem",
         "CoupledHDivHybridVIMSystem",
