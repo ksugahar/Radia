@@ -823,15 +823,6 @@ truncation is ~1% off, an isoparametric (curved) one reaches 5-6 digits.  (Past 
 it plateaus ~1e-5: the residual conformal-weight quadrature / energy-quotient limit.)
 Maintained summary: `docs/kelvin/DTN_SPECTRUM_COARSE_MESH.md`.
 
-## Connection to Cauer Ladder Network (CLN): both are spectral closures
-
-The DtN eigenvalue ladder -(n+1)/R is a SPECTRAL object of the same kind as the
-Cauer-Ladder-Network (CLN) eigenmode decomposition: each characterises a closure by
-how it transmits the modes a source excites.  CLN folds the INTERIOR response by
-circuit order {R_n, L_n}; the Kelvin closure folds the EXTERIOR response by element
-order p.  Same idea -- decompose the physics into eigenmodes and resolve only the
-modes that matter -- applied to the interior network vs the open boundary.
-
 ## Corollary: the exterior VOLUME mesh is irrelevant -- only Gamma matters (p>=n)
 
 A sharp, practically important consequence: with the truncation-surface Gamma fixed,
@@ -2886,12 +2877,8 @@ sets n_max. CLN "exact" = exact per-mode impedance synthesis over a FINITE set.
   p-vs-h ~1000x, R/a~2.78, corner 0.357/0.661, DeltaDoF 58->1/45; 2D -n/R).
 - IABC exact-DtN (wave): act6_10_iabc_time_domain (DtN poles = Bessel filter, 1e-15), act6_11_exact_dtn_fetd
   (FETD reflection O(h^2) 5.7e-4->3.6e-5, x2471 vs Sommerfeld-1, passive).
-- CLN (diffusion): act6_02_cln_dtn_cauer (Cauer in sqrt(s) EXACT n+1 stages 1e-16 vs Foster
-  floor 1.7e-3), act6_04_cln_mor_radial_eddy (700-DOF eddy FEM -> N=16 ladder, ~43x, SPD stable),
-  act6_05_cln_fetd_reflection (transient reflection 9.9e-7, 62659x vs Dirichlet), act6_09_cln_vs_pml (CLN 8
-  online DOF vs CFS-PML 128 at matched NRMSE 1.46e-4 = 16x fewer + 53189x better
-  cond@DC, DC-exact). NON-CLAIM: propagating waves are PML's home; arbitrary
-  geometry needs Kelvin + CLN.
+- NON-CLAIM: propagating waves are PML's home; arbitrary geometry needs Kelvin
+  + CLN.
 
 ## The CONSOLIDATED measured comparison (act7_22_dtn_spectrum_consolidated; 2026-06-21)
 
@@ -2949,9 +2936,8 @@ coarser than BEM's ~1e-5 = volume + PML-truncation error).  So BOTH NGSolve high
 AND Helmholtz BEM) ARE on the DtN yardstick (not proxies) -- the working high-freq tools the
 DtN-spectrum ranks.
 
-Companions: kelvin_transformation(topic="mesh_control"), dtn_coarse_mesh(topic="dtn_to_cln"),
-mor_cln(...).  (The `iabc` MCP tool was RETIRED 2026-06-20; the exact-impedance/Zs
--> DtN -> CLN content moved here to topic="dtn_to_cln".  IABC is kept only as the
+(The `iabc` MCP tool was RETIRED 2026-06-20; the exact-impedance/Zs -> DtN ->
+CLN content moved here to topic="dtn_to_cln". IABC is kept only as the
 comparison / negative-result record above + the act7 demos.)
 """
 
@@ -2968,17 +2954,16 @@ DTN_COARSE_MESH_DTN_TO_CLN = r"""
 #
 # PRODUCTION API (adopted 2026-06-20): `radia.open_boundary` (radia wheel), TWO paths:
 #   import radia.open_boundary as ob
-#   # (1) dtn_cln -- exact closed-form SEPARABLE (pure numpy/scipy):
+#   # (1) dtn_exact -- exact closed-form SEPARABLE (pure numpy/scipy):
 #   ob.eddy_dtn(n, s, R0, mu_sigma)        # exact eddy/diffusion DtN per multipole
-#   ob.cauer_ladder(n); ob.eval_ladder(..) # finite identity in the sqrt(s) variable
 #   ob.companion_poles(n)                 # inspect the variable convention before time realization
 #   # (2) kelvin_dtn -- Kelvin-BUILT material-aware / NON-separable:
 #   ob.kelvin_fem_radial_dtn(n, s)         # Kelvin-FEM BUILDS the DtN, no DC floor (numpy)
 #   ob.kelvin_dtn_matrix(mesh, p, s, nu=, sigma=); ob.steklov_spectrum(S, Mg)  # NGSolve,
 #                                          #   arbitrary-shape / iron-exterior DtN ladder
 #                                          #   (point-group split: cube O_h, square C4v)
-#   ob.band_cln_fit(s_band, dtn, stages)   # convergent band-CLN for the non-separable case
-# Goldens tests/open_boundary/{test_dtn_cln,test_kelvin_dtn}.py; example docs/open_boundary/demo_dtn_cln_usage.py.
+#   ob.band_rational_fit(s_band, dtn, stages)  # convergent band fit for the non-separable case
+# Goldens validation_test/open_boundary/{test_dtn_exact,test_kelvin_dtn}.py; example docs/open_boundary/demo_dtn_cln_usage.py.
 # SHOWCASE NOTEBOOK docs/open_boundary/open_boundary_demo.ipynb (DtN symbol, CLN ladder,
 #   companion poles, sqrt(s) ladder, Kelvin-FEM DtN build -- executed + rendered).
 # Diffusion qualification: a rational identity in q=sqrt(s) is not a rational
@@ -3044,29 +3029,24 @@ bridge "IABC shell == this exact termination impedance" and its PASSIVE
 EQUIVALENT-CIRCUIT (relaxation-network / TLM) realisation -- fit/synthesise with
 the `urn` / `urn_fit` tools.
 
-Lossy / conductive (eddy-current / diffusion) exterior: G_l is NOT rational in s
-(a sqrt(s) branch cut) -- BUT it IS EXACTLY RATIONAL in q=sqrt(s), with the SAME
-reverse Bessel poles as the wave case above (gamma=ik -> gamma=sqrt(s)):
-    G_n(s) = -s a^2 theta_{n-1}(a sqrt(s)) / theta_n(a sqrt(s)) - (n+1).
-So a Cauer / CLN continued fraction IN q realises it EXACTLY with n+1 stages and
+Lossy / conductive (eddy-current / diffusion) exterior: G_l is NOT rational in
+s (a sqrt(s) branch cut) -- BUT it IS EXACTLY RATIONAL in q=sqrt(s), with the
+SAME reverse Bessel poles as the wave case above (gamma=ik -> gamma=sqrt(s)):
+G_n(s) = -s a^2 theta_{n-1}(a sqrt(s)) / theta_n(a sqrt(s)) - (n+1). So a
+Cauer / CLN continued fraction IN q realises it EXACTLY with n+1 stages and
 WELL-CONDITIONED (coeff spread ~1-30) -- decisively beating a Foster fit in s
-(which floors ~1e-3 at 32 states and ill-conditions to ~1e5) and the URN (which
-plateaus ~1.7e-2; URN's edge is measured/multi-mechanism data, not a clean
-analytic DtN).  This promotes the lab CLN (Kameari-Sugahara eddy-current MOR) to
-the open BOUNDARY itself; the sqrt(s) diffusion-memory element is realised by the
-finite eddy-current ladder (real negative poles -> stable, finite auxiliary ODEs).
-VERIFIED two ways: act6_02_cln_dtn_cauer.py (the EXACT Cauer in q=sqrt(s), n+1
-stages -- the structural/unification result; wave realisation = act6_10/act6_11) and
-act6_04_cln_mor_radial_eddy.py (the GENUINE lab CLN: a Lanczos/PVL MOR of a
-~700-DOF radial eddy-current FEM down to a COMPACT ~16-stage INTEGER-ORDER Cauer
-ladder reproducing G_n, monotone convergence, SPD => real negative poles =>
-directly time-domain + stable -- the practical eddy-current open boundary).  And
-act6_05_cln_fetd_reflection.py USES it as a TRANSIENT open boundary: a Crank-
-Nicolson eddy-current diffusion FETD with the exterior Krylov-substructured to
-~16 DOFs gives ~1e-6 spurious reflection (vs ~6-11% for Dirichlet/Neumann
-truncation), monotone in the stage count, across n=1,2,3 -- the diffusive analog
-of act6_11's wave reflection test.  So the reverse-Bessel/CLN open boundary is
-reflectionless in time for BOTH the wave and the diffusion regime.
+(which floors ~1e-3 at 32 states and ill-conditions to ~1e5) and the URN
+(which plateaus ~1.7e-2; URN's edge is measured/multi-mechanism data, not a
+clean analytic DtN). This promotes the lab CLN (Kameari-Sugahara eddy-current
+MOR) to the open BOUNDARY itself; the sqrt(s) diffusion-memory element is
+realised by the finite eddy-current ladder (real negative poles -> stable,
+finite auxiliary ODEs). And act6_05_cln_fetd_reflection.py USES it as a
+TRANSIENT open boundary: a Crank- Nicolson eddy-current diffusion FETD with
+the exterior Krylov-substructured to ~16 DOFs gives ~1e-6 spurious reflection
+(vs ~6-11% for Dirichlet/Neumann truncation), monotone in the stage count,
+across n=1,2,3 -- the diffusive analog of act6_11's wave reflection test. So
+the reverse-Bessel/CLN open boundary is reflectionless in time for BOTH the
+wave and the diffusion regime.
 
 CLN vs PML (head-to-head, act6_09_cln_vs_pml.py): the eddy-current/diffusion
 exterior is EVANESCENT for every s=i*omega and STATIC as omega->0 -- this whole
@@ -3138,7 +3118,6 @@ def get_dtn_coarse_mesh_documentation(topic: str = "all") -> str:
         "datasheet": DTN_COARSE_MESH_DATASHEET,
         "symmetry_hex": DTN_COARSE_MESH_SYMMETRY_HEX,
         "method_map": DTN_COARSE_MESH_METHOD_MAP,
-        "dtn_to_cln": DTN_COARSE_MESH_DTN_TO_CLN,
     }
     if topic == "all":
         return "\n\n".join(topics.values())
