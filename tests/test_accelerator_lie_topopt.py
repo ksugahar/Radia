@@ -119,7 +119,11 @@ def test_mathematica_fourth_degree_hamiltonian_golden_matches_python():
         "H5_delta_delta_delta_delta_delta": jet.H5[5, 5, 5, 5, 5],
     }
     for name, expected in entries.items():
-        assert actual[name] == pytest.approx(expected, abs=3.0e-15)
+        # Tensor coefficients accumulate several floating-point products; retain
+        # an absolute floor near zero and allow roundoff at the coefficient scale.
+        assert actual[name] == pytest.approx(
+            expected, rel=4 * np.finfo(float).eps, abs=3.0e-15
+        )
 
     generator_entries = reference["linear_generator_entries"]
     actual_generator = {
@@ -134,7 +138,9 @@ def test_mathematica_fourth_degree_hamiltonian_golden_matches_python():
         "A_ell_delta": jet.A[4, 5],
     }
     for name, expected in generator_entries.items():
-        assert actual_generator[name] == pytest.approx(expected, abs=3.0e-15)
+        assert actual_generator[name] == pytest.approx(
+            expected, rel=4 * np.finfo(float).eps, abs=3.0e-15
+        )
 
 
 def test_design_orbit_curvature_is_independent_of_dipole_field_curvature():
