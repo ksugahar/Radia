@@ -315,7 +315,7 @@ the Schur matrix itself is correct.  `MixedGalerkinOrthogonalization.solve`
 
 ## Recorded p=6 broadband gate
 
-`validation_test/cln/evrs_esim_sibc_mixed_notched_p6.json` records an mdx run
+`validation_test/hcurl_response_compression/evrs_esim_sibc_mixed_notched_p6.json` records an mdx run
 on a re-entrant notched conductor from 1 kHz to 1 MHz:
 
 - 3557 active parent-HCurl DoFs;
