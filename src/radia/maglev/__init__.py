@@ -11,7 +11,8 @@ __version__ = "0.1.0"
 from . import mixed_galerkin
 from . import ecb
 from . import simulink
-from .position_cln import MovingHCurlCLNFamily, PositionForceCurve
+from .position_cln import MovingHCurlCLNFamily
+from .position_force import PositionForceCurve
 
 __all__ = [
     "mixed_galerkin",

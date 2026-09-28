@@ -1,8 +1,10 @@
-# CLN / EVRS Validation
+# HCurl response compression (EVRS) validation
 
-This directory holds validation-class research checks for Cauer ladder network
-and Eddy-Visible Response Space work.  These are not fast CI tests and their
-desktop runtimes are not benchmark claims.
+This directory holds validation-class research checks for Eddy-Visible Response
+Space (EVRS) compression of high-order HCurl parent spaces and the HDiv-MMM /
+HCurl-VIM smokes built on it.  These are not fast CI tests and their desktop
+runtimes are not benchmark claims.  Saved JSON may record the former
+`validation_test/cln/` path in its commands; that was this directory.
 
 ## EVRS p-by-n convergence smoke
 
@@ -30,7 +32,7 @@ verify that the graph-cycle bridge class has been converted to an actual
 VIM-compatible current basis.
 
 ```powershell
-python validation_test/cln/evrs_pn_convergence.py
+python validation_test/hcurl_response_compression/evrs_pn_convergence.py
 ```
 
 ## p=6 depth smoke
@@ -57,8 +59,8 @@ accuracy claim.
 
 Current interpretation: for this two-port smoke, p=6 needs roughly 20--24 EVRS
 coordinates to converge the reduced port admittance, so the useful reduction is
-about 98%.  Smaller ranks are valuable as low-order CLN/Cauer fits but should
-not be called converged.
+about 98%.  Smaller ranks are useful low-order fits but should not be called
+converged.
 
 ## EVRS + bridge-cycle + surface-Omega/SIBC mixed Schur smoke
 
@@ -93,8 +95,8 @@ bulk/bridge/surface degree requirements, so `p=6` can be identified as required
 or merely conservative.
 
 ```powershell
-python validation_test/cln/evrs_sibc_mixed_schur.py
-python validation_test/cln/evrs_sibc_mixed_schur.py --orders 4,5,6 --steps 8,12
+python validation_test/hcurl_response_compression/evrs_sibc_mixed_schur.py
+python validation_test/hcurl_response_compression/evrs_sibc_mixed_schur.py --orders 4,5,6 --steps 8,12
 ```
 
 Current p=6 desktop smoke (`evrs_sibc_mixed_schur_smoke.json`) with
@@ -116,7 +118,7 @@ solution-vector difference as the pass/fail observable.
 including the final native reduced solve and field reconstruction:
 
 ```powershell
-python validation_test/cln/hcurl_vim_hdiv_mmm_end_to_end.py
+python validation_test/hcurl_response_compression/hcurl_vim_hdiv_mmm_end_to_end.py
 ```
 
 The saved p=6 notched-box result
@@ -180,10 +182,10 @@ on an L-shaped body, comparing independently solved parent coefficients,
 element-average magnetization, and the re-entrant-corner neighborhood.
 
 ```powershell
-python validation_test/cln/planar_hdiv_mmm_response_smoke.py
-python validation_test/cln/planar_hdiv_mmm_response_smoke.py `
+python validation_test/hcurl_response_compression/planar_hdiv_mmm_response_smoke.py
+python validation_test/hcurl_response_compression/planar_hdiv_mmm_response_smoke.py `
   --order 2 --harmonic-degree 3 `
-  --output validation_test/cln/planar_hdiv_mmm_bdm2_response_smoke.json
+  --output validation_test/hcurl_response_compression/planar_hdiv_mmm_bdm2_response_smoke.json
 ```
 
 | HDiv parent | parent DoF | response modes | max energy error | max corner error |
@@ -228,7 +230,7 @@ motors, corners, thin skin depth, or higher-order SIBC traces.
 The companion `evrs_sibc_p6_depth20_smoke.json` checks reference stability on
 the same p=6 parent space: `n=18` is still about 0.71% away from `n=20`, while
 `n=19` is about 0.27% away.  Thus the p-comparison should use a sufficiently
-deep EVRS/CLN reference; the older `p=6,n=12` smoke is not a final p-reference.
+deep EVRS reference; the older `p=6,n=12` smoke is not a final p-reference.
 
 ## notched-box corner stress smoke
 
@@ -238,12 +240,12 @@ keeping the same conductor/SIBC classification rule.  The smoke below uses one
 frequency point and compares against `p=6,n=22`.
 
 ```powershell
-python validation_test/cln/evrs_sibc_mixed_schur.py `
+python validation_test/hcurl_response_compression/evrs_sibc_mixed_schur.py `
   --geometry notched-box --orders 4,6 --steps 20,22 `
-  --frequencies 100 --output validation_test/cln/evrs_sibc_notched_p46_depth22_smoke.json
-python validation_test/cln/evrs_sibc_mixed_schur.py `
+  --frequencies 100 --output validation_test/hcurl_response_compression/evrs_sibc_notched_p46_depth22_smoke.json
+python validation_test/hcurl_response_compression/evrs_sibc_mixed_schur.py `
   --geometry notched-box --orders 5,6 --steps 20,22 `
-  --frequencies 100 --output validation_test/cln/evrs_sibc_notched_p56_depth22_smoke.json
+  --frequencies 100 --output validation_test/hcurl_response_compression/evrs_sibc_notched_p56_depth22_smoke.json
 ```
 
 | geometry | p | n | active DoF | reduced modes | max rel. error vs p=6,n=22 | max Schur residual |
@@ -270,10 +272,10 @@ uses `int |J|^2 / sigma dV`.  For `notched-box`, the corner metric is measured
 near the re-entrant line at `(x,y)=(0.45,0.45)`.
 
 ```powershell
-python validation_test/cln/evrs_current_field_compare.py `
+python validation_test/hcurl_response_compression/evrs_current_field_compare.py `
   --geometry notched-box --orders 3,4,5,6 `
   --steps 2,4,8,12,16,22 --shifts 0.01,0.1,1,10,100 `
-  --output validation_test/cln/evrs_fem_notched_p36.json
+  --output validation_test/hcurl_response_compression/evrs_fem_notched_p36.json
 ```
 
 Against the full p=6 solve:
@@ -308,12 +310,12 @@ host, runtime, NGSolve version, and wall time.  They supersede the desktop smoke
 numbers for paper claims.
 
 ```powershell
-python validation_test/cln/curved_sphere_geometry_benchmark.py `
-  --output validation_test/cln/curved_sphere_geometry_benchmark.json
-python validation_test/cln/evrs_current_field_compare.py `
+python validation_test/hcurl_response_compression/curved_sphere_geometry_benchmark.py `
+  --output validation_test/hcurl_response_compression/curved_sphere_geometry_benchmark.json
+python validation_test/hcurl_response_compression/evrs_current_field_compare.py `
   --geometry sphere --curve-order 4 --orders 3,4,5,6 `
   --steps 2,4,8,12,16,22 --shifts 0.01,0.1,1,10,100 `
-  --output validation_test/cln/evrs_fem_sphere_curved_p36.json
+  --output validation_test/hcurl_response_compression/evrs_fem_sphere_curved_p36.json
 ```
 
 | curve order | sphere area error | sphere volume error | VIM/FEM area mismatch | tangent defect |
@@ -348,10 +350,10 @@ number drops from `3.117e9` to `3.155e3`; trial/test orthogonality defects are
 below `1.4e-13`, and the Schur identity error is `7.50e-10`.
 
 ```powershell
-python validation_test/cln/evrs_sibc_mixed_schur.py `
+python validation_test/hcurl_response_compression/evrs_sibc_mixed_schur.py `
   --geometry sphere --curve-order 4 --order 6 --steps 4,8,12,22 `
   --frequencies 100,1000,10000,100000,1000000 `
-  --output validation_test/cln/evrs_dtn_sibc_mixed_sphere_p6.json
+  --output validation_test/hcurl_response_compression/evrs_dtn_sibc_mixed_sphere_p6.json
 ```
 
 With graph-cycle and exterior-only SIBC modes included, the rank-8 port error
@@ -380,7 +382,7 @@ current errors are `4.855e-3` and `3.666e-3`; corner basis-energy density is
 1.426 times the far-field value.
 
 ```powershell
-python validation_test/cln/hcurl_corner_gmsh_visualization.py `
+python validation_test/hcurl_response_compression/hcurl_corner_gmsh_visualization.py `
   --corner-edge-maxh 0.2 --order 6 --steps 22 --shift 10 `
-  --output validation_test/cln/hcurl_corner_fields.msh
+  --output validation_test/hcurl_response_compression/hcurl_corner_fields.msh
 ```

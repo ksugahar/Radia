@@ -99,7 +99,7 @@ def test_lane_templates_expose_required_artifact_contracts():
         "tests/test_vim_eddy_hybrid.py::test_eddy_bubble_hcurl_basis_is_vim_and_hdiv_mmm_ready"
         in hdiv["public_evidence"]
     )
-    assert "validation_test/cln/hcurl_vim_hdiv_mmm_end_to_end.py" in hdiv["public_evidence"]
+    assert "validation_test/hcurl_response_compression/hcurl_vim_hdiv_mmm_end_to_end.py" in hdiv["public_evidence"]
 
 
 def test_hdiv_mmm_eddy_artifact_gate_accepts_solver_ready_contract():

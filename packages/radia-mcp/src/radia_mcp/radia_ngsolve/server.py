@@ -850,6 +850,9 @@ def esim(topic: str = "all") -> str:
                                 per-element vs per-node Z_s
             "module_api"      - radia.esim_cell_problem.ESIMFiniteSlabSolver
                                 + BEM-SIBC / FEM-SIBC coupling examples
+            "evrs_coupling"   - production HCurl EVRS + local ESIM surface
+                                Gram, LUT contract, exact affine bulk/surface
+                                reconstruction, recorded p=6 gate
     """
     return get_esim_documentation(topic)
 

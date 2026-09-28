@@ -300,7 +300,7 @@ check: positivity of R_k,L_k; p-refinement of moments; port transfer error.
 ```
 
 The first runnable Radia validation lane for this table is
-`validation_test/cln/evrs_pn_convergence.py`.  It builds a small unit-box
+`validation_test/hcurl_response_compression/evrs_pn_convergence.py`.  It builds a small unit-box
 `HCurl(p)` parent problem, compresses to EVRS depth `n`, samples `curl(T)`,
 assembles the reduced VIM, and writes `evrs_pn_convergence_smoke.json` with
 DoF compression and port-admittance error relative to the highest `(p,n)` case
@@ -308,7 +308,7 @@ in the run.  This is a desktop smoke, not benchmark evidence; non-monotone rows
 are useful diagnostics of sampling order, kernel regularization, or an
 insufficient reference case.
 
-The companion lane `validation_test/cln/evrs_sibc_mixed_schur.py` adds
+The companion lane `validation_test/hcurl_response_compression/evrs_sibc_mixed_schur.py` adds
 surface-Omega/SIBC modes to the same bulk EVRS basis and checks the mixed
 Galerkin Schur complement.  It accepts `--orders 4,5,6` so the same validation
 can compare candidate parent orders against the highest-p reference case.  The
@@ -330,7 +330,7 @@ higher-order SIBC correction can raise the ledger requirement.
 
 The first `p=4/5/6` smoke supports that interpretation.  With the default
 ledger (`required_parent_order=4`) and a smooth unit-box conductor,
-`validation_test/cln/evrs_sibc_p456_depth20_smoke.json` gives `p=4,n=18`
+`validation_test/hcurl_response_compression/evrs_sibc_p456_depth20_smoke.json` gives `p=4,n=18`
 within 0.25% of the `p=6,n=20` reference, while the active parent DoFs are 428
 instead of 1226.  Thus `p=6` is not justified as a universal default by this
 case.  It remains a useful conservative reference while sharper geometry,
@@ -346,7 +346,7 @@ therefore: use the ledger for admissibility, then run p-refinement on the
 retained port/SIBC observables for the actual geometry class.
 
 The field-level comparison is stronger.  In
-`validation_test/cln/evrs_current_field_compare.py`, the full p=6 HCurl parent
+`validation_test/hcurl_response_compression/evrs_current_field_compare.py`, the full p=6 HCurl parent
 solve is used as the reference and the sampled current `J = curl(T)` is compared
 directly.  On the same notched-box geometry, p=6 can be reduced from 3557 active
 parent DoFs to 44 EVRS coordinates while keeping the current L2 error at about
@@ -762,7 +762,7 @@ dense mixed-Galerkin/Schur verification path.
 
 ### 6.1 End-to-End p=6 Production-Path Smoke
 
-`validation_test/cln/hcurl_vim_hdiv_mmm_end_to_end.py` exercises the complete
+`validation_test/hcurl_response_compression/hcurl_vim_hdiv_mmm_end_to_end.py` exercises the complete
 path on a notched conductor with a p=6 HCurl parent, conductor-cycle bridges,
 exterior-only SIBC modes, a response-adapted HDiv magnetization basis, and two
 excitation ports.  The saved native-kernel smoke gives:
@@ -821,7 +821,7 @@ reconstructed fields, port response, and Joule loss now agree simultaneously.
 
 ### 6.2 Local ESIM-SIBC Broadband Gate
 
-`validation_test/cln/evrs_esim_sibc_mixed_notched_p6.json` is the mdx record
+`validation_test/hcurl_response_compression/evrs_esim_sibc_mixed_notched_p6.json` is the mdx record
 for the p=6 notched conductor at 1 kHz, 10 kHz, 100 kHz, and 1 MHz.  It couples
 the topology-aware 25-mode EVRS/bridge/surface model to the nonlinear ESIM cell
 and iterates the local surface Gram to a relative impedance tolerance of
@@ -848,7 +848,7 @@ bytes on the recorded mdx run.
 
 ### 6.3 p=6 Cell-Family and Curved-Geometry Gate
 
-`validation_test/cln/hcurl_p6_cell_family_matrixfree.py` applies the same
+`validation_test/hcurl_response_compression/hcurl_p6_cell_family_matrixfree.py` applies the same
 native COCR solve to every NGSolve HCurl cell family and a P2-curved tetrahedral
 mesh.  The mdx record is:
 
@@ -868,7 +868,7 @@ matrix-free, and every native COCR true residual is below `1.8e-15`.
 
 ### 6.4 Planar BDM/RT Corner Smoke
 
-`validation_test/cln/planar_hdiv_mmm_response_smoke.py` applies the same
+`validation_test/hcurl_response_compression/planar_hdiv_mmm_response_smoke.py` applies the same
 construction to a 2-D L-shaped body.  The production-default BDM1 path reduces
 42 DoFs to 4 modes and reproduces the parent Hx/Hy magnetization near the
 re-entrant corner to `4.19e-12`.  BDM2 reduces 93 DoFs to 6 modes.  Explicit
