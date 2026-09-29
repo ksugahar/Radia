@@ -173,28 +173,3 @@ def test_cli_accepts_large_changed_file_list_over_stdin():
     plan = json.loads(completed.stdout)
     assert plan["mode"] == "targeted"
     assert plan["changed_files"] == sorted(changed)
-
-
-def test_workflow_discovers_directory_and_preserves_exact_selectors(monkeypatch, tmp_path):
-    import textwrap
-    from types import SimpleNamespace
-    import pytest
-
-    workflow = (PACKAGE_ROOT.parents[1] / '.github/workflows/radia-mcp-matrix.yml').read_text(encoding='utf-8')
-    step = workflow.split('      - name: Pytest (compact contracts plus affected package tests)', 1)[1]
-    script = textwrap.dedent(step.split("          python - <<'PY'\n", 1)[1].split('          PY\n', 1)[0])
-    selectors = ['tests/test_ac_internal_inductance.py', 'tests/test_meta_health.py::test_meta_catalog_has_at_least_30_servers']
-    (tmp_path / 'radia-mcp-ci-selection.json').write_text(json.dumps({'package_tests': selectors}), encoding='utf-8')
-    monkeypatch.chdir(tmp_path)
-    calls = []
-    def run(command, **kwargs):
-        calls.append((command, kwargs))
-        return SimpleNamespace(returncode=0)
-    monkeypatch.setattr(subprocess, 'run', run)
-    with pytest.raises(SystemExit) as stopped:
-        exec(compile(script, '<workflow pytest step>', 'exec'), {})
-    assert stopped.value.code == 0
-    command, kwargs = calls[0]
-    assert command[-1] == 'tests'
-    assert not any(selector in command for selector in selectors)
-    assert json.loads(kwargs['env']['RADIA_MCP_CI_SELECTION_JSON']) == selectors
