@@ -54,7 +54,7 @@
   ],
   "int32_limit": 2147483648,
   "finding": "In NGSolve 6.2.2606 this mesh family factored at 597k free DOF with measured L-factor NZE 1.66e9, failed with bad_array_new_length at 951k free DOF, and exited with access violation at 1.72M free DOF. L-factor NZE was not measured for either failure. Extrapolations of approximately 3.6e9 and 9.9e9 suggest a possible indexing or allocation limit, but do not establish its cause or a universal 2^31 threshold. The diagnostic alternative factorization was interrupted at 71 GB, so it does not prove successful factorization. PARDISO is not a fallback.",
-  "limit_status": "failed-run cause remains unproven; 2607 source inspection identifies a Windows counter risk, while adequate-headroom reproduction and a safe pre-factorization guard remain pending",
+  "limit_status": "Historical unmodified-runtime failure causes remain unproven. An isolated guarded 2607 build solved two smaller matrices and rejected the 950584-free-DOF matrix at its counter-range check. Standard runtime deployment and complete release validation remain pending; no universal DOF limit is established.",
   "source_inspection_2607": {
     "source": "https://github.com/NGSolve/ngsolve/blob/v6.2.2607/linalg/sparsecholesky.cpp#L336-L390",
     "finding": "Allocate accumulates cnt and cnt_master in long int before assignment to size_t indices. Windows x64 long is 32-bit, so counts exceeding LONG_MAX cannot be represented by these intermediate counters.",
@@ -62,5 +62,68 @@
     "windows_x64_long_bytes": 4,
     "windows_x64_size_t_bytes": 8
   },
-  "consequence": "the full-size reduced-A route uses the explicit solver='ams' (AMS-preconditioned CG with a true-residual check)"
+  "consequence": "the full-size reduced-A route uses the explicit solver='ams' (AMS-preconditioned CG with a true-residual check)",
+  "guarded_2607_validation": {
+    "date": "2026-09-30",
+    "host": "LAB",
+    "ngsolve": "6.2.2607",
+    "ngsolve_source_commit": "cf9e5f956a93c343f276a8a4bc960da2e8f24abc",
+    "radia_source_commit": "0e9f26bd64bc3bcc4f7fa76931af9adb48868769",
+    "blas_lapack": "MKL",
+    "pardiso_enabled": false,
+    "ngsolve_threads": 2,
+    "blas_threads": 1,
+    "library_sha256": "1160f0e011c2bb56c850a2e9ce04f932dd42d14b0d0b753bf7e526a89513d442",
+    "guard_patch_sha256": "b9eee84b92b267a6537ea477734a0e7446a0c842f60c77fed23645e0483d817f",
+    "worker_sha256": "4baf67f47ccbd8c42dd0e0b61be992ad15a79e4ee18bfab4935f785c36a26820",
+    "evidence_archive_sha256": "4be987453d24b29550c372318d5352fe580e3d2b3f15bb192ae8b89218dc659c",
+    "input_archive_sha256": "aaeeffc6c5a8c23e9f1ed6a881d8d3f6b6bf30b78f5c7904bbd68727701b818f",
+    "patch_behavior": "Check both signed-long symbolic-entry accumulators against LONG_MAX before addition; release the ordering graph when construction throws. Does not widen indices or change numerical factorization.",
+    "rows": [
+      {
+        "mesh_size_scale": 2.0,
+        "mesh_sha256": "3c18ffb2d2c7c46f0016a3d3032d94a4c205f7aa01c2c15d816dac076781171e",
+        "tetrahedra": 278276,
+        "ndof": 335648,
+        "free_dofs": 324992,
+        "matrix_nnz_upper": 5333960,
+        "process_exit_code": 0,
+        "outcome": "solved",
+        "factor_nze": 594104403,
+        "relative_residual": 2.539533651079162e-13
+      },
+      {
+        "mesh_size_scale": 1.5,
+        "mesh_sha256": "429ac594f53ec9556e11cb2959bcb2718ff834a2868f2ce477ba4e0f3bff15da",
+        "tetrahedra": 511064,
+        "ndof": 615444,
+        "free_dofs": 596748,
+        "matrix_nnz_upper": 9795900,
+        "process_exit_code": 0,
+        "outcome": "solved",
+        "factor_nze": 1795236408,
+        "relative_residual": 3.539512236066818e-13
+      },
+      {
+        "mesh_size_scale": 1.25,
+        "mesh_sha256": "b8641e50ef9288f40511f1242c692ed1643916e0ec3ced848488cb807afbeb39",
+        "tetrahedra": 814206,
+        "ndof": 977725,
+        "free_dofs": 950584,
+        "matrix_nnz_upper": 15606292,
+        "process_exit_code": 1,
+        "outcome": "counter_range_guard_rejected",
+        "exception": "NgException",
+        "message": "SparseCholesky symbolic storage exceeds the supported counter range; use an iterative solver"
+      }
+    ],
+    "limitations": [
+      "Isolated experimental library; not the standard released runtime.",
+      "First linear matrix only; not nonlinear ESRF acceptance.",
+      "Concurrent LAB numerical validation; no timing comparison.",
+      "The 950584-free-DOF case was rejected, not solved; its factor NZE was not measured.",
+      "Does not prevent every out-of-memory failure or prove the causes of prior unmodified-library crashes.",
+      "Full upstream regression suite and exact release-quad remain outstanding."
+    ]
+  }
 }
