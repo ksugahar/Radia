@@ -10,6 +10,27 @@ from pathlib import Path
 import subprocess
 import tempfile
 
+def start_owned_engine(engine_api):
+    """A CI-owned Engine is allowed only when MATLAB is absent host-wide."""
+    def process_ids():
+        result = subprocess.run([
+            "pwsh", "-NoProfile", "-NonInteractive", "-Command",
+            "@(Get-Process MATLAB -ErrorAction SilentlyContinue | "
+            "Select-Object -ExpandProperty Id) | ConvertTo-Json -Compress",
+        ], capture_output=True, text=True, check=True, timeout=30)
+        value = json.loads(result.stdout) if result.stdout.strip() else []
+        return value if isinstance(value, list) else [value]
+
+    processes = process_ids()
+    shared = tuple(engine_api.find_matlab())
+    if processes or shared:
+        raise RuntimeError(
+            f"Existing MATLAB must be preserved: PIDs={processes}, shared={shared}. "
+            "This CI runner requires an unoccupied host; no new MATLAB was started.")
+    if process_ids():
+        raise RuntimeError("MATLAB appeared during preflight; no new MATLAB was started")
+    return engine_api.start_matlab("-nodesktop -nosplash")
+
 def record_timeout(child, output):
     record = dict(passed=False, error="owned Engine worker timeout", worker_pid=child.pid)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -74,7 +95,7 @@ def main():
     scratch = tempfile.TemporaryDirectory(prefix="sparsesolv-matlab-", dir="C:/temp")
     metrics = Path(scratch.name)/"metrics.json"
     try:
-        eng = matlab.engine.start_matlab("-nodesktop -nosplash")
+        eng = start_owned_engine(matlab.engine)
         eng.cd(str(root), nargout=0)
         eng.setenv("RADIA_PYTHON_EXECUTABLE", sys.executable, nargout=0)
         eng.addpath(str(root/"matlab"), nargout=0)
