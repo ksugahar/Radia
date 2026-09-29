@@ -141,7 +141,7 @@ def run_axisym_nonlinear(args, bh_curve):
         gfu = GridFunction(fes)
         max_picard = 25
         tol_picard = 1e-2
-        alpha = 0.5
+        alpha = 0.25
         convergence = []
         old_vec = gf_mu.vec.FV().NumPy().copy()
         # Map workpiece elements: index list
@@ -194,22 +194,26 @@ def run_axisym_nonlinear(args, bh_curve):
 
             max_dmu = float(np.max(np.abs(new_vec - old_vec)
                                     / np.maximum(old_vec, 1.0)))
+            # Judge the constitutive fixed-point defect, not the damped step:
+            # smaller relaxation must not make an unconverged field acceptable.
+            constitutive_residual = max_dmu / alpha
             gf_mu.vec.FV().NumPy()[:] = new_vec
             old_vec = new_vec.copy()
             convergence.append({"iter": k_outer, "max_dmu_r": max_dmu,
+                                 "constitutive_relative_residual": constitutive_residual,
                                  "mu_r_wp_mean": float(new_vec[wp_elem_idx].mean()),
                                  "B_wp_max": float(B_per_elem[wp_elem_idx].max()),
                                  "B_wp_mean": float(B_per_elem[wp_elem_idx].mean())})
             print(f"  Picard iter {k_outer}: max d(mu_r)={max_dmu:.4f}, "
                   f"<mu_r_wp>={float(new_vec[wp_elem_idx].mean()):.1f}, "
                   f"|B|_max={float(B_per_elem[wp_elem_idx].max()):.3f} T")
-            if max_dmu < tol_picard and k_outer > 0:
+            if constitutive_residual < tol_picard and k_outer > 0:
                 print(f"  CONVERGED at iter {k_outer}")
                 break
         else:
             raise RuntimeError(
                 f"Axisymmetric Picard did not converge in {max_picard} iterations: "
-                f"relative permeability update={max_dmu:.6g}, tolerance={tol_picard}")
+                f"constitutive residual={constitutive_residual:.6g}, tolerance={tol_picard}")
 
         # P_wp via volumetric integration.
         from ngsolve import InnerProduct
