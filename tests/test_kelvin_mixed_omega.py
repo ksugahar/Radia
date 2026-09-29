@@ -1089,7 +1089,9 @@ def test_picard_hybrid_linear_material_is_preserved(order):
     iron = Box(Pnt(0, -1, -1), Pnt(1, 1, 1))
     pole = Box(Pnt(1, -1, -1), Pnt(2, 1, 1))
     air.mat('reduced'); iron.mat('total'); pole.mat('pole')
-    air.faces.name = iron.faces.name = pole.faces.name = 'source_total_interface'
+    air.faces.name = iron.faces.name = pole.faces.name = 'outer'
+    from netgen.occ import X
+    air.faces.Max(X).name = iron.faces.Min(X).name = 'source_total_interface'
     mesh = ng.Mesh(OCCGeometry(Glue([air, iron, pole])).GenerateMesh(maxh=1))
     table = [(0, 0), (1, 100*MU_0), (2, 150*MU_0)]
     options = dict(total_materials=('total', 'pole'), order=order,
@@ -1119,20 +1121,34 @@ def test_trace_without_tolerance_is_not_accepted():
                 mesh, ng.CF((0, 0, 1)), 'source_total_interface', relative_tolerance=tolerance)
 
 
-def test_sparse_direct_saddle_solve_never_accepts_nonfinite_values():
+@pytest.mark.parametrize("order", [1, 2, 3])
+def test_sparse_direct_saddle_solve_satisfies_original_system(order):
     import ngsolve as ng
     from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_kelvin
     mesh, source, potential, _ = _picard_case(maxh=0.7)
-    try:
-        with ng.TaskManager():
-            result = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
-                mesh, source, potential, 1., (3., 0., 0.),
-                mu_r_by_material={"reduced": 1., "total": 1000.},
-                reduced_materials=("reduced",), total_materials=("total",),
-                interface_boundary="source_total_interface", order=1,
-                dirichlet_bbbnd="outer", inverse="sparsecholesky")
-    except RuntimeError as exc:
-        assert "non-finite solution" in str(exc)
-    else:
-        assert np.isfinite(result["solution"].vec.FV().NumPy()).all()
-        assert result["linear_residual"]["free_dofs"]["relative"] < 1e-8
+    with ng.TaskManager():
+        result = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+            mesh, source, potential, 1., (3., 0., 0.),
+            mu_r_by_material={"reduced": 1., "total": 1000.},
+            reduced_materials=("reduced",), total_materials=("total",),
+            interface_boundary="source_total_interface", order=order,
+            dirichlet_bbbnd="outer", inverse="sparsecholesky", return_system=True)
+    assert np.isfinite(result["solution"].vec.FV().NumPy()).all()
+    assert result["linear_residual"]["free_dofs"]["relative"] < 1e-8
+    # A manufactured full-system RHS exercises nonzero multiplier loads and
+    # multiplier recovery independently of the physical source above.
+    from radia.kelvin_solver import _matching_trace_direct_inverse
+    matrix = result["system"]["bilinear_form"].mat
+    fes = result["fes"]
+    free = np.asarray(list(fes.FreeDofs()), dtype=bool)
+    exact = matrix.CreateColVector()
+    exact.FV().NumPy()[:] = np.random.default_rng(813).normal(size=fes.ndof)
+    exact.FV().NumPy()[~free] = 0.
+    rhs = matrix.CreateColVector()
+    rhs.data = matrix * exact
+    with ng.TaskManager():
+        computed = _matching_trace_direct_inverse(matrix, fes, order=order) * rhs
+    residual = matrix.CreateColVector()
+    residual.data = matrix * computed - rhs
+    assert np.linalg.norm(residual.FV().NumPy()[free]) / np.linalg.norm(
+        rhs.FV().NumPy()[free]) < 1e-10
