@@ -2040,8 +2040,8 @@ class DensityAdjointVIM:
         The weighted HDiv mass is registered once.  H-matrix application,
         Krylov updates, and true-residual stopping tests remain inside C++.
         ``mass_riesz=False`` uses the inexpensive exact system diagonal;
-        ``True`` reuses the persistent PARDISO mass factor and applies it to
-        all right-hand sides in one phase-33 call.  With
+        ``True`` reuses the persistent SparseCholesky mass factor and applies it to
+        all right-hand sides through the native mass solver.  With
         ``cluster_tree=True``, all right-hand sides cross one
         row-major native boundary; the preserved H-matrix cluster tree supplies
         aggregate ``D^-1 B^T`` modes to a balanced two-level preconditioner,
