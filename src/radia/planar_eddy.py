@@ -73,7 +73,26 @@ def eddy_operator(fem_mesh, sigma, freq, order=4, conductor="conductor", dirichl
     af += 1j * w * MU0 * sigma * u * v * dx(conductor)
     af.Assemble()
     inv = af.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
+    _check_factor(af.mat, inv, fes)
     return fes, inv, w
+
+
+def _check_factor(matrix, inverse, fes):
+    """Verify the reused factor once on a random load (``radia._residual_gate``).
+
+    SparseCholesky returns a wrong answer without an error for a singular or
+    nonsymmetric matrix; every later ``eddy_reaction`` reuses this factor."""
+    from radia._residual_gate import check_true_residual
+
+    free = np.fromiter((bool(bit) for bit in fes.FreeDofs()), dtype=bool, count=fes.ndof)
+    probe = matrix.CreateColVector()
+    values = np.zeros(fes.ndof, dtype=complex)
+    values[free] = np.random.default_rng(0).standard_normal(int(free.sum()))
+    probe.FV().NumPy()[:] = values
+    solution = probe.CreateVector(); solution.data = inverse * probe
+    residual = probe.CreateVector(); residual.data = probe - matrix * solution
+    check_true_residual(matrix, residual.FV().NumPy(), solution.FV().NumPy(), values, free,
+                        "planar eddy SparseCholesky factor")
 
 
 def eddy_reaction(fes, inv, w, sigma, applied_Az_cf, conductor="conductor"):

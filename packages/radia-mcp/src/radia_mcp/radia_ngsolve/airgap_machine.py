@@ -39,9 +39,48 @@ from ngsolve import GridFunction, LinearForm, ds, x, y, atan2, cos, sin, BND, In
 from .airgap_element import annular_dtn_matrix, airgap_harmonic_torque
 
 
+def _free_mask(freedofs, n):
+    return np.fromiter((bool(bit) for bit in freedofs), dtype=bool, count=n)
+
+
+def _check_residual(matrix, residual, solution, rhs, free, what):
+    """Relative residual 1e-8, or 1e-6 with normwise backward error 1e-12, on the free rows
+    (the rule of ``radia._residual_gate``); raises otherwise."""
+    x, r, b = solution[free], residual[free], rhs[free]
+    r_norm = float(np.linalg.norm(r))
+    relative = r_norm / max(float(np.linalg.norm(b)), 1e-300)
+    if np.all(np.isfinite(x)) and math.isfinite(relative) and relative <= 1e-8:
+        return relative
+    if not relative <= 1e-6:            # e.g. a singular K: small backward error, huge x
+        raise RuntimeError(f"{what}: true relative residual {relative:.3e} exceeds 1e-8")
+    values, columns, pointers = (np.asarray(item) for item in matrix.CSR())
+    rows = np.repeat(np.arange(len(pointers) - 1), np.diff(pointers.astype(np.int64)))
+    keep = free[rows] & free[columns.astype(np.int64)]
+    scale = float(np.sqrt(np.sum(np.abs(values[keep]) ** 2))) * float(np.linalg.norm(x))
+    backward = r_norm / max(scale + float(np.linalg.norm(b)), 1e-300)
+    if not (np.all(np.isfinite(x)) and math.isfinite(backward) and backward <= 1e-12):
+        raise RuntimeError(f"{what}: true relative residual {relative:.3e} exceeds 1e-8 and "
+                           f"backward error {backward:.3e} exceeds 1e-12")
+    return relative
+
+
 def _inv(mat, freedofs):
-    """Use the explicit FE direct backend; propagate factorization failures."""
-    return mat.Inverse(freedofs, inverse="sparsecholesky")
+    """SparseCholesky factor of ``mat``, checked once on a random load.
+
+    SparseCholesky returns a wrong answer without an error for a singular or
+    nonsymmetric matrix (K is singular when the rotor has no Dirichlet
+    boundary), so the factor is verified before it is reused."""
+    inverse = mat.Inverse(freedofs, inverse="sparsecholesky")
+    probe = mat.CreateColVector()
+    free = _free_mask(freedofs, len(probe))
+    values = np.zeros(len(probe), dtype=probe.FV().NumPy().dtype)
+    values[free] = np.random.default_rng(0).standard_normal(int(free.sum()))
+    probe.FV().NumPy()[:] = values
+    solution = probe.CreateVector(); solution.data = inverse * probe
+    residual = probe.CreateVector(); residual.data = probe - mat * solution
+    _check_residual(mat, residual.FV().NumPy(), solution.FV().NumPy(), values, free,
+                    "air-gap SparseCholesky factor")
+    return inverse
 
 
 def airgap_coupling(fes, ri, ro, rotor_ring, stator_ring, harmonics):
@@ -90,7 +129,8 @@ def airgap_factorize(Kmat, coupling, freedofs):
     UtKU = np.array([[InnerProduct(U[i], w[j], conjugate=False) for j in range(len(U))]
                      for i in range(len(U))])
     smallinv = np.linalg.inv(coupling["Ginv"] + UtKU)
-    return {"Kmat": Kmat, "Kinv": Kinv, "w": w, "smallinv": smallinv, "U": U}
+    return {"Kmat": Kmat, "Kinv": Kinv, "w": w, "smallinv": smallinv, "U": U,
+            "G": np.linalg.inv(coupling["Ginv"]), "free": _free_mask(freedofs, len(U[0]))}
 
 
 def airgap_solve(factor, fes, dirichlet_cf=None, source_lf=None):
@@ -116,6 +156,15 @@ def airgap_solve(factor, fes, dirichlet_cf=None, source_lf=None):
                 raise ValueError("real AGE space received a complex Woodbury coefficient")
             coefficient = float(coefficient.real)
         delta.data -= coefficient * w[i]
+    # true residual of (K + U G U^T) delta = rhs on the free rows
+    projections = np.array([InnerProduct(U[i], delta, conjugate=False) for i in range(len(U))])
+    residual = rhs.CreateVector()
+    residual.data = rhs - factor["Kmat"] * delta
+    for i, coefficient in enumerate(factor["G"] @ projections):
+        coefficient = complex(coefficient) if residual.is_complex else float(np.real(coefficient))
+        residual.data -= coefficient * U[i]
+    _check_residual(factor["Kmat"], residual.FV().NumPy(), delta.FV().NumPy(),
+                    rhs.FV().NumPy(), factor["free"], "air-gap Woodbury solve")
     gfu.vec.data += delta
     return gfu
 
