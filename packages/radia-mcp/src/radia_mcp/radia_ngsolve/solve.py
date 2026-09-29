@@ -3323,13 +3323,18 @@ def solve_planar_eddy(mesh, nu, sigma, omega, driven_region=None,
     if driven_region is not None and total_current is not None:
         fes = H1(mesh, order=order, complex=True, dirichlet=dirichlet) \
             * NumberSpace(mesh, complex=True)
+        if not omega > 0:
+            raise ValueError("current-driven A-V solve needs omega > 0: the potential is scaled by 1/(j omega)")
+        # The unknown is the 1/s-scaled potential W = Vc / (j omega) (Kameari): the
+        # couplings become -j omega sigma on both sides, so the system is complex
+        # symmetric; Vc = j omega W is restored after the solve.
         (Az, Vc), (dA, dV) = fes.TnT()
-        a = BilinearForm(fes)
+        a = BilinearForm(fes, symmetric=True)
         a += nu * grad(Az) * grad(dA) * dx
         a += 1j * omega * sigma * Az * dA * dx          # eddy reaction
-        a += -sigma * Vc * dA * dx                       # Vc drives A in conductor
+        a += -1j * omega * sigma * Vc * dA * dx          # W drives A in conductor
         a += -1j * omega * sigma * Az * dV * dx          # net-current constraint
-        a += sigma * Vc * dV * dx
+        a += 1j * omega * sigma * Vc * dV * dx
         f = LinearForm(fes)
         if Jz is not None:
             f += Jz * dA * dx
@@ -3337,7 +3342,8 @@ def solve_planar_eddy(mesh, nu, sigma, omega, driven_region=None,
         f.Assemble()
         f.vec.FV().NumPy()[fes.Range(1).start] += complex(total_current)
         gfu = GridFunction(fes)
-        gfu.vec.data = solve_nonsymmetric(a.mat, fes.FreeDofs(), f.vec, "A-V net-current solve")
+        gfu.vec.data = solve_symmetric(a.mat, fes.FreeDofs(), f.vec, "A-V net-current solve")
+        gfu.vec.FV().NumPy()[fes.Range(1).start] *= 1j * omega   # Vc = j omega W
         return gfu
 
     fes = H1(mesh, order=order, complex=True, dirichlet=dirichlet)
@@ -3407,14 +3413,16 @@ def solve_planar_eddy_multi(mesh, nu, sigma, omega, conductors,
     if connection == "parallel":
         fes = H1(mesh, order=order, complex=True, dirichlet=dirichlet) \
             * NumberSpace(mesh, complex=True)
-        (Az, Vc), (dA, dV) = fes.TnT()
+        if not omega > 0:
+            raise ValueError("current-driven A-V solve needs omega > 0: the potential is scaled by 1/(j omega)")
+        (Az, Vc), (dA, dV) = fes.TnT()               # Vc holds W = Vc / (j omega)
         cond_cf = dx(definedon=mesh.Materials("|".join(conductors)))
-        a = BilinearForm(fes)
+        a = BilinearForm(fes, symmetric=True)
         a += nu * grad(Az) * grad(dA) * dx
         a += 1j * omega * sigma * Az * dA * dx
-        a += -sigma * Vc * dA * cond_cf
+        a += -1j * omega * sigma * Vc * dA * cond_cf
         a += -1j * omega * sigma * Az * dV * cond_cf
-        a += sigma * Vc * dV * cond_cf
+        a += 1j * omega * sigma * Vc * dV * cond_cf
         f = LinearForm(fes)
         if Jz is not None:
             f += Jz * dA * dx
@@ -3422,7 +3430,8 @@ def solve_planar_eddy_multi(mesh, nu, sigma, omega, conductors,
         f.Assemble()
         f.vec.FV().NumPy()[fes.Range(1).start] += complex(total_current)
         gfu = GridFunction(fes)
-        gfu.vec.data = solve_nonsymmetric(a.mat, fes.FreeDofs(), f.vec, "A-V net-current solve")
+        gfu.vec.data = solve_symmetric(a.mat, fes.FreeDofs(), f.vec, "A-V net-current solve")
+        gfu.vec.FV().NumPy()[fes.Range(1).start] *= 1j * omega   # Vc = j omega W
         return gfu
 
     # series / independent: one NumberSpace per conductor
@@ -3432,16 +3441,18 @@ def solve_planar_eddy_multi(mesh, nu, sigma, omega, conductors,
     fes = FESpace([h1] + [NumberSpace(mesh, complex=True) for _ in conductors])
     trials = fes.TrialFunction()
     tests = fes.TestFunction()
+    if not omega > 0:
+        raise ValueError("current-driven A-V solve needs omega > 0: the potential is scaled by 1/(j omega)")
     Az, dA = trials[0], tests[0]
-    a = BilinearForm(fes)
+    a = BilinearForm(fes, symmetric=True)
     a += nu * grad(Az) * grad(dA) * dx
     a += 1j * omega * sigma * Az * dA * dx
     for k, reg in enumerate(conductors):
-        Vc_k, dV_k = trials[k + 1], tests[k + 1]
+        Vc_k, dV_k = trials[k + 1], tests[k + 1]   # holds W_k = Vc_k / (j omega)
         dxr = dx(definedon=mesh.Materials(reg))
-        a += -sigma * Vc_k * dA * dxr            # Vc_k drives A only in conductor k
-        a += -1j * omega * sigma * Az * dV_k * dxr  # net-current constraint of k
-        a += sigma * Vc_k * dV_k * dxr
+        a += -1j * omega * sigma * Vc_k * dA * dxr      # W_k drives A only in conductor k
+        a += -1j * omega * sigma * Az * dV_k * dxr      # net-current constraint of k
+        a += 1j * omega * sigma * Vc_k * dV_k * dxr
     f = LinearForm(fes)
     if Jz is not None:
         f += Jz * dA * dx
@@ -3451,7 +3462,9 @@ def solve_planar_eddy_multi(mesh, nu, sigma, omega, conductors,
     for k in range(len(conductors)):
         fv[fes.Range(k + 1).start] += complex(currents[k])
     gfu = GridFunction(fes)
-    gfu.vec.data = solve_nonsymmetric(a.mat, fes.FreeDofs(), f.vec, "A-V net-current solve")
+    gfu.vec.data = solve_symmetric(a.mat, fes.FreeDofs(), f.vec, "A-V net-current solve")
+    for k in range(len(conductors)):
+        gfu.vec.FV().NumPy()[fes.Range(k + 1).start] *= 1j * omega   # Vc_k = j omega W_k
     return gfu
 
 
