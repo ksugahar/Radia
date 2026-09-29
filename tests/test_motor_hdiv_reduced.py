@@ -80,6 +80,11 @@ def test_motor_spatial_modes_declare_gmsh_output():
         lamination_mode="cell",
     ).build_command(python="python", panels_dir="panels")
     assert "--msh-output" not in cell
+    for command in (transient, global_lamination, cell):
+        assert command[command.index("--linear-solver") + 1] == "sparsecholesky"
+    for analysis in (ANALYSIS_TRANSIENT, ANALYSIS_LAMINATION):
+        with pytest.raises(ValueError, match="require sparsecholesky"):
+            MotorDesignSpec(analysis=analysis, linear_solver="pardiso").build_command()
 
 
 def test_native_planar_field_cf_matches_explicit_frame_transform():

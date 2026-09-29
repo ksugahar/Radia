@@ -8,7 +8,7 @@ This test exists to detect *regressions* — bit-for-bit reproducibility
 across NGSolve / scipy / Numpy version bumps would be too strict.  The
 band is set at ~30% on amplitudes and ~50% on integrated quantities,
 sufficient to catch genuine breakage (sign flips, off-by-pole-pairs,
-PARDISO failures) while tolerating floating-point drift.
+factorization failures) while tolerating floating-point drift.
 """
 
 from __future__ import annotations
@@ -24,39 +24,27 @@ import pytest
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
 PANELS = os.path.join(REPO, "src", "radia", "panels")
-TEMP = "C:/temp"
-
-MESH_VOL = os.path.join(TEMP, "test_pmsm.vol")
-OUTPUT_JSON = os.path.join(TEMP, "test_pmsm_golden.json")
-OUTPUT_MSH = os.path.join(TEMP, "test_pmsm_golden.msh")
-
-
 @pytest.fixture(scope="module")
-def pmsm_mesh():
+def pmsm_mesh(tmp_path_factory):
     """Build (or rebuild) the test PMSM mesh."""
     sys.path.insert(0, HERE)
     from build_test_motor_mesh import build_pmsm_mesh
-    os.makedirs(TEMP, exist_ok=True)
-    return build_pmsm_mesh(out_vol=MESH_VOL)
+    mesh_path = str(tmp_path_factory.mktemp("motor-mesh") / "motor.vol")
+    build_pmsm_mesh(out_vol=mesh_path)
+    return mesh_path
 
 
-def _run(extra_args):
+def _run(extra_args, mesh_path, output_dir):
     """Run calc_motor_transient.py and return parsed JSON."""
+    output_json = str(output_dir / "result.json")
+    output_msh = str(output_dir / "result.msh")
     cmd = [
         sys.executable,
         os.path.join(PANELS, "calc_motor_transient.py"),
-        "--vol", MESH_VOL,
+        "--vol", mesh_path,
         "--method", "linearization",
-        # Tests use sparsecholesky (ngsolve built-in, no MKL): a direct solver
-        # gives the SAME solution as the production pardiso default (golden
-        # bands unchanged), but avoids the MKL PARDISO threading-layer load,
-        # which is flaky under the pytest subprocess -- the pytest process
-        # pre-initialises MKL when it builds the mesh fixture in-process, and
-        # the spawned child inherits a broken MKL state ("Cannot load
-        # mkl_intel_thread.dll").  Production keeps pardiso (MKL + TaskManager).
-        "--linear-solver", "sparsecholesky",
-        "--msh-output", OUTPUT_MSH,
-        "--output", OUTPUT_JSON,
+        "--msh-output", output_msh,
+        "--output", output_json,
     ] + extra_args
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
@@ -66,15 +54,15 @@ def _run(extra_args):
         f"STDOUT:\n{r.stdout[-1500:]}\n"
         f"STDERR:\n{r.stderr[-1500:]}"
     )
-    with open(OUTPUT_JSON, "r", encoding="utf-8") as f:
+    with open(output_json, "r", encoding="utf-8") as f:
         result = json.load(f)
-    assert result["gmsh_file"] == os.path.abspath(OUTPUT_MSH)
-    with open(OUTPUT_MSH, "r", encoding="utf-8") as f:
+    assert result["gmsh_file"] == os.path.abspath(output_msh)
+    with open(output_msh, "r", encoding="utf-8") as f:
         assert f.read(40).startswith("$MeshFormat\n4.1 0 8\n$EndMeshFormat\n")
     return result
 
 
-def test_purely_inductive_no_pm(pmsm_mesh):
+def test_purely_inductive_no_pm(pmsm_mesh, tmp_path):
     """No PMs, voltage-driven 3-phase: currents should grow with R/L
     time constant; T_em near zero; back-EMF zero."""
     result = _run([
@@ -86,7 +74,7 @@ def test_purely_inductive_no_pm(pmsm_mesh):
         "--v-freq", "50",
         "--pm-Br-value", "0",
         "--R-phase", "0.5",
-    ])
+    ], pmsm_mesh, tmp_path)
     assert result["method"] == "linearization"
     assert result["n_FE_calls"] == 5      # PM-only solves skipped (no PM)
     assert result["n_circ_steps"] == 50
@@ -112,7 +100,7 @@ def test_purely_inductive_no_pm(pmsm_mesh):
         assert all(abs(ej) == 0.0 for ej in e)
 
 
-def test_pmsm_with_rotation(pmsm_mesh):
+def test_pmsm_with_rotation(pmsm_mesh, tmp_path):
     """8-pole PMSM, prescribed rotor speed, voltage-driven.
     Validate: PM-only FE solves are executed; T_em values are finite
     and bounded; back-EMF responds to omega."""
@@ -127,7 +115,7 @@ def test_pmsm_with_rotation(pmsm_mesh):
         "--n-pole-pairs", "4",
         "--omega-init", "62.83",   # ~600 rpm
         "--R-phase", "0.5",
-    ])
+    ], pmsm_mesh, tmp_path)
     # With PMs: 1 op-point + 2 PM-only per FE refresh = 3 calls/refresh
     assert result["n_FE_calls"] == 15
     # T_em finite, not insane (loose band -- 8-pole BLAC ratings span 0.001
@@ -159,7 +147,7 @@ def test_pmsm_with_rotation(pmsm_mesh):
     assert 0.01 < Imax < 100.0, f"|i_final| out of band: {Imax}"
 
 
-def test_voltage_sign_changes_current_response(pmsm_mesh):
+def test_voltage_sign_changes_current_response(pmsm_mesh, tmp_path):
     """Sanity: PM-free purely-inductive run with opposite voltages
     gives opposite-sign currents.  Tests that voltage source threads
     through Crank-Nicolson circuit ODE with correct sign.
@@ -177,7 +165,7 @@ def test_voltage_sign_changes_current_response(pmsm_mesh):
         "--v-amp", "100", "--v-freq", "50",
         "--pm-Br-value", "0",
         "--R-phase", "1.0",
-    ])
+    ], pmsm_mesh, tmp_path)
     r_neg = _run([
         "--t-end", "1e-4",
         "--dt-FE", "1e-4",
@@ -186,7 +174,7 @@ def test_voltage_sign_changes_current_response(pmsm_mesh):
         "--v-amp", "-100", "--v-freq", "50",
         "--pm-Br-value", "0",
         "--R-phase", "1.0",
-    ])
+    ], pmsm_mesh, tmp_path)
     i_pos = r_pos["final_i"]
     i_neg = r_neg["final_i"]
     # PM-free linear system: i(-v) = -i(v) exactly (up to round-off)
