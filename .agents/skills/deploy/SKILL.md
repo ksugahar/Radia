@@ -7,7 +7,8 @@ description: Current Radia deployment entry point. Use release-quad for releases
 
 Use this skill for deployment triage that does not yet require a new release.
 For a release candidate, use the owning release skill: `release-quad` for the
-numerical Radia solver/Simulink package, `release-radia-mcp` for radia-mcp, and
+numerical Radia solver/Simulink package, the [package release checks](../../../packages/radia-mcp/CONTRIBUTING.md)
+and [release-dual contract](../../../packages/radia-mcp/docs/operations/mcp-runtime-policy.md#release-completion) for radia-mcp, and
 `release-cubit-mesh-export` for the exporter and Cubit MCP.
 
 ## Machine roles
