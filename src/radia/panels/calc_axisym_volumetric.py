@@ -1,77 +1,23 @@
-"""calc_axisym_volumetric.py -- 2D axisymmetric A_phi volumetric eddy current solver.
+"""Axisymmetric volumetric eddy-current reference using standard NGSolve H1.
 
-The "truth" reference solver for ESIM validation: instead of imposing a
-surface-impedance Robin BC (SIBC / ESIM), this script resolves the
-volumetric eddy current inside the workpiece directly via the
-axisymmetric magnetic vector potential `A_phi` on a `(r, z)` mesh.
+The unknown is the azimuthal vector potential A_phi on an (r,z) mesh.
+The complex-symmetric weak form is
 
-Formulation
------------
+    integral (1/mu) [d_r(r A) d_r(r v)/r + r d_z(A) d_z(v)] dr dz
+      + i omega integral sigma r A v dr dz = integral J_phi r v dr dz.
 
-Time-harmonic Maxwell in axisymmetric `(r, z)`, single component
-`A_phi`.  Following Henrotte / Meeker FEMM convention, the discrete
-unknown is the flux function `psi = 2 pi r A_phi` interpolated linearly
-in `(s = r^2, z)`; element matrices follow from
-``radia.axifem.{AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI}``.
+A_phi is zero on the axis and on the outer truncation boundary. The
+implementation uses ordinary H1 elements, not the optional Henrotte native
+BFIs. Direct linear systems explicitly use SparseCholesky and check their
+original free-row residuals. No backend or physical-operator fallback is used.
 
-Strong form:
+The nonlinear path iterates elementwise permeability using a damped Picard
+update and the supplied B-H table. The constant-permeability limit, DC/AC
+residuals and current scaling are regression-tested. These checks do not
+establish accuracy for arbitrary nonlinear materials, skin depths or outer
+truncation distances; those need mesh/domain and constitutive validation.
 
-    1/mu * (-d_r^2 A_phi + 1/r d_r A_phi - 1/r^2 A_phi - d_z^2 A_phi)
-        + j w sigma A_phi = J_phi_source
-
-where ``J_phi_source`` is the impressed coil current density (real, A/m^2)
-and ``sigma > 0`` only inside the workpiece (eddy current induced).
-
-Weak form (in flux variable psi, after Henrotte change of variable):
-
-    int (1/mu) grad_s_z psi . grad_s_z psi' / (2 pi r)
-      + j w sigma psi psi' / (2 pi r)
-      = int J_phi_source psi' . (r-weighted)
-
-(Closed-form per-element by axifem BFIs.)
-
-Boundary conditions
--------------------
-
-- Axis (r = 0): A_phi = 0  (Dirichlet)
-- Far field: A_phi = 0 (truncation; replace with Kelvin transform when needed)
-
-Workflow
---------
-
-1. Build the (r, z) mesh: workpiece + air + (optionally) Kelvin annulus.
-2. Define material CFs: 1/mu(r,z), sigma(r,z), J_coil(r,z).
-3. AC complex assembly: K + j w M (with K from stiffness BFI, M from
-   sigma mass BFI).
-4. Linear/nonlinear solve.  For nonlinear mu(|B|), an outer Picard
-   iteration on the per-element |B| (max norm over quad-points).
-5. Post: P_wp = (1/2) Re( int_workpiece sigma |j w A_phi|^2 dV_axisym ).
-
-The volumetric P_wp is the "truth" against which scalar and
-per-element ESIM (calc_inductance.py output) are compared.
-
-Status (2026-05-22)
--------------------
-
-Phase 1 (linear mu): VALIDATED.  Long-cylinder Bessel cross-check
-agrees to -5.7 % (end-effect contamination at H=200mm, 40x R).
-IGTE-geometry linear-mu check agrees to +1 % vs Bessel-from-FEM-H_t.
-
-Phase 2 (nonlinear BH Picard): SCAFFOLD ONLY.  The outer Picard
-loop is implemented but currently produces NaN due to:
-  - mu_r floor missing at low |B| (BH curve interp gives mu_r->0)
-  - element-centroid finite-diff |B| unstable near element edges
-  - NGSolve's gf_mu.Set on a P0 piecewise FE space requires careful
-    handling of the material map
-Production use needs: proper |B| extraction via grad(gfu) at quadrature
-points, mu_r floor (>=1), CoefficientFunction-based mu update instead
-of per-element loop.  Estimated 1-2 days of additional work.
-
-This is task #36 in the project task list -- the validation reference
-needed to determine which of {scalar ESIM, per-element ESIM} is closer
-to truth on the IH benchmark.  Phase 1 alone is sufficient for the
-linear-mu cross-check; Phase 2 is needed for the nonlinear ESIM
-absolute-accuracy claim.
+Loss uses 0.5 sigma omega^2 |A_phi|^2 integrated with the 2 pi r measure.
 """
 from __future__ import annotations
 
@@ -145,7 +91,6 @@ def run_axisym_nonlinear(args, bh_curve):
         BilinearForm, LinearForm, GridFunction, Integrate, dx, grad,
         Conj, sqrt as ng_sqrt, x as r_cf, H1, L2, TaskManager,
     )
-    import radia.axifem   # noqa: F401
 
     mesh = build_mesh(
         R_wp_m=args.R_wp, H_wp_m=args.H_wp,
@@ -318,7 +263,6 @@ def run_axisym_linear(args):
         Integrate, dx, ds, grad, InnerProduct, Periodic, x as r_cf,
         FESpace, TaskManager,
     )
-    import radia.axifem   # registers axihenrotte FESpace
 
     mesh = build_mesh(
         R_wp_m=args.R_wp, H_wp_m=args.H_wp,
