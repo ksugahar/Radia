@@ -17,7 +17,9 @@ residuals and current scaling are regression-tested. These checks do not
 establish accuracy for arbitrary nonlinear materials, skin depths or outer
 truncation distances; those need mesh/domain and constitutive validation.
 
-Loss uses 0.5 sigma omega^2 |A_phi|^2 integrated with the 2 pi r measure.
+Phasors, including ``--current``, are peak amplitudes. Loss uses
+0.5 sigma omega^2 |A_phi|^2 integrated with the 2 pi r measure, and the
+B-H update reads the peak |B| = sqrt(|B_r|^2 + |B_z|^2).
 """
 from __future__ import annotations
 
@@ -33,6 +35,55 @@ import numpy as np
 from radia.panels.calc_common import apply_fe_inverse
 
 MU0 = 4.0e-7 * math.pi
+
+
+def peak_flux_density_cf(gfu):
+    """Peak |B| of the peak-amplitude phasor A_phi: sqrt(|B_z|^2 + |B_r|^2).
+
+    B_z = dA/dr + A/r and B_r = -dA/dz.  The phasors are peak amplitudes (the
+    loss is 0.5 sigma omega^2 |A|^2), so no sqrt(2) factor enters.
+    """
+    from ngsolve import Conj, grad, sqrt, x as r_cf
+
+    B_z = grad(gfu)[0] + gfu / r_cf
+    B_r = -grad(gfu)[1]
+    return sqrt((B_z * Conj(B_z) + B_r * Conj(B_r)).real)
+
+
+def secant_permeability_from_table(bh_curve, samples=4000):
+    """Return ``mu_r(B) = B / (mu0 H(B))`` for the production B(H) law.
+
+    B(H) is ``radia.bh_law.monotone_bh_pchip`` through the (H, B) table, and it
+    is continued beyond the last row with slope mu0.  Below the first nonzero
+    row it follows the same interpolant, so the low-field value is the
+    table's own initial slope rather than a separate constant.  A table that
+    does not start at the origin gets the row (0, 0) prepended.
+    """
+    from radia.bh_law import monotone_bh_pchip
+
+    table = np.asarray(bh_curve, dtype=float)
+    H_tab, B_tab = table[:, 0], table[:, 1]
+    if H_tab[0] > 0.0:
+        H_tab, B_tab = np.r_[0.0, H_tab], np.r_[0.0, B_tab]
+    law = monotone_bh_pchip(H_tab, B_tab)
+    H_grid = np.unique(np.r_[H_tab, np.geomspace(
+        max(H_tab[1], 1e-12) * 1e-6, H_tab[-1], samples)])
+    B_grid = law(H_grid)
+    if np.any(np.diff(B_grid) <= 0.0):
+        raise ValueError("B(H) table is not strictly increasing; mu_r(B) is undefined")
+    mu_r_origin = float(law.derivative()(0.0)) / MU0
+    H_last, B_last = float(H_tab[-1]), float(B_tab[-1])
+
+    def mu_r_of_B(B_values):
+        B_values = np.asarray(B_values, dtype=float)
+        H_values = np.where(B_values <= B_last,
+                            np.interp(B_values, B_grid, H_grid),
+                            H_last + (B_values - B_last) / MU0)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            mu_r = np.where(H_values > 0.0, B_values / (MU0 * H_values), mu_r_origin)
+        return np.maximum(mu_r, 1.0)
+
+    return mu_r_of_B
 
 
 def build_mesh(R_wp_m: float, H_wp_m: float,
@@ -77,19 +128,22 @@ def run_axisym_nonlinear(args, bh_curve):
       1. Solve AC linear problem with current mu_r distribution.
       2. Build a |B| CoefficientFunction from grad(gfu) (no finite diff).
       3. Project |B| onto L2(order=0) -> per-element constant.
-      4. Update mu_r per element via BH inverse: mu_r = B / (mu_0 H(B))
-         with mu_r floor at 1.0 (vacuum minimum).
+      4. Update mu_r per element via the secant of the production B(H) law,
+         mu_r = B / (mu_0 H(B)) (``secant_permeability_from_table``), floor 1.
       5. Damped Picard: mu_r_new = alpha mu_BH + (1-alpha) mu_r_old.
-      6. Stop when max relative change of mu_r drops below tol.
+      6. Stop when the constitutive defect, max relative change of mu_r
+         divided by alpha, drops below tol; otherwise raise.
+         ``mu_r_wp_mean`` in the log is the updated permeability, whereas the
+         returned field and loss were solved with the one before the update.
 
-    For axisymmetric A_phi:
+    For axisymmetric A_phi (peak phasors, as the loss 0.5 sigma omega^2 |A|^2):
         B_z = (1/r) d(r A)/dr = A/r + dA/dr
         B_r = -dA/dz
-        |B|^2 = |B_r|^2 + |B_z|^2  (complex; peak = sqrt(2) * RMS)
+        peak |B| = sqrt(|B_r|^2 + |B_z|^2)
     """
     from ngsolve import (
         BilinearForm, LinearForm, GridFunction, Integrate, dx, grad,
-        Conj, sqrt as ng_sqrt, x as r_cf, H1, L2, TaskManager,
+        x as r_cf, H1, L2, TaskManager,
     )
 
     mesh = build_mesh(
@@ -99,23 +153,7 @@ def run_axisym_nonlinear(args, bh_curve):
     )
     print(f"mesh: ne={mesh.ne}, nv={mesh.nv}, mats={mesh.GetMaterials()}")
 
-    # BH lookup -- given |B|, return mu_r = B / (mu_0 H).
-    bh = np.asarray(bh_curve)
-    H_arr_bh, B_arr_bh = bh[:, 0], bh[:, 1]
-    # Initial-slope mu_r for low |B| (B ~ 0 floor).
-    mu_r_init = float(args.mu_r)
-
-    def mu_r_from_B_array(B_arr_input):
-        """Vectorised: given per-element |B|, return per-element mu_r."""
-        out = np.full_like(B_arr_input, mu_r_init, dtype=float)
-        # For B above the first BH-curve point: invert BH numerically.
-        mask = B_arr_input > B_arr_bh[1] if len(B_arr_bh) > 1 else B_arr_input > 1e-6
-        if mask.any():
-            H_vals = np.interp(B_arr_input[mask], B_arr_bh, H_arr_bh)
-            mu_r = B_arr_input[mask] / (MU0 * np.maximum(H_vals, 1e-9))
-            out[mask] = mu_r
-        # Floor at 1 (vacuum).
-        return np.maximum(out, 1.0)
+    mu_r_from_B_array = secant_permeability_from_table(bh_curve)
 
     # Per-element mu_r via L2(order=0) (true piecewise-constant per element).
     fes_mu = L2(mesh, order=0)
@@ -168,15 +206,7 @@ def run_axisym_nonlinear(args, bh_curve):
             linear_residual = apply_fe_inverse(
                 a.mat, inverse, f.vec, gfu.vec, fes.FreeDofs())
 
-            # |B| as a CoefficientFunction from grad(gfu).
-            # B_z = grad[0] + A/r,  B_r = -grad[1]
-            # |B|^2 = Re(B_z conj(B_z)) + Re(B_r conj(B_r)) is the COMPLEX
-            # magnitude squared; peak |B| = sqrt(2) * sqrt(|B|^2).
-            B_z_cf = grad(gfu)[0] + gfu / r_cf
-            B_r_cf = -grad(gfu)[1]
-            B_abs_sq_cf = (B_z_cf * Conj(B_z_cf) + B_r_cf * Conj(B_r_cf)).real
-            # peak |B| = sqrt(2) * sqrt(|B|_complex^2)
-            B_peak_cf = ng_sqrt(2.0 * B_abs_sq_cf)
+            B_peak_cf = peak_flux_density_cf(gfu)
 
             # Project |B| onto L2(order=0) -> per-element constant.
             gf_B = GridFunction(fes_mu)
@@ -229,16 +259,15 @@ def run_axisym_nonlinear(args, bh_curve):
         eps_R = 1e-5
         H_t_samples = []
         for z_val in z_pts:
-            try:
-                r1 = args.R_wp + eps_R
-                r2 = args.R_wp + 2 * eps_R
-                A1 = complex(gfu(mesh(r1, z_val)))
-                A2 = complex(gfu(mesh(r2, z_val)))
-                B_z = ((r2 * A2 - r1 * A1) / (r2 - r1)) / r1
-                H_z = B_z / MU0  # vacuum just outside workpiece
-                H_t_samples.append(abs(H_z))
-            except Exception:
-                H_t_samples.append(0.0)
+            # A failed point evaluation raises: recording it as 0 would bias
+            # the reported |H_t| low without a signal.
+            r1 = args.R_wp + eps_R
+            r2 = args.R_wp + 2 * eps_R
+            A1 = complex(gfu(mesh(r1, z_val)))
+            A2 = complex(gfu(mesh(r2, z_val)))
+            B_z = ((r2 * A2 - r1 * A1) / (r2 - r1)) / r1
+            H_z = B_z / MU0  # vacuum just outside workpiece
+            H_t_samples.append(abs(H_z))
         H_t_samples = np.array(H_t_samples)
 
         return {
@@ -377,19 +406,17 @@ def run_axisym_linear(args):
     eps_R = 1e-5  # offset outside workpiece into air (mu_r=1 there)
     H_t_samples = []
     for z_val in z_pts:
-        try:
-            mip = mesh(args.R_wp + eps_R, z_val)
-            A_val = complex(gfu(mip))
-            # d(r A_phi)/dr via finite diff
-            mip2 = mesh(args.R_wp + 2 * eps_R, z_val)
-            A_val2 = complex(gfu(mip2))
-            r1 = args.R_wp + eps_R
-            r2 = args.R_wp + 2 * eps_R
-            B_z = ((r2 * A_val2 - r1 * A_val) / (r2 - r1)) / r1
-            H_z = B_z / MU0  # mu_r=1 just outside workpiece
-            H_t_samples.append(abs(H_z))
-        except Exception:
-            H_t_samples.append(0.0)
+        # A failed point evaluation raises instead of recording 0.
+        mip = mesh(args.R_wp + eps_R, z_val)
+        A_val = complex(gfu(mip))
+        # d(r A_phi)/dr via finite diff
+        mip2 = mesh(args.R_wp + 2 * eps_R, z_val)
+        A_val2 = complex(gfu(mip2))
+        r1 = args.R_wp + eps_R
+        r2 = args.R_wp + 2 * eps_R
+        B_z = ((r2 * A_val2 - r1 * A_val) / (r2 - r1)) / r1
+        H_z = B_z / MU0  # mu_r=1 just outside workpiece
+        H_t_samples.append(abs(H_z))
     H_t_samples = np.array(H_t_samples)
     H_t_mean = float(H_t_samples.mean())
     H_t_max = float(H_t_samples.max())
