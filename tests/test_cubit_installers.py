@@ -547,7 +547,14 @@ def test_native_manifest_rejects_drift_in_either_required_payload(
     (package_dir / "native_payloads.json").write_text(
         '{"payloads": {}}', encoding="utf-8")
     monkeypatch.setattr(provenance, "_source_commit", lambda _root: "a" * 40)
-    provenance.record_manifest(tmp_path, package_dir)
+    for build in ("build-pyd", "build-ccm"):
+        config = tmp_path / "src/cubit_plugin" / build / "CMakeFiles/4.4.3/CMakeCXXCompiler.cmake"
+        config.parent.mkdir(parents=True)
+        config.write_text('set(CMAKE_CXX_COMPILER_ID "MSVC")\n'
+                          'set(CMAKE_CXX_COMPILER_VERSION "19.51.36257.0")\n', encoding="utf-8")
+    manifest = provenance.record_manifest(tmp_path, package_dir)
+    assert all(item["toolchain"] == "MSVC 19.51.36257.0 / CMake / Ninja"
+               for item in manifest["payloads"].values())
     assert provenance.verify_manifest(tmp_path, package_dir) == []
 
     for name in provenance.REQUIRED_PAYLOADS:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 from importlib import metadata
 from pathlib import Path
@@ -149,7 +150,19 @@ def record_manifest(repo_root: Path, package_dir: Path) -> dict:
         payload["size"] = size
         payload.setdefault("platform", "win_amd64")
         payload.setdefault("cubit_version", "2025.12")
-        payload.setdefault("toolchain", "MSVC 19.50 / CMake / Ninja")
+        build_dir = "build-pyd" if name.endswith(".pyd") else "build-ccm"
+        configs = sorted((repo_root / "src/cubit_plugin" / build_dir / "CMakeFiles").glob(
+            "*/CMakeCXXCompiler.cmake"), key=lambda item: item.stat().st_mtime)
+        if configs:
+            config = configs[-1].read_text(encoding="utf-8")
+            compiler = re.search(r'set\(CMAKE_CXX_COMPILER_ID "([^"]+)"\)', config)
+            version = re.search(r'set\(CMAKE_CXX_COMPILER_VERSION "([^"]+)"\)', config)
+            if compiler and version:
+                payload["toolchain"] = f"{compiler[1]} {version[1]} / CMake / Ninja"
+            else:
+                raise ValueError(f"Missing compiler identity in {configs[-1]}")
+        else:
+            payload["toolchain"] = "unrecorded (no CMake compiler metadata)"
         if name.endswith(".pyd"):
             payload["asset_name"] = f"cubit_mesh_curver-{sha256}.pyd"
             payload.setdefault("python_abi", "cp312")
