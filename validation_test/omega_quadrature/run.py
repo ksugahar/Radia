@@ -163,7 +163,7 @@ def main():
                     mesh, h_s, source['potential'], case['radius'], case['center'],
                     mu_r_by_material={'iron': case['mu_r']}, reduced_materials=('air',),
                     total_materials=('iron', 'kelvin'), interface_boundary='iron_air_interface',
-                    order=order, bonus_intorder=bonus, dirichlet_bbbnd='GND', inverse='pardiso',
+                    order=order, bonus_intorder=bonus, dirichlet_bbbnd='GND', inverse='sparsecholesky',
                     kelvin_mats=('kelvin',), kelvin_interface_boundary='kelvin_int',
                     kelvin_source_h=h_ext, total_source_h=source['harmonic_field'],
                     total_source_materials=('iron',), return_system=True)
