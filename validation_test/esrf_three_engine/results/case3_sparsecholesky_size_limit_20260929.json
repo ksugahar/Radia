@@ -54,6 +54,13 @@
   ],
   "int32_limit": 2147483648,
   "finding": "In NGSolve 6.2.2606 this mesh family factored at 597k free DOF with measured L-factor NZE 1.66e9, failed with bad_array_new_length at 951k free DOF, and exited with access violation at 1.72M free DOF. L-factor NZE was not measured for either failure. Extrapolations of approximately 3.6e9 and 9.9e9 suggest a possible indexing or allocation limit, but do not establish its cause or a universal 2^31 threshold. The diagnostic alternative factorization was interrupted at 71 GB, so it does not prove successful factorization. PARDISO is not a fallback.",
-  "limit_status": "hypothesis_only; NGSolve 6.2.2607 reproduction and a safe pre-factorization guard remain pending",
+  "limit_status": "failed-run cause remains unproven; 2607 source inspection identifies a Windows counter risk, while adequate-headroom reproduction and a safe pre-factorization guard remain pending",
+  "source_inspection_2607": {
+    "source": "https://github.com/NGSolve/ngsolve/blob/v6.2.2607/linalg/sparsecholesky.cpp#L336-L390",
+    "finding": "Allocate accumulates cnt and cnt_master in long int before assignment to size_t indices. Windows x64 long is 32-bit, so counts exceeding LONG_MAX cannot be represented by these intermediate counters.",
+    "scope": "static source finding; not a measured factor count or proof of the cause of the recorded runtime failures",
+    "windows_x64_long_bytes": 4,
+    "windows_x64_size_t_bytes": 8
+  },
   "consequence": "the full-size reduced-A route uses the explicit solver='ams' (AMS-preconditioned CG with a true-residual check)"
 }

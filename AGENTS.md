@@ -51,6 +51,7 @@ Prefer established public abstractions over proprietary plumbing.
 - PARDISO is not used in principle: Python/MEX direct FE solves/subsolves use `sparsecholesky`, never a PARDISO fallback.
   MKL serves dense BLAS/LAPACK/FFT, not FE solver selection.
   Validate migration with true residuals and representative sizes; expose failures without changing operators or acceptance.
+  Residual checks cannot prevent native allocation or index overflow.
 - Compare vector fields with `norm(B1 - B2)`; ESRF coil-yoke HDiv/FEM validation defaults to 1 % relative RMS on its declared core stencil, separately from solver convergence.
 - Radia C++ matrix storage is row-major unless an external API owns the layout.
 - Radia core Green functions remain Laplace/MQS/Darwin kernels.
