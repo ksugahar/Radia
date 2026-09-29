@@ -74,6 +74,15 @@ factorizations must report failure. Do not change the operator to hide a failure
 MATLAB `radia.ngsolve.Matrix.inverse()` explicitly selects the same native backend
 without Python. MKL remains for dense BLAS/LAPACK and FFT, not FE solver selection.
 
+Large Windows factorizations also require a storage-capacity assessment before
+calling the inverse. The tagged NGSolve 6.2.2607 SparseCholesky implementation
+accumulates factor-entry counts in `long int`, which is 32-bit on Windows x64;
+the later `size_t` storage does not protect that intermediate count. A universal
+safe DoF cutoff has not been established. True-residual checks cannot prevent a
+native allocation/index failure. Use an explicitly selected, validated iterative
+route for unsupported large systems; there is no automatic direct fallback.
+See `docs/solver/SPARSECHOLESKY_LIMITS.md` for the evidence and remaining guard work.
+
 """
 
 NGSOLVE_FE_SPACES = """
