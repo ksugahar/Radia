@@ -69,6 +69,7 @@ NATIVE_PATHS = (
     'validation_test/panels/test_kelvin_benchmark_direct.py',
     'src/radia/panels/calc_kelvin_benchmark.py',
     'src/radia/panels/calc_accel_magnet.py',
+    'tests/test_accel_solver_selection.py',
     'src/radia/em_design.py',
     'src/radia/panels/calc_motor_lamination.py',
     'src/radia/panels/calc_motor_transient.py',
