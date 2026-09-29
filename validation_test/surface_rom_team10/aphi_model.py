@@ -74,6 +74,15 @@ class ModelAphi:
 
 
 def run_fom(m, fn, steps, max_newton=40, tol=1e-10, log=print):
+    """Stop on relative Newton decrement or the true free-row nonlinear residual.
+
+    The residual is normalized by its value at the start of each time step.
+    Check it before forming another correction: near equilibrium, solving a
+    tiny correction can be dominated by cancellation in the linear residual.
+    Every correction actually computed still has to pass the linear gate.
+    """
+    if not 1 <= max_newton <= 40 or not np.isfinite(tol) or tol <= 0:
+        raise ValueError('max_newton must be in [1, 40] and tol must be positive and finite')
     g = m.gfu; g.vec[:] = 0; m.gn.vec[:] = 0; dt = m.dt
     r = g.vec.CreateVector(); du = g.vec.CreateVector(); tr = g.vec.CreateVector()
     snaps = [g.vec.FV().NumPy().copy()]; hist = []; solves = 0; t0 = time.time()
@@ -87,9 +96,20 @@ def run_fom(m, fn, steps, max_newton=40, tol=1e-10, log=print):
         step_residual = 0.0
         step_refinements = 0
         converged = False
+        stop_reason = 'iteration_limit'
         for it in range(40):
             if it == max_newton: break
-            m.a.AssembleLinearization(g.vec); m.residual(g.vec, i, r)
+            m.residual(g.vec, i, r)
+            nonlinear_norm = float(np.linalg.norm(r.FV().NumPy()[free]))
+            if not np.isfinite(nonlinear_norm):
+                raise RuntimeError(f'FOM step {k}, Newton {it}: nonfinite nonlinear residual')
+            if it == 0:
+                nonlinear_scale = max(nonlinear_norm, 1e-300)
+            if nonlinear_norm == 0 or (it > 0 and nonlinear_norm <= tol * nonlinear_scale):
+                converged = True
+                stop_reason = 'nonlinear_residual'
+                break
+            m.a.AssembleLinearization(g.vec)
             inverse = m.a.mat.Inverse(m.fes.FreeDofs(), inverse='sparsecholesky')
             du.data = inverse * r; solves += 1
             scale = max(np.linalg.norm(r.FV().NumPy()[free]), 1e-300)
@@ -115,6 +135,7 @@ def run_fom(m, fn, steps, max_newton=40, tol=1e-10, log=print):
             if it == 0: d0 = max(dec, 1e-300)
             if dec <= tol * d0 or dec < 1e-24:
                 converged = True
+                stop_reason = 'newton_decrement'
                 break
             E0 = m.energy(g.vec, i); tau = 1.
             while True:
@@ -123,13 +144,19 @@ def run_fom(m, fn, steps, max_newton=40, tol=1e-10, log=print):
                 tau *= .5
             g.vec.data = tr
         else: raise RuntimeError(('Newton', k))
+        m.residual(g.vec, i, r)
+        nonlinear_relative = float(np.linalg.norm(r.FV().NumPy()[free]) / nonlinear_scale)
+        if not np.isfinite(nonlinear_relative):
+            raise RuntimeError(f'FOM step {k}: nonfinite final nonlinear residual')
         snaps.append(g.vec.FV().NumPy().copy())
         pos = team10_sections(m.bfield(g), m.mesh)
         hist.append(dict(t=k * dt, current_AT=[float(c) for c in m.currents(i)], newton=it, B_pos=pos,
                          newton_converged=converged, max_relative_linear_residual=step_residual,
+                         newton_stop_reason=stop_reason, relative_nonlinear_residual=nonlinear_relative,
                          refinement_solves=step_refinements))
         if k % 10 == 0: log(f'aphi {k}/{steps} newton {it} S1 {pos["S1"]:.3f} {time.time()-t0:.0f}s')
     return np.array(snaps), hist, dict(seconds=time.time() - t0, linear_solves=solves,
                                       linear_residual_limit=residual_limit,
+                                      nonlinear_relative_residual_limit=tol,
                                       refinement_solves=refinement_solves,
                                       max_relative_linear_residual=largest_residual)
