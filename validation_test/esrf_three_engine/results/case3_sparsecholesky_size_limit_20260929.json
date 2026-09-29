@@ -53,6 +53,7 @@
     }
   ],
   "int32_limit": 2147483648,
-  "finding": "SparseCholesky factors while the L-factor NZE stays below 2^31 (1.66e9 at 597k free DOF) and fails beyond it: bad_array_new_length at 951k free DOF (extrapolated NZE ~3.6e9) and an access violation at 1.72M free DOF (~9.9e9). The matrix itself is factorizable: a diagnostic PARDISO run of the full system was still factoring at 71 GB peak when stopped; PARDISO is not a fallback.",
+  "finding": "In NGSolve 6.2.2606 this mesh family factored at 597k free DOF with measured L-factor NZE 1.66e9, failed with bad_array_new_length at 951k free DOF, and exited with access violation at 1.72M free DOF. L-factor NZE was not measured for either failure. Extrapolations of approximately 3.6e9 and 9.9e9 suggest a possible indexing or allocation limit, but do not establish its cause or a universal 2^31 threshold. The diagnostic alternative factorization was interrupted at 71 GB, so it does not prove successful factorization. PARDISO is not a fallback.",
+  "limit_status": "hypothesis_only; NGSolve 6.2.2607 reproduction and a safe pre-factorization guard remain pending",
   "consequence": "the full-size reduced-A route uses the explicit solver='ams' (AMS-preconditioned CG with a true-residual check)"
 }
