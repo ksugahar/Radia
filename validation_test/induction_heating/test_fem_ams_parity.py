@@ -38,6 +38,8 @@ def test_ams_matches_direct_sibc_loss_and_inductance(tmp_path, order):
     assert "error" not in direct, direct
     assert "error" not in iterative, iterative
     assert iterative["linear_solver"] == ("ams" if order == 1 else "bddc")
-    assert iterative["linear_true_relative_residual"] <= 1e-7
+    for run in (direct, iterative):
+        assert run["linear_true_relative_residual"] <= run["linear_true_residual_limit"]
+    assert direct["linear_krylov_iterations"] == []
     assert iterative["P_total"] == pytest.approx(direct["P_total"], rel=1e-6)
     assert iterative["L"] == pytest.approx(direct["L"], rel=1e-6)
