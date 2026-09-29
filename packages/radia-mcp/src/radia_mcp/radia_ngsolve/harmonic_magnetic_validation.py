@@ -12,6 +12,7 @@ from typing import Any
 import ngsolve as ng
 import numpy as np
 from netgen.geom2d import unit_square
+from ._direct import solve_symmetric
 
 
 SCHEMA = "radia.harmonic-magnetic-validation.v1"
@@ -89,9 +90,9 @@ def _solve_case(
     form.Assemble()
     rhs.Assemble()
     solution = ng.GridFunction(fes)
-    solution.vec.data = form.mat.Inverse(
-        fes.FreeDofs(), inverse="umfpack"
-    ) * rhs.vec
+    solution.vec.data = solve_symmetric(
+        form.mat, fes.FreeDofs(), rhs.vec, "harmonic magnetic validation solve"
+    )
 
     error_sq = float(ng.Integrate(ng.Norm(solution - exact) ** 2, mesh))
     reference_sq = float(ng.Integrate(ng.Norm(exact) ** 2, mesh))

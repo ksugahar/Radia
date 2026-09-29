@@ -21,6 +21,8 @@ from ngsolve import (HCurl, H1, Periodic, NumberSpace, FESpace, BilinearForm,
                      curl, grad, dx, Integrate, Conj, Variation, Preconditioner,
                      x, y, sqrt, ds, BND)
 
+from ._direct import solve_nonsymmetric, solve_symmetric
+
 MU0 = 4.0e-7 * math.pi
 NU0 = 1.0 / MU0
 
@@ -3335,7 +3337,7 @@ def solve_planar_eddy(mesh, nu, sigma, omega, driven_region=None,
         f.Assemble()
         f.vec.FV().NumPy()[fes.Range(1).start] += complex(total_current)
         gfu = GridFunction(fes)
-        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * f.vec
+        gfu.vec.data = solve_nonsymmetric(a.mat, fes.FreeDofs(), f.vec, "A-V net-current solve")
         return gfu
 
     fes = H1(mesh, order=order, complex=True, dirichlet=dirichlet)
@@ -3353,10 +3355,11 @@ def solve_planar_eddy(mesh, nu, sigma, omega, driven_region=None,
     if dirichlet_value:                  # DRIVEN-SURFACE: A_z = dirichlet_value on `dirichlet` (skin slab)
         gfu.Set(CoefficientFunction(complex(dirichlet_value)), BND,
                 definedon=mesh.Boundaries(dirichlet))
-        r = f.vec - a.mat * gfu.vec
-        gfu.vec.data += a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * r
+        r = f.vec.CreateVector()
+        r.data = f.vec - a.mat * gfu.vec
+        gfu.vec.data += solve_symmetric(a.mat, fes.FreeDofs(), r, "2-D eddy driven-surface solve")
     else:
-        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * f.vec
+        gfu.vec.data = solve_symmetric(a.mat, fes.FreeDofs(), f.vec, "2-D eddy solve")
     return gfu
 
 
@@ -3419,7 +3422,7 @@ def solve_planar_eddy_multi(mesh, nu, sigma, omega, conductors,
         f.Assemble()
         f.vec.FV().NumPy()[fes.Range(1).start] += complex(total_current)
         gfu = GridFunction(fes)
-        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * f.vec
+        gfu.vec.data = solve_nonsymmetric(a.mat, fes.FreeDofs(), f.vec, "A-V net-current solve")
         return gfu
 
     # series / independent: one NumberSpace per conductor
@@ -3448,7 +3451,7 @@ def solve_planar_eddy_multi(mesh, nu, sigma, omega, conductors,
     for k in range(len(conductors)):
         fv[fes.Range(k + 1).start] += complex(currents[k])
     gfu = GridFunction(fes)
-    gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * f.vec
+    gfu.vec.data = solve_nonsymmetric(a.mat, fes.FreeDofs(), f.vec, "A-V net-current solve")
     return gfu
 
 
@@ -3494,7 +3497,7 @@ def solve_planar_eddy_nonlinear(mesh, nu_of_B, sigma, omega, Jz=None, order=3,
         a.Assemble()
         f.Assemble()
         gnew = GridFunction(fes)
-        gnew.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * f.vec
+        gnew.vec.data = solve_symmetric(a.mat, fes.FreeDofs(), f.vec, "2-D nonlinear eddy Picard solve")
         gfu.vec.data = (1.0 - relax) * gfu.vec + relax * gnew.vec
         Bc = CoefficientFunction((grad(gfu)[1], -grad(gfu)[0]))
         cur = Integrate((Bc[0] * Conj(Bc[0]) + Bc[1] * Conj(Bc[1])).real * dx, mesh)
@@ -4268,7 +4271,7 @@ def solve_axi_eddy(mesh, nu, sigma, omega, driven_region=None, total_current=Non
         f.Assemble()
         f.vec.FV().NumPy()[fes.Range(1).start] += complex(total_current) / (2.0 * math.pi)
         gfu = GridFunction(fes)
-        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * f.vec
+        gfu.vec.data = solve_nonsymmetric(a.mat, fes.FreeDofs(), f.vec, "A-V net-current solve")
         return gfu
 
     fes = H1Henrotte(mesh, order=order, complex=True, dirichlet=dirichlet)
@@ -4286,7 +4289,7 @@ def solve_axi_eddy(mesh, nu, sigma, omega, driven_region=None, total_current=Non
     a.Assemble()
     f.Assemble()
     gfu = GridFunction(fes)
-    gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * f.vec
+    gfu.vec.data = solve_symmetric(a.mat, fes.FreeDofs(), f.vec, "axisymmetric eddy solve")
     return gfu
 
 
