@@ -12,11 +12,14 @@ session via a disk eigenvalue benchmark.
 from __future__ import annotations
 
 import sys
-sys.stdout.reconfigure(encoding="utf-8")
+
 
 import numpy as np
+import pytest
 
-from radia.axifem import AxiHenrotteFE_P2_Triangle as P2_CPP
+from netgen.meshing import Mesh as NetgenMesh, MeshPoint, Pnt, Element2D, Element1D, FaceDescriptor, EdgeDescriptor
+from ngsolve import Mesh, GridFunction, grad
+from radia.axifem import H1Henrotte
 
 from axifem_p2_triangle import AxifemP2Triangle
 
@@ -29,12 +32,34 @@ def _make_p2_triangle_nodes(r0, z0, r1, z1, r2, z2):
     return rn, zn
 
 
-def test_one(label, r0, z0, r1, z1, r2, z2):
+def _check_triangle(label, r0, z0, r1, z1, r2, z2):
     print(f"\n[{label}]  vertices: "
           f"({r0:.4g}, {z0:.4g}), ({r1:.4g}, {z1:.4g}), ({r2:.4g}, {z2:.4g})")
     rn, zn = _make_p2_triangle_nodes(r0, z0, r1, z1, r2, z2)
     py_tri = AxifemP2Triangle(np.array(rn), np.array(zn))
-    cpp_tri = P2_CPP(rn, zn)
+    ngmesh = NetgenMesh(dim=2)
+    ngmesh.Add(FaceDescriptor(surfnr=1, domin=1, bc=1))
+    ngmesh.SetBCName(0, "outer")
+    boundary = EdgeDescriptor()
+    boundary.edgenr = 1
+    boundary.surfnr = (1, -1)
+    boundary.domin = 1
+    boundary.domout = 0
+    boundary.name = "outer"
+    ngmesh.Add(boundary)
+    points = [ngmesh.Add(MeshPoint(Pnt(rn[i], zn[i], 0))) for i in range(3)]
+    ngmesh.Add(Element2D(1, points))
+    for a, b in ((0, 1), (1, 2), (2, 0)):
+        ngmesh.Add(Element1D([points[a], points[b]], index=1))
+    mesh = Mesh(ngmesh)
+    fes = H1Henrotte(mesh, order=2)
+    field = GridFunction(fes)
+    gradient = grad(field)
+    # Match the reference's physical node order to the space's vertex/edge DOFs.
+    dofs = [fes.GetDofNrs(v)[0] for v in mesh.vertices]
+    for a, b in ((0, 1), (1, 2), (2, 0)):
+        edge = next(e for e in mesh.edges if {v.nr for v in mesh[e].vertices} == {a, b})
+        dofs.append(fes.GetDofNrs(edge)[0])
 
     # Sample at 5 random interior points in reference triangle T_0
     rng = np.random.default_rng(seed=42)
@@ -65,10 +90,18 @@ def test_one(label, r0, z0, r1, z1, r2, z2):
             grad_py[:, 0] * dr_deta + grad_py[:, 1] * dz_deta,
         ])
 
-        # C++ evaluation (via the IntegrationPoint interface)
-        ip = (xi, eta)
-        phi_cpp = np.array(cpp_tri.CalcShape(ip))
-        grad_cpp = np.array(cpp_tri.CalcDShape(ip))  # (6, 2) d phi / d(xi, eta)
+        # Use the production NGSolve evaluators; raw FE CalcShape/CalcDShape
+        # are C++ methods, not exported Python methods.
+        phi_cpp = np.zeros(6)
+        grad_cpp = np.zeros((6, 2))
+        point = mesh(rp, zp)
+        for i, dof in enumerate(dofs):
+            field.vec[:] = 0.0
+            field.vec[dof] = 1.0
+            phi_cpp[i] = field(point)
+            dr, dz = gradient(point)
+            grad_cpp[i] = (dr * dr_dxi + dz * dz_dxi,
+                           dr * dr_deta + dz * dz_deta)
 
         shape_err = np.linalg.norm(phi_py - phi_cpp) / max(
             np.linalg.norm(phi_py), 1e-30)
@@ -84,19 +117,24 @@ def test_one(label, r0, z0, r1, z1, r2, z2):
     return max_shape_err < 1e-10 and max_grad_err < 1e-8
 
 
+TRIANGLES = [
+    ("general", 1e-3, 0.0, 5e-3, 0.0, 3e-3, 2e-3),
+    ("axis-touch-vertex0", 0.0, 0.0, 4e-3, 0.0, 2e-3, 3e-3),
+    ("axis-both-vertex01", 0.0, 0.0, 0.0, 2e-3, 5e-3, 1e-3),
+    ("skew-general", 2e-3, 1e-3, 6e-3, 0.5e-3, 4e-3, 4e-3),
+]
+
+@pytest.mark.parametrize("triangle", TRIANGLES, ids=[tri[0] for tri in TRIANGLES])
+def test_cpp_matches_python_triangle(triangle):
+    assert _check_triangle(*triangle)
+
 def main():
     print("=" * 64)
     print("Phase B2 build smoke test: C++ P2 vs Python P2 reference")
     print("=" * 64)
-    triangles = [
-        ("general", 1e-3, 0.0, 5e-3, 0.0, 3e-3, 2e-3),
-        ("axis-touch-vertex0", 0.0, 0.0, 4e-3, 0.0, 2e-3, 3e-3),
-        ("axis-both-vertex01", 0.0, 0.0, 0.0, 2e-3, 5e-3, 1e-3),
-        ("skew-general", 2e-3, 1e-3, 6e-3, 0.5e-3, 4e-3, 4e-3),
-    ]
     all_ok = True
-    for tri_args in triangles:
-        ok = test_one(*tri_args)
+    for tri_args in TRIANGLES:
+        ok = _check_triangle(*tri_args)
         if not ok:
             all_ok = False
     print()
@@ -105,4 +143,5 @@ def main():
 
 
 if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8")
     main()
