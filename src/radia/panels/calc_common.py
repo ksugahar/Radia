@@ -29,7 +29,13 @@ def apply_fe_inverse(matrix, inverse, rhs, solution, free_dofs):
     projector = Projector(free_dofs, True)
     correction_rhs = rhs.CreateVector()
     correction_rhs.data = projector * (rhs - matrix * solution)
-    scale = correction_rhs.Norm()
+    boundary_lift = solution.CreateVector()
+    boundary_lift.data = solution - projector * solution
+    effective_rhs = rhs.CreateVector()
+    effective_rhs.data = projector * (rhs - matrix * boundary_lift)
+    scale = effective_rhs.Norm()
+    if scale == 0.0:
+        scale = correction_rhs.Norm()
     solution.data += inverse * correction_rhs
     residual = rhs.CreateVector()
     residual.data = projector * (rhs - matrix * solution)
