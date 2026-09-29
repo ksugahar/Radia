@@ -128,9 +128,11 @@ def _vertex_values(mesh, gf):
 def _require_region_for_definedon(mesh, gf, region):
     """A field on a subdomain has meaningless zeros elsewhere: its region
     must be named."""
-    from ngsolve import H1
-    full = H1(mesh, order=gf.space.globalorder).ndof
-    if region is None and gf.space.ndof != full:
+    from ngsolve import VOL
+    defined = gf.space.GetDefinedOnRegion(VOL)
+    # NGSolve returns an all-zero sentinel for an unrestricted space.
+    mask = list(defined.Mask()) if defined is not None else []
+    if region is None and any(mask) and not all(mask):
         raise ValueError(
             "the field is defined on a subdomain (definedon space); pass its "
             "region so the rest of the mesh is not counted as material")
