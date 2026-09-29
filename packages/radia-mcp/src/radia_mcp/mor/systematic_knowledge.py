@@ -215,8 +215,10 @@ optimizes the expansion points for H_2 optimality.
 - Cost dominated by r linear solves (with shared factorization if
   the matrix is fixed)
 
-For LTI systems with O(10^6) DOFs, moment-matching reaches r ~ 30
-with ~30 PARDISO back-substitutions — minutes, not hours.
+Moment matching reuses a factorization for repeated right-hand sides at a
+fixed expansion point. Radia explicitly selects SparseCholesky for direct FE
+subsolves. Choose the reduced order from measured band error; runtime and
+factorization memory must be measured for the actual matrix.
 
 ### Radia implementation
 
