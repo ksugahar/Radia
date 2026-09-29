@@ -42,7 +42,7 @@ Prefer established public abstractions over proprietary plumbing.
 - Keep two genuinely independent analysis routes for important models when
   feasible.
 ### Numerical Rules
-- Use Foster modal models or PRIMA projection for electromagnetic reduction.
+- Use Foster modal models, PRIMA projection or snapshot POD for electromagnetic reduction.
   Retired CLN/Cauer circuit APIs are not production or comparison routes.
   Analytic DtN continued fractions are boundary symbols, not circuit models.
   Choose reduced orders by measured error over the operating band.
