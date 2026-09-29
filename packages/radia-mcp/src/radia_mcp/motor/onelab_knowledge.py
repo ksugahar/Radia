@@ -451,7 +451,9 @@ For an IM at slip `s`:
 - σ ∂A/∂t becomes jω σ A, contributing to a complex stiffness.
 
 NGSolve equivalent: complex `HCurl` space, `jω σ` mass term,
-`PARDISO` direct solve (or `BlockMatrix` for circuit coupling).
+AMS or BDDC+AMS for supported pure-HCurl problems; explicitly select
+`SparseCholesky` when using a direct FE solve. Circuit coupling requires
+separate validation of the assembled block operator.
 
 ### Time-Domain (Flag_AnalysisType = 1)
 
@@ -515,7 +517,10 @@ DOFs:
 
 `Z_circ` is the lumped impedance matrix (resistors, inductors,
 capacitors), `C_circ` is the per-conductor coupling (turn count /
-slot area).  Solve as a 2x2 block system; PARDISO handles it.
+slot area). Solve the coupled block system with a method appropriate to its
+symmetry and nullspace. Direct FE subsolves explicitly select SparseCholesky;
+validate the true residual of the complete coupled system. Do not assume the
+pure-HCurl AMS contract covers circuit unknowns.
 """
 
 POST = """\

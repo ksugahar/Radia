@@ -104,9 +104,11 @@ time-rate of φ).  The system becomes:
   ε ∂φ/∂t                            =  ε χ     (definition)
 
 Now the (A, φ, χ) system is **symmetric** — because χ appears
-symmetrically as the time-rate of φ.  Solver: PARDISO direct
-(real symmetric indefinite) or block-CG with symmetric
-preconditioner.
+symmetrically as the time-rate of φ. The system can be indefinite, so
+symmetry alone does not justify CG. Radia direct FE subsolves explicitly
+select SparseCholesky; verify factorization and the true residual on the
+constrained operator. A block iterative route must support its definiteness
+and nullspace; no automatic direct-backend fallback is permitted.
 
 ### Numerical verification
 

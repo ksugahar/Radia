@@ -1734,19 +1734,22 @@ ferrite core and aluminum shield. Full results in `docs/solver/NGBEM_INTEGRATION
 | air_r | 120 mm (static), 60 mm (eddy) | Sphere with Dirichlet BC |
 | maxh | 8 mm (static), 4 mm (eddy) | Air mesh |
 | core.faces.maxh | 2 mm | Local refinement only |
-| Solver | PARDISO | NGSolve interface to Intel MKL |
+| Direct FE solver | SparseCholesky | Explicit NGSolve inverse selection |
 
-## PARDISO (NGSolve Feature)
+## Direct FE solver
 
-PARDISO is Intel MKL's multi-threaded direct sparse solver. It is accessed
-through NGSolve's inverse interface, NOT implemented in Radia.
+Radia explicitly selects NGSolve SparseCholesky for direct FE solves.
+The space must have the appropriate constraints or gauge; verify the true
+residual on free DOFs and propagate failures without changing the operator.
 
 ```python
 # NGSolve usage:
-gfA.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f.vec
+gfA.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 ```
 
-Speedup vs UMFPACK: 3.9-7.7x (multi-threaded vs single-threaded).
+For supported HCurl problems, AMS or BDDC+AMS is the iterative route.
+Measure time and memory for the actual problem; no direct-solver speedup
+is implied here. Dense BLAS/LAPACK may still depend on MKL.
 """
 
 RADIA_SCALAR_POTENTIAL = """
