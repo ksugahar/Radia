@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import subprocess
 from pathlib import Path
 
 
@@ -119,7 +120,10 @@ def test_urn_docs_do_not_own_generated_validation_artifacts():
 
 def test_docs_do_not_track_notebook_checksum_sidecars():
     offenders = []
-    for path in (ROOT / "docs").rglob("*_result.json"):
+    tracked = subprocess.check_output(
+        ["git", "ls-files", "-z", "--", "docs/*_result.json"], cwd=ROOT).decode("utf-8")
+    for name in filter(None, tracked.split("\0")):
+        path = ROOT / name
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
