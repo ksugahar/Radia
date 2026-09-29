@@ -542,7 +542,7 @@ def solve_heat_em_table(wp_vol, em_table_path,
                         f"t={t:.4g} s: surface temperature "
                         f"{T_dof.min():.1f}..{T_dof.max():.1f} C leaves the "
                         f"EM table {lo_T:.1f}..{hi_T:.1f} C; extend the table "
-                        "or pass --allow-table-extrapolation"}
+                        "or pass --allow-em-table-extrapolation"}
             max_T_excursion = max(max_T_excursion, over)
         live = Ht_now > 0
         H_lo = float(np.min(Ht_now[live])) if np.any(live) else 0.0
