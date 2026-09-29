@@ -121,7 +121,8 @@ def test_urn_docs_do_not_own_generated_validation_artifacts():
 def test_docs_do_not_track_notebook_checksum_sidecars():
     offenders = []
     tracked = subprocess.check_output(
-        ["git", "ls-files", "-z", "--", "docs/*_result.json"], cwd=ROOT).decode("utf-8")
+        ["git", "-c", f"safe.directory={ROOT.as_posix()}",
+         "ls-files", "-z", "--", "docs/*_result.json"], cwd=ROOT).decode("utf-8")
     for name in filter(None, tracked.split("\0")):
         path = ROOT / name
         try:
