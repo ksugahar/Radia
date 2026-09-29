@@ -175,7 +175,7 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     nonlinear_residual_tolerance: float = 1e-8,
     nonlinear_material_bonus_intorder: int | None = None,
     nonlinear_progress_callback=None,
-    inverse: str = "pardiso",
+    inverse: str = "sparsecholesky",
     bonus_intorder: int = 4,
     reduced_source_load: str = "auto",
     total_source_load: str = "auto",
