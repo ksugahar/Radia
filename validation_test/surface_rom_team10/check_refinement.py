@@ -1,5 +1,5 @@
 """Verify same-factor residual refinement and rejection of an unusable inverse."""
-import argparse,os,json
+import argparse,os,json,weakref
 from pathlib import Path
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--output',type=Path,required=True)
@@ -8,9 +8,17 @@ os.environ.update(TEAM_CASE='team10',TEAM_QUARTER='1',TEAM_COIL2='1')
 import ngsolve as ng
 from aphi_model import ModelAphi,run_fom
 from transient import waveform
+live_inverses=weakref.WeakSet()
+class Inverse:
+    def __init__(self,actual):
+        self.actual=actual
+        live_inverses.add(self)
+    def __mul__(self,v):return self.actual*v
 class Matrix:
     def __init__(self,actual,scale):self.actual=actual;self.scale=scale
-    def Inverse(self,*a,**kw):return self.scale*self.actual.Inverse(*a,**kw)
+    def Inverse(self,*a,**kw):
+        assert not live_inverses, 'previous factor retained during next factorization'
+        return Inverse(self.scale*self.actual.Inverse(*a,**kw))
     def __mul__(self,v):return self.actual*v
 class Form:
     def __init__(self,actual,scale):self.actual=actual;self.scale=scale
@@ -22,6 +30,7 @@ with ng.TaskManager():
     m=ModelAphi(.02,order=1,dt=.002);real=m.a
     m.a=Form(real,.999)
     _,hist,info=run_fom(m,waveform('mix_add'),1)
+    assert not live_inverses, 'factor retained after the solve'
     assert info['refinement_solves']>0 and info['max_relative_linear_residual']<=1e-7
     m.a=Form(real,0.)
     try:run_fom(m,waveform('mix_add'),1)
