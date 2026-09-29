@@ -1,0 +1,67 @@
+{
+  "schema": "radia.validation.maxwell-pec-sphere-2607.v1",
+  "date": "2026-09-30",
+  "host": "mdx2",
+  "source_commit": "6d1be6b586e1d27f3486482343349af91e6f4330",
+  "source_sha256": "22cbe8170e4695a4c577a80979fda1d9c26c9dcb4948ec27c6360e98d476cd66",
+  "ngsolve": "6.2.2607",
+  "threads": 1,
+  "intorder": 12,
+  "maxh": 0.25,
+  "order": 2,
+  "mie_relative_error_limit": 0.0001,
+  "true_relative_residual_limit": 1E-08,
+  "cases": [
+    {
+      "ndof": 4248,
+      "ka": 0.3,
+      "sigma_back_over_pa2": 0.07165885349218504,
+      "mie": 0.0716592506322245,
+      "rel_err": 5.542062412898688E-06,
+      "relative_residual": 1.8203267929823774E-10,
+      "passed": true
+    },
+    {
+      "ndof": 4248,
+      "ka": 0.5,
+      "sigma_back_over_pa2": 0.5295729957456158,
+      "mie": 0.5295762786963113,
+      "rel_err": 6.199202697668941E-06,
+      "relative_residual": 2.64776302745072E-10,
+      "passed": true
+    },
+    {
+      "ndof": 4248,
+      "ka": 1.0,
+      "sigma_back_over_pa2": 3.6375513307000653,
+      "mie": 3.6375665428517023,
+      "rel_err": 4.18195831136528E-06,
+      "relative_residual": 2.3486624422959666E-10,
+      "passed": true
+    },
+    {
+      "ndof": 4248,
+      "ka": 2.0,
+      "sigma_back_over_pa2": 1.008103986010595,
+      "mie": 1.008143083247345,
+      "rel_err": 3.878143628597912E-05,
+      "relative_residual": 3.219606900895484E-10,
+      "passed": true
+    },
+    {
+      "ndof": 4248,
+      "ka": 3.0,
+      "sigma_back_over_pa2": 0.5207594088363711,
+      "mie": 0.5207654283536416,
+      "rel_err": 1.1558980191058741E-05,
+      "relative_residual": 4.139528436020013E-10,
+      "passed": true
+    }
+  ],
+  "evidence_archive_sha256": "08e8d8308dc46afb8e828f9e1c4d1887d4ecaedd23eabcd651a82c50402d06fa",
+  "limitations": [
+    "Five sampled ka values, not a continuous-band error bound.",
+    "Single-thread 2607 API validation, not a performance or release-quad result.",
+    "Earlier eight-thread native abort remains unresolved; this serial result does not validate that configuration."
+  ]
+}
