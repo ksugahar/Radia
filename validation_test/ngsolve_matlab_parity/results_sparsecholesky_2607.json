@@ -1,0 +1,43 @@
+{
+  "schema": "radia.matlab-sparsecholesky-validation.v1",
+  "run_date": "2026-09-29",
+  "host": "INTEL11",
+  "matlab_version": "26.1.0.3346908 (R2026a) Update 5",
+  "ngsolve_version": "6.2.2607",
+  "source_commit": "e30ba516ba76fb9d535a382939ed47db6265c86a",
+  "native_sha256": "30ff27be332da42a361c98dd7ed76fad7f462ab31e045c14fedc6594117d1b04",
+  "native_bytes": 3988480,
+  "test_source_sha256": "6d03370b1a48f0f32e056099c93b845f481701a204ba6b16b27838127fd8d2f6",
+  "scope": "Real and complex H1 mass operators, orders 2 and 4; repeated RHS reuse; not a large-system or four-host release acceptance.",
+  "thresholds": {
+    "true_relative_residual": 1e-10,
+    "relative_difference_from_matlab_backslash": 1e-09
+  },
+  "cases": [
+    {
+      "test": "test_ngsolve_sparsecholesky/inverseResidualAndParity(scalar=real,order=2)",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "test": "test_ngsolve_sparsecholesky/inverseResidualAndParity(scalar=real,order=4)",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "test": "test_ngsolve_sparsecholesky/inverseResidualAndParity(scalar=complex,order=2)",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    },
+    {
+      "test": "test_ngsolve_sparsecholesky/inverseResidualAndParity(scalar=complex,order=4)",
+      "passed": true,
+      "failed": false,
+      "incomplete": false
+    }
+  ],
+  "all_passed": true
+}
