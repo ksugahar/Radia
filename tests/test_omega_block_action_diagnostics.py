@@ -1,5 +1,6 @@
 """Check diagnostic arithmetic with explicit matrices, without native imports."""
 import ast
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -51,7 +52,7 @@ def result(matrix, x, rhs, free=(True, True, True)):
             return np.array(matrix) @ vector.values
 
         def Inverse(self, mask, inverse):
-            assert inverse == 'pardiso'
+            assert inverse == 'sparsecholesky'
 
             class Inverse:
                 def __mul__(self, vector):
@@ -62,7 +63,7 @@ def result(matrix, x, rhs, free=(True, True, True)):
                     return value
             return Inverse()
 
-    fes = SimpleNamespace(ndof=3, FreeDofs=lambda: free,
+    fes = SimpleNamespace(ndof=3, components=[SimpleNamespace(globalorder=2)], FreeDofs=lambda: free,
                           Range=lambda i: SimpleNamespace(start=i, stop=i+1))
     return {'fes': fes, 'solution': SimpleNamespace(vec=Vector(x), components=(0, 1, 2)),
             'system': {'bilinear_form': SimpleNamespace(mat=Matrix()),
@@ -281,7 +282,12 @@ def test_matching_partial_identity_is_rejected(field):
 
 
 @pytest.mark.parametrize('fail_after_update', [False, True])
-def test_residual_correction_measures_and_restores_original(fail_after_update):
+def test_residual_correction_measures_and_restores_original(fail_after_update, monkeypatch):
+    def inverse(matrix, fes, *, order):
+        assert order == 2
+        return matrix.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
+    monkeypatch.setitem(sys.modules, "radia.kelvin_solver",
+                        SimpleNamespace(_matching_trace_direct_inverse=inverse))
     data = result(np.eye(3), [1, 2, 1], [1, 1, 1])
     original = data['solution'].vec.values.copy()
     corrected = function('residual_correction_observation')
