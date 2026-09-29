@@ -248,7 +248,7 @@ def _kelvin_identification_inventory(path: Path) -> dict[str, object]:
         [
             np.asarray(points[slave].p, dtype=float)
             - np.asarray(points[master].p, dtype=float)
-            for master, slave in pairs
+            for master, slave, *_identification in pairs
         ],
         dtype=float,
     )

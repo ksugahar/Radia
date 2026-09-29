@@ -62,7 +62,7 @@ def test_manufactured_result_covers_five_element_families() -> None:
     assert len({case["mesh_id"] for case in result["case_results"]}) == 5
 
 
-def test_hibino_result_records_the_exact_native_runtime() -> None:
+def test_historical_hibino_result_records_the_exact_native_runtime() -> None:
     result = _load("results_ngsolve_matlab_extended_hibino.json")
     assert result["schema"] == (
         "radia.ngsolve-python-matlab-extended-validation.v1"
@@ -70,6 +70,7 @@ def test_hibino_result_records_the_exact_native_runtime() -> None:
     assert result["all_passed"] is True
     assert result["host_name"].upper() == "HIBINO"
     assert result["matlab_release"] == "2026a"
+    # Archived 2606 evidence; this does not validate the current 2607 runtime.
     assert result["ngsolve_version"] == "6.2.2606"
     assert len(result["mex_sha256"]) == 64
     int(result["mex_sha256"], 16)

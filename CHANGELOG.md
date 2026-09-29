@@ -5,6 +5,12 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased (5.1.0) - Induction-heating thermal chain
 
+- **NGSolve/Netgen 6.2.2607 accepted (2026-09-29).** This supersedes the
+  previous decision to retain 6.2.2606. Compatibility helpers follow the
+  current runtime; historical validation retains its recorded version.
+  Periodic identification inventories accept Netgen's identification ID.
+  SciPy now requires 1.12 for the pressure-Schur CG relative-tolerance API.
+
 - **Exact, verified heat-source transfer.** `radia.ih_thermal` ties every
   `.sol` to its mesh through a required `.sol.json` sidecar (mesh digest,
   H1 order, DOF count, quantity, heated boundaries, EM power, frequency) and
