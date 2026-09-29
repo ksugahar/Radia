@@ -185,7 +185,8 @@
       "paths": [
         "validation_test/topology_optimization/test_hex_cluster_derivative.py",
         "validation_test/panels/test_motor_lamination_golden.py",
-        "validation_test/panels/test_motor_transient_golden.py"
+        "validation_test/panels/test_motor_transient_golden.py",
+        "validation_test/panels/test_axisym_volumetric_direct.py"
       ]
     },
     "solver-numerics": {

@@ -61,6 +61,8 @@ NATIVE_PATHS = (
     'validation_test/topology_optimization/test_hex_cluster_derivative.py',
     'src/radia/motor_design.py',
     'src/radia/panels/calc_common.py',
+    'src/radia/panels/calc_axisym_volumetric.py',
+    'validation_test/panels/test_axisym_volumetric_direct.py',
     'src/radia/panels/calc_motor_lamination.py',
     'src/radia/panels/calc_motor_transient.py',
     'validation_test/panels/test_motor_lamination_golden.py',
