@@ -307,7 +307,9 @@ jobs:
           env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
           if plan["package_tests"] != ["tests"]:
               env["RADIA_MCP_CI_SELECTION_JSON"] = json.dumps(plan["package_tests"])
-          targets = ["tests"] if plan["package_tests"] == ["tests"] else plan["package_tests"]
+          # Discover from the directory so collect_ignore can reject missing optional deps.
+          # conftest still applies the exact impact selectors from the environment.
+          targets = ["tests"]
           command = [
               sys.executable, "-m", "pytest", "-v", "-r", "aR",
               "-m", "not xval and not slow", *targets,
