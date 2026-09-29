@@ -309,7 +309,7 @@ low-frequency solves while preserving the underlying field formulation.
 
 - [Eddy-current method guide](docs/solver/EDDY_CURRENT_METHODS.md)
 - [ESIM formulation and usage](docs/esim/README.md)
-- [Cauer Ladder Network documentation](docs/cln/CAUER_LADDER_NETWORK.md)
+- [Foster, PRIMA, and Modal-bulk SIBC models](docs/solver/REDUCED_EDDY_MODELS.md)
 
 ### Stream functions and coil topology
 

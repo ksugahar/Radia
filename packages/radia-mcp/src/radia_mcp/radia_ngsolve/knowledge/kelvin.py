@@ -2687,7 +2687,7 @@ f += -omega.Trace() * (B_s_vec * specialcf.normal(3)) * ds("kelvin_int")
 ```
 
 See docs/kelvin/KELVIN_TRANSFORMATION.md §7.4.1 for full derivation.
-See docs/cln/CAUER_LADDER_NETWORK.md §6.4.1 for CLN + Kelvin specifics.
+For supported reduced models, see docs/solver/REDUCED_EDDY_MODELS.md.
 """
 
 KELVIN_VERIFIED_RECIPE = """

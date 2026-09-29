@@ -87,9 +87,10 @@ counted twice, once per parallel polarisation).
 | `scripts/bem_cln_ngsolve_2cuboid.py` | NGSolve A-formulation FEM cross-check (Phase 3 B.2): 2 Cu cuboids + Kelvin sphere, mesh ~83k elements, eddy current solve at 10⁵-10⁷ Hz. Reveals demagnetization-factor gap with scalar-diffusion α (~O(10) discrepancy), confirming need for proper 3D polarizability tensor |
 | `scripts/bem_cln_5cylinder_coil.wls` | **Engineering application** (Phase 3 B.3): 5-cylinder coil-like configuration via rigorous 2D Phase 2.5 framework. 25 DOF total (40× reduction vs 1000-mode Foster), +28.8% coupling enhancement at 10⁶ Hz, Schur-F preserves SIBC tail to 10 sig fig at 10¹² Hz |
 
-See [docs/cln/BEM_CLN.md](../../docs/cln/BEM_CLN.md) for the full
-BEM-CLN theory and the radia-mcp `bem_cln` tool for an MCP-callable
-documentation interface.
+The retired BEM-CLN construction guide is retained in Git history.
+For current implementation routes, see
+[Foster, PRIMA, and Modal-bulk SIBC](../../../docs/solver/REDUCED_EDDY_MODELS.md).
+This research corpus is historical and is not a supported CLN API.
 
 The Cauer-SIBC composition is the central method of the IEEE Trans Mag
 submission; the scripts above reproduce every numerical claim in the
