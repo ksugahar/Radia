@@ -63,8 +63,10 @@ class TransientAudit:
 
     def as_dict(self):
         balance = self.energy_in_J - self.energy_loss_J
-        rel = ((self.energy_stored_J - balance) / abs(balance)
-               if balance else 0.0)
+        scale = max(abs(self.energy_in_J), abs(self.energy_loss_J),
+                    abs(self.energy_stored_J))
+        rel = ((self.energy_stored_J - balance) / scale
+               if scale else 0.0)
         return {
             "scheme": "enthalpy-backward-euler-newton",
             "steps": self.steps, "substeps": self.substeps,
@@ -329,8 +331,8 @@ class NonlinearHeatStepper:
                                 inverse=self.linear_solver)
             du.data = inv * R.vec
             self.gfT.vec.data -= du
-            step = float(np.max(np.abs(np.asarray(du.FV().NumPy())
-                                       [self._vdofs])))
+            # Higher-order edge/interior corrections must also converge.
+            step = float(np.max(np.abs(du.FV().NumPy())))
             if not math.isfinite(step):
                 break
             if step < self.tol:
