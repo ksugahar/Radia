@@ -887,6 +887,11 @@ import runpy, sys
 import ngsolve as ng
 import numpy as np
 from radia.kelvin_solver import project_source_total_hodge
+ng.SetNumThreads(1)
+# Bound assembly heap reservation in this child (76 * 10 MB). The regression
+# still exercises 76 threads and the same high-order integral; Integrate's
+# fixed per-thread diagnostic heap is unaffected by SetHeapSize.
+ng.SetHeapSize(10_000_000)
 case = runpy.run_path(sys.argv[1])["_picard_case"]
 mesh, source, _, _ = case(maxh=0.35)
 values = []
