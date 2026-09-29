@@ -248,6 +248,10 @@ sets on which the rule stops; the other columns describe those sets.
 
 Each new FOM run checks every Newton linear solve against the original free-row
 residual (relative limit `1e-7`) and records the maximum per time step.
+Up to three corrections reuse the same factor and original operator before
+the unchanged gate is applied. `refinement_solves` records their cost.
+`python check_refinement.py --output C:/temp/pod-refinement.json` exercises
+correction of a deliberately inaccurate inverse and rejection of a zero inverse.
 `newton_converged` distinguishes convergence from the intentionally truncated
 one-iteration training trajectories. Historical JSON files without these fields
 do not establish that the checks were performed.

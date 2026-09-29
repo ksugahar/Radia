@@ -81,17 +81,29 @@ def run_fom(m, fn, steps, max_newton=40, tol=1e-10, log=print):
     defect = r.CreateVector()
     residual_limit = 1e-7  # same contract as check_sparsecholesky.py
     largest_residual = 0.0
+    refinement_solves = 0
     for k in range(1, steps + 1):
         i = fn(k * dt); m.gn.vec.data = g.vec
         step_residual = 0.0
+        step_refinements = 0
         converged = False
         for it in range(40):
             if it == max_newton: break
             m.a.AssembleLinearization(g.vec); m.residual(g.vec, i, r)
-            du.data = m.a.mat.Inverse(m.fes.FreeDofs(), inverse='sparsecholesky') * r; solves += 1
-            defect.data = m.a.mat * du - r
-            relative = float(np.linalg.norm(defect.FV().NumPy()[free]) /
-                             max(np.linalg.norm(r.FV().NumPy()[free]), 1e-300))
+            inverse = m.a.mat.Inverse(m.fes.FreeDofs(), inverse='sparsecholesky')
+            du.data = inverse * r; solves += 1
+            scale = max(np.linalg.norm(r.FV().NumPy()[free]), 1e-300)
+            for refinement in range(4):
+                defect.data = m.a.mat * du - r
+                relative = float(np.linalg.norm(defect.FV().NumPy()[free]) / scale)
+                if not np.isfinite(relative) or relative <= residual_limit or refinement == 3:
+                    break
+                # Refine the same constrained system with the existing factor.
+                # Neither the operator nor the residual acceptance changes.
+                du.data -= inverse * defect
+                solves += 1
+                refinement_solves += 1
+                step_refinements += 1
             if not np.isfinite(relative) or relative > residual_limit:
                 raise RuntimeError(f'FOM step {k}, Newton {it}: true linear residual {relative:.3e} exceeds {residual_limit:.1e}')
             step_residual = max(step_residual, relative)
@@ -111,8 +123,10 @@ def run_fom(m, fn, steps, max_newton=40, tol=1e-10, log=print):
         snaps.append(g.vec.FV().NumPy().copy())
         pos = team10_sections(m.bfield(g), m.mesh)
         hist.append(dict(t=k * dt, current_AT=[float(c) for c in m.currents(i)], newton=it, B_pos=pos,
-                         newton_converged=converged, max_relative_linear_residual=step_residual))
+                         newton_converged=converged, max_relative_linear_residual=step_residual,
+                         refinement_solves=step_refinements))
         if k % 10 == 0: log(f'aphi {k}/{steps} newton {it} S1 {pos["S1"]:.3f} {time.time()-t0:.0f}s')
     return np.array(snaps), hist, dict(seconds=time.time() - t0, linear_solves=solves,
                                       linear_residual_limit=residual_limit,
+                                      refinement_solves=refinement_solves,
                                       max_relative_linear_residual=largest_residual)

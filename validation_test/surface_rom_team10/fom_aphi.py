@@ -30,6 +30,7 @@ if __name__ == '__main__':
                n_air=len(m.idx_air), solve_s=info['seconds'], linear_solves=info['linear_solves'], history=hist,
                host=platform.node(), ngsolve=ngsolve.__version__,
                linear_residual_limit=info['linear_residual_limit'],
+               refinement_solves=info['refinement_solves'],
                max_relative_linear_residual=info['max_relative_linear_residual'],
                sources={q: hashlib.sha256((ROOT / q).read_bytes()).hexdigest() for q in ['team13_model.py', 'aphi_model.py', 'fom_aphi.py', 'transient.py']})
     (out / f'{wave}.json').write_text(json.dumps(res, indent=2))
