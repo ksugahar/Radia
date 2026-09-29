@@ -32,15 +32,19 @@ class TestObjTetrahedron:
         tetra = rad.ObjTetrahedron(vertices, [0, 0, 0])
         assert tetra > 0
 
-    def test_field_computation(self):
-        """Test field computation from tetrahedron."""
-        vertices = [
-            [0, 0, 0], [0.1, 0, 0], [0.05, 0.0866, 0], [0.05, 0.0289, 0.0816]
-        ]
-        tetra = rad.ObjTetrahedron(vertices, [0, 0, 954930])
-        B = rad.Fld(tetra, 'b', [0.05, 0.03, 0.2])
-        assert len(B) == 3
-        assert any(abs(b) > 0 for b in B)
+    @pytest.mark.parametrize("vertices,magnetization,point,component", [
+        ([[0, 0, 0], [0.1, 0, 0], [0.05, 0.0866, 0], [0.05, 0.0289, 0.0816]],
+         [0, 0, 954930], [0.05, 0.03, 0.2], "b"),
+        ([[0, 0, 0], [0.1, 0, 0], [0, 0.1, 0], [0, 0, 0.1]],
+         [0, 0, 12000], [0.15, 0.05, 0.05], "h"),
+    ], ids=["regular-B", "right-H"])
+    def test_field_computation(self, vertices, magnetization, point, component):
+        """Permanent tetrahedra produce finite fields without a soft-iron solve."""
+        tetra = rad.ObjTetrahedron(vertices, magnetization)
+        field = rad.Fld(tetra, component, point)
+        assert len(field) == 3
+        assert np.all(np.isfinite(field))
+        assert np.linalg.norm(field) > 0
 
     def test_wrong_vertex_count_3(self):
         """Test that 3 vertices raises error."""
