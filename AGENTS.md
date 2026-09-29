@@ -45,9 +45,10 @@ Prefer established public abstractions over proprietary plumbing.
 - Use Foster modal models, PRIMA projection or snapshot POD for electromagnetic reduction.
   Retired CLN/Cauer circuit APIs are not production or comparison routes.
   Choose reduced orders by measured error over the operating band.
+- Call eigenmode-bulk + surface-impedance coupling **Modal-bulk SIBC** (was Foster + SIBC; legacy identifiers stay), never "mixed Galerkin".
 
 - Use SI units; magnetization is A/m.
-- Python/MATLAB MEX direct FE solves/subsolves explicitly use `sparsecholesky`, never PARDISO fallback.
+- PARDISO is not used in principle: Python/MEX direct FE solves/subsolves use `sparsecholesky`, never a PARDISO fallback.
   MKL serves dense BLAS/LAPACK/FFT, not FE solver selection.
   Validate migration with true residuals and representative sizes; expose failures without changing operators or acceptance.
 - Compare vector fields with `norm(B1 - B2)`; ESRF coil-yoke HDiv/FEM validation defaults to 1 % relative RMS on its declared core stencil, separately from solver convergence.
@@ -139,7 +140,7 @@ solver boundary is a checked `.vol` regardless of the creation route.
   validation inputs may produce a visible skip. Heavier `.vol` work
   belongs to `validation_test/`, and `docs/**/*.ipynb` may show the Cubit
   generation step.
-- Only `cubit-mesh-export` owns Cubit GUI launches/tests on licensed hosts; Radia lanes must not duplicate them.
+- Drive Cubit headless via APREPRO or Python on the CLI, never the GUI; only `cubit-mesh-export` owns GUI release tests.
 - Prefer Cubit APREPRO/Python batch for production/validation CAD and meshes;
   consider Sculpt for suitable HEX domains; build123d/Netgen alternatives must be explicit.
 - Radia reads checked `.vol` files; CI uses fixtures. Generate headlessly via APREPRO/Python and export through `cubit-mesh-export`.
