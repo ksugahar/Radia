@@ -174,7 +174,7 @@ class EddyCurrentFEMBEM:
             freq: Frequency [Hz]
             intorder: Integration order for BEM singular quadrature
         """
-        from ngsolve import (H1, SurfaceL2, BilinearForm, GridFunction,
+        from ngsolve import (H1, SurfaceL2, BilinearForm, GridFunction, Integrate, CF,
                               Cross, ds, dx, grad, specialcf)
         from ngsolve.bem import LaplaceDL, LaplaceSL
 
@@ -236,8 +236,14 @@ class EddyCurrentFEMBEM:
         print("  Done.")
 
         # --- Preconditioner blocks ---
+        # The H1 block has no Dirichlet boundary. A tiny fixed mass leaves its
+        # constant mode nearly singular at engineering length scales. Scale
+        # only the preconditioner by diffusion and inverse length squared;
+        # the physical FEM/BEM operator above remains unchanged.
+        volume = float(Integrate(CF(1), self.mesh))
+        pre_mass = max(abs(self._k_sq), volume ** (-2.0 / 3.0))
         self._pre_h1 = BilinearForm(
-            (grad(u) * grad(v) + 1e-6 * u * v) * dx).Assemble()
+            (grad(u) * grad(v) + pre_mass * u * v) * dx).Assemble()
         self._pre_l2 = BilinearForm(
             uL2 * vL2.Trace() * ds(self.surface_label)).Assemble()
 
@@ -309,12 +315,25 @@ class EddyCurrentFEMBEM:
         f.Assemble()
 
         # Modify RHS for Dirichlet BC
-        r = f.vec - self._a.mat * self.gfu_h1.vec
+        r = f.vec.CreateVector()
+        r.data = f.vec - self._a.mat * self.gfu_h1.vec
 
         # Solve
         inv = self._a.mat.Inverse(
-            freedofs=self._fes.FreeDofs(), inverse="pardiso")
-        self.gfu_h1.vec.data += inv * r
+            freedofs=self._fes.FreeDofs(), inverse="sparsecholesky")
+        correction = r.CreateVector()
+        correction.data = inv * r
+        residual = r.CreateVector()
+        residual.data = r - self._a.mat * correction
+        free = np.array(list(self._fes.FreeDofs()), dtype=bool)
+        self.true_relative_residual = float(
+            np.linalg.norm(residual.FV().NumPy()[free])
+            / max(np.linalg.norm(r.FV().NumPy()[free]), 1e-300))
+        if (not np.isfinite(self.true_relative_residual)
+                or self.true_relative_residual > 1e-8):
+            raise RuntimeError(
+                f"FEM true relative residual {self.true_relative_residual:.3e} exceeds 1e-8")
+        self.gfu_h1.vec.data += correction
 
     def _solve_fembem(self, printrates=False):
         """Solve FEM-BEM coupled system using BlockMatrix + GMRes.
@@ -326,7 +345,7 @@ class EddyCurrentFEMBEM:
 
         where f_H1 = -k^2 * (Hz_inc, v) is the FEM volume source.
         """
-        from ngsolve import (GridFunction, LinearForm,
+        from ngsolve import (GridFunction, LinearForm, Projector,
                               BlockMatrix, BlockVector, dx, CF)
         from ngsolve.solvers import GMRes
 
@@ -359,11 +378,11 @@ class EddyCurrentFEMBEM:
         # --- Block preconditioner ---
         pre = BlockMatrix([
             [self._pre_h1.mat.Inverse(
-                freedofs=self._fes_h1.FreeDofs(), inverse="pardiso"),
+                freedofs=self._fes_h1.FreeDofs(), inverse="sparsecholesky"),
              None],
             [None,
              self._pre_l2.mat.Inverse(
-                 freedofs=self._fes_l2.FreeDofs())]
+                 freedofs=self._fes_l2.FreeDofs(), inverse="sparsecholesky")]
         ])
 
         # --- Solve with GMRes ---
@@ -374,8 +393,26 @@ class EddyCurrentFEMBEM:
         if printrates:
             print(f"  FEMBEM: H1 DOFs={self._fes_h1.ndof}, "
                   f"L2 DOFs={self._fes_l2.ndof}")
-        sol = GMRes(A=lhs, b=rhs, pre=pre,
-                    tol=1e-8, maxsteps=500, printrates=printrates)
+        # Right preconditioning makes GMRES minimize the original system's
+        # residual. Left preconditioning scales the two blocks differently
+        # and can report convergence while the true residual is still large.
+        identity = BlockMatrix([
+            [Projector(self._fes_h1.FreeDofs(), True), None],
+            [None, Projector(self._fes_l2.FreeDofs(), True)],
+        ])
+        auxiliary = GMRes(A=lhs @ pre, b=rhs, pre=identity,
+                          tol=0, reltol=1e-10, maxsteps=500,
+                          printrates=printrates)
+        sol = rhs.CreateVector()
+        sol.data = pre * auxiliary
+        from ngsolve import Norm
+        residual = rhs.CreateVector()
+        residual.data = rhs - lhs * sol
+        self.true_relative_residual = float(Norm(residual) / max(Norm(rhs), 1e-300))
+        if (not np.isfinite(self.true_relative_residual)
+                or self.true_relative_residual > 1e-8):
+            raise RuntimeError(
+                f"FEM-BEM true relative residual {self.true_relative_residual:.3e} exceeds 1e-8")
 
         # --- Extract solution ---
         self.gfu_h1 = GridFunction(self._fes_h1)
