@@ -11,8 +11,9 @@ import numpy as np
 import pytest
 
 import radia as rad
-from ngsolve import Mesh, TaskManager
-from netgen.occ import (Cylinder, Sphere, Pnt, Z, Vertex, Glue,
+from ngsolve import Mesh, TaskManager, VOL
+from netgen.meshing import Element0D
+from netgen.occ import (Cylinder, Sphere, Pnt, Z, Glue,
                          OCCGeometry, IdentificationType)
 
 from radia.scalar_potential_solver import ScalarPotentialSolver
@@ -62,8 +63,7 @@ def _build_kelvin_mesh():
     outer.maxh = MAXH_KELVIN; outer.mat("air_outer")
     for f in outer.faces:
         f.name = "kelvin_ext"
-    gnd = Vertex(Pnt(*KELVIN_CENTER)); gnd.name = "GND"
-    geo = Glue([inner_air, mag_cyl, outer, gnd])
+    geo = Glue([inner_air, mag_cyl, outer])
     geo.solids[0].name = "air_inner"
     geo.solids[1].name = "iron"
     geo.solids[2].name = "air_outer"
@@ -77,6 +77,19 @@ def _build_kelvin_mesh():
     k_int.Identify(k_ext, "periodic", IdentificationType.PERIODIC)
     with TaskManager():
         ngmesh = OCCGeometry(geo).GenerateMesh(maxh=MAXH_AIR, grading=0.5)
+    mesh = Mesh(ngmesh)
+    # An isolated OCC Vertex in Glue is not a connected volume-mesh vertex.
+    # Ground an actual Kelvin vertex: the scalar gauge changes no gradient.
+    kelvin_vertices = {
+        vertex.nr for element in mesh.Elements(VOL)
+        if element.mat == "air_outer" for vertex in element.vertices
+    }
+    ground = min(kelvin_vertices, key=lambda nr: sum(
+        (mesh.vertices[nr].point[i] - KELVIN_CENTER[i]) ** 2
+        for i in range(3)))
+    point_index = len(mesh.GetBBBoundaries()) + 1
+    ngmesh.Add(Element0D(ground + 1, index=point_index))
+    ngmesh.SetCD3Name(point_index, "GND")
     mesh = Mesh(ngmesh)
     mesh.Curve(FE_ORDER)
     return mesh
@@ -93,7 +106,8 @@ class TestOmegaReducedOmegaKelvin:
             kelvin_region='air_outer', kelvin_radius=PHYS_R,
             kelvin_center=list(KELVIN_CENTER))
         solver.set_source_from_radia(coil)
-        solver.solve()
+        with TaskManager():
+            solver.solve()
         return solver, mesh
 
     def test_auto_selects_total_reduced(self, fem_solver):

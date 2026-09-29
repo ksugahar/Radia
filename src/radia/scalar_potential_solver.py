@@ -936,8 +936,7 @@ class ScalarPotentialSolver:
         mu_cf = self._build_mu_cf_with_kelvin()
 
         # --- FE space: Periodic + GND Dirichlet only ---
-        fes_pre = H1(self.mesh, order=self.order, dirichlet=dirichlet)
-        fes = Periodic(fes_pre)
+        fes = self._make_h1_space(dirichlet)
 
         omega_t = fes.TrialFunction()
         psi = fes.TestFunction()
