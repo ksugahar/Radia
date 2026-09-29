@@ -8,6 +8,9 @@ from radia_mcp.electromagnet.em_knowledge import get_electromagnet_documentation
 from radia_mcp.matrix_solvers.direct_solvers_knowledge import (
     get_direct_solvers_knowledge,
 )
+from radia_mcp.matrix_solvers.overview_knowledge import (
+    get_overview_knowledge as get_matrix_overview_knowledge,
+)
 from radia_mcp.radia_ngsolve.knowledge.radia import get_radia_documentation
 
 
@@ -70,16 +73,33 @@ def test_mcp_result_ownership_distinguishes_docs_from_validation():
     assert "`validation_test/` owns" in guidance
 
 
-def test_pardiso_guidance_distinguishes_ngsolve_openblas_from_radia_mkl():
+def test_legacy_direct_topic_explains_migration_without_enabling_pardiso():
     guidance = get_direct_solvers_knowledge("pardiso")
     flat_guidance = " ".join(guidance.split())
 
     assert "ngsolve-openblas" in guidance
     assert "mkl>=2026,<2027" in guidance
-    assert "does not bundle or select MKL" in flat_guidance
-    assert "a compatible MKL runtime is a separate environment dependency" in flat_guidance
-    assert "included with NGSolve PyPI wheel" not in guidance
-    assert "NGSolve binary distributions automatically" not in guidance
+    assert "does not select PARDISO" in flat_guidance
+    assert "Use SparseCholesky explicitly" in flat_guidance
+    assert 'inverse="pardiso"' not in guidance
+
+
+def test_matrix_solver_guidance_preserves_the_direct_solve_contract():
+    direct = get_direct_solvers_knowledge("sparsecholesky")
+    all_direct = get_direct_solvers_knowledge("all")
+    decision = get_matrix_overview_knowledge("decision_tree")
+
+    assert direct in all_direct
+    assert 'inverse="sparsecholesky"' in direct
+    assert "Projector(fes.FreeDofs(), True)" in direct
+    assert "f.vec - a.mat * gfu.vec" in direct
+    assert "isfinite(relative_residual)" in direct
+    assert "same native" in direct
+    assert 'inverse="pardiso"' not in all_direct
+    assert "BDDC + AMS" in decision
+    assert "Do not silently fall back" in decision
+    assert "PARDISO complex direct" not in decision
+    assert "radia.Solve method=0" not in decision
 
 
 def test_radia_guidance_uses_current_demo_and_validation_ownership():
