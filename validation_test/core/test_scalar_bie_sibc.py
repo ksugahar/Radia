@@ -1,22 +1,17 @@
 """Test scalar BIE + SIBC solver against analytical sphere solution."""
 
 import math
-import sys
-import os
 import numpy as np
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-sys.path.insert(0, os.path.join(ROOT, "src"))
-sys.path.insert(0, os.path.join(ROOT, "src", "radia"))
 
 MU_0 = 4e-7 * np.pi
 
 
 def test_sphere_pec():
     """Scalar BIE on PEC sphere should match analytical (3/2)*H0*sqrt(2/3)."""
-    from ngsolve import Mesh, CF, z
+    from ngsolve import Mesh, CF, z, TaskManager
     from netgen.occ import Sphere, Pnt, OCCGeometry, Glue
-    from scalar_bie_sibc import ScalarBIE_SIBC
+    from radia.scalar_bie_sibc import ScalarBIE_SIBC
 
     R = 0.01
     B0 = 0.001
@@ -49,9 +44,9 @@ def test_sphere_pec():
 
 def test_sphere_sibc_sweep():
     """Scalar BIE + SIBC should match analytical for all Z_s ratios."""
-    from ngsolve import Mesh, CF, z
+    from ngsolve import Mesh, CF, z, TaskManager
     from netgen.occ import Sphere, Pnt, OCCGeometry, Glue
-    from scalar_bie_sibc import ScalarBIE_SIBC
+    from radia.scalar_bie_sibc import ScalarBIE_SIBC
 
     R = 0.01
     B0 = 0.001
@@ -93,9 +88,9 @@ def test_sphere_sibc_sweep():
 
 def test_phi_inc_from_H():
     """Test phi_inc reconstruction from H_inc via surface Poisson."""
-    from ngsolve import Mesh, CF, z
+    from ngsolve import Mesh, CF, z, TaskManager
     from netgen.occ import Sphere, Pnt, OCCGeometry, Glue
-    from scalar_bie_sibc import ScalarBIE_SIBC
+    from radia.scalar_bie_sibc import ScalarBIE_SIBC
 
     R = 0.01
     B0 = 0.001
@@ -131,10 +126,9 @@ def test_phi_inc_from_H():
 
 def test_frequency_sweep():
     """Test frequency sweep API."""
-    from ngsolve import Mesh, CF, z
-    from ngsolve import TaskManager
+    from ngsolve import Mesh, CF, z, TaskManager
     from netgen.occ import Sphere, Pnt, OCCGeometry, Glue
-    from scalar_bie_sibc import ScalarBIE_SIBC
+    from radia.scalar_bie_sibc import ScalarBIE_SIBC
 
     R = 0.01
     B0 = 0.001
