@@ -86,7 +86,10 @@ def residual_correction_observation(result, mesh, case):
     residual = solution.CreateVector()
     residual.data = rhs - matrix * solution
     correction = solution.CreateVector()
-    correction.data = matrix.Inverse(result['fes'].FreeDofs(), inverse='pardiso') * residual
+    # the saddle system is factored the way the solver factors it (no PARDISO)
+    from radia.kelvin_solver import _matching_trace_direct_inverse
+    order = result['fes'].components[0].globalorder
+    correction.data = _matching_trace_direct_inverse(matrix, result['fes'], order=order) * residual
     delta = correction.FV().NumPy()
     if not np.isfinite(delta).all():
         raise ValueError('nonfinite residual correction')
