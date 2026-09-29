@@ -19,8 +19,75 @@ import numpy as np
 import ngsolve as ng
 
 
+def _solve_rt0_saddle(matrix, rhs, free, velocity_dofs):
+    """Solve the unchanged mixed equations through an SPD pressure Schur CG.
+
+    SparseCholesky factors the velocity mass and a diagonal-mass Schur
+    preconditioner. The exact Schur operator uses the full mass inverse;
+    neither a pressure penalty nor a lumped physical mass is introduced.
+    """
+    from scipy.sparse import coo_matrix, diags
+    from scipy.sparse.linalg import LinearOperator, cg
+
+    rows, cols, values = matrix.COO()
+    full = coo_matrix((np.asarray(values), (rows, cols)),
+                      shape=(matrix.height, matrix.width)).tocsr()
+    if "SparseMatrixSymmetric" in type(matrix).__name__:
+        full = full + full.T - diags(full.diagonal())
+    active = np.flatnonzero(np.array(list(free), dtype=bool))
+    velocity = active[active < velocity_dofs]
+    pressure = active[active >= velocity_dofs]
+    if not len(velocity):
+        raise ValueError("drive does not excite a resolved closed current path")
+    mass = full[velocity][:, velocity]
+    divergence = full[pressure][:, velocity]
+
+    def factor_apply(sparse):
+        data = sparse.tocoo()
+        native = ng.la.SparseMatrixdouble.CreateFromCOO(
+            data.row.tolist(), data.col.tolist(), data.data.tolist(), *data.shape)
+        inverse = native.Inverse(inverse="sparsecholesky")
+
+        def apply(values):
+            source = native.CreateColVector()
+            source.FV().NumPy()[:] = values
+            answer = native.CreateRowVector()
+            answer.data = inverse * source
+            return answer.FV().NumPy().copy()
+        return apply
+
+    mass_solve = factor_apply(mass)
+    schur_pre = factor_apply(divergence @ diags(1 / mass.diagonal()) @ divergence.T)
+    schur = LinearOperator((len(pressure), len(pressure)), dtype=float,
+                           matvec=lambda x: divergence @ mass_solve(divergence.T @ x))
+    pre = LinearOperator(schur.shape, dtype=float, matvec=schur_pre)
+    load = rhs.FV().NumPy()
+    schur_rhs = divergence @ mass_solve(load[velocity]) - load[pressure]
+    iterations = 0
+
+    def counted(_):
+        nonlocal iterations
+        iterations += 1
+
+    p, info = cg(schur, schur_rhs, M=pre, rtol=1e-13, atol=0,
+                 maxiter=max(100, 2 * len(pressure)), callback=counted)
+    if info != 0:
+        raise RuntimeError(f"RT0 pressure Schur CG did not converge (info={info})")
+    result = rhs.CreateVector()
+    result[:] = 0
+    result.FV().NumPy()[pressure] = p
+    result.FV().NumPy()[velocity] = mass_solve(load[velocity] - divergence.T @ p)
+    residual = rhs.CreateVector()
+    residual.data = rhs - matrix * result
+    relative = float(np.linalg.norm(residual.FV().NumPy()[active]) /
+                     max(np.linalg.norm(load[active]), 1e-300))
+    if not np.isfinite(relative) or relative > 1e-10:
+        raise RuntimeError(f"RT0 mixed true relative residual {relative:.3e} exceeds 1e-10")
+    return result, relative, iterations
+
+
 def solve_closed_coil_current(mesh, drive, *, current_A, drive_length_m,
-                              materials=("coil",), inverse="pardiso"):
+                              materials=("coil",), inverse="sparsecholesky"):
     """Solve the RT0/P0 minimum-energy current with insulating conductor walls.
 
     ``drive`` must describe a unit tangential drive along a complete straight
@@ -32,7 +99,13 @@ def solve_closed_coil_current(mesh, drive, *, current_A, drive_length_m,
     The field minimizes integral |J|^2 with zero discrete divergence, in
     contrast to a continuous scalar-potential gradient whose normal component
     can jump between cells. No reference-solver field enters this solve.
+
+    The mixed saddle system is solved by pressure Schur CG with exact mass
+    application and SparseCholesky subsolves, checked on the original mixed
+    equations. ``inverse`` selects these subsolves and must be sparsecholesky.
     """
+    if inverse != "sparsecholesky":
+        raise ValueError("closed-coil direct subsolves require inverse='sparsecholesky'")
     current_A, length = float(current_A), float(drive_length_m)
     if not math.isfinite(current_A) or not math.isfinite(length) or length <= 0:
         raise ValueError("finite current and positive finite drive length required")
@@ -87,7 +160,9 @@ def solve_closed_coil_current(mesh, drive, *, current_A, drive_length_m,
     solution = ng.GridFunction(X)
     a.Assemble()
     f.Assemble()
-    solution.vec.data = a.mat.Inverse(free, inverse=inverse)*f.vec
+    solved, linear_residual, schur_iterations = _solve_rt0_saddle(
+        a.mat, f.vec, free, V.ndof)
+    solution.vec.data = solved
     flux = solution.components[0]
     pairing = float(ng.Integrate(ng.InnerProduct(flux, drive), mesh, definedon=region))
     drive_energy = float(ng.Integrate(ng.InnerProduct(drive, drive), mesh, definedon=region))
@@ -104,6 +179,10 @@ def solve_closed_coil_current(mesh, drive, *, current_A, drive_length_m,
     return {"current": current, "space": V,
             "stats": {"current_A": current_A, "drive_length_m": length,
                       "conductor_cells": len(cells), "ndof": X.ndof,
+                      "linear_solver": "pressure_schur_cg",
+                      "inverse": inverse,
+                      "linear_relative_residual": linear_residual,
+                      "schur_iterations": schur_iterations,
                       "relative_divergence": relative_divergence,
                       "section_current_A": float(ng.Integrate(ng.InnerProduct(current, drive),
                                                   mesh, definedon=region))/length,

@@ -1,0 +1,40 @@
+{
+  "schema": "radia.closed-current-schur-validation.v1",
+  "host": "lab",
+  "ngsolve": "6.2.2607",
+  "threads": 2,
+  "mesher": "Netgen OCC synthetic loop",
+  "relative_maxh": 0.18,
+  "source_sha256": "cd0f14bd072b2f1e82870d046e19b900a36b271563e580e72757fec6f6c42edd",
+  "cases": [
+    {
+      "scale_m": 1.0,
+      "mesh_elements": 9466,
+      "current_A": 2.0,
+      "drive_length_m": 2.0,
+      "conductor_cells": 9466,
+      "ndof": 30013,
+      "linear_solver": "pressure_schur_cg",
+      "inverse": "sparsecholesky",
+      "linear_relative_residual": 1.813173900239098e-14,
+      "schur_iterations": 25,
+      "relative_divergence": 2.1393498029130046e-12,
+      "section_current_A": 2.000000000000001
+    },
+    {
+      "scale_m": 0.001,
+      "mesh_elements": 9525,
+      "current_A": 2.0,
+      "drive_length_m": 0.002,
+      "conductor_cells": 9525,
+      "ndof": 30190,
+      "linear_solver": "pressure_schur_cg",
+      "inverse": "sparsecholesky",
+      "linear_relative_residual": 4.417629434676948e-16,
+      "schur_iterations": 26,
+      "relative_divergence": 1.4010001910479213e-12,
+      "section_current_A": 1.9999999999999973
+    }
+  ],
+  "accepted": true
+}
