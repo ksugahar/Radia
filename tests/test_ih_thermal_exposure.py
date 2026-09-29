@@ -29,6 +29,24 @@ def _cube(maxh=0.2):
                 .GenerateMesh(maxh=maxh))
 
 
+@pytest.mark.parametrize("order", [1, 2])
+def test_subdomain_temperature_requires_an_explicit_region(order):
+    from netgen.occ import Box, Glue, OCCGeometry, Pnt
+    from ngsolve import GridFunction, H1, Mesh
+    hot = Box(Pnt(0, 0, 0), Pnt(1, 1, 1))
+    hot.mat("hot")
+    air = Box(Pnt(1, 0, 0), Pnt(2, 1, 1))
+    air.mat("air")
+    mesh = Mesh(OCCGeometry(Glue([hot, air])).GenerateMesh(maxh=0.8))
+    gf = GridFunction(H1(mesh, order=order, definedon=mesh.Materials("hot")))
+    gf.Set(100.)
+    with pytest.raises(ValueError, match="defined on a subdomain"):
+        ih_thermal_post.thermal_exposure(mesh, gf, [50.], ring_samples=0)
+    result = ih_thermal_post.thermal_exposure(
+        mesh, gf, [50.], region="hot", ring_samples=0)
+    assert result["domain_measure_m3"] == pytest.approx(1.)
+
+
 def test_volume_above_threshold_matches_the_analytic_value():
     from ngsolve import GridFunction, H1, x
 
