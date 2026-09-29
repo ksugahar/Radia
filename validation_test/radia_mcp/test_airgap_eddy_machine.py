@@ -20,6 +20,7 @@ import os
 import sys
 
 import numpy as np
+import pytest
 from ngsolve import (Mesh, H1, GridFunction, BilinearForm, grad, dx, x, y, atan2, cos, sin,
                      ds, BND, Integrate, TaskManager)
 from netgen.geom2d import SplineGeometry
@@ -30,6 +31,44 @@ if _SRC not in sys.path:
 from radia_mcp.radia_ngsolve.airgap_machine import (airgap_coupling, airgap_factorize,
                                                     airgap_solve, airgap_torque, _inv)
 from radia_mcp.radia_ngsolve.airgap_element import airgap_harmonic_torque
+
+
+@pytest.mark.parametrize("complex_space", [False, True])
+def test_airgap_direct_true_residual(complex_space):
+    """Check the actual coupled operator, including the Dirichlet lift."""
+    from ngsolve import InnerProduct, Norm, Projector
+
+    mesh = _machine_mesh(meshed_gap=False)
+    fes = H1(mesh, order=2, complex=complex_space, dirichlet="outer|rotor_inner")
+    u, v = fes.TnT()
+    a = BilinearForm(fes, symmetric=True)
+    a += grad(u) * grad(v) * dx
+    if complex_space:
+        sigma = mesh.MaterialCF({"stator": SIGMA}, default=0.0)
+        a += 1j * OMEGA * MU0 * sigma * u * v * dx
+    with TaskManager():
+        a.Assemble()
+        coupling = airgap_coupling(fes, RI, RO, "rotor_ring", "stator_ring", [N])
+        factor = airgap_factorize(a.mat, coupling, fes.FreeDofs())
+        solution = airgap_solve(factor, fes, dirichlet_cf=_excite(mesh, 0.23))
+        lift = GridFunction(fes)
+        lift.Set(_excite(mesh, 0.23), BND)
+        free = Projector(fes.FreeDofs(), True)
+        G = np.linalg.inv(coupling["Ginv"])
+
+        def apply(vector):
+            result = vector.CreateVector()
+            result.data = a.mat * vector
+            coefficients = G @ np.array([
+                InnerProduct(mode, vector, conjugate=False) for mode in coupling["U"]
+            ])
+            for coefficient, mode in zip(coefficients, coupling["U"]):
+                result.data += coefficient.item() * mode
+            return result
+
+        relative = Norm(free * apply(solution.vec)) / Norm(free * apply(lift.vec))
+    print(f"AGE complex={complex_space}: coupled true relative residual={relative:.3e}")
+    assert np.isfinite(relative) and relative < 1e-8
 
 R0, RI, RO, REXT = 0.05, 0.10, 0.11, 0.20
 N = 2
