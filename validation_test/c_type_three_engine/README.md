@@ -326,9 +326,41 @@ that folder.
 
 ### Load selection and historical records
 
-The high-level mixed-Omega API now defaults to `auto` for newly executed
-calls. This validation driver's `source_load` is explicit and defaults to
-`volume`; the ESRF coil-yoke wrapper also defaults `--mixed-source-load` to
-`volume`. Select `surface_flux` explicitly to compare that route. Stored
+The high-level mixed-Omega API and this validation driver's `source_load`
+default to `auto` for newly executed calls. The ESRF coil-yoke wrapper also
+defaults `--mixed-source-load` to `auto`. Select `volume` or `surface_flux`
+explicitly to compare those routes. The result records the requested and
+selected load in `source_trace.load_selection`; the checkpoint contract
+records the requested setting. Stored
 results preserve their original load, wheel/source identity and convergence
 gates; they are not relabelled as results of the new API default.
+
+### Archived refinement investigation (2026-09-24)
+
+`results/historical_refinement_20260924.json` consolidates the former
+diagnostic branch. It is **Radia 5.0.0 / NGSolve 6.2.2606 evidence**, not
+acceptance of current source, current load selection, or a release artifact.
+The complete inputs and experimental drivers remain in Git history at
+`75e49aa58b43558c7a4cd3f48b6f24d6ca169d96`; duplicated drivers and operational
+logs are not installed as current validation entry points.
+
+Recompute the metrics in a full-history checkout (standard-library Python;
+no solver or archived Python code is executed):
+
+```powershell
+python validation_test/c_type_three_engine/audit_20260924_refinement.py --output C:/temp/historical-refinement.json
+```
+
+The audit recomputes parity projection and all three pairwise core norms
+from stored field vectors, checks common geometry/observations and the
+same-order FEM implementation contracts, and compares refinement metrics
+with the original records. It also recomputes the HDiv backend/quadrature
+sensitivities and the separate vacuum field error. Input JSON hashes are
+recorded in the consolidated result.
+
+The last BDM2 mesh increment contracts from 0.2422% to 0.00429%; the FEM
+increments contract too. This is numerical sensitivity, not a continuum
+error bound. The coarse p3 three-engine maximum core difference is 0.1216%.
+Neither result establishes an energy/coenergy ordering or matched-error
+speed advantage. These historical volume-load calculations do not replace
+the current-default nonlinear and release validation.
