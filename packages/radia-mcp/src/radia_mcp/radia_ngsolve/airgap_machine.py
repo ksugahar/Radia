@@ -37,31 +37,12 @@ import numpy as np
 from ngsolve import GridFunction, LinearForm, ds, x, y, atan2, cos, sin, BND, InnerProduct
 
 from .airgap_element import annular_dtn_matrix, airgap_harmonic_torque
+from ._direct import check_residual as _check_residual
 
 
 def _free_mask(freedofs, n):
     return np.fromiter((bool(bit) for bit in freedofs), dtype=bool, count=n)
 
-
-def _check_residual(matrix, residual, solution, rhs, free, what):
-    """Relative residual 1e-8, or 1e-6 with normwise backward error 1e-12, on the free rows
-    (the rule of ``radia._residual_gate``); raises otherwise."""
-    x, r, b = solution[free], residual[free], rhs[free]
-    r_norm = float(np.linalg.norm(r))
-    relative = r_norm / max(float(np.linalg.norm(b)), 1e-300)
-    if np.all(np.isfinite(x)) and math.isfinite(relative) and relative <= 1e-8:
-        return relative
-    if not relative <= 1e-6:            # e.g. a singular K: small backward error, huge x
-        raise RuntimeError(f"{what}: true relative residual {relative:.3e} exceeds 1e-8")
-    values, columns, pointers = (np.asarray(item) for item in matrix.CSR())
-    rows = np.repeat(np.arange(len(pointers) - 1), np.diff(pointers.astype(np.int64)))
-    keep = free[rows] & free[columns.astype(np.int64)]
-    scale = float(np.sqrt(np.sum(np.abs(values[keep]) ** 2))) * float(np.linalg.norm(x))
-    backward = r_norm / max(scale + float(np.linalg.norm(b)), 1e-300)
-    if not (np.all(np.isfinite(x)) and math.isfinite(backward) and backward <= 1e-12):
-        raise RuntimeError(f"{what}: true relative residual {relative:.3e} exceeds 1e-8 and "
-                           f"backward error {backward:.3e} exceeds 1e-12")
-    return relative
 
 
 def _inv(mat, freedofs):
