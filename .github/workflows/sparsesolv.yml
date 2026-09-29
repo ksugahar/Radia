@@ -366,13 +366,14 @@ jobs:
         shell: pwsh
         run: |
           # The package facade requires _radia_pybind; never borrow a developer binary.
-          & .\Build.ps1 -RadiaOnly
+          # Bound MSVC commit usage on shared runners (C1060 at four jobs).
+          & .\Build.ps1 -RadiaOnly -BuildJobs 2
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $vs = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
           if (-not $vs) { throw 'MSVC installation not found' }
           $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
-          & cmd.exe /d /c "call `"$vcvars`" && cmake --build build-msvc --config Release --target sparsesolv_ngsolve --parallel 4"
+          & cmd.exe /d /c "call `"$vcvars`" && cmake --build build-msvc --config Release --target sparsesolv_ngsolve --parallel 2"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Verify source provenance and run required AMS tests
@@ -428,7 +429,7 @@ jobs:
         env:
           PYTHONPATH: '${{ github.workspace }}\src'
         run: |
-          & .\Build.ps1 -MatlabMexOnly
+          & .\Build.ps1 -MatlabMexOnly -BuildJobs 2
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $matlab = Get-ChildItem "$env:ProgramFiles\MATLAB" -Directory | Sort-Object Name -Descending | Select-Object -First 1
           if (-not $matlab) { throw 'MATLAB installation required for native parity' }
