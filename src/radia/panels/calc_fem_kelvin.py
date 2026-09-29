@@ -39,6 +39,16 @@ from calc_common import (MU_0, NU_0, setup_paths,
                           EMMaterial, add_material_args)
 from calc_heat import QSURF_HANDOFF_ORDER
 
+# true relative residual ||b - A x|| / ||b|| on the free dofs that every
+# linear solve must reach (direct and iterative alike).  The system is a
+# gauged (eps*nu mass) curl-curl, whose direct factorization itself stops
+# near 1e-7, so it shares the limit of the reduced-A solver for that class.
+from radia.vector_potential_solver import (  # noqa: E402
+    LINEAR_RELATIVE_RESIDUAL_LIMIT as LINEAR_TRUE_RESIDUAL_LIMIT)
+# iterative-refinement steps allowed after the first Krylov solve; each step
+# must converge on its own and all are recorded
+MAX_RESIDUAL_CORRECTIONS = 3
+
 # largest relative difference between the saved P1 q_surf and the solved
 # surface loss (the thermal power gate then compares against the solved loss)
 QSURF_P1_TOLERANCE = 0.02
@@ -137,9 +147,6 @@ def solve_fem(vol_file="", fes_order=1,
         curve_order = 1
     # Resolve the supported HCurl policy: AMS for order 1 and BDDC+AMS
     # for higher orders. Small problems need not be faster than direct solves.
-    if solver == "auto":
-        solver = "ams" if fes_order == 1 else "bddc"
-        _log(f"SOLVER:auto -> {solver} (fes_order={fes_order})")
 
     if fes_order > curve_order:
         return {
@@ -196,6 +203,18 @@ def solve_fem(vol_file="", fes_order=1,
         _log(f"PERIODIC:from_vol ({n_ident} ident(s), a={a_kelvin:.4f})")
 
     t_mesh = time.perf_counter() - t0
+
+    # Resolve solver=auto: AMS at p=1, BDDC with the AMS wirebasket solver at
+    # p>=2.  Neither is validated on the periodic Kelvin space, where auto
+    # selects the direct factorization (recorded in the result).
+    solver_requested = solver
+    if solver == "auto":
+        if "kelvin" in mats_pre and has_kelvin_periodic:
+            solver = "sparsecholesky"
+        else:
+            solver = "ams" if fes_order == 1 else "bddc"
+        _log(f"SOLVER:auto -> {solver} (fes_order={fes_order}, periodic "
+             f"Kelvin={bool(has_kelvin_periodic)})")
 
     materials = mesh.GetMaterials()
     boundaries = mesh.GetBoundaries()
@@ -628,6 +647,9 @@ def solve_fem(vol_file="", fes_order=1,
         # PEEC total-field: Robin BC is on the LHS (a_bf already has it).
         # No surface RHS from A_s needed.
         rhs_vec = f_lf.vec
+        krylov_iterations = []      # first solve, then each correction
+        residual_history = []       # true residual before each correction
+        krylov_maxiter = None
 
         # Solver-specific setup
         if solver == "ams":
@@ -653,8 +675,9 @@ def solve_fem(vol_file="", fes_order=1,
                 return {"error": "solver=ams requires AC (frequency>0). "
                                  "For DC use solver=bddc or sparsecholesky."}
             if has_kelvin and has_kelvin_periodic:
-                return {"error": "solver=ams is not supported with "
-                                 "Periodic Kelvin BC. Use bddc."}
+                return {"error": "AMS and BDDC+AMS are not validated on the periodic Kelvin "
+                    "space; use --solver sparsecholesky (or auto, which "
+                    "selects it there)"}
 
             import radia.sparsesolv_ngsolve as ssn
 
@@ -710,12 +733,14 @@ def solve_fem(vol_file="", fes_order=1,
             _log(f"AMS:preconditioner setup {time.perf_counter()-t0_pre:.1f}s")
 
             a_bf.Assemble()
+            krylov_maxiter = 500
             with TaskManager():
                 cocr = ssn.COCRSolver(a_bf.mat, pre_ams,
                                        freedofs=fes.FreeDofs(),
-                                       maxiter=500, tol=1e-8,
+                                       maxiter=krylov_maxiter, tol=1e-8,
                                        printrates=False)
                 gfu.vec.data = cocr * rhs_vec
+            krylov_iterations.append(int(cocr.iterations))
             _log(f"AMS:COCR iters={cocr.iterations}")
 
             # Sanity check: COCR can spuriously "converge" in 0
@@ -758,14 +783,22 @@ def solve_fem(vol_file="", fes_order=1,
                 a_bf.mat, method="ICCG",
                 freedofs=fes.FreeDofs(),
                 tol=1e-8, maxiter=500, shift=shift_eps,
-                save_best_result=True, printrates=False,
+                save_best_result=False, printrates=False,
                 use_abmc=True, abmc_block_size=4, abmc_num_colors=4)
             iccg.auto_shift = True
             gfu.vec.data = iccg * rhs_vec
+            iccg_result = iccg.last_result
+            krylov_iterations.append(int(iccg_result.iterations))
+            if not iccg_result.converged:
+                return {"error": (
+                    f"solver=iccg did not converge in {iccg_result.iterations} "
+                    f"iterations (final residual "
+                    f"{iccg_result.final_residual:.3e}); use --solver auto")}
         elif solver == "bddc":
             if has_kelvin and has_kelvin_periodic:
-                raise ValueError("BDDC+AMS is not validated for Periodic Kelvin; "
-                                 "select sparsecholesky explicitly")
+                return {"error": "AMS and BDDC+AMS are not validated on the periodic Kelvin "
+                    "space; use --solver sparsecholesky (or auto, which "
+                    "selects it there)"}
             import radia.sparsesolv_ngsolve as ssn
             pre = Preconditioner(a_bf, "bddc", coarsetype="sparsesolv_ams")
             a_bf.Assemble()
@@ -773,11 +806,14 @@ def solve_fem(vol_file="", fes_order=1,
             # surface term from A_s. Copy into f_lf.vec if they differ.
             if rhs_vec is not f_lf.vec:
                 f_lf.vec.data = rhs_vec
+            krylov_maxiter = 500
             with TaskManager():
                 cocr = ssn.COCRSolver(a_bf.mat, pre,
                                      freedofs=fes.FreeDofs(),
-                                     maxiter=500, tol=1e-10, printrates=False)
+                                     maxiter=krylov_maxiter, tol=1e-10,
+                                     printrates=False)
                 gfu.vec.data = cocr * rhs_vec
+            krylov_iterations.append(int(cocr.iterations))
             _log(f"BDDC+AMS:COCR iters={cocr.iterations}")
         else:
             # sparsecholesky (direct)
@@ -829,28 +865,57 @@ def solve_fem(vol_file="", fes_order=1,
                     gfu.vec.data = a_bf.mat.Inverse(
                         fes.FreeDofs(), inverse="sparsecholesky") * rhs_vec
 
+        # Every route is checked on the assembled system.  A Krylov solve
+        # that reaches its iteration limit has not converged and is refused;
+        # iterative refinement (the same preconditioned solve applied to the
+        # true residual) is allowed for a bounded number of steps, each of
+        # which must converge, and all steps are recorded.
+        solver_label = {"ams": "AMS", "bddc": "BDDC+AMS", "iccg": "ICCG"}.get(
+            solver, "SparseCholesky")
+        residual = rhs_vec.CreateVector()
+        residual.data = rhs_vec - a_bf.mat * gfu.vec
+        free = np.asarray(list(fes.FreeDofs()), dtype=bool)
+        rhs_free_norm = max(float(np.linalg.norm(rhs_vec.FV().NumPy()[free])),
+                            1e-300)
+        relative_residual = float(
+            np.linalg.norm(residual.FV().NumPy()[free]) / rhs_free_norm)
         if solver in {"ams", "bddc"}:
-            solver_label = "AMS" if solver == "ams" else "BDDC+AMS"
-            residual = rhs_vec.CreateVector()
-            residual.data = rhs_vec - a_bf.mat * gfu.vec
-            free = np.asarray(list(fes.FreeDofs()), dtype=bool)
-            relative_residual = float(np.linalg.norm(residual.FV().NumPy()[free]) /
-                max(np.linalg.norm(rhs_vec.FV().NumPy()[free]), 1e-30))
-            for correction_step in range(3):
-                if not np.isfinite(relative_residual) or relative_residual <= 1e-7:
-                    break
+            if krylov_iterations[-1] >= krylov_maxiter:
+                return {"error": (
+                    f"{solver_label}: COCR did not converge in "
+                    f"{krylov_maxiter} iterations (true relative residual "
+                    f"{relative_residual:.3e})")}
+            while (np.isfinite(relative_residual)
+                   and relative_residual > LINEAR_TRUE_RESIDUAL_LIMIT
+                   and len(residual_history) < MAX_RESIDUAL_CORRECTIONS):
+                residual_history.append(relative_residual)
+                correction_norm = float(
+                    np.linalg.norm(residual.FV().NumPy()[free]))
                 correction_rhs = rhs_vec.CreateVector()
-                correction_norm = float(np.linalg.norm(residual.FV().NumPy()[free]))
                 correction_rhs.data = (1.0 / correction_norm) * residual
                 with TaskManager():
                     gfu.vec.data += correction_norm * (cocr * correction_rhs)
+                krylov_iterations.append(int(cocr.iterations))
+                if krylov_iterations[-1] >= krylov_maxiter:
+                    return {"error": (
+                        f"{solver_label}: residual correction "
+                        f"{len(residual_history)} did not converge in "
+                        f"{krylov_maxiter} iterations")}
                 residual.data = rhs_vec - a_bf.mat * gfu.vec
-                relative_residual = float(np.linalg.norm(residual.FV().NumPy()[free]) /
-                    max(np.linalg.norm(rhs_vec.FV().NumPy()[free]), 1e-30))
-                _log(f"{solver_label} true-residual correction {correction_step}: {relative_residual:.16e}")
-            if not np.isfinite(relative_residual) or relative_residual > 1e-7:
-                raise RuntimeError(f"{solver_label} true relative residual {relative_residual:.3e}")
-            _log(f"{solver_label}:true relative residual={relative_residual:.3e}")
+                relative_residual = float(
+                    np.linalg.norm(residual.FV().NumPy()[free]) / rhs_free_norm)
+                _log(f"{solver_label} true-residual correction "
+                     f"{len(residual_history)}: {relative_residual:.3e}")
+        if not (np.isfinite(relative_residual)
+                and relative_residual <= LINEAR_TRUE_RESIDUAL_LIMIT):
+            return {"error": (
+                f"{solver_label}: true relative residual "
+                f"{relative_residual:.3e} exceeds "
+                f"{LINEAR_TRUE_RESIDUAL_LIMIT:.0e} after "
+                f"{len(residual_history)} corrections")}
+        _log(f"{solver_label}:true relative residual={relative_residual:.3e} "
+             f"(iterations {krylov_iterations}, corrections "
+             f"{len(residual_history)})")
 
         t_solve_iter = time.perf_counter() - t0_iter
 
@@ -1349,7 +1414,12 @@ def solve_fem(vol_file="", fes_order=1,
 
     result = {
         "linear_solver": solver,
-        "linear_true_relative_residual": relative_residual if solver in {"ams", "bddc"} else None,
+        "linear_solver_requested": solver_requested,
+        "linear_true_relative_residual": relative_residual,
+        "linear_true_residual_limit": LINEAR_TRUE_RESIDUAL_LIMIT,
+        "linear_krylov_iterations": krylov_iterations,
+        "linear_residual_corrections": len(residual_history),
+        "linear_residual_before_corrections": residual_history,
         "P_total": float(P_total),
         "Q_total": float(Q_total),
         "L": float(L),
