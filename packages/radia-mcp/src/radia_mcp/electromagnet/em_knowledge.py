@@ -500,7 +500,7 @@ f += coeff * Hs * grad(v) * dx(bonus_intorder=4)
 f.Assemble()
 
 phi = GridFunction(fes)
-phi.vec.data = a.mat.Inverse(fes.FreeDofs(), "pardiso") * f.vec
+phi.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 
 # Total field
 H_total = Hs - grad(phi)
