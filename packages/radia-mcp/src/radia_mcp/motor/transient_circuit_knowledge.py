@@ -223,7 +223,7 @@ To replicate in radia_mcp.radia_ngsolve: implement an
 1. Holds an NGSolve `BilinearForm` for the nonlinear ν(B) problem.
 2. After each nonlinear solve, freezes ν*(x) = dB/dH(B_op) and
    builds the linearized BilinearForm.
-3. Solves N_phase linear problems (PARDISO with **shared factorization**
+3. Solves N_phase linear problems (SparseCholesky with **shared factorization**
    — NGSolve's `Inverse(symmetric=True, freedofs=...)` caches the
    factor; just call it N_phase times with different RHS).
 4. Computes ψ_jk = ∫ (∇×A_j) · n_coil_k dΩ → L_inc.
@@ -280,7 +280,7 @@ Skeleton (sketch — production code would live in
 import numpy as np
 from ngsolve import (Mesh, H1, BilinearForm, LinearForm, GridFunction,
                      CoefficientFunction, grad, x, y, dx, ds, Integrate,
-                     TaskManager, PARDISO)
+                     TaskManager)
 from radia_mcp.motor.onelab_knowledge import get_onelab_knowledge
 
 # 1. Load 2D machine mesh (Cubit / Gmsh / Netgen-OCC)
@@ -314,7 +314,7 @@ def build_L_inc(A_op, theta_rotor):
     a_lin += nu_star * grad(u) * grad(v) * dx
     a_lin.Assemble()
 
-    inv = a_lin.mat.Inverse(fes.FreeDofs(), inverse="pardiso")
+    inv = a_lin.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
     # ↑ factorize ONCE; back-substitute N_phase times.
 
     L_inc = np.zeros((NbrPhases, NbrPhases))
