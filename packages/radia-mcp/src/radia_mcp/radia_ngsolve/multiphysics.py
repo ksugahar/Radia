@@ -15,6 +15,8 @@ import math
 from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, InnerProduct,
                      Conj, CoefficientFunction, grad, dx, ds, BND)
 
+from ._direct import solve_symmetric
+
 
 def joule_loss_density(gfA, gfPhi, sigma_cf, omega, A0=None):
     """Time-averaged Joule (ohmic) loss density  q = 1/2 sigma |E|^2  [W/m^3]
@@ -123,7 +125,7 @@ def thermal_penetration_depth(k, rho_cp, omega):
 
 
 def solve_heat_harmonic(mesh, k, rho_cp, omega, dirichlet_values, source=None, order=2,
-                        inverse="umfpack"):
+                        inverse="sparsecholesky"):
     """FREQUENCY-DOMAIN (harmonic) heat conduction -- the COMPLEX temperature phasor T(x) for a
     boundary oscillating at angular frequency ``omega``:
 
@@ -146,8 +148,11 @@ def solve_heat_harmonic(mesh, k, rho_cp, omega, dirichlet_values, source=None, o
     a.Assemble(); f.Assemble()
     gfu = GridFunction(fes)
     gfu.Set(mesh.BoundaryCF(dirichlet_values, default=0.0), BND)
-    r = f.vec - a.mat * gfu.vec
-    gfu.vec.data += a.mat.Inverse(fes.FreeDofs(), inverse=inverse) * r
+    r = f.vec.CreateVector()
+    r.data = f.vec - a.mat * gfu.vec
+    if inverse != "sparsecholesky":
+        raise ValueError("direct FE solves require inverse='sparsecholesky'")
+    gfu.vec.data += solve_symmetric(a.mat, fes.FreeDofs(), r, "harmonic heat solve")
     return gfu
 
 

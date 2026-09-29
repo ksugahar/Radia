@@ -23,6 +23,8 @@ import math
 from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, grad, dx, ds,
                      Integrate, CoefficientFunction, BND, x as _r)
 
+from ._direct import solve_symmetric
+
 EPS0 = 8.8541878128e-12
 SIGMA_SB = 5.670374419e-8     # Stefan-Boltzmann constant [W/m^2/K^4]
 
@@ -357,8 +359,9 @@ def solve_current_flow_ac(mesh, sigma, eps, omega, potentials, order=2):
     gfu = GridFunction(fes)
     gfu.Set(mesh.BoundaryCF({b: complex(val) for b, val in potentials.items()},
                             default=0.0), BND)
-    r = f.vec - a.mat * gfu.vec
-    gfu.vec.data += a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * r
+    r = f.vec.CreateVector()
+    r.data = f.vec - a.mat * gfu.vec
+    gfu.vec.data += solve_symmetric(a.mat, fes.FreeDofs(), r, "complex admittance solve")
     return gfu
 
 
