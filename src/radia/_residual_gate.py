@@ -1,12 +1,13 @@
 """True-residual acceptance of FE linear solves (no solver fallback).
 
 A solve passes when the relative residual ||r|| / ||b|| on the free rows is at
-most 1e-8, or when the normwise backward error ||r|| / (||A||_F ||x|| + ||b||)
-is at most 1e-12.  The second clause keeps exact solves of ill-conditioned but
+most 1e-8, or when it is at most 1e-6 and the normwise backward error
+||r|| / (||A||_F ||x|| + ||b||) is at most 1e-12.  The second clause keeps exact solves of ill-conditioned but
 legitimate systems: a gauged HCurl curl-curl with a load that is not
 discretely divergence free reaches ||r||/||b|| ~ 1e-8 at a backward error of
 1e-17.  A factorization that ignored a nonsymmetric triangle or met a singular
-pivot fails both clauses (backward error ~1e-1, or non-finite values).
+pivot fails both: a singular pure-Neumann Laplacian gives ||r||/||b|| = 0.17 with
+||x|| ~ 1e15, whose backward error alone would look small.
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ import math
 import numpy as np
 
 RELATIVE_LIMIT = 1e-8
+BACKWARD_RELATIVE_LIMIT = 1e-6
 BACKWARD_LIMIT = 1e-12
 
 
@@ -40,7 +42,7 @@ def check_true_residual(matrix, residual, solution, rhs, free, what) -> float:
     relative = r_norm / max(float(np.linalg.norm(b)), 1e-300)
     backward = math.inf
     finite = bool(np.all(np.isfinite(x))) and math.isfinite(relative)
-    if finite and relative > RELATIVE_LIMIT:
+    if finite and RELATIVE_LIMIT < relative <= BACKWARD_RELATIVE_LIMIT:
         backward = r_norm / max(frobenius_norm_on(matrix, free) * float(np.linalg.norm(x))
                                 + float(np.linalg.norm(b)), 1e-300)
     if not finite or (relative > RELATIVE_LIMIT and backward > BACKWARD_LIMIT):
