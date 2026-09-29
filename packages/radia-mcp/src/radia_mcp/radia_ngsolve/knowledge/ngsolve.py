@@ -546,8 +546,11 @@ from ngsolve.bem import LaplaceSL, LaplaceDL, HelmholtzSL, HelmholtzDL
 - `HelmholtzDL` -- Double Layer (kappa parameter)
 
 ### Maxwell Operators -- EFIE/MFIE
-- `MaxwellSingleLayerPotentialOperator`
-- `MaxwellDoubleLayerPotentialOperator`
+- The legacy Maxwell single/double-layer classes were removed in 6.2.2607.
+- Build EFIE variationally from `HelmholtzSL`: vector single-layer term
+  multiplied by kappa, minus the surface-divergence single-layer term divided
+  by kappa. Validate normalization against an independent Maxwell reference.
+- Do not advertise the removed classes as callable MFIE/EFIE APIs.
 
 ### Elasticity
 - `LameSL` -- Lame single layer for elasticity BEM
