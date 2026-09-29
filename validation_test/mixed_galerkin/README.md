@@ -107,14 +107,10 @@ Resolved 2026-09-02, so the conference copy no longer feeds anything:
   the SAME code as `cylinder/01_no_d_baseline.py` and `sphere/02_hoibc_gamma1.py`
   respectively, comments aside. Nothing had diverged; there was simply a second
   copy waiting to.
-- `Y_cln_pade` had no counterpart here, which is why the talk's CLN curves could
-  not be reproduced from a clone. Promoted to
-  `radia.maglev.mixed_galerkin.references` and parameterised by `(a, sigma, mu)`
-  like its neighbours; it reproduces the old one bit for bit at eight test
-  points across both `kind="L"` and `kind="R"`.
-- The talk's `make_figs.py` now loads `cylinder/01` and `sphere/02` from THIS
-  directory by path, and takes `Y_cln_pade` from the reference API. Its
-  `results.json` after the switch differs from before only in its timestamp.
+- The former `Y_cln_pade` comparison API, its validation runner, and its
+  result fixture were retired on 2026-09-30. They remain in Git history,
+  not as a renamed production or comparison route. Exact cylinder/sphere
+  references remain available; reduced models use Foster, PRIMA, or POD.
 - `_references/cylinder_bessel.py`, `_references/sphere_bessel.py` — superseded
   here by `radia.maglev.mixed_galerkin.references`; the copy is the older route.
 - `square2d/_broken_simple_envelope.py` — a dead end kept under a `_broken_`
@@ -168,25 +164,9 @@ artifact are release evidence here.
 
 - **Task #183** — 3D cube Foster reference audit. CLOSED by replacing the reference rather than converging it: `cube3d/06_ngsolve_ground_truth.py` measures against an NGSolve FEM solution, giving 0.33% at rank 20 with the closed `K_ss`. The Phase 6 "20% wall band" was indeed a Foster N=99 truncation artifact, the same failure the 2D square showed in Phase 8c. `cube3d/01_corner_envelope_uncertain.py` still carries the provisional Foster-referenced number in its docstring and is superseded by 06.
 - **Two-point Padé Theorem** — formalize the bound err_intermediate ~ (δ/L)^{2N} for rank-N bulk + N-DOF Senior tower.
-- **Time-domain Cauer realization** — each Senior tower correction has a fractional-power impedance signature; the diffusive Foster quantization technique (digest §IV) can realize each as a finite RC ladder. This is the Paper 2 direction.
+- **Time-domain diffusion memory** — approximate the fractional-power response by Foster poles and residues; select the modal order using measured error over the operating band.
 
 ## Related references in this repo
-
-### Cauer Reference Stability
-
-Run `python validation_test/mixed_galerkin/validate_cln_pade_reference.py` to
-regenerate `results/cln_pade_reference.json`. This lightweight, solver-free
-lane compares the orthogonal-projection implementation of `Y_cln_pade` with
-an independent 100-digit Taylor-moment Pade solve at orders 1, 4, and 10 for
-both terminations. It checks complex error, not magnitude-only error.
-
-The comparison holds the finite 200-mode input fixed. It certifies evaluation
-stability, not convergence to the infinite-mode cylinder solution. The omitted
-modal weight remains a constant contribution, preserving the existing DC and
-Taylor-moment contract. It is not replaced by an arbitrarily placed extra pole.
-The result JSON records runtime versions and the source hash. The focused test
-`tests/test_mixed_galerkin_references.py` reads only two high-order regression
-cases; it does not rerun the high-precision lane or need a native build.
 
 - `README.md` — this validation campaign and its open questions
 - `_references/square2d_foster.py` — independent 2D square reference
