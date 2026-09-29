@@ -67,15 +67,15 @@ Dirichlet-to-Neumann operator, visible without ever solving the field problem.
 
 Radia is Laplace-kernel / MQS-Darwin.  The lab closes the exterior with the **exact exterior
 DtN operator**: Kelvin for the static air boundary, and -- where the boundary operator depends
-on s -- the exact DtN symbol, its terminating continued fraction, or its auxiliary-ODE /
-companion-pole realisation (the classical continued-fraction non-reflecting / absorbing BC).
+on s -- the exact DtN symbol or a validated finite-band Foster pole-residue fit.
+Diffusion q-plane companion roots are not physical-time relaxation rates.
 **PML / CFS-PML are NOT a solving method here** -- they are kept only as the benchmark FOIL
 measured on the DtN yardstick (act7_22_dtn_spectrum_consolidated + the real NGSolve FEM+PML
 act7_24_ngsolve_fem_pml_highfreq_dtn).  The IABC absorbing-shell METHOD is likewise RETIRED
 (2026-06-20, act7_20 (impedance-shell route vs the Kelvin-built exact DtN): strictly dominated
 by the exact DtN in this scope; kept as the comparison/research record only).  Pick the method
 by WHAT THE BOUNDARY OPERATOR IS (and note the two axes differ -- Kelvin = the SPATIAL
-boundary; the continued fraction / pole realisation = the TEMPORAL / s axis):
+boundary; the pole-residue fit approximates the TEMPORAL / s dependence):
 
   - **non-radiating AIR truncation (the usual outer boundary) -> KELVIN ALONE.**  Air is
     non-conducting, so the boundary DtN is the omega-INDEPENDENT static Laplace spectrum
@@ -87,12 +87,11 @@ boundary; the continued fraction / pole realisation = the TEMPORAL / s axis):
     paper's regime.
 
   - **conducting / diffusive boundary (SIBC = a semi-infinite conductor interior; sqrt(s))
-    -> exact multipole DtN symbol -> continued fraction.**  HERE the boundary operator IS
+    -> exact multipole DtN symbol or Foster pole-residue fit.**  HERE the boundary operator IS
     s-dependent: a passive sqrt(s) diffusion DtN (the sqrt(s) impedance of Warburg 1899),
-    EXACTLY rational in q=sqrt(s) (reverse-Bessel poles) -> a Robin BC whose symbol is a
-    continued fraction in q that terminates after n+1 partial quotients
-    (topic="dtn_continued_fraction"; act6_02 (exact continued fraction of the eddy DtN),
-    act6_12_iabc_diffusion_timedomain).  A SEPARABLE conductor (half-space / sphere) uses the
+    EXACTLY rational in q=sqrt(s) (reverse-Bessel poles). The maintained exact
+    symbol and finite-band Foster fit are described in topic="api". Historical work:
+    act6_12_iabc_diffusion_timedomain.  A SEPARABLE conductor (half-space / sphere) uses the
     analytic sqrt(s) symbol; **a Kelvin-BUILT DtN + band rational fit only for an arbitrary
     NON-separable conductor** (act6_01_kelvin_fem_eddy_dtn, rare).  Evanescent for EVERY omega
     (no propagating regime to absorb) -> the exact DtN beats even CFS-PML (act6_09 (exact DtN
@@ -107,11 +106,11 @@ boundary; the continued fraction / pole realisation = the TEMPORAL / s axis):
     radiation BCs; Guddati; Birk) -> adopted as a CAPABILITY, not a novelty claim.
 
   - **KEY (do not conflate the two axes):** Kelvin = the SPATIAL boundary (static air); the
-    continued fraction / pole realisation = the TEMPORAL / s axis, and ONLY a conducting
+    Foster pole-residue approximation = the TEMPORAL / s axis, and ONLY a conducting
     boundary or radiation is s-dependent.  So the air boundary needs Kelvin alone; the s-axis
     realisation earns its keep at the conductor SIBC or in radiation.  Where a DtN is BUILT
     (Kelvin-FEM / BEM) for a non-separable s-dependent boundary, a band rational
-    (pole-residue) fit or the continued fraction compresses the s-dependence of the built DtN.
+    pole-residue fit approximates the s-dependence of the built DtN.
 
   - **HONEST SCOPE (no overclaim):** principled for the lab's MQS-magnetics class (compact /
     quasi-spherical; mostly evanescent; separable radiation).  Exact for separable; an arbitrary
@@ -832,14 +831,11 @@ truncation is ~1% off, an isoparametric (curved) one reaches 5-6 digits.  (Past 
 it plateaus ~1e-5: the residual conformal-weight quadrature / energy-quotient limit.)
 Maintained summary: `docs/kelvin/DTN_SPECTRUM_COARSE_MESH.md`.
 
-## Connection to the continued-fraction open boundary: one symbol, two variables
+## Connection to the exact open boundary
 
-The DtN eigenvalue spectrum -(n+1)/R is the s->0 limit of the same per-mode symbol that
-the continued-fraction boundary evaluates in the frequency domain (topic="dtn_continued_fraction").  The
-Kelvin closure resolves the SPATIAL modes of that symbol by element order p; the
-terminating continued fraction in q=sqrt(s) (n+1 partial quotients) resolves its
-s-dependence mode by mode.  Both are spectral closures -- decompose the exterior into
-modes and resolve only the modes the source excites.
+The static DtN spectrum is the s->0 limit of `radia.open_boundary.eddy_dtn`.
+Kelvin resolves spatial modes. Foster pole-residue fits approximate diffusion
+memory over a declared frequency band; q-plane roots are not time-domain rates.
 
 ## Corollary: the exterior VOLUME mesh is irrelevant -- only Gamma matters (p>=n)
 
@@ -2859,151 +2855,27 @@ the .vol. Guarded by the static lint rule `ngsolve-curve-after-vol-import`.
 
 
 DTN_COARSE_MESH_METHOD_MAP = r"""
-# Open-boundary method map -- Kelvin / BEM / PML / IABC / continued-fraction NRBC
+# Maintained open-boundary routes
 
-Full doc: docs/open_boundary/OPEN_BOUNDARY_MAP.md. They all realize ONE operator
--- the exterior DtN Lambda_ext on Gamma -- which is reverse-Bessel RATIONAL per
-mode (poles = Bessel/Thomson filter poles; act6_10_iabc_time_domain 1e-15).
+- Static exterior air: Kelvin FEM or a Laplace DtN boundary operator.
+- Homogeneous separable diffusion exterior: `radia.open_boundary.eddy_dtn`.
+- Time-domain diffusion memory: `sqrt_s_passive_poles` / `eval_sqrt_poles`
+  provide a Foster pole-residue fit. Report the frequency band, retained order,
+  nonnegative residues and held-out error. A finite fit is not exact at every frequency.
+- Nonseparable or material exterior: `kelvin_dtn_matrix`, `steklov_spectrum`
+  and a separately validated band fit. Geometry and spatial errors remain.
+- Separable radiation: the separate `wave_dtn` utility. This does not turn
+  Radia's core Laplace/MQS/Darwin kernels into a general full-wave solver.
 
-## Three axes that select the method
-1. FREQUENCY (kR): quasi-static kR->0 = real spectrum -(n+1)/R -> KELVIN (spatial)
-   or the continued-fraction / auxiliary-ODE time-domain realisation of the exact
-   DtN symbol; radiating finite-kR = complex Hankel DtN -> IABC / PML /
-   extended-Kelvin. Wave is rational in s, diffusion in sqrt(s), SAME
-   reverse-Bessel poles (act6_02, exact continued fraction of the eddy DtN).
-2. GEOMETRY (truncation shape): Kelvin inversion is SPHERE-LOCKED (Liouville; the
-   BODY inside is arbitrary). The continued-fraction NRBC / IABC / BEM are
-   surface-free; the continued fraction is finite-exact ONLY on a separable surface
-   (sphere=rational, n+1 partial quotients), a convergent approximation on
-   cylinder/cube. Elongated body: sphere wastes air, a cylinder hugs.
-3. SPACE vs TIME: KELVIN = spatial operator FACTORY (builds the sparse DtN,
-   arbitrary body + iron, no Green's function); a band rational (pole-residue) fit
-   or the continued fraction compresses the s-dependence of the built DtN into a
-   few auxiliary ODEs. They COMPOSE.
+Diffusion reverse-Bessel roots are q-plane roots (q=sqrt(s)); do not interpret
+those roots as physical-time ODE rates. General rational fitting alone does not
+certify passivity. No universal state-count or speed advantage over PML is claimed.
 
-## No free lunch (modal axis)
-Every method truncates the multipole spectrum at finite n_max (Kelvin p>=n, BEM
-surface Nyquist, continued fraction n_max modes x partial quotients). Universal;
-the source multipole content sets n_max. An "exact" continued fraction is the exact
-per-mode DtN symbol over a FINITE multipole set.
-
-## Selection map
-- separable + transient          -> exact DtN symbol: continued fraction / companion
-                                    poles (beats PML; act6_05, transient reflection)
-- separable + static             -> analytic DtN / Kelvin (Kelvin exactness = elegance)
-- arbitrary body + iron + static -> KELVIN (only sparse Green-free factory; SA paper)
-- arbitrary + iron + transient   -> Kelvin BUILDS the DtN; a band rational fit
-                                    compresses its s-dependence
-- radiating (finite kR)          -> IABC / PML / extended-Kelvin
-
-## Measured anchors (audit-verified 2026-06-19)
-- Kelvin: 6 mesh_control pillars (Gamma-only 1e-15, floor=Curve 1.3e-5, p>=n &
-  p-vs-h ~1000x, R/a~2.78, corner 0.357/0.661, DeltaDoF 58->1/45; 2D -n/R).
-- IABC exact-DtN (wave): act6_10_iabc_time_domain (DtN poles = Bessel filter, 1e-15), act6_11_exact_dtn_fetd
-  (FETD reflection O(h^2) 5.7e-4->3.6e-5, x2471 vs Sommerfeld-1, passive).
-- Exact DtN, diffusion: act6_02 (exact continued fraction of the eddy DtN in sqrt(s),
-  EXACT at n+1 partial quotients 1e-16 vs a Foster pole fit in s floor 1.7e-3),
-  act6_04 (Lanczos/PVL Krylov reduction of a 700-DOF radial eddy FEM exterior -> 16
-  real negative poles, ~43x, SPD stable), act6_05 (transient reflection 9.9e-7,
-  62659x vs Dirichlet), act6_09 (exact DtN vs CFS-PML: 8 online DOF vs CFS-PML 128
-  at matched NRMSE 1.46e-4 = 16x fewer + 53189x better cond@DC, DC-exact).
-  NON-CLAIM: propagating waves are PML's home; arbitrary geometry needs a
-  Kelvin-built DtN + band rational fit.
-
-## The CONSOLIDATED measured comparison (act7_22_dtn_spectrum_consolidated; 2026-06-21)
-
-ONE table, every closure x regime x multipole, ONE yardstick = the per-mode DtN-spectral
-defect d_n = |lambda_h(n) - lambda_exact(n)| / |lambda_exact(n)|.  Consolidates the scattered
-measurements (static act7_21, eddy act6_09, high-freq act7_01/act7_07). The
-maintained summary is docs/open_boundary/DTN_SPECTRUM_COMPARISON.md; the retired
-generator is recorded in docs/kelvin/ARCHIVE_RETIREMENT.md.
-
-WHY this lens: a field-error comparison conflates interior-FEM error with open-boundary error;
-the per-mode DtN defect ISOLATES the boundary operator's accuracy, mode by mode.
-
-Measured (a=1):
-  static (lam_n=-(n+1)):  Kelvin <=2.1e-6 (converged); ballooning 0.33->6.9e-6 (fails LOW
-                          slow-decaying modes, shrinks with n and R); Robin 0->0.80 (exact n=0,
-                          fails HIGH modes -- the OPPOSITE failure).
-  eddy (s=i*1):           all closures resolve the mode (<5e-2); the DISTINGUISHERS are
-                          CONVERGENCE (Kelvin-built n=2 defect 1.2e-3->2.2e-5 under (h,Rmid)
-                          refinement, PARAMETER-FREE) and CONDITIONING (vanilla PML cond BLOWS
-                          UP toward DC ~2.4e4 vs CFS-PML ~2.3e3 -- WHY CFS-PML exists).
-  high-freq (z=ka=2):     a STUDIED regime (the radiating extended-Kelvin / HOIBC / PML track,
-                          act7_01..07).  The DtN is COMPLEX; the STATIC Kelvin is only the kR->0
-                          limit, but the EXTENDED (radiating) Kelvin (matched HOIBC, IEICE 2024)
-                          carries it -- exact-Z ~6e-6, 2nd-order HOIBC ~3e-2 (radiating-band knee
-                          at n~ka), competitive with PML ~1e-4 + BEM.  (The MQS/Laplace limit is
-                          on radia's CORE field solver, NOT on this comparison.)
-
-HEADLINE (not a single number -- report all axes, the honest result):
-  CONVERGENT + parameter-free + frequency-robust = Kelvin (static/eddy; the extended/radiating
-  Kelvin carries high-freq via the matched HOIBC) / BEM (all, DENSE).
-  FIXED-ERROR surrogate = PML (DC-ill-conditioned + tuned), CFS-PML (DC-fixed modest + tuned),
-  Robin (n=0 only).  FINITE-REACH = ballooning (low-mode dominated).  This is a MEASUREMENT /
-  COMPARISON (not a new method); provenance Freeman-Lowther / Bettess / Berenger / Kuzuoglu-
-  Mittra.  It is a repository BENCHMARK (the honest map), NOT a novel metric -- reflection is the
-  standard equivalent (below) and "exact open boundary = the DtN operator" is classical NRBC theory
-  (Keller-Givoli 1989 / Grote-Keller / Hagstrom).  The genuine paper is the Kelvin material-aware
-  inverse-design fusion (SF coils with iron), NOT this comparison.
-
-REFLECTION VIEW (act7_22 reflection block; d_n IS the reflection coefficient): the community grades
-open boundaries by the REFLECTION coefficient R_n (Berenger / Engquist-Majda / Bayliss-Turkel), NOT
-a DtN defect.  They are the SAME quantity: R_n = |lam_h-lam_exact|/|lam_h-lam_other| (lam_other =
-growing/incoming mode) has the SAME numerator as d_n -> reflection is the physically-measured face
-of d_n (adds nothing physically new; only convenience = uniform across regimes).  Measured: static
-Kelvin reflectionless ~1e-13..1e-6 vs ballooning R[n=0]=0.25; high-freq prop extKelvin-HOIBC + PML
-R<3e-2.
-
-ngsolve.bem AT HIGH-FREQ (act7_23_ngsbem_highfreq_dtn): the high-freq "BEM" column made REAL -- the
-genuine ngsolve.bem Helmholtz single/double-layer operators BUILD the exterior DtN
-Lambda = V^{-1}(-1/2 M + K); a per-mode Rayleigh quotient reproduces the COMPLEX wave_dtn to ~1e-5
-(monopole/dipole/quadrupole/octupole, ka=2), ~reflectionless.  The SYMMETRIC partner
-act7_24_ngsolve_fem_pml_highfreq_dtn makes the FEM+PML column REAL too: a genuine 3-D NGSolve
-Helmholtz solve with NGSolve's native radial PML (mesh.SetPML(pml.Radial(...))) reproduces wave_dtn
-to ~1e-3 (consistent-flux BILINEAR Rayleigh quotient -- the DtN is complex-SYMMETRIC, not Hermitian;
-coarser than BEM's ~1e-5 = volume + PML-truncation error).  So BOTH NGSolve high-freq tools (FEM+PML
-AND Helmholtz BEM) ARE on the DtN yardstick (not proxies) -- the working high-freq tools the
-DtN-spectrum ranks.
-
-Companions: kelvin_transformation(topic="mesh_control"),
-dtn_coarse_mesh(topic="dtn_continued_fraction").  (The `iabc` MCP tool was RETIRED
-2026-06-20; the exact-impedance / Zs -> exact DtN content moved here to
-topic="dtn_continued_fraction".  IABC is kept only as the comparison /
-negative-result record above + the act7 demos.)
-"""
-
-
-DTN_COARSE_MESH_DTN_CONTINUED_FRACTION = r"""
-# Separable diffusion DtN: analytic continued fraction
-
-For a spherical truncation the multipole symbol is rational in
-q = R0*sqrt(s*mu_sigma). `radia.open_boundary.eddy_dtn` evaluates it;
-`continued_fraction_stages` and `eval_continued_fraction` give the terminating
-Euclidean continued fraction in q. This is an analytic boundary operator,
-not a CLN circuit-reduction route or a substitute for PRIMA.
-
-The distinction between q and s is essential. A finite expression in sqrt(s)
-is not an exact finite-dimensional physical-time ODE. `companion_poles` returns
-reverse-Bessel roots: those are q-plane roots for diffusion, not its temporal
-relaxation rates. Their negative real parts do not alone prove passivity or
-unconditional stability of a discretised coupled solver.
-
-`sqrt_s_passive_poles` fits sum(g_m*s/(s+p_m)), with nonnegative residues and
-positive p_m, over the supplied frequency samples. Record that band, fit error,
-and retained state count; validate held-out frequencies and transient response
-before using the reduced model. Do not promote sampled fit error to a global
-bound. A general band rational fit does not automatically preserve passivity.
-
-For nonseparable geometries use `kelvin_dtn_matrix` / `steklov_spectrum` to
-build the discrete exterior operator. Spatial truncation, FEM discretisation,
-and frequency reduction introduce separate errors. There is no general claim
-that this route outperforms PML or needs fewer states at matched accuracy.
-
-Public checks: `validation_test/open_boundary/test_dtn_exact.py` and
-`test_dtn_continued_fraction.py`. Selection guidance and limitations:
-`docs/open_boundary/OPEN_BOUNDARY_MAP.md`. Linear dynamical model reduction
-uses the separate PRIMA/Foster workflow, with its own full-order comparisons.
+Exact nonreflecting-boundary references remain Grote-Keller and Hagstrom-Warburton;
+Kelvin material-exterior references include Freeman-Lowther. Historical comparison
+studies elsewhere in this knowledge module are not maintained implementation APIs.
+The retired CLN/Cauer and renamed continued-fraction route are absent from production.
+See docs/open_boundary/OPEN_BOUNDARY_MAP.md and validation_test/open_boundary/test_dtn_exact.py.
 """
 
 
@@ -3019,7 +2891,6 @@ def get_dtn_coarse_mesh_documentation(topic: str = "all") -> str:
         "datasheet": DTN_COARSE_MESH_DATASHEET,
         "symmetry_hex": DTN_COARSE_MESH_SYMMETRY_HEX,
         "method_map": DTN_COARSE_MESH_METHOD_MAP,
-        "dtn_continued_fraction": DTN_COARSE_MESH_DTN_CONTINUED_FRACTION,
     }
     if topic == "all":
         return "\n\n".join(topics.values())

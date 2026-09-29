@@ -5,6 +5,10 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased (5.1.0) - Induction-heating thermal chain
 
+- **Remove the retired DtN continued-fraction implementation and public helpers.**
+  Exact DtN evaluation and Foster pole-residue diffusion fits remain supported.
+  The renamed CLN route, its MCP topic and demonstration are removed.
+
 - **NGSolve/Netgen 6.2.2607 accepted (2026-09-29).** This supersedes the
   previous decision to retain 6.2.2606. Compatibility helpers follow the
   current runtime; historical validation retains its recorded version.

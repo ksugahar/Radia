@@ -1735,11 +1735,6 @@ def dtn_coarse_mesh(topic: str = "all") -> str:
                              no-free-lunch modal axis + the selection table.
                              Audit-verified anchors.
                              doc: docs/open_boundary/OPEN_BOUNDARY_MAP.md
-            "dtn_continued_fraction" - Exact open boundary as the exact DtN symbol,
-                             its terminating continued fraction (n+1 partial
-                             quotients in q=sqrt(s)); distinguish q-plane roots
-                             from physical-time poles and finite-band diffusion
-                             memory fits; radia.open_boundary API.
     """
     return get_dtn_coarse_mesh_documentation(topic)
 

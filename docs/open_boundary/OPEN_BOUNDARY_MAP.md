@@ -18,27 +18,17 @@ utilities do not turn the core into a full-wave solver.
 A finite modal expansion still has truncation error. Agreement for individual
 multipoles does not certify an arbitrary geometry or an unlimited frequency band.
 
-## Analytic continued fractions
+## Exact separable DtN
 
-`radia.open_boundary.dtn_continued_fraction` evaluates the terminating continued
-fraction of the separable eddy DtN rational function in
-`q = R0 * sqrt(s * mu_sigma)`. It is an analytic representation of a boundary
-symbol. It does not construct a Cauer circuit or a finite-element CLN basis.
+`radia.open_boundary.eddy_dtn` evaluates the exact multipole symbol for a
+homogeneous spherical diffusion exterior. `wave_dtn` evaluates the separate
+wave symbol. Diffusion reverse-Bessel roots are roots in `q = sqrt(s)`,
+not physical-time relaxation rates.
 
 ```python
 import radia.open_boundary as ob
-
-stages = ob.continued_fraction_stages(2)
-value = ob.eval_continued_fraction(stages, 50j, R0=0.1, mu_sigma=1.0)
-reference = ob.eddy_dtn(2, 50j, R0=0.1, mu_sigma=1.0)
+value = ob.eddy_dtn(2, 50j, R0=0.1, mu_sigma=1.0)
 ```
-
-For the supported multipoles, the finite expansion is compared with the
-independently evaluated analytic symbol. See
-[the continued-fraction tests](../../validation_test/open_boundary/test_dtn_continued_fraction.py)
-and [the executable demonstration](demo_dtn_continued_fraction_usage.py).
-The `n+1` partial quotients are not `n+1` integer-order time-domain states: the
-symbol depends on `sqrt(s)`.
 
 ## Time-domain approximations and model reduction
 
@@ -52,8 +42,7 @@ response. A sampled rational fit does not by itself establish passivity.
 
 For finite-dimensional electromagnetic systems, Radia uses PRIMA projection or
 Foster modal realizations through their maintained APIs. These reductions are
-separate from the analytic continued fraction above. Removing a circuit API does
-not change the mathematical meaning of a surviving boundary formula.
+validated against the full-order system over the operating band.
 
 ## Validation and interfaces
 
@@ -65,8 +54,8 @@ not change the mathematical meaning of a surviving boundary formula.
   boundary guidance. Consult their topic index for current names.
 
 The former `dtn_cln` module, circuit-named helpers, and `mor_cln` tool are retired.
-Use `continued_fraction_stages`, `eval_continued_fraction`, and
-`band_rational_fit` for their respective mathematical operations. Historical
+The renamed continued-fraction implementation is also removed. Use exact DtN
+evaluation or a validated Foster pole-residue approximation instead. Historical
 experiments remain in Git history; their measurements are not acceptance results
 for a changed implementation. The numerical scope above is not a patent or
 freedom-to-operate determination.

@@ -512,15 +512,12 @@ mostly its coarser element count, not worse geometry. So "hex lowers the floor /
 is **not** supported. **Tet stays the practical default** (simpler, handles symmetry sectors);
 high-order hex's strength stays sweepable bodies.)*
 
-### Connection to the continued-fraction open boundary
+### Connection to the exact open boundary
 
-The `−(n+1)/R` DtN eigenvalue spectrum is the `s → 0` limit of the same per-mode
-symbol that the continued-fraction open boundary realises in time
-(`dtn_coarse_mesh(topic="dtn_continued_fraction")`). The Kelvin closure resolves
-the **spatial** modes of that symbol by element order `p`; the terminating
-continued fraction in `q = √s` (`n+1` partial quotients) resolves its
-`s`-dependence mode by mode. Both are spectral closures — decompose the exterior
-into modes and resolve only the modes the source excites.
+The `−(n+1)/R` DtN eigenvalue spectrum is the `s → 0` limit of the
+per-mode symbol evaluated by `radia.open_boundary.eddy_dtn`. Kelvin closure
+resolves its spatial modes by element order. For time-domain diffusion memory,
+use the Foster pole-residue fit over a declared and validated frequency band.
 
 ### The two scalar readouts: capacitance (n=0) and external inductance (n=1)
 
