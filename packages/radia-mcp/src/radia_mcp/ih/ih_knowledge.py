@@ -2174,14 +2174,21 @@ Non-obvious features:
 3. **Linear solver** per-method:
    - PEEC+BEM: Dense LU (small) / HACApK (large, O(N log N))
    - HCurl FEM-SIBC: prefer AMS for p=1, BDDC with AMS coarse solve for
-     p=2 or p=3 (`calc_fem_kelvin --solver auto`). Both use COCR and a
-     true relative residual gate of 1e-7, with bounded residual correction.
+     p=2 or p=3 (`calc_fem_kelvin --solver auto`). Both use COCR. Every
+     route, direct included, must reach a true relative residual of 1e-6 on
+     the assembled system (the gauged curl-curl class shared with the
+     reduced-A solver; its direct factorization stops near 1e-7). Up to three
+     iterative-refinement steps are allowed after the first COCR solve; each
+     must converge, and the result records the iterations and corrections.
+     ICCG is refused unless it converges.
    - Compound A-V: select `sparsecholesky` explicitly; the HCurl AMS
      validation does not establish support for compound or periodic spaces.
    - Scalar thermal H1: `sparsecholesky`; Maxwell AMS is not its solver.
    Direct FE solves use `sparsecholesky`, with no alternative direct fallback.
    The small P1-P3 SIBC parity lane validates accuracy, not a speed advantage.
-   Periodic Kelvin with AMS is not validated and must fail explicitly.
+   AMS and BDDC+AMS are not validated on the periodic Kelvin space: `auto`
+   selects `sparsecholesky` there, and an explicit `ams` or `bddc` is an
+   error.
 
 4. **.vol label validation** on load via `inspect_vol_labels`: status
    label shows 'OK' (green), 'warn' (amber, e.g. missing kelvin),
