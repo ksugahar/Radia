@@ -223,3 +223,22 @@ def test_numerical_tier_changes_cannot_skip_native_lane():
     before, after = manifest(), manifest()
     after["profiles"]["solver-numerics"] = {"paths": ["tests/test_mixed_omega_newton.py"]}
     assert not IMPACT.ams_manifest_unchanged(json.dumps(before), json.dumps(after))
+
+
+def test_heavy_derivative_validation_remains_required_after_tier_split():
+    path = "validation_test/topology_optimization/test_hex_cluster_derivative.py"
+    workflow = yaml.safe_load((ROOT / ".github/workflows/sparsesolv.yml").read_text())
+    steps = workflow["jobs"]["ams-regression"]["steps"]
+    heavy = next(s for s in steps if s.get("name") == "Run required heavier numerical validation")
+    assert "--profile solver-heavy" in heavy["run"]
+    assert heavy["env"]["RADIA_TESTS_ALLOW_PARTIAL"] == "0"
+    assert "find('skipped') is None" in heavy["run"]
+    assert "steps.native-impact.outputs.required == 'true'" in heavy["if"]
+    profiles = json.loads((ROOT / "tests/test_tier_manifest.json").read_text())["profiles"]
+    assert path in profiles["solver-heavy"]["paths"]
+    assert path not in profiles["solver-numerics"]["paths"]
+    assert IMPACT.native_required("push", {"before": "a" * 40},
+                                  lambda *args: path + "\0")[0]
+    before, after = manifest(), manifest()
+    after["profiles"]["solver-heavy"] = {"paths": [path]}
+    assert not IMPACT.ams_manifest_unchanged(json.dumps(before), json.dumps(after))

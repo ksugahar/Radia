@@ -179,6 +179,11 @@
         "tests/test_ams_internal_setup_parallel.py"
       ]
     },
+    "solver-heavy": {
+      "description": "Required native low-rank derivative validation kept outside the compact numerical tier.",
+      "max_elapsed_seconds": 600,
+      "paths": ["validation_test/topology_optimization/test_hex_cluster_derivative.py"]
+    },
     "solver-numerics": {
       "description": "Required NGSolve contracts for mixed Omega, HDiv/topology, eddy currents, SIBC and IH thermal coupling; no partial dependency run.",
       "max_elapsed_seconds": 600,
