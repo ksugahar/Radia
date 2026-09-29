@@ -1,0 +1,586 @@
+{
+  "schema": "radia.ih-coarse-study.partial.v1",
+  "status": "partial",
+  "scope": "Two coarse p2 geometries, eight threads, cycles 1/2/4 and both wirebasket choices. All fourteen solves pass. Fine meshes and p3 remain unverified in this campaign.",
+  "source_commit": "3086c6f1a78e3b7b92a7caad81dea66d69ba9997",
+  "native_source_commit": "0e9f26bd6",
+  "release_acceptance": false,
+  "runtime_note": "Current Python source with the recorded historical native wheel; this does not verify a same-commit release artifact. Timings are observations for these runs, not general speed guarantees.",
+  "host": "mdx2",
+  "ngsolve": "6.2.2607",
+  "python": "3.12.10",
+  "numpy": "2.4.3",
+  "scipy": "1.17.1",
+  "source_sha256": {
+    "validation_test/induction_heating/bddc_ams_coarse_ih.py": "73888ee66791c6f5ecc7a49ba7d8fbe99b10694fe38757570471c871724e54fc",
+    "validation_test/induction_heating/fem_sibc_geometry.py": "bbe679c2344ed1cf872478ffb175d591e4e70c288347f47df4a48f41257da6da",
+    "src/radia/panels/calc_fem_kelvin.py": "c2b264bc55150adb511ddcd0049bf67e79a68809eb9231e063215aa5c533bfbf"
+  },
+  "native_sha256": {
+    "_equation.pyd": "4bdba163aafdbeaac1ca40b53d1d377532460dedee26a087d827060dc3ee1895",
+    "_radia_pybind.pyd": "9394a62772a23f2fb3c40c13fbd575477a7ca60c2014c22f18d0b17b10d58062",
+    "axifem.pyd": "8c4f9c20333492a6689b224cf95a978e123d1f6e3746c75c70cc5ac9e791b57c",
+    "peec_matrices.pyd": "e60940fd77b7b6e19362b548a0f81183cbb0c72ab4069f40d6e61c40c2e2c77c",
+    "radia_motor_rom.dll": "39cf9a79b4e01a13e73e9e2fac0c6032e642abb659232a35ac510afdf5efbe57",
+    "sparsesolv_ngsolve.pyd": "26d44ec1ac144129114ad9fcfa7e45520e0886d1d06578fbb1b77615404b3da4"
+  },
+  "case_settings": {
+    "frequency_Hz": 150000.0,
+    "meshes": {
+      "coarse": [
+        0.004,
+        0.006
+      ],
+      "fine": [
+        0.0025,
+        0.004
+      ]
+    },
+    "threads": 8
+  },
+  "records": [
+    {
+      "case": "tube",
+      "mesh": "coarse",
+      "order": 2,
+      "solver": "sparsecholesky",
+      "cycles": null,
+      "edge_wirebasket": null,
+      "coarse_applied": null,
+      "P_total": 1.6345890606308227,
+      "L": 1.2189397297876893E-07,
+      "error": null,
+      "linear_solver": "sparsecholesky",
+      "linear_true_relative_residual": 1.2429466628435635E-14,
+      "linear_krylov_iterations": [],
+      "linear_residual_corrections": 0,
+      "ndof": 164222,
+      "wall_s": 38.772,
+      "peak_memory_mb": 4351.7,
+      "threads": 8,
+      "process_exit": 0
+    },
+    {
+      "case": "tube",
+      "mesh": "coarse",
+      "order": 2,
+      "solver": "bddc",
+      "cycles": 1,
+      "edge_wirebasket": false,
+      "coarse_applied": {
+        "calls": 1,
+        "face_dofs_returned": 0
+      },
+      "P_total": 1.6345890606152103,
+      "L": 1.2189397297878103E-07,
+      "error": null,
+      "linear_solver": "bddc",
+      "linear_true_relative_residual": 7.74195916814388E-11,
+      "linear_krylov_iterations": [
+        103
+      ],
+      "linear_residual_corrections": 0,
+      "ndof": 164222,
+      "wall_s": 17.308,
+      "peak_memory_mb": 399.8,
+      "threads": 8,
+      "process_exit": 0
+    },
+    {
+      "case": "tube",
+      "mesh": "coarse",
+      "order": 2,
+      "solver": "bddc",
+      "cycles": 2,
+      "edge_wirebasket": false,
+      "coarse_applied": {
+        "calls": 1,
+        "face_dofs_returned": 0
+      },
+      "P_total": 1.6345890607498264,
+      "L": 1.218939729787348E-07,
+      "error": null,
+      "linear_solver": "bddc",
+      "linear_true_relative_residual": 8.314670905020615E-11,
+      "linear_krylov_iterations": [
+        76
+      ],
+      "linear_residual_corrections": 0,
+      "ndof": 164222,
+      "wall_s": 15.2,
+      "peak_memory_mb": 399.1,
+      "threads": 8,
+      "process_exit": 0
+    },
+    {
+      "case": "tube",
+      "mesh": "coarse",
+      "order": 2,
+      "solver": "bddc",
+      "cycles": 4,
+      "edge_wirebasket": false,
+      "coarse_applied": {
+        "calls": 1,
+        "face_dofs_returned": 0
+      },
+      "P_total": 1.6345890606408933,
+      "L": 1.2189397297876242E-07,
+      "error": null,
+      "linear_solver": "bddc",
+      "linear_true_relative_residual": 2.960126796570561E-11,
+      "linear_krylov_iterations": [
+        62
+      ],
+      "linear_residual_corrections": 0,
+      "ndof": 164222,
+      "wall_s": 15.88,
+      "peak_memory_mb": 399.8,
+      "threads": 8,
+      "process_exit": 0
+    },
+    {
+      "case": "tube",
+      "mesh": "coarse",
+      "order": 2,
+      "solver": "bddc",
+      "cycles": 1,
+      "edge_wirebasket": true,
+      "coarse_applied": {
+        "calls": 1,
+        "face_dofs_returned": 8
+      },
+      "P_total": 1.6345890606308786,
+      "L": 1.218939729787659E-07,
+      "error": null,
+      "linear_solver": "bddc",
+      "linear_true_relative_residual": 4.982861820529769E-11,
+      "linear_krylov_iterations": [
+        64
+      ],
+      "linear_residual_corrections": 0,
+      "ndof": 164222,
+      "wall_s": 15.124,
+      "peak_memory_mb": 398.7,
+      "threads": 8,
+      "process_exit": 0
+    },
+    {
+      "case": "tube",
+      "mesh": "coarse",
+      "order": 2,
+      "solver": "bddc",
+      "cycles": 2,
+      "edge_wirebasket": true,
+      "coarse_applied": {
+        "calls": 1,
+        "face_dofs_returned": 8
+      },
+      "P_total": 1.6345890607038311,
+      "L": 1.2189397297875422E-07,
+      "error": null,
+      "linear_solver": "bddc",
+      "linear_true_relative_residual": 5.04313464324845E-11,
+      "linear_krylov_iterations": [
+        47
+      ],
+      "linear_residual_corrections": 0,
+      "ndof": 164222,
+      "wall_s": 15.991,
+      "peak_memory_mb": 398.7,
+      "threads": 8,
+      "process_exit": 0
+    },
+    {
+      "case": "tube",
+      "mesh": "coarse",
+      "order": 2,
+      "solver": "bddc",
+      "cycles": 4,
+      "edge_wirebasket": true,
+      "coarse_applied": {
+        "calls": 1,
+        "face_dofs_returned": 8
+      },
+      "P_total": 1.6345890607440061,
+      "L": 1.218939729787698E-07,
+      "error": null,
+      "linear_solver": "bddc",
+      "linear_true_relative_residual": 6.054765967882727E-11,
+      "linear_krylov_iterations": [
+        40
+      ],
+      "linear_residual_corrections": 0,
+      "ndof": 164222,
+      "wall_s": 15.377,
+      "peak_memory_mb": 399.6,
+      "threads": 8,
+      "process_exit": 0
+    },
+    {
+      "case": "cross",
+      "mesh": "coarse",
+      "order": 2,
+      "solver": "sparsecholesky",
+      "cycles": null,
+      "edge_wirebasket": null,
+      "coarse_applied": null,
+      "P_total": 0.11754887831066742,
+      "L": 3.740891739537153E-08,
+      "error": null,
+      "linear_solver": "sparsecholesky",
+      "linear_true_relative_residual": 1.057040548541706E-14,
+      "linear_krylov_iterations": [],
+      "linear_residual_corrections": 0,
+      "ndof": 242346,
+      "wall_s": 51.574,
+      "peak_memory_mb": 5498.6,
+      "threads": 8,
+      "process_exit": 0
+    },
+    {
+      "case": "cross",
+      "mesh": "coarse",
+      "order": 2,
+      "solver": "bddc",
+      "cycles": 1,
+      "edge_wirebasket": false,
+      "coarse_applied": {
+        "calls": 1,
+        "face_dofs_returned": 0
+      },
+      "P_total": 0.11754887831303824,
+      "L": 3.740891739537193E-08,
+      "error": null,
+      "linear_solver": "bddc",
+      "linear_true_relative_residual": 5.019223140795818E-11,
+      "linear_krylov_iterations": [
+        69
+      ],
+      "linear_residual_corrections": 0,
+      "ndof": 242346,
+      "wall_s": 20.319,
+      "peak_memory_mb": 532.1,
+      "threads": 8,
+      "process_exit": 0
+    },
+    {
+      "case": "cross",
+      "mesh": "coarse",
+      "order": 2,
+      "solver": "bddc",
+      "cycles": 2,
+      "edge_wirebasket": false,
+      "coarse_applied": {
+        "calls": 1,
+        "face_dofs_returned": 0
+      },
+      "P_total": 0.1175488783175048,
+      "L": 3.740891739537126E-08,
+      "error": null,
+      "linear_solver": "bddc",
+      "linear_true_relative_residual": 9.276993816302291E-11,
+      "linear_krylov_iterations": [
+        48
+      ],
+      "linear_residual_corrections": 0,
+      "ndof": 242346,
+      "wall_s": 21.43,
+      "peak_memory_mb": 532.6,
+      "threads": 8,
+      "process_exit": 0
+    },
+    {
+      "case": "cross",
+      "mesh": "coarse",
+      "order": 2,
+      "solver": "bddc",
+      "cycles": 4,
+      "edge_wirebasket": false,
+      "coarse_applied": {
+        "calls": 1,
+        "face_dofs_returned": 0
+      },
+      "P_total": 0.11754887830961093,
+      "L": 3.7408917395372306E-08,
+      "error": null,
+      "linear_solver": "bddc",
+      "linear_true_relative_residual": 4.6437141500679275E-11,
+      "linear_krylov_iterations": [
+        41
+      ],
+      "linear_residual_corrections": 0,
+      "ndof": 242346,
+      "wall_s": 20.722,
+      "peak_memory_mb": 531.7,
+      "threads": 8,
+      "process_exit": 0
+    },
+    {
+      "case": "cross",
+      "mesh": "coarse",
+      "order": 2,
+      "solver": "bddc",
+      "cycles": 1,
+      "edge_wirebasket": true,
+      "coarse_applied": {
+        "calls": 1,
+        "face_dofs_returned": 0
+      },
+      "P_total": 0.11754887831304188,
+      "L": 3.7408917395371876E-08,
+      "error": null,
+      "linear_solver": "bddc",
+      "linear_true_relative_residual": 5.004850081576214E-11,
+      "linear_krylov_iterations": [
+        69
+      ],
+      "linear_residual_corrections": 0,
+      "ndof": 242346,
+      "wall_s": 22.813,
+      "peak_memory_mb": 532.3,
+      "threads": 8,
+      "process_exit": 0
+    },
+    {
+      "case": "cross",
+      "mesh": "coarse",
+      "order": 2,
+      "solver": "bddc",
+      "cycles": 2,
+      "edge_wirebasket": true,
+      "coarse_applied": {
+        "calls": 1,
+        "face_dofs_returned": 0
+      },
+      "P_total": 0.1175488783175048,
+      "L": 3.7408917395371274E-08,
+      "error": null,
+      "linear_solver": "bddc",
+      "linear_true_relative_residual": 9.276972398503655E-11,
+      "linear_krylov_iterations": [
+        48
+      ],
+      "linear_residual_corrections": 0,
+      "ndof": 242346,
+      "wall_s": 23.261,
+      "peak_memory_mb": 532.6,
+      "threads": 8,
+      "process_exit": 0
+    },
+    {
+      "case": "cross",
+      "mesh": "coarse",
+      "order": 2,
+      "solver": "bddc",
+      "cycles": 4,
+      "edge_wirebasket": true,
+      "coarse_applied": {
+        "calls": 1,
+        "face_dofs_returned": 0
+      },
+      "P_total": 0.11754887830961085,
+      "L": 3.7408917395372306E-08,
+      "error": null,
+      "linear_solver": "bddc",
+      "linear_true_relative_residual": 4.644115806068026E-11,
+      "linear_krylov_iterations": [
+        41
+      ],
+      "linear_residual_corrections": 0,
+      "ndof": 242346,
+      "wall_s": 21.813,
+      "peak_memory_mb": 532.0,
+      "threads": 8,
+      "process_exit": 0
+    }
+  ],
+  "acceptance": {
+    "all_passed": true,
+    "true_residual_limit": 1E-07,
+    "parity_limit": 1E-06,
+    "checks": [
+      {
+        "case": "tube",
+        "mesh": "coarse",
+        "order": 2,
+        "solver": "sparsecholesky",
+        "cycles": null,
+        "edge_wirebasket": null,
+        "passed": true,
+        "relative_errors": {
+          "P_total": 0.0,
+          "L": 0.0
+        }
+      },
+      {
+        "case": "tube",
+        "mesh": "coarse",
+        "order": 2,
+        "solver": "bddc",
+        "cycles": 1,
+        "edge_wirebasket": false,
+        "passed": true,
+        "relative_errors": {
+          "P_total": 9.551269268536304E-12,
+          "L": 9.923943721222735E-14
+        }
+      },
+      {
+        "case": "tube",
+        "mesh": "coarse",
+        "order": 2,
+        "solver": "bddc",
+        "cycles": 2,
+        "edge_wirebasket": false,
+        "passed": true,
+        "relative_errors": {
+          "P_total": 7.280343338442499E-11,
+          "L": 2.801288271417358E-13
+        }
+      },
+      {
+        "case": "tube",
+        "mesh": "coarse",
+        "order": 2,
+        "solver": "bddc",
+        "cycles": 4,
+        "edge_wirebasket": false,
+        "passed": true,
+        "relative_errors": {
+          "P_total": 6.160943600028381E-12,
+          "L": 5.3419915873540325E-14
+        }
+      },
+      {
+        "case": "tube",
+        "mesh": "coarse",
+        "order": 2,
+        "solver": "bddc",
+        "cycles": 1,
+        "edge_wirebasket": true,
+        "passed": true,
+        "relative_errors": {
+          "P_total": 3.423199248593623E-14,
+          "L": 2.4972724900232264E-14
+        }
+      },
+      {
+        "case": "tube",
+        "mesh": "coarse",
+        "order": 2,
+        "solver": "bddc",
+        "cycles": 2,
+        "edge_wirebasket": true,
+        "passed": true,
+        "relative_errors": {
+          "P_total": 4.46647355609854E-11,
+          "L": 1.207376960393838E-13
+        }
+      },
+      {
+        "case": "tube",
+        "mesh": "coarse",
+        "order": 2,
+        "solver": "bddc",
+        "cycles": 4,
+        "edge_wirebasket": true,
+        "passed": true,
+        "relative_errors": {
+          "P_total": 6.924276280092752E-11,
+          "L": 7.166086275718824E-15
+        }
+      },
+      {
+        "case": "cross",
+        "mesh": "coarse",
+        "order": 2,
+        "solver": "sparsecholesky",
+        "cycles": null,
+        "edge_wirebasket": null,
+        "passed": true,
+        "relative_errors": {
+          "P_total": 0.0,
+          "L": 0.0
+        }
+      },
+      {
+        "case": "cross",
+        "mesh": "coarse",
+        "order": 2,
+        "solver": "bddc",
+        "cycles": 1,
+        "edge_wirebasket": false,
+        "passed": true,
+        "relative_errors": {
+          "P_total": 2.0168850541218997E-11,
+          "L": 1.0613691110841353E-14
+        }
+      },
+      {
+        "case": "cross",
+        "mesh": "coarse",
+        "order": 2,
+        "solver": "bddc",
+        "cycles": 2,
+        "edge_wirebasket": false,
+        "passed": true,
+        "relative_errors": {
+          "P_total": 5.816625376911472E-11,
+          "L": 7.252688925741591E-15
+        }
+      },
+      {
+        "case": "cross",
+        "mesh": "coarse",
+        "order": 2,
+        "solver": "bddc",
+        "cycles": 4,
+        "edge_wirebasket": false,
+        "passed": true,
+        "relative_errors": {
+          "P_total": 8.987650460101617E-12,
+          "L": 2.069669766614064E-14
+        }
+      },
+      {
+        "case": "cross",
+        "mesh": "coarse",
+        "order": 2,
+        "solver": "bddc",
+        "cycles": 1,
+        "edge_wirebasket": true,
+        "passed": true,
+        "relative_errors": {
+          "P_total": 2.0199782188189188E-11,
+          "L": 9.198532296062505E-15
+        }
+      },
+      {
+        "case": "cross",
+        "mesh": "coarse",
+        "order": 2,
+        "solver": "bddc",
+        "cycles": 2,
+        "edge_wirebasket": true,
+        "passed": true,
+        "relative_errors": {
+          "P_total": 5.816625376911472E-11,
+          "L": 6.89889922204688E-15
+        }
+      },
+      {
+        "case": "cross",
+        "mesh": "coarse",
+        "order": 2,
+        "solver": "bddc",
+        "cycles": 4,
+        "edge_wirebasket": true,
+        "passed": true,
+        "relative_errors": {
+          "P_total": 8.988358818429179E-12,
+          "L": 2.069669766614064E-14
+        }
+      }
+    ]
+  }
+}
