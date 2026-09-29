@@ -119,15 +119,16 @@ def _constrains_point_gauge(mesh, selector, dirichlet_bbbnd):
     return free_unconstrained - free_constrained > 0
 
 
-def _assemble_and_solve(a_bf, f_lf, fes, inverse="pardiso"):
+def _assemble_and_solve(a_bf, f_lf, fes, inverse="sparsecholesky"):
     """Assemble and solve.  Caller MUST be inside `with TaskManager():`
     per CLAUDE.md "Caller Wraps, Helper Does NOT" (2026-05-27).
     """
+    if inverse != "sparsecholesky":
+        raise ValueError("direct FE solves require inverse='sparsecholesky'")
     a_bf.Assemble()
     f_lf.Assemble()
     gfu = GridFunction(fes)
-    gfu.vec.data = a_bf.mat.Inverse(
-        fes.FreeDofs(), inverse=inverse) * f_lf.vec
+    _solve_checked_direct(a_bf, f_lf, fes, gfu, inverse)
     return gfu
 
 
@@ -149,10 +150,10 @@ def _measure_integral(mesh, integrand, measure, *, boundary):
     form.Assemble()
     return float(form.vec[0])
 
-def _solve_source_projection(a_bf, f_lf, fes, potential_gf, inverse):
-    """Solve the gauged H1 projection and check its algebraic residual."""
+def _solve_checked_direct(a_bf, f_lf, fes, potential_gf, inverse):
+    """Solve a homogeneous-Dirichlet FE system and check its free-row residual."""
     if inverse != "sparsecholesky":
-        raise ValueError("source projection requires inverse='sparsecholesky'")
+        raise ValueError("direct FE solves require inverse='sparsecholesky'")
     freedofs = fes.FreeDofs()
     potential_gf.vec.data = a_bf.mat.Inverse(
         freedofs, inverse="sparsecholesky") * f_lf.vec
@@ -164,7 +165,7 @@ def _solve_source_projection(a_bf, f_lf, fes, potential_gf, inverse):
     relative = float(np.linalg.norm(residual.FV().NumPy()[free]) /
                      max(float(np.linalg.norm(rhs)), 1e-300))
     if not np.all(np.isfinite(solution)) or not math.isfinite(relative) or relative > 1e-8:
-        raise RuntimeError(f"source projection true relative residual {relative:.3e} exceeds 1e-8")
+        raise RuntimeError(f"direct FE true relative residual {relative:.3e} exceeds 1e-8")
     return relative
 
 
@@ -225,7 +226,7 @@ def project_source_interface_potential(
     a_bf.Assemble()
     f_lf.Assemble()
     potential_gf = GridFunction(fes, name="source_interface_potential")
-    linear_residual = _solve_source_projection(a_bf, f_lf, fes, potential_gf, inverse)
+    linear_residual = _solve_checked_direct(a_bf, f_lf, fes, potential_gf, inverse)
 
     residual = grad(potential_gf).Trace() + H_tangential
     residual_norm = float(math.sqrt(_measure_integral(
@@ -309,7 +310,7 @@ def project_source_physical_potential(
     a_bf.Assemble()
     f_lf.Assemble()
     potential_gf = GridFunction(fes, name="physical_source_potential")
-    linear_residual = _solve_source_projection(a_bf, f_lf, fes, potential_gf, inverse)
+    linear_residual = _solve_checked_direct(a_bf, f_lf, fes, potential_gf, inverse)
 
     residual = grad(potential_gf) + H_s
     residual_norm = float(math.sqrt(_measure_integral(
@@ -668,7 +669,7 @@ def project_source_total_hodge(
     a_bf.Assemble()
     f_lf.Assemble()
     potential_gf = GridFunction(fes, name="total_source_potential")
-    linear_residual = _solve_source_projection(a_bf, f_lf, fes, potential_gf, inverse)
+    linear_residual = _solve_checked_direct(a_bf, f_lf, fes, potential_gf, inverse)
 
     harmonic_field = H_s + grad(potential_gf)
     if source_load == "surface_flux":
@@ -752,7 +753,7 @@ def solve_full_A_kelvin(mesh, J_source_cf, R_K, offset,
                          gauge_eps=1e-6,
                          bonus_intorder=4,
                          kelvin_mats=("kelvin",),
-                         inverse="pardiso"):
+                         inverse="sparsecholesky"):
     """Full-A 3D HCurl FEM with Sugahara Kelvin convention.
 
     Solves ``curl(nu_kelvin curl A) = J_src`` on the two-sphere
@@ -803,7 +804,7 @@ def solve_reduced_A_kelvin(mesh, A_s_cf, R_K, offset,
                             gauge_eps=1e-6,
                             bonus_intorder=4,
                             kelvin_mats=("kelvin",),
-                            inverse="pardiso"):
+                            inverse="sparsecholesky"):
     """Reduced-A 3D HCurl FEM: A = A_r + A_s with external A_s.
 
     The source A_s is supplied as a CF that is ALREADY Kelvin-aware
@@ -858,7 +859,7 @@ def solve_reduced_A_kelvin(mesh, A_s_cf, R_K, offset,
 def solve_magnetostatic_reduced_A_kelvin(
         mesh, A_s, R_K, offset, *, mu_r_by_material,
         nu_0=NU_0, order=1, dirichlet_bbnd="GND", gauge_eps=1e-6,
-        bonus_intorder=4, kelvin_mats=("kelvin",), inverse="pardiso"):
+        bonus_intorder=4, kelvin_mats=("kelvin",), inverse="sparsecholesky"):
     """Solve the linear reduced-A magnetostatic problem with iron and Kelvin.
 
     This is the production three-dimensional route for a compact external
@@ -920,7 +921,7 @@ def solve_magnetostatic_reduced_A_kelvin(
 def solve_magnetostatic_reduced_omega_kelvin(
         mesh, H_s, R_K, offset, *, mu_r_by_material,
         order=1, dirichlet_bbbnd="GND", bonus_intorder=4,
-        kelvin_mats=("kelvin",), inverse="pardiso"):
+        kelvin_mats=("kelvin",), inverse="sparsecholesky"):
     """Retired plain reduced-Omega Kelvin entry point; always raises.
 
     The legacy exterior/interface convention is not validated. Use
@@ -937,6 +938,133 @@ def solve_magnetostatic_reduced_omega_kelvin(
         "solve_magnetostatic_mixed_total_reduced_omega_kelvin with explicit "
         "material partitions, source-potential traces and Kelvin interface "
         "data; automatic substitution is not supported.")
+
+
+def _matching_trace_direct_inverse(matrix, fes, *, order):
+    """Eliminate matching H1 trace constraints before SparseCholesky.
+
+    Solve the consistent free-row saddle system without a penalty or a changed
+    physical operator. The trace mass and constrained primal matrix are factored
+    separately; multipliers are recovered afterwards. Redundant multipliers at
+    prescribed trace intersections are set to zero. Callers check the residual
+    on every original free row, including redundant constraints.
+    """
+    import ngsolve as ng
+    from scipy.sparse import coo_matrix, diags
+    from scipy.sparse.linalg import norm as sparse_norm
+
+    if int(order) < 1 or len(fes.components) != 3:
+        raise ValueError("trace elimination requires three matching H1 spaces")
+    reduced, total, multiplier = fes.components
+    total_offset = fes.Range(1).start
+    multiplier_offset = fes.Range(2).start
+    free = np.fromiter(fes.FreeDofs(), dtype=bool, count=fes.ndof)
+    primal = np.flatnonzero(free[:multiplier_offset])
+    lambdas = np.flatnonzero(free[multiplier_offset:])
+    position = {int(d): i for i, d in enumerate(primal)}
+    rows, cols, values = matrix.COO()
+    assembled = coo_matrix((np.asarray(values), (np.asarray(rows), np.asarray(cols))),
+                           shape=(fes.ndof, fes.ndof)).tocsr()
+    if isinstance(matrix, ng.la.SparseMatrixSymmetricdouble):
+        assembled = assembled + assembled.T - diags(assembled.diagonal())
+    app = assembled[primal][:, primal].tocsr()
+    constraint = assembled[multiplier_offset + lambdas][:, primal].tocsr()
+    if not len(lambdas):
+        raise ValueError("trace elimination requires active interface constraints")
+
+    pairs = {}
+    groups = [(ng.VERTEX, fes.mesh.vertices)]
+    if int(order) >= 2:
+        groups += [(ng.EDGE, fes.mesh.edges), (ng.FACE, fes.mesh.faces)]
+    for kind, entities in groups:
+        for entity in entities:
+            node = ng.NodeId(kind, entity.nr)
+            lm = [d for d in multiplier.GetDofNrs(node) if d >= 0]
+            if not lm:
+                continue
+            rd = [d for d in reduced.GetDofNrs(node) if d >= 0]
+            td = [d for d in total.GetDofNrs(node) if d >= 0]
+            if len(lm) != len(rd) or len(lm) != len(td):
+                raise ValueError("interface H1 traces have incompatible entity DOFs")
+            for l, r, t in zip(lm, rd, td):
+                pair = (r, total_offset + t)
+                if l in pairs and pairs[l] != pair:
+                    raise ValueError("ambiguous periodic interface trace mapping")
+                pairs[l] = pair
+    eliminated, partners, signs, active_rows = [], [], [], []
+    for row, lm in enumerate(lambdas):
+        if int(lm) not in pairs:
+            raise ValueError("unmapped interface multiplier DOF")
+        r, t = pairs[int(lm)]
+        if t in position:
+            eliminated.append(position[t]); partners.append(position.get(r)); signs.append(1.)
+        elif r in position:
+            eliminated.append(position[r]); partners.append(position.get(t)); signs.append(-1.)
+        else:
+            # Both traces are prescribed. The remaining multiplier rows
+            # determine the primal trace; retain the full-system residual gate
+            # to reject incompatible data on redundant constraints.
+            continue
+        active_rows.append(row)
+    if len(set(eliminated)) != len(eliminated):
+        raise ValueError("interface trace elimination has dependent pivots")
+    remaining = sorted(set(range(len(primal))) - set(eliminated))
+    reduced_position = {d: i for i, d in enumerate(remaining)}
+    tr = list(remaining)
+    tc = list(range(len(remaining)))
+    for e, partner in zip(eliminated, partners):
+        if partner is not None:
+            if partner not in reduced_position:
+                raise ValueError("interface constraints form an unsupported elimination cycle")
+            tr.append(e); tc.append(reduced_position[partner])
+    transform = coo_matrix((np.ones(len(tr)), (tr, tc)),
+                           shape=(len(primal), len(remaining))).tocsr()
+    c_norm = max(float(sparse_norm(constraint)), 1e-300)
+    if sparse_norm(constraint @ transform) > 1e-11*c_norm:
+        raise ValueError("entity trace elimination does not preserve the assembled constraint")
+    lambdas = lambdas[active_rows]
+    constraint = constraint[active_rows]
+    signs = np.asarray(signs)
+    trace_mass = (constraint[:, eliminated] @ diags(signs)).tocsr()
+    if sparse_norm(trace_mass-trace_mass.T) > 1e-11*c_norm:
+        raise ValueError("interface trace mass is not symmetric in the matched numbering")
+    if np.any(trace_mass.diagonal() <= 0):
+        raise ValueError("interface trace mass must have positive diagonal")
+    constrained_primal = (transform.T @ app @ transform).tocsr()
+
+    def factor(sparse):
+        data = sparse.tocoo()
+        native = ng.la.SparseMatrixdouble.CreateFromCOO(
+            data.row.tolist(), data.col.tolist(), data.data.tolist(), *data.shape)
+        return native, native.Inverse(inverse="sparsecholesky")
+
+    trace_native, trace_inverse = factor(trace_mass)
+    primal_native, primal_inverse = factor(constrained_primal)
+
+    def apply(native, inverse, values):
+        rhs = native.CreateColVector()
+        rhs.FV().NumPy()[:] = values
+        answer = native.CreateRowVector()
+        answer.data = inverse * rhs
+        return answer.FV().NumPy().copy()
+
+    class TraceInverse:
+        def __mul__(self, rhs):
+            b = rhs.FV().NumPy()
+            lift = np.zeros(len(primal))
+            lift[eliminated] = signs * apply(
+                trace_native, trace_inverse, b[multiplier_offset + lambdas])
+            reduced_rhs = transform.T @ (b[primal] - app @ lift)
+            u = lift + transform @ apply(primal_native, primal_inverse, reduced_rhs)
+            lm = apply(trace_native, trace_inverse,
+                       signs * (b[primal] - app @ u)[eliminated])
+            answer = matrix.CreateColVector()
+            answer[:] = 0.
+            answer.FV().NumPy()[primal] = u
+            answer.FV().NumPy()[multiplier_offset + lambdas] = lm
+            return answer
+
+    return TraceInverse()
 
 
 def _report_direct_solve_residual(a_bf, f_lf, solution, fes, block_names=None):
@@ -1023,7 +1151,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         mesh, H_s, source_potential, R_K, offset, *, mu_r_by_material=None,
         reduced_materials, total_materials, interface_boundary,
         order=1, dirichlet_bbbnd="GND", bonus_intorder=4,
-        kelvin_mats=("kelvin",), inverse="pardiso",
+        kelvin_mats=("kelvin",), inverse="sparsecholesky",
         interface_constraint_scale=None, total_dirichlet_cf=None,
         mu_cf=None, kelvin_interface_boundary=None,
         kelvin_source_potential=None, kelvin_source_h=None,
@@ -1179,6 +1307,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             reduced load (for example :func:`interpolate_source_field`).  The
             reported reduced field still uses the exact ``H_s``.
     """
+    if inverse != "sparsecholesky":
+        raise ValueError("direct FE solves require inverse='sparsecholesky'")
     _check_source_load("reduced_source_load", reduced_source_load)
     _check_source_load("total_source_load", total_source_load)
     if (total_source_load == "surface_flux") != (total_source_potential is not None):
@@ -1583,7 +1713,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
 
     solution = GridFunction(fes)
     inverse_mat = timed_phase(
-        "factorization", lambda: a_bf.mat.Inverse(fes.FreeDofs(), inverse=inverse))
+        "factorization", lambda: _matching_trace_direct_inverse(a_bf.mat, fes, order=order))
     if total_dirichlet_cf is None and not has_surface:
         def apply_inverse():
             solution.vec.data = inverse_mat * f_lf.vec
@@ -1621,6 +1751,12 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     linear_residual = _report_direct_solve_residual(
         a_bf, f_lf, solution, fes,
         block_names=("phi_reduced", "phi_total", "interface_constraint"))
+    free_residual = linear_residual["free_dofs"]
+    if free_residual is not None:
+        relative = free_residual["residual_l2"] / max(free_residual["rhs_l2"], 1e-300)
+        if not math.isfinite(relative) or relative > 1e-8:
+            raise RuntimeError(
+                f"mixed Omega direct FE true relative residual {relative:.3e} exceeds 1e-8")
     assembled_energy = _assembled_primal_energy(
         a_bf, f_lf, solution, fes, primal_blocks=(0, 1))
 
@@ -1872,7 +2008,7 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
         reduced_materials, total_materials, interface_boundary,
         order=1, dirichlet_boundary=None, bonus_intorder=4,
         source_rhs_reduced=None, reduced_normal_flux=None,
-        reduced_flux_boundary=None, solver="direct", inverse="pardiso",
+        reduced_flux_boundary=None, solver="direct", inverse="sparsecholesky",
         cg_preconditioner="local", cg_tolerance=1.0e-10,
         cg_max_iterations=2000, return_system=False,
         dirichlet_bbbnd=None, total_source_h=None, total_source_materials=()):
@@ -1891,6 +2027,8 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
     CoefficientFunction would silently change the projection used by the
     multiplier formulation and has been observed to change P1 fields.
     """
+    if inverse != "sparsecholesky":
+        raise ValueError("direct FE solves require inverse='sparsecholesky'")
     import ngsolve as ng
 
     function_started = time.perf_counter()
@@ -2116,7 +2254,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         mesh, H_s, source_potential, R_K, offset, *, bh_table,
         nonlinear_materials, reduced_materials, total_materials,
         interface_boundary, order=1, dirichlet_bbbnd="GND",
-        bonus_intorder=4, kelvin_mats=("kelvin",), inverse="pardiso",
+        bonus_intorder=4, kelvin_mats=("kelvin",), inverse="sparsecholesky",
         mu_r_initial=1000.0, tolerance=2.0e-5, max_iterations=80,
         relaxation=0.3, interface_constraint_scale=None,
         kelvin_interface_boundary=None, kelvin_source_potential=None,
@@ -2186,6 +2324,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     because the reduced region's permeability stays constant; the iron volume
     term, whose permeability is updated, has no such form here.
     """
+    if inverse != "sparsecholesky":
+        raise ValueError("direct FE solves require inverse='sparsecholesky'")
     from ngsolve import GridFunction, L2, VOL
     from radia.picard_acceleration import (
         ConstrainedAndersonAccelerator, estimate_contraction_rate)

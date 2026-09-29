@@ -29,7 +29,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         interface_boundary, order=1, mu_r_initial=1000.0,
         tolerance=2e-5, residual_tolerance=1e-8, max_iterations=40,
         max_halvings=12, observation_points=None, progress_callback=None,
-        bonus_intorder=4, inverse="pardiso", mu_r_by_material=None,
+        bonus_intorder=4, inverse="sparsecholesky", mu_r_by_material=None,
         condense_matching_trace=False, linear_solver="direct",
         material_bonus_intorder=None, bh_evaluation="spline", **linear_options):
     """Newton with residual backtracking and the production PCHIP B(H) law.
@@ -49,11 +49,13 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
     Caller owns TaskManager, as for the linear mixed solver. Failure raises
     ``MixedOmegaNewtonNotConverged`` carrying iteration diagnostics.
     """
+    if inverse != "sparsecholesky":
+        raise ValueError("direct FE solves require inverse='sparsecholesky'")
     import ngsolve as ng
     from .kelvin_solver import (
         solve_magnetostatic_mixed_total_reduced_omega_kelvin,
         solve_magnetostatic_matching_trace_total_reduced_omega,
-        audit_mixed_omega_constitutive_field)
+        audit_mixed_omega_constitutive_field, _matching_trace_direct_inverse)
     from .scalar_potential_solver import (
         _build_bh_coefficient_function, _build_bh_coenergy_coefficient_function,
         _build_bh_spline_law)
@@ -214,13 +216,15 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
             preconditioner.Update()
             inv = CGSolver(mat=tangent.mat, pre=preconditioner.mat, tol=1e-10,
                            maxiter=3000, printrates=False)
-        else:
+        elif condense_matching_trace:
             inv = tangent.mat.Inverse(fes.FreeDofs(), inverse=inverse)
+        else:
+            inv = _matching_trace_direct_inverse(tangent.mat, fes, order=order)
         row["factorization_s"] = time.perf_counter() - t0
         linear_rhs = residual.CreateVector()
         linear_rhs.data = residual
         linear_rhs.FV().NumPy()[~free] = 0.0
-        step.data = -inv * linear_rhs
+        step.data = -(inv * linear_rhs)
         linear_error = residual.CreateVector()
         linear_error.data = tangent.mat * step + residual
         absolute_linear = float(np.linalg.norm(linear_error.FV().NumPy()[free]))
