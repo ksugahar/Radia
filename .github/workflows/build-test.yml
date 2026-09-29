@@ -273,7 +273,6 @@ jobs:
           # min extra per main push (full rebuild vs incremental); ~25
           # min total Build step.  Acceptable trade-off for correctness.
           $isTag = $env:GITHUB_REF -like 'refs/tags/*'
-          $rebuildFlag = @('-Rebuild')
           if ($isTag) {
               Write-Host "Tag push detected ($env:GITHUB_REF) -- forcing -Rebuild for clean build"
           } else {
@@ -282,7 +281,7 @@ jobs:
           Get-CimInstance Win32_OperatingSystem |
             Select-Object TotalVisibleMemorySize,FreePhysicalMemory,TotalVirtualMemorySize,FreeVirtualMemory |
             ConvertTo-Json | Set-Content (Join-Path $env:RADIA_CI_OUTPUT_DIR 'memory-before-build.json')
-          & "${{ github.workspace }}\Build.ps1" @rebuildFlag -RequireNativeProvenance *>&1 | Tee-Object -FilePath $buildLog
+          & "${{ github.workspace }}\Build.ps1" -Rebuild -RequireNativeProvenance *>&1 | Tee-Object -FilePath $buildLog
           $rc = $LASTEXITCODE
           Get-CimInstance Win32_OperatingSystem |
             Select-Object TotalVisibleMemorySize,FreePhysicalMemory,TotalVirtualMemorySize,FreeVirtualMemory |
