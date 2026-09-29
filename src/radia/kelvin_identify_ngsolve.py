@@ -148,6 +148,23 @@ def _boundary_vertex_ids(mesh, boundary: str) -> set[int]:
     return vertices
 
 
+def _identified_point_pairs(pairs) -> list[tuple[int, int]]:
+    """Return the 1-based point numbers of Netgen identification entries.
+
+    Netgen 6.2.2606 yields ``(point_a, point_b)`` and 6.2.2607 appends the
+    identification number.  Any other shape is a format change, so it raises
+    rather than reading as "no identification".
+    """
+    out: list[tuple[int, int]] = []
+    for entry in pairs:
+        if len(entry) not in (2, 3):
+            raise ValueError(
+                f"unexpected Netgen identification entry of length {len(entry)}: {entry!r}")
+        # PointId exposes its number as ``nr``; it has no ``__int__``.
+        out.append((int(entry[0].nr), int(entry[1].nr)))
+    return out
+
+
 def has_kelvin_identification(
         mesh, inner_bnd: str = "kelvin_int", outer_bnd: str = "kelvin_ext") -> bool:
     """Return whether the Kelvin boundaries, rather than any boundary, match.
@@ -158,31 +175,24 @@ def has_kelvin_identification(
     the reduced-potential solvers to apply an invalid exterior constraint.  A
     valid Kelvin identification must therefore pair every ``kelvin_int``
     boundary vertex with a ``kelvin_ext`` boundary vertex.
+
+    Errors propagate: an earlier catch-all turned the 6.2.2607 change of the
+    identification tuple into a silent "not identified".
     """
-    try:
-        inner = _boundary_vertex_ids(mesh, inner_bnd)
-        outer = _boundary_vertex_ids(mesh, outer_bnd)
-        if not inner or not outer:
-            return False
-        pairs = mesh.ngmesh.GetIdentifications()
-        matched_inner: set[int] = set()
-        matched_outer: set[int] = set()
-        for first, second, *_identification_number in pairs:
-            # Netgen 6.2.2607 appends the identification number to each pair.
-            # ``GetIdentifications`` returns PointId objects on current
-            # Netgen, whose public numeric member is ``nr`` rather than
-            # Python's ``__int__`` protocol.
-            first = int(first.nr)
-            second = int(second.nr)
-            if first in inner and second in outer:
-                matched_inner.add(first)
-                matched_outer.add(second)
-            elif second in inner and first in outer:
-                matched_inner.add(second)
-                matched_outer.add(first)
-        return matched_inner == inner and matched_outer == outer
-    except Exception:
+    inner = _boundary_vertex_ids(mesh, inner_bnd)
+    outer = _boundary_vertex_ids(mesh, outer_bnd)
+    if not inner or not outer:
         return False
+    matched_inner: set[int] = set()
+    matched_outer: set[int] = set()
+    for first, second in _identified_point_pairs(mesh.ngmesh.GetIdentifications()):
+        if first in inner and second in outer:
+            matched_inner.add(first)
+            matched_outer.add(second)
+        elif second in inner and first in outer:
+            matched_inner.add(second)
+            matched_outer.add(first)
+    return matched_inner == inner and matched_outer == outer
 
 
 def add_kelvin_identification(

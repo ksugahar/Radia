@@ -160,13 +160,10 @@ def _solve_checked_direct(a_bf, f_lf, fes, potential_gf, inverse):
     residual = f_lf.vec.CreateVector()
     residual.data = f_lf.vec - a_bf.mat * potential_gf.vec
     free = np.fromiter((bool(v) for v in freedofs), dtype=bool, count=fes.ndof)
-    solution = potential_gf.vec.FV().NumPy()[free]
-    rhs = f_lf.vec.FV().NumPy()[free]
-    relative = float(np.linalg.norm(residual.FV().NumPy()[free]) /
-                     max(float(np.linalg.norm(rhs)), 1e-300))
-    if not np.all(np.isfinite(solution)) or not math.isfinite(relative) or relative > 1e-8:
-        raise RuntimeError(f"direct FE true relative residual {relative:.3e} exceeds 1e-8")
-    return relative
+    from radia._residual_gate import check_true_residual
+    return check_true_residual(
+        a_bf.mat, residual.FV().NumPy(), potential_gf.vec.FV().NumPy(),
+        f_lf.vec.FV().NumPy(), free, "direct FE")
 
 
 def project_source_interface_potential(
@@ -1715,6 +1712,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     inverse_mat = timed_phase(
         "factorization", lambda: _matching_trace_direct_inverse(a_bf.mat, fes, order=order))
     if total_dirichlet_cf is None and not has_surface:
+        effective_load = f_lf.vec
         def apply_inverse():
             solution.vec.data = inverse_mat * f_lf.vec
         timed_phase("backsolve", apply_inverse)
@@ -1731,6 +1729,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
                 total_dirichlet_cf, definedon=mesh.BBBoundaries(dirichlet_bbbnd))
         residual = solution.vec.CreateVector()
         residual.data = f_lf.vec - a_bf.mat * solution.vec
+        # The lifted system's load is f - A u_D; a drive that enters only
+        # through Dirichlet or surface values has f = 0 on the free rows.
+        effective_load = residual
         def apply_inverse():
             solution.vec.data += inverse_mat * residual
         timed_phase("backsolve", apply_inverse)
@@ -1753,10 +1754,14 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         block_names=("phi_reduced", "phi_total", "interface_constraint"))
     free_residual = linear_residual["free_dofs"]
     if free_residual is not None:
-        relative = free_residual["residual_l2"] / max(free_residual["rhs_l2"], 1e-300)
+        free_mask = np.fromiter((bool(bit) for bit in fes.FreeDofs()), bool, fes.ndof)
+        load_l2 = float(np.linalg.norm(effective_load.FV().NumPy()[free_mask]))
+        linear_residual["free_dofs"]["effective_load_l2"] = load_l2
+        relative = free_residual["residual_l2"] / max(load_l2, 1e-300)
         if not math.isfinite(relative) or relative > 1e-8:
             raise RuntimeError(
-                f"mixed Omega direct FE true relative residual {relative:.3e} exceeds 1e-8")
+                f"mixed Omega direct FE true relative residual {relative:.3e} exceeds 1e-8 "
+                "(normalised by the effective load f - A u_D on the free rows)")
     assembled_energy = _assembled_primal_energy(
         a_bf, f_lf, solution, fes, primal_blocks=(0, 1))
 

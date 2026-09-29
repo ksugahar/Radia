@@ -1891,19 +1891,18 @@ class ScalarPotentialSolver:
             inv = CGSolver(mat=a.mat, pre=pre.mat, maxiter=2000,
                            printrates=False, tol=1e-10)
             gf.vec.data = inv * f.vec
+            if inv.iterations >= inv.maxiter:
+                raise RuntimeError(
+                    f"Scalar-potential CG did not converge in {inv.maxiter} iterations")
         else:
             gf.vec.data = a.mat.Inverse(
                 fes.FreeDofs(), inverse="sparsecholesky") * f.vec
-        from ngsolve import Norm, Projector
-        free = Projector(fes.FreeDofs(), True)
+        from radia._residual_gate import check_true_residual
         residual = f.vec.CreateVector()
-        residual.data = free * (f.vec - a.mat * gf.vec)
-        load = f.vec.CreateVector()
-        load.data = free * f.vec
-        relative = Norm(residual) / max(Norm(load), 1e-30)
-        if not np.isfinite(relative) or relative > 1e-8:
-            raise RuntimeError(
-                f"Scalar-potential linear solve failed: true relative residual {relative:.3e}")
+        residual.data = f.vec - a.mat * gf.vec
+        free = np.fromiter((bool(bit) for bit in fes.FreeDofs()), dtype=bool, count=fes.ndof)
+        check_true_residual(a.mat, residual.FV().NumPy(), gf.vec.FV().NumPy(),
+                            f.vec.FV().NumPy(), free, "Scalar-potential linear solve")
 
     def _element_centroid(self, el):
         """Compute centroid of a volume element."""

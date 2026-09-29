@@ -61,6 +61,21 @@ def _relative_residual_on_free_dofs(residual_values, rhs_values, free_dof_mask):
     return 0.0 if residual_norm == 0.0 else float("inf")
 
 
+def _check_direct_solve(matrix, fes, rhs, solution, what):
+    """Raise unless ``matrix * solution = rhs`` holds on the free rows.
+
+    SparseCholesky returns a wrong answer without an error for a
+    nonsymmetric or singular matrix, so every direct solve is checked
+    (``radia._residual_gate``: relative 1e-8 or backward error 1e-12).
+    """
+    from radia._residual_gate import check_true_residual
+    residual = rhs.CreateVector()
+    residual.data = rhs - matrix * solution
+    free = np.fromiter((bool(bit) for bit in fes.FreeDofs()), dtype=bool, count=fes.ndof)
+    return check_true_residual(matrix, residual.FV().NumPy(), solution.FV().NumPy(),
+                               rhs.FV().NumPy(), free, what)
+
+
 def _build_nu_of_b_interpolator(bh_data):
     """Invert the production monotone PCHIP B(H) law for reduced-A.
 
@@ -864,6 +879,7 @@ class VectorPotentialSolver:
                 inv = a.mat.Inverse(fes.FreeDofs(),
                                     inverse=direct_inverse_type(solver))
                 w.data = inv * r
+                _check_direct_solve(a.mat, fes, r, w, "vector-potential Newton step")
 
             err = InnerProduct(w, r)
             if verbose:
@@ -1429,6 +1445,7 @@ class VectorPotentialSolver:
             else:
                 A_gf.vec.data = a.mat.Inverse(
                     fes.FreeDofs(), inverse=direct_inverse_type(solver_type)) * f.vec
+                _check_direct_solve(a.mat, fes, f.vec, A_gf.vec, "hysteresis Picard solve")
 
             # B = B_s + curl(A_r) at centroids
             B_total_cf = self._B_source_cf + curl(A_gf)

@@ -11,7 +11,7 @@ build inputs into that environment:
 
 ```powershell
 python -m pip install --upgrade pip
-python -m pip install ngsolve==6.2.2606 netgen-mesher==6.2.2606 `
+python -m pip install ngsolve==6.2.2607 netgen-mesher==6.2.2607 `
   mkl-devel pybind11==3.0.2 ninja cmake build wheel
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\Build.ps1 -Rebuild -Test
 ```
