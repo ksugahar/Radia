@@ -119,12 +119,9 @@ has already passed the bibliography audit.
 > The MCP knowledge is the runnable layer; `PEEC_CONDUCTOR_MODELING_GUIDE.md`
 > is the architectural / theoretical overview.
 
-## Cauer Ladder Network (CLN)
+## Reduced eddy-current models
 
-- [CAUER_LADDER_NETWORK.md](cln/CAUER_LADDER_NETWORK.md) - Foundational CLN (Tanimoto-Kameari method): iterative orthogonalization, Cauer-II ladder synthesis, three formulations (A-T, T-Ω, A-Φ), 2D / 3D variants, gauge / constraint options, Kelvin transformation coupling
-- **Mixed Galerkin (CLN + HOIBC)** — bulk CLN Krylov modes + HOIBC surface envelope, coupled via the Schur complement. Single conductor admittance Y(s) with **no `d` parameter** and wall-band error 0.001–0.33% (geometry dependent). Result notebook: `docs/mixed_galerkin/mixed_galerkin_results.ipynb`; reusable smooth-body references: `radia.maglev.mixed_galerkin.references`; remaining research scripts: `validation_test/mixed_galerkin/`. **Superseded the Warburg-Schur termination as of 2026-06-12** (see `memory/project_warburg_schur_deprecated_2026_06_12.md` for the history).
-- [BEM_CLN.md](cln/BEM_CLN.md) - Multi-conductor BEM-CLN: per-element polarizability + integral-equation coupling for N-conductor clusters (Paper 2, IH workpiece + coils, paired transformer windings)
-- [CLN_3D_CUBOID.md](cln/CLN_3D_CUBOID.md) - 3D Cu cuboid benchmark: HCurl FEM + BEM Cauer 3-way validation
+- [Foster, PRIMA, and Modal-bulk SIBC](solver/REDUCED_EDDY_MODELS.md) — supported formulations, entry points, and validation limits.
 
 ## Transient Kernels
 
