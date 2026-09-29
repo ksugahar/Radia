@@ -77,8 +77,7 @@ def main():
                   points=field_points, observation_points=field_points)
     settings = {
         'reduced_a': dict(linear_solver='bddc', relax=0.1, anderson_depth=0),
-        'mixed_total_reduced_omega': dict(source_trace_tolerance=0.05, relaxation=0.3,
-                                        anderson_depth=2, source_projection_order=2,
+        'mixed_total_reduced_omega': dict(source_trace_tolerance=0.05, source_projection_order=2,
                                         bonus_intorder=4, exact_exterior_source=False),
     }
     fields = {'hdiv_mmm': _validated_field(hdiv['B_T'], len(points)).tolist()}

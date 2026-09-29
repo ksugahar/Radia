@@ -161,17 +161,9 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     source_projection_order: int | None = None,
     nonlinear_tolerance: float = 2.0e-5,
     nonlinear_max_iterations: int = 80,
-    nonlinear_relaxation: float = 0.3,
     kelvin_source_h=None,
-    nonlinear_anderson_depth: int = 0,
-    nonlinear_anderson_transform: str = "log",
-    nonlinear_mu_r_initial=1000.0,
+    nonlinear_mu_r_initial: float = 1000.0,
     nonlinear_observation_points=None,
-    nonlinear_material_update_order: int | None = None,
-    nonlinear_material_log_state_initial=None,
-    nonlinear_material_sampling: str = "element_centroid",
-    nonlinear_bh_interpolation: str = "pchip",
-    nonlinear_method: str = "picard",
     nonlinear_residual_tolerance: float = 1e-8,
     nonlinear_material_bonus_intorder: int | None = None,
     nonlinear_progress_callback=None,
@@ -184,36 +176,17 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
 ) -> dict[str, object]:
     """Solve one static electromagnet through the required H1 formulation.
 
-    ``nonlinear_method="newton"`` selects quadrature-based PCHIP Newton for
-    orders one and two, with residual backtracking. It requires an explicit
-    ``nonlinear_material_sampling="integration_point"``; centroid sampling is
-    a different discrete material law and is rejected. It does not use a projected
-    material state or Anderson mixing. ``nonlinear_residual_tolerance`` bounds
-    its free-DOF equation residual; ``nonlinear_tolerance`` bounds field change.
-    ``nonlinear_material_bonus_intorder`` (Newton only) sets the quadrature
-    bonus of the B(H) co-energy separately from ``bonus_intorder``; ``None``
-    keeps ``bonus_intorder``.
-
-    The nonlinear loop is the Picard iteration of
-    :func:`radia.kelvin_solver.solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin`:
-    ``nonlinear_anderson_depth`` enables its constrained Anderson mixing,
-    ``nonlinear_mu_r_initial`` is a scalar or the per-element warm start of an
-    earlier order-one ``nonlinear_stats["mu_r_elements"]``, and
-    ``nonlinear_observation_points`` records the per-iteration field change at
-    the points where the result is consumed.  A non-converged loop raises
-    :class:`radia.kelvin_solver.MixedOmegaPicardNotConverged` with that state.
-    For a P1 diagnostic, ``nonlinear_material_sampling="integration_point"``
-    evaluates the B(H) secant at volume quadrature points. It requires plain
-    Picard (relaxation=1, Anderson depth=0), and reports a separate returned-field
-    constitutive defect rather than treating iterate convergence as accuracy.
-    ``nonlinear_bh_interpolation="linear_spline"`` uses NGSolve's compact
-    piecewise-linear table lookup; its interpolation error must be checked
-    against the original B-H curve for a validation comparison.
-    Response order two requires an explicit
-    ``nonlinear_material_update_order=1``; its positive log-permeability field
-    is a separate spatial material state. Resume it with the complete
-    ``nonlinear_stats["material_restart_state"]`` mapping so mesh, B-H table,
-    material selector, orders, and active DOFs are checked before solving.
+    With ``bh_table`` the nonlinear iron is solved by the quadrature PCHIP
+    Newton of :func:`radia.mixed_omega_newton.solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin`
+    (orders one and two, residual backtracking; it replaced the Picard lanes on
+    2026-09-30).  ``nonlinear_mu_r_initial`` is the scalar starting permeability,
+    ``nonlinear_residual_tolerance`` bounds the free-DOF equation residual and
+    ``nonlinear_tolerance`` the relative field change.
+    ``nonlinear_material_bonus_intorder`` sets the quadrature bonus of the B(H)
+    co-energy separately from ``bonus_intorder``; ``None`` keeps
+    ``bonus_intorder``.  ``nonlinear_observation_points`` records the field at
+    the points where the result is consumed.  Non-convergence raises
+    :class:`radia.mixed_omega_newton.MixedOmegaNewtonNotConverged`.
 
     ``source_potential_contract="total_hodge"`` is the general CoilBuilder
     route.  It retains the non-exact harmonic/cut component of a linked source
@@ -288,15 +261,9 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
         raise ValueError("source_representation='nodal' does not cover the global_physical contract")
     if int(order) < 1:
         raise ValueError("order must be positive")
-    if (bh_table is not None and nonlinear_method == "newton"
-            and nonlinear_material_sampling != "integration_point"):
+    if nonlinear_material_bonus_intorder is not None and bh_table is None:
         raise ValueError(
-            "Newton requires nonlinear_material_sampling='integration_point'; "
-            "element_centroid is a different material discretization")
-    if nonlinear_material_bonus_intorder is not None and (
-            bh_table is None or nonlinear_method != "newton"):
-        raise ValueError(
-            "nonlinear_material_bonus_intorder applies to a nonlinear Newton solve only")
+            "nonlinear_material_bonus_intorder applies to a nonlinear (bh_table) solve only")
     if source_projection_order is None:
         source_projection_order = (
             int(order) if source_potential_contract == "total_hodge"
@@ -354,7 +321,6 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
         project_source_physical_potential,
         project_source_interface_potential,
         solve_magnetostatic_mixed_total_reduced_omega_kelvin,
-        solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin,
     )
 
     if source_potential_contract == "surface_trace":
@@ -525,31 +491,14 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     else:
         if not domain.nonlinear_materials:
             raise ValueError("bh_table requires declared nonlinear_materials")
-        if nonlinear_method not in ("picard", "newton"):
-            raise ValueError("nonlinear_method must be 'picard' or 'newton'")
-        nonlinear_solver = solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin
-        iteration_options = dict(
-            relaxation=float(nonlinear_relaxation),
-            anderson_depth=int(nonlinear_anderson_depth),
-            anderson_transform=str(nonlinear_anderson_transform),
-            material_update_order=nonlinear_material_update_order,
-            material_log_state_initial=nonlinear_material_log_state_initial,
-            material_sampling=nonlinear_material_sampling,
-            bh_interpolation=nonlinear_bh_interpolation)
-        if nonlinear_method == "newton":
-            from .mixed_omega_newton import solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin
-            if (nonlinear_anderson_depth != 0
-                    or nonlinear_material_update_order is not None
-                    or nonlinear_material_log_state_initial is not None
-                    or nonlinear_bh_interpolation != "pchip"):
-                raise ValueError("Newton requires PCHIP without Anderson or projected material state")
-            nonlinear_solver = solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin
-            iteration_options = dict(residual_tolerance=float(nonlinear_residual_tolerance),
-                                     material_bonus_intorder=nonlinear_material_bonus_intorder)
+        from .mixed_omega_newton import solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin
+
+        iteration_options = dict(residual_tolerance=float(nonlinear_residual_tolerance),
+                                 material_bonus_intorder=nonlinear_material_bonus_intorder)
         if reduced_source_load != "volume":
-            # Picard takes it explicitly; Newton forwards it to its linear solve.
+            # Newton forwards it to its linear solve.
             iteration_options["reduced_source_load"] = reduced_source_load
-        result = nonlinear_solver(
+        result = solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
             mesh,
             source_h,
             source_potential,
@@ -560,7 +509,7 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
             nonlinear_materials=domain.nonlinear_materials,
             tolerance=float(nonlinear_tolerance),
             max_iterations=int(nonlinear_max_iterations),
-            mu_r_initial=nonlinear_mu_r_initial,
+            mu_r_initial=float(nonlinear_mu_r_initial),
             observation_points=nonlinear_observation_points,
             progress_callback=nonlinear_progress_callback,
             **iteration_options,

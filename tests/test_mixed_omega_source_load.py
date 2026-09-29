@@ -180,16 +180,12 @@ def nonlinear_case():
 
 
 _LANES = {
-    "picard_centroid_p1": dict(order=1, relaxation=0.3),
-    "picard_projected_p2": dict(order=2, material_update_order=1, relaxation=0.3),
-    "picard_pointwise_p1": dict(order=1, material_sampling="integration_point",
-                                relaxation=1.0, anderson_depth=0),
+    "newton_p1": dict(order=1),
     "newton_p2": dict(order=2),
 }
 
 
 def _nonlinear_solve(case, lane, load):
-    from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin
     from radia.mixed_omega_newton import solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin
 
     mesh, source, potential, table = case
@@ -198,13 +194,9 @@ def _nonlinear_solve(case, lane, load):
                   dirichlet_bbbnd="GND", kelvin_mats=(), reduced_source_load=load,
                   bonus_intorder=SOURCE_BONUS_INTORDER)
     with ng.TaskManager():
-        if lane.startswith("newton"):
-            return solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
-                mesh, source, potential, 1.0, (3.0, 0.0, 0.0), tolerance=1e-8,
-                residual_tolerance=1e-10, **_LANES[lane], **common)
-        return solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
-            mesh, source, potential, 1.0, (3.0, 0.0, 0.0), tolerance=1e-9,
-            max_iterations=400, **_LANES[lane], **common)
+        return solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
+            mesh, source, potential, 1.0, (3.0, 0.0, 0.0), tolerance=1e-8,
+            residual_tolerance=1e-10, **_LANES[lane], **common)
 
 
 @pytest.mark.parametrize("lane", sorted(_LANES))

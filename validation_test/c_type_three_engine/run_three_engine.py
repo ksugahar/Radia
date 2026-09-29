@@ -450,14 +450,11 @@ def solve_omega(
     kelvin_radius: float,
     points: np.ndarray,
     source_trace_tolerance: float,
-    relaxation: float = 0.3,
-    anderson_depth: int = 0,
-    mu_r_initial=1000.0,
+    mu_r_initial: float = 1000.0,
     observation_points=None,
     source_projection_order: int | None = None,
     bonus_intorder: int = 4,
     exact_exterior_source: bool = False,
-    nonlinear_method: str = "picard",
     material_bonus_intorder: int | None = None,
     source_load: str = "auto",
     progress_callback=None,
@@ -469,13 +466,11 @@ def solve_omega(
     region.  Iron and the Kelvin exterior are total-potential regions, so the
     source field is never numerically cancelled in high-permeability iron.
 
-    ``relaxation`` / ``anderson_depth`` control the damped Picard loop and its
-    constrained Anderson mixing, ``mu_r_initial`` is a scalar or the per-element
-    warm start of an earlier ``nonlinear_stats["mu_r_elements"]``, and
-    ``observation_points`` records the per-iteration field change where the
-    comparison is made.  A non-converged loop raises
-    :class:`radia.kelvin_solver.MixedOmegaPicardNotConverged` carrying the
-    per-element state; the caller persists or discards it.
+    The B-H iron is solved by the quadrature PCHIP Newton of the production
+    workflow; ``mu_r_initial`` is its scalar starting permeability and
+    ``observation_points`` records the field where the comparison is made.
+    Non-convergence raises
+    :class:`radia.mixed_omega_newton.MixedOmegaNewtonNotConverged`.
     """
     started = time.perf_counter()
     if source_projection_order is not None and (
@@ -508,16 +503,11 @@ def solve_omega(
             kelvin_source_h=exterior_source,
             nonlinear_tolerance=nonlinear_tolerance,
             nonlinear_max_iterations=nonlinear_maximum_iterations,
-            nonlinear_material_update_order=(order - 1 if order > 1 and nonlinear_method == "picard" else None),
-            nonlinear_method=nonlinear_method,
-            nonlinear_material_bonus_intorder=material_bonus_intorder,
+            nonlinear_material_bonus_intorder=material_bonus_intorder if nonlinear else None,
             reduced_source_load=source_load,
             total_source_load=source_load,
-            nonlinear_material_sampling=("integration_point" if nonlinear_method == "newton" else "element_centroid"),
             nonlinear_progress_callback=progress_callback,
-            nonlinear_relaxation=float(relaxation),
-            nonlinear_anderson_depth=int(anderson_depth),
-            nonlinear_mu_r_initial=mu_r_initial,
+            nonlinear_mu_r_initial=float(mu_r_initial),
             nonlinear_observation_points=observation_points,
         )
     field = evaluate_cf(result["B_cf"], mesh, points)
@@ -567,7 +557,6 @@ def solve_omega(
         "kelvin_center_m": list(kelvin_center),
         "kelvin_radius_m": kelvin_radius,
         "bonus_intorder": bonus_intorder,
-        "material_update_order": (order - 1 if nonlinear and order > 1 else 0),
         "mesh_elements": int(mesh.ne),
         "mesh_vertices": int(mesh.nv),
         "ndof": int(result["fes"].ndof),

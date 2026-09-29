@@ -38,7 +38,6 @@ from radia.electromagnet_validation import (
 )
 from radia.esrf_examples import get_esrf_bh_table
 from radia.kelvin_identify_ngsolve import detect_kelvin_offset, has_kelvin_identification
-from radia.kelvin_solver import MixedOmegaPicardNotConverged
 
 from esrf_coil_yoke import (
     average_observation_field,
@@ -110,14 +109,6 @@ def _relative_rms(reference: np.ndarray, candidate: np.ndarray) -> float:
     if not np.isfinite(relative):
         raise ValueError("nonfinite three-engine relative RMS")
     return relative
-
-
-CHECKPOINT_SCHEMA = "radia.validation.esrf-coil-yoke-checkpoint.v3"
-LEGACY_CHECKPOINT_SCHEMAS = ("radia.validation.esrf-coil-yoke-checkpoint.v2",)
-STATE_SCHEMA = "radia.validation.esrf-coil-yoke-picard-state.v1"
-# A v2 checkpoint carried the iteration cap inside its identity.  The cap does not
-# change a converged solution, so it is provenance, not identity, from v3 on.
-LEGACY_CAP_KEY = "nonlinear_maximum_iterations"
 
 
 CHECKPOINT_SCHEMA = "radia.validation.esrf-coil-yoke-checkpoint.v3"
@@ -417,26 +408,8 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         default=None,
         help=(
-            "Optional Picard cap for mixed total/reduced Omega only. "
+            "Optional Newton iteration cap for mixed total/reduced Omega only. "
             "HDiv and reduced-A retain --nonlinear-maximum-iterations."
-        ),
-    )
-    parser.add_argument(
-        "--mixed-relaxation",
-        type=float,
-        default=0.3,
-        help="Damped-Picard relaxation of the mixed total/reduced Omega material update.",
-    )
-    parser.add_argument(
-        "--mixed-anderson-depth",
-        type=int,
-        default=0,
-        help=(
-            "Constrained Anderson mixing depth for the mixed total/reduced Omega Picard "
-            "loop (0 = the plain damped Picard the earlier runs used).  Opt-in: on a "
-            "shielded-knee probe the safeguarded mixing rejected a third of its steps "
-            "without beating plain Picard, so it is a per-case choice, and it is part of "
-            "the mixed checkpoint identity."
         ),
     )
     parser.add_argument(
@@ -455,7 +428,6 @@ def main(argv: list[str] | None = None) -> int:
                         help="Hodge source projection order; default preserves API order selection")
     parser.add_argument("--mixed-bonus", type=int, default=4,
                         help="Mixed Omega volume/interface assembly bonus")
-    parser.add_argument("--mixed-method", choices=("picard", "newton"), default="picard")
     parser.add_argument("--mixed-material-bonus", type=int, default=None,
                         help="Newton material quadrature bonus (defaults to mixed-bonus)")
     parser.add_argument("--mixed-source-load", choices=("auto", "volume", "surface_flux"), default="auto")
@@ -475,11 +447,8 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("--mixed-source-order must be positive")
     if options.mixed_bonus < 0:
         raise ValueError("--mixed-bonus must be nonnegative")
-    if options.mixed_material_bonus is not None and (
-            options.mixed_material_bonus < 0 or options.mixed_method != "newton"):
-        raise ValueError("--mixed-material-bonus requires Newton and a nonnegative value")
-    if options.mixed_method == "newton" and options.mixed_anderson_depth:
-        raise ValueError("Newton does not support --mixed-anderson-depth")
+    if options.mixed_material_bonus is not None and options.mixed_material_bonus < 0:
+        raise ValueError("--mixed-material-bonus must be nonnegative")
     if options.fem_order < 1:
         raise ValueError("--fem-order must be positive")
     if options.nonlinear_maximum_iterations < 1:
@@ -493,10 +462,8 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("--hdiv-gram-eps must lie in (0, 1)")
     if not 0.0 < options.reduced_a_relaxation <= 1.0:
         raise ValueError("--reduced-a-relaxation must lie in (0, 1]")
-    if not 0.0 < options.mixed_relaxation <= 1.0:
-        raise ValueError("--mixed-relaxation must lie in (0, 1]")
-    if options.mixed_anderson_depth < 0 or options.reduced_a_anderson_depth < 0:
-        raise ValueError("Anderson depths must be non-negative")
+    if options.reduced_a_anderson_depth < 0:
+        raise ValueError("--reduced-a-anderson-depth must be non-negative")
     if not 0.0 < options.source_trace_tolerance < 1.0:
         raise ValueError("--source-trace-tolerance must lie in (0, 1)")
     if (
@@ -617,7 +584,7 @@ def main(argv: list[str] | None = None) -> int:
             energy_observer=energy_observer,
         )
 
-    def run_mixed(state):
+    def run_mixed(_state):
         return engines.solve_omega(
             fem_mesh,
             coil,
@@ -633,14 +600,9 @@ def main(argv: list[str] | None = None) -> int:
             source_trace_tolerance=options.source_trace_tolerance,
             source_projection_order=options.mixed_source_order,
             bonus_intorder=options.mixed_bonus,
-            nonlinear_method=options.mixed_method,
             material_bonus_intorder=options.mixed_material_bonus,
             source_load=options.mixed_source_load,
             exact_exterior_source=options.mixed_exact_exterior_source,
-            relaxation=options.mixed_relaxation,
-            anderson_depth=options.mixed_anderson_depth,
-            mu_r_initial=(1000.0 if state is None
-                          else np.asarray(state["mu_r_elements"], dtype=float)),
             observation_points=field_points,
             energy_observer=energy_observer,
         )
@@ -649,7 +611,7 @@ def main(argv: list[str] | None = None) -> int:
     solver_specs = (
         ("hdiv_mmm", run_hdiv, None),
         ("reduced_a", run_reduced_a, "nu_elements"),
-        ("mixed_total_reduced_omega", run_mixed, "mu_r_elements"),
+        ("mixed_total_reduced_omega", run_mixed, None),
     )
     reduced_a_settings = {
         "linear_solver": options.reduced_a_solver,
@@ -670,13 +632,11 @@ def main(argv: list[str] | None = None) -> int:
                                         if options.mixed_source_order is None
                                         else int(options.mixed_source_order)),
             "bonus_intorder": int(options.mixed_bonus),
-            "nonlinear_method": options.mixed_method,
+            "nonlinear_method": "newton",
             "material_bonus_intorder": options.mixed_material_bonus,
             "source_load": options.mixed_source_load,
             "exact_exterior_source": bool(options.mixed_exact_exterior_source),
             "source_trace_tolerance": float(options.source_trace_tolerance),
-            "relaxation": float(options.mixed_relaxation),
-            "anderson_depth": int(options.mixed_anderson_depth),
         },
     }
     iteration_caps = {
@@ -726,21 +686,9 @@ def main(argv: list[str] | None = None) -> int:
         # problem is a warm start, never a result.
         state = (_read_state(state_path, contract)
                  if options.resume and state_key is not None else None)
-        try:
-            field_samples, diagnostics[name] = solve(state)
-        except MixedOmegaPicardNotConverged as exc:
-            if state_key is None:
-                raise
-            stats = dict(exc.state["nonlinear_stats"])
-            if state is not None:
-                stats["resumed_iterations"] = (
-                    int(state.get("resumed_iterations", 0)) + int(state["iterations"]))
-            _write_state(state_path, contract, _picard_state(name, stats, state_key),
-                         provenance(name))
-            raise RuntimeError(
-                f"{name} did not converge; its per-element state was saved to "
-                f"{state_path} for a warm restart with --resume"
-            ) from exc
+        # A mixed Omega Newton non-convergence raises MixedOmegaNewtonNotConverged
+        # and propagates: that engine has no per-element warm-start state.
+        field_samples, diagnostics[name] = solve(state)
         stats = dict(diagnostics[name].get("nonlinear_stats") or {})
         if state is not None:
             stats["resumed_iterations"] = (

@@ -79,7 +79,7 @@ def test_three_engine_runner_has_shared_physics_contract():
     electromagnet = (ROOT / "src" / "radia" / "static_electromagnet.py").read_text(encoding="utf-8")
     assert 'int(order) if source_potential_contract == "total_hodge"' in electromagnet
     assert "else max(2, int(order))" in electromagnet
-    assert "nonlinear_material_update_order=(order - 1 if order > 1 and nonlinear_method == \"picard\" else None)" in runner
+    assert "nonlinear_material_bonus_intorder=material_bonus_intorder if nonlinear else None" in runner
     assert "fixed_mesh_equality_claimed" in runner
     assert "pairwise_raw_full_tube" in runner
     assert "pairwise_median_projected_gap_core" in runner
@@ -121,7 +121,7 @@ def test_omega_and_hdiv_share_the_nonlinear_bh_interpolation_contract():
     ).read_text(encoding="utf-8")
 
     assert "def _build_bh_interpolator(" in source
-    assert "PchipInterpolator" in source
+    assert "from radia.bh_law import monotone_bh_pchip" in source
     assert "B_max + MU_0 * (value - H_max)" in source
     nonlinear = source.split("def solve_nonlinear(", 1)[1].split(
         "def solve_nonlinear_newton(", 1

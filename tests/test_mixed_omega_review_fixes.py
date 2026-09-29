@@ -1,24 +1,9 @@
-"""Three review findings on the mixed total/reduced Omega lanes, each pinned.
+"""Review finding on the mixed total/reduced Omega matching-trace lane, pinned.
 
-1. The higher-order projected lane capped the permeability at the larger of
-   the tabulated node secants and the initial guess. The constitutive law is
-   the PCHIP interpolant, whose secant exceeds every node secant between and
-   below the nodes: on the Picard test table the nodes top out at 2000 and
-   the law reaches about 2620, so the cap rewrote the material by up to 31%,
-   and by a different amount for each ``mu_r_initial``. The cap is now taken
-   from the law's dense maximum and raised to the law's own target whenever
-   the projection asks for more.
-
-2. The same lane declared convergence on the iteration-to-iteration change of
-   the projected |B| alone. A stalled update -- small relaxation, or the cap
-   above -- makes that change tiny while the material is still far from the
-   law; that was reported as ``converged=True``. Convergence now also needs
-   the material fixed-point residual, and the final re-solve is checked
-   against the law before it is returned.
-
-3. The matching-trace lane recorded the linear residual and returned whatever
-   CG produced, including a solution that hit ``maxiter``. The residual is
-   now checked on the returned solution and a miss raises.
+The matching-trace lane recorded the linear residual and returned whatever
+CG produced, including a solution that hit ``maxiter``. The residual is now
+checked on the returned solution and a miss raises.  (The two findings on
+the projected Picard lane were retired with that lane on 2026-09-30.)
 """
 from __future__ import annotations
 
@@ -26,17 +11,15 @@ import importlib.util
 import math
 from pathlib import Path
 
-import numpy as np
 import pytest
 
 ng = pytest.importorskip("ngsolve")
 
-MU_0 = 4.0e-7 * math.pi
 _HELPERS = None
 
 
 def helpers():
-    """The Picard fixtures from the main mixed-Omega test module, by path."""
+    """The shared fixtures from the main mixed-Omega test module, by path."""
     global _HELPERS
     if _HELPERS is None:
         path = Path(__file__).with_name("test_kelvin_mixed_omega.py")
@@ -46,108 +29,6 @@ def helpers():
         spec.loader.exec_module(module)
         _HELPERS = module
     return _HELPERS
-
-
-def _law_secant_maximum(bh_table):
-    from radia.scalar_potential_solver import _build_bh_interpolator
-
-    table = np.asarray(bh_table, dtype=float)
-    positive = table[:, 0] > 0
-    law = _build_bh_interpolator(table)
-    h = np.geomspace(table[positive, 0].min() * 1.0e-3, table[positive, 0].max(), 20001)
-    return float(np.max(np.asarray([law(v) for v in h]) / (MU_0 * h)))
-
-
-def test_the_projected_cap_comes_from_the_law_not_the_nodes():
-    """Finding 1: the ceiling is at least the interpolant's own maximum."""
-    h = helpers()
-    mesh, h_source, potential, bh_table = h._picard_case()
-    table = np.asarray(bh_table, dtype=float)
-    node_max = float(np.max(table[1:, 1] / (MU_0 * table[1:, 0])))
-    law_max = _law_secant_maximum(bh_table)
-    assert law_max > node_max * 1.2, "the table no longer exhibits the defect"
-
-    result = h._picard_solve(
-        mesh, h_source, potential, bh_table, order=2, material_update_order=1,
-        anderson_depth=0, mu_r_initial=1000.0)
-    stats = result["nonlinear_stats"]
-    assert stats["converged"]
-    lower, upper = stats["physical_permeability_bounds"]
-    assert lower == 1.0
-    # The solver scans the law on its own grid; this test on a finer one. They
-    # agree to ~1e-8, and the bound's job is to stop percent-level clipping,
-    # not to reproduce a sampling grid.
-    assert upper >= law_max * (1.0 - 1.0e-6), (upper, law_max)
-    # The live bound is exp(log(initial)) at minimum; allow the round trip.
-    assert upper >= stats["physical_permeability_bounds_initial"][1] * (1.0 - 1.0e-12)
-    ceilings = [row["mu_r_upper"] for row in stats["history"]]
-    assert ceilings == sorted(ceilings), "the ceiling may only be raised"
-
-
-def test_the_effective_law_no_longer_depends_on_the_initial_guess():
-    """Finding 1, the consequence: two starts, one material, one field."""
-    h = helpers()
-    mesh, h_source, potential, bh_table = h._picard_case()
-    observation = np.array([[0.5, 0.1, 0.2], [0.7, -0.2, 0.1]])
-    fields = []
-    for initial in (1000.0, 3000.0):
-        result = h._picard_solve(
-            mesh, h_source, potential, bh_table, order=2, material_update_order=1,
-            anderson_depth=0, mu_r_initial=initial, observation_points=observation,
-            tolerance=1.0e-8, max_iterations=120)
-        assert result["nonlinear_stats"]["converged"]
-        fields.append(np.asarray(result["nonlinear_stats"]["observation_field_T"]))
-    np.testing.assert_allclose(fields[0], fields[1], rtol=2.0e-6, atol=0.0)
-
-
-def test_projected_material_reuses_only_the_fixed_source_rhs():
-    h = helpers()
-    mesh, source, potential, table = h._picard_case()
-    results = []
-    for cached in (False, True):
-        result = h._picard_solve(
-            mesh, source, potential, table, order=2, material_update_order=1,
-            anderson_depth=0, cache_fixed_rhs=cached,
-            total_source_h=ng.CF((0., 0., .1)),
-            total_source_materials=("total",), tolerance=1e-6)
-        assert result["nonlinear_stats"]["converged"]
-        assert result["nonlinear_stats"]["rhs_cache"] == ("fixed_vector" if cached else "none")
-        results.append(np.asarray(result["B_cf"](mesh(.5, .1, .2))))
-    np.testing.assert_allclose(results[0], results[1], rtol=1e-10, atol=1e-14)
-
-
-def test_convergence_requires_the_material_residual_too():
-    """Finding 2: a converged solve is self-consistent with the law."""
-    h = helpers()
-    mesh, h_source, potential, bh_table = h._picard_case()
-    tolerance = 1.0e-6
-    result = h._picard_solve(
-        mesh, h_source, potential, bh_table, order=2, material_update_order=1,
-        anderson_depth=0, tolerance=tolerance)
-    stats = result["nonlinear_stats"]
-    assert stats["converged"]
-    assert stats["relative_constitutive_change"] <= tolerance
-    assert stats["final_state_constitutive_residual"] is not None
-    assert stats["final_state_constitutive_residual"] <= tolerance
-    assert stats["final_material_state_resolved"]
-    assert all("relative_constitutive_change" in row for row in stats["history"])
-
-
-def test_a_stalled_update_is_not_reported_as_converged():
-    """Finding 2, the failure it existed for: tiny relaxation, moving nothing."""
-    from radia.kelvin_solver import MixedOmegaPicardNotConverged
-
-    h = helpers()
-    mesh, h_source, potential, bh_table = h._picard_case()
-    with pytest.raises(MixedOmegaPicardNotConverged, match="did not converge") as info:
-        h._picard_solve(
-            mesh, h_source, potential, bh_table, order=2, material_update_order=1,
-            anderson_depth=0, relaxation=1.0e-3, max_iterations=3, tolerance=1.0e-6)
-    stats = info.value.state["nonlinear_stats"]
-    assert stats["converged"] is False
-    # The material is still far from the law, whatever |B| did.
-    assert stats["relative_constitutive_change"] > 1.0e-6
-    assert "relative_constitutive_change" in str(info.value)
 
 
 def _matching_trace_case():

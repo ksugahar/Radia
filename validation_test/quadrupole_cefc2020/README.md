@@ -88,10 +88,13 @@ carry the full point-wise fields and the mesh hashes.
 
 The nonlinear row is the tabulated B(H) law at the design current: HDiv-MMM
 converged its energy Newton loop (mass-Riesz CG inner solves); the mixed Omega
-Picard loop needed the constrained Anderson mixing (`--mixed-anderson-depth 2`,
-52 iterations, 126 min on hibino) after a first attempt with
-plain damped Picard stalled at the 80-iteration cap with a relative B change of
-7.8e-4 -- the runner now saves that partial state and resumes from it.
+row was then produced by the since-retired Picard route with constrained
+Anderson mixing (52 iterations, 126 min on hibino) after plain damped Picard
+stalled at the 80-iteration cap with a relative B change of 7.8e-4.  Since
+2026-09-30 the mixed Omega B-H solve is Newton only: the runner has no mixed
+relaxation, Anderson, or warm-start options, and a non-converged Newton solve
+raises instead of saving a partial state.  The nonlinear mixed Omega row has
+not been re-run on the Newton route.
 
 ## Multipole convergence: curved against straight pole faces, BDM1 against BDM2
 

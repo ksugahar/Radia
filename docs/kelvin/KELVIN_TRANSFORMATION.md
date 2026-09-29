@@ -995,7 +995,6 @@ Public API:
 from radia.kelvin_solver import (
     project_source_interface_potential,
     solve_magnetostatic_mixed_total_reduced_omega_kelvin,
-    solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin,
 )
 
 with ng.TaskManager():
@@ -1016,14 +1015,16 @@ with ng.TaskManager():
         order=2)
 ```
 
-The optional Picard driver consumes the same `B(H)` law and preserves this
-topological/source contract.  It is intentionally not a hysteresis solver.
+The nonlinear driver,
+`radia.mixed_omega_newton.solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin`,
+is a quadrature-point PCHIP Newton that consumes the same `B(H)` law and
+preserves this topological/source contract.  It is intentionally not a hysteresis solver.
 EnergyStop and Play state evolution need their own committed material-state
 iteration and must not be substituted by the memoryless `B(H)` update.
 
 Golden coverage: `tests/test_kelvin_mixed_omega.py` locks the interface
-jump, high-`mu_r` source exclusion, scalar-trace residual gate, and the
-linear-law Picard path. `tests/test_kelvin_radia_source_contract.py` locks
+jump, high-`mu_r` source exclusion and scalar-trace residual gate;
+`tests/test_mixed_omega_newton.py` locks the Newton driver. `tests/test_kelvin_radia_source_contract.py` locks
 the native Kelvin 0-form and twisted-1-form transforms.
 
 #### Analytical solutions for benchmark cases
