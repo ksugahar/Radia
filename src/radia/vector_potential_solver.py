@@ -66,7 +66,7 @@ def _check_direct_solve(matrix, fes, rhs, solution, what):
 
     SparseCholesky returns a wrong answer without an error for a
     nonsymmetric or singular matrix, so every direct solve is checked
-    (``radia._residual_gate``: relative 1e-8 or backward error 1e-12).
+    (``radia._residual_gate``: true relative residual at most 1e-8).
     """
     from radia._residual_gate import check_true_residual
     residual = rhs.CreateVector()
