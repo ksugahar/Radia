@@ -36,6 +36,22 @@ from radia.panels.calc_common import apply_fe_inverse
 MU0 = 4.0e-7 * math.pi
 
 
+def _mu_r_from_b_table(values, bh_curve):
+    """Secant permeability of the declared piecewise-linear B-H table."""
+    bh = np.asarray(bh_curve, dtype=float)
+    if (bh.ndim != 2 or bh.shape[1] != 2 or len(bh) < 2
+            or not np.isfinite(bh).all() or np.any(bh[0] != 0)
+            or np.any(np.diff(bh, axis=0) <= 0)):
+        raise ValueError("B-H table must start at (0, 0) and increase strictly in H and B")
+    values = np.asarray(values, dtype=float)
+    if not np.isfinite(values).all() or np.any(values < 0) or np.any(values > bh[-1, 1]):
+        raise ValueError(f"Flux amplitude is outside the B-H table range [0, {bh[-1, 1]}] T")
+    field = np.interp(values, bh[:, 1], bh[:, 0])
+    mu = np.full_like(values, bh[1, 1] / (MU0 * bh[1, 0]))
+    np.divide(values, MU0 * field, out=mu, where=field > 0)
+    return np.maximum(mu, 1.0)
+
+
 def build_mesh(R_wp_m: float, H_wp_m: float,
                R_coil_m: float, R_outer_m: float,
                maxh_wp_m: float, maxh_air_m: float):
@@ -100,23 +116,9 @@ def run_axisym_nonlinear(args, bh_curve):
     )
     print(f"mesh: ne={mesh.ne}, nv={mesh.nv}, mats={mesh.GetMaterials()}")
 
-    # BH lookup -- given |B|, return mu_r = B / (mu_0 H).
-    bh = np.asarray(bh_curve)
-    H_arr_bh, B_arr_bh = bh[:, 0], bh[:, 1]
-    # Initial-slope mu_r for low |B| (B ~ 0 floor).
-    mu_r_init = float(args.mu_r)
-
-    def mu_r_from_B_array(B_arr_input):
-        """Vectorised: given per-element |B|, return per-element mu_r."""
-        out = np.full_like(B_arr_input, mu_r_init, dtype=float)
-        # For B above the first BH-curve point: invert BH numerically.
-        mask = B_arr_input > B_arr_bh[1] if len(B_arr_bh) > 1 else B_arr_input > 1e-6
-        if mask.any():
-            H_vals = np.interp(B_arr_input[mask], B_arr_bh, H_arr_bh)
-            mu_r = B_arr_input[mask] / (MU0 * np.maximum(H_vals, 1e-9))
-            out[mask] = mu_r
-        # Floor at 1 (vacuum).
-        return np.maximum(out, 1.0)
+    # Validate the table before assembly. args.mu_r is only the initial guess;
+    # it must not change the constitutive law below the first positive knot.
+    _mu_r_from_b_table(np.array([0.]), bh_curve)
 
     # Per-element mu_r via L2(order=0) (true piecewise-constant per element).
     fes_mu = L2(mesh, order=0)
@@ -140,10 +142,14 @@ def run_axisym_nonlinear(args, bh_curve):
                                      "coil": 0.0, "air": 0.0}, default=0.0)
 
         gfu = GridFunction(fes)
-        max_picard = 25
+        max_picard = int(getattr(args, "max_picard", 200))
+        if max_picard < 1:
+            raise ValueError("max_picard must be positive")
         tol_picard = 1e-2
         alpha = 0.25
         convergence = []
+        initial_guess_reductions = 0
+        constitutive_residual = math.inf
         old_vec = gf_mu.vec.FV().NumPy().copy()
         # Map workpiece elements: index list
         wp_elem_idx = np.array(
@@ -187,7 +193,22 @@ def run_axisym_nonlinear(args, bh_curve):
             new_vec = old_vec.copy()
             if len(wp_elem_idx) > 0:
                 B_wp = B_per_elem[wp_elem_idx]
-                mu_r_bh = mu_r_from_B_array(B_wp)
+                if not convergence and np.max(B_wp) > float(bh_curve[-1][1]):
+                    # Globalize only the initial guess, never extrapolate the
+                    # constitutive law or accept an out-of-table final field.
+                    reduced_guess = np.maximum(1., 0.5 * old_vec[wp_elem_idx])
+                    if np.any(reduced_guess < old_vec[wp_elem_idx]):
+                        old_vec[wp_elem_idx] = reduced_guess
+                        gf_mu.vec.FV().NumPy()[:] = old_vec
+                        initial_guess_reductions += 1
+                        print("  Reducing initial permeability guess to enter B-H table range")
+                        continue
+                mu_r_bh = _mu_r_from_b_table(B_wp, bh_curve)
+                defect = float(np.max(np.abs(mu_r_bh - old_vec[wp_elem_idx])
+                                      / np.maximum(old_vec[wp_elem_idx], 1.)))
+                if (convergence and defect > 1.05 * convergence[-1][
+                        "constitutive_relative_residual"]):
+                    alpha = max(0.01, 0.5 * alpha)
                 mu_r_damped = alpha * mu_r_bh + (1.0 - alpha) * old_vec[wp_elem_idx]
                 mu_r_damped = np.maximum(mu_r_damped, 1.0)
                 new_vec[wp_elem_idx] = mu_r_damped
@@ -200,6 +221,7 @@ def run_axisym_nonlinear(args, bh_curve):
             gf_mu.vec.FV().NumPy()[:] = new_vec
             old_vec = new_vec.copy()
             convergence.append({"iter": k_outer, "max_dmu_r": max_dmu,
+                                 "relaxation": alpha,
                                  "constitutive_relative_residual": constitutive_residual,
                                  "mu_r_wp_mean": float(new_vec[wp_elem_idx].mean()),
                                  "B_wp_max": float(B_per_elem[wp_elem_idx].max()),
@@ -257,6 +279,8 @@ def run_axisym_nonlinear(args, bh_curve):
             "H_t_mean_A_per_m": float(H_t_samples.mean()),
             "H_t_max_A_per_m": float(H_t_samples.max()),
             "picard_iter": len(convergence),
+            "initial_guess_reductions": initial_guess_reductions,
+            "max_picard": max_picard,
             "picard_convergence": convergence,
             "linear_relative_residual": linear_residual,
         }
@@ -444,6 +468,8 @@ def main():
     parser.add_argument("--current", type=float, default=100.0,
                         help="Peak coil-current phasor amplitude [A]")
     parser.add_argument("--order", type=int, default=2)
+    parser.add_argument("--max-picard", type=int, default=200,
+                        help="Maximum nonlinear iterations, including initial-guess damping")
     parser.add_argument("--bh-file", type=str, default=None,
                         help="If set, run nonlinear-BH Picard outer iteration "
                              "using the given two-column H[A/m]  B[T] BH file.")

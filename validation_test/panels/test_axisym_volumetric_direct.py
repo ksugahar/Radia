@@ -7,6 +7,17 @@ import pytest
 from radia.panels import calc_axisym_volumetric as solver
 
 
+def test_bh_secant_is_continuous_at_first_knot_and_rejects_extrapolation():
+    bh = [(0., 0.), (100., .1), (1000., .5)]
+    low = solver._mu_r_from_b_table(np.array([0., .05, .1]), bh)
+    np.testing.assert_allclose(low, .001 / solver.MU0)
+    near = solver._mu_r_from_b_table(np.array([.1 - 1e-10, .1 + 1e-10]), bh)
+    assert near[1] == pytest.approx(near[0], rel=1e-8)
+    for invalid in (-.01, .5001, np.nan):
+        with pytest.raises(ValueError, match="outside the B-H table"):
+            solver._mu_r_from_b_table(np.array([invalid]), bh)
+
+
 @pytest.mark.parametrize("complex_space", [False, True])
 def test_direct_correction_can_reuse_a_converged_solution(complex_space):
     from netgen.geom2d import unit_square
@@ -66,11 +77,12 @@ def test_direct_residual_scaling_and_constant_bh(monkeypatch, frequency, order):
         assert linear["P_wp_W"] == nonlinear["P_wp_W"] == doubled["P_wp_W"] == 0
 
 
-def test_picard_converges_saturating_case_without_relaxing_acceptance():
+@pytest.mark.parametrize("current", [1000., 5000.])
+def test_picard_converges_saturating_case_without_relaxing_acceptance(current):
     args = SimpleNamespace(
         R_wp=.005, H_wp=.01, R_coil=.02, R_outer=.04,
         maxh_wp=.0005, maxh_air=.004, mu_r=1000., sigma=2e6,
-        frequency=1000., current=1000., order=2, output=None,
+        frequency=1000., current=current, order=2, output=None,
     )
     bh = [(0., 0.), (10., .012), (100., .12),
           (1000., .9), (10000., 1.5), (1e6, 2.75)]
