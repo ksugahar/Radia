@@ -1189,3 +1189,26 @@ def test_sparse_direct_saddle_solve_satisfies_original_system(order):
     residual.data = matrix * computed - rhs
     assert np.linalg.norm(residual.FV().NumPy()[free]) / np.linalg.norm(
         rhs.FV().NumPy()[free]) < 1e-10
+    # Reuse the same space while both constitutive and interface coefficients
+    # change. Stale numeric factors would fail the original-system residual.
+    from scipy.sparse import coo_matrix, diags
+    rows, cols, values = matrix.COO()
+    assembled = coo_matrix((np.asarray(values), (np.asarray(rows), np.asarray(cols))),
+                           shape=(fes.ndof, fes.ndof)).tocsr()
+    if isinstance(matrix, ng.la.SparseMatrixSymmetricdouble):
+        assembled = assembled + assembled.T - diags(assembled.diagonal())
+    entries = assembled.tocoo()
+    primal_end = fes.Range(2).start
+    is_primal = (entries.row < primal_end) & (entries.col < primal_end)
+    cache = {}
+    for primal_scale, trace_scale in ((1., 1.), (2., 1.), (.5, 3.)):
+        scaled = entries.data * np.where(is_primal, primal_scale, trace_scale)
+        changed = ng.la.SparseMatrixdouble.CreateFromCOO(
+            entries.row, entries.col, scaled, *assembled.shape)
+        rhs.data = changed * exact
+        with ng.TaskManager():
+            computed = _matching_trace_direct_inverse(
+                changed, fes, order=order, cache=cache) * rhs
+        residual.data = changed * computed - rhs
+        assert np.linalg.norm(residual.FV().NumPy()[free]) / np.linalg.norm(
+            rhs.FV().NumPy()[free]) < 1e-10
