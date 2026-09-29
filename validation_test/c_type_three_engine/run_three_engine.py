@@ -459,7 +459,7 @@ def solve_omega(
     exact_exterior_source: bool = False,
     nonlinear_method: str = "picard",
     material_bonus_intorder: int | None = None,
-    source_load: str = "volume",
+    source_load: str = "auto",
     progress_callback=None,
     energy_observer=None,
 ) -> tuple[np.ndarray, dict[str, object]]:
@@ -536,6 +536,8 @@ def solve_omega(
             "total Omega"
         ),
         "source_trace": {
+            "load_selection": source_trace.get("load_selection"),
+            "requested_source_load": source_load,
             "iron_interface_boundary": "iron_air_interface",
             "projection_order": int(source_trace["projection_order"]),
             # A surface-flux iron load evaluates the source on faces only and
