@@ -52,8 +52,9 @@ The selected Python environment's `Library` directory is the first MKL search
 location. An explicitly set `MKLROOT` is a fallback for a controlled external
 installation. There is no hard-coded oneAPI installation path.
 
-NGSolve 6.2.2606 uses its own OpenBLAS distribution. Radia's HACApK, PARDISO,
-and dense native kernels intentionally use MKL. These are separate native
+NGSolve 6.2.2607 declares `ngsolve-openblas==0.3.33` on Windows/Linux.
+Radia's HACApK and dense native kernels use MKL; direct FE solves explicitly
+use NGSolve SparseCholesky, with no PARDISO fallback. These are separate native
 dependencies; Radia does not replace or bundle the user's NumPy implementation.
 
 ## MATLAB and MEX
