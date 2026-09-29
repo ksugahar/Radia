@@ -1,0 +1,85 @@
+{
+  "schema": "radia.surface-rom.direct-migration.v1",
+  "ok": true,
+  "scope": "coarse residual and three-step nonlinear smoke only",
+  "inverse": "sparsecholesky",
+  "maxh": 0.02,
+  "order": 1,
+  "ndof": 22415,
+  "relative_true_residuals": {
+    "tangent": 1.6777601553120438e-11,
+    "source_air": 1.568660059585136e-11,
+    "trace_air": 9.723078677159645e-16,
+    "trace_interior": 3.5887455421852443e-16,
+    "indicator_steel": 2.6486278237123213e-16
+  },
+  "residual_limit": 1e-07,
+  "history": [
+    {
+      "t": 0.002,
+      "current_AT": [
+        35.825905235305356,
+        15.68422433907073
+      ],
+      "newton": 3,
+      "B_pos": {
+        "S1": 0.013100666222811176,
+        "S3": 0.011008389794695143,
+        "S2_x39.7": 0.0019688863445106006,
+        "S2_x41.8": 0.0019391530534311932
+      },
+      "newton_converged": true,
+      "max_relative_linear_residual": 1.1754206309006659e-11
+    },
+    {
+      "t": 0.004,
+      "current_AT": [
+        70.24705663345864,
+        30.7534614453457
+      ],
+      "newton": 3,
+      "B_pos": {
+        "S1": 0.03191643211947392,
+        "S3": 0.025946027467371856,
+        "S2_x39.7": 0.003941953534837006,
+        "S2_x41.8": 0.0038453692650707687
+      },
+      "newton_converged": true,
+      "max_relative_linear_residual": 7.455780657809881e-11
+    },
+    {
+      "t": 0.006,
+      "current_AT": [
+        103.31853538026755,
+        45.23182531313701
+      ],
+      "newton": 3,
+      "B_pos": {
+        "S1": 0.054232386334853756,
+        "S3": 0.04271241891611758,
+        "S2_x39.7": 0.005823657056487187,
+        "S2_x41.8": 0.005635217586145536
+      },
+      "newton_converged": true,
+      "max_relative_linear_residual": 3.9712740066041605e-11
+    }
+  ],
+  "host": "mdx1",
+  "python": "3.12.10",
+  "ngsolve": "6.2.2607",
+  "linear_solves": 12,
+  "sources": {
+    "aphi_model.py": "7a54819847239f1880f84eef8d4df23dcb3e841de2befda3eb1dd97eb57ba3b6",
+    "check_sparsecholesky.py": "dfbc828aace06d30ee2697e92aa3094d46c66c92627887b7528909c004a3ecad",
+    "ecsw.py": "8fd943b0a40f55f209987b3b36dd10b29b5fad7dff1ce3e4b3b501567f7b46db",
+    "fom_aphi.py": "e747ff898d763a29a0d615ad7d02e58111b5c7a50ddde166c626370a9db1864d",
+    "rom.py": "12cfd7e3e15d85b92580ba047cf290fa0593e2c93758bc03dae2cf3aded7257c",
+    "rom_aphi.py": "0e135ff335a4acae32dee53b10ebd33b564a8548531ffd66503448aea772e622",
+    "run_basis_10pct.py": "1f61b6be46e34b60aa63bdeddd5d7bf220d2b5798aaf053f024aea43462b31b3",
+    "run_pattern_select.py": "ad86e311ed2bc21dc75c21c06ad932cf149ac4fd06efcf54effcd39b3f80686f",
+    "run_pattern_study.py": "d3714518784c18154f958f4f388dd28e11f053b6579b688befc7d11b80a80dba",
+    "run_stop_calibration.py": "d1617670b87ad89a61ac26e13ea3f02d6a9ac8149460538a354f7a9724da7962",
+    "team13_model.py": "4c53f53637f3d5a018bbde951183b07f27282cdd932d3962eaa430b4fdd4d9dd",
+    "transient.py": "681c8fc205637b94855020872c6d1cc43be184a15f75d2a67462a1f4f431dbd7"
+  }
+}

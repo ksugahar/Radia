@@ -29,6 +29,8 @@ if __name__ == '__main__':
                ndof=m.fes.ndof, ndof_A=m.Vh.ndof, ndof_phi=m.Qh.ndof, n_gamma=len(m.idx_gamma), n_interior=len(m.idx_int),
                n_air=len(m.idx_air), solve_s=info['seconds'], linear_solves=info['linear_solves'], history=hist,
                host=platform.node(), ngsolve=ngsolve.__version__,
+               linear_residual_limit=info['linear_residual_limit'],
+               max_relative_linear_residual=info['max_relative_linear_residual'],
                sources={q: hashlib.sha256((ROOT / q).read_bytes()).hexdigest() for q in ['team13_model.py', 'aphi_model.py', 'fom_aphi.py', 'transient.py']})
     (out / f'{wave}.json').write_text(json.dumps(res, indent=2))
     print('done', wave, 'ndof', m.fes.ndof, 'gamma', len(m.idx_gamma), 'int', len(m.idx_int), 'air', len(m.idx_air), 'sec', round(info['seconds'], 1))
