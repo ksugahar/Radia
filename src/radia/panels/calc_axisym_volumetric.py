@@ -84,6 +84,8 @@ from pathlib import Path
 
 import numpy as np
 
+from radia.panels.calc_common import apply_fe_inverse
+
 MU0 = 4.0e-7 * math.pi
 
 
@@ -141,7 +143,7 @@ def run_axisym_nonlinear(args, bh_curve):
     """
     from ngsolve import (
         BilinearForm, LinearForm, GridFunction, Integrate, dx, grad,
-        Conj, sqrt as ng_sqrt, x as r_cf, H1, L2,
+        Conj, sqrt as ng_sqrt, x as r_cf, H1, L2, TaskManager,
     )
     import radia.axifem   # noqa: F401
 
@@ -214,7 +216,12 @@ def run_axisym_nonlinear(args, bh_curve):
             f += J_phi * r_cf * v * dx
             a.Assemble()
             f.Assemble()
-            gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f.vec
+            inverse = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
+            # Each Picard linear system has homogeneous Dirichlet data.
+            # Solve it afresh, retaining the original load as residual scale.
+            gfu.vec[:] = 0.0
+            linear_residual = apply_fe_inverse(
+                a.mat, inverse, f.vec, gfu.vec, fes.FreeDofs())
 
             # |B| as a CoefficientFunction from grad(gfu).
             # B_z = grad[0] + A/r,  B_r = -grad[1]
@@ -297,6 +304,7 @@ def run_axisym_nonlinear(args, bh_curve):
             "H_t_max_A_per_m": float(H_t_samples.max()),
             "picard_iter": len(convergence),
             "picard_convergence": convergence,
+            "linear_relative_residual": linear_residual,
         }
 
 
@@ -381,7 +389,7 @@ def run_axisym_linear(args):
     f = LinearForm(fes)
     f += J_phi * r_cf * v * dx
 
-    # TaskManager-Only policy: wrap the heavy FE work (assembly + pardiso
+    # TaskManager-Only policy: wrap the heavy FE work (assembly + SparseCholesky
     # solve + power integral) so it runs PARALLEL on the NGSolve threadpool,
     # like run_axisym_nonlinear (L178).  Without this the LINEAR solver ran
     # SERIALLY -- calc_main does not open a TaskManager context, and this
@@ -395,7 +403,9 @@ def run_axisym_linear(args):
 
         gfu = GridFunction(fes)
         t0 = time.perf_counter()
-        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f.vec
+        inverse = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
+        linear_residual = apply_fe_inverse(
+            a.mat, inverse, f.vec, gfu.vec, fes.FreeDofs())
         print(f"solved in {time.perf_counter()-t0:.2f}s")
 
         # P_wp = (1/2) Re( int_workpiece sigma |jw A_phi|^2 2 pi r dr dz )
@@ -449,6 +459,7 @@ def run_axisym_linear(args):
         "H_t_mean_A_per_m": H_t_mean,
         "H_t_max_A_per_m": H_t_max,
         "H_t_samples_A_per_m": H_t_samples.tolist(),
+        "linear_relative_residual": linear_residual,
     }
     if args.output:
         with open(args.output, "w") as fh:
