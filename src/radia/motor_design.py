@@ -13,7 +13,7 @@ ANALYSIS_LAMINATION = "Lamination"
 ANALYSIS_HDIV_REDUCED = "HDiv Reduced"
 MOTOR_ANALYSES = (ANALYSIS_TRANSIENT, ANALYSIS_LAMINATION, ANALYSIS_HDIV_REDUCED)
 TRANSIENT_METHODS = ("linearization", "coupled")
-LINEAR_SOLVERS = ("pardiso", "sparsecholesky", "umfpack")
+LINEAR_SOLVERS = ("sparsecholesky",)
 LAMINATION_MODES = ("cell", "global", "full")
 LAMINATION_DRIVES = ("meanB", "current", "voltage")
 HDIV_ORDERS = (1, 2)
@@ -26,7 +26,7 @@ class MotorDesignSpec:
     rotor_vol: str = ""
     method: str = "linearization"
     fes_order: int = 1
-    linear_solver: str = "pardiso"
+    linear_solver: str = "sparsecholesky"
     nbr_phases: int = 3
     n_turns_per_slot: int = 100
     slot_area: str = "1e-4"
@@ -125,6 +125,8 @@ class MotorDesignSpec:
         return not self.missing_required_inputs()
 
     def build_command(self, *, python: str | None = None, panels_dir=None) -> list[str]:
+        if self.analysis in (ANALYSIS_TRANSIENT, ANALYSIS_LAMINATION) and self.linear_solver not in LINEAR_SOLVERS:
+            raise ValueError("Motor direct FE solves require sparsecholesky")
         if self.analysis == ANALYSIS_TRANSIENT:
             return self._build_transient(python or sys.executable, panels_dir)
         if self.analysis == ANALYSIS_LAMINATION:

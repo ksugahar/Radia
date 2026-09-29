@@ -72,13 +72,8 @@ import time
 
 import numpy as np
 
-# Direct solver for the FE Inverse().  Default "pardiso" (MKL, fastest for the
-# repeated transient factorizations) is overridden by --linear-solver in
-# main().  The golden tests pass "sparsecholesky" (ngsolve built-in, no MKL)
-# so they run on machines whose PATH carries another product's OLD unversioned
-# MKL (e.g. CST Studio Suite on the CI runner), which otherwise breaks MKL
-# PARDISO at solve time with "Cannot load mkl_intel_thread.dll".
-_LINEAR_SOLVER = "pardiso"
+# Direct FE solves use NGSolve SparseCholesky without backend fallback.
+_LINEAR_SOLVER = "sparsecholesky"
 
 # --- panel-common boilerplate ---
 _this_dir = os.path.dirname(os.path.abspath(__file__))
@@ -86,7 +81,7 @@ if _this_dir not in sys.path:
     sys.path.insert(0, _this_dir)
 
 from calc_common import (MU_0, NU_0, setup_paths, progress, calc_main,
-                          EMMaterial, add_material_args)
+                          EMMaterial, add_material_args, apply_fe_inverse)
 
 
 def _log(msg):
@@ -155,7 +150,8 @@ def _solve_nonlinear_op_point(mesh, fes, A, nu_cf, f_assembled,
         A_prev.data = A.vec
         a.Assemble()
         inv = a.mat.Inverse(fes.FreeDofs(), inverse=_LINEAR_SOLVER)
-        A.vec.data = inv * f_assembled.vec
+        A.vec[:] = 0
+        apply_fe_inverse(a.mat, inv, f_assembled.vec, A.vec, fes.FreeDofs())
         diff = (A.vec - A_prev).Norm() / max(A.vec.Norm(), 1e-30)
         if diff < tol:
             break
@@ -194,7 +190,7 @@ def _extract_L_inc(mesh, fes, A, nu_cf, phase_regions, n_turns, slot_area,
             f += -J_density * v * dx(definedon=mesh.Materials(neg_mat))
             f.Assemble()
             gfu_j = GridFunction(fes)
-            gfu_j.vec.data = inv * f.vec
+            apply_fe_inverse(a_lin.mat, inv, f.vec, gfu_j.vec, fes.FreeDofs())
             gfu_phases.append(gfu_j)
 
         # Flux linkage: psi_kj = stack_length * N_turns/A_slot *
@@ -601,11 +597,9 @@ def build_argparser():
                         help="linearization=Lange-HH (default), "
                              "coupled=fully-coupled ONELAB-style (not yet)")
     parser.add_argument("--fes-order", type=int, default=1)
-    parser.add_argument("--linear-solver", default="pardiso",
-                        choices=["pardiso", "sparsecholesky", "umfpack"],
-                        help="FE direct solver. pardiso=MKL (fastest, default); "
-                             "sparsecholesky=ngsolve built-in (no MKL) -- use on "
-                             "machines with a conflicting MKL on PATH (e.g. CST).")
+    parser.add_argument("--linear-solver", default="sparsecholesky",
+                        choices=["sparsecholesky"],
+                        help="FE direct solver: NGSolve SparseCholesky.")
     parser.add_argument("--nbr-phases", type=int, default=3)
     parser.add_argument("--n-turns-per-slot", type=int, default=100)
     parser.add_argument("--slot-area", type=float, default=1e-4,

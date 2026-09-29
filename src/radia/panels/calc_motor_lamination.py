@@ -66,18 +66,15 @@ import sys
 
 import numpy as np
 
-# Direct solver for the FE Inverse(); default "pardiso" (MKL, fastest) is
-# overridden by --linear-solver in main().  Golden tests pass "sparsecholesky"
-# (ngsolve built-in, no MKL) -- same solution, but immune to the MKL PARDISO
-# threading-layer load that is flaky under the pytest subprocess.
-_LINEAR_SOLVER = "pardiso"
+# Direct FE solves use NGSolve SparseCholesky without backend fallback.
+_LINEAR_SOLVER = "sparsecholesky"
 
 # Panel-common boilerplate
 _this_dir = os.path.dirname(os.path.abspath(__file__))
 if _this_dir not in sys.path:
     sys.path.insert(0, _this_dir)
 
-from calc_common import (MU_0, NU_0, setup_paths, progress, calc_main)
+from calc_common import (MU_0, NU_0, setup_paths, progress, calc_main, apply_fe_inverse)
 from radia.lamination import laminated_mu_eff
 
 
@@ -216,8 +213,7 @@ def solve_cell_problem(d_iron=0.35e-3, d_ins=0.05e-3,
         f.Assemble()
 
         inv = a.mat.Inverse(fes.FreeDofs(), inverse=_LINEAR_SOLVER)
-        res = f.vec - a.mat * A_sol.vec
-        A_sol.vec.data = A_sol.vec + inv * res
+        linear_residual = apply_fe_inverse(a.mat, inv, f.vec, A_sol.vec, fes.FreeDofs())
 
         V_iron = Integrate(CoefficientFunction(1.0), mesh,
                             definedon=mesh.Materials("iron"))
@@ -283,6 +279,7 @@ def solve_cell_problem(d_iron=0.35e-3, d_ins=0.05e-3,
         sigma_eff = float((V_iron / V_total) * sigma)
 
         return {
+            "linear_relative_residual": linear_residual,
             "B_avg": B_avg,
             "freq": freq,
             "mu_eff_real": mu_eff_real,
@@ -390,7 +387,7 @@ def solve_global_fe_with_em(vol_file, em_table, H_amplitude, freq,
             f.Assemble()
 
     inv = a.mat.Inverse(fes.FreeDofs(), inverse=_LINEAR_SOLVER)
-    A.vec.data = inv * f.vec
+    linear_residual = apply_fe_inverse(a.mat, inv, f.vec, A.vec, fes.FreeDofs())
 
     # Post-process: average |B|^2 in stator_iron, multiply by ECL density
     gA = grad(A)
@@ -424,6 +421,7 @@ def solve_global_fe_with_em(vol_file, em_table, H_amplitude, freq,
 
     return {
         "vol_file": vol_file,
+        "linear_relative_residual": linear_residual,
         "fes_order": fes_order,
         "ndof": fes.ndof,
         "n_em_table_entries": len(em_table),
@@ -480,11 +478,9 @@ def build_argparser():
                         help="Hz, operating frequency for global FE")
     parser.add_argument("--fes-order", type=int, default=2,
                         help="HCurl order")
-    parser.add_argument("--linear-solver", default="pardiso",
-                        choices=["pardiso", "sparsecholesky", "umfpack"],
-                        help="FE direct solver. pardiso=MKL (fastest, default); "
-                             "sparsecholesky=ngsolve built-in (no MKL) -- use on "
-                             "machines with a conflicting MKL on PATH (e.g. CST).")
+    parser.add_argument("--linear-solver", default="sparsecholesky",
+                        choices=["sparsecholesky"],
+                        help="FE direct solver: NGSolve SparseCholesky.")
     parser.add_argument(
         "--msh-output", default="",
         help="GMSH .msh v4.1 output for global/full FE modes",

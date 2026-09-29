@@ -21,6 +21,23 @@ import numpy as np
 MU_0 = 4e-7 * np.pi
 NU_0 = 1.0 / MU_0
 
+
+def apply_fe_inverse(matrix, inverse, rhs, solution, free_dofs):
+    """Apply a Dirichlet correction and check the original free-row residual."""
+    from ngsolve import Projector
+
+    projector = Projector(free_dofs, True)
+    correction_rhs = rhs.CreateVector()
+    correction_rhs.data = projector * (rhs - matrix * solution)
+    scale = correction_rhs.Norm()
+    solution.data += inverse * correction_rhs
+    residual = rhs.CreateVector()
+    residual.data = projector * (rhs - matrix * solution)
+    relative = residual.Norm() / max(scale, 1e-300)
+    if not math.isfinite(relative) or relative > 1e-8:
+        raise RuntimeError(f"Direct FE solve failed true residual check: {relative:.3e}")
+    return relative
+
 # BH curve data and material presets are canonical in em_material.py.
 # Re-export here for backward compatibility.
 _radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
