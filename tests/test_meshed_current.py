@@ -19,16 +19,44 @@ def solve(mesh, current):
     drive = mesh.MaterialCF({"drive":ng.CF((0,1,0))}, default=ng.CF((0,0,0)))
     with ng.TaskManager():
         return solve_closed_coil_current(mesh, drive, current_A=current,
-                    drive_length_m=2, materials=("drive","return"), inverse="pardiso")
+                    drive_length_m=2, materials=("drive","return"), inverse="sparsecholesky")
 
 
 def test_current_conservation_sign_and_zero(ring):
     positive, negative, zero = (solve(ring,i) for i in (2,-2,0))
     assert positive['stats']['relative_divergence'] < 1e-10
+    assert positive['stats']['linear_relative_residual'] < 1e-10
     assert positive['stats']['section_current_A'] == pytest.approx(2,abs=1e-12)
     np.testing.assert_allclose(negative['current'].vec.FV().NumPy(),
                               -positive['current'].vec.FV().NumPy(),atol=1e-12)
     np.testing.assert_array_equal(zero['current'].vec.FV().NumPy(),0)
+
+
+def test_rt0_schur_preserves_original_saddle_solution(ring, monkeypatch):
+    from scipy.sparse import coo_matrix, diags
+    from scipy.linalg import solve as dense_solve
+    import radia.meshed_current as module
+
+    actual = module._solve_rt0_saddle
+
+    def checked(matrix, rhs, free, velocity_dofs):
+        rows, cols, values = matrix.COO()
+        full = coo_matrix((np.asarray(values), (rows, cols)),
+                          shape=(matrix.height, matrix.width)).tocsr()
+        if "SparseMatrixSymmetric" in type(matrix).__name__:
+            full = full + full.T - diags(full.diagonal())
+        active = np.flatnonzero(np.array(list(free), dtype=bool))
+        reference = dense_solve(full[active][:, active].toarray(),
+                                rhs.FV().NumPy()[active])
+        result, residual, iterations = actual(matrix, rhs, free, velocity_dofs)
+        np.testing.assert_allclose(result.FV().NumPy()[active], reference,
+                                   rtol=1e-10, atol=1e-11)
+        return result, residual, iterations
+
+    monkeypatch.setattr(module, "_solve_rt0_saddle", checked)
+    result = solve(ring, 2)
+    assert result['stats']['linear_solver'] == 'pressure_schur_cg'
+    assert result['stats']['inverse'] == 'sparsecholesky'
 
 
 def test_gradient_drive_has_no_closed_current(ring):
