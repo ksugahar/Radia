@@ -4,6 +4,13 @@ All notable changes to `cubit-mesh-export` — the high-order curved
 mesh export package for Coreform Cubit (Netgen / GMSH / Nastran /
 VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
+## 2.1.3 - Netgen 6.2.2607 native rebuild
+
+- Rebuild the optional Python curver against Netgen/NGSolve 6.2.2607.
+- Record the actual Netgen build version in native payload provenance.
+- The Cubit C++ export plugin remains independent of the solver wheel ABI;
+  LAB/100 deployment remains separate from the Radia solver release.
+
 ## 2.1.2 - Startup that survives removed release checkouts
 
 - The Cubit startup script no longer depends on the directory the package
