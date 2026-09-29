@@ -187,7 +187,8 @@
         "validation_test/panels/test_motor_lamination_golden.py",
         "validation_test/panels/test_motor_transient_golden.py",
         "validation_test/panels/test_axisym_volumetric_direct.py",
-        "validation_test/panels/test_accel_linear_dispatch.py"
+        "validation_test/panels/test_accel_linear_dispatch.py",
+        "validation_test/panels/test_kelvin_benchmark_direct.py"
       ]
     },
     "solver-numerics": {

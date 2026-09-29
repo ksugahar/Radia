@@ -45,7 +45,7 @@ if _this_dir not in sys.path:
 
 from calc_common import (
     setup_paths, progress, calc_main,
-    detect_kelvin_offset, add_periodic_kelvin,
+    detect_kelvin_offset, add_periodic_kelvin, apply_fe_inverse,
 )
 
 
@@ -87,8 +87,7 @@ def solve_kelvin_benchmark(vol_path, mu_r=100.0, H0=1.0,
                          specialcf, x, y, z, grad, sqrt, TaskManager)
 
     # Pull the Kelvin reluctivity helper from radia.kelvin_source.
-    sys.path.insert(0, os.path.join(_this_dir, ".."))
-    from kelvin_source import (kelvin_mu_factor_3d_cf, build_material_cf)
+    from radia.kelvin_source import (kelvin_mu_factor_3d_cf, build_material_cf)
 
     mu0 = 4.0 * math.pi * 1.0e-7
 
@@ -201,11 +200,15 @@ def solve_kelvin_benchmark(vol_path, mu_r=100.0, H0=1.0,
     f.Assemble()
 
     # ---- Solve ----
-    _log("assembling + solving (pardiso)")
+    _log("assembling + solving (sparsecholesky)")
     with TaskManager():
         a.Assemble()
-        gfOmega.vec.data = a.mat.Inverse(fes.FreeDofs(),
-                                          inverse="pardiso") * f.vec
+        inverse = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
+        # The source lift above only builds the load; the solved potential
+        # has homogeneous essential data, as in the original direct solve.
+        gfOmega.vec[:] = 0.0
+        linear_residual = apply_fe_inverse(
+            a.mat, inverse, f.vec, gfOmega.vec, fes.FreeDofs())
 
     # ---- Probe field at probe point (in magnetic region: H = grad(Omega)) ----
     grad_Omega = grad(gfOmega)
@@ -248,6 +251,8 @@ def solve_kelvin_benchmark(vol_path, mu_r=100.0, H0=1.0,
         "kelvin_offset": list(offset),
         "dirichlet": dirichlet,
         "converged": True,
+        "linear_solver": "sparsecholesky",
+        "linear_relative_residual": linear_residual,
         "iterations": 1,
         "msh_file": msh_file,
     }
