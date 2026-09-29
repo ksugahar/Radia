@@ -27,7 +27,7 @@ EM_METHODS = (
     METHOD_CLEBSCH,
 )
 
-FEM_SOLVERS = ("auto", "pardiso", "ams", "bddc", "iccg")
+FEM_SOLVERS = ("auto", "sparsecholesky", "ams", "bddc_ams", "bddc", "iccg")
 HDIV_SOLVERS = (("LU", 0), ("BiCGSTAB", 1), ("HACApK", 2))
 MATERIALS = ("steel", "copper", "aluminum", "elf_steel", "linear", "hysteresis")
 
@@ -117,6 +117,8 @@ class EMDesignSpec:
         append_value(cmd, "--hys-file", self.hys_file)
 
     def _build_fem_command(self, py: str, panels_dir) -> list[str]:
+        if self.solver not in FEM_SOLVERS:
+            raise ValueError(f"Unsupported FE solver: {self.solver}")
         if not self.coil_script:
             raise ValueError("No coil script specified.")
         stem = self.vol or self.coil_script
