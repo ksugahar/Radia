@@ -578,62 +578,26 @@ s = jω      (Laplace variable)
 Z(s)/R_dc = √(τs) · coth(√(τs))
 ```
 
-### Continued Fraction Expansion
+### Reduced time-domain models
 
-The function √(τs)·coth(√(τs)) has the elegant continued fraction:
+Use Foster poles and residues or a PRIMA projection of the passive descriptor
+system for a time-domain approximation. PRIMA is a projection method; renaming
+an extracted circuit does not implement it. The retired continued-fraction
+circuit construction is no longer an implementation route in Radia.
 
-```
-√(τs)·coth(√(τs)) = 1 + τs/(3 + τs/(5 + τs/(7 + τs/(9 + ...))))
-```
-
-**Truncated approximations**:
-
-| Order | Approximation | Accuracy |
-|-------|---------------|----------|
-| 0th | F₀ = 1 | DC exact |
-| 1st | F₁ = 1 + τs/3 | Good for τω < 1 |
-| 2nd | F₂ = (15 + 8τs)/(15 + 3τs) | Good for τω < 4.5 (ξ < 1.5) |
-
-### PRIMA Ladder Network
-
-The continued fraction maps to a ladder circuit:
-
-```
-     R_dc     L₁      L₂      L₃
-  o──/\/\/──○──⊃⊃⊃──○──⊃⊃⊃──○──⊃⊃⊃──○
-             │       │       │
-            ═╧═     ═╧═     ═╧═
-            R₁      R₂      R₃
-
-where:
-  L₁ = τ·R_dc/3,  R₁ = 3R_dc
-  L₂ = τ·R_dc/5,  R₂ = 5R_dc/3
-  L₃ = τ·R_dc/7,  R₃ = 7R_dc/5
-```
+For conductive-body models, see `radia.vim.HCurlEddyFosterModel`. For diffusion
+memory at an open boundary, use the exact DtN operator or its Foster modal
+approximation. Choose the retained modes using measured error over the required
+frequency band; a finite modal approximation must not be presented as an exact
+high-frequency diffusion law.
 
 ### Time Constant Examples
 
 | Material | a | σ [S/m] | μ_r | τ = a²μσ |
 |----------|---|---------|-----|----------|
-| Copper, 1mm | 1mm | 5.8×10⁷ | 1 | **73 ns** |
-| Copper, 5mm | 5mm | 5.8×10⁷ | 1 | **1.8 μs** |
+| Copper, 1mm | 1mm | 5.8×10⁷ | 1 | **73 μs** |
+| Copper, 5mm | 5mm | 5.8×10⁷ | 1 | **1.8 ms** |
 | Steel, 1mm | 1mm | 2×10⁶ | 1000 | **2.5 ms** |
-
-### Python Implementation
-
-```python
-def dowell_F_continued_fraction(tau_s, order=3):
-    """Continued fraction approximation of F(s)."""
-    denominators = [2*k + 1 for k in range(order, 0, -1)]
-    result = denominators[0]
-    for d in denominators[1:]:
-        result = d + tau_s / result
-    return 1 + tau_s / result
-
-def dowell_F_2nd_order(tau_s):
-    """2nd order rational approximation of F(s)."""
-    return (15 + 8*tau_s) / (15 + 3*tau_s)
-```
 
 ---
 
