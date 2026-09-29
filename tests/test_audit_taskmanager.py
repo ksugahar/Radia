@@ -27,7 +27,7 @@ def audit_module(monkeypatch, tmp_path):
         ("validation_test/heat/check_energy.py", "caller"),
         ("tests/test_heat.py", "caller"),
         ("docs/heat/notebook_helper.py", "caller"),
-        ("tests/_ngsolve_2606.py", "helper"),
+        ("tests/_ngsolve_2607.py", "helper"),
         ("tests/axifem/_vol_mesh.py", "helper"),
         ("validation_test/cubit/cubit_202512_helpers.py", "helper"),
         ("validation_test/feec/conftest.py", "helper"),

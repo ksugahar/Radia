@@ -1,6 +1,8 @@
 import hashlib
 import importlib.util
 import json
+import sys
+from types import SimpleNamespace
 from pathlib import Path
 
 import numpy as np
@@ -9,6 +11,27 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SUITE = ROOT / "validation_test" / "c_type_three_engine"
+
+
+@pytest.mark.parametrize("pairs", [[(1, 2), (3, 4)], [(1, 2, 7), (3, 4, 7)]])
+def test_kelvin_identification_inventory_accepts_netgen_identification_ids(monkeypatch, pairs):
+    spec = importlib.util.spec_from_file_location("c_type_builder", SUITE / "build_cubit_meshes.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    points = {
+        1: SimpleNamespace(p=(0., 0., 0.)),
+        2: SimpleNamespace(p=(0., 0., 2.)),
+        3: SimpleNamespace(p=(1., 0., 0.)),
+        4: SimpleNamespace(p=(1., 0., 2.)),
+    }
+    native = SimpleNamespace(GetIdentifications=lambda: pairs, Points=lambda: points)
+    monkeypatch.setitem(sys.modules, "ngsolve", SimpleNamespace(Mesh=lambda _: SimpleNamespace(ngmesh=native)))
+    result = module._kelvin_identification_inventory(Path("fixture.vol"))
+    assert result == {
+        "pair_count": 2,
+        "translation_m": [0., 0., 2.],
+        "maximum_pair_translation_error_m": 0.,
+    }
 
 
 def module_hash(path: Path) -> str:

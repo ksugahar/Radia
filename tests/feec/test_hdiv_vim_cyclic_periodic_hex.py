@@ -23,7 +23,7 @@ from radia.vim._vim import (  # noqa: E402
     _charge_basis_hex,
     build_charge_gram,
 )
-from tests._ngsolve_2606 import curve_mesh  # noqa: E402
+from tests._ngsolve_2607 import curve_mesh  # noqa: E402
 
 
 def _connected_sector_mesh(*, identification_count=4):

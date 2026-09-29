@@ -10,7 +10,7 @@ from ngsolve.meshes import MakeStructured3DMesh
 
 from radia import vim
 from radia.vim._magnetization_source import _field_coefficient_algorithm
-from tests._ngsolve_2606 import curve_mesh
+from tests._ngsolve_2607 import curve_mesh
 
 
 def _box_mesh(x0, x1, maxh=0.28):

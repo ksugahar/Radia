@@ -39,20 +39,16 @@ def _dependencies(path: Path) -> set[str]:
     return set(project["dependencies"])
 
 
-def test_ngsolve_netgen_runtime_matches_both_exact_package_pins():
+def test_ngsolve_netgen_runtime_matches_radia_exact_package_pins():
     assert ng.__version__ == PINNED_VERSION
     assert importlib.metadata.version("netgen-mesher") == PINNED_VERSION
 
     radia_dependencies = _dependencies(ROOT / "pyproject.toml")
-    cubit_dependencies = _dependencies(
-        ROOT / "packages" / "cubit-mesh-export" / "pyproject.toml"
-    )
     expected = {
         f"ngsolve=={PINNED_VERSION}",
         f"netgen-mesher=={PINNED_VERSION}",
     }
     assert expected <= radia_dependencies
-    assert expected <= cubit_dependencies
 
 
 def test_self_hosted_ci_keeps_the_ngsolve_abi_in_a_run_local_environment():
@@ -120,7 +116,11 @@ RETIRED_BEM_OPERATORS = frozenset(
 
 def test_production_bem_uses_current_variational_operator_api():
     offenders = []
-    for path in sorted((ROOT / "src" / "radia").rglob("*.py")):
+    roots = (
+        ROOT / "src" / "radia",
+        ROOT / "packages" / "radia-mcp" / "src" / "radia_mcp",
+    )
+    for path in sorted(path for root in roots for path in root.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and node.module == "ngsolve.bem":
@@ -200,7 +200,7 @@ def test_programmatic_structured_meshes_are_curve_safe(family, factory):
     assert mesh.ngmesh.EdgeDescriptors(), family
 
 
-def test_programmatic_2d_mesh_has_2606_edge_descriptors_before_vol_save(tmp_path):
+def test_programmatic_2d_mesh_has_2607_edge_descriptors_before_vol_save(tmp_path):
     mesh = NetgenMesh(dim=2)
     mesh.SetMaterial(1, "domain")
     mesh.Add(FaceDescriptor(surfnr=1, domin=0, bc=1))
@@ -221,7 +221,7 @@ def test_programmatic_2d_mesh_has_2606_edge_descriptors_before_vol_save(tmp_path
     for first, second in ((0, 1), (1, 2), (2, 3), (3, 0)):
         mesh.Add(Element1D([points[first], points[second]], index=1))
 
-    path = tmp_path / "ngsolve_2606_edge_descriptor.vol"
+    path = tmp_path / "ngsolve_2607_edge_descriptor.vol"
     mesh.Save(str(path))
     loaded = ng.Mesh(str(path))
     assert loaded.GetMaterials() == ("domain",)

@@ -1,4 +1,4 @@
-"""Test helpers for programmatic meshes under NGSolve 6.2.2606."""
+"""Test helpers for programmatic meshes under NGSolve 6.2.2607."""
 
 from netgen.meshing import EdgeDescriptor
 
@@ -35,7 +35,7 @@ def add_programmatic_edge_descriptors(mesh):
 
 
 def curve_mesh(mesh, order):
-    """Apply Curve after satisfying the 6.2.2606 descriptor contract."""
+    """Apply Curve after satisfying the 6.2.2607 descriptor contract."""
     add_programmatic_edge_descriptors(mesh)
     mesh.Curve(order)
     return mesh
