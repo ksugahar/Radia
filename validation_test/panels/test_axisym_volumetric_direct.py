@@ -7,6 +7,32 @@ import pytest
 from radia.panels import calc_axisym_volumetric as solver
 
 
+@pytest.mark.parametrize("complex_space", [False, True])
+def test_direct_correction_can_reuse_a_converged_solution(complex_space):
+    from netgen.geom2d import unit_square
+    from ngsolve import Mesh, H1, BilinearForm, LinearForm, GridFunction, TaskManager, dx, grad, x, BND
+    from radia.panels.calc_common import apply_fe_inverse
+
+    mesh = Mesh(unit_square.GenerateMesh(maxh=.2))
+    fes = H1(mesh, order=2, complex=complex_space, dirichlet=".*")
+    u, v = fes.TnT()
+    a = BilinearForm(fes, symmetric=True)
+    a += (grad(u) * grad(v) + (1j if complex_space else 1) * u * v) * dx
+    f = LinearForm(fes)
+    f += v * dx
+    solution = GridFunction(fes)
+    solution.Set(1 + x, BND)
+    with TaskManager():
+        a.Assemble()
+        f.Assemble()
+        inverse = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
+        apply_fe_inverse(a.mat, inverse, f.vec, solution.vec, fes.FreeDofs())
+        first = solution.vec.FV().NumPy().copy()
+        for _ in range(3):
+            assert apply_fe_inverse(a.mat, inverse, f.vec, solution.vec, fes.FreeDofs()) < 1e-8
+    np.testing.assert_allclose(solution.vec.FV().NumPy(), first, rtol=1e-12, atol=1e-12)
+
+
 @pytest.mark.parametrize("frequency", [0.0, 1000.0])
 @pytest.mark.parametrize("order", [1, 2])
 def test_direct_residual_scaling_and_constant_bh(monkeypatch, frequency, order):
