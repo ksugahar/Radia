@@ -1,162 +1,122 @@
-"""Direct sparse solvers: LU, PARDISO, MUMPS, SuperLU."""
+"""Direct-solver guidance for Radia's supported FE and legacy dense paths."""
 
 OVERVIEW = r"""
-# Direct sparse solvers
+# Radia direct-solver policy
 
-Direct solvers factor the matrix A = LU (or LDL^T for symmetric) and
-back-substitute.  Cost: O(N^{1.5}) memory for 2D, O(N^2) memory for 3D
-elliptic problems — limits practical N to ~500k DOF in 3D.
+For supported real symmetric and complex symmetric FE systems, explicitly select
+`inverse="sparsecholesky"`. Do not select PARDISO or silently switch backends.
+For HCurl applications, prefer the validated AMS or BDDC+AMS iterative path;
+SparseCholesky is the direct reference and an explicit user choice, not an
+assumption that direct factorization is always faster.
 
-| Solver | Distributed? | Lic | Best for |
-|--------|--------------|-----|----------|
-| PARDISO (Intel MKL) | shared mem (OpenMP) | Intel MKL | Default in NGSolve; fast on Intel |
-| MUMPS | MPI distributed | CeCILL-C | Large clusters, indefinite |
-| SuperLU_DIST | MPI | BSD | Non-symmetric, sparse direct |
-| UMFPACK | serial | LGPL | Small/medium, used by scipy |
-| KLU | serial | LGPL | Circuit simulation (very sparse) |
-| Legacy Radia dense LU (`method=0`) | MKL shared memory | (lab) | Compatibility relaxation path only |
+Factor reuse helps multiple right-hand sides only while the matrix is unchanged.
+A frequency sweep generally changes K + i omega M, so it does not in general
+reuse one factorization. Measure setup, solve, memory and true residual for the
+actual problem; there is no universal DOF cutoff for direct versus iterative.
 
-## When direct beats iterative
+Keep prescribed boundary values and check the original free-row residual.
+For constrained mixed systems, use the application's verified exact reduction
+and multiplier recovery. Do not regularize the physical operator or change the
+acceptance tolerance merely to make a factorization succeed. Unsupported matrix
+structure, singularity, memory exhaustion or a failed residual check must be
+reported as failures.
 
-1. **Many RHS sweeps with same A** (frequency sweep, port S-parameters):
-   factor once, back-substitute N_rhs times. Cost amortizes.
-2. **Ill-conditioned matrices** where Krylov stalls (κ > 10^10).
-3. **Small N** (< 10k): iterative setup overhead dominates.
-4. **Saddle-point / indefinite**: many Krylov + AMG fail without
-   sophisticated block preconditioning.
-
-## When direct loses
-
-1. **Single solve, large N (>500k 3D)**: memory blows up.
-2. **Memory-limited GPU**: no GPU direct solver matches MKL/HYPRE iter.
-3. **Time-stepping with changing A**: refactor cost per step kills.
+MKL remains a dependency of Radia's dense BLAS/LAPACK and FFT kernels. Removing
+PARDISO selection does not make the entire Radia package MKL-independent.
 """
 
+SPARSECHOLESKY = r"""
+# SparseCholesky: Radia's FE direct backend
+
+Use the built-in NGSolve backend explicitly. The caller owns TaskManager and
+assembly. In this example a, f, fes and gfu already exist; gfu holds prescribed
+boundary data before solving the free-DoF correction.
+
+```python
+from math import isfinite
+from ngsolve import Norm, Projector
+
+free = Projector(fes.FreeDofs(), True)
+inv = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
+rhs = f.vec.CreateVector()
+rhs.data = f.vec - a.mat * gfu.vec
+gfu.vec.data += inv * rhs
+r = f.vec.CreateVector()
+r.data = free * (f.vec - a.mat * gfu.vec)
+scale = Norm(free * rhs)
+rnorm = Norm(r)
+relative_residual = rnorm / scale if scale else (0.0 if rnorm == 0 else float("inf"))
+if not isfinite(relative_residual) or relative_residual > 1e-8:
+    raise RuntimeError(f"direct solve failed: residual={relative_residual}")
+```
+
+This example is for a supported symmetric system. It does not authorize applying
+SparseCholesky to arbitrary nonsymmetric or unhandled saddle-point matrices.
+A failed solve must not fall back to PARDISO, alter a gauge/penalty, or accept a
+nonfinite result. Applications can impose a stricter residual contract.
+
+MATLAB `radia.ngsolve.Matrix.inverse()` explicitly selects this same native
+backend. No Python process is needed by that MEX path.
+"""
 
 PARDISO = r"""
-# PARDISO (Schenk-Gärtner 2003)
+# Retired Radia FE solver selection: PARDISO
 
-Reference: Schenk-Gärtner, "Solving unsymmetric sparse systems of
-linear equations with PARDISO", FGCS 2003.  DOI: 10.1016/S0167-739X(03)00188-2.
+This legacy documentation topic remains discoverable to explain migration.
+Radia does not select PARDISO for FE direct solves. Use SparseCholesky explicitly
+for supported symmetric systems, or the validated AMS / BDDC+AMS application
+path. Do not install another backend or silently fall back after a failure.
 
-## What it is
-
-Multifrontal direct solver with **METIS** reordering and **OpenMP**
-parallelism. Intel distributes PARDISO in MKL. The NGSolve PyPI wheel uses
-`ngsolve-openblas`; a compatible MKL runtime is a separate environment
-dependency when PARDISO is required.
-
-## How to invoke from NGSolve
-
-```python
-from ngsolve import *
-mesh = Mesh(...); fes = H1(mesh, order=2)
-a = BilinearForm(fes); a += ...; a.Assemble()
-f = LinearForm(fes); f += ...; f.Assemble()
-
-inv = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso")   # or "sparsecholesky"
-u = GridFunction(fes); u.vec.data = inv * f.vec
-```
-
-Other choices: `inverse="sparsecholesky"` (built-in symmetric direct),
-`inverse="umfpack"` (built-in non-symmetric), `inverse="mumps"`
-(if compiled with MUMPS).
-
-## Performance characteristics
-
-- 8-core Xeon, 3D Poisson 1M DOF tet mesh: ~30 s setup, ~5 s back-sub.
-- Memory: ~12x sparse matrix size for elliptic 3D (cubic fill-in).
-- Threading: scales well to ~8 threads, plateaus beyond.
-
-## Pitfalls
-
-- Complex symmetric: PARDISO supports `mtype=6` but NGSolve `Inverse`
-  defaults to LU on complex.  Use `inverse="pardiso"` explicitly.
-- Singular matrices (Periodic with ungauged Omega-reduction): PARDISO
-  may return garbage without error.  Always check with one CG iteration
-  on the same matrix.
-- The NGSolve 6.2.2606 wheel uses its `ngsolve-openblas` dependency; it does
-  not bundle or select MKL. PARDISO requires a separately installed compatible
-  MKL runtime. Radia pins `mkl>=2026,<2027` for its own native kernels, and
-  availability must be checked in the active environment.
+NGSolve's `ngsolve-openblas` dependency and Radia's `mkl>=2026,<2027` dependency
+serve different native components. MKL remains for Radia dense BLAS/LAPACK and FFT;
+its presence is not permission to choose PARDISO.
 """
-
 
 MUMPS = r"""
-# MUMPS (Amestoy-Duff-L'Excellent 2000)
+# MUMPS: separate external integration
 
-Reference: Amestoy et al., "Multifrontal Parallel Distributed Symmetric
-and Unsymmetric Solvers", CMAME 184:501, 2000.
+This topic is background, not an automatic Radia fallback. Radia's supported
+symmetric FE direct path explicitly uses SparseCholesky. A workflow requiring a
+different matrix structure or external solver needs its own implementation and
+validation; it must not silently change the current problem or backend.
 
-## What it is
+MUMPS is a distributed-memory multifrontal solver with real and complex,
+symmetric and unsymmetric variants. It is relevant to separately configured MPI
+workflows and indefinite systems. NGSolve exposes it when built with
+`-DUSE_MUMPS=ON`; do not assume it is present in an installed wheel.
 
-**Distributed-memory** multifrontal direct solver via MPI.  Handles:
-- Real / complex
-- Symmetric / unsymmetric
-- Definite / indefinite (Bunch-Kaufman pivoting for symmetric indefinite)
-
-## When to use over PARDISO
-
-| Need | Pick |
-|------|------|
-| Shared-memory single node | PARDISO (simpler, no MPI) |
-| Distributed cluster (>1 node) | MUMPS |
-| Symmetric **indefinite** (saddle-point) | MUMPS (PARDISO mtype handling is brittle) |
-| Out-of-core (huge matrices) | MUMPS |
-
-## NGSolve invocation
-
-```python
-inv = a.mat.Inverse(fes.FreeDofs(), inverse="mumps")
-```
-
-Requires NGSolve compiled with `-DUSE_MUMPS=ON`.  The PyPI wheel does
-NOT include MUMPS — build from source if needed.
-
-## Pitfalls
-
-- MUMPS uses Fortran ordering — make sure CSR conversion is correct.
-- MPI initialization must come BEFORE NGSolve import.
-- Output verbosity defaults to chatty; set `-1, -1, -1, -1` for silence.
+In such a separately validated integration, the NGSolve selector is
+`a.mat.Inverse(fes.FreeDofs(), inverse="mumps")`. Initialize the MPI environment
+before using that integration, retain the matrix's actual symmetry contract,
+and verify the original residual. This selector is not a Radia FE fallback.
 """
-
 
 LU_RADIA = r"""
 # Legacy Radia dense LU (`method=0`)
 
-The retained C++ relaxation ABI accepts only dense LU:
+The retained C++ relaxation ABI accepts dense LU:
 
 ```python
 import radia as rad
 rad.Solve(legacy_object, 1e-4, 1000, 0)
 ```
 
-- Uses LAPACK through MKL.
-- Guaranteed convergence (it's not iterative).
-- Cost: O(N^3) factor, O(N^2) back-sub per RHS.
-- Threading: MKL handles internally via `MKL_NUM_THREADS`.
-
+This compatibility path uses LAPACK through MKL. Factorization is not a guarantee
+of a valid answer: singularity, conditioning and the true residual still matter.
 This is not the HDiv-VIM solver. New soft-iron models must be mesh-backed and
-use `radia.vim.Solve` or `radia.vim.HDivSolver.Solve`, whose
-`linear_solver`, `preconditioner`, `gram_eps`, `leaf`, and `eta` options are
-named independently of the legacy method integer. Do not recommend retired
-`rad.Solve` methods 1 or 2 for larger models.
+use `radia.vim.Solve` or `radia.vim.HDivSolver.Solve`, whose `linear_solver`,
+`preconditioner`, `gram_eps`, `leaf`, and `eta` options are named independently
+of the legacy method integer. Do not recommend retired `rad.Solve` methods 1 or 2.
 """
 
 
 def get_direct_solvers_knowledge(topic: str = "overview") -> str:
-    """Dispatch direct-solver topics.
-
-    Topics:
-        overview     - When direct beats iterative (DEFAULT)
-        pardiso      - Intel MKL PARDISO (NGSolve default)
-        mumps        - Distributed MUMPS
-        lu_radia     - Legacy Radia dense-LU compatibility path
-        all          - Everything
-    """
+    """Return current direct guidance, or explain a retired topic's migration."""
     topic = topic.lower().strip()
     if topic in ("overview", "general", "summary"):
         return OVERVIEW
+    if topic in ("sparsecholesky", "sparse_cholesky", "direct"):
+        return SPARSECHOLESKY
     if topic == "pardiso":
         return PARDISO
     if topic == "mumps":
@@ -164,6 +124,6 @@ def get_direct_solvers_knowledge(topic: str = "overview") -> str:
     if topic in ("lu", "lu_radia", "radia_lu"):
         return LU_RADIA
     if topic == "all":
-        return "\n\n".join([OVERVIEW, PARDISO, MUMPS, LU_RADIA])
-    return (f"Unknown topic '{topic}'. Available: overview, pardiso, mumps, "
-            "lu_radia, all.")
+        return "\n\n".join([OVERVIEW, SPARSECHOLESKY, PARDISO, MUMPS, LU_RADIA])
+    return (f"Unknown topic '{topic}'. Available: overview, sparsecholesky, "
+            "pardiso (migration), mumps, lu_radia, all.")
