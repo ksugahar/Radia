@@ -39,7 +39,7 @@ if SRC_RADIA not in sys.path:
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
-from calc_common import calc_main, progress
+from calc_common import apply_fe_inverse, calc_main, progress
 from em_material import EMMaterial, MU_0
 
 NU_0 = 1.0 / MU_0
@@ -266,6 +266,7 @@ def solve_fem_coilmesh(vol, frequency, I_target,
     max_iter = max(int(esim_max_iter), 1) if esim_solver is not None else 1
     t_asm = 0.0
     t_solve = 0.0
+    linear_residuals = []
     n_iter_done = 0
     dZ = float("inf")
     H_t_rms_iter = 0.0
@@ -294,10 +295,12 @@ def solve_fem_coilmesh(vol, frequency, I_target,
         progress("FEM", f"solve ({solver}, iter {iteration})")
         t0 = time.perf_counter()
         with TaskManager():
-            r = gfu.vec.CreateVector()
-            r.data = -a_bf.mat * gfu.vec
-            gfu.vec.data += a_bf.mat.Inverse(fes.FreeDofs(),
-                                               inverse=solver) * r
+            rhs = gfu.vec.CreateVector()
+            rhs[:] = 0
+            linear_residual = apply_fe_inverse(
+                a_bf.mat, a_bf.mat.Inverse(fes.FreeDofs(), inverse=solver),
+                rhs, gfu.vec, fes.FreeDofs())
+            linear_residuals.append(float(linear_residual))
         t_solve_iter = time.perf_counter() - t0
         t_solve += t_solve_iter
 
@@ -442,10 +445,12 @@ def solve_fem_coilmesh(vol, frequency, I_target,
         gf_phi.Set(CF(1), definedon=mesh.Boundaries(source_bnd))
         t0 = time.perf_counter()
         with TaskManager():
-            r = gfu.vec.CreateVector()
-            r.data = -a_bf.mat * gfu.vec
-            gfu.vec.data += a_bf.mat.Inverse(fes.FreeDofs(),
-                                               inverse=solver) * r
+            rhs = gfu.vec.CreateVector()
+            rhs[:] = 0
+            linear_residual = apply_fe_inverse(
+                a_bf.mat, a_bf.mat.Inverse(fes.FreeDofs(), inverse=solver),
+                rhs, gfu.vec, fes.FreeDofs())
+            linear_residuals.append(float(linear_residual))
         t_solve += time.perf_counter() - t0
         J_coil = -s * coil_sigma * (gf_A + grad(gf_phi))
         I_out_pre = complex(Integrate(
@@ -710,6 +715,7 @@ def solve_fem_coilmesh(vol, frequency, I_target,
         "t_load_s": float(t_load),
         "t_assembly_s": float(t_asm),
         "t_solve_s": float(t_solve),
+        "linear_true_relative_residuals": linear_residuals,
     }
     if gf_Zs is not None:
         Z_s_arr = np.asarray(gf_Zs.vec.FV().NumPy())
