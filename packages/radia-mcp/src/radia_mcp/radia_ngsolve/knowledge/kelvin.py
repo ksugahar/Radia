@@ -810,7 +810,7 @@ a.Assemble()
 f.Assemble()
 
 gfu = GridFunction(fes)
-gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f.vec
+gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 
 # Inductance from magnetic energy (nu_cf includes Kelvin modulation)
 W_mag = Integrate(0.5 * nu_cf * curl(gfu) * Conj(curl(gfu)),
@@ -1366,9 +1366,9 @@ KELVIN_TIPS = """
    - Reference: NGSolve Maxwell tutorial unit-2.4
      `HCurl(mesh, order=3, dirichlet="outer", nograds=True)`
    - Without nograds, the curl-curl system is rank deficient by the
-     gradient subspace dimension. PARDISO pseudo-inverses and returns a
-     solution polluted by an arbitrary gradient field; inductance or
-     magnetic energy values are then order-dependent and unreliable.
+     gradient subspace dimension unless the formulation supplies a gauge.
+     A direct solver is not a substitute for that gauge; preserve the
+     declared operator and check the true residual and physical observables.
 
 8. **Cubit coil: sweep, NOT webcut**
    - `create torus + webcut + delete` can silently produce a half-coil
@@ -1586,7 +1586,7 @@ The vertex at the exterior sphere center maps to physical infinity.
 | **H1 (phi, Omega)** | **Essential** -- uniqueness of scalar potential |
 | **HCurl (A)** | Optional -- gauge `reg * nu * u * v * dx` suffices |
 | **HCurl + iterative solver** | Recommended -- improves convergence |
-| **HCurl + PARDISO** | Optional -- PARDISO handles near-singular |
+| **HCurl + SparseCholesky** | Preserve the formulation gauge; direct factorization does not remove a nullspace |
 
 **Implementation**:
 ```python
@@ -2297,7 +2297,8 @@ B_cf = result["B_cf"]
   replace an unspecified pole piece by vacuum. P1 returned H, mu and B refer
   to the same assembled iterate; check both constitutive and iteration change.
 - The interface multiplier makes the system symmetric indefinite.  Use the
-  direct PARDISO path; do not incorrectly force a positive-definite CG solve.
+  explicit SparseCholesky path with true-residual validation; do not
+  incorrectly force a positive-definite CG solve.
 
 ## Cut / cohomology rule
 
@@ -2905,7 +2906,8 @@ the difference is in your model; (1) run the FES-verify trio on YOUR mesh;
 solver.
 
 HONEST LIMITS of the A-Phi goldens (do not extrapolate past these):
-- Both goldens solve with a DIRECT solver (pardiso).  Iterative solution of
+- These historical goldens used PARDISO, before the current explicit
+  SparseCholesky policy; they do not certify the migrated backend. Iterative solution of
   the MIXED A-Phi system (e.g. BDDC/CG on fesA*fesV) is NOT locked by any
   golden; recipe element 5 (BDDC at p>=2) is verified for the pure-HCurl
   space only.

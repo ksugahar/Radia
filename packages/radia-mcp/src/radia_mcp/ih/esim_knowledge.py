@@ -176,7 +176,7 @@ HCurl A with Robin SIBC + Kelvin transformation for open boundary.
       --formulation total \\
       --impedance esim --bh-file em_sample_bh.txt \\
       --max-iter 15 \\
-      --solver pardiso \\
+      --solver sparsecholesky \\
       --peec-step coil.step --peec-sigma 5.8e7 \\
       --peec-n-peri 16 --peec-nwinc 3 --peec-nhinc 3 \\
       --require-kelvin
@@ -202,10 +202,11 @@ calc_fem_kelvin.py analogue.
 
 | --solver       | When |
 |----------------|------|
-| pardiso        | Default; fast sparse direct |
-| ams            | HCurl p=1, low memory |
-| bddc           | Preconditioned CG, p >= 2 recommended |
-| iccg           | Generic fallback |
+| auto           | Default; select the supported iterative route |
+| sparsecholesky | Explicit direct FE reference; no fallback |
+| ams            | Pure HCurl p=1; validate complex true residual |
+| bddc           | Pure HCurl higher order with AMS coarse solve; complex outer solver follows the formulation |
+| iccg           | Explicit supported choice, never an automatic fallback |
 """
 
 
@@ -223,7 +224,7 @@ potential and HCurl A; workpiece SIBC as Robin BC.
       --coil-sigma 5.8e7 --sigma 2e6 --mu-r 100 \\
       --half-thickness 0.005 \\
       --fes-order 1 \\
-      --solver pardiso \\
+      --solver sparsecholesky \\
       --sibc-bnd sibc --source-bnd source --sink-bnd sink \\
       --coil-mat coil \\
       --impedance-model esim --bh-file em_sample_bh.txt \\
@@ -567,9 +568,11 @@ In contrast, in FEM HCurl + Robin (path C) the Robin coefficient
 must be re-assembled as a full bilinear-form term per Karl
 iteration -- 100x more expensive at the same accuracy.
 
-## Per-iteration Karl cost comparison
+## Historical per-iteration Karl cost comparison
 
-Production gapped-torus + steel-cylinder benchmark (50 kHz, 1 A):
+Historical gapped-torus + steel-cylinder benchmark (50 kHz, 1 A).
+The PARDISO rows below predate the current SparseCholesky/AMS policy;
+these timings are not measurements of the current backends:
 
 | Path | Outer DOFs | Per-iter cost | Karl scaling |
 |------|-----------|---------------|--------------|

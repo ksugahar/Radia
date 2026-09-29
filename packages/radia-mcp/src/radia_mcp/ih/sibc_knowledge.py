@@ -62,7 +62,7 @@ Files:
 ```
 Cubit .vol (coil + workpiece + air + Kelvin) -> full volume FEM
     -> Omega or A-formulation + SIBC + Kelvin
-    -> Direct solve (pardiso/bddc)
+    -> Explicit SparseCholesky direct solve, or supported BDDC iterative solve
 ```
 
 Advantages:
