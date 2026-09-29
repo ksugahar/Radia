@@ -148,11 +148,10 @@ def test_distribution_ci_is_change_scoped_and_mcp_full_suite_is_explicit():
     assert 'plan["package_tests"]' in mcp
     assert 'env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"' in mcp
     assert 'env["RADIA_MCP_CI_SELECTION_JSON"]' in mcp
-    # The package suite is change-scoped like the rest of the lane, and the
-    # full `tests` tree is the explicit case the plan has to ask for rather
-    # than the default that happens to be spelled out here.
-    assert ('targets = ["tests"] if plan["package_tests"] == ["tests"] '
-            'else plan["package_tests"]') in mcp
+    # Directory discovery must run optional-dependency collection hooks;
+    # RADIA_MCP_CI_SELECTION_JSON still restricts the collected test items.
+    # The package's workflow-execution test checks exact file/node selection.
+    assert 'targets = ["tests"]' in mcp
     assert '"-m", "not xval and not slow", *targets,' in mcp
     assert '"--confcutdir=tests/mcp_integration", *targets' in mcp
     assert 'metadata["project"]["optional-dependencies"]["md2html"]' in mcp
