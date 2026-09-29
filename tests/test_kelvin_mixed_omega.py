@@ -67,6 +67,38 @@ def test_reduced_normal_boundary_is_not_total_normal_boundary():
     assert float(shifted['phi_total'](point)-correction['phi_total'](point))==pytest.approx(2.)
 
 
+def test_lift_only_drive_is_judged_by_its_effective_load():
+    """With zero source the free-row load f is zero; only the lift A u_D drives.
+
+    The residual gate must divide by ||P(f - A u_D)||, not by ||P f|| (which
+    turned roundoff into a spurious failure).
+    """
+    import ngsolve as ng
+    from netgen.occ import Box, Pnt, Glue, OCCGeometry
+    from netgen.meshing import Element0D
+    from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_kelvin
+    iron=Box(Pnt(-.3,-.3,-.3),Pnt(.3,.3,.3))
+    iron.mat('total'); iron.faces.name='interface'
+    outer=Box(Pnt(-1,-1,-1),Pnt(1,1,1));outer.faces.name='outer'
+    air=outer-iron;air.mat('reduced')
+    mesh=ng.Mesh(OCCGeometry(Glue([iron,air])).GenerateMesh(maxh=.8))
+    material=mesh.GetMaterials().index('total')+1
+    e=next(e for e in mesh.ngmesh.Elements3D() if e.index==material)
+    mesh.ngmesh.Add(Element0D(e.vertices[0],index=1));mesh.ngmesh.SetCD3Name(1,'GND')
+    mesh=ng.Mesh(mesh.ngmesh)
+    with ng.TaskManager():
+        result=solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+            mesh,ng.CoefficientFunction((0.,0.,0.)),ng.CoefficientFunction(0.),1.,(0,0,0),
+            mu_r_by_material={'total':1.,'reduced':1.},
+            reduced_materials=('reduced',),total_materials=('total',),
+            interface_boundary='interface',kelvin_mats=(),order=1,
+            reduced_zero_normal_boundary='outer',
+            total_dirichlet_cf=ng.CoefficientFunction(3.))
+    point=mesh(.1,.1,.1)
+    assert float(result['phi_total'](point))==pytest.approx(3.)
+    assert np.linalg.norm(np.asarray(result['H_cf'](point)))<1e-9
+
+
 def test_realized_bh_response_binds_pchip_tangent_energy_and_vacuum_tail():
     from radia.scalar_potential_solver import MU_0, sample_bh_constitutive_response
 
