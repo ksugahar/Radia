@@ -83,7 +83,12 @@ def _select_accel_solver(solver, formulation, order, periodic, ndof):
         if formulation == "a" and not periodic and order in (1, 2, 3):
             return "bddc_ams"
         return "sparsecholesky" if ndof < 200000 else "bddc"
-    if solver in ("ams", "bddc_ams"):
+    if solver == "ams":
+        raise ValueError(
+            "Standalone AMS is not supported by the accelerator's full HCurl "
+            "space. Select bddc_ams explicitly for nonperiodic A order 1, 2 "
+            "or 3, or select sparsecholesky.")
+    if solver == "bddc_ams":
         if formulation != "a" or periodic or order not in (1, 2, 3):
             raise ValueError("AMS requires nonperiodic HCurl order 1, 2 or 3")
         # Preserve the existing full HCurl space, including gradient modes.
@@ -963,7 +968,8 @@ def build_argparser():
                         choices=FEM_SOLVERS,
                         help="auto (nonperiodic A p=1..3: BDDC+AMS; otherwise "
                              "SparseCholesky/BDDC by size), sparsecholesky, "
-                             "bddc, iccg, ams/bddc_ams (BDDC with AMS coarse solver)")
+                             "bddc, iccg, bddc_ams (BDDC with AMS coarse solver). "
+                             "Standalone ams is unsupported on this full HCurl space.")
     parser.add_argument("--msh-output", default="",
                         help="GMSH .msh output path")
     parser.add_argument("--output", default="",
