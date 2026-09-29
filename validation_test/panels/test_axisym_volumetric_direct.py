@@ -38,3 +38,22 @@ def test_direct_residual_scaling_and_constant_bh(monkeypatch, frequency, order):
         assert doubled["P_wp_W"] == pytest.approx(4 * linear["P_wp_W"], rel=1e-8)
     else:
         assert linear["P_wp_W"] == nonlinear["P_wp_W"] == doubled["P_wp_W"] == 0
+
+
+def test_picard_rejects_nonconverged_saturating_case():
+    args = SimpleNamespace(
+        R_wp=.005, H_wp=.01, R_coil=.02, R_outer=.04,
+        maxh_wp=.0005, maxh_air=.004, mu_r=1000., sigma=2e6,
+        frequency=1000., current=1000., order=2, output=None,
+    )
+    bh = [(0., 0.), (10., .012), (100., .12),
+          (1000., .9), (10000., 1.5), (1e6, 2.75)]
+    try:
+        result = solver.run_axisym_nonlinear(args, bh)
+    except RuntimeError as exc:
+        assert "Picard did not converge" in str(exc)
+    else:
+        # Future convergence improvements may solve this case, but a returned
+        # loss must never be accepted with an unconverged constitutive update.
+        assert result["picard_convergence"][-1]["max_dmu_r"] < 1e-2
+        assert result["linear_relative_residual"] < 1e-8

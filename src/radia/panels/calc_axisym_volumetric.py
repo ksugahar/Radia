@@ -206,6 +206,10 @@ def run_axisym_nonlinear(args, bh_curve):
             if max_dmu < tol_picard and k_outer > 0:
                 print(f"  CONVERGED at iter {k_outer}")
                 break
+        else:
+            raise RuntimeError(
+                f"Axisymmetric Picard did not converge in {max_picard} iterations: "
+                f"relative permeability update={max_dmu:.6g}, tolerance={tol_picard}")
 
         # P_wp via volumetric integration.
         from ngsolve import InnerProduct
