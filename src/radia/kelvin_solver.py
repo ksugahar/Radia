@@ -937,7 +937,7 @@ def solve_magnetostatic_reduced_omega_kelvin(
         "data; automatic substitution is not supported.")
 
 
-def _matching_trace_direct_inverse(matrix, fes, *, order):
+def _matching_trace_direct_inverse(matrix, fes, *, order, cache=None):
     """Eliminate matching H1 trace constraints before SparseCholesky.
 
     Solve the consistent free-row saddle system without a penalty or a changed
@@ -945,6 +945,10 @@ def _matching_trace_direct_inverse(matrix, fes, *, order):
     separately; multipliers are recovered afterwards. Redundant multipliers at
     prescribed trace intersections are set to zero. Callers check the residual
     on every original free row, including redundant constraints.
+
+    An optional solve-local cache reuses topology and symbolic factorization.
+    Its earlier inverses must not be used after another call updates the cache.
+    The assembled constraints are still checked on every call.
     """
     import ngsolve as ng
     from scipy.sparse import coo_matrix, diags
@@ -958,7 +962,6 @@ def _matching_trace_direct_inverse(matrix, fes, *, order):
     free = np.fromiter(fes.FreeDofs(), dtype=bool, count=fes.ndof)
     primal = np.flatnonzero(free[:multiplier_offset])
     lambdas = np.flatnonzero(free[multiplier_offset:])
-    position = {int(d): i for i, d in enumerate(primal)}
     rows, cols, values = matrix.COO()
     assembled = coo_matrix((np.asarray(values), (np.asarray(rows), np.asarray(cols))),
                            shape=(fes.ndof, fes.ndof)).tocsr()
@@ -969,53 +972,63 @@ def _matching_trace_direct_inverse(matrix, fes, *, order):
     if not len(lambdas):
         raise ValueError("trace elimination requires active interface constraints")
 
-    pairs = {}
-    groups = [(ng.VERTEX, fes.mesh.vertices)]
-    if int(order) >= 2:
-        groups += [(ng.EDGE, fes.mesh.edges), (ng.FACE, fes.mesh.faces)]
-    for kind, entities in groups:
-        for entity in entities:
-            node = ng.NodeId(kind, entity.nr)
-            lm = [d for d in multiplier.GetDofNrs(node) if d >= 0]
-            if not lm:
+    work_cache = {} if cache is None else cache
+    signature = (int(order), free.tobytes())
+    if work_cache.get("space") is not fes or work_cache.get("signature") != signature:
+        work_cache.clear()
+        work_cache.update(space=fes, signature=signature)
+    if "topology" in work_cache:
+        eliminated, signs, active_rows, transform = work_cache["topology"]
+    else:
+        position = {int(d): i for i, d in enumerate(primal)}
+        pairs = {}
+        groups = [(ng.VERTEX, fes.mesh.vertices)]
+        if int(order) >= 2:
+            groups += [(ng.EDGE, fes.mesh.edges), (ng.FACE, fes.mesh.faces)]
+        for kind, entities in groups:
+            for entity in entities:
+                node = ng.NodeId(kind, entity.nr)
+                lm = [d for d in multiplier.GetDofNrs(node) if d >= 0]
+                if not lm:
+                    continue
+                rd = [d for d in reduced.GetDofNrs(node) if d >= 0]
+                td = [d for d in total.GetDofNrs(node) if d >= 0]
+                if len(lm) != len(rd) or len(lm) != len(td):
+                    raise ValueError("interface H1 traces have incompatible entity DOFs")
+                for l, r, t in zip(lm, rd, td):
+                    pair = (r, total_offset + t)
+                    if l in pairs and pairs[l] != pair:
+                        raise ValueError("ambiguous periodic interface trace mapping")
+                    pairs[l] = pair
+        eliminated, partners, signs, active_rows = [], [], [], []
+        for row, lm in enumerate(lambdas):
+            if int(lm) not in pairs:
+                raise ValueError("unmapped interface multiplier DOF")
+            r, t = pairs[int(lm)]
+            if t in position:
+                eliminated.append(position[t]); partners.append(position.get(r)); signs.append(1.)
+            elif r in position:
+                eliminated.append(position[r]); partners.append(position.get(t)); signs.append(-1.)
+            else:
+                # Both traces are prescribed. The remaining multiplier rows
+                # determine the primal trace; retain the full-system residual gate
+                # to reject incompatible data on redundant constraints.
                 continue
-            rd = [d for d in reduced.GetDofNrs(node) if d >= 0]
-            td = [d for d in total.GetDofNrs(node) if d >= 0]
-            if len(lm) != len(rd) or len(lm) != len(td):
-                raise ValueError("interface H1 traces have incompatible entity DOFs")
-            for l, r, t in zip(lm, rd, td):
-                pair = (r, total_offset + t)
-                if l in pairs and pairs[l] != pair:
-                    raise ValueError("ambiguous periodic interface trace mapping")
-                pairs[l] = pair
-    eliminated, partners, signs, active_rows = [], [], [], []
-    for row, lm in enumerate(lambdas):
-        if int(lm) not in pairs:
-            raise ValueError("unmapped interface multiplier DOF")
-        r, t = pairs[int(lm)]
-        if t in position:
-            eliminated.append(position[t]); partners.append(position.get(r)); signs.append(1.)
-        elif r in position:
-            eliminated.append(position[r]); partners.append(position.get(t)); signs.append(-1.)
-        else:
-            # Both traces are prescribed. The remaining multiplier rows
-            # determine the primal trace; retain the full-system residual gate
-            # to reject incompatible data on redundant constraints.
-            continue
-        active_rows.append(row)
-    if len(set(eliminated)) != len(eliminated):
-        raise ValueError("interface trace elimination has dependent pivots")
-    remaining = sorted(set(range(len(primal))) - set(eliminated))
-    reduced_position = {d: i for i, d in enumerate(remaining)}
-    tr = list(remaining)
-    tc = list(range(len(remaining)))
-    for e, partner in zip(eliminated, partners):
-        if partner is not None:
-            if partner not in reduced_position:
-                raise ValueError("interface constraints form an unsupported elimination cycle")
-            tr.append(e); tc.append(reduced_position[partner])
-    transform = coo_matrix((np.ones(len(tr)), (tr, tc)),
-                           shape=(len(primal), len(remaining))).tocsr()
+            active_rows.append(row)
+        if len(set(eliminated)) != len(eliminated):
+            raise ValueError("interface trace elimination has dependent pivots")
+        remaining = sorted(set(range(len(primal))) - set(eliminated))
+        reduced_position = {d: i for i, d in enumerate(remaining)}
+        tr = list(remaining)
+        tc = list(range(len(remaining)))
+        for e, partner in zip(eliminated, partners):
+            if partner is not None:
+                if partner not in reduced_position:
+                    raise ValueError("interface constraints form an unsupported elimination cycle")
+                tr.append(e); tc.append(reduced_position[partner])
+        transform = coo_matrix((np.ones(len(tr)), (tr, tc)),
+                               shape=(len(primal), len(remaining))).tocsr()
+        work_cache["topology"] = (eliminated, signs, active_rows, transform)
     c_norm = max(float(sparse_norm(constraint)), 1e-300)
     if sparse_norm(constraint @ transform) > 1e-11*c_norm:
         raise ValueError("entity trace elimination does not preserve the assembled constraint")
@@ -1029,14 +1042,36 @@ def _matching_trace_direct_inverse(matrix, fes, *, order):
         raise ValueError("interface trace mass must have positive diagonal")
     constrained_primal = (transform.T @ app @ transform).tocsr()
 
-    def factor(sparse):
+    def factor(sparse, name):
+        sparse.sort_indices()
+        previous = work_cache.get(name)
+        if (previous is not None
+                and previous[0] == sparse.shape
+                and np.array_equal(previous[1], sparse.indptr)
+                and np.array_equal(previous[2], sparse.indices)):
+            _, _, _, old_values, native, inverse = previous
+            if not np.array_equal(old_values, sparse.data):
+                native.AsVector().FV().NumPy()[:] = sparse.data
+                inverse.Update()
+                old_values[:] = sparse.data
+            return native, inverse
         data = sparse.tocoo()
         native = ng.la.SparseMatrixdouble.CreateFromCOO(
-            data.row.tolist(), data.col.tolist(), data.data.tolist(), *data.shape)
-        return native, native.Inverse(inverse="sparsecholesky")
+            data.row, data.col, data.data, *data.shape)
+        inverse = native.Inverse(inverse="sparsecholesky")
+        # Reuse storage only when NGSolve preserves the CSR ordering exactly.
+        # A different graph still uses the same checked direct factorization.
+        _, columns, offsets = native.CSR()
+        if (np.array_equal(columns, sparse.indices)
+                and np.array_equal(offsets, sparse.indptr)):
+            work_cache[name] = (sparse.shape, sparse.indptr.copy(),
+                sparse.indices.copy(), sparse.data.copy(), native, inverse)
+        else:
+            work_cache.pop(name, None)
+        return native, inverse
 
-    trace_native, trace_inverse = factor(trace_mass)
-    primal_native, primal_inverse = factor(constrained_primal)
+    trace_native, trace_inverse = factor(trace_mass, "trace_factor")
+    primal_native, primal_inverse = factor(constrained_primal, "primal_factor")
 
     def apply(native, inverse, values):
         rhs = native.CreateColVector()
@@ -2513,6 +2548,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
                     if np.any(positive) else 1.0)
 
     mu_elements = GridFunction(L2(mesh, order=0), name="mixed_omega_mu")
+    mu_values = mu_elements.vec.FV().NumPy()
+    mu_values[:] = MU_0
     nonlinear_elements = []
     for element in mesh.Elements(VOL):
         material = str(element.mat)
@@ -2522,9 +2559,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
                 sum(float(point[component]) for point in coordinates) / len(coordinates)
                 for component in range(mesh.dim))
             nonlinear_elements.append((element.nr, centroid))
-        else:
-            mu_elements.vec[element.nr] = MU_0
     element_numbers = [int(number) for number, _ in nonlinear_elements]
+    centroids = np.asarray([point for _, point in nonlinear_elements], dtype=float)
+    material_points = mesh(centroids[:, 0], centroids[:, 1], centroids[:, 2])
     initial = np.asarray(mu_r_initial, dtype=float)
     if initial.ndim == 0:
         if not math.isfinite(float(initial)) or float(initial) <= 0.0:
@@ -2546,8 +2583,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
     mu_r_zero_field = np.full(len(nonlinear_elements), zero_field_mu_r)
     mu_r_upper = max(float(np.max(mu_r_current)) if mu_r_current.size else 1.0,
                      secant_upper, 1.0)
-    for index, (element_nr, _) in enumerate(nonlinear_elements):
-        mu_elements.vec[element_nr] = MU_0 * float(mu_r_current[index])
+    mu_values[element_numbers] = MU_0 * mu_r_current
 
     kelvin_mu = make_kelvin_mu_cf(
         mesh, R_K, offset, kelvin_mats=kelvin_mats, mu_r_by_material={},
@@ -2604,16 +2640,16 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
             surface_dirichlet=surface_dirichlet,
             _fixed_rhs_cache=rhs_cache, _rhs_material=cache_material,
             reduced_source_load=reduced_source_load)
-        B_current = np.zeros(len(nonlinear_elements))
-        mu_r_target = np.empty(len(nonlinear_elements))
-        for index, (element_nr, centroid) in enumerate(nonlinear_elements):
-            H_value = result["H_cf"](mesh(*centroid))
-            H_magnitude = math.sqrt(sum(float(value) ** 2 for value in H_value))
-            B_current[index] = B_of_H(H_magnitude)
-            if H_magnitude <= 1.0e-12:
-                mu_r_target[index] = mu_r_zero_field[index]
-            else:
-                mu_r_target[index] = max(1.0, B_current[index] / (MU_0 * H_magnitude))
+        # All nonlinear materials were checked to belong to the total region.
+        # Evaluate that field at the same element centroids in one native call;
+        # per-point Python/native transitions are costly inside TaskManager.
+        H_values = np.asarray(result["H_total_cf"](material_points), dtype=float).reshape(-1, 3)
+        H_magnitudes = np.sqrt(np.sum(H_values * H_values, axis=1))
+        B_current = np.fromiter((B_of_H(h) for h in H_magnitudes), dtype=float,
+                                count=len(nonlinear_elements))
+        mu_r_target = np.divide(B_current, MU_0 * H_magnitudes,
+                                out=mu_r_zero_field.copy(), where=H_magnitudes > 1.0e-12)
+        np.maximum(mu_r_target, 1.0, out=mu_r_target)
         entry = {"iteration": int(iteration)}
         if observation is not None:
             # Evaluate before the permeability update so the recorded field is the
@@ -2652,8 +2688,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         else:
             mu_r_next = accelerator.step(mu_r_current, mu_r_target)
         mu_r_current = np.asarray(mu_r_next, dtype=float)
-        for index, (element_nr, _) in enumerate(nonlinear_elements):
-            mu_elements.vec[element_nr] = MU_0 * float(mu_r_current[index])
+        mu_values[element_numbers] = MU_0 * mu_r_current
         B_previous = B_current
 
     if result is None:  # pragma: no cover - guarded by max_iterations validation

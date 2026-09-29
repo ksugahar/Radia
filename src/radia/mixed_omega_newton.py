@@ -199,6 +199,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
     field_b = physical_mu * field_h
     previous = ng.GridFunction(fes)
     reason = "iteration limit"
+    trace_factor_cache = {}
     for iteration in range(1, int(max_iterations) + 1):
         if converged:
             break
@@ -219,7 +220,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         elif condense_matching_trace:
             inv = tangent.mat.Inverse(fes.FreeDofs(), inverse=inverse)
         else:
-            inv = _matching_trace_direct_inverse(tangent.mat, fes, order=order)
+            inv = _matching_trace_direct_inverse(
+                tangent.mat, fes, order=order, cache=trace_factor_cache)
         row["factorization_s"] = time.perf_counter() - t0
         linear_rhs = residual.CreateVector()
         linear_rhs.data = residual
