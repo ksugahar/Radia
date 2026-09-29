@@ -2,6 +2,8 @@
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
+
 
 def _h1_system(convection=0.0):
     from netgen.geom2d import unit_square
