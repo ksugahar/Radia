@@ -147,8 +147,14 @@ def test_cyclic_rotation_pairs_do_not_claim_kelvin_readiness():
     assert has_kelvin_identification(_connected_sector_mesh()) is False
 
 
-def test_identification_predicate_honors_explicit_boundary_names():
+@pytest.mark.parametrize("roundtrip", [False, True])
+def test_identification_predicate_honors_explicit_boundary_names(tmp_path, roundtrip):
     mesh = _connected_sector_mesh()
+    if roundtrip:
+        path = tmp_path / "cyclic.vol"
+        mesh.ngmesh.Save(str(path))
+        mesh = ng.Mesh(str(path))
+    assert has_kelvin_identification(mesh) is False
     assert has_kelvin_identification(
         mesh, inner_bnd="periodic_min", outer_bnd="periodic_max") is True
 
