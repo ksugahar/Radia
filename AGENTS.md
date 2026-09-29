@@ -44,7 +44,6 @@ Prefer established public abstractions over proprietary plumbing.
 ### Numerical Rules
 - Use Foster modal models or PRIMA projection for electromagnetic reduction.
   Retired CLN/Cauer circuit APIs are not production or comparison routes.
-  Analytic DtN continued fractions are boundary symbols, not circuit models.
   Choose reduced orders by measured error over the operating band.
 
 - Use SI units; magnetization is A/m.
