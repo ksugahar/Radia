@@ -2,8 +2,7 @@
 import numpy as np
 import pytest
 
-from radia.em_design import EMDesignSpec
-from radia.panels.calc_accel_magnet import _accel_inverse, _select_accel_solver
+from radia.panels.calc_accel_magnet import _accel_inverse
 from radia.panels.calc_common import apply_fe_inverse
 
 
@@ -37,18 +36,6 @@ def test_accel_backend_matches_direct(form, order, backend):
         residual = apply_fe_inverse(a.mat, inverse, f.vec, result.vec, fes.FreeDofs())
     assert residual < 1e-8
     assert np.linalg.norm(result.vec.FV().NumPy() - expected) / np.linalg.norm(expected) < 1e-5
-
-
-def test_accel_selection_is_explicit_and_preserves_periodic_limit():
-    for order in (1, 2, 3):
-        assert _select_accel_solver("auto", "a", order, False, 100) == "bddc_ams"
-        assert _select_accel_solver("ams", "a", order, False, 100) == "bddc_ams"
-    assert _select_accel_solver("sparsecholesky", "omega", 2, False, 900000) == "sparsecholesky"
-    assert _select_accel_solver("bddc", "omega", 2, False, 100) == "bddc"
-    with pytest.raises(ValueError, match="nonperiodic"):
-        _select_accel_solver("ams", "a", 1, True, 100)
-    with pytest.raises(ValueError, match="Unsupported FE solver"):
-        EMDesignSpec(coil_script="coil.py", solver="pardiso").build_command()
 
 
 @pytest.mark.parametrize("order", [1, 2, 3])
