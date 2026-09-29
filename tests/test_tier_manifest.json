@@ -183,6 +183,7 @@
       "description": "Required NGSolve contracts for mixed Omega, HDiv/topology, eddy currents, SIBC and IH thermal coupling; no partial dependency run.",
       "max_elapsed_seconds": 600,
       "paths": [
+        "tests/test_ngsbem_peec_body_direct.py",
         "tests/test_ngsbem_eddy_direct.py",
         "tests/test_eddy_aphi_contract.py",
         "tests/test_hdiv_energy_material_consistency.py",

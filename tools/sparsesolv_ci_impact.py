@@ -74,6 +74,8 @@ NATIVE_PATHS = (
     'tests/matlab/beam_transfer_python_reference.py',
     'validation_test/accelerator/benchmark_beam_transfer_mex_python.py',
 
+    "src/radia/ngsbem_peec_body_coupling.py",
+    "tests/test_ngsbem_peec_body_direct.py",
     "src/radia/ngsbem_eddy.py",
     "tests/test_ngsbem_eddy_direct.py",
     "src/radia/eddy_aphi.py",
