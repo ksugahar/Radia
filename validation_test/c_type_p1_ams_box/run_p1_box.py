@@ -17,7 +17,7 @@ monotone PCHIP B(H) law as the three-engine lane:
   system is solved by Radia's compiled auxiliary-space Maxwell preconditioner
   (``radia.sparsesolv_ngsolve.HypreBasedAMSPreconditioner``, updated in place
   between iterations) with conjugate gradients to a true relative residual,
-  warm-started from the current iterate; or by the METIS SPD PARDISO direct
+  warm-started from the current iterate; or by the SparseCholesky direct
   solve for a cross-check.
 * ``mixed_omega``: first-order total/reduced scalar potential with the coil
   air as the reduced region, iron as the total region, the total-Hodge
@@ -281,7 +281,7 @@ class ReducedAP1Box:
         ``linear_solver``: ``"ams"`` (compiled auxiliary-space Maxwell
         preconditioner + CG), ``"iccg"`` (Radia's compiled shifted incomplete
         Cholesky CG of the same sparsesolv module, factorised per system with
-        ``ic_shift``), or ``"direct"`` (METIS SPD PARDISO).
+        ``ic_shift``), or ``"direct"`` (SparseCholesky).
         ``ams_update_every`` rebuilds the AMS hierarchy only every N-th linear
         system (1 = every system); a lagged preconditioner trades CG iterations
         for setup time and is recorded as such.
@@ -1038,7 +1038,7 @@ def solve_mixed_omega_box(mesh: ng.Mesh, coil: int, material, *, nonlinear: bool
                     "formulation": f"H1 mixed total/reduced Omega, order {order}",
                     "boundary": "natural B.n = 0 on the box; GND vertex gauge",
                     "iron_relative_harmonic_norm": float(hodge["relative_harmonic_norm"]),
-                    "linear_solver": "PARDISO (symmetric indefinite saddle point)",
+                    "linear_solver": "SparseCholesky (symmetric indefinite saddle point)",
                     "timing_s": timing, "ndof": None,
                 }
                 return field, stats, description, time.perf_counter() - started
@@ -1057,7 +1057,7 @@ def solve_mixed_omega_box(mesh: ng.Mesh, coil: int, material, *, nonlinear: bool
         "source": "exact Radia H_s in the reduced air/coil; total-Hodge split in iron",
         "iron_relative_harmonic_norm": float(hodge["relative_harmonic_norm"]),
         "ndof": int(result["fes"].ndof),
-        "linear_solver": "PARDISO (symmetric indefinite saddle point)",
+        "linear_solver": "SparseCholesky (symmetric indefinite saddle point)",
         "phase_timings_seconds": result.get("phase_timings_seconds"),
         "timing_s": timing,
     }
