@@ -729,7 +729,7 @@ class ScalarPotentialSolver:
         pre = None
         use_iterative = fes.ndof > 200_000
         if use_iterative:
-            pre = Preconditioner(a, 'bddc')
+            pre = Preconditioner(a, 'bddc', inverse='sparsecholesky')
         a.Assemble()
 
         # Source
@@ -812,7 +812,7 @@ class ScalarPotentialSolver:
         pre = None
         use_iterative = X.ndof > 200_000
         if use_iterative:
-            pre = Preconditioner(a, 'bddc')
+            pre = Preconditioner(a, 'bddc', inverse='sparsecholesky')
         a.Assemble()
 
         # Source: H_s in air only
@@ -949,7 +949,7 @@ class ScalarPotentialSolver:
         pre = None
         use_iterative = fes.ndof > 200_000
         if use_iterative:
-            pre = Preconditioner(a, 'bddc')
+            pre = Preconditioner(a, 'bddc', inverse='sparsecholesky')
         a.Assemble()
 
         # --- Dirichlet lift: Omega_s on iron boundary (weak) ---
@@ -1417,7 +1417,7 @@ class ScalarPotentialSolver:
         pre = None
         use_iterative = fes.ndof > 200_000
         if use_iterative:
-            pre = Preconditioner(a, 'bddc')
+            pre = Preconditioner(a, 'bddc', inverse='sparsecholesky')
         a.Assemble()
 
         # Total elements for VectorL2 block DOF mapping
@@ -1719,7 +1719,7 @@ class ScalarPotentialSolver:
             pre = None
             use_iterative = fes.ndof > 200_000
             if use_iterative:
-                pre = Preconditioner(a, 'bddc')
+                pre = Preconditioner(a, 'bddc', inverse='sparsecholesky')
             a.Assemble()
 
             f = LinearForm(fes)
@@ -1893,7 +1893,18 @@ class ScalarPotentialSolver:
                            printrates=False, tol=1e-10)
             gf.vec.data = inv * f.vec
         else:
-            gf.vec.data = a.mat.Inverse(fes.FreeDofs()) * f.vec
+            gf.vec.data = a.mat.Inverse(
+                fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+        from ngsolve import Norm, Projector
+        free = Projector(fes.FreeDofs(), True)
+        residual = f.vec.CreateVector()
+        residual.data = free * (f.vec - a.mat * gf.vec)
+        load = f.vec.CreateVector()
+        load.data = free * f.vec
+        relative = Norm(residual) / max(Norm(load), 1e-30)
+        if not np.isfinite(relative) or relative > 1e-8:
+            raise RuntimeError(
+                f"Scalar-potential linear solve failed: true relative residual {relative:.3e}")
 
     def _element_centroid(self, el):
         """Compute centroid of a volume element."""

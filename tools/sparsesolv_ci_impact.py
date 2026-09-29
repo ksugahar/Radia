@@ -45,6 +45,8 @@ NATIVE_PATHS = (
     "tests/test_hdiv_vim_native_matrix.py",
     "tests/test_hdiv_same_process_determinism.py",
     'src/radia/vector_potential_solver.py',
+    'src/radia/scalar_potential_solver.py',
+    'validation_test/panels/test_scalar_linear_direct.py',
     'src/radia/topology_optimization.py',
     'src/core/rad_hdiv*',
     'src/radia/vim/**',
