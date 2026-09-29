@@ -80,7 +80,8 @@ def test_discrete_material_energy_gradient_and_hessian(kind, order, curved):
         np.testing.assert_allclose(dg, hd, rtol=3e-6, atol=1e-7)
 
 
-def test_distinct_materials_and_zero_field_tangent():
+def test_distinct_materials_and_zero_field_tangent(monkeypatch):
+    monkeypatch.setattr(material_module._EnergyMaterialQuadrature, "_chunk_size", 7)
     from netgen.occ import Box, Pnt, Glue, OCCGeometry
     first = Box(Pnt(0, 0, 0), Pnt(1, 1, 1)).mat("first")
     second = Box(Pnt(1, 0, 0), Pnt(2, 1, 1)).mat("second")
