@@ -1,5 +1,6 @@
 """Complex A-V solves must pass the free-row residual before post-processing."""
 import pytest
+from ngsolve import TaskManager
 from netgen.occ import Box, Pnt, OCCGeometry, X
 
 from radia.panels import calc_fem_coilmesh as solver
@@ -13,7 +14,8 @@ def test_coilmesh_checks_each_dirichlet_solve(tmp_path, monkeypatch, model, fail
     body.faces.name = 'sibc'
     body.faces.Min(X).name = 'source'
     body.faces.Max(X).name = 'sink'
-    mesh = OCCGeometry(body).GenerateMesh(maxh=.006)
+    with TaskManager():
+        mesh = OCCGeometry(body).GenerateMesh(maxh=.006)
     vol = tmp_path / 'coil.vol'
     mesh.Save(str(vol))
     # A constant surface impedance isolates the final ESIM re-solve contract.
