@@ -29,6 +29,7 @@ on:
       - 'tests/test_isochronous_topopt.py'
       - 'tests/test_accelerator_lie_topopt.py'
       - 'tests/test_topology_optimization.py'
+      - 'validation_test/topology_optimization/test_hex_cluster_derivative.py'
       - 'tests/test_vim_eddy_hybrid.py'
       - 'tests/test_vim_coupled_weak_vs_monolithic.py'
       - 'tests/test_vector_potential_bh_tail.py'
@@ -148,6 +149,7 @@ on:
       - 'tests/test_isochronous_topopt.py'
       - 'tests/test_accelerator_lie_topopt.py'
       - 'tests/test_topology_optimization.py'
+      - 'validation_test/topology_optimization/test_hex_cluster_derivative.py'
       - 'tests/test_vim_eddy_hybrid.py'
       - 'tests/test_vim_coupled_weak_vs_monolithic.py'
       - 'tests/test_vector_potential_bh_tail.py'
@@ -368,6 +370,24 @@ jobs:
           python -c "import os, pathlib, xml.etree.ElementTree as ET; p=pathlib.Path(os.environ['RUNNER_TEMP'])/'solver-numerics.xml'; cases=list(ET.parse(p).iter('testcase')); assert cases and all(c.find('skipped') is None for c in cases), 'required numerical tests must execute without skips'; print('Executed numerical cases:', len(cases))"
           exit $LASTEXITCODE
 
+      - name: Run required heavier numerical validation
+        if: steps.native-impact.outputs.required == 'true'
+        shell: pwsh
+        env:
+          PYTHONPATH: '${{ github.workspace }}\src'
+          RADIA_TESTS_ALLOW_PARTIAL: '0'
+          RADIA_TEST_NGSOLVE_THREADS: '1'
+          OMP_NUM_THREADS: '1'
+          OPENBLAS_NUM_THREADS: '1'
+          MKL_NUM_THREADS: '1'
+        run: |
+          python -c "import ngsolve, radia; print('NGSolve:', ngsolve.__version__); print('Radia:', radia.__file__)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/run_test_tier.py --profile solver-heavy --junitxml "$env:RUNNER_TEMP\solver-heavy.xml"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import os, pathlib, xml.etree.ElementTree as ET; p=pathlib.Path(os.environ['RUNNER_TEMP'])/'solver-heavy.xml'; cases=list(ET.parse(p).iter('testcase')); assert cases and all(c.find('skipped') is None for c in cases), 'required numerical tests must execute without skips'; print('Executed numerical cases:', len(cases))"
+          exit $LASTEXITCODE
+
       - name: Build and verify native MATLAB parity
         if: steps.native-impact.outputs.required == 'true' && steps.matlab-impact.outputs.required == 'true'
         shell: pwsh
@@ -391,6 +411,7 @@ jobs:
           path: |
             ${{ runner.temp }}/sparsesolv-results.xml
             ${{ runner.temp }}/solver-numerics.xml
+            ${{ runner.temp }}/solver-heavy.xml
             ${{ runner.temp }}/sparsesolv-matlab.json
             build-msvc/build.log
           if-no-files-found: warn

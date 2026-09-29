@@ -58,6 +58,7 @@ NATIVE_PATHS = (
     'tests/test_isochronous_topopt.py',
     'tests/test_accelerator_lie_topopt.py',
     'tests/test_topology_optimization.py',
+    'validation_test/topology_optimization/test_hex_cluster_derivative.py',
     'tests/test_vim_eddy_hybrid.py',
     'tests/test_vim_coupled_weak_vs_monolithic.py',
     'tests/test_vector_potential_bh_tail.py',
@@ -158,8 +159,9 @@ def ams_manifest_unchanged(before: str, after: str) -> bool:
             name = profile.get("extends")
             if name is not None and not isinstance(name, str):
                 raise ValueError("invalid AMS parent")
-        if "solver-numerics" in profiles:
-            selected["solver-numerics"] = profiles["solver-numerics"]
+        for profile_name in ("solver-numerics", "solver-heavy"):
+            if profile_name in profiles:
+                selected[profile_name] = profiles[profile_name]
         data["profiles"] = selected
         paths = [path for profile in selected.values() for path in profile.get("paths", [])]
         if not paths or len(paths) != len(set(paths)):
