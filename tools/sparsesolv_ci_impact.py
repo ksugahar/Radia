@@ -51,6 +51,8 @@ NATIVE_PATHS = (
     'src/radia/accelerator_lie_topopt.py',
     'src/radia/isochronous_topopt.py',
     'src/radia/ffag_topopt.py',
+    'src/radia/kelvin_identify_ngsolve.py',
+    'tests/feec/test_hdiv_vim_cyclic_periodic_hex.py',
     'tests/test_hdiv_vim_bh_validation.py',
     'tests/test_hdiv_vim_capabilities.py',
     'tests/test_isochronous_topopt.py',

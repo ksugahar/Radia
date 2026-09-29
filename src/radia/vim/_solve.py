@@ -189,7 +189,7 @@ def _hdiv_space_with_image_constraints(
                 "vim.Solve: cyclic periodic sector faces must have disjoint "
                 "vertex sets")
         linked = {first: set(), second: set()}
-        for endpoint_a, endpoint_b in mesh.ngmesh.GetIdentifications():
+        for endpoint_a, endpoint_b, *_identification_number in mesh.ngmesh.GetIdentifications():
             endpoint_a = int(getattr(endpoint_a, "nr", endpoint_a))
             endpoint_b = int(getattr(endpoint_b, "nr", endpoint_b))
             if (endpoint_a in boundary_vertices[first]

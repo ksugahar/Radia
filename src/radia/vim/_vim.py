@@ -1137,7 +1137,7 @@ def _cyclic_periodic_hex_face_pairs(mesh, boundaries, image_rot_angle):
             "vertex sets")
 
     master_to_slave = {}
-    for endpoint_a, endpoint_b in mesh.ngmesh.GetIdentifications():
+    for endpoint_a, endpoint_b, *_identification_number in mesh.ngmesh.GetIdentifications():
         endpoint_a = int(getattr(endpoint_a, "nr", endpoint_a)) - 1
         endpoint_b = int(getattr(endpoint_b, "nr", endpoint_b)) - 1
         if (endpoint_a in boundary_vertices[master_name]
