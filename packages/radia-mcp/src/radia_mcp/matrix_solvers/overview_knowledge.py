@@ -1,7 +1,7 @@
 """Matrix-solver overview: lab stack, decision tree, history."""
 
 LAB_STACK = r"""
-# Sugahara Lab matrix-solver stack (production, 2026-05)
+# Radia matrix-solver stack
 
 ★ Production solver library = **`radia.sparsesolv_ngsolve`**
   (built from `src/ext/sparsesolv/`, shipped inside the radia wheel)
@@ -17,22 +17,23 @@ LAB_STACK = r"""
 | ABMC ordering | parallel triangular solve | (lab custom) | `abmc_ordering.hpp` |
 | RCM ordering | Cuthill-McKee | 1969 | `rcm_ordering.hpp` |
 
-The ★ are the **lab core methods** — anything new should pick these
-before reaching for HYPRE / PARDISO.
+The starred methods are available application building blocks. Choose by matrix
+structure and verified residual, not by an assumed universal size threshold.
+For direct FE solves, Radia explicitly uses SparseCholesky; PARDISO is not selected.
 
-## Why these and not HYPRE / PETSc
+## Application priorities
 
 | Goal | Choice | Why |
 |------|--------|-----|
-| TaskManager-native parallelism | CompactAMS, CompactAMG | HYPRE uses MPI; Compact uses NGSolve TaskManager (shared memory work-stealing) |
-| No HYPRE dependency | CompactAMG | HYPRE = 100s of MB binary + MPI; CompactAMG = ~3 kLOC C++ |
-| Complex symmetric eddy current | COCR + ComplexCompactAMS | PARDISO complex is paid; COCG is sometimes unstable; COCR is the modern alternative |
-| Open-source MIT | sparsesolv | HYPRE is BSD but heavyweight; PARDISO is per-seat paid |
+| Real HCurl systems | CG + CompactAMS | Use the validated application setup and check the original residual |
+| Complex symmetric eddy current | COCR + ComplexCompactAMS | Check the complex system, not only the real auxiliary problem |
+| Higher-order HCurl | BDDC + AMS coarse solver | Validated paths include order 2 and 3; do not infer higher-order or mixed-space support |
+| Direct symmetric FE reference | SparseCholesky | Explicit backend, boundary lifting and true-residual validation |
 
 ## What `radia.sparsesolv_ngsolve` does NOT solve
 
-- **Non-symmetric real** linear systems > 1M DOF: fall back to NGSolve
-  `BiCGSTAB` + `BoomerAMG` (HYPRE) or PARDISO direct.
+- **Non-symmetric real** systems need a separately validated nonsymmetric
+  method. Do not silently apply SparseCholesky or switch to another backend.
 - **Helmholtz** / full Maxwell at >GHz: out of scope (lab is Laplace-kernel
   MQS/Darwin only — see Radia CLAUDE.md).
 - **Indefinite** symmetric (Stokes-like): use MINRES + Schur-complement
@@ -46,9 +47,9 @@ DECISION_TREE = r"""
 ```
 1. Matrix structure
    ├── Real, symmetric positive definite (HCurl mass, magnetostatic Phi)
-   │   ├── N < 500            → LU direct (radia.Solve method=0)
-   │   ├── 500 < N < 100k     → CG + ICPreconditioner    [lab CGSolver]
-   │   └── N > 100k, HCurl    → CG + CompactAMS          ★ lab CORE
+   │   ├── HCurl             → validated CG + CompactAMS path
+   │   ├── Other spaces      → validated space-appropriate preconditioner
+   │   └── Direct FE choice  → SparseCholesky + true-residual check
    │
    ├── Real, symmetric indefinite (Stokes-like, saddle-point)
    │   └── MINRES + block preconditioner (defer to NGSolve)
@@ -57,10 +58,10 @@ DECISION_TREE = r"""
    │   ├── Mild non-symmetry → BiCGSTAB + ILU
    │   └── Severe + restart  → GMRES(m) + AMG / SOR
    │
-   ├── Complex symmetric (eddy current, Helmholtz w/ PML)
-   │   ├── N < 10k             → PARDISO complex direct
-   │   ├── N > 10k, HCurl ω·σ  → COCR + ComplexCompactAMS  ★ lab CORE
-   │   └── COCG legacy         → only if migrating old code
+   ├── Complex symmetric (eddy current)
+   │   ├── HCurl, order 1     → validated COCR + ComplexCompactAMS path
+   │   ├── HCurl, order 2/3   → validated BDDC + AMS coarse path
+   │   └── Direct FE choice   → SparseCholesky + true-residual check
    │
    └── Complex non-symmetric  → GMRES(m) + ILU(0) (rarely needed for MQS)
 
@@ -68,22 +69,21 @@ DECISION_TREE = r"""
    ├── Multiply connected (loops in conductor)
    │   └── Tree-cotree gauging or A-V formulation (Biro-Preis 2000)
    ├── Air region σ=0 with conductor σ>0
-   │   └── Shifted preconditioner (eps·mass in PREC only — see CLAUDE.md)
+   │   └── Use the application's validated nullspace/auxiliary setup
    ├── Frequency-stable from DC to MHz
    │   └── Two-Step Maxwell + tree-cotree (Ostrowski-Hiptmair 2021)
    └── Open boundary
        └── Kelvin transformation (NOT solver-related; geometry-level)
 ```
 
-## When to fall back to HYPRE / PETSc / PARDISO
+## Failure and comparison contract
 
-- HYPRE BoomerAMG: when CompactAMG converges in > 50 iterations on a
-  given problem.  Usually a sign of strong anisotropy or poor coarsening.
-  Try BoomerAMG with `coarsen_type=10` (HMIS).
-- PARDISO: when memory permits and N < 500k.  Direct beats iterative
-  for ill-conditioned RHS sweeps (e.g. unit-current sweep over many ports).
-- PETSc GAMG: only if MPI is already in the workflow.  No reason to
-  bring PETSc just for the preconditioner.
+Do not silently fall back to PARDISO or another backend. Preserve the original
+operator, right-hand side, boundary conditions and acceptance tolerance. Check
+the true free-row residual and report nonconvergence or factorization failure.
+Benchmark AMS/BDDC+AMS and SparseCholesky on the same problem before making a
+speed claim. Availability of HYPRE or PETSc must be checked explicitly; it is not
+an automatic replacement for the supported Radia path.
 """
 
 

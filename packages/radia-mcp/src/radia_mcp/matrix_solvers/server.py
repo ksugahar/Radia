@@ -2,7 +2,7 @@
 
 Sparse linear solver theory + decision layer for EM analysis.
 
-Covers direct solvers (PARDISO/MUMPS/LU), Krylov methods (CG/BiCGSTAB/
+Covers direct solvers (SparseCholesky, external MUMPS, legacy dense LU), Krylov methods (CG/BiCGSTAB/
 GMRES/COCG/COCR/IDR(s)), preconditioners (Jacobi/IC/MIC/ILU/AMG/AMS
 Hiptmair-Xu), and EM-specific topics (tree-cotree gauging, Biro-Preis
 A-V, shifted preconditioner for air+conductor).
@@ -53,14 +53,15 @@ def matrix_solvers_overview(topic: str = "decision_tree") -> str:
 @mcp.tool()
 def matrix_solvers_direct(topic: str = "overview") -> str:
     """
-    Direct sparse solvers: LU, PARDISO, MUMPS, SuperLU.
+    Radia FE direct policy, SparseCholesky, and legacy dense LU.
 
     Args:
         topic: One of:
             "overview"      - When direct beats iterative (DEFAULT)
-            "pardiso"       - Intel MKL PARDISO (NGSolve default)
-            "mumps"         - Distributed MUMPS for >1 node
-            "lu_radia"      - Built-in LU for Radia HDiv-VIM (N<500)
+            "sparsecholesky" - Supported symmetric FE direct solve
+            "pardiso"       - Retired selection: migration guidance only
+            "mumps"         - Separate external integration, not a fallback
+            "lu_radia"      - Legacy dense-LU compatibility (not HDiv-VIM)
             "all"           - Everything
     """
     return get_direct_solvers_knowledge(topic)
@@ -175,12 +176,12 @@ def pick_a_solver(problem_class: str) -> str:
             "   → radia_ngsolve MCP, tool sparsesolv('example_compact_ams')\n"
         ),
         "frequency_sweep": (
-            "Frequency sweep (same A factored once, many RHS):\n"
-            "1. Direct solver PARDISO — amortizes factor cost\n"
-            "   → matrix_solvers_direct('pardiso')\n"
-            "2. For very large N (>500k): iterative with recycling Krylov\n"
-            "   (not yet in lab stack — defer to NGSolve `MGmm` examples)\n"
-            "3. For S-parameter extraction in PEEC: PRIMA Lanczos MOR\n"
+            "Frequency sweep / multiple right-hand sides:\n"
+            "1. Reuse a SparseCholesky factor only while A is unchanged\n"
+            "   → matrix_solvers_direct('sparsecholesky')\n"
+            "2. Changing frequency generally changes K + i omega M;\n"
+            "   refactor or use a validated iterative/reduced-model path\n"
+            "3. For PEEC model reduction: validated PRIMA workflow\n"
             "   → radia_mcp.mor MCP\n"
         ),
         "non_symmetric": (
