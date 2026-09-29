@@ -256,7 +256,7 @@ def _cyclic_boundary_facets(mesh, periodic_boundaries):
         raise ValueError("FFAG cyclic boundary vertex sets must be disjoint")
 
     master_to_slave = {}
-    for endpoint_a, endpoint_b in mesh.ngmesh.GetIdentifications():
+    for endpoint_a, endpoint_b, *_identification_number in mesh.ngmesh.GetIdentifications():
         endpoint_a = int(getattr(endpoint_a, "nr", endpoint_a)) - 1
         endpoint_b = int(getattr(endpoint_b, "nr", endpoint_b)) - 1
         if (endpoint_a in vertices[boundaries[0]]

@@ -167,7 +167,8 @@ def has_kelvin_identification(
         pairs = mesh.ngmesh.GetIdentifications()
         matched_inner: set[int] = set()
         matched_outer: set[int] = set()
-        for first, second in pairs:
+        for first, second, *_identification_number in pairs:
+            # Netgen 6.2.2607 appends the identification number to each pair.
             # ``GetIdentifications`` returns PointId objects on current
             # Netgen, whose public numeric member is ``nr`` rather than
             # Python's ``__int__`` protocol.
