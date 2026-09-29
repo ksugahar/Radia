@@ -246,6 +246,12 @@ sets on which the rule stops; the other columns describe those sets.
 
 ## Running
 
+Each new FOM run checks every Newton linear solve against the original free-row
+residual (relative limit `1e-7`) and records the maximum per time step.
+`newton_converged` distinguishes convergence from the intentionally truncated
+one-iteration training trajectories. Historical JSON files without these fields
+do not establish that the checks were performed.
+
 The SparseCholesky migration smoke is reproducible with
 `python check_sparsecholesky.py --output results/sparsecholesky_smoke.json`.
 The recorded coarse p1 case has 22,415 DOFs. Its five constrained relative
