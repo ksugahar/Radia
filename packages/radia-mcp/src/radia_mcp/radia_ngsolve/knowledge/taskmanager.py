@@ -91,7 +91,7 @@ with TaskManager():
 
     gfu = GridFunction(fes)
     gfu.vec.data = bf.mat.Inverse(
-        fes.FreeDofs(), inverse="pardiso") * lf.vec   # parallelised
+        fes.FreeDofs(), inverse="sparsecholesky") * lf.vec   # parallelised
 ```
 
 ## What counts as "the solve" — wrap from BilinearForm() to .Set()
@@ -202,8 +202,7 @@ NGSolve and MKL each have their own thread pool:
 
 1. **NGSolve TaskManager** — wraps the solver's outer parallel loop
    (element assembly, MatVec dispatch, etc.).
-2. **MKL** — runs the matrix kernels (DGEMM, sparse LU
-   factorisation, Pardiso, BLAS-3) — controlled by
+2. **MKL** — runs dense BLAS/LAPACK and FFT kernels — controlled by
    `mkl_set_num_threads()`.
 
 ## The nesting problem
@@ -225,34 +224,23 @@ TaskManager: 28 workers
 So inside `with TaskManager(): bf.Assemble()`, MKL sees
 `mkl_set_num_threads(1)` — automatically.
 
-## When MKL parallelism IS useful
+## Direct FE solves and dense kernels
 
-For the **Pardiso solve** of a large factored system:
-
-```python
-with TaskManager():
-    bf.Assemble()                          # 28 NGSolve workers, MKL=1
-    gfu.vec.data = bf.mat.Inverse(
-        fes.FreeDofs(), inverse="pardiso"  # ← MKL Pardiso, controlled
-    ) * lf.vec                              # by mkl_set_num_threads
-```
-
-NGSolve's TaskManager hands off the factorisation to Pardiso, which
-internally uses MKL parallelism.  Pardiso reads
-`mkl_set_num_threads()` AT FACTORISATION TIME, so set it BEFORE the
-`with TaskManager():` block:
+Radia direct FE solves use SparseCholesky explicitly, including MATLAB MEX.
+MKL remains available for dense BLAS/LAPACK and FFT; it does not select the
+FE inverse. Do not use a PARDISO fallback.
 
 ```python
-import mkl
-mkl.set_num_threads(8)             # for the Pardiso factorise step
-ngsolve.SetNumThreads(8)           # for the assemble step
+ngsolve.SetNumThreads(8)
 with TaskManager():
-    ...                            # both honour 8 threads
+    bf.Assemble()
+    inverse = bf.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
+    gfu.vec.data = inverse * lf.vec
 ```
 
-(In practice the two values can differ; the lab uses
-`ngsolve.SetNumThreads(args.nthreads)` and lets MKL default to all
-cores for Pardiso.)
+Check the true residual on free DOFs after solving. Measure thread scaling
+for the actual problem; changing MKL thread counts does not establish
+SparseCholesky scaling. Bound inner BLAS pools to avoid oversubscription.
 
 ## Diagnostics
 
@@ -463,12 +451,12 @@ with TaskManager():
     bf.Assemble()
 ```
 
-## 5. Multiple Pardiso solves not benefiting
+## 5. Repeated solves of the same matrix
 
-Pardiso's REUSE-symbolic-factorisation path is faster on a second
-solve with the same matrix structure.  TaskManager doesn't fix this
-automatically — you need `inverse="pardiso"` + Sparskit reuse on
-your own.  TaskManager only parallelises within ONE Pardiso call.
+Retain the SparseCholesky inverse object and apply it to subsequent right-hand
+sides while the matrix and free-DOF constraints are unchanged. Rebuild it when
+the operator changes. TaskManager does not cache a factorization automatically.
+Check each solution's true residual; do not reuse a stale material factor.
 
 ## 6. Mixing raw OpenMP and TaskManager in same C++ TU
 
@@ -547,7 +535,7 @@ to wrap.  This is OPTIONAL — `audit_taskmanager.py` catches the
 missing-wrap case at lint time:
 
 ```python
-def _assemble_and_solve(a_bf, f_lf, fes, inverse="pardiso"):
+def _assemble_and_solve(a_bf, f_lf, fes, inverse="sparsecholesky"):
     \"\"\"Assemble and solve.  Caller MUST be inside `with TaskManager():`
     per CLAUDE.md "Caller Wraps, Helper Does NOT" (2026-05-27).
     \"\"\"
@@ -637,7 +625,7 @@ go through TaskManager.**  Wrap them anyway.
 |---|---|---|
 | `BilinearForm.Assemble()`     | YES                                | YES |
 | `LinearForm.Assemble()`       | YES                                | YES |
-| `mat.Inverse(inverse="...")`  | YES (PARDISO etc.)                 | YES |
+| `mat.Inverse(inverse="...")`  | YES (SparseCholesky)                 | YES |
 | `mesh.Curve(p)`               | YES                                | YES |
 | `gf.Set(cf, ...)`             | YES (CF evaluation)                | YES |
 | `Integrate(cf, mesh, ...)`    | YES                                | YES |
