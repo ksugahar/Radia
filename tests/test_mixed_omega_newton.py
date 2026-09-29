@@ -113,19 +113,6 @@ def test_spline_law_is_the_pchip_law_and_its_coenergy():
         _build_bh_spline_law([[1., 0.], [2., 1.]])
 
 
-def test_spline_and_ifpos_newton_agree(case):
-    mesh = case[0]
-    spline = run(case, order=2)
-    nested = run(case, order=2, bh_evaluation='ifpos')
-    assert spline['nonlinear_stats']['bh_evaluation'] == 'spline'
-    assert nested['nonlinear_stats']['bh_evaluation'] == 'ifpos'
-    for point in [(0.5, 0.1, 0.2), (-0.5, 0.1, 0.2)]:
-        np.testing.assert_allclose(spline['B_cf'](mesh(*point)), nested['B_cf'](mesh(*point)),
-                                   rtol=1e-10, atol=1e-16)
-    with pytest.raises(ValueError, match='bh_evaluation'):
-        run(case, bh_evaluation='linear')
-
-
 def test_iron_integrals_never_evaluate_the_air_source(case):
     """A compiled MaterialCF evaluates every entry; the coil lives in the air one."""
     from radia.esrf_examples import get_esrf_bh_table
@@ -144,12 +131,41 @@ def test_iron_integrals_never_evaluate_the_air_source(case):
     np.testing.assert_allclose(heavy['B_cf'](point), cheap['B_cf'](point), rtol=1e-9, atol=1e-16)
 
 
-def test_public_workflow_rejects_material_bonus_outside_newton():
+def test_public_workflow_rejects_material_bonus_without_bh_iron():
     from radia.static_electromagnet import solve_static_electromagnet_mixed_total_reduced_omega
-    with pytest.raises(ValueError, match='nonlinear Newton solve only'):
+    with pytest.raises(ValueError, match='nonlinear \\(bh_table\\) solve only'):
         solve_static_electromagnet_mixed_total_reduced_omega(
             None, None, None, 1., (0., 0., 0.), order=1,
-            bh_table=[[0., 0.], [1., 1.]], nonlinear_material_bonus_intorder=2)
+            linear_mu_r_by_material={'iron': 100.}, nonlinear_material_bonus_intorder=2)
+
+
+@pytest.mark.parametrize('order', [1, 2])
+def test_hybrid_linear_total_material_keeps_its_permeability(order):
+    """A linear total material needs its own mu_r; a nonlinear one cannot be overridden."""
+    from netgen.occ import Box, Pnt, Glue, OCCGeometry, X
+    from radia.kelvin_material import MU_0
+    air = Box(Pnt(-1, -1, -1), Pnt(0, 1, 1))
+    iron = Box(Pnt(0, -1, -1), Pnt(1, 1, 1))
+    pole = Box(Pnt(1, -1, -1), Pnt(2, 1, 1))
+    air.mat('reduced'); iron.mat('total'); pole.mat('pole')
+    air.faces.name = iron.faces.name = pole.faces.name = 'outer'
+    air.faces.Max(X).name = iron.faces.Min(X).name = 'source_total_interface'
+    mesh = ng.Mesh(OCCGeometry(Glue([air, iron, pole])).GenerateMesh(maxh=1))
+    options = dict(bh_table=[(0, 0), (1, 100*MU_0), (2, 150*MU_0)], nonlinear_materials=('total',),
+                   reduced_materials=('reduced',), total_materials=('total', 'pole'),
+                   interface_boundary='source_total_interface', dirichlet_bbbnd='outer',
+                   kelvin_mats=(), order=order, tolerance=1e-6)
+    zero = ng.CF((0., 0., 0.))
+    with ng.TaskManager():
+        # Before the check existed, the pole was silently solved as air.
+        with pytest.raises(ValueError, match='linear total materials'):
+            solve(mesh, zero, ng.CF(0.), 1., (3., 0., 0.), **options)
+        result = solve(mesh, zero, ng.CF(0.), 1., (3., 0., 0.),
+                       mu_r_by_material={'pole': 5000.}, **options)
+        with pytest.raises(ValueError, match='override nonlinear'):
+            solve(mesh, zero, ng.CF(0.), 1., (3., 0., 0.),
+                  mu_r_by_material={'pole': 5000., 'total': 1.}, **options)
+    assert result['mu_cf'](mesh(1.5, .13, .17)) / MU_0 == pytest.approx(5000.)
 
 
 def test_iteration_limit_never_returns_an_accepted_field(case):
@@ -180,16 +196,6 @@ def test_matching_trace_newton_preserves_harmonic_source_and_field(case, order):
     for point in [(0.5,0.1,0.2),(-0.5,0.1,0.2)]:
         np.testing.assert_allclose(condensed['B_cf'](mesh(*point)),
                                    reference['B_cf'](mesh(*point)), rtol=2e-6, atol=1e-12)
-
-
-@pytest.mark.parametrize("sampling", ["element_centroid", "invalid"])
-def test_public_workflow_rejects_incompatible_sampling_before_projection(sampling):
-    from radia.static_electromagnet import solve_static_electromagnet_mixed_total_reduced_omega
-    with pytest.raises(ValueError, match="different material discretization"):
-        solve_static_electromagnet_mixed_total_reduced_omega(
-            None, None, None, 1., (0.,0.,0.), order=1,
-            bh_table=[[0.,0.],[1.,1.]], nonlinear_method="newton",
-            nonlinear_material_sampling=sampling)
 
 
 def test_matching_trace_rejects_a_missing_point_gauge(case):

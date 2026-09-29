@@ -15,9 +15,10 @@ arrays, coordinates, true nonlinear residuals, and input/implementation hashes.
 The calculations called `solve_omega` in
 `validation_test/c_type_three_engine/run_three_engine.py`, using the case-6
 source, B-H table, mesh, and observation helpers from the coil-yoke runner.
-The public three-engine runner exposes the same settings as
-`--mixed-method newton --fem-order 2 --mixed-bonus 12 --mixed-source-order 2
---mixed-source-load surface_flux --mixed-material-bonus 4` (or `8`).
+The public three-engine runner, whose mixed Omega B-H solve is Newton only,
+exposes the same settings as `--fem-order 2 --mixed-bonus 12
+--mixed-source-order 2 --mixed-source-load surface_flux
+--mixed-material-bonus 4` (or `8`).
 Use separate outputs for the two material rules; their checkpoints are not
 interchangeable.
 

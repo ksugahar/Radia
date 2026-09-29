@@ -181,12 +181,12 @@ the production solver defaults are unchanged.
 `radia.kelvin_solver` on the same mesh: air and coil are the reduced region,
 iron the total region, the total-Hodge split supplies the interface trace and
 the harmonic remainder, natural `B.n = 0` on the box and the `GND` point gauge.
-Its default nonlinear loop is the production Picard iteration (damped or
-Anderson). `--omega-nonlinear-method newton` selects quadrature-based PCHIP
-coenergy Newton, with residual backtracking and both equation-residual and
-vector-field-change convergence checks. `--omega-order 2` enables the P2
-scalar-potential comparison; reduced-A remains first order. Newton does not
-use Anderson mixing. These switches do not imply a timing certificate.
+Its nonlinear loop is the production quadrature-based PCHIP coenergy Newton,
+with residual backtracking and both equation-residual and vector-field-change
+convergence checks (the earlier mixed Omega Picard route and its relaxation,
+Anderson and method options were retired on 2026-09-30). `--omega-order 2` enables the P2
+scalar-potential comparison; reduced-A remains first order. These switches do
+not imply a timing certificate.
 
 **total_a** -- lowest-order Nedelec total `A` with the coil meshed and no
 analytical source field: the coil current is the A-phi DC current of
@@ -446,5 +446,6 @@ Radia `H_s` evaluated at every quadrature point of the reduced region as the
 dominant cost (12 s of 15.5 s at 48k tets, one-off per problem); its nonlinear
 Picard loop at relaxation 0.3 did not reach the 2e-5 criterion within 80
 iterations on the 67k mesh and a constrained-Anderson run on the 48k mesh was
-stopped after 3 CPU-hours without converging.  A Newton loop for that engine is
-the open item.
+stopped after 3 CPU-hours without converging.  That Picard route has since been
+retired (2026-09-30); the engine now runs the production Newton loop, which
+this table has not re-measured on the box meshes.

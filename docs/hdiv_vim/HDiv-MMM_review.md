@@ -1000,7 +1000,9 @@ legacy convex combination bit for bit) and `estimate_contraction_rate`.
 counters, and the observed field.  The mixed loop raises
 `MixedOmegaPicardNotConverged` with that state; the reduced-A loop keeps
 returning, and its silent `except Exception: B_mag = 0.0` centroid fallback is
-now a raise.
+now a raise.  (2026-09-30: the mixed-Omega Picard loop and
+`MixedOmegaPicardNotConverged` were retired; mixed Omega is Newton only.
+The reduced-A Picard/Anderson controls above are unchanged.)
 
 Measured on the fast tests: reduced-A saturating cube (tol 1e-6) cold 24
 iterations, warm start from the converged state 2, Anderson(2) 14, fields

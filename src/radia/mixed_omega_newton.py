@@ -31,7 +31,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         max_halvings=12, observation_points=None, progress_callback=None,
         bonus_intorder=4, inverse="sparsecholesky", mu_r_by_material=None,
         condense_matching_trace=False, linear_solver="direct",
-        material_bonus_intorder=None, bh_evaluation="spline", **linear_options):
+        material_bonus_intorder=None, **linear_options):
     """Newton with residual backtracking and the production PCHIP B(H) law.
 
     Nonlinear materials must lie in the physical total-potential region.
@@ -42,10 +42,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
     and source terms; applied to the PCHIP co-energy it multiplies the
     linearization cost (12 is about 50 times 4 on a P2 mesh), so it is set
     separately and must be validated like any quadrature choice.
-    ``bh_evaluation="spline"`` evaluates that PCHIP law by native spline
-    lookup (exact to rounding, see ``_build_bh_spline_law``); ``"ifpos"`` keeps
-    the nested per-interval expression, whose automatic differentiation grows
-    with the table length.
+    The law is evaluated by native spline lookup (``_build_bh_spline_law``,
+    exact to rounding), not by the nested per-interval expression whose
+    automatic differentiation grows with the table length.
     Caller owns TaskManager, as for the linear mixed solver. Failure raises
     ``MixedOmegaNewtonNotConverged`` carrying iteration diagnostics.
     """
@@ -56,9 +55,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         solve_magnetostatic_mixed_total_reduced_omega_kelvin,
         solve_magnetostatic_matching_trace_total_reduced_omega,
         audit_mixed_omega_constitutive_field, _matching_trace_direct_inverse)
-    from .scalar_potential_solver import (
-        _build_bh_coefficient_function, _build_bh_coenergy_coefficient_function,
-        _build_bh_spline_law)
+    from .scalar_potential_solver import _build_bh_spline_law
 
     mu0 = 4e-7 * math.pi
     table = np.asarray(bh_table, dtype=float)
@@ -84,22 +81,27 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         raise ValueError("Newton owns the assembled system and constitutive coefficient")
     if linear_solver not in ("direct", "cg") or (linear_solver == "cg" and not condense_matching_trace):
         raise ValueError("Newton CG requires matching-trace condensation")
-    if bh_evaluation == "spline":
-        b_of, coenergy_of, _ = _build_bh_spline_law(table)
-    elif bh_evaluation == "ifpos":
-        def b_of(magnitude):
-            return _build_bh_coefficient_function(magnitude, table)
-
-        def coenergy_of(magnitude):
-            return _build_bh_coenergy_coefficient_function(magnitude, table)
-    else:
-        raise ValueError("bh_evaluation must be 'spline' or 'ifpos'")
+    b_of, coenergy_of, _ = _build_bh_spline_law(table)
     if material_bonus_intorder is None:
         material_bonus_intorder = bonus_intorder
     if type(material_bonus_intorder) is not int or material_bonus_intorder < 0:
         raise ValueError("material_bonus_intorder must be a nonnegative integer or None")
 
-    initial_mu = dict(mu_r_by_material or {})
+    # Hybrid materials: a linear total material needs its own permeability, and
+    # a nonlinear one must not be overridden.  Without these checks a missing
+    # entry silently solved that material as air.
+    from .kelvin_material import _is_kelvin_material
+    linear_mu = dict(mu_r_by_material or {})
+    nonlinear_set = set(nonlinear)
+    if set(linear_mu) & nonlinear_set:
+        raise ValueError("mu_r_by_material must not override nonlinear materials")
+    kelvin_names = {name for name in total if _is_kelvin_material(
+        name, linear_options.get("kelvin_mats", ("kelvin",)),
+        exact=bool(linear_options.get("kelvin_match_exact", False)))}
+    missing_linear = set(total) - nonlinear_set - kelvin_names - set(linear_mu)
+    if missing_linear:
+        raise ValueError(f"declare mu_r_by_material for linear total materials: {sorted(missing_linear)}")
+    initial_mu = dict(linear_mu)
     initial_mu.update({name: float(mu_r_initial) for name in nonlinear})
     started = time.perf_counter()
     if condense_matching_trace:
@@ -278,7 +280,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
 
     stats = dict(method="quadrature_pchip_newton", material_sampling="integration_point",
                  matching_trace_condensed=bool(condense_matching_trace), linear_solver=linear_solver,
-                 bh_interpolation="pchip", bh_evaluation=bh_evaluation, bonus_intorder=int(bonus_intorder),
+                 bh_interpolation="pchip", bh_evaluation="spline", bonus_intorder=int(bonus_intorder),
                  material_bonus_intorder=int(material_bonus_intorder),
                  converged=bool(converged), iterations=len(history),
                  residual_relative=norm / reference_norm, residual_tolerance=float(residual_tolerance),

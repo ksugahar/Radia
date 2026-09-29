@@ -56,10 +56,8 @@ import radia as rad  # noqa: E402
 from ngsolve.krylovspace import CGSolver  # noqa: E402
 
 from radia.kelvin_solver import (  # noqa: E402
-    MixedOmegaPicardNotConverged,
     project_source_total_hodge,
     solve_magnetostatic_mixed_total_reduced_omega_kelvin,
-    solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin,
 )
 from radia.picard_acceleration import ConstrainedAndersonAccelerator  # noqa: E402
 from radia.mixed_omega_newton import (  # noqa: E402
@@ -1000,10 +998,8 @@ def coil_current_phi(mesh: ng.Mesh, coil_manifest: dict, cut_radius: float | Non
 
 
 def solve_mixed_omega_box(mesh: ng.Mesh, coil: int, material, *, nonlinear: bool,
-                          relaxation: float, anderson_depth: int, tolerance: float,
-                          max_iterations: int, observation: np.ndarray,
-                          bonus_intorder: int, nonlinear_method: str = "picard",
-                          order: int = 1) -> tuple:
+                          tolerance: float, max_iterations: int, observation: np.ndarray,
+                          bonus_intorder: int, order: int = 1) -> tuple:
     started = time.perf_counter()
     source_h = rad.RadiaField(coil, "h")
     timing = {}
@@ -1023,24 +1019,14 @@ def solve_mixed_omega_box(mesh: ng.Mesh, coil: int, material, *, nonlinear: bool
     stats = {}
     with ng.TaskManager():
         if nonlinear:
-            solver = solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin
-            iteration_options = dict(relaxation=float(relaxation), anderson_depth=int(anderson_depth),
-                                     material_update_order=order - 1 if order > 1 else None)
-            if nonlinear_method == "newton":
-                if anderson_depth != 0:
-                    raise ValueError("Newton does not use Anderson mixing")
-                solver = solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin
-                iteration_options = dict(progress_callback=lambda row: progress("newton", engine="mixed_omega", **row))
-            elif nonlinear_method != "picard":
-                raise ValueError("nonlinear_method must be picard or newton")
             try:
-                result = solver(
+                result = solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
                     mesh, source_h, hodge["potential"], 1.0, (10.0, 0.0, 0.0),
                     bh_table=material, nonlinear_materials=("iron",),
                     tolerance=float(tolerance), max_iterations=int(max_iterations),
-                    **iteration_options,
+                    progress_callback=lambda row: progress("newton", engine="mixed_omega", **row),
                     observation_points=observation, **common)
-            except (MixedOmegaPicardNotConverged, MixedOmegaNewtonNotConverged) as exc:
+            except MixedOmegaNewtonNotConverged as exc:
                 # The carried state has the iteration history but no field:
                 # report the failure with its history and a NaN field.
                 stats = dict(exc.state["nonlinear_stats"])
@@ -1168,10 +1154,7 @@ def main() -> None:
     parser.add_argument("--newton-tolerance", type=float, default=1.0e-6,
                         help="relative nonlinear residual at which Newton stops")
     parser.add_argument("--line-search-max-halvings", type=int, default=6)
-    parser.add_argument("--omega-relax", type=float, default=0.3)
-    parser.add_argument("--omega-nonlinear-method", choices=("picard", "newton"), default="picard")
     parser.add_argument("--omega-order", type=int, choices=(1, 2), default=1)
-    parser.add_argument("--omega-anderson-depth", type=int, default=0)
     parser.add_argument("--omega-bonus-intorder", type=int, default=4)
     parser.add_argument("--tolerance", type=float, default=2.0e-5,
                         help="max |dB| / B_sat between iterations at which a loop is converged")
@@ -1335,11 +1318,9 @@ def run(options) -> dict:
     if "mixed_omega" in engines:
         progress("engine_start", engine="mixed_omega", mesh_elements=int(mesh.ne))
         field, stats, description, runtime = solve_mixed_omega_box(
-            mesh, coil, material, nonlinear=nonlinear, relaxation=options.omega_relax,
-            anderson_depth=options.omega_anderson_depth, tolerance=options.tolerance,
+            mesh, coil, material, nonlinear=nonlinear, tolerance=options.tolerance,
             max_iterations=options.max_iterations, observation=points,
-            bonus_intorder=options.omega_bonus_intorder,
-            nonlinear_method=options.omega_nonlinear_method, order=options.omega_order)
+            bonus_intorder=options.omega_bonus_intorder, order=options.omega_order)
         fields["mixed_omega"] = field
         diagnostics["mixed_omega"] = {**description, "nonlinear": nonlinear,
                                       "nonlinear_stats": stats, "runtime_s": runtime,

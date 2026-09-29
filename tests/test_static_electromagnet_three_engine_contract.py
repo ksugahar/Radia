@@ -128,9 +128,7 @@ def test_mixed_h1_uses_kelvin_vertex_gauge_not_surface_dirichlet_label():
     )
     mixed = source.split(
         "def solve_magnetostatic_mixed_total_reduced_omega_kelvin(", 1
-    )[1].split(
-        "def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(", 1
-    )[0]
+    )[1].split("\ndef ", 1)[0]
     assert 'dirichlet_bbbnd="GND"' in mixed
     # The `or ""` guard is required: this branch also reaches here with
     # dirichlet_bbbnd=None and no surface Dirichlet, and NGSolve rejects None.
