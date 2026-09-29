@@ -64,6 +64,8 @@ NATIVE_PATHS = (
     'src/radia/panels/calc_axisym_volumetric.py',
     'validation_test/panels/test_axisym_volumetric_direct.py',
     'validation_test/panels/test_accel_linear_dispatch.py',
+    'validation_test/panels/test_kelvin_benchmark_direct.py',
+    'src/radia/panels/calc_kelvin_benchmark.py',
     'src/radia/panels/calc_accel_magnet.py',
     'src/radia/em_design.py',
     'src/radia/panels/calc_motor_lamination.py',

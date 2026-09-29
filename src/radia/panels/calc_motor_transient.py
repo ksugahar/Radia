@@ -15,7 +15,7 @@ At each FE-resolution time step Dt_FE:
      `(i, theta)` operating point: A_op = argmin 1/2int nu(|gradA|^2) (gradA)^2 - J_s . A
   2. Freeze the *incremental* reluctivity nu*(x) = nu(B_op^2) + 2 nu'(B_op^2).
      B_op x B_op (the tangent operator)
-  3. Solve N_phase *linear* problems with shared PARDISO factorization:
+  3. Solve N_phase *linear* problems with shared SparseCholesky factorization:
      for each phase j, unit current -> A_j -> psi_kj column of L_inc
   4. Compute back-EMF e_bemf = omega . dpsi/dtheta (finite difference between
      two FE evaluations Dtheta apart)
@@ -465,7 +465,7 @@ def solve_motor_transient(
         )
         history["fe_calls"] += 1
 
-        # 2) Incremental inductance (shared PARDISO factorization)
+        # 2) Incremental inductance (shared SparseCholesky factorization)
         L_inc, _ = _extract_L_inc(
             mesh, fes, A, nu_cf, phase_regions,
             n_turns_per_slot, slot_area, stack_length,
