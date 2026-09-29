@@ -840,7 +840,7 @@ def mie_pec_bistatic_rcs(ka, theta, nmax=None):
 
 def maxwell_efie_pec_sphere_rcs(ka, a=1.0, maxh=0.3, order=2, intorder=12):
     r"""VECTOR-MAXWELL EFIE solve: the monostatic (backscatter) radar cross-section of a PERFECTLY
-    CONDUCTING (PEC) sphere via the ngsolve.bem ``MaxwellSingleLayerPotentialOperator`` (the electric-field
+    CONDUCTING (PEC) sphere via variational ``HelmholtzSL`` vector/divergence terms (the electric-field
     integral equation), verified against the analytic EM Mie RCS (:func:`mie_pec_sphere_rcs`).  This is the
     ACTUAL full-wave vector solve the scalar/acoustic Mie helpers above only gated analytically -- the open
     counterpart of a commercial high-frequency integral (MoM) RCS solver.
@@ -855,21 +855,31 @@ def maxwell_efie_pec_sphere_rcs(ka, a=1.0, maxh=0.3, order=2, intorder=12):
 
         sigma_b = (kappa^2 / 4 pi) (|A_x|^2 + |A_y|^2),   sigma_b/(pi a^2)  vs  mie_pec_sphere_rcs.
 
-    Verified to ~1e-4 across ka = 0.3 .. 3 (Rayleigh -> resonance -> optical onset).  Returns
+    The legacy implementation was checked to ~1e-4 across ka = 0.3 .. 3.
+    The 2607 variational implementation requires its own Mie validation. Returns
     ``{ndof, ka, sigma_back_over_pa2, mie, rel_err}``."""
     from ngsolve.krylovspace import GMResSolver
     kappa = ka / a
     mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), a)).GenerateMesh(maxh=maxh)).Curve(4)
     fes = ng.HDivSurface(mesh, order=order, complex=True)
     u, v = fes.TnT()
-    V = bem.MaxwellSingleLayerPotentialOperator(fes, kappa, intorder=intorder)
+    measure = _bem_surface_measure(intorder)
+    vector_sl = bem.HelmholtzSL(u.Trace() * measure, kappa) * v.Trace() * measure
+    divergence_sl = (bem.HelmholtzSL(ng.div(u.Trace()) * measure, kappa)
+                     * ng.div(v.Trace()) * measure)
+    matrix = kappa * vector_sl.mat - (1.0 / kappa) * divergence_sl.mat
     Einc = ng.CF((ng.exp(1j * kappa * ng.z), 0, 0))                       # x-pol, +z plane wave
     rhs = LinearForm((-1j) * (Einc * v.Trace()) * ds(bonus_intorder=intorder - 4)).Assemble()
     mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
-    pre = mass.Inverse(freedofs=fes.FreeDofs())
+    pre = mass.Inverse(freedofs=fes.FreeDofs(), inverse="sparsecholesky")
     J = GridFunction(fes)
-    inv = GMResSolver(V.mat, pre, printrates=False, maxiter=4000, tol=1e-9)
+    inv = GMResSolver(matrix, pre, printrates=False, maxiter=4000, tol=1e-9)
     J.vec.data = inv * rhs.vec
+    residual = rhs.vec.CreateVector()
+    residual.data = rhs.vec - matrix * J.vec
+    relative_residual = float(ng.Norm(residual) / max(ng.Norm(rhs.vec), 1e-300))
+    if not math.isfinite(relative_residual) or relative_residual > 1e-8:
+        raise RuntimeError(f"Maxwell EFIE true relative residual {relative_residual:.3e} exceeds 1e-8")
     ph = ng.exp(1j * kappa * ng.z)                                        # exp(-i k xhat.y), xhat = -zhat
     Ax = complex(Integrate(J[0] * ph * ds(bonus_intorder=intorder - 4), mesh))
     Ay = complex(Integrate(J[1] * ph * ds(bonus_intorder=intorder - 4), mesh))
@@ -877,7 +887,8 @@ def maxwell_efie_pec_sphere_rcs(ka, a=1.0, maxh=0.3, order=2, intorder=12):
     bem_val = float(sigma_b / (np.pi * a * a))
     mie = mie_pec_sphere_rcs(ka)["sigma_back_over_pa2"]
     return {"ndof": fes.ndof, "ka": float(ka), "sigma_back_over_pa2": bem_val,
-            "mie": float(mie), "rel_err": abs(bem_val - mie) / mie}
+            "mie": float(mie), "rel_err": abs(bem_val - mie) / mie,
+            "relative_residual": relative_residual}
 
 
 # ---------------------------------------------------------------------------
