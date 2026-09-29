@@ -23,12 +23,13 @@ def check_residual(matrix, residual, solution, rhs, free, what):
 
 
 def solve_nonsymmetric(matrix, freedofs, rhs, what):
-    """UMFPACK LU for the A-V net-current systems, residual-checked.
+    """UMFPACK LU for the axisymmetric A-V net-current system, residual-checked.
 
-    Their constraint row carries -j omega sigma where the column carries -sigma,
-    so the matrix is not symmetric and SparseCholesky (one triangle) would return
-    a wrong answer silently.  A symmetric scaling of the constraint row is the
-    route to SparseCholesky; until it is adopted this is the one LU use."""
+    The planar A-V systems are symmetrized by the 1/s-scaled potential
+    W = Vc / (j omega) (Kameari) and use :func:`solve_symmetric`.  In
+    ``solve_axi_eddy`` the constraint weights A by r but the A row does not, so
+    the same scaling leaves it nonsymmetric; its current definition is open, and
+    until it is settled this is the one LU use."""
     solution = rhs.CreateVector()
     solution.data = matrix.Inverse(freedofs, inverse="umfpack") * rhs
     residual = rhs.CreateVector()
