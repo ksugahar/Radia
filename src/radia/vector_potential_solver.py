@@ -1786,16 +1786,6 @@ class VectorPotentialSolver:
             raise ValueError("kelvin_eps must be a positive finite number")
         return physical_eps, resolved_kelvin_eps
 
-    def _solve_system(self, a, f, fes, gf, pre, use_iterative):
-        """Solve assembled linear system (direct or iterative)."""
-        if use_iterative:
-            from ngsolve.krylovspace import CGSolver
-            inv = CGSolver(mat=a.mat, pre=pre.mat, maxiter=2000,
-                           printrates=False, tol=1e-10)
-            gf.vec.data = inv * f.vec
-        else:
-            gf.vec.data = a.mat.Inverse(fes.FreeDofs()) * f.vec
-
     def _element_centroid(self, el):
         """Compute centroid of a volume element."""
         verts = el.vertices
