@@ -169,7 +169,7 @@ J_imp = sigma * (T_s_initial - grad(Omega_s))  # 初期 impressed current
 ## 9. 関連ドキュメント
 
 - `docs/kelvin/KELVIN_TRANSFORMATION.md` §7.5 — (ν-ν₀) 形破綻と修正
-- `docs/cln/CAUER_LADDER_NETWORK.md` §6 — CLN + Kelvin 接続、T-Ω 推奨
+- 旧 CLN + Kelvin 設計の説明は Git 履歴に保存。現行の縮約法は `docs/solver/REDUCED_EDDY_MODELS.md` を参照。
 - `packages/radia-mcp/.../cln_notebooks/CLN_T_Omega.py` — Tanimoto T-Ω 実装
   (Kelvin なし、ベース)
 - `docs/kelvin/KELVIN_TRANSFORMATION.md` と

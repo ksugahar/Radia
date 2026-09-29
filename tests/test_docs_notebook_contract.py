@@ -400,10 +400,9 @@ def test_ngbem_docs_do_not_duplicate_validation_drivers():
     )
 
 
-def test_cln_and_axifem_docs_do_not_publish_lab_drive_paths():
+def test_reduced_model_and_axifem_docs_do_not_publish_lab_drive_paths():
     paths = [
-        ROOT / "docs" / "cln" / "CAUER_LADDER_NETWORK.md",
-        ROOT / "docs" / "cln" / "CLN_3D_CUBOID.md",
+        ROOT / "docs" / "solver" / "REDUCED_EDDY_MODELS.md",
         ROOT / "docs" / "axifem" / "AXIFEM.md",
     ]
     offenders = []

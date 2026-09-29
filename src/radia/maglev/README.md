@@ -6,7 +6,7 @@ application module of **radia** (an application domain like `radia.ih`
 released PyPI package; it ships inside the `radia` wheel and the
 knowledge lives in the `radia_mcp.maglev` MCP subpackage).
 
-Mixed Galerkin CLN-SIBC framework for magnetic levitation and eddy-current
+Modal-bulk SIBC framework for magnetic levitation and eddy-current
 brake analysis.  Given an arbitrary conductor geometry (`.vol` mesh or
 OCC primitive), computes the polarizability tensor alpha(s) over a wide
 frequency band, the Lorentz force F = integral J x B dV at any drive
@@ -15,9 +15,11 @@ control-coupled simulation.
 
 ## Theoretical basis
 
-Mixed Galerkin reduction (Sugahara-Nagamine-Hane 2026, IEEE TMag in
-prep): bulk CLN Krylov modes (s=0) Schur-composed with a polyhedral
-surface envelope.  The polyhedral edge correction uses the closed-form
+Bulk Foster eigenmodes are Schur-composed with a polyhedral surface
+envelope. The module path `mixed_galerkin` is retained for compatibility;
+the method is named Modal-bulk SIBC. See the
+[reduced-model guide](../../../docs/solver/REDUCED_EDDY_MODELS.md).
+The polyhedral edge correction uses the closed-form
 wedge function
 
     W(alpha) = (4/pi) cot(alpha/2)
