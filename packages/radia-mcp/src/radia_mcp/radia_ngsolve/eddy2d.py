@@ -40,6 +40,7 @@ cannot simply be scaled by the turn count -- model the whole bundle or use the p
 All quantities are 2D planar (per unit out-of-plane length).
 """
 import math
+from ._direct import solve_symmetric
 
 MU0 = 4e-7 * math.pi
 
@@ -117,7 +118,7 @@ def ac_resistance_round_wire(a=1.0, sigma=1.0, freq=None, xi=None, mu_r=1.0,
     f_f += sig * 1.0 * w * ng.dx          # unit axial drive E0 = 1
     a_f.Assemble(); f_f.Assemble()
     gfu = ng.GridFunction(fes)
-    gfu.vec.data = a_f.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * f_f.vec
+    gfu.vec.data = solve_symmetric(a_f.mat, fes.FreeDofs(), f_f.vec, "eddy2d wire solve")
 
     Jz = sig * (1.0 - 1j * omega * gfu)
     wire = mesh.Materials("wire")
