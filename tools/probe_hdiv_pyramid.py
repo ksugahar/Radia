@@ -3,17 +3,19 @@
 
 This is the gate for HDiv-VIM tet/hex COUPLING (mixed meshes): a conforming tet+hex mesh needs pyramid
 transition elements (4 tri faces + 1 quad face) at every hex(quad-face) <-> tet(tri-face) interface, and
-those pyramids must carry an H(div) flux.  Joachim (Schoberl, NGSolve) committed to add HDiv-pyramid on the
-NGSolve side; we WAIT for it (do NOT reimplement -- same "complement NGSolve" pattern as wait-for-Hlib).
+those pyramids must carry an H(div) flux. NGSolve owns the finite-element implementation;
+this probe does not establish Radia charge-Gram or mixed-mesh support.
 
-As of NGSolve 6.2.2606 the state is ALLOC-BUT-UNIMPLEMENTED: HDiv(pyramid_mesh, order=1) constructs, but the
+The official Windows NGSolve 6.2.2606 and 6.2.2607 wheels are ALLOC-BUT-UNIMPLEMENTED:
+HDiv(pyramid_mesh, order=1) constructs, but the
 first Assemble raises `HDivHighOrderFESpace: Pyramid elements not implemented yet!`.  So the check must be
 FUNCTIONAL (assemble a mass form + reproduce a constant field), not just "did HDiv() not raise".
+Upstream eab015773b93397c14b374684e8af06408bc39e7 adds the first implementation.
 
 Verdicts (also the exit code, so a skill / CI can branch):
   IMPLEMENTED       (exit 0)  -- HDiv-pyramid assembles, mass is nonzero+finite, a constant field is
-                                 reproduced (L2 err < tol).  The block is LIFTED: add a Radia pyramid
-                                 charge-Gram mode (mirror the wedge port) + enable mixed meshes.
+                                 reproduced (L2 err < tol). Radia's pyramid charge-Gram and mixed-mesh
+                                 acceptance remain separate requirements.
   NOT_IMPLEMENTED   (exit 10) -- HDiv-pyramid raises "...not implemented..." (the expected current state).
   ALLOC_BUT_BROKEN  (exit 11) -- HDiv-pyramid assembles but is degenerate (ndof=0 / zero-or-NaN mass /
                                  constant field NOT reproduced): partially wired, still unusable.
@@ -82,13 +84,13 @@ def probe():
             ndof = fes.ndof
             u, v = fes.TnT()
             a = ng.BilinearForm(fes); a += u * v * ng.dx
-            a.Assemble()                                   # <-- raises "Pyramid ... not implemented" today
+            a.Assemble()  # Construction alone does not exercise the element implementation.
             rows, cols, vals = a.mat.COO()
             vv = np.array(vals)
             mass_fro = float(np.sqrt(np.sum(vv * vv))) if len(vv) else 0.0
             finite = bool(np.all(np.isfinite(vv))) if len(vv) else True
             gf = ng.GridFunction(fes); gf.Set(ng.CoefficientFunction((1, 0, 0)))
-            const_err = abs(float(ng.Integrate((gf[0] - 1.0) ** 2 + gf[1] ** 2 + gf[2] ** 2, mesh)))
+            const_err = abs(float(ng.Integrate((gf[0] - 1.0) ** 2 + gf[1] ** 2 + gf[2] ** 2, mesh))) ** 0.5
         result["detail"].update(hdiv_ndof=ndof, mass_frobenius=mass_fro,
                                  mass_finite=finite, const_field_L2err=const_err)
         functional = (ndof > 0 and mass_fro > 0.0 and finite and const_err < TOL_CONST_REPRO)
@@ -130,8 +132,8 @@ def main():
             print("  -> still BLOCKED: HDiv-VIM tet/hex coupling (mixed meshes) waits for NGSolve.")
             print(f"     ({d.get('exception', 'HDiv-pyramid Assemble raised the not-implemented guard')})")
         elif v == "IMPLEMENTED":
-            print("  -> UNBLOCKED! Add a Radia pyramid charge-Gram mode (mirror the wedge port) + enable")
-            print("     mixed meshes.  First probe the pyramid div-image (L2 order) + face types.")
+            print("  -> Basic NGSolve element check passed. Radia pyramid charge-Gram and mixed-mesh")
+            print("     support still require implementation and acceptance tests.")
             print(f"     (ndof={d.get('hdiv_ndof')}, massFro={d.get('mass_frobenius'):.3e}, "
                   f"const-repro L2err={d.get('const_field_L2err'):.2e})")
         elif v == "ALLOC_BUT_BROKEN":
