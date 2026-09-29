@@ -49,6 +49,16 @@ import numpy as np
 MU_0 = 4 * np.pi * 1e-7
 
 
+def _check_solve(matrix, fes, rhs, solution, what):
+    """True-residual acceptance of a SparseCholesky solve (``radia._residual_gate``)."""
+    from radia._residual_gate import check_true_residual
+    residual = rhs.CreateVector()
+    residual.data = rhs - matrix * solution
+    free = np.fromiter((bool(bit) for bit in fes.FreeDofs()), dtype=bool, count=fes.ndof)
+    return check_true_residual(matrix, residual.FV().NumPy(), solution.FV().NumPy(),
+                               rhs.FV().NumPy(), free, what)
+
+
 class CohomologyCutSolver:
     """Total scalar potential solver with automatic cohomology cuts (gmsh-free).
 
@@ -215,7 +225,9 @@ class CohomologyCutSolver:
             self._phi_gf.vec.data = inv * f.vec
             print(f"   CG converged ({ndofs} DOFs)", flush=True)
         else:
-            self._phi_gf.vec.data = a.mat.Inverse(fes.FreeDofs()) * f.vec
+            self._phi_gf.vec.data = a.mat.Inverse(
+                fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+            _check_solve(a.mat, fes, f.vec, self._phi_gf.vec, "cohomology total-potential solve")
 
         # Build result fields: H = -grad(phi) + sum NI_k * h_k
         from ngsolve import CF
@@ -285,7 +297,8 @@ class CohomologyCutSolver:
                     f += NI_k * self._mu_cf * self._h_basis[k] * grad(v) * dx
             f.Assemble()
 
-            phi_new.vec.data = a.mat.Inverse(fes.FreeDofs()) * f.vec
+            phi_new.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+            _check_solve(a.mat, fes, f.vec, phi_new.vec, "cohomology Picard solve")
 
             # Under-relaxation
             diff_vec = phi_new.vec.CreateVector()
