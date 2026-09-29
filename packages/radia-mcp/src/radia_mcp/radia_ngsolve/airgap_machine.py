@@ -40,12 +40,8 @@ from .airgap_element import annular_dtn_matrix, airgap_harmonic_torque
 
 
 def _inv(mat, freedofs):
-    for solver in ("umfpack", "pardiso", "sparsecholesky"):
-        try:
-            return mat.Inverse(freedofs, inverse=solver)
-        except Exception:
-            continue
-    return mat.Inverse(freedofs)
+    """Use the explicit FE direct backend; propagate factorization failures."""
+    return mat.Inverse(freedofs, inverse="sparsecholesky")
 
 
 def airgap_coupling(fes, ri, ro, rotor_ring, stator_ring, harmonics):
