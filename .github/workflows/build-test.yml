@@ -386,7 +386,6 @@ jobs:
             'validation_test/',
             '--ignore=validation_test/radia_mcp',
             '--ignore=validation_test/cubit_mesh_export',
-            '--import-mode=importlib',
             '-v',
             '--tb=short',
             '-r', 'aR',
