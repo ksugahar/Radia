@@ -16,9 +16,9 @@ A_ext_k = (1/2) e_k x (r - r_c) (curl A_ext_k = e_k) is projected onto
 the M-normalised modes, giving the per-mode residue b_n,k = <A_ext_k,
 w_n>_M and the 3x3 residue matrix G_n = b_n b_n^T.
 
-This is the eigenmode (Foster) form of the lab's 3D Cauer Ladder Network
-vector eddy solver (Kameari A-T; radia_mcp.mor mor_cln_advanced, MCP
-cln_3d).  A non-cubic box gives three DISTINCT leading tau (the shape
+This implementation constructs a Foster spectrum directly from the
+generalized curl-curl eigenproblem above. A non-cubic box gives three
+distinct leading tau (the shape
 split: a field along z drives currents in the a x b cross-section, etc.).
 
 SCOPE / CAVEATS (honest):

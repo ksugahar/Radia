@@ -39,7 +39,6 @@ Theory:
 TODO (requires Ren 2026 paper):
   - Off-diagonal Z_xy, Z_yx for general anisotropy
   - Topological multi-port: ring/torus workpiece via cohomology cuts
-  - Cauer ladder expansion of Z_s(omega) tensor (CLN dual)
 """
 
 import numpy as np
