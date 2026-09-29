@@ -248,7 +248,8 @@ def _kelvin_identification_inventory(path: Path) -> dict[str, object]:
         [
             np.asarray(points[slave].p, dtype=float)
             - np.asarray(points[master].p, dtype=float)
-            for master, slave, *_identification in pairs
+            # Netgen 6.2.2607 appends the identification number to each pair.
+            for master, slave, *_identification_number in pairs
         ],
         dtype=float,
     )

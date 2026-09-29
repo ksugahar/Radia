@@ -66,3 +66,18 @@ def test_sparsecholesky_solves_the_complex_planar_eddy_system():
     rhs_values = rhs.vec.FV().NumPy()[free]
     relative_residual = np.linalg.norm(residual_values) / np.linalg.norm(rhs_values)
     assert relative_residual < 1e-12
+
+
+def test_eddy_operator_factor_is_checked_and_rejects_a_singular_system():
+    """The reused factor is verified once; a Neumann-only magnetostatic system
+    (freq 0, no Dirichlet boundary) is singular and must raise, not solve."""
+    from netgen.geom2d import unit_square
+    from radia.planar_eddy import eddy_operator
+
+    mesh = ng.Mesh(unit_square.GenerateMesh(maxh=0.25))
+    fes, inverse, omega = eddy_operator(mesh, 3.7e7, 50.0, order=2,
+                                        conductor="default", dirichlet="left|right|top|bottom")
+    assert fes.ndof > 0 and omega == pytest.approx(2 * np.pi * 50.0)
+    with pytest.raises(RuntimeError, match="planar eddy SparseCholesky factor"):
+        eddy_operator(ng.Mesh(unit_square.GenerateMesh(maxh=0.25)), 3.7e7, 0.0, order=2,
+                      conductor="default", dirichlet="")

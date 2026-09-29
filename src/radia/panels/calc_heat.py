@@ -1302,9 +1302,11 @@ def main():
                     "boundary set. Use --heat-flux-boundaries and "
                     "--convection-boundaries; also pass "
                     "--radiation-boundaries when emissivity is nonzero."}
-        if (args.q_uniform is None) and (not args.qsurf_sol):
+        if ((args.q_uniform is None) and (not args.qsurf_sol)
+                and (not args.rotor_states)):
             return {"error":
-                    "Either --q-uniform or --qsurf-sol is required."}
+                    "One of --q-uniform, --qsurf-sol or --rotor-states is "
+                    "required."}
         try:
             thresholds = [float(t) for t in
                           str(args.exposure_thresholds).split(",")

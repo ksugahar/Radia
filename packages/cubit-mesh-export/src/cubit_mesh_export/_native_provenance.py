@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import subprocess
+from importlib import metadata
 from pathlib import Path
 
 
@@ -152,7 +153,9 @@ def record_manifest(repo_root: Path, package_dir: Path) -> dict:
         if name.endswith(".pyd"):
             payload["asset_name"] = f"cubit_mesh_curver-{sha256}.pyd"
             payload.setdefault("python_abi", "cp312")
-            payload.setdefault("netgen_version", "6.2.2606")
+            # The curver links the external Netgen C++ ABI; record the
+            # version of the environment that is recording the build.
+            payload["netgen_version"] = metadata.version("netgen-mesher")
     manifest_path.write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
     )
