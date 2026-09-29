@@ -354,6 +354,9 @@ jobs:
           $env:PATH = "$env:RADIA_CI_GIT_DIR;$env:PATH"
           python -c "import shutil,subprocess; p=shutil.which('git'); assert p, 'git is absent from pytest PATH'; subprocess.run([p,'--version'],check=True)"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-CimInstance Win32_OperatingSystem |
+            Select-Object TotalVisibleMemorySize,FreePhysicalMemory,TotalVirtualMemorySize,FreeVirtualMemory |
+            ConvertTo-Json | Set-Content (Join-Path $env:RADIA_CI_OUTPUT_DIR 'memory-before-native-smoke.json')
           Write-Host "Running checked native-smoke tier..."
           # Tee pytest stdout so a hard crash that prevents JUnit creation
           # still leaves a diagnostic log. Deterministic failures are not
@@ -373,6 +376,23 @@ jobs:
             exit $rc
           }
 
+      - name: Capture memory after native smoke
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:RADIA_CI_OUTPUT_DIR | Out-Null
+          Get-CimInstance Win32_OperatingSystem |
+            Select-Object TotalVisibleMemorySize,FreePhysicalMemory,TotalVirtualMemorySize,FreeVirtualMemory |
+            ConvertTo-Json | Set-Content (Join-Path $env:RADIA_CI_OUTPUT_DIR 'memory-after-native-smoke.json')
+
+      - name: Upload native smoke memory diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-smoke-memory-${{ github.sha }}
+          path: '${{ env.RADIA_CI_OUTPUT_DIR }}/memory-*-native-smoke.json'
+          if-no-files-found: warn
+          retention-days: 30
       - name: Run validation tests
         if: success() && env.RUN_VALIDATION_TESTS == 'true'
         shell: pwsh
