@@ -270,6 +270,10 @@ def _bh_inverse_funcs(Harr, Barr):
 class _EnergyMaterialQuadrature:
     """One NGSolve quadrature rule for material energy, gradient and Hessian."""
 
+    # Bound NumPy temporaries independently of mesh quadrature size. The
+    # persistent NGSolve coefficient fields retain the complete rule.
+    _chunk_size = 65536
+
     def __init__(self, fes, bh_table):
         from ngsolve.comp import IntegrationRuleSpace
 
@@ -325,23 +329,35 @@ class _EnergyMaterialQuadrature:
         self.m_field.vec.FV().NumPy()[:] = coefficients
         self.samples.Interpolate(self.m_field)
         values = self.samples.vec.FV().NumPy().reshape(3, self.npoints).T
-        magnitude = np.linalg.norm(values, axis=1)
-        energy = np.empty(self.npoints)
         secant = self.secant.vec.FV().NumPy()
         differential = self.differential.vec.FV().NumPy()
-        for i, (fields, wco, _) in enumerate(self.curves):
-            selected = self.regions == i
-            secant[selected], differential[selected] = fields(magnitude[selected])
-            energy[selected] = wco(magnitude[selected])
-        if not (np.isfinite(energy).all() and np.isfinite(secant).all()
-                and np.isfinite(differential).all()):
-            raise RuntimeError("vim.Solve: non-finite material quadrature state")
-        unit = np.divide(values, magnitude[:, None], out=np.zeros_like(values),
-                         where=magnitude[:, None] > 0)
-        tensor = (secant[:, None, None] * np.eye(3)
-                  + (differential-secant)[:, None, None] * unit[:, :, None] * unit[:, None, :])
-        self.tensor_samples.vec.FV().NumPy()[:] = tensor.reshape(self.npoints, 9).T.ravel()
-        return float(self.weights @ energy)
+        target = self.tensor_samples.vec.FV().NumPy().reshape(9, self.npoints)
+        total_energy = 0.0
+        for start in range(0, self.npoints, self._chunk_size):
+            stop = min(start + self._chunk_size, self.npoints)
+            local = values[start:stop]
+            magnitude = np.linalg.norm(local, axis=1)
+            energy = np.empty(stop - start)
+            local_secant = secant[start:stop]
+            local_differential = differential[start:stop]
+            regions = self.regions[start:stop]
+            for i, (fields, wco, _) in enumerate(self.curves):
+                selected = regions == i
+                if not np.any(selected):
+                    continue
+                local_secant[selected], local_differential[selected] = fields(magnitude[selected])
+                energy[selected] = wco(magnitude[selected])
+            if not (np.isfinite(energy).all() and np.isfinite(local_secant).all()
+                    and np.isfinite(local_differential).all()):
+                raise RuntimeError("vim.Solve: non-finite material quadrature state")
+            unit = np.divide(local, magnitude[:, None], out=np.zeros_like(local),
+                             where=magnitude[:, None] > 0)
+            tensor = (local_secant[:, None, None] * np.eye(3)
+                      + (local_differential-local_secant)[:, None, None]
+                      * unit[:, :, None] * unit[:, None, :])
+            target[:, start:stop] = tensor.reshape(stop-start, 9).T
+            total_energy += float(self.weights[start:stop] @ energy)
+        return total_energy
 
 
 def _reluctivity_tangent(gfM, mesh, fields, Id):
