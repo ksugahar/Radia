@@ -29,3 +29,8 @@ No elapsed times are accepted as performance evidence: other jobs and
 profiler sampling overlapped this campaign. These results do not establish
 a speed ranking. Component-wise ordering is also not an acceptance gate;
 HDiv-MMM does not lie between the other two methods at every sample.
+
+The 2026-09-29 driver defaults to `--mixed-source-load auto` and records both
+the requested policy and the selected loads in its checkpoint diagnostics.
+This historical result retains its explicit surface-flux setting and original
+runtime identity; it has not been recomputed with the current default or 2607.

@@ -76,7 +76,9 @@ def test_actual_adapter_arguments_and_diagnostics(exact, source_order, bonus, mi
         return None if missing else token
     def solve(*args, **kwargs):
         calls["solver"] = kwargs
-        source = {"projection_order": source_order or 2, "iron_relative_harmonic_norm": .01}
+        source = {"projection_order": source_order or 2, "iron_relative_harmonic_norm": .01,
+                  "load_selection": {"requested": {"total": "surface_flux", "reduced": "surface_flux"},
+                                     "total": "surface_flux", "reduced": "surface_flux"}}
         if not exact:
             source["kelvin_relative_tangential_residual"] = .001
         return {"B_cf": object(), "static_electromagnet_contract": {"source_trace": source},
@@ -112,6 +114,8 @@ def test_actual_adapter_arguments_and_diagnostics(exact, source_order, bonus, mi
     assert calls["solver"]["total_source_load"] == "surface_flux"
     assert calls["solver"]["nonlinear_material_update_order"] == (1 if method == "picard" else None)
     assert calls["solver"]["kelvin_source_h"] is (token if exact else None)
+    assert diag["source_trace"]["requested_source_load"] == "surface_flux"
+    assert diag["source_trace"]["load_selection"]["total"] == "surface_flux"
     assert diag["bonus_intorder"] == bonus
     if exact:
         assert calls["kelvin"] == (7, (1., 2., 3.), .16, (0., 0., 0.))
@@ -190,3 +194,4 @@ def test_actual_cli_defaults_and_explicit_settings(monkeypatch, extra, expected)
     compile_functions([validator, *prefix], ns)
     options = ns["options"]
     assert (options.mixed_source_order, options.mixed_bonus, options.mixed_exact_exterior_source) == expected
+    assert options.mixed_source_load == "auto"
