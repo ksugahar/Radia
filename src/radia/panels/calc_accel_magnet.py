@@ -67,12 +67,53 @@ if _this_dir not in sys.path:
 from calc_common import (MU_0, NU_0, setup_paths,
                           add_periodic_kelvin, detect_kelvin_offset,
                           get_bh_curve, progress, calc_main,
-                          EMMaterial, add_material_args)
+                          EMMaterial, add_material_args, apply_fe_inverse)
+from radia.em_design import FEM_SOLVERS
 
 
 def _log(msg):
     """Write progress to stderr (panel reads these)."""
     progress("ACCEL", msg)
+
+
+def _select_accel_solver(solver, formulation, order, periodic, ndof):
+    if solver not in FEM_SOLVERS:
+        raise ValueError(f"Unsupported FE solver: {solver}")
+    if solver == "auto":
+        if formulation == "a" and not periodic and order in (1, 2, 3):
+            return "bddc_ams"
+        return "sparsecholesky" if ndof < 200000 else "bddc"
+    if solver in ("ams", "bddc_ams"):
+        if formulation != "a" or periodic or order not in (1, 2, 3):
+            raise ValueError("AMS requires nonperiodic HCurl order 1, 2 or 3")
+        # Preserve the existing full HCurl space, including gradient modes.
+        # Its lowest-order wirebasket uses AMS; BDDC treats the other modes.
+        return "bddc_ams"
+    return solver
+
+
+def _accel_inverse(a, fes, solver):
+    """Construct the requested inverse without changing the FE operator."""
+    from ngsolve import Preconditioner, TaskManager
+    if solver == "sparsecholesky":
+        with TaskManager():
+            return a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
+    if solver == "iccg":
+        from radia.sparsesolv_ngsolve import SparseSolvSolver
+        return SparseSolvSolver(a.mat, method="ICCG", freedofs=fes.FreeDofs(),
+                                tol=1e-12, maxiter=2000, shift=1.05,
+                                save_best_result=True, printrates=False)
+    if solver not in ("bddc", "bddc_ams"):
+        raise ValueError(f"Unsupported resolved FE solver: {solver}")
+    flags = {"inverse": "sparsecholesky"}
+    if solver == "bddc_ams":
+        import radia.sparsesolv_ngsolve  # registers the coarse solver
+        flags["coarsetype"] = "sparsesolv_ams"
+    pre = Preconditioner(a, "bddc", **flags)
+    with TaskManager():
+        a.Assemble()
+    from ngsolve.krylovspace import CGSolver
+    return CGSolver(a.mat, pre.mat, maxiter=2000, tol=1e-10, printrates=False)
 
 
 def _elem_mat(mesh, materials):
@@ -208,6 +249,10 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
     Returns:
         dict with B_center, L, W_mag, ndof, iterations, etc.
     """
+    if solver not in FEM_SOLVERS:
+        raise ValueError(f"Unsupported FE solver: {solver}")
+    if max_iter < 1:
+        raise ValueError("max_iter must be positive")
     if mat is None:
         mat = EMMaterial.from_name("steel")
     material = mat.name
@@ -219,7 +264,7 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
     from ngsolve import (H1, HCurl, L2, Periodic, BilinearForm, LinearForm,
                          GridFunction, Integrate, InnerProduct,
                          curl, grad, dx, CF, VOL,
-                         TaskManager, Preconditioner, Mesh)
+                         TaskManager, Mesh)
     from ngsolve import x, y, z, sqrt
 
     setup_paths()
@@ -462,7 +507,8 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
     ndof = fes.ndof
     _log(f"FES:ndof={ndof}")
 
-    use_direct = ndof < 200000
+    linear_solver = _select_accel_solver(solver, formulation, fes_order, has_kelvin, ndof)
+    _log(f"SOLVER:{linear_solver}")
 
     # L2 space for per-element material property
     fes_l2 = L2(mesh, order=0)
@@ -516,12 +562,7 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
             a_bf += const_cf * grad(u) * grad(v) * dx(bonus_intorder=4)
         a_bf.Assemble()
 
-        with TaskManager():
-            if use_direct:
-                inv_a = a_bf.mat.Inverse(fes.FreeDofs(), inverse="pardiso")
-            else:
-                pre = Preconditioner(a_bf, "bddc")
-                a_bf.Assemble()
+        inv_a = _accel_inverse(a_bf, fes, linear_solver)
 
         _log(f"HANTILA:LHS factored (nu_rev={nu_rev:.4e}, "
              f"alpha={alpha_hys:.1f}, form={formulation})")
@@ -569,12 +610,8 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
 
                 # Back-substitution (no re-factorization)
                 with TaskManager():
-                    if use_direct:
-                        gfu.vec.data = inv_a * f_lf.vec
-                    else:
-                        from ngsolve import solvers
-                        solvers.BVP(bf=a_bf, lf=f_lf, gf=gfu,
-                                    pre=pre, maxsteps=500, tol=1e-8)
+                    linear_residual = apply_fe_inverse(
+                        a_bf.mat, inv_a, f_lf.vec, gfu.vec, fes.FreeDofs())
 
                 t_solve_iter = time.perf_counter() - t0_iter
 
@@ -727,16 +764,10 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
                 f_lf += -chord_cf * B_s * curl(v) * dx(bonus_intorder=4)
                 f_lf.Assemble()
 
+            inv_a = _accel_inverse(a_bf, fes, linear_solver)
             with TaskManager():
-                if use_direct:
-                    gfu.vec.data = a_bf.mat.Inverse(
-                        fes.FreeDofs(), inverse="pardiso") * f_lf.vec
-                else:
-                    from ngsolve import solvers
-                    pre = Preconditioner(a_bf, "bddc")
-                    a_bf.Assemble()
-                    solvers.BVP(bf=a_bf, lf=f_lf, gf=gfu,
-                                pre=pre, maxsteps=500, tol=1e-8)
+                linear_residual = apply_fe_inverse(
+                    a_bf.mat, inv_a, f_lf.vec, gfu.vec, fes.FreeDofs())
 
             t_solve_iter = time.perf_counter() - t0_iter
             n_iter_actual = iteration + 1
@@ -883,6 +914,8 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
         "ndof": ndof,
         "ne": ne,
         "formulation": formulation,
+        "linear_solver": linear_solver,
+        "linear_relative_residual": linear_residual,
         "iterations": n_iter_actual,
         "converged": converged,
         "nonlinear": is_nonlinear,
@@ -927,9 +960,10 @@ def build_argparser():
     parser.add_argument("--newton", action="store_true",
                         help="Use Newton iteration (default: Picard)")
     parser.add_argument("--solver", default="auto",
-                        choices=["auto", "pardiso", "bddc", "iccg", "ams"],
-                        help="auto (PARDISO/BDDC by size, A+p=1->AMS), "
-                             "pardiso, bddc, iccg (shifted IC+CG), ams (Compact AMS+COCR)")
+                        choices=FEM_SOLVERS,
+                        help="auto (nonperiodic A p=1..3: BDDC+AMS; otherwise "
+                             "SparseCholesky/BDDC by size), sparsecholesky, "
+                             "bddc, iccg, ams/bddc_ams (BDDC with AMS coarse solver)")
     parser.add_argument("--msh-output", default="",
                         help="GMSH .msh output path")
     parser.add_argument("--output", default="",
