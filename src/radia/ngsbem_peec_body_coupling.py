@@ -32,6 +32,23 @@ import time
 MU_0 = 4.0 * np.pi * 1e-7   # H/m
 
 
+def _apply_dirichlet_inverse(matrix, inverse, fes, field):
+    """Apply the zero-volume-source correction and check the free equations."""
+    rhs = field.vec.CreateVector()
+    rhs.data = -matrix * field.vec
+    correction = field.vec.CreateVector()
+    correction.data = inverse * rhs
+    residual = field.vec.CreateVector()
+    residual.data = rhs - matrix * correction
+    free = np.array(list(fes.FreeDofs()), dtype=bool)
+    relative = float(np.linalg.norm(residual.FV().NumPy()[free]) /
+                     max(np.linalg.norm(rhs.FV().NumPy()[free]), 1e-300))
+    if not np.isfinite(relative) or relative > 1e-8:
+        raise RuntimeError(f"PEEC body true relative residual {relative:.3e} exceeds 1e-8")
+    field.vec.data += correction
+    return relative
+
+
 
 # Biot-Savart functions removed. Use ngsolve.bem MaxwellDL(J*dC) instead.
 
@@ -266,7 +283,7 @@ class CoupledPEECBody:
         u, v = fes.TnT()
         a = BilinearForm(grad(u) * grad(v) * dx + k_sq * u * v * dx)
         a.Assemble()
-        inv = a.mat.Inverse(freedofs=fes.FreeDofs(), inverse="pardiso")
+        inv = a.mat.Inverse(freedofs=fes.FreeDofs(), inverse="sparsecholesky")
 
         # For each source group j: solve FEM with Hz_inc_j as Dirichlet BC
         Hz_total_gfs = []
@@ -277,13 +294,7 @@ class CoupledPEECBody:
             gfu.Set(self._hz_inc_gfs[j],
                     definedon=self.body_mesh.Boundaries(self.surface_label))
 
-            # RHS = 0 (total field formulation)
-            f = LinearForm(fes)
-            f.Assemble()
-
-            # Solve: A * u_free = -A * u_D
-            r = f.vec - a.mat * gfu.vec
-            gfu.vec.data += inv * r
+            _apply_dirichlet_inverse(a.mat, inv, fes, gfu)
 
             Hz_total_gfs.append(gfu)
 
@@ -383,15 +394,12 @@ class CoupledPEECBody:
         u, v = fes.TnT()
         a = BilinearForm(grad(u) * grad(v) * dx + k_sq * u * v * dx)
         a.Assemble()
-        inv = a.mat.Inverse(freedofs=fes.FreeDofs(), inverse="pardiso")
+        inv = a.mat.Inverse(freedofs=fes.FreeDofs(), inverse="sparsecholesky")
 
         gfu = GridFunction(fes)
         gfu.Set(self._hz_inc_gfs[group_idx],
                 definedon=self.body_mesh.Boundaries(self.surface_label))
-        f = LinearForm(fes)
-        f.Assemble()
-        r = f.vec - a.mat * gfu.vec
-        gfu.vec.data += inv * r
+        _apply_dirichlet_inverse(a.mat, inv, fes, gfu)
 
         volume = self._body_volume
         Hz_avg = Integrate(gfu, self.body_mesh) / volume
