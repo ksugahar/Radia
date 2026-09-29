@@ -434,7 +434,7 @@ a0.Assemble()
 f0 = LinearForm(fes)
 f0 += Hs_normal * v * ds(definedon=mesh.Boundaries(conductor_bnd))
 f0.Assemble()
-phi_0.vec.data = a0.mat.Inverse(fes.FreeDofs(), inverse='pardiso') * f0.vec
+phi_0.vec.data = a0.mat.Inverse(fes.FreeDofs(), inverse='sparsecholesky') * f0.vec
 
 # BVP_1: Leontovich correction (use surface gradient of (Hs - grad phi_0))
 phi_1 = GridFunction(fes)

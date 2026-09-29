@@ -142,7 +142,7 @@ a_aux = BilinearForm(fes_v, symmetric=True)
 a_aux += grad(u)*grad(w)*dx
 a_aux.Assemble()
 f_aux = LinearForm(fes_v); f_aux.Assemble()
-inv = a_aux.mat.Inverse(fes_v.FreeDofs(), inverse="pardiso")
+inv = a_aux.mat.Inverse(fes_v.FreeDofs(), inverse="sparsecholesky")
 gf_v.vec.data += inv * (f_aux.vec - a_aux.mat * gf_v.vec)
 
 # Force = -integral sigma_em : grad(v e_d) dV  (Coulomb volume form)
