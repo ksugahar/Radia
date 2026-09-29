@@ -17,7 +17,8 @@ residuals and current scaling are regression-tested. These checks do not
 establish accuracy for arbitrary nonlinear materials, skin depths or outer
 truncation distances; those need mesh/domain and constitutive validation.
 
-Loss uses 0.5 sigma omega^2 |A_phi|^2 integrated with the 2 pi r measure.
+Current and field phasors use peak amplitudes. Loss uses
+0.5 sigma omega^2 |A_phi|^2 integrated with the 2 pi r measure.
 """
 from __future__ import annotations
 
@@ -85,7 +86,7 @@ def run_axisym_nonlinear(args, bh_curve):
     For axisymmetric A_phi:
         B_z = (1/r) d(r A)/dr = A/r + dA/dr
         B_r = -dA/dz
-        |B|^2 = |B_r|^2 + |B_z|^2  (complex; peak = sqrt(2) * RMS)
+        |B|^2 = |B_r|^2 + |B_z|^2  (peak-amplitude phasor norm)
     """
     from ngsolve import (
         BilinearForm, LinearForm, GridFunction, Integrate, dx, grad,
@@ -171,12 +172,11 @@ def run_axisym_nonlinear(args, bh_curve):
             # |B| as a CoefficientFunction from grad(gfu).
             # B_z = grad[0] + A/r,  B_r = -grad[1]
             # |B|^2 = Re(B_z conj(B_z)) + Re(B_r conj(B_r)) is the COMPLEX
-            # magnitude squared; peak |B| = sqrt(2) * sqrt(|B|^2).
+            # magnitude squared of the peak-amplitude phasor.
             B_z_cf = grad(gfu)[0] + gfu / r_cf
             B_r_cf = -grad(gfu)[1]
             B_abs_sq_cf = (B_z_cf * Conj(B_z_cf) + B_r_cf * Conj(B_r_cf)).real
-            # peak |B| = sqrt(2) * sqrt(|B|_complex^2)
-            B_peak_cf = ng_sqrt(2.0 * B_abs_sq_cf)
+            B_peak_cf = ng_sqrt(B_abs_sq_cf)
 
             # Project |B| onto L2(order=0) -> per-element constant.
             gf_B = GridFunction(fes_mu)
@@ -245,6 +245,7 @@ def run_axisym_nonlinear(args, bh_curve):
             "method": "axisym_volumetric_A_phi_nonlinear",
             "frequency_Hz": args.frequency,
             "current_A": args.current,
+            "phasor_convention": "peak",
             "R_wp_m": args.R_wp,
             "H_wp_m": args.H_wp,
             "R_coil_m": args.R_coil,
@@ -400,6 +401,7 @@ def run_axisym_linear(args):
         "method": "axisym_volumetric_A_phi",
         "frequency_Hz": args.frequency,
         "current_A": args.current,
+        "phasor_convention": "peak",
         "R_wp_m": args.R_wp,
         "H_wp_m": args.H_wp,
         "R_coil_m": args.R_coil,
@@ -439,7 +441,8 @@ def main():
     parser.add_argument("--mu-r", type=float, default=100.0)
     parser.add_argument("--sigma", type=float, default=2e6)
     parser.add_argument("--frequency", type=float, default=50000.0)
-    parser.add_argument("--current", type=float, default=100.0)
+    parser.add_argument("--current", type=float, default=100.0,
+                        help="Peak coil-current phasor amplitude [A]")
     parser.add_argument("--order", type=int, default=2)
     parser.add_argument("--bh-file", type=str, default=None,
                         help="If set, run nonlinear-BH Picard outer iteration "
