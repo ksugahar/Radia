@@ -104,6 +104,9 @@ def run_fom(m, fn, steps, max_newton=40, tol=1e-10, log=print):
                 solves += 1
                 refinement_solves += 1
                 step_refinements += 1
+            # Do not keep the previous factor while constructing the next one.
+            # Python evaluates the RHS before replacing an existing binding.
+            del inverse
             if not np.isfinite(relative) or relative > residual_limit:
                 raise RuntimeError(f'FOM step {k}, Newton {it}: true linear residual {relative:.3e} exceeds {residual_limit:.1e}')
             step_residual = max(step_residual, relative)
