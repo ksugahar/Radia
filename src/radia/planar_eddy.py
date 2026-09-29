@@ -72,7 +72,7 @@ def eddy_operator(fem_mesh, sigma, freq, order=4, conductor="conductor", dirichl
     af += grad(u) * grad(v) * dx
     af += 1j * w * MU0 * sigma * u * v * dx(conductor)
     af.Assemble()
-    inv = af.mat.Inverse(fes.FreeDofs(), inverse="pardiso")
+    inv = af.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
     return fes, inv, w
 
 
