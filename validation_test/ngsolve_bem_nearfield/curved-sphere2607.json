@@ -1,0 +1,445 @@
+{
+  "schema": "radia.bem-curved-sphere/v1",
+  "ngsolve": "6.2.2607",
+  "python": "3.12.10",
+  "host": "lab",
+  "thresholds": {
+    "potential_rms": 1e-06,
+    "gradient_rms": 0.0001
+  },
+  "accepted_case": {
+    "maxh": 0.175,
+    "bonus_intorder": 24
+  },
+  "passed": true,
+  "cases": [
+    {
+      "maxh": 0.35,
+      "bonus_intorder": 12,
+      "curving_order": 5,
+      "source_elements": 270,
+      "surface_dofs": 238,
+      "geometry_radial_rms": 2.375043013275e-07,
+      "passed": false,
+      "results": [
+        {
+          "side": "inside",
+          "distance": 0.1,
+          "direct": {
+            "potential_rms": 2.6264730631684975e-08,
+            "gradient_rms": 6.633299208535507e-07
+          },
+          "local_expansion": {
+            "potential_rms": 2.8605181933011518e-08,
+            "gradient_rms": 6.633299208535507e-07
+          }
+        },
+        {
+          "side": "inside",
+          "distance": 0.01,
+          "direct": {
+            "potential_rms": 2.1280270971059843e-06,
+            "gradient_rms": 0.00022914468574044156
+          },
+          "local_expansion": {
+            "potential_rms": 2.1280655796868105e-06,
+            "gradient_rms": 0.00022914468574044156
+          }
+        },
+        {
+          "side": "inside",
+          "distance": 0.001,
+          "direct": {
+            "potential_rms": 3.035640824255999e-07,
+            "gradient_rms": 0.0003817731249049417
+          },
+          "local_expansion": {
+            "potential_rms": 3.0363144511283064e-07,
+            "gradient_rms": 0.0003817731249049417
+          }
+        },
+        {
+          "side": "inside",
+          "distance": 1e-05,
+          "direct": {
+            "potential_rms": 2.5400413864636894e-08,
+            "gradient_rms": 0.00010177003401544673
+          },
+          "local_expansion": {
+            "potential_rms": 2.5389245450158256e-08,
+            "gradient_rms": 0.00010177003401544673
+          }
+        },
+        {
+          "side": "outside",
+          "distance": 0.1,
+          "direct": {
+            "potential_rms": 7.087774236500988e-08,
+            "gradient_rms": 9.225660385334267e-07
+          },
+          "local_expansion": {
+            "potential_rms": 1.8480272356488637e-07,
+            "gradient_rms": 9.225660385334267e-07
+          }
+        },
+        {
+          "side": "outside",
+          "distance": 0.01,
+          "direct": {
+            "potential_rms": 7.397405570758237e-08,
+            "gradient_rms": 0.00023805942300886946
+          },
+          "local_expansion": {
+            "potential_rms": 7.414682354810839e-08,
+            "gradient_rms": 0.00023805942300886946
+          }
+        },
+        {
+          "side": "outside",
+          "distance": 0.001,
+          "direct": {
+            "potential_rms": 2.943742276869722e-07,
+            "gradient_rms": 0.0002991727572743967
+          },
+          "local_expansion": {
+            "potential_rms": 2.942857726808717e-07,
+            "gradient_rms": 0.0002991727572743967
+          }
+        },
+        {
+          "side": "outside",
+          "distance": 1e-05,
+          "direct": {
+            "potential_rms": 3.5429370461758494e-08,
+            "gradient_rms": 0.00010814571670844764
+          },
+          "local_expansion": {
+            "potential_rms": 3.535900941119431e-08,
+            "gradient_rms": 0.00010814571670844764
+          }
+        }
+      ]
+    },
+    {
+      "maxh": 0.35,
+      "bonus_intorder": 24,
+      "curving_order": 5,
+      "source_elements": 270,
+      "surface_dofs": 238,
+      "geometry_radial_rms": 2.375043013275e-07,
+      "passed": false,
+      "results": [
+        {
+          "side": "inside",
+          "distance": 0.1,
+          "direct": {
+            "potential_rms": 3.33677683534205e-08,
+            "gradient_rms": 1.405679383524856e-07
+          },
+          "local_expansion": {
+            "potential_rms": 3.587211530316299e-08,
+            "gradient_rms": 1.405679383524856e-07
+          }
+        },
+        {
+          "side": "inside",
+          "distance": 0.01,
+          "direct": {
+            "potential_rms": 1.2507718404348146e-07,
+            "gradient_rms": 3.370403159464625e-05
+          },
+          "local_expansion": {
+            "potential_rms": 1.2519565201312537e-07,
+            "gradient_rms": 3.370403159464625e-05
+          }
+        },
+        {
+          "side": "inside",
+          "distance": 0.001,
+          "direct": {
+            "potential_rms": 1.5336755970894186e-08,
+            "gradient_rms": 0.00011422012828605605
+          },
+          "local_expansion": {
+            "potential_rms": 1.546552933217476e-08,
+            "gradient_rms": 0.00011422012828605605
+          }
+        },
+        {
+          "side": "inside",
+          "distance": 1e-05,
+          "direct": {
+            "potential_rms": 2.920958409569561e-08,
+            "gradient_rms": 5.350632483719456e-05
+          },
+          "local_expansion": {
+            "potential_rms": 2.8990513117092096e-08,
+            "gradient_rms": 5.350632483719456e-05
+          }
+        },
+        {
+          "side": "outside",
+          "distance": 0.1,
+          "direct": {
+            "potential_rms": 6.451296061284616e-08,
+            "gradient_rms": 2.1293997270313553e-07
+          },
+          "local_expansion": {
+            "potential_rms": 1.9275782511866046e-07,
+            "gradient_rms": 2.1293997270313553e-07
+          }
+        },
+        {
+          "side": "outside",
+          "distance": 0.01,
+          "direct": {
+            "potential_rms": 1.5901469056285253e-07,
+            "gradient_rms": 2.813460976133092e-05
+          },
+          "local_expansion": {
+            "potential_rms": 1.5868529696426965e-07,
+            "gradient_rms": 2.813460976133092e-05
+          }
+        },
+        {
+          "side": "outside",
+          "distance": 0.001,
+          "direct": {
+            "potential_rms": 1.1451320169124141e-07,
+            "gradient_rms": 5.170715538666348e-05
+          },
+          "local_expansion": {
+            "potential_rms": 1.1426666130240286e-07,
+            "gradient_rms": 5.170715538666348e-05
+          }
+        },
+        {
+          "side": "outside",
+          "distance": 1e-05,
+          "direct": {
+            "potential_rms": 5.4639057108070696e-08,
+            "gradient_rms": 6.97822798932587e-05
+          },
+          "local_expansion": {
+            "potential_rms": 5.440368790492575e-08,
+            "gradient_rms": 6.97822798932587e-05
+          }
+        }
+      ]
+    },
+    {
+      "maxh": 0.175,
+      "bonus_intorder": 12,
+      "curving_order": 5,
+      "source_elements": 2206,
+      "surface_dofs": 938,
+      "geometry_radial_rms": 3.916458045842353e-09,
+      "passed": true,
+      "results": [
+        {
+          "side": "inside",
+          "distance": 0.1,
+          "direct": {
+            "potential_rms": 6.714563164382708e-10,
+            "gradient_rms": 3.03631494445925e-09
+          },
+          "local_expansion": {
+            "potential_rms": 4.050596217121823e-09,
+            "gradient_rms": 3.03631494445925e-09
+          }
+        },
+        {
+          "side": "inside",
+          "distance": 0.01,
+          "direct": {
+            "potential_rms": 1.8886130766567903e-07,
+            "gradient_rms": 9.230853630842674e-05
+          },
+          "local_expansion": {
+            "potential_rms": 1.8901635506077082e-07,
+            "gradient_rms": 9.230853630842674e-05
+          }
+        },
+        {
+          "side": "inside",
+          "distance": 0.001,
+          "direct": {
+            "potential_rms": 1.2819401601426313e-07,
+            "gradient_rms": 7.492121705625547e-05
+          },
+          "local_expansion": {
+            "potential_rms": 1.2845867203482632e-07,
+            "gradient_rms": 7.492121705625547e-05
+          }
+        },
+        {
+          "side": "inside",
+          "distance": 1e-05,
+          "direct": {
+            "potential_rms": 1.3334456809177204e-08,
+            "gradient_rms": 3.2114180194381075e-05
+          },
+          "local_expansion": {
+            "potential_rms": 1.3584294940238883e-08,
+            "gradient_rms": 3.2114180194381075e-05
+          }
+        },
+        {
+          "side": "outside",
+          "distance": 0.1,
+          "direct": {
+            "potential_rms": 1.0207454725026733e-09,
+            "gradient_rms": 3.4651344459752644e-09
+          },
+          "local_expansion": {
+            "potential_rms": 1.395324394215559e-07,
+            "gradient_rms": 3.4651344459752644e-09
+          }
+        },
+        {
+          "side": "outside",
+          "distance": 0.01,
+          "direct": {
+            "potential_rms": 2.599440091612961e-07,
+            "gradient_rms": 3.533011168606242e-05
+          },
+          "local_expansion": {
+            "potential_rms": 2.595913213146106e-07,
+            "gradient_rms": 3.533011168606242e-05
+          }
+        },
+        {
+          "side": "outside",
+          "distance": 0.001,
+          "direct": {
+            "potential_rms": 1.0196178367153499e-07,
+            "gradient_rms": 6.944538127238658e-05
+          },
+          "local_expansion": {
+            "potential_rms": 1.0168143182605104e-07,
+            "gradient_rms": 6.944538127238658e-05
+          }
+        },
+        {
+          "side": "outside",
+          "distance": 1e-05,
+          "direct": {
+            "potential_rms": 1.195463376579317e-08,
+            "gradient_rms": 3.436207367088522e-05
+          },
+          "local_expansion": {
+            "potential_rms": 1.2199289710338049e-08,
+            "gradient_rms": 3.436207367088522e-05
+          }
+        }
+      ]
+    },
+    {
+      "maxh": 0.175,
+      "bonus_intorder": 24,
+      "curving_order": 5,
+      "source_elements": 2206,
+      "surface_dofs": 938,
+      "geometry_radial_rms": 3.916458045842353e-09,
+      "passed": true,
+      "results": [
+        {
+          "side": "inside",
+          "distance": 0.1,
+          "direct": {
+            "potential_rms": 6.466580673291522e-10,
+            "gradient_rms": 2.848922676060974e-10
+          },
+          "local_expansion": {
+            "potential_rms": 2.4507318070885578e-09,
+            "gradient_rms": 2.848922676060974e-10
+          }
+        },
+        {
+          "side": "inside",
+          "distance": 0.01,
+          "direct": {
+            "potential_rms": 4.90220474045051e-09,
+            "gradient_rms": 2.1999966645419925e-06
+          },
+          "local_expansion": {
+            "potential_rms": 4.883709909677422e-09,
+            "gradient_rms": 2.1999966645419925e-06
+          }
+        },
+        {
+          "side": "inside",
+          "distance": 0.001,
+          "direct": {
+            "potential_rms": 3.541510835727499e-08,
+            "gradient_rms": 7.182810046604808e-05
+          },
+          "local_expansion": {
+            "potential_rms": 3.521126482779948e-08,
+            "gradient_rms": 7.182810046604808e-05
+          }
+        },
+        {
+          "side": "inside",
+          "distance": 1e-05,
+          "direct": {
+            "potential_rms": 3.258951306663084e-09,
+            "gradient_rms": 3.505353514503481e-05
+          },
+          "local_expansion": {
+            "potential_rms": 3.226684210114491e-09,
+            "gradient_rms": 3.505353514503481e-05
+          }
+        },
+        {
+          "side": "outside",
+          "distance": 0.1,
+          "direct": {
+            "potential_rms": 1.0554083567253755e-09,
+            "gradient_rms": 1.2895684883965363e-09
+          },
+          "local_expansion": {
+            "potential_rms": 1.362130583497663e-07,
+            "gradient_rms": 1.2895684883965363e-09
+          }
+        },
+        {
+          "side": "outside",
+          "distance": 0.01,
+          "direct": {
+            "potential_rms": 1.827203631812768e-09,
+            "gradient_rms": 2.735388843739974e-06
+          },
+          "local_expansion": {
+            "potential_rms": 2.125921600008809e-09,
+            "gradient_rms": 2.735388843739974e-06
+          }
+        },
+        {
+          "side": "outside",
+          "distance": 0.001,
+          "direct": {
+            "potential_rms": 1.802678982719824e-08,
+            "gradient_rms": 4.244435152314046e-05
+          },
+          "local_expansion": {
+            "potential_rms": 1.8261644943198332e-08,
+            "gradient_rms": 4.244435152314046e-05
+          }
+        },
+        {
+          "side": "outside",
+          "distance": 1e-05,
+          "direct": {
+            "potential_rms": 4.301225776495569e-09,
+            "gradient_rms": 3.8260568832186584e-05
+          },
+          "local_expansion": {
+            "potential_rms": 4.195412466898097e-09,
+            "gradient_rms": 3.8260568832186584e-05
+          }
+        }
+      ]
+    }
+  ]
+}
