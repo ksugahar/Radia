@@ -12,6 +12,28 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.parametrize("observations,shared,allowed", [
+    (["15244"], (), False),
+    (["[]"], ("existing",), False),
+    (["[]", "[7352]"], (), False),
+    (["[]", "[]"], (), True),
+])
+def test_owned_engine_requires_process_and_sharing_absence(monkeypatch, observations, shared, allowed):
+    runner = runpy.run_path(str(ROOT/"validation_test/ngsolve_matlab_parity/run_sparsesolv_parity.py"))
+    replies = iter(observations)
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: SimpleNamespace(stdout=next(replies)))
+    started = []
+    api = SimpleNamespace(find_matlab=lambda: shared,
+                          start_matlab=lambda options: started.append(options) or "owned")
+    if allowed:
+        assert runner["start_owned_engine"](api) == "owned"
+        assert len(started) == 1
+    else:
+        with pytest.raises(RuntimeError, match="no new MATLAB was started"):
+            runner["start_owned_engine"](api)
+        assert not started
+
+
 def test_engine_timeout_retains_evidence_when_cleanup_fails(tmp_path, monkeypatch):
     runner = runpy.run_path(str(ROOT/"validation_test/ngsolve_matlab_parity/run_sparsesolv_parity.py"))
     output = tmp_path/"nested/failure.json"
