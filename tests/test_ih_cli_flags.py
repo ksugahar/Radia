@@ -62,6 +62,23 @@ def test_sidecar_command_offers_every_record_field():
                  "--geometry"):
         assert flag in text
 
+def test_rotor_states_alone_is_an_accepted_heat_source(tmp_path):
+    """--rotor-states replaces --qsurf-sol, so it must pass the source gate
+    and reach the next input check."""
+    env = dict(os.environ, PYTHONPATH=os.path.join(ROOT, "src"))
+    missing = str(tmp_path / "missing_wp.vol")
+    base = [sys.executable, os.path.join(PANELS, "calc_heat.py"),
+            "--wp-vol", missing]
+    with_rotor = subprocess.run(
+        base + ["--rotor-states", str(tmp_path / "rotor.json")],
+        capture_output=True, text=True, timeout=120, env=env)
+    without = subprocess.run(base, capture_output=True, text=True,
+                             timeout=120, env=env)
+    assert "--rotor-states is required" in without.stdout
+    assert "is required" not in with_rotor.stdout
+    assert "--wp-vol not found" in with_rotor.stdout
+
+
 @pytest.mark.parametrize("script,function,kwargs", [
     ("calc_fem_kelvin.py", "solve_fem", {"solver": "pardiso"}),
     ("calc_fem_kelvin.py", "solve_fem", {"solver": "misspelled"}),
