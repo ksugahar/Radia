@@ -25,3 +25,8 @@ Reduced-A uses relaxation 0.1 without Anderson acceleration.
 Elapsed times are excluded because profiling and CI pauses affected this run.
 The evidence supports no speed ranking or universal component-wise ordering
 of HDiv-MMM between the other methods.
+
+The 2026-09-29 driver defaults to `--mixed-source-load auto` and records both
+the requested policy and the selected loads in its checkpoint diagnostics.
+This historical result retains its explicit surface-flux setting and original
+runtime identity; it has not been recomputed with the current default or 2607.

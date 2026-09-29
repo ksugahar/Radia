@@ -458,7 +458,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mixed-method", choices=("picard", "newton"), default="picard")
     parser.add_argument("--mixed-material-bonus", type=int, default=None,
                         help="Newton material quadrature bonus (defaults to mixed-bonus)")
-    parser.add_argument("--mixed-source-load", choices=("volume", "surface_flux"), default="volume")
+    parser.add_argument("--mixed-source-load", choices=("auto", "volume", "surface_flux"), default="auto")
     parser.add_argument("--mixed-exact-exterior-source", action="store_true",
                         help="Use exact Kelvin-pulled source instead of projected exterior trace")
     parser.add_argument("--relative-rms-tolerance", type=float, default=0.01)
