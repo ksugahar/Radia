@@ -1536,10 +1536,11 @@ class TemperatureDependentSource:
         self.gf_damping = gf_damping
         self.dT_fd = float(dT_fd)
 
-    def values(self, T_vertices):
+    def values(self, T_vertices, *, record_temperature=True):
         T = np.asarray(T_vertices, float)
-        self.T_surface_range = [min(self.T_surface_range[0], float(T.min())),
-                                max(self.T_surface_range[1], float(T.max()))]
+        if record_temperature:
+            self.T_surface_range = [min(self.T_surface_range[0], float(T.min())),
+                                    max(self.T_surface_range[1], float(T.max()))]
         num = self.table.q(self.s * self.H,
                            np.broadcast_to(T[:, None], self.H.shape))
         return self.q_ref * num.mean(axis=1) * self.ratio_ref
@@ -1554,7 +1555,8 @@ class TemperatureDependentSource:
             Tp = np.minimum(T + self.dT_fd, hi)
             Tm = np.maximum(T - self.dT_fd, lo)
             span = np.maximum(Tp - Tm, 1e-12)
-            dq = (self.values(Tp) - self.values(Tm)) / span
+            dq = (self.values(Tp, record_temperature=False)
+                  - self.values(Tm, record_temperature=False)) / span
             self.gf_damping.vec.FV().NumPy()[self.dofs] = np.maximum(-dq, 0.0)
 
     def audit(self) -> dict:

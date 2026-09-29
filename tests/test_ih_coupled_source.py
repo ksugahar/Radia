@@ -25,6 +25,24 @@ from radia import ih_thermal
 RE_Z0 = 3.0e-4          # Ohm, below the Curie band
 
 
+def test_derivative_probes_do_not_expand_observed_surface_temperature(case):
+    from ngsolve import GridFunction, H1
+    table = ih_thermal.ImpedanceTable({
+        "H": np.array([1., 10.]), "T": np.array([0., 100.]),
+        "q": np.array([[1., .5], [100., 50.]]),
+    })
+    fes = H1(case["mesh"], order=1)
+    temperature, flux, damping = (GridFunction(fes) for _ in range(3))
+    temperature.Set(20.)
+    dofs = np.arange(fes.ndof)
+    source = ih_thermal.TemperatureDependentSource(
+        table, np.ones(fes.ndof), np.full((fes.ndof, 1), 5.), dofs, flux,
+        T_ref=20., acknowledge_frozen_ht=True, gf_damping=damping, dT_fd=1.)
+    source.update(temperature, dofs)
+    np.testing.assert_allclose(source.T_surface_range, [20., 20.])
+    assert np.all(damping.vec.FV().NumPy() > 0.)
+
+
 def _re_z(T):
     """Illustrative Re Z_s(T): constant, then falling to 30 % over 700-800 C."""
     T = np.asarray(T, float)
