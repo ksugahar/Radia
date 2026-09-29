@@ -365,8 +365,17 @@ def solve_cut_patch(section_face, *, x_cut, panel_xy, panel_ds, panel_current,
     rhs.Assemble()
     residual = rhs.vec.CreateVector()
     residual.data = rhs.vec - form.mat * gf.vec
-    gf.vec.data += form.mat.Inverse(freedofs=fes.FreeDofs(),
-                                    inverse="umfpack") * residual
+    correction = residual.CreateVector()
+    correction.data = form.mat.Inverse(freedofs=fes.FreeDofs(),
+                                       inverse="sparsecholesky") * residual
+    # the complex-symmetric system is solved for the lift correction; check it
+    from radia._residual_gate import check_true_residual
+    defect = residual.CreateVector()
+    defect.data = residual - form.mat * correction
+    free = np.fromiter((bool(bit) for bit in fes.FreeDofs()), dtype=bool, count=fes.ndof)
+    check_true_residual(form.mat, defect.FV().NumPy(), correction.FV().NumPy(),
+                        residual.FV().NumPy(), free, "SIBC corner patch solve")
+    gf.vec.data += correction
 
     return PatchSolution(
         x_cut_m=None if x_cut is None else float(x_cut), side=side,
