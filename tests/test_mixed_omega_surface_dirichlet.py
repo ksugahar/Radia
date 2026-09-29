@@ -38,7 +38,11 @@ def test_vacuum_hodge_split_requires_response_representable_lift():
         project_source_total_hodge,
     )
     mesh, _, options = _case()
-    source = ng.CF((2*ng.x, 0., -2*ng.z))
+    # Keep a nonzero P1 load: the pure quadratic potential has identical nodal
+    # values on this symmetric coarse mesh, leaving only roundoff in its RHS.
+    # The uniform part is exactly representable at both orders; the quadratic
+    # part still exercises the projection/response order mismatch below.
+    source = ng.CF((1. + 2*ng.x, 0., -2*ng.z))
     selector = mesh.Materials('iron')
     errors = {}
     with ng.TaskManager():
