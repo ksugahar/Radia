@@ -2309,10 +2309,30 @@ source trace to the mixed solver, or select an HCurl reduced-A formulation.
 Do not fall back to `rad.Fld(..., "phi")` or an HDiv-projected B field: neither
 is a general scalar-Omega source contract for a compound current coil.
 
-For memoryless nonlinear iron, use
-`solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin`; it shares the
-same interface trace and B(H) law.  This Picard helper is not a hysteresis
-model. The following material-order contract describes the development solver
+For memoryless nonlinear iron, prefer the static-electromagnet adapter with
+`nonlinear_method="newton"` and
+`nonlinear_material_sampling="integration_point"`. Newton evaluates the
+PCHIP B(H) law at quadrature points. Picard remains an explicit alternative,
+not a hysteresis model; selecting Newton does not preserve Picard's
+element-centroid material discretization.
+
+The adapter defaults both source loads to `"auto"`: B-H iron with an exact
+source, the `total_hodge` contract and a source-trace tolerance selects the
+gated surface-flux load; other supported cases select volume loads. Preserve
+`source_trace["load_selection"]` in results so requested and selected loads
+and their reason are auditable. The low-level Kelvin solver does not perform
+this automatic selection.
+
+Keep source quadrature (`bonus_intorder`) separate from material quadrature:
+use `nonlinear_material_bonus_intorder` in the adapter, or
+`material_bonus_intorder` in the Newton solver. Verify material-quadrature
+convergence for the problem rather than assuming that a high source order
+is needed for B(H). For material updates in total-potential iron use
+`H_total_cf`. Do not compile the piecewise `H_cf` there: compiling it can
+evaluate expensive reduced-domain coil fields at iron quadrature points.
+Retain the original free-row true-residual and constitutive checks.
+
+The following Picard material-order contract describes the development solver
 candidate, not a capability enabled by upgrading radia-mcp alone. Check the
 loaded solver's signature and numerical acceptance before using
 material_update_order; the current released solver may not expose it.

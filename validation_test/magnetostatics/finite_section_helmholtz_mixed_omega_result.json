@@ -2,11 +2,20 @@
   "schema": "radia.finite-section-helmholtz-mixed-omega.v1",
   "created_at_utc": "2026-09-13T10:50:38Z",
   "producer": "radia-ngsolve validation runner",
-  "solver_version": "4.95.91",
-  "units": {"length": "m", "field": "T", "current_density": "A/m^2"},
+  "units": {
+    "length": "m",
+    "field": "T",
+    "current_density": "A/m^2"
+  },
   "geometry": {
-    "radial_bounds_m": [10.0, 13.0],
-    "positive_axial_bounds_m": [3.0, 6.0],
+    "radial_bounds_m": [
+      10.0,
+      13.0
+    ],
+    "positive_axial_bounds_m": [
+      3.0,
+      6.0
+    ],
     "mirror_pair": true,
     "current_density_A_per_m2": 10000.0
   },
@@ -19,40 +28,194 @@
   "open_boundary": {
     "method": "kelvin_transform",
     "radius_m": 20.0,
-    "mapped_sphere_offset_m": [60.0, 0.0, 0.0]
+    "mapped_sphere_offset_m": [
+      60.0,
+      0.0,
+      0.0
+    ]
   },
-  "axis_z_m": [0.0, 1.0, 2.0, 3.0],
+  "axis_z_m": [
+    0.0,
+    1.0,
+    2.0,
+    3.0
+  ],
   "reference_bz_T": [
-    0.00792907237221318,
+    0.007929072372213177,
     0.007902349246165159,
     0.007818835918418848,
     0.007670109587620525
   ],
   "coil_builder_field_T": [
-    [-2.42e-14, 0.0, 0.007929072379766044],
-    [-2.40e-14, 0.0, 0.00790234925275819],
-    [-2.25e-14, 0.0, 0.007818835921249668],
-    [-1.96e-14, 0.0, 0.007670109583852553]
+    [
+      -2.42e-14,
+      0.0,
+      0.007929072379766044
+    ],
+    [
+      -2.4e-14,
+      0.0,
+      0.00790234925275819
+    ],
+    [
+      -2.25e-14,
+      0.0,
+      0.007818835921249668
+    ],
+    [
+      -1.96e-14,
+      0.0,
+      0.007670109583852553
+    ]
   ],
   "mixed_total_reduced": {
     "formulation": "mixed_total_reduced_omega",
     "field_T": [
-      [2.5060801242412015e-06, -3.971699417892497e-06, 0.007931620193590618],
-      [2.6535937266985635e-06, -4.469148949450773e-06, 0.007904718445317082],
-      [2.5097592752474656e-06, -4.73770926732656e-06, 0.007820880092642974],
-      [2.245642341972054e-06, -4.7301580172209686e-06, 0.007671789916063336]
+      [
+        -4.7639195115695807e-08,
+        -1.9660417921950085e-07,
+        0.007930784310684981
+      ],
+      [
+        -3.512619703709984e-08,
+        -1.5415677892761313e-07,
+        0.007903988785872718
+      ],
+      [
+        -3.6702449033179545e-08,
+        -1.6010162276379236e-07,
+        0.007820565607280765
+      ],
+      [
+        -4.198088411690221e-08,
+        -1.4301071681681553e-07,
+        0.007671861495714352
+      ]
     ],
     "refinement_levels": [
-      {"mesh_maxh_m": 3.0, "order": 2, "cell_count": 8011, "ndof": 14226, "maximum_relative_error": 0.00614167, "elapsed_seconds": 17.3},
-      {"mesh_maxh_m": 2.0, "order": 3, "cell_count": 23274, "ndof": 121637, "maximum_relative_error": 0.000635068, "elapsed_seconds": 92.25},
-      {"mesh_maxh_m": 2.0, "order": 4, "cell_count": 19429, "ndof": 226944, "maximum_relative_error": 0.0003213265383183086, "elapsed_seconds": 186.407}
-    ]
+      {
+        "mesh_maxh_m": 3.0,
+        "order": 2,
+        "cell_count": 8011,
+        "ndof": 14226,
+        "maximum_relative_error": 0.00614167,
+        "elapsed_seconds": 17.3
+      },
+      {
+        "mesh_maxh_m": 2.0,
+        "order": 3,
+        "cell_count": 23274,
+        "ndof": 121637,
+        "maximum_relative_error": 0.000635068,
+        "elapsed_seconds": 92.25
+      },
+      {
+        "mesh_maxh_m": 2.0,
+        "order": 4,
+        "cell_count": 23274,
+        "vertex_count": 5434,
+        "ndof": 278069,
+        "maximum_relative_error": 0.00022840717903882556,
+        "elapsed_seconds": 150.427864999976,
+        "source_commit": "239504dd9"
+      }
+    ],
+    "linear_residual": {
+      "free_dofs": {
+        "residual_l2": 3.688351086665723e-15,
+        "rhs_l2": 1.4987135764783512,
+        "relative": 2.4610113263486546e-15
+      },
+      "all_dofs": {
+        "residual_l2": 3.839064314297386e-15,
+        "rhs_l2": 1.4988456202984255,
+        "relative": 2.5613473878203775e-15
+      },
+      "blocks": {
+        "phi_reduced": {
+          "residual_l2": 3.673974716833029e-15,
+          "rhs_l2": 1.498663574918713,
+          "relative": 2.4515006425189883e-15
+        },
+        "phi_total": {
+          "residual_l2": 3.2531292632364605e-16,
+          "rhs_l2": 0.0,
+          "relative": null
+        },
+        "interface_constraint": {
+          "residual_l2": 3.875376966390176e-18,
+          "rhs_l2": 0.012242284606813944,
+          "relative": 3.1655667964402466e-16
+        }
+      }
+    }
   },
   "gate_tolerances": {
-    "maximum_reference_relative_error": 1.0e-11,
-    "maximum_coil_builder_relative_error": 1.0e-8,
-    "maximum_mixed_relative_error": 4.0e-4,
-    "maximum_coil_transverse_ratio": 1.0e-10,
-    "maximum_mixed_transverse_ratio": 1.0e-3
+    "maximum_reference_relative_error": 1e-11,
+    "maximum_coil_builder_relative_error": 1e-08,
+    "maximum_mixed_relative_error": 0.0004,
+    "maximum_coil_transverse_ratio": 1e-10,
+    "maximum_mixed_transverse_ratio": 0.001
+  },
+  "updated_on": "2026-09-29",
+  "provenance": {
+    "historical_source_and_refinement": {
+      "solver_version": "4.95.91",
+      "created_at_utc": "2026-09-13T10:50:38Z",
+      "scope": "CoilBuilder values and first two refinement levels; not rerun."
+    },
+    "latest_mixed_run": {
+      "source_commit": "239504dd9",
+      "host": "mdx1",
+      "run_date": "2026-09-29",
+      "raw_sha256": "545bd6d660cc95fe0574a3fc7f96ae0dfa685178180ac1b71c1d7894154c68b4",
+      "ngsolve_version": null,
+      "native_sha256": null,
+      "limitation": "Runtime and native identities were not included in the recovered numerical output. This is not exact-artifact 2607 release acceptance."
+    },
+    "scope": "Historical refinement sequence with updated final mixed solve; not a same-build refinement campaign."
+  },
+  "gate_result": {
+    "policy": "finite_section_helmholtz_mixed_omega_gate_v1",
+    "status": "ok",
+    "checks": {
+      "schema_is_supported": true,
+      "units_are_explicit_si": true,
+      "geometry_is_mirrored_finite_section": true,
+      "source_is_coil_builder_finite_section": true,
+      "formulation_is_mixed_total_reduced_omega": true,
+      "open_boundary_uses_kelvin_transform": true,
+      "stored_reference_matches_analytic_integral": true,
+      "coil_builder_matches_analytic_integral": true,
+      "coil_builder_preserves_axis_symmetry": true,
+      "mixed_solution_matches_analytic_integral": true,
+      "mixed_solution_preserves_axis_symmetry": true,
+      "refinement_effort_increases": true,
+      "refinement_error_decreases": true,
+      "final_refinement_matches_field": true
+    },
+    "issues": [],
+    "metrics": {
+      "sample_count": 4,
+      "analytic_bz_T": [
+        0.00792907237221315,
+        0.00790234924616515,
+        0.007818835918418863,
+        0.007670109587620502
+      ],
+      "maximum_reference_relative_error": 3.5004820630590137e-15,
+      "maximum_coil_builder_relative_error": 9.525570860631002e-10,
+      "maximum_coil_transverse_ratio": 3.052059413879893e-12,
+      "maximum_mixed_relative_error": 0.0002284071790417664,
+      "maximum_mixed_transverse_ratio": 2.5507387566255224e-05,
+      "refinement_maximum_relative_errors": [
+        0.00614167,
+        0.000635068,
+        0.00022840717903882556
+      ],
+      "final_order": 4,
+      "final_ndof": 278069
+    },
+    "lesson": "A mixed total/reduced Omega result is accepted only when a finite-cross-section CoilBuilder source, an independently integrated on-axis field, Kelvin open-boundary treatment, axis symmetry, and strictly improving p/h evidence agree under one SI geometry identity."
   }
 }
