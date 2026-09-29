@@ -51,7 +51,7 @@ def result(matrix, x, rhs, free=(True, True, True)):
         def __mul__(self, vector):
             return np.array(matrix) @ vector.values
 
-        def Inverse(self, mask, inverse):
+        def solve_dense(self, mask, inverse):
             assert inverse == 'sparsecholesky'
 
             class Inverse:
@@ -285,7 +285,7 @@ def test_matching_partial_identity_is_rejected(field):
 def test_residual_correction_measures_and_restores_original(fail_after_update, monkeypatch):
     def inverse(matrix, fes, *, order):
         assert order == 2
-        return matrix.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
+        return matrix.solve_dense(fes.FreeDofs(), inverse="sparsecholesky")
     monkeypatch.setitem(sys.modules, "radia.kelvin_solver",
                         SimpleNamespace(_matching_trace_direct_inverse=inverse))
     data = result(np.eye(3), [1, 2, 1], [1, 1, 1])
