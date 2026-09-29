@@ -2309,12 +2309,10 @@ source trace to the mixed solver, or select an HCurl reduced-A formulation.
 Do not fall back to `rad.Fld(..., "phi")` or an HDiv-projected B field: neither
 is a general scalar-Omega source contract for a compound current coil.
 
-For memoryless nonlinear iron, prefer the static-electromagnet adapter with
-`nonlinear_method="newton"` and
-`nonlinear_material_sampling="integration_point"`. Newton evaluates the
-PCHIP B(H) law at quadrature points. Picard remains an explicit alternative,
-not a hysteresis model; selecting Newton does not preserve Picard's
-element-centroid material discretization.
+For memoryless nonlinear iron, the static-electromagnet adapter always uses
+the quadrature-point PCHIP Newton solver; the mixed-Omega Picard lanes were
+retired on 2026-09-30. Newton is not a hysteresis model. Linear total
+materials beside B-H iron must be declared in `linear_mu_r_by_material`.
 
 The adapter defaults both source loads to `"auto"`: B-H iron with an exact
 source, the `total_hodge` contract and a source-trace tolerance selects the

@@ -20,11 +20,11 @@ def _coil():
 
 
 @pytest.fixture(scope="module")
-def picard_case():
-    return _picard_case_data()
+def nonlinear_case():
+    return _nonlinear_case_data()
 
 
-def _picard_case_data():
+def _nonlinear_case_data():
     spec = importlib.util.spec_from_file_location(
         "source_load_tests", Path(__file__).resolve().parents[2] / "tests" / "test_mixed_omega_source_load.py")
     module = importlib.util.module_from_spec(spec)
@@ -50,19 +50,15 @@ def _picard_case_data():
     return mesh, source, potential, hodge["harmonic_field"], table
 
 
-@pytest.mark.parametrize("lane", ["picard_projected_p2", "newton_p2"])
-def test_nonlinear_memoisation_leaves_the_solution_unchanged(picard_case, lane):
-    from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin as picard
-    from radia.mixed_omega_newton import solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin as newton
+def test_nonlinear_memoisation_leaves_the_newton_p2_solution_unchanged(nonlinear_case):
+    from radia.mixed_omega_newton import solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin as solve
 
-    mesh, source, potential, harmonic, table = picard_case
+    mesh, source, potential, harmonic, table = nonlinear_case
     common = dict(bh_table=table, nonlinear_materials=("total",), reduced_materials=("reduced",),
                   total_materials=("total",), interface_boundary="source_total_interface",
                   dirichlet_bbbnd="GND", kelvin_mats=(), order=2,
                   total_source_h=harmonic, total_source_materials=("total",))
-    solve = newton if lane.startswith("newton") else picard
-    options = (dict(tolerance=1e-8, residual_tolerance=1e-10) if lane.startswith("newton")
-               else dict(tolerance=1e-8, max_iterations=200, material_update_order=1, relaxation=0.3))
+    options = dict(tolerance=1e-8, residual_tolerance=1e-10)
     # Serial, so the assembly sums are reproducible and any difference would
     # come from the memoised values; concurrency is covered by the test above.
     memoised = solve(mesh, source, potential, 1.0, (3.0, 0.0, 0.0), **options, **common)

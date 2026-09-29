@@ -318,12 +318,13 @@ def test_coil_yoke_formal_lane_records_and_requires_wheel_identity():
     assert '"runtime_identity": runtime_identity' in text
 
 
-def test_coil_yoke_runner_declares_picard_state_and_anderson_controls():
+def test_coil_yoke_runner_declares_reduced_a_picard_state_and_newton_mixed():
     text = COIL_YOKE_RUNNER_PATH.read_text(encoding="utf-8")
-    assert "--mixed-anderson-depth" in text
     assert "--reduced-a-anderson-depth" in text
-    assert "--mixed-relaxation" in text
-    assert "MixedOmegaPicardNotConverged" in text
+    # Mixed Omega is Newton only; its retired Picard controls must not return.
+    assert "--mixed-anderson-depth" not in text
+    assert "--mixed-relaxation" not in text
+    assert "MixedOmegaPicardNotConverged" not in text
     assert 'CHECKPOINT_SCHEMA = "radia.validation.esrf-coil-yoke-checkpoint.v3"' in text
     assert 'STATE_SCHEMA = "radia.validation.esrf-coil-yoke-picard-state.v1"' in text
     assert "_write_state(" in text
@@ -336,7 +337,7 @@ def test_coil_yoke_runner_declares_picard_state_and_anderson_controls():
         ROOT / "validation_test" / "c_type_three_engine" / "run_three_engine.py"
     ).read_text(encoding="utf-8")
     assert "anderson_depth=int(anderson_depth)" in shared
-    assert "nonlinear_mu_r_initial=mu_r_initial" in shared
+    assert "nonlinear_mu_r_initial=float(mu_r_initial)" in shared
     assert "nu_initial=nu_initial" in shared
 
 

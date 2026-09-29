@@ -76,92 +76,6 @@ def test_constitutive_audit_detects_centroid_secant_defect():
     assert frozen['accuracy_accepted'] is False
 
 
-def test_pointwise_picard_solves_linear_material_control():
-    import ngsolve as ng
-    from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin
-    mesh, source, options = _case()
-    table = np.array([[0.,0.], [100., 100.*4e-7*np.pi*20],
-                      [1000., 1000.*4e-7*np.pi*20]])
-    with ng.TaskManager():
-        result = solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
-            mesh, source, -100*ng.z, 1., (0,0,0), bh_table=table,
-            nonlinear_materials=('iron',), mu_r_initial=10.,
-            material_sampling='integration_point', relaxation=1.,
-            max_iterations=8, tolerance=1e-9, **options)
-    assert result['nonlinear_stats']['converged']
-    assert result['constitutive_field_audit']['relative_B_constitutive_L2'] < 1e-9
-
-
-def test_pointwise_picard_nonlinear_material_has_quadrature_consistency():
-    import ngsolve as ng
-    from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin
-    mesh, source, options = _case()
-    h = np.linspace(0., 1000., 21)
-    table = np.column_stack((h, 4e-7*np.pi*h + .01*np.tanh(h/100)))
-    with ng.TaskManager():
-        result = solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
-            mesh, source, -100*ng.z, 1., (0,0,0), bh_table=table,
-            nonlinear_materials=('iron',), mu_r_initial=10.,
-            material_sampling='integration_point', relaxation=1.,
-            max_iterations=40, tolerance=1e-5, **options)
-    assert result['nonlinear_stats']['converged']
-    assert result['constitutive_field_audit']['relative_B_constitutive_L2'] < 1e-5
-
-
-def test_linear_spline_table_matches_piecewise_linear_curve():
-    import ngsolve as ng
-    from radia.scalar_potential_solver import (
-        _build_bh_linear_spline_coefficient_function,
-        _build_bh_linear_spline_coenergy_coefficient_function)
-    mesh, _, _ = _case()
-    table = np.array([[0.,0.], [100.,.2], [200.,.35]])
-    field = _build_bh_linear_spline_coefficient_function(1000*ng.x, table)
-    energy = _build_bh_linear_spline_coenergy_coefficient_function(1000*ng.x, table)
-    for x in (.001, .02, .07, .12, .18, .25):
-        actual = float(field(mesh(x, .0, .0)))
-        expected = (np.interp(1000*x, table[:,0], table[:,1])
-                    if x <= .2 else table[-1,1] + 4e-7*np.pi*(1000*x-table[-1,0]))
-        assert actual == pytest.approx(expected, abs=1e-12)
-        step = 1e-6
-        derivative = (float(energy(mesh(x+step,0,0))) -
-                      float(energy(mesh(x-step,0,0))))/(2000*step)
-        assert derivative == pytest.approx(actual, rel=1e-8)
-
-
-def test_pointwise_picard_linear_spline_nonlinear_control():
-    import ngsolve as ng
-    from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin
-    mesh, source, options = _case()
-    h = np.linspace(0., 1000., 21)
-    table = np.column_stack((h, 4e-7*np.pi*h + .01*np.tanh(h/100)))
-    with ng.TaskManager():
-        result = solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
-            mesh, source, -100*ng.z, 1., (0,0,0), bh_table=table,
-            nonlinear_materials=('iron',), mu_r_initial=10.,
-            material_sampling='integration_point', bh_interpolation='linear_spline',
-            relaxation=1., max_iterations=40, tolerance=1e-5, **options)
-    assert result['nonlinear_stats']['converged']
-    assert result['constitutive_field_audit']['interpolation'] == 'linear_spline'
-    assert result['constitutive_field_audit']['relative_B_constitutive_L2'] < 1e-5
-    energy = result['energy_observables']
-    assert energy['energy_J'] > 0
-    assert energy['coenergy_J'] > 0
-    assert energy['energy_J'] + energy['coenergy_J'] == pytest.approx(
-        energy['h_dot_b_integral_J'], rel=1e-12)
-
-
-def test_pointwise_picard_rejects_unbounded_damped_expression_tree():
-    import ngsolve as ng
-    from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin
-    mesh, source, options = _case()
-    table = np.array([[0., 0.], [100., .1], [1000., .2]])
-    with pytest.raises(ValueError, match='relaxation=1'):
-        solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
-            mesh, source, -100*ng.z, 1., (0,0,0), bh_table=table,
-            nonlinear_materials=('iron',), mu_r_initial=10.,
-            material_sampling='integration_point', relaxation=.5, **options)
-
-
 def test_total_surface_requires_source_lift_not_reduced_zero():
     import ngsolve as ng
     from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_kelvin as solve
@@ -215,13 +129,11 @@ def test_dirichlet_junction_is_rejected_before_singular_multiplier_solve():
 @pytest.mark.parametrize('order', [1, 2])
 def test_nonlinear_total_and_reduced_representations_match(order):
     import ngsolve as ng
-    from radia.kelvin_solver import solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin as solve
+    from radia.mixed_omega_newton import solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin as solve
     mesh, source, options = _case()
     options.update(bh_table=[(0., 0.), (50., .001), (100., .0015), (200., .002)],
                    nonlinear_materials=('iron',), mu_r_initial=10.,
-                   tolerance=1e-7, max_iterations=150, relaxation=.5,
-                   cache_fixed_rhs=False, order=order,
-                   material_update_order=order-1)
+                   tolerance=1e-9, residual_tolerance=1e-11, max_iterations=40, order=order)
     with ng.TaskManager():
         total = solve(mesh, source, -100*ng.z, 1., (0, 0, 0), **options)
         reduced = solve(mesh, source, ng.CoefficientFunction(0.), 1., (0, 0, 0),
