@@ -1,0 +1,204 @@
+{
+  "schema": "radia.ih-coarse-study.partial.v1",
+  "status": "partial",
+  "scope": "One coarse tube at p2. Initial failures retained; full case/order/cycle sweep not complete.",
+  "host": "mdx1",
+  "ngsolve": "6.2.2607",
+  "python": "3.12.10",
+  "numpy": "2.5.3",
+  "scipy": "1.18.1",
+  "solver_source_commit": "e64533b52657fc862e198b776cdd56c2adbb0cd3",
+  "driver_commit": "ccd5d1986",
+  "native_source_commit": "0e9f26bd6",
+  "native_sha256": {
+    "_equation.pyd": "4bdba163aafdbeaac1ca40b53d1d377532460dedee26a087d827060dc3ee1895",
+    "_radia_pybind.pyd": "9394a62772a23f2fb3c40c13fbd575477a7ca60c2014c22f18d0b17b10d58062",
+    "axifem.pyd": "8c4f9c20333492a6689b224cf95a978e123d1f6e3746c75c70cc5ac9e791b57c",
+    "peec_matrices.pyd": "e60940fd77b7b6e19362b548a0f81183cbb0c72ab4069f40d6e61c40c2e2c77c",
+    "radia_motor_rom.dll": "39cf9a79b4e01a13e73e9e2fac0c6032e642abb659232a35ac510afdf5efbe57",
+    "sparsesolv_ngsolve.pyd": "26d44ec1ac144129114ad9fcfa7e45520e0886d1d06578fbb1b77615404b3da4"
+  },
+  "source_sha256": {
+    "validation_test/induction_heating/bddc_ams_coarse_ih.py": "73888ee66791c6f5ecc7a49ba7d8fbe99b10694fe38757570471c871724e54fc",
+    "validation_test/induction_heating/fem_sibc_geometry.py": "bbe679c2344ed1cf872478ffb175d591e4e70c288347f47df4a48f41257da6da",
+    "src/radia/panels/calc_fem_kelvin.py": "c2b264bc55150adb511ddcd0049bf67e79a68809eb9231e063215aa5c533bfbf"
+  },
+  "frequency_Hz": 150000,
+  "mesh": {
+    "elements": 31286,
+    "dofs": 164222,
+    "order": 2,
+    "geometry_order": 2
+  },
+  "records": [
+    {
+      "case": "tube",
+      "mesh": "coarse",
+      "order": 2,
+      "solver": "sparsecholesky",
+      "cycles": 0,
+      "edge_wirebasket": false,
+      "process_exit": 1,
+      "process_wall_s": 6.419,
+      "threads": 8
+    },
+    {
+      "case": "tube",
+      "mesh": "coarse",
+      "order": 2,
+      "solver": "bddc",
+      "cycles": 1,
+      "edge_wirebasket": false,
+      "process_exit": 3221226505,
+      "process_wall_s": 11.494,
+      "threads": 8
+    },
+    {
+      "case": "tube",
+      "mesh": "coarse",
+      "order": 2,
+      "solver": "bddc",
+      "cycles": 1,
+      "edge_wirebasket": true,
+      "process_exit": 3221226505,
+      "process_wall_s": 9.772,
+      "threads": 8
+    },
+    {
+      "P_total": 1.6345890606144806,
+      "L": 1.2189397297878074e-07,
+      "error": null,
+      "linear_solver": "bddc",
+      "linear_true_relative_residual": 8.248546895365109e-11,
+      "linear_krylov_iterations": [
+        103
+      ],
+      "linear_residual_corrections": 0,
+      "linear_residual_before_corrections": [],
+      "ndof": 164222,
+      "case": "tube",
+      "mesh": "coarse",
+      "order": 2,
+      "solver": "bddc",
+      "cycles": 1,
+      "edge_wirebasket": false,
+      "coarse_applied": {
+        "calls": 1,
+        "face_dofs_returned": 0
+      },
+      "wall_s": 17.837,
+      "peak_memory_mb": 393.7,
+      "threads": 1,
+      "run": "bddc-single-thread",
+      "process_exit": 0
+    },
+    {
+      "P_total": 1.634589060614516,
+      "L": 1.2189397297878077e-07,
+      "error": null,
+      "linear_solver": "bddc",
+      "linear_true_relative_residual": 8.22363525579321e-11,
+      "linear_krylov_iterations": [
+        103
+      ],
+      "linear_residual_corrections": 0,
+      "linear_residual_before_corrections": [],
+      "ndof": 164222,
+      "case": "tube",
+      "mesh": "coarse",
+      "order": 2,
+      "solver": "auto",
+      "cycles": null,
+      "edge_wirebasket": null,
+      "coarse_applied": null,
+      "wall_s": 19.992,
+      "peak_memory_mb": 400.8,
+      "threads": 8,
+      "run": "auto-eight-thread",
+      "process_exit": 0
+    },
+    {
+      "P_total": 1.634589060614338,
+      "L": 1.2189397297878085e-07,
+      "error": null,
+      "linear_solver": "bddc",
+      "linear_true_relative_residual": 8.266294696686328e-11,
+      "linear_krylov_iterations": [
+        103
+      ],
+      "linear_residual_corrections": 0,
+      "linear_residual_before_corrections": [],
+      "ndof": 164222,
+      "case": "tube",
+      "mesh": "coarse",
+      "order": 2,
+      "solver": "bddc",
+      "cycles": 1,
+      "edge_wirebasket": false,
+      "coarse_applied": {
+        "calls": 1,
+        "face_dofs_returned": 0
+      },
+      "wall_s": 17.155,
+      "peak_memory_mb": 401.0,
+      "threads": 8,
+      "run": "wrapped-eight-thread-recheck",
+      "process_exit": 0
+    },
+    {
+      "P_total": 1.6345890606308227,
+      "L": 1.2189397297876901e-07,
+      "error": null,
+      "linear_solver": "sparsecholesky",
+      "linear_true_relative_residual": 1.2177585676783144e-14,
+      "linear_krylov_iterations": [],
+      "linear_residual_corrections": 0,
+      "linear_residual_before_corrections": [],
+      "ndof": 164222,
+      "case": "tube",
+      "mesh": "coarse",
+      "order": 2,
+      "solver": "sparsecholesky",
+      "cycles": null,
+      "edge_wirebasket": null,
+      "coarse_applied": null,
+      "wall_s": 159.371,
+      "peak_memory_mb": 3552.4,
+      "threads": 1,
+      "run": "direct-single-thread",
+      "process_exit": 0
+    }
+  ],
+  "completed_repeat_accuracy": [
+    {
+      "run": "bddc-single-thread",
+      "relative_errors": {
+        "P_total": 9.99764358325371e-12,
+        "L": 9.619927939828597e-14
+      },
+      "passed": true
+    },
+    {
+      "run": "auto-eight-thread",
+      "relative_errors": {
+        "P_total": 9.976044826089965e-12,
+        "L": 9.64164335278532e-14
+      },
+      "passed": true
+    },
+    {
+      "run": "wrapped-eight-thread-recheck",
+      "relative_errors": {
+        "P_total": 1.0084853659348834e-11,
+        "L": 9.706789591655491e-14
+      },
+      "passed": true
+    }
+  ],
+  "single_thread_wall_ratio": 8.93485451589393,
+  "limitations": [
+    "One run per setting; no statistical performance estimate.",
+    "Eight-thread direct allocation failure and two subsequent native aborts remain unexplained.",
+    "Repeat success does not erase initial failures; no release-quad acceptance."
+  ]
+}
