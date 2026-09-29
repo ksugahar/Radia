@@ -25,7 +25,7 @@ from radia.gmsh_post_export import (
     export_element_activation_animation,
     export_nodal_deformation_animation,
 )
-from tests._ngsolve_2606 import curve_mesh
+from tests._ngsolve_2607 import curve_mesh
 
 
 @pytest.fixture(scope="module", autouse=True)

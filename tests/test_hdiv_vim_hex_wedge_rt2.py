@@ -18,7 +18,7 @@ import radia._radia_pybind as _rp  # noqa: E402
 from radia.vim import (  # noqa: E402
     ChargeGram, FieldFromSolution, MagnetizationSource, Solve,
 )
-from tests._ngsolve_2606 import curve_mesh  # noqa: E402
+from tests._ngsolve_2607 import curve_mesh  # noqa: E402
 
 
 def _cube(kind):

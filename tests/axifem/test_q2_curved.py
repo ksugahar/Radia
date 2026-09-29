@@ -32,7 +32,7 @@ from ngsolve import BilinearForm, CoefficientFunction as CF, TaskManager
 from ngsolve.meshes import MakeStructured2DMesh
 from radia.axifem import (H1Henrotte, AxiHenrotteStiffnessBFI,
                           AxiHenrotteSigmaMassBFI)
-from tests._ngsolve_2606 import curve_mesh
+from tests._ngsolve_2607 import curve_mesh
 
 
 def _lam_min(mesh, curvedquad):

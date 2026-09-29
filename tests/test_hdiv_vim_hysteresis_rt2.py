@@ -7,7 +7,7 @@ ng = pytest.importorskip("ngsolve")
 from ngsolve.meshes import MakeStructured3DMesh  # noqa: E402
 
 from radia import vim  # noqa: E402
-from tests._ngsolve_2606 import curve_mesh  # noqa: E402
+from tests._ngsolve_2607 import curve_mesh  # noqa: E402
 
 
 MU0 = 4.0e-7*np.pi

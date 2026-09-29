@@ -28,7 +28,7 @@ classifiers = [
 dependencies = [
     "numpy>=1.20",
     # CoilBuilder's orientation and standard source construction require SciPy.
-    "scipy>=1.11",
+    "scipy>=1.12",
     # Coordinate-defining SVDs use a one-thread BLAS context so canonical
     # HCurl bases remain bit-reproducible across caller thread settings.
     "threadpoolctl>=3.1",

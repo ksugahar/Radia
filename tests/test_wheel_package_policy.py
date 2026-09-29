@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_coil_builder_dependency_is_available_without_extras():
     config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    assert "scipy>=1.11" in config["project"]["dependencies"]
+    assert "scipy>=1.12" in config["project"]["dependencies"]
 
 
 def test_radia_wheel_excludes_native_backup_files():
