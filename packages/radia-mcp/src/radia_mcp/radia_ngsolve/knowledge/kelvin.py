@@ -3270,7 +3270,7 @@ Kelvin Transformation, IEICE Trans. Electron. 2024) and a periodic Kelvin (2013)
 
 This is the formulation basis for radia.open_boundary.kelvin_dtn's MATERIAL-aware
 (nu, sigma) exterior DtN: the (a/r)^4 sigma / (a/r)^2 mu weights come from this
-conformal derivation.  See dtn_coarse_mesh(topic="dtn_continued_fraction") +
+conformal derivation.  See dtn_coarse_mesh(topic="api") +
 docs/open_boundary/OPEN_BOUNDARY_MAP.md.
 
 References (cite): Ward & Pendry, J. Mod. Opt. 43 (1996); Freeman & Lowther, IEEE
