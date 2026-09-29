@@ -11,7 +11,8 @@ description: Four-machine numerical Radia solver and Simulink release gate. Use 
 QUAD acceptance. It does not publish, install, uninstall, repoint, reconnect,
 or version-gate `radia-mcp` or `cubit-mesh-export`.
 
-- `radia-mcp`: use `release-radia-mcp` and LAB/100 release-dual.
+- `radia-mcp`: follow [package release checks](../../../packages/radia-mcp/CONTRIBUTING.md)
+  and the [LAB/100 release-dual completion contract](../../../packages/radia-mcp/docs/operations/mcp-runtime-policy.md#release-completion).
 - `cubit-mesh-export`: use `release-cubit-mesh-export` and LAB/100 release-dual.
 - `radia-optuna`: use its exact-wheel candidate/done lane; do not install
   Radia, Cubit, or radia-mcp as a side effect.
