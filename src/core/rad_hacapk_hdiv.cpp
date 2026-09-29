@@ -253,24 +253,27 @@ struct MassRieszFactor {
         if (TryFactorLocalBlocks(mI, mJ, mV, n_face)) {
             return true;
         }
-        std::vector<std::map<int, double>> entries(static_cast<size_t>(n));
-        ngcore::Array<int> rows, cols;
-        ngcore::Array<double> values;
-        for (size_t k = 0; k < mV.size(); ++k) {
-            const int i = mI[k], j = mJ[k];
-            if (i < 0 || i >= n || j < i || j >= n) continue;
-            if (!std::isfinite(mV[k]))
-                throw std::runtime_error("MassRieszFactor: non-finite mass entry");
-            entries[static_cast<size_t>(j)][i] += mV[k];
-        }
-        for (int row = 0; row < n; ++row)
-            for (const auto& entry : entries[static_cast<size_t>(row)]) {
-                rows.Append(row); cols.Append(entry.first); values.Append(entry.second);
-            }
         ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
-        auto coo = ngla::SparseMatrixTM<double>::CreateFromCOO(
-            rows, cols, values, n, n);
-        sparse_mass = std::make_shared<ngla::SparseMatrixSymmetric<double>>(*coo);
+        // Release duplicate COO/map storage before the fill-heavy factorization.
+        {
+            std::vector<std::map<int, double>> entries(static_cast<size_t>(n));
+            ngcore::Array<int> rows, cols;
+            ngcore::Array<double> values;
+            for (size_t k = 0; k < mV.size(); ++k) {
+                const int i = mI[k], j = mJ[k];
+                if (i < 0 || i >= n || j < i || j >= n) continue;
+                if (!std::isfinite(mV[k]))
+                    throw std::runtime_error("MassRieszFactor: non-finite mass entry");
+                entries[static_cast<size_t>(j)][i] += mV[k];
+            }
+            for (int row = 0; row < n; ++row)
+                for (const auto& entry : entries[static_cast<size_t>(row)]) {
+                    rows.Append(row); cols.Append(entry.first); values.Append(entry.second);
+                }
+            auto coo = ngla::SparseMatrixTM<double>::CreateFromCOO(
+                rows, cols, values, n, n);
+            sparse_mass = std::make_shared<ngla::SparseMatrixSymmetric<double>>(*coo);
+        }
         sparse_mass->SetSPD(true);
         sparse_factor = std::make_shared<ngla::SparseCholesky<double>>(sparse_mass);
         // NGSolve stores inverse diagonal factors; positivity and finiteness
