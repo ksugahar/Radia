@@ -1,6 +1,7 @@
 #include "radia_ih_thermal.h"
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -42,7 +43,12 @@ double dot(const std::vector<double>& a, const std::vector<double>& b) {
 }
 
 double norm(const std::vector<double>& values) {
-    return std::sqrt(std::max(0.0, dot(values, values)));
+    double result = 0.0;
+    for (double value : values) {
+        if (!std::isfinite(value)) return std::numeric_limits<double>::infinity();
+        result = std::hypot(result, value);
+    }
+    return result;
 }
 
 void true_residual(const CSRMatrix& a, const std::vector<double>& b,
@@ -77,10 +83,9 @@ void cg(const CSRMatrix& a, const std::vector<double>& b,
     // an unresolved small heat increment behind the much larger stored-energy
     // term M*T_previous.
     const double effective_load_norm = norm(r);
+    if (!std::isfinite(effective_load_norm))
+        throw std::runtime_error("IH thermal effective load is not finite");
     if (effective_load_norm == 0.0) return;
-    const double target = relative_limit *
-        std::max(effective_load_norm, 1.0e-300);
-    if (norm(r) <= target) return;
     for (int i = 0; i < n; ++i)
         z[static_cast<std::size_t>(i)] =
             r[static_cast<std::size_t>(i)] / diagonal[static_cast<std::size_t>(i)];
@@ -92,13 +97,30 @@ void cg(const CSRMatrix& a, const std::vector<double>& b,
         if (!(pap > 0.0) || !std::isfinite(pap))
             throw std::runtime_error("IH thermal matrix is not positive definite");
         const double alpha = rz / pap;
+        if (!std::isfinite(alpha))
+            throw std::runtime_error("IH thermal CG step is not finite");
         for (int i = 0; i < n; ++i) {
             x[static_cast<std::size_t>(i)] += alpha * p[static_cast<std::size_t>(i)];
             r[static_cast<std::size_t>(i)] -= alpha * ap[static_cast<std::size_t>(i)];
         }
-        if (norm(r) <= target) {
+        const double recursive_norm = norm(r);
+        if (!std::isfinite(recursive_norm))
+            throw std::runtime_error("IH thermal CG residual is not finite");
+        if (recursive_norm / effective_load_norm <= relative_limit) {
             true_residual(a, b, x, r);
-            if (norm(r) <= target) return;
+            const double checked_norm = norm(r);
+            if (!std::isfinite(checked_norm))
+                throw std::runtime_error("IH thermal true residual is not finite");
+            if (checked_norm / effective_load_norm <= relative_limit) return;
+            for (int i = 0; i < n; ++i)
+                z[static_cast<std::size_t>(i)] =
+                    r[static_cast<std::size_t>(i)] /
+                    diagonal[static_cast<std::size_t>(i)];
+            p = z;
+            rz = dot(r, z);
+            if (!(rz > 0.0) || !std::isfinite(rz))
+                throw std::runtime_error("IH thermal CG restart residual is not finite");
+            continue;
         }
         for (int i = 0; i < n; ++i)
             z[static_cast<std::size_t>(i)] =
@@ -113,7 +135,9 @@ void cg(const CSRMatrix& a, const std::vector<double>& b,
         rz = next_rz;
     }
     true_residual(a, b, x, r);
-    if (norm(r) > target)
+    const double checked_norm = norm(r);
+    if (!std::isfinite(checked_norm) ||
+        checked_norm / effective_load_norm > relative_limit)
         throw std::runtime_error("IH thermal CG true relative residual exceeds 1e-6");
 }
 
@@ -137,6 +161,12 @@ void advance_thermal(const CSRMatrix& mass, const CSRMatrix& stiffness,
     const bool coefficients = !options.constant_coefficients.empty();
     if (coefficients && options.constant_coefficients.size() != static_cast<std::size_t>(n))
         throw std::invalid_argument("IH constant coefficient size mismatch");
+    for (double value : source_W)
+        if (!std::isfinite(value))
+            throw std::invalid_argument("IH thermal source must be finite");
+    for (double value : state.temperature_K)
+        if (!std::isfinite(value))
+            throw std::invalid_argument("IH thermal state must be finite");
     for (double w : cell_weights)
         if ((!coefficients && !(w > 0.0)) || !std::isfinite(w))
             throw std::invalid_argument("IH thermal cell weights must be finite and positive");
