@@ -10,6 +10,12 @@ import tomllib
 
 # Checked against both workflow trigger lists by the lightweight contract suite.
 NATIVE_PATHS = (
+    'packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py',
+    'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py',
+    'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py',
+    'validation_test/radia_mcp/test_axi_eddy_current_drive.py',
+    'validation_test/radia_mcp/test_eddy_driven_region.py',
+
     'src/radia/ih*.py',
     'src/radia/panels/calc_heat*.py',
     'src/radia/panels/calc_ih_axisym_coupled.py',
