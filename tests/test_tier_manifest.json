@@ -1,6 +1,7 @@
 {
   "schema": "radia.test-tier-manifest.v1",
   "impact_rules": {
+    "src/radia/ih_heat_transient.py": ["tests/test_ih_energy_audit_contract.py"],
     "packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py": [
       "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
       "validation_test/radia_mcp/test_eddy_driven_region.py"
@@ -170,6 +171,7 @@
         "tests/test_radia_promotion_gate.py",
         "tests/test_mcp_residual_vendor_contract.py",
         "tests/test_trace_reuse_evidence_contract.py",
+        "tests/test_ih_energy_audit_contract.py",
         "tests/test_wheel_package_policy.py",
         "tests/test_application_interface_manifest.py",
         "tests/axifem/test_docs_notebook_evidence.py"
