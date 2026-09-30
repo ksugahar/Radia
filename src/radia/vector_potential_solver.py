@@ -66,7 +66,7 @@ def _check_direct_solve(matrix, fes, rhs, solution, what):
 
     SparseCholesky returns a wrong answer without an error for a
     nonsymmetric or singular matrix, so every direct solve is checked
-    (``radia._residual_gate``: true relative residual at most 1e-8).
+    (``radia._residual_gate``: true relative residual at most 1e-6).
     """
     from radia._residual_gate import check_true_residual
     residual = rhs.CreateVector()
@@ -1699,6 +1699,49 @@ class VectorPotentialSolver:
         margin = 0.1 * max(pmax[i] - pmin[i] for i in range(3))
         return [[pmin[i] - margin, pmax[i] + margin] for i in range(3)]
 
+    def _periodic_lowest_order_gradient(self, fes):
+        """Edge-vertex discrete gradient of a Periodic (Kelvin) order-1 HCurl space.
+
+        ``CreateGradient`` has no Periodic variant.  The gradient of the
+        Periodic order-1 H1 space is interpolated into ``fes`` element by
+        element; for lowest-order spaces that is exact, so every used edge row
+        is one +1/-1 vertex pair once roundoff is removed.  Rows of edges the
+        identification left unused (never free) take the plain gradient of
+        their own vertices, so each row is an edge-vertex pair as AMS requires.
+        """
+        from ngsolve import H1, HCurl, Periodic, ConvertOperator, grad
+        from ngsolve.la import SparseMatrixdouble
+
+        h1 = Periodic(H1(self.mesh, order=1))
+        u = h1.TrialFunction()
+        rows, cols, vals = ConvertOperator(
+            spacea=h1, spaceb=fes, trial_proxy=grad(u)).COO()
+        rows, cols, vals = np.asarray(rows), np.asarray(cols), np.asarray(vals)
+        keep = np.abs(vals) > 1e-9
+        rows, cols, vals = rows[keep], cols[keep], np.rint(vals[keep])
+        if np.any(np.abs(np.asarray(vals)) != 1.0):
+            raise RuntimeError("Periodic HCurl gradient has entries other than +-1")
+        count = np.bincount(rows, minlength=fes.ndof)
+        signed = np.bincount(rows, weights=vals, minlength=fes.ndof)
+        if np.any((count != 0) & ((count != 2) | (signed != 0.0))):
+            raise RuntimeError("Periodic HCurl gradient rows are not edge-vertex pairs")
+        empty = np.flatnonzero(count == 0)
+        free = fes.FreeDofs()
+        if any(free[int(index)] for index in empty):
+            raise RuntimeError("a free Periodic HCurl DOF has no gradient row")
+        plain = HCurl(self.mesh, order=1, nograds=True)
+        if plain.ndof != fes.ndof:
+            raise RuntimeError("Periodic HCurl DOF numbering differs from its base space")
+        plain_gradient, _ = plain.CreateGradient()
+        prow, pcol, pval = (np.asarray(v) for v in plain_gradient.COO())
+        fill = np.isin(prow, empty)
+        rows = np.concatenate([rows, prow[fill]])
+        cols = np.concatenate([cols, pcol[fill]])
+        vals = np.concatenate([vals, pval[fill]])
+        matrix = SparseMatrixdouble.CreateFromCOO(
+            rows.tolist(), cols.tolist(), vals.tolist(), fes.ndof, h1.ndof)
+        return matrix, int(h1.ndof)
+
     def _setup_ams_preconditioner(self, a_mat, fes, h1_mass_coeff):
         """Set up AMS preconditioner with Chebyshev smoother.
 
@@ -1721,19 +1764,23 @@ class VectorPotentialSolver:
                 "AMS requires HCurl order=1; use solver='bddc' for order>=2"
             )
 
-        # Cache G_mat and h1_fes (invariant across Newton/Picard iterations)
+        # Cache G_mat and the H1 size (invariant across Newton/Picard iterations)
         if self._ams_cache.get('fes_id') != id(fes):
-            G_mat, h1_fes = fes.CreateGradient()
+            if getattr(self, '_kelvin_region', None):
+                G_mat, h1_ndof = self._periodic_lowest_order_gradient(fes)
+            else:
+                G_mat, h1_fes = fes.CreateGradient()
+                h1_ndof = int(h1_fes.ndof)
             self._ams_cache = {
-                'G_mat': G_mat, 'h1_fes': h1_fes, 'fes_id': id(fes),
+                'G_mat': G_mat, 'h1_ndof': h1_ndof, 'fes_id': id(fes),
             }
         G_mat = self._ams_cache['G_mat']
-        h1_fes = self._ams_cache['h1_fes']
+        h1_ndof = self._ams_cache['h1_ndof']
 
-        if int(h1_fes.ndof) != int(self.mesh.nv):
+        if int(h1_ndof) != int(self.mesh.nv):
             raise RuntimeError(
                 "AMS order-1 gradient space must have one H1 DOF per mesh "
-                f"vertex (got {h1_fes.ndof} DOFs for {self.mesh.nv} vertices)"
+                f"vertex (got {h1_ndof} DOFs for {self.mesh.nv} vertices)"
             )
         coordinates = [self.mesh.vertices[index].point
                        for index in range(self.mesh.nv)]
@@ -1755,16 +1802,6 @@ class VectorPotentialSolver:
 
     def _select_solver(self, fes_ndof, solver):
         """Select solver type based on DOF count and availability."""
-        if getattr(self, '_kelvin_region', None):
-            if solver == 'ams':
-                raise ValueError(
-                    "solver='ams' is not supported for Periodic Kelvin HCurl: "
-                    "the current auxiliary H1 space is order-1 and Periodic "
-                    "low-order coupling is unavailable; use solver='bddc'"
-                )
-            if solver != 'auto':
-                return solver
-            return 'direct' if fes_ndof <= 200_000 else 'bddc'
         if solver != 'auto':
             if solver == 'ams' and int(self.order) != 1:
                 raise ValueError(
@@ -1772,6 +1809,8 @@ class VectorPotentialSolver:
                     "for order>=2"
                 )
             return solver
+        if getattr(self, '_kelvin_region', None):
+            return 'direct' if fes_ndof <= 200_000 else 'bddc'
         if fes_ndof <= 200_000:
             return 'direct'
         if int(self.order) != 1:
