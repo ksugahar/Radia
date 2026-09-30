@@ -189,17 +189,38 @@ assert tuple(SIMULINK_TARGETS) == RELEASE_ACCEPTANCE_HOSTS, (
 
 
 def _editable_repo_lab():
-    """Return the LAB editable source, allowing an exact release worktree."""
-    return os.environ.get(EDITABLE_REPO_LAB_ENV, NAS_REPO_LAB).strip().rstrip("/\\")
+    """Return the LAB view of the immutable release worktree."""
+    default = f"S:/Radia/release-quad/v{_radia_version()}-{_release_commit()[:9]}"
+    return os.environ.get(EDITABLE_REPO_LAB_ENV, default).strip().rstrip("/\\")
 
 
 def _editable_repo_100():
-    """Return the 100-machine view of the same release worktree."""
-    return os.environ.get(EDITABLE_REPO_100_ENV, NAS_REPO_100).strip().rstrip("/\\")
+    """Return the 100-machine view of the immutable release worktree."""
+    default = rf"W:\00_CAE\Radia\release-quad\v{_radia_version()}-{_release_commit()[:9]}"
+    return os.environ.get(EDITABLE_REPO_100_ENV, default).strip().rstrip("/\\")
+
+
+def _radia_version() -> str:
+    return _read_repo_versions({"radia"})["radia"]
+
+
+def _release_commit() -> str:
+    """Return the peeled commit for the version being deployed."""
+    version = _radia_version()
+    result = _git("rev-list", "-n", "1", f"v{version}", check=False)
+    commit = result.stdout.strip().lower()
+    if result.returncode or len(commit) != 40:
+        raise RuntimeError(f"annotated or lightweight release tag v{version} is missing")
+    return commit
+
+
+def _requires_simulink_candidate() -> bool:
+    from packaging.version import Version
+    return Version(_radia_version()) >= Version("5.1.0")
 
 
 def _release_head():
-    return _git("rev-parse", "HEAD").stdout.strip().lower()
+    return _release_commit()
 
 
 def cmd_deployment_plan(args):
@@ -313,6 +334,14 @@ def _simulink_state_path(package_sha256: str) -> Path:
     return SIMULINK_GATE_ROOT / f"simulink-{package_sha256}.json"
 
 
+def _simulink_mex_sha256(manifest: dict) -> str:
+    matches = [row.get("sha256") for row in manifest.get("files", [])
+               if row.get("path") == "matlab/radia_mex.mexw64"]
+    if len(matches) != 1 or not isinstance(matches[0], str) or len(matches[0]) != 64:
+        raise ValueError("Simulink manifest must identify exactly one radia_mex hash")
+    return matches[0].lower()
+
+
 def _release_tag_commit(version: object) -> str | None:
     """Return the peeled commit for the public ``v<version>`` tag, if any."""
     if not isinstance(version, str) or not version.strip():
@@ -394,7 +423,8 @@ def _write_simulink_state(path: Path, state: dict, target: str) -> None:
         try:
             previous = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
             if previous:
-                for field in ('schema', 'package_sha256', 'wheel_sha256', 'commit', 'ci_run_id'):
+                for field in ('schema', 'package_sha256', 'wheel_sha256', 'commit',
+                              'ci_run_id', 'mex_sha256'):
                     if previous.get(field) != state.get(field):
                         raise ValueError(f'Candidate state identity mismatch: {field}')
             merged = {**state, 'targets': {**previous.get('targets', {})}}
@@ -502,6 +532,7 @@ def cmd_simulink_candidate(args):
         fail(f"invalid Simulink candidate: {error}")
         return 2
     package_sha256 = _sha256_file(package)
+    mex_sha256 = _simulink_mex_sha256(manifest)
     success_marker = (
         "RADIA_SIMULINK_RELEASE_OK"
         if manifest.get("schema") in {
@@ -519,6 +550,7 @@ def cmd_simulink_candidate(args):
         "package_sha256": package_sha256,
         "version": manifest.get("version"),
         "commit": manifest.get("commit"),
+        "mex_sha256": mex_sha256,
         "targets": {},
     }
     if state_path.is_file():
@@ -553,6 +585,7 @@ def cmd_simulink_candidate(args):
             "label": label,
             "status": "passed" if passed else "failed",
             "verified_at_utc": datetime.now(timezone.utc).isoformat(),
+            "mex_sha256": mex_sha256,
             "output_tail": output[-4000:],
         }
         _write_simulink_state(state_path, state, key)
@@ -574,6 +607,7 @@ def _verify_simulink_candidate_state(package_arg: str) -> int:
     try:
         manifest = _simulink_manifest(package)
         package_sha256 = _sha256_file(package)
+        mex_sha256 = _simulink_mex_sha256(manifest)
     except (OSError, RuntimeError, ValueError, zipfile.BadZipFile) as error:
         fail(f"invalid Simulink candidate: {error}")
         return 2
@@ -584,11 +618,13 @@ def _verify_simulink_candidate_state(package_arg: str) -> int:
         return 4
     state = json.loads(state_path.read_text(encoding="utf-8"))
     if state.get("package_sha256") != package_sha256 or \
-            state.get("commit") != manifest.get("commit"):
+            state.get("commit") != manifest.get("commit") or \
+            state.get("mex_sha256") != mex_sha256:
         fail("Simulink candidate state does not match the supplied archive")
         return 4
     missing = [key for key in SIMULINK_TARGETS
-               if state.get("targets", {}).get(key, {}).get("status") != "passed"]
+               if state.get("targets", {}).get(key, {}).get("status") != "passed"
+               or state.get("targets", {}).get(key, {}).get("mex_sha256") != mex_sha256]
     if missing:
         fail(f"Simulink candidate has not passed: {', '.join(missing)}")
         return 4
@@ -992,13 +1028,72 @@ def _solver_install_guard_powershell(python_command="python"):
             'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n')
 
 
+EDITABLE_RELEASE_VERIFY = r'''import hashlib, importlib.metadata as md, json, pathlib, subprocess, sys
+repo = pathlib.Path(sys.argv[1]).resolve()
+expected_commit, expected_ngsolve, expected_netgen = sys.argv[2:5]
+package = repo / "src" / "radia"
+manifest_path = package / "release_native_payloads.json"
+if not manifest_path.is_file():
+    raise SystemExit(f"missing exact-wheel native manifest: {manifest_path}")
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+if manifest.get("schema") != "radia.release-native-payloads.v1":
+    raise SystemExit("invalid exact-wheel native manifest schema")
+if manifest.get("source_commit", "").lower() != expected_commit:
+    raise SystemExit("native manifest source commit differs from the release tag")
+files = manifest.get("files")
+if not isinstance(files, dict):
+    raise SystemExit("native manifest files must be an object")
+actual = {p.name: p for pattern in ("*.pyd", "*.dll") for p in package.glob(pattern)}
+required = {"_radia_pybind.pyd", "axifem.pyd", "sparsesolv_ngsolve.pyd"}
+if not required <= files.keys():
+    raise SystemExit("native manifest omits required NGSolve ABI payloads")
+if set(actual) != set(files):
+    raise SystemExit(f"native payload set differs: actual={sorted(actual)} expected={sorted(files)}")
+for name, path in actual.items():
+    lowered = name.lower()
+    if name == "cln_core.pyd" or "locked-old" in lowered or ".pre_" in lowered:
+        raise SystemExit(f"retired native payload remains import-visible: {name}")
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if files[name] != digest:
+        raise SystemExit(f"native payload hash differs for {name}")
+if md.version("ngsolve") != expected_ngsolve or md.version("netgen-mesher") != expected_netgen:
+    raise SystemExit("installed NGSolve/Netgen differs from package metadata pins")
+import ngsolve, radia
+if ngsolve.__version__ != expected_ngsolve:
+    raise SystemExit("loaded NGSolve differs from package metadata pin")
+if repo not in pathlib.Path(radia.__file__).resolve().parents:
+    raise SystemExit(f"radia imported outside fixed release checkout: {radia.__file__}")
+subprocess.run([sys.executable, "-m", "pip", "check"], check=True)
+print(json.dumps({"source_commit": expected_commit, "native_sha256": files}, sort_keys=True))
+'''
+
+
+def _editable_release_verify_command(repo, expected_sha, python_command="python"):
+    pins = _solver_dependency_pins()
+    encoded = base64.b64encode(EDITABLE_RELEASE_VERIFY.encode("utf-8")).decode("ascii")
+    return [python_command, "-c", f"import base64; exec(base64.b64decode('{encoded}'))",
+            repo, expected_sha, pins["ngsolve"], pins["netgen-mesher"]]
+
+
+def _solver_abi_probe_command(python_command="python"):
+    pins = _solver_dependency_pins()
+    code = ("import importlib.metadata as m,ngsolve;"
+            f"assert ngsolve.__version__ == '{pins['ngsolve']}';"
+            f"assert m.version('netgen-mesher') == '{pins['netgen-mesher']}'")
+    return [python_command, "-c", code]
+
+
 def _deploy_lab():
     """Install only the numerical Radia solver from the approved editable."""
     step("Phase 8 (LAB): verify and install Radia solver editable")
     repo = _editable_repo_lab()
-    rc = _verify_local_release_source(repo, _release_head())
+    expected_sha = _release_head()
+    rc = _verify_local_release_source(repo, expected_sha)
     if rc != 0:
         return rc
+    if run(_solver_abi_probe_command(), check=False).returncode:
+        fail("LAB NGSolve/Netgen ABI pins are not installed; source was not changed")
+        return 2
     if run([sys.executable, "-c", SOLVER_INSTALL_GUARD], check=False).returncode:
         fail("Radia install preflight failed; existing installation was preserved")
         return 3
@@ -1010,6 +1105,10 @@ def _deploy_lab():
     if installed.returncode != 0:
         fail("LAB Radia editable install failed; independent packages were unchanged")
         return 3
+    verified = run(_editable_release_verify_command(repo, expected_sha), check=False)
+    if verified.returncode != 0:
+        fail("LAB exact native/runtime verification failed")
+        return 4
     if _verify_lab_editable([("radia", repo)]):
         return 4
     _record_release_intent_lab(repo)
@@ -1034,8 +1133,12 @@ if ($LASTEXITCODE -ne 0 -or $sourceDirty) {{
   Write-Error "Release source has tracked changes: $sourceDirty"
   exit 42
 }}
+{' '.join('"' + part.replace('"', '`"') + '"' for part in _solver_abi_probe_command())}
+if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 {_solver_install_guard_powershell()}
 python -m pip install --no-deps --no-cache-dir --no-build-isolation -e "{repo}"
+if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
+{' '.join('"' + part.replace('"', '`"') + '"' for part in _editable_release_verify_command(repo, expected_sha))}
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 """
     encoded = base64.b64encode(ps_block.encode("utf-16le")).decode("ascii")
@@ -1161,7 +1264,7 @@ def cmd_phase8e(args):
     return 0
 
 
-CROSS_MACHINE_PROBE = '''import hashlib, os
+CROSS_MACHINE_PROBE = '''import hashlib, importlib.metadata as md, os
 
 # This is an identity probe, not a throughput benchmark.  Keep its import
 # footprint bounded so it can coexist with an authorized MATLAB computation.
@@ -1177,6 +1280,13 @@ def hsh_text(p):
 import radia
 rad = os.path.dirname(radia.__file__)
 print(f"VER radia              = {radia.__version__}")
+print(f"ABI ngsolve            = {md.version('ngsolve')}")
+print(f"ABI netgen-mesher      = {md.version('netgen-mesher')}")
+native = sorted(p for pattern in ("*.pyd", "*.dll") for p in __import__('pathlib').Path(rad).glob(pattern))
+h = hashlib.sha256()
+for p in native:
+    h.update(p.name.encode()); h.update(b"\\0"); h.update(hashlib.sha256(p.read_bytes()).digest())
+print(f"NATIVE radia           = {h.hexdigest()[:12]}")
 for r in ["simulink/application.py",
           "panels/calc_inductance.py",
           "panels/calc_fem_kelvin.py",
@@ -1195,7 +1305,7 @@ for r in ["simulink/application.py",
 # (b) post-release commits on main.  Versions/COMPAT come from installed
 # metadata (re-synced to the release in Phase 8), identical to the consumer
 # probe. Phase9 requires the complete field set and compares by key.
-CROSS_MACHINE_PROBE_LAB = '''import hashlib, os, shutil, subprocess
+CROSS_MACHINE_PROBE_LAB = '''import hashlib, importlib.metadata as md, os, shutil, subprocess
 
 # This is an identity probe, not a throughput benchmark.  Keep its import
 # footprint bounded so it can coexist with an authorized MATLAB computation.
@@ -1222,6 +1332,14 @@ def hsh_git(relpath):
     h = hashlib.sha256(); h.update(d); return h.hexdigest()[:12]
 
 print(f"VER radia              = {radia.__version__}")
+print(f"ABI ngsolve            = {md.version('ngsolve')}")
+print(f"ABI netgen-mesher      = {md.version('netgen-mesher')}")
+package = __import__('pathlib').Path(radia.__file__).parent
+native = sorted(p for pattern in ("*.pyd", "*.dll") for p in package.glob(pattern))
+h = hashlib.sha256()
+for p in native:
+    h.update(p.name.encode()); h.update(b"\\0"); h.update(hashlib.sha256(p.read_bytes()).digest())
+print(f"NATIVE radia           = {h.hexdigest()[:12]}")
 for r in ["simulink/application.py",
           "panels/calc_inductance.py",
           "panels/calc_fem_kelvin.py",
@@ -1287,6 +1405,9 @@ def _probe(host_label, cmd_prefix, probe_src=CROSS_MACHINE_PROBE):
 
 _PHASE9_FIELDS = (
     "VER radia",
+    "ABI ngsolve",
+    "ABI netgen-mesher",
+    "NATIVE radia",
     "SHA radia/simulink/application.py",
     "SHA radia/panels/calc_inductance.py",
     "SHA radia/panels/calc_fem_kelvin.py",
@@ -1315,7 +1436,7 @@ def _parse_phase9_probe(label, output):
             raise ValueError(f"{label}: invalid probe row {line!r}")
         if key in result:
             raise ValueError(f"{label}: duplicate field {key}")
-        if key.startswith("SHA "):
+        if key.startswith(("SHA ", "NATIVE ")):
             valid = len(value) == 12 and all(c in "0123456789abcdef" for c in value)
         else:
             try:
@@ -2099,6 +2220,11 @@ def cmd_done(args):
              "release done (this is the root cause of the recurring "
              "rebase-conflict sessions).")
         return rc
+
+    if _requires_simulink_candidate() and not getattr(args, "simulink_package", None):
+        fail("Radia 5.1.0 and newer require --simulink-package with matching "
+             "four-machine MEX/SLX candidate evidence.")
+        return 4
 
     if getattr(args, "simulink_package", None):
         rc = _verify_simulink_candidate_state(args.simulink_package)

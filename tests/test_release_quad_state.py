@@ -15,7 +15,8 @@ SPEC.loader.exec_module(module)
 
 
 def state(**targets):
-    return {'schema': 'test', 'commit': 'a', 'package_sha256': 'hash', 'targets': targets}
+    return {'schema': 'test', 'commit': 'a', 'package_sha256': 'hash',
+            'mex_sha256': 'b' * 64, 'targets': targets}
 
 
 def test_remote_candidate_sends_powershell_as_encoded_argument(tmp_path, monkeypatch):
@@ -55,7 +56,8 @@ def test_candidate_uses_package_specific_success_marker(tmp_path, monkeypatch, s
     package = tmp_path / 'candidate.zip'
     package.write_bytes(b'candidate identity')
     monkeypatch.setattr(module, '_simulink_manifest', lambda _: {
-        'schema': schema, 'version': '5.0.0', 'commit': 'a' * 40})
+        'schema': schema, 'version': '5.0.0', 'commit': 'a' * 40,
+        'files': [{'path': 'matlab/radia_mex.mexw64', 'sha256': 'b' * 64}]})
     monkeypatch.setattr(module, 'SIMULINK_GATE_ROOT', tmp_path)
     visited = []
 
@@ -74,6 +76,9 @@ def test_candidate_uses_package_specific_success_marker(tmp_path, monkeypatch, s
     assert visited == list(module.SIMULINK_TARGETS)
     recorded = json.loads(module._simulink_state_path(module._sha256_file(package)).read_text())
     assert all(target['status'] == 'passed' for target in recorded['targets'].values())
+    assert recorded['mex_sha256'] == 'b' * 64
+    assert all(target['mex_sha256'] == recorded['mex_sha256']
+               for target in recorded['targets'].values())
 
 
 @pytest.mark.parametrize('matched', [True, False])

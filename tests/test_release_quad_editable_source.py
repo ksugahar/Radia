@@ -49,17 +49,41 @@ def test_release_quad_git_helper_trusts_only_its_active_worktree(monkeypatch):
     assert kwargs == {"capture_output": True, "text": True, "check": True}
 
 
-def test_release_head_uses_safe_git_helper(monkeypatch):
+def test_release_head_uses_version_tag_commit(monkeypatch):
     calls = []
 
     def fake_git(*args, **kwargs):
         calls.append((args, kwargs))
-        return subprocess.CompletedProcess(args, 0, stdout="ABCDEF\n", stderr="")
+        return subprocess.CompletedProcess(
+            args, 0, stdout="a" * 40 + "\n", stderr="")
 
     monkeypatch.setattr(release_quad, "_git", fake_git)
 
-    assert release_quad._release_head() == "abcdef"
-    assert calls == [(('rev-parse', 'HEAD'), {})]
+    assert release_quad._release_head() == "a" * 40
+    assert calls == [(('rev-list', '-n', '1', 'v5.1.0'), {'check': False})]
+
+
+def test_default_editable_roots_are_fixed_release_checkouts(monkeypatch):
+    monkeypatch.delenv(release_quad.EDITABLE_REPO_LAB_ENV, raising=False)
+    monkeypatch.delenv(release_quad.EDITABLE_REPO_100_ENV, raising=False)
+    monkeypatch.setattr(release_quad, "_radia_version", lambda: "5.1.0")
+    monkeypatch.setattr(release_quad, "_release_commit", lambda: "c" * 40)
+
+    assert release_quad._editable_repo_lab() == (
+        "S:/Radia/release-quad/v5.1.0-ccccccccc")
+    assert release_quad._editable_repo_100() == (
+        r"W:\00_CAE\Radia\release-quad\v5.1.0-ccccccccc")
+
+
+def test_editable_runtime_gate_requires_exact_native_manifest_and_pip_check():
+    gate = release_quad.EDITABLE_RELEASE_VERIFY
+    assert "release_native_payloads.json" in gate
+    assert 'radia.release-native-payloads.v1' in gate
+    assert '{"_radia_pybind.pyd", "axifem.pyd", "sparsesolv_ngsolve.pyd"}' in gate
+    assert "native payload set differs" in gate
+    assert 'name == "cln_core.pyd"' in gate
+    assert '"locked-old" in lowered' in gate
+    assert 'sys.executable, "-m", "pip", "check"' in gate
 
 
 def test_deployment_plan_is_solver_only_and_does_not_probe_runtime(
@@ -100,7 +124,10 @@ def test_lab_deploy_changes_only_radia(monkeypatch, drift):
                         lambda repo: events.append(("record", repo)) or 0)
 
     assert release_quad._deploy_lab() == (4 if drift else 0)
+    abi_probe = release_quad._solver_abi_probe_command()
+    assert abi_probe in events
     command = next(event for event in events if isinstance(event, list) and "pip" in event)
+    assert events.index(abi_probe) < events.index(command)
     joined = " ".join(command)
     assert "pip install" in joined
     assert "uninstall" not in joined
@@ -142,7 +169,10 @@ def test_remote_deploy_changes_only_radia(monkeypatch, drift):
     assert "cubit-mesh-export" not in script
     assert "Stop-Process" not in script
     assert "status --porcelain --untracked-files=no" in script
+    assert "ngsolve.__version__" in script
+    assert "netgen-mesher" in script
     assert script.index("rev-parse HEAD") < script.index("pip install")
+    assert script.index("ngsolve.__version__") < script.index("pip install")
     if drift:
         assert calls[-1] == "verify"
         assert not any(isinstance(c, tuple) for c in calls)
@@ -188,6 +218,24 @@ def test_done_checks_only_solver_editable_roots(monkeypatch, tmp_path):
     assert calls[1] == "tag"
     assert calls[2] == {"radia": release_quad._editable_repo_lab()}
     assert calls[3] == {"radia": release_quad._editable_repo_100()}
+
+
+def test_done_requires_simulink_candidate_for_5_1_and_newer(monkeypatch, tmp_path):
+    from argparse import Namespace
+
+    monkeypatch.setattr(release_quad, "cmd_preflight", lambda _a: 0)
+    monkeypatch.setattr(release_quad, "_done_active_lab_source", lambda: str(tmp_path))
+    monkeypatch.setattr(release_quad, "_verify_local_release_source", lambda *_a: 0)
+    monkeypatch.setattr(release_quad, "cmd_temp_shadows", lambda _a: 0)
+    monkeypatch.setattr(release_quad, "_verify_head_release_tag", lambda: 0)
+    monkeypatch.setattr(release_quad, "_verify_lab_editable", lambda: 0)
+    monkeypatch.setattr(release_quad, "_verify_100_editable", lambda: 0)
+    monkeypatch.setattr(release_quad, "cmd_phase9", lambda _a: 0)
+    monkeypatch.setattr(release_quad, "_run_retired_standalone_pyside_guard", lambda: 0)
+    monkeypatch.setattr(release_quad, "_check_main_synced", lambda **_k: 0)
+    monkeypatch.setattr(release_quad, "_radia_version", lambda: "5.1.0")
+
+    assert release_quad.cmd_done(Namespace(simulink_package=None)) == 4
 
 
 def test_restore_editable_is_a_tombstone_that_restores_nothing(monkeypatch, capsys):
@@ -344,12 +392,13 @@ def test_lab_deploy_preserves_install_when_binary_preflight_fails(monkeypatch):
     calls = []
     def blocked(command, **_kwargs):
         calls.append(command)
-        return subprocess.CompletedProcess(command, 1)
+        rc = 0 if command == release_quad._solver_abi_probe_command() else 1
+        return subprocess.CompletedProcess(command, rc)
     monkeypatch.setattr(release_quad, "run", blocked)
     assert release_quad._deploy_lab() == 3
-    assert len(calls) == 1
-    assert calls[0][-1] == release_quad.SOLVER_INSTALL_GUARD
-    assert "pip" not in calls[0]
+    assert len(calls) == 2
+    assert calls[1][-1] == release_quad.SOLVER_INSTALL_GUARD
+    assert not any("pip" in command for command in calls)
 
 
 def test_remote_deploy_checks_exact_source_before_install(monkeypatch):
@@ -372,7 +421,10 @@ def test_remote_deploy_checks_exact_source_before_install(monkeypatch):
     assert expected_sha in script
     assert 'safe.directory=W:/Radia/release-source' in script
     assert "status --porcelain --untracked-files=no" in script
+    assert "ngsolve.__version__" in script
+    assert "netgen-mesher" in script
     assert script.index("rev-parse HEAD") < script.index("pip install --no-deps")
+    assert script.index("ngsolve.__version__") < script.index("pip install --no-deps")
     assert "pip uninstall" not in script
     assert "radia-mcp" not in script
     assert "cubit-mesh-export" not in script
@@ -403,11 +455,15 @@ def test_done_keeps_exact_verified_editables_after_all_gates(monkeypatch, tmp_pa
         lambda: calls.append("guard") or 0,
     )
     monkeypatch.setattr(release_quad, "_check_main_synced", lambda **_kwargs: calls.append("main") or 0)
+    monkeypatch.setattr(
+        release_quad, "_verify_simulink_candidate_state",
+        lambda package: calls.append(("simulink", package)) or 0)
 
-    args = type("Args", (), {"simulink_package": None})()
+    args = type("Args", (), {"simulink_package": "candidate.zip"})()
     assert release_quad.cmd_done(args) == 0
     assert calls == [
-        "preflight", "source", "shadows", "tag", "lab", "100", "phase9", "guard", "main"
+        "preflight", "source", "shadows", "tag", "lab", "100", "phase9", "guard", "main",
+        ("simulink", "candidate.zip")
     ]
 
 
