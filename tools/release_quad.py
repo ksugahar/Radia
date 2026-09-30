@@ -1028,7 +1028,7 @@ def _solver_install_guard_powershell(python_command="python"):
             'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n')
 
 
-EDITABLE_RELEASE_VERIFY = r'''import hashlib, importlib.metadata as md, json, pathlib, subprocess, sys
+EDITABLE_RELEASE_VERIFY = r'''import hashlib, importlib.metadata as md, json, pathlib, sys
 repo = pathlib.Path(sys.argv[1]).resolve()
 expected_commit, expected_ngsolve, expected_netgen = sys.argv[2:5]
 package = repo / "src" / "radia"
@@ -1063,7 +1063,6 @@ if ngsolve.__version__ != expected_ngsolve:
     raise SystemExit("loaded NGSolve differs from package metadata pin")
 if repo not in pathlib.Path(radia.__file__).resolve().parents:
     raise SystemExit(f"radia imported outside fixed release checkout: {radia.__file__}")
-subprocess.run([sys.executable, "-m", "pip", "check"], check=True)
 print(json.dumps({"source_commit": expected_commit, "native_sha256": files}, sort_keys=True))
 '''
 
@@ -1081,6 +1080,22 @@ def _solver_abi_probe_command(python_command="python"):
             f"assert ngsolve.__version__ == '{pins['ngsolve']}';"
             f"assert m.version('netgen-mesher') == '{pins['netgen-mesher']}'")
     return [python_command, "-c", code]
+
+
+def _verify_final_pip_checks() -> int:
+    """Require clean shared Python dependency graphs after coordinated deploys."""
+    lab = run([sys.executable, "-m", "pip", "check"], check=False)
+    remote_script = "python -m pip check"
+    encoded = base64.b64encode(remote_script.encode("utf-16le")).decode("ascii")
+    machine100 = run(
+        ["ssh", SSH_100, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
+         "-EncodedCommand", encoded],
+        check=False,
+    )
+    if lab.returncode or machine100.returncode:
+        fail("pip check failed on LAB or 100; coordinated Radia/Cubit deployment is incomplete")
+        return 4
+    return 0
 
 
 def _deploy_lab():
@@ -2231,6 +2246,10 @@ def cmd_done(args):
         if rc != 0:
             fail("Simulink candidate did not satisfy the four-machine gate.")
             return rc
+
+    rc = _verify_final_pip_checks()
+    if rc != 0:
+        return rc
 
     print("")
     suffix = (" The supplied Simulink candidate also passed all four MATLAB "

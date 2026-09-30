@@ -75,7 +75,7 @@ def test_default_editable_roots_are_fixed_release_checkouts(monkeypatch):
         r"W:\00_CAE\Radia\release-quad\v5.1.0-ccccccccc")
 
 
-def test_editable_runtime_gate_requires_exact_native_manifest_and_pip_check():
+def test_editable_runtime_gate_requires_exact_native_manifest():
     gate = release_quad.EDITABLE_RELEASE_VERIFY
     assert "release_native_payloads.json" in gate
     assert 'radia.release-native-payloads.v1' in gate
@@ -83,7 +83,6 @@ def test_editable_runtime_gate_requires_exact_native_manifest_and_pip_check():
     assert "native payload set differs" in gate
     assert 'name == "cln_core.pyd"' in gate
     assert '"locked-old" in lowered' in gate
-    assert 'sys.executable, "-m", "pip", "check"' in gate
 
 
 def test_deployment_plan_is_solver_only_and_does_not_probe_runtime(
@@ -236,6 +235,22 @@ def test_done_requires_simulink_candidate_for_5_1_and_newer(monkeypatch, tmp_pat
     monkeypatch.setattr(release_quad, "_radia_version", lambda: "5.1.0")
 
     assert release_quad.cmd_done(Namespace(simulink_package=None)) == 4
+
+
+@pytest.mark.parametrize("local_rc,remote_rc,expected", [(0, 0, 0), (1, 0, 4), (0, 1, 4)])
+def test_done_pip_check_requires_both_editable_hosts(monkeypatch, local_rc, remote_rc, expected):
+    calls = []
+
+    def fake_run(command, **_kwargs):
+        calls.append(command)
+        rc = remote_rc if command[0] == "ssh" else local_rc
+        return subprocess.CompletedProcess(command, rc)
+
+    monkeypatch.setattr(release_quad, "run", fake_run)
+    assert release_quad._verify_final_pip_checks() == expected
+    assert calls[0][-2:] == ["pip", "check"]
+    remote = base64.b64decode(calls[1][-1]).decode("utf-16le")
+    assert remote == "python -m pip check"
 
 
 def test_restore_editable_is_a_tombstone_that_restores_nothing(monkeypatch, capsys):
@@ -458,12 +473,15 @@ def test_done_keeps_exact_verified_editables_after_all_gates(monkeypatch, tmp_pa
     monkeypatch.setattr(
         release_quad, "_verify_simulink_candidate_state",
         lambda package: calls.append(("simulink", package)) or 0)
+    monkeypatch.setattr(
+        release_quad, "_verify_final_pip_checks",
+        lambda: calls.append("pip-check") or 0)
 
     args = type("Args", (), {"simulink_package": "candidate.zip"})()
     assert release_quad.cmd_done(args) == 0
     assert calls == [
         "preflight", "source", "shadows", "tag", "lab", "100", "phase9", "guard", "main",
-        ("simulink", "candidate.zip")
+        ("simulink", "candidate.zip"), "pip-check"
     ]
 
 
