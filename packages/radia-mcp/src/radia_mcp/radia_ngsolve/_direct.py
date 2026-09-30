@@ -7,21 +7,14 @@ The computational backend supplies the shared acceptance limit.
 """
 from __future__ import annotations
 
-import math
-
 import numpy as np
 
 
-def check_residual(matrix, residual, solution, rhs, free, what):
-    from radia._residual_gate import RELATIVE_LIMIT
+def check_residual(matrix, residual, solution, rhs, free, what, *, reference_norm=0.0):
+    from radia._residual_gate import check_true_residual
 
-    x, r, b = solution[free], residual[free], rhs[free]
-    r_norm = float(np.linalg.norm(r))
-    relative = r_norm / max(float(np.linalg.norm(b)), 1e-300)
-    if np.all(np.isfinite(x)) and math.isfinite(relative) and relative <= RELATIVE_LIMIT:
-        return relative
-    raise RuntimeError(f"{what}: nonfinite solution or true relative residual "
-                       f"{relative:.3e} exceeds {RELATIVE_LIMIT:g}")
+    return check_true_residual(matrix, residual, solution, rhs, free, what,
+                               reference_norm=reference_norm)
 
 
 def solve_symmetric(matrix, freedofs, rhs, what):
