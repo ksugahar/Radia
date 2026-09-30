@@ -364,3 +364,11 @@ error bound. The coarse p3 three-engine maximum core difference is 0.1216%.
 Neither result establishes an energy/coenergy ordering or matched-error
 speed advantage. These historical volume-load calculations do not replace
 the current-default nonlinear and release validation.
+
+### Historical negative result: BDM1 refinement
+
+The archived three-level BDM1 increments did **not** contract: normalized
+core increments were 0.0001627804 and 0.0100149322 (ratio 61.5242).
+The cause remains unresolved. This is not evidence of BDM1 mesh convergence
+or an accuracy certificate. The offline audit now recomputes and retains
+this result alongside the BDM2 results, from the same immutable 2606 records.
