@@ -84,6 +84,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -221,6 +222,30 @@ def _requires_simulink_candidate() -> bool:
 
 def _release_head():
     return _release_commit()
+
+
+def _is_lab_controller() -> bool:
+    """Return whether this process is running on the LAB release controller."""
+    return platform.node().strip().lower() == "lab"
+
+
+def _require_lab_controller(targets: list[str]) -> int:
+    """Refuse editable-tier deployment from a host with the wrong local role.
+
+    ``_deploy_lab`` deliberately operates on the local Python environment,
+    while ``_deploy_100`` reaches 100号機 over SSH.  Running those routes on
+    INTEL11 would otherwise mutate 100号機 when the operator selected LAB and
+    could then verify 100号機 twice.  Compute-only mdx targets remain routable
+    from any controller because both are always remote.
+    """
+    editable_targets = {"lab", "100", "100号機", "100goki", "all"}
+    if editable_targets.intersection(targets) and not _is_lab_controller():
+        fail(
+            "LAB/100 editable deployment must run on LAB: the LAB route is "
+            "local and the 100 route is remote. No installation was attempted."
+        )
+        return 2
+    return 0
 
 
 def cmd_deployment_plan(args):
@@ -1239,9 +1264,14 @@ def cmd_phase8(args):
         fail("preflight failed; refusing Phase 8")
         return rc
 
-    targets = args.target.split(",") if args.target else ["lab", "100"]
+    targets = (
+        [t.strip().lower() for t in args.target.split(",")]
+        if args.target else ["lab", "100"]
+    )
+    rc = _require_lab_controller(targets)
+    if rc != 0:
+        return rc
     for t in targets:
-        t = t.strip().lower()
         if t == "lab":
             rc = _deploy_lab()
             if rc != 0:
