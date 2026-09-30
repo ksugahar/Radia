@@ -121,3 +121,32 @@ def test_axi_current_drive_is_confined_to_driven_region():
     # I = int_0^h int_ri^rs sigma*Vc/r dr dz = sigma*Vc*h*log(rs/ri).
     vc_reference = imposed_current / (conductivity * height * math.log(r_split / r_inner))
     assert abs(vc_value / vc_reference - 1.0) < 1.0e-8
+
+
+def test_axi_coupled_field_matches_voltage_drive_with_passive_conductor():
+    """Nonzero free A DOFs exercise both off-diagonal A-V blocks."""
+    conductivity, omega, imposed = 5.8e7, 2.0 * math.pi * 1000.0, 3.25 - 0.4j
+    mesh = _split_annular_strip(0.01, 0.015, 0.02, 0.006)
+    sigma = ng.CoefficientFunction(conductivity)
+    nu = ng.CoefficientFunction(1.0 / MU0)
+    boundary = "bottom|outer|top|inner"
+    with ng.TaskManager():
+        solution = solve_axi_eddy(mesh, nu, sigma, omega,
+                                  driven_region="driven", total_current=imposed,
+                                  order=2, dirichlet=boundary)
+        a, vc = solution.components
+        assert sum(solution.space.FreeDofs()) > 1  # not only the scalar port
+        voltage = complex(vc(mesh(0.0125, 0.003)))
+        driven = complex(ng.Integrate(sigma * (-1j*omega*a + vc/ng.x), mesh,
+                                      definedon=mesh.Materials("driven")))
+        passive = complex(ng.Integrate(sigma * (-1j*omega*a), mesh,
+                                       definedon=mesh.Materials("passive")))
+        a_voltage = solve_axi_eddy(mesh, nu, sigma, omega,
+                                   driven_region="driven", applied_Vc=voltage,
+                                   order=2, dirichlet=boundary)
+        norm_a = math.sqrt(ng.Integrate(ng.Norm(a)**2, mesh))
+        difference = math.sqrt(ng.Integrate(ng.Norm(a-a_voltage)**2, mesh))
+    assert norm_a > 0
+    assert abs(passive) > 1e-4 * abs(imposed)
+    assert abs(driven/imposed-1) < 1e-8
+    assert difference/norm_a < 1e-8

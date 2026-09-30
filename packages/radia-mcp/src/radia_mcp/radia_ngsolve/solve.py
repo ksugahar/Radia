@@ -4260,6 +4260,21 @@ def axi_vdof_magnet_bz_average(mesh, nu, magnets, gfu):
     return out
 
 
+def _require_off_axis_current_drive(mesh, driven_region):
+    """The constant Vc/r winding field has no finite cross-section at r=0."""
+    from ngsolve import VOL
+
+    selected = {name for name, active in zip(
+        mesh.GetMaterials(), mesh.Materials(driven_region).Mask()) if active}
+    for element in mesh.Elements(VOL):
+        if element.mat in selected and any(
+                mesh.vertices[v.nr].point[0] <= 0.0 for v in element.vertices):
+            raise ValueError(
+                "axisymmetric Vc/r current drive requires r > 0 throughout "
+                "driven_region; a conductor touching r=0 needs a regular "
+                "imposed current-density formulation")
+
+
 def solve_axi_eddy(mesh, nu, sigma, omega, driven_region=None, total_current=None,
                     applied_Vc=None, Jr=None, order=3, dirichlet="axis|outer"):
     """Axisymmetric time-harmonic eddy currents via H1Henrotte.
@@ -4276,6 +4291,8 @@ def solve_axi_eddy(mesh, nu, sigma, omega, driven_region=None, total_current=Non
       int sigma*(-j*w*A + Vc/r) dr dz = I  over ``driven_region``.
       Other conductors in ``sigma`` carry induced eddy current alone; an
       empty or non-conducting ``driven_region`` raises ValueError.
+      The driven cross-section must lie strictly at r > 0; Vc/r is singular
+      for a conductor touching the symmetry axis.
     * ``applied_Vc`` : VOLTAGE-DRIVEN. Vc = r*E_phi is PRESCRIBED (a known
       constant [V/turn/radian]); the cross-section current is
       I = int sigma*(-j*w*A + Vc/r) dr dz.  The source covers
@@ -4292,8 +4309,6 @@ def solve_axi_eddy(mesh, nu, sigma, omega, driven_region=None, total_current=Non
     r = x
 
     if driven_region is not None and total_current is not None:
-        fes_h1 = H1Henrotte(mesh, order=order, complex=True, dirichlet=dirichlet)
-        fes = fes_h1 * NumberSpace(mesh, complex=True)
         if not omega > 0:
             raise ValueError("current-driven axisymmetric A-V solve needs omega > 0: "
                              "the potential is scaled by 1/(j omega)")
@@ -4304,7 +4319,10 @@ def solve_axi_eddy(mesh, nu, sigma, omega, driven_region=None, total_current=Non
         # making the complex bilinear form symmetric.  Restore Vc afterwards.
         # The drive and the constraint act on the driven conductor only; every
         # other conductor keeps its eddy reaction but carries no impressed field.
+        _require_off_axis_current_drive(mesh, driven_region)
         _require_driven_conductor(mesh, sigma, driven_region, 1.0 / r)
+        fes_h1 = H1Henrotte(mesh, order=order, complex=True, dirichlet=dirichlet)
+        fes = fes_h1 * NumberSpace(mesh, complex=True)
         (Az, Vc), (dA, dV) = fes.TnT()
         a = BilinearForm(fes, symmetric=True)
         a += nu * (1.0 / r) * (r * grad(Az)[0] + Az) * (r * grad(dA)[0] + dA) * dx
