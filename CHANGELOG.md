@@ -5,6 +5,15 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- **Planar optics convention unified (2026-10-01).** The right-handed frame
+  uses `x = bend_axis × tangent`, with positive curvature bending toward
+  `-x` and metric `1 + h*x`. `curvature_sign` applies the charge sign to
+  every magnetic harmonic. The independent `gradient_sign` / `GradientSign`
+  options and objective fields were removed; callers must update their
+  keyword and positional arguments. FFAG defaults use charge sign `-1`.
+  Native orbit curvature now follows this convention directly, so native
+  callers must remove any previous extra sign reversal.
+
 - **Restore analytic DtN continued fractions (2026-09-30).** Retirement is
   reversed for the exact/high-order non-reflecting boundary representation,
   including the public helpers, MCP topic and demonstration.
