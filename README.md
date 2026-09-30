@@ -120,7 +120,7 @@ still apply.
 ## Quick start
 
 The current production wheel targets **Windows x64**, **Python 3.12**, and
-**NGSolve/Netgen 6.2.2606**.
+**NGSolve/Netgen 6.2.2607**.
 
 ```powershell
 python -m pip install --upgrade radia
@@ -530,7 +530,7 @@ explicit configuration.
 | Operating system | Windows 10/11 or Windows Server, x64 |
 | Python core | 3.12 |
 | Lightweight radia-mcp | Python 3.10-3.12 |
-| NGSolve / Netgen | 6.2.2606 |
+| NGSolve / Netgen | 6.2.2607 |
 | MATLAB / Simulink package | R2026a, Windows x64 |
 | Coreform Cubit | 2025.12, optional |
 | Native build | Visual Studio 2022, CMake/Ninja, pip `mkl-devel` oneMKL |

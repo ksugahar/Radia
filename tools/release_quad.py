@@ -1066,7 +1066,9 @@ def _deploy_pypi(ssh_host, label, *, python_cmd="python"):
     ps_block = f"""
 $ErrorActionPreference = 'Stop'
 {_solver_install_guard_powershell(python_cmd)}
-{python_cmd} -m pip install --upgrade --force-reinstall --no-deps --no-cache-dir "radia=={v_radia}"
+{python_cmd} -m pip install --upgrade --force-reinstall --no-cache-dir "radia=={v_radia}"
+if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
+{python_cmd} -c "import importlib.metadata as m, ngsolve, radia; assert radia.__version__ == '{v_radia}'; assert ngsolve.__version__ == '6.2.2607'; assert m.version('netgen-mesher') == '6.2.2607'"
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 """
     encoded = base64.b64encode(ps_block.encode("utf-16le")).decode("ascii")
