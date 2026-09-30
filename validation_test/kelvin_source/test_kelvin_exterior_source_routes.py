@@ -56,7 +56,7 @@ import math
 import pytest
 
 from netgen.meshing import IdentificationType
-from netgen.occ import Glue, OCCGeometry, Pnt, Sphere, Vertex
+from netgen.occ import Glue, OCCGeometry, Pnt, Sphere
 from ngsolve import (
     BilinearForm, CoefficientFunction as CF, GridFunction, H1, LinearForm,
     Mesh, Periodic, TaskManager, dx, grad, x, y, z,
@@ -98,10 +98,7 @@ def _build_mesh():
     for f in kext.faces:
         f.name = "kelvin_ext"
 
-    gnd = Vertex(Pnt(*OFFSET))
-    gnd.name = "GND"
-
-    geo = Glue([mag, shell, kext, gnd])
+    geo = Glue([mag, shell, kext])
 
     int_face = ext_face = None
     for s in geo.solids:
@@ -116,6 +113,8 @@ def _build_mesh():
 
     with TaskManager():
         mesh = Mesh(OCCGeometry(geo).GenerateMesh(maxh=MAXH, grading=0.5))
+        from radia.kelvin_geometry import ground_kelvin_scalar_mesh
+        mesh = ground_kelvin_scalar_mesh(mesh, OFFSET, "kelvin_air")
         mesh.Curve(ORDER)
     return mesh
 
@@ -156,7 +155,7 @@ def _solve(mesh, route):
     mu = mesh.MaterialCF(mu_dict, default=MU_0)
 
     h_s = _source_cf(mesh, route)
-    fes = Periodic(H1(mesh, order=ORDER, dirichlet_bbnd="GND"))
+    fes = Periodic(H1(mesh, order=ORDER, dirichlet_bbbnd="GND"))
     u, v = fes.TnT()
 
     with TaskManager():
@@ -177,7 +176,7 @@ def _results():
     """Solve all three routes once and cache."""
     if not _CACHE:
         mesh = _build_mesh()
-        fes_plain = H1(mesh, order=ORDER, dirichlet_bbnd="GND")
+        fes_plain = H1(mesh, order=ORDER, dirichlet_bbbnd="GND")
         slaved = sum(fes_plain.FreeDofs()) - sum(Periodic(fes_plain).FreeDofs())
         assert slaved > 0, \
             f"Kelvin periodic identification constrains no DOF (slaved={slaved})"
