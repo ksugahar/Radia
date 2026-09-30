@@ -41,34 +41,80 @@ double dot(const std::vector<double>& a, const std::vector<double>& b) {
     return result;
 }
 
+double norm(const std::vector<double>& values) {
+    return std::sqrt(std::max(0.0, dot(values, values)));
+}
+
+void true_residual(const CSRMatrix& a, const std::vector<double>& b,
+                   const std::vector<double>& x, std::vector<double>& residual) {
+    matvec(a, x, residual);
+    for (int i = 0; i < a.n; ++i)
+        residual[static_cast<std::size_t>(i)] =
+            b[static_cast<std::size_t>(i)] - residual[static_cast<std::size_t>(i)];
+}
+
 void cg(const CSRMatrix& a, const std::vector<double>& b,
         double tolerance, int max_iterations, std::vector<double>& x) {
     const int n = a.n;
-    std::vector<double> r = b, p, ap;
-    matvec(a, x, ap); // Warm start from the previous accepted temperature.
-    for (int i = 0; i < n; ++i) r[i] -= ap[i];
-    p = r;
-    double rr = dot(r, r);
-    const double target = tolerance * tolerance * std::max(1.0, dot(b, b));
-    for (int iteration = 0; iteration < max_iterations && rr > target; ++iteration) {
+    if (!(tolerance > 0.0) || !std::isfinite(tolerance) || max_iterations < 0)
+        throw std::invalid_argument("invalid IH thermal CG options");
+    const double relative_limit = std::min(tolerance, 1.0e-6);
+
+    std::vector<double> diagonal(static_cast<std::size_t>(n), 0.0);
+    for (int i = 0; i < n; ++i)
+        for (int k = a.row_ptr[i]; k < a.row_ptr[i + 1]; ++k)
+            if (a.col[static_cast<std::size_t>(k)] == i)
+                diagonal[static_cast<std::size_t>(i)] +=
+                    a.value[static_cast<std::size_t>(k)];
+    for (double value : diagonal)
+        if (!(value > 0.0) || !std::isfinite(value))
+            throw std::runtime_error(
+                "IH thermal Jacobi preconditioner requires a positive finite diagonal");
+
+    std::vector<double> r, z(static_cast<std::size_t>(n)), p, ap;
+    true_residual(a, b, x, r); // Warm start from the previous accepted temperature.
+    // The fixed effective load is b-A*x_initial.  Scaling by ||b|| would hide
+    // an unresolved small heat increment behind the much larger stored-energy
+    // term M*T_previous.
+    const double effective_load_norm = norm(r);
+    if (effective_load_norm == 0.0) return;
+    const double target = relative_limit *
+        std::max(effective_load_norm, 1.0e-300);
+    if (norm(r) <= target) return;
+    for (int i = 0; i < n; ++i)
+        z[static_cast<std::size_t>(i)] =
+            r[static_cast<std::size_t>(i)] / diagonal[static_cast<std::size_t>(i)];
+    p = z;
+    double rz = dot(r, z);
+    for (int iteration = 0; iteration < max_iterations; ++iteration) {
         matvec(a, p, ap);
         const double pap = dot(p, ap);
         if (!(pap > 0.0) || !std::isfinite(pap))
             throw std::runtime_error("IH thermal matrix is not positive definite");
-        const double alpha = rr / pap;
+        const double alpha = rz / pap;
         for (int i = 0; i < n; ++i) {
             x[static_cast<std::size_t>(i)] += alpha * p[static_cast<std::size_t>(i)];
             r[static_cast<std::size_t>(i)] -= alpha * ap[static_cast<std::size_t>(i)];
         }
-        const double next_rr = dot(r, r);
-        if (next_rr <= target) return;
-        const double beta = next_rr / rr;
+        if (norm(r) <= target) {
+            true_residual(a, b, x, r);
+            if (norm(r) <= target) return;
+        }
         for (int i = 0; i < n; ++i)
-            p[static_cast<std::size_t>(i)] = r[static_cast<std::size_t>(i)] +
+            z[static_cast<std::size_t>(i)] =
+                r[static_cast<std::size_t>(i)] / diagonal[static_cast<std::size_t>(i)];
+        const double next_rz = dot(r, z);
+        if (!(next_rz >= 0.0) || !std::isfinite(next_rz))
+            throw std::runtime_error("IH thermal CG residual is not finite");
+        const double beta = next_rz / rz;
+        for (int i = 0; i < n; ++i)
+            p[static_cast<std::size_t>(i)] = z[static_cast<std::size_t>(i)] +
                 beta * p[static_cast<std::size_t>(i)];
-        rr = next_rr;
+        rz = next_rz;
     }
-    if (rr > target) throw std::runtime_error("IH thermal CG did not converge");
+    true_residual(a, b, x, r);
+    if (norm(r) > target)
+        throw std::runtime_error("IH thermal CG true relative residual exceeds 1e-6");
 }
 
 }  // namespace
@@ -122,7 +168,10 @@ void advance_thermal(const CSRMatrix& mass, const CSRMatrix& stiffness,
     if (convection)
         for (std::size_t k = 0; k < system.value.size(); ++k)
             system.value[k] += options.dt_s * options.convection_W_per_m2K * convection->value[k];
-    cg(system, rhs, options.tolerance, options.max_iterations, state.temperature_K);
+    std::vector<double> accepted_temperature = state.temperature_K;
+    cg(system, rhs, options.tolerance, options.max_iterations,
+       accepted_temperature);
+    state.temperature_K.swap(accepted_temperature);
     state.time_s += options.dt_s;
     state.previous_angle_rad = angle_now_rad;
 }
