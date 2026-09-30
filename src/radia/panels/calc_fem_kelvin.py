@@ -49,10 +49,37 @@ MAX_RESIDUAL_CORRECTIONS = 3
 # surface loss (the thermal power gate then compares against the solved loss)
 QSURF_P1_TOLERANCE = 0.02
 
+# V-cycles of the AMS wirebasket solve per BDDC application (the native
+# default is 1).  Measured on the IH FEM-SIBC system at 150 kHz, p=2/3, two
+# shapes and two meshes (validation_test/induction_heating/results/
+# bddc_ams_coarse_ih_2607.json): with the edge-only wirebasket below the
+# iterations stop falling at 3; wall time is the fastest of all 10 settings
+# or within 3.4 % of it, except 6.5 % on the smallest (15 s) case.
+BDDC_AMS_COARSE_CYCLES = 3
+
 
 def _log(msg):
     """Write progress to stderr (panel reads these)."""
     progress("FEM", msg)
+
+
+def _edge_only_wirebasket(fes, mesh):
+    """Keep only lowest-order edge DOFs in the BDDC wirebasket.
+
+    The AMS coarse solver is built for the lowest-order edge space, but
+    HCurl puts the face DOFs of badly shaped faces into the wirebasket (on
+    the IH tube mesh: all four faces of one air tetrahedron at the coil ring
+    surface, 8 of 164222 DOFs), where AMS only smooths them.  They raised the
+    COCR iterations by up to 4x; they are returned to INTERFACE, as
+    src/ext/sparsesolv/README.md recommends.  Returns how many DOFs changed.
+    """
+    from ngsolve import COUPLING_TYPE
+    changed = 0
+    for dof in range(mesh.nedge, fes.ndof):
+        if fes.CouplingType(dof) == COUPLING_TYPE.WIREBASKET_DOF:
+            fes.SetCouplingType(dof, COUPLING_TYPE.INTERFACE_DOF)
+            changed += 1
+    return changed
 
 
 def _kelvin_gradient_gauge(fes, mesh):
@@ -473,6 +500,7 @@ def solve_fem(vol_file="", fes_order=1,
         fes = base_fes
     direct_free = fes.FreeDofs()
     kelvin_gauge_dofs = 0
+    wirebasket_dofs_returned = None     # set by the BDDC route only
     if has_kelvin and has_kelvin_periodic:
         direct_free, kelvin_gauge_dofs = _kelvin_gradient_gauge(fes, mesh)
     u, v = fes.TnT()
@@ -889,7 +917,9 @@ def solve_fem(vol_file="", fes_order=1,
                     "space; use --solver sparsecholesky (or auto, which "
                     "selects it there)"}
             import radia.sparsesolv_ngsolve as ssn
-            pre = Preconditioner(a_bf, "bddc", coarsetype="sparsesolv_ams")
+            wirebasket_dofs_returned = _edge_only_wirebasket(fes, mesh)
+            pre = Preconditioner(a_bf, "bddc", coarsetype="sparsesolv_ams",
+                                 coarseflags={"cycles": BDDC_AMS_COARSE_CYCLES})
             a_bf.Assemble()
             # BVP reads f_lf.vec; for PEEC, rhs_vec includes the Robin
             # surface term from A_s. Copy into f_lf.vec if they differ.
@@ -1529,6 +1559,8 @@ def solve_fem(vol_file="", fes_order=1,
         "linear_krylov_iterations": krylov_iterations,
         "linear_residual_corrections": len(residual_history),
         "linear_residual_before_corrections": residual_history,
+        "bddc_ams_coarse_cycles": (BDDC_AMS_COARSE_CYCLES if solver == "bddc" else None),
+        "bddc_wirebasket_dofs_returned": wirebasket_dofs_returned,
         "P_total": float(P_total),
         "Q_total": float(Q_total),
         "L": float(L),

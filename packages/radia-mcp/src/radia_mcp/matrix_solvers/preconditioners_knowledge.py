@@ -271,8 +271,14 @@ See https://hypre.readthedocs.io/en/latest/solvers-ams.html#high-order-discretiz
 
 **AMS as the BDDC wirebasket (coarse) solver: measured faster at p=2.**
 The tested runs restrict the HCurl wirebasket to lowest-order edges; the
-default wirebasket may also contain face dofs. Importing sparsesolv registers `coarsetype="sparsesolv_ams"` for NGSolve's BDDC
-(`coarseflags={"cycles": 4}`). On the Hiruma 30 kHz problem (p=2, eps*nu mass
+default wirebasket may also contain face dofs. Importing sparsesolv registers `coarsetype="sparsesolv_ams"` for NGSolve's BDDC;
+pass the V-cycle count explicitly (`coarseflags={"cycles": k}`, native default 1).
+The IH FEM-SIBC route (`calc_fem_kelvin`) fixes k=3 with the edge-only
+wirebasket: at 150 kHz, p=2/3, 164k-1.06M dof, the iterations stop falling at
+k=3; on p=3 the time is 0.60-0.77x the k=1 NGSolve-wirebasket setting where
+HCurl marked face dofs, 0.97x where it marked none
+(`validation_test/induction_heating/results/bddc_ams_coarse_ih_2607.json`).
+On the Hiruma 30 kHz problem (p=2, eps*nu mass
 1e-6, COCR 1e-8, mdx1, 8 threads, 2026-09-27) wall time against the direct
 wirebasket factorization: 680k dof 174 s -> 77 s (11.6 -> 1.3 GB), 865k dof
 268 s -> 151 s (15.8 -> 1.6 GB); at 1.46M dof the direct factorization
