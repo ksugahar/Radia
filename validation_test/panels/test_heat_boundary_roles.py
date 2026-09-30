@@ -514,3 +514,34 @@ def _caller_taskmanager():
     from ngsolve import TaskManager
     with TaskManager():
         yield
+
+
+@pytest.mark.parametrize("axisymmetric", [False, True])
+def test_distinct_convection_labels_match_series_thermal_resistance(axisymmetric):
+    """Two ambient reservoirs produce an independent 1D steady solution."""
+    mesh = _annulus_section_mesh() if axisymmetric else _slab_mesh()
+    solve = calc_heat_axisym.solve_heat_axisym if axisymmetric else calc_heat.solve_heat
+    probe = (1.5, 0.5) if axisymmetric else (0.5, 0.5, 0.5)
+    mapping = {
+        "cooled": {"h_W_m2K": 2.0, "ambient_C": 10.0},
+        "heated": {"h_W_m2K": 5.0, "ambient_C": 40.0},
+    }
+    result = solve(
+        "<in-memory>", material="custom", rho=1.0, cp=1.0, k=1.0,
+        t_initial=20.0, heat_flux_boundaries="heated", q_uniform=0.0,
+        convection_map=mapping, dt=0.1, t_end=20.0, fes_order=2,
+        probe_point=probe, _wp_mesh=mesh, _write_solution=False,
+    )
+    assert "error" not in result, result
+    if axisymmetric:
+        flux_factor = 30.0 / (1.0 / 2.0 + math.log(2.0) + 1.0 / 10.0)
+        expected = 10.0 + flux_factor * (0.5 + math.log(1.5))
+    else:
+        flux = 30.0 / (0.5 + 1.0 + 0.2)
+        expected = 10.0 + flux * (0.5 + 0.5)
+    assert result["T_probe_history_C"][-1] == pytest.approx(expected, abs=0.02)
+    assert result["h_conv_W_m2K"] is None
+    applied = {term["selector"]: term for term in result["convection_by_boundary"]}
+    assert applied["cooled"]["ambient_C"] == 10.0
+    assert applied["heated"]["h_W_m2K"] == 5.0
+    assert set(applied) == {"cooled", "heated"}

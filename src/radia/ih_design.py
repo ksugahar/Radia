@@ -246,6 +246,7 @@ class IHDesignSpec:
     # Repairs applied by normalize_geometry_roles, newest last.  Kept on
     # the spec so the Simulink runner / MCP callers can surface them.
     geometry_role_notes: tuple[str, ...] = ()
+    convection_map: str = ""
 
     def __post_init__(self) -> None:
         if self.surface_label is not None:
@@ -387,7 +388,7 @@ class IHDesignSpec:
         if thermal:
             fields.update({
                 "thermal_mesh_type", "heat_source", "heat_flux_boundaries",
-                "convection_boundaries", "radiation_boundaries",
+                "convection_boundaries", "convection_map", "radiation_boundaries",
                 "thermal_material", "override_kcprho", "rho", "cp", "k",
                 "h_conv", "t_ext", "emissivity", "t_init", "time_scheme",
                 "dt", "t_end", "linear_solver", "thermal_fes_order",
@@ -446,7 +447,7 @@ class IHDesignSpec:
                 convection_active = float(self.h_conv) != 0.0
             except (TypeError, ValueError):
                 convection_active = True
-            if convection_active:
+            if convection_active and not self.convection_map:
                 need(self.convection_boundaries,
                      "Convection boundary selector")
             try:
@@ -770,7 +771,9 @@ class IHDesignSpec:
         boundary_missing = []
         if not self.heat_flux_boundaries.strip():
             boundary_missing.append("heat_flux_boundaries")
-        if float(self.h_conv) != 0.0 and not self.convection_boundaries.strip():
+        if self.convection_map and self.convection_boundaries.strip():
+            raise ValueError("convection_map and convection_boundaries are mutually exclusive")
+        if float(self.h_conv) != 0.0 and not self.convection_map and not self.convection_boundaries.strip():
             boundary_missing.append("convection_boundaries")
         if (float(self.emissivity) != 0.0
                 and not self.radiation_boundaries.strip()):
@@ -805,6 +808,8 @@ class IHDesignSpec:
         if not is_axisym:
             cmd += ["--rotation-axis", str(self.rotation_axis)]
 
+        if self.convection_map:
+            cmd += ["--convection-map", self.convection_map]
         if self.convection_boundaries:
             cmd += ["--convection-boundaries", self.convection_boundaries]
         if self.radiation_boundaries:

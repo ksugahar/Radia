@@ -97,7 +97,7 @@ from calc_heat import (  # noqa: E402
     _input_mesh_geometry_audit,
     _locate_probe,
     _probe_value,
-    _resolve_boundary_role,
+    _resolve_boundary_role, _resolve_convection_roles,
     _resolve_material,
     _temperature_extrema,
 )
@@ -331,7 +331,7 @@ def solve_heat_em_table(wp_vol, em_table_path,
                          probe_point=None,
                          csv_output="",
                          allow_table_extrapolation=False,
-                         allow_frozen_ht=False):
+                         allow_frozen_ht=False, convection_map=None):
     """Backward-Euler heat solve with per-step 2D-table q_surf lookup."""
     setup_paths()
     t0 = time.perf_counter()
@@ -376,9 +376,8 @@ def solve_heat_em_table(wp_vol, em_table_path,
         heat_flux_selector, heat_flux_names = _resolve_boundary_role(
             wp_mesh, heat_flux_boundaries, "--heat-flux-boundaries",
             required=True)
-        convection_selector, convection_names = _resolve_boundary_role(
-            wp_mesh, convection_boundaries, "--convection-boundaries",
-            required=float(h_conv) != 0.0)
+        convection_selector, convection_names, convection_terms, resolved_convection_map = _resolve_convection_roles(
+            wp_mesh, convection_map, convection_boundaries, h_conv, t_ext)
         radiation_selector, radiation_names = _resolve_boundary_role(
             wp_mesh, radiation_boundaries, "--radiation-boundaries",
             required=float(emissivity) != 0.0)
@@ -473,8 +472,8 @@ def solve_heat_em_table(wp_vol, em_table_path,
 
     a_form = BilinearForm(fes_T, symmetric=True)
     a_form += K_cf * InnerProduct(grad(u), grad(v)) * dx
-    if float(h_conv) != 0.0:
-        a_form += float(h_conv) * v * u * ds(convection_selector)
+    for term in convection_terms:
+        a_form += term["h_W_m2K"] * v * u * ds(term["selector"])
     a_form.Assemble()
 
     m_form = BilinearForm(fes_T, symmetric=True)
@@ -564,9 +563,9 @@ def solve_heat_em_table(wp_vol, em_table_path,
 
         f_form = LinearForm(fes_T)
         f_form += gf_q * v * ds(heat_flux_selector)
-        if float(h_conv) != 0.0:
-            f_form += float(h_conv) * float(t_ext) * v \
-                * ds(convection_selector)
+        for term in convection_terms:
+            f_form += term["h_W_m2K"] * term["ambient_C"] * v \
+                * ds(term["selector"])
         if float(emissivity) > 0.0:        # radiation (explicit, prev-step T, in K)
             _TK = gfT + 273.15
             f_form += -float(emissivity) * SIGMA_SB \
@@ -644,6 +643,7 @@ def solve_heat_em_table(wp_vol, em_table_path,
         "surface_area_m2": A_surf,
         "heat_flux_boundaries": heat_flux_selector,
         "convection_boundaries": convection_selector,
+        "convection_by_boundary": convection_terms,
         "radiation_boundaries": radiation_selector,
         "boundary_audit": {
             "heat_flux": heat_flux_audit,
@@ -754,6 +754,9 @@ def main():
 
     parser.add_argument("--heat-flux-boundaries", default="",
                         help="Required boundary expression receiving q_surf.")
+    parser.add_argument("--convection-map", default="",
+                        help="JSON map of exact boundary labels to h_W_m2K and ambient_C; "
+                             "unlisted faces have no convection.")
     parser.add_argument("--convection-boundaries", default="",
                         help="Boundary expression receiving convection; "
                              "required when --h-conv is nonzero.")
@@ -808,6 +811,7 @@ def main():
             t_initial=args.t_initial, emissivity=args.emissivity,
             heat_flux_boundaries=args.heat_flux_boundaries,
             convection_boundaries=args.convection_boundaries,
+            convection_map=args.convection_map,
             radiation_boundaries=args.radiation_boundaries,
             dt=args.dt, t_end=args.t_end,
             fes_order=args.fes_order,
