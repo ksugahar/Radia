@@ -233,6 +233,9 @@ def test_unc_normalization_covers_canonical_and_release_worktrees():
     assert release_quad._norm_path(legacy_root_unc) == (
         "s:/radia/01_github/packages/radia-mcp"
     )
+    assert release_quad._norm_path(
+        r"W:\00_CAE\Radia\01_GitHub\src\radia\__init__.py"
+    ) == "s:/radia/01_github/src/radia/__init__.py"
     assert "//192.168.121.100/work/00_cae/radia/" in (
         release_quad.REMOTE_EDITABLE_VERIFY
     )
