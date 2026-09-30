@@ -37,6 +37,15 @@ SIBC in one regime: a ferromagnetic workpiece (typically steel /
 electrical steel) driven hard enough that the surface H_t traverses
 the BH knee.
 
+## Current command-line support boundary
+
+The scalar weak-coupling path does not support per-panel ESIM or P2 BEM.
+The strong path requires linear SIBC. `--esim-per-panel` exists as a parser
+option but is not a working production coupling. The BEM solver now rejects
+nonuniform Z_s: source-side weighted stiffness K_gamma and local loss
+integration are pending. Per-element discussions and saved examples below
+are historical/method descriptions, not commands to run on this CLI.
+
 ## Decision table
 
 | Workpiece                                      | Drive level         | Use |
@@ -44,7 +53,7 @@ the BH knee.
 | Cu / Al / brass (mu_r ~ 1)                     | any                 | --impedance-model sibc (linear Dowell) |
 | Steel, |H_t| stays well below knee (~ 100 A/m) | low                 | --impedance-model sibc --mu-r 100 (constant mu_r) |
 | Steel, |H_t| straddles knee (~ 1 kA/m)         | mid                 | **--impedance-model esim --bh-file <bh.txt>** |
-| Steel, deep saturation                         | high                | **--impedance-model esim --esim-per-panel** (BEM path only) |
+| Steel, deep saturation                         | high                | not supported by the production BEM CLI; requires a validated local coupling |
 | Lossy ferrite (Mn-Zn, Ni-Zn)                   | any                 | currently Python-API only (complex_mu kwarg); CLI does not yet expose |
 
 ## Cost vs benefit
@@ -489,7 +498,7 @@ ESIM_USAGE_TROUBLESHOOTING = """
 | `BIE iv overflow` / NaN seed                       | very high xi (R/delta > 100)  | Cell solver uses thin-skin fallback automatically (v4.46.1+); upgrade radia |
 | Per-element runs but stagnates around dZ_max=0.3   | BH-knee-straddling DOFs       | Try --esim-relax 0.2; if still stuck, P_wp is usually stable to ~1% anyway |
 | Per-element stalls at iter=30 in I=500 A f>=20 kHz band | high-current high-freq limit cycle | See `convergence` topic, "Operating-regime stall map" -- not fixable by raising max_iter |
-| `{"error": "No module named 'radia.<X>'"}` in JSON, returncode 0 | transient NAS-share import flicker under heavy 100bangoki OCR load | radia >= 4.92.0: calc_main now exits non-zero on any error (commit `5b88b67f`).  Sweep wrappers see returncode != 0 and can retry.  validation_test/ih_esim_benchmark/sweep_f_I.py has auto-recover for cached error JSONs (commit `1795e078`). |
+| `{"error": "No module named 'radia.<X>'"}` in JSON, returncode 0 | transient NAS-share import flicker under heavy validation host OCR load | radia >= 4.92.0: calc_main now exits non-zero on any error (commit `5b88b67f`).  Sweep wrappers see returncode != 0 and can retry.  validation_test/ih_esim_benchmark/sweep_f_I.py has auto-recover for cached error JSONs (commit `1795e078`). |
 
 ## Sanity checks
 
@@ -798,7 +807,7 @@ Reference field --ht-source:
     python calc_heat_with_em_table.py \\
         --wp-vol workpiece.vol --em-table em_table_steel_50kHz.npz \\
         --ht-source kelvin --ht-sol run_Jsurf.sol --em-vol run_fem.vol \\
-        --I-ref 1000 --coil-current 1200 --dt 0.5 --t-end 60
+        --I-ref 1000 --coil-current 1200 --dt 0.5 --t-end 60 --allow-frozen-ht
 
 --coil-current-csv <t_s,I_A> gives a time-varying current (clamped).
 
@@ -808,14 +817,21 @@ Reference field --ht-source:
                                             projection + image-factor
                                             vs analytical circular loop
 
-## When to prefer this over --impedance esim (Karl)
+## Frozen-field limitation
+
+`--allow-frozen-ht` explicitly acknowledges that this table does not re-solve
+EM backreaction as temperature changes. Do not recommend it for a Curie-band
+crossing or strong field redistribution. Re-solving the coupled EM problem is
+required to establish accuracy there.
+
+## Restricted use of a frozen field
   - You need the WHOLE heat-up transient (many timesteps), not one EM
     operating point.
   - sigma(T) / mu(T) move enough during heating that a single Z_s is
     wrong, but re-solving the EM per step is too expensive.
   - The |H_t| spatial shape is roughly current-independent (true in the
-    weak-redistribution regime; re-run the kelvin reference at a
-    representative T if a Curie band sweeps across the part).
+    weak-redistribution regime only; this assumption is not established by
+    one reference solve when a Curie band sweeps across the part).
 """
 
 

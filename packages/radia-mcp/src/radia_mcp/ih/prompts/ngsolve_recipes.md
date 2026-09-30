@@ -11,89 +11,29 @@ code follows the lab's policies:
 - Shifted preconditioner for air + conductor problems
 - No fallback chains (fail-fast)
 
-## Recipe 1: Scalar BIE + SIBC Robin term with COCR + ComplexCompactAMS
+## Recipe 1: Uniform scalar BIE + SIBC
 
-Production reference: `src/radia/bem_sibc_solver.py::ScalarBIESIBCSolver`.
+Production reference: `radia.bem_sibc_solver.ScalarBIESIBCSolver`.
+The implemented surface equation is
+`(0.5 M - DL + gamma SL M^-1 K) phi = rhs`, with a mean-potential
+Lagrange multiplier and uniform `gamma = Z_s / (1j omega mu0)`.
+Use the assembled solver's `solve(phi_inc, Z_s, omega)` for dense solving,
+`solve_hacapk(...)` for its assembled HACApK operator, or
+`solve_iterative(...)` for its matrix-free operator. Iterative paths use GMRES,
+not HCurl AMS or COCR. Caller owns NGSolve TaskManager where required.
 
-```python
-from ngsolve import (Mesh, H1, BilinearForm, LinearForm, GridFunction,
-                     grad, ds, dx, InnerProduct, specialcf)
-from ngsolve.bem import LaplaceDL, LaplaceSL, SingleLayerPotential
-import radia.sparsesolv_ngsolve as ssn
+All three paths recompute the augmented true residual against the fixed load
+norm and require the shared `RELATIVE_LIMIT = 1e-6`; GMRES nonconvergence raises.
+Returned `linear_residual_rel` and `linear_residual_limit` expose this check.
 
-# Surface H1 space (BND only)
-fes = H1(mesh, order=1, definedon=mesh.Boundaries("wp_bnd"))
-u, v = fes.TnT()
+## Recipe 2: Variable impedance is not implemented in scalar BEM
 
-# System: (1/2 M - DL + gamma * SL * M^-1 * K) phi = M phi_inc
-# gamma = Z_s / (jw * mu0)  -- complex
-gamma = Zs / (1j * omega * mu0)
-
-M = BilinearForm(fes); M += u*v*ds; M.Assemble()
-K = BilinearForm(fes); K += grad(u).Trace() * grad(v).Trace() * ds; K.Assemble()
-DL = LaplaceDL(fes, fes).Assemble()
-SL = LaplaceSL(fes, fes).Assemble()
-
-# Build A = 0.5 * M - DL + gamma * SL * M^-1 * K (Lagrange mult for gauge)
-# ... assembly details in bem_sibc_solver.py
-
-# COCR solver (Sogabe-Zhang 2007) for complex symmetric system
-solver = ssn.COCRSolver(
-    matrix=A, preconditioner=prec,
-    tol=1e-7, maxiter=400
-)
-phi.vec.data = solver * f.vec
-```
-
-**When to use**: BEM Scalar BIE (no FEM volume), nonlinear ESIM
-workpieces via Karl outer iteration. Reference: lab 2026-04-13
-Smythe sphere validation (-1.6% accuracy).
-
-## Recipe 2: Per-node Z_s array via per-panel curvature extraction
-
-Production reference: `src/radia/panels/calc_inductance.py::
-_compute_panel_local_radii` and `_build_per_node_Zs`.
-
-```python
-import numpy as np
-from ngsolve import H1, GridFunction, SurfaceL2
-
-def per_node_curvature_h1(mesh, surface_label, percentile=10):
-    # Discrete normal-angle radius extractor on a workpiece surface.
-    # Returns one R_local per H1 vertex on `surface_label`. Used to
-    # compute per-node Z_s for the SIBC Robin block.
-    fes_p1 = H1(mesh, order=1, definedon=mesh.Boundaries(surface_label))
-    ndof = fes_p1.ndof
-    R_local = np.zeros(ndof)
-
-    # Build panel adjacency from BND elements
-    panels = list(mesh.Boundaries(surface_label).Elements())
-    # ... per-panel normal, centroid, neighbor pairs (see calc_inductance.py)
-
-    # For each panel: angle_ij = arccos(n_i . n_j), dist_ij = |c_j - c_i|
-    # R_ij = dist_ij / angle_ij ; R_panel[i] = percentile(R_ij, 10)
-    R_panel = compute_per_panel_R(panels, percentile=percentile)
-
-    # Adaptive sliver clamp: R_floor[i] = 0.5 * panel_diameter[i]
-    R_panel = np.maximum(R_panel, 0.5 * panel_diameters)
-
-    # Vertex averaging to project panel -> H1 nodes
-    for vid in range(ndof):
-        neighbor_panels = vertex_to_panels[vid]
-        R_local[vid] = np.mean([R_panel[p] for p in neighbor_panels])
-
-    return R_local
-
-# Use per-node Z_s in ScalarBIESIBCSolver
-R_local = per_node_curvature_h1(mesh, "wp_bnd")
-Zs_per_node = (1 + 1j) / (sigma * skin_depth(omega, mu0*mur, sigma)) * \
-              (1 + (1 + 1j)/2 * skin_depth(omega, mu0*mur, sigma) / R_local)
-solver.solve(phi_inc, Z_s=Zs_per_node, omega=omega)   # ndarray accepted
-```
-
-**Validation** (lab 2026-04-12, prolate spheroid `a/b=4`):
-- Cu 10 Hz, scalar(mean R): -11.2% error
-- Cu 10 Hz, per-node(mesh): +3.1% error (4x improvement)
+A scalar or constant nodal array is accepted. A nonuniform `Z_s` array raises
+`NotImplementedError`. Multiplying output rows by impedance is not equivalent
+to source-side weighted surface stiffness `K_gamma` followed by `SL M^-1`.
+Correct variable-coefficient assembly and local loss integration still need
+implementation and independent validation. Curvature or ESIM cell values must
+not be fed into the removed output-row scaling route.
 
 ## Recipe 3: FEM + Kelvin + Robin BC (hole approach)
 
