@@ -5,7 +5,6 @@ from pathlib import Path
 
 import ngsolve as ng
 import pytest
-from radia._residual_gate import RELATIVE_LIMIT
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src" / "radia" / "panels"))
@@ -13,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import calc_fem_kelvin as solver
 import fem_sibc_geometry as geometry
 from radia.em_material import EMMaterial
+from radia._residual_gate import RELATIVE_LIMIT
 
 
 @pytest.mark.parametrize("order", [1, 2, 3])
@@ -44,6 +44,9 @@ def test_ams_matches_direct_sibc_loss_and_inductance(tmp_path, order):
         assert result["linear_true_relative_residual"] <= RELATIVE_LIMIT
     assert iterative["P_total"] == pytest.approx(direct["P_total"], rel=1e-6)
     assert iterative["L"] == pytest.approx(direct["L"], rel=1e-6)
+    if order > 1:
+        assert iterative["bddc_ams_coarse_cycles"] == solver.BDDC_AMS_COARSE_CYCLES
+        assert iterative["bddc_wirebasket_dofs_returned"] >= 0
 
     if order == 1:
         scattered = solver.solve_fem(**arguments, solver="sparsecholesky", formulation="scattered")
