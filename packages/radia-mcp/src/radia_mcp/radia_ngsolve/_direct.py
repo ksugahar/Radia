@@ -22,24 +22,6 @@ def check_residual(matrix, residual, solution, rhs, free, what):
                        f"{relative:.3e} exceeds 1e-8")
 
 
-def solve_nonsymmetric(matrix, freedofs, rhs, what):
-    """UMFPACK LU for the axisymmetric A-V net-current system, residual-checked.
-
-    The planar A-V systems are symmetrized by the 1/s-scaled potential
-    W = Vc / (j omega) (Kameari) and use :func:`solve_symmetric`.  In
-    ``solve_axi_eddy`` the constraint weights A by r but the A row does not, so
-    the same scaling leaves it nonsymmetric; its current definition is open, and
-    until it is settled this is the one LU use."""
-    solution = rhs.CreateVector()
-    solution.data = matrix.Inverse(freedofs, inverse="umfpack") * rhs
-    residual = rhs.CreateVector()
-    residual.data = rhs - matrix * solution
-    free = np.fromiter((bool(bit) for bit in freedofs), dtype=bool, count=len(solution))
-    check_residual(matrix, residual.FV().NumPy(), solution.FV().NumPy(),
-                   rhs.FV().NumPy(), free, what)
-    return solution
-
-
 def solve_symmetric(matrix, freedofs, rhs, what):
     """Return ``A^-1 rhs`` on the free rows (zero elsewhere), residual-checked."""
     solution = rhs.CreateVector()

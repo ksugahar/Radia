@@ -143,7 +143,7 @@ A = solve_axi_magnetostatic_nonlinear(mesh, nu_of_B, Jr=Jr_cf, relax=0.5)
 
 # eddy / AC, current-driven (Vc = r*E_phi, NumberSpace):
 gfu = solve_axi_eddy(mesh, nu, sigma, omega,
-        driven_region="wire", total_current=I)         # I = 2pi int J_phi r dr dz
+        driven_region="wire", total_current=I)         # I = int J_phi dr dz
 Az, Vc = gfu.components
 # voltage-driven (Vc = r*E_phi prescribed):
 Az = solve_axi_eddy(mesh, nu, sigma, omega, applied_Vc=Vc)
