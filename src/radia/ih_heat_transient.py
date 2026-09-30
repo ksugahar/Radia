@@ -40,6 +40,20 @@ SIGMA_SB = 5.670374419e-8
 KELVIN = 273.15
 
 
+def checked_heat_increment(matrix, inverse, rhs, freedofs, *, reference_norm=0.0):
+    """Solve a correction and check free-row true residual before any state update."""
+    from ._residual_gate import check_true_residual
+    delta = rhs.CreateVector()
+    delta.data = inverse * rhs
+    residual = rhs.CreateVector()
+    residual.data = rhs - matrix * delta
+    relative = check_true_residual(
+        matrix, residual.FV().NumPy(), delta.FV().NumPy(), rhs.FV().NumPy(),
+        np.asarray(freedofs, dtype=bool), "IH heat increment",
+        reference_norm=reference_norm)
+    return delta, relative
+
+
 @dataclass
 class HeatBoundaryTerms:
     heat_flux: str = ""
@@ -62,6 +76,7 @@ class TransientAudit:
     energy_loss_J: float = 0.0
     energy_stored_J: float = 0.0
     table_extrapolation_C: float = 0.0
+    linear_true_residual_max: float = 0.0
 
     def as_dict(self):
         """Report throughput closure and a separate net-storage diagnostic.
@@ -94,6 +109,7 @@ class TransientAudit:
             "energy_storage_relative_error": float(storage_relative),
             "energy_storage_normalization": "max(abs(input-loss), abs(stored))",
             "table_extrapolation_C": self.table_extrapolation_C,
+            "linear_true_residual_max": self.linear_true_residual_max,
         }
 
 
@@ -379,7 +395,7 @@ class NonlinearHeatStepper:
         R, J = self._forms
         self._rdt.Set(1.0 / dt)
         self.gf_old.vec.data = self.gfT.vec
-        du = self.gfT.vec.CreateVector()
+        reference_norm = None
         for it in range(1, self.max_newton + 1):
             if self.q_update is not None:
                 self.q_update(self.gfT)
@@ -388,7 +404,20 @@ class NonlinearHeatStepper:
             J.Assemble()
             inv = J.mat.Inverse(self.fes.FreeDofs(),
                                 inverse=self.linear_solver)
-            du.data = inv * R.vec
+            if reference_norm is None:
+                free = np.asarray(self.fes.FreeDofs(), dtype=bool)
+                reference_norm = float(np.linalg.norm(R.vec.FV().NumPy()[free]))
+            try:
+                du, relative = checked_heat_increment(
+                    J.mat, inv, R.vec, self.fes.FreeDofs(),
+                    reference_norm=reference_norm)
+            except RuntimeError:
+                self.gfT.vec.data = self.gf_old.vec
+                if self.q_update is not None:
+                    self.q_update(self.gfT)
+                raise
+            self.audit.linear_true_residual_max = max(
+                self.audit.linear_true_residual_max, relative)
             self.gfT.vec.data -= du
             # Higher-order edge/interior corrections must also converge.
             step = float(np.max(np.abs(du.FV().NumPy())))

@@ -808,6 +808,8 @@ def solve_heat(wp_vol,
     T_max_history = [float(t_initial)]
     n_steps = int(math.ceil(t_end / dt))
     Q_input_J = 0.0
+    linear_true_residual_max = 0.0
+    from radia.ih_heat_transient import checked_heat_increment
     heat_flux_audit = _boundary_role_audit(
         wp_mesh, heat_flux_names, q_cf=q_cf)
     convection_audit = _boundary_role_audit(wp_mesh, convection_names)
@@ -842,7 +844,10 @@ def solve_heat(wp_vol,
             f_form.Assemble()
             with TaskManager():
                 res_vec.data = f_form.vec - a_form.mat * gfT.vec
-                gfT.vec.data += float(dt) * (inv * res_vec)
+                delta, relative = checked_heat_increment(
+                    mstar, inv, res_vec, fes_T.FreeDofs())
+                linear_true_residual_max = max(linear_true_residual_max, relative)
+                gfT.vec.data += float(dt) * delta
         if rotation_active:
             # the step-averaged source changes with the angle
             heat_flux_audit = _boundary_role_audit(
@@ -1024,6 +1029,8 @@ def solve_heat(wp_vol,
         "T_probe_history_C": T_probe if probe_point is not None else None,
         "t_history_s": t_arr,
         "Q_input_J": Q_input_J,
+        "linear_true_residual_max": (stepper.audit.linear_true_residual_max
+                                     if nonlinear else linear_true_residual_max),
         "q_surf_int_W": q_int,
         "surface_area_m2": A_surf,
         "n_steps": n_steps,
