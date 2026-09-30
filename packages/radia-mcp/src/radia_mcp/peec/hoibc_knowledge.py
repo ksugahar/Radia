@@ -410,14 +410,14 @@ from ngsolve import (H1, BilinearForm, LinearForm, grad, dx, ds,
 
 # Surface curvature: NGSolve 6.2.2603 does NOT expose a direct
 # MeanCurvature CF.  Options:
-#   (a) Pass user-known R_curv as scalar (simplest; what
-#       calc_fem_kelvin.py --mitzner-radius does today)
+#   (a) Pass user-known R_curv as scalar in a research implementation.
+#       calc_fem_kelvin.py does not expose --mitzner-radius.
 #   (b) Compute trace of Weingarten map via specialcf.Weingarten(3)
 #       (3D; needs surface FE machinery)
 #   (c) Provide a per-element curvature CF from the CAD origin
 #       (NGSolve's OCC geometry has access)
 #
-# For Phase 1 implementation we use Option (a) -- one R_curv scalar.
+# This proposed example uses Option (a) -- one R_curv scalar.
 # For non-uniform surfaces, sub-divide by material region or pass a
 # H1(boundary=true) curvature GridFunction.
 
