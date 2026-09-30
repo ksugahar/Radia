@@ -24,6 +24,13 @@ on:
       - 'matlab/+radia/+simulink/validateIHNativeConfig.m'
       - 'tests/matlab/test_ih_sparse_inputs.m'
       - 'matlab/+radia/+internal/nextIHNativeHandle.m'
+      - 'matlab/+radia/+internal/selectedPythonExecutable.m'
+      - 'matlab/+radia/+internal/resolveAssemblyPython.m'
+      - 'matlab/+radia/+simulink/assembleIHOperatorsFromGeometry.m'
+      - 'matlab/+radia/+simulink/addIHGeometryUpdateBlock.m'
+      - 'matlab/+radia/+simulink/updateIHGeometry.m'
+      - 'tests/matlab/test_ih_python_selection.m'
+      - 'tests/matlab/test_ih_geometry_update.m'
       - 'src/radia/bem/sibc_hacapk.py'
       - 'src/radia/panels/surface_mesh_extract.py'
       - 'tests/test_surface_orientation.py'
@@ -203,6 +210,13 @@ on:
       - 'matlab/+radia/+simulink/validateIHNativeConfig.m'
       - 'tests/matlab/test_ih_sparse_inputs.m'
       - 'matlab/+radia/+internal/nextIHNativeHandle.m'
+      - 'matlab/+radia/+internal/selectedPythonExecutable.m'
+      - 'matlab/+radia/+internal/resolveAssemblyPython.m'
+      - 'matlab/+radia/+simulink/assembleIHOperatorsFromGeometry.m'
+      - 'matlab/+radia/+simulink/addIHGeometryUpdateBlock.m'
+      - 'matlab/+radia/+simulink/updateIHGeometry.m'
+      - 'tests/matlab/test_ih_python_selection.m'
+      - 'tests/matlab/test_ih_geometry_update.m'
       - 'src/radia/bem/sibc_hacapk.py'
       - 'src/radia/panels/surface_mesh_extract.py'
       - 'tests/test_surface_orientation.py'
@@ -421,6 +435,7 @@ jobs:
           $required = $required -or [bool]($changed -match '^(src/(core/rad_beam_transfer|lib/rad_beam_transfer_pybind|matlab/radia_beam_mex_commands|radia/beam\.py)|matlab/\+radia/\+beam/(canonicalBodyHamiltonianJet|propagateVariationalMap)\.m|tests/matlab/(test_beam_transfer_mex\.m|beam_transfer_python_reference\.py)|validation_test/accelerator/benchmark_beam_transfer_mex_python\.py)')
           $required = $required -or ($changed -contains 'tools/native_build_provenance.ps1')
           $required = $required -or [bool]($changed -match '^(src/core/rad_ngsolve_radia_field\.h|matlab/\+radia/RadiaField\.m|tests/matlab/test_radiafield_mex\.m)$')
+          $required = $required -or [bool]($changed -match '^(matlab/\+radia/\+internal/(selectedPythonExecutable|resolveAssemblyPython)\.m|matlab/\+radia/\+simulink/(assembleIHOperatorsFromGeometry|addIHGeometryUpdateBlock|updateIHGeometry)\.m|tests/matlab/test_ih_(python_selection|geometry_update)\.m)$')
           $required = $required -or [bool]($changed -match '^(matlab/\+radia/\+internal/nextIHNativeHandle\.m|matlab/\+radia/\+simulink/validateIHNativeConfig\.m|tests/matlab/test_ih_sparse_inputs\.m)$')
           "required=$($required.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
           Write-Host "MATLAB parity required=$required; diff_failed=$diffFailed; changed_files=$($changed.Count)"

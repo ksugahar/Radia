@@ -63,6 +63,8 @@ PACKAGE_FILES = (
     "+radia/setup.m",
     "+radia/+internal/expectedNGSolveVersion.m",
     "+radia/+internal/nextIHNativeHandle.m",
+    "+radia/+internal/selectedPythonExecutable.m",
+    "+radia/+internal/resolveAssemblyPython.m",
     "+radia/+internal/pythonProcessPath.m",
     "+radia/+simulink/buildIHNativeModel.m",
     "+radia/+simulink/addIHMonitorBus.m",
