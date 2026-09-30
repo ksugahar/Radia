@@ -46,6 +46,7 @@ validated against the full-order system over the operating band.
 
 ## Validation and interfaces
 
+- [Continued-fraction validation](../../validation_test/open_boundary/test_dtn_continued_fraction.py)
 - [Exact symbols and pole fits](../../validation_test/open_boundary/test_dtn_exact.py)
 - [Kelvin DtN implementation](../../src/radia/open_boundary/kelvin_dtn.py)
 - [Kelvin spectral guidance](../kelvin/DTN_SPECTRUM_COARSE_MESH.md)
@@ -54,8 +55,9 @@ validated against the full-order system over the operating band.
   boundary guidance. Consult their topic index for current names.
 
 The former `dtn_cln` module, circuit-named helpers, and `mor_cln` tool are retired.
-The renamed continued-fraction implementation is also removed. Use exact DtN
-evaluation or a validated Foster pole-residue approximation instead. Historical
+The analytic continued-fraction representation is restored: use
+`continued_fraction_stages` and `eval_continued_fraction` for exact/high-order
+non-reflecting boundaries. It terminates at n+1 partial quotients in sqrt(s). Historical
 experiments remain in Git history; their measurements are not acceptance results
 for a changed implementation. The numerical scope above is not a patent or
 freedom-to-operate determination.

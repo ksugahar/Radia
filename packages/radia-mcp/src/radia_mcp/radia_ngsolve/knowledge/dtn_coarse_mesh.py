@@ -2874,14 +2874,36 @@ certify passivity. No universal state-count or speed advantage over PML is claim
 Exact nonreflecting-boundary references remain Grote-Keller and Hagstrom-Warburton;
 Kelvin material-exterior references include Freeman-Lowther. Historical comparison
 studies elsewhere in this knowledge module are not maintained implementation APIs.
-The retired CLN/Cauer and renamed continued-fraction route are absent from production.
+The exact/high-order non-reflecting boundary continued fraction is available
+through the dtn_continued_fraction topic.
 See docs/open_boundary/OPEN_BOUNDARY_MAP.md and validation_test/open_boundary/test_dtn_exact.py.
+"""
+
+
+DTN_CONTINUED_FRACTION = r"""
+# Exact/high-order non-reflecting boundary continued fractions
+
+For a homogeneous separable diffusion exterior, the multipole-n DtN symbol
+is rational in q = R0*sqrt(s*mu_sigma). Euclidean polynomial division gives
+n+1 partial quotients; the terminating fraction evaluates that exact symbol.
+
+    from radia.open_boundary import continued_fraction_stages, eval_continued_fraction
+    stages = continued_fraction_stages(2)
+    symbol = eval_continued_fraction(stages, 1j * 50, R0=0.1, mu_sigma=1.0)
+
+This is a frequency-domain boundary representation. A finite expression in
+sqrt(s) is not an exact finite-dimensional time-domain ODE. Diffusion memory
+can instead be approximated over a declared band using Foster pole-residue fits.
+References: Grote-Keller and Hagstrom-Warburton on non-reflecting boundaries.
+Validation: validation_test/open_boundary/test_dtn_continued_fraction.py.
+Demo: docs/open_boundary/demo_dtn_continued_fraction_usage.py.
 """
 
 
 def get_dtn_coarse_mesh_documentation(topic: str = "all") -> str:
     """Return DtN-spectrum / coarse-mesh-accuracy documentation."""
     topics = {
+        "dtn_continued_fraction": DTN_CONTINUED_FRACTION,
         "overview": DTN_COARSE_MESH_OVERVIEW,
         "numerics": DTN_COARSE_MESH_NUMERICS,
         "api": DTN_COARSE_MESH_API,

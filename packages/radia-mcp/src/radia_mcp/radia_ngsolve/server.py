@@ -1735,6 +1735,8 @@ def dtn_coarse_mesh(topic: str = "all") -> str:
                              no-free-lunch modal axis + the selection table.
                              Audit-verified anchors.
                              doc: docs/open_boundary/OPEN_BOUNDARY_MAP.md
+            "dtn_continued_fraction" - Exact/high-order non-reflecting boundary
+                             representation with n+1 quotients in q=sqrt(s).
     """
     return get_dtn_coarse_mesh_documentation(topic)
 
