@@ -15,10 +15,16 @@ import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
 
-_acceptance_spec = importlib.util.spec_from_file_location(
-    "radia_release_acceptance", Path(__file__).resolve().with_name("release_acceptance.py"))
-acceptance_module = importlib.util.module_from_spec(_acceptance_spec)
-_acceptance_spec.loader.exec_module(acceptance_module)
+try:
+    from release_acceptance import RELEASE_ACCEPTANCE_HOSTS
+    from release_acceptance import RELEASE_ACCEPTANCE_HOSTNAMES
+except ModuleNotFoundError:  # Loaded by path in unit tests rather than run as a script.
+    _acceptance_spec = importlib.util.spec_from_file_location(
+        "radia_release_acceptance", Path(__file__).resolve().with_name("release_acceptance.py"))
+    _acceptance_module = importlib.util.module_from_spec(_acceptance_spec)
+    _acceptance_spec.loader.exec_module(_acceptance_module)
+    RELEASE_ACCEPTANCE_HOSTNAMES = _acceptance_module.RELEASE_ACCEPTANCE_HOSTNAMES
+    RELEASE_ACCEPTANCE_HOSTS = _acceptance_module.RELEASE_ACCEPTANCE_HOSTS
 
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 HASH = re.compile(r"[0-9a-f]{64}\Z")
@@ -29,6 +35,9 @@ TESTS = {
     "test_frozen_wedge_jacobi_reaches_true_residual",
     *(f"test_nonfinite_scalar_pcg_cannot_report_convergence[{where}-{value}]"
       for where in ("rhs", "x0") for value in ("nan", "inf")),
+}
+STRENGTHENED_TESTS = TESTS | {
+    "test_indefinite_operator_with_positive_jacobi_diagonal_raises_in_batched_pcg",
 }
 
 
@@ -159,15 +168,16 @@ def verify_host(acceptance, full, junit, identity, host):
     require(b"<!DOCTYPE" not in junit.upper(), "DTD is forbidden")
     root = ET.fromstring(junit)
     cases = root.findall(".//testcase")
-    require(len(cases) == 7 and {c.get("name") for c in cases} == TESTS,
+    case_names = {c.get("name") for c in cases}
+    require(len(cases) == len(case_names) and case_names in (TESTS, STRENGTHENED_TESTS),
             "Missing or duplicate focused case")
     require(not any(c.find(tag) is not None for c in cases for tag in ("failure", "error", "skipped")),
             "Focused case did not pass")
     suites = root.findall(".//testsuite")
-    require(len(suites) == 1 and suites[0].get("tests") == "7"
+    require(len(suites) == 1 and suites[0].get("tests") == str(len(cases))
             and all(suites[0].get(k) == "0" for k in ("failures", "errors", "skipped")),
             "Focused suite totals mismatch")
-    hostnames = acceptance_module.RELEASE_ACCEPTANCE_HOSTNAMES.get(host, {host})
+    hostnames = RELEASE_ACCEPTANCE_HOSTNAMES.get(host, {host})
     require(suites[0].get("hostname", "").lower() in hostnames, "Wrong acceptance host")
     require(all(math.isfinite(float(node.get("time", "nan")))
                 and float(node.get("time", "nan")) >= 0 for node in suites + cases),
@@ -201,7 +211,6 @@ def verify_artifact(api, run, commit, wheel_dir, context_dir, expected_hash):
     # so this gate cannot quietly ask for fewer machines than policy requires.
     # It used to name two hosts of its own, one of which is not an acceptance
     # target at all, and would have published on two of the four.
-    RELEASE_ACCEPTANCE_HOSTS = acceptance_module.RELEASE_ACCEPTANCE_HOSTS
     missing = []
     for host in RELEASE_ACCEPTANCE_HOSTS:
         try:

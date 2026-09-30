@@ -1,0 +1,72 @@
+{
+  "wheel_sha256": "2f5633376a33582a8bffaa2a696e24f9da6abb3b801eb4c6bd388755e334d22b",
+  "native_sha256": "32486195d84799c7c41c1736533b645c6d0cb59be9ab1aa612273933c08d3732",
+  "source_commit": "cc8f4b8752d34b79e8914a6bd47a0a4d98ce262b",
+  "ci_run": 36675230770,
+  "sources_verified": 313,
+  "version": "5.1.0",
+  "import_path": "C:\\temp\\radia-quad-cc8f4b875\\venv\\Lib\\site-packages\\radia",
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "hostname": "intel11",
+  "steps": [
+    {
+      "name": "pip-check",
+      "command": [
+        "C:\\temp\\radia-quad-cc8f4b875\\venv\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-m",
+        "pip",
+        "check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "full6",
+      "command": [
+        "C:\\temp\\radia-quad-cc8f4b875\\venv\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-I",
+        "C:\\temp\\radia-quad-cc8f4b875\\inputs\\hdiv_newton_native_smoke_strong.py",
+        "--drive",
+        "300000",
+        "--output",
+        "C:\\temp\\radia-quad-cc8f4b875\\output\\full6.json"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "focused",
+      "command": [
+        "C:\\temp\\radia-quad-cc8f4b875\\venv\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-I",
+        "-m",
+        "pytest",
+        "-q",
+        "--confcutdir",
+        "C:\\temp\\radia-quad-cc8f4b875\\inputs",
+        "C:\\temp\\radia-quad-cc8f4b875\\inputs\\tests\\feec\\test_hdiv_jacobi_diagonal_fail_loud.py",
+        "C:\\temp\\radia-quad-cc8f4b875\\inputs\\validation_test\\feec\\test_wedge_frozen_pcg.py",
+        "--junitxml",
+        "C:\\temp\\radia-quad-cc8f4b875\\output\\focused.xml"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "pip-freeze",
+      "command": [
+        "C:\\temp\\radia-quad-cc8f4b875\\venv\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-m",
+        "pip",
+        "freeze"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "passed": true
+}
