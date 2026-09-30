@@ -89,6 +89,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 import zipfile
 from datetime import datetime, timezone
 from importlib import metadata as importlib_metadata
@@ -271,6 +272,21 @@ def _read_repo_versions(labels=None):
         m = re.search(r'(?:^version|^__version__)\s*=\s*"([^"]+)"', text, re.M)
         out[label] = m.group(1) if m else None
     return out
+
+
+def _solver_dependency_pins() -> dict[str, str]:
+    """Return the exact native solver ABI pins owned by pyproject.toml."""
+    with (REPO / "pyproject.toml").open("rb") as stream:
+        dependencies = tomllib.load(stream)["project"]["dependencies"]
+    pins = {}
+    for dependency in dependencies:
+        for package in ("ngsolve", "netgen-mesher"):
+            prefix = f"{package}=="
+            if dependency.startswith(prefix):
+                pins[package] = dependency.removeprefix(prefix)
+    if set(pins) != {"ngsolve", "netgen-mesher"}:
+        raise ValueError("pyproject.toml must exactly pin ngsolve and netgen-mesher")
+    return pins
 
 
 def _sha256_file(path: Path) -> str:
@@ -1065,13 +1081,20 @@ def _deploy_pypi(ssh_host, label, *, python_cmd="python"):
         return rc
 
     v_radia = v["radia"]
+    pins = _solver_dependency_pins()
+    ngsolve_version = pins["ngsolve"]
+    netgen_version = pins["netgen-mesher"]
 
     ps_block = f"""
 $ErrorActionPreference = 'Stop'
 {_solver_install_guard_powershell(python_cmd)}
-{python_cmd} -m pip install --upgrade --force-reinstall --no-cache-dir "radia=={v_radia}"
+{python_cmd} -c "import importlib.metadata as m, ngsolve; assert ngsolve.__version__ == '{ngsolve_version}'; assert m.version('netgen-mesher') == '{netgen_version}'"
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-{python_cmd} -c "import importlib.metadata as m, ngsolve, radia; assert radia.__version__ == '{v_radia}'; assert ngsolve.__version__ == '6.2.2607'; assert m.version('netgen-mesher') == '6.2.2607'"
+{python_cmd} -m pip install --upgrade --force-reinstall --no-cache-dir --no-deps "radia=={v_radia}"
+if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
+{python_cmd} -c "import importlib.metadata as m, ngsolve, radia; assert radia.__version__ == '{v_radia}'; assert ngsolve.__version__ == '{ngsolve_version}'; assert m.version('netgen-mesher') == '{netgen_version}'"
+if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
+{python_cmd} -m pip check
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 """
     encoded = base64.b64encode(ps_block.encode("utf-16le")).decode("ascii")
