@@ -1,5 +1,6 @@
 """The release requires both compute hosts; preflight selects idle capacity."""
 import importlib.util
+import importlib.metadata
 import base64
 import builtins
 import sys
@@ -76,6 +77,9 @@ def test_compute_probe_is_solver_only_and_keeps_row_contract(monkeypatch, capsys
     tool = load_tool('release_quad')
     radia = SimpleNamespace(__file__=str(tmp_path / '__init__.py'), __version__='1.0')
     monkeypatch.setitem(sys.modules, 'radia', radia)
+    solver_versions = {'ngsolve': '6.2.2607', 'netgen-mesher': '6.2.2607'}
+    monkeypatch.setattr(
+        importlib.metadata, 'version', lambda name: solver_versions[name])
     original_import = builtins.__import__
 
     def guarded_import(name, *args, **kwargs):
