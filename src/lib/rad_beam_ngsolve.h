@@ -29,8 +29,8 @@ struct GridFunctionLinearizationOptions {
     double sample_radius_m = 1.0e-3;
     Vector3 initial_horizontal{1.0, 0.0, 0.0};
     bool periodic_frame = false;
+    // Charge sign: h = q*B_y/p and every harmonic focusing term.
     double curvature_sign = 1.0;
-    double gradient_sign = 1.0;
     unsigned multipole_order = 1;
     unsigned maximum_map_order = 1;
     double maximum_step_m = 1.0e-3;

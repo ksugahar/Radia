@@ -428,8 +428,8 @@ TaylorMap6 IntegrateConstantJet(const DynamicsJet6& jet, double length_m,
 
 DynamicsJet6 BuildParaxialMagneticDynamicsJet(
         const TransverseMagneticMultipoleExpansion& expansion,
-        double magnetic_rigidity_t_m, double curvature_sign,
-        double gradient_sign, unsigned maximum_order) {
+        double magnetic_rigidity_t_m, double charge_sign,
+        unsigned maximum_order) {
     if (expansion.order > 4)
         throw std::invalid_argument("multipole order must not exceed four");
     if (maximum_order < 1 || maximum_order > 3)
@@ -438,9 +438,8 @@ DynamicsJet6 BuildParaxialMagneticDynamicsJet(
         magnetic_rigidity_t_m == 0.0)
         throw std::invalid_argument(
             "magnetic_rigidity_t_m must be finite and nonzero");
-    if (!std::isfinite(curvature_sign) || !std::isfinite(gradient_sign))
-        throw std::invalid_argument(
-            "curvature_sign and gradient_sign must be finite");
+    if (!std::isfinite(charge_sign))
+        throw std::invalid_argument("charge_sign must be finite");
     for (double coefficient : expansion.normal_t_per_m_power)
         if (!std::isfinite(coefficient))
             throw std::invalid_argument(
@@ -451,7 +450,7 @@ DynamicsJet6 BuildParaxialMagneticDynamicsJet(
                 "skew multipole coefficients must be finite");
 
     DynamicsJet6 jet;
-    const double curvature = curvature_sign *
+    const double curvature = charge_sign *
         expansion.normal_t_per_m_power[0] / magnetic_rigidity_t_m;
     jet.a_per_m(0, 1) = 1.0;
     jet.a_per_m(1, 0) = -curvature * curvature;
@@ -488,12 +487,12 @@ DynamicsJet6 BuildParaxialMagneticDynamicsJet(
                 const double chromatic = delta_power % 2 == 0 ? 1.0 : -1.0;
                 AddMonomialDerivative(
                     jet, 1, powers,
-                    -gradient_sign * chromatic * polynomial.real() /
+                    -charge_sign * chromatic * polynomial.real() /
                         magnetic_rigidity_t_m,
                     maximum_order);
                 AddMonomialDerivative(
                     jet, 3, powers,
-                    gradient_sign * chromatic * polynomial.imag() /
+                    charge_sign * chromatic * polynomial.imag() /
                         magnetic_rigidity_t_m,
                     maximum_order);
             }
@@ -505,8 +504,8 @@ DynamicsJet6 BuildParaxialMagneticDynamicsJet(
 
 HamiltonianJet6 BuildCanonicalBodyHamiltonianJet(
         const TransverseMagneticMultipoleExpansion& expansion,
-        double magnetic_rigidity_t_m, double curvature_sign,
-        double gradient_sign, double reference_beta,
+        double magnetic_rigidity_t_m, double charge_sign,
+        double reference_beta,
         std::optional<double> reference_curvature_per_m) {
     if (expansion.order > 4)
         throw std::invalid_argument("multipole order must not exceed four");
@@ -514,9 +513,8 @@ HamiltonianJet6 BuildCanonicalBodyHamiltonianJet(
         magnetic_rigidity_t_m == 0.0)
         throw std::invalid_argument(
             "magnetic_rigidity_t_m must be finite and nonzero");
-    if (!std::isfinite(curvature_sign) || !std::isfinite(gradient_sign))
-        throw std::invalid_argument(
-            "curvature_sign and gradient_sign must be finite");
+    if (!std::isfinite(charge_sign))
+        throw std::invalid_argument("charge_sign must be finite");
     if (!std::isfinite(reference_beta) || reference_beta <= 0.0 ||
         reference_beta > 1.0)
         throw std::invalid_argument(
@@ -536,7 +534,7 @@ HamiltonianJet6 BuildCanonicalBodyHamiltonianJet(
 
     HamiltonianJet6 result;
     result.reference_beta = reference_beta;
-    const double field_curvature = curvature_sign *
+    const double field_curvature = charge_sign *
         expansion.normal_t_per_m_power[0] / magnetic_rigidity_t_m;
     const double curvature = reference_curvature_per_m.value_or(
         field_curvature);
@@ -613,7 +611,7 @@ HamiltonianJet6 BuildCanonicalBodyHamiltonianJet(
     const std::complex<double> imaginary(0.0, 1.0);
     for (unsigned order = 1; order <= expansion.order; ++order) {
         const unsigned degree = order + 1;
-        const std::complex<double> normalized = gradient_sign *
+        const std::complex<double> normalized = charge_sign *
             std::complex<double>(
                 expansion.normal_t_per_m_power[order],
                 expansion.skew_t_per_m_power[order]) /

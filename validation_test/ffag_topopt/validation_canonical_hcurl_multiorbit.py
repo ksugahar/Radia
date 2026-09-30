@@ -169,8 +169,7 @@ def run_orbit(offset_m, options, b_point, b_batch, iron_evaluator, coil,
         magnetic_rigidity=rigidity,
         bend_axis=np.array([0.0, 0.0, 1.0]),
         path_length_stations=stations,
-        # The native tracker reports counter-clockwise-positive turning.
-        signed_curvature_per_m=-np.asarray(curvature),
+        signed_curvature_per_m=curvature,
     )
     lap("orbit_track")
     if cross_gate:
