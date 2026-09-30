@@ -1,0 +1,131 @@
+{
+  "host": "Hibino",
+  "ngsolve": "6.2.2607",
+  "threads": 8,
+  "cases": [
+    {
+      "maxh": 0.2,
+      "ndof": 9261,
+      "baseline": [
+        {
+          "scale": 0.9,
+          "seconds": 1.0576715000206605,
+          "residual": 7.647367313333118e-16
+        },
+        {
+          "scale": 1.1,
+          "seconds": 1.048351800069213,
+          "residual": 7.948142450360027e-16
+        },
+        {
+          "scale": 0.7,
+          "seconds": 1.2234700999688357,
+          "residual": 9.520849831988748e-15
+        }
+      ],
+      "updated": [
+        {
+          "scale": 0.9,
+          "seconds": 1.0676200999878347,
+          "residual": 8.138334982752917e-16
+        },
+        {
+          "scale": 1.1,
+          "seconds": 0.06687359989155084,
+          "residual": 7.241547467683806e-16
+        },
+        {
+          "scale": 0.7,
+          "seconds": 0.0718222000868991,
+          "residual": 1.8603516134924938e-14
+        }
+      ],
+      "cached_primal_factor": true
+    },
+    {
+      "maxh": 0.12,
+      "ndof": 42594,
+      "baseline": [
+        {
+          "scale": 0.9,
+          "seconds": 5.491981300059706,
+          "residual": 1.329641082634829e-15
+        },
+        {
+          "scale": 1.1,
+          "seconds": 5.416653200052679,
+          "residual": 1.417185656898129e-15
+        },
+        {
+          "scale": 0.7,
+          "seconds": 5.365062700002454,
+          "residual": 1.2868127288615745e-15
+        }
+      ],
+      "updated": [
+        {
+          "scale": 0.9,
+          "seconds": 5.803871299955063,
+          "residual": 1.335825659266112e-15
+        },
+        {
+          "scale": 1.1,
+          "seconds": 0.6593002999434248,
+          "residual": 1.4016377667748696e-15
+        },
+        {
+          "scale": 0.7,
+          "seconds": 0.6497322000795975,
+          "residual": 1.2827474428575526e-15
+        }
+      ],
+      "cached_primal_factor": true
+    },
+    {
+      "maxh": 0.09,
+      "ndof": 69243,
+      "baseline": [
+        {
+          "scale": 0.9,
+          "seconds": 9.01023399992846,
+          "residual": 1.4342639487237787e-15
+        },
+        {
+          "scale": 1.1,
+          "seconds": 9.176695099915378,
+          "residual": 1.6480368843933457e-15
+        },
+        {
+          "scale": 0.7,
+          "seconds": 9.080456999945454,
+          "residual": 1.6925335739312334e-15
+        }
+      ],
+      "updated": [
+        {
+          "scale": 0.9,
+          "seconds": 9.515303199994378,
+          "residual": 1.4435084457736382e-15
+        },
+        {
+          "scale": 1.1,
+          "seconds": 1.3017179999733344,
+          "residual": 1.7023341422565897e-15
+        },
+        {
+          "scale": 0.7,
+          "seconds": 1.25129799998831,
+          "residual": 1.7077317417727637e-15
+        }
+      ],
+      "cached_primal_factor": true
+    }
+  ],
+  "method": "Identical matrix graphs, three different positive primal coefficients; fresh baseline vs cache updates",
+  "runner_sha256": "082d552243f440ef1cdf8009c616b6ea505deff3be463d6ba9a4ec806d0ee199",
+  "old_source_sha256": "1dfea37dca8c1f57fabdd8b9b4b02be9dfa57953c31c2eba2fc596fdbf0ed21c",
+  "new_source_sha256": "18d5b5ffdb69685889063147ea1f5cf7c4ea6ce5e14611c2e6462fe6db308e60",
+  "baseline_commit": "0e9f26bd6",
+  "scope": "Trace elimination and factorization only; not ESRF case 6 or complete nonlinear solve timing",
+  "complete": true
+}
