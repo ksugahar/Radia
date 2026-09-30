@@ -431,6 +431,83 @@ class SampledCurrentBasis:
         )
 
 
+def SampledCurrentMagneticField(
+    basis: SampledCurrentBasis,
+    coefficients,
+    points,
+    *,
+    mu: float = MU0,
+    block_size: int = 4096,
+) -> np.ndarray:
+    """Evaluate the external magnetic flux density of sampled current modes.
+
+    Both volume-current densities and surface-current densities use the same
+    quadrature form of the Biot--Savart integral. A coefficient vector returns
+    ``(n_target, 3)``; a matrix with one excitation per column returns
+    ``(n_target, 3, n_port)``. Singular self fields are outside this sampled
+    evaluator's contract, so targets may not coincide with source points.
+    """
+
+    if not isinstance(basis, SampledCurrentBasis):
+        raise TypeError("basis must be a SampledCurrentBasis")
+    targets = _as_points(points, "points")
+    coefficient_array = np.asarray(coefficients)
+    if coefficient_array.ndim not in {1, 2}:
+        raise ValueError("coefficients must be a vector or a two-dimensional matrix")
+    if coefficient_array.shape[0] != basis.n_modes:
+        raise ValueError(
+            f"coefficients must have {basis.n_modes} rows, "
+            f"got {coefficient_array.shape[0]}"
+        )
+    if not np.all(np.isfinite(coefficient_array)):
+        raise ValueError("coefficients contain non-finite values")
+    if not np.isfinite(mu) or mu <= 0.0:
+        raise ValueError("mu must be positive and finite")
+    if int(block_size) != block_size or block_size < 1:
+        raise ValueError("block_size must be a positive integer")
+
+    dtype = np.result_type(basis.modes.dtype, coefficient_array.dtype, float)
+    if coefficient_array.ndim == 1:
+        field = np.zeros((targets.shape[0], 3), dtype=dtype)
+        sampled_current = np.einsum(
+            "m,mnj->nj", coefficient_array, basis.modes, optimize=True
+        )
+    else:
+        field = np.zeros(
+            (targets.shape[0], 3, coefficient_array.shape[1]), dtype=dtype
+        )
+        sampled_current = np.einsum(
+            "mp,mnj->npj", coefficient_array, basis.modes, optimize=True
+        )
+
+    factor = float(mu) / (4.0 * np.pi)
+    for start in range(0, basis.n_samples, int(block_size)):
+        stop = min(start + int(block_size), basis.n_samples)
+        delta = targets[:, np.newaxis, :] - basis.points[np.newaxis, start:stop, :]
+        radius_squared = np.einsum("tni,tni->tn", delta, delta)
+        if np.any(radius_squared == 0.0):
+            raise ValueError(
+                "target points must not coincide with source quadrature points"
+            )
+        inverse_radius_cubed = radius_squared**-1.5
+        weights = basis.weights[start:stop]
+        if coefficient_array.ndim == 1:
+            cross = np.cross(sampled_current[start:stop][np.newaxis, :, :], delta)
+            field += factor * np.einsum(
+                "tnj,tn,n->tj", cross, inverse_radius_cubed, weights, optimize=True
+            )
+        else:
+            cross = np.cross(
+                sampled_current[start:stop][np.newaxis, :, :, :],
+                delta[:, :, np.newaxis, :],
+            )
+            block_field = factor * np.einsum(
+                "tnpj,tn,n->tpj", cross, inverse_radius_cubed, weights, optimize=True
+            )
+            field += np.transpose(block_field, (0, 2, 1))
+    return field
+
+
 @dataclass(frozen=True)
 class SampledMagnetizationBasis:
     """Magnetization basis sampled on a volume quadrature rule.

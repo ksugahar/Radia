@@ -27,6 +27,83 @@ class _ToySymmetricOperator:
         return {"matrix_free": True, "backend": "toy"}
 
 
+@pytest.mark.parametrize("kind", ["volume", "surface"])
+def test_sampled_current_magnetic_field_matches_one_point_biot_savart(kind):
+    basis = vim.SampledCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0]]),
+        weights=np.array([2.0]),
+        modes=np.array([[[1.0, 0.0, 0.0]]]),
+        kind=kind,
+        names=("jx",),
+    )
+
+    field = vim.SampledCurrentMagneticField(
+        basis, np.array([3.0]), np.array([[0.0, 2.0, 0.0]])
+    )
+
+    # mu0/(4*pi) * weight * coefficient * (ex cross 2*ey) / |2*ey|^3
+    np.testing.assert_allclose(field, [[0.0, 0.0, 1.5e-7]], atol=1.0e-20)
+
+
+def test_sampled_current_magnetic_field_supports_complex_multiport_coefficients():
+    basis = vim.VolumeCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0]]),
+        weights=np.array([2.0]),
+        current_modes=np.array([[[1.0, 0.0, 0.0]]]),
+        names=["jx"],
+    )
+    targets = np.array([[0.0, 1.0, 0.0]])
+
+    field = vim.SampledCurrentMagneticField(basis, np.array([2.0 + 3.0j]), targets)
+    multiport = vim.SampledCurrentMagneticField(
+        basis, np.array([[1.0, 2.0j]]), targets
+    )
+
+    assert "SampledCurrentMagneticField" in vim.__all__
+    np.testing.assert_allclose(field[0, :2], 0.0, atol=1.0e-18)
+    assert field[0, 2] == pytest.approx((2.0 + 3.0j) * 2.0e-7)
+    assert multiport.shape == (1, 3, 2)
+    np.testing.assert_allclose(multiport[0, 2], np.array([2.0e-7, 4.0e-7j]))
+
+
+@pytest.mark.parametrize(
+    "coefficients, points, mu, block_size, error",
+    [
+        (np.ones((1, 1, 1)), [[0.0, 1.0, 0.0]], vim.MU0, 1, "vector"),
+        (np.ones(2), [[0.0, 1.0, 0.0]], vim.MU0, 1, "1 rows"),
+        (np.array([np.nan]), [[0.0, 1.0, 0.0]], vim.MU0, 1, "non-finite"),
+        (np.ones(1), [[0.0, 1.0]], vim.MU0, 1, "shape"),
+        (np.ones(1), [[0.0, 1.0, 0.0]], 0.0, 1, "positive"),
+        (np.ones(1), [[0.0, 1.0, 0.0]], vim.MU0, 0, "positive integer"),
+    ],
+)
+def test_sampled_current_magnetic_field_validates_inputs(
+    coefficients, points, mu, block_size, error
+):
+    basis = vim.VolumeCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0]]),
+        weights=np.array([1.0]),
+        current_modes=np.array([[[0.0, 1.0, 0.0]]]),
+    )
+    with pytest.raises(ValueError, match=error):
+        vim.SampledCurrentMagneticField(
+            basis, coefficients, points, mu=mu, block_size=block_size
+        )
+
+
+def test_sampled_current_magnetic_field_rejects_self_target():
+    basis = vim.VolumeCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0]]),
+        weights=np.array([1.0]),
+        current_modes=np.array([[[0.0, 1.0, 0.0]]]),
+    )
+    with pytest.raises(ValueError, match="must not coincide"):
+        vim.SampledCurrentMagneticField(basis, np.array([1.0]), basis.points)
+
+    with pytest.raises(TypeError, match="SampledCurrentBasis"):
+        vim.SampledCurrentMagneticField(object(), np.array([1.0]), [[0.0, 1.0, 0.0]])
+
+
 def test_team28_skin_depth_gate_selects_volumetric_hcurl():
     gate = vim.EddySIBCApplicability(
         frequency_hz=50.0,
