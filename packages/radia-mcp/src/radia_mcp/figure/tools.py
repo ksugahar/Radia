@@ -1778,3 +1778,210 @@ def plot_basis_size_convergence(ax, basis_sizes, errors_by_method, *,
     ax.set_ylabel(ylabel)
     ax.grid(True, which="both", linestyle=":", alpha=0.4)
     return lines
+
+
+def figure_tikz_recipe(query: str = "all",
+                       target: str = "paper_single_column") -> str:
+    """Return lab drawing recipes for TikZ / PGFPlots publication figures.
+
+    Args:
+        query: One of ``all``, ``schematic``, ``pgfplots``,
+            ``externalize``, ``matlab2tikz``, ``checklist``, or
+            ``sources``.
+        target: Figure profile used to choose a default width.
+
+    Returns:
+        Practical LaTeX/TikZ recipes and lab rules for paper-ready
+        schematics, annotations, and modest-size data plots.
+    """
+    q = (query or "all").strip().lower()
+    target_key = (target or "paper_single_column").strip().lower()
+    prof = _PROFILES.get(target_key, _PROFILES["paper_single_column"])
+    width_cm = float(prof["embed_width_cm"])
+    height_cm = width_cm * 0.62
+
+    intro = f"""\
+TikZ / PGFPlots drawing policy for radia_mcp.figure
+
+Target profile: {target_key if target_key in _PROFILES else 'paper_single_column'}
+  width  = {width_cm:.2f} cm
+  height = {height_cm:.2f} cm (default h/w = 0.62; adjust to content)
+  page text = {prof['font_pt']} pt, no in-figure title
+
+Use TikZ for schematics, geometry, flux paths, boundary conditions,
+coordinate-precise annotations, and block/process diagrams.
+Use PGFPlots for modest data axes where LaTeX-native labels and vector
+output matter.  Use rendered PDF/PNG plus TikZ labels for dense fields,
+large meshes, photos, or 3-D scenes.
+"""
+
+    schematic = r"""
+TikZ schematic template
+
+\documentclass[tikz,border=1mm]{standalone}
+\usepackage{newtxtext,newtxmath}
+\usetikzlibrary{arrows.meta,calc,positioning,fit,backgrounds,
+                decorations.pathreplacing}
+
+\begin{document}
+\begin{tikzpicture}[
+  x=1cm, y=1cm,
+  >={Latex[length=2.2mm,width=1.6mm]},
+  material/.style={draw=black, line width=0.45pt, fill=black!4},
+  conductor/.style={draw=black, line width=0.5pt, fill=orange!18},
+  flux/.style={-Latex, line width=0.55pt, blue!70!black},
+  dim/.style={<->, line width=0.4pt},
+  note/.style={font=\footnotesize, inner sep=1pt, align=center},
+]
+  % Coordinates first: make geometry auditable.
+  \coordinate (A) at (0,0);
+  \coordinate (B) at (4.0,0);
+  \coordinate (C) at (4.0,2.2);
+  \coordinate (D) at (0,2.2);
+
+  % Body, paths, and labels.
+  \draw[material] (A) rectangle (C);
+  \draw[conductor] (0.45,0.35) rectangle (1.25,1.85);
+  \draw[flux] (1.6,0.55) .. controls (2.5,1.15) .. (3.45,1.75);
+  \node[note, anchor=west] at (3.52,1.75) {$\Phi$};
+
+  % Dimensions use parentheses for units in labels.
+  \draw[dim] (0,-0.35) -- node[note, fill=white] {$w$ (mm)} (4.0,-0.35);
+  \draw[dim] (-0.35,0) -- node[note, fill=white] {$h$ (mm)} (-0.35,2.2);
+\end{tikzpicture}
+\end{document}
+
+Rules:
+- Put the title in the LaTeX caption or beamer frametitle, never inside
+  the picture.
+- Define semantic styles once (material, conductor, flux, dim, note).
+- Name important coordinates and draw from those names, not repeated
+  magic numbers.
+- Keep labels short; use units in parentheses: $B$ (T), $f$ (Hz).
+- Prefer arrows.meta and calc/positioning over manual arrowheads and
+  fragile absolute offsets.
+"""
+
+    pgfplots = rf"""
+PGFPlots data-axis template
+
+\documentclass[tikz,border=1mm]{{standalone}}
+\usepackage{{newtxtext,newtxmath}}
+\usepackage{{pgfplots}}
+\pgfplotsset{{compat=1.18}}
+\begin{{document}}
+\begin{{tikzpicture}}
+\begin{{axis}}[
+  width={width_cm:.2f}cm,
+  height={height_cm:.2f}cm,
+  scale only axis,
+  xlabel={{$f$ (Hz)}},
+  ylabel={{$|Z|$ ($\Omega$)}},
+  xmin=0, xmax=10,
+  grid=both,
+  grid style={{black!12}},
+  tick align=inside,
+  tick style={{black}},
+  legend style={{draw=none, fill=none, font=\footnotesize}},
+  legend pos=north west,
+]
+  \addplot+[black, mark=*] table[x=f, y=z] {{data.csv}};
+  \addlegendentry{{measured}}
+  \addplot+[blue!70!black, mark=square*] table[x=f, y=model] {{data.csv}};
+  \addlegendentry{{model}}
+\end{{axis}}
+\end{{tikzpicture}}
+\end{{document}}
+
+Rules:
+- For repeated builds, keep data in external CSV/TSV files and use
+  \addplot table.  Do not inline thousands of coordinates in the paper.
+- Use scale only axis, fixed width/height, and compat=1.18 for stable
+  geometry across local machines and CI.
+- For geometry-sensitive plots, add axis equal image.
+- For multi-series plots, do not rely on color alone: combine color,
+  marker shape, dash pattern, or direct labels.
+- If TeX compile time grows, decimate data before export or switch dense
+  layers to vector PDF/raster with TikZ annotations.
+"""
+
+    externalize = r"""
+TikZ compile-time control
+
+Preamble:
+\usepackage{tikz}
+\usetikzlibrary{external}
+\tikzexternalize[prefix=fig/cache/]
+
+Build:
+  latexmk -pdf -shell-escape paper.tex
+
+Rules:
+- Externalize stable standalone figures, not tiny one-off marks.
+- Keep generated cache files under fig/cache/ and ignore them in git.
+- If a journal build disallows shell-escape, precompile the standalone
+  figure to PDF and include that PDF in the final manuscript.
+- For dense FEM fields, export the field as PDF/PNG and overlay labels,
+  arrows, callouts, and dimensions with TikZ.  That keeps typography
+  consistent without forcing TeX to draw every cell or triangle.
+"""
+
+    matlab2tikz = figure_matlab2tikz_recipe(target=target_key)
+
+    checklist = r"""
+TikZ / drawing review checklist
+
+- No title inside the picture.
+- Caption or slide title explains the figure; in-picture text only names
+  parts, symbols, dimensions, or boundary conditions.
+- All important geometry is coordinate-driven or style-driven, not copied
+  by hand in several places.
+- Text is 9-10 pt on the printed page and uses the paper font.
+- Units use parentheses.
+- Color is supported by line style, marker, fill pattern, or direct label.
+- Dense simulation content is not forced through TikZ when PDF/PNG plus
+  TikZ annotation is clearer and faster.
+- Standalone figure compiles by itself before it is input into the paper.
+"""
+
+    sources = """\
+Source-backed notes
+
+- PGF/TikZ manual: TikZ is a TeX graphics language with precise
+  positioning, macros, and TeX typography.
+  https://tikz.dev/
+- PGFPlots on CTAN: normal/log plots in 2-D and 3-D; line, scatter, bar,
+  area, mesh/surface, and related plot types directly in TeX.
+  https://ctan.org/pkg/pgfplots
+- matlab2tikz README: converts MATLAB figures to TikZ/PGFPlots, requires
+  TikZ/PGF and PGFPlots, supports cleanfigure before export.
+  https://github.com/matlab2tikz/matlab2tikz
+- IEEE Author Center: prefer vector formats such as PDF/EPS/PS; otherwise
+  use high-resolution raster, and size figures at one/two-column widths.
+  https://journals.ieeeauthorcenter.ieee.org/create-your-ieee-journal-article/create-graphics-for-your-article/resolution-and-size/
+- IEEE conference guidance: embed fonts in PDF/EPS/PS and keep type about
+  9-10 pt at final size; support color with shape, dashes, or labels.
+  https://conferences.ieeeauthorcenter.ieee.org/write-your-paper/improve-your-graphics/
+"""
+
+    sections = {
+        "intro": intro,
+        "schematic": schematic,
+        "pgfplots": pgfplots,
+        "externalize": externalize,
+        "matlab2tikz": matlab2tikz,
+        "checklist": checklist,
+        "sources": sources,
+    }
+    if q == "all":
+        order = [
+            "intro", "schematic", "pgfplots", "externalize",
+            "matlab2tikz", "checklist", "sources",
+        ]
+        return "\n\n".join(sections[key].strip() for key in order)
+    if q in sections:
+        return sections[q].strip()
+    return (
+        f"Unknown query '{query}'. Valid: all, schematic, pgfplots, "
+        "externalize, matlab2tikz, checklist, sources."
+    )
