@@ -12,6 +12,8 @@ import tomllib
 NATIVE_PATHS = (
     'src/radia/_residual_gate.py',
     'validation_test/open_boundary/test_kelvin_vector_direct_gate.py',
+    'validation_test/team21/',
+    'tests/test_team21a_geometry_source.py',
 
     'packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py',
     'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py',
