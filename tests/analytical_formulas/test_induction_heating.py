@@ -85,6 +85,17 @@ def test_positive_joule_loss_at_all_ka():
         assert p > 0, f"P({ka=}) = {p}; must be positive"
 
 
+@pytest.mark.parametrize("ka", [1_000.0, 10_000.0])
+def test_large_ka_remains_finite_and_matches_thin_skin(ka):
+    omega = (ka / A_CU) ** 2 / (SIGMA_CU * MU_0)
+    p_full = cylinder_axial_eddy_loss(H0, A_CU, omega, SIGMA_CU)
+    p_thin = cylinder_axial_eddy_loss_thin_skin(H0, A_CU, omega, SIGMA_CU)
+
+    assert math.isfinite(p_full)
+    assert p_full > 0.0
+    assert p_full == pytest.approx(p_thin, rel=1.0e-3)
+
+
 def test_quadratic_in_H_0():
     """Joule loss is quadratic in H_0 (single linearity check)."""
     omega = 6.28e4

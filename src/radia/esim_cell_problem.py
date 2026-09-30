@@ -29,6 +29,8 @@ import numpy as np
 from scipy.interpolate import interp1d
 from scipy.constants import mu_0
 
+from radia.bh_law import monotone_bh_pchip
+
 try:
     from ngsolve import *
     import netgen.meshing as ngm
@@ -70,14 +72,14 @@ class BHCurveInterpolator:
             self.H_data = np.insert(self.H_data, 0, 0)
             self.B_data = np.insert(self.B_data, 0, 0)
 
-        # Create B(H) interpolator
-        # Use cubic if enough points, otherwise linear
-        interp_kind = 'cubic' if len(self.H_data) >= 4 else 'linear'
-        self._B_interp = interp1d(
-            self.H_data, self.B_data,
-            kind=interp_kind,
-            fill_value='extrapolate',
-            bounds_error=False
+        # Use the production monotone-M law on the tabulated interval. Above
+        # the last row, hold magnetization constant so B continues with the
+        # vacuum slope instead of extrapolating a cubic polynomial.
+        self._B_interp = monotone_bh_pchip(
+            self.H_data, self.B_data, extrapolate=False
+        )
+        self._saturation_magnetization = (
+            self.B_data[-1] / mu_0 - self.H_data[-1]
         )
 
         # Compute initial permeability (slope at H=0)
@@ -96,7 +98,12 @@ class BHCurveInterpolator:
         Returns:
             B: Magnetic flux density [T]
         """
-        return float(self._B_interp(H_abs))
+        H_value = float(H_abs)
+        if not np.isfinite(H_value) or H_value < 0.0:
+            raise ValueError("H_abs must be finite and non-negative")
+        if H_value > self.H_data[-1]:
+            return float(mu_0 * (H_value + self._saturation_magnetization))
+        return float(self._B_interp(H_value))
 
     def mu(self, H_abs):
         """
@@ -680,10 +687,8 @@ class ESIMFiniteSlabSolver:
         if self.geometry == 'cylinder':
             # Cylinder: I = integral_0^R J*2pi*r dr, J = -dH/dr
             # Using Ampere: I_total = 2*pi*R*H(R) (for H_z with symmetry)
-            # R_ac/R_dc = (R/2) * integral_0^R |J|^2*r dr / (|I/(pi*R^2)|^2 * pi*R^2)
-            # Simpler: use P_ac/P_dc method
-            I_total = H[n-1]  # H(R) = H0, total current per unit length = H0
-            I_abs_sq = np.abs(I_total) ** 2
+            H_surface = H[n-1]
+            I_abs_sq = np.abs(H_surface) ** 2
             if I_abs_sq < 1e-30:
                 return self._compute_resistance_ratio_surface_impedance(H)
             J_sq_r_integral = 0.0
@@ -692,16 +697,12 @@ class ESIMFiniteSlabSolver:
                 J_mid = -(H[i + 1] - H[i]) / dr
                 r_mid = 0.5 * (z[i] + z[i + 1])
                 J_sq_r_integral += np.abs(J_mid) ** 2 * r_mid * dr
-            # P_dc for uniform J in cylinder: J_dc = I/(pi*R^2), P_dc = rho*|J_dc|^2*pi*R^2
             # P_ac = rho * 2*pi * integral |J|^2 * r dr
-            # R_ac/R_dc = P_ac/P_dc = (R^2/2) * integral|J|^2*r dr / |I|^2
-            # But I = H0 (Ampere, per unit length), I_total = 2*pi*R*H0
             # R_dc = rho * L / A = rho / (pi*R^2) per unit length
             # P_dc = |I_total|^2 * R_dc = 4*pi^2*R^2*|H0|^2 * rho/(pi*R^2) = 4*pi*rho*|H0|^2
-            # P_ac = rho * 2*pi * integral|J|^2*r dr
             # R_ratio = 2*pi*rho*integral|J|^2*r dr / (4*pi*rho*|H0|^2)
             #         = integral|J|^2*r dr / (2*|H0|^2)
-            R_ratio = J_sq_r_integral / (2 * I_abs_sq) * a
+            R_ratio = J_sq_r_integral / (2 * I_abs_sq)
         else:
             # Slab: I = H(0) - H(a)
             I_total = H[0] - H[n-1]

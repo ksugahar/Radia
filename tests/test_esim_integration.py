@@ -13,9 +13,12 @@ Date: 2026-01-08
 
 import sys
 import numpy as np
+import pytest
+from scipy.constants import mu_0
 
 from radia.esim_cell_problem import (
     ESIMCellProblemSolver,
+    ESIMFiniteSlabSolver,
     BHCurveInterpolator,
     ESITable,
     generate_esi_table_from_bh_curve,
@@ -71,6 +74,33 @@ def test_bh_curve_interpolation():
     print(f"  Result: {passed}/{len(tests)} tests passed")
     print()
     return passed == len(tests)
+
+
+def test_bh_curve_saturation_extension_keeps_vacuum_slope():
+    bh_curve = [
+        [0, 0], [100, 0.2], [500, 0.9], [1000, 1.3],
+        [5000, 1.8], [50000, 2.1],
+    ]
+    law = BHCurveInterpolator(bh_curve)
+
+    assert law.B(100_000.0) == pytest.approx(2.1 + mu_0 * 50_000.0)
+    assert law.B(200_000.0) == pytest.approx(2.1 + mu_0 * 150_000.0)
+    assert law.B(200_000.0) > law.B(100_000.0) > law.B(50_000.0)
+
+
+def test_cylinder_resistance_ratio_is_invariant_under_radius_scaling():
+    def ratio(radius):
+        solver = ESIMFiniteSlabSolver.__new__(ESIMFiniteSlabSolver)
+        solver.geometry = "cylinder"
+        solver.half_thickness = radius
+        solver.n_nodes = 2001
+        solver.mesh_points = np.linspace(0.0, radius, solver.n_nodes)
+        normalized_radius = solver.mesh_points / radius
+        field = normalized_radius ** 8
+        return solver._compute_resistance_ratio(field, None, 1.0)
+
+    assert ratio(0.01) == pytest.approx(2.0, rel=2.0e-5)
+    assert ratio(0.1) == pytest.approx(ratio(0.01), rel=1.0e-12)
 
 
 def test_cell_problem_solver():
