@@ -63,6 +63,37 @@ def _log(msg):
     progress("FEM", msg)
 
 
+def _validate_mode_contracts(*, solver, formulation, max_iter,
+                             esim_per_panel, periodic_kelvin=None):
+    if solver not in {"auto", "sparsecholesky", "ams", "iccg", "bddc"}:
+        raise ValueError(f"unsupported FEM solver: {solver!r}")
+    if formulation not in {"total", "scattered"}:
+        raise ValueError(f"unsupported FEM formulation: {formulation!r}")
+    if max_iter <= 0:
+        raise ValueError("max_iter must be positive")
+    if esim_per_panel:
+        raise ValueError(
+            "esim_per_panel is disabled: hierarchical boundary DOFs are not "
+            "point values and the local-Z surface loss/q_surf integral is not "
+            "implemented; use the scalar ESIM path")
+    if periodic_kelvin is not None:
+        if formulation == "scattered" and solver != "sparsecholesky":
+            raise ValueError(
+                "formulation='scattered' is implemented only for "
+                "solver='sparsecholesky'; use formulation='total' for iterative solvers")
+        if solver == "iccg" and periodic_kelvin:
+            raise ValueError(
+                "solver='iccg' is not validated on the periodic Kelvin space; "
+                "use solver='sparsecholesky'")
+
+
+def _accepted_karl_impedance(iteration, max_iter, relative_change,
+                             tolerance, impedance_used_for_solve):
+    converged = (relative_change < tolerance and
+                 (iteration > 0 or max_iter <= 1))
+    return converged, (complex(impedance_used_for_solve) if converged else None)
+
+
 def _edge_only_wirebasket(fes, mesh):
     """Keep only lowest-order edge DOFs in the BDDC wirebasket.
 
@@ -218,8 +249,9 @@ def solve_fem(vol_file="", fes_order=1,
     Returns:
         dict with P_total, L, Z_s, H_t_rms, etc.
     """
-    if solver not in {"auto", "sparsecholesky", "ams", "iccg", "bddc"}:
-        raise ValueError(f"unsupported FEM solver: {solver!r}")
+    _validate_mode_contracts(
+        solver=solver, formulation=formulation, max_iter=max_iter,
+        esim_per_panel=esim_per_panel)
     if mat is None:
         mat = EMMaterial.from_name("steel")
     sigma = mat.sigma
@@ -326,6 +358,10 @@ def solve_fem(vol_file="", fes_order=1,
             solver = "ams" if fes_order == 1 else "bddc"
         _log(f"SOLVER:auto -> {solver} (fes_order={fes_order}, periodic "
              f"Kelvin={bool(has_kelvin_periodic)})")
+    _validate_mode_contracts(
+        solver=solver, formulation=formulation, max_iter=max_iter,
+        esim_per_panel=esim_per_panel,
+        periodic_kelvin=bool(has_kelvin_periodic))
 
     materials = mesh.GetMaterials()
     boundaries = mesh.GetBoundaries()
@@ -688,6 +724,7 @@ def solve_fem(vol_file="", fes_order=1,
     # Karl iteration
     gfu = GridFunction(fes)
     history = []
+    karl_converged = False
 
     # Per-panel ESIM (v4.48.0+): build a surface H1 GridFunction on the
     # workpiece BND so the Robin coefficient becomes a per-DOF CF instead
@@ -719,6 +756,7 @@ def solve_fem(vol_file="", fes_order=1,
 
     for iteration in range(max_iter):
         t0_iter = time.perf_counter()
+        Z_s_used_for_solve = complex(Z_s)
 
         # Robin coefficient:
         #   Hole approach: +jw/Z_s (SIBC on external boundary of air domain)
@@ -1198,12 +1236,25 @@ def solve_fem(vol_file="", fes_order=1,
         # <= 1: the user explicitly asked for one iteration, so the
         # dZ we just computed is what they get -- report it as
         # converged if it passes tol, NOT-CONVERGED otherwise.
-        if dZ < tol and (iteration > 0 or max_iter <= 1):
+        accepted, accepted_Z_s = _accepted_karl_impedance(
+            iteration, max_iter, dZ, tol, Z_s_used_for_solve)
+        if accepted:
+            # gfu was solved with the impedance at the start of this
+            # iteration.  Publish that same value so A, loss and q_surf never
+            # mix fields from Z_old with an updated Z_new.
+            Z_s = accepted_Z_s
+            karl_converged = True
             _log(f"CONVERGED:iter={iteration}")
             break
 
         if esim is None:
+            karl_converged = True
             break  # linear SIBC: single iteration
+
+    if not karl_converged:
+        raise RuntimeError(
+            f"FEM ESIM Karl iteration did not converge in {max_iter} iterations "
+            f"(last relative impedance change {dZ:.3e}, tolerance {tol:.3e})")
 
     # ============================================================
     # Step 6: Post-process
