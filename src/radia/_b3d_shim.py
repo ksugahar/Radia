@@ -481,7 +481,12 @@ def _unique_subshapes(root_topods, abs_type, wrap_cls, downcast):
     ``TopExp.MapShapes_s`` which builds an indexed map keyed by
     geometric identity (each TopoDS_Shape stored once)."""
     from OCP.TopExp import TopExp
-    from OCP.TopTools import TopTools_IndexedMapOfShape
+    try:
+        from OCP.TopTools import TopTools_IndexedMapOfShape
+    except ImportError:
+        from OCP.collections import (
+            IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as TopTools_IndexedMapOfShape,
+        )
     m = TopTools_IndexedMapOfShape()
     TopExp.MapShapes_s(root_topods, abs_type, m)
     out = []
@@ -621,7 +626,10 @@ def _bounding_box(topods) -> BBox:
     from OCP.BRepBndLib import BRepBndLib
     bb = Bnd_Box()
     BRepBndLib.AddOptimal_s(topods, bb, True, True)
-    xmin, ymin, zmin, xmax, ymax, zmax = bb.Get()
+    # OCP 8 exposes Get() as an unbound Bnd_Box::Limits return type.
+    # CornerMin/CornerMax include the same gap and work in both bindings.
+    xmin, ymin, zmin = bb.CornerMin().Coord()
+    xmax, ymax, zmax = bb.CornerMax().Coord()
     return BBox(min=Vector(xmin, ymin, zmin), max=Vector(xmax, ymax, zmax))
 
 
@@ -651,7 +659,7 @@ class Solid(_ShapeBase):
         from OCP.TopAbs import TopAbs_FACE
         from OCP.TopoDS import TopoDS
         self._faces_cache = _unique_subshapes(
-            self.wrapped, TopAbs_FACE, Face, TopoDS.Face_s)
+            self.wrapped, TopAbs_FACE, Face, _topods_cast("Face"))
         return self._faces_cache
 
     def edges(self) -> List[Edge]:
@@ -660,7 +668,7 @@ class Solid(_ShapeBase):
         from OCP.TopAbs import TopAbs_EDGE
         from OCP.TopoDS import TopoDS
         self._edges_cache = _unique_subshapes(
-            self.wrapped, TopAbs_EDGE, Edge, TopoDS.Edge_s)
+            self.wrapped, TopAbs_EDGE, Edge, _topods_cast("Edge"))
         return self._edges_cache
 
     def solids(self) -> List["Solid"]:
@@ -669,7 +677,7 @@ class Solid(_ShapeBase):
         from OCP.TopAbs import TopAbs_SOLID
         from OCP.TopoDS import TopoDS
         self._solids_cache = _unique_subshapes(
-            self.wrapped, TopAbs_SOLID, Solid, TopoDS.Solid_s)
+            self.wrapped, TopAbs_SOLID, Solid, _topods_cast("Solid"))
         return self._solids_cache
 
     def bounding_box(self) -> BBox:
@@ -703,6 +711,12 @@ class Compound(Solid):
         return out
 
 
+def _topods_cast(kind):
+    """Resolve the identical downcast API in OCP 7 and OCP 8 bindings."""
+    from OCP.TopoDS import TopoDS
+    cast = getattr(TopoDS, kind + "_s", None)
+    return cast if cast is not None else getattr(TopoDS, kind)
+
 def _wrap_topods(topods):
     """Wrap an OCP ``TopoDS_Shape`` in the most specific shim class."""
     from OCP.TopAbs import (TopAbs_COMPOUND, TopAbs_SOLID,
@@ -710,15 +724,15 @@ def _wrap_topods(topods):
     from OCP.TopoDS import TopoDS
     st = topods.ShapeType()
     if st == TopAbs_COMPOUND:
-        return Compound(TopoDS.Compound_s(topods))
+        return Compound(_topods_cast("Compound")(topods))
     if st == TopAbs_SOLID:
-        return Solid(TopoDS.Solid_s(topods))
+        return Solid(_topods_cast("Solid")(topods))
     if st == TopAbs_FACE:
-        return Face(TopoDS.Face_s(topods))
+        return Face(_topods_cast("Face")(topods))
     if st == TopAbs_WIRE:
-        return Wire(TopoDS.Wire_s(topods))
+        return Wire(_topods_cast("Wire")(topods))
     if st == TopAbs_EDGE:
-        return Edge(TopoDS.Edge_s(topods))
+        return Edge(_topods_cast("Edge")(topods))
     # Fall back to generic Solid wrapper — gives .faces() etc.
     return Solid(topods)
 
