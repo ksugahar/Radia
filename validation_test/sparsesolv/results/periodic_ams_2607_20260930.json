@@ -1,0 +1,30 @@
+{
+  "schema": "radia.periodic-ams-validation.v1",
+  "host": "Hibino",
+  "ngsolve": "6.2.2607",
+  "python": "3.12.10",
+  "source_hashes": {
+    "src/radia/vector_potential_solver.py": "35d985bbaf04828c98894b74af07b7a323019e0898439812dcb63130e4e3f3c3",
+    "src/radia/em_design.py": "410441d2ff40b4e21f15a3658342e476f25870cd47245e1db35f8eb7b89d2288",
+    "src/radia/panels/calc_accel_magnet.py": "8412aa9c8d1df28c4e3997750af09d8188451830cb4be51e2f5cd62a7b131f58",
+    "tests/test_vector_potential_solver_dispatch.py": "ee3111b836549ed2dd191775ef6b0381ca1f40c4565eebb1a4724c83e1ac85e0",
+    "tests/test_vector_potential_periodic_ams.py": "7f50fc78d0fbb475b511a3a1298c383505bc8dda09e72a7f7be4547c99ca8914",
+    "tests/test_accel_solver_selection.py": "89ab19beb5ffccbf37f4e4b2e26d02251169b35fb298dd99833df578ae147103"
+  },
+  "native": {
+    "module": "sparsesolv_ngsolve.pyd",
+    "sha256": "5b77eb33a1191131e4c364562c429aa67743b4f5f717287cc3340b40a3adfa2c",
+    "matches_validation_native": true
+  },
+  "tests": {
+    "passed": 30,
+    "failed": 0,
+    "skipped": 0,
+    "by_module": {
+      "test_accel_solver_selection": 7,
+      "test_vector_potential_periodic_ams": 2,
+      "test_vector_potential_solver_dispatch": 21
+    }
+  },
+  "scope": "Periodic lowest-order gradient exactness and AMS/direct curl-field parity, vector solver dispatch, and accelerator solver selection. No nonlinear Kelvin Newton or performance acceptance is claimed."
+}
