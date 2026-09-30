@@ -210,3 +210,31 @@ def test_p2_extractor_rejects_open_surface(monkeypatch):
 
     with np.testing.assert_raises_regex(ValueError, "closed two-manifold"):
         sibc_hacapk.extract_surface_p2_lagrange(object())
+
+
+def test_p2_extractor_rejects_multiple_closed_shells(monkeypatch):
+    from radia.bem import sibc_hacapk
+
+    first_points, first_tris = _octahedron()
+    second_points, second_tris = _octahedron(center=(5.0, 0.0, 0.0))
+    points = np.vstack([first_points, second_points])
+    triangles = np.vstack([first_tris, second_tris + len(first_points)])
+    nodes = np.empty((len(triangles), 6, 3))
+    for index, tri in enumerate(triangles):
+        corners = points[tri]
+        nodes[index] = [
+            corners[0], corners[1], corners[2],
+            0.5 * (corners[0] + corners[1]),
+            0.5 * (corners[1] + corners[2]),
+            0.5 * (corners[2] + corners[0]),
+        ]
+    monkeypatch.setattr(
+        sibc_hacapk,
+        "extract_surface_curved",
+        lambda mesh, bnd_label=None, geom_order=2: (
+            points, triangles, np.arange(len(points)), nodes
+        ),
+    )
+
+    with np.testing.assert_raises_regex(ValueError, "exactly one closed component"):
+        sibc_hacapk.extract_surface_p2_lagrange(object())
