@@ -2337,18 +2337,6 @@ is needed for B(H). For material updates in total-potential iron use
 evaluate expensive reduced-domain coil fields at iron quadrature points.
 Retain the original free-row true-residual and constitutive checks.
 
-The following Picard material-order contract describes the development solver
-candidate, not a capability enabled by upgrading radia-mcp alone. Check the
-loaded solver's signature and numerical acceptance before using
-material_update_order; the current released solver may not expose it.
-In that candidate, the default path uses one element-centroid order-0 permeability and is
-therefore limited to response `order=1`.  A response `order=2` solve must opt in
-with `material_update_order=1`; that path projects the monotone-PCHIP B(H)
-secant law into a discontinuous P1 log-permeability field, bounds the physical
-relative permeability above zero, and returns restartable material-state DoFs.
-The final field is re-solved after the material convergence test so H and mu
-belong to the same nonlinear state.
-
 The material field is assembled and evaluated as an NGSolve
 ``CoefficientFunction`` on the selected finite-element space and is integrated
 with NGSolve quadrature.  The current Radia table adapter constructs that
@@ -2358,7 +2346,7 @@ the last knot with vacuum slope.  Therefore equal B-H knots from another
 solver are not yet an equal constitutive law: bind the table digest,
 interpolation, extrapolation, and anisotropy contract explicitly.
 
-For either path, compare a volume integral or sufficiently resolved volume
+For the Newton path, compare a volume integral or sufficiently resolved volume
 quadrature through `nonlinear_magnetic_spatial_evidence_gate`.  Production
 evidence also needs at least three h levels through
 `nonlinear_magnetic_refinement_energy_gate`: response/material orders must be

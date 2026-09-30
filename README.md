@@ -110,9 +110,9 @@ still apply.
 | Accelerator and precision magnets | Clebsch-Hodograph pole design, field quality and multipoles, isochronous topology optimization, and charged-particle tracking |
 | Eddy currents and shielding | NGSolve HCurl workflows, BEM-A, SIBC, ESIM, cohomology-aware formulations, and reduced transient models |
 | Coil and current-sheet design | Stream-function inverse design, ACA+ / TSVD compression, contour extraction, and manufacturable single-stroke paths |
-| Conductors and circuits | PEEC, proximity and skin effects, PRIMA/CLN reduction, SPICE export, KiCad/LTspice workflows, and circuit-field coupling |
+| Conductors and circuits | PEEC, proximity and skin effects, PRIMA/Foster reduction, SPICE export, KiCad/LTspice workflows, and circuit-field coupling |
 | Induction heating | Geometry-to-operator assembly, distributed Eddy/Thermal Simulink blocks, temperature fields, and checked Gmsh outputs |
-| Motors and magnetic levitation | Angle-periodic native reduced models, HCurl/CLN moving plants, Lorentz force, and Simulink control integration |
+| Motors and magnetic levitation | Angle-periodic native reduced models, HCurl/Foster moving plants, Lorentz force, and Simulink control integration |
 | Electromagnetic optimization | TPE, CMA-ES, MMA, SQP, adjoints, density/shape optimization, sheet-metal deformation, and CAD/mesh regeneration |
 | Post-processing | Saved NGSolve WebGUI scenes, Gmsh field views, LIC, isosurfaces, streamlines, sweeps, and flying particle-orbit animations |
 | TeX equation authoring | Eqnedit64 structural/TeX dual editing, keyboard-first templates, and native Office Math or image clipboard export |
@@ -326,7 +326,7 @@ optimization.
 
 PEEC workflows cover partial inductance, resistance, proximity and skin
 effects, shield coupling, circuit assembly, and SPICE-compatible extraction.
-PRIMA, block Lanczos, CLN, and universal relaxation networks provide reusable
+PRIMA, block Lanczos, Foster modal models, and universal relaxation networks provide reusable
 reduced models for circuit and transient studies.
 
 The built-in `radia.ltspice` package connects SPICE netlists, editable LTspice
@@ -659,7 +659,7 @@ Current priorities are:
 1. strengthen HDiv-VIM, topology optimization, and scalable open-boundary
    operators;
 2. complete robust Hodograph and accelerator-magnet design workflows;
-3. deepen Eddy, SIBC/ESIM, PEEC, CLN, and thermal coupling;
+3. deepen Eddy, SIBC/ESIM, PEEC, Foster reduction, and thermal coupling;
 4. expand measured Python/MATLAB/MEX parity and native Simulink dynamics;
 5. improve executed documentation, independent validation, and reproducible
    application artifacts.
