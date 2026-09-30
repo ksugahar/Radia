@@ -40,9 +40,9 @@ void require_scalar_struct(const mxArray* value, const char* context) {
 std::vector<double> numbers(const mxArray* value, const char* name,
                             bool optional = false) {
     if (!value && optional) return {};
-    if (!value || !mxIsDouble(value) || mxIsComplex(value))
+    if (!value || !mxIsDouble(value) || mxIsComplex(value) || mxIsSparse(value))
         throw std::invalid_argument(std::string(name) +
-                                    " must be a real double array");
+                                    " must be a full real double array");
     const std::size_t count = mxGetNumberOfElements(value);
     if (count == 0) return {};
     const double* data = mxGetPr(value);

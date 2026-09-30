@@ -193,10 +193,10 @@ value = double(value);
 end
 
 function values = finiteVector(values, count, name)
-if ~isnumeric(values) || ~isreal(values) || numel(values) ~= count || ...
+if ~isnumeric(values) || ~isreal(values) || issparse(values) || numel(values) ~= count || ...
         any(~isfinite(values), "all")
     error("radia:simulink:IHConfigVector", ...
-        "%s must contain %d finite real values.", name, count);
+        "%s must contain %d finite real values in a full array.", name, count);
 end
 values = double(values(:));
 end
@@ -210,10 +210,10 @@ end
 end
 
 function values = rowMajor(values, rows, columns, name)
-if ~isnumeric(values) || ~isreal(values) || numel(values) ~= rows * columns || ...
+if ~isnumeric(values) || ~isreal(values) || issparse(values) || numel(values) ~= rows * columns || ...
         any(~isfinite(values), "all")
     error("radia:simulink:IHConfigMatrix", ...
-        "%s must be a finite %d-by-%d real matrix.", name, rows, columns);
+        "%s must be a full finite %d-by-%d real matrix.", name, rows, columns);
 end
 if ~isvector(values) && ~isequal(size(values), [rows, columns])
     error("radia:simulink:IHConfigMatrix", ...
