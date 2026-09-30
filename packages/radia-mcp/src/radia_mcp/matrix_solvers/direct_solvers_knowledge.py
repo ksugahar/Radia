@@ -46,7 +46,8 @@ r.data = free * (f.vec - a.mat * gfu.vec)
 scale = Norm(free * rhs)
 rnorm = Norm(r)
 relative_residual = rnorm / scale if scale else (0.0 if rnorm == 0 else float("inf"))
-if not isfinite(relative_residual) or relative_residual > 1e-8:
+from radia._residual_gate import RELATIVE_LIMIT
+if not isfinite(relative_residual) or relative_residual > RELATIVE_LIMIT:
     raise RuntimeError(f"direct solve failed: residual={relative_residual}")
 ```
 

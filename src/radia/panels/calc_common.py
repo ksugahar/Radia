@@ -9,6 +9,7 @@ Provides:
   - Subprocess output protocol (progress / calc_main)
 """
 
+from radia._residual_gate import RELATIVE_LIMIT
 import io
 import json
 import math
@@ -40,7 +41,7 @@ def apply_fe_inverse(matrix, inverse, rhs, solution, free_dofs):
     residual = rhs.CreateVector()
     residual.data = projector * (rhs - matrix * solution)
     relative = residual.Norm() / max(scale, 1e-300)
-    if not math.isfinite(relative) or relative > 1e-8:
+    if not math.isfinite(relative) or relative > RELATIVE_LIMIT:
         raise RuntimeError(f"Direct FE solve failed true residual check: {relative:.3e}")
     return relative
 

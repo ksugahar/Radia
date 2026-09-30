@@ -174,6 +174,7 @@
         "tests/test_radia.py",
         "tests/test_meshless_relaxation_contract.py",
         "tests/test_version_consistency.py",
+        "tests/test_ngsolve_2607_compatibility.py",
         "tests/test_vim_api_names.py",
         "src/ext/sparsesolv/tests/test_sparsesolv.py",
         "tests/test_ams_internal_setup_parallel.py"
@@ -207,6 +208,8 @@
         "tests/test_boundary_material_adjacency.py",
         "tests/test_coil_axis_closed_form.py",
         "tests/test_mixed_omega_newton.py",
+        "tests/test_direct_residual_gate.py",
+        "tests/test_cohomology_cut_linear_residual.py",
         "tests/test_kelvin_mixed_omega.py",
         "tests/test_mixed_omega_review_fixes.py",
         "tests/test_c_type_p1_box_lane.py",

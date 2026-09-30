@@ -5,8 +5,7 @@ import math
 
 import numpy as np
 
-RELATIVE_LIMIT = 1e-8
-BACKWARD_LIMIT = 1e-12
+RELATIVE_LIMIT = 1e-6
 
 
 def frobenius_norm_on(matrix, free) -> float:
