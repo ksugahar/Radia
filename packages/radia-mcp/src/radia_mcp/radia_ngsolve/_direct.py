@@ -11,7 +11,7 @@ import numpy as np
 
 
 def check_residual(matrix, residual, solution, rhs, free, what, *, reference_norm=0.0):
-    from radia._residual_gate import check_true_residual
+    from ._vendor.residual_gate import check_true_residual
 
     return check_true_residual(matrix, residual, solution, rhs, free, what,
                                reference_norm=reference_norm)
