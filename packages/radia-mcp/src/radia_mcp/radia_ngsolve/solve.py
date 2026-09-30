@@ -3288,6 +3288,22 @@ def solve_planar_magnetostatic_nonlinear(mesh, nu_of_B, Jz=None, magnets=None,
     return gfu
 
 
+def _require_driven_conductor(mesh, sigma, driven_region, weight):
+    """Fail loudly unless ``driven_region`` names mesh regions that conduct.
+
+    ``weight`` is the constraint row's integrand factor (1 planar, 1/r
+    axisymmetric), so a zero value means the net-current row would be empty.
+    """
+    region = mesh.Materials(driven_region)
+    if region.Mask().NumSet() == 0:
+        raise ValueError(f"driven_region {driven_region!r} matches no mesh material; "
+                         f"materials are {sorted(set(mesh.GetMaterials()))}")
+    conductance = Integrate(sigma * weight, mesh, definedon=region)
+    if not abs(conductance) > 0:
+        raise ValueError(f"driven_region {driven_region!r} has zero conductivity: "
+                         "a current-driven conductor needs sigma > 0")
+
+
 def solve_planar_eddy(mesh, nu, sigma, omega, driven_region=None,
                       total_current=None, applied_Ez=None, Jz=None, order=3,
                       dirichlet="outer", dirichlet_value=0.0):
@@ -3306,11 +3322,14 @@ def solve_planar_eddy(mesh, nu, sigma, omega, driven_region=None,
     * ``driven_region`` + ``total_current`` : CURRENT-DRIVEN solid conductor. A
       NumberSpace scalar Vc (axial driving field -dV/dz) is added and constrained
       so  int_region sigma (-j w A_z + Vc) dA = total_current -- net current is
-      fixed while J redistributes (skin/proximity). FEMM "current driven" circuit.
+      fixed while J redistributes (skin/proximity). Vc acts on ``driven_region``
+      only; other conductors in ``sigma`` carry induced eddy current alone.
+      An empty or non-conducting ``driven_region`` raises ValueError.
     * ``applied_Ez`` : VOLTAGE-DRIVEN conductor. The axial field Vc = applied_Ez
       [V/m] is PRESCRIBED (a known source  f += sigma*Vc*v, no NumberSpace); the
       net current I = int sigma(-j w A_z + Vc) then follows, giving the per-length
-      impedance Z = applied_Ez / I. FEMM "voltage driven" circuit.
+      impedance Z = applied_Ez / I. The source covers ``driven_region`` when given,
+      else every conductor in ``sigma``.
 
     Returns the compound GridFunction (``components = (A_z, Vc)``) in current-driven
     mode, else the H1 GridFunction ``A_z`` (E_z = -j w A_z (+ applied_Ez in the
@@ -3325,16 +3344,19 @@ def solve_planar_eddy(mesh, nu, sigma, omega, driven_region=None,
             * NumberSpace(mesh, complex=True)
         if not omega > 0:
             raise ValueError("current-driven A-V solve needs omega > 0: the potential is scaled by 1/(j omega)")
+        _require_driven_conductor(mesh, sigma, driven_region, CoefficientFunction(1.0))
         # The unknown is the 1/s-scaled potential W = Vc / (j omega) (Kameari): the
         # couplings become -j omega sigma on both sides, so the system is complex
-        # symmetric; Vc = j omega W is restored after the solve.
+        # symmetric; Vc = j omega W is restored after the solve. The drive and the
+        # net-current constraint act on the driven conductor only; every other
+        # conductor keeps its eddy reaction but carries no impressed field.
         (Az, Vc), (dA, dV) = fes.TnT()
         a = BilinearForm(fes, symmetric=True)
         a += nu * grad(Az) * grad(dA) * dx
-        a += 1j * omega * sigma * Az * dA * dx          # eddy reaction
-        a += -1j * omega * sigma * Vc * dA * dx          # W drives A in conductor
-        a += -1j * omega * sigma * Az * dV * dx          # net-current constraint
-        a += 1j * omega * sigma * Vc * dV * dx
+        a += 1j * omega * sigma * Az * dA * dx                         # eddy reaction
+        a += -1j * omega * sigma * Vc * dA * dx(driven_region)          # W drives A in the conductor
+        a += -1j * omega * sigma * Az * dV * dx(driven_region)          # net-current constraint
+        a += 1j * omega * sigma * Vc * dV * dx(driven_region)
         f = LinearForm(fes)
         if Jz is not None:
             f += Jz * dA * dx
@@ -3354,7 +3376,7 @@ def solve_planar_eddy(mesh, nu, sigma, omega, driven_region=None,
     if Jz is not None:
         f += Jz * v * dx
     if applied_Ez is not None:           # voltage-driven: J_src = sigma * Vc
-        f += sigma * applied_Ez * v * dx
+        f += sigma * applied_Ez * v * (dx if driven_region is None else dx(driven_region))
     a.Assemble()
     f.Assemble()
     gfu = GridFunction(fes)
@@ -4251,10 +4273,13 @@ def solve_axi_eddy(mesh, nu, sigma, omega, driven_region=None, total_current=Non
       A NumberSpace scalar Vc (= r*E_phi, constant) is added; ``total_current``
       is the current through a meridional conductor cross-section,
       I = int J_phi dr dz, fixed by
-      int sigma*(-j*w*A + Vc/r) dr dz = I.
+      int sigma*(-j*w*A + Vc/r) dr dz = I  over ``driven_region``.
+      Other conductors in ``sigma`` carry induced eddy current alone; an
+      empty or non-conducting ``driven_region`` raises ValueError.
     * ``applied_Vc`` : VOLTAGE-DRIVEN. Vc = r*E_phi is PRESCRIBED (a known
       constant [V/turn/radian]); the cross-section current is
-      I = int sigma*(-j*w*A + Vc/r) dr dz.
+      I = int sigma*(-j*w*A + Vc/r) dr dz.  The source covers
+      ``driven_region`` when given, else every conductor in ``sigma``.
 
     Returns compound gfu (A_phi, Vc) in current-driven mode, else H1Henrotte gfu.
     Flux density: B_z = grad(u)[0] + u/r, B_r = -grad(u)[1]
@@ -4277,14 +4302,17 @@ def solve_axi_eddy(mesh, nu, sigma, omega, driven_region=None, total_current=Non
         #   j*omega int sigma*(-A + W/r) dr dz = I.
         # Its A coupling is therefore identical to the A-equation coupling,
         # making the complex bilinear form symmetric.  Restore Vc afterwards.
+        # The drive and the constraint act on the driven conductor only; every
+        # other conductor keeps its eddy reaction but carries no impressed field.
+        _require_driven_conductor(mesh, sigma, driven_region, 1.0 / r)
         (Az, Vc), (dA, dV) = fes.TnT()
         a = BilinearForm(fes, symmetric=True)
         a += nu * (1.0 / r) * (r * grad(Az)[0] + Az) * (r * grad(dA)[0] + dA) * dx
         a += nu * r * grad(Az)[1] * grad(dA)[1] * dx
         a += 1j * omega * sigma * r * Az * dA * dx
-        a += -1j * omega * sigma * Vc * dA * dx
-        a += -1j * omega * sigma * Az * dV * dx
-        a += 1j * omega * sigma * (1.0 / r) * Vc * dV * dx
+        a += -1j * omega * sigma * Vc * dA * dx(driven_region)
+        a += -1j * omega * sigma * Az * dV * dx(driven_region)
+        a += 1j * omega * sigma * (1.0 / r) * Vc * dV * dx(driven_region)
         f = LinearForm(fes)
         if Jr is not None:
             f += Jr * r * dA * dx
@@ -4308,7 +4336,7 @@ def solve_axi_eddy(mesh, nu, sigma, omega, driven_region=None, total_current=Non
         f += Jr * r * v * dx
     if applied_Vc is not None:
         # Vc = r*E_phi (constant); source: sigma*(Vc/r)*v*r dx = sigma*Vc*v*dx
-        f += sigma * applied_Vc * v * dx
+        f += sigma * applied_Vc * v * (dx if driven_region is None else dx(driven_region))
     a.Assemble()
     f.Assemble()
     gfu = GridFunction(fes)
