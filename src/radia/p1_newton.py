@@ -380,7 +380,14 @@ def solve_p1_newton(mesh, bh_table, *, iron=("iron",), source_cf=None, current_c
             tolerance = max(tolerance, min(0.01, 0.1 * r_norm / r0))
         if linear_floor:
             tolerance = min(0.5, max(tolerance, 0.1 * float(newton_tolerance) * r0 / r_norm))
+        from radia._residual_gate import RELATIVE_LIMIT, residual_scale
+        # r0 is fixed before Newton starts, independent of the computed update.
+        linear_scale = residual_scale(r_norm, r0)
+        tolerance = min(tolerance, RELATIVE_LIMIT * linear_scale / residual_scale(r_norm))
         row["linear_tolerance"] = tolerance
+        row["linear_reference_norm"] = r0
+        row["linear_residual_scale"] = linear_scale
+        row["linear_residual_limit"] = RELATIVE_LIMIT
         rhs.FV().NumPy()[:] = np.where(free, -r, 0.0)
         update[:] = 0.0
         t0 = time.perf_counter()
@@ -442,7 +449,10 @@ def solve_p1_newton(mesh, bh_table, *, iron=("iron",), source_cf=None, current_c
         rhs_norm = max(float(np.linalg.norm(rhs.FV().NumPy()[free])), 1e-300)
         linear = float(np.linalg.norm(check.FV().NumPy()[free]) / rhs_norm)
         row["linear_relative_residual"] = linear
-        if not math.isfinite(linear) or linear > tolerance * (1.0 + 1e-9):
+        scaled_linear = float(np.linalg.norm(check.FV().NumPy()[free]) / linear_scale)
+        row["linear_scaled_relative_residual"] = scaled_linear
+        if (not math.isfinite(linear) or scaled_linear > RELATIVE_LIMIT
+                or linear > tolerance * (1.0 + 1e-9)):
             raise RuntimeError(f"Newton linear solve ({linear_solver}) reached {linear:.2e}, "
                                f"above its tolerance {tolerance:.2e}")
         step = update.FV().NumPy().copy()

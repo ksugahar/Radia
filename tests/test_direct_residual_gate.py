@@ -79,3 +79,29 @@ def test_shared_linear_gate_rejects_excess_and_nonfinite(relative):
     with pytest.raises(RuntimeError, match="true relative residual"):
         check_true_residual(Identity(), np.array([relative]), np.ones(1),
                             np.ones(1), np.array([True]), "boundary")
+
+
+def test_fixed_physical_scale_handles_tiny_correction_rhs_without_backward_admission():
+    from radia._residual_gate import check_true_residual
+
+    class Identity:
+        def CSR(self):
+            return np.ones(1), np.zeros(1, dtype=int), np.array([0, 1])
+
+    free = np.array([True])
+    rhs = np.array([1e-20])
+    x = np.array([1e12])  # the solution must never enlarge the acceptance scale
+    assert check_true_residual(Identity(), np.array([5e-7]), x, rhs, free,
+                               "fixed load", reference_norm=1.0) == 5e-7
+    with pytest.raises(RuntimeError):
+        check_true_residual(Identity(), np.array([2e-6]), x, rhs, free,
+                            "fixed load", reference_norm=1.0)
+    with pytest.raises(RuntimeError):
+        check_true_residual(Identity(), np.array([5e-7]), x, rhs, free, "no scale")
+
+
+@pytest.mark.parametrize("scale", [-1.0, float("nan"), float("inf")])
+def test_physical_reference_scale_must_be_finite_nonnegative(scale):
+    from radia._residual_gate import residual_scale
+    with pytest.raises(ValueError):
+        residual_scale(1.0, scale)

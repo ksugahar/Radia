@@ -17,8 +17,20 @@ def frobenius_norm_on(matrix, free) -> float:
     return float(np.sqrt(np.sum(np.abs(values[keep]) ** 2)))
 
 
-def check_true_residual(matrix, residual, solution, rhs, free, what) -> float:
-    """Require the original relative-residual limit; return ||r||/||b||.
+def residual_scale(rhs_norm: float, reference_norm: float = 0.0) -> float:
+    """Use an explicit fixed physical load scale, never the computed solution.
+
+    A caller may supply its original effective-load norm for Newton correction
+    equations. The reference must be fixed before solving, finite and nonnegative.
+    """
+    if not math.isfinite(reference_norm) or reference_norm < 0:
+        raise ValueError("reference_norm must be finite and nonnegative")
+    return max(float(rhs_norm), float(reference_norm), 1e-300)
+
+
+def check_true_residual(matrix, residual, solution, rhs, free, what,
+                        *, reference_norm: float = 0.0) -> float:
+    """Require the shared limit; return ||r||/max(||b||, reference_norm).
 
     ``residual``, ``solution`` and ``rhs`` are full-length arrays; ``free`` is
     the boolean mask of the rows that were solved.
@@ -27,7 +39,7 @@ def check_true_residual(matrix, residual, solution, rhs, free, what) -> float:
     r = residual[free]
     b = rhs[free]
     r_norm = float(np.linalg.norm(r))
-    relative = r_norm / max(float(np.linalg.norm(b)), 1e-300)
+    relative = r_norm / residual_scale(float(np.linalg.norm(b)), reference_norm)
     backward = math.inf
     finite = bool(np.all(np.isfinite(x))) and math.isfinite(relative)
     if finite and relative > RELATIVE_LIMIT:

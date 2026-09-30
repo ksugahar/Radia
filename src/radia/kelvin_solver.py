@@ -2138,8 +2138,8 @@ def solve_magnetostatic_matching_trace_total_reduced_omega(
     # returned like any other; CGSolver does not raise at maxiter and says
     # nothing with printrates=False.  The true residual is checked here, on
     # the solution the caller will receive.  CG's own tolerance is on the
-    # preconditioned residual, so the true one is allowed a factor over it.
-    residual_limit = (100.0 * float(cg_tolerance) if solver == "cg" else 1.0e-8)
+    # preconditioned residual; acceptance uses the shared true-residual limit.
+    residual_limit = RELATIVE_LIMIT
     linear_residual["accepted_below"] = residual_limit
     if not (math.isfinite(relative_residual) and relative_residual <= residual_limit):
         raise LinearSolveNotConverged(

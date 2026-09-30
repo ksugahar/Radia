@@ -81,8 +81,9 @@ def _solve_rt0_saddle(matrix, rhs, free, velocity_dofs):
     residual.data = rhs - matrix * result
     relative = float(np.linalg.norm(residual.FV().NumPy()[active]) /
                      max(np.linalg.norm(load[active]), 1e-300))
-    if not np.isfinite(relative) or relative > 1e-10:
-        raise RuntimeError(f"RT0 mixed true relative residual {relative:.3e} exceeds 1e-10")
+    from radia._residual_gate import RELATIVE_LIMIT
+    if not np.isfinite(relative) or relative > RELATIVE_LIMIT:
+        raise RuntimeError(f"RT0 mixed true relative residual {relative:.3e} exceeds {RELATIVE_LIMIT:g}")
     return result, relative, iterations
 
 
