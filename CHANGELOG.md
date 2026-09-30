@@ -5,6 +5,19 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 5.2.0 - Solver maintenance and label-specific cooling
+
+Release candidate; publication and four-host acceptance are not yet complete.
+
+- Thermal surface labels can specify independent convection coefficients and
+  ambient temperatures in the Python/MCP thermal chain. Native Simulink scalar
+  cooling inputs are unchanged.
+- Sampled-current magnetic-field evaluation reuses the existing Biot-Savart
+  kernel, and static normal lamination permeability has independent layered
+  energy checks.
+- The numerical CI lane includes thermal boundary-role regression tests;
+  pure input and energy-audit contracts remain usable without native modules.
+
 - MagLev demonstration names now identify their actual algorithms: sphere
   `G_lanczos`, TEAM 28 `team28_arnoldi_force.arnoldi_forces`, and rotating-magnet
   POD-Krylov result keys (`pod_krylov_*` instead of `cln_*`). Update demo imports
