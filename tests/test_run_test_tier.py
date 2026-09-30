@@ -343,3 +343,16 @@ def test_scoped_native_lane_still_checks_changed_parent_profile():
     previous['profiles']['fast-contracts']['paths'].remove('tests/test_ci_monitor.py')
     assert runner.changed_impact_tests(
         current, previous, profile_name='native-smoke') == {'tests/test_ci_monitor.py'}
+
+def test_axisymmetric_mcp_checks_use_numerical_lane_and_trace_is_fast():
+    runner = runner_module()
+    changed = ['packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py']
+    numerical = {'validation_test/radia_mcp/test_axi_eddy_current_drive.py',
+                 'validation_test/radia_mcp/test_eddy_driven_region.py'}
+    fast, _ = runner.load_profile('fast-contracts')
+    selected = runner.select_impact_tests(fast, changed, profile_name='fast-contracts')
+    assert not numerical.intersection(selected)
+    solver, _ = runner.load_profile('solver-numerics')
+    assert numerical.issubset(solver)
+    assert len(solver) == len(set(solver))
+    assert 'tests/test_trace_reuse_evidence_contract.py' in fast
