@@ -47,3 +47,13 @@ def test_karl_acceptance_publishes_impedance_used_by_final_field():
         tolerance=1.0e-3, impedance_used_for_solve=2.0 + 3.0j)
     assert not converged
     assert published is None
+
+
+def test_fem_cell_convergence_gate_keeps_diagnostics():
+    with pytest.raises(
+            RuntimeError,
+            match=r"FEM scalar ESIM.*iterations=9.*relative_change=0.02"):
+        solver.require_esim_converged(
+            {"converged": False, "iterations": 9,
+             "relative_change": 0.02, "Z": 1.0 + 1.0j},
+            "FEM scalar ESIM cell solve")
