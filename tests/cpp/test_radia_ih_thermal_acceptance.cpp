@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -55,6 +56,27 @@ void TestTinyLoadCannotUseAnAbsoluteResidualFloor() {
     RequireEqual(state.previous_angle_rad, 0.25, "angle");
 }
 
+void TestSubnormalScaleCannotUnderflowToConvergence() {
+    ThermalState state{{0.0}, 3.0, 0.15};
+    ThermalStepOptions options;
+    options.dt_s = 1.0;
+    options.tolerance = 1.0e-6;
+    options.max_iterations = 0;
+    bool rejected = false;
+    try {
+        radia::ih::advance_thermal(
+            Diagonal(1, 1.0), Diagonal(1, 0.0), nullptr,
+            {1.0e-300}, {1.0}, 0.5, options, state);
+    } catch (const std::runtime_error&) {
+        rejected = true;
+    }
+    if (!rejected)
+        throw std::runtime_error("subnormal unresolved thermal load was accepted");
+    RequireEqual(state.temperature_K[0], 0.0, "subnormal temperature");
+    RequireEqual(state.time_s, 3.0, "subnormal time");
+    RequireEqual(state.previous_angle_rad, 0.15, "subnormal angle");
+}
+
 void TestFailedIterationDoesNotPublishPartialState() {
     ThermalState state{{300.0, 310.0}, 2.0, 0.1};
     ThermalStepOptions options;
@@ -97,13 +119,48 @@ void TestJacobiPcgAcceptsAResolvedSystem() {
     if (!(relative <= 1.0e-12))
         throw std::runtime_error("accepted solve failed the independent true residual");
 }
+
+void TestNonfiniteSourceAndStateFailWithoutMutation() {
+    ThermalStepOptions options;
+    options.dt_s = 1.0;
+    for (int case_index = 0; case_index < 2; ++case_index) {
+        ThermalState state{{300.0}, 5.0, 0.2};
+        std::vector<double> source = {1.0};
+        if (case_index == 0)
+            source[0] = std::numeric_limits<double>::quiet_NaN();
+        else
+            state.temperature_K[0] =
+                std::numeric_limits<double>::quiet_NaN();
+        const ThermalState before = state;
+        bool rejected = false;
+        try {
+            radia::ih::advance_thermal(
+                Diagonal(1, 1.0), Diagonal(1, 0.0), nullptr,
+                source, {1.0}, 0.7, options, state);
+        } catch (const std::invalid_argument&) {
+            rejected = true;
+        }
+        if (!rejected)
+            throw std::runtime_error("nonfinite thermal input was accepted");
+        if (case_index == 0)
+            RequireEqual(state.temperature_K[0], before.temperature_K[0],
+                         "finite temperature");
+        else if (!std::isnan(state.temperature_K[0]))
+            throw std::runtime_error("nonfinite input state was mutated");
+        RequireEqual(state.time_s, before.time_s, "time");
+        RequireEqual(state.previous_angle_rad, before.previous_angle_rad,
+                     "angle");
+    }
+}
 }  // namespace
 
 int main() {
     try {
         TestTinyLoadCannotUseAnAbsoluteResidualFloor();
+        TestSubnormalScaleCannotUnderflowToConvergence();
         TestFailedIterationDoesNotPublishPartialState();
         TestJacobiPcgAcceptsAResolvedSystem();
+        TestNonfiniteSourceAndStateFailWithoutMutation();
         std::cout << "radia_ih_thermal: all tests passed\n";
         return 0;
     } catch (const std::exception& error) {
