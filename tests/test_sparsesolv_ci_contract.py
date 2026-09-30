@@ -268,3 +268,11 @@ def test_native_solver_lane_builds_required_axisymmetric_extension():
     steps = workflow["jobs"]["ams-regression"]["steps"]
     build = next(s for s in steps if s.get("name") == "Build current package and SparseSolv")
     assert ".\\Build.ps1 -AxiFemOnly" in build["run"]
+
+
+def test_axifem_build_links_python_from_the_base_interpreter():
+    script = (ROOT / "Build.ps1").read_text(encoding="utf-8")
+    assert "sys.base_prefix" in script
+    assert 'Join-Path $pyBasePrefix "libs\\$pyLib"' in script
+    assert '"$PythonImportLibrary"' in script
+    assert '"$pyPrefix\\libs\\$pyLib"' not in script
