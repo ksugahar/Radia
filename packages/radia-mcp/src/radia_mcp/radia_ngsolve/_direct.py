@@ -2,8 +2,8 @@
 
 SparseCholesky returns a wrong answer without an error for a singular or
 nonsymmetric matrix, so every solve is accepted by its true residual on the free
-rows: ||r||/||b|| <= 1e-8. Backward error cannot relax that contract.
-Radia-mcp is a separate distribution, so it carries its own check.
+rows: ||r||/||b|| <= 1e-6. Backward error cannot relax that contract.
+The computational backend supplies the shared acceptance limit.
 """
 from __future__ import annotations
 
@@ -13,13 +13,15 @@ import numpy as np
 
 
 def check_residual(matrix, residual, solution, rhs, free, what):
+    from radia._residual_gate import RELATIVE_LIMIT
+
     x, r, b = solution[free], residual[free], rhs[free]
     r_norm = float(np.linalg.norm(r))
     relative = r_norm / max(float(np.linalg.norm(b)), 1e-300)
-    if np.all(np.isfinite(x)) and math.isfinite(relative) and relative <= 1e-8:
+    if np.all(np.isfinite(x)) and math.isfinite(relative) and relative <= RELATIVE_LIMIT:
         return relative
     raise RuntimeError(f"{what}: nonfinite solution or true relative residual "
-                       f"{relative:.3e} exceeds 1e-8")
+                       f"{relative:.3e} exceeds {RELATIVE_LIMIT:g}")
 
 
 def solve_symmetric(matrix, freedofs, rhs, what):

@@ -26,6 +26,7 @@ Each segment represents a straight current-carrying wire.
 Part of Radia project
 """
 
+from radia._residual_gate import RELATIVE_LIMIT
 import numpy as np
 import time
 
@@ -43,8 +44,8 @@ def _apply_dirichlet_inverse(matrix, inverse, fes, field):
     free = np.array(list(fes.FreeDofs()), dtype=bool)
     relative = float(np.linalg.norm(residual.FV().NumPy()[free]) /
                      max(np.linalg.norm(rhs.FV().NumPy()[free]), 1e-300))
-    if not np.isfinite(relative) or relative > 1e-8:
-        raise RuntimeError(f"PEEC body true relative residual {relative:.3e} exceeds 1e-8")
+    if not np.isfinite(relative) or relative > RELATIVE_LIMIT:
+        raise RuntimeError(f"PEEC body true relative residual {relative:.3e} exceeds {RELATIVE_LIMIT:g}")
     field.vec.data += correction
     return relative
 

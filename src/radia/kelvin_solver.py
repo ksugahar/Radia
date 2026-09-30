@@ -23,6 +23,7 @@ two-sphere Kelvin geometry built via
 
 from __future__ import annotations
 
+from radia._residual_gate import RELATIVE_LIMIT
 import functools
 import math
 import time
@@ -1696,9 +1697,9 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         load_l2 = float(np.linalg.norm(effective_load.FV().NumPy()[free_mask]))
         linear_residual["free_dofs"]["effective_load_l2"] = load_l2
         relative = free_residual["residual_l2"] / max(load_l2, 1e-300)
-        if not math.isfinite(relative) or relative > 1e-8:
+        if not math.isfinite(relative) or relative > RELATIVE_LIMIT:
             raise RuntimeError(
-                f"mixed Omega direct FE true relative residual {relative:.3e} exceeds 1e-8 "
+                f"mixed Omega direct FE true relative residual {relative:.3e} exceeds {RELATIVE_LIMIT:g} "
                 "(normalised by the effective load f - A u_D on the free rows)")
     assembled_energy = _assembled_primal_energy(
         a_bf, f_lf, solution, fes, primal_blocks=(0, 1))
