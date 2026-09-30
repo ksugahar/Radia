@@ -1,11 +1,17 @@
+import importlib.util
 import json
+import sys
+from pathlib import Path
 
 import pytest
 
-from radia.ih_heat_boundaries import (
-    load_convection_map,
-    normalize_convection_map,
-)
+SOURCE = Path(__file__).parents[1] / "src" / "radia" / "ih_heat_boundaries.py"
+SPEC = importlib.util.spec_from_file_location("ih_heat_boundaries_under_test", SOURCE)
+MODULE = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = MODULE
+SPEC.loader.exec_module(MODULE)
+load_convection_map = MODULE.load_convection_map
+normalize_convection_map = MODULE.normalize_convection_map
 
 
 def test_convection_map_normalizes_exact_labels_and_insulation():
