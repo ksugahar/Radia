@@ -232,8 +232,13 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         linear_error = residual.CreateVector()
         linear_error.data = tangent.mat * step + residual
         absolute_linear = float(np.linalg.norm(linear_error.FV().NumPy()[free]))
-        relative_linear = float(absolute_linear
-                                / max(np.linalg.norm(residual.FV().NumPy()[free]), 1e-30))
+        from radia._residual_gate import residual_scale
+        rhs_norm = float(np.linalg.norm(residual.FV().NumPy()[free]))
+        linear_scale = residual_scale(rhs_norm, reference_norm)
+        relative_linear = absolute_linear / linear_scale
+        row["linear_rhs_relative_residual"] = absolute_linear / residual_scale(rhs_norm)
+        row["linear_reference_norm"] = reference_norm
+        row["linear_residual_scale"] = linear_scale
         row["linear_residual_relative"] = relative_linear
         row["linear_iterations"] = getattr(inv, "iterations", None)
         # The linear acceptance contract is independent of nonlinear stopping.

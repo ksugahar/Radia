@@ -107,6 +107,8 @@ def test_linear_solvers_agree_on_the_nonlinear_field(box_mesh):
     np.testing.assert_allclose(direct["observation_B_T"], beta_zero["observation_B_T"], rtol=1e-4, atol=1e-7)
     for result in (beta_zero, iccg, direct):
         assert result["stats"]["converged"]
+        assert all(row["linear_scaled_relative_residual"] <= 1e-6
+                   for row in result["stats"]["history"])
         assert all(row["linear_relative_residual"] <= row["linear_tolerance"] * (1 + 1e-9)
                    for row in result["stats"]["history"])
 
