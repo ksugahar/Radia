@@ -83,6 +83,7 @@ def main():
                                 root/'src/matlab/radia_ih_mex_commands.cpp',
                                 root/'matlab/+radia/+simulink/validateIHNativeConfig.m',
                                 root/'tests/matlab/test_ih_sparse_inputs.m',
+                                root/'matlab/+radia/+internal/nextIHNativeHandle.m',
                                 root/"matlab/+radia/RadiaField.m",
                                 root/"src/core/rad_ngsolve_radia_field.h",
                                 root/"src/ext/HACApK/cHACApK_base.c",
@@ -99,6 +100,7 @@ def main():
     metrics = Path(scratch.name)/"metrics.json"
     try:
         eng = start_owned_engine(matlab.engine)
+        eng.setenv("RADIA_MEX_RELOAD_TEST", "1", nargout=0)
         eng.cd(str(root), nargout=0)
         eng.setenv("RADIA_PYTHON_EXECUTABLE", sys.executable, nargout=0)
         eng.addpath(str(root/"matlab"), nargout=0)
