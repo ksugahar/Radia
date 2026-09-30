@@ -391,6 +391,10 @@ jobs:
           # Bound MSVC commit usage on shared runners (C1060 at four jobs).
           & .\Build.ps1 -RadiaOnly -BuildJobs 2
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Required axisymmetric solver tests import radia.axifem; build the
+          # native extension explicitly instead of borrowing or skipping it.
+          & .\Build.ps1 -AxiFemOnly -BuildJobs 2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $vs = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
           if (-not $vs) { throw 'MSVC installation not found' }
