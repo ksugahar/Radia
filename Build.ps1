@@ -326,13 +326,18 @@ if ($AxiFemOnly) {
 # paths that do not resolve when 8dot3 name creation is disabled on the volume).
 $netgenPkg = (& $PythonExecutable -c "import netgen,os;print(os.path.dirname(netgen.__file__))").Trim()
 $pyPrefix  = (& $PythonExecutable -c "import sys;print(sys.prefix)").Trim()
+$pyBasePrefix = (& $PythonExecutable -c "import sys;print(sys.base_prefix)").Trim()
 $pyInc     = (& $PythonExecutable -c "import sysconfig;print(sysconfig.get_path('include'))").Trim()
 $pyLib     = (& $PythonExecutable -c "import sys;print(f'python{sys.version_info.major}{sys.version_info.minor}.lib')").Trim()
+$PythonImportLibrary = Join-Path $pyBasePrefix "libs\$pyLib"
+if (-not (Test-Path -LiteralPath $PythonImportLibrary -PathType Leaf)) {
+    throw "Python import library not found at base interpreter path: $PythonImportLibrary"
+}
 $axiSrc    = "$PROJECT_DIR\src\ext\axifem"
 $objDir    = "$BUILD_DIR\axifem_direct"
 if (-not (Test-Path $objDir)) { New-Item -ItemType Directory -Path $objDir | Out-Null }
 Write-Host "  netgen pkg: $netgenPkg" -ForegroundColor Gray
-Write-Host "  python    : $pyPrefix ($pyLib)" -ForegroundColor Gray
+Write-Host "  python    : $pyPrefix ($PythonImportLibrary)" -ForegroundColor Gray
 # Compile flags mirror the CMake target (see `ninja -t commands axifem`).
 $axiCFlags = '/nologo /TP -DHAVE_NETGEN_SOURCES -DHAVE_STRUCT_TIMESPEC -DLAPACK -DMSVC_EXPRESS -DNDEBUG -DNETGEN_PYTHON -DNGS_PYTHON -DNG_PYTHON -DNOMINMAX -DPYBIND11_SIMPLE_GIL_MANAGEMENT -DPy_NO_LINK_LIB -DRADIA_AXIFEM_PHASE_2B -DTCL -DUSE_TIMEOFDAY -DUSE_UMFPACK -DWIN32 -DWNT -DWNT_WINDOW -D_CRT_SECURE_NO_WARNINGS -D_WIN32_WINNT=0x1000 -Daxifem_EXPORTS /EHsc /O2 /Ob2 /MD /fp:fast /W0 /wd4244 /wd4267 /arch:AVX2 /bigobj /std:c++20 /wd4068 -DMAX_SYS_DIM=3'
 $BatchContent = @"
@@ -349,7 +354,7 @@ for %%F in (axifem axi_henrotte_fe axi_henrotte_fespace axi_henrotte_integrators
     if errorlevel 1 ( echo COMPILE_FAILED %%F & exit /b 1 )
 )
 echo === LINK axifem.pyd ===
-link /nologo "$objDir\axifem.obj" "$objDir\axi_henrotte_fe.obj" "$objDir\axi_henrotte_fespace.obj" "$objDir\axi_henrotte_integrators.obj" "$objDir\axi_henrotte_numeric.obj" /out:"$BUILD_DIR\axifem.pyd" /implib:"$objDir\axifem.lib" /dll /machine:x64 /INCREMENTAL:NO /ignore:4273 /ignore:4217 /ignore:4049 "$pyPrefix\libs\$pyLib" "$netgenPkg\lib\libngsolve.lib" "$netgenPkg\lib\nglib.lib" "$netgenPkg\lib\ngcore.lib" kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib
+link /nologo "$objDir\axifem.obj" "$objDir\axi_henrotte_fe.obj" "$objDir\axi_henrotte_fespace.obj" "$objDir\axi_henrotte_integrators.obj" "$objDir\axi_henrotte_numeric.obj" /out:"$BUILD_DIR\axifem.pyd" /implib:"$objDir\axifem.lib" /dll /machine:x64 /INCREMENTAL:NO /ignore:4273 /ignore:4217 /ignore:4049 "$PythonImportLibrary" "$netgenPkg\lib\libngsolve.lib" "$netgenPkg\lib\nglib.lib" "$netgenPkg\lib\ngcore.lib" kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib
 if errorlevel 1 ( echo LINK_FAILED & exit /b 2 )
 copy /Y "$BUILD_DIR\axifem.pyd" "$PROJECT_DIR\src\radia\axifem.pyd" >nul
 echo Build completed.
