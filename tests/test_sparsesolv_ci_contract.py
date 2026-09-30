@@ -251,3 +251,13 @@ def test_heavy_derivative_validation_remains_required_after_tier_split():
     before, after = manifest(), manifest()
     after["profiles"]["solver-heavy"] = {"paths": [path]}
     assert not IMPACT.ams_manifest_unchanged(json.dumps(before), json.dumps(after))
+
+
+def test_mex_symmetry_cpp_runs_through_generator_independent_ctest():
+    workflow = yaml.safe_load((ROOT / ".github/workflows/sparsesolv.yml").read_text())
+    steps = workflow["jobs"]["ams-regression"]["steps"]
+    build = next(s for s in steps if s.get("name") == "Build current package and SparseSolv")
+    assert "ctest --test-dir build-msvc -C Release" in build["run"]
+    assert "--no-tests=error" in build["run"]
+    assert "radia\\.mex_sparse_symmetry\\.cpp$" in build["run"]
+    assert "build-msvc\\Release\\test_radia_mex_sparse_symmetry.exe" not in build["run"]
