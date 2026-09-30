@@ -583,7 +583,37 @@ topology-preserving `GetTrafo` deformation with a complete physical re-solve
 for every accepted step. Acceptance is evaluated against selected entries of
 the fourth-order Lie map; no gray material or design finite difference is used.
 
-`mmm_topology_two_stage_lie_lab_20260830.json` is the retained LAB result. It
-records the runtime versions, solve history, recovered displacement, and every
-scientific gate. The fast unit tests cover facade ordering, type checks, and
+`mmm_topology_two_stage_lie_mdx2_20260930.json` is the retained result,
+regenerated after the planar sign-convention change below. It records the
+runtime versions, solve history, recovered displacement, and every scientific
+gate. The fast unit tests cover facade ordering, type checks, and
 acceptance semantics only; numerical evidence remains in this validation lane.
+
+## Planar sign convention (2026-09-30)
+
+Every planar optics route now uses one right-handed frame: `x = bend_axis x t`,
+`y = bend_axis`, `s = t`.  Positive signed curvature bends toward `-x`
+(metric `1 + h*x`), and `curvature_sign` is the charge sign in
+`h = q*B_y/p` and `k1 = q*(dB_y/dx)/p`; no separate gradient sign exists.
+Before this change the linear, Taylor and Lie-multipole routes treated `x` as
+outward while the observation stencils, `frame_at` and the A-map route used
+`e_x`, so a gradient measured along `e_x` entered with the unphysical sign.
+The FFAG cells turn counter-clockwise about +z in positive `B_z`, hence
+`FFAG_CELL_CHARGE_SIGN = -1`, negative `h`, and cell rows `[B_z, -dB_z/dr]`.
+
+`sign_convention_rerun_mdx2_20260930.json` records the regeneration on mdx2
+(clean provenance build, NGSolve 2607) and its comparison with the previous
+evidence.  The cell targets, section-optics rows, both canonical HCurl chains
+and the two-stage Lie run are unchanged within numerical noise; the former
+empirical `htilde = -signed_curvature` patch had reproduced the correct `h`.
+`results_ffag_hdiv_mmm_poc.json` changed physically: its gradient rows now
+carry the physical sign and the linear-model agreement rose from 0.50 to 0.86.
+
+The dated summaries without a producer script in this tree
+(`manufactured_inverse_*_2026082*.json`, `real_target_selected_components_lab_20260825.json`,
+`results_ffag_hdiv_mmm_poc_*_partial3_20260824.json`, `solver_*_2026082*.json`)
+predate the change and cannot be replayed.  The solver files are performance
+records and the manufactured-inverse gates are self-consistent recoveries, so
+their conclusions stand.  `real_target_selected_components_lab_20260825.json`
+and the two partial-adjoint PoC summaries targeted physical focusing through
+the old gradient sign and are superseded, not evidence for the current code.
