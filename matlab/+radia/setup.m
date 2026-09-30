@@ -60,6 +60,7 @@ if ~options.Force && ~isempty(cachedInfo) && ...
         verifyLoadedMex(cachedInfo.mex_source_commit);
     end
     cachedInfo.simulink_file_generation = fileGenerationInfo;
+    radia.internal.selectedPythonExecutable("set", cachedInfo.python_executable);
     info = cachedInfo;
     return
 end
@@ -164,6 +165,7 @@ if options.Verbose
 end
 cachedInfo = info;
 cachedPython = options.PythonExecutable;
+radia.internal.selectedPythonExecutable("set", options.PythonExecutable);
 end
 
 function executable = defaultPythonExecutable()
