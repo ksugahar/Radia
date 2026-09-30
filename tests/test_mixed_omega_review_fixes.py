@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 ng = pytest.importorskip("ngsolve")
+from radia._residual_gate import RELATIVE_LIMIT
 
 _HELPERS = None
 
@@ -74,4 +75,4 @@ def test_a_converged_cg_solve_records_the_bar_it_cleared():
     residual = result["linear_residual"]
     assert math.isfinite(result["linear_residual_relative"])
     assert result["linear_residual_relative"] <= residual["accepted_below"]
-    assert residual["accepted_below"] == pytest.approx(100.0 * 1.0e-10)
+    assert residual["accepted_below"] == RELATIVE_LIMIT
