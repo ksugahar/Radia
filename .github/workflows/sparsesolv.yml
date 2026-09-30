@@ -399,7 +399,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & cmd.exe /d /c "call `"$vcvars`" && cmake --build build-msvc --config Release --target test_radia_mex_sparse_symmetry --parallel 2"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & .\build-msvc\Release\test_radia_mex_sparse_symmetry.exe
+          ctest --test-dir build-msvc -C Release -R '^radia\.mex_sparse_symmetry\.cpp$' --output-on-failure --no-tests=error
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Verify source provenance and run required AMS tests
