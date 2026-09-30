@@ -168,6 +168,14 @@ mesh boundary labels to a heat-transfer coefficient and ambient temperature:
 }
 ```
 
+Name the faces of the thermal solid mesh during mesh export. These boundary
+labels are separate from the volume material name such as `workpiece`. The
+map checks existing mesh labels; it does not create or rename them. Use the
+Python thermal chain with a custom mesh-label contract for these multiple
+labels. The existing native Simulink presets `ih_workpiece_v1` and its
+axisymmetric variant allow only their declared `sibc` (and axis) labels; this
+feature does not relax those presets.
+
 Set `IHDesignSpec(convection_map="cooling.json", ...)` to pass the file path
 through the Python design command builder. Use the boundary labels stored in
 the thermal mesh; unknown labels and ambiguous mixtures with the old uniform
