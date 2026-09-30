@@ -22,7 +22,10 @@
       "tests/test_trace_reuse_evidence_contract.py"
     ],
     "src/radia/_residual_gate.py": ["tests/test_mcp_residual_vendor_contract.py"],
-    "src/radia/panels/calc_fem_kelvin.py": ["tests/test_element_line_quadrature_contract.py"],
+    "src/radia/panels/calc_fem_kelvin.py": [
+      "tests/test_element_line_quadrature_contract.py",
+      "tests/test_calc_fem_kelvin_fail_loud.py"
+    ],
     "validation_test/esrf_three_engine/run_hybrid_undulator_three_engine.py": [
       "tests/test_three_engine_agreement_gate.py"
     ],
@@ -238,6 +241,7 @@
         "tests/test_hdiv_energy_material_consistency.py",
         "tests/test_envelope_stop_core.py",
         "tests/test_axisym_measure_contract.py",
+        "tests/test_calc_fem_kelvin_fail_loud.py",
         "tests/test_sibc_corner_patch.py",
         "tests/test_boundary_material_adjacency.py",
         "tests/test_coil_axis_closed_form.py",
