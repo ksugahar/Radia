@@ -83,11 +83,6 @@ def _select_accel_solver(solver, formulation, order, periodic, ndof):
         if formulation == "a" and not periodic and order in (1, 2, 3):
             return "bddc_ams"
         return "sparsecholesky" if ndof < 200000 else "bddc"
-    if solver == "ams":
-        raise ValueError(
-            "Standalone AMS is not supported by the accelerator's full HCurl "
-            "space. Select bddc_ams explicitly for nonperiodic A order 1, 2 "
-            "or 3, or select sparsecholesky.")
     if solver == "bddc_ams":
         if formulation != "a" or periodic or order not in (1, 2, 3):
             raise ValueError("AMS requires nonperiodic HCurl order 1, 2 or 3")
