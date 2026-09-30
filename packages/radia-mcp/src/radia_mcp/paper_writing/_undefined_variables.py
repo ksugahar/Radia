@@ -71,7 +71,7 @@ UNIVERSAL_WHITELIST = frozenset({
     # SI-style constants
     r"\mu_0", r"\epsilon_0", r"\varepsilon_0", r"\hbar",
     # Loop / index / counter (almost universally generic)
-    "i", "j", "k", "l", "m", "n",
+    "e", "i", "j", "k", "l", "m", "n",
     # Time / frequency / position (universal in EM body text)
     "t", "f", "x", "y", "z", "r",
     # Math operators
@@ -130,7 +130,7 @@ _NOMENCLATURE_PATTERNS = [
                 re.DOTALL),
     # Lab-friendly informal "Notation" / "Symbols" section
     re.compile(
-        r"\\section\*?\{(?:Notation|Symbols|Nomenclature)\}"
+        r"\\section\*?\{(?:Notation|Symbols|Nomenclature|記号|主要記号)\}"
         r"(.+?)(?=\\section\{|\\bibliography|\\end\{document\})",
         re.DOTALL | re.IGNORECASE,
     ),
@@ -154,6 +154,55 @@ _INLINE_DEF_PATTERNS = [
     # Reverse: "the conductivity $\sigma$"
     re.compile(r"(?:the|a|an)\s+\w+(?:\s+\w+){0,4}\s+\$([^$]+)\$"),
 ]
+
+_JAPANESE_DEFINITION_TAIL = re.compile(
+    r"^\s*(?:は|を)?[^。\n]{0,100}?"
+    r"(?:を表す|を表し|を意味する|と定義する|とする|と置く|と置けば|"
+    r"と書く|と呼ぶ|である|であり)"
+)
+_JAPANESE_REVERSE_DEFINITION_TAIL = re.compile(
+    r"^\s*(?:と定義する|とする|と置く|と書く|と呼ぶ)"
+)
+_JAPANESE_DEFINITION_CLAUSE = re.compile(
+    r"(?:ここで|ただし|以下(?:では)?)[^。\n]{0,1000}(?:。|\n|$)"
+)
+
+_NON_SYMBOL_COMMANDS = frozenset({
+    "frac", "tfrac", "dfrac", "sqrt", "cdot", "times", "div", "cdots",
+    "ldots", "vdots", "ddots", "infty", "to", "mapsto", "rightarrow",
+    "leftarrow", "longrightarrow", "longleftarrow", "Rightarrow",
+    "Leftarrow", "Longrightarrow", "Longleftarrow", "leftrightarrow",
+    "Leftrightarrow", "le", "leq", "ge", "geq", "ne", "neq", "ll", "gg",
+    "approx", "simeq", "sim", "equiv", "propto", "in", "notin",
+    "subset", "supset", "subseteq", "supseteq", "forall", "exists",
+    "nexists", "pm", "mp", "ast", "sum", "int", "iint", "iiint", "oint",
+    "prod", "lim", "max", "min", "sup", "inf", "left", "right", "middle",
+    "big", "Big", "bigg", "Bigg", "bigl", "bigr", "Bigl", "Bigr", "quad",
+    "qquad", "hspace", "vspace", "begin", "end", "label", "ref", "eqref",
+    "cite", "text", "textrm", "textit", "textbf", "mathrm", "mathit",
+    "mathbf", "mathsf", "mathtt", "mathcal", "mathbb", "operatorname", "bm",
+    "boldsymbol", "hat", "widehat", "tilde", "widetilde", "bar", "vec", "dot",
+    "ddot", "overline", "underline", "overbrace", "underbrace", "stackrel",
+    "underset", "overset", "color", "phantom", "vphantom", "hphantom",
+    "displaystyle", "scriptstyle", "scriptscriptstyle", "top", "SI", "SIrange",
+    "num", "unit", "qty", "qtyrange", "percent",
+})
+
+
+def _strip_comments_and_preamble(tex_source: str) -> str:
+    begin = tex_source.find(r"\begin{document}")
+    if begin >= 0:
+        tex_source = tex_source[begin + len(r"\begin{document}"):]
+    return re.sub(r"(?<!\\)%.*$", "", tex_source, flags=re.MULTILINE)
+
+
+def _read_tex_source(tex_path: str) -> str:
+    try:
+        with open(tex_path, encoding="utf-8", errors="strict") as fh:
+            return fh.read()
+    except UnicodeDecodeError:
+        with open(tex_path, encoding="cp932", errors="strict") as fh:
+            return fh.read()
 
 
 def _extract_math_blocks(tex_source: str) -> list[str]:
@@ -188,22 +237,7 @@ def _extract_symbols_from_math(math_block: str) -> set[str]:
         arg = m.group(2)
         subscript = m.group(3) or ""   # e.g. "_s" or "_{12}"
         # Skip operators / structural commands that aren't symbols
-        if cmd in {
-            "frac", "sqrt", "cdot", "times", "div", "cdots",
-            "ldots", "vdots", "ddots", "infty", "to", "rightarrow",
-            "leftarrow", "Rightarrow", "Leftarrow",
-            "leq", "geq", "neq", "ll", "gg", "approx", "sim",
-            "equiv", "propto", "in", "notin",
-            "sum", "int", "iint", "iiint", "oint", "prod",
-            "lim", "max", "min", "sup", "inf",
-            "left", "right", "big", "Big", "bigg", "Bigg",
-            "quad", "qquad", "hspace", "vspace",
-            "begin", "end", "label", "ref", "eqref",
-            "text", "textrm", "textit", "textbf",
-            "hat", "tilde", "bar", "vec", "dot", "ddot",
-            "overline", "underline", "overbrace", "underbrace",
-            "stackrel", "underset", "overset",
-        }:
+        if cmd in _NON_SYMBOL_COMMANDS:
             continue
         if arg is not None:
             # \\mathbf{E} -> store as "\\mathbf{E}"
@@ -219,7 +253,12 @@ def _extract_symbols_from_math(math_block: str) -> set[str]:
     )
     # Strip out parts inside backslash-commands first, otherwise
     # \\sigma -> we'd extract 's', 'i', 'g', 'm', 'a' which is wrong.
-    cleaned = re.sub(r"\\[A-Za-z]+(?:\{[^}]*\})?", " ", math_block)
+    cleaned = re.sub(
+        r"\\(?:text|textrm|textit|textbf|mathrm|mathsf|mathtt|mathbb|operatorname|"
+        r"SI|SIrange|num|unit|qty|qtyrange)\s*(?:\{[^{}]*\}){1,4}",
+        " ", math_block,
+    )
+    cleaned = re.sub(r"\\[A-Za-z]+", " ", cleaned)
     for m in letter_pat.finditer(cleaned):
         symbols.add(m.group(1))
 
@@ -251,6 +290,25 @@ def _extract_defined_symbols(tex_source: str) -> set[str]:
     for pat in _INLINE_DEF_PATTERNS:
         for m in pat.finditer(tex_source):
             defined |= _extract_symbols_from_math(m.group(1))
+
+    for m in _MATH_ENV_PATTERNS[0].finditer(tex_source):
+        tail = tex_source[m.end():m.end() + 120]
+        if _JAPANESE_DEFINITION_TAIL.match(tail):
+            defined |= _extract_symbols_from_math(m.group(1))
+            continue
+        before = tex_source[max(0, m.start() - 80):m.start()]
+        if (re.search(r"(?:を|は)\s*$", before)
+                and _JAPANESE_REVERSE_DEFINITION_TAIL.match(tail)):
+            defined |= _extract_symbols_from_math(m.group(1))
+
+    for m in _JAPANESE_DEFINITION_CLAUSE.finditer(tex_source):
+        for block in _extract_math_blocks(m.group(0)):
+            defined |= _extract_symbols_from_math(block)
+
+    for block in _extract_math_blocks(tex_source):
+        for row in re.split(r"\\\\|\n", block):
+            if "=" in row:
+                defined |= _extract_symbols_from_math(row.split("=", 1)[0])
 
     return defined
 
@@ -314,8 +372,7 @@ def paper_writing_check_undefined_variables(
     if not os.path.exists(tex_path):
         return {"error": f"tex_path not found: {tex_path}"}
     try:
-        with open(tex_path, encoding="utf-8", errors="replace") as fh:
-            src = fh.read()
+        src = _strip_comments_and_preamble(_read_tex_source(tex_path))
     except Exception as e:  # noqa: BLE001
         return {"error": f"failed to read tex: {e}"}
 
