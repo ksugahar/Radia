@@ -84,6 +84,13 @@ def main():
                                 root/'matlab/+radia/+simulink/validateIHNativeConfig.m',
                                 root/'tests/matlab/test_ih_sparse_inputs.m',
                                 root/'matlab/+radia/+internal/nextIHNativeHandle.m',
+                                root/'matlab/+radia/+internal/selectedPythonExecutable.m',
+                                root/'matlab/+radia/+internal/resolveAssemblyPython.m',
+                                root/'matlab/+radia/+simulink/assembleIHOperatorsFromGeometry.m',
+                                root/'matlab/+radia/+simulink/addIHGeometryUpdateBlock.m',
+                                root/'matlab/+radia/+simulink/updateIHGeometry.m',
+                                root/'tests/matlab/test_ih_python_selection.m',
+                                root/'tests/matlab/test_ih_geometry_update.m',
                                 root/"matlab/+radia/RadiaField.m",
                                 root/"src/core/rad_ngsolve_radia_field.h",
                                 root/"src/ext/HACApK/cHACApK_base.c",
@@ -116,6 +123,8 @@ def main():
                                       str(root/"tests/matlab/test_beam_transfer_mex.m"),
                                       str(root/"tests/matlab/test_hacapk_rank_cap.m"),
                                       str(root/"tests/matlab/test_ih_sparse_inputs.m"),
+                                      str(root/"tests/matlab/test_ih_python_selection.m"),
+                                      str(root/"tests/matlab/test_ih_geometry_update.m"),
                                       str(root/"tests/matlab/test_radiafield_mex.m")]
         eng.eval("r = runtests(testfiles); disp(table(r));", nargout=0)
         record["tests"] = json.loads(eng.eval("jsonencode(struct('names',{string({r.Name})},'passed',[r.Passed],'failed',[r.Failed],'incomplete',[r.Incomplete],'duration',[r.Duration]))"))
