@@ -523,6 +523,8 @@ def solve_heat_em_table(wp_vol, em_table_path,
     max_H_excursion = 1.0
 
     Q_input_J = 0.0
+    linear_true_residual_max = 0.0
+    from radia.ih_heat_transient import checked_heat_increment
     for step in range(1, n_steps + 1):
         t = step * float(dt)
 
@@ -574,7 +576,10 @@ def solve_heat_em_table(wp_vol, em_table_path,
         f_form.Assemble()
         with TaskManager():
             res_vec.data = f_form.vec - a_form.mat * gfT.vec
-            gfT.vec.data += float(dt) * (inv * res_vec)
+            delta, relative = checked_heat_increment(
+                mstar, inv, res_vec, fes_T.FreeDofs())
+            linear_true_residual_max = max(linear_true_residual_max, relative)
+            gfT.vec.data += float(dt) * delta
 
         q_int = float(Integrate(gf_q, wp_mesh, BND,
                                  definedon=heat_flux_region).real)
@@ -640,6 +645,7 @@ def solve_heat_em_table(wp_vol, em_table_path,
         "T_avg_history_C": [float(t_initial)] + T_avg_hist,
         "T_max_history_C": [float(t_initial)] + T_max_hist,
         "Q_input_J": Q_input_J,
+        "linear_true_residual_max": linear_true_residual_max,
         "surface_area_m2": A_surf,
         "heat_flux_boundaries": heat_flux_selector,
         "convection_boundaries": convection_selector,
