@@ -559,7 +559,7 @@ The scalar potential BIE avoids all three failure modes because:
 | EddyCurrentFEMBEM | V (SLP), K (DLP), D (Hypersingular) | ngbem or ngsolve.bem |
 | VectorEddyCurrentFEMBEM | HelmholtzSL only | ngsolve.bem |
 | EddyCurrentBEMSIBC | V, K, D (cached) | ngbem or ngsolve.bem |
-| ShieldBEMSIBC | MaxwellSingleLayerPotentialOperator | ngbem |
+| ShieldBEMSIBC | HelmholtzSL vector and surface-divergence terms | ngsolve.bem (2607) |
 | FEM + Kelvin | (none -- pure FEM) | NGSolve only |
 
 ## Cross-Method Validation

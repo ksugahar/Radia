@@ -1,5 +1,11 @@
 # NGSolve 6.2.2604+ `ngsolve.bem` integration
 
+> Historical API inventory below: audited on 6.2.2604, not a current import
+> contract. Radia now targets 6.2.2607. The former Maxwell SL/DL potential
+> classes were removed; current EFIE assembly uses variational `HelmholtzSL`
+> vector and surface-divergence terms. See `src/radia/ngsbem_eddy.py` and
+> `maxwell_efie_pec_sphere_rcs` in the MCP BEM module for maintained examples.
+
 NGSolve 6.2.2604 (released 2026-04-30) ships a substantially upgraded
 `ngsolve.bem` module with both **FMM-style** kernel-specific
 acceleration AND a **kernel-agnostic block-entry callback bridge**
