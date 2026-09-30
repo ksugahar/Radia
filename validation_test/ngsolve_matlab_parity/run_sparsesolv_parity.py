@@ -73,7 +73,7 @@ def main():
                   source_base_commit=subprocess.check_output(["git", "-c", f"safe.directory={root.as_posix()}",
                       "rev-parse", "HEAD"], cwd=root, text=True).strip(),
                   source_hashes={str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
-                      for p in [root/"src/matlab/radia_mex.cpp", root/"tests/matlab/test_sparsesolv_mex.m", root/"tests/matlab/test_ngsolve_sparsecholesky.m",
+                      for p in [root/"src/matlab/radia_mex.cpp", root/"tests/matlab/test_sparsesolv_mex.m", root/"tests/matlab/test_ngsolve_sparsecholesky.m", root/"tests/matlab/test_setup_python_selection.m",
                                 root/"tests/matlab/test_mex_runtime_setup.m", root/"matlab/+radia/+internal/callMex.m",
                                 root/"matlab/+radia/setup.m",
                                 root/"tests/matlab/sparsesolv_python_reference.py",
@@ -106,7 +106,7 @@ def main():
         if Path(record["resolved_mex"]).resolve() != mex.resolve():
             raise RuntimeError("MATLAB resolved a different MEX")
         eng.workspace["testfiles"] = [str(root/"tests/matlab/test_sparsesolv_mex.m"),
-                                      str(root/"tests/matlab/test_ngsolve_sparsecholesky.m"),
+                                      str(root/"tests/matlab/test_ngsolve_sparsecholesky.m"), str(root/"tests/matlab/test_setup_python_selection.m"),
                                       str(root/"tests/matlab/test_mex_runtime_setup.m"),
                                       str(root/"tests/matlab/test_beam_transfer_mex.m"),
                                       str(root/"tests/matlab/test_hacapk_rank_cap.m"),

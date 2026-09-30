@@ -2,9 +2,11 @@ function info = setup(options)
 %SETUP Configure Radia's MATLAB runtime and locate the native MEX gateway.
 %   INFO = radia.setup() is safe to call repeatedly. The first call adds the
 %   package directory and NGSolve DLL directories to MATLAB's search path.
+%   PythonExecutable defaults to RADIA_PYTHON_EXECUTABLE when set, otherwise
+%   "python". An explicit PythonExecutable always takes precedence.
 
 arguments
-    options.PythonExecutable (1,1) string = "python"
+    options.PythonExecutable (1,1) string = defaultPythonExecutable()
     options.RequireMex (1,1) logical = true
     options.ConfigureSimulinkFileGeneration (1,1) logical = true
     options.SimulinkFileGenerationRoot (1,1) string = ""
@@ -161,6 +163,13 @@ if options.Verbose
 end
 cachedInfo = info;
 cachedPython = options.PythonExecutable;
+end
+
+function executable = defaultPythonExecutable()
+executable = string(getenv("RADIA_PYTHON_EXECUTABLE"));
+if strlength(executable) == 0
+    executable = "python";
+end
 end
 
 function value = runtimeValue(lines, prefix)
