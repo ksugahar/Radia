@@ -158,7 +158,7 @@ def build_occ_ih_mesh_3d(R_coil=0.030, a_coil=0.003, gap_deg=5,
       - Interior sphere at origin (radius a_kelvin): physical domain
       - Exterior sphere at (kelvin_offset, 0, 0) (same radius): mapped domain
       - Periodic BC on sphere surfaces (Identify)
-      - GND vertex at exterior sphere center (Dirichlet = 0 = infinity)
+      - Connected scalar GND gauge near exterior center (no HCurl constraint)
       - nu_kelvin = nu0 * (a/r')^2, r' from exterior center
 
     Args:
@@ -178,7 +178,7 @@ def build_occ_ih_mesh_3d(R_coil=0.030, a_coil=0.003, gap_deg=5,
     """
     from ngsolve import Mesh, TaskManager
     from netgen.occ import (WorkPlane, Axes, Axis, Pnt, Dir, Sphere,
-                             Cylinder, OCCGeometry, Glue, Vertex,
+                             Cylinder, OCCGeometry, Glue,
                              IdentificationType)
 
     # Gapped torus coil
@@ -226,9 +226,7 @@ def build_occ_ih_mesh_3d(R_coil=0.030, a_coil=0.003, gap_deg=5,
     ext_sphere.name = "kelvin"
     ext_sphere.maxh = maxh_air * 2
 
-    # GND vertex at exterior sphere center (= physical infinity)
-    gnd = Vertex(Pnt(kelvin_offset, 0, 0))
-    gnd.name = "GND"
+    # A scalar gauge is attached to a connected vertex after meshing.
 
     # Periodic identification: match sphere surfaces
     # After boolean, air has multiple faces; the sphere surface is the one
@@ -252,11 +250,13 @@ def build_occ_ih_mesh_3d(R_coil=0.030, a_coil=0.003, gap_deg=5,
         int_face.Identify(ext_face, "kelvin", IdentificationType.PERIODIC)
 
     # Hole approach: wp_cyl is NOT included (it's just a hole in air)
-    shape = Glue([air, torus, ext_sphere, gnd])
+    shape = Glue([air, torus, ext_sphere])
     geo = OCCGeometry(shape)
     with TaskManager():
         ngmesh = geo.GenerateMesh(maxh=maxh_air, grading=0.3)
     mesh = Mesh(ngmesh)
+    from radia.kelvin_geometry import ground_kelvin_scalar_mesh
+    mesh = ground_kelvin_scalar_mesh(mesh, (kelvin_offset, 0, 0))
     mesh.Curve(order)
 
     info = {

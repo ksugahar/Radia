@@ -1807,6 +1807,8 @@ class ScalarPotentialSolver:
                 "Kelvin H1 requires kelvin_int/kelvin_ext point "
                 "identifications in the .vol mesh"
             )
+        from radia.kelvin_geometry import require_kelvin_scalar_ground
+        require_kelvin_scalar_ground(self.mesh, self._kelvin_region)
         kwargs = {"order": self.order, "dirichlet_bbbnd": "GND"}
         if dirichlet not in ('default', 'GND'):
             kwargs["dirichlet"] = dirichlet

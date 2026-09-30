@@ -1414,9 +1414,14 @@ def add_kelvin_occ(air_shape, R, symmetry=None,
     Returns:
         (compound_shape, info_dict)
         The compound_shape is ready for OCCGeometry().GenerateMesh().
+        No scalar point constraint is fabricated from an isolated OCC vertex.
+        For Radia scalar H1 use, pass the generated mesh through
+        radia.kelvin_geometry.ground_kelvin_scalar_mesh(mesh, info["center"])
+        before curving or creating spaces. This fixes an additive gauge, not
+        a prescribed physical value at infinity; HCurl needs its own gauge.
         info_dict has keys: 'R', 'center', 'symmetry', 'offset_dir'.
     """
-    from netgen.occ import (Sphere, Pnt, Dir, Glue, Vertex, HalfSpace,
+    from netgen.occ import (Sphere, Pnt, Dir, Glue, HalfSpace,
                              IdentificationType)
 
     if symmetry is None:
@@ -1471,12 +1476,9 @@ def add_kelvin_occ(air_shape, R, symmetry=None,
 
     int_face.Identify(ext_face, "kelvin", IdentificationType.PERIODIC)
 
-    # ---- 4. GND vertex at Kelvin center ----
-    gnd = Vertex(Pnt(ox, oy, oz))
-    gnd.name = "GND"
-
-    # ---- 5. Glue everything ----
-    shape = Glue([air_shape, ext_sphere, gnd])
+    # A detached OCC Vertex does not constrain a volume-mesh unknown.
+    # Scalar users must explicitly attach a connected point gauge after meshing.
+    shape = Glue([air_shape, ext_sphere])
 
     info = {
         "R": R,
@@ -1492,7 +1494,7 @@ def add_kelvin_occ(air_shape, R, symmetry=None,
     print("  symmetry = %s (1/%d)" % (symmetry, 2 ** n_sym) if n_sym else
           "  symmetry = [] (full)")
     print("  Identify: kelvin_int <-> kelvin_ext")
-    print("  GND vertex at (%g, %g, %g)" % (ox, oy, oz))
+    print("  Scalar point gauge: attach to a connected vertex after meshing")
 
     return shape, info
 
