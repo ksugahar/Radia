@@ -1,24 +1,8 @@
-"""
-ESIM Coupled Solver for Induction Heating and WPT Analysis
+"""Analytical coil and WPT helpers.
 
-This module implements coupled solvers that combine:
-1. FastImp coil (conductor model with eddy currents)
-2. ESIM workpiece (nonlinear ferromagnetic material)
-3. WPT (Wireless Power Transfer) multi-coil coupling analysis
-
-Key Features:
-- Fixed-point iteration for nonlinear material (ESIM)
-- Neumann integral for mutual inductance calculation
-- Coupling coefficient k = M / sqrt(L1*L2)
-- Two-coil WPT impedance matrix analysis
-
-Reference:
-    K. Hollaus, M. Kaltenbacher, J. Schoberl, "A Nonlinear Effective Surface
-    Impedance in a Magnetic Scalar Potential Formulation," IEEE Trans. Magnetics,
-    2025, DOI: 10.1109/TMAG.2025.3613932
-
-Author: Radia Development Team
-Date: 2026-01-08
+The former ESIM coupled solve is retired: it lacked the workpiece reaction
+field and therefore could not establish a coupled fixed point. Use a validated
+FEM/BEM coupling. Independent coil geometry and WPT helpers remain available.
 """
 
 import numpy as np
@@ -197,8 +181,8 @@ class InductionHeatingCoil:
             a2 = 2 * np.pi * (i + 1) / n_seg
             p1 = center + radius * (np.cos(a1) * t1 + np.sin(a1) * t2)
             p2 = center + radius * (np.cos(a2) * t1 + np.sin(a2) * t2)
-            H += h_filament(p1, p2, point, current=float(np.real(current)))
-        return (MU0 * H).astype(complex)
+            H += h_filament(p1, p2, point, current=1.0)
+        return (complex(current) * MU0 * H).astype(complex)
 
     def compute_field_batch(self, points):
         """
@@ -390,31 +374,7 @@ class InductionHeatingCoil:
 
 
 class ESIMCoupledSolver:
-    """
-    Coupled solver for induction heating with ESIM workpiece.
-
-    This solver combines:
-    1. FastImp-based coil model (or analytical model)
-    2. ESIM workpiece with nonlinear surface impedance
-
-    The coupling is achieved through fixed-point iteration:
-    1. Compute B field from coil at workpiece surface
-    2. Extract tangential H field
-    3. Look up Z(|H_t|) from ESI table
-    4. Update workpiece impedance
-    5. Repeat until convergence
-
-    Impedance Calculation:
-    The total coil impedance seen from the power source includes:
-    - Z_coil = R_coil + j*omega*L_coil  (coil self-impedance)
-    - Z_reflected = k^2 * Z_workpiece    (reflected from workpiece)
-
-    where:
-    - R_coil: Coil AC resistance (including skin effect)
-    - L_coil: Coil self-inductance
-    - k: Coupling coefficient between coil and workpiece
-    - Z_workpiece: Effective workpiece impedance from ESIM
-    """
+    """Retired coupling facade; useful standalone impedance helpers remain."""
 
     def __init__(self, coil, workpiece, frequency):
         """
@@ -477,122 +437,10 @@ class ESIMCoupledSolver:
         return B_fields, H_tangential
 
     def solve(self, tol=1e-4, max_iter=50, relaxation=0.5, verbose=True):
-        """
-        Solve the coupled induction heating problem with fixed-point iteration.
-
-        Parameters:
-            tol: Convergence tolerance (relative change in Z)
-            max_iter: Maximum number of iterations
-            relaxation: Under-relaxation parameter (0 < alpha <= 1)
-            verbose: Print iteration progress
-
-        Returns:
-            result: Dict with solution data
-        """
-        if verbose:
-            print(f"ESIM Coupled Solver")
-            print(f"  Frequency: {self.frequency/1000:.1f} kHz")
-            print(f"  Workpiece panels: {self.workpiece.num_panels}")
-            print(f"  Tolerance: {tol}")
-            print()
-
-        # Initialize: compute field from coil
-        B_fields, H_tangential = self.compute_coil_field_on_workpiece()
-
-        # Set initial tangential field on workpiece
-        for panel_id, H_t in H_tangential.items():
-            self.workpiece.set_tangential_field(panel_id, H_t)
-
-        # Store previous Z values for convergence check
-        Z_prev = {p.panel_id: p.Z_surface for p in self.workpiece.panels}
-
-        self.residual_history = []
-
-        for iteration in range(max_iter):
-            # Update impedances based on current H field
-            self.workpiece.update_all_impedances()
-
-            # Get new Z values
-            Z_new = {p.panel_id: p.Z_surface for p in self.workpiece.panels}
-
-            # Check convergence (relative change in Z)
-            max_rel_change = 0.0
-            for panel_id in Z_new:
-                if abs(Z_prev[panel_id]) > 1e-20:
-                    rel_change = abs(Z_new[panel_id] - Z_prev[panel_id]) / abs(Z_prev[panel_id])
-                    max_rel_change = max(max_rel_change, rel_change)
-
-            self.residual_history.append(max_rel_change)
-
-            if verbose:
-                P_total, Q_total = self.workpiece.compute_power_losses()
-                print(f"  Iter {iteration+1:3d}: max_rel_change = {max_rel_change:.2e}, "
-                      f"P = {P_total:.1f} W, Q = {Q_total:.1f} var")
-
-            if max_rel_change < tol:
-                self.converged = True
-                self.iterations = iteration + 1
-                break
-
-            # Under-relaxation
-            for panel_id in Z_new:
-                Z_relaxed = (1 - relaxation) * Z_prev[panel_id] + relaxation * Z_new[panel_id]
-                # Apply relaxed Z to panel
-                self.workpiece.panels[panel_id].Z_surface = Z_relaxed
-
-            Z_prev = {p.panel_id: p.Z_surface for p in self.workpiece.panels}
-        else:
-            self.converged = False
-            self.iterations = max_iter
-
-        # Final power computation
-        P_total, Q_total = self.workpiece.compute_power_losses()
-
-        # Compute impedances
-        self.compute_coil_self_impedance()
-        self.compute_reflected_impedance(P_total, Q_total)
-        self.compute_total_impedance()
-        impedance_summary = self.get_impedance_summary()
-
-        # Get summary
-        summary = self.workpiece.get_summary()
-
-        result = {
-            'converged': self.converged,
-            'iterations': self.iterations,
-            'P_total': P_total,
-            'Q_total': Q_total,
-            'S_total': np.sqrt(P_total**2 + Q_total**2),
-            'power_factor': P_total / np.sqrt(P_total**2 + Q_total**2) if P_total > 0 else 0,
-            'max_P_density': summary['max_P_density'],
-            'residual_history': self.residual_history,
-            'H_tangential': H_tangential,
-            'B_fields': B_fields,
-            # Impedance results
-            'impedance': impedance_summary,
-            'Z_coil_self': self.Z_coil_self,
-            'Z_reflected': self.Z_reflected,
-            'Z_total': self.Z_total,
-        }
-
-        if verbose:
-            print()
-            print(f"Solution {'converged' if self.converged else 'did NOT converge'} "
-                  f"in {self.iterations} iterations")
-            print(f"  Total power: P = {P_total:.1f} W, Q = {Q_total:.1f} var")
-            print(f"  Power factor: {result['power_factor']:.3f}")
-            print(f"  Max power density: {summary['max_P_density']/1e3:.2f} kW/m^2")
-            print()
-            print("Impedance Analysis:")
-            print(f"  Coil: L = {impedance_summary['L_coil_uH']:.3f} uH, "
-                  f"R = {impedance_summary['R_coil_mOhm']:.3f} mOhm")
-            print(f"  Z_coil_self = {self.Z_coil_self.real*1e3:.3f} + j{self.Z_coil_self.imag*1e3:.3f} mOhm")
-            print(f"  Z_reflected = {self.Z_reflected.real*1e3:.3f} + j{self.Z_reflected.imag*1e3:.3f} mOhm")
-            print(f"  Z_total     = {self.Z_total.real*1e3:.3f} + j{self.Z_total.imag*1e3:.3f} mOhm")
-            print(f"  |Z_total|   = {abs(self.Z_total)*1e3:.3f} mOhm, phase = {np.angle(self.Z_total, deg=True):.1f} deg")
-            print(f"  Efficiency (P_wp/P_total): {impedance_summary['efficiency']*100:.1f}%")
-
-        return result
+        """Reject the former incident-only iteration; it had no reaction field."""
+        raise NotImplementedError(
+            "ESIMCoupledSolver.solve has no workpiece reaction-field solve; "
+            "use a validated FEM/BEM coupling instead")
 
     def get_power_distribution(self):
         """
@@ -733,81 +581,19 @@ class ESIMCoupledSolver:
         return self.Z_coil_self
 
     def compute_reflected_impedance(self, P_workpiece, Q_workpiece):
+        """Return 2*(P+jQ)/|I_peak|^2 from independently supplied average power.
+
+        Power alone does not identify mutual inductance or a coupling factor.
+        The coil current is a peak phasor, not an RMS current.
         """
-        Compute the reflected impedance from workpiece to coil.
-
-        The reflected impedance represents the loading effect of the workpiece
-        on the coil. It is computed from the power balance:
-
-            Z_reflected = (P + jQ) / I^2
-
-        where P and Q are the real and reactive power absorbed by the workpiece.
-
-        Alternative formulation using coupling coefficient:
-            Z_reflected = omega^2 * M^2 / Z_workpiece
-                        = k^2 * omega * L_coil * omega * L_workpiece / Z_workpiece
-
-        Parameters:
-            P_workpiece: Real power absorbed by workpiece [W]
-            Q_workpiece: Reactive power (inductive) [var]
-
-        Returns:
-            Z_reflected: Complex reflected impedance [Ohm]
-        """
-        I = self.coil.current
-
-        if abs(I) < 1e-20:
-            self.Z_reflected = 0j
-            return self.Z_reflected
-
-        # Impedance from power balance
-        # P = Re(Z) * I^2, Q = Im(Z) * I^2
-        R_reflected = P_workpiece / (I**2)
-        X_reflected = Q_workpiece / (I**2)
-
-        self.Z_reflected = R_reflected + 1j * X_reflected
-
-        # Estimate mutual inductance and coupling factor
-        if self.L_coil is not None and self.L_coil > 0:
-            # From Q_reflected = omega * M^2 / L_workpiece_eff
-            # Approximate L_workpiece_eff from workpiece geometry
-            # For a slab: L_eff ~ mu_0 * A / delta where A is area, delta is skin depth
-
-            # Total workpiece area
-            A_workpiece = sum(p.area for p in self.workpiece.panels)
-
-            # Average skin depth (from first panel's Z_surface)
-            if self.workpiece.panels:
-                Z_avg = np.mean([abs(p.Z_surface) for p in self.workpiece.panels])
-                sigma = self.workpiece.esi_table.sigma
-                # Z_s = (1+j) * rho / delta = (1+j) / (sigma * delta)
-                # |Z_s| = sqrt(2) / (sigma * delta)
-                # delta = sqrt(2) / (sigma * |Z_s|)
-                if Z_avg > 1e-20:
-                    delta_est = np.sqrt(2) / (sigma * Z_avg)
-                else:
-                    delta_est = 0.001  # Default 1mm
-            else:
-                delta_est = 0.001
-
-            # Effective workpiece inductance (very rough estimate)
-            # L_workpiece_eff ~ mu_0 * A / (pi * delta) for induced currents
-            L_workpiece_eff = mu_0 * A_workpiece / (np.pi * delta_est)
-
-            # Mutual inductance from reflected reactance
-            # X_reflected = omega * M^2 / L_workpiece_eff
-            if abs(X_reflected) > 1e-20 and L_workpiece_eff > 1e-20:
-                M_squared = X_reflected * L_workpiece_eff / self.omega
-                if M_squared > 0:
-                    self.M_mutual = np.sqrt(M_squared)
-                    self.coupling_factor = self.M_mutual / np.sqrt(self.L_coil * L_workpiece_eff)
-                else:
-                    self.M_mutual = 0
-                    self.coupling_factor = 0
-            else:
-                self.M_mutual = 0
-                self.coupling_factor = 0
-
+        current_squared = abs(complex(self.coil.current)) ** 2
+        if not np.isfinite(current_squared) or current_squared == 0:
+            raise ValueError("Reflected impedance requires finite nonzero peak current")
+        if not np.isfinite(P_workpiece) or not np.isfinite(Q_workpiece):
+            raise ValueError("Workpiece powers must be finite")
+        self.Z_reflected = 2 * complex(P_workpiece, Q_workpiece) / current_squared
+        self.M_mutual = None
+        self.coupling_factor = None
         return self.Z_reflected
 
     def compute_total_impedance(self):
@@ -865,8 +651,8 @@ class ESIMCoupledSolver:
             'phase_deg': np.angle(self.Z_total, deg=True) if self.Z_total else 0,
 
             # Coupling
-            'M_mutual_uH': self.M_mutual * 1e6 if self.M_mutual else 0,
-            'coupling_factor': self.coupling_factor if self.coupling_factor else 0,
+            'M_mutual_uH': self.M_mutual * 1e6 if self.M_mutual is not None else None,
+            'coupling_factor': self.coupling_factor,
 
             # Efficiency estimate (P_workpiece / P_total)
             'efficiency': (self.Z_reflected.real / self.Z_total.real
