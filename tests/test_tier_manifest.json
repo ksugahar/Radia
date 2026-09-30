@@ -224,6 +224,7 @@
       "max_elapsed_seconds": 600,
       "paths": [
         "tests/test_bem_sibc_acceptance.py",
+        "tests/test_surface_orientation.py",
         "tests/test_maglev_sphere_golden.py",
         "tests/test_team28_arnoldi_golden.py",
         "tests/test_rotating_magnet_eddy_golden.py",

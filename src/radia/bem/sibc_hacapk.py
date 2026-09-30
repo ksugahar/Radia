@@ -207,46 +207,38 @@ def extract_surface_p2_lagrange(mesh, bnd_label=None, geom_order=2):
     n_v = len(verts)
     n_t = len(tris)
 
-    # Force outward orientation -- triangles whose natural cross-product
-    # normal points INWARD (toward the surface centroid) get flipped.
-    # This is the same logic ``_extract_bnd_only_inline`` applies to the
-    # P1 wp_mesh extraction in calc_inductance.py.  Without it, the P2
-    # path inherits NGSolve's natural BND orientation (which on a
-    # workpiece-as-hole sibc face points FROM AIR INTO HOLE, i.e.,
-    # OPPOSITE to "outward from workpiece"), and DL gets sign-flipped
-    # globally -- caught 2026-05-22 when P2 BIE produced P_wp ~1500x
-    # the P1 value on 3turnCoil_work.
-    #
-    # Reorder the 6 P2 Lagrange nodes consistently with the corner flip
-    # [c0, c1, c2] -> [c0, c2, c1]:
-    #   new corner 0 = c0, new corner 1 = c2, new corner 2 = c1
-    #   new edge 01 = old edge 20 (between c0,c2)
-    #   new edge 12 = old edge 12 (between c2,c1) -- but corner order
-    #     reversed -> same physical edge
-    #   new edge 20 = old edge 01 (between c1,c0)
-    centroid = verts.mean(axis=0)
+    # The signed-volume outward pass is defined only for closed manifold
+    # components.  Disjoint shells are supported; nested cavity shells need
+    # material-side information and are intentionally outside this contract.
+    edge_counts = {}
+    for tri in tris:
+        for a, b in ((tri[0], tri[1]), (tri[1], tri[2]), (tri[2], tri[0])):
+            key = (min(int(a), int(b)), max(int(a), int(b)))
+            edge_counts[key] = edge_counts.get(key, 0) + 1
+    invalid_edges = [edge for edge, count in edge_counts.items() if count != 2]
+    if invalid_edges:
+        raise ValueError(
+            "P2 SIBC surface must be a closed two-manifold; "
+            f"found {len(invalid_edges)} edges with incidence != 2"
+        )
+
+    from radia.panels.surface_mesh_extract import orient_surface_triangles
+
+    original_tris = tris.copy()
+    oriented_tris, orientation_stats = orient_surface_triangles(verts, tris)
+    p2_flip_permutation = np.array([0, 2, 1, 5, 4, 3])
     n_flipped = 0
     for t in range(n_t):
-        c0, c1, c2 = tris[t, 0], tris[t, 1], tris[t, 2]
-        p0, p1, p2 = verts[c0], verts[c1], verts[c2]
-        nrm = np.cross(p1 - p0, p2 - p0)
-        tri_center = (p0 + p1 + p2) / 3.0
-        if np.dot(nrm, tri_center - centroid) < 0:
-            # Flip corner order
-            tris[t, 1], tris[t, 2] = c2, c1
-            # Reorder the 6 P2 nodes accordingly.
-            old = tri_p2_nodes[t].copy()
-            tri_p2_nodes[t, 0] = old[0]   # c0
-            tri_p2_nodes[t, 1] = old[2]   # c2
-            tri_p2_nodes[t, 2] = old[1]   # c1
-            tri_p2_nodes[t, 3] = old[5]   # edge 20 (between c0, c2) -> new e01
-            tri_p2_nodes[t, 4] = old[4]   # edge 12 -> new e12 (same edge)
-            tri_p2_nodes[t, 5] = old[3]   # edge 01 -> new e20
-            n_flipped += 1
-    if n_flipped > 0:
-        import sys
-        print(f"extract_surface_p2_lagrange: flipped {n_flipped}/{n_t} "
-              f"triangles to outward orientation", file=sys.stderr)
+        if np.array_equal(oriented_tris[t], original_tris[t]):
+            continue
+        expected_flip = original_tris[t, [0, 2, 1]]
+        if not np.array_equal(oriented_tris[t], expected_flip):
+            raise RuntimeError("surface orientation changed triangle identity")
+        tri_p2_nodes[t] = tri_p2_nodes[t, p2_flip_permutation]
+        n_flipped += 1
+    tris = oriented_tris
+    if orientation_stats["conflicts_after"] != 0:
+        raise ValueError("P2 SIBC surface could not be oriented consistently")
 
     # Enumerate unique edges across all tris.  Each tri has 3 edges:
     #   local edge k (k=0,1,2) goes between corners (k, (k+1) % 3)
