@@ -150,7 +150,7 @@ def test_combined_function_four_response_jacobian_is_analytic():
     )
 
 
-def test_hdiv_field_response_fuses_into_four_optics_rows_with_explicit_signs():
+def test_hdiv_field_response_fuses_into_four_optics_rows_with_charge_sign():
     lengths = np.array([0.4, 0.6])
     rigidity = 2.0
     bz = np.array([-0.10, -0.14])
@@ -167,7 +167,6 @@ def test_hdiv_field_response_fuses_into_four_optics_rows_with_explicit_signs():
         downstream_drift=0.2,
         field_response_jacobian=field_jacobian,
         curvature_sign=-1.0,
-        gradient_sign=-1.0,
     )
     direct = combined_function_exit_metrics(
         -bz / rigidity, -gradient / rigidity, lengths,
@@ -227,7 +226,7 @@ def test_transfer_map_field_chain_uses_forward_ad_jacobian():
         field, lengths, rigidity,
         field_response_jacobian=field_jacobian,
         segment_length_jacobian=length_jacobian,
-        curvature_sign=-1.0, gradient_sign=-1.0)
+        curvature_sign=-1.0)
     assert differentiated.derivative_backend==(
         "forward-mode-expm-frechet-ad")
 
@@ -240,11 +239,11 @@ def test_transfer_map_field_chain_uses_forward_ad_jacobian():
         plus = combined_function_transfer_map_from_field_response(
             field + step * field_jacobian[:, parameter],
             lengths + step * length_jacobian[:, parameter], rigidity,
-            curvature_sign=-1.0, gradient_sign=-1.0)
+            curvature_sign=-1.0)
         minus = combined_function_transfer_map_from_field_response(
             field - step * field_jacobian[:, parameter],
             lengths - step * length_jacobian[:, parameter], rigidity,
-            curvature_sign=-1.0, gradient_sign=-1.0)
+            curvature_sign=-1.0)
         finite_difference[:, parameter] = (
             plus.response - minus.response) / (2.0 * step)
     np.testing.assert_allclose(

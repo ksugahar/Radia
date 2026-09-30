@@ -982,7 +982,7 @@ def test_earlytimes_lie_and_a_rk_reject_unprojected_a_coefficient_function():
         )
 
 
-def test_hcurl_lie_uses_the_negative_rmf_metric_connection(monkeypatch):
+def test_hcurl_lie_uses_the_standard_planar_metric_connection(monkeypatch):
     radius = 2.0
     rigidity = 3.0
     angles = np.array([0.0, 0.05, 0.10])
@@ -1004,9 +1004,9 @@ def test_hcurl_lie_uses_the_negative_rmf_metric_connection(monkeypatch):
     coefficient_shape = (len(orbit.segment_lengths), 6, 6)
     Ay = np.zeros(coefficient_shape)
     As = np.zeros(coefficient_shape)
-    # In the constrained local gauge, B_y=-dA_s/dx and the design-orbit
-    # relation is h=-B_y/(B rho), hence dA_s/dx=(B rho)h.
-    As[:, 1, 0] = rigidity * orbit.signed_curvature
+    # In the constrained local gauge, B_y=-dA_s/dx and a proton's design
+    # orbit has h=+B_y/(B rho), hence dA_s/dx=-(B rho)h.
+    As[:, 1, 0] = -rigidity * orbit.signed_curvature
     samples = SimpleNamespace(grid_function_space_order=5)
     polynomial_fit = SimpleNamespace(
         Ay_coefficients_t_m=Ay,
@@ -1035,7 +1035,7 @@ def test_hcurl_lie_uses_the_negative_rmf_metric_connection(monkeypatch):
 
     np.testing.assert_allclose(
         result.lie_map.reference_curvature_per_m,
-        -orbit.signed_curvature,
+        orbit.signed_curvature,
         rtol=0.0,
         atol=0.0,
     )

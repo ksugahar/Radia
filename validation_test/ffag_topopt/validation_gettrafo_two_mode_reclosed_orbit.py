@@ -47,6 +47,7 @@ def run(args):
     from ngsolve.meshes import MakeStructured3DMesh
 
     from radia.ffag_topopt import (
+        FFAG_CELL_CHARGE_SIGN,
         build_ffag_cell_target_family,
         differentiate_recovered_planar_orbit_shape_native,
         recover_ffag_closed_orbit_family_native,
@@ -245,7 +246,7 @@ def run(args):
                 gradient_offset=args.gradient_offset,
                 tracking_step_m=args.tracking_step,
                 integration_stations=args.variational_stations,
-                curvature_sign=1.0,
+                curvature_sign=FFAG_CELL_CHARGE_SIGN,
                 response_entries=RESPONSE_ENTRIES)
             for item in recovered)
         response = map_vector(recovered)
@@ -634,7 +635,7 @@ def run(args):
                 item.entrance_incidence_angle_rad),
             n_segments=args.segments,
             gradient_offset=args.gradient_offset,
-            curvature_sign=1.0,
+            curvature_sign=FFAG_CELL_CHARGE_SIGN,
             position_tolerance=args.position_tolerance,
             tangent_tolerance=args.tangent_tolerance,
             root_max_evaluations=max(20, args.root_max_evaluations),

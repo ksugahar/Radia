@@ -103,18 +103,20 @@ def run(args):
     incident = np.array([MU0*args.source_h_a_per_m, 0.0])
     initial_raw = response_matrix@initial_state + incident
     target_raw = response_matrix@target_state + incident
+    # Counter-clockwise about +z in positive B_z: charge sign -1.
+    charge = -1.0
     rigidity = float(
-        target_raw[0]/provisional_orbit.signed_curvature[0])
+        charge*target_raw[0]/provisional_orbit.signed_curvature[0])
     orbit = PlanarDesignOrbit(
         provisional_orbit.positions, provisional_orbit.tangents,
         magnetic_rigidity=rigidity,
         bend_axis=provisional_orbit.bend_axis)
     target_map = combined_function_transfer_map_from_field_response(
         target_raw, orbit.segment_lengths, orbit.magnetic_rigidity,
-        response_entries=entries).matrix
+        curvature_sign=charge, response_entries=entries).matrix
     initial_map = combined_function_transfer_map_from_field_response(
         initial_raw, orbit.segment_lengths, orbit.magnetic_rigidity,
-        response_entries=entries).matrix
+        curvature_sign=charge, response_entries=entries).matrix
     selected_change = max(
         abs(target_map[row, column]-initial_map[row, column])
         for row, column in entries)
@@ -127,7 +129,8 @@ def run(args):
         (orbit,), target_map[None, :, :],
         transfer_matrix_band=transfer_band,
         bend_field_band=bend_band,
-        controlled_components=CONTROLLED_COMPONENTS)
+        controlled_components=CONTROLLED_COMPONENTS,
+        curvature_sign=charge)
     objective = family.objective
     field_correction = solve_transfer_matrix_field_correction(
         objective, initial_raw, relative_tolerance=1.0e-10)
@@ -149,7 +152,8 @@ def run(args):
             maximum_batch_elements=1,
             graph_front_proposal_limit=0,
             max_iterations=1,
-            solve_tolerance=1.0e-11)
+            solve_tolerance=1.0e-11,
+            curvature_sign=charge)
 
     gates = {
         "named_four_component_objective": (

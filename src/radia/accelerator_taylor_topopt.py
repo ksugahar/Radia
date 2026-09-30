@@ -462,7 +462,6 @@ def _paraxial_taylor_jet(
     coefficients,
     magnetic_rigidity,
     curvature_sign,
-    gradient_sign,
     *,
     maximum_order,
 ):
@@ -477,13 +476,12 @@ def _paraxial_taylor_jet(
     )
     rigidity = float(magnetic_rigidity)
     curvature_sign = float(curvature_sign)
-    gradient_sign = float(gradient_sign)
     if (
         not np.isfinite(rigidity)
         or rigidity == 0.0
-        or not np.all(np.isfinite([curvature_sign, gradient_sign]))
+        or not np.isfinite(curvature_sign)
     ):
-        raise ValueError("rigidity and multipole signs must be finite")
+        raise ValueError("rigidity and the charge sign must be finite")
 
     A = np.zeros((6, 6), dtype=float)
     F2 = np.zeros((6, 6, 6), dtype=float)
@@ -535,8 +533,10 @@ def _paraxial_taylor_jet(
                 powers[2] = y_power
                 powers[5] = delta_power
                 chromatic = 1.0 if delta_power % 2 == 0 else -1.0
-                horizontal_scale = -gradient_sign * chromatic / rigidity
-                vertical_scale = gradient_sign * chromatic / rigidity
+                # The charge sign that maps B_y to h also maps every
+                # harmonic to its focusing strength.
+                horizontal_scale = -curvature_sign * chromatic / rigidity
+                vertical_scale = curvature_sign * chromatic / rigidity
                 degree = sum(powers)
                 if degree == 1:
                     target_value, target_tangent = A, dA
@@ -563,27 +563,21 @@ def _paraxial_taylor_jet(
     return A, F2, F3, dA, dF2, dF3
 
 
-def _paraxial_second_order_jet(
-    coefficients, magnetic_rigidity, curvature_sign, gradient_sign
-):
+def _paraxial_second_order_jet(coefficients, magnetic_rigidity, curvature_sign):
     A, F2, _, dA, dF2, _ = _paraxial_taylor_jet(
         coefficients,
         magnetic_rigidity,
         curvature_sign,
-        gradient_sign,
         maximum_order=2,
     )
     return A, F2, dA, dF2
 
 
-def _paraxial_third_order_jet(
-    coefficients, magnetic_rigidity, curvature_sign, gradient_sign
-):
+def _paraxial_third_order_jet(coefficients, magnetic_rigidity, curvature_sign):
     return _paraxial_taylor_jet(
         coefficients,
         magnetic_rigidity,
         curvature_sign,
-        gradient_sign,
         maximum_order=3,
     )
 
@@ -792,7 +786,6 @@ def second_order_taylor_map_from_multipoles(
     magnetic_rigidity,
     *,
     curvature_sign=1.0,
-    gradient_sign=1.0,
     maximum_step_m=1.0e-3,
     maximum_steps=1_000_000,
 ) -> SecondOrderTaylorMap:
@@ -813,7 +806,7 @@ def second_order_taylor_map_from_multipoles(
     for segment, length in enumerate(lengths):
         local_coefficients = coefficients[:, segment]
         A, F2, dA, dF2 = _paraxial_second_order_jet(
-            local_coefficients, magnetic_rigidity, curvature_sign, gradient_sign
+            local_coefficients, magnetic_rigidity, curvature_sign
         )
         A_values[segment] = A
         F2_values[segment] = F2
@@ -890,7 +883,6 @@ def third_order_taylor_map_from_multipoles(
     magnetic_rigidity,
     *,
     curvature_sign=1.0,
-    gradient_sign=1.0,
     maximum_step_m=1.0e-3,
     maximum_steps=1_000_000,
 ) -> ThirdOrderTaylorMap:
@@ -915,7 +907,6 @@ def third_order_taylor_map_from_multipoles(
             local_coefficients,
             magnetic_rigidity,
             curvature_sign,
-            gradient_sign,
         )
         A_values[segment] = A
         F2_values[segment] = F2
@@ -991,7 +982,6 @@ class PlanarSecondOrderTaylorMapObjective:
     R_entries: tuple[tuple[int, int], ...] = _ALL_R_ENTRIES
     T_entries: tuple[tuple[int, int, int], ...] = _ALL_SYMMETRIC_T_ENTRIES
     curvature_sign: float = 1.0
-    gradient_sign: float = 1.0
     maximum_step_m: float = 1.0e-3
 
     def __post_init__(self):
@@ -1078,7 +1068,6 @@ class PlanarSecondOrderTaylorMapObjective:
             self.orbit.segment_lengths,
             self.orbit.magnetic_rigidity,
             curvature_sign=self.curvature_sign,
-            gradient_sign=self.gradient_sign,
             maximum_step_m=self.maximum_step_m,
         )
 
@@ -1121,7 +1110,6 @@ class PlanarThirdOrderTaylorMapObjective:
     T_entries: tuple[tuple[int, int, int], ...] = _ALL_SYMMETRIC_T_ENTRIES
     U_entries: tuple[tuple[int, int, int, int], ...] = _ALL_SYMMETRIC_U_ENTRIES
     curvature_sign: float = 1.0
-    gradient_sign: float = 1.0
     maximum_step_m: float = 1.0e-3
 
     def __post_init__(self):
@@ -1233,7 +1221,6 @@ class PlanarThirdOrderTaylorMapObjective:
             self.orbit.segment_lengths,
             self.orbit.magnetic_rigidity,
             curvature_sign=self.curvature_sign,
-            gradient_sign=self.gradient_sign,
             maximum_step_m=self.maximum_step_m,
         )
 
