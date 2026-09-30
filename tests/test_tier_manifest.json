@@ -1,6 +1,7 @@
 {
   "schema": "radia.test-tier-manifest.v1",
   "impact_rules": {
+    "src/radia/lamination.py": ["tests/test_lamination_api.py"],
     "docs/maglev/demos/sphere/maglev_sphere_force.py": ["tests/test_maglev_sphere_golden.py"],
     "docs/maglev/demos/team28/team28_arnoldi_force.py": ["tests/test_team28_arnoldi_golden.py"],
     "docs/maglev/demos/rotating_magnet_eddy.py": ["tests/test_rotating_magnet_eddy_golden.py"],
