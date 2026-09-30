@@ -90,6 +90,7 @@ from ._hysteresis import (  # noqa: F401  (B-input hysteresis stepping: ONE Gram
     PlayHysteresisMaterial,
     SolveHysteresis as _solve_hysteresis_impl,
 )
+from ._envelope_stop import EnvelopeStopVector3D  # noqa: F401
 from ._field_batch import (  # noqa: F401  (batch exterior field of the BDM1/BDM2 solution)
     field_coefficient_from_solution as _field_coefficient_from_solution_impl,
     field_from_solution as _field_from_solution_impl,
@@ -368,6 +369,7 @@ __all__ = [
     "soft_iron_box", "soft_iron_hex",
     "magnet_box", "magnet_hex",
     "SolveHysteresis", "EnergyStopMaterial", "PlayHysteresisMaterial",
+    "EnvelopeStopVector3D",
     "FieldFromSolution", "FieldCoefficientFromSolution",
     "VectorPotentialCoefficientFromSolution", "MagnetizationSource",
     "CoupledBody", "SolveCoupled", "FieldFromCoupledSolution",
