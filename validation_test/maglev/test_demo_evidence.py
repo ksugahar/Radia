@@ -63,7 +63,12 @@ def test_docs_json_routes_to_validation_and_copied_runs_stay_local(tmp_path):
 
 def test_mixed_galerkin_and_rom_claims_are_preserved():
     sweep = _load("cube_alpha_sweep_results.json")
-    assert len(sweep["f_hz"]) == len(sweep["re_alpha_over_V"]) == 73
+    # The regenerated sweep may add samples, but must retain at least the
+    # original frequency coverage and one response value per frequency.
+    assert len(sweep["f_hz"]) == len(sweep["re_alpha_over_V"])
+    assert len(sweep["f_hz"]) >= 73
+    assert sweep["f_hz"][0] <= 1.0
+    assert sweep["f_hz"][-1] >= 1.0e9
     assert sweep["re_alpha_over_V"][-1] > 0.99
 
     tensor = _load("cube_alpha_tensor_results.json")
