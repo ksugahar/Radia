@@ -324,7 +324,11 @@ class IHDesignSpec:
         return tuple(notes)
 
     def impedance_model_cli(self) -> str:
-        return "esim" if self.impedance_model.startswith("Nonlinear ESIM") else "sibc"
+        if self.impedance_model == "Linear SIBC":
+            return "sibc"
+        if self.impedance_model.startswith("Nonlinear ESIM"):
+            return "esim"
+        raise ValueError(f"Unknown impedance model: {self.impedance_model}")
 
     def coil_solver_cli(self) -> str:
         if self.method in (METHOD_BEMA_IND, METHOD_BEMA_BEM,
@@ -517,12 +521,10 @@ class IHDesignSpec:
         ], coil_in
 
     def _bem_size(self) -> dict[str, str]:
-        return PEEC_SOLVERS.get(
-            self.solver,
-            {"coil_bem_solver": "auto",
-             "coil_saddle_solver": "auto",
-             "wp_bem_backend": "hacapk"},
-        )
+        try:
+            return PEEC_SOLVERS[self.solver]
+        except KeyError as exc:
+            raise ValueError(f"Unknown BEM solver: {self.solver}") from exc
 
     def _fem_solver(self) -> str:
         # The shared design defaults to a BEM preset. Switching the method
@@ -613,6 +615,11 @@ class IHDesignSpec:
         magnetic-energy term and P_wp is self-consistent.  Requires a BEM-A
         coil .vol (source/sink labels) -- no PEEC, no ESIM.
         """
+        if self.impedance_model_cli() != "sibc":
+            raise ValueError(
+                "BEM strong coupling supports only Linear SIBC; "
+                "Nonlinear ESIM cannot be substituted by the linear model."
+            )
         coil_arg, _coil_in = self._coil_input_args()
         bem_size = self._bem_size()
         return [
@@ -764,8 +771,16 @@ class IHDesignSpec:
         is_axisym = mesh_type == MESH_TYPE_AXISYM
         thermal_fes_order = self.resolved_thermal_fes_order()
         calc = "calc_heat_axisym.py" if is_axisym else "calc_heat.py"
-        material_cli = THERMAL_PRESET_TO_CLI.get(self.thermal_material, "custom")
-        scheme_cli = TIME_SCHEME_TO_CLI.get(self.time_scheme, "backward-euler")
+        try:
+            material_cli = THERMAL_PRESET_TO_CLI[self.thermal_material]
+        except KeyError as exc:
+            raise ValueError(
+                f"Unknown thermal material: {self.thermal_material}"
+            ) from exc
+        try:
+            scheme_cli = TIME_SCHEME_TO_CLI[self.time_scheme]
+        except KeyError as exc:
+            raise ValueError(f"Unknown time scheme: {self.time_scheme}") from exc
         rotation_rpm = 0.0 if self.method == METHOD_THERMAL_3D_STATIC else self.rotation_rpm
 
         boundary_missing = []
