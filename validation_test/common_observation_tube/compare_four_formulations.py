@@ -123,10 +123,7 @@ def build_omega_kelvin_mesh(radius=0.12, offset=(0.30, 0.0, 0.0)):
     outer.mat("air_outer")
     for face in outer.faces:
         face.name = "kelvin_ext"
-    gnd = Vertex(Pnt(*offset))
-    gnd.name = "GND"
-
-    shape = Glue([air_inner, iron, outer, gnd])
+    shape = Glue([air_inner, iron, outer])
     for solid in shape.solids:
         if solid.name not in ("iron", "air_inner", "air_outer"):
             center = solid.center
@@ -142,7 +139,8 @@ def build_omega_kelvin_mesh(radius=0.12, offset=(0.30, 0.0, 0.0)):
     )
     with ng.TaskManager():
         ngmesh = OCCGeometry(shape).GenerateMesh(maxh=0.020, grading=0.4)
-    return ng.Mesh(ngmesh)
+    from radia.kelvin_geometry import ground_kelvin_scalar_mesh
+    return ground_kelvin_scalar_mesh(ng.Mesh(ngmesh), offset, "air_outer")
 
 
 def observation_tube(stations=41, circle_points=24, radius=0.006):
@@ -344,7 +342,7 @@ def omega_reduced_omega_engine(order=2):
         outer_keyword="air_outer",
         overrides={"iron": MODEL["mu_r"] * MU0},
     )
-    fes = Periodic(H1(mesh, order=order, dirichlet_bbnd="GND"))
+    fes = Periodic(H1(mesh, order=order, dirichlet_bbbnd="GND"))
     trial, test = fes.TnT()
     bilinear = BilinearForm(mu * grad(trial) * grad(test) * dx, symmetric=True)
 
