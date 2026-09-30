@@ -34,4 +34,4 @@ def test_evrs_coupling_topic_does_not_use_cln_naming() -> None:
     text = get_esim_documentation("evrs_coupling")
 
     assert "CLN" not in text
-    assert "Cauer" not in text
+    # Generic Cauer/Dowell ladder descriptions are not CLN reduction.

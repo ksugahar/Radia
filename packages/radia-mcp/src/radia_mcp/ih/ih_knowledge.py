@@ -13,8 +13,6 @@ Public docs/notebooks:
     checked JSON, and publication figures.
 
 Sources:
-  - Internal production induction-heating toymodel notes
-    (K. Sugahara's production simulations; machine-local path omitted)
   - https://docu.ngsolve.org/latest/i-tutorials/
   - https://forum.ngsolve.org/
 """
@@ -48,7 +46,10 @@ separate activity; known nonlinear implementation issues remain issues.
 ### Native Simulink preview limits
 
 The geometry assembler currently freezes the full EM unit-current loss field
-and scales it by current squared; it emits one Eddy unknown and rotation=none.
+and scales it by peak current squared; it emits one Eddy unknown and rotation=none.
+Sinusoidal RMS current must be converted to peak amplitude before this interface.
+The native thermal preview is linear and does not implement the Python nonlinear
+enthalpy, latent-heat and temperature-dependent material model.
 This is not temperature-dependent nonlinear BH coupling. Hand-authored dense
 temperature-slope operators are a small-system runtime capability, not a
 validated production generator. heat_projection represents diagonal quadratic
@@ -740,10 +741,9 @@ a missing companion file from a filename convention.
 `calc_fem_kelvin.py` saves q_surf as:
 
 ```python
-fes_q = H1(mesh, order=1)                # fixed P1 cross-mesh handoff
-gf_q = GridFunction(fes_q)
-gf_q.vec[:] = 0                          # interior DOFs stay 0
-gf_q.Set(q_surf_cf, definedon=wp_region) # only workpiece-boundary DOFs touched
+from radia.ih_thermal import lumped_surface_p1
+gf_q, on_boundary = lumped_surface_p1(mesh, q_surf_cf, wp_region)
+# Positive lumped projection: fixed P1 cross-mesh handoff; interior DOFs stay zero.
 gf_q.Save(qsurf_sol_path)
 ```
 
@@ -925,7 +925,7 @@ temperatures with an independent Bessel-series solution.
 Field-report symptom map: "the axisym thermal result looks wrong near
 the axis" == this order-1 cusp.  Fix: keep the default order 2 (or pass
 `--fes-order 2`).  Do NOT switch the scalar solve to the Henrotte
-basis: the FEMM-canonical standard-H1 policy stands, order 2 already
+basis: the reference standard-H1 policy stands, order 2 already
 strongly suppresses the axis artifact.  The optional Henrotte heat BFIs now
 reject axis-touching Q2 explicitly instead of assembling inconsistent matrices.
 
@@ -1137,10 +1137,11 @@ INDUCTION_HEATING_ROTATING = """
 
 ## Production path: angle is an explicit Simulink signal
 
-The workpiece angle is generated on the Simulink side and is wired to both the
-Eddy and Thermal blocks.  The Thermal block holds temperature in workpiece
-coordinates and transfers the previous accepted field from ``theta_prev`` to
-``theta_now`` before advancing the thermal step.  The headless validation path
+The workpiece angle is generated on the Simulink side. Temperature stays in
+workpiece material coordinates. Eddy maps temperature to the source frame and
+heat back; Thermal must not rotate the accepted temperature a second time.
+The generated native preview currently fixes rotation=none; a supplied angle
+does not enable an unimplemented geometry-dependent EM solve. The headless path
 can generate the equivalent angle history from ``--rotation-rpm``:
 
 ```bash
@@ -1219,15 +1220,11 @@ and the thermal solve (calc_heat.py):
    ``calc_fem_kelvin.py`` always produces this handoff at order 1,
    independently of the electromagnetic solve order.
 
-3. **q_surf is a volume H1 GF with non-zero values ONLY on the
-   workpiece boundary**.  calc_fem_kelvin does
-   `gf_q = GridFunction(H1(mesh, order=fes_order));
-    gf_q.Set(q_surf_cf, definedon=wp_region)`.
-   The rest of the volume is 0.  The thermal solver point-samples
-   this GF at workpiece surface vertices -- H1 continuity guarantees
-   the boundary node values are recovered exactly.  Wp surface
-   vertices that fall OUTSIDE the EM mesh (mesh mismatch) are set to
-   0 and a count is reported in the run log.
+3. **q_surf is a fixed-P1 volume H1 GridFunction with non-zero values only
+   on the workpiece boundary**. `lumped_surface_p1` performs the positive
+   lumped surface projection independently of the EM polynomial order.
+   Transfer uses boundary-mapped evaluation and explicit mesh/provenance checks.
+   Unmapped points fail loudly; they are not silently replaced by zero.
 
 4. **Thermal boundary roles are explicit and independently audited**.
    Heat flux, convection, and radiation use separate selectors.  The
@@ -1617,7 +1614,7 @@ a += s * sigma * (A + grad(phi)) * (N + grad(psi)) * dx("coil_...")  # eddy curr
 I_out = Integrate(J * grad(psi) * dx("coil_..."), mesh)  # computed current
 B = curl(gfA) * I_target / I_out                          # scale to I_target
 E = -s * (gfA + grad(gfPhi)) * I_target / I_out
-Q = 0.5 * sigma * InnerProduct(E, E).real                 # Joule heat [W/m^3]
+Q = 0.5 * sigma * InnerProduct(E, Conj(E)).real                 # Joule heat [W/m^3]
 ```
 
 ### Mesh Structure (Gmsh)
@@ -1636,7 +1633,7 @@ Boundary layer mesh (`work_skin`) resolves skin depth delta ~ 0.18 mm at 8 kHz.
 ### Thermal Coupling
 
 ```python
-Q = 0.5 * sigma * InnerProduct(E, E).real  # from EM solve
+Q = 0.5 * sigma * InnerProduct(E, Conj(E)).real  # from EM solve
 # theta-scheme: rho*c * dT/dt = div(k*grad(T)) + Q
 # dt = 0.5s, t_end = 5s, h = 10 W/m^2K convection
 ```
@@ -1860,7 +1857,7 @@ At ``omega == 0`` it reduces to the real vacuum-L saddle (R = 0).
 It solved a perfect-conductor saddle then integrated ``R = Re(Z_s)*|J|^2 dS``
 afterwards; the PEC J concentrates singularly at near-contact turn gaps /
 edges where it varies below the skin depth and the Leontovich integral
-breaks down, over-estimating R ~3x on tightly-wound coils (kubota 3-turn
+breaks down, over-estimating R ~3x on tightly-wound coils (example 3-turn
 pancake: PEC 15.14 mOhm vs the physical 4.63, the latter confirmed by
 volume PEEC 3.7 / perimeter PEEC 4.5 / analytic proximity 4.8).  On smooth
 geometry both agreed (isolated straight wire = closed-form Bessel to <1%),
@@ -1886,7 +1883,7 @@ reduction is what makes it fit.
 
 R is the accepted metric and it AGREES (impedance-EFIE 4.63 mOhm ~= perimeter
 PEEC 4.5 / analytic 4.8, all in the ~4.5-5 band).  The residual L gap --
-BEM-A EXTERNAL L 411.6 nH vs PEEC 430 nH (~4.3%) on the kubota 3-turn coil --
+BEM-A EXTERNAL L 411.6 nH vs PEEC 430 nH (~4.3%) on the example 3-turn coil --
 is a KNOWN, BENIGN geometry/convention difference, LEFT AS-IS (Sugahara
 2026-07-03: signed off because R agrees).  It is NOT a defect, and raising the
 mesh curve order does NOT close it:
@@ -2048,9 +2045,11 @@ Linear SIBC in the workpiece: `Z_s = (1+j)/(sigma*delta)` with
 `delta = sqrt(2/(omega*mu_0*mu_r*sigma))`. Pass mu_r via the material setup
 in `IHWorkpieceContext(mesh, freq, sigma, mu_r=100, ...)`.
 
-Nonlinear BH (saturation): use ESIM cell problem to compute per-panel Z_s,
-then `ScalarBIESIBCSolver.solve(phi_inc, Z_s_array, omega)` with per-node
-Z_s array. Karl iteration alternates ESIM and BEM solves.
+Nonlinear BH cell problems can produce spatially varying impedance, but the
+current ScalarBIESIBCSolver accepts only uniform Z_s (a scalar or a constant
+array). Nonuniform arrays fail loudly. Source-side weighted stiffness K_gamma
+and local loss integration are not implemented; do not recommend the old
+per-node BEM route as a working ESIM coupling.
 
 ## Coil side: copper (linear, mu_r=1) is the default assumption
 
@@ -2175,7 +2174,7 @@ Non-obvious features:
    - PEEC+BEM: Dense LU (small) / HACApK (large, O(N log N))
    - HCurl FEM-SIBC: prefer AMS for p=1, BDDC with AMS coarse solve for
      p=2 or p=3 (`calc_fem_kelvin --solver auto`). Both use COCR. Every
-     route, direct included, has a true relative residual gate of 1e-7 on
+     route, direct included, has a true relative residual gate of 1e-6 on
      the original assembled free rows, with at most three residual corrections
      using the same operator. Iterations and correction residuals are recorded.
      ICCG is refused unless it converges.
