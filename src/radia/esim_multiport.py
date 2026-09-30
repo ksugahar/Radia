@@ -42,7 +42,8 @@ TODO (requires Ren 2026 paper):
 """
 
 import numpy as np
-from .esim_cell_problem import ESIMCellProblemSolver, ESIMFiniteSlabSolver
+from .esim_cell_problem import (ESIMCellProblemSolver, ESIMFiniteSlabSolver,
+                                require_esim_converged)
 
 
 class ESIMPort:
@@ -176,6 +177,8 @@ class ESIMMultiportSolver:
         for j, (port, H0) in enumerate(zip(self.ports, H0_list)):
             cell_solver = solvers[j] if solvers is not None else self._make_cell_solver(port)
             res = cell_solver.solve(float(H0), **solver_kwargs)
+            require_esim_converged(
+                res, f"ESIM multiport cell solve for port {j} ({port.name})")
             Z_diag[j] = res['Z']
             results.append(res)
 

@@ -1216,7 +1216,10 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         # next outer iter overrides anyway.
         esim_solver = mat_wp.create_esim_solver(
             args.frequency, args.half_thickness, geometry='cylinder')
-        Z_s_seed = complex(esim_solver.solve(5.0, max_iter=5)['Z'])
+        from radia.esim_cell_problem import require_esim_converged
+        seed_result = require_esim_converged(
+            esim_solver.solve(5.0), "BEM ESIM seed cell solve")
+        Z_s_seed = complex(seed_result['Z'])
         if args.esim_per_panel:
             # Per-DOF Z_s works on BOTH intree-dense and HACApK backends
             # (v4.47.2+).  Seed every DOF with the same scalar; subsequent
@@ -1297,9 +1300,10 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             # Per-DOF ESIM
             Z_s_new = np.empty(bem.ndof, dtype=complex)
             for i in range(bem.ndof):
-                Z_s_new[i] = complex(
-                    esim_solver.solve(max(float(H_t_per[i]), 1e-3),
-                                       max_iter=20)['Z'])
+                cell_result = require_esim_converged(
+                    esim_solver.solve(max(float(H_t_per[i]), 1e-3)),
+                    f"BEM per-panel ESIM cell solve at DOF {i}")
+                Z_s_new[i] = complex(cell_result['Z'])
             Z_s_wp = anderson.step(Z_s_old, Z_s_new)
             dZ_per_dof = (np.abs(Z_s_wp - Z_s_old)
                           / np.maximum(np.abs(Z_s_old), 1e-30))
@@ -1324,6 +1328,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
                 f"max(dZ)={dZ:.4e} t={t_iter:.1f}s")
         else:
             sol_new = esim_solver.solve(max(H_t_rms_iter, 1e-3))
+            require_esim_converged(sol_new, "BEM scalar ESIM cell solve")
             Z_s_new = complex(sol_new['Z'])
             Z_s_wp = anderson.step(Z_s_old, Z_s_new)
             dZ = abs(Z_s_wp - Z_s_old) / max(abs(Z_s_old), 1e-30)

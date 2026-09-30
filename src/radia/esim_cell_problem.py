@@ -31,6 +31,20 @@ from scipy.constants import mu_0
 
 from radia.bh_law import monotone_bh_pchip
 
+
+def require_esim_converged(result, context="ESIM cell solve"):
+    """Return a cell result only when its nonlinear iteration converged."""
+    if not isinstance(result, dict):
+        raise TypeError(f"{context} returned {type(result).__name__}, expected dict")
+    if result.get('converged') is not True:
+        diagnostics = []
+        for name in ('iterations', 'relative_change', 'xi', 'delta'):
+            if name in result:
+                diagnostics.append(f"{name}={result[name]!r}")
+        detail = ", ".join(diagnostics) or "no convergence diagnostics"
+        raise RuntimeError(f"{context} did not converge ({detail})")
+    return result
+
 try:
     from ngsolve import *
     import netgen.meshing as ngm
@@ -523,6 +537,7 @@ class ESIMFiniteSlabSolver:
         mu_dist = np.full(n, self.mu_initial, dtype=complex)
 
         converged = False
+        rel_change = float('inf')
 
         for iteration in range(max_iter):
             # Build and solve linear system
@@ -561,6 +576,7 @@ class ESIMFiniteSlabSolver:
             'mesh_points': self.mesh_points,
             'converged': converged,
             'iterations': iteration + 1,
+            'relative_change': float(rel_change),
             'xi': self.xi,
             'delta': self.delta
         }
@@ -984,6 +1000,7 @@ class ESIMCellProblemSolver:
         mu_dist = np.full(self.n_nodes, mu_initial, dtype=complex)
 
         converged = False
+        rel_change = float('inf')
 
         for iteration in range(max_iter):
             # Build and solve the linear system with current mu distribution
@@ -1022,6 +1039,7 @@ class ESIMCellProblemSolver:
             'mesh_points': self.mesh_points,
             'converged': converged,
             'iterations': iteration + 1,
+            'relative_change': float(rel_change),
             'mu_final': mu_final,
             'use_complex_mu': self.use_complex_mu
         }
@@ -1280,6 +1298,16 @@ class ESITable:
         table_array = np.array(table_data)
         if np.iscomplexobj(table_array):
             table_array = table_array.real
+        if table_array.ndim != 2 or table_array.shape[1] < 5:
+            raise ValueError("ESI table must be a 2D array with at least 5 columns")
+        if table_array.shape[1] >= 7:
+            flags = table_array[:, 6]
+            failed = np.flatnonzero(~np.isfinite(flags) | (flags < 0.5))
+            if failed.size:
+                fields = table_array[failed, 0].tolist()
+                raise RuntimeError(
+                    "ESI table contains unconverged cell solves at rows "
+                    f"{failed.tolist()} (H0={fields})")
         self.table = np.ascontiguousarray(table_array, dtype=np.float64)
         self.H0_values = np.ascontiguousarray(self.table[:, 0].copy())
         self.Z_real = np.ascontiguousarray(self.table[:, 1].copy())
