@@ -105,6 +105,8 @@ on:
       - 'tests/test_three_engine_energy.py'
       - 'validation_test/c_type_three_engine/magnetic_energy.py'
       - 'src/matlab/radia_mex.cpp'
+      - 'src/matlab/radia_mex_sparse_symmetry.h'
+      - 'tests/cpp/test_radia_mex_sparse_symmetry.cpp'
       - 'matlab/+radia/+internal/callMex.m'
       - 'matlab/+radia/setup.m'
       - 'tests/matlab/test_ngsolve_sparsecholesky.m'
@@ -243,6 +245,8 @@ on:
       - 'tests/test_three_engine_energy.py'
       - 'validation_test/c_type_three_engine/magnetic_energy.py'
       - 'src/matlab/radia_mex.cpp'
+      - 'src/matlab/radia_mex_sparse_symmetry.h'
+      - 'tests/cpp/test_radia_mex_sparse_symmetry.cpp'
       - 'matlab/+radia/+internal/callMex.m'
       - 'matlab/+radia/setup.m'
       - 'tests/matlab/test_ngsolve_sparsecholesky.m'
@@ -378,6 +382,10 @@ jobs:
           if (-not $vs) { throw 'MSVC installation not found' }
           $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
           & cmd.exe /d /c "call `"$vcvars`" && cmake --build build-msvc --config Release --target sparsesolv_ngsolve --parallel 2"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & cmd.exe /d /c "call `"$vcvars`" && cmake --build build-msvc --config Release --target test_radia_mex_sparse_symmetry --parallel 2"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .\build-msvc\Release\test_radia_mex_sparse_symmetry.exe
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Verify source provenance and run required AMS tests

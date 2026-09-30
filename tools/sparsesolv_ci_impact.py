@@ -124,6 +124,8 @@ NATIVE_PATHS = (
     "tests/test_c_type_p1_box_lane.py",
 
     "src/ext/sparsesolv/**", "src/matlab/radia_mex.cpp",
+    "src/matlab/radia_mex_sparse_symmetry.h",
+    "tests/cpp/test_radia_mex_sparse_symmetry.cpp",
     "matlab/+radia/+internal/callMex.m", "matlab/+radia/setup.m",
     "tests/matlab/test_ngsolve_sparsecholesky.m", "matlab/+radia/+ngsolve/Matrix.m",
     "tests/matlab/test_mex_runtime_setup.m", "matlab/+radia/+sparsesolv/**",

@@ -41,6 +41,7 @@
 #include <postproc.hpp>
 #include <sparsematrix.hpp>
 #include <sparsecholesky.hpp>
+#include "radia_mex_sparse_symmetry.h"
 #include <symbolicintegrator.hpp>
 // Shared SparseSolv types must preserve BaseMatrix scalar-type metadata.
 #include <sparsesolv/preconditioners/complex_compact_ams.hpp>
@@ -60,6 +61,7 @@
 #include <memory>
 #include <mutex>
 #include <numeric>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -4879,6 +4881,35 @@ void NGSolveMatrixInverse(int nlhs, mxArray* plhs[], int nrhs,
     auto sparse = std::dynamic_pointer_cast<ngla::BaseSparseMatrix>(matrix.matrix);
     if (!sparse)
         BadArgument("ngsolve.matrix.inverse requires a native sparse matrix");
+    radia::matlab::SparseSymmetryCheck symmetry;
+    if (const auto typed = std::dynamic_pointer_cast<ngla::SparseMatrix<double>>(
+            matrix.matrix)) {
+        symmetry = radia::matlab::CheckSparseTransposeSymmetry<double>(
+            typed->VHeight(),
+            [&](int row) { return typed->GetRowIndices(row).Size(); },
+            [&](int row, int entry) { return typed->GetRowIndices(row)[entry]; },
+            [&](int row, int entry) { return typed->GetRowValues(row)[entry]; });
+    } else if (const auto typed =
+                   std::dynamic_pointer_cast<ngla::SparseMatrix<Complex>>(
+                       matrix.matrix)) {
+        symmetry = radia::matlab::CheckSparseTransposeSymmetry<Complex>(
+            typed->VHeight(),
+            [&](int row) { return typed->GetRowIndices(row).Size(); },
+            [&](int row, int entry) { return typed->GetRowIndices(row)[entry]; },
+            [&](int row, int entry) { return typed->GetRowValues(row)[entry]; });
+    } else {
+        BadArgument(
+            "ngsolve.matrix.inverse symmetry check requires a scalar real or complex sparse matrix");
+    }
+    if (!symmetry.symmetric) {
+        std::ostringstream message;
+        message << "ngsolve.matrix.inverse requires a transpose-symmetric matrix before "
+                   "SparseCholesky; |A(" << (symmetry.row + 1) << ","
+                << (symmetry.column + 1) << ")-A(" << (symmetry.column + 1)
+                << "," << (symmetry.row + 1) << ")|=" << symmetry.difference
+                << " exceeds " << symmetry.tolerance;
+        BadArgument(message.str());
+    }
     auto inverse = ngla::BaseSparseCholesky::Create(sparse, free_dofs);
     plhs[0] = Uint64Output(RegisterMatrix(MakeNGSolveMatrixHandle(
         std::move(inverse), matrix.fespace, "sparsecholesky(" + matrix.kind + ")")));
