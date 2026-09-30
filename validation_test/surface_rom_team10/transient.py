@@ -24,6 +24,14 @@ T_END = float(_os.environ.get('TEAM_T_END', '0.12'))   # override only for trunc
 NI0 = 1000.0
 
 
+def _check_linear_correction(matrix, defect, correction, rhs, free, what,
+                             reference_norm):
+    """Apply the repository-wide free-row residual contract to one correction."""
+    return check_true_residual(
+        matrix, defect, correction, rhs, free, what,
+        reference_norm=reference_norm)
+
+
 def waveform(name):
     if name == 'rise': return lambda t: NI0 * (1 - np.exp(-t / .05))
     if name == 'rise_fast': return lambda t: NI0 * (1 - np.exp(-t / .02))
@@ -117,10 +125,10 @@ def run_fom(model, wave, steps=60, tol=1e-10, max_newton=40):
                 linear_reference_norm = float(np.linalg.norm(r.FV().NumPy()[free]))
             du.data = m.a.mat.Inverse(m.fes.FreeDofs(), inverse='sparsecholesky') * r
             defect.data = m.a.mat * du - r
-            relative = check_true_residual(
+            relative = _check_linear_correction(
                 m.a.mat, defect.FV().NumPy(), du.FV().NumPy(),
                 r.FV().NumPy(), free, f'FOM step {k}, Newton {it}',
-                reference_norm=linear_reference_norm)
+                linear_reference_norm)
             step_linear_residual = max(step_linear_residual, relative)
             dec = abs(InnerProduct(du, r))
             if it == 0: dec0 = max(dec, 1e-300)
