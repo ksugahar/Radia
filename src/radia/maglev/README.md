@@ -60,8 +60,7 @@ print(f"alpha(1 kHz) / V = {a/V:.4f}")
 
 ## Examples
 
-Curated, runnable demonstrations live under `docs/maglev/demos/` (the broad
-research corpus is in `validation_test/maglev/research_cln/`, see below):
+Analytical and full-FEM demonstrations live under `docs/maglev/demos/`:
 
 | Example | Script |
 |---------|--------|
@@ -70,26 +69,12 @@ research corpus is in `validation_test/maglev/research_cln/`, see below):
 | Coil-driven sphere eddy force | `docs/maglev/demos/sphere/coil_sphere_eddy_force.py` |
 | Coil + sphere equilibrium height | `docs/maglev/demos/sphere/coil_maglev_equilibrium.py` |
 | Ellipsoid demag / alpha tensor (axisym + 3D HCurl) | `docs/maglev/demos/ellipsoid/ellipsoid_alpha_tensor.py` |
-| 3D cuboid CLN-SIBC standalone demo | `docs/maglev/demos/cuboid/cln_sibc_cuboid_3d.py` |
-| TEAM 28 electrodynamic levitation (CLN force / sweep) | `docs/maglev/demos/team28/team28_cln_force.py` |
 
-## Research corpus (`validation_test/maglev/research_cln/`)
+## Reduced-model validation
 
-`validation_test/maglev/research_cln/` holds the absorbed radia-cln research corpus — the raw
-verification sweeps, Mathematica derivations, and iteration history that
-back the theory but are **not** README-backed package examples (per the
-lab Sample Promotion Ladder: tests -> examples -> panels).  Contents:
-
-| Subdir | What |
-|--------|------|
-| `validation_test/maglev/research_cln/ngsolve_validation/` | NGSolve FEM verification sweeps (dated `*_results.json` snapshots, one-off probe scripts) |
-| `validation_test/maglev/research_cln/multiconn_loop_method/` | T-Omega multiply-connected bath-plate notebook |
-| `validation_test/maglev/research_cln/tanimoto_canonical/` | Tanimoto canonical CLN notebooks (A-phi / A-T / T-Omega) |
-| `validation_test/maglev/research_cln/*.wls` | Schur-F / CF / quadrupole / polarizability symbolic derivations |
-| `validation_test/maglev/research_cln/bem_cln_*` | BEM-CLN multi-conductor verification (iteration history) |
-
-Promote a script from `research/` to `docs/maglev/demos/` only after it gains a
-README, runs standalone, and demonstrates one clear concept.
+Use `validation_test/maglev/ecb_foster_lorentz_3d_reference.py` for the
+three-dimensional Foster current/force comparison. Historical reduction
+experiments are not supported production or comparison routes.
 
 ## Force computation: three-dimensional HCurl-VIM
 
@@ -148,12 +133,10 @@ for c_1/s).  Typical state count: 50-300 depending on accuracy target.
 
 ## Related
 
-- **radia-mcp** maglev knowledge: see `radia_iem_fem` and
-  `cln_mor_control` topics (the published research line: Yano bachelor
-  + Yano master, IEEE TMag 2018).
-- **TEAM 28** electrodynamic levitation: `docs/maglev/demos/team28/` reproduces
-  the lab full-FEM force benchmark with 5-stage CLN reduction (0.000%
-  error at the equilibrium height).
+- **TEAM 28** full-FEM reference:
+  `docs/maglev/demos/team28/team28_axisym_fem.py`. Reduced dynamic plants use
+  `radia.vim.ExportHCurlEddyFosterFamilyJSON`; validate each exported family
+  against its full-order field and force solution.
 - **Sphere / ellipsoid / coil**: closed-form anchors and Radia open-
   boundary coil examples (migrated from
   `docs/maglev/demos/{sphere,ellipsoid,team28}/`).

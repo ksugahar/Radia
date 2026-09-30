@@ -1153,7 +1153,7 @@ case, but Kelvin transformation handles both cases uniformly.
 |------|-------------|
 | `tests/test_kelvin_source.py` | 11 unit tests (involution, pullback, Biot-Savart) |
 | `validation_test/cubit/kelvin_1_4_p_convergence/` | Promoted Cubit p-convergence fixture covered by `validation_test/cubit/test_kelvin_1_4_p_convergence.py` |
-| `src/radia/open_boundary/` | Productionized DtN / CLN open-boundary APIs |
+| `src/radia/open_boundary/` | Exact DtN, continued-fraction boundary symbols, and passive diffusion-memory APIs |
 
 ### MCP Knowledge
 
