@@ -4,6 +4,7 @@ The uncached reference intentionally repeats native source evaluation.
 Pointwise cache and concurrency contracts live in tests/test_radiafield_memoize.py.
 """
 import importlib.util
+import os
 from pathlib import Path
 
 import numpy as np
@@ -61,10 +62,14 @@ def test_nonlinear_memoisation_leaves_the_newton_p2_solution_unchanged(nonlinear
     options = dict(tolerance=1e-8, residual_tolerance=1e-10)
     # Serial, so the assembly sums are reproducible and any difference would
     # come from the memoised values; concurrency is covered by the test above.
-    memoised = solve(mesh, source, potential, 1.0, (3.0, 0.0, 0.0), **options, **common)
-    assert not source.memoize and source.GetCacheStats()["size"] == 0
-    plain = solve.__wrapped__(mesh, source, potential, 1.0, (3.0, 0.0, 0.0), **options, **common)
-    assert memoised["nonlinear_stats"]["converged"]
-    for point in ((-0.5, 0.15, -0.1), (0.5, 0.1, 0.2), (0.2, -0.3, -0.1)):
-        np.testing.assert_array_equal(np.asarray(memoised["B_cf"](mesh(*point))),
-                                      np.asarray(plain["B_cf"](mesh(*point))))
+    ng.SetNumThreads(1)
+    try:
+        memoised = solve(mesh, source, potential, 1.0, (3.0, 0.0, 0.0), **options, **common)
+        assert not source.memoize and source.GetCacheStats()["size"] == 0
+        plain = solve.__wrapped__(mesh, source, potential, 1.0, (3.0, 0.0, 0.0), **options, **common)
+        assert memoised["nonlinear_stats"]["converged"]
+        for point in ((-0.5, 0.15, -0.1), (0.5, 0.1, 0.2), (0.2, -0.3, -0.1)):
+            np.testing.assert_array_equal(np.asarray(memoised["B_cf"](mesh(*point))),
+                                          np.asarray(plain["B_cf"](mesh(*point))))
+    finally:
+        ng.SetNumThreads(int(os.environ.get("RADIA_TEST_NGSOLVE_THREADS", os.cpu_count() or 1)))
