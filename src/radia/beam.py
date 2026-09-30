@@ -94,8 +94,7 @@ def canonical_body_hamiltonian_jet(
     decapole coefficients.  Returned ``H2/H3/H4/H5`` and ``A/F2/F3/F4``
     tensors use coordinates
     ``(x, px/p0, y, py/p0, ell, delta)`` with longitudinal Poisson sign -1.
-    ``curvature_sign`` is the charge sign of every harmonic; the native
-    gradient sign is always the same value.
+    ``curvature_sign`` is the charge sign of every harmonic.
     """
     values = _real_finite_array(coefficients, "coefficients")
     if values.shape not in ((7,), (9,)):
@@ -120,7 +119,6 @@ def canonical_body_hamiltonian_jet(
         values,
         rigidity,
         curvature_sign=curvature,
-        gradient_sign=curvature,
         reference_beta=beta,
         reference_curvature_per_m=reference_curvature,
     )
@@ -280,7 +278,6 @@ def propagate_grid_function_linear_map(
         sample_radius_m=radius,
         names=region_names,
         curvature_sign=curvature,
-        gradient_sign=curvature,
         periodic_frame=bool(periodic_frame),
         maximum_step_m=step,
         maximum_steps=_positive_integer(maximum_steps, "maximum_steps"),
@@ -382,7 +379,6 @@ def propagate_grid_function_multipole_map(
         sample_radius_m=radius,
         names=region_names,
         curvature_sign=float(curvature_sign),
-        gradient_sign=float(curvature_sign),
         multipole_order=field_order,
         maximum_map_order=map_order,
         periodic_frame=bool(periodic_frame),

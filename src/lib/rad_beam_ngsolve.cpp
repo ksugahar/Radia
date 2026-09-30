@@ -233,10 +233,10 @@ void BuildDynamicsJet(GridFunctionSegmentLinearization& output,
     output.curvature_per_m = options.curvature_sign *
         output.center_field_local_t[1] /
         options.magnetic_rigidity_t_m;
-    output.normal_gradient_per_m2 = options.gradient_sign *
+    output.normal_gradient_per_m2 = options.curvature_sign *
         output.multipoles.normal_t_per_m_power[1] /
         options.magnetic_rigidity_t_m;
-    output.skew_gradient_per_m2 = options.gradient_sign *
+    output.skew_gradient_per_m2 = options.curvature_sign *
         output.multipoles.skew_t_per_m_power[1] /
         options.magnetic_rigidity_t_m;
     output.transverse_divergence_t_per_m = d_bx_dx + d_by_dy;
@@ -249,7 +249,7 @@ void BuildDynamicsJet(GridFunctionSegmentLinearization& output,
     (void)skew_gradient_t_per_m;
     output.dynamics_jet = BuildParaxialMagneticDynamicsJet(
         output.multipoles, options.magnetic_rigidity_t_m,
-        options.curvature_sign, options.gradient_sign,
+        options.curvature_sign,
         options.maximum_map_order);
     output.a_per_m = output.dynamics_jet.a_per_m;
 }
@@ -428,7 +428,6 @@ GridFunctionTransferReport6 PropagateGridFunctionMultipoleMap(
         options.maximum_map_order < 1 || options.maximum_map_order > 3 ||
         !Finite(options.initial_horizontal) ||
         !std::isfinite(options.curvature_sign) ||
-        !std::isfinite(options.gradient_sign) ||
         !std::isfinite(options.maximum_step_m) ||
         options.maximum_step_m <= 0.0 || options.maximum_steps == 0)
         throw std::invalid_argument(

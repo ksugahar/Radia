@@ -63,11 +63,12 @@ def test_native_tracker_matches_scipy_reference():
     # The symmetric pair keeps the measured planarity at integrator noise.
     assert oop_m < 1.0e-9
     assert oop_t < 1.0e-9
-    # Midpoint curvature must collocate -B_z/(B rho) of the same field.
+    # Midpoint curvature must collocate h = +B_z/(B rho) of the same field
+    # (positive h bends toward -x = -(z x t)).
     middle = len(stations) // 2
     midpoint = 0.5 * (positions[middle] + positions[middle + 1])
     field = np.asarray(rad.Fld(container, "b", midpoint.tolist()))
-    assert curvature[middle] == pytest.approx(-field[2] / RIGIDITY,
+    assert curvature[middle] == pytest.approx(field[2] / RIGIDITY,
                                               rel=1.0e-3)
     rad.UtiDelAll()
 
@@ -127,7 +128,8 @@ def test_native_general_plane_tracker_recovers_uniform_field_sector():
     np.testing.assert_allclose(tangents[-1], tangent_1, atol=2.0e-9)
     np.testing.assert_allclose(length, radius * angle, atol=2.0e-9)
     np.testing.assert_allclose(stations, np.linspace(0.0, length, 33))
-    np.testing.assert_allclose(curvature, 1.0 / radius, atol=2.0e-12)
+    # Counter-clockwise about +z bends toward +x: h < 0.
+    np.testing.assert_allclose(curvature, -1.0 / radius, atol=2.0e-12)
     assert oop_m == 0.0 and oop_t == 0.0
 
 

@@ -351,7 +351,8 @@ OrbitTrackResult TrackReferenceOrbit3DToPlaneImpl(
     }
 
     // Collocated midpoint curvature from ONE batched field call:
-    // kappa = -(B . z) / (B rho) on the measured-planar orbit.
+    // h = +(B . z) / (B rho): the standard planar frame x = z x t, y = z
+    // bends toward -x for positive h (dt/ds = t x B/(B rho)).
     const std::size_t midpoint_count = station_count - 1;
     std::vector<double> midpoints(3*midpoint_count);
     double tangent_scratch[3];
@@ -364,7 +365,7 @@ OrbitTrackResult TrackReferenceOrbit3DToPlaneImpl(
     field.Evaluate(midpoints.data(), midpoint_count, midpoint_field.data());
     for (std::size_t midpoint = 0; midpoint < midpoint_count; ++midpoint)
         curvature_out[midpoint] =
-            -midpoint_field[3*midpoint+2] * inverse_rigidity;
+            midpoint_field[3*midpoint+2] * inverse_rigidity;
     return result;
 }
 

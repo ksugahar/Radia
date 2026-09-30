@@ -481,7 +481,7 @@ void ExportBeamTransfer(py::module_& module) {
     module.def(
         "_beam_canonical_hamiltonian_jet",
         [](F64Array coefficients, double magnetic_rigidity_t_m,
-           double curvature_sign, double gradient_sign,
+           double curvature_sign,
            double reference_beta, py::object reference_curvature) {
             const auto buffer = coefficients.request();
             if (buffer.ndim != 1 ||
@@ -504,7 +504,7 @@ void ExportBeamTransfer(py::module_& module) {
             const auto result =
                 radia::beam::BuildCanonicalBodyHamiltonianJet(
                     expansion, magnetic_rigidity_t_m, curvature_sign,
-                    gradient_sign, reference_beta,
+                    reference_beta,
                     reference_curvature_per_m);
             py::dict output;
             output["schema"] =
@@ -537,7 +537,6 @@ void ExportBeamTransfer(py::module_& module) {
         },
         py::arg("coefficients"), py::arg("magnetic_rigidity_t_m"),
         py::arg("curvature_sign") = 1.0,
-        py::arg("gradient_sign") = 1.0,
         py::arg("reference_beta") = 1.0,
         py::arg("reference_curvature_per_m") = py::none(),
         R"pbdoc(
@@ -545,8 +544,9 @@ Build the native fifth-degree canonical body-multipole Hamiltonian jet.
 
 Seven coefficients stop at octupole; nine add normal/skew decapole.  The
 result contains symmetric H2/H3/H4/H5 tensors and J*H dynamics A/F2/F3/F4.
-When reference_curvature_per_m is supplied, h(s) is independent of the
-dipole field curvature B0/(B rho); omitting it retains the legacy equality.
+curvature_sign is the charge sign of every harmonic.  When
+reference_curvature_per_m is supplied, h(s) is independent of the dipole
+field curvature q*B0/(B rho); omitting it retains the legacy equality.
 )pbdoc");
 
     module.def(
@@ -594,7 +594,7 @@ u_out = R*u + 1/2*T[u,u] + 1/6*U[u,u,u].
            F64Array reference_positions, F64Array reference_tangents,
            double magnetic_rigidity_t_m, F64Array initial_horizontal,
            double sample_radius_m, py::object names_object,
-           double curvature_sign, double gradient_sign, bool periodic_frame,
+           double curvature_sign, bool periodic_frame,
            double maximum_step_m, std::size_t maximum_steps,
            const std::string& field_representation) {
             const auto lengths_buffer = lengths.request();
@@ -630,7 +630,6 @@ u_out = R*u + 1/2*T[u,u] + 1/6*U[u,u,u].
             std::copy(horizontal_data, horizontal_data + 3,
                       options.initial_horizontal.begin());
             options.curvature_sign = curvature_sign;
-            options.gradient_sign = gradient_sign;
             options.periodic_frame = periodic_frame;
             options.maximum_step_m = maximum_step_m;
             options.maximum_steps = maximum_steps;
@@ -654,7 +653,6 @@ u_out = R*u + 1/2*T[u,u] + 1/6*U[u,u,u].
         py::arg("sample_radius_m") = 1.0e-3,
         py::arg("names") = py::none(),
         py::arg("curvature_sign") = 1.0,
-        py::arg("gradient_sign") = 1.0,
         py::arg("periodic_frame") = false,
         py::arg("maximum_step_m") = 1.0e-3,
         py::arg("maximum_steps") = 1000000,
@@ -674,7 +672,7 @@ six-dimensional R map without constructing a regular-grid field map.
            F64Array reference_positions, F64Array reference_tangents,
            double magnetic_rigidity_t_m, F64Array initial_horizontal,
            double sample_radius_m, py::object names_object,
-           double curvature_sign, double gradient_sign,
+           double curvature_sign,
            unsigned multipole_order, unsigned maximum_map_order,
            bool periodic_frame, double maximum_step_m,
            std::size_t maximum_steps,
@@ -711,7 +709,6 @@ six-dimensional R map without constructing a regular-grid field map.
             std::copy(horizontal_data, horizontal_data + 3,
                       options.initial_horizontal.begin());
             options.curvature_sign = curvature_sign;
-            options.gradient_sign = gradient_sign;
             options.multipole_order = multipole_order;
             options.maximum_map_order = maximum_map_order;
             options.periodic_frame = periodic_frame;
@@ -737,7 +734,6 @@ six-dimensional R map without constructing a regular-grid field map.
         py::arg("sample_radius_m") = 1.0e-3,
         py::arg("names") = py::none(),
         py::arg("curvature_sign") = 1.0,
-        py::arg("gradient_sign") = 1.0,
         py::arg("multipole_order") = 3,
         py::arg("maximum_map_order") = 3,
         py::arg("periodic_frame") = false,

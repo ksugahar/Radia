@@ -1741,10 +1741,7 @@ def recover_periodic_planar_closed_orbit_native(
     positions = np.ascontiguousarray(tracked[0], dtype=float)
     tangents = np.ascontiguousarray(tracked[1], dtype=float)
     path_stations = np.ascontiguousarray(tracked[2], dtype=float)
-    # The native tracker reports -(B.z)/(B rho) for its signed rigidity,
-    # i.e. counter-clockwise-positive turning about +z.  With bend_axis=+z,
-    # positive h bends toward -x = clockwise, hence the negation.
-    curvature = -np.ascontiguousarray(tracked[3], dtype=float)
+    curvature = np.ascontiguousarray(tracked[3], dtype=float)
     path_length = float(tracked[4])
     final_residual = residual((radius, alpha))
     position_residual = abs(float(final_residual[0])) * radius_scale

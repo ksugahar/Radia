@@ -188,15 +188,17 @@ TaylorMap6 ComposeTaylorMaps(const TaylorMap6& outer,
 TaylorMap6 IntegrateConstantJet(const DynamicsJet6& jet, double length_m,
                                 unsigned maximum_order = 3);
 
+// ``charge_sign`` maps B_y to h = q*B_y/p and every harmonic to its
+// focusing term in the right-handed frame whose positive h bends toward -x.
 DynamicsJet6 BuildParaxialMagneticDynamicsJet(
     const TransverseMagneticMultipoleExpansion& expansion,
-    double magnetic_rigidity_t_m, double curvature_sign = 1.0,
-    double gradient_sign = 1.0, unsigned maximum_order = 3);
+    double magnetic_rigidity_t_m, double charge_sign = 1.0,
+    unsigned maximum_order = 3);
 
 HamiltonianJet6 BuildCanonicalBodyHamiltonianJet(
     const TransverseMagneticMultipoleExpansion& expansion,
-    double magnetic_rigidity_t_m, double curvature_sign = 1.0,
-    double gradient_sign = 1.0, double reference_beta = 1.0,
+    double magnetic_rigidity_t_m, double charge_sign = 1.0,
+    double reference_beta = 1.0,
     std::optional<double> reference_curvature_per_m = std::nullopt);
 
 VariationalReport6 PropagateVariationalMap(

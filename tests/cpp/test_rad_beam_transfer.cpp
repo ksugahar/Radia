@@ -183,7 +183,7 @@ void TestMultipoleExpansionBuildsChromaticDynamicsJet() {
     expansion.skew_t_per_m_power = {0.0, -0.6, 1.5, 2.0};
     const double rigidity = 3.0;
     const auto jet = radia::beam::BuildParaxialMagneticDynamicsJet(
-        expansion, rigidity, 1.0, 1.0, 3);
+        expansion, rigidity, 1.0, 3);
 
     RequireClose(jet.a_per_m(1, 0), -0.8, 1.0e-15,
                  "multipole normal quadrupole");
@@ -231,7 +231,7 @@ void TestCanonicalHamiltonianJet() {
     const double curvature = 0.2 / rigidity;
     const HamiltonianJet6 jet =
         radia::beam::BuildCanonicalBodyHamiltonianJet(
-            expansion, rigidity, 1.0, 1.0, beta);
+            expansion, rigidity, 1.0, beta);
 
     RequireClose(jet.h2_per_m(1, 1), 1.0, 1.0e-15,
                  "canonical H2 px px");
@@ -264,7 +264,7 @@ void TestCanonicalHamiltonianJet() {
     const double design_curvature = 0.25;
     const HamiltonianJet6 geometric =
         radia::beam::BuildCanonicalBodyHamiltonianJet(
-            expansion, rigidity, 1.0, 1.0, beta,
+            expansion, rigidity, 1.0, beta,
             design_curvature);
     RequireClose(geometric.reference_curvature_per_m,
                  design_curvature, 1.0e-15,

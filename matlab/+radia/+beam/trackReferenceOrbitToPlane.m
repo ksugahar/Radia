@@ -62,8 +62,6 @@ config.planarity_tolerance_m = double(options.PlanarityTolerance);
 config.station_count = double(options.StationCount);
 result = radia.internal.callMex( ...
     'beam.orbit.track_reference_to_plane',fieldEvaluator.nativeHandle(),config);
-% The kernel reports counter-clockwise-positive turning about +z.
-result.signed_curvature_per_m = -result.signed_curvature_per_m;
 result.magnetic_rigidity_t_m = double(rigidity);
 result.curvature_sign = double(options.CurvatureSign);
 end
