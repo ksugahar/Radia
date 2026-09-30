@@ -263,6 +263,15 @@ for index = 1:numel(names)
     end
     values.(name) = get_param(block, name);
 end
+finDefaults = struct("coil_step_solver", "peec", "fin_n_lanes", "", ...
+    "fin_n_stations", "", "fin_lane_grading", "auto", "fin_tip_lanes", "");
+for name = string(fieldnames(finDefaults))'
+    if isfield(parameters, name)
+        values.(name) = get_param(block, name);
+    else
+        values.(name) = finDefaults.(name);
+    end
+end
 % Existing tracked 3D blocks retain their explicit historical 3D behavior.
 for name=["axisymmetric_thermal_vol","n_phi_samples","thermal_order"]
     if isfield(parameters,name), values.(name)=get_param(block,name); end
