@@ -14,10 +14,11 @@ Use this to distinguish two failure modes:
 
   * Karl hit `max_iter` on the strict per-DOF `dZ` criterion BUT |Z_s|
     and |H_t|_rms have visibly plateaued
-    => not a divergence; the integrated P_wp is trustworthy
-       (see docs/esim/IMPLEMENTATION.md section 3.4).  Either raise
-       `--esim-tol` after confirming the plateau, or accept the
-       max_iter cap as the per-DOF noise floor.
+    => inspect a possible stagnation or per-DOF noise floor. A visible plateau
+       is a diagnostic, not evidence that integrated P_wp is accurate or that
+       the nonlinear solve converged. Keep the configured convergence gate:
+       an iteration-limit failure remains a failure. Do not raise the tolerance
+       or accept max_iter solely from this plot.
 
 Usage:
     python validation_test/ih_esim_benchmark/plot_karl_history.py <RESULT.json>
