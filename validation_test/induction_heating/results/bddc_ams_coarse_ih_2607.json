@@ -1,0 +1,4287 @@
+{
+ "_description": "BDDC with the AMS wirebasket solver on the IH FEM-SIBC system (150 kHz, tube with bore + coaxial loop, cross hole + side loop; coarse/fine; p=2,3): cycles {1,2,3,4,6} x edge-only wirebasket, 8 threads, against 1-thread SparseCholesky references of the same meshes.",
+ "host": "mdx1",
+ "ngsolve": "6.2.2607",
+ "source_commit": "3086c6f1a78e3b7b92a7caad81dea66d69ba9997",
+ "driver": "validation_test/induction_heating/bddc_ams_coarse_ih.py at the source commit (removed after the recipe was adopted)",
+ "recovered_archive_sha256": "D938D6709B399EE956D75252F3F3E8A60A4339E803E13875BC8B20EA81043B17",
+ "adopted": {
+  "coarseflags": {
+   "cycles": 3
+  },
+  "edge_only_wirebasket": true,
+  "reason": "iterations stop falling at cycles=3 with the edge-only wirebasket; wall time fastest or within 3.4 % of the fastest setting except 6.5 % on the 15 s case; cycles=1 with the NGSolve wirebasket (previous default) was the slowest or near slowest everywhere"
+ },
+ "acceptance": {
+  "true_residual_limit": 1e-07,
+  "parity_limit": 1e-06,
+  "all_referenced_passed": true,
+  "cases_without_reference": [
+   "cross/fine/3"
+  ],
+  "bddc_spread_without_reference": {
+   "cross/fine/3": {
+    "P_rel_spread": 2.1175302576217823e-10,
+    "L_rel_spread": 2.1489468493831594e-13,
+    "runs": 10
+   }
+  },
+  "checks": [
+   {
+    "case": "tube",
+    "mesh": "coarse",
+    "order": 2,
+    "cycles": 1,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 9.734810184385991e-12,
+     "L": 4.907690632871271e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "coarse",
+    "order": 2,
+    "cycles": 2,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 5.435461464441145e-11,
+     "L": 7.035804270134035e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "coarse",
+    "order": 2,
+    "cycles": 3,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 3.1624752523731014e-11,
+     "L": 2.2366908636537208e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "coarse",
+    "order": 2,
+    "cycles": 4,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 5.814369477716072e-12,
+     "L": 6.08032467789361e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "coarse",
+    "order": 2,
+    "cycles": 6,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 3.3335971913263964e-13,
+     "L": 1.763294156589147e-13
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "coarse",
+    "order": 2,
+    "cycles": 1,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 2.4859343358301976e-12,
+     "L": 2.67099976921755e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "coarse",
+    "order": 2,
+    "cycles": 2,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 4.5637679103652543e-11,
+     "L": 1.7415787113109553e-13
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "coarse",
+    "order": 2,
+    "cycles": 3,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 5.755386270687795e-11,
+     "L": 1.1617763223832433e-13
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "coarse",
+    "order": 2,
+    "cycles": 4,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 6.80294269859788e-11,
+     "L": 1.4766502789170194e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "coarse",
+    "order": 2,
+    "cycles": 6,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 1.2216601296323138e-10,
+     "L": 3.1856558223106877e-13
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "coarse",
+    "order": 3,
+    "cycles": 1,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 4.442455521264204e-11,
+     "L": 1.5953855551461889e-13
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "coarse",
+    "order": 3,
+    "cycles": 2,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 2.263791766350646e-11,
+     "L": 4.00275945735603e-15
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "coarse",
+    "order": 3,
+    "cycles": 3,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 1.4815532347519135e-11,
+     "L": 1.780274920557396e-13
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "coarse",
+    "order": 3,
+    "cycles": 4,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 3.294500590579118e-11,
+     "L": 1.1150544202634654e-13
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "coarse",
+    "order": 3,
+    "cycles": 6,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 1.365498208545384e-10,
+     "L": 5.350355141332559e-13
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "coarse",
+    "order": 3,
+    "cycles": 1,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 1.0080509183216882e-11,
+     "L": 1.5820430236216687e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "coarse",
+    "order": 3,
+    "cycles": 2,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 9.115816324113794e-11,
+     "L": 2.0490316269798722e-13
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "coarse",
+    "order": 3,
+    "cycles": 3,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 1.7991335630417395e-11,
+     "L": 7.338392338486054e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "coarse",
+    "order": 3,
+    "cycles": 4,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 3.1298029422053365e-12,
+     "L": 9.416015104447042e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "coarse",
+    "order": 3,
+    "cycles": 6,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 1.3651559441057046e-11,
+     "L": 3.4709642723072997e-13
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "fine",
+    "order": 2,
+    "cycles": 1,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 3.5809317167662037e-11,
+     "L": 5.50000143443812e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "fine",
+    "order": 2,
+    "cycles": 2,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 8.640628978992086e-13,
+     "L": 9.59074983229423e-15
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "fine",
+    "order": 2,
+    "cycles": 3,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 3.899042862979192e-11,
+     "L": 4.266905027428862e-13
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "fine",
+    "order": 2,
+    "cycles": 4,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 5.377863026826854e-12,
+     "L": 1.4992886472525267e-13
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "fine",
+    "order": 2,
+    "cycles": 6,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 8.965062203614167e-12,
+     "L": 4.6975101219400315e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "fine",
+    "order": 2,
+    "cycles": 1,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 8.11888682777956e-12,
+     "L": 2.1530254725558477e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "fine",
+    "order": 2,
+    "cycles": 2,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 8.093898915277102e-12,
+     "L": 1.1195732457290407e-13
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "fine",
+    "order": 2,
+    "cycles": 3,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 9.297811077806736e-11,
+     "L": 2.562100312341459e-13
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "fine",
+    "order": 2,
+    "cycles": 4,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 3.237286474170923e-11,
+     "L": 1.534519973167077e-13
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "fine",
+    "order": 2,
+    "cycles": 6,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 2.949433914900802e-11,
+     "L": 1.900534303501571e-13
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "fine",
+    "order": 3,
+    "cycles": 1,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 3.130451704502226e-11,
+     "L": 1.1648366175964324e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "fine",
+    "order": 3,
+    "cycles": 2,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 4.9163071391487695e-11,
+     "L": 4.276862804906304e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "fine",
+    "order": 3,
+    "cycles": 3,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 2.4562172586620384e-11,
+     "L": 1.790718979290038e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "fine",
+    "order": 3,
+    "cycles": 4,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 6.672170353706204e-12,
+     "L": 1.2204706053025306e-13
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "fine",
+    "order": 3,
+    "cycles": 6,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 9.690755471740537e-12,
+     "L": 6.954248463262283e-15
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "fine",
+    "order": 3,
+    "cycles": 1,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 1.61157371983387e-11,
+     "L": 2.6460915402712986e-13
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "fine",
+    "order": 3,
+    "cycles": 2,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 2.9309292843215204e-11,
+     "L": 1.526457537686071e-13
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "fine",
+    "order": 3,
+    "cycles": 3,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 2.1050858138550693e-11,
+     "L": 1.0657385769949449e-13
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "fine",
+    "order": 3,
+    "cycles": 4,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 1.5697851091511057e-11,
+     "L": 1.3039215868616781e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "tube",
+    "mesh": "fine",
+    "order": 3,
+    "cycles": 6,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 5.86959007959092e-11,
+     "L": 4.694117712702041e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 2,
+    "cycles": 1,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 3.753500420794775e-11,
+     "L": 6.792763770607534e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 2,
+    "cycles": 2,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 2.5857589022202836e-11,
+     "L": 3.00721312761271e-15
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 2,
+    "cycles": 3,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 5.453458914823747e-12,
+     "L": 1.0613693391574272e-15
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 2,
+    "cycles": 4,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 9.11951981034642e-12,
+     "L": 1.768948898595712e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 2,
+    "cycles": 6,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 7.546482042306524e-11,
+     "L": 6.173631656099035e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 2,
+    "cycles": 1,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 3.748636110180124e-11,
+     "L": 6.775074281621577e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 2,
+    "cycles": 2,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 2.5857825153786072e-11,
+     "L": 2.830318237753139e-15
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 2,
+    "cycles": 3,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 5.448736283159038e-12,
+     "L": 3.714792687050995e-15
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 2,
+    "cycles": 4,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 9.11574170501465e-12,
+     "L": 1.751259409609755e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 2,
+    "cycles": 6,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 7.74995662758055e-11,
+     "L": 6.421284501902434e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 3,
+    "cycles": 1,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 1.849445242064566e-11,
+     "L": 1.9593623555967172e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 3,
+    "cycles": 2,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 8.563844803891165e-11,
+     "L": 1.4741140222184676e-13
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 3,
+    "cycles": 3,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 9.96513842110557e-12,
+     "L": 2.1430525764339095e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 3,
+    "cycles": 4,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 1.2211995900444619e-11,
+     "L": 2.2655127236587042e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 3,
+    "cycles": 6,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 4.236020225682463e-11,
+     "L": 4.01056982161203e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 3,
+    "cycles": 1,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 1.8496626448201865e-11,
+     "L": 1.9440548371936178e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 3,
+    "cycles": 2,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 8.563277141140377e-11,
+     "L": 1.4771755258990876e-13
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 3,
+    "cycles": 3,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 9.96513842110557e-12,
+     "L": 2.1430525764339095e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 3,
+    "cycles": 4,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 1.2211995900444619e-11,
+     "L": 2.3573578340773002e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 3,
+    "cycles": 6,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 4.236020225682463e-11,
+     "L": 4.01056982161203e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "fine",
+    "order": 2,
+    "cycles": 1,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 7.796827247681867e-11,
+     "L": 4.111776692129625e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "fine",
+    "order": 2,
+    "cycles": 2,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 2.5366899937319254e-11,
+     "L": 1.4569287491797882e-15
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "fine",
+    "order": 2,
+    "cycles": 3,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 2.6199696185871406e-11,
+     "L": 3.626133775736362e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "fine",
+    "order": 2,
+    "cycles": 4,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 3.277541822960575e-11,
+     "L": 1.5702454296715494e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "fine",
+    "order": 2,
+    "cycles": 6,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 1.9607549119655964e-11,
+     "L": 4.111776692129625e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "fine",
+    "order": 2,
+    "cycles": 1,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 9.552697857481154e-13,
+     "L": 4.014648108850972e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "fine",
+    "order": 2,
+    "cycles": 2,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 2.4362712149833973e-11,
+     "L": 9.372908286389971e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "fine",
+    "order": 2,
+    "cycles": 3,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 7.830212891203216e-12,
+     "L": 3.9175195255723194e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "fine",
+    "order": 2,
+    "cycles": 4,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 2.951755072705188e-11,
+     "L": 3.820390942293667e-14
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "fine",
+    "order": 2,
+    "cycles": 6,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": "sparsecholesky 1 thread",
+    "relative_errors": {
+     "P_total": 2.5248711188596617e-11,
+     "L": 6.960881801636766e-15
+    },
+    "passed": true
+   },
+   {
+    "case": "cross",
+    "mesh": "fine",
+    "order": 3,
+    "cycles": 1,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": null,
+    "relative_errors": null,
+    "passed": false
+   },
+   {
+    "case": "cross",
+    "mesh": "fine",
+    "order": 3,
+    "cycles": 2,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": null,
+    "relative_errors": null,
+    "passed": false
+   },
+   {
+    "case": "cross",
+    "mesh": "fine",
+    "order": 3,
+    "cycles": 3,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": null,
+    "relative_errors": null,
+    "passed": false
+   },
+   {
+    "case": "cross",
+    "mesh": "fine",
+    "order": 3,
+    "cycles": 4,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": null,
+    "relative_errors": null,
+    "passed": false
+   },
+   {
+    "case": "cross",
+    "mesh": "fine",
+    "order": 3,
+    "cycles": 6,
+    "edge_wirebasket": false,
+    "solved": true,
+    "reference": null,
+    "relative_errors": null,
+    "passed": false
+   },
+   {
+    "case": "cross",
+    "mesh": "fine",
+    "order": 3,
+    "cycles": 1,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": null,
+    "relative_errors": null,
+    "passed": false
+   },
+   {
+    "case": "cross",
+    "mesh": "fine",
+    "order": 3,
+    "cycles": 2,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": null,
+    "relative_errors": null,
+    "passed": false
+   },
+   {
+    "case": "cross",
+    "mesh": "fine",
+    "order": 3,
+    "cycles": 3,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": null,
+    "relative_errors": null,
+    "passed": false
+   },
+   {
+    "case": "cross",
+    "mesh": "fine",
+    "order": 3,
+    "cycles": 4,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": null,
+    "relative_errors": null,
+    "passed": false
+   },
+   {
+    "case": "cross",
+    "mesh": "fine",
+    "order": 3,
+    "cycles": 6,
+    "edge_wirebasket": true,
+    "solved": true,
+    "reference": null,
+    "relative_errors": null,
+    "passed": false
+   }
+  ]
+ },
+ "references_1thread": [
+  {
+   "P_total": 0.11754283453030598,
+   "L": 3.7408909356723136e-08,
+   "error": null,
+   "linear_solver": "sparsecholesky",
+   "linear_true_relative_residual": 9.800740262860587e-15,
+   "linear_krylov_iterations": [],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 242346,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "sparsecholesky",
+   "cycles": null,
+   "edge_wirebasket": null,
+   "coarse_applied": null,
+   "wall_s": 221.04,
+   "peak_memory_mb": 4598.9,
+   "threads": 1,
+   "stdout_log": "work/p2_cross_coarse_p2_sparsecholesky_t1.stdout.log"
+  },
+  {
+   "P_total": 0.11490203048602662,
+   "L": 4.3230030669663415e-08,
+   "error": null,
+   "linear_solver": "sparsecholesky",
+   "linear_true_relative_residual": 1.3220127733791652e-14,
+   "linear_krylov_iterations": [],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 656493,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "sparsecholesky",
+   "cycles": null,
+   "edge_wirebasket": null,
+   "coarse_applied": null,
+   "wall_s": 1331.292,
+   "peak_memory_mb": 15724.3,
+   "threads": 1,
+   "stdout_log": "work/p2_cross_coarse_p3_sparsecholesky_t1.stdout.log"
+  },
+  {
+   "P_total": 0.11659860555339309,
+   "L": 4.0878460348419226e-08,
+   "error": null,
+   "linear_solver": "sparsecholesky",
+   "linear_true_relative_residual": 1.8984056587734428e-14,
+   "linear_krylov_iterations": [],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 460078,
+   "case": "cross",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "sparsecholesky",
+   "cycles": null,
+   "edge_wirebasket": null,
+   "coarse_applied": null,
+   "wall_s": 1252.328,
+   "peak_memory_mb": 13893.8,
+   "threads": 1,
+   "stdout_log": "work/p2_cross_fine_p2_sparsecholesky_t1.stdout.log"
+  },
+  {
+   "P_total": 1.6345629937047643,
+   "L": 1.218937915506625e-07,
+   "error": null,
+   "linear_solver": "sparsecholesky",
+   "linear_true_relative_residual": 1.3285897387359887e-14,
+   "linear_krylov_iterations": [],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 164222,
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "sparsecholesky",
+   "cycles": null,
+   "edge_wirebasket": null,
+   "coarse_applied": null,
+   "wall_s": 159.558,
+   "peak_memory_mb": 3552.7,
+   "threads": 1,
+   "stdout_log": "work/p2_tube_coarse_p2_sparsecholesky_t1.stdout.log"
+  },
+  {
+   "P_total": 1.621879015045705,
+   "L": 1.3887054107488243e-07,
+   "error": null,
+   "linear_solver": "sparsecholesky",
+   "linear_true_relative_residual": 1.6145291511888665e-14,
+   "linear_krylov_iterations": [],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 447926,
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "sparsecholesky",
+   "cycles": null,
+   "edge_wirebasket": null,
+   "coarse_applied": null,
+   "wall_s": 1114.189,
+   "peak_memory_mb": 13244.4,
+   "threads": 1,
+   "stdout_log": "work/p2_tube_coarse_p3_sparsecholesky_t1.stdout.log"
+  },
+  {
+   "P_total": 1.6261527527472892,
+   "L": 1.3523647505805954e-07,
+   "error": null,
+   "linear_solver": "sparsecholesky",
+   "linear_true_relative_residual": 3.402374868891568e-14,
+   "linear_krylov_iterations": [],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 388824,
+   "case": "tube",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "sparsecholesky",
+   "cycles": null,
+   "edge_wirebasket": null,
+   "coarse_applied": null,
+   "wall_s": 1083.774,
+   "peak_memory_mb": 12679.2,
+   "threads": 1,
+   "stdout_log": "work/p2_tube_fine_p2_sparsecholesky_t1.stdout.log"
+  },
+  {
+   "P_total": 1.6169040361649332,
+   "L": 1.522509858054726e-07,
+   "error": null,
+   "linear_solver": "sparsecholesky",
+   "linear_true_relative_residual": 5.222938330056482e-14,
+   "linear_krylov_iterations": [],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 1060509,
+   "case": "tube",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "sparsecholesky",
+   "cycles": null,
+   "edge_wirebasket": null,
+   "coarse_applied": null,
+   "wall_s": 7742.08,
+   "peak_memory_mb": 47809.8,
+   "threads": 1,
+   "stdout_log": "work/p2_tube_fine_p3_sparsecholesky_t1.stdout.log"
+  }
+ ],
+ "reference_failures": [
+  {
+   "log": "work/p2_cross_fine_p3_sparsecholesky_t1.stdout.log",
+   "error": "MemoryError: bad allocation"
+  }
+ ],
+ "records": [
+  {
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "sparsecholesky",
+   "cycles": 0,
+   "edge_wirebasket": false,
+   "process_exit": 3221225477,
+   "stderr_tail": "FEM:MESH:loading\nFEM:MESH:loaded C:\\temp\\ih_bddc_study_3086c6f1a\\work\\tube_coarse.vol\nFEM:MESH:curve_order=3, fes_order=2\nFEM:MESH:done (31286 elems, 0.3s)\nFEM:SIBC:boundary=sibc, approach=hole\nFEM:SOURCE:filaments given directly\nFEM:SIBC:Z_s=1.0104e-04+1.0104e-04j, model=sibc\nFEM:FARFIELD:Dirichlet A=0 on 'outer' boundary (truncation error if outer is too close to coil)\nFEM:FES:ndof=164222\nFEM:SOLVER:sparsecholesky, reg=1e-06, shift_eps=1e-06, threads=8\nFEM:PEEC:1 given filaments, 720 segments\nFEM:PEEC:assembling line-integral RHS\nFEM:PEEC:line-integral RHS assembled (2.8s, 0 skipped)\n",
+   "stdout_log": "tube_coarse_p2_sparsecholesky_c0_e0.stdout.log",
+   "stderr_log": "tube_coarse_p2_sparsecholesky_c0_e0.stderr.log",
+   "process_wall_s": 15.108
+  },
+  {
+   "P_total": 1.6345629936888522,
+   "L": 1.2189379155066848e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 7.078180118561621e-11,
+   "linear_krylov_iterations": [
+    103
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 164222,
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 1,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 15.261,
+   "peak_memory_mb": 398.0,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_coarse_p2_bddc_c1_e0.stdout.log",
+   "stderr_log": "tube_coarse_p2_bddc_c1_e0.stderr.log",
+   "process_wall_s": 16.865
+  },
+  {
+   "P_total": 1.6345629937936104,
+   "L": 1.2189379155065392e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 8.026834665316844e-11,
+   "linear_krylov_iterations": [
+    75
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 164222,
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 2,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 16.592,
+   "peak_memory_mb": 397.7,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_coarse_p2_bddc_c2_e0.stdout.log",
+   "stderr_log": "tube_coarse_p2_bddc_c2_e0.stderr.log",
+   "process_wall_s": 17.823
+  },
+  {
+   "P_total": 1.634562993756457,
+   "L": 1.2189379155066523e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 3.907655653050796e-11,
+   "linear_krylov_iterations": [
+    66
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 164222,
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 3,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 15.36,
+   "peak_memory_mb": 398.3,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_coarse_p2_bddc_c3_e0.stdout.log",
+   "stderr_log": "tube_coarse_p2_bddc_c3_e0.stderr.log",
+   "process_wall_s": 16.544
+  },
+  {
+   "P_total": 1.6345629937142683,
+   "L": 1.218937915506551e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 2.969119559254438e-11,
+   "linear_krylov_iterations": [
+    62
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 164222,
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 4,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 15.392,
+   "peak_memory_mb": 397.9,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_coarse_p2_bddc_c4_e0.stdout.log",
+   "stderr_log": "tube_coarse_p2_bddc_c4_e0.stderr.log",
+   "process_wall_s": 16.597
+  },
+  {
+   "P_total": 1.6345629937042194,
+   "L": 1.21893791550684e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 4.97063578519946e-11,
+   "linear_krylov_iterations": [
+    59
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 164222,
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 6,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 15.838,
+   "peak_memory_mb": 397.6,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_coarse_p2_bddc_c6_e0.stdout.log",
+   "stderr_log": "tube_coarse_p2_bddc_c6_e0.stderr.log",
+   "process_wall_s": 17.141
+  },
+  {
+   "P_total": 1.6345629937088277,
+   "L": 1.2189379155065924e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 6.24388993387788e-11,
+   "linear_krylov_iterations": [
+    64
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 164222,
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 1,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 8
+   },
+   "wall_s": 15.371,
+   "peak_memory_mb": 397.4,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_coarse_p2_bddc_c1_e1.stdout.log",
+   "stderr_log": "tube_coarse_p2_bddc_c1_e1.stderr.log",
+   "process_wall_s": 16.665
+  },
+  {
+   "P_total": 1.634562993779362,
+   "L": 1.2189379155064127e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 7.930429644022565e-11,
+   "linear_krylov_iterations": [
+    46
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 164222,
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 2,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 8
+   },
+   "wall_s": 15.279,
+   "peak_memory_mb": 397.3,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_coarse_p2_bddc_c2_e1.stdout.log",
+   "stderr_log": "tube_coarse_p2_bddc_c2_e1.stderr.log",
+   "process_wall_s": 16.546
+  },
+  {
+   "P_total": 1.6345629937988397,
+   "L": 1.2189379155064834e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 4.3635737301155056e-11,
+   "linear_krylov_iterations": [
+    43
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 164222,
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 3,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 8
+   },
+   "wall_s": 16.255,
+   "peak_memory_mb": 397.7,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_coarse_p2_bddc_c3_e1.stdout.log",
+   "stderr_log": "tube_coarse_p2_bddc_c3_e1.stderr.log",
+   "process_wall_s": 17.66
+  },
+  {
+   "P_total": 1.6345629938159627,
+   "L": 1.218937915506643e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 6.083362558970754e-11,
+   "linear_krylov_iterations": [
+    40
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 164222,
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 4,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 8
+   },
+   "wall_s": 15.528,
+   "peak_memory_mb": 397.0,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_coarse_p2_bddc_c4_e1.stdout.log",
+   "stderr_log": "tube_coarse_p2_bddc_c4_e1.stderr.log",
+   "process_wall_s": 16.813
+  },
+  {
+   "P_total": 1.6345629935050763,
+   "L": 1.2189379155070133e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 9.115494779609757e-11,
+   "linear_krylov_iterations": [
+    41
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 164222,
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 6,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 8
+   },
+   "wall_s": 15.821,
+   "peak_memory_mb": 397.2,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_coarse_p2_bddc_c6_e1.stdout.log",
+   "stderr_log": "tube_coarse_p2_bddc_c6_e1.stderr.log",
+   "process_wall_s": 17.128
+  },
+  {
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "sparsecholesky",
+   "cycles": 0,
+   "edge_wirebasket": false,
+   "process_exit": 1,
+   "stderr_tail": "FEM:MESH:loading\nFEM:MESH:loaded C:\\temp\\ih_bddc_study_3086c6f1a\\work\\tube_coarse.vol\nFEM:MESH:curve_order=3, fes_order=3\nFEM:MESH:done (31286 elems, 0.2s)\nFEM:SIBC:boundary=sibc, approach=hole\nFEM:SOURCE:filaments given directly\nFEM:SIBC:Z_s=1.0104e-04+1.0104e-04j, model=sibc\nFEM:FARFIELD:Dirichlet A=0 on 'outer' boundary (truncation error if outer is too close to coil)\nFEM:FES:ndof=447926\nFEM:SOLVER:sparsecholesky, reg=1e-06, shift_eps=1e-06, threads=8\nFEM:PEEC:1 given filaments, 720 segments\nFEM:PEEC:assembling line-integral RHS\nFEM:PEEC:line-integral RHS assembled (3.3s, 0 skipped)\nTraceback (most recent call last):\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 268, in <module>\n    main()\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 187, in main\n    single(a)\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 112, in single\n    res = K.solve_fem(vol_file=a.vol, fes_order=a.order, frequency=a.frequency,\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\src\\radia\\panels\\calc_fem_kelvin.py\", line 949, in solve_fem\n    direct_inverse = a_bf.mat.Inverse(\n                     ^^^^^^^^^^^^^^^^^\nMemoryError: bad allocation\n",
+   "stdout_log": "tube_coarse_p3_sparsecholesky_c0_e0.stdout.log",
+   "stderr_log": "tube_coarse_p3_sparsecholesky_c0_e0.stderr.log",
+   "process_wall_s": 9.132
+  },
+  {
+   "P_total": 1.6218790149736537,
+   "L": 1.3887054107490458e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 7.627266157586652e-11,
+   "linear_krylov_iterations": [
+    288
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 447926,
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 1,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 43.632,
+   "peak_memory_mb": 1137.4,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_coarse_p3_bddc_c1_e0.stdout.log",
+   "stderr_log": "tube_coarse_p3_bddc_c1_e0.stderr.log",
+   "process_wall_s": 45.138
+  },
+  {
+   "P_total": 1.621879015082421,
+   "L": 1.3887054107488298e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 4.5597099814984877e-11,
+   "linear_krylov_iterations": [
+    200
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 447926,
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 2,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 40.093,
+   "peak_memory_mb": 1137.4,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_coarse_p3_bddc_c2_e0.stdout.log",
+   "stderr_log": "tube_coarse_p3_bddc_c2_e0.stderr.log",
+   "process_wall_s": 41.422
+  },
+  {
+   "P_total": 1.621879015021676,
+   "L": 1.3887054107490715e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 9.389400825654864e-11,
+   "linear_krylov_iterations": [
+    172
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 447926,
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 3,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 39.49,
+   "peak_memory_mb": 1137.8,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_coarse_p3_bddc_c3_e0.stdout.log",
+   "stderr_log": "tube_coarse_p3_bddc_c3_e0.stderr.log",
+   "process_wall_s": 40.744
+  },
+  {
+   "P_total": 1.6218790150991378,
+   "L": 1.3887054107486694e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 9.259852576496619e-11,
+   "linear_krylov_iterations": [
+    150
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 447926,
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 4,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 37.808,
+   "peak_memory_mb": 1137.5,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_coarse_p3_bddc_c4_e0.stdout.log",
+   "stderr_log": "tube_coarse_p3_bddc_c4_e0.stderr.log",
+   "process_wall_s": 39.185
+  },
+  {
+   "P_total": 1.6218790148242377,
+   "L": 1.3887054107495673e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 8.214448722173102e-11,
+   "linear_krylov_iterations": [
+    127
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 447926,
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 6,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 38.736,
+   "peak_memory_mb": 1137.7,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_coarse_p3_bddc_c6_e0.stdout.log",
+   "stderr_log": "tube_coarse_p3_bddc_c6_e0.stderr.log",
+   "process_wall_s": 40.004
+  },
+  {
+   "P_total": 1.6218790150293556,
+   "L": 1.3887054107488462e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 7.06109884651905e-11,
+   "linear_krylov_iterations": [
+    97
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 447926,
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 1,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 20
+   },
+   "wall_s": 36.221,
+   "peak_memory_mb": 1137.3,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_coarse_p3_bddc_c1_e1.stdout.log",
+   "stderr_log": "tube_coarse_p3_bddc_c1_e1.stderr.log",
+   "process_wall_s": 38.0
+  },
+  {
+   "P_total": 1.6218790151935525,
+   "L": 1.3887054107485397e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 9.601032908611514e-11,
+   "linear_krylov_iterations": [
+    75
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 447926,
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 2,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 20
+   },
+   "wall_s": 34.093,
+   "peak_memory_mb": 1137.3,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_coarse_p3_bddc_c2_e1.stdout.log",
+   "stderr_log": "tube_coarse_p3_bddc_c2_e1.stderr.log",
+   "process_wall_s": 35.551
+  },
+  {
+   "P_total": 1.6218790150165252,
+   "L": 1.3887054107489262e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 7.305361695524878e-11,
+   "linear_krylov_iterations": [
+    71
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 447926,
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 3,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 20
+   },
+   "wall_s": 33.399,
+   "peak_memory_mb": 1137.5,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_coarse_p3_bddc_c3_e1.stdout.log",
+   "stderr_log": "tube_coarse_p3_bddc_c3_e1.stderr.log",
+   "process_wall_s": 34.708
+  },
+  {
+   "P_total": 1.6218790150406288,
+   "L": 1.388705410748955e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 4.916685877272157e-11,
+   "linear_krylov_iterations": [
+    71
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 447926,
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 4,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 20
+   },
+   "wall_s": 33.563,
+   "peak_memory_mb": 1137.9,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_coarse_p3_bddc_c4_e1.stdout.log",
+   "stderr_log": "tube_coarse_p3_bddc_c4_e1.stderr.log",
+   "process_wall_s": 34.775
+  },
+  {
+   "P_total": 1.6218790150235638,
+   "L": 1.3887054107493063e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 8.307604766502536e-11,
+   "linear_krylov_iterations": [
+    72
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 447926,
+   "case": "tube",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 6,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 20
+   },
+   "wall_s": 35.784,
+   "peak_memory_mb": 1137.4,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_coarse_p3_bddc_c6_e1.stdout.log",
+   "stderr_log": "tube_coarse_p3_bddc_c6_e1.stderr.log",
+   "process_wall_s": 37.044
+  },
+  {
+   "case": "tube",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "sparsecholesky",
+   "cycles": 0,
+   "edge_wirebasket": false,
+   "process_exit": 1,
+   "stderr_tail": "FEM:MESH:loading\nFEM:MESH:loaded C:\\temp\\ih_bddc_study_3086c6f1a\\work\\tube_fine.vol\nFEM:MESH:curve_order=3, fes_order=2\nFEM:MESH:done (74069 elems, 0.6s)\nFEM:SIBC:boundary=sibc, approach=hole\nFEM:SOURCE:filaments given directly\nFEM:SIBC:Z_s=1.0104e-04+1.0104e-04j, model=sibc\nFEM:FARFIELD:Dirichlet A=0 on 'outer' boundary (truncation error if outer is too close to coil)\nFEM:FES:ndof=388824\nFEM:SOLVER:sparsecholesky, reg=1e-06, shift_eps=1e-06, threads=8\nFEM:PEEC:1 given filaments, 720 segments\nFEM:PEEC:assembling line-integral RHS\nFEM:PEEC:line-integral RHS assembled (2.7s, 0 skipped)\nTraceback (most recent call last):\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 268, in <module>\n    main()\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 187, in main\n    single(a)\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 112, in single\n    res = K.solve_fem(vol_file=a.vol, fes_order=a.order, frequency=a.frequency,\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\src\\radia\\panels\\calc_fem_kelvin.py\", line 949, in solve_fem\n    direct_inverse = a_bf.mat.Inverse(\n                     ^^^^^^^^^^^^^^^^^\nMemoryError: bad allocation\n",
+   "stdout_log": "tube_fine_p2_sparsecholesky_c0_e0.stdout.log",
+   "stderr_log": "tube_fine_p2_sparsecholesky_c0_e0.stderr.log",
+   "process_wall_s": 8.832
+  },
+  {
+   "P_total": 1.6261527528055206,
+   "L": 1.3523647505806698e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 8.063273471629883e-11,
+   "linear_krylov_iterations": [
+    173
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 388824,
+   "case": "tube",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 1,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 35.328,
+   "peak_memory_mb": 787.6,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_fine_p2_bddc_c1_e0.stdout.log",
+   "stderr_log": "tube_fine_p2_bddc_c1_e0.stderr.log",
+   "process_wall_s": 36.819
+  },
+  {
+   "P_total": 1.6261527527486943,
+   "L": 1.3523647505806084e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 9.584325159384523e-11,
+   "linear_krylov_iterations": [
+    118
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 388824,
+   "case": "tube",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 2,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 35.788,
+   "peak_memory_mb": 787.3,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_fine_p2_bddc_c2_e0.stdout.log",
+   "stderr_log": "tube_fine_p2_bddc_c2_e0.stderr.log",
+   "process_wall_s": 37.022
+  },
+  {
+   "P_total": 1.6261527528106936,
+   "L": 1.3523647505800184e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 9.80514692120549e-11,
+   "linear_krylov_iterations": [
+    97
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 388824,
+   "case": "tube",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 3,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 36.227,
+   "peak_memory_mb": 787.3,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_fine_p2_bddc_c3_e0.stdout.log",
+   "stderr_log": "tube_fine_p2_bddc_c3_e0.stderr.log",
+   "process_wall_s": 37.682
+  },
+  {
+   "P_total": 1.6261527527560344,
+   "L": 1.3523647505807982e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 4.7549368788078806e-11,
+   "linear_krylov_iterations": [
+    89
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 388824,
+   "case": "tube",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 4,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 36.97,
+   "peak_memory_mb": 787.9,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_fine_p2_bddc_c4_e0.stdout.log",
+   "stderr_log": "tube_fine_p2_bddc_c4_e0.stderr.log",
+   "process_wall_s": 38.312
+  },
+  {
+   "P_total": 1.6261527527327106,
+   "L": 1.352364750580659e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 7.110940725894916e-11,
+   "linear_krylov_iterations": [
+    74
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 388824,
+   "case": "tube",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 6,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 36.148,
+   "peak_memory_mb": 787.2,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_fine_p2_bddc_c6_e0.stdout.log",
+   "stderr_log": "tube_fine_p2_bddc_c6_e0.stderr.log",
+   "process_wall_s": 37.419
+  },
+  {
+   "P_total": 1.6261527527604918,
+   "L": 1.3523647505805663e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 3.732226509876835e-11,
+   "linear_krylov_iterations": [
+    71
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 388824,
+   "case": "tube",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 1,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 56
+   },
+   "wall_s": 33.803,
+   "peak_memory_mb": 787.6,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_fine_p2_bddc_c1_e1.stdout.log",
+   "stderr_log": "tube_fine_p2_bddc_c1_e1.stderr.log",
+   "process_wall_s": 34.976
+  },
+  {
+   "P_total": 1.6261527527604511,
+   "L": 1.352364750580444e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 9.951270403421993e-11,
+   "linear_krylov_iterations": [
+    49
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 388824,
+   "case": "tube",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 2,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 56
+   },
+   "wall_s": 34.239,
+   "peak_memory_mb": 787.5,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_fine_p2_bddc_c2_e1.stdout.log",
+   "stderr_log": "tube_fine_p2_bddc_c2_e1.stderr.log",
+   "process_wall_s": 35.471
+  },
+  {
+   "P_total": 1.6261527528984858,
+   "L": 1.352364750580942e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 9.947772611596809e-11,
+   "linear_krylov_iterations": [
+    43
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 388824,
+   "case": "tube",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 3,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 56
+   },
+   "wall_s": 33.776,
+   "peak_memory_mb": 787.7,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_fine_p2_bddc_c3_e1.stdout.log",
+   "stderr_log": "tube_fine_p2_bddc_c3_e1.stderr.log",
+   "process_wall_s": 35.004
+  },
+  {
+   "P_total": 1.626152752694646,
+   "L": 1.352364750580803e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 7.131658165653853e-11,
+   "linear_krylov_iterations": [
+    43
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 388824,
+   "case": "tube",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 4,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 56
+   },
+   "wall_s": 36.752,
+   "peak_memory_mb": 787.5,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_fine_p2_bddc_c4_e1.stdout.log",
+   "stderr_log": "tube_fine_p2_bddc_c4_e1.stderr.log",
+   "process_wall_s": 38.155
+  },
+  {
+   "P_total": 1.626152752699327,
+   "L": 1.3523647505808524e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 5.178852920957913e-11,
+   "linear_krylov_iterations": [
+    44
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 388824,
+   "case": "tube",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 6,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 56
+   },
+   "wall_s": 35.62,
+   "peak_memory_mb": 787.6,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_fine_p2_bddc_c6_e1.stdout.log",
+   "stderr_log": "tube_fine_p2_bddc_c6_e1.stderr.log",
+   "process_wall_s": 36.839
+  },
+  {
+   "case": "tube",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "sparsecholesky",
+   "cycles": 0,
+   "edge_wirebasket": false,
+   "process_exit": 1,
+   "stderr_tail": "FEM:MESH:loading\nFEM:MESH:loaded C:\\temp\\ih_bddc_study_3086c6f1a\\work\\tube_fine.vol\nFEM:MESH:curve_order=3, fes_order=3\nFEM:MESH:done (74069 elems, 0.6s)\nFEM:SIBC:boundary=sibc, approach=hole\nFEM:SOURCE:filaments given directly\nFEM:SIBC:Z_s=1.0104e-04+1.0104e-04j, model=sibc\nFEM:FARFIELD:Dirichlet A=0 on 'outer' boundary (truncation error if outer is too close to coil)\nFEM:FES:ndof=1060509\nFEM:SOLVER:sparsecholesky, reg=1e-06, shift_eps=1e-06, threads=8\nFEM:PEEC:1 given filaments, 720 segments\nFEM:PEEC:assembling line-integral RHS\nFEM:PEEC:line-integral RHS assembled (3.8s, 0 skipped)\nTraceback (most recent call last):\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 268, in <module>\n    main()\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 187, in main\n    single(a)\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 112, in single\n    res = K.solve_fem(vol_file=a.vol, fes_order=a.order, frequency=a.frequency,\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\src\\radia\\panels\\calc_fem_kelvin.py\", line 949, in solve_fem\n    direct_inverse = a_bf.mat.Inverse(\n                     ^^^^^^^^^^^^^^^^^\nMemoryError: bad allocation\n",
+   "stdout_log": "tube_fine_p3_sparsecholesky_c0_e0.stdout.log",
+   "stderr_log": "tube_fine_p3_sparsecholesky_c0_e0.stderr.log",
+   "process_wall_s": 18.27
+  },
+  {
+   "P_total": 1.6169040362155496,
+   "L": 1.5225098580547436e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 6.946334692642588e-11,
+   "linear_krylov_iterations": [
+    438
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 1060509,
+   "case": "tube",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 1,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 126.332,
+   "peak_memory_mb": 2544.1,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_fine_p3_bddc_c1_e0.stdout.log",
+   "stderr_log": "tube_fine_p3_bddc_c1_e0.stderr.log",
+   "process_wall_s": 128.108
+  },
+  {
+   "P_total": 1.6169040362444251,
+   "L": 1.522509858054791e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 9.805859883074204e-11,
+   "linear_krylov_iterations": [
+    297
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 1060509,
+   "case": "tube",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 2,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 107.309,
+   "peak_memory_mb": 2544.4,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_fine_p3_bddc_c2_e0.stdout.log",
+   "stderr_log": "tube_fine_p3_bddc_c2_e0.stderr.log",
+   "process_wall_s": 108.822
+  },
+  {
+   "P_total": 1.6169040362046478,
+   "L": 1.5225098580547532e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 9.106620732937972e-11,
+   "linear_krylov_iterations": [
+    229
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 1060509,
+   "case": "tube",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 3,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 97.422,
+   "peak_memory_mb": 2544.0,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_fine_p3_bddc_c3_e0.stdout.log",
+   "stderr_log": "tube_fine_p3_bddc_c3_e0.stderr.log",
+   "process_wall_s": 98.812
+  },
+  {
+   "P_total": 1.616904036154145,
+   "L": 1.5225098580549117e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 8.327189445818195e-11,
+   "linear_krylov_iterations": [
+    208
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 1060509,
+   "case": "tube",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 4,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 97.258,
+   "peak_memory_mb": 2544.3,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_fine_p3_bddc_c4_e0.stdout.log",
+   "stderr_log": "tube_fine_p3_bddc_c4_e0.stderr.log",
+   "process_wall_s": 98.455
+  },
+  {
+   "P_total": 1.6169040361806022,
+   "L": 1.5225098580547153e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 8.921040668078697e-11,
+   "linear_krylov_iterations": [
+    175
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 1060509,
+   "case": "tube",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 6,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 94.717,
+   "peak_memory_mb": 2544.3,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_fine_p3_bddc_c6_e0.stdout.log",
+   "stderr_log": "tube_fine_p3_bddc_c6_e0.stderr.log",
+   "process_wall_s": 95.946
+  },
+  {
+   "P_total": 1.6169040361388756,
+   "L": 1.5225098580551288e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 9.454508239754774e-11,
+   "linear_krylov_iterations": [
+    108
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 1060509,
+   "case": "tube",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 1,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 140
+   },
+   "wall_s": 82.594,
+   "peak_memory_mb": 2544.3,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_fine_p3_bddc_c1_e1.stdout.log",
+   "stderr_log": "tube_fine_p3_bddc_c1_e1.stderr.log",
+   "process_wall_s": 83.89
+  },
+  {
+   "P_total": 1.6169040362123235,
+   "L": 1.5225098580549583e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 6.581521885481571e-11,
+   "linear_krylov_iterations": [
+    83
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 1060509,
+   "case": "tube",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 2,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 140
+   },
+   "wall_s": 81.521,
+   "peak_memory_mb": 2543.9,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_fine_p3_bddc_c2_e1.stdout.log",
+   "stderr_log": "tube_fine_p3_bddc_c2_e1.stderr.log",
+   "process_wall_s": 83.055
+  },
+  {
+   "P_total": 1.6169040361989704,
+   "L": 1.5225098580548882e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 6.119597395982325e-11,
+   "linear_krylov_iterations": [
+    76
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 1060509,
+   "case": "tube",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 3,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 140
+   },
+   "wall_s": 76.239,
+   "peak_memory_mb": 2544.3,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_fine_p3_bddc_c3_e1.stdout.log",
+   "stderr_log": "tube_fine_p3_bddc_c3_e1.stderr.log",
+   "process_wall_s": 77.494
+  },
+  {
+   "P_total": 1.616904036190315,
+   "L": 1.5225098580547458e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 5.186094543757639e-11,
+   "linear_krylov_iterations": [
+    76
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 1060509,
+   "case": "tube",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 4,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 140
+   },
+   "wall_s": 78.147,
+   "peak_memory_mb": 2544.2,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_fine_p3_bddc_c4_e1.stdout.log",
+   "stderr_log": "tube_fine_p3_bddc_c4_e1.stderr.log",
+   "process_wall_s": 79.402
+  },
+  {
+   "P_total": 1.6169040362598388,
+   "L": 1.5225098580546544e-07,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 8.449045363177453e-11,
+   "linear_krylov_iterations": [
+    76
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 1060509,
+   "case": "tube",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 6,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 140
+   },
+   "wall_s": 80.04,
+   "peak_memory_mb": 2544.2,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "tube_fine_p3_bddc_c6_e1.stdout.log",
+   "stderr_log": "tube_fine_p3_bddc_c6_e1.stderr.log",
+   "process_wall_s": 81.53
+  },
+  {
+   "P_total": 0.11754283453030598,
+   "L": 3.7408909356723136e-08,
+   "error": null,
+   "linear_solver": "sparsecholesky",
+   "linear_true_relative_residual": 9.663638401134148e-15,
+   "linear_krylov_iterations": [],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 242346,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "sparsecholesky",
+   "cycles": null,
+   "edge_wirebasket": null,
+   "coarse_applied": null,
+   "wall_s": 53.264,
+   "peak_memory_mb": 5106.7,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_coarse_p2_sparsecholesky_c0_e0.stdout.log",
+   "stderr_log": "cross_coarse_p2_sparsecholesky_c0_e0.stderr.log",
+   "process_wall_s": 54.766
+  },
+  {
+   "P_total": 0.11754283452589401,
+   "L": 3.740890935672568e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 6.584554521050474e-11,
+   "linear_krylov_iterations": [
+    68
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 242346,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 1,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 21.262,
+   "peak_memory_mb": 530.3,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_coarse_p2_bddc_c1_e0.stdout.log",
+   "stderr_log": "cross_coarse_p2_bddc_c1_e0.stderr.log",
+   "process_wall_s": 22.746
+  },
+  {
+   "P_total": 0.11754283453334535,
+   "L": 3.740890935672325e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 3.045484716034664e-11,
+   "linear_krylov_iterations": [
+    49
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 242346,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 2,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 21.252,
+   "peak_memory_mb": 530.4,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_coarse_p2_bddc_c2_e0.stdout.log",
+   "stderr_log": "cross_coarse_p2_bddc_c2_e0.stderr.log",
+   "process_wall_s": 22.529
+  },
+  {
+   "P_total": 0.11754283452966496,
+   "L": 3.74089093567231e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 3.595815591476758e-11,
+   "linear_krylov_iterations": [
+    42
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 242346,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 3,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 21.493,
+   "peak_memory_mb": 530.9,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_coarse_p2_bddc_c3_e0.stdout.log",
+   "stderr_log": "cross_coarse_p2_bddc_c3_e0.stderr.log",
+   "process_wall_s": 22.788
+  },
+  {
+   "P_total": 0.11754283452923404,
+   "L": 3.74089093567238e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 4.769812023634325e-11,
+   "linear_krylov_iterations": [
+    41
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 242346,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 4,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 21.674,
+   "peak_memory_mb": 530.7,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_coarse_p2_bddc_c4_e0.stdout.log",
+   "stderr_log": "cross_coarse_p2_bddc_c4_e0.stderr.log",
+   "process_wall_s": 23.027
+  },
+  {
+   "P_total": 0.11754283453917633,
+   "L": 3.740890935672083e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 6.216786235497648e-11,
+   "linear_krylov_iterations": [
+    43
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 242346,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 6,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 22.374,
+   "peak_memory_mb": 530.4,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_coarse_p2_bddc_c6_e0.stdout.log",
+   "stderr_log": "cross_coarse_p2_bddc_c6_e0.stderr.log",
+   "process_wall_s": 23.695
+  },
+  {
+   "P_total": 0.11754283452589973,
+   "L": 3.740890935672567e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 6.596287477523133e-11,
+   "linear_krylov_iterations": [
+    68
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 242346,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 1,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 22.95,
+   "peak_memory_mb": 530.7,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_coarse_p2_bddc_c1_e1.stdout.log",
+   "stderr_log": "cross_coarse_p2_bddc_c1_e1.stderr.log",
+   "process_wall_s": 24.489
+  },
+  {
+   "P_total": 0.11754283453334538,
+   "L": 3.740890935672324e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 3.045486743883569e-11,
+   "linear_krylov_iterations": [
+    49
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 242346,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 2,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 21.614,
+   "peak_memory_mb": 530.6,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_coarse_p2_bddc_c2_e1.stdout.log",
+   "stderr_log": "cross_coarse_p2_bddc_c2_e1.stderr.log",
+   "process_wall_s": 22.8
+  },
+  {
+   "P_total": 0.11754283452966552,
+   "L": 3.7408909356723e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 3.575188343064569e-11,
+   "linear_krylov_iterations": [
+    42
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 242346,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 3,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 21.859,
+   "peak_memory_mb": 530.6,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_coarse_p2_bddc_c3_e1.stdout.log",
+   "stderr_log": "cross_coarse_p2_bddc_c3_e1.stderr.log",
+   "process_wall_s": 23.121
+  },
+  {
+   "P_total": 0.11754283452923449,
+   "L": 3.740890935672379e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 4.767300986728146e-11,
+   "linear_krylov_iterations": [
+    41
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 242346,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 4,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 21.681,
+   "peak_memory_mb": 530.2,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_coarse_p2_bddc_c4_e1.stdout.log",
+   "stderr_log": "cross_coarse_p2_bddc_c4_e1.stderr.log",
+   "process_wall_s": 23.052
+  },
+  {
+   "P_total": 0.1175428345394155,
+   "L": 3.7408909356720734e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 6.362397028229895e-11,
+   "linear_krylov_iterations": [
+    43
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 242346,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 6,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 22.771,
+   "peak_memory_mb": 531.0,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_coarse_p2_bddc_c6_e1.stdout.log",
+   "stderr_log": "cross_coarse_p2_bddc_c6_e1.stderr.log",
+   "process_wall_s": 23.817
+  },
+  {
+   "P_total": 0.1149020304860265,
+   "L": 4.323003066966339e-08,
+   "error": null,
+   "linear_solver": "sparsecholesky",
+   "linear_true_relative_residual": 1.322535976456904e-14,
+   "linear_krylov_iterations": [],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 656493,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "sparsecholesky",
+   "cycles": null,
+   "edge_wirebasket": null,
+   "coarse_applied": null,
+   "wall_s": 231.538,
+   "peak_memory_mb": 20597.9,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_coarse_p3_sparsecholesky_c0_e0.stdout.log",
+   "stderr_log": "cross_coarse_p3_sparsecholesky_c0_e0.stderr.log",
+   "process_wall_s": 232.881
+  },
+  {
+   "P_total": 0.11490203048815167,
+   "L": 4.323003066966257e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 7.635943377369295e-11,
+   "linear_krylov_iterations": [
+    97
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 656493,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 1,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 48.476,
+   "peak_memory_mb": 1603.6,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_coarse_p3_bddc_c1_e0.stdout.log",
+   "stderr_log": "cross_coarse_p3_bddc_c1_e0.stderr.log",
+   "process_wall_s": 55.8
+  },
+  {
+   "P_total": 0.11490203047618659,
+   "L": 4.323003066966979e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 7.866424340883062e-11,
+   "linear_krylov_iterations": [
+    74
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 656493,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 2,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 45.96,
+   "peak_memory_mb": 1604.2,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_coarse_p3_bddc_c2_e0.stdout.log",
+   "stderr_log": "cross_coarse_p3_bddc_c2_e0.stderr.log",
+   "process_wall_s": 46.998
+  },
+  {
+   "P_total": 0.11490203048488161,
+   "L": 4.323003066966434e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 4.588328472071753e-11,
+   "linear_krylov_iterations": [
+    71
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 656493,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 3,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 46.349,
+   "peak_memory_mb": 1604.2,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_coarse_p3_bddc_c3_e0.stdout.log",
+   "stderr_log": "cross_coarse_p3_bddc_c3_e0.stderr.log",
+   "process_wall_s": 47.984
+  },
+  {
+   "P_total": 0.11490203048742981,
+   "L": 4.3230030669662435e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 9.488830395872335e-11,
+   "linear_krylov_iterations": [
+    69
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 656493,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 4,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 46.61,
+   "peak_memory_mb": 1604.4,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_coarse_p3_bddc_c4_e0.stdout.log",
+   "stderr_log": "cross_coarse_p3_bddc_c4_e0.stderr.log",
+   "process_wall_s": 47.945
+  },
+  {
+   "P_total": 0.1149020304908939,
+   "L": 4.323003066966168e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 5.447755363133919e-11,
+   "linear_krylov_iterations": [
+    71
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 656493,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 6,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 50.214,
+   "peak_memory_mb": 1603.8,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_coarse_p3_bddc_c6_e0.stdout.log",
+   "stderr_log": "cross_coarse_p3_bddc_c6_e0.stderr.log",
+   "process_wall_s": 51.796
+  },
+  {
+   "P_total": 0.11490203048815192,
+   "L": 4.3230030669662574e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 7.636109608862962e-11,
+   "linear_krylov_iterations": [
+    97
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 656493,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 1,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 50.433,
+   "peak_memory_mb": 1604.4,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_coarse_p3_bddc_c1_e1.stdout.log",
+   "stderr_log": "cross_coarse_p3_bddc_c1_e1.stderr.log",
+   "process_wall_s": 56.618
+  },
+  {
+   "P_total": 0.11490203047618724,
+   "L": 4.32300306696698e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 7.866244485402664e-11,
+   "linear_krylov_iterations": [
+    74
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 656493,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 2,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 48.43,
+   "peak_memory_mb": 1603.5,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_coarse_p3_bddc_c2_e1.stdout.log",
+   "stderr_log": "cross_coarse_p3_bddc_c2_e1.stderr.log",
+   "process_wall_s": 49.843
+  },
+  {
+   "P_total": 0.11490203048488161,
+   "L": 4.323003066966434e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 4.5883215936802195e-11,
+   "linear_krylov_iterations": [
+    71
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 656493,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 3,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 47.248,
+   "peak_memory_mb": 1604.4,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_coarse_p3_bddc_c3_e1.stdout.log",
+   "stderr_log": "cross_coarse_p3_bddc_c3_e1.stderr.log",
+   "process_wall_s": 48.547
+  },
+  {
+   "P_total": 0.11490203048742981,
+   "L": 4.3230030669662395e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 9.488829018063298e-11,
+   "linear_krylov_iterations": [
+    69
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 656493,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 4,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 47.437,
+   "peak_memory_mb": 1604.3,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_coarse_p3_bddc_c4_e1.stdout.log",
+   "stderr_log": "cross_coarse_p3_bddc_c4_e1.stderr.log",
+   "process_wall_s": 48.747
+  },
+  {
+   "P_total": 0.1149020304908939,
+   "L": 4.323003066966168e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 5.4477561664437535e-11,
+   "linear_krylov_iterations": [
+    71
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 656493,
+   "case": "cross",
+   "mesh": "coarse",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 6,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 50.362,
+   "peak_memory_mb": 1604.0,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_coarse_p3_bddc_c6_e1.stdout.log",
+   "stderr_log": "cross_coarse_p3_bddc_c6_e1.stderr.log",
+   "process_wall_s": 51.658
+  },
+  {
+   "P_total": 0.11659860555339298,
+   "L": 4.0878460348419226e-08,
+   "error": null,
+   "linear_solver": "sparsecholesky",
+   "linear_true_relative_residual": 1.880057648946447e-14,
+   "linear_krylov_iterations": [],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 460078,
+   "case": "cross",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "sparsecholesky",
+   "cycles": null,
+   "edge_wirebasket": null,
+   "coarse_applied": null,
+   "wall_s": 212.101,
+   "peak_memory_mb": 17777.0,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_fine_p2_sparsecholesky_c0_e0.stdout.log",
+   "stderr_log": "cross_fine_p2_sparsecholesky_c0_e0.stderr.log",
+   "process_wall_s": 213.63
+  },
+  {
+   "P_total": 0.1165986055443021,
+   "L": 4.0878460348420906e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 6.783830802487817e-11,
+   "linear_krylov_iterations": [
+    145
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 460078,
+   "case": "cross",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 1,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 41.043,
+   "peak_memory_mb": 908.4,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_fine_p2_bddc_c1_e0.stdout.log",
+   "stderr_log": "cross_fine_p2_bddc_c1_e0.stderr.log",
+   "process_wall_s": 42.438
+  },
+  {
+   "P_total": 0.11659860555635083,
+   "L": 4.0878460348419166e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 6.817252331345475e-11,
+   "linear_krylov_iterations": [
+    103
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 460078,
+   "case": "cross",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 2,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 46.01,
+   "peak_memory_mb": 908.0,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_fine_p2_bddc_c2_e0.stdout.log",
+   "stderr_log": "cross_fine_p2_bddc_c2_e0.stderr.log",
+   "process_wall_s": 47.646
+  },
+  {
+   "P_total": 0.11659860555033824,
+   "L": 4.087846034842071e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 5.3416283345779644e-11,
+   "linear_krylov_iterations": [
+    85
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 460078,
+   "case": "cross",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 3,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 44.353,
+   "peak_memory_mb": 908.0,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_fine_p2_bddc_c3_e0.stdout.log",
+   "stderr_log": "cross_fine_p2_bddc_c3_e0.stderr.log",
+   "process_wall_s": 45.809
+  },
+  {
+   "P_total": 0.11659860554957152,
+   "L": 4.087846034841987e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 7.402807043423455e-11,
+   "linear_krylov_iterations": [
+    77
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 460078,
+   "case": "cross",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 4,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 50.602,
+   "peak_memory_mb": 908.0,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_fine_p2_bddc_c4_e0.stdout.log",
+   "stderr_log": "cross_fine_p2_bddc_c4_e0.stderr.log",
+   "process_wall_s": 52.103
+  },
+  {
+   "P_total": 0.11659860555110688,
+   "L": 4.0878460348420906e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 7.253905583541246e-11,
+   "linear_krylov_iterations": [
+    72
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 460078,
+   "case": "cross",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 6,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 43.742,
+   "peak_memory_mb": 907.6,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_fine_p2_bddc_c6_e0.stdout.log",
+   "stderr_log": "cross_fine_p2_bddc_c6_e0.stderr.log",
+   "process_wall_s": 45.273
+  },
+  {
+   "P_total": 0.11659860555350447,
+   "L": 4.087846034842087e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 7.994137234566198e-11,
+   "linear_krylov_iterations": [
+    72
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 460078,
+   "case": "cross",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 1,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 56
+   },
+   "wall_s": 40.466,
+   "peak_memory_mb": 908.2,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_fine_p2_bddc_c1_e1.stdout.log",
+   "stderr_log": "cross_fine_p2_bddc_c1_e1.stderr.log",
+   "process_wall_s": 41.862
+  },
+  {
+   "P_total": 0.11659860555623375,
+   "L": 4.087846034842306e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 9.727652553527687e-11,
+   "linear_krylov_iterations": [
+    49
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 460078,
+   "case": "cross",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 2,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 56
+   },
+   "wall_s": 40.873,
+   "peak_memory_mb": 907.0,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_fine_p2_bddc_c2_e1.stdout.log",
+   "stderr_log": "cross_fine_p2_bddc_c2_e1.stderr.log",
+   "process_wall_s": 42.204
+  },
+  {
+   "P_total": 0.1165986055524801,
+   "L": 4.087846034842083e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 5.951869027967718e-11,
+   "linear_krylov_iterations": [
+    45
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 460078,
+   "case": "cross",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 3,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 56
+   },
+   "wall_s": 41.833,
+   "peak_memory_mb": 907.8,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_fine_p2_bddc_c3_e1.stdout.log",
+   "stderr_log": "cross_fine_p2_bddc_c3_e1.stderr.log",
+   "process_wall_s": 43.135
+  },
+  {
+   "P_total": 0.1165986055568348,
+   "L": 4.0878460348417664e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 5.509945037884999e-11,
+   "linear_krylov_iterations": [
+    47
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 460078,
+   "case": "cross",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 4,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 56
+   },
+   "wall_s": 42.063,
+   "peak_memory_mb": 907.8,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_fine_p2_bddc_c4_e1.stdout.log",
+   "stderr_log": "cross_fine_p2_bddc_c4_e1.stderr.log",
+   "process_wall_s": 43.394
+  },
+  {
+   "P_total": 0.11659860555633705,
+   "L": 4.087846034841951e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 9.095737656447206e-11,
+   "linear_krylov_iterations": [
+    45
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 460078,
+   "case": "cross",
+   "mesh": "fine",
+   "order": 2,
+   "solver": "bddc",
+   "cycles": 6,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 56
+   },
+   "wall_s": 45.528,
+   "peak_memory_mb": 908.2,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_fine_p2_bddc_c6_e1.stdout.log",
+   "stderr_log": "cross_fine_p2_bddc_c6_e1.stderr.log",
+   "process_wall_s": 46.843
+  },
+  {
+   "case": "cross",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "sparsecholesky",
+   "cycles": 0,
+   "edge_wirebasket": false,
+   "process_exit": 3221226505,
+   "stderr_tail": "FEM:MESH:loading\nFEM:MESH:loaded C:\\temp\\ih_bddc_study_3086c6f1a\\work_cross\\cross_fine.vol\nFEM:MESH:curve_order=3, fes_order=3\nFEM:MESH:done (86758 elems, 1.0s)\nFEM:SIBC:boundary=sibc, approach=hole\nFEM:SOURCE:filaments given directly\nFEM:SIBC:Z_s=1.0104e-04+1.0104e-04j, model=sibc\nFEM:FARFIELD:Dirichlet A=0 on 'outer' boundary (truncation error if outer is too close to coil)\nFEM:FES:ndof=1250776\nFEM:SOLVER:sparsecholesky, reg=1e-06, shift_eps=1e-06, threads=8\nFEM:PEEC:1 given filaments, 720 segments\nFEM:PEEC:assembling line-integral RHS\nFEM:PEEC:line-integral RHS assembled (3.3s, 0 skipped)\n",
+   "stdout_log": "cross_fine_p3_sparsecholesky_c0_e0.stdout.log",
+   "stderr_log": "cross_fine_p3_sparsecholesky_c0_e0.stderr.log",
+   "process_wall_s": 186.576
+  },
+  {
+   "P_total": 0.11439282286050648,
+   "L": 4.6652754706435234e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 8.366901494803345e-11,
+   "linear_krylov_iterations": [
+    345
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 1250776,
+   "case": "cross",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 1,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 126.348,
+   "peak_memory_mb": 2968.7,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_fine_p3_bddc_c1_e0.stdout.log",
+   "stderr_log": "cross_fine_p3_bddc_c1_e0.stderr.log",
+   "process_wall_s": 128.436
+  },
+  {
+   "P_total": 0.11439282285227881,
+   "L": 4.6652754706433547e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 9.194749651298379e-11,
+   "linear_krylov_iterations": [
+    235
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 1250776,
+   "case": "cross",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 2,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 110.438,
+   "peak_memory_mb": 2968.2,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_fine_p3_bddc_c2_e0.stdout.log",
+   "stderr_log": "cross_fine_p3_bddc_c2_e0.stderr.log",
+   "process_wall_s": 111.756
+  },
+  {
+   "P_total": 0.11439282284518075,
+   "L": 4.665275470643949e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 7.538598933013747e-11,
+   "linear_krylov_iterations": [
+    195
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 1250776,
+   "case": "cross",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 3,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 106.44,
+   "peak_memory_mb": 2969.0,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_fine_p3_bddc_c3_e0.stdout.log",
+   "stderr_log": "cross_fine_p3_bddc_c3_e0.stderr.log",
+   "process_wall_s": 107.787
+  },
+  {
+   "P_total": 0.11439282284314686,
+   "L": 4.665275470643913e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 9.830507222481799e-11,
+   "linear_krylov_iterations": [
+    179
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 1250776,
+   "case": "cross",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 4,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 109.187,
+   "peak_memory_mb": 2969.0,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_fine_p3_bddc_c4_e0.stdout.log",
+   "stderr_log": "cross_fine_p3_bddc_c4_e0.stderr.log",
+   "process_wall_s": 110.399
+  },
+  {
+   "P_total": 0.11439282285451671,
+   "L": 4.665275470643487e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 8.032641695447625e-11,
+   "linear_krylov_iterations": [
+    155
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 1250776,
+   "case": "cross",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 6,
+   "edge_wirebasket": false,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 0
+   },
+   "wall_s": 107.596,
+   "peak_memory_mb": 2968.3,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_fine_p3_bddc_c6_e0.stdout.log",
+   "stderr_log": "cross_fine_p3_bddc_c6_e0.stderr.log",
+   "process_wall_s": 109.123
+  },
+  {
+   "P_total": 0.11439282285586586,
+   "L": 4.665275470643266e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 9.773574257492938e-11,
+   "linear_krylov_iterations": [
+    105
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 1250776,
+   "case": "cross",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 1,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 140
+   },
+   "wall_s": 94.523,
+   "peak_memory_mb": 2968.2,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_fine_p3_bddc_c1_e1.stdout.log",
+   "stderr_log": "cross_fine_p3_bddc_c1_e1.stderr.log",
+   "process_wall_s": 96.075
+  },
+  {
+   "P_total": 0.11439282286295174,
+   "L": 4.6652754706433454e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 9.381230111776869e-11,
+   "linear_krylov_iterations": [
+    80
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 1250776,
+   "case": "cross",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 2,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 140
+   },
+   "wall_s": 90.044,
+   "peak_memory_mb": 2967.7,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_fine_p3_bddc_c2_e1.stdout.log",
+   "stderr_log": "cross_fine_p3_bddc_c2_e1.stderr.log",
+   "process_wall_s": 91.618
+  },
+  {
+   "P_total": 0.11439282285845313,
+   "L": 4.665275470643616e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 5.773210758211008e-11,
+   "linear_krylov_iterations": [
+    76
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 1250776,
+   "case": "cross",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 3,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 140
+   },
+   "wall_s": 88.261,
+   "peak_memory_mb": 2967.7,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_fine_p3_bddc_c3_e1.stdout.log",
+   "stderr_log": "cross_fine_p3_bddc_c3_e1.stderr.log",
+   "process_wall_s": 89.57
+  },
+  {
+   "P_total": 0.1143928228613339,
+   "L": 4.665275470643341e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 6.619953401821835e-11,
+   "linear_krylov_iterations": [
+    77
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 1250776,
+   "case": "cross",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 4,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 140
+   },
+   "wall_s": 89.228,
+   "peak_memory_mb": 2968.4,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_fine_p3_bddc_c4_e1.stdout.log",
+   "stderr_log": "cross_fine_p3_bddc_c4_e1.stderr.log",
+   "process_wall_s": 90.915
+  },
+  {
+   "P_total": 0.11439282286736989,
+   "L": 4.6652754706429464e-08,
+   "error": null,
+   "linear_solver": "bddc",
+   "linear_true_relative_residual": 9.03453849141454e-11,
+   "linear_krylov_iterations": [
+    77
+   ],
+   "linear_residual_corrections": 0,
+   "linear_residual_before_corrections": [],
+   "ndof": 1250776,
+   "case": "cross",
+   "mesh": "fine",
+   "order": 3,
+   "solver": "bddc",
+   "cycles": 6,
+   "edge_wirebasket": true,
+   "coarse_applied": {
+    "calls": 1,
+    "face_dofs_returned": 140
+   },
+   "wall_s": 90.773,
+   "peak_memory_mb": 2968.1,
+   "threads": 8,
+   "process_exit": 0,
+   "stdout_log": "cross_fine_p3_bddc_c6_e1.stdout.log",
+   "stderr_log": "cross_fine_p3_bddc_c6_e1.stderr.log",
+   "process_wall_s": 92.04
+  }
+ ],
+ "failed_trials": {
+  "note": "pass 1 (8 threads for every run): every SparseCholesky run failed (0xC0000005, MemoryError 'bad allocation', exit 1) and the cross-case runs after 08:03 failed to allocate NGSolve localheap; a foreign 8-thread job (C:\\work_eddy) shared mdx1 and the host has no page file (commit limit = RAM 57.4 GB), so these failures are not attributed to thread count alone. In pass 2 the 8-thread direct solves of cross coarse p2/p3 and fine p2 succeeded; cross fine p3 direct failed with 8 threads (0xC0000409) and 1 thread (bad allocation, while a foreign python held 15 GB). The tube fine p3 1-thread direct solve peaked at 47.8 GB.",
+  "pass1_records": [
+   {
+    "case": "tube",
+    "mesh": "coarse",
+    "order": 2,
+    "solver": "sparsecholesky",
+    "cycles": 0,
+    "edge_wirebasket": false,
+    "process_exit": 3221225477,
+    "stderr_tail": "FEM:MESH:loading\nFEM:MESH:loaded C:\\temp\\ih_bddc_study_3086c6f1a\\work\\tube_coarse.vol\nFEM:MESH:curve_order=3, fes_order=2\nFEM:MESH:done (31286 elems, 0.3s)\nFEM:SIBC:boundary=sibc, approach=hole\nFEM:SOURCE:filaments given directly\nFEM:SIBC:Z_s=1.0104e-04+1.0104e-04j, model=sibc\nFEM:FARFIELD:Dirichlet A=0 on 'outer' boundary (truncation error if outer is too close to coil)\nFEM:FES:ndof=164222\nFEM:SOLVER:sparsecholesky, reg=1e-06, shift_eps=1e-06, threads=8\nFEM:PEEC:1 given filaments, 720 segments\nFEM:PEEC:assembling line-integral RHS\nFEM:PEEC:line-integral RHS assembled (2.8s, 0 skipped)\n",
+    "stdout_log": "tube_coarse_p2_sparsecholesky_c0_e0.stdout.log",
+    "stderr_log": "tube_coarse_p2_sparsecholesky_c0_e0.stderr.log",
+    "process_wall_s": 15.108
+   },
+   {
+    "case": "tube",
+    "mesh": "coarse",
+    "order": 3,
+    "solver": "sparsecholesky",
+    "cycles": 0,
+    "edge_wirebasket": false,
+    "process_exit": 1,
+    "stderr_tail": "FEM:MESH:loading\nFEM:MESH:loaded C:\\temp\\ih_bddc_study_3086c6f1a\\work\\tube_coarse.vol\nFEM:MESH:curve_order=3, fes_order=3\nFEM:MESH:done (31286 elems, 0.2s)\nFEM:SIBC:boundary=sibc, approach=hole\nFEM:SOURCE:filaments given directly\nFEM:SIBC:Z_s=1.0104e-04+1.0104e-04j, model=sibc\nFEM:FARFIELD:Dirichlet A=0 on 'outer' boundary (truncation error if outer is too close to coil)\nFEM:FES:ndof=447926\nFEM:SOLVER:sparsecholesky, reg=1e-06, shift_eps=1e-06, threads=8\nFEM:PEEC:1 given filaments, 720 segments\nFEM:PEEC:assembling line-integral RHS\nFEM:PEEC:line-integral RHS assembled (3.3s, 0 skipped)\nTraceback (most recent call last):\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 268, in <module>\n    main()\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 187, in main\n    single(a)\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 112, in single\n    res = K.solve_fem(vol_file=a.vol, fes_order=a.order, frequency=a.frequency,\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\src\\radia\\panels\\calc_fem_kelvin.py\", line 949, in solve_fem\n    direct_inverse = a_bf.mat.Inverse(\n                     ^^^^^^^^^^^^^^^^^\nMemoryError: bad allocation\n",
+    "stdout_log": "tube_coarse_p3_sparsecholesky_c0_e0.stdout.log",
+    "stderr_log": "tube_coarse_p3_sparsecholesky_c0_e0.stderr.log",
+    "process_wall_s": 9.132
+   },
+   {
+    "case": "tube",
+    "mesh": "fine",
+    "order": 2,
+    "solver": "sparsecholesky",
+    "cycles": 0,
+    "edge_wirebasket": false,
+    "process_exit": 1,
+    "stderr_tail": "FEM:MESH:loading\nFEM:MESH:loaded C:\\temp\\ih_bddc_study_3086c6f1a\\work\\tube_fine.vol\nFEM:MESH:curve_order=3, fes_order=2\nFEM:MESH:done (74069 elems, 0.6s)\nFEM:SIBC:boundary=sibc, approach=hole\nFEM:SOURCE:filaments given directly\nFEM:SIBC:Z_s=1.0104e-04+1.0104e-04j, model=sibc\nFEM:FARFIELD:Dirichlet A=0 on 'outer' boundary (truncation error if outer is too close to coil)\nFEM:FES:ndof=388824\nFEM:SOLVER:sparsecholesky, reg=1e-06, shift_eps=1e-06, threads=8\nFEM:PEEC:1 given filaments, 720 segments\nFEM:PEEC:assembling line-integral RHS\nFEM:PEEC:line-integral RHS assembled (2.7s, 0 skipped)\nTraceback (most recent call last):\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 268, in <module>\n    main()\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 187, in main\n    single(a)\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 112, in single\n    res = K.solve_fem(vol_file=a.vol, fes_order=a.order, frequency=a.frequency,\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\src\\radia\\panels\\calc_fem_kelvin.py\", line 949, in solve_fem\n    direct_inverse = a_bf.mat.Inverse(\n                     ^^^^^^^^^^^^^^^^^\nMemoryError: bad allocation\n",
+    "stdout_log": "tube_fine_p2_sparsecholesky_c0_e0.stdout.log",
+    "stderr_log": "tube_fine_p2_sparsecholesky_c0_e0.stderr.log",
+    "process_wall_s": 8.832
+   },
+   {
+    "case": "tube",
+    "mesh": "fine",
+    "order": 3,
+    "solver": "sparsecholesky",
+    "cycles": 0,
+    "edge_wirebasket": false,
+    "process_exit": 1,
+    "stderr_tail": "FEM:MESH:loading\nFEM:MESH:loaded C:\\temp\\ih_bddc_study_3086c6f1a\\work\\tube_fine.vol\nFEM:MESH:curve_order=3, fes_order=3\nFEM:MESH:done (74069 elems, 0.6s)\nFEM:SIBC:boundary=sibc, approach=hole\nFEM:SOURCE:filaments given directly\nFEM:SIBC:Z_s=1.0104e-04+1.0104e-04j, model=sibc\nFEM:FARFIELD:Dirichlet A=0 on 'outer' boundary (truncation error if outer is too close to coil)\nFEM:FES:ndof=1060509\nFEM:SOLVER:sparsecholesky, reg=1e-06, shift_eps=1e-06, threads=8\nFEM:PEEC:1 given filaments, 720 segments\nFEM:PEEC:assembling line-integral RHS\nFEM:PEEC:line-integral RHS assembled (3.8s, 0 skipped)\nTraceback (most recent call last):\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 268, in <module>\n    main()\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 187, in main\n    single(a)\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 112, in single\n    res = K.solve_fem(vol_file=a.vol, fes_order=a.order, frequency=a.frequency,\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\src\\radia\\panels\\calc_fem_kelvin.py\", line 949, in solve_fem\n    direct_inverse = a_bf.mat.Inverse(\n                     ^^^^^^^^^^^^^^^^^\nMemoryError: bad allocation\n",
+    "stdout_log": "tube_fine_p3_sparsecholesky_c0_e0.stdout.log",
+    "stderr_log": "tube_fine_p3_sparsecholesky_c0_e0.stderr.log",
+    "process_wall_s": 18.27
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 2,
+    "solver": "sparsecholesky",
+    "cycles": 0,
+    "edge_wirebasket": false,
+    "process_exit": 3221225477,
+    "stderr_tail": "FEM:MESH:loading\nFEM:MESH:loaded C:\\temp\\ih_bddc_study_3086c6f1a\\work\\cross_coarse.vol\nFEM:MESH:curve_order=3, fes_order=2\nFEM:MESH:done (45190 elems, 0.4s)\nFEM:SIBC:boundary=sibc, approach=hole\nFEM:SOURCE:filaments given directly\nFEM:SIBC:Z_s=1.0104e-04+1.0104e-04j, model=sibc\nFEM:FARFIELD:Dirichlet A=0 on 'outer' boundary (truncation error if outer is too close to coil)\nFEM:FES:ndof=242346\nFEM:SOLVER:sparsecholesky, reg=1e-06, shift_eps=1e-06, threads=8\nFEM:PEEC:1 given filaments, 720 segments\nFEM:PEEC:assembling line-integral RHS\nFEM:PEEC:line-integral RHS assembled (1.5s, 0 skipped)\n",
+    "stdout_log": "cross_coarse_p2_sparsecholesky_c0_e0.stdout.log",
+    "stderr_log": "cross_coarse_p2_sparsecholesky_c0_e0.stderr.log",
+    "process_wall_s": 16.385
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 3,
+    "solver": "sparsecholesky",
+    "cycles": 0,
+    "edge_wirebasket": false,
+    "process_exit": 1,
+    "stderr_tail": "\n\nCaught Exception:\nCould not allocate localheap, heapsize = 380000000\nTraceback (most recent call last):\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 268, in <module>\n    main()\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 187, in main\n    single(a)\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 104, in single\n    import ngsolve\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\venv\\Lib\\site-packages\\ngsolve\\__init__.py\", line 69, in <module>\n    from .ngslib import __version__, ngstd, bla, la, fem, comp, solve\nImportError: cannot import name 'solve' from 'ngsolve' (C:\\temp\\ih_bddc_study_3086c6f1a\\venv\\Lib\\site-packages\\ngsolve\\ngslib.pyd)\n",
+    "stdout_log": "cross_coarse_p3_sparsecholesky_c0_e0.stdout.log",
+    "stderr_log": "cross_coarse_p3_sparsecholesky_c0_e0.stderr.log",
+    "process_wall_s": 0.487
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 2,
+    "solver": "sparsecholesky",
+    "cycles": 0,
+    "edge_wirebasket": false,
+    "process_exit": 3221225477,
+    "stderr_tail": "FEM:MESH:loading\nFEM:MESH:loaded C:\\temp\\ih_bddc_study_3086c6f1a\\work\\cross_coarse.vol\nFEM:MESH:curve_order=3, fes_order=2\nFEM:MESH:done (45190 elems, 0.4s)\nFEM:SIBC:boundary=sibc, approach=hole\nFEM:SOURCE:filaments given directly\nFEM:SIBC:Z_s=1.0104e-04+1.0104e-04j, model=sibc\nFEM:FARFIELD:Dirichlet A=0 on 'outer' boundary (truncation error if outer is too close to coil)\nFEM:FES:ndof=242346\nFEM:SOLVER:sparsecholesky, reg=1e-06, shift_eps=1e-06, threads=8\nFEM:PEEC:1 given filaments, 720 segments\nFEM:PEEC:assembling line-integral RHS\nFEM:PEEC:line-integral RHS assembled (1.5s, 0 skipped)\n",
+    "stdout_log": "cross_coarse_p2_sparsecholesky_c0_e0.stdout.log",
+    "stderr_log": "cross_coarse_p2_sparsecholesky_c0_e0.stderr.log",
+    "process_wall_s": 16.385
+   },
+   {
+    "P_total": 0.11754283452589817,
+    "L": 3.740890935672567e-08,
+    "error": null,
+    "linear_solver": "bddc",
+    "linear_true_relative_residual": 6.596884092003298e-11,
+    "linear_krylov_iterations": [
+     68
+    ],
+    "linear_residual_corrections": 0,
+    "linear_residual_before_corrections": [],
+    "ndof": 242346,
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 2,
+    "solver": "bddc",
+    "cycles": 1,
+    "edge_wirebasket": false,
+    "coarse_applied": {
+     "calls": 1,
+     "face_dofs_returned": 0
+    },
+    "wall_s": 20.901,
+    "peak_memory_mb": 530.8,
+    "threads": 8,
+    "process_exit": 0,
+    "stdout_log": "cross_coarse_p2_bddc_c1_e0.stdout.log",
+    "stderr_log": "cross_coarse_p2_bddc_c1_e0.stderr.log",
+    "process_wall_s": 22.417
+   },
+   {
+    "P_total": 0.11754283453334544,
+    "L": 3.7408909356723236e-08,
+    "error": null,
+    "linear_solver": "bddc",
+    "linear_true_relative_residual": 3.045490268130202e-11,
+    "linear_krylov_iterations": [
+     49
+    ],
+    "linear_residual_corrections": 0,
+    "linear_residual_before_corrections": [],
+    "ndof": 242346,
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 2,
+    "solver": "bddc",
+    "cycles": 2,
+    "edge_wirebasket": false,
+    "coarse_applied": {
+     "calls": 1,
+     "face_dofs_returned": 0
+    },
+    "wall_s": 20.504,
+    "peak_memory_mb": 530.8,
+    "threads": 8,
+    "process_exit": 0,
+    "stdout_log": "cross_coarse_p2_bddc_c2_e0.stdout.log",
+    "stderr_log": "cross_coarse_p2_bddc_c2_e0.stderr.log",
+    "process_wall_s": 21.749
+   },
+   {
+    "P_total": 0.1175428345296601,
+    "L": 3.740890935672301e-08,
+    "error": null,
+    "linear_solver": "bddc",
+    "linear_true_relative_residual": 3.5285817522367915e-11,
+    "linear_krylov_iterations": [
+     42
+    ],
+    "linear_residual_corrections": 0,
+    "linear_residual_before_corrections": [],
+    "ndof": 242346,
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 2,
+    "solver": "bddc",
+    "cycles": 3,
+    "edge_wirebasket": false,
+    "coarse_applied": {
+     "calls": 1,
+     "face_dofs_returned": 0
+    },
+    "wall_s": 27.044,
+    "peak_memory_mb": 530.7,
+    "threads": 8,
+    "process_exit": 0,
+    "stdout_log": "cross_coarse_p2_bddc_c3_e0.stdout.log",
+    "stderr_log": "cross_coarse_p2_bddc_c3_e0.stderr.log",
+    "process_wall_s": 28.816
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 2,
+    "solver": "bddc",
+    "cycles": 4,
+    "edge_wirebasket": false,
+    "process_exit": 1,
+    "stderr_tail": "FEM:MESH:loading\nFEM:MESH:loaded C:\\temp\\ih_bddc_study_3086c6f1a\\work\\cross_coarse.vol\nFEM:MESH:curve_order=3, fes_order=2\nFEM:MESH:done (45190 elems, 0.4s)\nFEM:SIBC:boundary=sibc, approach=hole\nFEM:SOURCE:filaments given directly\nFEM:SIBC:Z_s=1.0104e-04+1.0104e-04j, model=sibc\nFEM:FARFIELD:Dirichlet A=0 on 'outer' boundary (truncation error if outer is too close to coil)\nFEM:FES:ndof=242346\nFEM:SOLVER:bddc, reg=1e-06, shift_eps=1e-06, threads=8\nFEM:PEEC:1 given filaments, 720 segments\nFEM:PEEC:assembling line-integral RHS\nFEM:PEEC:line-integral RHS assembled (1.7s, 0 skipped)\nTraceback (most recent call last):\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 268, in <module>\n    main()\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 187, in main\n    single(a)\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 112, in single\n    res = K.solve_fem(vol_file=a.vol, fes_order=a.order, frequency=a.frequency,\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\src\\radia\\panels\\calc_fem_kelvin.py\", line 641, in solve_fem\n    f_lf.Assemble()\nnetgen.libngpy._meshing.NgException: Could not allocate localheap, heapsize = 800000000\n",
+    "stdout_log": "cross_coarse_p2_bddc_c4_e0.stdout.log",
+    "stderr_log": "cross_coarse_p2_bddc_c4_e0.stderr.log",
+    "process_wall_s": 4.099
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 2,
+    "solver": "bddc",
+    "cycles": 6,
+    "edge_wirebasket": false,
+    "process_exit": 1,
+    "stderr_tail": "Traceback (most recent call last):\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 268, in <module>\n    main()\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 187, in main\n    single(a)\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 106, in single\n    from radia.em_material import EMMaterial\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\src\\radia\\__init__.py\", line 97, in <module>\n    from .esim_cell_problem import (\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\src\\radia\\esim_cell_problem.py\", line 29, in <module>\n    from scipy.interpolate import interp1d\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\venv\\Lib\\site-packages\\scipy\\interpolate\\__init__.py\", line 195, in <module>\n    from ._fitpack2 import *\n  File \"<frozen importlib._bootstrap>\", line 1360, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1331, in _find_and_load_unlocked\n  File \"<frozen importlib._bootstrap>\", line 935, in _load_unlocked\n  File \"<frozen importlib._bootstrap_external>\", line 995, in exec_module\n  File \"<frozen importlib._bootstrap_external>\", line 1091, in get_code\n  File \"<frozen importlib._bootstrap_external>\", line 1191, in get_data\nMemoryError\n",
+    "stdout_log": "cross_coarse_p2_bddc_c6_e0.stdout.log",
+    "stderr_log": "cross_coarse_p2_bddc_c6_e0.stderr.log",
+    "process_wall_s": 1.643
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 2,
+    "solver": "bddc",
+    "cycles": 1,
+    "edge_wirebasket": true,
+    "process_exit": 3221226505,
+    "stderr_tail": "",
+    "stdout_log": "cross_coarse_p2_bddc_c1_e1.stdout.log",
+    "stderr_log": "cross_coarse_p2_bddc_c1_e1.stderr.log",
+    "process_wall_s": 6.877
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 2,
+    "solver": "bddc",
+    "cycles": 2,
+    "edge_wirebasket": true,
+    "process_exit": 3221226505,
+    "stderr_tail": "",
+    "stdout_log": "cross_coarse_p2_bddc_c2_e1.stdout.log",
+    "stderr_log": "cross_coarse_p2_bddc_c2_e1.stderr.log",
+    "process_wall_s": 0.779
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 2,
+    "solver": "bddc",
+    "cycles": 3,
+    "edge_wirebasket": true,
+    "process_exit": 3221226505,
+    "stderr_tail": "",
+    "stdout_log": "cross_coarse_p2_bddc_c3_e1.stdout.log",
+    "stderr_log": "cross_coarse_p2_bddc_c3_e1.stderr.log",
+    "process_wall_s": 2.391
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 2,
+    "solver": "bddc",
+    "cycles": 4,
+    "edge_wirebasket": true,
+    "process_exit": 3221226505,
+    "stderr_tail": "",
+    "stdout_log": "cross_coarse_p2_bddc_c4_e1.stdout.log",
+    "stderr_log": "cross_coarse_p2_bddc_c4_e1.stderr.log",
+    "process_wall_s": 3.307
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 2,
+    "solver": "bddc",
+    "cycles": 6,
+    "edge_wirebasket": true,
+    "process_exit": 3221226505,
+    "stderr_tail": "",
+    "stdout_log": "cross_coarse_p2_bddc_c6_e1.stdout.log",
+    "stderr_log": "cross_coarse_p2_bddc_c6_e1.stderr.log",
+    "process_wall_s": 0.631
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 3,
+    "solver": "sparsecholesky",
+    "cycles": 0,
+    "edge_wirebasket": false,
+    "process_exit": 1,
+    "stderr_tail": "\n\nCaught Exception:\nCould not allocate localheap, heapsize = 380000000\nTraceback (most recent call last):\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 268, in <module>\n    main()\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 187, in main\n    single(a)\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 104, in single\n    import ngsolve\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\venv\\Lib\\site-packages\\ngsolve\\__init__.py\", line 69, in <module>\n    from .ngslib import __version__, ngstd, bla, la, fem, comp, solve\nImportError: cannot import name 'solve' from 'ngsolve' (C:\\temp\\ih_bddc_study_3086c6f1a\\venv\\Lib\\site-packages\\ngsolve\\ngslib.pyd)\n",
+    "stdout_log": "cross_coarse_p3_sparsecholesky_c0_e0.stdout.log",
+    "stderr_log": "cross_coarse_p3_sparsecholesky_c0_e0.stderr.log",
+    "process_wall_s": 0.487
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 3,
+    "solver": "bddc",
+    "cycles": 1,
+    "edge_wirebasket": false,
+    "process_exit": 1,
+    "stderr_tail": "\n\nCaught Exception:\nCould not allocate localheap, heapsize = 380000000\nTraceback (most recent call last):\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 268, in <module>\n    main()\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 187, in main\n    single(a)\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 104, in single\n    import ngsolve\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\venv\\Lib\\site-packages\\ngsolve\\__init__.py\", line 69, in <module>\n    from .ngslib import __version__, ngstd, bla, la, fem, comp, solve\nImportError: cannot import name 'solve' from 'ngsolve' (C:\\temp\\ih_bddc_study_3086c6f1a\\venv\\Lib\\site-packages\\ngsolve\\ngslib.pyd)\n",
+    "stdout_log": "cross_coarse_p3_bddc_c1_e0.stdout.log",
+    "stderr_log": "cross_coarse_p3_bddc_c1_e0.stderr.log",
+    "process_wall_s": 0.414
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 3,
+    "solver": "bddc",
+    "cycles": 2,
+    "edge_wirebasket": false,
+    "process_exit": 1,
+    "stderr_tail": "\n\nCaught Exception:\nCould not allocate localheap, heapsize = 380000000\nTraceback (most recent call last):\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 268, in <module>\n    main()\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 187, in main\n    single(a)\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 104, in single\n    import ngsolve\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\venv\\Lib\\site-packages\\ngsolve\\__init__.py\", line 69, in <module>\n    from .ngslib import __version__, ngstd, bla, la, fem, comp, solve\nImportError: cannot import name 'solve' from 'ngsolve' (C:\\temp\\ih_bddc_study_3086c6f1a\\venv\\Lib\\site-packages\\ngsolve\\ngslib.pyd)\n",
+    "stdout_log": "cross_coarse_p3_bddc_c2_e0.stdout.log",
+    "stderr_log": "cross_coarse_p3_bddc_c2_e0.stderr.log",
+    "process_wall_s": 0.389
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 3,
+    "solver": "bddc",
+    "cycles": 3,
+    "edge_wirebasket": false,
+    "process_exit": 1,
+    "stderr_tail": "\n\nCaught Exception:\nCould not allocate localheap, heapsize = 380000000\nTraceback (most recent call last):\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 268, in <module>\n    main()\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 187, in main\n    single(a)\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 104, in single\n    import ngsolve\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\venv\\Lib\\site-packages\\ngsolve\\__init__.py\", line 69, in <module>\n    from .ngslib import __version__, ngstd, bla, la, fem, comp, solve\nImportError: cannot import name 'solve' from 'ngsolve' (C:\\temp\\ih_bddc_study_3086c6f1a\\venv\\Lib\\site-packages\\ngsolve\\ngslib.pyd)\n",
+    "stdout_log": "cross_coarse_p3_bddc_c3_e0.stdout.log",
+    "stderr_log": "cross_coarse_p3_bddc_c3_e0.stderr.log",
+    "process_wall_s": 0.389
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 3,
+    "solver": "bddc",
+    "cycles": 4,
+    "edge_wirebasket": false,
+    "process_exit": 3221226505,
+    "stderr_tail": "",
+    "stdout_log": "cross_coarse_p3_bddc_c4_e0.stdout.log",
+    "stderr_log": "cross_coarse_p3_bddc_c4_e0.stderr.log",
+    "process_wall_s": 0.448
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 3,
+    "solver": "bddc",
+    "cycles": 6,
+    "edge_wirebasket": false,
+    "process_exit": 1,
+    "stderr_tail": "Traceback (most recent call last):\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 268, in <module>\n    main()\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 187, in main\n    single(a)\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 104, in single\n    import ngsolve\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\venv\\Lib\\site-packages\\ngsolve\\__init__.py\", line 30, in <module>\n    import netgen\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\venv\\Lib\\site-packages\\netgen\\__init__.py\", line 114, in <module>\n    from pyngcore import Timer\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\venv\\Lib\\site-packages\\pyngcore\\__init__.py\", line 12, in <module>\n    from .pyngcore import *\nImportError: DLL load failed while importing pyngcore: \u30c0\u30a4\u30ca\u30df\u30c3\u30af \u30ea\u30f3\u30af \u30e9\u30a4\u30d6\u30e9\u30ea (DLL) \u521d\u671f\u5316\u30eb\u30fc\u30c1\u30f3\u306e\u5b9f\u884c\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002\n",
+    "stdout_log": "cross_coarse_p3_bddc_c6_e0.stdout.log",
+    "stderr_log": "cross_coarse_p3_bddc_c6_e0.stderr.log",
+    "process_wall_s": 0.885
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 3,
+    "solver": "bddc",
+    "cycles": 1,
+    "edge_wirebasket": true,
+    "process_exit": 1,
+    "stderr_tail": "Traceback (most recent call last):\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\venv\\Lib\\site-packages\\netgen\\__init__.py\", line 28, in load_occ_libs\n    import importlib.metadata as metadata\n  File \"C:\\Program Files\\Python312\\Lib\\importlib\\metadata\\__init__.py\", line 17, in <module>\n    import inspect\n  File \"<frozen importlib._bootstrap>\", line 1360, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1331, in _find_and_load_unlocked\n  File \"<frozen importlib._bootstrap>\", line 935, in _load_unlocked\n  File \"<frozen importlib._bootstrap_external>\", line 995, in exec_module\n  File \"<frozen importlib._bootstrap_external>\", line 1091, in get_code\n  File \"<frozen importlib._bootstrap_external>\", line 1191, in get_data\nMemoryError\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 268, in <module>\n    main()\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 187, in main\n    single(a)\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\tree\\validation_test\\induction_heating\\bddc_ams_coarse_ih.py\", line 104, in single\n    import ngsolve\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\venv\\Lib\\site-packages\\ngsolve\\__init__.py\", line 30, in <module>\n    import netgen\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\venv\\Lib\\site-packages\\netgen\\__init__.py\", line 77, in <module>\n    load_occ_libs()\n  File \"C:\\temp\\ih_bddc_study_3086c6f1a\\venv\\Lib\\site-packages\\netgen\\__init__.py\", line 74, in load_occ_libs\n    except metadata.PackageNotFoundError:\n           ^^^^^^^^\nUnboundLocalError: cannot access local variable 'metadata' where it is not associated with a value\n",
+    "stdout_log": "cross_coarse_p3_bddc_c1_e1.stdout.log",
+    "stderr_log": "cross_coarse_p3_bddc_c1_e1.stderr.log",
+    "process_wall_s": 0.602
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 3,
+    "solver": "bddc",
+    "cycles": 2,
+    "edge_wirebasket": true,
+    "process_exit": 3221225773,
+    "stderr_tail": "",
+    "stdout_log": "cross_coarse_p3_bddc_c2_e1.stdout.log",
+    "stderr_log": "cross_coarse_p3_bddc_c2_e1.stderr.log",
+    "process_wall_s": 0.03
+   },
+   {
+    "case": "cross",
+    "mesh": "coarse",
+    "order": 3,
+    "solver": "bddc",
+    "cycles": 3,
+    "edge_wirebasket": true,
+    "process_exit": 3221225773,
+    "stderr_tail": "",
+    "stdout_log": "cross_coarse_p3_bddc_c3_e1.stdout.log",
+    "stderr_log": "cross_coarse_p3_bddc_c3_e1.stderr.log",
+    "process_wall_s": 0.027
+   }
+  ],
+  "commit_log": "commit_p2.log in the recovered archive"
+ },
+ "provenance": {
+  "pass1": {
+   "commit": "3086c6f1a78e3b7b92a7caad81dea66d69ba9997",
+   "dirty": false,
+   "source": "git-checkout",
+   "sha256": {
+    "validation_test/induction_heating/bddc_ams_coarse_ih.py": "73888ee66791c6f5ecc7a49ba7d8fbe99b10694fe38757570471c871724e54fc",
+    "validation_test/induction_heating/fem_sibc_geometry.py": "bbe679c2344ed1cf872478ffb175d591e4e70c288347f47df4a48f41257da6da",
+    "src/radia/panels/calc_fem_kelvin.py": "c2b264bc55150adb511ddcd0049bf67e79a68809eb9231e063215aa5c533bfbf"
+   },
+   "native_sha256": {
+    "_radia_pybind.pyd": "6eeb3d33d47c8944ac3b5a68596b7124a9bc34ac0b8339b0c64175e67332aef4",
+    "sparsesolv_ngsolve.pyd": "1cc11f0c8f8b8df867c7226d2d0c39a599950f0f95816bf2abc6e56779e0d040"
+   },
+   "command": [
+    "python.exe",
+    "validation_test\\induction_heating\\bddc_ams_coarse_ih.py",
+    "--source-commit",
+    "3086c6f1a78e3b7b92a7caad81dea66d69ba9997",
+    "--work",
+    "C:\\temp\\ih_bddc_study_3086c6f1a\\work",
+    "--out",
+    "C:\\temp\\ih_bddc_study_3086c6f1a\\result.json"
+   ],
+   "utc": "2026-09-29T22:28:00+00:00",
+   "host": "mdx1",
+   "python": "3.12.10",
+   "numpy": "2.5.3",
+   "scipy": "1.18.1",
+   "ngsolve": "6.2.2607",
+   "cpu_count": 38
+  },
+  "pass2": {
+   "commit": "3086c6f1a78e3b7b92a7caad81dea66d69ba9997",
+   "dirty": false,
+   "source": "git-checkout",
+   "sha256": {
+    "validation_test/induction_heating/bddc_ams_coarse_ih.py": "73888ee66791c6f5ecc7a49ba7d8fbe99b10694fe38757570471c871724e54fc",
+    "validation_test/induction_heating/fem_sibc_geometry.py": "bbe679c2344ed1cf872478ffb175d591e4e70c288347f47df4a48f41257da6da",
+    "src/radia/panels/calc_fem_kelvin.py": "c2b264bc55150adb511ddcd0049bf67e79a68809eb9231e063215aa5c533bfbf"
+   },
+   "native_sha256": {
+    "_radia_pybind.pyd": "6eeb3d33d47c8944ac3b5a68596b7124a9bc34ac0b8339b0c64175e67332aef4",
+    "sparsesolv_ngsolve.pyd": "1cc11f0c8f8b8df867c7226d2d0c39a599950f0f95816bf2abc6e56779e0d040"
+   },
+   "command": [
+    "python.exe",
+    "validation_test\\induction_heating\\bddc_ams_coarse_ih.py",
+    "--cases",
+    "cross",
+    "--source-commit",
+    "3086c6f1a78e3b7b92a7caad81dea66d69ba9997",
+    "--work",
+    "C:\\temp\\ih_bddc_study_3086c6f1a\\work_cross",
+    "--out",
+    "C:\\temp\\ih_bddc_study_3086c6f1a\\result_cross.json"
+   ],
+   "utc": "2026-09-30T05:28:37+00:00",
+   "host": "mdx1",
+   "python": "3.12.10",
+   "numpy": "2.5.3",
+   "scipy": "1.18.1",
+   "ngsolve": "6.2.2607",
+   "cpu_count": 38
+  }
+ }
+}
