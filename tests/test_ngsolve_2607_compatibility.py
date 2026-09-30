@@ -121,7 +121,9 @@ def test_production_bem_uses_current_variational_operator_api():
         ROOT / "packages" / "radia-mcp" / "src" / "radia_mcp",
     )
     for path in sorted(path for root in roots for path in root.rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        # A few generated MATLAB COM helper modules retain a UTF-8 BOM.
+        # Python's file loader accepts it, so this source audit must too.
+        tree = ast.parse(path.read_text(encoding="utf-8-sig"))
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and node.module == "ngsolve.bem":
                 names = {alias.name for alias in node.names}

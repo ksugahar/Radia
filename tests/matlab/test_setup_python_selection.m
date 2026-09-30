@@ -21,6 +21,14 @@ classdef test_setup_python_selection < matlab.unittest.TestCase
                 ConfigureSimulinkFileGeneration=false, RequireMex=false);
             testCase.verifyEqual(info.python_executable, testCase.Python);
         end
+        function nonMexSetupDoesNotPoisonMexCache(testCase)
+            radia.setup(PythonExecutable=testCase.Python, Force=true, ...
+                ConfigureSimulinkFileGeneration=false, RequireMex=false);
+            info = radia.setup(PythonExecutable=testCase.Python, ...
+                ConfigureSimulinkFileGeneration=false, RequireMex=true);
+            testCase.verifyTrue(info.mex_available);
+            testCase.verifyEqual(strlength(info.mex_source_commit), 40);
+        end
     end
 end
 

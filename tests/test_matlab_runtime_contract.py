@@ -43,6 +43,7 @@ def test_cached_mex_setup_keeps_provenance_subprocess_off_the_step_path() -> Non
     verifier_launch = setup.index('verifier = fullfile(matlabDir, "verify_radia_mex_provenance.py")')
     assert cache_return < verifier_launch
     assert "verifyLoadedMex(cachedInfo.mex_source_commit)" in setup[cache_branch:cache_return]
+    assert "strlength(cachedInfo.mex_source_commit) == 40" in setup[cache_branch:cache_return]
 
 
 def test_matlab_release_uses_sequential_mkl_without_changing_python() -> None:
