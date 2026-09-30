@@ -98,10 +98,14 @@ def test_periodic_kelvin_accepts_bddc():
     assert value._select_solver(1_000_000, "bddc") == "bddc"
 
 
-def test_periodic_kelvin_rejects_ams_low_order_auxiliary_space():
+def test_periodic_kelvin_accepts_explicit_order_one_ams():
+    """The Periodic gradient exists now (_periodic_lowest_order_gradient)."""
     value = selector(1)
     value._kelvin_region = "kelvin"
-    with pytest.raises(ValueError, match="Periodic low-order coupling"):
+    assert value._select_solver(50_000, "ams") == "ams"
+    value = selector(2)
+    value._kelvin_region = "kelvin"
+    with pytest.raises(ValueError, match="requires HCurl order=1"):
         value._select_solver(50_000, "ams")
 
 
