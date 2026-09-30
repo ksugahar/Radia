@@ -23,8 +23,37 @@ import math
 import time
 import numpy as np
 from scipy.linalg import solve as scipy_solve
+from ._residual_gate import RELATIVE_LIMIT, residual_scale
 
 MU_0 = 4e-7 * np.pi
+
+
+def _uniform_surface_impedance(value, ndof):
+    """Reject variable impedance until coefficient-weighted stiffness is supported."""
+    values = np.asarray(value, dtype=complex)
+    if values.ndim:
+        if values.shape != (ndof,):
+            raise ValueError(f"Surface impedance must be scalar or shape ({ndof},)")
+        if not np.all(values == values[0]):
+            raise NotImplementedError(
+                "Variable surface impedance requires source-side coefficient-weighted "
+                "surface stiffness and local loss integration; BEM currently supports uniform Z_s only")
+        values = values[0]
+    result = complex(values)
+    if not np.isfinite(result) or result.real < 0:
+        raise ValueError("Surface impedance must be finite and passive")
+    return result
+
+
+def _check_bie_solution(operator, solution, rhs, *, info=0):
+    """Check the original gauge-augmented equation, with its fixed load norm."""
+    if info != 0:
+        raise RuntimeError(f"BEM SIBC GMRES failed to converge (info={info})")
+    residual = operator @ solution - rhs
+    relative = float(np.linalg.norm(residual)) / residual_scale(float(np.linalg.norm(rhs)))
+    if not np.all(np.isfinite(solution)) or not math.isfinite(relative) or relative > RELATIVE_LIMIT:
+        raise RuntimeError(f"BEM SIBC true relative residual {relative:.3e} exceeds {RELATIVE_LIMIT:g}")
+    return relative
 
 
 def _project_sibc_surface_heat(fes, phi_vec, Z_s, *, element_heat=None):
@@ -450,10 +479,9 @@ class ScalarBIESIBCSolver:
             Z_s: Surface impedance.
                  - **complex scalar**: legacy global SIBC (uniform Z_s
                    over the workpiece)
-                 - **ndarray of length ndof (complex)**: per-node Z_s
-                   (per-panel curvature SIBC; build the array from
-                   panel-level Z_s values via vertex averaging or any
-                   other H1 projection).
+                 - **constant ndarray of length ndof**: equivalent uniform Z_s.
+                 Variable impedance is rejected until weighted surface stiffness
+                 and local loss integration are available.
             omega: Angular frequency [rad/s].
 
         Returns:
@@ -462,7 +490,7 @@ class ScalarBIESIBCSolver:
                 phi_vec: ndarray (complex) - coefficient vector
                 H_t_rms: float - RMS tangential H [A/m] (= surface current density)
                 P_density: float - time-averaged power loss density [W/m^2]
-                gamma: complex - Z_s / (jw * mu_0) (or its mean if per-node)
+                gamma: complex - Z_s / (jw * mu_0)
                 t_solve: float - solve time [s]
         """
         if not self._intree_lagrange_p2:
@@ -471,6 +499,7 @@ class ScalarBIESIBCSolver:
 
         t0 = time.perf_counter()
         ndof = self.ndof
+        Z_s = _uniform_surface_impedance(Z_s, ndof)
 
         # RHS: <phi_inc, v>_S
         if isinstance(phi_inc_cf, np.ndarray):
@@ -488,34 +517,11 @@ class ScalarBIESIBCSolver:
             lf.Assemble()
             rhs_vec = lf.vec.FV().NumPy().copy()
 
-        # System matrix.
-        # Original global-Z_s formulation:
-        #   gamma = Z_s / (jw * mu_0)         (scalar)
-        #   A = 1/2 M - DL + gamma * (SL M^{-1} K)
-        # Per-node Z_s formulation:
-        #   Gamma_ii = Z_s_i / (jw * mu_0)    (diagonal)
-        #   The Robin term gamma * Delta_s phi has the per-node coefficient
-        #   on the test side: <gamma_i grad_s phi, grad_s v> -> the SL M^-1 K
-        #   block is left-multiplied by diag(gamma) (per-row scaling).
-        # That is, the discrete form (1/2 M - DL) phi + diag(gamma) (SL M^-1 K)
-        # phi = M phi_inc.
-        if isinstance(Z_s, np.ndarray):
-            if Z_s.shape != (ndof,):
-                raise ValueError(
-                    f"Per-node Z_s must have shape ({ndof},), got {Z_s.shape}")
-            if omega <= 0:
-                gamma_vec = np.zeros(ndof, dtype=complex)
-            else:
-                gamma_vec = Z_s.astype(complex) / (1j * omega * MU_0)
-            gamma_for_log = complex(np.mean(gamma_vec))
-            # diag(gamma_vec) @ M = gamma_vec[:, None] * M (row-scaling)
-            robin_block = gamma_vec[:, None] * (self.SL @ self.M_inv @ self.K)
-            A_sys = (0.5 * self.M - self.DL + robin_block).astype(complex)
-        else:
-            gamma = Z_s / (1j * omega * MU_0) if omega > 0 and Z_s != 0 else 0
-            gamma_for_log = complex(gamma)
-            A_sys = (0.5 * self.M - self.DL
-                     + gamma * self.SL @ self.M_inv @ self.K).astype(complex)
+        # Uniform coefficient: SL acts on the source-side surface flux.
+        gamma = Z_s / (1j * omega * MU_0) if omega > 0 and Z_s != 0 else 0
+        gamma_for_log = complex(gamma)
+        A_sys = (0.5 * self.M - self.DL
+                 + gamma * self.SL @ self.M_inv @ self.K).astype(complex)
 
         # Solve with gauge (Lagrange multiplier for int phi dS = 0)
         phi_vec = self._solve_with_gauge(A_sys, rhs_vec.astype(complex))
@@ -543,14 +549,8 @@ class ScalarBIESIBCSolver:
             H_t_rms = math.sqrt((abs(Hsq_re) + abs(Hsq_im)) / abs(area))
 
         # Power density: P' = (1/2) Re(Z_s) |J_s|^2 = (1/2) Re(Z_s) H_t_rms^2
-        # (time-averaged). For per-node Z_s, the area-averaged Re(Z_s) is
-        # the right scalar to report; the caller already integrates the
-        # local power per panel via the panel-level R if needed.
-        if isinstance(Z_s, np.ndarray):
-            Z_s_avg_re = float(np.mean(Z_s.real))
-            P_density = 0.5 * Z_s_avg_re * H_t_rms ** 2
-        else:
-            P_density = 0.5 * Z_s.real * H_t_rms ** 2 if Z_s != 0 else 0
+        # Uniform impedance; variable-coefficient loss is not supported.
+        P_density = 0.5 * Z_s.real * H_t_rms ** 2
 
         # GridFunction output (None for the Lagrange-P2 path)
         if self._intree_lagrange_p2:
@@ -567,6 +567,8 @@ class ScalarBIESIBCSolver:
             'area': float(abs(area)),
             'gamma': gamma_for_log,
             't_solve': round(t_solve, 3),
+            'linear_residual_rel': self._last_linear_residual,
+            'linear_residual_limit': RELATIVE_LIMIT,
         }
 
     def solve_hacapk(self, phi_inc_cf, Z_s, omega, *,
@@ -596,6 +598,7 @@ class ScalarBIESIBCSolver:
 
         t0 = time.perf_counter()
         ndof = self.ndof
+        Z_s = _uniform_surface_impedance(Z_s, ndof)
 
         # RHS: <phi_inc, v>_S
         if isinstance(phi_inc_cf, np.ndarray):
@@ -611,26 +614,9 @@ class ScalarBIESIBCSolver:
             lf.Assemble()
             rhs_vec = lf.vec.FV().NumPy().copy()
 
-        # Accept scalar OR per-node ndarray Z_s.  The MatVec below
-        # uses element-wise multiplication of the SL block by
-        # ``gr_vec`` / ``gi_vec`` (length-ndof), so the scalar case
-        # is handled by broadcasting a full-length array with the
-        # same value at every DOF -- no separate code path.
-        if isinstance(Z_s, np.ndarray):
-            if Z_s.shape != (ndof,):
-                raise ValueError(
-                    f"Per-node Z_s must have shape ({ndof},), "
-                    f"got {Z_s.shape}")
-            if omega <= 0:
-                gamma_vec = np.zeros(ndof, dtype=complex)
-            else:
-                gamma_vec = Z_s.astype(complex) / (1j * omega * MU_0)
-            gamma_for_log = complex(np.mean(gamma_vec))
-        else:
-            gamma_scalar = (Z_s / (1j * omega * MU_0)
-                             if (omega > 0 and Z_s != 0) else 0 + 0j)
-            gamma_vec = np.full(ndof, gamma_scalar, dtype=complex)
-            gamma_for_log = complex(gamma_scalar)
+        gamma_scalar = Z_s / (1j * omega * MU_0) if omega > 0 and Z_s != 0 else 0j
+        gamma_vec = np.full(ndof, gamma_scalar, dtype=complex)
+        gamma_for_log = complex(gamma_scalar)
         gr_vec = np.ascontiguousarray(gamma_vec.real)
         gi_vec = np.ascontiguousarray(gamma_vec.imag)
 
@@ -647,8 +633,7 @@ class ScalarBIESIBCSolver:
         def matvec_complex(x_complex):
             """y = A_sys @ x where A_sys = (1/2)M - DL + diag(gamma)*SL*M^-1*K.
 
-            Per-node Z_s is implemented by element-wise scaling of the
-            SL block's output rows by gr_vec/gi_vec; scalar Z_s reduces
+            Z_s is uniform; constant gr_vec/gi_vec scaling reduces
             to the same path with gamma_vec broadcast to a constant.
             """
             x_re = np.ascontiguousarray(x_complex.real)
@@ -690,9 +675,7 @@ class ScalarBIESIBCSolver:
         rhs_aug[:ndof] = rhs_vec
         sol_aug, info = gmres(A_aug, rhs_aug, rtol=tol,
                                 atol=0.0, maxiter=maxiter, restart=restart)
-        if info != 0:
-            print(f"  WARN: gmres did not converge cleanly (info={info})",
-                  flush=True)
+        self._last_linear_residual = _check_bie_solution(A_aug, sol_aug, rhs_aug, info=info)
         phi_vec = sol_aug[:ndof]
         t_solve = time.perf_counter() - t0
 
@@ -715,13 +698,7 @@ class ScalarBIESIBCSolver:
             H_t_rms = math.sqrt((abs(Hsq_re) + abs(Hsq_im)) / abs(area))
             gf_phi = GridFunction(self.fes)
             gf_phi.vec.FV().NumPy()[:] = phi_vec.real
-        # Per-node Z_s: report the area-averaged Re(Z_s) for the scalar
-        # power-density quantity, matching the dense path's convention.
-        if isinstance(Z_s, np.ndarray):
-            Z_s_avg_re = float(np.mean(Z_s.real))
-            P_density = 0.5 * Z_s_avg_re * H_t_rms ** 2
-        else:
-            P_density = 0.5 * Z_s.real * H_t_rms ** 2 if Z_s != 0 else 0.0
+        P_density = 0.5 * Z_s.real * H_t_rms ** 2
         return {
             'phi': gf_phi,
             'phi_vec': phi_vec,
@@ -730,6 +707,8 @@ class ScalarBIESIBCSolver:
             'area': float(abs(area)),
             'gamma': complex(gamma_for_log),
             't_solve': round(t_solve, 3),
+            'linear_residual_rel': self._last_linear_residual,
+            'linear_residual_limit': RELATIVE_LIMIT,
         }
 
     def _solve_with_gauge(self, A_mat, rhs):
@@ -741,7 +720,9 @@ class ScalarBIESIBCSolver:
         A_aug[n, :n] = self._c_gauge
         rhs_aug = np.zeros(n + 1, dtype=complex)
         rhs_aug[:n] = rhs
-        return scipy_solve(A_aug, rhs_aug)[:n]
+        solution = scipy_solve(A_aug, rhs_aug)
+        self._last_linear_residual = _check_bie_solution(A_aug, solution, rhs_aug)
+        return solution[:n]
 
     def solve_iterative(self, phi_inc_cf, Z_s, omega, *,
                          tol=1e-8, maxiter=200, restart=50):
@@ -767,6 +748,7 @@ class ScalarBIESIBCSolver:
 
         t0 = time.perf_counter()
         ndof = self.ndof
+        Z_s = _uniform_surface_impedance(Z_s, ndof)
 
         # RHS: <phi_inc, v>_S
         if isinstance(phi_inc_cf, np.ndarray):
@@ -777,13 +759,6 @@ class ScalarBIESIBCSolver:
             lf += phi_inc_cf * v_h1.Trace() * ds
             lf.Assemble()
             rhs_vec = lf.vec.FV().NumPy().copy()
-
-        # Per-node Z_s NOT supported in iterative path yet (the dense
-        # solve has its own row-scaling logic).
-        if isinstance(Z_s, np.ndarray):
-            raise NotImplementedError(
-                "solve_iterative does not support per-node Z_s yet -- "
-                "use solve() with assemble_dense=True for that case.")
 
         gamma = (Z_s / (1j * omega * MU_0)
                  if (omega > 0 and Z_s != 0) else complex(0))
@@ -844,8 +819,7 @@ class ScalarBIESIBCSolver:
 
         t_solve = time.perf_counter() - t0
 
-        if info > 0:
-            print(f"[bem_sibc] WARN: GMRES did not converge in {info} iters")
+        self._last_linear_residual = _check_bie_solution(A_op, sol_aug, rhs_aug, info=info)
 
         # Extract H_t_rms / P_density (same as solve())
         gf = GridFunction(self.fes)
@@ -870,6 +844,8 @@ class ScalarBIESIBCSolver:
             'area': float(abs(area)),
             'gamma': complex(gamma),
             't_solve': round(t_solve, 3),
+            'linear_residual_rel': self._last_linear_residual,
+            'linear_residual_limit': RELATIVE_LIMIT,
             'gmres_info': int(info),
         }
 
