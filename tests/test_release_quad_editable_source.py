@@ -63,6 +63,49 @@ def test_release_head_uses_version_tag_commit(monkeypatch):
     assert calls == [(('rev-list', '-n', '1', 'v5.1.0'), {'check': False})]
 
 
+def test_phase8_refuses_editable_targets_from_100_before_install(monkeypatch):
+    from argparse import Namespace
+
+    monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: 0)
+    monkeypatch.setattr(release_quad.platform, "node", lambda: "INTEL11")
+    monkeypatch.setattr(
+        release_quad, "_deploy_lab",
+        lambda: pytest.fail("LAB install must not run from 100号機"),
+    )
+    monkeypatch.setattr(
+        release_quad, "_deploy_100",
+        lambda: pytest.fail("editable deployment must use the LAB controller"),
+    )
+
+    assert release_quad.cmd_phase8(Namespace(target="lab,100")) == 2
+
+
+def test_phase8_routes_editable_targets_from_lab(monkeypatch):
+    from argparse import Namespace
+
+    calls = []
+    monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: 0)
+    monkeypatch.setattr(release_quad.platform, "node", lambda: "LAB")
+    monkeypatch.setattr(release_quad, "_deploy_lab", lambda: calls.append("lab") or 0)
+    monkeypatch.setattr(release_quad, "_deploy_100", lambda: calls.append("100") or 0)
+
+    assert release_quad.cmd_phase8(Namespace(target="lab,100")) == 0
+    assert calls == ["lab", "100"]
+
+
+def test_phase8_all_refuses_non_lab_controller(monkeypatch):
+    from argparse import Namespace
+
+    monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: 0)
+    monkeypatch.setattr(release_quad.platform, "node", lambda: "INTEL11")
+    monkeypatch.setattr(
+        release_quad, "_deploy_lab",
+        lambda: pytest.fail("all must fail before its first install"),
+    )
+
+    assert release_quad.cmd_phase8(Namespace(target="all")) == 2
+
+
 def test_default_editable_roots_are_fixed_release_checkouts(monkeypatch):
     monkeypatch.delenv(release_quad.EDITABLE_REPO_LAB_ENV, raising=False)
     monkeypatch.delenv(release_quad.EDITABLE_REPO_100_ENV, raising=False)
