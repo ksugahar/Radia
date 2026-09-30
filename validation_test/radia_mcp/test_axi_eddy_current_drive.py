@@ -5,7 +5,7 @@ The imposed current is the amperes crossing a meridional conductor section,
 integral ``2*pi*integral J_phi*r dr dz``, whose dimensions are A*m.
 """
 import math
-import os
+from pathlib import Path
 import sys
 
 import pytest
@@ -21,7 +21,7 @@ from netgen.meshing import (
     Pnt,
 )
 
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = str(Path(__file__).resolve().parents[2] / "packages/radia-mcp/src")
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
@@ -101,3 +101,11 @@ def test_axi_current_drive_rejects_zero_frequency_scaled_form():
             order=1,
             dirichlet="bottom|outer|top|inner",
         )
+
+
+def test_axi_current_drive_rejects_conductor_touching_axis():
+    mesh = _annular_section_strip(0.0, 0.02, 0.006)
+    with pytest.raises(ValueError, match="touching r=0"):
+        solve_axi_eddy(mesh, ng.CoefficientFunction(1.0),
+                       ng.CoefficientFunction(1.0), 1000.,
+                       driven_region="conductor", total_current=1., order=2)
