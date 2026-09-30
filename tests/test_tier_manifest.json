@@ -12,6 +12,7 @@
     "src/radia/kelvin_solver.py": ["validation_test/open_boundary/test_kelvin_vector_direct_gate.py"],
     "src/radia/ih_heat_transient.py": ["tests/test_ih_energy_audit_contract.py"],
     "src/radia/ih_heat_boundaries.py": ["tests/test_ih_heat_boundaries.py"],
+    "src/radia/vim/_envelope_stop.py": ["tests/test_envelope_stop_core.py"],
     "packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py": [
       "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
       "validation_test/radia_mcp/test_eddy_driven_region.py"
@@ -232,6 +233,7 @@
         "tests/test_ngsbem_eddy_direct.py",
         "tests/test_eddy_aphi_contract.py",
         "tests/test_hdiv_energy_material_consistency.py",
+        "tests/test_envelope_stop_core.py",
         "tests/test_axisym_measure_contract.py",
         "tests/test_sibc_corner_patch.py",
         "tests/test_boundary_material_adjacency.py",
