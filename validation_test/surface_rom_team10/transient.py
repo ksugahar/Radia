@@ -15,6 +15,7 @@ from pathlib import Path
 import numpy as np
 import ngsolve
 from ngsolve import *
+from radia._residual_gate import RELATIVE_LIMIT, check_true_residual
 from team13_model import *
 
 ROOT = Path(__file__).resolve().parent
@@ -102,13 +103,25 @@ def run_fom(model, wave, steps=60, tol=1e-10, max_newton=40):
     fn = waveform(wave); m = model; dt = T_END / steps; assert abs(dt - m.dt) < 1e-15
     gfu = m.gfu; gfu.vec[:] = 0; m.An.vec[:] = 0
     r = gfu.vec.CreateVector(); du = gfu.vec.CreateVector(); trial = gfu.vec.CreateVector()
+    defect = gfu.vec.CreateVector()
+    free = np.asarray(list(m.fes.FreeDofs()), dtype=bool)
     snaps = [gfu.vec.FV().NumPy().copy()]; hist = []; t0 = time.time()
     for k in range(1, steps + 1):
         i = fn(k * dt); m.An.vec.data = gfu.vec
+        step_linear_residual = 0.0
+        linear_reference_norm = 0.0
         for it in range(40):
             if it == max_newton: break                      # inexact training snapshot
             m.a.AssembleLinearization(gfu.vec); m.residual(gfu.vec, i, r)
+            if it == 0:
+                linear_reference_norm = float(np.linalg.norm(r.FV().NumPy()[free]))
             du.data = m.a.mat.Inverse(m.fes.FreeDofs(), inverse='sparsecholesky') * r
+            defect.data = m.a.mat * du - r
+            relative = check_true_residual(
+                m.a.mat, defect.FV().NumPy(), du.FV().NumPy(),
+                r.FV().NumPy(), free, f'FOM step {k}, Newton {it}',
+                reference_norm=linear_reference_norm)
+            step_linear_residual = max(step_linear_residual, relative)
             dec = abs(InnerProduct(du, r))
             if it == 0: dec0 = max(dec, 1e-300)
             if dec <= tol * dec0 or dec < 1e-24: break
@@ -124,7 +137,10 @@ def run_fom(model, wave, steps=60, tol=1e-10, max_newton=40):
         pos = team10_sections(B, m.mesh) if CASE == 'team10' else average_B_positions(B, m.mesh, n=(3, 6))
         Jp = -SIGMA_PLACEHOLDER * (gfu - m.An) / dt
         jc = Jp(m.mesh(0.0, 0.0, .03))   # centre plate probe
-        hist.append(dict(t=k * dt, current_AT=float(i), newton=it, B_pos=pos, J_probe=[float(c) for c in jc]))
+        hist.append(dict(t=k * dt, current_AT=float(i), newton=it, B_pos=pos,
+                         J_probe=[float(c) for c in jc],
+                         max_relative_linear_residual=step_linear_residual,
+                         linear_residual_limit=RELATIVE_LIMIT))
         if k % 10 == 0:
             b1 = pos['S1'] if isinstance(pos, dict) else pos[0]
             print(wave, k, steps, 'newton', it, 'B1', round(b1, 3), round(time.time() - t0, 1), flush=True)
@@ -145,7 +161,11 @@ if __name__ == '__main__':
                               + (f'_nw{max_newton}' if max_newton < 40 else '') + (f'_T{T_END*1000:g}ms' if abs(T_END - 0.12) > 1e-12 else '') + (f'_g{model.gauge:g}' if model.gauge != 1e-6 else '')); out.mkdir(parents=True, exist_ok=True)
     np.save(out / f'{wave}.npy', snaps)
     res = dict(case=f'{CASE}_transient_{wave}', team_case=CASE, sigma=SIGMA_PLACEHOLDER, half=half, quarter=QUARTER, gauge=model.gauge, max_newton=max_newton,
-               linear_solves=int(sum(min(h['newton'] + 1, max_newton) for h in hist)), maxh_steel=maxh, order=order, steps=steps, dt=T_END / steps,
+               linear_solves=int(sum(min(h['newton'] + 1, max_newton) for h in hist)),
+               linear_true_residual_limit=RELATIVE_LIMIT,
+               max_relative_linear_residual=max(
+                   (h['max_relative_linear_residual'] for h in hist), default=0.0),
+               maxh_steel=maxh, order=order, steps=steps, dt=T_END / steps,
                sigma_placeholder=SIGMA_PLACEHOLDER, ndof=model.fes.ndof, n_gamma=len(model.idx_gamma),
                n_interior=len(model.idx_int), n_air=len(model.idx_air), solve_s=sec, history=hist,
                host=platform.node(), ngsolve=ngsolve.__version__,

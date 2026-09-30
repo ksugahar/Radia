@@ -1,6 +1,9 @@
 {
   "schema": "radia.test-tier-manifest.v1",
   "impact_rules": {
+    "validation_test/surface_rom_team10/transient.py": [
+      "tests/test_surface_rom_linear_gate_contract.py"
+    ],
     "validation_test/team21/": ["tests/test_team21a_geometry_source.py"],
     "src/radia/kelvin_solver.py": ["validation_test/open_boundary/test_kelvin_vector_direct_gate.py"],
     "src/radia/ih_heat_transient.py": ["tests/test_ih_energy_audit_contract.py"],
