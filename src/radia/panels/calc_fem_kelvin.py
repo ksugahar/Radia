@@ -67,10 +67,11 @@ def _edge_only_wirebasket(fes, mesh):
     """Keep only lowest-order edge DOFs in the BDDC wirebasket.
 
     The AMS coarse solver is built for the lowest-order edge space, but
-    NGSolve marks the face DOFs of a few elements WIREBASKET (on the IH tube
-    mesh: all four faces of one air tetrahedron at the coil ring surface).
-    Those few DOFs raise the COCR iterations by up to 4x; they are returned
-    to INTERFACE.  Returns how many DOFs were changed.
+    HCurl puts the face DOFs of badly shaped faces into the wirebasket (on
+    the IH tube mesh: all four faces of one air tetrahedron at the coil ring
+    surface, 8 of 164222 DOFs), where AMS only smooths them.  They raised the
+    COCR iterations by up to 4x; they are returned to INTERFACE, as
+    src/ext/sparsesolv/README.md recommends.  Returns how many DOFs changed.
     """
     from ngsolve import COUPLING_TYPE
     changed = 0

@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import calc_fem_kelvin as solver
 import fem_sibc_geometry as geometry
 from radia.em_material import EMMaterial
+from radia._residual_gate import RELATIVE_LIMIT
 
 
 @pytest.mark.parametrize("order", [1, 2, 3])
@@ -39,15 +40,18 @@ def test_ams_matches_direct_sibc_loss_and_inductance(tmp_path, order):
     assert "error" not in iterative, iterative
     assert iterative["linear_solver"] == ("ams" if order == 1 else "bddc")
     for result in (direct, iterative):
-        assert result["linear_true_residual_limit"] == 1e-7
-        assert result["linear_true_relative_residual"] <= 1e-7
+        assert result["linear_true_residual_limit"] == RELATIVE_LIMIT
+        assert result["linear_true_relative_residual"] <= RELATIVE_LIMIT
     assert iterative["P_total"] == pytest.approx(direct["P_total"], rel=1e-6)
     assert iterative["L"] == pytest.approx(direct["L"], rel=1e-6)
+    if order > 1:
+        assert iterative["bddc_ams_coarse_cycles"] == solver.BDDC_AMS_COARSE_CYCLES
+        assert iterative["bddc_wirebasket_dofs_returned"] >= 0
 
     if order == 1:
         scattered = solver.solve_fem(**arguments, solver="sparsecholesky", formulation="scattered")
         assert "error" not in scattered, scattered
-        assert scattered["linear_true_relative_residual"] <= 1e-7
+        assert scattered["linear_true_relative_residual"] <= RELATIVE_LIMIT
         assert scattered["P_total"] == pytest.approx(direct["P_total"], rel=1e-6)
 
 @pytest.mark.parametrize("order", [1, 2, 3])
@@ -83,7 +87,7 @@ def test_periodic_kelvin_auto_uses_the_supported_direct_route(tmp_path, order):
     assert result['kelvin_gradient_gauge_dofs'] > 0
     assert result['linear_solver_requested'] == 'auto'
     assert result['linear_solver'] == 'sparsecholesky'
-    assert result['linear_true_relative_residual'] <= 1e-7
+    assert result['linear_true_relative_residual'] <= RELATIVE_LIMIT
     if order == 1:
         # A closed current must do no work on a discrete scalar gradient.
         # A rule spanning element faces violates this even though curl=0.
