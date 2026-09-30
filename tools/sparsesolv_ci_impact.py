@@ -10,6 +10,9 @@ import tomllib
 
 # Checked against both workflow trigger lists by the lightweight contract suite.
 NATIVE_PATHS = (
+    'src/radia/_residual_gate.py',
+    'validation_test/open_boundary/test_kelvin_vector_direct_gate.py',
+
     'packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py',
     'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py',
     'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py',
