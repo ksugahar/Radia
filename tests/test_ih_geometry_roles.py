@@ -15,6 +15,7 @@ from radia.ih_design import (
     HEAT_SRC_SPATIAL,
     IHDesignSpec,
     METHOD_BEMA_BEM,
+    METHOD_BEMA_BEM_STRONG,
     METHOD_PEEC_BEM,
     METHOD_PEEC_FEM_KELVIN,
     METHOD_FEM_FULL,
@@ -46,6 +47,30 @@ def test_hcurl_design_honours_direct_choice_and_rejects_unknown_solver():
     spec.solver = "misspelled"
     with pytest.raises(ValueError, match="Unknown FEM solver"):
         spec._fem_solver()
+
+
+def test_bem_design_preserves_default_and_rejects_unknown_solver():
+    default = IHDesignSpec()._bem_size()
+    assert default["coil_bem_solver"] == "dense-lu"
+    with pytest.raises(ValueError, match="Unknown BEM solver"):
+        IHDesignSpec(solver="misspelled")._bem_size()
+
+
+def test_strong_bem_rejects_nonlinear_esim_instead_of_substituting_sibc():
+    spec = IHDesignSpec(
+        method=METHOD_BEMA_BEM_STRONG,
+        coil_vol="coil.vol",
+        wp_vol="workpiece.vol",
+        impedance_model="Nonlinear ESIM",
+        bh_file="steel.bh",
+    )
+    with pytest.raises(ValueError, match="strong coupling.*only Linear SIBC"):
+        spec.build_command(python="python", panels_dir="panels")
+
+
+def test_unknown_impedance_model_is_not_treated_as_linear_sibc():
+    with pytest.raises(ValueError, match="Unknown impedance model"):
+        IHDesignSpec(impedance_model="typo").impedance_model_cli()
 
 
 def test_swapped_wp_vol_and_peec_step_are_repaired():
@@ -174,6 +199,28 @@ def test_thermal_fes_order_uses_method_specific_default(method, expected_order):
         python="python", panels_dir="panels"
     )
     assert command[command.index("--fes-order") + 1] == expected_order
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("thermal_material", "Unobtainium", "Unknown thermal material"),
+        ("time_scheme", "Forward Euler", "Unknown time scheme"),
+    ],
+)
+def test_thermal_design_rejects_unknown_material_and_time_scheme(
+    field, value, message,
+):
+    kwargs = {field: value}
+    spec = IHDesignSpec(
+        method=METHOD_THERMAL_3D_STATIC,
+        wp_vol="workpiece.vol",
+        heat_flux_boundaries="heated",
+        convection_boundaries="exposed",
+        **kwargs,
+    )
+    with pytest.raises(ValueError, match=message):
+        spec.build_command(python="python", panels_dir="panels")
 
 
 @pytest.mark.parametrize("method", [METHOD_THERMAL_AXISYM, METHOD_THERMAL_3D_STATIC])
