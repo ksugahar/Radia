@@ -21,7 +21,7 @@ from ngsolve import (HCurl, H1, Periodic, NumberSpace, FESpace, BilinearForm,
                      curl, grad, dx, Integrate, Conj, Variation, Preconditioner,
                      x, y, sqrt, ds, BND)
 
-from ._direct import solve_nonsymmetric, solve_symmetric
+from ._direct import solve_symmetric
 
 MU0 = 4.0e-7 * math.pi
 NU0 = 1.0 / MU0
@@ -4248,11 +4248,13 @@ def solve_axi_eddy(mesh, nu, sigma, omega, driven_region=None, total_current=Non
     Drive modes:
     * ``Jr`` : imposed phi-direction current density [A/m^2] CF.
     * ``driven_region`` + ``total_current`` : CURRENT-DRIVEN conductor.
-      A NumberSpace scalar Vc (= r*E_phi, constant) is added; the constraint
-      int sigma*(-j*w*r*A + Vc)*dx = I/(2*pi) fixes the total 3D ring current
-      I = 2*pi * int J_phi * r dr dz.
+      A NumberSpace scalar Vc (= r*E_phi, constant) is added; ``total_current``
+      is the current through a meridional conductor cross-section,
+      I = int J_phi dr dz, fixed by
+      int sigma*(-j*w*A + Vc/r) dr dz = I.
     * ``applied_Vc`` : VOLTAGE-DRIVEN. Vc = r*E_phi is PRESCRIBED (a known
-      constant [V/turn/radian]); net current I = 2*pi*int sigma*(-j*w*r*A+Vc)*dx.
+      constant [V/turn/radian]); the cross-section current is
+      I = int sigma*(-j*w*A + Vc/r) dr dz.
 
     Returns compound gfu (A_phi, Vc) in current-driven mode, else H1Henrotte gfu.
     Flux density: B_z = grad(u)[0] + u/r, B_r = -grad(u)[1]
@@ -4267,24 +4269,32 @@ def solve_axi_eddy(mesh, nu, sigma, omega, driven_region=None, total_current=Non
     if driven_region is not None and total_current is not None:
         fes_h1 = H1Henrotte(mesh, order=order, complex=True, dirichlet=dirichlet)
         fes = fes_h1 * NumberSpace(mesh, complex=True)
+        if not omega > 0:
+            raise ValueError("current-driven axisymmetric A-V solve needs omega > 0: "
+                             "the potential is scaled by 1/(j omega)")
+        # Solve for W = Vc/(j*omega).  Since J_phi = sigma*(-j*omega*A +
+        # Vc/r), the physical cross-section-current constraint becomes
+        #   j*omega int sigma*(-A + W/r) dr dz = I.
+        # Its A coupling is therefore identical to the A-equation coupling,
+        # making the complex bilinear form symmetric.  Restore Vc afterwards.
         (Az, Vc), (dA, dV) = fes.TnT()
-        a = BilinearForm(fes)
+        a = BilinearForm(fes, symmetric=True)
         a += nu * (1.0 / r) * (r * grad(Az)[0] + Az) * (r * grad(dA)[0] + dA) * dx
         a += nu * r * grad(Az)[1] * grad(dA)[1] * dx
         a += 1j * omega * sigma * r * Az * dA * dx
-        # Vc = r*E_phi (constant); J_phi = sigma*(-jw A + Vc/r), so source is sigma*Vc*v*dx
-        a += -sigma * Vc * dA * dx
-        # current constraint: int sigma*(-jw*r*A + Vc)*dx = I/(2pi)
-        a += -1j * omega * sigma * r * Az * dV * dx
-        a += sigma * Vc * dV * dx
+        a += -1j * omega * sigma * Vc * dA * dx
+        a += -1j * omega * sigma * Az * dV * dx
+        a += 1j * omega * sigma * (1.0 / r) * Vc * dV * dx
         f = LinearForm(fes)
         if Jr is not None:
             f += Jr * r * dA * dx
         a.Assemble()
         f.Assemble()
-        f.vec.FV().NumPy()[fes.Range(1).start] += complex(total_current) / (2.0 * math.pi)
+        f.vec.FV().NumPy()[fes.Range(1).start] += complex(total_current)
         gfu = GridFunction(fes)
-        gfu.vec.data = solve_nonsymmetric(a.mat, fes.FreeDofs(), f.vec, "A-V net-current solve")
+        gfu.vec.data = solve_symmetric(a.mat, fes.FreeDofs(), f.vec,
+                                       "axisymmetric A-V net-current solve")
+        gfu.vec.FV().NumPy()[fes.Range(1).start] *= 1j * omega
         return gfu
 
     fes = H1Henrotte(mesh, order=order, complex=True, dirichlet=dirichlet)
