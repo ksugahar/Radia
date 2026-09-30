@@ -36,8 +36,6 @@ from typing import Callable
 
 import numpy as np
 
-from .ih_heat_boundaries import normalize_convection_map
-
 SIGMA_SB = 5.670374419e-8
 KELVIN = 273.15
 
@@ -121,6 +119,8 @@ class NonlinearHeatStepper:
         self.material = material
         self.bnd = boundaries
         self.convection_map_specified = boundaries.convection_map is not None
+        from .ih_heat_boundaries import normalize_convection_map
+
         self.convection_boundaries = normalize_convection_map(
             boundaries.convection_map)
         if self.convection_map_specified and boundaries.convection:
