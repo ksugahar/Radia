@@ -15,15 +15,15 @@ CASES = {
     "calc_heat.py": (["--max-halvings", "--allow-frozen-ht",
                       "--em-reference-temperature", "--power-tolerance",
                       "--em-heat-boundaries", "--rotor-states",
-                      "--angle-step-tolerance"],
+                      "--angle-step-tolerance", "--convection-map"],
                      ["--q-phi-average-n", "--surface-label"]),
     "calc_heat_axisym.py": (["--max-halvings", "--allow-frozen-ht",
-                             "--n-phi-samples", "--power-tolerance"],
+                             "--n-phi-samples", "--power-tolerance", "--convection-map"],
                             ["--q-phi-average-n"]),
     "calc_ih_axisym_coupled.py": (["--max-halvings", "--skin-resolution",
                                    "--newton-max-iter"], []),
     "calc_heat_with_em_table.py": (["--allow-frozen-ht",
-                                    "--allow-em-table-extrapolation"],
+                                    "--allow-em-table-extrapolation", "--convection-map"],
                                    ["--ht-order",
                                     "--allow-table-extrapolation"]),
 }
@@ -95,3 +95,18 @@ def test_unsupported_solver_fails_before_loading_a_mesh(script, function, kwargs
     exec(compile(ast.Module(body=[node], type_ignores=[]), str(path), "exec"), ns)
     with pytest.raises(ValueError):
         ns[function](**kwargs)
+
+
+@pytest.mark.parametrize("selector,expected", [
+    ("", "Unknown convection boundary labels"),
+    ("air_cooling", "mutually exclusive"),
+])
+def test_convection_map_rejects_unknown_label_or_uniform_mix(tmp_path, selector, expected):
+    from types import SimpleNamespace
+    from radia.panels.calc_heat import _resolve_convection_roles
+
+    cooling = tmp_path / "cooling.json"
+    cooling.write_text('{"unknown_wall":{"h_W_m2K":10,"ambient_C":20}}')
+    mesh_labels = SimpleNamespace(GetBoundaries=lambda: ("air_cooling", "heated"))
+    with pytest.raises(ValueError, match=expected):
+        _resolve_convection_roles(mesh_labels, str(cooling), selector, 10.0, 20.0)

@@ -370,3 +370,22 @@ def test_a_non_numeric_temperature_limit_fails_early():
             convection_boundaries="exposed",
             temperature_limit="hot",
         ).build_command(python="python", panels_dir="panels")
+
+
+@pytest.mark.parametrize("method", [METHOD_THERMAL_AXISYM, METHOD_THERMAL_3D_STATIC])
+def test_thermal_convection_map_path_is_preserved_in_command(method):
+    cooling_path = "case with spaces/cooling.json"
+    spec = IHDesignSpec(method=method, wp_vol="workpiece.vol",
+                        heat_flux_boundaries="heated", convection_map=cooling_path)
+    command = spec.build_command(python="python", panels_dir="panels")
+    assert command[command.index("--convection-map") + 1] == cooling_path
+    assert "--convection-boundaries" not in command
+    assert "Convection boundary selector" not in spec.missing_required_inputs()
+
+
+def test_thermal_convection_map_rejects_uniform_selector_mix():
+    spec = IHDesignSpec(method=METHOD_THERMAL_AXISYM, wp_vol="workpiece.vol",
+                        heat_flux_boundaries="heated", convection_map="cooling.json",
+                        convection_boundaries="air_cooling")
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        spec.build_command(python="python", panels_dir="panels")

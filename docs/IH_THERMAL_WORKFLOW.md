@@ -154,3 +154,29 @@ Numerical evidence and benchmarks belong under `validation_test/` with JSON
 results. Public demonstrations belong in executed `docs/**/*.ipynb` notebooks
 with saved, parameterized WebGUI scenes. Neither replaces the Simulink
 production interface.
+
+## Label-specific convection in the Python thermal chain
+
+The `calc_heat.py`, `calc_heat_axisym.py`, and `calc_heat_with_em_table.py`
+command lines accept `--convection-map cooling.json`. The JSON maps exact
+mesh boundary labels to a heat-transfer coefficient and ambient temperature:
+
+```json
+{
+  "air_cooling": {"h_W_m2K": 10, "ambient_C": 20},
+  "water_cooling": {"h_W_m2K": 500, "ambient_C": 25}
+}
+```
+
+Set `IHDesignSpec(convection_map="cooling.json", ...)` to pass the file path
+through the Python design command builder. Use the boundary labels stored in
+the thermal mesh; unknown labels and ambiguous mixtures with the old uniform
+convection selector are errors. In map mode, `h_conv` is ignored; `t_ext`
+remains available independently for radiation. Each listed face receives its own Robin term
+`h * (T - T_ambient)`. Unlisted faces receive no convection term, and `h=0`
+is adiabatic **with respect to convection only**. Heat-flux and radiation
+selections remain independent and can still act on those faces. This feature
+does not model thermal contact resistance.
+
+This map is a Python thermal-chain input. The native Simulink scalar cooling
+interface has not been extended to accept this map.
