@@ -96,6 +96,21 @@ def test_host_and_focused_failure():
         gate.verify_host(a, f, x.replace(b'failures="0"', b'failures="1"'), identity, "lab")
 
 
+def test_strengthened_focused_suite_and_reject_unknown_case():
+    a, f, x, identity = evidence()
+    root = ET.fromstring(x)
+    suite = root if root.tag == "testsuite" else root.find("testsuite")
+    extra = ET.SubElement(suite, "testcase")
+    extra.set("name", "test_indefinite_operator_with_positive_jacobi_diagonal_raises_in_batched_pcg")
+    extra.set("time", "0.1")
+    suite.set("tests", str(int(suite.get("tests")) + 1))
+    strengthened = ET.tostring(root)
+    gate.verify_host(a, f, strengthened, identity, "lab")
+    extra.set("name", "test_unreviewed_extra_case")
+    with pytest.raises(ValueError, match="Missing or duplicate focused case"):
+        gate.verify_host(a, f, ET.tostring(root), identity, "lab")
+
+
 def test_100_role_accepts_actual_intel11_hostname_only_for_that_target():
     a, f, xml, identity = evidence()
     root = ET.fromstring(xml)
