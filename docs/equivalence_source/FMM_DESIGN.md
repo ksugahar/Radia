@@ -3,6 +3,13 @@
 **Status**: design only.  Implementation deferred until a real
 use case demands `N_face × N_obs > 1e9` direct pairs.
 
+**2607 migration note:** the API inventory and proposed Maxwell potential
+calls below describe the 6.2.2603 audit. Those Maxwell SL/DL potential classes
+are no longer available in 6.2.2607. Current Radia EFIE assembly uses
+variational `HelmholtzSL` vector and surface-divergence terms. That assembly
+does not validate the deferred point-evaluation/FMM design described here;
+its evaluation API and low-frequency accuracy still require validation.
+
 **Key architectural commitment**: any acceleration of the
 equivalence-source one-shot evaluator goes through **NGSolve.bem**
 existing Multilevel Expansion (FMM-equivalent) machinery, NOT a
