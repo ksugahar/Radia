@@ -27,7 +27,7 @@ EM_METHODS = (
     METHOD_CLEBSCH,
 )
 
-FEM_SOLVERS = ("auto", "sparsecholesky", "ams", "bddc_ams", "bddc", "iccg")
+FEM_SOLVERS = ("auto", "sparsecholesky", "bddc_ams", "bddc", "iccg")
 HDIV_SOLVERS = (("LU", 0), ("BiCGSTAB", 1), ("HACApK", 2))
 MATERIALS = ("steel", "copper", "aluminum", "elf_steel", "linear", "hysteresis")
 
