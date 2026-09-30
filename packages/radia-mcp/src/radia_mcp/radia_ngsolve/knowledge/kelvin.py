@@ -198,7 +198,7 @@ magnetostatic/electromagnetic problems without artificial truncation.
    - **H1 (scalar potential)**: Essential for uniqueness: `dirichlet_bbnd="GND"`
    - **HCurl (vector potential)**: Optional but recommended. Gauge
      regularization (`reg * nu0 * u * v * dx`) provides uniqueness without GND.
-     GND improves convergence for iterative solvers.
+     A point GND constrains no HCurl degree of freedom.
    - Cubit: create vertex at Kelvin sphere center, assign as nodeset "GND"
 
 ## Cubit Workflow: Offset Spheres (3D with .vol export)
@@ -626,9 +626,7 @@ inner_air.mat("air_inner")
 outer_sphere = Sphere(Pnt(offset_x, 0, 0), kelvin_radius)
 outer_sphere.mat("air_outer")
 
-# GND at center of exterior
-gnd = Vertex(Pnt(offset_x, 0, 0))
-gnd.name = "GND"
+# Scalar GND is added to a connected vertex after meshing.
 
 # Name Kelvin boundary faces BEFORE boolean operations
 for face in inner_sphere.faces:
@@ -639,7 +637,7 @@ for face in outer_sphere.faces:
 inner_air = inner_sphere - mag_sphere
 inner_air.mat("air_inner")
 
-shape = Glue([inner_air, mag_sphere, outer_sphere, gnd])
+shape = Glue([inner_air, mag_sphere, outer_sphere])
 
 # Identify by name (see topic "identify" for details)
 int_face = next(f for s in shape.solids for f in s.faces if f.name == "kelvin_int")
@@ -647,9 +645,11 @@ ext_face = next(f for s in shape.solids for f in s.faces if f.name == "kelvin_ex
 int_face.Identify(ext_face, "periodic", IdentificationType.PERIODIC)
 geo = OCCGeometry(shape)
 mesh = Mesh(geo.GenerateMesh(maxh=0.03))
+from radia.kelvin_geometry import ground_kelvin_scalar_mesh
+mesh = ground_kelvin_scalar_mesh(mesh, (offset_x, 0, 0), "air_outer")
 
 # Periodic FE space
-fes_before = H1(mesh, order=3, dirichlet="GND")
+fes_before = H1(mesh, order=3, dirichlet_bbbnd="GND")
 fes = Periodic(fes_before)
 u, v = fes.TnT()
 
@@ -828,7 +828,8 @@ the bilinear form (curl-curl stiffness with nu' modulation).
 
 ## GND Vertex in Cubit Workflow
 
-For HCurl, GND is optional but improves iterative solver convergence:
+For scalar H1, a connected GND node fixes the additive gauge. HCurl
+edge unknowns are not constrained by this point:
 
 ```
 # In Cubit journal (after creating exterior sphere):
@@ -977,7 +978,7 @@ inner_air = inner_sphere - mag_sphere  # Name survives
 for face in outer_sphere.faces:
     face.name = "kelvin_ext"
 
-shape = Glue([inner_air, mag_sphere, outer_sphere, gnd])
+shape = Glue([inner_air, mag_sphere, outer_sphere])
 
 kelvin_int_face = None
 kelvin_ext_face = None
@@ -1584,8 +1585,8 @@ The vertex at the exterior sphere center maps to physical infinity.
 | Formulation | GND requirement |
 |-------------|----------------|
 | **H1 (phi, Omega)** | **Essential** -- uniqueness of scalar potential |
-| **HCurl (A)** | Optional -- gauge `reg * nu * u * v * dx` suffices |
-| **HCurl + iterative solver** | Recommended -- improves convergence |
+| **HCurl (A)** | Point GND constrains no edge DOF; retain the formulation gauge |
+| **HCurl + iterative solver** | Point GND has no effect; use the formulation gauge/preconditioner |
 | **HCurl + SparseCholesky** | Preserve the formulation gauge; direct factorization does not remove a nullspace |
 
 **Implementation**:
@@ -1595,17 +1596,23 @@ create vertex X {kelvin_offset_x} Y 0 Z 0
 nodeset 100 add vertex {last_vertex_id}
 nodeset 100 name "GND"
 
-# In calc_fem_kelvin.py:
-if "GND" in boundaries:
-    dirichlet_bnd = "GND"  # A(infinity) = 0
+# A nodeset must contain a connected mesh node. For HCurl, use the
+# formulation gauge: a point nodeset does not constrain edge unknowns.
 ```
 
-**For OCC workflow**:
+**For 3-D OCC scalar workflow**: an isolated `Vertex` in `Glue` is not a
+volume-connected constraint. The explicit helper below selects an existing
+Kelvin vertex nearest the center and fixes only the additive scalar gauge.
+It does not impose a physical zero value exactly at infinity and is not for
+transformed potentials that require such a value. Missing/disconnected labels
+are errors in the scalar solver.
+
 ```python
-gnd = Vertex(Pnt(kelvin_offset, 0, 0))
-gnd.name = "GND"
-# Include in Glue
-shape = Glue([air, torus, ext_sphere, gnd])
+shape = Glue([air, torus, ext_sphere])
+mesh = Mesh(OCCGeometry(shape).GenerateMesh(maxh=maxh))
+from radia.kelvin_geometry import ground_kelvin_scalar_mesh
+mesh = ground_kelvin_scalar_mesh(mesh, (kelvin_offset, 0, 0))
+fes = Periodic(H1(mesh, order=order, dirichlet_bbbnd="GND"))
 ```
 
 ### 8. Kelvin Domain: Tet Only (No Hex)
