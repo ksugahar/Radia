@@ -10,7 +10,7 @@ def test_ih_solver_priority_distinguishes_hcurl_compound_and_thermal_spaces():
     assert "Scalar thermal H1" in text
     assert "not a speed advantage" in text
     normalized = " ".join(text.split())
-    assert "true relative residual gate of 1e-7" in normalized
+    assert "true relative residual gate of 1e-6" in normalized
     assert "ICCG is refused unless it converges" in normalized
     assert "`auto` selects `sparsecholesky` there" in normalized
     assert "original rows removed" in normalized
