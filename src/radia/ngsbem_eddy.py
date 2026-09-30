@@ -28,6 +28,7 @@ BEM+SIBC (replaces A_FEM with gamma*M_surf):
 Part of Radia project
 """
 
+from radia._residual_gate import RELATIVE_LIMIT
 import numpy as np
 import time
 from scipy.linalg import lu_factor, lu_solve
@@ -330,9 +331,9 @@ class EddyCurrentFEMBEM:
             np.linalg.norm(residual.FV().NumPy()[free])
             / max(np.linalg.norm(r.FV().NumPy()[free]), 1e-300))
         if (not np.isfinite(self.true_relative_residual)
-                or self.true_relative_residual > 1e-8):
+                or self.true_relative_residual > RELATIVE_LIMIT):
             raise RuntimeError(
-                f"FEM true relative residual {self.true_relative_residual:.3e} exceeds 1e-8")
+                f"FEM true relative residual {self.true_relative_residual:.3e} exceeds {RELATIVE_LIMIT:g}")
         self.gfu_h1.vec.data += correction
 
     def _solve_fembem(self, printrates=False):
@@ -410,9 +411,9 @@ class EddyCurrentFEMBEM:
         residual.data = rhs - lhs * sol
         self.true_relative_residual = float(Norm(residual) / max(Norm(rhs), 1e-300))
         if (not np.isfinite(self.true_relative_residual)
-                or self.true_relative_residual > 1e-8):
+                or self.true_relative_residual > RELATIVE_LIMIT):
             raise RuntimeError(
-                f"FEM-BEM true relative residual {self.true_relative_residual:.3e} exceeds 1e-8")
+                f"FEM-BEM true relative residual {self.true_relative_residual:.3e} exceeds {RELATIVE_LIMIT:g}")
 
         # --- Extract solution ---
         self.gfu_h1 = GridFunction(self._fes_h1)

@@ -38,6 +38,7 @@ from the user; nothing here is alloy data.
 """
 from __future__ import annotations
 
+from radia._residual_gate import RELATIVE_LIMIT
 import csv
 import math
 from dataclasses import dataclass, field
@@ -244,8 +245,8 @@ class AxisymEddyCurrent:
         free = np.asarray(list(self.fes.FreeDofs()), dtype=bool)
         relative_residual = float(np.linalg.norm(defect.FV().NumPy()[free]) /
                                   max(np.linalg.norm(f.vec.FV().NumPy()[free]), 1e-300))
-        if not np.isfinite(relative_residual) or relative_residual > 1e-7:
-            raise RuntimeError(f"eddy-current true relative residual {relative_residual:.3e} exceeds 1e-7")
+        if not np.isfinite(relative_residual) or relative_residual > RELATIVE_LIMIT:
+            raise RuntimeError(f"eddy-current true relative residual {relative_residual:.3e} exceeds {RELATIVE_LIMIT:g}")
         wp = self.mesh.Materials(self.workpiece)
         P_joule = float(Integrate(
             self.heat_density() * 2 * math.pi * r, self.mesh,

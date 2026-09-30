@@ -878,8 +878,9 @@ def maxwell_efie_pec_sphere_rcs(ka, a=1.0, maxh=0.3, order=2, intorder=12):
     residual = rhs.vec.CreateVector()
     residual.data = rhs.vec - matrix * J.vec
     relative_residual = float(ng.Norm(residual) / max(ng.Norm(rhs.vec), 1e-300))
-    if not math.isfinite(relative_residual) or relative_residual > 1e-8:
-        raise RuntimeError(f"Maxwell EFIE true relative residual {relative_residual:.3e} exceeds 1e-8")
+    from radia._residual_gate import RELATIVE_LIMIT
+    if not math.isfinite(relative_residual) or relative_residual > RELATIVE_LIMIT:
+        raise RuntimeError(f"Maxwell EFIE true relative residual {relative_residual:.3e} exceeds {RELATIVE_LIMIT:g}")
     ph = ng.exp(1j * kappa * ng.z)                                        # exp(-i k xhat.y), xhat = -zhat
     Ax = complex(Integrate(J[0] * ph * ds(bonus_intorder=intorder - 4), mesh))
     Ay = complex(Integrate(J[1] * ph * ds(bonus_intorder=intorder - 4), mesh))

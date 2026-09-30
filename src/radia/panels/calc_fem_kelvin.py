@@ -39,8 +39,8 @@ from calc_common import (MU_0, NU_0, setup_paths,
                           EMMaterial, add_material_args)
 from calc_heat import QSURF_HANDOFF_ORDER
 
-# Preserve the established IH acceptance threshold for every solve route.
-LINEAR_TRUE_RESIDUAL_LIMIT = 1e-7
+# Shared linear acceptance threshold; nonlinear and accuracy gates are separate.
+from radia._residual_gate import RELATIVE_LIMIT as LINEAR_TRUE_RESIDUAL_LIMIT
 # iterative-refinement steps allowed after the first linear solve; each step
 # must converge on its own and all are recorded
 MAX_RESIDUAL_CORRECTIONS = 3

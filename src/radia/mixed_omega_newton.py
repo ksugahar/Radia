@@ -236,11 +236,10 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
                                 / max(np.linalg.norm(residual.FV().NumPy()[free]), 1e-30))
         row["linear_residual_relative"] = relative_linear
         row["linear_iterations"] = getattr(inv, "iterations", None)
-        # Near nonlinear convergence, roundoff divided by the tiny Newton RHS
-        # is not a meaningful failure. Also require the error to exceed the
-        # original equation's absolute convergence budget.
-        if (not math.isfinite(relative_linear) or
-                (relative_linear > 1e-6 and absolute_linear > residual_tolerance * reference_norm)):
+        # The linear acceptance contract is independent of nonlinear stopping.
+        from radia._residual_gate import RELATIVE_LIMIT
+        row["linear_residual_limit"] = RELATIVE_LIMIT
+        if not math.isfinite(relative_linear) or relative_linear > RELATIVE_LIMIT:
             raise MixedOmegaNewtonNotConverged("Newton linear solve did not converge",
                                               {"nonlinear_stats": {"converged": False,
                                                "history": history + [row]}})

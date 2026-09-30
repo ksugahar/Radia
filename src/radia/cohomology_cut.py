@@ -47,10 +47,11 @@ Reference:
 import numpy as np
 
 MU_0 = 4 * np.pi * 1e-7
+_ITERATIVE_DOF_THRESHOLD = 200000
 
 
 def _check_solve(matrix, fes, rhs, solution, what):
-    """True-residual acceptance of a SparseCholesky solve (``radia._residual_gate``)."""
+    """True-residual acceptance of a linear solve (``radia._residual_gate``)."""
     from radia._residual_gate import check_true_residual
     residual = rhs.CreateVector()
     residual.data = rhs - matrix * solution
@@ -175,7 +176,7 @@ class CohomologyCutSolver:
 
         # Choose solver strategy based on problem size
         ndofs = fes.ndof
-        use_iterative = ndofs > 200000
+        use_iterative = ndofs > _ITERATIVE_DOF_THRESHOLD
 
         # Bilinear form: a(phi, v) = integral(mu * grad(phi) . grad(v))
         a = BilinearForm(fes)
@@ -227,7 +228,8 @@ class CohomologyCutSolver:
         else:
             self._phi_gf.vec.data = a.mat.Inverse(
                 fes.FreeDofs(), inverse="sparsecholesky") * f.vec
-            _check_solve(a.mat, fes, f.vec, self._phi_gf.vec, "cohomology total-potential solve")
+        _check_solve(a.mat, fes, f.vec, self._phi_gf.vec,
+                     "cohomology total-potential solve")
 
         # Build result fields: H = -grad(phi) + sum NI_k * h_k
         from ngsolve import CF

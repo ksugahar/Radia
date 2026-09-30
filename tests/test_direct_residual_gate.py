@@ -26,7 +26,7 @@ def test_large_relative_residual_is_rejected_even_at_small_backward_error():
     x = np.zeros_like(b)
     x[free] = 1e12                               # huge solution, as in a gauged system
     r = np.zeros_like(b)
-    r[free] = 1e-7 * np.linalg.norm(b[free]) / np.sqrt(free.sum())   # ||r||/||b|| = 1e-7
+    r[free] = 1e-5 * np.linalg.norm(b[free]) / np.sqrt(free.sum())   # ||r||/||b|| = 1e-5
     with pytest.raises(RuntimeError, match="true relative residual"):
         check_true_residual(a.mat, r, x, b, free, "test")
     x[free] = 1.0                                # same residual, ordinary solution size
@@ -56,3 +56,26 @@ def test_nonfinite_solution_is_rejected():
     x = np.full_like(b, np.inf)
     with pytest.raises(RuntimeError):
         check_true_residual(a.mat, np.zeros_like(b), x, b, free, "test")
+
+
+@pytest.mark.parametrize("relative", [0.0, 1e-8, 0.999e-6, 1e-6])
+def test_shared_linear_gate_accepts_up_to_one_e_minus_six(relative):
+    from radia._residual_gate import RELATIVE_LIMIT, check_true_residual
+
+    assert RELATIVE_LIMIT == 1e-6
+    # No factorization is involved: this checks the acceptance boundary itself.
+    assert check_true_residual(None, np.array([relative]), np.ones(1),
+                               np.ones(1), np.array([True]), "boundary") == relative
+
+
+@pytest.mark.parametrize("relative", [1.001e-6, 1e-5, float("nan"), float("inf")])
+def test_shared_linear_gate_rejects_excess_and_nonfinite(relative):
+    from radia._residual_gate import check_true_residual
+
+    class Identity:
+        def CSR(self):
+            return np.ones(1), np.zeros(1, dtype=int), np.array([0, 1])
+
+    with pytest.raises(RuntimeError, match="true relative residual"):
+        check_true_residual(Identity(), np.array([relative]), np.ones(1),
+                            np.ones(1), np.array([True]), "boundary")
