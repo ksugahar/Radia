@@ -16,7 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
-from team28_cln_force import cln_forces, aluminium_z
+from team28_arnoldi_force import arnoldi_forces, aluminium_z
 
 # Lab full-FEM ground truth Fz1(dZ) [N], NEGATIVE = upward lift,
 # from W:\00_CAE\NGSolve\01_菅原\2024_08_TEAM28\50Hz_可動\axisymmetric_mixed.mat
@@ -74,7 +74,7 @@ def run():
     fz_full, fz_cln, fz_lab = [], [], []
     print(" dZ[mm]  full-FEM   CLN(6)    lab-ref   CLN-vs-lab")
     for dz in dz_mm:
-        ff, sf = cln_forces(aluminium_z + dz * 1e-3, max_stage=NSTAGE)
+        ff, sf = arnoldi_forces(aluminium_z + dz * 1e-3, max_stage=NSTAGE)
         fc = sf[-1]
         ref = LAB[dz]
         err = abs(fc - ref) / abs(ref) * 100 if ref != 0 else float("nan")

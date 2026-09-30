@@ -113,7 +113,7 @@ def test_dynamic_and_team28_claims_are_preserved():
     assert len(moving) >= 4
     assert moving[0]["source_only_F_err"] < 0.001
     assert moving[-1]["source_only_F_err"] > 0.1
-    assert max(row["cln_F_err"] for row in moving) < 0.003
+    assert max(row["pod_krylov_F_err"] if "pod_krylov_F_err" in row else row["cln_F_err"] for row in moving) < 0.003
 
     team28 = _load("team28/team28_cln_sweep_results.json")
     assert len(team28["dZ_mm"]) == len(team28["fz_cln_N"]) == 25

@@ -5,6 +5,13 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- MagLev demonstration names now identify their actual algorithms: sphere
+  `G_lanczos`, TEAM 28 `team28_arnoldi_force.arnoldi_forces`, and rotating-magnet
+  POD-Krylov result keys (`pod_krylov_*` instead of `cln_*`). Update demo imports
+  and new-result consumers; these are demonstration interfaces, not package
+  APIs. Numerical operations are unchanged. Historical JSON remains unchanged,
+  and its evidence reader accepts both key conventions. No circuit is synthesized.
+
 - **Planar optics convention unified (2026-10-01).** The right-handed frame
   uses `x = bend_axis × tangent`, with positive curvature bending toward
   `-x` and metric `1 + h*x`. `curvature_sign` applies the charge sign to

@@ -1,5 +1,5 @@
 """rotating_magnet_eddy.py -- moving-magnet eddy current: when is a per-step
-FEM (or a CLN model-order reduction) actually needed?  The magnetic-Reynolds
+FEM (or a POD-Krylov model-order reduction) actually needed?  The magnetic-Reynolds
 crossover, on Yano's rotating-magnet-over-plate problem.
 
 Geometry (Yano & Sugahara): a 1 mm cube permanent magnet (Br = 0.2 T,
@@ -16,16 +16,15 @@ Three ways to get the eddy current J, Joule loss P and Lorentz force F:
      Exact in the low magnetic-Reynolds-number limit Rm = mu0 sigma omega L^2
      << 1, where the eddy reaction barely perturbs the field.
   2. full-FEM A-phi:           the reference (carries the reaction A_r, phi).
-  3. CLN-reduced A-phi:        a constant-basis multiport Cauer Ladder Network
-     (Tanimoto/Sugahara/Takahashi/Matsuo, IEEE TMag 2023, generalized to a
-     2-parameter translating+rotating source by SVD-seeded block-Krylov over
-     the transient iteration matrix A_sys^-1 M).  Per-step cost ~ M x M.
+  3. POD-Krylov-reduced A-phi:        a constant-basis multiport Galerkin projection,
+     with SVD compression of source-response Krylov blocks from
+     the transient iteration matrix A_sys^-1 M.  Per-step cost ~ M x M.
 
 The crossover (this script's headline): the kinematic source-only error grows
 with Rm.  Below Rm ~ 0.1 it is < 0.5 % -- the analytic source formula suffices
 and NO per-step FEM is needed (Yano's actual case, Rm ~ 0.016, error 0.035 %).
-Above Rm ~ 1 the reaction matters (error %-level), and the CLN reproduces the
-full-FEM to ~1e-4..1e-6 at ~1000x less per-step cost -- THIS is where the CLN
+Above Rm ~ 1 the reaction matters (error %-level), and the POD-Krylov reproduces the
+full-FEM to ~1e-4..1e-6 at ~1000x less per-step cost -- THIS is where the POD-Krylov
 earns its keep (e.g. faster motion, thicker / more conductive rails, kHz drive,
 or the TEAM 28 aluminium disk).
 
@@ -184,7 +183,7 @@ def run(maxh=0.0005, ncfg=48, T_list=(2.0, 0.2, 0.02, 2e-3), verbose=True):
             Jf[n], Pf[n], Ff[n] = outputs(U[:, n], U[:, n - 1], n, dt)
             Js[n], Ps[n], Fs[n] = outputs(None, None, n, dt, src_only=True)
 
-        # --- CLN-reduced (M=20) ---
+        # --- POD-Krylov-reduced (M=20) ---
         X0_ = np.column_stack([Av(G[:, j]) for j in range(ncfg)])
         X1_ = np.column_stack([Av(Mv(X0_[:, j])) for j in range(ncfg)])
         X2_ = np.column_stack([Av(Mv(X1_[:, j])) for j in range(ncfg)])
@@ -215,9 +214,9 @@ def run(maxh=0.0005, ncfg=48, T_list=(2.0, 0.2, 0.02, 2e-3), verbose=True):
             "T_s": T, "Rm": float(Rm), "Jrms_peak": float(Jf[1:].max()),
             "F_peak_N": float(Ff[1:].max()),
             "source_only_Jrms_err": relmax(Js, Jf), "source_only_F_err": relmax(Fs, Ff),
-            "cln_Jrms_err": relmax(Jc, Jf), "cln_F_err": relmax(Fc, Ff),
-            "cln_reaction_err": float(rx[1:].max()),
-            "full_ms_per_step": ms_full, "cln_ms_per_step": ms_red,
+            "pod_krylov_Jrms_err": relmax(Jc, Jf), "pod_krylov_F_err": relmax(Fc, Ff),
+            "pod_krylov_reaction_err": float(rx[1:].max()),
+            "full_ms_per_step": ms_full, "pod_krylov_ms_per_step": ms_red,
             "speedup": ms_full / ms_red if ms_red > 0 else None,
         }
         rows.append(row)
@@ -226,7 +225,7 @@ def run(maxh=0.0005, ncfg=48, T_list=(2.0, 0.2, 0.02, 2e-3), verbose=True):
                     "Jrms_src_t": Js.tolist(), "F_src_t": Fs.tolist(), "dt_s": dt}
         if verbose:
             print(f"  Rm={Rm:8.3f} | J_rms peak={Jf[1:].max():9.1f} | source-only J err={relmax(Js,Jf):8.2e}"
-                  f" F err={relmax(Fs,Ff):8.2e} | CLN J err={relmax(Jc,Jf):8.2e}"
+                  f" F err={relmax(Fs,Ff):8.2e} | POD-Krylov J err={relmax(Jc,Jf):8.2e}"
                   f" | reaction captured={1-rx[1:].max():6.1%} | speedup {row['speedup']:.0f}x"
                   f" [{time.time()-t0:.0f}s]", flush=True)
     return {"ndof": int(ndof), "ncfg": int(ncfg), "maxh": maxh, "Vc": float(Vc),
@@ -241,7 +240,7 @@ def make_figure(res, path):
     Rm = [r["Rm"] for r in rows]
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7.0, 2.8))
     ax1.loglog(Rm, [r["source_only_F_err"] for r in rows], 'o-', label="source-only (no FEM)")
-    ax1.loglog(Rm, [r["cln_F_err"] for r in rows], 's-', label="CLN (M=20)")
+    ax1.loglog(Rm, [r["pod_krylov_F_err"] for r in rows], 's-', label="POD-Krylov (M=20)")
     ax1.axhline(0.01, ls=":", color="0.5"); ax1.axvline(1.0, ls=":", color="0.5")
     ax1.set_xlabel("magnetic Reynolds number  Rm"); ax1.set_ylabel("Lorentz force rel. error")
     ax1.legend(fontsize=8, loc="upper left"); ax1.grid(True, which="both", alpha=0.3)
@@ -273,7 +272,7 @@ def main():
             print(f"(figure skipped: {e!r})")
     print("\n=== Rm crossover ===")
     print("  Rm < ~0.1  : source-only J = -sigma dA_s/dt suffices (no per-step FEM) -- Yano's case")
-    print("  Rm > ~1    : eddy reaction matters; CLN(M=20) reproduces full-FEM to ~1e-4 at ~1000x")
+    print("  Rm > ~1    : eddy reaction matters; POD-Krylov(M=20) reproduces full-FEM to ~1e-4 at ~1000x")
     print(f"  saved {output}")
 
 

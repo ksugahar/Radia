@@ -5,7 +5,7 @@ docs/maglev/demos/sphere/maglev_sphere_force.py:
   - the analytic sphere response G(x) hits its physical limits
     (DC Re[G]->0, high-freq Re[G]->-1/2),
   - Re[G] < 0 across the band (a lift at every frequency),
-  - the CLN/Cauer reduction of the sphere modal Foster ladder converges,
+  - the Lanczos projection of the sphere modal Foster response converges,
   - the levitation-force coefficient matches the perfect-conductor
     analytic limit (pi a^3 / 2 mu0) |grad B0^2| (sign + normalization).
 
@@ -18,7 +18,7 @@ import sys
 import pytest
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-# CLN was absorbed into radia.maglev ->
+# The sphere and ellipsoid demonstrations live under
 # docs/maglev/demos/{sphere,ellipsoid}. Add both so sphere + ellipsoid modules resolve.
 _LEV = os.path.join(_HERE, "..", "docs", "maglev", "demos")
 sys.path.insert(0, os.path.join(_LEV, "sphere"))
@@ -50,10 +50,10 @@ def test_closed_form_matches_foster_modal_sum():
         assert abs(L.G_exact(w) - L.G_modal(w)) < 1e-3
 
 
-def test_cln_cauer_reduction_converges():
+def test_lanczos_projection_converges():
     w = TWO_PI * 5e3
     tgt = L.G_modal(w)
-    err = [abs(L.G_cln(w, m) - tgt) / abs(tgt) for m in (1, 2, 3, 4, 6, 8)]
+    err = [abs(L.G_lanczos(w, m) - tgt) / abs(tgt) for m in (1, 2, 3, 4, 6, 8)]
     # stage 1 is the eddy-free DC response -> large error
     assert err[0] > 0.1
     # by stage 4 within 0.1%, by stage 6 essentially exact

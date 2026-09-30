@@ -1,6 +1,6 @@
-"""team28_cln_force.py -- CLN-reduced TEAM 28 levitation force (coil-driven).
+"""team28_arnoldi_force.py -- Arnoldi-reduced TEAM 28 levitation force (coil-driven).
 
-Goal: show that a Cauer-Ladder-Network (CLN) reduced model of the coil-
+Goal: show that a Krylov-Galerkin reduced model of the coil-
 driven eddy-current disk reproduces the full-FEM Lorentz levitation force.
 
 The axisymmetric mixed phi-B system is, at angular frequency s = j*omega,
@@ -11,10 +11,9 @@ with
     N  = the conductivity term  v * (sigma * u/r),
     F  = the coil source  v * Jz.
 The coil field is the excitation (per the chosen coupling), exactly as in
-the full-FEM baseline team28_axisym_fem.py (which reproduces the lab
-ground truth to 0.01%).
+the full-FEM baseline team28_axisym_fem.py (used here as the full-order reference).
 
-CLN / Cauer reduction = the Krylov subspace generated from the source by
+Arnoldi-Galerkin reduction = the Krylov subspace generated from the source by
 the magnetostatic-solve / sigma-accumulate recursion
     V_0 = K^{-1} F                       (s=0 coil response, no eddy)
     V_{k+1} = orthonormalize( K^{-1} (N V_k) )
@@ -22,7 +21,7 @@ After m stages the reduced model (V^T K V + s V^T N V) y = V^T F gives the
 reduced field X_m(s) = V y; we evaluate the Lorentz force from X_m(j*omega)
 and watch it converge to the full-FEM force as m grows.
 
-Run:  python team28_cln_force.py
+Run:  python team28_arnoldi_force.py
 """
 import numpy as np
 import scipy.sparse as sp
@@ -111,10 +110,10 @@ def force_from_vec(xfull, fes, fesPhi, fesB, sig, p=2):
     return float(fz.real)
 
 
-def cln_forces(al_z=aluminium_z, max_stage=10):
+def arnoldi_forces(al_z=aluminium_z, max_stage=10):
     """Return (fz_full, [fz_stage1, ..., fz_stageM]) for the disk at height al_z.
 
-    fz_full = direct (K+sN) solve force; the list is the N-stage CLN/Cauer
+    fz_full = direct (K+sN) solve force; the list is the N-stage Arnoldi-Galerkin
     reduced force for N=1..M (M <= max_stage; the Krylov basis stops early
     once it stops growing).
     """
@@ -132,7 +131,7 @@ def cln_forces(al_z=aluminium_z, max_stage=10):
     xfull[free] = spla.spsolve((Kf + s * Nf).tocsc(), Ff)
     fz_full = force_from_vec(xfull, fes, fesPhi, fesB, sig)
 
-    # CLN / Cauer Krylov basis from the coil source
+    # Arnoldi-Galerkin Krylov basis from the coil source
     V = []
     v0 = Klu.solve(Ff); v0 /= np.sqrt(abs(v0 @ v0.conj())); V.append(v0)
     for _ in range(max_stage - 1):
@@ -155,9 +154,9 @@ def cln_forces(al_z=aluminium_z, max_stage=10):
 
 
 def main():
-    fz_full, sf = cln_forces()
+    fz_full, sf = arnoldi_forces()
     print(f"\n direct full-FEM (split K+sN) force = {fz_full:+.4f} N  (ref -2.1928)")
-    print(f"\n stages  CLN force [N]   rel.err vs full")
+    print(f"\n stages  Arnoldi force [N]   rel.err vs full")
     for m, fz in enumerate(sf, 1):
         print(f"   {m:2d}    {fz:+.5f}     {abs(fz - fz_full)/abs(fz_full)*100:8.3f} %")
 

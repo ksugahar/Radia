@@ -14,6 +14,14 @@ NATIVE_PATHS = (
     'validation_test/open_boundary/test_kelvin_vector_direct_gate.py',
     'validation_test/team21/**',
     'tests/test_team21a_geometry_source.py',
+    'docs/maglev/demos/sphere/maglev_sphere_force.py',
+    'docs/maglev/demos/team28/team28_arnoldi_force.py',
+    'docs/maglev/demos/rotating_magnet_eddy.py',
+    'tests/test_maglev_sphere_golden.py',
+    'tests/test_team28_arnoldi_golden.py',
+    'tests/test_rotating_magnet_eddy_golden.py',
+    'validation_test/maglev/test_demo_evidence.py',
+
 
     'packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py',
     'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py',

@@ -3,14 +3,14 @@ plate -- locks docs/maglev/demos/rotating_magnet_eddy.py.
 
 The eddy current J / Joule / Lorentz force can be obtained three ways:
 kinematic source-only (J = -sigma dA_s/dt, NO eddy FEM), full-FEM A-phi
-(reference), and a constant-basis multiport CLN.  The locked facts:
+(reference), and a constant-basis multiport POD-Krylov.  The locked facts:
 
   * Low Rm (Yano's case, Rm ~ 0.016): the source-only error is < 1 % --
     the analytic-source shortcut suffices, no per-step FEM is needed.
   * High Rm (~16): the source-only error is %-level-large -- the eddy
     reaction matters there.
   * The source-only error grows monotonically with Rm.
-  * The CLN reproduces the full-FEM Lorentz force across ALL Rm.
+  * The POD-Krylov reproduces the full-FEM Lorentz force across ALL Rm.
   * Physical sanity at Yano's case: J_rms ~ a few 100 A/m^2.
 
 Runs a coarse, fast version of the example (~1 min) by calling run() directly
@@ -60,7 +60,7 @@ def test_source_error_grows_with_rm(res):
     assert errs[-1] > 20 * errs[0]
 
 
-def test_cln_accurate_across_all_rm(res):
+def test_pod_krylov_accurate_across_all_rm(res):
     for r in res["rows"]:
-        assert r["cln_F_err"] < 1e-2, (r["Rm"], r["cln_F_err"])
+        assert r["pod_krylov_F_err"] < 1e-2, (r["Rm"], r["pod_krylov_F_err"])
         assert r["speedup"] is None or r["speedup"] > 50    # ~1000x; loose floor
