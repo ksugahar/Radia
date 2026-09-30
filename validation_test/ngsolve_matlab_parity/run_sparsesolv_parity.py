@@ -80,6 +80,9 @@ def main():
                                 root/"tests/matlab/test_beam_transfer_mex.m",
                                 root/"tests/matlab/test_hacapk_rank_cap.m",
                                 root/"tests/matlab/test_radiafield_mex.m",
+                                root/'src/matlab/radia_ih_mex_commands.cpp',
+                                root/'matlab/+radia/+simulink/validateIHNativeConfig.m',
+                                root/'tests/matlab/test_ih_sparse_inputs.m',
                                 root/"matlab/+radia/RadiaField.m",
                                 root/"src/core/rad_ngsolve_radia_field.h",
                                 root/"src/ext/HACApK/cHACApK_base.c",
@@ -110,6 +113,7 @@ def main():
                                       str(root/"tests/matlab/test_mex_runtime_setup.m"),
                                       str(root/"tests/matlab/test_beam_transfer_mex.m"),
                                       str(root/"tests/matlab/test_hacapk_rank_cap.m"),
+                                      str(root/"tests/matlab/test_ih_sparse_inputs.m"),
                                       str(root/"tests/matlab/test_radiafield_mex.m")]
         eng.eval("r = runtests(testfiles); disp(table(r));", nargout=0)
         record["tests"] = json.loads(eng.eval("jsonencode(struct('names',{string({r.Name})},'passed',[r.Passed],'failed',[r.Failed],'incomplete',[r.Incomplete],'duration',[r.Duration]))"))
