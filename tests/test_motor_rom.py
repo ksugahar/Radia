@@ -305,7 +305,7 @@ class _Hybrid:
         return self.resistance.shape[0]
 
 
-def test_hybrid_vim_factory_requires_time_domain_cln_when_sibc_is_active():
+def test_hybrid_vim_factory_requires_passive_realization_when_sibc_is_active():
     angles = _angles()
     systems = tuple(
         _Hybrid(
@@ -324,7 +324,7 @@ def test_hybrid_vim_factory_requires_time_domain_cln_when_sibc_is_active():
         pm_flux_linkage_Wb=np.zeros(2),
         inertia_kg_m2=0.01,
     )
-    with pytest.raises(ValueError, match="positive-real time-domain CLN"):
+    with pytest.raises(ValueError, match="positive-real time-domain passive"):
         MotorROMFromHybridVIMSweep(angles, systems, ports, **kwargs)
 
     motor = MotorROMFromHybridVIMSweep(

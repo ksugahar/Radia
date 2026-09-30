@@ -2,7 +2,7 @@
 
 The generalized currents are ordered as physical phase currents followed by
 internal eddy-current coordinates.  The latter may be HCurl Eddy Bubble,
-conductor-cycle bridge, SIBC/CLN, or other passive reduced coordinates.  A
+conductor-cycle bridge, passive SIBC realizations, or other passive reduced coordinates.  A
 single periodic flux law
 
     lambda(theta, q) = L(theta) q + psi_pm(theta) + psi_hys
@@ -1083,7 +1083,7 @@ def MotorROMFromHybridVIMSweep(
 
     A nonzero ``surface_mass`` means the frequency-domain system still contains
     a DtN/SIBC ``sqrt(s)`` term.  Such a term must first be realized as a
-    positive-real CLN state system and supplied through the explicit
+    positive-real finite-band state system and supplied through the explicit
     ``time_domain_eddy_*`` arrays.  It is never silently replaced by a constant
     resistance.
     """
@@ -1108,7 +1108,7 @@ def MotorROMFromHybridVIMSweep(
     ):
         raise ValueError(
             "frequency-domain DtN/SIBC surface_mass is active; provide its positive-real "
-            "time-domain CLN realization through time_domain_eddy_resistance_ohm and "
+            "time-domain passive realization through time_domain_eddy_resistance_ohm and "
             "time_domain_eddy_inductance_H"
         )
     np_ = ports.n_phase
