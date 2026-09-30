@@ -261,3 +261,10 @@ def test_mex_symmetry_cpp_runs_through_generator_independent_ctest():
     assert "--no-tests=error" in build["run"]
     assert "radia\\.mex_sparse_symmetry\\.cpp$" in build["run"]
     assert "build-msvc\\Release\\test_radia_mex_sparse_symmetry.exe" not in build["run"]
+
+
+def test_native_solver_lane_builds_required_axisymmetric_extension():
+    workflow = yaml.safe_load((ROOT / ".github/workflows/sparsesolv.yml").read_text())
+    steps = workflow["jobs"]["ams-regression"]["steps"]
+    build = next(s for s in steps if s.get("name") == "Build current package and SparseSolv")
+    assert ".\\Build.ps1 -AxiFemOnly" in build["run"]
