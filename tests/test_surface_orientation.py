@@ -23,6 +23,29 @@ if str(_PANELS) not in sys.path:
 from surface_mesh_extract import orient_surface_triangles
 
 
+def _torus_grid(nu=12, nv=8, major_radius=3.0, minor_radius=1.0):
+    pts = []
+    for i in range(nu):
+        tu = 2 * np.pi * i / nu
+        for j in range(nv):
+            tv = 2 * np.pi * j / nv
+            rho = major_radius + minor_radius * np.cos(tv)
+            pts.append([rho * np.cos(tu), rho * np.sin(tu), minor_radius * np.sin(tv)])
+    pts = np.array(pts)
+
+    def vid(i, j):
+        return (i % nu) * nv + (j % nv)
+
+    tris = []
+    for i in range(nu):
+        for j in range(nv):
+            a, b = vid(i, j), vid(i + 1, j)
+            c, d = vid(i + 1, j + 1), vid(i, j + 1)
+            tris.append([a, b, c])
+            tris.append([a, c, d])
+    return pts, np.array(tris, dtype=np.int64)
+
+
 def _octahedron(center=(0.0, 0.0, 0.0), scale=1.0):
     c = np.asarray(center, dtype=float)
     pts = c + scale * np.array([
@@ -94,28 +117,7 @@ def test_genus1_torus_grid_consistent():
     """A structured torus grid (chi=0) with randomised winding must come
     back conflict-free -- the genus-1 case is exactly where the old
     centroid heuristic broke."""
-    R, b = 3.0, 1.0
-    nu, nv_ = 12, 8
-    pts = []
-    for i in range(nu):
-        tu = 2 * np.pi * i / nu
-        for j in range(nv_):
-            tv = 2 * np.pi * j / nv_
-            rho = R + b * np.cos(tv)
-            pts.append([rho * np.cos(tu), rho * np.sin(tu), b * np.sin(tv)])
-    pts = np.array(pts)
-
-    def vid(i, j):
-        return (i % nu) * nv_ + (j % nv_)
-
-    tris = []
-    for i in range(nu):
-        for j in range(nv_):
-            a, b2 = vid(i, j), vid(i + 1, j)
-            c, d = vid(i + 1, j + 1), vid(i, j + 1)
-            tris.append([a, b2, c])
-            tris.append([a, c, d])
-    tris = np.array(tris, dtype=np.int64)
+    pts, tris = _torus_grid()
     rng = np.random.default_rng(7)
     bad = tris.copy()
     flip = rng.random(len(bad)) < 0.5
@@ -123,3 +125,88 @@ def test_genus1_torus_grid_consistent():
     out, stats = orient_surface_triangles(pts, bad)
     assert stats["conflicts_after"] == 0
     assert _signed_volume(pts, out) > 0
+
+
+def test_p2_extractor_orients_concave_torus_and_preserves_dof_coordinates(
+    monkeypatch,
+):
+    from radia.bem import sibc_hacapk
+
+    major_radius = 3.0
+    pts, outward_tris = _torus_grid(major_radius=major_radius)
+    rng = np.random.default_rng(17)
+    input_tris = outward_tris.copy()
+    flip = rng.random(len(input_tris)) < 0.5
+    input_tris[flip] = input_tris[flip][:, [0, 2, 1]]
+
+    p2_nodes = np.empty((len(input_tris), 6, 3))
+    for index, tri in enumerate(input_tris):
+        corners = pts[tri]
+        p2_nodes[index, :3] = corners
+        p2_nodes[index, 3] = 0.5 * (corners[0] + corners[1])
+        p2_nodes[index, 4] = 0.5 * (corners[1] + corners[2])
+        p2_nodes[index, 5] = 0.5 * (corners[2] + corners[0])
+
+    original_nodes = p2_nodes.copy()
+    monkeypatch.setattr(
+        sibc_hacapk,
+        "extract_surface_curved",
+        lambda mesh, bnd_label=None, geom_order=2: (
+            pts.copy(), input_tris.copy(), np.arange(len(pts)), p2_nodes.copy()
+        ),
+    )
+
+    (
+        vertices,
+        triangles,
+        _vertex_global,
+        oriented_nodes,
+        dofs_per_tri,
+        _n_dof,
+        dof_coords,
+    ) = sibc_hacapk.extract_surface_p2_lagrange(object())
+
+    for index, (before, after) in enumerate(zip(input_tris, triangles)):
+        if np.array_equal(after, before):
+            np.testing.assert_allclose(oriented_nodes[index], original_nodes[index])
+        else:
+            np.testing.assert_array_equal(after, before[[0, 2, 1]])
+            np.testing.assert_allclose(
+                oriented_nodes[index], original_nodes[index, [0, 2, 1, 5, 4, 3]]
+            )
+
+        center = vertices[after].mean(axis=0)
+        normal = np.cross(vertices[after[1]] - vertices[after[0]],
+                          vertices[after[2]] - vertices[after[0]])
+        azimuth = np.arctan2(center[1], center[0])
+        tube_center = major_radius * np.array(
+            [np.cos(azimuth), np.sin(azimuth), 0.0]
+        )
+        assert np.dot(normal, center - tube_center) > 0.0
+
+        np.testing.assert_allclose(
+            dof_coords[dofs_per_tri[index]], oriented_nodes[index]
+        )
+
+
+def test_p2_extractor_rejects_open_surface(monkeypatch):
+    from radia.bem import sibc_hacapk
+
+    pts = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+    tris = np.array([[0, 1, 2]], dtype=np.int64)
+    nodes = np.array([[
+        pts[0], pts[1], pts[2],
+        0.5 * (pts[0] + pts[1]),
+        0.5 * (pts[1] + pts[2]),
+        0.5 * (pts[2] + pts[0]),
+    ]])
+    monkeypatch.setattr(
+        sibc_hacapk,
+        "extract_surface_curved",
+        lambda mesh, bnd_label=None, geom_order=2: (
+            pts, tris, np.arange(3), nodes
+        ),
+    )
+
+    with np.testing.assert_raises_regex(ValueError, "closed two-manifold"):
+        sibc_hacapk.extract_surface_p2_lagrange(object())
