@@ -261,3 +261,12 @@ def test_eqnedit64_release_order_is_handtest_fable_main_o_drive_then_tag():
     assert "HEAD=$headSha origin/main=$originMainSha" in sync
     assert "eqnedit64.o-release.v1" in sync
     assert "source_sha = $normalizedSourceSha" in sync
+
+
+def test_native_assets_use_accepted_tag_artifact_after_promotion():
+    workflow = RELEASE_WORKFLOWS[0].read_text(encoding="utf-8")
+    upload = workflow.split("  upload-binaries:", 1)[1].split("  publication-hold:", 1)[0]
+    assert "needs: verify-promotion" in upload
+    assert "needs.verify-promotion.result == 'success'" in upload
+    assert "run-id: ${{ inputs.ci_run_id }}" in upload
+    assert "head_branch" not in upload
