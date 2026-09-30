@@ -3,7 +3,6 @@
 #include "radia_ih_runtime.h"
 
 #include <algorithm>
-#include <atomic>
 #include <climits>
 #include <cmath>
 #include <complex>
@@ -25,7 +24,6 @@ using Registry = std::unordered_map<std::uint64_t, std::shared_ptr<T>>;
 std::mutex registry_mutex;
 Registry<radia::ih::EddyRuntime> eddy_registry;
 Registry<radia::ih::ThermalRuntime> thermal_registry;
-std::atomic<std::uint64_t> next_handle{UINT64_C(0x8000000000000000)};
 
 const mxArray* field(const mxArray* value, const char* name) {
     return value && mxIsStruct(value) ? mxGetField(value, 0, name) : nullptr;
@@ -331,11 +329,28 @@ void require_arity(int nrhs, int expected_rhs, int nlhs, int expected_lhs,
 
 template <class T>
 std::uint64_t insert(Registry<T>& registry, std::shared_ptr<T> value) {
+    // Allocate only at create-time, outside the registry lock. MATLAB's locked
+    // persistent counter survives this MEX unloading; no step-time callback.
+    mxArray* output = nullptr;
+    mxArray* failure = mexCallMATLABWithTrap(
+        1, &output, 0, nullptr, "radia.internal.nextIHNativeHandle");
+    if (failure) {
+        mxDestroyArray(failure);
+        if (output) mxDestroyArray(output);
+        throw std::runtime_error("IH process-local handle allocation failed");
+    }
+    if (!output || !mxIsUint64(output) || mxIsComplex(output) ||
+        mxGetNumberOfElements(output) != 1) {
+        if (output) mxDestroyArray(output);
+        throw std::runtime_error("IH handle allocator returned an invalid identity");
+    }
+    const auto handle = *static_cast<const std::uint64_t*>(mxGetData(output));
+    mxDestroyArray(output);
+    if ((handle & UINT64_C(0x8000000000000000)) == 0)
+        throw std::runtime_error("IH handle allocator violated its reserved namespace");
     std::unique_lock<std::mutex> guard(registry_mutex);
-    std::uint64_t handle = next_handle.fetch_add(1);
-    while (handle == 0 || eddy_registry.count(handle) != 0 ||
-           thermal_registry.count(handle) != 0)
-        handle = next_handle.fetch_add(1);
+    if (eddy_registry.count(handle) || thermal_registry.count(handle))
+        throw std::runtime_error("IH handle allocator reused a live identity");
     registry.emplace(handle, std::move(value));
     guard.unlock();
     mexLock();
