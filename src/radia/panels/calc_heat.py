@@ -247,6 +247,32 @@ def _resolve_boundary_role(mesh, selector, option_name, *, required):
     return text, matched
 
 
+def _resolve_convection_roles(mesh, convection_map, selector, h_conv, t_ext):
+    """Resolve uniform or exact-label convection into assembly records."""
+    from radia.ih_heat_boundaries import load_convection_map, normalize_convection_map
+
+    if convection_map is not None and convection_map != "":
+        if str(selector or "").strip():
+            raise ValueError("--convection-map and --convection-boundaries are mutually exclusive")
+        mapping = load_convection_map(convection_map)
+        terms = normalize_convection_map(mapping)
+        available = set(mesh.GetBoundaries())
+        missing = [term.label for term in terms if term.label not in available]
+        if missing:
+            raise ValueError(f"Unknown convection boundary labels: {missing}; available: {sorted(available)}")
+        rows = [{"selector": re.escape(term.label), "labels": [term.label],
+                 "h_W_m2K": term.h_W_m2K, "ambient_C": term.ambient_C}
+                for term in terms]
+        names = [term.label for term in terms]
+        return "|".join(re.escape(name) for name in names), names, rows, mapping
+    selected, names = _resolve_boundary_role(
+        mesh, selector, "--convection-boundaries", required=float(h_conv) != 0.0)
+    rows = ([{"selector": selected, "labels": names,
+              "h_W_m2K": float(h_conv), "ambient_C": float(t_ext)}]
+            if float(h_conv) != 0.0 else [])
+    return selected, names, rows, None
+
+
 def _boundary_role_audit(mesh, boundary_names, *, q_cf=None, weight=None):
     """Return deterministic per-boundary area and optional heat input."""
     from ngsolve import BND, CF, Integrate
@@ -254,7 +280,7 @@ def _boundary_role_audit(mesh, boundary_names, *, q_cf=None, weight=None):
     measure = CF(1.0) if weight is None else weight
     rows = []
     for name in boundary_names:
-        region = mesh.Boundaries(name)
+        region = mesh.Boundaries(re.escape(name))
         area = float(Integrate(
             measure, mesh, BND, definedon=region).real)
         row = {"boundary": name, "area_m2": area}
@@ -520,7 +546,7 @@ def solve_heat(wp_vol,
                msh_output="",
                csv_output="",
                _wp_mesh=None,
-               _write_solution=True):
+               _write_solution=True, convection_map=None):
     """Run the transient heat solve.  See module docstring for inputs."""
     setup_paths()
     t0 = time.perf_counter()
@@ -582,9 +608,8 @@ def solve_heat(wp_vol,
         heat_flux_selector, heat_flux_names = _resolve_boundary_role(
             wp_mesh, heat_flux_boundaries, "--heat-flux-boundaries",
             required=True)
-        convection_selector, convection_names = _resolve_boundary_role(
-            wp_mesh, convection_boundaries, "--convection-boundaries",
-            required=float(h_conv) != 0.0)
+        convection_selector, convection_names, convection_terms, resolved_convection_map = _resolve_convection_roles(
+            wp_mesh, convection_map, convection_boundaries, h_conv, t_ext)
         radiation_selector, radiation_names = _resolve_boundary_role(
             wp_mesh, radiation_boundaries, "--radiation-boundaries",
             required=float(emissivity) != 0.0)
@@ -712,8 +737,8 @@ def solve_heat(wp_vol,
 
         a_form = BilinearForm(fes_T, symmetric=True)
         a_form += K_cf * grad_dot(u, v) * dx
-        if float(h_conv) != 0.0:
-            a_form += float(h_conv) * v * u * ds(convection_selector)
+        for term in convection_terms:
+            a_form += term["h_W_m2K"] * v * u * ds(term["selector"])
         a_form.Assemble()
 
         m_form = BilinearForm(fes_T, symmetric=True)
@@ -740,7 +765,8 @@ def solve_heat(wp_vol,
             gfT, thermal_material,
             ih_heat_transient.HeatBoundaryTerms(
                 heat_flux=heat_flux_selector,
-                convection=convection_selector if float(h_conv) else "",
+                convection=(convection_selector if float(h_conv) and resolved_convection_map is None else ""),
+                convection_map=resolved_convection_map,
                 h_conv=float(h_conv), t_ext=float(t_ext),
                 radiation=radiation_selector if float(emissivity) else "",
                 emissivity=float(emissivity)),
@@ -805,9 +831,9 @@ def solve_heat(wp_vol,
         else:
             f_form = LinearForm(fes_T)
             f_form += q_cf * v * ds(heat_flux_selector)
-            if float(h_conv) != 0.0:
-                f_form += float(h_conv) * float(t_ext) * v \
-                    * ds(convection_selector)
+            for term in convection_terms:
+                f_form += term["h_W_m2K"] * term["ambient_C"] * v \
+                    * ds(term["selector"])
             if float(emissivity) > 0.0:    # radiation (explicit, prev-step T, in K)
                 _TK = gfT + 273.15
                 f_form += -float(emissivity) * SIGMA_SB \
@@ -1016,11 +1042,12 @@ def solve_heat(wp_vol,
         "cp_J_kgK": float(cp_v),
         "k_W_mK": float(k_v),
         "rotation_rpm": float(rotation_rpm),
-        "h_conv_W_m2K": float(h_conv),
+        "h_conv_W_m2K": (float(h_conv) if resolved_convection_map is None else None),
         "t_ext_C": float(t_ext),
         "emissivity": float(emissivity),
         "heat_flux_boundaries": heat_flux_selector,
         "convection_boundaries": convection_selector,
+        "convection_by_boundary": convection_terms,
         "radiation_boundaries": radiation_selector,
         "boundary_audit": {
             "heat_flux": heat_flux_audit,
@@ -1090,6 +1117,9 @@ def main():
                         help="Required boundary name or NGSolve boundary "
                              "expression receiving q_surf, for example "
                              "'heated_outer|heated_end'.")
+    parser.add_argument("--convection-map", default="",
+                        help="JSON map of exact boundary labels to h_W_m2K and ambient_C; "
+                             "unlisted faces have no convection.")
     parser.add_argument("--convection-boundaries", default="",
                         help="Boundary expression receiving Newton "
                              "convection. Required when --h-conv is nonzero.")
@@ -1345,6 +1375,7 @@ def main():
             emissivity=args.emissivity,
             heat_flux_boundaries=args.heat_flux_boundaries,
             convection_boundaries=args.convection_boundaries,
+            convection_map=args.convection_map,
             radiation_boundaries=args.radiation_boundaries,
             q_uniform=args.q_uniform,
             qsurf_sol=args.qsurf_sol,

@@ -56,7 +56,7 @@ from calc_heat import (  # noqa: E402
     SIGMA_SB,
     THERMAL_PRESETS,
     _boundary_role_audit,
-    _resolve_boundary_role,
+    _resolve_boundary_role, _resolve_convection_roles,
     _resolve_material,
     _input_mesh_geometry_audit,
     _locate_probe,
@@ -278,7 +278,7 @@ def solve_heat_axisym(wp_vol,
                       msh_output="",
                       csv_output="",
                       _wp_mesh=None,
-                      _write_solution=True):
+                      _write_solution=True, convection_map=None):
     setup_paths()
     t0 = time.perf_counter()
 
@@ -325,9 +325,8 @@ def solve_heat_axisym(wp_vol,
         heat_flux_selector, heat_flux_names = _resolve_boundary_role(
             wp_mesh, heat_flux_boundaries, "--heat-flux-boundaries",
             required=True)
-        convection_selector, convection_names = _resolve_boundary_role(
-            wp_mesh, convection_boundaries, "--convection-boundaries",
-            required=float(h_conv) != 0.0)
+        convection_selector, convection_names, convection_terms, resolved_convection_map = _resolve_convection_roles(
+            wp_mesh, convection_map, convection_boundaries, h_conv, t_ext)
         radiation_selector, radiation_names = _resolve_boundary_role(
             wp_mesh, radiation_boundaries, "--radiation-boundaries",
             required=float(emissivity) != 0.0)
@@ -337,9 +336,10 @@ def solve_heat_axisym(wp_vol,
         active_roles = [
             ("--heat-flux-boundaries", heat_flux_names),
         ]
-        if float(h_conv) != 0.0:
+        if any(term["h_W_m2K"] for term in convection_terms):
             active_roles.append(
-                ("--convection-boundaries", convection_names)
+                ("--convection-boundaries", [name for term in convection_terms
+                  if term["h_W_m2K"] for name in term["labels"]])
             )
         if float(emissivity) != 0.0:
             active_roles.append(
@@ -463,8 +463,8 @@ def solve_heat_axisym(wp_vol,
 
         a_form = BilinearForm(fes_T, symmetric=True)
         a_form += K_cf * InnerProduct(grad(u), grad(v)) * weight * dx
-        if float(h_conv) != 0.0:
-            a_form += float(h_conv) * v * u * weight * ds(convection_selector)
+        for term in convection_terms:
+            a_form += term["h_W_m2K"] * v * u * weight * ds(term["selector"])
 
         m_form = BilinearForm(fes_T, symmetric=True)
         m_form += rho_cp * u * v * weight * dx
@@ -490,7 +490,8 @@ def solve_heat_axisym(wp_vol,
             gfT, thermal_material,
             ih_heat_transient.HeatBoundaryTerms(
                 heat_flux=heat_flux_selector,
-                convection=convection_selector if float(h_conv) else "",
+                convection=(convection_selector if float(h_conv) and resolved_convection_map is None else ""),
+                convection_map=resolved_convection_map,
                 h_conv=float(h_conv), t_ext=float(t_ext),
                 radiation=radiation_selector if float(emissivity) else "",
                 emissivity=float(emissivity)),
@@ -557,9 +558,9 @@ def solve_heat_axisym(wp_vol,
         else:
             f_form = LinearForm(fes_T)
             f_form += q_cf * v * weight * ds(heat_flux_selector)
-            if float(h_conv) != 0.0:
-                f_form += float(h_conv) * float(t_ext) * v * weight \
-                    * ds(convection_selector)
+            for term in convection_terms:
+                f_form += term["h_W_m2K"] * term["ambient_C"] * v * weight \
+                    * ds(term["selector"])
             if float(emissivity) > 0.0:    # radiation (explicit, prev-step T, in K)
                 _TK = gfT + 273.15
                 f_form += -float(emissivity) * SIGMA_SB \
@@ -756,11 +757,12 @@ def solve_heat_axisym(wp_vol,
         "cp_J_kgK": float(cp_v),
         "k_W_mK": float(k_v),
         "rotation_rpm": float(rotation_rpm),
-        "h_conv_W_m2K": float(h_conv),
+        "h_conv_W_m2K": (float(h_conv) if resolved_convection_map is None else None),
         "t_ext_C": float(t_ext),
         "emissivity": float(emissivity),
         "heat_flux_boundaries": heat_flux_selector,
         "convection_boundaries": convection_selector,
+        "convection_by_boundary": convection_terms,
         "radiation_boundaries": radiation_selector,
         "boundary_audit": {
             "heat_flux": heat_flux_audit,
@@ -791,6 +793,9 @@ def main():
     parser.add_argument("--heat-flux-boundaries", default="",
                         help="Required boundary name or NGSolve boundary "
                              "expression receiving q_surf.")
+    parser.add_argument("--convection-map", default="",
+                        help="JSON map of exact boundary labels to h_W_m2K and ambient_C; "
+                             "unlisted faces have no convection.")
     parser.add_argument("--convection-boundaries", default="",
                         help="Boundary expression receiving Newton "
                              "convection. Required when --h-conv is nonzero.")
@@ -984,6 +989,7 @@ def main():
             emissivity=args.emissivity,
             heat_flux_boundaries=args.heat_flux_boundaries,
             convection_boundaries=args.convection_boundaries,
+            convection_map=args.convection_map,
             radiation_boundaries=args.radiation_boundaries,
             q_uniform=args.q_uniform,
             qsurf_sol=args.qsurf_sol,

@@ -66,6 +66,7 @@ NATIVE_PATHS = (
     'src/radia/vector_potential_solver.py',
     'src/radia/scalar_potential_solver.py',
     'validation_test/panels/test_scalar_linear_direct.py',
+    'validation_test/panels/test_heat_boundary_roles.py',
     'src/radia/topology_optimization.py',
     'src/core/rad_hdiv*',
     'src/radia/vim/**',
