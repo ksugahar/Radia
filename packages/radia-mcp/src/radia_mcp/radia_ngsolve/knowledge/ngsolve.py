@@ -1903,6 +1903,11 @@ For label-specific Python thermal cooling, pass ``--convection-map cooling.json`
 (or ``IHDesignSpec(convection_map="cooling.json")``). Example JSON:
 ``{"air_cooling":{"h_W_m2K":10,"ambient_C":20},
 "water_cooling":{"h_W_m2K":500,"ambient_C":25}}``.
+Assign face labels when exporting the thermal solid mesh, separately from
+volume material names. The map validates existing labels and never creates
+them. Multiple cooling labels use the Python chain with a custom mesh-label
+contract; existing native ``ih_workpiece_v1``/axisymmetric presets retain their
+restricted ``sibc``/axis labels.
 Keys are exact mesh boundary labels; unknown labels and combining the map with
 an old uniform convection selector fail explicitly. Map mode ignores ``h_conv``;
 ``t_ext`` remains an independent radiation setting. Unlisted faces have no
