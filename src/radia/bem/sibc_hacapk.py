@@ -207,9 +207,10 @@ def extract_surface_p2_lagrange(mesh, bnd_label=None, geom_order=2):
     n_v = len(verts)
     n_t = len(tris)
 
-    # The signed-volume outward pass is defined only for closed manifold
-    # components.  Disjoint shells are supported; nested cavity shells need
-    # material-side information and are intentionally outside this contract.
+    # The signed-volume outward pass is defined only for one closed manifold
+    # component. Multiple shells are rejected because this API has no
+    # material-side information: independently making every shell positive
+    # would silently reverse a nested cavity's required inward normal.
     edge_counts = {}
     for tri in tris:
         for a, b in ((tri[0], tri[1]), (tri[1], tri[2]), (tri[2], tri[0])):
@@ -226,6 +227,11 @@ def extract_surface_p2_lagrange(mesh, bnd_label=None, geom_order=2):
 
     original_tris = tris.copy()
     oriented_tris, orientation_stats = orient_surface_triangles(verts, tris)
+    if orientation_stats["n_components"] != 1:
+        raise ValueError(
+            "P2 SIBC surface must contain exactly one closed component; "
+            "multiple shells require material-side orientation information"
+        )
     p2_flip_permutation = np.array([0, 2, 1, 5, 4, 3])
     n_flipped = 0
     for t in range(n_t):
