@@ -1,8 +1,8 @@
-"""CLN-stage convergence of the TEAM 28 levitation force.
+"""Arnoldi subspace convergence of the TEAM 28 levitation force.
 
-Scheduled for removal with the repository's Cauer-ladder code.  The full-FEM
+This is an orthogonal Krylov projection, not a circuit realization. The full-FEM
 ground truth, the force convention and the published height are locked by
-tests/test_team28_golden.py on the CLN-free solver team28_axisym_fem.py.
+tests/test_team28_golden.py on the full-order solver team28_axisym_fem.py.
 
 Runs a real axisymmetric NGSolve eddy-current solve (~20-40 s); skipped
 cleanly if ngsolve / netgen are not importable in the active env.
@@ -23,14 +23,14 @@ sys.path.insert(0, _TEAM28)
 
 @pytest.fixture(scope="module")
 def forces():
-    from team28_cln_force import cln_forces  # noqa: E402
-    fz_full, stage_forces = cln_forces(max_stage=6)
+    from team28_arnoldi_force import arnoldi_forces  # noqa: E402
+    fz_full, stage_forces = arnoldi_forces(max_stage=6)
     return fz_full, stage_forces
 
 
-def test_cln_converges_to_full(forces):
+def test_arnoldi_converges_to_full(forces):
     fz_full, sf = forces
-    assert len(sf) >= 5, "expected at least 5 CLN stages"
+    assert len(sf) >= 5, "expected at least 5 Arnoldi stages"
     err = [abs(f - fz_full) / abs(fz_full) for f in sf]
     # stage 1 is the eddy-free DC response -> large error
     assert err[0] > 0.5

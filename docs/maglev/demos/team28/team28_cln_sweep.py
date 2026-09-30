@@ -14,7 +14,7 @@ import numpy as np
 import scipy.sparse.linalg as spla
 from numpy import pi
 
-from team28_cln_force import (
+from team28_arnoldi_force import (
     setup, to_csr, force_from_vec, aluminium_z, FREQ,
 )
 

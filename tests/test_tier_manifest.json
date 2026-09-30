@@ -1,6 +1,9 @@
 {
   "schema": "radia.test-tier-manifest.v1",
   "impact_rules": {
+    "docs/maglev/demos/sphere/maglev_sphere_force.py": ["tests/test_maglev_sphere_golden.py"],
+    "docs/maglev/demos/team28/team28_arnoldi_force.py": ["tests/test_team28_arnoldi_golden.py"],
+    "docs/maglev/demos/rotating_magnet_eddy.py": ["tests/test_rotating_magnet_eddy_golden.py"],
     "validation_test/surface_rom_team10/transient.py": [
       "tests/test_surface_rom_linear_gate_contract.py"
     ],
@@ -216,6 +219,10 @@
       "description": "Required NGSolve contracts for mixed Omega, HDiv/topology, eddy currents, SIBC and IH thermal coupling; no partial dependency run.",
       "max_elapsed_seconds": 600,
       "paths": [
+        "tests/test_maglev_sphere_golden.py",
+        "tests/test_team28_arnoldi_golden.py",
+        "tests/test_rotating_magnet_eddy_golden.py",
+        "validation_test/maglev/test_demo_evidence.py",
         "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
         "validation_test/radia_mcp/test_eddy_driven_region.py",
         "tests/test_accel_solver_selection.py",
