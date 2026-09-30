@@ -25,10 +25,11 @@ permissions:
 
 jobs:
   upload-binaries:
+    needs: verify-promotion
     if: >-
-      github.event_name == 'workflow_run' &&
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main'
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      needs.verify-promotion.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -40,7 +41,7 @@ jobs:
         with:
           name: radia-pyd
           path: pyd-files
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ inputs.ci_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload native binaries to GitHub Releases
         env:
