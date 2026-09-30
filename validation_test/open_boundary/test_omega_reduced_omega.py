@@ -11,8 +11,7 @@ import numpy as np
 import pytest
 
 import radia as rad
-from ngsolve import Mesh, TaskManager, VOL
-from netgen.meshing import Element0D
+from ngsolve import Mesh, TaskManager
 from netgen.occ import (Cylinder, Sphere, Pnt, Z, Glue,
                          OCCGeometry, IdentificationType)
 
@@ -78,19 +77,8 @@ def _build_kelvin_mesh():
     with TaskManager():
         ngmesh = OCCGeometry(geo).GenerateMesh(maxh=MAXH_AIR, grading=0.5)
     mesh = Mesh(ngmesh)
-    # An isolated OCC Vertex in Glue is not a connected volume-mesh vertex.
-    # Ground an actual Kelvin vertex: the scalar gauge changes no gradient.
-    kelvin_vertices = {
-        vertex.nr for element in mesh.Elements(VOL)
-        if element.mat == "air_outer" for vertex in element.vertices
-    }
-    ground = min(kelvin_vertices, key=lambda nr: sum(
-        (mesh.vertices[nr].point[i] - KELVIN_CENTER[i]) ** 2
-        for i in range(3)))
-    point_index = len(mesh.GetBBBoundaries()) + 1
-    ngmesh.Add(Element0D(ground + 1, index=point_index))
-    ngmesh.SetCD3Name(point_index, "GND")
-    mesh = Mesh(ngmesh)
+    from radia.kelvin_geometry import ground_kelvin_scalar_mesh
+    mesh = ground_kelvin_scalar_mesh(mesh, KELVIN_CENTER, "air_outer")
     mesh.Curve(FE_ORDER)
     return mesh
 
