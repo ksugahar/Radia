@@ -1417,6 +1417,10 @@ def _norm_path(p):
     """Lower-case + forward-slashes + strip trailing slash so a UNC and
     a drive-letter form of the same NAS path compare equal."""
     p = (p or "").replace("\\", "/").rstrip("/").lower()
+    # INTEL11 sees the LAB Radia share as W:\00_CAE\Radia while LAB records
+    # the same files through S:\Radia.  Editable imports may canonicalize to
+    # either mapped drive, so compare both spellings in the LAB namespace.
+    p = p.replace("w:/00_cae/radia/", "s:/radia/")
     # Both UNC spellings resolve to the LAB S: drive.  Normalize the whole
     # Radia namespace, not just 01_GitHub: release worktrees live under the
     # same share and editable imports report their real UNC location.
