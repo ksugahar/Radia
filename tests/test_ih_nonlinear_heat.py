@@ -93,6 +93,44 @@ def test_energy_balance_is_exact_with_latent_heat():
     assert audit["halvings"] == 0
 
 
+def test_label_specific_convection_matches_independent_boundary_loss():
+    from ngsolve import BND, CF, Integrate
+
+    mesh = _plate(maxh=0.006)
+    convection = {
+        "edge": {"h_W_m2K": 12.0, "ambient_C": 5.0},
+        "heated": {"h_W_m2K": 31.0, "ambient_C": 45.0},
+    }
+    gf, st = _stepper(mesh, _steel_like(), 0.0,
+                      convection_map=convection)
+    gf.Set(CF(100.0))
+    edge_area = float(Integrate(CF(1.0), mesh, BND,
+                                definedon=mesh.Boundaries("edge")))
+    heated_area = float(Integrate(CF(1.0), mesh, BND,
+                                  definedon=mesh.Boundaries("heated")))
+    expected = (12.0 * (100.0 - 5.0) * edge_area
+                + 31.0 * (100.0 - 45.0) * heated_area)
+    assert st._flows(CF(0.0))[1] == pytest.approx(expected, rel=1.0e-12)
+    st.advance(0.01)
+    assert st.audit.energy_loss_J > 0.0
+    assert abs(st.audit.as_dict()["energy_balance_relative_error"]) < 1.0e-5
+
+
+def test_core_convection_map_validates_mode_and_boundary_labels():
+    mesh = _plate(maxh=0.008)
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        _stepper(mesh, _steel_like(), 0.0, convection="edge",
+                 convection_map={})
+    with pytest.raises(ValueError, match="unknown convection boundary"):
+        _stepper(mesh, _steel_like(), 0.0, convection_map={
+            "missing": {"h_W_m2K": 0.0, "ambient_C": 20.0}})
+    _, stepper = _stepper(mesh, _steel_like(), 0.0, h_conv=float("nan"),
+                          convection_map={
+                              "edge": {"h_W_m2K": 0.0,
+                                       "ambient_C": 20.0}})
+    assert stepper.convection_boundaries[0].h_W_m2K == 0.0
+
+
 def test_uniform_heating_follows_the_enthalpy_curve():
     """A thin, highly conductive plate heated on both faces is isothermal,
     so T(t) must follow H(T) = H(T0) + q A t / V through the latent band."""

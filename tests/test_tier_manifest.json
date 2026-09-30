@@ -11,6 +11,7 @@
     "validation_test/team21/": ["tests/test_team21a_geometry_source.py"],
     "src/radia/kelvin_solver.py": ["validation_test/open_boundary/test_kelvin_vector_direct_gate.py"],
     "src/radia/ih_heat_transient.py": ["tests/test_ih_energy_audit_contract.py"],
+    "src/radia/ih_heat_boundaries.py": ["tests/test_ih_heat_boundaries.py"],
     "packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py": [
       "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
       "validation_test/radia_mcp/test_eddy_driven_region.py"
@@ -279,6 +280,7 @@
         "tests/test_ih_nonlinear_heat.py",
         "tests/test_ih_thermal_exposure.py",
         "tests/test_ih_thermal_transfer.py",
+        "validation_test/panels/test_heat_boundary_roles.py",
         "validation_test/induction_heating/test_fem_ams_parity.py"
       ]
     },
