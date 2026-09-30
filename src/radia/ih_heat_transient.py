@@ -62,11 +62,20 @@ class TransientAudit:
     table_extrapolation_C: float = 0.0
 
     def as_dict(self):
+        """Report throughput closure and a separate net-storage diagnostic.
+
+        The throughput-normalized metric is the established acceptance gate.
+        Near steady state it does not bound the relative error of the much
+        smaller net stored energy; that cancellation is exposed separately.
+        Both residuals are signed: computed storage minus (input minus loss).
+        """
         balance = self.energy_in_J - self.energy_loss_J
         scale = max(abs(self.energy_in_J), abs(self.energy_loss_J),
                     abs(self.energy_stored_J))
-        rel = ((self.energy_stored_J - balance) / scale
-               if scale else 0.0)
+        defect = self.energy_stored_J - balance
+        rel = defect / scale if scale else 0.0
+        storage_scale = max(abs(balance), abs(self.energy_stored_J))
+        storage_relative = defect / storage_scale if storage_scale else 0.0
         return {
             "scheme": "enthalpy-backward-euler-newton",
             "steps": self.steps, "substeps": self.substeps,
@@ -78,6 +87,10 @@ class TransientAudit:
             "energy_loss_J": self.energy_loss_J,
             "energy_stored_J": self.energy_stored_J,
             "energy_balance_relative_error": float(rel),
+            "energy_balance_normalization": "max(abs(input), abs(loss), abs(stored))",
+            "energy_balance_residual_J": float(defect),
+            "energy_storage_relative_error": float(storage_relative),
+            "energy_storage_normalization": "max(abs(input-loss), abs(stored))",
             "table_extrapolation_C": self.table_extrapolation_C,
         }
 
@@ -216,14 +229,19 @@ class NonlinearHeatStepper:
         return lo, hi
 
     def check_energy(self, tolerance: float = 1.0e-4) -> float:
-        """Raise when the energy balance of the run exceeds ``tolerance``."""
+        """Gate throughput-normalized closure at the unchanged tolerance.
+
+        This is not a relative-accuracy guarantee on net stored energy near
+        steady state. Inspect ``energy_storage_relative_error`` separately;
+        this diagnostic does not introduce a second acceptance threshold.
+        """
         rel = self.audit.as_dict()["energy_balance_relative_error"]
         if not abs(rel) <= tolerance:
             raise RuntimeError(
                 "heat energy balance failed: stored "
                 f"{self.audit.energy_stored_J:.6e} J against input - loss "
                 f"{self.audit.energy_in_J - self.audit.energy_loss_J:.6e} J "
-                f"(relative {rel:+.2e}, tolerance {tolerance:.1e})")
+                f"(throughput-relative {rel:+.2e}, tolerance {tolerance:.1e})")
         return rel
 
     def _nodal(self, gf=None):
