@@ -91,6 +91,16 @@ def test_preflight_checks_only_solver_version_pair(monkeypatch, matched):
     assert bool(checked_main) == matched
 
 
+def test_compute_host_install_resolves_and_checks_native_dependencies():
+    source = TOOL.read_text(encoding="utf-8")
+    start = source.index("def _deploy_pypi(")
+    end = source.index("\ndef _deploy_100", start)
+    deploy = source[start:end]
+    assert "--no-deps" not in deploy
+    assert "ngsolve.__version__ == '6.2.2607'" in deploy
+    assert "m.version('netgen-mesher') == '6.2.2607'" in deploy
+
+
 def test_stale_snapshot_does_not_erase_another_host(tmp_path):
     path = tmp_path / 'state.json'
     module._write_simulink_state(path, state(lab={'status': 'passed'}), 'lab')
