@@ -622,3 +622,11 @@ MCP knowledge tool for the live recipe.
    continued-fraction / complete radiation boundary conditions — the prior art for
    the continued-fraction open boundary in
    [`OPEN_BOUNDARY_MAP.md`](../open_boundary/OPEN_BOUNDARY_MAP.md).
+
+## Maintained analytic continued-fraction API
+
+`radia.open_boundary.continued_fraction_stages` and `eval_continued_fraction`
+represent exact/high-order non-reflecting boundaries. For diffusion multipole n,
+the expansion in q = R0 sqrt(s mu_sigma) terminates after n+1 partial quotients.
+See [the executed notebook](../open_boundary/open_boundary_demo.ipynb) and
+[validation](../../validation_test/open_boundary/test_dtn_continued_fraction.py).

@@ -56,3 +56,6 @@ __all__ = [
     "steklov_spectrum",
     "band_rational_fit",
 ]
+
+from .dtn_continued_fraction import continued_fraction_stages, eval_continued_fraction
+__all__ += ["continued_fraction_stages", "eval_continued_fraction"]
