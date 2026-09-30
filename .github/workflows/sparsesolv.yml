@@ -23,6 +23,16 @@ on:
       - 'src/matlab/radia_ih_mex_commands.cpp'
       - 'matlab/+radia/+simulink/validateIHNativeConfig.m'
       - 'tests/matlab/test_ih_sparse_inputs.m'
+      - 'src/radia/bem_sibc_solver.py'
+      - 'tests/test_bem_sibc_acceptance.py'
+      - 'src/radia/esim_cell_problem.py'
+      - 'src/radia/analytical_formulas/induction_heating.py'
+      - 'tests/test_esim_integration.py'
+      - 'tests/analytical_formulas/test_induction_heating.py'
+      - 'src/radia/panels/em_table.py'
+      - 'tests/test_em_table.py'
+      - 'src/radia/simulink/radia_ih_thermal.cpp'
+      - 'tests/cpp/test_radia_ih_thermal_acceptance.cpp'
       - 'src/radia/ih*.py'
       - 'src/radia/panels/calc_heat*.py'
       - 'src/radia/panels/calc_ih_axisym_coupled.py'
@@ -183,6 +193,16 @@ on:
       - 'src/matlab/radia_ih_mex_commands.cpp'
       - 'matlab/+radia/+simulink/validateIHNativeConfig.m'
       - 'tests/matlab/test_ih_sparse_inputs.m'
+      - 'src/radia/bem_sibc_solver.py'
+      - 'tests/test_bem_sibc_acceptance.py'
+      - 'src/radia/esim_cell_problem.py'
+      - 'src/radia/analytical_formulas/induction_heating.py'
+      - 'tests/test_esim_integration.py'
+      - 'tests/analytical_formulas/test_induction_heating.py'
+      - 'src/radia/panels/em_table.py'
+      - 'tests/test_em_table.py'
+      - 'src/radia/simulink/radia_ih_thermal.cpp'
+      - 'tests/cpp/test_radia_ih_thermal_acceptance.cpp'
       - 'src/radia/ih*.py'
       - 'src/radia/panels/calc_heat*.py'
       - 'src/radia/panels/calc_ih_axisym_coupled.py'
@@ -428,9 +448,11 @@ jobs:
           $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
           & cmd.exe /d /c "call `"$vcvars`" && cmake --build build-msvc --config Release --target sparsesolv_ngsolve --parallel 2"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & cmd.exe /d /c "call `"$vcvars`" && cmake --build build-msvc --config Release --target test_radia_mex_sparse_symmetry --parallel 2"
+          & cmd.exe /d /c "call `"$vcvars`" && cmake --build build-msvc --config Release --target test_radia_mex_sparse_symmetry test_radia_ih_thermal_acceptance --parallel 2"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ctest --test-dir build-msvc -C Release -R '^radia\.mex_sparse_symmetry\.cpp$' --output-on-failure --no-tests=error
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build-msvc -C Release -R '^radia\.ih_thermal_acceptance\.cpp$' --output-on-failure --no-tests=error
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Verify source provenance and run required AMS tests

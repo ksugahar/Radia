@@ -352,6 +352,15 @@ if(BUILD_TESTING)
         src/radia/simulink/radia_ih_transport.cpp)
     target_include_directories(test_ih_rotation_runtime PRIVATE src/radia/simulink)
     add_test(NAME radia.ih_rotation.cpp COMMAND test_ih_rotation_runtime)
+
+    add_executable(test_radia_ih_thermal_acceptance
+        tests/cpp/test_radia_ih_thermal_acceptance.cpp
+        src/radia/simulink/radia_ih_runtime.cpp
+        src/radia/simulink/radia_ih_thermal.cpp
+        src/radia/simulink/radia_ih_transport.cpp)
+    target_include_directories(test_radia_ih_thermal_acceptance PRIVATE src/radia/simulink)
+    target_compile_features(test_radia_ih_thermal_acceptance PRIVATE cxx_std_17)
+    add_test(NAME radia.ih_thermal_acceptance.cpp COMMAND test_radia_ih_thermal_acceptance)
 	add_executable(test_rad_beam_transfer
 		${CMAKE_CURRENT_SOURCE_DIR}/tests/cpp/test_rad_beam_transfer.cpp
 		${CORE_DIR}/rad_beam_transfer.cpp
