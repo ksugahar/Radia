@@ -96,9 +96,18 @@ def test_compute_host_install_resolves_and_checks_native_dependencies():
     start = source.index("def _deploy_pypi(")
     end = source.index("\ndef _deploy_100", start)
     deploy = source[start:end]
-    assert "--no-deps" not in deploy
-    assert "ngsolve.__version__ == '6.2.2607'" in deploy
-    assert "m.version('netgen-mesher') == '6.2.2607'" in deploy
+    assert '--no-deps "radia==' in deploy
+    assert "_solver_dependency_pins()" in deploy
+    assert "ngsolve_version = pins[\"ngsolve\"]" in deploy
+    assert "netgen_version = pins[\"netgen-mesher\"]" in deploy
+    assert deploy.count("-m pip check") == 1
+
+
+def test_solver_dependency_versions_come_from_exact_metadata_pins():
+    assert module._solver_dependency_pins() == {
+        "ngsolve": "6.2.2607",
+        "netgen-mesher": "6.2.2607",
+    }
 
 
 def test_stale_snapshot_does_not_erase_another_host(tmp_path):
