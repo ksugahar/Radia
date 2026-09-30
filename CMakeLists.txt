@@ -394,6 +394,19 @@ if(BUILD_TESTING)
 	endif()
 	add_test(NAME radia.arc_section.cpp COMMAND test_rad_arc_section)
 	set_tests_properties(radia.arc_section.cpp PROPERTIES TIMEOUT 120)
+
+	add_executable(test_radia_mex_sparse_symmetry
+		${CMAKE_CURRENT_SOURCE_DIR}/tests/cpp/test_radia_mex_sparse_symmetry.cpp
+	)
+	target_include_directories(test_radia_mex_sparse_symmetry PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/src/matlab)
+	target_compile_features(test_radia_mex_sparse_symmetry PRIVATE cxx_std_17)
+	if(MSVC)
+		target_compile_options(test_radia_mex_sparse_symmetry PRIVATE /W4 /permissive-)
+	else()
+		target_compile_options(test_radia_mex_sparse_symmetry PRIVATE -Wall -Wextra -Wpedantic)
+	endif()
+	add_test(NAME radia.mex_sparse_symmetry.cpp COMMAND test_radia_mex_sparse_symmetry)
 endif()
 
 # Platform-neutral C ABI for Simulink S-functions, Modelica, and FMI wrappers.

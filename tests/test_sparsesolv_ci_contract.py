@@ -210,6 +210,15 @@ def test_numerical_source_changes_select_built_ngsolve_lane(source):
     assert "find('skipped') is None" in numerical["run"]
 
 
+@pytest.mark.parametrize("source", [
+    "src/matlab/radia_mex_sparse_symmetry.h",
+    "tests/cpp/test_radia_mex_sparse_symmetry.cpp",
+])
+def test_mex_sparse_symmetry_sources_require_the_native_lane(source):
+    assert IMPACT.native_required("push", {"before": "a" * 40},
+                                  lambda *args: source + "\0")[0]
+
+
 def test_ih_thermal_and_complex_ams_contracts_run_with_ngsolve():
     profiles = json.loads((ROOT / "tests/test_tier_manifest.json").read_text())["profiles"]
     required = {"tests/test_ih_axisym_coupled.py", "tests/test_ih_thermal_transfer.py",
