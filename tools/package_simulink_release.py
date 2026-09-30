@@ -62,6 +62,7 @@ PACKAGE_FILES = (
     "verify_radia_ih_release.m",
     "+radia/setup.m",
     "+radia/+internal/expectedNGSolveVersion.m",
+    "+radia/+internal/nextIHNativeHandle.m",
     "+radia/+internal/pythonProcessPath.m",
     "+radia/+simulink/buildIHNativeModel.m",
     "+radia/+simulink/addIHMonitorBus.m",
