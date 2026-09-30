@@ -30,10 +30,13 @@ element integration points, and the energy balance can be enforced with
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass, field
 from typing import Callable
 
 import numpy as np
+
+from .ih_heat_boundaries import normalize_convection_map
 
 SIGMA_SB = 5.670374419e-8
 KELVIN = 273.15
@@ -47,6 +50,7 @@ class HeatBoundaryTerms:
     t_ext: float = 20.0
     radiation: str = ""
     emissivity: float = 0.0
+    convection_map: object = None
 
 
 @dataclass
@@ -116,6 +120,25 @@ class NonlinearHeatStepper:
         self.mesh = self.fes.mesh
         self.material = material
         self.bnd = boundaries
+        self.convection_map_specified = boundaries.convection_map is not None
+        self.convection_boundaries = normalize_convection_map(
+            boundaries.convection_map)
+        if self.convection_map_specified and boundaries.convection:
+            raise ValueError(
+                "convection_map and the legacy convection selector are mutually exclusive")
+        if (not self.convection_map_specified
+                and (not math.isfinite(float(boundaries.h_conv))
+                     or float(boundaries.h_conv) < 0.0)):
+            raise ValueError("h_conv must be finite and nonnegative")
+        if not math.isfinite(float(boundaries.t_ext)):
+            raise ValueError("t_ext must be finite")
+        available = set(self.mesh.GetBoundaries())
+        unknown = [term.label for term in self.convection_boundaries
+                   if term.label not in available]
+        if unknown:
+            raise ValueError(
+                f"unknown convection boundary labels {unknown!r}; available: "
+                f"{sorted(available)!r}")
         self.w = CF(1.0) if weight is None else weight
         from ngsolve import Parameter
         # q_source is a coefficient function (a GridFunction when q depends
@@ -185,9 +208,12 @@ class NonlinearHeatStepper:
         import re
         from ngsolve import BND
         b = self.bnd
-        for label, sel in (("heat-flux", b.heat_flux),
-                           ("convection", b.convection if b.h_conv else ""),
-                           ("radiation", b.radiation if b.emissivity else "")):
+        selections = [("heat-flux", b.heat_flux),
+                      ("convection", b.convection if b.h_conv else ""),
+                      ("radiation", b.radiation if b.emissivity else "")]
+        selections.extend(("convection", re.escape(term.label))
+                          for term in self.convection_boundaries)
+        for label, sel in selections:
             if not sel:
                 continue
             pat = re.compile(str(sel))
@@ -290,6 +316,14 @@ class NonlinearHeatStepper:
                                     self.mesh, BND, definedon=self.mesh
                                     .Boundaries(b.convection),
                                     order=self.intorder).real)
+        for term in self.convection_boundaries:
+            if term.h_W_m2K == 0.0:
+                continue
+            loss += float(Integrate(
+                term.h_W_m2K * (self.gfT - term.ambient_C) * self.w,
+                self.mesh, BND,
+                definedon=self.mesh.Boundaries(re.escape(term.label)),
+                order=self.intorder).real)
         if b.emissivity and b.radiation:
             TK = self.gfT + KELVIN
             loss += float(Integrate(
@@ -323,6 +357,13 @@ class NonlinearHeatStepper:
             R += b.h_conv * (self.gfT - b.t_ext) * v * self.w \
                 * DS(b.convection)
             J += b.h_conv * u * v * self.w * DS(b.convection)
+        for term in self.convection_boundaries:
+            if term.h_W_m2K == 0.0:
+                continue
+            selector = re.escape(term.label)
+            R += term.h_W_m2K * (self.gfT - term.ambient_C) * v * self.w \
+                * DS(selector)
+            J += term.h_W_m2K * u * v * self.w * DS(selector)
         if b.emissivity and b.radiation:
             TK = self.gfT + KELVIN
             R += b.emissivity * SIGMA_SB * (TK ** 4 - (b.t_ext + KELVIN)
