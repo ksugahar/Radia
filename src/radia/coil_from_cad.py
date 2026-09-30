@@ -4048,7 +4048,7 @@ def _section_solid_at_plane(solid, point_xyz, normal_xyz):
         )
         from OCP.TopExp import TopExp_Explorer
         from OCP.TopAbs import TopAbs_EDGE
-        from OCP.TopoDS import TopoDS
+        from radia._b3d_shim import _topods_cast
         from radia._b3d_shim import Face
     except ImportError:
         return None
@@ -4075,7 +4075,7 @@ def _section_solid_at_plane(solid, point_xyz, normal_xyz):
     edges = []
     exp = TopExp_Explorer(section_shape, TopAbs_EDGE)
     while exp.More():
-        edges.append(TopoDS.Edge_s(exp.Current()))
+        edges.append(_topods_cast("Edge")(exp.Current()))
         exp.Next()
     if not edges:
         return None
@@ -4088,7 +4088,10 @@ def _section_solid_at_plane(solid, point_xyz, normal_xyz):
     # query point, NOT the largest wire (which was the previous bug).
     try:
         from OCP.ShapeAnalysis import ShapeAnalysis_FreeBounds
-        from OCP.TopTools import TopTools_HSequenceOfShape
+        try:
+            from OCP.TopTools import TopTools_HSequenceOfShape
+        except ImportError:
+            from OCP.collections import HSequence_TopoDS_Shape as TopTools_HSequenceOfShape
         from OCP.GProp import GProp_GProps
         from OCP.BRepGProp import BRepGProp
         edge_seq = TopTools_HSequenceOfShape()
@@ -4104,7 +4107,7 @@ def _section_solid_at_plane(solid, point_xyz, normal_xyz):
         best_wire = None
         best_dist = float("inf")
         for i in range(1, wires_seq.Length() + 1):
-            w_ds = TopoDS.Wire_s(wires_seq.Value(i))
+            w_ds = _topods_cast("Wire")(wires_seq.Value(i))
             # Wire centroid via LinearProperties center-of-mass
             props = GProp_GProps()
             BRepGProp.LinearProperties_s(w_ds, props)
