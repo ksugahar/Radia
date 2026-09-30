@@ -1,7 +1,7 @@
 {
   "schema": "radia.mmm-topology-two-stage-fourth-order-lie/v1",
   "status": "pass",
-  "machine": "lab",
+  "machine": "mdx2",
   "python": "3.12.10",
   "policy": {
     "name": "MMM-topology",
@@ -21,8 +21,8 @@
     "target_amplitude_m": 0.003,
     "selected_entries": {
       "R": [
-        3,
-        0
+        1,
+        2
       ],
       "T": [
         1,
@@ -45,13 +45,13 @@
     }
   },
   "inverse": {
-    "initial_max_band_ratio": 62.504457208339566,
-    "shape_undeformed_max_band_ratio": 60.00000000069173,
-    "lego_full_topology_max_band_ratio": 57.413087899151336,
-    "lego_final_max_band_ratio": 57.413087899151336,
-    "final_max_band_ratio": 0.999939168065822,
-    "recovered_amplitude_m": 0.0029685302158178476,
-    "amplitude_relative_error": 0.010489928060717496,
+    "initial_max_band_ratio": 62.504457208338586,
+    "shape_undeformed_max_band_ratio": 60.00000000069207,
+    "lego_full_topology_max_band_ratio": 57.413087899150575,
+    "lego_final_max_band_ratio": 57.413087899150575,
+    "final_max_band_ratio": 0.9999391677649003,
+    "recovered_amplitude_m": 0.0029685302158261274,
+    "amplitude_relative_error": 0.010489928057957551,
     "lego_iterations": 1,
     "shape_iterations": 4,
     "initial_active_elements": 23,
@@ -62,32 +62,32 @@
   "shape_history": [
     {
       "iteration": 0,
-      "max_band_ratio_before": 60.00000000069173,
-      "max_band_ratio_after": 37.841343753334776,
+      "max_band_ratio_before": 60.00000000069207,
+      "max_band_ratio_after": 37.84134375318595,
       "accepted_scale": 1.0,
       "route": "ngsolve_deform",
       "nonlinear_resolves": 1
     },
     {
       "iteration": 1,
-      "max_band_ratio_before": 37.841343753334776,
-      "max_band_ratio_after": 3.679675392528084,
+      "max_band_ratio_before": 37.84134375318595,
+      "max_band_ratio_after": 3.679675392520433,
       "accepted_scale": 1.0,
       "route": "ngsolve_deform",
       "nonlinear_resolves": 1
     },
     {
       "iteration": 2,
-      "max_band_ratio_before": 3.679675392528084,
-      "max_band_ratio_after": 0.8922785046392054,
+      "max_band_ratio_before": 3.679675392520433,
+      "max_band_ratio_after": 0.8922785048914342,
       "accepted_scale": 1.0,
       "route": "ngsolve_deform",
       "nonlinear_resolves": 1
     },
     {
       "iteration": 3,
-      "max_band_ratio_before": 0.8922785046392054,
-      "max_band_ratio_after": 0.999939168065822,
+      "max_band_ratio_before": 0.8922785048914342,
+      "max_band_ratio_after": 0.9999391677649003,
       "accepted_scale": 1.0,
       "route": "ngsolve_deform",
       "nonlinear_resolves": 1
@@ -97,65 +97,65 @@
     {
       "derivative": false,
       "iterations": 30,
-      "wall_s": 0.43444520000048215
+      "wall_s": 0.351208999985829
     },
     {
       "derivative": false,
       "iterations": 28,
-      "wall_s": 0.34289849999913713
+      "wall_s": 0.34698139992542565
     },
     {
       "derivative": false,
       "iterations": 33,
-      "wall_s": 0.2030282999985502
+      "wall_s": 0.5761149000609294
     },
     {
       "derivative": true,
       "iterations": 28,
-      "wall_s": 0.830554200001643
+      "wall_s": 1.0452960999682546
     },
     {
       "derivative": false,
       "iterations": 30,
-      "wall_s": 0.3011412999985623
+      "wall_s": 0.5042657000012696
     },
     {
       "derivative": true,
       "iterations": 30,
-      "wall_s": 1.128023999997822
+      "wall_s": 2.4192776000127196
     },
     {
       "derivative": false,
       "iterations": 30,
-      "wall_s": 0.2934114000017871
+      "wall_s": 0.7807620000094175
     },
     {
       "derivative": true,
       "iterations": 30,
-      "wall_s": 1.0282657999996445
+      "wall_s": 1.131548700039275
     },
     {
       "derivative": false,
       "iterations": 30,
-      "wall_s": 0.2946072999984608
+      "wall_s": 0.21270060003735125
     },
     {
       "derivative": true,
       "iterations": 30,
-      "wall_s": 0.9548417999976664
+      "wall_s": 2.672478900058195
     },
     {
       "derivative": false,
       "iterations": 30,
-      "wall_s": 0.3993897999971523
+      "wall_s": 0.5089752998901531
     },
     {
       "derivative": true,
       "iterations": 30,
-      "wall_s": 1.0610674999988987
+      "wall_s": 1.3931737000821158
     }
   ],
-  "wall_s": 22.84762249999767,
+  "wall_s": 33.67279870004859,
   "gates": {
     "same_mesh_for_both_stages": true,
     "initial_binary_topology_valid": true,
