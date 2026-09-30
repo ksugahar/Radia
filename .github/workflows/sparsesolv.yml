@@ -4,6 +4,8 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'src/radia/_residual_gate.py'
+      - 'validation_test/open_boundary/test_kelvin_vector_direct_gate.py'
       - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py'
       - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py'
       - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py'
@@ -149,6 +151,8 @@ on:
   push:
     branches: [main]
     paths:
+      - 'src/radia/_residual_gate.py'
+      - 'validation_test/open_boundary/test_kelvin_vector_direct_gate.py'
       - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py'
       - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_direct.py'
       - 'packages/radia-mcp/src/radia_mcp/radia_ngsolve/_vendor/residual_gate.py'
