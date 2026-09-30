@@ -1,27 +1,49 @@
-function tests = test_ih_python_selection
-tests = functiontests(localfunctions);
+classdef test_ih_python_selection < matlab.unittest.TestCase
+    %TEST_IH_PYTHON_SELECTION Interpreter selection and setup cache contract.
+
+    methods (TestMethodSetup)
+        function preserveSelectedInterpreter(testCase)
+            previous = radia.internal.selectedPythonExecutable("get");
+            testCase.addTeardown(@() restoreSelectedInterpreter(previous));
+        end
+    end
+
+    methods (Test)
+        function selectedInterpreterStateRoundTrip(testCase)
+            chosen = "C:\temp\radia-selected-python.exe";
+            override = "C:\temp\explicit-python.exe";
+
+            radia.internal.selectedPythonExecutable("set", chosen);
+            selected = radia.internal.selectedPythonExecutable("get");
+            resolved = radia.internal.resolveAssemblyPython("");
+            explicit = radia.internal.resolveAssemblyPython(override);
+
+            testCase.verifyEqual(selected, chosen);
+            testCase.verifyEqual(resolved, chosen);
+            testCase.verifyEqual(explicit, override);
+        end
+
+        function setupPublishesCachedInterpreter(testCase)
+            python = string(getenv("RADIA_PYTHON_EXECUTABLE"));
+            testCase.assumeNotEmpty(python);
+
+            info = radia.setup(PythonExecutable=python, RequireMex=false, ...
+                ConfigureSimulinkFileGeneration=false, Force=true);
+            selected = radia.internal.selectedPythonExecutable("get");
+            cached = radia.setup(PythonExecutable=python, RequireMex=false, ...
+                ConfigureSimulinkFileGeneration=false);
+            selectedCached = radia.internal.selectedPythonExecutable("get");
+
+            testCase.verifyEqual(selected, info.python_executable);
+            testCase.verifyEqual(selectedCached, cached.python_executable);
+        end
+    end
 end
 
-function testSelectedInterpreterStateRoundTrip(testCase)
-cleanup = onCleanup(@() radia.internal.selectedPythonExecutable("clear")); %#ok<NASGU>
-chosen = "C:\temp\radia-selected-python.exe";
-radia.internal.selectedPythonExecutable("set", chosen);
-testCase.verifyEqual(radia.internal.selectedPythonExecutable("get"), chosen);
-testCase.verifyEqual(radia.internal.resolveAssemblyPython(""), chosen);
-override = "C:\temp\explicit-python.exe";
-testCase.verifyEqual(radia.internal.resolveAssemblyPython(override), override);
+function restoreSelectedInterpreter(previous)
+if strlength(previous) == 0
+    radia.internal.selectedPythonExecutable("clear");
+else
+    radia.internal.selectedPythonExecutable("set", previous);
 end
-
-function testSetupPublishesCachedInterpreter(testCase)
-cleanup = onCleanup(@() radia.internal.selectedPythonExecutable("clear")); %#ok<NASGU>
-python = string(getenv("RADIA_PYTHON_EXECUTABLE"));
-testCase.assumeNotEmpty(python);
-info = radia.setup(PythonExecutable=python, RequireMex=false, ...
-    ConfigureSimulinkFileGeneration=false, Force=true);
-testCase.verifyEqual( ...
-    radia.internal.selectedPythonExecutable("get"), info.python_executable);
-cached = radia.setup(PythonExecutable=python, RequireMex=false, ...
-    ConfigureSimulinkFileGeneration=false);
-testCase.verifyEqual( ...
-    radia.internal.selectedPythonExecutable("get"), cached.python_executable);
 end
