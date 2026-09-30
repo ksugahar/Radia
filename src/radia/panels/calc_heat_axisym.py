@@ -545,6 +545,8 @@ def solve_heat_axisym(wp_vol,
     _log(f"Q_SURF:int q dA = {q_int:.4e} W (axisym area "
          f"{A_surf_axisym:.4e} m^2)")
     Q_input_J = 0.0
+    linear_true_residual_max = 0.0
+    from radia.ih_heat_transient import checked_heat_increment
     heat_input_history = []            # W, per step (end-of-step source)
 
     for step in range(1, n_steps + 1):
@@ -569,7 +571,10 @@ def solve_heat_axisym(wp_vol,
             with TaskManager():
                 f_form.Assemble()
                 res_vec.data = f_form.vec - a_form.mat * gfT.vec
-                gfT.vec.data += float(dt) * (inv * res_vec)
+                delta, relative = checked_heat_increment(
+                    mstar, inv, res_vec, fes_T.FreeDofs())
+                linear_true_residual_max = max(linear_true_residual_max, relative)
+                gfT.vec.data += float(dt) * delta
         Q_input_J += q_int * float(dt)
         heat_input_history.append(float(stepper.last_heat_input_W)
                                   if nonlinear else q_int)
@@ -732,6 +737,8 @@ def solve_heat_axisym(wp_vol,
         "T_probe_history_C": T_probe if probe_point is not None else None,
         "t_history_s": t_arr,
         "Q_input_J": Q_input_J,
+        "linear_true_residual_max": (stepper.audit.linear_true_residual_max
+                                     if nonlinear else linear_true_residual_max),
         "heat_input_history_W": heat_input_history,
         "q_surf_int_W": q_int,
         "surface_area_m2": A_surf_axisym,

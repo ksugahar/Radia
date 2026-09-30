@@ -221,3 +221,28 @@ def test_axisymmetric_material_table_conserves_revolved_energy(tmp_path):
     # revolved heat input: q * 2 pi R H * t
     assert audit["energy_in_J"] == pytest.approx(
         4.0e6 * 2 * np.pi * 0.02 * 0.01 * 2.5, rel=1e-9)
+
+
+@pytest.mark.parametrize("load", [1.0, 1e-12])
+def test_heat_increment_rejects_inaccurate_inverse_at_small_load(load):
+    from ngsolve import BilinearForm, H1, LinearForm, dx, grad, InnerProduct
+    mesh = _plate()
+    fes = H1(mesh, order=1, dirichlet="edge")
+    u, v = fes.TnT()
+    a = BilinearForm(fes, symmetric=True)
+    a += (u*v + InnerProduct(grad(u), grad(v))) * dx
+    a.Assemble()
+    f = LinearForm(fes)
+    f += load*v*dx
+    f.Assemble()
+    inv = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
+    delta, residual = iht.checked_heat_increment(a.mat, inv, f.vec, fes.FreeDofs())
+    assert residual <= 1e-6
+    true = f.vec.CreateVector()
+    true.data = f.vec - a.mat*delta
+    free = np.asarray(fes.FreeDofs(), dtype=bool)
+    assert np.linalg.norm(true.FV().NumPy()[free]) <= 1e-6*np.linalg.norm(f.vec.FV().NumPy()[free])
+    before = f.vec.FV().NumPy().copy()
+    with pytest.raises(RuntimeError, match="true relative residual"):
+        iht.checked_heat_increment(a.mat, 0.99*inv, f.vec, fes.FreeDofs())
+    np.testing.assert_array_equal(f.vec.FV().NumPy(), before)
