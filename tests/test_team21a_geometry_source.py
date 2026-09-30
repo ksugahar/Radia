@@ -66,7 +66,8 @@ def test_team21a_slitted_conductor_mesh_preserves_volume_and_topology(model):
     team21a = _load_team21a()
     import radia.vim as vim
 
-    mesh = team21a.build_conductor_mesh(model, maxh=0.12)
+    with ng.TaskManager():
+        mesh = team21a.build_conductor_mesh(model, maxh=0.12)
     assert mesh.GetMaterials() == ("cond",)
     assert "skin" in mesh.GetBoundaries()
     expected_volume = (
@@ -78,10 +79,12 @@ def test_team21a_slitted_conductor_mesh_preserves_volume_and_topology(model):
         * team21a.SPEC.slit_width_m
         * team21a.SPEC.plate_thickness_m
     )
-    actual_volume = ng.Integrate(1.0, mesh, definedon=mesh.Materials("cond"))
+    with ng.TaskManager():
+        actual_volume = ng.Integrate(1.0, mesh, definedon=mesh.Materials("cond"))
     assert actual_volume == pytest.approx(expected_volume, rel=1.0e-10)
 
-    topology = vim.ClassifyNgsolveEddyTopology(mesh, conductive_materials="cond")
+    with ng.TaskManager():
+        topology = vim.ClassifyNgsolveEddyTopology(mesh, conductive_materials="cond")
     diagnostics = topology.diagnostics()
     assert diagnostics["conductive_component_count"] == 1
     assert diagnostics["sibc_face_count"] > 0
