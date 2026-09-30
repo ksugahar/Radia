@@ -3080,15 +3080,20 @@ offset = 2.5 * R_K  # separation distance
 outer_sphere = Sphere(Pnt(offset, 0, 0), R_K)
 outer_sphere.name = "kelvin"
 
-# GND at exterior center
-gnd = Vertex(Pnt(offset, 0, 0)); gnd.name = "GND"
+# A scalar gauge is attached to a connected mesh vertex after meshing.
+# A detached OCC Vertex cannot constrain H1 volume unknowns.
 
 # Periodic identification BEFORE Glue
 int_face = [f for f in inner_air.faces if f.name == "kelvin_int"][0]
 ext_face = [f for f in outer_sphere.faces if f.name == "kelvin_ext"][0]
 int_face.Identify(ext_face, "periodic", IdentificationType.PERIODIC)
 
-shape = Glue([inner_air, coil, outer_sphere, gnd])
+shape = Glue([inner_air, coil, outer_sphere])
+# For scalar H1 only, before Curve/spaces:
+mesh = Mesh(OCCGeometry(shape).GenerateMesh(maxh=maxh))
+from radia.kelvin_geometry import ground_kelvin_scalar_mesh
+mesh = ground_kelvin_scalar_mesh(mesh, (offset, 0, 0))
+# HCurl uses its formulation gauge; point GND constrains no edge DOF.
 ```
 
 ## SIBC + Kelvin for Eddy Current (Induction Heating)
