@@ -1,6 +1,7 @@
 {
   "schema": "radia.test-tier-manifest.v1",
   "impact_rules": {
+    "src/radia/kelvin_solver.py": ["validation_test/open_boundary/test_kelvin_vector_direct_gate.py"],
     "src/radia/ih_heat_transient.py": ["tests/test_ih_energy_audit_contract.py"],
     "packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py": [
       "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
@@ -226,6 +227,7 @@
         "tests/test_direct_residual_gate.py",
         "tests/test_cohomology_cut_linear_residual.py",
         "validation_test/open_boundary/test_kelvin_connected_ground.py",
+        "validation_test/open_boundary/test_kelvin_vector_direct_gate.py",
         "tests/test_kelvin_mixed_omega.py",
         "tests/test_mixed_omega_review_fixes.py",
         "tests/test_c_type_p1_box_lane.py",
