@@ -141,6 +141,12 @@ class FakeAPI:
             "git/tags/" + "c" * 40: {"object": {"type": "commit", "sha": "a" * 40}},
         }
 
+        for workflow in ("radia-fast.yml", "policy-lint.yml"):
+            self.records[f"actions/workflows/{workflow}/runs?head_sha={'b' * 40}&event=push&per_page=100"] = {
+                "workflow_runs": [{"head_sha": "b" * 40, "head_branch": "main",
+                                   "run_number": 1, "run_attempt": 1,
+                                   "status": "completed", "conclusion": "success"}]}
+
     def get(self, path):
         return copy.deepcopy(self.records[path])
 
@@ -254,3 +260,44 @@ def test_new_releases_require_the_strengthened_focused_suite():
         extra.set("time", "0.1")
         suite.set("tests", str(int(suite.get("tests")) + 1))
         gate.verify_host(a, f, ET.tostring(root), identity, "lab")
+
+
+@pytest.mark.parametrize("status,conclusion", [("in_progress", None), ("completed", "failure"),
+                                               ("completed", "cancelled"), ("completed", "skipped")])
+def test_publication_waits_for_acceptance_commit_ci(status, conclusion):
+    api = FakeAPI()
+    key = f"actions/workflows/radia-fast.yml/runs?head_sha={'b' * 40}&event=push&per_page=100"
+    api.records[key]["workflow_runs"][0].update(status=status, conclusion=conclusion)
+    with pytest.raises(ValueError, match="Acceptance CI not successful"):
+        gate.verify_run(api, 9, "b" * 40)
+
+
+def test_old_success_cannot_hide_a_failed_ci_rerun():
+    api = FakeAPI()
+    key = f"actions/workflows/radia-fast.yml/runs?head_sha={'b' * 40}&event=push&per_page=100"
+    failed = dict(api.records[key]["workflow_runs"][0], run_attempt=2, conclusion="failure")
+    api.records[key]["workflow_runs"].append(failed)
+    with pytest.raises(ValueError, match="Acceptance CI not successful"):
+        gate.verify_run(api, 9, "b" * 40)
+
+
+def application_proof():
+    return {"schema": "radia.release-quad.simulink-candidate.v1", "version": "5.1.0",
+            "commit": "a"*40, "package_sha256": "b"*64, "mex_sha256": "c"*64,
+            "targets": {host: {"label": host, "status": "passed", "mex_sha256": "c"*64,
+                              "verified_at_utc": "2026-09-30T00:00:00Z"}
+                        for host in gate.RELEASE_ACCEPTANCE_HOSTS}}
+
+
+def test_application_acceptance_requires_four_exact_mex_results():
+    identity = {"source_commit": "a"*40, "version": "5.1.0"}
+    gate.verify_application_acceptance(application_proof(), identity)
+    for mutation in ("missing_host", "failed", "wrong_mex", "wrong_source", "missing_time"):
+        proof = application_proof()
+        if mutation == "missing_host": del proof["targets"]["mdx2"]
+        elif mutation == "failed": proof["targets"]["100"]["status"] = "failed"
+        elif mutation == "wrong_mex": proof["targets"]["lab"]["mex_sha256"] = "d"*64
+        elif mutation == "wrong_source": proof["commit"] = "e"*40
+        else: del proof["targets"]["mdx1"]["verified_at_utc"]
+        with pytest.raises(ValueError):
+            gate.verify_application_acceptance(proof, identity)

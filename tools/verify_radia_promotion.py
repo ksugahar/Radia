@@ -103,6 +103,19 @@ class GitHub:
         return base64.b64decode(record["content"], validate=False)
 
 
+def verify_acceptance_ci(api, commit):
+    """Require successful main CI on the commit containing acceptance records."""
+    for workflow in ("radia-fast.yml", "policy-lint.yml"):
+        query = f"actions/workflows/{workflow}/runs?head_sha={commit}&event=push&per_page=100"
+        runs = api.get(query).get("workflow_runs", [])
+        matching = [run for run in runs if run.get("head_sha") == commit
+                    and run.get("head_branch") == "main"]
+        require(matching, f"No main acceptance CI: {workflow}")
+        latest = max(matching, key=lambda run: (run.get("run_number", 0), run.get("run_attempt", 0)))
+        require(latest.get("status") == "completed" and latest.get("conclusion") == "success",
+                f"Acceptance CI not successful: {workflow}")
+
+
 def verify_run(api, run_id, commit):
     require(SHA.fullmatch(commit), "Acceptance commit must be a full lowercase SHA")
     repo = api.get("")
@@ -118,6 +131,7 @@ def verify_run(api, run_id, commit):
     reachable = api.get(f"compare/main...{commit}")
     require(reachable.get("status") in ("behind", "identical")
             and reachable.get("ahead_by") == 0, "Acceptance is not reachable from main")
+    verify_acceptance_ci(api, commit)
     return run
 
 
@@ -186,6 +200,23 @@ def verify_host(acceptance, full, junit, identity, host):
             "Nonfinite or invalid focused duration")
 
 
+def verify_application_acceptance(proof, identity):
+    require(proof.get("schema") == "radia.release-quad.simulink-candidate.v1",
+            "Unknown MATLAB/Simulink acceptance schema")
+    require(proof.get("commit") == identity["source_commit"]
+            and proof.get("version") == identity["version"], "MATLAB/Simulink source identity mismatch")
+    for key in ("package_sha256", "mex_sha256"):
+        require(isinstance(proof.get(key), str) and HASH.fullmatch(proof[key]),
+                f"Missing MATLAB/Simulink artifact identity: {key}")
+    targets = proof.get("targets", {})
+    require(set(targets) == set(RELEASE_ACCEPTANCE_HOSTS), "MATLAB/Simulink requires all four hosts")
+    for host, row in targets.items():
+        require(row.get("label") == host and row.get("status") == "passed",
+                f"MATLAB/Simulink failed or missing: {host}")
+        require(row.get("mex_sha256") == proof["mex_sha256"], f"MEX identity mismatch: {host}")
+        require(bool(row.get("verified_at_utc")), f"Missing MATLAB/Simulink verification time: {host}")
+
+
 def verify_artifact(api, run, commit, wheel_dir, context_dir, expected_hash):
     require(HASH.fullmatch(expected_hash), "Wheel hash must be lowercase SHA-256")
     wheels = list(wheel_dir.rglob("*.whl"))
@@ -226,6 +257,9 @@ def verify_artifact(api, run, commit, wheel_dir, context_dir, expected_hash):
     require(not missing,
             f"Acceptance evidence missing for {', '.join(missing)}; release-quad "
             f"requires all of {', '.join(RELEASE_ACCEPTANCE_HOSTS)} at {prefix}")
+    if tuple(int(part) for part in version.split(".")) >= (5, 1, 0):
+        proof = strict_json(api.file(f"{prefix}/application_acceptance.json", commit))
+        verify_application_acceptance(proof, identity)
     return dict(identity, acceptance_commit=commit,
                 hosts=list(RELEASE_ACCEPTANCE_HOSTS), passed=True)
 
