@@ -1928,6 +1928,85 @@ def test_undefined_variables_missing_tex_returns_error(tmp_path):
     assert "not found" in r["error"]
 
 
+def test_undefined_variables_recognizes_japanese_definition_clauses(tmp_path):
+    from radia_mcp.paper_writing._undefined_variables import (
+        paper_writing_check_undefined_variables,
+    )
+    tex = tmp_path / "ja_defs.tex"
+    tex.write_text(r"""
+\documentclass{jarticle}
+\begin{document}
+\begin{equation}
+Q = C V
+\end{equation}
+ここで$Q$は電荷，$C$は静電容量，$V$は電圧を表す。
+\end{document}
+""", encoding="utf-8")
+    result = paper_writing_check_undefined_variables(str(tex))
+    flagged = {item["symbol"] for item in result["undefined_symbols"]}
+    assert not ({"Q", "C", "V"} & flagged)
+
+
+def test_undefined_variables_ignores_latex_structure_and_siunitx(tmp_path):
+    from radia_mcp.paper_writing._undefined_variables import (
+        paper_writing_check_undefined_variables,
+    )
+    tex = tmp_path / "macros.tex"
+    tex.write_text(r"""
+\documentclass{article}
+\newcommand{\preambleMath}{$Q_{bad}$}
+\begin{document}
+\begin{equation}
+\bm{H}\cdot d\bm{B}\ge\SI{2}{A/m/T}
+\Longrightarrow \mathrm{clip}(B)
+\end{equation}
+\end{document}
+""", encoding="utf-8")
+    result = paper_writing_check_undefined_variables(str(tex))
+    flagged = {item["symbol"] for item in result["undefined_symbols"]}
+    for command in [r"\bm", r"\ge", r"\SI", r"\Longrightarrow", r"\mathrm"]:
+        assert command not in flagged
+    assert not any("bad" in symbol for symbol in flagged)
+
+
+def test_undefined_variables_ignores_constants_quantifiers_and_number_sets(tmp_path):
+    from radia_mcp.paper_writing._undefined_variables import (
+        paper_writing_check_undefined_variables,
+    )
+    tex = tmp_path / "standard_math.tex"
+    tex.write_text(r"""
+\documentclass{article}
+\begin{document}
+\begin{equation}
+x \in \mathbb{C}, \qquad e^{j\omega t} \ne 0 \quad \forall x
+\end{equation}
+\end{document}
+""", encoding="utf-8")
+    result = paper_writing_check_undefined_variables(str(tex))
+    assert result["undefined_symbols"] == []
+
+
+def test_undefined_variables_reads_cp932_japanese_tex(tmp_path):
+    from radia_mcp.paper_writing._undefined_variables import (
+        paper_writing_check_undefined_variables,
+    )
+    tex = tmp_path / "cp932.tex"
+    source = r"""
+\documentclass{jarticle}
+\begin{document}
+\begin{equation}
+Q = C V
+\end{equation}
+ここで$Q$は電荷，$C$は静電容量，$V$は電圧である。
+\end{document}
+"""
+    tex.write_bytes(source.encode("cp932"))
+    result = paper_writing_check_undefined_variables(str(tex))
+    assert "error" not in result
+    flagged = {item["symbol"] for item in result["undefined_symbols"]}
+    assert not ({"Q", "C", "V"} & flagged)
+
+
 def test_resolve_input_chain_inlines_subfiles(tmp_path):
     """resolve_input_chain merges \\input{...} subfiles into one string."""
     from radia_mcp.paper_writing._tex_resolver import resolve_input_chain
