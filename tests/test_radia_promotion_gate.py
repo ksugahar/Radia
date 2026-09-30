@@ -239,3 +239,18 @@ def test_acceptance_not_symlink_submodule_or_executable(mode):
     api.get = lambda _: {"truncated": False, "tree": [{"path": "evidence.json", "type": "blob", "mode": mode}]}
     with pytest.raises(ValueError, match="regular file"):
         api.file("evidence.json", "b" * 40)
+
+
+def test_new_releases_require_the_strengthened_focused_suite():
+    a, f, xml, identity = evidence()
+    for version in ("5.1.0", "5.1.1", "6.0.0"):
+        a["version"] = f["version"] = identity["version"] = version
+        with pytest.raises(ValueError, match="Missing or duplicate focused case"):
+            gate.verify_host(a, f, xml, identity, "lab")
+        root = ET.fromstring(xml)
+        suite = root if root.tag == "testsuite" else root.find("testsuite")
+        extra = ET.SubElement(suite, "testcase")
+        extra.set("name", "test_indefinite_operator_with_positive_jacobi_diagonal_raises_in_batched_pcg")
+        extra.set("time", "0.1")
+        suite.set("tests", str(int(suite.get("tests")) + 1))
+        gate.verify_host(a, f, ET.tostring(root), identity, "lab")

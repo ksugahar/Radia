@@ -169,7 +169,9 @@ def verify_host(acceptance, full, junit, identity, host):
     root = ET.fromstring(junit)
     cases = root.findall(".//testcase")
     case_names = {c.get("name") for c in cases}
-    require(len(cases) == len(case_names) and case_names in (TESTS, STRENGTHENED_TESTS),
+    version_parts = tuple(int(part) for part in identity["version"].split("."))
+    allowed_suites = (STRENGTHENED_TESTS,) if version_parts >= (5, 1, 0) else (TESTS, STRENGTHENED_TESTS)
+    require(len(cases) == len(case_names) and case_names in allowed_suites,
             "Missing or duplicate focused case")
     require(not any(c.find(tag) is not None for c in cases for tag in ("failure", "error", "skipped")),
             "Focused case did not pass")
