@@ -4,7 +4,8 @@ This proof-of-concept connects a prescribed planar reference orbit and a
 target first-order transfer matrix to the existing whole-element HDiv-MMM
 optimizer.  The electromagnetic problem supplies row-major response rows
 
-``[B_binormal(segment 0..n-1), dB_binormal/dnormal(segment 0..n-1)]``.
+``[B_y(segment 0..n-1), dB_y/dx(segment 0..n-1)]`` in the right-handed frame
+of :class:`PlanarDesignOrbit`.
 
 The orbit fixes the required dipole field through ``B rho * curvature``.  The
 same field response is converted to a 6-by-6 combined-function transfer map,
@@ -103,16 +104,19 @@ class PlanarDesignOrbit:
     ``path_length_stations`` optionally preserves the RK independent variable;
     when present it is the source of truth for each ``Delta s``.  Otherwise
     chord lengths are used for backward-compatible manually supplied orbits.
-    ``bend_axis`` is the constant plane normal and defines the positive signed
-    turning angle.  By default, tangent rotation divided by segment length
-    supplies the signed curvature.  A tracked orbit may instead provide
+    ``bend_axis`` is the constant plane normal.  The local frame is the
+    right-handed ``x = bend_axis x tangent``, ``y = bend_axis``,
+    ``s = tangent``.  Positive signed curvature ``h`` bends the orbit toward
+    ``-x``, so ``+x`` points away from the centre of curvature and the
+    curvilinear metric is ``1 + h*x``.  By default, tangent rotation divided by
+    segment length supplies ``h``.  A tracked orbit may instead provide
     ``signed_curvature_per_m`` from the ODE/B-field collocation points; the
     tangent-turning value remains available as ``geometric_signed_curvature``
     for a finite-station consistency diagnostic.
 
     ``magnetic_rigidity`` is the positive reference ``B rho`` in tesla-metre.
-    The charge/bend orientation is represented by the signed curvature rather
-    than by a signed rigidity.
+    Field-to-optics routes take the charge sign as ``curvature_sign`` in
+    ``h = curvature_sign*B_y/(B rho)``, rather than a signed rigidity.
     """
 
     positions: np.ndarray
@@ -231,10 +235,14 @@ class PlanarDesignOrbit:
 
     @property
     def geometric_signed_curvature(self) -> np.ndarray:
-        """Return tangent-turning curvature for each orbit segment."""
+        """Return tangent-turning curvature for each orbit segment.
+
+        Turning toward ``-x`` is clockwise about ``bend_axis``, hence the
+        negated axial component of ``t_i x t_{i+1}``.
+        """
         left = self.tangents[:-1]
         right = self.tangents[1:]
-        sine = np.einsum(
+        sine = -np.einsum(
             "j,ij->i", self.bend_axis, np.cross(left, right))
         cosine = np.einsum("ij,ij->i", left, right)
         turning = np.arctan2(sine, cosine)
@@ -319,7 +327,11 @@ class PlanarDesignOrbit:
         return float(result) if scalar else np.asarray(result, dtype=float)
 
     def frame_at(self, s_m) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Return local ``(horizontal, vertical, tangent)`` axes in global xyz."""
+        """Return right-handed ``(x, y, s)`` axes in global xyz.
+
+        ``x = bend_axis x tangent`` and ``y = bend_axis``; positive ``h``
+        bends toward ``-x``.
+        """
         tangent = self.tangent_at(s_m)
         horizontal = np.cross(self.bend_axis, tangent)
         horizontal /= np.linalg.norm(horizontal, axis=-1, keepdims=True)
@@ -342,10 +354,12 @@ def planar_orbit_field_observations(
                                                                np.ndarray]:
     """Return points and vector weights for orbit ``B``/normal-gradient rows.
 
-    Each dipole row samples the bend-axis component at a segment midpoint.
-    Each gradient row applies a centered physical-space stencil along the local
-    in-plane normal.  This stencil defines the field observable only; topology
-    derivatives still come from analytic HDiv-MMM Schur contractions.
+    Each dipole row samples ``B_y = B.bend_axis`` at a segment midpoint.
+    Each gradient row applies a centered physical-space stencil ``dB_y/dx``
+    along the frame axis ``x = bend_axis x tangent`` of
+    :meth:`PlanarDesignOrbit.frame_at`.  This stencil defines the field
+    observable only; topology derivatives still come from analytic HDiv-MMM
+    Schur contractions.
     """
     if not isinstance(orbit, PlanarDesignOrbit):
         raise TypeError("orbit must be a PlanarDesignOrbit")
@@ -562,7 +576,9 @@ class PlanarTransferMatrixObjective:
     36 entries are checked, so entries that are invariant in the underlying
     combined-function model still fail loudly when the requested matrix is
     incompatible.  A caller may supply a physically relevant subset through
-    ``response_entries``.
+    ``response_entries``.  ``curvature_sign`` is the charge sign: it maps
+    ``B_y`` to ``h`` and ``dB_y/dx`` to ``k1``, so no independent gradient
+    sign exists.
     """
 
     orbit: PlanarDesignOrbit
@@ -571,7 +587,6 @@ class PlanarTransferMatrixObjective:
     bend_field_band: np.ndarray | float
     response_entries: tuple[tuple[int, int], ...] = _ALL_TRANSFER_ENTRIES
     curvature_sign: float = 1.0
-    gradient_sign: float = 1.0
 
     def __post_init__(self):
         if not isinstance(self.orbit, PlanarDesignOrbit):
@@ -596,7 +611,6 @@ class PlanarTransferMatrixObjective:
         entries = tuple(tuple(int(value) for value in pair)
                         for pair in self.response_entries)
         curvature_sign = float(self.curvature_sign)
-        gradient_sign = float(self.gradient_sign)
         if (not entries or len(set(entries)) != len(entries)
                 or any(len(pair) != 2 for pair in entries)
                 or any(row < 0 or row >= 6 or column < 0 or column >= 6
@@ -606,17 +620,15 @@ class PlanarTransferMatrixObjective:
         if (not np.all(np.isfinite(matrix_band)) or np.any(matrix_band <= 0.0)
                 or not np.all(np.isfinite(bend_band))
                 or np.any(bend_band <= 0.0)
-                or not np.isfinite(curvature_sign) or curvature_sign == 0.0
-                or not np.isfinite(gradient_sign) or gradient_sign == 0.0):
+                or not np.isfinite(curvature_sign) or curvature_sign == 0.0):
             raise ValueError(
-                "objective bands and field-to-optics signs must be finite; "
-                "bands must be positive and signs nonzero")
+                "objective bands and the charge sign must be finite; "
+                "bands must be positive and the sign nonzero")
         object.__setattr__(self, "target_matrix", matrix.copy())
         object.__setattr__(self, "transfer_matrix_band", matrix_band)
         object.__setattr__(self, "bend_field_band", bend_band)
         object.__setattr__(self, "response_entries", entries)
         object.__setattr__(self, "curvature_sign", curvature_sign)
-        object.__setattr__(self, "gradient_sign", gradient_sign)
 
     @property
     def raw_field_response_size(self) -> int:
@@ -654,7 +666,6 @@ class PlanarTransferMatrixObjective:
             self.orbit.magnetic_rigidity,
             field_response_jacobian=field_response_jacobian,
             curvature_sign=self.curvature_sign,
-            gradient_sign=self.gradient_sign,
             response_entries=self.response_entries)
 
     def transform(self, field_response) -> np.ndarray:
@@ -817,7 +828,7 @@ class MultiMomentumTransferMatrixObjective:
     Every orbit owns its physical observation points and may contain a
     different number of longitudinal segments.  Raw rows are concatenated in
     momentum order, with each orbit retaining the row order
-    ``[B_binormal..., dB_binormal/dnormal...]``.  The transformed response is
+    ``[B_y..., dB_y/dx...]``.  The transformed response is
     the corresponding concatenation of
     :class:`PlanarTransferMatrixObjective` responses.  Its Jacobian is block
     diagonal and uses the same forward-mode matrix-exponential AD chain; no
@@ -830,7 +841,6 @@ class MultiMomentumTransferMatrixObjective:
     bend_field_band: object
     response_entries: tuple[tuple[int, int], ...] = _ALL_TRANSFER_ENTRIES
     curvature_sign: float = 1.0
-    gradient_sign: float = 1.0
 
     def __post_init__(self):
         orbits = tuple(self.orbits)
@@ -869,7 +879,7 @@ class MultiMomentumTransferMatrixObjective:
         objectives = tuple(
             PlanarTransferMatrixObjective(
                 orbit, matrix, band, bend_band, self.response_entries,
-                self.curvature_sign, self.gradient_sign)
+                self.curvature_sign)
             for orbit, matrix, band, bend_band in zip(
                 orbits, matrices, matrix_band, bend_bands))
         object.__setattr__(self, "orbits", orbits)
@@ -1737,7 +1747,7 @@ def optimize_hdiv_mmm_magnet_from_transfer_matrix(
         active_elements, element_volumes, volume_max,
         incident_field_response=None, field_correction=None,
         response_entries=None,
-        curvature_sign=1.0, gradient_sign=1.0,
+        curvature_sign=1.0,
         **generation_options) -> AcceleratorMagnetTopologyResult:
     """Create a whole-element HDiv-MMM magnet from orbit and map inputs.
 
@@ -1752,7 +1762,7 @@ def optimize_hdiv_mmm_magnet_from_transfer_matrix(
                tuple(response_entries))
     objective = PlanarTransferMatrixObjective(
         design_orbit, target_transfer_matrix, transfer_matrix_band,
-        bend_field_band, entries, curvature_sign, gradient_sign)
+        bend_field_band, entries, curvature_sign)
     response_matrix = _finite_array(
         field_response_matrix, name="field_response_matrix")
     if (response_matrix.ndim != 2
@@ -1843,7 +1853,7 @@ def optimize_hdiv_mmm_magnet_from_transfer_matrices(
         active_elements, element_volumes, volume_max,
         incident_field_response=None, field_correction=None,
         response_entries=None,
-        curvature_sign=1.0, gradient_sign=1.0,
+        curvature_sign=1.0,
         **generation_options) -> MultiMomentumAcceleratorMagnetTopologyResult:
     """Create one binary HDiv-MMM magnet for several orbit/map targets.
 
@@ -1859,7 +1869,7 @@ def optimize_hdiv_mmm_magnet_from_transfer_matrices(
     objective = MultiMomentumTransferMatrixObjective(
         tuple(design_orbits), target_transfer_matrices,
         transfer_matrix_band, bend_field_band, entries,
-        curvature_sign, gradient_sign)
+        curvature_sign)
     response_matrix = _finite_array(
         field_response_matrix, name="field_response_matrix")
     if (response_matrix.ndim != 2

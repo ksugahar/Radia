@@ -10,6 +10,9 @@ function result = trackReferenceOrbit3D(radiaObject,rigidity,entrancePoint,entra
 %   containers); the HDiv iron-evaluator term is a pybind-owned handle
 %   and joins once an evaluator handle exists in the MEX registry.
 %
+%   RIGIDITY carries the charge sign (q*|B rho|).  signed_curvature_per_m
+%   uses the planar frame x = z x t, y = z: positive h bends toward -x.
+%
 %   result fields: positions_m/tangents (3 x N), stations_m (N),
 %   signed_curvature_per_m (N-1), length_m, out_of_plane_m,
 %   out_of_plane_slope.
@@ -37,4 +40,6 @@ config.maximum_path_m = double(options.MaximumPath);
 config.planarity_tolerance_m = double(options.PlanarityTolerance);
 config.station_count = double(options.StationCount);
 result = radia.internal.callMex('beam.orbit.track_reference_3d',config);
+% The kernel reports counter-clockwise-positive turning about +z.
+result.signed_curvature_per_m = -result.signed_curvature_per_m;
 end

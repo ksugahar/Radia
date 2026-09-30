@@ -355,9 +355,10 @@ def test_design_orbit_exposes_continuous_global_xyz_frame_and_h_of_s():
     np.testing.assert_allclose(orbit.arc_length_stations, stations, atol=0.0)
     np.testing.assert_allclose(orbit.position_at(stations), positions, atol=2.0e-15)
     np.testing.assert_allclose(orbit.tangent_at(stations), tangents, atol=2.0e-15)
+    # Counter-clockwise about bend_axis=+y bends toward +x: h < 0.
     np.testing.assert_allclose(
         orbit.signed_curvature_at(0.5 * (stations[:-1] + stations[1:])),
-        1.0 / radius,
+        -1.0 / radius,
         atol=2.0e-15,
     )
     horizontal, vertical, evaluated_tangent = orbit.frame_at(stations)
@@ -424,7 +425,8 @@ def test_s_runge_kutta_keeps_matched_uniform_field_design_orbit():
         path_length_stations=stations,
     )
     coefficients = np.zeros((9, len(orbit.segment_lengths)))
-    coefficients[0] = rigidity / radius
+    # A proton matches h = B_y/(B rho); this orbit has h = -1/R.
+    coefficients[0] = -rigidity / radius
 
     fixed = track_canonical_hamiltonian_s(
         orbit,
@@ -449,7 +451,7 @@ def test_s_runge_kutta_keeps_matched_uniform_field_design_orbit():
         fixed.global_positions_m, fixed.reference_positions_m, atol=2.0e-15
     )
     np.testing.assert_allclose(
-        fixed.reference_curvature_per_m, 1.0 / radius, atol=2.0e-15
+        fixed.reference_curvature_per_m, -1.0 / radius, atol=2.0e-15
     )
 
 

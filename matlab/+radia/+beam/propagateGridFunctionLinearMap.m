@@ -32,7 +32,6 @@ arguments
     options.InitialHorizontal double {mustBeReal,mustBeFinite} = [1 0 0]
     options.Names = strings(0,1)
     options.CurvatureSign (1,1) double {mustBeFinite} = 1
-    options.GradientSign (1,1) double {mustBeFinite} = 1
     options.PeriodicFrame (1,1) logical = false
     options.FieldRepresentation (1,1) string {mustBeMember( ...
         options.FieldRepresentation,["magnetic_flux_density", ...
@@ -81,7 +80,8 @@ if ~isempty(options.Names)
     config.names = cellstr(names);
 end
 config.curvature_sign = options.CurvatureSign;
-config.gradient_sign = options.GradientSign;
+% The charge sign maps B_y to h and every harmonic to its focusing term.
+config.gradient_sign = options.CurvatureSign;
 config.periodic_frame = options.PeriodicFrame;
 config.field_representation = char(options.FieldRepresentation);
 config.maximum_step_m = options.MaximumStepM;

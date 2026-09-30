@@ -39,6 +39,12 @@ from .isochronous_topopt import (
 
 PROTON_REST_ENERGY_MEV = 938.27208816
 GEV_C_PER_TESLA_METRE = 0.299792458
+# FFAG cells turn counter-clockwise about +z in a positive B_z.  In the
+# right-handed planar frame (x = z x t, y = z) that is the Lorentz motion of
+# a negative charge, or equivalently of a proton in the reversed field, so
+# the cell fixtures and closed-orbit recovery use charge sign -1 and
+# negative signed curvature.
+FFAG_CELL_CHARGE_SIGN = -1.0
 
 
 @dataclass(frozen=True)
@@ -711,7 +717,13 @@ def _periodic_planar_orbit(curvature, segment_lengths, rigidity, bend_axis):
     lengths = np.asarray(segment_lengths, dtype=float).reshape(-1)
     if curvature.shape != lengths.shape:
         raise ValueError("curvature and segment lengths must match")
-    angle = np.r_[0.0, np.cumsum(curvature * lengths)]
+    axis = np.asarray(bend_axis, dtype=float)
+    axis = axis / np.linalg.norm(axis)
+    if abs(abs(axis[2]) - 1.0) > 1.0e-12:
+        raise ValueError("the reduced periodic orbit requires bend_axis=+-z")
+    # Positive h bends toward -x = -(bend_axis x t): clockwise about
+    # bend_axis, i.e. a tangent angle about +z of -axis_z*h*ds.
+    angle = np.r_[0.0, np.cumsum(-axis[2] * curvature * lengths)]
     turning = np.diff(angle)
     midpoint_angle = angle[:-1] + 0.5 * turning
     steps = lengths[:, None] * np.column_stack((
@@ -788,12 +800,15 @@ def build_ffag_cell_reference(
         rigidity * spec.cell_bend_angle_rad - b0_integral
     ) / gradient_integral
     field = b0 + gradient * offset
-    curvature = field / rigidity
+    curvature = FFAG_CELL_CHARGE_SIGN * field / rigidity
     orbit = _periodic_planar_orbit(
         curvature, lengths, rigidity, np.array([0.0, 0.0, 1.0]))
-    raw = np.r_[field, gradient]
+    # The Bell--Abell gradient is outward, dB_z/dr, while the frame axis
+    # x = z x t of a counter-clockwise cell points toward the centre.
+    raw = np.r_[field, -gradient]
     transfer = combined_function_transfer_map_from_field_response(
-        raw, lengths, rigidity, response_entries=response_entries)
+        raw, lengths, rigidity, curvature_sign=FFAG_CELL_CHARGE_SIGN,
+        response_entries=response_entries)
     theta = spec.cell_bend_angle_rad
     rotation = np.array([
         [np.cos(theta), -np.sin(theta), 0.0],
@@ -804,7 +819,7 @@ def build_ffag_cell_reference(
         orbit.positions[-1] - rotation @ orbit.positions[0]))
     tangent_residual = float(np.linalg.norm(
         orbit.tangents[-1] - rotation @ orbit.tangents[0]))
-    bend_angle = float(np.sum(curvature * lengths))
+    bend_angle = float(field @ lengths) / rigidity
     return FFAGCellReference(
         energy, rigidity, float(offset), orbit,
         np.ascontiguousarray(raw), transfer, bend_angle,
@@ -897,7 +912,7 @@ def build_ffag_cell_target_family(
     objective = MultiMomentumTransferMatrixObjective(
         tuple(reference.orbit for reference in references),
         np.asarray([reference.transfer.matrix for reference in references]),
-        transfer_matrix_band, bend_field_band, entries)
+        transfer_matrix_band, bend_field_band, entries, FFAG_CELL_CHARGE_SIGN)
     return FFAGCellTargetFamily(
         spec, references, objective,
         spec.symmetric_tanh_fringe_integrals())
@@ -908,7 +923,7 @@ def build_ffag_fixed_design_orbit_target_family(
         transfer_matrix_band=1.0e-3, bend_field_band=1.0e-3,
         response_entries=None, controlled_components=None,
         require_symplectic=True, symplectic_tolerance=1.0e-9,
-        curvature_sign=1.0, gradient_sign=1.0
+        curvature_sign=1.0
         ) -> FFAGFixedDesignOrbitTargetFamily:
     """Build the direct ``design orbit + target map`` one-pass contract.
 
@@ -938,8 +953,7 @@ def build_ffag_fixed_design_orbit_target_family(
     options = dict(
         transfer_matrix_band=transfer_matrix_band,
         bend_field_band=bend_field_band,
-        curvature_sign=curvature_sign,
-        gradient_sign=gradient_sign)
+        curvature_sign=curvature_sign)
     if response_entries is not None:
         options["response_entries"] = response_entries
     objective = MultiMomentumTransferMatrixObjective(
@@ -1059,7 +1073,7 @@ def differentiate_recovered_planar_orbit_shape_native(
         iron_evaluator, iron_scale, constant_field_t=(0.0, 0.0, 0.0),
         cell_angle_rad, gradient_offset=1.0e-3,
         tracking_step_m=5.0e-3, integration_stations=257,
-        maximum_path_m=None, curvature_sign=1.0,
+        maximum_path_m=None, curvature_sign=FFAG_CELL_CHARGE_SIGN,
         response_entries=None) -> ReclosedOrbitShapeJacobian:
     """Differentiate a periodic orbit and its map without design FD.
 
@@ -1129,7 +1143,8 @@ def differentiate_recovered_planar_orbit_shape_native(
         np.cos(alpha)*tangent_0 + np.sin(alpha)*radial_0)
     entrance_alpha_tangent = (
         -np.sin(alpha)*tangent_0 + np.cos(alpha)*radial_0)
-    native_rigidity = -rigidity/curvature_sign
+    # C++ integrates dt/ds = t x B/(B rho); the charge sign enters there.
+    native_rigidity = rigidity/curvature_sign
     tracked = _native.track_reference_orbit_to_plane_native(
         iron_evaluator, iron_scale, -1, False, constant_field,
         native_rigidity, np.ascontiguousarray(radius*radial_0),
@@ -1336,7 +1351,7 @@ def recover_periodic_planar_closed_orbit(
         field, *, magnetic_rigidity, cell_angle_rad, initial_radius_m,
         initial_incidence_angle_rad=0.0, n_segments=128,
         gradient_offset=1.0e-3, max_path_length_m=None,
-        curvature_sign=1.0, position_tolerance=1.0e-9,
+        curvature_sign=FFAG_CELL_CHARGE_SIGN, position_tolerance=1.0e-9,
         tangent_tolerance=1.0e-9, root_max_evaluations=80,
         response_entries=None) -> FullFieldClosedOrbit:
     """Recover one-cell periodic orbit and its local transfer map.
@@ -1349,10 +1364,10 @@ def recover_periodic_planar_closed_orbit(
     the two-variable root finder concerns orbit recovery only; no design
     derivative or topology sensitivity is approximated.
 
-    ``curvature_sign=+1`` matches :class:`PlanarTransferMatrixObjective`: a
-    positive binormal field produces positive signed curvature.  It therefore
-    fixes the otherwise conventional charge/field orientation in the Lorentz
-    equation used here.
+    ``curvature_sign`` is the charge sign in ``dt/ds = q*t x B/p``, as in
+    :class:`PlanarTransferMatrixObjective`.  The cell turns counter-clockwise
+    about +z, so the default :data:`FFAG_CELL_CHARGE_SIGN` closes the orbit
+    in the positive-``B_z`` FFAG fixtures; a proton needs negative ``B_z``.
     """
     from scipy.integrate import solve_ivp
     from scipy.optimize import least_squares
@@ -1411,7 +1426,7 @@ def recover_periodic_planar_closed_orbit(
                 raise RuntimeError("particle tangent vanished")
             tangent = tangent / tangent_norm
             magnetic_field = _evaluate_b_field(field, state[:3])
-            curvature = (-curvature_sign
+            curvature = (curvature_sign
                          * np.cross(tangent, magnetic_field) / rigidity)
             return np.r_[tangent, curvature]
 
@@ -1508,7 +1523,7 @@ def recover_periodic_planar_closed_orbit_native(
         initial_incidence_angle_rad=0.0, n_segments=128,
         gradient_offset=1.0e-3, tracking_step_m=5.0e-4,
         max_path_length_m=None, planarity_tolerance_m=1.0e-7,
-        curvature_sign=1.0, position_tolerance=1.0e-9,
+        curvature_sign=FFAG_CELL_CHARGE_SIGN, position_tolerance=1.0e-9,
         tangent_tolerance=1.0e-9, root_max_evaluations=80,
         response_entries=None) -> FullFieldClosedOrbit:
     """Recover a periodic orbit with the fixed-step C++ field tracker.
@@ -1581,9 +1596,8 @@ def recover_periodic_planar_closed_orbit_native(
     radial_1 = rotation @ radial_0
     tangent_1 = np.ascontiguousarray(rotation @ tangent_0)
     radius_scale = max(radius_guess, 1.0e-6)
-    # C++ uses dt/ds=t x B/(B rho), whereas the public planar convention is
-    # positive B_binormal -> positive signed curvature.
-    native_rigidity = -rigidity / curvature_sign
+    # C++ integrates dt/ds = t x B/(B rho); the charge sign enters there.
+    native_rigidity = rigidity / curvature_sign
 
     def track(radius, alpha, station_count):
         start_position = np.ascontiguousarray(radius * radial_0)
@@ -1727,7 +1741,10 @@ def recover_periodic_planar_closed_orbit_native(
     positions = np.ascontiguousarray(tracked[0], dtype=float)
     tangents = np.ascontiguousarray(tracked[1], dtype=float)
     path_stations = np.ascontiguousarray(tracked[2], dtype=float)
-    curvature = np.ascontiguousarray(tracked[3], dtype=float)
+    # The native tracker reports -(B.z)/(B rho) for its signed rigidity,
+    # i.e. counter-clockwise-positive turning about +z.  With bend_axis=+z,
+    # positive h bends toward -x = clockwise, hence the negation.
+    curvature = -np.ascontiguousarray(tracked[3], dtype=float)
     path_length = float(tracked[4])
     final_residual = residual((radius, alpha))
     position_residual = abs(float(final_residual[0])) * radius_scale
@@ -2266,7 +2283,6 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
                 exact_state_cache=exact_state_cache,
                 response_entries=objective.response_entries,
                 curvature_sign=objective.curvature_sign,
-                gradient_sign=objective.gradient_sign,
                 max_iterations=material_count,
                 **trial_options)
             next_active = np.asarray(
@@ -2343,7 +2359,6 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
                 exact_state_cache=exact_state_cache,
                 response_entries=objective.response_entries,
                 curvature_sign=objective.curvature_sign,
-                gradient_sign=objective.gradient_sign,
                 max_iterations=material_count,
                 **oracle_options)
             next_active = np.asarray(
@@ -2406,7 +2421,6 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
             exact_state_cache=exact_state_cache,
             response_entries=objective.response_entries,
             curvature_sign=objective.curvature_sign,
-            gradient_sign=objective.gradient_sign,
             max_iterations=0, **baseline_options)
     # The physical source scale includes a calibration applied inside the
     # accepted generation (source_calibration_rows in generation_options);
@@ -2426,7 +2440,7 @@ def optimize_ffag_hdiv_mmm_from_design_orbits(
         transfer_matrix_band=1.0e-3, bend_field_band=1.0e-3,
         response_entries=None, controlled_components=None,
         require_symplectic=True, symplectic_tolerance=1.0e-9,
-        curvature_sign=1.0, gradient_sign=1.0,
+        curvature_sign=1.0,
         **optimization_options) -> FFAGFixedOrbitHDivMMMTopologyResult:
     """Optimize HDiv-MMM material for caller-supplied one-pass optics.
 
@@ -2449,8 +2463,7 @@ def optimize_ffag_hdiv_mmm_from_design_orbits(
         controlled_components=controlled_components,
         require_symplectic=require_symplectic,
         symplectic_tolerance=symplectic_tolerance,
-        curvature_sign=curvature_sign,
-        gradient_sign=gradient_sign)
+        curvature_sign=curvature_sign)
     return optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
         target_family, **optimization_options)
 
@@ -2601,8 +2614,7 @@ def optimize_ffag_hdiv_mmm_from_transfer_matrices(
             target_family.objective.transfer_matrix_band,
             target_family.objective.bend_field_band,
             target_family.objective.response_entries,
-            target_family.objective.curvature_sign,
-            target_family.objective.gradient_sign)
+            target_family.objective.curvature_sign)
         response_matrix = build_multi_orbit_field_response_matrix(
             charge_gram, dynamic_objective,
             gradient_offset=gradient_offset)
@@ -2645,7 +2657,6 @@ def optimize_ffag_hdiv_mmm_from_transfer_matrices(
                 volume_max=volume_max,
                 response_entries=dynamic_objective.response_entries,
                 curvature_sign=dynamic_objective.curvature_sign,
-                gradient_sign=dynamic_objective.gradient_sign,
                 max_iterations=inner_count,
                 initial_material_move_fraction=trial_fraction,
                 maximum_material_move_fraction=trial_fraction,

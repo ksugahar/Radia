@@ -228,7 +228,8 @@ def track_reference_orbit(
     midpoint_b = np.asarray(
         [magnetic_flux_density(point) for point in midpoint_positions]
     )
-    collocated_curvature = -np.einsum(
+    # Proton in the standard planar frame: h = +B_y/(B rho).
+    collocated_curvature = np.einsum(
         "ij,ij->i", midpoint_b, midpoint_vertical
     ) / float(magnetic_rigidity)
     return PlanarDesignOrbit(
@@ -451,7 +452,7 @@ def run_case(options, iron_maxh):
         midpoint_positions = orbit.position_at(midpoint_s)
         _, midpoint_vertical, _ = orbit.frame_at(midpoint_s)
         midpoint_b = b_batch(midpoint_positions)
-        curvature_from_b = -np.einsum(
+        curvature_from_b = np.einsum(
             "ij,ij->i", midpoint_b, midpoint_vertical
         ) / float(options.magnetic_rigidity)
         curvature_discrepancy = orbit.signed_curvature - curvature_from_b

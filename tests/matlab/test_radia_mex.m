@@ -2858,6 +2858,7 @@ function testBeamOrbitTrackerToPlaneHDivHandle(testCase)
 % The general-plane MEX route owns an HDiv evaluator handle and adds a
 % constant incident field.  This exact circular sector is shared with the
 % pybind regression and therefore locks row-major Python/MATLAB parity.
+% The orbit turns counter-clockwise about +z in positive Bz: charge -1.
 rigidity = 1.7;
 radius = 3.2;
 angle = 0.25;
@@ -2873,8 +2874,8 @@ field = radia.HDivFieldEvaluator.fromCloud([0.0,0.0,10.0],0.0);
 result = radia.beam.trackReferenceOrbitToPlane( ...
     field,rigidity,radius*radial0,tangent0,tangent1,0.0, ...
     IronScale=0.0,ConstantField=[0.0,0.0,bendingField], ...
-    Step=5.0e-4,MaximumPath=2.0,PlanarityTolerance=1.0e-8, ...
-    StationCount=33);
+    CurvatureSign=-1.0,Step=5.0e-4,MaximumPath=2.0, ...
+    PlanarityTolerance=1.0e-8,StationCount=33);
 
 verifyEqual(testCase,result.positions_m(:,end),radius*radial1.', ...
     "AbsTol",2.0e-9);
@@ -2882,9 +2883,9 @@ verifyEqual(testCase,result.tangents(:,end),tangent1.', ...
     "AbsTol",2.0e-9);
 verifyEqual(testCase,result.length_m,radius*angle,"AbsTol",2.0e-9);
 verifyEqual(testCase,result.signed_curvature_per_m, ...
-    (1.0/radius)*ones(32,1),"AbsTol",2.0e-12);
+    -(1.0/radius)*ones(32,1),"AbsTol",2.0e-12);
 verifyEqual(testCase,result.magnetic_rigidity_t_m,rigidity);
-verifyEqual(testCase,result.curvature_sign,1.0);
+verifyEqual(testCase,result.curvature_sign,-1.0);
 verifyEqual(testCase,result.out_of_plane_m,0.0);
 verifyEqual(testCase,result.out_of_plane_slope,0.0);
 end

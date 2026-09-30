@@ -7,9 +7,10 @@ function result = trackReferenceOrbitToPlane(fieldEvaluator,rigidity, ...
 %
 %     IronScale * fieldEvaluator + optional Radia object + ConstantField.
 %
-%   RIGIDITY is the positive physical |B rho|.  CurvatureSign=+1 follows the
-%   accelerator-topology convention in which positive Bz gives positive
-%   signed curvature; the wrapper performs the C++ charge-sign conversion.
+%   RIGIDITY is the positive physical |B rho| and CurvatureSign is the charge
+%   sign in dt/ds = q*t x B/p.  signed_curvature_per_m uses the planar frame
+%   x = z x t, y = z: positive h bends toward -x (metric 1 + h*x), so a
+%   counter-clockwise orbit about +z has negative h.
 %
 %   result fields: positions_m/tangents (3 x N), stations_m (N),
 %   signed_curvature_per_m (N-1), length_m, out_of_plane_m,
@@ -50,7 +51,7 @@ else
 end
 config.mirror_z = logical(options.MirrorZ);
 config.constant_field_t = double(options.ConstantField);
-config.magnetic_rigidity_t_m = -double(rigidity) / options.CurvatureSign;
+config.magnetic_rigidity_t_m = double(rigidity) / options.CurvatureSign;
 config.entrance_point_m = double(entrancePoint);
 config.entrance_direction = double(entranceDirection);
 config.exit_plane_normal = double(exitPlaneNormal);
@@ -61,6 +62,8 @@ config.planarity_tolerance_m = double(options.PlanarityTolerance);
 config.station_count = double(options.StationCount);
 result = radia.internal.callMex( ...
     'beam.orbit.track_reference_to_plane',fieldEvaluator.nativeHandle(),config);
+% The kernel reports counter-clockwise-positive turning about +z.
+result.signed_curvature_per_m = -result.signed_curvature_per_m;
 result.magnetic_rigidity_t_m = double(rigidity);
 result.curvature_sign = double(options.CurvatureSign);
 end

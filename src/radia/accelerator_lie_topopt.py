@@ -498,7 +498,6 @@ def canonical_body_hamiltonian_jet(
     magnetic_rigidity,
     *,
     curvature_sign=1.0,
-    gradient_sign=1.0,
     reference_beta=1.0,
     reference_curvature_per_m=None,
 ) -> CanonicalHamiltonianJet:
@@ -512,18 +511,19 @@ def canonical_body_hamiltonian_jet(
     cancels the reference-orbit linear force and supplies sector focusing;
     normal/skew harmonic terms continue through optional decapole.  ``H_ref`` supplies
     finite-speed slip and becomes ``1+delta`` when ``reference_beta=1``.
+    ``curvature_sign`` is the charge sign of every field harmonic, from
+    ``h=q*B_y/p`` through the quadrupole and higher focusing terms.
     """
     values = _finite_array(coefficients, name="segment multipoles").reshape(-1)
     if values.shape not in ((7,), (9,)):
         raise ValueError("segment multipoles must have shape (7,) or (9,)")
     rigidity = float(magnetic_rigidity)
     curvature_sign = float(curvature_sign)
-    gradient_sign = float(gradient_sign)
     beta = float(reference_beta)
     if (
         not np.isfinite(rigidity)
         or rigidity == 0.0
-        or not np.all(np.isfinite([curvature_sign, gradient_sign, beta]))
+        or not np.all(np.isfinite([curvature_sign, beta]))
         or beta <= 0.0
         or beta > 1.0
     ):
@@ -682,13 +682,13 @@ def canonical_body_hamiltonian_jet(
         normal_parameter = 2 * order - 1
         skew_parameter = 2 * order
         normalized = (
-            gradient_sign
+            curvature_sign
             * complex(values[normal_parameter], values[skew_parameter])
             / rigidity
         )
         normalized_tangent = np.zeros(parameter_count, dtype=complex)
-        normalized_tangent[normal_parameter] = gradient_sign / rigidity
-        normalized_tangent[skew_parameter] = 1.0j * gradient_sign / rigidity
+        normalized_tangent[normal_parameter] = curvature_sign / rigidity
+        normalized_tangent[skew_parameter] = 1.0j * curvature_sign / rigidity
         target, target_tangent = {
             2: (H2, dH2),
             3: (H3, dH3),
@@ -732,7 +732,6 @@ def canonical_body_hamiltonian_jet(
         values,
         rigidity,
         curvature_sign=curvature_sign,
-        gradient_sign=gradient_sign,
         reference_beta=beta,
         reference_curvature_per_m=(
             None if reference_curvature_per_m is None else curvature
@@ -787,7 +786,6 @@ def canonical_body_hamiltonian_rhs(
     magnetic_rigidity,
     *,
     curvature_sign=1.0,
-    gradient_sign=1.0,
     reference_beta=1.0,
     reference_curvature_per_m=None,
 ) -> np.ndarray:
@@ -832,7 +830,7 @@ def canonical_body_hamiltonian_rhs(
     potential_y = 0.0
     for order in range(1, 1 + (values.size - 1) // 2):
         coefficient = (
-            float(gradient_sign)
+            float(curvature_sign)
             * complex(values[2 * order - 1], values[2 * order])
             / rigidity
         )
@@ -2061,7 +2059,6 @@ def third_order_lie_map_from_multipoles(
     magnetic_rigidity,
     *,
     curvature_sign=1.0,
-    gradient_sign=1.0,
     reference_beta=1.0,
     reference_curvature_per_m=None,
     maximum_step_m=1.0e-3,
@@ -2107,7 +2104,6 @@ def third_order_lie_map_from_multipoles(
             coefficients[:, segment],
             magnetic_rigidity,
             curvature_sign=curvature_sign,
-            gradient_sign=gradient_sign,
             reference_beta=reference_beta,
             reference_curvature_per_m=(
                 None
@@ -2218,7 +2214,6 @@ def fourth_order_lie_map_from_multipoles(
     magnetic_rigidity,
     *,
     curvature_sign=1.0,
-    gradient_sign=1.0,
     reference_beta=1.0,
     reference_curvature_per_m=None,
     maximum_step_m=1.0e-3,
@@ -2271,7 +2266,6 @@ def fourth_order_lie_map_from_multipoles(
         lengths,
         magnetic_rigidity,
         curvature_sign=curvature_sign,
-        gradient_sign=gradient_sign,
         reference_beta=reference_beta,
         reference_curvature_per_m=reference_curvature,
         maximum_step_m=step_limit,
@@ -2286,7 +2280,6 @@ def fourth_order_lie_map_from_multipoles(
             coefficients[:, segment],
             magnetic_rigidity,
             curvature_sign=curvature_sign,
-            gradient_sign=gradient_sign,
             reference_beta=reference_beta,
             reference_curvature_per_m=(
                 None
@@ -2854,12 +2847,9 @@ def fourth_order_lie_map_from_hcurl_transverse(
         polynomial_fit.As_coefficients_t_m,
         orbit.segment_lengths,
         orbit.magnetic_rigidity,
-        # PlanarDesignOrbit uses e_x = bend_axis x tangent and therefore
-        # d(e_x)/ds = -h*tangent.  Its physical loft metric is 1-h*x,
-        # whereas the canonical jet names the coefficient in 1+k*x.
-        # Hence the Hamiltonian connection coefficient is k=-h.  The direct
-        # HCurl A-RK route uses the same sign explicitly as metric_curvature.
-        reference_curvature_per_m=-orbit.signed_curvature,
+        # PlanarDesignOrbit bends toward -x for positive h, so its loft
+        # metric is the canonical 1+h*x.
+        reference_curvature_per_m=orbit.signed_curvature,
         curvature_sign=curvature_sign,
         reference_beta=reference_beta,
         longitudinal_component="physical",
@@ -2975,7 +2965,6 @@ class PlanarThirdOrderLieMapObjective(PlanarThirdOrderTaylorMapObjective):
             self.orbit.segment_lengths,
             self.orbit.magnetic_rigidity,
             curvature_sign=self.curvature_sign,
-            gradient_sign=self.gradient_sign,
             reference_beta=self.reference_beta,
             reference_curvature_per_m=self.orbit.signed_curvature,
             maximum_step_m=self.maximum_step_m,
@@ -3089,7 +3078,6 @@ class PlanarFourthOrderLieMapObjective(PlanarThirdOrderLieMapObjective):
             self.orbit.segment_lengths,
             self.orbit.magnetic_rigidity,
             curvature_sign=self.curvature_sign,
-            gradient_sign=self.gradient_sign,
             reference_beta=self.reference_beta,
             reference_curvature_per_m=self.orbit.signed_curvature,
             maximum_step_m=self.maximum_step_m,
@@ -3896,9 +3884,10 @@ def track_hcurl_vector_potential_canonical_s(
     polynomial field map is used.
     The constrained gauge removes ``A_x`` from the Hamiltonian and is checked
     at every visited point.  Physical ``A_s=A.t`` is converted to the
-    curvilinear covariant component ``(1-h*x) A_s`` before calling the exact
+    curvilinear covariant component ``(1+h*x) A_s`` before calling the exact
     Hamiltonian RHS.  Here ``h=orbit.signed_curvature`` and the orbit frame
-    uses ``e_x=bend_axis x tangent``; consequently ``d e_x/ds=-h*tangent``.
+    uses ``e_x=bend_axis x tangent``; positive ``h`` bends toward ``-x``, so
+    ``d e_x/ds=h*tangent``.
 
     The caller owns the surrounding ``ngsolve.TaskManager``.
     """
@@ -3948,10 +3937,9 @@ def track_hcurl_vector_potential_canonical_s(
         start = float(stations[segment])
         stop = float(stations[segment + 1])
         h = float(curvature[segment])
-        # PlanarDesignOrbit defines e_x = bend_axis x tangent.  Positive
-        # signed turning therefore gives d e_x/ds = -h*tangent, so the
-        # Hamiltonian connection coefficient is -h and the metric is 1-h*x.
-        metric_curvature = -h
+        # Positive h bends toward -x, so d e_x/ds = h*tangent and the
+        # Hamiltonian metric is 1+h*x.
+        metric_curvature = h
         interior_margin = min(
             0.25 * float(length),
             max(1.0e-12, 1.0e-8 * float(length)),
@@ -4726,7 +4714,6 @@ def track_canonical_hamiltonian_s(
     initial_state,
     *,
     curvature_sign=1.0,
-    gradient_sign=1.0,
     reference_beta=1.0,
     integrator="DOP853",
     maximum_step_m=1.0e-3,
@@ -4786,7 +4773,6 @@ def track_canonical_hamiltonian_s(
                 coefficients[:, segment],
                 orbit.magnetic_rigidity,
                 curvature_sign=curvature_sign,
-                gradient_sign=gradient_sign,
                 reference_beta=reference_beta,
                 reference_curvature_per_m=curvature[segment],
             )
@@ -4865,9 +4851,6 @@ def track_tracked_lie_map_canonical_s(
     configured = dict(options)
     configured.setdefault(
         "curvature_sign", float(result.field_fit["lie_curvature_sign"])
-    )
-    configured.setdefault(
-        "gradient_sign", float(result.field_fit["lie_gradient_sign"])
     )
     configured.setdefault(
         "reference_beta", float(result.field_fit["lie_reference_beta"])
@@ -5053,7 +5036,6 @@ def fourth_order_lie_map_from_tracked_orbit(
     sample_radius_m=1.0e-3,
     initial_horizontal=None,
     curvature_sign=1.0,
-    gradient_sign=1.0,
     periodic_frame=False,
     reference_beta=1.0,
     maximum_step_m=1.0e-3,
@@ -5102,7 +5084,6 @@ def fourth_order_lie_map_from_tracked_orbit(
         sample_radius_m=sample_radius_m,
         initial_horizontal=horizontal_seed,
         curvature_sign=curvature_sign,
-        gradient_sign=gradient_sign,
         multipole_order=4,
         maximum_map_order=1,
         periodic_frame=periodic_frame,
@@ -5153,7 +5134,6 @@ def fourth_order_lie_map_from_tracked_orbit(
     )
     fitted["lie_initial_horizontal"] = np.ascontiguousarray(horizontal_seed)
     fitted["lie_curvature_sign"] = float(curvature_sign)
-    fitted["lie_gradient_sign"] = float(gradient_sign)
     fitted["lie_reference_beta"] = float(reference_beta)
     fitted["lie_maximum_step_m"] = float(maximum_step_m)
     response = np.vstack(
@@ -5174,7 +5154,6 @@ def fourth_order_lie_map_from_tracked_orbit(
         orbit.segment_lengths,
         orbit.magnetic_rigidity,
         curvature_sign=curvature_sign,
-        gradient_sign=gradient_sign,
         reference_beta=reference_beta,
         reference_curvature_per_m=reference_curvature,
         maximum_step_m=maximum_step_m,

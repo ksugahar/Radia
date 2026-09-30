@@ -13,6 +13,7 @@ from radia.accelerator_magnet_topopt import (
     static_magnet_transfer_component_entries,
 )
 from radia.ffag_topopt import (
+    FFAG_CELL_CHARGE_SIGN,
     build_ffag_cyclic_hdiv_excitation,
     FFAGCyclicSectorContract,
     FFAGFixedDesignOrbitTargetFamily,
@@ -727,8 +728,9 @@ def test_full_field_periodic_orbit_recovers_uniform_field_circle():
         np.linspace(0.0, radius * angle, 33),
         atol=3e-10,
     )
+    # Counter-clockwise about +z bends toward +x = z x t: h < 0.
     np.testing.assert_allclose(
-        result.orbit.signed_curvature, 1.0 / radius, atol=2e-11
+        result.orbit.signed_curvature, -1.0 / radius, atol=2e-11
     )
     assert abs(result.entrance_incidence_angle_rad) < 2e-10
     assert result.periodic_position_residual_m < 3e-10
@@ -766,7 +768,7 @@ def test_native_periodic_orbit_recovery_matches_uniform_field_circle():
     np.testing.assert_allclose(
         result.path_length_m, radius * angle, atol=3e-9)
     np.testing.assert_allclose(
-        result.orbit.signed_curvature, 1.0 / radius, atol=2e-12)
+        result.orbit.signed_curvature, -1.0 / radius, atol=2e-12)
     assert abs(result.entrance_incidence_angle_rad) < 2e-9
     assert result.periodic_position_residual_m < 3e-9
     assert result.periodic_tangent_residual < 3e-9
@@ -819,17 +821,18 @@ def test_two_rigidity_bdm1_hex_topology_reaches_both_cell_maps():
             field_scale=MU0)
     incident = np.array([MU0 * 1.0e5, 0.0, MU0 * 1.0e5, 0.0])
     target_raw = native_rows @ target_state + incident
+    charge = FFAG_CELL_CHARGE_SIGN
     orbits = tuple(PlanarDesignOrbit(
         orbit.positions, orbit.tangents,
         magnetic_rigidity=float(
-            target_raw[2 * index] / orbit.signed_curvature[0]),
+            charge * target_raw[2 * index] / orbit.signed_curvature[0]),
         bend_axis=orbit.bend_axis)
         for index, orbit in enumerate(provisional_orbits))
     assert all(orbit.magnetic_rigidity > 0.0 for orbit in orbits)
     maps = np.asarray([
         combined_function_transfer_map_from_field_response(
             target_raw[2*index:2*index+2], orbit.segment_lengths,
-            orbit.magnetic_rigidity,
+            orbit.magnetic_rigidity, curvature_sign=charge,
             response_entries=tuple(
                 (row, column) for row in range(6) for column in range(6)
             )).matrix
@@ -842,7 +845,7 @@ def test_two_rigidity_bdm1_hex_topology_reaches_both_cell_maps():
     map_change = max(np.max(np.abs(
         maps[index] - combined_function_transfer_map_from_field_response(
             initial_raw[2*index:2*index+2], orbit.segment_lengths,
-            orbit.magnetic_rigidity,
+            orbit.magnetic_rigidity, curvature_sign=charge,
             response_entries=tuple(
                 (row, column) for row in range(6) for column in range(6)
             )).matrix)) for index, orbit in enumerate(orbits))
@@ -851,7 +854,7 @@ def test_two_rigidity_bdm1_hex_topology_reaches_both_cell_maps():
     map_band = 0.2 * map_change
     volumes = np.asarray(ng.Integrate(1.0, mesh, element_wise=True))
     objective = MultiMomentumTransferMatrixObjective(
-        orbits, maps, map_band, bend_band)
+        orbits, maps, map_band, bend_band, curvature_sign=charge)
     field_correction = solve_transfer_matrix_field_correction(
         objective, initial_raw, relative_tolerance=1e-10)
 
@@ -865,7 +868,7 @@ def test_two_rigidity_bdm1_hex_topology_reaches_both_cell_maps():
         volume_max=float(np.sum(volumes)) + 1e-14,
         fixed_active_elements=initial, maximum_batch_elements=1,
         graph_front_proposal_limit=0, max_iterations=1,
-        solve_tolerance=1e-11)
+        solve_tolerance=1e-11, curvature_sign=charge)
 
     assert result.converged
     assert result.field_correction is field_correction
@@ -908,6 +911,7 @@ def test_full_field_outer_loop_tracks_only_before_and_after_binary_batch(
             transfer=combined_function_transfer_map_from_field_response(
                 field,reference.orbit.segment_lengths,
                 reference.orbit.magnetic_rigidity,
+                curvature_sign=objective.curvature_sign,
                 response_entries=objective.response_entries)
             values.append(FullFieldClosedOrbit(
                 reference.magnetic_rigidity_tm,reference.orbit,
@@ -937,7 +941,7 @@ def test_full_field_outer_loop_tracks_only_before_and_after_binary_batch(
         objective=MultiMomentumTransferMatrixObjective(
             tuple(orbits),np.asarray(matrices),
             kwargs["transfer_matrix_band"],kwargs["bend_field_band"],
-            kwargs["response_entries"])
+            kwargs["response_entries"],kwargs["curvature_sign"])
         split=objective.split_raw_response(correction.target_field_response)
         return MultiMomentumAcceleratorMagnetTopologyResult(
             objective,generation,split,
@@ -1040,7 +1044,7 @@ def test_fixed_design_orbit_path_never_runs_periodic_orbit_recovery(
         objective=MultiMomentumTransferMatrixObjective(
             tuple(orbits),np.asarray(matrices),
             kwargs["transfer_matrix_band"],kwargs["bend_field_band"],
-            kwargs["response_entries"])
+            kwargs["response_entries"],kwargs["curvature_sign"])
         split=objective.split_raw_response(correction.target_field_response)
         return MultiMomentumAcceleratorMagnetTopologyResult(
             objective,generation,split,np.asarray(matrices),
@@ -1164,7 +1168,7 @@ def test_fixed_design_orbit_path_never_runs_periodic_orbit_recovery(
         objective=MultiMomentumTransferMatrixObjective(
             tuple(orbits),np.asarray(matrices),
             kwargs["transfer_matrix_band"],kwargs["bend_field_band"],
-            kwargs["response_entries"])
+            kwargs["response_entries"],kwargs["curvature_sign"])
         split=objective.split_raw_response(correction.target_field_response)
         return MultiMomentumAcceleratorMagnetTopologyResult(
             objective,generation,split,np.asarray(matrices),
@@ -1212,7 +1216,7 @@ def test_fixed_design_orbit_path_never_runs_periodic_orbit_recovery(
         objective=MultiMomentumTransferMatrixObjective(
             tuple(orbits),np.asarray(matrices),
             kwargs["transfer_matrix_band"],kwargs["bend_field_band"],
-            kwargs["response_entries"])
+            kwargs["response_entries"],kwargs["curvature_sign"])
         split=objective.split_raw_response(raw)
         return MultiMomentumAcceleratorMagnetTopologyResult(
             objective,generation,split,np.asarray(matrices),
