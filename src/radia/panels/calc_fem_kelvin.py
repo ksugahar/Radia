@@ -41,6 +41,7 @@ from calc_heat import QSURF_HANDOFF_ORDER
 
 # Shared linear acceptance threshold; nonlinear and accuracy gates are separate.
 from radia._residual_gate import RELATIVE_LIMIT as LINEAR_TRUE_RESIDUAL_LIMIT
+from radia.esim_cell_problem import require_esim_converged
 # iterative-refinement steps allowed after the first linear solve; each step
 # must converge on its own and all are recorded
 MAX_RESIDUAL_CORRECTIONS = 3
@@ -448,11 +449,13 @@ def solve_fem(vol_file="", fes_order=1,
         esim = None
         has_wp = False
     elif impedance_model == "esim":
-        # Seed Z_s with a small-H Picard solve; cap inner iter at 5
-        # because the outer Karl loop will refresh Z_s immediately.
+        # Seed Z_s with a converged small-H cell solve.  An unconverged seed
+        # is not a cheaper approximation: it changes every outer Karl matrix.
         esim = mat.create_esim_solver(frequency, half_thickness,
                                       geometry='cylinder')
-        Z_s = esim.solve(5.0, max_iter=5)['Z']
+        seed_result = require_esim_converged(
+            esim.solve(5.0), "FEM ESIM seed cell solve")
+        Z_s = seed_result['Z']
     else:
         # Linear SIBC via Dowell tanh formula
         Z_s = mat.dowell_Zs(frequency, half_thickness)
@@ -1180,7 +1183,9 @@ def solve_fem(vol_file="", fes_order=1,
                 if abs(Zsi_old) <= 1e-30:
                     continue
                 Ht_i = abs(1j * omega / Zsi_old) * float(At_amp_per_dof[i])
-                sol_new = esim.solve(max(Ht_i, 1e-3))
+                sol_new = require_esim_converged(
+                    esim.solve(max(Ht_i, 1e-3)),
+                    f"FEM per-panel ESIM cell solve at DOF {i}")
                 Z_s_new_arr[i] = complex(sol_new['Z'])
                 n_called += 1
             # Under-relax per-DOF.
@@ -1215,7 +1220,9 @@ def solve_fem(vol_file="", fes_order=1,
             # Scalar Karl (legacy path)
             Z_s_old = Z_s
             if esim is not None:
-                sol_new = esim.solve(max(float(H_t_rms), 1e-3))
+                sol_new = require_esim_converged(
+                    esim.solve(max(float(H_t_rms), 1e-3)),
+                    "FEM scalar ESIM cell solve")
                 Z_s = relax * sol_new['Z'] + (1 - relax) * Z_s_old
             # else: linear SIBC, Z_s constant (no iteration needed)
 
