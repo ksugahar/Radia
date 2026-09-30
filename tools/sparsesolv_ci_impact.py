@@ -29,6 +29,9 @@ NATIVE_PATHS = (
     'validation_test/radia_mcp/test_axi_eddy_current_drive.py',
     'validation_test/radia_mcp/test_eddy_driven_region.py',
 
+    'src/matlab/radia_ih_mex_commands.cpp',
+    'matlab/+radia/+simulink/validateIHNativeConfig.m',
+    'tests/matlab/test_ih_sparse_inputs.m',
     'src/radia/ih*.py',
     'src/radia/panels/calc_heat*.py',
     'src/radia/panels/calc_ih_axisym_coupled.py',
