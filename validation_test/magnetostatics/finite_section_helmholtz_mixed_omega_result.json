@@ -177,7 +177,8 @@
   },
   "gate_result": {
     "policy": "finite_section_helmholtz_mixed_omega_gate_v1",
-    "status": "ok",
+    "status": "unverified",
+    "historical_numeric_status": "ok",
     "checks": {
       "schema_is_supported": true,
       "units_are_explicit_si": true,
@@ -194,7 +195,10 @@
       "refinement_error_decreases": true,
       "final_refinement_matches_field": true
     },
-    "issues": [],
+    "issues": [
+      "The refinement sequence combines different builds and final-level meshes.",
+      "The latest run lacks NGSolve version and native binary identity; a same-build campaign is required for current acceptance."
+    ],
     "metrics": {
       "sample_count": 4,
       "analytic_bz_T": [
