@@ -44,7 +44,8 @@ struct OrbitTrackResult {
 //
 // positions/tangents: (station_count, 3); stations: (station_count) path
 // lengths; curvature: (station_count-1) midpoint-collocated signed
-// curvature -(B . bend_axis)/(B rho) with bend_axis = +z.
+// curvature h = (B . bend_axis)/(B rho) with bend_axis = +z, positive when
+// the orbit bends toward -x = -(z x t).
 //
 // Throws std::invalid_argument on bad inputs, std::runtime_error when the
 // exit plane is not crossed or the planarity gate trips.

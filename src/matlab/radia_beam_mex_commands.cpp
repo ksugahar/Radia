@@ -261,8 +261,6 @@ GridFunctionInput ParseGridFunctionInput(const mxArray* config) {
         Field(config, "periodic_frame"), "periodic_frame", false);
     output.options.curvature_sign = Scalar(
         Field(config, "curvature_sign"), "curvature_sign", 1.0, true);
-    output.options.gradient_sign = Scalar(
-        Field(config, "gradient_sign"), "gradient_sign", 1.0, true);
     output.options.multipole_order = static_cast<unsigned>(PositiveInteger(
         Field(config, "multipole_order"), "multipole_order",
         multipole ? 3 : 1, true));
@@ -1210,8 +1208,6 @@ void CanonicalHamiltonianJet(int nlhs, mxArray* plhs[], int nrhs,
         "magnetic_rigidity_t_m", 0.0, false);
     const double curvature_sign = Scalar(
         Field(config, "curvature_sign"), "curvature_sign", 1.0, true);
-    const double gradient_sign = Scalar(
-        Field(config, "gradient_sign"), "gradient_sign", 1.0, true);
     const double reference_beta = Scalar(
         Field(config, "reference_beta"), "reference_beta", 1.0, true);
     std::optional<double> reference_curvature_per_m;
@@ -1220,7 +1216,7 @@ void CanonicalHamiltonianJet(int nlhs, mxArray* plhs[], int nrhs,
             value, "reference_curvature_per_m", 0.0, false);
     plhs[0] = CanonicalHamiltonianJetResult(
         radia::beam::BuildCanonicalBodyHamiltonianJet(
-            expansion, rigidity, curvature_sign, gradient_sign,
+            expansion, rigidity, curvature_sign,
             reference_beta, reference_curvature_per_m));
 }
 

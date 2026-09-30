@@ -88,8 +88,6 @@ if ~isempty(options.Names)
     config.names = cellstr(names);
 end
 config.curvature_sign = options.CurvatureSign;
-% The charge sign maps B_y to h and every harmonic to its focusing term.
-config.gradient_sign = options.CurvatureSign;
 config.periodic_frame = options.PeriodicFrame;
 config.field_representation = char(options.FieldRepresentation);
 config.multipole_order = options.MultipoleOrder;
