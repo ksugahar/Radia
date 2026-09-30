@@ -14,10 +14,10 @@
   "raw_field_row_count": 3584,
   "design_response_count": 1883,
   "maximum_bend_angle_error_rad": 5.551115123125783e-17,
-  "maximum_periodic_position_residual_m": 1.4043333874306805e-15,
+  "maximum_periodic_position_residual_m": 1.616509124176106e-15,
   "maximum_periodic_tangent_residual": 4.847302891456678e-16,
-  "maximum_analytic_map_transform_residual": 6.17284001691587e-13,
-  "maximum_symplectic_residual": 6.049674187463118e-15,
+  "maximum_analytic_map_transform_residual": 7.188130299318196e-14,
+  "maximum_symplectic_residual": 5.206884479516193e-15,
   "gates": {
     "cell_bend": true,
     "periodic_position": true,
@@ -32,15 +32,15 @@
       "reduced_transverse_offset_m": -0.2965025122768126,
       "minimum_orbit_radius_m": 3.9100202806004267,
       "maximum_orbit_radius_m": 4.1057079968635275,
-      "entrance_incidence_angle_deg": 23.38364589222589,
-      "bend_angle_error_rad": -5.551115123125783e-17,
-      "periodic_position_residual_m": 1.4043333874306805e-15,
+      "entrance_incidence_angle_deg": 23.383645892225893,
+      "bend_angle_error_rad": 5.551115123125783e-17,
+      "periodic_position_residual_m": 1.616509124176106e-15,
       "periodic_tangent_residual": 4.847302891456678e-16,
-      "radial_trace": -2.483960156068237,
-      "vertical_trace": 0.4775001534472083,
+      "radial_trace": -2.4839601560682376,
+      "vertical_trace": 0.47750015344720653,
       "radial_machine_tune": null,
-      "vertical_machine_tune": 5.0791479583446275,
-      "symplectic_residual": 6.049674187463118e-15
+      "vertical_machine_tune": 5.07914795834463,
+      "symplectic_residual": 5.206884479516193e-15
     },
     {
       "kinetic_energy_mev": 50.0,
@@ -49,14 +49,14 @@
       "minimum_orbit_radius_m": 4.17553967827395,
       "maximum_orbit_radius_m": 4.288893076791825,
       "entrance_incidence_angle_deg": 13.402466003592677,
-      "bend_angle_error_rad": 5.551115123125783e-17,
+      "bend_angle_error_rad": 0.0,
       "periodic_position_residual_m": 1.3322676295501878e-15,
       "periodic_tangent_residual": 3.64275408404521e-16,
       "radial_trace": -1.21478368191501,
-      "vertical_trace": 1.2675449772054228,
+      "vertical_trace": 1.267544977205423,
       "radial_machine_tune": 8.49341027134727,
       "vertical_machine_tune": 3.378066561011566,
-      "symplectic_residual": 2.48081675969307e-15
+      "symplectic_residual": 2.9469141992177336e-15
     },
     {
       "kinetic_energy_mev": 80.0,
@@ -65,13 +65,13 @@
       "minimum_orbit_radius_m": 4.297738547854864,
       "maximum_orbit_radius_m": 4.343797949130736,
       "entrance_incidence_angle_deg": 5.491448461341953,
-      "bend_angle_error_rad": 5.551115123125783e-17,
+      "bend_angle_error_rad": 0.0,
       "periodic_position_residual_m": 4.440892098500626e-16,
       "periodic_tangent_residual": 1.1102230246251565e-16,
-      "radial_trace": 0.32417369268388163,
-      "vertical_trace": 1.6967480134074728,
+      "radial_trace": 0.3241736926838815,
+      "vertical_trace": 1.6967480134074715,
       "radial_machine_tune": 5.378130330002119,
-      "vertical_machine_tune": 2.130982975479759,
+      "vertical_machine_tune": 2.1309829754797636,
       "symplectic_residual": 8.6248278114485e-16
     },
     {
@@ -80,15 +80,15 @@
       "reduced_transverse_offset_m": 0.0090174469273421,
       "minimum_orbit_radius_m": 4.327708278750517,
       "maximum_orbit_radius_m": 4.339340204773597,
-      "entrance_incidence_angle_deg": -0.052928933637216076,
-      "bend_angle_error_rad": -5.551115123125783e-17,
+      "entrance_incidence_angle_deg": -0.05292893363721623,
+      "bend_angle_error_rad": 0.0,
       "periodic_position_residual_m": 2.220446049250313e-16,
       "periodic_tangent_residual": 1.6653345369377348e-16,
-      "radial_trace": 0.8975517962594455,
-      "vertical_trace": 1.9035292863164839,
-      "radial_machine_tune": 4.222321737810222,
-      "vertical_machine_tune": 1.1912158429188866,
-      "symplectic_residual": 2.0922260999513245e-15
+      "radial_trace": 0.8975517962594456,
+      "vertical_trace": 1.9035292863164848,
+      "radial_machine_tune": 4.222321737810221,
+      "vertical_machine_tune": 1.191215842918881,
+      "symplectic_residual": 2.008903232445835e-15
     },
     {
       "kinetic_energy_mev": 160.0,
@@ -100,11 +100,11 @@
       "bend_angle_error_rad": 0.0,
       "periodic_position_residual_m": 0.0,
       "periodic_tangent_residual": 0.0,
-      "radial_trace": 0.909841826025777,
+      "radial_trace": 0.9098418260257772,
       "vertical_trace": 1.9923463463451594,
-      "radial_machine_tune": 4.196010283403833,
+      "radial_machine_tune": 4.196010283403832,
       "vertical_machine_tune": 0.3342753643663925,
-      "symplectic_residual": 4.3131278990434954e-15
+      "symplectic_residual": 4.283744412715194e-15
     },
     {
       "kinetic_energy_mev": 205.0,
@@ -112,15 +112,15 @@
       "reduced_transverse_offset_m": 0.21215283077163236,
       "minimum_orbit_radius_m": 4.282963833377547,
       "maximum_orbit_radius_m": 4.337446465980434,
-      "entrance_incidence_angle_deg": -5.905364997534395,
-      "bend_angle_error_rad": -5.551115123125783e-17,
-      "periodic_position_residual_m": 4.440892098500626e-16,
+      "entrance_incidence_angle_deg": -5.905364997534393,
+      "bend_angle_error_rad": 0.0,
+      "periodic_position_residual_m": 6.661338147750939e-16,
       "periodic_tangent_residual": 1.1102230246251565e-16,
-      "radial_trace": 0.7451301951617929,
+      "radial_trace": 0.7451301951617927,
       "vertical_trace": 2.042432267847511,
       "radial_machine_tune": 4.541739951407664,
       "vertical_machine_tune": null,
-      "symplectic_residual": 1.908799453722409e-15
+      "symplectic_residual": 2.142189005845384e-15
     },
     {
       "kinetic_energy_mev": 250.0,
@@ -128,15 +128,15 @@
       "reduced_transverse_offset_m": 0.30630002316369076,
       "minimum_orbit_radius_m": 4.258447157085606,
       "maximum_orbit_radius_m": 4.3284063142593885,
-      "entrance_incidence_angle_deg": -7.7206706078521465,
-      "bend_angle_error_rad": 5.551115123125783e-17,
-      "periodic_position_residual_m": 9.155133597044475e-16,
+      "entrance_incidence_angle_deg": -7.720670607852148,
+      "bend_angle_error_rad": 0.0,
+      "periodic_position_residual_m": 9.930136612989092e-16,
       "periodic_tangent_residual": 1.2412670766236366e-16,
-      "radial_trace": 0.5408086066678351,
-      "vertical_trace": 2.0694263626738922,
+      "radial_trace": 0.5408086066678353,
+      "vertical_trace": 2.069426362673892,
       "radial_machine_tune": 4.954111555708287,
       "vertical_machine_tune": null,
-      "symplectic_residual": 3.761898049900699e-15
+      "symplectic_residual": 3.902363585564952e-15
     }
   ]
 }
