@@ -67,7 +67,7 @@ def test_sampled_current_magnetic_field_supports_complex_multiport_coefficients(
 
 
 @pytest.mark.parametrize(
-    "coefficients, points, mu, block_size, error",
+    "coefficients, points, mu, source_block_size, error",
     [
         (np.ones((1, 1, 1)), [[0.0, 1.0, 0.0]], vim.MU0, 1, "vector"),
         (np.ones(2), [[0.0, 1.0, 0.0]], vim.MU0, 1, "1 rows"),
@@ -78,7 +78,7 @@ def test_sampled_current_magnetic_field_supports_complex_multiport_coefficients(
     ],
 )
 def test_sampled_current_magnetic_field_validates_inputs(
-    coefficients, points, mu, block_size, error
+    coefficients, points, mu, source_block_size, error
 ):
     basis = vim.VolumeCurrentBasis(
         points=np.array([[0.0, 0.0, 0.0]]),
@@ -87,7 +87,11 @@ def test_sampled_current_magnetic_field_validates_inputs(
     )
     with pytest.raises(ValueError, match=error):
         vim.SampledCurrentMagneticField(
-            basis, coefficients, points, mu=mu, block_size=block_size
+            basis,
+            coefficients,
+            points,
+            mu=mu,
+            source_block_size=source_block_size,
         )
 
 
@@ -97,11 +101,54 @@ def test_sampled_current_magnetic_field_rejects_self_target():
         weights=np.array([1.0]),
         current_modes=np.array([[[0.0, 1.0, 0.0]]]),
     )
-    with pytest.raises(ValueError, match="must not coincide"):
+    with pytest.raises(ValueError, match="contain a source point"):
         vim.SampledCurrentMagneticField(basis, np.array([1.0]), basis.points)
 
     with pytest.raises(TypeError, match="SampledCurrentBasis"):
         vim.SampledCurrentMagneticField(object(), np.array([1.0]), [[0.0, 1.0, 0.0]])
+
+
+def test_sampled_current_magnetic_field_delegates_combined_modes(monkeypatch):
+    basis = vim.SampledCurrentBasis(
+        points=np.array([[0.0, 0.0, 0.0]]),
+        weights=np.array([2.0]),
+        modes=np.array([[[1.0, 0.0, 0.0]], [[0.0, 1.0, 0.0]]]),
+        kind="surface",
+        names=("jx", "jy"),
+    )
+    coefficients = np.array([[1.0, 2.0j], [3.0, 4.0]])
+    targets = np.array([[0.0, 0.0, 1.0]])
+    captured = {}
+
+    def fake_kernel(combined_basis, target_points, **kwargs):
+        captured["basis"] = combined_basis
+        captured["targets"] = target_points
+        captured["kwargs"] = kwargs
+        return np.arange(6).reshape(2, 1, 3)
+
+    monkeypatch.setattr(eddy_hybrid, "CurrentMagneticFluxDensitySamples", fake_kernel)
+    result = vim.SampledCurrentMagneticField(
+        basis,
+        coefficients,
+        targets,
+        kernel_epsilon=0.25,
+        target_block_size=7,
+        source_block_size=5,
+    )
+
+    np.testing.assert_allclose(
+        captured["basis"].modes,
+        np.einsum("mp,mnj->pnj", coefficients, basis.modes),
+    )
+    assert captured["basis"].kind == "surface"
+    assert captured["targets"] is targets
+    assert captured["kwargs"] == {
+        "mu": vim.MU0,
+        "kernel_epsilon": 0.25,
+        "target_block_size": 7,
+        "source_block_size": 5,
+    }
+    np.testing.assert_array_equal(result, np.arange(6).reshape(2, 1, 3).transpose(1, 2, 0))
 
 
 def test_team28_skin_depth_gate_selects_volumetric_hcurl():
