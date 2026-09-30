@@ -164,6 +164,16 @@
       8.157396609914261e-11
     ]
   },
+  "bdm1_mesh_sensitivity": {
+    "core_increments": [
+      0.0001627804035454513,
+      0.010014932242695451
+    ],
+    "contraction_ratio": 61.52418856670973,
+    "status": "not_contracting",
+    "cause": "unresolved",
+    "interpretation": "BDM1 refinement did not demonstrate convergence; not an accuracy certificate."
+  },
   "fem_order_sensitivity": {
     "reduced_a": {
       "coarse_p2": 0.0004917761644798028,
@@ -259,6 +269,7 @@
     "fullfiner/cached-three": "842aef222fa779b757b4ff916c11bf287a334837cc6ac633f8b4a8be108d2143",
     "order3/cached-three": "b7ecceaffbd87004d567e2c5a3bbbf4c40ea44a057c9134b5d82408d819e53b3",
     "fullfiner/fem_refinement": "85439e7602ffb1ef38542011aa826012e21c640ac95889c07bbdc9a867023e62",
+    "fine/three_level_increments": "04c385ebc959595a6dfafade31eabaa253f040ebc05f969ae1baba1a8f89085d",
     "bdm2levels/medium_bdm2": "2735c7cc60751f7472df3d252fa72d5f629a0a1e9aa1273e8d87f42111a0c4eb",
     "bdm2levels/fine_bdm2": "3011c0aac99b9f2b204cd491092f79b604cea8abdaca70292ef779c27588699e",
     "bdm2finer/finer_bdm2": "88d954a009068516b95082279b469b4a4f9c4c6879cca4dd5f6523310f29ae27",

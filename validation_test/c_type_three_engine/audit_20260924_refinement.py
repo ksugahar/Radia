@@ -110,6 +110,19 @@ def summarize():
             close(actual, expected)
         fem[engine] = {"core_increments": increments, "contraction_ratio": increments[1] / increments[0]}
 
+    bdm1_saved = read("fine/three_level_increments")["engines"]["hdiv_mmm"]
+    bdm1_fields = [core(campaigns[key]["median_plane_projected_fields_T"]["hdiv_mmm"])
+                   for key in ("cached", "medium", "fine")]
+    bdm1_increments = [difference(a, b) / norm(bdm1_fields[-1])
+                       for a, b in zip(bdm1_fields, bdm1_fields[1:])]
+    for actual, expected in zip(bdm1_increments, bdm1_saved["core_increments_normalized_by_fine"]):
+        close(actual, expected)
+    bdm1_ratio = bdm1_increments[1] / bdm1_increments[0]
+    close(bdm1_ratio, bdm1_saved["core_increment_contraction_ratio"])
+    bdm1 = {"core_increments": bdm1_increments, "contraction_ratio": bdm1_ratio,
+            "status": "not_contracting", "cause": "unresolved",
+            "interpretation": "BDM1 refinement did not demonstrate convergence; not an accuracy certificate."}
+
     bdm_rows = [next(row for row in read(name)["rows"] if row["rule"] == 2) for name in
                 ("bdm2levels/medium_bdm2", "bdm2levels/fine_bdm2", "bdm2finer/finer_bdm2")]
     require(all(row["solve_scalars"]["last_solve_converged"] == 1 for row in bdm_rows),
@@ -161,6 +174,7 @@ def summarize():
                         "Runtime includes exact source-cache preparation; process RSS is not isolated engine memory.",
                         "These historic volume-load results do not validate current auto/surface-flux defaults."],
         "campaigns": summaries, "fem_mesh_sensitivity": fem, "bdm2_mesh_sensitivity": bdm,
+        "bdm1_mesh_sensitivity": bdm1,
         "fem_order_sensitivity": order_sensitivity,
         "hdiv_controlled_sensitivities": sensitivity, "vacuum_raw_relative_rms": vacuum_error,
         "input_json_sha256": inputs,
