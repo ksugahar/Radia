@@ -261,7 +261,7 @@ isomorphic H-matrix.
 | File | What |
 |---|---|
 | `team28_axisym_fem.py` | Repo-clean port of the lab full-FEM axisymmetric TEAM 28 solve (mixed phi-B + anisotropic-nu infinite shell). Reproduces the lab `.mat` force to **0.01%** at dZ=0. The ground-truth baseline. |
-| `team28_cln_force.py`  | CLN/Cauer reduction at one height: builds K, N, F, shows the N-stage CLN force converging to full-FEM (golden). |
+| `team28_arnoldi_force.py`  | Arnoldi-Galerkin projection at one height: builds K, N, F, shows the reduced force converging to full-FEM (golden). |
 | `team28_cln_sweep.py`  | CLN force **vs height**, compared to the lab full-FEM `Fz1(dZ)`; recovers the physical levitation equilibrium (`F_z/2 == weight`) at absolute z ~ 11.0 mm (published 11.3 mm). |
 | `validation_test/maglev/team28_hcurl_eddy_bubble.py` | Recomputes the p=6 face/cycle/SIBC policy and locks the existing 25-position full-FEM/CLN force curve as the acceptance target for the 3-D HCurl-VIM route. |
 | `validation_test/maglev/team28_hcurl_vim_force.py` | Builds the p=6 3-D HCurl parent, applies topology-aware Eddy Bubble reduction, assembles the epsilon-free analytic tetrahedron VIM interaction, and verifies Lorentz force on three meshes plus an outer-quadrature check. |
@@ -477,7 +477,7 @@ is `~6e-6`, negligible) -- a pure convention factor, not the dipole error.
 
 ```bash
 python team28_axisym_fem.py      # full-FEM baseline  -> -2.1925 N @ dZ=0
-python team28_cln_force.py       # CLN convergence    -> 5-stage golden
+python team28_arnoldi_force.py       # Arnoldi convergence -> full-order force comparison
 python team28_cln_sweep.py       # CLN force vs height -> physical equilib z~11.0mm (pub 11.3mm)
 python validation_test/maglev/team28_hcurl_eddy_bubble.py  # run from repo root
 python cln_sibc_cuboid_3d.py     # CLN-SIBC 3D cuboid core (alpha, Schur-F)

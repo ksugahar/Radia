@@ -12,7 +12,7 @@ Motivation (the honest caveat in coil_maglev_equilibrium.py / README.md):
     regime."  This script IS that solve.
 
 Method -- reuse the lab-verified axisymmetric mixed phi-B eddy-current
-machinery (team28_axisym_fem.py / team28_cln_force.py, which reproduce the
+machinery (team28_axisym_fem.py / team28_arnoldi_force.py, which reproduce the
 TEAM 28 ground-truth Lorentz force to 0.01%):
 
   * mixed space    fesPhi = H1(order=p, dirichlet="outer", complex),

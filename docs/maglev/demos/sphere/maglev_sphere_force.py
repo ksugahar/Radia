@@ -1,10 +1,8 @@
 """maglev_sphere_force.py -- induced-dipole AC levitation force on a
 conducting sphere, with the coefficient PINNED by the analytic perfect-
-conductor limit and the frequency response REDUCED by CLN/Cauer.
+conductor limit and the frequency response REDUCED by Lanczos projection.
 
-This is the isotropic levitation-FORCE primitive of the 3D CLN-SIBC route
-(docs/maglev/demos/cuboid/cln_sibc_cuboid_3d.py).  A sphere
-is isotropic, so the scalar polarizability already ported applies directly
+A sphere is isotropic, so the scalar polarizability already ported applies directly
 -- no anisotropic alpha tensor is needed to demonstrate (and verify) a
 levitation force.  The cuboid a!=b!=c anisotropy is a separable refinement
 -- and note it is SHAPE anisotropy (the dimensions a,b,c), NOT material
@@ -31,10 +29,9 @@ amplitude, real in space):
   Coefficient cross-checked against the perfect-conductor sphere energy
   U = -1/2 m.B  ->  <F> -> -(pi a^3 / 2 mu0) grad(B0^2)  at high freq.
 
-CLN/Cauer reduction: the sphere has the Foster form
+Lanczos projection: the sphere has the Foster form
       G(s) = -1/2 + sum_n (3/(n pi)^2) / (1 - s tau_n),  tau_n = mu0 sigma a^2/(n pi)^2,
-  i.e. a ladder of relaxation modes -- the same modal structure the cuboid
-  CLN-SIBC port reduces.  A Lanczos/Cauer reduction of this modal system
+  i.e. a sum of relaxation modes. A Lanczos projection of this modal system
   converges to G with a handful of stages.
 
 Run:  python maglev_sphere_force.py     (a few seconds; pure numpy)
@@ -84,13 +81,12 @@ def G_modal(omega, N=NMODES):
     return -0.5 + np.sum(W[n] / (1.0 - s * TAU[n]))
 
 
-def G_cln(omega, nstage):
-    """Lanczos/Cauer reduction of the modal system b^T (I - sT)^{-1} b.
+def G_lanczos(omega, nstage):
+    """Lanczos projection of the modal system b^T (I - sT)^{-1} b.
 
     T = diag(tau_n), b_n = sqrt(W_n); G+1/2 = b^T (I - sT)^{-1} b exactly.
     Lanczos on (T, b) builds a tridiagonal T_m; the reduced transfer
-    function is ||b||^2 e1^T (I - s T_m)^{-1} e1 -- the Cauer continued
-    fraction truncated at nstage relaxation stages.
+    function is ||b||^2 e1^T (I - s T_m)^{-1} e1 -- a projection onto nstage Krylov vectors; no circuit is synthesized.
     """
     b = np.sqrt(W)
     beta = np.linalg.norm(b)
@@ -157,17 +153,17 @@ def main():
     assert np.all(ReGs <= 1e-9), "Re G must be <= 0 (always a lift)"
     print(f"   Re G(f) < 0 for all f in [1 Hz, 100 MHz]  -> lift at every freq  OK")
 
-    # ----- check 3: CLN/Cauer reduction converges -----
-    # the CLN reduces the N-mode modal operator; its target is G_modal(N),
+    # ----- check 3: Lanczos projection converges -----
+    # the Lanczos reduces the N-mode modal operator; its target is G_modal(N),
     # not the closed form (the Foster<->closed-form gap is check 1).
-    print("\n[check 3] CLN/Cauer reduction of the sphere modal system (f=5 kHz)")
+    print("\n[check 3] Lanczos projection of the sphere modal system (f=5 kHz)")
     w = 2 * np.pi * 5e3
     gtgt = G_modal(w)
-    print("   stages   Re G_CLN     rel.err vs full modal")
+    print("   stages   Re G_Lanczos     rel.err vs full modal")
     for m in (1, 2, 3, 4, 6, 8):
-        gc = G_cln(w, m)
+        gc = G_lanczos(w, m)
         print(f"     {m:2d}     {gc.real:+9.6f}    {abs(gc - gtgt)/abs(gtgt)*100:8.4f} %")
-    assert abs(G_cln(w, 8) - gtgt) / abs(gtgt) < 1e-3, "CLN must reduce the modal system"
+    assert abs(G_lanczos(w, 8) - gtgt) / abs(gtgt) < 1e-3, "Lanczos must reduce the modal system"
 
     # ----- check 4: perfect-conductor force coefficient -----
     # gradient field: B0=0.1 T, scale length L -> grad(B0^2) ~ -B0^2/L (away from coil)
@@ -215,7 +211,7 @@ def plot(fs, lift, F_pc):
     import matplotlib.pyplot as plt
     plt.rcParams.update({"font.size": 10, "font.family": "serif", "axes.linewidth": 0.8})
     fig, ax = plt.subplots(figsize=(8 / 2.54, 6 / 2.54))
-    ax.semilogx(fs, lift * 1e3, "C0-", lw=1.2, label="induced-dipole + CLN")
+    ax.semilogx(fs, lift * 1e3, "C0-", lw=1.2, label="induced-dipole + Lanczos")
     ax.axhline(F_pc * 1e3, color="0.6", ls=":", lw=0.8)
     ax.text(fs[0], F_pc * 1e3, " perfect conductor", va="bottom", ha="left",
             fontsize=8, color="0.4")
