@@ -1899,6 +1899,17 @@ f_form.Assemble()
 In Radia IH, ``heat_flux_selector`` is resolved independently from the
 convection and radiation selectors.  Never reuse one generic surface label
 for all three roles unless the overlap is intentional and explicit.
+For label-specific Python thermal cooling, pass ``--convection-map cooling.json``
+(or ``IHDesignSpec(convection_map="cooling.json")``). Example JSON:
+``{"air_cooling":{"h_W_m2K":10,"ambient_C":20},
+"water_cooling":{"h_W_m2K":500,"ambient_C":25}}``.
+Keys are exact mesh boundary labels; unknown labels and combining the map with
+an old uniform convection selector fail explicitly. Map mode ignores ``h_conv``;
+``t_ext`` remains an independent radiation setting. Unlisted faces have no
+convection; ``h_W_m2K=0`` disables convection on that label only. Radiation and
+heat flux are separate. Contact resistance is not modeled by this map, and the
+native Simulink scalar cooling interface does not yet accept it.
+
 
 Diagnostic value of POINT-EVALUATION over `.Trace()`: when wp surface
 vertices fall slightly OUTSIDE the EM mesh (mesh-mismatch, geometry
