@@ -43,7 +43,7 @@ def test_em_mie_coefficients_shapes_and_magnitude():
 
 @pytest.mark.parametrize("ka", [0.5, 1.0, 2.0])
 def test_em_mie_efie_solve_matches_rcs(ka):
-    """ACTUAL Maxwell EFIE BEM solve (MaxwellSingleLayerPotentialOperator) reproduces the analytic EM
+    """Maxwell EFIE using variational HelmholtzSL terms reproduces the analytic EM
     Mie monostatic RCS across Rayleigh -> resonance, with ONE global normalization (not a per-ka fit)."""
     r = maxwell_efie_pec_sphere_rcs(ka, maxh=0.35, order=2)
     assert r["rel_err"] < 5e-3, (ka, r["sigma_back_over_pa2"], r["mie"], r["rel_err"])

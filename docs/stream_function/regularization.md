@@ -94,8 +94,9 @@ Use as "physics-flavoured smoothing" rather than a strict inductance
 optimum.  Not actually better than `h1` numerically.
 
 **Full inductance implementation path** (open extension): use
-ngsolve.bem 6.2.2604+ `MaxwellSingleLayerPotentialOperator` on a thin
-3D shell embedding the source plane; assemble the bilinear form
+the supported `ngsolve.bem` Laplace single-layer formulation on a thin
+3D shell embedding the source plane (the former Maxwell potential class
+was removed in 2607); assemble and validate the bilinear form
 `∫∫ K(x)·K(y)/(4π|x-y|) ds(x) ds(y)`; combine with the constraint
 `A ψ = B` in a Lagrangian.  ~1 week.
 
