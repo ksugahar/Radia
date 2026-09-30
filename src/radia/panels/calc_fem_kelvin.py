@@ -106,7 +106,7 @@ def _kelvin_gradient_gauge(fes, mesh):
     return free, count
 
 
-def _element_line_quadrature(mesh, start, direction, nodes, weights):
+def _element_line_quadrature(mesh, start, direction, nodes, weights, *, max_evaluations=100000):
     """Partition a filament at element transitions before Gaussian integration.
 
     A basis gradient is discontinuous across faces; a fixed rule across a face
@@ -114,12 +114,18 @@ def _element_line_quadrature(mesh, start, direction, nodes, weights):
     transitions to 2**-40 of the segment with strict point location (the
     default point tolerance smears element boundaries), then merge leaves in the
     same element, so bisection depth does not multiply basis evaluations.
+    A global point-location budget prevents exponential work on ambiguous faces.
     """
     intervals = []
+    evaluations = 0
     stack = [(0.0, 1.0, 0)]
     while stack:
         lo, hi, depth = stack.pop()
         width = hi - lo
+        if evaluations + 5 > max_evaluations:
+            raise RuntimeError("Filament element partition exceeded its point-location budget; "
+                               "check a filament lying on an element boundary")
+        evaluations += 5
         samples = [mesh(*(start + (lo + width*t)*direction), tol=1e-12)
                    for t in (1e-10, .25, .5, .75, 1-1e-10)]
         if len({point.nr for point in samples}) > 1 and depth < 40:
