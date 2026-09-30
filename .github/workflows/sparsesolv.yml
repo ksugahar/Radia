@@ -23,6 +23,10 @@ on:
       - 'src/matlab/radia_ih_mex_commands.cpp'
       - 'matlab/+radia/+simulink/validateIHNativeConfig.m'
       - 'tests/matlab/test_ih_sparse_inputs.m'
+      - 'matlab/+radia/+internal/nextIHNativeHandle.m'
+      - 'src/radia/bem/sibc_hacapk.py'
+      - 'src/radia/panels/surface_mesh_extract.py'
+      - 'tests/test_surface_orientation.py'
       - 'src/radia/bem_sibc_solver.py'
       - 'tests/test_bem_sibc_acceptance.py'
       - 'src/radia/esim_cell_problem.py'
@@ -193,6 +197,10 @@ on:
       - 'src/matlab/radia_ih_mex_commands.cpp'
       - 'matlab/+radia/+simulink/validateIHNativeConfig.m'
       - 'tests/matlab/test_ih_sparse_inputs.m'
+      - 'matlab/+radia/+internal/nextIHNativeHandle.m'
+      - 'src/radia/bem/sibc_hacapk.py'
+      - 'src/radia/panels/surface_mesh_extract.py'
+      - 'tests/test_surface_orientation.py'
       - 'src/radia/bem_sibc_solver.py'
       - 'tests/test_bem_sibc_acceptance.py'
       - 'src/radia/esim_cell_problem.py'
@@ -403,7 +411,7 @@ jobs:
           $required = $required -or [bool]($changed -match '^(src/(core/rad_beam_transfer|lib/rad_beam_transfer_pybind|matlab/radia_beam_mex_commands|radia/beam\.py)|matlab/\+radia/\+beam/(canonicalBodyHamiltonianJet|propagateVariationalMap)\.m|tests/matlab/(test_beam_transfer_mex\.m|beam_transfer_python_reference\.py)|validation_test/accelerator/benchmark_beam_transfer_mex_python\.py)')
           $required = $required -or ($changed -contains 'tools/native_build_provenance.ps1')
           $required = $required -or [bool]($changed -match '^(src/core/rad_ngsolve_radia_field\.h|matlab/\+radia/RadiaField\.m|tests/matlab/test_radiafield_mex\.m)$')
-          $required = $required -or [bool]($changed -match '^(matlab/\+radia/\+simulink/validateIHNativeConfig\.m|tests/matlab/test_ih_sparse_inputs\.m)$')
+          $required = $required -or [bool]($changed -match '^(matlab/\+radia/\+internal/nextIHNativeHandle\.m|matlab/\+radia/\+simulink/validateIHNativeConfig\.m|tests/matlab/test_ih_sparse_inputs\.m)$')
           "required=$($required.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
           Write-Host "MATLAB parity required=$required; diff_failed=$diffFailed; changed_files=$($changed.Count)"
           exit 0
