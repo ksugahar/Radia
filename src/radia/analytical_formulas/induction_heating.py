@@ -65,7 +65,7 @@ Limits (verified by tests)
               = π σ ω² B_0² a^4 / 16.
 
 * **Large ka** (thin skin, ``a >> δ``): asymptotically the Kelvin-
-  function ratio approaches ``-1/√2`` and ``P → π a H_0² Re(Z_s)`` with
+  function ratio approaches ``1/√2`` and ``P → π a H_0² Re(Z_s)`` with
   the planar surface resistance ``Re(Z_s) = sqrt(omega mu / (2 sigma))``.
 
 References
@@ -119,7 +119,7 @@ def cylinder_axial_eddy_loss(
 
     .. math::
 
-        P = \\frac{\\pi}{\\kappa} H_0^2 (ka)
+        P = \\frac{\\pi}{\\sigma} H_0^2 (ka)
             \\frac{\\mathrm{ber}(ka) \\mathrm{ber}'(ka)
                   + \\mathrm{bei}(ka) \\mathrm{bei}'(ka)}
                  {\\mathrm{ber}(ka)^2 + \\mathrm{bei}(ka)^2},
@@ -150,15 +150,20 @@ def cylinder_axial_eddy_loss(
     if H_0 < 0:
         raise ValueError(f"H_0>=0 required; got {H_0}")
     ka = _ka(a, omega, sigma, mu_r)
-    ber = special.ber(ka)
-    bei = special.bei(ka)
-    berp = special.berp(ka)
-    beip = special.beip(ka)
-    denom = ber * ber + bei * bei
-    if denom == 0.0:
-        return 0.0
-    num = ber * berp + bei * beip
-    return math.pi / sigma * H_0 ** 2 * ka * num / denom
+    # ber(x) + j bei(x) = J_0(exp(3j*pi/4) x). Direct Kelvin values
+    # overflow for ka around 1000 even though their logarithmic derivative is
+    # finite. ``jve`` removes the common exponential scale, which cancels in
+    # J_1/J_0 and keeps the exact Bessel expression evaluable in that regime.
+    phase = complex(-math.sqrt(0.5), math.sqrt(0.5))
+    j0_scaled = special.jve(0, phase * ka)
+    j1_scaled = special.jve(1, phase * ka)
+    kelvin_log_derivative = (-phase * j1_scaled / j0_scaled).real
+    loss = math.pi / sigma * H_0 ** 2 * ka * kelvin_log_derivative
+    if not math.isfinite(loss) or loss < 0.0:
+        raise ArithmeticError(
+            f"failed to evaluate finite non-negative cylinder loss at ka={ka}"
+        )
+    return loss
 
 
 def cylinder_axial_eddy_loss_small_ka(

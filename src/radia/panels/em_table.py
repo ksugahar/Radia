@@ -122,18 +122,30 @@ def _bilinear(tab_field: np.ndarray, logH_grid: np.ndarray,
 
 def interp_qsurf(tab: EMTable, H_t, T_celsius) -> np.ndarray:
     """q_surf [W/m^2] at the given (|H_t|, T) points."""
-    H = np.asarray(H_t, dtype=float)
-    # log(0) trap -- treat H<=0 as the table's H_min (q_surf -> 0 anyway).
-    H_safe = np.where(H > 0, H, tab.H_grid[0])
-    return _bilinear(tab.q_surf, tab.logH_grid, tab.T_grid,
-                     np.log(H_safe), T_celsius)
+    H, T = np.broadcast_arrays(
+        np.abs(np.asarray(H_t, dtype=float)),
+        np.asarray(T_celsius, dtype=float),
+    )
+    if not np.all(np.isfinite(H)) or not np.all(np.isfinite(T)):
+        raise ValueError("H_t and T_celsius must be finite")
+    zero_field = H == 0.0
+    H_safe = np.where(zero_field, tab.H_grid[0], H)
+    q_surf = _bilinear(
+        tab.q_surf, tab.logH_grid, tab.T_grid, np.log(H_safe), T
+    )
+    return np.where(zero_field, 0.0, q_surf)
 
 
 def interp_Zs(tab: EMTable, H_t, T_celsius) -> np.ndarray:
     """Complex Z_s [Ohm] at the given (|H_t|, T) points."""
-    H = np.asarray(H_t, dtype=float)
-    H_safe = np.where(H > 0, H, tab.H_grid[0])
+    H, T = np.broadcast_arrays(
+        np.abs(np.asarray(H_t, dtype=float)),
+        np.asarray(T_celsius, dtype=float),
+    )
+    if not np.all(np.isfinite(H)) or not np.all(np.isfinite(T)):
+        raise ValueError("H_t and T_celsius must be finite")
+    H_safe = np.where(H > 0.0, H, tab.H_grid[0])
     logH = np.log(H_safe)
-    Zr = _bilinear(tab.Zs_re, tab.logH_grid, tab.T_grid, logH, T_celsius)
-    Zi = _bilinear(tab.Zs_im, tab.logH_grid, tab.T_grid, logH, T_celsius)
+    Zr = _bilinear(tab.Zs_re, tab.logH_grid, tab.T_grid, logH, T)
+    Zi = _bilinear(tab.Zs_im, tab.logH_grid, tab.T_grid, logH, T)
     return Zr + 1j * Zi
