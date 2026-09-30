@@ -3,12 +3,33 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
-## Unreleased (5.1.0) - Induction-heating thermal chain
+## Unreleased
 
 - **Restore analytic DtN continued fractions (2026-09-30).** Retirement is
   reversed for the exact/high-order non-reflecting boundary representation,
   including the public helpers, MCP topic and demonstration.
 
+
+- Linear solve acceptance uses a shared 1e-6 true-residual limit, with an
+  explicit fixed effective-load scale for small Newton correction equations.
+- `solve_axi_eddy.total_current` now means cross-section current in amperes;
+  planar and axisymmetric excitation is restricted to `driven_region`.
+
+## 5.1.0 - NGSolve 2607 and induction-heating thermal chain
+
+Published wheel: `v5.1.0` (`cc8f4b875`). Shared-runtime deployment and
+MATLAB/Simulink acceptance are tracked separately and remain under verification.
+
+### Compatibility changes
+
+- mixed Omega uses Newton; its Picard API and Picard-only options were removed.
+- Retired reduction MEX commands, VIM APIs and the URN reduction route were
+  removed; Simulink MagLev/TEAM 28 use Foster models.
+- `Y_cln_pade` was removed. The analytic boundary API was renamed to
+  `continued_fraction_*` in `1ecfde37f`, removed before 5.1.0, and is restored
+  under Unreleased above; it is not present in the 5.1.0 wheel.
+- Direct FE solves, including PEEC routes, select SparseCholesky rather than
+  PARDISO. MKL remains the dense BLAS/LAPACK backend.
 
 - **NGSolve/Netgen 6.2.2607 accepted (2026-09-29).** This supersedes the
   previous decision to retain 6.2.2606. Compatibility helpers follow the
@@ -115,10 +136,21 @@ artifact acceptance by `release_quad done`.
   (their CLI default remains `volume`); they do not inherit the API's `auto`.
   The hybrid-undulator driver uses `global_physical` and retains volume loads.
 
+## 5.0.2 - Material assembly optimization
+
+Published tag `v5.0.2` (`f6a682eac`). Evaluate the material tangent tensor once
+per quadrature point in the HDiv material assembly.
+
+## 5.0.1 - Source caching and mixed Omega controls
+
+Published tag `v5.0.1` (`5757126e6`). Memoize source evaluation across the whole
+solve, avoid air-side coil evaluation in iron material updates, and bind ESRF
+mixed Omega solver controls to checkpoint identities.
+
 ## 5.0.0 - HDiv-MMM production milestone
 
-Release candidate. Publication and four-machine deployment remain subject to
-the exact-tag native CI and `release_quad done` gates.
+Published as `v5.0.0`. The numerical scope and historical evidence below
+remain separate from subsequent four-machine deployment gates.
 
 - Promotes the HDiv-MMM production milestone with reproducible ESRF6 nominal
   nonlinear three-engine acceptance: full iron mesh, BDM1, no IMA, and
