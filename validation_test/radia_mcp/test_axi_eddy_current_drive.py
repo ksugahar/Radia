@@ -109,3 +109,23 @@ def test_axi_current_drive_rejects_conductor_touching_axis():
         solve_axi_eddy(mesh, ng.CoefficientFunction(1.0),
                        ng.CoefficientFunction(1.0), 1000.,
                        driven_region="conductor", total_current=1., order=2)
+
+
+@pytest.mark.parametrize("drive, message", [
+    ({"total_current": 1.}, "requires driven_region"),
+    ({"driven_region": "conductor"}, "requires total_current or applied_Vc"),
+    ({"driven_region": "conductor", "total_current": 1., "applied_Vc": 2.},
+     "mutually exclusive"),
+])
+def test_axi_rejects_incomplete_or_conflicting_drive(drive, message):
+    # Argument errors must be rejected before touching any mesh or assembling.
+    with pytest.raises(ValueError, match=message):
+        solve_axi_eddy(None, None, None, 1000., **drive)
+
+
+def test_axi_rejects_impressed_current_overlapping_current_constraint():
+    mesh = _annular_section_strip(.01, .02, .006)
+    with ng.TaskManager(), pytest.raises(ValueError, match="Jr must vanish"):
+        solve_axi_eddy(mesh, ng.CoefficientFunction(1.), ng.CoefficientFunction(1.),
+                       1000., driven_region="conductor", total_current=1.,
+                       Jr=ng.CoefficientFunction(1j))

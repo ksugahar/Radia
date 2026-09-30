@@ -4305,6 +4305,19 @@ def solve_axi_eddy(mesh, nu, sigma, omega, driven_region=None, total_current=Non
     time-harmonic via Cu-disk eddy eigenvalue tau_1 = 224.31 us, 0.27 % gap to
     BEM-Foster (see validation_test/axifem/research/verification/test_disk_eigenvalue.py).
     """
+    if total_current is not None and driven_region is None:
+        raise ValueError("total_current requires driven_region")
+    if driven_region is not None and total_current is None and applied_Vc is None:
+        raise ValueError("driven_region requires total_current or applied_Vc")
+    if total_current is not None and applied_Vc is not None:
+        raise ValueError("total_current and applied_Vc are mutually exclusive")
+    if total_current is not None and Jr is not None:
+        import math
+        from ngsolve import Conj, Integrate
+        overlap = float(Integrate((Jr * Conj(Jr)).real, mesh,
+                                  definedon=mesh.Materials(driven_region)))
+        if not math.isfinite(overlap) or overlap > 0:
+            raise ValueError("Jr must vanish on the current-driven region")
     from radia.axifem import H1Henrotte
     r = x
 
