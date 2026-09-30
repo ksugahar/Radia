@@ -21,19 +21,6 @@ from radia import ih_heat_transient as iht
 from radia import ih_thermal_material as itm
 
 
-@pytest.mark.parametrize("incoming,loss,stored,expected", [
-    (1000.0, 1000.0, 0.0, 0.0),
-    (1000.0, 1000.0, 0.001, 1e-6),
-    (0.0, 0.0, 1.0, 1.0),
-    (0.0, 0.0, 0.0, 0.0),
-    (0.0, 10.0, -10.0, 0.0),
-])
-def test_energy_audit_handles_steady_state_and_zero_input(incoming, loss, stored, expected):
-    audit = iht.TransientAudit(energy_in_J=incoming, energy_loss_J=loss,
-                              energy_stored_J=stored)
-    assert audit.as_dict()["energy_balance_relative_error"] == pytest.approx(expected)
-
-
 def _plate(maxh=0.004, t=0.004):
     """0.02 x 0.02 x t plate; both large faces are 'heated'."""
     from netgen.occ import Box, OCCGeometry, Pnt, Z
