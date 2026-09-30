@@ -822,19 +822,23 @@ def combined_function_transfer_map(
 def combined_function_transfer_map_from_field_response(
         field_response, segment_lengths, magnetic_rigidity, *,
         field_response_jacobian=None, curvature_sign=1.0,
-        gradient_sign=1.0, segment_length_jacobian=None,
+        segment_length_jacobian=None,
         response_entries=None,
         stability_tolerance=1e-10):
-    """Fuse row-major HDiv-MMM ``[B..., dB/dx...]`` rows into a bend map."""
+    """Fuse row-major HDiv-MMM ``[B_y..., dB_y/dx...]`` rows into a bend map.
+
+    ``curvature_sign`` is the charge sign, giving ``h=q*B_y/p`` and
+    ``k1=q*(dB_y/dx)/p`` in the right-handed frame whose positive curvature
+    bends toward ``-x``.
+    """
     values = np.asarray(field_response, dtype=float).reshape(-1)
     lengths = np.asarray(segment_lengths, dtype=float).reshape(-1)
     rigidity = float(magnetic_rigidity)
     curvature_sign = float(curvature_sign)
-    gradient_sign = float(gradient_sign)
     if (lengths.size == 0 or values.shape != (2 * lengths.size,)
             or not np.isfinite(rigidity) or rigidity == 0.0
             or not np.all(np.isfinite(
-                np.r_[values, lengths, curvature_sign, gradient_sign]))):
+                np.r_[values, lengths, curvature_sign]))):
         raise ValueError(
             "field response must contain finite B/G rows for every segment "
             "and magnetic_rigidity must be finite and nonzero")
@@ -850,10 +854,10 @@ def combined_function_transfer_map_from_field_response(
         curvature_jacobian = (
             curvature_sign * jacobian[:lengths.size] / rigidity)
         gradient_jacobian = (
-            gradient_sign * jacobian[lengths.size:] / rigidity)
+            curvature_sign * jacobian[lengths.size:] / rigidity)
     return combined_function_transfer_map(
         curvature_sign * values[:lengths.size] / rigidity,
-        gradient_sign * values[lengths.size:] / rigidity,
+        curvature_sign * values[lengths.size:] / rigidity,
         lengths,
         curvature_jacobian=curvature_jacobian,
         gradient_jacobian=gradient_jacobian,
@@ -1262,25 +1266,24 @@ def combined_function_exit_metrics(
 def combined_function_exit_metrics_from_field_response(
         field_response, segment_lengths, magnetic_rigidity, *,
         reference_curvature, downstream_drift=0.0,
-        field_response_jacobian=None, curvature_sign=1.0,
-        gradient_sign=1.0):
+        field_response_jacobian=None, curvature_sign=1.0):
     """Fuse HDiv-MMM field rows directly into the four optics responses.
 
     ``field_response`` is the row-major vector
     ``[B_0 ... B_(n-1), G_0 ... G_(n-1)]`` produced by the HDiv-MMM response
-    matrix, where ``G=dB/dx``.  Its optional Jacobian therefore has shape
-    ``(2*n_segment, n_parameter)``.  Sign arguments make the electromagnetic
-    coordinate convention explicit; no silent field-axis assumption is made.
+    matrix, where ``B=B_y`` and ``G=dB_y/dx`` in the right-handed frame whose
+    positive curvature bends toward ``-x``.  Its optional Jacobian therefore
+    has shape ``(2*n_segment, n_parameter)``.  ``curvature_sign`` is the charge
+    sign, giving ``h=q*B/p`` and ``k1=q*G/p``.
     """
     values = np.asarray(field_response, dtype=float).reshape(-1)
     lengths = np.asarray(segment_lengths, dtype=float).reshape(-1)
     rigidity = float(magnetic_rigidity)
     curvature_sign = float(curvature_sign)
-    gradient_sign = float(gradient_sign)
     if (lengths.size == 0 or values.shape != (2 * lengths.size,)
             or not np.isfinite(rigidity) or rigidity == 0.0
             or not np.all(np.isfinite(
-                np.r_[values, lengths, curvature_sign, gradient_sign]))):
+                np.r_[values, lengths, curvature_sign]))):
         raise ValueError(
             "field response must contain finite B/G rows for every segment "
             "and magnetic_rigidity must be finite and nonzero")
@@ -1298,10 +1301,10 @@ def combined_function_exit_metrics_from_field_response(
         curvature_jacobian = (
             curvature_sign * jacobian[:lengths.size] / rigidity)
         gradient_jacobian = (
-            gradient_sign * jacobian[lengths.size:] / rigidity)
+            curvature_sign * jacobian[lengths.size:] / rigidity)
     return combined_function_exit_metrics(
         curvature_sign * values[:lengths.size] / rigidity,
-        gradient_sign * values[lengths.size:] / rigidity,
+        curvature_sign * values[lengths.size:] / rigidity,
         lengths,
         reference_curvature=reference_curvature,
         downstream_drift=downstream_drift,

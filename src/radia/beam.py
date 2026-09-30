@@ -84,7 +84,6 @@ def canonical_body_hamiltonian_jet(
     magnetic_rigidity_t_m: float,
     *,
     curvature_sign: float = 1.0,
-    gradient_sign: float = 1.0,
     reference_beta: float = 1.0,
     reference_curvature_per_m: float | None = None,
 ) -> dict:
@@ -95,18 +94,19 @@ def canonical_body_hamiltonian_jet(
     decapole coefficients.  Returned ``H2/H3/H4/H5`` and ``A/F2/F3/F4``
     tensors use coordinates
     ``(x, px/p0, y, py/p0, ell, delta)`` with longitudinal Poisson sign -1.
+    ``curvature_sign`` is the charge sign of every harmonic; the native
+    gradient sign is always the same value.
     """
     values = _real_finite_array(coefficients, "coefficients")
     if values.shape not in ((7,), (9,)):
         raise ValueError("coefficients must have shape (7,) or (9,)")
     rigidity = float(magnetic_rigidity_t_m)
     curvature = float(curvature_sign)
-    gradient = float(gradient_sign)
     beta = float(reference_beta)
     if not np.isfinite(rigidity) or rigidity == 0.0:
         raise ValueError("magnetic_rigidity_t_m must be finite and nonzero")
-    if not np.all(np.isfinite([curvature, gradient, beta])):
-        raise ValueError("curvature_sign, gradient_sign, and beta must be finite")
+    if not np.all(np.isfinite([curvature, beta])):
+        raise ValueError("curvature_sign and beta must be finite")
     if beta <= 0.0 or beta > 1.0:
         raise ValueError("reference_beta must be in (0, 1]")
     reference_curvature = (
@@ -120,7 +120,7 @@ def canonical_body_hamiltonian_jet(
         values,
         rigidity,
         curvature_sign=curvature,
-        gradient_sign=gradient,
+        gradient_sign=curvature,
         reference_beta=beta,
         reference_curvature_per_m=reference_curvature,
     )
@@ -199,7 +199,6 @@ def propagate_grid_function_linear_map(
     initial_horizontal=(1.0, 0.0, 0.0),
     names: Sequence[str] | None = None,
     curvature_sign: float = 1.0,
-    gradient_sign: float = 1.0,
     periodic_frame: bool = False,
     maximum_step_m: float = 1.0e-3,
     maximum_steps: int = 1_000_000,
@@ -220,7 +219,9 @@ def propagate_grid_function_linear_map(
     A first-order harmonic
     multipole fit yields
     curvature, normal/skew quadrupole gradients, Maxwell-residual diagnostics,
-    and the accumulated six-dimensional ``R`` map.  No regular-grid field map
+    and the accumulated six-dimensional ``R`` map.  ``curvature_sign`` is the
+    charge sign in ``h=q*B_y/p`` and in every harmonic focusing term; the
+    local ``y`` axis is ``tangent x x``.  No regular-grid field map
     is created; NGSolve retains ownership of element lookup, transformations,
     and GridFunction evaluation.  Set ``periodic_frame=True`` for a sampled
     closed loop; the one-turn Bishop holonomy is then distributed uniformly
@@ -256,14 +257,13 @@ def propagate_grid_function_linear_map(
     rigidity = float(magnetic_rigidity_t_m)
     radius = float(sample_radius_m)
     curvature = float(curvature_sign)
-    gradient = float(gradient_sign)
     step = float(maximum_step_m)
     if not np.isfinite(rigidity) or rigidity == 0.0:
         raise ValueError("magnetic_rigidity_t_m must be finite and nonzero")
     if not np.isfinite(radius) or radius <= 0.0:
         raise ValueError("sample_radius_m must be finite and positive")
-    if not np.all(np.isfinite([curvature, gradient])):
-        raise ValueError("curvature_sign and gradient_sign must be finite")
+    if not np.isfinite(curvature):
+        raise ValueError("curvature_sign must be finite")
     if not np.isfinite(step) or step <= 0.0:
         raise ValueError("maximum_step_m must be finite and positive")
     region_names = None if names is None else [str(name) for name in names]
@@ -280,7 +280,7 @@ def propagate_grid_function_linear_map(
         sample_radius_m=radius,
         names=region_names,
         curvature_sign=curvature,
-        gradient_sign=gradient,
+        gradient_sign=curvature,
         periodic_frame=bool(periodic_frame),
         maximum_step_m=step,
         maximum_steps=_positive_integer(maximum_steps, "maximum_steps"),
@@ -299,7 +299,6 @@ def propagate_grid_function_multipole_map(
     initial_horizontal=(1.0, 0.0, 0.0),
     names: Sequence[str] | None = None,
     curvature_sign: float = 1.0,
-    gradient_sign: float = 1.0,
     multipole_order: int = 3,
     maximum_map_order: int = 3,
     periodic_frame: bool = False,
@@ -383,7 +382,7 @@ def propagate_grid_function_multipole_map(
         sample_radius_m=radius,
         names=region_names,
         curvature_sign=float(curvature_sign),
-        gradient_sign=float(gradient_sign),
+        gradient_sign=float(curvature_sign),
         multipole_order=field_order,
         maximum_map_order=map_order,
         periodic_frame=bool(periodic_frame),

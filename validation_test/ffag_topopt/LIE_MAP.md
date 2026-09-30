@@ -61,6 +61,15 @@ defines the straightened transverse frame.  This is geometrically equivalent
 to the planar Frenet frame away from zero curvature, without using a
 curvature-derived normal as the numerical transport rule.
 
+Every planar route shares one right-handed convention: `x = bend_axis x t`,
+`y = bend_axis`, `s = t`.  Positive signed curvature bends the orbit toward
+`-x`, so the metric is `1 + h*x`, and `curvature_sign` is the charge sign in
+`h = q*B_y/p` and `k1 = q*(dB_y/dx)/p`; there is no separate gradient sign.
+`tests/test_planar_optics_frame_convention.py` compares the linear, Taylor,
+Lie, and canonical-s routes with Cartesian Lorentz tracking.  The FFAG cell
+fixtures turn counter-clockwise about +z in positive `B_z`, hence
+`FFAG_CELL_CHARGE_SIGN = -1` and negative `h`.
+
 `fourth_order_lie_map_from_hcurl_transverse` is the production bridge from the
 tracked orbit to optics. Its field argument is a real vector-potential
 GridFunction in `HCurl(order=p)`. At every segment it constructs the moving

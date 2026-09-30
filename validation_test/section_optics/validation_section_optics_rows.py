@@ -164,6 +164,9 @@ def main(argv=None):
         _native.track_reference_orbit_native(
             evaluator, MU0 / (4.0 * np.pi), int(coil), False,
             RIGIDITY_T_M, entry, heading, exit_x, 5.0e-4, 1.2, 1.0e-6, 129))
+    # The native tracker reports counter-clockwise-positive turning; the
+    # planar frame bends toward -x for positive h.
+    curvature = -np.asarray(curvature)
     orbit = PlanarDesignOrbit(
         positions=positions, tangents=tangents,
         magnetic_rigidity=RIGIDITY_T_M, bend_axis=np.array([0.0, 0.0, 1.0]),
@@ -188,7 +191,7 @@ def main(argv=None):
 
     chain = CanonicalHCurlChain(
         breaks, HALF_WIDTH, HALF_HEIGHT, order_x=ORDER_X, order_s=ORDER_S,
-        curvature_per_m=lambda s: -float(np.interp(s, seg_mids, curvature)))
+        curvature_per_m=lambda s: float(np.interp(s, seg_mids, curvature)))
     rng = np.random.default_rng(20260819)
     cloud = sample_frame_cloud(orbit, b_batch, (0.0, s_total), HALF_WIDTH,
                                HALF_HEIGHT, rng, ELEMENTS, 20, breaks=breaks)

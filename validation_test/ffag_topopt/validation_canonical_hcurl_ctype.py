@@ -16,8 +16,8 @@ Stage-3 first verification of the CanonicalHCurl production space
 
 The independent HDiv B-map RK cross-route and the exact-source (ungauged)
 A-RK reuse the established three-route harness and are wired in a follow-up
-run; the sign convention ``htilde = -signed_curvature`` follows the
-EarlyTimes metric contract and is pinned against B-RK there.
+run; the chain metric is ``g = 1 + h*x`` with ``h = signed_curvature``,
+the EarlyTimes planar convention pinned against B-RK there.
 
 Usage (LAB smoke; heavy sweeps use hibino first or an idle-CI mdx fallback):
   python validation_canonical_hcurl_ctype.py --iron-maxh 0.02
@@ -86,10 +86,6 @@ def parser():
                              "directly (nonautonomous stage-jet RK4)")
     result.add_argument("--reference-orbit-tolerance", type=float,
                         default=2.0e-3)
-    result.add_argument("--htilde-sign", type=float, default=-1.0,
-                        help="htilde = sign * signed_curvature (metric "
-                             "g = 1 + htilde*x); the Hamiltonian-linear "
-                             "gate pins the correct convention")
     result.add_argument("--grade-fringe", type=float, default=0.0,
                         help="graded_breaks strength on the |dBy/ds| orbit "
                              "monitor (0 = uniform elements)")
@@ -309,10 +305,8 @@ def main(argv=None):
                           + orbit.arc_length_stations[1:])
 
     def htilde_of_s(s_value):
-        # EarlyTimes metric contract: g = 1 + htilde*x.  The sign relative
-        # to orbit.signed_curvature is pinned empirically by the
-        # Hamiltonian-linear gate (and against B-RK in the follow-up).
-        return float(options.htilde_sign) * float(
+        # EarlyTimes planar convention: g = 1 + h*x with h = signed_curvature.
+        return float(
             np.interp(s_value, segment_mids, orbit.signed_curvature))
 
     if float(options.grade_fringe) > 0.0:

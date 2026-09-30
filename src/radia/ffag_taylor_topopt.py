@@ -247,7 +247,6 @@ def build_ffag_second_order_taylor_objective(
             ideal.reshape(-1), reference.orbit.segment_lengths,
             reference.orbit.magnetic_rigidity,
             curvature_sign=target_family.objective.curvature_sign,
-            gradient_sign=target_family.objective.gradient_sign,
             maximum_step_m=maximum_step_m)
         options = {} if T_entries is None else {"T_entries": tuple(T_entries)}
         objectives.append(PlanarSecondOrderTaylorMapObjective(
@@ -260,7 +259,6 @@ def build_ffag_second_order_taylor_objective(
                 target_family.objective.bend_field_band[index]),
             R_entries=target_family.objective.response_entries,
             curvature_sign=target_family.objective.curvature_sign,
-            gradient_sign=target_family.objective.gradient_sign,
             maximum_step_m=maximum_step_m,
             **options))
     return MultiMomentumSecondOrderTaylorMapObjective(tuple(objectives))
