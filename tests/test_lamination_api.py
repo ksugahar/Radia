@@ -96,3 +96,27 @@ def test_normal_lamination_public_module_import():
     from radia.lamination import laminated_mu_perpendicular
 
     assert laminated_mu_perpendicular(2000.0, 0.9) == LAMINATION.laminated_mu_perpendicular(2000.0, 0.9)
+
+
+@pytest.mark.parametrize("mode_count", [0, 3, 20])
+@pytest.mark.parametrize("skin_parameter", [0.01, 1.0, 100.0])
+def test_laminated_response_matches_foster_modes_and_exact_tail(mode_count, skin_parameter):
+    """Independent modal identity covers weak shielding through the skin limit."""
+    from scipy.special import digamma
+
+    mu_r, sigma, thickness, fill = 800.0, 2.0e6, 0.5e-3, 0.93
+    tau = MU0 * mu_r * sigma * (thickness / 2.0)**2
+    omega = skin_parameter**2 / tau
+    z = cmath.sqrt(1j * omega * tau)
+    # tanh(z)/z = 2 sum_{n>=0} [pi^2 (n+1/2)^2 + z^2]^-1.
+    # Partial fractions and psi(b)-psi(a)=sum(1/(k+a)-1/(k+b))
+    # sum the omitted terms exactly; this reference never evaluates tanh.
+    finite = sum(2.0 / (math.pi**2 * (n + 0.5)**2 + z*z)
+                 for n in range(mode_count))
+    a = mode_count + 0.5
+    tail = (1j / (math.pi * z)) * (
+        digamma(a - 1j*z/math.pi) - digamma(a + 1j*z/math.pi))
+    modal_permeability = MU0 * (fill * mu_r * (finite + tail) + 1.0 - fill)
+    actual = laminated_mu_eff(mu_r, sigma, omega, thickness, fill)
+    assert actual == pytest.approx(modal_permeability, rel=2e-11, abs=0.0)
+    assert actual.imag < 0.0
