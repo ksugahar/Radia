@@ -30,7 +30,7 @@ from radia.coil_spec import CoilSpec, build_coil_from_spec
 class Trial:
     iteration: int
     spec: CoilSpec
-    metrics: dict           # empty when evaluation failed
+    metrics: dict           # empty when physical evaluation failed
     objective: float        # -inf / +inf when eval failed
     t_eval_ms: float
     failure: Optional[str] = None
@@ -81,9 +81,20 @@ class IHOptimizer:
                 coil = build_coil_from_spec(spec)
                 metrics = self.ctx.evaluate(
                     coil, nw=self.nw, nh=self.nh, **self.kwargs)
-                obj = float(self.objective_fn(metrics))
-            except Exception as e:
+            except (ValueError, RuntimeError, ArithmeticError,
+                    np.linalg.LinAlgError) as e:
                 failure = f"{type(e).__name__}: {e}"
+            if failure is None:
+                # Keep user objective code outside the recoverable solver/input
+                # boundary: a broken callback is a programming error, not a bad
+                # design candidate.
+                obj = float(self.objective_fn(metrics))
+                if not np.isfinite(obj):
+                    failure = (
+                        "ValueError: objective_fn returned a non-finite "
+                        f"value: {obj!r}"
+                    )
+                    obj = self._bad_objective()
             t_eval = (time.perf_counter() - t0) * 1e3
 
             trial = Trial(iteration=i, spec=spec, metrics=metrics,
@@ -128,6 +139,11 @@ class IHOptimizer:
         lines = [
             f"trials: {len(self.history)} total, "
             f"{len(ok)} ok, {len(fail)} failed",
+        ]
+        if best is None:
+            lines.append("best  : none (all trials failed)")
+            return "\n".join(lines)
+        lines += [
             f"best  : iter {best.iteration}  obj={best.objective:.4e}",
             f"spec  : {best.spec.to_json()}",
             f"H_t_rms={best.metrics['H_t_rms']:.4f}  "
