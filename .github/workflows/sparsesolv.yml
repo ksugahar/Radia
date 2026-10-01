@@ -40,6 +40,20 @@ on:
       - 'src/radia/analytical_formulas/induction_heating.py'
       - 'tests/test_esim_integration.py'
       - 'src/radia/esim_coupled_solver.py'
+      - 'src/radia/simulink/ih_operator_assembly.py'
+      - 'src/radia/gmsh_post_export.py'
+      - 'src/radia/em_material.py'
+      - 'src/radia/coil_from_cad.py'
+      - 'src/radia/force_ngsolve.py'
+      - 'src/radia/scalar_bie_sibc.py'
+      - 'packages/cubit-mesh-export/src/cubit_mesh_export/check.py'
+      - 'tests/test_ih_operator_assembly.py'
+      - 'tests/test_ih_operator_axisym.py'
+      - 'tests/test_ih_fin_surface_boundary.py'
+      - 'tests/axifem/test_heat_henrotte_smoke.py'
+      - 'tests/axifem/test_heat_field_extrema.py'
+      - 'validation_test/induction_heating/test_ih_operator_physics_golden.py'
+      - 'validation_test/axifem/test_heat_axisym_e2e.py'
       - 'src/radia/esim_multiport.py'
       - 'src/radia/panels/calc_inductance.py'
       - 'tests/test_esim_incident_only_retirement.py'
@@ -226,6 +240,20 @@ on:
       - 'src/radia/analytical_formulas/induction_heating.py'
       - 'tests/test_esim_integration.py'
       - 'src/radia/esim_coupled_solver.py'
+      - 'src/radia/simulink/ih_operator_assembly.py'
+      - 'src/radia/gmsh_post_export.py'
+      - 'src/radia/em_material.py'
+      - 'src/radia/coil_from_cad.py'
+      - 'src/radia/force_ngsolve.py'
+      - 'src/radia/scalar_bie_sibc.py'
+      - 'packages/cubit-mesh-export/src/cubit_mesh_export/check.py'
+      - 'tests/test_ih_operator_assembly.py'
+      - 'tests/test_ih_operator_axisym.py'
+      - 'tests/test_ih_fin_surface_boundary.py'
+      - 'tests/axifem/test_heat_henrotte_smoke.py'
+      - 'tests/axifem/test_heat_field_extrema.py'
+      - 'validation_test/induction_heating/test_ih_operator_physics_golden.py'
+      - 'validation_test/axifem/test_heat_axisym_e2e.py'
       - 'src/radia/esim_multiport.py'
       - 'src/radia/panels/calc_inductance.py'
       - 'tests/test_esim_incident_only_retirement.py'
@@ -451,7 +479,9 @@ jobs:
           $ciPython = Join-Path $venv 'Scripts\python.exe'
           $pins = @(& $ciPython -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*[x for x in d['project']['dependencies'] if x.startswith(('ngsolve==','netgen-mesher=='))], sep='\n')")
           if ($LASTEXITCODE -ne 0 -or $pins.Count -ne 2) { throw 'Expected two exact FE runtime pins' }
-          & $ciPython -m pip install @pins mkl-devel pybind11==3.0.2 ninja cmake pytest scipy pyyaml
+          $cadPins = @(& $ciPython -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*d['project']['optional-dependencies']['build123d'], sep='\n')")
+          if ($LASTEXITCODE -ne 0 -or $cadPins.Count -eq 0) { throw 'Expected declared STEP CAD dependencies' }
+          & $ciPython -m pip install @pins @cadPins mkl-devel pybind11==3.0.2 ninja cmake pytest scipy pyyaml
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "RADIA_CI_VENV=$venv" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           (Join-Path $venv 'Scripts') | Out-File $env:GITHUB_PATH -Encoding utf8 -Append
@@ -503,7 +533,7 @@ jobs:
         if: steps.native-impact.outputs.required == 'true'
         shell: pwsh
         env:
-          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-mcp\src'
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-mcp\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
           RADIA_TESTS_ALLOW_PARTIAL: '0'
           RADIA_TEST_NGSOLVE_THREADS: '1'
           OMP_NUM_THREADS: '1'
@@ -521,7 +551,7 @@ jobs:
         if: steps.native-impact.outputs.required == 'true'
         shell: pwsh
         env:
-          PYTHONPATH: '${{ github.workspace }}\src'
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
           RADIA_TESTS_ALLOW_PARTIAL: '0'
           RADIA_TEST_NGSOLVE_THREADS: '1'
           OMP_NUM_THREADS: '1'
