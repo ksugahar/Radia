@@ -36,7 +36,6 @@ def rna_mec(topic: str = "overview") -> str:
             "electromechanical_coupling"     - State-space RNA + ODE (RK4)
             "team28_reduced_model"           - TEAM-28 in depth, 85h -> 1h speedup
             "topology_optimization"          - Yin 2023 grid RNA + AVM
-            "dynamic_hysteresis"             - Lab Play + Cauer dynamic MEC
             "vs_pec_peec"                    - Acronym map: RNA/MEC/PEEC/FEM/HDiv-VIM
             "all"                            - Everything
     """
@@ -48,7 +47,7 @@ def rna_mec(topic: str = "overview") -> str:
 register_status_tool(
     mcp,
     server_name='mcp-server-rna-mec',
-    description='RNA / Magnetic Equivalent Circuit. ★ Lab specialty: dynamic hysteresis MEC (Play + Cauer)',
+    description='RNA / Magnetic Equivalent Circuit. ★ Lab specialty: Play-model hysteresis MEC',
     subpackage='radia_mcp.rna_mec',
     related_servers=["magnetic-materials", "mor", "ih"],
 )

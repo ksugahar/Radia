@@ -162,7 +162,7 @@ For the excess-eddy coefficient, the accompanying integral-equation paper
 identifies its dependence on flux density directly from measured excess loss,
 without imposing an arbitrary functional fit.  This is a good source for the
 Radia field-separation and Bayesian identification lane: identify the
-coefficient, carry its uncertainty, then re-evaluate the loss in the Cauer or
+coefficient, carry its uncertainty, then re-evaluate the loss in the circuit or
 field model.
 
 ## Powder cores
@@ -173,15 +173,6 @@ gap, domain-wall, and anomalous-loss variability matter.  Loss rises as the
 microstructural variability is represented more realistically.  A powder-core
 model must therefore expose its microstructural assumptions instead of hiding
 them in one effective conductivity.
-
-## Play plus Cauer
-
-The report combines a play model for DC hysteresis with a Cauer ladder for
-skin-effect and dynamic minor-loop behavior.  One ladder stage can overestimate
-PWM minor-loop behavior; two stages improve the reported case.  A useful
-workflow is to identify static hysteresis first, identify the dynamic ladder
-from frequency-dependent loss, and validate an unseen waveform rather than
-only the calibration loop.
 
 ## Darwin approximation
 

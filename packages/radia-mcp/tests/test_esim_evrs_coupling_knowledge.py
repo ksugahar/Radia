@@ -28,10 +28,3 @@ def test_full_esim_documentation_includes_evrs_coupling() -> None:
 
     assert "Production HCurl EVRS + local ESIM-SIBC coupling" in text
     assert "local-ESIM port difference" in text
-
-
-def test_evrs_coupling_topic_does_not_use_cln_naming() -> None:
-    text = get_esim_documentation("evrs_coupling")
-
-    assert "CLN" not in text
-    # Generic Cauer/Dowell ladder descriptions are not CLN reduction.

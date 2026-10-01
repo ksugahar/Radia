@@ -761,11 +761,7 @@ jupyter nbconvert --to notebook --execute --inplace hiruma_xfem_comparison.ipynb
 ## Citing this work
 
 If you reproduce or extend the Phase 1-4 benchmark for publication,
-cite:
-    Sugahara, Nagamine, Hane (2026 in preparation).
-    "Asymptote-preserving Schur augmentation of CLN" (IEEE TMag).
-
-The Phase 2 XFEM reproduction also independently confirms:
+note that the Phase 2 XFEM reproduction independently confirms:
     Hiruma et al., "Extended FEM for Eddy-Current Problems with
     Surface Skin Effect", IEEE TMag 59(5), 2023.
 """

@@ -104,7 +104,7 @@ WPT_LAB_LINEAGE = r"""
 3. **RNA + PEEC + HDiv-VIM / reduced-FEM coupling** for transformer-like core models →
    `radia_mcp.radia_ngsolve.hdiv_vim`
 4. **MOR / equivalent circuit** for time-domain control →
-   `radia_mcp.mor.systematic` (CLN, Lanczos, PRIMA)
+   `radia_mcp.mor.systematic` (Lanczos, PRIMA)
 5. **FOD via search coil arrays** (research direction)
 
 ## Implementation pattern (lab production)
