@@ -4,19 +4,13 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
+from radia_mcp._shared.identity_checks import is_sha256 as _digest
 
 
 SUPPRESSION = "feature_suppression_configuration_mass_cache_owner_identity"
 LOFT = "loft_profile_orientation_wire_seam_correspondence_self_intersection_owner_identity"
 IMPORT = "import_unit_inference_layer_color_subshape_mapping_owner_identity"
 SELECTOR = "topology_selector_query_cardinality_witness_feature_history_identity"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 
 def _result_ok(row: Mapping[str, object], *, owner: bool = False) -> bool:

@@ -4,36 +4,11 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
+from radia_mcp._shared.identity_checks import is_sha256 as _digest, finite_vector as _finite_vector, generation_closed as _generations, result_digest_accepted as _result
 
 
 DEMAG = "nonlinear_demag_recoil_branch_temperature_loadstep_result_owner_identity"
 VIRTUAL_WORK = "virtual_work_displacement_frame_mesh_state_energy_owner_identity"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
-
-
-def _generations(row: Mapping[str, object], *fields: str) -> bool:
-    generation = str(row.get("generation") or "")
-    return bool(generation) and all(row.get(field) == generation for field in fields)
-
-
-def _result(row: Mapping[str, object]) -> bool:
-    return _digest(row.get("result_sha256")) and row.get("accepted_result_sha256") == row.get("result_sha256")
-
-
-def _finite_vector(value: object, length: int | None = None) -> bool:
-    return (
-        isinstance(value, Sequence)
-        and not isinstance(value, (str, bytes))
-        and (length is None or len(value) == length)
-        and bool(value)
-        and all(isinstance(item, (int, float)) and math.isfinite(float(item)) for item in value)
-    )
 
 
 def _recoil_branch(value: object) -> bool:

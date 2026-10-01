@@ -9,28 +9,13 @@ from .assembly_exchange_identity_v53 import (
     validate_public_identity as validate_public_v53_identity,
     validate_source_identity as validate_source_v53_identity,
 )
+from radia_mcp._shared.identity_checks import is_sha256 as _digest, generation_closed as _generation, public_rows as _public_rows, gate_report as _report, result_digest_accepted as _result
 
 
 SELECTOR = "selector_query_order_topology_label_owner_identity"
 WORKPLANE = "workplane_local_coordinate_pending_edge_wire_owner_identity"
 BREP = "brep_occversion_location_tshape_serialization_owner_identity"
 GLTF = "gltf_axis_scale_material_instance_scene_owner_identity"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
-
-
-def _generation(row: Mapping[str, object], *names: str) -> bool:
-    value = str(row.get("generation") or "")
-    return bool(value) and all(row.get(name) == value for name in names)
-
-
-def _result(row: Mapping[str, object]) -> bool:
-    return _digest(row.get("result_sha256")) and row.get("accepted_result_sha256") == row.get("result_sha256")
 
 
 def _finite_vector(value: object, length: int) -> bool:
@@ -139,23 +124,6 @@ def _gltf_ok(row: Mapping[str, object]) -> bool:
         and row.get("replayed_scene_owner") == row.get("scene_owner")
         and _result(row)
     )
-
-
-def _public_rows(payload: Mapping[str, object]) -> list[Mapping[str, object]]:
-    rows: list[Mapping[str, object]] = []
-    reference = payload.get("reference")
-    if isinstance(reference, Sequence) and not isinstance(reference, (str, bytes)):
-        rows.extend(item for item in reference if isinstance(item, Mapping))
-    measured = payload.get("measured")
-    if isinstance(measured, Mapping):
-        for family in measured.values():
-            if isinstance(family, Sequence) and not isinstance(family, (str, bytes)):
-                rows.extend(item for item in family if isinstance(item, Mapping))
-    return rows
-
-
-def _report(policy: str, checks: dict[str, bool]) -> dict[str, object]:
-    return {"policy": policy, "status": "ok" if all(checks.values()) else "needs_attention", "checks": checks, "issues": [name for name, accepted in checks.items() if not accepted]}
 
 
 def validate_public_identity(payload: object) -> dict[str, object]:

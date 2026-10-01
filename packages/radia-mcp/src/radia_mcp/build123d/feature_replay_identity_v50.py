@@ -4,28 +4,13 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
+from radia_mcp._shared.identity_checks import is_sha256 as _digest, generation_closed as _generations, gate_report as _report, result_digest_accepted as _result
 
 
 MATE = "assembly_mate_constraint_dof_frame_occurrence_transform_owner_identity"
 FEATURE = "fillet_chamfer_edge_selector_radius_topology_history_owner_identity"
 HEALING = "occt_tolerance_healing_sewing_shell_solid_orientation_owner_identity"
 STL = "stl_tessellation_linear_angular_deflection_triangle_normal_unit_owner_identity"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
-
-
-def _generations(row: Mapping[str, object], *fields: str) -> bool:
-    generation = str(row.get("generation") or "")
-    return bool(generation) and all(row.get(field) == generation for field in fields)
-
-
-def _result(row: Mapping[str, object]) -> bool:
-    return _digest(row.get("result_sha256")) and row.get("accepted_result_sha256") == row.get("result_sha256")
 
 
 def _unique_strings(value: object, prefix: str | None = None) -> bool:
@@ -231,15 +216,6 @@ def _stl_ok(row: Mapping[str, object]) -> bool:
         and row.get("result_mesh_owner") == row.get("mesh_owner")
         and _result(row)
     )
-
-
-def _report(policy: str, checks: dict[str, bool]) -> dict[str, object]:
-    return {
-        "policy": policy,
-        "status": "ok" if all(checks.values()) else "needs_attention",
-        "checks": checks,
-        "issues": [name for name, accepted in checks.items() if not accepted],
-    }
 
 
 def _public_rows(payload: Mapping[str, object]) -> list[Mapping[str, object]]:

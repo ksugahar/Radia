@@ -6,30 +6,11 @@ import math
 from collections.abc import Mapping, Sequence
 
 from .motor_artifact_identity_v53 import validate_public_identity as validate_public_v53_identity
+from radia_mcp._shared.identity_checks import is_sha256 as _digest, is_finite_number as _finite, generation_closed as _generations, result_digest_accepted as _result
 
 
 IRON_LOSS = "ironloss_fft_window_harmonic_rotation_frequency_coefficient_waveform_owner_identity"
 COGGING = "cogging_slot_pole_period_sampling_phase_torque_owner_identity"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
-
-
-def _generations(row: Mapping[str, object], *fields: str) -> bool:
-    generation = str(row.get("generation") or "")
-    return bool(generation) and all(row.get(field) == generation for field in fields)
-
-
-def _result(row: Mapping[str, object]) -> bool:
-    return _digest(row.get("result_sha256")) and row.get("accepted_result_sha256") == row.get("result_sha256")
-
-
-def _finite(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
 
 
 def _finite_vector(value: object) -> bool:

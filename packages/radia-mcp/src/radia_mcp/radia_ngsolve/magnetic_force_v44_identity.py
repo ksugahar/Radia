@@ -12,6 +12,7 @@ from .bem_hysteresis_identity_v48 import validate_public_identity as validate_pu
 from .demag_virtual_work_identity_v49 import validate_public_identity as validate_public_v49_identity
 from .bem_motion_identity_v50 import validate_public_identity as validate_public_v50_identity
 from .potential_bem_identity_v51 import validate_public_identity as validate_public_v51_identity
+from radia_mcp._shared.identity_checks import is_sha256 as _digest, finite_sequence as _finite_sequence
 
 
 _DYNAMIC = "magneticbearing_dynamicstiffness_phase_damping_force_power_stability_mesh_result_identity"
@@ -20,22 +21,6 @@ _DEMAG = "demag_minorloop_fieldpath_remanence_loss_energy_temperature_material_m
 
 def _same(row: Mapping[str, object], left: str, right: str) -> bool:
     return row.get(left) == row.get(right)
-
-
-def _finite_sequence(value: object, *, minimum: int = 1) -> bool:
-    return (
-        isinstance(value, Sequence)
-        and not isinstance(value, (str, bytes))
-        and len(value) >= minimum
-        and all(isinstance(item, (int, float)) and math.isfinite(float(item)) for item in value)
-    )
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 
 def _dynamic_ok(row: Mapping[str, object]) -> bool:

@@ -5,7 +5,7 @@ ill-conditioned, rank-deficient system with a known SVD.
 
 Grounds the lab's truncated-SVD magnet/coil field-synthesis method (public-safe curated corpus
 30_Optimization\\2019_10_16_TSVD) as the linear-inverse core of topology_opt_applications
-topic `field_synthesis`.  Exercises radia_mcp.topology_optimization.linear_inverse.
+topic `field_synthesis`.  Exercises radia_mcp.optimization.linear_inverse.
 """
 import os
 import sys
@@ -17,7 +17,7 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-from radia_mcp.topology_optimization.linear_inverse import (
+from radia_mcp.optimization.linear_inverse import (
     tsvd_solve, tikhonov_solve, filter_factors, lcurve, lcurve_corner)
 
 

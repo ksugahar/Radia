@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Mapping, Sequence
+from radia_mcp._shared.identity_checks import is_finite_number as _finite, generation_closed_stripped as _generation_closed, prefixed_equal as _prefixed_equal
 
 
 _DIGEST = re.compile(r"^[0-9a-f]{64}$")
@@ -125,15 +126,6 @@ def _float_matrix(value: object) -> list[list[float]]:
     return rows if all(rows) else []
 
 
-def _generation_closed(value: Mapping[str, object], fields: Sequence[str]) -> bool:
-    generation = str(value.get("generation", "")).strip()
-    return bool(generation) and all(value.get(field) == generation for field in fields)
-
-
-def _prefixed_equal(value: Mapping[str, object], left: str, right: str, prefix: str) -> bool:
-    return str(value.get(left, "")).startswith(prefix) and value.get(left) == value.get(right)
-
-
 def _digest_equal(value: Mapping[str, object], left: str, right: str) -> bool:
     return _valid_digest(value.get(left)) and value.get(right) == value.get(left)
 
@@ -144,10 +136,6 @@ def _result_digest_bound(value: Mapping[str, object]) -> bool:
 
 def _valid_digest(value: object) -> bool:
     return isinstance(value, str) and bool(_DIGEST.fullmatch(value))
-
-
-def _finite(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
 
 
 def _close(left: float, right: float) -> bool:

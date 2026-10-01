@@ -2,7 +2,7 @@
 Radia + NGSolve Unified MCP Server
 
 Provides tools for both Radia (field/PEEC C++ core) and NGSolve (FEM/BEM):
-- Unified linting (33 rules: Radia API + NGSolve FEM + BEM + PEEC)
+- Unified linting (Radia API + NGSolve FEM + BEM + PEEC rules; see rules.ALL_RULES)
 - Radia C++ library usage (field computation, materials, solver)
 - NGSolve FEM usage (22 topics: EM formulations, axisymmetric, materials)
 - ngsolve.bem (BEM operators, inductance extraction)

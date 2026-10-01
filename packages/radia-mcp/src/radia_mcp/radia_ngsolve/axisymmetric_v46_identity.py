@@ -2,18 +2,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-
-
-def _sha(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
-
-
-def _closed(row: Mapping[str, object], fields: tuple[str, ...]) -> bool:
-    generation = str(row.get("generation", "")).strip()
-    return bool(generation) and all(row.get(field) == generation for field in fields)
+from radia_mcp._shared.identity_checks import generation_closed_stripped as _closed, is_sha256 as _sha
 
 
 def validate_public_identity(identity: object) -> dict[str, bool]:

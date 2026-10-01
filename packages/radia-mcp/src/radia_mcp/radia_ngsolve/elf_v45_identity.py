@@ -2,22 +2,11 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
+from radia_mcp._shared.identity_checks import generation_closed_stripped as _closed, is_sha256 as _digest
 
 
 def _finite(value: object) -> bool:
     return isinstance(value, Sequence) and not isinstance(value, (str, bytes)) and bool(value) and all(isinstance(item, (int, float)) and math.isfinite(float(item)) for item in value)
-
-
-def _closed(row: Mapping[str, object], fields: tuple[str, ...]) -> bool:
-    generation = str(row.get("generation", "")).strip()
-    return bool(generation) and all(row.get(field) == generation for field in fields)
 
 
 def validate_public_v45_identity(identity: object) -> dict[str, bool]:

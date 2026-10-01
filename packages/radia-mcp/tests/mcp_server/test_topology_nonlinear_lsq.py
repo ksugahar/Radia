@@ -15,7 +15,7 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-from radia_mcp.topology_optimization.nonlinear_lsq import levenberg_marquardt
+from radia_mcp.optimization.nonlinear_lsq import levenberg_marquardt
 
 MU0 = 4e-7 * math.pi
 

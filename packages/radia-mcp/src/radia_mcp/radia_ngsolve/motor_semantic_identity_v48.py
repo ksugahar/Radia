@@ -4,36 +4,11 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
+from radia_mcp._shared.identity_checks import result_digest_accepted as _digest, finite_vector as _finite_vector, generation_closed_fields as _generation, is_sha256 as _sha
 
 
 SKEW = "skew_slice_weight_rotor_angle_torque_harmonic_phase_aggregation_identity"
 PWM = "pwm_carrier_control_sample_switch_state_current_voltage_loss_owner_identity"
-
-
-def _sha(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
-
-
-def _generation(row: Mapping[str, object], names: tuple[str, ...]) -> bool:
-    value = str(row.get("generation") or "")
-    return bool(value) and all(row.get(name) == value for name in names)
-
-
-def _digest(row: Mapping[str, object]) -> bool:
-    return _sha(row.get("result_sha256")) and row.get("accepted_result_sha256") == row.get("result_sha256")
-
-
-def _finite_vector(value: object, length: int | None = None) -> bool:
-    return (
-        isinstance(value, Sequence)
-        and not isinstance(value, (str, bytes))
-        and (length is None or len(value) == length)
-        and bool(value)
-        and all(isinstance(item, (int, float)) and math.isfinite(float(item)) for item in value)
-    )
 
 
 def _skew_ok(row: Mapping[str, object]) -> bool:

@@ -9,16 +9,10 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
+from radia_mcp._shared.identity_checks import is_sha256 as _digest
 
 _TIME = "time_adaptive_partial_solution_nan_inf_restart_window_identity"
 _FIELD = "unit_scale_coordinate_frame_complex_field_vector_identity"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 
 def _same(row: Mapping[str, object], *names: str) -> bool:

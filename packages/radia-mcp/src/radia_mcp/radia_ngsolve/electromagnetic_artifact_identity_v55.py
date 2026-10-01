@@ -6,22 +6,11 @@ import math
 from collections.abc import Mapping, Sequence
 
 from .electromagnetic_force_heat_identity_v56 import validate_public_identity as validate_public_v56_identity
+from radia_mcp._shared.identity_checks import is_sha256 as _digest, generation_closed as _generations, result_digest_accepted as _result
 
 
 INDUCTION = "induction_skin_depth_jouleloss_complexfield_frequency_conductor_owner_identity"
 CAPACITANCE = "electrostatic_capacitance_charge_voltage_energy_symmetry_owner_identity"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
-
-
-def _generations(row: Mapping[str, object], *fields: str) -> bool:
-    generation = str(row.get("generation") or "")
-    return bool(generation) and all(row.get(field) == generation for field in fields)
 
 
 def _number(value: object, *, positive: bool = False, nonnegative: bool = False) -> bool:
@@ -39,12 +28,6 @@ def _close(left: object, right: object) -> bool:
     return _number(left) and _number(right) and math.isclose(
         float(left), float(right), rel_tol=1.0e-10, abs_tol=1.0e-12
     )
-
-
-def _result(row: Mapping[str, object]) -> bool:
-    return _digest(row.get("result_sha256")) and row.get(
-        "accepted_result_sha256"
-    ) == row.get("result_sha256")
 
 
 def _induction_ok(row: Mapping[str, object]) -> bool:

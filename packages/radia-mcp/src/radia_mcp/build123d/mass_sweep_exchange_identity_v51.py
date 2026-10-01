@@ -10,6 +10,7 @@ from .selector_exchange_identity_v52 import (
     validate_public_identity as validate_public_v52_identity,
     validate_source_identity as validate_source_v52_identity,
 )
+from radia_mcp._shared.identity_checks import is_sha256 as _digest, gate_report as _report, result_digest_accepted as _result
 
 
 MASS = "mass_properties_frame_inertia_parallel_axis_density_shape_owner_identity"
@@ -18,20 +19,9 @@ STEP = "step_external_reference_occurrence_name_schema_unit_color_owner_identity
 BREP = "brep_occt_version_location_precision_triangulation_cache_owner_identity"
 
 
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
-
-
 def _generations(row: Mapping[str, object], *names: str) -> bool:
     generation = str(row.get("generation") or "")
     return bool(generation) and all(row.get(name) == generation for name in names)
-
-
-def _result(row: Mapping[str, object]) -> bool:
-    return _digest(row.get("result_sha256")) and row.get("accepted_result_sha256") == row.get("result_sha256")
 
 
 def _positive(value: object) -> bool:
@@ -192,10 +182,6 @@ def _brep_ok(row: Mapping[str, object]) -> bool:
         and row.get("result_shape_owner") == row.get("shape_owner")
         and _result(row)
     )
-
-
-def _report(policy: str, checks: dict[str, bool]) -> dict[str, object]:
-    return {"policy": policy, "status": "ok" if all(checks.values()) else "needs_attention", "checks": checks, "issues": [name for name, accepted in checks.items() if not accepted]}
 
 
 def validate_public_identity(payload: object) -> dict[str, object]:

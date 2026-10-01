@@ -3,17 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from radia_mcp._shared.identity_checks import is_sha256 as _digest
 
 
 _ROWS = "force_torque_energy_parameter_row_key_identity"
 _CACHE = "model_mesh_study_result_cache_owner_chain_identity"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 
 def _unique_strings(value: object) -> bool:

@@ -14,7 +14,7 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-from radia_mcp.topology_optimization.global_optimizers import (
+from radia_mcp.optimization.global_optimizers import (
     best_feasible_record,
     constraint_violation,
     differential_evolution,

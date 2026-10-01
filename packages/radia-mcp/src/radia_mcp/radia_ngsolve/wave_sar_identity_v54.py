@@ -6,32 +6,13 @@ import math
 from collections.abc import Mapping, Sequence
 
 from .wave_energy_identity_v55 import validate_public_v55_identity
+from radia_mcp._shared.identity_checks import is_sha256 as _digest, is_finite_number as _finite, generation_closed as _generations, result_digest_accepted as _result
 
 
 CUTOFF = "waveguide_cutoff_mode_normalization_power_impedance_port_owner_identity"
 SAR = "sar_average_mass_density_voxel_frequency_field_owner_identity"
 _C0 = 299792458.0
 _ETA0 = 376.730313668
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
-
-
-def _finite(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
-
-
-def _generations(row: Mapping[str, object], *fields: str) -> bool:
-    generation = str(row.get("generation") or "")
-    return bool(generation) and all(row.get(field) == generation for field in fields)
-
-
-def _result(row: Mapping[str, object]) -> bool:
-    return _digest(row.get("result_sha256")) and row.get("accepted_result_sha256") == row.get("result_sha256")
 
 
 def _cutoff_ok(row: Mapping[str, object]) -> bool:

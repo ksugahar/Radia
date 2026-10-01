@@ -33,7 +33,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from radia_mcp.radia_ngsolve.waveguide import waveguide_dielectric_slab_sparams  # noqa: E402
-from radia_mcp.topology_optimization.global_optimizers import (  # noqa: E402
+from radia_mcp.optimization.global_optimizers import (  # noqa: E402
     best_feasible_record,
     constraint_violation,
 )

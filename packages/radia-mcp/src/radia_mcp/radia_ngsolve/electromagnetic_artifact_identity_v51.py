@@ -6,26 +6,11 @@ import math
 from collections.abc import Mapping, Sequence
 
 from .electromagnetic_artifact_identity_v52 import validate_public_identity as validate_public_v52_identity
+from radia_mcp._shared.identity_checks import is_sha256 as _digest, generation_closed as _generations, result_digest_accepted as _result
 
 
 INCREMENTAL = "incremental_frozen_bias_harmonic_tangent_branch_owner_identity"
 WEIGHTED_FORCE = "weighted_stress_mask_air_axisym_factor_force_frame_owner_identity"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
-
-
-def _generations(row: Mapping[str, object], *fields: str) -> bool:
-    generation = str(row.get("generation") or "")
-    return bool(generation) and all(row.get(field) == generation for field in fields)
-
-
-def _result(row: Mapping[str, object]) -> bool:
-    return _digest(row.get("result_sha256")) and row.get("accepted_result_sha256") == row.get("result_sha256")
 
 
 def _finite_positive(value: object) -> bool:
