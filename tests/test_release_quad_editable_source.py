@@ -50,6 +50,7 @@ def test_release_quad_git_helper_trusts_only_its_active_worktree(monkeypatch):
 
 
 def test_release_head_uses_version_tag_commit(monkeypatch):
+    monkeypatch.setattr(release_quad, "_radia_version", lambda: "5.1.0")
     calls = []
 
     def fake_git(*args, **kwargs):
@@ -130,6 +131,7 @@ def test_editable_runtime_gate_requires_exact_native_manifest():
 
 def test_deployment_plan_is_solver_only_and_does_not_probe_runtime(
         monkeypatch, capsys):
+    monkeypatch.setattr(release_quad, "_release_commit", lambda: "c" * 40)
     import json
 
     monkeypatch.setattr(release_quad, "run", lambda *a, **k: pytest.fail("not a dry run"))
@@ -147,6 +149,7 @@ def test_deployment_plan_is_solver_only_and_does_not_probe_runtime(
 
 @pytest.mark.parametrize("drift", [0, 1])
 def test_lab_deploy_changes_only_radia(monkeypatch, drift):
+    monkeypatch.setattr(release_quad, "_release_commit", lambda: "c" * 40)
     root = release_quad._editable_repo_lab()
     monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
     monkeypatch.setattr(release_quad, "_verify_local_release_source", lambda *a: 0)
@@ -226,6 +229,7 @@ def test_remote_deploy_changes_only_radia(monkeypatch, drift):
 
 
 def test_done_checks_only_solver_editable_roots(monkeypatch, tmp_path):
+    monkeypatch.setattr(release_quad, "_release_commit", lambda: "c" * 40)
     from argparse import Namespace
 
     # `done` takes its source from the recorded editable intent and refuses
@@ -265,6 +269,7 @@ def test_done_checks_only_solver_editable_roots(monkeypatch, tmp_path):
 
 
 def test_done_requires_simulink_candidate_for_5_1_and_newer(monkeypatch, tmp_path):
+    monkeypatch.setattr(release_quad, "_release_commit", lambda: "c" * 40)
     from argparse import Namespace
 
     monkeypatch.setattr(release_quad, "cmd_preflight", lambda _a: 0)
@@ -434,6 +439,7 @@ def test_release_tag_gate_requires_declared_version_at_exact_head(monkeypatch):
 
 
 def test_lab_deploy_stops_before_install_on_source_mismatch(monkeypatch):
+    monkeypatch.setattr(release_quad, "_release_commit", lambda: "c" * 40)
     monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
     monkeypatch.setattr(
         release_quad, "_verify_local_release_source", lambda _repo, _sha: 4
@@ -447,6 +453,7 @@ def test_lab_deploy_stops_before_install_on_source_mismatch(monkeypatch):
 
 
 def test_lab_deploy_preserves_install_when_binary_preflight_fails(monkeypatch):
+    monkeypatch.setattr(release_quad, "_release_commit", lambda: "c" * 40)
     monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
     monkeypatch.setattr(release_quad, "_verify_local_release_source", lambda *_: 0)
     calls = []
@@ -688,3 +695,12 @@ def test_native_evidence_must_succeed_even_when_other_checks_are_selected(
     )
     assert not ok
     assert f"{release_quad.RELEASE_CHECK_RUN}: {conclusion}" in message
+
+
+@pytest.mark.parametrize("host", ["lab", "100"])
+def test_explicit_editable_root_does_not_resolve_controller_version_tag(monkeypatch, host):
+    env = getattr(release_quad, "EDITABLE_REPO_" + host.upper() + "_ENV")
+    monkeypatch.setenv(env, "C:/release-quad/v5.1.0-ccccccccc/")
+    monkeypatch.setattr(release_quad, "_release_commit",
+                        lambda: pytest.fail("explicit root must not resolve a controller tag"))
+    assert getattr(release_quad, "_editable_repo_" + host)() == "C:/release-quad/v5.1.0-ccccccccc"

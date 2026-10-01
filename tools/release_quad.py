@@ -191,12 +191,18 @@ assert tuple(SIMULINK_TARGETS) == RELEASE_ACCEPTANCE_HOSTS, (
 
 def _editable_repo_lab():
     """Return the LAB view of the immutable release worktree."""
+    configured = os.environ.get(EDITABLE_REPO_LAB_ENV)
+    if configured is not None:
+        return configured.strip().rstrip("/\\")
     default = f"S:/Radia/release-quad/v{_radia_version()}-{_release_commit()[:9]}"
     return os.environ.get(EDITABLE_REPO_LAB_ENV, default).strip().rstrip("/\\")
 
 
 def _editable_repo_100():
     """Return the 100-machine view of the immutable release worktree."""
+    configured = os.environ.get(EDITABLE_REPO_100_ENV)
+    if configured is not None:
+        return configured.strip().rstrip("/\\")
     default = rf"W:\00_CAE\Radia\release-quad\v{_radia_version()}-{_release_commit()[:9]}"
     return os.environ.get(EDITABLE_REPO_100_ENV, default).strip().rstrip("/\\")
 
