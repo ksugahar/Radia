@@ -1404,6 +1404,81 @@ threshold = float(threshold_s)
 worst_n = int(worst_n_s)
 want_stats = stats_s == "1"
 result = {"ok": False, "ran": False}
+
+
+def _face_groups(mesh, element_type):
+    # Faces of one element type as (corner count, sorted corner keys, all
+    # face nodes).  Gmsh 5 returns faces of every size with their sizes;
+    # Gmsh 4 takes one call per corner count and raises for a count the
+    # element type does not have.  primary=True gives the corners that
+    # identify a face; primary=False adds the high-order face nodes.
+    groups = []
+    if hasattr(mesh, "getElementFaceNodesByType"):  # Gmsh >= 5
+        corners, csizes = mesh.getElementFaceNodes(element_type, primary=True)
+        nodes, nsizes = mesh.getElementFaceNodes(element_type, primary=False)
+        corners = np.asarray(corners, dtype=np.int64)
+        nodes = np.asarray(nodes, dtype=np.int64)
+        csizes = np.asarray(csizes, dtype=np.int64)
+        nsizes = np.asarray(nsizes, dtype=np.int64)
+        coff = np.concatenate(([0], np.cumsum(csizes)[:-1]))
+        noff = np.concatenate(([0], np.cumsum(nsizes)[:-1]))
+        for n in np.unique(csizes):
+            idx = np.nonzero(csizes == n)[0]
+            widths = np.unique(nsizes[idx])
+            if len(widths) != 1:
+                raise RuntimeError(
+                    "faces with %d corners have mixed node counts %s"
+                    % (n, widths.tolist()))
+            key = corners[coff[idx][:, None] + np.arange(n)]
+            full = nodes[noff[idx][:, None] + np.arange(widths[0])]
+            groups.append((int(n), np.sort(key, axis=1), full))
+        return groups
+    for n in (3, 4):
+        try:
+            corners = mesh.getElementFaceNodes(element_type, n, primary=True)
+        except Exception:  # Gmsh 4: no faces with n corners on this type
+            continue
+        if not len(corners):
+            continue
+        key = np.asarray(corners, dtype=np.int64).reshape(-1, n)
+        full = np.asarray(
+            mesh.getElementFaceNodes(element_type, n, primary=False),
+            dtype=np.int64).reshape(len(key), -1)
+        groups.append((n, np.sort(key, axis=1), full))
+    return groups
+
+
+def _boundary_faces(mesh, element_types):
+    # Boundary faces belong to exactly one 3D element.  Faces of all element
+    # types are pooled, so a face shared by a hex and a prism is interior.
+    pooled = {}
+    for et in element_types:
+        for n, key, full in _face_groups(mesh, int(et)):
+            pooled.setdefault(n, []).append((key, full))
+    n_faces, nodes = 0, set()
+    for parts in pooled.values():
+        keys = np.concatenate([key for key, _ in parts])
+        _, inverse, counts = np.unique(
+            keys, axis=0, return_inverse=True, return_counts=True)
+        once = counts[np.asarray(inverse).ravel()] == 1
+        start = 0
+        for key, full in parts:
+            sel = once[start:start + len(key)]
+            start += len(key)
+            n_faces += int(sel.sum())
+            nodes.update(full[sel].ravel().tolist())
+    return n_faces, nodes
+
+
+def _face_counts(mesh):
+    # (triangles, quadrilaterals) among the faces made by createFaces().
+    if hasattr(mesh, "getFacesByType"):  # Gmsh >= 5: faces of any size
+        _tags, _nodes, sizes = mesh.getAllFaces()
+        sizes = np.asarray(sizes)
+        return int((sizes == 3).sum()), int((sizes == 4).sum())
+    return len(mesh.getAllFaces(3)[0]), len(mesh.getAllFaces(4)[0])
+
+
 try:
     import numpy as np
     import gmsh
@@ -1520,36 +1595,17 @@ try:
             gmsh.model.mesh.createEdges()
             gmsh.model.mesh.createFaces()
             edge_tags, _ = gmsh.model.mesh.getAllEdges()
-            tri_tags, _ = gmsh.model.mesh.getAllFaces(3)
-            quad_tags, _ = gmsh.model.mesh.getAllFaces(4)
+            n_tri, n_quad = _face_counts(gmsh.model.mesh)
             node_tags, _, _ = gmsh.model.mesh.getNodes()
             n_elem3d = sum(bt["n_elements"] for bt in by_type)
-
-            # boundary faces are those incident to exactly ONE 3D element
-            bnd_nodes = set()
-            n_bnd_faces = 0
-            for et, etags in zip(etypes, etags_all):
-                for fnn in (3, 4):
-                    try:
-                        fn = gmsh.model.mesh.getElementFaceNodes(int(et), fnn)
-                    except Exception:
-                        continue
-                    if not len(fn):
-                        continue
-                    fa = np.asarray(fn, dtype=np.int64).reshape(-1, fnn)
-                    key = np.sort(fa, axis=1)
-                    uniq, inv_idx, counts = np.unique(
-                        key, axis=0, return_inverse=True, return_counts=True)
-                    once = counts == 1
-                    n_bnd_faces += int(once.sum())
-                    bnd_nodes.update(uniq[once].ravel().tolist())
+            n_bnd_faces, bnd_nodes = _boundary_faces(gmsh.model.mesh, etypes)
             n_nodes = int(len(node_tags))
             n_bnd_nodes = len(bnd_nodes)
             result["mesh_stats"] = {
                 "n_nodes": n_nodes,
                 "n_edges": int(len(edge_tags)),
-                "n_faces_tri": int(len(tri_tags)),
-                "n_faces_quad": int(len(quad_tags)),
+                "n_faces_tri": n_tri,
+                "n_faces_quad": n_quad,
                 "n_elements_3d": int(n_elem3d),
                 "n_boundary_faces": n_bnd_faces,
                 "n_boundary_nodes": n_bnd_nodes,
@@ -1559,7 +1615,7 @@ try:
                 "dof_estimate": {
                     "h1_p1": n_nodes,
                     "hcurl_lowest": int(len(edge_tags)),
-                    "hdiv_lowest": int(len(tri_tags)) + int(len(quad_tags)),
+                    "hdiv_lowest": n_tri + n_quad,
                     "l2_p0": int(n_elem3d),
                 },
                 "note": ("dof_estimate is the TOTAL (unconstrained) dof "
