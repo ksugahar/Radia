@@ -54,7 +54,8 @@ def make_sphere_axisym_trig_mesh(N_rho_in, N_rho_out, N_theta):
     theta_grid = np.linspace(0.0, pi, N_theta + 1)
     n_rho = len(rho_grid)
 
-    # netgen 2D mesh, matching test_hiruma_disk_q1.py pattern:
+    # netgen 2D mesh, matching the make_structured_disk_quad_mesh pattern in
+    # validation_test/axifem/research/verification/disk_axisym_reference.py:
     # - SetMaterial(N, name) names volume domain N.
     # - One FaceDescriptor must exist for every Element2D index in use;
     #   otherwise Mesh(ngmesh) crashes ("has no facedecoding: ind = K").

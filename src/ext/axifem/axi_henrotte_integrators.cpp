@@ -12,7 +12,7 @@
 //     element_sigma_mass                  (P1 triangle sigma mass, Hammer 7-point)
 //
 // DOF convention (V-DOF): u_j = A_phi at vertex j. This matches the Python
-// references (validation_test/axifem/research/verification/test_hiruma_disk*.py).
+// references (validation_test/axifem/research/verification/disk_axisym_reference.py).
 // - Q1 closed form: M_V = T M_phi T with T_jj = 2 pi r_j; axis-vertex rows/
 //   cols become zero (caller MUST Dirichlet axis edges).
 // - P1 triangle stiffness: -pi factor applied to FEMM raw matrices, matches

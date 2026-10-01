@@ -51,8 +51,8 @@
     {
       "Element path": "Q2 quad",
       "Production selection": "H1Henrotte(mesh, order=2, curvedquad=False) on axis-aligned quads loaded through Netgen .vol",
-      "Evidence gate": "test_de_rham_identities.py + test_q2_curved.py straight-quad equivalence + test_axifem_guards.py + Q2 stored ladder validation summary",
-      "What would fail if broken": "axis-aligned Q2 eigenvalue changes, non-axis-aligned closed-form input is not rejected, or Q2 ladder time constants drift"
+      "Evidence gate": "test_de_rham_identities.py + test_q2_curved.py straight-quad equivalence + test_axifem_guards.py",
+      "What would fail if broken": "axis-aligned Q2 eigenvalue changes or non-axis-aligned closed-form input is not rejected"
     },
     {
       "Element path": "P2 curved triangle",
@@ -89,67 +89,8 @@
       "contract": "Axis-aligned boundary value traces integrate against analytic edge integrals after .vol reload."
     }
   ],
-  "ladder_validation_summary": [
-    {
-      "family": "Q1 quad",
-      "source": "validation_test/axifem/research/verification/test_hiruma_disk_q1_results.json",
-      "selected_mesh": "very fine",
-      "mesh": {
-        "ne": 15170,
-        "ndof": 15438,
-        "free": 14904
-      },
-      "tau_pair_us_first6": [
-        218.052147,
-        77.773176,
-        39.374895,
-        23.140683,
-        16.064211,
-        13.011787
-      ],
-      "stored_bem_reference_us_first6": [
-        224.307059,
-        88.423956,
-        49.539868,
-        32.090204,
-        23.339598,
-        22.588437
-      ],
-      "first_tau_relative_to_reference": 0.027885,
-      "load_elapsed_s": 0.000381
-    },
-    {
-      "family": "Q2 quad",
-      "source": "validation_test/axifem/research/verification/test_hiruma_disk_q2_results.json",
-      "selected_mesh": "fine",
-      "mesh": {
-        "ne": 2530,
-        "ndof": 10323,
-        "free": 9919
-      },
-      "tau_pair_us_first6": [
-        218.707571,
-        78.121442,
-        39.54416,
-        23.157879,
-        16.073587,
-        13.118726
-      ],
-      "stored_bem_reference_us_first6": [
-        224.307059,
-        88.423956,
-        49.539868,
-        32.090204,
-        23.339598,
-        22.588437
-      ],
-      "first_tau_relative_to_reference": 0.024963,
-      "load_elapsed_s": 0.000246
-    }
-  ],
   "timing_breakdown_s": {
     "pytest_axifem_vol_backed_gates": 2.883,
-    "ladder_json_summary_load": 0.0,
     "notebook_artifact_generation": 0.0
   }
 }
