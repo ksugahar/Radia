@@ -29,6 +29,7 @@ import math
 
 import numpy as np
 import pytest
+from cubit_mesh_export.check import check_consistency as _required_check_consistency
 
 # Exact geometry of the 1 cm workpiece cube (mesh-independent).
 BOX_VOLUME_M3 = 1.0e-6
@@ -59,7 +60,6 @@ def _taskmanager():
 
 
 def _assemble(tmp):
-    pytest.importorskip("cubit_mesh_export")
     from netgen.occ import (
         Axes,
         Axis,

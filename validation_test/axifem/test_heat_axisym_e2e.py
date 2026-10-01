@@ -31,8 +31,6 @@ ng = pytest.importorskip("ngsolve")
 REPO = os.path.normpath(
     os.path.join(os.path.dirname(__file__), "..", ".."))
 FIXTURE_DIR = os.path.join(REPO, "validation_test", "panels", "fixtures")
-FIXTURE = os.path.join(FIXTURE_DIR,
-                       "heat_workpiece_cylinder_R25_H25_axisym.vol")
 SCRIPT = os.path.join(REPO, "src", "radia", "panels",
                        "calc_heat_axisym.py")
 
@@ -43,12 +41,15 @@ def _taskmanager():
         yield
 
 
-@pytest.fixture(scope="module")
-def regenerate_fixture():
-    """Regenerate the structured-grid .vol with the supported Netgen API."""
+@pytest.fixture
+def regenerate_fixture(tmp_path):
+    """Generate the structured-grid .vol without modifying tracked fixtures."""
     gen = os.path.join(FIXTURE_DIR, "generate_heat_cylinder_axisym.py")
-    subprocess.run([sys.executable, gen], check=True)
-    return FIXTURE
+    output = tmp_path / "heat_workpiece_cylinder_R25_H25_axisym.vol"
+    subprocess.run(
+        [sys.executable, gen, "--output", str(output)], check=True,
+    )
+    return str(output)
 
 
 def test_calc_heat_axisym_temperature_band(regenerate_fixture, tmp_path):

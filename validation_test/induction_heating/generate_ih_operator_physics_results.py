@@ -3,21 +3,60 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import importlib.metadata
 import os
 import platform
+import socket
+import subprocess
 import tempfile
 import time
 from datetime import UTC, datetime
 from pathlib import Path
 
 import ngsolve as ng
+import radia
 import test_ih_operator_physics_golden as ih_golden
 
 OUTPUT = Path(__file__).with_name("ih_operator_physics_results.json")
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def _git(*args: str) -> str:
+    result = subprocess.run(
+        ["git", *args], cwd=ROOT, check=True, capture_output=True, text=True,
+    )
+    return result.stdout.strip()
+
+
+def _source_identity() -> tuple[str, bool]:
+    try:
+        return (
+            _git("rev-parse", "HEAD"),
+            bool(_git("status", "--porcelain", "--untracked-files=no")),
+        )
+    except (OSError, subprocess.CalledProcessError):
+        commit = os.environ.get("RADIA_SOURCE_COMMIT", "").strip()
+        dirty = os.environ.get("RADIA_SOURCE_DIRTY", "").strip().lower()
+        if not commit or dirty not in {"0", "1", "false", "true"}:
+            raise RuntimeError(
+                "source checkout has no readable Git identity; set "
+                "RADIA_SOURCE_COMMIT and RADIA_SOURCE_DIRTY explicitly"
+            )
+        return commit, dirty in {"1", "true"}
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def main() -> int:
     started = time.perf_counter()
+    source_commit, source_dirty = _source_identity()
+    native_module = Path(radia.__file__).resolve().with_name("_radia_pybind.pyd")
+    native_build_commit = os.environ.get("RADIA_NATIVE_BUILD_COMMIT", "").strip()
+    if not native_build_commit:
+        raise RuntimeError("RADIA_NATIVE_BUILD_COMMIT is required for native provenance")
     temp_root = Path(os.environ.get("RADIA_TEMP_DIR", r"C:\temp"))
     temp_root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="radia-ih-golden-", dir=temp_root) as directory:
@@ -84,6 +123,25 @@ def main() -> int:
             ),
             "python": platform.python_version(),
             "ngsolve": getattr(ng, "__version__", "unknown"),
+            "host": socket.gethostname(),
+            "commit": source_commit,
+            "dirty": source_dirty,
+            "source_sha256": {
+                path: _sha256(ROOT / path)
+                for path in (
+                    "src/radia/simulink/ih_operator_assembly.py",
+                    "validation_test/induction_heating/test_ih_operator_physics_golden.py",
+                    "validation_test/induction_heating/generate_ih_operator_physics_results.py",
+                    "packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
+                )
+            },
+            "native_runtime": {
+                "distribution_version": importlib.metadata.version("radia"),
+                "build_commit": native_build_commit,
+                "module_sha256": _sha256(native_module),
+                "wheel_sha256": os.environ.get("RADIA_NATIVE_WHEEL_SHA256", "").strip()
+                or None,
+            },
         },
         "configuration": {
             "frequency_hz": 7000.0,

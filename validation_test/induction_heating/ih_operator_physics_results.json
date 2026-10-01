@@ -1,10 +1,25 @@
 {
   "schema": "radia.validation.ih-operator-physics.v1",
-  "generated_at_utc": "2026-09-03T21:10:49.457321+00:00",
+  "generated_at_utc": "2026-10-01T00:24:26.805713+00:00",
   "provenance": {
     "command": "python validation_test/induction_heating/generate_ih_operator_physics_results.py",
     "python": "3.12.10",
-    "ngsolve": "6.2.2606"
+    "ngsolve": "6.2.2607",
+    "host": "lab",
+    "commit": "24a3f19cdfeeac0d1f956ccac329cdd58306f844",
+    "dirty": true,
+    "source_sha256": {
+      "src/radia/simulink/ih_operator_assembly.py": "438446ccc07cc30ecf942dbedb8166f425aa572e60f135d75745bf04cd1a548b",
+      "validation_test/induction_heating/test_ih_operator_physics_golden.py": "84afca40a0312d5e3d3d5d67619d1836ebbef45b73f11c1462b2d5a80c6fefec",
+      "validation_test/induction_heating/generate_ih_operator_physics_results.py": "a2eac60603f794e5b29dbe1ac8660c39d44daa0724db064cf1db956dddba1a0b",
+      "packages/cubit-mesh-export/src/cubit_mesh_export/check.py": "b5253f7ad2971a9b300f54a97ef9cc89fb91b42cbc398e48a4090ccdfabc4692"
+    },
+    "native_runtime": {
+      "distribution_version": "5.1.0",
+      "build_commit": "cc8f4b8752d34b79e8914a6bd47a0a4d98ce262b",
+      "module_sha256": "32486195d84799c7c41c1736533b645c6d0cb59be9ab1aa612273933c08d3732",
+      "wheel_sha256": "2f5633376a33582a8bffaa2a696e24f9da6abb3b801eb4c6bd388755e334d22b"
+    }
   },
   "configuration": {
     "frequency_hz": 7000.0,
@@ -16,7 +31,7 @@
     "workpiece_box_volume_m3": 1e-06,
     "workpiece_box_area_m2": 0.0006
   },
-  "runtime_seconds": 6.271743100020103,
+  "runtime_seconds": 5.9047648000123445,
   "thresholds": {
     "electromagnetic_power_W_minimum": 5.656410577146e-06,
     "electromagnetic_power_W_maximum": 5.887284478254001e-06,
@@ -28,18 +43,18 @@
     "temperature_weight_row_sum_relative_error_maximum": 1e-10
   },
   "observed": {
-    "electromagnetic_power_W": 5.7718475276642226e-06,
-    "thermal_source_power_W": 5.771847527664251e-06,
-    "relative_power_error": 4.989584369409143e-15,
-    "heat_projection_closure_W": 5.771847527664251e-06,
+    "electromagnetic_power_W": 5.771847527664258e-06,
+    "thermal_source_power_W": 5.771847527664282e-06,
+    "relative_power_error": 4.109069480689857e-15,
+    "heat_projection_closure_W": 5.771847527664282e-06,
     "mass_sum_J_per_K": 3.6426000000000007,
-    "stiffness_constant_nullspace_maximum": 8.326672684688674e-17,
-    "stiffness_maximum_absolute_entry": 1.3980000000000001,
+    "stiffness_constant_nullspace_maximum": 2.220446049250313e-16,
+    "stiffness_maximum_absolute_entry": 1.3980000000000004,
     "convection_sum_m2": 0.0006000000000000001,
     "temperature_weight_minimum_J_per_K": 0.01897187500000004,
     "temperature_weight_sum_J_per_K": 3.6426000000000007,
-    "temperature_weight_row_sum_maximum_relative_error": 1.2191544771005929e-16,
-    "direct_calc_inductance_power_W": 5.7718475276642226e-06,
+    "temperature_weight_row_sum_maximum_relative_error": 1.219154478649392e-16,
+    "direct_calc_inductance_power_W": 5.771847527664258e-06,
     "assembler_to_direct_power_relative_difference": 0.0,
     "operator_basis": "exact-single-current-linear-response",
     "surrogate": false,

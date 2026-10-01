@@ -7,7 +7,6 @@ the argparser acceptance are exercised.
 
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
 
 import pytest
@@ -69,8 +68,6 @@ def test_unit_current_argv_for_series_peec_and_bema_are_unchanged():
 
 
 def test_calc_inductance_argparser_accepts_fin_surface():
-    if importlib.util.find_spec("radia.panels.calc_inductance") is None:
-        pytest.skip("panels package not importable here")
     from radia.panels.calc_inductance import build_argparser
 
     args = build_argparser().parse_args(_argv("peec", coil_step_solver="fin-surface"))
