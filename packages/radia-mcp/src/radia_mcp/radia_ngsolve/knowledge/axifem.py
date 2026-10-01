@@ -508,10 +508,10 @@ intended canonical use:
   25x-50x the conductor extent for < 1 %).
 
 * **Reduced model**: once you have `K, M, b` from the Henrotte assembly,
-  reduce with a Krylov projection (Hiruma 3-term Lanczos, or the PRIMA
-  congruence projection in `radia.lanczos_reduction`) or the Foster modal
-  form (generalized eigenproblem on `K, M`), and state the moment
-  convention (impedance vs susceptibility form, above) explicitly.
+  reduce with a Krylov projection (the PRIMA congruence projection in
+  `radia.lanczos_reduction`) or the Foster modal form (generalized
+  eigenproblem on `K, M`), and state which transfer function the moments
+  are taken from (impedance or susceptibility form) explicitly.
 
 
 ## Hessian-of-W convention (load-bearing)
