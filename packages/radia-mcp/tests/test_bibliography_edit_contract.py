@@ -163,3 +163,35 @@ def test_key_generation_does_not_use_macro_name_as_metadata(tmp_path, field):
     result = bibliography_canonicalize_keys(str(path), dry_run=False)
     assert result.startswith("Error:") and "explicit" in result
     assert path.read_bytes() == data
+
+
+@pytest.fixture(autouse=True)
+def _tmp_bib_is_editable(monkeypatch, tmp_path):
+    """Edit-mechanics tests write scratch .bib files; the canonical-only guard
+    still applies to every path outside this test's tmp_path."""
+    from pathlib import Path
+    from radia_mcp.bibliography import _source_edit
+
+    guard = _source_edit.require_canonical_target
+
+    def allow_tmp(path):
+        if Path(path).resolve().is_relative_to(Path(tmp_path).resolve()):
+            return None
+        return guard(path)
+
+    monkeypatch.setattr(_source_edit, "require_canonical_target", allow_tmp)
+
+
+def test_non_canonical_bib_is_never_rewritten(tmp_path, monkeypatch):
+    from radia_mcp.bibliography import _source_edit
+
+    monkeypatch.undo()  # drop the scratch exemption for this test
+    path = tmp_path / "manuscript.bib"
+    path.write_text("@article{Old2020, title={X}, year={2020}, author={Old, A.}}\n", encoding="utf-8")
+    before = path.read_bytes()
+    result = bibliography_canonicalize_keys(str(path), dry_run=False)
+    assert path.read_bytes() == before
+    if "proposed renames: 0" not in result:
+        assert "only the canonical bibliography" in result
+    with pytest.raises(ValueError, match="only the canonical bibliography"):
+        _source_edit.require_canonical_target(path)

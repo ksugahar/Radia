@@ -83,3 +83,20 @@ def test_locked_source_is_not_rewritten(tmp_path):
         with pytest.raises(OSError, match="busy"):
             _source_edit.write_source_edits(path, original, text, [(*entries[0].key_span, "new")])
     assert path.read_bytes() == original
+
+
+@pytest.fixture(autouse=True)
+def _tmp_bib_is_editable(monkeypatch, tmp_path):
+    """Edit-mechanics tests write scratch .bib files; the canonical-only guard
+    still applies to every path outside this test's tmp_path."""
+    from pathlib import Path
+    from radia_mcp.bibliography import _source_edit
+
+    guard = _source_edit.require_canonical_target
+
+    def allow_tmp(path):
+        if Path(path).resolve().is_relative_to(Path(tmp_path).resolve()):
+            return None
+        return guard(path)
+
+    monkeypatch.setattr(_source_edit, "require_canonical_target", allow_tmp)

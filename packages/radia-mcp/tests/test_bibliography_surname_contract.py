@@ -77,3 +77,20 @@ def test_failed_surname_publication_preserves_source(tmp_path, monkeypatch):
     assert "Error:" in bibliography_check_surname_braces(str(path), fix=True)
     assert path.read_bytes() == data
     assert not list(tmp_path.glob(".radia-bib-*.tmp"))
+
+
+@pytest.fixture(autouse=True)
+def _tmp_bib_is_editable(monkeypatch, tmp_path):
+    """Edit-mechanics tests write scratch .bib files; the canonical-only guard
+    still applies to every path outside this test's tmp_path."""
+    from pathlib import Path
+    from radia_mcp.bibliography import _source_edit
+
+    guard = _source_edit.require_canonical_target
+
+    def allow_tmp(path):
+        if Path(path).resolve().is_relative_to(Path(tmp_path).resolve()):
+            return None
+        return guard(path)
+
+    monkeypatch.setattr(_source_edit, "require_canonical_target", allow_tmp)
