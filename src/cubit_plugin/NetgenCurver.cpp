@@ -74,30 +74,30 @@ bool NetgenCurver::build(const MeshData &md, int order)
 
   // Diagnostic report: projection reject stats
   PRINT_INFO("NetgenCurver: projection stats — "
-             "project=%ld calls, %ld rejects (>%g mm), max_disp=%g mm (surf %d)\n",
+             "project=%ld calls, %ld rejects (>%g), max_disp=%g (surf %d) [model length units]\n",
              diag_project_calls_, diag_project_rejects_,
              project_reject_threshold_,
              diag_project_max_disp_, diag_project_max_disp_surf_);
-  PRINT_INFO("NetgenCurver: edge_project stats — %ld calls, %ld rejects, max_disp=%g mm\n",
+  PRINT_INFO("NetgenCurver: edge_project stats — %ld calls, %ld rejects, max_disp=%g [model length units]\n",
              diag_edge_calls_, diag_edge_rejects_, diag_edge_max_disp_);
-  PRINT_INFO("NetgenCurver: trim-then-refine — tries=%ld, recovered=%ld, max_tdisp=%g mm\n",
+  PRINT_INFO("NetgenCurver: trim-then-refine — tries=%ld, recovered=%ld, max_tdisp=%g [model length units]\n",
              diag_refine_tries_, diag_refine_success_, diag_refine_max_tdisp_);
   if (!polar_surfaces_.empty() || diag_polar_skips_ > 0) {
     PRINT_INFO("NetgenCurver: polar-disk short-circuit — %zu surfaces, %ld HO skips (linear fallback)\n",
                polar_surfaces_.size(), diag_polar_skips_);
   }
   PRINT_INFO("NetgenCurver: path distribution — "
-             "0(uv_direct_eval)=%ld (max_disp=%g mm), "
-             "1(uv_guess_fallback)=%ld (max_disp=%g mm), "
-             "2(nearest_vertex_hint)=%ld (max_disp=%g mm), "
-             "3(no_hint_trimmed)=%ld (max_disp=%g mm)\n",
+             "0(uv_direct_eval)=%ld (max_disp=%g), "
+             "1(uv_guess_fallback)=%ld (max_disp=%g), "
+             "2(nearest_vertex_hint)=%ld (max_disp=%g), "
+             "3(no_hint_trimmed)=%ld (max_disp=%g) [model length units]\n",
              diag_path_calls_[0], diag_path_max_disp_[0],
              diag_path_calls_[1], diag_path_max_disp_[1],
              diag_path_calls_[2], diag_path_max_disp_[2],
              diag_path_calls_[3], diag_path_max_disp_[3]);
   PRINT_INFO("NetgenCurver: path=0 disp histogram — "
              "<0.01:%ld  [0.01,0.05):%ld  [0.05,0.1):%ld  [0.1,0.2):%ld  "
-             "[0.2,0.5):%ld  [0.5,1.0):%ld  >=1.0:%ld mm\n",
+             "[0.2,0.5):%ld  [0.5,1.0):%ld  >=1.0:%ld [model length units]\n",
              diag_path0_hist_[0], diag_path0_hist_[1], diag_path0_hist_[2],
              diag_path0_hist_[3], diag_path0_hist_[4], diag_path0_hist_[5],
              diag_path0_hist_[6]);
@@ -829,7 +829,7 @@ bool NetgenCurver::attach_callback_geometry()
   // the body) admissible while catching projections of points that sit a
   // substantial fraction of the body away from a candidate surface.
   surf_bbox_pad_ = 0.05 * global_diam;
-  PRINT_INFO("NetgenCurver: built bbox for %d surfaces (pad=%g mm, global_diam=%g mm)\n",
+  PRINT_INFO("NetgenCurver: built bbox for %d surfaces (pad=%g, global_diam=%g [model length units])\n",
              (int)surf_bbox_.size(), surf_bbox_pad_, global_diam);
 
   // Project callback: (surfnr, x,y,z, u_hint, v_hint, has_hint) -> (xp,yp,zp, u,v)

@@ -446,6 +446,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
 
   // Extract linear mesh from Cubit (MeshData)
   MeshData md;
+  md.require_volume_elements = true;  // .vol has no surface-only mode
   int build_order = (order >= 2) ? order : 2;
   if (!md.extract(build_order)) {
     PRINT_ERROR("Mesh extraction failed.\n");

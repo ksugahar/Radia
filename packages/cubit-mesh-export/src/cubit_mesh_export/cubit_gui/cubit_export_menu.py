@@ -847,10 +847,12 @@ def _run_netgen_export(cubit_mod, parent):
         rc, stdout, stderr = _run_subprocess_utf8(
             [python] + args, timeout=300)
     except subprocess.TimeoutExpired:
+        print("Verification FAILED: NGSolve verification timed out.")
         QMessageBox.warning(parent, "Verification",
                             "NGSolve verification timed out.")
         return
     except OSError as exc:
+        print(f"Verification FAILED: cannot start check-vol: {exc}")
         QMessageBox.warning(parent, "Verification failed",
                             f"Cannot start standalone check-vol:\n{exc}")
         return
@@ -859,9 +861,12 @@ def _run_netgen_export(cubit_mod, parent):
         with open(report_path, encoding="utf-8") as stream:
             r = json.load(stream)
     except (OSError, json.JSONDecodeError):
+        print(f"Verification FAILED: no valid check-vol report: "
+              f"{stderr[:500]}")
         QMessageBox.warning(parent, "Verification",
                             f"No valid check-vol report:\n{stderr[:2000]}")
         return
+    print(_verification_summary(rc, r, report_path))
     if rc != 0 or not r.get("passed", False):
         QMessageBox.warning(parent, "Verification failed",
                             json.dumps(r, indent=2)[:4000])
@@ -869,6 +874,21 @@ def _run_netgen_export(cubit_mod, parent):
 
     _show_netgen_result(r, vol_path, order, parent)
     _open_in_os(vol_path)
+
+
+def _verification_summary(rc, report, report_path):
+    """Console lines for a check-vol report, so the log keeps the verdict."""
+    passed = rc == 0 and bool(report.get("passed", False))
+    lines = [
+        f"Verification {'passed' if passed else 'FAILED'}: "
+        f"{report.get('n_elements', '?')} elements, "
+        f"{report.get('n_points', '?')} points, "
+        f"order {report.get('order', '?')} (report: {report_path})"]
+    if report.get("error"):
+        lines.append(f"  error: {report['error']}")
+    for warning in report.get("warnings", [])[:10]:
+        lines.append(f"  warning: {warning}")
+    return "\n".join(lines)
 
 
 def _show_netgen_result(r, vol_path, order, parent):
