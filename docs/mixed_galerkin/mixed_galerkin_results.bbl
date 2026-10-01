@@ -22,6 +22,13 @@ Sergey~V. {Yuferev} and Nathan {Ida}.
   Approach}.
 \newblock CRC Press, Boca Raton, FL, 2009.
 
+\bibitem{Kameari2018}
+Akihisa {Kameari}, Hassan {Ebrahimi}, Kengo {Sugahara}, Yuji {Shindo}, and
+  Tetsuji {Matsuo}.
+\newblock Cauer ladder network representation of eddy-current fields for model
+  order reduction using finite-element method.
+\newblock {\em IEEE Transactions on Magnetics}, 54(3):1–4, Mar 2018.
+
 \bibitem{QuarteroniValli1999}
 A.~{Quarteroni} and A.~{Valli}.
 \newblock {\em Domain Decomposition Methods for Partial Differential

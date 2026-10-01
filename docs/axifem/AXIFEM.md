@@ -333,3 +333,8 @@ works exactly like any other space.
     March 1993.
 [^MeekerFEMM]: D. Meeker, FEMM 4.2 axisymmetric formulation notes
     (`prob3big.cpp` `StaticAxisymmetric`).
+[^Nagamine2026]: H. Nagamine, T. Yamaguchi, K. Sugahara, S. Hiruma, T.
+    Mifune, T. Matsuo, "Verified Numerical Computations of the Cauer
+    Network Representation of a Square Prism Conductor", manuscript
+    2026-05-04 (Japan Journal of Industrial and Applied Mathematics
+    submission).
