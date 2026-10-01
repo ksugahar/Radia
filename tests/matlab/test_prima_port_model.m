@@ -95,6 +95,41 @@ testCase.verifyError(@() radia.simulink.loadPrimaPortModel(tampered), ...
     "radia:simulink:PrimaExchange");
 end
 
+function testInvalidCheckFrequenciesAreRejected(testCase)
+for frequency = {[], [100; -1; 1e3], [0; 1e3]}
+    payload = localPayload(testCase);
+    payload.check.frequency_hz = frequency{1};
+    localVerifyRejected(testCase, payload);
+end
+end
+
+function testInvalidCheckLimitIsRejected(testCase)
+for limit = {1e-3, 0, -1e-9, [1e-9, 1e-9]}
+    payload = localPayload(testCase);
+    payload.check.relative_limit = limit{1};
+    localVerifyRejected(testCase, payload);
+end
+end
+
+function testNonFiniteModelResponseIsRejected(testCase)
+% E = A = 0 makes s E - A singular at every check frequency.
+payload = localPayload(testCase);
+payload.arrays.E.values(:) = 0;
+payload.arrays.A.values(:) = 0;
+localVerifyRejected(testCase, payload);
+end
+
+function payload = localPayload(testCase)
+payload = jsondecode(fileread(fullfile(testCase.TestData.folder, "rl_admittance.json")));
+end
+
+function localVerifyRejected(testCase, payload)
+tampered = string(tempname(testCase.TestData.folder)) + ".json";
+writelines(jsonencode(payload), tampered);
+testCase.verifyError(@() radia.simulink.loadPrimaPortModel(tampered), ...
+    "radia:simulink:PrimaExchange");
+end
+
 function value = quoteCommandArgument(value)
 value = '"' + replace(string(value), '"', '""') + '"';
 end
