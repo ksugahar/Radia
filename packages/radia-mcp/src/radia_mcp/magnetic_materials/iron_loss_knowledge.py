@@ -57,6 +57,7 @@ Captures: DC bias, minor loops, non-sinusoidal trapezoid.
 - 電磁鋼板の詳細な積層モデルを用いた高周波用リアクトルの鉄損解析
 - 高周波励磁下におけるリアクトル損失の空隙特性
 - Iron Loss Comparison between Reactor with Air Gap and Material
+- Cauer 等価回路とプレイモデルを用いた...鉄損特性評価
 """
 
 
@@ -293,6 +294,8 @@ Have measured B(t) waveform OR simulated FE B(t)?
 
 - Iron Loss Evaluation of Reactor Core with Air Gaps by Magnetic
   Field (Magnetic-field-based, not assumed-sinusoid)
+- Cauer等価回路とプレイモデルを用いた数値解析による
+  インバータ励磁下における鉄損特性評価 (PWM-specific)
 - 高周波励磁下におけるリアクトル損失の空隙特性
 - 電磁鋼板の詳細な積層モデルを用いた高周波用リアクトルの鉄損解析
 

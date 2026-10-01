@@ -513,6 +513,12 @@ intended canonical use:
   eigenproblem on `K, M`), and state which transfer function the moments
   are taken from (impedance or susceptibility form) explicitly.
 
+Reference (citation):
+  Nagamine, Yamaguchi, Sugahara, Hiruma, Mifune, Matsuo, "Verified
+  Numerical Computations of the Cauer Network Representation of a Square
+  Prism Conductor", manuscript 2026-05-04 (Japan J. Industrial Appl.
+  Math. submission).
+
 
 ## Hessian-of-W convention (load-bearing)
 
