@@ -1,5 +1,11 @@
 # Stream Function Method (SFM) coil design — full documentation
 
+The selected introduction is now a result-reading notebook. Detailed historical
+studies and their original scope are preserved in
+[the validation study archive](../../validation_test/showcase/studies/README.md);
+new focused reruns are documented in [the campaign](../../validation_test/showcase/README.md).
+The broader descriptions below refer to the detailed studies.
+
 This folder is the **canonical documentation** for the Radia stream-function
 coil-design framework: kernel-agnostic (ACA+)+TSVD least-norm solver,
 single-stroke chain construction (field_aware / Kuijpers), FE-direct ψ with

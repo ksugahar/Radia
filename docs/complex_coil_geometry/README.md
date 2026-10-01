@@ -1,5 +1,11 @@
 # Complex Coil Geometry Docs Showcase
 
+The selected introduction is now a result-reading notebook. Detailed historical
+studies and their original scope are preserved in
+[the validation study archive](../../validation_test/showcase/studies/README.md);
+new focused reruns are documented in [the campaign](../../validation_test/showcase/README.md).
+The broader descriptions below refer to the detailed studies.
+
 Result-bearing docs showcase demonstrating complex multi-segment coil geometry construction using the modern CoilBuilder API.
 
 ## Overview
