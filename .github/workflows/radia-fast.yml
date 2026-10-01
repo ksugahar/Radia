@@ -93,6 +93,12 @@ jobs:
             --junitxml "$env:RADIA_CI_OUTPUT_DIR\fast-contracts.xml"
           exit $LASTEXITCODE
 
+      - name: Check saved showcase results and reader contracts
+        shell: pwsh
+        run: |
+          & $env:RADIA_FAST_PYTHON -m pytest tests/showcase/test_result_readers.py --confcutdir=tests/showcase --basetemp "$env:RADIA_CI_OUTPUT_DIR/showcase-temp" -q -o addopts=
+          exit $LASTEXITCODE
+
       - name: Record exact CI ref context
         shell: pwsh
         run: |

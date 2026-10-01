@@ -1,8 +1,10 @@
 # From a target field to a winding
 
-The complete worked case now lives in the [executed notebook](../stream_function/theory.ipynb),
-including the model, figure, saved result, interpretation and reproduction route.
-It explains continuous-current fitting, connected-wire error and the non-monotone correction experiment.
+The [result notebook](../stream_function/theory.ipynb) displays the connected
+spherical winding, the continuous-fit residual and the connected-wire error.
+The wider non-monotone correction experiment is preserved in the
+[historical study](../../validation_test/showcase/studies/stream_function/theory.ipynb);
+it was not rerun in the six-case campaign.
 
 [Open the notebook](../stream_function/theory.ipynb) · [Back to applications](../APPLICATION_GUIDE.md)
 

@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 import numpy as np
 import ngsolve as ng
 import radia
+from recording import runtime_metadata
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -21,6 +22,10 @@ def run(case):
         sys.path.insert(0, str(helper.parent))
         from cogging_skew_demo import run_demo
         data = run_demo(verbose=True)
+        stack_length_m, length_unit_m, symmetry_factor = 0.050, 1e-3, 1.0
+        data.update(stack_length_m=stack_length_m, length_unit_m=length_unit_m, symmetry_factor=symmetry_factor,
+                    torque_Nm=(np.array(data["torque_2d_per_depth"])*length_unit_m**2*stack_length_m*symmetry_factor).tolist(),
+                    scope="Two-dimensional torque ripple and skew ratios for a 50 mm stack; no drive controller.")
         if not all(data["checks"].values()):
             raise AssertionError(data["checks"])
     elif case == "complex_coil":
@@ -41,19 +46,18 @@ def run(case):
                   "current_reversal": error < 1e-10}
         if not all(checks.values()):
             raise AssertionError(checks)
-        data = {"parameters": parameters, "x_m": xs.tolist(), "y_m": ys.tolist(),
+        data = {"parameters": parameters, "parameter_units": {"current": "A"}, "x_m": xs.tolist(), "y_m": ys.tolist(),
                 "B_T": field.tolist(), "current_reversal_relative_error": error,
                 "checks": checks, "scope": "Prescribed-current solid coil; reversal is a consistency check, not an independent accuracy estimate."}
     else:
         raise ValueError(case)
     return {"schema": "radia.selected_showcase.v1", "case": case,
             "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-            "host": platform.node(), "python": platform.python_version(),
-            "versions": {"radia": radia.__version__, "ngsolve": ng.__version__, "numpy": np.__version__},
-            "driver_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            "host": platform.node(),
+            **runtime_metadata(__file__, [helper], threads=2),
             "helper": helper.relative_to(ROOT).as_posix(),
             "helper_sha256": hashlib.sha256(helper.read_bytes()).hexdigest(),
-            "threads": 2, "result": data}
+            "result": data}
 
 
 if __name__ == "__main__":

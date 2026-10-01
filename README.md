@@ -404,8 +404,8 @@ integrator. Independent canonical A-map and projected B-map Runge--Kutta routes
 keep field-projection error separate from Lie truncation error.
 
 <p align="center">
-  <img src="docs/gmsh_post/output/saddle_beam.gif"
-       alt="Charged particles flying through a saddle-coil magnetic field"
+  <img src="docs/application_cases/particles_rerun.png"
+       alt="Recorded electron dispersion in a saddle-coil magnetic field"
        width="520">
 </p>
 
