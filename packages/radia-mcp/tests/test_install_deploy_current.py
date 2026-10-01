@@ -67,6 +67,10 @@ def test_release_workflow_does_not_restore_coupled_mcp_policy():
     assert "LAB live-source" in quality
     assert "radia-ngsolve, cubit, build123d" not in RELEASE_WORKFLOW
     assert "Cubit MCP is distributed by cubit-mesh-export" in overview
+    assert "LAB SSH uses a LAB-local source" in overview
+    assert "fixed release checkout" in overview
+    assert "release_native_payloads.json" in overview
+    assert "installed NGSolve/Netgen ABI" in overview
     assert "Bump 4 version files" not in RELEASE_WORKFLOW
     assert "Composite commit (HEREDOC, all packages" not in RELEASE_WORKFLOW
     assert "the radia-mcp Scripts/mcp-server-*.exe" not in RELEASE_WORKFLOW
