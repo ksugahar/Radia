@@ -64,7 +64,7 @@ Three natural connections:
 | Mesh-based PDE surrogate | GNN (this MCP) |
 | Continuous-coordinate PDE surrogate | PINN (`radia_mcp.pinn`) |
 | Topology synthesis | GNN + topology_optimization |
-| Circuit reduction | PRIMA / Cauer (`radia_mcp.mor`) |
+| Circuit reduction | PRIMA / Lanczos (`radia_mcp.mor`) |
 | Graph-structured Bayesian inference | NumPyro + custom GNN |
 """
 

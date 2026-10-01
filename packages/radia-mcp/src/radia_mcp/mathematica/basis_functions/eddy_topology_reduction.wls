@@ -14,7 +14,7 @@
 
       conductor | air/exterior  -> SIBC / surface-Omega trace class,
       conductor | conductor     -> bridge class,
-      interior HCurl bulk       -> EVRS / CLN response class.
+      interior HCurl bulk       -> EVRS / Krylov response class.
 
   The conductor-conductor bridge class is then reduced by the cycle space of
   the conductive adjacency graph.  If B is the oriented cell-face incidence
@@ -175,7 +175,7 @@ Module[
       Simplify[SurfaceDiv[SurfaceK[omega]]] === 0];
 
   (* Parent-order selection is therefore a symbolic admissibility problem, not a
-     numerical p=6 slogan.  The actual requirements come from the intended CLN
+     numerical p=6 slogan.  The actual requirements come from the intended Krylov
      moments, surface ladder degree, and bridge trace representation. *)
   admissibleParentOrder =
     p >= Max[

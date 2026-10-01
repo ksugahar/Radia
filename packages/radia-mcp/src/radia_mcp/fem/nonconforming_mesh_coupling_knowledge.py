@@ -671,15 +671,6 @@ Coil + Cubit hex iron).
 What mortar would unlock: refine ONLY the shim region without
 re-meshing the entire iron yoke.  Faster sensitivity sweeps.
 
-## 6. BEM-CLN multi-conductor refinement
-
-Status: lab uses single-mesh BEM-FEM coupling
-(radia_mcp.bem.bem_fem_bem_hybrid).
-
-If multi-mesh BEM coupling is needed (e.g., each transformer winding
-with its own surface mesh), mortar on BEM panels is possible
-(De Gersem-Weiland series).
-
 ## Priority for lab adoption
 
 | Scenario | Effort | Payoff | Priority |

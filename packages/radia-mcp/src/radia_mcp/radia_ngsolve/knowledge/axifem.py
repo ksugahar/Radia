@@ -505,14 +505,6 @@ divergence is the combined effect of FE basis-order error at higher modes
 plus the numerical conditioning of high-stage moment extraction (BEM itself
 starts producing negative tau for k >= 6).
 
-Reference (citation):
-  Nagamine, Yamaguchi, Sugahara, Hiruma, Mifune, Matsuo, "Verified
-  Numerical Computations of the Cauer Network Representation of a Square
-  Prism Conductor", manuscript 2026-05-04 (Japan J. Industrial Appl.
-  Math. submission).
-
-Test: `validation_test/axifem/research/verification/test_3way_cauer_cross_validation.py`
-
 ## Moment convention matters (verified 2026-05-10)
 
 The Hiruma 3-term Lanczos recurrence works on the impedance-form generating
