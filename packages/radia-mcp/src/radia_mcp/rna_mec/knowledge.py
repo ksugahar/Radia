@@ -8,6 +8,9 @@ Knowledge base derived from canonical RNA / MEC references:
   - Janet, Coulomb, Chillet, Mas, legacy current-transformer
     integral/circuit mixed modeling papers, IEEE Trans. Magn. 40(2)
     and 41(5), 2004-2005.
+  - Hane, Nakamura, "Dynamic Hysteresis Modeling for Magnetic Circuit
+    Analysis by Incorporating Play Model and Cauer's Equivalent Circuit
+    Theory", IEEE Trans. Magn., DOI 10.1109/TMAG.2020.3004355, 2020.
   - Yin, Naidjate, Bracikowski, Pierquin, Trichet, "Topology
     Optimization of Magnetic Actuator based on Reluctance Network
     Modeling and Adjoint Variable Method", Compumag/CEFC, 2023.
@@ -15,8 +18,21 @@ Knowledge base derived from canonical RNA / MEC references:
     Electromechanical System Using Conductor Segmentation and Circuit
     Parameters Extracted by FEA", IEEE Trans. Magn. 41(5), 1448-1451,
     2005. (TEAM Workshop Problem 28)
+  - Kameari, Ebrahimi, Sugahara, Shindo, Matsuo, "Cauer Ladder Network
+    Representation of Eddy-Current Fields for Model Order Reduction
+    Using Finite-Element Method", IEEE Trans. Magn. 54(3), 7201804,
+    2018.
   - Le-Duc, Chadebec, Guichon, Meunier, Lembeey, legacy PEEC/core
     integral coupling, COMPEL 32(1), 383-395, 2013.
+  - Tanaka, Nakamura, Ichinokura, "Magnetic Circuit Model combined with
+    Play Model Obtained from Landau-Lifshitz-Gilbert Equation", JPCS
+    903, 012047, 2017.
+  - Shindo, Noro, "Simple Circuit Simulation Models for the Eddy Current
+    in Magnetic Sheets and Wires", IEEJ Trans. FM 134(4), 173-181,
+    2014.
+  - Shindo, Miyazaki, Matsuo, "Cauer Circuit Representation of the
+    Homogenized Eddy-Current Field Based on the Legendre Expansion for
+    a Magnetic Sheet", IEEE Trans. Magn. 52(3), 6300504, 2016.
 
 All knowledge below is plain ASCII; no Unicode mathematics symbols are
 used.  Coordinates in meters, B in Tesla, H in A/m (Radia convention).
@@ -104,6 +120,7 @@ with Sugahara lab):
   - `1801_磁気学会_羽根_採録.pdf` -- Hane 2018 (Magnetics Society of Japan)
   - `1803_マグ研_羽根.pdf` -- Hane 2018
   - `1902_マグ研_羽根.pdf` -- Hane 2019
+  - `1912_マグ研_羽根_PlayCauer.pdf` -- Hane 2019
   - `修士論文_本審査_久田.ppt` -- Hisada (M.Eng. thesis)
   - `博士論文_本審査_吉田.pptx` -- Yoshida (Ph.D. thesis)
   - `AC_DC_Bridgeless_Flyback.pdf` -- application
@@ -111,6 +128,7 @@ with Sugahara lab):
 External (`public-safe curated corpus`):
   - `Comparison_Nodal_Mesh_MEC.pdf` (Derbas 2009) -- the canonical
     nodal-vs-mesh comparison.
+  - `Dynamic_Hysteresis_Magnetic_Circuit.pdf` (Hane 2020) -- IEEE version.
   - `TopOpt_Magnetic_Actuator_RNA.pdf` (Yin 2023) -- RNA + Adjoint
     Variable Method for topology optimization.
 
