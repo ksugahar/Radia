@@ -17,3 +17,14 @@ def test_per_panel_parser_option_is_not_advertised_as_production_support():
     assert '--esim-per-panel' in ESIM_USAGE_OVERVIEW
     assert 'not a working production coupling' in ESIM_USAGE_OVERVIEW
     assert 'strong path requires linear SIBC' in ESIM_USAGE_OVERVIEW
+
+
+def test_sibc_default_is_current_architecture_not_redirect_stub():
+    from radia_mcp.ih.sibc_knowledge import get_ih_sibc_documentation
+    text = get_ih_sibc_documentation('peec_fem')
+    assert 'BDDC_AMS_COARSE_CYCLES = 3' in text
+    assert 'edge-only wirebasket' in text
+    assert 'variable nodal Z_s' in text
+    assert 'calc_peec.py' not in text
+    assert 'v4.6.0' not in text
+    assert text in get_ih_sibc_documentation()

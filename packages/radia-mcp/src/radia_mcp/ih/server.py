@@ -216,7 +216,10 @@ register_status_tool(
 def main():
     if "--selftest" in sys.argv:
         print("IH MCP server self-test:")
-        print(f"  ih_sibc('overview'): {len(ih_sibc('overview'))} chars")
+        sibc_text = ih_sibc("peec_fem")
+        if "BDDC_AMS_COARSE_CYCLES = 3" not in sibc_text:
+            raise RuntimeError("IH SIBC production documentation is unavailable")
+        print(f"  ih_sibc('peec_fem'): {len(sibc_text)} chars")
         print(f"  induction_heating('overview'): "
               f"{len(induction_heating('overview'))} chars")
         print(f"  ih_esim('overview'): "
