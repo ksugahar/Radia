@@ -180,6 +180,16 @@
       "notes": "MATLAB has focused reduction primitives, but the complete Python orchestration surface is not one-to-one."
     },
     {
+      "id": "prima-port-model-export",
+      "patterns": ["prima_export.py"],
+      "classification": "matlab-native",
+      "matlab": [
+        "matlab/+radia/+simulink/loadPrimaPortModel.m",
+        "matlab/+radia/+simulink/addPrimaLTIBlock.m"
+      ],
+      "notes": "Python writes the radia.prima.port_model.v1 descriptor exchange (and LTspice Laplace subcircuits); MATLAB natively rebuilds the dss object, verifies the stored check response and places it in the LTI System block."
+    },
+    {
       "id": "electromagnetic-force-postprocessing",
       "patterns": ["force.py"],
       "classification": "matlab-native",
