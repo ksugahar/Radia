@@ -7,6 +7,7 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
@@ -205,8 +206,14 @@ def test_solver_artifact_identity_rejects_plausible_but_ambiguous_result():
 
 
 def test_fleet_audit_writes_portable_hdf5_report(tmp_path):
-    h5py = __import__("h5py")
-    from tools.audit_mcp_fleet import write_report
+    h5py = pytest.importorskip("h5py")
+    # Load the package's maintenance tool by path: whether ``tools`` is on
+    # sys.path depends on the working directory and the pytest entry point.
+    tool = Path(__file__).resolve().parents[1] / "tools" / "audit_mcp_fleet.py"
+    spec = importlib.util.spec_from_file_location("radia_mcp_audit_mcp_fleet", tool)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    write_report = module.write_report
 
     report = {
         "schema": "cae-ai-lab.mcp-fleet-audit.v1",

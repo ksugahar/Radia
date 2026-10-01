@@ -131,3 +131,10 @@ def test_wheel_rejects_retired_cubit_entrypoint(tmp_path):
     result = MODULE.verify_wheel_contents(wheel)
     assert not result["ok"]
     assert result["retired_entries"] == ["mcp-server-cubit"]
+
+
+def test_every_tracked_runtime_asset_is_covered_by_package_data():
+    # A tracked template, script or data file outside package-data is left out
+    # of the wheel without error; the poster templates were.
+    assert MODULE.unpackaged_source_assets() == []
+    assert "radia_mcp/poster/templates/poster_a1_portrait.tex" in MODULE.REQUIRED_ASSETS
