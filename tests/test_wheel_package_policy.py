@@ -120,3 +120,44 @@ def test_mcp_sdk_is_optional_for_core_radia_users():
     assert all(not requirement.lower().startswith("mcp") for requirement in project["dependencies"])
     assert optional["mcp"] == ["mcp>=1.0,<2"]
     assert "mcp>=1.0,<2" in optional["test"]
+
+
+def test_repack_regenerates_record_after_metadata_edits(tmp_path):
+    import base64
+    import csv
+    import hashlib
+    import io
+    import shutil
+    import subprocess
+    import zipfile
+
+    source = tmp_path / "unpacked"
+    metadata = source / "probe-1.0.dist-info"
+    metadata.mkdir(parents=True)
+    (source / "probe.py").write_text("value = 1\n")
+    (metadata / "METADATA").write_text("Metadata-Version: 2.1\nName: probe\nVersion: 1.0\n")
+    (metadata / "WHEEL").write_text("Wheel-Version: 1.0\nRoot-Is-Purelib: false\nTag: cp312-cp312-win_amd64\n")
+    (metadata / "RECORD").write_text("probe-1.0.dist-info/WHEEL,sha256=stale,1\nremoved.dll,sha256=stale,1\n")
+    destination = tmp_path / "dist"
+    destination.mkdir()
+    wheel = destination / "probe-1.0-cp312-cp312-win_amd64.whl"
+    script = (ROOT / "Build_Wheel.ps1").read_text(encoding="utf-8")
+    block = script.split("    # Repack with wheel", 1)[1].split("    # Cleanup", 1)[0]
+    block = "# Repack with wheel" + block
+    def quote(path):
+        return "'" + str(path).replace("'", "''") + "'"
+    command = "$TempDir=" + quote(source) + "; $DistDir=" + quote(destination) + "; $NewWheelPath=" + quote(wheel) + ";\n" + block
+    shell = shutil.which("pwsh")
+    assert shell, "PowerShell is required to check the wheel builder"
+    subprocess.run([shell, "-NoProfile", "-Command", command], check=True, capture_output=True, text=True)
+    with zipfile.ZipFile(wheel) as archive:
+        rows = list(csv.reader(io.StringIO(archive.read("probe-1.0.dist-info/RECORD").decode())))
+        assert "removed.dll" not in {row[0] for row in rows}
+        for name, digest, size in rows:
+            if name.endswith("/RECORD"):
+                assert digest == size == ""
+                continue
+            data = archive.read(name)
+            expected = base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b"=").decode()
+            assert digest == "sha256=" + expected
+            assert int(size) == len(data)
