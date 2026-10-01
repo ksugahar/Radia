@@ -1,7 +1,31 @@
-# Electric-Machine Docs
+# Electric machines: fields, torque and reduced models
 
-This docs topic now owns the human-facing electric-machine demo material that
-used to live under `examples/electric_machine`.
+The selected introduction is now a result-reading notebook. Detailed historical
+studies and their original scope are preserved in
+[the validation study archive](../../validation_test/showcase/studies/README.md);
+new focused reruns are documented in [the campaign](../../validation_test/showcase/README.md).
+The broader descriptions below refer to the detailed studies.
+
+Explore how Radia evaluates machine fields and torque and builds reduced models
+for dynamic calculations. The notebooks introduce capabilities through saved
+results. You define the operating conditions and judge the engineering outcome.
+
+## Choose your next step
+
+| Purpose | Entry point |
+| --- | --- |
+| Inspect torque between sampled rotor angles | [Angle-periodic ROM notebook](angle_periodic_motor_rom.ipynb) |
+| Operate supported analysis tools with AI | [MCP setup and tools](../../packages/radia-mcp/README.md) |
+| Collaborate on application models | [Radia Simulink library](../../matlab/README.md) and [motor adapter contract](../../src/radia/simulink/README.md) |
+| Prepare geometry and mesh | [Cubit workflow](../cubit_mesh_export/README.md) |
+| Read small executable ROM examples | [Motor-ROM tests](../../tests/test_motor_rom.py), using synthetic periodic tables |
+| Inspect full-model and runtime validation | [Electric-machine validation](../../validation_test/electric_machine/README.md) |
+
+The synthetic-table tests establish API behavior. The curved 2D machine study
+checks a particular full-model/ROM comparison; neither establishes arbitrary
+3D machine accuracy. Read each case's inputs and acceptance criteria.
+
+## Demonstrations and reference material
 
 | Artifact | Purpose |
 |---|---|

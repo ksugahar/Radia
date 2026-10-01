@@ -1,9 +1,9 @@
 # Radia
 
 <p align="center">
-  <strong>AI-native electromagnetic CAE, built on NGSolve</strong><br>
-  Design magnets, conductors, coils, open boundaries, reduced models, and
-  coupled electromagnetic systems from Python, MCP, MATLAB, and Simulink.
+  <strong>Electromagnetic CAE you can operate through AI and MCP</strong><br>
+  Connect CAD, mesh control, field analysis, and result inspection on NGSolve,
+  with Python, MCP, MATLAB, and Simulink interfaces.
 </p>
 
 <p align="center">
@@ -27,14 +27,20 @@
   shielding-performance claim.</sub>
 </p>
 
-**AI designs. Radia provides the engineering platform.**
+**You set the analysis direction. AI helps operate the CAE tools.**
 
-Radia is an open-source electromagnetic engineering platform for moving from
-geometry and physical intent to solved fields, optimized designs, dynamic
-models, and durable result artifacts. It brings together analytical
-open-boundary magnetics, high-order finite and boundary elements, scalable
-integral operators, CAD and mesh workflows, optimization, visualization, and
-human/AI interfaces.
+Radia is an open-source electromagnetic CAE platform that an AI assistant can
+operate through MCP. Specify the analysis task and conditions; connected tools
+can prepare geometry, control meshing, execute supported calculations, and
+inspect results. This reduces the need to memorize each tool's commands and
+interaction sequences while keeping the model and results inspectable.
+
+Start from supported CAD, mesh, or model data where available, instead of
+rebuilding every input. What transfers depends on the format and workflow;
+materials, sources, boundary conditions, and units still need to be checked.
+The user defines the physical assumptions, analysis plan, and acceptance criteria
+and evaluates the engineering conclusions. Radia's current positioning is
+AI-operable CAE, not autonomous design decision-making.
 
 Radia is deliberately **not** another monolithic finite-element solver. It is
 built on [NGSolve](https://ngsolve.org/), which remains the numerical
@@ -49,6 +55,24 @@ orchestration around that foundation.
 [Simulink](#simulink) | [MCP](#python-and-mcp) |
 [Eqnedit64](#eqnedit64) |
 [Documentation](#documentation) | [Contributing](#contributing)
+
+## Find your next engineering workflow
+
+Use the documentation to discover capabilities and inspect results. Carry out
+analysis through MCP, or through human–AI collaboration using Cubit and Simulink.
+The executable samples live in [tests/](tests/README.md) for small usage and
+contract examples, and [validation_test/](validation_test/README.md) for physics
+and application cases with numerical evidence.
+
+[**Start here**](docs/START_HERE.md) · [**Result gallery**](docs/APPLICATION_GUIDE.md#browse-results) ·
+[**Accuracy and validation**](docs/VALIDATION_GUIDE.md)
+
+| Explore | What you will find |
+| :--- | :--- |
+| [Calculate your first field](#quick-start) | A small analytical magnet example with SI inputs and output |
+| [See geometry and results](docs/APPLICATION_GUIDE.md#browse-results) | A curved coil, motor torque and thermal response, linked to their conditions and saved calculations |
+| [Inspect the numerical evidence](docs/VALIDATION_GUIDE.md) | Analytical references, force checks, holdout comparisons and their limits |
+| [Choose an interface and get help](docs/START_HERE.md#choose-how-you-want-to-work) | Python/MCP, MATLAB/Simulink, installation and reproducible issue reports |
 
 ## NGSolve from MATLAB
 
@@ -80,9 +104,14 @@ still apply.
 
 ## Why Radia?
 
-- **Design, not only solve.** Optimize pole faces, magnetic material,
-  conductor topology, stream-function coils, reduced models, circuits, and
-  controllers in one workflow.
+- **Operate CAE through an AI assistant.** Use MCP to invoke supported operations
+  from a stated analysis task, reducing tool-specific command and UI memorization.
+- **Build on existing inputs.** Reuse supported geometry, meshes and model data,
+  with explicit checks on the physical information carried into the calculation.
+- **Connect geometry, mesh and analysis.** Drive CAD operations through MCP and
+  control the mesh through the connected meshing workflow before solving.
+- **Use optimization when you choose it.** Run coil, material, geometry or other
+  supported optimization workflows with user-defined objectives and constraints.
 - **Open boundaries are first-class.** Combine analytical source fields,
   Kelvin and DtN techniques, volume and boundary integral methods, SIBC, and
   model reduction without automatically surrounding every problem with a
@@ -98,8 +127,9 @@ still apply.
   LTspice, MATLAB, Simulink, NumPy, SciPy, MKL, HACApK, and proven sparse
   solvers are connected through explicit boundaries instead of reimplemented.
 - **Results carry evidence.** Production runs write checked meshes, logs,
-  machine-readable result metadata, and visualization artifacts. Public
-  examples are executed, result-bearing notebooks.
+  machine-readable result metadata, and visualization artifacts. Executable
+  samples in `tests/` and `validation_test/` show expected behavior;
+  documentation notebooks introduce features through saved results.
 
 ## What can you build?
 
@@ -391,6 +421,11 @@ keep field-projection error separate from Lie truncation error.
 Python is the complete programmable API. MCP makes the same platform
 discoverable and executable by AI agents.
 
+The user chooses the analysis purpose, assumptions and success criteria. An AI
+assistant uses the available MCP tools to carry out the requested operations and
+return inspectable artifacts. Tool execution can be automated; responsibility
+for the analysis plan and engineering judgement remains with the user.
+
 The [radia-mcp package](packages/radia-mcp/) provides domain servers for Radia,
 NGSolve, Cubit, Gmsh, build123d, PEEC, induction heating, optimization,
 materials, electric machines, accelerator magnets, and supporting engineering
@@ -489,10 +524,11 @@ archive is published only after it passes the multi-host release gate.
 
 ### Documentation and visualization
 
-`docs/**/*.ipynb` is the public explanation and reproduction layer. Published
-examples are executed notebooks with narrative, code, saved results, and
+`docs/**/*.ipynb` is the feature-introduction layer. Demonstrations are
+executed notebooks with narrative, code, saved results, and
 saved `ngsolve.webgui.Draw` or `netgen.webgui.Draw` scenes. They are not hidden
-production workbenches. Benchmarks and numerical evidence live under
+production workbenches. Executable samples live in `tests/` and
+`validation_test/`. Benchmarks and numerical evidence live under
 `validation_test/` with machine-readable JSON; docs notebooks need no sidecar.
 
 Field-producing application runs write checked Gmsh `.msh v4.1` artifacts.
@@ -585,9 +621,9 @@ packages/cubit-mesh-export/     Cubit exporters, plugin, and check-vol
 packages/radia-optuna/          Standalone MATLAB/Simulink Optuna package
 packages/eqnedit64/             Windows Eqnedit64 Python/API distribution
 tools/eqnedit64/                Canonical native and browser editor source
-tests/                          Fast implementation regressions for CI
-validation_test/                Numerical validation and research-grade gates
-docs/                           Executed notebooks and technical references
+tests/                          Small executable samples and fast regressions
+validation_test/                Physics/application samples and validation gates
+docs/                           Feature introductions, saved results and theory
 tools/                          Build, policy, release, and verification tools
 ```
 
@@ -631,8 +667,10 @@ python -m pytest -q tests
 ```
 
 Fast regressions belong in `tests/`. Long numerical studies, convergence
-sweeps, and benchmark-quality checks belong in `validation_test/`. Public
-examples belong in executed notebooks under `docs/`.
+sweeps, and benchmark-quality checks belong in `validation_test/`. These two
+directories also provide executable samples. Feature introductions and saved
+demonstrations belong under `docs/`; operational workflows use MCP or
+human–AI collaboration through Cubit and Simulink.
 
 - Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 - Use the [issue tracker](https://github.com/ksugahar/Radia/issues) for bugs and
