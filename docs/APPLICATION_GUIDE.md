@@ -43,12 +43,16 @@ actual execution date and runtime, and redraws its figures. Run All does not
 launch a solver. These are numerical runs, not recorded end-to-end MCP sessions.
 Use MCP or Cubit/Simulink for operational work.
 
+These records used Radia 4.95.90 and NGSolve 6.2.2606; they are not a
+validation of the current supported stack. Read the
+[source and runtime limitations](../validation_test/showcase/README.md#recorded-source-and-runtime) before reproducing them.
+
 ### Shape a coil for a target field
 
 <a href="stream_function/theory.ipynb"><img src="application_cases/winding_rerun.png" alt="Recomputed connected Z2 winding on a spherical former, coordinates in metres" width="480"></a>
 
-How does a desired field become a winding? Inspect the surface-current solution,
-the connected wire and the field error after discretization in the
+How does a desired field become a winding? Inspect
+the connected wire and recorded fit/connected-wire errors in the
 [coil notebook](stream_function/theory.ipynb). The preview is the spherical case;
 the wider historical study is retained in the validation archive.
 
@@ -58,7 +62,8 @@ the wider historical study is retained in the validation archive.
 
 See how cogging torque varies with rotation and how skew changes the response in
 the [motor cogging and skew notebook](electric_machine/cogging_skew_demo.ipynb).
-Inspect the saved geometry and torque curves together with the skew conditions.
+Inspect the unskewed torque curve and the recorded skew amplitude ratios.
+The viewer does not draw the machine geometry.
 The [machine validation lane](../validation_test/electric_machine/README.md)
 owns numerical checks.
 
@@ -85,16 +90,17 @@ controlled levitation.
 ![Electron trajectories for three incident energies](application_cases/particles_rerun.png)
 
 The [particle-orbit notebook](gmsh_post/em_particle_orbits.ipynb) shows particles
-passing through coil and permanent-magnet fields. Inspect the geometry, initial
-particle conditions and trajectories to understand bending and focusing.
+at three incident energies dispersing in a saddle-coil magnetic field.
+The recorded check measures kinetic-energy conservation; quadrupole and fringe
+focusing belong to the [historical study](../validation_test/showcase/studies/gmsh_post/em_particle_orbits.ipynb).
 
 ### Build a complex coil and inspect its field
 
 ![Recomputed magnetic field slice of the complex coil](application_cases/complex_coil_rerun.png)
 
 The [complex-coil notebook](complex_coil_geometry/complex_coil.ipynb) connects a
-three-dimensional winding to its magnetic field. It introduces geometry and
-field capability; the [small coil sample](../tests/test_coil_axis_closed_form.py)
+three-dimensional coil model to a saved z = 0 magnetic-field slice. The viewer
+does not draw the coil geometry; the [small coil sample](../tests/test_coil_axis_closed_form.py)
 checks a simpler finite-section coil against an analytical axis field.
 
 ## Go deeper
