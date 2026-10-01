@@ -12,6 +12,10 @@ Release candidate; publication and four-host acceptance are not yet complete.
 - Thermal surface labels can specify independent convection coefficients and
   ambient temperatures in the Python/MCP thermal chain. Native Simulink scalar
   cooling inputs are unchanged.
+- `SurfaceImpedanceModel` validates user-defined complex `Zs(H, T)` laws and
+  tables, their frequency and validity domain, and peak-field heat flux.
+  This is a material-evaluation API: local weak PEEC+BEM ESIM, nonlinear
+  Simulink coupling and eddy-solution reuse remain unconnected and guarded.
 - Sampled-current magnetic-field evaluation reuses the existing Biot-Savart
   kernel, and static normal lamination permeability has independent layered
   energy checks.
