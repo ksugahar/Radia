@@ -42,10 +42,10 @@ Prefer established public abstractions over proprietary plumbing.
 - Keep two genuinely independent analysis routes for important models when
   feasible.
 ### Numerical Rules
-- Use Foster modal models, PRIMA projection or snapshot POD for electromagnetic reduction.
-  Retired reduction APIs are not production/comparison routes.
-  Select reduced orders by measured operating-band error.
-  DtN continued fractions represent exact/high-order non-reflecting boundaries.
+- Radia/radia-mcp must not include implementations infringing CLN patents.
+  Preserve citations and independent methods; renaming is not removal.
+  Use measured operating-band error to select reduced order.
+  Follow [CLN implementation policy](docs/CLN_POLICY.md).
 - Call eigenmode-bulk + surface-impedance coupling **Modal-bulk SIBC** (was Foster + SIBC; legacy identifiers stay), never "mixed Galerkin".
 
 - Use SI units; magnetization is A/m.
