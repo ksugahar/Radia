@@ -3,7 +3,7 @@ MOR (Model Order Reduction) MCP Server (radia_mcp.mor)
 
 Knowledge layer for model order reduction: the systematic MOR taxonomy
 (projection / POD / Krylov-PRIMA / system-theoretic / data-driven,
-hyperreduction) and the MOR bibliography.
+hyperreduction) and a literature-corpus search.
 
 Usage:
     mcp-server-mor              # Start MCP server (stdio)
@@ -16,13 +16,6 @@ from mcp.server.fastmcp import FastMCP
 from radia_mcp.common import register_status_tool
 
 from .systematic_knowledge import get_systematic_mor_knowledge
-
-try:
-    from .bibliography_index_knowledge import get_bibliography_index
-except ImportError:
-    def get_bibliography_index(query: str = "") -> str:
-        return "MOR bibliography index not yet generated."
-
 
 mcp = FastMCP("mcp-server-mor")
 
@@ -55,8 +48,9 @@ def mor_systematic(topic: str = "mor_taxonomy") -> str:
 
 @mcp.tool()
 def mor_bibliography(query: str = "") -> str:
-    """Search the MOR bibliography catalog (87 papers in lab library)."""
-    return get_bibliography_index(query)
+    """Search the local literature corpus (RADIA_LIT_ROOT) by filename keywords."""
+    from radia_mcp.literature_index.index_tools import lit_search
+    return lit_search(query)
 
 
 register_status_tool(

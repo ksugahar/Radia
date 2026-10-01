@@ -231,11 +231,11 @@ def check_packaging(root: Path) -> tuple[list[str], list[str]]:
 # verification (a commercial tool adjacent to a number / another solver / a
 # ground-truth claim) or on an internal filesystem path -- NOT on a bare
 # capability mention, an open-source tool, or a published author/method.
-_TOOL = r"(?:FEMM|JMAG|COMSOL|CST)"          # commercial / licensed tools
+_TOOL = r"(?:FEMM|JMAG|COMSOL|CST|OPERA|TOSCA|ANSYS)"   # commercial / licensed tools
 # Tools whose INFLUENCE on a public capability must be hidden ("何から学んだかも隠す").
 # FEMM is deliberately EXCLUDED: radia-ngsolve's "FEMM-parity" is the project's STATED open goal
 # (allowlisted), so a FEMM design-reference is allowed; COMSOL / JMAG / CST design-references are not.
-_REF_TOOL = r"(?:COMSOL|JMAG|CST)"
+_REF_TOOL = r"(?:COMSOL|JMAG|CST|OPERA|TOSCA|ANSYS)"
 # A "value" token that signals a benchmark NUMBER (a MEASUREMENT), NOT a
 # capability label ("prob1-4big") nor a VERSION ("FEMM 4.2", "COMSOL 6.2").
 # A measurement is: signed; or %-suffixed; or a physical unit (T/H/us/...); or a
@@ -347,6 +347,22 @@ PROVENANCE_RULES: list[tuple[re.Pattern, str]] = [
      "commercial LiveLink harness identifier (cc_lab)"),
     (re.compile(r"reference_comsol_rdp_license"),
      "internal memory reference naming a commercial tool"),
+    # --- provenance phrasing and private harness / server names -----------
+    (re.compile(r"\b" + _REF_TOOL + r"[\s-](?:derived|recorded|class)\b", re.IGNORECASE),
+     "public content attributed to a commercial tool ('<tool>-derived / -recorded / -class')"),
+    (re.compile(r"\bLiveLink\b"),
+     "commercial LiveLink harness named in public text"),
+    (re.compile(r"\bmcp-server-(?:femm|jmag|comsol|cst|opera)\b", re.IGNORECASE),
+     "non-public commercial-tool MCP server named in public text"),
+    (re.compile(r"commercial-tool\s+corpus", re.IGNORECASE),
+     "private commercial-tool corpus named as a source"),
+    # --- personal data ------------------------------------------------------
+    (re.compile(r"[A-Za-z0-9._%+-]+@(?!example\.(?:com|org)\b)(?!users\.noreply\.github\.com\b)"
+                r"(?!anthropic\.com\b)[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*"
+                r"\.(?:com|org|net|edu|gov|io|info|jp|uk|de|fr|cn|kr|ch|it|nl|se|au|ca|us|eu)\b"),
+     "e-mail address in public text"),
+    (re.compile(r"mail\.google\.com/mail", re.IGNORECASE),
+     "exported private mail message in public text"),
 ]
 
 # Lines containing any of these substrings are EXEMPT (allowlist): published
@@ -355,18 +371,19 @@ PROVENANCE_RULES: list[tuple[re.Pattern, str]] = [
 _ALLOW_SUBSTR = (
     "wjc9011/COMSOL_Multiphysics_MCP",      # cited open pattern source (GitHub)
     "COMSOL_Multiphysics_MCP",
+    "| **Contact** |",                      # deliberate maintainer contact row
     "EED/CST London",                       # quoted paper affiliation (CST = a London
                                             # institution, NOT the CST software) in a
                                             # bibliography abstract -- not an attribution
 )
 
 # File globs to scan under each tree.
-_SCAN_GLOBS = ("*.py", "*.md", "*.m", "*.wls")
+_SCAN_GLOBS = ("*.py", "*.md", "*.m", "*.wls", "*.json", "*.tex", "*.txt")
 _SCAN_SUFFIXES = tuple(
     glob[1:] for glob in _SCAN_GLOBS if glob.startswith("*.") and len(glob) > 1
 )
 # Subtrees of the package to scan.
-_SCAN_DIRS = ("src", "examples", "tests")
+_SCAN_DIRS = ("src", "examples", "tests", "docs", "skills")
 # The package's own prose, which ships with the distribution.
 _SCAN_ROOT_FILES = ("CHANGELOG.md", "README.md", "CONTRIBUTING.md")
 # Files exempt from the provenance scan: this guard's OWN test, which holds
@@ -544,6 +561,14 @@ def selftest() -> int:
         "validated against ... the reference commercial code",
         r"distilled from S:\FEMM\等価定理の基礎原理\, S:\FEMM\2015_05_21",
         r"S:/COMSOL/2022_05_12_XFEM/An eXtended Finite Element Method",
+        "Public-safe COMSOL-derived identity gates",               # provenance phrasing
+        "the COMSOL-recorded values",
+        "record the COMSOL server -> LiveLink MATLAB chain",
+        "mcp-server-jmag (lab-internal)",
+        "the lab's internal commercial-tool corpus",
+        "TOSCA 0.2498 T reference",                               # added tool
+        "contact: someone.private@kindai.ac.jp",                  # personal e-mail
+        "https://mail.google.com/mail/u/1/?ik=e6531991ea",
     ]
     must_not_flag = [
         "# FEMM-parity on NGSolve -- executable, tested",         # bare framing
@@ -581,6 +606,11 @@ def selftest() -> int:
         # generic capability prose (no commercial tool named) stays clean:
         "a generic loft / sweep / shell modelling operation",
         "Created in COMSOL Multiphysics 6.2 with the AC/DC module",  # version + module, no feature-ref
+        "Co-Authored-By: Claude <noreply@anthropic.com>",
+        "mailto:{contact} from RADIA_MCP_CONTACT_EMAIL",
+        "a livelink_matlab_pid result key",                        # snake_case schema key
+        "pre = invM @ (kappa*Vrot.mat - surfcurl@invMH1@Vpot.mat@invMH1)",  # matmul, not e-mail
+        "git -c user.email=test@example.invalid commit",
     ]
     fails = []
     for s in must_flag:
@@ -634,8 +664,8 @@ def main(argv: list[str] | None = None) -> int:
 
     # report provenance findings (file:line: reason)
     suffix = " (git-tracked only)" if args.tracked_only else ""
-    print(f"\nPROVENANCE (commercial-tool attribution / internal paths) in "
-          f"src+examples+tests+root prose{suffix}:")
+    print(f"\nPROVENANCE (commercial-tool attribution / internal paths / personal data) in "
+          f"src+examples+tests+docs+skills+root prose{suffix}:")
     if findings:
         for label, lineno, reason in findings:
             print(f"  {label}:{lineno}: {reason}")

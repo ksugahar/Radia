@@ -90,13 +90,6 @@ build_pm_armature_reaction_hdiv_hex_gate = lazy_callable(".pm_armature_reaction_
 build_motor_virtual_work_width_ladder_gate = lazy_callable(".virtual_work_width_gate", "motor_virtual_work_width_ladder_gate", __package__)
 build_transient_no_load_load_cycle_gate = lazy_callable(".transient_no_load_load_gate", "motor_transient_no_load_load_cycle_gate", __package__)
 
-try:
-    from .bibliography_index_knowledge import get_bibliography_index
-except ImportError:
-    def get_bibliography_index(query: str = "") -> str:
-        return "Motor bibliography index not yet generated."
-
-
 mcp = FastMCP("mcp-server-motor")
 _validation = CoarseToolRegistry(mcp, namespace="motor")
 
@@ -669,26 +662,22 @@ def motor_hollaus_genealogy(view: str = "by_topic") -> str:
 
 @mcp.tool()
 def motor_bibliography(query: str = "") -> str:
-    """Search the motor analysis bibliography catalog."""
-    return get_bibliography_index(query)
+    """Search the local literature corpus (RADIA_LIT_ROOT) by filename keywords."""
+    from radia_mcp.literature_index.index_tools import lit_search
+    return lit_search(query)
 
 
 @mcp.tool()
 def motor_tritool_cross_reference(topic: str = "overview") -> str:
     """
-    Tri-tool cross-reference: FEMM / JMAG / radia-ngsolve (相互学習).
-
-    Cross-learning that ties the lab's three motor-FEA tools together so each
-    strengthens the others. Mirrors the shared cross_ref.json carried by the
-    two dedicated lab-internal knowledge servers (mcp-server-femm and
-    mcp-server-jmag), whose commercial-tool specifics stay lab-private.
+    Motor-FEA cross-reference: radia-ngsolve against the open 2D yardstick.
 
     Args:
         topic: One of:
-            "overview"          - The ecosystem + the two new MCP servers
-            "capability_matrix" - Per-capability FEMM/JMAG/radia table + strongest
-            "radia_can_exceed"  - Where radia-ngsolve matches or beats the others
-            "jmag_only"         - Genuine JMAG-only capabilities (gaps)
+            "overview"          - Purpose and triangulation rule
+            "capability_matrix" - Per-capability FEMM / radia-ngsolve table
+            "radia_can_exceed"  - Where radia-ngsolve matches or beats the yardstick
+            "open_gaps"         - Capabilities radia-ngsolve does not have yet
             "femm_role"         - FEMM as the open-source 2D yardstick + .fem strategy
             "roadmap"           - radia-motor strengthening roadmap (ranked)
             "all"               - Everything

@@ -1,4 +1,4 @@
-"""Solver-state and material lineage checks for COMSOL-derived v49 summaries."""
+"""Solver-state and material lineage checks for multiphysics v49 summaries."""
 
 from __future__ import annotations
 

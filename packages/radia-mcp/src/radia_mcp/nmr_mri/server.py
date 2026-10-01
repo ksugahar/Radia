@@ -1,25 +1,18 @@
-"""NMR/MRI MCP Server (radia_mcp.nmr_mri).  Auto-populated from lab literature."""
+"""NMR/MRI MCP Server (radia_mcp.nmr_mri): literature-corpus search."""
 
 import sys
 
 from mcp.server.fastmcp import FastMCP
 from radia_mcp.common import register_status_tool
 
-try:
-    from .bibliography_index_knowledge import get_bibliography_index
-except ImportError:
-    def get_bibliography_index(query: str = "") -> str:
-        return "NMR/MRI bibliography index not yet generated."
-
 mcp = FastMCP("mcp-server-nmr-mri")
 
 
 @mcp.tool()
 def nmr_mri_bibliography(query: str = "") -> str:
-    """Search the NMR/MRI bibliography catalog."""
-    return get_bibliography_index(query)
-
-
+    """Search the local literature corpus (RADIA_LIT_ROOT) by filename keywords."""
+    from radia_mcp.literature_index.index_tools import lit_search
+    return lit_search(query)
 
 
 register_status_tool(
@@ -33,7 +26,7 @@ register_status_tool(
 
 def main():
     if "--selftest" in sys.argv:
-        print(f"NMR/MRI MCP server self-test: bib {len(get_bibliography_index(''))} chars  PASSED")
+        print("NMR/MRI MCP server self-test: PASSED")
         return
     mcp.run(transport="stdio")
 

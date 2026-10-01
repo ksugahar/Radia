@@ -17,12 +17,27 @@ crystallized as its own package.
   topics, their knowledge modules, and the Mathematica QD Cauer-ladder asset.
   Reduced models are described through POD, PRIMA (congruence projection) and
   the Foster modal form.
+- The embedded literature catalogs (`<subpackage>/bibliography_index_knowledge.py`,
+  12 modules) and their generators (`tools/catalog_to_knowledge.py`,
+  `pdf_batch_indexer.py`, `reclassify.py`). They redistributed abstract
+  excerpts and personal e-mail. `ndt_bibliography`, `mor_bibliography`,
+  `metamaterial_bibliography`, `nmr_mri_bibliography` and `motor_bibliography`
+  keep their names and now search the local corpus at `RADIA_LIT_ROOT`.
 
 ### Changed
 
 - `mor_systematic`: the CLN topic is removed, PVL is attributed to Feldmann
   and Freund (1995) and PRIMA is described as the block-Arnoldi congruence
   projection; application recommendations use PRIMA / Foster modal models.
+- Outgoing Crossref/arXiv/publisher requests name the operator's contact from
+  `RADIA_MCP_CONTACT_EMAIL` instead of a fixed maintainer address.
+- Generated working files default to `RADIA_MCP_TEMP`, else `C:\temp` on
+  Windows, else the OS temporary directory (`radia_mcp.common.scratch`).
+- `motor_tritool_cross_reference` compares radia-ngsolve with the open 2D
+  yardstick only; the `jmag_only` topic became `open_gaps`.
+- `tools/policy_lint.py` also scans `docs/`, `skills/` and `.json/.tex/.txt`,
+  and flags e-mail addresses, exported mail, solver-bridge harness names,
+  non-public commercial-tool servers and `<tool>-derived` provenance.
 
 ### Added
 
@@ -2725,7 +2740,7 @@ per theme group.
 | `mor_cln_multiport` | 03, 04, 10, 11 | 801 | 10 | Kuriyama 2019 multi-expansion `K = C^T nu C + s_0 sigma` with 4 variants (A/T/3D/AK); FreeFEM++ `Multi-turnLadderSeries.edp` quoted; 3D HCurl/H1 saddle-point via `A_phi_Gridap.jl` |
 | `mor_cln_advanced` | 05, 06, 07, 14, 16, 2020_12_07 | 1172 | 12 | **FP-CLN** (Fixed-Point CLN; CEFC 2024 Sugahara-Tobita-Matsuo-Takahashi); 4-generation nonlinear lineage 2017-2023 culminating in Tobita's jw method; CLN-as-SPICE-block via Shindo electromagnet 437-line FreeFEM++ driver |
 | `mor_cln_specialty` | 08, 12, 13, 15 | 1148 | 11 | **Hiruma method** (Shingo Hiruma, Hokkaido Igarashi -> Kyoto Matsuo): non-symmetric Lanczos producing Cauer ladder from algebraic `(G+sC)x=b`, unifying CLN with PVL/SyPVL/PRIMA; **Nagamine error theory** (Hideaki Nagamine, Kyoto Matsuo): mesh-adequacy rule `delta_n >= 10*Delta_x` from Foster cut-off; BEM+FEM TSVD coupling reducing `O(M*N_m)` to `K=5-15` ports |
-| `mor_cln_collab` | 2021_CauerI_to_II, 2022_遠藤, 2023_松本, 2026_長方形, 2017_inverter | 854 | 10 | CauerI vs CauerII (continued-fraction expansion of Z(s) around s=0 vs s=infty); two-matrix Lanczos in K-inner-product (N<=7 stability); Endo @ Hosei 4-square+1-cylinder COMSOL LiveLink sweep; CLN-as-inverter-subcircuit 2017 design memo |
+| `mor_cln_collab` | 2021_CauerI_to_II, 2022_遠藤, 2023_松本, 2026_長方形, 2017_inverter | 854 | 10 | CauerI vs CauerII (continued-fraction expansion of Z(s) around s=0 vs s=infty); two-matrix Lanczos in K-inner-product (N<=7 stability); Endo @ Hosei 4-square+1-cylinder parametric sweep; CLN-as-inverter-subcircuit 2017 design memo |
 
 **Wired through**:
 - `mor/server.py` -- 5 new `@mcp.tool()` entries + `--selftest`

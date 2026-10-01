@@ -33,7 +33,6 @@ mcp-server-radia-ngsolve             # stdio server
 | **sparsesolv** | `compact_ams_preconditioner`, `cocr_solver` (HYPRE-free, TaskManager-native) |
 | **Mesh + I/O** | `netgen_workflow`, `vol_format_inspect`, `vol_file_lint` |
 | **lint / QA** | `radia_ngsolve_lint` |
-| **bibliography** | `radia_ngsolve_bibliography_index` |
 
 Run `radia_ngsolve_status()` for the live list.
 
@@ -85,5 +84,3 @@ For pure documentation use, install with `pip install radia-mcp`
 
 - `src/radia_mcp/radia_ngsolve/server.py` — tool registration
 - `src/radia_mcp/radia_ngsolve/knowledge/` — per-topic knowledge
-- `src/radia_mcp/radia_ngsolve/bibliography_index_knowledge.py` —
-  auto-generated bibliography

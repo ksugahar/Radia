@@ -294,14 +294,14 @@ before the torque scalar is handed to a notebook, optimizer, or cross-solver
 comparison.  Slot 2026-07-01/372 extends that package with
 ``run_timestamp_utc``, ``solver_version``, ``radia_mcp_version``,
 ``run_duration_s``, and dominant ``timing_breakdown_s`` sections, so a scalar
-torque from an old JMAG version or incomplete timing log cannot become reusable
+torque from an old solver version or incomplete timing log cannot become reusable
 notebook/cross-validation evidence by value alone.
-Slot 2026-07-01/379 adds the upstream model-input identity to the same package:
+The upstream model-input identity belongs to the same package:
 record the project/model artifact id, digest, and path beside the field-table,
 sample-grid, integration, torque-output, and execution metadata.  That keeps a
 plausible Maxwell-shear torque scalar from being joined to stale project
 geometry, material state, or current definitions.
-Slot 2026-07-01/386 adds one more export-side identity: the JMAG export recipe
+One more export-side identity is the export recipe
 or macro/script file that generated the Br/Bt table and torque package.  Record
 ``export_recipe_artifact_id``, ``export_recipe_digest``, and
 ``export_recipe_path`` and use ``require_export_recipe_artifact`` before

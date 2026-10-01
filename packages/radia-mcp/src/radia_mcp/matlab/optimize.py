@@ -6,6 +6,7 @@ import json
 import re
 from typing import Any, Mapping
 
+from ..common.scratch import scratch_root
 from .optuna_boundary import matlab_optuna_mcp_route
 
 
@@ -135,7 +136,7 @@ def matlab_cad_topology_build(spec: Mapping[str, Any] | str) -> dict[str, Any]:
     if not 0<volume_fraction<=1:
         raise ValueError("volume_fraction must be in (0,1]")
     move_limit=float(spec.get("move_limit",0.2)); iterations=int(spec.get("max_iterations",30))
-    journal=str(spec.get("output_journal","C:/temp/radia_topopt_density.jou"))
+    journal=str(spec.get("output_journal") or scratch_root()/"radia_topopt_density.jou")
     threshold=float(spec.get("threshold",0.5))
     weight_expr="["+";".join(f"{value:.17g}" for value in weights)+"]"
     code=(
@@ -186,7 +187,7 @@ def matlab_sheet_metal_topology_build(spec: Mapping[str, Any] | str) -> dict[str
         raise ValueError("activation hysteresis must satisfy 0 <= remove < restore <= 1")
     if cubit_batch_interval<1 or not 0<cubit_batch_fraction<=1:
         raise ValueError("invalid Cubit batching controls")
-    work_directory=str(spec.get("work_directory",r"C:\temp\radia_hex_topopt"))
+    work_directory=str(spec.get("work_directory") or scratch_root()/"radia_hex_topopt")
     code=(
         f"data=load('{_quote(design_data)}');\n"
         f"mesh=radia.ngsolve.Mesh.create('{_quote(mesh_path)}');\n"

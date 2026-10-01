@@ -1,11 +1,9 @@
 """Electromagnetic Non-Destructive Testing (NDT) knowledge.
 
 This module is the substantive knowledge layer for the
-`radia_mcp.ndt` subpackage. It complements the searchable
-`bibliography_index_knowledge.py` catalog by providing distilled,
-topic-organized prose drawn from the configured literature library at
-`public-safe curated corpus`
-(approximately 145 PDFs across 12 subfolders).
+`radia_mcp.ndt` subpackage: distilled, topic-organized prose drawn
+from a curated literature corpus (approximately 145 PDFs across 12
+subfolders).
 
 The catalog covers:
   - 01_eddy_current_NDT  (14 PDFs) -- the core technique
@@ -821,8 +819,8 @@ The static MFIE has a null space for non-simply-connected surfaces
   Non-Simply Connected Surface"
 
 Solution: add a cut surface inside the hole (Kotiuga 1991 -- see
-"Clebsch_potentials_and_the_visualization_of_three-dimensional_solenoidal_vector_fields"
-in the bibliography catalog).
+"Clebsch potentials and the visualization of three-dimensional
+solenoidal vector fields").
 
 ## Acceleration
 
@@ -838,7 +836,7 @@ Dense BEM/VIE matrices are O(N^2). Acceleration:
 public-safe curated corpus (17 PDFs)
 public-safe curated corpus (BEM-flavoured papers)
 - Dense IE solver: "Solution of Dense Systems of Linear Equations
-  Arising from Integral-Equation Formulations" (bibliography catalog)
+  Arising from Integral-Equation Formulations"
 """
 
 

@@ -33,13 +33,13 @@ def _ssl_context() -> ssl.SSLContext | None:
 
 from .._bibparse import BibEntry, make_cite_key, write_bib
 from .._metadata_text import bibtex_text
+from ...common.user_agent import polite_user_agent
 
 
 _ARXIV_API = "https://export.arxiv.org/api/query"
 _NS = {"a": "http://www.w3.org/2005/Atom",
        "arxiv": "http://arxiv.org/schemas/atom"}
-_USER_AGENT = ("mcp-server-document/3.0 "
-               "(mailto:ksugahar@ele.kindai.ac.jp)")
+_USER_AGENT = polite_user_agent("mcp-server-document/3.0")
 
 
 def _normalize_arxiv_id(s: str) -> str:

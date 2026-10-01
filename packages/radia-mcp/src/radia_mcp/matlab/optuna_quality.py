@@ -17,6 +17,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from ..common.scratch import scratch_root
+
 _NOTICE_TOKENS = (
     "Copyright (c) 2018 Preferred Networks, Inc.",
     "Copyright (c) 2025 Preferred Networks, Inc.",
@@ -487,7 +489,7 @@ def matlab_optuna_oracle_plan(
     prefixes = _ORACLE_SCOPE_FILES[key]
     prefix_code = _matlab_cellstr(prefixes)
     root_code = _matlab_literal(str(root))
-    output = Path(output_path or rf"C:\temp\radia-optuna-{key}-summary.json")
+    output = Path(output_path or scratch_root() / f"radia-optuna-{key}-summary.json")
     output_code = _matlab_literal(str(output))
     matlab_code = (
         f"repoRoot=string({root_code}); cd(repoRoot); "
@@ -567,7 +569,7 @@ def _python_constant(source: str, name: str) -> float:
 
 
 def matlab_optuna_benchmark_plan(
-    repository_path: str = "", output_directory: str = r"C:\temp\radia-optuna-benchmark"
+    repository_path: str = "", output_directory: str = ""
 ) -> dict[str, Any]:
     """Build a same-host cold/warm Python-versus-MATLAB benchmark plan."""
     health = matlab_optuna_health(repository_path)
@@ -606,7 +608,8 @@ def matlab_optuna_benchmark_plan(
             "benchmark must define exactly the scalar and grouped TPE seeds"
         )
     scalar_seed, group_seed = sampler_seeds
-    output = Path(output_directory).expanduser()
+    output = (Path(output_directory).expanduser() if output_directory
+              else scratch_root() / "radia-optuna-benchmark")
     python_output = output / "optuna50_python.json"
     matlab_output = output / "optuna50_matlab.json"
     cold_output = output / "optuna_mex_cold.json"

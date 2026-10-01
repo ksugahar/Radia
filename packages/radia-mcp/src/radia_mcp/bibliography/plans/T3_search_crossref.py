@@ -11,10 +11,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from .._doi import normalize_doi
+from ...common.user_agent import polite_user_agent
 
 
-_USER_AGENT = ("mcp-server-document/3.0 (mailto:ksugahar@ele.kindai.ac.jp) "
-               "Crossref-Plus")
+_USER_AGENT = polite_user_agent("mcp-server-document/3.0", "Crossref-Plus")
 
 
 def bibliography_search_crossref(query: str, limit: int = 5) -> str:

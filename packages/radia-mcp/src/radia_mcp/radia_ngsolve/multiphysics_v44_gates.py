@@ -1,4 +1,4 @@
-"""Public-safe COMSOL-derived identity gates for generalization v44."""
+"""Public-safe multiphysics identity gates for generalization v44."""
 
 from __future__ import annotations
 

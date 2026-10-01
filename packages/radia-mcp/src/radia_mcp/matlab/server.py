@@ -74,7 +74,7 @@ def matlab_optuna_oracle_plan(scope:str="all",repository_path:str="",output_path
     """Build an official-MATLAB-MCP-ready Optuna differential test plan."""
     return json.dumps(_optuna_oracle_plan(scope,repository_path,output_path),ensure_ascii=False,indent=2)
 @mcp.tool()
-def matlab_optuna_benchmark_plan(repository_path:str="",output_directory:str=r"C:\temp\radia-optuna-benchmark")->str:
+def matlab_optuna_benchmark_plan(repository_path:str="",output_directory:str="")->str:
     """Build the same-host cold/warmed MATLAB-versus-Optuna benchmark plan."""
     return json.dumps(_optuna_benchmark_plan(repository_path,output_directory),ensure_ascii=False,indent=2)
 @_validation.tool()

@@ -16,7 +16,7 @@ nothing to do with Radia's C++ core or NGSolve integration."
 ## Current state
 
 - Located at `packages/radia-mcp/src/radia_mcp/mathematica/`
-- Promoted 2026-05-20 from `s:/mcp-server/src/mcp_server_document/mathematica/`
+- Promoted 2026-05-20 from the former `mcp_server_document.mathematica` package
 - 11 MCP tools: `mathematica_evaluate`, `mathematica_status`,
   `mathematica_simplify`, `mathematica_to_tex`, `mathematica_check_identity`,
   `mathematica_vector_calc`, `mathematica_unit_convert`,

@@ -275,7 +275,9 @@ def _gmsh_export(
     from ngsolve import CoefficientFunction, Conj, InnerProduct, sqrt  # type: ignore
     from radia.gmsh_post_export import GmshPostExport
 
-    root = Path(r"C:\temp") / "radia_mcp_vol2d_scalar" / request_sha256[:20]
+    from radia_mcp.common.scratch import scratch_root
+
+    root = scratch_root() / "radia_mcp_vol2d_scalar" / request_sha256[:20]
     root.mkdir(parents=True, exist_ok=True)
     msh = root / f"{basename}.msh"
     post = GmshPostExport(mesh)

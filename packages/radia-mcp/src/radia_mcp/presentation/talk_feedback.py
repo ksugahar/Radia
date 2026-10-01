@@ -174,8 +174,8 @@ FIELD_NOTES: list[dict] = [
                           "against them, over several example geometries.",
             },
             {
-                "q": "Computational cost vs OPERA-3D?",
-                "a": "OPERA-3D 72 min (8-layer IABC, 1/8 model) vs 2 min.",
+                "q": "Computational cost vs a conventional 3D FE solver?",
+                "a": "Conventional 3D FE: 72 min (8-layer IABC, 1/8 model) vs 2 min.",
                 "lesson": "Lead the cost slide with one dramatic number.",
             },
         ],

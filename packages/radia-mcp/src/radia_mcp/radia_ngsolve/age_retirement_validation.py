@@ -33,8 +33,11 @@ def _validation_vol() -> str:
     geometry.SetMaterial(1, "rotor")
     geometry.SetMaterial(2, "stator")
     mesh = geometry.GenerateMesh(maxh=0.18)
-    Path(r"C:\temp").mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="radia-age-", dir=r"C:\temp") as folder:
+    from radia_mcp.common.scratch import scratch_root
+
+    root = scratch_root()
+    root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="radia-age-", dir=root) as folder:
         path = Path(folder) / "generated_age_validation.vol"
         mesh.Save(str(path))
         return path.read_text(encoding="utf-8")

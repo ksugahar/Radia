@@ -222,7 +222,7 @@ section CIRCLE edges); sample it at ``n_segments + 1``
 arc-length-equidistant points; section at midpoints to extract
 cross-section centroids and areas.
 
-**Why this path is critical** (keiko 2026-05-15 incident):
+**Why this path is critical** (2026-05-15 incident):
 BSPLINE-lofted coils whose lateral is split into 2 equal halves at
 the z-equator fail Predicate 1 (dominance ~0.5 < 0.8), have no
 multi-station planar faces (Predicate 1 of filaments_from_step has
@@ -250,7 +250,7 @@ the section area.
 
 **CLOSED-only guard**: ``_centerline_from_topology_spine`` raises if
 called with ``topo.is_open == True`` (programming-error indicator,
-NOT a soft-fallback signal).  This guard catches keiko-class OPEN-
+NOT a soft-fallback signal).  This guard catches this class of OPEN-
 with-leads geometries that would otherwise get a bbox-radius planar
 arc bypassing their leads.
 
@@ -365,7 +365,7 @@ After v4.48.1 the centerline coming back from
 bbox -- success, or (b) fails the
 ``_check_filaments_cover_solid_bbox`` sanity check -- raises with a
 diagnostic and a HINT pointing at CAD regeneration or BEM-A switch.
-**No silent wrong-spine output** (the regression that caught keiko's
+**No silent wrong-spine output** (the regression that caught a user's
 ``1turn_coil_loft_outsideline.step`` on 2026-05-15).
 
 ## Verification (2026-04-28 on 100号機)
@@ -518,7 +518,7 @@ circular cross-section direction).
 ## Anti-patterns (PRODUCE STEPs that the auto-detect rejects)
 
   * **Lateral split into 2 equal halves at the z-equator**.  Symptom:
-    keiko 2026-05-15 ``1turn_coil_loft_outsideline.step`` -- the loft
+    the 2026-05-15 ``1turn_coil_loft_outsideline.step`` -- the loft
     cross-section had no consistent vertex alignment, the resulting
     lateral surface split into ``BSPLINE_top`` and ``BSPLINE_bottom``
     of nearly equal area at z=0.  ``_find_lateral_surface`` rejects

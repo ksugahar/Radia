@@ -10,11 +10,6 @@ Electromagnetic metamaterial knowledge:
 - Perfect lens / evanescent amplification (Pendry vs Bergamin)
 - Gyrator-based active LH lines (lab thesis)
 
-Distilled from PDFs in
-  public-safe curated corpus
-  public-safe curated corpus
-  public-safe curated corpus
-
 Cross-references:
 - `radia_mcp.electromagnet` -- Kelvin transform (same coordinate-
   transformation family as transformation optics cloaks/lenses)
@@ -33,13 +28,6 @@ from mcp.server.fastmcp import FastMCP
 from radia_mcp.common import register_status_tool, register_topics_tool
 
 from .knowledge import get_knowledge, TOPICS
-
-try:
-    from .bibliography_index_knowledge import get_bibliography_index
-except ImportError:
-    def get_bibliography_index(query: str = "") -> str:
-        return ("Metamaterial bibliography index not yet generated. "
-                "Run the auto-indexer.")
 
 
 mcp = FastMCP("mcp-server-metamaterial")
@@ -74,8 +62,9 @@ def metamaterial(topic: str = "overview") -> str:
 
 @mcp.tool()
 def metamaterial_bibliography(query: str = "") -> str:
-    """Search the metamaterial bibliography catalog of cited PDFs."""
-    return get_bibliography_index(query)
+    """Search the local literature corpus (RADIA_LIT_ROOT) by filename keywords."""
+    from radia_mcp.literature_index.index_tools import lit_search
+    return lit_search(query)
 
 
 register_status_tool(
@@ -110,8 +99,6 @@ def main():
         print("metamaterial MCP server self-test:")
         print(f"  topics:    {len(TOPICS)}")
         print(f"  knowledge: {len(get_knowledge('all'))} chars")
-        n_bib = len(get_bibliography_index(""))
-        print(f"  bibliography: {n_bib} chars")
         # Round-trip every topic to make sure the dispatcher is wired
         for name in TOPICS:
             body = get_knowledge(name)

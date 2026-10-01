@@ -31,6 +31,8 @@ import tempfile
 from typing import Optional
 from contextlib import closing
 
+from ..common.user_agent import polite_user_agent
+
 # requests is optional (lazy-imported via _require_requests below) --
 # this module only runs when the user invokes a download tool. Keeping
 # it lazy means the rest of radia_mcp.paper_writing imports cleanly on
@@ -55,7 +57,7 @@ _CHROME_UA = (
 )
 
 _CROSSREF_UA = (
-    "radia-mcp (mailto:ksugahar@ele.kindai.ac.jp) Crossref-Plus"
+    polite_user_agent("radia-mcp", "Crossref-Plus")
 )
 
 _HTML_HEADERS = {

@@ -2361,7 +2361,7 @@ def magnetic_circuit_gap_field(N, current, gap, iron_path, mu_r):
     ``N*current`` = amp-turns. For mu_r -> inf the iron carries no MMF and
     B_gap -> mu0 NI / gap. The FEM value sits a few % BELOW this (fringing/leakage
     widen the effective gap) -- that gap is the physical content the reluctance model
-    misses, and what a COMSOL cross-check pins down."""
+    misses, and what a full-field FE solve pins down."""
     return MU0 * N * current / (gap + iron_path / mu_r)
 
 
@@ -4743,7 +4743,7 @@ def solve_scattered_uniform_field(mesh, mu_r_by_material, B0_vec, order=2,
 def shell_shielding_factor(mu_r, a, b, geometry="sphere"):
     """Exact magnetic shielding factor S = B_applied / B_cavity for a permeable
     shell (inner radius ``a``, outer ``b``, relative permeability ``mu_r``) in a
-    uniform applied field -- the COMSOL AC/DC "magnetic shielding" benchmark.
+    uniform applied field -- the classic magnetic shielding benchmark.
 
         sphere   : S = [(2 mu_r+1)(mu_r+2) - 2 (a/b)^3 (mu_r-1)^2] / (9 mu_r)
         cylinder : S = [(mu_r+1)^2 - (a/b)^2 (mu_r-1)^2] / (4 mu_r)   (transverse)

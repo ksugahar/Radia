@@ -93,11 +93,11 @@ _force_position_profile_gate = lazy_callable(".force_position_profile_gate", "fo
 _force_coenergy_displacement_gate = lazy_callable(".force_coenergy_gate", "force_coenergy_displacement_gate", __package__)
 _validate_axisymmetric_v44_identity = lazy_callable(".axisymmetric_v44_identity", "validate_public_identity", __package__)
 _validate_axisymmetric_v46_identity = lazy_callable(".axisymmetric_v46_identity", "validate_public_identity", __package__)
-from .magnetic_artifact_lineage_v47 import validate_public_identity as _validate_femm_v47_identity
-_validate_femm_v48_identity = lazy_callable(".electromagnetic_semantic_identity_v48", "validate_public_identity", __package__)
-_validate_femm_v49_identity = lazy_callable(".electromagnetic_artifact_identity_v49", "validate_public_identity", __package__)
-_validate_femm_v50_identity = lazy_callable(".electromagnetic_artifact_identity_v50", "validate_public_identity", __package__)
-_validate_femm_v51_identity = lazy_callable(".electromagnetic_artifact_identity_v51", "validate_public_identity", __package__)
+from .magnetic_artifact_lineage_v47 import validate_public_identity as _validate_coenergy_force_v47_identity
+_validate_coenergy_force_v48_identity = lazy_callable(".electromagnetic_semantic_identity_v48", "validate_public_identity", __package__)
+_validate_coenergy_force_v49_identity = lazy_callable(".electromagnetic_artifact_identity_v49", "validate_public_identity", __package__)
+_validate_coenergy_force_v50_identity = lazy_callable(".electromagnetic_artifact_identity_v50", "validate_public_identity", __package__)
+_validate_coenergy_force_v51_identity = lazy_callable(".electromagnetic_artifact_identity_v51", "validate_public_identity", __package__)
 _validate_motor_v44_identity = lazy_callable(".motor_v44_identity", "validate_public_identity", __package__)
 _validate_motor_v46_identity = lazy_callable(".motor_identity_v46", "validate_public_identity", __package__)
 from .motor_artifact_lineage_v47 import validate_public_identity as _validate_motor_v47_identity
@@ -117,11 +117,11 @@ _validate_network_v49_identity = lazy_callable(".network_artifact_identity_v49",
 _validate_network_v50_identity = lazy_callable(".network_artifact_identity_v50", "validate_public_v50_identity", __package__)
 _validate_network_v51_identity = lazy_callable(".network_artifact_identity_v51", "validate_public_v51_identity", __package__)
 _validate_solver_state_v46_identity = lazy_callable(".solver_state_identity_v46", "validate_public_identity", __package__)
-from .cross_artifact_lineage_v47 import validate_public_identity as _validate_comsol_v47_identity
-from .transform_normalization_v48 import validate_public_v48_identity as _validate_comsol_v48_identity
-_validate_comsol_v49_identity = lazy_callable(".solver_state_identity_v49", "validate_public_v49_identity", __package__)
-_validate_comsol_v50_identity = lazy_callable(".frequency_contact_identity_v50", "validate_public_v50_identity", __package__)
-_validate_comsol_v51_identity = lazy_callable(".modal_continuation_identity_v51", "validate_public_v51_identity", __package__)
+from .cross_artifact_lineage_v47 import validate_public_identity as _validate_eddy_brake_v47_identity
+from .transform_normalization_v48 import validate_public_v48_identity as _validate_eddy_brake_v48_identity
+_validate_eddy_brake_v49_identity = lazy_callable(".solver_state_identity_v49", "validate_public_v49_identity", __package__)
+_validate_eddy_brake_v50_identity = lazy_callable(".frequency_contact_identity_v50", "validate_public_v50_identity", __package__)
+_validate_eddy_brake_v51_identity = lazy_callable(".modal_continuation_identity_v51", "validate_public_v51_identity", __package__)
 _regularized_trace_inverse_path_gate = lazy_callable(".regularized_trace_inverse_gate", "regularized_trace_inverse_path_gate", __package__)
 from ..matlab_agentic_ml import validate_matlab_ml_rl_v44_identity as _validate_matlab_ml_rl_v44_identity
 from ..matlab_agentic_ml import validate_matlab_ml_rl_v45_identity as _validate_matlab_ml_rl_v45_identity
@@ -758,7 +758,7 @@ def ngsolve_usage(topic: str = "index") -> str:
             "ironloss"         - Iron loss estimation: decomposition, FEM computation, steel grades
             "practical"        - Practical techniques: voltage source, force/torque, rotation, coupling
             "team7"            - TEAM Problem 7: eddy current benchmark (A-formulation, OCC geometry, BDDC/AMS solver)
-            "multiphysics"     - COMSOL-class couplings: induction heating EM->thermal (joule_loss_density + solve_heat_steady), the scattered-field A0 gotcha
+            "multiphysics"     - Multiphysics couplings: induction heating EM->thermal (joule_loss_density + solve_heat_steady), the scattered-field A0 gotcha
             "cross_validation_registry"
                                - Reusable validation scripts/summary JSONs and the
                                  public-safe MCP knowledge hooks that learned from them
@@ -1587,7 +1587,7 @@ def peec_inductance(topic: str = "all") -> str:
       3. Single-loop revolution sweep (TORUS / CYLINDER / CONE /
          REVOLUTION + PLANE caps) -> analytical arc
       4. OPEN coil with caps -> longest open lateral rim edge
-         (handles "arc + leads" e.g. keiko outsideline.step)
+         (handles "arc + leads" e.g. a loft outsideline.step)
       5. CLOSED full revolution (no caps) -> coil_topology spine
 
     Sibling-.jou auto-preference: if the user picks ``foo.step`` and
@@ -2813,31 +2813,31 @@ def rotational_eddy_brake_energy_gate(summary_json: str) -> str:
             result["solver_state_v46_identity"] = v46_checks
             if v46_checks["status"] != "ok":
                 result["status"] = "needs_attention"
-        v47_checks = _validate_comsol_v47_identity(payload)
+        v47_checks = _validate_eddy_brake_v47_identity(payload)
         if v47_checks:
             result.setdefault("checks", {}).update(v47_checks["checks"])
             result["comsol_v47_identity"] = v47_checks
             if v47_checks["status"] != "ok":
                 result["status"] = "needs_attention"
-        v48_checks = _validate_comsol_v48_identity(payload)
+        v48_checks = _validate_eddy_brake_v48_identity(payload)
         if v48_checks:
             result.setdefault("checks", {}).update(v48_checks["checks"])
             result["transform_normalization_v48"] = v48_checks
             if v48_checks["status"] != "ok":
                 result["status"] = "needs_attention"
-        v49_checks = _validate_comsol_v49_identity(payload)
+        v49_checks = _validate_eddy_brake_v49_identity(payload)
         if v49_checks:
             result.setdefault("checks", {}).update(v49_checks["checks"])
             result["solver_state_identity_v49"] = v49_checks
             if v49_checks["status"] != "ok":
                 result["status"] = "needs_attention"
-        v50_checks = _validate_comsol_v50_identity(payload)
+        v50_checks = _validate_eddy_brake_v50_identity(payload)
         if v50_checks:
             result.setdefault("checks", {}).update(v50_checks["checks"])
             result["frequency_contact_identity_v50"] = v50_checks
             if v50_checks["status"] != "ok":
                 result["status"] = "needs_attention"
-        v51_checks = _validate_comsol_v51_identity(payload)
+        v51_checks = _validate_eddy_brake_v51_identity(payload)
         if v51_checks:
             result.setdefault("checks", {}).update(v51_checks["checks"])
             result["modal_continuation_identity_v51"] = v51_checks
@@ -3366,31 +3366,31 @@ def force_coenergy_displacement_gate(
             result["axisymmetric_v46_identity_checks"] = v46_checks
             if not all(v46_checks.values()):
                 result["status"] = "needs_attention"
-        v47_checks = _validate_femm_v47_identity(artifact_identity)
+        v47_checks = _validate_coenergy_force_v47_identity(artifact_identity)
         if v47_checks:
             result.setdefault("checks", {}).update(v47_checks)
             result["magnetic_v47_identity_checks"] = v47_checks
             if not all(v47_checks.values()):
                 result["status"] = "needs_attention"
-        v48_checks = _validate_femm_v48_identity(artifact_identity)
+        v48_checks = _validate_coenergy_force_v48_identity(artifact_identity)
         if v48_checks:
             result.setdefault("checks", {}).update(v48_checks)
             result["electromagnetic_v48_identity_checks"] = v48_checks
             if not all(v48_checks.values()):
                 result["status"] = "needs_attention"
-        v49_checks = _validate_femm_v49_identity(artifact_identity)
+        v49_checks = _validate_coenergy_force_v49_identity(artifact_identity)
         if v49_checks:
             result.setdefault("checks", {}).update(v49_checks)
             result["electromagnetic_v49_identity_checks"] = v49_checks
             if not all(v49_checks.values()):
                 result["status"] = "needs_attention"
-        v50_checks = _validate_femm_v50_identity(artifact_identity)
+        v50_checks = _validate_coenergy_force_v50_identity(artifact_identity)
         if v50_checks:
             result.setdefault("checks", {}).update(v50_checks)
             result["electromagnetic_v50_identity_checks"] = v50_checks
             if not all(v50_checks.values()):
                 result["status"] = "needs_attention"
-        v51_checks = _validate_femm_v51_identity(artifact_identity)
+        v51_checks = _validate_coenergy_force_v51_identity(artifact_identity)
         if v51_checks:
             result.setdefault("checks", {}).update(v51_checks)
             result["electromagnetic_v51_identity_checks"] = v51_checks

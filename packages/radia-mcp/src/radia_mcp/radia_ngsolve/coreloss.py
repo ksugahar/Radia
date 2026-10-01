@@ -7,8 +7,7 @@ iron loss only from a time-HARMONIC solve and ignores the DC (permanent-magnet)
 field, forcing the awkward ".ans frequency hand-edit" hack for PM machines.
 radia-ngsolve instead takes the per-element flux-density waveform B(theta) from
 a rotor-angle sweep (e.g. the committed cogging sweep), FFTs it into harmonics,
-and applies the Bertotti three-term loss separation natively -- the same path
-JMAG's iron-loss study uses.
+and applies the Bertotti three-term loss separation natively.
 
 Loss separation (specific loss, W/m^3, sinusoidal flux at frequency f, peak Bpk):
 

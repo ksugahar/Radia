@@ -1227,7 +1227,7 @@ def test_adjacent_reviewer_readability_flags_applicant_internal_metaphors():
     assert result["metrics"]["vague_readiness_status_count"] == 1
 
 
-def test_adjacent_reviewer_readability_accepts_concrete_keiko_revision():
+def test_adjacent_reviewer_readability_accepts_concrete_reviewer_revision():
     text = (
         "比較できる対象が自研究室の既存コードで扱える手法に限られやすい。"
         "本研究では、誘導加熱と加速器電磁石の二課題について検証する。"
