@@ -16,7 +16,7 @@ def test_angle_periodic_motor_rom_knowledge_is_complete_and_fail_loud():
         "limits",
     }
     assert "cycle basis" in get_angle_periodic_rom_knowledge("face_policy")
-    assert "positive-real CLN" in get_angle_periodic_rom_knowledge("time_domain")
+    assert "positive-real state system" in get_angle_periodic_rom_knowledge("time_domain")
     assert "C ABI version 1" in get_angle_periodic_rom_knowledge("ports")
     assert "Unknown topic" in get_angle_periodic_rom_knowledge("missing")
     assert len(get_angle_periodic_rom_knowledge("all")) > 2000

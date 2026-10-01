@@ -1659,9 +1659,9 @@ paper) — only the surrogate L2 cost.
     boundaries.
 
 (g) PARALLELISM:
-    PARDISO direct solver.  Substitute NGSolve's PARDISO interface
-    (MKL-shipped).  For larger 3D problems switch to Compact HX
-    preconditioner per lab POLICY on HCurl/H1 problems.
+    The paper used a direct solver.  In Radia use SparseCholesky
+    (inverse="sparsecholesky", residual-checked); for larger 3D problems
+    switch to the Compact HX / AMS preconditioner on HCurl/H1 problems.
 
 (h) RADIA ROLE:
     Marginal — this is a bounded-domain FEM problem with no open-
@@ -1830,7 +1830,7 @@ jagged boundaries.  The hybrid is the lab default.
   - `basis_functions` — Nedelec HCurl edge elements (state space)
   - `esim` — SIBC / nonlinear surface impedance (related sensitivity
               framework for fluid-conductor TopOpt extensions)
-  - `sparsesolv` — PARDISO + Compact HX preconditioner for large 3D
+  - `sparsesolv` — Compact HX / AMS preconditioner for large 3D
 """
 
 

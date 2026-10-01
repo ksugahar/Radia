@@ -144,7 +144,7 @@ electrodynamic levitation device).
 ## Showcase notebook
 
 `docs/maglev/maglev_showcase.ipynb` -- consolidated rendered view of the
-`docs/maglev/demos/` tier: mixed-Galerkin `alpha(s)` sweep, validated sphere
+`docs/maglev/demos/` tier: Modal-bulk SIBC `alpha(s)` sweep, validated sphere
 levitation force, shape-anisotropic ellipsoid tensor, the moving-magnet
 magnetic-Reynolds (`Rm`) crossover, and the TEAM 28 benchmark (committed
 figures + headline JSON; golden corpus kept in `docs/maglev/demos/`).
@@ -638,7 +638,7 @@ exterior disk face touches air, but at 50 Hz the aluminium skin depth is
 SIBC modes.  On the committed coarse 3-D disk mesh, HCurl(p=6) has 22,814 DoF;
 EVRS rank 6 plus 130 conductor-graph cycle modes gives 136 estimated retained
 modes (0.596%).  This is the topology-preserving a priori plan.  The final
-mixed-Galerkin/EVRS response basis for the three TEAM excitation ports has
+Modal-bulk SIBC/EVRS response basis for the three TEAM excitation ports has
 rank 3.
 
 The epsilon-free fixed-position 3-D HCurl-VIM force gate passes on mdx.  The
@@ -681,8 +681,8 @@ Duffy kernel.  Durable records are
 
 PHYSICAL_TENSOR_ROM = r"""
 # Physical polarizability tensor alpha(s) as a passive, stable LTI
-*(Lab research: radia.levitation, the "physical Stoll spectrum -> LTI"
-route; src/radia/levitation/mixed_galerkin/rom_fit.py, 2026-06-20.)*
+*(Lab research: radia.maglev, the "physical Stoll spectrum -> LTI"
+route; src/radia/maglev/mixed_galerkin/rom_fit.py, 2026-06-20.)*
 
 The maglev FORCE on a moving conductor is F ~ Re[alpha(s)] grad(B^2); the
 conductor is fully described, per direction, by its eddy-current
@@ -755,7 +755,7 @@ Cu sphere a=5mm, alpha(s) = 4 pi a^3 [ -1/2 + sum_n (3/(n pi)^2)/(1+s tau_n) ],
     mu0 sigma a^2/(n pi)^2 to 0.000 %.
   - alpha_inf = -784.9 mm^3 == the perfect-conductor flux-exclusion limit
     -2 pi a^3 = -785.4 mm^3.
-Golden: tests/test_levitation_mixed_galerkin_golden.py
+Golden: tests/test_maglev_mixed_galerkin_golden.py
 `::test_rom_fit_sphere_stoll_spectrum` + `::test_rom_fit_diagonal_tensor_mimo`.
 
 Verified on the ANISOTROPIC body too (FEM triaxial): Cu ellipsoid 5x3x1.5 mm,
@@ -766,10 +766,10 @@ decay times shape-split: tau_z = 60.2 us > tau_x = tau_y = 34.6 us; D_diag =
 [-102.5, -122.3, -218.8] mm^3 = the -V/(1-N_i) ordering |z|>|y|>|x| (short axis
 strongest) -- matching the static `ellipsoid_alpha_tensor.py` HF anchors.
 
-## API (radia.levitation.mixed_galerkin)
+## API (radia.maglev.mixed_galerkin)
 
 ```python
-from radia.levitation.mixed_galerkin import (
+from radia.maglev.mixed_galerkin import (
     passive_foster_fit, FosterROM, diagonal_tensor_state_space)
 
 # sample the verified per-frequency tensor (or any alpha(s) data) on j omega
@@ -793,7 +793,7 @@ MIMO LTI).
   (~2-3% for a general body; the analytic sphere is the exact anchor).
 - These are FOSTER poles tau_n (physical decay times), not continued-fraction
   rung time constants (systematic ~-6-8% offset; compare like-with-like).
-- This is the EXTERIOR-MATCHED physical tensor.  The mixed-Galerkin bulk
+- This is the EXTERIOR-MATCHED physical tensor.  The Modal-bulk SIBC bulk
   Foster (bulk_foster_via_eigen / bulk_foster_vector_via_eigen) uses the
   INTERIOR-PEC eigenmodes -- a different, interior model; a SIBC tail
   completes it, but it is NOT the same object as this exterior-matched fit.

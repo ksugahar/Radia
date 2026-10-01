@@ -1615,7 +1615,8 @@ View[0].FakeTransparency = 0;      // 0=real (sorted), 1=additive (faster)
 - **No per-element/per-material alpha**. Alpha is global per View.
 - **STEP geometry surfaces have NO alpha support** at all.
 
-For proper transparency, use ParaView (VTK) or Blender.
+For see-through rendering, isolate the region with per-view visibility or a
+cut plane, or export a surface (STL/glTF) to Blender.
 
 ## .opt Companion File
 

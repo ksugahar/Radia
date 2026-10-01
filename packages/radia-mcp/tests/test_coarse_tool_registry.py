@@ -382,3 +382,22 @@ def test_each_grouped_server_installs_its_registry_once():
         if grouped_count:
             assert source.count("_validation.install()") == 1, server_path
             assert "CoarseToolRegistry" in source, server_path
+
+
+def test_primary_catalog_tools_exist_in_each_live_server():
+    # The catalog names entry points for agents; a name the server does not
+    # register sends them to a tool that does not exist.
+    import asyncio
+    import importlib
+
+    missing = {}
+    for key, entry in CATALOG.items():
+        module = importlib.import_module(entry["subpackage"] + ".server")
+        mcp = getattr(module, "mcp", None)
+        if mcp is None:  # capability packs compose domain servers
+            continue
+        live = {tool.name for tool in asyncio.run(mcp.list_tools())}
+        absent = [name for name in entry.get("primary_tools", ()) if name not in live]
+        if absent:
+            missing[key] = absent
+    assert missing == {}

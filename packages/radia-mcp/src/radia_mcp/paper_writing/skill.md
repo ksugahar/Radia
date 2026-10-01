@@ -1476,7 +1476,7 @@ JSON/選択点から決定論的に再構成) を用意しておくと、図ス�
 
 ## 🔁 フレーミング移行時の figure/数値監査ポリシー (2026-06-14)
 
-論文の理論フレーミングを更新したとき (例: Warburg-Schur → Mixed Galerkin)、
+論文の理論フレーミングを更新したとき (例: Warburg-Schur → Modal-bulk SIBC)、
 **本文 (タイトル・abstract・章題・キーワード) と figure/* と figure 内の数値
 は不可分の三点セット**として監査する。これを怠ると、概念は新フレームだが
 **図と数値は旧フレームのまま**という最も悪いタイプのドリフトが発生する。
@@ -1484,12 +1484,12 @@ JSON/選択点から決定論的に再構成) を用意しておくと、図ス�
 ### 実例 (2026-06-14 lab incident)
 
 IGTE 2026 ダイジェスト:
-- ✅ Title: "Mixed Galerkin Reduction" に更新済
-- ✅ Abstract / §3 本文: Mixed Galerkin で記述
+- ✅ Title: "Modal-bulk SIBC Reduction" に更新済
+- ✅ Abstract / §3 本文: Modal-bulk SIBC で記述
 - ❌ Fig. 1: 旧 `circle_warburg.pdf` のまま (Warburg-with-$d$ で 17% wall band)
-- ❌ Fig. 1 caption: "rank-(1,1) Mixed Galerkin **specialization** — equivalent to the historical Warburg-Randles cell — within **17%**"
+- ❌ Fig. 1 caption: "rank-(1,1) Modal-bulk SIBC **specialization** — equivalent to the historical Warburg-Randles cell — within **17%**"
 
-実際の no-$d$ Mixed Galerkin は **0.064%** (270× 改善)。本文には正しく
+実際の no-$d$ Modal-bulk SIBC は **0.064%** (270× 改善)。本文には正しく
 0.04% と書いてあるが、図と図キャプションだけが旧 Warburg 時代の 17% を
 報告し、自己矛盾していた。reviewer がこれを見つけたら「結果が再現してない」
 と即 reject。
@@ -1510,18 +1510,18 @@ IGTE 2026 ダイジェスト:
 **Rule 2: 同じファイル名で意味が変わる場合は rename**
 
 旧フレームの `figures/circle_warburg.pdf` を新フレームの内容で上書きしないこと。
-Warburg-with-$d$ の図と Mixed Galerkin no-$d$ の図は**別ファイルとして共存**
+Warburg-with-$d$ の図と Modal-bulk SIBC no-$d$ の図は**別ファイルとして共存**
 させ、本文の `\includegraphics{...}` を差し替える:
 
 - ✅ 旧: `figures/circle_warburg.pdf` → 残す (歴史的参照、git blame で追跡可)
-- ✅ 新: `figures/cylinder_mixed_galerkin.pdf` → 新規追加
-- `.tex` の `\includegraphics{figures/cylinder_mixed_galerkin.pdf}` で差し替え
+- ✅ 新: `figures/cylinder_modal_bulk_sibc.pdf` → 新規追加
+- `.tex` の `\includegraphics{figures/cylinder_modal_bulk_sibc.pdf}` で差し替え
 
 **なぜファイル名を変えるか**: 同じファイル名が「Warburg ブランチでは Warburg
-結果、Mixed Galerkin ブランチでは Mixed Galerkin 結果」と branch 依存で意味が
+結果、Modal-bulk SIBC ブランチでは Modal-bulk SIBC 結果」と branch 依存で意味が
 変わると、ブランチ切り替えや古いキャッシュ済 PDF を開いたときの取り違えが
 起きる。**ファイル名に framework を埋め込む**ことで物理的に区別する
-(`circle_warburg.pdf` vs `cylinder_mixed_galerkin.pdf`)。
+(`circle_warburg.pdf` vs `cylinder_modal_bulk_sibc.pdf`)。
 
 **Rule 3: 移行コミットの差分 self-review**
 
