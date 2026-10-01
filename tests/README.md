@@ -7,6 +7,41 @@ pre-push checks.
 Heavy solver studies, Cubit export checks, GUI/panel goldens, benchmarks,
 and cross-validation cases live under `validation_test/`.
 
+## Use tests as executable samples
+
+These tests also show small, concrete API calls, expected behavior and failure
+conditions. Read the fixtures and assertions together, then run the relevant
+case with its declared dependencies. Mocked contract tests illustrate interface
+behavior; they do not establish physical accuracy.
+
+For larger physics and application samples, use
+[validation_test/](../validation_test/README.md). The
+[documentation](../docs/README.md) introduces features and saved results.
+Actual CAE operation uses [MCP](../packages/radia-mcp/README.md), or human–AI
+collaboration through [Cubit](../docs/cubit_mesh_export/README.md) and
+[Simulink](../matlab/README.md).
+
+## Select a small sample
+
+| What to learn | Executable sample | What to inspect |
+| --- | --- | --- |
+| Build a finite-section coil and evaluate its field | [Coil axis field](test_coil_axis_closed_form.py) | Geometry, current sign, scale and comparison with a closed-form axis field; requires Radia, NGSolve and Netgen |
+| Construct and query a periodic motor ROM | [Motor ROM](test_motor_rom.py) | Synthetic periodic tables, ports, derivatives and bundle checks; these inputs are not a solved machine model |
+| Transfer a heat source with checked field artifacts | [Thermal transfer](test_ih_thermal_transfer.py) | Mesh/field pairing, metadata, conserved power and rejected inputs; requires NGSolve/Netgen |
+| Understand the circuit-field Simulink adapter contract | [Adapter source contract](mcp_integration/test_circuit_field_simulink_contract.py) | Static source assertions only; this does not execute Simulink or establish numerical accuracy |
+
+Run a selected case from the repository root with the configured Radia environment,
+for example:
+
+```powershell
+python -m pytest tests/test_motor_rom.py::test_periodic_fourier_value_derivative_and_continuous_skew -q
+```
+
+Read module imports and shared `conftest.py` fixtures before running. Tests may
+need a built native package even when the selected calculation looks small.
+For full-model comparisons, continue to the
+[application validation samples](../validation_test/README.md#select-an-application-sample).
+
 ## Two-Stage Test Layout
 
 | Directory | Purpose | Typical command |

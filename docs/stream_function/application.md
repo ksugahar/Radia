@@ -1,4 +1,26 @@
-# Stream-Function coil-design application (`calc_streamfunction.py`)
+# Stream-function coils: from target field to winding
+
+Specify a target field on an evaluation region, inspect a fitted surface-current
+distribution, and assess the field again after constructing a winding. You
+choose the target, constraints and acceptance criteria; AI can operate the
+supported calculation and geometry tools.
+
+## Choose your next step
+
+| Purpose | Entry point |
+| --- | --- |
+| Inspect surface currents and winding results | [Saved feature notebook](theory.ipynb) |
+| Operate supported tools with AI | [MCP setup and tools](../../packages/radia-mcp/README.md) |
+| Prepare coil and evaluation meshes | [Cubit workflow](../cubit_mesh_export/README.md) |
+| Collaborate on an application model | [Radia Simulink library](../../matlab/README.md) |
+| Read a small coil construction/field sample | [Finite-section coil axis test](../../tests/test_coil_axis_closed_form.py) |
+| Inspect winding verification and benchmarks | [Stream-function validation](../../validation_test/stream_function/README.md) |
+
+The small coil test demonstrates geometry and field evaluation. It does not
+exercise the complete inverse-design workflow. The validation lane contains
+the broader winding checks, with geometry-specific scope.
+
+## Application interface
 
 The FE-direct stream-function designer is exposed through the masked
 `radia_simulink_library/Applications/Stream Function` block over the headless

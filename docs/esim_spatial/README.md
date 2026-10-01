@@ -1,6 +1,14 @@
-# ESIM spatial example
+# ESIM heating results
 
-Open [the executed notebook](esim_spatial_demo.ipynb) to inspect the coil,
+The [introduction notebook](esim_spatial_demo.ipynb) now reads the selected
+frequency-sweep results and plots integrated workpiece power. Its execution
+date and runtime are displayed from the result record. It does not solve a
+temperature field or certify local surface-loss accuracy.
+
+The earlier spatial study described below is preserved in
+[validation_test/showcase/studies](../../validation_test/showcase/studies/README.md).
+
+Open [the retained spatial study](../../validation_test/showcase/studies/esim_spatial/esim_spatial_demo.ipynb) to inspect the coil,
 workpiece mesh, tangential field, surface resistance and two different loss
 distributions at 10, 50 and 100 kHz.
 

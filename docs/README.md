@@ -1,14 +1,24 @@
 # Explore Radia
 
-**From a magnet or coil to fields, circuits, optimization, and Simulink.**
-These pages show what you can make with Radia. Start with saved results in a
-notebook, then follow the MATLAB or Python interface into your own application.
+**Operate electromagnetic CAE through AI and MCP, with an analysis plan you define.**
+These pages introduce capabilities through geometry, mesh, field and result
+views. Operate CAE through MCP, or collaborate with AI using Cubit and Simulink.
+AI-assisted tool operation reduces the burden of
+learning each tool's commands; the physical assumptions and engineering
+decisions remain yours.
 
 ![External stray field with and without an active-shield coil](stream_function/demo_active_shield.png)
 
 *Design for a field target: external stray fields in a stream-function
 active-shield demonstration. The plotted comparison applies to this coil
 configuration; it is not a general performance guarantee.*
+
+[**Guided start and FAQ**](START_HERE.md) · [**Application examples**](APPLICATION_GUIDE.md) ·
+[**Accuracy and validation**](VALIDATION_GUIDE.md)
+
+Start with the [six selected applications](APPLICATION_GUIDE.md#browse-results).
+For convergence, formulation comparisons and research evidence, use the
+[validation study index](../validation_test/STUDY_INDEX.md).
 
 ## Choose a Starting Point
 
@@ -32,11 +42,23 @@ material, or backend.
 For installation and supported platforms, see the [Quick start](../README.md#quick-start).
 For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 
-## Repository Examples
+## Introduction, operation and executable samples
 
-Runnable CAE examples published in this repository are executed
-`docs/**/*.ipynb` notebooks, not loose scripts. Each example keeps its computed
-outputs and an interactive
+| Purpose | Where to go |
+| :--- | :--- |
+| Understand a capability and its demonstrated scope | This documentation and its saved notebooks |
+| Ask AI to carry out analysis operations | [MCP tools and setup](../packages/radia-mcp/README.md) |
+| Work with AI on geometry and mesh | [Cubit mesh workflow](cubit_mesh_export/README.md) |
+| Work with AI on an application model | [Radia Simulink library](../matlab/README.md) |
+| Inspect small executable usage and contract examples | [tests/](../tests/README.md) |
+| Inspect physics, numerical and application examples with evidence | [validation_test/](../validation_test/README.md) |
+
+The executable sample collection lives in `tests/` and `validation_test/`.
+Tests retain their assertions, fixtures and execution requirements; use the
+relevant case's setup rather than treating every file as a standalone script.
+
+`docs/**/*.ipynb` introduces features and explains saved results. Each
+demonstration keeps its computed outputs and an interactive
 `ngsolve.webgui.Draw` scene for the mesh and principal field (or
 `netgen.webgui.Draw` for pre-mesh CAD). Static figures may supplement the
 scene, but do not replace it. Principal-field scenes pass the field and mesh
@@ -51,10 +73,11 @@ Docs notebooks are demonstrations and do not require JSON sidecars.
 These notebooks introduce capabilities through visible results: the engineering
 question, the computed field or design, and a route to trying it yourself.
 They are not timing competitions or release-acceptance certificates.
-The final human operating
-interface for Radia applications remains the masked Simulink block library.
-Its spatial field results are durable GMSH `.msh v4.1` artifacts in the run
-directory; interactive WebGUI scenes remain the notebook explanation layer.
+Human–AI collaboration uses Cubit for CAD/mesh work and the masked Simulink
+block library for application models. AI-driven Cubit operations run headlessly;
+geometry, journals, meshes and checks provide the handoff to human work.
+Spatial application results are durable GMSH `.msh v4.1` artifacts in the run
+directory; interactive WebGUI scenes support the feature explanation.
 
 ### References in Notebooks
 
