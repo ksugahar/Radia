@@ -1181,14 +1181,18 @@ class ESIMCellProblemSolver:
 
         return float(P_prime), float(Q_prime), float(P_magnetic)
 
-    def generate_esi_table(self, H0_values, tol=1e-6, max_iter=50):
+    def generate_esi_table(self, H0_values, tol=1e-6, max_iter=100):
         """
         Generate ESI table for a range of H0 values.
 
         Parameters:
             H0_values: List or array of surface field amplitudes [A/m]
             tol: Convergence tolerance for each solve
-            max_iter: Maximum iterations for each solve
+            max_iter: Maximum iterations for each solve.  Table generation
+                uses a larger budget than the interactive single-cell default
+                because the saturated high-field rows of a monotone B-H law
+                can require more than 50 Picard steps at the unchanged
+                nonlinear tolerance.
 
         Returns:
             table: numpy array with columns:

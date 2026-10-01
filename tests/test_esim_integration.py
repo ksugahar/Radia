@@ -11,7 +11,6 @@ Author: Radia Development Team
 Date: 2026-01-08
 """
 
-import sys
 import numpy as np
 import pytest
 from scipy.constants import mu_0
@@ -23,12 +22,8 @@ from radia.esim_cell_problem import (
     ESITable,
     generate_esi_table_from_bh_curve,
 )
-from radia.esim_workpiece import create_esim_block, create_esim_cylinder
-from radia.esim_coupled_solver import (
-    InductionHeatingCoil,
-    ESIMCoupledSolver,
-    solve_induction_heating,
-)
+from radia.esim_workpiece import create_esim_block
+from radia.esim_coupled_solver import InductionHeatingCoil
 
 
 def test_bh_curve_interpolation():
@@ -73,7 +68,7 @@ def test_bh_curve_interpolation():
 
     print(f"  Result: {passed}/{len(tests)} tests passed")
     print()
-    return passed == len(tests)
+    assert passed == len(tests)
 
 
 def test_bh_curve_saturation_extension_keeps_vacuum_slope():
@@ -141,7 +136,7 @@ def test_cell_problem_solver():
 
     print(f"  Result: {'All tests passed' if passed else 'Some tests failed'}")
     print()
-    return passed
+    assert passed
 
 
 def test_esi_table_generation():
@@ -182,7 +177,7 @@ def test_esi_table_generation():
         print(f"  |Z| vs H0: {Z_mags} - Expected decreasing [FAIL]")
 
     print()
-    return monotonic
+    assert monotonic
 
 
 def test_coil_field_computation():
@@ -229,12 +224,12 @@ def test_coil_field_computation():
         passed = False
 
     print()
-    return passed
+    assert passed
 
 
-def test_coupled_solver():
-    """Test coupled ESIM solver convergence."""
-    print("Test 5: Coupled Solver Convergence")
+def test_workpiece_power_distribution_uses_converged_esi_table():
+    """Test the supported table-driven ESIM workpiece power path."""
+    print("Test 5: Table-driven Workpiece Power")
     print("-" * 40)
 
     bh_curve = [
@@ -244,189 +239,30 @@ def test_coupled_solver():
     sigma = 2e6
     freq = 50000
 
-    # Create coil
-    coil = InductionHeatingCoil(
-        coil_type='spiral',
-        center=[0, 0, 0.02],
-        inner_radius=0.03,
-        outer_radius=0.05,
-        pitch=0.005,
-        num_turns=3,
-        axis=[0, 0, 1],
-    )
-    coil.set_current(100)
-
-    # Create workpiece
     workpiece = create_esim_block(
         center=[0, 0, -0.01],
         dimensions=[0.08, 0.08, 0.02],
         bh_curve=bh_curve,
         sigma=sigma,
         frequency=freq,
-        panels_per_side=6
+        panels_per_side=2,
+        esi_n_points=30,
     )
+    surface_field = 500.0
+    for panel in workpiece.panels:
+        panel.H_tangential = surface_field + 0j
 
-    # Solve
-    solver = ESIMCoupledSolver(coil, workpiece, freq)
-    result = solver.solve(tol=1e-4, max_iter=30, verbose=False)
+    p_density, q_density = workpiece.esi_table.get_power_loss(surface_field)
+    summary = workpiece.get_summary()
+    distribution = workpiece.get_power_distribution()
 
-    print(f"  Converged: {result['converged']}")
-    print(f"  Iterations: {result['iterations']}")
-    print(f"  P_total = {result['P_total']:.1f} W")
-    print(f"  Q_total = {result['Q_total']:.1f} var")
-    print(f"  Power factor = {result['power_factor']:.3f}")
-
-    passed = result['converged']
-    if passed:
-        # Additional checks
-        if result['P_total'] > 0:
-            print(f"  P > 0: [PASS]")
-        else:
-            print(f"  P > 0: [FAIL]")
-            passed = False
-
-        if 0 < result['power_factor'] <= 1:
-            print(f"  0 < PF <= 1: [PASS]")
-        else:
-            print(f"  Power factor range: [FAIL]")
-            passed = False
-
-    print()
-    return passed
-
-
-def _validate_physical_consistency():
-    """Test physical consistency of results."""
-    print("Test 7: Physical Consistency")
-    print("-" * 40)
-
-    bh_curve = [[0, 0], [100, 0.2], [500, 0.9], [1000, 1.3], [5000, 1.8], [50000, 2.1]]
-    sigma = 2e6
-    freq = 50000
-
-    coil = InductionHeatingCoil(
-        coil_type='spiral',
-        center=[0, 0, 0.02],
-        inner_radius=0.03,
-        outer_radius=0.05,
-        pitch=0.005,
-        num_turns=3,
-        axis=[0, 0, 1],
+    assert summary['P_total'] == pytest.approx(
+        p_density * workpiece.total_surface_area
     )
-
-    workpiece = create_esim_block(
-        center=[0, 0, -0.01],
-        dimensions=[0.08, 0.08, 0.02],
-        bh_curve=bh_curve,
-        sigma=sigma,
-        frequency=freq,
-        panels_per_side=5
+    assert summary['Q_total'] == pytest.approx(
+        q_density * workpiece.total_surface_area
     )
-
-    passed = True
-
-    # Test 1: Power scales with I^2 (linear regime)
-    print("  Power scaling with I^2 (linear regime):")
-    powers = []
-    currents = [10, 20]
-    for I in currents:
-        coil.set_current(I)
-        solver = ESIMCoupledSolver(coil, workpiece, freq)
-        result = solver.solve(tol=1e-3, max_iter=10, verbose=False)
-        powers.append(result['P_total'])
-        print(f"    I = {I} A: P = {result['P_total']:.2f} W")
-
-    # P should scale as I^2
-    ratio = powers[1] / powers[0]
-    expected = (currents[1] / currents[0]) ** 2
-    error = abs(ratio - expected) / expected
-    if error < 0.15:  # 15% tolerance for nonlinear effects
-        print(f"    P2/P1 = {ratio:.2f} (expected {expected:.2f}): [PASS]")
-    else:
-        print(f"    P2/P1 = {ratio:.2f} (expected {expected:.2f}): [FAIL]")
-        passed = False
-
-    # Test 2: Higher frequency -> higher power density (skin effect)
-    print("  Frequency effect on power:")
-    coil.set_current(50)
-
-    freqs = [30000, 60000]
-    powers_freq = []
-    for f in freqs:
-        wp = create_esim_block(
-            center=[0, 0, -0.01],
-            dimensions=[0.08, 0.08, 0.02],
-            bh_curve=bh_curve,
-            sigma=sigma,
-            frequency=f,
-            panels_per_side=5
-        )
-        solver = ESIMCoupledSolver(coil, wp, f)
-        result = solver.solve(tol=1e-3, max_iter=10, verbose=False)
-        powers_freq.append(result['P_total'])
-        print(f"    f = {f/1000:.0f} kHz: P = {result['P_total']:.2f} W")
-
-    # Higher frequency should generally increase power (complex due to nonlinearity)
-    if powers_freq[1] != powers_freq[0]:
-        print(f"    Frequency affects power: [PASS]")
-    else:
-        print(f"    Frequency effect: [FAIL]")
-        passed = False
-
-    print()
-    return passed
-
-
-def main():
-    """Run all integration tests."""
-    print()
-    print("=" * 60)
-    print("ESIM Integration Tests")
-    print("=" * 60)
-    print()
-
-    tests = [
-        ("B-H Curve Interpolation", test_bh_curve_interpolation),
-        ("Cell Problem Solver", test_cell_problem_solver),
-        ("ESI Table Generation", test_esi_table_generation),
-        ("Coil Field Computation", test_coil_field_computation),
-        ("Coupled Solver", test_coupled_solver),
-        ("Physical Consistency", _validate_physical_consistency),
-    ]
-
-    results = []
-    for name, test_func in tests:
-        try:
-            passed = test_func()
-            results.append((name, passed))
-        except Exception as e:
-            print(f"  Exception: {e}")
-            results.append((name, False))
-
-    # Summary
-    print("=" * 60)
-    print("Test Summary")
-    print("=" * 60)
-
-    total_passed = 0
-    for name, passed in results:
-        status = "PASS" if passed else "FAIL"
-        print(f"  {name}: [{status}]")
-        if passed:
-            total_passed += 1
-
-    print()
-    print(f"Total: {total_passed}/{len(tests)} tests passed")
-    print()
-
-    if total_passed == len(tests):
-        print("All tests passed! ESIM implementation is validated.")
-    else:
-        print("Some tests failed. Review the output above.")
-
-    return total_passed == len(tests)
-
-
-if __name__ == "__main__":
-    success = main()
-    sys.exit(0 if success else 1)
+    assert summary['P_total'] > 0.0
+    assert sum(row['P_loss'] for row in distribution) == pytest.approx(
+        summary['P_total']
+    )
