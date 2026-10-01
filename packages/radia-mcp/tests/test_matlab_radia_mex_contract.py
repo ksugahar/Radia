@@ -318,6 +318,7 @@ def test_optimize_builder_rejects_loose_spec_values():
         ({**base, "parallel": "false"}, "parallel must be true or false"),
         ({**base, "live_monitor": 0}, "live_monitor must be true or false"),
         ({**base, "n_trials": 2.7}, "n_trials must be an integer"),
+        ({**base, "n_trials": float("inf")}, "n_trials must be an integer"),
         ({**base, "n_trial": 5}, "unknown optimization spec keys"),
         ({"runner": {"kind": "objective", "objective_fcn": "f", "batch_size": 2}}, r"unknown runner \(objective\) keys"),
         ({"runner": {"kind": "simulink", "model": "m", "score_fcn": "s", "use_fast_restart": "no"}},
