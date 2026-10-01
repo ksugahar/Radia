@@ -398,8 +398,12 @@ jobs:
         shell: pwsh
         working-directory: ${{ github.workspace }}
         env:
-          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia'
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia;${{ github.workspace }}\packages\cubit-mesh-export\src'
         run: |
+          $cadPins = @(python -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*d['project']['optional-dependencies']['build123d'], sep='\n')")
+          if ($LASTEXITCODE -ne 0 -or $cadPins.Count -eq 0) { throw 'Expected declared STEP CAD dependencies' }
+          python -m pip install @cadPins
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Write-Host "Running validation_test pytest gate..."
           Write-Host "Solver distribution only; MCP and Cubit validation belong to their independent release lanes."
           $pytestArgs = @(

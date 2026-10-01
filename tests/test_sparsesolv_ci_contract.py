@@ -198,6 +198,9 @@ def test_mixed_manifest_and_runtime_dependency_change_still_runs():
     "src/radia/vector_potential_solver.py", "src/radia/topology_optimization.py",
     "src/radia/ih_thermal.py", "src/radia/ih_axisym_coupled.py",
     "src/radia/panels/calc_fem_kelvin.py",
+    "src/radia/simulink/ih_operator_assembly.py",
+    "src/radia/coil_from_cad.py",
+    "packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
 ])
 def test_numerical_source_changes_select_built_ngsolve_lane(source):
     assert IMPACT.native_required("push", {"before": "a" * 40},
@@ -223,6 +226,9 @@ def test_ih_thermal_and_complex_ams_contracts_run_with_ngsolve():
     profiles = json.loads((ROOT / "tests/test_tier_manifest.json").read_text())["profiles"]
     required = {"tests/test_ih_axisym_coupled.py", "tests/test_ih_thermal_transfer.py",
                 "tests/test_ih_thermal_exposure.py",
+                "tests/test_ih_operator_assembly.py",
+                "tests/test_ih_operator_axisym.py",
+                "tests/test_ih_fin_surface_boundary.py",
                 "validation_test/induction_heating/test_fem_ams_parity.py"}
     assert required <= set(profiles["solver-numerics"]["paths"])
     assert required.isdisjoint(profiles["fast-contracts"]["paths"])
