@@ -18,7 +18,7 @@ def test_mixed_omega_knowledge_preserves_solver_and_evidence_boundaries():
     assert "from radia.kelvin_solver import" in text
     assert "solve_magnetostatic_mixed_total_reduced_omega_kelvin" in text
     assert "nonlinear_material_bonus_intorder" in text
-    assert "material_bonus_intorder" in text
+    assert "`material_bonus_intorder`" in text
     assert "Picard lanes were" in text
     assert "v5-v11" in text
     assert "unsmoothed element-local" in text

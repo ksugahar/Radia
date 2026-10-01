@@ -106,7 +106,7 @@ def test_radia_mcp_publishes_only_from_its_successful_tag_ci():
     assert "radia-mcp-ci-release-context" not in workflow
     assert "needs: [scope, selftest, minimum-sdk, release-evidence]" in workflow
     assert "Require a successful full audit on the tagged commit" in workflow
-    assert "workflow_dispatch" in workflow
+    assert "head_sha=${GITHUB_SHA}&event=workflow_dispatch&status=success" in workflow
     assert "full audit evidence found for ${GITHUB_SHA}" in workflow
     assert "github.ref_type == 'tag'" in workflow
     assert "startsWith(github.ref_name, 'radia-mcp-v')" in workflow
