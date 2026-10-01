@@ -60,7 +60,7 @@ tests after checking available memory and active jobs; mdx CI takes priority.
 
 | Machine | Solver install tier | Solver release route |
 |---|---|---|
-| LAB | exact accepted Radia wheel | wheel deployment; legacy phase8 migration pending |
+| LAB | exact accepted Radia wheel | `phase8 --target lab` (wheel over SSH) |
 | 100号機 | dedicated editable development venv; separate release runtime | explicit interpreter and source verification |
 | mdx1 | exact accepted Radia wheel | `phase8e` |
 | mdx2 | exact accepted Radia wheel | `phase8e` |

@@ -1129,6 +1129,33 @@ def _verify_final_pip_checks() -> int:
     return 0
 
 
+def _verify_lab_wheel():
+    """Verify LAB's installed solver wheel and every hashed RECORD payload."""
+    code = """import base64, hashlib, importlib.metadata as m, json, pathlib
+import radia
+version = VERSION_PLACEHOLDER
+d = m.distribution('radia')
+assert d.version == version and radia.__version__ == version, 'Radia version mismatch'
+assert not json.loads(d.read_text('direct_url.json') or '{}').get('dir_info', {}).get('editable', False), 'LAB must use a wheel'
+assert pathlib.Path(radia.__file__).resolve() == pathlib.Path(d.locate_file('radia/__init__.py')).resolve(), 'Shadowed Radia import'
+assert d.files, 'Missing wheel RECORD'
+checked = 0
+for f in d.files:
+    if f.hash is not None:
+        digest = hashlib.new(f.hash.mode, pathlib.Path(d.locate_file(f)).read_bytes()).digest()
+        actual = base64.urlsafe_b64encode(digest).rstrip(b'=').decode()
+        assert actual == f.hash.value, 'Wheel payload mismatch: ' + str(f)
+        checked += 1
+assert checked, 'Empty wheel hash manifest'
+print('LAB wheel verified:', version, checked)
+""".replace("VERSION_PLACEHOLDER", repr(_radia_version()))
+    encoded_code = base64.b64encode(code.encode('utf-8')).decode('ascii')
+    script = f'python -c "import base64; exec(base64.b64decode(\'{encoded_code}\'))"; exit $LASTEXITCODE'
+    encoded = base64.b64encode(script.encode('utf-16le')).decode('ascii')
+    result = run(['ssh', '102', 'pwsh', '-NoProfile', '-EncodedCommand', encoded], check=False)
+    return 0 if result.returncode == 0 else 4
+
+
 def _deploy_lab():
     """Deploy the published solver wheel to LAB; never recreate an editable."""
     return _deploy_pypi("102", "LAB")
@@ -1924,14 +1951,8 @@ def _record_release_intent_remote(ssh_host, label, repo):
 
 
 def _done_active_lab_source():
-    """Source ``done`` must verify: the release override, else the recorded intent."""
-    explicit = os.environ.get(EDITABLE_REPO_LAB_ENV, "").strip()
-    if explicit:
-        return explicit.rstrip("/\\")
-    entry = editable_intent.recorded_entry(editable_intent.load_intent(), "radia")
-    if entry and entry.get("source"):
-        return str(entry["source"]).rstrip("/\\")
-    return None
+    """Legacy helper name: verify the controller release tree, not LAB runtime."""
+    return str(REPO)
 
 
 def _repoint_argv(args):
@@ -2178,15 +2199,10 @@ def _run_retired_standalone_pyside_guard():
 
 
 def cmd_done(args):
-    """Run release gates without changing the verified editable sources.
+    """Verify the controller release source, LAB wheel and 100 editable runtime.
 
-    Exit 0 means the release is consistent across LAB / 100号機 / mdx1 / mdx2,
-    the repo is release-ready, the retired non-Cubit PySide panel surface has
-    not been reintroduced, AND LAB/100号機 still use the exact clean source
-    verified by this command. The source to verify is the release override
-    when set, otherwise the recorded editable intent; with neither the gate
-    reports UNVERIFIED (exit 5) instead of assuming a default tree. Any later
-    move of the development tier is an explicit ``repoint`` with a reason.
+    Exact-tag, native/source, four-machine and Simulink gates remain mandatory.
+    LAB's installed wheel is independent of the controller checkout location.
     """
     step("Definition-of-done check "
          "(preflight + editable tier + phase9 + retired standalone panel guard)")
@@ -2196,16 +2212,9 @@ def cmd_done(args):
         return rc
 
     active_source = _done_active_lab_source()
-    if active_source is None:
-        fail("active LAB editable source is UNVERIFIED: no "
-             f"{EDITABLE_REPO_LAB_ENV} override and no recorded editable intent "
-             "for radia. Set the override for this release, or record the "
-             "intended pointer with `release_quad repoint --record-current`. "
-             "No default source is assumed.")
-        return 5
     rc = _verify_local_release_source(active_source, _release_head())
     if rc != 0:
-        fail("active LAB editable source is not the exact clean release SHA.")
+        fail("controller release source is not the exact clean release SHA.")
         return rc
 
     rc = cmd_temp_shadows(argparse.Namespace(apply=False))
@@ -2218,7 +2227,7 @@ def cmd_done(args):
         fail("release HEAD is not anchored by its declared Radia version tag.")
         return rc
 
-    drift = _verify_lab_editable()
+    drift = _verify_lab_wheel()
     drift += _verify_100_editable()
     if drift > 0:
         fail(f"{drift} editable-tier check(s) drifted.  "
@@ -2263,7 +2272,7 @@ def cmd_done(args):
     suffix = (" The supplied Simulink candidate also passed all four MATLAB "
               "machines." if getattr(args, "simulink_package", None) else "")
     ok("DEFINITION OF DONE met. Release is consistent across LAB / 100号機 / "
-       "mdx1 / mdx2, LAB/100号機 remain on the exact verified editable "
+       "mdx1 / mdx2, LAB uses a verified wheel and 100号機 retains the verified editable "
        "source, and the retired standalone PySide panel surface is absent. "
        "The recorded editable intent names this release source; move it later "
        "only with an explicit `release_quad repoint --reason`." + suffix)
