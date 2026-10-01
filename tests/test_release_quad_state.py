@@ -101,7 +101,7 @@ def test_compute_host_install_resolves_and_checks_native_dependencies():
     start = source.index("def _deploy_pypi(")
     end = source.index("\ndef _deploy_100", start)
     deploy = source[start:end]
-    assert '--no-deps "radia==' in deploy
+    assert '--no-deps --only-binary=:all: "radia==' in deploy
     assert "_solver_dependency_pins()" in deploy
     assert "ngsolve_version = pins[\"ngsolve\"]" in deploy
     assert "netgen_version = pins[\"netgen-mesher\"]" in deploy
