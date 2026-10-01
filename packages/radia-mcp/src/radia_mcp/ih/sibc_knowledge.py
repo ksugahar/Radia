@@ -21,83 +21,33 @@ embedded PySide toolbar owns mesh export only; it is not an analysis panel.
 from radia_mcp.common import load_prompt
 
 IH_PEEC_FEM = """
-# IH Architecture: PEEC+FEM (v4.6.0)
+# IH architecture and current solver boundaries
 
-## Two Solver Paths
+Use explicit headless entry points rather than removed analysis-panel choices:
+- `python -m radia.panels.calc_inductance --help`: coil-only or supported
+  uniform-SIBC weak PEEC/BEM coupling.
+- `python -m radia.panels.calc_fem_kelvin --help`: HCurl FEM-SIBC with a
+  prescribed filament source and optional Kelvin exterior.
+- `python -m radia.panels.calc_fem_coilmesh --help`: volume coil A-V formulation.
 
-| Path | Coil | Workpiece | Backend selection |
-|------|------|-----------|-------------------|
-| **PEEC+FEM** (default) | PEEC filaments (no mesh) | FEM-SIBC + Kelvin | "PEEC+FEM" |
-| **ALL FEM** (reference) | FEM volume mesh | FEM-SIBC + Kelvin | "FEM" |
+For nonperiodic HCurl FEM-SIBC, `auto` selects AMS at p=1 and BDDC+AMS at
+p=2/3. BDDC uses an edge-only wirebasket and three AMS coarse cycles per
+application (`BDDC_AMS_COARSE_CYCLES = 3`); this is a measured IH recipe,
+not a guarantee for arbitrary problems. Compound A-V and unsupported periodic
+contracts do not inherit this qualification. Explicit direct solves use
+SparseCholesky. Consult the current CLI for restrictions and required labels.
 
-### Path 1: PEEC+FEM (Production, default)
+The scalar BEM route accepts uniform impedance only. A variable nodal Z_s
+requires source-side weighted surface stiffness and local loss integration;
+these are not implemented. Do not run historical per-panel ESIM recipes on
+this route. Linear solve acceptance uses the shared true residual limit 1e-6;
+nonlinear convergence and physical validation gates are separate.
 
-```
-STEP coil file -> auto centerline -> PEEC filaments (ms, no mesh)
-    -> Biot-Savart source field
-    -> FEM-SIBC + Kelvin on workpiece (sparse, seconds)
-    -> Picard back-reaction (1 step)
-```
-
-Advantages:
-- **No coil mesh** (STEP -> filaments, auto cross-section extraction)
-- **Coil rotation/translation** = coordinate transform only (no remesh)
-- Shifted Compact AMS preconditioner (HCurl p=1, TaskManager parallel)
-- HACApK saddle-point for large coils (N > 3000)
-- PRIMA MOR for broadband sweep (if needed)
-
-Solver options in the application configuration:
-- Dense LU: fastest for N < 3000 (default)
-- HACApK saddle-point: for N >= 3000
-- PRIMA: for frequency sweep (rarely needed in IH)
-
-Files:
-- `calc_peec.py` (headless computation)
-- `coil_from_cad.py` (STEP -> filaments)
-- `peec_topology.py` (PEECCircuitSolver)
-- `prima_hacapk.py` (PRIMA MOR)
-
-### Path 2: ALL FEM (Reference, validation)
-
-```
-Cubit .vol (coil + workpiece + air + Kelvin) -> full volume FEM
-    -> Omega or A-formulation + SIBC + Kelvin
-    -> Explicit SparseCholesky direct solve, or supported BDDC iterative solve
-```
-
-Advantages:
-- Full physics (volume currents, nonlinear materials)
-- Well-validated (2D axisym reference: 1.15%)
-- No approximations beyond mesh discretization
-
-Limitations:
-- Requires full volume mesh (coil + air + Kelvin)
-- Coil remesh required for geometry changes
-- Slower for parametric studies
-
-Files:
-- `calc_fem_kelvin.py` (headless computation)
-- `scalar_potential_solver.py` (Omega formulation)
-- `kelvin_solver.py` (Kelvin helpers)
-
-### When to Use Which
-
-| Scenario | Recommended |
-|----------|------------|
-| IH coil design (fast iteration) | **PEEC+FEM** |
-| Coil placement optimization | **PEEC+FEM** (rotation = coordinate transform) |
-| Nonlinear workpiece (BH curve) | **PEEC+FEM** (ESIM in FEM workpiece) |
-| Validation / reference | **ALL FEM** (full physics) |
-| Complex coil geometry (not helix) | **ALL FEM** (until STEP extraction matures) |
-
-### Workpiece Sub-options (both paths)
-
-| Workpiece | Description |
-|-----------|-------------|
-| off | Coil self-impedance only |
-| SIBC | Linear surface impedance (Cu, Al, fixed mu_r) |
-| ESIM | Nonlinear 1D cell problem (steel, BH curve, freq-dependent mu) |
+The native Simulink preview freezes a unit-current EM loss field and uses
+peak current squared scaling; it does not establish nonlinear thermal-EM
+backreaction. Refer to `induction_heating('overview')` for its explicit limits.
 """
+
 
 IH_ESIM = """
 # ESIM for Induction Heating Workpieces

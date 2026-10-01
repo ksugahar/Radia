@@ -35,72 +35,19 @@ Correct variable-coefficient assembly and local loss integration still need
 implementation and independent validation. Curvature or ESIM cell values must
 not be fed into the removed output-row scaling route.
 
-## Recipe 3: FEM + Kelvin + Robin BC (hole approach)
+## Recipe 3: Use the supported FEM-SIBC entry point
 
-Production reference: `src/radia/panels/calc_fem_kelvin.py`.
+Run `python -m radia.panels.calc_fem_kelvin --help` for the actual model and
+source arguments. The implementation owns the geometry, Kelvin mapping,
+source integration and residual checks; do not reconstruct them from the
+removed schematic snippet with undefined `nu_kelvin_cf`/`A`/`prec` objects.
 
-**KEY**: workpiece is SUBTRACTED from mesh (hole approach), NOT meshed.
-SIBC = Robin BC on the hole boundary. Avoids the -34% systematic error
-of the interface approach.
-
-```python
-from ngsolve import (Mesh, HCurl, Periodic, BilinearForm, LinearForm,
-                     GridFunction, curl, dx, ds, InnerProduct,
-                     specialcf, x, y, z, Preconditioner, BVP)
-import radia.sparsesolv_ngsolve as ssn
-
-mesh = Mesh("model.vol")  # hole approach + Kelvin pair
-
-# Verify-First Policy: check FES and Kelvin pair BEFORE solving
-print("Materials:", mesh.GetMaterials())
-print("Boundaries:", mesh.GetBoundaries())
-
-fes_base = HCurl(mesh, order=1, dirichlet="gnd",
-                  complex=True, gradientdomains={})
-fes = Periodic(fes_base)  # Kelvin pair = master/slave
-slaved = sum(fes_base.FreeDofs()) - sum(fes.FreeDofs())
-assert slaved > 0, "Kelvin Periodic identification failed"
-
-# Functional test: Set 1 on kelvin_int -> ratio on kelvin_ext should be 1.0
-gfu_test = GridFunction(fes); gfu_test.vec[:] = 0
-gfu_test.Set(1.0, definedon=mesh.Boundaries("kelvin_int"))
-ratio = Integrate(gfu_test*gfu_test, mesh,
-                   definedon=mesh.Boundaries("kelvin_ext")) / \
-        Integrate(gfu_test*gfu_test, mesh,
-                   definedon=mesh.Boundaries("kelvin_int"))
-assert abs(ratio - 1.0) < 1e-3, f"Kelvin ratio = {ratio}, expected 1.0"
-
-# Build system
-u, v = fes.TnT()
-nu = 1.0 / (mu0 * mur_air)
-nu_kelvin = nu_kelvin_cf(mesh)  # = nu0 * (r'/R)^2
-
-a = BilinearForm(fes, symmetric=False)
-a += nu * curl(u) * curl(v) * dx("air")
-a += nu_kelvin * curl(u) * curl(v) * dx("kelvin")
-a += (1j * omega / Zs) * InnerProduct(u.Trace(), v.Trace()) * \
-     ds(definedon=mesh.Boundaries("sibc"))  # Robin SIBC
-
-# Shifted preconditioner for air + conductor (eps = 1e-6 * nu)
-a_shifted = BilinearForm(fes, symmetric=False)
-a_shifted += nu * curl(u) * curl(v) * dx
-a_shifted += 1e-6 * nu * u * v * dx   # eps * mass shift on prec only
-
-c = Preconditioner(a_shifted, "compactams")  # Compact HX (HYPRE-free)
-
-# RHS: Biot-Savart from PEEC filaments
-f = LinearForm(fes)
-f += InnerProduct(H_inc_cf, v.Trace()) * \
-     ds(definedon=mesh.Boundaries("sibc"))
-
-# Solve via BiCGStab + Compact HX
-A.Assemble(); c.Update(); f.Assemble()
-inv = ssn.BiCGStab(matrix=A, c=c, tol=1e-7, maxiter=200)
-gfu.vec.data = inv * f.vec
-```
-
-**Validated**: 3D FEM-Kelvin L = 90.71 nH vs analytical torus 88.5 nH
-(+2.5% on coarse mesh, lab 2026-04-12). 2D axisym: L < 1%, P < 2%.
+For supported nonperiodic HCurl spaces, `--solver auto` uses AMS at p=1 and
+BDDC+AMS at p=2/3. The latter explicitly selects an edge-only wirebasket and
+three AMS coarse cycles. Periodic Kelvin and compound-space restrictions
+remain distinct; inspect the current dispatch errors rather than assume a
+preconditioner applies to every space. `sparsecholesky` is the direct option.
+No universal speed claim or new validation result follows from this recipe.
 
 ## Recipe 4: Verify-First Policy on a typical IH FES setup
 
