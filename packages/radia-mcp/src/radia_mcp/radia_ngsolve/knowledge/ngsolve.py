@@ -2052,12 +2052,11 @@ newer versions due to internal API changes (CoefficientFunction vtable, etc.).
 # Symptom: import crashes or method not found errors
 ImportError: DLL load failed while importing EMPY_Field
 
-# Fix: rebuild .pyd against the target NGSolve version
-# Or: pin NGSolve version in requirements.txt
-ngsolve==6.2.2405
+# Fix: rebuild .pyd against the installed NGSolve version, or install the
+# NGSolve version the extension was built against (the package metadata pin)
 ```
 
-**Rule**: Always pin NGSolve version for C++ extension compatibility.
+**Rule**: A C++ extension must match the exact NGSolve ABI it was built against.
 
 ## 27. Static Condensation Pattern (i-tutorials unit-1.4)
 

@@ -554,23 +554,17 @@ For a small transformer with 50 Hz nonlinear excitation:
 - Loss accuracy: < 0.5%
 - Flux-density distribution: visually identical
 
-### Connection to radia_mcp.mor and Sugahara lab CLN work
+### Connection to radia_mcp.mor
 
-The Hollaus-Schöberl-Schöbinger snapshot/POD approach is **one of**
-the canonical MOR techniques.  The Sugahara lab's specialty is
-**Cauer Ladder Network (CLN)** MOR (Sugahara as co-author on 5+ CLN
-papers; see `radia_mcp.mor.cln_knowledge`) — a **structurally
-different** Lanczos-based MOR.
+The Hollaus-Schöberl-Schöbinger snapshot/POD approach is one of the
+reduction routes Radia uses; see `mor_systematic` for the taxonomy.
 
 For motor analysis specifically:
 - POD-snapshot from MSFEM → Hollaus 2020 approach.  Works for any
   problem.
-- CLN from PEEC-coupled FE → Sugahara approach.  Requires loop-star
-  decomposition, but gives directly-interpretable RL ladder network
-  (good for circuit simulator hand-off).
-
-Both approaches can be combined: use MSFEM for the FE side, hand off
-to CLN for the circuit side.
+- A circuit-simulator hand-off uses a PRIMA congruence projection or a
+  Foster modal model, with the reduced order selected by the measured
+  operating-band error.
 """
 
 MOTOR_STRATEGY = """\

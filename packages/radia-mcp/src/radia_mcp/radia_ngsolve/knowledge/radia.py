@@ -3332,7 +3332,7 @@ The bridge is intentionally contract-based:
   link or start Python.  The legacy `radentry.cpp` compatibility layer is
   compiled with Python callback support disabled for MEX; numeric Radia calls
   remain available and callback objects fail explicitly at the boundary.
-* Fixed reduced IH and HCurl Eddy Bubble/CLN models use
+* Fixed reduced IH and HCurl Eddy Bubble models use
   `simulink.state_space.create/info/step/reset/destroy`.  Matrices and the
   initial state cross MATLAB/MEX once at block start, while each Simulink step
   transfers only the input and output.  Moving height-family interpolation

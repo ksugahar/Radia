@@ -14,7 +14,7 @@ Distribution: bundled inside the radia wheel as `radia.sparsesolv_ngsolve`.
 
 Import: from radia.sparsesolv_ngsolve import CompactAMSPreconditioner, COCRSolver, ...
 Install: pip install radia
-Requires: ngsolve >= 6.2.2603
+Requires: the NGSolve version pinned by the installed radia package
 
 History note: an earlier draft of this knowledge module (and CLAUDE.md)
 documented the symbols as living in `ngsolve.la`.  That integration
@@ -545,8 +545,7 @@ SPARSESOLV_BUILD = """
 ## PyPI (Recommended)
 
 ```bash
-pip install ngsolve>=6.2.2603     # Required dependency
-pip install radia    # Includes sparsesolv
+pip install radia    # Includes sparsesolv; installs the NGSolve version it was built against
 ```
 
 Verify:

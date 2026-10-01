@@ -539,7 +539,7 @@ R = 0.05   # Major radius [m]
 a = 0.005  # Minor radius [m]
 
 # --- Step 1: Create geometry ---
-cubit.init(['cubit', '-nojournal', '-batch'])
+cubit.init(['cubit', '-nojournal', '-nographics', '-batch'])
 cubit.cmd("reset")
 cubit.cmd(f"create torus major radius {R} minor radius {a}")
 

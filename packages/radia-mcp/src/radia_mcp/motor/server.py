@@ -1632,7 +1632,7 @@ def main():
             print(f"  motor_angle_periodic_rom({k!r}): {len(r)} chars")
             assert len(r) > 100, f"Motor angle-ROM topic {k} too short"
         assert "cycle basis" in motor_angle_periodic_rom("face_policy")
-        assert "positive-real CLN" in motor_angle_periodic_rom("time_domain")
+        assert "positive-real state system" in motor_angle_periodic_rom("time_domain")
         ports_text = motor_angle_periodic_rom("ports")
         assert "FMI source boundary" in ports_text
         assert "packaged FMU" in ports_text

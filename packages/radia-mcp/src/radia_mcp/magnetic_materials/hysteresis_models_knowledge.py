@@ -1401,10 +1401,9 @@ without needing a parameterized analytical model.
    prediction (avalanche dynamics) -- explains Barkhausen noise.
 3. **Sub-grid microstructure** can be captured by CA without
    explicit RVE meshing.
-4. Saito 兆古 lab (Hosei) is the same group that developed the
-   **Cauer Ladder Network (CLN)** reduction now in
-   `radia_mcp.mor` -- cross-reference for nonlinear material
-   reduction.
+4. Saito 兆古 lab (Hosei) also works on reduced circuit models of
+   magnetic devices; Radia's reduction routes are listed in
+   `mor_systematic`.
 
 ## CA-based Preisach implementation pseudocode
 
@@ -3463,9 +3462,8 @@ use the lab core energy-based method.
 The lab library 06_Chua folder (18 papers, the largest single-model
 collection) is dominated by:
 - **Saito 兆古 (Hosei University) Chua-type model identification**
-   (斎藤流Chua-model同定.pdf, Hybrid model papers) — same group as
-   the Cauer Ladder Network (CLN) work in `radia_mcp.mor` and the
-   cellular automaton model (`cellular_automaton` topic)
+   (斎藤流Chua-model同定.pdf, Hybrid model papers) — the same group as
+   the cellular automaton model (`cellular_automaton` topic)
 - **Ferroresonance circuit analysis** (Parallel Ferroresonance
    Circuit Analysis by Chua-type Magnetization Model; 鉄共振現象)
    — nonlinear LC resonance + chaos (cf. Bobbio 1997 PTM

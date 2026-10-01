@@ -167,7 +167,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "FEM formulations theory layer (A-Omega / T-Omega / H / "
                        "Reduced / Darwin, edge / HO / XFEM / IGA / DG, gauging "
                        "+ Kelvin, MSFEM, Schur circuit coupling, NGSolve hierarchical)",
-        "primary_tools": ["fem_usage"],
+        "primary_tools": ["fem_overview"],
         "related": [
             "bem",
             "differential-forms",
@@ -185,7 +185,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-bem",
         "description": "MoM/BEM theory: RWG, EFIE/MFIE/CFIE/PMCHWT, "
                        "Loop-Star, Calderon, Radia HDiv-VIM, HACApK, FEM-BEM",
-        "primary_tools": ["bem_usage"],
+        "primary_tools": ["bem_overview"],
         "related": [
             "fem",
             "peec",
@@ -202,7 +202,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "Sparse solver theory + decision tree: Krylov "
                        "(CG/BiCGSTAB/GMRES/COCG/COCR/IDR), preconditioners "
                        "(AMG, Hiptmair-Xu AMS), Biro-Preis A-V, tree-cotree",
-        "primary_tools": ["matrix_solvers_usage"],
+        "primary_tools": ["matrix_solvers_overview"],
         "related": ["radia-ngsolve", "fem"],
         "tags": ["solver", "theory"],
     },
@@ -211,7 +211,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-mor",
         "description": "Model Order Reduction: POD, PRIMA/Krylov, "
                        "hyperreduction (DEIM)",
-        "primary_tools": ["mor_usage"],
+        "primary_tools": ["mor_systematic"],
         "related": ["data-assimilation", "radia-ngsolve", "rna-mec"],
         "tags": ["solver"],
     },
@@ -273,7 +273,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "Motor analysis: ONELAB transient, Hollaus effective "
                        "material (lamination), Wakao autoencoder topology, "
                        "Kaimori-Mifune Darwin TD",
-        "primary_tools": ["motor_usage"],
+        "primary_tools": ["motor_validation_router", "motor_field_quick_check"],
         "related": [
             "electromagnet",
             "force",
@@ -290,7 +290,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-accelerator",
         "description": "Accelerator physics: beam optics, dipole/quad/sext "
                        "magnets, undulator/wiggler",
-        "primary_tools": ["accelerator_usage"],
+        "primary_tools": ["accelerator"],
         "related": ["electromagnet", "fusion-reactor", "nmr-mri"],
         "tags": ["application"],
     },
@@ -312,7 +312,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "Magnetic materials: hysteresis (Play/Energy lab core), "
                        "iron loss (Bertotti/Steinmetz/iGSE), JIS silicon steel, "
                        "PM datasheets, Osborn demag factor",
-        "primary_tools": ["magnetic_materials_usage"],
+        "primary_tools": ["magnetic_materials_hysteresis", "magnetic_materials_iron_loss"],
         "related": [
             "electromagnet",
             "ih",
@@ -353,7 +353,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-topology-optimization",
         "description": "Topology optimization: SIMP, level set, ON/OFF, MMA, "
                        "Wakao autoencoder+LS SynRM",
-        "primary_tools": ["topology_optimization_usage"],
+        "primary_tools": ["topology_opt_topology_derivative"],
         "related": [
             "evolutionary",
             "motor",
@@ -402,7 +402,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-pinn",
         "description": "Physics-Informed Neural Networks + Gaussian Processes "
                        "for EM",
-        "primary_tools": ["pinn_usage"],
+        "primary_tools": ["pinn"],
         "related": ["gnn", "bayesian-opt", "fem"],
         "tags": ["ml"],
     },
@@ -415,7 +415,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "Wireless Power Transfer: coil + compensation (SS/LCC/"
                        "LCL), efficiency, IEC 61980 / SAE J2954, FOD, dynamic EV / "
                        "robot / bearingless motor, capacitive / microwave / metamaterial",
-        "primary_tools": ["pcb_usage"],
+        "primary_tools": ["pcb_overview"],
         "related": [
             "litz-transmission",
             "maglev",
@@ -429,7 +429,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-ndt",
         "description": "Non-destructive testing: eddy current testing, "
                        "magnetic flux leakage, MFL signal analysis",
-        "primary_tools": ["ndt_usage"],
+        "primary_tools": ["ndt"],
         "related": ["ih", "magnetic-materials"],
         "tags": ["application"],
     },
@@ -438,7 +438,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-metamaterial",
         "description": "Metamaterials: homogenization, effective medium, "
                        "periodic structures",
-        "primary_tools": ["metamaterial_usage"],
+        "primary_tools": ["metamaterial"],
         "related": ["pcb", "litz-transmission"],
         "tags": ["application"],
     },
@@ -447,7 +447,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-nmr-mri",
         "description": "NMR/MRI: gradient coils, B0 shimming, RF coils, "
                        "field uniformity",
-        "primary_tools": ["nmr_mri_usage"],
+        "primary_tools": ["nmr_mri_bibliography"],
         "related": ["electromagnet", "accelerator", "radia-streamfunction"],
         "tags": ["application"],
     },
@@ -472,7 +472,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-team-benchmark",
         "description": "TEAM Workshop benchmark problems reference layer "
                        "(30 problems × physics class). ★ Lab core: 13, 20, 23, 32, 33b",
-        "primary_tools": ["team_benchmark"],
+        "primary_tools": ["team_catalog"],
         "related": ["fem", "bem", "force", "motor"],
         "tags": ["application"],
     },
@@ -619,7 +619,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "Conference poster generation and lint: templates, "
                        "viewing-distance font size, color contrast, zone "
                        "balance, QR audit, and print readiness.",
-        "primary_tools": ["poster_usage", "poster_lint",
+        "primary_tools": ["poster_health_report", "poster_compile", "poster_lint",
                             "poster_health_report"],
         "related": [
             "paper-writing",

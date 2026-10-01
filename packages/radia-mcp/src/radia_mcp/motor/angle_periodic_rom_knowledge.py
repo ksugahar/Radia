@@ -10,7 +10,7 @@ Use BDM1/BDM2 HDiv-MMM for magnetization and HCurl high-order parent spaces
 for divergence-free eddy current.  Reduction is role-aware: an air/exterior
 conductor face may carry a surface/SIBC trace, a conductor-conductor face must
 preserve loop transport, and ordinary low-response interior coordinates may
-be removed by mixed-Galerkin response compression.  Do not select p=6 as a
+be removed by Modal-bulk SIBC response compression.  Do not select p=6 as a
 universal answer; increase the parent order until the retained response,
 corner/edge observables, and passivity gates stop changing.
 """,
@@ -43,7 +43,8 @@ Advance flux implicitly with mechanical angle and speed.  Temperature scales
 the resistance by a positive diagonal congruence, preserving positive
 semidefiniteness; optional end-winding L/R and a lumped thermal state remain
 explicit model parameters.  A frequency-domain sqrt(s) DtN/SIBC term must be
-realized as a positive-real CLN state system before time stepping and must
+realized as a positive-real state system (Foster modal form or the DtN
+continued fraction) before time stepping and must
 never be replaced silently by a constant resistance.  Hysteresis uses a pure
 trial callback; commit its restart state only after the coupled step succeeds.
 """,

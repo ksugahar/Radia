@@ -152,7 +152,7 @@ def magnetic_materials_hysteresis(topic: str = "lab_core") -> str:
                                     (loop widening type-c / narrowing
                                     type-d for fluorescent lamps).
                                     SPICE/ferroresonance; Saito Hosei
-                                    lineage (= CLN MOR group).
+                                    lineage.
             "other_models"   - Niche: Chan (SPICE transformer, 3-param
                                     hyperbolic branches), Bouc-Wen
                                     (structural/piezo ODE), Potter-

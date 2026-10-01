@@ -79,6 +79,15 @@ crystallized as its own package.
   `except ImportError` in a library module no longer removes the tests that
   reach it (37 build123d test files were silently skipped on hosts without
   CadQuery).
+- Knowledge follows the solver policy: the `ngsolve://solvers` resource and
+  topology-optimization notes recommend SparseCholesky (no PARDISO/UMFPACK
+  rows), reduced models point to POD/PRIMA/Foster and the DtN continued
+  fraction instead of CLN, "mixed Galerkin" prose reads "Modal-bulk SIBC",
+  the maglev API path is `radia.maglev.mixed_galerkin`, the Cubit example runs
+  with `-nographics`, Gmsh transparency advice no longer points to ParaView
+  and NGSolve pins defer to package metadata.
+- Every `primary_tools` entry in the `radia_mcp.meta` catalog names a tool its
+  server registers (15 did not), checked against each live server.
 - PDF lock release (`doc_convert`, `poster`) stops only dedicated PDF viewers
   showing that file and passes the name through the environment; browsers are
   never stopped.
