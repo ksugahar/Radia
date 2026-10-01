@@ -132,14 +132,13 @@ def fit_nonnegative_debye(
     a = np.vstack([basis.real, basis.imag])
     b = np.concatenate([target.real, target.imag])
 
-    coeff: np.ndarray
+    # Clipping an unconstrained least-squares solution is a different fit, so
+    # a missing or failing NNLS is an error, not a fallback.
     try:
         from scipy.optimize import nnls  # type: ignore
-
-        coeff, _ = nnls(a, b)
-    except Exception:  # pragma: no cover - exercised only without SciPy/NNLS
-        coeff = np.linalg.lstsq(a, b, rcond=None)[0]
-        coeff = np.maximum(coeff, 0.0)
+    except ImportError as exc:
+        raise RuntimeError("cq_urn fitting requires scipy.optimize.nnls") from exc
+    coeff, _ = nnls(a, b)
 
     if fit_feedthrough:
         feedthrough = float(coeff[0])

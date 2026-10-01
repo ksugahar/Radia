@@ -72,14 +72,25 @@ def _sequence(value: object) -> Sequence[object]:
     return ()
 
 
+def _integer(value: object, default: int) -> int:
+    """Integer field or ``default`` for a missing / non-integral value."""
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and math.isfinite(value) and value.is_integer():
+        return int(value)
+    return default
+
+
 def _same_identity(left: Mapping[str, object], right: Mapping[str, object]) -> bool:
-    fields = (
-        "geometry_sha256",
-        "material_tables_sha256",
-        "excitation_sha256",
-        "coordinate_system",
+    """Both identities are present, well-formed and equal (absent never matches)."""
+    digests = ("geometry_sha256", "material_tables_sha256", "excitation_sha256")
+    return (
+        all(_sha256(left.get(f)) and left.get(f) == right.get(f) for f in digests)
+        and bool(left.get("coordinate_system"))
+        and left.get("coordinate_system") == right.get("coordinate_system")
     )
-    return all(left.get(field) == right.get(field) for field in fields)
 
 
 def _history_checks(history: Sequence[object]) -> dict[str, bool]:
@@ -253,7 +264,7 @@ def evaluate_team36_artifact(
             for name, value in EXPECTED_EXCITATION.items()
         ),
         "material_tables_are_complete": all(
-            int(material.get(name, 0)) >= minimum
+            _integer(material.get(name, 0), 0) >= minimum
             for name, minimum in {
                 "resistivity_point_count": 16,
                 "mu20_point_count": 20,
@@ -267,9 +278,9 @@ def evaluate_team36_artifact(
         and _sha256(thermal_mesh.get("topology_sha256")),
         "meshes_are_first_order_triangles": em_mesh.get("element_kinds") == ["triangle"]
         and thermal_mesh.get("element_kinds") == ["triangle"]
-        and int(em_mesh.get("element_order", 0)) == 1
-        and int(thermal_mesh.get("element_order", 0)) == 1
-        and int(em_mesh.get("billet_skin_layer_count", 0)) >= 4,
+        and _integer(em_mesh.get("element_order", 0), 0) == 1
+        and _integer(thermal_mesh.get("element_order", 0), 0) == 1
+        and _integer(em_mesh.get("billet_skin_layer_count", 0), 0) >= 4,
         "meshes_are_noncoincident": em_mesh.get("topology_sha256")
         != thermal_mesh.get("topology_sha256")
         and (
@@ -279,12 +290,12 @@ def evaluate_team36_artifact(
         "temperature_mapping_is_bidirectional_evidence": temperature_map.get("source_mesh_sha256")
         == thermal_mesh.get("topology_sha256")
         and temperature_map.get("target_mesh_sha256") == em_mesh.get("topology_sha256")
-        and int(temperature_map.get("sample_count", 0)) > 0
-        and int(temperature_map.get("outside_count", -1)) == 0,
+        and _integer(temperature_map.get("sample_count", 0), 0) > 0
+        and _integer(temperature_map.get("outside_count", -1), -1) == 0,
         "joule_mapping_is_conservative": power_map.get("source_mesh_sha256")
         == em_mesh.get("topology_sha256")
         and power_map.get("target_mesh_sha256") == thermal_mesh.get("topology_sha256")
-        and int(power_map.get("sample_count", 0)) > 0
+        and _integer(power_map.get("sample_count", 0), 0) > 0
         and _finite(power_map.get("maximum_relative_error"))
         and float(power_map["maximum_relative_error"]) <= 0.02
         and _finite(power_map.get("maximum_scale_deviation"))

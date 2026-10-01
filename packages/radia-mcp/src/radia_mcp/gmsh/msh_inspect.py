@@ -1433,11 +1433,15 @@ def _face_groups(mesh, element_type):
             full = nodes[noff[idx][:, None] + np.arange(widths[0])]
             groups.append((int(n), np.sort(key, axis=1), full))
         return groups
-    for n in (3, 4):
-        try:
-            corners = mesh.getElementFaceNodes(element_type, n, primary=True)
-        except Exception:  # Gmsh 4: no faces with n corners on this type
-            continue
+    # Gmsh 4: ask only for the face sizes this element family has
+    # (tet: tri, hex: quad, prism/pyramid: both), so an API failure raises.
+    primary = mesh.getElementProperties(element_type)[5]
+    corner_counts = {4: (3,), 8: (4,), 6: (3, 4), 5: (3, 4)}.get(int(primary))
+    if corner_counts is None:
+        raise RuntimeError("unsupported 3D element type %d (%d primary nodes)"
+                           % (element_type, primary))
+    for n in corner_counts:
+        corners = mesh.getElementFaceNodes(element_type, n, primary=True)
         if not len(corners):
             continue
         key = np.asarray(corners, dtype=np.int64).reshape(-1, n)
@@ -1599,6 +1603,8 @@ try:
             node_tags, _, _ = gmsh.model.mesh.getNodes()
             n_elem3d = sum(bt["n_elements"] for bt in by_type)
             n_bnd_faces, bnd_nodes = _boundary_faces(gmsh.model.mesh, etypes)
+            if n_bnd_faces == 0:
+                raise RuntimeError("a non-empty 3D mesh reported no boundary faces")
             n_nodes = int(len(node_tags))
             n_bnd_nodes = len(bnd_nodes)
             result["mesh_stats"] = {
@@ -1629,6 +1635,8 @@ try:
     finally:
         gmsh.finalize()
 except Exception as exc:
+    # An error after the quality verdict (e.g. in mesh_stats) is still a failure.
+    result["ok"] = False
     result["error"] = f"{type(exc).__name__}: {exc}"
 with open(out_path, "w", encoding="utf-8") as f:
     json.dump(result, f)

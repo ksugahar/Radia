@@ -248,6 +248,12 @@ class ChromaRetriever:
             logger.error(f"Failed to initialize ChromaDB: {e}")
             return False
 
+    def _require_initialized(self, operation: str) -> None:
+        if not self.is_initialized and not self.initialize():
+            raise RuntimeError(
+                f"ChromaDB collection '{self.collection_name}' at {self.db_dir} could not "
+                f"be opened for {operation}; see the log for the cause")
+
     def add_chunks(
         self,
         chunks: Sequence[dict],
@@ -262,8 +268,7 @@ class ChromaRetriever:
 
         Returns the number of chunks added.
         """
-        if not self.is_initialized and not self.initialize():
-            return 0
+        self._require_initialized("add_chunks")
         if not chunks:
             return 0
 
@@ -306,8 +311,7 @@ class ChromaRetriever:
             List of dicts: [{"id", "text", "metadata", "score"}, ...]
             (score in [0, 1] -- higher is more similar)
         """
-        if not self.is_initialized and not self.initialize():
-            return []
+        self._require_initialized("search")
 
         # Build effective `where` filter combining caller-supplied where
         # with language_filter. ChromaDB requires multi-clause filters
@@ -328,8 +332,8 @@ class ChromaRetriever:
                 include=["documents", "metadatas", "distances"],
             )
         except Exception as e:
-            logger.error(f"Search failed: {e}")
-            return []
+            # A failed query is not "no hits": surface it to the caller.
+            raise RuntimeError(f"ChromaDB search failed in '{self.collection_name}': {e}") from e
 
         out: list[dict] = []
         if res and res.get("documents") and res["documents"][0]:
@@ -474,7 +478,7 @@ def _ocr_page_ndlocr(page, dpi: int) -> str:
         os.makedirs(out, exist_ok=True)
         page.get_pixmap(dpi=dpi, colorspace=fitz.csRGB).save(png)
         subprocess.run([sys.executable, "ocr.py", "--sourceimg", png, "--output", out],
-                       cwd=src, check=True,
+                       cwd=src, check=True, timeout=600,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         txt = os.path.join(out, "page.txt")
         if os.path.isfile(txt):

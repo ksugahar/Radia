@@ -15,7 +15,7 @@ Iteration (Picard/fixed-point, default):
         4. gfu_{k+1} = airgap_solve(factor_k, fes, dirichlet_cf, source_lf)
         5. ||gfu_{k+1} - gfu_k|| / ||gfu_{k+1}|| < tol  →  converged
 
-Newton iteration (use_newton=True) replaces step 2 with the tangent operator
+A Newton tangent solve would replace step 2 with the tangent operator
 ∂(νB)/∂A (assembled via num_diff or analytic Jacobian).  For mild saturation
 (silicon steel at typical flux densities) Picard converges in 5-15 iterations;
 Newton is faster when ν changes steeply.
@@ -66,9 +66,8 @@ def age_motor_nonlinear_solve(
     niter: int = 20,
     tol: float = 1e-6,
     relax: float = 1.0,
-    use_newton: bool = False,
 ) -> tuple[GridFunction, dict]:
-    """Picard/Newton iteration for nonlinear AGE motor.
+    """Picard iteration for nonlinear AGE motor.
 
     Parameters
     ----------
@@ -86,12 +85,14 @@ def age_motor_nonlinear_solve(
     niter        : int       Maximum Picard iterations.
     tol          : float     Relative L2 convergence tolerance.
     relax        : float     Under-relaxation factor (1.0 = full update, 0.5 = half).
-    use_newton   : bool      NOT YET IMPLEMENTED — placeholder for future tangent solver.
 
     Returns
     -------
     gfu  : GridFunction  Converged solution.
     info : dict          ``{niter_used, converged, rel_change_history, torque}``.
+
+    Raises ``RuntimeError`` when the relative change of the unrelaxed update
+    does not fall below ``tol`` within ``niter`` iterations.
 
     Notes
     -----
@@ -104,9 +105,6 @@ def age_motor_nonlinear_solve(
             a.Assemble()
             return a
     """
-    if use_newton:
-        raise NotImplementedError("Newton tangent solver not yet implemented; use Picard (use_newton=False).")
-
     gfu_prev = GridFunction(fes)
     gfu_curr = GridFunction(fes)
     rel_history = []
@@ -121,17 +119,17 @@ def age_motor_nonlinear_solve(
         factor = airgap_factorize(a.mat, coupling, fes.FreeDofs())
         gfu_curr = airgap_solve(factor, fes, dirichlet_cf=dirichlet_cf, source_lf=source_lf)
 
-        # Under-relaxation
-        if relax < 1.0:
-            gfu_curr.vec.data = relax * gfu_curr.vec + (1.0 - relax) * gfu_prev.vec
-
-        # Convergence check
+        # Convergence is judged on the unrelaxed update, so relax < 1 does not
+        # loosen the tolerance.
         diff = gfu_curr.vec.CreateVector()
         diff.data = gfu_curr.vec - gfu_prev.vec
         norm_diff = math.sqrt(abs(InnerProduct(diff, diff, conjugate=False)))
         norm_curr = _solution_norm(gfu_curr)
         rel_change = norm_diff / norm_curr if norm_curr > 0 else float("inf")
         rel_history.append(rel_change)
+
+        if relax < 1.0:
+            gfu_curr.vec.data = relax * gfu_curr.vec + (1.0 - relax) * gfu_prev.vec
 
         if rel_change < tol:
             converged = True
@@ -145,6 +143,10 @@ def age_motor_nonlinear_solve(
             a = bilinear_fn(nu_cf)
         # If nu_cf_fn is None (linear problem), reuse same stiffness → converges in 1 iter
 
+    if not converged:
+        raise RuntimeError(
+            f"age_motor_nonlinear_solve: Picard did not converge in {niter} iterations "
+            f"(last relative change {rel_history[-1]:.3e}, tol {tol:g})")
     T = airgap_torque(coupling, gfu_curr)
     return gfu_curr, {
         "niter_used": k + 1,

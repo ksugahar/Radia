@@ -55,8 +55,8 @@ For silicon steel at typical operating points (B ≈ 1.5 T):
   - Initial guess = zero field (cold start); warm-starting from nearby angle
     saves ~30% iterations in a rotation sweep
 
-Newton (use_newton=True) is a future extension for faster convergence near
-saturation knee. Picard is adequate for most machine analysis workflows.
+Picard is adequate for most machine analysis workflows; non-convergence within
+``niter`` raises ``RuntimeError``.
 
 ## Hysteretic Iron (age_motor_hysteresis_sweep)
 
@@ -158,7 +158,6 @@ print(f"Average torque: {T_avg:.4f} N·m, ripple: {T_rip:.4f} N·m")
 | niter         | 20      | Max Picard iterations                           |
 | tol           | 1e-6    | Relative L2 convergence (||δu||/||u||)          |
 | relax         | 1.0     | Under-relaxation (reduce to 0.5-0.7 for steep ν) |
-| use_newton    | False   | Picard only; Newton planned for future release  |
 """
 
 AGE_MOTOR_WORKFLOW_SATURATION_MODELS = """

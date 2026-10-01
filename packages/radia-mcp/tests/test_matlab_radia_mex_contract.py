@@ -295,3 +295,16 @@ def test_optimize_server_builds_sheet_metal_mesh_routing_code():
     assert "CubitBatchInterval=4" in payload["matlab_code"]
     assert payload["hmatrix_rebuild_policy"].startswith("exactly once")
     assert payload["mesh_routes"]==["ngsolve_deform","ngsolve_refine","cubit_rebuild"]
+
+
+def test_missing_sources_never_report_complete_parity(monkeypatch):
+    from radia_mcp.matlab import runtime
+
+    monkeypatch.setattr(runtime, "_radia_repo_root", lambda: (None, None))
+    monkeypatch.setattr(runtime, "_radia_mex_commands", lambda: [])
+    monkeypatch.setattr(runtime, "_optuna_mex_commands", lambda: [])
+    monkeypatch.setattr(runtime, "_pybind_public_names", lambda: [])
+    monkeypatch.setattr(runtime, "_pybind_all_top_level_names", lambda: [])
+    contract = runtime.matlab_radia_mex_contract("mex")
+    assert contract["status"] == "source_unavailable"
+    assert contract["parity_status"] == "incomplete"

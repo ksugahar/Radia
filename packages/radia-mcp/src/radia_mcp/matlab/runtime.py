@@ -604,7 +604,9 @@ def matlab_radia_mex_contract(topic="all"):
                 if re.search(rf"\b{re.escape(symbol)}\b", candidate_text)
             )
     retired_unsafe_c_abi_leaks.sort()
-    parity_complete = not (
+    # Parity is a claim about inspected sources: with no command or pybind
+    # surface there is nothing to compare, which is never "complete".
+    parity_complete = bool(commands and pybind_names) and not (
         pybind_missing or internal_missing or internal_unclassified
         or class_missing or class_unmapped or retired_unsafe_constructor_leaks
         or retired_unsafe_c_abi_leaks

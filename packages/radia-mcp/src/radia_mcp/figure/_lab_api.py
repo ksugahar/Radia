@@ -282,15 +282,25 @@ def save_lab_figure(fig, path_no_ext, embed_width_cm=None, *,
         p = path_no_ext + ".png"; fig.savefig(p, dpi=dpi); wrote.append(p)
 
     # ---- post-save gates (final bytes) ----
-    if save_pdf:
-        pdf = path_no_ext + ".pdf"
-        tnr_bad = _check_tnr_in_pdf(pdf)
-        if tnr_bad:
-            raise RuntimeError("save_lab_figure: " + "; ".join(tnr_bad))
-        jf = _check_no_japanese_font_in_pdf(pdf)
-        if jf:
-            raise ValueError("save_lab_figure: CJK font embedded in PDF:\n  "
-                             + "\n  ".join(jf))
+    # A figure that fails a gate is removed, so a later build cannot pick it up.
+    try:
+        if save_pdf:
+            pdf = path_no_ext + ".pdf"
+            tnr_bad = _check_tnr_in_pdf(pdf)
+            if tnr_bad:
+                raise RuntimeError("save_lab_figure: " + "; ".join(tnr_bad))
+            jf = _check_no_japanese_font_in_pdf(pdf)
+            if jf:
+                raise ValueError("save_lab_figure: CJK font embedded in PDF:\n  "
+                                 + "\n  ".join(jf))
+    except Exception:
+        for written in wrote:
+            try:
+                os.remove(written)
+            except OSError:
+                pass
+        plt.close(fig)
+        raise
 
     if ew:
         latex = r"\includegraphics[width=%.2fcm]{%s}" % (ew, base)
@@ -376,10 +386,12 @@ def legend_no_overlap(ax, *, frameon=False, outside_threshold: float = 0.03,
         return "none"
 
     def _worst():
+        # An overlap check that cannot run is treated as overlapping, so the
+        # placement escalates instead of keeping a legend that may hide data.
         try:
             return max((o["fraction"] for o in check_legend_overlap(ax)), default=0.0)
         except Exception:
-            return 0.0
+            return float("inf")
 
     ax.legend(loc="best", frameon=frameon, **legend_kw)
     if _worst() <= outside_threshold:

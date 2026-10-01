@@ -21,38 +21,18 @@ from ngsolve import (HCurl, H1, Periodic, NumberSpace, FESpace, BilinearForm,
                      curl, grad, dx, Integrate, Conj, Variation, Preconditioner,
                      x, y, sqrt, ds, BND)
 
-from ._direct import solve_symmetric
+from ._direct import CheckedInverse, check_residual, require_direct_inverse, solve_symmetric
 
 MU0 = 4.0e-7 * math.pi
 NU0 = 1.0 / MU0
 
 
-def _direct_inverse(matrix, freedofs, inverse, where=""):
-    """Direct sparse factorization with an actionable message on the 3D curl-curl
-    integer-overflow ceiling.
-
-    NGSolve's sparsecholesky/umfpack factorisation of a 3D HCurl (curl-curl) system
-    overflows around ~84k order-2 elements, surfacing as a cryptic
-    "bad array new length". That is INTEGER OVERFLOW in the factorisation fill-in,
-    NOT out-of-RAM -- it triggers with tens of GB still free. Re-raise with the fix
-    rather than letting the opaque message escape. (Bug -> permanent guard, runtime
-    layer: see the note in rules.py for why this is not a static lint.)
-    """
-    try:
-        return matrix.Inverse(freedofs, inverse=inverse)
-    except Exception as e:
-        msg = str(e).lower()
-        if "array new length" in msg:
-            raise RuntimeError(
-                "Direct solver '{}' overflowed the factorization index space{} -- "
-                "this is the ~84k order-2 3D HCurl (curl-curl) ceiling: integer "
-                "overflow in the sparse fill-in, NOT out-of-RAM. Switch to an "
-                "iterative solver -- CG with a BDDC/AMG preconditioner "
-                "(Preconditioner(a, 'bddc') registered BEFORE a.Assemble()) -- or "
-                "coarsen the mesh / lower the element order.".format(
-                    inverse, (" in " + where) if where else "")
-            ) from e
-        raise
+def _raise_not_converged(what, max_iter, cur, prev):
+    change = (abs(cur - prev) / max(abs(cur), 1e-30)
+              if prev is not None else float("nan"))
+    raise RuntimeError(
+        f"{what}: Picard iteration did not converge in {max_iter} iterations "
+        f"(last relative change {change:.3e}); raise max_iter or lower relax")
 
 
 def periodic_h1(mesh, order=2, dirichlet="", antiperiodic=False):
@@ -2278,7 +2258,7 @@ def solve_planar_magnetostatic(mesh, nu, Jz=None, magnets=None, order=2,
     a.Assemble()
     f.Assemble()
     gfu = GridFunction(fes)
-    gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+    gfu.vec.data = solve_symmetric(a.mat, fes.FreeDofs(), f.vec, "planar magnetostatic solve")
     return gfu
 
 
@@ -3278,13 +3258,15 @@ def solve_planar_magnetostatic_nonlinear(mesh, nu_of_B, Jz=None, magnets=None,
         a.Assemble()
         f.Assemble()
         gnew = GridFunction(fes)
-        gnew.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+        gnew.vec.data = solve_symmetric(a.mat, fes.FreeDofs(), f.vec, "planar nonlinear Picard solve")
         gfu.vec.data = (1.0 - relax) * gfu.vec + relax * gnew.vec
         Bc = CoefficientFunction((grad(gfu)[1], -grad(gfu)[0]))
         cur = Integrate(InnerProduct(Bc, Bc) * dx, mesh)
         if prev is not None and it + 1 >= min_iter and abs(cur - prev) < tol * max(abs(cur), 1e-30):
             break
         prev = cur
+    else:
+        _raise_not_converged("solve_planar_magnetostatic_nonlinear", max_iter, cur, prev)
     return gfu
 
 
@@ -3539,6 +3521,8 @@ def solve_planar_eddy_nonlinear(mesh, nu_of_B, sigma, omega, Jz=None, order=3,
         if prev is not None and it + 1 >= min_iter and abs(cur - prev) < tol * max(abs(cur), 1e-30):
             break
         prev = cur
+    else:
+        _raise_not_converged("solve_planar_eddy_nonlinear", max_iter, cur, prev)
     return gfu
 
 
@@ -3775,7 +3759,8 @@ def _solve_with_axisymmetric_point_potentials(
         fes, mesh, point_potentials
     )
     if not evidence:
-        return matrix.Inverse(fes.FreeDofs(), inverse=inverse) * rhs
+        require_direct_inverse(inverse)
+        return solve_symmetric(matrix, fes.FreeDofs(), rhs, "axisymmetric solve")
 
     free_default = fes.FreeDofs()
     free = BitArray(fes.ndof)
@@ -3790,7 +3775,9 @@ def _solve_with_axisymmetric_point_potentials(
     adjusted.data = rhs - matrix * known
     solution = known.CreateVector()
     solution.data = known
-    solution.data += matrix.Inverse(free, inverse=inverse) * adjusted
+    require_direct_inverse(inverse)
+    solution.data += solve_symmetric(matrix, free, adjusted,
+                                     "axisymmetric point-potential solve")
     return solution
 
 
@@ -4230,7 +4217,7 @@ def _solve_axi_magnetostatic_vdof_order1(
     for i in range(nv):
         freeb[i] = bool(free[i]) and (r_node[i] > 1e-9)   # drop dead axis (r~0) DOFs
     gfu = GridFunction(fes)
-    gfu.vec.data = aK.mat.Inverse(freeb, inverse="sparsecholesky") * fvec
+    gfu.vec.data = solve_symmetric(aK.mat, freeb, fvec, "axisymmetric V-DOF solve")
     return gfu
 
 
@@ -4489,6 +4476,8 @@ def solve_axi_magnetostatic_nonlinear(
         if prev is not None and it + 1 >= min_iter and abs(cur - prev) < tol * max(abs(cur), 1e-30):
             break
         prev = cur
+    else:
+        _raise_not_converged("solve_axi_magnetostatic_nonlinear", max_iter, cur, prev)
     return gfu
 
 
@@ -4666,6 +4655,10 @@ def solve_axi_eddy_harmonic_nonlinear(mesh, mu_of_B, sigma_cf, omega, applied_A,
         sweeps = it + 1
         if it > 0 and dnorm < tol:
             break
+    else:
+        raise RuntimeError(
+            f"solve_axi_eddy_harmonic_nonlinear: Picard iteration did not converge in "
+            f"{max_iter} iterations (last relative change {dnorm:.3e})")
 
     P_eddy = 0.5 * omega * omega * float(np.real(np.conj(xf) @ (M @ xf)))
     return gfu, P_eddy
@@ -4702,8 +4695,8 @@ def solve_magnetostatic_Aform(mesh, nu, source=None, curl_source=None, order=2,
     a.Assemble()
     f.Assemble()
     gfu = GridFunction(fes)
-    gfu.vec.data = _direct_inverse(a.mat, fes.FreeDofs(), "sparsecholesky",
-                                   "solve_magnetostatic_Aform") * f.vec
+    gfu.vec.data = solve_symmetric(a.mat, fes.FreeDofs(), f.vec,
+                                   "solve_magnetostatic_Aform")
     return gfu
 
 
@@ -4735,8 +4728,8 @@ def solve_scattered_uniform_field(mesh, mu_r_by_material, B0_vec, order=2,
     f += InnerProduct(nu_pert * B0cf, curl(v)) * dx
     a.Assemble(); f.Assemble()
     gfA = GridFunction(fes)
-    gfA.vec.data = _direct_inverse(a.mat, fes.FreeDofs(), "sparsecholesky",
-                                   "solve_scattered_uniform_field") * f.vec
+    gfA.vec.data = solve_symmetric(a.mat, fes.FreeDofs(), f.vec,
+                                   "solve_scattered_uniform_field")
     return gfA
 
 
@@ -4825,14 +4818,16 @@ def solve_magnetostatic_nonlinear(mesh, nu_of_B, source=None, order=2,
         a += nu_of_B(curl(gfu)) * curl(u) * curl(v) * dx + reg * NU0 * u * v * dx
         a.Assemble()
         gnew = GridFunction(fes)
-        gnew.vec.data = _direct_inverse(a.mat, fes.FreeDofs(), "sparsecholesky",
-                                        "solve_magnetostatic_nonlinear") * f.vec
+        gnew.vec.data = solve_symmetric(a.mat, fes.FreeDofs(), f.vec,
+                                        "solve_magnetostatic_nonlinear")
         gfu.vec.data = (1.0 - relax) * gfu.vec + relax * gnew.vec
         cur = probe(curl(gfu))
         if (prev is not None and it + 1 >= min_iter
                 and abs(cur - prev) < tol * max(abs(cur), 1e-30)):
             break
         prev = cur
+    else:
+        _raise_not_converged("solve_magnetostatic_nonlinear", max_iter, cur, prev)
     return gfu
 
 
@@ -4900,6 +4895,10 @@ def solve_magnetostatic_newton(mesh, source, energy_density, steel_region,
             inv = CGSolver(mat=a.mat, pre=pre.mat, tol=cg_tol,
                            maxiter=cg_maxiter, printrates=False)
             w.data = inv * r
+            if inv.iterations >= cg_maxiter:
+                raise RuntimeError(
+                    f"solve_magnetostatic_newton: CG did not reach cg_tol={cg_tol:g} in "
+                    f"{cg_maxiter} iterations (load step {step}, Newton it {it + 1})")
             err = InnerProduct(w, r)
             if abs(err) < tol:
                 if verbose:
@@ -4911,9 +4910,17 @@ def solve_magnetostatic_newton(mesh, source, energy_density, steel_region,
             while (a.Energy(xn) - InnerProduct(fv, xn)) > E0 - 1e-4 * tau * abs(err) and tau > 1e-10:
                 tau *= 0.5
                 xn.data = gfu.vec + tau * w
+            if tau <= 1e-10:
+                raise RuntimeError(
+                    "solve_magnetostatic_newton: line search found no energy decrease "
+                    f"(load step {step}, Newton it {it + 1}, err={err:.3e})")
             gfu.vec.data = xn
             if verbose:
                 print(f"  [load {step}/{load_steps}] it{it+1} err={err:.2e} tau={tau:.3g}", flush=True)
+        else:
+            raise RuntimeError(
+                f"solve_magnetostatic_newton: Newton did not converge in {max_iter} "
+                f"iterations at load step {step}/{load_steps} (err={err:.3e}, tol={tol:g})")
     return gfu
 
 
@@ -4981,8 +4988,9 @@ def solve_eddy_current_harmonic_APhi(
                                    + grad(gfAPhi.components[1]))``
     """
     from ngsolve import Periodic, H1, HCurl, BilinearForm, LinearForm, \
-        GridFunction, Preconditioner, TaskManager, curl, grad, dx
+        GridFunction, Preconditioner, curl, grad, dx
     from ngsolve.krylovspace import GMRes
+    import numpy as np
 
     fes_A_base  = HCurl(mesh, order=order, complex=True,
                         dirichlet=dirichlet, nograds=True)
@@ -5016,12 +5024,18 @@ def solve_eddy_current_harmonic_APhi(
     gf = GridFunction(fes)
     gf.vec[:] = 0
 
-    with TaskManager():
-        a.Assemble()
-        pre.Update()
-        f.Assemble()
+    # TaskManager is caller-owned (radia-mcp FE policy).
+    a.Assemble()
+    pre.Update()
+    f.Assemble()
 
     GMRes(a.mat, f.vec, pre=pre.mat, x=gf.vec,
           tol=tol, maxsteps=maxsteps, restart=restart, printrates=False)
 
+    residual = f.vec.CreateVector()
+    residual.data = f.vec - a.mat * gf.vec
+    free = np.fromiter((bool(bit) for bit in fes.FreeDofs()), dtype=bool,
+                       count=len(gf.vec))
+    check_residual(a.mat, residual.FV().NumPy(), gf.vec.FV().NumPy(),
+                   f.vec.FV().NumPy(), free, "solve_eddy_current_harmonic_APhi GMRes")
     return gf

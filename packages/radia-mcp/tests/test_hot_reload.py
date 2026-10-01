@@ -361,3 +361,49 @@ def test_tool_refresh_failure_rolls_back_code_and_registry(tmp_path, monkeypatch
 
     sys.modules.pop("registrypkg.tools", None)
     sys.modules.pop("registrypkg", None)
+
+
+def test_name_imported_from_a_reloaded_module_is_rebound(tmp_path, monkeypatch):
+    pkg = tmp_path / "rebindpkg"
+    pkg.mkdir()
+    _write(pkg / "__init__.py", "")
+    _write(pkg / "knowledge.py", "def get_text(): return 'one'\n")
+    _write(pkg / "server.py", "from .knowledge import get_text\n\ndef rebind_ping(): return get_text()\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    server = importlib.import_module("rebindpkg.server")
+    mcp = FastMCP("rebind-test")
+    server.LIVE_MCP = mcp
+    mcp.add_tool(server.rebind_ping)
+    hot_reload._prime_mtimes("rebindpkg")
+
+    _write(pkg / "knowledge.py", "def get_text(): return 'two'  # edited\n")
+    report = hot_reload.reload_and_refresh(mcp, "rebindpkg")
+    assert report["reloaded"] == ["rebindpkg.knowledge"]
+    assert report["rebound"] == ["rebindpkg.server.get_text"]
+    assert _call(mcp, "rebind_ping") == "two"
+
+    for name in [m for m in sys.modules if m.startswith("rebindpkg")]:
+        sys.modules.pop(name, None)
+
+
+def test_every_module_owning_a_server_is_protected(tmp_path, monkeypatch):
+    pkg = tmp_path / "packpkg"
+    (pkg / "a").mkdir(parents=True)
+    (pkg / "b").mkdir()
+    for path in (pkg / "__init__.py", pkg / "a" / "__init__.py", pkg / "b" / "__init__.py"):
+        _write(path, "")
+    body = "from mcp.server.fastmcp import FastMCP\nmcp = FastMCP('{0}')\n"
+    _write(pkg / "a" / "server.py", body.format("a"))
+    _write(pkg / "b" / "server.py", body.format("b"))
+    monkeypatch.syspath_prepend(str(tmp_path))
+    a = importlib.import_module("packpkg.a.server")
+    importlib.import_module("packpkg.b.server")
+    hot_reload._prime_mtimes("packpkg")
+
+    _write(pkg / "b" / "server.py", body.format("b") + "# edited\n")
+    report = hot_reload.reload_and_refresh(a.mcp, "packpkg")
+    assert report["reloaded"] == []
+    assert report["restart_required"] == ["packpkg.b.server"]
+
+    for name in [m for m in sys.modules if m.startswith("packpkg")]:
+        sys.modules.pop(name, None)

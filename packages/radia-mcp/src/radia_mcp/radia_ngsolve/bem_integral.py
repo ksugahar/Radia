@@ -67,7 +67,7 @@ def single_layer_capacitance(mesh, order=3, intorder=12, curve_order=4, tol=1e-9
     V = _laplace_sl(u, v, intorder)                                     # Laplace single layer (SPD)
     rhs = LinearForm(1.0 * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble()
     mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
-    pre = mass.Inverse(freedofs=fes.FreeDofs())
+    pre = mass.Inverse(freedofs=fes.FreeDofs(), inverse="sparsecholesky")
     sigma = GridFunction(fes)
     inv = CGSolver(V.mat, pre, printrates=False, maxiter=maxiter, tol=tol)
     sigma.vec.data = inv * rhs.vec
@@ -143,7 +143,7 @@ def conductor_polarizability(mesh, axis="z", order=3, intorder=12, maxiter=600):
     V = _laplace_sl(u, v, intorder)
     rhs = LinearForm(coord * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble()
     mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
-    pre = mass.Inverse(freedofs=fes.FreeDofs())
+    pre = mass.Inverse(freedofs=fes.FreeDofs(), inverse="sparsecholesky")
     sigma = GridFunction(fes)
     inv = CGSolver(V.mat, pre, printrates=False, maxiter=maxiter)
     sigma.vec.data = inv * rhs.vec
@@ -218,7 +218,7 @@ def helmholtz_exterior_point_source(kappa, a=1.0, maxh=0.4, order=3, rext=3.0, i
     g = cmath.exp(1j * kappa * a) / (4.0 * np.pi * a)                      # constant interior-source trace
     rhs = LinearForm(g * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble()
     mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
-    pre = mass.Inverse(freedofs=fes.FreeDofs())
+    pre = mass.Inverse(freedofs=fes.FreeDofs(), inverse="sparsecholesky")
     sigma = GridFunction(fes)
     inv = GMResSolver(V.mat, pre, printrates=False, maxiter=1000, tol=1e-10)
     sigma.vec.data = inv * rhs.vec
@@ -273,7 +273,7 @@ def helmholtz_soundsoft_sphere_scattering(kappa, a=1.0, maxh=0.35, order=3, rext
     uinc = ng.exp(1j * kappa * ng.z)                                      # incident plane wave (+z)
     rhs = LinearForm(-uinc * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble()
     mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
-    pre = mass.Inverse(freedofs=fes.FreeDofs())
+    pre = mass.Inverse(freedofs=fes.FreeDofs(), inverse="sparsecholesky")
     sigma = GridFunction(fes)
     inv = GMResSolver(V.mat, pre, printrates=False, maxiter=2000, tol=1e-10)
     sigma.vec.data = inv * rhs.vec
@@ -341,7 +341,7 @@ def helmholtz_soundhard_sphere_scattering(kappa, a=1.0, maxh=0.35, order=3, rext
     mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
     nrm = specialcf.normal(3)
     g = -1j * kappa * nrm[2] * ng.exp(1j * kappa * ng.z)                  # Neumann datum sigma = -du_inc/dn
-    pre = mass.Inverse(freedofs=fes.FreeDofs())
+    pre = mass.Inverse(freedofs=fes.FreeDofs(), inverse="sparsecholesky")
     bg = LinearForm(g * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble()
     sigma = GridFunction(fes)
     sigma.vec.data = pre * bg.vec                                          # project the Neumann data to coeffs
@@ -397,7 +397,7 @@ def helmholtz_sphere_radiation_impedance(kappa, a=1.0, maxh=0.3, order=3, intord
     V = _helmholtz_sl(u, v, kappa, intorder)
     K = _helmholtz_dl(u, v, kappa, intorder)
     mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
-    pre = mass.Inverse(freedofs=fes.FreeDofs())
+    pre = mass.Inverse(freedofs=fes.FreeDofs(), inverse="sparsecholesky")
     area = Integrate(ng.CoefficientFunction(1.0) * ds, mesh).real
     res = {"ndof": fes.ndof, "kappa": kappa, "ka": kappa * a}
     for n, sig_cf, label in [(0, ng.CoefficientFunction(1.0 + 0j), "monopole"),
@@ -445,7 +445,7 @@ def helmholtz_cfie_soundsoft_sphere(kappa, a=1.0, maxh=0.35, order=3, rext=2.0, 
     mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
     rhs = LinearForm(-ng.exp(1j * kappa * ng.z) * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble()
     psi = GridFunction(fes)
-    pre = mass.Inverse(freedofs=fes.FreeDofs())
+    pre = mass.Inverse(freedofs=fes.FreeDofs(), inverse="sparsecholesky")
     inv = GMResSolver(cfo.mat + 0.5 * mass, pre, printrates=False, maxiter=3000, tol=1e-10)
     psi.vec.data = inv * rhs.vec
     nrm = specialcf.normal(3)
@@ -545,7 +545,7 @@ def helmholtz_soundsoft_far_field(kappa, a=1.0, maxh=0.3, order=3, intorder=12,
     mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
     rhs = LinearForm(-ng.exp(1j * kappa * ng.z) * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble()
     psi = GridFunction(fes)
-    pre = mass.Inverse(freedofs=fes.FreeDofs())
+    pre = mass.Inverse(freedofs=fes.FreeDofs(), inverse="sparsecholesky")
     inv = GMResSolver(cfo.mat + 0.5 * mass, pre, printrates=False, maxiter=3000, tol=1e-10)
     psi.vec.data = inv * rhs.vec
     nrm = specialcf.normal(3)
@@ -629,7 +629,7 @@ def helmholtz_soundhard_far_field(kappa, a=1.0, maxh=0.3, order=3, intorder=12,
     mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
     nrm = specialcf.normal(3)
     g = -1j * kappa * nrm[2] * ng.exp(1j * kappa * ng.z)                  # Neumann datum sigma = -du_inc/dn
-    pre = mass.Inverse(freedofs=fes.FreeDofs())
+    pre = mass.Inverse(freedofs=fes.FreeDofs(), inverse="sparsecholesky")
     bg = LinearForm(g * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble()
     sigma = GridFunction(fes)
     sigma.vec.data = pre * bg.vec                                          # project the Neumann data to coeffs
@@ -714,7 +714,7 @@ def helmholtz_impedance_far_field(kappa, a=1.0, beta=0.5, maxh=0.3, order=3, int
     mass = BilinearForm(u.Trace() * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble().mat
     nrm = specialcf.normal(3)
     g = -1j * kappa * (nrm[2] + beta) * ng.exp(1j * kappa * ng.z)         # Robin datum -(dn u_inc + i k beta u_inc)
-    pre = mass.Inverse(freedofs=fes.FreeDofs())
+    pre = mass.Inverse(freedofs=fes.FreeDofs(), inverse="sparsecholesky")
     bg = LinearForm(g * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble()
     gproj = GridFunction(fes)
     gproj.vec.data = pre * bg.vec                                          # L2 projection of the Robin datum g
@@ -1114,7 +1114,7 @@ def sphere_exterior_dtn_eigenvalue(R=1.0, maxh=0.4, order=1, intorder=10):
     mass = mass_bf.mat
     rhs_f = LinearForm((ng.z / R) * v.Trace() * ds(bonus_intorder=intorder - 4)).Assemble()
     gf_f = GridFunction(fes)
-    gf_f.vec.data = mass.Inverse(freedofs=fes.FreeDofs()) * rhs_f.vec
+    gf_f.vec.data = mass.Inverse(freedofs=fes.FreeDofs(), inverse="sparsecholesky") * rhs_f.vec
     f_vec = gf_f.vec.FV().NumPy()[:]
     sigma_vec = dtn @ f_vec                              # σ = Λ f
     # Exact: σ = −2/R × f for the n=1 harmonic

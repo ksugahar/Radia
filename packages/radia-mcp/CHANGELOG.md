@@ -44,6 +44,33 @@ crystallized as its own package.
   `build123d_try` compiles the script verbatim (`from __future__` and
   triple-quoted text survive); `build123d_try_race` keeps submission order,
   rejects unknown `prefer` rules and reports `error` when no variant wins.
+- radia-ngsolve direct solves all go through the residual-checked
+  SparseCholesky path (`_direct.solve_symmetric` / `CheckedInverse`,
+  ||r||/||b|| <= 1e-6); `inverse=` arguments other than `sparsecholesky` raise,
+  and BEM mass solves no longer use the build's default inverse.
+- The Picard solvers (`solve_planar_magnetostatic_nonlinear`,
+  `solve_planar_eddy_nonlinear`, `solve_axi_magnetostatic_nonlinear`,
+  `solve_axi_eddy_harmonic_nonlinear`, `solve_magnetostatic_nonlinear`),
+  `solve_magnetostatic_newton` (Newton, CG and line search) and
+  `age_motor_nonlinear_solve` raise `RuntimeError` instead of returning an
+  unconverged field. `age_motor_nonlinear_solve` judges convergence on the
+  unrelaxed update and drops the unimplemented `use_newton` switch.
+  `solve_eddy_current_harmonic_APhi` checks the GMRes true residual and leaves
+  TaskManager to the caller. `cq_urn` no longer substitutes a clipped
+  least-squares fit when NNLS is unavailable.
+- `gmsh_mesh_quality` reports `ok: false` when mesh statistics fail and no
+  longer hides Gmsh 4 face-API errors.
+- `ih_team36_validate` never matches two absent identities and treats
+  non-integral counts as a failed check; the MATLAB MEX contract never reports
+  complete parity without inspected sources.
+- Worker crashes in motor/FEM `.vol` tools report `worker_failed` instead of
+  `invalid_input`. Literature indexing fails when ChromaDB cannot be opened,
+  a failed semantic query raises instead of returning no hits, OCR has a
+  timeout and `folder` cannot leave `RADIA_LIT_ROOT`. A lab figure that fails
+  a post-save gate is deleted.
+- Hot reload rebinds names imported from reloaded modules, protects every
+  module that owns a FastMCP server (capability packs host several), and
+  capability packs re-read each domain's tool list instead of a startup copy.
 - PDF lock release (`doc_convert`, `poster`) stops only dedicated PDF viewers
   showing that file and passes the name through the environment; browsers are
   never stopped.
