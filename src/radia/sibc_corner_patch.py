@@ -1,5 +1,9 @@
 """Matched-patch correction for a surface impedance near tips and corners.
 
+Scope: this patch uses constant mu0 in both conductor and air (mu_r=1).
+It is not a ferromagnetic or nonlinear-permeability corner correction; supplying
+a magnetic outer impedance does not change the patch PDE.
+
 A Leontovich impedance is the leading term of an expansion in the ratio of the
 skin depth to the radius of curvature of the surface.  Where that ratio stops
 being small -- a rounded tip only a skin depth or two across, or a genuine
