@@ -1115,7 +1115,7 @@ def sl_pair_singular(verts, tri_a, tri_b, n_q=5):
 #
 # Galerkin DL convention (matches NGSolve.bem LaplaceDL):
 #   M_ij = int_{T_a} int_{T_b} L_i^a(r)
-#                              [ -(r - r')·n_y / (4*pi |r-r'|^3) ]
+#                              [ +(r - r')·n_y / (4*pi |r-r'|^3) ]
 #                              L_j^b(r')   dS dS'
 # where n_y is the OUTWARD normal of T_b at r'.
 #
@@ -1235,7 +1235,7 @@ def assemble_DL_dense(verts, tris, *, regular_quad_degree=11,
     """Build the dense Galerkin Laplace DL matrix on a flat triangulation.
 
     Convention matches NGSolve.bem LaplaceDL:
-        M_ij = int_{T_a} int_{T_b} L_i^a(r) [-(r-r')·n_y / (4*pi*|r-r'|^3)]
+        M_ij = int_{T_a} int_{T_b} L_i^a(r) [+(r-r')·n_y / (4*pi*|r-r'|^3)]
                                   L_j^b(r') dS dS'
 
     For the diagonal (identical) pair on a flat triangle, the kernel
