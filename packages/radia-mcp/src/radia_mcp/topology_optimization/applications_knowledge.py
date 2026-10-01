@@ -326,7 +326,7 @@ design method and the linear core under the `field_synthesis` PM-multipole / str
 function inverse: the analytic multipole identity gives the columns of A; this solver
 inverts it stably.
 
-IMPLEMENTATION (radia_mcp.optimization.linear_inverse; old topology import retained):
+IMPLEMENTATION (radia_mcp.optimization.linear_inverse):
   tsvd_solve(A, b, k)        TSVD solution keeping k modes (k=rank -> pinv).
   tikhonov_solve(A, b, lam)  Tikhonov solution, argmin ||A x - b||^2 + lam^2 ||x||^2.
   filter_factors(s, lam)     phi_n = s_n^2/(s_n^2+lam^2).
@@ -426,7 +426,6 @@ Verified (test_topology_global_opt): global optimum of Rastrigin (2-D and 5-D), 
 Rosenbrock (4-D) to f < 1e-6 at the known minimizer, deterministic for a fixed seed, and matching
 scipy.optimize.differential_evolution.
 
-The historical topology_optimization.global_optimizers path is an identity alias.
 These test problems do not establish a universal global-optimum guarantee;
 population spread is only a termination heuristic. Prefer established production
 libraries. Bayesian/evolutionary guidance stays separate from shared diagnostics.

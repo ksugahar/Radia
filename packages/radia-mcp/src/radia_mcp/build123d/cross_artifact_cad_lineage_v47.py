@@ -4,19 +4,13 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
+from radia_mcp._shared.identity_checks import is_sha256 as _digest
 
 
 COMPOUND = "compound_child_permutation_mass_property_aggregate_identity"
 ASSEMBLY = "assembly_mate_hierarchy_transform_owner_chain_identity"
 ROUNDTRIP = "step_brep_label_uuid_roundtrip_duplicate_owner_identity"
 EXTERNAL = "sketch_external_reference_dependency_cycle_revision_identity"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 
 def _result_ok(row: Mapping[str, object], *, owner: bool = False) -> bool:

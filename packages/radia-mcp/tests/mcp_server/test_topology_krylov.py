@@ -10,7 +10,7 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-from radia_mcp.topology_optimization.krylov import linear_conjugate_gradient
+from radia_mcp.matrix_solvers.krylov import linear_conjugate_gradient
 
 
 def test_legacy_import_is_canonical_linear_algebra_helper():

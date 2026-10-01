@@ -6,6 +6,7 @@ import math
 from collections.abc import Mapping, Sequence
 
 from .multiphysics_identity_v56 import validate_public_v56_identity
+from radia_mcp._shared.identity_checks import is_sha256 as _digest, generation_closed as _generation
 
 
 THERMO = (
@@ -16,18 +17,6 @@ ELECTROCHEM = (
     "electrochem_current_species_stoichiometry_boundaryflux_time_owner_identity"
 )
 _FARADAY_C_PER_MOL = 96485.33212
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
-
-
-def _generation(row: Mapping[str, object], *names: str) -> bool:
-    generation = str(row.get("generation") or "")
-    return bool(generation) and all(row.get(name) == generation for name in names)
 
 
 def _number(value: object, *, positive: bool = False, nonnegative: bool = False) -> bool:

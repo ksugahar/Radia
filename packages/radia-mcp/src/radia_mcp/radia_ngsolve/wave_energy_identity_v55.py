@@ -4,30 +4,11 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
+from radia_mcp._shared.identity_checks import is_sha256 as _digest, is_finite_number as _finite, generation_closed as _generations, result_digest_accepted as _result
 
 
 RESONATOR = "resonator_loaded_unloaded_q_coupling_linewidth_energy_owner_identity"
 ANTENNA = "antenna_efficiency_accepted_radiated_loss_gain_directivity_owner_identity"
-
-
-def _finite(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
-
-
-def _generations(row: Mapping[str, object], *fields: str) -> bool:
-    generation = str(row.get("generation") or "")
-    return bool(generation) and all(row.get(field) == generation for field in fields)
-
-
-def _result(row: Mapping[str, object]) -> bool:
-    return _digest(row.get("result_sha256")) and row.get("accepted_result_sha256") == row.get("result_sha256")
 
 
 def _close(value: object, expected: float) -> bool:

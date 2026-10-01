@@ -1,27 +1,18 @@
-"""The ownership migration must not fork algorithms or break historical imports."""
+"""The solver-neutral optimization layer owns the global-search helpers."""
 
 import numpy as np
 import pytest
 from radia_mcp.optimization import global_optimizers as common
-from radia_mcp.topology_optimization import global_optimizers as legacy
-
-
-@pytest.mark.parametrize(
-    "name",
-    ["constraint_violation", "best_feasible_record", "differential_evolution"],
-)
-def test_legacy_import_is_canonical(name):
-    assert getattr(legacy, name) is getattr(common, name)
 
 
 def test_seeded_search_preserves_return_contract():
     objective = lambda x: float(np.dot(x, x))
     kwargs = dict(bounds=[(-1, 1), (-1, 1)], popsize=3, maxiter=3, seed=12)
-    old = legacy.differential_evolution(objective, **kwargs)
+    first = common.differential_evolution(objective, **kwargs)
     new = common.differential_evolution(objective, **kwargs)
     assert set(new) == {"x", "fun", "nfev", "nit"}
-    np.testing.assert_array_equal(old["x"], new["x"])
-    assert old["fun"] == new["fun"]
+    np.testing.assert_array_equal(first["x"], new["x"])
+    assert first["fun"] == new["fun"]
     assert new["nfev"] == 24
 
 

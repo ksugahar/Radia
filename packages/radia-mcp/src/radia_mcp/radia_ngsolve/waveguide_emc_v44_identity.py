@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
+from radia_mcp._shared.identity_checks import is_sha256 as _digest
 
 
 _WAVEGUIDE = "waveguide_modal_cutoff_impedance_groupdelay_power_orthogonality_mesh_result_identity"
@@ -20,13 +21,6 @@ def _seq(value: object) -> bool:
 
 def _finite(value: object) -> bool:
     return _seq(value) and all(isinstance(item, (int, float)) and math.isfinite(float(item)) for item in value)
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 
 def _waveguide_ok(row: Mapping[str, object]) -> bool:

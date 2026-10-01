@@ -8,16 +8,10 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
+from radia_mcp._shared.identity_checks import is_sha256 as _digest
 
 _WAVEGUIDE = "waveguide_cutoff_impedance_group_delay_power_orthogonality_mesh_owner_identity"
 _EMC = "emc_probe_coordinate_interpolation_window_fft_parseval_monitor_result_identity"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
 
 
 def _finite_sequence(value: object) -> bool:

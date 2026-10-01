@@ -4,26 +4,11 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
+from radia_mcp._shared.identity_checks import is_sha256 as _digest, generation_closed as _generation_closed, result_digest_accepted as _result_identity_ok
 
 
 _ALE = "ale_reference_current_force_quadrature_owner_identity"
 _SEGREGATED = "segregated_variable_scaling_residual_iteration_solution_identity"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
-
-
-def _generation_closed(row: Mapping[str, object], *names: str) -> bool:
-    generation = str(row.get("generation") or "")
-    return bool(generation) and all(row.get(name) == generation for name in names)
-
-
-def _result_identity_ok(row: Mapping[str, object]) -> bool:
-    return _digest(row.get("result_sha256")) and row.get("accepted_result_sha256") == row.get("result_sha256")
 
 
 def _ale_ok(row: Mapping[str, object]) -> bool:

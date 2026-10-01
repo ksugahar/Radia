@@ -4,22 +4,11 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
+from radia_mcp._shared.identity_checks import generation_closed_fields as _generation, is_sha256 as _sha
 
 
 FORCE = "force_method_body_owner_sign_displacement_pair_causal_identity"
 BH = "nonlinear_bh_operating_point_row_hysteresis_branch_mapping_identity"
-
-
-def _sha(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
-
-
-def _generation(row: Mapping[str, object], names: tuple[str, ...]) -> bool:
-    value = str(row.get("generation") or "")
-    return bool(value) and all(row.get(name) == value for name in names)
 
 
 def _force_ok(row: Mapping[str, object]) -> bool:

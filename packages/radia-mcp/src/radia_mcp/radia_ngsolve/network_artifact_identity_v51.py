@@ -6,6 +6,7 @@ import math
 from collections.abc import Mapping, Sequence
 
 from .wave_energy_identity_v52 import validate_public_v52_identity
+from radia_mcp._shared.identity_checks import is_finite_number as _finite, generation_closed_fields as _generation
 
 
 S_PARAMETER = "sparameter_renormalization_complex_zref_modal_impedance_wavebasis_port_owner_identity"
@@ -19,17 +20,8 @@ def _sha(value: object) -> bool:
     return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
 
 
-def _generation(row: Mapping[str, object], names: tuple[str, ...]) -> bool:
-    generation = str(row.get("generation") or "")
-    return bool(generation) and all(row.get(name) == generation for name in names)
-
-
 def _result(row: Mapping[str, object]) -> bool:
     return _sha(row.get("result_sha256")) and row.get("accepted_result_sha256") == row.get("result_sha256")
-
-
-def _finite(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
 
 
 def _complex_pair(value: object) -> bool:

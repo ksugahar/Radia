@@ -6,6 +6,7 @@ import math
 from collections.abc import Mapping, Sequence
 
 from .wave_sar_identity_v54 import validate_public_v54_identity
+from radia_mcp._shared.identity_checks import is_sha256 as _digest, is_finite_number as _finite, result_digest_accepted as _result
 
 
 WAVEGUIDE = "waveguide_mode_cutoff_normalization_referenceplane_port_owner_identity"
@@ -13,23 +14,8 @@ FARFIELD = "farfield_realizedgain_polarization_basis_angulargrid_monitor_owner_i
 _C0 = 299792458.0
 
 
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
-
-
 def _generation(row: Mapping[str, object], names: tuple[str, ...]) -> bool:
     generation = str(row.get("generation") or ""); return bool(generation) and all(row.get(name) == generation for name in names)
-
-
-def _result(row: Mapping[str, object]) -> bool:
-    return _digest(row.get("result_sha256")) and row.get("accepted_result_sha256") == row.get("result_sha256")
-
-
-def _finite(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
 
 
 def _waveguide_ok(row: Mapping[str, object]) -> bool:

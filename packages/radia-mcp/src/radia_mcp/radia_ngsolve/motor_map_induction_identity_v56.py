@@ -4,16 +4,10 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
+from radia_mcp._shared.identity_checks import is_sha256 as _digest, generation_closed as _generations, result_digest_accepted as _result
 
 MAP = "motormap_speed_torque_input_output_loss_efficiency_owner_identity"
 INDUCTION = "inductionmotor_slip_synchronousspeed_rotorfrequency_torque_owner_identity"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
 
 
 def _number(value: object, *, positive: bool = False, nonnegative: bool = False) -> bool:
@@ -25,15 +19,6 @@ def _number(value: object, *, positive: bool = False, nonnegative: bool = False)
 
 def _close(left: object, right: object) -> bool:
     return _number(left) and _number(right) and math.isclose(float(left), float(right), rel_tol=1.0e-9, abs_tol=1.0e-9)
-
-
-def _generations(row: Mapping[str, object], *fields: str) -> bool:
-    generation = str(row.get("generation") or "")
-    return bool(generation) and all(row.get(field) == generation for field in fields)
-
-
-def _result(row: Mapping[str, object]) -> bool:
-    return _digest(row.get("result_sha256")) and row.get("accepted_result_sha256") == row.get("result_sha256")
 
 
 def _map_ok(row: Mapping[str, object]) -> bool:

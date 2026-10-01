@@ -4,27 +4,12 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
+from radia_mcp._shared.identity_checks import result_digest_accepted as _digest, generation_closed_fields as _generation, is_sha256 as _sha
 
 
 MOTOR = "v47_public_motor_dual_lane_geometry_material_excitation_operating_point_identity_mismatch"
 FORCE = "v47_public_force_coenergy_displacement_pair_body_owner_aggregation_mismatch"
 MOTOR_LANES = ["ngsolve_age", "hdiv_mmm_hcurl_eddy_bubble"]
-
-
-def _sha(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
-
-
-def _generation(row: Mapping[str, object], names: tuple[str, ...]) -> bool:
-    value = str(row.get("generation") or "")
-    return bool(value) and all(row.get(name) == value for name in names)
-
-
-def _digest(row: Mapping[str, object]) -> bool:
-    return _sha(row.get("result_sha256")) and row.get("accepted_result_sha256") == row.get("result_sha256")
 
 
 def _finite_mapping(value: object) -> bool:

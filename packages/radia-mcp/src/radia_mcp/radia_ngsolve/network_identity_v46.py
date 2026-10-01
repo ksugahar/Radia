@@ -5,25 +5,10 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 from itertools import pairwise
+from radia_mcp._shared.identity_checks import is_sha256 as _digest, finite_sequence as _finite_sequence
 
 _PORT = "v46_public_time_domain_port_wave_impedance_unit_scale_partial_trace_mismatch"
 _MONITOR = "v46_public_field_monitor_coordinate_frame_sampling_window_nan_inf_mismatch"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
-
-
-def _finite_sequence(value: object, *, minimum: int = 1) -> bool:
-    return (
-        isinstance(value, Sequence)
-        and not isinstance(value, (str, bytes))
-        and len(value) >= minimum
-        and all(isinstance(item, (int, float)) and math.isfinite(float(item)) for item in value)
-    )
 
 
 def _linked(row: Mapping[str, object], fields: tuple[str, ...], generation_key: str = "generation") -> bool:

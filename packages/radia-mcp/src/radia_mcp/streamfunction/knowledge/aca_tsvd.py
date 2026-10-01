@@ -1647,7 +1647,7 @@ the N-dimensional DOF space.
 
   - L-curve: plot (||A psi - B|| , ||psi|| or peak J) over a lambda / k
     sweep; the CORNER (max curvature) is the design point.  ``lcurve()``
-    in ``topology_optimization.linear_inverse`` returns the point list.
+    in ``optimization.linear_inverse`` returns the point list.
   - Morozov discrepancy: stop where ||A psi - B|| == the noise level.  SF
     has NO measurement noise -- the floor is the FIELD UNREACHABILITY on
     this winding surface (the residual PLATEAU), so Morozov here == "stop

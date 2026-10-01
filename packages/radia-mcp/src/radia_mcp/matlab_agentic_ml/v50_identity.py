@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Mapping
+from radia_mcp._shared.identity_checks import generation_closed_stripped as _generation_closed, is_integer as _integer
 
 
 _DIGEST = re.compile(r"^[0-9a-f]{64}$")
@@ -224,11 +225,6 @@ def _tall_datastore_checks(value: Mapping[str, object]) -> dict[str, bool]:
     }
 
 
-def _generation_closed(value: Mapping[str, object], fields: tuple[str, ...]) -> bool:
-    generation = str(value.get("generation", "")).strip()
-    return bool(generation) and all(value.get(field) == generation for field in fields)
-
-
 def _valid_constraints(value: object) -> bool:
     return isinstance(value, list) and bool(value) and all(
         isinstance(item, Mapping)
@@ -285,10 +281,6 @@ def _digest_bound(value: Mapping[str, object]) -> bool:
     return _valid_digest(value.get("result_sha256")) and value.get(
         "accepted_result_sha256"
     ) == value.get("result_sha256")
-
-
-def _integer(value: object) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def _finite_number(value: object) -> bool:

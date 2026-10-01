@@ -88,6 +88,13 @@ crystallized as its own package.
   and NGSolve pins defer to package metadata.
 - Every `primary_tools` entry in the `radia_mcp.meta` catalog names a tool its
   server registers (15 did not), checked against each live server.
+- The versioned identity validators bind shared field checks from
+  `radia_mcp._shared.identity_checks` instead of 238 verbatim helper copies
+  across 78 modules; results are unchanged.
+- The `topology_optimization` compatibility modules (`global_optimizers`,
+  `krylov`, `line_search`, `linear_inverse`, `nonlinear_lsq`) are removed;
+  import them from `radia_mcp.optimization` / `radia_mcp.matrix_solvers`. The
+  unreferenced `radia_ngsolve.hysteresis_knowledge` module is removed.
 - PDF lock release (`doc_convert`, `poster`) stops only dedicated PDF viewers
   showing that file and passes the name through the environment; browsers are
   never stopped.

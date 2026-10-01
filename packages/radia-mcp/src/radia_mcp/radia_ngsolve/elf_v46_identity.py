@@ -2,26 +2,11 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
+from radia_mcp._shared.identity_checks import is_sha256 as _digest, finite_sequence as _finite_sequence
 
 
 _FORCE = "v46_public_magnetic_force_partial_solve_unit_scale_coordinate_frame_nan_mismatch"
 _DEMAG = "v46_public_demagnetization_curve_branch_restart_temperature_window_mismatch"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(char in "0123456789abcdef" for char in text)
-
-
-def _finite_sequence(value: object, *, minimum: int = 1) -> bool:
-    return (
-        isinstance(value, Sequence)
-        and not isinstance(value, (str, bytes))
-        and len(value) >= minimum
-        and all(isinstance(item, (int, float)) and math.isfinite(float(item)) for item in value)
-    )
 
 
 def _linked(row: Mapping[str, object], fields: tuple[str, ...]) -> bool:

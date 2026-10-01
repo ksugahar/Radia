@@ -4,17 +4,11 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
+from radia_mcp._shared.identity_checks import is_sha256 as _digest, result_digest_accepted as _result_identity
 
 
 MODAL = "acoustic_modalparticipation_response_normalization_energy_owner_identity"
 INDUCTION = "inductionheating_input_joule_thermal_time_owner_identity"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
 
 
 def _number(value: object, *, positive: bool = False, nonnegative: bool = False) -> bool:
@@ -31,10 +25,6 @@ def _close(left: object, right: object) -> bool:
 def _generation(row: Mapping[str, object], *fields: str) -> bool:
     generation = str(row.get("generation") or "")
     return bool(generation) and all(row.get(field) == generation for field in fields)
-
-
-def _result_identity(row: Mapping[str, object]) -> bool:
-    return _digest(row.get("result_sha256")) and row.get("accepted_result_sha256") == row.get("result_sha256")
 
 
 def _modal_ok(row: Mapping[str, object]) -> bool:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
+from radia_mcp._shared.identity_checks import is_finite_number as _finite, generation_closed_fields as _generation
 
 
 FLOQUET = "periodic_floquet_phase_lattice_vector_mode_normalization_boundary_owner_identity"
@@ -17,17 +18,8 @@ def _sha(value: object) -> bool:
     return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
 
 
-def _generation(row: Mapping[str, object], names: tuple[str, ...]) -> bool:
-    generation = str(row.get("generation") or "")
-    return bool(generation) and all(row.get(name) == generation for name in names)
-
-
 def _digest(row: Mapping[str, object]) -> bool:
     return _sha(row.get("result_sha256")) and row.get("accepted_result_sha256") == row.get("result_sha256")
-
-
-def _finite(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
 
 
 def _vector(value: object, size: int) -> bool:

@@ -13,7 +13,7 @@ _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-from radia_mcp.topology_optimization.line_search import armijo_backtracking
+from radia_mcp.optimization.line_search import armijo_backtracking
 
 
 def test_legacy_import_is_the_canonical_function():

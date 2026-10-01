@@ -9,6 +9,7 @@ from .gear_pipe_exchange_identity_v56 import (
     validate_public_identity as validate_public_v56_identity,
     validate_source_identity as validate_source_v56_identity,
 )
+from radia_mcp._shared.identity_checks import is_sha256 as _digest, generation_closed as _generation, public_rows as _public_rows, gate_report as _report, result_digest_accepted as _result
 
 
 THREAD = "screwthread_pitch_handedness_start_topology_volume_owner_identity"
@@ -18,18 +19,6 @@ SHEET = (
 PMI = "step_pmi_tolerance_datum_unit_product_owner_identity"
 BREP = "brep_repair_tolerance_sewnshell_orientation_volume_owner_identity"
 _LENGTH_UNITS = {"m", "mm", "cm", "inch"}
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
-
-
-def _generation(row: Mapping[str, object], *names: str) -> bool:
-    generation = str(row.get("generation") or "")
-    return bool(generation) and all(row.get(name) == generation for name in names)
 
 
 def _number(value: object, *, positive: bool = False, nonnegative: bool = False) -> bool:
@@ -47,12 +36,6 @@ def _close(left: object, right: object) -> bool:
     return _number(left) and _number(right) and math.isclose(
         float(left), float(right), rel_tol=1.0e-10, abs_tol=1.0e-12
     )
-
-
-def _result(row: Mapping[str, object]) -> bool:
-    return _digest(row.get("result_sha256")) and row.get(
-        "accepted_result_sha256"
-    ) == row.get("result_sha256")
 
 
 def _topology(value: object) -> bool:
@@ -310,28 +293,6 @@ def _brep_ok(row: Mapping[str, object]) -> bool:
         )
         and _result(row)
     )
-
-
-def _public_rows(payload: Mapping[str, object]) -> list[Mapping[str, object]]:
-    rows: list[Mapping[str, object]] = []
-    reference = payload.get("reference")
-    if isinstance(reference, Sequence) and not isinstance(reference, (str, bytes)):
-        rows.extend(item for item in reference if isinstance(item, Mapping))
-    measured = payload.get("measured")
-    if isinstance(measured, Mapping):
-        for family in measured.values():
-            if isinstance(family, Sequence) and not isinstance(family, (str, bytes)):
-                rows.extend(item for item in family if isinstance(item, Mapping))
-    return rows
-
-
-def _report(policy: str, checks: dict[str, bool]) -> dict[str, object]:
-    return {
-        "policy": policy,
-        "status": "ok" if all(checks.values()) else "needs_attention",
-        "checks": checks,
-        "issues": [name for name, accepted in checks.items() if not accepted],
-    }
 
 
 def validate_public_identity(payload: object) -> dict[str, object]:

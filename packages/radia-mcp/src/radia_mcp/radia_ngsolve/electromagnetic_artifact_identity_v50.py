@@ -4,26 +4,11 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
+from radia_mcp._shared.identity_checks import is_sha256 as _digest, generation_closed as _generations, result_digest_accepted as _result
 
 
 CIRCUIT = "complex_current_phasor_circuit_series_parallel_turns_depth_owner_identity"
 IRON = "iron_loss_steinmetz_frequency_flux_waveform_component_owner_identity"
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
-
-
-def _generations(row: Mapping[str, object], *fields: str) -> bool:
-    generation = str(row.get("generation") or "")
-    return bool(generation) and all(row.get(field) == generation for field in fields)
-
-
-def _result(row: Mapping[str, object]) -> bool:
-    return _digest(row.get("result_sha256")) and row.get("accepted_result_sha256") == row.get("result_sha256")
 
 
 def _finite_vector(value: object, length: int | None = None) -> bool:

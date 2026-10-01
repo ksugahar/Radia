@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
+from radia_mcp._shared.identity_checks import is_sha256 as _digest, generation_closed as _generation, gate_report as _report, result_digest_accepted as _result
 
 
 GEAR = "involutegear_module_toothcount_pressureangle_pitchdiameter_volume_owner_identity"
@@ -11,13 +12,6 @@ PIPE = "pipesweep_pathlength_frame_twist_selfintersection_volume_owner_identity"
 STEP = "step_occurrence_transform_unit_product_assemblyframe_owner_identity"
 MESH = "meshformat_watertight_manifold_unit_signedvolume_owner_identity"
 _UNIT_SCALE = {"m": 1.0, "mm": 1.0e-3, "cm": 1.0e-2, "inch": 0.0254}
-
-
-def _digest(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    text = value.lower()
-    return len(text) == 64 and all(character in "0123456789abcdef" for character in text)
 
 
 def _number(value: object, *, positive: bool = False) -> bool:
@@ -31,17 +25,6 @@ def _close(left: object, right: object) -> bool:
     return _number(left) and _number(right) and math.isclose(
         float(left), float(right), rel_tol=1.0e-10, abs_tol=1.0e-12
     )
-
-
-def _generation(row: Mapping[str, object], *names: str) -> bool:
-    generation = str(row.get("generation") or "")
-    return bool(generation) and all(row.get(name) == generation for name in names)
-
-
-def _result(row: Mapping[str, object]) -> bool:
-    return _digest(row.get("result_sha256")) and row.get(
-        "accepted_result_sha256"
-    ) == row.get("result_sha256")
 
 
 def _gear_ok(row: Mapping[str, object]) -> bool:
@@ -265,15 +248,6 @@ def _public_rows(payload: Mapping[str, object]) -> list[Mapping[str, object]] | 
                     return None
                 rows.append(item)
     return rows
-
-
-def _report(policy: str, checks: dict[str, bool]) -> dict[str, object]:
-    return {
-        "policy": policy,
-        "status": "ok" if all(checks.values()) else "needs_attention",
-        "checks": checks,
-        "issues": [name for name, accepted in checks.items() if not accepted],
-    }
 
 
 def validate_public_identity(payload: object) -> dict[str, object]:
