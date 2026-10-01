@@ -161,7 +161,7 @@ def paper_writing_usage() -> str:
       Page-limit hack hierarchy の Level 0 detector。
     - paper_writing_check_digest_human_review_triggers — 1-page digest
       human review trigger detector: abstract numeric overload, known
-      Warburg/CLN framing, uncited HOIBC/Warburg first use, overloaded
+      bulk/surface-model framing, uncited HOIBC/Warburg first use, overloaded
       captions, opaque rank-(m,n) notation, unnumbered/uncited core
       equations, ambiguous block-matrix/N_b notation, and geometry scope
       creep.

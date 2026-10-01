@@ -14,6 +14,14 @@ Direct CLN-specific support requests to CLN-mcp; this ownership notice is not
 a runtime integration. General manuscript checks, historical research context
 and paper citations may remain, but must not imply a Radia CLN module exists.
 
+## Radia model reduction and representation
+
+Radia uses POD for snapshot-based reduction, PRIMA for projection-based
+reduction, and Foster pole-residue models for reduced-response representation.
+Validate the selected order against measured operating-band error; naming a
+method does not replace numerical validation. CLN-specific implementations
+and support remain in CLN-mcp as described above.
+
 ## Removal scope
 
 The current removal program excludes CLN reduction implementations from these
