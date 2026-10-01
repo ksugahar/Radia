@@ -340,7 +340,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "subpackage": "radia_mcp.rna_mec",
         "entry_point": "mcp-server-rna-mec",
         "description": "RNA / Magnetic Equivalent Circuit. ★ Lab specialty: "
-                       "dynamic hysteresis MEC (Play + Cauer)",
+                       "Play-model hysteresis MEC",
         "primary_tools": ["rna_mec"],
         "related": ["magnetic-materials", "mor", "ih"],
         "tags": ["application"],

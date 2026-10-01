@@ -100,7 +100,7 @@ H_0^(1)) kernel.
 ## TIME CONVENTION WARNING
 
 Chew uses exp(-i omega t) (physics convention).  Stoll, Radia C++,
-Sugahara lab CLN papers, and most engineering EM literature use
+Sugahara lab ROM papers, and most engineering EM literature use
 exp(+j omega t) (engineering convention).  TO CONVERT:
 
   * imaginary unit i in physics ↔ -j in engineering

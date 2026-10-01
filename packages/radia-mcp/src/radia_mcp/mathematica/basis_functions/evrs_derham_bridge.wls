@@ -157,7 +157,7 @@ Module[
       Simplify[Dmat.Jcoeff] === {0}];
 
   (* T-method curl-only matrices.  mr/ml are generic symmetric current-space
-     matrices standing in for resistance, inductance, BEM/VIM, or CLN moments.
+     matrices standing in for resistance, inductance, BEM/VIM, or Krylov moments.
      The proofs are algebraic, not numerical. *)
   mr = symMatrix[Length[w2], "r"];
   ml = symMatrix[Length[w2], "l"];
