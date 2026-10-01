@@ -155,6 +155,8 @@ public:
   // Configuration
   int  order = 1;
   bool has_netgen = false;  // true if NetgenCurver was used
+  // Fail extract() when no block holds a volume element (volume-only formats)
+  bool require_volume_elements = false;
 
 #ifdef HAVE_NETGEN
   // Access the NetgenCurver used during extraction (null if order < 2 or failed)
@@ -210,6 +212,7 @@ public:
 private:
   void extract_nodes(MeshExportInterface *iface);
   void extract_elements(MeshExportInterface *iface);
+  bool check_block_coverage() const;
   void extract_sidesets(MeshExportInterface *iface);
   void extract_nodesets(MeshExportInterface *iface);
 

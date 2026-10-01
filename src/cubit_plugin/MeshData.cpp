@@ -7,6 +7,7 @@
 #include "CubitMessage.hpp"
 
 #include <algorithm>
+#include <map>
 #include <set>
 #include <sstream>
 
@@ -36,6 +37,10 @@ bool MeshData::extract(int req_order)
   // Extract linear mesh data first (single pass through iface)
   extract_nodes(iface);
   extract_elements(iface);
+  if (!check_block_coverage()) {
+    CubitInterface::release_interface(iface);
+    return false;
+  }
   extract_sidesets(iface);
   extract_nodesets(iface);
 
@@ -177,6 +182,68 @@ void MeshData::extract_elements(MeshExportInterface *iface)
   }
   if (dup_count > 0)
     PRINT_WARNING("Skipped %d duplicate elements across blocks.\n", dup_count);
+}
+
+// ================================================================
+// check_block_coverage — report volume elements outside every block
+//
+// Only block elements are exported (see extract_elements), so a hex or
+// tet that was meshed but never added to a block is dropped without a
+// trace.  Warn with per-type counts, and fail when the caller needs a
+// volume mesh and no block holds a single volume element (a meshed
+// `brick` without `block 1 add volume all` exported 0 elements).
+// ================================================================
+static const char *volume_kind(ElementType t)
+{
+  switch (t) {
+    case TETRA: case TETRA4: case TETRA8: case TETRA10: case TETRA14: case TETRA15:
+      return "tet";
+    case HEX: case HEX8: case HEX9: case HEX20: case HEX21: case HEX26: case HEX27:
+      return "hex";
+    case WEDGE: case WEDGE6: case WEDGE15: case WEDGE16: case WEDGE20: case WEDGE21:
+      return "wedge";
+    case PYRAMID: case PYRAMID5: case PYRAMID8: case PYRAMID13: case PYRAMID18:
+      return "pyramid";
+    default:
+      return nullptr;
+  }
+}
+
+bool MeshData::check_block_coverage() const
+{
+  std::map<std::string, int> in_blocks;
+  for (const auto &elem : elements)
+    if (const char *kind = volume_kind(elem.type))
+      in_blocks[kind]++;
+
+  const std::pair<const char *, int> in_model[] = {
+    {"tet", CubitInterface::get_tet_count()},
+    {"hex", CubitInterface::get_hex_count()},
+    {"wedge", CubitInterface::get_wedge_count()},
+    {"pyramid", CubitInterface::get_pyramid_count()},
+  };
+  int n_volume = 0, n_model = 0;
+  std::ostringstream missing;
+  for (const auto &[kind, total] : in_model) {
+    int exported = in_blocks[kind];
+    n_volume += exported;
+    n_model += total;
+    if (total > exported)
+      missing << (missing.tellp() > 0 ? ", " : "") << (total - exported)
+              << " of " << total << " " << kind;
+  }
+
+  if (require_volume_elements && n_volume == 0) {
+    PRINT_ERROR("No block contains volume elements; the model has %d meshed "
+                "volume elements outside every block.  Add them to a block "
+                "before exporting, e.g. 'block 1 add volume all'.\n", n_model);
+    return false;
+  }
+  if (!missing.str().empty())
+    PRINT_WARNING("Volume elements outside every block are not exported: %s.  "
+                  "Add their volumes to a block to include them.\n",
+                  missing.str().c_str());
+  return true;
 }
 
 // ================================================================
