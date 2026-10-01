@@ -16,9 +16,11 @@ Paper citations and bibliographic records may remain. Independent Foster modal
 models, PRIMA projection, snapshot POD, ordinary Lanczos/Arnoldi methods, and
 classical scalar rational/continued-fraction algebra are not removed merely
 because they previously shared a file or were described using CLN terminology.
-DtN continued fractions represent exact/high-order non-reflecting boundaries
-and remain supported. Retired reduction APIs are not production/comparison
-routes. Select reduced orders by measured operating-band error.
+DtN continued fractions represent exact/high-order non-reflecting boundaries.
+They are explicitly outside the CLN removal scope: retain their implementations,
+tests, documentation, notebooks, citations, and corresponding Git history.
+Retired reduction APIs are not production/comparison routes. Select reduced
+orders by measured operating-band error.
 
 ## Review and evidence
 
