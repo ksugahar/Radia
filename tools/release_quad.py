@@ -1130,36 +1130,8 @@ def _verify_final_pip_checks() -> int:
 
 
 def _deploy_lab():
-    """Install only the numerical Radia solver from the approved editable."""
-    step("Phase 8 (LAB): verify and install Radia solver editable")
-    repo = _editable_repo_lab()
-    expected_sha = _release_head()
-    rc = _verify_local_release_source(repo, expected_sha)
-    if rc != 0:
-        return rc
-    if run(_solver_abi_probe_command(), check=False).returncode:
-        fail("LAB NGSolve/Netgen ABI pins are not installed; source was not changed")
-        return 2
-    if run([sys.executable, "-c", SOLVER_INSTALL_GUARD], check=False).returncode:
-        fail("Radia install preflight failed; existing installation was preserved")
-        return 3
-    installed = run(
-        [sys.executable, "-m", "pip", "install", "--no-deps",
-         "--no-cache-dir", "--no-build-isolation", "-e", repo],
-        check=False,
-    )
-    if installed.returncode != 0:
-        fail("LAB Radia editable install failed; independent packages were unchanged")
-        return 3
-    verified = run(_editable_release_verify_command(repo, expected_sha), check=False)
-    if verified.returncode != 0:
-        fail("LAB exact native/runtime verification failed")
-        return 4
-    if _verify_lab_editable([("radia", repo)]):
-        return 4
-    _record_release_intent_lab(repo)
-    ok("Phase 8 complete on LAB")
-    return 0
+    """Deploy the published solver wheel to LAB; never recreate an editable."""
+    return _deploy_pypi("102", "LAB")
 
 
 def _deploy_editable_remote(ssh_host, label, repo):
@@ -1239,9 +1211,9 @@ $ErrorActionPreference = 'Stop'
 {_solver_install_guard_powershell(python_cmd)}
 {python_cmd} -c "import importlib.metadata as m, ngsolve; assert ngsolve.__version__ == '{ngsolve_version}'; assert m.version('netgen-mesher') == '{netgen_version}'"
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-{python_cmd} -m pip install --upgrade --force-reinstall --no-cache-dir --no-deps "radia=={v_radia}"
+{python_cmd} -m pip install --upgrade --force-reinstall --no-cache-dir --no-deps --only-binary=:all: "radia=={v_radia}"
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-{python_cmd} -c "import importlib.metadata as m, ngsolve, radia; assert radia.__version__ == '{v_radia}'; assert ngsolve.__version__ == '{ngsolve_version}'; assert m.version('netgen-mesher') == '{netgen_version}'"
+{python_cmd} -c "import importlib.metadata as m, json, ngsolve, radia; assert not json.loads(m.distribution('radia').read_text('direct_url.json') or '{{}}').get('dir_info',{{}}).get('editable',False); assert radia.__version__ == '{v_radia}'; assert ngsolve.__version__ == '{ngsolve_version}'; assert m.version('netgen-mesher') == '{netgen_version}'"
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 {python_cmd} -m pip check
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}

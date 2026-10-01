@@ -147,44 +147,15 @@ def test_deployment_plan_is_solver_only_and_does_not_probe_runtime(
                for plan in plans for key in plan)
 
 
-@pytest.mark.parametrize("drift", [0, 1])
-def test_lab_deploy_changes_only_radia(monkeypatch, drift):
-    monkeypatch.setattr(release_quad, "_release_commit", lambda: "c" * 40)
-    root = release_quad._editable_repo_lab()
-    monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
-    monkeypatch.setattr(release_quad, "_verify_local_release_source", lambda *a: 0)
-    events = []
-
-    def verify(packages):
-        assert packages == [("radia", root)]
-        events.append("verify")
-        return drift
-
-    monkeypatch.setattr(release_quad, "_verify_lab_editable", verify)
-    def run(command, **_kwargs):
-        events.append(command)
-        return subprocess.CompletedProcess(command, 0)
-    monkeypatch.setattr(release_quad, "run", run)
+@pytest.mark.parametrize("rc", [0, 2, 4])
+def test_lab_deploy_routes_wheel_to_lab_and_propagates_failure(monkeypatch, rc):
+    calls = []
+    monkeypatch.setattr(release_quad, "_deploy_pypi",
+                        lambda host, label: calls.append((host, label)) or rc)
     monkeypatch.setattr(release_quad, "_record_release_intent_lab",
-                        lambda repo: events.append(("record", repo)) or 0)
-
-    assert release_quad._deploy_lab() == (4 if drift else 0)
-    abi_probe = release_quad._solver_abi_probe_command()
-    assert abi_probe in events
-    command = next(event for event in events if isinstance(event, list) and "pip" in event)
-    assert events.index(abi_probe) < events.index(command)
-    joined = " ".join(command)
-    assert "pip install" in joined
-    assert "uninstall" not in joined
-    assert "radia-mcp" not in joined
-    assert "cubit-mesh-export" not in joined
-    assert "Stop-Process" not in joined
-    if drift:
-        assert events[-1] == "verify"
-        assert not any(isinstance(e, tuple) for e in events)
-    else:
-        assert events[-2] == "verify"
-        assert events[-1] == ("record", root)
+                        lambda *_: pytest.fail("LAB must not acquire editable intent"))
+    assert release_quad._deploy_lab() == rc
+    assert calls == [("102", "LAB")]
 
 
 @pytest.mark.parametrize("drift", [0, 1])
@@ -438,34 +409,28 @@ def test_release_tag_gate_requires_declared_version_at_exact_head(monkeypatch):
     assert release_quad._verify_head_release_tag() == 4
 
 
-def test_lab_deploy_stops_before_install_on_source_mismatch(monkeypatch):
-    monkeypatch.setattr(release_quad, "_release_commit", lambda: "c" * 40)
-    monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
-    monkeypatch.setattr(
-        release_quad, "_verify_local_release_source", lambda _repo, _sha: 4
-    )
-
-    monkeypatch.setattr(
-        release_quad, "run",
-        lambda *_a, **_k: pytest.fail("install must not run for invalid source"))
-
-    assert release_quad._deploy_lab() == 4
+def test_lab_wheel_deploy_stops_before_ssh_when_unpublished(monkeypatch):
+    monkeypatch.setattr(release_quad, "_read_repo_versions", lambda *_: {"radia": "5.2.0"})
+    monkeypatch.setattr(release_quad, "_check_pypi_propagation", lambda *_: 2)
+    monkeypatch.setattr(release_quad, "run", lambda *_a, **_k: pytest.fail("No SSH before wheel availability"))
+    assert release_quad._deploy_lab() == 2
 
 
-def test_lab_deploy_preserves_install_when_binary_preflight_fails(monkeypatch):
-    monkeypatch.setattr(release_quad, "_release_commit", lambda: "c" * 40)
-    monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
-    monkeypatch.setattr(release_quad, "_verify_local_release_source", lambda *_: 0)
+def test_lab_wheel_deploy_has_guard_no_editable_and_pip_check(monkeypatch):
     calls = []
-    def blocked(command, **_kwargs):
-        calls.append(command)
-        rc = 0 if command == release_quad._solver_abi_probe_command() else 1
-        return subprocess.CompletedProcess(command, rc)
-    monkeypatch.setattr(release_quad, "run", blocked)
-    assert release_quad._deploy_lab() == 3
-    assert len(calls) == 2
-    assert calls[1][-1] == release_quad.SOLVER_INSTALL_GUARD
-    assert not any("pip" in command for command in calls)
+    monkeypatch.setattr(release_quad, "_read_repo_versions", lambda *_: {"radia": "5.1.0"})
+    monkeypatch.setattr(release_quad, "_check_pypi_propagation", lambda *_: 0)
+    monkeypatch.setattr(release_quad, "run", lambda command, **kw: calls.append(command) or subprocess.CompletedProcess(command, 0))
+    assert release_quad._deploy_lab() == 0
+    assert calls[0][:2] == ["ssh", "102"]
+    script = base64.b64decode(calls[0][-1]).decode("utf-16le")
+    assert script.index("base64") < script.index("pip install")
+    assert "--only-binary=:all:" in script
+    assert "--no-deps" in script
+    assert " -e " not in script
+    assert "direct_url.json" in script and "editable" in script
+    assert "pip check" in script
+    assert "radia-mcp" not in script and "cubit-mesh-export" not in script
 
 
 def test_remote_deploy_checks_exact_source_before_install(monkeypatch):
