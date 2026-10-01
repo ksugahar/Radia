@@ -4,7 +4,7 @@ Package release workflows for the Radia monorepo.
 The Radia monorepo ships four independent PyPI distributions and one
 versioned Simulink library package from one git tree. The numerical Radia
 solver uses its multi-host QUAD gate. radia-mcp and cubit-mesh-export publish
-independently and deploy editable sources to LAB and 100 through DUAL lanes;
+independently and deploy wheels to LAB and editable sources to 100 through DUAL lanes;
 radia-optuna has its own exact-wheel lane. These release boundaries must not
 be collapsed into one coupled version or deployment requirement.
 
@@ -30,7 +30,7 @@ RELEASE_WORKFLOW = """\
 # Package-scoped releases: Radia QUAD and MCP/Cubit DUAL
 
 radia-mcp releases independently of Radia. Its release-dual deployment targets
-are LAB and 100 only, using editable installs, like cubit-mesh-export.
+are LAB (verified wheel) and 100 (editable) only, like cubit-mesh-export.
 Never deploy radia-mcp to hibino, mdx1 or mdx2. Isolated CI is not deployment.
 For MCP-only updates use update source -> reconnect -> check an affected live
 tool, following packages/radia-mcp/docs/maintenance.md, not the QUAD installer.
@@ -81,11 +81,20 @@ where an affected tool uses another package:
 * cubit-mesh-export owns Cubit meshing, export, and its C++ plugin binaries.
   Radia consumes the checked `.vol` boundary; it does not couple solver release
   acceptance to the exporter version.
-* LAB and 100号機 use NAS editable installs for `radia`,
-  `cubit-mesh-export`, and `radia-mcp`.
-  On 100号機 the editable path must be the mapped drive
-  configured on the target, not the self-referential UNC path, because
-  Windows can crash while loading `_radia_pybind.pyd` from that UNC form.
+* Only 100号機 uses editable development installs in a dedicated local venv.
+  LAB uses a verified wheel, as do mdx1/mdx2 for the numerical solver.
+  LAB SSH uses a LAB-local source for build/validation staging because its
+  session cannot assume NAS drive mappings or share credentials.
+  A release editable acceptance points to a fixed release checkout. On 100 use its configured local/mapped drive,
+  not a self-referential UNC path when loading native extensions.
+  Before installation, verify the exact release SHA, tracked cleanliness,
+  installed NGSolve/Netgen ABI against package metadata, and native hashes
+  against `release_native_payloads.json`. The manifest must match the exact
+  accepted wheel; a matching Python version string alone is not acceptance.
+  Explicit source-root overrides do not require a tag for the controller's
+  development version; the selected release source still passes every gate.
+  radia-mcp keeps its independent maintained-source policy, and
+  cubit-mesh-export keeps its own release-dual checkouts.
 * mdx1/mdx2 install the exact accepted `radia` wheel for solver release
   acceptance. They do not receive Cubit or radia-mcp deployments.
 * hibino does not receive radia-mcp deployments; it remains a computation host,
@@ -108,8 +117,9 @@ tag, package CI, verified wheel, and PyPI trusted-publishing job. Its wheel must
 not contain the retired `radia_mcp.cubit` namespace or `mcp-server-cubit` entry
 point. Mixed omega remains in radia-mcp.
 
-After publication, update the maintained editable sources on LAB and 100 and
-verify registration plus a fresh import on both. LAB must also confirm the
+After publication, install the verified wheel on LAB and update the maintained
+editable environment on 100; verify registration plus a fresh import on both.
+Do not replace newer reviewed LAB source with an older public wheel. LAB must also confirm the
 affected live source and one harmless affected tool. Existing 100 clients may
 remain `next-launch-pending` until their normal restart; this does not block
 release completion. Immediate all-user reconnection is a separate explicit

@@ -1,11 +1,11 @@
 # Codex - Radia Project Policy
 
-Historical investigations remain in Git history.
+Investigations remain in Git.
 ## Mission
-Radia is an AI-native electromagnetic CAE platform, not another standalone solver.
+Radia is an AI-native electromagnetic CAE platform.
 AI designs; Radia provides the engineering platform. Extend NGSolve only for missing engineering capability.
 
-Until explicitly closed, work is limited to:
+Current scope:
 
 1. Complete and validate HDiv-MMM topology optimization.
 2. Improve repository and `radia-mcp` quality, maintenance, validation,
@@ -76,7 +76,7 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 `cubit-mesh-export` toolbar. Normal Radia Python must not depend on Qt. LLM/MCP Cubit execution is always batch/nographics and fails rather than launching or attaching to a GUI; the only GUI run is the separately scoped human-facing release test, while journal/checkpoint handoff remains artifact-only.
 
 ### Shared MCP Runtime Ownership
-- radia-mcp releases independently of Radia: release-dual deploys editable updates only to LAB and 100, like cubit-mesh-export. Never deploy radia-mcp to hibino/mdx1/mdx2; isolated CI tests are not deployment. Do not wait for a solver release.
+- radia-mcp releases independently of Radia: release-dual targets LAB (wheel) and 100 (editable), like cubit-mesh-export. Never deploy radia-mcp to hibino/mdx1/mdx2; isolated CI tests are not deployment. Do not wait for a solver release.
 - Routine editable updates: update the usual source -> reconnect -> check the live source and one harmless affected tool. Pure Python edits need no reinstall; source relocation or dependency/package-metadata changes do. No new daemon or mandatory ledger; see the shared runtime policy for exceptions.
 - MCP updates are forward-only: fix forward, never revert/reinstall/redistribute an old version. Retain obsolete copies only as identified debugging evidence with a removal condition, never as deployment targets or rollback reserves; remove them after consumer and unique-work checks. Details follow the shared runtime policy below.
 - MCP is experimental development tooling, not a numerical solver release. Developers may edit live MCP source and change its editable source with
@@ -168,7 +168,9 @@ Do not run development suites or heavy validation on 100号機; limit release ac
 to necessary installation, import and student-facing application smoke checks. Both mdx hosts give CI and preflight priority.
 GitHub Actions uses the shared `mdx` label and assigns jobs to an available runner.
 Release-quad requires LAB, 100号機, mdx1, and mdx2 for the same release commit.
-LAB/100号機 retain verified editable installs; mdx1/mdx2 consume release wheels.
+Decision 2026-10-01: editable only on 100号機, in a dedicated local development
+venv for maintainers/students, separate from the release runtime. LAB/mdx use
+verified wheels. Existing LAB editable installs await migration.
 `cubit-mesh-export` uses its own release-dual to LAB and 100号機; the Radia
 solver release-quad must not install, uninstall, repoint, or version-gate it.
 Do not install or run Cubit on mdx1/mdx2 in either release lane. This boundary
@@ -219,14 +221,15 @@ memory, and timing work on hibino when it is **already running and idle**.
 hibino is a SPOT instance; only a human starts it.
 Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes hibino hostname` — ICMP is
 blocked, so `ping` reports a false "down" — then check for a running python
-job, because hibino takes one heavy job at a time. Otherwise use whichever of
-mdx1/mdx2 is idle, after checking both its CI runner and its job queue are idle.
-An idle LAB may run tests/validation, never timing; Gmsh rendering needs a LAB/100 desktop, not mdx/ssh.
+job, because hibino takes one heavy job at a time. Otherwise use an idle
+mdx1/mdx2 or LAB; check CI/jobs and available memory first. LAB is also an
+execution host for high-memory tests. mdx CI has priority; avoid concurrent
+timing jobs. Gmsh rendering needs a LAB/100 desktop, not mdx/ssh.
 Compute work must never delay or destabilize CI/preflight.
 Historical mdx measurements remain valid provenance. Record host, runtime,
 versions and results in validation JSON.
 
-Core count does not imply speed; settle quadrature and threads first.
+Measure speed; settle quadrature and threads first.
 hibino has 230 GB memory, no pagefile, no guaranteed speedup.
 
 **POLICY**: 全てのベンチマークスクリプトは機械可読な JSON 結果を保存すること。
@@ -259,8 +262,8 @@ and cleanup of their job-owned `C:\temp` inputs, outputs, staging, environments 
 
 Use `tools/release_quad.py` and the `release-quad` skill. Publish only when
 CI, exact package hashes, native/MEX/SLX checks, and required machine gates pass
-for the same commit. LAB and 100号機 retain approved, verified editable sources
-after release; source changes follow Shared MCP Runtime Ownership, not an automatic reset.
+for the same commit. MCP/Cubit independently migrate LAB to wheels; verify
+fresh imports and live sources.
 Before tagging, dispatch `Radia Native Release` on the exact release SHA; `ci-verify` requires its successful native check.
 
 ## Optuna
