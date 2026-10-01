@@ -2173,7 +2173,8 @@ Non-obvious features:
 3. **Linear solver** per-method:
    - PEEC+BEM: Dense LU (small) / HACApK (large, O(N log N))
    - HCurl FEM-SIBC: prefer AMS for p=1, BDDC with AMS coarse solve for
-     p=2 or p=3 (`calc_fem_kelvin --solver auto`). Both use COCR. Every
+     p=2 or p=3 (`calc_fem_kelvin --solver auto`). The edge-only wirebasket
+     uses three AMS coarse cycles per BDDC application. Both use COCR. Every
      route, direct included, has a true relative residual gate of 1e-6 on
      the original assembled free rows, with at most three residual corrections
      using the same operator. Iterations and correction residuals are recorded.
@@ -2192,10 +2193,10 @@ Non-obvious features:
    integrating a closed loop across discontinuous basis gradients with one
    fixed quadrature rule can inject an unphysical gradient load.
 
-4. **.vol label validation** on load via `inspect_vol_labels`: status
-   label shows 'OK' (green), 'warn' (amber, e.g. missing kelvin),
-   'ERROR' (red, e.g. missing source/sink for FEM).  Run button
-   disabled on errors.
+4. **.vol label validation**: inspect `mesh.GetMaterials()` and
+   `mesh.GetBoundaries()` against the selected solver's required contracts.
+   Use the headless CLI validation errors; there is no `inspect_vol_labels`
+   utility or retired analysis-panel Run-button contract to invoke.
 
 5. **Physics sanity** shown under method:
    - wp delta and R/delta ratio; warns when R/delta < 3
