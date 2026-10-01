@@ -940,6 +940,15 @@ response space has been exposed.
 
 ## References
 
+- A. Kameari et al., "Cauer Ladder Network Representation of Eddy-Current
+  Fields for Model Order Reduction Using Finite-Element Method," IEEE
+  Transactions on Magnetics, 2018.
+- Y. Shindo et al., "Dynamical Model of an Electromagnet using Cauer Ladder
+  Network Representation of Eddy-current Fields," IEEJ Journal of Industry
+  Applications, 2018.  https://doi.org/10.1541/ieejjia.7.305
+- O. Biro and N. Koster, "Generating a Cauer Ladder Network Representation of
+  Eddy Current Fields Using Scalar Potentials," IEEE Transactions on Magnetics,
+  2022.  https://doi.org/10.1109/TMAG.2022.3171079
 - S. Yuferev and L. Di Rienzo, "Surface Impedance Boundary Conditions in Terms
   of Various Formalisms," IEEE Transactions on Magnetics, 2010.
 - A. Bendali et al., high-order impedance-boundary/asymptotic treatments of
