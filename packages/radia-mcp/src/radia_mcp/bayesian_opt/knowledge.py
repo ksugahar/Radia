@@ -581,7 +581,7 @@ This is BO with the **UCB** acquisition reduced to pure exploration
   surrogate objectives
 - `radia_mcp.pinn` — neural surrogates for PDEs
 - `radia_mcp.mor` — model order reduction is the "physics-aware
-  surrogate" alternative (PRIMA, Cauer ladder)
+  surrogate" alternative (PRIMA, Lanczos)
 - `radia_mcp.mathematica` — symbolic baseline for verification
 """
 

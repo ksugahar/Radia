@@ -1144,12 +1144,12 @@ def label_curve_endpoints(ax, labels, *,
     Example:
         >>> # Single-panel digest figure with 4 curve labels
         >>> label_curve_endpoints(ax, [
-        ...     {"y_data": 141, "text": "CLN (R-term)", "color": "C1"},
+        ...     {"y_data": 141, "text": "ROM (R-term)", "color": "C1"},
         ...     {"y_data":  27, "text": r"$K/\\sqrt{\\omega}$",
         ...      "color": "k", "alpha": 0.7},
         ...     {"y_data": 8.5, "text": r"Schur-F = $Y$",
         ...      "color": "C3", "fontweight": "bold"},
-        ...     {"y_data": 0.55, "text": "CLN (L-term)", "color": "C0"},
+        ...     {"y_data": 0.55, "text": "ROM (L-term)", "color": "C0"},
         ... ])
         >>> # Leave room for labels in the right margin:
         >>> fig.subplots_adjust(right=0.78)
@@ -1602,7 +1602,7 @@ def place_text_clear(ax, s, *, nx: int = 11, ny: int = 7,
     return probe
 
 # ============================================================
-# ROM-paper helpers (Cauer / Multi-K / Schur-F asymptote plots)
+# ROM-paper helpers (ladder ROM / Multi-K / Schur-F asymptote plots)
 # ============================================================
 
 def place_label_arrow(ax, s, xy, *, region=None, arrow_kw=None, **text_kw):
@@ -1660,7 +1660,7 @@ def plot_asymptote_ratio_sweep(ax, f_Hz, Y_curves, K_SIBC, *,
     """Plot r(f) = |Y_R(jw)| * sqrt(omega) / K_SIBC log-log.
 
     Canonical "C-axis" reviewer figure for eddy-current ROM papers:
-    rational ROMs (CLN-N, Multi-K) decay as r ~ omega^{-(N-1/2)} above
+    rational ROMs (ladder ROM-N, Multi-K) decay as r ~ omega^{-(N-1/2)} above
     their wall band, while a Schur-F-augmented ROM has r flat at 1
     structurally.
 

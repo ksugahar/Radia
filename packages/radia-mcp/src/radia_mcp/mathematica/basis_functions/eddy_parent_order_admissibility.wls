@@ -11,7 +11,7 @@
       p is a parent-space admissibility order.
 
   The reduced model order is not p.  The reduced model order is the retained
-  EVRS/CLN rank plus topology and surface branches:
+  EVRS/Krylov rank plus topology and surface branches:
 
       n_reduced = n_EVRS + n_cycle * dim(trace-polys) + n_surface.
 
@@ -96,7 +96,7 @@ Module[
 
   chk["ledger contains exactly the three spatial requirements used by p",
       LedgerCompleteQ[req]];
-  chk["parent p requirement is max(bulk, bridge, surface), not CLN rank",
+  chk["parent p requirement is max(bulk, bridge, surface), not Krylov rank",
       ParentOrderRequirement[req] == 4];
   chk["p=4 is admissible for this ledger; p=3 is not",
       AdmissibleParentOrderQ[4, req] && ! AdmissibleParentOrderQ[3, req]];
@@ -133,8 +133,8 @@ Module[
   chk["if bridge faces need quadratic traces, mode count is no longer 34",
       ReducedModeCount[nEVRS, cycleRank, rBridge, surfaceModes] == 24 + 42 + 3];
 
-  (* Symbolic statement: CLN/Krylov depth nEVRS is independent of p unless the
-     spatial moment degree requested by that CLN construction changes. *)
+  (* Symbolic statement: Krylov depth nEVRS is independent of p unless the
+     spatial moment degree requested by that Krylov construction changes. *)
   pReq = ParentOrderRequirement[<|
     "bulkCurrentDegree" -> rBulk,
     "bridgeTraceDegree" -> rBridgeSym,

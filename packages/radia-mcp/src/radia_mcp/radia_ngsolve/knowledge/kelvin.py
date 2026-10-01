@@ -2926,9 +2926,9 @@ HONEST LIMITS of the A-Phi goldens (do not extrapolate past these):
   space only.
 - The geometry is a smooth sphere.  Sharp-cornered conductors (cuboid) are
   NOT covered; a cuboid + Kelvin HCurl gauge collapse (-76%) is on record
-  from the 2026-05 CLN study, so corners are a known risk area, not a
+  from a 2026-05 study, so corners are a known risk area, not a
   solved one.
-- The goldens validate the FEM formulation layer.  CLN / Cauer-ladder
+- The goldens validate the FEM formulation layer.  Reduced-order
   extraction on top of it (Lanczos, Foster poles, R_0 normalization) is a
   separate layer with its own open questions.
 

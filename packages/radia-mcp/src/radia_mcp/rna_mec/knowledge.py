@@ -8,9 +8,6 @@ Knowledge base derived from canonical RNA / MEC references:
   - Janet, Coulomb, Chillet, Mas, legacy current-transformer
     integral/circuit mixed modeling papers, IEEE Trans. Magn. 40(2)
     and 41(5), 2004-2005.
-  - Hane, Nakamura, "Dynamic Hysteresis Modeling for Magnetic Circuit
-    Analysis by Incorporating Play Model and Cauer's Equivalent Circuit
-    Theory", IEEE Trans. Magn., DOI 10.1109/TMAG.2020.3004355, 2020.
   - Yin, Naidjate, Bracikowski, Pierquin, Trichet, "Topology
     Optimization of Magnetic Actuator based on Reluctance Network
     Modeling and Adjoint Variable Method", Compumag/CEFC, 2023.
@@ -18,20 +15,11 @@ Knowledge base derived from canonical RNA / MEC references:
     Electromechanical System Using Conductor Segmentation and Circuit
     Parameters Extracted by FEA", IEEE Trans. Magn. 41(5), 1448-1451,
     2005. (TEAM Workshop Problem 28)
-  - Kameari, Ebrahimi, Sugahara, Shindo, Matsuo, "Cauer Ladder Network
-    Representation of Eddy-Current Fields for Model Order Reduction
-    Using Finite-Element Method", IEEE Trans. Magn. 54(3), 7201804,
-    2018.
   - Le-Duc, Chadebec, Guichon, Meunier, Lembeey, legacy PEEC/core
     integral coupling, COMPEL 32(1), 383-395, 2013.
 
 All knowledge below is plain ASCII; no Unicode mathematics symbols are
 used.  Coordinates in meters, B in Tesla, H in A/m (Radia convention).
-
-References (retained):
-  - Tanaka, Nakamura, Ichinokura, "Magnetic Circuit Model combined with Play Model Obtained from Landau-Lifshitz-Gilbert Equation", JPCS 903, 012047, 2017.
-  - Shindo, Noro, "Simple Circuit Simulation Models for the Eddy Current in Magnetic Sheets and Wires", IEEJ Trans. FM 134(4), 173-181, 2014.
-  - Shindo, Miyazaki, Matsuo, "Cauer Circuit Representation of the Homogenized Eddy-Current Field Based on the Legendre Expansion for a Magnetic Sheet", IEEE Trans. Magn. 52(3), 6300504, 2016.
 """
 
 
@@ -116,7 +104,6 @@ with Sugahara lab):
   - `1801_磁気学会_羽根_採録.pdf` -- Hane 2018 (Magnetics Society of Japan)
   - `1803_マグ研_羽根.pdf` -- Hane 2018
   - `1902_マグ研_羽根.pdf` -- Hane 2019
-  - `1912_マグ研_羽根_PlayCauer.pdf` -- Hane 2019, Play + Cauer
   - `修士論文_本審査_久田.ppt` -- Hisada (M.Eng. thesis)
   - `博士論文_本審査_吉田.pptx` -- Yoshida (Ph.D. thesis)
   - `AC_DC_Bridgeless_Flyback.pdf` -- application
@@ -236,6 +223,9 @@ behaviour -- see topic `nodal_vs_mesh_analysis`.
 - **Detailed force distribution on a moving armature** -- needs FEM or
   a fine RNA mesh with Maxwell-stress tensor evaluation.
 
+These limitations motivate the hybrid approaches documented in the
+other topics: nodal-vs-mesh, RNA + FEA extraction, RNA + calibrated
+integral leakage coupling, and Play-model hysteresis branches.
 """
 
 
@@ -852,6 +842,10 @@ The RNA + ODE solver framework dovetails directly with SPICE:
     electronics; the device's internal state advances at the SPICE
     timestep.
 
+This is how lab-scale Hane MEC + Play models are typically
+embedded in a switching-converter simulation -- the magnetic device
+appears as a 1-port (transformer) or 2-port (coupled inductor) with
+realistic iron loss + saturation + frequency-dependent eddy current.
 
 ## Cross-references
 
@@ -1088,8 +1082,6 @@ PREFER FEM-based TO:
 """
 
 
-
-
 VS_PEC_PEEC = r"""
 # Terminology: RNA vs PEC vs PEEC vs MEC vs MoM vs HDiv-VIM
 
@@ -1098,9 +1090,11 @@ used in the Sugahara-Kindai lab and in the literature cited above:
 
 ## RNA -- Reluctance Network Analysis
 
-A magnetic-circuit method. Discretize a magnetic structure into LUMPED
-reluctances + MMF sources + flux sources, solve via Kirchhoff laws (KCL or
-KVL). Domain: magnetostatics + slow-frequency quasi-static.
+A magnetic-circuit method.  Discretize a magnetic structure into
+LUMPED reluctances + MMF sources + flux sources, solve via Kirchhoff
+laws (KCL or KVL).  Domain: magnetostatics + slow-frequency
+quasi-static.  Output: branch fluxes, port inductance, force on
+armature, iron loss with optional Play-model extensions.
 
 Synonyms: MEC (Magnetic Equivalent Circuit), magnetic-circuit method,
 permeance network.
@@ -1179,6 +1173,9 @@ In radia_mcp: see `radia_mcp.radia_ngsolve.hdiv_vim`.
   Radia, use a dedicated solver).
 - Detailed local field map in complex 3D -> **FEM** (NGSolve).
 
+The Sugahara-Kindai-Tohoku research program covers RNA + HDiv-VIM +
+PEEC + Play in a unified framework; for any specific problem
+the right combination is usually obvious from the table above.
 """
 
 
@@ -1195,7 +1192,6 @@ def get_knowledge(topic: str = "overview") -> str:
         electromechanical_coupling
         team28_reduced_model
         topology_optimization
-        dynamic_hysteresis
         vs_pec_peec
         all
     """

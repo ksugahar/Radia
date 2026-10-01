@@ -468,7 +468,7 @@ How to fix (in order of lab preference):
        label_curve_endpoints(ax, [
            {"y_data": 141.0, "text": "Schur",  "color": "C1"},
            {"y_data":  27.0, "text": "Exact",  "color": "k"},
-           {"y_data":   8.5, "text": "CLN-N",  "color": "C0"},
+           {"y_data":   8.5, "text": "ROM-N",  "color": "C0"},
        ])
        fig.subplots_adjust(right=0.78)   # reserve right-margin room
 
