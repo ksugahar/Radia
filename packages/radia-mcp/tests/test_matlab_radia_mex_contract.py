@@ -308,3 +308,23 @@ def test_missing_sources_never_report_complete_parity(monkeypatch):
     contract = runtime.matlab_radia_mex_contract("mex")
     assert contract["status"] == "source_unavailable"
     assert contract["parity_status"] == "incomplete"
+
+
+def test_optimize_builder_rejects_loose_spec_values():
+    import pytest
+
+    base = {"runner": {"kind": "objective", "objective_fcn": "objectiveFcn"}}
+    for spec, message in (
+        ({**base, "parallel": "false"}, "parallel must be true or false"),
+        ({**base, "live_monitor": 0}, "live_monitor must be true or false"),
+        ({**base, "n_trials": 2.7}, "n_trials must be an integer"),
+        ({**base, "n_trial": 5}, "unknown optimization spec keys"),
+        ({"runner": {"kind": "objective", "objective_fcn": "f", "batch_size": 2}}, r"unknown runner \(objective\) keys"),
+        ({"runner": {"kind": "simulink", "model": "m", "score_fcn": "s", "use_fast_restart": "no"}},
+         "runner.use_fast_restart must be true or false"),
+        ({**base, "sampler": {"name": "grid", "search_space": {"coil.turns": [1, 2]}}},
+         "must be MATLAB identifiers"),
+    ):
+        with pytest.raises(ValueError, match=message):
+            matlab_optimize_build(spec)
+    assert matlab_optimize_build({**base, "n_trials": 3.0})["spec"]["n_trials"] == 3

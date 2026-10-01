@@ -25,12 +25,55 @@ _SAMPLER_NAMES = {
 }
 
 
+_MATLAB_IDENTIFIER = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,62}")
+_SPEC_KEYS = frozenset({
+    "name", "directions", "sampler", "n_trials", "runner", "parallel", "storage", "live_monitor",
+})
+_RUNNER_KEYS = {
+    "objective": frozenset({"kind", "objective_fcn"}),
+    "simulink": frozenset({
+        "kind", "model", "score_fcn", "configure_fcn", "constraint_fcn", "validation_fcn",
+        "result_fcn", "failure_classifier_fcn", "stop_time", "use_fast_restart", "context",
+        "continue_on_error", "batch_size",
+    }),
+    "ltspice": frozenset({"kind", "netlist", "configure_fcn", "score_fcn"}),
+}
+
+
+def _strict_int(value, label, *, minimum=None):
+    """An integral number (``3`` or ``3.0``), never a bool, truncation or string."""
+    try:
+        rejected = isinstance(value, bool) or int(value) != value
+    except (TypeError, ValueError):
+        rejected = True
+    if rejected:
+        raise ValueError(f"{label} must be an integer, got {value!r}")
+    number = int(value)
+    if minimum is not None and number < minimum:
+        raise ValueError(f"{label} must be >= {minimum}")
+    return number
+
+
+def _strict_bool(value, label):
+    """JSON true/false only: ``bool("false")`` would silently be True."""
+    if not isinstance(value, bool):
+        raise ValueError(f"{label} must be true or false, got {value!r}")
+    return value
+
+
+def _reject_unknown(mapping, allowed, label):
+    unknown = sorted(set(mapping) - set(allowed))
+    if unknown:
+        raise ValueError(f"unknown {label} keys: {unknown}")
+
+
 def matlab_optimize_build(spec: Mapping[str, Any] | str) -> dict[str, Any]:
     """Validate an optimization spec and generate official-MCP-ready MATLAB."""
     if isinstance(spec, str):
         spec = json.loads(spec)
     if not isinstance(spec, Mapping):
         raise ValueError("optimization spec must be a JSON object")
+    _reject_unknown(spec, _SPEC_KEYS, "optimization spec")
     name = str(spec.get("name", "radia-study"))
     directions = [str(item) for item in spec.get("directions", ["minimize"])]
     if not directions or any(item not in {"minimize", "maximize"} for item in directions):
@@ -39,16 +82,18 @@ def matlab_optimize_build(spec: Mapping[str, Any] | str) -> dict[str, Any]:
         spec.get("sampler", "tpe"),
         directions,
     )
-    n_trials = int(spec.get("n_trials", 20))
-    if n_trials <= 0:
-        raise ValueError("n_trials must be positive")
-    runner = dict(spec.get("runner", {"kind": "objective"}))
+    n_trials = _strict_int(spec.get("n_trials", 20), "n_trials", minimum=1)
+    runner = spec.get("runner", {"kind": "objective"})
+    if not isinstance(runner, Mapping):
+        raise ValueError("runner must be a JSON object")
+    runner = dict(runner)
     kind = str(runner.get("kind", "objective")).lower()
-    if kind not in {"objective", "simulink", "ltspice"}:
+    if kind not in _RUNNER_KEYS:
         raise ValueError("runner.kind must be objective, simulink, or ltspice")
-    parallel = bool(spec.get("parallel", kind in {"simulink", "ltspice"}))
+    _reject_unknown(runner, _RUNNER_KEYS[kind], f"runner ({kind})")
+    parallel = _strict_bool(spec.get("parallel", kind in {"simulink", "ltspice"}), "parallel")
     storage = str(spec.get("storage", ""))
-    live = bool(spec.get("live_monitor", True))
+    live = _strict_bool(spec.get("live_monitor", True), "live_monitor")
     code = _matlab_code(
         name, directions, sampler["matlab_code"], n_trials, runner,
         parallel, storage, live,
@@ -257,7 +302,7 @@ def _matlab_code(name, directions, sampler_code, n_trials, runner, parallel, sto
             stop_time = str(runner.get("stop_time", ""))
             if stop_time:
                 constructor.append(f"StopTime=\"{_quote_double(stop_time)}\"")
-            use_fast_restart = bool(runner.get("use_fast_restart", True))
+            use_fast_restart = _strict_bool(runner.get("use_fast_restart", True), "runner.use_fast_restart")
             constructor.append(f"UseFastRestart={str(use_fast_restart).lower()}")
             context = runner.get("context", {})
             if not isinstance(context, Mapping):
@@ -278,12 +323,11 @@ def _matlab_code(name, directions, sampler_code, n_trials, runner, parallel, sto
             )
         method = "optimizeParallel" if parallel else "optimize"
         if kind == "simulink":
-            continue_on_error = str(bool(runner.get("continue_on_error", True))).lower()
+            continue_on_error = str(_strict_bool(
+                runner.get("continue_on_error", True), "runner.continue_on_error")).lower()
             method_options = [f"ContinueOnError={continue_on_error}"]
             if parallel:
-                batch_size = int(runner.get("batch_size", 4))
-                if batch_size <= 0:
-                    raise ValueError("runner.batch_size must be positive")
+                batch_size = _strict_int(runner.get("batch_size", 4), "runner.batch_size", minimum=1)
                 method_options.insert(0, f"BatchSize={batch_size}")
             lines.append(
                 f"results=runner.{method}(study,{n_trials}," +
@@ -425,7 +469,7 @@ def _sampler_spec(value: Any, directions: list[str], *, nested: bool = False) ->
             raise ValueError("GridSampler requires non-empty sampler.search_space")
         code = (
             "radia.optuna.GridSampler("
-            f"{_jsondecode(search_space)},Seed={seed})"
+            f"{_jsondecode(_matlab_field_names(search_space, 'sampler.search_space'))},Seed={seed})"
         )
         supported_surface = "finite Cartesian grid exhaustion"
     elif name == "bruteforce":
@@ -442,7 +486,7 @@ def _sampler_spec(value: Any, directions: list[str], *, nested: bool = False) ->
         base = _sampler_spec(options.pop("base_sampler", "tpe"), directions, nested=True)
         code = (
             "radia.optuna.PartialFixedSampler("
-            f"{_jsondecode(fixed)},{base['matlab_code']})"
+            f"{_jsondecode(_matlab_field_names(fixed, 'sampler.fixed_params'))},{base['matlab_code']})"
         )
         supported_surface = "fixed parameters plus an oracled base sampler"
 
@@ -540,6 +584,22 @@ def _mutation(value):
 
 def _matlab_bool(value):
     return "true" if value else "false"
+
+
+def _matlab_field_names(mapping, label):
+    """Parameter names must survive ``jsondecode`` unchanged.
+
+    ``jsondecode`` turns JSON keys into struct fields through
+    ``matlab.lang.makeValidName`` (``"coil.turns"`` becomes ``coil_turns``), which
+    would silently rename the parameter the sampler reports to the study.
+    """
+    invalid = [key for key in mapping
+               if not (isinstance(key, str) and _MATLAB_IDENTIFIER.fullmatch(key))]
+    if invalid:
+        raise ValueError(
+            f"{label} names must be MATLAB identifiers (letter first, then letters, "
+            f"digits or _, at most 63 characters): {invalid}")
+    return mapping
 
 
 def _jsondecode(value):
