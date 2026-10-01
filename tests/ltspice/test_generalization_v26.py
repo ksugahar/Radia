@@ -112,7 +112,7 @@ def test_v26_public_electrothermal_identity_mismatch():
             "result_device_power_trace_ids": ["P(M0)"],
             "result_device_power_sha256": "9" * 64,
             "result_temperature_model_id": "constant_ambient",
-            "result_thermal_network_id": "cauer_rc_previous",
+            "result_thermal_network_id": "ladder_rc_previous",
             "result_time_step_s": 2.0e-5,
             "result_time_grid_s": [0.0, 2.0e-5, 4.0e-5],
             "result_temperature_waveform_sha256": "c" * 64,

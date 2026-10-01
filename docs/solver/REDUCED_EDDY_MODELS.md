@@ -1,8 +1,8 @@
 # Reduced eddy-current models
 
 Radia uses Foster modal models, PRIMA projection, and snapshot POD for
-electromagnetic model reduction. Retired CLN/Cauer construction guides are
-available in Git history; they are not supported implementation recipes.
+electromagnetic model reduction. Retired ladder construction guides are not
+supported implementation recipes.
 
 ## Foster modal dynamics
 
@@ -34,7 +34,7 @@ frequency band. A continued-fraction construction is not this projection.
 The eigenmode-bulk and surface-impedance composition lives under the legacy
 module path `radia.maglev.mixed_galerkin`. Its public method name is
 **Modal-bulk SIBC**. Geometry, frequency range, modal truncation, and
-surface corrections need their own validation; historical CLN comparisons
+surface corrections need their own validation; historical reduced-model comparisons
 do not establish acceptance of a current implementation.
 
 Keep full-model, reduced-model, and force/thermal validation separate.

@@ -1,11 +1,26 @@
-"""Copper-disk generalized eigenmodes on a structured Q1 quadrilateral mesh.
+"""Axisymmetric Cu disk eddy-current eigen reference (AXIFEM Q1 / Q2 quads).
 
-Builds axis-aligned rectangles to select AxiHenrotteFE_Q1_AxisAligned
-instead of AxiHenrotteFE_P1_Triangle from the OCC triangular mesh.
-The existing eigsh calculation and reference comparison remain.
-The historical Hiruma field-recurrence comparison has been retired."""
+Solid copper disk (radius R_DISK, thickness T_DISK, conductivity SIGMA_CU)
+in an air box, discretised on a structured axis-aligned quad mesh so that
+the closed-form AXIFEM quad elements are dispatched:
 
-import json
+    * ``solve_disk``    -- H1Henrotte(order=1), Q1 quads
+    * ``solve_disk_q2`` -- H1Henrotte(order=2), Q2 quads (9 DOFs / quad)
+
+Both assemble the stiffness K (1/mu) and the sigma-mass M (conductor only)
+and return the slowest eddy-current decay time constants
+``tau_n = 1 / lambda_n`` of the generalized eigenproblem ``K u = lambda M u``
+(scipy ``eigsh``, shift-invert at sigma=0), in microseconds, plus mesh size
+information. ``BEM_TAU`` is the stored axisymmetric integral-equation (BEM)
+modal spectrum of the same disk, used as the comparison reference.
+
+The mesh builder reads the module globals ``R_DISK``/``T_DISK`` at call time
+and the solvers read ``SIGMA_CU``/``MU0`` at call time, so callers may
+temporarily override them on the module object for other disk variants.
+
+Requires the native ``radia.axifem`` extension plus ngsolve and scipy.
+"""
+
 import os
 from math import pi
 
@@ -13,14 +28,13 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
-import netgen.meshing as ng_meshing
 from netgen.meshing import (
     Mesh as NgMesh, EdgeDescriptor, Element1D, Element2D, FaceDescriptor,
     MeshPoint, Pnt,
 )
 from ngsolve import (
-    Mesh, BilinearForm, LinearForm, CoefficientFunction, TaskManager,
-    x, dx, ngsglobals,
+    Mesh, BilinearForm, CoefficientFunction, TaskManager,
+    ngsglobals,
 )
 from radia.axifem import (
     H1Henrotte, AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI,
@@ -31,12 +45,25 @@ R_DISK = 10e-3
 T_DISK = 2e-3
 SIGMA_CU = 5.8e7
 MU0 = 4 * pi * 1e-7
-B0 = 1.0
+B0 = 1.0  # imposed axial flux density [T] (excitation A_phi = B0 r / 2)
+
+# Stored axisymmetric BEM modal spectrum of the disk [us].
+BEM_TAU = [224.3070587702379, 88.42395618426703, 49.53986759314118,
+           32.090204181064834, 23.339598470067966, 22.588437092711622]
+# Pure-Python Q1 prototype leading time constants [us].
+PYTHON_Q1_TAU = [223.06, 87.60, 48.86, 31.49]
+
+# Location of the refined BEM reference result (regenerable, not shipped).
+BEM_TAU_REF_PATH = os.path.normpath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "..", "bem_disk",
+    "bem_disk_axisym_v3_refined.json",
+))
 
 
 def make_structured_disk_quad_mesh(NR_disk=40, Nz_disk=8, NR_air=15, Nz_air=15,
                                     R_air=200e-3, Z_air=200e-3):
-    """Mirror axifem/axifem_quad.py:structured_disk_mesh, output as NGSolve.
+    """Structured axis-aligned quad mesh of the disk + air box, as NGSolve Mesh.
 
     Layout in (r, z):
         - Disk: r in [0, R_disk], z in [-T/2, T/2], NR_disk x Nz_disk uniform cells.
@@ -124,6 +151,7 @@ def make_structured_disk_quad_mesh(NR_disk=40, Nz_disk=8, NR_air=15, Nz_air=15,
 
 
 def to_scipy_csr(mat, n):
+    """NGSolve sparse matrix -> symmetrised scipy CSR (n x n)."""
     rs, cs, vs = mat.COO()
     K = sp.csr_matrix(
         (np.asarray(vs, dtype=np.float64),
@@ -132,23 +160,10 @@ def to_scipy_csr(mat, n):
     return (K + K.T) * 0.5
 
 
-
-
-def solve_disk(NR_disk, Nz_disk, NR_air, Nz_air, R_air, Z_air, N_stages=6,
-               label=""):
-    print(f"\n=== Q1 quad: NR_d={NR_disk} Nz_d={Nz_disk} NR_a={NR_air} "
-          f"Nz_a={Nz_air} R_air={R_air*1e3}mm  {label} ===")
-    ngsglobals.msg_level = 0
-    mesh = make_structured_disk_quad_mesh(NR_disk, Nz_disk, NR_air, Nz_air,
-                                            R_air, Z_air)
-    fes = H1Henrotte(mesh, dirichlet="axis|right|top|bot")
-    n_free = sum(1 for f in fes.FreeDofs() if f)
-    print(f"  mesh ne={mesh.ne} ndof={fes.ndof}  free={n_free}  "
-          f"materials={mesh.GetMaterials()}")
-
+def _eigen_time_constants(fes, mesh, N_stages, fmt):
+    """Assemble K, M on ``fes`` and return eigsh time constants [us] + free count."""
     mu_cf = CoefficientFunction(MU0)
     sigma_cf = mesh.MaterialCF({"conductor": SIGMA_CU}, default=0.0)
-    A_imposed = B0 * x / 2
 
     a = BilinearForm(fes, symmetric=True)
     a += AxiHenrotteStiffnessBFI(mu_cf)
@@ -158,72 +173,84 @@ def solve_disk(NR_disk, Nz_disk, NR_air, Nz_air, R_air, Z_air, N_stages=6,
     m += AxiHenrotteSigmaMassBFI(sigma_cf)
     with TaskManager(): m.Assemble()
 
-    b_form = LinearForm(fes)
-    v = fes.TestFunction()
-    b_form += sigma_cf * A_imposed * v * 2 * pi * x * dx
-    with TaskManager(): b_form.Assemble()
-    b_vec = np.array(b_form.vec)
-
     K_csr = to_scipy_csr(a.mat, fes.ndof)
     M_csr = to_scipy_csr(m.mat, fes.ndof)
     free = np.array([i for i in range(fes.ndof) if fes.FreeDofs()[i]], dtype=int)
     K_red = K_csr[free[:, None], free[None, :]]
     M_red = M_csr[free[:, None], free[None, :]]
-    b_red = b_vec[free]
 
     eigs, _ = spla.eigsh(K_red, k=min(N_stages, len(free) // 2),
-                          M=M_red, sigma=0.0, which="LM",
-                          tol=1e-10, maxiter=3000)
+                         M=M_red, sigma=0.0, which="LM",
+                         tol=1e-10, maxiter=3000)
     eigsh_taus = sorted((1.0/e) * 1e6 for e in eigs)[::-1]
     print(f"  scipy eigsh tau_n[:{len(eigsh_taus)}] = "
-          f"{[f'{t:.3f}' for t in eigsh_taus]} us")
-
-    res = {}
-    res["eigsh_tau_us"] = eigsh_taus
-    res["mesh"] = {"ne": mesh.ne, "ndof": fes.ndof, "free": int(len(free))}
-    return res
+          f"{[format(t, fmt) for t in eigsh_taus]} us")
+    return eigsh_taus, int(len(free))
 
 
-BEM_TAU = [224.3070587702379, 88.42395618426703, 49.53986759314118,
-           32.090204181064834, 23.339598470067966, 22.588437092711622]
-PYTHON_Q1_TAU = [223.06, 87.60, 48.86, 31.49]
+def solve_disk(NR_disk, Nz_disk, NR_air, Nz_air, R_air, Z_air, N_stages=6,
+               label=""):
+    """Q1 quad disk: slowest ``N_stages`` eddy time constants [us] + mesh info."""
+    print(f"\n=== Q1 quad: NR_d={NR_disk} Nz_d={Nz_disk} NR_a={NR_air} "
+          f"Nz_a={Nz_air} R_air={R_air*1e3}mm  {label} ===")
+    ngsglobals.msg_level = 0
+    mesh = make_structured_disk_quad_mesh(NR_disk, Nz_disk, NR_air, Nz_air,
+                                            R_air, Z_air)
+    fes = H1Henrotte(mesh, dirichlet="axis|right|top|bot")
+    n_free = sum(1 for f in fes.FreeDofs() if f)
+    print(f"  mesh ne={mesh.ne} ndof={fes.ndof}  free={n_free}  "
+          f"materials={mesh.GetMaterials()}")
+    eigsh_taus, free = _eigen_time_constants(fes, mesh, N_stages, ".3f")
+    return {"eigsh_tau_us": eigsh_taus,
+            "mesh": {"ne": mesh.ne, "ndof": fes.ndof, "free": free}}
+
+
+def solve_disk_q2(NR_disk, Nz_disk, NR_air, Nz_air, R_air, Z_air, N_stages=6,
+                  label=""):
+    """Q2 quad disk: slowest ``N_stages`` eddy time constants [us] + mesh info."""
+    print(f"\n=== Q2 quad: NR_d={NR_disk} Nz_d={Nz_disk} NR_a={NR_air} "
+          f"Nz_a={Nz_air} R_air={R_air*1e3}mm  {label} ===")
+    ngsglobals.msg_level = 0
+    mesh = make_structured_disk_quad_mesh(NR_disk, Nz_disk, NR_air, Nz_air,
+                                          R_air, Z_air)
+    fes = H1Henrotte(mesh, order=2, dirichlet="axis|right|top|bot")
+    n_free = sum(1 for f in fes.FreeDofs() if f)
+    print(f"  mesh ne={mesh.ne} ndof={fes.ndof}  free={n_free}  "
+          f"materials={mesh.GetMaterials()}")
+    eigsh_taus, free = _eigen_time_constants(fes, mesh, N_stages, ".4f")
+    return {"eigsh_tau_us": eigsh_taus,
+            "mesh": {"ne": mesh.ne, "ndof": fes.ndof, "free": free}}
 
 
 def main():
-    cases = [
+    cases_q1 = [
         (20,  4,  10, 10, 100e-3, 100e-3, "coarse"),
         (40,  8,  15, 15, 200e-3, 200e-3, "medium"),
         (80, 16,  20, 20, 500e-3, 500e-3, "fine"),
         (160, 32, 25, 25, 500e-3, 500e-3, "very fine"),
     ]
-    all_res = {}
-    for NR_d, Nz_d, NR_a, Nz_a, R_a, Z_a, lbl in cases:
-        all_res[lbl] = solve_disk(NR_d, Nz_d, NR_a, Nz_a, R_a, Z_a,
-                                    N_stages=6, label=lbl)
+    cases_q2 = [
+        (10, 4,  8,  8, 100e-3, 100e-3, "coarse"),
+        (20, 8, 12, 12, 200e-3, 200e-3, "medium"),
+        (40, 16, 15, 15, 500e-3, 500e-3, "fine"),
+    ]
+    rows = []
+    for NR_d, Nz_d, NR_a, Nz_a, R_a, Z_a, lbl in cases_q1:
+        rows.append(("Q1 " + lbl, solve_disk(NR_d, Nz_d, NR_a, Nz_a, R_a, Z_a,
+                                              N_stages=6, label=lbl)))
+    for NR_d, Nz_d, NR_a, Nz_a, R_a, Z_a, lbl in cases_q2:
+        rows.append(("Q2 " + lbl, solve_disk_q2(NR_d, Nz_d, NR_a, Nz_a, R_a,
+                                                 Z_a, N_stages=6, label=lbl)))
 
-    print("\n" + "="*78)
-    print("Summary: Q1 quad mesh vs BEM-Foster (Mathematica reference)")
-    print("="*78)
-    print(f"{'case':<10} {'ne':>8} {'free':>6}  "
-          f"{'τ_1 eigsh':>10}  {'/BEM':>7}  {'/PyQ1':>7}")
-    for lbl, r in all_res.items():
+    print("\n" + "="*70)
+    print("Summary: first eddy time constant vs stored BEM modal reference")
+    print("="*70)
+    print(f"{'case':<14} {'ne':>8} {'free':>6}  {'tau_1 us':>10}  {'/BEM':>7}")
+    for lbl, r in rows:
         t1 = r["eigsh_tau_us"][0]
-        ratio_bem = t1 / BEM_TAU[0]
-        ratio_py = t1 / PYTHON_Q1_TAU[0]
-        print(f"{lbl:<10} {r['mesh']['ne']:>8} {r['mesh']['free']:>6}  "
-              f"{t1:>10.4f}  {ratio_bem:>7.4f}  {ratio_py:>7.4f}")
-
-    out_path = os.path.join(os.path.dirname(__file__),
-                            "test_hiruma_disk_q1_results.json")
-    with open(out_path, "w") as fp:
-        json.dump({"results": all_res, "bem_tau_us": BEM_TAU,
-                   "python_q1_tau_us": PYTHON_Q1_TAU}, fp, indent=2)
-    print(f"\nSaved: {out_path}")
+        print(f"{lbl:<14} {r['mesh']['ne']:>8} {r['mesh']['free']:>6}  "
+              f"{t1:>10.4f}  {t1 / BEM_TAU[0]:>7.4f}")
 
 
 if __name__ == "__main__":
     main()
-
-# Reference retained from retired method: The Cauer ladder follows Nagamine et al. 2026 Fig. 3 / Eq. (11):
-
-# Historical Hiruma field recurrence retired; independent eigenmode solve retained.

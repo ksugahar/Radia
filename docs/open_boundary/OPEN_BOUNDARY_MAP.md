@@ -54,7 +54,7 @@ validated against the full-order system over the operating band.
 - MCP: `dtn_coarse_mesh` and `kelvin_transformation` expose the maintained
   boundary guidance. Consult their topic index for current names.
 
-The former `dtn_cln` module, circuit-named helpers, and `mor_cln` tool are retired.
+The former circuit-named DtN module, helpers, and reduction tool are retired.
 The analytic continued-fraction representation is restored: use
 `continued_fraction_stages` and `eval_continued_fraction` for exact/high-order
 non-reflecting boundaries. It terminates at n+1 partial quotients in sqrt(s). Historical

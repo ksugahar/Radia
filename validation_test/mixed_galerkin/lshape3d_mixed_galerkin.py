@@ -387,7 +387,7 @@ def main():
         print()
 
     print("Notes:")
-    print("- bulk-only is straight CLN (rank-N Krylov-at-0), Q(s) rational, integer tail.")
+    print("- bulk-only is straight rank-N Krylov-at-0, Q(s) rational, integer tail.")
     print("- +bbox 1DOF: bounding-box tensor SIBC (BC mismatch at 2 concave step faces).")
     print("- +region 1DOF: sum of horiz + vert per-region tensors, vanishes on ALL 8 faces.")
     print("- +split 2DOF: horiz and vert per-region tensors as 2 separate basis functions.")

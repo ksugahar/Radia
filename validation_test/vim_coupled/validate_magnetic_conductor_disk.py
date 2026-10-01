@@ -62,7 +62,7 @@ from radia.axifem import (  # noqa: E402
     AxiHenrotteStiffnessBFI,
     H1Henrotte,
 )
-import test_hiruma_disk_q1 as axifem_disk  # noqa: E402
+import disk_axisym_reference as axifem_disk  # noqa: E402
 
 
 MU0 = 4.0e-7 * math.pi

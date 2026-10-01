@@ -19,8 +19,8 @@ alpha_shear  eps_acute (deg)     Y_FEM_re     Y_FEM_im  Sum L_e W (m)       Avg 
 === Quadratic fit: Delta Sum_LW = 2 L * W''(pi/2) * eps^2 ===
   Fit:  Delta Sum_LW = 107.2424 mm * eps^2  (eps in radians)
 Traceback (most recent call last):
-  File "W:\02_学会資料\2026年度\2026_09_IGTE_Symposium\CauerLadderNetwork@菅原\mixed_galerkin\cuboid_general\04_W_alpha_regression.py", line 215, in <module>
+  File "<conference-copy>\mixed_galerkin\cuboid_general\04_W_alpha_regression.py", line 215, in <module>
     main()
-  File "W:\02_学会資料\2026年度\2026_09_IGTE_Symposium\CauerLadderNetwork@菅原\mixed_galerkin\cuboid_general\04_W_alpha_regression.py", line 201, in main
+  File "<conference-copy>\mixed_galerkin\cuboid_general\04_W_alpha_regression.py", line 201, in main
     print(f"  W''(pi/2) \u2248 {W_pp:.4f}")
 UnicodeEncodeError: 'cp932' codec can't encode character '\u2248' in position 12: illegal multibyte sequence

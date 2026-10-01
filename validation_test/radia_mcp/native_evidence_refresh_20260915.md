@@ -98,7 +98,7 @@ was held open until a genuinely passing replacement was generated.
   Duffy integral as the primal. Reference Piola charge measures are fixed;
   the derivative kernel is `-dot(X_T-X_S, V_T-V_S)/|X_T-X_S|^3`.
 - The passing native JSON is promoted to `annular_motor_dual_lane_v1`, SHA-256
-  `88eec885cd8a0f4ddd2bac4f3c79db04025868690b9197eb256bd927b3d5deab`.
+  `7546f9b4c7f0a754629f77427a347d1fde65890ab46001eb3e4e7fd1e4329d70`.
   Its production proof is regenerated with separate historical motor/native
   versions. The failed JSON is superseded (Git preserves the investigation).
   Kernel and executed-test hashes now guard evidence freshness, not just the

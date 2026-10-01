@@ -120,10 +120,9 @@ def bulk_foster_matrix_via_eigen(mesh, sigma: float, mu: float, drive_cfs,
     with G_n[n] = sigma V b_n b_n^T  (symmetric positive-semidefinite, rank 1
     per mode), b_n[p] = <f_p, phi_n>_M / sqrt(V), tau_n = mu sigma / lam_n.
 
-    This is the Foster-eigenbasis realization of the matrix-form CLN
-    (Matsuo 2017/2018c multi-port Kameari: the modal amplitude carries one
-    column per port and lambda becomes an N_port x N_port matrix; see
-    radia_mcp.mor mor_cln_multiport "multiport_theory").  With drive_cfs the
+    This is the Foster-eigenbasis realization of the matrix-form multi-port
+    modal model (the modal amplitude carries one column per port and lambda
+    becomes an N_port x N_port matrix).  With drive_cfs the
     set {1, x-x_c, y-y_c, z-z_c, ...} the matrix Y(s)_{pq} is a MULTIPOLE
     expansion of the conductor's scalar eddy response: the monopole port 1
     couples to a uniform external field, the dipole ports x, y, z to field
@@ -308,7 +307,7 @@ def surface_moment_matrix(mesh, drive_cfs):
     """Surface moment matrix K_geom[p,q] = integral_{dOmega} f_p f_q dS.
 
     The matrix generalization of the wetted area S that sets the SIBC
-    orthogonal-residual tail (cln_sibc_orthogonal "math": the residual modes
+    orthogonal-residual tail (the residual modes
     sum to K_SIBC / sqrt(s) with the area as the geometric factor; for a
     multi-drive projection the area becomes the surface second moment of the
     drives).  For the monopole drive f=1 this is the total boundary area S

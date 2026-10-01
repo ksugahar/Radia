@@ -384,8 +384,6 @@ ssh 100 'pwsh -Command "Get-CimInstance Win32_Process -Filter ''Name=\"coreform_
 ## Memory references
 
 - `reference_shared_filesystem_lab_100.md` — LAB S: ↔ 100号機 W: same mount
-- `project_iga_cln_dual_reduction.md` — unrelated, but shows what a
-  proper research plan placement looks like
 - 2026-04-21 license warmup deployment: commit `7b60b106` +
   `3500c4d9` (both in `packages/radia-mcp/src/radia_mcp/cubit/`)
 - `C:\ProgramData\CoreformCubit\` → cubit_license_refresh.ps1

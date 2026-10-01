@@ -2,7 +2,8 @@
 9x9 element matrix from each element + the assembled global matrix vs a
 manual reference.
 
-Goal: find the source of the factor-~8 error in test_hiruma_disk_q2.py.
+Goal: find the source of the factor-~8 error seen in the Q2 Cu-disk run
+(now ``solve_disk_q2`` in disk_axisym_reference.py).
 """
 import sys
 from pathlib import Path

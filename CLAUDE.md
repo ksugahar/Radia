@@ -43,7 +43,7 @@ Prefer established public abstractions over proprietary plumbing.
   feasible.
 ### Numerical Rules
 - Use Foster modal models, PRIMA projection or snapshot POD for electromagnetic reduction.
-  Retired CLN/Cauer APIs are not production/comparison routes.
+  Retired reduction APIs are not production/comparison routes.
   Select reduced orders by measured operating-band error.
   DtN continued fractions represent exact/high-order non-reflecting boundaries.
 - Call eigenmode-bulk + surface-impedance coupling **Modal-bulk SIBC** (was Foster + SIBC; legacy identifiers stay), never "mixed Galerkin".

@@ -12,13 +12,14 @@ DERIVATIONS = ROOT / "validation_test/axifem/research/prototypes"
 def test_axifem_reference_links_resolve_inside_repository():
     document = ROOT / "docs/axifem/AXIFEM.md"
     source = document.read_text(encoding="utf-8")
-    assert "W%3A" not in source and "W:/30_CauerLadderNetwork" not in source
-    for filename in ("bem_disk_axisym_cauer.wls", "disk_bem_cauer.py"):
-        links = re.findall(r"\[`" + re.escape(filename) + r"`\]\(([^)]+)\)", source)
-        assert len(links) == 1
-        target = (document.parent / links[0]).resolve()
+    # No links into internal lab drives (URL-encoded or the W:/30_* research trees).
+    assert "W%3A" not in source and not re.search(r"W:[/\\]30_", source)
+    links = re.findall(r"\]\(((?:\.\./)+validation_test/[^)#]+)\)", source)
+    assert links
+    for link in links:
+        target = (document.parent / link).resolve()
         assert target.is_relative_to(ROOT.resolve())
-        assert target.is_file()
+        assert target.exists(), link
 
 
 @pytest.mark.parametrize("order,expected", [(1, 1), (2, 2)])
