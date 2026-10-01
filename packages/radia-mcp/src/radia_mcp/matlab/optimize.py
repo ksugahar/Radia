@@ -44,7 +44,7 @@ def _strict_int(value, label, *, minimum=None):
     """An integral number (``3`` or ``3.0``), never a bool, truncation or string."""
     try:
         rejected = isinstance(value, bool) or int(value) != value
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):  # OverflowError: int(inf)
         rejected = True
     if rejected:
         raise ValueError(f"{label} must be an integer, got {value!r}")
