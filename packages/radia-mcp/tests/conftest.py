@@ -230,6 +230,28 @@ def _project_import_has_absent_dependency(module_name: str, seen: set | None = N
     return ""
 
 
+def _with_local_helper_imports(modules: set, seen: set | None = None) -> set:
+    """Add the imports of sibling helper modules (``tests/<name>.py``).
+
+    Shared payload builders live in such helpers; their dependencies decide
+    whether the importing test file can be collected just as its own do.
+    """
+    seen = set() if seen is None else seen
+    out = set(modules)
+    for module in modules:
+        top = _top_module(module)
+        helper = _TEST_ROOT / f"{top}.py"
+        if top in seen or not helper.is_file():
+            continue
+        seen.add(top)
+        try:
+            nested = _imported_modules(helper.read_text(encoding="utf-8", errors="ignore"))
+        except OSError:
+            continue
+        out |= _with_local_helper_imports(nested, seen)
+    return out
+
+
 collect_ignore = []
 # Files left out because an optional dependency is absent, with the reason.
 # They are reported in the session header and summary, never dropped silently.
@@ -264,7 +286,7 @@ for _f in _dependency_scan_files:
         _src = _f.read_text(encoding="utf-8", errors="ignore")
     except OSError:
         continue
-    for _m in sorted(_imported_modules(_src)):
+    for _m in sorted(_with_local_helper_imports(_imported_modules(_src))):
         _absent = _top_module(_m) if _module_absent(_m) else _project_import_has_absent_dependency(_m)
         if _absent:
             collect_ignore.append(_relative)
