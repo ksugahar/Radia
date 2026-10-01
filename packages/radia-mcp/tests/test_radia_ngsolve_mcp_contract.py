@@ -11,13 +11,15 @@ from radia_mcp.common.mcp_contract import SCHEMA
 from radia_mcp.radia_ngsolve.server import mcp
 
 
-def test_mixed_omega_knowledge_preserves_candidate_and_evidence_boundaries():
+def test_mixed_omega_knowledge_preserves_solver_and_evidence_boundaries():
     from radia_mcp.radia_ngsolve.knowledge.kelvin import KELVIN_SOURCE_IN_OMEGA_FORM
 
     text = KELVIN_SOURCE_IN_OMEGA_FORM
-    assert "development solver" in text
-    assert "not a capability enabled by upgrading radia-mcp alone" in text
-    assert "material_update_order" in text
+    assert "from radia.kelvin_solver import" in text
+    assert "solve_magnetostatic_mixed_total_reduced_omega_kelvin" in text
+    assert "nonlinear_material_bonus_intorder" in text
+    assert "material_bonus_intorder" in text
+    assert "Picard lanes were" in text
     assert "v5-v11" in text
     assert "unsmoothed element-local" in text
     assert "Historical C-type" in text
