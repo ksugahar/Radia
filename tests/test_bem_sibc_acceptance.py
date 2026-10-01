@@ -57,3 +57,27 @@ def test_dense_bad_solution_is_rejected(monkeypatch):
     monkeypatch.setattr(module, 'scipy_solve', lambda matrix, rhs: np.zeros_like(rhs))
     with pytest.raises(RuntimeError, match='true relative residual'):
         solver._solve_with_gauge(np.eye(2), np.array([1., -1.]))
+
+@pytest.mark.parametrize('order,symbol', [(1,'_AssembleSLDL_Galerkin'),(2,'_AssembleSLDL_Galerkin_P2')])
+def test_selected_native_bem_rejects_missing_symbol(monkeypatch,order,symbol):
+    import ngsolve as ng
+    from netgen.occ import OCCGeometry, Sphere, Pnt
+    from radia import _radia_pybind
+    monkeypatch.delattr(_radia_pybind,symbol,raising=False)
+    with ng.TaskManager():
+        mesh=ng.Mesh(OCCGeometry(Sphere(Pnt(0,0,0),1)).GenerateMesh(maxh=1))
+        with pytest.raises(RuntimeError,match='Rebuild/reinstall'):
+            module.ScalarBIESIBCSolver(mesh,order=order,use_intree_bem=True)
+
+
+def test_native_segment_field_missing_symbol_and_analytic_normal_path(monkeypatch):
+    from radia import _radia_pybind
+    segments=np.array([[[-1.,0.,0.],[1.,0.,0.]]])
+    point=np.array([[0.,1.,0.]])
+    field=module._h_segments_complex(segments,point,np.array([1.+2j]))
+    # Finite straight wire at unit distance, endpoint angles +/- pi/4.
+    expected=np.array([[0.,0.,np.sqrt(2)/(4*np.pi)*(1+2j)]])
+    np.testing.assert_allclose(field,expected,rtol=1e-13,atol=1e-15)
+    monkeypatch.delattr(_radia_pybind,'_HFromSegmentsComplex')
+    with pytest.raises(RuntimeError,match='Rebuild/reinstall'):
+        module._h_segments_complex(segments,point,np.array([1.+2j]))

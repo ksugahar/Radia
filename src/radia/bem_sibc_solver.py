@@ -28,6 +28,17 @@ from ._residual_gate import RELATIVE_LIMIT, residual_scale
 MU_0 = 4e-7 * np.pi
 
 
+def _required_native_symbol(name):
+    """Require the explicitly selected native backend; never substitute an oracle."""
+    try:
+        from radia import _radia_pybind
+        return getattr(_radia_pybind, name)
+    except (ImportError, AttributeError) as exc:
+        raise RuntimeError(
+            f"Native BEM symbol {name} is unavailable. Rebuild/reinstall Radia "
+            "for the active Python/NGSolve ABI; no backend fallback is permitted.") from exc
+
+
 def _uniform_surface_impedance(value, ndof):
     """Reject variable impedance until coefficient-weighted stiffness is supported."""
     values = np.asarray(value, dtype=complex)
@@ -206,9 +217,7 @@ class ScalarBIESIBCSolver:
 
         if use_intree_bem:
             # In-tree Sauter-Schwab Galerkin BEM (no ngsolve.bem dep).
-            # Uses the C++ assembler (radia._radia_pybind._AssembleSLDL_
-            # Galerkin) when available -- pure-Python fallback only when
-            # the C++ symbol is missing (older wheel without Phase 1.9).
+            # Requires the matching native Galerkin assembler.
             from radia.bem.sibc_hacapk import extract_surface_curved
             _t_ext = time.perf_counter()
             verts, tris, v_global, tri_p2 = extract_surface_curved(
@@ -217,40 +226,20 @@ class ScalarBIESIBCSolver:
                 f"extract_surface_curved: {len(tris)} tris, {len(verts)} verts "
                 f"(geom_order={intree_geom_order}, "
                 f"{time.perf_counter()-_t_ext:.1f}s)")
-            try:
-                from radia import _radia_pybind as _rpb
-                _cpp_assemble = _rpb._AssembleSLDL_Galerkin
-            except (ImportError, AttributeError):
-                _cpp_assemble = None
+            _cpp_assemble = _required_native_symbol("_AssembleSLDL_Galerkin")
             _t_sldl = time.perf_counter()
-            if _cpp_assemble is not None:
-                _log_phase("BEM",
-                    f"SLDL Galerkin assembly: C++ kernel, "
-                    f"{len(tris)} tris, quad_deg={intree_regular_quad_degree}, "
-                    f"sing_n_q={intree_singular_n_q}")
-                v_arr = np.ascontiguousarray(verts, dtype=np.float64)
-                t_arr = np.ascontiguousarray(tris, dtype=np.int64)
-                p_arr = np.ascontiguousarray(tri_p2, dtype=np.float64)
-                SL_loc, DL_loc = _cpp_assemble(
-                    v_arr, t_arr, p_arr,
-                    intree_regular_quad_degree,
-                    intree_singular_n_q,
-                    0)   # n_threads=0 -> OpenMP default
-            else:
-                _log_phase("BEM",
-                    f"SLDL Galerkin assembly: pure-Python fallback "
-                    f"(C++ _AssembleSLDL_Galerkin not available -- slow!), "
-                    f"{len(tris)} tris")
-                from radia.bem.sibc_hacapk import (
-                    assemble_SL_dense_curved, assemble_DL_dense_curved)
-                SL_loc = assemble_SL_dense_curved(
-                    verts, tris, tri_p2,
-                    regular_quad_degree=intree_regular_quad_degree,
-                    singular_n_q=intree_singular_n_q)
-                DL_loc = assemble_DL_dense_curved(
-                    verts, tris, tri_p2,
-                    regular_quad_degree=intree_regular_quad_degree,
-                    singular_n_q=intree_singular_n_q)
+            _log_phase("BEM",
+                f"SLDL Galerkin assembly: C++ kernel, "
+                f"{len(tris)} tris, quad_deg={intree_regular_quad_degree}, "
+                f"sing_n_q={intree_singular_n_q}")
+            v_arr = np.ascontiguousarray(verts, dtype=np.float64)
+            t_arr = np.ascontiguousarray(tris, dtype=np.int64)
+            p_arr = np.ascontiguousarray(tri_p2, dtype=np.float64)
+            SL_loc, DL_loc = _cpp_assemble(
+                v_arr, t_arr, p_arr,
+                intree_regular_quad_degree,
+                intree_singular_n_q,
+                0)   # n_threads=0 -> OpenMP default
             _log_phase("BEM",
                 f"SLDL Galerkin assembly done "
                 f"({time.perf_counter()-_t_sldl:.1f}s)")
@@ -407,34 +396,17 @@ class ScalarBIESIBCSolver:
         self._intree_dofs_per_tri = dofs_per_tri
         self._intree_tri_p2 = tri_p2
 
-        # SL / DL: Python implementation (slow O(n_t^2)).  Replaced with a
-        # C++ binding ``_AssembleSLDL_Galerkin_P2`` once the .pyd ships
-        # the P2 entry point.
-        try:
-            from radia import _radia_pybind as _rpb
-            _cpp_assemble_p2 = getattr(_rpb, "_AssembleSLDL_Galerkin_P2",
-                                       None)
-        except ImportError:
-            _cpp_assemble_p2 = None
-        if _cpp_assemble_p2 is not None:
-            v_arr = np.ascontiguousarray(verts, dtype=np.float64)
-            t_arr = np.ascontiguousarray(tris, dtype=np.int64)
-            p_arr = np.ascontiguousarray(tri_p2, dtype=np.float64)
-            d_arr = np.ascontiguousarray(dofs_per_tri, dtype=np.int64)
-            self.SL, self.DL = _cpp_assemble_p2(
-                v_arr, t_arr, p_arr, d_arr, int(n_dof),
-                int(intree_regular_quad_degree),
-                int(intree_singular_n_q),
-                0)
-        else:
-            self.SL = assemble_SL_dense_curved_p2(
-                verts, tris, tri_p2, dofs_per_tri, n_dof,
-                regular_quad_degree=intree_regular_quad_degree,
-                singular_n_q=intree_singular_n_q)
-            self.DL = assemble_DL_dense_curved_p2(
-                verts, tris, tri_p2, dofs_per_tri, n_dof,
-                regular_quad_degree=intree_regular_quad_degree,
-                singular_n_q=intree_singular_n_q)
+        _cpp_assemble_p2 = _required_native_symbol("_AssembleSLDL_Galerkin_P2")
+        v_arr = np.ascontiguousarray(verts, dtype=np.float64)
+        t_arr = np.ascontiguousarray(tris, dtype=np.int64)
+        p_arr = np.ascontiguousarray(tri_p2, dtype=np.float64)
+        d_arr = np.ascontiguousarray(dofs_per_tri, dtype=np.int64)
+        self.SL, self.DL = _cpp_assemble_p2(
+            v_arr, t_arr, p_arr, d_arr, int(n_dof),
+            int(intree_regular_quad_degree),
+            int(intree_singular_n_q),
+            0)
+
 
         self.M = assemble_mass_curved_p2(
             tri_p2, dofs_per_tri, n_dof,
@@ -1470,90 +1442,21 @@ def _h_segments_complex(segments, obs_points, currents,
     returns:   (N_obs, 3) complex
 
     Calls the C++ kernel `radia._radia_pybind._HFromSegmentsComplex`
-    when available (~50-100x faster than the legacy NumPy fallback at
-    typical IH coil sizes).  Falls back to the NumPy path when the C++
-    symbol is missing (older wheel build).
+    and fails explicitly if the installed native build lacks that symbol.
     """
     obs = np.asarray(obs_points, dtype=float)
     if obs.ndim == 1:
         obs = obs.reshape(1, 3)
 
-    # C++ fast path
-    try:
-        from radia import _radia_pybind as _rpb_bs
-        _cpp_bs = _rpb_bs._HFromSegmentsComplex
-    except (ImportError, AttributeError):
-        _cpp_bs = None
-    if _cpp_bs is not None:
-        seg = np.ascontiguousarray(np.asarray(segments, dtype=float))
-        I = np.asarray(currents, dtype=complex)
-        I_re = np.ascontiguousarray(I.real)
-        I_im = np.ascontiguousarray(I.imag)
-        obs_c = np.ascontiguousarray(obs)
-        H_re, H_im = _cpp_bs(seg, obs_c, I_re, I_im, 0)
-        return H_re + 1j * H_im
+    _cpp_bs = _required_native_symbol("_HFromSegmentsComplex")
+    seg = np.ascontiguousarray(np.asarray(segments, dtype=float))
+    I = np.asarray(currents, dtype=complex)
+    I_re = np.ascontiguousarray(I.real)
+    I_im = np.ascontiguousarray(I.imag)
+    obs_c = np.ascontiguousarray(obs)
+    H_re, H_im = _cpp_bs(seg, obs_c, I_re, I_im, 0)
+    return H_re + 1j * H_im
 
-    # ---- legacy NumPy fallback ----
-    INV_4PI = 1.0 / (4.0 * np.pi)
-    obs = np.asarray(obs_points, dtype=float)
-    if obs.ndim == 1:
-        obs = obs.reshape(1, 3)
-    n_obs = len(obs)
-
-    seg = np.asarray(segments, dtype=float)
-    p1s_all = seg[:, 0, :]
-    p2s_all = seg[:, 1, :]
-    I_all = np.asarray(currents, dtype=complex)
-
-    H_total = np.zeros((n_obs, 3), dtype=complex)
-
-    # Chunk on segments to cap peak memory at
-    # n_obs * seg_chunk * 3 (* 16 B complex).
-    for s0 in range(0, len(p1s_all), seg_chunk):
-        s1 = min(s0 + seg_chunk, len(p1s_all))
-        p1s = p1s_all[s0:s1]  # (M, 3)
-        p2s = p2s_all[s0:s1]
-        I = I_all[s0:s1]      # (M,)
-        M = s1 - s0
-
-        dl = p2s - p1s                             # (M, 3)
-        L = np.linalg.norm(dl, axis=1)             # (M,)
-        valid_seg = L > 1e-30
-        if not np.any(valid_seg):
-            continue
-        e_l = np.zeros_like(dl)
-        e_l[valid_seg] = dl[valid_seg] / L[valid_seg, np.newaxis]
-
-        # r1, r2 shape: (n_obs, M, 3)
-        r1 = obs[:, None, :] - p1s[None, :, :]
-        r2 = obs[:, None, :] - p2s[None, :, :]
-
-        # cross(e_l, r1) per (obs, seg) -> (n_obs, M, 3)
-        cross = np.cross(e_l[None, :, :], r1)
-        d = np.linalg.norm(cross, axis=2)          # (n_obs, M)
-        r1_mag = np.linalg.norm(r1, axis=2)
-        r2_mag = np.linalg.norm(r2, axis=2)
-
-        ok = (d > 1e-30) & (r1_mag > 1e-30) & (r2_mag > 1e-30)
-        ok &= valid_seg[None, :]
-
-        # Safe denominators to avoid /0 warnings outside 'ok'
-        d_safe = np.where(ok, d, 1.0)
-        r1_safe = np.where(ok, r1_mag, 1.0)
-        r2_safe = np.where(ok, r2_mag, 1.0)
-
-        cos_a1 = np.sum(r1 * e_l[None, :, :], axis=2) / r1_safe
-        cos_a2 = np.sum(r2 * e_l[None, :, :], axis=2) / r2_safe
-        geom = np.where(ok, INV_4PI / d_safe * (cos_a1 - cos_a2), 0.0)
-
-        # e_perp = cross / d (zero where not ok)
-        e_perp = cross / d_safe[..., None]
-
-        # H contribution per (obs, seg): I[seg] * geom[obs, seg] * e_perp[obs, seg, :]
-        weight = I[None, :] * geom                  # (n_obs, M) complex
-        H_total += np.sum(weight[..., None] * e_perp, axis=1)
-
-    return H_total
 
 
 def compute_phi_inc_from_filaments(obs_points, filament_paths, currents,
