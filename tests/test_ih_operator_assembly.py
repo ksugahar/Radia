@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from cubit_mesh_export.check import check_consistency as _required_check_consistency
 
 from radia.simulink import ih_operator_assembly as assembly
 
@@ -101,7 +102,6 @@ def test_options_reject_nonphysical_values():
 
 
 def test_geometry_to_native_config_preserves_power(monkeypatch, tmp_path):
-    pytest.importorskip("cubit_mesh_export")
     workpiece = _workpiece(tmp_path / "workpiece.vol")
     coil = tmp_path / "coil.step"
     coil.write_text("STEP fixture is not parsed by this focused test\n", encoding="ascii")
@@ -142,7 +142,6 @@ def test_geometry_to_native_config_preserves_power(monkeypatch, tmp_path):
 
 
 def test_crlf_vol_gz_is_materialized_for_ngsolve(monkeypatch, tmp_path):
-    pytest.importorskip("cubit_mesh_export")
     workpiece = _workpiece(tmp_path / "workpiece.vol")
     compressed = tmp_path / "workpiece.vol.gz"
     with workpiece.open("rb") as source, gzip.open(compressed, "wb") as target:
@@ -174,7 +173,6 @@ def test_crlf_vol_gz_is_materialized_for_ngsolve(monkeypatch, tmp_path):
 
 
 def test_bema_coil_vol_gz_is_materialized_after_contract_check(monkeypatch, tmp_path):
-    pytest.importorskip("cubit_mesh_export")
     workpiece = _workpiece(tmp_path / "workpiece.vol")
     coil = _bema_coil(tmp_path / "coil.vol")
     compressed = tmp_path / "coil.vol.gz"
@@ -205,7 +203,6 @@ def test_bema_coil_vol_gz_is_materialized_after_contract_check(monkeypatch, tmp_
 
 
 def test_strict_workpiece_labels_fail_before_solver(monkeypatch, tmp_path):
-    pytest.importorskip("cubit_mesh_export")
     workpiece = _workpiece(tmp_path / "bad.vol", material="steel", boundary="surface")
     coil = tmp_path / "coil.step"
     coil.write_text("not reached\n", encoding="ascii")
@@ -233,7 +230,6 @@ def test_strict_workpiece_labels_fail_before_solver(monkeypatch, tmp_path):
 
 
 def test_hole_requires_solved_cohomology_mode(monkeypatch, tmp_path):
-    pytest.importorskip("cubit_mesh_export")
     workpiece = _workpiece(tmp_path / "workpiece.vol")
     coil = tmp_path / "coil.step"
     coil.write_text("STEP fixture is not parsed by this focused test\n", encoding="ascii")
