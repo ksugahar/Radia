@@ -4,6 +4,15 @@ MCP is experimental development tooling. This policy supersedes the former
 snapshot-freeze and per-edit deployment-approval requirements for MCP packages.
 It does not relax numerical solver, native ABI or release acceptance.
 
+## Host installation policy (2026-10-01)
+
+100号機 is the only editable development host, using a dedicated local venv
+for maintainers and student contributors. LAB consumes a verified wheel.
+Existing LAB editable installations are transitional: migrate forward using a
+wheel that includes the reviewed source changes, never downgrade to an older
+published package just to remove editable metadata. Keep the release runtime
+separate from in-progress edits. The development rules below apply to 100.
+
 ## Development
 
 ### Lightweight editable updates (2026-09-15)
@@ -129,8 +138,8 @@ separately, with host/client and observation time. When not checked, say so.
 ## Release completion
 
 For radia-mcp release-dual, completion requires passing the package release
-checks, verified publication, verified editable updates/fresh imports on LAB
-and 100, and LAB client reconnection with live source and harmless-tool checks.
+checks, verified publication, a verified wheel/fresh import on LAB
+and a verified editable update/fresh import on 100, and LAB client reconnection with live source and harmless-tool checks.
 The LAB check must cover affected servers/contracts, not an unrelated tool.
 
 Existing clients on 100 may load the update at their next normal restart.
@@ -144,7 +153,7 @@ This distinction does not weaken wheel, dependency, or numerical acceptance.
 ## Scope
 
 radia-mcp is independently versioned and distributed. Its release-dual targets
-are LAB and 100 only, using editable installations like cubit-mesh-export.
+are LAB (verified wheel) and 100 (editable) only, like cubit-mesh-export.
 Do not deploy radia-mcp to hibino, mdx1 or mdx2, or run the full Radia QUAD
 installer for an MCP-only update. Isolated CI/wheel tests on compute runners
 are tests, not host deployment. Existing installations on excluded hosts are

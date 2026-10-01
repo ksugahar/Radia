@@ -50,10 +50,18 @@ this retired override only; it is not added to the four deployment targets.
 
 ## Solver machine policy
 
+Decision 2026-10-01 supersedes the older two-editable-host recipe: LAB consumes
+verified wheels; only 100 has a dedicated local editable development venv.
+Keep its release runtime separate from in-progress development. Tool migration
+is in progress: do not run an old LAB editable installer to undo the wheel
+migration. hibino/mdx1/mdx2/LAB are execution hosts; LAB may run high-memory
+tests after checking available memory and active jobs; mdx CI takes priority.
+
+
 | Machine | Solver install tier | Solver release route |
 |---|---|---|
-| LAB | verified current editable | `phase8 --target lab` |
-| 100号機 | verified current editable over SSH | `phase8 --target 100` |
+| LAB | exact accepted Radia wheel | wheel deployment; legacy phase8 migration pending |
+| 100号機 | dedicated editable development venv; separate release runtime | explicit interpreter and source verification |
 | mdx1 | exact accepted Radia wheel | `phase8e` |
 | mdx2 | exact accepted Radia wheel | `phase8e` |
 
