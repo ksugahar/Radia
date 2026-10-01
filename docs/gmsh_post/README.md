@@ -1,5 +1,11 @@
 # gmsh post-processing showcase
 
+The selected introduction is now a result-reading notebook. Detailed historical
+studies and their original scope are preserved in
+[the validation study archive](../../validation_test/showcase/studies/README.md);
+new focused reruns are documented in [the campaign](../../validation_test/showcase/README.md).
+The broader descriptions below refer to the detailed studies.
+
 Canonical, executed examples of the standard EM post-processing lane:
 `GmshPostExport` output interrogated and rendered through the
 `radia-mcp` gmsh verbs (`flux_lines`, `streamlines_2d`, `streamlines`,
