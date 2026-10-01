@@ -7,8 +7,38 @@ from radia.simulink.ih_operator_assembly import IHOperatorAssemblyOptions, _asse
 
 
 def fixture():
-    from validation_test.induction_heating._axisym_test_mesh import make_axisymmetric_mesh
-    mesh=make_axisymmetric_mesh()
+    from netgen.meshing import (EdgeDescriptor, Element1D, Element2D,
+                                FaceDescriptor, Mesh, MeshPoint, Pnt)
+
+    radius, height, count = .025, .025, 9
+    ngmesh = Mesh(dim=2)
+    points = {(i, j): ngmesh.Add(MeshPoint(Pnt(
+        radius*i/count, -height/2+height*j/count, 0)))
+        for j in range(count+1) for i in range(count+1)}
+    face = ngmesh.Add(FaceDescriptor(bc=1, domin=1, surfnr=1))
+    ngmesh.SetMaterial(1, 'workpiece')
+    for j in range(count):
+        for i in range(count):
+            ngmesh.Add(Element2D(face, [points[i, j], points[i+1, j],
+                                        points[i+1, j+1], points[i, j+1]]))
+    boundaries = [
+        ('bot', [(i, 0, i+1, 0) for i in range(count)]),
+        ('outer', [(count, j, count, j+1) for j in range(count)]),
+        ('top', [(i, count, i+1, count) for i in range(count)]),
+        ('axis', [(0, j, 0, j+1) for j in range(count)]),
+    ]
+    for index, (name, edges) in enumerate(boundaries, 1):
+        ngmesh.SetBCName(index-1, name)
+        descriptor = EdgeDescriptor()
+        descriptor.edgenr = index
+        descriptor.surfnr = (index, -1)
+        descriptor.domin = 1
+        descriptor.domout = 0
+        descriptor.name = name
+        ngmesh.Add(descriptor)
+        for i, j, k, l in edges:
+            ngmesh.Add(Element1D([points[i, j], points[k, l]], index=index))
+    mesh = ng.Mesh(ngmesh)
     for i,name in enumerate(mesh.GetBoundaries()):
         if name != 'axis': mesh.ngmesh.SetBCName(i,'sibc')
     return mesh

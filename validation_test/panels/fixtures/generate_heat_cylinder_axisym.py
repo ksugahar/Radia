@@ -20,11 +20,12 @@ to (re)write::
 
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 
 
-def main():
+def main(argv=None):
     """Build a rectangular (r,z) fixture with a deterministic quad grid.
 
     The production thermal solver uses standard NGSolve H1 with the 2*pi*r
@@ -39,9 +40,16 @@ def main():
         Element2D, Pnt,
     )
 
-    here = os.path.dirname(os.path.abspath(__file__))
-    out = os.path.join(here,
-                       "heat_workpiece_cylinder_R25_H25_axisym.vol")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--output",
+        default=os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "heat_workpiece_cylinder_R25_H25_axisym.vol"),
+        help="Output .vol path (tests must use a temporary path).",
+    )
+    args = parser.parse_args(argv)
+    out = os.path.abspath(args.output)
+    os.makedirs(os.path.dirname(out), exist_ok=True)
 
     R, H = 0.025, 0.025
     NR, NZ = 9, 9   # quad count per side; 10x10 vertices, 81 quads total
