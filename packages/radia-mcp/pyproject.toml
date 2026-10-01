@@ -101,7 +101,7 @@ urn = [
 ]
 # Native equation rendering for presentations.
 equation = [
-    "eqnedit64>=3.1",
+    "eqnedit64>=3.0.16; sys_platform == 'win32'",
 ]
 # md2html: Markdown -> HTML conversion requires Python-Markdown.
 # pymdown-extensions supplies arithmatex, which owns math detection: it keeps
