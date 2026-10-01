@@ -581,7 +581,7 @@ The main contributions of this paper are:
 12. **1-page digest に詳細を詰め込みすぎる** — abstract に個別誤差
     (0.04%, 0.001%, ...) を列挙しない。abstract は
     "sub-percent accuracy" のような包括表現にし、個別値は本文・図説明へ
-    移す。Warburg 型要素 + Cauer Ladder Network (CLN) のように既知の
+    移す。縮約体積モデルと表面インピーダンス のように既知の
     組合せは「既知」と明示し、novelty は parameter-free Galerkin coupling,
     Schur complement, SIBC/HOIBC surface envelope などの差分に置く。
     HOIBC / Warburg などの専門語は
@@ -592,10 +592,10 @@ The main contributions of this paper are:
     insider shorthand は "one bulk mode and one surface mode" のように
     物理的に言い換える。ただし "one bulk mode + one surface mode" は
     「円形導体全体が基底 2 個で表せる」と誤読されやすいので、有限次の
-    bulk CLN basis と追加 surface envelope/block を明確に分けて書く。
-    図・本文・caption のいずれかで、CLN 側の基底数 (`N_b=2`, `N=10`
+    bulk reduced basis と追加 surface envelope/block を明確に分けて書く。
+    図・本文・caption のいずれかで、体積側の基底数 (`N_b=2`, `N=10`
     など) と表面インピーダンス側の次数 (`p_H=0`, leading/zeroth-order
-    SIBC, `p_H>0` の HOIBC など) を必ず明示する。`2-rung CLN + SIBC0`
+    SIBC, `p_H>0` の HOIBC など) を必ず明示する。`two bulk modes + leading SIBC`
     が主張なら、`N_b` と dc 項の含有/非含有をこねずにそのまま書く。
     `uniform dc term is not included in this count` のような否定形の数え方は
     1-page digest では読者の負荷になる。`p_H=0` は
@@ -604,12 +604,11 @@ The main contributions of this paper are:
     必要になり得る拡張」と切り分ける。`N_b` は何を数えるかを必ず定義し、uniform dc term を
     含めるのか、zero-boundary bulk correction functions だけを数えるのかを
     書く。`N_b` と `N` を同じ図・節で使う場合は、`N_b` は混合モデルの
-    体積補正基底数、`N` は体積のみ CLN 梯子の段数、というように役割を
-    明示して表記ゆれに見せない。L-term / R-term は本文で
-    L-terminated = inductive last rung, R-terminated = resistive last rung
-    と定義する。CLN+表面インピーダンス結合の提案を示す digest で `N_b=1` だけを出すと、
-    「DC + IBC だけではないか」と読まれやすいので、少なくとも bulk
-    補正基底を 2 個使うか、`N_b=1` が十分な理由を本文で説明する。
+    体積補正基底数、`N` は体積のみの参照モデルの次数、というように役割を
+    明示して表記ゆれに見せない。モデルの終端条件を定義し、
+    必要な次数は動作帯域内の実測誤差で選ぶ。CLN 固有の実装・手法・
+    執筆相談は独立した CLN-mcp が担当する。Radia の固有モード体積モデルと
+    表面インピーダンスの結合は Modal-bulk SIBC と呼ぶ。
     混合 Galerkin / Schur 補の中心式は `\[` ではなく番号付き `equation`
     環境に置き、本文で `\eqref{...}` する。`K_{bb}`, `K_{sb}` などの
     ブロックは `K_{bb}(s)` のように周波数依存を明示し、体積・表面・結合
@@ -620,8 +619,8 @@ The main contributions of this paper are:
     「それが surface Dirichlet data を Neumann flux に写す」と説明する。
     "high-frequency SIBC scaling" とだけ書くと曖昧なので、意図が
     admittance の `f^{-1/2}` / `s^{-1/2}` tail なら指数を明示する。
-    CLN と Warburg/表面項の接続問題は「Galerkin 縮約の外」と狭く書かず、
-    「有限段 CLN と接続する際に経験的な遷移周波数でモデルを閉じる」
+    縮約体積モデルと Warburg/表面項の接続問題は「Galerkin 縮約の外」と狭く書かず、
+    「縮約モデルと接続する際に経験的な遷移周波数でモデルを閉じる」
     という汎用的な課題として書く。円形導体などのベンチマークは、半径だけ
     でなく導電率・透磁率・参照解まで本文に書き、再現可能にする。
     "wall band" / 「壁帯」は少なくとも和文では伝わりにくいので、

@@ -5,6 +5,15 @@ This applies to Python, native code, MATLAB/Simulink, MCP tools, examples,
 notebooks, and distributed artifacts. Renaming, wrapping, or moving an
 implementation within these products does not satisfy this policy.
 
+## Support ownership
+
+CLN implementation, tools, method-specific guidance and user support belong to
+the separate CLN-mcp project. Radia and radia-mcp do not vendor, wrap or import
+its implementation, depend on it at runtime, or expose a CLN execution route.
+Direct CLN-specific support requests to CLN-mcp; this ownership notice is not
+a runtime integration. General manuscript checks, historical research context
+and paper citations may remain, but must not imply a Radia CLN module exists.
+
 ## Removal scope
 
 The current removal program excludes CLN reduction implementations from these
