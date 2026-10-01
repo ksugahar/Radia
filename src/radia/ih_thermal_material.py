@@ -34,7 +34,7 @@ class ThermalMaterial:
     latent_heat: float = 0.0         # J/kg
     latent_range: tuple = (0.0, 0.0)  # degC interval of the latent release
     allow_extrapolation: bool = False
-    source: str = "constant"
+    source: str = "table"
     _grid: np.ndarray = field(default=None, repr=False)
     _H: np.ndarray = field(default=None, repr=False)
 
@@ -91,7 +91,7 @@ class ThermalMaterial:
 
     def _build_enthalpy(self):
         lo, hi = self.T[0], self.T[-1]
-        if self.source == "constant":
+        if self.source == "constant" and self.is_constant:
             grid = np.array([lo, hi])
         else:
             n = int(math.ceil((hi - lo) / _ENTHALPY_STEP_K)) + 1

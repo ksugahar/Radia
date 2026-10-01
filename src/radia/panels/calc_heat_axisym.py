@@ -113,6 +113,27 @@ def _reject_axis_boundary_roles(mesh, role_specs):
             )
 
 
+def _validate_axisym_radii(mesh):
+    """Reject coordinates that would give a negative/invalid revolution weight."""
+    radii = np.asarray(
+        [float(vertex.point[0]) for vertex in mesh.vertices], dtype=float
+    )
+    if radii.size == 0:
+        return
+    if not np.all(np.isfinite(radii)):
+        raise ValueError(
+            "axisymmetric thermal mesh has a non-finite radial coordinate; "
+            "all vertices must have finite r >= 0"
+        )
+    minimum = float(np.min(radii))
+    if minimum < 0.0:
+        raise ValueError(
+            "axisymmetric thermal mesh has a negative radial coordinate "
+            f"(min r={minimum:.6g} m); all vertices must satisfy r >= 0 "
+            "before applying the 2*pi*r integration weight"
+        )
+
+
 # -----------------------------------------------------------------
 # q_surf source for the axisym mesh
 # -----------------------------------------------------------------
@@ -294,6 +315,10 @@ def solve_heat_axisym(wp_vol,
         return {"error":
                 f"--wp-vol is {wp_mesh.dim}D; axisym needs a 2D mesh "
                 f"in the (r, z) plane.  Use calc_heat.py for 3D."}
+    try:
+        _validate_axisym_radii(wp_mesh)
+    except ValueError as exc:
+        return {"error": str(exc)}
     # --- Workpiece-only mesh contract (radia-ih thermal, axisym) ------
     # The axisym thermal step targets the WORKPIECE (r, z) cross-section
     # ONLY -- a single region.  Reject an empty mesh or a multi-region
