@@ -1466,7 +1466,7 @@ deleted rather than retained. These families are represented as follows:
 | Family | MATLAB representation |
 |---|---|
 | Legacy object, transform, material, solve, and field calls | Thin numeric wrappers over `radentry` |
-| Pure array kernels such as SIBC, Schur, CLN, EVRS/T, Biot-Savart, and Galerkin assembly | Direct MEX commands |
+| Pure array kernels such as SIBC, Schur, EVRS/T, Biot-Savart, and Galerkin assembly | Direct MEX commands |
 | Stateful EnergyStop, HACApK, and field evaluators | Typed `uint64` handles with `mexLock` lifetime |
 | NGSolve mesh and finite-element work | Persistent Mesh/FESpace/BilinearForm/Matrix handles plus numeric snapshots |
 | NGSolve `CoefficientFunction` / `GridFunction` | Native MEX handles with explicit vector and metadata contracts |

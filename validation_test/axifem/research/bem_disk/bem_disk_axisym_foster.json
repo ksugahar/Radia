@@ -1,5 +1,5 @@
 {
-	"method":"Axisymmetric BEM Foster-CLN for Cu disk",
+	"method":"Axisymmetric BEM Foster modes for Cu disk",
 	"params":{
 		"R_mm":10,
 		"t_mm":2,

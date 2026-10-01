@@ -201,7 +201,7 @@ def assemble_p2_split(nodes, triangles, is_cond_per_cell, sigma):
 
 
 def solve_schur_eigenvalue(K, M, fixed_idx, cond_idx, nodes, n_eigs=5):
-    """Schur-complement Cauer extraction with Dirichlet BC.
+    """Schur-complement eigenvalue extraction with Dirichlet BC.
 
     Free DOFs := all DOFs minus (outer-boundary + axis r=0 DOFs).
     Axis DOFs are auto-decoupled by FEMM Henrotte r_i factor (zero rows in

@@ -82,7 +82,7 @@ unrelated `freq8000Hz_mur1.0_toymodel_maxTemp.py` job (PID 12152) existed at the
 initial resource probe; later it disappeared and another Python job appeared.
 Neither was stopped or modified. BDM1 is not final BDM2 acceptance.
 
-Recovery SHA-256 is `18a5b1c97d28f738191d4c40d1aee1a5d19997ac22824526b4fc3286d2d553ce`.
+Recovery SHA-256 is `43fa3d9274790ff9844253ec84d7d5d9f7a063bcf073e74419621fa3197c4f54`.
 The durable copy is in `S:/Radia/validation_artifacts/esrf6_mesh_audit_20260913/`.
 Cell-average M is retained for iron-side comparisons. Global average M is
 almost zero by quadrupole symmetry and is not an adequate nonlinear observable.

@@ -3,8 +3,8 @@
 This directory holds validation-class research checks for Eddy-Visible Response
 Space (EVRS) compression of high-order HCurl parent spaces and the HDiv-MMM /
 HCurl-VIM smokes built on it.  These are not fast CI tests and their desktop
-runtimes are not benchmark claims.  Saved JSON may record the former
-`validation_test/cln/` path in its commands; that was this directory.
+runtimes are not benchmark claims.  Saved JSON may record a former
+directory name in its commands; that was this directory.
 
 ## EVRS p-by-n convergence smoke
 

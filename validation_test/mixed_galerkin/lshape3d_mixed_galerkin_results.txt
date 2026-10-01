@@ -44,7 +44,7 @@ Precomputing q1..q10 = FEM Krylov modes at s=0...
     1.00e+06  107.00      +11.556%      +15.621%
 
 Notes:
-- bulk-only is straight CLN (rank-N Krylov-at-0), Q(s) rational, integer tail.
+- bulk-only is straight rank-N Krylov-at-0, Q(s) rational, integer tail.
 - +bbox 1DOF: bounding-box tensor SIBC (BC mismatch at 2 concave step faces).
 - +region 1DOF: sum of horiz + vert per-region tensors, vanishes on ALL 8 faces.
 - +split 2DOF: horiz and vert per-region tensors as 2 separate basis functions.

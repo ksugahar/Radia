@@ -20,7 +20,7 @@ import pytest
 pytest.importorskip("scipy")
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-# CLN was absorbed into radia.maglev ->
+# The polarizability demos were absorbed into radia.maglev ->
 # docs/maglev/demos/{sphere,ellipsoid}. Add both so sphere + ellipsoid modules resolve.
 _LEV = os.path.join(_HERE, "..", "docs", "maglev", "demos")
 sys.path.insert(0, os.path.join(_LEV, "sphere"))

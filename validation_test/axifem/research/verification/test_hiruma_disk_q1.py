@@ -224,6 +224,6 @@ def main():
 if __name__ == "__main__":
     main()
 
-# Reference retained from retired method: The Cauer ladder follows Nagamine et al. 2026 Fig. 3 / Eq. (11):
+# Reference retained from retired method: The RL ladder follows Nagamine et al. 2026 Fig. 3 / Eq. (11):
 
 # Historical Hiruma field recurrence retired; independent eigenmode solve retained.

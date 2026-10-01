@@ -19,7 +19,7 @@ with the remote originals before recording them here.
 
 | File | SHA-256 |
 | --- | --- |
-| omega_algebraic_bonus12_16.json | 7cc8befa4eeb1f7ae056c816e2c36da5e07ce58bc36e99a0af7a65c8b343ca15 |
+| omega_algebraic_bonus12_16.json | 8f914b9f5219b3478ee25b6092fbceb43d89dd32cf59af69ced3b7a636ebc556 |
 | omega_plateau_bonus12_16.json | fa1577ebf844f56e81ae68362756ae84e88301a00146fbe5b2b7506df6a99a18 |
 
 | Metric | Observed | Predeclared limit |

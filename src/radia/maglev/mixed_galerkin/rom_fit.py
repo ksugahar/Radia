@@ -13,10 +13,8 @@ Re[alpha] part), NOT the interior-PEC bulk eigenmodes
 
 Why a sample fit and not a Kameari + Kelvin eigen-accumulation: the 3D HCurl
 Kameari + Kelvin accumulation structurally BREAKS DOWN on the
-isolated-conductor-in-vacuum problem (L_n sign flip at stage 1; see
-validation_test/maglev/research_cln/ngsolve_validation/
-cuboid_521_kameari_kelvin_v15_canonical.py).  Sphere axisym Kameari reaches the
-Stoll Cauer ladder to 0.000%, but the general 3D body does not.  This module
+isolated-conductor-in-vacuum problem (L_n sign flip at stage 1).  Sphere axisym
+Kameari reaches the Stoll ladder to 0.000%, but the general 3D body does not.  This module
 sidesteps that by building the LTI on the verified per-frequency solve instead.
 
 Recipe (VERIFIED on the analytic sphere Stoll spectrum to < 0.2 %):

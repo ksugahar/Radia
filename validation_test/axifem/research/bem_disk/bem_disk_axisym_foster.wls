@@ -1,6 +1,6 @@
 #!/usr/bin/env wolframscript
 (*
-  Axisymmetric BEM Foster-CLN for Cu disk in vacuum (2026-05-05).
+  Axisymmetric BEM Foster modes for Cu disk in vacuum (2026-05-05).
 
   Computes Foster poles τ_n of eddy current decay in an axisymmetric
   conducting disk via:
@@ -141,7 +141,7 @@ Do[
 
 (* Save JSON *)
 result = <|
-  "method" -> "Axisymmetric BEM Foster-CLN for Cu disk",
+  "method" -> "Axisymmetric BEM Foster modes for Cu disk",
   "params" -> <|
     "R_mm" -> R * 1000,
     "t_mm" -> t * 1000,

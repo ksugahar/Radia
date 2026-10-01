@@ -1,7 +1,7 @@
-# Foster + SIBC and CLN + SIBC validation
+# Foster + SIBC and Krylov + SIBC validation
 
 Research scripts for bulk/surface coupling in eddy-current admittance Y(s).
-Use **Foster + SIBC** for eigenmode bulk and **CLN + SIBC** for CLN/Krylov
+Use **Foster + SIBC** for eigenmode bulk and **Krylov + SIBC** for Krylov
 bulk. HOIBC denotes the higher-order surface corrections when present.
 The scalar unknown is approximated in an enriched trial space; this is not
 a mixed finite-element formulation. A Schur complement describes algebraic
@@ -11,17 +11,17 @@ block elimination, not by itself a physical DtN boundary operator.
 legacy compatibility identifiers. Saved historical output may still use the
 old term; retain it as evidence, not as the current method name.
 The public box implementation in `src/radia/maglev/mixed_galerkin/schur.py`
-uses Foster eigenmodes. CLN/Krylov validation does not silently change its
+uses Foster eigenmodes. Krylov validation does not silently change its
 public `lam`, `tau`, or `Y_bulk` contract.
 
-**Production default: Foster + SIBC.** CLN is a comparison route, not a
+**Production default: Foster + SIBC.** Krylov bulk is a comparison route, not a
 required migration. Select retained Foster modes by convergence and error in
 the operating frequency band. Similar accuracy is a validation question, not
 an assumption established by either basis name.
 
-> **History note (2026-06-12)**: This directory was previously
-> `examples/hierarchical_cauer_sibc/` and centred on the **Warburg-Schur
-> termination** (`Y_R = Y_CLN + K_SIBC √s / (s + d)`, with `d` tuned).
+> **History note (2026-06-12)**: This directory previously lived under
+> `examples/` and centred on the **Warburg-Schur
+> termination** (`Y_R = Y_bulk + K_SIBC √s / (s + d)`, with `d` tuned).
 > That approach was superseded by the bulk/surface coupling below,
 > which removes the `d` parameter entirely and improves wall-band
 > accuracy by 1–4 orders of magnitude. The Warburg-Schur code was
@@ -45,14 +45,14 @@ The two endpoints have different natural bases:
 
 | Endpoint | Basis | Captures |
 |---|---|---|
-| s → 0 (DC, low-freq) | Foster eigenmodes, or CLN/Krylov vectors as declared by the case | volume diffusion |
+| s → 0 (DC, low-freq) | Foster eigenmodes, or Krylov vectors as declared by the case | volume diffusion |
 | s → ∞ (deep skin)    | HOIBC Senior tower of fractional-power envelopes | surface skin effect |
 
 The **bulk + SIBC enriched approximation** combines both:
 
   v(r, s) ≈ Σ ξ_k^{bulk} φ_k(r) + Σ ξ_k^{surf} ψ_k(r, s)
 
-with bulk φ_k from Foster eigenmodes or CLN Krylov-at-s=0 (frequency-independent) and surface
+with bulk φ_k from Foster eigenmodes or Krylov-at-s=0 (frequency-independent) and surface
 ψ_k(r, s) the planar SIBC envelope plus Senior tower curvature
 corrections. The Galerkin system has size (N_bulk + N_surf) and is
 solved per-frequency. Intermediate-frequency accuracy is bounded by the
@@ -80,8 +80,7 @@ Senior tower corrections, rank-N bulk sweep, etc.
 
 ## Promoted from the conference folder (2026-09-02)
 
-A copy of this directory lived in
-`W:\02_学会資料\2026年度\2026_09_IGTE_Symposium\CauerLadderNetwork@菅原\mixed_galerkin`
+A copy of this directory lived in the IGTE 2026 conference folder
 and had grown past it. The IGTE figure script imported from that copy, so the
 material below was driving talk content while being invisible here -- which is
 why this README could still say "corner Mellin needed" and "mixed Galerkin
@@ -107,7 +106,7 @@ Resolved 2026-09-02, so the conference copy no longer feeds anything:
   the SAME code as `cylinder/01_no_d_baseline.py` and `sphere/02_hoibc_gamma1.py`
   respectively, comments aside. Nothing had diverged; there was simply a second
   copy waiting to.
-- The former `Y_cln_pade` comparison API, its validation runner, and its
+- The former Pade comparison API, its validation runner, and its
   result fixture were retired on 2026-09-30. They remain in Git history,
   not as a renamed production or comparison route. Exact cylinder/sphere
   references remain available; reduced models use Foster, PRIMA, or POD.
@@ -131,8 +130,8 @@ for remaining square/cube candidates):
 
 All results obtained with **zero free parameters**: the bulk-surface
 crossover frequency is determined by the Galerkin system, not a
-user-supplied `d` (cf. the Warburg-terminated CLN of the IGTE digest
-where `d` is fit). For the smooth-boundary bodies (sphere, cylinder),
+user-supplied `d` (cf. the Warburg-terminated reduced model of the IGTE
+digest where `d` is fit). For the smooth-boundary bodies (sphere, cylinder),
 the Senior tower coefficients γ_k = -H_mean, (K_gauss - H_mean²)/2,
 ... are the canonical curvature corrections (Senior 1962 / Mitzner
 1967 / Yuferev-Ida 2010).
@@ -144,7 +143,7 @@ The development went through ~11 numbered "Phases" within the
 
 | Phase | Discovery |
 |---|---|
-| 1   | Reproduce digest's CLN3 + Warburg with `d` tuned (17% wall band). |
+| 1   | Reproduce digest's 3-stage reduced model + Warburg with `d` tuned (17% wall band). |
 | 2   | Replace Warburg block with s-dependent SIBC envelope → 0.04% wall band, no `d` needed. |
 | 3   | Bulk rank-N sweep — does NOT help (envelope-limited). |
 | 4   | Extend to sphere — 1-DOF gives 0.11%. |
@@ -184,4 +183,3 @@ artifact are release evidence here.
 - Mitzner, K. M. (1967). An integral equation approach to scattering from a body of finite conductivity. *Radio Sci.* 2:1459 — **curvature correction**.
 - Quarteroni, A. & Valli, A. (1999). *Domain Decomposition Methods for Partial Differential Equations*. Oxford — **Steklov-Poincaré operator**.
 - Yuferev, S. V. & Ida, N. (2010). *Surface Impedance Boundary Conditions: A Comprehensive Approach*. CRC Press — **Rytov-form HOIBC**.
-- Kameari, A. *et al.* (2018). Cauer ladder network representation of eddy-current fields for MOR using FEM. *IEEE TMag* 54(11):7202804 — **CLN bulk basis**.

@@ -1,5 +1,5 @@
 """team28_axisym_fem.py -- repo-clean port of the lab TEAM 28 axisymmetric
-full-FEM levitation-force solve (ground-truth baseline for the CLN-reduced
+full-FEM levitation-force solve (ground-truth baseline for the reduced-model
 verification).
 
 Ported from the learning material
@@ -7,7 +7,7 @@ Ported from the learning material
 (axisymmetric MIXED phi-B formulation, anisotropic-nu infinite-element
 shell for the open boundary).  This reproduces the full-FEM levitation
 force F_z at a single disk height so we have a runnable, self-contained
-in-repo baseline before layering the CLN reduction on top.
+in-repo baseline before layering a model reduction on top.
 
 Reference (from the lab .mat, Fz1 vs dZ): at dZ=0 (disk bottom at 10.8mm)
 F_z = -2.1928 N  (sign convention: NEGATIVE F_z = upward lift).  Disk
@@ -137,6 +137,6 @@ def solve_force_pair(dz_m=0.0):
 if __name__ == "__main__":
     fz = solve_force()
     ref = -2.1928
-    print(f"\nF_z (CLN-baseline full-FEM) = {fz:+.4f} N")
+    print(f"\nF_z (baseline full-FEM) = {fz:+.4f} N")
     print(f"reference (lab .mat, dZ=0)  = {ref:+.4f} N")
     print(f"rel. error = {abs(fz - ref) / abs(ref) * 100:.2f} %")

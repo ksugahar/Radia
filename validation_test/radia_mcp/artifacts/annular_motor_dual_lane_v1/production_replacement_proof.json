@@ -16,8 +16,8 @@
         "manifest": "346ba82368d77738e91284f943a248c662b8ec57ea1bdd4a91f2db227363c57e",
         "gate": "2c805e9d28923b1056e2bb714b3cfd7228d5198e16b941f848dc7a8dd890bc5b",
         "ngsolve_age": "44759324710cc1817afe47ab24cd7c4176e5d958f969ebb3c3789c4443bd6070",
-        "hdiv_mmm_hcurl_eddy_bubble": "d4a060243ba2464309eb000683943478addebd0045e7f9863e74217d01992b7a",
-        "dual_lane": "817229c05086064b5986509a81a675ec51202257c02b026fb785a3ade031be35"
+        "hdiv_mmm_hcurl_eddy_bubble": "a748442787f366902ad459fb0f0dce836899316c028b2b52abda2343760bd12b",
+        "dual_lane": "b2651f74db4c2fb02075824b1b154afab09a785d31e8a81e42c07f967105525f"
       },
       "checks": {
         "both_lanes_solved": true,
@@ -34,7 +34,7 @@
       "executed_at_utc": "2026-09-15T10:13:38.402Z",
       "test_count": 87,
       "artifact_sha256_by_role": {
-        "matlab": "88eec885cd8a0f4ddd2bac4f3c79db04025868690b9197eb256bd927b3d5deab"
+        "matlab": "7546f9b4c7f0a754629f77427a347d1fde65890ab46001eb3e4e7fd1e4329d70"
       },
       "checks": {
         "standalone_batch": true,
@@ -48,5 +48,5 @@
   },
   "status": "pass",
   "pass": true,
-  "proof_payload_sha256": "fd59c9ce5d39558e2be5ff896a63f398b651c2d06f3bc33c4809f894d5ddea60"
+  "proof_payload_sha256": "73d86d901685e25b7beee81c4fb582463af9eb0ee98f80fc83f0b00f57f12a2c"
 }

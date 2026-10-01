@@ -324,7 +324,7 @@ def main():
 
 4. CIRCUIT SYNTHESIS
    - URN directly maps to RLC ladders
-   - VF requires additional Foster/Cauer synthesis
+   - VF requires additional Foster synthesis
 
 5. NOISE ROBUSTNESS
    - Physical constraints regularize the fit

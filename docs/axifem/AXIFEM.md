@@ -148,98 +148,6 @@ Empirical comparison on the Cu disk eddy-current benchmark
 `axihenrotte p=2` outperforms NGSolve `H1 order=3` with fewer DOFs; this is
 the value of the axisymmetric-specific basis.
 
-### Cauer-ladder cross-validation against BEM (Nagamine pipeline)
-
-The Cauer ladder for the eddy-current problem follows Nagamine et al. 2026
-[^Nagamine2026]:
-
-```
-in --R_0--+--R_2--+--R_4--+-...
-          |       |       |
-         L_1     L_3     L_5  ...
-          |       |       |
-         gnd     gnd     gnd
-```
-
-`R_{2k}` (k = 0, 1, 2, …) are the *series* resistors (even subscripts) and
-`L_{2k+1}` are the *shunt* inductors (odd subscripts). The per-pair time
-constant is
-$$\tau_{\text{pair}}[k] = L_{2k+1} / R_{2k}.$$
-
-Two paths to the same ladder, both implemented in this repository:
-
-* **(A) Nagamine BEM-Foster pipeline** — independent reference. Mathematica
-  [`bem_disk_axisym_cauer.wls`](../../validation_test/maglev/research_cln/ngsolve_validation/bem_disk_axisym_cauer.wls)
-  builds a 1920-element ring mesh with the elliptic-integral Newton kernel,
-  solves the symmetric eigenproblem (top 50 modes) and computes 20 Foster
-  Taylor moments `α_n`. Python
-  [`disk_bem_cauer.py`](../../validation_test/maglev/research_cln/ngsolve_validation/disk_bem_cauer.py)
-  applies a 50-digit `mpmath` classical Cauer extraction (Foster → Taylor →
-  CFE → Cauer ladder of Nagamine Fig. 5; mathematically equivalent to the
-  paper's QD + equivalence-transform pipeline). Note that we do **not**
-  implement the verified-interval-arithmetic part of Nagamine's algorithm
-  — our extraction is high-precision floating-point, not interval-rigorous.
-
-* **(B) Differential-equation Henrotte FE + Hiruma 3-term Lanczos** — this
-  package. The C++ `axihenrotte` FESpace at order=1 (4 DOFs/quad) or
-  order=2 (9 DOFs/quad), plus the Hiruma 3-term recurrence. Both p=1 and
-  p=2 share the same recurrence wrapper, only the FE basis functions
-  differ — so the order=1 vs order=2 comparison is a *convergence study*
-  in basis order, not two independent methods.
-
-The Hiruma recurrence builds Krylov-orthogonal vectors `w_i` via
-`K w_{i+1} = M w_i` and reads off:
-* `λ_{2k+1} = w_{2k+1}^T K w_{2k+1} = 1 / R_{2k}`     (conductance per rung)
-* `λ_{2k+2} = w_{2k+2}^T M w_{2k+2} = L_{2k+1}`        (inductance per rung)
-
-so that `tau_pair[k] = λ_{2k+1} · λ_{2k+2}`, which matches the
-Nagamine BEM extraction in absolute value (within FE / mesh error).
-
-#### Comparison: `tau_pair[k]` (normalisation-invariant)
-
-The Foster-amplitude normalisation differs between BEM and FE, so the
-absolute `R_{2k}, L_{2k+1}` values differ between the two methods by a
-common scale factor. The ratio `tau_pair[k] = L_{2k+1}/R_{2k}` is
-normalisation-invariant and is the comparison endpoint:
-
-| k | BEM Cauer (µs) | axihenrotte p=2 fine (µs) | axihenrotte p=1 v-fine (µs) | p=2/BEM gap | p=1/BEM gap |
-|---|---|---|---|---|---|
-| 0 | 219.32 | 218.71 | 218.05 | **-0.28 %** | -0.58 % |
-| 1 |  78.65 |  78.12 |  77.77 | **-0.68 %** | -1.12 % |
-| 2 |  40.04 |  39.54 |  39.37 |  -1.24 %    | -1.66 % |
-| 3 |  23.74 |  23.16 |  23.14 |  -2.46 %    | -2.54 % |
-| 4 |  17.07 |  16.07 |  16.06 |  -5.86 %    | -5.91 % |
-| 5 |  14.70 |  13.12 |  13.01 | -10.77 %    | -11.50 % |
-
-`axihenrotte p=2` beats `axihenrotte p=1` at every k (closer to the BEM
-Cauer reference). This is **Phase 3-(3) cross-validation**, executed
-2026-05-06; the test lives at
-[`tests/test_3way_cauer_cross_validation.py`](../../validation_test/axifem/research/verification/test_3way_cauer_cross_validation.py).
-
-The high-mode (k ≥ 4) divergence is the expected combined effect of FE
-discretisation error at higher modes and the numerical conditioning of the
-Cauer extraction at high stages (BEM itself starts producing negative `τ`
-for k ≥ 6, a known artefact of finite-precision moment reconstruction; the
-Nagamine paper addresses this by switching to verified interval
-arithmetic, which we have not implemented here).
-
-#### `R_{2k}, L_{2k+1}` from `axihenrotte` (Nagamine convention)
-
-Within the FE side, `R_{2k}` and `L_{2k+1}` are directly comparable
-between order=1 and order=2 because both use the same Foster-amplitude
-normalisation (the same RHS vector `b`). The values are recorded in the
-JSON results files [`tests/test_hiruma_disk_q1_results.json`](../../validation_test/axifem/research/verification/test_hiruma_disk_q1_results.json)
-and [`tests/test_hiruma_disk_q2_results.json`](../../validation_test/axifem/research/verification/test_hiruma_disk_q2_results.json)
-under the keys `"R_2k"` and `"L_2k_plus_1"` for each stage.
-
-[^Nagamine2026]: H. Nagamine, T. Yamaguchi, K. Sugahara, S. Hiruma, T.
-    Mifune, T. Matsuo, "Verified Numerical Computations of the Cauer
-    Network Representation of a Square Prism Conductor", manuscript
-    2026-05-04 (Japan Journal of Industrial and Applied Mathematics
-    submission). The 3-step algorithm is summation (Foster→Taylor with
-    truncation error analysis), QD algorithm (Taylor→CFE), and equivalence
-    transform (CFE→Cauer ladder).
-
 ## Basis details
 
 ### Triangle paths: P1, P2, and P2 curved
@@ -384,7 +292,7 @@ docs/axifem/
 validation_test/axifem/                  # validation-class research checks
   axifem_element_evidence.json             # checked evidence consumed by the docs notebook
   research/validate_q2_codegen.py         # Q2 closed-form matrix check
-  research/verification/                  # Hiruma/Cauer + element checks and JSON
+  research/verification/                  # Hiruma + element checks and JSON
 ```
 
 The standalone `pyproject.toml`, `CMakeLists.txt`, and `ngsolve_addon.cmake`
