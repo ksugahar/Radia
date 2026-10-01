@@ -157,8 +157,10 @@ class SurfaceImpedanceModel:
     ``evaluate`` accepts broadcast arrays in A/m (peak) and degC and returns
     complex ohms with the same shape, or a scalar for a uniform model.
     Bounds are inclusive. No clipping, extrapolation or fitted correction is
-    performed. This material interface does not freeze the electromagnetic
-    field: a coupled solver must reevaluate the field after a material update.
+    performed. Evaluate locally as Zs(x) = evaluate(|Ht(x)|, T(x)).
+    A coupled driver may reuse its converged eddy solution when this spatial
+    impedance field AND all other EM inputs are unchanged. Constant T alone
+    is not sufficient during nonlinear iteration or after a source change.
     """
 
     evaluate: object
