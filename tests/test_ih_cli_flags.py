@@ -86,15 +86,12 @@ def test_rotor_states_alone_is_an_accepted_heat_source(tmp_path):
      I_target=1., coil_sigma=1., wp_sigma=1., wp_mu_r=1., half_thickness=1., solver="bddc")),
 ])
 def test_unsupported_solver_fails_before_loading_a_mesh(script, function, kwargs):
-    import ast
-    from pathlib import Path
-    path = Path(PANELS) / script
-    node = next(n for n in ast.parse(path.read_text(encoding="utf-8")).body
-                if isinstance(n, ast.FunctionDef) and n.name == function)
-    ns = {}
-    exec(compile(ast.Module(body=[node], type_ignores=[]), str(path), "exec"), ns)
+    from importlib import import_module
+
+    module = import_module("radia.panels." + script.removesuffix(".py"))
     with pytest.raises(ValueError):
-        ns[function](**kwargs)
+        getattr(module, function)(**kwargs)
+
 
 
 @pytest.mark.parametrize("selector,expected", [
