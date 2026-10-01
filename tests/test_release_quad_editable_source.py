@@ -212,6 +212,8 @@ def test_remote_deploy_changes_only_radia(monkeypatch, drift):
     assert "Stop-Process" not in script
     assert "status --porcelain --untracked-files=no" in script
     assert "ngsolve.__version__" in script
+    assert '& "python" "-c"' in script
+    assert '\n"python" "-c"' not in script
     assert "netgen-mesher" in script
     assert script.index("rev-parse HEAD") < script.index("pip install")
     assert script.index("ngsolve.__version__") < script.index("pip install")

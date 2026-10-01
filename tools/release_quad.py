@@ -1173,12 +1173,12 @@ if ($LASTEXITCODE -ne 0 -or $sourceDirty) {{
   Write-Error "Release source has tracked changes: $sourceDirty"
   exit 42
 }}
-{' '.join('"' + part.replace('"', '`"') + '"' for part in _solver_abi_probe_command())}
+& {' '.join('"' + part.replace('"', '`"') + '"' for part in _solver_abi_probe_command())}
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 {_solver_install_guard_powershell()}
 python -m pip install --no-deps --no-cache-dir --no-build-isolation -e "{repo}"
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-{' '.join('"' + part.replace('"', '`"') + '"' for part in _editable_release_verify_command(repo, expected_sha))}
+& {' '.join('"' + part.replace('"', '`"') + '"' for part in _editable_release_verify_command(repo, expected_sha))}
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 """
     encoded = base64.b64encode(ps_block.encode("utf-16le")).decode("ascii")
