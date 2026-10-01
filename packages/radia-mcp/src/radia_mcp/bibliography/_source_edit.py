@@ -37,7 +37,23 @@ def read_source(path: Path):
     return original, text, parse_bib(text)
 
 
+def require_canonical_target(path: Path) -> None:
+    """Only the canonical parent bibliography is ever rewritten.
+
+    Manuscript folders cite canonical keys and ship a generated ``.bbl``; a
+    local ``.bib`` copy is not maintained, so editing one would fork the data.
+    """
+    from .plans import T14_canonical
+
+    canonical = Path(T14_canonical.CANONICAL).resolve()
+    if Path(path).resolve() != canonical:
+        raise ValueError(
+            f"refusing to rewrite {path}: only the canonical bibliography "
+            f"({canonical}) is edited; manuscripts use bibliography_make_bbl")
+
+
 def write_source_edits(path: Path, original: bytes, text: str, edits: list) -> None:
+    require_canonical_target(path)
     with target_lock(path):
         _write_source_edits_unlocked(path, original, text, edits)
 

@@ -112,6 +112,10 @@ crystallized as its own package.
   flags (`"false"` used to enable `parallel`) and non-integral counts
   (`n_trials: 2.7` used to become 2), and refuses grid / fixed parameter names
   that MATLAB `jsondecode` would rename (`coil.turns`).
+- Bibliography edits (`bibliography_canonicalize_keys`,
+  `bibliography_normalize_journal_names`, `bibliography_check_surname_braces`
+  with `fix=True`) only rewrite the canonical `references.bib`; a manuscript-local
+  `.bib` is reported, never rewritten.
 - PDF lock release (`doc_convert`, `poster`) stops only dedicated PDF viewers
   showing that file and passes the name through the environment; browsers are
   never stopped.
