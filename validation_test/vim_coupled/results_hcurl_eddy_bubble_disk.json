@@ -24,8 +24,7 @@
   },
   "axifem_reference": {
     "reference_files": [
-      "validation_test/axifem/research/verification/test_hiruma_disk_q1.py",
-      "validation_test/axifem/research/verification/test_hiruma_disk_q2.py"
+      "validation_test/axifem/research/verification/disk_axisym_reference.py"
     ],
     "bem_first_modal_time_constant_us": 224.3070587702379,
     "rows": [

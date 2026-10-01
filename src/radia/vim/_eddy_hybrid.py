@@ -192,8 +192,8 @@ def EddyTracePolynomialDim(degree: int, *, face_family: str = "simplex") -> int:
 class EddyParentOrderLedger:
     """Symbolic parent-order ledger for topology-aware eddy bubbling.
 
-    ``p`` is treated as a parent-space admissibility order.  It is not the CLN
-    stage count and it is not automatically optimal.  The minimum admissible
+    ``p`` is treated as a parent-space admissibility order.  It is not a
+    reduced-model stage count and it is not automatically optimal.  The minimum admissible
     parent order is
 
     ``max(bulk_degree, bridge_trace_degree, surface_current_degree)``.
@@ -7323,7 +7323,7 @@ class HybridVIMSystem:
         """Return the named-block Schur complement.
 
         This is the production hook for the IGTE mixed Galerkin reduction:
-        keep the surface/SIBC block and eliminate the finite bulk CLN block to
+        keep the surface/SIBC block and eliminate the reduced bulk block to
         obtain the surface-port DtN/admittance block, or do the reverse for a
         bulk-only effective operator.
         """
@@ -7509,7 +7509,7 @@ class HybridVIMSystem:
         These checks are the production handoff between dense sampled kernels,
         ngsolve.bem projections, and Radia/HACApK backends: every backend must
         preserve the Hermitian/passive block structure before it is allowed to
-        drive CLN fitting or motor-coupled solves.
+        drive reduced-model fitting or motor-coupled solves.
         """
 
         if passive_tol < 0.0:

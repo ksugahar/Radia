@@ -13,8 +13,8 @@ For Cu sphere R=10 mm:  tau_1 = 4 pi * 1e-7 * 5.8e7 * (0.01)^2 / pi^2
                               = 738.5 us  (leading)
 
 Reference baseline:
-- axifem Q1 + 500 mm air box: tau_pair[0] = leading 0.21% off Stoll.
-- VIM DD axisym 270 cells: leading tau_pair 0.2% off Stoll.
+- axifem Q1 + 500 mm air box: leading time constant 0.21% off Stoll.
+- VIM DD axisym 270 cells: leading time constant 0.2% off Stoll.
 
 We solve the generalized eigenvalue problem with Schur-complement
 reduction onto conductor DOFs:
@@ -201,7 +201,7 @@ def assemble_p2_split(nodes, triangles, is_cond_per_cell, sigma):
 
 
 def solve_schur_eigenvalue(K, M, fixed_idx, cond_idx, nodes, n_eigs=5):
-    """Schur-complement Cauer extraction with Dirichlet BC.
+    """Schur-complement eigenvalue extraction with Dirichlet BC.
 
     Free DOFs := all DOFs minus (outer-boundary + axis r=0 DOFs).
     Axis DOFs are auto-decoupled by FEMM Henrotte r_i factor (zero rows in

@@ -47,8 +47,9 @@ import netgen.occ as occ  # noqa: E402
 import ngsolve as ng  # noqa: E402
 import radia  # noqa: E402
 import radia.vim as vim  # noqa: E402
-import test_hiruma_disk_q1 as axifem_q1  # noqa: E402
-import test_hiruma_disk_q2 as axifem_q2  # noqa: E402
+import disk_axisym_reference as axifem_q1  # noqa: E402
+
+axifem_q2 = axifem_q1  # Q1 and Q2 disk solvers share one reference module
 
 
 RADIUS_M = 0.010
@@ -320,8 +321,7 @@ def _run_axifem_reference() -> dict[str, object]:
         )
     return {
         "reference_files": [
-            "validation_test/axifem/research/verification/test_hiruma_disk_q1.py",
-            "validation_test/axifem/research/verification/test_hiruma_disk_q2.py",
+            "validation_test/axifem/research/verification/disk_axisym_reference.py",
         ],
         "bem_first_modal_time_constant_us": float(BEM_MODAL_REFERENCE_US[0]),
         "rows": rows,

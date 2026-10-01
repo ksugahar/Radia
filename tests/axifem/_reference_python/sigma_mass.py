@@ -1,7 +1,7 @@
 """
 sigma_mass.py — Sigma mass matrix for axifem (V-form, FEMM-style basis).
 
-For Hiruma 3-term CLN we need:
+For the Hiruma 3-term recurrence we need:
   M_sigma_ij = sigma * Integrate( A_phi(r,z) * v_phi(r,z) * 2*pi*r dr dz )  over conductor
 
 In our convention:

@@ -15,11 +15,6 @@
     "source": "C:\\Program Files\\Python312\\Lib\\site-packages\\radia\\axifem.pyd"
   },
   {
-    "file": "cln_core.pyd",
-    "sha256": "020EB9577BECED80406AC5B3F4085C7D36C658E83AFD151AAFC3417EFDDEC7F5",
-    "source": "C:\\Program Files\\Python312\\Lib\\site-packages\\radia\\cln_core.pyd"
-  },
-  {
     "file": "peec_matrices.pyd",
     "sha256": "7FBA4E7BFE395B13A604644CA798A2173D3504AC2D0D25FE8EF93FA1F402C72D",
     "source": "C:\\Program Files\\Python312\\Lib\\site-packages\\radia\\peec_matrices.pyd"

@@ -17,7 +17,7 @@ needs no live TeX installation to read. The bibliography-only generation was run
 with BibTeX and TeX4ht from TeX Live 2026; the numerical notebook was not rerun.
 
 The seven works cover the existing Grote/Keller, Hagstrom/Warburton,
-Warburg/Cauer, Kameari CLN and Freeman/Lowther attributions. Two missing parent
+Warburg, Kameari and Freeman/Lowther attributions. Two missing parent
 entries were verified and added using the publisher's metadata:
 
 - [Grote and Keller, SIAM J. Appl. Math. 55(2), 280–297 (1995)](https://epubs.siam.org/doi/10.1137/S0036139993269266).

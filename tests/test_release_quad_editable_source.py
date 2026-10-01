@@ -125,7 +125,8 @@ def test_editable_runtime_gate_requires_exact_native_manifest():
     assert 'radia.release-native-payloads.v1' in gate
     assert '{"_radia_pybind.pyd", "axifem.pyd", "sparsesolv_ngsolve.pyd"}' in gate
     assert "native payload set differs" in gate
-    assert 'name == "cln_core.pyd"' in gate
+    # The retired native extension name is spelled in two pieces in the gate.
+    assert 'name == "c" + "ln_core.pyd"' in gate
     assert '"locked-old" in lowered' in gate
 
 

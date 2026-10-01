@@ -140,4 +140,4 @@ windows, the yoke loops) — they only move the metric.
   Robert (IEEE TMag 1991), Moffatt (JFM 1969).
 - **DtN spectrum / IE-vs-Kelvin:** `docs/open_boundary/`,
   `src/radia/open_boundary/`, and `validation_test/open_boundary/`
-  (Kelvin-built DtN and CLN validation; the old act7 archive is retired).
+  (Kelvin-built DtN validation; the old act7 archive is retired).

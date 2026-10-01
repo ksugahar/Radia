@@ -3,11 +3,6 @@
 PEEC (Partial Element Equivalent Circuit) method implementation and verification,
 combined with PRIMA model order reduction and Dowell continued-fraction expansion.
 
-> **Note**: We use "PRIMA" (Passive Reduced-order Interconnect Macromodeling Algorithm)
-> instead of "CLN" (Cauer Ladder Network). Both are mathematically equivalent
-> (Lanczos tridiagonalization for ladder network representation), but PRIMA is
-> the widely recognized term from the 1998 IEEE paper and avoids patent issues.
-
 **Theory**: See [PEEC_SURFACE_IMPEDANCE.md](../../peec/PEEC_SURFACE_IMPEDANCE.md).
 
 ## Directory Structure

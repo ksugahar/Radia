@@ -3,7 +3,7 @@ Cylinder mixed Galerkin, rank-1 bulk + 1-DOF surface, NO free parameter.
 
 Phase 2 of the 2026-05-28 -> 2026-06-12 research sprint.
 
-Replaces the IGTE digest's Warburg-terminated CLN (which has a tuned
+Replaces the IGTE digest's Warburg-terminated reduced model (which has a tuned
 free parameter d, achieving 17% wall-band error) by an s-DEPENDENT
 SIBC envelope used directly as a Galerkin basis function.
 

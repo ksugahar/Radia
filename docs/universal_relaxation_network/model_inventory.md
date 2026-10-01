@@ -91,7 +91,7 @@ positive.
 3. Add Y-domain Cole-Davidson and Havriliak-Negami electric/magnetic variants.
 4. Add a compact skin/proximity branch for PCB winding loss.
 5. Keep passive vector fitting as a reference model and optional route to a
-   Foster/Cauer network.
+   Foster network.
 6. Use DRT as a diagnostic layer to propose basis count before training.
 
 ## References

@@ -2,8 +2,8 @@
 
 The legacy module/class identifiers are retained for compatibility. This
 scalar enriched-space construction is not a mixed finite-element formulation.
-Its bulk basis is Foster (Dirichlet eigenmodes), not CLN/Krylov. Validation
-cases using CLN/Krylov bulk must be identified as CLN + SIBC; they do not
+Its bulk basis is Foster (Dirichlet eigenmodes), not Krylov. Validation
+cases using a Krylov bulk must be identified as Krylov + SIBC; they do not
 establish a change of the public eigenmode-coordinate API (lam, tau, Y_bulk).
 
 The bulk eigenmodes phi_n (Dirichlet Laplacian, vanish on the boundary) and

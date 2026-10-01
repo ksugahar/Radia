@@ -175,7 +175,7 @@
         "geometry": "affine-tetrahedron",
         "eigenvalue_measurement": "live-reduced-operator-dense-probe"
       },
-      "cln_handoff": {
+      "foster_handoff": {
         "state_order": 3,
         "port_count": 1,
         "blocks": {
@@ -299,7 +299,7 @@
     "all_transverse_force_ratios_below_half_percent": true,
     "all_runtime_reductions_below_one_percent": true,
     "no_kernel_epsilon": true,
-    "all_hcurl_to_cln_handoffs_passive": true
+    "all_hcurl_to_foster_handoffs_passive": true
   },
   "hcurl_vim_force_acceptance_complete": true
 }

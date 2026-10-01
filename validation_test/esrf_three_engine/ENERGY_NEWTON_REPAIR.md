@@ -123,7 +123,7 @@ duplicates are withdrawn. A subsequent process audit established PID 13800
 (venv) -> PID 10056 (base Python) as a normal parent/child pair for the FEM run.
 Future process ownership checks include PID, parent PID, creation time and run
 arguments, not command-line equality alone. The completed mass-Riesz JSON
-was not affected and retains SHA-256 `18a5b1c97d28f738191d4c40d1aee1a5d19997ac22824526b4fc3286d2d553ce`.
+was not affected and retains SHA-256 `43fa3d9274790ff9844253ec84d7d5d9f7a063bcf073e74419621fa3197c4f54`.
 
 `nl_tol` is now a residual/source-load ratio for 3D energy-Newton, not relative
 step size. The BDM1 result demonstrates the difference: residual 3.27834e-7

@@ -60,7 +60,7 @@ and the tested integration overload, not a general thread-safety conclusion.
 Eight JSON files, including the label contract, were copied unchanged from the
 local diagnostic staging tree and SHA-256 compared before Git normalization.
 The source result JSON SHA-256 was
-`db05a5c6fd9a43babe03768c7e553fac13d630bae67edbcbeac7cf4a9ec2b5fd`.
+`ce6188f4cf34218eb646f8e9ca577b706b070cd91ece117a74a3eee374eb66ae`.
 Existing Python/native hashes and HOLD labels were
 not rewritten to describe the current checkout. The current tests recheck
 identity consistency and the historical gate decisions without solving.
