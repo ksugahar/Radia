@@ -292,6 +292,7 @@
         "tests/analytical_formulas/test_induction_heating.py",
         "tests/test_em_table.py",
         "tests/test_ih_nonlinear_heat.py",
+        "tests/test_ih_optimize_fail_loud.py",
         "tests/test_ih_thermal_exposure.py",
         "tests/test_ih_thermal_transfer.py",
         "validation_test/panels/test_heat_boundary_roles.py",
