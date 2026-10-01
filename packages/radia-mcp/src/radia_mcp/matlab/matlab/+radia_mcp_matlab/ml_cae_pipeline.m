@@ -20,7 +20,7 @@ report = struct("schema", "radia-mcp.matlab.ml-cae-pipeline.v1", ...
     "generated_candidate_is_ground_truth", false), "checks", struct());
 
 % A cheap analytic forward model keeps the test deterministic. Production
-% callers replace this with a FEM/BEM/NGSolve/attached LiveLink callback.
+% callers replace this with a FEM/BEM/NGSolve/attached solver callback.
 x = linspace(0, 1, 32)';
 snapshots = [sin(pi*x), sin(2*pi*x), 0.5*cos(pi*x)] + 0.02*x*(1:3);
 qoi = forwardModel(x);

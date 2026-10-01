@@ -344,7 +344,9 @@ def _material_permeability(mesh_contract: dict[str, Any], raw: Any) -> dict[str,
 
 
 def _runtime_vol_path(text: str, digest: str) -> Path:
-    root = Path(os.environ.get("RADIA_MCP_TEMP", r"C:\temp")) / "radia_mcp_vol2d"
+    from radia_mcp.common.scratch import scratch_root
+
+    root = scratch_root() / "radia_mcp_vol2d"
     root.mkdir(parents=True, exist_ok=True)
     path = root / f"{digest}.vol"
     normalized = text.replace("\r\n", "\n").replace("\r", "\n")

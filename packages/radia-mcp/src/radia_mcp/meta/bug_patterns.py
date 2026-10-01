@@ -70,7 +70,7 @@ PATTERNS: list[dict] = [
                       "and the EARLIER `with TaskManager():` then "
                       "raises UnboundLocalError on the local that "
                       "hasn't been assigned yet.  Real site: "
-                      "calc_verify_vol.py:38 vs :83 (keiko 100号機).",
+                      "calc_verify_vol.py:38 vs :83 (student account, shared host).",
         "detection": "validation_test/panels/test_taskmanager_scoping.py (AST sweep) "
                      "+ tools/audit_application_block_contract.py rule C6.",
         "prevention": "Put TaskManager in the TOP-of-function import "
@@ -186,7 +186,7 @@ PATTERNS: list[dict] = [
                 "phantom block (id K+1) that the user never created.  "
                 "Subsequent parse_cubit_list('volume', 'in block K+1') "
                 "errors with 'No block with ID K+1 was found'.  "
-                "Reported by keiko 100号機 2026-05-30 on a 6-turn "
+                "Reported from a student account 2026-05-30 on a 6-turn "
                 "loft coil journal.",
         "root_cause": "MeshExportInterface::get_block_list (and the "
                       "sideset / nodeset variants) returns a 'default' "
@@ -404,7 +404,7 @@ PATTERNS: list[dict] = [
         "id": "cubit-rlm-per-user-per-machine-activation",
         "title": "Coreform RLM activation is keyed on (Windows user, "
                  "machine).  Administrator's --logout cannot release "
-                 "keiko's seat even on the same machine.",
+                 "another user's seat even on the same machine.",
         "topics": ["cubit", "license", "rlm", "per-user"],
         "severity": "high",
         "first_seen": "2026-05-30",
@@ -415,8 +415,8 @@ PATTERNS: list[dict] = [
         "root_cause": "Server-side activations are keyed on (user, "
                       "machine, account) triple.  Administrator's "
                       "--logout only releases the (administrator, "
-                      "INTEL11, 144576) row.  keiko's (keiko, "
-                      "INTEL11, 144576) row is untouched.",
+                      "host, account) row.  Another user's (user, "
+                      "host, account) row is untouched.",
         "detection": "Inspect Cubit-Log.txt under EACH user profile, "
                      "not just one.",
         "prevention": "To release a specific user's seat: (a) log in "

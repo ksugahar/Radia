@@ -1,10 +1,9 @@
-"""3D electrostatics + capacitance on standard NGSolve H1 -- the COMSOL AC/DC
-"Computing Capacitance" / Electrostatics interface, in 3D.
+"""3D electrostatics + capacitance on standard NGSolve H1, in 3D.
 
 The 2D/axisymmetric twin lives in ``scalar_fem2d`` (FEMM csolv analog). This module
 is the genuine 3D capability: solve the Laplace/Poisson potential with conductors as
 Dirichlet boundaries, then read capacitance from the field ENERGY (the robust route
-COMSOL uses for the capacitance matrix):
+to the capacitance matrix):
 
     -div(eps grad V) = rho ,  E = -grad V ,  W = 1/2 integral eps |grad V|^2 ,  C = 2W/V^2
 
@@ -66,8 +65,8 @@ def spherical_capacitor_C(a, b, eps_r=1.0):
 
 
 def capacitance_matrix(mesh, eps_cf, conductors, order=2):
-    """Maxwell capacitance matrix C (N x N) for the named conductor boundaries --
-    the COMSOL "Computing Capacitance" capacitance matrix, in 3D.
+    """Maxwell capacitance matrix C (N x N) for the named conductor boundaries,
+    in 3D.
 
     Energises each conductor to 1 V in turn (all others grounded), solves the
     electrostatic problem, and reads EVERY conductor's charge from the FEM REACTION

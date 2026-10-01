@@ -753,7 +753,7 @@ OBSERVED LAB HABIT (from internal scripts):
   - FEMM MATLAB (legacy): set(gca,'FontName','Times'); xlabel('{\\it X}
                    (m)'); print('-dmeta','f.emf');  % print is DEPRECATED
                    -> modern: exportgraphics(...,'ContentType','vector')
-  - COMSOL/CoreformCubit matplotlib: figsize=(3,4), dpi=400, Times New
+  - Lab matplotlib default: figsize=(3,4), dpi=400, Times New
                    Roman 10 pt, inward ticks, savefig PNG.
 
 RULE: NEVER embed a raster PNG in a CAMERA-READY paper -- re-render to

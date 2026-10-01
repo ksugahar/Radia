@@ -1,4 +1,4 @@
-"""Multiphysics couplings for radia-ngsolve -- the COMSOL-class problems
+"""Multiphysics couplings for radia-ngsolve -- standard multiphysics problems
 (induction heating EM->thermal, ...) as REUSABLE building blocks rather than
 one-off scripts.
 

@@ -10,7 +10,7 @@
 
 | | |
 |---|---|
-| **Author** | Kengo Sugahara (菅原 賢悟) — Sugawara Lab, Kindai University |
+| **Author** | Kengo Sugahara (菅原 賢悟) — Sugahara Lab, Kindai University |
 | **Contact** | ksugahar@ele.kindai.ac.jp |
 | **First public disclosure** | 2026-04-20, this repository, BSD-3-Clause |
 | **Reference implementation** | [`radia-mcp`](https://pypi.org/project/radia-mcp/) ≥ 0.25.0 |

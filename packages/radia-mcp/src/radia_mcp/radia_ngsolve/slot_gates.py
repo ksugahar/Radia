@@ -4870,7 +4870,7 @@ def shared_solver_session_health_gate(
 
     This public-safe gate records whether an external solver session was reused
     cleanly before a numerical validation row is trusted.  It is deliberately
-    generic: COMSOL LiveLink, MATLAB Engine, Jupyter kernels, and similar
+    generic: MATLAB Engine, Jupyter kernels, and similar
     long-lived solver sessions can all use the same separation between session
     health and physics residuals.
     """
@@ -5221,13 +5221,13 @@ def shared_solver_session_health_gate(
             "a direct discovery false negative can be healthy when passive diagnostics and shared-engine evaluation agree",
             "close a direct discovery false negative only after selecting the shared engine and running an ok shared-engine eval",
             "record passive process and port evidence when a direct discovery path misses a reusable session",
-            "do not assume cc_livelink returns a version field; record MATLAB and solver version sources separately",
+            "do not assume a session bridge returns a version field; record MATLAB and solver version sources separately",
             "a shared-engine timeout is diagnostic evidence, not a reason to kill solver-owned processes",
             "a previous shared-engine timeout is closed only by a later ok eval with visible API evidence",
-            "when many MATLAB processes exist, select the LiveLink target by parent/port evidence, not by the first MATLAB executable",
-            "record the selected shared engine name and verify it matches the LiveLink MATLAB worker PID when available",
+            "when many MATLAB processes exist, select the target session by parent/port evidence, not by the first MATLAB executable",
+            "record the selected shared engine name and verify it matches the worker MATLAB PID when available",
             "record matlab.engine.find_matlab() output separately when direct MCP discovery misses a shared MATLAB session",
-            "record the COMSOL server -> LiveLink MATLAB -> shared worker MATLAB parent chain when passive diagnostics expose it",
+            "record the solver server -> bridge MATLAB -> shared worker MATLAB parent chain when passive diagnostics expose it",
             "an external solver MCP profile should expose health-first calls and prohibit unrequested process start or kill",
         ],
     }
@@ -5563,9 +5563,8 @@ def solver_result_artifact_provenance_timing_gate(
 
     Result numbers are much easier to reuse when the artifact records when it
     was run, which solver/tool versions produced it, and where the wall time
-    went.  This gate is intentionally solver-independent; private COMSOL,
-    MATLAB, CST, or other lanes can keep their provenance private while public
-    helpers replay the structural contract.
+    went.  This gate is intentionally solver-independent: public helpers replay the
+    structural contract for any solver.
     """
 
     if not isinstance(artifact, dict):
@@ -14471,7 +14470,7 @@ def motor_fem_export_case_package_gate(
     expected_result_set_id=None,
     required_kinds=("column_metadata", "symmetry_coverage", "value_table", "notebook_row"),
 ):
-    """Check that JMAG-derived export artifacts belong to one case package.
+    """Check that JMAG export artifacts belong to one case package.
 
     JMAG postprocessing often exports column metadata, sector/symmetry coverage,
     value tables, and selected notebook rows separately.  This gate keeps the
@@ -19852,7 +19851,7 @@ def thermal_layer_stack_conductance_gate(
     The layers are stacked normal to the heat-flow direction.  The heat rate is
     constant through the stack and the resistance of layer ``i`` is
     ``R_i = d_i / (k_i A)``.  This is the thermal counterpart of the layered
-    dielectric COMSOL/radia gates: keep the interface temperatures visible
+    dielectric gates: keep the interface temperatures visible
     before trusting a full heat-transfer model.
     """
 
@@ -20621,8 +20620,8 @@ def acoustic_plane_wave_intensity_convention_gate(
 
     For a normally incident plane wave, ``Z0=rho*c``, ``v_peak=p_peak/Z0``,
     and the time-averaged intensity is ``0.5*p_peak^2/Z0``.  The same value
-    must be obtained from RMS pressure as ``p_rms^2/Z0``.  This keeps COMSOL
-    acoustic LiveLink slots and open radia-ngsolve notebooks aligned on
+    must be obtained from RMS pressure as ``p_rms^2/Z0``.  This keeps acoustic
+    solver runs and open radia-ngsolve notebooks aligned on
     amplitude convention before comparing any solver field.
     """
 

@@ -11,8 +11,7 @@ physics-named wrappers, each validated against an analytical benchmark:
     current flow    : -div(sig grad V)    = 0   ,  J=-sig grad V , G = 2P/V^2
     magnetic scalar : -div(mu  grad phi_m)= 0   ,  H=-grad phi_m, B=mu H , P = 2W/F^2
 
-The last is the current-free magnetic scalar potential (COMSOL 'Magnetic Fields,
-No Currents' / mfnc) -- the magnetic-circuit / reluctance-network primitive, with
+The last is the current-free magnetic scalar potential -- the magnetic-circuit / reluctance-network primitive, with
 mu = mu0*mu_r in place of eps / k / sigma. On the coaxial annulus all four give the
 SAME radial-Laplace lumped value  2 pi c / ln(b/a)  (c = eps, k, sigma, mu).
 
@@ -249,7 +248,7 @@ def thermal_conductance(T, mesh, k, delta_T):
 
 
 def solve_magnetic_scalar(mesh, mu, scalar_potentials, order=2):
-    """Current-free magnetic scalar potential (COMSOL 'Magnetic Fields, No Currents' / mfnc analog):
+    """Current-free magnetic scalar potential:
     -div(mu grad phi_m) = 0, with H = -grad(phi_m) and B = mu H (mu = mu0*mu_r). ``scalar_potentials``
     = {boundary: magnetomotive potential [A]} fixed-MMF boundaries. The fourth member of the FEMM-style
     scalar-Laplace family (electrostatic / current-flow / thermal): the reduced scalar potential for
@@ -270,8 +269,8 @@ def permeance(phi, mesh, mu, mmf):
 
 
 def solve_magnetostatic_az(mesh, nu, currents, dirichlet_values, order=2):
-    """In-plane (2D planar) magnetostatic vector potential A_z (FEMM 'magnetics' /
-    COMSOL 'mf' analog): -div(nu grad A_z) = J_z, with reluctivity nu = 1/(mu0 mu_r),
+    """In-plane (2D planar) magnetostatic vector potential A_z (FEMM 'magnetics'
+    analog): -div(nu grad A_z) = J_z, with reluctivity nu = 1/(mu0 mu_r),
     out-of-plane current density J_z [A/m^2] and flux density B = (dA_z/dy, -dA_z/dx)
     so |B| = |grad A_z|. This is the CURRENT-carrying (vector-potential) member of the
     same elliptic operator -div(c grad u) = f as the scalar potentials in this module --

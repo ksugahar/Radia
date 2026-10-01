@@ -385,7 +385,7 @@ def build_em_force_target_artifact(
         "next_slot_allowed": pass_artifact,
         "notes": [
             "This is a solver-ready target pass, not a live commercial solver run.",
-            "Run source-native FEMM/JMAG/ELF/COMSOL force slots next, then feed verified and scrubbed lessons back into the appropriate MCP lane.",
+            "Run an independent force evaluation next before treating the target as validated.",
         ],
     }
     feedback_gate = cross_validation_artifact_to_mcp_feedback_gate(

@@ -65,7 +65,7 @@ race with past winners.
 
 ```
 # All lab machines: set this in shell rc / cubit_session.py env
-export RADIA_MCP_LEARNED_DIR='S:\Radia\01_GitHub\lab_learned'
+export RADIA_MCP_LEARNED_DIR='<repo>/lab_learned'
 ```
 
 `_learned_recipes_path()` checks the env var first; when set, the
@@ -129,7 +129,7 @@ to ASME IDETC/CIE or a similar CAE+AI venue, after the bundle has
 ```bash
 pip install radia-mcp[full]
 # Optional but recommended for lab-shared learning:
-setx RADIA_MCP_LEARNED_DIR "S:\Radia\01_GitHub\lab_learned"
+setx RADIA_MCP_LEARNED_DIR "<repo>\lab_learned"
 # or, on POSIX:
 export RADIA_MCP_LEARNED_DIR=/mnt/lab/learned
 ```
@@ -147,9 +147,9 @@ import json
 print(json.loads(cs.cubit_curate_learned_recipes(top_per_class=3))['curated_entries'])
 "
 # 2. Review the diff:
-git -C s:/Radia/01_GitHub diff packages/cubit-mesh-export/src/cubit_mesh_export/mcp/curated_recipes_bundle.py
+git -C <repo> diff packages/cubit-mesh-export/src/cubit_mesh_export/mcp/curated_recipes_bundle.py
 # 3. Commit + bump version + ship:
-cd s:/Radia/01_GitHub/packages/radia-mcp
+cd <repo>/packages/radia-mcp
 sed -i 's/version = "0.X.Y"/version = "0.X.(Y+1)"/' pyproject.toml
 sed -i 's/__version__ = "0.X.Y"/__version__ = "0.X.(Y+1)"/' src/radia_mcp/__init__.py
 rm -rf build/ dist/radia_mcp-0.X.*

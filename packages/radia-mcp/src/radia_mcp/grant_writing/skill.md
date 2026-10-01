@@ -1640,7 +1640,7 @@ the specific method or evidence third, and the remaining limit or question
 last. The result has no score so an author cannot improve it by deleting
 necessary technical detail; each excerpt must be reviewed in context.
 
-Keiko's 2026-09-01 close read adds a reviewer-navigation rule. Replace
+A 2026-09-01 close read adds a reviewer-navigation rule. Replace
 applicant-internal metaphors such as "our code lineage", "connect four assets",
 or "move the rule" with an observable limitation, named operation, and research
 destination. Re-anchor a scope sentence with "in this research" and the number

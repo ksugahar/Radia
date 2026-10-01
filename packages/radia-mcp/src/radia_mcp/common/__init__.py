@@ -45,10 +45,12 @@ _LAZY_MODULES = {
     "learning_quality",
     "mcp_contract",
     "prompts_loader",
+    "scratch",
     "server_hardening",
     "status",
     "tool_group",
     "topics",
+    "user_agent",
     "utf8_stdout",
     "web_docs",
 }

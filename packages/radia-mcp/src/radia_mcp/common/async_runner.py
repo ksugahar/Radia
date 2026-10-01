@@ -1,7 +1,7 @@
 """Threading-based async runner with progress + cancel.
 
-Adapted from wjc9011/COMSOL_Multiphysics_MCP src/async_handler/solver.py
-(which wraps long COMSOL solves). Generalized here for arbitrary
+Adapted from wjc9011/COMSOL_Multiphysics_MCP src/async_handler/solver.py.
+Generalized here for arbitrary
 long-running commands (external mesh + NGSolve solve + Radia C++ Solve
 + Optuna sweep, etc.).
 

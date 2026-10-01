@@ -48,7 +48,7 @@ k=3:  Laplacian(psi) ≠ 0          [factor wrong]
 in vector calculus appears as the conformal weight λ^((n−2k)/2) of a
 k-form, and Mathematica verifies it symbolically.
 
-Authored by the **Sugawara Lab (菅原研究室)**, Kindai University —
+Authored by the **Sugahara Lab (菅原研究室)**, Kindai University —
 where the lab-standard primary pair is **build123d (CAD authoring) +
 Cubit (hex meshing)**, with Gmsh as the post-processing workhorse.
 
@@ -135,7 +135,7 @@ AI assistant can **solve a real electromagnetics / multiphysics engineering prob
 open-source [NGSolve](https://ngsolve.org), and every capability is cross-checked against
 a closed-form analytic solution**. The result is a library you can trust an AI to drive.
 
-### 20+ "COMSOL-class" problems, each validated and baked in
+### 20+ classic multiphysics problems, each validated and baked in
 
 Each model ships as a **reusable helper + runnable example + regression test + queryable
 knowledge** (`ngsolve_usage(...)`), so the server gets smarter,
@@ -432,7 +432,7 @@ otherwise cache TTL is 7 days.
 
 ---
 
-## Lab stance (Sugawara Lab, 菅原研究室)
+## Lab stance (Sugahara Lab, 菅原研究室)
 
 | Tool | Position |
 |---|---|

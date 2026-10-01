@@ -41,6 +41,8 @@ import tarfile
 import urllib.parse
 from typing import Optional
 
+from ..common.user_agent import polite_user_agent
+
 
 # ============================================================
 # Constants
@@ -170,7 +172,7 @@ def paper_writing_arxiv_fetch_latex_source(
     try:
         response = requests.get(
             url, stream=True,
-            headers={"User-Agent": "radia-mcp (mailto:ksugahar@ele.kindai.ac.jp)"},
+            headers={"User-Agent": polite_user_agent()},
             timeout=60,
         )
         response.raise_for_status()
@@ -418,7 +420,7 @@ def paper_writing_arxiv_search(
         r = requests.get(
             url,
             params=params,
-            headers={"User-Agent": "radia-mcp (mailto:ksugahar@ele.kindai.ac.jp)"},
+            headers={"User-Agent": polite_user_agent()},
             timeout=30,
         )
         r.raise_for_status()

@@ -4714,18 +4714,15 @@ Separation ensures:
 - Hantila polarization: LU once, back-sub iteration
 ```
 
-## Unique Capabilities
+## Radia+NGSolve capabilities
 
-| Feature | OPERA | ANSYS | COMSOL | Radia+NGSolve |
-|---------|-------|-------|--------|---------------|
-| Hex + arbitrary order | - | - | - | Yes |
-| No coil mesh | - | - | - | Yes (Biot-Savart) |
-| No STEP/OCC needed | - | - | - | Yes (ACIS direct) |
-| Kelvin transform | - | - | - | Yes |
-| 2-scalar method | - | - | - | Yes |
-| B-input hysteresis | - | - | - | Yes (Play model) |
-| Energy-based | - | - | - | Yes (convex) |
-| Open source | - | - | - | Yes (pip install) |
+- Hex meshes with arbitrary polynomial order
+- Coils without a coil mesh (Biot-Savart source field)
+- ACIS geometry without a STEP/OCC round trip
+- Kelvin-transform open boundary
+- Two-scalar-potential method
+- B-input hysteresis (Play model), convex energy-based
+- Open source (pip install)
 
 ## Reference
 """
@@ -5462,14 +5459,14 @@ G_matrix, fes_H1 = fes_HCurl.CreateGradient()
 
 
 NGSOLVE_MULTIPHYSICS = r"""
-# Multiphysics couplings in NGSolve (COMSOL-class problems)
+# Multiphysics couplings in NGSolve
 
 Reusable building blocks live in ``radia_mcp.radia_ngsolve.multiphysics``;
 worked, validated demos.
 
 ## Induction heating (magneto-thermal, one-way EM -> heat)
 
-The canonical COMSOL induction-heating tutorial, reproduced and validated.
+Induction heating of a conducting cylinder, validated against closed forms.
 Pipeline:
 
     eddy solve (A-Phi harmonic)  ->  joule_loss_density()  ->  solve_heat_steady()
@@ -5541,7 +5538,7 @@ torque operator itself.
 ## Magnetic shielding (high-mu shell, scattered-field uniform applied field)
 
 Shielding factor S = B_applied/B_cavity of a permeable shell in a uniform field --
-the COMSOL AC/DC "magnetic shielding" benchmark. Driven by the PERMEABILITY JUMP
+a classic magnetostatic shielding benchmark. Driven by the PERMEABILITY JUMP
 (no coil): ``solve_scattered_uniform_field`` solves curl(nu curl A~) =
 curl(nu_pert B0) with nu_pert = nu0(1-1/mu_r) in the shell; total B = curl(A~)+B0.
 
@@ -5594,11 +5591,11 @@ formula); this exact result is the 2D / infinite-length limit.
 
 
 NGSOLVE_ELECTROSTATICS_3D = r"""
-# 3D electrostatics & capacitance (COMSOL AC/DC "Computing Capacitance")
+# 3D electrostatics & capacitance
 
 The 2D/axisymmetric electrostatics is in ``scalar_fem2d`` (FEMM csolv analog). The
 genuine 3D capability is ``radia_ngsolve.electrostatic3d``: conductors as Dirichlet
-boundaries, capacitance from the field ENERGY (the route COMSOL uses for the
+boundaries, capacitance from the field ENERGY (the standard route to the
 capacitance matrix).
 
 ```python
@@ -5887,7 +5884,7 @@ of the across-gap B component (not a point). Validated
 (validation/force/validate_force_xval.py::validate_c_magnet_gap_field):
 g=6 mm, mu_r=2000 -> B_gap matches the reluctance model to **0.5 %**, sitting just below
 the mu_r->inf ideal (the deficit = gap fringing/leakage -- the lumped model's blind spot,
-and exactly what a COMSOL cross-check resolves). Wider gaps -> more fringing -> bigger
+and exactly what a full-field FE solve resolves). Wider gaps -> more fringing -> bigger
 deficit; that trend IS the engineering content (effective gap > geometric gap).
 
 HOLDING FORCE (the force companion -- relay / solenoid / electromagnet pull): the pole faces
@@ -5943,7 +5940,7 @@ the minimum margin as green (>100 kA/m), amber (0..100 kA/m), or red (<0).  This
 pre-run margin contract only; local per-element field checks are still required for a final
 irreversible-demag claim.
 
-Continuous-loop slot 142 adds the RunResult handoff rule for ELF/MAGIC-style notebooks: before
+RunResult handoff rule for external-solver notebooks: before
 turning local product result rows into a load-line or demag-margin panel, normalize the row into
 ``case_id``, ``temperature_C``, ``gap_m``, ``B_gap_T``, ``H_pm_A_per_m``,
 ``H_knee_A_per_m``, ``recoil_mu_r``, and ``safe_against_knee``.  Run
@@ -5956,7 +5953,7 @@ magnetization axis, knee reference, and recoil permeability is not solver-ready 
 NGSOLVE_JOULE_ELECTROTHERMAL = r"""
 # Electro-thermal (Joule heating) multiphysics -- chaining the two solvers
 
-The canonical COMSOL "Joule Heating" coupling: current dissipates ohmic heat, which sets
+The classic Joule-heating coupling: current dissipates ohmic heat, which sets
 the temperature. radia-ngsolve does it by CHAINING the existing solvers (not hand-imposing
 the heat):
 
@@ -5988,10 +5985,7 @@ conduction -div(k grad T)=q gives the parabolic rise dT(r)=q(a^2-r^2)/(4k), cent
 ``dT_peak = q a^2/(4 k)`` (``multiphysics.joule_heated_cylinder_peak_dT``) -- the classic
 current-carrying-wire / ampacity temperature rise, the cylindrical analog of the slab's
 sigma V^2/(8k). solve_heat_steady on a disk (face "wire", edge "surf") reproduces dT(r) to
-**0.00 %**. VALIDATED LIVE 3-way (the corrected COMSOL policy: `comsol_preflight` -> gate1
-LiveLink up + gate2 module licensed [core ht, no add-on] -> live): COMSOL 6.4 LiveLink
-**25.0000 K == NGSolve == analytic q a^2/4k, 0.000 %** (COMSOL number internal/unattributed;
-public gate is the closed form). tests/test_cylinder_joule_heating.py.
+**0.00 %** against the closed form q a^2/(4k). tests/test_cylinder_joule_heating.py.
 
 CONVECTIVE cooling (#44) -- the realistic BC. Instead of a fixed surface temperature, the slab
 is cooled by CONVECTION (Newton cooling, film coefficient h): a ROBIN boundary
@@ -6001,10 +5995,8 @@ stiffness and ``h*T_inf*s`` to the load on the ``robin`` boundary (other boundar
 insulated). For a slab (thickness L, both faces convective) the centre rise is
 ``convective_slab_peak_dT`` = ``qL^2/(8k) + qL/(2h)`` = conduction parabola PLUS the convective
 FILM rise qL/(2h); the surface sits qL/(2h) above the coolant, and h->inf recovers the fixed-T
-parabola qL^2/8k. VALIDATED LIVE 3-way (`comsol_preflight` gates core ht -> live): COMSOL 6.4
-LiveLink **22.5000 K == NGSolve == analytic, 0.000 %** (the convective BC = ht `HeatFluxBoundary`
-with `HeatFluxType='ConvectiveHeatFlux'`, `h`, `Text`; COMSOL number internal, public gate is the
-closed form). tests/test_convective_electrothermal.py.
+parabola qL^2/8k. NGSolve matches the closed form to 0.000 %.
+tests/test_convective_electrothermal.py.
 
 COOLING FIN / extended surface (#47) -- conduction ALONG a thin fin + distributed surface
 convection: the 1-D fin equation, dT(x) = dT_base cosh(m(L-x))/cosh(mL), m = sqrt(2h/(k t))
@@ -6013,11 +6005,9 @@ the FIN EFFICIENCY eta = tanh(mL)/(mL) (``fin_efficiency``) = actual heat / heat
 (eta->1 short/fat/conductive, ->0 long/thin -- the heat-sink design trade-off). radia uses
 ``solve_heat_steady_robin`` with the fin BASE as an inhomogeneous Dirichlet (``dirichlet_value``)
 + convective long faces; the fin efficiency comes from the convected heat
-``Integrate(h*T*ds(conv))/(h*P*L*dT_base)``. VALIDATED LIVE 3-way (`comsol_preflight` gates core
-ht -> live): COMSOL 6.4 LiveLink tip **16.3307 K == NGSolve 16.3307 == 1-D analytic 16.307**
-(0.14 %, the 2-D-vs-1-D fin approximation), eta FE 0.3945 vs tanh(mL)/(mL) 0.3946 (0.04 %).
-COMSOL recipe: base `TemperatureBoundary` + long-face `HeatFluxBoundary`/`ConvectiveHeatFlux`.
-Generalises the convective slab (#44, no along-fin gradient). tests/test_cooling_fin.py.
+``Integrate(h*T*ds(conv))/(h*P*L*dT_base)``. NGSolve tip rise 16.3307 K vs the 1-D analytic
+16.307 K (0.14 %, the 2-D-vs-1-D fin approximation), eta FE 0.3945 vs tanh(mL)/(mL) 0.3946
+(0.04 %). Generalises the convective slab (#44, no along-fin gradient). tests/test_cooling_fin.py.
 
 MULTILAYER thermal resistance / DIE-STACK junction temperature (#50) -- the electronics-cooling
 junction-to-ambient metric. A heat-generating top layer conducts DOWN through a passive layer
@@ -6030,11 +6020,9 @@ top layer the self-heating drop is q*L1^2/(2 k1), so
 
 Low-k layers (solder, TIM) dominate the rise; high-k spreaders (Cu) drop little. radia uses
 ``solve_heat_steady`` with a region-wise k CF (``mesh.MaterialCF({lay1:k1,...})``) + the source
-only in the active layer. VALIDATED LIVE 3-way (`comsol_preflight` gates core ht -> live): COMSOL
-6.4 LiveLink == NGSolve == analytic, **0.000 %** at every interface (the conduction profile is
-piecewise-linear/parabolic, represented exactly). COMSOL recipe: per-layer k via
-`SolidHeatTransferModel` features (one per domain, `k_mat='userdef'`) + `HeatSource` in the
-active layer + base `TemperatureBoundary`. tests/test_die_stack_thermal.py.
+only in the active layer. NGSolve matches the analytic profile to **0.000 %** at every
+interface (the conduction profile is piecewise-linear/parabolic, represented exactly).
+tests/test_die_stack_thermal.py.
 """
 
 
@@ -6400,7 +6388,7 @@ and the R2-invariance of T_max (with s_max ∝ R2) holds exactly. PURE circuit t
 tool-independent. Continuous-loop slot 36 adds the no-load / locked-rotor front gate:
 400 V/5 A/900 W no-load gives Rc=177.7777777777778 ohm and Xm=47.830502044476084 ohm;
 90 V/20 A/1200 W locked-rotor gives Req=1.0 ohm, Xeq=2.3979157616563596 ohm, and
-R2'=0.6 ohm if R1=0.4 ohm. The analytic basis for the JMAG-roadmap IM 1/4-model FE study
+R2'=0.6 ohm if R1=0.4 ohm. The analytic basis for an IM 1/4-model FE study
 (anti-periodic + slip + cage), the induction-machine companion to dq_torque for PM machines.
 """
 

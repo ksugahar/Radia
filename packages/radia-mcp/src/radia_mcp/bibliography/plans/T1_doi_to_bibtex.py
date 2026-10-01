@@ -18,11 +18,11 @@ import urllib.request
 from .._bibparse import BibEntry, make_cite_key, write_bib
 from .._doi import normalize_doi
 from .._metadata_text import bibtex_text
+from ...common.user_agent import polite_user_agent
 
 
 _CROSSREF_BASE = "https://api.crossref.org/works/"
-_USER_AGENT = ("mcp-server-document/3.0 (mailto:ksugahar@ele.kindai.ac.jp) "
-               "Crossref-Plus")
+_USER_AGENT = polite_user_agent("mcp-server-document/3.0", "Crossref-Plus")
 
 
 def _fetch_crossref(doi: str, timeout: float = 15.0) -> dict | None:
