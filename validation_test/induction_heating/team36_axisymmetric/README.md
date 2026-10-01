@@ -62,3 +62,14 @@ The result has two distinct gates:
 A standalone radia-ih run never promotes itself to cross-validation or MCP
 learning evidence.  This prevents a numerically plausible temperature history
 from being mistaken for an independent comparison.
+
+### Discretization acceptance remains open
+
+Neither gate above certifies convergence with mesh size or time step. Nonlinear
+iteration convergence is a separate check. The retained baseline and refined
+v11 histories differ substantially at 250 s (about 16% in axial temperature
+and 29% in induction power); both remain unaccepted for cross-validation and
+MCP learning. Execution success must not be presented as physical validation.
+A mesh/time-step study with independently justified observable tolerances is
+required before claiming discretization convergence. No such tolerance is
+inferred from the linear residual limit.
