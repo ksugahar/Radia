@@ -274,6 +274,10 @@ def test_native_solver_lane_builds_required_axisymmetric_extension():
     steps = workflow["jobs"]["ams-regression"]["steps"]
     build = next(s for s in steps if s.get("name") == "Build current package and SparseSolv")
     assert ".\\Build.ps1 -AxiFemOnly" in build["run"]
+    assert "--target sparsesolv_ngsolve peec_matrices" in build["run"]
+    verify = next(s for s in steps if s.get("name") == "Verify source provenance and run required AMS tests")
+    assert "radia.peec_matrices" in verify["run"]
+    assert "ExtensionFileLoader" in verify["run"]
 
 
 def test_axifem_build_links_python_from_the_base_interpreter():
