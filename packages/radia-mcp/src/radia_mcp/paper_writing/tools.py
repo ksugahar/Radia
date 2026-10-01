@@ -2048,18 +2048,18 @@ def paper_writing_check_digest_human_review_triggers(
 ) -> dict:
     """Detect one-page digest issues learned from Sugahara human review.
 
+    General manuscript checks may recognize historical CLN terminology;
+    CLN-specific implementation and method support belongs to CLN-mcp.
     This checker is intentionally a warning-level review assistant, not a
     rigid grammar rule.  It catches patterns that repeatedly trigger
     reviewer/coauthor questions in short EM digests:
 
     - the abstract enumerates per-case exact percent errors instead of an
       aggregate claim such as "sub-percent accuracy";
-    - an EM digest abstract says only "Cauer ladder models", which can
-      read as a generic equivalent circuit rather than a Cauer Ladder
-      Network field-reduction representation;
-    - a known Warburg/Randles/CLN combination is framed as the novelty;
-    - an empirical CLN--surface transition-frequency issue is described too
-      narrowly as something "outside the Galerkin reduction";
+    - a model name does not distinguish field reduction from a generic circuit;
+    - a known bulk/surface combination is framed as the novelty;
+    - an empirical transition-frequency issue is described too narrowly
+      as something "outside the Galerkin reduction";
     - HOIBC or Warburg is introduced in the body without a nearby citation;
     - a figure caption carries interpretation that should be in the body;
     - opaque shorthand such as rank-(1,1) appears without words;
@@ -2072,12 +2072,12 @@ def paper_writing_check_digest_human_review_triggers(
     - N_b is used without defining what is counted and whether the dc term
       is included;
     - the digest explains N_b by saying the uniform dc term is not counted,
-      instead of using a simpler "two-rung CLN + SIBC" style count;
+      instead of describing the retained bulk modes and surface order;
     - N_b and N are both used without distinguishing mixed-model bulk
-      corrections from bulk-only CLN order;
+      corrections from bulk-only reference order;
     - L/R terminations are mentioned without saying they are inductive and
-      resistive closures of the last CLN rung;
-    - a CLN/HOIBC demonstrator uses N_b=1 without explaining why it is not
+      resistive model closures;
+    - a reduced bulk/surface demonstrator uses N_b=1 without explaining why it is not
       just a dc term plus an impedance boundary condition;
     - a p_H=0 / SIBC0 example is advertised as HOIBC or high-order
       without separating the current benchmark from the higher-order
@@ -2085,7 +2085,7 @@ def paper_writing_check_digest_human_review_triggers(
     - Schur complement and DtN/Steklov language are equated in one sentence
       without explaining the elimination/map interpretation;
     - "SIBC scaling" is used without saying whether it means f^{-1/2};
-    - CLN basis count or HOIBC order is missing from a graph/model
+    - bulk basis count or surface order is missing from a graph/model
       description;
     - a main result figure is placed in the source before the
       numerical/verification section that explains it;
@@ -2149,10 +2149,9 @@ def paper_writing_check_digest_human_review_triggers(
             add(
                 "abstract_generic_cauer_ladder",
                 "abstract uses a generic Cauer-ladder phrase",
-                ("If the contribution is an electromagnetic field-reduction "
-                 "model, write 'Cauer Ladder Network representations of "
-                 "electromagnetic fields' or equivalent wording.  'Cauer "
-                 "ladder models' can read as a generic circuit model."),
+                ("State whether the paper concerns a field-reduction representation "
+                 "or a generic circuit model, and cite the actual method. "
+                 "CLN-specific method and notation support belongs to CLN-mcp."),
                 abstract,
             )
 
@@ -2226,7 +2225,7 @@ def paper_writing_check_digest_human_review_triggers(
         add(
             "over_narrow_galerkin_transition_framing",
             "transition-frequency issue is framed too narrowly as outside Galerkin reduction",
-            ("If the real issue is coupling a finite CLN to a Warburg/surface "
+            ("If the real issue is coupling a reduced bulk model to a Warburg/surface "
              "tail, state that the model is closed by an empirical transition "
              "frequency; do not make the claim sound specific to Galerkin "
              "projection unless that is essential."),
@@ -2285,7 +2284,7 @@ def paper_writing_check_digest_human_review_triggers(
             add(
                 "known_construct_framing",
                 "Warburg-related construction may be framed as the novelty",
-                ("If Warburg/CLN combination is already known, state that it is "
+                ("If the bulk/surface combination is already known, state that it is "
                  "known and locate the novelty in the parameter-free Galerkin, "
                  "Schur-complement, or HOIBC coupling."),
                 ctx,
@@ -2320,7 +2319,7 @@ def paper_writing_check_digest_human_review_triggers(
         add(
             "misleading_minimal_basis_claim",
             "minimal bulk/surface phrase may imply the whole benchmark uses only two basis functions",
-            ("Distinguish the finite bulk CLN basis from the added surface "
+            ("Distinguish the finite reduced bulk basis from the added surface "
              "envelope/block.  Avoid wording that sounds as if a circular "
              "conductor is represented by only two spatial basis functions."),
             content_src[max(0, m.start() - 120):m.end() + 120],
@@ -2517,7 +2516,7 @@ def paper_writing_check_digest_human_review_triggers(
                 "model-order count is explained by excluding the dc term",
                 ("In a short digest, avoid making the reader parse whether "
                  "the dc field is counted.  Prefer a direct physical count "
-                 "such as 'two-rung CLN + SIBC0', or define N_b in one "
+                 "such as 'two bulk modes + leading SIBC', or define N_b in one "
                  "simple sentence without negative exclusions."),
                 content_src[max(0, m_dc_count.start() - 120):m_dc_count.end() + 120],
             )
@@ -2561,10 +2560,8 @@ def paper_writing_check_digest_human_review_triggers(
             add(
                 "undefined_lr_termination",
                 "L/R CLN terminations are mentioned without defining them",
-                ("Define L- and R-terminated CLNs in words: the L termination "
-                 "closes the last rung inductively, and the R termination "
-                 "closes it resistively.  Also state whether N is a rung, "
-                 "mode, or basis count."),
+                ("Define the model termination and explain what N counts. "
+                 "For CLN-specific termination guidance, use CLN-mcp."),
                 content_src,
             )
 
@@ -2593,7 +2590,7 @@ def paper_writing_check_digest_human_review_triggers(
                     "N_b and N appear without distinguishing their roles",
                     ("When both N_b and N are used, define the distinction: "
                      "N_b counts bulk correction functions in the mixed model, "
-                     "whereas N is the order of the bulk-only CLN ladder."),
+                     "whereas N is the order of the bulk-only reference model."),
                     content_src,
                 )
         if (re.search(r"\bCLN\b|Cauer", content_src, flags=re.IGNORECASE)
@@ -2604,10 +2601,9 @@ def paper_writing_check_digest_human_review_triggers(
             add(
                 "minimal_bulk_order_misread",
                 "CLN/HOIBC demonstrator uses N_b=1, which can read as dc plus IBC only",
-                ("Use at least two bulk correction functions for a mixed "
-                 "CLN/HOIBC demonstration, or explicitly explain why N_b=1 "
-                 "is sufficient and how it differs from the dc term plus an "
-                 "impedance boundary condition."),
+                ("Justify the retained bulk order with measured operating-band "
+                 "error and explain how the model differs from a dc term plus "
+                 "an impedance boundary. CLN-specific support belongs to CLN-mcp."),
                 content_src,
             )
 
@@ -2636,9 +2632,10 @@ def paper_writing_check_digest_human_review_triggers(
             add(
                 "missing_model_order_disclosure",
                 "mixed CLN/HOIBC description lacks CLN basis count and/or HOIBC order",
-                ("State the model orders in the body, caption, or legend: "
-                 "for example, 'bulk CLN N_b=2 with zeroth-order HOIBC "
-                 "(p_H=0); bulk-only CLN references use N=10'."),
+                ("State the bulk basis count and surface approximation order "
+                 "in the body, caption or legend, and distinguish the coupled "
+                 "model from its bulk-only reference. Do not present p_H=0 "
+                 "as a high-order surface result."),
                 content_src,
             )
 
@@ -2750,7 +2747,7 @@ def paper_writing_check_digest_human_review_triggers(
                 "f_N marker appears without explaining what it denotes",
                 ("If a vertical line or label such as $f_N$ is shown, state "
                  "in the caption or nearby text what it marks, e.g. 'the "
-                 "highest pole frequency of the bulk CLN'."),
+                 "highest pole frequency of the reduced bulk model'."),
                 content_src,
             )
 

@@ -113,9 +113,9 @@ Stickier rule: WHATEVER you pick, use it CONSISTENTLY in the same paper.
 
 Lab default: **bold italic capital** for symbolic tensor; component
 form ($T_{ij}$, $\\nu_{ij}$ for the reluctivity tensor) for indexed
-operations.  The CLN module uses ${{R}}_n$, ${{L}}_n$ (italic
-non-bold) for SCALAR rungs and ${{\\boldsymbol{R}}}_n$,
-${{\\boldsymbol{L}}}_n$ for MATRIX rungs.
+operations. Use italic non-bold symbols for scalar coefficients and bold
+symbols for matrix coefficients. CLN-specific notation and method guidance
+are supported by the separate CLN-mcp project; Radia has no CLN module.
 
 ## Math operators: italic VS upright
 
@@ -338,23 +338,20 @@ EQUATION_TYPESETTING = r"""
   block matrices and model-order symbols.  Write frequency-domain blocks
   as `K_{bb}(s)`, `K_{bs}(s)`, `K_{sb}(s)`, `K_{ss}(s)` when they depend
   on `s`, and define them in words as bulk, surface, and coupling
-  Galerkin blocks.  If the result is really "two-rung CLN + SIBC",
-  say that directly; do not make the reader parse whether a uniform dc
-  term is included in `N_b`.  Define `N_b` explicitly only when the
-  symbol is needed: what kind of rung/mode/basis function it counts.
-  If `N_b` and `N` both appear, state the distinction instead of relying
-  on convention; e.g. `N_b` counts mixed-model bulk correction functions,
-  whereas `N` is the order of the bulk-only CLN ladder.
+  Galerkin blocks. Describe the actual reduced bulk model and its surface
+  impedance coupling. For an eigenmode-bulk model, use "Modal-bulk SIBC".
+  Define whether each order symbol counts modes or basis functions and
+  whether it includes the uniform dc term. Distinguish the bulk correction
+  count in a coupled model from the order of a bulk-only reference model.
   For surface-impedance expansions, define the surface order explicitly.
   In particular, `p_H=0` is the leading SIBC term, not a high-order
   impedance-boundary result.  If the manuscript also mentions HOIBC, make
   the separation clear: the present benchmark uses the leading SIBC term,
   while higher-order impedance terms are the extension needed in some
   curved or three-dimensional applications.
-  If L/R CLN terminations appear in a figure or caption, define them:
-  L-terminated means the last rung is closed inductively, and
-  R-terminated means it is closed resistively.  State whether `N=10`
-  is a rung, mode, or basis count.
+  Define any termination or closure used by the model and justify the
+  retained order by measured operating-band error. CLN-specific guidance
+  belongs to CLN-mcp.
 
   Do not equate a Schur complement with a Dirichlet-to-Neumann /
   Steklov-Poincare map in a single unexplained sentence.  The Schur
