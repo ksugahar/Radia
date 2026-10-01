@@ -5,6 +5,12 @@ Cubit-panel examples location.  It is not a public examples tier; use it to
 preserve old checks while reusable kernels migrate to `src/` and public
 walkthroughs migrate to result-saved docs notebooks.
 
+The three `verify_per_node_sibc_*` prototypes were retired: they imported
+removed radius/impedance helpers and did not validate the current solver.
+Their source remains in Git history. Current BEM acceptance tests live in
+`tests/test_bem_sibc_acceptance.py`; spatially varying surface impedance is
+explicitly unsupported until weighted assembly and local power are validated.
+
 Self-inductance extraction using `ngsolve.bem.LaplaceSL` with source/sink constrained EFIE.
 Optional workpiece surface impedance (ESIM/Dowell) for induction heating analysis.
 
