@@ -229,14 +229,15 @@ def test_done_checks_only_solver_editable_roots(monkeypatch, tmp_path):
     monkeypatch.setattr(release_quad, "_release_head", lambda: "c" * 40)
     monkeypatch.setattr(release_quad, "_verify_local_release_source", lambda root, sha: calls.append((root, sha)) or 0)
     monkeypatch.setattr(release_quad, "_verify_head_release_tag", lambda: calls.append("tag") or 0)
-    monkeypatch.setattr(release_quad, "_verify_lab_editable", lambda: calls.append(dict(release_quad._lab_editable_packages())) or 0)
+    monkeypatch.setattr(release_quad, "_verify_lab_wheel", lambda: calls.append(dict(release_quad._lab_editable_packages())) or 0)
     monkeypatch.setattr(release_quad, "_verify_100_editable", lambda: calls.append(dict(release_quad._remote_100_editable_packages())) or 0)
     monkeypatch.setattr(release_quad, "cmd_phase9", lambda a: 4)
     assert release_quad.cmd_done(Namespace(simulink_package=None)) == 4
-    assert calls[0] == (release_quad._editable_repo_lab(), "c" * 40)
+    assert calls[0] == (str(release_quad.REPO), "c" * 40)
     assert calls[1] == "tag"
     assert calls[2] == {"radia": release_quad._editable_repo_lab()}
     assert calls[3] == {"radia": release_quad._editable_repo_100()}
+
 
 
 def test_done_requires_simulink_candidate_for_5_1_and_newer(monkeypatch, tmp_path):
@@ -248,7 +249,7 @@ def test_done_requires_simulink_candidate_for_5_1_and_newer(monkeypatch, tmp_pat
     monkeypatch.setattr(release_quad, "_verify_local_release_source", lambda *_a: 0)
     monkeypatch.setattr(release_quad, "cmd_temp_shadows", lambda _a: 0)
     monkeypatch.setattr(release_quad, "_verify_head_release_tag", lambda: 0)
-    monkeypatch.setattr(release_quad, "_verify_lab_editable", lambda: 0)
+    monkeypatch.setattr(release_quad, "_verify_lab_wheel", lambda: 0)
     monkeypatch.setattr(release_quad, "_verify_100_editable", lambda: 0)
     monkeypatch.setattr(release_quad, "cmd_phase9", lambda _a: 0)
     monkeypatch.setattr(release_quad, "_run_retired_standalone_pyside_guard", lambda: 0)
@@ -256,6 +257,7 @@ def test_done_requires_simulink_candidate_for_5_1_and_newer(monkeypatch, tmp_pat
     monkeypatch.setattr(release_quad, "_radia_version", lambda: "5.1.0")
 
     assert release_quad.cmd_done(Namespace(simulink_package=None)) == 4
+
 
 
 @pytest.mark.parametrize("local_rc,remote_rc,expected", [(0, 0, 0), (1, 0, 4), (0, 1, 4)])
@@ -272,6 +274,7 @@ def test_done_pip_check_requires_both_editable_hosts(monkeypatch, local_rc, remo
     assert calls[0][-2:] == ["pip", "check"]
     remote = base64.b64decode(calls[1][-1]).decode("utf-16le")
     assert remote == "python -m pip check"
+
 
 
 def test_restore_editable_is_a_tombstone_that_restores_nothing(monkeypatch, capsys):
@@ -478,7 +481,7 @@ def test_done_keeps_exact_verified_editables_after_all_gates(monkeypatch, tmp_pa
         "_verify_head_release_tag",
         lambda: calls.append("tag") or 0,
     )
-    monkeypatch.setattr(release_quad, "_verify_lab_editable", lambda *_args: calls.append("lab") or 0)
+    monkeypatch.setattr(release_quad, "_verify_lab_wheel", lambda *_args: calls.append("lab") or 0)
     monkeypatch.setattr(release_quad, "_verify_100_editable", lambda *_args: calls.append("100") or 0)
     monkeypatch.setattr(release_quad, "cmd_phase9", lambda _args: calls.append("phase9") or 0)
     monkeypatch.setattr(
@@ -502,6 +505,7 @@ def test_done_keeps_exact_verified_editables_after_all_gates(monkeypatch, tmp_pa
     ]
 
 
+
 def test_done_stops_before_machine_checks_when_active_source_is_stale(monkeypatch, tmp_path):
     monkeypatch.setenv(release_quad.EDITABLE_REPO_LAB_ENV, str(tmp_path))
     calls = []
@@ -516,12 +520,13 @@ def test_done_stops_before_machine_checks_when_active_source_is_stale(monkeypatc
     def unexpected_machine_check(*_args, **_kwargs):
         raise AssertionError("machine checks must not run from a stale source")
 
-    monkeypatch.setattr(release_quad, "_verify_lab_editable", unexpected_machine_check)
+    monkeypatch.setattr(release_quad, "_verify_lab_wheel", unexpected_machine_check)
     monkeypatch.setattr(release_quad, "_verify_100_editable", unexpected_machine_check)
 
     args = type("Args", (), {"simulink_package": None})()
     assert release_quad.cmd_done(args) == 4
     assert calls == ["preflight", "source"]
+
 
 
 def test_ci_check_runs_use_latest_attempt_for_each_name(monkeypatch):
@@ -669,3 +674,17 @@ def test_explicit_editable_root_does_not_resolve_controller_version_tag(monkeypa
     monkeypatch.setattr(release_quad, "_release_commit",
                         lambda: pytest.fail("explicit root must not resolve a controller tag"))
     assert getattr(release_quad, "_editable_repo_" + host)() == "C:/release-quad/v5.1.0-ccccccccc"
+
+
+@pytest.mark.parametrize("rc,expected", [(0, 0), (1, 4)])
+def test_lab_wheel_verifier_uses_remote_record_gate(monkeypatch, rc, expected):
+    calls = []
+    monkeypatch.setattr(release_quad, "_radia_version", lambda: "5.1.0")
+    monkeypatch.setattr(release_quad, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, rc))
+    assert release_quad._verify_lab_wheel() == expected
+    assert calls[0][:2] == ["ssh", "102"]
+    script = base64.b64decode(calls[0][-1]).decode("utf-16le")
+    payload = script.split("b64decode('", 1)[1].split("'", 1)[0]
+    code = base64.b64decode(payload).decode()
+    assert "d.files" in code and "actual == f.hash.value" in code
+    assert "Shadowed Radia import" in code and "LAB must use a wheel" in code
