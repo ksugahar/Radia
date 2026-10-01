@@ -382,7 +382,7 @@ behavioral regression. The other five scientific evidence gaps are unchanged.
   current amplitude and frequency. Its stated stationary height is 11.3 mm;
   11.5 mm occurs in transient Table I samples, not as that stated reference.
   Source PDF SHA-256 is `f0013db710e2109dcbea37a213d750deaa245f1004a0a8044289535bb6e7f041`.
-  Code and tests use `team28_reference.json`. Four actual FEM/CLN regressions
+  Code and tests use `team28_reference.json`. Four actual FEM/reduced-model regressions
   passed on mdx2 (2 threads; final run 48 s), with unchanged tolerances. Exact source
   hashes/runtime are in `team28_reference_regression.json`. The retained model
   weight 1.055 N differs from the reference mass 0.107 kg; dZ=0 is a steady

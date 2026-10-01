@@ -8,7 +8,7 @@
     "numpy": "2.5.2"
   },
   "source_sha256": {
-    "docs/maglev/demos/team28/team28_axisym_fem.py": "81b2000bb694497298f46e8c37a760c9395a2f65b63a08593db1590d9c6d73ea",
+    "docs/maglev/demos/team28/team28_axisym_fem.py": "7f781636ab625983cdabce2e0a4c62eb2d4bb41617ff30a4773ddca060a394ad",
     "validation_test/maglev/team28_axisym_fem_height_sweep.py": "ae6d1f76bb085639286aeb250dc898546b444628e16141c083a06d07978ef5ea"
   },
   "method": "axisymmetric mixed phi-B full FEM, p=2, anisotropic-nu infinite-element shell, one fresh mesh per height",

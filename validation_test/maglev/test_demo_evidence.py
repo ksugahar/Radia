@@ -19,7 +19,6 @@ EXPECTED = {
     "sphere/coil_maglev_equilibrium_results.json",
     "sphere/coil_sphere_eddy_force_results.json",
     "sphere/maglev_sphere_force_results.json",
-    "team28/team28_cln_sweep_results.json",
 }
 
 
@@ -108,17 +107,9 @@ def test_shape_anisotropy_and_force_claims_are_preserved():
     assert force["key_check"]["abs_dev_1mm"] < force["key_check"]["abs_dev_5mm"]
 
 
-def test_dynamic_and_team28_claims_are_preserved():
+def test_dynamic_claims_are_preserved():
     moving = _load("rotating_magnet_eddy_results.json")["rows"]
     assert len(moving) >= 4
     assert moving[0]["source_only_F_err"] < 0.001
     assert moving[-1]["source_only_F_err"] > 0.1
-    assert max(row["pod_krylov_F_err"] if "pod_krylov_F_err" in row else row["cln_F_err"] for row in moving) < 0.003
-
-    team28 = _load("team28/team28_cln_sweep_results.json")
-    assert len(team28["dZ_mm"]) == len(team28["fz_cln_N"]) == 25
-    assert team28["max_abs_cln_minus_lab_N"] < 0.001
-    assert abs(
-        team28["equilibrium_abs_height_mm"]["cln"]
-        - team28["published_ref"]["levitation_height_mm"]
-    ) < 0.6
+    assert max(row["pod_krylov_F_err"] for row in moving) < 0.003

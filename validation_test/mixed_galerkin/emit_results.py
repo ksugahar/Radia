@@ -1,4 +1,4 @@
-"""Write the numerical artifact for the Foster/CLN + SIBC studies.
+"""Write the numerical artifact for the Foster/Krylov + SIBC studies.
 
 `validation_test/` owns the numbers. Documentation notebooks and talk material
 read this file; they do not recompute it. That rule exists because the
@@ -133,7 +133,7 @@ def main() -> int:
     ap.add_argument("--out", default=str(HERE / "results" / "mixed_galerkin_results.json"))
     args = ap.parse_args()
 
-    print("running the analytic Foster/CLN + SIBC cases ...")
+    print("running the analytic Foster/Krylov + SIBC cases ...")
     data = build()
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)

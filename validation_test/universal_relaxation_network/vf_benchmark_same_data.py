@@ -553,7 +553,7 @@ KEY ADVANTAGES OF URN:
 5. DIRECT CIRCUIT SYNTHESIS
    - URN maps directly to RLC ladder networks
    - Each basis function has known equivalent circuit
-   - VF requires Foster/Cauer synthesis (may lose passivity)
+   - VF requires Foster synthesis (may lose passivity)
 """)
 
     print(f"\nResults saved to: {output_path}")

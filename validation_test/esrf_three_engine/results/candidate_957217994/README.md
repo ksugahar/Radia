@@ -67,7 +67,7 @@ JSON files are retained without changing their reported flags:
 - `three_engine_case6_bonus8_p2.json`, SHA256
   `40ab46e2d2aa2676633cc8731005b666b073df44ff8ff41347770cc809332e21`.
 - `omega_bonus8_p1_q16_22.json`, SHA256
-  `af29048e10e2cb19959b2ec6ac67b45ec6cdcdc2481b056101b70f9bf7ecbf65`.
+  `d48707ddbeffdee648d5fe707b3887a7680b9c3ff00b69d45ee6c5e9db09bba6`.
 
 The nonlinear run used BDM2 for HDiv, FEM order 2, mixed source order 3,
 exact exterior source, mixed assembly bonus 8, and tolerance `2e-5`.

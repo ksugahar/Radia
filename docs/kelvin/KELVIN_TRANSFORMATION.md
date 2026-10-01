@@ -745,7 +745,7 @@ Kelvin region size is a free parameter.
 **Recommendation**: for "isolated conductor + applied uniform B" problems,
 use Kameari's A-Ω_r with Order ≥ 3 and boundary-integral source. The
 (ν-ν₀) bulk-source approach (next §7.5) requires extra care and was
-the source of the v11-v14 cuboid CLN issues.
+the source of the v11-v14 cuboid reduced-model issues.
 
 ### 7.5 The (ν − ν₀) Form Pitfall with Kelvin (CRITICAL)
 

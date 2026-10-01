@@ -24,7 +24,7 @@ Release candidate; publication and four-host acceptance are not yet complete.
 
 - MagLev demonstration names now identify their actual algorithms: sphere
   `G_lanczos`, TEAM 28 `team28_arnoldi_force.arnoldi_forces`, and rotating-magnet
-  POD-Krylov result keys (`pod_krylov_*` instead of `cln_*`). Update demo imports
+  POD-Krylov result keys (`pod_krylov_*` instead of the former keys). Update demo imports
   and new-result consumers; these are demonstration interfaces, not package
   APIs. Numerical operations are unchanged. Historical JSON remains unchanged,
   and its evidence reader accepts both key conventions. No circuit is synthesized.
@@ -58,7 +58,7 @@ MATLAB/Simulink acceptance are tracked separately and remain under verification.
 - mixed Omega uses Newton; its Picard API and Picard-only options were removed.
 - Retired reduction MEX commands, VIM APIs and the URN reduction route were
   removed; Simulink MagLev/TEAM 28 use Foster models.
-- `Y_cln_pade` was removed. The analytic boundary API was renamed to
+- The former Pade comparison API was removed. The analytic boundary API was renamed to
   `continued_fraction_*` in `1ecfde37f`, removed before 5.1.0, and is restored
   under Unreleased above; it is not present in the 5.1.0 wheel.
 - Direct FE solves, including PEEC routes, select SparseCholesky rather than
@@ -291,7 +291,7 @@ Released 2026-09-14.
 - Added `bibliography_get_entries` so PowerPoint and other non-LaTeX generators
   can resolve ordered BibTeX keys from the bundled canonical bibliography and
   record its SHA-256 instead of carrying hand-written reference lists. Added
-  the ten records needed by the IGTE 2026 Cauer/SIBC talk and corrected the
+  the ten records needed by the IGTE 2026 SIBC talk and corrected the
   Senior impedance-boundary paper to its DOI-backed 1960 publication year.
 - Added the presentation rule that a claim such as “generated from the
   canonical references.bib” is valid only when the build actually calls the
@@ -445,7 +445,7 @@ Released 2026-09-02.
   and time-domain studies into the validation lane with one canonical JSON
   result artifact. The review also records the failed separable 3D edge-basis
   attempt instead of presenting it as a completed repair.
-- Stabilized the disk CLN Pade reference in its dimensionless diffusion
+- Stabilized the disk Pade reference in its dimensionless diffusion
   variable, added fail-fast input contracts, and preserved geometric
   similarity across scaled conductors.
 - Extended the standalone MATLAB MEX boundary for NGSolve finite-element
@@ -1345,7 +1345,7 @@ Released 2026-08-05.
 
 - Added the generated `radia_maglev.slx` production composition and the
   `Applications/Magnetic Levitation` library block. The model advances a
-  position-dependent common-basis HCurl/CLN state from `-dI/dt`, height, and
+  position-dependent common-basis HCurl reduced state from `-dI/dt`, height, and
   coil current and emits induced response plus three-component Lorentz force
   without per-step Python.
 - Added family-file mask handling, diagnostic smoke data, MATLAB model tests,
@@ -1623,7 +1623,7 @@ Released 2026-07-29.
 
 Released 2026-07-28.
 
-- Added Y-admittance, Cauer-ladder, and CLN-peeling URN models with passive
+- Added Y-admittance and ladder URN models with passive
   physical bases, trust-aware stopping, global objectives, and reproducible
   restart selection.
 - Excluded conforming internal material interfaces from VIM exterior-boundary
@@ -1705,7 +1705,7 @@ Released 2026-07-21.
   right-hand-side Jacobians, and topology gradients.
 - Separated fast API/MCP contract tests from 68 Netgen/NGSolve-backed
   numerical checks, which now run from `validation_test/radia_mcp/`.
-- Added Simulink CLN/state-space application paths, MATLAB reinforcement-
+- Added Simulink state-space application paths, MATLAB reinforcement-
   learning adapters, and durable application result/log contracts.
 
 ## 4.95.19 - Production motor ROM and native C ABI
@@ -3550,7 +3550,6 @@ unchanged; verified on LAB + 100号機 that no regression.
   skill enforces).
 - Deploy skill: per-mode Panel Mode Matrix + golden-range numeric
   assertions replace `status: "ok"` as the definition of "works".
-- docs/research/IGA_CLN_DUAL_REDUCTION.md (LAB-local research plan).
 
 ### Known issues / non-goals
 

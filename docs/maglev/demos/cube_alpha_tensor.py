@@ -4,10 +4,10 @@ Frontier C + D of the radia-maglev mixed-Galerkin stack, demonstrated together
 on a Cu cube with FOUR ports: the monopole f=1 plus the three centered dipole
 (coordinate) drives {x-c, y-c, z-c}.
 
-  D (multi-port matrix-CLN, multipole admittance):
+  D (multi-port matrix-modal, multipole admittance):
     Each port is projected onto the SAME shared Dirichlet-Laplacian eigenbasis;
     the per-pole residue becomes the rank-1 matrix G_n = sigma V b_n b_n^T (the
-    matrix-form Kameari / multi-port CLN structure, Matsuo 2017/2018c).  The
+    matrix-form multi-port modal structure).  The
     matrix Y(s)_{pq} is a MULTIPOLE expansion of the conductor's scalar eddy
     response: the monopole port 1 <-> uniform external field, the dipoles
     x,y,z <-> field gradients.  Port 0 (monopole) reproduces the verified

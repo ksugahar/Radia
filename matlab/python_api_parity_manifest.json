@@ -177,7 +177,7 @@
       "classification": "python-fallback",
       "backend_contract": "in-process-python",
       "matlab": ["matlab/+radia/+python/analysis.m"],
-      "notes": "MATLAB has focused CLN primitives, but the complete Python orchestration surface is not one-to-one."
+      "notes": "MATLAB has focused reduction primitives, but the complete Python orchestration surface is not one-to-one."
     },
     {
       "id": "electromagnetic-force-postprocessing",
@@ -598,7 +598,7 @@
     {
       "priority": 2,
       "family": "vim-esim-ih",
-      "current": "Focused VIM, Schur, SIBC, CLN, state-space, and IH Simulink kernels are native; high-level setup remains explicit Python fallback.",
+      "current": "Focused VIM, Schur, SIBC, state-space, and IH Simulink kernels are native; high-level setup remains explicit Python fallback.",
       "next_native_boundary": "Artifact-to-handle initialization and reusable ROM/state contracts for repeated solves and IH control.",
       "retained_python_boundary": "NGSolve space/form construction, CAD/mesh preparation, and explicit batch artifact generation.",
       "gate": ["tests/matlab/test_radia_mex.m", "tests/matlab/test_simulink_workflow.m"]
@@ -630,7 +630,7 @@
     {
       "priority": 6,
       "family": "motor-maglev",
-      "current": "Motor ROM, TEAM 28 CLN artifacts, native state-space stepping, and production Simulink applications exist.",
+      "current": "Motor ROM, TEAM 28 reduced-model artifacts, native state-space stepping, and production Simulink applications exist.",
       "next_native_boundary": "Stable operating-point/model artifact loaders and native model initialization for Motor and MagLev blocks.",
       "retained_python_boundary": "One-time design sweeps, NGSolve model generation, and research validation.",
       "gate": ["tests/matlab/test_simulink_workflow.m", "tests/test_team28_golden.py"]

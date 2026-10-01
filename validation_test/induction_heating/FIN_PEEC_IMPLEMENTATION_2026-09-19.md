@@ -2,7 +2,7 @@
 
 This is an internal implementation/validation ledger, not a user workflow.
 The production IH PEEC path remains the existing series-filament bundle.
-No CLN code or CLN-derived snapshots are used by this work.
+No ladder-network reduction code or derived snapshots are used by this work.
 
 ## Implemented
 

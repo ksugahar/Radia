@@ -54,7 +54,7 @@ fixture, RL environment, or fallback.
 The retired MATLAB surfaces were `buildIHControlModel`, `makeIHPlant`, the IH
 power/heat LUT constructors and evaluators, the waveform simulators, and the
 lumped `makeIHEnvironment` adapter. Generic HCurl reduced state-space support,
-the TEAM28 CLN table, and the temperature-dependent BH material block remain
+the TEAM28 reduced-model table, and the temperature-dependent BH material block remain
 separate canonical capabilities.
 
 The fast regression route uses the actual library block with a synthetic

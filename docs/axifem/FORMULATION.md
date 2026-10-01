@@ -376,7 +376,7 @@ where `V` is the global vector of nodal `A_φ` DOFs.  In the API:
   (P1 / P2 triangle, Q1 / Q2 quad, with axis-element bookkeeping).
 - The user assembles `K`, `M` with standard NGSolve `BilinearForm`
   and feeds them into any solver (direct, iterative, eigenvalue,
-  Hiruma 3-term recurrence for Cauer ladder extraction).
+  Hiruma 3-term recurrence).
 
 ## 10b. Heat-equation operator on the same FESpace (radia 4.31.0+, OPTIONAL infrastructure)
 
@@ -543,7 +543,7 @@ heat-specific BFIs remain for structured axis-aligned quads.
 
 ## 11. Cross-validation
 
-The closed-form C++ implementation is cross-checked against three
+The closed-form C++ implementation is cross-checked against two
 independent paths:
 
 1. **Pure-Python reference** — `tests/axifem/_reference_python/`
@@ -562,13 +562,6 @@ independent paths:
    closed-form C++ vs the same monomial integrals re-derived in
    sympy at 50-digit precision.  Should match to ~1e-13 relative.
 
-3. **Independent BEM-Foster reference** — the Cauer ladder time
-   constants `τ_pair[k]` from a 1920-element BEM ring mesh
-   (Mathematica, elliptic-integral kernel) are compared against
-   the FE ladder via the Hiruma 3-term recurrence.  See
-   `validation_test/axifem/research/verification/test_3way_cauer_cross_validation.py`
-   and the table in [`AXIFEM.md`](AXIFEM.md#cauer-ladder-cross-validation-against-bem-nagamine-pipeline).
-
 ## 12. Why this matters for induction heating
 
 Induction heating coils + axisymmetric workpieces (cylinders, disks,
@@ -577,8 +570,8 @@ where `A_φ` is the only nontrivial vector-potential component.  The
 axifem Henrotte / Meeker formulation:
 
 - removes the standard P1 axis singularity in `B_r ∝ 1/r`,
-- gives smooth per-element `B_z = const`, `B_r ∝ 1/r` — perfect for
-  Cauer ladder time-constant extraction (the inductive transient of
+- gives smooth per-element `B_z = const`, `B_r ∝ 1/r` — well suited to
+  eddy-current time-constant extraction (the inductive transient of
   the workpiece is driven by these τ values),
 - reduces the problem from 3-D to 2-D `(r, z)` without losing
   axisymmetric physics,

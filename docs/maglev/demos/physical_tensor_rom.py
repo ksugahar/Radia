@@ -1,5 +1,5 @@
 """physical_tensor_rom.py -- the EXTERIOR-MATCHED physical polarizability tensor
-as a passive, stable LTI (the "physical Stoll spectrum -> CLN" route).
+as a passive, stable LTI (the "physical Stoll spectrum -> Foster ROM" route).
 
 Frontier "physical-tensor ROM" of the radia-maglev stack.  The mixed-Galerkin
 bulk Foster (bulk_foster_via_eigen / bulk_foster_vector_via_eigen) uses the
@@ -17,8 +17,7 @@ captures the tail, and NNLS makes the residues passive.
 
 Why a sample fit and not a Kameari + Kelvin eigen-accumulation: the 3D HCurl
 Kameari + Kelvin accumulation structurally BREAKS DOWN on the
-isolated-conductor-in-vacuum problem (L_n sign flip at stage 1; see
-research_cln/ngsolve_validation/cuboid_521_kameari_kelvin_v15_canonical.py).
+isolated-conductor-in-vacuum problem (L_n sign flip at stage 1).
 This route sidesteps that by building on the verified per-frequency solve.
 
 Two modes:

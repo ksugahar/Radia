@@ -51,8 +51,8 @@
     {
       "Element path": "Q2 quad",
       "Production selection": "H1Henrotte(mesh, order=2, curvedquad=False) on axis-aligned quads loaded through Netgen .vol",
-      "Evidence gate": "test_de_rham_identities.py + test_q2_curved.py straight-quad equivalence + test_axifem_guards.py + Cauer Q2 stored validation summary",
-      "What would fail if broken": "axis-aligned Q2 eigenvalue changes, non-axis-aligned closed-form input is not rejected, or Q2 Cauer time constants drift"
+      "Evidence gate": "test_de_rham_identities.py + test_q2_curved.py straight-quad equivalence + test_axifem_guards.py + Q2 stored ladder validation summary",
+      "What would fail if broken": "axis-aligned Q2 eigenvalue changes, non-axis-aligned closed-form input is not rejected, or Q2 ladder time constants drift"
     },
     {
       "Element path": "P2 curved triangle",
@@ -89,7 +89,7 @@
       "contract": "Axis-aligned boundary value traces integrate against analytic edge integrals after .vol reload."
     }
   ],
-  "cauer_validation_summary": [
+  "ladder_validation_summary": [
     {
       "family": "Q1 quad",
       "source": "validation_test/axifem/research/verification/test_hiruma_disk_q1_results.json",
@@ -149,7 +149,7 @@
   ],
   "timing_breakdown_s": {
     "pytest_axifem_vol_backed_gates": 2.883,
-    "cauer_json_summary_load": 0.0,
+    "ladder_json_summary_load": 0.0,
     "notebook_artifact_generation": 0.0
   }
 }

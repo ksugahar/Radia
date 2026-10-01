@@ -1,9 +1,9 @@
-# High-Order HCurl Response Compression for CLN/VIM Eddy-Current Models
+# High-Order HCurl Response Compression for VIM Eddy-Current Models
 
 This note records the theory direction for the hybrid eddy-current model:
 use a high-order NGSolve `HCurl` space as the parent space, keep only the
 external-field-visible response subspace, and assemble a passive reduced
-VIM/CLN model enriched by surface-Omega/SIBC branches.
+VIM model enriched by surface-Omega/SIBC branches.
 
 The intended presentation angle is theoretical.  Numerical experiments should
 illustrate the construction, not carry the main claim.
@@ -28,7 +28,7 @@ span{ K_p^{-1} B,
 Here `K_p` is the magnetic stiffness / inductive operator and `M_p` is the
 conductive mass / resistance-side operator in the high-order `HCurl` space.
 The integer `p` controls how accurately the parent space can represent spatial
-skin-effect modes.  The integer `n` controls how many CLN/Cauer moments are
+skin-effect modes.  The integer `n` controls how many Krylov moments are
 kept.  They are related, but they are not the same parameter.
 
 The reduction is therefore:
@@ -38,19 +38,19 @@ high-order HCurl parent space
     -> response-visible subspace
     -> topology guard for eddy-current loop closure
     -> curl(T) sampled current basis
-    -> passive reduced VIM / CLN circuit
+    -> passive reduced VIM circuit
 ```
 
 Terminology used in this project:
 
 | Term | Meaning |
 |---|---|
-| **Eddy-Visible Response Space (EVRS)** | The retained response subspace visible through the external-field ports and the chosen CLN/Krylov depth. |
+| **Eddy-Visible Response Space (EVRS)** | The retained response subspace visible through the external-field ports and the chosen Krylov depth. |
 | **Eddy-Invisible DoF (EID)** | A high-order eddy-current DoF or direction that exists in the parent `HCurl(p)` space but is not visible to the selected low-order external-field ports within the retained response order. |
 | **eddy bubble** | Informal short name for an EID.  This is not the same as an NGSolve element bubble / `LOCAL_DOF`. |
 
 This is stronger than using a low-order edge-element model directly.  With
-`p=1`, later Cauer stages can be limited by the parent space before the reduced
+`p=1`, later reduced-model stages can be limited by the parent space before the reduced
 model has a chance to express the physics.  With `p=3,4,...`, the parent space
 contains sharper eddy-current distributions, and the response compression can
 discard the EIDs after they have done their job.
@@ -93,7 +93,7 @@ The production reduction is performed by class, not by a single global cutoff:
 air/exterior surface class:  replace by surface-Omega/SIBC basis or boundary ladder
 non-air trace class:         keep as a boundary trace condition, not SIBC
 bridge class:                reduce conductor-conductor face bridges by a graph cycle basis
-interior class:              compress aggressively by EVRS / CLN Krylov depth
+interior class:              compress aggressively by EVRS / Krylov depth
 ```
 
 Validation JSON stores both `topology_diagnostics` and
@@ -155,7 +155,7 @@ p >= max(r_bulk, r_bridge, r_surface),
 n_reduced = n_EVRS + cycle_rank * dim P_r_bridge(face) + n_surface.
 ```
 
-Here `r_bulk` is the spatial current degree that the bulk EVRS/CLN moment
+Here `r_bulk` is the spatial current degree that the bulk EVRS moment
 construction needs, `r_bridge` is the polynomial trace degree retained on
 conductor-conductor bridge faces, and `r_surface` is the trace degree retained
 on SIBC/surface-Omega faces.  A surface-Omega scalar potential of degree
@@ -253,20 +253,18 @@ from high-order NGSolve `HCurl` spaces.
 
 ---
 
-## 3. Relation to CLN Stages
+## 3. Relation to Moment Matching
 
 For a linear conductor, the port transfer function obtained from a finite
-element discretization is a positive-real rational function.  A Cauer ladder is
-a continued-fraction realization of the same positive-real transfer function.
+element discretization is a positive-real rational function.
 
 The response basis above is a block Krylov basis.  In exact arithmetic, a
 Galerkin projection onto the first `n` Krylov blocks matches the corresponding
-low-frequency moments of the transfer function.  A Lanczos/Stieltjes
-continued-fraction realization of those moments gives the Cauer ladder.  This
-is the algebraic bridge between
+low-frequency moments of the transfer function.  This is the algebraic bridge
+between
 
 ```text
-high-order FE matrices  <->  response Krylov basis  <->  CLN stages.
+high-order FE matrices  <->  response Krylov basis  <->  reduced moments.
 ```
 
 The parent response basis must then be quotiented by the current map.  Let
@@ -287,7 +285,7 @@ The key design rule is therefore not "use p=4" or "use four stages".  The rule
 is:
 
 ```text
-Choose p high enough that the first n CLN stages are stable under p-refinement.
+Choose p high enough that the first n Krylov stages are stable under p-refinement.
 Then choose n by the frequency band and by the desired circuit accuracy.
 ```
 
@@ -413,7 +411,7 @@ resolution without making the dense Gram dimension p=6.
 
 ## 5. SIBC Bridge
 
-The SIBC branch should be viewed as a boundary Cauer branch.
+The SIBC branch should be viewed as a passive boundary branch.
 
 For a local half-space conductor,
 
@@ -423,7 +421,7 @@ Z_s(s) = sqrt(mu s / sigma)
 
 is a positive-real surface impedance for `Re(s) >= 0`.  For a finite-thickness
 slab, the surface impedance is a hyperbolic-function variant of the same
-diffusion solution.  Rational Cauer/Pade approximants of these one-dimensional
+diffusion solution.  Rational Pade approximants of these one-dimensional
 diffusion impedances give passive ladder branches.
 
 A surface-Omega basis represents the tangential surface current as
@@ -440,14 +438,14 @@ Thus the bridge is:
 ```text
 local diffusion SIBC
     -> positive-real boundary impedance Z_s(s)
-    -> Cauer/Pade boundary ladder
+    -> Pade boundary ladder
     -> surface-Omega reduced basis
     -> same VIM/BEM exterior interaction matrix.
 ```
 
-This does not imply that "SIBC order = CLN stage".  SIBC order is an asymptotic
-order in skin depth and curvature.  CLN stage is a rational approximation order
-for a transfer function.  They meet when the SIBC operator is itself realized as
+This does not imply that "SIBC order = Krylov stage".  SIBC order is an
+asymptotic order in skin depth and curvature.  Krylov stage is a rational
+approximation order for a transfer function.  They meet when the SIBC operator is itself realized as
 a passive boundary ladder.
 
 For a linear conductor, an exact discrete DtN map can eliminate volume
@@ -525,7 +523,7 @@ Current primitives:
 | `HACApKSampledLaplaceInteraction` / `HACApKSampledPlanarLogInteraction` | production 3-D/2-D sampled cross-block interactions retained as C++ HACApK operators |
 | `NGSolveProjectedInteraction` | projects an actual NGSolve BEM/DtN `BaseMatrix`; `from_laplace_sl` assembles `ngsolve.bem.LaplaceSL` |
 | `CoupledReducedOperator` | keeps independent HDiv and HCurl H-matrices as separate terms in one native reduced block matvec |
-| `ReducedPortAdmittance` / `ReducedPortImpedance` | evaluates the reduced external-port transfer function for p/n convergence and CLN fitting |
+| `ReducedPortAdmittance` / `ReducedPortImpedance` | evaluates the reduced external-port transfer function for p/n convergence and reduced-model fitting |
 | `SIBCAdmittanceTail` | returns the leading `S sqrt(sigma/(mu s))` SIBC admittance tail |
 | `SIBCSchurTerminationImpedance` | returns the Schur/Warburg scalar block `(s+d)/(K_SIBC sqrt(s))` |
 | `SharedMeshMaterialModel` | carries the shared mesh, material labels, and `mu`/`nu`/`sigma`/SIBC coefficients seen by both branches |
@@ -567,7 +565,7 @@ for small-ROM diagnostics, mixed-Galerkin orthogonalization, or Schur checks.
 Every production backend should pass the same `HybridVIMSystem.diagnostics`
 gate: the reduced `R`, `L`, and `M_Gamma` blocks must be Hermitian and
 positive semidefinite to numerical tolerance, and the backend name should be
-recorded in validation JSON before CLN fitting or motor-coupled solves.
+recorded in validation JSON before reduced-model fitting or motor-coupled solves.
 
 The port-level observable is
 
@@ -576,7 +574,7 @@ Y_r(s) = B_r^* Z_r(s)^-1 B_r,
 ```
 
 available through `ReducedPortAdmittance`.  This is the quantity to compare
-under `p` refinement, Krylov/CLN depth changes, and backend replacement.
+under `p` refinement, Krylov depth changes, and backend replacement.
 
 The current HDiv coexistence layer is intentionally rectangular.  The eddy
 branch remains a current/impedance system, while the magnetic branch remains an
@@ -924,7 +922,7 @@ For an IGTE-level contribution, the strong path is:
 
 1. Define the high-order `HCurl` parent space and response-visible subspace.
 2. Prove that the reduced VIM matrices preserve reciprocity and passivity.
-3. Relate the block Krylov basis to CLN/Cauer moment matching.
+3. Relate the block Krylov basis to moment matching.
 4. Explain that `p` is parent-space resolution and `n` is circuit order.
 5. Show that the surface-Omega/SIBC branch is another passive boundary branch.
 6. Use small numerical examples only to illustrate p-vs-n convergence, VIM
@@ -942,15 +940,6 @@ response space has been exposed.
 
 ## References
 
-- A. Kameari et al., "Cauer Ladder Network Representation of Eddy-Current
-  Fields for Model Order Reduction Using Finite-Element Method," IEEE
-  Transactions on Magnetics, 2018.
-- Y. Shindo et al., "Dynamical Model of an Electromagnet using Cauer Ladder
-  Network Representation of Eddy-current Fields," IEEJ Journal of Industry
-  Applications, 2018.  https://doi.org/10.1541/ieejjia.7.305
-- O. Biro and N. Koster, "Generating a Cauer Ladder Network Representation of
-  Eddy Current Fields Using Scalar Potentials," IEEE Transactions on Magnetics,
-  2022.  https://doi.org/10.1109/TMAG.2022.3171079
 - S. Yuferev and L. Di Rienzo, "Surface Impedance Boundary Conditions in Terms
   of Various Formalisms," IEEE Transactions on Magnetics, 2010.
 - A. Bendali et al., high-order impedance-boundary/asymptotic treatments of

@@ -5,7 +5,7 @@
  *   phi --G--> T --C--> J --D--> rho,     J = curl T.
  *
  * NGSolve owns the finite-element spaces and matrices.  Radia owns the reduced
- * VIM/CLN algebra once the discrete de Rham maps are supplied.
+ * VIM algebra once the discrete de Rham maps are supplied.
  */
 #ifndef RAD_EVRS_TMETHOD_H
 #define RAD_EVRS_TMETHOD_H

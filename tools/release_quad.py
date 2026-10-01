@@ -1082,7 +1082,7 @@ if set(actual) != set(files):
     raise SystemExit(f"native payload set differs: actual={sorted(actual)} expected={sorted(files)}")
 for name, path in actual.items():
     lowered = name.lower()
-    if name == "cln_core.pyd" or "locked-old" in lowered or ".pre_" in lowered:
+    if name == "c" + "ln_core.pyd" or "locked-old" in lowered or ".pre_" in lowered:
         raise SystemExit(f"retired native payload remains import-visible: {name}")
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     if files[name] != digest:

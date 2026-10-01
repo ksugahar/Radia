@@ -70,7 +70,7 @@ numerical acceptance result.
 
 `matlab_radia_mex_contract("ngsolve")` and the MATLAB skill expose the native
 `radia.ngsolve` mesh, space, form, matrix, vector and field-handle boundary.
-The skill distinguishes native local HCurl/CLN reduction from the full
+The skill distinguishes native local HCurl reduction from the full
 HCurl-VIM/BEM route and from exported reduced-state families. This is substantial
 executable guidance, not a full clone of upstream NGSolve or model retraining.
 

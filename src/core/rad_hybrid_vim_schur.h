@@ -5,7 +5,7 @@
  *   S = K_kk - K_ke K_ee^{-1} K_ek
  *
  * The matrices are dense, row-major, and complex-valued because the reduced
- * VIM/CLN system is normally evaluated at s = j omega.
+ * VIM system is normally evaluated at s = j omega.
  */
 #ifndef RAD_HYBRID_VIM_SCHUR_H
 #define RAD_HYBRID_VIM_SCHUR_H
