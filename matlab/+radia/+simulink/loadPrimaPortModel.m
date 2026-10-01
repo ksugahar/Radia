@@ -43,12 +43,27 @@ sys.OutputName = names + "." + string(payload.output_quantity);
 sys.InputUnit = repmat(string(payload.input_unit), 1, nPort);
 sys.OutputUnit = repmat(string(payload.output_unit), 1, nPort);
 
+% The file may tighten the check limit, never loosen it past the exporter's.
+reconstructionLimit = 1e-6;
 check = payload.check;
 frequency = double(check.frequency_hz(:));
+if isempty(frequency) || any(~isfinite(frequency)) || any(frequency <= 0)
+    error("radia:simulink:PrimaExchange", ...
+        "check frequencies must be a nonempty list of finite positive values [Hz].");
+end
+limit = double(check.relative_limit);
+if ~isscalar(limit) || ~isfinite(limit) || limit <= 0 || limit > reconstructionLimit
+    error("radia:simulink:PrimaExchange", ...
+        "check relative_limit must be a finite positive scalar <= %g.", reconstructionLimit);
+end
 nFrequency = numel(frequency);
 expected = localDecode(check.response_real, [nFrequency, nPort, nPort]) + ...
     1i * localDecode(check.response_imag, [nFrequency, nPort, nPort]);
 actual = freqresp(sys, 2 * pi * frequency);   % [nPort, nPort, nFrequency]
+if any(~isfinite(actual(:)))
+    error("radia:simulink:PrimaExchange", ...
+        "dss model response is non-finite at a check frequency.");
+end
 worst = 0;
 for k = 1:nFrequency
     reference = squeeze(expected(k, :, :));
@@ -58,7 +73,7 @@ for k = 1:nFrequency
     worst = max(worst, norm(actual(:, :, k) - reference) / ...
         max(norm(reference), realmin));
 end
-if worst > double(check.relative_limit)
+if ~isfinite(worst) || worst > limit
     error("radia:simulink:PrimaExchange", ...
         "dss model does not reproduce the exported response (relative error %.3g).", worst);
 end
