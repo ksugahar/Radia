@@ -329,12 +329,13 @@ def test_policy_twins_define_the_same_compute_host_routing():
     assert "already running and idle" in normalized
     assert "SPOT instance" in normalized
     assert "one heavy job at a time" in normalized
-    assert "whichever of mdx1/mdx2 is idle" in normalized
-    assert "both its CI runner and its job queue are idle" in normalized
+    assert "an idle mdx1/mdx2 or LAB" in normalized
+    assert "check CI/jobs and available memory first" in normalized
+    assert "LAB is also an execution host for high-memory tests" in normalized
     # ICMP is blocked on hibino, so ping reports a false "down".
     assert "ConnectTimeout" in normalized
     assert 'reports a false "down"' in normalized
-    assert "Core count does not imply speed" in normalized
+    assert "Measure speed" in normalized
     assert "Compute work must never delay or destabilize CI/preflight" in normalized
     assert "Historical mdx measurements remain valid provenance" in normalized
 
@@ -363,7 +364,7 @@ def test_agent_policies_stay_compact_and_share_one_policy_body():
     assert claude_path.stat().st_size < 20_000
 
     policy = "\n".join(agents)
-    assert "Historical investigations remain in Git history" in policy
+    assert "Investigations remain in Git" in policy
     assert "Do not expand this file into a second manual" in policy
     assert "packages/radia-mcp/src/radia_mcp/**/knowledge/" in policy
 
