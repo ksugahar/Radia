@@ -38,24 +38,30 @@ cubit = [
 cadquery = [
     "cadquery>=2.5",
 ]
-# gmsh_post: MSH v4.1 inspect / validate / convert / write_node_data.
-# Depends only on the gmsh Python bindings (pure pip wheel, no MKL).
+# gmsh_post: MSH v4.1 inspect / validate / convert / write_node_data, plus
+# the NumPy/SciPy field post-processing and Matplotlib raster tools.
 gmsh = [
     "gmsh>=4.10",
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "matplotlib>=3.8",
+]
+# Solver-neutral optimization, Krylov and inverse-problem helpers
+# (radia-design / matrix-solvers tools).
+numeric = [
+    "numpy>=1.24",
+    "scipy>=1.10",
 ]
 # Topology-optimization shape regeneration: Radia density/level-set output
 # -> watertight STL -> headless Cubit -> gated `.vol` / `.msh` artifacts.
 # `trimesh` is also the independent STL closure/volume referee used before
 # Cubit consumes the surface.
+# The STL/marching-cubes stack belongs to radia's own `topopt-cad` extra.
 shape-regeneration = [
     "cubit-mesh-export>=1.0.2; python_version == '3.12' and sys_platform == 'win32'",
-    "radia>=4.6.1",
+    "radia[topopt-cad]>=4.95.51",
     "scipy>=1.10",
     "gmsh>=4.10",
-    "scikit-image>=0.22",
-    "trimesh>=4.0",
-    "netCDF4>=1.6",
-    "fast-simplification>=0.1",
 ]
 # YouTube transcript scraping for Cubit/build123d/gmsh tutorial
 # absorption (cubit_youtube / build123d_youtube / gmsh_youtube
@@ -82,6 +88,21 @@ rag = [
     "sentence-transformers>=2.2.0",
     "pymupdf>=1.24.0",
 ]
+# Optional OCR engines for scanned PDFs and slide images (literature index
+# fallback, presentation text audits). Google Cloud Vision sends images to an
+# external service and needs explicit permission for unpublished material.
+ocr = [
+    "easyocr>=1.7",
+    "google-cloud-vision>=3.0",
+]
+# Universal response network fitting (radia_ngsolve urn tools).
+urn = [
+    "radia[urn]>=4.6.1",
+]
+# Native equation rendering for presentations.
+equation = [
+    "eqnedit64>=3.1",
+]
 # md2html: Markdown -> HTML conversion requires Python-Markdown.
 # pymdown-extensions supplies arithmatex, which owns math detection: it keeps
 # \begin{...} environments and inline code containing "$" out of the hands of
@@ -101,13 +122,14 @@ document = [
     "Pillow>=10.0",
     "opencv-python-headless>=4.8",
     "matplotlib>=3.8",
+    "numpy>=1.24",
     "requests>=2.0",
     "edge-tts>=6.1",
     "pywin32>=306; platform_system == 'Windows'",
 ]
 # All MCP servers including the radia-coupled knowledge base.
 full = [
-    "radia-mcp[build123d,cadquery,gmsh,shape-regeneration,youtube,radia,rag,md2html,document]",
+    "radia-mcp[build123d,cadquery,gmsh,numeric,shape-regeneration,youtube,radia,rag,ocr,urn,md2html,document,equation]",
 ]
 
 [project.urls]

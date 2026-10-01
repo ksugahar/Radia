@@ -100,6 +100,11 @@ crystallized as its own package.
   `ScalarPotentialSolver.solve_nonlinear_newton` and the monotone PCHIP of
   `radia.bh_law`, and fixes the `BSpline(order, knots, values)` call in the
   air-gap motor workflow.
+- Optional dependencies match the imports: `gmsh` adds NumPy/SciPy/Matplotlib,
+  new `numeric`, `ocr`, `urn` and `equation` extras, `document` adds NumPy,
+  and `shape-regeneration` takes the STL stack from `radia[topopt-cad]`
+  instead of repeating it. A test fails when a third-party import has no
+  declared requirement.
 - PDF lock release (`doc_convert`, `poster`) stops only dedicated PDF viewers
   showing that file and passes the name through the environment; browsers are
   never stopped.
