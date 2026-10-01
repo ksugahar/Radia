@@ -216,18 +216,18 @@ LAB-owned mapped drives or the workgroup share. Do not restore that dependency.
 
 **POLICY (2026-09-28)**: Run solver-heavy validation, optimization, scaling,
 memory, and timing work on hibino when it is **already running and idle**.
-hibino is a SPOT instance: starting it is a human action, not an agent one.
+hibino is a SPOT instance; only a human starts it.
 Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes hibino hostname` — ICMP is
 blocked, so `ping` reports a false "down" — then check for a running python
 job, because hibino takes one heavy job at a time. Otherwise use whichever of
 mdx1/mdx2 is idle, after checking both its CI runner and its job queue are idle.
-An idle LAB may also run tests and validation, never timing work.
+An idle LAB may run tests/validation, never timing; Gmsh rendering needs a LAB/100 desktop, not mdx/ssh.
 Compute work must never delay or destabilize CI/preflight.
 Historical mdx measurements remain valid provenance. Record host, runtime,
 versions and results in validation JSON.
 
-Core count does not imply speed; settle quadrature and thread settings first.
-hibino has 230 GB memory, no pagefile and no guaranteed speedup.
+Core count does not imply speed; settle quadrature and threads first.
+hibino has 230 GB memory, no pagefile, no guaranteed speedup.
 
 **POLICY**: 全てのベンチマークスクリプトは機械可読な JSON 結果を保存すること。
 
