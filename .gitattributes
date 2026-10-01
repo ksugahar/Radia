@@ -53,3 +53,6 @@ validation_test/esim_spatial/*.json -text whitespace=cr-at-eol
 validation_test/esim_spatial/inputs/* -text whitespace=cr-at-eol
 validation_test/esim_spatial/inputs/*.vol binary
 validation_test/esim_spatial/*_qsurf.sol binary
+
+# Preserve recorded execution bytes for campaign SHA-256 verification.
+validation_test/showcase/results/*.json -text whitespace=cr-at-eol

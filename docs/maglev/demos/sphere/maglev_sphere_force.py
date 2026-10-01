@@ -124,7 +124,7 @@ def levitation_force(omega, B0, gradB2):
     return Fz
 
 
-def main():
+def main(output_dir=None):
     print(f"Cu sphere a={a*1e3:.1f} mm, sigma={sigma:.2e};  modal modes={NMODES}")
 
     # ----- check 1: closed form vs Foster modal sum -----
@@ -190,6 +190,10 @@ def main():
     fs_plot = np.logspace(1, 7.5, 120)
     lift_plot = [abs(levitation_force(2 * np.pi * f, B0, gradB2)) for f in fs_plot]
     data = {
+        "acceptance_quantities": {"low_frequency_G_real": float(g_lo.real),
+            "high_frequency_G_real": float(g_hi.real),
+            "modal_relative_error": float(abs(G_lanczos(2*np.pi*5e3, 8) - G_modal(2*np.pi*5e3)) / abs(G_modal(2*np.pi*5e3))),
+            "high_frequency_lift_ratio": float(abs(levitation_force(2*np.pi*f_hi, B0, gradB2)) / F_pc)},
         "sphere": {"a_m": a, "sigma": sigma},
         "field": {"B0_T": B0, "scale_L_m": L, "gradB2_T2_per_m": gradB2},
         "perfect_conductor_lift_N": F_pc,
@@ -198,14 +202,15 @@ def main():
         "freq_Hz": fs_plot.tolist(),
         "lift_N": lift_plot,
     }
-    output = validation_output("maglev_sphere_force_results.json", HERE)
+    output = validation_output("maglev_sphere_force_results.json", HERE if output_dir is None else output_dir)
     with open(output, "w") as fp:
         json.dump(data, fp, indent=2, allow_nan=False)
     print(f"\n wrote {output}")
-    plot(fs_plot, np.array(lift_plot), F_pc)
+    plot(fs_plot, np.array(lift_plot), F_pc, output_dir)
+    return data
 
 
-def plot(fs, lift, F_pc):
+def plot(fs, lift, F_pc, output_dir=None):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -220,7 +225,7 @@ def plot(fs, lift, F_pc):
     ax.legend(frameon=False, fontsize=8, loc="lower right")
     ax.tick_params(direction="in", top=True, right=True)
     fig.tight_layout(pad=0.3)
-    out = os.path.join(HERE, "maglev_sphere_force_vs_freq.png")
+    out = os.path.join(HERE if output_dir is None else output_dir, "maglev_sphere_force_vs_freq.png")
     fig.savefig(out, dpi=300)
     print(f" wrote {out}")
 
