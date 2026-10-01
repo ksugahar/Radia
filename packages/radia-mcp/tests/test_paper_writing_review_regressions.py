@@ -212,7 +212,13 @@ def test_computational_electromagnetics_venues_are_supported():
         assert result["target_category"] == "electromagnetics"
 
 
-def test_float_distance_without_aux_is_not_reported_as_pass(tmp_path):
+def test_float_distance_without_aux_is_not_reported_as_pass(tmp_path, monkeypatch):
+    # This branch must not open a PDF. Keep the missing-aux contract runnable
+    # in the minimal MCP environment; an attempted parser call still fails.
+    monkeypatch.setattr(
+        "radia_mcp.paper_writing._pdf_layout_visual._require_pymupdf",
+        lambda: object(),
+    )
     tex = tmp_path / "paper.tex"
     pdf = tmp_path / "paper.pdf"
     tex.write_text(
