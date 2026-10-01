@@ -298,7 +298,7 @@ def build_package(
             "python_per_step": False,
             "python_runtime_required_for_native_mex": True,
             "python_runtime_required_for_headless_application_blocks": full_library,
-            "dt_order": "eddy;transport(theta_prev,theta_now);thermal",
+            "dt_order": "eddy(material-frame heat);thermal(material-frame state)",
             "standalone_mex_debug_api": True,
             "files": files,
         }
