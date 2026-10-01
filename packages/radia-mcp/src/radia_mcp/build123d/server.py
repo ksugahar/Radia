@@ -1701,11 +1701,144 @@ async def execute_build123d(
     )
 
 
+_ISOLATED_RESULT_MARKER = "__RADIA_MCP_ISOLATED_RESULT__"
+_ISOLATED_TIMEOUT_S = 300
+
+
+def _run_isolated(func_name: str, kwargs: dict, *, timeout_s: float,
+                  stage: str) -> str:
+    """Run a module-level inspector in a fresh interpreter.
+
+    A script that calls ``sys.exit``, crashes the CAD kernel or never returns
+    ends only the child; the MCP server keeps serving and reports the failure.
+    """
+    import os as _os
+    import subprocess as _sp
+
+    child = (
+        "import json, sys\n"
+        "from radia_mcp.build123d import server\n"
+        "payload = json.load(sys.stdin)\n"
+        "result = getattr(server, payload['func'])(**payload['kwargs'])\n"
+        f"sys.__stdout__.write('\\n{_ISOLATED_RESULT_MARKER}' + result)\n"
+    )
+    src_root = str(Path(__file__).resolve().parents[2])
+    env = dict(_os.environ, PYTHONIOENCODING="utf-8")
+    env["PYTHONPATH"] = _os.pathsep.join(
+        [src_root] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
+    try:
+        r = _sp.run(
+            [sys.executable, "-c", child],
+            input=json.dumps({"func": func_name, "kwargs": kwargs}),
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=timeout_s, env=env,
+        )
+    except _sp.TimeoutExpired as e:
+        return _dumps({"status": "error", "stage": "timeout", "kind": "input",
+                       "error": f"script exceeded {timeout_s}s",
+                       "stdout": (e.stdout or "")[-4000:] if isinstance(e.stdout, str) else "",
+                       "stderr": (e.stderr or "")[-4000:] if isinstance(e.stderr, str) else ""},
+                      indent=2)
+    except OSError as e:
+        return _dumps({"status": "error", "stage": "spawn", "kind": "environment",
+                       "error": str(e)}, indent=2)
+    out = r.stdout or ""
+    at = out.rfind(_ISOLATED_RESULT_MARKER)
+    if at < 0:
+        return _dumps({
+            "status": "error", "stage": stage, "kind": "input",
+            "error": ("isolated run ended without a result "
+                      f"(returncode {r.returncode})"),
+            "hint": ("the script called sys.exit()/os._exit() or crashed the "
+                     "CAD kernel; the server is unaffected"),
+            "stdout": out[-4000:],
+            "stderr": (r.stderr or "")[-4000:],
+        }, indent=2)
+    return out[at + len(_ISOLATED_RESULT_MARKER):]
+
+
 def _execute_build123d_sync(
     script: str,
     export_dir: str = "",
     export_format: str = "step",
+    export_name: str = "",
+    timeout_s: float = _ISOLATED_TIMEOUT_S,
 ) -> str:
+    return _run_isolated(
+        "_inspect_build123d_in_process",
+        {"script": script, "export_dir": export_dir,
+         "export_format": export_format, "export_name": export_name},
+        timeout_s=timeout_s, stage="exec",
+    )
+
+
+def _last_assigned(script: str, namespace: dict, kind) -> tuple:
+    """Return ``(obj, name)`` of the ``kind`` instance assigned last in the script.
+
+    ``namespace`` keeps first-assignment order, so ``result = result - tool``
+    would otherwise report ``tool``; the source order of the last binding of
+    each name decides instead.
+    """
+    import ast as _ast
+
+    last: dict[str, tuple[int, int]] = {}
+    try:
+        tree = _ast.parse(script)
+    except SyntaxError:
+        tree = None
+    if tree is not None:
+        for node in _ast.walk(tree):
+            if isinstance(node, _ast.Assign):
+                targets = node.targets
+            elif isinstance(node, (_ast.AnnAssign, _ast.AugAssign, _ast.NamedExpr,
+                                   _ast.For, _ast.AsyncFor)):
+                targets = [node.target]
+            elif isinstance(node, (_ast.With, _ast.AsyncWith)):
+                targets = [i.optional_vars for i in node.items if i.optional_vars]
+            else:
+                continue
+            where = (node.lineno, node.col_offset)
+            for target in targets:
+                for leaf in _ast.walk(target):
+                    if isinstance(leaf, _ast.Name) and where > last.get(leaf.id, (-1, -1)):
+                        last[leaf.id] = where
+    best = None
+    for index, (name, obj) in enumerate(namespace.items()):
+        if name.startswith("_") or not isinstance(obj, kind):
+            continue
+        key = (last.get(name, (-1, -1)), index)
+        if best is None or key > best[0]:
+            best = (key, obj, name)
+    return (None, None) if best is None else (best[1], best[2])
+
+
+def _export_target(write, base_name: str, export_dir: str, export_format: str) -> dict:
+    """Export through ``write(path)`` and confirm a non-empty file exists."""
+    import re as _re_export
+
+    fmt = export_format.lower().strip()
+    if fmt not in ("step", "brep", "stl"):
+        return {"export_error": f"Unknown format: {fmt}"}
+    safe = _re_export.sub(r"[^A-Za-z0-9._-]+", "_", str(base_name)).strip("._") or "shape"
+    export_path = Path(export_dir)
+    export_path.mkdir(parents=True, exist_ok=True)
+    fpath = export_path / f"{safe}.{fmt}"
+    try:
+        reported = write(fmt, str(fpath))
+    except Exception as e:  # noqa: BLE001
+        return {"export_error": f"{type(e).__name__}: {e}"}
+    if reported is False or not fpath.is_file() or fpath.stat().st_size == 0:
+        return {"export_error": f"{fmt} export wrote no file at {fpath}"}
+    return {"exported": str(fpath)}
+
+
+def _inspect_build123d_in_process(
+    script: str,
+    export_dir: str = "",
+    export_format: str = "step",
+    export_name: str = "",
+) -> str:
+    """Execute and inspect a build123d script in THIS process (isolated child)."""
     # Capture stdout
     old_stdout = sys.stdout
     sys.stdout = captured = StringIO()
@@ -1715,11 +1848,10 @@ def _execute_build123d_sync(
 
     namespace = {}
     try:
-        exec(  # noqa: S102
-            "from build123d import *\n" + script,
-            namespace,
-        )
-    except Exception as e:
+        # Separate statements keep a leading ``from __future__`` legal.
+        exec("from build123d import *", namespace)  # noqa: S102
+        exec(compile(script, "<build123d script>", "exec"), namespace)  # noqa: S102
+    except (Exception, SystemExit) as e:
         sys.stdout = old_stdout
         tb = traceback.format_exc()
         _fl.record_failure("build123d", {
@@ -1744,17 +1876,9 @@ def _execute_build123d_sync(
 
     stdout_text = captured.getvalue()
 
-    # Find the last Shape-like object in namespace
-    from build123d import Shape, Compound, Part, Sketch, Curve
+    from build123d import Shape
 
-    target = None
-    target_name = None
-    for name, obj in namespace.items():
-        if name.startswith("_"):
-            continue
-        if isinstance(obj, Shape):
-            target = obj
-            target_name = name
+    target, target_name = _last_assigned(script, namespace, Shape)
 
     if target is None:
         return _dumps({
@@ -1823,25 +1947,13 @@ def _execute_build123d_sync(
     if export_dir:
         from build123d import export_step, export_brep, export_stl
 
-        export_path = Path(export_dir)
-        export_path.mkdir(parents=True, exist_ok=True)
-        base_name = target.label if target.label else target_name
-        fmt = export_format.lower().strip()
-
-        if fmt == "step":
-            fpath = export_path / f"{base_name}.step"
-            export_step(target, str(fpath))
-            info["exported"] = str(fpath)
-        elif fmt == "brep":
-            fpath = export_path / f"{base_name}.brep"
-            export_brep(target, str(fpath))
-            info["exported"] = str(fpath)
-        elif fmt == "stl":
-            fpath = export_path / f"{base_name}.stl"
-            export_stl(target, str(fpath))
-            info["exported"] = str(fpath)
-        else:
-            info["export_error"] = f"Unknown format: {fmt}"
+        writers = {"step": export_step, "brep": export_brep, "stl": export_stl}
+        info.update(_export_target(
+            lambda fmt, path: writers[fmt](target, path),
+            export_name or target.label or target_name, export_dir, export_format))
+        if "export_error" in info:
+            info["status"] = "error"
+            info["stage"] = "export"
 
     if stdout_text:
         info["stdout"] = stdout_text
@@ -1879,134 +1991,75 @@ def preview_shape_in_cubit(script: str, label: str = "preview") -> str:
         JSON with shape stats (volume / bbox / faces / edges) plus the
         Cubit session response (per-command ok flags).
     """
-    import sys as _sys
+    import shutil as _shutil
     import tempfile as _tf
-    import traceback as _tb
-    from io import StringIO
     from pathlib import Path as _P
 
-    namespace = {}
-    _buf = StringIO()
-    _orig_stdout = sys.stdout
-    sys.stdout = _buf
-    try:
-        exec(  # noqa: S102
-            "from build123d import *\n" + script,
-            namespace,
-        )
-    except Exception:
-        sys.stdout = _orig_stdout
-        return _dumps({
-            "status": "error",
-            "stage": "script_exec",
-            "error": _tb.format_exc(),
-            "stdout": _buf.getvalue(),
-        }, indent=2)
-    finally:
-        sys.stdout = _orig_stdout
-    stdout_text = _buf.getvalue()
-
-    from build123d import Shape, export_step
-
-    target = None
-    target_name = None
-    for n, obj in namespace.items():
-        if n.startswith("_"):
-            continue
-        if isinstance(obj, Shape):
-            target, target_name = obj, n
-    if target is None:
-        return _dumps({
-            "status": "error",
-            "stage": "extract",
-            "error": "Script executed but no build123d Shape was found.",
-            "stdout": stdout_text,
-        }, indent=2)
-
-    # Write to a temp STEP; Cubit daemon imports, then we clean up.
+    # Execute, inspect and export in an isolated child; Cubit then imports
+    # the checked STEP and the temporary directory is removed.
     tmp = _P(_tf.mkdtemp(prefix="b123d_to_cubit_"))
-    step_path = tmp / f"{label}.step"
     try:
-        export_step(target, str(step_path))
-    except Exception:
-        return _dumps({
-            "status": "error",
-            "stage": "step_export",
-            "error": _tb.format_exc(),
-        }, indent=2)
+        exec_info = json.loads(_execute_build123d_sync(
+            script, export_dir=str(tmp), export_format="step", export_name=label))
+        if exec_info.get("status") != "ok" or "exported" not in exec_info:
+            return _dumps({
+                "status": "error",
+                "stage": "extract" if exec_info.get("status") == "ok" else "build123d",
+                "error": exec_info.get("error") or exec_info.get("export_error")
+                or exec_info.get("message") or "no build123d Shape was exported",
+                "build123d": exec_info,
+            }, indent=2)
 
-    # Hand to the persistent headless Cubit session (lazy-start daemon).
-    try:
-        from cubit_mesh_export.mcp import session as _cs
-    except ImportError as e:
-        return _dumps({
-            "status": "error",
-            "stage": "cubit_import",
-            "error": f"cubit_mesh_export.mcp not available: {e}",
-        }, indent=2)
+        # Hand to the persistent headless Cubit session (lazy-start daemon).
+        try:
+            from cubit_mesh_export.mcp import session as _cs
+        except ImportError as e:
+            return _dumps({
+                "status": "error",
+                "stage": "cubit_import",
+                "error": f"cubit_mesh_export.mcp not available: {e}",
+            }, indent=2)
 
-    try:
-        sess = _cs.CubitSession.get(mode="batch")
-        sess.ensure_started()
-    except _cs.CubitSessionError as e:
-        return _dumps({
-            "status": "error",
-            "stage": "cubit_session",
-            "error": str(e),
-            "hint": ("Is Coreform Cubit installed? Override path via "
-                     "`CUBIT_BIN_DIR` env var or `set_cubit_bin_dir()`."),
-        }, indent=2)
+        try:
+            sess = _cs.CubitSession.get(mode="batch")
+            sess.ensure_started()
+        except _cs.CubitSessionError as e:
+            return _dumps({
+                "status": "error",
+                "stage": "cubit_session",
+                "error": str(e),
+                "hint": ("Is Coreform Cubit installed? Override path via "
+                         "`CUBIT_BIN_DIR` env var or `set_cubit_bin_dir()`."),
+            }, indent=2)
 
-    step_fwd = str(step_path).replace("\\", "/")
-    try:
-        r = sess.call("cmd", [f'import step "{step_fwd}"'])
-    except _cs.CubitSessionError as e:
-        return _dumps({
-            "status": "error",
-            "stage": "cubit_rpc",
-            "error": str(e),
-        }, indent=2)
+        step_fwd = exec_info["exported"].replace("\\", "/")
+        try:
+            r = sess.call("cmd", [f'import step "{step_fwd}"'])
+        except _cs.CubitSessionError as e:
+            return _dumps({
+                "status": "error",
+                "stage": "cubit_rpc",
+                "error": str(e),
+            }, indent=2)
+        imported = isinstance(r, dict) and bool(r.get("ok"))
 
-    info = {
-        "status": "ok",
-        "stage": "loaded_in_cubit_headless",
-        "viewer": "cubit_persistent_headless_session",
-        "gui_started": False,
-        "label": label,
-        "variable": target_name,
-        "type": type(target).__name__,
-        "is_valid": target.is_valid,
-        "cubit_result": r,
-    }
-    try:
-        info["volume"] = round(target.volume, 6)
-    except Exception:
-        info["volume"] = None
-    try:
-        info["face_count"] = len(target.faces())
-        info["edge_count"] = len(target.edges())
-    except Exception:
-        pass
-    try:
-        bb = target.bounding_box()
-        info["bounding_box"] = {
-            "min": [round(bb.min.X, 4), round(bb.min.Y, 4), round(bb.min.Z, 4)],
-            "max": [round(bb.max.X, 4), round(bb.max.Y, 4), round(bb.max.Z, 4)],
+        info = {
+            "status": "ok" if imported else "error",
+            "stage": "loaded_in_cubit_headless" if imported else "cubit_import_step",
+            "viewer": "cubit_persistent_headless_session",
+            "gui_started": False,
+            "label": label,
+            "variable": exec_info.get("variable"),
+            "type": exec_info.get("type"),
+            "is_valid": exec_info.get("is_valid"),
+            "cubit_result": r,
         }
-    except Exception:
-        pass
-    if stdout_text:
-        info["stdout"] = stdout_text
-
-    # Temp STEP can be cleaned now — Cubit has imported it.
-    try:
-        step_path.unlink(missing_ok=True)
-        tmp.rmdir()
-    except OSError:
-        pass
-
-    return _dumps(info, indent=2)
-
+        for key in ("volume", "face_count", "edge_count", "bounding_box", "stdout"):
+            if key in exec_info:
+                info[key] = exec_info[key]
+        return _dumps(info, indent=2)
+    finally:
+        _shutil.rmtree(tmp, ignore_errors=True)
 
 @mcp.tool()
 def inspect_geometry(file_path: str) -> str:
@@ -3122,16 +3175,25 @@ def execute_cadquery(script: str,
                       "`pip install cadquery`."),
         }, indent=2)
 
+    return _run_isolated(
+        "_inspect_cadquery_in_process",
+        {"script": script, "export_dir": export_dir, "export_format": export_format},
+        timeout_s=_ISOLATED_TIMEOUT_S, stage="exec",
+    )
+
+
+def _inspect_cadquery_in_process(script: str,
+                                 export_dir: str = "",
+                                 export_format: str = "step") -> str:
+    """Execute and inspect a CadQuery script in THIS process (isolated child)."""
     old_stdout = sys.stdout
     sys.stdout = captured = StringIO()
 
     namespace = {}
     try:
-        exec(  # noqa: S102
-            "from cadquery import *\n" + script,
-            namespace,
-        )
-    except Exception as e:
+        exec("from cadquery import *", namespace)  # noqa: S102
+        exec(compile(script, "<cadquery script>", "exec"), namespace)  # noqa: S102
+    except (Exception, SystemExit) as e:
         sys.stdout = old_stdout
         tb = traceback.format_exc()
         _fl.record_failure("cadquery", {
@@ -3217,27 +3279,13 @@ def execute_cadquery(script: str,
 
     # Export
     if export_dir:
-        export_path = Path(export_dir)
-        export_path.mkdir(parents=True, exist_ok=True)
-        base_name = target_name
-        fmt = export_format.lower().strip()
-        try:
-            if fmt == "step":
-                fpath = export_path / f"{base_name}.step"
-                target.exportStep(str(fpath))
-                info["exported"] = str(fpath)
-            elif fmt == "brep":
-                fpath = export_path / f"{base_name}.brep"
-                target.exportBrep(str(fpath))
-                info["exported"] = str(fpath)
-            elif fmt == "stl":
-                fpath = export_path / f"{base_name}.stl"
-                target.exportStl(str(fpath))
-                info["exported"] = str(fpath)
-            else:
-                info["export_error"] = f"Unknown format: {fmt}"
-        except Exception as e:
-            info["export_error"] = f"{type(e).__name__}: {e}"
+        writers = {"step": target.exportStep, "brep": target.exportBrep,
+                   "stl": target.exportStl}
+        info.update(_export_target(
+            lambda fmt, path: writers[fmt](path), target_name, export_dir, export_format))
+        if "export_error" in info:
+            info["status"] = "error"
+            info["stage"] = "export"
 
     if stdout_text:
         info["stdout"] = stdout_text
@@ -3837,7 +3885,7 @@ def generate_build123d_script(pattern: str = "helix_coil") -> str:
 # ============================================================
 
 @mcp.tool()
-def build123d_try(script: str, timeout_s: int = 90) -> str:
+async def build123d_try(script: str, timeout_s: int = 90) -> str:
     """Dry-run a build123d script in a **fresh Python subprocess**.
 
     Unlike `execute_build123d` (same process, mutates namespace),
@@ -3854,21 +3902,32 @@ def build123d_try(script: str, timeout_s: int = 90) -> str:
         script: Python using build123d (self-contained).
         timeout_s: subprocess timeout (default 90).
     """
+    import anyio
+    return await anyio.to_thread.run_sync(
+        lambda: _build123d_try_sync(script, timeout_s))
+
+
+def _build123d_try_sync(script: str, timeout_s: int = 90) -> str:
     import subprocess as _sp
     import tempfile as _tmp
     preflight = _b3d_preflight_warn(script)
     tmp = Path(_tmp.mkdtemp(prefix="b3d_try_"))
     script_path = tmp / "_try.py"
+    # The user script is compiled verbatim from its own file: re-indenting it
+    # would change triple-quoted strings and reject ``from __future__``.
+    (tmp / "_user.py").write_text(script, encoding="utf-8")
     wrapped = (
-        "import sys, json, traceback\n"
+        "import sys, traceback\n"
+        "ns = {}\n"
         "try:\n"
-        "    from build123d import *\n"
-        + "\n".join("    " + ln for ln in script.splitlines())
-        + "\n"
+        "    exec('from build123d import *', ns)\n"
+        "    with open('_user.py', encoding='utf-8') as fh:\n"
+        "        exec(compile(fh.read(), '_user.py', 'exec'), ns)\n"
         "    print('__B3D_TRY_OK__')\n"
-        "except Exception as e:\n"
+        "except BaseException:\n"
         "    print('__B3D_TRY_ERR__')\n"
         "    traceback.print_exc()\n"
+        "    sys.exit(1)\n"
     )
     script_path.write_text(wrapped, encoding="utf-8")
     try:
@@ -3895,7 +3954,8 @@ def build123d_try(script: str, timeout_s: int = 90) -> str:
         "returncode": r.returncode,
         "stdout": out[-4000:],
         "stderr": err[-4000:],
-        "artefacts": [p.name for p in tmp.iterdir() if p.name != "_try.py"],
+        "artefacts": [p.name for p in tmp.iterdir()
+                      if p.name not in ("_try.py", "_user.py")],
         "tmpdir": str(tmp),
     }
     if preflight:
@@ -3914,10 +3974,10 @@ def build123d_try(script: str, timeout_s: int = 90) -> str:
 # ============================================================
 
 @mcp.tool()
-def build123d_try_race(scripts: list,
-                        max_concurrent: int = 4,
-                        timeout_s: int = 90,
-                        prefer: str = "valid_largest_volume") -> str:
+async def build123d_try_race(scripts: list,
+                             max_concurrent: int = 4,
+                             timeout_s: int = 90,
+                             prefer: str = "valid_largest_volume") -> str:
     """Race N build123d script variants in parallel subprocesses,
     return the per-variant report + chosen winner.
 
@@ -3936,13 +3996,31 @@ def build123d_try_race(scripts: list,
           * "first_valid" — first one that's valid (race semantics).
           * "first_ok" — first that finishes without error.
 
-    Returns JSON: list of per-variant info + chosen winner index.
+    Returns JSON: list of per-variant info (submission order) + chosen
+    winner index; ``status`` is ``error`` when no variant qualifies.
     """
+    import anyio
+    return await anyio.to_thread.run_sync(
+        lambda: _build123d_try_race_sync(scripts, max_concurrent, timeout_s, prefer))
+
+
+_RACE_RULES = ("valid_largest_volume", "first_valid", "first_ok")
+
+
+def _build123d_try_race_sync(scripts: list,
+                             max_concurrent: int = 4,
+                             timeout_s: int = 90,
+                             prefer: str = "valid_largest_volume") -> str:
     import concurrent.futures as _cf
 
     if not scripts:
         return _dumps({"status": "error",
                            "error": "scripts list cannot be empty"})
+    rule = (prefer or "valid_largest_volume").strip().lower()
+    if rule not in _RACE_RULES:
+        return _dumps({"status": "error",
+                       "error": f"unknown prefer rule {prefer!r}",
+                       "known": list(_RACE_RULES)})
 
     # Normalize entries
     norm: list[dict] = []
@@ -3957,7 +4035,7 @@ def build123d_try_race(scripts: list,
                                "error": f"scripts[{i}] must be str or {{name, script}}"})
 
     def _one(rec: dict) -> dict:
-        raw = build123d_try(script=rec["script"], timeout_s=timeout_s)
+        raw = _build123d_try_sync(script=rec["script"], timeout_s=timeout_s)
         info = json.loads(raw)
         # build123d_try returns artefacts + status; we also want
         # validity / volume which come from execute_build123d. Run
@@ -3968,8 +4046,9 @@ def build123d_try_race(scripts: list,
         if info.get("status") != "ok":
             return {**rec, "status": "error", "info": info,
                     "is_valid": None, "volume": None}
-        # Now in-process inspect for validity / volume
-        inspect_raw = _execute_build123d_sync(script=rec["script"], export_dir="")
+        # Isolated inspection for validity / volume
+        inspect_raw = _execute_build123d_sync(script=rec["script"], export_dir="",
+                                              timeout_s=timeout_s)
         inspect = json.loads(inspect_raw)
         return {
             "name": rec["name"],
@@ -3981,18 +4060,12 @@ def build123d_try_race(scripts: list,
             "subprocess_artefacts": info.get("artefacts", []),
         }
 
-    results: list[dict] = []
     with _cf.ThreadPoolExecutor(max_workers=max(1, int(max_concurrent))) as pool:
-        futures = {pool.submit(_one, r): r for r in norm}
-        for fut in _cf.as_completed(futures):
-            results.append(fut.result())
+        futures = [pool.submit(_one, r) for r in norm]
+        results: list[dict] = [fut.result() for fut in futures]
 
-    # Stable order by submission index, but we lost it across threads;
-    # re-key by name → keep results as-is, callers can sort.
-
-    # Pick winner per `prefer` rule
+    # Pick winner per `prefer` rule; "first" means first in submission order.
     winner_idx = None
-    rule = (prefer or "valid_largest_volume").strip().lower()
     if rule == "first_ok":
         for i, r in enumerate(results):
             if r.get("status") == "ok":
@@ -4011,7 +4084,7 @@ def build123d_try_race(scripts: list,
             winner_idx = max(valid, key=lambda iv: iv[1]["volume"])[0]
 
     return _dumps({
-        "status": "ok",
+        "status": "ok" if winner_idx is not None else "error",
         "rule": rule,
         "results": results,
         "winner_index": winner_idx,

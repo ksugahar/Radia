@@ -39,61 +39,15 @@ from __future__ import annotations
 
 import os
 import pathlib
-import re
 import subprocess
 import sys
 import time
 
 
 # ---------------------------------------------------------------------------
-# Shared: PDF lock release (mirror of poster/_lock release)
+# Shared: PDF lock release
 # ---------------------------------------------------------------------------
-_PDF_VIEWER_PROCESSES = (
-    "Acrobat", "AcroRd32", "SumatraPDF", "FoxitReader", "FoxitPDFReader",
-    "msedge", "chrome", "firefox",
-)
-
-
-def _release_pdf_lock(pdf_path: pathlib.Path) -> list[str]:
-    """Kill PDF viewers holding ``pdf_path``. Windows-only."""
-    killed: list[str] = []
-    if not pdf_path.exists() or sys.platform != "win32":
-        return killed
-    try:
-        with open(pdf_path, "r+b"):
-            return killed
-    except PermissionError:
-        pass
-    except OSError:
-        return killed
-    basename = pdf_path.name
-    ps_script = (
-        "Get-Process | Where-Object { $_.MainWindowTitle -ne '' } | "
-        f"Where-Object {{ $_.MainWindowTitle -match '{re.escape(basename)}' "
-        "-or $_.ProcessName -in @("
-        + ",".join(f"'{p}'" for p in _PDF_VIEWER_PROCESSES)
-        + ") } | Select-Object -ExpandProperty Id"
-    )
-    try:
-        out = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", ps_script],
-            capture_output=True, text=True, timeout=15,
-        )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return killed
-    for pid in (out.stdout or "").split():
-        pid = pid.strip()
-        if not pid.isdigit():
-            continue
-        try:
-            subprocess.run(
-                ["powershell", "-NoProfile", "-Command", f"Stop-Process -Id {pid} -Force"],
-                capture_output=True, text=True, timeout=10,
-            )
-            killed.append(pid)
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            pass
-    return killed
+from ..common.pdf_lock import release_pdf_lock as _release_pdf_lock
 
 
 # ---------------------------------------------------------------------------

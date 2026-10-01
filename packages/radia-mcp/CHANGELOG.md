@@ -35,6 +35,18 @@ crystallized as its own package.
   Windows, else the OS temporary directory (`radia_mcp.common.scratch`).
 - `motor_tritool_cross_reference` compares radia-ngsolve with the open 2D
   yardstick only; the `jmag_only` topic became `open_gaps`.
+- `execute_build123d`, `execute_cadquery`, `preview_shape_in_cubit` and
+  `build123d_to_cubit_hex` execute user scripts in an isolated interpreter
+  with a timeout, so `sys.exit`, a kernel crash or a hang no longer stops the
+  server. The inspected shape is the one bound last in the script, export
+  names are sanitized and a missing or empty export file is an error.
+  `preview_shape_in_cubit` reports the Cubit `import step` outcome.
+  `build123d_try` compiles the script verbatim (`from __future__` and
+  triple-quoted text survive); `build123d_try_race` keeps submission order,
+  rejects unknown `prefer` rules and reports `error` when no variant wins.
+- PDF lock release (`doc_convert`, `poster`) stops only dedicated PDF viewers
+  showing that file and passes the name through the environment; browsers are
+  never stopped.
 - `tools/policy_lint.py` also scans `docs/`, `skills/` and `.json/.tex/.txt`,
   and flags e-mail addresses, exported mail, solver-bridge harness names,
   non-public commercial-tool servers and `<tool>-derived` provenance.
