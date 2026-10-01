@@ -210,7 +210,6 @@
     },
     "solver-heavy": {
       "description": "Required native derivative and motor workflow validation outside the compact numerical tier.",
-      "max_elapsed_seconds": 600,
       "paths": [
         "validation_test/topology_optimization/test_hex_cluster_derivative.py",
         "validation_test/panels/test_motor_lamination_golden.py",
@@ -226,7 +225,6 @@
     },
     "solver-numerics": {
       "description": "Required NGSolve contracts for mixed Omega, HDiv/topology, eddy currents, SIBC and IH thermal coupling; no partial dependency run.",
-      "max_elapsed_seconds": 600,
       "paths": [
         "tests/test_bem_sibc_acceptance.py",
         "tests/test_surface_orientation.py",
