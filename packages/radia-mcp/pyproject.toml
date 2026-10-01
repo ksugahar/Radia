@@ -251,6 +251,7 @@ where = ["src"]
 ]
 "radia_mcp.poster" = [
     "skill.md",
+    "templates/*.tex",
 ]
 "radia_mcp.bibliography" = [
     "data/references.bib",

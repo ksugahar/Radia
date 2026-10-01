@@ -71,6 +71,14 @@ crystallized as its own package.
 - Hot reload rebinds names imported from reloaded modules, protects every
   module that owns a FastMCP server (capability packs host several), and
   capability packs re-read each domain's tool list instead of a startup copy.
+- The wheel ships the poster `.tex` templates. `tools/verify_wheel_contents.py`
+  derives the required assets from `package-data` and fails when a tracked
+  non-Python source file is not covered by it.
+- The test collector reports every file it does not collect (and the missing
+  dependency) in the session header and summary, and an import guarded by
+  `except ImportError` in a library module no longer removes the tests that
+  reach it (37 build123d test files were silently skipped on hosts without
+  CadQuery).
 - PDF lock release (`doc_convert`, `poster`) stops only dedicated PDF viewers
   showing that file and passes the name through the environment; browsers are
   never stopped.

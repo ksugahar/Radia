@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -11,18 +12,19 @@ from radia_mcp.radia_ngsolve.vol2d_scalar import _prepare, scalar_replay_gate
 
 
 def _vol(*, x0: float = 0.0) -> str:
-    path = Path(r"C:\temp\radia_vol2d_scalar_contract.vol")
-    write_structured_rect_vol(
-        path,
-        x0=x0,
-        x1=1.0,
-        y0=0.0,
-        y1=1.0,
-        nx=2,
-        ny=2,
-        material="domain",
-    )
-    return path.read_text(encoding="utf-8")
+    with tempfile.TemporaryDirectory(prefix="radia_vol2d_scalar_") as folder:
+        path = Path(folder) / "contract.vol"
+        write_structured_rect_vol(
+            path,
+            x0=x0,
+            x1=1.0,
+            y0=0.0,
+            y1=1.0,
+            nx=2,
+            ny=2,
+            material="domain",
+        )
+        return path.read_text(encoding="utf-8")
 
 
 def _request(physics: str = "electrostatic") -> dict:

@@ -136,6 +136,47 @@ def _imported_modules(text: str) -> set:
     return mods
 
 
+_IMPORT_GUARDS = {"ImportError", "ModuleNotFoundError", "Exception", "BaseException"}
+
+
+def _guards_import_errors(handler) -> bool:
+    kinds = handler.type
+    if kinds is None:
+        return True
+    names = kinds.elts if isinstance(kinds, ast.Tuple) else [kinds]
+    return any(isinstance(n, ast.Name) and n.id in _IMPORT_GUARDS for n in names)
+
+
+def _unguarded_imports(text: str) -> set:
+    """Imports of a library module that fail when their target is absent.
+
+    An import inside ``try: ... except ImportError`` is an optional backend by
+    construction (the module reports it instead of crashing), so it does not
+    make the tests that reach this module unrunnable; every other import,
+    module level or lazy inside a function, does.
+    """
+    mods = set()
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return mods
+
+    def visit(node):
+        if isinstance(node, ast.Try) and any(_guards_import_errors(h) for h in node.handlers):
+            for child in (*node.handlers, *node.orelse, *node.finalbody):
+                visit(child)
+            return
+        if isinstance(node, ast.Import):
+            mods.update(alias.name for alias in node.names if alias.name)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            mods.add(node.module)
+        for child in ast.iter_child_nodes(node):
+            visit(child)
+
+    visit(tree)
+    return mods
+
+
 def _project_module_path(module_name: str) -> Path | None:
     if not module_name.startswith("radia_mcp."):
         return None
@@ -149,15 +190,16 @@ def _project_module_path(module_name: str) -> Path | None:
     return None
 
 
-def _project_import_has_absent_dependency(module_name: str, seen: set | None = None) -> bool:
+def _project_import_has_absent_dependency(module_name: str, seen: set | None = None) -> str:
+    """Return the absent module reached at import time through ``module_name`` ("" if none)."""
     if not module_name.startswith("radia_mcp."):
-        return False
+        return ""
     if module_name in _PROJECT_IMPORT_CACHE:
         return _PROJECT_IMPORT_CACHE[module_name]
     if seen is None:
         seen = set()
     if module_name in seen:
-        return False
+        return ""
     seen.add(module_name)
 
     # Never import a server merely to decide whether its tests are collectable.
@@ -168,25 +210,30 @@ def _project_import_has_absent_dependency(module_name: str, seen: set | None = N
     # is unavailable in the current (or FORCE_MINIMAL) environment.
     path = _project_module_path(module_name)
     if path is None:
-        _PROJECT_IMPORT_CACHE[module_name] = False
-        return False
+        _PROJECT_IMPORT_CACHE[module_name] = ""
+        return ""
     try:
         text = path.read_text(encoding="utf-8", errors="ignore")
     except OSError:
-        _PROJECT_IMPORT_CACHE[module_name] = False
-        return False
-    for dep in _imported_modules(text):
+        _PROJECT_IMPORT_CACHE[module_name] = ""
+        return ""
+    for dep in _unguarded_imports(text):
         if _module_absent(dep):
-            _PROJECT_IMPORT_CACHE[module_name] = True
-            return True
-        if dep.startswith("radia_mcp.") and _project_import_has_absent_dependency(dep, seen):
-            _PROJECT_IMPORT_CACHE[module_name] = True
-            return True
-    _PROJECT_IMPORT_CACHE[module_name] = False
-    return False
+            _PROJECT_IMPORT_CACHE[module_name] = _top_module(dep)
+            return _top_module(dep)
+        if dep.startswith("radia_mcp."):
+            absent = _project_import_has_absent_dependency(dep, seen)
+            if absent:
+                _PROJECT_IMPORT_CACHE[module_name] = absent
+                return absent
+    _PROJECT_IMPORT_CACHE[module_name] = ""
+    return ""
 
 
 collect_ignore = []
+# Files left out because an optional dependency is absent, with the reason.
+# They are reported in the session header and summary, never dropped silently.
+_DEPENDENCY_IGNORED: dict[str, str] = {}
 if _CI_SELECT_ALL:
     _dependency_scan_files = sorted(_TEST_ROOT.rglob("test_*.py"))
 else:
@@ -217,9 +264,28 @@ for _f in _dependency_scan_files:
         _src = _f.read_text(encoding="utf-8", errors="ignore")
     except OSError:
         continue
-    if any(_module_absent(_m) or _project_import_has_absent_dependency(_m)
-           for _m in _imported_modules(_src)):
-        collect_ignore.append(_f.relative_to(_TEST_ROOT).as_posix())
+    for _m in sorted(_imported_modules(_src)):
+        _absent = _top_module(_m) if _module_absent(_m) else _project_import_has_absent_dependency(_m)
+        if _absent:
+            collect_ignore.append(_relative)
+            _DEPENDENCY_IGNORED[_relative] = (
+                _absent if _absent == _top_module(_m) else f"{_absent} (via {_m})")
+            break
+
+
+def pytest_report_header(config):
+    if not _DEPENDENCY_IGNORED:
+        return None
+    return (f"radia-mcp: {len(_DEPENDENCY_IGNORED)} test file(s) not collected "
+            "because an optional dependency is absent (listed in the summary)")
+
+
+def pytest_terminal_summary(terminalreporter):
+    if not _DEPENDENCY_IGNORED:
+        return
+    terminalreporter.section("radia-mcp files not collected (optional dependency absent)")
+    for relative, reason in sorted(_DEPENDENCY_IGNORED.items()):
+        terminalreporter.line(f"{relative}: missing {reason}")
 
 
 def pytest_collection_modifyitems(config, items):
