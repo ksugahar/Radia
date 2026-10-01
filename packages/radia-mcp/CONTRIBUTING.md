@@ -214,6 +214,10 @@ operational completion.  The minimum pre-push health evidence is:
 - top-level pytest collection green
 
 Publication belongs to the monorepo's `radia-mcp-matrix.yml` workflow.
+Its `release-evidence` job refuses to publish unless a `workflow_dispatch`
+(full-audit) run of that workflow succeeded on the exact tagged commit, so run
+`gh workflow run radia-mcp-matrix.yml --ref main` on the candidate commit and
+wait for it to pass before tagging.
 An approved `radia-mcp-v<version>` tag runs its release checks, builds and
 verifies the wheel, then publishes that same artifact through PyPI Trusted
 Publishing in the `pypi` environment. Do not replace this lane with a local

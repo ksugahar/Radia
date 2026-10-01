@@ -105,6 +105,9 @@ crystallized as its own package.
   and `shape-regeneration` takes the STL stack from `radia[topopt-cad]`
   instead of repeating it. A test fails when a third-party import has no
   declared requirement.
+- Release tags publish only after a successful full-audit (`workflow_dispatch`)
+  run of `radia-mcp-matrix.yml` on the exact tagged commit (`release-evidence`
+  job).
 - PDF lock release (`doc_convert`, `poster`) stops only dedicated PDF viewers
   showing that file and passes the name through the environment; browsers are
   never stopped.

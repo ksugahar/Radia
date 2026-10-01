@@ -480,8 +480,36 @@ jobs:
           path: packages/radia-mcp/dist/*.whl
           if-no-files-found: error
 
+  release-evidence:
+    # CONTRIBUTING: publish only a candidate whose explicit full audit
+    # (workflow_dispatch, mode=full) passed on the exact tagged commit.
+    needs: scope
+    if: >-
+      github.ref_type == 'tag' &&
+      startsWith(github.ref_name, 'radia-mcp-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Require a successful full audit on the tagged commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          count=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/radia-mcp-matrix.yml/runs?head_sha=${GITHUB_SHA}&event=workflow_dispatch&status=success&per_page=1" \
+            --jq '.total_count')
+          if [[ "${count}" -lt 1 ]]; then
+            echo "::error::No successful radia-mcp full audit (workflow_dispatch) for ${GITHUB_SHA}; run it on this commit before tagging."
+            exit 1
+          fi
+          echo "full audit evidence found for ${GITHUB_SHA}"
+
   publish:
-    needs: [scope, selftest, minimum-sdk]
+    needs: [scope, selftest, minimum-sdk, release-evidence]
     if: >-
       github.ref_type == 'tag' &&
       startsWith(github.ref_name, 'radia-mcp-v')
