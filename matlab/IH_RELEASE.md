@@ -1,6 +1,19 @@
 # Radia IH Simulink Preview
 
+The next preview is `0.1.0-preview.8`. Its manifest describes the material-frame
+thermal state used by the current runtime; it does not apply a second rotation
+to that state. Publication requires the native and Simulink acceptance gates.
+
 ## Validated scope and review limitations
+
+The current input port is a peak-current amplitude in amperes, not an RMS
+current. Convert an RMS amplitude to peak by multiplying by sqrt(2).
+
+The native Thermal block uses fixed conductivity and volumetric heat capacity,
+with one uniform convection coefficient. It has no radiation or latent-heat
+term. Temperature-dependent properties and region-specific convection belong
+to the Python thermal solver; the native block must not be treated as an
+equivalent nonlinear heat model across a phase or Curie transition.
 
 The geometry assembler generates a frozen unit-current EM loss distribution;
 runtime heat scales with current squared. It currently emits one Eddy unknown
