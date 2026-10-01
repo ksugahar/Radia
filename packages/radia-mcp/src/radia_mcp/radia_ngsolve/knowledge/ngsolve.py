@@ -1413,6 +1413,15 @@ c = Preconditioner(a, type="bddc", inverse="sparsecholesky")
 f = LinearForm(-J0 * J_normalized * v * dx("coil"))
 ```
 
+**Compact support (a silent wrong answer)**: an NGSolve `BSpline` evaluates to
+zero above its last knot. A Newton trial step that leaves the table then sees
+H = 0, i.e. no coercivity. Extend the table to a high field and continue with
+the vacuum slope `H = H_max + (B - B_max)/mu0` (and the matching quadratic
+coenergy tail), as Radia's reduced-A Newton route does
+(`radia.vector_potential_solver._coercive_bh_law`). Radia's soft-iron
+interpolant for tabulated data elsewhere (HDiv-MMM, scalar potential, ESIM) is
+`radia.bh_law.monotone_bh_pchip`, a PCHIP through the magnetization M = B/mu0 - H.
+
 **BSpline vs BSplineCurve1D**: `BSpline` (from ngsolve) has `.Integrate()` for
 exact antiderivative. `BSplineCurve1D` (from netgen.occ) is for geometry only.
 

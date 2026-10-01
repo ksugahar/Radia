@@ -4852,8 +4852,10 @@ def solve_magnetostatic_newton(mesh, source, energy_density, steel_region,
     ----------
     source         : current-density vector CF (the int J.v excitation).
     energy_density : callable(Bmag_cf) -> co-energy density phi(|B|)=int_0^|B| H db
-                     [J/m^3] of the steel, e.g.
-                     ``BSpline(2, [0]+B_list, H_list).Integrate()``.
+                     [J/m^3] of the steel, e.g. the ``w_star`` of
+                     ``radia.vector_potential_solver._coercive_bh_law`` (an H(B)
+                     BSpline integral with a vacuum tail; a bare BSpline is zero
+                     beyond its last knot and drops the coercivity).
     steel_region   : materials string for the nonlinear steel (e.g. "yoke|pole").
                      Everywhere else gets the linear vacuum energy 1/2 nu0 |B|^2.
     reg            : |A|^2 gauge regularisation (x nu0) fixing the curl nullspace.

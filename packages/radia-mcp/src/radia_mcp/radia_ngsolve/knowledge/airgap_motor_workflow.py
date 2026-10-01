@@ -197,9 +197,11 @@ piecewise interpolation in NGSolve use `ng.IfPos` chains or `ng.Piecewise`.
 ## 3. Built-in NGSolve material CFs
 
     from ngsolve.comp import CoefficientFunction as CF
-    # BH-curve via NGSolve nonlinear materials (available in recent versions):
+    # Reluctivity from a tabulated curve: BSpline(order, knots, values).
+    # It is zero beyond the last knot, so append a far knot with the vacuum
+    # reluctivity before evaluating at |B| (see the ngsolve knowledge topic).
     from ngsolve import BSpline
-    nu_cf = BSpline(B_knots, nu_values)(ng.sqrt(B2))
+    nu_cf = BSpline(2, [0.0] + B_knots, nu_values)(ng.sqrt(B2))
 
 ## 4. Simplified linear (validation)
 

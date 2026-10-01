@@ -95,6 +95,11 @@ crystallized as its own package.
   `krylov`, `line_search`, `linear_inverse`, `nonlinear_lsq`) are removed;
   import them from `radia_mcp.optimization` / `radia_mcp.matrix_solvers`. The
   unreferenced `radia_ngsolve.hysteresis_knowledge` module is removed.
+- B-H knowledge states that an NGSolve `BSpline` is zero beyond its last knot
+  and needs a vacuum tail, points scalar-potential users to
+  `ScalarPotentialSolver.solve_nonlinear_newton` and the monotone PCHIP of
+  `radia.bh_law`, and fixes the `BSpline(order, knots, values)` call in the
+  air-gap motor workflow.
 - PDF lock release (`doc_convert`, `poster`) stops only dedicated PDF viewers
   showing that file and passes the name through the environment; browsers are
   never stopped.
