@@ -178,7 +178,7 @@ class ScalarBIE_SIBC:
                       Used to compute phi_inc via surface Poisson if phi_inc_cf
                       is not provided.
             Zs: Complex surface impedance [Ohm]. For linear conductor:
-                Zs = (1+1j)/sqrt(2) * sqrt(rho*omega*mu/2) where rho=resistivity.
+                Zs = (1+1j) * sqrt(rho*omega*mu/2) where rho=resistivity.
             omega: Angular frequency [rad/s]
             phi_inc_cf: Optional CoefficientFunction for phi_inc directly
                         (e.g., -H0*z for uniform field). If given, H_inc_cf
@@ -188,7 +188,7 @@ class ScalarBIE_SIBC:
             dict with keys:
                 phi: complex ndarray (ndof,) scalar potential on surface
                 H_rms: float, RMS tangential H field [A/m]
-                P_loss: float, total power loss [W] (= Re(Z_s) * integral |J|^2 dS)
+                P_loss: float, total power loss [W] (= 0.5 * Re(Z_s) * integral |J_peak|^2 dS)
                 Q_reactive: float, reactive power [var]
                 Zs_used: complex, surface impedance used
                 omega: float, angular frequency

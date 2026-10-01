@@ -74,11 +74,13 @@ class AndersonAccelerator:
             step.  Set to ``float('inf')`` to disable clipping.
         restart_growth : float
             Residual-monotone restart threshold (Walker-Ni 2011 § 3.4).
-            If ``||f_k|| > restart_growth * min(||f_j||, j < k)``, the
+            Let ``r_k = ||f_k||_inf / max(||x_k||_inf, 1e-30)``.
+            If ``r_k > restart_growth * r_(k-1)``, the
             most recent step diverged: clear the history (keep current
             iterate) so the next step is plain damped Picard and
             Anderson rebuilds from scratch.  Default ``2.0`` means
-            "restart when residual grew by more than 2x best-so-far".
+            "restart when the normalized residual grew by more than 2x
+            the previous step", not the historical minimum.
             Set to ``float('inf')`` to disable restart.
         """
         if m < 0:
@@ -116,8 +118,10 @@ class AndersonAccelerator:
         """Clear iterate / residual history.
 
         Call this when the underlying map has changed discontinuously
-        (e.g. mesh refined, BH curve swapped), or after a restart
-        criterion fires.
+        (e.g. mesh refined, BH curve swapped). This clears only the
+        stored secant vectors; it retains the previous residual tracker
+        and cumulative restart/clip counters. Create a new accelerator
+        when those diagnostics and the previous-step baseline must reset.
         """
         self._X.clear()
         self._F.clear()
