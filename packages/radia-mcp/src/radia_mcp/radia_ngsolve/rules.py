@@ -1065,8 +1065,8 @@ def check_scattered_eddy_missing_a0(filepath: str, lines: List[str]) -> List[Dic
 # NOTE: the "direct solver on 3D HCurl hits the ~84k order-2 ceiling" footgun is
 # NOT a static lint -- "uses a direct solver" is correct the vast majority of the
 # time (every 2D-H1 and small 3D solve), so a static check floods correct library
-# code with false positives. It is instead enforced as a RUNTIME guard in solve.py
-# (`_direct_inverse`), which turns the cryptic "bad array new length" overflow into
+# code with false positives. It is instead enforced as a RUNTIME guard in _direct.py
+# (`factor`), which turns the cryptic "bad array new length" overflow into
 # an actionable "switch to CG+BDDC" message. Right guard, right layer.
 
 

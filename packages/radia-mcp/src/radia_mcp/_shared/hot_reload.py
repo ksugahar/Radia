@@ -92,18 +92,62 @@ def _restore_modules(snapshots: dict[str, dict[str, Any]]) -> None:
         module.__dict__.update(snapshot)
 
 
-def _modules_owning_object(obj: Any, prefix: str) -> set[str]:
-    """Find modules that expose ``obj`` as a global (normally server.py)."""
+def _modules_owning_server(prefix: str) -> set[str]:
+    """Modules that hold a live FastMCP instance (every domain ``server.py``).
+
+    Re-executing any of them creates an orphaned server instead of updating
+    the connected one. A capability pack hosts several domain servers in one
+    process, so all of them are protected, not only the caller's own.
+    """
+    from mcp.server.fastmcp import FastMCP
+
     owners: set[str] = set()
     for name, module in list(sys.modules.items()):
         if module is None or not (name == prefix or name.startswith(prefix + ".")):
             continue
         try:
-            if any(value is obj for value in module.__dict__.values()):
+            if any(isinstance(value, FastMCP) for value in module.__dict__.values()):
                 owners.add(name)
         except RuntimeError:
             continue
     return owners
+
+
+def _rebind_imported_names(
+    prefix: str, reloaded: list[str], snapshots: dict[str, dict[str, Any]]
+) -> list[str]:
+    """Point ``from reloaded import name`` bindings in other modules at the new objects.
+
+    A server module that is not itself reloaded keeps the function objects it
+    imported by name; without this its tools would keep running the old code.
+    Only functions and classes defined in a reloaded module are rebound.
+    """
+    fresh_by_old: dict[int, Any] = {}
+    for name in reloaded:
+        module = sys.modules.get(name)
+        if module is None:
+            continue
+        for key, old in snapshots.get(name, {}).items():
+            if not callable(old) or getattr(old, "__module__", None) != name:
+                continue
+            new = module.__dict__.get(key)
+            if new is not None and new is not old:
+                fresh_by_old[id(old)] = new
+    rebound: list[str] = []
+    if not fresh_by_old:
+        return rebound
+    reloaded_set = set(reloaded)
+    for name, module in list(sys.modules.items()):
+        if (module is None or name in reloaded_set
+                or not (name == prefix or name.startswith(prefix + "."))):
+            continue
+        namespace = module.__dict__
+        for key, value in list(namespace.items()):
+            new = fresh_by_old.get(id(value))
+            if new is not None:
+                namespace[key] = new
+                rebound.append(f"{name}.{key}")
+    return sorted(rebound)
 
 
 def _prime_mtimes(prefix: str) -> None:
@@ -287,8 +331,9 @@ def reload_and_refresh(mcp: Any, module_prefix: str = "radia_mcp") -> dict[str, 
         and (name == module_prefix or name.startswith(module_prefix + "."))
     }
     seen_snapshot = dict(_seen_mtimes)
-    protected = _modules_owning_object(mcp, module_prefix)
+    protected = _modules_owning_server(module_prefix)
     report = reload_changed_modules(module_prefix, protected_modules=protected)
+    report["rebound"] = []
     if report["errors"]:
         report.update(
             {
@@ -301,6 +346,8 @@ def reload_and_refresh(mcp: Any, module_prefix: str = "radia_mcp") -> dict[str, 
         )
         return report
     try:
+        report["rebound"] = _rebind_imported_names(
+            module_prefix, report["reloaded"], module_snapshots)
         report.update(
             refresh_tools(
                 mcp,
@@ -312,7 +359,8 @@ def reload_and_refresh(mcp: Any, module_prefix: str = "radia_mcp") -> dict[str, 
         _restore_modules(
             {
                 name: module_snapshots[name]
-                for name in report["reloaded"]
+                for name in {*report["reloaded"],
+                             *(entry.rsplit(".", 1)[0] for entry in report["rebound"])}
                 if name in module_snapshots
             }
         )
@@ -323,6 +371,7 @@ def reload_and_refresh(mcp: Any, module_prefix: str = "radia_mcp") -> dict[str, 
                 "reloaded": [],
                 "errors": {"tool_registry": f"{type(exc).__name__}: {exc}"},
                 "rolled_back": True,
+                "rebound": [],
                 "updated": [],
                 "added": [],
                 "removed": [],

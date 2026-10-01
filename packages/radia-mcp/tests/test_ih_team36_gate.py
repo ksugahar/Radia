@@ -175,3 +175,22 @@ def test_mcp_boundary_accepts_json_not_paths():
     assert contract["artifact_schema"] == SCHEMA
     result = ih_team36_validate(json.dumps(artifact()), json.dumps(reference()))
     assert result["accepted_for_cross_validation"]
+
+
+def test_reference_without_identity_never_matches_an_unidentified_artifact():
+    value = artifact()
+    del value["identity"]
+    ref = reference()
+    del ref["identity"]
+    result = evaluate_team36_artifact(value, reference=ref)
+    assert not result["checks"]["cross_reference_identity_matches"]
+    assert not result["accepted_for_cross_validation"]
+
+
+def test_non_numeric_counts_fail_the_check_instead_of_raising():
+    value = artifact()
+    value["material_model"]["mu20_point_count"] = "many"
+    value["coupling"]["temperature_to_em"]["outside_count"] = None
+    result = evaluate_team36_artifact(value)
+    assert not result["checks"]["material_tables_are_complete"]
+    assert not result["checks"]["temperature_mapping_is_bidirectional_evidence"]

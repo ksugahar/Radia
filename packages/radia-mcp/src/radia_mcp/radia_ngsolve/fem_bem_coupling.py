@@ -40,6 +40,7 @@ from ngsolve import (
     GridFunction, LinearForm, BilinearForm,
     ds, dx, BND, x as ng_x, y as ng_y, z as ng_z, sqrt as ng_sqrt,
 )
+from ._direct import solve_symmetric
 from netgen.occ import Sphere, Pnt, OCCGeometry
 
 from .bem_integral import laplace_exterior_dtn
@@ -252,7 +253,7 @@ def sphere_shell_analytic_dtn(R_inner=0.5, R_outer=1.0, maxh_vol=0.3,
     gfu.Set(ng_z / R_inner, ng.BND)
     rhs = gfu.vec.CreateVector()
     rhs.data = -(a.mat * gfu.vec)
-    gfu.vec.data += a.mat.Inverse(freedofs=fes.FreeDofs()) * rhs
+    gfu.vec.data += solve_symmetric(a.mat, fes.FreeDofs(), rhs, "Robin open-boundary solve")
 
     r2 = ng_x**2 + ng_y**2 + ng_z**2
     r3 = r2 * ng_sqrt(r2)
@@ -396,7 +397,7 @@ def kelvin_dtn_eigenvalue(R=1.0, degree=1, maxh=0.4, order=1, intorder=10, dim=3
     if freedofs.NumSet():
         rhs = gfu.vec.CreateVector()
         rhs.data = -(a.mat * gfu.vec)
-        gfu.vec.data += a.mat.Inverse(freedofs=freedofs) * rhs
+        gfu.vec.data += solve_symmetric(a.mat, freedofs, rhs, "harmonic extension solve")
 
     # λ_eff = offset − ∫|∇u*|² / ∮u*²   (weak, variationally consistent)
     offset = -(dim - 2) / R                               # 3D: −1/R ; 2D: 0
@@ -448,7 +449,7 @@ def _shell_robin_solve(mesh, R_inner, degree, lam, order, intorder):
     gfu.Set(inner_datum, BND)
     rhs = gfu.vec.CreateVector()
     rhs.data = -(a.mat * gfu.vec)
-    gfu.vec.data += a.mat.Inverse(freedofs=fes.FreeDofs()) * rhs
+    gfu.vec.data += solve_symmetric(a.mat, fes.FreeDofs(), rhs, "DtN Robin solve")
     return gfu
 
 
@@ -641,7 +642,7 @@ def kelvin_twosphere_shell_dipole(R_inner=0.5, R_outer=1.0, offset=3.0,
     gfu.Set(_z / R_inner, BND, definedon=mesh.Boundaries("inner"))
     rhs = gfu.vec.CreateVector()
     rhs.data = -(a.mat * gfu.vec)
-    gfu.vec.data += a.mat.Inverse(freedofs=fes.FreeDofs(), inverse="sparsecholesky") * rhs
+    gfu.vec.data += solve_symmetric(a.mat, fes.FreeDofs(), rhs, "Kelvin shell solve")
 
     values, columns, row_starts = a.mat.CSR()
     matrix_hash = hashlib.sha256()

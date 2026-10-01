@@ -110,7 +110,7 @@ def solve_poisson_2d(mesh, coeff, dirichlet_values, source=None, order=2,
     gfu = GridFunction(fes)
     gfu.Set(mesh.BoundaryCF(dirichlet_values, default=0.0), BND)
     r = f.vec - a.mat * gfu.vec
-    gfu.vec.data += a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * r
+    gfu.vec.data += solve_symmetric(a.mat, fes.FreeDofs(), r, "scalar Laplace solve")
     return gfu
 
 
@@ -136,7 +136,7 @@ def solve_poisson_axi(mesh, coeff, dirichlet_values, source=None, order=2):
     gfu = GridFunction(fes)
     gfu.Set(mesh.BoundaryCF(dirichlet_values, default=0.0), BND)
     res = f.vec - a.mat * gfu.vec
-    gfu.vec.data += a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * res
+    gfu.vec.data += solve_symmetric(a.mat, fes.FreeDofs(), res, "scalar Laplace solve")
     return gfu
 
 
@@ -318,7 +318,7 @@ def solve_magnetostatic_az_magnet(mesh, nu, magnetization, dirichlet_values,
     gfu = GridFunction(fes)
     gfu.Set(mesh.BoundaryCF(dirichlet_values, default=0.0), BND)
     res = f.vec - a.mat * gfu.vec
-    gfu.vec.data += a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * res
+    gfu.vec.data += solve_symmetric(a.mat, fes.FreeDofs(), res, "scalar Laplace solve")
     return gfu
 
 

@@ -13,6 +13,7 @@ import math
 
 from ngsolve import (VectorH1, BilinearForm, LinearForm, GridFunction, InnerProduct,
                      CoefficientFunction, grad, dx, ds, Id, Trace, ArnoldiSolver)
+from ._direct import solve_symmetric
 
 
 def _lame(E, nu, plane):
@@ -65,7 +66,7 @@ def solve_linear_elasticity(mesh, E, nu, dirichletx="", dirichlety="", dirichlet
     a.Assemble()
     f.Assemble()
     gu = GridFunction(fes)
-    gu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+    gu.vec.data = solve_symmetric(a.mat, fes.FreeDofs(), f.vec, "linear elasticity solve")
     return gu
 
 

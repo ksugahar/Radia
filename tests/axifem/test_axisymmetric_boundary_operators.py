@@ -216,7 +216,7 @@ def test_nonlinear_signed_constraint_generator_persists_across_picard_steps():
         order=2,
         dirichlet="left",
         relax=0.5,
-        max_iter=3,
+        max_iter=40,
         min_iter=2,
         dof_constraints=constraints,
     )

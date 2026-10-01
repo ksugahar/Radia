@@ -304,8 +304,12 @@ def literature_build_vector_index(
                 f"progress {s.get('progress', 0):.1%}, "
                 f"elapsed {s.get('elapsed_seconds', 0):.0f}s.")
 
-    base = _LIT_ROOT
-    target = base / folder if folder else base
+    base = _LIT_ROOT.resolve()
+    target = (base / folder).resolve() if folder else base
+    try:
+        target.relative_to(base)
+    except ValueError:
+        return f"Target folder is outside the literature root: {folder!r}"
     if not target.exists():
         return f"Target folder does not exist: {target}"
 
@@ -317,7 +321,8 @@ def literature_build_vector_index(
         if not pdfs:
             return {"added": 0, "msg": "No PDFs found."}
         rag = _get_retriever()
-        rag.initialize()
+        if not rag.initialize():
+            raise RuntimeError("ChromaDB could not be opened; nothing was indexed")
         total_added = 0
         failed = []
         broken = []   # PDFs whose extracted text is mostly garble (corrupt layer)

@@ -34,6 +34,7 @@ class CapabilityServer:
         self.pack = pack
         self.profile = profile
         self.modules = modules_for(pack, profile)
+        self.sources = []
         self.tools = {}
         self.prompts = {}
         self.resources = {}
@@ -64,6 +65,7 @@ class CapabilityServer:
         instructions = []
         for module in self.modules:
             source = importlib.import_module(f"radia_mcp.{module}.server").mcp
+            self.sources.append((source, module))
             if await source.list_resource_templates():
                 raise ValueError(f"{module}: resource templates require an explicit routing adapter")
             for registry, entries, key in (
@@ -121,7 +123,18 @@ class CapabilityServer:
                                                   idempotentHint=True, openWorldHint=False),
             )
 
+    async def _refresh_tools(self):
+        """Re-read every domain's live tool list (hot reload changes it in place)."""
+        tools = {}
+        for source, module in self.sources:
+            for entry in await source.list_tools():
+                if entry.name == "capability_pack_status" or entry.name in tools:
+                    raise ValueError(f"Duplicate capability name {entry.name!r} in {module}")
+                tools[entry.name] = (entry, source, module)
+        self.tools = tools
+
     async def list_tools(self):
+        await self._refresh_tools()
         return [
             self.status_tool(),
             *[entry for entry, _, _ in self.tools.values()],
@@ -131,6 +144,8 @@ class CapabilityServer:
         if name == "capability_pack_status":
             return self.status()
         if name not in self.tools:
+            await self._refresh_tools()
+        if name not in self.tools:
             raise ValueError(f"Unknown tool: {name}")
         return await self.tools[name][1].call_tool(name, arguments)
 
@@ -138,12 +153,16 @@ class CapabilityServer:
         return [entry for entry, _, _ in self.prompts.values()]
 
     async def get_prompt(self, name, arguments):
+        if name not in self.prompts:
+            raise ValueError(f"Unknown prompt: {name}")
         return await self.prompts[name][1].get_prompt(name, arguments)
 
     async def list_resources(self):
         return [entry for entry, _, _ in self.resources.values()]
 
     async def read_resource(self, uri):
+        if str(uri) not in self.resources:
+            raise ValueError(f"Unknown resource: {uri}")
         return await self.resources[str(uri)][1].read_resource(uri)
 
 

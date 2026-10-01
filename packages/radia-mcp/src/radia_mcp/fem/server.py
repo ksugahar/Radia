@@ -212,6 +212,10 @@ def fem_axifem_signature_execution_gate(evidence_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
+class _WorkerFailed(RuntimeError):
+    """The owned solver worker crashed or exited non-zero (not an input error)."""
+
+
 @mcp.tool(
     annotations=ToolAnnotations(
         readOnlyHint=True,
@@ -249,7 +253,7 @@ async def fem_vol2d_scalar_analysis(analysis_json: str) -> str:
         )
         if process.returncode != 0:
             message = stderr.decode("utf-8", errors="replace").strip()
-            raise RuntimeError(message[-1000:] or "scalar worker failed")
+            raise _WorkerFailed(message[-1000:] or "scalar worker failed")
         result = _decode_worker_json(stdout)
     except asyncio.TimeoutError:
         if process is not None and process.returncode is None:
@@ -265,6 +269,12 @@ async def fem_vol2d_scalar_analysis(analysis_json: str) -> str:
             process.kill()
             await process.wait()
         raise
+    except _WorkerFailed as exc:
+        result = {
+            "schema": "radia.vol2d-scalar-analysis.v1",
+            "status": "worker_failed",
+            "error": str(exc),
+        }
     except (json.JSONDecodeError, OSError, TypeError, ValueError, RuntimeError) as exc:
         result = {
             "schema": "radia.vol2d-scalar-analysis.v1",

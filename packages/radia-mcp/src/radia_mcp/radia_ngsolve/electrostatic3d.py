@@ -13,6 +13,7 @@ import math
 import numpy as np
 from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, grad, dx,
                      Integrate, CoefficientFunction)
+from ._direct import CheckedInverse, solve_symmetric
 
 EPS0 = 8.8541878128e-12   # vacuum permittivity [F/m]
 
@@ -45,7 +46,7 @@ def solve_electrostatic_3d(mesh, eps_cf, bc_values, order=2, rho=None):
     # Dirichlet lift: solve for the free-DOF correction to the prescribed boundary data
     r = f.vec.CreateVector()
     r.data = f.vec - a.mat * gfV.vec
-    gfV.vec.data += a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * r
+    gfV.vec.data += solve_symmetric(a.mat, fes.FreeDofs(), r, "3D electrostatic solve")
     return gfV
 
 
@@ -85,7 +86,7 @@ def capacitance_matrix(mesh, eps_cf, conductors, order=2):
     a = BilinearForm(fes, symmetric=True)
     a += eps_cf * grad(u) * grad(v) * dx
     a.Assemble()
-    inv = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
+    inv = CheckedInverse(a.mat, fes.FreeDofs(), "capacitance-matrix solve")
 
     # indicator gridfunction (=1 on each conductor's boundary trace) for the reaction
     chi = []

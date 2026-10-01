@@ -90,6 +90,10 @@ build_pm_armature_reaction_hdiv_hex_gate = lazy_callable(".pm_armature_reaction_
 build_motor_virtual_work_width_ladder_gate = lazy_callable(".virtual_work_width_gate", "motor_virtual_work_width_ladder_gate", __package__)
 build_transient_no_load_load_cycle_gate = lazy_callable(".transient_no_load_load_gate", "motor_transient_no_load_load_cycle_gate", __package__)
 
+class _WorkerFailed(RuntimeError):
+    """An owned solver worker crashed or exited non-zero (not an input error)."""
+
+
 mcp = FastMCP("mcp-server-motor")
 _validation = CoarseToolRegistry(mcp, namespace="motor")
 
@@ -817,7 +821,7 @@ async def motor_vol2d_circuit_analysis(analysis_json: str) -> str:
         )
         if process.returncode != 0:
             message = stderr.decode("utf-8", errors="replace").strip()
-            raise RuntimeError(message[-1000:] or "vol2d worker failed")
+            raise _WorkerFailed(message[-1000:] or "vol2d worker failed")
         result = _decode_owned_worker_json(stdout)
     except asyncio.TimeoutError:
         if process is not None and process.returncode is None:
@@ -833,6 +837,12 @@ async def motor_vol2d_circuit_analysis(analysis_json: str) -> str:
             process.kill()
             await process.wait()
         raise
+    except _WorkerFailed as exc:
+        result = {
+            "schema": "radia.vol2d-circuit-analysis.v1",
+            "status": "worker_failed",
+            "error": str(exc),
+        }
     except (json.JSONDecodeError, OSError, TypeError, ValueError, RuntimeError) as exc:
         result = {
             "schema": "radia.vol2d-circuit-analysis.v1",
@@ -869,7 +879,7 @@ async def motor_vol2d_dynamic_analysis(analysis_json: str) -> str:
         )
         if process.returncode != 0:
             message = stderr.decode("utf-8", errors="replace").strip()
-            raise RuntimeError(message[-1000:] or "vol2d dynamics worker failed")
+            raise _WorkerFailed(message[-1000:] or "vol2d dynamics worker failed")
         result = _decode_owned_worker_json(stdout)
     except asyncio.TimeoutError:
         if process is not None and process.returncode is None:
@@ -885,6 +895,12 @@ async def motor_vol2d_dynamic_analysis(analysis_json: str) -> str:
             process.kill()
             await process.wait()
         raise
+    except _WorkerFailed as exc:
+        result = {
+            "schema": "radia.vol2d-dynamic-analysis.v1",
+            "status": "worker_failed",
+            "error": str(exc),
+        }
     except (json.JSONDecodeError, OSError, TypeError, ValueError, RuntimeError) as exc:
         result = {
             "schema": "radia.vol2d-dynamic-analysis.v1",
@@ -930,7 +946,7 @@ async def motor_vol2d_force_analysis(analysis_json: str) -> str:
         )
         if process.returncode != 0:
             message = stderr.decode("utf-8", errors="replace").strip()
-            raise RuntimeError(message[-1000:] or "vol2d force worker failed")
+            raise _WorkerFailed(message[-1000:] or "vol2d force worker failed")
         result = _decode_owned_worker_json(stdout)
     except asyncio.TimeoutError:
         if process is not None and process.returncode is None:
@@ -946,6 +962,12 @@ async def motor_vol2d_force_analysis(analysis_json: str) -> str:
             process.kill()
             await process.wait()
         raise
+    except _WorkerFailed as exc:
+        result = {
+            "schema": "radia.vol2d-force-analysis.v1",
+            "status": "worker_failed",
+            "error": str(exc),
+        }
     except (json.JSONDecodeError, OSError, TypeError, ValueError, RuntimeError) as exc:
         result = {
             "schema": "radia.vol2d-force-analysis.v1",
@@ -991,7 +1013,7 @@ async def motor_age_periodic_motion_analysis(analysis_json: str) -> str:
         )
         if process.returncode != 0:
             message = stderr.decode("utf-8", errors="replace").strip()
-            raise RuntimeError(message[-1000:] or "AGE periodic-motion worker failed")
+            raise _WorkerFailed(message[-1000:] or "AGE periodic-motion worker failed")
         result = _decode_owned_worker_json(stdout)
     except asyncio.TimeoutError:
         if process is not None and process.returncode is None:
@@ -1007,6 +1029,12 @@ async def motor_age_periodic_motion_analysis(analysis_json: str) -> str:
             process.kill()
             await process.wait()
         raise
+    except _WorkerFailed as exc:
+        result = {
+            "schema": "radia.age-periodic-motion-analysis.v1",
+            "status": "worker_failed",
+            "error": str(exc),
+        }
     except (json.JSONDecodeError, OSError, TypeError, ValueError, RuntimeError) as exc:
         result = {
             "schema": "radia.age-periodic-motion-analysis.v1",
@@ -1043,7 +1071,7 @@ async def motor_age_retirement_validation(request_json: str = "{}") -> str:
         )
         if process.returncode != 0:
             message = stderr.decode("utf-8", errors="replace").strip()
-            raise RuntimeError(message[-1000:] or "AGE retirement worker failed")
+            raise _WorkerFailed(message[-1000:] or "AGE retirement worker failed")
         result = _decode_owned_worker_json(stdout)
     except asyncio.TimeoutError:
         if process is not None and process.returncode is None:
@@ -1055,6 +1083,8 @@ async def motor_age_retirement_validation(request_json: str = "{}") -> str:
             process.kill()
             await process.wait()
         raise
+    except _WorkerFailed as exc:
+        result = {"schema": "radia.age-retirement-validation.v1", "status": "worker_failed", "pass": False, "error": str(exc)}
     except (json.JSONDecodeError, OSError, TypeError, ValueError, RuntimeError) as exc:
         result = {"schema": "radia.age-retirement-validation.v1", "status": "invalid_input", "pass": False, "error": str(exc)}
     return json.dumps(result, indent=2, sort_keys=True)
@@ -1096,7 +1126,7 @@ async def motor_vol2d_postprocess_analysis(analysis_json: str) -> str:
         )
         if process.returncode != 0:
             message = stderr.decode("utf-8", errors="replace").strip()
-            raise RuntimeError(message[-1000:] or "vol2d postprocess worker failed")
+            raise _WorkerFailed(message[-1000:] or "vol2d postprocess worker failed")
         result = _decode_owned_worker_json(stdout)
     except asyncio.TimeoutError:
         if process is not None and process.returncode is None:
@@ -1112,6 +1142,12 @@ async def motor_vol2d_postprocess_analysis(analysis_json: str) -> str:
             process.kill()
             await process.wait()
         raise
+    except _WorkerFailed as exc:
+        result = {
+            "schema": "radia.vol2d-postprocess-analysis.v1",
+            "status": "worker_failed",
+            "error": str(exc),
+        }
     except (json.JSONDecodeError, OSError, TypeError, ValueError, RuntimeError) as exc:
         result = {
             "schema": "radia.vol2d-postprocess-analysis.v1",

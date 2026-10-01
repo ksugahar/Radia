@@ -133,3 +133,23 @@ def test_real_stdio_discovery_call_and_errors(pack, profile, tmp_path):
                     })
                     assert result.messages
     asyncio.run(check())
+
+
+def test_pack_tool_list_follows_a_domain_registry_change():
+    async def check():
+        app = await CapabilityServer("radia-design", "optimization").initialize()
+        module = modules_for("radia-design", "optimization")[0]
+        source = importlib.import_module(f"radia_mcp.{module}.server").mcp
+
+        def pack_probe_tool() -> str:
+            return "probe"
+
+        source.add_tool(pack_probe_tool)
+        try:
+            assert "pack_probe_tool" in {t.name for t in await app.list_tools()}
+        finally:
+            source.remove_tool("pack_probe_tool")
+        assert "pack_probe_tool" not in {t.name for t in await app.list_tools()}
+        with pytest.raises(ValueError, match="Unknown prompt"):
+            await app.get_prompt("no_such_prompt", {})
+    asyncio.run(check())

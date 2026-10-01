@@ -15,7 +15,7 @@ import math
 from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, InnerProduct,
                      Conj, CoefficientFunction, grad, dx, ds, BND)
 
-from ._direct import solve_symmetric
+from ._direct import CheckedInverse, require_direct_inverse, solve_symmetric
 
 
 def joule_loss_density(gfA, gfPhi, sigma_cf, omega, A0=None):
@@ -65,7 +65,8 @@ def solve_heat_steady(mesh, q, k, conductor, dirichlet, order=2,
     f = LinearForm(fesT);   f += q * s * dx
     a.Assemble(); f.Assemble()
     gT = GridFunction(fesT)
-    gT.vec.data = a.mat.Inverse(fesT.FreeDofs(), inverse=inverse) * f.vec
+    require_direct_inverse(inverse)
+    gT.vec.data = solve_symmetric(a.mat, fesT.FreeDofs(), f.vec, "steady heat solve")
     return gT
 
 
@@ -106,7 +107,8 @@ def solve_heat_transient(mesh, T0, k, rho_cp, dirichlet, t_end, n_steps,
     dt = t_end / n_steps
     mstar = M.mat.CreateMatrix()
     mstar.AsVector().data = M.mat.AsVector() + theta * dt * A.mat.AsVector()
-    inv = mstar.Inverse(fesT.FreeDofs(), inverse=inverse)
+    require_direct_inverse(inverse)
+    inv = CheckedInverse(mstar, fesT.FreeDofs(), "transient heat step")
     fvec = LinearForm(source * s * dx).Assemble().vec if source is not None else None
     rhs = gT.vec.CreateVector()
     for _ in range(n_steps):
@@ -199,9 +201,9 @@ def solve_heat_steady_robin(mesh, q, k, conductor, robin, h, T_inf=0.0, order=2,
         gT.Set(CoefficientFunction(dirichlet_value), definedon=mesh.Boundaries(dirichlet))
         r = f.vec.CreateVector()
         r.data = f.vec - a.mat * gT.vec
-        gT.vec.data += a.mat.Inverse(fesT.FreeDofs(), inverse=inverse) * r
+        gT.vec.data += solve_symmetric(a.mat, fesT.FreeDofs(), r, "Robin heat solve")
     else:
-        gT.vec.data = a.mat.Inverse(fesT.FreeDofs(), inverse=inverse) * f.vec
+        gT.vec.data = solve_symmetric(a.mat, fesT.FreeDofs(), f.vec, "Robin heat solve")
     return gT
 
 
