@@ -17,7 +17,6 @@ Usage:
     model = PRIMAHACApKModel.from_topology(topo, q=30)
     Z_sweep = model.impedance_sweep(freqs)        # (n_freq,) complex
     L_dc, R_dc = model.dc_inductance_resistance()  # scalar
-    model.validate_against_full(topo, freqs)       # prints error table
 
 Cost:
     Build:  q iterations x 2 real HACApK matvecs = O(q N log N)
@@ -183,12 +182,12 @@ class PRIMAHACApKModel:
             )
             t_build = time.perf_counter() - t0
 
-            # For descriptor PRIMA:
-            #   (A_q + s E_q) x_q = B_q
-            #   y_q = B_q^T x_q = port voltage
-            # Z_port(s) = y_q / I_port = B_q^T (A_q + s E_q)^{-1} B_q
+            # For descriptor PRIMA (MNA form):
+            #   (G_q + s E_q) x_q = b_q
+            #   y_q = b_q^T x_q = port voltage
+            # Z_port(s) = y_q / I_port = b_q^T (G_q + s E_q)^{-1} b_q
             L_q = E_q    # E = [[L,0],[0,0]] projected
-            R_q = A_q    # A_sys = [[R,A^T],[A,0]] projected
+            R_q = A_q    # G = [[R,A^T],[-A,0]] projected
             port_vec_q = B_q
 
             stats = {
@@ -215,16 +214,15 @@ class PRIMAHACApKModel:
         """Evaluate Z_port at a single frequency from the reduced model.
 
         For series chain (q=1): Z = R_total + s * L_total (exact).
-        For descriptor PRIMA: Z = B_q^T (A_q + s*E_q)^{-1} B_q.
+        For descriptor PRIMA: Z = b_q^T (G_q + s*E_q)^{-1} b_q.
         """
         s = 1j * 2.0 * math.pi * freq_hz
         if self.q == 1 and self.build_stats.get("is_series"):
             return complex(self.R_q[0, 0] + s * self.L_q[0, 0])
-        # Descriptor PRIMA: (A_q + s*E_q) x = B_q, output = C_q^T x
-        # B = [0; -e_port], C = [0; +e_port] → C = -B → Z = -B^T Z^{-1} B
+        # Descriptor PRIMA (MNA form): (G_q + s*E_q) x = b_q, Z = b_q^T x
         Z_q = self.R_q + s * self.L_q
         x = np.linalg.solve(Z_q, self.port_vec_q.astype(np.complex128))
-        return -complex(self.port_vec_q @ x)
+        return complex(self.port_vec_q @ x)
 
     def impedance_sweep(self, freqs) -> np.ndarray:
         """Evaluate Z_port at multiple frequencies.
@@ -247,14 +245,13 @@ class PRIMAHACApKModel:
         Returns:
             (L_dc [H], R_dc [Ohm]) tuple.
         """
-        # Z(s) ≈ R_port + s * L_port for small s
-        # R_port = b^T R_q^{-1} b  ... no, Z_port = b^T Z^{-1} b
-        # At DC: Z_port(0) = b^T R_q^{-1} b = R_port
-        # dZ/ds|_0 = -b^T R_q^{-1} L_q R_q^{-1} b = L_port
+        if self.q == 1 and self.build_stats.get("is_series"):
+            return float(self.L_q[0, 0]), float(self.R_q[0, 0])
+        # Z(s) = b^T (G_q + s E_q)^{-1} b ≈ R_port + s * L_port for small s:
+        # R_port = b^T G_q^{-1} b, L_port = dZ/ds|_0 = -b^T G_q^{-1} E_q G_q^{-1} b
         x0 = np.linalg.solve(self.R_q, self.port_vec_q)
-        R_port = float(np.real(self.port_vec_q @ x0))
-        Lx = self.L_q @ x0
-        L_port = float(np.real(self.port_vec_q @ np.linalg.solve(self.R_q, Lx)))
+        R_port = float(self.port_vec_q @ x0)
+        L_port = -float(self.port_vec_q @ np.linalg.solve(self.R_q, self.L_q @ x0))
         return L_port, R_port
 
 
@@ -264,17 +261,18 @@ def _descriptor_prima(solver, R_dc, A_hat, e_port, q, inv_R=None):
     System: [R+sL  A^T] [I]   [0    ]
             [A     0  ] [V] = [i_ext]
 
-    Descriptor form: E x_dot = A_sys x + B u, where
+    Descriptor (MNA) form: (G + s E) x = b u, y = b^T x, where
         E = [[L, 0], [0, 0]]   (singular)
-        A_sys = -[[R, A^T], [A, 0]]
-        B = [[0], [e_port]]
+        G = [[R, A^T], [-A, 0]]   (G + G^T >= 0)
+        b = [[0], [e_port]]
         x = [I; V]
 
-    PRIMA Krylov from M = A_sys^{-1} E starting at x0 = A_sys^{-1} B:
-    Each step requires one saddle-point solve + one HACApK L matvec.
+    PRIMA Krylov of G^{-1} E from G^{-1} b, computed with the symmetric
+    saddle M = [[R, A^T], [A, 0]] (same space, since G = diag(I, -I) M):
+    each step requires one saddle-point solve + one HACApK L matvec.
 
-    Returns (V_basis, L_q, R_q, port_vec_q) where V_basis spans the
-    Krylov subspace in the augmented [I; V] space.
+    Returns (V_basis, E_q, G_q, b_q, q) where V_basis spans the Krylov
+    subspace in the augmented [I; V] space.
     """
     import scipy.sparse as sp
     from scipy.sparse.linalg import LinearOperator, lgmres, splu
@@ -378,17 +376,23 @@ def _descriptor_prima(solver, R_dc, A_hat, e_port, q, inv_R=None):
     E_q = V_basis.T @ EV   # (q, q)
     E_q = 0.5 * (E_q + E_q.T)  # symmetrize
 
-    # A_q = V^T A_block V (A_block is sparse, cheap)
+    # Project the MNA form G = [[R, A^T], [-A, 0]], b = [0; e_port]: the
+    # symmetric saddle with its KCL rows negated.  G + G^T = diag(2R, 0) is
+    # positive semidefinite, so the congruence keeps every reduced pole
+    # stable (PRIMA passivity).  The symmetric saddle itself is indefinite;
+    # its projection produced unstable out-of-band poles.  Negating rows that
+    # E does not touch leaves G^{-1} E and G^{-1} b, hence the Krylov basis,
+    # unchanged.
     AV = np.zeros((dim, actual_q), dtype=np.float64)
     for j in range(actual_q):
         I_ = V_basis[:N, j]; V_ = V_basis[N:, j]
         AV[:N, j] = R_dc * I_ + A_hat_T @ V_
-        AV[N:, j] = A_hat @ I_
+        AV[N:, j] = -(A_hat @ I_)
     A_q = V_basis.T @ AV
 
-    # Port vector in reduced space: B_q = V^T B = V^T [0; -e_port]
+    # Port vector in reduced space: B_q = V^T b, b = [0; e_port]
     B_full = np.zeros(dim, dtype=np.float64)
-    B_full[N:] = -e_port
+    B_full[N:] = e_port
     B_q = V_basis.T @ B_full
 
     return V_basis, E_q, A_q, B_q, actual_q
