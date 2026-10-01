@@ -68,7 +68,7 @@ def test_axifem_element_evidence_notebook_is_result_bearing():
 @pytest.mark.parametrize('source,names,expected', [
     ('axifem/research/validate_q2_codegen.py', ['PROTO'],
      {'PROTO': 'axifem/research/prototypes'}),
-    ('axifem/research/verification/test_hiruma_disk.py', ['BEM_TAU_REF_PATH'],
+    ('axifem/research/verification/disk_axisym_reference.py', ['BEM_TAU_REF_PATH'],
      {'BEM_TAU_REF_PATH': 'axifem/research/bem_disk/bem_disk_axisym_v3_refined.json'}),
 ])
 def test_research_reference_paths_follow_a_relocated_checkout(tmp_path, monkeypatch, source, names, expected):
