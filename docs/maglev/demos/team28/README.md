@@ -433,6 +433,10 @@ is `~6e-6`, negligible) -- a pure convention factor, not the dipole error.
   DC / 50Hz / 50Hz_可動 / Transient + field-validation figure).
   Disk: Al, R=65mm, t=3mm, sigma=3.4e7; coils: 960t/+20A (r=41mm) and
   576t/-20A (r=87.5mm) counter-wound, 50 Hz.
+- Kameari-Ebrahimi-Sugahara-Shindo-Matsuo 2018, IEEE TMag 54(3):7201804.
+- K. Sugahara, N. Tanimoto, Y. Takahashi, T. Matsuo, "Cauer Ladder Network
+  Representation with Constant Basis Functions for Eddy Current Problems
+  Involving Conductor Movement", COMPUMAG 2023 (Paper ID 324).
 - Method context: `radia_mcp.maglev` topic `radia_iem_fem`; the CLAUDE.md
   policy "Maglev Analysis: Radia + NGSolve".
 
