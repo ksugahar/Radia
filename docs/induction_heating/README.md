@@ -2,9 +2,26 @@
 
 Radia computes electromagnetic workpiece loss and transient temperature fields.
 The **Radia IH MCP tool family** owns current input contracts and operating
-instructions; the Radia Simulink library is the formal human interface.
+instructions. Human–AI collaboration uses Cubit for geometry/mesh and the Radia
+Simulink library for application models.
 These executed notebooks explain numerical evidence, not production controls.
 Numerical evidence and its checked JSON remain under `validation_test/`.
+
+## Choose your next step
+
+| Purpose | Entry point |
+| --- | --- |
+| Inspect temperature and conservative source transfer | [Thermal feature notebook](axisymmetric_p2_thermal.ipynb) |
+| Operate the supported analysis with AI | [MCP setup and tools](../../packages/radia-mcp/README.md) |
+| Prepare geometry and labeled mesh | [Cubit workflow](../cubit_mesh_export/README.md) |
+| Collaborate on an application model | [Radia Simulink library](../../matlab/README.md) |
+| Read executable field-transfer examples | [Thermal transfer tests](../../tests/test_ih_thermal_transfer.py) |
+| Inspect electromagnetic/thermal operator checks | [IH physics validation](../../validation_test/induction_heating/README.md#simulink-operator-physics-golden) |
+
+The manufactured thermal transient, field-transfer contracts and real
+electromagnetic operator check answer different questions. Use the validation
+case matching your quantity; their presence alone does not qualify a complete
+coupled application on a new geometry.
 
 ## Executed demonstrations
 

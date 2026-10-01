@@ -1,0 +1,33 @@
+{
+  "schema": "radia.selected_showcase.v1",
+  "case": "heating",
+  "generated_at_utc": "2026-10-01T04:13:40.102150+00:00",
+  "host": "Hibino",
+  "versions": {
+    "radia": "4.95.90"
+  },
+  "solver_sha256": "c9c802470288e08787876e844c7e792572a906a7e3ca407cfdfedeae6725533e",
+  "result": {
+    "cases": [
+      {
+        "frequency_hz": 10000,
+        "power_W": 1.9907067864733776,
+        "converged": true
+      },
+      {
+        "frequency_hz": 50000,
+        "power_W": 18.676803483753474,
+        "converged": true
+      },
+      {
+        "frequency_hz": 100000,
+        "power_W": 29.351172547154547,
+        "converged": true
+      }
+    ],
+    "checks": {
+      "positive_power_and_convergence": true
+    },
+    "scope": "Weak-coupled ESIM integrated workpiece power; spatial-loss accuracy and transient temperature are separate checks."
+  }
+}

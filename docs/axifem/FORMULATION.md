@@ -5,7 +5,7 @@ element formulation that `radia.axifem` implements.  Read this
 before reading the C++ source under `src/ext/axifem/`.  Companion doc
 [`AXIFEM.md`](AXIFEM.md) covers usage, API, and validation results.
 The executed P1/Q1/P2/Q2/P2-curved/Q2-curved proof artifact is
-[`AXIFEM_ELEMENT_EVIDENCE.ipynb`](AXIFEM_ELEMENT_EVIDENCE.ipynb).
+[`AXIFEM_ELEMENT_EVIDENCE.ipynb`](../../validation_test/axifem/AXIFEM_ELEMENT_EVIDENCE.ipynb).
 
 ## 1. Problem class
 
@@ -583,7 +583,7 @@ axifem Henrotte / Meeker formulation:
 - reduces the problem from 3-D to 2-D `(r, z)` without losing
   axisymmetric physics,
 - runs at FEMM-grade accuracy per DOF, with current evidence recorded in
-  [`AXIFEM_ELEMENT_EVIDENCE.ipynb`](AXIFEM_ELEMENT_EVIDENCE.ipynb) and
+  [`AXIFEM_ELEMENT_EVIDENCE.ipynb`](../../validation_test/axifem/AXIFEM_ELEMENT_EVIDENCE.ipynb) and
   [`validation_test/axifem/axifem_element_evidence.json`](../../validation_test/axifem/axifem_element_evidence.json).
 
 This is why `radia.axifem` is a critical module of the radia

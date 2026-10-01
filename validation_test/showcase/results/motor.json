@@ -1,0 +1,85 @@
+{
+  "schema": "radia.selected_showcase.v1",
+  "case": "motor",
+  "generated_at_utc": "2026-10-01T03:59:00.704610+00:00",
+  "host": "Hibino",
+  "python": "3.12.10",
+  "versions": {
+    "radia": "4.95.90",
+    "ngsolve": "6.2.2606",
+    "numpy": "2.4.3"
+  },
+  "driver_sha256": "bdf7378390a9b15748f2fcc9c940ba33bc920c1fc10cddf276bd68bc19864f27",
+  "helper": "docs/electric_machine/cogging_skew_demo.py",
+  "helper_sha256": "23bb602fb45587ea40a4ef3cb16f14fdfc05e76bffcb3231a4313a277b830571",
+  "threads": 2,
+  "result": {
+    "schema": "radia.validation.electric_machine.cogging_skew_demo.v1",
+    "generated_at_utc": "2026-10-01T03:59:00.358570+00:00",
+    "versions": {
+      "python": "3.12.10",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "numpy": "2.4.3",
+      "ngsolve": "6.2.2606",
+      "netgen": "6.2.2606",
+      "radia_mcp": "1.6.0"
+    },
+    "checks": {
+      "dominant_order_is_2": true,
+      "mean_fraction_lt_0p15": true,
+      "skew_matches_analytic": true
+    },
+    "theta_deg": [
+      0,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      210,
+      240,
+      270,
+      300,
+      330
+    ],
+    "torque_2d_per_depth": [
+      55041.36774066278,
+      10535787.788880961,
+      10503458.578561377,
+      -9617.052898520857,
+      -10490363.474038938,
+      -10458034.263719298,
+      55041.3677407557,
+      10535787.788881019,
+      10503458.578561367,
+      -9617.05289852068,
+      -10490363.474038923,
+      -10458034.263719292
+    ],
+    "dominant_order": 2,
+    "mean_fraction": 0.002155715156395203,
+    "peak_torque_Nm": 0.526789389444051,
+    "peak_torque_mNm": 526.7893894440509,
+    "skew_rows": [
+      {
+        "skew_deg": 30.0,
+        "amplitude_ratio": 0.954929658551372,
+        "predicted_ratio": 0.954929658551372,
+        "amplitude_per_depth": 11574541.894748252
+      },
+      {
+        "skew_deg": 90.0,
+        "amplitude_ratio": 0.6366197723675814,
+        "predicted_ratio": 0.6366197723675814,
+        "amplitude_per_depth": 7716361.263165502
+      },
+      {
+        "skew_deg": 180.0,
+        "amplitude_ratio": 1.216257567615575e-15,
+        "predicted_ratio": 3.8981718325193755e-17,
+        "amplitude_per_depth": 1.4742053558716388e-08
+      }
+    ]
+  }
+}

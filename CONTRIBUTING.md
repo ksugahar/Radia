@@ -92,17 +92,20 @@ rather than passing it. At the time of writing:
 outside the repository in `C:\temp`; tracked work enters only after promotion
 to a durable lane:
 
-- `tests/` for fast, deterministic bug and contract protection
-- `validation_test/` for numerical, performance, native and multi-machine
-  evidence with machine-readable result JSON
-- `docs/<topic>/*.ipynb` for executed, result-bearing public demonstrations.
+- `tests/` for small executable usage samples and fast, deterministic bug/contract protection
+- `validation_test/` for executable physics/application samples and numerical,
+  performance, native and multi-machine evidence with machine-readable result JSON
+- `docs/<topic>/*.ipynb` for feature introductions with executed, saved demonstrations.
+  Link the relevant executable samples in `tests/` and `validation_test/`.
   Saved notebook output is the record; no adjacent JSON or runtime gate is
   required
 - `src/` for reusable APIs and solver helpers
 
 Standalone PySide/PyQt panels and notebook workbenches are retired and are not
-a promotion target. The human production interface is the masked blocks in the
-single Radia Simulink library; the AI interface is Python/MCP.
+a promotion target. Operational workflows use MCP or human–AI collaboration
+through Cubit for CAD/mesh and the single Radia Simulink block library for
+application models. AI-driven Cubit runs headlessly, with artifact handoff to
+human work. Documentation introduces these capabilities and their scope.
 
 Historical references to `examples/` are migration blockers. Migrate the
 owning code/docs to one of the lanes above, then delete the stale reference.

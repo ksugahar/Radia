@@ -34,7 +34,7 @@ def test_axifem_element_evidence_json_covers_all_shipping_paths():
 
 def test_axifem_element_evidence_notebook_is_result_bearing():
     nb = json.loads(
-        (DOCS / "AXIFEM_ELEMENT_EVIDENCE.ipynb").read_text(encoding="utf-8")
+        (VALIDATION / "AXIFEM_ELEMENT_EVIDENCE.ipynb").read_text(encoding="utf-8")
     )
 
     radia_meta = nb["metadata"]["radia"]

@@ -35,7 +35,7 @@ custom `BilinearFormIntegrator`s).
 ### Result-bearing evidence
 
 The executed proof artifact is
-[`AXIFEM_ELEMENT_EVIDENCE.ipynb`](AXIFEM_ELEMENT_EVIDENCE.ipynb). Its saved
+[`AXIFEM_ELEMENT_EVIDENCE.ipynb`](../../validation_test/axifem/AXIFEM_ELEMENT_EVIDENCE.ipynb). Its saved
 outputs present the checked evidence stored under
 [`validation_test/axifem`](../../validation_test/axifem/). The validation
 record captures the `radia` runtime version, execution date, pytest output,

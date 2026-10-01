@@ -1,0 +1,39 @@
+{
+  "schema": "radia.showcase.campaign.v1",
+  "execution_host": "Hibino",
+  "recovered_archive_sha256": "d211ba5ae1de3af2e6966a25e78f125f224ce3a589a4d0ccb344a211349734c4",
+  "source_sha256": {
+    "validation_test/showcase/run_selected.py": "bdf7378390a9b15748f2fcc9c940ba33bc920c1fc10cddf276bd68bc19864f27",
+    "validation_test/showcase/run_physics.py": "d3065c110a4b7ad6d5454dc2d6b58cf678769e12cdec4c02b2f1befdd92baf30",
+    "validation_test/showcase/run_heating.py": "dd4c05f4ba7d244385bad207d3c26aaa740e31ae37ee8375efbee94b7cfe6df1",
+    "docs/complex_coil_geometry/coil_model.py": "f216f2495914c366cbde8b5022064abfeec9df30eaa204b4341bc07bc6efc823",
+    "docs/electric_machine/cogging_skew_demo.py": "23bb602fb45587ea40a4ef3cb16f14fdfc05e76bffcb3231a4313a277b830571",
+    "docs/stream_function/demo_sphere_fe_direct.py": "88532beb61d322d35011d7002ff37d324868396b78da332fa2d38ddec57737ef",
+    "docs/stream_function/demo_sf_to_peec_gx.py": "6ae2556bbabec152325e488921f37e302a4e2842654f9074d1f277b9d2305818",
+    "docs/maglev/demos/sphere/maglev_sphere_force.py": "bc382366653bc4667760d231652f78afc2f17ee0df9165b13126554d2c53f3eb",
+    "packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py": "da23fe32f2996b520ceac48db9de1d5cb2ebd954b0612881433ee03b832a0804",
+    "packages/radia-mcp/src/radia_mcp/radia_ngsolve/force.py": "628bfb86961ccd5cc742a9181d8bfdd2c2ca73523d07a478b13a2c8b90df0add",
+    "packages/radia-mcp/src/radia_mcp/radia_ngsolve/machine_scaling.py": "38deeabddb234412441dfab2c1475169f79436cfa753045f97702cfcad9ece8a"
+  },
+  "heating_extra_versions": {
+    "numpy": "2.5.3",
+    "scipy": "1.17.1",
+    "cadquery-ocp": "7.8.1.1.post1",
+    "vtk": "9.3.1"
+  },
+  "input_sha256": {
+    "em_sample_bh.txt": "7a0711748f130a636f19957ac6f2de2d00d32bf164c7c244d09aaae5af5222ee",
+    "ih_bem_sample_p1.vol": "2d4aa00153d7dd55b19e2100e9d51d2662c017fb47ee3af73f3cd54a9c7348ec",
+    "ih_bem_sample_p1.vol.json": "c658538771c46a4c78d39c9af0d754bab96442ab1148fc9c691813a97357fa80",
+    "ih_fem_kelvin_demo_coil.step": "1a316956fbc8f0e961b78eb1fb54b39378bced0437a71a1c055deca0240a1d0d"
+  },
+  "result_sha256": {
+    "complex_coil.json": "32715f00164b6619f3a16c9727c7bc50f0cbc0e284da20fc01d5f7580357e5d3",
+    "heating.json": "a8b5a93fbd07f8eed7c934cb7b001f0682d4d7ed765d1324aca7eb6870268789",
+    "lift.json": "a61c1dc8f2044ffa4445d60b9bf3ee75f2db26c339fc91f7d00849188368a541",
+    "motor.json": "86a2536b9a6f15c5ad30a3ae2d549d60394858961af0a2608361256d8ddf2dc2",
+    "particles.json": "cd60074acea0c80853c68afde2a651dd8ac62bff47fd3e3952988944b81c2088",
+    "winding.json": "4ff2f244a50c819d54044e111f0c91fa4303327823f6b382709ef9d64296d822"
+  },
+  "scope": "Six focused numerical reruns; historical study notebooks were retained, not all re-executed."
+}

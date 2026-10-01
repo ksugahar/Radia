@@ -1,6 +1,28 @@
-# Cubit Mesh Export Examples
+# Cubit: geometry, mesh and checked solver inputs
 
-Example scripts for the radia Cubit C++ plugin (`cubit_mesh_export.ccm`), organized by export format.
+Explore mesh export and validation capabilities of the independent
+`cubit-mesh-export` package. This page introduces saved demonstrations and
+connects them to executable validation samples.
+
+## Human–AI collaboration
+
+Humans work with geometry and mesh controls in Cubit; AI-driven operations run
+headlessly through the package's MCP/Python interface. Saved geometry, journals,
+mesh files and check reports provide the handoff. Named regions and boundaries
+connect the mesh to the physical model you define.
+
+Use the [owning package guide](../../packages/cubit-mesh-export/README.md) for
+installation and supported operations. Cubit's MCP server is distributed with
+that package, independently of `radia-mcp`. Continue with
+[Radia MCP](../../packages/radia-mcp/README.md) or the
+[Simulink library](../../matlab/README.md) for supported analysis workflows.
+
+For executable mesh cases and evidence, use
+[validation_test/cubit_mesh_export](../../validation_test/cubit_mesh_export/).
+Passing a mesh check establishes its declared mesh contract; physical material,
+source and boundary choices still belong to the analysis model.
+
+## Feature demonstrations
 
 Presentation notebook:
 [`docs/cubit_mesh_export/cubit_mesh_export_showcase.ipynb`](../../docs/cubit_mesh_export/cubit_mesh_export_showcase.ipynb)
@@ -93,4 +115,4 @@ export vtk "file.vtk" [order {1|2}] [dimension {2|3}] [overwrite]
 ## See Also
 
 - [src/cubit_plugin/](../../src/cubit_plugin/) - C++ plugin source
-- [tests/cubit/](../../tests/cubit/) - Automated tests (42/42 PASS)
+- [validation_test/cubit/](../../validation_test/cubit/) - Cubit validation cases; see each case's execution requirements and recorded evidence
