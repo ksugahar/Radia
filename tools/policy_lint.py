@@ -64,6 +64,7 @@ BRAND_CITATION_ALLOW = (
     "packages/radia-mcp/src/radia_mcp/presentation/talk_feedback.py",
     # this file, which has to spell the brand out to forbid it
     "tools/policy_lint.py",
+    "packages/radia-mcp/tools/policy_lint.py",
 )
 
 # Policy 4 allowlist: genuine LAPACK / HACApK column-major interop.

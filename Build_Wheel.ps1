@@ -169,24 +169,16 @@ if (-not $SkipBuild) {
         Set-Content -Path $WheelMetaPath.FullName -Value $WheelContent -NoNewline
     }
 
-    # Also fix RECORD file to remove entries for DLLs that were removed.
-    $RecordPath = Get-ChildItem -Path $TempDir -Filter "RECORD" -Recurse | Select-Object -First 1
-    if ($RecordPath -and $RemovedDLLs.Count -gt 0) {
-        $RemovedNames = @($RemovedDLLs | ForEach-Object { [regex]::Escape($_.Name) })
-        $RemovedPattern = '/(' + ($RemovedNames -join '|') + '),'
-        $RecordLines = Get-Content $RecordPath.FullName | Where-Object { $_ -notmatch $RemovedPattern }
-        Set-Content -Path $RecordPath.FullName -Value ($RecordLines -join "`n") -NoNewline
-    }
-
     # Remove old wheel and create new one with correct name
     Remove-Item $OrigWheel.FullName -Force
     $NewWheelName = "radia-$Version-$PlatformTag.whl"
     $NewWheelPath = Join-Path $DistDir $NewWheelName
 
-    # Repack as zip
-    $NewZipPath = Join-Path $env:TEMP "radia_wheel_new.zip"
-    Compress-Archive -Path (Join-Path $TempDir "*") -DestinationPath $NewZipPath -Force
-    Move-Item $NewZipPath $NewWheelPath -Force
+    # Repack with wheel so RECORD hashes and sizes reflect all edits/removals.
+    python -m wheel pack $TempDir --dest-dir $DistDir
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $NewWheelPath)) {
+        throw "Wheel repack failed; no artifact may be published."
+    }
 
     # Cleanup
     Remove-Item -Recurse -Force $TempDir
