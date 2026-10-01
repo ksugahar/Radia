@@ -4,6 +4,18 @@ All notable changes to `cubit-mesh-export` — the high-order curved
 mesh export package for Coreform Cubit (Netgen / GMSH / Nastran /
 VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
+## 2.1.4 - Netgen export refuses meshes outside every block
+
+- `export netgen` fails when no block holds a volume element.  Only block
+  elements are exported, so a volume meshed without `block 1 add volume all`
+  used to write a `.vol` with surface elements only and report success.
+- Every export warns, per element type, about tets, hexes, wedges and
+  pyramids that sit outside every block and are therefore not exported.
+- The toolbar's Netgen export prints the check-vol verdict (pass/fail,
+  element and point counts, order, warnings) to the Cubit console; it was
+  shown only in a dialog.
+- Curving diagnostics no longer label lengths as mm; they are in model
+  length units.
 ## 2.1.3 - Netgen 6.2.2607 native rebuild
 
 - Rebuild the optional Python curver against Netgen/NGSolve 6.2.2607.
