@@ -1829,24 +1829,19 @@ and energy-based line search. This is MUCH better than Picard iteration
 variable (H = H_s - grad(phi)). The energy density uses B(H), not H(B).
 
 ```python
-from ngsolve import BSpline
-import pandas as pd
+import numpy as np
+from radia.scalar_potential_solver import ScalarPotentialSolver, sample_bh_constitutive_response
 
-# Load B-H data (column 0 = H in A/m, column 1 = B in Tesla)
-df = pd.read_csv('BH.txt', sep='\\t')
-H_data = list(df.iloc[:, 0])
-B_data = list(df.iloc[:, 1])
-
-# B as function of H (for scalar potential formulation)
-bh_direct = BSpline(2, [0] + H_data, B_data)
-
-# Energy density: w(H) = integral_0^H B(H') dH'
-w_H = bh_direct.Integrate()
-
-# Compare with A-formulation (where H(B) is used):
-# bh_curve = BSpline(2, [0] + B_data, H_data)  # H(B)
-# energy_dens = bh_curve.Integrate()             # w*(B) = integral H(B')dB'
+bh_data = np.loadtxt('BH.txt')            # rows [H in A/m, B in T], H strictly increasing
+# The production law: monotone PCHIP B(H) through the magnetization, vacuum
+# slope beyond the last row, and the matching coenergy w(H) = int_0^H B dH'.
+response = sample_bh_constitutive_response(bh_data, np.linspace(0.0, 2.0e5, 401))
+# ... build `solver = ScalarPotentialSolver(...)` for the model, then
+# solver.solve_nonlinear_newton(bh_data) assembles SymbolicEnergy from this law.
 ```
+
+A hand-built `BSpline(2, [0] + H_data, B_data)` is not this law: it is not
+monotone in M between rows and evaluates to zero above its last knot.
 
 ### Formulation: Energy Minimization
 
@@ -1953,11 +1948,12 @@ B_cf = mu0 * H_cf  # air approximation; use B(H) for iron
 | Line search | Energy-based (guaranteed) | Under-relaxation (manual) |
 | Jacobian | Exact (auto-differentiated) | Approximate (secant slope) |
 | Remanence | Via energy functional | Needs polarization method |
-| Implementation | SymbolicEnergy + BSpline | Manual mu_gf update loop |
+| Implementation | SymbolicEnergy + tabulated law with a vacuum tail | Manual mu_gf update loop |
 
-**IMPORTANT**: For the scalar potential formulation, use `B(H)` BSpline
-(not `H(B)`) because H is the primary variable. For the A-formulation,
-use `H(B)` BSpline because B = curl(A) is the primary variable.
+**IMPORTANT**: For the scalar potential formulation the law is `B(H)` (H is the
+primary variable; Radia uses the monotone PCHIP of `radia.bh_law`). For the
+A-formulation it is `H(B)` because B = curl(A) is the primary variable (Radia's
+reduced-A Newton route uses an `H(B)` BSpline with a vacuum tail).
 
 ### Multi-Level Current Sweep
 
