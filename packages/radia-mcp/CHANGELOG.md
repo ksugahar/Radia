@@ -7,7 +7,7 @@ crystallized as its own package.
 
 ## [Unreleased]
 
-## [2.0.0] - 2026-10-01
+## [2.0.0] - 2026-10-02
 
 ### Removed
 
@@ -110,7 +110,8 @@ crystallized as its own package.
 - `matlab_optimize_build` rejects unknown spec and runner keys, non-boolean
   flags (`"false"` used to enable `parallel`) and non-integral counts
   (`n_trials: 2.7` used to become 2), and refuses grid / fixed parameter names
-  that MATLAB `jsondecode` would rename (`coil.turns`).
+  that MATLAB `jsondecode` would rename (`coil.turns`). An infinite trial count
+  is a spec error instead of an `OverflowError`.
 - Bibliography edits (`bibliography_canonicalize_keys`,
   `bibliography_normalize_journal_names`, `bibliography_check_surname_braces`
   with `fix=True`) only rewrite the canonical `references.bib`; a manuscript-local
@@ -121,6 +122,24 @@ crystallized as its own package.
 - `tools/policy_lint.py` also scans `docs/`, `skills/` and `.json/.tex/.txt`,
   and flags e-mail addresses, exported mail, solver-bridge harness names,
   non-public commercial-tool servers and `<tool>-derived` provenance.
+- `solve_eddy_current_harmonic_APhi(periodic=True)` raises when neither the
+  `dirichlet` faces nor the `dirichlet_bbbnd` point selector fixes a free H1
+  dof, e.g. a missing `GND` tag or a glued OCC vertex that no volume element
+  uses; such input used to leave the Phi gauge free without an error.
+- The `equation` extra requires `eqnedit64>=3.0.16` on Windows only.
+- Knowledge corrections: the 2D-parity AC-loss recipes keep the driven
+  conductor field (`+ Vc`, `+ Vc/r`); the PEEC HOIBC recipes use NGSolve
+  `CGSolver` with BDDC registered before assembly and the mean-curvature check
+  1/R (sphere), 1/(2R) (cylinder), sign-reversed for a hole, instead of APIs
+  Radia does not ship; the ESIM reproduction uses the shipped
+  `validation_test/esim_spatial/inputs` files and no longer calls ESIM work in
+  progress; the IH FEM-ESIM note uses the 3D Kelvin factor `(r'/R)^2`.
+- Manuscript checks give method-neutral advice; CLN-specific guidance and
+  support belong to the separate CLN-mcp project. Paper citations, the DtN
+  continued fraction and URN are retained.
+- The MATLAB MEX contract cites the existing Optuna 5 paired MATLAB/Python
+  performance result (`results_optuna50_paired_lab_20260908.json`) instead of a
+  file that was never produced.
 
 ### Added
 

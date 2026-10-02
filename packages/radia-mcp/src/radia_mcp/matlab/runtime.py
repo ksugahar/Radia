@@ -692,7 +692,7 @@ def matlab_radia_mex_contract(topic="all"):
             "optuna_differential_oracle_gate": "matlab_optuna_oracle_plan",
             "optuna_performance_gate": "matlab_optuna_benchmark_plan -> matlab_optuna_release_gate",
             "optuna_native_kernel_benchmark": "validation_test/optimization/results_matlab_optuna_mex_benchmark_20260806.json",
-            "optuna50_performance_benchmark": "validation_test/optimization/results_matlab_optuna50_performance_20260825.json",
+            "optuna50_performance_benchmark": "validation_test/optimization/results_optuna50_paired_lab_20260908.json",
             "runtime_probe": "radia.quickCheck()",
             "native_build": "pwsh -ExecutionPolicy Bypass -File .\\Build.ps1 -MatlabMexOnly -Verbose",
             "optuna_native_build": "pwsh -ExecutionPolicy Bypass -File .\\Build.ps1 -OptunaMexOnly",

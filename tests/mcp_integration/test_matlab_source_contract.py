@@ -250,8 +250,14 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
         "results_matlab_optuna_mex_benchmark_20260806.json"
     )
     assert contract["verified_contract"]["optuna50_performance_benchmark"].endswith(
-        "results_matlab_optuna50_performance_20260825.json"
+        "results_optuna50_paired_lab_20260908.json"
     )
+    root = Path(__file__).resolve().parents[2]
+    cited = [value for value in contract["verified_contract"].values()
+             if isinstance(value, str) and value.startswith("validation_test/")
+             and value.endswith(".json")]
+    assert cited
+    assert [path for path in cited if not (root / path).is_file()] == []
     assert contract["verified_contract"]["native_motor_family_artifact"].endswith(
         "native_motor_angle_family.json"
     )
