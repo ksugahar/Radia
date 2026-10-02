@@ -78,16 +78,21 @@ drift and never a QUAD blocker.
 
 Never stash, reset, clean, or rebase a shared worktree for a release. Run the
 controller from an independent clone (not a worktree of a shared checkout, whose
-diverged local `main` would fail the main-sync gate) detached at the release
-tag; `done` verifies that controller checkout as the release source. The LAB
-wheel needs no source tree. For 100号機's development venv, create one
+diverged local `main` would fail the main-sync gate). By default `done` verifies
+that controller as the release source, so it must sit at the release tag. When
+release tooling was repaired after the tag, keep the controller on current
+`main` and pass a separate exact-tag checkout with `--release-source`: the
+source must be tracked-clean at the tag commit, and the controller must be
+tracked-clean, descend from that commit, and declare the same Radia version.
+Neither side is retagged, and untracked tool copies are never substituted. The
+LAB wheel needs no source tree. For 100号機's development venv, create one
 tracked-clean release worktree containing the exact wheel's native payloads and
 `src/radia/release_native_payloads.json`, and name its 100-local view:
 
 ```powershell
 $env:RADIA_RELEASE_EDITABLE_REPO_100 = "W:\00_CAE\Radia\release-quad\<release>"
 python tools/release_quad.py all
-python tools/release_quad.py done --simulink-package <zip>
+python tools/release_quad.py done --simulink-package <zip> --release-source <exact-tag checkout>
 ```
 
 QUAD verifies exact SHA and tracked cleanliness before mutation. `done` is

@@ -10,9 +10,10 @@ Usage:
         Read-only: report current state and consistency. Use anytime.
 
     python tools/release_quad.py phase8 [--target lab|100|mdx1|mdx2|all]
-        Install the numerical Radia solver by the target's tier
-        (LAB/100 editable, mdx1/mdx2 PyPI). Never change radia-mcp or
-        cubit-mesh-export.
+        Install the numerical Radia solver by the target's tier: the published
+        wheel on LAB, mdx1, mdx2 and 100号機's machine-default release runtime,
+        and the release checkout editable in 100号機's development venv. Never
+        change radia-mcp or cubit-mesh-export.
 
     python tools/release_quad.py phase8e
         Upgrade mdx1 and mdx2 from PyPI. Refuses to run if pip index versions
@@ -36,17 +37,16 @@ Usage:
     python tools/release_quad.py all
         phase8 -> phase8e -> phase9 with all preconditions enforced.
 
-        When the canonical LAB worktree contains parallel WIP, set
-        RADIA_RELEASE_EDITABLE_REPO_LAB and RADIA_RELEASE_EDITABLE_REPO_100
-        to the LAB and 100-machine views of one clean NAS release worktree.
-        Both editable deployments then fail before install unless that
-        worktree is tracked-clean and matches the invoking release SHA.
+        RADIA_RELEASE_EDITABLE_REPO_100 names the 100-machine view of one
+        clean release worktree for the development venv; the editable deploy
+        fails before install unless it is tracked-clean at the release SHA.
 
-    python tools/release_quad.py done --simulink-package <zip>
-        Require both the normal release gate and the matching four-machine
-        Simulink candidate state. The active LAB/100号機 editable sources stay
-        unchanged so a verified release worktree cannot be replaced by an
-        older canonical WIP tree after the final gate.
+    python tools/release_quad.py done --simulink-package <zip> [--release-source <path>]
+        Require the normal release gate and the matching four-machine Simulink
+        candidate state. The release source is the controller (which must then
+        sit at the tag) or a separate exact-tag checkout; with the latter the
+        controller must be a tracked-clean descendant declaring the same
+        version. No runtime is changed.
 
     python tools/release_quad.py verify-editable
         Read-only: compare LAB and 100号機 editable pointers with the recorded
@@ -395,7 +395,7 @@ def _release_tag_commit(version: object) -> str | None:
 
 
 def _verify_head_release_tag() -> int:
-    """Require ``HEAD`` to be the peeled tag for the declared Radia version."""
+    """Require the declared version's ``v<version>`` tag to name the release commit."""
     version = _read_repo_versions()["radia"]
     head = _release_head()
     tag_commit = _release_tag_commit(version)
@@ -404,11 +404,11 @@ def _verify_head_release_tag() -> int:
         return 4
     if tag_commit != head:
         fail(
-            f"HEAD {head} is not the v{version} release commit {tag_commit}; "
-            "release_quad done must run on the exact tagged source"
+            f"release commit {head} is not the v{version} tag commit {tag_commit}; "
+            "release_quad done must verify the exact tagged source"
         )
         return 4
-    ok(f"HEAD is anchored at v{version} ({head[:12]})")
+    ok(f"release commit is anchored at v{version} ({head[:12]})")
     return 0
 
 
@@ -1205,15 +1205,16 @@ def _deploy_lab():
     return _deploy_pypi("102", "LAB")
 
 
+# Remote editable-deploy refusals, all before any install.  The guards write to
+# stderr and exit: Write-Error under ErrorActionPreference Stop would end the
+# script with exit 1 before the documented code.
+SOURCE_SHA_MISMATCH_EXIT = 41
+SOURCE_DIRTY_EXIT = 42
 DEV_VENV_MISSING_EXIT = 43
 
 
 def _dev_venv_guard_powershell(python_path):
-    """Exit DEV_VENV_MISSING_EXIT before any install when the venv is absent.
-
-    Plain stderr, not Write-Error: under ErrorActionPreference Stop that would
-    terminate with exit 1 before the documented code.
-    """
+    """Exit DEV_VENV_MISSING_EXIT before any install when the venv is absent."""
     literal = python_path.replace("'", "''")
     return (f"if (-not (Test-Path -LiteralPath '{literal}' -PathType Leaf)) {{\n"
             f"  [Console]::Error.WriteLine('Development venv interpreter is missing: {literal}')\n"
@@ -1229,15 +1230,15 @@ def _deploy_editable_remote(ssh_host, label, repo, python_path):
     python = "& '" + python_path.replace("'", "''") + "'"
     ps_block = f"""
 $ErrorActionPreference = 'Stop'
-{_dev_venv_guard_powershell(python_path)}$sourceHead = (& git -c "safe.directory={safe_repo}" -C "{repo}" rev-parse HEAD).Trim().ToLowerInvariant()
+{_dev_venv_guard_powershell(python_path)}$sourceHead = "$(& git -c "safe.directory={safe_repo}" -C "{repo}" rev-parse HEAD 2>$null)".Trim().ToLowerInvariant()
 if ($LASTEXITCODE -ne 0 -or $sourceHead -ne "{expected_sha}") {{
-  Write-Error "Release source SHA mismatch: expected {expected_sha}, got $sourceHead"
-  exit 41
+  [Console]::Error.WriteLine("Release source SHA mismatch: expected {expected_sha}, got $sourceHead")
+  exit {SOURCE_SHA_MISMATCH_EXIT}
 }}
-$sourceDirty = (& git -c "safe.directory={safe_repo}" -C "{repo}" status --porcelain --untracked-files=no) -join "`n"
+$sourceDirty = (& git -c "safe.directory={safe_repo}" -C "{repo}" status --porcelain --untracked-files=no 2>$null) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $sourceDirty) {{
-  Write-Error "Release source has tracked changes: $sourceDirty"
-  exit 42
+  [Console]::Error.WriteLine("Release source has tracked changes: $sourceDirty")
+  exit {SOURCE_DIRTY_EXIT}
 }}
 & {' '.join('"' + part.replace('"', '`"') + '"' for part in _solver_abi_probe_command(python_path))}
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
@@ -1660,11 +1661,53 @@ def _remote_100_editable_packages():
     return [("radia", root)]
 
 
+def _verify_release_controller(controller, release_sha, version):
+    """Accept a later tooling controller only on top of the exact release.
+
+    The controller may carry release-tool repairs made after the tag, so its
+    HEAD may differ from the release commit.  It must then be tracked-clean,
+    descend from the release commit, and declare the same Radia version that
+    the release commit declares; the release source itself is checked
+    separately by the strict exact-SHA gate.
+    """
+    safe = str(controller).replace("\\", "/")
+    git = [GIT_EXE, "-c", f"safe.directory={safe}", "-C", str(controller)]
+    head = run([*git, "rev-parse", "HEAD"], capture=True, check=False)
+    got = (head.stdout or "").strip().lower()
+    if head.returncode != 0 or len(got) != 40:
+        fail(f"release controller HEAD is unavailable: {controller}")
+        return 4
+    dirty = run([*git, "status", "--porcelain", "--untracked-files=no"],
+                capture=True, check=False)
+    if dirty.returncode != 0 or (dirty.stdout or "").strip():
+        fail("release controller has tracked changes: "
+             f"{(dirty.stdout or '').strip() or '<status unavailable>'}")
+        return 4
+    ancestry = run([*git, "merge-base", "--is-ancestor", release_sha, got],
+                   capture=True, check=False)
+    if ancestry.returncode != 0:
+        fail(f"release controller {got[:12]} does not descend from the release "
+             f"commit {release_sha[:12]}")
+        return 4
+    released = run([*git, "show", f"{release_sha}:pyproject.toml"], capture=True, check=False)
+    try:
+        declared = tomllib.loads(released.stdout or "")["project"]["version"]
+    except (tomllib.TOMLDecodeError, KeyError, TypeError):
+        declared = None
+    if released.returncode != 0 or declared != version:
+        fail(f"release controller declares radia {version}, but the release commit "
+             f"declares {declared or '<unreadable>'}")
+        return 4
+    ok(f"release controller {got[:10]} is clean and descends from v{version} "
+       f"({release_sha[:10]})")
+    return 0
+
+
 def _verify_local_release_source(repo, expected_sha):
-    """Fail before install unless the editable source is the exact clean SHA."""
+    """Fail unless the release source is the exact tracked-clean release SHA."""
     path = Path(repo)
     if not path.is_dir():
-        fail(f"LAB editable release source does not exist: {repo}")
+        fail(f"release source does not exist: {repo}")
         return 2
     safe_repo = repo.replace("\\", "/")
     head = run(
@@ -1675,7 +1718,7 @@ def _verify_local_release_source(repo, expected_sha):
     got_sha = (head.stdout or "").strip().lower()
     if head.returncode != 0 or got_sha != expected_sha.lower():
         fail(
-            "LAB editable release source SHA mismatch: "
+            "release source SHA mismatch: "
             f"expected {expected_sha}, got {got_sha or '<unavailable>'}"
         )
         return 4
@@ -1687,11 +1730,11 @@ def _verify_local_release_source(repo, expected_sha):
     tracked_changes = (dirty.stdout or "").strip()
     if dirty.returncode != 0 or tracked_changes:
         fail(
-            "LAB editable release source has tracked changes: "
+            "release source has tracked changes: "
             f"{tracked_changes or '<status unavailable>'}"
         )
         return 4
-    ok(f"LAB editable release source is exact and clean ({got_sha[:10]})")
+    ok(f"release source is exact and clean ({got_sha[:10]})")
     return 0
 
 
@@ -2028,9 +2071,15 @@ def _record_release_intent_remote(ssh_host, label, repo):
     return rc
 
 
-def _done_active_lab_source():
-    """Legacy helper name: verify the controller release tree, not LAB runtime."""
-    return str(REPO)
+def _done_release_source(args):
+    """The checkout `done` verifies as the exact release source.
+
+    By default that is the controller itself, which must then sit at the tag.
+    ``--release-source`` names a separate exact-tag checkout so a later,
+    repaired tooling controller can run `done`; LAB intent never selects it.
+    """
+    selected = getattr(args, "release_source", None)
+    return str(Path(selected).resolve()) if selected else str(REPO)
 
 
 def _repoint_argv(args):
@@ -2217,17 +2266,18 @@ RELEASE_CHECK_RUN = "radia-native-release-build"
 
 
 def cmd_ci_verify(args):
-    """Require every latest GitHub check-run for HEAD to be green.
+    """Require every latest GitHub check-run for the release-tag commit to be green.
 
-    Also require the release build itself to exist for this SHA. Without that,
-    tagging proceeds on a commit the release workflow has never seen, and the
-    isolated environment's missing dependencies surface only after the tag is
-    spent -- measured 4.95.86..4.95.89, four tags for four missing names.
+    The commit is the one the existing ``v<version>`` tag names, so this runs
+    after tagging; it fails while that tag is missing. It also requires the
+    release build itself to exist for this SHA, which the dispatched
+    'Radia Native Release' run provides before the tag is pushed -- measured
+    4.95.86..4.95.89, four tags spent on four missing names without it.
     """
 
     step("Phase 5.5: CI verify -- SHA-bound GitHub check-runs")
     head_sha = _release_head()
-    print(f"  HEAD = {head_sha[:8]}")
+    print(f"  release tag commit = {head_sha[:8]}")
     gh_ok, gh_msg = _check_github_hosted_workflows(
         head_sha, required_names=None, require_present=[RELEASE_CHECK_RUN],
         timeout_sec=3600
@@ -2242,7 +2292,7 @@ def cmd_ci_verify(args):
         return 4
 
     print("")
-    ok("CI is GREEN for this exact commit. Safe to create and push release tags.")
+    ok("CI is GREEN for the exact release-tag commit, including the native release check.")
     return 0
 
 
@@ -2289,10 +2339,16 @@ def cmd_done(args):
         fail("preflight failed — repo state not release-ready.")
         return rc
 
-    active_source = _done_active_lab_source()
-    rc = _verify_local_release_source(active_source, _release_head())
+    release_sha = _release_head()
+    release_source = _done_release_source(args)
+    if _norm_path(release_source) != _norm_path(str(REPO)):
+        rc = _verify_release_controller(REPO, release_sha, _radia_version())
+        if rc != 0:
+            fail("release controller is not a clean descendant of the release commit.")
+            return rc
+    rc = _verify_local_release_source(release_source, release_sha)
     if rc != 0:
-        fail("controller release source is not the exact clean release SHA.")
+        fail("release source is not the exact clean release SHA.")
         return rc
 
     rc = cmd_temp_shadows(argparse.Namespace(apply=False))
@@ -2716,7 +2772,8 @@ def main():
         "restore-editable",
         help="removed: no default development source; use repoint with a reason")
     sub.add_parser("ci-verify",
-                    help="Phase 5.5: SHA-bound CI-green gate (after push main, before tag)")
+                    help="Phase 5.5: CI-green gate for the commit the existing "
+                         "v<version> tag names (requires the tag)")
     sm = sub.add_parser("sync-main",
                         help="fetch -> twin-aware rebase -> preflight -> push")
     sm.add_argument("--no-push", action="store_true",
@@ -2733,6 +2790,12 @@ def main():
     done.add_argument(
         "--simulink-package",
         help="also require a matching four-machine Simulink candidate pass")
+    done.add_argument(
+        "--release-source",
+        help="separate exact-tag checkout to verify as the release source; the "
+             "controller running `done` must then be a tracked-clean descendant of "
+             "the release commit declaring the same version (default: the "
+             "controller itself, which must sit at the tag)")
 
     shadows = sub.add_parser("temp-shadows", help="verify retired Omega overrides on mdx1/mdx2/hibino")
     shadows.add_argument("--apply", action="store_true", help="remove only unused, non-linked known override trees")
