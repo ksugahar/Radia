@@ -172,75 +172,58 @@ def test_remote_verify_counts_unverified_and_drift(monkeypatch):
     assert report["drift"] == 1
 
 
-def test_done_reports_unverified_without_override_or_record(monkeypatch, capsys):
+@pytest.mark.parametrize("record,override", [
+    (False, False), (True, False), (False, True), (True, True)])
+@pytest.mark.parametrize("source_rc", [0, 4])
+def test_done_verifies_the_controller_source_whatever_lab_intent_says(
+        isolated_record, monkeypatch, record, override, source_rc):
+    # LAB holds a wheel, so its legacy editable record and release override no
+    # longer name the release source: `done` always verifies the controller
+    # checkout it runs from, and a stale controller stops it.
+    if record:
+        _record(isolated_record, "radia", "S:/Radia/release-quad/recorded/")
+    if override:
+        monkeypatch.setenv(release_quad.EDITABLE_REPO_LAB_ENV, "S:/Radia/release-quad/override/")
+    assert release_quad._done_active_lab_source() == str(release_quad.REPO)
     monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: 0)
+    monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
+    seen = []
+    monkeypatch.setattr(release_quad, "_verify_local_release_source",
+                        lambda repo, sha: seen.append((repo, sha)) or source_rc)
+    stop = AssertionError("stop after the source gate")
+
+    def later_gate(_args):
+        raise stop
+
+    monkeypatch.setattr(release_quad, "cmd_temp_shadows", later_gate)
+    if source_rc:
+        assert release_quad.cmd_done(SimpleNamespace(simulink_package=None)) == source_rc
+    else:
+        with pytest.raises(AssertionError) as raised:
+            release_quad.cmd_done(SimpleNamespace(simulink_package=None))
+        assert raised.value is stop
+    assert seen == [(str(release_quad.REPO), "a" * 40)]
+
+
+@pytest.mark.parametrize("rc", [0, 2, 3])
+def test_lab_deploy_delegates_to_the_wheel_route_and_propagates_failure(monkeypatch, rc):
+    """LAB takes the published wheel; it never installs or records an editable.
+
+    Phase 8 installs the numerical solver alone, so cubit-mesh-export and
+    radia-mcp are untouched and no LAB editable intent is written.
+    """
+    calls = []
+    monkeypatch.setenv(release_quad.EDITABLE_REPO_LAB_ENV, "S:/Radia/release-quad/x")
+    monkeypatch.setattr(release_quad, "_deploy_pypi",
+                        lambda host, label, **kw: calls.append((host, label, kw)) or rc)
 
     def must_not_run(*_args, **_kwargs):
-        raise AssertionError("no source can be verified before an expectation exists")
+        raise AssertionError("LAB wheel deployment must not touch an editable")
 
-    monkeypatch.setattr(release_quad, "_verify_local_release_source", must_not_run)
+    monkeypatch.setattr(release_quad, "_record_release_intent_lab", must_not_run)
     monkeypatch.setattr(release_quad, "_verify_lab_editable", must_not_run)
-    args = SimpleNamespace(simulink_package=None)
-    assert release_quad.cmd_done(args) == 5
-    out = capsys.readouterr().out
-    assert "UNVERIFIED" in out
-    assert "record-current" in out
-    assert "01_GitHub" not in out
-
-
-def test_done_verifies_the_recorded_source_when_no_override_is_set(isolated_record, monkeypatch):
-    _record(isolated_record, "radia", "S:/Radia/release-quad/recorded/")
-    monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: 0)
-    monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
-    seen = {}
-
-    def capture(repo, sha):
-        seen["repo"] = repo
-        return 4
-
-    monkeypatch.setattr(release_quad, "_verify_local_release_source", capture)
-    assert release_quad.cmd_done(SimpleNamespace(simulink_package=None)) == 4
-    assert seen["repo"] == "S:/Radia/release-quad/recorded"
-
-
-def test_done_prefers_the_release_override_over_the_record(isolated_record, monkeypatch):
-    _record(isolated_record, "radia", "S:/Radia/release-quad/recorded")
-    monkeypatch.setenv(release_quad.EDITABLE_REPO_LAB_ENV, "S:/Radia/release-quad/override/")
-    assert release_quad._done_active_lab_source() == "S:/Radia/release-quad/override"
-
-
-def test_lab_deploy_records_the_installed_source_after_pip_install(monkeypatch):
-    """The record is written after the install is verified, and only then.
-
-    Phase 8 installs the numerical solver alone. It does not stop a process and
-    does not uninstall cubit-mesh-export or radia-mcp, which release on their
-    own, so this asserts their absence as well as the ordering.
-    """
-    events = []
-    monkeypatch.setenv(release_quad.EDITABLE_REPO_LAB_ENV, "S:/Radia/release-quad/x")
-    monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
-    monkeypatch.setattr(release_quad, "_verify_local_release_source", lambda repo, sha: 0)
-    monkeypatch.setattr(release_quad, "_verify_lab_editable",
-                        lambda packages: events.append(("verify", packages)) or 0)
-
-    def fake_run(command, **kwargs):
-        events.append(" ".join(str(c) for c in command))
-        return subprocess.CompletedProcess(command, 0)
-
-    monkeypatch.setattr(release_quad, "run", fake_run)
-    monkeypatch.setattr(release_quad, "_record_release_intent_lab",
-                        lambda repo: events.append(("record", repo)) or 0)
-
-    assert release_quad._deploy_lab() == 0
-    commands = [e for e in events if isinstance(e, str)]
-    install = next(i for i, e in enumerate(events)
-                   if isinstance(e, str) and "pip install" in e)
-    verify = next(i for i, e in enumerate(events)
-                  if isinstance(e, tuple) and e[0] == "verify")
-    record = events.index(("record", "S:/Radia/release-quad/x"))
-    assert install < verify < record
-    assert not any("uninstall" in c for c in commands)
-    assert not any("cubit-mesh-export" in c or "radia-mcp" in c for c in commands)
+    assert release_quad._deploy_lab() == rc
+    assert calls == [("102", "LAB", {})]
 
 
 def test_lab_record_helper_adopts_only_solver_without_pip(monkeypatch):
