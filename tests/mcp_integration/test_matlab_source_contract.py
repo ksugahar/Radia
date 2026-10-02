@@ -253,18 +253,22 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
         "results_optuna50_paired_lab_20260908.json"
     )
     root = Path(__file__).resolve().parents[2]
-    cited = [value for value in contract["verified_contract"].values()
-             if isinstance(value, str) and value.startswith("validation_test/")
-             and value.endswith(".json")]
+    cited = [
+        value
+        for value in contract["verified_contract"].values()
+        if isinstance(value, str)
+        and value.startswith("validation_test/")
+        and value.endswith(".json")
+    ]
     assert cited
     assert [path for path in cited if not (root / path).is_file()] == []
     assert contract["verified_contract"]["native_motor_family_artifact"].endswith(
         "native_motor_angle_family.json"
     )
-    assert contract["verified_contract"][
-        "native_motor_family_artifact_status"].startswith("stale:")
-    assert "not re-measured" in contract["verified_contract"][
-        "optuna50_performance_benchmark_status"]
+    assert contract["verified_contract"]["native_motor_family_artifact_status"].startswith("stale:")
+    assert (
+        "not re-measured" in contract["verified_contract"]["optuna50_performance_benchmark_status"]
+    )
     assert "libiomp5md.dll" in contract["verified_contract"][
         "openmp_runtime_policy"
     ]
@@ -313,7 +317,7 @@ def test_optuna_simulink_contract_is_table_backed():
     assert "ObjectiveTable" in contract["tables"]
     assert "ConstraintTable" in contract["tables"]
     assert "SamplerStateTable" in contract["tables"]
-    assert contract["schema"].endswith("/v3")
+    assert contract["schema"].endswith("/v4")
     assert contract["upstream_oracle"]["ok"] is True
     assert contract["upstream_oracle"]["oracle_versions"]["optuna"] == "5.0.0"
     assert contract["native_acceleration"]["upstream_python_gp_python_per_trial"] is True
@@ -380,7 +384,13 @@ def test_optuna_simulink_contract_is_table_backed():
         "radia.simulink.buildMotorAngleFamilyModel"
     )
     assert "verified_tests" not in native_family
-    assert native_family["recorded_tests"] == 74
+    artifact = json.loads(
+        (Path(__file__).resolve().parents[2] / native_family["validation_artifact"]).read_text(
+            encoding="utf-8"
+        )
+    )
+    assert native_family["recorded_tests"] == artifact["test_count"]
+    assert artifact["passed_count"] == artifact["test_count"]
     assert native_family["evidence_status"].startswith("stale:")
     assert contract["reinforcement_learning_workflow"]
     topology = contract["cad_topology_optimization"]
