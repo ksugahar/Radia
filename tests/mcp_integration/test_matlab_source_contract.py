@@ -261,6 +261,10 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert contract["verified_contract"]["native_motor_family_artifact"].endswith(
         "native_motor_angle_family.json"
     )
+    assert contract["verified_contract"][
+        "native_motor_family_artifact_status"].startswith("stale:")
+    assert "not re-measured" in contract["verified_contract"][
+        "optuna50_performance_benchmark_status"]
     assert "libiomp5md.dll" in contract["verified_contract"][
         "openmp_runtime_policy"
     ]
@@ -375,7 +379,9 @@ def test_optuna_simulink_contract_is_table_backed():
     assert native_family["simulink_builder"] == (
         "radia.simulink.buildMotorAngleFamilyModel"
     )
-    assert native_family["verified_tests"] == 74
+    assert "verified_tests" not in native_family
+    assert native_family["recorded_tests"] == 74
+    assert native_family["evidence_status"].startswith("stale:")
     assert contract["reinforcement_learning_workflow"]
     topology = contract["cad_topology_optimization"]
     assert topology["sensitivity_policy"].startswith("No cell-wise finite differences")
