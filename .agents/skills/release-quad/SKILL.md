@@ -61,7 +61,7 @@ tests after checking available memory and active jobs; mdx CI takes priority.
 | Machine | Solver install tier | Solver release route |
 |---|---|---|
 | LAB | exact accepted Radia wheel | `phase8 --target lab` (wheel over SSH) |
-| 100号機 | dedicated editable development venv `W:\00_CAE\Radia\environments\development`; separate release runtime | `phase8 --target 100` (that venv's interpreter only) and source verification |
+| 100号機 | release runtime (machine-default Python): exact accepted Radia wheel; dedicated editable development venv `W:\00_CAE\Radia\environments\development` | `phase8 --target 100`: wheel into the release runtime, then editable into that venv only; `done`/`phase9` verify both separately |
 | mdx1 | exact accepted Radia wheel | `phase8e` |
 | mdx2 | exact accepted Radia wheel | `phase8e` |
 

@@ -1140,14 +1140,17 @@ def _solver_abi_probe_command(python_command="python"):
 def _verify_final_pip_checks() -> int:
     """Require clean shared Python dependency graphs after coordinated deploys."""
     lab = run([sys.executable, "-m", "pip", "check"], check=False)
-    remote_script = f"& {DEV_PYTHON_100_PS} -m pip check"
-    encoded = base64.b64encode(remote_script.encode("utf-16le")).decode("ascii")
-    machine100 = run(
-        ["ssh", SSH_100, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
-         "-EncodedCommand", encoded],
-        check=False,
-    )
-    if lab.returncode or machine100.returncode:
+    failed = lab.returncode != 0
+    # 100号機 has two runtimes: the development venv and the release default.
+    for remote_script in (f"& {DEV_PYTHON_100_PS} -m pip check", "python -m pip check"):
+        encoded = base64.b64encode(remote_script.encode("utf-16le")).decode("ascii")
+        machine100 = run(
+            ["ssh", SSH_100, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
+             "-EncodedCommand", encoded],
+            check=False,
+        )
+        failed = failed or machine100.returncode != 0
+    if failed:
         fail("pip check failed on LAB or 100; coordinated Radia/Cubit deployment is incomplete")
         return 4
     return 0
@@ -1155,12 +1158,26 @@ def _verify_final_pip_checks() -> int:
 
 def _verify_lab_wheel():
     """Verify LAB's installed solver wheel and every hashed RECORD payload."""
+    return _verify_wheel_runtime("102", "LAB")
+
+
+def _verify_100_release_wheel():
+    """Verify 100号機's machine-default release runtime holds the solver wheel.
+
+    The editable development venv is checked separately; neither stands in
+    for the other.
+    """
+    return _verify_wheel_runtime(SSH_100, "100号機 release runtime")
+
+
+def _verify_wheel_runtime(ssh_host, label):
+    """Verify the default Python on ``ssh_host`` holds the exact release wheel."""
     code = """import base64, hashlib, importlib.metadata as m, json, pathlib
 import radia
 version = VERSION_PLACEHOLDER
 d = m.distribution('radia')
 assert d.version == version and radia.__version__ == version, 'Radia version mismatch'
-assert not json.loads(d.read_text('direct_url.json') or '{}').get('dir_info', {}).get('editable', False), 'LAB must use a wheel'
+assert not json.loads(d.read_text('direct_url.json') or '{}').get('dir_info', {}).get('editable', False), 'LABEL_PLACEHOLDER must use a wheel'
 assert pathlib.Path(radia.__file__).resolve() == pathlib.Path(d.locate_file('radia/__init__.py')).resolve(), 'Shadowed Radia import'
 assert d.files, 'Missing wheel RECORD'
 checked = 0
@@ -1171,18 +1188,37 @@ for f in d.files:
         assert actual == f.hash.value, 'Wheel payload mismatch: ' + str(f)
         checked += 1
 assert checked, 'Empty wheel hash manifest'
-print('LAB wheel verified:', version, checked)
-""".replace("VERSION_PLACEHOLDER", repr(_radia_version()))
+print('LABEL_PLACEHOLDER wheel verified:', version, checked)
+""".replace("VERSION_PLACEHOLDER", repr(_radia_version())).replace("LABEL_PLACEHOLDER", label)
     encoded_code = base64.b64encode(code.encode('utf-8')).decode('ascii')
     script = f'python -c "import base64; exec(base64.b64decode(\'{encoded_code}\'))"; exit $LASTEXITCODE'
     encoded = base64.b64encode(script.encode('utf-16le')).decode('ascii')
-    result = run(['ssh', '102', 'pwsh', '-NoProfile', '-EncodedCommand', encoded], check=False)
-    return 0 if result.returncode == 0 else 4
+    result = run(['ssh', ssh_host, 'pwsh', '-NoProfile', '-EncodedCommand', encoded], check=False)
+    if result.returncode != 0:
+        fail(f"{label} does not hold the verified Radia {_radia_version()} wheel")
+        return 4
+    return 0
 
 
 def _deploy_lab():
     """Deploy the published solver wheel to LAB; never recreate an editable."""
     return _deploy_pypi("102", "LAB")
+
+
+DEV_VENV_MISSING_EXIT = 43
+
+
+def _dev_venv_guard_powershell(python_path):
+    """Exit DEV_VENV_MISSING_EXIT before any install when the venv is absent.
+
+    Plain stderr, not Write-Error: under ErrorActionPreference Stop that would
+    terminate with exit 1 before the documented code.
+    """
+    literal = python_path.replace("'", "''")
+    return (f"if (-not (Test-Path -LiteralPath '{literal}' -PathType Leaf)) {{\n"
+            f"  [Console]::Error.WriteLine('Development venv interpreter is missing: {literal}')\n"
+            f"  exit {DEV_VENV_MISSING_EXIT}\n"
+            "}\n")
 
 
 def _deploy_editable_remote(ssh_host, label, repo, python_path):
@@ -1193,11 +1229,7 @@ def _deploy_editable_remote(ssh_host, label, repo, python_path):
     python = "& '" + python_path.replace("'", "''") + "'"
     ps_block = f"""
 $ErrorActionPreference = 'Stop'
-if (-not (Test-Path -LiteralPath '{python_path.replace("'", "''")}' -PathType Leaf)) {{
-  Write-Error "Development venv interpreter is missing: {python_path}"
-  exit 43
-}}
-$sourceHead = (& git -c "safe.directory={safe_repo}" -C "{repo}" rev-parse HEAD).Trim().ToLowerInvariant()
+{_dev_venv_guard_powershell(python_path)}$sourceHead = (& git -c "safe.directory={safe_repo}" -C "{repo}" rev-parse HEAD).Trim().ToLowerInvariant()
 if ($LASTEXITCODE -ne 0 -or $sourceHead -ne "{expected_sha}") {{
   Write-Error "Release source SHA mismatch: expected {expected_sha}, got $sourceHead"
   exit 41
@@ -1282,6 +1314,15 @@ if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 
 
 def _deploy_100():
+    """Deploy both 100号機 runtimes: the release wheel, then the development editable.
+
+    The machine-default Python is the student-facing release runtime and takes
+    the published wheel, as LAB does; the dedicated development venv takes the
+    editable release checkout.  Each is verified on its own.
+    """
+    rc = _deploy_pypi(SSH_100, "100号機 release runtime")
+    if rc != 0:
+        return rc
     return _deploy_editable_remote(
         SSH_100, "100号機", _editable_repo_100(), DEV_PYTHON_100
     )
@@ -1540,6 +1581,7 @@ def cmd_phase9(args):
     # 100号機 keeps an editable release checkout.
     targets = [
         ("LAB", ["ssh", "102", "python", "-"], CROSS_MACHINE_PROBE),
+        ("100号機 release", ["ssh", SSH_100, "python", "-"], CROSS_MACHINE_PROBE),
         ("100号機", ["ssh", SSH_100, DEV_PYTHON_100_PS, "-"], CROSS_MACHINE_PROBE_LAB),
         ("mdx1", ["ssh", SSH_MDX1, "python", "-"], CROSS_MACHINE_PROBE),
         ("mdx2", ["ssh", SSH_MDX2, "python", "-"], CROSS_MACHINE_PROBE),
@@ -2264,6 +2306,7 @@ def cmd_done(args):
         return rc
 
     drift = _verify_lab_wheel()
+    drift += _verify_100_release_wheel()
     drift += _verify_100_editable()
     if drift > 0:
         fail(f"{drift} editable-tier check(s) drifted.  "
@@ -2308,8 +2351,8 @@ def cmd_done(args):
     suffix = (" The supplied Simulink candidate also passed all four MATLAB "
               "machines." if getattr(args, "simulink_package", None) else "")
     ok("DEFINITION OF DONE met. Release is consistent across LAB / 100号機 / "
-       "mdx1 / mdx2, LAB uses a verified wheel and 100号機 retains the verified editable "
-       "source, and the retired standalone PySide panel surface is absent. "
+       "mdx1 / mdx2, LAB and 100号機's release runtime use the verified wheel, "
+       "100号機's development venv retains the verified editable source, and the retired standalone PySide panel surface is absent. "
        "The recorded editable intent names this release source; move it later "
        "only with an explicit `release_quad repoint --reason`." + suffix)
     return 0

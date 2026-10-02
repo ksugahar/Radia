@@ -236,13 +236,15 @@ def test_done_checks_only_solver_editable_roots(monkeypatch, tmp_path):
     monkeypatch.setattr(release_quad, "_verify_local_release_source", lambda root, sha: calls.append((root, sha)) or 0)
     monkeypatch.setattr(release_quad, "_verify_head_release_tag", lambda: calls.append("tag") or 0)
     monkeypatch.setattr(release_quad, "_verify_lab_wheel", lambda: calls.append(dict(release_quad._lab_editable_packages())) or 0)
+    monkeypatch.setattr(release_quad, "_verify_100_release_wheel", lambda: calls.append("100-release") or 0)
     monkeypatch.setattr(release_quad, "_verify_100_editable", lambda: calls.append(dict(release_quad._remote_100_editable_packages())) or 0)
     monkeypatch.setattr(release_quad, "cmd_phase9", lambda a: 4)
     assert release_quad.cmd_done(Namespace(simulink_package=None)) == 4
     assert calls[0] == (str(release_quad.REPO), "c" * 40)
     assert calls[1] == "tag"
     assert calls[2] == {"radia": release_quad._editable_repo_lab()}
-    assert calls[3] == {"radia": release_quad._editable_repo_100()}
+    assert calls[3] == "100-release"
+    assert calls[4] == {"radia": release_quad._editable_repo_100()}
 
 
 
@@ -256,6 +258,7 @@ def test_done_requires_simulink_candidate_for_5_1_and_newer(monkeypatch, tmp_pat
     monkeypatch.setattr(release_quad, "cmd_temp_shadows", lambda _a: 0)
     monkeypatch.setattr(release_quad, "_verify_head_release_tag", lambda: 0)
     monkeypatch.setattr(release_quad, "_verify_lab_wheel", lambda: 0)
+    monkeypatch.setattr(release_quad, "_verify_100_release_wheel", lambda: 0)
     monkeypatch.setattr(release_quad, "_verify_100_editable", lambda: 0)
     monkeypatch.setattr(release_quad, "cmd_phase9", lambda _a: 0)
     monkeypatch.setattr(release_quad, "_run_retired_standalone_pyside_guard", lambda: 0)
@@ -278,8 +281,9 @@ def test_done_pip_check_requires_both_editable_hosts(monkeypatch, local_rc, remo
     monkeypatch.setattr(release_quad, "run", fake_run)
     assert release_quad._verify_final_pip_checks() == expected
     assert calls[0][-2:] == ["pip", "check"]
-    remote = base64.b64decode(calls[1][-1]).decode("utf-16le")
-    assert remote == f"& '{release_quad.DEV_PYTHON_100}' -m pip check"
+    remote = [base64.b64decode(call[-1]).decode("utf-16le") for call in calls[1:]]
+    # Both 100号機 runtimes: the development venv and the release default.
+    assert remote == [f"& '{release_quad.DEV_PYTHON_100}' -m pip check", "python -m pip check"]
 
 
 def test_100_editable_tooling_uses_the_dedicated_development_venv(monkeypatch):
@@ -298,12 +302,42 @@ def test_100_editable_tooling_uses_the_dedicated_development_venv(monkeypatch):
     release_quad._remote_editable_intent("mdx1", ["--json", "verify"])
     assert commands[0][:3] == ["ssh", "100", release_quad.DEV_PYTHON_100_PS]
     assert commands[1][:3] == ["ssh", "mdx1", "python"]
+
+
+@pytest.mark.parametrize("wheel_rc", [0, 2, 3])
+def test_100_deploy_updates_release_wheel_then_development_editable(monkeypatch, wheel_rc):
+    # The machine-default Python is the student-facing release runtime (wheel);
+    # the development venv holds the editable. A failed wheel stops both.
     called = []
+    monkeypatch.setattr(release_quad, "_deploy_pypi",
+                        lambda host, label, **kw: called.append(("wheel", host, label, kw)) or wheel_rc)
     monkeypatch.setattr(release_quad, "_deploy_editable_remote",
-                        lambda *args: called.append(args) or 0)
+                        lambda *args: called.append(("editable", *args)) or 0)
     monkeypatch.setattr(release_quad, "_editable_repo_100", lambda: "W:/release")
-    assert release_quad._deploy_100() == 0
-    assert called == [("100", "100号機", "W:/release", release_quad.DEV_PYTHON_100)]
+    assert release_quad._deploy_100() == wheel_rc
+    assert called[0] == ("wheel", "100", "100号機 release runtime", {})
+    if wheel_rc:
+        assert len(called) == 1
+    else:
+        assert called[1] == ("editable", "100", "100号機", "W:/release",
+                             release_quad.DEV_PYTHON_100)
+
+
+@pytest.mark.skipif(shutil.which("pwsh") is None, reason="needs PowerShell 7 to execute the guard")
+def test_missing_development_venv_exits_43_before_any_install(monkeypatch, tmp_path):
+    # Execute the real PowerShell branch with a guaranteed-absent interpreter.
+    absent = str(tmp_path / "absent venv" / "Scripts" / "python.exe")
+    captured = {}
+    monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
+    monkeypatch.setattr(release_quad, "run", lambda command, **_kw: captured.setdefault(
+        "command", command) and subprocess.CompletedProcess(command, 1))
+    assert release_quad._deploy_editable_remote("100", "100", str(tmp_path), absent) == 3
+    result = subprocess.run(
+        ["pwsh", "-NoProfile", "-NonInteractive", "-EncodedCommand", captured["command"][-1]],
+        capture_output=True, text=True, timeout=60)
+    assert result.returncode == release_quad.DEV_VENV_MISSING_EXIT == 43
+    assert "Development venv interpreter is missing" in result.stderr
+    assert "rev-parse" not in result.stdout + result.stderr
 
 
 
@@ -513,6 +547,8 @@ def test_done_keeps_exact_verified_editables_after_all_gates(monkeypatch, tmp_pa
         lambda: calls.append("tag") or 0,
     )
     monkeypatch.setattr(release_quad, "_verify_lab_wheel", lambda *_args: calls.append("lab") or 0)
+    monkeypatch.setattr(release_quad, "_verify_100_release_wheel",
+                        lambda *_args: calls.append("100-release") or 0)
     monkeypatch.setattr(release_quad, "_verify_100_editable", lambda *_args: calls.append("100") or 0)
     monkeypatch.setattr(release_quad, "cmd_phase9", lambda _args: calls.append("phase9") or 0)
     monkeypatch.setattr(
@@ -531,7 +567,8 @@ def test_done_keeps_exact_verified_editables_after_all_gates(monkeypatch, tmp_pa
     args = type("Args", (), {"simulink_package": "candidate.zip"})()
     assert release_quad.cmd_done(args) == 0
     assert calls == [
-        "preflight", "source", "shadows", "tag", "lab", "100", "phase9", "guard", "main",
+        "preflight", "source", "shadows", "tag", "lab", "100-release", "100", "phase9",
+        "guard", "main",
         ("simulink", "candidate.zip"), "pip-check"
     ]
 
@@ -552,6 +589,7 @@ def test_done_stops_before_machine_checks_when_active_source_is_stale(monkeypatc
         raise AssertionError("machine checks must not run from a stale source")
 
     monkeypatch.setattr(release_quad, "_verify_lab_wheel", unexpected_machine_check)
+    monkeypatch.setattr(release_quad, "_verify_100_release_wheel", unexpected_machine_check)
     monkeypatch.setattr(release_quad, "_verify_100_editable", unexpected_machine_check)
 
     args = type("Args", (), {"simulink_package": None})()
@@ -707,15 +745,22 @@ def test_explicit_editable_root_does_not_resolve_controller_version_tag(monkeypa
     assert getattr(release_quad, "_editable_repo_" + host)() == "C:/release-quad/v5.1.0-ccccccccc"
 
 
+@pytest.mark.parametrize("verifier,host,label", [
+    ("_verify_lab_wheel", "102", "LAB"),
+    ("_verify_100_release_wheel", "100", "100号機 release runtime"),
+])
 @pytest.mark.parametrize("rc,expected", [(0, 0), (1, 4)])
-def test_lab_wheel_verifier_uses_remote_record_gate(monkeypatch, rc, expected):
+def test_wheel_verifiers_use_remote_record_gate(monkeypatch, verifier, host, label, rc, expected):
     calls = []
     monkeypatch.setattr(release_quad, "_radia_version", lambda: "5.1.0")
     monkeypatch.setattr(release_quad, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, rc))
-    assert release_quad._verify_lab_wheel() == expected
-    assert calls[0][:2] == ["ssh", "102"]
+    assert getattr(release_quad, verifier)() == expected
+    assert calls[0][:2] == ["ssh", host]
     script = base64.b64decode(calls[0][-1]).decode("utf-16le")
+    # The release runtime is the machine-default interpreter, not a venv.
+    assert script.startswith('python -c "import base64')
     payload = script.split("b64decode('", 1)[1].split("'", 1)[0]
     code = base64.b64decode(payload).decode()
     assert "d.files" in code and "actual == f.hash.value" in code
-    assert "Shadowed Radia import" in code and "LAB must use a wheel" in code
+    assert "Shadowed Radia import" in code and f"{label} must use a wheel" in code
+    assert "'5.1.0'" in code
