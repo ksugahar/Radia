@@ -101,8 +101,8 @@ SIBC + hole approach.
 ## Recipe 4: Per-panel curvature SIBC correction (Mitzner check)
 
 Symbolic version of the per-panel local curvature SIBC (lab 2026-04-12).
-Use this to verify the numerical `R_local` extractor in
-`_compute_panel_local_radii`.
+Use this to verify a numerical per-element curvature, such as the projected
+Weingarten trace of the PEEC HOIBC recipe 6.
 
 ```mathematica
 (* Mitzner curvature-corrected Z_s for a sphere of radius R *)

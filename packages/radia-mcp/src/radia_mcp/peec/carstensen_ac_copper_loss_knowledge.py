@@ -558,7 +558,8 @@ averaged per layer.
 ### Stage-2: Compute per-layer R_AC + P_AC via Carstensen
 
 ```python
-from radia.panels.calc_carstensen_loss import carstensen_R_AC, carstensen_P_loss
+# carstensen_R_AC / carstensen_P_loss: defined in the "python_recipe" topic of
+# peec_carstensen_ac_loss; Radia ships no module with these functions.
 
 # Winding parameters (per slot, per phase)
 m_layers = 8                 # 8 layers of conductors
