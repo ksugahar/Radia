@@ -1695,7 +1695,9 @@ Q = 0.5 * sigma * InnerProduct(E, Conj(E)).real  # from EM solve
    ```
 3. **Add** Kelvin exterior sphere (replaces `air` Dirichlet BC):
    ```python
-   # Kelvin: nu' = nu0 * (r'/a)^4 in exterior sphere (3D)
+   # Kelvin: nu' = nu0 * (r'/R)^2 in exterior sphere (3D HCurl A;
+   # radia.kelvin_source.kelvin_nu_factor_3d_cf). (r'/R)^4 is only the
+   # 2D cylindrical nu_zz slot, never the 3D sphere.
    # Periodic BC: inner sphere <-> outer sphere
    ```
 4. **Compute** H_t from SIBC relation (NOT from curl(A)):
