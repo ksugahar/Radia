@@ -732,7 +732,7 @@ def matlab_optuna_simulink_contract():
 
     upstream = matlab_optuna_compatibility_contract()
     return {
-        "schema": "radia-mcp.matlab-optuna-simulink/v3",
+        "schema": "radia-mcp.matlab-optuna-simulink/v4",
         "status": "ready",
         "package": "radia.optuna",
         "distribution": "radia-optuna",
@@ -820,7 +820,7 @@ def matlab_optuna_simulink_contract():
                 "interpolation": "periodic linear interpolation over one mechanical-angle period",
                 "torque": "0.5*x'*Q*x + x'*R*u + 0.5*u'*S*u",
                 "validation_artifact": "validation_test/radia_mcp/artifacts/annular_motor_dual_lane_v1/native_motor_angle_family.json",
-                "recorded_tests": 74,
+                "recorded_tests": 87,
                 "evidence_status": "stale: recorded 2026-09-15 before the native HCurl and TEAM 28 MATLAB tests were renamed to their Foster/Lift forms; it still names the retired tests and was not re-run for this release. Regenerate it with native_motor_family_gate before relying on it.",
             },
             "sibc": "SIBC termination must be rationalized before state-space export; the current numeric bridge records this boundary explicitly.",

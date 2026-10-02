@@ -141,8 +141,10 @@ crystallized as its own package.
   performance result (`results_optuna50_paired_lab_20260908.json`) instead of a
   file that was never produced, and states that it was recorded on 2026-09-08
   and not re-measured. The native motor angle-family artifact is reported as
-  stale (it predates the Foster/Lift test renames) with `recorded_tests` in
-  place of a current `verified_tests` count.
+  stale (it predates the Foster/Lift test renames) with `recorded_tests` (87,
+  the artifact's own count) in place of a current `verified_tests` count;
+  `matlab_optuna_simulink_contract` reports schema
+  `radia-mcp.matlab-optuna-simulink/v4` for that field change.
 - `radia_ngsolve` SparseSolv knowledge describes the current ICCG contract:
   scaled-system recursive-residual stop and the separate `true_residual`,
   defaults `tol=1e-8`, `maxiter=0` (2n), `shift=1.0` with automatic search,
