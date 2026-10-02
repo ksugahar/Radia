@@ -30,21 +30,21 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 CALC = REPO / "src" / "radia" / "panels" / "calc_inductance.py"
-SAMPLES = REPO / "src" / "radia" / "panels" / "samples"
+INPUTS = REPO / "validation_test" / "esim_spatial" / "inputs"
 
 FREQS_HZ = [10000, 20000, 50000, 100000, 200000, 500000]
 CURRENTS_A = [1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0]
 
 CMD_BASE = [
     sys.executable, str(CALC),
-    "--coil-step", str(SAMPLES / "ih_fem_kelvin_demo_coil.step"),
+    "--coil-step", str(INPUTS / "ih_fem_kelvin_demo_coil.step"),
     "--coil-solver", "peec",
-    "--vol", str(SAMPLES / "ih_bem_sample_p1.vol"),
+    "--vol", str(INPUTS / "ih_bem_sample_p1.vol"),
     "--wp-label", "sibc",
     "--sigma", "2e6", "--mu-r", "100", "--half-thickness", "0.005",
     "--coil-sigma", "5.8e7",
     "--impedance-model", "esim",
-    "--bh-file", str(SAMPLES / "em_sample_bh.txt"),
+    "--bh-file", str(INPUTS / "em_sample_bh.txt"),
     "--esim-max-iter", "30", "--esim-tol", "1e-3",
     "--esim-relax", "0.5",
     "--esim-anderson-m", "5",     # safeguarded Anderson
