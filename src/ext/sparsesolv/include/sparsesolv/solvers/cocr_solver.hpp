@@ -73,7 +73,6 @@ protected:
         auto& p = this->p_;       // search direction
         auto& q = this->Ap_;      // A*p (reuse Ap_)
         Scalar* x = this->x_;
-        const auto& config = this->config_;
 
         // rt = M^{-1} * r  (initial preconditioned residual)
         this->apply_preconditioner();
@@ -92,8 +91,10 @@ protected:
         const auto* A_colidx = this->A_->col_idx();
         const auto* A_vals = this->A_->values();
 
-        // Main iteration loop
-        for (int iter = 0; iter < config.max_iterations; ++iter) {
+        using Step = typename IterativeSolver<Scalar>::Step;
+        const int limit = this->iteration_limit_;
+
+        for (int iter = 1; iter <= limit; ++iter) {
             // qt = M^{-1} * q  (preconditioner apply)
             if (this->precond_) {
                 this->precond_->apply(q.data(), qt_.data(), n);
@@ -104,13 +105,9 @@ protected:
             // mu = qt^T * q  (unconjugated)
             Scalar mu = unconjugated_dot(qt_.data(), q.data(), n);
 
-            // Breakdown check
-            if (std::abs(mu) < constants::BREAKDOWN_THRESHOLD) {
-                double norm_r = this->compute_norm(r.data(), n);
-                if (this->check_convergence(norm_r, iter)) {
-                    return this->build_result(true, iter + 1, norm_r);
-                }
-                return this->build_result(false, iter, norm_r);
+            // Breakdown: the current iterate has already been tested
+            if (!(std::abs(mu) > 0.0) || !std::isfinite(std::abs(mu))) {
+                return this->build_result(false, iter - 1);
             }
 
             Scalar alpha = rho / mu;
@@ -127,15 +124,9 @@ protected:
             });
             double norm_r = std::sqrt(norm_r_sq);
 
-            // Check convergence
-            if (this->check_convergence(norm_r, iter)) {
-                return this->build_result(true, iter + 1, norm_r);
-            }
-
-            // Check divergence
-            if (this->is_diverging()) {
-                return this->build_result(false, iter + 1, norm_r);
-            }
+            const Step step = this->check_convergence(norm_r, iter);
+            if (step == Step::Converged) return this->build_result(true, iter);
+            if (step == Step::Stop) return this->build_result(false, iter);
 
             // Fused: t = A * rt AND rho_new = rt^T * t
             Scalar rho_new = parallel_reduce_sum<Scalar>(n, [&](index_t i) -> Scalar {
@@ -147,8 +138,8 @@ protected:
             });
 
             // Breakdown check
-            if (std::abs(rho) < constants::BREAKDOWN_THRESHOLD) {
-                return this->build_result(false, iter + 1, norm_r);
+            if (!(std::abs(rho) > 0.0) || !std::isfinite(std::abs(rho))) {
+                return this->build_result(false, iter);
             }
 
             Scalar beta = rho_new / rho;
@@ -162,9 +153,7 @@ protected:
             });
         }
 
-        // Max iterations reached
-        double final_norm = this->compute_norm(r.data(), n);
-        return this->build_result(false, config.max_iterations, final_norm);
+        return this->build_result(false, limit);
     }
 
 private:

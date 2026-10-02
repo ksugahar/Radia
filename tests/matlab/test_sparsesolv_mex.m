@@ -107,6 +107,146 @@ if ~isempty(path)
 end
 end
 
+function [space, form, a, cleanup] = iccgSystem(t, complexCase)
+% H1 order-2 Dirichlet Laplace system matching sparsesolv_python_reference.py.
+mesh = radia.ngsolve.Mesh.create(t.TestData.ref.mesh);
+space = radia.ngsolve.FESpace.create(mesh,"h1",2,Dirichlet=".*",Complex=complexCase);
+if complexCase
+    weight = radia.ngsolve.CoefficientFunction.constant(1+0.5i);
+    form = radia.ngsolve.BilinearForm.createFromCoefficient(space,"stiffness",weight);
+else
+    weight = [];
+    form = radia.ngsolve.BilinearForm.create(space,"stiffness");
+end
+a = form.matrix();
+cleanup = onCleanup(@() cellfun(@delete, {a, form, space, weight, mesh}));
+end
+
+function options = iccgOptions(name)
+switch name
+    case "default", options = {};
+    case "fixed_unscaled", options = {'Shift',1.2,'AutoShift',false,'DiagonalScaling',false};
+    case "iteration_limit", options = {'MaxIterations',4};
+    case "strict_stagnation", options = {'DivergenceThreshold',1.0,'DivergenceCount',0};
+    case "abmc", options = {'UseABMC',true};
+    otherwise, error('unknown ICCG case %s', name);
+end
+end
+
+function testICCGPythonParity(t)
+% The MEX entry runs the same C++ ICCG as the Python module; results agree to
+% thread-order rounding, with the same option meaning and result fields.
+cases = t.TestData.ref.iccg;
+for i = 1:numel(cases)
+    c = cases(i);
+    fprintf('Checking ICCG %s (complex=%d)\n', c.name, c.complex);
+    [space, ~, a, cleanup] = iccgSystem(t, logical(c.complex)); %#ok<ASGLU>
+    rhs = a.vector();
+    rhs.setValues(unpack(c.rhs, logical(c.complex)));
+    opts = iccgOptions(string(c.name));
+    [x, info] = radia.sparsesolv.ICCG(a, rhs, opts{:}, SaveResidualHistory=true);
+    verifyEqual(t, info.converged, logical(c.converged));
+    verifyLessThanOrEqual(t, abs(info.iterations - c.iterations), 1);
+    verifyEqual(t, info.actual_shift, c.actual_shift, AbsTol=1e-12);
+    verifyEqual(t, numel(info.residual_history), info.iterations + 1);
+    verifyEqual(t, info.residual_history(1), c.residual_history(1), RelTol=1e-12);
+    k = min(numel(info.residual_history), numel(c.residual_history));
+    verifyEqual(t, info.residual_history(1:min(k,5)), c.residual_history(1:min(k,5)), RelTol=1e-8);
+    ref = unpack(c.solution, logical(c.complex));
+    verifyLessThan(t, norm(x.values() - ref) / max(norm(ref), realmin), 1e-6);
+    % true_residual is the original free-DOF residual of the returned x
+    free = logical(radia.internal.callMex('ngsolve.fespace.free_dofs', space.nativeHandle()));
+    A = sparse(a);
+    r = rhs.values() - A * x.values();
+    verifyEqual(t, info.true_residual, norm(r(free)) / norm(rhs.values()), RelTol=1e-6, AbsTol=1e-14);
+    verifyEqual(t, info.final_residual, info.residual_history(info.best_iteration + 1), RelTol=0);
+    delete(x); delete(rhs); clear cleanup
+end
+end
+
+function testICCGContractAndLifecycle(t)
+[~, ~, a, cleanup] = iccgSystem(t, false); %#ok<ASGLU>
+rhs = a.vector();
+rhs.setValues(cos(0.3 * (1:rhs.Size)'));
+before = radia.apiInfo();
+[x, info] = radia.sparsesolv.ICCG(a, rhs);
+verifyTrue(t, info.converged);
+verifyEqual(t, info.best_iteration, info.iterations);
+verifyEmpty(t, info.residual_history);  % default SaveResidualHistory=false, as in Python
+% an initial guess that already solves the system returns before the IC factor
+[x2, info2] = radia.sparsesolv.ICCG(a, rhs, InitialGuess=x, Tolerance=1e-6);
+verifyTrue(t, info2.converged);
+verifyEqual(t, info2.iterations, 0);
+verifyEqual(t, info2.actual_shift, 0);
+verifyEqual(t, x2.values(), x.values());
+% an exactly zero right-hand side returns x = 0
+zero = a.vector(); zero.setZero();
+[x0, info0] = radia.sparsesolv.ICCG(a, zero, InitialGuess=x);
+verifyTrue(t, info0.converged);
+verifyEqual(t, info0.iterations, 0);
+verifyEqual(t, x0.values(), zeros(rhs.Size, 1));
+% the iteration limit returns the best iterate, and history has iterations + 1 entries
+[x4, info4] = radia.sparsesolv.ICCG(a, rhs, MaxIterations=2, SaveResidualHistory=true);
+verifyFalse(t, info4.converged);
+verifyEqual(t, info4.iterations, 2);
+verifyEqual(t, info4.final_residual, min(info4.residual_history));
+% option and input validation fail loudly
+verifyError(t, @() radia.sparsesolv.ICCG(a, rhs, Shift=0.5), 'MATLAB:validators:mustBeGreaterThanOrEqual');
+% Direct native calls request both outputs so they reach option validation,
+% not the arity check; the complete struct is the positive control.
+good = struct('tolerance',1e-8,'max_iterations',0,'shift',1,'auto_shift',true, ...
+    'diagonal_scaling',true,'save_best_result',true,'save_residual_history',false, ...
+    'divergence_check',true,'divergence_threshold',10,'divergence_count',10, ...
+    'use_abmc',false,'abmc_block_size',4,'abmc_num_colors',4,'abmc_reorder_spmv',false, ...
+    'abmc_use_rcm',false);
+[hc, infoc] = rawIccg(a.nativeHandle(), rhs.nativeHandle(), uint64(0), good);
+verifyTrue(t, infoc.converged);
+radia.internal.callMex('ngsolve.vector.destroy', hc);
+verifyError(t, @() rawIccg(a.nativeHandle(), rhs.nativeHandle(), uint64(0), ...
+    rmfield(good, 'divergence_count')), 'radia:mex:Exception');          % missing option
+withExtra = good; withExtra.conjugate = true;
+verifyError(t, @() rawIccg(a.nativeHandle(), rhs.nativeHandle(), uint64(0), withExtra), ...
+    'radia:mex:Exception');                                              % unknown option
+negative = good; negative.max_iterations = -1;
+verifyError(t, @() rawIccg(a.nativeHandle(), rhs.nativeHandle(), uint64(0), negative), ...
+    'radia:mex:Exception');                                              % invalid value
+lowShift = good; lowShift.shift = 0.5;
+verifyError(t, @() rawIccg(a.nativeHandle(), rhs.nativeHandle(), uint64(0), lowShift), ...
+    'radia:mex:Exception');                                              % native shift check
+verifyError(t, @() radia.internal.callMex('sparsesolv.iccg', a.nativeHandle(), ...
+    rhs.nativeHandle(), uint64(0), good), 'radia:mex:Exception');        % one output
+[otherSpace, ~, other, otherCleanup] = iccgSystem(t, true); %#ok<ASGLU>
+otherRhs = other.vector();
+verifyError(t, @() rawIccg(a.nativeHandle(), otherRhs.nativeHandle(), uint64(0), good), ...
+    'radia:mex:Exception');                                              % complex rhs, real matrix
+short = radia.ngsolve.Vector.fromNativeHandle( ...
+    radia.internal.callMex('ngsolve.matrix.vector', a.nativeHandle()));
+staleRhs = short.nativeHandle();
+delete(short);
+verifyError(t, @() rawIccg(a.nativeHandle(), staleRhs, uint64(0), good), ...
+    'radia:mex:Exception');                                              % stale rhs handle
+verifyError(t, @() rawIccg(a.nativeHandle(), rhs.nativeHandle(), staleRhs, good), ...
+    'radia:mex:Exception');                                              % stale initial guess
+delete(otherRhs); clear otherCleanup
+nanRhs = a.vector(); nanRhs.setValues(nan(rhs.Size, 1));
+verifyError(t, @() radia.sparsesolv.ICCG(a, nanRhs), 'radia:mex:Exception');
+% the solution vector keeps its matrix alive; every returned handle is released
+values = x.values();
+delete(a);
+verifyEqual(t, x.values(), values);
+stale = x.nativeHandle();
+delete(nanRhs); delete(zero); delete(x0); delete(x4); delete(x2); delete(x);
+verifyError(t, @() radia.internal.callMex('ngsolve.vector.info', stale), 'radia:mex:Exception');
+after = radia.apiInfo();
+verifyEqual(t, after.handle_count, before.handle_count - 1);  % only the deleted matrix
+delete(rhs);
+clear cleanup
+end
+
+function [h, info] = rawIccg(varargin)
+[h, info] = radia.internal.callMex('sparsesolv.iccg', varargin{:});
+end
+
 function testRejectWrongSpace(t)
 mesh = radia.ngsolve.Mesh.create(t.TestData.ref.mesh);
 cleanup = onCleanup(@() delete(mesh));

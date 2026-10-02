@@ -37,13 +37,20 @@ class SparseSolvResult:
     """Result of a SparseSolv iterative solve."""
 
     converged: bool
-    """Whether the solver converged within tolerance."""
+    """Whether the recursive relative residual fell below tol."""
     iterations: int
     """Number of iterations performed."""
+    best_iteration: int
+    """Iteration of the returned iterate (0 = initial guess)."""
     final_residual: float
-    """Final relative residual (or best residual if save_best_result enabled)."""
+    """Recursive relative residual of the returned iterate (scaled system when
+    diagonal_scaling is on)."""
+    true_residual: float
+    """||b - A x|| / ||b|| of the returned x on the original (free-DOF) system."""
+    actual_shift: float
+    """IC shift used (0 when no IC factor was applied)."""
     residual_history: list[float]
-    """Residual at each iteration (empty unless save_residual_history enabled)."""
+    """[initial, iteration 1, ...] (empty unless save_residual_history enabled)."""
 
 # =============================================================================
 # IC Preconditioner types
@@ -95,29 +102,29 @@ class SparseSolvSolverD(BaseMatrix):
     method: str
     """Solver method: ``"ICCG"``, ``"CG"``, or ``"COCR"``."""
     tol: float
-    """Convergence tolerance (relative residual)."""
+    """Stop when the recursive relative residual < tol (default: 1e-8)."""
     maxiter: int
-    """Maximum iterations."""
+    """Iteration limit; 0 means 2*n (default: 0)."""
     shift: float
-    """IC shift parameter."""
+    """IC shift >= 1; start value of the auto-shift search (default: 1.0)."""
     auto_shift: bool
-    """Auto-increase shift on IC breakdown (default: False)."""
+    """Raise the shift by 0.01 while a pivot has Re(d) < 1e-6|a_ii| (limit 5, then error) (default: True)."""
     diagonal_scaling: bool
-    """Diagonal scaling for improved conditioning (default: False)."""
+    """Solve the scaled system S A S (default: True)."""
     save_best_result: bool
-    """Track and return the best iterate found (default: True)."""
+    """Return the best iterate, initial guess included (default: True)."""
     save_residual_history: bool
     """Record residual at each iteration (default: False)."""
     printrates: bool
     """Print convergence info to stdout (default: False)."""
     conjugate: bool
-    """Use conjugated inner product for Hermitian systems (default: False)."""
+    """Conjugated inner product for Hermitian systems; CG only (default: False)."""
     divergence_check: bool
-    """Enable stagnation-based divergence detection (default: True)."""
+    """Enable the stagnation stop (default: True)."""
     divergence_threshold: float
-    """Threshold for divergence detection (default: 1.0)."""
+    """A residual below best*threshold resets the counter (default: 10.0)."""
     divergence_count: int
-    """Iterations before declaring divergence (default: 50)."""
+    """Stop when the counter exceeds this value (default: 10)."""
     use_abmc: bool
     """Enable ABMC ordering for parallel triangular solves (default: False)."""
     abmc_block_size: int
@@ -154,9 +161,9 @@ class SparseSolvSolverC(BaseMatrix):
     maxiter: int
     shift: float
     auto_shift: bool
-    """Auto-increase shift on IC breakdown (default: False)."""
+    """See SparseSolvSolverD.auto_shift (default: True)."""
     diagonal_scaling: bool
-    """Diagonal scaling for improved conditioning (default: False)."""
+    """See SparseSolvSolverD.diagonal_scaling (default: True)."""
     save_best_result: bool
     save_residual_history: bool
     printrates: bool
@@ -210,9 +217,9 @@ def SparseSolvSolver(
     mat: BaseMatrix,
     method: str = "ICCG",
     freedofs: BitArray | None = None,
-    tol: float = 1e-10,
-    maxiter: int = 1000,
-    shift: float = 1.05,
+    tol: float = 1e-8,
+    maxiter: int = 0,
+    shift: float = 1.0,
     save_best_result: bool = True,
     save_residual_history: bool = False,
     printrates: bool = False,
@@ -222,6 +229,11 @@ def SparseSolvSolver(
     abmc_num_colors: int = 4,
     abmc_reorder_spmv: bool = False,
     abmc_use_rcm: bool = False,
+    auto_shift: bool = True,
+    diagonal_scaling: bool = True,
+    divergence_check: bool = True,
+    divergence_threshold: float = 10.0,
+    divergence_count: int = 10,
 ) -> SparseSolvSolverD | SparseSolvSolverC:
     """Iterative solver (ICCG / CG / COCR).
 
@@ -231,13 +243,13 @@ def SparseSolvSolver(
     Auto-dispatches to real/complex based on ``mat.IsComplex()``.
 
     Args:
-        mat: SPD sparse matrix (real or complex).
+        mat: SPD sparse matrix (real or complex), full (non-symmetric) storage.
         method: ``"ICCG"``, ``"CG"``, or ``"COCR"``.
         freedofs: Free DOFs.
-        tol: Convergence tolerance (default: 1e-10).
-        maxiter: Maximum iterations (default: 1000).
-        shift: IC shift parameter (default: 1.05).
-        save_best_result: Track and return best iterate (default: True).
+        tol: Stop when the recursive relative residual < tol (default: 1e-8).
+        maxiter: Iteration limit, 0 means 2*n (default: 0).
+        shift: IC shift >= 1, auto-shift start value (default: 1.0).
+        save_best_result: Return best iterate incl. initial guess (default: True).
         save_residual_history: Record residual per iteration (default: False).
         printrates: Print convergence info to stdout (default: False).
         conjugate: Conjugated inner product for Hermitian systems (default: False).
@@ -246,6 +258,11 @@ def SparseSolvSolver(
         abmc_num_colors: Target ABMC colors (default: 4).
         abmc_reorder_spmv: Reorder SpMV in ABMC space (default: False).
         abmc_use_rcm: Use RCM ordering (default: False).
+        auto_shift: Auto IC shift search (default: True).
+        diagonal_scaling: Solve the scaled system S A S (default: True).
+        divergence_check: Stagnation stop (default: True).
+        divergence_threshold: Counter reset factor (default: 10.0).
+        divergence_count: Stop when the counter exceeds it (default: 10).
     """
     ...
 
@@ -463,7 +480,7 @@ def ClosedCoilCurrentPhi(mesh: object, materials: list[int], current_A: float, o
     """A-phi DC current of a closed conductor with one thick cut (conductor-only, native).
 
     Used by radia.meshed_current.solve_closed_coil_current_phi. ``inverse`` is
-    "iccg" (IC(0)-CG to 1e-12, fails loudly) or an NGSolve inverse type. Returns
+    "iccg" (IC(0)-CG on the scaled system to 1e-12, fails loudly) or an NGSolve inverse type. Returns
     ``elements``, ``density`` (n, 3), ``vertices``, ``phi``, the cut statistics,
     ``relative_weak_divergence``, ``cut_face_flux_A`` and ``timing``.
     """

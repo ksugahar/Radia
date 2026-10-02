@@ -65,7 +65,7 @@
       "classification": "python-fallback",
       "backend_contract": "in-process-python",
       "matlab": ["matlab/+radia/+python/sparsesolv.m"],
-      "notes": "Compiled public module, not discoverable by a .py-only inventory. Native AMS (real/complex, coordinate-based 3D HCurl order 1), IC and COCR operate on retained NGSolve Matrix handles. Native AMS currently exposes cycle/smoothing only; Update, detailed solver telemetry, custom gradients, AMG, GMRES and SparseSolvSolver options remain explicitly available through the named Python batch entry. Python objects and MEX handles cannot be interchanged. This is partial native coverage, not full native parity."
+      "notes": "Compiled public module, not discoverable by a .py-only inventory. Native AMS (real/complex, coordinate-based 3D HCurl order 1), IC, COCR and the ICCG solve (radia.sparsesolv.ICCG: the full SparseSolvSolver ICCG option and result contract, real and complex) operate on retained NGSolve Matrix handles. Native AMS currently exposes cycle/smoothing only; Update, custom gradients, AMG, GMRES and the CG/COCR methods of SparseSolvSolver remain explicitly available through the named Python batch entry. Python objects and MEX handles cannot be interchanged. This is partial native coverage, not full native parity."
     },
     {
       "id": "core-pybind-api",
@@ -658,9 +658,9 @@
     {
       "python": "sparsesolv_ngsolve.pyd",
       "classification": "native-mex",
-      "matlab": "matlab/+radia/+sparsesolv/AMS.m; matlab/+radia/+sparsesolv/IC.m; matlab/+radia/+sparsesolv/COCR.m",
+      "matlab": "matlab/+radia/+sparsesolv/AMS.m; matlab/+radia/+sparsesolv/IC.m; matlab/+radia/+sparsesolv/COCR.m; matlab/+radia/+sparsesolv/ICCG.m",
       "status": "focused-native-commands",
-      "native_commands": ["sparsesolv.ams", "sparsesolv.ic", "sparsesolv.cocr"],
+      "native_commands": ["sparsesolv.ams", "sparsesolv.ic", "sparsesolv.cocr", "sparsesolv.iccg"],
       "fallback": "matlab/+radia/+python/sparsesolv.m"
     },
     {

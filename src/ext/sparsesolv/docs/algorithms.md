@@ -138,38 +138,54 @@ A ~ L * D * L^T
 d_i = alpha * a_ii - Sigma_{k<i} l_ik^2 * d_k^{-1}
 ```
 
-ここでalphaはシフトパラメータ（デフォルト: 1.05）。
-
-- alpha = 1.0: 標準IC(0)。不定値行列では破綻する可能性あり
-- alpha = 1.05: デフォルト。やや安定性が高い
-- alpha = 1.1〜1.2: 困難な問題向け
+ここでalphaはシフトパラメータ（alpha ≥ 1、ソルバーの既定は1.0で自動探索、
+単独の `ICPreconditioner` の既定は1.05固定）。シフトは Re(a_ii) > 0 の行の対角にだけ掛け、
+それ以外の行は a_ii のまま分解する。零または非有限のピボットはエラーとする。
 
 ### 2.3 自動シフト
 
 半正定値行列（curl-curl問題）では、対角成分が過小となりIC分解が破綻する場合がある。
-自動シフトはこれを自動検出し、シフトを増加させて分解をやり直す:
+自動シフトはこれを検出し、シフトを一定刻みで増やして分解を最初からやり直す:
 
 ```cpp
 // ic_preconditioner.hpp: compute_ic_factorization()
-if (abs_s < config_.min_diagonal_threshold && abs_orig > 0.0) {
-    shift += increment;     // シフトを増加
-    increment *= 2;         // 指数バックオフ
-    restart = true;          // 分解をやり直す
+if (pivot_too_small(orig_diag, s)) {          // Re(d) < 1e-6 * |a_ii|, Re(a_ii) > 0
+    if (shift < config_.max_shift_value) {    // 5.0
+        shift += config_.shift_increment;     // +0.01
+        restart = true;
+        break;
+    }
+    throw_shift_limit(i, shift);              // 上限でも閾値未満ならエラー
 }
 ```
 
+ABMC経路は色ごとの並列分解の後に同じ判定を行う。
+
 ### 2.4 対角スケーリング
 
-行列の条件数を改善するために対角スケーリングを適用可能:
+ソルバー（`solve_iccg` 等）は既定でスケーリング後の系を解く:
 
 ```
-scaling[i] = 1 / sqrt(|A[i,i]|)
-A_scaled[i,j] = scaling[i] * A[i,j] * scaling[j]
+s_i = 1 / sqrt(|A[i,i]|)        (A[i,i] = 0 の行は s_i = 1 / max_{j<i} |A[i,j] s_j|)
+(S A S) y = S b,  y0 = S^{-1} x0,  x = S y
 ```
 
-実装: `ICPreconditioner::compute_scaling_factors()`, `apply_scaling_to_L()`
+収束判定はスケーリング後の系の漸化式残差 `‖r'‖/‖Sb‖ < tol` で行い、
+元の系の残差 `‖b−Ax‖/‖b‖` は `true_residual` として返す。
+単独の `ICPreconditioner` の `diagonal_scaling` は前処理内部だけのスケーリングである。
 
-### 2.5 三角ソルブの並列化
+実装: `detail::solve_scaled()`（`sparsesolv.hpp`）、`ICPreconditioner::compute_scaling_factors()`
+
+### 2.5 反復の停止と返す解
+
+- b は max|b_i| に近い2のべき乗で割ってから解く（相対残差は不変、ノルムのアンダーフロー・オーバーフローを避ける）。
+- 初期推定値は反復0で、最良解の候補に含まれる。`‖r0‖/‖b‖ < tol` なら IC 分解を作らずに返す。b が厳密に零なら x = 0。
+- 破綻判定は `p·Ap`（COCR では `μ`, `ρ`）が厳密に零または非有限のときだけで、絶対閾値は使わない。
+- 各反復: 残差が最良値未満なら最良解を更新して停滞カウンタを0、最良値×`divergence_threshold` 未満ならカウンタを0、
+  それ以外はカウンタを1増やす。カウンタが `divergence_count` を超えるか残差が非有限なら停止。
+- `save_best_result`（既定）では収束・停止・反復上限のいずれでも最良の反復解を返す。
+
+### 2.6 三角ソルブの並列化
 
 三角ソルブの適用（前進代入と後退代入）は本質的に逐次処理であるが、
 データ依存性の解析により部分的に並列化できる。

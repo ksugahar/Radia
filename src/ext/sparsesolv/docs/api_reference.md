@@ -77,29 +77,37 @@ gfu.vec.data = inv * f.vec
 
 ```python
 solver = SparseSolvSolver(mat, method="ICCG", freedofs=None,
-                           tol=1e-10, maxiter=1000, shift=1.05,
+                           tol=1e-8, maxiter=0, shift=1.0,
                            save_best_result=True,
                            save_residual_history=False,
                            printrates=False, conjugate=False,
                            use_abmc=False, abmc_block_size=4,
                            abmc_num_colors=4, abmc_reorder_spmv=False,
-                           abmc_use_rcm=False)
+                           abmc_use_rcm=False,
+                           auto_shift=True, diagonal_scaling=True,
+                           divergence_check=True, divergence_threshold=10.0,
+                           divergence_count=10)
 ```
 
 ### パラメータ
 
 | パラメータ | 型 | デフォルト | 説明 |
 |-----------|------|---------|-------------|
-| `mat` | `SparseMatrix` | - | SPD行列 |
-| `method` | `str` | `"ICCG"` | `"ICCG"`, `"CG"`, `"COCR"` |
+| `mat` | `SparseMatrix` | - | SPD行列（非対称格納。対称格納の行列は拒否） |
+| `method` | `str` | `"ICCG"` | `"ICCG"`, `"CG"`, `"COCR"`。それ以外は構築時に `ValueError` |
 | `freedofs` | `BitArray` | `None` | 自由度 |
-| `tol` | `float` | `1e-10` | 収束判定閾値 |
-| `maxiter` | `int` | `1000` | 最大反復回数 |
-| `shift` | `float` | `1.05` | IC分解のシフト量（ICCG用） |
-| `save_best_result` | `bool` | `True` | 最良解の追跡 |
-| `save_residual_history` | `bool` | `False` | 残差履歴の記録 |
+| `tol` | `float` | `1e-8` | 漸化式残差 `‖r‖/‖b‖ < tol` で停止（厳密な <）。`diagonal_scaling` 有効時はスケール後の系で判定。正の値のみ |
+| `maxiter` | `int` | `0` | 反復上限。0 は 2n。負値は `ValueError` |
+| `shift` | `float` | `1.0` | IC対角シフト α ≥ 1（Re(a_ii)>0 の行に α·a_ii）。`auto_shift` 時は探索の初期値 |
+| `save_best_result` | `bool` | `True` | 残差最小の反復解（初期推定値を含む）を返す。False は最終反復解 |
+| `save_residual_history` | `bool` | `False` | 残差履歴 `[初期, 反復1, ...]` の記録 |
 | `printrates` | `bool` | `False` | 収束情報の出力 |
-| `conjugate` | `bool` | `False` | 共役内積（エルミート系用） |
+| `conjugate` | `bool` | `False` | 共役内積（エルミート系用、CGのみ。ICCG/COCRでは `ValueError`） |
+| `auto_shift` | `bool` | `True` | ピボットが Re(d) < 1e-6·\|a_ii\| のとき shift を +0.01 して分解をやり直す（shift < 5 の間）。上限でも閾値未満ならエラー |
+| `diagonal_scaling` | `bool` | `True` | S = diag(1/√\|a_ii\|) で (SAS)y = Sb を解き x = Sy。a_ii = 0 の行は s_i = 1/max_{j<i}\|a_ij s_j\| |
+| `divergence_check` | `bool` | `True` | 停滞による停止 |
+| `divergence_threshold` | `float` | `10.0` | 残差が 最良値×この値 未満なら停滞カウンタを0に戻す |
+| `divergence_count` | `int` | `10` | カウンタがこの値を**超えたら**停止（count+1 回の不良反復） |
 
 ### ABMC関連パラメータ
 
@@ -115,12 +123,10 @@ solver = SparseSolvSolver(mat, method="ICCG", freedofs=None,
 
 | プロパティ | 型 | 説明 |
 |----------|------|-------------|
-| `auto_shift` | `bool` | IC分解の自動シフト調整 |
-| `diagonal_scaling` | `bool` | 対角スケーリング |
-| `divergence_check` | `bool` | 停滞検出時の早期終了 |
-| `divergence_threshold` | `float` | 発散検出の閾値 |
-| `divergence_count` | `int` | 発散と判定するまでの連続不良反復回数 |
+| `auto_shift`, `diagonal_scaling`, `divergence_check`, `divergence_threshold`, `divergence_count` | - | コンストラクタ引数と同じ |
 | `last_result` | `SparseSolvResult` | 直近の求解結果 |
+
+`SparseSolvResult` は `converged`, `iterations`, `best_iteration`（返した反復解の番号、0 は初期推定値）, `final_residual`（返した反復解の漸化式相対残差）, `true_residual`（元の系の `‖b−Ax‖/‖b‖`、b が厳密に零なら `‖Ax‖`）, `actual_shift`（使用した IC シフト、IC 分解を作らなかった場合は 0）, `residual_history` を持つ。オプションと行列（スケーリング係数を含む）を検査した後、右辺が厳密に零なら x = 0 を、初期推定値が既に `tol` を満たせばその値を、IC 分解を作らずに返す。右辺の大きさは結果に影響しない（b を2のべき乗で正規化してから解く）。右辺または初期推定値に NaN・無限大が含まれれば `ValueError`。
 
 ### メソッド
 
