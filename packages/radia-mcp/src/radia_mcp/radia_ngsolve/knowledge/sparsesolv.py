@@ -140,38 +140,54 @@ Factory function that auto-detects real/complex from mat.IsComplex().
 ```python
 solver = SparseSolvSolver(
     mat,                          # NGSolve SparseMatrix (required)
-    method="ICCG",                # "ICCG", "SGSMRTR", "CG", "COCR"
+    method="ICCG",                # "ICCG", "CG" or "COCR" (others raise ValueError)
     freedofs=None,                # BitArray for Dirichlet BCs (optional)
-    tol=1e-10,                    # Relative convergence tolerance
-    maxiter=1000,                 # Maximum iterations
-    shift=1.05,                   # IC preconditioner shift parameter
-    save_best_result=True,        # Track best solution during iteration
-    save_residual_history=False,  # Record residual at each iteration
+    tol=1e-8,                     # stop when ||r||/||b|| < tol (recursive residual)
+    maxiter=0,                    # iteration limit; 0 means 2*n
+    shift=1.0,                    # IC shift alpha >= 1; start value of the auto search
+    save_best_result=True,        # return the best iterate (initial guess included)
+    save_residual_history=False,  # record [initial, iteration 1, ...]
     printrates=False,             # Print convergence info
-    conjugate=False,              # True for Hermitian, False for complex-symmetric
+    conjugate=False,              # Hermitian products; CG only (ICCG/COCR raise)
     use_abmc=False,               # Enable ABMC ordering for parallel triangular solves
     abmc_block_size=4,            # Rows per block in ABMC aggregation
     abmc_num_colors=4,            # Target number of colors for ABMC coloring
     abmc_use_rcm=False,           # RCM bandwidth reduction before ABMC
+    auto_shift=True,              # shift += 0.01 while a pivot Re(d) < 1e-6|a_ii| (limit 5)
+    diagonal_scaling=True,        # solve (S A S) y = S b, x = S y, S = diag(1/sqrt|a_ii|)
+    divergence_check=True,        # stagnation stop
+    divergence_threshold=10.0,    # a residual below best*threshold resets the counter
+    divergence_count=10,          # stop when the counter exceeds this value
 )
 ```
+
+Stopping criterion vs true residual: the solve stops on the *recursive*
+relative residual of the system it iterates on, which with
+`diagonal_scaling=True` is the scaled system S A S.  `result.final_residual`
+is that value for the returned iterate; `result.true_residual` is
+`||b - A x|| / ||b||` recomputed on the original free-DOF system and can
+differ from it.  Check `true_residual` when a downstream gate is defined on
+the original equations.  Non-convergence is reported in `result.converged`,
+not raised; invalid options, non-finite input and IC breakdown raise.  An
+exactly zero right-hand side returns x = 0, and an initial guess that already
+meets `tol` returns without iterating.
 
 ### Properties (read/write)
 
 | Property              | Type  | Default  | Description                              |
 |-----------------------|-------|----------|------------------------------------------|
 | method                | str   | "ICCG"   | Solver method                            |
-| tol                   | float | 1e-10    | Relative tolerance                       |
-| maxiter               | int   | 1000     | Maximum iterations                       |
-| shift                 | float | 1.05     | IC shift parameter                       |
-| save_best_result      | bool  | True     | Track best solution                      |
+| tol                   | float | 1e-8     | Recursive relative residual target       |
+| maxiter               | int   | 0        | Iteration limit (0 = 2*n)                |
+| shift                 | float | 1.0      | IC shift (>= 1), auto-search start       |
+| save_best_result      | bool  | True     | Return best iterate (x0 included)        |
 | save_residual_history | bool  | False    | Record residual history                  |
-| auto_shift            | bool  | False    | Auto-adjust for semi-definite systems    |
-| diagonal_scaling      | bool  | False    | Enable 1/sqrt(A[i,i]) scaling            |
-| divergence_check      | bool  | False    | Stagnation-based early termination       |
-| divergence_threshold  | float | 1000.0   | Stagnation detection multiplier          |
-| conjugate             | bool  | False    | Conjugated inner product (Hermitian)     |
-| divergence_count      | int   | 100      | Bad iterations before stopping           |
+| auto_shift            | bool  | True     | +0.01 steps up to shift 5, then error    |
+| diagonal_scaling      | bool  | True     | Solve the scaled system S A S            |
+| divergence_check      | bool  | True     | Stagnation stop                          |
+| divergence_threshold  | float | 10.0     | Counter reset below best*threshold       |
+| conjugate             | bool  | False    | Hermitian products (CG only)             |
+| divergence_count      | int   | 10       | Stop when the counter exceeds it         |
 | printrates            | bool  | False    | Print convergence info                   |
 | use_abmc              | bool  | False    | ABMC ordering for parallel tri. solves   |
 | abmc_block_size       | int   | 4        | Rows per block in ABMC aggregation       |
@@ -321,7 +337,7 @@ gfu = GridFunction(fes)
 gfu.vec.data = solver * f.vec
 ```
 
-## 3b. Hermitian System (conjugate=True)
+## 3b. Hermitian System (CG with conjugate=True)
 
 ```python
 # Real-coefficient problem in complex FE space => Hermitian (A^H = A)
@@ -332,8 +348,9 @@ a = BilinearForm(fes)
 a += grad(u) * grad(v) * dx + u * v * dx  # real coefficients => Hermitian
 a.Assemble()
 
-# Hermitian: use conjugate=True (conjugated inner product a^H * b)
-solver = SparseSolvSolver(a.mat, method="ICCG",
+# Hermitian: CG with conjugated inner products a^H * b.  The IC factor is
+# complex symmetric, so method="ICCG" (and "COCR") reject conjugate=True.
+solver = SparseSolvSolver(a.mat, method="CG",
                            freedofs=fes.FreeDofs(),
                            tol=1e-10, conjugate=True)
 gfu = GridFunction(fes)
@@ -499,9 +516,13 @@ This is the most common source of confusion:
   - Examples: eddy current with `1j * sigma * u * v * dx`
   - Inner product: a^T * b (unconjugated)
 
-- **Hermitian** (A^H = A): `conjugate=True`
+- **Hermitian** (A^H = A): `method="CG"` with `conjugate=True`
   - Examples: real-coefficient problem assembled in complex FE space
   - Inner product: a^H * b (conjugated)
+  - ICCG and COCR raise ValueError for `conjugate=True` (complex-symmetric
+    IC factor / unconjugated COCR).  For a real-coefficient matrix in a
+    complex space A^T = A^H, so ICCG with the default `conjugate=False` is
+    also valid
 
 Using the wrong setting causes divergence or extremely slow convergence
 (e.g., 5000 iterations instead of 58).
@@ -519,11 +540,15 @@ Using the wrong setting causes divergence or extremely slow convergence
 
 ## Shift Parameter for IC
 
-- Default `shift=1.05` works for most SPD problems
-- For semi-definite (curl-curl): use `auto_shift=True` with `shift=1.0`
+- Solver defaults: `shift=1.0`, `auto_shift=True`, `diagonal_scaling=True`
+- The shift multiplies a_ii only on rows with Re(a_ii) > 0 and must be >= 1
+- Auto shift restarts the factorization with shift + 0.01 while a pivot has
+  Re(d) < 1e-6 |a_ii| and shift < 5; a pivot still below it at the limit, or
+  a zero/non-finite pivot, raises.  `result.actual_shift` reports the shift used
+- `auto_shift=False` keeps the given shift (negative pivots are accepted)
 - Higher shift = more stable but slower convergence
-- `diagonal_scaling=True` often helps for poorly scaled matrices
-- Auto-shift uses exponential backoff (increment *= 2), so restart count is O(log n)
+- The standalone `ICPreconditioner` uses its fixed shift (default 1.05,
+  must be >= 1) without the automatic search
 
 ## ABMC Ordering
 
