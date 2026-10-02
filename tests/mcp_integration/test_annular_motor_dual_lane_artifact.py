@@ -101,6 +101,19 @@ def test_production_replacement_proof_binds_motor_and_native_artifacts():
     }
     assert all(proof["proofs"]["motor_dual_lane"]["checks"].values())
     assert all(proof["proofs"]["native_motor_angle_family"]["checks"].values())
+    files_by_role = {
+        ("native_motor_angle_family", "matlab"): "native_motor_angle_family.json",
+        ("motor_dual_lane", "manifest"): "manifest.json",
+        ("motor_dual_lane", "gate"): "gate_result.json",
+        ("motor_dual_lane", "ngsolve_age"): "ngsolve_age.json",
+        ("motor_dual_lane", "hdiv_mmm_hcurl_eddy_bubble"): "hdiv_mmm_hcurl_eddy_bubble.json",
+        ("motor_dual_lane", "dual_lane"): "dual_lane.json",
+    }
+    for (proof_name, role), name in files_by_role.items():
+        committed = proof["proofs"][proof_name]["artifact_sha256_by_role"][role]
+        assert committed == hashlib.sha256((ARTIFACT_DIR / name).read_bytes()).hexdigest(), name
+    native = _load("native_motor_angle_family.json")
+    assert proof["proofs"]["native_motor_angle_family"]["test_count"] == native["test_count"]
     assert _validate_production_replacement_proof(
         {
             "artifact_json": raw,
