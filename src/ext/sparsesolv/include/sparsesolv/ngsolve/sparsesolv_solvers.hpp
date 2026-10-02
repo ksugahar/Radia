@@ -30,15 +30,16 @@ using SparseSolvResult = sparsesolv::SolverResult;
 ///
 /// Uses internal preconditioner (IC for ICCG, none for CG/COCR).
 /// For external preconditioner with COCR, use COCRSolverNGS instead.
+/// The matrix must use full (non-symmetric) storage.
 template<typename SCAL = double>
 class SparseSolvSolver : public BaseMatrix {
 public:
     SparseSolvSolver(shared_ptr<SparseMatrix<SCAL>> mat,
                       const string& method = "ICCG",
                       shared_ptr<BitArray> freedofs = nullptr,
-                      double tol = 1e-10,
-                      int maxiter = 1000,
-                      double shift = 1.05,
+                      double tol = 1e-8,
+                      int maxiter = 0,
+                      double shift = 1.0,
                       bool save_best_result = true,
                       bool save_residual_history = false,
                       bool printrates = false)
@@ -49,11 +50,21 @@ public:
         , width_(static_cast<sparsesolv::index_t>(mat->Width()))
         , printrates_(printrates)
     {
+        if (std::dynamic_pointer_cast<SparseMatrixSymmetric<SCAL>>(mat)) {
+            throw std::invalid_argument(
+                "SparseSolvSolver: symmetric-storage matrices are not supported; "
+                "assemble with symmetric=False");
+        }
+        if (freedofs_ && freedofs_->Size() != static_cast<size_t>(height_)) {
+            throw std::invalid_argument("SparseSolvSolver: freedofs size does not match the matrix");
+        }
+        CheckMethod(method_);
         config_.tolerance = tol;
         config_.max_iterations = maxiter;
         config_.shift_parameter = shift;
         config_.save_best_result = save_best_result;
         config_.save_residual_history = save_residual_history;
+        config_.validate();
     }
 
     /// Solve Ax = b, x initialized to zero
@@ -108,21 +119,14 @@ public:
 
         // Dispatch to appropriate solver
         sparsesolv::SolverResult result;
+        const string method = CheckMethod(method_);
 
-        if (method_ == "ICCG" || method_ == "iccg") {
+        if (method == "ICCG") {
             result = sparsesolv::solve_iccg(view, b_ptr, x_ptr, height_, config);
-        } else if (method_ == "CG" || method_ == "cg") {
-            sparsesolv::CGSolver<SCAL> solver;
-            solver.set_config(config);
-            result = solver.solve(view, b_ptr, x_ptr, height_, nullptr);
-        } else if (method_ == "COCR" || method_ == "cocr") {
-            sparsesolv::COCRSolver<SCAL> solver;
-            solver.set_config(config);
-            result = solver.solve(view, b_ptr, x_ptr, height_, nullptr);
+        } else if (method == "CG") {
+            result = sparsesolv::solve_cg(view, b_ptr, x_ptr, height_, config);
         } else {
-            throw std::runtime_error(
-                "SparseSolvSolver: Unknown method '" + method_ +
-                "'. Available: ICCG, CG, COCR");
+            result = sparsesolv::solve_cocr_unpreconditioned(view, b_ptr, x_ptr, height_, config);
         }
 
         // Copy solution back (only free DOFs)
@@ -167,7 +171,7 @@ public:
 
     // Property accessors
     const string& GetMethod() const { return method_; }
-    void SetMethod(const string& method) { method_ = method; }
+    void SetMethod(const string& method) { CheckMethod(method); method_ = method; }
     double GetTolerance() const { return config_.tolerance; }
     void SetTolerance(double tol) { config_.tolerance = tol; }
     int GetMaxIterations() const { return config_.max_iterations; }
@@ -218,6 +222,15 @@ public:
     const SparseSolvResult& GetLastResult() const { return last_result_; }
 
 private:
+    /// Canonical method name ("ICCG", "CG" or "COCR"); unknown names are an error
+    static string CheckMethod(const string& method) {
+        if (method == "ICCG" || method == "iccg") return "ICCG";
+        if (method == "CG" || method == "cg") return "CG";
+        if (method == "COCR" || method == "cocr") return "COCR";
+        throw std::invalid_argument(
+            "SparseSolvSolver: Unknown method '" + method + "'. Available: ICCG, CG, COCR");
+    }
+
     sparsesolv::SparseMatrixView<SCAL> prepare_matrix() const {
         return BuildSparseMatrixView<SCAL>(
             *mat_, freedofs_.get(), height_, width_,

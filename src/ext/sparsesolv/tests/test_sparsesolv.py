@@ -15,11 +15,13 @@ based on mat.IsComplex() and auto-call Update() on construction.
 import pytest
 import subprocess
 import sys
+import numpy as np
 from netgen.geom2d import unit_square
 from netgen.csg import unit_cube
 from ngsolve import *
 from radia.sparsesolv_ngsolve import ICPreconditioner
 from radia.sparsesolv_ngsolve import SparseSolvSolver
+from ngsolve import la
 from ngsolve.krylovspace import CGSolver
 
 
@@ -933,48 +935,237 @@ def test_properties(poisson_2d):
                                freedofs=fes.FreeDofs())
 
     assert solver.method == "ICCG"
-    assert abs(solver.tol - 1e-10) < 1e-15
-    assert solver.maxiter == 1000
-    assert abs(solver.shift - 1.05) < 1e-10
+    assert solver.tol == 1e-8
+    assert solver.maxiter == 0
+    assert solver.shift == 1.0
     assert solver.save_best_result is True
     assert solver.save_residual_history is False
-    assert solver.auto_shift is False
-    assert solver.diagonal_scaling is False
-    assert solver.divergence_check is False
-    assert abs(solver.divergence_threshold - 1000.0) < 1e-10
-    assert solver.divergence_count == 100
+    assert solver.auto_shift is True
+    assert solver.diagonal_scaling is True
+    assert solver.divergence_check is True
+    assert solver.divergence_threshold == 10.0
+    assert solver.divergence_count == 10
 
-    solver.tol = 1e-8
-    assert abs(solver.tol - 1e-8) < 1e-15
+    solver.tol = 1e-10
+    assert solver.tol == 1e-10
 
     solver.maxiter = 500
     assert solver.maxiter == 500
 
-    solver.auto_shift = True
-    assert solver.auto_shift is True
+    solver.auto_shift = False
+    assert solver.auto_shift is False
 
-    solver.diagonal_scaling = True
-    assert solver.diagonal_scaling is True
+    solver.diagonal_scaling = False
+    assert solver.diagonal_scaling is False
 
-    solver.divergence_check = True
-    assert solver.divergence_check is True
+    solver.divergence_check = False
+    assert solver.divergence_check is False
 
-    solver.divergence_threshold = 10.0
-    assert abs(solver.divergence_threshold - 10.0) < 1e-10
+    solver.divergence_threshold = 100.0
+    assert solver.divergence_threshold == 100.0
 
     solver.divergence_count = 5
     assert solver.divergence_count == 5
 
 
 def test_invalid_method(poisson_2d):
-    """Invalid method raises RuntimeError."""
+    """An unknown method is rejected when the solver is built."""
     _, fes, a, f, _, _ = poisson_2d
 
-    solver = SparseSolvSolver(a.mat, method="INVALID",
-                               freedofs=fes.FreeDofs())
-    gfu = GridFunction(fes)
+    with pytest.raises(ValueError):
+        SparseSolvSolver(a.mat, method="INVALID", freedofs=fes.FreeDofs())
+
+
+# ============================================================================
+# Solver contract: stopping, best iterate, initial guess, options
+# ============================================================================
+
+def _poisson_rhs_from_solution(poisson_2d):
+    _, fes, a, _, _, _ = poisson_2d
+    exact = GridFunction(fes)
+    exact.Set(x * (1 - x) * y * (1 - y) * 16)
+    free = np.array(list(fes.FreeDofs()), dtype=bool)
+    exact.vec.FV().NumPy()[~free] = 0.0  # an exact solution of the free-DOF system
+    rhs = exact.vec.CreateVector()
+    rhs.data = a.mat * exact.vec
+    rhs.FV().NumPy()[~free] = 0.0
+    return fes, a, exact, rhs, free
+
+
+def test_iccg_contract_default_solve(poisson_2d):
+    """Defaults: converged iterate is the best one, history starts at 1, true residual reported."""
+    fes, a, _, rhs, free = _poisson_rhs_from_solution(poisson_2d)
+    solver = SparseSolvSolver(a.mat, freedofs=fes.FreeDofs(), save_residual_history=True)
+    sol = GridFunction(fes)
+    result = solver.Solve(rhs, sol.vec)
+    assert result.converged
+    assert result.final_residual < 1e-8
+    assert result.best_iteration == result.iterations > 0
+    assert len(result.residual_history) == result.iterations + 1
+    assert result.residual_history[0] == 1.0
+    assert result.actual_shift >= 1.0
+    check = rhs.CreateVector()
+    check.data = rhs - a.mat * sol.vec
+    true = np.linalg.norm(check.FV().NumPy()[free]) / np.linalg.norm(rhs.FV().NumPy()[free])
+    assert abs(result.true_residual - true) <= 1e-12 + 1e-6 * true
+
+
+def test_iccg_contract_initial_guess_and_zero_rhs(poisson_2d):
+    """An exact initial guess and a zero right-hand side return without iterating."""
+    fes, a, exact, rhs, free = _poisson_rhs_from_solution(poisson_2d)
+    solver = SparseSolvSolver(a.mat, freedofs=fes.FreeDofs())
+    sol = exact.vec.CreateVector()
+    sol.data = exact.vec
+    result = solver.Solve(rhs, sol)
+    assert result.converged and result.iterations == 0 and result.best_iteration == 0
+    zero = rhs.CreateVector()
+    zero[:] = 0.0
+    sol.FV().NumPy()[:] = 3.0
+    result = solver.Solve(zero, sol)
+    assert result.converged and result.iterations == 0
+    assert np.all(sol.FV().NumPy()[free] == 0.0)
+
+
+def test_iccg_contract_iteration_limit_returns_best(poisson_2d):
+    """At the iteration limit the iterate with the smallest residual is returned."""
+    fes, a, _, rhs, _ = _poisson_rhs_from_solution(poisson_2d)
+    solver = SparseSolvSolver(a.mat, freedofs=fes.FreeDofs(), maxiter=3,
+                              save_residual_history=True)
+    sol = GridFunction(fes)
+    result = solver.Solve(rhs, sol.vec)
+    assert not result.converged and result.iterations == 3
+    assert result.final_residual == min(result.residual_history)
+    assert result.residual_history[result.best_iteration] == result.final_residual
+
+
+def test_iccg_contract_stagnation_counter_is_strict(poisson_2d):
+    """divergence_count=0 stops on the first iteration that sets no new best (count + 1 bad steps)."""
+    fes, a, _, rhs, _ = _poisson_rhs_from_solution(poisson_2d)
+    solver = SparseSolvSolver(a.mat, freedofs=fes.FreeDofs(), divergence_threshold=1.0,
+                              divergence_count=0, save_residual_history=True)
+    sol = GridFunction(fes)
+    result = solver.Solve(rhs, sol.vec)
+    history = result.residual_history
+    if not result.converged:
+        assert history[-1] >= min(history[:-1])
+        assert all(history[k] < history[k - 1] for k in range(1, len(history) - 1))
+
+
+@pytest.mark.parametrize("option,value", [("tol", 0.0), ("tol", -1.0), ("maxiter", -1),
+                                          ("shift", 0.5), ("divergence_count", -1),
+                                          ("divergence_threshold", 0.0)])
+def test_iccg_contract_rejects_undefined_options(poisson_2d, option, value):
+    _, fes, a, f, _, _ = poisson_2d
+    with pytest.raises(ValueError):
+        SparseSolvSolver(a.mat, freedofs=fes.FreeDofs(), **{option: value}).Solve(
+            f.vec, GridFunction(fes).vec)
+
+
+def test_iccg_contract_reports_auto_shift(poisson_2d):
+    """The auto-shift search reports the shift it used; fixed mode keeps the given shift."""
+    fes, a, _, rhs, _ = _poisson_rhs_from_solution(poisson_2d)
+    sol = GridFunction(fes)
+    fixed = SparseSolvSolver(a.mat, freedofs=fes.FreeDofs(), shift=1.2, auto_shift=False)
+    assert fixed.Solve(rhs, sol.vec).actual_shift == 1.2
+    sol.vec[:] = 0.0
+    auto = SparseSolvSolver(a.mat, freedofs=fes.FreeDofs())
+    shift = auto.Solve(rhs, sol.vec).actual_shift
+    assert 1.0 <= shift <= 5.01
+
+
+def _dense_system(entries, rhs, x0=None):
+    """NGSolve matrix and vectors for a small dense system (rows of entries)."""
+    n = len(entries)
+    rows, cols, vals = [], [], []
+    for i, row in enumerate(entries):
+        for j, value in enumerate(row):
+            rows.append(i); cols.append(j); vals.append(float(value))
+    m = la.SparseMatrixdouble.CreateFromCOO(rows, cols, vals, n, n)
+    b = m.CreateRowVector()
+    b.FV().NumPy()[:] = rhs
+    x = m.CreateColVector()
+    x.FV().NumPy()[:] = 0.0 if x0 is None else x0
+    return m, b, x
+
+
+@pytest.mark.parametrize("a,b,scaling", [(1e64, 1.0, True), (1.0, 1e-31, False),
+                                         (1.0, 1e-300, False), (1e-200, 1e100, True)])
+def test_iccg_contract_tiny_and_huge_scales_are_solved(a, b, scaling):
+    """A nonzero right-hand side of any magnitude is solved and the true residual is relative."""
+    m, rhs, x = _dense_system([[a]], [b])
+    result = SparseSolvSolver(m, diagonal_scaling=scaling).Solve(rhs, x)
+    assert result.converged
+    assert x.FV().NumPy()[0] == pytest.approx(b / a, rel=1e-14)
+    assert result.true_residual < 1e-14
+
+
+@pytest.mark.parametrize("scaling", [True, False])
+@pytest.mark.parametrize("rhs,x0", [([float("nan")], None), ([1.0], [float("nan")]),
+                                    ([float("inf")], None), ([1.0], [float("-inf")])])
+def test_iccg_contract_rejects_non_finite_rhs_and_initial_guess(scaling, rhs, x0):
+    m, b, x = _dense_system([[1.0]], rhs, x0=x0)
+    with pytest.raises(ValueError):
+        SparseSolvSolver(m, diagonal_scaling=scaling).Solve(b, x)
+
+
+def test_iccg_contract_rejects_a_single_nan_among_finite_entries(poisson_2d):
+    fes, a, _, rhs, free = _poisson_rhs_from_solution(poisson_2d)
+    bad = rhs.CreateVector()
+    bad.data = rhs
+    bad.FV().NumPy()[np.flatnonzero(free)[3]] = float("nan")
+    with pytest.raises(ValueError):
+        SparseSolvSolver(a.mat, freedofs=fes.FreeDofs()).Solve(bad, GridFunction(fes).vec)
+
+
+@pytest.mark.parametrize("scaling", [True, False])
+def test_iccg_contract_subnormal_rhs_has_a_finite_relative_residual(scaling):
+    m, b, x = _dense_system([[3.0]], [1e-310])
+    result = SparseSolvSolver(m, diagonal_scaling=scaling).Solve(b, x)
+    xs = x.FV().NumPy()[0]
+    reference = abs(1e-310 - 3.0 * xs) / 1e-310   # residual of the subnormal result itself
+    assert result.converged
+    assert np.isfinite(result.true_residual) and result.true_residual < 1e-10
+    assert result.true_residual == pytest.approx(reference, abs=1e-12)
+
+
+@pytest.mark.parametrize("scale", [2.0 ** -500, 2.0 ** 500])
+def test_iccg_contract_is_scale_invariant(poisson_2d, scale):
+    """Scaling A and b by a power of two (about 1e+-150) leaves the iteration unchanged."""
+    fes, a, _, rhs, _ = _poisson_rhs_from_solution(poisson_2d)
+    reference = SparseSolvSolver(a.mat, freedofs=fes.FreeDofs()).Solve(rhs, GridFunction(fes).vec)
+    scaled = a.mat.CreateMatrix()
+    scaled.AsVector().data = scale * a.mat.AsVector()
+    srhs = rhs.CreateVector()
+    srhs.data = scale * rhs
+    result = SparseSolvSolver(scaled, freedofs=fes.FreeDofs(), diagonal_scaling=False).Solve(
+        srhs, GridFunction(fes).vec)
+    plain = SparseSolvSolver(a.mat, freedofs=fes.FreeDofs(), diagonal_scaling=False).Solve(
+        rhs, GridFunction(fes).vec)
+    assert reference.converged and result.converged
+    assert result.iterations == plain.iterations
+    assert result.true_residual == pytest.approx(plain.true_residual, rel=1e-6)
+
+
+def test_iccg_contract_exact_guess_returns_before_ic_factorization():
+    """x0 that already solves the system returns even where the IC factor would fail."""
+    m, rhs, x = _dense_system([[1, 1], [1, 1]], [2, 2], x0=[1, 1])
+    solver = SparseSolvSolver(m, shift=1.0, auto_shift=False)
+    result = solver.Solve(rhs, x)
+    assert result.converged and result.iterations == 0 and result.actual_shift == 0.0
+    assert list(x.FV().NumPy()) == [1.0, 1.0]
+    x.FV().NumPy()[:] = 0.0
     with pytest.raises(RuntimeError):
-        solver.Solve(f.vec, gfu.vec)
+        solver.Solve(rhs, x)  # iterating needs the IC factor, whose pivot is zero
+
+
+@pytest.mark.parametrize("method", ["ICCG", "COCR"])
+def test_iccg_contract_conjugate_only_with_cg(poisson_2d, method):
+    _, fes, a, f, _, _ = poisson_2d
+    solver = SparseSolvSolver(a.mat, method=method, freedofs=fes.FreeDofs(), conjugate=True)
+    with pytest.raises(ValueError):
+        solver.Solve(f.vec, GridFunction(fes).vec)
+    cg = SparseSolvSolver(a.mat, method="CG", freedofs=fes.FreeDofs(), conjugate=True)
+    assert cg.Solve(f.vec, GridFunction(fes).vec).converged
 
 
 # ============================================================================
@@ -1349,14 +1540,20 @@ def test_conjugate_factory_parameter(poisson_2d_complex):
     assert solver.conjugate is True
 
 
-@pytest.mark.parametrize("method", ["ICCG"])
+def test_iccg_rejects_conjugate(poisson_2d_complex):
+    """The IC factor is complex symmetric, so Hermitian ICCG is refused."""
+    _, fes, a, f = poisson_2d_complex
+    solver = SparseSolvSolver(a.mat, method="ICCG", freedofs=fes.FreeDofs(), conjugate=True)
+    with pytest.raises(ValueError):
+        solver.Solve(f.vec, GridFunction(fes).vec)
+
+
+@pytest.mark.parametrize("method", ["CG"])
 def test_hermitian_system_with_conjugate(poisson_2d_complex, method):
     """Hermitian system (real coefficients, complex space) solves with conjugate=True."""
     mesh, fes, a, f = poisson_2d_complex
 
     # This is a Hermitian system (A^H = A) because coefficients are real.
-    # Both conjugate=True (Hermitian) and conjugate=False (complex-symmetric)
-    # should converge, but conjugate=True is mathematically correct here.
     solver = SparseSolvSolver(a.mat, method=method,
                                freedofs=fes.FreeDofs(),
                                tol=1e-10, maxiter=2000,
@@ -1372,13 +1569,13 @@ def test_hermitian_system_with_conjugate(poisson_2d_complex, method):
 
 
 def test_hermitian_vs_direct(poisson_2d_complex):
-    """Hermitian ICCG with conjugate=True matches direct solver."""
+    """Hermitian CG with conjugate=True matches direct solver."""
     mesh, fes, a, f = poisson_2d_complex
 
     gfu_direct = GridFunction(fes)
     gfu_direct.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 
-    solver = SparseSolvSolver(a.mat, method="ICCG",
+    solver = SparseSolvSolver(a.mat, method="CG",
                                freedofs=fes.FreeDofs(),
                                tol=1e-12, maxiter=2000,
                                conjugate=True)
@@ -1531,7 +1728,6 @@ class TestABMCSolve:
         solver = SparseSolvSolver(a.mat, method="ICCG",
                                    freedofs=fes.FreeDofs(),
                                    tol=1e-10, maxiter=2000,
-                                   conjugate=True,
                                    use_abmc=True,
                                    abmc_block_size=4,
                                    abmc_num_colors=4)
@@ -1721,7 +1917,6 @@ class TestABMCReorderedSpace:
         solver = SparseSolvSolver(a.mat, method="ICCG",
                                    freedofs=fes.FreeDofs(),
                                    tol=1e-10, maxiter=2000,
-                                   conjugate=True,
                                    use_abmc=True,
                                    abmc_block_size=4,
                                    abmc_num_colors=4)
