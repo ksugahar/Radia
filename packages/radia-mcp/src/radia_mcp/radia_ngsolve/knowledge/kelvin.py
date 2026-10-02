@@ -1345,6 +1345,12 @@ KELVIN_TIPS = """
      but improves iterative solver convergence.
    - Place vertex at center of exterior sphere (maps to physical infinity).
    - Cubit: `create vertex X {offset} Y 0 Z 0; nodeset N name "GND"`
+   - The GND point must be a vertex of a volume element.  A separate OCC
+     `Vertex` glued into the shape can come out as a mesh point that no
+     element uses; H1 then has no dof to fix and the gauge stays free with
+     no NGSolve error.  `solve_eddy_current_harmonic_APhi(periodic=True)`
+     rejects such a tag; check `H1(mesh, order=1, dirichlet_bbbnd="GND")`
+     removes a free dof before relying on it elsewhere.
 
 4. **Boundary terms in linear form**
    - With Kelvin + Periodic BC, boundary terms CANCEL
