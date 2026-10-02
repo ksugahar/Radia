@@ -27,7 +27,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 SWEEP = HERE / "sweep_data_dense"
-VOL = (HERE.parent.parent / "src" / "radia" / "panels" / "samples"
+VOL = (HERE.parent / "esim_spatial" / "inputs"
        / "ih_bem_sample_p1.vol")
 
 

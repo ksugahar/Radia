@@ -33,7 +33,7 @@ from radia_mcp.figure import (
 
 HERE = Path(__file__).resolve().parent
 SWEEP_DENSE = HERE / "sweep_data_dense"
-VOL = (HERE.parent.parent / "src" / "radia" / "panels" / "samples"
+VOL = (HERE.parent / "esim_spatial" / "inputs"
        / "ih_bem_sample_p1.vol")
 # Committed, self-contained side-wall field (theta, z, |H_t|, R) for the
 # 100 A / 50 kHz per-panel case.  The figure draws from THIS file, so it
