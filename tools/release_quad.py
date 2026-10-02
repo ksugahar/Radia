@@ -178,15 +178,20 @@ SIMULINK_TARGETS = {
 # drift apart again.  release_acceptance.py is the single owner of the list.
 try:
     from release_acceptance import RELEASE_ACCEPTANCE_HOSTS
+    from release_acceptance import RELEASE_ACCEPTANCE_HOST_LABELS
 except ModuleNotFoundError:  # Loaded by path in unit tests rather than run as a script.
     _acceptance_spec = importlib.util.spec_from_file_location(
         "radia_release_acceptance", Path(__file__).resolve().with_name("release_acceptance.py"))
     _acceptance_module = importlib.util.module_from_spec(_acceptance_spec)
     _acceptance_spec.loader.exec_module(_acceptance_module)
     RELEASE_ACCEPTANCE_HOSTS = _acceptance_module.RELEASE_ACCEPTANCE_HOSTS
+    RELEASE_ACCEPTANCE_HOST_LABELS = _acceptance_module.RELEASE_ACCEPTANCE_HOST_LABELS
 
 assert tuple(SIMULINK_TARGETS) == RELEASE_ACCEPTANCE_HOSTS, (
     "release_quad targets and the release acceptance hosts have drifted")
+# The promotion gate checks each stored row label against the same table.
+assert {key: row[0] for key, row in SIMULINK_TARGETS.items()} == RELEASE_ACCEPTANCE_HOST_LABELS, (
+    "Simulink target labels and the release acceptance host labels have drifted")
 
 
 def _editable_repo_lab():
@@ -1439,8 +1444,9 @@ def _probe(host_label, cmd_prefix, probe_src=CROSS_MACHINE_PROBE):
     """Run the probe on a target (cmd_prefix is the python invocation).
 
     probe_src defaults to the consumer probe (hashes the installed wheel
-    files).  LAB passes CROSS_MACHINE_PROBE_LAB (hashes tracked files at the
-    release tag via git) -- see those probe strings for the rationale.
+    files).  The editable 100号機 checkout passes CROSS_MACHINE_PROBE_LAB
+    (hashes tracked files at the release tag via git) -- see those probe
+    strings for the rationale.
     """
     try:
         p = _run_script_with_file_output(cmd_prefix, probe_src, timeout=120)
@@ -1505,8 +1511,11 @@ def _parse_phase9_probe(label, output):
 
 def cmd_phase9(args):
     """Cross-machine consistency probe."""
+    # LAB holds the published wheel (phase8 installs it over `ssh 102`, as the
+    # LAB wheel check reads it), so it takes the installed-wheel probe; only
+    # 100号機 keeps an editable release checkout.
     targets = [
-        ("LAB", ["python", "-"], CROSS_MACHINE_PROBE_LAB),
+        ("LAB", ["ssh", "102", "python", "-"], CROSS_MACHINE_PROBE),
         ("100号機", ["ssh", SSH_100, "python", "-"], CROSS_MACHINE_PROBE_LAB),
         ("mdx1", ["ssh", SSH_MDX1, "python", "-"], CROSS_MACHINE_PROBE),
         ("mdx2", ["ssh", SSH_MDX2, "python", "-"], CROSS_MACHINE_PROBE),

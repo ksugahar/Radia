@@ -39,6 +39,20 @@ def test_required_keys_match_both_actual_probe_file_lists():
     assert set(quad._parse_phase9_probe("LAB", probe())) == set(quad._PHASE9_FIELDS)
 
 
+def test_phase9_probes_wheel_hosts_as_wheels_and_100_as_editable(monkeypatch):
+    # LAB holds the published wheel since phase8 installs it; the git-show
+    # probe only works from an editable checkout and failed on LAB.
+    seen = {}
+    def record(label, cmd_prefix, probe_src):
+        seen[label] = (cmd_prefix, probe_src)
+        return probe()
+    monkeypatch.setattr(quad, "_probe", record)
+    assert quad.cmd_phase9(None) == 0
+    assert seen["LAB"] == (["ssh", "102", "python", "-"], quad.CROSS_MACHINE_PROBE)
+    assert seen["100号機"][1] is quad.CROSS_MACHINE_PROBE_LAB
+    assert seen["mdx1"][1] is seen["mdx2"][1] is quad.CROSS_MACHINE_PROBE
+
+
 def test_phase9_accepts_complete_shuffled_output(monkeypatch):
     monkeypatch.setattr(
         quad, "_probe", lambda _label, *_args: "\n".join(reversed(probe().splitlines())))
