@@ -20,6 +20,9 @@
 #include <atomic>
 #include <cmath>
 #include <limits>
+#include <stdexcept>
+#include <string>
+#include <type_traits>
 
 namespace sparsesolv {
 
@@ -57,7 +60,13 @@ public:
      */
     explicit ICPreconditioner(double shift = 1.05)
         : shift_parameter_(shift)
-    {}
+    {
+        // A standalone preconditioner uses the given shift without search or
+        // internal scaling unless set_config() enables them.
+        config_.auto_shift = false;
+        config_.diagonal_scaling = false;
+        config_.shift_parameter = shift;
+    }
 
     /**
      * @brief Setup the IC factorization from matrix A
@@ -161,6 +170,9 @@ public:
             if (config_.diagonal_scaling) {
                 compute_scaling_factors();
             }
+            // The apply kernels read the scaling in original ordering; it must
+            // follow the factors of this setup (or be absent without scaling).
+            update_composite_scaling(n);
 
             compute_ic_factorization_abmc();
 
@@ -597,8 +609,11 @@ private:
 
         // composite_perm_rcm_: RCM space -> ABMC space (for apply_rcm_abmc adapter)
         composite_perm_rcm_ = abmc_ord;
+    }
 
-        // Pre-compute scaling in original space for the composite path
+    /// Scaling in original space for the composite path
+    void update_composite_scaling(index_t n) {
+        composite_scaling_.clear();
         if (config_.diagonal_scaling && !scaling_.empty()) {
             composite_scaling_.resize(n);
             for (index_t i = 0; i < n; ++i) {
@@ -1148,40 +1163,78 @@ private:
         }
     }
 
+    // ================================================================
+    // Pivot rules shared by both factorization orders
+    // ================================================================
+
+    static bool finite_scalar(const Scalar& v) {
+        if constexpr (std::is_same_v<Scalar, double>) {
+            return std::isfinite(v);
+        } else {
+            return std::isfinite(v.real()) && std::isfinite(v.imag());
+        }
+    }
+
+    /// The shift multiplies a_ii only where Re(a_ii) > 0; other rows keep a_ii.
+    static Scalar shifted_diagonal(const Scalar& a_ii, double shift) {
+        return std::real(a_ii) > 0.0 ? a_ii * static_cast<Scalar>(shift) : a_ii;
+    }
+
+    /// Auto-shift trigger: Re(d) < min_diagonal_threshold * |a_ii| on a row with Re(a_ii) > 0
+    bool pivot_too_small(const Scalar& a_ii, const Scalar& d) const {
+        return config_.auto_shift && std::real(a_ii) > 0.0
+            && !(std::real(d) >= config_.min_diagonal_threshold * std::abs(a_ii));
+    }
+
+    [[noreturn]] void throw_singular_pivot(index_t row, double shift) const {
+        throw std::runtime_error(
+            "IC factorization: zero or non-finite pivot at row " + std::to_string(row)
+            + " (shift " + std::to_string(shift) + ")");
+    }
+
+    [[noreturn]] void throw_shift_limit(index_t row, double shift) const {
+        throw std::runtime_error(
+            "IC factorization: pivot at row " + std::to_string(row)
+            + " remains below the auto-shift threshold at shift " + std::to_string(shift)
+            + " (limit " + std::to_string(config_.max_shift_value) + ")");
+    }
+
+    void validate_shift() const {
+        if (!(shift_parameter_ >= 1.0) || !std::isfinite(shift_parameter_)) {
+            throw std::invalid_argument("IC factorization: shift must be >= 1 and finite");
+        }
+    }
+
     /**
      * @brief Compute IC factorization in-place on L_
      *
-     * Modifies L_ to contain the IC factor and fills inv_diag_ with D^{-1}
+     * Modifies L_ to contain the IC factor and fills inv_diag_ with D^{-1}.
      *
-     * When auto_shift is enabled, automatically increases the shift parameter
-     * when the factorized diagonal becomes too small (below min_diagonal_threshold).
-     * This restarts the factorization with the new shift until successful or
-     * max_shift_trials is exceeded.
+     * With auto_shift, a pivot below the threshold restarts the
+     * factorization with shift + shift_increment while shift < max_shift_value;
+     * a pivot still below it at the limit is an error.
      */
     void compute_ic_factorization() {
         const index_t n = size_;
         inv_diag_.resize(n);
+        validate_shift();
 
         double shift = shift_parameter_;
         actual_shift_ = shift;
-        double increment = config_.shift_increment;
 
         bool restart = true;
-        int shift_trials = 0;
+        bool first_pass = true;
 
         while (restart) {
             restart = false;
 
-            if (shift_trials > 0) {
-                // Restart: restore original values
+            if (!first_pass) {
                 L_.values = original_values_;
-                if (config_.diagonal_scaling) {
-                    apply_scaling_to_L();
-                }
-            } else if (config_.diagonal_scaling) {
-                // First pass with scaling: apply scaling to original values
+            }
+            if (config_.diagonal_scaling) {
                 apply_scaling_to_L();
             }
+            first_pass = false;
 
             // For each row i
             for (index_t i = 0; i < n; ++i) {
@@ -1225,11 +1278,9 @@ private:
                         + std::to_string(i));
                 }
 
-                // Get the original (possibly scaled) diagonal value
-                Scalar orig_diag = L_.values[diag_pos];
-
-                // Apply shift to diagonal
-                Scalar s = orig_diag * static_cast<Scalar>(shift);
+                // Original (possibly scaled) diagonal value
+                const Scalar orig_diag = L_.values[diag_pos];
+                Scalar s = shifted_diagonal(orig_diag, shift);
 
                 // s -= sum over k < i of: L(i,k)^2 * D^{-1}(k)
                 for (index_t kk = row_start; kk < diag_pos; ++kk) {
@@ -1240,32 +1291,18 @@ private:
 
                 L_.values[diag_pos] = s;
 
-                // Auto-shift check: if diagonal is too small and original was positive
-                double abs_s = std::abs(s);
-                if (config_.auto_shift) {
-                    double abs_orig = std::abs(orig_diag);
-
-                    if (abs_s < config_.min_diagonal_threshold && abs_orig > 0.0) {
-                        if (shift < config_.max_shift_value &&
-                            shift_trials < config_.max_shift_trials) {
-                            shift += increment;
-                            increment *= 2;  // exponential backoff
-                            shift_trials++;
-                            restart = true;
-                            break; // Restart factorization with new shift
-                        }
+                if (pivot_too_small(orig_diag, s)) {
+                    if (shift < config_.max_shift_value) {
+                        shift += config_.shift_increment;
+                        restart = true;
+                        break;
                     }
+                    throw_shift_limit(i, shift);
                 }
-
-                // Store D^{-1}(i) = 1/s
-                if (abs_s > config_.zero_diagonal_replacement) {
-                    inv_diag_[i] = Scalar(1) / s;
-                } else {
-                    // Zero or negative diagonal: clamp to safe value
-                    Scalar safe_val = static_cast<Scalar>(config_.zero_diagonal_replacement);
-                    L_.values[diag_pos] = safe_val;
-                    inv_diag_[i] = Scalar(1) / safe_val;
+                if (s == Scalar(0) || !finite_scalar(s)) {
+                    throw_singular_pivot(i, shift);
                 }
+                inv_diag_[i] = Scalar(1) / s;
             }
         }
 
@@ -1287,27 +1324,32 @@ private:
     void compute_ic_factorization_abmc() {
         const index_t n = size_;
         inv_diag_.resize(n);
+        validate_shift();
 
         double shift = shift_parameter_;
-        double increment = config_.shift_increment;
         bool restart = true;
-        int shift_trials = 0;
+        bool first_pass = true;
 
         while (restart) {
             restart = false;
 
-            // Restore original values on restart (same as sequential path)
-            if (shift_trials > 0) {
+            if (!first_pass) {
                 L_.values = original_values_;
-                if (config_.diagonal_scaling) {
-                    apply_scaling_to_L();
-                }
-            } else if (config_.diagonal_scaling) {
+            }
+            if (config_.diagonal_scaling) {
                 apply_scaling_to_L();
             }
+            first_pass = false;
 
-            // Atomic flag: any thread can signal breakdown
-            std::atomic<bool> need_restart(false);
+            // Threads record the lowest offending row; the color loop acts
+            // after the parallel region (no exception crosses a task).
+            std::atomic<index_t> small_row(n);
+            std::atomic<index_t> fault_row(n);
+            std::atomic<index_t> missing_row(n);
+            auto record_min = [](std::atomic<index_t>& slot, index_t row) {
+                index_t cur = slot.load(std::memory_order_relaxed);
+                while (row < cur && !slot.compare_exchange_weak(cur, row)) {}
+            };
 
             const index_t nc = abmc_schedule_.num_colors();
             for (index_t c = 0; c < nc; ++c) {
@@ -1357,13 +1399,13 @@ private:
                         // Process diagonal element L(i, i)
                         const index_t diag_pos = l_row_end - 1;
                         if (L_.col_idx[diag_pos] != i) {
-                            throw std::runtime_error(
-                                "IC decomposition failed: missing diagonal at row "
-                                + std::to_string(i));
+                            record_min(missing_row, i);
+                            inv_diag_[i] = Scalar(0);
+                            continue;
                         }
 
-                        Scalar orig_diag = L_.values[diag_pos];
-                        Scalar s = orig_diag * static_cast<Scalar>(shift);
+                        const Scalar orig_diag = L_.values[diag_pos];
+                        Scalar s = shifted_diagonal(orig_diag, shift);
 
                         // s -= sum over k < i of: L(i,k)^2 * D^{-1}(k)
                         for (index_t kk = row_start; kk < diag_pos; ++kk) {
@@ -1374,41 +1416,32 @@ private:
 
                         L_.values[diag_pos] = s;
 
-                        // Auto-shift breakdown detection
-                        double abs_s = std::abs(s);
-                        if (config_.auto_shift) {
-                            double abs_orig = std::abs(orig_diag);
-                            if (abs_s < config_.min_diagonal_threshold
-                                && abs_orig > 0.0) {
-                                need_restart.store(true,
-                                    std::memory_order_relaxed);
-                            }
+                        if (pivot_too_small(orig_diag, s)) {
+                            record_min(small_row, i);
+                        } else if (s == Scalar(0) || !finite_scalar(s)) {
+                            record_min(fault_row, i);
                         }
-
-                        // Store D^{-1}(i) = 1/s
-                        if (abs_s > config_.zero_diagonal_replacement) {
-                            inv_diag_[i] = Scalar(1) / s;
-                        } else {
-                            Scalar safe_val = static_cast<Scalar>(
-                                config_.zero_diagonal_replacement);
-                            L_.values[diag_pos] = safe_val;
-                            inv_diag_[i] = Scalar(1) / safe_val;
-                        }
+                        inv_diag_[i] = (s == Scalar(0) || !finite_scalar(s))
+                            ? Scalar(0) : Scalar(1) / s;
                     }
                 });
 
-                // Check after color completes (parallel_for = barrier)
-                if (config_.auto_shift && need_restart.load()) {
-                    if (shift < config_.max_shift_value
-                        && shift_trials < config_.max_shift_trials) {
-                        shift += increment;
-                        increment *= 2;  // exponential backoff
-                        shift_trials++;
+                // Act after the color completes (parallel_for is a barrier)
+                if (missing_row.load() < n) {
+                    throw std::runtime_error(
+                        "IC decomposition failed: missing diagonal at row "
+                        + std::to_string(missing_row.load()));
+                }
+                if (small_row.load() < n) {
+                    if (shift < config_.max_shift_value) {
+                        shift += config_.shift_increment;
                         restart = true;
-                        break;  // exit color loop, restart outer while
+                        break;  // restart the outer loop with the larger shift
                     }
-                    // Exceeded max trials: continue without restart
-                    need_restart.store(false);
+                    throw_shift_limit(small_row.load(), shift);
+                }
+                if (fault_row.load() < n) {
+                    throw_singular_pivot(fault_row.load(), shift);
                 }
             }
         }

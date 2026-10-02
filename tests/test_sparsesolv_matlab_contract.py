@@ -50,6 +50,33 @@ def test_engine_timeout_retains_evidence_when_cleanup_fails(tmp_path, monkeypatc
     assert record["cleanup_error"] == "access denied"
 
 
+@pytest.mark.parametrize("argv,expected", [([], 900), (["--timeout", "1200"], 1200)])
+def test_parity_runner_waits_for_the_worker_with_the_configured_timeout(
+        tmp_path, monkeypatch, argv, expected):
+    runner = runpy.run_path(str(ROOT/"validation_test/ngsolve_matlab_parity/run_sparsesolv_parity.py"))
+    calls = {}
+
+    class Child:
+        pid = 4242
+
+        def wait(self, timeout=None):
+            calls["timeout"] = timeout
+            return 0
+
+    def popen(command, **kwargs):
+        calls["command"] = command
+        return Child()
+
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    monkeypatch.setattr("sys.argv", ["run_sparsesolv_parity.py", "--output",
+                                     str(tmp_path/"r.json"), *argv])
+    with pytest.raises(SystemExit) as stop:
+        runner["main"]()
+    assert stop.value.code == 0
+    assert calls["timeout"] == expected
+    assert "--worker" in calls["command"] and "--timeout" not in calls["command"]
+
+
 def test_sparsesolv_has_native_and_explicit_fallback_owners():
     manifest = json.loads((ROOT / "matlab/python_api_parity_manifest.json").read_text())
     entry = next(e for e in manifest["binary_extensions"] if e["python"] == "sparsesolv_ngsolve.pyd")

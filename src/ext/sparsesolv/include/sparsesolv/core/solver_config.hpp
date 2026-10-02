@@ -27,7 +27,7 @@ namespace sparsesolv {
  * SolverConfig config;
  * config.tolerance = 1e-10;
  * config.max_iterations = 1000;
- * config.shift_parameter = 1.05;  // for IC decomposition
+ * config.shift_parameter = 1.05;  // IC shift; start value when auto_shift
  * @endcode
  */
 struct SolverConfig {
@@ -35,79 +35,66 @@ struct SolverConfig {
     // Convergence criteria
     //--------------------------------------------------
 
-    /// Relative tolerance for convergence (default: 1e-10)
-    double tolerance = 1e-10;
+    /// Relative tolerance: stop when ||r|| / ||b|| < tolerance (strict), with
+    /// the recursive residual of the (diagonally scaled, when enabled) system.
+    /// Must be positive.
+    double tolerance = 1e-8;
 
-    /// Maximum number of iterations (default: 1000)
-    int max_iterations = 1000;
-
-    /// Absolute tolerance threshold (solver stops if ||r|| < abs_tolerance)
-    double abs_tolerance = 1e-12;
-
-    //--------------------------------------------------
-    // Normalization for convergence check
-    //--------------------------------------------------
-
-    /// How to normalize the residual for convergence check
-    NormType norm_type = NormType::RHS;
-
-    /// Custom normalization value (used when norm_type == Custom)
-    double custom_norm = 1.0;
+    /// Maximum number of iterations; 0 means 2 * n. Must not be negative.
+    int max_iterations = 0;
 
     //--------------------------------------------------
     // Preconditioning parameters
     //--------------------------------------------------
 
-    /// Shift parameter for incomplete Cholesky decomposition
-    /// Values > 1.0 improve stability, typical: 1.0-1.2
-    /// (Previously called "accera" or acceleration factor)
-    double shift_parameter = 1.05;
+    /// Multiplicative shift of the IC diagonal, alpha * a_ii, applied to rows
+    /// with Re(a_ii) > 0.  Fixed value, or the start value when auto_shift is
+    /// on.  Must be >= 1.
+    double shift_parameter = 1.0;
 
-    /// Enable diagonal scaling (1/sqrt(A[i,i])) before IC factorization
-    bool diagonal_scaling = false;
+    /// Solve the symmetrically scaled system S A S y = S b, x = S y, with
+    /// S = diag(1/sqrt|a_ii|); the stopping test then uses the scaled system.
+    bool diagonal_scaling = true;
 
     //--------------------------------------------------
     // Auto-shift parameters for IC decomposition
     //--------------------------------------------------
 
-    /// Enable automatic shift adjustment when IC factorization encounters
-    /// small or negative diagonal entries
-    bool auto_shift = false;
+    /// Restart the factorization with shift + shift_increment while a pivot
+    /// of a row with Re(a_ii) > 0 has Re(d_i) < min_diagonal_threshold * |a_ii|
+    /// and shift < max_shift_value.  A pivot still below it at the limit is
+    /// an error.
+    bool auto_shift = true;
 
-    /// Initial increment for automatic shift adjustment (default: 0.05)
-    /// The increment doubles after each restart (exponential backoff)
-    double shift_increment = 0.05;
+    /// Additive shift step of the auto-shift search
+    double shift_increment = 0.01;
 
-    /// Maximum allowed shift value during auto-adjustment (default: 5.0)
+    /// The auto-shift search stops increasing the shift once it reaches this value
     double max_shift_value = 5.0;
 
-    /// Threshold below which diagonal is considered too small (triggers shift increase)
+    /// Pivot threshold relative to |a_ii| of the factored (scaled) matrix
     double min_diagonal_threshold = 1e-6;
-
-    /// Replacement value for zero or negative diagonals (default: 1e-10)
-    double zero_diagonal_replacement = 1e-10;
-
-    /// Maximum number of shift adjustment trials (default: 100)
-    int max_shift_trials = 100;
 
     //--------------------------------------------------
     // Divergence detection
     //--------------------------------------------------
 
     /// Strategy for detecting divergence
-    DivergenceCheck divergence_check = DivergenceCheck::None;
+    DivergenceCheck divergence_check = DivergenceCheck::StagnationCount;
 
-    /// Multiplier for divergence detection (residual > best * this value triggers count)
-    double divergence_threshold = 1000.0;
+    /// A residual below best * divergence_threshold resets the stagnation counter
+    double divergence_threshold = 10.0;
 
-    /// Number of consecutive iterations above threshold before declaring divergence
-    int divergence_count = 100;
+    /// Stop when more than this many consecutive iterations neither improve
+    /// the best residual nor stay below best * divergence_threshold
+    int divergence_count = 10;
 
     //--------------------------------------------------
     // Result saving options
     //--------------------------------------------------
 
-    /// Save the best result encountered during iteration (useful for non-converging solves)
+    /// Return the iterate with the smallest residual (the initial guess
+    /// included) instead of the last iterate
     bool save_best_result = true;
 
     /// Save residual history for analysis/debugging
@@ -156,6 +143,26 @@ struct SolverConfig {
     /// matrix.
     bool abmc_use_rcm = false;
 
+    /// Iteration limit for a system of size n (0 means 2 * n)
+    int iteration_limit(index_t n) const {
+        return max_iterations > 0 ? max_iterations : 2 * static_cast<int>(n);
+    }
+
+    /// Reject option values that have no defined meaning
+    void validate() const {
+        if (!(tolerance > 0.0) || !std::isfinite(tolerance))
+            throw std::invalid_argument("SparseSolv: tolerance must be positive and finite");
+        if (max_iterations < 0)
+            throw std::invalid_argument("SparseSolv: max_iterations must be >= 0 (0 means 2*n)");
+        if (!(shift_parameter >= 1.0) || !std::isfinite(shift_parameter))
+            throw std::invalid_argument("SparseSolv: IC shift must be >= 1 and finite");
+        if (!(shift_increment > 0.0) || !(max_shift_value >= 1.0)
+            || !(min_diagonal_threshold > 0.0))
+            throw std::invalid_argument("SparseSolv: invalid auto-shift parameters");
+        if (!(divergence_threshold > 0.0) || divergence_count < 0)
+            throw std::invalid_argument(
+                "SparseSolv: divergence_threshold must be > 0 and divergence_count >= 0");
+    }
 };
 
 } // namespace sparsesolv

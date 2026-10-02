@@ -186,7 +186,12 @@ public:
         : SparseSolvPrecondBase<SCAL>(mat, freedofs)
         , shift_(shift)
         , precond_(std::make_shared<sparsesolv::ICPreconditioner<SCAL>>(shift))
-    {}
+    {
+        // Fixed shift, no internal scaling: the solver-level defaults do not apply here.
+        config_.auto_shift = false;
+        config_.diagonal_scaling = false;
+        sync_config();
+    }
 
     void Update() {
         auto view = this->prepare_matrix_view();

@@ -63,9 +63,60 @@ def generate(directory):
             return dict(real=values.real.tolist(), imag=values.imag.tolist())
         output["cases"].append(dict(name=name, rhs=split(rhs), applied=split(applied),
                                      solution=split(solution), iterations=solver.iterations))
+    output["iccg"] = iccg_reference(mesh)
     path = directory / "reference.json"
     path.write_text(json.dumps(output, indent=2), encoding="utf-8")
     return path
+
+
+# Option sets shared with test_sparsesolv_mex.m:testICCGPythonParity (MATLAB names)
+ICCG_CASES = [
+    ("default", {}, {}),
+    ("fixed_unscaled", dict(Shift=1.2, AutoShift=False, DiagonalScaling=False),
+     dict(shift=1.2, auto_shift=False, diagonal_scaling=False)),
+    ("iteration_limit", dict(MaxIterations=4), dict(maxiter=4)),
+    ("strict_stagnation", dict(DivergenceThreshold=1.0, DivergenceCount=0),
+     dict(divergence_threshold=1.0, divergence_count=0)),
+    ("abmc", dict(UseABMC=True), dict(use_abmc=True)),
+]
+
+
+def iccg_reference(mesh):
+    """ICCG solves on the H1 order-2 Dirichlet Laplace system, real and complex."""
+    out = []
+    for complex_ in (False, True):
+        space = ng.H1(mesh, order=2, dirichlet=".*", complex=complex_)
+        u, v = space.TnT()
+        weight = (1 + 0.5j) if complex_ else 1.0
+        a = ng.BilinearForm(space)
+        a += weight * ng.grad(u) * ng.grad(v) * ng.dx
+        with ng.TaskManager():
+            a.Assemble()
+        free = np.array(list(space.FreeDofs()), dtype=bool)
+        rhs = a.mat.CreateColVector()
+        values = np.cos(0.7 * np.arange(space.ndof) + 0.1)
+        if complex_:
+            values = values * (1 - 0.4j)
+        rhs.FV().NumPy()[:] = values * free
+        for name, _, kwargs in ICCG_CASES:
+            solver = ss.SparseSolvSolver(a.mat, method="ICCG", freedofs=space.FreeDofs(),
+                                         save_residual_history=True, **kwargs)
+            sol = rhs.CreateVector()
+            sol[:] = 0.0
+            with ng.TaskManager():
+                result = solver.Solve(rhs, sol)
+            x = sol.FV().NumPy()
+            out.append(dict(name=name, complex=complex_, ndof=space.ndof,
+                            rhs=dict(real=rhs.FV().NumPy().real.tolist(),
+                                     imag=rhs.FV().NumPy().imag.tolist()),
+                            solution=dict(real=x.real.tolist(), imag=x.imag.tolist()),
+                            converged=bool(result.converged), iterations=result.iterations,
+                            best_iteration=result.best_iteration,
+                            final_residual=result.final_residual,
+                            true_residual=result.true_residual,
+                            actual_shift=result.actual_shift,
+                            residual_history=list(result.residual_history)))
+    return out
 
 
 if __name__ == "__main__":
