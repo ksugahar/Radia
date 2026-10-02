@@ -74,24 +74,26 @@ host, not a QUAD acceptance target.
 hashes. MCP and Cubit installations are independent observations, never solver
 drift and never a QUAD blocker.
 
-## WIP-safe editable sources
+## WIP-safe release sources
 
-Never stash, reset, clean, or rebase a shared worktree for a release. If the
-ordinary LAB tree contains parallel work, create one tracked-clean current
-release worktree on durable storage and expose its two host-local views:
+Never stash, reset, clean, or rebase a shared worktree for a release. Run the
+controller from an independent clone (not a worktree of a shared checkout, whose
+diverged local `main` would fail the main-sync gate) detached at the release
+tag; `done` verifies that controller checkout as the release source. The LAB
+wheel needs no source tree. For 100号機's development venv, create one
+tracked-clean release worktree containing the exact wheel's native payloads and
+`src/radia/release_native_payloads.json`, and name its 100-local view:
 
 ```powershell
-$env:RADIA_RELEASE_EDITABLE_REPO_LAB = "S:/Radia/release-quad/<release>"
 $env:RADIA_RELEASE_EDITABLE_REPO_100 = "W:\00_CAE\Radia\release-quad\<release>"
 python tools/release_quad.py all
 python tools/release_quad.py done --simulink-package <zip>
 ```
 
-The worktree contains the solver-native artifacts required by the editable
-install. QUAD verifies exact SHA and tracked cleanliness before mutation. `done`
-is non-mutating and leaves verified pointers unchanged. Later advance the
-explicitly intended editable source to current `main` and verify it; do not use
-an old-path restore operation.
+QUAD verifies exact SHA and tracked cleanliness before mutation. `done` is
+non-mutating and leaves both runtimes unchanged. Later advance the development
+venv's explicitly intended source to current `main` and verify it; do not use an
+old-path restore operation.
 
 ## Independent radia-optuna lane
 

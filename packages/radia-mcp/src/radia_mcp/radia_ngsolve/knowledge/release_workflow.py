@@ -148,7 +148,7 @@ the AI-readable summary; independent package lanes are excluded.
 | 8 | Deploy/verify the Radia solver on its current QUAD targets | always | this phase does not install radia-mcp or cubit-mesh-export |
 | 8S | Verify the exact versioned Simulink ZIP on LAB / 100号機 / mdx1 / mdx2 | for every Simulink revision | `simulink-candidate --package <zip> --target all` |
 | 9 | Cross-machine solver consistency probe | always | package-independent MCP state is outside this probe |
-| DoD | Re-run preflight, exact-source/editable checks, and Phase 9; bind the exact ZIP hash to the same HEAD without changing the verified editable pointers | always | `done --simulink-package <zip>`; only exit 0 authorizes GitHub Release publication. `done` requires the active LAB source to be the exact tracked-clean release SHA, requires that SHA to equal the peeled `v<radia-version>` tag, verifies LAB/100号機 editable metadata and import origins, and refuses while NAS main != origin/main. Any later repoint must select and verify an explicitly intended current source; never restore an older tree merely because its path was once canonical. |
+| DoD | Re-run preflight, the controller-source check, both runtime checks, and Phase 9; bind the exact ZIP hash to the release tag without changing any runtime | always | `done --simulink-package <zip>`; only exit 0 authorizes GitHub Release publication. `done` requires the controller checkout it runs from to be the exact tracked-clean release SHA equal to the peeled `v<radia-version>` tag, verifies the exact wheel (RECORD hashes, not editable, no shadowed import) in LAB and in 100号機's machine-default release runtime, verifies 100号機's development-venv editable source, and refuses while NAS main != origin/main. Any later development-venv repoint must select and verify an explicitly intended current source; never restore an older tree merely because its path was once canonical. |
 
 ## ===
 ## simulink_candidate — exact MEX + SLX publication gate
@@ -175,12 +175,14 @@ python tools/release_quad.py done `
 
 The candidate state is keyed by the ZIP SHA-256. Rebuilding or modifying the
 archive invalidates the four-machine evidence. `done` also requires the
-manifest commit to equal repository `HEAD`, so validation from another commit
-cannot authorize publication. A successful `done` leaves LAB and 100号機 on
-the exact editable source it verified; it never swaps a release worktree for a
-possibly older path as a side effect. Advance the explicitly intended editable
-source to current `main` and verify it in place; do not restore a prior tree by
-historical path name. Upload the ZIP,
+manifest commit to equal the peeled release-tag commit, an ancestor of the
+controller `HEAD`, so validation from another commit cannot authorize
+publication. `done` is non-mutating: LAB and 100号機's release runtime keep the
+verified wheel and 100号機's development venv keeps the verified editable
+source. Advance that venv's explicitly intended source to current `main` and
+verify it in place; do not restore a prior tree by historical path name.
+Run each target's candidate verification with `--python HOST=PATH` when the
+host default interpreter does not hold the candidate release. Upload the ZIP,
 external `manifest.json`, and `SHA256SUMS.txt` to the matching Radia GitHub
 Release only after `done` exits 0.
 
