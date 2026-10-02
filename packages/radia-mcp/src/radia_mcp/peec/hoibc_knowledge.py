@@ -736,7 +736,8 @@ The 1st-order path is already production; orders 0 and 2 are new.
 
 ```python
 from ngsolve import (Mesh, H1, BilinearForm, LinearForm, GridFunction,
-                     grad, dx, ds, InnerProduct, specialcf, x, y, z)
+                     grad, dx, ds, InnerProduct, specialcf, x, y, z,
+                     Preconditioner)
 
 mesh = Mesh("model.vol")  # workpiece is meshed as a HOLE (subtracted)
 
@@ -749,6 +750,7 @@ u, v = fes.TnT()
 # LHS: Laplace
 a = BilinearForm(fes, symmetric=True)
 a += grad(u) * grad(v) * dx
+c = Preconditioner(a, "bddc")  # register before assembly
 a.Assemble()
 
 # RHS: Neumann data on conductor surface = -H_s.n
@@ -760,10 +762,9 @@ f += -InnerProduct(H_s_cf, n) * v * ds(
     definedon=mesh.Boundaries("conductor_bnd"))
 f.Assemble()
 
-# Solve with Compact AMS preconditioner
-import radia.sparsesolv_ngsolve as ssn
-c = Preconditioner(a, "bddc")
-inv = ssn.BiCGStab(matrix=a.mat, c=c.mat, tol=1e-8)
+# Real Laplace operator with a Dirichlet outer boundary: CG + BDDC
+from ngsolve.krylovspace import CGSolver
+inv = CGSolver(a.mat, c.mat, tol=1e-10, maxiter=1000)
 phi_0.vec.data = inv * f.vec
 
 H_ext_PEC = H_s_cf - grad(phi_0)  # PEC result
@@ -889,30 +890,15 @@ the volume eddy-current problem per frequency (~2 min each x 100 =
 #   order=2 vs full-volume FE reference: < 2% error
 ```
 
-## Recipe 6: Per-panel curvature extraction for HOIBC
+## Recipe 6: Per-panel curvature for HOIBC
 
-Reuses the per-panel local curvature extractor from
-`calc_inductance.py::_compute_panel_local_radii` (lab 2026-04-12).
-
-```python
-from radia.panels.calc_inductance import _compute_panel_local_radii
-
-# For each panel on the conductor surface, get principal radii (d_1, d_2)
-# from discrete normal-angle method:
-R_local = _compute_panel_local_radii(mesh, surface_label="conductor_bnd",
-                                      percentile=10)  # [m]
-
-# In BVP_2, use per-panel mean curvature H_mean[i] = 1/R_local[i] for
-# each surface element. Wrap as a SurfaceL2 GridFunction:
-from ngsolve import SurfaceL2
-fes_curv = SurfaceL2(mesh, order=0, definedon=mesh.Boundaries("conductor_bnd"))
-H_mean_gf = GridFunction(fes_curv)
-for i, R in enumerate(R_local):
-    H_mean_gf.vec[i] = 1.0 / R  # 1/m
-
-# Use H_mean_gf in term2 of BVP_2 instead of analytical specialcf.Weingarten
-# (more robust on irregular meshes)
-```
+`radia.panels.calc_inductance` provides no per-panel curvature extractor.
+Use the geometric
+`specialcf.Weingarten(3)` of BVP_2 on a curved (`mesh.Curve(order)`)
+surface mesh; if a per-element mean curvature is needed, project
+`Trace(specialcf.Weingarten(3))/2` onto `SurfaceL2(mesh, order=0,
+definedon=mesh.Boundaries("conductor_bnd"))` and check it against the
+analytic 1/R of a sphere or cylinder before using it.
 
 ## Cross-MCP recipe references
 
@@ -921,7 +907,7 @@ for i, R in enumerate(R_local):
 - `radia_mcp.peec.hoibc('radia_application')` -- TODO checklist for
   full Radia HOIBC integration
 - `radia_mcp.fem` -- FEM gauging + Kelvin transform for outer boundary
-- `radia_mcp.matrix_solvers` -- BiCGStab + Compact AMS preconditioner
+- `radia_mcp.matrix_solvers` -- Krylov solver and preconditioner selection
 """
 
 
