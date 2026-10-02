@@ -2367,7 +2367,7 @@ for n in range(N):
 Picard non-linear loops, time stepping that reuses prior states), `stage 0`
 matches the analytical answer to machine precision, but `stage 1+`
 returns wrong-sign or wildly wrong values that look like algorithmic
-divergence — when in fact the prior `J_n_cf` expressions are silently
+divergence — when in fact the prior `state_cf` expressions are silently
 re-evaluating against the *current* (updated) `gf_acc`, not the
 `gf_acc` value at the time the CF was built.
 

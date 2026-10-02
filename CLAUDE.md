@@ -3,7 +3,8 @@
 Investigations remain in Git.
 ## Mission
 Radia is an AI-native electromagnetic CAE platform.
-AI designs; Radia provides the engineering platform. Extend NGSolve only for missing engineering capability.
+Position Radia as AI-operable CAE through MCP: users define the analysis plan, physical assumptions and acceptance criteria; AI assists tool operation and execution.
+Do not market autonomous AI design. Extend NGSolve only for missing engineering capability.
 
 Current scope:
 
@@ -17,11 +18,10 @@ The monorepo independently releases `radia`, `cubit-mesh-export`, `radia-mcp`, `
 Scope commits and CI to the owner. Shared files trigger multiple lanes only for real shared ABI, build or integration changes.
 
 - `src/`, `matlab/`, `packages/`: production implementation.
-- `tests/`: fast deterministic bug and contract protection.
-- `validation_test/`: numerical, performance, native, GUI, and multi-machine
-  evidence with machine-readable result JSON.
-- `docs/**/*.ipynb`: executed, result-bearing public demonstrations and
-  presentation-ready narratives, not production interfaces or benchmarks.
+- `tests/`: small executable usage samples and fast deterministic bug/contract protection.
+- `validation_test/`: executable physics/application samples and numerical, performance, native, GUI, and multi-machine evidence with result JSON.
+- `docs/**/*.ipynb`: executed, saved feature introductions and presentation-ready
+  narratives linking those samples; not production interfaces or benchmarks.
 - `C:\temp`: disposable prototypes and generated work.
 - `examples/`: retired; never add files.
 
@@ -66,8 +66,9 @@ Prefer established public abstractions over proprietary plumbing.
 - Fail loudly on unsupported geometry, labels, ABI, convergence, or backend
   state. Never silently substitute a numerically different route.
 ## Interfaces
-Python/MCP is the first-class AI interface. Masked blocks in the single Radia
-Simulink library are the human production interface. Implement and study both
+Python/MCP is the first-class AI interface. Operational workflows use MCP
+or human–AI collaboration through Cubit for CAD/mesh and masked blocks in the
+single Radia Simulink library for application models. Implement and study both
 MCP+LLM and Simulink+MCP workflows; their relative effectiveness is an active
 research question.
 
@@ -201,7 +202,7 @@ rerun a failed deterministic test. Do not keep two tests whose purpose and
 failure signal are the same. When CI exposes numerical uncertainty, run only
 the relevant validation lane and retain its result JSON.
 
-`docs/**/*.ipynb` is the public calculation record. Saved output is sufficient;
+`docs/**/*.ipynb` introduces features through saved calculation records. Saved output is sufficient;
 an adjacent JSON and a runtime gate are not required. A docs-only contract lane
 parses changed notebooks. Public examples include saved parameterized WebGUI
 geometry/mesh and primary-field scenes.

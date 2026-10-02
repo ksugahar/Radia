@@ -56,3 +56,9 @@ validation_test/esim_spatial/*_qsurf.sol binary
 
 # Preserve recorded execution bytes for campaign SHA-256 verification.
 validation_test/showcase/results/*.json -text whitespace=cr-at-eol
+
+# test_agent_policies_stay_compact_and_share_one_policy_body caps these policy
+# files by on-disk bytes. Pin them to LF so a Windows autocrlf checkout
+# measures the same bytes as the index and as Linux/mdx CI.
+AGENTS.md text eol=lf
+CLAUDE.md text eol=lf
