@@ -49,7 +49,8 @@ def test_phase9_probes_wheel_hosts_as_wheels_and_100_as_editable(monkeypatch):
     monkeypatch.setattr(quad, "_probe", record)
     assert quad.cmd_phase9(None) == 0
     assert seen["LAB"] == (["ssh", "102", "python", "-"], quad.CROSS_MACHINE_PROBE)
-    assert seen["100号機"][1] is quad.CROSS_MACHINE_PROBE_LAB
+    assert seen["100号機"] == (["ssh", "100", quad.DEV_PYTHON_100_PS, "-"],
+                               quad.CROSS_MACHINE_PROBE_LAB)
     assert seen["mdx1"][1] is seen["mdx2"][1] is quad.CROSS_MACHINE_PROBE
 
 

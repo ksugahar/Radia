@@ -159,6 +159,10 @@ EDITABLE_PACKAGES = ("radia", "cubit-mesh-export", "radia-mcp")
 # change between lab network segments, while the supported host alias remains
 # stable and carries the correct user/key settings.
 SSH_100 = "100"
+# 100号機's editable lives only in this dedicated development venv, separate
+# from the machine's release runtime (CLAUDE.md, decision 2026-10-01).
+DEV_PYTHON_100 = r"W:\00_CAE\Radia\environments\development\Scripts\python.exe"
+DEV_PYTHON_100_PS = "'" + DEV_PYTHON_100 + "'"
 SSH_MDX1 = "mdx1"
 SSH_MDX2 = "mdx2"
 SSH_HIBINO = "hibino"
@@ -504,12 +508,16 @@ def _run_ssh_powershell(host: str, script: str, timeout: int):
 
 def _run_simulink_candidate_target(
         key: str, package: Path, package_sha256: str,
-        success_marker: str, engine_session: str | None = None) -> tuple[bool, str]:
+        success_marker: str, engine_session: str | None = None,
+        python_executable: str | None = None) -> tuple[bool, str]:
     label, host, python_command = SIMULINK_TARGETS[key]
+    if python_executable:
+        # The verifier hands its own interpreter to MATLAB as RADIA_PYTHON_EXECUTABLE.
+        python_command = "'" + python_executable.replace("'", "''") + "'"
     verifier = REPO / "tools/verify_simulink_release.py"
     if host is None:
         command = [
-            sys.executable, str(verifier), str(package),
+            python_executable or sys.executable, str(verifier), str(package),
             "--matlab", MATLAB_EXE,
         ]
         if engine_session:
@@ -610,18 +618,29 @@ def cmd_simulink_candidate(args):
             return 2
         sessions[key] = name.strip()
 
+    pythons = {}
+    for entry in getattr(args, "python", None) or []:
+        key, separator, path = entry.partition("=")
+        if not separator or key not in requested or not path.strip() or key in pythons:
+            fail("candidate interpreters must be unique selected-target=python-path pairs")
+            return 2
+        pythons[key] = path.strip()
+
     failed = 0
     for key in requested:
         label = SIMULINK_TARGETS[key][0]
         info(f"verifying extracted package on {label}")
         session_args = [sessions[key]] if key in sessions else []
+        python_kwargs = {"python_executable": pythons[key]} if key in pythons else {}
         passed, output = _run_simulink_candidate_target(
-            key, package, package_sha256, success_marker, *session_args)
+            key, package, package_sha256, success_marker, *session_args, **python_kwargs)
         state["targets"][key] = {
             "label": label,
             "status": "passed" if passed else "failed",
             "verified_at_utc": datetime.now(timezone.utc).isoformat(),
             "mex_sha256": mex_sha256,
+            "python_executable": pythons.get(key, SIMULINK_TARGETS[key][2]
+                                             if SIMULINK_TARGETS[key][1] else sys.executable),
             "output_tail": output[-4000:],
         }
         _write_simulink_state(state_path, state, key)
@@ -1121,7 +1140,7 @@ def _solver_abi_probe_command(python_command="python"):
 def _verify_final_pip_checks() -> int:
     """Require clean shared Python dependency graphs after coordinated deploys."""
     lab = run([sys.executable, "-m", "pip", "check"], check=False)
-    remote_script = "python -m pip check"
+    remote_script = f"& {DEV_PYTHON_100_PS} -m pip check"
     encoded = base64.b64encode(remote_script.encode("utf-16le")).decode("ascii")
     machine100 = run(
         ["ssh", SSH_100, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
@@ -1166,13 +1185,18 @@ def _deploy_lab():
     return _deploy_pypi("102", "LAB")
 
 
-def _deploy_editable_remote(ssh_host, label, repo):
-    """Install only Radia editable on the remote development host."""
+def _deploy_editable_remote(ssh_host, label, repo, python_path):
+    """Install only Radia editable into the remote host's development venv."""
     step(f"Phase 8 ({label}): verify and install Radia solver editable")
     expected_sha = _release_head()
     safe_repo = repo.replace("\\", "/")
+    python = "& '" + python_path.replace("'", "''") + "'"
     ps_block = f"""
 $ErrorActionPreference = 'Stop'
+if (-not (Test-Path -LiteralPath '{python_path.replace("'", "''")}' -PathType Leaf)) {{
+  Write-Error "Development venv interpreter is missing: {python_path}"
+  exit 43
+}}
 $sourceHead = (& git -c "safe.directory={safe_repo}" -C "{repo}" rev-parse HEAD).Trim().ToLowerInvariant()
 if ($LASTEXITCODE -ne 0 -or $sourceHead -ne "{expected_sha}") {{
   Write-Error "Release source SHA mismatch: expected {expected_sha}, got $sourceHead"
@@ -1183,12 +1207,12 @@ if ($LASTEXITCODE -ne 0 -or $sourceDirty) {{
   Write-Error "Release source has tracked changes: $sourceDirty"
   exit 42
 }}
-& {' '.join('"' + part.replace('"', '`"') + '"' for part in _solver_abi_probe_command())}
+& {' '.join('"' + part.replace('"', '`"') + '"' for part in _solver_abi_probe_command(python_path))}
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-{_solver_install_guard_powershell()}
-python -m pip install --no-deps --no-cache-dir --no-build-isolation -e "{repo}"
+{_solver_install_guard_powershell(python)}
+{python} -m pip install --no-deps --no-cache-dir --no-build-isolation -e "{repo}"
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-& {' '.join('"' + part.replace('"', '`"') + '"' for part in _editable_release_verify_command(repo, expected_sha))}
+& {' '.join('"' + part.replace('"', '`"') + '"' for part in _editable_release_verify_command(repo, expected_sha, python_path))}
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 """
     encoded = base64.b64encode(ps_block.encode("utf-16le")).decode("ascii")
@@ -1259,7 +1283,7 @@ if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 
 def _deploy_100():
     return _deploy_editable_remote(
-        SSH_100, "100号機", _editable_repo_100()
+        SSH_100, "100号機", _editable_repo_100(), DEV_PYTHON_100
     )
 
 
@@ -1516,7 +1540,7 @@ def cmd_phase9(args):
     # 100号機 keeps an editable release checkout.
     targets = [
         ("LAB", ["ssh", "102", "python", "-"], CROSS_MACHINE_PROBE),
-        ("100号機", ["ssh", SSH_100, "python", "-"], CROSS_MACHINE_PROBE_LAB),
+        ("100号機", ["ssh", SSH_100, DEV_PYTHON_100_PS, "-"], CROSS_MACHINE_PROBE_LAB),
         ("mdx1", ["ssh", SSH_MDX1, "python", "-"], CROSS_MACHINE_PROBE),
         ("mdx2", ["ssh", SSH_MDX2, "python", "-"], CROSS_MACHINE_PROBE),
     ]
@@ -1835,11 +1859,14 @@ def _verify_lab_editable(packages=None, report=None):
 REMOTE_EDITABLE_VERIFY = _EDITABLE_INTENT_SOURCE
 
 
-def _remote_editable_intent(ssh_host, argv, python="python", timeout=900):
+def _remote_editable_intent(ssh_host, argv, python=None, timeout=900):
     """Run tools/editable_intent.py on ``ssh_host``.
 
+    100号機's editable intent belongs to its development venv.
     Returns (returncode, parsed JSON report or None, combined text).
     """
+    if python is None:
+        python = DEV_PYTHON_100_PS if ssh_host == SSH_100 else "python"
     token = base64.b64encode(json.dumps(list(argv)).encode("utf-8")).decode("ascii")
     proc = _run_script_with_file_output(
         ["ssh", ssh_host, python, "-", "--argv-b64", token],
@@ -2598,6 +2625,10 @@ def main():
                     help="comma list: lab, 100, mdx1, mdx2, all")
     ss.add_argument("--engine-session", action="append", metavar="HOST=NAME",
                     help="reuse an explicitly shared Engine on this target (repeatable)")
+    ss.add_argument("--python", action="append", metavar="HOST=PATH",
+                    help="candidate interpreter on this target, which runs the verifier and "
+                         "becomes MATLAB's RADIA_PYTHON_EXECUTABLE (repeatable); it must "
+                         "provide the package's radia release")
     optuna_candidate = sub.add_parser(
         "optuna-candidate",
         help="download one main-CI radia-optuna wheel and verify it on four MATLAB machines")

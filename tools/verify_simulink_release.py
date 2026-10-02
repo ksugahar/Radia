@@ -417,9 +417,12 @@ def _engine_worker(expected_root: str, expression: str, session: str | None = No
                 raise RuntimeError("Borrowed MATLAB already has Radia/Optuna MEX loaded; preserving its handles")
             saved_path, saved_pwd = engine.path(), engine.pwd()
             saved_environment = {name: engine.getenv(name) for name in (
-                "PATH", "MKL_THREADING_LAYER", "PYTHONPATH")}
+                "PATH", "MKL_THREADING_LAYER", "PYTHONPATH", "RADIA_PYTHON_EXECUTABLE")}
             borrowed_ready = True
             print(f"Reusing MATLAB Engine {session}, PID={pid}", flush=True)
+        # radia.setup reads this; the candidate is this interpreter, never PATH's python.
+        engine.setenv("RADIA_PYTHON_EXECUTABLE", sys.executable, nargout=0)
+        print(f"RADIA_PYTHON_EXECUTABLE={sys.executable}", flush=True)
         actual_root = engine.matlabroot()
         if Path(actual_root).resolve() != Path(expected_root).resolve():
             raise RuntimeError(
@@ -459,6 +462,21 @@ class _EngineScratch(tempfile.TemporaryDirectory):
                 time.sleep(0.25)
 
 
+def _require_candidate_interpreter(manifest: dict) -> None:
+    """MATLAB runs Radia through this interpreter, so it must hold the package's release."""
+    import importlib.metadata as metadata
+
+    expected = manifest.get("radia_version") or manifest.get("version")
+    try:
+        installed = metadata.version("radia")
+    except metadata.PackageNotFoundError:
+        installed = None
+    if installed != expected:
+        raise RuntimeError(
+            f"{sys.executable} provides radia {installed}, but the package is radia "
+            f"{expected}; run this verifier with the candidate interpreter")
+
+
 def run_matlab_smoke(archive: Path, matlab: Path, timeout: int = 300,
                      engine_session: str | None = None) -> str:
     if not matlab.is_file():
@@ -466,6 +484,7 @@ def run_matlab_smoke(archive: Path, matlab: Path, timeout: int = 300,
     scratch = Path(r"C:\temp")
     scratch.mkdir(parents=True, exist_ok=True)
     manifest = verify_archive(archive)
+    _require_candidate_interpreter(manifest)
     full_library = (
         manifest.get("schema") in {
             "radia.simulink.library-release-manifest.v1",

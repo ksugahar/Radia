@@ -310,9 +310,33 @@ def test_matlab_smoke_decodes_utf8_without_cp932(monkeypatch, tmp_path):
         return Result()
 
     monkeypatch.setattr(verify_module, "_run_matlab_process", run_worker)
+    monkeypatch.setattr(verify_module, "_require_candidate_interpreter", lambda manifest: None)
     output = verify_module.run_matlab_smoke(archive, matlab)
     assert "RADIA_IH_RELEASE_OK" in output
     assert verify_module._console_safe("bad:\ufffd", "cp932") == "bad:\\ufffd"
+
+
+@pytest.mark.parametrize("installed,passes", [("5.2.1", True), ("5.1.0", False), (None, False)])
+def test_matlab_smoke_requires_the_package_release_in_its_interpreter(
+        monkeypatch, installed, passes):
+    # MATLAB runs Radia through RADIA_PYTHON_EXECUTABLE = this interpreter; a
+    # host default still on an older release must fail, not pass silently.
+    import importlib.metadata
+    module = load_module("verify_candidate_interpreter", ROOT / "tools" / "verify_simulink_release.py")
+
+    def version(name):
+        assert name == "radia"
+        if installed is None:
+            raise importlib.metadata.PackageNotFoundError(name)
+        return installed
+
+    monkeypatch.setattr(importlib.metadata, "version", version)
+    manifest = {"version": "5.2.1", "radia_version": "5.2.1"}
+    if passes:
+        module._require_candidate_interpreter(manifest)
+    else:
+        with pytest.raises(RuntimeError, match="candidate interpreter"):
+            module._require_candidate_interpreter(manifest)
 
 
 def test_matlab_timeout_stops_only_owned_windows_tree(monkeypatch):
@@ -377,6 +401,9 @@ def test_engine_worker_quits_its_session_on_success_and_failure(monkeypatch, tmp
             if failure:
                 raise RuntimeError("simulation failed")
 
+        def setenv(self, name, value, **kwargs):
+            calls.append((name, value))
+
         def quit(self):
             calls.append("quit")
 
@@ -393,7 +420,7 @@ def test_engine_worker_quits_its_session_on_success_and_failure(monkeypatch, tmp
             module._engine_worker(str(tmp_path), "verify()")
     else:
         assert module._engine_worker(str(tmp_path), "verify()") == 0
-    assert calls == ["verify()", "quit"]
+    assert calls == [("RADIA_PYTHON_EXECUTABLE", sys.executable), "verify()", "quit"]
 
 
 def test_unshared_existing_matlab_prevents_substitute_start(monkeypatch, tmp_path):
@@ -464,11 +491,13 @@ def test_named_borrowed_engine_is_preserved_and_environment_restored(monkeypatch
             module._engine_worker(str(tmp_path), "verify()", "owned_by_user")
     else:
         assert module._engine_worker(str(tmp_path), "verify()", "owned_by_user") == 0
-    assert calls == ["verify()", "clear radia_mex optuna_mex",
+    assert calls == [("RADIA_PYTHON_EXECUTABLE", sys.executable),
+                     "verify()", "clear radia_mex optuna_mex",
                      ("path", "original path"), ("pwd", "original folder"),
                      ("PATH", "original PATH"),
                      ("MKL_THREADING_LAYER", "original MKL_THREADING_LAYER"),
-                     ("PYTHONPATH", "original PYTHONPATH")]
+                     ("PYTHONPATH", "original PYTHONPATH"),
+                     ("RADIA_PYTHON_EXECUTABLE", "original RADIA_PYTHON_EXECUTABLE")]
 
 
 def test_engine_scratch_retries_transient_dll_lock(monkeypatch, tmp_path):

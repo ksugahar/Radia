@@ -61,7 +61,7 @@ tests after checking available memory and active jobs; mdx CI takes priority.
 | Machine | Solver install tier | Solver release route |
 |---|---|---|
 | LAB | exact accepted Radia wheel | `phase8 --target lab` (wheel over SSH) |
-| 100号機 | dedicated editable development venv; separate release runtime | explicit interpreter and source verification |
+| 100号機 | dedicated editable development venv `W:\00_CAE\Radia\environments\development`; separate release runtime | `phase8 --target 100` (that venv's interpreter only) and source verification |
 | mdx1 | exact accepted Radia wheel | `phase8e` |
 | mdx2 | exact accepted Radia wheel | `phase8e` |
 
@@ -126,6 +126,13 @@ Radia/Optuna MEX handles, restores the borrowed path and environment, and does
 not quit it. Without an explicit session it starts MATLAB only when no MATLAB
 process or shared Engine exists; inaccessible existing sessions are not a
 reason to launch a substitute. Close only sessions owned by this operation.
+
+Host default interpreters can hold an older release. Name the candidate
+interpreter per target, for example
+`--python mdx1=C:\temp\<candidate>\venv\Scripts\python.exe` (repeatable). It runs
+the verifier, must provide the package's radia release (otherwise the target
+fails), and is set as MATLAB's `RADIA_PYTHON_EXECUTABLE`; a borrowed session's
+previous value is restored. The state records each target's interpreter.
 
 ## Completion rules
 

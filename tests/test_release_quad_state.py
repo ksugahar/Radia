@@ -81,6 +81,51 @@ def test_candidate_uses_package_specific_success_marker(tmp_path, monkeypatch, s
                for target in recorded['targets'].values())
 
 
+def test_remote_candidate_runs_the_selected_interpreter(tmp_path, monkeypatch):
+    scripts = []
+
+    def run(command, **kwargs):
+        if command[0] == 'ssh':
+            scripts.append(base64.b64decode(command[-1]).decode('utf-16le'))
+            kwargs['stdout'].write(b'RADIA_SIMULINK_RELEASE_OK {"status": "passed"}')
+        return subprocess.CompletedProcess(command, 0, '', '')
+
+    monkeypatch.setattr(module.subprocess, 'run', run)
+    python = r"C:\temp\candidate's venv\Scripts\python.exe"
+    passed, _ = module._run_simulink_candidate_target(
+        'mdx1', tmp_path/'candidate.zip', 'a'*64, 'RADIA_SIMULINK_RELEASE_OK',
+        python_executable=python)
+    assert passed
+    assert scripts[1].startswith("& 'C:\\temp\\candidate''s venv\\Scripts\\python.exe' ")
+
+
+def test_candidate_interpreters_are_recorded_per_target(tmp_path, monkeypatch):
+    package = tmp_path / 'candidate.zip'
+    package.write_bytes(b'candidate identity')
+    monkeypatch.setattr(module, '_simulink_manifest', lambda _: {
+        'schema': 'radia.simulink.library-release-manifest.v4', 'version': '5.2.1',
+        'commit': 'a' * 40,
+        'files': [{'path': 'matlab/radia_mex.mexw64', 'sha256': 'b' * 64}]})
+    monkeypatch.setattr(module, 'SIMULINK_GATE_ROOT', tmp_path)
+    used = {}
+
+    def verify_target(key, path, digest, marker, engine_session=None, python_executable=None):
+        used[key] = python_executable
+        return True, marker
+
+    monkeypatch.setattr(module, '_run_simulink_candidate_target', verify_target)
+    args = SimpleNamespace(package=str(package), target='mdx1,mdx2', engine_session=[],
+                           python=[r'mdx1=C:\temp\venv\Scripts\python.exe'])
+    assert module.cmd_simulink_candidate(args) == 0
+    assert used == {'mdx1': r'C:\temp\venv\Scripts\python.exe', 'mdx2': None}
+    recorded = json.loads(module._simulink_state_path(module._sha256_file(package)).read_text())
+    assert recorded['targets']['mdx1']['python_executable'] == r'C:\temp\venv\Scripts\python.exe'
+    assert recorded['targets']['mdx2']['python_executable'] == 'python'
+    for bad in (['lab=C:\\py.exe'], ['mdx1='], ['mdx1=a', 'mdx1=b'], ['mdx1']):
+        args.python = bad
+        assert module.cmd_simulink_candidate(args) == 2
+
+
 def test_recorded_candidate_state_passes_the_promotion_gate(tmp_path, monkeypatch):
     # The gate consumes this exact state as application_acceptance.json; a
     # hand-written fixture once hid a label mismatch that blocked promotion.
