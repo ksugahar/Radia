@@ -348,7 +348,8 @@ def test_axisymmetric_mcp_checks_use_numerical_lane_and_trace_is_fast():
     runner = runner_module()
     changed = ['packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py']
     numerical = {'validation_test/radia_mcp/test_axi_eddy_current_drive.py',
-                 'validation_test/radia_mcp/test_eddy_driven_region.py'}
+                 'validation_test/radia_mcp/test_eddy_driven_region.py',
+                 'validation_test/radia_mcp/test_aphi_gauge_point.py'}
     fast, _ = runner.load_profile('fast-contracts')
     selected = runner.select_impact_tests(fast, changed, profile_name='fast-contracts')
     assert not numerical.intersection(selected)

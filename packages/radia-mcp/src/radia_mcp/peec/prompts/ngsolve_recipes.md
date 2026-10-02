@@ -171,9 +171,13 @@ the volume eddy-current problem per frequency (~2 min each x 100 =
 Use the geometric
 `specialcf.Weingarten(3)` of BVP_2 on a curved (`mesh.Curve(order)`)
 surface mesh; if a per-element mean curvature is needed, project
-`Trace(specialcf.Weingarten(3))/2` onto `SurfaceL2(mesh, order=0,
-definedon=mesh.Boundaries("conductor_bnd"))` and check it against the
-analytic 1/R of a sphere or cylinder before using it.
+`Trace(specialcf.Weingarten(3))/2` = (kappa_1 + kappa_2)/2 onto
+`SurfaceL2(mesh, order=0, definedon=mesh.Boundaries("conductor_bnd"))`.
+Check it against the analytic mean curvature before using it: 1/R on a
+sphere, 1/(2R) on a cylinder side (principal curvatures 1/R and 0).  The
+sign follows the boundary normal: with the conductor meshed as a hole the
+normal points into the conductor and the value changes sign (a spherical
+hole gives -1/R).
 
 ## Cross-MCP recipe references
 

@@ -16,7 +16,14 @@
     "src/radia/vim/_envelope_stop.py": ["tests/test_envelope_stop_core.py"],
     "packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py": [
       "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
-      "validation_test/radia_mcp/test_eddy_driven_region.py"
+      "validation_test/radia_mcp/test_eddy_driven_region.py",
+      "validation_test/radia_mcp/test_aphi_gauge_point.py"
+    ],
+    "packages/radia-mcp/src/radia_mcp/peec/hoibc_knowledge.py": [
+      "validation_test/radia_mcp/test_hoibc_weingarten_curvature.py"
+    ],
+    "packages/radia-mcp/src/radia_mcp/peec/prompts/ngsolve_recipes.md": [
+      "validation_test/radia_mcp/test_hoibc_weingarten_curvature.py"
     ],
     "validation_test/mixed_omega_trace_reuse/": [
       "tests/test_trace_reuse_evidence_contract.py"
@@ -234,6 +241,8 @@
         "validation_test/maglev/test_demo_evidence.py",
         "validation_test/radia_mcp/test_axi_eddy_current_drive.py",
         "validation_test/radia_mcp/test_eddy_driven_region.py",
+        "validation_test/radia_mcp/test_aphi_gauge_point.py",
+        "validation_test/radia_mcp/test_hoibc_weingarten_curvature.py",
         "tests/test_accel_solver_selection.py",
         "tests/test_ngsbem_peec_body_direct.py",
         "tests/test_ngsbem_eddy_direct.py",
