@@ -12,8 +12,8 @@ Usage:
     python tools/release_quad.py phase8 [--target lab|100|mdx1|mdx2|all]
         Install the numerical Radia solver by the target's tier: the published
         wheel on LAB, mdx1, mdx2 and 100号機's machine-default release runtime,
-        and the release checkout editable in 100号機's development venv. Never
-        change radia-mcp or cubit-mesh-export.
+        and the release checkout editable in 100号機's development venv.
+        Never change radia-mcp or cubit-mesh-export.
 
     python tools/release_quad.py phase8e
         Upgrade mdx1 and mdx2 from PyPI. Refuses to run if pip index versions
