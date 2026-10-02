@@ -4926,6 +4926,36 @@ def solve_magnetostatic_newton(mesh, source, energy_density, steel_region,
     return gfu
 
 
+def _require_gauge_point(mesh, dirichlet, dirichlet_bbbnd):
+    """Fail unless ``dirichlet_bbbnd`` names a point that fixes an H1 dof.
+
+    A point tag that is absent, or that labels a vertex not connected to any
+    mesh element (e.g. a separate OCC vertex glued into the geometry), leaves
+    the Phi gauge free without any error from NGSolve.
+    """
+    from ngsolve import H1
+
+    if not dirichlet_bbbnd:
+        raise ValueError("periodic A-Phi needs a dirichlet_bbbnd point tag "
+                         "to fix the Phi gauge")
+    names = set(mesh.GetBBBoundaries())
+    if dirichlet_bbbnd not in names:
+        raise ValueError(
+            f"dirichlet_bbbnd={dirichlet_bbbnd!r} is not a point tag of this "
+            f"mesh (point tags: {sorted(n for n in names if n)})")
+    # NGSolve already excludes vertices of no element from the free dofs, so
+    # count only the dofs that each tag removes from the untagged space.
+    plain = H1(mesh, order=1).FreeDofs().NumSet()
+    if dirichlet and H1(mesh, order=1, dirichlet=dirichlet).FreeDofs().NumSet() < plain:
+        return  # a Dirichlet face already fixes the gauge
+    gauged = H1(mesh, order=1, dirichlet_bbbnd=dirichlet_bbbnd).FreeDofs().NumSet()
+    if gauged >= plain:
+        raise ValueError(
+            f"dirichlet_bbbnd={dirichlet_bbbnd!r} fixes no H1 vertex; the "
+            "tagged point is not a vertex of any volume element, so the Phi "
+            "gauge would stay free")
+
+
 def solve_eddy_current_harmonic_APhi(
     mesh, nu, sigma, omega, add_source,
     order=5, precond="local", dirichlet="", dirichlet_bbbnd="GND",
@@ -4999,6 +5029,7 @@ def solve_eddy_current_harmonic_APhi(
     fes_A       = Periodic(fes_A_base) if periodic else fes_A_base
 
     if periodic:
+        _require_gauge_point(mesh, dirichlet, dirichlet_bbbnd)
         fes_Ph_base = H1(mesh, order=order, complex=True,
                          dirichlet=dirichlet, dirichlet_bbbnd=dirichlet_bbbnd)
     else:
