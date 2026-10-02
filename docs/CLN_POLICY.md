@@ -36,6 +36,10 @@ because they previously shared a file or were described using CLN terminology.
 DtN continued fractions represent exact/high-order non-reflecting boundaries.
 They are explicitly outside the CLN removal scope: retain their implementations,
 tests, documentation, notebooks, citations, and corresponding Git history.
+The Universal Relaxation Network (URN, `radia.urn`) is likewise outside that
+scope: its scalar relaxation bases and their Foster, continued-fraction and
+ladder circuit realizations fit measured port responses and do not reduce an
+electromagnetic field. Retain them on the same terms as DtN.
 Retired reduction APIs are not production/comparison routes. Select reduced
 orders by measured operating-band error.
 
