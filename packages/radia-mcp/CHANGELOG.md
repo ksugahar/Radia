@@ -139,7 +139,10 @@ crystallized as its own package.
   continued fraction and URN are retained.
 - The MATLAB MEX contract cites the existing Optuna 5 paired MATLAB/Python
   performance result (`results_optuna50_paired_lab_20260908.json`) instead of a
-  file that was never produced.
+  file that was never produced, and states that it was recorded on 2026-09-08
+  and not re-measured. The native motor angle-family artifact is reported as
+  stale (it predates the Foster/Lift test renames) with `recorded_tests` in
+  place of a current `verified_tests` count.
 
 ### Added
 
