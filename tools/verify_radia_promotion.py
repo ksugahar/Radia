@@ -18,12 +18,14 @@ import zipfile
 try:
     from release_acceptance import RELEASE_ACCEPTANCE_HOSTS
     from release_acceptance import RELEASE_ACCEPTANCE_HOSTNAMES
+    from release_acceptance import RELEASE_ACCEPTANCE_HOST_LABELS
 except ModuleNotFoundError:  # Loaded by path in unit tests rather than run as a script.
     _acceptance_spec = importlib.util.spec_from_file_location(
         "radia_release_acceptance", Path(__file__).resolve().with_name("release_acceptance.py"))
     _acceptance_module = importlib.util.module_from_spec(_acceptance_spec)
     _acceptance_spec.loader.exec_module(_acceptance_module)
     RELEASE_ACCEPTANCE_HOSTNAMES = _acceptance_module.RELEASE_ACCEPTANCE_HOSTNAMES
+    RELEASE_ACCEPTANCE_HOST_LABELS = _acceptance_module.RELEASE_ACCEPTANCE_HOST_LABELS
     RELEASE_ACCEPTANCE_HOSTS = _acceptance_module.RELEASE_ACCEPTANCE_HOSTS
 
 SHA = re.compile(r"[0-9a-f]{40}\Z")
@@ -211,7 +213,9 @@ def verify_application_acceptance(proof, identity):
     targets = proof.get("targets", {})
     require(set(targets) == set(RELEASE_ACCEPTANCE_HOSTS), "MATLAB/Simulink requires all four hosts")
     for host, row in targets.items():
-        require(row.get("label") == host and row.get("status") == "passed",
+        # Rows are keyed by host and carry the human label simulink-candidate prints.
+        require(row.get("label") == RELEASE_ACCEPTANCE_HOST_LABELS[host]
+                and row.get("status") == "passed",
                 f"MATLAB/Simulink failed or missing: {host}")
         require(row.get("mex_sha256") == proof["mex_sha256"], f"MEX identity mismatch: {host}")
         require(bool(row.get("verified_at_utc")), f"Missing MATLAB/Simulink verification time: {host}")

@@ -81,6 +81,32 @@ def test_candidate_uses_package_specific_success_marker(tmp_path, monkeypatch, s
                for target in recorded['targets'].values())
 
 
+def test_recorded_candidate_state_passes_the_promotion_gate(tmp_path, monkeypatch):
+    # The gate consumes this exact state as application_acceptance.json; a
+    # hand-written fixture once hid a label mismatch that blocked promotion.
+    gate_spec = importlib.util.spec_from_file_location(
+        'promotion_gate_roundtrip', TOOL.with_name('verify_radia_promotion.py'))
+    gate = importlib.util.module_from_spec(gate_spec)
+    gate_spec.loader.exec_module(gate)
+    package = tmp_path / 'candidate.zip'
+    package.write_bytes(b'candidate identity')
+    monkeypatch.setattr(module, '_simulink_manifest', lambda _: {
+        'schema': 'radia.simulink.library-release-manifest.v4',
+        'version': '5.2.1', 'commit': 'a' * 40,
+        'files': [{'path': 'matlab/radia_mex.mexw64', 'sha256': 'b' * 64}]})
+    monkeypatch.setattr(module, 'SIMULINK_GATE_ROOT', tmp_path)
+    monkeypatch.setattr(module, '_run_simulink_candidate_target',
+                        lambda *args: (True, 'RADIA_SIMULINK_RELEASE_OK'))
+    args = SimpleNamespace(package=str(package), target='all', engine_session=[])
+    assert module.cmd_simulink_candidate(args) == 0
+    recorded = json.loads(module._simulink_state_path(module._sha256_file(package)).read_text())
+    identity = {'source_commit': 'a' * 40, 'version': '5.2.1'}
+    gate.verify_application_acceptance(recorded, identity)
+    recorded['targets']['lab']['label'] = 'lab'
+    with pytest.raises(ValueError, match='lab'):
+        gate.verify_application_acceptance(recorded, identity)
+
+
 @pytest.mark.parametrize('matched', [True, False])
 def test_preflight_checks_only_solver_version_pair(monkeypatch, matched):
     versions = dict.fromkeys([

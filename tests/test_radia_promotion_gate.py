@@ -284,7 +284,8 @@ def test_old_success_cannot_hide_a_failed_ci_rerun():
 def application_proof():
     return {"schema": "radia.release-quad.simulink-candidate.v1", "version": "5.1.0",
             "commit": "a"*40, "package_sha256": "b"*64, "mex_sha256": "c"*64,
-            "targets": {host: {"label": host, "status": "passed", "mex_sha256": "c"*64,
+            "targets": {host: {"label": gate.RELEASE_ACCEPTANCE_HOST_LABELS[host],
+                              "status": "passed", "mex_sha256": "c"*64,
                               "verified_at_utc": "2026-09-30T00:00:00Z"}
                         for host in gate.RELEASE_ACCEPTANCE_HOSTS}}
 
@@ -292,9 +293,11 @@ def application_proof():
 def test_application_acceptance_requires_four_exact_mex_results():
     identity = {"source_commit": "a"*40, "version": "5.1.0"}
     gate.verify_application_acceptance(application_proof(), identity)
-    for mutation in ("missing_host", "failed", "wrong_mex", "wrong_source", "missing_time"):
+    for mutation in ("missing_host", "failed", "wrong_mex", "wrong_source", "missing_time",
+                     "wrong_label"):
         proof = application_proof()
         if mutation == "missing_host": del proof["targets"]["mdx2"]
+        elif mutation == "wrong_label": proof["targets"]["100"]["label"] = "mdx1"
         elif mutation == "failed": proof["targets"]["100"]["status"] = "failed"
         elif mutation == "wrong_mex": proof["targets"]["lab"]["mex_sha256"] = "d"*64
         elif mutation == "wrong_source": proof["commit"] = "e"*40
