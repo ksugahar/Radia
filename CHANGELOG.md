@@ -5,6 +5,10 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 5.2.1 - SparseSolv ICCG contract and native MATLAB ICCG
+
+Release candidate; publication and four-host acceptance are not yet complete.
+
 - SparseSolv ICCG (`radia.sparsesolv_ngsolve.SparseSolvSolver`, `solve_iccg`)
   follows one documented contract, and **its defaults changed**: diagonal
   scaling on (the stop test uses the recursive residual of the scaled system),
@@ -27,6 +31,29 @@ All notable changes to the `radia` package.  Format: each release lists
 - MATLAB: `radia.sparsesolv.ICCG` (native `sparsesolv.iccg`) runs the same
   ICCG contract on NGSolve matrix handles; `radia.sparsesolv.IC` documents
   that `Shift >= 1` is required (the native factorization rejects smaller values).
+- PRIMA port-model export: `radia.prima_export.DescriptorPortModel` holds a
+  real descriptor port model in impedance or admittance orientation (switched
+  through the exact descriptor inverse; `from_prima_hacapk` for single-port
+  PRIMA results).  `ltspice_subckt`/`write_ltspice_subckt` write an LTspice
+  `.subckt` with one Laplace source per real pole section, in a proper
+  orientation, from a pole-residue form checked against the descriptor
+  response; `export_prima_lti_json` writes the `radia.prima.port_model.v1`
+  exchange.  Unstable, defective or ill-conditioned poles, unpaired complex
+  poles, a polynomial part of degree > 1, singular pencils, identically zero
+  ports and models improper in both orientations are rejected.
+- MATLAB/Simulink: `radia.simulink.loadPrimaPortModel` rebuilds the exchange as
+  a `dss` model and checks its response at the stored frequencies; it rejects
+  unsupported schemas, mismatched ports, an empty or non-positive check
+  frequency list, a relative limit looser than the exporter's 1e-6, and
+  non-finite responses or errors.  `addPrimaLTIBlock` places the model in an
+  LTI System block and rejects improper models.
+- `radia.prima_hacapk` descriptor branch now projects the MNA form
+  `G = [[R, A^T], [-A, 0]]` (port vector `[0; e_port]`) instead of the
+  symmetric saddle.  The Krylov basis is unchanged, `G + G^T` is positive
+  semidefinite as PRIMA's passivity argument requires, and the previous
+  symmetric-saddle projection could yield unstable out-of-band poles.
+  `dc_inductance_resistance` returns `L = dZ/ds` at `s = 0` with the correct
+  sign, and the series-chain model's `R_total`/`L_total` directly.
 
 ## 5.2.0 - Solver maintenance and label-specific cooling
 

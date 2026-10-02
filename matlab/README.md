@@ -4,10 +4,17 @@
 
 `radia.sparsesolv.AMS(A, space)` and `radia.sparsesolv.IC(A)` return native
 `radia.ngsolve.Matrix` preconditioners. `radia.sparsesolv.COCR(A, P)` returns
-an inverse operator applied with `inverse.matvec(rhs)`. Matrices and vectors
-remain owned by C++; deleting the input MATLAB wrappers does not invalidate
-the inverse operator. The MEX calls the same SparseSolv C++ implementation as
-the Python extension, without embedding Python for these operations.
+an inverse operator applied with `inverse.matvec(rhs)`.
+`[x, info] = radia.sparsesolv.ICCG(A, b, ...)` solves on the free DOFs of the
+matrix's space with the SparseSolv ICCG contract (scaled-system stop,
+automatic IC shift, best iterate, stagnation stop) and returns a new vector
+plus `converged`, `iterations`, `best_iteration`, `final_residual`,
+`true_residual`, `actual_shift` and `residual_history`; its options and
+defaults match the Python `SparseSolvSolver`. Matrices and vectors remain
+owned by C++; deleting the input MATLAB wrappers does not invalidate the
+inverse operator or a returned solution. The MEX calls the same SparseSolv C++
+implementation as the Python extension, without embedding Python for these
+operations.
 
 The coordinate-based AMS entry requires a real auxiliary matrix assembled on
 the supplied 3D `HCurl` space with `Order=1` and `NoGrads=true`. Use
