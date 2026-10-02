@@ -178,7 +178,9 @@ def test_remote_deploy_changes_only_radia(monkeypatch, drift):
         release_quad, "_record_release_intent_remote",
         lambda host, label, repo: calls.append(("record", host, repo)) or 0)
 
-    assert release_quad._deploy_editable_remote("100", "100", "W:/release") == (4 if drift else 0)
+    venv = release_quad.DEV_PYTHON_100
+    assert release_quad._deploy_editable_remote(
+        "100", "100", "W:/release", venv) == (4 if drift else 0)
     script = base64.b64decode(calls[0][-1]).decode("utf-16le")
     assert "pip install --no-deps" in script
     assert "pip uninstall" not in script
@@ -187,8 +189,11 @@ def test_remote_deploy_changes_only_radia(monkeypatch, drift):
     assert "Stop-Process" not in script
     assert "status --porcelain --untracked-files=no" in script
     assert "ngsolve.__version__" in script
-    assert '& "python" "-c"' in script
-    assert '\n"python" "-c"' not in script
+    # Every interpreter call is the dedicated development venv, never PATH's python.
+    assert f'& "{venv}" "-c"' in script
+    assert f"& '{venv}' -m pip install --no-deps" in script
+    assert script.index(f"Test-Path -LiteralPath '{venv}'") < script.index("pip install")
+    assert '"python"' not in script and "\npython " not in script
     assert "netgen-mesher" in script
     assert script.index("rev-parse HEAD") < script.index("pip install")
     assert script.index("ngsolve.__version__") < script.index("pip install")
@@ -274,7 +279,31 @@ def test_done_pip_check_requires_both_editable_hosts(monkeypatch, local_rc, remo
     assert release_quad._verify_final_pip_checks() == expected
     assert calls[0][-2:] == ["pip", "check"]
     remote = base64.b64decode(calls[1][-1]).decode("utf-16le")
-    assert remote == "python -m pip check"
+    assert remote == f"& '{release_quad.DEV_PYTHON_100}' -m pip check"
+
+
+def test_100_editable_tooling_uses_the_dedicated_development_venv(monkeypatch):
+    # 100号機's editable is a maintainer/student venv, separate from its release
+    # runtime; the machine-wide python is never the editable target.
+    assert release_quad.DEV_PYTHON_100 == (
+        r"W:\00_CAE\Radia\environments\development\Scripts\python.exe")
+    commands = []
+
+    def run(command, source, timeout):
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, "{}", "")
+
+    monkeypatch.setattr(release_quad, "_run_script_with_file_output", run)
+    release_quad._remote_editable_intent("100", ["--json", "verify"])
+    release_quad._remote_editable_intent("mdx1", ["--json", "verify"])
+    assert commands[0][:3] == ["ssh", "100", release_quad.DEV_PYTHON_100_PS]
+    assert commands[1][:3] == ["ssh", "mdx1", "python"]
+    called = []
+    monkeypatch.setattr(release_quad, "_deploy_editable_remote",
+                        lambda *args: called.append(args) or 0)
+    monkeypatch.setattr(release_quad, "_editable_repo_100", lambda: "W:/release")
+    assert release_quad._deploy_100() == 0
+    assert called == [("100", "100号機", "W:/release", release_quad.DEV_PYTHON_100)]
 
 
 
@@ -451,7 +480,8 @@ def test_remote_deploy_checks_exact_source_before_install(monkeypatch):
     monkeypatch.setattr(release_quad, "_record_release_intent_remote", lambda *_a: 0)
 
     assert release_quad._deploy_editable_remote(
-        "release-host", "release host", r"W:\Radia\release-source"
+        "release-host", "release host", r"W:\Radia\release-source",
+        release_quad.DEV_PYTHON_100
     ) == 0
     script = base64.b64decode(captured["command"][-1]).decode("utf-16le")
     assert expected_sha in script
