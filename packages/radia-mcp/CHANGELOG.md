@@ -7,6 +7,13 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+### Changed
+- `radia_ngsolve` SparseSolv knowledge describes the current ICCG contract:
+  scaled-system recursive-residual stop and the separate `true_residual`,
+  defaults `tol=1e-8`, `maxiter=0` (2n), `shift=1.0` with automatic search,
+  diagonal scaling and the stagnation stop on.  Hermitian systems use
+  `method="CG"` with `conjugate=True`; ICCG and COCR reject `conjugate=True`.
+
 ## [2.0.0] - 2026-10-01
 
 ### Removed
