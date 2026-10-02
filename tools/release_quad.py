@@ -2525,8 +2525,12 @@ def cmd_sync_main(args):
 
 _MOTOR_ARTIFACT = ("validation_test/radia_mcp/artifacts/"
                    "annular_motor_dual_lane_v1/native_motor_angle_family.json")
-_MOTOR_PYTEST = ("packages/radia-mcp/tests/"
-                 "test_annular_motor_dual_lane_artifact.py")
+# Existing acceptance checks for a regenerated artifact. They are run, never
+# edited: a failure means the evidence or the source is wrong.
+_MOTOR_ACCEPTANCE_TESTS = (
+    "validation_test/radia_mcp/test_motor_angle_source_freshness.py",
+    "tests/mcp_integration/test_annular_motor_dual_lane_artifact.py",
+)
 # Complete root-relative closure the HIBINO run needs (learned 2026-08-07:
 # missing pyproject.toml / maglev data / team28 docs each cost one round trip).
 _MOTOR_SNAPSHOT_ROOTS = (
@@ -2566,8 +2570,8 @@ def cmd_evidence_motor(args):
     ship the snapshot closure to hibino over scp, run the generator in
     a SYNCHRONOUS ssh (Windows OpenSSH reaps detached children on
     session exit — Start-Process launches died twice before this was
-    understood), fetch the artifact back, verify the SHA pins, and
-    align the pytest test-count expectation.
+    understood), fetch the artifact back, verify the SHA pins, and run
+    the existing acceptance tests without editing them.
     """
     step("evidence-motor: HIBINO MATLAB evidence regeneration")
 
@@ -2665,17 +2669,28 @@ def cmd_evidence_motor(args):
        f"{art['passed_count']}/{art['test_count']} on "
        f"{art['execution_environment']['hostname']} ({art['matlab_release']})")
 
-    # 6) align the pytest expectation with the measured suite size
-    import re
-    pytest_path = REPO / _MOTOR_PYTEST
-    text = pytest_path.read_text(encoding="utf-8")
-    new_text, n = re.subn(
-        r'(assert native\["test_count"\] == native\["passed_count"\] == )\d+',
-        rf"\g<1>{art['test_count']}", text)
-    if n == 1 and new_text != text:
-        pytest_path.write_text(new_text, encoding="utf-8", newline="\n")
-        ok(f"pytest expectation aligned to {art['test_count']}")
-    info("stage & commit:  git add " + _MOTOR_ARTIFACT + " " + _MOTOR_PYTEST)
+    # 6) run the existing acceptance checks against the regenerated artifact
+    rc = _motor_acceptance()
+    if rc != 0:
+        return rc
+    info("stage & commit:  git add " + _MOTOR_ARTIFACT)
+    return 0
+
+
+def _motor_acceptance(run_fn=None):
+    """Run the motor acceptance tests unchanged; return 0 or a failure code."""
+    run_fn = run if run_fn is None else run_fn
+    missing = [rel for rel in _MOTOR_ACCEPTANCE_TESTS if not (REPO / rel).is_file()]
+    if missing:
+        for rel in missing:
+            fail("motor acceptance test missing: " + rel)
+        return 4
+    p = run_fn([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
+                *_MOTOR_ACCEPTANCE_TESTS], check=False, cwd=str(REPO))
+    if p.returncode != 0:
+        fail(f"motor acceptance tests failed (exit {p.returncode})")
+        return 4
+    ok("motor acceptance tests passed")
     return 0
 
 
