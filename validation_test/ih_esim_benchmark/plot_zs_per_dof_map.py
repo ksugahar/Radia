@@ -29,7 +29,7 @@ Inputs:
     case) -- regenerable from the repo, no C:/temp dependency.
 
     Workpiece .vol mesh used to recover the per-DOF (x, y, z)
-    coordinates.  Default points at samples/ih_bem_sample_p1.vol.
+    coordinates.  Default points at esim_spatial/inputs/ih_bem_sample_p1.vol.
 
 Outputs:
     Zs_per_dof_map.png       (3-panel figure)
@@ -56,8 +56,8 @@ from radia_mcp.figure import (
 # Data Persistence Policy: default to the committed dense-sweep case,
 # not a transient C:/temp snapshot.
 DEFAULT_JSON = Path(__file__).parent / "sweep_data_dense" / "I100_f50k_per_panel.json"
-DEFAULT_VOL = Path(__file__).resolve().parent.parent.parent / \
-              "src" / "radia" / "panels" / "samples" / "ih_bem_sample_p1.vol"
+DEFAULT_VOL = Path(__file__).resolve().parent.parent / \
+              "esim_spatial" / "inputs" / "ih_bem_sample_p1.vol"
 OUT_PNG = Path(__file__).parent / "Zs_per_dof_map.png"
 
 
@@ -69,11 +69,11 @@ def main():
         print(f"ERROR: {json_path} not found.")
         print("Generate it by running:")
         print("  python src/radia/panels/calc_inductance.py \\")
-        print("    --coil-step samples/ih_fem_kelvin_demo_coil.step \\")
-        print("    --coil-solver peec --vol samples/ih_bem_sample_p1.vol \\")
+        print("    --coil-step validation_test/esim_spatial/inputs/ih_fem_kelvin_demo_coil.step \\")
+        print("    --coil-solver peec --vol validation_test/esim_spatial/inputs/ih_bem_sample_p1.vol \\")
         print("    --wp-label sibc --sigma 2e6 --mu-r 100 --half-thickness 0.005 \\")
         print("    --frequency 50000 --current 100.0 --coil-sigma 5.8e7 \\")
-        print("    --impedance-model esim --bh-file samples/em_sample_bh.txt \\")
+        print("    --impedance-model esim --bh-file validation_test/esim_spatial/inputs/em_sample_bh.txt \\")
         print("    --esim-per-panel --h1-order 1 --wp-bem-backend intree-dense \\")
         print(f"    --output {json_path}")
         sys.exit(1)
