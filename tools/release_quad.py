@@ -2525,11 +2525,16 @@ def cmd_sync_main(args):
 
 _MOTOR_ARTIFACT = ("validation_test/radia_mcp/artifacts/"
                    "annular_motor_dual_lane_v1/native_motor_angle_family.json")
+_MOTOR_PROOF = ("validation_test/radia_mcp/artifacts/"
+                "annular_motor_dual_lane_v1/production_replacement_proof.json")
+_MOTOR_PROOF_GENERATOR = ("validation_test/radia_mcp/"
+                          "generate_production_replacement_proof.py")
 # Existing acceptance checks for a regenerated artifact. They are run, never
 # edited: a failure means the evidence or the source is wrong.
 _MOTOR_ACCEPTANCE_TESTS = (
     "validation_test/radia_mcp/test_motor_angle_source_freshness.py",
     "tests/mcp_integration/test_annular_motor_dual_lane_artifact.py",
+    "tests/mcp_integration/test_matlab_source_contract.py",
 )
 # Complete root-relative closure the HIBINO run needs (learned 2026-08-07:
 # missing pyproject.toml / maglev data / team28 docs each cost one round trip).
@@ -2570,8 +2575,9 @@ def cmd_evidence_motor(args):
     ship the snapshot closure to hibino over scp, run the generator in
     a SYNCHRONOUS ssh (Windows OpenSSH reaps detached children on
     session exit — Start-Process launches died twice before this was
-    understood), fetch the artifact back, verify the SHA pins, and run
-    the existing acceptance tests without editing them.
+    understood), fetch the artifact back, verify the SHA pins, regenerate
+    the production replacement proof, and run the existing acceptance
+    tests without editing them.
     """
     step("evidence-motor: HIBINO MATLAB evidence regeneration")
 
@@ -2669,12 +2675,23 @@ def cmd_evidence_motor(args):
        f"{art['passed_count']}/{art['test_count']} on "
        f"{art['execution_environment']['hostname']} ({art['matlab_release']})")
 
-    # 6) run the existing acceptance checks against the regenerated artifact
-    rc = _motor_acceptance()
+    # 6) rebind the proof to the new artifact, then run the acceptance checks
+    rc = _motor_post_regeneration()
     if rc != 0:
         return rc
-    info("stage & commit:  git add " + _MOTOR_ARTIFACT)
+    info("stage & commit:  git add " + _MOTOR_ARTIFACT + " " + _MOTOR_PROOF)
     return 0
+
+
+def _motor_post_regeneration(run_fn=None):
+    """Regenerate the production proof, then accept; stop at the first failure."""
+    run_fn = run if run_fn is None else run_fn
+    p = run_fn([sys.executable, _MOTOR_PROOF_GENERATOR], check=False, cwd=str(REPO))
+    if p.returncode != 0:
+        fail(f"production replacement proof failed (exit {p.returncode})")
+        return 4
+    ok("production replacement proof regenerated: " + _MOTOR_PROOF)
+    return _motor_acceptance(run_fn)
 
 
 def _motor_acceptance(run_fn=None):
