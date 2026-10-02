@@ -5,6 +5,10 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 5.2.1 - SparseSolv ICCG contract and native MATLAB ICCG
+
+Release candidate; publication and four-host acceptance are not yet complete.
+
 - SparseSolv ICCG (`radia.sparsesolv_ngsolve.SparseSolvSolver`, `solve_iccg`)
   follows one documented contract, and **its defaults changed**: diagonal
   scaling on (the stop test uses the recursive residual of the scaled system),
