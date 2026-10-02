@@ -265,7 +265,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert contract["verified_contract"]["native_motor_family_artifact"].endswith(
         "native_motor_angle_family.json"
     )
-    assert contract["verified_contract"]["native_motor_family_artifact_status"].startswith("stale:")
+    assert contract["verified_contract"]["native_motor_family_artifact_status"].startswith("recorded ")
     assert (
         "not re-measured" in contract["verified_contract"]["optuna50_performance_benchmark_status"]
     )
@@ -391,7 +391,11 @@ def test_optuna_simulink_contract_is_table_backed():
     )
     assert native_family["recorded_tests"] == artifact["test_count"]
     assert artifact["passed_count"] == artifact["test_count"]
-    assert native_family["evidence_status"].startswith("stale:")
+    assert native_family["evidence_status"].startswith("recorded ")
+    assert (
+        f"{artifact['passed_count']} of {artifact['test_count']} tests passed"
+        in native_family["evidence_status"]
+    )
     assert contract["reinforcement_learning_workflow"]
     topology = contract["cad_topology_optimization"]
     assert topology["sensitivity_policy"].startswith("No cell-wise finite differences")
