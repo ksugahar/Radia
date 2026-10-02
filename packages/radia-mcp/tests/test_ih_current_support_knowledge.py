@@ -35,3 +35,8 @@ def test_esim_is_not_described_as_unimplemented():
     assert 'ESIM WIP' not in text
     assert 'ESIM-WIP' not in text
     assert '"esim_converged": false' in text
+
+def test_3d_kelvin_reluctivity_factor_is_squared():
+    text = get_induction_heating_documentation('all')
+    assert "(r'/a)^4" not in text
+    assert "nu' = nu0 * (r'/R)^2 in exterior sphere (3D HCurl A" in text
