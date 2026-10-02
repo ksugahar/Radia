@@ -14,7 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent.parent
-SAMPLES = REPO / "src" / "radia" / "panels" / "samples"
+INPUTS = REPO / "validation_test" / "esim_spatial" / "inputs"
 
 
 SCENARIOS = [
@@ -27,11 +27,11 @@ SCENARIOS = [
         "panel": "radia_ih",
         "window_class": "IHWindow",
         "method_const": "METHOD_PEEC_BEM",
-        "vol": str(SAMPLES / "ih_bem_sample_p1.vol"),
+        "vol": str(INPUTS / "ih_bem_sample_p1.vol"),
         "set": {
             "impedance_model": "Nonlinear ESIM (experimental, WIP)",
-            "peec_step": str(SAMPLES / "ih_fem_kelvin_demo_coil.step"),
-            "bh_file":   str(SAMPLES / "em_sample_bh.txt"),
+            "peec_step": str(INPUTS / "ih_fem_kelvin_demo_coil.step"),
+            "bh_file":   str(INPUTS / "em_sample_bh.txt"),
             "freq":            "50000",
             "current":         "100.0",
             "wp_sigma":        "2e6",
@@ -63,11 +63,11 @@ SCENARIOS = [
         "panel": "radia_ih",
         "window_class": "IHWindow",
         "method_const": "METHOD_PEEC_BEM",
-        "vol": str(SAMPLES / "ih_bem_sample_p1.vol"),
+        "vol": str(INPUTS / "ih_bem_sample_p1.vol"),
         "set": {
             "impedance_model": "Nonlinear ESIM (experimental, WIP)",
-            "peec_step": str(SAMPLES / "ih_fem_kelvin_demo_coil.step"),
-            "bh_file":   str(SAMPLES / "em_sample_bh.txt"),
+            "peec_step": str(INPUTS / "ih_fem_kelvin_demo_coil.step"),
+            "bh_file":   str(INPUTS / "em_sample_bh.txt"),
             "freq":            "50000",
             "current":         "100.0",
             "wp_sigma":        "2e6",
