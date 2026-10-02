@@ -2165,10 +2165,14 @@ Non-obvious features:
    re-enables manual entry.  **Coil and wp materials are INDEPENDENT**
    — setting one does not change the other.
 
-2. **Impedance model** (Linear SIBC / Nonlinear ESIM-WIP).  Selecting
-   ESIM reveals bh_file, max_iter, tol widgets.  Calc scripts accept
-   `--impedance-model esim` but return `{"error":"ESIM WIP"}` — the
-   CLI path is plumbed for future extension.
+2. **Impedance model** (Linear SIBC / Nonlinear ESIM).  Selecting
+   ESIM reveals bh_file, max_iter, tol widgets.  `calc_inductance`,
+   `calc_fem_kelvin` and `calc_fem_coilmesh` run the ESIM Karl iteration
+   for `--impedance-model esim`; it needs a 2-column BH file
+   (`--bh-file`).  An unconverged ESIM cell solve always raises.  An
+   unconverged outer Karl loop raises in `calc_fem_kelvin`, while
+   `calc_inductance` and `calc_fem_coilmesh` report it as
+   `"esim_converged": false` in their JSON — check that field.
 
 3. **Linear solver** per-method:
    - PEEC+BEM: Dense LU (small) / HACApK (large, O(N log N))

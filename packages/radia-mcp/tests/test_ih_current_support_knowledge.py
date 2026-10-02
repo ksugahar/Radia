@@ -28,3 +28,10 @@ def test_sibc_default_is_current_architecture_not_redirect_stub():
     assert 'calc_peec.py' not in text
     assert 'v4.6.0' not in text
     assert text in get_ih_sibc_documentation()
+
+def test_esim_is_not_described_as_unimplemented():
+    from radia_mcp.ih.esim_knowledge import get_ih_esim_documentation
+    text = get_induction_heating_documentation('all') + get_ih_esim_documentation('all')
+    assert 'ESIM WIP' not in text
+    assert 'ESIM-WIP' not in text
+    assert '"esim_converged": false' in text
