@@ -123,6 +123,7 @@ Az = solve_planar_eddy(mesh, nu, sigma, omega, applied_Ez=Vc)
 Fx, Fy = eggshell_force_2d(B, mesh, center, r_in, r_out)
 tau    = eggshell_torque_2d(B, mesh, center, r_in, r_out, pivot=(0,0))
 L_pm   = inductance_2d(B, mesh, nu, current)           # H/m (per unit length)
+Ez     = -1j*omega*Az + Vc                             # driven conductor: keep the Vc term
 P_pm   = ohmic_loss_2d(Ez, mesh, sigma, region="wire") # W/m ; Rac = 2P/|I|^2
 ```
 
@@ -151,7 +152,8 @@ Az = solve_axi_eddy(mesh, nu, sigma, omega, applied_Vc=Vc)
 # post: 3D inductance [H], AC loss [W]
 B    = CoefficientFunction((grad(Az)[0] + Az/x, -grad(Az)[1]))  # (Bz, Br)
 L_3D = inductance_axi(B, mesh, nu, current)            # H (full torus)
-P_3D = ohmic_loss_axi(-1j*omega*Az, mesh, sigma, region="wire") # W ; Rac = 2P/|I|^2
+E_phi = -1j*omega*Az + Vc/x                            # driven conductor: keep Vc/r
+P_3D = ohmic_loss_axi(E_phi, mesh, sigma, region="wire") # W ; Rac = 2P/|I|^2
 ```
 
 Conventions: axis(r=0) MUST be Dirichlet for H1Henrotte; magnet theta is from
