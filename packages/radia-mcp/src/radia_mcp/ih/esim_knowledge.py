@@ -633,13 +633,13 @@ Inputs:
   - Workpiece: cylindrical steel, diameter = 50 mm, height = 25 mm,
                 sigma = 2e6 S/m,
                 mu_r(linear) = 100, BH curve
-                src/radia/panels/samples/em_sample_bh.txt (CEFC 2020),
+                validation_test/esim_spatial/inputs/em_sample_bh.txt (CEFC 2020),
                 ESIM cell half_thickness = 5 mm
-  - Coil: PEEC filament (16 perimeter), src/radia/panels/samples/
-          ih_fem_kelvin_demo_coil.step
+  - Coil: PEEC filament (16 perimeter), validation_test/esim_spatial/
+          inputs/ih_fem_kelvin_demo_coil.step
   - Frequency: 50 kHz
   - I_port: 100 A (chosen to push surface H_t past the BH knee)
-  - Mesh: src/radia/panels/samples/ih_bem_sample_p1.vol
+  - Mesh: validation_test/esim_spatial/inputs/ih_bem_sample_p1.vol
           (2150 BND tris, 1077 vertices)
   - Karl: --esim-max-iter 30 --esim-anderson-m 5 --esim-relax 0.5
 
@@ -663,12 +663,12 @@ truth is the dense sweep with the triangle-wise P1 gradient extractor.
 Reproduction (from any machine with radia >= 4.67.0 installed):
 
   python src/radia/panels/calc_inductance.py \\
-    --coil-step src/radia/panels/samples/ih_fem_kelvin_demo_coil.step \\
+    --coil-step validation_test/esim_spatial/inputs/ih_fem_kelvin_demo_coil.step \\
     --coil-solver peec \\
-    --vol src/radia/panels/samples/ih_bem_sample_p1.vol --wp-label sibc \\
+    --vol validation_test/esim_spatial/inputs/ih_bem_sample_p1.vol --wp-label sibc \\
     --sigma 2e6 --mu-r 100 --half-thickness 0.005 \\
     --frequency 50000 --current 100.0 --coil-sigma 5.8e7 \\
-    --impedance-model esim --bh-file src/radia/panels/samples/em_sample_bh.txt \\
+    --impedance-model esim --bh-file validation_test/esim_spatial/inputs/em_sample_bh.txt \\
     --esim-max-iter 30 --esim-tol 1e-3 --esim-relax 0.5 --esim-anderson-m 5 \\
     [--esim-per-panel] \\
     --h1-order 1 --wp-bem-backend intree-dense \\
