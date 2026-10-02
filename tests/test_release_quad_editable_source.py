@@ -253,7 +253,6 @@ def test_done_requires_simulink_candidate_for_5_1_and_newer(monkeypatch, tmp_pat
     from argparse import Namespace
 
     monkeypatch.setattr(release_quad, "cmd_preflight", lambda _a: 0)
-    monkeypatch.setattr(release_quad, "_done_active_lab_source", lambda: str(tmp_path))
     monkeypatch.setattr(release_quad, "_verify_local_release_source", lambda *_a: 0)
     monkeypatch.setattr(release_quad, "cmd_temp_shadows", lambda _a: 0)
     monkeypatch.setattr(release_quad, "_verify_head_release_tag", lambda: 0)
@@ -459,6 +458,113 @@ def test_local_release_source_requires_exact_sha_and_tracked_clean(
 
     (repo / "tracked.txt").write_text("parallel WIP\n", encoding="ascii")
     assert release_quad._verify_local_release_source(str(repo), head) == 4
+
+
+def _release_repo(tmp_path):
+    """A tagged v5.2.1 release commit followed by a tooling repair commit."""
+    repo = tmp_path / "controller"
+    repo.mkdir()
+    _git(repo, "init")
+    _git(repo, "config", "user.name", "Radia Test")
+    _git(repo, "config", "user.email", "radia-test@example.invalid")
+    (repo / "pyproject.toml").write_text('[project]\nname = "radia"\nversion = "5.2.1"\n',
+                                         encoding="ascii")
+    (repo / "tool.py").write_text("release\n", encoding="ascii")
+    _git(repo, "add", "pyproject.toml", "tool.py")
+    _git(repo, "commit", "-m", "release")
+    release = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "tag", "-a", "v5.2.1", "-m", "release", release)
+    (repo / "tool.py").write_text("repaired release tooling\n", encoding="ascii")
+    _git(repo, "commit", "-am", "tooling repair")
+    return repo, release
+
+
+def test_later_tooling_controller_must_descend_cleanly_from_the_release(tmp_path):
+    repo, release = _release_repo(tmp_path)
+    assert release_quad._verify_release_controller(repo, release, "5.2.1") == 0
+    # Same version declared at the release commit is part of the identity.
+    assert release_quad._verify_release_controller(repo, release, "5.2.2") == 4
+    # Tracked changes in the controller are refused.
+    (repo / "tool.py").write_text("unreviewed\n", encoding="ascii")
+    assert release_quad._verify_release_controller(repo, release, "5.2.1") == 4
+    _git(repo, "checkout", "--", "tool.py")
+    # A controller that does not contain the release commit is refused.
+    _git(repo, "checkout", "--orphan", "unrelated")
+    _git(repo, "commit", "-m", "unrelated history")
+    assert release_quad._verify_release_controller(repo, release, "5.2.1") == 4
+
+
+def _done_until_source_gates(monkeypatch, controller, release):
+    monkeypatch.setattr(release_quad, "REPO", controller)
+    monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: 0)
+    monkeypatch.setattr(release_quad, "_release_head", lambda: release)
+    monkeypatch.setattr(release_quad, "_radia_version", lambda: "5.2.1")
+    passed = AssertionError("source gates passed")
+
+    def next_gate(_args):
+        raise passed
+
+    monkeypatch.setattr(release_quad, "cmd_temp_shadows", next_gate)
+    return passed
+
+
+def test_done_accepts_a_later_controller_with_a_separate_exact_tag_source(
+        tmp_path, monkeypatch):
+    from argparse import Namespace
+    controller, release = _release_repo(tmp_path)
+    source = tmp_path / "release-source"
+    _git(tmp_path, "clone", "-q", str(controller), str(source))
+    _git(source, "checkout", "-q", "--detach", "v5.2.1")
+    passed = _done_until_source_gates(monkeypatch, controller, release)
+    with pytest.raises(AssertionError) as raised:
+        release_quad.cmd_done(Namespace(simulink_package=None, release_source=str(source)))
+    assert raised.value is passed
+    # Without a separate source the later controller is itself the source: refused.
+    assert release_quad.cmd_done(Namespace(simulink_package=None, release_source=None)) == 4
+
+
+@pytest.mark.parametrize("case", ["stale-source", "dirty-source", "dirty-controller",
+                                  "unrelated-controller"])
+def test_done_rejects_a_bad_source_or_controller(tmp_path, monkeypatch, case):
+    from argparse import Namespace
+    controller, release = _release_repo(tmp_path)
+    source = tmp_path / "release-source"
+    _git(tmp_path, "clone", "-q", str(controller), str(source))
+    if case != "stale-source":
+        _git(source, "checkout", "-q", "--detach", "v5.2.1")
+    if case == "dirty-source":
+        (source / "tool.py").write_text("parallel WIP\n", encoding="ascii")
+    elif case == "dirty-controller":
+        (controller / "tool.py").write_text("unreviewed\n", encoding="ascii")
+    elif case == "unrelated-controller":
+        _git(controller, "checkout", "-q", "--orphan", "unrelated")
+        _git(controller, "commit", "-q", "-m", "unrelated history")
+    _done_until_source_gates(monkeypatch, controller, release)
+    assert release_quad.cmd_done(
+        Namespace(simulink_package=None, release_source=str(source))) == 4
+
+
+@pytest.mark.skipif(shutil.which("pwsh") is None, reason="needs PowerShell 7 to execute the guard")
+@pytest.mark.parametrize("case,code", [("wrong-sha", 41), ("dirty", 42)])
+def test_editable_deploy_source_refusals_exit_with_their_codes(tmp_path, monkeypatch, case, code):
+    import sys
+    controller, release = _release_repo(tmp_path)
+    expected = release if case == "dirty" else "0" * 40
+    _git(controller, "checkout", "-q", "--detach", release)
+    if case == "dirty":
+        (controller / "tool.py").write_text("parallel WIP\n", encoding="ascii")
+    captured = {}
+    monkeypatch.setattr(release_quad, "_release_head", lambda: expected)
+    monkeypatch.setattr(release_quad, "run", lambda command, **_kw: captured.setdefault(
+        "command", command) and subprocess.CompletedProcess(command, 1))
+    assert release_quad._deploy_editable_remote(
+        "100", "100", str(controller), sys.executable) == 3
+    result = subprocess.run(
+        ["pwsh", "-NoProfile", "-NonInteractive", "-EncodedCommand", captured["command"][-1]],
+        capture_output=True, text=True, timeout=60)
+    assert result.returncode == code
+    assert ("SHA mismatch" if code == 41 else "tracked changes") in result.stderr
+    assert "pip install" not in result.stdout
 
 
 def test_release_tag_gate_requires_declared_version_at_exact_head(monkeypatch):

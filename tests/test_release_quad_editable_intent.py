@@ -175,16 +175,16 @@ def test_remote_verify_counts_unverified_and_drift(monkeypatch):
 @pytest.mark.parametrize("record,override", [
     (False, False), (True, False), (False, True), (True, True)])
 @pytest.mark.parametrize("source_rc", [0, 4])
-def test_done_verifies_the_controller_source_whatever_lab_intent_says(
+def test_done_default_source_is_the_controller_whatever_lab_intent_says(
         isolated_record, monkeypatch, record, override, source_rc):
     # LAB holds a wheel, so its legacy editable record and release override no
-    # longer name the release source: `done` always verifies the controller
-    # checkout it runs from, and a stale controller stops it.
+    # longer name the release source: without --release-source `done` verifies
+    # the controller checkout it runs from, and a stale controller stops it.
     if record:
         _record(isolated_record, "radia", "S:/Radia/release-quad/recorded/")
     if override:
         monkeypatch.setenv(release_quad.EDITABLE_REPO_LAB_ENV, "S:/Radia/release-quad/override/")
-    assert release_quad._done_active_lab_source() == str(release_quad.REPO)
+    assert release_quad._done_release_source(SimpleNamespace()) == str(release_quad.REPO)
     monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: 0)
     monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
     seen = []
@@ -196,11 +196,12 @@ def test_done_verifies_the_controller_source_whatever_lab_intent_says(
         raise stop
 
     monkeypatch.setattr(release_quad, "cmd_temp_shadows", later_gate)
+    args = SimpleNamespace(simulink_package=None, release_source=None)
     if source_rc:
-        assert release_quad.cmd_done(SimpleNamespace(simulink_package=None)) == source_rc
+        assert release_quad.cmd_done(args) == source_rc
     else:
         with pytest.raises(AssertionError) as raised:
-            release_quad.cmd_done(SimpleNamespace(simulink_package=None))
+            release_quad.cmd_done(args)
         assert raised.value is stop
     assert seen == [(str(release_quad.REPO), "a" * 40)]
 
