@@ -4927,33 +4927,31 @@ def solve_magnetostatic_newton(mesh, source, energy_density, steel_region,
 
 
 def _require_gauge_point(mesh, dirichlet, dirichlet_bbbnd):
-    """Fail unless ``dirichlet_bbbnd`` names a point that fixes an H1 dof.
+    """Fail unless a Dirichlet face or ``dirichlet_bbbnd`` fixes an H1 dof.
 
-    A point tag that is absent, or that labels a vertex not connected to any
-    mesh element (e.g. a separate OCC vertex glued into the geometry), leaves
-    the Phi gauge free without any error from NGSolve.
+    Both selectors keep NGSolve's semantics (regular expressions included);
+    only their effect on the free dofs is checked.  A point selector that
+    matches nothing, or only a vertex no volume element uses (e.g. a separate
+    OCC vertex glued into the geometry), removes no dof and would leave the
+    Phi gauge free without any NGSolve error.
     """
     from ngsolve import H1
 
-    if not dirichlet_bbbnd:
-        raise ValueError("periodic A-Phi needs a dirichlet_bbbnd point tag "
-                         "to fix the Phi gauge")
-    names = set(mesh.GetBBBoundaries())
-    if dirichlet_bbbnd not in names:
-        raise ValueError(
-            f"dirichlet_bbbnd={dirichlet_bbbnd!r} is not a point tag of this "
-            f"mesh (point tags: {sorted(n for n in names if n)})")
     # NGSolve already excludes vertices of no element from the free dofs, so
-    # count only the dofs that each tag removes from the untagged space.
+    # count only the dofs that each selector removes from the untagged space.
     plain = H1(mesh, order=1).FreeDofs().NumSet()
     if dirichlet and H1(mesh, order=1, dirichlet=dirichlet).FreeDofs().NumSet() < plain:
         return  # a Dirichlet face already fixes the gauge
-    gauged = H1(mesh, order=1, dirichlet_bbbnd=dirichlet_bbbnd).FreeDofs().NumSet()
+    gauged = plain
+    if dirichlet_bbbnd:
+        gauged = H1(mesh, order=1,
+                    dirichlet_bbbnd=dirichlet_bbbnd).FreeDofs().NumSet()
     if gauged >= plain:
+        tags = sorted(n for n in set(mesh.GetBBBoundaries()) if n)
         raise ValueError(
-            f"dirichlet_bbbnd={dirichlet_bbbnd!r} fixes no H1 vertex; the "
-            "tagged point is not a vertex of any volume element, so the Phi "
-            "gauge would stay free")
+            f"periodic A-Phi gauge is not fixed: dirichlet={dirichlet!r} "
+            f"fixes no face dof and dirichlet_bbbnd={dirichlet_bbbnd!r} fixes "
+            f"no vertex of a volume element (mesh point tags: {tags})")
 
 
 def solve_eddy_current_harmonic_APhi(
