@@ -20,7 +20,8 @@ def _box(*, point="GND", isolated=False, face=None):
     elif point:
         box.vertices[0].name = point
     shape = occ.Glue(parts) if len(parts) > 1 else box
-    return ngsolve.Mesh(occ.OCCGeometry(shape).GenerateMesh(maxh=0.5))
+    with ngsolve.TaskManager():
+        return ngsolve.Mesh(occ.OCCGeometry(shape).GenerateMesh(maxh=0.5))
 
 
 def test_connected_gauge_point_is_accepted():

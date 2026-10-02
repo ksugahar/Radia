@@ -20,15 +20,16 @@ def _mean_curvature(shape, label, *, hole=False):
     for face in shape.faces:
         face.maxh = R / 5  # refine only the curved surface under test
     geometry = occ.Box(occ.Pnt(-1, -1, -1.5), occ.Pnt(1, 1, 1.5)) - shape if hole else shape
-    mesh = ngsolve.Mesh(occ.OCCGeometry(geometry).GenerateMesh(maxh=0.6))
-    mesh.Curve(3)
-    region = mesh.Boundaries(label)
-    space = ngsolve.SurfaceL2(mesh, order=0, definedon=region)
-    gf = ngsolve.GridFunction(space)
-    curvature = ngsolve.Trace(ngsolve.specialcf.Weingarten(3)) / 2
-    gf.Set(curvature, definedon=region)
-    area = ngsolve.Integrate(1.0, mesh, ngsolve.BND, definedon=region)
-    return ngsolve.Integrate(gf, mesh, ngsolve.BND, definedon=region) / area
+    with ngsolve.TaskManager():
+        mesh = ngsolve.Mesh(occ.OCCGeometry(geometry).GenerateMesh(maxh=0.6))
+        mesh.Curve(3)
+        region = mesh.Boundaries(label)
+        space = ngsolve.SurfaceL2(mesh, order=0, definedon=region)
+        gf = ngsolve.GridFunction(space)
+        curvature = ngsolve.Trace(ngsolve.specialcf.Weingarten(3)) / 2
+        gf.Set(curvature, definedon=region)
+        area = ngsolve.Integrate(1.0, mesh, ngsolve.BND, definedon=region)
+        return ngsolve.Integrate(gf, mesh, ngsolve.BND, definedon=region) / area
 
 
 def _sphere():
