@@ -239,7 +239,7 @@ def solve_fem(vol_file="", fes_order=1,
         solver: "sparsecholesky" (direct), "bddc" (iterative), "iccg" (shifted IC+CG),
                 "ams" (Compact AMS+COCR)
         reg: Gauge regularization parameter (add reg*nu0*u*v*dx to system)
-        shift_eps: Shifted preconditioner eps (AMS/ICCG, add eps*nu*u*v*dx to prec)
+        shift_eps: Shifted preconditioner eps (AMS, add eps*nu*u*v*dx to prec)
         nthreads: TaskManager thread count (0=auto, 1=single thread)
         msh_output: Optional GMSH .msh output path
         filaments: ``(paths, currents)`` given directly instead of
@@ -937,13 +937,14 @@ def solve_fem(vol_file="", fes_order=1,
             a_bf.Assemble()
 
             import radia.sparsesolv_ngsolve as ssn
+            # IC shift: automatic search from 1.0 (shift_eps is the mass
+            # regularization of the operator, not the IC diagonal factor).
             iccg = ssn.SparseSolvSolver(
                 a_bf.mat, method="ICCG",
                 freedofs=fes.FreeDofs(),
-                tol=1e-8, maxiter=500, shift=shift_eps,
+                tol=1e-8, maxiter=500,
                 save_best_result=False, printrates=False,
                 use_abmc=True, abmc_block_size=4, abmc_num_colors=4)
-            iccg.auto_shift = True
             gfu.vec.data = iccg * rhs_vec
             iccg_result = iccg.last_result
             krylov_iterations.append(int(iccg_result.iterations))

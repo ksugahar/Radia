@@ -36,20 +36,30 @@ namespace ngla {
 
 inline void ExportSparseSolvResult_impl(py::module& m) {
   py::class_<SparseSolvResult>(m, "SparseSolvResult",
-    "Result of a SparseSolv iterative solve (converged, iterations, final_residual, residual_history).")
+    "Result of a SparseSolv iterative solve.")
     .def_readonly("converged", &SparseSolvResult::converged,
-        "Whether the solver converged within tolerance")
+        "Whether the recursive relative residual fell below tol")
     .def_readonly("iterations", &SparseSolvResult::iterations,
         "Number of iterations performed")
+    .def_readonly("best_iteration", &SparseSolvResult::best_iteration,
+        "Iteration of the returned iterate (0 = initial guess)")
     .def_readonly("final_residual", &SparseSolvResult::final_residual,
-        "Final relative residual (or best residual if save_best_result enabled)")
+        "Recursive relative residual of the returned iterate (scaled system "
+        "when diagonal_scaling is on)")
+    .def_readonly("true_residual", &SparseSolvResult::true_residual,
+        "||b - A x|| / ||b|| of the returned x on the original (free-DOF) system")
+    .def_readonly("actual_shift", &SparseSolvResult::actual_shift,
+        "IC shift used (0 when no IC factor was applied)")
     .def_readonly("residual_history", &SparseSolvResult::residual_history,
-        "Residual at each iteration (if save_residual_history enabled)")
+        "[initial, iteration 1, ...] recursive relative residuals "
+        "(if save_residual_history enabled)")
     .def("__repr__", [](const SparseSolvResult& r) {
       return string("SparseSolvResult(converged=") +
              (r.converged ? "True" : "False") +
              ", iterations=" + std::to_string(r.iterations) +
-             ", residual=" + std::to_string(r.final_residual) + ")";
+             ", best_iteration=" + std::to_string(r.best_iteration) +
+             ", residual=" + std::to_string(r.final_residual) +
+             ", true_residual=" + std::to_string(r.true_residual) + ")";
     });
 }
 
@@ -468,14 +478,15 @@ inline py::dict ClosedCoilCurrentPhiImpl(shared_ptr<ngcomp::MeshAccess> ma,
   free->Clear(local_of[tets[0][0]]);  // one potential gauge for the connected conductor
   lap("assembly_s");
   if (inverse == "iccg") {
-    // IC(0)-preconditioned CG to a true relative residual of 1e-12 on the
-    // gauged SPD system; non-convergence fails loudly.
+    // IC(0)-preconditioned CG on the diagonally scaled, gauged SPD system to
+    // a recursive relative residual of 1e-12; non-convergence fails loudly.
     SparseSolvSolver<double> solver(laplace, "ICCG", free, 1e-12, 20000, 1.0);
     phi.FV() = 0.0;
     const auto result = solver.Solve(rhs, phi);
     if (!result.converged)
       throw std::runtime_error("A-phi potential: ICCG did not converge (residual "
-                               + std::to_string(result.final_residual) + ")");
+                               + std::to_string(result.final_residual) + ", true residual "
+                               + std::to_string(result.true_residual) + ")");
   } else {
     laplace->SetInverseType(inverse);
     auto solver = laplace->InverseMatrix(free);
@@ -880,10 +891,18 @@ shift : float
                                  bool save_best_result, bool save_residual_history,
                                  bool printrates, bool conjugate,
                                  bool use_abmc, int abmc_block_size, int abmc_num_colors,
-                                 bool abmc_reorder_spmv, bool abmc_use_rcm) {
+                                 bool abmc_reorder_spmv, bool abmc_use_rcm,
+                                 bool auto_shift, bool diagonal_scaling,
+                                 bool divergence_check, double divergence_threshold,
+                                 int divergence_count) {
     auto sp_freedofs = ExtractFreeDofs(freedofs);
 
     auto configure = [&](auto& solver) {
+      solver->SetAutoShift(auto_shift);
+      solver->SetDiagonalScaling(diagonal_scaling);
+      solver->SetDivergenceCheck(divergence_check);
+      solver->SetDivergenceThreshold(divergence_threshold);
+      solver->SetDivergenceCount(divergence_count);
       solver->SetConjugate(conjugate);
       solver->SetUseABMC(use_abmc);
       solver->SetABMCBlockSize(abmc_block_size);
@@ -915,9 +934,9 @@ shift : float
   py::arg("mat"),
   py::arg("method") = "ICCG",
   py::arg("freedofs") = py::none(),
-  py::arg("tol") = 1e-10,
-  py::arg("maxiter") = 1000,
-  py::arg("shift") = 1.05,
+  py::arg("tol") = 1e-8,
+  py::arg("maxiter") = 0,
+  py::arg("shift") = 1.0,
   py::arg("save_best_result") = true,
   py::arg("save_residual_history") = false,
   py::arg("printrates") = false,
@@ -927,15 +946,21 @@ shift : float
   py::arg("abmc_num_colors") = 4,
   py::arg("abmc_reorder_spmv") = false,
   py::arg("abmc_use_rcm") = false,
+  py::arg("auto_shift") = true,
+  py::arg("diagonal_scaling") = true,
+  py::arg("divergence_check") = true,
+  py::arg("divergence_threshold") = 10.0,
+  py::arg("divergence_count") = 10,
   R"raw_string(
 Iterative solver (ICCG / CG / COCR). Auto-detects real/complex.
 
-Can be used as BaseMatrix (inverse operator) or via Solve() for detailed results.
+Can be used as BaseMatrix (inverse operator, zero initial guess) or via
+Solve(rhs, sol) with sol as the initial guess for detailed results.
 
 Parameters:
 
 mat : SparseMatrix
-  System matrix (real or complex).
+  System matrix (real or complex), full (non-symmetric) storage.
 method : str
   "ICCG", "CG", or "COCR".
   COCR: Conjugate Orthogonal Conjugate Residual for complex-symmetric A^T=A.
@@ -943,24 +968,34 @@ method : str
 freedofs : BitArray, optional
   Free DOFs.
 tol : float
-  Convergence tolerance (default: 1e-10).
+  Stop when the recursive relative residual ||r||/||b|| < tol (default 1e-8).
+  With diagonal_scaling the test uses the scaled system.
 maxiter : int
-  Max iterations (default: 1000).
+  Iteration limit; 0 means 2*n (default 0).
 shift : float
-  IC shift parameter (default: 1.05).
+  IC diagonal shift alpha >= 1 (alpha*a_ii on rows with Re(a_ii) > 0);
+  the start value when auto_shift is on (default 1.0).
 save_best_result : bool
-  Track best solution (default: True).
+  Return the iterate with the smallest residual, the initial guess
+  included (default True); False returns the last iterate.
 save_residual_history : bool
   Record residual history (default: False).
 printrates : bool
   Print convergence info (default: False).
 conjugate : bool
-  Conjugated inner product for Hermitian systems (default: False).
-
-Properties (set after construction):
-  auto_shift, diagonal_scaling, divergence_check, divergence_threshold,
-  divergence_count, use_abmc, abmc_block_size, abmc_num_colors,
-  abmc_reorder_spmv, abmc_use_rcm.
+  Conjugated inner product for Hermitian systems; CG only (default False).
+auto_shift : bool
+  Restart the IC factorization with shift + 0.01 while a pivot has
+  Re(d) < 1e-6 |a_ii| and shift < 5; a pivot still below it at the limit
+  is an error (default True).
+diagonal_scaling : bool
+  Solve (S A S) y = S b, x = S y with S = diag(1/sqrt|a_ii|) (default True).
+divergence_check, divergence_threshold, divergence_count : bool, float, int
+  Stop when more than divergence_count consecutive iterations neither set a
+  new best residual nor stay below best*divergence_threshold
+  (default True, 10, 10).
+use_abmc, abmc_block_size, abmc_num_colors, abmc_reorder_spmv, abmc_use_rcm :
+  Parallel IC ordering (changes the IC factor).
 )raw_string");
 }
 

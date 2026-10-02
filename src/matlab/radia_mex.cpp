@@ -1463,7 +1463,7 @@ mxArray* Commands() {
         "ngsolve.matrix.info", "ngsolve.matrix.values", "ngsolve.matrix.vector",
         "ngsolve.matrix.matvec", "ngsolve.matrix.matvec_into",
         "ngsolve.matrix.inverse",
-        "sparsesolv.ams", "sparsesolv.ic", "sparsesolv.cocr",
+        "sparsesolv.ams", "sparsesolv.ic", "sparsesolv.cocr", "sparsesolv.iccg",
         "ngsolve.matrix.projected_create",
         "ngsolve.matrix.reduced_block_create",
         "ngsolve.matrix.diagonal_preconditioner",
@@ -4863,6 +4863,117 @@ void SparseSolvCOCR(int nlhs, mxArray* plhs[], int nrhs,
     else
         result = std::make_shared<ngla::COCRSolverNGS<double>>(a.matrix, p.matrix, free, steps, tol, false);
     plhs[0] = Uint64Output(RegisterMatrix(MakeNGSolveMatrixHandle(result, a.fespace, "sparsesolv.cocr")));
+}
+
+const mxArray* SparseSolvOption(const mxArray* options, const char* name) {
+    const mxArray* value = mxGetField(options, 0, name);
+    if (value == nullptr)
+        BadArgument(std::string("ICCG options are missing field '") + name + "'");
+    return value;
+}
+
+template<typename SCAL>
+void SparseSolvICCGSolve(const std::shared_ptr<ngla::SparseMatrix<SCAL>>& mat,
+                         const std::shared_ptr<ngcore::BitArray>& free,
+                         const mxArray* options, const ngla::BaseVector& rhs,
+                         ngla::BaseVector& solution, ngla::SparseSolvResult& result) {
+    ngla::SparseSolvSolver<SCAL> solver(
+        mat, "ICCG", free,
+        Scalar(SparseSolvOption(options, "tolerance"), "tolerance"),
+        NonnegativeInteger(SparseSolvOption(options, "max_iterations"), "max_iterations"),
+        Scalar(SparseSolvOption(options, "shift"), "shift"),
+        Boolean(SparseSolvOption(options, "save_best_result"), "save_best_result"),
+        Boolean(SparseSolvOption(options, "save_residual_history"), "save_residual_history"),
+        false);
+    solver.SetAutoShift(Boolean(SparseSolvOption(options, "auto_shift"), "auto_shift"));
+    solver.SetDiagonalScaling(
+        Boolean(SparseSolvOption(options, "diagonal_scaling"), "diagonal_scaling"));
+    solver.SetDivergenceCheck(
+        Boolean(SparseSolvOption(options, "divergence_check"), "divergence_check"));
+    solver.SetDivergenceThreshold(
+        Scalar(SparseSolvOption(options, "divergence_threshold"), "divergence_threshold"));
+    solver.SetDivergenceCount(
+        NonnegativeInteger(SparseSolvOption(options, "divergence_count"), "divergence_count"));
+    solver.SetUseABMC(Boolean(SparseSolvOption(options, "use_abmc"), "use_abmc"));
+    solver.SetABMCBlockSize(
+        PositiveInteger(SparseSolvOption(options, "abmc_block_size"), "abmc_block_size"));
+    solver.SetABMCNumColors(
+        PositiveInteger(SparseSolvOption(options, "abmc_num_colors"), "abmc_num_colors"));
+    solver.SetABMCReorderSpMV(
+        Boolean(SparseSolvOption(options, "abmc_reorder_spmv"), "abmc_reorder_spmv"));
+    solver.SetABMCUseRCM(Boolean(SparseSolvOption(options, "abmc_use_rcm"), "abmc_use_rcm"));
+    result = solver.Solve(rhs, solution);
+}
+
+void SparseSolvICCG(int nlhs, mxArray* plhs[], int nrhs,
+                    const mxArray* prhs[]) {
+    if (nrhs != 5 || nlhs != 2)
+        BadArgument("Usage: [x, info] = radia_mex('sparsesolv.iccg', matrix, rhs, "
+                    "initial_guess_or_0, options)");
+    const auto& a = Matrix(Handle(prhs[1]));
+    const auto& rhs = Vector(Handle(prhs[2]));
+    if (!mxIsStruct(prhs[4]) || mxGetNumberOfElements(prhs[4]) != 1)
+        BadArgument("ICCG options must be a scalar struct");
+    static const char* known[] = {
+        "tolerance", "max_iterations", "shift", "auto_shift", "diagonal_scaling",
+        "save_best_result", "save_residual_history", "divergence_check",
+        "divergence_threshold", "divergence_count", "use_abmc", "abmc_block_size",
+        "abmc_num_colors", "abmc_reorder_spmv", "abmc_use_rcm"};
+    for (int f = 0; f < mxGetNumberOfFields(prhs[4]); ++f) {
+        const std::string field = mxGetFieldNameByNumber(prhs[4], f);
+        if (std::find(std::begin(known), std::end(known), field) == std::end(known))
+            BadArgument("unknown ICCG option: " + field);
+    }
+    if (a.matrix->VHeight() != a.matrix->VWidth())
+        BadArgument("ICCG requires a square matrix");
+    if (rhs.vector->Size() != static_cast<size_t>(a.matrix->VHeight()))
+        BadArgument("right-hand-side size does not match the matrix");
+    if (rhs.vector->IsComplex() != a.matrix->IsComplex())
+        BadArgument("right-hand-side scalar type must match the matrix");
+    auto solution = a.matrix->CreateColVector();
+    const std::uint64_t guess_handle = Handle(prhs[3]);
+    if (guess_handle == 0) {
+        *solution = 0.0;
+    } else {
+        const auto& guess = Vector(guess_handle);
+        if (guess.vector->Size() != rhs.vector->Size() ||
+            guess.vector->IsComplex() != rhs.vector->IsComplex())
+            BadArgument("initial guess must match the right-hand side in size and scalar type");
+        *solution = *guess.vector;
+    }
+    auto free = a.fespace ? a.fespace->GetFreeDofs(false) : nullptr;
+    ngla::SparseSolvResult result;
+    {
+        ngcore::RegionTaskManager task_manager;
+        if (a.matrix->IsComplex()) {
+            auto mat = std::dynamic_pointer_cast<ngla::SparseMatrix<Complex>>(a.matrix);
+            if (!mat) BadArgument("ICCG requires a sparse matrix");
+            SparseSolvICCGSolve<Complex>(mat, free, prhs[4], *rhs.vector, *solution, result);
+        } else {
+            auto mat = std::dynamic_pointer_cast<ngla::SparseMatrix<double>>(a.matrix);
+            if (!mat) BadArgument("ICCG requires a sparse matrix");
+            SparseSolvICCGSolve<double>(mat, free, prhs[4], *rhs.vector, *solution, result);
+        }
+    }
+    auto holder = std::make_unique<NGSolveVectorHandle>();
+    holder->vector = std::move(solution);
+    holder->parent_matrix = a.matrix;
+    holder->is_view = false;
+    plhs[0] = Uint64Output(RegisterVector(std::move(holder)));
+    static const char* fields[] = {"converged", "iterations", "best_iteration",
+                                   "final_residual", "true_residual", "actual_shift",
+                                   "residual_history"};
+    plhs[1] = mxCreateStructMatrix(1, 1, 7, fields);
+    mxSetField(plhs[1], 0, "converged", mxCreateLogicalScalar(result.converged));
+    mxSetField(plhs[1], 0, "iterations", mxCreateDoubleScalar(result.iterations));
+    mxSetField(plhs[1], 0, "best_iteration", mxCreateDoubleScalar(result.best_iteration));
+    mxSetField(plhs[1], 0, "final_residual", mxCreateDoubleScalar(result.final_residual));
+    mxSetField(plhs[1], 0, "true_residual", mxCreateDoubleScalar(result.true_residual));
+    mxSetField(plhs[1], 0, "actual_shift", mxCreateDoubleScalar(result.actual_shift));
+    mxArray* history = mxCreateDoubleMatrix(result.residual_history.size(), 1, mxREAL);
+    std::copy(result.residual_history.begin(), result.residual_history.end(),
+              mxGetDoubles(history));
+    mxSetField(plhs[1], 0, "residual_history", history);
 }
 
 void NGSolveMatrixInverse(int nlhs, mxArray* plhs[], int nrhs,
@@ -12079,6 +12190,9 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
     }
     if (command == "sparsesolv.cocr") {
         SparseSolvCOCR(nlhs, plhs, nrhs, prhs); return;
+    }
+    if (command == "sparsesolv.iccg") {
+        SparseSolvICCG(nlhs, plhs, nrhs, prhs); return;
     }
     if (command == "ngsolve.matrix.destroy") {
         CheckArity(nrhs, 2, nlhs, 0,

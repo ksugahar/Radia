@@ -49,7 +49,11 @@ def main():
     parser = argparse.ArgumentParser(__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--timeout", type=int, default=240)
+    # The worker starts an owned MATLAB Engine and runs the complete MATLAB
+    # suite; on mdx1 (2026-10-02) that took 200 s and the old 240 s limit
+    # expired inside test_radiafield_mex.
+    parser.add_argument("--timeout", type=int, default=900,
+                        help="seconds to wait for the owned-Engine worker (default 900)")
     args = parser.parse_args()
     if not args.worker:
         child = subprocess.Popen([sys.executable, str(Path(__file__).resolve()),
@@ -77,6 +81,9 @@ def main():
                                 root/"tests/matlab/test_mex_runtime_setup.m", root/"matlab/+radia/+internal/callMex.m",
                                 root/"matlab/+radia/setup.m",
                                 root/"tests/matlab/sparsesolv_python_reference.py",
+                                root/"matlab/+radia/+sparsesolv/ICCG.m",
+                                root/"src/ext/sparsesolv/include/sparsesolv/sparsesolv.hpp",
+                                root/"src/ext/sparsesolv/include/sparsesolv/ngsolve/sparsesolv_solvers.hpp",
                                 root/"tests/matlab/test_beam_transfer_mex.m",
                                 root/"tests/matlab/test_hacapk_rank_cap.m",
                                 root/"tests/matlab/test_radiafield_mex.m",

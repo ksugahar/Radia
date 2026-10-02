@@ -5,6 +5,29 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- SparseSolv ICCG (`radia.sparsesolv_ngsolve.SparseSolvSolver`, `solve_iccg`)
+  follows one documented contract, and **its defaults changed**: diagonal
+  scaling on (the stop test uses the recursive residual of the scaled system),
+  `tol=1e-8`, `maxiter=0` (2n), automatic IC shift from 1.0 in steps of 0.01
+  (error if a pivot is still too small at shift 5), stagnation stop on with
+  threshold 10 and count 10 (stop when the count is exceeded), and the best
+  iterate, initial guess included, is returned.  Callers that relied on the old
+  defaults (`tol=1e-10`, `maxiter=1000`, `shift=1.05`, no scaling, no
+  stagnation stop) get different iteration counts and results; pass the
+  options explicitly to keep a specific setting.  Results add
+  `best_iteration`, `true_residual` (original system) and `actual_shift`.
+  Now rejected instead of continuing: shift < 1, `tol <= 0`, negative
+  `maxiter`/counts, zero or non-finite pivots (previously clamped), non-finite
+  right-hand sides or initial guesses, `conjugate=True` with ICCG or COCR (use
+  CG for Hermitian systems), unknown methods and symmetric-storage matrices.
+  A zero right-hand side returns x = 0 and a converged initial guess returns
+  before the IC factor is built.  The standalone `ICPreconditioner` keeps its
+  fixed shift but now rejects shift < 1 and zero pivots.  Result JSON produced
+  under the old defaults stays historical evidence.
+- MATLAB: `radia.sparsesolv.ICCG` (native `sparsesolv.iccg`) runs the same
+  ICCG contract on NGSolve matrix handles; `radia.sparsesolv.IC` documents
+  that `Shift >= 1` is required (the native factorization rejects smaller values).
+
 ## 5.2.0 - Solver maintenance and label-specific cooling
 
 Release candidate; publication and four-host acceptance are not yet complete.

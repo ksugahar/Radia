@@ -11,6 +11,8 @@
 #define SPARSESOLV_SOLVERS_ITERATIVE_SOLVER_HPP
 
 #include "../core/types.hpp"
+#include "../core/constants.hpp"
+#include "../core/norms.hpp"
 #include "../core/solver_config.hpp"
 #include "../core/sparse_matrix_view.hpp"
 #include "../core/preconditioner.hpp"
@@ -62,20 +64,21 @@ public:
         index_t size,
         const Preconditioner<Scalar>* precond = nullptr
     ) {
-        // Initialize
+        config_.validate();
         size_ = size;
         A_ = &A;
         b_ = b;
         x_ = x;
         precond_ = precond;
+        iteration_limit_ = config_.iteration_limit(size);
 
-        // Allocate work vectors
         allocate_work_vectors();
 
-        // Compute initial state
-        prepare_iteration();
-
-        // Run the iteration
+        // A zero right-hand side or an initial guess that already meets the
+        // tolerance returns without iterating.
+        if (prepare_iteration()) {
+            return build_result(true, 0);
+        }
         return do_iterate();
     }
 
@@ -130,53 +133,48 @@ protected:
     }
 
     /**
-     * @brief Prepare for iteration (compute initial residual, etc.)
+     * @brief Compute the initial residual and register the initial guess
+     *
+     * The initial guess is iteration 0 and the first best-result candidate.
+     * @return true when no iteration is needed (zero right-hand side, or the
+     *         initial relative residual is already below the tolerance)
      */
-    virtual void prepare_iteration() {
-        // Initialize x to zero if requested
-        if (config_.save_best_result) {
-            best_x_.resize(size_);
-            best_residual_ = std::numeric_limits<double>::max();
-        }
+    bool prepare_iteration() {
+        residual_history_.clear();
+        bad_count_ = 0;
+        best_iteration_ = 0;
+        last_residual_ = 0.0;
 
-        // Compute initial residual: r = b - A*x
+        const double norm_b = robust_norm(b_, size_);
+        if (!std::isfinite(norm_b)) {
+            throw std::invalid_argument("SparseSolv: right-hand side is not finite");
+        }
+        if (norm_b == 0.0) {
+            // A x = 0 has the solution x = 0
+            std::fill(x_, x_ + size_, Scalar(0));
+            normalizer_ = 1.0;
+            best_residual_ = 0.0;
+            if (config_.save_best_result) best_x_.assign(x_, x_ + size_);
+            if (config_.save_residual_history) residual_history_.push_back(0.0);
+            return true;
+        }
+        normalizer_ = norm_b;
+
+        // r = b - A*x
         A_->multiply(x_, r_.data());
         parallel_for(size_, [&](index_t i) {
             r_[i] = b_[i] - r_[i];
         });
-
-        // Compute norm of b for normalization
-        norm_b_ = compute_norm(b_, size_);
-
-        // Compute initial residual norm
-        double init_norm_r = compute_norm(r_.data(), size_);
-
-        // Set normalizer based on config
-        switch (config_.norm_type) {
-            case NormType::RHS:
-                normalizer_ = norm_b_;
-                break;
-            case NormType::InitialResidual:
-                normalizer_ = init_norm_r;
-                break;
-            case NormType::Custom:
-                normalizer_ = config_.custom_norm;
-                break;
+        const double rel0 = robust_norm(r_.data(), size_) / normalizer_;
+        if (!std::isfinite(rel0)) {
+            throw std::invalid_argument("SparseSolv: initial residual is not finite");
         }
+        if (config_.save_residual_history) residual_history_.push_back(rel0);
 
-        // Avoid division by zero
-        if (normalizer_ < 1e-15) {
-            normalizer_ = 1.0;
-        }
-
-        // Clear residual history
-        if (config_.save_residual_history) {
-            residual_history_.clear();
-            residual_history_.push_back(init_norm_r / normalizer_);
-        }
-
-        // Reset divergence counter
-        bad_count_ = 0;
+        best_residual_ = rel0;
+        last_residual_ = rel0;
+        if (config_.save_best_result) best_x_.assign(x_, x_ + size_);
+        return rel0 < config_.tolerance;
     }
 
     /**
@@ -208,85 +206,62 @@ protected:
         }
     }
 
+    /// Outcome of the per-iteration test
+    enum class Step { Continue, Converged, Stop };
+
     /**
-     * @brief Check convergence and update tracking
-     * @param norm_r Current residual norm (unnormalized)
-     * @param iter Current iteration number
-     * @return true if converged
+     * @brief Record iteration `iter` (1-based) and decide whether to stop
+     *
+     * rel = ||r|| / ||b|| with the recursive residual.  A new minimum
+     * becomes the best iterate and resets the stagnation counter; a residual
+     * below best * divergence_threshold also resets it; any other residual
+     * increments it.  The solve converges when rel < tolerance and stops
+     * when the counter exceeds divergence_count or rel is not finite.
      */
-    bool check_convergence(double norm_r, int iter) {
-        double rel_residual = norm_r / normalizer_;
+    Step check_convergence(double norm_r, int iter) {
+        const double rel = norm_r / normalizer_;
+        last_residual_ = rel;
+        if (config_.save_residual_history) residual_history_.push_back(rel);
+        if (!std::isfinite(rel)) return Step::Stop;
 
-        // Save to history
-        if (config_.save_residual_history) {
-            residual_history_.push_back(rel_residual);
+        if (rel < best_residual_) {
+            best_residual_ = rel;
+            best_iteration_ = iter;
+            if (config_.save_best_result) std::copy(x_, x_ + size_, best_x_.begin());
+            bad_count_ = 0;
+        } else if (rel < best_residual_ * config_.divergence_threshold) {
+            bad_count_ = 0;
+        } else {
+            ++bad_count_;
         }
 
-        // Update best result
-        if (config_.save_best_result && rel_residual < best_residual_) {
-            best_residual_ = rel_residual;
-            std::copy(x_, x_ + size_, best_x_.begin());
+        if (rel < config_.tolerance) return Step::Converged;
+        if (config_.divergence_check == DivergenceCheck::StagnationCount
+            && bad_count_ > config_.divergence_count) {
+            return Step::Stop;
         }
-
-        // Check convergence
-        if (rel_residual < config_.tolerance || norm_r < config_.abs_tolerance) {
-            return true;
-        }
-
-        // Check divergence
-        if (config_.divergence_check == DivergenceCheck::StagnationCount) {
-            if (rel_residual >= best_residual_ * config_.divergence_threshold) {
-                bad_count_++;
-                if (bad_count_ >= config_.divergence_count) {
-                    return false; // Will be marked as not converged
-                }
-            } else {
-                bad_count_ = 0;
-            }
-        }
-
-        return false;
+        return Step::Continue;
     }
 
     /**
-     * @brief Check if we should stop due to divergence
+     * @brief Build the result and, with save_best_result, restore the best iterate
      */
-    bool is_diverging() const {
-        return config_.divergence_check == DivergenceCheck::StagnationCount &&
-               bad_count_ >= config_.divergence_count;
-    }
-
-    /**
-     * @brief Build the result structure
-     */
-    SolverResult build_result(bool converged, int iterations, double final_residual) {
+    SolverResult build_result(bool converged, int iterations) {
         SolverResult result;
         result.converged = converged;
         result.iterations = iterations;
-        result.final_residual = final_residual / normalizer_;
-
-        if (config_.save_residual_history) {
-            result.residual_history = std::move(residual_history_);
-        }
-
-        // If not converged but we have best result, use it
-        if (!converged && config_.save_best_result) {
+        if (config_.save_best_result) {
             std::copy(best_x_.begin(), best_x_.end(), x_);
+            result.best_iteration = best_iteration_;
             result.final_residual = best_residual_;
+        } else {
+            result.best_iteration = iterations;
+            result.final_residual = last_residual_;
         }
-
+        result.residual_history = std::move(residual_history_);
         return result;
     }
 
-    /**
-     * @brief Compute Euclidean norm of a vector
-     */
-    static double compute_norm(const Scalar* v, index_t size) {
-        double sum = parallel_reduce_sum<double>(size, [v](index_t i) {
-            return std::norm(v[i]); // std::norm for complex gives |z|^2
-        });
-        return std::sqrt(sum);
-    }
 
     /**
      * @brief Compute dot product of two vectors
@@ -338,15 +313,17 @@ protected:
     std::vector<Scalar> Ap_;  // Matrix-vector product A*p
 
     // Convergence tracking
-    double norm_b_ = 0.0;
-    double normalizer_ = 1.0;
+    int iteration_limit_ = 0;
+    double normalizer_ = 1.0;       // ||b||
+    double last_residual_ = 0.0;    // relative residual of the last iterate
     std::vector<double> residual_history_;
 
-    // Best result tracking
+    // Best result tracking (the residual is tracked even when the iterate is not saved)
     std::vector<Scalar> best_x_;
-    double best_residual_ = std::numeric_limits<double>::max();
+    double best_residual_ = 0.0;
+    int best_iteration_ = 0;
 
-    // Divergence tracking
+    // Stagnation counter
     int bad_count_ = 0;
 };
 

@@ -17,9 +17,6 @@
 namespace sparsesolv {
 namespace constants {
 
-/// Threshold for detecting numerical breakdown in CG (pAp ~ 0)
-constexpr double BREAKDOWN_THRESHOLD = 1e-30;
-
 /// Minimum absolute diagonal value for safe inversion in preconditioners
 /// (Jacobi, IC diagonal checks)
 constexpr double MIN_DIAGONAL_TOLERANCE = 1e-15;

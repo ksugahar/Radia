@@ -81,8 +81,10 @@ protected:
         const auto* A_colidx = this->A_->col_idx();
         const auto* A_vals = this->A_->values();
 
-        // Main iteration loop
-        for (int iter = 0; iter < config.max_iterations; ++iter) {
+        using Step = typename IterativeSolver<Scalar>::Step;
+        const int limit = this->iteration_limit_;
+
+        for (int iter = 1; iter <= limit; ++iter) {
             // Fused: Ap = A*p AND pAp = (p, Ap) in single pass
             // Avoids re-reading p[] and Ap[] for separate dot product
             Scalar pAp = parallel_reduce_sum<Scalar>(n, [&](index_t i) -> Scalar {
@@ -97,14 +99,9 @@ protected:
                 }
             });
 
-            // Avoid division by zero
-            if (std::abs(pAp) < constants::BREAKDOWN_THRESHOLD) {
-                // Numerical breakdown - check if already converged
-                double norm_r = this->compute_norm(r.data(), n);
-                if (this->check_convergence(norm_r, iter)) {
-                    return this->build_result(true, iter + 1, norm_r);
-                }
-                return this->build_result(false, iter, norm_r);
+            // Breakdown: the current iterate has already been tested
+            if (!(std::abs(pAp) > 0.0) || !std::isfinite(std::abs(pAp))) {
+                return this->build_result(false, iter - 1);
             }
 
             Scalar alpha = rz_old / pAp;
@@ -118,15 +115,9 @@ protected:
             });
             double norm_r = std::sqrt(norm_r_sq);
 
-            // Check convergence
-            if (this->check_convergence(norm_r, iter)) {
-                return this->build_result(true, iter + 1, norm_r);
-            }
-
-            // Check divergence
-            if (this->is_diverging()) {
-                return this->build_result(false, iter + 1, norm_r);
-            }
+            const Step step = this->check_convergence(norm_r, iter);
+            if (step == Step::Converged) return this->build_result(true, iter);
+            if (step == Step::Stop) return this->build_result(false, iter);
 
             // Fused: z = M^{-1} * r AND rz_new = dot(r, z) in one pass
             // Avoids a separate kernel launch for the dot product
@@ -140,9 +131,7 @@ protected:
             });
         }
 
-        // Max iterations reached
-        double final_norm = this->compute_norm(r.data(), n);
-        return this->build_result(false, config.max_iterations, final_norm);
+        return this->build_result(false, limit);
     }
 };
 

@@ -143,6 +143,11 @@ crystallized as its own package.
   and not re-measured. The native motor angle-family artifact is reported as
   stale (it predates the Foster/Lift test renames) with `recorded_tests` in
   place of a current `verified_tests` count.
+- `radia_ngsolve` SparseSolv knowledge describes the current ICCG contract:
+  scaled-system recursive-residual stop and the separate `true_residual`,
+  defaults `tol=1e-8`, `maxiter=0` (2n), `shift=1.0` with automatic search,
+  diagonal scaling and the stagnation stop on.  Hermitian systems use
+  `method="CG"` with `conjugate=True`; ICCG and COCR reject `conjugate=True`.
 
 ### Added
 

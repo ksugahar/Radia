@@ -10,8 +10,10 @@
 #ifndef SPARSESOLV_CORE_TYPES_HPP
 #define SPARSESOLV_CORE_TYPES_HPP
 
+#include <cmath>
 #include <cstdint>
 #include <complex>
+#include <stdexcept>
 #include <vector>
 #include <string>
 
@@ -29,20 +31,15 @@ using complex_t = std::complex<double>;
 struct SolverResult {
     bool converged = false;           ///< Whether the solver converged
     int iterations = 0;               ///< Number of iterations performed
-    double final_residual = 0.0;      ///< Final relative residual
-    std::vector<double> residual_history;  ///< Residual at each iteration (optional)
+    int best_iteration = 0;           ///< Iteration of the returned iterate (0 = initial guess)
+    double final_residual = 0.0;      ///< Relative recursive residual of the returned iterate
+                                      ///< (scaled system when diagonal scaling is on)
+    double true_residual = 0.0;       ///< ||b - A x|| / ||b|| of the returned x, original system
+    double actual_shift = 0.0;        ///< IC shift used (0 when no IC factor was applied)
+    std::vector<double> residual_history;  ///< [initial, iteration 1, ...] (optional)
 
     /// Check if the solve was successful
     explicit operator bool() const { return converged; }
-};
-
-/**
- * @brief Type of norm used for convergence check
- */
-enum class NormType {
-    RHS,              ///< Normalize by ||b|| (right-hand side norm)
-    InitialResidual,  ///< Normalize by ||r_0|| (initial residual)
-    Custom            ///< Use a custom normalization value
 };
 
 /**
