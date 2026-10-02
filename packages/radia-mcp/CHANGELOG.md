@@ -7,6 +7,14 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+### Fixed
+
+- The native motor angle-family evidence is current again. The artifact was
+  regenerated on 2026-10-03 with `native_motor_family_gate` (MATLAB R2026a,
+  clean `radia_mex` build) and names the Foster/Lift tests; 86 of 86 tests
+  passed. `matlab_radia_mex_contract` and `matlab_optuna_simulink_contract`
+  report it as recorded instead of `stale:`, and `recorded_tests` is 86.
+
 ## [2.0.0] - 2026-10-02
 
 ### Removed
