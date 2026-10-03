@@ -460,9 +460,9 @@ def test_local_release_source_requires_exact_sha_and_tracked_clean(
     assert release_quad._verify_local_release_source(str(repo), head) == 4
 
 
-def _release_repo(tmp_path):
+def _build_release_repo(root):
     """A tagged v5.2.1 release commit followed by a tooling repair commit."""
-    repo = tmp_path / "controller"
+    repo = root / "controller"
     repo.mkdir()
     _git(repo, "init")
     _git(repo, "config", "user.name", "Radia Test")
@@ -479,8 +479,38 @@ def _release_repo(tmp_path):
     return repo, release
 
 
-def test_later_tooling_controller_must_descend_cleanly_from_the_release(tmp_path):
-    repo, release = _release_repo(tmp_path)
+@pytest.fixture(scope="module")
+def release_template(tmp_path_factory):
+    """Build the release controller and a clone of it once per module.
+
+    Every test works on its own copy (a directory copy keeps the commits,
+    tag and SHAs), so the per-test Git process cost is only what the test
+    itself exercises.
+    """
+    root = tmp_path_factory.mktemp("release-template")
+    repo, release = _build_release_repo(root)
+    source = root / "release-source"
+    _git(root, "clone", "-q", str(repo), str(source))
+    return repo, source, release
+
+
+def _release_repo(tmp_path, template):
+    repo, _source, release = template
+    copy = tmp_path / "controller"
+    shutil.copytree(repo, copy)
+    return copy, release
+
+
+def _release_source(tmp_path, template):
+    _repo, source, _release = template
+    copy = tmp_path / "release-source"
+    shutil.copytree(source, copy)
+    return copy
+
+
+def test_later_tooling_controller_must_descend_cleanly_from_the_release(
+        tmp_path, release_template):
+    repo, release = _release_repo(tmp_path, release_template)
     assert release_quad._verify_release_controller(repo, release, "5.2.1") == 0
     # Same version declared at the release commit is part of the identity.
     assert release_quad._verify_release_controller(repo, release, "5.2.2") == 4
@@ -509,11 +539,10 @@ def _done_until_source_gates(monkeypatch, controller, release):
 
 
 def test_done_accepts_a_later_controller_with_a_separate_exact_tag_source(
-        tmp_path, monkeypatch):
+        tmp_path, monkeypatch, release_template):
     from argparse import Namespace
-    controller, release = _release_repo(tmp_path)
-    source = tmp_path / "release-source"
-    _git(tmp_path, "clone", "-q", str(controller), str(source))
+    controller, release = _release_repo(tmp_path, release_template)
+    source = _release_source(tmp_path, release_template)
     _git(source, "checkout", "-q", "--detach", "v5.2.1")
     passed = _done_until_source_gates(monkeypatch, controller, release)
     with pytest.raises(AssertionError) as raised:
@@ -525,11 +554,10 @@ def test_done_accepts_a_later_controller_with_a_separate_exact_tag_source(
 
 @pytest.mark.parametrize("case", ["stale-source", "dirty-source", "dirty-controller",
                                   "unrelated-controller"])
-def test_done_rejects_a_bad_source_or_controller(tmp_path, monkeypatch, case):
+def test_done_rejects_a_bad_source_or_controller(tmp_path, monkeypatch, case, release_template):
     from argparse import Namespace
-    controller, release = _release_repo(tmp_path)
-    source = tmp_path / "release-source"
-    _git(tmp_path, "clone", "-q", str(controller), str(source))
+    controller, release = _release_repo(tmp_path, release_template)
+    source = _release_source(tmp_path, release_template)
     if case != "stale-source":
         _git(source, "checkout", "-q", "--detach", "v5.2.1")
     if case == "dirty-source":
@@ -546,9 +574,10 @@ def test_done_rejects_a_bad_source_or_controller(tmp_path, monkeypatch, case):
 
 @pytest.mark.skipif(shutil.which("pwsh") is None, reason="needs PowerShell 7 to execute the guard")
 @pytest.mark.parametrize("case,code", [("wrong-sha", 41), ("dirty", 42)])
-def test_editable_deploy_source_refusals_exit_with_their_codes(tmp_path, monkeypatch, case, code):
+def test_editable_deploy_source_refusals_exit_with_their_codes(
+        tmp_path, monkeypatch, case, code, release_template):
     import sys
-    controller, release = _release_repo(tmp_path)
+    controller, release = _release_repo(tmp_path, release_template)
     expected = release if case == "dirty" else "0" * 40
     _git(controller, "checkout", "-q", "--detach", release)
     if case == "dirty":
