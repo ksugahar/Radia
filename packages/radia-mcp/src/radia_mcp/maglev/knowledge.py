@@ -68,7 +68,7 @@ TOPICS: dict[str, str] = {
     "overview": "Magnetic levitation -- systems (EMS/EDS/PM/SC/Halbach) + force physics (induction/EML/AMB/SC/diamagnetic/Earnshaw) + the lab's Radia-IEM research line",
     # -- maglev systems + the lab's Radia research --
     "radia_iem_fem": "Radia IEM (HDiv-VIM) <-> reduced-potential FEM weak coupling for moving-magnet eddy-current levitation force; A-phi (A_ext) / T-Omega (B_ext); no re-mesh on magnet motion; rotating-magnet-over-plate cross-validation tightens to ~0.1% at order=2; the Lorentz-force HDiv(J=curl T) function-space pitfall + verified NGSolve recipe (Yano bachelor, lab research)",
-    "team28_dynamic_scope": "TEAM 28 reduced models: measured-height benchmark (11.0 vs 11.5 mm), force-convention gotcha, HCurl Eddy Bubble + Foster modal ROM, and the Simulink scope (validated 50 Hz cycle-averaged force-height LUT plus slow mechanical motion; not a carrier-resolved electromagnetic transient, motion-EMF model, or identified damping law)",
+    "team28_dynamic_scope": "TEAM 28 reduced models: published-height benchmark (11.04 vs 11.3 mm), force-convention gotcha, HCurl Eddy Bubble + Foster modal ROM, and the Simulink scope (validated 50 Hz cycle-averaged force-height LUT plus slow mechanical motion; not a carrier-resolved electromagnetic transient, motion-EMF model, or identified damping law)",
     "physical_tensor_rom": "Physical (exterior-matched) polarizability tensor alpha(s) as a passive, stable LTI: AAA discovers the Stoll poles + NNLS passive residues, fitting the per-frequency 3D HCurl tensor; eigen-accumulation with a Kelvin boundary BREAKS DOWN for the general 3D body (rom_fit.py, lab research)",
     "pm_maglev_zero_power": "Zero-power passive PM levitation: Maxwell-Earnshaw constraint, axial PM bearings, halbach diamagnetism",
     "eddy_current_maglev": "Eddy-current EDS: Arago-disk physics, magnetic wheels (Fujii/Kansai 2D model), Inductrack",
@@ -402,9 +402,10 @@ the wrong reason.
 
 **The real high-Rm anchor at the other end of this crossover is TEAM 28**
 (`Rm ~ 57` at the in-plane current-loop scale; the lift IS the eddy reaction).
-There a 6-stage Krylov reduction reproduces the full-FEM levitation force and
-the equilibrium height matches the **published measured 11.5 mm to 4%** -- see
-`team28_dynamic_scope` ("External-benchmark validation").  So the crossover has
+There a Krylov reduction reproduces the full-FEM levitation force at a fixed
+height, and the full-FEM equilibrium height (11.04 mm) is within 3% of the
+**published stationary 11.3 mm** -- see `team28_dynamic_scope`
+("External-benchmark validation").  So the crossover has
 two REAL anchors: low-Rm Yano (kinematic, no reduction needed) and high-Rm
 TEAM 28 (dynamic reduction essential, validated against the published
 benchmark).
@@ -503,9 +504,12 @@ coil-driven axisymmetric eddy problem is `(K + s*N) X = F` (K = s-independent
 magnetostatic operator, N = conductivity term, F = coil source); the reduction
 is a congruence projection onto the orthonormalised Krylov subspace built from
 the COIL SOURCE (`V0 = K^-1 F`, `V_{k+1} = orthonormalise(K^-1 (N V_k))`,
-PRIMA-type).  A **6-stage reduction reproduces the full-FEM levitation force vs
-height** to max |reduced-full| = 5e-4 N (stage 3 = 0.14%, stage 5 = 0.000%);
-the repo full-FEM matches the lab axisymmetric ground truth to 0.01%.
+PRIMA-type).  At the fixed height dZ = 0 the reduction converges to the
+full-FEM levitation force (stage 3 below 1%, stage 5 below 0.05%;
+`tests/test_team28_arnoldi_golden.py`).  The force-vs-height curve is a
+**full-FEM** result: 25 heights within 1 mN of the lab axisymmetric ground
+truth (`validation_test/maglev/team28_axisym_fem_height_sweep.json`).  No
+committed artifact runs this axisymmetric reduction over the height sweep.
 
 **External-benchmark validation (the honest high-Rm anchor).**  TEAM 28 is a
 genuinely HIGH-Rm levitation problem -- `Rm ~ 57` at the in-plane
@@ -515,9 +519,11 @@ earns its keep (contrast the LOW-Rm rotating-magnet plate in `radia_iem_fem`,
 Rm ~ 0.016, where the reaction is a ~0.03% correction and a reduction buys
 nothing).  The physically-correct levitation equilibrium (where the
 time-averaged lift == disk weight 1.055 N) lands at absolute disk-bottom
-height **z = 11.0 mm**, matching the **published measured steady-state
-levitation height z = 11.5 mm** (Karl-Fetzer-Kurz-Lehner-Rucker, the official
-TEAM 28 definition; laser triangulation, 4-measurement average) to **4%**.
+height **z = 11.04 mm** in the full-FEM sweep, within **3%** of the
+**published stationary levitation height z = 11.3 mm** (Karl-Fetzer-Kurz-
+Lehner-Rucker, official TEAM 28 Model A, sections II-III; laser
+triangulation).  The formerly quoted 11.5 mm is a transient sample of Table I,
+not the stationary reference (`validation_test/maglev/team28_reference.json`).
 
 **Prior art -- this is an OPEN REPRODUCTION, not a first.**  Motion-coupled
 TEAM 28 levitation with a reduced circuit model was already published by
@@ -527,13 +533,13 @@ steps) vs measurement.  The radia `docs/maglev/demos/team28/` is an OPEN,
 pip-installable, NGSolve + golden-tested reproduction of a frequency-domain
 slice of that published result -- reproducible-open value, NOT novelty.
 
-**Force-convention gotcha (caught by the published 11.5 mm).**  The TEAM 28
+**Force-convention gotcha (caught by the published height).**  The TEAM 28
 surface force integral `Re[B_r J_t]` (and the lab .mat `Fz1`) is EXACTLY 2x the
 physical time-averaged Lorentz force `<f_z> = -(1/2) Re[J_t conj(B_r)]`
 (verified ratio 1.9998; the Im*Im cross term ~6e-5).  The disk floats where the
 PHYSICAL lift == weight, i.e. `F_z/2 == 1.055 N`.  Balancing the 2x integral
 against the 1x weight gives a spurious equilibrium 14.9 mm -- ABOVE the
-measured 11.5 mm, which is the unphysical tell -- so use `F_z/2`.  The
+published 11.3 mm, which is the unphysical tell -- so use `F_z/2`.  The
 reduced-vs-full convergence is convention-independent (golden locks
 `F_z(dZ=0) = -2.1928 N`).
 
@@ -650,8 +656,9 @@ the smooth outer rule from 15 to 125 points changes force by 0.0197%.  No
 kernel epsilon is used.  The independent 25-position reference force target
 also passes, so the spatial and temporal ROM levels each have an acceptance gate.
 
-Do not overclaim the remaining boundary: the same 3-D HCurl basis has not yet
-driven the complete moving-position sweep.  P2 TET geometry is exact; curved
+Do not overclaim the remaining boundary: the 25-position Foster height family
+shares one mode set and is gated against the full-FEM sweep at 2% of peak
+lift; it is not a moving-mesh transient.  P2 TET geometry is exact; curved
 non-tet geometry remains residual-controlled rather than a native parent-cell
 Duffy kernel.  Durable records are
 `validation_test/maglev/team28_hcurl_vim_force_summary.json` and

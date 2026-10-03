@@ -1,12 +1,12 @@
 {
   "schema": "radia.team28.hcurl-vim-force.v1",
-  "generated_at_utc": "2026-09-10T11:38:14.226161+00:00",
+  "generated_at_utc": "2026-10-03T08:56:09.786404+00:00",
   "runtime": {
     "hostname": "mdx2",
     "python_version": "3.12.10",
     "platform": "Windows-11-10.0.26200-SP0",
-    "radia_version": "4.95.82",
-    "ngsolve_version": "6.2.2606"
+    "radia_version": "5.2.1",
+    "ngsolve_version": "6.2.2607"
   },
   "problem": {
     "frequency_hz": 50.0,
@@ -29,13 +29,13 @@
       "runtime_reduction_ratio": 0.00013149820285789427,
       "current_sample_count": 49032,
       "physical_force_N": [
-        -0.0018079479230307734,
-        0.0001623798169772474,
-        1.1018890654542093
+        -0.0018079479256047591,
+        0.00016237981713347678,
+        1.101889065481575
       ],
       "target_physical_force_magnitude_N": 1.0962660575565093,
-      "magnitude_relative_error": 0.005129236519675912,
-      "transverse_force_ratio": 0.001647375728647563,
+      "magnitude_relative_error": 0.005129236544638525,
+      "transverse_force_ratio": 0.0016473757309459435,
       "interaction": {
         "kind": "HCurlTetVolumeInteraction",
         "backend": "hacapk-local-polynomial-affine-tet-hcurl",
@@ -43,14 +43,14 @@
         "cell_count": 227,
         "mode_count": 3,
         "polynomial_degree": 5,
-        "projection_relative_residual": 3.5431924779634292e-15,
+        "projection_relative_residual": 3.5904354567428975e-15,
         "projection_tolerance": 1e-10,
         "projection_quadrature_points": 343,
         "outer_quadrature_points": 15,
-        "max_vandermonde_condition": 142964.93761990772,
+        "max_vandermonde_condition": 142964.93761990784,
         "mu_H_per_m": 1.2566370614359173e-06,
-        "minimum_eigenvalue_H": 1.0207471408521961e-12,
-        "maximum_eigenvalue_H": 4.231059281639666e-11,
+        "minimum_eigenvalue_H": 1.0207471401925483e-12,
+        "maximum_eigenvalue_H": 4.231059281520212e-11,
         "matrix_free": true,
         "hmatrix_operator": {
           "scalar_gram_backend": "hacapk-local-polynomial-degree18",
@@ -72,16 +72,16 @@
             "n_leaves": 1399,
             "n_lowrank": 372,
             "n_dense": 1027,
-            "max_rank": 157,
-            "compression": 0.6842554677948339,
-            "build_time": 20.628903,
-            "memory_mb": 21.789390563964844,
+            "max_rank": 162,
+            "compression": 0.7179430784391098,
+            "build_time": 4.5508542,
+            "memory_mb": 22.862136840820312,
             "dense_memory_mb": 31.84394073486328,
-            "build_prep_s": 0.16661900000000002,
-            "build_cluster_s": 0.00019270001212134957,
-            "build_leafgen_s": 0.00020910002058371902,
-            "build_fill_s": 20.461620399990352,
-            "build_diag_s": 0.0746759,
+            "build_prep_s": 0.1132901,
+            "build_cluster_s": 0.0005085999146103859,
+            "build_leafgen_s": 0.00021620001643896103,
+            "build_fill_s": 4.436369300005026,
+            "build_diag_s": 0.039469500000000005,
             "hex_cache_stats_enabled": 0.0,
             "hex_block_cache_limit": 200000.0,
             "hex_trans_cache_enabled": 1.0,
@@ -106,6 +106,8 @@
             "hex_glpair_w_n": 0.0,
             "hex_glpair_affine_w_n": 0.0,
             "hex_pair_nonconforming": 0.0,
+            "hex_pair_anisotropy_graded": 0.0,
+            "hex_exponential_rule_max_anisotropy": 12.0,
             "hex_cluster_radius_enabled": 1.0,
             "hex_glnear_n": 0.0,
             "hex_glout_n": 0.0,
@@ -173,11 +175,14 @@
         },
         "kernel_epsilon_m": null,
         "geometry": "affine-tetrahedron",
-        "eigenvalue_measurement": "live-reduced-operator-dense-probe"
+        "hermitian_relative_error": 0.0,
+        "eigenvalue_measurement": "live-reduced-operator-dense-probe",
+        "minimum_to_maximum_eigenvalue_ratio": 0.024125096631257684
       },
       "foster_handoff": {
         "state_order": 3,
         "port_count": 1,
+        "form": "foster_modal",
         "blocks": {
           "volume": [
             0,
@@ -187,8 +192,10 @@
         "input_convention": "u=-d(coil_current)/dt for vector-potential ports",
         "has_sibc_termination": false,
         "finite_rl_state_space": true,
-        "min_resistance_eigenvalue": 2.9411764705882338e-08,
-        "min_inductance_eigenvalue": 1.0207471408521961e-12,
+        "min_decay_rate": 695.1395087831248,
+        "max_decay_rate": 28813.95749032841,
+        "min_resistance_eigenvalue": 2.941176470588237e-08,
+        "min_inductance_eigenvalue": 1.0207471401925483e-12,
         "min_surface_mass_eigenvalue": 0.0,
         "passive": true
       },
@@ -282,16 +289,16 @@
         },
         "parent_order": 6
       },
-      "elapsed_seconds": 39.68345979999867
+      "elapsed_seconds": 22.05470860004425
     }
   ],
   "outer_quadrature_check": null,
   "outer_quadrature_relative_force_change": null,
   "force_magnitude_range_N": [
-    1.1018890654542093,
-    1.1018890654542093
+    1.101889065481575,
+    1.101889065481575
   ],
-  "maximum_force_relative_error": 0.005129236519675912,
+  "maximum_force_relative_error": 0.005129236544638525,
   "checks": {
     "all_projection_residuals_below_1e-10": true,
     "all_inductance_blocks_positive": true,
