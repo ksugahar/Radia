@@ -211,6 +211,23 @@ def _create_bh_interpolators(bh_data):
     slope = law.derivative()
     H_max = float(H_tab[-1])
     B_max = float(B_tab[-1])
+    # The chord reluctivity needs H(B), so the law must be strictly
+    # increasing: dB/dH > 0 on every piece.  dB/dH is a quadratic per piece,
+    # so its minimum is exact (endpoints or the vertex); nothing is floored.
+    widths = np.diff(H_tab)
+    for piece in range(len(widths)):
+        a, b, c = slope.c[:, piece]
+        candidates = [0.0, float(widths[piece])]
+        if a > 0.0:
+            vertex = -b / (2.0 * a)
+            if 0.0 < vertex < widths[piece]:
+                candidates.append(float(vertex))
+        minimum = min(a * t * t + b * t + c for t in candidates)
+        if not minimum > 0.0:
+            raise ValueError(
+                "bh_data gives a B(H) law that is not strictly increasing on "
+                f"[{H_tab[piece]:g}, {H_tab[piece + 1]:g}] A/m (min dB/dH = "
+                f"{minimum:.3e}); H(B) and the chord reluctivity are undefined")
 
     def b_of_h(H):
         H = abs(float(H))
@@ -230,9 +247,12 @@ def _create_bh_interpolators(bh_data):
             return H_max + (B - B_max) / MU_0
         if B <= 0.0:
             return 0.0
-        # B(H) is non-decreasing on the table, so the root is bracketed.
+        # B(H) is strictly increasing on the table, so the root is bracketed
+        # and unique.  Stop on relative accuracy only, so a small nonzero B
+        # keeps its own nonzero H instead of an absolute-tolerance zero.
         return float(brentq(lambda H: float(law(H)) - B, 0.0, H_max,
-                            xtol=1e-12 * max(H_max, 1.0), rtol=1e-14))
+                            xtol=1e-300, rtol=4.0 * np.finfo(float).eps,
+                            maxiter=500))
 
     mu_initial = db_dh(0.0)
 
@@ -275,7 +295,8 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
         n_steps: Number of quasi-static steps (hysteresis: 0->I->0)
         max_iter: Max Picard/Hantila iterations
         tol: Convergence tolerance
-        relax: Under-relaxation (0 = full step, higher = more damping)
+        relax: Fraction of the new material step taken per iteration,
+            in (0, 1]: 1 is the full (undamped) step, smaller damps more.
         msh_output: Optional GMSH .msh output path
 
     Returns:
@@ -285,6 +306,10 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
         raise ValueError(f"Unsupported FE solver: {solver}")
     if max_iter < 1:
         raise ValueError("max_iter must be positive")
+    if not 0.0 < float(relax) <= 1.0:
+        # relax = 0 would never update the material and then report the
+        # initial-permeability solution as converged.
+        raise ValueError("relax must lie in (0, 1]; 1 is the full material step")
     if mat is None:
         mat = EMMaterial.from_name("steel")
     material = mat.name
@@ -787,19 +812,46 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
 
             a_bf.Assemble()
 
-            if formulation == "omega":
-                f_lf = LinearForm(fes)
+            newton_step = newton and is_nonlinear and iteration > 0
+            f_lf = LinearForm(fes)
+            if newton_step:
+                # Newton: the tangent solves for the correction to the
+                # current iterate from the current nonlinear residual,
+                # not for a new iterate from the chord source term.
+                if formulation == "omega":
+                    f_lf += chord_cf * (H_s - grad(gfu)) * grad(v) * dx(bonus_intorder=4)
+                else:
+                    f_lf += -chord_cf * (curl(gfu) + B_s) * curl(v) * dx(bonus_intorder=4)
+                    f_lf += -1e-6 * NU_0 * gfu * v * dx
+            elif formulation == "omega":
                 f_lf += chord_cf * H_s * grad(v) * dx(bonus_intorder=4)
-                f_lf.Assemble()
             else:
-                f_lf = LinearForm(fes)
                 f_lf += -chord_cf * B_s * curl(v) * dx(bonus_intorder=4)
-                f_lf.Assemble()
+            f_lf.Assemble()
 
             inv_a = _accel_inverse(a_bf, fes, linear_solver)
-            with TaskManager():
-                linear_residual = apply_fe_inverse(
-                    a_bf.mat, inv_a, f_lf.vec, gfu.vec, fes.FreeDofs())
+            if newton_step:
+                # The correction is measured against the system load, the
+                # chord source term a full (Picard) solve would use.
+                f_load = LinearForm(fes)
+                if formulation == "omega":
+                    f_load += chord_cf * H_s * grad(v) * dx(bonus_intorder=4)
+                else:
+                    f_load += -chord_cf * B_s * curl(v) * dx(bonus_intorder=4)
+                f_load.Assemble()
+                load_free = np.array([bool(flag) for flag in fes.FreeDofs()])
+                load_norm = float(np.linalg.norm(
+                    np.asarray(f_load.vec.FV().NumPy())[load_free]))
+                gf_delta = GridFunction(fes)
+                with TaskManager():
+                    linear_residual = apply_fe_inverse(
+                        a_bf.mat, inv_a, f_lf.vec, gf_delta.vec, fes.FreeDofs(),
+                        reference_norm=load_norm)
+                gfu.vec.data += gf_delta.vec
+            else:
+                with TaskManager():
+                    linear_residual = apply_fe_inverse(
+                        a_bf.mat, inv_a, f_lf.vec, gfu.vec, fes.FreeDofs())
 
             t_solve_iter = time.perf_counter() - t0_iter
             n_iter_actual = iteration + 1
@@ -857,6 +909,46 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
                 converged = True
                 break
 
+    # Residual of the discrete nonlinear equation at the returned iterate.
+    # The loop stops on the relaxed material change; this re-evaluates the
+    # material from the final field (no relaxation) and measures how well
+    # that field satisfies the panel's own equations.
+    nonlinear_relative_residual = None
+    if is_nonlinear and not is_hysteresis:
+        gf_check = GridFunction(fes_l2)
+        gf_check.vec.data = gf_prop.vec
+        if formulation == "omega":
+            check_field = H_s - grad(gfu)
+            law = bh_interp['mu_chord']
+        else:
+            check_field = curl(gfu) + B_s
+            law = bh_interp['nu_chord']
+        gf_mag = GridFunction(fes_l2)
+        gf_mag.Set(sqrt(InnerProduct(check_field, check_field)))
+        for nr in yoke_elem_indices:
+            gf_check.vec[nr] = float(law(max(float(gf_mag.vec[nr]), 1e-10)))
+        check_cf = gf_check * kelvin_weight
+        a_check = BilinearForm(fes)
+        f_check = LinearForm(fes)
+        if formulation == "omega":
+            a_check += check_cf * grad(u) * grad(v) * dx(bonus_intorder=4)
+            f_check += check_cf * H_s * grad(v) * dx(bonus_intorder=4)
+        else:
+            a_check += check_cf * curl(u) * curl(v) * dx(bonus_intorder=4)
+            a_check += 1e-6 * NU_0 * u * v * dx
+            f_check += -check_cf * B_s * curl(v) * dx(bonus_intorder=4)
+        a_check.Assemble()
+        f_check.Assemble()
+        r_vec = f_check.vec.CreateVector()
+        r_vec.data = a_check.mat * gfu.vec - f_check.vec
+        free = np.array([bool(flag) for flag in fes.FreeDofs()])
+        r_np = np.asarray(r_vec.FV().NumPy())[free]
+        f_np = np.asarray(f_check.vec.FV().NumPy())[free]
+        nonlinear_relative_residual = float(
+            np.linalg.norm(r_np) / max(np.linalg.norm(f_np), 1e-300))
+        _log(f"NONLINEAR:relative residual of the final iterate "
+             f"{nonlinear_relative_residual:.3e}")
+
     # ============================================================
     # Step 7: Post-process
     # ============================================================
@@ -892,8 +984,43 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
             phys_mask * gf_prop * InnerProduct(B_field, B_field),
             mesh, order=10).real
 
-    L = 2 * W_mag / current**2
-    _log(f"ENERGY:W={W_mag:.6e} J, L={L*1e6:.4f} uH")
+    # 0.5*int(B.H) equals the magnetic energy only for linear material.  It is
+    # kept as W_half_BH; L = 2*W_half_BH/I^2 is the retained finite-domain B.H
+    # inductance estimate (Kelvin region excluded), not a validated flux linkage.
+    W_half_BH = W_mag
+    W_coenergy = W_mag
+    energy_convention = ("linear material: energy = coenergy = 0.5*int(B.H)")
+    if is_hysteresis:
+        energy_convention = ("hysteresis: 0.5*int(nu_rev*|B|^2) approximation; no unique "
+                             "reversible energy or coenergy exists and none is reported")
+        W_coenergy = None
+    elif is_nonlinear:
+        # Reversible nonlinear law: energy int(H dB) and coenergy int(B dH)
+        # from the shared production B(H) law and its antiderivative,
+        # evaluated on the solved field H.
+        from radia.scalar_potential_solver import _build_bh_spline_law
+
+        b_of, coenergy_of, _ = _build_bh_spline_law(bh_data)
+        H_cf = H_s - grad(gfu) if formulation == "omega" else gf_prop * B_field
+        H_mag = sqrt(InnerProduct(H_cf, H_cf))
+        iron = mesh.MaterialCF({m: CF(1.0 if "yoke" in m.lower() else 0.0)
+                                for m in materials}, default=CF(0.0))
+        air_coenergy = 0.5 * gf_prop * InnerProduct(H_cf, H_cf) if formulation == "omega" \
+            else 0.5 * InnerProduct(B_field, H_cf)
+        iron_coenergy = coenergy_of(H_mag)
+        iron_bh = b_of(H_mag) * H_mag
+        W_coenergy = Integrate(phys_mask * (iron * iron_coenergy + (1 - iron) * air_coenergy),
+                               mesh, order=10).real
+        W_bh = Integrate(phys_mask * (iron * iron_bh + (1 - iron) * 2.0 * air_coenergy),
+                         mesh, order=10).real
+        W_mag = W_bh - W_coenergy
+        energy_convention = ("reversible nonlinear: W_mag = int(H dB) and W_coenergy = "
+                             "int(B dH) from the shared radia.bh_law antiderivative; "
+                             "W_half_BH = 0.5*int(B.H) is not an energy")
+
+    L = 2 * W_half_BH / current**2
+    _log(f"ENERGY:W={W_mag:.6e} J, W'={W_coenergy}, "
+         f"L(B.H estimate)={L*1e6:.4f} uH")
 
     # B at origin
     try:
@@ -942,7 +1069,12 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
         "B_origin": B_origin,
         "B_origin_mag": B_origin_mag,
         "W_mag": float(W_mag),
+        "W_coenergy": None if W_coenergy is None else float(W_coenergy),
+        "W_half_BH": float(W_half_BH),
+        "energy_convention": energy_convention,
         "L": float(L),
+        "L_convention": ("finite-domain estimate int(B.H)/I^2 over the physical "
+                         "(non-Kelvin) region; not a validated flux linkage"),
         "ndof": ndof,
         "ne": ne,
         "formulation": formulation,
@@ -950,6 +1082,7 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
         "linear_relative_residual": linear_residual,
         "iterations": n_iter_actual,
         "converged": converged,
+        "nonlinear_relative_residual": nonlinear_relative_residual,
         "nonlinear": is_nonlinear,
         "t_mesh": round(t_mesh, 2),
         "t_total": round(t_total, 2),
@@ -988,7 +1121,8 @@ def build_argparser():
     parser.add_argument("--tol", type=float, default=1e-3,
                         help="Convergence tolerance")
     parser.add_argument("--relax", type=float, default=0.3,
-                        help="Under-relaxation (0-1)")
+                        help="Fraction of the new material step per iteration, "
+                             "in (0, 1]; 1 is the full step")
     parser.add_argument("--newton", action="store_true",
                         help="Use Newton iteration (default: Picard)")
     parser.add_argument("--solver", default="auto",
