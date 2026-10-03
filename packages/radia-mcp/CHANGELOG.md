@@ -7,7 +7,27 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-10-03
+
+### Changed
+
+- `release_workflow` knowledge describes the current release-quad
+  definition of done: the release source is the peeled `v<radia-version>`
+  tag (or a checkout named by `--release-source`), LAB and 100号機's release
+  runtime are verified exact wheels, 100号機's development venv is the
+  editable source, and `done` changes no runtime.
+- `ngsolve` knowledge: the stale-CoefficientFunction note names the
+  generic `state_cf` instead of a removed example identifier.
+
 ### Fixed
+
+- `maglev` knowledge (`team28_dynamic_scope`, topic list): the TEAM 28
+  height reference is the published stationary 11.3 mm (official Model A),
+  not 11.5 mm; the full-FEM equilibrium is 11.04 mm. The claim that a
+  six-stage reduction reproduces the force-vs-height curve to 5e-4 N had no
+  committed artifact and is replaced by what is verified: fixed-height
+  reduction convergence, the full-FEM 25-height sweep against the lab
+  reference, and the Foster height family at 2% of peak lift.
 
 - The native motor angle-family evidence is current again. The artifact was
   regenerated on 2026-10-03 with `native_motor_family_gate` (MATLAB R2026a,
