@@ -100,25 +100,34 @@ try {
         Select-Object -First 1).Source
     $matlabRoot = Split-Path -Parent (Split-Path -Parent $matlabCommand)
 
-    # The worker runs in the isolated venv with the Engine that ships with
-    # this MATLAB, never a system interpreter's Engine. Pip builds a local
-    # directory in place, so build from a copy, not the MATLAB installation.
-    $engineSource = Join-Path $matlabRoot 'extern\engines\python'
-    if (-not (Test-Path -LiteralPath (Join-Path $engineSource 'setup.py') -PathType Leaf)) {
-        throw "MATLAB Engine for Python source is missing: $engineSource"
+    # The worker runs in the isolated venv with MathWorks' matlabengine
+    # release matched to this MATLAB, never a system interpreter's Engine.
+    # Its in-tree setup.py derives the MATLAB root from the build folder, so
+    # it is neither copied nor built inside the MATLAB installation.
+    [xml]$versionInfo = Get-Content -LiteralPath (Join-Path $matlabRoot 'VersionInfo.xml') -Raw
+    $matlabVersion = [string]$versionInfo.MathWorks_version_info.version
+    if ($matlabVersion -notmatch '^(\d+)\.(\d+)\.') {
+        throw "Cannot read the MATLAB version from $matlabRoot"
     }
-    $engineBuild = Join-Path $resolvedRunRoot 'matlab-engine-source'
-    Copy-Item -LiteralPath $engineSource -Destination $engineBuild -Recurse
-    & $venvPython -m pip install --disable-pip-version-check $engineBuild
-    if ($LASTEXITCODE -ne 0) { throw "Installing the MATLAB Engine failed with exit code $LASTEXITCODE" }
-    $engineVersion = (& $venvPython -c 'import importlib.metadata as m, matlab.engine; print(m.version("matlabengine"))' | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0 -or -not $engineVersion) {
+    $engineRequirement = "matlabengine==$($Matches[1]).$($Matches[2]).*"
+    & $venvPython -m pip install --disable-pip-version-check $engineRequirement
+    if ($LASTEXITCODE -ne 0) { throw "Installing $engineRequirement failed with exit code $LASTEXITCODE" }
+    # The Engine records the MATLAB it binds to; it must be this MATLAB.
+    $engineProbe = (& $venvPython -c 'import importlib.metadata as m, json, os, matlab.engine; lines = open(os.path.join(os.path.dirname(matlab.engine.__file__), "_arch.txt")).read().splitlines(); print(json.dumps({"version": m.version("matlabengine"), "bin": lines[1]}))' | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $engineProbe) {
         throw "The isolated venv cannot import matlab.engine"
+    }
+    $engineBinding = $engineProbe | ConvertFrom-Json
+    $expectedBin = [IO.Path]::GetFullPath((Join-Path $matlabRoot 'bin')).TrimEnd('\') + '\'
+    if (-not ([IO.Path]::GetFullPath($engineBinding.bin) + '\').StartsWith($expectedBin, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "matlabengine binds to $($engineBinding.bin), not $matlabRoot"
     }
     $engineEvidence = [ordered]@{
         distribution = 'matlabengine'
-        version = $engineVersion
-        source = $engineSource
+        requirement = $engineRequirement
+        version = $engineBinding.version
+        matlab_version = $matlabVersion
+        matlab_bin = $engineBinding.bin
         interpreter = $venvPython
         session = if ($EngineSession) { $EngineSession } else { $null }
         ownership = if ($EngineSession) { 'borrowed' } else { 'owned' }

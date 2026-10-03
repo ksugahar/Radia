@@ -479,7 +479,8 @@ def test_installed_wheel_runner_uses_the_isolated_engine_worker():
     # through the Engine installed into the isolated venv from this MATLAB.
     assert "-batch" not in runner
     assert "& $venvPython @workerArguments" in runner
-    assert "extern\\engines\\python" in runner
+    assert "matlabengine==$($Matches[1]).$($Matches[2]).*" in runner
+    assert "matlabengine binds to" in runner
     assert "matlab_engine = $engineEvidence" in runner
     # A borrowed session gets no license retry.
     assert "$maxMatlabAttempts = if ($EngineSession) { 1 } else { 3 }" in runner
