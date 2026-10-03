@@ -239,15 +239,24 @@ def _installable_fake_wheel(path):
 
 def test_wheel_tier_verify_accepts_only_the_exact_installed_wheel(tmp_path):
     """Install the wheel into an isolated venv and run the worker's verify phase."""
+    import os
     import subprocess
+    # The deployment worker runs in the target's own interpreter environment.
+    # Test runners may export PYTHONPATH (the cubit-mesh-export workflow sets
+    # it to the package source), which would put the real source package in
+    # front of the installed wheel, so the isolated venv gets an explicit
+    # environment without interpreter path overrides.
+    isolated = {k: v for k, v in os.environ.items()
+                if k not in ('PYTHONPATH', 'PYTHONHOME', 'PYTHONSTARTUP', 'PYTHONUSERBASE',
+                             'PYTHONSAFEPATH', 'PYTHONNOUSERSITE')}
     venv = tmp_path / 'venv'
     subprocess.run([sys.executable, '-m', 'venv', '--system-site-packages', str(venv)],
-                   check=True, timeout=300)
+                   check=True, timeout=300, env=isolated)
     python = venv / 'Scripts' / 'python.exe'
     wheel = tmp_path / 'cubit_mesh_export-1.0.2-py3-none-any.whl'
     _installable_fake_wheel(wheel)
     subprocess.run([str(python), '-m', 'pip', 'install', '--no-deps', '--no-index', str(wheel)],
-                   check=True, capture_output=True, timeout=300)
+                   check=True, capture_output=True, timeout=300, env=isolated)
     import base64
     import json
     contract = dual.wheel_contract(wheel)
@@ -255,33 +264,40 @@ def test_wheel_tier_verify_accepts_only_the_exact_installed_wheel(tmp_path):
     for name in ('netgen-mesher', 'ngsolve'):
         probe = subprocess.run([str(python), '-c',
                                 'import importlib.metadata as m,sys;print(m.version(sys.argv[1]))', name],
-                               capture_output=True, text=True)
+                               capture_output=True, text=True, env=isolated)
         if probe.returncode:
             pytest.skip('worker dependency pins need netgen-mesher and ngsolve installed')
         pins[name] = probe.stdout.strip()
 
-    def verify(installed_wheel_name):
+    def verify(installed_wheel_name, env):
         out = tmp_path / ('evidence-' + installed_wheel_name)
         cfg = dict(contract, schema=dual.SCHEMA, source_sha='a' * 40, target='lab',
                    action='verify', tier='wheel', source_root='', output=str(out),
                    wheel_path=str(wheel), dependencies=pins, force_close_cubit=False)
         encoded = base64.b64encode(json.dumps(cfg).encode()).decode()
         p = subprocess.run([str(python), '-', encoded], input=dual.WORKER, text=True,
-                           capture_output=True, timeout=300)
+                           capture_output=True, timeout=300, env=env)
         line = [l for l in p.stdout.splitlines() if l.startswith('CUBIT_DUAL_RESULT=')][-1]
         return json.loads(line.partition('=')[2])
 
     # The exact wheel passes identity and payload verification; the run then
     # stops at the MCP self-test that this synthetic wheel cannot provide.
-    result = verify('exact')
-    assert result['installed_payload_verified'] is True, result.get('error')
+    result = verify('exact', isolated)
+    assert result.get('installed_payload_verified') is True, result.get('error')
     assert result['installed']['direct_url']['archive_info'] is not None
     assert 'mcp.server' in result['error']
+
+    # A source tree shadowing the installed wheel (the CI PYTHONPATH case) is
+    # refused by the fresh-interpreter identity check, not reported as the wheel.
+    shadow = dict(isolated, PYTHONPATH=str(ROOT / 'packages' / 'cubit-mesh-export' / 'src'))
+    result = verify('shadowed', shadow)
+    assert 'installed_payload_verified' not in result
+    assert 'Wrong installed version' in result.get('error', ''), result.get('error')
 
     # A modified installed file is caught by the payload check.
     site = venv / 'Lib' / 'site-packages' / 'cubit_mesh_export'
     (site / 'toolbar_smoke.py').write_text('changed\n')
-    result = verify('modified')
+    result = verify('modified', isolated)
     assert 'installed_payload_verified' not in result
     assert 'Published wheel/source mismatch: cubit_mesh_export/toolbar_smoke.py' in result['error']
 
