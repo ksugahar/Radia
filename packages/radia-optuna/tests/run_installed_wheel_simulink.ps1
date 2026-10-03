@@ -29,7 +29,44 @@ function ConvertTo-MatlabLiteral([string]$Value) {
     return $Value.Replace("'", "''")
 }
 
+function Remove-OwnedRunRoot {
+    # MATLAB can return from Engine.quit or `clear optuna_mex` shortly before
+    # Windows releases the MEX/DLL image, so removal of this run's own folder
+    # is retried for a bounded time. A folder that still cannot be removed is
+    # left in place as diagnostic evidence and the run fails.
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$TempRoot,
+        [double]$TimeoutSeconds = 60
+    )
+    $root = [IO.Path]::GetFullPath($TempRoot).TrimEnd('\') + '\'
+    $target = [IO.Path]::GetFullPath($Path)
+    if (-not $target.StartsWith($root, [StringComparison]::OrdinalIgnoreCase) -or
+            $target.Length -le $root.Length) {
+        throw "Refusing to remove a folder outside ${root}: $target"
+    }
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    while (Test-Path -LiteralPath $target) {
+        $resolved = (Resolve-Path -LiteralPath $target).ProviderPath
+        if ($resolved -ne $target -or
+                ((Get-Item -LiteralPath $target).Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+                (Get-ChildItem -LiteralPath $target -Recurse -Force |
+                    Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint })) {
+            throw "Refusing to remove owned scratch containing a reparse point: $target"
+        }
+        try {
+            Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction Stop
+        } catch {
+            if ([DateTime]::UtcNow -ge $deadline) {
+                throw "Owned scratch could not be removed within $TimeoutSeconds s and is kept for diagnosis: $target ($($_.Exception.Message))"
+            }
+            Start-Sleep -Milliseconds 500
+        }
+    }
+}
+
 New-Item -ItemType Directory -Path $resolvedRunRoot | Out-Null
+$testsPassed = $false
 try {
     if ($PreverifiedWheelSha256) {
         if ($PreverifiedWheelSha256 -notmatch '^[0-9a-fA-F]{64}$') {
@@ -167,24 +204,31 @@ try {
         simulink_e2e = $simulinkEvidence
         table_resume = $simulinkEvidence.table_resume
     }
-    $encodedEvidence = $evidence | ConvertTo-Json -Depth 12
-    if ($EvidenceOutput) {
-        $resolvedEvidenceOutput = [IO.Path]::GetFullPath($EvidenceOutput)
-        $evidenceParent = Split-Path -Parent $resolvedEvidenceOutput
-        if ($evidenceParent -and -not (Test-Path -LiteralPath $evidenceParent)) {
-            New-Item -ItemType Directory -Path $evidenceParent -Force | Out-Null
-        }
-        [IO.File]::WriteAllText(
-            $resolvedEvidenceOutput,
-            $encodedEvidence + [Environment]::NewLine,
-            [Text.UTF8Encoding]::new($false))
-    }
-    Write-Output $encodedEvidence
-    Write-Output 'RADIA_OPTUNA_WHEEL_SIMULINK_OK'
+    $testsPassed = $true
 } finally {
-    $checkedRunRoot = [IO.Path]::GetFullPath($resolvedRunRoot)
-    if ($checkedRunRoot.StartsWith($resolvedTempRoot, [StringComparison]::OrdinalIgnoreCase) -and
-            (Test-Path -LiteralPath $checkedRunRoot)) {
-        Remove-Item -LiteralPath $checkedRunRoot -Recurse -Force
+    # A cleanup failure fails a passing run; after a test failure it is
+    # reported without hiding the original error.
+    try {
+        Remove-OwnedRunRoot -Path $resolvedRunRoot -TempRoot $resolvedTempRoot
+    } catch {
+        if ($testsPassed) { throw }
+        Write-Warning "Cleanup after the failed run also failed: $($_.Exception.Message)"
     }
 }
+
+# Evidence and the success marker exist only after the owned scratch is gone.
+$evidence.owned_scratch_removed = $true
+$encodedEvidence = $evidence | ConvertTo-Json -Depth 12
+if ($EvidenceOutput) {
+    $resolvedEvidenceOutput = [IO.Path]::GetFullPath($EvidenceOutput)
+    $evidenceParent = Split-Path -Parent $resolvedEvidenceOutput
+    if ($evidenceParent -and -not (Test-Path -LiteralPath $evidenceParent)) {
+        New-Item -ItemType Directory -Path $evidenceParent -Force | Out-Null
+    }
+    [IO.File]::WriteAllText(
+        $resolvedEvidenceOutput,
+        $encodedEvidence + [Environment]::NewLine,
+        [Text.UTF8Encoding]::new($false))
+}
+Write-Output $encodedEvidence
+Write-Output 'RADIA_OPTUNA_WHEEL_SIMULINK_OK'
