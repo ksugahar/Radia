@@ -379,6 +379,60 @@ class TestBHInterpolation:
         assert mu_d > 0
         assert nu_d > 0
 
+    def test_panel_law_is_the_production_law_with_vacuum_tail(self):
+        """The panel's chord/differential laws are radia.bh_law plus mu0 beyond the table."""
+        sys.path.insert(0, os.path.join(_repo, "src", "radia", "panels"))
+        from calc_accel_magnet import _create_bh_interpolators
+        from radia.bh_law import monotone_bh_pchip
+
+        table = np.loadtxt(os.path.join(_repo, "src", "radia", "panels",
+                                        "samples", "em_sample_bh.txt"))
+        H_tab, B_tab = table[:, 0], table[:, 1]
+        interp = _create_bh_interpolators(table.tolist())
+        law = monotone_bh_pchip(H_tab, B_tab)
+
+        inside = np.concatenate([H_tab[1:], 0.5 * (H_tab[1:] + H_tab[:-1])])
+        B_panel = interp['mu_chord'](inside) * inside
+        assert np.allclose(B_panel, law(inside), rtol=1e-12, atol=0.0)
+        # At H_max itself the panel takes the tail's one-sided slope (mu0).
+        interior = inside[inside < H_tab[-1]]
+        assert np.allclose(interp['mu_diff'](interior), law.derivative()(interior),
+                           rtol=1e-12, atol=0.0)
+        # The sample's magnetization rises, so dB/dH never drops below mu0.
+        assert np.all(interp['mu_diff'](inside) >= MU_0 * (1.0 - 1e-12))
+
+        # Beyond the table: B = B_max + mu0 (H - H_max), H(B) its inverse.
+        H_max, B_max = float(H_tab[-1]), float(B_tab[-1])
+        for factor in (1.5, 10.0, 100.0):
+            H = factor * H_max
+            B = B_max + MU_0 * (H - H_max)
+            assert interp['mu_chord'](H) * H == pytest.approx(B, rel=1e-13)
+            assert interp['mu_diff'](H) == pytest.approx(MU_0, rel=1e-13)
+            assert interp['nu_chord'](B) * B == pytest.approx(H, rel=1e-12)
+            assert interp['nu_diff'](B) == pytest.approx(1.0 / MU_0, rel=1e-13)
+        # The retired chord extrapolation held B/H at its last value, which
+        # at ten times H_max claimed ten times B_max (26 T for this sample).
+        assert interp['mu_chord'](10.0 * H_max) * 10.0 * H_max < 0.5 * 10.0 * B_max
+
+        # H(B) inverts B(H) inside the table, and the differentials are reciprocal.
+        H_probe = inside[::7]
+        B_probe = interp['mu_chord'](H_probe) * H_probe
+        assert np.allclose(interp['nu_chord'](B_probe) * B_probe, H_probe,
+                           rtol=1e-9, atol=1e-9 * H_max)
+        assert np.allclose(interp['nu_diff'](B_probe) * interp['mu_diff'](H_probe),
+                           1.0, rtol=1e-8)
+
+    def test_panel_law_rejects_tables_the_production_law_rejects(self):
+        sys.path.insert(0, os.path.join(_repo, "src", "radia", "panels"))
+        from calc_accel_magnet import _create_bh_interpolators
+
+        with pytest.raises(ValueError, match="start at"):
+            _create_bh_interpolators([[10, 0.1], [100, 1.0]])
+        with pytest.raises(ValueError, match="strictly increasing"):
+            _create_bh_interpolators([[0, 0], [100, 1.0], [100, 1.2]])
+        with pytest.raises(ValueError, match="non-decreasing"):
+            _create_bh_interpolators([[0, 0], [100, 1.0], [200, 0.9]])
+
 
 # ============================================================
 # Run as standalone
