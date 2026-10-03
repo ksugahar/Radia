@@ -13,13 +13,14 @@ with
 The coil field is the excitation (per the chosen coupling), exactly as in
 the full-FEM baseline team28_axisym_fem.py (used here as the full-order reference).
 
-Arnoldi-Galerkin reduction = the Krylov subspace generated from the source by
-the magnetostatic-solve / sigma-accumulate recursion
+Arnoldi-Galerkin reduction = the block Krylov space K_m(K^{-1} N, K^{-1} F)
+(moment matching at s = 0), orthonormalised by modified Gram-Schmidt:
     V_0 = K^{-1} F                       (s=0 coil response, no eddy)
     V_{k+1} = orthonormalize( K^{-1} (N V_k) )
-After m stages the reduced model (V^T K V + s V^T N V) y = V^T F gives the
-reduced field X_m(s) = V y; we evaluate the Lorentz force from X_m(j*omega)
-and watch it converge to the full-FEM force as m grows.
+followed by the congruence projection (V^H K V + s V^H N V) y = V^H F, which
+gives the reduced field X_m(s) = V y of order m.  No circuit is synthesised.
+We evaluate the Lorentz force from X_m(j*omega) and watch it converge to the
+full-FEM force as the order m grows.
 
 Run:  python team28_arnoldi_force.py
 """
@@ -110,11 +111,11 @@ def force_from_vec(xfull, fes, fesPhi, fesB, sig, p=2):
     return float(fz.real)
 
 
-def arnoldi_forces(al_z=aluminium_z, max_stage=10):
-    """Return (fz_full, [fz_stage1, ..., fz_stageM]) for the disk at height al_z.
+def arnoldi_forces(al_z=aluminium_z, max_order=10):
+    """Return (fz_full, [fz_order1, ..., fz_orderM]) for the disk at height al_z.
 
-    fz_full = direct (K+sN) solve force; the list is the N-stage Arnoldi-Galerkin
-    reduced force for N=1..M (M <= max_stage; the Krylov basis stops early
+    fz_full = direct (K+sN) solve force; the list is the order-m Arnoldi-Galerkin
+    reduced force for m=1..M (M <= max_order; the Krylov basis stops early
     once it stops growing).
     """
     mesh, fes, fesPhi, fesB, sig, K, Nmat, F = setup(al_z)
@@ -134,7 +135,7 @@ def arnoldi_forces(al_z=aluminium_z, max_stage=10):
     # Arnoldi-Galerkin Krylov basis from the coil source
     V = []
     v0 = Klu.solve(Ff); v0 /= np.sqrt(abs(v0 @ v0.conj())); V.append(v0)
-    for _ in range(max_stage - 1):
+    for _ in range(max_order - 1):
         w = Klu.solve(Nf @ V[-1])
         for vv in V:                          # modified Gram-Schmidt
             w = w - (vv.conj() @ w) * vv
@@ -143,20 +144,20 @@ def arnoldi_forces(al_z=aluminium_z, max_stage=10):
             break
         V.append(w / nrm)
 
-    stage_forces = []
+    order_forces = []
     for m in range(1, len(V) + 1):
         Vm = np.array(V[:m]).T
         y = np.linalg.solve(Vm.conj().T @ (Kf @ Vm) + s * (Vm.conj().T @ (Nf @ Vm)),
                             Vm.conj().T @ Ff)
         xr = np.zeros(ndof, dtype=complex); xr[free] = Vm @ y
-        stage_forces.append(force_from_vec(xr, fes, fesPhi, fesB, sig))
-    return fz_full, stage_forces
+        order_forces.append(force_from_vec(xr, fes, fesPhi, fesB, sig))
+    return fz_full, order_forces
 
 
 def main():
     fz_full, sf = arnoldi_forces()
     print(f"\n direct full-FEM (split K+sN) force = {fz_full:+.4f} N  (ref -2.1928)")
-    print(f"\n stages  Arnoldi force [N]   rel.err vs full")
+    print(f"\n order   Arnoldi force [N]   rel.err vs full")
     for m, fz in enumerate(sf, 1):
         print(f"   {m:2d}    {fz:+.5f}     {abs(fz - fz_full)/abs(fz_full)*100:8.3f} %")
 
