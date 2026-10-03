@@ -11,11 +11,11 @@ ellipsoid_alpha_tensor_3d.py, which carries the air reaction dipole, the lift /
 Re[alpha] part), NOT the interior-PEC bulk eigenmodes
 (mixed_galerkin.bulk_foster_via_eigen / bulk_foster_vector_via_eigen).
 
-Why a sample fit and not a Kameari + Kelvin eigen-accumulation: the 3D HCurl
-Kameari + Kelvin accumulation structurally BREAKS DOWN on the
-isolated-conductor-in-vacuum problem (L_n sign flip at stage 1).  Sphere axisym
-Kameari reaches the Stoll ladder to 0.000%, but the general 3D body does not.  This module
-sidesteps that by building the LTI on the verified per-frequency solve instead.
+Why a sample fit: the exterior-matched response of a general 3D isolated
+conductor is not available as a bounded-domain HCurl eigenproblem; only the
+analytic sphere and axisymmetric bodies give the Stoll free-decay spectrum
+directly.  This module therefore builds the LTI from the verified
+per-frequency solve.
 
 Recipe (VERIFIED on the analytic sphere Stoll spectrum to < 0.2 %):
   1. scipy.interpolate.AAA discovers the DOMINANT real poles; they land on the

@@ -1,4 +1,4 @@
-"""export.py -- Export conductor Y(s) Foster ladder as MATLAB / Simulink LTI.
+"""export.py -- Export the conductor Y(s) Foster pole-residue model as a MATLAB / Simulink LTI.
 
 Foster representation:
     Y(s) = sum_n g_n / (1 + s tau_n) + K_SIBC/sqrt(s) + c_1/s
@@ -16,7 +16,7 @@ import numpy as np
 
 
 def diffusive_quadrature(K_SIBC, n_aux=30, f_lo=1e-3, f_hi=1e10):
-    """Approximate K_SIBC/sqrt(s) by n_aux first-order RC rungs.
+    """Approximate K_SIBC/sqrt(s) by n_aux first-order diagonal poles.
 
     Identity: 1/sqrt(s) = (1/pi) * integral_0^inf 1/(sqrt(xi) (s + xi)) dxi.
 
@@ -69,7 +69,7 @@ def build_state_space(g_n, tau_n, V, sigma, K_SIBC, c1, n_warburg_rungs=30):
         B[n, 0] = 1.0
         C[0, n] = g_n[n] / tau_n[n]
 
-    # Warburg rungs: K_SIBC/sqrt(s) via diffusive quadrature
+    # Warburg tail: K_SIBC/sqrt(s) via diffusive-quadrature poles
     for k in range(n_warburg):
         idx = n_foster + k
         A[idx, idx] = -xi_w[k]
@@ -176,7 +176,7 @@ def build_state_space_mimo(G_n, tau_n, V, sigma, K_mat, C1_mat,
 
 def save_mat(out_path, *, A, B, C, D, V, S, sigma, mu, K_SIBC, c_1,
               tau_foster, g_foster, n_foster, n_warburg, n_integrator,
-              description="Conductor Y(s) Foster ladder LTI state-space."):
+              description="Conductor Y(s) Foster pole-residue LTI state-space."):
     """Save state-space + metadata to MATLAB-loadable .mat.
 
     Also writes a sibling .m helper script for Simulink loading.

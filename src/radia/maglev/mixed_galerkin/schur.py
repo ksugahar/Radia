@@ -26,7 +26,7 @@ gives the block system
 and the admittance Y(s) = sigma [ int f^2 dV + xi_b . b_b + xi_s b_s ].
 Eliminating xi_b is the Schur complement S(s) = K_ss - K_sb K_bb^-1 K_bs,
 the Gram-Schmidt residual of the envelope against the bulk modes: the
-crossover between the Foster ladder and the sqrt(s) tail is decided by the
+crossover between the Foster modal sum and the sqrt(s) tail is decided by the
 projection, nothing is fitted.  Y is exact at DC (xi -> 0) and expels the
 field at high frequency through the "-1" of the envelope.
 

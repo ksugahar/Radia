@@ -1,11 +1,13 @@
 """
-Dowell式をPRIMA形式で表現
+Dowell式を経験的な RL ラダー回路で近似する試行 (要素値は導出していない)
 
 Dowell式:
   Z(s) = R_dc * F_R(xi) + s * L_int_dc * F_L(xi)
   xi = d/delta = d * sqrt(omega*mu*sigma/2)
 
-F_R(xi)とF_L(xi)をsの関数として展開し、PRIMA I形式で表現できるか検証。
+F_R(xi)とF_L(xi)を、DC 値と経験的なスケーリングで決めた RL ラダー回路で
+近似できるか試す (PRIMA 射影でも、解析的に導いた連分数でもない)。
+ファイル名・関数名の "prima" は履歴上の名称。
 """
 
 import numpy as np
@@ -98,7 +100,7 @@ def build_tridiagonal(L):
 
 
 def calc_prima_impedance(R_prima, L_prima, freqs):
-    """PRIMA I インピーダンス"""
+    """経験的 RL ラダー回路 (三重対角 L) のインピーダンス"""
     RR = np.diag(R_prima)
     LL = build_tridiagonal(L_prima)
     n = len(R_prima)
@@ -117,13 +119,13 @@ def calc_prima_impedance(R_prima, L_prima, freqs):
 
 def dowell_prima_params(d, sigma, mu=MU_0, n_stages=7):
     """
-    Dowell式に基づくPRIMAパラメータ
+    Dowell の DC 値と経験的なスケーリングで決める RL ラダー回路の要素値
 
     Dowell DC parameters:
       R_dc = 1/(sigma*d)
       L_int_dc = mu*d/3
 
-    PRIMA I DC極限で Z -> R_dc + j*omega*L_int_dc となるように設定
+    連分数回路の DC極限で Z -> R_dc + j*omega*L_int_dc となるように設定
     """
     R_dc = 1.0 / (sigma * d)
     L_int_dc = mu * d / 3.0
@@ -131,11 +133,11 @@ def dowell_prima_params(d, sigma, mu=MU_0, n_stages=7):
     R_prima = np.zeros(n_stages)
     L_prima = np.zeros(n_stages)
 
-    # Stage 1: DC抵抗とDC内部インダクタンス
+    # term 1: DC抵抗とDC内部インダクタンス
     R_prima[0] = R_dc
     L_prima[0] = L_int_dc
 
-    # Stage 2以降: 高周波補正項
+    # term 2以降: 高周波補正項
     # 表皮効果による追加のR, L
     for n in range(2, n_stages + 1):
         # 経験的なスケーリング (要調整)
@@ -147,7 +149,7 @@ def dowell_prima_params(d, sigma, mu=MU_0, n_stages=7):
 
 def main():
     print("="*70)
-    print("Dowell式のPRIMA表現")
+    print("Dowell式の経験的 RL ラダー回路による近似")
     print("="*70)
 
     d = 0.1e-3
@@ -166,12 +168,12 @@ def main():
     # Dowell式
     Z_dowell = calc_dowell_impedance(R_dc, L_int_dc, d, sigma, mu, freqs)
 
-    # PRIMA (Dowell DC parameters)
+    # 経験的 RL ラダー回路 (Dowell DC parameters + ad hoc scaling)
     n_stages = 10
     R_prima, L_prima = dowell_prima_params(d, sigma, mu, n_stages)
     Z_prima = calc_prima_impedance(R_prima, L_prima, freqs)
 
-    print(f"\nPRIMA parameters ({n_stages} stages):")
+    print(f"\nEmpirical ladder-circuit parameters ({n_stages} terms):")
     print(f"  R_prima[:3] = {R_prima[:3]}")
     print(f"  L_prima[:3] = {L_prima[:3]}")
 
@@ -182,7 +184,7 @@ def main():
     print(f"  R_dc + j*w*L_dc = {R_dc + 1j*2*np.pi*1*L_int_dc:.6e}")
 
     # 比較
-    print(f"\n{'Freq':>12} {'|Z_Dowell|':>14} {'|Z_PRIMA|':>14} {'Err':>10}")
+    print(f"\n{'Freq':>12} {'|Z_Dowell|':>14} {'|Z_CF|':>14} {'Err':>10}")
     print("-"*55)
 
     test_freqs = [1, 100, 1e3, 10e3, 100e3, 1e6, 10e6]
@@ -194,9 +196,9 @@ def main():
         freq_str = f"{f:.0f} Hz" if f < 1000 else f"{f/1e3:.0f} kHz" if f < 1e6 else f"{f/1e6:.0f} MHz"
         print(f"  {freq_str:>10} {np.abs(z_dow):>14.6e} {np.abs(z_prima):>14.6e} {err:>9.2f}%")
 
-    # PRIMAから逆算したF_R, F_L
-    print(f"\nPRIMAから逆算したF_R, F_L:")
-    print(f"{'Freq':>12} {'xi':>8} {'F_R(PRIMA)':>12} {'F_R(Dow)':>12} {'F_L(PRIMA)':>12} {'F_L(Dow)':>12}")
+    # 連分数回路から逆算したF_R, F_L
+    print(f"\n連分数回路から逆算したF_R, F_L:")
+    print(f"{'Freq':>12} {'xi':>8} {'F_R(CF)':>12} {'F_R(Dow)':>12} {'F_L(CF)':>12} {'F_L(Dow)':>12}")
     print("-"*75)
 
     for f in test_freqs:
@@ -220,7 +222,7 @@ def main():
 
     ax1 = axes[0, 0]
     ax1.loglog(freqs, np.abs(Z_dowell), 'r-', linewidth=2, label='Dowell')
-    ax1.loglog(freqs, np.abs(Z_prima), 'b--', linewidth=2, label='PRIMA')
+    ax1.loglog(freqs, np.abs(Z_prima), 'b--', linewidth=2, label='Dowell CF circuit')
     ax1.set_xlabel('Frequency [Hz]')
     ax1.set_ylabel('|Z| [Ohm*m^2]')
     ax1.set_title('Impedance Magnitude')
@@ -232,12 +234,12 @@ def main():
     ax2.semilogx(freqs, err, 'b-', linewidth=2)
     ax2.set_xlabel('Frequency [Hz]')
     ax2.set_ylabel('Relative Error [%]')
-    ax2.set_title('PRIMA vs Dowell Error')
+    ax2.set_title('Continued-fraction circuit vs Dowell Error')
     ax2.grid(True, which='both', alpha=0.3)
 
     ax3 = axes[1, 0]
     ax3.loglog(freqs, np.real(Z_dowell), 'r-', linewidth=2, label='Dowell')
-    ax3.loglog(freqs, np.real(Z_prima), 'b--', linewidth=2, label='PRIMA')
+    ax3.loglog(freqs, np.real(Z_prima), 'b--', linewidth=2, label='Dowell CF circuit')
     ax3.set_xlabel('Frequency [Hz]')
     ax3.set_ylabel('Re(Z)')
     ax3.set_title('Real Part (Resistance)')
@@ -246,7 +248,7 @@ def main():
 
     ax4 = axes[1, 1]
     ax4.loglog(freqs, np.imag(Z_dowell), 'r-', linewidth=2, label='Dowell')
-    ax4.loglog(freqs, np.imag(Z_prima), 'b--', linewidth=2, label='PRIMA')
+    ax4.loglog(freqs, np.imag(Z_prima), 'b--', linewidth=2, label='Dowell CF circuit')
     ax4.set_xlabel('Frequency [Hz]')
     ax4.set_ylabel('Im(Z)')
     ax4.set_title('Imaginary Part (Reactance)')

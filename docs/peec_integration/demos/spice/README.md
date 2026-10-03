@@ -9,7 +9,7 @@ PRIMA model order reduction with SPICE netlist and Verilog-A export.
 | `demo_veriloga_export.py` | Verilog-A export demo |
 | `demo_dowell_spice.py` | Dowell skin-effect SPICE model |
 | `prima_with_dowell_correction.py` | PRIMA(DC) + Dowell correction verification |
-| `dowell_to_prima.py` | Dowell formula to PRIMA ladder conversion |
+| `dowell_to_prima.py` | Trial of an empirical RL ladder circuit for the Dowell formula (element values from DC values and an ad hoc scaling; neither a PRIMA projection nor a derived continued fraction; the file name is historical) |
 
 Numerical PRIMA/Dowell evidence is maintained under
 `validation_test/peec_integration/verification/`.
@@ -21,8 +21,6 @@ Numerical PRIMA/Dowell evidence is maintained under
 | `dowell_skin.sp` | Dowell skin-effect SPICE netlist |
 | `skin_effect.sp` | Skin effect model |
 | `wire_full.sp` | Full wire model |
-| `wire_prima.sp` | PRIMA reduced wire model |
-| `wire_prima_skin.sp` | PRIMA wire with skin effect |
 
 ## Verilog-A Models
 
@@ -33,7 +31,6 @@ Numerical PRIMA/Dowell evidence is maintained under
 | `demo_dowell_skin.va` | Dowell skin-effect model |
 | `demo_multi_debye.va` | Multi-Debye relaxation model |
 | `demo_peec_segment.va` | PEEC segment model |
-| `wire_prima.va` | PRIMA wire model |
 
 ## Usage
 

@@ -15,10 +15,11 @@ via the AAA + NNLS recipe in mixed_galerkin/rom_fit.py.  AAA discovers the
 DOMINANT real poles (the physical Stoll decay times), a log-spaced filler
 captures the tail, and NNLS makes the residues passive.
 
-Why a sample fit and not a Kameari + Kelvin eigen-accumulation: the 3D HCurl
-Kameari + Kelvin accumulation structurally BREAKS DOWN on the
-isolated-conductor-in-vacuum problem (L_n sign flip at stage 1).
-This route sidesteps that by building on the verified per-frequency solve.
+Why a sample fit: the exterior-matched response of a general 3D isolated
+conductor is not available as a bounded-domain HCurl eigenproblem; only the
+analytic sphere and axisymmetric bodies give the Stoll free-decay spectrum
+directly.  This script therefore builds the LTI from the verified
+per-frequency solve.
 
 Two modes:
   (default) analytic sphere Stoll alpha(s) -> ROM.  Pure numpy, ~1 s.  The
@@ -108,9 +109,8 @@ def run_sphere():
         "analytic_stoll_tau_us": (tau_anal * 1e6).tolist(),
         "mimo_n_states": int(ns),
         "scope_note": ("exterior-matched physical alpha(s) as a passive LTI; AAA "
-                       "poles = physical Stoll decay times.  Kameari+Kelvin "
-                       "eigen-accumulation breaks down on this isolated-conductor "
-                       "problem, so the LTI is fit from the per-frequency solve."),
+                       "poles = physical Stoll decay times; the LTI is fit "
+                       "from the per-frequency solve."),
     }
     output = validation_output("physical_tensor_rom_sphere.json", HERE)
     with open(output, "w") as fp:

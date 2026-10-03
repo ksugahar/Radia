@@ -33,18 +33,20 @@ The coil-driven eddy-current disk is, at angular frequency `s = j*omega`,
 a linear system `(K + s*N) X = F` where `K` is the s-independent
 magnetostatic mixed phi-B operator, `N` the conductivity term
 `v*(sigma*u/r)`, and `F` the coil source `v*Jz`.  The Arnoldi-Galerkin
-reduction is the Krylov subspace generated from the **coil source** by the
-magnetostatic-solve / sigma-accumulate recursion
+reduction = the block Krylov space K_m(K^{-1}N, K^{-1}F) (moment matching
+at s=0), orthonormalised by modified Gram-Schmidt, followed by the
+congruence projection (V^H K V + s V^H N V) y = V^H F:
 
     V_0     = K^{-1} F                          (s=0 coil response, no eddy)
     V_{k+1} = orthonormalise( K^{-1} (N V_k) )
 
-The N-stage reduced model `(V^T K V + s V^T N V) y = V^T F`, evaluated at
-50 Hz, gives the reduced field; the levitation Lorentz force follows from
+The order-m reduced model, evaluated at 50 Hz, gives the reduced field
+(`arnoldi_forces(al_z, max_order=...)` returns `order_forces` for
+m = 1..M); the levitation Lorentz force follows from
 the lab force integral `Fz = integral (Re[B_r]Re[J] - Im[B_r]Im[J]) 2*pi*r`
-over the disk.  The force converges to the full-FEM value in ~5 stages:
+over the disk.  The force converges to the full-FEM value by order m ~ 5:
 
-| stages | F_z [N] | rel. err vs full |
+| order m | F_z [N] | rel. err vs full |
 |---|---|---|
 | 1 | -0.047 | 97.8 % (DC, no eddy) |
 | 2 | -2.278 | 3.9 % |
@@ -238,7 +240,7 @@ isomorphic H-matrix.
 | `team28_arnoldi_force.py`  | Arnoldi-Galerkin projection at one height: builds K, N, F, shows the reduced force converging to full-FEM (golden). |
 | `validation_test/maglev/team28_hcurl_eddy_bubble.py` | Recomputes the p=6 face/cycle/SIBC policy for the 3-D HCurl-VIM route. |
 | `validation_test/maglev/team28_hcurl_vim_force.py` | Builds the p=6 3-D HCurl parent, applies topology-aware Eddy Bubble reduction, assembles the epsilon-free analytic tetrahedron VIM interaction, and verifies Lorentz force on three meshes plus an outer-quadrature check. |
-| `maglev_sphere_force.py` | **Isotropic induced-dipole AC levitation force** on a conducting sphere, coefficient pinned by the analytic perfect-conductor limit, frequency response reduced to a few modal stages. See below. |
+| `maglev_sphere_force.py` | **Isotropic induced-dipole AC levitation force** on a conducting sphere, coefficient pinned by the analytic perfect-conductor limit, frequency response reduced by a few Lanczos steps. See below. |
 | `ellipsoid_alpha_tensor.py` | **Shape-anisotropic polarizability tensor** of a conducting ellipsoid (analytic demag tensor + high-freq perfect-conductor `kappa_i = -V/(1-N_i)` + orientation-dependent lift). The analytic non-axisym anchor. See below. |
 | `ellipsoid_alpha_omega_axisym.py` | **Full-frequency** axial `alpha_c(omega)` of a spheroid by axisymmetric FEM (uniform-field eddy solve), validated on the sphere vs `4 pi a^3 G(x)` and anchored at HF by `-V/(1-N_c)`. The eddy leg between the DC and HF analytic limits. See below. |
 | `ellipsoid_alpha_tensor_3d.py` | **Transverse `m=1` tensor** via a 3D HCurl + CompactAMS solve on a graded fine-air-shell mesh. Matches the analytic sphere to ~2-3%, isotropic; the triaxial splits with the analytic ordering. Completes the tensor. See below. |
@@ -266,7 +268,7 @@ dipole in a field gradient is
 |---|---|
 | limits of G | DC `Re G -> 0`, HF `Re G -> -0.4997` |
 | sign | `Re G < 0` for all f in [1 Hz, 100 MHz] -> lift at every frequency |
-| modal reduction | stage 4 within **0.013%**, stage 6 **0.0000%** of the full modal system |
+| modal reduction | Lanczos step 4 within **0.013%**, step 6 **0.0000%** of the full modal system |
 | coefficient pin | HF lift `31.22 mN` vs perfect-conductor `(pi a^3/2 mu0)|grad B0^2| = 31.25 mN` (**0.09%**) |
 
 The same `(pi a^3 / 2 mu0) grad(B0^2)` coefficient is derived independently
@@ -433,12 +435,15 @@ is `~6e-6`, negligible) -- a pure convention factor, not the dipole error.
   DC / 50Hz / 50Hz_可動 / Transient + field-validation figure).
   Disk: Al, R=65mm, t=3mm, sigma=3.4e7; coils: 960t/+20A (r=41mm) and
   576t/-20A (r=87.5mm) counter-wound, 50 Hz.
+- Method context: `radia_mcp.maglev` topic `radia_iem_fem`; the CLAUDE.md
+  policy "Maglev Analysis: Radia + NGSolve".
+
+### Related literature (not implemented here)
+
 - Kameari-Ebrahimi-Sugahara-Shindo-Matsuo 2018, IEEE TMag 54(3):7201804.
 - K. Sugahara, N. Tanimoto, Y. Takahashi, T. Matsuo, "Cauer Ladder Network
   Representation with Constant Basis Functions for Eddy Current Problems
   Involving Conductor Movement", COMPUMAG 2023 (Paper ID 324).
-- Method context: `radia_mcp.maglev` topic `radia_iem_fem`; the CLAUDE.md
-  policy "Maglev Analysis: Radia + NGSolve".
 
 ## Run
 

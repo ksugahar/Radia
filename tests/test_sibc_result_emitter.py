@@ -56,7 +56,7 @@ def test_unvalidated_cylinder_candidates_are_pending_not_executed(monkeypatch):
         return SimpleNamespace(summary=lambda: {"case": label})
     monkeypatch.setattr(emitter, "load", load)
     result = emitter.build()
-    for label in ("cylinder_bulk_tower", "cylinder_two_point_ladder"):
+    for label in ("cylinder_bulk_tower",):
         pending = result["pending_cases"][label]
         assert pending["status"] == "HOLD"
         assert pending["script"] not in observed

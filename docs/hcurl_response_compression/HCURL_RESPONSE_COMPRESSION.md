@@ -90,7 +90,7 @@ element merely because it is remote from the exterior boundary.
 The production reduction is performed by class, not by a single global cutoff:
 
 ```text
-air/exterior surface class:  replace by surface-Omega/SIBC basis or boundary ladder
+air/exterior surface class:  replace by surface-Omega/SIBC basis or Foster boundary branches
 non-air trace class:         keep as a boundary trace condition, not SIBC
 bridge class:                reduce conductor-conductor face bridges by a graph cycle basis
 interior class:              compress aggressively by EVRS / Krylov depth
@@ -281,11 +281,11 @@ coordinates but carry no independent eddy current, loss, or VIM interaction.
 transform to both `V` and `C V`.  This second quotient is the current-space
 Eddy Bubble removal; topology-aware bridge/SIBC protection is applied after it.
 
-The key design rule is therefore not "use p=4" or "use four stages".  The rule
+The key design rule is therefore not "use p=4" or "use Krylov order four".  The rule
 is:
 
 ```text
-Choose p high enough that the first n Krylov stages are stable under p-refinement.
+Choose p high enough that the first n Krylov vectors are stable under p-refinement.
 Then choose n by the frequency band and by the desired circuit accuracy.
 ```
 
@@ -422,7 +422,7 @@ Z_s(s) = sqrt(mu s / sigma)
 is a positive-real surface impedance for `Re(s) >= 0`.  For a finite-thickness
 slab, the surface impedance is a hyperbolic-function variant of the same
 diffusion solution.  Rational Pade approximants of these one-dimensional
-diffusion impedances give passive ladder branches.
+diffusion impedances give passive partial-fraction (Foster) boundary branches.
 
 A surface-Omega basis represents the tangential surface current as
 
@@ -438,15 +438,15 @@ Thus the bridge is:
 ```text
 local diffusion SIBC
     -> positive-real boundary impedance Z_s(s)
-    -> Pade boundary ladder
+    -> Foster/Pade boundary impedance
     -> surface-Omega reduced basis
     -> same VIM/BEM exterior interaction matrix.
 ```
 
-This does not imply that "SIBC order = Krylov stage".  SIBC order is an
-asymptotic order in skin depth and curvature.  Krylov stage is a rational
+This does not imply that "SIBC order = Krylov order".  SIBC order is an
+asymptotic order in skin depth and curvature.  Krylov order is a rational
 approximation order for a transfer function.  They meet when the SIBC operator is itself realized as
-a passive boundary ladder.
+passive partial-fraction (Foster) boundary branches.
 
 For a linear conductor, an exact discrete DtN map can eliminate volume
 unknowns and retain only boundary traces.  The resulting operator is dense and

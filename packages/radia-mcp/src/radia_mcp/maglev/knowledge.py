@@ -69,7 +69,7 @@ TOPICS: dict[str, str] = {
     # -- maglev systems + the lab's Radia research --
     "radia_iem_fem": "Radia IEM (HDiv-VIM) <-> reduced-potential FEM weak coupling for moving-magnet eddy-current levitation force; A-phi (A_ext) / T-Omega (B_ext); no re-mesh on magnet motion; rotating-magnet-over-plate cross-validation tightens to ~0.1% at order=2; the Lorentz-force HDiv(J=curl T) function-space pitfall + verified NGSolve recipe (Yano bachelor, lab research)",
     "team28_dynamic_scope": "TEAM 28 reduced models: published-height benchmark (11.04 vs 11.3 mm), force-convention gotcha, HCurl Eddy Bubble + Foster modal ROM, and the Simulink scope (validated 50 Hz cycle-averaged force-height LUT plus slow mechanical motion; not a carrier-resolved electromagnetic transient, motion-EMF model, or identified damping law)",
-    "physical_tensor_rom": "Physical (exterior-matched) polarizability tensor alpha(s) as a passive, stable LTI: AAA discovers the Stoll poles + NNLS passive residues, fitting the per-frequency 3D HCurl tensor; eigen-accumulation with a Kelvin boundary BREAKS DOWN for the general 3D body (rom_fit.py, lab research)",
+    "physical_tensor_rom": "Physical (exterior-matched) polarizability tensor alpha(s) as a passive, stable LTI: AAA poles = physical Stoll decay times + NNLS passive residues; the LTI is fit from the per-frequency 3D HCurl tensor solve (rom_fit.py, lab research)",
     "pm_maglev_zero_power": "Zero-power passive PM levitation: Maxwell-Earnshaw constraint, axial PM bearings, halbach diamagnetism",
     "eddy_current_maglev": "Eddy-current EDS: Arago-disk physics, magnetic wheels (Fujii/Kansai 2D model), Inductrack",
     "sumitomo_heavy_industrial": "Sumitomo Heavy patents: PM axial bearing with brake ring (JP 7-327337); planar eddy-current mover (JP 2007-215264)",
@@ -508,8 +508,11 @@ PRIMA-type).  At the fixed height dZ = 0 the reduction converges to the
 full-FEM levitation force (stage 3 below 1%, stage 5 below 0.05%;
 `tests/test_team28_arnoldi_golden.py`).  The force-vs-height curve is a
 **full-FEM** result: 25 heights within 1 mN of the lab axisymmetric ground
-truth (`validation_test/maglev/team28_axisym_fem_height_sweep.json`).  No
-committed artifact runs this axisymmetric reduction over the height sweep.
+truth (`validation_test/maglev/team28_axisym_fem_height_sweep.json`).  The
+same reduction over all 25 heights, with its order chosen as the smallest one
+within 0.1 mN of the direct solve everywhere (order 5), stays within 0.47 mN
+of the lab reference and gives an 11.04 mm equilibrium, 0.26 mm from the
+published 11.3 mm (`validation_test/maglev/team28_arnoldi_height_sweep.json`).
 
 **External-benchmark validation (the honest high-Rm anchor).**  TEAM 28 is a
 genuinely HIGH-Rm levitation problem -- `Rm ~ 57` at the in-plane
@@ -700,18 +703,10 @@ port reduced model (Foster modal form, topic `team28_dynamic_scope`): there
 the object is a port admittance Z(s); here it is the open-boundary
 polarizability TENSOR alpha_ij(s) of an isolated body in free space.
 
-## The honest obstacle: eigen-accumulation with a Kelvin boundary BREAKS DOWN here
+## Why a sample fit
 
-The natural idea -- get the physical (exterior-matched, free-decay /
-Stoll) eddy spectrum by an A-T accumulation recurrence with a Kelvin open
-boundary -- DOES NOT WORK for a general 3D isolated-conductor-in-vacuum
-body: even with the two known bug fixes applied, the iteration sign-flips
-the first inductance at stage 1 and the Schmidt energy norm grows x15.  This
-is structural for the HCurl + vacuum-coupled BC class (the A_ext gauge is
-unbounded at infinity).  The accumulation reproduces the Stoll spectrum to
-0.000% ONLY for the SPHERE (the special chi-susceptibility case) and for
-AXISYM bodies -- NOT for the general 3D tensor.  So the physical-tensor LTI
-is NOT obtained by eigen-accumulation.
+An exterior-matched eigenmode route is not available for a general 3D body;
+use the AAA + NNLS sample fit below.
 
 ## The verified route: AAA + NNLS sample fit of the per-frequency tensor
 
@@ -798,8 +793,8 @@ MIMO LTI).
   poles are an approximation basis, NOT individually physical.
 - The fit is only as accurate as the per-frequency FEM data it consumes
   (~2-3% for a general body; the analytic sphere is the exact anchor).
-- These are FOSTER poles tau_n (physical decay times), not continued-fraction
-  rung time constants (systematic ~-6-8% offset; compare like-with-like).
+- These are Foster poles tau_n (physical decay times); compare them only
+  with other pole or eigenvalue sets.
 - This is the EXTERIOR-MATCHED physical tensor.  The Modal-bulk SIBC bulk
   Foster (bulk_foster_via_eigen / bulk_foster_vector_via_eigen) uses the
   INTERIOR-PEC eigenmodes -- a different, interior model; a SIBC tail
