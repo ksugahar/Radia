@@ -279,6 +279,25 @@ def project_source_physical_potential(
 SOURCE_LOADS = ("volume", "surface_flux")
 
 
+class SurfaceFluxGateFailed(RuntimeError):
+    """The surface-flux source load does not represent this source.
+
+    Raised when the boundary tangential residual of the surface-flux Hodge
+    projection exceeds its tolerance: the source is not exact on the total
+    region (for example, current linking the iron), so only the volume load,
+    which keeps the harmonic remainder, is valid.
+    """
+
+    def __init__(self, relative_residual, tolerance):
+        self.relative_residual = float(relative_residual)
+        self.tolerance = float(tolerance)
+        super().__init__(
+            "surface_flux Hodge projection: boundary tangential residual "
+            f"{self.relative_residual:.3e} exceeds {self.tolerance:.3e}; the "
+            "source is not exact on this total region (linked current?). Use "
+            "source_load='volume', which retains the harmonic remainder")
+
+
 @contextmanager
 def _memoized_source(field):
     """Reuse coil evaluations across nonlinear iterations, values unchanged.
@@ -623,11 +642,7 @@ def project_source_total_hodge(
             mesh, InnerProduct(source_t, source_t), d_boundary, boundary=True)))
         relative_t = residual_norm / max(source_t_norm, 1.0e-300)
         if relative_t > float(tangential_tolerance):
-            raise RuntimeError(
-                "surface_flux Hodge projection: boundary tangential residual "
-                f"{relative_t:.3e} exceeds {float(tangential_tolerance):.3e}; the "
-                "source is not exact on this total region (linked current?). Use "
-                "source_load='volume', which retains the harmonic remainder")
+            raise SurfaceFluxGateFailed(relative_t, float(tangential_tolerance))
         return {
             "potential": potential_gf,
             "linear_true_relative_residual": linear_residual,
