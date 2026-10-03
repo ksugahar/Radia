@@ -22,6 +22,8 @@ on:
       - 'src/matlab/radia_mex.cpp'
       - 'Build.ps1'
       - 'tools/native_build_provenance.ps1'
+      - 'tools/verify_simulink_release.py'
+      - 'tools/release_quad.py'
       - 'CMakeLists.txt'
       - '.github/workflows/radia-optuna.yml'
   pull_request:
@@ -44,6 +46,8 @@ on:
       - 'src/matlab/radia_mex.cpp'
       - 'Build.ps1'
       - 'tools/native_build_provenance.ps1'
+      - 'tools/verify_simulink_release.py'
+      - 'tools/release_quad.py'
       - 'CMakeLists.txt'
       - '.github/workflows/radia-optuna.yml'
   workflow_dispatch:

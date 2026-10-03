@@ -19,6 +19,24 @@ def state(**targets):
             'mex_sha256': 'b' * 64, 'targets': targets}
 
 
+@pytest.mark.parametrize("key,controller,allowed", [("100", "INTEL11", True), ("lab", "LAB", True), ("lab", "INTEL11", False), ("100", "LAB", False), ("mdx1", "INTEL11", False)])
+def test_com_acceptance_never_labels_another_host_as_the_target(monkeypatch, tmp_path, key, controller, allowed):
+    calls = []
+    monkeypatch.setattr(module.platform, "node", lambda: controller)
+    def run(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, 'RADIA_SIMULINK_RELEASE_OK RADIA_OPTUNA_WHEEL_SIMULINK_OK {"status": "passed"}', "")
+    monkeypatch.setattr(module.subprocess, "run", run)
+    passed, _ = module._run_simulink_candidate_target(key, tmp_path / "candidate.zip", "a" * 64, "RADIA_SIMULINK_RELEASE_OK", "com:123")
+    assert passed is allowed
+    passed, _ = module._run_optuna_candidate_target(key, tmp_path / "candidate.whl", "a" * 64, "com:123")
+    assert passed is allowed
+    assert len(calls) == (2 if allowed else 0)
+    for command in calls:
+        assert command[0] not in ("ssh", "scp")
+        assert "com:123" in command
+
+
 def test_remote_candidate_sends_powershell_as_encoded_argument(tmp_path, monkeypatch):
     scripts = []
 

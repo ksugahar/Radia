@@ -150,6 +150,11 @@ Record `execution_backend: matlab-com`, the PID, exact artifact identity,
 success marker and verified restoration in the acceptance evidence. This is
 a host-local transport alternative; it does not waive any four-host gate or
 authorize starting a replacement MATLAB or sharing MATLAB between hosts.
+Select it with `--engine-session 100=com:<PID>` on 100, or
+`--engine-session lab=com:<PID>` in LAB's interactive logon. COM acceptance
+refuses execution on a different host; it does not connect across SSH logons.
+The selected solver candidate interpreter needs `pywin32`; the independent
+Optuna runner installs that client only in its isolated test environment.
 
 Check MATLAB processes, shared Engine names, and the official MCP connection
 separately before acceptance. Reuse an appropriate existing session explicitly:

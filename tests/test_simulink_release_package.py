@@ -423,6 +423,52 @@ def test_engine_worker_quits_its_session_on_success_and_failure(monkeypatch, tmp
     assert calls == [("RADIA_PYTHON_EXECUTABLE", sys.executable), "verify()", "quit"]
 
 
+@pytest.mark.parametrize("receipt", [None, {"pid": 124, "restored": True}, {"pid": 123, "restored": False}, {"pid": 123, "restored": True}])
+def test_com_worker_requires_completed_restored_receipt(monkeypatch, tmp_path, receipt):
+    import json
+    import re
+    import sys
+    import types
+    from pathlib import Path
+    module = load_module("verify_com_worker", ROOT / "tools/verify_simulink_release.py")
+    monkeypatch.setattr(module, "_matlab_process_ids", lambda: {123})
+    factory = module.tempfile.TemporaryDirectory
+    monkeypatch.setattr(module.tempfile, "TemporaryDirectory", lambda **kw: factory(dir=tmp_path))
+
+    class Application:
+        def Execute(self, command):
+            script = Path(command.removeprefix("run('").removesuffix("');"))
+            source = script.read_text(encoding="utf-8")
+            destination = Path(re.search(r"fid=fopen\('([^']+)'", source)[1])
+            if receipt is not None:
+                destination.write_text(json.dumps(receipt), encoding="utf-8")
+            return "MATLAB reported an error" if receipt is None else "MATLAB completed"
+
+    client = types.ModuleType("win32com.client")
+    def attach(progid):
+        assert progid == "Matlab.Desktop.Application"
+        return Application()
+    client.GetActiveObject = attach
+    parent = types.ModuleType("win32com"); parent.client = client
+    monkeypatch.setitem(sys.modules, "win32com", parent)
+    monkeypatch.setitem(sys.modules, "win32com.client", client)
+    if receipt == {"pid": 123, "restored": True}:
+        assert module._engine_worker(str(tmp_path), "verify()", "com:123") == 0
+    else:
+        with pytest.raises(RuntimeError, match="COM"):
+            module._engine_worker(str(tmp_path), "verify()", "com:123")
+    assert not list(tmp_path.iterdir())
+
+
+def test_com_worker_refuses_absent_pid_without_connecting(monkeypatch):
+    module = load_module("verify_com_missing_pid", ROOT / "tools/verify_simulink_release.py")
+    monkeypatch.setattr(module, "_matlab_process_ids", lambda: set())
+    with pytest.raises(RuntimeError, match="not running"):
+        module._engine_worker("unused", "verify()", "com:123")
+    with pytest.raises(ValueError, match="positive PID"):
+        module._engine_worker("unused", "verify()", "com:0")
+
+
 def test_unshared_existing_matlab_prevents_substitute_start(monkeypatch, tmp_path):
     import types
     import sys
