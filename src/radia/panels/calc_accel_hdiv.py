@@ -171,8 +171,7 @@ def _extract_elements_from_mesh(mesh, material_name="yoke"):
 
 
 def solve_hdiv(coil_script="", vol_file="",
-              mat=None, ima="", solver=0,
-              max_iter=100, tol=1e-3, relax=0.0,
+              mat=None, ima="",
               msh_output="", demag_backend="hdiv", hdiv_order=1):
     """HDiv-VIM solver: Netgen .vol mesh -> MeshSoftIron -> rad.Solve.
 
@@ -184,10 +183,6 @@ def solve_hdiv(coil_script="", vol_file="",
             are in meters (export netgen policy).
         mat: EMMaterial instance (iron yoke properties)
         ima: IMA string e.g. '+x-z' for quarter model ('' = no IMA)
-        solver: 0=LU, 1=BiCGSTAB, 2=HACApK
-        max_iter: Max nonlinear iterations
-        tol: Convergence tolerance
-        relax: Under-relaxation (0=full step)
         msh_output: Optional GMSH .msh output path
         demag_backend: only 'hdiv' is exposed by this panel
             (the FEEC HDiv-VIM via radia.vim.MeshSoftIron + rad.Solve).
@@ -277,7 +272,6 @@ def solve_hdiv(coil_script="", vol_file="",
         if bh_data is None:
             return {"error": f"No BH curve for material: {material}"}
 
-    solver_names = {0: "LU", 1: "BiCGSTAB", 2: "HACApK"}
     n_dof = n_hex * 6 + n_tet * 3 + n_wedge * 5
 
     # --- FEEC HDiv-VIM backend (radia.vim) -- the only backend exposed by this panel.  KELVIN-less, IRON-ONLY:
@@ -313,11 +307,11 @@ def solve_hdiv(coil_script="", vol_file="",
         _log(f"MAT:nonlinear BH ({len(bh_data)} pts) (HDiv-VIM)")
     model = rad.ObjCnt([iron, coil_container])
     topology = "tet" if n_tet else ("hex" if n_hex else "wedge")
-    _log(f"SOLVE:backend=hdiv (FEEC HDiv-VIM BDM{hdiv_order}/{topology}), "
-         f"tol={tol}, maxiter={max_iter}")
+    _log(f"SOLVE:backend=hdiv (FEEC HDiv-VIM BDM{hdiv_order}/{topology}); "
+         "convergence contract: radia.vim.Solve defaults")
     t_solve_start = time.perf_counter()
     with _TM():
-        res = rad.Solve(model, tol, max_iter, solver, demag_backend="hdiv")
+        res = rad.Solve(model, demag_backend="hdiv")
     t_solve = time.perf_counter() - t_solve_start
     # The HDiv dispatch returns the radia.vim.Solve dict and raises on
     # non-convergence, so reaching this point is the convergence evidence.
@@ -334,11 +328,6 @@ def solve_hdiv(coil_script="", vol_file="",
         residual = None
         residual_kind = "linear HDiv-VIM solve (radia.vim.Solve raises above its tolerance)"
         residual_tolerance = None
-    # rad.Solve's legacy arguments are not used by the HDiv route; say so.
-    unused_options = {"solver": solver_names.get(solver, solver), "max_iter": max_iter,
-                      "tol": tol, "relax": relax}
-    _log("SOLVE:HDiv-VIM uses its own nonlinear/linear solver contract; "
-         f"panel options not applied: {unused_options}")
     solver_label = "HDiv-VIM"
 
     _log(f"SOLVE:done in {t_solve:.2f}s, {n_iter} iter, "
@@ -385,7 +374,7 @@ def solve_hdiv(coil_script="", vol_file="",
         "residual_kind": residual_kind,
         "residual_tolerance": residual_tolerance,
         "converged": converged,
-        "panel_options_not_applied": unused_options,
+        "convergence_contract": "radia.vim.Solve defaults (HDiv-VIM)",
         "material": material,
         "mu_r": mu_r if is_linear else None,
         "current": current,
@@ -509,21 +498,12 @@ def build_argparser():
     parser.add_argument("--ima", default="",
                         help="IMA string: '+x-z' (quarter), '+x' (half-x), "
                              "'-z' (half-z), '' (full)")
-    parser.add_argument("--solver", type=int, default=0,
-                        choices=[0, 1, 2],
-                        help="0=LU, 1=BiCGSTAB, 2=HACApK")
     parser.add_argument("--demag-backend", default="hdiv",
                         choices=["hdiv"],
                         help="Demag backend: 'hdiv' (the FEEC HDiv-VIM; KELVIN-less, requires an "
                              "iron-only .vol, does not support IMA symmetry yet).")
     parser.add_argument("--hdiv-order", type=int, choices=[1, 2], default=1,
                         help="HDiv finite-element order: 1=BDM1, 2=BDM2")
-    parser.add_argument("--max-iter", type=int, default=100,
-                        help="Max nonlinear iterations")
-    parser.add_argument("--tol", type=float, default=1e-3,
-                        help="Convergence tolerance")
-    parser.add_argument("--relax", type=float, default=0.0,
-                        help="Under-relaxation (0=full step)")
     parser.add_argument("--msh-output", default="",
                         help="GMSH .msh output path")
     parser.add_argument("--output", default="",
@@ -540,10 +520,6 @@ def main():
             vol_file=args.vol,
             mat=EMMaterial.from_args(args),
             ima=args.ima,
-            solver=args.solver,
-            max_iter=args.max_iter,
-            tol=args.tol,
-            relax=args.relax,
             msh_output=args.msh_output,
             demag_backend=args.demag_backend,
             hdiv_order=args.hdiv_order,

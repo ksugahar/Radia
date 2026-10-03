@@ -55,6 +55,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
         solve_magnetostatic_mixed_total_reduced_omega_kelvin,
         solve_magnetostatic_matching_trace_total_reduced_omega,
         audit_mixed_omega_constitutive_field, _matching_trace_direct_inverse)
+    from .bh_law import bh_interpolation_kind
     from .scalar_potential_solver import _build_bh_spline_law
 
     mu0 = 4e-7 * math.pi
@@ -284,7 +285,8 @@ def solve_magnetostatic_mixed_total_reduced_omega_newton_kelvin(
 
     stats = dict(method="quadrature_pchip_newton", material_sampling="integration_point",
                  matching_trace_condensed=bool(condense_matching_trace), linear_solver=linear_solver,
-                 bh_interpolation="pchip", bh_evaluation="spline", bonus_intorder=int(bonus_intorder),
+                 bh_interpolation=bh_interpolation_kind(table[:, 0], table[:, 1]),
+                 bh_evaluation="spline", bonus_intorder=int(bonus_intorder),
                  material_bonus_intorder=int(material_bonus_intorder),
                  converged=bool(converged), iterations=len(history),
                  residual_relative=norm / reference_norm, residual_tolerance=float(residual_tolerance),

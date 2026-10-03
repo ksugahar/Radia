@@ -57,7 +57,7 @@
       "classification": "python-fallback",
       "backend_contract": "in-process-python",
       "matlab": ["matlab/+radia/+python/staticElectromagnet.m"],
-      "notes": "Named MATLAB entry for the total/reduced Omega domain and solve contract, including its opt-in mixed_omega_newton implementation through solve_static_electromagnet_mixed_total_reduced_omega. Executes the installed Python implementation without copying the formulation or claiming validation of another source revision."
+      "notes": "Named MATLAB entry for the total/reduced Omega domain and solve contract, including mixed_omega_newton, its only nonlinear route, through solve_static_electromagnet_mixed_total_reduced_omega. Executes the installed Python implementation without copying the formulation or claiming validation of another source revision."
     },
     {
       "id": "sparsesolv-native-and-python",
