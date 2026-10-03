@@ -173,8 +173,14 @@ def _load_coil_script(script_path):
 def _create_bh_interpolators(bh_data):
     """Create chord and differential interpolators from BH curve data.
 
+    The B(H) law is the production one shared by every Radia route
+    (:func:`radia.bh_law.monotone_bh_pchip`) inside the table, continued at
+    the vacuum slope ``B_max + mu0 (H - H_max)`` beyond it, as the static
+    electromagnet solver does.
+
     Args:
-        bh_data: list of [H, B] pairs (H in A/m, B in Tesla)
+        bh_data: list of [H, B] pairs (H in A/m, B in Tesla), starting at
+            [0, 0] with strictly increasing H and non-decreasing B.
 
     Returns:
         dict with keys:
@@ -184,43 +190,69 @@ def _create_bh_interpolators(bh_data):
             nu_diff(B)  -> dH/dB (differential reluctivity, for Newton)
             mu_r_init   -> initial mu_r
     """
-    from scipy.interpolate import interp1d
+    from scipy.optimize import brentq
+    from radia.bh_law import monotone_bh_pchip
 
-    bh = np.array(bh_data, dtype=float)
-    H_arr = bh[:, 0]
-    B_arr = bh[:, 1]
+    bh = np.asarray(bh_data, dtype=float)
+    if bh.ndim != 2 or bh.shape[1] < 2 or bh.shape[0] < 2:
+        raise ValueError("bh_data must contain at least two [H, B] rows")
+    H_tab = bh[:, 0]
+    B_tab = bh[:, 1]
+    if not (np.all(np.isfinite(H_tab)) and np.all(np.isfinite(B_tab))):
+        raise ValueError("bh_data must contain finite H and B values")
+    if np.any(np.diff(H_tab) <= 0.0):
+        raise ValueError("bh_data H values must be strictly increasing")
+    if np.any(np.diff(B_tab) < 0.0):
+        raise ValueError("bh_data B values must be non-decreasing")
+    if H_tab[0] != 0.0 or B_tab[0] != 0.0:
+        raise ValueError("bh_data must start at [0, 0]")
 
-    # Chord: mu(H) = B/H, nu(B) = H/B
-    mu_arr = np.zeros_like(H_arr)
-    mu_arr[0] = B_arr[1] / max(H_arr[1], 1e-10) if len(H_arr) > 1 else MU_0 * 1000
-    for i in range(1, len(H_arr)):
-        mu_arr[i] = B_arr[i] / max(H_arr[i], 1e-10)
+    law = monotone_bh_pchip(H_tab, B_tab, extrapolate=False)
+    slope = law.derivative()
+    H_max = float(H_tab[-1])
+    B_max = float(B_tab[-1])
 
-    nu_arr = np.zeros_like(B_arr)
-    nu_arr[0] = max(H_arr[1], 1e-10) / max(B_arr[1], 1e-10) if len(B_arr) > 1 else NU_0
-    for i in range(1, len(B_arr)):
-        nu_arr[i] = H_arr[i] / max(B_arr[i], 1e-10)
+    def b_of_h(H):
+        H = abs(float(H))
+        if H >= H_max:
+            return B_max + MU_0 * (H - H_max)
+        return float(law(H))
 
-    # Differential: dB/dH, dH/dB (finite differences)
-    dBdH_arr = np.gradient(B_arr, H_arr)
-    dHdB_arr = np.gradient(H_arr, B_arr)
+    def db_dh(H):
+        H = abs(float(H))
+        if H >= H_max:
+            return MU_0
+        return float(slope(H))
 
-    mu_r_init = float(mu_arr[0] / MU_0)
+    def h_of_b(B):
+        B = abs(float(B))
+        if B >= B_max:
+            return H_max + (B - B_max) / MU_0
+        if B <= 0.0:
+            return 0.0
+        # B(H) is non-decreasing on the table, so the root is bracketed.
+        return float(brentq(lambda H: float(law(H)) - B, 0.0, H_max,
+                            xtol=1e-12 * max(H_max, 1.0), rtol=1e-14))
+
+    mu_initial = db_dh(0.0)
+
+    def mu_chord(H):
+        H = abs(float(H))
+        return mu_initial if H == 0.0 else b_of_h(H) / H
+
+    def nu_chord(B):
+        B = abs(float(B))
+        return 1.0 / mu_initial if B == 0.0 else h_of_b(B) / B
+
+    def nu_diff(B):
+        return 1.0 / db_dh(h_of_b(B))
 
     return {
-        'mu_chord': interp1d(H_arr, mu_arr,
-                              fill_value=(mu_arr[0], mu_arr[-1]),
-                              bounds_error=False),
-        'nu_chord': interp1d(B_arr, nu_arr,
-                              fill_value=(nu_arr[0], nu_arr[-1]),
-                              bounds_error=False),
-        'mu_diff': interp1d(H_arr, dBdH_arr,
-                             fill_value=(dBdH_arr[0], dBdH_arr[-1]),
-                             bounds_error=False),
-        'nu_diff': interp1d(B_arr, dHdB_arr,
-                             fill_value=(dHdB_arr[0], dHdB_arr[-1]),
-                             bounds_error=False),
-        'mu_r_init': mu_r_init,
+        'mu_chord': np.vectorize(mu_chord, otypes=[float]),
+        'nu_chord': np.vectorize(nu_chord, otypes=[float]),
+        'mu_diff': np.vectorize(db_dh, otypes=[float]),
+        'nu_diff': np.vectorize(nu_diff, otypes=[float]),
+        'mu_r_init': float(mu_initial / MU_0),
     }
 
 

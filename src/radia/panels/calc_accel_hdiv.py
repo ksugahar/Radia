@@ -319,16 +319,30 @@ def solve_hdiv(coil_script="", vol_file="",
     with _TM():
         res = rad.Solve(model, tol, max_iter, solver, demag_backend="hdiv")
     t_solve = time.perf_counter() - t_solve_start
-    # the HDiv dispatch returns the radia.vim.Solve dict (raises on non-convergence)
-    n_iter = int(res.get("iters", 0)) if isinstance(res, dict) else 0
-    n_dof = int(res.get("ndof", n_dof)) if isinstance(res, dict) else n_dof
-    M_avg = [float(c) for c in res["M_avg"]] if isinstance(res, dict) else [0.0, 0.0, 0.0]
-    residual = 0.0
+    # The HDiv dispatch returns the radia.vim.Solve dict and raises on
+    # non-convergence, so reaching this point is the convergence evidence.
+    # Report the solver's own residual, never a placeholder.
+    n_iter = int(res["iters"])
+    n_dof = int(res["ndof"])
+    M_avg = [float(c) for c in res["M_avg"]]
     converged = True
+    if res.get("nonlinear"):
+        residual = float(res["nonlinear_final_relative_residual"])
+        residual_kind = "nonlinear_final_relative_residual"
+        residual_tolerance = res.get("nonlinear_residual_tolerance")
+    else:
+        residual = None
+        residual_kind = "linear HDiv-VIM solve (radia.vim.Solve raises above its tolerance)"
+        residual_tolerance = None
+    # rad.Solve's legacy arguments are not used by the HDiv route; say so.
+    unused_options = {"solver": solver_names.get(solver, solver), "max_iter": max_iter,
+                      "tol": tol, "relax": relax}
+    _log("SOLVE:HDiv-VIM uses its own nonlinear/linear solver contract; "
+         f"panel options not applied: {unused_options}")
     solver_label = "HDiv-VIM"
 
     _log(f"SOLVE:done in {t_solve:.2f}s, {n_iter} iter, "
-         f"residual={residual:.2e}")
+         f"{residual_kind}={residual}")
 
     # ============================================================
     # Step 5: Evaluate field at origin
@@ -368,7 +382,10 @@ def solve_hdiv(coil_script="", vol_file="",
         "ima": ima,
         "iterations": n_iter,
         "residual": residual,
+        "residual_kind": residual_kind,
+        "residual_tolerance": residual_tolerance,
         "converged": converged,
+        "panel_options_not_applied": unused_options,
         "material": material,
         "mu_r": mu_r if is_linear else None,
         "current": current,
