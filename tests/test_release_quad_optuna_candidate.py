@@ -30,18 +30,18 @@ def test_optuna_candidate_requires_the_independent_distribution_workflow():
     assert '"workflowName": "CI"' not in source
 
 
-def test_optuna_workflow_covers_its_release_quad_acceptance_contract():
-    """The independent distribution CI runs when its acceptance code changes."""
+def test_genuine_optuna_build_runs_its_release_quad_candidate_contract():
+    """A triggered radia-optuna build checks the candidate contract at its own SHA.
+
+    Whether release tooling triggers that workflow is owned by
+    test_test_tier_policy (it must not; fast-contracts covers it).
+    """
     import yaml
 
     root = Path(__file__).resolve().parents[1]
     workflow = yaml.safe_load(
         (root / ".github/workflows/radia-optuna.yml").read_text(encoding="utf-8")
     )
-    triggers = workflow[True] if True in workflow else workflow["on"]
-    owned = {"tools/release_quad.py", "tests/test_release_quad_optuna_candidate.py"}
-    for event in ("push", "pull_request"):
-        assert owned <= set(triggers[event]["paths"]), event
     build = next(
         step["run"] for step in workflow["jobs"]["build-test"]["steps"]
         if step.get("name") == "Test, build, and verify radia-optuna wheel"
