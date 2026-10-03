@@ -205,10 +205,10 @@ for w_val in [0.01, 0.1, 1.0, 4.0, 10.0]:
     print(f"  {w_val:>8.2f} {np.abs(exact):>14.8f} {np.abs(jf5):>14.8f} {np.abs(jf10):>14.8f}")
 
 # ============================================================
-# Convert J-fraction to PRIMA form
+# Realize the J-fraction as a continued-fraction circuit
 # ============================================================
 print("\n" + "="*70)
-print("J-fraction to PRIMA Ladder Network")
+print("J-fraction to a Dowell (z*coth z) continued-fraction circuit")
 print("="*70)
 
 print("""
@@ -221,33 +221,34 @@ For impedance Z(s) = R_dc * F_R + s*L_dc * F_L:
 At s = j*omega:
   w = j*tau*omega
 
-The impedance can be written as a ladder network:
+The impedance can be written as a continued-fraction circuit:
   Z(s) = R_dc + s*L_dc * f(tau*s)
 
 The J-fraction in w naturally corresponds to:
-  Stage 1: Series R, Shunt L
-  Stage 2: Series R, Shunt L
+  term 1: Series R, Shunt L
+  term 2: Series R, Shunt L
   ...
 
 But the exact correspondence depends on the impedance formula structure.
 """)
 
 # ============================================================
-# PRIMA parameters from continued fraction
+# 1D-diffusion continued-fraction circuit terms
 # ============================================================
 print("\n" + "="*70)
-print("PRIMA I Parameters (from 1D diffusion eigenvalue expansion)")
+print("1D-diffusion continued-fraction circuit terms")
 print("="*70)
 
 print("""
-The PRIMA I form comes from eigenvalue expansion of 1D diffusion:
+The 1D-diffusion continued-fraction circuit (not a PRIMA projection)
+has the closed-form terms:
 
 R[n] = (4n-5) * 4 / (sigma*d)  for n >= 2, R[1] ~ 0
 L[n] = d*mu / (4n-3)
 
-The continued fraction for PRIMA I is different from z*coth(z).
+This continued fraction is different from the z*coth(z) J-fraction.
 
-PRIMA I represents:
+The 1D-diffusion continued-fraction circuit represents:
   Z_prima(s) = sL[1] + R[1] || (sL[2] + R[2] || (sL[3] + R[3] || ...))
 
 which matches the 1D diffusion equation solution:
@@ -256,13 +257,13 @@ which matches the 1D diffusion equation solution:
 NOT Dowell's formula: Z_dowell = R_dc*F_R + s*L_dc*F_L
 
 So:
-- PRIMA I matches 1D Diffusion (exact)
-- PRIMA I does NOT match Dowell (different model)
-- Dowell has its own continued fraction (J-fraction)
+- the 1D-diffusion continued-fraction circuit matches 1D Diffusion (exact)
+- it does NOT match Dowell (different model)
+- Dowell has its own analytic (z*coth z) continued fraction (J-fraction)
 """)
 
 def skin_effect_prima_params(d, sigma, mu=MU_0, n_stages=7):
-    """PRIMA I parameters for 1D diffusion skin effect"""
+    """1D-diffusion continued-fraction circuit terms (skin effect)."""
     R_prima = np.zeros(n_stages)
     L_prima = np.zeros(n_stages)
 
@@ -279,16 +280,16 @@ def skin_effect_prima_params(d, sigma, mu=MU_0, n_stages=7):
 d = 0.1e-3  # 0.1 mm
 sigma = 5.8e7  # Copper
 
-print(f"\nPRIMA I parameters for d = {d*1e3} mm, sigma = {sigma:.1e} S/m:")
+print(f"\nContinued-fraction circuit terms for d = {d*1e3} mm, sigma = {sigma:.1e} S/m:")
 R_prima, L_prima = skin_effect_prima_params(d, sigma, MU_0, 7)
 for i in range(7):
-    print(f"  Stage {i+1}: R = {R_prima[i]:.4e} Ohm*m^2, L = {L_prima[i]*1e9:.4f} nH*m^2")
+    print(f"  term {i+1}: R = {R_prima[i]:.4e} Ohm*m^2, L = {L_prima[i]*1e9:.4f} nH*m^2")
 
 # ============================================================
-# Dowell PRIMA form
+# Dowell continued-fraction form
 # ============================================================
 print("\n" + "="*70)
-print("Dowell-based PRIMA (Different from 1D Diffusion PRIMA)")
+print("Dowell (z*coth z) continued fraction (different from the 1D-diffusion circuit)")
 print("="*70)
 
 print("""
@@ -305,7 +306,7 @@ We can write F_R and F_L in terms of continued fractions.
 However, the structure is:
   Z = R_dc * (rational function of tau*s)
 
-This is different from the PRIMA I structure:
+This is different from the 1D-diffusion continued-fraction circuit structure:
   Z = s*L + parallel RC network
 
 The "DC PRIMA + Dowell correction" approach avoids this mismatch:
@@ -332,9 +333,9 @@ print("""
 3. The Viskovatov algorithm can convert Taylor series to S-fraction,
    but the J-fraction form is more natural for z*coth(z).
 
-4. The PRIMA I form (from 1D diffusion) has DIFFERENT structure:
-   - PRIMA I matches 1D diffusion equation
-   - PRIMA I does NOT match Dowell formula
+4. The 1D-diffusion continued-fraction circuit has DIFFERENT structure:
+   - it matches the 1D diffusion equation
+   - it does NOT match the Dowell formula
 
 5. For Dowell-based PEEC, use "DC PRIMA + Dowell correction":
    - No continued fraction conversion needed

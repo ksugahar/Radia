@@ -183,4 +183,4 @@ artifact are release evidence here.
 - Mitzner, K. M. (1967). An integral equation approach to scattering from a body of finite conductivity. *Radio Sci.* 2:1459 — **curvature correction**.
 - Quarteroni, A. & Valli, A. (1999). *Domain Decomposition Methods for Partial Differential Equations*. Oxford — **Steklov-Poincaré operator**.
 - Yuferev, S. V. & Ida, N. (2010). *Surface Impedance Boundary Conditions: A Comprehensive Approach*. CRC Press — **Rytov-form HOIBC**.
-- Kameari, A. *et al.* (2018). Cauer ladder network representation of eddy-current fields for MOR using FEM. *IEEE TMag* 54(11):7202804 — **CLN bulk basis**.
+- Kameari, A. *et al.* (2018). Cauer ladder network representation of eddy-current fields for MOR using FEM. *IEEE TMag* 54(11):7202804 — historical reference only; the bulk bases here are Foster eigenmodes or s=0 Krylov vectors.

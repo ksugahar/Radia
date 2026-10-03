@@ -54,9 +54,9 @@ def test_lanczos_projection_converges():
     w = TWO_PI * 5e3
     tgt = L.G_modal(w)
     err = [abs(L.G_lanczos(w, m) - tgt) / abs(tgt) for m in (1, 2, 3, 4, 6, 8)]
-    # stage 1 is the eddy-free DC response -> large error
+    # order 1 is the eddy-free DC response -> large error
     assert err[0] > 0.1
-    # by stage 4 within 0.1%, by stage 6 essentially exact
+    # by Lanczos step 4 within 0.1%, by step 6 essentially exact
     assert err[3] < 1e-3, f"stage 4 rel err {err[3]*100:.4f}% (expect <0.1%)"
     assert err[4] < 1e-5, f"stage 6 rel err {err[4]*100:.6f}% (expect <1e-3%)"
     assert err[4] <= err[3]

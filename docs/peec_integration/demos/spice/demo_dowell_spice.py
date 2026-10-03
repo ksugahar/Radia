@@ -10,7 +10,7 @@ Dowell表皮効果モデルのSPICE化
    - 誤差: < 1e-10% (数値精度限界)
 
 2. RLラダー回路 (1D拡散固有モード、Dowellとは異なるモデル)
-   - PRIMAラダー: L_n = mu*d/(4n-3), R_n = (4n-5)*4/(sigma*d)
+   - RLラダー回路の要素値 (PRIMA 射影ではない): L_n = mu*d/(4n-3), R_n = (4n-5)*4/(sigma*d)
    - 1D拡散方程式: Z = s*mu*(2/k/d)*tan(k*d/2)*d
    - Dowellのz*coth(z)とは異なる (tan vs coth)
    - 高周波極限では類似するが、低〜中周波で差異あり

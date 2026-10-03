@@ -58,8 +58,9 @@ to make a blanket default pass. Include distorted/curved and mixed-cell cases.
 
 ## Actual DoF: Strong Narrow Evidence, Not General Accuracy Certification
 
-The existing `maglev/team28_hcurl_vim_force_live_20260910.json` records a real
-mdx2 solve, not an estimated rank:
+The maintained `maglev/team28_hcurl_vim_force_live_20261003.json` (fresh mdx2
+re-run that replaced the 2026-09-10 record; see the adjacent `.md`) records a
+real mdx2 solve, not an estimated rank:
 
 | Quantity | Recorded value |
 | --- | ---: |

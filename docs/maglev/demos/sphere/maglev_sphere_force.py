@@ -32,7 +32,7 @@ amplitude, real in space):
 Lanczos projection: the sphere has the Foster form
       G(s) = -1/2 + sum_n (3/(n pi)^2) / (1 - s tau_n),  tau_n = mu0 sigma a^2/(n pi)^2,
   i.e. a sum of relaxation modes. A Lanczos projection of this modal system
-  converges to G with a handful of stages.
+  converges to G with a handful of Lanczos steps.
 
 Run:  python maglev_sphere_force.py     (a few seconds; pure numpy)
 """
@@ -159,7 +159,7 @@ def main(output_dir=None):
     print("\n[check 3] Lanczos projection of the sphere modal system (f=5 kHz)")
     w = 2 * np.pi * 5e3
     gtgt = G_modal(w)
-    print("   stages   Re G_Lanczos     rel.err vs full modal")
+    print("   steps    Re G_Lanczos     rel.err vs full modal")
     for m in (1, 2, 3, 4, 6, 8):
         gc = G_lanczos(w, m)
         print(f"     {m:2d}     {gc.real:+9.6f}    {abs(gc - gtgt)/abs(gtgt)*100:8.4f} %")

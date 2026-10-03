@@ -2340,51 +2340,38 @@ copy, of the GridFunction's data. Re-assigning `gf.vec.data` between
 uses silently changes the value of every CF that references it.
 
 ```python
-# WRONG — gf_acc is updated in the loop, every prior expression breaks
-gf_acc = GridFunction(fes)
-gf_acc.vec[:] = 0.0
-state_history = []                        # list of CFs we want to keep
+# WRONG — gf_state is updated in the loop, every stored expression breaks
+gf_state = GridFunction(fes)
+history = []                               # CFs we want to keep
 for n in range(N):
     ...
-    gf_acc.vec.data += increment.vec        # MUTATES the SHARED gf_acc
-    proj_cf = gf_acc - grad(phi_acc_n)         # CF holds a REFERENCE
-    state_cf = state_cf + proj_cf    # captures gf_acc by ref
-    state_history.append(state_cf)                    # later evaluations see
-                                                # the LATEST gf_acc value!
+    gf_state.vec.data += increment.vec     # MUTATES the shared gf_state
+    flux_cf = gf_state - grad(phi_n)       # CF holds a REFERENCE
+    history.append(flux_cf)                # later evaluations see the
+                                           # LATEST gf_state value!
 
 # CORRECT — snapshot to a fresh GridFunction each iteration
 for n in range(N):
     ...
-    gf_acc.vec.data += increment.vec
+    gf_state.vec.data += increment.vec
     snap = GridFunction(fes, name=f"snap_{n}")  # fresh object
-    snap.vec.data = gf_acc.vec                  # explicit copy
-    proj_cf = snap - grad(phi_acc_n)            # frozen reference
-    state_cf = state_cf + proj_cf
-    state_history.append(state_cf)                    # safe: snap never mutates
+    snap.vec.data = gf_state.vec                # explicit copy
+    history.append(snap - grad(phi_n))          # frozen reference
 ```
 
-**Symptom**: in iterative schemes (Krylov-type accumulation recurrences,
-Picard non-linear loops, time stepping that reuses prior states), `stage 0`
-matches the analytical answer to machine precision, but `stage 1+`
-returns wrong-sign or wildly wrong values that look like algorithmic
-divergence — when in fact the prior `state_cf` expressions are silently
-re-evaluating against the *current* (updated) `gf_acc`, not the
-`gf_acc` value at the time the CF was built.
+**Symptom**: in iterative schemes (Krylov sequences, Picard non-linear
+loops, time stepping that reuses prior states), the first iterate
+matches the analytical answer to machine precision, but later iterates
+return wrong-sign or wildly wrong values that look like algorithmic
+divergence — when in fact the stored expressions are silently
+re-evaluating against the *current* (updated) `gf_state`, not the value
+it had when the CF was built.
 
-**Verified failure mode** (2026-05-10, Cu sphere a=10mm, B0=1T, 3D
-accumulation recurrence + Kelvin):
-- Without snapshot: τ_0 = 693.95 μs (matches the analytical Stoll
-  reference 694.14 to 0.027 %), τ_1 = −796 μs (sign flip; analytical 154.6 μs),
-  stages 2+ diverge by orders of magnitude.
-- With snapshot: τ_0 = 693.95 (−0.027 %), τ_1 = 154.46 (−0.094 %),
-  τ_2 = 63.45 (−0.97 %), τ_3 = 33.08 (−4.06 %); stage 4 hits the
-  FP64 Hankel-Padé wall.
-
-**Diagnostic strategy**: if a 3D iteration matches axisym at stage 0
-but breaks at stage 1+, suspect this trap before suspecting H-H
-projection, gauge fixing, ORDER, Schmidt orthogonalisation, or
-solver tolerance. None of those help if the GridFunction the CFs
-refer to keeps mutating beneath them.
+**Diagnostic strategy**: if a 3D iteration matches a reference at its
+first iterate but breaks afterwards, suspect this trap before suspecting
+projection, gauge fixing, integration order, orthogonalisation, or
+solver tolerance. None of those help if the GridFunction the CFs refer
+to keeps mutating beneath them.
 """
 
 NGSOLVE_LINALG = """
@@ -5389,12 +5376,12 @@ For **robust Foster modal validation**:
 
 **Problem**: `nograds=True` removes only HIGHER-ORDER (p>=2) gradient
 bubbles.  Lowest-order vertex gradients grad(linear hat) remain in the
-HCurl basis -> the curl-curl operator has a gradient kernel -> a Krylov-type
-accumulation recurrence explodes after stage 0.
+HCurl basis -> the curl-curl operator has a gradient kernel -> a Krylov
+sequence on it breaks down after its first iterate.
 
 **Solution**: Tree-cotree gauge via mesh edge spanning tree.
 
-| Method | EBE pure? | Stable recurrence stages | Cost/stage |
+| Method | EBE pure? | Krylov iterations before gradient-kernel breakdown | Cost/iteration |
 |---|---|---|---|
 | No gauge | YES | 0 | 1x |
 | Gram-Schmidt re-orthog | YES | 0 | 1x + inner products |

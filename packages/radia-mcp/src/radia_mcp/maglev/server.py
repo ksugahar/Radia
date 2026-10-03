@@ -52,7 +52,7 @@ def maglev(topic: str = "overview") -> str:
             "overview"            - Unified maglev landscape (DEFAULT)
             "radia_iem_fem"       - Radia IEM <-> reduced-potential FEM weak coupling (Yano)
             "team28_dynamic_scope"- TEAM 28 reduced models + 50 Hz cycle-average motion scope
-            "physical_tensor_rom" - Physical polarizability tensor alpha(s) as a passive LTI (AAA+NNLS; eigen-accumulation breakdown)
+            "physical_tensor_rom" - Physical polarizability tensor alpha(s) as a passive LTI (AAA+NNLS fit of the per-frequency solve)
             "pm_maglev_zero_power"- Passive PM levitation, Maxwell-Earnshaw
             "eddy_current_maglev" - Eddy-current EDS, Kansai 2D model, Arago
             "sumitomo_heavy_industrial" - JP 7-327337 PM bearing + JP 2007-215264 mover

@@ -1,9 +1,9 @@
 """
-Dowell式からPRIMAパラメータを導出
+Dowell式から連分数回路の項を求める試行 (PRIMA 射影ではない。ファイル名は履歴上の名称)
 
 Dowell式: Z = R_dc * F_R(xi) + j*omega * L_int_dc * F_L(xi)
 
-これをPRIMA I形式で表現できるか検討。
+これを連分数型の RL 回路で表現できるか検討。
 
 問題: 1D拡散式 Z = s*mu*(2/(k*d))*tan(k*d/2)*d は
       DC極限で Z -> j*omega*mu*d （抵抗成分なし）
