@@ -74,6 +74,11 @@ host, not a QUAD acceptance target.
 hashes. MCP and Cubit installations are independent observations, never solver
 drift and never a QUAD blocker.
 
+Deployments and final dependency checks address each target over SSH,
+including LAB. Run the controller on a host with the configured `102`, `100`,
+`mdx1`, and `mdx2` aliases; the controller's own Python is not a substitute for
+a target runtime. A LAB-only controller restriction is no longer necessary.
+
 ## WIP-safe release sources
 
 Never stash, reset, clean, or rebase a shared worktree for a release. Run the
