@@ -10,13 +10,28 @@ All notable changes to the `radia` package.  Format: each release lists
 Release candidate; publication and four-host acceptance are not yet complete.
 Contains everything in 5.2.1; `v5.2.1` and its wheel are unchanged.
 
-- Electromagnet block, HDiv-VIM method (`panels/calc_accel_hdiv.py`): the
-  result JSON now carries the solver's own `nonlinear_final_relative_residual`
-  and its tolerance (`residual`, `residual_kind`, `residual_tolerance`)
-  instead of a fixed `residual=0.0`, and `panel_options_not_applied` lists
-  the `solver`, `max_iter`, `tol` and `relax` values that the HDiv route does
-  not use.  The HDiv convergence contract itself is unchanged; a linear solve
-  reports `residual: null`.
+- Electromagnet block, HDiv-VIM method (`panels/calc_accel_hdiv.py`,
+  `em_design.EMDesignSpec`): the result JSON now carries the solver's own
+  `nonlinear_final_relative_residual` and its tolerance (`residual`,
+  `residual_kind`, `residual_tolerance`) instead of a fixed `residual=0.0`;
+  a linear solve reports `residual: null`.  HDiv-VIM keeps its own solver and
+  convergence contract (`radia.vim.Solve` defaults, recorded as
+  `convergence_contract`), so the FEM iteration options that it never
+  applied are gone: the DesignSpec no longer shows or sends
+  `hdiv_solver`/`max_iter`/`tol`/`relax` for this method, and
+  `calc_accel_hdiv.py` rejects `--solver`, `--max-iter`, `--tol` and
+  `--relax`.
+- `static_electromagnet`, `total_source_load="auto"`: when the surface-flux
+  gate fails (a source that links the iron), the documented switch to the
+  volume load now raises a typed `kelvin_solver.SurfaceFluxGateFailed`
+  internally, records `load_selection["total_fallback"]` as a dict with the
+  measured relative tangential residual, the tolerance and the selected
+  load, and emits a `RuntimeWarning`.  An explicit `"surface_flux"` request
+  still raises.  Correction to the 5.0.3 notes below: the C-type and coil-yoke
+  three-engine drivers default to `"auto"`, not `"volume"`.
+- `mixed_omega_newton` statistics report which monotone PCHIP branch of
+  `radia.bh_law` the table took (`magnetization_pchip` or
+  `flux_density_pchip`) instead of a generic `"pchip"`.
 - Electromagnet block, Omega/A-Phi method (`panels/calc_accel_magnet.py`):
   the nonlinear material uses the shared `radia.bh_law` monotone PCHIP law
   inside the table and continues at the vacuum slope
@@ -24,7 +39,31 @@ Contains everything in 5.2.1; `v5.2.1` and its wheel are unchanged.
   The previous linear chord law held the last chord permeability beyond the
   table (claiming 10x B_max at 10x H_max), so saturated results change.
   Tables must start at [0, 0] with strictly increasing H and non-decreasing
-  B; others are rejected.
+  B, and the resulting law must be strictly increasing (dB/dH > 0 on every
+  piece, needed for H(B)); others are rejected.  H(B) is solved to relative
+  accuracy, so small nonzero B keeps its own nonzero H.
+- Omega/A-Phi method, `--newton`: the Newton step now solves the tangent
+  for the correction from the current nonlinear residual and adds it to the
+  iterate; it previously solved the tangent against the chord source term,
+  which is not a Newton step and diverged (also at 0.05 T).  It now converges
+  in 5-8 iterations on the acceptance cases (Omega and A-Phi).  The
+  correction solve keeps the 1e-6 true-residual gate, measured against the
+  system load (`apply_fe_inverse(reference_norm=...)`, finite and positive)
+  instead of the vanishing nonlinear residual.
+- Omega/A-Phi method: `relax` is the fraction of the new material step, in
+  (0, 1] (1 = full step), as the code always applied it; the help text said
+  the opposite, and `relax=0` never updated the material yet reported the
+  initial-permeability solution as converged.  Values outside (0, 1] are
+  rejected.  The result also reports `nonlinear_relative_residual`, the
+  residual of the panel's own discrete equations at the returned iterate.
+- Omega/A-Phi method, energy: for a reversible nonlinear law `W_mag` is now
+  the magnetic energy int(H dB) and `W_coenergy` the coenergy int(B dH), both
+  from the shared `radia.bh_law` antiderivative on the solved field;
+  `W_half_BH` keeps the former 0.5*int(B.H), which is an energy only for
+  linear material.  `L` keeps its value, 2*W_half_BH/I^2, now described as a
+  finite-domain B.H inductance estimate (Kelvin region excluded), not a
+  validated flux linkage.  Hysteresis keeps its 0.5*nu_rev*|B|^2
+  approximation and reports no coenergy.  Linear results are unchanged.
 
 ## 5.2.1 - SparseSolv ICCG contract and native MATLAB ICCG
 
