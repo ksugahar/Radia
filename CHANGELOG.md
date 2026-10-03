@@ -5,6 +5,27 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 5.2.2 - Electromagnet block convergence reporting and B-H law
+
+Release candidate; publication and four-host acceptance are not yet complete.
+Contains everything in 5.2.1; `v5.2.1` and its wheel are unchanged.
+
+- Electromagnet block, HDiv-VIM method (`panels/calc_accel_hdiv.py`): the
+  result JSON now carries the solver's own `nonlinear_final_relative_residual`
+  and its tolerance (`residual`, `residual_kind`, `residual_tolerance`)
+  instead of a fixed `residual=0.0`, and `panel_options_not_applied` lists
+  the `solver`, `max_iter`, `tol` and `relax` values that the HDiv route does
+  not use.  The HDiv convergence contract itself is unchanged; a linear solve
+  reports `residual: null`.
+- Electromagnet block, Omega/A-Phi method (`panels/calc_accel_magnet.py`):
+  the nonlinear material uses the shared `radia.bh_law` monotone PCHIP law
+  inside the table and continues at the vacuum slope
+  `B_max + mu0 (H - H_max)` beyond it, like the static electromagnet solver.
+  The previous linear chord law held the last chord permeability beyond the
+  table (claiming 10x B_max at 10x H_max), so saturated results change.
+  Tables must start at [0, 0] with strictly increasing H and non-decreasing
+  B; others are rejected.
+
 ## 5.2.1 - SparseSolv ICCG contract and native MATLAB ICCG
 
 Release candidate; publication and four-host acceptance are not yet complete.
