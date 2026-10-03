@@ -727,7 +727,15 @@ def _verify_optuna_wheel(wheel: Path) -> tuple[dict | None, str]:
 
 
 def _optuna_release_source_ready() -> tuple[bool, str]:
-    head = _release_head()
+    """Return the checked-out radia-optuna candidate commit when it is main.
+
+    radia-optuna is released independently of the solver, so its source
+    identity is the checkout HEAD, never the solver ``v<radia version>`` tag.
+    """
+    current = _git("rev-parse", "HEAD", check=False)
+    if current.returncode != 0:
+        return False, current.stderr.strip() or "git rev-parse HEAD failed"
+    head = current.stdout.strip().lower()
     status = _git("status", "--porcelain", "--untracked-files=no", check=False)
     if status.returncode != 0:
         return False, status.stderr.strip() or "git status failed"
