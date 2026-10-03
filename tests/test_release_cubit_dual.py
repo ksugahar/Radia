@@ -15,7 +15,10 @@ spec.loader.exec_module(dual)
 def test_worker_compiles_and_targets_only_dual():
     compile(dual.WORKER, '<worker>', 'exec')
     assert dual.TARGETS == ('lab', '100')
+    # AGENTS.md: LAB runs verified wheels, 100 keeps the editable install.
+    assert dual.TIERS == {'lab': 'wheel', '100': 'editable'}
     assert "'-e', str(package)" in dual.WORKER
+    assert "'--force-reinstall'" in dual.WORKER
     assert 'pip\', \'uninstall' not in dual.WORKER
     # Cubit is closed only on explicit request, and then everything closed
     # is recorded in the receipt.
@@ -47,7 +50,8 @@ def test_student_host_registers_every_profile():
     contract = dict(version='1.0.2', source_sha='a' * 40, wheel_sha256='b' * 64)
     receipt = dict(contract, schema=dual.SCHEMA, target='100', passed=True,
                    unrelated_packages_unchanged=True, smoke_test=True, toolbar_smoke=True,
-                   mcp_selftest=True, mcp_cli_selftest=True, profile_scope=['--all-users'])
+                   mcp_selftest=True, mcp_cli_selftest=True, profile_scope=['--all-users'],
+                   tier='editable')
     assert dual.check_receipt(receipt, contract, '100')
     assert not dual.check_receipt(dict(receipt, profile_scope=[]), contract, '100')
 
@@ -70,13 +74,102 @@ def test_receipt_requires_every_acceptance_field():
     contract = dict(version='1.0.2', source_sha='a' * 40, wheel_sha256='b' * 64)
     receipt = dict(contract, schema=dual.SCHEMA, target='lab', passed=True,
                    unrelated_packages_unchanged=True, smoke_test=True, toolbar_smoke=True,
-                   mcp_selftest=True, mcp_cli_selftest=True, profile_scope=[])
+                   mcp_selftest=True, mcp_cli_selftest=True, profile_scope=[],
+                   tier='wheel', installed_payload_verified=True)
     assert dual.check_receipt(receipt, contract, 'lab')
     for key in receipt:
         damaged = {k: v for k, v in receipt.items() if k != key}
         assert not dual.check_receipt(damaged, contract, 'lab'), key
     assert not dual.check_receipt(receipt, contract, '100')
     assert not dual.check_receipt(receipt, dict(contract, wheel_sha256='c' * 64), 'lab')
+
+
+def test_receipt_is_bound_to_the_target_tier():
+    contract = dict(version='1.0.2', source_sha='a' * 40, wheel_sha256='b' * 64)
+    common = dict(contract, schema=dual.SCHEMA, passed=True,
+                  unrelated_packages_unchanged=True, smoke_test=True, toolbar_smoke=True,
+                  mcp_selftest=True, mcp_cli_selftest=True)
+    # An editable LAB receipt (the pre-v4 behaviour) no longer satisfies done.
+    lab_editable = dict(common, target='lab', profile_scope=[], tier='editable',
+                        installed_payload_verified=True)
+    assert not dual.check_receipt(lab_editable, contract, 'lab')
+    student_wheel = dict(common, target='100', profile_scope=['--all-users'], tier='wheel')
+    assert not dual.check_receipt(student_wheel, contract, '100')
+
+
+def test_wheel_transport_is_local_or_hash_rechecked_remote_copy(monkeypatch, tmp_path):
+    wheel = tmp_path / 'cubit_mesh_export-1.0.2-cp312-cp312-win_amd64.whl'
+    wheel.write_bytes(b'wheel')
+    assert dual.transport_wheel(wheel, 'lab', 'lab', r'C:\temp\e') == str(wheel.resolve())
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs.get('input')))
+        return None
+
+    monkeypatch.setattr(dual.subprocess, 'run', fake_run)
+    destination = dual.transport_wheel(wheel, 'lab', '100', r'C:\temp\e')
+    assert destination == r'C:\temp\e\lab\wheel' + '\\' + wheel.name
+    (mkdir, script), (copy, _) = calls
+    assert mkdir[:5] == ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10']
+    assert mkdir[5:8] == ['lab', 'python', '-'] and 'mkdir' in script
+    assert copy[-1] == 'lab:' + destination.replace('\\', '/')
+
+
+def _fake_cubit_wheel(path):
+    contract_files = ('cubit_mesh_export.ccm', 'cubit_mesh_curver.pyd',
+                      'toolbar_smoke.py', 'cubit_gui/toolbar_probe.py',
+                      'cubit_gui/cubit_export_menu.py',
+                      'cubit_gui/cubit_toolbar/toolbars/cubit_mesh_export_toolbar.ttb.tmpl',
+                      'cubit_gui/solver_ready_sample.jou', 'native_payloads.json',
+                      'mcp/server.py', 'mcp/_support/status.py')
+    installer = ('from pathlib import Path\n'
+                 'def _find_cubit_dir():\n    return Path(".")\n'
+                 'def preflight(cubit_dir, verbose=False):\n    return True, []\n')
+    with zipfile.ZipFile(path, 'w') as archive:
+        archive.writestr('cubit_mesh_export-1.0.2.dist-info/METADATA',
+                         'Name: cubit-mesh-export\nVersion: 1.0.2\n')
+        for file in contract_files:
+            archive.writestr('cubit_mesh_export/' + file, b'payload\n')
+        archive.writestr('cubit_mesh_export/install.py', installer)
+
+
+def _run_worker(cfg):
+    import base64
+    import json
+    import subprocess
+    encoded = base64.b64encode(json.dumps(cfg).encode()).decode()
+    p = subprocess.run([sys.executable, '-', encoded], input=dual.WORKER, text=True,
+                       capture_output=True, timeout=120)
+    lines = [line for line in p.stdout.splitlines() if line.startswith('CUBIT_DUAL_RESULT=')]
+    assert lines, p.stderr
+    return p.returncode, json.loads(lines[-1].partition('=')[2])
+
+
+@pytest.mark.parametrize('tamper', [False, True])
+def test_wheel_tier_preflight_reads_only_hash_checked_wheel_bytes(tmp_path, tamper):
+    from importlib import metadata
+    try:
+        pins = {name: metadata.version(name) for name in ('netgen-mesher', 'ngsolve')}
+    except metadata.PackageNotFoundError:
+        pytest.skip('worker dependency pins need netgen-mesher and ngsolve installed')
+    wheel = tmp_path / 'cubit_mesh_export-1.0.2-cp312-cp312-win_amd64.whl'
+    _fake_cubit_wheel(wheel)
+    contract = dual.wheel_contract(wheel)
+    if tamper:
+        contract['wheel_sha256'] = '0' * 64
+    out = tmp_path / 'evidence' / 'lab'
+    cfg = dict(contract, schema=dual.SCHEMA, source_sha='a' * 40, target='lab',
+               action='preflight', tier='wheel', source_root='', output=str(out),
+               wheel_path=str(wheel), dependencies=pins, force_close_cubit=False)
+    returncode, result = _run_worker(cfg)
+    assert result['tier'] == 'wheel'
+    assert not (out / 'wheel_payload').exists()
+    if tamper:
+        assert returncode == 1 and result['passed'] is False
+        assert 'Transported wheel differs' in result['error']
+    else:
+        assert returncode == 0 and result['passed'] is True, result.get('error')
 
 
 def test_wheel_contract_includes_embedded_probe_and_bytes(tmp_path):

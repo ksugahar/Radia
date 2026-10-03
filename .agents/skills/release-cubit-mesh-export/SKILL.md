@@ -60,11 +60,11 @@ on mdx1/mdx2.
 - 100: `git -C W:\00_CAE\Radia\01_GitHub worktree add --detach W:\00_CAE\Radia\release-dual\cubit-mesh-export-N cubit-mesh-export-vN`,
   copy the hash-checked pyd into `packages/cubit-mesh-export/src/cubit_mesh_export/`,
   run `_native_provenance.py verify`.
-- LAB-local (for ssh deployment): LAB's ssh session cannot reach GitHub
-  either (credential prompt hangs). Make a shallow clone on 100
-  (`git clone --depth 1 --branch cubit-mesh-export-vN file:///W:/00_CAE/Radia/01_GitHub <dir>`),
-  add the pyd, `tar -czf`, `scp` to `lab:C:/release-dual/`, extract, and
-  verify HEAD, clean status and provenance over ssh.
+- LAB needs no release checkout: it is the wheel tier. The command copies the
+  wheel to `<evidence-lab>\lab\wheel\`, the worker re-hashes it against the
+  published SHA-256, installs it with `pip install --no-deps --force-reinstall`,
+  and verifies in a fresh interpreter that the import is not editable, comes
+  from that wheel, and that every packaged file equals the wheel.
 - Wheel: `pip download --no-deps --only-binary=:all: --no-cache-dir cubit-mesh-export==N -d W:\00_CAE\Radia\release-dual\wheels-cubit-N`
   and confirm its sha256 against PyPI's JSON.
 
@@ -76,14 +76,15 @@ Normal (stops if any Cubit is open), from 100:
 python tools/release_cubit_dual.py --action deploy --run-from 100 `
   --wheel W:\00_CAE\Radia\release-dual\wheels-cubit-N\cubit_mesh_export-N-cp312-cp312-win_amd64.whl `
   --source-sha <tag commit> `
-  --source-root-lab C:\release-dual\cubit-mesh-export-N `
   --source-root-100 W:\00_CAE\Radia\release-dual\cubit-mesh-export-N `
   --evidence-lab C:\temp\cubit-dual-N --evidence-100 C:\temp\cubit-dual-N
 ```
 
 then the same arguments with `--action done`. Both preflights finish before
-either install. On 100 the worker registers every profile
-(`--all-users`); the receipt requires it.
+either install. Tiers are fixed per target: LAB `wheel`, 100 `editable`
+(`TIERS`); each receipt records its tier and `done` rejects a receipt of the
+wrong tier, and a LAB receipt without `installed_payload_verified`. On 100 the
+worker registers every profile (`--all-users`); the receipt requires it.
 
 **Forced** (the user explicitly asked to close running Cubit): add
 `--force-close-cubit`. Every running `coreform_cubit.exe` on both hosts is
