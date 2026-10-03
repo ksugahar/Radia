@@ -11,22 +11,14 @@
   and document the modified font and license. Final candidate acceptance is
   recorded separately in FONT_DIAGNOSTICS.md; this entry is not release approval.
 
-- Share Web suffix attachment across degrees, stars, flat/sharp, primes and
-  editable scripts so selections survive and repeated scripts do not collide.
+- Share Web suffix attachment across degrees, primes, editable scripts and
+  Web star variants so selections survive and repeated scripts do not collide.
+  Shared flat/sharp and star templates retain their explicit base slots.
   Test compound/scripted bases and prefix accents, including real degree clicks.
 
 - Use explicit prime superscripts for every prime decoration, including atoms,
   native shortcuts and Web caret insertion. Update the shared catalogue and
   independent expected TeX together; keep empty-base double-script protection.
-
-- Replace the native embedded CFF resource with Eqnedit Math, a reproducibly
-  converted TrueType-outline derivative of Latin Modern Math. Both EXE and
-  wheel module use the same asset and physical family; reject a non-TrueType
-  resource before registration. This avoids the reproduced Windows ATM host
-  failure path, rather than hiding it behind successful registration retries.
-  Preserve advances and math-layout tables, test all glyph bounds and winding,
-  and document the modified font and license. Final candidate acceptance is
-  recorded separately in FONT_DIAGNOSTICS.md; this entry is not release approval.
 
 - Preserve grouped and empty-base apostrophes on native import, including
   following scripts. Restore ordinary Web preview after optional Office macro
@@ -50,13 +42,13 @@
   checked against the insertion oracle. Share category order and preview TeX,
   preserve Web-only snippets explicitly, and explain native-only matrix actions.
   Fit toolbar selector ink as well as popup cells, add selector/style proof
-  sheets (120 total), and simplify brace examples without removing input slots.
+  sheets (114 cell sheets + 6 selector sheets = 120 total), and simplify brace examples without removing input slots.
 
 - Fit palette ink to the cell instead of centering the font's line metrics;
   radicals and standalone slashes no longer rely on being clipped to fit.
   Show native previews for fractions, radicals, decorations and typefaces.
-  Check border clearance in normal/selected states and publish 114 offscreen
-  palette proof images per CI run for AI visual review. These are evidence,
+  Check border clearance in normal/selected states and publish the offscreen
+  cell proof sheets counted above per CI run for AI visual review. These are evidence,
   not an automatic claim of human legibility.
 
 - Restrict palette coverage to Windows Unicode cmaps: Mac Roman entries
