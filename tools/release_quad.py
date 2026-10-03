@@ -506,6 +506,18 @@ def _run_ssh_powershell(host: str, script: str, timeout: int):
                 output.read().decode("utf-8", errors="replace"), "")
 
 
+def _engine_sessions(args, requested: list[str]) -> dict[str, str] | None:
+    """Per-target shared MATLAB Engine names; None after reporting a bad pair."""
+    sessions = {}
+    for entry in getattr(args, "engine_session", None) or []:
+        key, separator, name = entry.partition("=")
+        if not separator or key not in requested or not name.strip() or key in sessions:
+            fail("engine sessions must be unique selected-target=shared-name pairs")
+            return None
+        sessions[key] = name.strip()
+    return sessions
+
+
 def _run_simulink_candidate_target(
         key: str, package: Path, package_sha256: str,
         success_marker: str, engine_session: str | None = None,
@@ -610,13 +622,9 @@ def cmd_simulink_candidate(args):
         fail(f"unknown Simulink target(s): {', '.join(unknown)}")
         return 2
 
-    sessions = {}
-    for entry in getattr(args, "engine_session", None) or []:
-        key, separator, name = entry.partition("=")
-        if not separator or key not in requested or not name.strip() or key in sessions:
-            fail("engine sessions must be unique selected-target=shared-name pairs")
-            return 2
-        sessions[key] = name.strip()
+    sessions = _engine_sessions(args, requested)
+    if sessions is None:
+        return 2
 
     pythons = {}
     for entry in getattr(args, "python", None) or []:
@@ -837,10 +845,13 @@ def _download_verified_optuna_ci_wheel(ci_run_id: str) -> tuple[dict | None, str
 
 
 def _run_optuna_candidate_target(
-        key: str, wheel: Path, wheel_sha256: str) -> tuple[bool, str]:
+        key: str, wheel: Path, wheel_sha256: str,
+        engine_session: str | None = None) -> tuple[bool, str]:
     label, host, python_command = SIMULINK_TARGETS[key]
     runner = REPO / "packages/radia-optuna/tests/run_installed_wheel_simulink.ps1"
     matlab_tests = REPO / "packages/radia-optuna/tests/matlab"
+    # The solver release Engine worker owns MATLAB session reuse and launch.
+    worker = REPO / "tools/verify_simulink_release.py"
     if host is None:
         command = [
             "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
@@ -848,7 +859,10 @@ def _run_optuna_candidate_target(
             "-MatlabExecutable", MATLAB_EXE,
             "-PythonExecutable", sys.executable,
             "-PreverifiedWheelSha256", wheel_sha256,
+            "-EngineWorker", str(worker),
         ]
+        if engine_session:
+            command.extend(["-EngineSession", engine_session])
         result = subprocess.run(
             command,
             capture_output=True,
@@ -875,7 +889,7 @@ def _run_optuna_candidate_target(
         )
         if created.returncode != 0:
             return False, created.stderr.strip() or created.stdout.strip()
-        sources = [runner, wheel, *sorted(matlab_tests.glob("*.m"))]
+        sources = [runner, worker, wheel, *sorted(matlab_tests.glob("*.m"))]
         for source_file in sources:
             subdir = "matlab/" if source_file.suffix == ".m" else ""
             destination = f"{remote_root_posix}/{subdir}{source_file.name}"
@@ -890,6 +904,10 @@ def _run_optuna_candidate_target(
                 return False, copied.stderr.strip() or copied.stdout.strip()
         remote_runner = remote_root_windows + "\\" + runner.name
         remote_wheel = remote_root_windows + "\\" + wheel.name
+        remote_worker = remote_root_windows + "\\" + worker.name
+        session_option = (
+            " -EngineSession '" + engine_session.replace("'", "''") + "'"
+            if engine_session else "")
         python_parts = python_command.split()
         python_line = (
             "$pythonExe = (& " + " ".join(python_parts)
@@ -900,7 +918,8 @@ def _run_optuna_candidate_target(
             + python_line
             + f"& '{remote_runner}' -Wheel '{remote_wheel}' "
               f"-MatlabExecutable '{MATLAB_EXE}' -PythonExecutable $pythonExe "
-              f"-PreverifiedWheelSha256 '{wheel_sha256}'\n"
+              f"-PreverifiedWheelSha256 '{wheel_sha256}' "
+              f"-EngineWorker '{remote_worker}'{session_option}\n"
             + "exit $LASTEXITCODE\n"
         )
         result = subprocess.run(
@@ -949,17 +968,22 @@ def cmd_optuna_candidate(args):
     if unknown:
         fail(f"unknown radia-optuna target(s): {', '.join(unknown)}")
         return 2
+    sessions = _engine_sessions(args, requested)
+    if sessions is None:
+        return 2
     failed = 0
     for key in requested:
         label = SIMULINK_TARGETS[key][0]
         info(f"verifying exact installed wheel on {label}")
+        session_args = [sessions[key]] if key in sessions else []
         passed, target_output = _run_optuna_candidate_target(
-            key, wheel, wheel_sha256
+            key, wheel, wheel_sha256, *session_args
         )
         state["targets"][key] = {
             "label": label,
             "status": "passed" if passed else "failed",
             "verified_at_utc": datetime.now(timezone.utc).isoformat(),
+            "engine_session": sessions.get(key),
             "output_tail": target_output[-4000:],
         }
         _write_simulink_state(state_path, state, key)
@@ -2777,6 +2801,10 @@ def main():
     optuna_candidate.add_argument(
         "--target", default="all",
         help="comma list: lab, 100, mdx1, mdx2, all")
+    optuna_candidate.add_argument(
+        "--engine-session", action="append", metavar="HOST=NAME",
+        help="reuse an explicitly shared Engine on this target (repeatable); "
+             "without it a target runs only when no MATLAB exists there")
     optuna_done = sub.add_parser(
         "optuna-done",
         help="require the exact radia-optuna wheel to have passed all four machines")
