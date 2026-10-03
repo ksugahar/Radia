@@ -65,7 +65,7 @@ U+00BD or U+00B2 entries of the shipped font. This predicts which font
 not observe which font a running process received. `--self-test` now makes that
 observation: it calls the production chooser, reads the physical face GDI
 resolved at 96, 120, 144, 192, 288, and 384 dpi, and exits 243 naming the
-substitute and DPI if the palette is not drawing in Latin Modern Math.
+substitute and DPI if the palette is not drawing in Eqnedit Math.
 Diagnostics separate physical-face substitution, glyph coverage, and missing
 ink; they do not infer a root cause from the selected fallback alone. The ink
 probe allocates its surface from the selected font's measured line height and
@@ -144,10 +144,10 @@ A human may still resolve ambiguous legibility or monitor-specific perception.
 AI images are not evidence of popup positioning, pointer behavior, or the
 health of LAB's interactive font session. Record untested dimensions explicitly.
 
-## Prime attachment
+## Suffix and base-slot attachment
 
-All Web suffix keys (degree, star, flat/sharp, primes, and editable sub/superscripts)
-share one attachment contract. A selection is the complete base, never replaced
+Web suffix snippets beginning with `^` or `_` (degree, primes, editable
+sub/superscripts and Web star variants) share one attachment contract. A selection is the complete base, never replaced
 by the suffix or moved into its exponent. An empty script keeps its caret inside
 the script hole. Without selection, attach at the caret; insert an empty base
 only at empty input or when the preceding atom already has that script kind.
@@ -157,6 +157,11 @@ This does not guess the extent of an unselected compound expression. Prefix
 decorations (`hat`, `vec`, `bar`, dots, over/underline) instead enclose the
 entire selected body in their argument. Cross-product tests cover empty,
 atomic, compound, and already-scripted bases, separately from key inventory.
+
+Shared flat/sharp and `f^*`/`f_*` keys instead use an explicit `{}` base slot,
+matching the native catalogue. Selected text fills that base slot; without a
+selection the caret stays in the empty base. They do not attach to an earlier
+unselected atom.
 
 A prime decoration always uses an explicit `^{\prime }` superscript, including
 single characters and control-word atoms: `x^{\prime }`, `\alpha ^{\prime }`.

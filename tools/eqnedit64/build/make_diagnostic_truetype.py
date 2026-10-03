@@ -1,4 +1,4 @@
-"""Make a private CFF/glyf A/B asset; not a distribution/release font.
+"""Convert CFF outlines for a diagnostic A/B asset or a named derived font.
 
 By default keep family names for the controlled GDI selection comparison.
 Use --family-name for the separately validated derived asset. Preserve GUST/LPPL
@@ -31,7 +31,7 @@ def main():
                              or not args.family_name.strip()):
         parser.error("family name must be nonempty ASCII within the Windows face-name limit")
     if args.output.exists() or args.source.resolve() == args.output.resolve():
-        parser.error("output must be a new, separate diagnostic file")
+        parser.error("output must be a new, separate file")
     font = TTFont(args.source, recalcTimestamp=False)
     if "CFF " not in font or "glyf" in font or "CFF2" in font:
         parser.error("expected static CFF source")
@@ -97,7 +97,7 @@ def main():
                 worst_bounds_error = max(worst_bounds_error, error)
         preserved = {tag: check.getTableData(tag) == value for tag, value in original_tables.items()}
         assert all(preserved.values()), preserved
-        report = dict(diagnostic_only=True, source_sha256=digest(args.source),
+        report = dict(diagnostic_only=not bool(args.family_name), source_sha256=digest(args.source),
                       output_sha256=digest(args.output), fonttools=fontTools.__version__,
                       glyphs=len(order), units_per_em=check["head"].unitsPerEm,
                       max_cubic_approximation_error_design_units=0.5,

@@ -94,6 +94,16 @@ class ConversionTest(unittest.TestCase):
             self.assertIn('std::string ' + field + ' = EQNEDIT64_MATH_FONT_FAMILY', style)
         self.assertIn('wcscpy_s(lf.lfFaceName, EQNEDIT64_MATH_FONT_FACE)', renderer)
 
+    def test_named_conversion_report_is_not_diagnostic_only(self):
+        output = Path(self.scratch.name) / 'named.ttf'
+        subprocess.run([sys.executable, str(ROOT / 'build/make_diagnostic_truetype.py'),
+                        str(ROOT / 'assets/latinmodern-math.otf'), str(output),
+                        '--family-name', 'Eqnedit Math'],
+                       check=True, capture_output=True, text=True)
+        report = json.loads(output.with_suffix('.json').read_text(encoding='utf-8'))
+        self.assertFalse(report['diagnostic_only'])
+        self.assertEqual(report['derived_family'], 'Eqnedit Math')
+
 
 if __name__ == '__main__':
     unittest.main()

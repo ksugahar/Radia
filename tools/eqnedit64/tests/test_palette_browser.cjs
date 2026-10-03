@@ -141,6 +141,18 @@ const server = http.createServer((req, res) => {
                    "x^{" + "\\prime ".repeat(count) + "}");
     }
     await page.getByRole('tab', {name:"Web追加", exact:true}).click();
+    for (const [name, environment, separator] of [
+      ["行列", "pmatrix", " & "], ["整列", "aligned", " &= "]
+    ]) {
+      await page.locator(".eqed-source").fill("x");
+      await page.locator(".eqed-source").evaluate(e => e.setSelectionRange(0, 1));
+      await page.getByRole('button', {name, exact:true}).click();
+      const expected = "\\begin{" + environment + "}\n  {x}" + separator +
+        "{} \\\\\n  {}" + separator + "{}\n\\end{" + environment + "}";
+      assert.equal(await page.locator(".eqed-source").inputValue(), expected);
+      assert.equal(await page.locator(".eqed-source").evaluate(e => e.selectionStart),
+                   expected.indexOf("{x}") + 2);
+    }
     for (const [base, selected, expected] of [
       ["x", true, "{x}^{\\circ}"],
       ["a+b", true, "{a+b}^{\\circ}"],
