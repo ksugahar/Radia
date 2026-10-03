@@ -171,6 +171,7 @@ MATLAB_EXE = r"C:\Program Files\MATLAB\R2026a\bin\matlab.exe"
 SIMULINK_GATE_ROOT = Path(r"C:\temp\radia-release-quad")
 OPTUNA_GATE_ROOT = SIMULINK_GATE_ROOT / "radia-optuna"
 OPTUNA_SUCCESS_MARKER = "RADIA_OPTUNA_WHEEL_SIMULINK_OK"
+OPTUNA_WHEEL_RUNNER = REPO / "packages/radia-optuna/tests/run_installed_wheel_simulink.ps1"
 SIMULINK_TARGETS = {
     "lab": ("LAB", None, "python"),
     "100": ("100号機", SSH_100, "python"),
@@ -844,11 +845,41 @@ def _download_verified_optuna_ci_wheel(ci_run_id: str) -> tuple[dict | None, str
     }, output
 
 
+def _optuna_remote_invocation(
+        runner: str, wheel: str, worker: str, python_command: str,
+        wheel_sha256: str, engine_session: str | None = None) -> str:
+    """PowerShell script that exits nonzero on any failure.
+
+    A terminating error inside the runner leaves $LASTEXITCODE at the last
+    native command's value, often 0, so the exit code cannot come from it
+    alone: the runner's errors exit 1 and a native failure keeps its code.
+    """
+    session_option = (
+        " -EngineSession '" + engine_session.replace("'", "''") + "'"
+        if engine_session else "")
+    return (
+        "$ErrorActionPreference = 'Stop'\n"
+        "try {\n"
+        f"    $pythonExe = (& {python_command} -c \"import sys; print(sys.executable)\").Trim()\n"
+        "    if ($LASTEXITCODE -ne 0) { throw \"Python discovery failed with exit code $LASTEXITCODE\" }\n"
+        f"    & '{runner}' -Wheel '{wheel}' "
+        f"-MatlabExecutable '{MATLAB_EXE}' -PythonExecutable $pythonExe "
+        f"-PreverifiedWheelSha256 '{wheel_sha256}' "
+        f"-EngineWorker '{worker}'{session_option}\n"
+        "    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n"
+        "} catch {\n"
+        "    [Console]::Error.WriteLine(($_ | Out-String))\n"
+        "    exit 1\n"
+        "}\n"
+        "exit 0\n"
+    )
+
+
 def _run_optuna_candidate_target(
         key: str, wheel: Path, wheel_sha256: str,
         engine_session: str | None = None) -> tuple[bool, str]:
     label, host, python_command = SIMULINK_TARGETS[key]
-    runner = REPO / "packages/radia-optuna/tests/run_installed_wheel_simulink.ps1"
+    runner = OPTUNA_WHEEL_RUNNER
     matlab_tests = REPO / "packages/radia-optuna/tests/matlab"
     # The solver release Engine worker owns MATLAB session reuse and launch.
     worker = REPO / "tools/verify_simulink_release.py"
@@ -878,15 +909,7 @@ def _run_optuna_candidate_target(
             "$ErrorActionPreference = 'Stop'\n"
             f"New-Item -ItemType Directory -Force -Path '{remote_matlab_windows}' | Out-Null\n"
         )
-        created = subprocess.run(
-            ["ssh", host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
-             "-Command", "-"],
-            input=prepare,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        created = _run_ssh_powershell(host, prepare, timeout=60)
         if created.returncode != 0:
             return False, created.stderr.strip() or created.stdout.strip()
         sources = [runner, worker, wheel, *sorted(matlab_tests.glob("*.m"))]
@@ -902,35 +925,13 @@ def _run_optuna_candidate_target(
             )
             if copied.returncode != 0:
                 return False, copied.stderr.strip() or copied.stdout.strip()
-        remote_runner = remote_root_windows + "\\" + runner.name
-        remote_wheel = remote_root_windows + "\\" + wheel.name
-        remote_worker = remote_root_windows + "\\" + worker.name
-        session_option = (
-            " -EngineSession '" + engine_session.replace("'", "''") + "'"
-            if engine_session else "")
-        python_parts = python_command.split()
-        python_line = (
-            "$pythonExe = (& " + " ".join(python_parts)
-            + " -c \"import sys; print(sys.executable)\").Trim()\n"
+        invocation = _optuna_remote_invocation(
+            remote_root_windows + "\\" + runner.name,
+            remote_root_windows + "\\" + wheel.name,
+            remote_root_windows + "\\" + worker.name,
+            python_command, wheel_sha256, engine_session,
         )
-        invocation = (
-            "$ErrorActionPreference = 'Stop'\n"
-            + python_line
-            + f"& '{remote_runner}' -Wheel '{remote_wheel}' "
-              f"-MatlabExecutable '{MATLAB_EXE}' -PythonExecutable $pythonExe "
-              f"-PreverifiedWheelSha256 '{wheel_sha256}' "
-              f"-EngineWorker '{remote_worker}'{session_option}\n"
-            + "exit $LASTEXITCODE\n"
-        )
-        result = subprocess.run(
-            ["ssh", host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
-             "-Command", "-"],
-            input=invocation,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        result = _run_ssh_powershell(host, invocation, timeout=1800)
     output = ((result.stdout or "") + (result.stderr or "")).strip()
     if result.returncode != 0:
         return False, output

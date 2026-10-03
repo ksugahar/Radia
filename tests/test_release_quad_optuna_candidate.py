@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import importlib.util
 import json
@@ -325,8 +326,10 @@ def test_remote_candidate_copies_the_engine_worker_and_selects_the_session(
         if command[0] == "scp":
             copies.append((Path(command[1]).name, command[2]))
             return SimpleNamespace(returncode=0, stdout="", stderr="")
-        assert command[0] == "ssh" and command[1] == "mdx2"
-        scripts.append(kwargs["input"])
+        assert command[0] == "ssh" and "mdx2" in command
+        assert "-Command" not in command
+        scripts.append(base64.b64decode(command[-1]).decode("utf-16le"))
+        kwargs["stdout"].write(release_quad.OPTUNA_SUCCESS_MARKER.encode())
         return SimpleNamespace(
             returncode=0, stdout=release_quad.OPTUNA_SUCCESS_MARKER, stderr=""
         )
@@ -484,3 +487,142 @@ def test_installed_wheel_runner_uses_the_isolated_engine_worker():
     assert "matlab_engine = $engineEvidence" in runner
     # A borrowed session gets no license retry.
     assert "$maxMatlabAttempts = if ($EngineSession) { 1 } else { 3 }" in runner
+
+
+FAKE_RUNNER = """param(
+    [string]$Wheel, [string]$MatlabExecutable, [string]$PythonExecutable,
+    [string]$PreverifiedWheelSha256, [string]$EngineWorker, [string]$EngineSession
+)
+$ErrorActionPreference = 'Stop'
+Write-Output 'RADIA_OPTUNA_WHEEL_SIMULINK_OK'
+& $PythonExecutable -c "pass"
+{tail}
+"""
+
+
+def _fake_runner(tmp_path, tail):
+    runner = tmp_path / "fake_runner.ps1"
+    runner.write_text(FAKE_RUNNER.replace("{tail}", tail), encoding="utf-8")
+    return runner
+
+
+@pytest.mark.parametrize("tail,passes", [
+    ("", True),
+    # A cleanup failure after the marker, with a stale native exit code of 0.
+    ("throw 'owned scratch cleanup failed'", False),
+])
+def test_local_candidate_requires_the_runner_to_finish(monkeypatch, tmp_path,
+                                                        tail, passes):
+    wheel = tmp_path / "radia_optuna-0.2.0-py3-none-win_amd64.whl"
+    wheel.write_bytes(b"wheel")
+    monkeypatch.setattr(release_quad, "OPTUNA_WHEEL_RUNNER", _fake_runner(tmp_path, tail))
+    passed, output = release_quad._run_optuna_candidate_target(
+        "lab", wheel, hashlib.sha256(wheel.read_bytes()).hexdigest()
+    )
+    assert release_quad.OPTUNA_SUCCESS_MARKER in output
+    assert passed is passes
+
+
+@pytest.mark.parametrize("tail,code", [
+    ("", 0),
+    ("throw 'owned scratch cleanup failed'", 1),
+    ("& $PythonExecutable -c 'import sys; sys.exit(3)'", 3),
+])
+def test_remote_invocation_propagates_powershell_and_native_failures(tmp_path,
+                                                                      tail, code):
+    """Run the exact SSH script locally against a runner that prints success."""
+    runner = _fake_runner(tmp_path, tail)
+    script = release_quad._optuna_remote_invocation(
+        str(runner), str(tmp_path / "w.whl"), str(tmp_path / "worker.py"),
+        "'" + sys.executable.replace("'", "''") + "'", "0" * 64, "o'shared",
+    )
+    result = _run_pwsh(script)
+    assert release_quad.OPTUNA_SUCCESS_MARKER in result.stdout
+    assert result.returncode == code, result.stderr
+
+
+def _cleanup_script(root, body):
+    runner = str(RUNNER).replace("'", "''")
+    return "\n".join([
+        "$ErrorActionPreference = 'Stop'",
+        "$tokens = $null; $errors = $null",
+        f"$ast = [System.Management.Automation.Language.Parser]::ParseFile('{runner}', [ref]$tokens, [ref]$errors)",
+        "$function = $ast.FindAll({ param($node) $node -is "
+        "[System.Management.Automation.Language.FunctionDefinitionAst] -and "
+        "$node.Name -eq 'Remove-OwnedRunRoot' }, $true)[0]",
+        "Invoke-Expression $function.Extent.Text",
+        f"$root = '{str(root)}'",
+        "$target = Join-Path $root 'owned'",
+        "New-Item -ItemType Directory -Path $target | Out-Null",
+        "$file = Join-Path $target 'optuna_mex.mexw64'",
+        "Set-Content -LiteralPath $file -Value 'image'",
+        # Held without sharing, as a MEX image is until MATLAB releases it.
+        "$held = [IO.File]::Open($file, 'Open', 'Read', 'None')",
+        body,
+    ])
+
+
+def _run_pwsh(script):
+    return subprocess.run(
+        ["pwsh", "-NoProfile", "-NonInteractive", "-EncodedCommand",
+         base64.b64encode(script.encode("utf-16le")).decode("ascii")],
+        capture_output=True, text=True, encoding="utf-8",
+        timeout=120,
+    )
+
+
+def test_owned_scratch_removal_waits_for_a_released_image(tmp_path):
+    result = _run_pwsh(_cleanup_script(tmp_path, "\n".join([
+        "$job = Start-ThreadJob { Start-Sleep -Milliseconds 1500; ($using:held).Dispose() }",
+        "Remove-OwnedRunRoot -Path $target -TempRoot $root -TimeoutSeconds 30",
+        "Receive-Job $job -Wait | Out-Null",
+        "'removed=' + (-not (Test-Path -LiteralPath $target))",
+    ])))
+    assert result.returncode == 0, result.stderr
+    assert "removed=True" in result.stdout
+
+
+def test_owned_scratch_kept_and_failed_when_never_released(tmp_path):
+    result = _run_pwsh(_cleanup_script(tmp_path, "\n".join([
+        "try { Remove-OwnedRunRoot -Path $target -TempRoot $root -TimeoutSeconds 1; 'UNEXPECTED_REMOVAL' }",
+        "catch { 'failed=' + $_.Exception.Message }",
+        "finally { $held.Dispose() }",
+        "'kept=' + (Test-Path -LiteralPath $target)",
+    ])))
+    assert result.returncode == 0, result.stderr
+    assert "kept for diagnosis" in result.stdout
+    assert "kept=True" in result.stdout
+    assert "UNEXPECTED_REMOVAL" not in result.stdout
+
+
+def test_owned_scratch_removal_refuses_outside_its_root(tmp_path):
+    result = _run_pwsh(_cleanup_script(tmp_path / "root", "\n".join([
+        "$held.Dispose()",
+        "try { Remove-OwnedRunRoot -Path (Split-Path $root) -TempRoot $root; 'UNEXPECTED_REMOVAL' }",
+        "catch { 'refused=' + $_.Exception.Message }",
+    ])))
+    assert "Refusing to remove a folder outside" in result.stdout
+    assert (tmp_path / "root" / "owned").is_dir()
+
+
+def test_runner_emits_evidence_and_marker_only_after_cleanup():
+    runner = RUNNER.read_text(encoding="utf-8")
+    cleanup = runner.index("Remove-OwnedRunRoot -Path $resolvedRunRoot")
+    assert runner.index("Write-Output 'RADIA_OPTUNA_WHEEL_SIMULINK_OK'") > cleanup
+    assert runner.index("[IO.File]::WriteAllText(") > cleanup
+    assert "$evidence.owned_scratch_removed = $true" in runner
+
+
+def test_owned_scratch_refuses_a_junction(tmp_path):
+    result = _run_pwsh(_cleanup_script(tmp_path / "root", "\n".join([
+        "$held.Dispose()",
+        "$outside = Join-Path (Split-Path $root) 'outside'",
+        "New-Item -ItemType Directory -Path $outside | Out-Null",
+        "Set-Content -LiteralPath (Join-Path $outside 'keep.txt') -Value 'keep'",
+        "New-Item -ItemType Junction -Path (Join-Path $target 'link') -Target $outside | Out-Null",
+        "try { Remove-OwnedRunRoot -Path $target -TempRoot $root; throw 'UNEXPECTED_REMOVAL' }",
+        "catch { if ($_.Exception.Message -notlike '*reparse point*') { throw }; 'refused-junction' }",
+    ])))
+    assert result.returncode == 0, result.stderr
+    assert "refused-junction" in result.stdout
+    assert (tmp_path / "outside" / "keep.txt").read_text().strip() == "keep"
