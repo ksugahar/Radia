@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import base64
+from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 import hashlib
 import importlib.util
 import json
@@ -361,6 +363,7 @@ RUNNER = (
 )
 
 
+@lru_cache(maxsize=2)
 def _runner_expression(session: str) -> str:
     """Evaluate the runner's own expression lines with fixed inputs."""
     lines = RUNNER.read_text(encoding="utf-8").splitlines()
@@ -523,22 +526,25 @@ def test_local_candidate_requires_the_runner_to_finish(monkeypatch, tmp_path,
     assert passed is passes
 
 
-@pytest.mark.parametrize("tail,code", [
-    ("", 0),
-    ("throw 'owned scratch cleanup failed'", 1),
-    ("& $PythonExecutable -c 'import sys; sys.exit(3)'", 3),
-])
-def test_remote_invocation_propagates_powershell_and_native_failures(tmp_path,
-                                                                      tail, code):
+def test_remote_invocation_propagates_powershell_and_native_failures(tmp_path):
     """Run the exact SSH script locally against a runner that prints success."""
-    runner = _fake_runner(tmp_path, tail)
-    script = release_quad._optuna_remote_invocation(
-        str(runner), str(tmp_path / "w.whl"), str(tmp_path / "worker.py"),
-        "'" + sys.executable.replace("'", "''") + "'", "0" * 64, "o'shared",
-    )
-    result = _run_pwsh(script)
-    assert release_quad.OPTUNA_SUCCESS_MARKER in result.stdout
-    assert result.returncode == code, result.stderr
+    cases = [("", 0), ("throw 'owned scratch cleanup failed'", 1),
+             ("& $PythonExecutable -c 'import sys; sys.exit(3)'", 3)]
+    scripts = []
+    for index, (tail, _) in enumerate(cases):
+        folder = tmp_path / str(index)
+        folder.mkdir()
+        runner = _fake_runner(folder, tail)
+        scripts.append(release_quad._optuna_remote_invocation(
+            str(runner), str(folder / "w.whl"), str(folder / "worker.py"),
+            "'" + sys.executable.replace("'", "''") + "'", "0" * 64, "o'shared"))
+    # These isolated subprocesses share no files or MATLAB state. Overlap shell
+    # startup instead of spending the fast-contract budget waiting three times.
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        results = list(pool.map(_run_pwsh, scripts))
+    for (tail, code), result in zip(cases, results):
+        assert release_quad.OPTUNA_SUCCESS_MARKER in result.stdout, tail
+        assert result.returncode == code, (tail, result.stderr)
 
 
 def _cleanup_script(root, body):
@@ -573,7 +579,7 @@ def _run_pwsh(script):
 
 def test_owned_scratch_removal_waits_for_a_released_image(tmp_path):
     result = _run_pwsh(_cleanup_script(tmp_path, "\n".join([
-        "$job = Start-ThreadJob { Start-Sleep -Milliseconds 1500; ($using:held).Dispose() }",
+        "$job = Start-ThreadJob { Start-Sleep -Milliseconds 250; ($using:held).Dispose() }",
         "Remove-OwnedRunRoot -Path $target -TempRoot $root -TimeoutSeconds 30",
         "Receive-Job $job -Wait | Out-Null",
         "'removed=' + (-not (Test-Path -LiteralPath $target))",
@@ -584,7 +590,7 @@ def test_owned_scratch_removal_waits_for_a_released_image(tmp_path):
 
 def test_owned_scratch_kept_and_failed_when_never_released(tmp_path):
     result = _run_pwsh(_cleanup_script(tmp_path, "\n".join([
-        "try { Remove-OwnedRunRoot -Path $target -TempRoot $root -TimeoutSeconds 1; 'UNEXPECTED_REMOVAL' }",
+        "try { Remove-OwnedRunRoot -Path $target -TempRoot $root -TimeoutSeconds 0.1; 'UNEXPECTED_REMOVAL' }",
         "catch { 'failed=' + $_.Exception.Message }",
         "finally { $held.Dispose() }",
         "'kept=' + (Test-Path -LiteralPath $target)",
