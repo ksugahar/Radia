@@ -128,6 +128,48 @@ def test_optuna_done_requires_exact_head_hash_version_and_four_targets(
     assert checked is None
 
 
+def _fake_git(head, origin_main, dirty=""):
+    def run_git(*argv, **_kwargs):
+        if argv[:2] == ("rev-parse", "HEAD"):
+            return SimpleNamespace(returncode=0, stdout=head + "\n", stderr="")
+        if argv[:2] == ("rev-parse", "origin/main"):
+            return SimpleNamespace(returncode=0, stdout=origin_main + "\n", stderr="")
+        if argv[0] == "status":
+            return SimpleNamespace(returncode=0, stdout=dirty, stderr="")
+        if argv[0] == "fetch":
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        raise AssertionError(f"unexpected git call: {argv}")
+
+    return run_git
+
+
+def test_optuna_source_identity_is_the_checkout_not_the_solver_tag(monkeypatch):
+    main = "d" * 40
+
+    def solver_tag():
+        raise AssertionError("radia-optuna must not resolve the solver release tag")
+
+    monkeypatch.setattr(release_quad, "_release_commit", solver_tag)
+    monkeypatch.setattr(release_quad, "_release_head", solver_tag)
+    monkeypatch.setattr(release_quad, "_git", _fake_git(main, main))
+    assert release_quad._optuna_release_source_ready() == (True, main)
+
+
+def test_optuna_source_rejects_a_checkout_behind_main_or_dirty(monkeypatch):
+    main = "d" * 40
+    behind = "1" * 40
+    monkeypatch.setattr(release_quad, "_git", _fake_git(behind, main))
+    ready, message = release_quad._optuna_release_source_ready()
+    assert ready is False
+    assert behind in message and main in message
+
+    monkeypatch.setattr(release_quad, "_git", _fake_git(main, main, dirty=" M x.py\n"))
+    assert release_quad._optuna_release_source_ready() == (
+        False,
+        "tracked release source is dirty",
+    )
+
+
 def test_installed_wheel_runner_emits_quad_success_marker_and_checks_notices():
     root = Path(__file__).resolve().parents[1]
     runner = (
