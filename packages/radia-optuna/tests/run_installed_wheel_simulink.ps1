@@ -8,6 +8,7 @@ param(
     # An explicitly shared MATLAB Engine to reuse (never quit). Without it a
     # dedicated session is started only when no MATLAB process or shared
     # Engine exists; an existing MATLAB without a selected session refuses.
+    # com:<PID> selects an already enabled local desktop COM session.
     [string]$EngineSession = '',
     # The solver release Engine worker that owns this policy.
     [string]$EngineWorker = ''
@@ -149,6 +150,11 @@ try {
     $engineRequirement = "matlabengine==$($Matches[1]).$($Matches[2]).*"
     & $venvPython -m pip install --disable-pip-version-check $engineRequirement
     if ($LASTEXITCODE -ne 0) { throw "Installing $engineRequirement failed with exit code $LASTEXITCODE" }
+    if ($EngineSession.StartsWith('com:')) {
+        if ($EngineSession -notmatch '^com:[1-9][0-9]*$') { throw 'COM session must be com:<positive PID>' }
+        & $venvPython -m pip install --disable-pip-version-check pywin32
+        if ($LASTEXITCODE -ne 0) { throw "Installing the COM client failed with exit code $LASTEXITCODE" }
+    }
     # The Engine records the MATLAB it binds to; it must be this MATLAB.
     $engineProbe = (& $venvPython -c 'import importlib.metadata as m, json, os, matlab.engine; lines = open(os.path.join(os.path.dirname(matlab.engine.__file__), "_arch.txt")).read().splitlines(); print(json.dumps({"version": m.version("matlabengine"), "bin": lines[1]}))' | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or -not $engineProbe) {
@@ -168,6 +174,7 @@ try {
         interpreter = $venvPython
         session = if ($EngineSession) { $EngineSession } else { $null }
         ownership = if ($EngineSession) { 'borrowed' } else { 'owned' }
+        transport = if ($EngineSession.StartsWith('com:')) { 'matlab-com' } else { 'matlab-engine' }
     }
     $workerArguments = @('-X', 'utf8', '-s', $EngineWorker, '--engine-worker', $matlabRoot, $batch)
     if ($EngineSession) { $workerArguments += $EngineSession }

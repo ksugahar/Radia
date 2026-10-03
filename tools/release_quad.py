@@ -85,6 +85,7 @@ import importlib.util
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -484,7 +485,7 @@ def _run_ssh_powershell(host: str, script: str, timeout: int):
 
 
 def _engine_sessions(args, requested: list[str]) -> dict[str, str] | None:
-    """Per-target shared MATLAB Engine names; None after reporting a bad pair."""
+    """Per-target Engine names or com:PID selectors; None after a bad pair."""
     sessions = {}
     for entry in getattr(args, "engine_session", None) or []:
         key, separator, name = entry.partition("=")
@@ -495,11 +496,28 @@ def _engine_sessions(args, requested: list[str]) -> dict[str, str] | None:
     return sessions
 
 
+def _local_com_target_error(key: str, session: str | None) -> str | None:
+    """COM borrows the chosen host's desktop, never another host's session."""
+    if not session or not session.startswith("com:"):
+        return None
+    if not re.fullmatch(r"com:[1-9][0-9]*", session):
+        return "COM session must be com:<positive PID>"
+    expected = {"lab": "lab", "100": "intel11"}.get(key)
+    if expected is None or platform.node().strip().lower() != expected:
+        return f"Run COM acceptance locally in the selected {key} desktop logon"
+    return None
+
+
 def _run_simulink_candidate_target(
         key: str, package: Path, package_sha256: str,
         success_marker: str, engine_session: str | None = None,
         python_executable: str | None = None) -> tuple[bool, str]:
     label, host, python_command = SIMULINK_TARGETS[key]
+    if engine_session and engine_session.startswith("com:"):
+        error = _local_com_target_error(key, engine_session)
+        if error:
+            return False, error
+        host = None
     if python_executable:
         # The verifier hands its own interpreter to MATLAB as RADIA_PYTHON_EXECUTABLE.
         python_command = "'" + python_executable.replace("'", "''") + "'"
@@ -624,6 +642,8 @@ def cmd_simulink_candidate(args):
             "status": "passed" if passed else "failed",
             "verified_at_utc": datetime.now(timezone.utc).isoformat(),
             "mex_sha256": mex_sha256,
+            "engine_session": sessions.get(key),
+            "execution_backend": "matlab-com" if sessions.get(key, "").startswith("com:") else "matlab-engine",
             "python_executable": pythons.get(key, SIMULINK_TARGETS[key][2]
                                              if SIMULINK_TARGETS[key][1] else sys.executable),
             "output_tail": output[-4000:],
@@ -855,6 +875,11 @@ def _run_optuna_candidate_target(
         key: str, wheel: Path, wheel_sha256: str,
         engine_session: str | None = None) -> tuple[bool, str]:
     label, host, python_command = SIMULINK_TARGETS[key]
+    if engine_session and engine_session.startswith("com:"):
+        error = _local_com_target_error(key, engine_session)
+        if error:
+            return False, error
+        host = None
     runner = OPTUNA_WHEEL_RUNNER
     matlab_tests = REPO / "packages/radia-optuna/tests/matlab"
     # The solver release Engine worker owns MATLAB session reuse and launch.
@@ -2764,7 +2789,7 @@ def main():
     ss.add_argument("--target", default="all",
                     help="comma list: lab, 100, mdx1, mdx2, all")
     ss.add_argument("--engine-session", action="append", metavar="HOST=NAME",
-                    help="reuse an explicitly shared Engine on this target (repeatable)")
+                    help="shared Engine name or com:<PID> in the selected host's desktop logon (repeatable)")
     ss.add_argument("--python", action="append", metavar="HOST=PATH",
                     help="candidate interpreter on this target, which runs the verifier and "
                          "becomes MATLAB's RADIA_PYTHON_EXECUTABLE (repeatable); it must "
@@ -2780,7 +2805,7 @@ def main():
         help="comma list: lab, 100, mdx1, mdx2, all")
     optuna_candidate.add_argument(
         "--engine-session", action="append", metavar="HOST=NAME",
-        help="reuse an explicitly shared Engine on this target (repeatable); "
+        help="shared Engine name or com:<PID> in the selected host's desktop logon (repeatable); "
              "without it a target runs only when no MATLAB exists there")
     optuna_done = sub.add_parser(
         "optuna-done",

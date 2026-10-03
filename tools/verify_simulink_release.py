@@ -380,8 +380,63 @@ def _matlab_process_ids() -> set[int]:
     return {int(pid) for pid in (value if isinstance(value, list) else [value])}
 
 
+def _com_worker(expected_root: str, expression: str, pid: int) -> int:
+    """Attach to an explicitly selected, already running desktop; never create one."""
+    if pid <= 0 or pid not in _matlab_process_ids():
+        raise RuntimeError(f"Selected MATLAB PID is not running: {pid}")
+    import win32com.client
+
+    application = win32com.client.GetActiveObject("Matlab.Desktop.Application")
+    quote = lambda value: str(value).replace("'", "''")
+    # Run the acceptance in a function workspace, not the user's base workspace.
+    with tempfile.TemporaryDirectory(prefix="radia-com-worker-", dir=r"C:\temp") as temporary:
+        script = Path(temporary) / "verify_existing_session.m"
+        receipt = Path(temporary) / "completed.json"
+        script.write_text(f"""verify_existing_session_local();
+function verify_existing_session_local()
+assert(feature('getpid')=={pid}, 'Unexpected MATLAB PID');
+assert(strcmpi(matlabroot,'{quote(expected_root)}'), 'Unexpected MATLAB root');
+assert(isempty(find_system('SearchDepth',0,'Type','block_diagram')), 'Borrowed MATLAB has loaded diagrams');
+[~, loadedMex] = inmem;
+assert(~any(contains(string(loadedMex),["radia_mex","optuna_mex"])), 'Borrowed MATLAB has native handles');
+savedPath=path; savedPwd=pwd;
+names={{'PATH','MKL_THREADING_LAYER','PYTHONPATH','RADIA_PYTHON_EXECUTABLE'}};
+values=cellfun(@getenv,names,'UniformOutput',false);
+cleanup=onCleanup(@() restore_session(savedPath,savedPwd,names,values));
+setenv('RADIA_PYTHON_EXECUTABLE','{quote(sys.executable)}');
+{expression}
+clear cleanup;
+assert(strcmp(path,savedPath) && strcmp(pwd,savedPwd), 'Session paths were not restored');
+assert(all(cellfun(@(n,v) strcmp(getenv(n),v),names,values)), 'Session environment was not restored');
+fid=fopen('{quote(receipt)}','w'); assert(fid~=-1);
+closeFile=onCleanup(@() fclose(fid));
+fprintf(fid,'%s',jsonencode(struct('pid',feature('getpid'),'restored',true)));
+end
+function restore_session(savedPath,savedPwd,names,values)
+clear radia_mex optuna_mex;
+path(savedPath); cd(savedPwd);
+for k=1:numel(names), setenv(names{{k}},values{{k}}); end
+end
+""", encoding="utf-8")
+        output = application.Execute(f"run('{quote(script)}');")
+        print(output, end="", flush=True)
+        # Execute returns MATLAB errors as text. Require a fresh receipt written
+        # only after the complete expression and session restoration succeed.
+        if not receipt.is_file():
+            raise RuntimeError("COM acceptance or borrowed-session restoration failed")
+        proof = json.loads(receipt.read_text(encoding="utf-8"))
+        if proof != {"pid": pid, "restored": True}:
+            raise RuntimeError("Invalid COM completion receipt")
+    print(f"MATLAB COM connected: PID={pid}; borrowed session restored", flush=True)
+    return 0
+
+
 def _engine_worker(expected_root: str, expression: str, session: str | None = None) -> int:
     """Reuse an explicitly named session, or own one when no MATLAB exists."""
+    if session and session.startswith("com:"):
+        if not re.fullmatch(r"com:[1-9][0-9]*", session):
+            raise ValueError("COM session must be com:<positive PID>")
+        return _com_worker(expected_root, expression, int(session[4:]))
     import matlab.engine
 
     processes = _matlab_process_ids()
@@ -540,7 +595,7 @@ def main() -> int:
     parser.add_argument("--matlab", type=Path)
     parser.add_argument("--manifest-only", action="store_true")
     parser.add_argument("--timeout", type=int, default=300)
-    parser.add_argument("--engine-session", help="Explicit shared MATLAB Engine to reuse; never quits it")
+    parser.add_argument("--engine-session", help="Shared Engine name or com:<PID> for a local existing desktop; never quits it")
     args = parser.parse_args()
     archive = args.archive.resolve()
     manifest = verify_archive(archive)
@@ -552,7 +607,8 @@ def main() -> int:
         print(_console_safe(matlab_output.rstrip()))
     print(json.dumps({
         "status": "passed",
-        "execution_backend": "not-executed" if args.manifest_only else "matlab-engine",
+        "execution_backend": ("not-executed" if args.manifest_only else
+                              "matlab-com" if (args.engine_session or "").startswith("com:") else "matlab-engine"),
         "package": manifest["package"],
         "version": manifest["version"],
         "commit": manifest["commit"],
