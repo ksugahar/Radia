@@ -11,10 +11,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_declared_notebook_bibliographies_keep_generated_bbl_and_display():
+def test_declared_notebook_bibliographies_keep_generated_bbl_and_display(monkeypatch):
     """Migrated notebooks fail on stale/missing artifacts; unclaimed ones stay unclaimed."""
+    from functools import lru_cache
+    from radia_mcp.bibliography.plans import T14_canonical
     from radia_mcp.bibliography.plans.T14_canonical import _citation_source_sha256, _generated_keys
+    # Every notebook refers to one immutable source during this test. Run the
+    # real parser once per distinct text; retain every per-notebook fingerprint,
+    # dependency, generated-key and display assertion below.
+    monkeypatch.setattr(T14_canonical, "parse_bib", lru_cache(maxsize=1)(T14_canonical.parse_bib))
     canonical = ROOT / "packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib"
+    canonical_bytes = canonical.read_bytes()
     for path in (ROOT / "docs").rglob("*.ipynb"):
         notebook = json.loads(path.read_text(encoding="utf-8"))
         declaration = notebook.get("metadata", {}).get("radia", {}).get("bibliography")
@@ -31,7 +38,7 @@ def test_declared_notebook_bibliographies_keep_generated_bbl_and_display():
         display = cells[0]
         provenance = display["metadata"]["radia_bibliography"]
         assert provenance["style"] == declaration.get("style", "IEEEtran"), path
-        assert provenance["selected_source_sha256"] == _citation_source_sha256(keys, canonical.read_bytes()), path
+        assert provenance["selected_source_sha256"] == _citation_source_sha256(keys, canonical_bytes), path
         assert provenance["bbl"] == bbl.name, path
         assert provenance["bbl_sha256_lf"] == hashlib.sha256(raw.replace(b"\r\n", b"\n")).hexdigest(), path
         rendered = "".join(display["source"])
