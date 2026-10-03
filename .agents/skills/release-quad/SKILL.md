@@ -135,6 +135,17 @@ MEX handles, runtime DLLs, `manifest.json`, and `SHA256SUMS.txt`. Verify the exa
 ZIP independently on LAB, 100, mdx1, and mdx2 through verified MATLAB Engine
 sessions. Rebuilding the ZIP invalidates all prior candidate evidence.
 
+If Engine discovery cannot reach an existing desktop, an explicitly enabled
+local MATLAB COM Automation session may run the same extracted-package
+verification function. Attach only to a running instance, check the selected
+PID, preserve the borrowed session, and apply the same diagram/MEX refusal
+and path/environment restoration checks. A desktop COM connection may require
+execution in that user's interactive Windows logon instead of SSH's logon.
+Record `execution_backend: matlab-com`, the PID, exact artifact identity,
+success marker and verified restoration in the acceptance evidence. This is
+a host-local transport alternative; it does not waive any four-host gate or
+authorize starting a replacement MATLAB or sharing MATLAB between hosts.
+
 Check MATLAB processes, shared Engine names, and the official MCP connection
 separately before acceptance. Reuse an appropriate existing session explicitly:
 `simulink-candidate --package <zip> --target 100 --engine-session 100=<name>`.
