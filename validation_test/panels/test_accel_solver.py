@@ -414,8 +414,9 @@ class TestBHInterpolation:
         # at ten times H_max claimed ten times B_max (26 T for this sample).
         assert interp['mu_chord'](10.0 * H_max) * 10.0 * H_max < 0.5 * 10.0 * B_max
 
-        # H(B) inverts B(H) inside the table, and the differentials are reciprocal.
-        H_probe = inside[::7]
+        # H(B) inverts B(H) inside the table, and the differentials are
+        # reciprocal away from the C0 kink at H_max (one-sided slopes differ).
+        H_probe = interior[::7]
         B_probe = interp['mu_chord'](H_probe) * H_probe
         assert np.allclose(interp['nu_chord'](B_probe) * B_probe, H_probe,
                            rtol=1e-9, atol=1e-9 * H_max)
@@ -432,6 +433,108 @@ class TestBHInterpolation:
             _create_bh_interpolators([[0, 0], [100, 1.0], [100, 1.2]])
         with pytest.raises(ValueError, match="non-decreasing"):
             _create_bh_interpolators([[0, 0], [100, 1.0], [200, 0.9]])
+        # A flat piece has dB/dH = 0, so H(B) and the reluctivity do not exist.
+        with pytest.raises(ValueError, match="not strictly increasing"):
+            _create_bh_interpolators([[0, 0], [1, 0], [2, 1]])
+        with pytest.raises(ValueError, match="not strictly increasing"):
+            _create_bh_interpolators([[0, 0], [100, 1.0], [200, 1.0], [300, 1.5]])
+
+    def test_production_coenergy_is_the_antiderivative_of_the_law(self):
+        """The energy split used by the panel: coenergy = int B dH, energy = BH - coenergy."""
+        import ngsolve as ng
+        from netgen.geom2d import unit_square
+        from scipy.integrate import quad
+        from radia.bh_law import monotone_bh_pchip
+        from radia.scalar_potential_solver import _build_bh_spline_law
+
+        table = np.loadtxt(os.path.join(_repo, "src", "radia", "panels",
+                                        "samples", "em_sample_bh.txt"))
+        H_tab, B_tab = table[:, 0], table[:, 1]
+        law = monotone_bh_pchip(H_tab, B_tab)
+        H_max, B_max = float(H_tab[-1]), float(B_tab[-1])
+
+        def b_exact(h):
+            return float(law(h)) if h <= H_max else B_max + MU_0 * (h - H_max)
+
+        b_of, coenergy_of, _ = _build_bh_spline_law(table)
+        mesh = ng.Mesh(unit_square.GenerateMesh(maxh=0.5))
+        point = mesh(0.5, 0.5)
+        for h in (50.0, 2.0e3, 5.0e4, 3.0e5, 1.0e6, 5.0e6):
+            knots = [k for k in H_tab if k < h] + [h]
+            exact = sum(quad(b_exact, a, b, limit=200)[0] for a, b in zip([0.0] + knots[:-1], knots))
+            assert coenergy_of(ng.CF(h))(point) == pytest.approx(exact, rel=1e-9)
+            assert b_of(ng.CF(h))(point) == pytest.approx(b_exact(h), rel=1e-12)
+        # In saturation 0.5*B*H is neither the energy nor the coenergy.
+        h = 1.0e6
+        coenergy = coenergy_of(ng.CF(h))(point)
+        energy = b_exact(h) * h - coenergy
+        assert abs(0.5 * b_exact(h) * h - energy) > 0.2 * energy
+
+    def test_panel_inverse_law_is_exact_for_small_nonzero_flux_density(self):
+        """H(B) keeps relative accuracy down to tiny B; no absolute-tolerance zero."""
+        sys.path.insert(0, os.path.join(_repo, "src", "radia", "panels"))
+        from calc_accel_magnet import _create_bh_interpolators
+        from radia.bh_law import monotone_bh_pchip
+
+        table = np.loadtxt(os.path.join(_repo, "src", "radia", "panels",
+                                        "samples", "em_sample_bh.txt"))
+        interp = _create_bh_interpolators(table.tolist())
+        law = monotone_bh_pchip(table[:, 0], table[:, 1])
+        mu_initial = interp['mu_r_init'] * MU_0
+        for B in (1e-15, 1e-12, 1e-9, 1e-6, 1e-3, 0.5, 2.0):
+            H = interp['nu_chord'](B) * B
+            assert H > 0.0
+            assert float(law(H)) == pytest.approx(B, rel=1e-12)
+            assert np.isfinite(interp['nu_diff'](B)) and interp['nu_diff'](B) > 0.0
+        # In the initial linear range the chord reluctivity is 1/mu(0).
+        assert interp['nu_chord'](1e-15) == pytest.approx(1.0 / mu_initial, rel=1e-6)
+        assert interp['nu_chord'](0.0) == pytest.approx(1.0 / mu_initial, rel=1e-12)
+
+
+# ============================================================
+# Test: increment solves measured against the system load
+# ============================================================
+class TestIncrementResidualScale:
+
+    @pytest.fixture
+    def poisson(self):
+        from ngsolve import H1, BilinearForm, LinearForm, GridFunction, grad, dx, Mesh
+        from netgen.geom2d import unit_square
+
+        mesh = Mesh(unit_square.GenerateMesh(maxh=0.2))
+        fes = H1(mesh, order=1, dirichlet=".*")
+        u, v = fes.TnT()
+        a = BilinearForm(grad(u) * grad(v) * dx).Assemble()
+        f = LinearForm(1.0 * v * dx).Assemble()
+        return fes, a, f, GridFunction(fes)
+
+    @pytest.mark.parametrize("bad", [float("inf"), float("nan"), 0.0, -1.0])
+    def test_reference_norm_must_be_finite_and_positive(self, poisson, bad):
+        sys.path.insert(0, os.path.join(_repo, "src", "radia", "panels"))
+        from calc_common import apply_fe_inverse
+
+        fes, a, f, gfu = poisson
+        inverse = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
+        with pytest.raises(ValueError, match="finite positive"):
+            apply_fe_inverse(a.mat, inverse, f.vec, gfu.vec, fes.FreeDofs(),
+                             reference_norm=bad)
+
+    def test_inaccurate_increment_fails_against_a_valid_load_scale(self, poisson):
+        sys.path.insert(0, os.path.join(_repo, "src", "radia", "panels"))
+        from calc_common import apply_fe_inverse
+
+        fes, a, f, gfu = poisson
+        exact = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
+        load = f.vec.Norm()
+        # Accurate solve passes against the load scale ...
+        assert apply_fe_inverse(a.mat, exact, f.vec, gfu.vec, fes.FreeDofs(),
+                                reference_norm=load) <= 1e-6
+        # ... a wrong inverse (half the exact one) does not.
+        gfu.vec[:] = 0.0
+        wrong = 0.5 * exact
+        with pytest.raises(RuntimeError, match="true residual"):
+            apply_fe_inverse(a.mat, wrong, f.vec, gfu.vec, fes.FreeDofs(),
+                             reference_norm=load)
 
 
 # ============================================================

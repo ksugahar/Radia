@@ -23,8 +23,14 @@ MU_0 = 4e-7 * np.pi
 NU_0 = 1.0 / MU_0
 
 
-def apply_fe_inverse(matrix, inverse, rhs, solution, free_dofs):
-    """Apply a Dirichlet correction and check the original free-row residual."""
+def apply_fe_inverse(matrix, inverse, rhs, solution, free_dofs, reference_norm=None):
+    """Apply a Dirichlet correction and check the original free-row residual.
+
+    ``reference_norm`` is the load scale for an increment solve: a Newton
+    correction's right-hand side is the current nonlinear residual, which
+    vanishes near convergence, so its residual is measured against the
+    system's own load (the same quantity a full solve is measured against).
+    """
     from ngsolve import Projector
 
     projector = Projector(free_dofs, True)
@@ -35,7 +41,11 @@ def apply_fe_inverse(matrix, inverse, rhs, solution, free_dofs):
     effective_rhs = rhs.CreateVector()
     effective_rhs.data = projector * (rhs - matrix * boundary_lift)
     scale = effective_rhs.Norm()
-    if scale == 0.0:
+    if reference_norm is not None:
+        scale = float(reference_norm)
+        if not (math.isfinite(scale) and scale > 0.0):
+            raise ValueError("reference_norm must be a finite positive load norm")
+    elif scale == 0.0:
         scale = correction_rhs.Norm()
     solution.data += inverse * correction_rhs
     residual = rhs.CreateVector()
