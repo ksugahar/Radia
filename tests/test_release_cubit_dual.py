@@ -162,14 +162,128 @@ def test_wheel_tier_preflight_reads_only_hash_checked_wheel_bytes(tmp_path, tamp
     cfg = dict(contract, schema=dual.SCHEMA, source_sha='a' * 40, target='lab',
                action='preflight', tier='wheel', source_root='', output=str(out),
                wheel_path=str(wheel), dependencies=pins, force_close_cubit=False)
+    # A pre-existing tree under the evidence directory is never removed.
+    foreign = out / 'wheel_payload'
+    foreign.mkdir(parents=True)
+    (foreign / 'keep.txt').write_text('not ours')
     returncode, result = _run_worker(cfg)
     assert result['tier'] == 'wheel'
-    assert not (out / 'wheel_payload').exists()
+    assert (foreign / 'keep.txt').read_text() == 'not ours'
+    assert not list(out.glob('cubit-dual-wheel-*'))
     if tamper:
         assert returncode == 1 and result['passed'] is False
         assert 'Transported wheel differs' in result['error']
     else:
         assert returncode == 0 and result['passed'] is True, result.get('error')
+        assert result['staging_removed'] is True
+
+
+def _pins_or_skip():
+    from importlib import metadata
+    try:
+        return {name: metadata.version(name) for name in ('netgen-mesher', 'ngsolve')}
+    except metadata.PackageNotFoundError:
+        pytest.skip('worker dependency pins need netgen-mesher and ngsolve installed')
+
+
+def test_wheel_tier_rejects_a_member_that_leaves_the_staging_tree(tmp_path):
+    pins = _pins_or_skip()
+    wheel = tmp_path / 'cubit_mesh_export-1.0.2-cp312-cp312-win_amd64.whl'
+    _fake_cubit_wheel(wheel)
+    contract = dual.wheel_contract(wheel)
+    with zipfile.ZipFile(wheel, 'a') as archive:
+        archive.writestr('../escape.txt', b'x')
+    contract['wheel_sha256'] = dual.digest(wheel.read_bytes())
+    out = tmp_path / 'evidence' / 'lab'
+    cfg = dict(contract, schema=dual.SCHEMA, source_sha='a' * 40, target='lab',
+               action='preflight', tier='wheel', source_root='', output=str(out),
+               wheel_path=str(wheel), dependencies=pins, force_close_cubit=False)
+    returncode, result = _run_worker(cfg)
+    assert returncode == 1 and 'Unsafe wheel member path' in result['error']
+    # The owned directory was recorded before extraction failed, so it is
+    # cleaned up and reported without replacing the original error.
+    assert result['staging'] and result['staging_removed'] is True
+    assert 'staging_cleanup_error' not in result
+    assert not (tmp_path / 'evidence' / 'escape.txt').exists()
+    assert not list(out.glob('cubit-dual-wheel-*'))
+
+
+def _installable_fake_wheel(path):
+    """A pip-installable wheel with the contract files (no Cubit, no MCP)."""
+    import base64
+    payload = {'cubit_mesh_export/__init__.py': b'__version__ = "1.0.2"\n',
+               'cubit_mesh_export/install.py': (
+                   b'from pathlib import Path\n'
+                   b'def _find_cubit_dir():\n    return Path(".")\n'
+                   b'def preflight(cubit_dir, verbose=False):\n    return True, []\n')}
+    for file in ('cubit_mesh_export.ccm', 'cubit_mesh_curver.pyd', 'toolbar_smoke.py',
+                 'cubit_gui/toolbar_probe.py', 'cubit_gui/cubit_export_menu.py',
+                 'cubit_gui/cubit_toolbar/toolbars/cubit_mesh_export_toolbar.ttb.tmpl',
+                 'cubit_gui/solver_ready_sample.jou', 'native_payloads.json',
+                 'mcp/server.py', 'mcp/_support/status.py'):
+        payload['cubit_mesh_export/' + file] = b'payload\n'
+    info = 'cubit_mesh_export-1.0.2.dist-info/'
+    payload[info + 'METADATA'] = b'Metadata-Version: 2.1\nName: cubit-mesh-export\nVersion: 1.0.2\n'
+    payload[info + 'WHEEL'] = (b'Wheel-Version: 1.0\nGenerator: test\nRoot-Is-Purelib: false\n'
+                               b'Tag: py3-none-any\n')
+    record = []
+    for name, data in payload.items():
+        digest = base64.urlsafe_b64encode(dual.hashlib.sha256(data).digest()).rstrip(b'=')
+        record.append(f'{name},sha256={digest.decode()},{len(data)}')
+    record.append(info + 'RECORD,,')
+    payload[info + 'RECORD'] = ('\n'.join(record) + '\n').encode()
+    with zipfile.ZipFile(path, 'w') as archive:
+        for name, data in payload.items():
+            archive.writestr(name, data)
+
+
+def test_wheel_tier_verify_accepts_only_the_exact_installed_wheel(tmp_path):
+    """Install the wheel into an isolated venv and run the worker's verify phase."""
+    import subprocess
+    venv = tmp_path / 'venv'
+    subprocess.run([sys.executable, '-m', 'venv', '--system-site-packages', str(venv)],
+                   check=True, timeout=300)
+    python = venv / 'Scripts' / 'python.exe'
+    wheel = tmp_path / 'cubit_mesh_export-1.0.2-py3-none-any.whl'
+    _installable_fake_wheel(wheel)
+    subprocess.run([str(python), '-m', 'pip', 'install', '--no-deps', '--no-index', str(wheel)],
+                   check=True, capture_output=True, timeout=300)
+    import base64
+    import json
+    contract = dual.wheel_contract(wheel)
+    pins = {}
+    for name in ('netgen-mesher', 'ngsolve'):
+        probe = subprocess.run([str(python), '-c',
+                                'import importlib.metadata as m,sys;print(m.version(sys.argv[1]))', name],
+                               capture_output=True, text=True)
+        if probe.returncode:
+            pytest.skip('worker dependency pins need netgen-mesher and ngsolve installed')
+        pins[name] = probe.stdout.strip()
+
+    def verify(installed_wheel_name):
+        out = tmp_path / ('evidence-' + installed_wheel_name)
+        cfg = dict(contract, schema=dual.SCHEMA, source_sha='a' * 40, target='lab',
+                   action='verify', tier='wheel', source_root='', output=str(out),
+                   wheel_path=str(wheel), dependencies=pins, force_close_cubit=False)
+        encoded = base64.b64encode(json.dumps(cfg).encode()).decode()
+        p = subprocess.run([str(python), '-', encoded], input=dual.WORKER, text=True,
+                           capture_output=True, timeout=300)
+        line = [l for l in p.stdout.splitlines() if l.startswith('CUBIT_DUAL_RESULT=')][-1]
+        return json.loads(line.partition('=')[2])
+
+    # The exact wheel passes identity and payload verification; the run then
+    # stops at the MCP self-test that this synthetic wheel cannot provide.
+    result = verify('exact')
+    assert result['installed_payload_verified'] is True, result.get('error')
+    assert result['installed']['direct_url']['archive_info'] is not None
+    assert 'mcp.server' in result['error']
+
+    # A modified installed file is caught by the payload check.
+    site = venv / 'Lib' / 'site-packages' / 'cubit_mesh_export'
+    (site / 'toolbar_smoke.py').write_text('changed\n')
+    result = verify('modified')
+    assert 'installed_payload_verified' not in result
+    assert 'Published wheel/source mismatch: cubit_mesh_export/toolbar_smoke.py' in result['error']
 
 
 def test_wheel_contract_includes_embedded_probe_and_bytes(tmp_path):
