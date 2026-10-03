@@ -66,6 +66,33 @@ def test_remote_candidate_sends_powershell_as_encoded_argument(tmp_path, monkeyp
     assert 'exit $LASTEXITCODE' in scripts[1]
 
 
+@pytest.mark.parametrize("lane", ["simulink", "optuna"])
+def test_lab_acceptance_from_another_controller_reaches_lab(tmp_path, monkeypatch, lane):
+    monkeypatch.setattr(module.platform, "node", lambda: "INTEL11")
+    calls = []
+    marker = 'RADIA_SIMULINK_RELEASE_OK RADIA_OPTUNA_WHEEL_SIMULINK_OK {"status": "passed"}'
+
+    def run(command, **kwargs):
+        calls.append(command)
+        if command[0] == "ssh":
+            assert command[1] == "102"
+            kwargs["stdout"].write(marker.encode())
+        else:
+            assert command[0] == "scp"
+            assert command[-1].startswith("102:")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(module.subprocess, "run", run)
+    if lane == "simulink":
+        passed, _ = module._run_simulink_candidate_target(
+            "lab", tmp_path / "candidate.zip", "a" * 64, "RADIA_SIMULINK_RELEASE_OK")
+    else:
+        passed, _ = module._run_optuna_candidate_target(
+            "lab", tmp_path / "candidate.whl", "a" * 64)
+    assert passed
+    assert calls
+
+
 @pytest.mark.parametrize('schema,marker', [
     ('radia.simulink.library-release-manifest.v4', 'RADIA_SIMULINK_RELEASE_OK'),
     ('radia.simulink.ih-release-manifest.v3', 'RADIA_IH_RELEASE_OK'),

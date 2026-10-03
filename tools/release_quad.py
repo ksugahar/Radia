@@ -174,7 +174,7 @@ OPTUNA_GATE_ROOT = SIMULINK_GATE_ROOT / "radia-optuna"
 OPTUNA_SUCCESS_MARKER = "RADIA_OPTUNA_WHEEL_SIMULINK_OK"
 OPTUNA_WHEEL_RUNNER = REPO / "packages/radia-optuna/tests/run_installed_wheel_simulink.ps1"
 SIMULINK_TARGETS = {
-    "lab": ("LAB", None, "python"),
+    "lab": ("LAB", "102", "python"),
     "100": ("100号機", SSH_100, "python"),
     "mdx1": ("mdx1", SSH_MDX1, "python"),
     "mdx2": ("mdx2", SSH_MDX2, "python"),
@@ -513,6 +513,8 @@ def _run_simulink_candidate_target(
         success_marker: str, engine_session: str | None = None,
         python_executable: str | None = None) -> tuple[bool, str]:
     label, host, python_command = SIMULINK_TARGETS[key]
+    if key == "lab" and platform.node().strip().lower() == "lab":
+        host = None
     if engine_session and engine_session.startswith("com:"):
         error = _local_com_target_error(key, engine_session)
         if error:
@@ -875,6 +877,8 @@ def _run_optuna_candidate_target(
         key: str, wheel: Path, wheel_sha256: str,
         engine_session: str | None = None) -> tuple[bool, str]:
     label, host, python_command = SIMULINK_TARGETS[key]
+    if key == "lab" and platform.node().strip().lower() == "lab":
+        host = None
     if engine_session and engine_session.startswith("com:"):
         error = _local_com_target_error(key, engine_session)
         if error:
@@ -1723,7 +1727,8 @@ def _verify_release_controller(controller, release_sha, version):
         fail(f"release controller {got[:12]} does not descend from the release "
              f"commit {release_sha[:12]}")
         return 4
-    released = run([*git, "show", f"{release_sha}:pyproject.toml"], capture=True, check=False)
+    released = run([*git, "show", f"{release_sha}:pyproject.toml"],
+                   capture=True, check=False, encoding="utf-8")
     try:
         declared = tomllib.loads(released.stdout or "")["project"]["version"]
     except (tomllib.TOMLDecodeError, KeyError, TypeError):
