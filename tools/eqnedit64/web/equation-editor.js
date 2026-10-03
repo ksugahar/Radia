@@ -3770,10 +3770,9 @@
   function composePaletteInsertion(value, start, end, item) {
     if (item[6]) throw new Error(item[6]);
     var snippet = item[1], slot = item[5] || 0;
+    if (snippet.indexOf("\\begin{") >= 0) snippet = prettyTex(snippet);
     if (/^[\^_]\{[^{}]*\}\s*$/.test(snippet))
       return composeInsertion(value, start, end, snippet);
-    if (/^'+$/.test(snippet) && end > start)
-      return composeInsertion(value, end, end, snippet);
     var holes = [], match, pattern = /\{\}|\[\]/g;
     while ((match = pattern.exec(snippet))) holes.push(match.index + 1);
     if (!holes.length) return composeInsertion(value, start, end, snippet);

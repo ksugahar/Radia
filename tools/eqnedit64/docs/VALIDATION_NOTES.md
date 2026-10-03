@@ -1,5 +1,17 @@
 # Eqnedit64 検証記録
 
+## 2026-10-03 3.1.0 font-fix scope clarification
+
+The product-side avoidance of the reproduced CFF/ATM path is accepted only
+within the measured scope recorded in [FONT_DIAGNOSTICS.md](FONT_DIAGNOSTICS.md#accepted-font-fix-scope):
+run 34667023701 passed 96 lifecycle launches and the palette comparison.
+This supersedes the earlier candidate's open product-fix status below. It
+does not repair Windows or an already damaged session and is not a guarantee
+about arbitrary third-party fonts. The integrated signed candidate still
+requires its own applicable acceptance and O: hand test; neither is claimed
+complete here. Historical observations below retain their original dates.
+
+
 ## 2026-09-12: observation gate hardening, not an incident resolution
 
 - The lifecycle probe now refuses acceptance without a session font-host PID
