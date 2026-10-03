@@ -24,6 +24,8 @@ on:
       - 'tools/native_build_provenance.ps1'
       - 'CMakeLists.txt'
       - '.github/workflows/radia-optuna.yml'
+      - 'tools/release_quad.py'
+      - 'tests/test_release_quad_optuna_candidate.py'
   pull_request:
     branches: [main]
     paths:
@@ -46,6 +48,8 @@ on:
       - 'tools/native_build_provenance.ps1'
       - 'CMakeLists.txt'
       - '.github/workflows/radia-optuna.yml'
+      - 'tools/release_quad.py'
+      - 'tests/test_release_quad_optuna_candidate.py'
   workflow_dispatch:
 
 permissions:
@@ -86,6 +90,13 @@ jobs:
           & $env:RADIA_OPTUNA_CI_PYTHON -m pip install build wheel pytest optuna==5.0.0
           & $env:RADIA_OPTUNA_CI_PYTHON -m pytest packages\radia-optuna\tests -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # The independent candidate source and four-host completion contract
+          # lives in tools/release_quad.py; it needs no NGSolve, so the repository
+          # test harness is told explicitly that this is a partial run.
+          $env:RADIA_TESTS_ALLOW_PARTIAL = '1'
+          & $env:RADIA_OPTUNA_CI_PYTHON -m pytest tests\test_release_quad_optuna_candidate.py -q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Remove-Item Env:RADIA_TESTS_ALLOW_PARTIAL
           Push-Location packages\radia-optuna
           try {
             & $env:RADIA_OPTUNA_CI_PYTHON -m build --wheel
