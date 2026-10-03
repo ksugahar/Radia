@@ -147,7 +147,8 @@
       "tests/test_mdx_runner_pool.py"
     ],
     "tools/verify_simulink_release.py": [
-      "tests/test_simulink_release_package.py"
+      "tests/test_simulink_release_package.py",
+      "tests/test_release_quad_optuna_candidate.py"
     ],
     "tools/verify_lab_editable.py": [
       "tests/test_editable_daily_check.py"

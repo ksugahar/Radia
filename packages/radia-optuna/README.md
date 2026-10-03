@@ -165,6 +165,16 @@ pwsh -File packages/radia-optuna/tests/run_installed_wheel_simulink.ps1 `
   -Wheel <wheel> -EvidenceOutput C:\temp\radia-optuna-installed.json
 ```
 
+MATLAB runs through the MATLAB Engine for Python, which the runner installs
+into its isolated venv from that MATLAB's own `extern\engines\python` and
+records in the evidence; the acceptance runs in a function workspace. With
+`-EngineSession <name>` the runner reuses that shared session after a PID check
+and restores its path, folder and environment without quitting it; it refuses a
+session with loaded diagrams or Radia/Optuna MEX. Without it, the runner starts
+one dedicated session only when the host has no MATLAB process and no shared
+Engine, and fails before launch otherwise. `release_quad optuna-candidate`
+accepts the same choice per target as `--engine-session HOST=NAME`.
+
 This evidence includes source-fidelity verification, the installed doctor,
 standalone Simulink success and typed-failure paths, and all seven persisted
 tables after MAT reload. Shared Study/Trial MCP operations remain upstream.

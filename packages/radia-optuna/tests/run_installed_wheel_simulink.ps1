@@ -4,7 +4,13 @@ param(
     [string]$MatlabExecutable = 'matlab',
     [string]$PythonExecutable = 'python',
     [string]$EvidenceOutput = '',
-    [string]$PreverifiedWheelSha256 = ''
+    [string]$PreverifiedWheelSha256 = '',
+    # An explicitly shared MATLAB Engine to reuse (never quit). Without it a
+    # dedicated session is started only when no MATLAB process or shared
+    # Engine exists; an existing MATLAB without a selected session refuses.
+    [string]$EngineSession = '',
+    # The solver release Engine worker that owns this policy.
+    [string]$EngineWorker = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -72,16 +78,62 @@ try {
     $testDirectoryLiteral = ConvertTo-MatlabLiteral $testDirectory
     $simulinkEvidencePath = Join-Path $resolvedRunRoot 'simulink-evidence.json'
     $simulinkEvidenceLiteral = ConvertTo-MatlabLiteral $simulinkEvidencePath
-    $batch = "restoredefaultpath; addpath('$matlabPathLiteral'); addpath('$testDirectoryLiteral'); result=test_standalone_simulink('$matlabPathLiteral'); assert(result.ok); fileId=fopen('$simulinkEvidenceLiteral','w'); assert(fileId>=0); cleanupFile=onCleanup(@()fclose(fileId)); fprintf(fileId,'%s\n',jsonencode(result,PrettyPrint=true)); clear cleanupFile;"
+    # A dedicated session starts from the default path. A borrowed session
+    # keeps its caller's path (the worker restores it afterwards) because
+    # restoredefaultpath would cut that session's own MCP/tool functions;
+    # the candidate directories are prepended so they take precedence. The
+    # acceptance runs in a function workspace, leaving base variables alone.
+    $pathReset = if ($EngineSession) { '' } else { 'restoredefaultpath; ' }
+    $batch = "${pathReset}addpath('$matlabPathLiteral','-begin'); addpath('$testDirectoryLiteral','-begin'); run_installed_wheel_acceptance('$matlabPathLiteral','$simulinkEvidenceLiteral');"
+
+    # MATLAB runs through the solver release Engine worker, which reuses only
+    # the selected shared session (PID-checked, with path, folder and
+    # environment restored and no loaded diagrams or Radia/Optuna MEX), or
+    # owns one new session when no MATLAB process or shared Engine exists.
+    if (-not $EngineWorker) {
+        $EngineWorker = Join-Path $PSScriptRoot '..\..\..\tools\verify_simulink_release.py'
+    }
+    if (-not (Test-Path -LiteralPath $EngineWorker -PathType Leaf)) {
+        throw "MATLAB Engine worker is missing: $EngineWorker"
+    }
+    $matlabCommand = (Get-Command -Name $MatlabExecutable -CommandType Application -ErrorAction Stop |
+        Select-Object -First 1).Source
+    $matlabRoot = Split-Path -Parent (Split-Path -Parent $matlabCommand)
+
+    # The worker runs in the isolated venv with the Engine that ships with
+    # this MATLAB, never a system interpreter's Engine. Pip builds a local
+    # directory in place, so build from a copy, not the MATLAB installation.
+    $engineSource = Join-Path $matlabRoot 'extern\engines\python'
+    if (-not (Test-Path -LiteralPath (Join-Path $engineSource 'setup.py') -PathType Leaf)) {
+        throw "MATLAB Engine for Python source is missing: $engineSource"
+    }
+    $engineBuild = Join-Path $resolvedRunRoot 'matlab-engine-source'
+    Copy-Item -LiteralPath $engineSource -Destination $engineBuild -Recurse
+    & $venvPython -m pip install --disable-pip-version-check $engineBuild
+    if ($LASTEXITCODE -ne 0) { throw "Installing the MATLAB Engine failed with exit code $LASTEXITCODE" }
+    $engineVersion = (& $venvPython -c 'import importlib.metadata as m, matlab.engine; print(m.version("matlabengine"))' | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $engineVersion) {
+        throw "The isolated venv cannot import matlab.engine"
+    }
+    $engineEvidence = [ordered]@{
+        distribution = 'matlabengine'
+        version = $engineVersion
+        source = $engineSource
+        interpreter = $venvPython
+        session = if ($EngineSession) { $EngineSession } else { $null }
+        ownership = if ($EngineSession) { 'borrowed' } else { 'owned' }
+    }
+    $workerArguments = @('-X', 'utf8', '-s', $EngineWorker, '--engine-worker', $matlabRoot, $batch)
+    if ($EngineSession) { $workerArguments += $EngineSession }
 
     # MathWorks' online license service can transiently reject an otherwise
-    # valid batch start with error 5202. Retry only that startup failure; a
-    # MATLAB assertion, numerical mismatch, or any other error still fails on
-    # the first attempt.
-    $matlabLog = Join-Path $resolvedRunRoot 'matlab-batch.log'
-    $maxMatlabAttempts = 3
+    # valid start with error 5202. Retry only that failure, and only for an
+    # owned session; a borrowed session, a MATLAB assertion, numerical
+    # mismatch, or any other error still fails on the first attempt.
+    $matlabLog = Join-Path $resolvedRunRoot 'matlab-engine.log'
+    $maxMatlabAttempts = if ($EngineSession) { 1 } else { 3 }
     for ($attempt = 1; $attempt -le $maxMatlabAttempts; $attempt++) {
-        & $MatlabExecutable -batch $batch 2>&1 | Tee-Object -FilePath $matlabLog
+        & $venvPython @workerArguments 2>&1 | Tee-Object -FilePath $matlabLog
         $matlabExitCode = $LASTEXITCODE
         if ($matlabExitCode -eq 0) { break }
 
@@ -92,7 +144,7 @@ try {
         }
 
         $delaySeconds = 10 * $attempt
-        Write-Warning "MathWorks license service returned 5202; retrying the same MATLAB batch command in $delaySeconds seconds (attempt $($attempt + 1)/$maxMatlabAttempts)."
+        Write-Warning "MathWorks license service returned 5202; retrying the same MATLAB Engine command in $delaySeconds seconds (attempt $($attempt + 1)/$maxMatlabAttempts)."
         Start-Sleep -Seconds $delaySeconds
     }
     $simulinkEvidence = Get-Content -LiteralPath $simulinkEvidencePath -Raw |
@@ -102,6 +154,7 @@ try {
         ok = $true
         wheel_verification = $wheelVerification
         doctor = $doctorEvidence
+        matlab_engine = $engineEvidence
         simulink_e2e = $simulinkEvidence
         table_resume = $simulinkEvidence.table_resume
     }

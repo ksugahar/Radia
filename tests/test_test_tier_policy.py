@@ -74,3 +74,9 @@ def test_release_gate_contracts_do_not_trigger_optuna_rebuilds():
         assert 'Build.ps1' in events[event]['paths']
     manifest = json.loads((ROOT / 'tests/test_tier_manifest.json').read_text())
     assert contract in manifest['profiles']['fast-contracts']['paths']
+    # The installed-wheel route runs MATLAB through the solver Engine worker;
+    # a worker change reruns the Optuna contract without a wheel rebuild.
+    worker = 'tools/verify_simulink_release.py'
+    assert contract in manifest['impact_rules'][worker]
+    for event in ('push', 'pull_request'):
+        assert worker not in events[event]['paths']

@@ -1,8 +1,9 @@
 function result = test_standalone_simulink(installedMatlabPath)
 %TEST_STANDALONE_SIMULINK Exercise Simulink using only an installed wheel.
 %
-% The caller must run restoredefaultpath before adding installedMatlabPath and
-% this test folder.  This test deliberately builds a scratch model rather
+% The caller puts installedMatlabPath and this test folder first on the path;
+% every entry point below must then resolve inside the installed wheel, or
+% the test fails.  This test deliberately builds a scratch model rather
 % than relying on a Radia model or on the monorepo MATLAB tree.
 
 arguments
