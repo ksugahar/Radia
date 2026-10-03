@@ -16,8 +16,14 @@ crystallized as its own package.
   tag (or a checkout named by `--release-source`), LAB and 100号機's release
   runtime are verified exact wheels, 100号機's development venv is the
   editable source, and `done` changes no runtime.
-- `ngsolve` knowledge: the stale-CoefficientFunction note names the
-  generic `state_cf` instead of a removed example identifier.
+- `ngsolve` knowledge: the GridFunction-snapshot trap is illustrated with a
+  generic iteration instead of a retired reduction recurrence and its stage
+  results, and the tree-cotree table counts Krylov iterations before the
+  gradient-kernel breakdown.
+- `maglev` knowledge and server descriptions: the 3D sample-fit route is
+  described as an AAA + NNLS Foster fit of the per-frequency solve, and Foster
+  poles are compared only with other pole or eigenvalue sets; retired
+  recurrence wording is removed.
 
 ### Fixed
 
