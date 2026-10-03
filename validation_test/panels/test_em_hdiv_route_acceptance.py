@@ -2,7 +2,7 @@
 
 ``calc_accel_hdiv.solve_hdiv`` is what the Simulink Electromagnet block runs
 for the HDiv-VIM method.  It must report the solver's own convergence data
-(not placeholders) and say which panel options the HDiv route does not use.
+(not placeholders) and must not accept FEM iteration options it cannot apply.
 The independent reference is ``radia.vim.Solve`` called directly on the same
 mesh, B-H table and coil field; the soft iron must also strengthen the coil
 field at a nearby point.
@@ -72,22 +72,15 @@ def test_hdiv_panel_reports_the_production_solve(tmp_path, current):
         coil_script=str(coil),
         vol_file=str(vol),
         mat=material,
-        solver=2,
-        max_iter=30,
-        tol=1e-3,
-        relax=0.3,
     )
     assert "error" not in result, result.get("error")
     assert result["converged"] is True
     assert result["residual_kind"] == "nonlinear_final_relative_residual"
     assert result["residual"] is not None and result["residual"] > 0.0
     assert result["residual"] <= result["residual_tolerance"]
-    assert result["panel_options_not_applied"] == {
-        "solver": "HACApK",
-        "max_iter": 30,
-        "tol": 1e-3,
-        "relax": 0.3,
-    }
+    assert result["convergence_contract"] == "radia.vim.Solve defaults (HDiv-VIM)"
+    with pytest.raises(TypeError):
+        solve_hdiv(coil_script=str(coil), vol_file=str(vol), mat=material, tol=1e-3)
 
     # Independent reference: the production solve on the same inputs.
     import radia.vim as vim

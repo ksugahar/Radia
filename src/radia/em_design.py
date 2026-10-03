@@ -28,8 +28,9 @@ EM_METHODS = (
 )
 
 FEM_SOLVERS = ("auto", "sparsecholesky", "bddc_ams", "bddc", "iccg")
-HDIV_SOLVERS = (("LU", 0), ("BiCGSTAB", 1), ("HACApK", 2))
 MATERIALS = ("steel", "copper", "aluminum", "elf_steel", "linear", "hysteresis")
+# Options of the Omega/A-Phi FEM iteration that the HDiv-VIM route cannot apply.
+_FEM_ONLY_OPTIONS = ("n_steps", "max_iter", "tol", "relax", "newton", "solver")
 
 
 @dataclass(slots=True)
@@ -50,7 +51,6 @@ class EMDesignSpec:
     newton: bool = False
     solver: str = "auto"
     ima: str = ""
-    hdiv_solver: int = 0
     demag_backend: str = "hdiv"
     kelvin_mu_r: str = "100"
     h0: str = "1.0"
@@ -70,10 +70,12 @@ class EMDesignSpec:
                 "max_iter", "tol", "relax", "newton", "solver",
             })
         elif self.method == METHOD_HDIV:
+            # HDiv-VIM owns its solver and convergence contract
+            # (radia.vim.Solve); the FEM iteration options do not apply.
             fields.update({
                 "vol", "coil_script", "material", "sigma", "mu_r",
-                "bh_file", "hys_file", "fes_order", "ima", "hdiv_solver",
-                "demag_backend", "max_iter", "tol", "relax",
+                "bh_file", "hys_file", "fes_order", "ima",
+                "demag_backend",
             })
         elif self.method == METHOD_KELVIN_BENCH:
             fields.update({
@@ -144,17 +146,25 @@ class EMDesignSpec:
     def _build_hdiv_command(self, py: str, panels_dir) -> list[str]:
         if not self.coil_script:
             raise ValueError("No coil script specified.")
+        # HDiv-VIM owns its solver and convergence contract; an explicitly
+        # changed FEM iteration option would otherwise be dropped silently.
+        changed = [
+            name for name in _FEM_ONLY_OPTIONS
+            if getattr(self, name) != EMDesignSpec.__dataclass_fields__[name].default
+        ]
+        if changed:
+            raise ValueError(
+                "HDiv-VIM does not apply the FEM options "
+                + ", ".join(changed)
+                + "; its convergence contract is radia.vim.Solve's. Reset them "
+                "or choose the Omega or A-Phi method.")
         stem = self.vol or self.coil_script
         cmd = [
             py,
             calc_script("calc_accel_hdiv.py", panels_dir),
             "--coil-script", self.coil_script,
-            "--solver", str(self.hdiv_solver),
             "--hdiv-order", str(self.fes_order),
             "--demag-backend", self.demag_backend,
-            "--max-iter", str(self.max_iter),
-            "--tol", str(self.tol),
-            "--relax", str(self.relax),
             "--msh-output", msh_output(stem, "_hdiv"),
             "--output", json_output(stem, "_hdiv"),
         ]

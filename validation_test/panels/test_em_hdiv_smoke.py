@@ -68,15 +68,36 @@ def test_hdiv_material_modes_parse(material, mu_r, bh_file, hys_file):
     assert rc == 0, f"argparse rejected the HDiv-VIM panel command:\n{err}"
 
 
-def test_hdiv_solver_choice_argparse():
+def test_hdiv_command_does_not_offer_fem_iteration_options():
+    """HDiv-VIM owns its solver and convergence contract (radia.vim.Solve).
+
+    The DesignSpec must not expose or send options the route cannot apply,
+    and the CLI must reject them instead of ignoring them.
+    """
     spec = _hdiv_spec()
-    for solver_id in (0, 1, 2):
-        spec.hdiv_solver = solver_id
-        cmd = spec.build_command(python=sys.executable)
-        assert "--solver" in cmd
-        assert cmd[cmd.index("--solver") + 1] == str(solver_id)
-        rc, err = _argparse_dry_run(cmd)
-        assert rc == 0, f"argparse rejected solver {solver_id}:\n{err}"
+    assert not {"max_iter", "tol", "relax", "hdiv_solver"} & spec.visible_fields()
+    cmd = spec.build_command(python=sys.executable)
+    for flag in ("--solver", "--max-iter", "--tol", "--relax"):
+        assert flag not in cmd
+    rc, err = _argparse_dry_run(cmd)
+    assert rc == 0, err
+    for extra in (["--solver", "2"], ["--max-iter", "30"], ["--tol", "1e-3"],
+                  ["--relax", "0.3"]):
+        proc = subprocess.run(cmd + extra, capture_output=True, text=True, timeout=60)
+        assert proc.returncode == 2, (extra, proc.stderr)
+        assert "unrecognized arguments" in proc.stderr
+
+
+@pytest.mark.parametrize("name,value", [
+    ("tol", "1e-9"), ("max_iter", 200), ("relax", "0.0"), ("newton", True),
+    ("solver", "iccg"), ("n_steps", 4),
+])
+def test_hdiv_spec_rejects_an_explicit_fem_option(name, value):
+    """A changed FEM option is an error for HDiv-VIM, never silently dropped."""
+    spec = _hdiv_spec()
+    setattr(spec, name, value)
+    with pytest.raises(ValueError, match=name):
+        spec.build_command(python=sys.executable)
 
 
 def test_hdiv_fes_order_reaches_cli():
