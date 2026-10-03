@@ -111,6 +111,16 @@ The candidate is the exact successful-main wheel. Bind its SHA256, source SHA,
 version, CI run, and all declared target results before tagging and publishing.
 Do not run solver Phase 8 or install other distributions.
 
+Each target runs MATLAB through the same Engine worker as the Simulink gate
+below. The runner's isolated venv installs `matlabengine` matching that host's
+MATLAB version from PyPI and refuses an Engine bound to another MATLAB root.
+Without a session it starts MATLAB only when the host has no MATLAB process
+or shared Engine; otherwise it fails before launch. Name an existing shared
+session per target with `--engine-session <target>=<name>` (repeatable). That
+session is PID-checked, refused with loaded diagrams or Radia/Optuna MEX, keeps
+its path and base workspace, and is not quit. The state records each target's
+`engine_session`.
+
 ## Radia exact-artifact publication hold
 
 Radia tag builds do not automatically publish to PyPI. Accept the exact tag-CI
