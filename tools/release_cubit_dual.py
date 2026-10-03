@@ -135,7 +135,33 @@ profile_scope = ['--all-users'] if cfg['target'] == '100' else []
 result['profile_scope'] = profile_scope
 tier = cfg['tier']
 result['tier'] = tier
-staging = out / 'wheel_payload'
+staging = None  # created fresh by this worker; never a pre-existing tree
+
+def create_owned():
+    # A new directory owned by this run, recorded before anything can fail.
+    import tempfile
+    if any(p.is_symlink() or p.is_junction() for p in (out, *out.parents)):
+        raise RuntimeError('Evidence directory path contains a link: ' + str(out))
+    return Path(tempfile.mkdtemp(prefix='cubit-dual-wheel-', dir=out)).resolve()
+
+def extract_into(wheel, target):
+    # Members may not leave the owned directory.
+    with zipfile.ZipFile(wheel) as archive:
+        for member in archive.namelist():
+            destination = (target / member).resolve()
+            if member.startswith(('/', '\\')) or ':' in member or target not in destination.parents:
+                raise RuntimeError('Unsafe wheel member path: ' + member)
+        archive.extractall(target)
+    return target
+
+def remove_owned(path):
+    entries = [path, *path.rglob('*')]
+    if any(p.is_symlink() or p.is_junction() for p in entries):
+        raise RuntimeError('Staging contains a link; left in place: ' + str(path))
+    shutil.rmtree(path)
+    if path.exists():
+        raise RuntimeError('Staging cleanup failed: ' + str(path))
+
 before = preserved()
 try:
     if tier == 'editable':
@@ -154,10 +180,9 @@ try:
         wheel = Path(cfg['wheel_path']).resolve()
         if hashlib.sha256(wheel.read_bytes()).hexdigest() != cfg['wheel_sha256']:
             raise RuntimeError('Transported wheel differs from the published wheel')
-        if staging.exists():
-            shutil.rmtree(staging)
-        with zipfile.ZipFile(wheel) as archive:
-            archive.extractall(staging)
+        staging = create_owned()
+        result['staging'] = str(staging)
+        extract_into(wheel, staging)
         verify_files(staging, cfg['files'])
         installer_path = staging / 'cubit_mesh_export/install.py'
     else:
@@ -230,7 +255,8 @@ try:
                     or 'archive_info' not in direct_url
                     or not str(direct_url.get('url', '')).endswith(Path(cfg['wheel_path']).name)):
                 raise RuntimeError('Not installed from the exact wheel: ' + str(identity))
-            if (root is not None and root in imported.parents) or staging in imported.parents:
+            if ((root is not None and root in imported.parents)
+                    or (staging is not None and staging in imported.parents)):
                 raise RuntimeError('Wheel tier imports a source or staging copy: ' + str(identity))
             # Every packaged file in the live installation equals the wheel.
             verify_files(imported.parent.parent, cfg['files'])
@@ -255,12 +281,19 @@ try:
 except Exception as exc:
     result['error'] = repr(exc)
 finally:
-    if staging.exists():
-        shutil.rmtree(staging)
+    if staging is not None:
+        # A cleanup problem is recorded beside, never instead of, the outcome.
+        try:
+            remove_owned(staging)
+            result['staging_removed'] = True
+        except Exception as cleanup_exc:
+            result['staging_removed'] = False
+            result['staging_cleanup_error'] = repr(cleanup_exc)
     result['preserved_before'] = before
     result['preserved_after'] = preserved()
     result['unrelated_packages_unchanged'] = before == result['preserved_after']
-    result['passed'] = result['passed'] and result['unrelated_packages_unchanged']
+    result['passed'] = (result['passed'] and result['unrelated_packages_unchanged']
+                        and result.get('staging_removed', True))
     result['events'] = events
     (out / (cfg['action'] + '.json')).write_text(json.dumps(result, indent=2), encoding='utf-8')
     print('CUBIT_DUAL_RESULT=' + json.dumps(result))
