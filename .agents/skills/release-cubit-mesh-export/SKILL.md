@@ -26,8 +26,9 @@ on mdx1/mdx2.
   stdio hangs; with inherited stdio it works. So run the orchestrator **from
   100** (`--run-from 100`) when driving both hosts over ssh; from LAB it only
   works in LAB's interactive session.
-- In remote pwsh command strings avoid the text `Remove-Item` (the local
-  command guard blocks the whole call); use `[IO.File]::Delete(...)`.
+- Use native PowerShell file operations with explicit, verified paths. If
+  approval review rejects a deletion, report the rejection; do not retry
+  through another API or shell to bypass it.
 
 ## 1. Release (version N)
 
