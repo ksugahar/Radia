@@ -223,6 +223,8 @@ def test_nonlinear_reduced_surface_flux_matches_the_volume_load(nonlinear_case, 
 ])
 def test_auto_source_load_prefers_the_gated_surface_route_for_bh_iron(monkeypatch, case, expected):
     """Default loads: gated surface flux for B-H iron under total_hodge, volume otherwise."""
+    import warnings
+
     import radia.kelvin_solver as kelvin
     from radia.static_electromagnet import (
         StaticElectromagnetMixedDomain, solve_static_electromagnet_mixed_total_reduced_omega)
@@ -235,7 +237,7 @@ def test_auto_source_load_prefers_the_gated_surface_route_for_bh_iron(monkeypatc
     def hodge(mesh, H_s, materials, *, source_load, tangential_tolerance, **kwargs):
         calls.append(source_load)
         if case == "bh_gate_fails" and source_load == "surface_flux":
-            raise RuntimeError("surface_flux Hodge projection: boundary tangential residual 0.2")
+            raise kelvin.SurfaceFluxGateFailed(0.2, tangential_tolerance)
         assert (tangential_tolerance is not None) == (source_load == "surface_flux")
         return {"potential": 0.0, "harmonic_field": None, "relative_harmonic_norm": None,
                 "bonus_intorder": 4}
@@ -252,11 +254,50 @@ def test_auto_source_load_prefers_the_gated_surface_route_for_bh_iron(monkeypatc
     material = ({"linear_mu_r_by_material": {"iron": 100.0}} if case == "linear"
                 else {"bh_table": [[0.0, 0.0], [1.0, 1.0]]})
     tolerance = None if case == "bh_no_tolerance" else 0.05
-    with pytest.raises(Stop):
+    with warnings.catch_warnings(record=True) as caught, pytest.raises(Stop):
+        warnings.simplefilter("always")
         solve_static_electromagnet_mixed_total_reduced_omega(
             _mesh(0.6), ng.CF((0.0, 0.0, 1.0)), domain, 1.0, (0.0, 0.0, 0.0), order=1,
             source_potential_contract="total_hodge", source_trace_tolerance=tolerance, **material)
     assert calls == expected
+    # The fallback is never silent: it warns with the measured gate.
+    fallback = [w for w in caught if "selected 'volume'" in str(w.message)]
+    if case == "bh_gate_fails":
+        assert len(fallback) == 1 and issubclass(fallback[0].category, RuntimeWarning)
+        assert "2.000e-01 exceeds 5.000e-02" in str(fallback[0].message)
+    else:
+        assert fallback == []
+
+
+@pytest.mark.parametrize("explicit, error", [
+    ("surface_flux", "gate"),       # an explicit request never falls back
+    ("auto", "other_runtime"),      # only the typed gate failure selects the volume load
+])
+def test_source_load_fallback_is_limited_to_the_auto_gate(monkeypatch, explicit, error):
+    import radia.kelvin_solver as kelvin
+    from radia.static_electromagnet import (
+        StaticElectromagnetMixedDomain, solve_static_electromagnet_mixed_total_reduced_omega)
+
+    calls = []
+
+    def hodge(mesh, H_s, materials, *, source_load, tangential_tolerance, **kwargs):
+        calls.append(source_load)
+        if error == "gate":
+            raise kelvin.SurfaceFluxGateFailed(0.2, tangential_tolerance)
+        raise RuntimeError("surface_flux Hodge projection: boundary tangential residual 0.2")
+
+    monkeypatch.setattr(kelvin, "project_source_total_hodge", hodge)
+    monkeypatch.setattr(StaticElectromagnetMixedDomain, "validate_mesh_labels",
+                        lambda self, *args: None)
+    domain = StaticElectromagnetMixedDomain(
+        reduced_materials=("air",), total_materials=("iron", "kelvin"), nonlinear_materials=("iron",))
+    expected = kelvin.SurfaceFluxGateFailed if error == "gate" else RuntimeError
+    with pytest.raises(expected):
+        solve_static_electromagnet_mixed_total_reduced_omega(
+            _mesh(0.6), ng.CF((0.0, 0.0, 1.0)), domain, 1.0, (0.0, 0.0, 0.0), order=1,
+            source_potential_contract="total_hodge", source_trace_tolerance=0.05,
+            total_source_load=explicit, bh_table=[[0.0, 0.0], [1.0, 1.0]])
+    assert calls == ["surface_flux"]
 
 
 def test_surface_flux_hodge_refuses_a_linked_source():

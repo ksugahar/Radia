@@ -317,6 +317,7 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
     trace_source_h = source_h if reduced_load_h is None else reduced_load_h
 
     from radia.kelvin_solver import (
+        SurfaceFluxGateFailed,
         project_source_total_hodge,
         project_source_physical_potential,
         project_source_interface_potential,
@@ -373,12 +374,24 @@ def solve_static_electromagnet_mixed_total_reduced_omega(
 
         try:
             source_hodge = hodge(total_source_load)
-        except RuntimeError as exc:
-            # An auto request falls back only on the gate itself: a source
-            # that links the iron needs the volume harmonic remainder.
-            if not (total_auto and "boundary tangential residual" in str(exc)):
+        except SurfaceFluxGateFailed as exc:
+            # The documented auto contract: a source that links the iron is
+            # not representable by the surface load, so the general volume
+            # load (which keeps the harmonic remainder) is used instead.  The
+            # selection, its reason and the measured gate are recorded, and
+            # a warning is emitted; an explicit surface_flux request raises.
+            if not total_auto:
                 raise
-            load_selection["total_fallback"] = str(exc)
+            import warnings
+
+            load_selection["total_fallback"] = {
+                "reason": "surface_flux tangential gate failed (source not exact on the iron)",
+                "relative_tangential_residual": exc.relative_residual,
+                "tolerance": exc.tolerance,
+                "selected": "volume",
+            }
+            warnings.warn(f"total_source_load='auto' selected 'volume': {exc}",
+                          RuntimeWarning, stacklevel=2)
             total_source_load = "volume"
             source_hodge = hodge(total_source_load)
         # The exact pulled-back exterior source needs no interface trace at
