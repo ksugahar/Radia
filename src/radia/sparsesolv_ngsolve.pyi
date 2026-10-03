@@ -252,7 +252,8 @@ def SparseSolvSolver(
         save_best_result: Return best iterate incl. initial guess (default: True).
         save_residual_history: Record residual per iteration (default: False).
         printrates: Print convergence info to stdout (default: False).
-        conjugate: Conjugated inner product for Hermitian systems (default: False).
+        conjugate: Conjugated inner product for CG only (default: False).
+            ICCG and COCR reject True.
         use_abmc: Enable ABMC parallel ordering (default: False).
         abmc_block_size: Rows per ABMC block (default: 4).
         abmc_num_colors: Target ABMC colors (default: 4).

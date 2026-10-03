@@ -75,7 +75,7 @@ def test_lab_acceptance_from_another_controller_reaches_lab(tmp_path, monkeypatc
     def run(command, **kwargs):
         calls.append(command)
         if command[0] == "ssh":
-            assert command[1] == "102"
+            assert command[command.index("pwsh") - 1] == "102"
             kwargs["stdout"].write(marker.encode())
         else:
             assert command[0] == "scp"
