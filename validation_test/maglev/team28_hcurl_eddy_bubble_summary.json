@@ -1,13 +1,13 @@
 {
   "schema": "radia.team28.hcurl-eddy-bubble-acceptance.v1",
-  "generated_at_utc": "2026-09-28T11:57:47.891738+00:00",
+  "generated_at_utc": "2026-10-03T09:53:39.793950+00:00",
   "runtime": {
-    "hostname": "intel11",
+    "hostname": "mdx1",
     "python_version": "3.12.10",
-    "platform": "Windows-2022Server-10.0.20348-SP0",
-    "radia_version": "5.0.2",
-    "ngsolve_version": "6.2.2606",
-    "elapsed_seconds_lab_smoke": 0.3337753000087105
+    "platform": "Windows-11-10.0.26200-SP0",
+    "radia_version": "5.2.2",
+    "ngsolve_version": "6.2.2607",
+    "elapsed_seconds_lab_smoke": 0.46258059999672696
   },
   "problem": {
     "name": "TEAM Workshop Problem 28",
@@ -127,22 +127,22 @@
       "candidate": "full-fem",
       "reference": "reference",
       "sample_count": 25,
-      "max_abs_error_N": 0.0004655511338810814,
-      "rms_error_N": 0.00022707960377367162,
-      "max_abs_error_normalized": 7.075890413731973e-05
+      "max_abs_error_N": 0.00046555113388091485,
+      "rms_error_N": 0.00022707960377333104,
+      "max_abs_error_normalized": 7.075890413729441e-05
     },
     "foster_family_file": "team28_coilbuilder_height_family_results.json",
     "foster_family_vs_full_fem": {
       "candidate": "hcurl-foster-family-physical-time-average",
       "reference": "full-fem-physical-time-average",
       "sample_count": 25,
-      "max_abs_error_N": 0.02687220267949808,
-      "rms_error_N": 0.009255915545796746,
-      "max_abs_error_normalized": 0.008169937318232451
+      "max_abs_error_N": 0.026872202679498525,
+      "rms_error_N": 0.00925591554579674,
+      "max_abs_error_normalized": 0.008169937318232586
     },
-    "equilibrium_dz_m": 0.00023940798736756888,
-    "equilibrium_abs_height_m": 0.011039407987367569,
-    "published_steady_height_m": 0.0115
+    "equilibrium_dz_m": 0.0002394079873675703,
+    "equilibrium_abs_height_m": 0.01103940798736757,
+    "published_stationary_height_m": 0.0113
   },
   "reduced_mode_summary": {
     "parent_ndof": 22814,
@@ -182,7 +182,7 @@
     "foster_family_lift_matches_full_fem_below_2_percent_of_peak": true,
     "foster_family_passed_its_own_gates": true,
     "physical_equilibrium_found": true,
-    "physical_equilibrium_within_10_percent_of_11p5mm": true,
+    "physical_equilibrium_within_10_percent_of_published_11p3mm": true,
     "fixed_position_3d_hcurl_vim_force_passed": true
   },
   "structural_and_reference_acceptance_passed": true,

@@ -1,7 +1,7 @@
 {
   "schema": "radia.team28-reference-regression.v1",
-  "created_at_utc": "2026-10-03T08:51:25.454636+00:00",
-  "host": "mdx2",
+  "created_at_utc": "2026-10-03T09:53:29.376039+00:00",
+  "host": "mdx1",
   "python": "3.12.10",
   "packages": {
     "radia": "5.2.1",
@@ -13,12 +13,12 @@
   "threads": 2,
   "command": "python -m pytest -q tests/test_team28_golden.py tests/test_team28_arnoldi_golden.py",
   "exit_code": 0,
-  "elapsed_s": 7.95999539992772,
+  "elapsed_s": 9.89258810004685,
   "input_sha256": {
     "tests/test_team28_golden.py": "00581e8a324283cc208c86f093a0ceb56fcd49264ad46e52c22b368904898aa4",
-    "tests/test_team28_arnoldi_golden.py": "63ecc25c4727b4646bc660897e4441235098b7ff93c8cc62fe71001688d2b33a",
+    "tests/test_team28_arnoldi_golden.py": "f9ff13f0e4a30d70c257ca938cd82b9aab3e5cc04152e1e3e283f4a0ecec31da",
     "docs/maglev/demos/team28/team28_axisym_fem.py": "d07fdc10148331a2bc15150f758d1f0741babb9a962c9ca7bad8d2ac3e472f2a",
-    "docs/maglev/demos/team28/team28_arnoldi_force.py": "24d62ebf9bdae61d7501014d9287a4d11ec6be12d33c2ea3c2a561a7eeb828bb",
+    "docs/maglev/demos/team28/team28_arnoldi_force.py": "974be73f6ccc28568b65940a29e07d7fbb13c8003adfe412787c536e6d7b45c1",
     "validation_test/maglev/team28_reference.json": "9c1276d3d9d0500676f722e9bc282918227b45c50ebbdb8459a57f8d73bd027e"
   },
   "scope": "Exact Python source hashes; NGSolve axisymmetric full FEM versus the lab ground truth and the Arnoldi-Galerkin reduction at dZ = 0. No Radia native kernel, Cubit, transient motion acceptance or editable change."

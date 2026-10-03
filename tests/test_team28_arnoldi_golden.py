@@ -24,18 +24,18 @@ sys.path.insert(0, _TEAM28)
 @pytest.fixture(scope="module")
 def forces():
     from team28_arnoldi_force import arnoldi_forces  # noqa: E402
-    fz_full, stage_forces = arnoldi_forces(max_stage=6)
-    return fz_full, stage_forces
+    fz_full, order_forces = arnoldi_forces(max_order=6)
+    return fz_full, order_forces
 
 
 def test_arnoldi_converges_to_full(forces):
     fz_full, sf = forces
-    assert len(sf) >= 5, "expected at least 5 Arnoldi stages"
+    assert len(sf) >= 5, "expected at least order 5"
     err = [abs(f - fz_full) / abs(fz_full) for f in sf]
-    # stage 1 is the eddy-free DC response -> large error
+    # order 1 is the eddy-free DC response -> large error
     assert err[0] > 0.5
-    # convergence: by stage 3 within 1%, by stage 5 within 0.05%
-    assert err[2] < 0.01, f"stage 3 rel err {err[2]*100:.3f}% (expect <1%)"
-    assert err[4] < 5e-4, f"stage 5 rel err {err[4]*100:.4f}% (expect <0.05%)"
-    # monotone-ish: stage 5 is at least as good as stage 3
+    # convergence: by order 3 within 1%, by order 5 within 0.05%
+    assert err[2] < 0.01, f"order 3 rel err {err[2]*100:.3f}% (expect <1%)"
+    assert err[4] < 5e-4, f"order 5 rel err {err[4]*100:.4f}% (expect <0.05%)"
+    # monotone-ish: order 5 is at least as good as order 3
     assert err[4] <= err[2]

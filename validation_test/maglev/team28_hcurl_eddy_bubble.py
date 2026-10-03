@@ -144,9 +144,9 @@ def run(maxh_m: float = 0.025, evrs_rank: int = 6) -> dict[str, object]:
         ),
         "foster_family_passed_its_own_gates": bool(family["pass"]),
         "physical_equilibrium_found": equilibrium_abs_height_m is not None,
-        "physical_equilibrium_within_10_percent_of_11p5mm": (
+        "physical_equilibrium_within_10_percent_of_published_11p3mm": (
             equilibrium_abs_height_m is not None
-            and abs(equilibrium_abs_height_m - 11.5e-3) / 11.5e-3 < 0.10
+            and abs(equilibrium_abs_height_m - 11.3e-3) / 11.3e-3 < 0.10
         ),
         "fixed_position_3d_hcurl_vim_force_passed": hcurl_force_passed,
     }
@@ -185,7 +185,7 @@ def run(maxh_m: float = 0.025, evrs_rank: int = 6) -> dict[str, object]:
             "foster_family_vs_full_fem": family_vs_full,
             "equilibrium_dz_m": equilibrium_dz_m,
             "equilibrium_abs_height_m": equilibrium_abs_height_m,
-            "published_steady_height_m": 11.5e-3,
+            "published_stationary_height_m": 11.3e-3,
         },
         "reduced_mode_summary": {
             "parent_ndof": int(p6["parent_ndof"]),
