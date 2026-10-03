@@ -64,47 +64,22 @@ def test_release_head_uses_version_tag_commit(monkeypatch):
     assert calls == [(('rev-list', '-n', '1', 'v5.1.0'), {'check': False})]
 
 
-def test_phase8_refuses_editable_targets_from_100_before_install(monkeypatch):
-    from argparse import Namespace
-
-    monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: 0)
-    monkeypatch.setattr(release_quad.platform, "node", lambda: "INTEL11")
-    monkeypatch.setattr(
-        release_quad, "_deploy_lab",
-        lambda: pytest.fail("LAB install must not run from 100号機"),
-    )
-    monkeypatch.setattr(
-        release_quad, "_deploy_100",
-        lambda: pytest.fail("editable deployment must use the LAB controller"),
-    )
-
-    assert release_quad.cmd_phase8(Namespace(target="lab,100")) == 2
-
-
-def test_phase8_routes_editable_targets_from_lab(monkeypatch):
+@pytest.mark.parametrize("controller", ["INTEL11", "LAB"])
+@pytest.mark.parametrize("targets", ["lab,100", "all"])
+def test_phase8_routes_explicit_hosts_independently_of_controller(monkeypatch, controller, targets):
     from argparse import Namespace
 
     calls = []
     monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: 0)
-    monkeypatch.setattr(release_quad.platform, "node", lambda: "LAB")
-    monkeypatch.setattr(release_quad, "_deploy_lab", lambda: calls.append("lab") or 0)
-    monkeypatch.setattr(release_quad, "_deploy_100", lambda: calls.append("100") or 0)
-
-    assert release_quad.cmd_phase8(Namespace(target="lab,100")) == 0
-    assert calls == ["lab", "100"]
-
-
-def test_phase8_all_refuses_non_lab_controller(monkeypatch):
-    from argparse import Namespace
-
-    monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: 0)
-    monkeypatch.setattr(release_quad.platform, "node", lambda: "INTEL11")
-    monkeypatch.setattr(
-        release_quad, "_deploy_lab",
-        lambda: pytest.fail("all must fail before its first install"),
-    )
-
-    assert release_quad.cmd_phase8(Namespace(target="all")) == 2
+    monkeypatch.setattr(release_quad.platform, "node", lambda: controller)
+    monkeypatch.setattr(release_quad, "_editable_repo_100", lambda: "release-source")
+    monkeypatch.setattr(release_quad, "_deploy_pypi", lambda host, label: calls.append(host) or 0)
+    monkeypatch.setattr(release_quad, "_deploy_editable_remote", lambda host, *args: calls.append((host, "development")) or 0)
+    assert release_quad.cmd_phase8(Namespace(target=targets)) == 0
+    expected = ["102", release_quad.SSH_100, (release_quad.SSH_100, "development")]
+    if targets == "all":
+        expected += [release_quad.SSH_MDX1, release_quad.SSH_MDX2]
+    assert calls == expected
 
 
 def test_default_editable_roots_are_fixed_release_checkouts(monkeypatch):
@@ -268,21 +243,21 @@ def test_done_requires_simulink_candidate_for_5_1_and_newer(monkeypatch, tmp_pat
 
 
 
-@pytest.mark.parametrize("local_rc,remote_rc,expected", [(0, 0, 0), (1, 0, 4), (0, 1, 4)])
-def test_done_pip_check_requires_both_editable_hosts(monkeypatch, local_rc, remote_rc, expected):
+@pytest.mark.parametrize("failure", [None, 0, 1, 2])
+def test_done_pip_check_checks_all_declared_runtimes_over_ssh(monkeypatch, failure):
     calls = []
 
     def fake_run(command, **_kwargs):
+        rc = int(len(calls) == failure)
         calls.append(command)
-        rc = remote_rc if command[0] == "ssh" else local_rc
         return subprocess.CompletedProcess(command, rc)
 
     monkeypatch.setattr(release_quad, "run", fake_run)
-    assert release_quad._verify_final_pip_checks() == expected
-    assert calls[0][-2:] == ["pip", "check"]
-    remote = [base64.b64decode(call[-1]).decode("utf-16le") for call in calls[1:]]
-    # Both 100号機 runtimes: the development venv and the release default.
-    assert remote == [f"& '{release_quad.DEV_PYTHON_100}' -m pip check", "python -m pip check"]
+    assert release_quad._verify_final_pip_checks() == (0 if failure is None else 4)
+    assert [call[:2] for call in calls] == [
+        ["ssh", "102"], ["ssh", release_quad.SSH_100], ["ssh", release_quad.SSH_100]]
+    remote = [base64.b64decode(call[-1]).decode("utf-16le") for call in calls]
+    assert remote == ["python -m pip check", f"& '{release_quad.DEV_PYTHON_100}' -m pip check", "python -m pip check"]
 
 
 def test_100_editable_tooling_uses_the_dedicated_development_venv(monkeypatch):

@@ -240,30 +240,6 @@ def _release_head():
     return _release_commit()
 
 
-def _is_lab_controller() -> bool:
-    """Return whether this process is running on the LAB release controller."""
-    return platform.node().strip().lower() == "lab"
-
-
-def _require_lab_controller(targets: list[str]) -> int:
-    """Refuse editable-tier deployment from a host with the wrong local role.
-
-    ``_deploy_lab`` deliberately operates on the local Python environment,
-    while ``_deploy_100`` reaches 100号機 over SSH.  Running those routes on
-    INTEL11 would otherwise mutate 100号機 when the operator selected LAB and
-    could then verify 100号機 twice.  Compute-only mdx targets remain routable
-    from any controller because both are always remote.
-    """
-    editable_targets = {"lab", "100", "100号機", "100goki", "all"}
-    if editable_targets.intersection(targets) and not _is_lab_controller():
-        fail(
-            "LAB/100 editable deployment must run on LAB: the LAB route is "
-            "local and the 100 route is remote. No installation was attempted."
-        )
-        return 2
-    return 0
-
-
 def cmd_deployment_plan(args):
     """Dry-run only: print solver roots without imports, SSH or installs."""
     plans = []
@@ -1172,17 +1148,20 @@ def _solver_abi_probe_command(python_command="python"):
 
 def _verify_final_pip_checks() -> int:
     """Require clean shared Python dependency graphs after coordinated deploys."""
-    lab = run([sys.executable, "-m", "pip", "check"], check=False)
-    failed = lab.returncode != 0
+    failed = False
     # 100号機 has two runtimes: the development venv and the release default.
-    for remote_script in (f"& {DEV_PYTHON_100_PS} -m pip check", "python -m pip check"):
+    for host, remote_script in (
+        ("102", "python -m pip check"),
+        (SSH_100, f"& {DEV_PYTHON_100_PS} -m pip check"),
+        (SSH_100, "python -m pip check"),
+    ):
         encoded = base64.b64encode(remote_script.encode("utf-16le")).decode("ascii")
-        machine100 = run(
-            ["ssh", SSH_100, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
+        result = run(
+            ["ssh", host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
              "-EncodedCommand", encoded],
             check=False,
         )
-        failed = failed or machine100.returncode != 0
+        failed = failed or result.returncode != 0
     if failed:
         fail("pip check failed on LAB or 100; coordinated Radia/Cubit deployment is incomplete")
         return 4
@@ -1377,9 +1356,6 @@ def cmd_phase8(args):
         [t.strip().lower() for t in args.target.split(",")]
         if args.target else ["lab", "100"]
     )
-    rc = _require_lab_controller(targets)
-    if rc != 0:
-        return rc
     for t in targets:
         if t == "lab":
             rc = _deploy_lab()
