@@ -442,8 +442,8 @@ def _build_release_repo(root):
     _git(repo, "init")
     _git(repo, "config", "user.name", "Radia Test")
     _git(repo, "config", "user.email", "radia-test@example.invalid")
-    (repo / "pyproject.toml").write_text('[project]\nname = "radia"\nversion = "5.2.1"\n',
-                                         encoding="ascii")
+    (repo / "pyproject.toml").write_text('# Release metadata — 日本語\n[project]\nname = "radia"\nversion = "5.2.1"\n',
+                                         encoding="utf-8")
     (repo / "tool.py").write_text("release\n", encoding="ascii")
     _git(repo, "add", "pyproject.toml", "tool.py")
     _git(repo, "commit", "-m", "release")
@@ -484,8 +484,9 @@ def _release_source(tmp_path, template):
 
 
 def test_later_tooling_controller_must_descend_cleanly_from_the_release(
-        tmp_path, release_template):
+        tmp_path, release_template, monkeypatch):
     repo, release = _release_repo(tmp_path, release_template)
+    monkeypatch.setattr(subprocess, "_text_encoding", lambda: "cp932")
     assert release_quad._verify_release_controller(repo, release, "5.2.1") == 0
     # Same version declared at the release commit is part of the identity.
     assert release_quad._verify_release_controller(repo, release, "5.2.2") == 4

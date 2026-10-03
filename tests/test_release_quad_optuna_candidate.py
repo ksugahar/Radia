@@ -280,6 +280,7 @@ def test_installed_wheel_runner_emits_quad_success_marker_and_checks_notices():
 
 
 def test_local_candidate_decodes_matlab_output_as_utf8(monkeypatch, tmp_path):
+    monkeypatch.setattr(release_quad.platform, "node", lambda: "LAB")
     wheel = tmp_path / "radia_optuna-0.1.1-py3-none-win_amd64.whl"
     wheel.write_bytes(b"platform-wheel")
     observed = {}
@@ -516,6 +517,7 @@ def _fake_runner(tmp_path, tail):
 ])
 def test_local_candidate_requires_the_runner_to_finish(monkeypatch, tmp_path,
                                                         tail, passes):
+    monkeypatch.setattr(release_quad.platform, "node", lambda: "LAB")
     wheel = tmp_path / "radia_optuna-0.2.0-py3-none-win_amd64.whl"
     wheel.write_bytes(b"wheel")
     monkeypatch.setattr(release_quad, "OPTUNA_WHEEL_RUNNER", _fake_runner(tmp_path, tail))
