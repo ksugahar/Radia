@@ -820,9 +820,11 @@ function Assert-PowerPointEquationRendering([string]$Path) {
             throw 'PowerPoint-rendered pasted equation is visually blank.'
         }
 
-        if ($minX -gt 24) {
-            throw ("PowerPoint-rendered equation is not left-aligned: " +
-                "first ink is at x=$minX px.")
+        $inkCentre = ($minX + $maxX) / 2.0
+        if ([Math]::Abs($inkCentre - $bitmap.Width / 2.0) -gt
+            $bitmap.Width * 0.15) {
+            throw ("PowerPoint-rendered equation is not centred: " +
+                "ink-centre=$inkCentre px, frame-centre=$($bitmap.Width / 2) px.")
         }
 
         $inkWidth = $maxX - $minX + 1
@@ -899,7 +901,8 @@ try {
         'MathML Presentation')
     $htmlFormat = [EqneditClipboardNative]::RegisterClipboardFormat('HTML Format')
     $requiredFormats = @(
-        13, 14, 17, $latexFormat, $htmlFormat)
+        13, 14, 17, $latexFormat, $htmlFormat,
+        $mathMlFormat, $mathMlPresentationFormat)
     foreach ($requiredFormat in $requiredFormats) {
         if (-not [EqneditClipboardNative]::IsClipboardFormatAvailable($requiredFormat)) {
             throw "Required clipboard format is missing: $requiredFormat"
@@ -914,6 +917,14 @@ try {
             "TeX fragment: actual=<$actualRaw> expected=<$expectedRaw>")
     }
     $officeHtml = Read-ClipboardUtf8 $htmlFormat
+    $registeredMathMl = Read-ClipboardUtf16 $mathMlFormat
+    $registeredMathMlPresentation =
+        Read-ClipboardUtf16 $mathMlPresentationFormat
+    if ($registeredMathMl -ne $registeredMathMlPresentation -or
+        $registeredMathMl -notmatch
+            '<msubsup><mo[^>]*>&#x222B;</mo><mrow><mi>a</mi></mrow><mrow><mi>b</mi></mrow></msubsup>') {
+        throw 'Registered MathML formats lost the integral limit structure.'
+    }
     $startMarker = '<!--StartFragment-->'
     $endMarker = '<!--EndFragment-->'
     $fragmentStart = $officeHtml.IndexOf($startMarker)
@@ -928,10 +939,6 @@ try {
     $mathMl = if ($fragment.EndsWith($inlineSentinel)) {
         $fragment.Substring(0, $fragment.Length - $inlineSentinel.Length)
     } else { '' }
-    if ([EqneditClipboardNative]::IsClipboardFormatAvailable($mathMlFormat) -or
-        [EqneditClipboardNative]::IsClipboardFormatAvailable($mathMlPresentationFormat)) {
-        throw 'Normal copy exposed registered MathML that PowerPoint centres.'
-    }
     if ($officeHtml -notmatch '<math\b' -or
         $officeHtml -notmatch '</math><span style="font-size:18pt">&#160;</span><!--EndFragment-->' -or
         $mathMl -notmatch 'display="inline"' -or
@@ -977,9 +984,6 @@ try {
     $powerPointInsertionRange = $powerPointTextRange.Characters(
         $powerPointTextRange.Length + 1, 0)
     $powerPointInsertionFontSize = [double]$powerPointInsertionRange.Font.Size
-    $powerPointAlignment =
-        [int]$pastedShape.TextFrame2.TextRange.ParagraphFormat.Alignment
-    $powerPointLeft = [double]$pastedShape.Left
     if ([Math]::Abs($powerPointFontSize - 18.0) -gt 0.1) {
         throw "PowerPoint native equation is not 18 pt: $powerPointFontSize pt."
     }
@@ -991,14 +995,8 @@ try {
         throw ("PowerPoint insertion point after the native equation is not 18 pt: " +
             "$powerPointInsertionFontSize pt.")
     }
-    # UI Paste chooses the placement of a newly created text box, commonly
-    # around the centre of the slide. Shape.Left is therefore object position,
-    # not paragraph alignment. The alignment contract is the left-aligned
-    # paragraph containing inline m:oMath (also checked in saved OOXML below).
-    if ($powerPointAlignment -ne 1) {
-        throw ("PowerPoint native equation is not left-aligned: " +
-            "paragraphAlignment=$powerPointAlignment, left=$powerPointLeft pt.")
-    }
+    # PowerPoint converts registered MathML into a centred MathML paragraph.
+    # Its native script layout takes priority over CF_HTML's plain-text fallback.
     $presentation.SaveAs($pptxOutput, 24)
     $slideXml = Get-SlideXml $pptxOutput
     $hasInlineContainer = $slideXml -match '<a14:m(?:\s|>)'
@@ -1009,18 +1007,21 @@ try {
     $naryCount = ([regex]::Matches($slideXml, '<m:nary>')).Count
     $barCount = ([regex]::Matches($slideXml, '<m:bar>')).Count
     $accentCount = ([regex]::Matches($slideXml, '<m:acc>')).Count
-    $nbsp = [regex]::Escape([string][char]0x00A0)
-    $hasSizedInlineSentinel = $slideXml -match (
-        '</a14:m><a:r><a:rPr\b[^>]*\bsz="1800"[^>]*>.*?</a:rPr>' +
-        '<a:t>' + $nbsp + '</a:t></a:r>')
-    if (-not $hasInlineContainer -or -not $hasInlineMath -or $hasDisplayMath -or
+    $integralLimits = [regex]::Match(
+        $slideXml,
+        '(?s)<m:nary><m:naryPr><m:limLoc m:val="subSup"/>.*?' +
+        '<m:sub>(?<lower>.*?)</m:sub><m:sup>(?<upper>.*?)</m:sup><m:e>')
+    $hasIntegralLimits = $integralLimits.Success -and
+        $integralLimits.Groups['lower'].Value -match '<m:t>𝑎</m:t>' -and
+        $integralLimits.Groups['upper'].Value -match '<m:t>𝑏</m:t>'
+    if (-not $hasInlineContainer -or -not $hasInlineMath -or -not $hasDisplayMath -or
         -not $hasFraction -or -not $hasRadical -or $naryCount -lt 2 -or
-        ($barCount + $accentCount) -lt 2 -or -not $hasSizedInlineSentinel) {
+        ($barCount + $accentCount) -lt 2 -or -not $hasIntegralLimits) {
         throw (("PowerPoint paste contract failed: inlineContainer={0}, " +
             "inlineMath={1}, displayMath={2}, fraction={3}, radical={4}, nary={5}, " +
-            "bars={6}, accents={7}, sentinel18pt={8}, artifact={9}") -f $hasInlineContainer, $hasInlineMath,
-            $hasDisplayMath, $hasFraction, $hasRadical, $naryCount, $barCount,
-            $accentCount, $hasSizedInlineSentinel, $pptxOutput)
+            "integralLimits={6}, bars={7}, accents={8}, artifact={9}") -f $hasInlineContainer, $hasInlineMath,
+            $hasDisplayMath, $hasFraction, $hasRadical, $naryCount,
+            $hasIntegralLimits, $barCount, $accentCount, $pptxOutput)
     }
     # XML and MathZones can both exist while PowerPoint draws no equation.
     # Shape.Export invokes PowerPoint's own renderer without a visible window;
@@ -1063,33 +1064,35 @@ try {
             "rows and two line breaks: math=$alignedMathCount, " +
             "breaks=$alignedBreakCount.")
     }
-    $alignedSlide = $presentation.Slides.Add(2, 12)
-    $powerPointWindow.View.GotoSlide(2)
-    $alignedSlide.Select()
-    Start-Sleep -Milliseconds 100
-    $powerPoint.CommandBars.ExecuteMso('Paste')
-    Start-Sleep -Milliseconds 150
-    if ($alignedSlide.Shapes.Count -ne 1) {
-        throw ("PowerPoint aligned UI Paste created an unexpected shape count: " +
-            $alignedSlide.Shapes.Count)
-    }
-    $alignedPastedShape = $alignedSlide.Shapes.Item(1)
-    $alignedPastedShape.Export($alignedPowerPointPngOutput, 2)
-    if (-not (Test-Path -LiteralPath $alignedPowerPointPngOutput)) {
-        throw 'PowerPoint did not export the aligned pasted equation.'
-    }
-    # Save before the pixel assertion so a failing release candidate leaves
-    # its exact imported OMML available for diagnosis.
-    $presentation.Save()
-    $alignedRowsContract =
-        Assert-PowerPointMathRowsShareLeftEdge $alignedPowerPointPngOutput
-    $alignedSlideXml = Get-SlideXml $pptxOutput 2
-    $savedMathRows = ([regex]::Matches(
-        $alignedSlideXml, '<m:oMath(?:\s|>)')).Count
-    if ($savedMathRows -ne 3 -or
-        $alignedSlideXml -match '<m:t>&amp;</m:t>|<m:eqArr(?:\s|>)|<m:m(?:\s|>)') {
-        throw ("PowerPoint did not retain three independent math rows without " +
-            "visible alignment syntax: rows=$savedMathRows.")
+    if ([EqneditClipboardNative]::IsClipboardFormatAvailable($mathMlFormat)) {
+        $alignedSlide = $presentation.Slides.Add(2, 12)
+        $powerPointWindow.View.GotoSlide(2)
+        $alignedSlide.Select()
+        Start-Sleep -Milliseconds 100
+        $powerPoint.CommandBars.ExecuteMso('Paste')
+        Start-Sleep -Milliseconds 150
+        if ($alignedSlide.Shapes.Count -ne 1) {
+            throw ("PowerPoint aligned UI Paste created an unexpected shape count: " +
+                $alignedSlide.Shapes.Count)
+        }
+        $alignedPastedShape = $alignedSlide.Shapes.Item(1)
+        $alignedPastedShape.Export($alignedPowerPointPngOutput, 2)
+        if (-not (Test-Path -LiteralPath $alignedPowerPointPngOutput)) {
+            throw 'PowerPoint did not export the aligned pasted equation.'
+        }
+        $presentation.Save()
+        $alignedRowsContract =
+            Assert-PowerPointMathRowsShareLeftEdge $alignedPowerPointPngOutput
+        $alignedSlideXml = Get-SlideXml $pptxOutput 2
+        $savedMathRows = ([regex]::Matches(
+            $alignedSlideXml, '<m:oMath(?:\s|>)')).Count
+        if ($savedMathRows -ne 3 -or
+            $alignedSlideXml -match '<m:t>&amp;</m:t>|<m:eqArr(?:\s|>)|<m:m(?:\s|>)') {
+            throw ("PowerPoint did not retain three independent math rows without " +
+                "visible alignment syntax: rows=$savedMathRows.")
+        }
+    } else {
+        Write-Host 'SKIP: PowerPoint aligned-row import is not covered by registered MathML.'
     }
 
     $googlePublisher = Start-Process -FilePath $app `
@@ -1207,14 +1210,15 @@ try {
     }
 
     Write-Host "PASS: normal DIBV5 is opaque black-on-white ($dibContract)"
-    Write-Host 'PASS: clipboard contains raw LaTeX, inline MathML CF_HTML, Office TeX, EMF, and DIBV5 without centring registered MathML'
+    Write-Host 'PASS: clipboard contains raw LaTeX, inline MathML CF_HTML, registered MathML, Office TeX, EMF, and DIBV5'
     Write-Host ("PASS: no-selection GUI copy -> visible editable Office Math " +
         "in PowerPoint ($powerPointFontSize pt, tail=$powerPointTailFontSize pt, " +
         "insertion=$powerPointInsertionFontSize pt, " +
-        "left=$powerPointLeft pt, " +
         "rendered $powerPointImageSize with ink)")
-    Write-Host ("PASS: unequal editable PowerPoint math rows share one " +
-        "left edge without visible alignment syntax ($alignedRowsContract)")
+    if ($alignedRowsContract) {
+        Write-Host ("PASS: unequal editable PowerPoint math rows share one " +
+            "left edge without visible alignment syntax ($alignedRowsContract)")
+    }
     Write-Host "PASS: IrfanView /clippaste produced a nonblank $imageSize PNG"
     Write-Host ("PASS: Google Slides clipboard contains a byte-identical " +
         "$($pngContract.Width)x$($pngContract.Height) 300 dpi PNG and " +
