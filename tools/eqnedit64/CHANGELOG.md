@@ -1,5 +1,12 @@
 # Eqnedit64 changelog
 
+## 3.1.1 — hand-test candidate
+
+- Preserve integral bounds and other scripts when copying a single equation
+  from the Windows app into PowerPoint by publishing registered MathML formats.
+  PowerPoint imports the expression as editable OMML and centres its math
+  paragraph; aligned multi-row expressions retain the CF_HTML path.
+
 ## 3.1.0 — release candidate
 
 - Replace the native embedded CFF resource with Eqnedit Math, a reproducibly

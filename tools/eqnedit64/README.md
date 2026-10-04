@@ -54,12 +54,12 @@ GUIの画面構成、状態遷移、TeX/クリップボード契約、自動・�
 キャンバスからのコピーは、一つの数式を複数形式でクリップボードへ登録します。
 選択範囲があればその範囲を、選択がなければ数式全体を `Ctrl+C` でコピーします。
 PowerPoint、Word、Excel向けには、inline 18 pt MathMLと18 ptを明示した末尾NBSPを
-1つのCF_HTML断片として提供し、編集可能なOffice Mathへ変換します。Web版も同じ
-経路を使います。PowerPointの通常Ctrl+Vでは左寄せを優先し、数式本体、末尾文字、
-次の挿入点を標準18 ptでそろえます。
-通常コピーでは、PowerPointが中央寄せの数式段落として優先する登録`MathML` /
-`MathML Presentation`や、Web版だけの直接OMMLを混在させません。Office保存後は
-OOXML内のインライン`m:oMath`となり、`m:oMathPara`にはなりません。
+1つのCF_HTML断片として提供し、編集可能なOffice Mathへ変換します。Windows版は
+単一数式のCtrl+Cで登録`MathML` / `MathML Presentation`も提供します。現在の
+PowerPointはCF_HTML内のMathMLを通常テキストに平坦化するため、この登録形式で
+積分などの上下限を含む数式を編集可能なOMMLに変換します。PowerPointでは数式段落が
+中央寄せになります。複数行の`aligned`は行ごとの配置を崩さないようCF_HTML経路を
+使います。Web版はブラウザー既存のコピー経路を使います。
 旧Office向けには区切り付きLaTeXも残します。IrfanViewなどの画像ソフトは
 EMFまたは全画素不透明の32-bit DIBV5を選べます。TeX対応ソフト向けには生の断片も
 `LaTeX` 形式で保持します。
