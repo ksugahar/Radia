@@ -47,7 +47,7 @@ Unreported free DOFs, factor entries, peak memory or commit headroom remain
 unavailable unless independently measured. Preserve the existing result schema.
 
 The shared true linear residual gate remains 1e-6; keep stricter application,
-nonlinear and physical acceptance criteria unchanged. No PARDISO and no silent
+nonlinear and physical acceptance criteria unchanged. No alternative direct backend and no silent
 fallback after allocation failure or nonconvergence. Residual checks validate
 returned solutions, not allocation/index safety before factorization.
 
