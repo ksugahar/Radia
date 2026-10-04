@@ -1185,9 +1185,10 @@ private:
     // Pivot rules shared by both factorization orders
     // ================================================================
 
-    Scalar adjoint(const Scalar& v) const {
-        if constexpr (std::is_same_v<Scalar, double>) return v;
-        else return config_.conjugate ? std::conj(v) : v;
+    template<bool Hermitian>
+    static Scalar adjoint(const Scalar& v) {
+        if constexpr (std::is_same_v<Scalar, double> || !Hermitian) return v;
+        else return std::conj(v);
     }
 
     static bool finite_scalar(const Scalar& v) {
@@ -1238,6 +1239,14 @@ private:
      * a pivot still below it at the limit is an error.
      */
     void compute_ic_factorization() {
+        // Select once, outside elimination loops; the default complex-symmetric
+        // path retains its branch-free multiplication sequence.
+        if (config_.conjugate) compute_ic_factorization_impl<true>();
+        else compute_ic_factorization_impl<false>();
+    }
+
+    template<bool Hermitian>
+    void compute_ic_factorization_impl() {
         const index_t n = size_;
         inv_diag_.resize(n);
         validate_shift();
@@ -1282,7 +1291,7 @@ private:
                         // Find L(j, k) in row j
                         for (index_t jj = j_start; jj < j_end; ++jj) {
                             if (L_.col_idx[jj] == k) {
-                                s -= L_.values[ii] * adjoint(L_.values[jj]) * inv_diag_[k];
+                                s -= L_.values[ii] * adjoint<Hermitian>(L_.values[jj]) * inv_diag_[k];
                                 break;
                             } else if (L_.col_idx[jj] > k) {
                                 break;
@@ -1309,7 +1318,7 @@ private:
                 for (index_t kk = row_start; kk < diag_pos; ++kk) {
                     const index_t k = L_.col_idx[kk];
                     if (k >= i) break;
-                    s -= L_.values[kk] * adjoint(L_.values[kk]) * inv_diag_[k];
+                    s -= L_.values[kk] * adjoint<Hermitian>(L_.values[kk]) * inv_diag_[k];
                 }
 
                 L_.values[diag_pos] = s;
@@ -1322,7 +1331,7 @@ private:
                     }
                     throw_shift_limit(i, shift);
                 }
-                if (s == Scalar(0) || !finite_scalar(s) || (config_.conjugate && !(std::real(s) > 0))) {
+                if (s == Scalar(0) || !finite_scalar(s) || (Hermitian && !(std::real(s) > 0))) {
                     throw_singular_pivot(i, shift);
                 }
                 inv_diag_[i] = Scalar(1) / s;
@@ -1345,6 +1354,14 @@ private:
      * pattern-based and reused across restarts.
      */
     void compute_ic_factorization_abmc() {
+        // Select once, outside elimination loops; the default complex-symmetric
+        // path retains its branch-free multiplication sequence.
+        if (config_.conjugate) compute_ic_factorization_abmc_impl<true>();
+        else compute_ic_factorization_abmc_impl<false>();
+    }
+
+    template<bool Hermitian>
+    void compute_ic_factorization_abmc_impl() {
         const index_t n = size_;
         inv_diag_.resize(n);
         validate_shift();
@@ -1408,7 +1425,7 @@ private:
 
                                 for (index_t jj = j_start; jj < j_end; ++jj) {
                                     if (L_.col_idx[jj] == k) {
-                                        s -= L_.values[ii] * adjoint(L_.values[jj]) * inv_diag_[k];
+                                        s -= L_.values[ii] * adjoint<Hermitian>(L_.values[jj]) * inv_diag_[k];
                                         break;
                                     } else if (L_.col_idx[jj] > k) {
                                         break;
@@ -1434,17 +1451,17 @@ private:
                         for (index_t kk = row_start; kk < diag_pos; ++kk) {
                             const index_t k = L_.col_idx[kk];
                             if (k >= i) break;
-                            s -= L_.values[kk] * adjoint(L_.values[kk]) * inv_diag_[k];
+                            s -= L_.values[kk] * adjoint<Hermitian>(L_.values[kk]) * inv_diag_[k];
                         }
 
                         L_.values[diag_pos] = s;
 
                         if (pivot_too_small(orig_diag, s)) {
                             record_min(small_row, i);
-                        } else if (s == Scalar(0) || !finite_scalar(s) || (config_.conjugate && !(std::real(s) > 0))) {
+                        } else if (s == Scalar(0) || !finite_scalar(s) || (Hermitian && !(std::real(s) > 0))) {
                             record_min(fault_row, i);
                         }
-                        inv_diag_[i] = (s == Scalar(0) || !finite_scalar(s) || (config_.conjugate && !(std::real(s) > 0)))
+                        inv_diag_[i] = (s == Scalar(0) || !finite_scalar(s) || (Hermitian && !(std::real(s) > 0)))
                             ? Scalar(0) : Scalar(1) / s;
                     }
                 });
@@ -1475,7 +1492,8 @@ private:
     /// Compute L^T (transpose of L)
     void compute_transpose() {
         Lt_ = L_.transpose();
-        for (auto& v : Lt_.values) v = adjoint(v);
+        if (config_.conjugate)
+            for (auto& v : Lt_.values) v = adjoint<true>(v);
     }
 
     /**
