@@ -172,3 +172,18 @@ These permissions apply to MCP development, including editable repointing.
 Numerical solvers and native binaries still require their independent tests,
 provenance and release checks. Do not turn MCP experimentation into an excuse
 to waive those checks or overwrite another task's changes.
+
+## Discovery and local call diagnostics
+
+Cold MCP initialization and repeated `tools/list` must not acquire a numerical
+solver, connect to an external application, or launch a process. The discovery
+lifecycle tests enforce this through the real stdio transport and record
+attempts even when the server catches the resulting exception. Explicit tool
+execution keeps its existing session and solver ownership rules.
+
+Local call logs include random `runtime_id` and `call_id` values for separating
+concurrent requests. These are local correlation identifiers, not solver session
+IDs or client identities. Duration uses a monotonic clock while `ts` remains a
+wall-clock timestamp. Argument values and error messages are not logged; the
+existing `RADIA_MCP_CALL_LOG=0` switch disables this local log. This does not enable
+remote telemetry.
