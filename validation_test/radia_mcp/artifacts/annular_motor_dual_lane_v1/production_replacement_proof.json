@@ -1,7 +1,7 @@
 {
   "radia_version": "4.95.30",
   "schema": "radia.validation.production-replacement-proof.v1",
-  "executed_at_utc": "2026-10-02T22:27:57.296535+00:00",
+  "executed_at_utc": "2026-10-04T03:04:34.015809+00:00",
   "execution_version": {
     "radia": "4.95.30",
     "matlab": "2026a",
@@ -30,11 +30,11 @@
     },
     "native_motor_angle_family": {
       "status": "pass",
-      "radia_version": "5.2.1",
-      "executed_at_utc": "2026-10-02T22:26:06.152Z",
+      "radia_version": "5.2.3",
+      "executed_at_utc": "2026-10-04T03:03:28.916Z",
       "test_count": 86,
       "artifact_sha256_by_role": {
-        "matlab": "fb3b2752a8d0f0d6bc702ad945f644bc8368741484393d3b047bd5d9203a2c1a"
+        "matlab": "aa4ffbdbc719f121bab180addfa789194ef863491fb3782e248408a9fa3a0ddd"
       },
       "checks": {
         "standalone_batch": true,
@@ -48,5 +48,5 @@
   },
   "status": "pass",
   "pass": true,
-  "proof_payload_sha256": "87b4ff753707f1720fbe0830af847fb92362e936b5840697fcb9330b86cf4a3e"
+  "proof_payload_sha256": "5be1240e8d549d28f171ecd544e66f29ed7918b89fe10d4723765db4275b95ad"
 }
