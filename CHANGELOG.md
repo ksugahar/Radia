@@ -20,7 +20,6 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## 5.2.2 - Electromagnet block convergence reporting and B-H law
 
-Release candidate; publication and four-host acceptance are not yet complete.
 Contains everything in 5.2.1; `v5.2.1` and its wheel are unchanged.
 
 - Electromagnet block, HDiv-VIM method (`panels/calc_accel_hdiv.py`,
