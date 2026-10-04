@@ -1,5 +1,65 @@
 """Direct-solver guidance for Radia's supported FE and legacy dense paths."""
 
+SOLVER_CAPACITY = r"""
+# Solver capacity and measured diagnosis
+
+Direct solvers can be fast when the factor fits. Capacity and speed are separate:
+element count or total runtime alone does not establish a factorization bottleneck.
+There is no universal DOF/element cutoff or guaranteed memory estimate.
+
+Sparse factors acquire fill-in depending on graph, ordering, FE space and order.
+Matrix NNZ is not factor-entry storage. Real versus complex entries, indices,
+workspace and temporary allocations all matter. On Windows, record system commit
+headroom (commit limit minus committed bytes), not only free physical RAM;
+process peak memory and system commit are different quantities. Neither a small
+matrix nor available RAM guarantees that factorization will fit.
+
+Report the actual chain: outer solver -> preconditioner -> coarse solver.
+An iterative outer solve with BDDC can still use a direct SparseCholesky coarse
+factorization. Explicit BDDC + AMS coarse selection changes that stage; do not
+infer it from the word BDDC or claim that all auxiliary levels are factor-free.
+For validated HCurl applications select AMS or BDDC+AMS explicitly within their
+space/order/periodicity restrictions. Maxwell AMS is not an H1 prescription.
+CG needs a positive-definite compatible system, not arbitrary complex matrices.
+Native ICCG with conjugate=True supports Hermitian positive-definite systems,
+checks Hermitian structure and rejects encountered non-positive curvature;
+complex-symmetric eddy current is a different contract (COCR in validated HCurl
+paths). IC shifts act on the preconditioner, not permission to alter the operator.
+Iterative methods are not guaranteed faster, convergent or memory-safe.
+
+## Diagnostic report: measured, estimated, unavailable
+
+Label each quantity measured (including method/units), estimated (including
+assumptions), or unavailable. Record space, order, free DOFs versus total DOFs,
+real/complex arithmetic, matrix NNZ, actual solver chain, backend/version and
+threads. Report factor/setup/solve times separately only if actually instrumented;
+include factor entries, peak memory, Windows commit headroom, iterations and
+true relative residual when available. An aggregate solve time is not a measured
+factorization time. Missing telemetry is unavailable, never zero. An extrapolated
+factor count is estimated, never measured; this guidance adds no memory predictor.
+
+For IH calc_fem_kelvin JSON, linear_solver_requested and linear_solver distinguish
+request from selection; bddc_ams_coarse_cycles describes that configured coarse
+route. ndof is total DOFs, ne is element count, linear_krylov_iterations records outer
+iterations, and linear_true_relative_residual / linear_true_residual_limit report the
+linear gate. t_solve_s and t_total_s are aggregates, not isolated factor timings.
+Unreported free DOFs, factor entries, peak memory or commit headroom remain
+unavailable unless independently measured. Preserve the existing result schema.
+
+The shared true linear residual gate remains 1e-6; keep stricter application,
+nonlinear and physical acceptance criteria unchanged. No alternative direct backend and no silent
+fallback after allocation failure or nonconvergence. Residual checks validate
+returned solutions, not allocation/index safety before factorization.
+
+## SparseCholesky evidence boundary
+
+See docs/solver/SPARSECHOLESKY_LIMITS.md in the source repository. The 6.2.2607
+Windows long counter is a source-level risk, not an established crash cause.
+The reproduction was memory-confounded; no universal threshold was established.
+A production pre-factorization symbolic-storage guard is not yet implemented.
+This guidance does not implement or validate such a guard.
+"""
+
 OVERVIEW = r"""
 # Radia direct-solver policy
 
@@ -111,6 +171,9 @@ of the legacy method integer. Do not recommend retired `rad.Solve` methods 1 or 
 """
 
 
+OVERVIEW += SOLVER_CAPACITY
+SPARSECHOLESKY += SOLVER_CAPACITY
+
 def get_direct_solvers_knowledge(topic: str = "overview") -> str:
     """Return current direct guidance, or explain a retired topic's migration."""
     topic = topic.lower().strip()
@@ -118,6 +181,8 @@ def get_direct_solvers_knowledge(topic: str = "overview") -> str:
         return OVERVIEW
     if topic in ("sparsecholesky", "sparse_cholesky", "direct"):
         return SPARSECHOLESKY
+    if topic in ("capacity", "memory", "diagnostics", "bddc"):
+        return SOLVER_CAPACITY
     if topic == "pardiso":
         return PARDISO
     if topic == "mumps":
@@ -127,4 +192,4 @@ def get_direct_solvers_knowledge(topic: str = "overview") -> str:
     if topic == "all":
         return "\n\n".join([OVERVIEW, SPARSECHOLESKY, PARDISO, MUMPS, LU_RADIA])
     return (f"Unknown topic '{topic}'. Available: overview, sparsecholesky, "
-            "pardiso (migration), mumps, lu_radia, all.")
+            "capacity (memory, diagnostics, bddc), pardiso (migration), mumps, lu_radia, all.")

@@ -17,6 +17,8 @@ Sources:
   - https://forum.ngsolve.org/
 """
 
+from radia_mcp.matrix_solvers.direct_solvers_knowledge import SOLVER_CAPACITY
+
 INDUCTION_HEATING_OVERVIEW = """
 # Induction Heating Simulation with NGSolve
 
@@ -2386,6 +2388,20 @@ production path. No modulation of surface panels needed.
 """
 
 
+INDUCTION_HEATING_SOLVER_CAPACITY = """
+# IH solver selection and capacity
+
+For nonperiodic HCurl FEM-SIBC, calc_fem_kelvin --solver auto selects AMS at p=1
+and BDDC+AMS at p=2/3, both with COCR; the BDDC route uses an edge-only wirebasket
+and three AMS coarse cycles. Periodic Kelvin auto selects sparsecholesky;
+explicit `ams` or `bddc` requests fail. Compound A-V requires explicit
+sparsecholesky. Scalar thermal H1 does not inherit HCurl AMS support.
+The optional IH iccg branch uses the complex-symmetric setting, not the native
+Hermitian ICCG contract: it must converge and pass the original true residual.
+It is not an automatic fallback or a blanket recommendation for eddy current.
+""" + SOLVER_CAPACITY
+INDUCTION_HEATING_PEEC_BEM_SIBC += SOLVER_CAPACITY
+
 def get_induction_heating_documentation(topic: str = "all") -> str:
     """Return induction heating simulation documentation by topic."""
     topics = {
@@ -2403,6 +2419,8 @@ def get_induction_heating_documentation(topic: str = "all") -> str:
     }
 
     topic = topic.lower().strip()
+    if topic in ("solvers", "capacity", "memory", "diagnostics", "bddc"):
+        return INDUCTION_HEATING_SOLVER_CAPACITY
     if topic == "all":
         return "\n\n".join(topics.values())
     elif topic in topics:

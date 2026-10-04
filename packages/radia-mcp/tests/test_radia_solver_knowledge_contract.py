@@ -125,3 +125,46 @@ def test_bem_inductance_guidance_requires_physical_current_constraints():
     assert "flat-mesh convergence" in NGBEM_OVERVIEW
     assert "including at order=0 (RT0)" in NGSOLVE_BEM
     assert "only valid for order=0" not in NGSOLVE_BEM
+
+
+def test_capacity_is_retrievable_through_existing_public_tools():
+    from radia_mcp.matrix_solvers.server import matrix_solvers_direct, pick_a_solver
+    from radia_mcp.radia_ngsolve.server import ngsolve_usage, sparsesolv, ngsolve_solvers_reference
+    from radia_mcp.ih.server import induction_heating
+
+    for tool in (matrix_solvers_direct, ngsolve_usage, sparsesolv, induction_heating):
+        for topic in ("memory", "capacity", "diagnostics", "bddc"):
+            text = tool(topic)
+            assert "Unknown topic" not in text
+            assert "factor-entry storage" in text
+            assert "commit limit minus committed bytes" in text
+            assert "outer solver -> preconditioner -> coarse solver" in text
+            assert "not yet implemented" in text
+            assert "memory-confounded" in text
+            assert "no silent" in text
+        assert "Hermitian positive-definite" in tool("memory")
+        assert "Maxwell AMS is not an H1 prescription" in tool("memory")
+    for problem in ("magnetostatic_h1", "magnetostatic_hcurl", "eddy_current_mqs",
+                    "frequency_sweep", "non_symmetric", "indefinite_saddle_point"):
+        assert "matrix_solvers_direct('memory')" in pick_a_solver(problem)
+    assert "ngsolve_usage('memory')" in ngsolve_solvers_reference()
+    assert "Residual checks do not protect allocation" in ngsolve_solvers_reference()
+    h1 = pick_a_solver("magnetostatic_h1")
+    assert "N<" not in h1
+    assert "method=0" not in h1
+
+
+def test_default_solver_guidance_reports_capacity_without_size_heuristics():
+    from radia_mcp.radia_ngsolve.knowledge.ngsolve import get_ngsolve_documentation
+    from radia_mcp.radia_ngsolve.knowledge.sparsesolv import get_sparsesolv_documentation
+    for text in (get_direct_solvers_knowledge(),
+                 get_matrix_overview_knowledge("decision_tree"),
+                 get_ngsolve_documentation("solvers"),
+                 get_sparsesolv_documentation("overview")):
+        assert "Direct solvers can be fast when the factor fits" in text
+        assert "An iterative outer solve with BDDC can still use a direct" in text
+        assert "true linear residual gate remains 1e-6" in text
+        assert "<10K DOF" not in text and ">100K DOF" not in text
+    practices = get_sparsesolv_documentation("best_practices")
+    assert "Krylov workspace (not total memory)" in practices
+    assert "ICCG (fallback)" not in practices

@@ -1,5 +1,7 @@
 """Matrix-solver overview: lab stack, decision tree, history."""
 
+from radia_mcp.matrix_solvers.direct_solvers_knowledge import SOLVER_CAPACITY
+
 LAB_STACK = r"""
 # Radia matrix-solver stack
 
@@ -137,6 +139,8 @@ Sogabe-Zhang 2007).
 """
 
 
+DECISION_TREE += SOLVER_CAPACITY
+
 def get_overview_knowledge(topic: str = "lab_stack") -> str:
     """Dispatch overview topics.
 
@@ -151,6 +155,8 @@ def get_overview_knowledge(topic: str = "lab_stack") -> str:
         return LAB_STACK
     if topic in ("decision_tree", "decision", "choose", "tree"):
         return DECISION_TREE
+    if topic in ("capacity", "memory", "diagnostics", "bddc"):
+        return SOLVER_CAPACITY
     if topic in ("history", "genealogy", "lineage"):
         return HISTORY
     if topic == "all":
