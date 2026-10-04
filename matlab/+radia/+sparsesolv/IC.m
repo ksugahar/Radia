@@ -1,5 +1,7 @@
 function result = IC(matrix, options)
 %IC Native real/complex incomplete Cholesky preconditioner.
+%   Uses transpose IC for real SPD or complex-symmetric matrices. For
+%   Hermitian positive-definite systems use ICCG with Conjugate=true.
 %   Shift is the multiplicative IC diagonal shift alpha (alpha*a_ii on rows
 %   with Re(a_ii) > 0) and must be >= 1: the native factorization rejects a
 %   smaller value with radia:mex:Exception (this wrapper only checks that it

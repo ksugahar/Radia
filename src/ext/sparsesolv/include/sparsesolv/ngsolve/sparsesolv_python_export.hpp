@@ -877,7 +877,9 @@ Incomplete Cholesky (IC) Preconditioner.
 Parameters:
 
 mat : SparseMatrix
-  SPD matrix (real or complex, auto-detected).
+  Real SPD or complex-symmetric matrix (transpose IC, auto-detected type).
+  For Hermitian positive-definite systems use SparseSolvSolver with
+  method="ICCG", conjugate=True instead.
 freedofs : BitArray, optional
   Free DOFs. Constrained DOFs treated as identity.
 shift : float

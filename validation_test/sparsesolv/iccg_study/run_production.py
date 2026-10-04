@@ -10,12 +10,15 @@ import os
 from pathlib import Path
 import platform
 import statistics
+import subprocess
 import sys
 import time
 
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
 import numpy as np
+import psutil
 import ngsolve as ng
 import radia.sparsesolv_ngsolve as ss
 
@@ -62,7 +65,10 @@ def throughput(meshpath, kind, space):
                 elapsed = time.perf_counter()-start
             residual = rhs.CreateVector(); residual.data = rhs-matrix*x
             rr = np.linalg.norm(residual.FV().NumPy()[free])/ng.Norm(rhs)
+            solution_error = ng.Norm(x-exact)/ng.Norm(exact)
             assert info.converged and rr < 1e-8
+            if repeat == 0:
+                first_solve_s = elapsed
             if repeat:
                 samples.append(elapsed)
                 solutions.append(x.FV().NumPy().copy())
@@ -71,8 +77,11 @@ def throughput(meshpath, kind, space):
             matrix_values_sha256=hashlib.sha256(matrix.AsVector().FV().NumPy().tobytes()).hexdigest(),
             rhs_sha256=hashlib.sha256(rhs.FV().NumPy().tobytes()).hexdigest(),
             samples_s=samples, median_s=statistics.median(samples),
+            first_solve_s=first_solve_s,
+            process_rss_bytes=psutil.Process().memory_info().rss,
             iterations=info.iterations, actual_shift=info.actual_shift,
             true_residual=float(rr), history=histories[-1],
+            manufactured_solution_relative_error=float(solution_error),
             solution_sha256=hashlib.sha256(solutions[-1].tobytes()).hexdigest(),
             repeat_relative=max(float(np.linalg.norm(s-solutions[0])/np.linalg.norm(s)) for s in solutions))
         rows.append(row)
@@ -96,6 +105,8 @@ def main():
         host=platform.node(), python=platform.python_version(),
         ngsolve=ng.__version__, module=str(ss.__file__),
         binary_sha256=hashlib.sha256(Path(ss.__file__).read_bytes()).hexdigest(), passed=False)
+    result["checkout_commit"] = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    result["harness_sha256"] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     try:
         if args.part == "ams":
             from run_study import ams_study
@@ -111,13 +122,15 @@ def main():
         result["pass"] = result["passed"]
         result["run"] = dict(command=" ".join(sys.argv), workdir=str(Path.cwd()),
             exit_code=0 if result["passed"] else 1, duration_s=time.perf_counter()-start)
+        result["timing_breakdown_s"] = dict(total=result["run"]["duration_s"])
         result["checks"] = dict(ran_to_completion="cases" in result,
             validation_passed=result["passed"], result_files_exist=True)
         result["result_files"] = [str(args.output)]
         result["tolerances"] = dict(true_relative=1e-7 if args.part == "ams" else 1e-8,
             repeated_apply_relative=1e-12)
         result["errors"] = dict(max_true_relative=max((r["true_residual"] for r in result.get("cases", [])), default=0))
-        result["tool_versions"] = dict(python=platform.python_version(), ngsolve=ng.__version__)
+        result["tool_versions"] = dict(python=platform.python_version(), ngsolve=ng.__version__,
+            numpy=np.__version__, radia=sys.modules["radia"].__version__)
         if args.mesh is not None and args.mesh.is_file():
             result["mesh_sha256"] = hashlib.sha256(args.mesh.read_bytes()).hexdigest()
         result["verification"] = dict(method="Original-system residual; repeated application; paired baseline histories and solution hashes")
