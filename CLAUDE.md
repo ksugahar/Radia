@@ -288,9 +288,9 @@ radia-mcp owns MATLAB, Simulink, MEX, differential-oracle, performance-gate and 
 - Inspect branches, PRs, and remote main before merge or rebase.
 - Do not finish while required tests, CI, build, or release commands run.
 
-Claude normally stops after a tested local commit and reports branch/SHA. Codex
-owns push, CI, fix-forward, tags, publication, deployment, and `release-quad`,
-unless the user explicitly assigns that work to Claude for the specific task.
+Defaults: Codex implements and validates numerics. Claude reviews, integrates,
+pushes, runs CI, fixes forward, tags, publishes, deploys and owns release gates.
+Reassess roles as tools and results evolve; explicit user assignments prevail.
 
 ## Detailed Guidance
 
