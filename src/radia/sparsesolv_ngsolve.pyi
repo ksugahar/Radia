@@ -207,7 +207,9 @@ def ICPreconditioner(
     Calls ``Update()`` automatically on construction.
 
     Args:
-        mat: SPD sparse matrix (real or complex).
+        mat: Real SPD or complex-symmetric sparse matrix (transpose IC).
+            For Hermitian positive-definite systems, use
+            SparseSolvSolver(method="ICCG", conjugate=True) instead.
         freedofs: Free DOFs. Constrained DOFs treated as identity.
         shift: Shift parameter for stability (default: 1.05).
     """

@@ -102,7 +102,7 @@ solver = SparseSolvSolver(mat, method="ICCG", freedofs=None,
 | `save_best_result` | `bool` | `True` | 残差最小の反復解（初期推定値を含む）を返す。False は最終反復解 |
 | `save_residual_history` | `bool` | `False` | 残差履歴 `[初期, 反復1, ...]` の記録 |
 | `printrates` | `bool` | `False` | 収束情報の出力 |
-| `conjugate` | `bool` | `False` | 共役内積（エルミート系用、CGのみ。ICCG/COCRでは `ValueError`） |
+| `conjugate` | `bool` | `False` | CG/ICCGのエルミート正定値モード。ICCGは共役転置ICを使用し、構造を検査する。正定値性は呼出側の要件。COCRでは `ValueError` |
 | `auto_shift` | `bool` | `True` | ピボットが Re(d) < 1e-6·\|a_ii\| のとき shift を +0.01 して分解をやり直す（shift < 5 の間）。上限でも閾値未満ならエラー |
 | `diagonal_scaling` | `bool` | `True` | S = diag(1/√\|a_ii\|) で (SAS)y = Sb を解き x = Sy。a_ii = 0 の行は s_i = 1/max_{j<i}\|a_ij s_j\| |
 | `divergence_check` | `bool` | `True` | 停滞による停止 |

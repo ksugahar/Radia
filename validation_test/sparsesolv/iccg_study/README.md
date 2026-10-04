@@ -11,6 +11,7 @@ unstructured complex-symmetric systems and the original 48 AMS conditions.
 ## Reproduce
 
 Use an idle compute host with Python, NumPy, SciPy, pybind11, CMake and MSVC.
+The pinned baseline commit must be available locally; shallow clones need its history.
 The AMS comparison additionally uses the installed Radia/NGSolve native pair.
 Run in a Developer PowerShell with CMake on PATH, from the repository root:
 
@@ -108,7 +109,11 @@ Machine-readable evidence is in [results/core.json](results/core.json) and
 [results/ams.json](results/ams.json); the latter intentionally has `pass:false`.
 Operational paths/logs and prototype binaries are retained only privately.
 
-## Decision and promotion requirements
+## Original study decision and promotion requirements
+
+These were the original experiment's open requirements. See
+[production validation](PRODUCTION.md) for the subsequent implementation and
+measured results; the original failed AMS evidence above remains historical.
 
 1. Hermitian ICCG is viable for known HPD matrices. Keep this trial separate
    until structural Hermitian validation, positive-curvature/pivot failure
