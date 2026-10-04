@@ -47,6 +47,16 @@ BDDC+AMS at p=2/3. The latter explicitly selects an edge-only wirebasket and
 three AMS coarse cycles. Periodic Kelvin and compound-space restrictions
 remain distinct; inspect the current dispatch errors rather than assume a
 preconditioner applies to every space. `sparsecholesky` is the direct option.
+Periodic Kelvin `auto` selects SparseCholesky; explicit AMS/BDDC requests fail.
+Compound A-V and scalar thermal H1 do not inherit HCurl AMS support.
+
+Before scaling, retrieve `induction_heating("memory")` or
+`matrix_solvers_direct("capacity")` for the diagnostic report checklist.
+Direct can be fast when the factor fits; factor fill-in and Windows commit
+headroom govern capacity, not element count alone. Record outer solver,
+preconditioner and coarse solver: generic BDDC can retain direct factorization.
+This IH BDDC route explicitly configures AMS coarse cycles. Aggregate t_solve_s
+is not isolated factor time; absent memory/factor telemetry stays unavailable.
 No universal speed claim or new validation result follows from this recipe.
 
 ## Recipe 4: Verify-First Policy on a typical IH FES setup
