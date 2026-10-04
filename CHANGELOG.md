@@ -5,6 +5,17 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- SparseSolv ICCG retains complex-symmetric defaults and uses natural row
+  traversal for large serial triangular solves. Optional Hermitian
+  positive-definite ICCG is available through Python `conjugate=True` and
+  MATLAB `Conjugate=true`, with structural and encountered-curvature checks.
+  Corrected the combined RCM/ABMC SpMV permutation and factor reuse after
+  ordering or sparsity changes.
+- AMS applies its existing sparse Cholesky coarse factors in a fixed block
+  order, removing task-scheduling variation amplified by nearly singular
+  gradient corrections. The numerical factorization and residual gates remain
+  unchanged.
+
 ## 5.2.2 - Electromagnet block convergence reporting and B-H law
 
 Release candidate; publication and four-host acceptance are not yet complete.

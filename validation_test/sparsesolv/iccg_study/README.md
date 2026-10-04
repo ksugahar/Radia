@@ -1,10 +1,12 @@
 # ICCG Hermitian and throughput study
 
-This is an isolated, serial C++ experiment, not a production solver API. It
-builds four temporary pybind modules from the current SparseSolv headers:
+The original study is an isolated, serial C++ experiment. It
+builds four temporary pybind modules from the headers pinned at `a0700dac3`:
 baseline, natural-row triangular solves, Hermitian IC, and both changes.
-It neither installs modules nor changes `SparseSolvSolver`'s public rejection
-of `ICCG(conjugate=True)`. COCR's contract is unchanged.
+It does not install modules. Production now supports explicit Hermitian ICCG;
+the default remains complex symmetric. COCR's contract is unchanged.
+`run_production.py` exercises the production Python binary, including
+unstructured complex-symmetric systems and the original 48 AMS conditions.
 
 ## Reproduce
 

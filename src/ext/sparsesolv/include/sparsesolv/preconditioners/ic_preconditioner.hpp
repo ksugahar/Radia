@@ -12,6 +12,7 @@
 
 #include "../core/preconditioner.hpp"
 #include "../core/solver_config.hpp"
+#include "../core/hermitian.hpp"
 #include "../core/sparse_matrix_csr.hpp"
 #include "../core/level_schedule.hpp"
 #include "../core/abmc_ordering.hpp"
@@ -76,6 +77,9 @@ public:
      * @param A Symmetric positive definite sparse matrix (CSR format)
      */
     void setup(const SparseMatrixView<Scalar>& A) override {
+        const bool was_setup = this->is_setup_;
+        this->is_setup_ = false;
+        if (config_.conjugate) validate_hermitian(A);
         const index_t n = A.rows();
         const index_t nnz = A.row_ptr()[n];
         size_ = n;
@@ -84,10 +88,16 @@ public:
         // When pattern is the same AND the same code path (ABMC vs standard) is
         // used, skip ordering/scheduling rebuild and only update values + refactorize.
         // Path switch (e.g., use_abmc changed after construction) forces full rebuild.
-        const bool pattern_unchanged = this->is_setup_
+        const bool pattern_unchanged = was_setup
                                        && cached_n_ == n
                                        && cached_nnz_ == nnz
-                                       && cached_use_abmc_ == config_.use_abmc;
+                                       && cached_use_abmc_ == config_.use_abmc
+                                       && cached_rcm_ == config_.abmc_use_rcm
+                                       && cached_block_size_ == config_.abmc_block_size
+                                       && cached_colors_ == config_.abmc_num_colors
+                                       && std::equal(cached_rows_.begin(), cached_rows_.end(), A.row_ptr())
+                                       && std::equal(cached_columns_.begin(), cached_columns_.end(), A.col_idx());
+        if (config_.diagonal_scaling) work_temp2_.resize(n);
 
         if (config_.use_abmc) {
             // ============================================================
@@ -209,6 +219,11 @@ public:
             }
         }
 
+        cached_rows_.assign(A.row_ptr(), A.row_ptr() + n + 1);
+        cached_columns_.assign(A.col_idx(), A.col_idx() + nnz);
+        cached_rcm_ = config_.abmc_use_rcm;
+        cached_block_size_ = config_.abmc_block_size;
+        cached_colors_ = config_.abmc_num_colors;
         this->is_setup_ = true;
     }
 
@@ -268,9 +283,9 @@ public:
             reordered_csr_.values.data());
     }
 
-    /// Get the ABMC ordering (ordering[old_row] = new_row)
+    /// Original rows -> factor rows, including the optional RCM permutation.
     const std::vector<index_t>& abmc_ordering() const {
-        return abmc_schedule_.ordering;
+        return composite_perm_;
     }
 
     /// Check if RCM ordering is available
@@ -575,6 +590,9 @@ private:
     mutable std::vector<Scalar> abmc_y_perm_;   // Work vector: permuted output
 
     // Sparsity pattern cache (for Newton iteration: skip ordering rebuild)
+    std::vector<index_t> cached_rows_, cached_columns_;
+    bool cached_rcm_ = false;
+    int cached_block_size_ = 0, cached_colors_ = 0;
     index_t cached_n_ = 0;
     index_t cached_nnz_ = 0;
     bool cached_use_abmc_ = false;  // which path was used for cached ordering
@@ -1167,6 +1185,11 @@ private:
     // Pivot rules shared by both factorization orders
     // ================================================================
 
+    Scalar adjoint(const Scalar& v) const {
+        if constexpr (std::is_same_v<Scalar, double>) return v;
+        else return config_.conjugate ? std::conj(v) : v;
+    }
+
     static bool finite_scalar(const Scalar& v) {
         if constexpr (std::is_same_v<Scalar, double>) {
             return std::isfinite(v);
@@ -1188,7 +1211,7 @@ private:
 
     [[noreturn]] void throw_singular_pivot(index_t row, double shift) const {
         throw std::runtime_error(
-            "IC factorization: zero or non-finite pivot at row " + std::to_string(row)
+            "IC factorization: zero, non-finite or inadmissible pivot at row " + std::to_string(row)
             + " (shift " + std::to_string(shift) + ")");
     }
 
@@ -1259,7 +1282,7 @@ private:
                         // Find L(j, k) in row j
                         for (index_t jj = j_start; jj < j_end; ++jj) {
                             if (L_.col_idx[jj] == k) {
-                                s -= L_.values[ii] * L_.values[jj] * inv_diag_[k];
+                                s -= L_.values[ii] * adjoint(L_.values[jj]) * inv_diag_[k];
                                 break;
                             } else if (L_.col_idx[jj] > k) {
                                 break;
@@ -1286,7 +1309,7 @@ private:
                 for (index_t kk = row_start; kk < diag_pos; ++kk) {
                     const index_t k = L_.col_idx[kk];
                     if (k >= i) break;
-                    s -= L_.values[kk] * L_.values[kk] * inv_diag_[k];
+                    s -= L_.values[kk] * adjoint(L_.values[kk]) * inv_diag_[k];
                 }
 
                 L_.values[diag_pos] = s;
@@ -1299,7 +1322,7 @@ private:
                     }
                     throw_shift_limit(i, shift);
                 }
-                if (s == Scalar(0) || !finite_scalar(s)) {
+                if (s == Scalar(0) || !finite_scalar(s) || (config_.conjugate && !(std::real(s) > 0))) {
                     throw_singular_pivot(i, shift);
                 }
                 inv_diag_[i] = Scalar(1) / s;
@@ -1385,7 +1408,7 @@ private:
 
                                 for (index_t jj = j_start; jj < j_end; ++jj) {
                                     if (L_.col_idx[jj] == k) {
-                                        s -= L_.values[ii] * L_.values[jj] * inv_diag_[k];
+                                        s -= L_.values[ii] * adjoint(L_.values[jj]) * inv_diag_[k];
                                         break;
                                     } else if (L_.col_idx[jj] > k) {
                                         break;
@@ -1411,17 +1434,17 @@ private:
                         for (index_t kk = row_start; kk < diag_pos; ++kk) {
                             const index_t k = L_.col_idx[kk];
                             if (k >= i) break;
-                            s -= L_.values[kk] * L_.values[kk] * inv_diag_[k];
+                            s -= L_.values[kk] * adjoint(L_.values[kk]) * inv_diag_[k];
                         }
 
                         L_.values[diag_pos] = s;
 
                         if (pivot_too_small(orig_diag, s)) {
                             record_min(small_row, i);
-                        } else if (s == Scalar(0) || !finite_scalar(s)) {
+                        } else if (s == Scalar(0) || !finite_scalar(s) || (config_.conjugate && !(std::real(s) > 0))) {
                             record_min(fault_row, i);
                         }
-                        inv_diag_[i] = (s == Scalar(0) || !finite_scalar(s))
+                        inv_diag_[i] = (s == Scalar(0) || !finite_scalar(s) || (config_.conjugate && !(std::real(s) > 0)))
                             ? Scalar(0) : Scalar(1) / s;
                     }
                 });
@@ -1452,6 +1475,7 @@ private:
     /// Compute L^T (transpose of L)
     void compute_transpose() {
         Lt_ = L_.transpose();
+        for (auto& v : Lt_.values) v = adjoint(v);
     }
 
     /**
@@ -1461,6 +1485,16 @@ private:
      * level are independent and processed via parallel_for.
      */
     void forward_substitution(const Scalar* x, Scalar* y) const {
+        if (get_num_threads() == 1 && size_ >= 49152) {
+            for (index_t i = 0; i < size_; ++i) {
+                Scalar s = x[i];
+                const index_t end = L_.row_ptr[i + 1] - 1;
+                for (index_t k = L_.row_ptr[i]; k < end; ++k)
+                    s -= L_.values[k] * y[L_.col_idx[k]];
+                y[i] = s / L_.values[end];
+            }
+            return;
+        }
         for (const auto& level : fwd_schedule_.levels) {
             const index_t level_size = static_cast<index_t>(level.size());
             parallel_for(level_size, [&](index_t idx) {
@@ -1485,6 +1519,15 @@ private:
      * Uses level scheduling for parallelism.
      */
     void backward_substitution(const Scalar* x, Scalar* y) const {
+        if (get_num_threads() == 1 && size_ >= 49152) {
+            for (index_t i = size_; i-- > 0;) {
+                Scalar s = Scalar(0);
+                for (index_t k = Lt_.row_ptr[i] + 1; k < Lt_.row_ptr[i + 1]; ++k)
+                    s -= Lt_.values[k] * y[Lt_.col_idx[k]];
+                y[i] = s * inv_diag_[i] + x[i];
+            }
+            return;
+        }
         for (const auto& level : bwd_schedule_.levels) {
             const index_t level_size = static_cast<index_t>(level.size());
             parallel_for(level_size, [&](index_t idx) {

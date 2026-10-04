@@ -104,9 +104,9 @@ struct SolverConfig {
     // Complex inner product
     //--------------------------------------------------
 
-    /// Use conjugated inner product (a^H * b) for Hermitian systems.
+    /// Use conjugated products and adjoint IC for Hermitian positive-definite systems.
     /// Default false uses unconjugated (a^T * b) for complex-symmetric systems.
-    /// Has no effect for real-valued problems.
+    /// Also enables structural/positive-curvature checks; COCR rejects true.
     bool conjugate = false;
 
     //--------------------------------------------------

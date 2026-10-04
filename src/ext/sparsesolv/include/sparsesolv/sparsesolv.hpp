@@ -300,7 +300,7 @@ template<typename Scalar = double>
     index_t size,
     const SolverConfig& config = SolverConfig()
 ) {
-    detail::reject_conjugate(config, "ICCG: the IC factor is complex symmetric");
+    if (config.conjugate) validate_hermitian(A);
     return detail::solve_scaled(A, b, x, size, config,
         [](const SparseMatrixView<Scalar>& M, const Scalar* rhs, Scalar* sol,
            const SolverConfig& cfg) {
