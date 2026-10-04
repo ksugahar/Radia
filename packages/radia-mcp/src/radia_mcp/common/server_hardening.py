@@ -29,6 +29,7 @@ import json
 import os
 import re
 import time
+from uuid import uuid4
 from collections.abc import Sized
 
 from mcp.types import ToolAnnotations
@@ -231,12 +232,14 @@ def rotate_if_large(log_path, cap_bytes: int = CALL_LOG_ROTATE_BYTES) -> bool:
 def install_call_log(mcp, log_name: str, env_var: str | None = None) -> bool:
     """Wrap ``ToolManager.call_tool`` with a JSONL all-calls log.
 
-    Every call appends ``{ts, tool, args, ms, ok, error_type?}`` to
+    Every call appends ``{ts, runtime_id, call_id, tool, args, ms, ok, error_type?}`` to
     ``<state_dir>/logs/<log_name>`` (size-capped via
     :func:`rotate_if_large`).  Argument *values are never recorded*;
     only key, type and length/shape metadata are retained.  A server-specific
     ``env_var`` overrides the fleet-wide ``RADIA_MCP_CALL_LOG`` switch.
     Installation is idempotent and creates no directory until the first call.
+    Random identifiers correlate local calls without storing client or solver
+    identities. Duration uses a monotonic clock; timestamps remain wall time.
 
     Returns ``True`` when the wrapper was installed.
     """
@@ -250,6 +253,7 @@ def install_call_log(mcp, log_name: str, env_var: str | None = None) -> bool:
         return False
 
     orig_call_tool = manager.call_tool
+    runtime_id = uuid4().hex
 
     def _digest(arguments: dict) -> dict:
         out = {}
@@ -273,9 +277,10 @@ def install_call_log(mcp, log_name: str, env_var: str | None = None) -> bool:
 
     async def logged_call_tool(name, arguments, context=None,
                                convert_result=False):
-        t0 = time.time()
+        t0 = time.perf_counter()
         record = {"schema": "radia-mcp.tool-call.v1",
-                  "ts": round(t0, 3), "tool": name,
+                  "ts": round(time.time(), 3), "tool": name,
+                  "runtime_id": runtime_id, "call_id": uuid4().hex,
                   "args": _digest(arguments)}
         try:
             result = await orig_call_tool(
@@ -288,7 +293,7 @@ def install_call_log(mcp, log_name: str, env_var: str | None = None) -> bool:
             record["error_type"] = type(exc).__name__
             raise
         finally:
-            record["ms"] = round((time.time() - t0) * 1000, 1)
+            record["ms"] = round((time.perf_counter() - t0) * 1000, 1)
             try:
                 log_dir = _fl.state_dir() / "logs"
                 log_dir.mkdir(parents=True, exist_ok=True)
