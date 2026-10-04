@@ -59,7 +59,7 @@ PowerPoint、Word、Excel向けには、inline 18 pt MathMLと18 ptを明示し�
 PowerPointはCF_HTML内のMathMLを通常テキストに平坦化するため、この登録形式で
 積分などの上下限を含む数式を編集可能なOMMLに変換します。PowerPointでは数式段落が
 中央寄せになります。複数行の`aligned`は行ごとの配置を崩さないようCF_HTML経路を
-使います。Web版は従来どおりCF_HTML経路を使います。
+使います。Web版はブラウザー既存のコピー経路を使います。
 旧Office向けには区切り付きLaTeXも残します。IrfanViewなどの画像ソフトは
 EMFまたは全画素不透明の32-bit DIBV5を選べます。TeX対応ソフト向けには生の断片も
 `LaTeX` 形式で保持します。
