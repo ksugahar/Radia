@@ -5,6 +5,8 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 5.2.3 - ICCG throughput and deterministic AMS corrections
+
 - SparseSolv ICCG retains complex-symmetric defaults and uses natural row
   traversal for large serial triangular solves. Optional Hermitian
   positive-definite ICCG is available through Python `conjugate=True` and
