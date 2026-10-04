@@ -1158,8 +1158,8 @@ def test_iccg_contract_exact_guess_returns_before_ic_factorization():
         solver.Solve(rhs, x)  # iterating needs the IC factor, whose pivot is zero
 
 
-@pytest.mark.parametrize("method", ["ICCG", "COCR"])
-def test_iccg_contract_conjugate_only_with_cg(poisson_2d, method):
+@pytest.mark.parametrize("method", ["COCR"])
+def test_cocr_contract_rejects_conjugate(poisson_2d, method):
     _, fes, a, f, _, _ = poisson_2d
     solver = SparseSolvSolver(a.mat, method=method, freedofs=fes.FreeDofs(), conjugate=True)
     with pytest.raises(ValueError):
@@ -1540,15 +1540,7 @@ def test_conjugate_factory_parameter(poisson_2d_complex):
     assert solver.conjugate is True
 
 
-def test_iccg_rejects_conjugate(poisson_2d_complex):
-    """The IC factor is complex symmetric, so Hermitian ICCG is refused."""
-    _, fes, a, f = poisson_2d_complex
-    solver = SparseSolvSolver(a.mat, method="ICCG", freedofs=fes.FreeDofs(), conjugate=True)
-    with pytest.raises(ValueError):
-        solver.Solve(f.vec, GridFunction(fes).vec)
-
-
-@pytest.mark.parametrize("method", ["CG"])
+@pytest.mark.parametrize("method", ["CG", "ICCG"])
 def test_hermitian_system_with_conjugate(poisson_2d_complex, method):
     """Hermitian system (real coefficients, complex space) solves with conjugate=True."""
     mesh, fes, a, f = poisson_2d_complex

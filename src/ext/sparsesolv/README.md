@@ -14,6 +14,14 @@ COCR (Conjugate Orthogonal Conjugate Residual) on top of official
 - **COCR** — short-recurrence Krylov solver for complex-symmetric
   systems (A^T = A) (Sogabe–Zhang 2007).
 - **ICCG** — auto-shift IC(0) + ABMC parallel triangular solve.
+  Complex-symmetric products remain the default (`conjugate=False`).
+  Explicit `conjugate=True` selects Hermitian positive-definite ICCG with
+  adjoint IC; MATLAB uses `Conjugate=true`. Structure and positive diagonal
+  are checked (64 machine epsilons, scaled by entries and participating
+  diagonals), and encountered non-positive curvature raises. These checks
+  do not certify positive definiteness for all right-hand sides.
+  Serial triangular application uses natural row order for at least 49,152
+  rows; parallel level scheduling and ABMC remain available.
 
 Forked from [JP-MARs/SparseSolv](https://github.com/JP-MARs/SparseSolv).
 Header-only C++17, supports both `double` and `std::complex<double>`.

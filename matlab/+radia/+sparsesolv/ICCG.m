@@ -21,6 +21,10 @@ function [solution, info] = ICCG(matrix, rhs, options)
 %   SparseSolvSolver defaults.
 %   Non-convergence is reported in info, not raised; invalid options,
 %   non-finite input and IC breakdown raise radia:mex:Exception.
+%   Conjugate=true selects Hermitian positive-definite ICCG (L D L^H).
+%   The default false retains complex-symmetric products (L D L^T).
+%   Hermitian structure and positive diagonal are checked; the caller must
+%   ensure positive definiteness. Encountered non-positive curvature raises.
 arguments
     matrix (1,1) radia.ngsolve.Matrix
     rhs (1,1) radia.ngsolve.Vector
@@ -28,6 +32,7 @@ arguments
     options.Tolerance (1,1) double {mustBeFinite,mustBePositive} = 1e-8
     options.MaxIterations (1,1) double {mustBeInteger,mustBeNonnegative} = 0
     options.Shift (1,1) double {mustBeFinite,mustBeGreaterThanOrEqual(options.Shift,1)} = 1
+    options.Conjugate (1,1) logical = false
     options.AutoShift (1,1) logical = true
     options.DiagonalScaling (1,1) logical = true
     options.SaveBestResult (1,1) logical = true
@@ -54,6 +59,7 @@ native = struct( ...
     'tolerance', options.Tolerance, ...
     'max_iterations', options.MaxIterations, ...
     'shift', options.Shift, ...
+    'conjugate', options.Conjugate, ...
     'auto_shift', options.AutoShift, ...
     'diagonal_scaling', options.DiagonalScaling, ...
     'save_best_result', options.SaveBestResult, ...

@@ -2,11 +2,13 @@
 import argparse
 import difflib
 import hashlib
+import io
 import json
 from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tarfile
 import pybind11
 
 
@@ -70,9 +72,23 @@ def main():
     args = parser.parse_args()
     here = Path(__file__).resolve().parent
     repo = here.parents[2]
-    source = repo / "src/ext/sparsesolv/include"
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
+    # This historical experiment predates production integration. Pin the
+    # baseline rather than applying the transformations twice to current code.
+    baseline = "a0700dac35e06f1f0a376aff3a05e6b2f5845f65"
+    prefix = "src/ext/sparsesolv/include/"
+    archive = subprocess.check_output(["git", "archive", baseline, prefix], cwd=repo)
+    source = out / "source"
+    with tarfile.open(fileobj=io.BytesIO(archive)) as tree:
+        for member in tree.getmembers():
+            if member.isfile() and member.name.startswith(prefix):
+                relative_name = member.name[len(prefix):]
+                if ".." in Path(relative_name).parts:
+                    raise ValueError("unsafe archive member")
+                destination = source / relative_name
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(tree.extractfile(member).read())
     hashes = {}
     relative = Path("sparsesolv/preconditioners/ic_preconditioner.hpp")
     original = (source / relative).read_text(encoding="utf-8")

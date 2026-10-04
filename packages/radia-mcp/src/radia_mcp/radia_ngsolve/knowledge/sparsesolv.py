@@ -148,7 +148,7 @@ solver = SparseSolvSolver(
     save_best_result=True,        # return the best iterate (initial guess included)
     save_residual_history=False,  # record [initial, iteration 1, ...]
     printrates=False,             # Print convergence info
-    conjugate=False,              # Hermitian products; CG only (ICCG/COCR raise)
+    conjugate=False,              # Hermitian CG/ICCG products (COCR rejects True)
     use_abmc=False,               # Enable ABMC ordering for parallel triangular solves
     abmc_block_size=4,            # Rows per block in ABMC aggregation
     abmc_num_colors=4,            # Target number of colors for ABMC coloring
@@ -186,7 +186,7 @@ meets `tol` returns without iterating.
 | diagonal_scaling      | bool  | True     | Solve the scaled system S A S            |
 | divergence_check      | bool  | True     | Stagnation stop                          |
 | divergence_threshold  | float | 10.0     | Counter reset below best*threshold       |
-| conjugate             | bool  | False    | Hermitian products (CG only)             |
+| conjugate             | bool  | False    | Hermitian products (CG/ICCG)             |
 | divergence_count      | int   | 10       | Stop when the counter exceeds it         |
 | printrates            | bool  | False    | Print convergence info                   |
 | use_abmc              | bool  | False    | ABMC ordering for parallel tri. solves   |
@@ -337,7 +337,7 @@ gfu = GridFunction(fes)
 gfu.vec.data = solver * f.vec
 ```
 
-## 3b. Hermitian System (CG with conjugate=True)
+## 3b. Hermitian Positive-Definite System (ICCG with conjugate=True)
 
 ```python
 # Real-coefficient problem in complex FE space => Hermitian (A^H = A)
@@ -348,9 +348,9 @@ a = BilinearForm(fes)
 a += grad(u) * grad(v) * dx + u * v * dx  # real coefficients => Hermitian
 a.Assemble()
 
-# Hermitian: CG with conjugated inner products a^H * b.  The IC factor is
-# complex symmetric, so method="ICCG" (and "COCR") reject conjugate=True.
-solver = SparseSolvSolver(a.mat, method="CG",
+# Hermitian positive definite: adjoint IC and conjugated products a^H * b.
+# Structure is checked; the caller must ensure positive definiteness.
+solver = SparseSolvSolver(a.mat, method="ICCG",
                            freedofs=fes.FreeDofs(),
                            tol=1e-10, conjugate=True)
 gfu = GridFunction(fes)
@@ -516,13 +516,13 @@ This is the most common source of confusion:
   - Examples: eddy current with `1j * sigma * u * v * dx`
   - Inner product: a^T * b (unconjugated)
 
-- **Hermitian** (A^H = A): `method="CG"` with `conjugate=True`
+- **Hermitian positive definite** (A^H = A): `method="ICCG"` or `"CG"` with `conjugate=True`
   - Examples: real-coefficient problem assembled in complex FE space
   - Inner product: a^H * b (conjugated)
-  - ICCG and COCR raise ValueError for `conjugate=True` (complex-symmetric
-    IC factor / unconjugated COCR).  For a real-coefficient matrix in a
-    complex space A^T = A^H, so ICCG with the default `conjugate=False` is
-    also valid
+  - ICCG checks Hermitian structure and uses an adjoint IC factor.
+    Positive definiteness remains a caller requirement; encountered
+    non-positive curvature raises. COCR rejects `conjugate=True`.
+    Default `conjugate=False` keeps the complex-symmetric contract.
 
 Using the wrong setting causes divergence or extremely slow convergence
 (e.g., 5000 iterations instead of 58).
@@ -1041,7 +1041,7 @@ solver = ssn.SparseSolvSolver(a.mat, method="COCR",
 ```
 
 Note: COCR uses unconjugated inner product (x^T y, not x^H y).
-For Hermitian systems, use CG with conjugate=True.
+For Hermitian positive-definite systems, use CG or ICCG with conjugate=True.
 
 ## Limitations
 

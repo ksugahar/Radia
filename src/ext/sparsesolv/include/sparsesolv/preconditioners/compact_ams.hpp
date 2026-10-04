@@ -984,7 +984,12 @@ private:
 
         // Coarse solve: g_c = B^{-1} * r_c (one AMG V-cycle)
         g_c.FVDouble() = 0;
-        ProfileCorrection(t_auxiliary_, [&]() { B.Mult(r_c, g_c); });
+        ProfileCorrection(t_auxiliary_, [&]() {
+            if (dynamic_cast<const SparseCholesky<double>*>(&B))
+                DeterministicCoarseSolve(B, r_c, g_c);
+            else
+                B.Mult(r_c, g_c);
+        });
 
         // Prolongate and add: x += omega * P * g_c
         ProfileCorrection(t_prolong_, [&]() { P.MultAdd(correction_weight_, g_c, x); });
@@ -1051,9 +1056,15 @@ private:
         // (direct inverses) assign it as well.
         // Sequential on purpose: each AMG V-cycle is internally parallel, and
         // running the three inside one ParallelFor (nested jobs) livelocks.
-        B_Pix_->Mult(*r_Pix_, *g_Pix_);
-        B_Piy_->Mult(*r_Piy_, *g_Piy_);
-        B_Piz_->Mult(*r_Piz_, *g_Piz_);
+        if (subspace_solver_ == 1) {
+            DeterministicCoarseSolve(*B_Pix_, *r_Pix_, *g_Pix_);
+            DeterministicCoarseSolve(*B_Piy_, *r_Piy_, *g_Piy_);
+            DeterministicCoarseSolve(*B_Piz_, *r_Piz_, *g_Piz_);
+        } else {
+            B_Pix_->Mult(*r_Pix_, *g_Pix_);
+            B_Piy_->Mult(*r_Piy_, *g_Piy_);
+            B_Piz_->Mult(*r_Piz_, *g_Piz_);
+        }
         });
 
         // Prolongate and add all 3 corrections (one sweep when fused)

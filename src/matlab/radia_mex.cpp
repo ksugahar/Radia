@@ -4885,6 +4885,9 @@ void SparseSolvICCGSolve(const std::shared_ptr<ngla::SparseMatrix<SCAL>>& mat,
         Boolean(SparseSolvOption(options, "save_best_result"), "save_best_result"),
         Boolean(SparseSolvOption(options, "save_residual_history"), "save_residual_history"),
         false);
+    // Older native callers omit this newly optional field.
+    const mxArray* conjugate = mxGetField(options, 0, "conjugate");
+    solver.SetConjugate(conjugate ? Boolean(conjugate, "conjugate") : false);
     solver.SetAutoShift(Boolean(SparseSolvOption(options, "auto_shift"), "auto_shift"));
     solver.SetDiagonalScaling(
         Boolean(SparseSolvOption(options, "diagonal_scaling"), "diagonal_scaling"));
@@ -4918,7 +4921,7 @@ void SparseSolvICCG(int nlhs, mxArray* plhs[], int nrhs,
         "tolerance", "max_iterations", "shift", "auto_shift", "diagonal_scaling",
         "save_best_result", "save_residual_history", "divergence_check",
         "divergence_threshold", "divergence_count", "use_abmc", "abmc_block_size",
-        "abmc_num_colors", "abmc_reorder_spmv", "abmc_use_rcm"};
+        "abmc_num_colors", "abmc_reorder_spmv", "abmc_use_rcm", "conjugate"};
     for (int f = 0; f < mxGetNumberOfFields(prhs[4]); ++f) {
         const std::string field = mxGetFieldNameByNumber(prhs[4], f);
         if (std::find(std::begin(known), std::end(known), field) == std::end(known))

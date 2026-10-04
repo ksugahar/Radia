@@ -73,6 +73,13 @@ protected:
         // Fused: z = M^{-1} * r AND rz_old = dot(r, z)
         Scalar rz_old = this->apply_preconditioner_fused_dot();
 
+        auto require_positive = [&](const Scalar& value, const char* message) {
+            if (config.conjugate && (!(std::real(value) > 0)
+                || !std::isfinite(std::abs(value))))
+                throw std::runtime_error(message);
+        };
+        require_positive(rz_old, "Hermitian CG: preconditioner is not positive definite");
+
         // p = z
         std::copy(z.begin(), z.end(), p.begin());
 
@@ -99,6 +106,8 @@ protected:
                 }
             });
 
+            require_positive(pAp, "Hermitian CG: non-positive matrix curvature");
+
             // Breakdown: the current iterate has already been tested
             if (!(std::abs(pAp) > 0.0) || !std::isfinite(std::abs(pAp))) {
                 return this->build_result(false, iter - 1);
@@ -122,6 +131,7 @@ protected:
             // Fused: z = M^{-1} * r AND rz_new = dot(r, z) in one pass
             // Avoids a separate kernel launch for the dot product
             Scalar rz_new = this->apply_preconditioner_fused_dot();
+            require_positive(rz_new, "Hermitian CG: preconditioner is not positive definite");
             Scalar beta = rz_new / rz_old;
             rz_old = rz_new;
 

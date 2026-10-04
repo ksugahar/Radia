@@ -16,6 +16,7 @@
 #define SPARSESOLV_COMPACT_AMG_HPP
 
 #include <comp.hpp>
+#include <sparsecholesky.hpp>
 #include <vector>
 #include <cmath>
 #include <random>
@@ -27,6 +28,32 @@
 #include <chrono>
 
 namespace ngla {
+
+// Keep NGSolve's sparse factorization, but visit its solve blocks in a fixed
+// order. Parallel microtasks otherwise atomically accumulate in varying order;
+// nearly singular gradient coarse spaces amplify that rounding variation.
+inline void DeterministicCoarseSolve(const BaseMatrix& inverse,
+                                    const BaseVector& b, BaseVector& x) {
+    const auto* factor = dynamic_cast<const SparseCholesky<double>*>(&inverse);
+    if (!factor)
+        throw std::runtime_error("AMG coarse solve requires real sparsecholesky");
+    Vector<double> work(factor->GetNUsed());
+    work = 0.0;
+    const auto order = factor->GetOrder();
+    const auto blocks = factor->GetBlocks();
+    const auto diagonal = factor->GetDiag();
+    auto rhs = b.FVDouble();
+    auto result = x.FVDouble();
+    for (int i = 0; i < order.Size(); ++i)
+        if (order[i] != -1) work[order[i]] = rhs[i];
+    for (int block = 0; block + 1 < blocks.Size(); ++block)
+        factor->SolveBlock(block, work);
+    for (int i = 0; i < work.Size(); ++i) work[i] *= diagonal[i];
+    for (int block = int(blocks.Size()) - 2; block >= 0; --block)
+        factor->SolveBlockT(block, work);
+    for (int i = 0; i < order.Size(); ++i)
+        result[i] = order[i] == -1 ? 0.0 : work[order[i]];
+}
 
 inline bool GalerkinProductOnPattern(const SparseMatrix<double>& Pt, const SparseMatrix<double>& A,
                                      const SparseMatrix<double>& P, SparseMatrix<double>& C);
@@ -1319,8 +1346,8 @@ private:
             if (!lev.dense_inv.empty()) {
                 DenseSolve(lev, b1, x1, &b2, &x2);
             } else if (lev.inv) {
-                lev.inv->Mult(b1, x1);
-                lev.inv->Mult(b2, x2);
+                DeterministicCoarseSolve(*lev.inv, b1, x1);
+                DeterministicCoarseSolve(*lev.inv, b2, x2);
             } else {
                 for (int s = 0; s < 10; s++)
                     DualL1JacobiSmooth(level, b1, x1, b2, x2, s == 0);
@@ -1484,7 +1511,7 @@ private:
             if (!lev.dense_inv.empty()) {
                 DenseSolve(lev, b, x, nullptr, nullptr);
             } else if (lev.inv) {
-                lev.inv->Mult(b, x);
+                DeterministicCoarseSolve(*lev.inv, b, x);
             } else {
                 // Fall back to l1-Jacobi smoothing
                 for (int s = 0; s < 10; s++)

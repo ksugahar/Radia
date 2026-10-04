@@ -983,7 +983,9 @@ save_residual_history : bool
 printrates : bool
   Print convergence info (default: False).
 conjugate : bool
-  Conjugated inner product for Hermitian systems; CG only (default False).
+  Hermitian products for CG/ICCG (default False); ICCG uses adjoint IC.
+  ICCG checks Hermitian structure; the caller must ensure positive definiteness.
+  Encountered non-positive curvature raises. COCR rejects True.
 auto_shift : bool
   Restart the IC factorization with shift + 0.01 while a pivot has
   Re(d) < 1e-6 |a_ii| and shift < 5; a pivot still below it at the limit

@@ -133,6 +133,32 @@ switch name
 end
 end
 
+function testHermitianICCG(t)
+mesh = radia.ngsolve.Mesh.create(t.TestData.ref.mesh);
+space = radia.ngsolve.FESpace.create(mesh,"h1",2,Dirichlet=".*",Complex=true);
+form = radia.ngsolve.BilinearForm.create(space,"stiffness");
+a = form.matrix();
+rhs = a.vector();
+cleanup = onCleanup(@() cellfun(@delete,{rhs,a,form,space,mesh})); %#ok<NASGU>
+free = logical(radia.internal.callMex('ngsolve.fespace.free_dofs',space.nativeHandle()));
+b = exp(0.3i*(1:rhs.Size)'); b(~free) = 0;
+rhs.setValues(b);
+A = sparse(a);
+reference = A(free,free)\b(free);
+for abmc = [false,true]
+    [x,info] = radia.sparsesolv.ICCG(a,rhs,Conjugate=true,UseABMC=abmc,Tolerance=1e-11);
+    verifyTrue(t,info.converged);
+    values = x.values();
+    verifyLessThan(t,norm(values(free)-reference)/norm(reference),1e-9);
+    verifyLessThan(t,norm(A(free,free)*values(free)-b(free))/norm(b(free)),1e-10);
+    delete(x);
+end
+[~,~,bad,badCleanup] = iccgSystem(t,true); %#ok<ASGLU>
+zero = bad.vector(); zero.setZero();
+zeroCleanup = onCleanup(@() delete(zero)); %#ok<NASGU>
+verifyError(t,@() radia.sparsesolv.ICCG(bad,zero,Conjugate=true),'radia:mex:Exception');
+end
+
 function testICCGPythonParity(t)
 % The MEX entry runs the same C++ ICCG as the Python module; results agree to
 % thread-order rounding, with the same option meaning and result fields.
@@ -198,13 +224,13 @@ good = struct('tolerance',1e-8,'max_iterations',0,'shift',1,'auto_shift',true, .
     'diagonal_scaling',true,'save_best_result',true,'save_residual_history',false, ...
     'divergence_check',true,'divergence_threshold',10,'divergence_count',10, ...
     'use_abmc',false,'abmc_block_size',4,'abmc_num_colors',4,'abmc_reorder_spmv',false, ...
-    'abmc_use_rcm',false);
+    'abmc_use_rcm',false,'conjugate',false);
 [hc, infoc] = rawIccg(a.nativeHandle(), rhs.nativeHandle(), uint64(0), good);
 verifyTrue(t, infoc.converged);
 radia.internal.callMex('ngsolve.vector.destroy', hc);
 verifyError(t, @() rawIccg(a.nativeHandle(), rhs.nativeHandle(), uint64(0), ...
     rmfield(good, 'divergence_count')), 'radia:mex:Exception');          % missing option
-withExtra = good; withExtra.conjugate = true;
+withExtra = good; withExtra.unknown_option = true;
 verifyError(t, @() rawIccg(a.nativeHandle(), rhs.nativeHandle(), uint64(0), withExtra), ...
     'radia:mex:Exception');                                              % unknown option
 negative = good; negative.max_iterations = -1;
