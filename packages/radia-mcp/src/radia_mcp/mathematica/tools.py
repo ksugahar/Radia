@@ -445,3 +445,4 @@ from .helpers import (  # noqa: E402, F401
     mathematica_integrate,
     mathematica_differentiate,
 )
+from .equation_export import mathematica_export_equation  # noqa: E402, F401

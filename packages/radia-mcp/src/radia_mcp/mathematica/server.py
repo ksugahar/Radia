@@ -14,6 +14,7 @@ Tools:
     mathematica_status()                   — diagnostic: is wolframscript OK?
     mathematica_simplify(expr, assumptions)
     mathematica_to_tex(expr)               — TeXForm for paper writing
+    mathematica_export_equation(expr)      — evaluated result to EqnEdit64/Office
     mathematica_check_identity(lhs, rhs)   — verify LHS == RHS
     mathematica_check_identities(claims)   — batch named identities in one kernel
     mathematica_verification_guide(topic)  — choose checks and execution mode
