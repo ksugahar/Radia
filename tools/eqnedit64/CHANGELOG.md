@@ -9,11 +9,6 @@
 
 ## 3.1.0 — release candidate
 
-- Preserve scripts and integral bounds when copying a single equation from the
-  Windows app into current PowerPoint by publishing registered MathML alongside
-  CF_HTML. PowerPoint imports the equation as editable OMML and centres its math
-  paragraph; aligned multi-row equations retain the CF_HTML path.
-
 - Replace the native embedded CFF resource with Eqnedit Math, a reproducibly
   converted TrueType-outline derivative of Latin Modern Math. Both EXE and
   wheel module use the same asset and physical family; reject a non-TrueType
