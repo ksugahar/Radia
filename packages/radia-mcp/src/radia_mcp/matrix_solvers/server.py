@@ -57,7 +57,8 @@ def matrix_solvers_direct(topic: str = "overview") -> str:
 
     Args:
         topic: One of:
-            "overview"      - When direct beats iterative (DEFAULT)
+            "overview"      - Speed, capacity and direct-solver policy (DEFAULT)
+            "capacity"      - Memory/BDDC diagnostics; aliases memory, diagnostics, bddc
             "sparsecholesky" - Supported symmetric FE direct solve
             "pardiso"       - Retired selection: migration guidance only
             "mumps"         - Separate external integration, not a fallback
@@ -146,11 +147,11 @@ def pick_a_solver(problem_class: str) -> str:
             "Magnetostatic (H1 scalar potential):\n"
             "1. SPD matrix → CG\n"
             "   → matrix_solvers_krylov('cg')\n"
-            "2. Preconditioner: classical IC for N<100k, AMG for larger\n"
+            "2. Preconditioner: validated IC or AMG; measure setup and solve\n"
             "   → matrix_solvers_preconditioners('classical')\n"
             "   → matrix_solvers_preconditioners('amg')\n"
-            "3. For Radia HDiv-VIM (N<500): LU direct (method=0)\n"
-            "   → matrix_solvers_direct('lu_radia')\n"
+            "3. Direct symmetric FE reference: SparseCholesky\n"
+            "   → matrix_solvers_direct('sparsecholesky')\n"
         ),
         "magnetostatic_hcurl": (
             "Magnetostatic (HCurl A-formulation):\n"
@@ -197,12 +198,13 @@ def pick_a_solver(problem_class: str) -> str:
         "indefinite_saddle_point": (
             "Indefinite saddle-point (Stokes-like, mixed FE):\n"
             "1. MINRES + block-diagonal preconditioner\n"
-            "2. Direct: MUMPS (handles symmetric indefinite cleanly)\n"
+            "2. MUMPS requires a separate validated external integration\n"
             "   → matrix_solvers_direct('mumps')\n"
             "3. NOT in lab core (defer to NGSolve examples)\n"
         ),
     }
-    return guidance.get(problem_class, (
+    capacity = "\nCapacity/BDDC diagnostics: matrix_solvers_direct('memory').\n"
+    return capacity + guidance.get(problem_class, (
         f"Unknown problem_class '{problem_class}'. Available:\n"
         "  magnetostatic_h1, magnetostatic_hcurl, eddy_current_mqs,\n"
         "  frequency_sweep, non_symmetric, indefinite_saddle_point.\n"

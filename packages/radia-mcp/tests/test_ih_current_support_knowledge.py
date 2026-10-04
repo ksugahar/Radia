@@ -40,3 +40,15 @@ def test_3d_kelvin_reluctivity_factor_is_squared():
     text = get_induction_heating_documentation('all')
     assert "(r'/a)^4" not in text
     assert "nu' = nu0 * (r'/R)^2 in exterior sphere (3D HCurl A" in text
+
+
+def test_ih_capacity_report_does_not_invent_factor_telemetry_or_expand_ams():
+    text = get_induction_heating_documentation("memory")
+    flat = " ".join(text.split())
+    assert "explicit `ams` or `bddc` requests fail" in flat
+    assert "Scalar thermal H1" in text and "Compound A-V" in text
+    assert "t_solve_s and t_total_s are aggregates, not isolated factor timings" in flat
+    assert "ndof is total DOFs" in flat
+    assert "Missing telemetry is unavailable, never zero" in flat
+    assert "nonlinear and physical acceptance criteria unchanged" in flat
+    assert "linear_solver_requested and linear_solver" in flat

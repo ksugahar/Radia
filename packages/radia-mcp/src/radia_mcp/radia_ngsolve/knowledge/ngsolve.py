@@ -15,6 +15,8 @@ Sources:
   - public-safe curated corpus (K. Sugahara's EM formulations)
 """
 
+from radia_mcp.matrix_solvers.direct_solvers_knowledge import SOLVER_CAPACITY
+
 NGSOLVE_OVERVIEW = """
 # NGSolve Overview
 
@@ -385,8 +387,8 @@ solvers.MinRes(mat=a.mat, rhs=f.vec, sol=gfu.vec,
 | Non-symmetric (Navier-Stokes) | No general direct route; validate formulation | GMRes |
 | Complex symmetric (eddy current) | sparsecholesky, validate residual | COCR/GMRES + suitable preconditioner |
 | BEM dense | N/A | GMRes + Calderon precond |
-| Small (<10K DOF) | sparsecholesky for supported symmetric systems | Problem-dependent |
-| Large (>100K DOF) | May run out of memory | BDDC + AMG |
+
+Select by supported matrix/space and measured capacity; no DOF cutoff applies.
 
 ## Eigenvalue Problems
 
@@ -7336,6 +7338,8 @@ Representative next promotions:
 """
 
 
+NGSOLVE_SOLVERS += SOLVER_CAPACITY
+
 def get_ngsolve_documentation(topic: str = "all") -> str:
     """Return NGSolve usage documentation by topic."""
     topics = {
@@ -7685,6 +7689,10 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
         "coenergy": NGSOLVE_FROZEN_PERM,
         "co_energy": NGSOLVE_FROZEN_PERM,
         "superposition": NGSOLVE_FROZEN_PERM,
+        "capacity": SOLVER_CAPACITY,
+        "memory": SOLVER_CAPACITY,
+        "diagnostics": SOLVER_CAPACITY,
+        "bddc": SOLVER_CAPACITY,
         "overview": NGSOLVE_OVERVIEW,
         "spaces": NGSOLVE_FE_SPACES,
         "maxwell": NGSOLVE_MAXWELL,
@@ -7754,7 +7762,8 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
         lines.append('Legacy ngsolve_usage(topic="all") returns the full, very large corpus.')
         return "\n".join(lines)
     if topic == "all":
-        return "\n\n".join(topics.values())
+        return "\n\n".join(value for key, value in topics.items()
+                            if key not in ("capacity", "memory", "diagnostics", "bddc"))
     elif topic in topics:
         return topics[topic]
     else:

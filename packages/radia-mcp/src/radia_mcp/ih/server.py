@@ -62,6 +62,8 @@ def induction_heating(topic: str = "all") -> str:
             "postprocess"   - GMSH output, field evaluation
             "pitfalls"      - Common mistakes
             "esim_kelvin"   - ESIM + Kelvin for IH
+            "memory"        - Solver capacity, actual IH chain and diagnostic reporting
+                              (aliases solvers, capacity, diagnostics, bddc)
     """
     return get_induction_heating_documentation(topic)
 
