@@ -23,6 +23,8 @@ was aspirational and never landed; symbols stay in
 will fail at import time on every machine.
 """
 
+from radia_mcp.matrix_solvers.direct_solvers_knowledge import SOLVER_CAPACITY
+
 SPARSESOLV_OVERVIEW = """
 # sparsesolv (radia.sparsesolv_ngsolve)
 
@@ -501,12 +503,12 @@ SPARSESOLV_BEST_PRACTICES = """
 |---------------------------------|--------------------------------|----------------------------------|
 | H1 Poisson/Elasticity (small)  | IC (shift=1.05)                | Fast, reliable                   |
 | H1 Poisson/Elasticity (large)  | Compact AMG                    | Header-only AMG, no HYPRE needed |
-| HCurl curl-curl (semi-definite)| IC + auto_shift                | Handles kernel automatically     |
+| HCurl curl-curl (semi-definite)| IC + auto_shift | Requires compatible load and validated nullspace treatment |
 | HCurl magnetostatics (real)    | **Compact AMS + CG**           | Mesh-independent iterations      |
-| HCurl eddy current (complex)   | **Compact AMS + COCR**         | Best: 52 iters stable at any scale |
-| HCurl eddy current (complex)   | ICCG (fallback)                | Simple but O(h^-1) iteration growth |
+| HCurl eddy current (complex symmetric) | **Compact AMS + COCR** | Validated application setup only |
+| Hermitian positive definite | ICCG, conjugate=True | Explicit selection; not complex-symmetric eddy current |
 | Large parallel (H1)            | ABMC + IC                      | Parallel triangular solve        |
-| Any problem, IC fails          | SGS-MRTR                       | No factorization needed          |
+| Compatible SGSMRTR application | SGS-MRTR (explicit selection) | No automatic fallback after IC failure |
 
 ## Complex-Valued Problems: conjugate Setting
 
@@ -558,7 +560,7 @@ Using the wrong setting causes divergence or extremely slow convergence
 
 ## Solver Selection for Non-Symmetric Systems
 
-| Solver   | Memory       | Best For                          |
+| Solver   | Krylov workspace (not total memory) | Best For                          |
 |----------|-------------|-----------------------------------|
 | COCR     | 5 vectors   | Complex-symmetric (A^T = A)       |
 | GMRES(40)| 40+ vectors | Non-symmetric, robust convergence |
@@ -1194,6 +1196,9 @@ mismatch and needs source-level debugging in
 """
 
 
+SPARSESOLV_OVERVIEW += SOLVER_CAPACITY
+SPARSESOLV_BEST_PRACTICES += SOLVER_CAPACITY
+
 def get_full_documentation() -> str:
     """Return complete sparsesolv (radia.sparsesolv_ngsolve) documentation."""
     return "\n\n".join([
@@ -1211,6 +1216,10 @@ def get_full_documentation() -> str:
 def get_sparsesolv_documentation(topic: str = "all") -> str:
     """Return sparsesolv documentation by topic, including code examples."""
     topics = {
+        "capacity": SOLVER_CAPACITY,
+        "memory": SOLVER_CAPACITY,
+        "diagnostics": SOLVER_CAPACITY,
+        "bddc": SOLVER_CAPACITY,
         "overview": SPARSESOLV_OVERVIEW,
         "api": SPARSESOLV_API,
         "examples": SPARSESOLV_EXAMPLES,

@@ -737,6 +737,7 @@ def ngsolve_usage(topic: str = "index") -> str:
             "spaces"           - FE spaces (H1, HCurl, HDiv, HDivSurface, SurfaceL2)
             "maxwell"          - Maxwell/magnetostatics (A-formulation, BDDC, materials)
             "solvers"          - Direct & iterative solver selection guide
+            "memory"           - Capacity, factor storage, BDDC chain and evidence report
             "preconditioners"  - BDDC, multigrid, Jacobi, AMG configuration
             "bem"              - Boundary element method (ngsolve.bem, LaplaceSL, FEM-BEM coupling)
             "ngsolve_bem_50"    - .vol visualization + 50-case NGSolve.BEM/MATLAB comparison lane
@@ -799,6 +800,8 @@ def sparsesolv(topic: str = "all") -> str:
     Args:
         topic: Documentation topic. Options:
             "all"              - Complete documentation
+            "memory"           - Capacity, direct coarse factors and diagnostic reporting
+                                 (aliases capacity, diagnostics, bddc)
             "overview"         - Library overview, add-on positioning, features
             "api"              - Python API reference (solvers, preconditioners)
             "examples"         - Usage examples (Poisson, curl-curl, complex, etc.)
@@ -1816,13 +1819,15 @@ def ngsolve_solvers_reference() -> str:
     """NGSolve solver selection quick reference."""
     return (
         "# NGSolve Solver Selection\n\n"
+        "Direct can be fast when the factor fits. Residual checks do not protect allocation.\n"
+        "See ngsolve_usage('memory') for fill-in, Windows commit headroom and the BDDC coarse solver.\n\n"
         "## Direct Solvers\n"
         "| Solver | Strengths | When to Use |\n"
         "|--------|-----------|------------|\n"
         "| sparsecholesky | Radia's direct solver; pass inverse=\"sparsecholesky\" "
         "and accept by true residual <= 1e-6 | symmetric (or complex-symmetric) FE systems |\n"
         "| (none) | Radia does not select PARDISO or another fallback | "
-        "large 3D HCurl: iterative CG + BDDC/AMS instead |\n\n"
+        "validated HCurl: compatible Krylov + AMS/BDDC+AMS |\n\n"
         "## Iterative Solvers\n"
         "| Solver | System Type | Preconditioner |\n"
         "|--------|------------|----------------|\n"
