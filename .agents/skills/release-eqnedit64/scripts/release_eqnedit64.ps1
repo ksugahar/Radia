@@ -3,7 +3,8 @@
 # steps before it - the hand test, the Fable review, the merge to main - which
 # stay in SKILL.md.
 #
-# What it runs on LAB is COMPILATION AND SIGNING ONLY.  The signing key is
+# Run this build and signing phase on INTEL11 (100号機). LAB is reserved for
+# validation and must not compile or sign release binaries. The signing key is
 # non-exportable, so the executable that ships can only be produced here; the
 # GitHub-hosted CI build is an unsigned test artifact.  It starts no GUI,
 # renders no equation, and registers no font, so it stays clear of the failure
@@ -85,7 +86,7 @@ $dist = Join-Path $eqnedit 'dist\Eqnedit64.exe'
 if ($SkipBuild) {
     Step 'skipping the build on request; verifying the existing dist binary'
 } else {
-    Step 'compiling and signing on LAB'
+    Step 'compiling and signing on INTEL11 (100号機)'
     & cmd.exe /d /c (Join-Path $eqnedit 'build\build_eqnedt64.bat')
     if ($LASTEXITCODE -ne 0) {
         throw "build_eqnedt64.bat failed with exit code $LASTEXITCODE."

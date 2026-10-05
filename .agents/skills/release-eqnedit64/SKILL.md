@@ -43,8 +43,10 @@ GitHub/PyPI success alone does not complete an Eqnedit64 release.
 - After the hand-test and Fable gates, push the approved release commit to
   `main` and require the main Eqnedit64 CI to pass. Do not create or push the
   release tag yet.
-- Build the standalone executable on LAB from that exact `origin/main` commit
-  with `tools/eqnedit64/build/build_eqnedt64.bat`. The signing key is
+- Build and sign the standalone executable on INTEL11 (100号機) from that
+  exact `origin/main` commit. LAB is reserved for validation; do not compile
+  or sign release binaries there. Use
+  `tools/eqnedit64/build/build_eqnedt64.bat`. The signing key is
   deliberately non-exportable; the CMake executable produced by GitHub-hosted
   CI is an unsigned test artifact and must not be published or copied to `O:`.
 - Require product version equal to the tag version, Authenticode status
@@ -61,18 +63,17 @@ GitHub/PyPI success alone does not complete an Eqnedit64 release.
   SERVICE, which can reach neither a per-user mapped drive nor the workgroup
   share. The signature is what carries the guarantee across that transport -
   the key is non-exportable, so a matching `CN=ksugahar` signature, SHA-256,
-  product version, and source SHA together prove the binary was built on LAB
-  from the tagged commit, and an unsigned CI build cannot impersonate it.
-- On the interactive LAB desktop, the release does exactly two things:
-  **compile and sign**. `build_eqnedt64.bat` invokes the compiler and
+  product version, and source SHA together prove the binary was built and
+  signed on INTEL11 (100号機) from the tagged commit, and an unsigned CI
+  build cannot impersonate it.
+- On INTEL11 (100号機), the release build invokes the compiler and
   `signtool`; it starts no window, renders no equation, and registers no font,
   so it stays clear of the `fontdrvhost.exe` failure that leaves the session's
   Office fonts inkless. Everything that *runs* the built binary - the GUI,
   rendering, `--self-test`, the font-session endurance suites, and
-  `accept_release.ps1` - belongs to the isolated CI or VM session. Do not
-  bypass `EQNEDIT64_ISOLATED_TEST_SESSION` on the interactive LAB desktop.
-  Compiling on LAB is not optional: the signing key is non-exportable, so the
-  shipped executable can only be produced there.
+  `accept_release.ps1` - belongs to the isolated CI or VM session. LAB is a
+  validation machine only and must not compile or sign release binaries. Do
+  not bypass `EQNEDIT64_ISOLATED_TEST_SESSION` on INTEL11 or LAB.
 
 ## Required order
 
@@ -85,7 +86,8 @@ GitHub/PyPI success alone does not complete an Eqnedit64 release.
    hand testing. Do not merge to `main` before this gate is recorded.
 5. Merge the approved release commit to `main` and push it.
 6. Wait for the main Eqnedit64 CI and Policy Lint to pass.
-7. Run the build, staging, and tag-push phase as one command. It checks the source against
+7. On INTEL11 (100号機), run the build, staging, and tag-push phase as one
+   command. It checks the source against
    `origin/main`, refuses a tag that already exists, refuses a tree whose
    declared version disagrees with the tag, compiles and signs, verifies the
    product version and `CN=ksugahar` signature, backs up whatever O: currently
