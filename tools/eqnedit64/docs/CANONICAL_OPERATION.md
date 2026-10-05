@@ -68,7 +68,8 @@ eventが伴わない場合は製品FAILではなく`INCONCLUSIVE`として停止
 greenになるまで回し直して合格扱いにせず、健全な新しい隔離sessionで候補を再検査する。
 
 公開順は固定する。まずリリースコミットを`main`へpushして隔離main CIを通し、その
-`origin/main`と同じコミットからLABではコンパイルと署名だけを行う。次に
+`origin/main`と同じコミットからINTEL11（100号機）でコンパイルと署名だけを行う。
+LABは検証専用とし、正式リリースのコンパイル・署名には使わない。次に
 `.agents\skills\release-eqnedit64\scripts\sync_to_o.ps1`で
 `O:\Eqnedit64.exe`を更新し、隣の`O:\Eqnedit64.release.json`へ予定tag、
 source SHA、EXE SHA-256、version、signerを記録する。ここまで成功してから最後に
