@@ -133,12 +133,12 @@ if (Test-Path -LiteralPath $oneDrive) {
 
 # --- 7. stage to O: and to the release CI reads ---------------------------
 Step 'staging to O: and the eqnedit64-staging release'
-$syncArgs = @(
-    '-Tag', $Tag,
-    '-SourceExe', $dist,
-    '-SourceSha', $headSha
-)
-if ($WhatIf) { $syncArgs += '-WhatIf' }
+$syncArgs = @{
+    Tag = $Tag
+    SourceExe = $dist
+    SourceSha = $headSha
+}
+if ($WhatIf) { $syncArgs.WhatIf = $true }
 # sync_to_o.ps1 throws on every failure it detects, and $ErrorActionPreference
 # is Stop, so a returned object means it succeeded.  Do not read $LASTEXITCODE
 # here: it belongs to whatever native command that script happened to run last.
