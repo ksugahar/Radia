@@ -463,10 +463,12 @@ native出力は `tools/eqnedit64/dist/Eqnedit64.exe`。ビルド前に同じ出�
    その試験だけなら一度のレビューを満たすが、無関係なモデル／仕様変更を加えた場合は
    新しい候補としてFableレビューをやり直す。
 5. 承認された候補を`main`へ統合してpushし、Eqnedit64専用main CIがgreenであることを確認する。
-6. exact `origin/main`からLABでrelease EXEをビルドし、`CN=ksugahar`で署名する。
+6. exact `origin/main`からINTEL11（100号機）でrelease EXEをビルドし、
+   `CN=ksugahar`で署名する。LABは検証専用で、正式リリースのビルド・署名には使わない。
 7. `sync_to_o.ps1 -WhatIf`でversion、build stamp、署名、source SHA、O:配置先を
-   事前検査する。private-font full suiteはPR/main/tagの隔離CIだけで行い、対話中LABで
-   `EQNEDIT64_ISOLATED_TEST_SESSION`を偽装して`accept_release.ps1`を実行しない。
+   事前検査する。private-font full suiteはPR/main/tagの隔離CIだけで行い、
+   INTEL11/LABの対話セッションで`EQNEDIT64_ISOLATED_TEST_SESSION`を偽装して
+   `accept_release.ps1`を実行しない。
 8. `.agents/skills/release-eqnedit64/scripts/sync_to_o.ps1`で
    `O:\Eqnedit64.exe`を更新する。
 9. `O:\Eqnedit64.release.json`へ予定tag、version、source SHA、EXE SHA-256、signerを記録し、
@@ -478,7 +480,7 @@ native出力は `tools/eqnedit64/dist/Eqnedit64.exe`。ビルド前に同じ出�
 13. PyPIから各wheel、GitHub ReleaseからEXEを再取得し、同梱EXEとO:のEXEがbyte-identical、
     SHA-256一致、署名有効であることを外側から確認する。
 
-O:は対話中LABでは`C:\Users\Administrator\OneDrive`へのSUBSTである。self-hosted runnerは
+O:はINTEL11では`C:\Users\Administrator\OneDrive`へのSUBSTである。self-hosted runnerは
 LocalSystemのためユーザー固有ドライブ文字O:を見られない場合がある。release workflowは
 `Get-PSDrive O`を確認し、無い場合は同じOneDrive backing pathを検査する。O:更新前にtagを
 pushするとrelease gateが失敗するのが正しい。
