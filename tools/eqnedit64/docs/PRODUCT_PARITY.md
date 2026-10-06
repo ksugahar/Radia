@@ -86,22 +86,14 @@ Eqnedit64.exe と Web/JS 数式エディタは、Radia の `tools/eqnedit64` で
 | 数式3.0由来ショートカット | 互換層として必須 | 非該当 | native固有 |
 | インストール不要のブラウザ利用 | 非該当 | 必須 | Web固有 |
 
-両製品のMathMLはinline・18 ptとし、18 ptを明示した末尾NBSPを加えた単一CF_HTML
-断片だけをOfficeへ渡す。PowerPointの通常Ctrl+Vでは編集可能な数式、末尾文字、
-次の挿入点を18 pt・左寄せでそろえる。左寄せを24 pt固定より優先する。
-登録MathMLはPowerPointが中央寄せ`m:oMathPara`として優先するため通常コピーへ
-載せず、Web版だけの直接OMMLも使わない。生成器（native構造木とMathJax）の空白や
-補助要素は異なってよいが、総和、積分、分数、根号、上線、下線を正規化し、保存OOXMLの
-インライン`m:oMath`とPowerPoint描画を一致させる。実機基準式ではOMML部分とPNGが
-一致することを確認する。
-`&`なし複数行`aligned`はnative/Webとも入れ子の1列`aligned`を葉の行まで再帰的に
-平坦化してから各行を独立したinline MathMLへ変換し、行ごとの18 pt NBSPと`<br>`を
-同じCF_HTML断片へ入れる。PowerPointはMathML
-`columnalign`を無視し、`maligngroup` / `malignmark`を可視`&`として描くため、
-Office経路へこれらの整列要素を出してはならない。保存OOXMLは行数と同数の
-インライン`m:oMath`を持ち、`m:oMathPara`、`m:eqArr`、行列、可視`&`を持たない。
-明示`&`を含む入力は1つの整列MathMLとして保持し、保存TeXを変更しない。
-空のテキストボックス、置換文字だけの描画、画像への退化は不合格とする。
+2026-10-07 の UXP-0029 は、PowerPoint貼り付けで積分上下限とスクリプトの保存を
+左寄せより優先する。Windows版の単一式（cases・行列など式内の表を含む）は
+登録 `MathML` / `MathML Presentation` を発行し、中央寄せの編集可能な
+`m:oMathPara` を許容する。CF_HTML・18 pt末尾NBSPも保持する。
+独立した複数行はCF_HTMLで各行を渡し、左端と上下限を実PowerPoint試験で検査する。
+Web版はブラウザーのCF_HTML経路を使う。現在のPowerPointでのWeb・複数行の上下限は
+隔離Office試験で再確認するまで未検証とし、native/WebのOOXML・PNG一致は保証しない。
+画像への退化・空のMathZone・上下限の欠落は合格としない。明示 `&` と保存TeXは保持する。
 
 論文からのTeX入力では、両版とも裸の`~`を非改行空白、U+223Cを`\sim`として区別し、
 `align` / `align*`の`&`列を保持する。`%`コメント、`\label`、`\nonumber`、`\notag`、

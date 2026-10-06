@@ -1,22 +1,24 @@
 # Eqnedit64 changelog
 
-## 3.1.1 — hand-test candidate
+## 3.1.2 — review candidate
+
+- Preserve registered MathML for single expressions containing cases or matrices.
+- Wait for asynchronous MathJax startup, format palette environment insertion, and reject invalid MathML.
+- Restore mandatory multi-row PowerPoint acceptance; Web/multi-row limits await isolated Office evidence.
+- Pin release signer certificates and reconcile the limits-first Office contract.
+- Preserve primes on bare limit/sum/integral operators across save/reopen,
+  and reject overlong diagnostic paths before formatting a trace filename.
+
+## 3.1.1 — 2026-10-05
 
 - Preserve integral bounds and other scripts when copying a single equation
   from the Windows app into PowerPoint by publishing registered MathML formats.
   PowerPoint imports the expression as editable OMML and centres its math
   paragraph; aligned multi-row expressions retain the CF_HTML path.
 
-## 3.1.0 — release candidate
+## 3.1.0 — development changes included in 3.1.1
 
-- Replace the native embedded CFF resource with Eqnedit Math, a reproducibly
-  converted TrueType-outline derivative of Latin Modern Math. Both EXE and
-  wheel module use the same asset and physical family; reject a non-TrueType
-  resource before registration. This avoids the reproduced Windows ATM host
-  failure path, rather than hiding it behind successful registration retries.
-  Preserve advances and math-layout tables, test all glyph bounds and winding,
-  and document the modified font and license. Final candidate acceptance is
-  recorded separately in FONT_DIAGNOSTICS.md; this entry is not release approval.
+
 
 - Share Web suffix attachment across degrees, stars, flat/sharp, primes and
   editable scripts so selections survive and repeated scripts do not collide.

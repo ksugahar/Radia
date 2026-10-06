@@ -766,6 +766,8 @@ $pngOutput = "C:\temp\Eqnedit64-IrfanView-paste-$runId.png"
 $texclipPngOutput = "C:\temp\Eqnedit64-texclip-paste-$runId.png"
 $cliTexInput = "C:\temp\Eqnedit64-cli-input-$runId.tex"
 $alignedCliTexInput = "C:\temp\Eqnedit64-aligned-cli-input-$runId.tex"
+$tableCliTexInput = "C:\temp\Eqnedit64-table-cli-input-$runId.tex"
+$tablePowerPointPngOutput = "C:\temp\Eqnedit64-table-paste-$runId.png"
 # A delimiter space after a control word is valid TeX and proves that the
 # public file-based CLI normalises the supplied equation rather than copying a
 # private fixed fixture.
@@ -1064,7 +1066,11 @@ try {
             "rows and two line breaks: math=$alignedMathCount, " +
             "breaks=$alignedBreakCount.")
     }
-    if ([EqneditClipboardNative]::IsClipboardFormatAvailable($mathMlFormat)) {
+    if ([EqneditClipboardNative]::IsClipboardFormatAvailable($mathMlFormat) -or
+        [EqneditClipboardNative]::IsClipboardFormatAvailable($mathMlPresentationFormat)) {
+        throw 'Aligned independent rows must use CF_HTML without registered MathML.'
+    }
+    . {
         $alignedSlide = $presentation.Slides.Add(2, 12)
         $powerPointWindow.View.GotoSlide(2)
         $alignedSlide.Select()
@@ -1091,8 +1097,42 @@ try {
             throw ("PowerPoint did not retain three independent math rows without " +
                 "visible alignment syntax: rows=$savedMathRows.")
         }
-    } else {
-        Write-Host 'SKIP: PowerPoint aligned-row import is not covered by registered MathML.'
+    }
+
+    # A table inside one equation must not silently select CF_HTML-only copy.
+    $tableSlideNumber = 2
+    foreach ($tableTex in @(
+        'f=\begin{cases}\int_a^b x\,dx & x>0\end{cases}',
+        '\begin{pmatrix}\int_a^b x\,dx & 0\\0 & 1\end{pmatrix}')) {
+        $tableSlideNumber++
+        [IO.File]::WriteAllText($tableCliTexInput, $tableTex,
+            [Text.UTF8Encoding]::new($false))
+        $tablePublisher = Start-Process -FilePath $app `
+            -ArgumentList @($tableCliTexInput, 'office') `
+            -WorkingDirectory (Split-Path -Parent $app) -WindowStyle Hidden -Wait -PassThru
+        if ($tablePublisher.ExitCode -ne 0) { throw 'Table clipboard publication failed.' }
+        foreach ($format in @($mathMlFormat, $mathMlPresentationFormat)) {
+            if (-not [EqneditClipboardNative]::IsClipboardFormatAvailable($format)) {
+                throw 'Single-equation table is missing registered MathML.'
+            }
+        }
+        $tableMath = Read-ClipboardUtf16 $mathMlFormat
+        if ($tableMath -notmatch '<mtable' -or $tableMath -notmatch '<msubsup><mo[^>]*>&#x222B;') {
+            throw 'Table MathML lost its table or integral structure.'
+        }
+        $tableSlide = $presentation.Slides.Add($tableSlideNumber, 12)
+        $powerPointWindow.View.GotoSlide($tableSlideNumber)
+        $tableSlide.Select()
+        $powerPoint.CommandBars.ExecuteMso('Paste')
+        Start-Sleep -Milliseconds 150
+        if ($tableSlide.Shapes.Count -ne 1) { throw 'Table UI Paste did not create one shape.' }
+        $presentation.Save()
+        $tableXml = Get-SlideXml $pptxOutput $tableSlideNumber
+        if ($tableXml -notmatch '(?s)<m:nary>.*?<m:sub>.*?<m:t>𝑎</m:t>.*?</m:sub>.*?<m:sup>.*?<m:t>𝑏</m:t>.*?</m:sup>') {
+            throw 'PowerPoint table paste lost integral bounds.'
+        }
+        $tableSlide.Shapes.Item(1).Export($tablePowerPointPngOutput, 2)
+        $null = Assert-ImageHasInk $tablePowerPointPngOutput 'PowerPoint table paste'
     }
 
     $googlePublisher = Start-Process -FilePath $app `
@@ -1259,7 +1299,8 @@ try {
     [GC]::WaitForPendingFinalizers()
     $cleanupPaths = @(
         $powerPointPngOutput, $alignedPowerPointPngOutput, $pngOutput,
-        $texclipPngOutput, $cliTexInput, $alignedCliTexInput)
+        $texclipPngOutput, $cliTexInput, $alignedCliTexInput,
+        $tableCliTexInput, $tablePowerPointPngOutput)
     if ($completed) { $cleanupPaths += $pptxOutput }
     foreach ($path in $cleanupPaths) {
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }

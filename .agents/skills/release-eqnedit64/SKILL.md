@@ -61,11 +61,12 @@ GitHub/PyPI success alone does not complete an Eqnedit64 release.
   publishes GitHub Release and PyPI from that one signed binary. No job reads
   O:, and none runs on a self-hosted runner: a runner service is NETWORK
   SERVICE, which can reach neither a per-user mapped drive nor the workgroup
-  share. The signature is what carries the guarantee across that transport -
-  the key is non-exportable, so a matching `CN=ksugahar` signature, SHA-256,
-  product version, and source SHA together prove the binary was built and
-  signed on INTEL11 (100号機) from the tagged commit, and an unsigned CI
-  build cannot impersonate it.
+  share. The staged binary must pass cryptographic Authenticode verification and the
+  approved certificate thumbprint policy in `scripts/assert_release_signature.ps1`.
+  Approved keys are INTEL11 `7E80D4365CFDBA7B22B33C35EB7CD6A41050E065`
+  and historical LAB `BAEBD216FF82C03F57B2796C42DC8F4D083E07E1`.
+  A matching subject alone does not identify the key or prove the build host;
+  build-host/source records and hashes remain separate required evidence.
 - On INTEL11 (100号機), the release build invokes the compiler and
   `signtool`; it starts no window, renders no equation, and registers no font,
   so it stays clear of the `fontdrvhost.exe` failure that leaves the session's

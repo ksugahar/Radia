@@ -22,12 +22,12 @@ const server = http.createServer((req, res) => {
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.end('<!doctype html><html lang="ja"><meta charset="utf-8">' +
       '<script>window.MathJax={startup:{typeset:false}};</script>' +
-      '<script src="/mathjax/tex-chtml.js"></script>' +
+      (req.url === '/?delayed' ? '' : '<script src="/mathjax/tex-chtml.js"></script>') +
       // The homepage supplies this adapter; exercise the real preview engine.
       '<script>window.SugaharaMath={typeset:function(node){' +
       'return MathJax.startup.promise.then(function(){return MathJax.typesetPromise([node]);}).catch(function(){});}};</script>' +
       fs.readFileSync(path.join(web, "equation-editor.fragment.html"), "utf8")
-        .replace(req.url === "/?cold" ? '<script src="./equation-editor.js"></script>' : "__unused__", ""));
+        .replace((req.url === "/?cold" || req.url === "/?delayed") ? '<script src="./equation-editor.js"></script>' : "__unused__", ""));
   }
 });
 (async () => {
@@ -36,6 +36,25 @@ const server = http.createServer((req, res) => {
   try {
     browser = await chromium.launch({headless:true,
       ...(process.env.EQNEDIT64_BROWSER_PATH ? {executablePath:process.env.EQNEDIT64_BROWSER_PATH} : {})});
+    for (const config of [true, false]) {
+      const delayed = await browser.newPage();
+      const delayedErrors = [];
+      delayed.on("pageerror", error => delayedErrors.push(error.message));
+      await delayed.goto("http://127.0.0.1:" + server.address().port + "/?delayed");
+      await delayed.evaluate(config => {
+        window.MathJax = config ? {startup:{typeset:false}} : undefined;
+      }, config);
+      await delayed.addScriptTag({url:"http://127.0.0.1:" + server.address().port + "/equation-editor.js"});
+      assert.equal(await delayed.locator(".eqed-key").count(), 291);
+      assert(await delayed.locator(".eqed-copy-office").isDisabled());
+      await delayed.addScriptTag({url:"http://127.0.0.1:" + server.address().port + "/mathjax/tex-chtml.js"});
+      await delayed.waitForFunction(() => !document.querySelector(".eqed-copy-office").disabled);
+      assert.deepEqual(delayedErrors, []);
+      await delayed.locator(".eqed-source").fill("\\foo x");
+      await delayed.locator(".eqed-copy-office").click();
+      await delayed.waitForFunction(() => document.querySelector(".eqed-status").textContent.includes("MathMLに変換できません"));
+      await delayed.close();
+    }
     const cold = await browser.newPage();
     let releaseCancel;
     const cancelGate = new Promise(resolve => {releaseCancel = resolve;});

@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.1.2 — review candidate
+
+- Share the native/Web fixes and pinned release signer policy in the canonical tools changelog.
+
+## 3.1.1 — 2026-10-05
+
+- Preserve native single-equation integral bounds in PowerPoint with registered MathML.
+
 ## Unreleased
 
 - Clarify that the signed standalone EXE is the canonical direct converter;

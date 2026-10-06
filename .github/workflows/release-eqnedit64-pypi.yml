@@ -135,7 +135,8 @@ jobs:
           $expectedVersion = $env:EQNEDIT64_TAG.Substring('eqnedit64-v'.Length)
           $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $exe).Hash
           $actualVersion = (Get-Item -LiteralPath $exe).VersionInfo.ProductVersion
-          $signature = Get-AuthenticodeSignature -LiteralPath $exe
+          . ./.agents/skills/release-eqnedit64/scripts/assert_release_signature.ps1
+          $signature = Assert-EqneditReleaseSignature $exe -AllowUntrustedRoot
           if ($manifest.schema -cne 'eqnedit64.o-release.v1' -or
               $manifest.tag -cne $env:EQNEDIT64_TAG -or
               $manifest.version -cne $expectedVersion -or
@@ -203,7 +204,8 @@ jobs:
           if ($actual -ne $expected) {
             throw "SHA-256 mismatch: $actual != $expected"
           }
-          $signature = Get-AuthenticodeSignature -LiteralPath $exe
+          . ./.agents/skills/release-eqnedit64/scripts/assert_release_signature.ps1
+          $signature = Assert-EqneditReleaseSignature $exe -AllowUntrustedRoot
           if (-not $signature.SignerCertificate -or
               $signature.SignerCertificate.Subject -cne 'CN=ksugahar' -or
               $signature.Status -in @('NotSigned', 'HashMismatch')) {

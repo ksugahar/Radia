@@ -719,7 +719,8 @@ void LaTeXEmitter::emitScript(const ScriptNode& script, std::string& out) {
         size_t a = s.find_first_not_of(' '), b = s.find_last_not_of(' ');
         return a == std::string::npos ? std::string() : s.substr(a, b - a + 1);
     };
-    const bool scriptGreedyBase = trimmed(base) == "\\lim";
+    const bool scriptGreedyBase = trimmed(base) == "\\lim" ||
+        trimmed(base) == "\\sum" || trimmed(base) == "\\int";
 
     if (base.empty()) out += "{}";
     else if (scriptGreedyBase || !is_single_tex_atom(base)) {
@@ -889,6 +890,10 @@ void LaTeXEmitter::emitMatrix(const MatrixNode& mat, std::string& out) {
 
 void LaTeXEmitter::emitEmbell(const EmbellNode& embell, std::string& out) {
     const std::string content = emitNodes(embell.content);
+    auto trimmed = [](const std::string& s) {
+        const size_t a = s.find_first_not_of(' '), b = s.find_last_not_of(' ');
+        return a == std::string::npos ? std::string() : s.substr(a, b - a + 1);
+    };
     const int type = static_cast<int>(embell.embellType);
     const int primes = embell.embellType == EM_PRIME ? 1 :
         embell.embellType == EM_DPRIME ? 2 :
@@ -897,7 +902,9 @@ void LaTeXEmitter::emitEmbell(const EmbellNode& embell, std::string& out) {
         /* A suffix apostrophe supplies another superscript. Preserve the
          * whole decorated base, including an existing exponent, and use the
          * ordinary symbol emitter so save/reopen has the same spelling. */
-        if (is_single_tex_atom(content)) out += content;
+        if (trimmed(content) != "\\lim" &&
+            trimmed(content) != "\\sum" && trimmed(content) != "\\int" &&
+            is_single_tex_atom(content)) out += content;
         else { out += "{"; out += content; out += "}"; }
         out += "^{";
         for (int i = 0; i < primes; ++i) {
