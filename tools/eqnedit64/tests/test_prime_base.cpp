@@ -46,7 +46,8 @@ int main() {
     for (auto kind : {eqnedit::EM_PRIME, eqnedit::EM_DPRIME,
                       eqnedit::EM_TPRIME, eqnedit::EM_BPRIME}) {
         for (const char* input : {"a^{2}", "x_{i}^{n}", "\\frac{a}{b}",
-                                  "a+b", "\\mathbf{x}", "x", "\\alpha"}) {
+                                  "a+b", "\\mathbf{x}", "x", "\\alpha",
+                                  "\\lim", "\\sum", "\\int"}) {
             auto base = eqnedit::parse_latex(input);
             auto mark = std::make_unique<eqnedit::EmbellNode>();
             mark->embellType = kind;
@@ -63,5 +64,5 @@ int main() {
             std::cout << tex << '\n';
         }
     }
-    std::cout << "PASS: 20 accent bases, 28 prime bases, 6 grouped imports, 4 legacy spellings\n";
+    std::cout << "PASS: 20 accent bases, 40 prime bases, 6 grouped imports, 4 legacy spellings\n";
 }

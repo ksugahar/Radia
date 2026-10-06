@@ -1,12 +1,14 @@
 # Eqnedit64 — 数式入力に特化したTeXエディタ
 
+Source version: **3.1.2** (review candidate).
+
 Eqnedit64は、軽快な構造編集とTeXファイルを直接つないだ64-bit Windows
 数式エディタです。数式は常にTeXとして開き、編集し、保存します。
 `Eqnedit64.exe` 単体で動作するポータブルアプリで、インストールや
 レジストリ登録は不要です。
 
 公開ソースはRadiaリポジトリの`tools/eqnedit64`、署名済み単体EXEは
-[Eqnedit64 GitHub Release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.16)
+[Eqnedit64 GitHub Release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.1.1)
 で配布します。旧Eqnedit32バイナリ、MTEF変換コード、逆アセンブリ資料は
 Eqnedit64のソース・ビルド・配布物に含めません。
 
@@ -58,8 +60,8 @@ PowerPoint、Word、Excel向けには、inline 18 pt MathMLと18 ptを明示し�
 単一数式のCtrl+Cで登録`MathML` / `MathML Presentation`も提供します。現在の
 PowerPointはCF_HTML内のMathMLを通常テキストに平坦化するため、この登録形式で
 積分などの上下限を含む数式を編集可能なOMMLに変換します。PowerPointでは数式段落が
-中央寄せになります。複数行の`aligned`は行ごとの配置を崩さないようCF_HTML経路を
-使います。Web版はブラウザー既存のコピー経路を使います。
+中央寄せになります。独立した複数行の`aligned`はCF_HTML経路を使います。
+Web・複数行のPowerPoint上下限保持は隔離Office試験での再確認待ちです。Web版はブラウザー既存のコピー経路を使います。
 旧Office向けには区切り付きLaTeXも残します。IrfanViewなどの画像ソフトは
 EMFまたは全画素不透明の32-bit DIBV5を選べます。TeX対応ソフト向けには生の断片も
 `LaTeX` 形式で保持します。
@@ -229,8 +231,8 @@ cmd /c build\build_tests.bat
 ```
 
 リリース候補の通常回帰、ASan、拡張GUI耐久、署名・単体配布を一括判定する
-最終ゲートは次です。公開配布は、このゲートが生成した `dist\Eqnedit64.exe`
-だけをGitHub Releaseへ添付します。
+最終ゲートは次です。公開配布EXEは、その合格したソースから100号機で
+`build_eqnedt64.bat` により別途ビルド・署名し、証明書とSHA-256を検査します。
 
 ```powershell
 $env:EQNEDIT64_ISOLATED_TEST_SESSION = '1'
@@ -297,7 +299,7 @@ GUIファザーにも完成／未完成TeXのソース編集を混ぜます。�
 検査し、PowerPointなど他製品との貼り付けも `test_external_paste.ps1` が非表示の
 API経由で検査します。この試験は内部生成関数を迂回路として使わず、選択なしの
 通常GUIコピー命令を送ってから、PowerPointの組み込みUI `Paste` が
-左寄せ18 ptの編集可能なOffice Mathと分数・根号の構造を作ることに加え、貼り付けた
+中央寄せを許容した編集可能なOffice Mathと積分上下限・分数・根号の構造を作ることに加え、貼り付けた
 図形をPowerPoint自身でPNG化し、空白や豆腐文字ではなく分数線を含む数式の輪郭が
 描画されること、
 IrfanViewの `/clippaste` が非空画像を作ること、DIBV5の全画素がα=255であること、

@@ -1655,8 +1655,7 @@ bool clipboard_set(const std::string& latex) {
     const std::string officeHtml = cf_html_fragment(
         officeRows + kOfficeInlineSentinel);
     const bool registerSingleMath =
-        officeRows.find("<br>") == std::string::npos &&
-        officeRows.find("<mtable") == std::string::npos;
+        officeRows.find("<br>") == std::string::npos;
     HGLOBAL unicode = global_copy(officeText.c_str(),
         (officeText.size() + 1) * sizeof(wchar_t));
     HGLOBAL mathMl = global_copy(registeredMathMl.c_str(),

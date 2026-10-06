@@ -21,7 +21,7 @@
   /* デプロイごとに上げる。ボタン行の右端に出て、開きっぱなしのタブが
    * 古い版を動かし続けていないかを一目で判別できる（.exe の
    * タイトルバー・ビルドスタンプと同じ教訓）。 */
-  var BUILD = "3.1.1 (2026-10-05)";
+  var BUILD = "3.1.2 (2026-10-07)";
 
   // BEGIN GENERATED PALETTES
   var PALETTES = [
@@ -3151,7 +3151,8 @@
     var raw = window.MathJax.tex2mml(
       "\\displaystyle " + mathJaxTex(tex), { display: false });
     var doc = new window.DOMParser().parseFromString(raw, "application/xml");
-    if (doc.querySelector("parsererror")) throw new Error("invalid MathML");
+    if (doc.querySelector("parsererror, merror, [mathcolor=\"red\"]"))
+      throw new Error("invalid MathML or unsupported TeX");
     var math = doc.documentElement;
     math.setAttribute("display", "inline");
     math.setAttribute("mathsize", "18pt");
@@ -3770,6 +3771,7 @@
   function composePaletteInsertion(value, start, end, item) {
     if (item[6]) throw new Error(item[6]);
     var snippet = item[1], slot = item[5] || 0;
+    if (snippet.indexOf("\\begin{") >= 0) snippet = prettyTex(snippet);
     if (/^[\^_]\{[^{}]*\}\s*$/.test(snippet))
       return composeInsertion(value, start, end, snippet);
     if (/^'+$/.test(snippet) && end > start)
@@ -3798,9 +3800,27 @@
     var officePreparing = true;
     officeButton.disabled = true;
     officeButton.title = "数式機能を準備しています";
-    var officePreparation = (window.MathJax && window.MathJax.startup
-      ? window.MathJax.startup.promise : Promise.resolve())
-      .then(warmAutoloadedMacros).then(function () {
+    // The editor can load before the asynchronous MathJax script. A config
+    // object is not a started engine; wait for both its promise and converters.
+    var officePreparation = new Promise(function (resolve, reject) {
+      var deadline = Date.now() + 60000;
+      function awaitEngine() {
+        var mj = window.MathJax;
+        var startup = mj && mj.startup && mj.startup.promise;
+        if (startup && typeof startup.then === "function") {
+          startup.then(function () {
+            if (typeof mj.tex2mmlPromise === "function" &&
+                typeof mj.tex2chtmlPromise === "function") resolve();
+            else reject(new Error("MathJax conversion unavailable"));
+          }, reject);
+        } else if (Date.now() >= deadline) {
+          reject(new Error("MathJax startup timed out"));
+        } else {
+          window.setTimeout(awaitEngine, 100);
+        }
+      }
+      awaitEngine();
+    }).then(warmAutoloadedMacros).then(function () {
         officeReady = true;
         officePreparing = false;
         officeButton.disabled = false;
@@ -4142,7 +4162,7 @@
        * size as the equation so the caret and next insertion agree. */
       var html = mml + '<span style="font-size:18pt">&#160;</span>';
       writeOfficeClipboard(html, tex).then(
-        function () { say("18 pt・左揃えのPowerPoint数式をコピーしました"); },
+        function () { say("数式をコピーしました"); },
         function () { say("コピーできませんでした（ブラウザの権限を確認してください）"); }
       );
     });

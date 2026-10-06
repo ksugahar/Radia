@@ -225,19 +225,18 @@ Office Mathになることが合格条件である。MathMLの文字列がクリ
 
 Office向けはnative EXE版とWeb/JS版のどちらも、通常Ctrl+Vで左揃え18 ptの編集可能
 Office Mathになることを製品契約とする。PowerPointでは左揃えと24 pt強制を通常貼り付けで
-両立できないため、左揃えを優先する。中央揃え、画像への退化、空のMathZoneを許容しない。
+UXP-0029 により積分上下限を左揃えより優先する。単一式の中央揃えを許容し、画像への退化と空のMathZoneは拒否する。
 実PowerPoint試験で文字サイズ、段落揃え、貼り付け位置、Office Math構造、描画inkを
 すべて検査する。
 
-クリップボード入口は両版とも、inline 18 pt MathML本体と末尾NBSPだけを含む同期
-CF_HTMLに統一する。native通常コピーへ登録`MathML` / `MathML Presentation`を載せると
-PowerPointがそれを優先して中央寄せ`m:oMathPara`へ変換するため禁止する。Web版だけ
-条件付きOMMLを直接渡すことも、総和記号と上下限の見た目がMathML変換と異なるため
-禁止する。OfficeファイルはOOXMLであり、貼り付け成功後の数式はその内部のインライン
-OMML `m:oMath`になる。`m:oMathPara`は回帰不具合として拒否する。
-
-同じ基準TeXを両版から実PowerPointへ貼り付け、保存OOXML内の`m:oMath`部分と
-PowerPoint自身が書き出したPNGがbyte-identicalになることをリリース判定に含める。
+2026-10-07 の UXP-0029 は、PowerPoint貼り付けで積分上下限とスクリプトの保存を
+左寄せより優先する。Windows版の単一式（cases・行列など式内の表を含む）は
+登録 `MathML` / `MathML Presentation` を発行し、中央寄せの編集可能な
+`m:oMathPara` を許容する。CF_HTML・18 pt末尾NBSPも保持する。
+独立した複数行はCF_HTMLで各行を渡し、左端と上下限を実PowerPoint試験で検査する。
+Web版はブラウザーのCF_HTML経路を使う。現在のPowerPointでのWeb・複数行の上下限は
+隔離Office試験で再確認するまで未検証とし、native/WebのOOXML・PNG一致は保証しない。
+画像への退化・空のMathZone・上下限の欠落は合格としない。明示 `&` と保存TeXは保持する。
 
 ### 6.2 Google Slidesと画像
 
@@ -480,10 +479,9 @@ native出力は `tools/eqnedit64/dist/Eqnedit64.exe`。ビルド前に同じ出�
 13. PyPIから各wheel、GitHub ReleaseからEXEを再取得し、同梱EXEとO:のEXEがbyte-identical、
     SHA-256一致、署名有効であることを外側から確認する。
 
-O:はINTEL11では`C:\Users\Administrator\OneDrive`へのSUBSTである。self-hosted runnerは
-LocalSystemのためユーザー固有ドライブ文字O:を見られない場合がある。release workflowは
-`Get-PSDrive O`を確認し、無い場合は同じOneDrive backing pathを検査する。O:更新前にtagを
-pushするとrelease gateが失敗するのが正しい。
+O:はINTEL11では `C:\Users\Administrator\OneDrive` へのSUBSTであり、ユーザーの
+手動試験入口である。GitHub-hosted release workflow はO:を読まず、タグ作成前に
+`eqnedit64-staging`へ置いたEXEとmanifestを取得してタグSHA・版・署名・ハッシュを確認する。
 
 ## 13. 現在の公開状態
 

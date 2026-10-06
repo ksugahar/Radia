@@ -1,5 +1,7 @@
 # Eqnedit64 for Python
 
+Source version: **3.1.2** (review candidate).
+
 `eqnedit64` packages the same TeX-first equation engine and standalone Windows
 application maintained in the Radia monorepo. The signed one-file
 `Eqnedit64.exe` is the canonical editor and command-line converter and remains
@@ -42,7 +44,7 @@ Only UTF-8 TeX is a source format. MTEF and `.eqn` are intentionally not
 supported. Current wheels target 64-bit Windows and Python 3.10 or newer.
 
 The wheel embeds the signed executable produced for the matching
-`eqnedit64-v3.0.16` GitHub Release; it does not build a second application
+`eqnedit64-v3.1.1` GitHub Release; it does not build a second application
 implementation. The package is BSD 2-Clause licensed. The embedded Eqnedit
 Math font is a TrueType-outline derivative of Latin Modern Math under the
 GUST Font License. Its license and derivation manifest are included in the wheel.

@@ -51,7 +51,8 @@ if (-not $exeText.Contains($shortSha, [StringComparison]::Ordinal)) {
     throw "EXE binary does not contain the hand-test build stamp $shortSha"
 }
 
-$signature = Get-AuthenticodeSignature -LiteralPath $resolvedSource
+. (Join-Path $PSScriptRoot 'assert_release_signature.ps1')
+$signature = Assert-EqneditReleaseSignature $resolvedSource
 $signer = if ($signature.SignerCertificate) {
     $signature.SignerCertificate.Subject
 } else {

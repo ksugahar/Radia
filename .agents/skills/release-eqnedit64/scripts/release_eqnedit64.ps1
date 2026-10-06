@@ -5,14 +5,15 @@
 #
 # Run this build and signing phase on INTEL11 (100号機). LAB is reserved for
 # validation and must not compile or sign release binaries. The signing key is
-# non-exportable, so the executable that ships can only be produced here; the
+# non-exportable and its certificate is pinned; build-host provenance is
+# recorded separately from signature verification. The
 # GitHub-hosted CI build is an unsigned test artifact.  It starts no GUI,
 # renders no equation, and registers no font, so it stays clear of the failure
 # that breaks the interactive session's fonts.  Every private-font suite
 # belongs to the isolated CI session, never to this script.
 #
 #   pwsh -File .agents/skills/release-eqnedit64/scripts/release_eqnedit64.ps1 `
-#     -Tag eqnedit64-v3.0.16
+#     -Tag eqnedit64-v<version>
 #
 # -WhatIf performs every check and the build, reports what would happen, and
 # changes neither O: nor the staging release nor the remote tag.
@@ -98,7 +99,8 @@ if (-not (Test-Path -LiteralPath $dist -PathType Leaf)) {
 
 # --- 5. the binary must be this version, signed by the release identity ----
 $item = Get-Item -LiteralPath $dist
-$signature = Get-AuthenticodeSignature -LiteralPath $dist
+. (Join-Path $PSScriptRoot 'assert_release_signature.ps1')
+$signature = Assert-EqneditReleaseSignature $dist
 $sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $dist).Hash
 $productVersion = $item.VersionInfo.ProductVersion
 $signer = if ($signature.SignerCertificate) {
