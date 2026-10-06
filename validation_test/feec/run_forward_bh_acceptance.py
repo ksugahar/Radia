@@ -14,7 +14,18 @@ tests = [
 ]
 status = pytest.main(['-q', '--basetemp', str(root/'pytest_tmp'), *tests])
 evidence = [json.loads(p.read_text()) for p in (root/'pytest_tmp').rglob('result.json')]
+# pytest's optional "current" symlinks are temporary aliases, not evidence.
+# Remove only aliases into this job; preserve all actual test directories.
+removed_links = []
+for path in (root/'pytest_tmp').iterdir():
+    if path.is_symlink():
+        target = path.resolve(strict=True)
+        if not target.is_relative_to((root/'pytest_tmp').resolve()):
+            raise RuntimeError('pytest alias escapes the acceptance job')
+        removed_links.append(dict(path=str(path), target=str(target)))
+        path.unlink()
 (root/'result.json').write_text(json.dumps(dict(
     passed=status == 0, host=platform.node(), tests=tests,
-    wall_s=time.perf_counter()-start, forward_evidence=evidence), indent=2))
+    wall_s=time.perf_counter()-start, forward_evidence=evidence,
+    removed_temporary_aliases=removed_links), indent=2))
 raise SystemExit(status)
