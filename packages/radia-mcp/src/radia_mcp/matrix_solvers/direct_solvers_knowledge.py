@@ -172,7 +172,7 @@ of the legacy method integer. Do not recommend retired `rad.Solve` methods 1 or 
 
 
 OVERVIEW += SOLVER_CAPACITY
-SPARSECHOLESKY += SOLVER_CAPACITY
+SPARSECHOLESKY += "\n\nFor measured capacity guidance, use the memory topic."
 
 def get_direct_solvers_knowledge(topic: str = "overview") -> str:
     """Return current direct guidance, or explain a retired topic's migration."""
