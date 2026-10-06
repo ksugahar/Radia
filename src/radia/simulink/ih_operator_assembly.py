@@ -28,7 +28,7 @@ import sys
 import time
 import traceback
 from contextlib import redirect_stderr, redirect_stdout
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, Sequence
@@ -77,8 +77,14 @@ class IHOperatorAssemblyOptions:
     thermal_order: int = 1
     axisymmetric_thermal_vol: str = ""
     n_phi_samples: int = 128
+    panel_zs_file: str = ""
 
     def checked(self) -> "IHOperatorAssemblyOptions":
+        if self.panel_zs_file:
+            if self.coupling_mode != 'weak':
+                raise ValueError('panel_zs_file requires weak coupling')
+            if not Path(self.panel_zs_file).is_absolute() or not Path(self.panel_zs_file).is_file():
+                raise ValueError('panel_zs_file must be an existing absolute JSON path')
         if isinstance(self.n_phi_samples, bool) or not isinstance(self.n_phi_samples, int) or self.n_phi_samples < 1:
             raise ValueError("n_phi_samples must be a positive integer")
         positive = {
@@ -413,6 +419,8 @@ def _unit_current_argv(
             ]
         )
 
+    if options.panel_zs_file:
+        argv.extend(['--panel-zs-file', options.panel_zs_file])
     return argv
 
 
@@ -821,6 +829,13 @@ def _native_config(
             "gzip_materialized": bool(solver_workpiece != workpiece or solver_coil != coil),
         },
         "physical_parameters": asdict(options),
+        "surface_impedance": {
+            "mode": "specified-panel" if options.panel_zs_file else "uniform-linear",
+            "file_sha256": _sha256(Path(options.panel_zs_file)) if options.panel_zs_file else None,
+            "layout": "BND-element-order" if options.panel_zs_file else "uniform",
+            "constant_during_simulation": True,
+        },
+        "independent_fem_validation": {"status": "not-performed"},
         "unit_current": {
             "reference_current_A": 1.0,
             "electromagnetic_power_W": solver_power,
@@ -932,6 +947,13 @@ def assemble_ih_operators(
         tee_err = _Tee(sys.stderr, log)
         try:
             with redirect_stdout(tee_out), redirect_stderr(tee_err):
+                if options.panel_zs_file:
+                    # Bind the solve and recorded hash to the same immutable
+                    # job input even if the student's original file is edited.
+                    snapshot = run_path / 'input-panel-zs.json'
+                    snapshot.write_bytes(Path(options.panel_zs_file).read_bytes())
+                    options = replace(options, panel_zs_file=str(snapshot.resolve()))
+                    artifacts.append(snapshot.resolve())
                 print(f"workpiece: {workpiece_path}")
                 print(f"coil ({backend}): {coil_path}")
                 print(f"output: {output_path}")
@@ -1141,6 +1163,7 @@ def build_argparser() -> argparse.ArgumentParser:
         action=argparse.BooleanOptionalAction,
         default=True,
     )
+    parser.add_argument('--panel-zs-file', default='', help='Absolute mesh-bound panel Zs JSON [ohm]')
     parser.add_argument("--coupling-mode", choices=("weak", "strong"), default="weak")
     parser.add_argument(
         "--workpiece-bem-backend",
@@ -1153,6 +1176,7 @@ def build_argparser() -> argparse.ArgumentParser:
 def _options_from_args(args: argparse.Namespace) -> IHOperatorAssemblyOptions:
     return IHOperatorAssemblyOptions(
         frequency_hz=args.frequency_hz,
+        panel_zs_file=args.panel_zs_file,
         axisymmetric_thermal_vol=args.axisymmetric_thermal_vol,
         n_phi_samples=args.n_phi_samples,
         thermal_order=args.thermal_order,

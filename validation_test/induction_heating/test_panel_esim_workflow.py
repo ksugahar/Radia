@@ -19,14 +19,17 @@ from radia.panels import calc_inductance as calc
 import em_material
 
 
-@pytest.mark.parametrize('backend,converges', [('intree-dense', True), ('hacapk', True), ('intree-dense', False)])
-def test_panel_esim_workflow_preserves_heat_and_panel_identity(tmp_path, monkeypatch, backend, converges):
+@pytest.mark.parametrize('backend,converges,specified', [
+    ('intree-dense', True, False), ('hacapk', True, False), ('intree-dense', False, False),
+    ('intree-dense', True, True), ('hacapk', True, True)])
+def test_panel_esim_workflow_preserves_heat_and_panel_identity(tmp_path, monkeypatch, backend, converges, specified):
     ng.SetNumThreads(4)
     with ng.TaskManager():
         body = Cylinder(Pnt(0, 0, -.0125), Vec(0, 0, 1), r=.025, h=.025)
         for face in body.faces:
             face.name = 'sibc'
-        fixture = ng.Mesh(OCCGeometry(Glue(list(body.faces))).GenerateMesh(maxh=.005))
+        body.mat('workpiece')
+        fixture = ng.Mesh(OCCGeometry(body if specified else Glue(list(body.faces))).GenerateMesh(maxh=.005))
         label = str(tmp_path/'case.vol')
         fixture.ngmesh.Save(label)
         bh = tmp_path/'linear-bh.txt'
@@ -59,6 +62,17 @@ def test_panel_esim_workflow_preserves_heat_and_panel_identity(tmp_path, monkeyp
             return fixture if isinstance(value, str) and value == label else original_mesh(value, *a, **kw)
 
         monkeypatch.setattr(ng, 'Mesh', load)
+        if specified:
+            from radia.surface_impedance import write_panel_impedance
+            surface = calc._extract_bnd_only_inline(fixture, 'sibc')
+            centers = np.array([np.mean([surface.vertices[v.nr].point for v in el.vertices], axis=0)
+                                for el in surface.Elements(ng.BND)])
+            values = z0*(1+.05*centers[:,2]/.0125)
+            zs_file = tmp_path/'panel-zs.json'
+            write_panel_impedance(zs_file, surface, values, frequency_hz=1000)
+            args.panel_zs_file = str(zs_file)
+            args.impedance_model = 'sibc'
+            args.esim_per_panel = False
         if not converges:
             args.esim_max_iter = 1
             args.esim_tol = 1e-10
@@ -68,7 +82,12 @@ def test_panel_esim_workflow_preserves_heat_and_panel_identity(tmp_path, monkeyp
             return
         result = calc._solve_workpiece_weak_coupled(args, source)
         assert result['esim_converged']
-        assert result['esim_fixed_point_relative_error'] <= args.esim_tol
+        if specified:
+            np.testing.assert_array_equal(result['esim_per_panel_Z_s_real'], values.real)
+            assert result['esim_iterations'] == 1
+            assert not result['esim_per_panel']
+        else:
+            assert result['esim_fixed_point_relative_error'] <= args.esim_tol
         assert result['esim_impedance_layout'] == 'BND-element-order'
         values = np.array(result['esim_per_panel_Z_s_real'])
         assert np.ptp(values) > .001*values.mean()
@@ -83,6 +102,27 @@ def test_panel_esim_workflow_preserves_heat_and_panel_identity(tmp_path, monkeyp
         h = ng.GridFunction(ng.H1(fixture, order=1))
         h.Load(result['ht_sol'])
         assert np.all(np.isfinite(h.vec.FV().NumPy()))
+        if specified:
+            from radia.simulink import ih_operator_assembly as assembly
+            options = assembly.IHOperatorAssemblyOptions(
+                frequency_hz=1000, workpiece_conductivity_S_per_m=5.8e7,
+                workpiece_relative_permeability=1, panel_zs_file=str(zs_file))
+            thermal = assembly._assemble_thermal_operators(Path(label), heat.vec.FV().NumPy(), options)
+            assert thermal.heat_power_W == pytest.approx(result['P_wp'], rel=1e-10)
+            # The electromagnetic source in this test is an explicit 1-A
+            # filament; no STEP/coil discretization accuracy is claimed.
+            coil = tmp_path/'prescribed-filament.step'
+            coil.write_text('prescribed filament test source')
+            report = tmp_path/'workpiece.vol-check.json'
+            contract = assembly._contract_path('ih_workpiece_v1.json')
+            assembly._check_vol(Path(label), contract, report, workpiece=True, workpiece_label='sibc')
+            em = assembly.UnitCurrentResult(heat.vec.FV().NumPy().copy(),
+                    {**result, 'P_wp_W':result['P_wp']}, Path(result['qsurf_sol']), Path(result['msh_file']))
+            config = assembly._native_config(Path(label), coil, Path(label), coil,
+                     'peec', options, em, thermal, [report], [contract], [])
+            assert config['surface_impedance']['mode'] == 'specified-panel'
+            assert config['independent_fem_validation']['status'] == 'not-performed'
+            (tmp_path/'native-panel-config.json').write_text(json.dumps(config), encoding='utf-8')
         (tmp_path/'summary.json').write_text(json.dumps({
             'backend': backend, 'power_W': result['P_wp'],
             'reaction_balance': result['wp_power_balance_relative_error'],

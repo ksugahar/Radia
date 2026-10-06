@@ -11,6 +11,9 @@ library. There is no standalone PySide application or notebook workbench.
 
 Run `simulink-app-health` with IH in scope. Also use:
 
+- `radia-ih-fem-crosscheck` for every changed physical case or solver result;
+  interface acceptance alone does not certify electromagnetic heating accuracy.
+
 - `panel-cli-diff` for `IHDesignSpec` and headless calculation parity.
 - `verify-deploy` to prove the loaded MATLAB, MEX, Python, and Cubit assets come
   from the intended checkout or release.

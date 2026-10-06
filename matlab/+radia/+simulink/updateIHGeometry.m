@@ -106,6 +106,16 @@ elseif ~java.io.File(char(configFile)).isAbsolute()
 end
 assemblyOptions = readAssemblyOptions(block);
 geometryFiles = [wpPath; coilPath];
+if isfield(assemblyOptions, "panel_zs_file") && strlength(string(assemblyOptions.panel_zs_file)) > 0
+    zsPath = string(assemblyOptions.panel_zs_file);
+    if ~java.io.File(char(zsPath)).isAbsolute() || ~isfile(zsPath)
+        error("radia:simulink:IHPanelZsFile", "Element Zs requires an existing absolute JSON path: %s", zsPath);
+    end
+    if strlength(assembleFcn) > 0 || strlength(command) > 0
+        error("radia:simulink:IHPanelZsAssembler", "Element Zs requires the built-in assembler.");
+    end
+    geometryFiles(end+1) = zsPath;
+end
 if isfield(assemblyOptions,"axisymmetric_thermal_vol") && strlength(string(assemblyOptions.axisymmetric_thermal_vol)) > 0
     thermalPath=string(assemblyOptions.axisymmetric_thermal_vol);
     if ~java.io.File(char(thermalPath)).isAbsolute()
@@ -273,7 +283,7 @@ for name = string(fieldnames(finDefaults))'
     end
 end
 % Existing tracked 3D blocks retain their explicit historical 3D behavior.
-for name=["axisymmetric_thermal_vol","n_phi_samples","thermal_order"]
+for name=["axisymmetric_thermal_vol","n_phi_samples","thermal_order","panel_zs_file"]
     if isfield(parameters,name), values.(name)=get_param(block,name); end
 end
 end

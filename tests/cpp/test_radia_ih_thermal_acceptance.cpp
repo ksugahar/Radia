@@ -120,6 +120,49 @@ void TestJacobiPcgAcceptsAResolvedSystem() {
         throw std::runtime_error("accepted solve failed the independent true residual");
 }
 
+void TestSmallHeatOnAmbientBaseline() {
+    ThermalState state{{293.15, 293.15}, 0.0, 0.0};
+    ThermalStepOptions options;
+    options.dt_s = 1.0;
+    options.tolerance = 1.0e-12;
+    options.max_iterations = 10;
+    radia::ih::advance_thermal(
+        DenseTwoByTwo(1.0, 0.0, 0.0, 1.0),
+        DenseTwoByTwo(100.0, -100.0, -100.0, 100.0), nullptr,
+        {1.0e-8, 2.0e-8}, {1.0, 1.0}, 0.0, options, state);
+    // Independent inverse of [[101,-100],[-100,101]], determinant 201.
+    const double expected0 = 293.15 + (101.0e-8 + 200.0e-8) / 201.0;
+    const double expected1 = 293.15 + (100.0e-8 + 202.0e-8) / 201.0;
+    if (std::abs(state.temperature_K[0]-expected0) > 1.0e-13 ||
+        std::abs(state.temperature_K[1]-expected1) > 1.0e-13)
+        throw std::runtime_error("small heat increment failed independent inverse");
+}
+
+void TestIncrementMatchesImplicitConvectionEquation() {
+    for (bool coefficients : {false, true}) {
+        ThermalState state{{300.0, 310.0}, 0.0, 0.0};
+        ThermalStepOptions options;
+        options.dt_s = 1.0;
+        options.tolerance = 1.0e-12;
+        options.max_iterations = 10;
+        options.ambient_temperature_K = 293.15;
+        options.convection_W_per_m2K = 2.0;
+        if (coefficients) options.constant_coefficients = {1.0, 2.0};
+        const auto convection = DenseTwoByTwo(.4, .1, .1, .3);
+        radia::ih::advance_thermal(
+            DenseTwoByTwo(1.0, 0.0, 0.0, 1.0),
+            DenseTwoByTwo(2.0, -1.0, -1.0, 2.0), &convection,
+            {4.0, -3.0}, {1.0, 1.0}, 0.0, options, state);
+        const double rhs0 = 304.0 + 2.0*293.15*(coefficients ? .6 : .5);
+        const double rhs1 = 307.0 + 2.0*293.15*(coefficients ? .7 : .4);
+        const double expected0 = (3.6*rhs0+.8*rhs1)/13.04;
+        const double expected1 = (.8*rhs0+3.8*rhs1)/13.04;
+        if (std::abs(state.temperature_K[0]-expected0) > 1.0e-12 ||
+            std::abs(state.temperature_K[1]-expected1) > 1.0e-12)
+            throw std::runtime_error("increment solve changed implicit convection equation");
+    }
+}
+
 void TestNonfiniteSourceAndStateFailWithoutMutation() {
     ThermalStepOptions options;
     options.dt_s = 1.0;
@@ -160,6 +203,8 @@ int main() {
         TestSubnormalScaleCannotUnderflowToConvergence();
         TestFailedIterationDoesNotPublishPartialState();
         TestJacobiPcgAcceptsAResolvedSystem();
+        TestSmallHeatOnAmbientBaseline();
+        TestIncrementMatchesImplicitConvectionEquation();
         TestNonfiniteSourceAndStateFailWithoutMutation();
         std::cout << "radia_ih_thermal: all tests passed\n";
         return 0;
