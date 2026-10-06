@@ -56,7 +56,7 @@ def read_lock(path: Path) -> dict:
     return lock
 
 
-def create_lock(wheelhouse: Path, output: Path, procedure_commit: str) -> dict:
+def create_lock(wheelhouse: Path, output: Path, procedure_commit: str, runtime_id: str | None = None) -> dict:
     wheels, modules, records = [], {}, {}
     for path in sorted(wheelhouse.glob("*.whl")):
         with zipfile.ZipFile(path) as z:
@@ -90,6 +90,11 @@ def create_lock(wheelhouse: Path, output: Path, procedure_commit: str) -> dict:
     # Netgen and NGSolve both own share/__init__.py, with different delvewheel paths.
     # Accept only exact bytes present in the locked wheels and record the installed winner.
     lock["shared_record_hashes"] = {n: sorted(v) for n, v in records.items() if len(v) > 1}
+    # Numerical environment identity is independent of operation-helper revisions.
+    lock["runtime_id"] = runtime_id or hashlib.sha256(canonical(dict(
+        wheels=wheels, python=lock["python"], architecture=lock["architecture"]))).hexdigest()[:16]
+    if len(lock["runtime_id"]) != 16 or any(c not in "0123456789abcdef" for c in lock["runtime_id"]):
+        raise ValueError("Runtime ID must contain 16 lowercase hexadecimal characters")
     lock["lock_sha256"] = hashlib.sha256(canonical(lock)).hexdigest()
     output.write_text(json.dumps(lock, indent=2), encoding="utf-8")
     return lock
@@ -192,12 +197,17 @@ def deploy(lock_path: Path, wheelhouse: Path, runtime: Path) -> None:
     # A deployed runtime is maintained software, never a case workspace.
     base = Path("C:/ProgramData/Radia/compute-runtimes").resolve()
     runtime = runtime.resolve()
-    if runtime.parent != base or runtime.name != lock["lock_sha256"][:16]:
-        raise ValueError("Use the dedicated runtime path named by the lock digest")
+    if runtime.parent != base or runtime.name != lock["runtime_id"]:
+        raise ValueError("Use the dedicated runtime path recorded in the lock")
     if runtime.exists() and runtime.is_symlink():
         raise ValueError("Runtime must not be a link")
-    runtime.mkdir(parents=True, exist_ok=True)
-    venv.EnvBuilder(with_pip=True).create(runtime)
+    if (runtime / "lock.json").exists():
+        previous = read_lock(runtime / "lock.json")
+        if any(previous[k] != lock[k] for k in ("wheels", "python", "architecture")):
+            raise ValueError("An existing runtime cannot receive different numerical wheels")
+    else:
+        runtime.mkdir(parents=True, exist_ok=True)
+        venv.EnvBuilder(with_pip=True).create(runtime)
     python = runtime / "Scripts/python.exe"
     req = runtime / "requirements.lock"
     req.write_text("\n".join(f"{r['name']}=={r['version']} --hash=sha256:{r['sha256']}" for r in lock["wheels"]) + "\n")
@@ -218,6 +228,19 @@ def safe_member(root: Path, name: str) -> Path:
     if not path.is_relative_to(root.resolve()) or Path(name).is_absolute():
         raise ValueError(f"Escaping bundle member: {name}")
     return path
+
+
+def process_tree_private_bytes(process) -> int:
+    """Windows venv launchers spawn the real interpreter; measure the whole tree."""
+    import psutil
+    total = 0
+    for member in [process, *process.children(recursive=True)]:
+        try:
+            memory = member.memory_info()
+            total += getattr(memory, "private", memory.rss)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    return total
 
 
 def verify_job(root: Path, job: dict, lock: dict) -> None:
@@ -266,8 +289,7 @@ def run_job(lock: dict, root: Path) -> int:
         try:
             while child.poll() is None:
                 try:
-                    memory = psutil.Process(child.pid).memory_info()
-                    peak = max(peak, getattr(memory, "private", memory.rss))
+                    peak = max(peak, process_tree_private_bytes(psutil.Process(child.pid)))
                 except psutil.NoSuchProcess:
                     pass
                 time.sleep(1)
@@ -279,6 +301,7 @@ def run_job(lock: dict, root: Path) -> int:
                   host=platform.node(), command=command, lock_sha256=lock["lock_sha256"],
                   source_commit=job["source_commit"], wall_s=time.perf_counter()-started,
                   peak_process_private_bytes=peak)
+    result["memory_scope"] = "Sum of child process tree private bytes, including Windows venv interpreter child; one-second samples"
     (root / "execution.json").write_text(json.dumps(result, indent=2))
     print(json.dumps(result), flush=True)
     return child.returncode
@@ -377,6 +400,7 @@ def main() -> int:
     p.add_argument("--wheelhouse", type=Path, required=True)
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--procedure-commit", required=True)
+    p.add_argument("--runtime-id", help="Reuse a named runtime only when its numerical wheel identity is unchanged")
     p = sub.add_parser("deploy")
     p.add_argument("--lock", type=Path, required=True)
     p.add_argument("--wheelhouse", type=Path, required=True)
@@ -402,7 +426,7 @@ def main() -> int:
     p.add_argument("--report", type=Path, required=True)
     a = ap.parse_args()
     if a.action == "lock":
-        print(json.dumps(create_lock(a.wheelhouse, a.output, a.procedure_commit)))
+        print(json.dumps(create_lock(a.wheelhouse, a.output, a.procedure_commit, a.runtime_id)))
     elif a.action == "deploy":
         deploy(a.lock, a.wheelhouse, a.runtime)
     elif a.action == "probe":
