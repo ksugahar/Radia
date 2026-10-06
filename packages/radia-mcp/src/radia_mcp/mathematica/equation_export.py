@@ -25,6 +25,7 @@ def mathematica_export_equation(
     Matrices use MatrixForm for display only; InputForm retains the result.
     Each request evaluates once in a fresh kernel; prior notebook variables
     are unavailable. Include definitions in expression, e.g. a Module.
+    Use one expression; join statements with ';' or wrap them in Module.
     Unevaluated symbolic heads are allowed; Null and failure markers are not.
     A failed calculation never invokes the editor. Backend failures retain
     the generated TeX so the caller can inspect unsupported notation.
@@ -34,6 +35,8 @@ def mathematica_export_equation(
     try:
         if not isinstance(expression, str) or not expression.strip():
             raise ValueError("expression must be a non-empty Wolfram expression")
+        if any(ord(char) < 32 and char not in "\t\r\n" for char in expression):
+            raise ValueError("expression contains unsupported control characters")
         if action not in {"tex", "save", "copy", "render"}:
             raise ValueError("action must be tex, save, copy, or render")
         if isinstance(timeout, bool) or not math.isfinite(timeout) or not 0 < timeout <= 300:
@@ -55,11 +58,11 @@ def mathematica_export_equation(
 
     literal = json.dumps(expression, ensure_ascii=False)
     code = (
-        "Module[{held, result, display}, Block[{$MessageList = {}},"
+        'Module[{held, result, display, reason = ""}, Block[{$MessageList = {}},'
         f"held = Check[ToExpression[{literal}, InputForm, HoldComplete], $Failed];"
-        "result = If[held === $Failed, $Failed, Check[ReleaseHold[held], $Failed]];"
+        'result = If[held === $Failed, $Failed, If[Length[held] != 1, reason = "Use one expression; join statements with semicolons or wrap them in Module"; $Failed, Check[ReleaseHold[held], $Failed]]];'
         'If[result === Null || !FreeQ[result, $Failed | $Aborted], Print[ExportString[<|"ok"->False,'
-        '"error"->("Invalid equation result: " <> ToString[result, InputForm] <> "; messages: " <> ToString[$MessageList, InputForm])|>, "RawJSON", "Compact"->True]],'
+        '"error"->(reason <> "; Invalid equation result: " <> ToString[result, InputForm] <> "; messages: " <> ToString[$MessageList, InputForm])|>, "RawJSON", "Compact"->True]],'
         "display = If[MatrixQ[result], MatrixForm[result], result];"
         'Print[ExportString[<|"ok"->True, "tex"->ToString[TeXForm[display]],'
         '"input_form"->ToString[result, InputForm]|>, "RawJSON", "Compact"->True]]]]]'
