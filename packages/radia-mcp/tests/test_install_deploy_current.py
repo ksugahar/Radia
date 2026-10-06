@@ -15,6 +15,9 @@ def test_install_deploy_topics_match_current_machine_roles():
 
     assert "LAB is not a CI runner" in overview
     assert "mdx" in overview and "CI priority" in overview
+    assert "the only editable development host" in overview
+    assert "verified wheels" in overview
+    assert "editable `radia`, `cubit-mesh-export`, `radia-mcp`" not in overview
     assert "impact-selected" in ci_compute
     assert "validation_test/" in ci_compute
 
@@ -48,6 +51,9 @@ def test_mcp_release_route_is_distinct_from_solver_release():
     assert "radia-mcp-v<VERSION>" in mcp
     assert "LAB live source" in mcp
     assert "next-launch-pending" in mcp
+    assert "a verified\nwheel and fresh import on LAB" in mcp
+    assert "editable development install and fresh import\non 100" in mcp
+    assert "editable installations on LAB" not in mcp
     assert "do not block release completion" in mcp
     assert "Failed\ninstallation/import still blocks" in mcp
     assert "tools/release_quad.py" not in mcp
@@ -81,4 +87,6 @@ def test_release_workflow_does_not_restore_coupled_mcp_policy():
     assert "RADIA_RELEASE_PRESERVE_MCP_SOURCE" not in RELEASE_WORKFLOW
     assert "solver candidate lane never installs" in RELEASE_WORKFLOW
     assert "monorepo_lockstep" not in RELEASE_WORKFLOW
+    assert "are LAB (verified wheel) and 100 (editable) only" in RELEASE_WORKFLOW
+    assert "editable registration and fresh imports on LAB and 100" not in RELEASE_WORKFLOW
     assert "## version_pairs" in get_release_workflow_documentation("version_pairs")

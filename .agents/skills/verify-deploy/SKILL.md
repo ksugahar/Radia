@@ -1,6 +1,6 @@
 ---
 name: verify-deploy
-description: Verify that Radia edits are loaded from the intended editable checkout by external Python and Simulink, while Cubit loads only its deployed embedded-Python toolbar files.
+description: Verify that Radia edits are loaded from the intended runtime by external Python and Simulink, while Cubit loads only its deployed embedded-Python toolbar files.
 ---
 
 # Verify Deploy
@@ -8,7 +8,8 @@ description: Verify that Radia edits are loaded from the intended editable check
 Use this after changing `src/radia`, Simulink application code, or the Cubit
 toolbar. The supported runtime boundary is:
 
-- external Python 3.12: editable `radia` and headless application code;
+- external Python 3.12: editable `radia` on 100号機; verified wheel on LAB;
+  both run the headless application code;
 - MATLAB/Simulink: the same external source through the checked MATLAB/MEX
   entry point and tracked Radia library;
 - Coreform Cubit: deployed `.ccm`, curver module, startup hook, and toolbar in
@@ -26,18 +27,19 @@ python -c "import pathlib,radia; print(radia.__version__); print(pathlib.Path(ra
 python -c "import pathlib,radia.simulink.application as m; print(pathlib.Path(m.__file__).resolve())"
 ```
 
-Both paths must resolve to the explicitly intended current editable checkout,
-not a wheel under `site-packages`. A reviewed release worktree is valid while
-it is the selected current source; a historically canonical path is not an
-automatic recovery target. LAB and 100号機 use editable installs. If the source
-is wrong, verify the intended source and repoint only `radia`, without an
-uninstall-first step:
+On 100号機, both paths must resolve to the explicitly intended current editable
+checkout. On LAB, they must resolve to the verified wheel in `site-packages`.
+A reviewed release worktree is valid while selected as the 100号機 source; a
+historically canonical path is not an automatic recovery target. Only 100号機
+uses an editable install. If its source is wrong, verify the intended source
+and repoint only `radia`, without an uninstall-first step:
 
 ```powershell
 python -m pip install -e <intended-current-radia-root> --no-deps
 ```
 
-Verify editable metadata and a fresh import before touching long-lived clients.
+On 100, verify editable metadata; on LAB, verify the installed wheel version
+and package path. Confirm fresh imports before touching long-lived clients.
 Then reconnect only affected MCP/MATLAB clients at a safe boundary. A process
 keeps imported modules and registered tool objects until it reloads or restarts.
 Fix a failed update forward; never repoint to an older tree merely because it
@@ -79,8 +81,8 @@ inventory and a real export/check cycle.
 
 ## 4. Cross-machine acceptance
 
-- LAB and 100号機: explicitly intended current editable source and fast
-  application checks.
+- LAB: verified wheel and fast application checks; 100号機: explicitly
+  intended editable source and fast application checks.
 - mdx1/mdx2: isolated CI/compute environments; never infer their state from LAB
   files.
 - hibino: optional long optimization/validation compute host.

@@ -268,8 +268,9 @@ and top-level pytest collection all pass. Tool discovery is verified from
 snapshots are not committed or used as a CI oracle.
 
 Operational quality is claimed only after the published wheel is verified,
-editable registration and fresh imports pass on LAB and 100, and LAB confirms
-the affected live source and a harmless tool call. Existing 100 clients may
+a non-editable wheel install and fresh import pass on LAB, an editable
+development import passes on 100, and LAB confirms the affected live source
+and a harmless tool call. Existing 100 clients may
 adopt the update on their next normal launch; they do not block the release.
 The numerical solver's four-host release-quad is a separate workflow.
 Public-safe quality records live in
@@ -336,6 +337,29 @@ shown below for reference; everything else is discoverable via meta.
 | **Force** | `mcp-server-force` | direct + validation catalog | Common Motor/MagLev force layer: shared result normalization; static and peak/RMS phasor Lorentz/Maxwell force and torque; virtual work, coenergy and uniform/sampled air-gap torque; method selection, independent-method/action-reaction/lift-weight gates; and validation guidance (numerical tools require the `radia` extra). |
 | **differential-forms** | `mcp-server-differential-forms` | direct | Visual differential geometry for computational EM: intrinsic metric, curvature/holonomy, Cartan moving frames, k-forms, exterior derivative, **Hodge star, Whitney complex, de Rham, tree-cotree, FEEC**, and executable geometry/gauge gates. Distilled from Needham 2021/2026, Bossavit 1998, Whitney 1957, Kameari 2011, Arnold-Falk-Winther 2006, 新しい計算電磁気学 2003, and Codecasa 2010. |
 | **mathematica** | `mcp-server-mathematica` | direct | Wolfram Mathematica subprocess bridge: evaluate expressions, execute tracked verification scripts with JSON reports, batch named identities in one kernel, and select a course/differential-forms/paper verification workflow, plus simplify, TeX, vector calculus, units, solve, integrate, differentiate, and status helpers. Pairs with `differential-forms` for symbolic verification of d²=0, Stokes, Whitney elements, Kelvin transform, Maxwell identities. Requires `wolframscript` on PATH. |
+
+### Mathematica result to an editable equation
+
+`mathematica_export_equation(expression, action="tex")` evaluates the Wolfram
+expression once and returns the resulting `input_form` and EqnEdit64-ready
+`tex`. Each call uses a fresh kernel; include required definitions in the
+expression rather than referring to variables in an open notebook.
+
+- `action="save", output_path=".../result.tex"`: save UTF-8 TeX to open in EqnEdit64.
+- `action="copy", target="office"`: copy editable Office math through the
+  existing native clipboard adapter. Requires EqnEdit64 on the same host.
+- `action="render", output_path=".../result.png"`: render a preview; PNG/EMF
+  are images, not editable equations.
+
+For example, `{{1/2,Sqrt[x]},{D[Sin[x],x],Integrate[x,{x,0,1}]}}` exports a
+two-by-two matrix containing the evaluated derivative and integral. Centered
+TeXForm arrays are converted to equivalent matrix syntax, with `wolfram_tex`
+retaining the original. Other array alignments fail explicitly. Calculation
+failure does not invoke the editor; editor failure retains the generated TeX.
+
+MCP execution belongs on 100 or LAB. A remote clipboard is local to the host
+running EqnEdit64; transfer the `.tex` file to the intended editing host when
+needed. Optional `executable` selects the native backend explicitly.
 
 ### Radia-coupled (`pip install radia-mcp[radia]`)
 
