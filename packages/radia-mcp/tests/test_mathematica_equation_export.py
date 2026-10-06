@@ -101,9 +101,10 @@ def test_editor_failure_keeps_tex(evaluation, monkeypatch, tmp_path):
 
 
 def test_new_tool_registered_without_kernel(monkeypatch):
-    monkeypatch.setattr(
-        tools, "mathematica_evaluate", lambda *a, **k: pytest.fail("discovery launched kernel")
-    )
+    def mathematica_evaluate(*a, **k):
+        pytest.fail("discovery launched kernel")
+
+    monkeypatch.setattr(tools, "mathematica_evaluate", mathematica_evaluate)
     from radia_mcp.mathematica import server
 
     assert "mathematica_export_equation" in server._REGISTERED
@@ -139,3 +140,42 @@ def test_noncentered_array_is_not_silently_changed(monkeypatch):
     result = tools.mathematica_export_equation("matrix")
     assert not result["ok"] and result["stage"] == "conversion"
     assert result["tex"] == tex
+
+
+def test_save_has_lf_bytes(evaluation, tmp_path):
+    output = tmp_path / "equation.tex"
+    assert tools.mathematica_export_equation("1/2", action="save", output_path=str(output))["ok"]
+    assert output.read_bytes() == b"\\frac{1}{2}\n"
+
+
+def test_evaluation_error_surfaces_messages(monkeypatch):
+    monkeypatch.setattr(
+        tools,
+        "mathematica_evaluate",
+        lambda *a, **k: {"exit_code": 0, "result": '{"ok":false,"error":"Power::infy"}'},
+    )
+    result = tools.mathematica_export_equation("1/0")
+    assert not result["ok"] and result["error"] == "Power::infy"
+
+
+@pytest.mark.parametrize(
+    "tex,ok",
+    [
+        (r"\begin{array}{c}1\\2\end{array}", True),
+        (r"\begin{array}{c}1\end{array}\begin{array}{l}2\end{array}", False),
+        (r"\begin{array}{c}\begin{array}{c}1\end{array}\end{array}", True),
+    ],
+)
+def test_array_shapes(monkeypatch, tex, ok):
+    monkeypatch.setattr(
+        tools,
+        "mathematica_evaluate",
+        lambda *a, **k: {
+            "exit_code": 0,
+            "result": json.dumps({"ok": True, "tex": tex, "input_form": "matrix"}),
+        },
+    )
+    result = tools.mathematica_export_equation("matrix")
+    assert result["ok"] is ok
+    if ok:
+        assert r"\begin{array}" not in result["tex"]
