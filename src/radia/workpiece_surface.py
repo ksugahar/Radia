@@ -42,23 +42,30 @@ def _check_sibc_reaction_power(surface_power, reaction_power, tolerance=0.1):
 
 
 def _complete_sibc_reaction(magnetic_delta_L, phi_inc, phi, stiffness,
-                           Z_s, omega, I_port):
-    """Complete constant-Zs, single-valued SIBC coil reciprocity [H].
+                           Z_s, omega, I_port, *, weighted_stiffness=None):
+    """Complete source-weighted, single-valued SIBC coil reciprocity [H].
 
     The magnetic phi.B term alone omits the electric surface term.
     For peak exp(+i*omega*t) phasors the missing term is
     Zs/(i*omega*I_port**2) * phi_inc.T @ K @ phi (no conjugation).
-    Inputs must use the same surface FE basis. This function does not apply
-    to a multivalued loop potential or a spatially varying impedance.
+    Inputs must use the same surface FE basis. For PanelSurfaceImpedance,
+    weighted_stiffness must be the assembled K_Z, used without an extra Zs.
+    This function does not apply to a multivalued loop potential.
     """
     incident = np.asarray(phi_inc, dtype=complex)
     total = np.asarray(phi, dtype=complex)
-    matrix = np.asarray(stiffness)
+    from .surface_impedance import PanelSurfaceImpedance
+    is_panel = isinstance(Z_s, PanelSurfaceImpedance)
+    if is_panel and weighted_stiffness is None:
+        raise ValueError("Panel reciprocity requires the weighted surface stiffness")
+    if not is_panel and weighted_stiffness is not None:
+        raise ValueError("Weighted surface stiffness requires tagged panel Z_s")
+    matrix = np.asarray(weighted_stiffness if is_panel else stiffness)
     if incident.ndim != 1 or total.shape != incident.shape or matrix.shape != (len(total), len(total)):
         raise ValueError("SIBC reciprocity requires matching surface FE vectors and stiffness")
-    if np.ndim(Z_s) != 0:
+    if not is_panel and np.ndim(Z_s) != 0:
         raise ValueError("SIBC reciprocity requires scalar Z_s; variable impedance needs a weighted surface form")
-    z = complex(Z_s)
+    z = 1+0j if is_panel else complex(Z_s)
     if (not np.isfinite(omega) or omega <= 0 or not np.isfinite(I_port)
             or I_port == 0 or not np.isfinite(z) or z.real < 0
             or not np.isfinite(magnetic_delta_L)
