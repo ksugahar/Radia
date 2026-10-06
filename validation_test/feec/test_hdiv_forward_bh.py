@@ -26,7 +26,7 @@ def test_linear_equivalence_and_falling_m_retention(tmp_path):
         falling = Solve(mesh, bh_table=[[0, 0], [1, MU0 * 11], [10, MU0 * 15]],
                         H_ext=ng.CF((0, 0, 8)), order=1, gram_eps=1e-10,
                         nonlinear_solver="forward-newton", nl_tol=1e-9,
-                        newton_inner_tol=1e-10, maxit=1000, nl_maxit=50)
+                        maxit=1000, nl_maxit=50)
     assert float(falling["M_avg"][2]) > 5.5, falling["M_avg"]
     for result in (forward, falling):
         assert result["nonlinear_final_relative_residual"] <= 1e-9

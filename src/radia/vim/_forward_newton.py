@@ -22,6 +22,9 @@ def solve_forward_newton(mesh, fes, table, operator, h_ext, *,
     """
     if isinstance(table, dict):
         raise NotImplementedError("forward-newton currently requires one B(H) table")
+    inner_tol = 1e-9 if tol == "auto" else float(tol)
+    if not np.isfinite(inner_tol) or inner_tol <= 0 or maxit < 1 or nl_maxit < 1:
+        raise ValueError("forward-newton requires positive tolerances and iteration budgets")
     arr = np.asarray(table, dtype=float)
     _, bfun, bder, hmax, mmax = _bh_table_funcs(arr[:, 0], arr[:, 1])
     u, v = fes.TnT()
@@ -137,7 +140,7 @@ def solve_forward_newton(mesh, fes, table, operator, h_ext, *,
         J = Jacobian()
         b = G.CreateRowVector()
         b.FV().NumPy()[:] = -residual
-        inner = GMRESSolver(J, pre=Gi, tol=min(float(tol), 1e-8),
+        inner = GMRESSolver(J, pre=Gi, tol=min(inner_tol, 1e-8),
                             maxiter=maxit, restart=min(100, maxit), printrates=False)
         delta = G.CreateColVector()
         delta.data = inner * b
