@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import csv
 import hashlib
 import importlib
 import importlib.metadata as metadata
@@ -28,7 +29,7 @@ MODULES = ("radia", "radia._radia_pybind", "radia.bh_law",
            "radia.coil_builder", "radia.vim._solve", "radia.vim._nonlinear",
            "ngsolve", "netgen", "numpy", "scipy")
 THREADS = {"OMP_NUM_THREADS": "8", "MKL_NUM_THREADS": "1",
-           "OPENBLAS_NUM_THREADS": "1"}
+           "OPENBLAS_NUM_THREADS": "1", "MKL_THREADING_LAYER": "TBB"}
 
 
 def digest(path: Path) -> str:
@@ -56,7 +57,7 @@ def read_lock(path: Path) -> dict:
 
 
 def create_lock(wheelhouse: Path, output: Path, procedure_commit: str) -> dict:
-    wheels, modules = [], {}
+    wheels, modules, records = [], {}, {}
     for path in sorted(wheelhouse.glob("*.whl")):
         with zipfile.ZipFile(path) as z:
             meta_names = [n for n in z.namelist() if n.endswith(".dist-info/METADATA")]
@@ -65,6 +66,10 @@ def create_lock(wheelhouse: Path, output: Path, procedure_commit: str) -> dict:
             meta = BytesParser().parsebytes(z.read(meta_names[0]))
             wheels.append(dict(file=path.name, sha256=digest(path),
                                name=normalize(meta["Name"]), version=meta["Version"]))
+            record = meta_names[0].replace("METADATA", "RECORD")
+            for name, value, _ in csv.reader(z.read(record).decode().splitlines()):
+                if value.startswith("sha256="):
+                    records.setdefault(name, set()).add(value.split("=", 1)[1])
             for module in MODULES:
                 stem = module.replace(".", "/")
                 candidates = [n for n in z.namelist() if n in (stem + ".py", stem + "/__init__.py")
@@ -82,6 +87,9 @@ def create_lock(wheelhouse: Path, output: Path, procedure_commit: str) -> dict:
     lock = dict(schema=SCHEMA, python=platform.python_version(), architecture=platform.machine(),
                 procedure_commit=procedure_commit, helper_sha256=digest(Path(__file__)),
                 threads=THREADS, wheels=wheels, modules=modules)
+    # Netgen and NGSolve both own share/__init__.py, with different delvewheel paths.
+    # Accept only exact bytes present in the locked wheels and record the installed winner.
+    lock["shared_record_hashes"] = {n: sorted(v) for n, v in records.items() if len(v) > 1}
     lock["lock_sha256"] = hashlib.sha256(canonical(lock)).hexdigest()
     output.write_text(json.dumps(lock, indent=2), encoding="utf-8")
     return lock
@@ -97,8 +105,9 @@ def verify_wheels(lock: dict, wheelhouse: Path) -> None:
 
 
 def probe(lock: dict) -> dict:
-    errors, loaded, packages = [], {}, {}
+    errors, loaded, packages, shared = [], {}, {}, {}
     prefix = Path(sys.prefix).resolve()
+    os.environ.update(environment(lock, prefix))
     if sys.prefix == sys.base_prefix:
         errors.append("A dedicated virtual environment is required")
     if platform.python_version() != lock["python"] or platform.machine() != lock["architecture"]:
@@ -130,7 +139,10 @@ def probe(lock: dict) -> dict:
                     errors.append(f"Unsupported RECORD hash: {name}/{member}")
                     continue
                 actual = base64.urlsafe_b64encode(bytes.fromhex(digest(p))).decode().rstrip("=")
-                if actual != member.hash.value:
+                known_shared = lock.get("shared_record_hashes", {}).get(str(member).replace("\\", "/"), [])
+                if known_shared:
+                    shared[str(member).replace("\\", "/")] = actual
+                if actual != member.hash.value and actual not in known_shared:
                     errors.append(f"Installed file changed: {name}/{member}")
         except KeyError:
             errors.append(f"Missing distribution: {name}")
@@ -143,17 +155,32 @@ def probe(lock: dict) -> dict:
                 errors.append(f"Loaded source/binary mismatch: {name}")
         except Exception as exc:
             errors.append(f"Import failed: {name}: {exc!r}")
+    import psutil
+    numerical_dlls = {}
+    for mapping in psutil.Process().memory_maps():
+        path = Path(mapping.path)
+        name = path.name.lower()
+        if name.endswith(".dll") and any(s in name for s in ("mkl", "openblas", "ngcore", "nglib", "ngstd", "libngsolve", "tbb12", "libiomp")):
+            path = path.resolve()
+            numerical_dlls[name] = dict(path=str(path), sha256=digest(path))
+            if not path.is_relative_to(prefix):
+                errors.append(f"Numerical DLL loaded outside selected runtime: {path}")
     return dict(schema=SCHEMA, status="passed" if not errors else "failed", errors=errors,
                 host=platform.node(), python=sys.executable, python_version=platform.python_version(),
                 prefix=str(prefix), lock_sha256=lock["lock_sha256"], procedure_commit=lock["procedure_commit"],
-                packages=packages, modules=loaded, threads=lock["threads"])
+                packages=packages, modules=loaded, threads=lock["threads"],
+                shared_installed_files=shared, numerical_dlls=numerical_dlls,
+                mklroot=os.environ["MKLROOT"])
 
 
-def environment(lock: dict) -> dict:
+def environment(lock: dict, runtime: Path | None = None) -> dict:
     env = os.environ.copy()
     for key in ("PYTHONPATH", "PYTHONHOME"):
         env.pop(key, None)
-    env.update(lock["threads"], PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
+    # The supported MKLROOT override must be absolute and belong to this runtime.
+    # Without it Radia's loader can mistake a cwd-relative bin directory for MKL.
+    env.update(lock["threads"], MKLROOT=str((runtime or Path(sys.prefix)).resolve() / "Library"),
+               PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
     return env
 
 
@@ -176,14 +203,14 @@ def deploy(lock_path: Path, wheelhouse: Path, runtime: Path) -> None:
     req.write_text("\n".join(f"{r['name']}=={r['version']} --hash=sha256:{r['sha256']}" for r in lock["wheels"]) + "\n")
     subprocess.run([str(python), "-I", "-m", "pip", "install", "--no-index", "--no-deps",
                     "--only-binary=:all:", "--require-hashes", "--find-links", str(wheelhouse.resolve()),
-                    "-r", str(req)], env=environment(lock), check=True)
-    subprocess.run([str(python), "-I", "-m", "pip", "check"], env=environment(lock), check=True)
+                   "-r", str(req)], env=environment(lock, runtime), check=True)
+    subprocess.run([str(python), "-I", "-m", "pip", "check"], env=environment(lock, runtime), check=True)
     shutil.copy2(lock_path, runtime / "lock.json")
     if Path(__file__).resolve() != runtime / "compute_runtime.py":
         shutil.copy2(__file__, runtime / "compute_runtime.py")
     subprocess.run([str(python), "-I", str(runtime / "compute_runtime.py"), "probe", "--lock",
                     str(runtime / "lock.json"), "--output", str(runtime / "acceptance.json")],
-                   cwd=runtime, env=environment(lock), check=True)
+                   cwd=runtime, env=environment(lock, runtime), check=True)
 
 
 def safe_member(root: Path, name: str) -> Path:
