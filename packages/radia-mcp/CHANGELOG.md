@@ -7,6 +7,12 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- Add `mathematica_export_equation`: evaluate once, retain InputForm and TeX,
+  save an editor input file, copy editable Office math, or render PNG/EMF via
+  the existing EqnEdit64 adapter. Centered TeXForm arrays use equivalent matrix
+  notation; unsupported column alignment fails explicitly. Calculation and
+  editor failures remain distinct and preserve the available source equation.
+
 ## [2.0.1] - 2026-10-03
 
 ### Changed

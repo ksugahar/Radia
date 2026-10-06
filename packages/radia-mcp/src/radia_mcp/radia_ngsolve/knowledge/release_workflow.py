@@ -4,7 +4,7 @@ Package release workflows for the Radia monorepo.
 The Radia monorepo ships four independent PyPI distributions and one
 versioned Simulink library package from one git tree. The numerical Radia
 solver uses its multi-host QUAD gate. radia-mcp and cubit-mesh-export publish
-independently and deploy wheels to LAB and editable sources to 100 through DUAL lanes;
+independently and deploy verified wheels to LAB and editable sources to 100 through DUAL lanes;
 radia-optuna has its own exact-wheel lane. These release boundaries must not
 be collapsed into one coupled version or deployment requirement.
 
@@ -281,7 +281,8 @@ Operational completion for radia-mcp requires its independent release-dual
 gates:
 
 * package CI, published-wheel verification, and dependency resolution,
-* editable registration and fresh imports on LAB and 100,
+* a verified non-editable wheel and fresh import on LAB, plus an editable
+  development registration and fresh import on 100,
 * LAB live-source and harmless affected-tool verification.
 
 Existing 100 clients can be `next-launch-pending`; they are not a release

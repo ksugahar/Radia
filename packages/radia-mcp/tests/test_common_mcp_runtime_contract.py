@@ -6,6 +6,7 @@ import asyncio
 import importlib.util
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from mcp.server.fastmcp import FastMCP
@@ -160,6 +161,42 @@ def test_meta_server_passes_real_stdio_runtime_contract():
         "positive": "accepted",
         "negative": "rejected",
     }
+
+
+def test_call_log_correlates_calls_and_survives_wall_clock_adjustment(
+    monkeypatch, tmp_path
+):
+    from radia_mcp.common import server_hardening as logging_layer
+
+    monkeypatch.setenv("RADIA_MCP_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("RADIA_MCP_CALL_LOG", "1")
+    wall = iter([1000.0, 900.0])
+    elapsed = iter([10.0, 10.025, 20.0, 20.050])
+    monkeypatch.setattr(logging_layer.time, "time", lambda: next(wall))
+    monkeypatch.setattr(logging_layer.time, "perf_counter", lambda: next(elapsed))
+
+    async def call(name, arguments, **kwargs):
+        if name == "failure":
+            raise ValueError("private error details")
+        return {"ok": True}
+
+    manager = SimpleNamespace(call_tool=call)
+    mcp = SimpleNamespace(_tool_manager=manager)
+    assert install_call_log(mcp, "clock.jsonl")
+    assert asyncio.run(manager.call_tool("success", {})) == {"ok": True}
+    with pytest.raises(ValueError, match="private error details"):
+        asyncio.run(manager.call_tool("failure", {}))
+
+    text = (tmp_path / "logs" / "clock.jsonl").read_text()
+    records = [json.loads(line) for line in text.splitlines()]
+    assert [r["ts"] for r in records] == [1000.0, 900.0]
+    assert [r["ms"] for r in records] == [25.0, 50.0]
+    assert records[0]["runtime_id"] == records[1]["runtime_id"]
+    assert len(records[0]["runtime_id"]) == 32
+    assert records[0]["call_id"] != records[1]["call_id"]
+    assert records[1]["ok"] is False
+    assert records[1]["error_type"] == "ValueError"
+    assert "private error details" not in text
 
 
 def _valid_solver_artifact() -> dict:

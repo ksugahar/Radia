@@ -13,10 +13,13 @@ and [release-dual contract](../../../packages/radia-mcp/docs/operations/mcp-runt
 
 ## Machine roles
 
-- 100号機 (INTEL11) is the development host; only it has editable `radia`,
-  `cubit-mesh-export`, and `radia-mcp` installs (Radia in its development venv).
-- LAB is the test host with fixed wheels. MCP servers and Cubit distributions
-  are deployed to and run on LAB and 100号機 only.
+- 100号機 (INTEL11) is the development host and the only editable-install host.
+  Its editable Radia install belongs in the dedicated development venv.
+- LAB is the test host and uses fixed, verified wheels; do not use an editable
+  install there.
+- MCP servers and Cubit distributions are deployed to and run on LAB and 100号機
+  only. mdx1, mdx2 and hibino are compute/CI hosts, not MCP or Cubit deployment
+  targets.
 - mdx1 and mdx2 are the priority CI runners and MATLAB compute hosts. CI builds
   in isolated per-run environments.
 - hibino runs long optimization and validation jobs when available.
@@ -28,8 +31,9 @@ and [release-dual contract](../../../packages/radia-mcp/docs/operations/mcp-runt
 
 ## Supported operations
 
-1. Confirm editable imports with the `verify-deploy` skill. A running MCP
-   server may need code reload or one client reconnect after source changes.
+1. Confirm the intended runtime with `verify-deploy`: editable source on 100号機
+   or a verified wheel on LAB. A running MCP server may need code reload or one
+   client reconnect after source changes.
 2. Install and verify the independently packaged Cubit backend and embedded
    toolbar with `cubit-plugin-install` and `cubit-smoke-test`.
 3. Build native extensions on the machine that will validate them, using the
