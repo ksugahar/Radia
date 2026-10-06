@@ -3774,8 +3774,6 @@
     if (snippet.indexOf("\\begin{") >= 0) snippet = prettyTex(snippet);
     if (/^[\^_]\{[^{}]*\}\s*$/.test(snippet))
       return composeInsertion(value, start, end, snippet);
-    if (/^'+$/.test(snippet) && end > start)
-      return composeInsertion(value, end, end, snippet);
     var holes = [], match, pattern = /\{\}|\[\]/g;
     while ((match = pattern.exec(snippet))) holes.push(match.index + 1);
     if (!holes.length) return composeInsertion(value, start, end, snippet);

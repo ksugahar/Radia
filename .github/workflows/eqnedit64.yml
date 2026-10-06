@@ -87,6 +87,9 @@ jobs:
           python build/generate_palettes.py --check
           python -m pytest tests/test_web_contract.py tests/test_node_dispatch.py tests/test_version_contract.py tests/test_palette_faces.py tests/test_palette_intent.py -q
 
+      - name: Check shipped TrueType conversion without font registration
+        run: python tests/test_truetype_conversion.py
+
       - name: Check Web JavaScript syntax and insertion behaviour
         run: |
           node --check web/equation-editor.js

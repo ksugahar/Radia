@@ -176,6 +176,9 @@ for (const mark of ["'", "''", "'''"]) {
   const decorated = "{a^{2}}^{" + "\\prime ".repeat(mark.length) + "}";
   assert.deepEqual(editor.composeInsertion("a^{2}", 0, 5, mark),
                    { value: decorated, caret: decorated.length });
+  assert.deepEqual(editor.composePaletteInsertion("a^{2}", 0, 5,
+    ["prime", mark, "prime", "", "template.prime", 0]),
+    { value: decorated, caret: decorated.length });
 }
 assert.deepEqual(editor.composeInsertion("a^{2}", 5, 5, "'"),
                  { value: "a^{2}{}" + onePrime, caret: 7 + onePrime.length });
