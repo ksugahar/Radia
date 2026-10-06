@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import json
 import re
 from pathlib import Path
 
@@ -24,6 +25,7 @@ def mathematica_export_equation(
     Matrices use MatrixForm for display only; InputForm retains the result.
     Each request evaluates once in a fresh kernel; prior notebook variables
     are unavailable. Include definitions in expression, e.g. a Module.
+    Unevaluated symbolic heads are allowed; Null and failure markers are not.
     A failed calculation never invokes the editor. Backend failures retain
     the generated TeX so the caller can inspect unsupported notation.
     """
@@ -51,12 +53,16 @@ def mathematica_export_equation(
     except (TypeError, ValueError, OSError) as exc:
         return {"ok": False, "stage": "input", "error": str(exc)}
 
+    literal = json.dumps(expression, ensure_ascii=False)
     code = (
-        "Module[{result, display}, result = Check[(" + expression + "), $Failed];"
-        'If[result === $Failed || result === $Aborted, Print[ExportString[<|"ok"->False|>, "RawJSON", "Compact"->True]],'
+        "Module[{held, result, display}, Block[{$MessageList = {}},"
+        f"held = Check[ToExpression[{literal}, InputForm, HoldComplete], $Failed];"
+        "result = If[held === $Failed, $Failed, Check[ReleaseHold[held], $Failed]];"
+        'If[result === Null || !FreeQ[result, $Failed | $Aborted], Print[ExportString[<|"ok"->False,'
+        '"error"->("Invalid equation result: " <> ToString[result, InputForm] <> "; messages: " <> ToString[$MessageList, InputForm])|>, "RawJSON", "Compact"->True]],'
         "display = If[MatrixQ[result], MatrixForm[result], result];"
         'Print[ExportString[<|"ok"->True, "tex"->ToString[TeXForm[display]],'
-        '"input_form"->ToString[result, InputForm]|>, "RawJSON", "Compact"->True]]]]'
+        '"input_form"->ToString[result, InputForm]|>, "RawJSON", "Compact"->True]]]]]'
     )
     raw = mathematica_evaluate(code, timeout=timeout)
     if raw.get("exit_code") != 0 or raw.get("timed_out"):
@@ -77,7 +83,9 @@ def mathematica_export_equation(
         return {
             "ok": False,
             "stage": "evaluation",
-            "error": error or "Wolfram did not return a valid equation",
+            "error": error
+            or (payload.get("error") if isinstance(payload, dict) else None)
+            or "Wolfram did not return a valid equation",
             "raw": raw,
         }
     result = {
@@ -108,7 +116,7 @@ def mathematica_export_equation(
     if action == "save":
         try:
             destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_text(result["tex"] + "\n", encoding="utf-8")
+            destination.write_bytes((result["tex"] + "\n").encode("utf-8"))
             result["output_path"] = str(destination)
         except OSError as exc:
             result.update(ok=False, stage="save", error=str(exc))
