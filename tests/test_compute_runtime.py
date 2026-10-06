@@ -1,0 +1,42 @@
+"""Admission failures must prevent a mismatched runtime/job from executing."""
+import importlib.util
+import json
+from pathlib import Path
+import pytest
+
+path = Path(__file__).resolve().parents[1] / "tools/compute_runtime.py"
+spec = importlib.util.spec_from_file_location("compute_runtime", path)
+runtime = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(runtime)
+
+
+def test_changed_lock_is_rejected(tmp_path):
+    value = {"schema": runtime.SCHEMA, "python": "3.12.10"}
+    import hashlib
+    value["lock_sha256"] = hashlib.sha256(runtime.canonical(value)).hexdigest()
+    p = tmp_path / "lock.json"
+    p.write_text(json.dumps(value))
+    assert runtime.read_lock(p) == value
+    value["python"] = "3.12.11"
+    p.write_text(json.dumps(value))
+    with pytest.raises(ValueError, match="modified"):
+        runtime.read_lock(p)
+
+
+def test_mismatched_or_changed_job_is_rejected(tmp_path):
+    p = tmp_path / "entry.py"
+    p.write_text("raise SystemExit(0)")
+    lock = {"lock_sha256": "a"}
+    job = dict(schema="radia.compute-job.v1", lock_sha256="a", source_commit="commit",
+               physics_contract={"units": "SI"}, files={"entry.py": runtime.digest(p)}, entry="entry.py")
+    runtime.verify_job(tmp_path, job, lock)
+    with pytest.raises(ValueError, match="lock mismatch"):
+        runtime.verify_job(tmp_path, job, {"lock_sha256": "b"})
+    p.write_text("raise SystemExit(1)")
+    with pytest.raises(ValueError, match="changed"):
+        runtime.verify_job(tmp_path, job, lock)
+
+
+def test_bundle_cannot_escape_root(tmp_path):
+    with pytest.raises(ValueError, match="Escaping"):
+        runtime.safe_member(tmp_path, "../private.py")
