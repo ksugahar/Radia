@@ -1037,6 +1037,9 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     progress("BEM",
         f"wp nv={wp_mesh.nv} ne(BND)={wp_mesh.GetNE(BND)} ({t_wp_mesh:.1f}s)")
     wp_chi, wp_genus = _wp_genus_check(wp_mesh)
+    panel_zs_file = getattr(args, 'panel_zs_file', '')
+    if panel_zs_file and wp_genus != 0:
+        raise ValueError('Specified panel Zs currently requires a genus-0 surface')
 
     # Resolve the loop-DOF mode (see --wp-loop-dof).  "on" was already
     # early-guarded in run_inductance and _apply_wp_loop_dof enforces
@@ -1207,7 +1210,13 @@ def _solve_workpiece_weak_coupled(args, coil_data):
                          bh_curve=bh_curve)
     delta_wp = mat_wp.skin_depth(args.frequency)
 
-    if args.impedance_model == "esim":
+    if panel_zs_file:
+        from radia.surface_impedance import read_panel_impedance
+        Z_s_wp = read_panel_impedance(panel_zs_file, wp_mesh,
+                                      frequency_hz=args.frequency).values
+        esim_solver = None
+        max_iter = 1
+    elif args.impedance_model == "esim":
         # ESIM cell solver: 1D nonlinear B-H(H) Karl iteration on a
         # cylindrical workpiece slice of radius `half_thickness`.
         # The seed solve at a small H0=5 A/m only needs a rough Z_s
@@ -1538,7 +1547,8 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         Z_s_real_out = float(Z_s_mean.real)
         Z_s_imag_out = float(Z_s_mean.imag)
         per_panel_block = {
-            "esim_per_panel": True,
+            "esim_per_panel": esim_solver is not None,
+            "panel_zs_file": str(panel_zs_file),
             "esim_impedance_layout": "BND-element-order",
             "esim_per_panel_centroids": [
                 np.mean([wp_mesh.vertices[v.nr].point for v in el.vertices], axis=0).tolist()
@@ -1957,7 +1967,7 @@ def _assemble_full_output(args, coil_data, wp_data):
     # Propagate per-panel block (esim_per_panel, esim_per_panel_Z_s_real/imag,
     # esim_per_panel_H_t) — emitted by _solve_workpiece_weak_coupled when
     # --esim-per-panel is set.
-    for key in ("esim_per_panel", "esim_impedance_layout", "esim_per_panel_centroids",
+    for key in ("esim_per_panel", "panel_zs_file", "esim_impedance_layout", "esim_per_panel_centroids",
                 "esim_per_panel_Z_s_real",
                 "esim_per_panel_Z_s_imag",
                 "esim_per_panel_H_t"):
@@ -2622,6 +2632,14 @@ def run_inductance(args):
                          "proximity-aware strong coupling remains unsupported.",
             }
 
+    if getattr(args, 'panel_zs_file', ''):
+        if (args.coupling_mode != 'weak' or args.impedance_model != 'sibc'
+                or args.esim_per_panel or args.coil_only or not args.vol
+                or args.wp_loop_dof == 'on' or int(args.h1_order) != 1):
+            return {'status': 'error', 'error':
+                    'Specified panel Zs requires weak P1 SIBC, a workpiece, '
+                    'no ESIM iteration and no loop DOF.'}
+
     # Loop-DOF extension: an EXPLICIT "on" fails fast on unsupported
     # combinations BEFORE the expensive coil solve (the genus check itself
     # needs the wp mesh and lives in the workpiece drivers).  The default
@@ -2865,6 +2883,8 @@ def build_argparser():
                         help="sibc: linear Dowell tanh formula. "
                              "esim: nonlinear Karl iteration; requires "
                              "--bh-file.")
+    parser.add_argument('--panel-zs-file', default='',
+                        help='Mesh-bound per-triangle Zs JSON [ohm], weak P1 genus-0 SIBC only')
     parser.add_argument("--esim-max-iter", type=int, default=15)
     parser.add_argument("--esim-tol", type=float, default=1e-3)
     parser.add_argument("--esim-relax", type=float, default=0.5,

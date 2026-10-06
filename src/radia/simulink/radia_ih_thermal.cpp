@@ -78,10 +78,9 @@ void cg(const CSRMatrix& a, const std::vector<double>& b,
                 "IH thermal Jacobi preconditioner requires a positive finite diagonal");
 
     std::vector<double> r, z(static_cast<std::size_t>(n)), p, ap;
-    true_residual(a, b, x, r); // Warm start from the previous accepted temperature.
-    // The fixed effective load is b-A*x_initial.  Scaling by ||b|| would hide
-    // an unresolved small heat increment behind the much larger stored-energy
-    // term M*T_previous.
+    true_residual(a, b, x, r);
+    // The caller solves for a temperature increment from zero, so this norm
+    // measures the physical heat/cooling load, not the stored-energy baseline.
     const double effective_load_norm = norm(r);
     if (!std::isfinite(effective_load_norm))
         throw std::runtime_error("IH thermal effective load is not finite");
@@ -182,25 +181,37 @@ void advance_thermal(const CSRMatrix& mass, const CSRMatrix& stiffness,
         system.value[k] += mass.value[k];
 
     std::vector<double> rhs;
-    matvec(mass, state.temperature_K, rhs);
+    // Solve (M+dt*K+dt*h*C)*dT = dt*(Q-K*T+h*C*(Tamb-T)).
+    // Forming M*T+dt*Q and solving directly for T loses small heating
+    // increments to cancellation in the recomputed residual.
+    matvec(stiffness, state.temperature_K, rhs);
     for (int i = 0; i < n; ++i) {
-        rhs[static_cast<std::size_t>(i)] += options.dt_s * source_W[static_cast<std::size_t>(i)];
+        rhs[static_cast<std::size_t>(i)] = options.dt_s *
+            (source_W[static_cast<std::size_t>(i)] -
+             options.conductivity_scale * rhs[static_cast<std::size_t>(i)]);
         if (convection) {
-            double row_sum = 0.0;
+            double cooling_load = 0.0;
             for (int k = convection->row_ptr[i]; k < convection->row_ptr[i + 1]; ++k)
-                row_sum += convection->value[static_cast<std::size_t>(k)] *
-                    (coefficients ? options.constant_coefficients[
-                        static_cast<std::size_t>(convection->col[static_cast<std::size_t>(k)])] : 1.0);
+                cooling_load += convection->value[static_cast<std::size_t>(k)] *
+                    (options.ambient_temperature_K * (coefficients ? options.constant_coefficients[
+                        static_cast<std::size_t>(convection->col[static_cast<std::size_t>(k)])] : 1.0) -
+                     state.temperature_K[static_cast<std::size_t>(convection->col[static_cast<std::size_t>(k)])]);
             rhs[static_cast<std::size_t>(i)] += options.dt_s * options.convection_W_per_m2K *
-                options.ambient_temperature_K * row_sum;
+                cooling_load;
         }
     }
     if (convection)
         for (std::size_t k = 0; k < system.value.size(); ++k)
             system.value[k] += options.dt_s * options.convection_W_per_m2K * convection->value[k];
     std::vector<double> accepted_temperature = state.temperature_K;
+    std::vector<double> increment(static_cast<std::size_t>(n), 0.0);
     cg(system, rhs, options.tolerance, options.max_iterations,
-       accepted_temperature);
+       increment);
+    for (int i = 0; i < n; ++i) {
+        accepted_temperature[static_cast<std::size_t>(i)] += increment[static_cast<std::size_t>(i)];
+        if (!std::isfinite(accepted_temperature[static_cast<std::size_t>(i)]))
+            throw std::runtime_error("IH accepted thermal state is not finite");
+    }
     state.temperature_K.swap(accepted_temperature);
     state.time_s += options.dt_s;
     state.previous_angle_rad = angle_now_rad;

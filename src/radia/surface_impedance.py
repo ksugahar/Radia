@@ -8,6 +8,53 @@ from dataclasses import dataclass
 import numpy as np
 
 
+def panel_mesh_identity(mesh):
+    """Hash ordered triangle coordinates; vertex renumbering alone is harmless."""
+    import hashlib
+    from ngsolve import BND
+    triangles = np.asarray([[tuple(mesh.vertices[v.nr].point) for v in el.vertices]
+                            for el in mesh.Elements(BND)], dtype='<f8')
+    if triangles.ndim != 3 or triangles.shape[1:] != (3, 3):
+        raise ValueError('Panel impedance requires triangular 3D surfaces')
+    return hashlib.sha256(triangles.tobytes()).hexdigest(), triangles.mean(axis=1)
+
+
+def write_panel_impedance(path, mesh, values, *, frequency_hz):
+    """Write mesh-bound JSON in ohms; values use peak-phasor convention."""
+    import json
+    from pathlib import Path
+    impedance = PanelSurfaceImpedance(values)
+    identity, centroids = panel_mesh_identity(mesh)
+    if len(centroids) != len(impedance.values):
+        raise ValueError('One impedance is required per surface triangle')
+    if not np.isfinite(frequency_hz) or frequency_hz <= 0:
+        raise ValueError('frequency_hz must be finite and positive')
+    payload = dict(schema='radia.panel_surface_impedance.v1', layout='BND-element-order',
+                   unit='ohm', frequency_hz=float(frequency_hz), surface_sha256=identity,
+                   centroids_m=centroids.tolist(), real_ohm=impedance.values.real.tolist(),
+                   imag_ohm=impedance.values.imag.tolist())
+    Path(path).write_text(json.dumps(payload, indent=2, allow_nan=False), encoding='utf-8')
+
+
+def read_panel_impedance(path, mesh, *, frequency_hz):
+    """Reject stale mesh order, frequency, invalid shape and active/nonfinite Zs."""
+    import json
+    from pathlib import Path
+    data = json.loads(Path(path).read_text(encoding='utf-8-sig'))
+    identity, centroids = panel_mesh_identity(mesh)
+    if (data.get('schema') != 'radia.panel_surface_impedance.v1'
+            or data.get('layout') != 'BND-element-order' or data.get('unit') != 'ohm'
+            or data.get('surface_sha256') != identity):
+        raise ValueError('Panel Zs schema, units or surface mesh/order mismatch')
+    frequency = float(data.get('frequency_hz', float('nan')))
+    if not np.isfinite(frequency) or not np.isclose(frequency, frequency_hz, rtol=1e-12, atol=0):
+        raise ValueError('Panel Zs frequency mismatch')
+    real, imag = np.asarray(data['real_ohm'], float), np.asarray(data['imag_ohm'], float)
+    if real.shape != (len(centroids),) or imag.shape != real.shape:
+        raise ValueError('One real/imag impedance is required per surface triangle')
+    return PanelSurfaceImpedance(real + 1j*imag)
+
+
 @dataclass(frozen=True)
 class PanelSurfaceImpedance:
     """One peak-phasor impedance [ohm] per BND triangle, in mesh order."""
@@ -75,3 +122,29 @@ def panel_tangential_field_rms(fes, phi_vec):
     if np.any(area <= 0):
         raise ValueError("Surface panels require positive area")
     return np.sqrt(np.maximum(integral / area, 0))
+
+
+def main(argv=None):
+    """Export an editable, mesh-bound panel table for the Simulink assembler."""
+    import argparse
+    from ngsolve import Mesh, BND
+    from radia.panels.calc_inductance import _extract_bnd_only_inline
+    parser = argparse.ArgumentParser(description=main.__doc__)
+    parser.add_argument('workpiece')
+    parser.add_argument('--label', default='sibc')
+    parser.add_argument('--frequency', required=True, type=float)
+    parser.add_argument('--real-ohm', required=True, type=float)
+    parser.add_argument('--imag-ohm', required=True, type=float)
+    parser.add_argument('--output', required=True)
+    args = parser.parse_args(argv)
+    mesh = Mesh(args.workpiece)
+    if args.label not in mesh.GetBoundaries():
+        raise ValueError('Template label must name a workpiece boundary')
+    surface = _extract_bnd_only_inline(mesh, args.label)
+    values = np.full(surface.GetNE(BND), complex(args.real_ohm, args.imag_ohm))
+    write_panel_impedance(args.output, surface, values, frequency_hz=args.frequency)
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
