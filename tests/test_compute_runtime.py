@@ -82,3 +82,17 @@ def test_memory_includes_windows_interpreter_child():
             assert recursive
             return [Child(), Child()]
     assert runtime.process_tree_private_bytes(Launcher()) == 3000
+
+
+def test_admission_excludes_only_exact_parent_launcher(tmp_path):
+    import sys
+    own = dict(pid=10, name="python.exe", cmdline=[])
+    launcher = dict(pid=9, name="python.exe", cmdline=[sys.executable, "-I",
+        str(Path(runtime.__file__).resolve()), "run", "--job-root", str(tmp_path)])
+    other = dict(launcher, pid=11)
+    ci = dict(pid=12, name="Runner.Worker.exe", cmdline=[])
+    conflicts = runtime.admission_conflicts([own, launcher, other, ci], tmp_path,
+                                           own_pid=10, parent_pid=9)
+    assert [p['pid'] for p in conflicts] == [11, 12]
+    wrong_parent = dict(launcher, cmdline=launcher['cmdline'][:-1] + [str(tmp_path/'other')])
+    assert runtime.admission_conflicts([wrong_parent], tmp_path, own_pid=10, parent_pid=9)
