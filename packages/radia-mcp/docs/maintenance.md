@@ -55,15 +55,17 @@ maintenance never kills unrelated MATLAB, Python, or client processes.
 ## Repeatable editable update
 
 radia-mcp uses **release-dual: LAB and 100 only**, independently of Radia's
-solver release. Both keep editable installs. Do not deploy to hibino/mdx1/mdx2
+solver release. 100 is the only editable development host; LAB uses a verified
+wheel and supplies test/live-client acceptance. Do not deploy to hibino/mdx1/mdx2
 or invoke the full QUAD installer for this package-only update. Compute-runner
 CI remains isolated; existing excluded-host installations are left untouched.
 
 The default is **update source -> reconnect -> check one affected live tool**.
-For release-dual, LAB supplies the live-client acceptance. Verify the editable
-installation and fresh import on both hosts; existing 100 clients can update
-at their next normal restart without blocking release completion. Do not force
-all-user restarts merely to close the checklist. See the
+For release-dual, verify a fresh, non-editable wheel install on LAB and a fresh
+editable development import on 100. LAB supplies live-client acceptance;
+existing 100 clients can update at their next normal restart without blocking
+release completion. Do not force all-user restarts merely to close the
+checklist. See the
 [release completion contract](operations/mcp-runtime-policy.md#release-completion).
 
 1. Update the usual editable development checkout with reviewed changes. Check

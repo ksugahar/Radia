@@ -268,8 +268,9 @@ and top-level pytest collection all pass. Tool discovery is verified from
 snapshots are not committed or used as a CI oracle.
 
 Operational quality is claimed only after the published wheel is verified,
-editable registration and fresh imports pass on LAB and 100, and LAB confirms
-the affected live source and a harmless tool call. Existing 100 clients may
+a non-editable wheel install and fresh import pass on LAB, an editable
+development import passes on 100, and LAB confirms the affected live source
+and a harmless tool call. Existing 100 clients may
 adopt the update on their next normal launch; they do not block the release.
 The numerical solver's four-host release-quad is a separate workflow.
 Public-safe quality records live in

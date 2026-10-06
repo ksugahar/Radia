@@ -13,8 +13,8 @@ and [release-dual contract](../../../packages/radia-mcp/docs/operations/mcp-runt
 
 ## Machine roles
 
-- LAB and 100号機 are development hosts with editable `radia`,
-  `cubit-mesh-export`, and `radia-mcp` installs.
+- 100号機 is the only editable development host. LAB is a test site that uses
+  verified wheels; MCP and Cubit run or deploy only on LAB and 100号機.
 - mdx1 and mdx2 are the priority CI runners and MATLAB compute hosts. CI builds
   in isolated per-run environments.
 - hibino runs long optimization and validation jobs when available.
@@ -26,8 +26,9 @@ and [release-dual contract](../../../packages/radia-mcp/docs/operations/mcp-runt
 
 ## Supported operations
 
-1. Confirm editable imports with the `verify-deploy` skill. A running MCP
-   server may need code reload or one client reconnect after source changes.
+1. Confirm the intended runtime with `verify-deploy`: editable source on 100号機
+   or a verified wheel on LAB. A running MCP server may need code reload or one
+   client reconnect after source changes.
 2. Install and verify the independently packaged Cubit backend and embedded
    toolbar with `cubit-plugin-install` and `cubit-smoke-test`.
 3. Build native extensions on the machine that will validate them, using the

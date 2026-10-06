@@ -26,10 +26,11 @@ client verification are not automatically open code defects.
 
 Release-operation follow-up (2026-09-16): removed the obsolete four-host solver
 release requirement and live-Cubit GUI/IPC guidance from CONTRIBUTING. The
-runtime policy now distinguishes required LAB live acceptance from nonblocking
-100 next-launch adoption; both hosts still require verified editable updates
-and fresh imports. Historical observations below are scoped to their recorded
-dates, not assertions about the current deployment.
+runtime policy now distinguishes required LAB wheel/live acceptance from
+nonblocking 100 next-launch adoption. At that time both hosts still required
+editable updates; the 2026-10-04 policy supersedes that installation detail.
+Historical observations below are scoped to their recorded dates, not
+assertions about the current deployment.
 
 M04 follow-up (2026-09-12): bibliography T2 arXiv identity, explicit version,
 required metadata and primary-category preservation have 23 offline regression

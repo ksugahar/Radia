@@ -6,9 +6,9 @@ from __future__ import annotations
 INSTALL_DEPLOY = """\
 # Radia install and deployment contract
 
-Radia uses isolated build and release artifacts. Development checkouts are
-editable where agents work; CI and release verification never depend on native
-binaries copied from another machine.
+Radia uses isolated build and release artifacts. Only 100号機 has an editable
+development checkout; LAB uses verified wheels. CI and release verification
+never depend on native binaries copied from another machine.
 
 Available topics: overview, development, ci_compute, release, mcp_release, cubit, failures.
 
@@ -16,8 +16,8 @@ Available topics: overview, development, ci_compute, release, mcp_release, cubit
 
 | Machine | Primary role | Installation rule |
 |---|---|---|
-| LAB | development and operations | editable `radia`, `cubit-mesh-export`, `radia-mcp` |
-| 100号機 | development and execution | editable packages from its mapped repository path |
+| LAB | test site and operations | verified wheels for `radia`, `cubit-mesh-export`, `radia-mcp` |
+| 100号機 | development and execution | the only editable development host |
 | mdx | CI priority and MATLAB compute | isolated per-run environment; validated workloads |
 | hibino | long optimization and validation when available | release or job-specific environment |
 
@@ -29,11 +29,12 @@ timing or performance measurements.
 
 ## development
 
-LAB and 100号機 use editable installs so Python source changes are visible on
-the next import. A running MCP process still owns already-imported modules and
-registered tool objects. Reconnect affected clients; compatible same-root Python
-edits may use a reviewed safe reload. Root, dependency, entry-point and schema
-changes require reconnecting, not just reloading Python modules.
+Only 100号機 uses editable installs so Python source changes are visible on
+the next import. LAB uses verified wheels for testing and operations. A running
+MCP process still owns already-imported modules and registered tool objects.
+Reconnect affected clients; compatible same-root Python edits may use a
+reviewed safe reload. Root, dependency, entry-point and schema changes require
+reconnecting, not just reloading Python modules.
 
 Native extensions are built locally against the selected Python environment.
 That environment owns NGSolve, Netgen, pybind11, and pip `mkl-devel`. Do not
@@ -66,12 +67,14 @@ native files into `site-packages`.
 ## mcp_release
 
 radia-mcp publishes independently through `radia-mcp-v<VERSION>` and its package
-CI/PyPI workflow. Its release-dual updates editable installations on LAB and
-100 only, not hibino/mdx1/mdx2. Do not run the solver's four-host release gate.
+CI/PyPI workflow. Its release-dual deploys a verified wheel to LAB and updates
+the editable development install on 100 only, not hibino/mdx1/mdx2. Do not run
+the solver's four-host release gate.
 Mixed omega remains in radia-mcp; Cubit MCP belongs to cubit-mesh-export.
 
-Completion requires passing package checks, verified publication, both hosts'
-editable registration and fresh imports, plus LAB live source and harmless
+Completion requires passing package checks, verified publication, a verified
+wheel and fresh import on LAB, the editable development install and fresh import
+on 100, plus LAB live source and harmless
 affected-tool verification. Existing 100 clients may remain next-launch-pending
 until their normal restart; they do not block release completion. Failed
 installation/import still blocks deployment completion. Immediate all-user
