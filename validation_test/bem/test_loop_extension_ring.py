@@ -92,6 +92,11 @@ def ring_case():
 
         from radia.bem_loop_extension import solve_loop_extended
         out = solve_loop_extended(solver, phi_inc, Z_S, OMEGA, A_inc_fn)
+        angles = np.arange(128) * 2 * np.pi / 128
+        carrier = np.c_[R_T*np.cos(angles), R_T*np.sin(angles), np.zeros(128)]
+        explicit = solve_loop_extended(solver, phi_inc, Z_S, OMEGA, A_inc_fn,
+            section_anchor=(R_T, 0), carrier_ring=carrier)
+        out['explicit_carrier'] = explicit
 
         res = solver.solve(phi_inc, Z_s=Z_S, omega=OMEGA)
         P_prod = res["P_density"] * res["area"]
@@ -150,3 +155,14 @@ def test_screening_reduces_H_t(ring_case):
     current's Joule heat, absent in the frozen solve)."""
     out, _ = ring_case
     assert out["P_total"] > out["P_frozen"]
+
+
+def test_explicit_material_carrier_preserves_ring_solution(ring_case):
+    out, _ = ring_case
+    explicit = out['explicit_carrier']
+    assert abs(explicit['alpha']/out['alpha']-1) < .03
+    assert abs(explicit['P_total']/out['P_total']-1) < .03
+    assert abs(abs(explicit['theta_jump'])-1) < 5e-3
+    for result in (out, explicit):
+        assert result['linear_residual_rel'] < 1e-6
+        assert result['faraday_residual_rel'] < 1e-6
