@@ -325,10 +325,68 @@ def _theta_by_path_integration(pts_o, tris_o, dup, cut_loop, H_ring,
     return Theta, float(jumps.mean())
 
 
+def _auto_material_ring(pts, tris):
+    """Find an interior circular carrier from the closed surface alone.
+
+    Supports a through-hole surrounding the z axis, including stepped
+    walls. Every carrier vertex and edge midpoint must be inside a
+    material interval on its radial ray; no CAD or hard-coded radius.
+    """
+    pts, tris = np.asarray(pts, float), np.asarray(tris, int)
+    origin = pts[tris[:, 0]]
+    edge1 = pts[tris[:, 1]] - origin
+    edge2 = pts[tris[:, 2]] - origin
+    scale = float(np.ptp(pts, axis=0).max())
+    tol = max(scale*1e-9, 1e-14)
+
+    def intervals(z, angle):
+        direction = np.array([math.cos(angle), math.sin(angle), 0.])
+        h = np.cross(direction, edge2)
+        determinant = np.einsum('ij,ij->i', edge1, h)
+        valid = np.abs(determinant) > scale*scale*1e-13
+        inverse = np.divide(1., determinant, out=np.zeros_like(determinant), where=valid)
+        offset = np.array([0., 0., z]) - origin
+        u = inverse*np.einsum('ij,ij->i', offset, h)
+        q = np.cross(offset, edge1)
+        v = inverse*(q @ direction)
+        distance = inverse*np.einsum('ij,ij->i', edge2, q)
+        hits = np.sort(distance[valid & (u >= -1e-10) & (v >= -1e-10)
+            & (u+v <= 1+1e-10) & (distance > tol)])
+        hits = hits[np.r_[True, np.diff(hits)>tol]] if len(hits) else hits
+        # An odd number means the axis is inside material (no bore here).
+        return hits.reshape(-1, 2) if len(hits) and len(hits)%2 == 0 else np.empty((0, 2))
+
+    lo, hi = float(pts[:,2].min()), float(pts[:,2].max())
+    candidates = []
+    for z in np.linspace(lo, hi, 33)[1:-1]:
+        for inner, outer in intervals(z, .137):
+            radius = .5*(inner+outer)
+            score = min(.5*(outer-inner), z-lo, hi-z)
+            candidates.append((score, radius, z))
+    angles = np.arange(512)*2*math.pi/512
+    for score, radius, z in sorted(candidates, reverse=True):
+        if score <= tol:continue
+        # Alternate vertices and polygon-edge midpoints of a 256-edge ring.
+        radii = np.where(np.arange(512)%2, radius*math.cos(math.pi/256), radius)
+        inside = True
+        for angle, r in zip(angles, radii):
+            spans = intervals(z, angle)
+            if not np.any((spans[:,0]+tol < r) & (r < spans[:,1]-tol)):
+                inside = False;break
+        if inside:
+            theta = angles[::2]
+            ring = np.c_[radius*np.cos(theta), radius*np.sin(theta), np.full(256,z)]
+            return (float(radius), float(z)), ring
+    raise ValueError("Automatic workpiece cohomology could not find an interior carrier around the z axis. "
+        "Supported geometry: one through-hole around z (tube, ring, stepped shaft). "
+        "For a different orientation or shape, supply a validated section_anchor and carrier_ring; "
+        "no uncorrected heating result is returned.")
+
+
 # ----------------------------------------------------------------------
 # main entry
 # ----------------------------------------------------------------------
-def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn):
+def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, section_anchor=None, carrier_ring=None):
     """Solve the loop-extended scalar BIE + SIBC on a genus-1 workpiece.
 
     Args:
@@ -338,6 +396,15 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn):
         phi_inc_nodal: (ndof,) complex incident scalar potential at the
             H1 nodes (e.g. the surface-Poisson reconstruction, or an
             exact expression for a uniform field).
+        carrier_ring: optional ordered closed-loop vertices inside the
+            material wall, in metres (closing vertex is implicit). Use when
+            normal-ray construction fails on a stepped wall. The unit-jump
+            check still applies. If both carrier_ring and section_anchor
+            are omitted, an interior circular carrier is found automatically
+            from the closed surface for a single through-hole around z.
+        section_anchor: optional (rho, z) point strictly inside the material
+            meridional section, in metres. Supply this for stepped profiles
+            whose surface-node mean lies outside the material.
         Z_s: complex Leontovich surface impedance (global scalar).
         omega: angular frequency [rad/s].
         A_inc_fn: callable ``A_inc_fn(points (n,3)) -> (n,3) complex`` --
@@ -418,8 +485,17 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn):
     from radia.cohomology import surface_fundamental_cycles
 
     _b1, Pi, expand, _cotree = surface_fundamental_cycles(tris, nv=nv)
+    automatic_carrier = section_anchor is None and carrier_ring is None
+    if automatic_carrier:
+        section_anchor, carrier_ring = _auto_material_ring(pts, tris)
     rho_all = np.sqrt(pts[:, 0] ** 2 + pts[:, 1] ** 2)
     rho0, z0 = float(rho_all.mean()), float(pts[:, 2].mean())
+
+    if section_anchor is not None:
+        anchor = np.asarray(section_anchor, dtype=float)
+        if anchor.shape != (2,) or not np.all(np.isfinite(anchor)) or anchor[0] <= 0:
+            raise ValueError("section_anchor must be a finite (rho, z) pair with rho > 0, inside the material section")
+        rho0, z0 = map(float, anchor)
 
     def _windings(p):
         q = pts[list(p) + [p[0]]]
@@ -503,7 +579,9 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn):
     vnorm /= np.maximum(np.linalg.norm(vnorm, axis=1), 1e-30)[:, None]
 
     # Theta carrier
-    ring = _midwall_ring(pts, pts_o, tris_o, cut, vnorm)
+    ring = _midwall_ring(pts, pts_o, tris_o, cut, vnorm) if carrier_ring is None else np.asarray(carrier_ring, dtype=float)
+    if ring.ndim != 2 or ring.shape[1] != 3 or len(ring) < 3 or not np.all(np.isfinite(ring)):
+        raise ValueError("carrier_ring must contain at least three finite 3D points inside the material wall")
     H_ring = _ring_H_factory(ring)
     Theta, theta_jump = _theta_by_path_integration(
         pts_o, tris_o, dup, cut, H_ring)
@@ -578,6 +656,11 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn):
     b2[:nv] = RHS
     b2[nv] = -1j * omega * Phi_inc_loop
     u = np.linalg.solve(A2, b2)
+    residual = A2 @ u - b2
+    linear_residual_rel = float(np.linalg.norm(residual) / max(np.linalg.norm(b2), np.finfo(float).tiny))
+    faraday_residual_rel = float(abs(residual[nv]) / max(abs(b2[nv]), abs((A2 @ u)[nv]), np.finfo(float).tiny))
+    if not np.isfinite(linear_residual_rel) or linear_residual_rel > 1e-6 or faraday_residual_rel > 1e-6:
+        raise RuntimeError("Loop SIBC true residual / Faraday closure failed")
     phi_u, alpha = u[:nv], complex(u[nv])
 
     def _P_Ht(phi_u_v, alpha_v):
@@ -615,6 +698,10 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn):
     P_frozen, Ht_frozen = _P_Ht(phi_f, 0.0)
 
     return {
+        "linear_residual_rel": linear_residual_rel,
+        "faraday_residual_rel": faraday_residual_rel,
+        "section_anchor": (rho0, z0),
+        "automatic_carrier": automatic_carrier,
         "alpha": alpha,
         "P_total": float(P_total),
         "H_t_tri": H_total,

@@ -733,6 +733,25 @@ def _delta_L_telegen_phiB_from_surface_J(
 # ======================================================================
 # Workpiece weak-coupled BEM-SIBC block (shared by both coil solvers)
 # ======================================================================
+def _resolve_workpiece_backend(args, genus, surface_vertices):
+    """Resolve the explicitly topology-aware auto backend before assembly."""
+    requested = args.wp_bem_backend
+    if requested == 'auto':
+        if genus >= 1:
+            if genus != 1 or args.impedance_model != 'sibc':
+                raise ValueError('Automatic hole treatment supports one handle and linear SIBC; multiple holes/nonlinear ESIM are not supported')
+            if int(args.h1_order) != 1:
+                raise ValueError('Automatic hole treatment requires --h1-order 1 (surface BEM basis only)')
+            requested = 'intree-dense'
+        else:
+            requested = 'hacapk'
+        progress('BEM', f'workpiece backend auto: genus={genus}, selected {requested}; cohomology={genus == 1}')
+    if genus == 1 and requested == 'intree-dense' and surface_vertices > 7000:
+        raise ValueError(f'Hole cohomology currently needs dense operators: {surface_vertices} surface vertices exceed the 7000-vertex limit. Use a coarser validated surface mesh; the hole is never filled or ignored.')
+    args.wp_bem_backend = requested
+    return requested
+
+
 def _resolve_weak_loop_mode(args, wp_genus, basis_order):
     """Refuse unrepresented handle currents before assembly or qsurf export."""
     mode = getattr(args, "wp_loop_dof", "auto")
@@ -868,6 +887,10 @@ def _apply_wp_loop_dof(args, bem, phi_inc, Z_s_wp, omega, coil_data,
     res_bem["loop_reaction_integral"] = loop_out["reaction_integral"]
     loop_meta = {
         "wp_loop_dof": True,
+        "wp_loop_automatic_carrier": bool(loop_out["automatic_carrier"]),
+        "wp_loop_section_anchor_m": list(loop_out["section_anchor"]),
+        "wp_loop_linear_residual_rel": float(loop_out["linear_residual_rel"]),
+        "wp_loop_faraday_residual_rel": float(loop_out["faraday_residual_rel"]),
         "wp_loop_alpha_A": float(abs(alpha)),
         "wp_loop_alpha_deg": alpha_deg,
         "wp_loop_theta_jump": float(loop_out["theta_jump"]),
@@ -1040,6 +1063,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     panel_zs_file = getattr(args, 'panel_zs_file', '')
     if panel_zs_file and wp_genus != 0:
         raise ValueError('Specified panel Zs currently requires a genus-0 surface')
+    _resolve_workpiece_backend(args, wp_genus, wp_mesh.nv)
 
     # Resolve the loop-DOF mode (see --wp-loop-dof).  "on" was already
     # early-guarded in run_inductance and _apply_wp_loop_dof enforces
@@ -1920,6 +1944,8 @@ def _assemble_full_output(args, coil_data, wp_data):
         out["wp_loop_dof_skip_reason"] = wp_data["wp_loop_dof_skip_reason"]
     if wp_data.get("wp_loop_dof"):
         out["wp_loop_dof"] = True
+        for key in ("wp_loop_automatic_carrier", "wp_loop_section_anchor_m", "wp_loop_linear_residual_rel", "wp_loop_faraday_residual_rel"):
+            if key in wp_data: out[key] = wp_data[key]
         out["wp_loop_alpha_A"] = float(wp_data["wp_loop_alpha_A"])
         out["wp_loop_alpha_deg"] = float(wp_data["wp_loop_alpha_deg"])
         out["wp_loop_theta_jump"] = float(wp_data["wp_loop_theta_jump"])
@@ -2048,6 +2074,7 @@ def _solve_workpiece_strong_coupled(args):
             f"({sorted(mats)}) or boundaries ({sorted(bnds)})")
     t_wp_mesh = time.perf_counter() - t0
     wp_chi, wp_genus = _wp_genus_check(wp_mesh, tag="COUPLED")
+    _resolve_workpiece_backend(args, wp_genus, wp_mesh.nv)
 
     # --- global Leontovich Z_s (delta includes mu_r), same convention as
     #     the linear weak path: Z_s = (1+j) * rho / delta ---
@@ -2225,6 +2252,7 @@ def _solve_workpiece_strong_coupled_peec(args, coil_data):
             f"({sorted(mats)}) or boundaries ({sorted(bnds)})")
     t_wp_mesh = time.perf_counter() - t0
     wp_chi, wp_genus = _wp_genus_check(wp_mesh, tag="COUPLED")
+    _resolve_workpiece_backend(args, wp_genus, wp_mesh.nv)
 
     mat_wp = EMMaterial(name="wp", sigma=args.sigma, mu_r=args.mu_r)
     delta_wp = mat_wp.skin_depth(args.frequency)
@@ -2670,7 +2698,7 @@ def run_inductance(args):
                     "error": "--wp-loop-dof supports the linear SIBC only "
                              "(--impedance-model sibc); the ESIM Karl loop "
                              "is not integrated with the loop DOF."}
-        if args.wp_bem_backend != "intree-dense":
+        if args.wp_bem_backend not in ("auto", "intree-dense"):
             return {"status": "error",
                     "error": "--wp-loop-dof needs the dense operators: pass "
                              "--wp-bem-backend intree-dense (the HACApK "
@@ -2933,8 +2961,9 @@ def build_argparser():
                              "P2 basis on flat Tri3 geometry). Weak heat/"
                              "reaction postprocessing currently requires P1; "
                              "this does not restrict thermal FEM order.")
-    parser.add_argument("--wp-bem-backend", default="hacapk",
-                        choices=["hacapk", "intree-dense"])
+    parser.add_argument("--wp-bem-backend", default="auto",
+                        choices=["auto", "hacapk", "intree-dense"],
+                        help="auto: HACApK for simply connected workpieces; dense cohomology for one z-axis through-hole with linear SIBC/P1. Explicit backends are never overridden.")
     parser.add_argument("--wp-aca-eps", type=float, default=1e-10)
     parser.add_argument("--wp-gmres-tol", type=float, default=1e-10)
     parser.add_argument("--wp-loop-dof", nargs="?", const="on",
@@ -2947,7 +2976,7 @@ def build_argparser():
                              "whose bore links the coil flux.  "
                              "auto (default): apply on a genus-1 workpiece "
                              "when the prerequisites hold (weak coupling, "
-                             "linear SIBC, --wp-bem-backend intree-dense, "
+                             "linear SIBC, auto or intree-dense backend, "
                              "--h1-order 1); unsupported weak handle "
                              "combinations fail before BEM assembly. "
                              "on (= bare --wp-loop-dof): require it -- "

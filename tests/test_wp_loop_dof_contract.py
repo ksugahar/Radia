@@ -79,11 +79,11 @@ def test_argparse_accepts_flag():
 @pytest.mark.parametrize("extra,frag", [
     (["--impedance-model", "esim", "--wp-bem-backend", "intree-dense"],
      "linear SIBC"),
-    ([], "intree-dense"),                       # default backend = hacapk
+    (["--wp-bem-backend", "hacapk"], "intree-dense"),                       # default backend = hacapk
     (["--wp-bem-backend", "intree-dense", "--h1-order", "2"], "P1"),
     # strong coupling now TAKES the loop DOF (applied once on the
     # converged Picard state) but still needs the dense backend:
-    (["--coupling-mode", "strong", "--no-peec-proximity"], "intree-dense"),
+    (["--coupling-mode", "strong", "--no-peec-proximity", "--wp-bem-backend", "hacapk"], "intree-dense"),
 ])
 def test_early_guards_fail_fast(extra, frag):
     """Unsupported combinations return an error dict BEFORE the coil
@@ -122,3 +122,22 @@ def test_genus0_workpiece_raises():
     ])
     with pytest.raises(ValueError, match="genus-1"):
         ci.run_inductance(ns)
+
+
+def test_auto_workpiece_backend_uses_topology_and_preserves_explicit_request():
+    args = SimpleNamespace(wp_bem_backend='auto', impedance_model='sibc', h1_order=1)
+    assert ci._resolve_workpiece_backend(args, 0, 100) == 'hacapk'
+    args.wp_bem_backend='auto'
+    assert ci._resolve_workpiece_backend(args, 1, 100) == 'intree-dense'
+    assert ci._resolve_weak_loop_mode(args, 1, 1)[1]
+    args.wp_bem_backend='hacapk'
+    assert ci._resolve_workpiece_backend(args, 1, 100) == 'hacapk'
+    with pytest.raises(ValueError, match='HACApK'):
+        ci._resolve_weak_loop_mode(args, 1, 1)
+
+
+def test_auto_holes_reject_unsupported_physics_and_dense_capacity():
+    for genus,model,nv,fragment in [(2,'sibc',100,'multiple holes'),(1,'esim',100,'nonlinear'),(1,'sibc',7001,'7000')]:
+        args=SimpleNamespace(wp_bem_backend='auto',impedance_model=model,h1_order=1)
+        with pytest.raises(ValueError,match=fragment):
+            ci._resolve_workpiece_backend(args,genus,nv)
