@@ -164,14 +164,14 @@ solver boundary is a checked `.vol` regardless of the creation route.
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
 **POLICY**: **mdx1 and mdx2** are Radia's self-hosted CI and preflight pool.
-LAB is the development host; 100号機 is the student-facing release and usage host.
-Do not run development suites or heavy validation on 100号機; limit release acceptance
-to necessary installation, import and student-facing application smoke checks. Both mdx hosts give CI and preflight priority.
+100号機 (INTEL11) hosts development, review, integration and the release runtime; LAB is the test
+host (fixed wheels, job-local `C:\temp\<job-id>` inputs). Do not run development suites or heavy validation
+on 100号機; limit its release acceptance to installation, import and student application smoke checks. Both mdx hosts give CI and preflight priority.
 GitHub Actions uses the shared `mdx` label and assigns jobs to an available runner.
 Release-quad requires LAB, 100号機, mdx1, and mdx2 for the same release commit.
 Decision 2026-10-01: editable only on 100号機, in a dedicated local development
 venv for maintainers/students, separate from the release runtime. LAB/mdx use
-verified wheels. Existing LAB editable installs await migration.
+verified wheels.
 `cubit-mesh-export` uses its own release-dual to LAB and 100号機; the Radia
 solver release-quad must not install, uninstall, repoint, or version-gate it.
 Do not install or run Cubit on mdx1/mdx2 in either release lane. This boundary
@@ -263,8 +263,8 @@ and cleanup of their job-owned `C:\temp` inputs, outputs, staging, environments 
 
 Use `tools/release_quad.py` and the `release-quad` skill. Publish only when
 CI, exact package hashes, native/MEX/SLX checks, and required machine gates pass
-for the same commit. MCP/Cubit independently migrate LAB to wheels; verify
-fresh imports and live sources.
+for the same commit. MCP/Cubit deploy LAB as wheels; verify fresh imports
+and live sources.
 Before tagging, dispatch `Radia Native Release` on the exact release SHA; `ci-verify` requires its successful native check.
 
 ## Optuna

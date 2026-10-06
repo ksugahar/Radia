@@ -13,8 +13,10 @@ and [release-dual contract](../../../packages/radia-mcp/docs/operations/mcp-runt
 
 ## Machine roles
 
-- LAB and 100号機 are development hosts with editable `radia`,
-  `cubit-mesh-export`, and `radia-mcp` installs.
+- 100号機 (INTEL11) is the development host; only it has editable `radia`,
+  `cubit-mesh-export`, and `radia-mcp` installs (Radia in its development venv).
+- LAB is the test host with fixed wheels. MCP servers and Cubit distributions
+  are deployed to and run on LAB and 100号機 only.
 - mdx1 and mdx2 are the priority CI runners and MATLAB compute hosts. CI builds
   in isolated per-run environments.
 - hibino runs long optimization and validation jobs when available.

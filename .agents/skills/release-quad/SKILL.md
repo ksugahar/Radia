@@ -65,8 +65,10 @@ tests after checking available memory and active jobs; mdx CI takes priority.
 | mdx1 | exact accepted Radia wheel | `phase8e` |
 | mdx2 | exact accepted Radia wheel | `phase8e` |
 
-LAB is the development host. 100号機 is the student-facing release/usage host;
-keep acceptance there to installation, import, and necessary application smoke.
+100号機 (INTEL11) is the development, editable-install, review and integration
+host and the student-facing release/usage host; keep its acceptance to
+installation, import, and necessary application smoke. LAB is the test host:
+it runs fixed wheels and job-local `C:\temp\<job-id>` inputs, never an editable.
 mdx1/mdx2 are the self-hosted CI and preflight pool. hibino is a computation
 host, not a QUAD acceptance target.
 
