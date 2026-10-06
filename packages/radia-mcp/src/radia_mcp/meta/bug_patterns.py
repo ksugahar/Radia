@@ -504,13 +504,18 @@ PATTERNS: list[dict] = [
                       ".pth pointer with a regular install.  Easy "
                       "trap when Phase 8 deploy commands accidentally "
                       "run on LAB.",
-        "detection": "tools/release_quad.py done's LAB-editable "
-                     "gate (POLICY 2026-05-27).",
-        "prevention": "Record the intended source, repoint only the owning "
-                      "package, and verify editable metadata plus a fresh "
-                      "import. Fix forward; never restore an older tree merely "
-                      "because its path was once canonical. radia-mcp uses the "
-                      "LAB/100 release-dual rather than solver Phase 8/9.",
+        "detection": "For current deployments, verify LAB's non-editable "
+                     "wheel, artifact hashes and fresh import. On 100, verify "
+                     "the intended editable development source and fresh "
+                     "import separately from the fixed-wheel release runtime.",
+        "prevention": "The incident above predates LAB's wheel-only policy. "
+                      "Only 100 uses editable installs: record its intended "
+                      "source before repointing the owning package and verify "
+                      "editable metadata plus a fresh import. On LAB, repair "
+                      "with the verified current wheel, never an editable "
+                      "pointer. Fix forward; never restore an older tree. "
+                      "radia-mcp uses its independent LAB wheel / 100 editable "
+                      "release-dual, not solver Phase 8/9.",
         "related": ["docs/maintenance.md",
                     "radia_ngsolve/knowledge/install_deploy.py"],
     },
