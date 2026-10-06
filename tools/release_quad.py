@@ -1199,9 +1199,9 @@ def _verify_100_release_wheel():
     return _verify_wheel_runtime(SSH_100, "100号機 release runtime")
 
 
-def _verify_wheel_runtime(ssh_host, label):
-    """Verify the default Python on ``ssh_host`` holds the exact release wheel."""
-    code = """import base64, hashlib, importlib.metadata as m, json, pathlib
+def _wheel_runtime_probe_code(version, label):
+    """Build the target-side check for wheel metadata, import origin and RECORD."""
+    return """import base64, hashlib, importlib.metadata as m, json, pathlib
 import radia
 version = VERSION_PLACEHOLDER
 d = m.distribution('radia')
@@ -1218,7 +1218,12 @@ for f in d.files:
         checked += 1
 assert checked, 'Empty wheel hash manifest'
 print('LABEL_PLACEHOLDER wheel verified:', version, checked)
-""".replace("VERSION_PLACEHOLDER", repr(_radia_version())).replace("LABEL_PLACEHOLDER", label)
+""".replace("VERSION_PLACEHOLDER", repr(version)).replace("LABEL_PLACEHOLDER", label)
+
+
+def _verify_wheel_runtime(ssh_host, label):
+    """Verify the default Python on ``ssh_host`` holds the exact release wheel."""
+    code = _wheel_runtime_probe_code(_radia_version(), label)
     encoded_code = base64.b64encode(code.encode('utf-8')).decode('ascii')
     script = f'python -c "import base64; exec(base64.b64decode(\'{encoded_code}\'))"; exit $LASTEXITCODE'
     encoded = base64.b64encode(script.encode('utf-16le')).decode('ascii')

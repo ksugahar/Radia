@@ -90,8 +90,8 @@ and versioned GitHub Release packages are the distribution boundary.
 
 Routine native CI runs on the self-hosted `mdx` runner. Each job creates an
 isolated virtual environment, installs the repository pins and `mkl-devel`, and
-builds from the checked commit. LAB and 100号機 remain editable development
-hosts and are not routine CI runners.
+builds from the checked commit. 100号機 is the editable development host; LAB
+uses fixed wheels as a test site. Neither is a routine CI runner.
 
 Normal source CI runs only compact regression tests affected by changed paths.
 Solver benchmarks, machine comparisons, convergence studies, and publication
