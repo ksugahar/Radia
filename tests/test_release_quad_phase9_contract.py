@@ -28,7 +28,7 @@ def probe():
 
 
 def test_required_keys_match_both_actual_probe_file_lists():
-    for script in (quad.CROSS_MACHINE_PROBE, quad.CROSS_MACHINE_PROBE_LAB):
+    for script in (quad.CROSS_MACHINE_PROBE, quad.CROSS_MACHINE_PROBE_100_EDITABLE):
         tree = ast.parse(script)
         paths = next(ast.literal_eval(node.iter) for node in ast.walk(tree)
                      if isinstance(node, ast.For) and isinstance(node.iter, ast.List))
@@ -50,7 +50,7 @@ def test_phase9_probes_wheel_hosts_as_wheels_and_100_as_editable(monkeypatch):
     assert quad.cmd_phase9(None) == 0
     assert seen["LAB"] == (["ssh", "102", "python", "-"], quad.CROSS_MACHINE_PROBE)
     assert seen["100号機"] == (["ssh", "100", quad.DEV_PYTHON_100_PS, "-"],
-                               quad.CROSS_MACHINE_PROBE_LAB)
+                               quad.CROSS_MACHINE_PROBE_100_EDITABLE)
     # 100号機's release runtime is a wheel and is compared on its own.
     assert seen["100号機 release"] == (["ssh", "100", "python", "-"], quad.CROSS_MACHINE_PROBE)
     assert seen["mdx1"][1] is seen["mdx2"][1] is quad.CROSS_MACHINE_PROBE

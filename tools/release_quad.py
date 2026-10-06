@@ -156,7 +156,7 @@ EDITABLE_PACKAGES = ("radia", "cubit-mesh-export", "radia-mcp")
 # stable and carries the correct user/key settings.
 SSH_100 = "100"
 # 100号機's editable lives only in this dedicated development venv, separate
-# from the machine's release runtime (CLAUDE.md, decision 2026-10-01).
+# from the machine's release runtime (host policy, 2026-10-04).
 DEV_PYTHON_100 = r"W:\00_CAE\Radia\environments\development\Scripts\python.exe"
 DEV_PYTHON_100_PS = "'" + DEV_PYTHON_100 + "'"
 SSH_MDX1 = "mdx1"
@@ -1452,7 +1452,7 @@ for r in ["simulink/application.py",
 # (b) post-release commits on main.  Versions/COMPAT come from installed
 # metadata (re-synced to the release in Phase 8), identical to the consumer
 # probe. Phase9 requires the complete field set and compares by key.
-CROSS_MACHINE_PROBE_LAB = '''import hashlib, importlib.metadata as md, os, shutil, subprocess
+CROSS_MACHINE_PROBE_100_EDITABLE = '''import hashlib, importlib.metadata as md, os, shutil, subprocess
 
 # This is an identity probe, not a throughput benchmark.  Keep its import
 # footprint bounded so it can coexist with an authorized MATLAB computation.
@@ -1536,7 +1536,7 @@ def _probe(host_label, cmd_prefix, probe_src=CROSS_MACHINE_PROBE):
     """Run the probe on a target (cmd_prefix is the python invocation).
 
     probe_src defaults to the consumer probe (hashes the installed wheel
-    files).  The editable 100号機 checkout passes CROSS_MACHINE_PROBE_LAB
+    files).  The editable 100号機 checkout passes CROSS_MACHINE_PROBE_100_EDITABLE
     (hashes tracked files at the release tag via git) -- see those probe
     strings for the rationale.
     """
@@ -1609,7 +1609,7 @@ def cmd_phase9(args):
     targets = [
         ("LAB", ["ssh", "102", "python", "-"], CROSS_MACHINE_PROBE),
         ("100号機 release", ["ssh", SSH_100, "python", "-"], CROSS_MACHINE_PROBE),
-        ("100号機", ["ssh", SSH_100, DEV_PYTHON_100_PS, "-"], CROSS_MACHINE_PROBE_LAB),
+        ("100号機", ["ssh", SSH_100, DEV_PYTHON_100_PS, "-"], CROSS_MACHINE_PROBE_100_EDITABLE),
         ("mdx1", ["ssh", SSH_MDX1, "python", "-"], CROSS_MACHINE_PROBE),
         ("mdx2", ["ssh", SSH_MDX2, "python", "-"], CROSS_MACHINE_PROBE),
     ]
