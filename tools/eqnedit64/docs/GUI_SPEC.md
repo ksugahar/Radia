@@ -609,3 +609,16 @@ Other unknown control words retain the historical permissive parser fallback
 and can still disappear silently. Proposed follow-up: strict diagnostics on
 load/paste/CLI with recoverable source editing, plus a documented compatibility
 allowlist; this broader parser change is not included in UXP-0030.
+
+### PowerPoint colour retention: current evidence
+
+The current user hand test of Web `\color{red}{x}` copies successfully,
+but PowerPoint imports it without the red colour. This is a known Web paste
+limitation. Native emits colour in MathML and Office TeX, but colour retention
+by PowerPoint on the new native colour candidate has not been measured.
+Neither edition promises that PowerPoint retains colour. Native canvas,
+SVG, EMF/bitmap exports and saved TeX carry the colour independently of
+PowerPoint import. Publishing `mathcolor` is not evidence that Office keeps it.
+Token-level MathML, mstyle, CF_HTML CSS and Office TeX import routes remain
+pending a scoped comparison; do not infer that every Office route loses colour
+from the observed Web result alone.
