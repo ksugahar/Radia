@@ -1983,11 +1983,11 @@ def _assemble_full_output(args, coil_data, wp_data):
 # ======================================================================
 # Strong-coupled workpiece block (iterative CoupledBEMSolver)
 #
-# Re-exposes the validated per-panel back-reaction solver
+# Re-exposes the validated per-DOF back-reaction solver
 # (radia.bem_coupled_solver.CoupledBEMSolver) as the --coupling-mode
 # strong path.  Unlike the weak Telegen path, the coil surface current is
 # recomputed each Picard iteration in response to the workpiece reaction
-# field (A_wp projected per-panel onto the coil), so ΔL includes the
+# field (A_wp projected per-DOF onto the coil), so ΔL includes the
 # workpiece magnetic-energy term (the term the weak Telegen form drops)
 # and P_wp is self-consistent.  Coil L/R still come from the BEM-A
 # impedance-EFIE coil solve (coil_data); the coupled solver contributes
@@ -2646,6 +2646,13 @@ def run_inductance(args):
             return {'status': 'error', 'error':
                     'Specified panel Zs requires weak P1 SIBC, a workpiece, '
                     'no ESIM iteration and no loop DOF.'}
+
+    # --esim-per-panel names the per-panel ESIM iteration; with linear SIBC it
+    # would otherwise be dropped and a uniform-Zs result reported.
+    if args.esim_per_panel and args.impedance_model != 'esim':
+        return {'status': 'error', 'error':
+                '--esim-per-panel requires --impedance-model esim; '
+                'use --panel-zs-file for specified panel Zs.'}
 
     # Loop-DOF extension: an EXPLICIT "on" fails fast on unsupported
     # combinations BEFORE the expensive coil solve (the genus check itself

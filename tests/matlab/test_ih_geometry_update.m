@@ -506,3 +506,22 @@ config.surface_impedance.mode = "uniform-linear";
 writelines(jsonencode(config), file);
 radia.simulink.verifyIHPanelImpedanceProvenance(file,"","");
 end
+
+function testPanelZsPathSpellingsShareTheResolvedProvenance(testCase)
+work = string(tempname("C:\temp")); mkdir(work); mkdir(fullfile(work, "sub"));
+cleanup = onCleanup(@() rmdir(work, "s")); %#ok<NASGU>
+source = fullfile(work, "zs.json");
+writelines("{}", source);
+resolved = string(java.io.File(char(source)).getCanonicalPath());
+spellings = [replace(source, "\", "/"), fullfile(work, "sub", "..", "zs.json")];
+file = fullfile(work, "config.json");
+config.surface_impedance = struct("mode","specified-panel", ...
+    "file_sha256","snapshot-hash","source_file",resolved);
+writelines(jsonencode(config), file);
+for spelling = spellings
+    canonical = radia.simulink.canonicalInputPath(spelling);
+    verifyEqual(testCase, canonical, resolved);
+    radia.simulink.verifyIHPanelImpedanceProvenance(file, canonical, "snapshot-hash");
+end
+verifyError(testCase, @() radia.simulink.canonicalInputPath("relative.json"), "radia:simulink:IHInputPath");
+end

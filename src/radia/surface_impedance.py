@@ -56,6 +56,8 @@ def read_panel_impedance(path, mesh, *, frequency_hz):
     frequency = float(data.get('frequency_hz', float('nan')))
     if not np.isfinite(frequency) or not np.isclose(frequency, frequency_hz, rtol=1e-12, atol=0):
         raise ValueError('Panel Zs frequency mismatch')
+    if 'real_ohm' not in data or 'imag_ohm' not in data:
+        raise ValueError('Panel Zs requires real_ohm and imag_ohm arrays')
     real, imag = np.asarray(data['real_ohm'], float), np.asarray(data['imag_ohm'], float)
     if real.shape != (len(centroids),) or imag.shape != real.shape:
         raise ValueError('One real/imag impedance is required per surface triangle')

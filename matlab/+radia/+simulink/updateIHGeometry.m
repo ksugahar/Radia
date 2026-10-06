@@ -114,6 +114,10 @@ if isfield(assemblyOptions, "panel_zs_file") && strlength(string(assemblyOptions
     if strlength(assembleFcn) > 0 || strlength(command) > 0
         error("radia:simulink:IHPanelZsAssembler", "Element Zs requires the built-in assembler.");
     end
+    % One canonical spelling for fingerprint, assembler argument and the
+    % provenance check; the Python assembler records its resolved path.
+    zsPath = radia.simulink.canonicalInputPath(zsPath);
+    assemblyOptions.panel_zs_file = zsPath;
     geometryFiles(end+1) = zsPath;
 end
 if isfield(assemblyOptions,"axisymmetric_thermal_vol") && strlength(string(assemblyOptions.axisymmetric_thermal_vol)) > 0
