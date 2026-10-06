@@ -95,5 +95,5 @@ def test_compute_probe_is_solver_only_and_keeps_row_contract(monkeypatch, capsys
     assert set(rows) == set(tool._PHASE9_FIELDS)
     assert all(value != 'N/A' for value in rows.values())
     assert compute_rows[0].endswith('= 1.0')
-    assert 'cubit_mesh_export' not in tool.CROSS_MACHINE_PROBE_LAB
-    assert 'radia-mcp' not in tool.CROSS_MACHINE_PROBE_LAB
+    assert 'cubit_mesh_export' not in tool.CROSS_MACHINE_PROBE_100_EDITABLE
+    assert 'radia-mcp' not in tool.CROSS_MACHINE_PROBE_100_EDITABLE

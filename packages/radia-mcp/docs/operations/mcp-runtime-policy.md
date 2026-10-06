@@ -4,14 +4,15 @@ MCP is experimental development tooling. This policy supersedes the former
 snapshot-freeze and per-edit deployment-approval requirements for MCP packages.
 It does not relax numerical solver, native ABI or release acceptance.
 
-## Host installation policy (2026-10-01)
+## Host installation policy (updated 2026-10-04)
 
 100号機 is the only editable development host, using a dedicated local venv
 for maintainers and student contributors. LAB consumes a verified wheel.
-Existing LAB editable installations are transitional: migrate forward using a
-wheel that includes the reviewed source changes, never downgrade to an older
-published package just to remove editable metadata. Keep the release runtime
-separate from in-progress edits. The development rules below apply to 100.
+LAB editable installations are unsupported legacy state. Move them forward to
+a verified wheel that includes the reviewed source changes; do not downgrade
+to an older published package just to remove editable metadata. Keep the
+release runtime separate from in-progress edits. The development rules below
+apply to 100 only.
 
 ## Development
 
@@ -91,17 +92,15 @@ identity. Use registration-time provenance when exposed and a harmless changed
 tool call. Report contradictory evidence as unverified, with a mixed-generation
 reason; one verified client does not establish all clients are current.
 
-The intended source per host, interpreter and package is a recorded fact, not
-an inference. `python tools/release_quad.py repoint` (and Phase 8 of a release)
-writes it to `%ProgramData%\Radia\editable-intent.json`
+Editable intent records apply only to the 100 development venv. On 100,
+`python tools/release_quad.py repoint` (and Phase 8 of a release) writes the
+selected source to `%ProgramData%\Radia\editable-intent.json`
 (`RADIA_EDITABLE_INTENT_FILE`) together with the previous pointer, commit,
-actor, time and reason, and appends every change to a log beside it.
-`verify-editable` and `tools/verify_lab_editable.py` compare installations with
-that record. A package without a record is UNVERIFIED, not drift, and no tool
-proposes a repair target for it: record the current pointer if it is intended
-(`repoint --record-current --reason ...`) or move it explicitly. `repoint` does
-not uninstall first and does not stop processes. A pushed ref is required only
-for formal handoff or completion evidence (`repoint --require-pushed`), not for
+actor, time and reason, and appends every change to a log beside it. `repoint`
+refuses other hosts, does not uninstall first and does not stop processes. The
+read-only `release_quad.py verify-editable` command checks LAB's fixed wheel
+and 100's development editable. A pushed ref is required only for
+formal handoff or completion evidence (`repoint --require-pushed`), not for
 routine MCP development.
 
 ## Reload And Reconnect
