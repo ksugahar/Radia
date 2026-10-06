@@ -367,8 +367,12 @@ private:
         case Node::kMathbf:
             return element("mstyle", sequence(static_cast<const MathbfNode&>(node).content),
                            "mathvariant=\"bold\"");
-        case Node::kGroup:
-            return sequence(static_cast<const GroupNode&>(node).children);
+        case Node::kGroup: {
+            const auto& group = static_cast<const GroupNode&>(node);
+            const std::string attributes = "mathcolor=\"" + group.colorHex + "\"";
+            return group.colorHex.empty() ? sequence(group.children) :
+                element("mstyle", sequence(group.children), attributes.c_str());
+        }
         case Node::kPrime: {
             const int count = std::max(1, static_cast<const PrimeNode&>(node).count);
             std::string primes;
@@ -407,12 +411,26 @@ std::string latex_to_mathml(const std::string& latex, double pointSize) {
 
 namespace {
 
-bool collect_unanchored_aligned_rows(
-        const LineNode& line, std::vector<const LineNode*>& rows) {
-    if (line.children.size() == 1 && line.children[0] &&
-        line.children[0]->tag() == Node::kMatrix) {
+struct OfficeRow { const LineNode* line; std::string color; };
+
+bool collect_unanchored_aligned_rows(const NodeList& children,
+        const LineNode& fallback, std::vector<OfficeRow>& rows,
+        const std::string& color = {}) {
+    if (children.size() == 1 && children[0]) {
+        if (children[0]->tag() == Node::kGroup) {
+            const auto& group = static_cast<const GroupNode&>(*children[0]);
+            return collect_unanchored_aligned_rows(group.children, fallback, rows,
+                group.colorHex.empty() ? color : group.colorHex);
+        }
+        if (children[0]->tag() == Node::kLine) {
+            const auto& nested = static_cast<const LineNode&>(*children[0]);
+            return collect_unanchored_aligned_rows(nested.children, nested, rows, color);
+        }
+    }
+    if (children.size() == 1 && children[0] &&
+        children[0]->tag() == Node::kMatrix) {
         const auto& matrix =
-            static_cast<const MatrixNode&>(*line.children[0]);
+            static_cast<const MatrixNode&>(*children[0]);
         if (matrix.layoutKind == MatrixNode::kAlignedLayout &&
             matrix.cols <= 1 && matrix.rows > 0 &&
             matrix.elements.size() >= size_t(matrix.rows)) {
@@ -420,14 +438,15 @@ bool collect_unanchored_aligned_rows(
                 const Node* rowNode = matrix.elements[size_t(rowIndex)].get();
                 if (!rowNode || rowNode->tag() != Node::kLine ||
                     !collect_unanchored_aligned_rows(
-                        static_cast<const LineNode&>(*rowNode), rows)) {
+                        static_cast<const LineNode&>(*rowNode).children,
+                        static_cast<const LineNode&>(*rowNode), rows, color)) {
                     return false;
                 }
             }
             return true;
         }
     }
-    rows.push_back(&line);
+    rows.push_back({&fallback, color});
     return true;
 }
 
@@ -437,13 +456,15 @@ std::string latex_to_office_mathml_fragment(
         const std::string& latex, double pointSize) {
     std::unique_ptr<LineNode> root = parse_latex(latex);
     if (!root) return {};
-    std::vector<const LineNode*> rows;
-    if (!collect_unanchored_aligned_rows(*root, rows)) return {};
+    std::vector<OfficeRow> rows;
+    if (!collect_unanchored_aligned_rows(root->children, *root, rows)) return {};
     if (rows.size() > 1) {
         std::string fragment;
-        for (const LineNode* row : rows) {
+        for (const auto& row : rows) {
             if (!fragment.empty()) fragment += "<br>";
-            fragment += tree_to_mathml(*row, pointSize);
+            std::string math = tree_to_mathml(*row.line, pointSize);
+            if (!row.color.empty()) math.insert(5, " mathcolor=\"" + row.color + "\"");
+            fragment += math;
         }
         return fragment;
     }

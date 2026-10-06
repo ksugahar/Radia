@@ -10,11 +10,12 @@
 namespace eqnedit {
 
 /* Parse LaTeX math into a node tree.  Surrounding $...$ / $$...$$ / \[...\]
- * delimiters are accepted and stripped.  Never returns null: unknown commands
- * become literal text rather than aborting the parse, so a typo costs one
- * wrong glyph instead of the whole equation. */
+ * delimiters are accepted and stripped. Unsupported colour names/models return
+ * null and an optional diagnostic. Other unknown control words still follow
+ * the historical permissive fallback; do not assume strict TeX validation. */
 std::unique_ptr<LineNode> parse_latex(const std::string& latex,
-                                      bool* depthExceeded = nullptr);
+                                      bool* depthExceeded = nullptr,
+                                      std::string* error = nullptr);
 
 }  // namespace eqnedit
 

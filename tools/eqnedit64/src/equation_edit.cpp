@@ -400,7 +400,8 @@ Equation::Equation() : root_(std::make_unique<LineNode>()) {}
 bool Equation::load_latex(const std::string& latex) {
     lastError_.clear();
     bool depthExceeded = false;
-    std::unique_ptr<LineNode> parsed = parse_latex(latex, &depthExceeded);
+    std::unique_ptr<LineNode> parsed = parse_latex(latex, &depthExceeded, &lastError_);
+    if (!lastError_.empty()) return false;
     if (depthExceeded) {
         lastError_ = kDepthError;
         return false;
@@ -421,7 +422,8 @@ bool Equation::load_latex(const std::string& latex) {
 bool Equation::replace_latex(const std::string& latex, bool checkpointFirst) {
     lastError_.clear();
     bool depthExceeded = false;
-    std::unique_ptr<LineNode> parsed = parse_latex(latex, &depthExceeded);
+    std::unique_ptr<LineNode> parsed = parse_latex(latex, &depthExceeded, &lastError_);
+    if (!lastError_.empty()) return false;
     if (depthExceeded) {
         lastError_ = kDepthError;
         return false;
@@ -713,7 +715,24 @@ std::string Equation::selection_latex() const {
     int first = 0, last = 0;
     if (!selection_range(&l, &first, &last) || !l) return std::string();
     LaTeXEmitter em;
-    return em.emit_range(*l, size_t(first), size_t(last));
+    std::string text = em.emit_range(*l, size_t(first), size_t(last));
+    NodeList* ancestors = &root_->children;
+    std::string inheritedColor;
+    for (const auto& step : path_) {
+        if (step.child < 0 || size_t(step.child) >= ancestors->size()) break;
+        Node* node = (*ancestors)[size_t(step.child)].get();
+        if (!node) break;
+        if (node->tag() == Node::kGroup) {
+            const auto& group = static_cast<const GroupNode&>(*node);
+            if (!group.colorName.empty()) inheritedColor = group.colorName;
+        }
+        auto slots = node_slots(*node);
+        if (step.slot < 0 || size_t(step.slot) >= slots.size()) break;
+        ancestors = slots[size_t(step.slot)];
+    }
+    if (!inheritedColor.empty() && !text.empty())
+        text = "\\textcolor{" + inheritedColor + "}{" + text + "}";
+    return text;
 }
 
 bool Equation::delete_selection() {
@@ -1489,7 +1508,8 @@ void Equation::insert_text_typeface(const std::string& utf8,
 bool Equation::insert_latex(const std::string& latex) {
     lastError_.clear();
     bool depthExceeded = false;
-    std::unique_ptr<LineNode> parsed = parse_latex(latex, &depthExceeded);
+    std::unique_ptr<LineNode> parsed = parse_latex(latex, &depthExceeded, &lastError_);
+    if (!lastError_.empty()) return false;
     if (!parsed) return false;
     if (depthExceeded ||
         int(path_.size()) + list_nesting(parsed->children) > kMaxNestingDepth) {

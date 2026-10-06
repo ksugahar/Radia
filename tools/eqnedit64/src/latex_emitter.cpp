@@ -428,6 +428,13 @@ void LaTeXEmitter::emitNode(const Node* node, std::string& out) {
     case Node::kFont:
         /* FONT records ignored in output */
         break;
+    case Node::kGroup: {
+        const auto& group = *static_cast<const GroupNode*>(node);
+        out += group.colorName.empty() ? "{" : "\\textcolor{" + group.colorName + "}{";
+        out += emitNodes(group.children);
+        out += "}";
+        break;
+    }
     default:
         break;
     }
