@@ -204,3 +204,9 @@ def test_multiple_expressions_report_actionable_error(monkeypatch):
     result = tools.mathematica_export_equation("a=1\na+1")
     assert not result["ok"] and result["stage"] == "evaluation"
     assert "Use one expression" in result["error"]
+
+
+def test_pasted_expression_trailing_blank_lines_are_stripped(evaluation):
+    result = tools.mathematica_export_equation(" x\n\n")
+    assert result["ok"]
+    assert 'ToExpression["x", InputForm, HoldComplete]' in evaluation[0][0]

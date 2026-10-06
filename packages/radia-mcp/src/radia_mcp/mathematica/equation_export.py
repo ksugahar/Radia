@@ -56,13 +56,13 @@ def mathematica_export_equation(
     except (TypeError, ValueError, OSError) as exc:
         return {"ok": False, "stage": "input", "error": str(exc)}
 
-    literal = json.dumps(expression, ensure_ascii=False)
+    literal = json.dumps(expression.strip(), ensure_ascii=False)
     code = (
         'Module[{held, result, display, reason = ""}, Block[{$MessageList = {}},'
         f"held = Check[ToExpression[{literal}, InputForm, HoldComplete], $Failed];"
         'result = If[held === $Failed, $Failed, If[Length[held] != 1, reason = "Use one expression; join statements with semicolons or wrap them in Module"; $Failed, Check[ReleaseHold[held], $Failed]]];'
         'If[result === Null || !FreeQ[result, $Failed | $Aborted], Print[ExportString[<|"ok"->False,'
-        '"error"->(reason <> "; Invalid equation result: " <> ToString[result, InputForm] <> "; messages: " <> ToString[$MessageList, InputForm])|>, "RawJSON", "Compact"->True]],'
+        '"error"->(If[reason === "", "", reason <> "; "] <> "Invalid equation result: " <> ToString[result, InputForm] <> "; messages: " <> ToString[$MessageList, InputForm])|>, "RawJSON", "Compact"->True]],'
         "display = If[MatrixQ[result], MatrixForm[result], result];"
         'Print[ExportString[<|"ok"->True, "tex"->ToString[TeXForm[display]],'
         '"input_form"->ToString[result, InputForm]|>, "RawJSON", "Compact"->True]]]]]'
