@@ -39,12 +39,16 @@ the BH knee.
 
 ## Current command-line support boundary
 
-The scalar weak-coupling path does not support per-panel ESIM or P2 BEM.
-The strong path requires linear SIBC. `--esim-per-panel` exists as a parser
-option but is not a working production coupling. The BEM solver now rejects
-nonuniform Z_s: source-side weighted stiffness K_gamma and local loss
-integration are pending. Per-element discussions and saved examples below
-are historical/method descriptions, not commands to run on this CLI.
+The genus-0 weak-coupling path supports --esim-per-panel on surface P1,
+with intree-dense or HACApK. PanelSurfaceImpedance identifies one Zs per BND
+triangle: source-side weighted stiffness K_gamma, local heat and complete
+reaction use the same local coefficient. The strong path requires linear SIBC.
+P2 BEM and genus-1 nonlinear ESIM remain unsupported; no fallback is selected.
+The heat handoff is a positive conservative lumped P1 projection. The saved Ht
+is sqrt(lumped mean |Ht|^2), not an exact panel field. Untagged nodal impedance
+arrays remain rejected. Outer and cell convergence are required. The existing
+linear acceptance does not certify nonlinear B-H accuracy, hysteresis or harmonics.
+Historical per-DOF discussions below do not define the current panel ordering.
 
 ## Decision table
 
@@ -476,7 +480,9 @@ emit JSON to stdout.  ESIM-specific fields:
 When --esim-per-panel is used, the final Z_s array is exposed:
 
   "esim_per_panel": true,
-  "esim_per_panel_Z_s_real": [float, ...],  # length = N_DOF
+  "esim_impedance_layout": "BND-element-order",
+  "esim_per_panel_centroids": [[x, y, z], ...],
+  "esim_per_panel_Z_s_real": [float, ...],  # length = number of BND triangles
   "esim_per_panel_Z_s_imag": [float, ...],
 
 Use this for spatial-pattern visualisation (e.g. plot Z_s magnitude

@@ -13,9 +13,12 @@ def test_current_sibc_and_heat_contracts_are_explicit():
     assert 'must not rotate the accepted temperature a second time' in text
 
 
-def test_per_panel_parser_option_is_not_advertised_as_production_support():
+def test_per_panel_support_is_bounded_to_weighted_p1_genus_zero():
     assert '--esim-per-panel' in ESIM_USAGE_OVERVIEW
-    assert 'not a working production coupling' in ESIM_USAGE_OVERVIEW
+    assert 'genus-0' in ESIM_USAGE_OVERVIEW
+    assert 'PanelSurfaceImpedance' in ESIM_USAGE_OVERVIEW
+    assert 'P2 BEM and genus-1 nonlinear ESIM remain unsupported' in ESIM_USAGE_OVERVIEW
+    assert 'does not certify nonlinear B-H accuracy' in ESIM_USAGE_OVERVIEW
     assert 'strong path requires linear SIBC' in ESIM_USAGE_OVERVIEW
 
 

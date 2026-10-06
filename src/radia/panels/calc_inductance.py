@@ -1045,10 +1045,10 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     # before assembly instead of emitting uncorrected absolute heating.
     wp_loop_req, wp_loop_apply, wp_loop_skip = _resolve_weak_loop_mode(
         args, wp_genus, basis_order)
-    if basis_order != 1 or getattr(args, "esim_per_panel", False):
+    if basis_order != 1:
         raise ValueError(
             "Verified weak SIBC heat/reaction postprocessing requires P1 "
-            "and spatially uniform Z_s. Higher-order BEM or per-panel ESIM "
+            "surface elements. Higher-order BEM "
             "needs a mapped weighted surface form; no incident-field "
             "heat-pattern fallback is permitted. This does not restrict "
             "the thermal FEM order.")
@@ -1221,10 +1221,8 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             esim_solver.solve(5.0), "BEM ESIM seed cell solve")
         Z_s_seed = complex(seed_result['Z'])
         if args.esim_per_panel:
-            # Per-DOF Z_s works on BOTH intree-dense and HACApK backends
-            # (v4.47.2+).  Seed every DOF with the same scalar; subsequent
-            # iters refresh Z_s_wp[i] from the per-DOF H_t.
-            Z_s_wp = np.full(bem.ndof, Z_s_seed, dtype=complex)
+            # One constant impedance per BND panel, not per vertex.
+            Z_s_wp = np.full(wp_ne_bnd, Z_s_seed, dtype=complex)
         else:
             Z_s_wp = Z_s_seed
         max_iter = max(int(args.esim_max_iter), 1)
@@ -1255,6 +1253,9 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     else:
         progress("BEM",
             f"BIE solve Z_s={Z_s_wp:.3e} (model={args.impedance_model})")
+    from radia.surface_impedance import PanelSurfaceImpedance, panel_tangential_field_rms
+    def surface_z():
+        return PanelSurfaceImpedance(Z_s_wp) if isinstance(Z_s_wp, np.ndarray) else Z_s_wp
     res_bem = None
     loop_meta = None
     esim_history = []
@@ -1263,14 +1264,15 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     t_bie = 0.0
     n_iter_done = 0
     dZ = float("inf")
+    esim_fixed_point_error = None
     for iteration in range(max_iter):
         n_iter_done = iteration + 1
         t0 = time.perf_counter()
         if args.wp_bem_backend == "intree-dense":
-            res_bem = bem.solve(phi_inc, Z_s=Z_s_wp, omega=omega)
+            res_bem = bem.solve(phi_inc, Z_s=surface_z(), omega=omega)
         else:
             res_bem = bem.solve_hacapk(
-                phi_inc, Z_s=Z_s_wp, omega=omega,
+                phi_inc, Z_s=surface_z(), omega=omega,
                 tol=args.wp_gmres_tol, maxiter=500, restart=80)
         t_iter = time.perf_counter() - t0
         t_bie += t_iter
@@ -1287,25 +1289,15 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         # Karl update.
         Z_s_old = Z_s_wp
         if args.esim_per_panel:
-            # Extract per-DOF |H_t| via the manual triangle-wise P1
-            # gradient of phi (v4.67.0+ formula, matching the q_surf
-            # spatial output).  The legacy Galerkin localization
-            # ``phi_i * (K @ phi)_i`` is a Laplacian sample, not a
-            # gradient-norm sample, and feeds wrong local |H_t| values
-            # into the cell solver -- inflating the per-element vs
-            # scalar gap by mis-placing the saturation hot-spot.
-            from radia.bem_sibc_solver import extract_H_t_per_dof_grad
-            phi_vec = np.asarray(res_bem["phi_vec"])
-            H_t_per = extract_H_t_per_dof_grad(phi_vec, wp_mesh)
-            # Per-DOF ESIM
-            Z_s_new = np.empty(bem.ndof, dtype=complex)
-            for i in range(bem.ndof):
+            H_t_per = panel_tangential_field_rms(bem.fes, res_bem["phi_vec"])
+            Z_s_new = np.empty(wp_ne_bnd, dtype=complex)
+            for i in range(wp_ne_bnd):
                 cell_result = require_esim_converged(
                     esim_solver.solve(max(float(H_t_per[i]), 1e-3)),
-                    f"BEM per-panel ESIM cell solve at DOF {i}")
+                    f"BEM per-panel ESIM cell solve at panel {i}")
                 Z_s_new[i] = complex(cell_result['Z'])
             Z_s_wp = anderson.step(Z_s_old, Z_s_new)
-            dZ_per_dof = (np.abs(Z_s_wp - Z_s_old)
+            dZ_per_dof = (np.abs(Z_s_new - Z_s_old)
                           / np.maximum(np.abs(Z_s_old), 1e-30))
             dZ = float(np.max(dZ_per_dof))
             Zabs_mean = float(np.mean(np.abs(Z_s_wp)))
@@ -1316,8 +1308,8 @@ def _solve_workpiece_weak_coupled(args, coil_data):
                 "Z_s_abs_mean": Zabs_mean,
                 "Z_s_abs_max": float(np.max(np.abs(Z_s_wp))),
                 "Z_s_abs_min": float(np.min(np.abs(Z_s_wp))),
-                "H_t_per_dof_mean": Ht_mean,
-                "H_t_per_dof_max": Ht_max,
+                "H_t_per_panel_mean": Ht_mean,
+                "H_t_per_panel_max": Ht_max,
                 "dZ_max": dZ,
                 "t_solve": float(t_iter),
             })
@@ -1331,7 +1323,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             require_esim_converged(sol_new, "BEM scalar ESIM cell solve")
             Z_s_new = complex(sol_new['Z'])
             Z_s_wp = anderson.step(Z_s_old, Z_s_new)
-            dZ = abs(Z_s_wp - Z_s_old) / max(abs(Z_s_old), 1e-30)
+            dZ = abs(Z_s_new - Z_s_old) / max(abs(Z_s_old), 1e-30)
             esim_history.append({
                 "iteration": iteration,
                 "Z_s_abs": float(abs(Z_s_wp)),
@@ -1357,27 +1349,41 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             progress("BEM",
                 f"ESIM:NOT-CONVERGED after {max_iter} iter "
                 f"(dZ={dZ:.4e} > tol={args.esim_tol:.1e})")
+    if esim_solver is not None and not esim_converged:
+        raise RuntimeError("BEM ESIM did not converge; refusing heat/reaction output")
     if esim_solver is not None:
         # Re-solve once at the final Z_s so res_bem reflects the
         # converged impedance (the last iter computed H_t_rms with the
         # PREVIOUS Z_s, not the updated one).
         t0 = time.perf_counter()
         if args.wp_bem_backend == "intree-dense":
-            res_bem = bem.solve(phi_inc, Z_s=Z_s_wp, omega=omega)
+            res_bem = bem.solve(phi_inc, Z_s=surface_z(), omega=omega)
         else:
             res_bem = bem.solve_hacapk(
-                phi_inc, Z_s=Z_s_wp, omega=omega,
+                phi_inc, Z_s=surface_z(), omega=omega,
                 tol=args.wp_gmres_tol, maxiter=500, restart=80)
         t_bie += time.perf_counter() - t0
-        # Final per-DOF |H_t| via triangle-gradient (matches Karl loop
+        # Final per-panel |H_t| via triangle-gradient (matches Karl loop
         # interior; see extract_H_t_per_dof_grad in bem_sibc_solver.py).
         # Used for the Z_s vs H_t scatter / spatial map in publications.
         if isinstance(Z_s_wp, np.ndarray):
-            from radia.bem_sibc_solver import extract_H_t_per_dof_grad
-            phi_vec_final = np.asarray(res_bem["phi_vec"])
-            H_t_per_final = extract_H_t_per_dof_grad(phi_vec_final, wp_mesh)
+            H_t_per_final = panel_tangential_field_rms(bem.fes, res_bem["phi_vec"])
         else:
             H_t_per_final = None
+        # Certify the constitutive mismatch on the final re-solved field,
+        # not only on the field before the last damped/Anderson update.
+        if isinstance(Z_s_wp, np.ndarray):
+            target = np.array([complex(require_esim_converged(
+                esim_solver.solve(max(float(h), 1e-3)),
+                "BEM final per-panel ESIM cell solve")['Z']) for h in H_t_per_final])
+        else:
+            target = complex(require_esim_converged(
+                esim_solver.solve(max(float(res_bem["H_t_rms"]), 1e-3)),
+                "BEM final scalar ESIM cell solve")['Z'])
+        esim_fixed_point_error = float(np.max(np.abs(target-Z_s_wp)
+                                               / np.maximum(np.abs(Z_s_wp), 1e-30)))
+        if not np.isfinite(esim_fixed_point_error) or esim_fixed_point_error > args.esim_tol:
+            raise RuntimeError("BEM final ESIM constitutive mismatch exceeds tolerance")
     info = res_bem.get("gmres_info", 0)
     progress("BEM",
         f"BIE total ({t_bie:.1f}s over {n_iter_done} iter, gmres info={info})")
@@ -1386,7 +1392,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     # incident Biot-Savart pattern.  The loop path supplies its full field.
     from radia.bem_sibc_solver import _project_sibc_surface_heat
     gf_q_wp, projected_power = _project_sibc_surface_heat(
-        bem.fes, res_bem["phi_vec"], Z_s_wp,
+        bem.fes, res_bem["phi_vec"], surface_z(),
         element_heat=res_bem.get("loop_q_tri"))
     q_per_dof = gf_q_wp.vec.FV().NumPy().copy()
     expected_power = float(res_bem["P_density"]) * float(res_bem["area"])
@@ -1499,7 +1505,9 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         from radia.workpiece_surface import _complete_sibc_reaction
         delta_L_complex = _complete_sibc_reaction(
             delta_L_complex, phi_inc, res_bem["phi_vec"], bem.K,
-            Z_s_wp, omega, args.current)
+            surface_z(), omega, args.current,
+            weighted_stiffness=bem.impedance_stiffness(surface_z())
+            if isinstance(Z_s_wp, np.ndarray) else None)
     reaction_power = -0.5 * omega * delta_L_complex.imag * args.current**2
     from radia.workpiece_surface import _check_sibc_reaction_power
     power_balance_error = _check_sibc_reaction_power(P_wp, reaction_power)
@@ -1531,10 +1539,14 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         Z_s_imag_out = float(Z_s_mean.imag)
         per_panel_block = {
             "esim_per_panel": True,
+            "esim_impedance_layout": "BND-element-order",
+            "esim_per_panel_centroids": [
+                np.mean([wp_mesh.vertices[v.nr].point for v in el.vertices], axis=0).tolist()
+                for el in wp_mesh.Elements(_BND)],
             "esim_per_panel_Z_s_real": Z_s_wp.real.tolist(),
             "esim_per_panel_Z_s_imag": Z_s_wp.imag.tolist(),
         }
-        # Save final per-DOF |H_t| at convergence (only when per-panel
+        # Save final per-panel |H_t| at convergence (only when per-panel
         # mode was active and the final re-solve completed).
         try:
             if H_t_per_final is not None:
@@ -1665,15 +1677,16 @@ def _solve_workpiece_weak_coupled(args, coil_data):
                 unit=ih_thermal.QSURF_UNIT, boundaries=heated,
                 extra={"P_wp_W": float(P_wp), **common,
                        "qsurf_method": "solved-total-field-lumped-P1"})
-            # |H_t| peak amplitude consistent with q = Re(Z_s)|H_t|^2 / 2 at
-            # every workpiece vertex (Z_s scalar, or per DOF with
-            # --esim-per-panel), for temperature-dependent re-evaluation.
-            re_z = np.real(np.asarray(Z_s_wp, dtype=complex))
-            re_z = np.broadcast_to(re_z, (wp_mesh.nv,)) \
-                if re_z.ndim == 0 else re_z[:wp_mesh.nv]
-            h_per_dof = np.sqrt(np.maximum(
-                2.0 * np.asarray(q_per_dof, float)[:wp_mesh.nv]
-                / np.maximum(re_z, 1e-300), 0.0))
+            # Export sqrt(lumped mean |H_t|^2) for thermal re-evaluation.
+            # With panel Zs, projected q and Ht do not obey a nodal q/Z identity.
+            # Project the solved |H_t|^2 separately: dividing projected heat
+            # by a local Z is incorrect across panels with different impedances.
+            if isinstance(Z_s_wp, np.ndarray):
+                gf_h2, _ = _project_sibc_surface_heat(bem.fes, res_bem["phi_vec"], 1.0)
+                h_per_dof = np.sqrt(np.maximum(2*gf_h2.vec.FV().NumPy(), 0))
+            else:
+                h_per_dof = np.sqrt(np.maximum(
+                    2*np.asarray(q_per_dof, float)/max(Z_s_wp.real, 1e-300), 0))
             gf_h_vol = _GF(fes_q_vol)
             gf_h_vol.vec[:] = 0
             h_vec = gf_h_vol.vec.FV().NumPy()
@@ -1688,7 +1701,8 @@ def _solve_workpiece_weak_coupled(args, coil_data):
                 boundaries=heated,
                 extra={**common, "convention": "peak phasor amplitude, "
                        "q = Re(Z_s) |H_t|^2 / 2",
-                       "Z_s_per_dof": bool(np.ndim(Z_s_wp) > 0)})
+                       "Z_s_per_dof": False,
+                       "surface_impedance_layout": "BND-element-order" if isinstance(Z_s_wp, np.ndarray) else "uniform"})
             ht_sol_path = sol_H
             progress("BEM",
                 f"wrote qsurf.sol on parent vol_mesh: "
@@ -1728,6 +1742,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         "impedance_model": args.impedance_model,
         "esim_iterations": int(n_iter_done),
         "esim_converged": bool(esim_converged),
+        "esim_fixed_point_relative_error": esim_fixed_point_error,
         "esim_anderson_m": int(getattr(args, "esim_anderson_m", 0)),
         "esim_anderson_restarts": int(anderson.n_restarts) if esim_solver is not None else 0,
         "esim_anderson_clips": int(anderson.n_clips) if esim_solver is not None else 0,
@@ -1925,6 +1940,7 @@ def _assemble_full_output(args, coil_data, wp_data):
     out["impedance_model"] = wp_data["impedance_model"]
     out["esim_iterations"] = wp_data["esim_iterations"]
     out["esim_converged"] = wp_data["esim_converged"]
+    out["esim_fixed_point_relative_error"] = wp_data["esim_fixed_point_relative_error"]
     out["esim_anderson_m"] = wp_data.get("esim_anderson_m", 0)
     out["esim_anderson_restarts"] = wp_data.get("esim_anderson_restarts", 0)
     out["esim_anderson_clips"] = wp_data.get("esim_anderson_clips", 0)
@@ -1941,7 +1957,7 @@ def _assemble_full_output(args, coil_data, wp_data):
     # Propagate per-panel block (esim_per_panel, esim_per_panel_Z_s_real/imag,
     # esim_per_panel_H_t) — emitted by _solve_workpiece_weak_coupled when
     # --esim-per-panel is set.
-    for key in ("esim_per_panel",
+    for key in ("esim_per_panel", "esim_impedance_layout", "esim_per_panel_centroids",
                 "esim_per_panel_Z_s_real",
                 "esim_per_panel_Z_s_imag",
                 "esim_per_panel_H_t"):
@@ -1953,11 +1969,11 @@ def _assemble_full_output(args, coil_data, wp_data):
 # ======================================================================
 # Strong-coupled workpiece block (iterative CoupledBEMSolver)
 #
-# Re-exposes the validated per-DOF back-reaction solver
+# Re-exposes the validated per-panel back-reaction solver
 # (radia.bem_coupled_solver.CoupledBEMSolver) as the --coupling-mode
 # strong path.  Unlike the weak Telegen path, the coil surface current is
 # recomputed each Picard iteration in response to the workpiece reaction
-# field (A_wp projected per-DOF onto the coil), so ΔL includes the
+# field (A_wp projected per-panel onto the coil), so ΔL includes the
 # workpiece magnetic-energy term (the term the weak Telegen form drops)
 # and P_wp is self-consistent.  Coil L/R still come from the BEM-A
 # impedance-EFIE coil solve (coil_data); the coupled solver contributes
@@ -2857,20 +2873,16 @@ def build_argparser():
                              "calc_fem_kelvin).  Lower if Karl "
                              "oscillates near saturation.")
     parser.add_argument("--esim-per-panel", action="store_true",
-                        help="Per-DOF ESIM Karl iteration (Phase B): the "
-                             "ESIM cell solver is called once per BEM "
-                             "DOF using a per-node H_t extracted from "
-                             "the phi_vec, building a per-node Z_s "
-                             "ndarray instead of a single scalar.  "
-                             "Resolves the spatial saturation pattern; "
-                             "costs N_DOF extra ESIM calls per Karl "
-                             "iter (~5 ms each).  Requires "
-                             "--wp-bem-backend intree-dense.")
+                        help="P1 per-BND-triangle ESIM iteration with source-weighted "
+                             "surface stiffness and local heat integration. Uses "
+                             "the solved per-panel peak H_t; supports intree-dense "
+                             "and HACApK on genus-0 workpieces. One cell solve per "
+                             "panel per iteration. Genus-1 ESIM remains unsupported.")
     parser.add_argument("--esim-anderson-m", type=int, default=0,
                         help="Anderson-acceleration memory depth for "
                              "the outer Karl iteration.  0 (default) = "
                              "plain damped Picard.  3-5 closes the "
-                             "per-DOF dZ_max noise floor when --esim-"
+                             "per-panel dZ_max noise floor when --esim-"
                              "per-panel is used.  See "
                              "src/radia/esim_anderson.py.")
     parser.add_argument("--h1-order", type=int, default=1,
