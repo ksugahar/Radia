@@ -49,16 +49,13 @@ Usage:
         version. No runtime is changed.
 
     python tools/release_quad.py verify-editable
-        Read-only: compare LAB and 100号機 editable pointers with the recorded
-        intent (tools/editable_intent.py). A package without a record is
-        reported UNVERIFIED and is never repaired toward a default path.
+        Read-only: verify LAB's fixed wheel and 100号機's development editable.
 
     python tools/release_quad.py repoint --package <name> --source <path> --reason "..."
-        Move editable pointers explicitly: record the previous pointer, pip
-        install -e the new source, verify registration and a fresh-process
-        import, record the new intent. --host 100 runs the same steps on
-        100号機 with paths in its own namespace. --record-current adopts the
-        installed pointers as intent; --rollback reinstalls the previous
+        On 100号機 only, move an editable pointer explicitly: record the
+        previous pointer, pip install -e the new source, verify registration
+        and a fresh-process import, then record the new intent. --record-current
+        adopts the installed pointer; --rollback reinstalls the previous
         pointer. No process is stopped and nothing is uninstalled.
 
     python tools/release_quad.py restore-editable
@@ -150,9 +147,7 @@ if GIT_EXE is None:
     raise RuntimeError("Git is required by tools/release_quad.py")
 
 REPO = Path(__file__).resolve().parent.parent
-NAS_REPO_LAB = "S:/Radia/01_GitHub"
 NAS_REPO_100 = r"W:\00_CAE\Radia\01_GitHub"
-EDITABLE_REPO_LAB_ENV = "RADIA_RELEASE_EDITABLE_REPO_LAB"
 EDITABLE_REPO_100_ENV = "RADIA_RELEASE_EDITABLE_REPO_100"
 # The three repository packages installed editable on the development tier.
 EDITABLE_PACKAGES = ("radia", "cubit-mesh-export", "radia-mcp")
@@ -200,15 +195,6 @@ assert {key: row[0] for key, row in SIMULINK_TARGETS.items()} == RELEASE_ACCEPTA
     "Simulink target labels and the release acceptance host labels have drifted")
 
 
-def _editable_repo_lab():
-    """Return the LAB view of the immutable release worktree."""
-    configured = os.environ.get(EDITABLE_REPO_LAB_ENV)
-    if configured is not None:
-        return configured.strip().rstrip("/\\")
-    default = f"S:/Radia/release-quad/v{_radia_version()}-{_release_commit()[:9]}"
-    return os.environ.get(EDITABLE_REPO_LAB_ENV, default).strip().rstrip("/\\")
-
-
 def _editable_repo_100():
     """Return the 100-machine view of the immutable release worktree."""
     configured = os.environ.get(EDITABLE_REPO_100_ENV)
@@ -242,13 +228,15 @@ def _release_head():
 
 
 def cmd_deployment_plan(args):
-    """Dry-run only: print solver roots without imports, SSH or installs."""
-    plans = []
-    for host, root in (("lab", _editable_repo_lab()), ("100", _editable_repo_100())):
-        plans.append({"host": host, "solver_source": root,
-                      "solver_action": "verify-and-install",
-                      "independent_packages": "unchanged",
-                      "verified": False})
+    """Dry-run only: print solver runtime roles without imports or installs."""
+    plans = [
+        {"host": "lab", "solver_runtime": "verified-wheel",
+         "solver_action": "verify-and-install", "independent_packages": "unchanged",
+         "verified": False},
+        {"host": "100", "solver_runtime": "release-wheel+development-editable",
+         "solver_action": "verify-and-install", "development_source": _editable_repo_100(),
+         "independent_packages": "unchanged", "verified": False},
+    ]
     print(json.dumps(plans, indent=2))
     return 0
 
@@ -1454,7 +1442,7 @@ for r in ["simulink/application.py",
 '''
 
 
-# Editable-tier probe (2026-05-28 fix).  LAB/100号機 are editable DEV checkouts, so
+# Editable-tier probe (2026-05-28 fix).  100号機 is an editable DEV checkout, so
 # os.path.dirname(radia.__file__) is the *working tree* -- full of
 # uncommitted dev WIP that has nothing to do with the released wheel.
 # Hashing that guaranteed perpetual false-positive drift (the whole reason
@@ -1681,19 +1669,6 @@ def cmd_all(args):
     return cmd_phase9(args)
 
 
-# ============================================================
-# LAB editable-install verifier: compare with the recorded intent
-# (tools/editable_intent.py). No canonical default (policy P02, 2026-09-11).
-# ============================================================
-
-# (package name, expected Editable project location prefix on LAB)
-# Path-prefix match (case-insensitive, slash-normalised) so a UNC vs
-# drive-letter representation of the same NAS path is accepted.
-def _lab_editable_packages():
-    root = _editable_repo_lab()
-    return [("radia", root)]
-
-
 def _remote_100_editable_packages():
     root = _editable_repo_100()
     return [("radia", root)]
@@ -1849,136 +1824,8 @@ def _fresh_import_origin(pkg):
     return (result.stdout or "").strip()
 
 
-def _recorded_lab_editable_packages():
-    """Expected LAB pointers from the recorded intent; None where nothing is recorded."""
-    data = editable_intent.load_intent()
-    expected = []
-    for pkg in (*EDITABLE_PACKAGES, "mcp-server-document"):
-        entry = editable_intent.recorded_entry(data, pkg)
-        expected.append((pkg, entry["source"] if entry else None))
-    return expected
-
-
-def _expected_lab_editable_packages():
-    """The release override wins when set; otherwise the recorded intent."""
-    if os.environ.get(EDITABLE_REPO_LAB_ENV, "").strip():
-        return _lab_editable_packages()
-    return _recorded_lab_editable_packages()
-
-
-def _verify_lab_editable(packages=None, report=None):
-    """Check the LAB editable packages against their expected sources.
-
-    ``packages`` is a list of (name, expected path or None). Without it the
-    expectation is RADIA_RELEASE_EDITABLE_REPO_LAB when set, otherwise the
-    recorded intent (tools/editable_intent.py). A package whose expectation is
-    None is UNVERIFIED: it counts toward the returned total because no gate may
-    treat it as passing, but it is not drift and no repair target is printed
-    for it. Missing ``mcp-server-document`` is tolerated (LAB-private).
-
-    Returns the number of packages not verified as matching. ``report`` (a
-    dict) receives the counts when supplied.
-    """
-    step("LAB editable verify (recorded intent)")
-    n_ok = n_drift = n_missing = n_unverified = 0
-    details = []
-
-    packages = packages or _expected_lab_editable_packages()
-    for pkg, want_prefix in packages:
-        d = _pip_show(pkg)
-        if d is None:
-            if pkg == "mcp-server-document":
-                info(f"{pkg:25s}  not installed  (LAB-private; tolerated)")
-                n_missing += 1
-            else:
-                fail(f"{pkg:25s}  NOT INSTALLED  -- expected editable @ "
-                     f"{want_prefix or '<no recorded intent>'}")
-                n_drift += 1
-                details.append((pkg, "not_installed", want_prefix))
-            continue
-
-        version = d.get("version", "?")
-        editable = d.get("editable project location") \
-                   or d.get("editable-project-location") \
-                   or d.get("location")
-        if not editable:
-            fail(f"{pkg:25s}  v{version}  -- no Location field in "
-                 f"pip show output")
-            n_drift += 1
-            details.append((pkg, "no_location", "?"))
-            continue
-
-        if not d.get("editable project location"):
-            fail(f"{pkg:25s}  v{version}  NOT EDITABLE")
-            n_drift += 1
-            details.append((pkg, "not_editable", editable))
-            continue
-
-        if want_prefix is None:
-            origin = _fresh_import_origin(pkg)
-            suffix = f"; import -> {origin}" if origin else ""
-            if pkg == "mcp-server-document":
-                info(f"{pkg:25s}  v{version}  editable  -> {editable}{suffix}"
-                     "  (LAB-private; no record)")
-                n_missing += 1
-                continue
-            warn(f"{pkg:25s}  v{version}  UNVERIFIED  editable  -> {editable}{suffix}")
-            n_unverified += 1
-            details.append((pkg, "unverified", editable))
-            continue
-
-        got_norm = _norm_path(editable)
-        want_norm = _norm_path(want_prefix)
-        if got_norm != want_norm:
-            fail(f"{pkg:25s}  v{version}  DRIFT  editable\n"
-                 f"        got:      {editable}\n"
-                 f"        expected: {want_prefix}")
-            n_drift += 1
-            details.append((pkg, "drift", editable))
-            continue
-
-        origin = _fresh_import_origin(pkg)
-        if origin is not None and not _norm_path(origin).startswith(want_norm + "/"):
-            fail(f"{pkg:25s}  v{version}  IMPORT DRIFT\n"
-                 f"        imported: {origin or '<import failed>'}\n"
-                 f"        expected below: {want_prefix}")
-            n_drift += 1
-            details.append((pkg, "import_drift", origin or "<import failed>"))
-            continue
-
-        suffix = f"; import -> {origin}" if origin else ""
-        ok(f"{pkg:25s}  v{version}  editable  -> {editable}{suffix}")
-        n_ok += 1
-
-    print()
-    if report is not None:
-        report.update(ok=n_ok, drift=n_drift, unverified=n_unverified, missing=n_missing)
-    if n_drift == 0 and n_unverified == 0:
-        ok(f"All {n_ok} LAB-editable package(s) match their recorded or explicit source"
-           + (f" ({n_missing} LAB-private skipped)" if n_missing else ""))
-        return 0
-    if n_unverified:
-        warn(f"{n_unverified} LAB-editable package(s) have no recorded intent (UNVERIFIED).")
-        print("        Not drift. If the current pointer is the intended one, record it:")
-        print(f'        & "{sys.executable}" tools/release_quad.py repoint '
-              '--record-current --reason "<why this source>"')
-        print("        Otherwise move it explicitly with repoint. Nothing is repaired automatically.")
-    if n_drift:
-        fail(f"{n_drift} LAB-editable package(s) differ from their expected source:")
-        for pkg, why, got in details:
-            if why != "unverified":
-                print(f"        # {pkg} ({why}) -> {got}")
-        print("        Decide whether the record or the installation is wrong, then either")
-        print("        re-record the current pointer or move it explicitly:")
-        print(f'        & "{sys.executable}" tools/release_quad.py repoint '
-              '--package <pkg> --source <intended> --reason "<why>"')
-        print("        No default target exists; nothing is uninstalled and no process is stopped.")
-        print("        Reconnect affected clients afterwards and verify their live provenance.")
-    return n_drift + n_unverified
-
-
 # tools/editable_intent.py is piped to the remote interpreter as a script, so
-# LAB and 100号機 run the same verification and repoint code. Arguments travel
+# 100号機 runs the same verification and repoint code. Arguments travel
 # as one base64 JSON token so the remote shell cannot re-split them.
 REMOTE_EDITABLE_VERIFY = _EDITABLE_INTENT_SOURCE
 
@@ -2053,38 +1900,13 @@ def _verify_100_editable(expected=None, report=None):
 
 
 def cmd_verify_editable(args):
-    """Standalone editable verifier (no preflight, no phase9).
+    """Verify LAB's fixed wheel and 100号機's development editable.
 
-    Exit 0: every package matches its recorded or explicit source.
-    Exit 5: nothing drifted but at least one package has no recorded intent.
-    Exit 1: at least one package differs from its expected source.
+    Exit 0: both runtime roles match. No LAB editable source is accepted.
     """
-    lab, remote = {}, {}
-    failures = _verify_lab_editable(None, lab)
-    failures += _verify_100_editable(None, remote)
-    if failures == 0:
-        return 0
-    if not lab.get("drift") and not remote.get("drift"):
-        warn("no drift, but at least one package is UNVERIFIED (no recorded intent)")
-        return 5
-    return 1
-
-
-def _record_release_intent_lab(repo):
-    """Record the source Phase 8 just installed as the LAB editable intent."""
-    reason = f"release-quad phase8 deploy from {repo} at {_release_head()[:12]}"
-    try:
-        result = editable_intent.record_current(
-            ["radia"], reason, via="release-quad phase8")
-    except OSError as exc:
-        warn(f"LAB editable intent was not recorded ({exc}); run "
-             "`release_quad repoint --record-current` before `done`")
-        return 1
-    print(editable_intent.format_action(result))
-    if result["exit_code"] != 0:
-        warn("LAB editable intent was not fully recorded; `done` reports UNVERIFIED "
-             "until `release_quad repoint --record-current` succeeds")
-    return result["exit_code"]
+    wheel_failures = _verify_lab_wheel()
+    editable_failures = _verify_100_editable()
+    return 0 if wheel_failures + editable_failures == 0 else 1
 
 
 def _record_release_intent_remote(ssh_host, label, repo):
@@ -2142,7 +1964,7 @@ def _repoint_argv(args):
 
 
 def cmd_repoint(args):
-    """Explicit editable move on LAB (default) or 100号機 (``--host 100``).
+    """Explicit editable move on 100号機 only.
 
     Records the previous pointer, installs with ``pip install -e``, verifies
     registration and a fresh-process import, then records the new intent. It
@@ -2165,11 +1987,8 @@ def cmd_repoint(args):
     if not undo and not getattr(args, "reason", ""):
         fail("--reason is required: the record must say why this pointer is intended")
         return 2
-    host = (getattr(args, "host", None) or "lab").strip().lower()
+    host = (getattr(args, "host", None) or "100").strip().lower()
     argv = _repoint_argv(args)
-    if host == "lab":
-        step("LAB editable repoint (recorded; no process stop, no uninstall)")
-        return editable_intent.main(argv)
     if host in ("100", "100号機", "100goki"):
         step("100号機 editable repoint over SSH (paths in the 100 namespace)")
         rc, result, text = _remote_editable_intent(SSH_100, ["--json", *argv])
@@ -2178,7 +1997,7 @@ def cmd_repoint(args):
         elif text:
             print(text)
         return rc
-    fail(f"unknown host: {host!r} (use lab or 100)")
+    fail(f"editable repoint is allowed only on 100号機; refusing host {host!r}")
     return 2
 
 
@@ -2404,7 +2223,7 @@ def cmd_done(args):
     drift += _verify_100_release_wheel()
     drift += _verify_100_editable()
     if drift > 0:
-        fail(f"{drift} editable-tier check(s) drifted.  "
+        fail(f"{drift} runtime-tier check(s) drifted.  "
              "Run the printed recovery commands, then re-run "
              "`release_quad done`.")
         return 1
@@ -2821,13 +2640,13 @@ def main():
     sub.add_parser("all",
                     help="phase8 -> phase8e -> phase9 in one shot")
     sub.add_parser("verify-editable",
-                    help=("LAB/100号機 editable pointers vs the recorded intent "
-                          "(read-only; exit 5 = unverified)"))
+                    help="verify LAB's fixed Radia wheel and 100号機's development editable")
     rp = sub.add_parser(
         "repoint",
         help=("explicit editable move: record previous pointer, pip install -e, "
               "verify, record intent (no process stop, no uninstall)"))
-    rp.add_argument("--host", default="lab", help="lab (default) or 100")
+    rp.add_argument("--host", default="100",
+                    help="100 only; editable installs are not allowed on LAB")
     rp.add_argument("--package", action="append", default=[],
                     help="package name (repeatable)")
     rp.add_argument("--source", action="append", default=[],
