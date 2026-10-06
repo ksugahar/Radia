@@ -193,7 +193,7 @@ def test_autoloaded_macros_are_warmed_before_the_first_office_copy() -> None:
     failed the first copy of a `\\bm` equation on a freshly opened page.
     """
     assert "function warmAutoloadedMacros()" in SOURCE
-    assert r'"\\require{cancel}\\boldsymbol{x}+\\cancel{x}"' in SOURCE
+    assert r'"\\require{cancel}\\require{color}\\boldsymbol{x}+\\cancel{x}"' in SOURCE
     assert "var palettePreviewQueue = officePreparation" in SOURCE
     assert "officeButton.disabled = true" in SOURCE
     assert "officeButton.disabled = false" in SOURCE
