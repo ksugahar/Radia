@@ -24,6 +24,24 @@ def intent_file(tmp_path, monkeypatch):
     return path
 
 
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["repoint", "--package", "radia", "--source", "{source}", "--reason", "policy test"],
+        ["repoint", "--record-current", "--package", "radia", "--reason", "policy test"],
+        ["repoint", "--rollback", "--package", "radia"],
+    ],
+)
+def test_cli_refuses_mutation_from_lab(intent_file, monkeypatch, tmp_path, capsys, args):
+    monkeypatch.setattr(ei.platform, "node", lambda: "LAB")
+    source = tmp_path / "source"
+    source.mkdir()
+    argv = [part.format(source=source) for part in args]
+    assert ei.main(argv) == ei.EXIT_PRECONDITION
+    assert "only on 100号機" in capsys.readouterr().out
+    assert not intent_file.exists()
+
+
 @pytest.fixture
 def sources(tmp_path):
     old = tmp_path / "old-tree" / "packages" / "radia-mcp"
