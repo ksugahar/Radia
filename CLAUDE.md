@@ -164,11 +164,10 @@ solver boundary is a checked `.vol` regardless of the creation route.
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
 **POLICY (2026-10-04)**: Radia development and the sole editable install use
-100号機's local-drive checkout (dedicated dev venv, separate from release).
+100号機 local-drive checkout (dedicated dev venv).
 LAB is test-only: transfer identified source/inputs/build targets to
 `C:\temp\<job-id>`; return logs and hashes. MCP servers and Cubit/MCP packages
-run or deploy only on LAB/100; other hosts use fixed wheels. mdx1/mdx2 are
-CI/preflight hosts; hibino is computation-only. Keep heavy validation off 100;
+run or deploy only on LAB/100; other hosts use fixed wheels. Both mdx hosts give CI and preflight priority; hibino is computation-only. Keep heavy validation off 100;
 limit its acceptance to install, import and student-facing smoke checks.
 GitHub Actions uses the shared `mdx` label and assigns jobs to an available runner.
 Release-quad requires LAB, 100号機, mdx1, and mdx2 for the same release commit.
