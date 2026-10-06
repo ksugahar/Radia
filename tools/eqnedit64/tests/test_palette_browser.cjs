@@ -47,12 +47,32 @@ const server = http.createServer((req, res) => {
       await delayed.addScriptTag({url:"http://127.0.0.1:" + server.address().port + "/equation-editor.js"});
       assert.equal(await delayed.locator(".eqed-key").count(), 291);
       assert(await delayed.locator(".eqed-copy-office").isDisabled());
+      await delayed.evaluate(() => {
+        const originalNow = Date.now;
+        Date.now = () => originalNow() + 61000;
+      });
+      await delayed.waitForFunction(() => document.querySelector(".eqed-copy-office").title.includes("読み込みを待っています"));
       await delayed.addScriptTag({url:"http://127.0.0.1:" + server.address().port + "/mathjax/tex-chtml.js"});
       await delayed.waitForFunction(() => !document.querySelector(".eqed-copy-office").disabled);
       assert.deepEqual(delayedErrors, []);
       await delayed.locator(".eqed-source").fill("\\foo x");
       await delayed.locator(".eqed-copy-office").click();
       await delayed.waitForFunction(() => document.querySelector(".eqed-status").textContent.includes("MathMLに変換できません"));
+      await delayed.evaluate(() => {
+        window.copyAttempts = 0;
+        document.execCommand = function (command) {
+          if (command !== "copy") return false;
+          window.copyAttempts++;
+          const data = new DataTransfer();
+          const event = new ClipboardEvent("copy", {clipboardData:data, cancelable:true});
+          document.dispatchEvent(event);
+          return event.defaultPrevented;
+        };
+      });
+      await delayed.locator(".eqed-source").fill("\\color{red}{x}");
+      await delayed.locator(".eqed-copy-office").click();
+      await delayed.waitForFunction(() => window.copyAttempts === 1);
+      await delayed.waitForFunction(() => document.querySelector(".eqed-status").textContent.includes("コピーしました"));
       await delayed.close();
     }
     const cold = await browser.newPage();
