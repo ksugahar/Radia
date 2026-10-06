@@ -168,3 +168,13 @@ def test_default_solver_guidance_reports_capacity_without_size_heuristics():
     practices = get_sparsesolv_documentation("best_practices")
     assert "Krylov workspace (not total memory)" in practices
     assert "ICCG (fallback)" not in practices
+
+
+def test_aggregate_solver_guidance_contains_capacity_once():
+    from radia_mcp.matrix_solvers.server import matrix_solvers_direct
+    from radia_mcp.radia_ngsolve.server import sparsesolv
+    from radia_mcp.radia_ngsolve.knowledge.sparsesolv import get_full_documentation
+
+    for text in (matrix_solvers_direct("all"), sparsesolv("all"),
+                 get_full_documentation()):
+        assert text.count("# Solver capacity and measured diagnosis") == 1
