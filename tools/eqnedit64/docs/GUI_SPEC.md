@@ -518,7 +518,7 @@ Web版はブラウザーのCF_HTML経路を使う。現在のPowerPointでのWeb
 | AUT-04 | 3,072件のraw TeXで正規化固定点、有限寸法、有効SVG、有効な24 pt MathMLを満たす | `test_tex_fuzz.py` |
 | AUT-05 | 5分類タブ＋選択分類のパレット、キャンバス、常時表示のTeXソース、ステータスが重ならず、全19パレットが一意に分類され、DPI対応する | `test_palettes.py` / `--status-layout-test` |
 | AUT-06 | `WM_CHAR`、サロゲートペア、キー、構造スロットのダブルクリック選択に加え、完成／未完成TeX、双方向同期、1編集バースト1 Undo、両ペインの直接クリック編集、キャンバス上でTeXコマンドを解釈しないことを非表示で処理できる | `--ui-interaction-test` |
-| AUT-07 | raw TeX、inline 18 pt MathML + NBSPの`HTML Format`、有効EMF、全画素α=255で白背景・黒文字のDIBV5を生成し、通常コピーに登録MathMLを混在させない | `--self-test` |
+| AUT-07 | raw TeX、inline 18 pt MathML + NBSPの`HTML Format`、有効EMF、不透明DIBV5を保持する。単一式は登録MathMLを発行し、独立複数行は発行しない | `--self-test` |
 | AUT-08 | `dist` は有効な指定開発者署名を持つexe一つで、試験済みexeと同一、静的ランタイム、別ディレクトリ起動可 | `test_background.ps1` |
 | AUT-09 | `.tex`保存は新規 `equation`、既存 `equation*` 外枠維持、`aligned`、UTF-8の契約を満たす | `test_tex_document.exe` / `--operation-test` |
 | AUT-10 | 単一式は登録MathMLを発行し、独立複数行はCF_HTMLを使う。raw TeX・EMF・不透明DIBV5も保持 | `test_external_paste.ps1` |

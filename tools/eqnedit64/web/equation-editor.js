@@ -3125,7 +3125,7 @@
    * munderoverとなり、native emitterも同じ規則を試験する。 */
   /* MathJax loads \boldsymbol and \cancel on demand, and until the package
    * arrives the synchronous tex2mml the Office copy needs throws
-   * "MathJax retry".  Pull both in once at startup so the first copy of a
+   * "MathJax retry". Pull them and color in once at startup so the first copy of a
    * `\bm` or `\cancel` equation cannot fail on a package that is still in
    * flight.  Fire and forget: the copy path stays synchronous, which is what
    * keeps the user gesture alive for the clipboard write. */
@@ -3136,7 +3136,7 @@
       return Promise.reject(new Error("MathJax conversion unavailable"));
     // Initialize the primary typesetter first. Loading cancel only in the
     // separate MathML converter left the primary jax with an undefined macro.
-    var sample = "\\require{cancel}\\boldsymbol{x}+\\cancel{x}";
+    var sample = "\\require{cancel}\\require{color}\\boldsymbol{x}+\\cancel{x}";
     return mj.tex2chtmlPromise(sample, { display: false }).then(function () {
       return mj.tex2mmlPromise(sample, { display: false });
     }).then(function () {
@@ -3151,7 +3151,7 @@
     var raw = window.MathJax.tex2mml(
       "\\displaystyle " + mathJaxTex(tex), { display: false });
     var doc = new window.DOMParser().parseFromString(raw, "application/xml");
-    if (doc.querySelector("parsererror, merror, [mathcolor=\"red\"]"))
+    if (doc.querySelector("parsererror, merror, mtext[mathcolor=\"red\"]"))
       throw new Error("invalid MathML or unsupported TeX");
     var math = doc.documentElement;
     math.setAttribute("display", "inline");
@@ -3814,7 +3814,10 @@
             else reject(new Error("MathJax conversion unavailable"));
           }, reject);
         } else if (Date.now() >= deadline) {
-          reject(new Error("MathJax startup timed out"));
+          // Keep waiting at a lower rate. A delayed CDN must still recover
+          // without reloading or constructing another editor instance.
+          officeButton.title = "数式機能の読み込みを待っています";
+          window.setTimeout(awaitEngine, 1000);
         } else {
           window.setTimeout(awaitEngine, 100);
         }

@@ -166,6 +166,16 @@ jobs:
       - name: Test release signer policy without native execution
         run: pwsh -NoProfile -File tests/test_release_signature.ps1
 
+      - name: Verify pinned signer trust on disposable hosted runner
+        run: |
+          $exe = Join-Path $env:RUNNER_TEMP 'eqnedit64-approved-signer-fixture.exe'
+          Invoke-WebRequest -Uri 'https://github.com/ksugahar/Radia/releases/download/eqnedit64-v3.1.1/Eqnedit64.exe' -OutFile $exe
+          $expected = '9431048EB1DA0444787AAC9C61EF8192386F07F61464D42552D5ADDAD7CB2413'
+          if ((Get-FileHash $exe -Algorithm SHA256).Hash -cne $expected) { throw 'Signer fixture hash mismatch.' }
+          . ../../.agents/skills/release-eqnedit64/scripts/assert_release_signature.ps1
+          $signature = Assert-EqneditReleaseSignature $exe -AllowUntrustedRoot
+          if ($signature.Status -ne 'Valid') { throw 'Pinned hosted signer qualification failed.' }
+
       - name: Enable isolated font lifecycle diagnostics
         run: |
           $directory = Join-Path $env:RUNNER_TEMP 'eqnedit64-font-trace'
