@@ -1,0 +1,3 @@
+interface:
+  display_name: "CoilBuilder"
+  short_description: "Build checked planar and spatial coil excitation models"
