@@ -41,7 +41,8 @@ Use Build.ps1's current propagation paths, not historical .ccl/plugin recipes.
 ## Protect development installs
 
 - Do not pass `-InstallToSitePackages` during isolated verification. Build
-  success is not authorization to repoint LAB/100 editable sources.
+  success is not authorization to repoint 100号機 editable sources or replace
+  LAB verified wheels.
 - Never bulk-kill Python, MCP, MATLAB or Cubit to unlock artifacts. Build into
   an isolated checkout and defer replacement of an in-use file.
 - Check import origin, version and native ABI in a fresh process from the
@@ -50,7 +51,8 @@ Use Build.ps1's current propagation paths, not historical .ccl/plugin recipes.
   performance evidence belongs in validation_test with result JSON; do not
   launch the entire suite merely because compilation finished.
 - Record source SHA, interpreter/runtime versions, target and artifact hashes.
-  Follow release-quad for deployment; LAB/100 must remain verified editable.
+  Follow release-quad for deployment; LAB uses verified wheels and only
+  100号機 uses an editable development install.
   MCP client reconnection is separate from file installation.
 
 ## Other distributions

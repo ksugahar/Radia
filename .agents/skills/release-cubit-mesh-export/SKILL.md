@@ -14,8 +14,8 @@ on mdx1/mdx2.
 
 | name | host | ssh alias | notes |
 |---|---|---|---|
-| LAB = 102号機 | 192.168.121.102 | `lab` (also `102`) | development host; pwsh 7 ssh shell |
-| 100号機 | 192.168.121.100, hostname `intel11` | `100` | student host, many user profiles |
+| LAB = 102号機 | 192.168.121.102 | `lab` (also `102`) | test host with verified wheels; pwsh 7 ssh shell |
+| 100号機 | 192.168.121.100, hostname `intel11` | `100` | development/editable/review/integration host; many user profiles |
 
 - On 100, `W:` is local and `S:` is `subst` of `W:\00_CAE`; `W:\` is shared as
   `\\192.168.121.100\Work`. LAB's interactive session maps that share as `S:`.
