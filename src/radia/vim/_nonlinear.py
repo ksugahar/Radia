@@ -90,7 +90,7 @@ def _validate_bh_table(table, *, context="vim.Solve"):
             raise ValueError(f"{label} B values must be non-decreasing")
 
 
-def _bh_table_falling_magnetization(table, *, context="vim.Solve"):
+def _bh_table_falling_magnetization(table, *, context="vim.Solve", inverse=True):
     """Warn about, and return, table rows where M = B/mu0 - H falls.
 
     Soft iron has dB/dH >= mu0.  Where a table's slope drops below mu0 the
@@ -115,8 +115,10 @@ def _bh_table_falling_magnetization(table, *, context="vim.Solve"):
             label = f"{context}: bh_table" if region is None else f"{context}: bh_table[{region!r}]"
             warnings.warn(
                 f"{label} magnetization M=B/mu0-H falls between H={interval[0]:g} and "
-                f"H={interval[1]:g} A/m (dB/dH < mu0); the nonlinear law caps M at the "
-                f"last row, below the interpolated peak", RuntimeWarning, stacklevel=3)
+                f"H={interval[1]:g} A/m (dB/dH < mu0); " +
+                ("the nonlinear law caps M at the last row, below the interpolated peak"
+                 if inverse else "forward-newton retains the original B(H) without an inverse-M cap"),
+                RuntimeWarning, stacklevel=3)
     return falling or None
 
 
