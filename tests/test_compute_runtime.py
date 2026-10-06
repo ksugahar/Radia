@@ -60,3 +60,13 @@ def test_recovered_file_must_match_manifest(tmp_path):
         z.writestr("recovery_manifest.json", json.dumps(dict(root="owned", host="host", files={"result.json": "wrong hash"})))
     with pytest.raises(ValueError, match="Recovered file hash mismatch"):
         runtime.verify_recovery(archive, tmp_path / "recovered", runtime.digest(archive))
+
+
+def test_environment_cannot_inherit_external_mkl_or_source_override(tmp_path, monkeypatch):
+    monkeypatch.setenv("MKLROOT", "C:/external/mkl")
+    monkeypatch.setenv("MKL_THREADING_LAYER", "INTEL")
+    monkeypatch.setenv("PYTHONPATH", "C:/another/source")
+    env = runtime.environment({"threads": runtime.THREADS}, tmp_path)
+    assert Path(env["MKLROOT"]) == tmp_path.resolve() / "Library"
+    assert env["MKL_THREADING_LAYER"] == "TBB"
+    assert "PYTHONPATH" not in env

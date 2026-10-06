@@ -55,7 +55,12 @@ These versioned virtual environments are maintained runtime deployments,
 separate from temporary jobs and existing CI/default Python. The command uses
 offline, hash-checked wheels, checks dependency closure, verifies installed
 RECORD hashes and imports, and writes `acceptance.json`. Compare all hosts'
-lock hashes and package/module hashes. Never substitute default `python` for
+lock hashes, package/module hashes, shared-file winners and loaded numerical
+DLL hashes. NGSolve and Netgen share a delvewheel initialization file; its
+installed bytes must be one of the hashes in the locked wheel records and
+must match across hosts. The launcher explicitly sets MKLROOT to the selected
+runtime's absolute Library directory and rejects numerical DLLs loaded outside
+that runtime. Never substitute default `python` for
 the recorded runtime's `Scripts/python.exe`.
 
 ## Admit and execute a job
