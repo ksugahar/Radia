@@ -40,3 +40,23 @@ def test_mismatched_or_changed_job_is_rejected(tmp_path):
 def test_bundle_cannot_escape_root(tmp_path):
     with pytest.raises(ValueError, match="Escaping"):
         runtime.safe_member(tmp_path, "../private.py")
+
+
+def test_changed_wheel_bytes_are_rejected(tmp_path):
+    p = tmp_path / "solver.whl"
+    p.write_bytes(b"original wheel")
+    lock = {"wheels": [{"file": p.name, "sha256": runtime.digest(p)}]}
+    runtime.verify_wheels(lock, tmp_path)
+    p.write_bytes(b"different wheel")
+    with pytest.raises(ValueError, match="Wheel hash mismatch"):
+        runtime.verify_wheels(lock, tmp_path)
+
+
+def test_recovered_file_must_match_manifest(tmp_path):
+    import zipfile
+    archive = tmp_path / "recovery.zip"
+    with zipfile.ZipFile(archive, "w") as z:
+        z.writestr("result.json", "changed result")
+        z.writestr("recovery_manifest.json", json.dumps(dict(root="owned", host="host", files={"result.json": "wrong hash"})))
+    with pytest.raises(ValueError, match="Recovered file hash mismatch"):
+        runtime.verify_recovery(archive, tmp_path / "recovered", runtime.digest(archive))

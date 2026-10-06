@@ -23,7 +23,7 @@ foreach ($target in $targets) {
 }
 $hash = (Get-FileHash -LiteralPath $RecoveryArchive -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($hash -ne $RecoveredArchiveSHA256) { throw 'Recovery archive changed since verified recovery' }
-$active = Get-CimInstance Win32_Process -Filter "Name='python.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($resolvedJob, [StringComparison]::OrdinalIgnoreCase) }
+$active = Get-CimInstance Win32_Process -Filter "Name='python.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine.Replace('/', '\').Contains($resolvedJob, [StringComparison]::OrdinalIgnoreCase) }
 if ($active) { throw 'Owned compute process still running' }
 foreach ($target in $targets) { Remove-Item -LiteralPath $target -Recurse -Force }
 $remaining = @($targets | Where-Object { Test-Path -LiteralPath $_ })
