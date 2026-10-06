@@ -18,6 +18,7 @@ Gates:
                            validation_test/ suite
   8. validation-run     -- (only with --validation --full) run the heavy
                            validation_test/ suite
+  9. taskmanager        -- caller/helper static audit for affected Python paths
 
 Usage:
     python tools/ci_preflight.py            # affected compact gates
@@ -97,6 +98,12 @@ def gate_policy_lint():
         return True, "8 policies pass"
     fails = [ln[6:].strip() for ln in out.splitlines() if ln.startswith("FAIL")]
     return False, "; ".join(fails) if fails else (out.strip()[-200:] or "policy lint failed")
+
+
+def gate_taskmanager_audit():
+    """Run the same caller/helper static audit as main's fast CI."""
+    rc, out = _sh([sys.executable, os.path.join(REPO, "tools", "audit_taskmanager.py")])
+    return rc == 0, out.strip()
 
 
 # ======================================================================
@@ -348,6 +355,7 @@ def gate_validation_run():
 
 ALL_GATES = [
     ("policy",          "Policy Lint (8 static policies)",        gate_policy_lint),
+    ("taskmanager",     "Caller-owned TaskManager audit",         gate_taskmanager_audit),
     ("publish-boundary","radia-mcp publish-boundary lint",        gate_publish_boundary_lint),
     ("version",         "Version consistency (pyproject==init)",  gate_version_consistency),
     ("radia-mcp",       "radia-mcp impact lane",                  gate_radia_mcp_matrix),
@@ -411,6 +419,12 @@ def _gates_for_changes(changed):
     packages/radia-mcp changed. Repository contracts are owned by the fixed
     fast mdx lane, so broad top-level collection is an explicit diagnostic."""
     sel = {"policy", "version"}
+    if any(
+        f == "tools/audit_taskmanager.py"
+        or (f.endswith(".py") and f.startswith(("src/radia/", "tests/", "validation_test/", "docs/")))
+        for f in changed
+    ):
+        sel.add("taskmanager")
     mcp_changes = [
         f for f in changed if f.startswith("packages/radia-mcp/")
     ]

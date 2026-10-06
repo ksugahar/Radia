@@ -206,6 +206,33 @@ def test_preflight_uses_live_mcp_contracts_without_generated_inventory_gate():
     assert not (ROOT / "packages" / "radia-mcp" / ".gitattributes").exists()
 
 
+def test_preflight_catches_taskmanager_failures_before_fast_tests(monkeypatch):
+    preflight = _preflight_module()
+    for path in (
+        "tests/test_panel_impedance_file.py",
+        "validation_test/induction_heating/test_panel_esim_workflow.py",
+        "src/radia/surface_impedance.py",
+        "docs/solver_probe.py",
+        "tools/audit_taskmanager.py",
+    ):
+        keys = {key for key, _, _ in preflight._gates_for_changes([path])}
+        assert "taskmanager" in keys, path
+
+    calls = []
+
+    def failed_audit(command):
+        calls.append(command)
+        return 1, "tests/test_panel_impedance_file.py: caller lacks TaskManager"
+
+    monkeypatch.setattr(preflight, "_sh", failed_audit)
+    ok, detail = preflight.gate_taskmanager_audit()
+    assert not ok
+    assert "caller lacks TaskManager" in detail
+    assert Path(calls[0][-1]).name == "audit_taskmanager.py"
+    monkeypatch.setattr(preflight, "_changed_since", lambda ref: ["tests/test_panel_impedance_file.py"])
+    assert preflight.main(["--only", "taskmanager"]) == 1
+
+
 def test_active_docs_do_not_restore_generated_catalog_or_old_release_name():
     active_docs = [
         ROOT / "README.md",
