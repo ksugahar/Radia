@@ -235,7 +235,7 @@
     },
     {
       "id": "bem-peec",
-      "patterns": ["bem/*.py", "bem_*.py", "ngsbem_*.py", "peec_*.py", "dielectric_solver.py", "fasthenry_parser.py", "scalar_bie_sibc.py"],
+      "patterns": ["bem/*.py", "bem_*.py", "ngsbem_*.py", "peec_*.py", "dielectric_solver.py", "fasthenry_parser.py", "scalar_bie_sibc.py", "surface_impedance.py"],
       "classification": "python-fallback",
       "backend_contract": "in-process-python",
       "matlab": ["matlab/+radia/+python/bemPeec.m"],

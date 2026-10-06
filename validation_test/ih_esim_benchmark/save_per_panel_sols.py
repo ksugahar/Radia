@@ -38,7 +38,9 @@ def save_sols_for_case(case: str) -> None:
     perp = SWEEP / f"{case}_per_panel.json"
     if not perp.exists() or not VOL.exists():
         sys.exit(f"ERROR: need {perp} and {VOL}.")
-    d = json.load(open(perp))
+    d = json.loads(perp.read_text(encoding="utf-8"))
+    from radia.surface_impedance import require_legacy_vertex_layout
+    require_legacy_vertex_layout(d)
     zr = np.asarray(d["esim_per_panel_Z_s_real"])
     zi = np.asarray(d["esim_per_panel_Z_s_imag"])
     Ht = np.asarray(d["esim_per_panel_H_t"])
@@ -49,6 +51,8 @@ def save_sols_for_case(case: str) -> None:
         sibc = {i for i, n in enumerate(labs) if n.lower() == "sibc"}
         bv = sorted({int(v.nr) for el in mesh.Elements(BND)
                      if int(el.index) in sibc for v in el.vertices})
+        if not (len(Ht) == len(zr) == len(zi) == len(bv)):
+            raise ValueError('Legacy field arrays must match the boundary vertex count')
 
         # |H_t| as a real H1 order-1 GridFunction on the full mesh
         # (zero outside the SIBC vertices).

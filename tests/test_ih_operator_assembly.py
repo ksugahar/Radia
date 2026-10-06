@@ -92,6 +92,53 @@ def test_default_output_path_uses_both_geometry_names(tmp_path):
     assert output.name == "workpiece_coil_ih_native.json"
 
 
+def test_panel_zs_is_forwarded_and_strong_coupling_is_rejected(tmp_path):
+    zs = tmp_path/'panel-zs.json'
+    zs.write_text('{}')
+    options = assembly.IHOperatorAssemblyOptions(panel_zs_file=str(zs)).checked()
+    argv = assembly._unit_current_argv(tmp_path/'workpiece.vol', tmp_path/'coil.step',
+                                      'peec', options, tmp_path/'fields.msh')
+    assert argv[argv.index('--panel-zs-file')+1] == str(zs)
+    with pytest.raises(ValueError, match='weak coupling'):
+        assembly.IHOperatorAssemblyOptions(panel_zs_file=str(zs), coupling_mode='strong').checked()
+    with pytest.raises(ValueError, match='absolute'):
+        assembly.IHOperatorAssemblyOptions(panel_zs_file='relative.json').checked()
+
+
+def test_panel_zs_snapshot_binds_solve_and_provenance(monkeypatch, tmp_path):
+    import hashlib
+    workpiece = _workpiece(tmp_path/'workpiece.vol')
+    coil = tmp_path/'coil.step'
+    coil.write_text('prescribed fixture')
+    zs = tmp_path/'zs.json'
+    zs.write_bytes(b'{"fixture":"original"}')
+    original = zs.read_bytes()
+
+    def capture(workpiece, coil, backend, options, run_dir):
+        assert Path(options.panel_zs_file) == (run_dir/f'input-panel-zs-{hashlib.sha256(original).hexdigest()}.json').resolve()
+        assert Path(options.panel_zs_file).read_bytes() == original
+        zs.write_text('{"fixture":"edited during assembly"}')
+        return _fake_unit_current(workpiece, coil, backend, options, run_dir)
+
+    monkeypatch.setattr(assembly, '_solve_unit_current', capture)
+    config = assembly.assemble_ih_operators(workpiece, coil, output=tmp_path/'native.json',
+             options=assembly.IHOperatorAssemblyOptions(panel_zs_file=str(zs)))
+    assert config['surface_impedance']['file_sha256'] == hashlib.sha256(original).hexdigest()
+    assert config['independent_fem_validation']['status'] == 'not-performed'
+    assert config['surface_impedance']['source_file'] == str(zs.resolve())
+    snapshot = Path(config['surface_impedance']['snapshot_file'])
+    assert snapshot.read_bytes() == original
+    saved_config = (tmp_path/'native.json').read_bytes()
+    def fail(*args):
+        raise ValueError('fixture failure')
+    monkeypatch.setattr(assembly, '_solve_unit_current', fail)
+    with pytest.raises(ValueError, match='fixture failure'):
+        assembly.assemble_ih_operators(workpiece, coil, output=tmp_path/'native.json',
+            options=assembly.IHOperatorAssemblyOptions(panel_zs_file=str(zs)))
+    assert snapshot.read_bytes() == original
+    assert (tmp_path/'native.json').read_bytes() == saved_config
+
+
 def test_options_reject_nonphysical_values():
     with pytest.raises(ValueError, match="frequency_hz"):
         assembly.IHOperatorAssemblyOptions(frequency_hz=0.0).checked()

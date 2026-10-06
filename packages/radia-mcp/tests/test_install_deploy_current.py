@@ -90,3 +90,32 @@ def test_release_workflow_does_not_restore_coupled_mcp_policy():
     assert "are LAB (verified wheel) and 100 (editable) only" in RELEASE_WORKFLOW
     assert "editable registration and fresh imports on LAB and 100" not in RELEASE_WORKFLOW
     assert "## version_pairs" in get_release_workflow_documentation("version_pairs")
+
+
+def test_host_roles_agree_across_active_guidance_and_recovery():
+    from pathlib import Path
+    from radia_mcp.meta.bug_patterns import PATTERNS
+
+    root = Path(__file__).resolve().parents[3]
+    install = " ".join(INSTALL_DEPLOY.split())
+    verify = " ".join((root / ".agents/skills/verify-deploy/SKILL.md").read_text(encoding="utf-8").split())
+    cubit = " ".join((root / ".agents/skills/release-cubit-mesh-export/SKILL.md").read_text(encoding="utf-8").split())
+    build = " ".join((root / ".agents/skills/build/SKILL.md").read_text(encoding="utf-8").split())
+    completion = " ".join(get_release_workflow_documentation("mcp_quality_review").split())
+    assert "Only 100号機 uses editable installs" in install
+    assert "verified wheel to LAB" in install
+    assert "On LAB, they must resolve to the verified wheel" in verify
+    assert "Only 100号機 uses an editable install" in verify
+    assert "verified non-editable wheel and fresh import on LAB" in completion
+    assert "editable development registration and fresh import on 100" in completion
+    assert "LAB/100 editable sources" not in build
+    assert "LAB/100 must remain verified editable" not in build
+    assert "LAB uses verified wheels and only 100号機 uses an editable development install" in build
+    assert "test host with verified wheels" in cubit
+    assert "LAB `wheel`, 100 `editable`" in cubit
+    assert "release-quad must not install, repoint or gate it" in cubit
+    incident = next(p for p in PATTERNS if p["id"] == "lab-editable-drift-after-pip-force-reinstall")
+    assert "LAB-editable" not in incident["detection"]
+    assert "On LAB, repair with the verified current wheel, never an editable pointer" in incident["prevention"]
+    assert "LAB wheel / 100 editable release-dual" in incident["prevention"]
+    assert "Source edits no longer flow to runtime" in incident["what"]

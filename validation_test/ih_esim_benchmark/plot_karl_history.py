@@ -66,15 +66,15 @@ def main():
     # Z_s_abs_mean / H_t_per_dof_mean / dZ_max plus min/max.  Accept either.
     Z_abs = np.array([h.get("Z_s_abs", h.get("Z_s_abs_mean", float("nan")))
                        for h in hist])
-    H_rms = np.array([h.get("H_t_rms", h.get("H_t_per_dof_mean", float("nan")))
+    H_rms = np.array([h.get("H_t_rms", h.get("H_t_per_panel_mean", h.get("H_t_per_dof_mean", float("nan"))))
                        for h in hist])
     dZ_seq = np.array([h.get("dZ", h.get("dZ_max", float("nan")))
                        for h in hist])
     # per-panel auxiliary keys (radia >= 4.55.x emit these)
     Z_min = np.array([h.get("Z_s_abs_min", float("nan")) for h in hist])
     Z_max = np.array([h.get("Z_s_abs_max", float("nan")) for h in hist])
-    H_mean = np.array([h.get("H_t_per_dof_mean", float("nan")) for h in hist])
-    H_max = np.array([h.get("H_t_per_dof_max", float("nan")) for h in hist])
+    H_mean = np.array([h.get("H_t_per_panel_mean", h.get("H_t_per_dof_mean", float("nan"))) for h in hist])
+    H_max = np.array([h.get("H_t_per_panel_max", h.get("H_t_per_dof_max", float("nan"))) for h in hist])
     dZ_max = np.array([h.get("dZ_max", float("nan")) for h in hist])
 
     print(f"JSON: {json_path.name}")

@@ -495,20 +495,27 @@ PATTERNS: list[dict] = [
         "first_seen": "2026-04-28",
         "last_seen": "2026-06-01",
         "what": "Historically, LAB used an editable Radia install. Installing "
-                "a wheel replaced that source pointer, so later source edits "
-                "no longer appeared in the running package.",
+                "a wheel replaced that source pointer. Source edits no longer "
+                "flow to runtime under that former development setup.",
         "root_cause": "This records the former LAB editable-development "
                       "setup: a wheel install replaced the source .pth "
                       "pointer. LAB now intentionally uses a verified wheel; "
                       "that is the supported runtime, not an accidental "
                       "Phase 8 deployment.",
-        "detection": "`release_quad.py verify-editable` verifies LAB's wheel "
-                     "and the editable install on 100.",
-        "prevention": "Keep LAB on a verified wheel and use the dedicated "
-                      "development venv on 100 for editable installs. The "
-                      "editable-intent CLI refuses mutation on other hosts. "
-                      "Fix forward; never restore an older tree merely because "
-                      "its path was once canonical.",
+        "detection": "`release_quad.py verify-editable` checks the current "
+                     "LAB wheel and 100 development editable. Verify LAB's non-editable "
+                     "wheel, artifact hashes and fresh import. On 100, verify "
+                     "the intended editable development source and fresh "
+                     "import separately from the fixed-wheel release runtime.",
+        "prevention": "The incident above predates LAB's wheel-only policy. "
+                      "Only 100 uses editable installs: record its intended "
+                      "source before repointing the owning package and verify "
+                      "editable metadata plus a fresh import. The editable-intent "
+                      "CLI refuses mutation on other hosts. On LAB, repair "
+                      "with the verified current wheel, never an editable "
+                      "pointer. Fix forward; never restore an older tree. "
+                      "radia-mcp uses its independent LAB wheel / 100 editable "
+                      "release-dual, not solver Phase 8/9.",
         "related": ["docs/maintenance.md",
                     "radia_ngsolve/knowledge/install_deploy.py"],
     },

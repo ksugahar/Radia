@@ -45,6 +45,8 @@ def load_fields(data_dir, sample_dir):
         path = data_dir / (stem + '.json')
         assert hashlib.sha256(path.read_bytes()).hexdigest() == item['result_sha256']
         result = json.loads(path.read_text(encoding='utf-8'))
+        from radia.surface_impedance import require_legacy_vertex_layout
+        require_legacy_vertex_layout(result)
         assert result['esim_converged'] and result['wp_basis_order'] == 1
         fields = []
         for key in ('esim_per_panel_H_t', 'esim_per_panel_Z_s_real'):
