@@ -1197,7 +1197,7 @@ mismatch and needs source-level debugging in
 
 
 SPARSESOLV_OVERVIEW += SOLVER_CAPACITY
-SPARSESOLV_BEST_PRACTICES += SOLVER_CAPACITY
+SPARSESOLV_BEST_PRACTICES += "\n\nFor measured capacity guidance, use the memory topic."
 
 def get_full_documentation() -> str:
     """Return complete sparsesolv (radia.sparsesolv_ngsolve) documentation."""
