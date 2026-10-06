@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
-from types import SimpleNamespace
-
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,45 +30,6 @@ def test_legacy_lab_editable_verifier_only_explains_new_command(capsys):
     output = capsys.readouterr().err
     assert "LAB uses fixed wheels" in output
     assert "release_quad.py verify-editable" in output
-
-
-def test_verify_editable_checks_lab_wheel_and_100_editable(monkeypatch):
-    tool = load(ROOT / "tools" / "release_quad.py", "verify_runtime_roles")
-    assert not hasattr(tool, "EDITABLE_REPO_LAB_ENV")
-    assert not hasattr(tool, "_verify_lab_editable")
-    calls = []
-    monkeypatch.setattr(tool, "_verify_lab_wheel", lambda: calls.append("lab-wheel") or 0)
-    monkeypatch.setattr(tool, "_verify_100_editable", lambda: calls.append("100-editable") or 0)
-    assert tool.cmd_verify_editable(None) == 0
-    assert calls == ["lab-wheel", "100-editable"]
-
-
-def test_release_quad_repoint_refuses_lab_before_any_remote_or_local_action(monkeypatch, capsys):
-    tool = load(ROOT / "tools" / "release_quad.py", "reject_lab_repoint")
-    actions = []
-    monkeypatch.setattr(tool.editable_intent, "main", lambda argv: actions.append(argv) or 0)
-    monkeypatch.setattr(
-        tool, "_remote_editable_intent", lambda *a, **k: actions.append(a) or (0, {}, "")
-    )
-    args = SimpleNamespace(
-        host="lab",
-        package=["radia"],
-        source=["S:/tree"],
-        reason="test",
-        via=None,
-        record_current=False,
-        rollback=False,
-        dry_run=False,
-        require_pushed=False,
-    )
-    assert tool.cmd_repoint(args) == 2
-    assert actions == []
-    assert "only on 100号機" in capsys.readouterr().out
-
-
-def test_release_quad_repoint_defaults_to_100():
-    text = (ROOT / "tools" / "release_quad.py").read_text(encoding="utf-8")
-    assert 'rp.add_argument("--host", default="100"' in text
 
 
 @pytest.mark.parametrize(

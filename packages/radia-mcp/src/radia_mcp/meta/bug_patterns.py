@@ -497,10 +497,11 @@ PATTERNS: list[dict] = [
         "what": "Historically, LAB used an editable Radia install. Installing "
                 "a wheel replaced that source pointer, so later source edits "
                 "no longer appeared in the running package.",
-        "root_cause": "pip install --force-reinstall replaces the "
-                      ".pth pointer with a regular install.  Easy "
-                      "trap when Phase 8 deploy commands accidentally "
-                      "run on LAB.",
+        "root_cause": "This records the former LAB editable-development "
+                      "setup: a wheel install replaced the source .pth "
+                      "pointer. LAB now intentionally uses a verified wheel; "
+                      "that is the supported runtime, not an accidental "
+                      "Phase 8 deployment.",
         "detection": "The retired LAB editable verifier is a notice-only shim; "
                      "`release_quad.py verify-editable` verifies LAB's wheel "
                      "and the editable install on 100.",

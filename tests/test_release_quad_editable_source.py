@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import importlib.util
+import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -25,6 +28,39 @@ def _git(repo, *args):
         capture_output=True,
         text=True,
     ).stdout.strip()
+
+
+def _fake_wheel_site(root, *, shadow=False):
+    """Create a tiny Radia wheel install with a valid hash-checked RECORD."""
+    site = root / "site"
+    package = site / "radia"
+    dist_info = site / "radia-5.1.0.dist-info"
+    package.mkdir(parents=True)
+    dist_info.mkdir()
+    files = {
+        "radia/__init__.py": b"__version__ = '5.1.0'\n",
+        "radia-5.1.0.dist-info/METADATA": (
+            b"Metadata-Version: 2.1\nName: radia\nVersion: 5.1.0\n"
+        ),
+    }
+    for relative, content in files.items():
+        (site / relative).write_bytes(content)
+    rows = []
+    for relative, content in files.items():
+        digest = base64.urlsafe_b64encode(hashlib.sha256(content).digest())
+        rows.append(f"{relative},sha256={digest.rstrip(b'=').decode()},{len(content)}")
+    rows.append("radia-5.1.0.dist-info/RECORD,,")
+    (dist_info / "RECORD").write_text("\n".join(rows) + "\n", encoding="utf-8")
+    paths = [site]
+    if shadow:
+        shadow_root = root / "shadow"
+        shadow_package = shadow_root / "radia"
+        shadow_package.mkdir(parents=True)
+        (shadow_package / "__init__.py").write_bytes(files["radia/__init__.py"])
+        paths.insert(0, shadow_root)
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join(str(path) for path in paths)
+    return env
 
 
 def test_release_quad_git_helper_trusts_only_its_active_worktree(monkeypatch):
@@ -799,3 +835,29 @@ def test_wheel_verifiers_use_remote_record_gate(monkeypatch, verifier, host, lab
     assert "d.files" in code and "actual == f.hash.value" in code
     assert "Shadowed Radia import" in code and f"{label} must use a wheel" in code
     assert "'5.1.0'" in code
+
+
+@pytest.mark.parametrize(
+    "expected_version,shadow,expected_rc,expected_message",
+    [
+        ("5.1.0", False, 0, "LAB wheel verified"),
+        ("5.1.1", False, 1, "Radia version mismatch"),
+        ("5.1.0", True, 1, "Shadowed Radia import"),
+    ],
+)
+def test_wheel_runtime_probe_checks_installed_version_and_import_origin(
+    tmp_path, expected_version, shadow, expected_rc, expected_message
+):
+    env = _fake_wheel_site(tmp_path, shadow=shadow)
+    code = release_quad._wheel_runtime_probe_code(expected_version, "LAB")
+
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=30,
+    )
+
+    assert result.returncode == expected_rc
+    assert expected_message in result.stdout + result.stderr
