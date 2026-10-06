@@ -320,7 +320,7 @@ def test_unc_normalization_covers_canonical_and_release_worktrees():
 
 
 def test_editable_probe_resolves_git_inside_the_target_process():
-    probe = release_quad.CROSS_MACHINE_PROBE_LAB
+    probe = release_quad.CROSS_MACHINE_PROBE_100_EDITABLE
 
     assert 'git_exe = shutil.which("git")' in probe
     assert "[git_exe," in probe

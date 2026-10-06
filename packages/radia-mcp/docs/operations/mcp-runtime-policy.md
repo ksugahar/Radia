@@ -4,7 +4,7 @@ MCP is experimental development tooling. This policy supersedes the former
 snapshot-freeze and per-edit deployment-approval requirements for MCP packages.
 It does not relax numerical solver, native ABI or release acceptance.
 
-## Host installation policy (2026-10-01)
+## Host installation policy (updated 2026-10-04)
 
 100号機 is the only editable development host, using a dedicated local venv
 for maintainers and student contributors. LAB consumes a verified wheel.
