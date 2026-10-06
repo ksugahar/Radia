@@ -1,0 +1,174 @@
+{
+  "geometry": "stepped",
+  "nv": 2016,
+  "rows": [
+    {
+      "anchor": [
+        0.029,
+        -0.002
+      ],
+      "old": {
+        "P_total": 5.530216463540622e-07,
+        "P_reaction": 5.098049400174272e-07,
+        "theta_jump": 0.9999975684557775,
+        "linear_residual_rel": 4.1508743387582435e-17,
+        "faraday_residual_rel": 1.1865288933363042e-18,
+        "alpha_real": -0.050150727484105324,
+        "alpha_imag": -0.000506643089611052,
+        "power_balance_rel": 0.07814650045174965
+      },
+      "qt6": {
+        "P_total": 5.651548311789498e-07,
+        "P_reaction": 5.279214752878739e-07,
+        "theta_jump": 0.9999975684557775,
+        "linear_residual_rel": 8.084744353361703e-17,
+        "faraday_residual_rel": 2.3730577866726085e-18,
+        "alpha_real": -0.049500526517826694,
+        "alpha_imag": -0.0005344352896433588,
+        "power_balance_rel": 0.06588169088708795
+      },
+      "qt12": {
+        "P_total": 5.651548229758948e-07,
+        "P_reaction": 5.279214709265883e-07,
+        "theta_jump": 0.9999975684557775,
+        "linear_residual_rel": 7.268065621678676e-17,
+        "faraday_residual_rel": 2.9663222333407604e-18,
+        "alpha_real": -0.04950052633331694,
+        "alpha_imag": -0.0005344352897214387,
+        "power_balance_rel": 0.06588168504561209
+      }
+    },
+    {
+      "anchor": [
+        0.027,
+        -0.002
+      ],
+      "old": {
+        "P_total": 5.646157604955825e-07,
+        "P_reaction": 5.130490143860948e-07,
+        "theta_jump": 0.9999976387635098,
+        "linear_residual_rel": 2.164771837785286e-16,
+        "faraday_residual_rel": 1.5187569834704692e-16,
+        "alpha_real": -0.05050905222571962,
+        "alpha_imag": -0.0005022879670235102,
+        "power_balance_rel": 0.09133068843885239
+      },
+      "qt6": {
+        "P_total": 5.650966985890531e-07,
+        "P_reaction": 5.258111681542091e-07,
+        "theta_jump": 0.9999976387635098,
+        "linear_residual_rel": 1.0971362078819941e-16,
+        "faraday_residual_rel": 4.746115573345217e-18,
+        "alpha_real": -0.04964033472509438,
+        "alpha_imag": -0.0005307249986620695,
+        "power_balance_rel": 0.06952001406650055
+      },
+      "qt12": {
+        "P_total": 5.650966916218076e-07,
+        "P_reaction": 5.25811165730698e-07,
+        "theta_jump": 0.9999976387635098,
+        "linear_residual_rel": 2.4160431015318834e-16,
+        "faraday_residual_rel": 1.520424624166985e-16,
+        "alpha_real": -0.04964033453109766,
+        "alpha_imag": -0.0005307250019739404,
+        "power_balance_rel": 0.06952000688300175
+      }
+    },
+    {
+      "anchor": [
+        0.033,
+        -0.002
+      ],
+      "old": {
+        "P_total": 5.308543086620683e-07,
+        "P_reaction": 4.732384651882693e-07,
+        "theta_jump": 0.9999977582381948,
+        "linear_residual_rel": 3.11360512912573e-16,
+        "faraday_residual_rel": 3.0375661088764113e-16,
+        "alpha_real": -0.0497040003420532,
+        "alpha_imag": -0.0005084008126800196,
+        "power_balance_rel": 0.108534192025323
+      },
+      "qt6": {
+        "P_total": 5.670451925336431e-07,
+        "P_reaction": 5.249861511581848e-07,
+        "theta_jump": 0.9999977582381948,
+        "linear_residual_rel": 1.0093259285621926e-16,
+        "faraday_residual_rel": 2.9663222333407606e-19,
+        "alpha_real": -0.04956352051728169,
+        "alpha_imag": -0.0005269246775479106,
+        "power_balance_rel": 0.0741722916078914
+      },
+      "qt12": {
+        "P_total": 5.670451803592824e-07,
+        "P_reaction": 5.249861448422388e-07,
+        "theta_jump": 0.9999977582381948,
+        "linear_residual_rel": 1.1669328795299606e-16,
+        "faraday_residual_rel": 5.932644466681521e-19,
+        "alpha_real": -0.049563520388860506,
+        "alpha_imag": -0.0005269246758411552,
+        "power_balance_rel": 0.07417228286887967
+      }
+    },
+    {
+      "anchor": [
+        0.029,
+        0.002
+      ],
+      "old": {
+        "P_total": 5.61111986103872e-07,
+        "P_reaction": 5.181815142188752e-07,
+        "theta_jump": 1.0000004430002898,
+        "linear_residual_rel": 3.1115164872382243e-16,
+        "faraday_residual_rel": 3.037537141244984e-16,
+        "alpha_real": -0.04977113561166524,
+        "alpha_imag": -0.0005059668125907925,
+        "power_balance_rel": 0.07650963256566345
+      },
+      "qt6": {
+        "P_total": 5.626385262931144e-07,
+        "P_reaction": 5.244837981706671e-07,
+        "theta_jump": 1.0000004430002898,
+        "linear_residual_rel": 9.12202588730837e-17,
+        "faraday_residual_rel": 1.1865288933363042e-18,
+        "alpha_real": -0.04954223851445362,
+        "alpha_imag": -0.0005291817130107113,
+        "power_balance_rel": 0.06781392730751268
+      },
+      "qt12": {
+        "P_total": 5.626385251978033e-07,
+        "P_reaction": 5.244837974058144e-07,
+        "theta_jump": 1.0000004430002898,
+        "linear_residual_rel": 9.842612292242519e-17,
+        "faraday_residual_rel": 2.6696900100066844e-18,
+        "alpha_real": -0.04954223849939027,
+        "alpha_imag": -0.000529181713187484,
+        "power_balance_rel": 0.06781392685219167
+      }
+    }
+  ],
+  "widths": {
+    "old": {
+      "P_width_W": 3.3761451833514224e-08,
+      "P_width_percent": 6.111765980266783,
+      "alpha_width_A": 0.000805075091079627
+    },
+    "qt6": {
+      "P_width_W": 4.406666240528717e-09,
+      "P_width_percent": 0.7799632743051033,
+      "alpha_width_A": 0.00013985743125973125
+    },
+    "qt12": {
+      "P_width_W": 4.406655161479116e-09,
+      "P_width_percent": 0.7799613231705453,
+      "alpha_width_A": 0.000139857421690314
+    }
+  },
+  "quadrature_power_relative_error": 2.146982480688564e-08,
+  "elapsed_s": 114.65388040000107,
+  "host": "lab",
+  "ngsolve": "6.2.2607",
+  "production_module": "src/radia/bem_loop_extension.py",
+  "status": "rejected_initial_test",
+  "failure_reason": "Old trace outer carrier power balance 0.108534 exceeds unchanged 0.1 gate; refine mesh"
+}

@@ -41,7 +41,7 @@ I_ANA = -1j * OMEGA * (MU_0 * H0 * math.pi * R_T ** 2) \
 
 
 @pytest.fixture(scope="module")
-def ring_case():
+def ring_setup():
     from netgen.occ import WorkPlane, Axes, OCCGeometry, Axis, Glue
     from netgen.meshing import MeshingParameters
     import netgen.meshing as ngmsh
@@ -90,6 +90,14 @@ def ring_case():
             return 0.5 * B0 * np.stack(
                 [-p[:, 1], p[:, 0], np.zeros(len(p))], axis=1).astype(complex)
 
+    return solver, phi_inc, A_inc_fn
+
+
+@pytest.fixture(scope="module")
+def ring_case(ring_setup):
+    from ngsolve import TaskManager
+    solver, phi_inc, A_inc_fn = ring_setup
+    with TaskManager():
         from radia.bem_loop_extension import solve_loop_extended
         out = solve_loop_extended(solver, phi_inc, Z_S, OMEGA, A_inc_fn)
         angles = np.arange(128) * 2 * np.pi / 128

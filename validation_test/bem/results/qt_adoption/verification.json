@@ -1,0 +1,43 @@
+{
+  "status": "passed",
+  "tests": 32,
+  "passed": 31,
+  "skipped": 1,
+  "skip_reason": "Optional genus-0 demo STEP/VOL fixtures not present",
+  "host": "lab",
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "installed_radia": "5.2.3",
+  "ngsolve": "6.2.2607",
+  "elapsed_s": 445.14,
+  "canonical_source_sha256": "6336c280f76d8e3d703b5124d682a883a2f56db85f917b5aeac0d4a6a02f58dc",
+  "executed_source_sha256_before_eol_normalization": "094d8f5206334baa942f929e3be51e04dd562db3cbfa80becd896cfaa9f40791",
+  "source_normalization": "CRLF to LF only after tests; no statements changed; canonical worktree bytes match Git blob",
+  "files": [
+    "validation_test/bem/test_loop_extension_ring.py",
+    "tests/test_bem_loop_neumann_projection.py",
+    "validation_test/bem/test_loop_neumann_carriers.py"
+  ],
+  "initial_runs": [
+    {
+      "status": "collection_failed",
+      "reason": "Checkout root missing from sys.path; fixed isolated runner before numerical execution"
+    },
+    {
+      "passed": 29,
+      "skipped": 1
+    },
+    {
+      "failed": 2,
+      "reason": "Rejected universal improvement hypothesis; old-trace coarse stepped power gate failed; retained JSON"
+    }
+  ],
+  "gates": {
+    "linear_residual": 1e-06,
+    "faraday_residual": 1e-06,
+    "unit_jump": 0.005,
+    "existing_coarse_ring_power_balance": 0.1,
+    "carrier_width_percent": 2.0,
+    "quadrature_relative_power": 0.0001
+  },
+  "runtime_loading": "Installed native Radia; checkout radia.bem_loop_extension explicitly loaded with importlib; checkout panels loaded by contract tests"
+}
