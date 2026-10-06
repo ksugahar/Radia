@@ -25,7 +25,7 @@ def test_file_roundtrip_and_rejects_wrong_frequency(surface, tmp_path):
         read_panel_impedance(path, surface, frequency_hz=2000)
 
 
-@pytest.mark.parametrize('change', ['mesh', 'shape', 'active', 'nan', 'unit'])
+@pytest.mark.parametrize('change', ['mesh', 'shape', 'active', 'nan', 'unit', 'missing'])
 def test_bad_or_stale_panel_file_fails(surface, tmp_path, change):
     import ngsolve as ng
     path = tmp_path/'zs.json'
@@ -39,8 +39,10 @@ def test_bad_or_stale_panel_file_fails(surface, tmp_path, change):
         data['real_ohm'][0] = -1
     elif change == 'nan':
         data['real_ohm'][0] = float('nan')
-    else:
+    elif change == 'unit':
         data['unit'] = 'milliohm'
+    else:
+        del data['imag_ohm']
     path.write_text(json.dumps(data))
     with pytest.raises(ValueError):
         read_panel_impedance(path, surface, frequency_hz=1000)
