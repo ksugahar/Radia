@@ -8,7 +8,7 @@ arguments
 end
 allowed = any(startsWith(moduleName, ["bem","peec","ngsbem_"])) || ...
     ismember(moduleName, ["dielectric_solver","fasthenry_parser", ...
-    "scalar_bie_sibc"]);
+    "scalar_bie_sibc","surface_impedance"]);
 if ~allowed
     error("radia:python:Module", "Unsupported BEM/PEEC module: %s", moduleName);
 end

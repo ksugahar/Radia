@@ -106,6 +106,16 @@ elseif ~java.io.File(char(configFile)).isAbsolute()
 end
 assemblyOptions = readAssemblyOptions(block);
 geometryFiles = [wpPath; coilPath];
+if isfield(assemblyOptions, "panel_zs_file") && strlength(string(assemblyOptions.panel_zs_file)) > 0
+    zsPath = string(assemblyOptions.panel_zs_file);
+    if ~java.io.File(char(zsPath)).isAbsolute() || ~isfile(zsPath)
+        error("radia:simulink:IHPanelZsFile", "Element Zs requires an existing absolute JSON path: %s", zsPath);
+    end
+    if strlength(assembleFcn) > 0 || strlength(command) > 0
+        error("radia:simulink:IHPanelZsAssembler", "Element Zs requires the built-in assembler.");
+    end
+    geometryFiles(end+1) = zsPath;
+end
 if isfield(assemblyOptions,"axisymmetric_thermal_vol") && strlength(string(assemblyOptions.axisymmetric_thermal_vol)) > 0
     thermalPath=string(assemblyOptions.axisymmetric_thermal_vol);
     if ~java.io.File(char(thermalPath)).isAbsolute()
@@ -157,6 +167,15 @@ if ~isempty(stored)
 end
 
 if fresh
+    if assembleFcn == builtInFcn
+        panelPath = string(assemblyOptions.panel_zs_file);
+        panelHash = "";
+        if strlength(panelPath) > 0
+            matches = strcmp(string({fingerprint.files.path}), panelPath);
+            panelHash = string(fingerprint.files(matches).sha256);
+        end
+        radia.simulink.verifyIHPanelImpedanceProvenance(configFile, panelPath, panelHash);
+    end
     % Inputs unchanged -> never re-run the assemble command.  Reloading
     % the configuration is still skipped only when BOTH the artifact
     % hash and the model-workspace revision marker prove the workspace
@@ -212,6 +231,18 @@ if ~isfile(configFile)
     error("radia:simulink:IHGeometryUpdateArtifact", ...
         "The assembler finished but did not write the " + ...
         "configuration file: %s", configFile);
+end
+if assembleFcn == builtInFcn
+    if ~isequal(radia.simulink.fileFingerprint(geometryFiles), fingerprint.files)
+        error("radia:simulink:IHGeometryInputChanged", "Inputs changed during assembly; rebuild again.");
+    end
+    panelPath = string(assemblyOptions.panel_zs_file);
+    panelHash = "";
+    if strlength(panelPath) > 0
+        matches = strcmp(string({fingerprint.files.path}), panelPath);
+        panelHash = string(fingerprint.files(matches).sha256);
+    end
+    radia.simulink.verifyIHPanelImpedanceProvenance(configFile, panelPath, panelHash);
 end
 radia.simulink.configureIHNativeModel(modelName, configFile);
 
@@ -273,7 +304,7 @@ for name = string(fieldnames(finDefaults))'
     end
 end
 % Existing tracked 3D blocks retain their explicit historical 3D behavior.
-for name=["axisymmetric_thermal_vol","n_phi_samples","thermal_order"]
+for name=["axisymmetric_thermal_vol","n_phi_samples","thermal_order","panel_zs_file"]
     if isfield(parameters,name), values.(name)=get_param(block,name); end
 end
 end

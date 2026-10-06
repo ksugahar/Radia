@@ -24,6 +24,7 @@ import time
 import numpy as np
 from scipy.linalg import solve as scipy_solve
 from ._residual_gate import RELATIVE_LIMIT, residual_scale
+from .surface_impedance import PanelSurfaceImpedance, assemble_panel_impedance_stiffness
 
 MU_0 = 4e-7 * np.pi
 
@@ -48,7 +49,8 @@ def _uniform_surface_impedance(value, ndof):
         if not np.all(values == values[0]):
             raise NotImplementedError(
                 "Variable surface impedance requires source-side coefficient-weighted "
-                "surface stiffness and local loss integration; BEM currently supports uniform Z_s only")
+                "surface stiffness and local loss integration; use PanelSurfaceImpedance "
+                "with one value per BND triangle on surface P1, not a nodal array")
         values = values[0]
     result = complex(values)
     if not np.isfinite(result) or result.real < 0:
@@ -77,11 +79,15 @@ def _project_sibc_surface_heat(fes, phi_vec, Z_s, *, element_heat=None):
     """
     from ngsolve import GridFunction, LinearForm, SurfaceL2, BND, ds, grad, InnerProduct, CF, Integrate
     mesh = fes.mesh
-    if fes.ndof != mesh.nv or np.ndim(Z_s) != 0:
-        raise ValueError("Solved SIBC heat projection requires surface P1 and scalar Z_s")
-    z = complex(Z_s)
-    if not np.isfinite(z) or z.real < 0:
-        raise ValueError("SIBC heat requires finite passive Z_s")
+    if fes.ndof != mesh.nv:
+        raise ValueError("Solved SIBC heat projection requires surface P1")
+    if isinstance(Z_s, PanelSurfaceImpedance):
+        z_real = Z_s.coefficient(fes)
+    else:
+        z = complex(Z_s)
+        if not np.isfinite(z) or z.real < 0:
+            raise ValueError("SIBC heat requires finite passive Z_s")
+        z_real = z.real
     if element_heat is None:
         phi = np.asarray(phi_vec, dtype=complex)
         if phi.shape != (fes.ndof,) or not np.all(np.isfinite(phi)):
@@ -89,7 +95,7 @@ def _project_sibc_surface_heat(fes, phi_vec, Z_s, *, element_heat=None):
         real, imag = GridFunction(fes), GridFunction(fes)
         real.vec.FV().NumPy()[:] = phi.real
         imag.vec.FV().NumPy()[:] = phi.imag
-        q_cf = .5 * z.real * (InnerProduct(grad(real), grad(real))
+        q_cf = .5 * z_real * (InnerProduct(grad(real), grad(real))
                              + InnerProduct(grad(imag), grad(imag)))
     else:
         heat = np.asarray(element_heat, dtype=float)
@@ -442,6 +448,14 @@ class ScalarBIESIBCSolver:
                 eta=hacapk_eta,
                 max_rank=-1, print_level=0)
 
+    def impedance_stiffness(self, Z_s):
+        """Return the source-side impedance-weighted surface stiffness."""
+        if isinstance(Z_s, PanelSurfaceImpedance):
+            if self._intree_lagrange_p2 or self.order != 1:
+                raise ValueError("Panel Z_s supports surface P1 only")
+            return assemble_panel_impedance_stiffness(self.fes, Z_s)
+        return _uniform_surface_impedance(Z_s, self.ndof) * self.K
+
     def solve(self, phi_inc_cf, Z_s, omega):
         """Solve scalar BIE + SIBC for given incident potential and impedance.
 
@@ -452,8 +466,8 @@ class ScalarBIESIBCSolver:
                  - **complex scalar**: legacy global SIBC (uniform Z_s
                    over the workpiece)
                  - **constant ndarray of length ndof**: equivalent uniform Z_s.
-                 Variable impedance is rejected until weighted surface stiffness
-                 and local loss integration are available.
+                 - **PanelSurfaceImpedance**: one constant value per BND triangle
+                   (surface P1 only). Untagged variable nodal arrays remain rejected.
             omega: Angular frequency [rad/s].
 
         Returns:
@@ -471,7 +485,12 @@ class ScalarBIESIBCSolver:
 
         t0 = time.perf_counter()
         ndof = self.ndof
-        Z_s = _uniform_surface_impedance(Z_s, ndof)
+        if isinstance(Z_s, PanelSurfaceImpedance):
+            if not np.isfinite(omega) or omega <= 0:
+                raise ValueError("Panel Z_s requires positive finite frequency")
+        else:
+            Z_s = _uniform_surface_impedance(Z_s, ndof)
+        K_Z = self.impedance_stiffness(Z_s)
 
         # RHS: <phi_inc, v>_S
         if isinstance(phi_inc_cf, np.ndarray):
@@ -489,11 +508,12 @@ class ScalarBIESIBCSolver:
             lf.Assemble()
             rhs_vec = lf.vec.FV().NumPy().copy()
 
-        # Uniform coefficient: SL acts on the source-side surface flux.
-        gamma = Z_s / (1j * omega * MU_0) if omega > 0 and Z_s != 0 else 0
+        # SL acts on the impedance-weighted source-side surface flux.
+        gamma = (1 if isinstance(Z_s, PanelSurfaceImpedance) else Z_s) / (1j * omega * MU_0) if omega > 0 else 0
         gamma_for_log = complex(gamma)
+        robin = K_Z / (1j * omega * MU_0) if omega > 0 else K_Z * 0
         A_sys = (0.5 * self.M - self.DL
-                 + gamma * self.SL @ self.M_inv @ self.K).astype(complex)
+                 + self.SL @ self.M_inv @ robin).astype(complex)
 
         # Solve with gauge (Lagrange multiplier for int phi dS = 0)
         phi_vec = self._solve_with_gauge(A_sys, rhs_vec.astype(complex))
@@ -521,8 +541,8 @@ class ScalarBIESIBCSolver:
             H_t_rms = math.sqrt((abs(Hsq_re) + abs(Hsq_im)) / abs(area))
 
         # Power density: P' = (1/2) Re(Z_s) |J_s|^2 = (1/2) Re(Z_s) H_t_rms^2
-        # Uniform impedance; variable-coefficient loss is not supported.
-        P_density = 0.5 * Z_s.real * H_t_rms ** 2
+        # Local dissipation uses the same weighted form as the solve.
+        P_density = 0.5 * float(np.vdot(phi_vec, K_Z.real @ phi_vec).real) / abs(area)
 
         # GridFunction output (None for the Lagrange-P2 path)
         if self._intree_lagrange_p2:
@@ -537,7 +557,8 @@ class ScalarBIESIBCSolver:
             'H_t_rms': float(H_t_rms),
             'P_density': float(P_density),
             'area': float(abs(area)),
-            'gamma': gamma_for_log,
+            'gamma': None if isinstance(Z_s, PanelSurfaceImpedance) else gamma_for_log,
+            'impedance_layout': 'BND-element-order' if isinstance(Z_s, PanelSurfaceImpedance) else 'uniform',
             't_solve': round(t_solve, 3),
             'linear_residual_rel': self._last_linear_residual,
             'linear_residual_limit': RELATIVE_LIMIT,
@@ -570,7 +591,15 @@ class ScalarBIESIBCSolver:
 
         t0 = time.perf_counter()
         ndof = self.ndof
-        Z_s = _uniform_surface_impedance(Z_s, ndof)
+        if isinstance(Z_s, PanelSurfaceImpedance):
+            if not np.isfinite(omega) or omega <= 0:
+                raise ValueError("Panel Z_s requires positive finite frequency")
+        else:
+            Z_s = _uniform_surface_impedance(Z_s, ndof)
+        is_panel = isinstance(Z_s, PanelSurfaceImpedance)
+        K_Z = self.impedance_stiffness(Z_s) if is_panel else None
+        if not is_panel and getattr(self, '_Minv_K', None) is None:
+            self._Minv_K = self.M_inv @ self.K  # real, reused across frequencies/Zs
 
         # RHS: <phi_inc, v>_S
         if isinstance(phi_inc_cf, np.ndarray):
@@ -586,47 +615,21 @@ class ScalarBIESIBCSolver:
             lf.Assemble()
             rhs_vec = lf.vec.FV().NumPy().copy()
 
-        gamma_scalar = Z_s / (1j * omega * MU_0) if omega > 0 and Z_s != 0 else 0j
-        gamma_vec = np.full(ndof, gamma_scalar, dtype=complex)
-        gamma_for_log = complex(gamma_scalar)
-        gr_vec = np.ascontiguousarray(gamma_vec.real)
-        gi_vec = np.ascontiguousarray(gamma_vec.imag)
-
-        # Pre-compute M^{-1} @ K (real) once for reuse in MatVec.
-        # The Robin term `SL @ M_inv @ K` applied to x is:
-        #   (SL @ M_inv @ K) @ x = SL @ (M_inv @ K @ x)
-        # so caching M_inv @ K saves one dense matmul per MatVec.
-        Minv_K = self.M_inv @ self.K  # ndof x ndof, real
-
-        SL_op = self._SL_hacapk
-        DL_op = self._DL_hacapk
-        M_full = self.M
+        gamma_for_log = complex((1 if isinstance(Z_s, PanelSurfaceImpedance) else Z_s)
+                                / (1j * omega * MU_0) if omega > 0 else 0)
+        SL_op, DL_op, M_full = self._SL_hacapk, self._DL_hacapk, self.M
 
         def matvec_complex(x_complex):
-            """y = A_sys @ x where A_sys = (1/2)M - DL + diag(gamma)*SL*M^-1*K.
-
-            Z_s is uniform; constant gr_vec/gi_vec scaling reduces
-            to the same path with gamma_vec broadcast to a constant.
-            """
-            x_re = np.ascontiguousarray(x_complex.real)
-            x_im = np.ascontiguousarray(x_complex.imag)
-            # (1/2)*M - DL part (real)
-            half_M_re = 0.5 * (M_full @ x_re)
-            half_M_im = 0.5 * (M_full @ x_im)
-            DL_re = DL_op.MatVec(x_re)
-            DL_im = DL_op.MatVec(x_im)
-            # SL @ M^-1 @ K @ x part (real intermediate)
-            MinvK_re = Minv_K @ x_re
-            MinvK_im = Minv_K @ x_im
-            SL_re = SL_op.MatVec(np.ascontiguousarray(MinvK_re))
-            SL_im = SL_op.MatVec(np.ascontiguousarray(MinvK_im))
-            # diag(gamma) * (SL_re + j*SL_im) row-wise:
-            # term[i] = (gr_i*SL_re[i] - gi_i*SL_im[i]) + j(gr_i*SL_im[i] + gi_i*SL_re[i])
-            term_re = gr_vec * SL_re - gi_vec * SL_im
-            term_im = gr_vec * SL_im + gi_vec * SL_re
-            y_re = half_M_re - DL_re + term_re
-            y_im = half_M_im - DL_im + term_im
-            return y_re + 1j * y_im
+            # Zs belongs inside the source flux BEFORE the single-layer map.
+            # Keep panel K_Z sparse and apply M_inv only to its source vector;
+            # no dense complex n*n Robin matrix is needed by GMRES.
+            flux = ((self.M_inv @ (K_Z @ x_complex)) / (1j * omega * MU_0)
+                    if is_panel else gamma_for_log * (self._Minv_K @ x_complex))
+            sl = (SL_op.MatVec(np.ascontiguousarray(flux.real))
+                  + 1j * SL_op.MatVec(np.ascontiguousarray(flux.imag)))
+            dl = (DL_op.MatVec(np.ascontiguousarray(x_complex.real))
+                  + 1j * DL_op.MatVec(np.ascontiguousarray(x_complex.imag)))
+            return .5 * (M_full @ x_complex) - dl + sl
 
         # Augment with gauge multiplier
         c_gauge = self._c_gauge
@@ -670,14 +673,16 @@ class ScalarBIESIBCSolver:
             H_t_rms = math.sqrt((abs(Hsq_re) + abs(Hsq_im)) / abs(area))
             gf_phi = GridFunction(self.fes)
             gf_phi.vec.FV().NumPy()[:] = phi_vec.real
-        P_density = 0.5 * Z_s.real * H_t_rms ** 2
+        loss_flux = K_Z.real @ phi_vec if is_panel else Z_s.real * (self.K @ phi_vec)
+        P_density = 0.5 * float(np.vdot(phi_vec, loss_flux).real) / abs(area)
         return {
             'phi': gf_phi,
             'phi_vec': phi_vec,
             'H_t_rms': float(H_t_rms),
             'P_density': float(P_density),
             'area': float(abs(area)),
-            'gamma': complex(gamma_for_log),
+            'gamma': None if isinstance(Z_s, PanelSurfaceImpedance) else complex(gamma_for_log),
+            'impedance_layout': 'BND-element-order' if isinstance(Z_s, PanelSurfaceImpedance) else 'uniform',
             't_solve': round(t_solve, 3),
             'linear_residual_rel': self._last_linear_residual,
             'linear_residual_limit': RELATIVE_LIMIT,
@@ -720,7 +725,12 @@ class ScalarBIESIBCSolver:
 
         t0 = time.perf_counter()
         ndof = self.ndof
-        Z_s = _uniform_surface_impedance(Z_s, ndof)
+        if isinstance(Z_s, PanelSurfaceImpedance):
+            if not np.isfinite(omega) or omega <= 0:
+                raise ValueError("Panel Z_s requires positive finite frequency")
+        else:
+            Z_s = _uniform_surface_impedance(Z_s, ndof)
+        K_Z = self.impedance_stiffness(Z_s)
 
         # RHS: <phi_inc, v>_S
         if isinstance(phi_inc_cf, np.ndarray):
@@ -732,8 +742,8 @@ class ScalarBIESIBCSolver:
             lf.Assemble()
             rhs_vec = lf.vec.FV().NumPy().copy()
 
-        gamma = (Z_s / (1j * omega * MU_0)
-                 if (omega > 0 and Z_s != 0) else complex(0))
+        gamma = complex((1 if isinstance(Z_s, PanelSurfaceImpedance) else Z_s)
+                        / (1j * omega * MU_0) if omega > 0 else 0)
 
         # Helper: complex matvec on a real bem bilinear form.  NGSolve
         # bem operators are real-valued, so we dispatch real and imag
@@ -759,10 +769,10 @@ class ScalarBIESIBCSolver:
             x = np.asarray(x, dtype=complex).ravel()
             t1 = 0.5 * (self.M @ x)
             t2 = _bem_matvec(DL_bf, x)
-            kx = self.K @ x
+            kx = K_Z @ x
             mkx = self.M_inv @ kx
             slmkx = _bem_matvec(SL_bf, mkx)
-            return t1 - t2 + gamma * slmkx
+            return t1 - t2 + (slmkx / (1j * omega * MU_0) if omega > 0 else 0)
 
         # Augmented system to enforce int(phi) dS = 0:
         #   [ A    c ] [phi]   [b]
@@ -803,8 +813,7 @@ class ScalarBIESIBCSolver:
                             self.mesh, BND)
         area = Integrate(CF(1), self.mesh, BND)
         H_t_rms = math.sqrt((abs(Hsq_re) + abs(Hsq_im)) / abs(area))
-        P_density = (0.5 * Z_s.real * H_t_rms ** 2
-                     if Z_s != 0 else 0.0)
+        P_density = 0.5 * float(np.vdot(phi_vec, K_Z.real @ phi_vec).real) / abs(area)
 
         gf_phi = GridFunction(self.fes)
         gf_phi.vec.FV().NumPy()[:] = phi_vec.real
@@ -814,7 +823,8 @@ class ScalarBIESIBCSolver:
             'H_t_rms': float(H_t_rms),
             'P_density': float(P_density),
             'area': float(abs(area)),
-            'gamma': complex(gamma),
+            'gamma': None if isinstance(Z_s, PanelSurfaceImpedance) else complex(gamma),
+            'impedance_layout': 'BND-element-order' if isinstance(Z_s, PanelSurfaceImpedance) else 'uniform',
             't_solve': round(t_solve, 3),
             'linear_residual_rel': self._last_linear_residual,
             'linear_residual_limit': RELATIVE_LIMIT,

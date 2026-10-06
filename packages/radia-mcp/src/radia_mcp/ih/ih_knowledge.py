@@ -15,6 +15,14 @@ Public docs/notebooks:
 Sources:
   - https://docu.ngsolve.org/latest/i-tutorials/
   - https://forum.ngsolve.org/
+
+Student element-Zs workflow: Geometry Update accepts panel_zs_file, an absolute
+mesh/frequency-bound JSON path (ohm, BND-element-order). Use
+radia.simulink.writeIHPanelImpedance with a full ordered complex vector; centroid
+selection is performed by the caller. P1 weak genus-0 only, constant during each
+linear simulation, with content-hash-triggered rebuild. Independent FEM accuracy
+is separate: independent_fem_validation.status starts as not-performed.
+See docs/induction_heating/SIMULINK_ELEMENT_ZS.md.
 """
 
 from radia_mcp.matrix_solvers.direct_solvers_knowledge import SOLVER_CAPACITY
@@ -1941,11 +1949,12 @@ The runtime refuses negative reaction power, nonfinite results or a
 power imbalance above 10%; this safety ceiling is NOT an accuracy claim.
 Numerical acceptance uses tighter mesh-converged FEM/BEM comparisons.
 
-Supported weak postprocessing is surface P1 with spatially uniform Zs.
+Supported weak postprocessing is surface P1. Genus-0 weak coupling accepts
+uniform Zs or per-BND-triangle ESIM with coefficient-weighted stiffness.
 This restriction is on the EM BEM basis, NOT the thermal FEM order;
 standard NGSolve H1 order 2 remains the thermal route.
-Higher-order BEM and per-panel ESIM are rejected until a mapped,
-weighted surface postprocessor is implemented. No fallback is selected.
+Higher-order BEM remains rejected. Local loss and complete reaction use the
+same source-weighted form; heat is conservatively projected to P1. No fallback is selected.
 Scalar ESIM remains subject to its constitutive convergence checks;
 linear reference tests alone do not certify arbitrary nonlinear BH data.
 
@@ -2050,10 +2059,12 @@ Linear SIBC in the workpiece: `Z_s = (1+j)/(sigma*delta)` with
 in `IHWorkpieceContext(mesh, freq, sigma, mu_r=100, ...)`.
 
 Nonlinear BH cell problems can produce spatially varying impedance, but the
-current ScalarBIESIBCSolver accepts only uniform Z_s (a scalar or a constant
-array). Nonuniform arrays fail loudly. Source-side weighted stiffness K_gamma
-and local loss integration are not implemented; do not recommend the old
-per-node BEM route as a working ESIM coupling.
+current ScalarBIESIBCSolver accepts uniform Z_s or PanelSurfaceImpedance on
+surface P1. Untagged nonuniform arrays fail loudly: vertex values are not panel
+values. Source-side weighted stiffness K_gamma and local loss integration use
+one Zs per BND triangle; --esim-per-panel connects this to the genus-0 weak
+coil/heat route. Genus-1 nonlinear ESIM and strong nonlinear coupling remain
+unsupported. This implementation does not certify arbitrary magnetic materials.
 
 ## Coil side: copper (linear, mu_r=1) is the default assumption
 

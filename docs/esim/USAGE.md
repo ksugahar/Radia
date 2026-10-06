@@ -91,7 +91,7 @@ ESIM-specific flags:
 | `--esim-max-iter` | 15 | Outer Karl iteration cap |
 | `--esim-tol` | 1e-3 | Outer convergence on `max\|dZ_s\|/\|Z_s\|` |
 | `--esim-relax` | 0.5 | Karl damping (under-relaxation); lower if oscillation observed |
-| `--esim-per-panel` | False | Per-DOF Z_s mode (BEM-A path only; raises if combined with `--wp-bem-backend hacapk`) |
+| `--esim-per-panel` | False | P1 element Z_s mode (weak genus-0 BEM; dense or HACApK) |
 
 The workpiece geometry is the `cylinder` cell-problem mode in all cases
 (see § 3.2 of [`MATHEMATICAL_ANALYSIS.md`](MATHEMATICAL_ANALYSIS.md)).
@@ -270,18 +270,15 @@ diagnostic plotting:
 }
 ```
 
-When `--esim-per-panel` is used (BEM path only) the schema gains:
-
-- `esim_per_panel: true`
-- `esim_per_panel_Z_s_real: [...]`, `esim_per_panel_Z_s_imag: [...]`:
-  per-DOF Z_s ndarray, listed in BEM DOF order
-- `esim_per_panel_H_t: [...]`: per-DOF |H_t| at convergence
-  (radia ≥ 4.55.x; same DOF order as `esim_per_panel_Z_s_real`).
-  Use this for spatial visualisation (see
-  [`WORKFLOWS.md`](WORKFLOWS.md) -> `plot_zs_per_dof_map.py`).
-- `Z_s_wp_real` / `Z_s_wp_imag`: area-weighted mean (for back-compat)
-- Each `esim_history` entry adds `Z_s_abs_min / Z_s_abs_max`,
-  `H_t_per_dof_mean / H_t_per_dof_max`, `dZ_max`
+When `--esim-per-panel` is used, arrays use `esim_impedance_layout:
+"BND-element-order"`. `esim_per_panel_Z_s_real`, `esim_per_panel_Z_s_imag`
+and `esim_per_panel_H_t` have one value per BND triangle, not per vertex.
+Panel centroids identify physical locations. Use the solver's qsurf/Ht SOL
+artifacts for nodal visualization. Legacy vertex plot/export scripts explicitly
+reject this layout; old unmarked JSON retains its historical vertex meaning.
+History uses `H_t_per_panel_mean` / `H_t_per_panel_max` and `dZ_max`.
+For prescribed values use `--panel-zs-file`; see
+[student workflow](../induction_heating/SIMULINK_ELEMENT_ZS.md).
 
 ---
 
@@ -309,8 +306,8 @@ relaxation parameter less relevant.
 |---|---|---|
 | `--impedance-model esim requires --bh-file` | ESIM requested without a BH table | Pass `--bh-file <path>`; see § 2 |
 | `BH curve is empty` / `not monotone in H` | Malformed BH-file | Verify two-column ASCII, ascending H, includes (0, 0) |
-| `ESIM:NOT-CONVERGED after N iter` | Karl loop hit `max_iter` before `dZ < tol` | First inspect `esim_history` with [`plot_karl_history.py`](../../validation_test/ih_esim_benchmark/plot_karl_history.py).  If `Z_s_abs` / `H_t_rms` are plateaued and only the per-DOF `dZ_max` failed to drop, the run is usable (see [`IMPLEMENTATION.md`](IMPLEMENTATION.md) § 3.4).  Otherwise: raise `--esim-max-iter` or lower `--esim-relax`; check BH curve monotonicity. |
-| `--esim-per-panel ... wp-bem-backend hacapk` | per-panel ESIM not yet supported on HACApK | Use `--wp-bem-backend intree-dense`, or fall back to scalar Z_s |
+| `ESIM:NOT-CONVERGED after N iter` | Karl loop hit `max_iter` before `dZ < tol` | A plateau does not establish convergence. Inspect `esim_history` with [`plot_karl_history.py`](../../validation_test/ih_esim_benchmark/plot_karl_history.py), then: raise `--esim-max-iter` or lower `--esim-relax`; check BH curve monotonicity. |
+| Unsupported per-panel topology/order | P1 weak genus-0 is required | Use a supported mesh and coupling mode |
 | `cell solver SCIPY_AVAILABLE False` | scipy not installed in the calc-side Python | `pip install scipy` |
 
 ---
