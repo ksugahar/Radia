@@ -181,8 +181,9 @@ def test_array_shapes(monkeypatch, tex, ok):
         assert r"\begin{array}" not in result["tex"]
 
 
-def test_control_characters_rejected_before_kernel(evaluation):
-    result = tools.mathematica_export_equation("x\x00")
+@pytest.mark.parametrize("control", ["\x00", "\x7f", "\x80", "\x85", "\x9f"])
+def test_control_characters_rejected_before_kernel(evaluation, control):
+    result = tools.mathematica_export_equation(f"x{control}")
     assert not result["ok"] and result["stage"] == "input"
     assert evaluation == []
 

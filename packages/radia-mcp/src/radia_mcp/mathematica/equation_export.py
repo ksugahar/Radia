@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import math
 import json
+import math
 import re
+import unicodedata
 from pathlib import Path
 
 
@@ -35,7 +36,10 @@ def mathematica_export_equation(
     try:
         if not isinstance(expression, str) or not expression.strip():
             raise ValueError("expression must be a non-empty Wolfram expression")
-        if any(ord(char) < 32 and char not in "\t\r\n" for char in expression):
+        if any(
+            unicodedata.category(char) == "Cc" and char not in "\t\r\n"
+            for char in expression
+        ):
             raise ValueError("expression contains unsupported control characters")
         if action not in {"tex", "save", "copy", "render"}:
             raise ValueError("action must be tex, save, copy, or render")
