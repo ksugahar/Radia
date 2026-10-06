@@ -1,268 +1,94 @@
-"""Daily checks share release verification without running deployment."""
+"""The old LAB editable command fails closed under the wheel-only policy."""
+
+from __future__ import annotations
+
 import importlib.util
-import json
 from pathlib import Path
-import sys
 from types import SimpleNamespace
 
 import pytest
 
-
-def load_checker():
-    tools = Path(__file__).resolve().parents[1] / "tools"
-    sys.path.insert(0, str(tools))
-    try:
-        spec = importlib.util.spec_from_file_location(
-            "daily_editable_check", tools / "verify_lab_editable.py")
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
-    finally:
-        sys.path.pop(0)
+ROOT = Path(__file__).resolve().parents[1]
 
 
-_INTENT_TOOL = Path(__file__).resolve().parents[1] / "tools" / "editable_intent.py"
+@pytest.fixture
+def intent_file(tmp_path, monkeypatch):
+    path = tmp_path / "editable-intent.json"
+    monkeypatch.setenv("RADIA_EDITABLE_INTENT_FILE", str(path))
+    return path
 
 
-def load_intent_tool():
-    spec = importlib.util.spec_from_file_location("daily_editable_intent", _INTENT_TOOL)
+def load(path: Path, name: str):
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-RECORDED = {
-    "radia": "S:/Radia/release-quad/recorded",
-    "cubit-mesh-export": "S:/Radia/release-quad/recorded/packages/cubit-mesh-export",
-    "radia-mcp": "S:/Radia/release-quad/recorded/packages/radia-mcp",
-    "mcp-server-document": "S:/mcp-server",
-}
+def test_legacy_lab_editable_verifier_only_explains_new_command(capsys):
+    tool = load(ROOT / "tools" / "verify_lab_editable.py", "retired_lab_editable")
+    assert tool.main([]) == 2
+    output = capsys.readouterr().err
+    assert "LAB uses fixed wheels" in output
+    assert "release_quad.py verify-editable" in output
 
 
-@pytest.fixture(autouse=True)
-def recorded_intent(tmp_path, monkeypatch):
-    """Tests never read the machine's record; they start from a recorded intent."""
-    path = tmp_path / "editable-intent.json"
-    monkeypatch.setenv("RADIA_EDITABLE_INTENT_FILE", str(path))
-    monkeypatch.delenv("RADIA_RELEASE_EDITABLE_REPO_LAB", raising=False)
-    intent = load_intent_tool()
-    data = intent.load_intent(path)
-    for name, source in RECORDED.items():
-        intent.set_entry(data, name, {
-            "source": source, "commit": None, "tracked_clean": None,
-            "recorded_at": "2026-09-12T00:00:00Z", "recorded_by": "test",
-            "recorded_via": "test", "reason": "fixture", "pushed_refs": None,
-            "previous": None})
-    intent.save_intent(data, path)
-    return path
+def test_verify_editable_checks_lab_wheel_and_100_editable(monkeypatch):
+    tool = load(ROOT / "tools" / "release_quad.py", "verify_runtime_roles")
+    assert not hasattr(tool, "EDITABLE_REPO_LAB_ENV")
+    assert not hasattr(tool, "_verify_lab_editable")
+    calls = []
+    monkeypatch.setattr(tool, "_verify_lab_wheel", lambda: calls.append("lab-wheel") or 0)
+    monkeypatch.setattr(tool, "_verify_100_editable", lambda: calls.append("100-editable") or 0)
+    assert tool.cmd_verify_editable(None) == 0
+    assert calls == ["lab-wheel", "100-editable"]
 
 
-def test_daily_checker_is_connected_to_impact_ci():
-    root = Path(__file__).resolve().parents[1]
-    rules = json.loads((root / "tests/test_tier_manifest.json").read_text())["impact_rules"]
-    assert rules["tools/verify_lab_editable.py"] == ["tests/test_editable_daily_check.py"]
+def test_release_quad_repoint_refuses_lab_before_any_remote_or_local_action(monkeypatch, capsys):
+    tool = load(ROOT / "tools" / "release_quad.py", "reject_lab_repoint")
+    actions = []
+    monkeypatch.setattr(tool.editable_intent, "main", lambda argv: actions.append(argv) or 0)
+    monkeypatch.setattr(
+        tool, "_remote_editable_intent", lambda *a, **k: actions.append(a) or (0, {}, "")
+    )
+    args = SimpleNamespace(
+        host="lab",
+        package=["radia"],
+        source=["S:/tree"],
+        reason="test",
+        via=None,
+        record_current=False,
+        rollback=False,
+        dry_run=False,
+        require_pushed=False,
+    )
+    assert tool.cmd_repoint(args) == 2
+    assert actions == []
+    assert "only on 100号機" in capsys.readouterr().out
 
 
-def test_explicit_mcp_source_does_not_repoint_physics():
-    module = load_checker()
-    canonical = dict(module.expected_packages())
-    actual = dict(module.expected_packages("S:/Radia/mcp-runtime/packages/radia-mcp"))
-    assert actual.pop("radia-mcp") == "S:/Radia/mcp-runtime/packages/radia-mcp"
-    canonical.pop("radia-mcp")
-    assert actual == canonical
+def test_release_quad_repoint_defaults_to_100():
+    text = (ROOT / "tools" / "release_quad.py").read_text(encoding="utf-8")
+    assert 'rp.add_argument("--host", default="100"' in text
 
 
-def test_explicit_source_root_repoints_only_monorepo_packages():
-    module = load_checker()
-    canonical = dict(module.expected_packages())
-    root = Path("S:/Radia/release-quad/main-current")
-    actual = dict(module.expected_packages(source_root=root))
-
-    assert actual["radia"] == str(root)
-    assert actual["cubit-mesh-export"] == str(root / "packages" / "cubit-mesh-export")
-    assert actual["radia-mcp"] == str(root / "packages" / "radia-mcp")
-    assert actual["mcp-server-document"] == canonical["mcp-server-document"]
-
-
-def test_explicit_mcp_source_can_override_source_root():
-    module = load_checker()
-    root = Path("S:/Radia/release-quad/main-current")
-    mcp = "S:/Radia/mcp-runtime/packages/radia-mcp"
-    actual = dict(module.expected_packages(mcp_source=mcp, source_root=root))
-
-    assert actual["radia"] == str(root)
-    assert actual["cubit-mesh-export"] == str(root / "packages" / "cubit-mesh-export")
-    assert actual["radia-mcp"] == mcp
-
-
-def test_failure_exit_code(monkeypatch):
-    module = load_checker()
-    monkeypatch.setattr(module.release_quad, "_verify_lab_editable", lambda packages: 1)
-    monkeypatch.setattr(module, "verify_against_origin_main", lambda packages: 0)
-    assert module.main([]) == 4
-
-
-def test_source_behind_origin_main_is_drift(monkeypatch, capsys):
-    """A correct pointer at a stale tree must not read as clean.
-
-    Measured 2026-09-10: every LAB editable satisfied the path check while
-    running older code than origin/main (radia-mcp 1.4.39 vs 1.4.53).
-    """
-    module = load_checker()
-    monkeypatch.setattr(module, "_running_version",
-                        lambda name: ("1.4.39", "S:/Radia/01_GitHub/.../__init__.py"))
-    monkeypatch.setattr(module, "_origin_main_version", lambda path: "1.4.53")
-    assert module.verify_against_origin_main([("radia-mcp", "S:/Radia/01_GitHub")]) == 1
-    assert "origin/main carries 1.4.53" in capsys.readouterr().out
-
-
-def test_source_ahead_of_origin_main_is_not_drift(monkeypatch):
-    """Mid-development the checkout leads origin/main; that is not drift."""
-    module = load_checker()
-    monkeypatch.setattr(module, "_running_version", lambda name: ("1.4.60", "x"))
-    monkeypatch.setattr(module, "_origin_main_version", lambda path: "1.4.53")
-    assert module.verify_against_origin_main([("radia-mcp", "S:/Radia/01_GitHub")]) == 0
-
-
-def test_release_order_compares_numerically_not_lexically():
-    """4.95.9 precedes 4.95.81; string order would invert that."""
-    module = load_checker()
-    assert module._release_order("4.95.9") < module._release_order("4.95.81")
-
-
-@pytest.mark.parametrize("running,reference,failures,message", [
-    ("5.0.0rc1", "5.0.0", 1, "origin/main carries"),
-    ("5.0.0.dev10", "5.0.0rc1", 1, "origin/main carries"),
-    ("5.0.0", "5.0.0rc1", 0, "ahead of"),
-    ("5.0.0.post1", "5.0.0", 0, "ahead of"),
-    ("5.0", "5.0.0", 0, "matches"),
-    ("1!1.0", "9.0", 0, "ahead of"),
-    ("5.0+lab.1", "5.0", 0, "ahead of"),
-    ("broken999", "5.0", 1, "UNVERIFIED"),
-    ("5.0", "broken999", 1, "UNVERIFIED"),
-    ("broken999", "broken999", 1, "UNVERIFIED"),
-])
-def test_pep440_version_comparison(monkeypatch, capsys, running, reference, failures, message):
-    module = load_checker()
-    monkeypatch.setattr(module, "_running_version", lambda name: (running, "source"))
-    monkeypatch.setattr(module, "_origin_main_version", lambda path: reference)
-    assert module.verify_against_origin_main([("radia", "source")]) == failures
-    assert message in capsys.readouterr().out
-
-
-def test_missing_version_parser_fails_closed(monkeypatch, capsys):
-    module = load_checker()
-    monkeypatch.setattr(module, "_running_version", lambda name: ("5.0", "source"))
-    monkeypatch.setattr(module, "_origin_main_version", lambda path: "5.0")
-    monkeypatch.setattr(module.release_quad, "_verify_lab_editable", lambda packages: 0)
-
-    def unavailable(version):
-        raise ModuleNotFoundError("No module named 'packaging'")
-
-    monkeypatch.setattr(module, "_release_order", unavailable)
-    assert module.main([]) == 4
-    assert "python -m pip install packaging" in capsys.readouterr().out
-    assert module.main(["--skip-origin-check"]) == 0
-
-
-@pytest.mark.parametrize("running,reference", [(None, "1.4.53"), ("1.4.53", None), (None, None)])
-def test_unknown_version_fails_even_when_editable_path_matches(monkeypatch, capsys, running, reference):
-    """A missing answer must be visible, never counted as agreement."""
-    module = load_checker()
-    monkeypatch.setattr(module, "_running_version", lambda name: (running, None))
-    monkeypatch.setattr(module, "_origin_main_version", lambda path: reference)
-    monkeypatch.setattr(module, "expected_packages", lambda **kwargs: [("radia-mcp", "source")])
-    monkeypatch.setattr(module.release_quad, "_verify_lab_editable", lambda packages: 0)
-    assert module.main([]) == 4
-    assert "UNVERIFIED" in capsys.readouterr().out
-
-
-def test_matching_version_and_path_pass(monkeypatch):
-    module = load_checker()
-    monkeypatch.setattr(module, "_running_version", lambda name: ("1.4.53", "source"))
-    monkeypatch.setattr(module, "_origin_main_version", lambda path: "1.4.53")
-    monkeypatch.setattr(module.release_quad, "_verify_lab_editable", lambda packages: 0)
-    assert module.main([]) == 0
-
-
-@pytest.mark.parametrize("returncode,stdout,expected", [(0, '__version__ = "1.4.53"', "1.4.53"),
-                                                     (1, "", None), (0, "no version", None)])
-def test_reference_git_access_is_scoped_and_missing_data_is_unknown(monkeypatch, returncode, stdout, expected):
-    module = load_checker()
-    def run(command, **kwargs):
-        assert command == ["git", "-c", f"safe.directory={module._REPO.as_posix()}",
-                           "-C", str(module._REPO), "show", "origin/main:file.py"]
-        assert kwargs["encoding"] == "utf-8"
-        return SimpleNamespace(returncode=returncode, stdout=stdout)
-    monkeypatch.setattr(module.subprocess, "run", run)
-    assert module._origin_main_version("file.py") == expected
-
-
-def test_missing_git_is_unknown_not_an_uncaught_exception(monkeypatch):
-    module = load_checker()
-    def missing(*args, **kwargs):
-        raise FileNotFoundError("git")
-    monkeypatch.setattr(module.subprocess, "run", missing)
-    assert module._origin_main_version("file.py") is None
-
-
-def test_skip_origin_check_bypasses_the_comparison(monkeypatch):
-    module = load_checker()
-    monkeypatch.setattr(module.release_quad, "_verify_lab_editable", lambda packages: 0)
-
-    def must_not_run(packages):
-        raise AssertionError("origin/main comparison should have been skipped")
-
-    monkeypatch.setattr(module, "verify_against_origin_main", must_not_run)
-    assert module.main(["--skip-origin-check"]) == 0
-
-
-def test_noneditable_install_cannot_pass(monkeypatch, capsys):
-    module = load_checker().release_quad
-    monkeypatch.setattr(module, "_pip_show", lambda name: {
-        "version": "1", "location": "S:/Radia/01_GitHub"})
-    assert module._verify_lab_editable([("radia", "S:/Radia/01_GitHub")]) == 1
-    output = capsys.readouterr().out
-    assert "NOT EDITABLE" in output
-    assert "Stop-Process" not in output
-
-
-def test_expected_packages_follow_the_record():
-    module = load_checker()
-    assert dict(module.expected_packages()) == RECORDED
-
-
-def test_no_record_is_unverified_not_drift(recorded_intent, monkeypatch, capsys):
-    """Without a record the checker must not invent an expectation."""
-    recorded_intent.unlink()
-    module = load_checker()
-
-    def must_not_run(packages):
-        raise AssertionError("no expectation exists, so nothing can be compared")
-
-    monkeypatch.setattr(module.release_quad, "_verify_lab_editable", must_not_run)
-    assert module.main(["--skip-origin-check"]) == 5
-    out = capsys.readouterr().out
-    assert "UNVERIFIED" in out
-    assert "record-current" in out
-    for forbidden in ("01_GitHub", "pip install -e", "uninstall", "Stop-Process"):
-        assert forbidden not in out
-
-
-def test_explicit_source_root_is_an_expectation_without_a_record(recorded_intent, monkeypatch):
-    recorded_intent.unlink()
-    module = load_checker()
-    seen = {}
-
-    def capture(packages):
-        seen["packages"] = packages
-        return 0
-
-    monkeypatch.setattr(module.release_quad, "_verify_lab_editable", capture)
-    root = Path("S:/Radia/release-quad/x")
-    assert module.main(["--source-root", str(root), "--skip-origin-check"]) == 0
-    assert dict(seen["packages"]) == {
-        "radia": str(root),
-        "cubit-mesh-export": str(root / "packages" / "cubit-mesh-export"),
-        "radia-mcp": str(root / "packages" / "radia-mcp"),
-    }
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["repoint", "--package", "radia", "--source", "{source}", "--reason", "policy test"],
+        ["repoint", "--record-current", "--package", "radia", "--reason", "policy test"],
+        ["repoint", "--rollback", "--package", "radia"],
+    ],
+)
+def test_editable_intent_cli_refuses_mutation_from_lab(
+    intent_file, monkeypatch, tmp_path, capsys, args
+):
+    tool = load(ROOT / "tools" / "editable_intent.py", "editable_intent_lab_refusal")
+    monkeypatch.setattr(tool.platform, "node", lambda: "LAB")
+    source = tmp_path / "source"
+    source.mkdir()
+    argv = [part.format(source=source) for part in args]
+    assert tool.main(argv) == tool.EXIT_PRECONDITION
+    assert "only on 100号機" in capsys.readouterr().out
+    assert not Path(tool.intent_file_path()).exists()

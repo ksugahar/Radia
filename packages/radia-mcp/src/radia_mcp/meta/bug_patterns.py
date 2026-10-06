@@ -489,28 +489,26 @@ PATTERNS: list[dict] = [
     },
     {
         "id": "lab-editable-drift-after-pip-force-reinstall",
-        "title": "`pip install --force-reinstall <package>` from PyPI "
-                 "clobbers LAB's editable install pointer.",
+        "title": "Legacy LAB editable state can be overwritten by a wheel install.",
         "topics": ["release", "lab", "editable"],
         "severity": "medium",
         "first_seen": "2026-04-28",
         "last_seen": "2026-06-01",
-        "what": "After release-quad Phase 8, LAB's "
-                "`pip show radia` no longer says "
-                "'Editable project location: public-safe curated corpus'.  "
-                "Source edits no longer flow to runtime; dev loop is "
-                "broken.",
+        "what": "Historically, LAB used an editable Radia install. Installing "
+                "a wheel replaced that source pointer, so later source edits "
+                "no longer appeared in the running package.",
         "root_cause": "pip install --force-reinstall replaces the "
                       ".pth pointer with a regular install.  Easy "
                       "trap when Phase 8 deploy commands accidentally "
                       "run on LAB.",
-        "detection": "tools/release_quad.py done's LAB-editable "
-                     "gate (POLICY 2026-05-27).",
-        "prevention": "Record the intended source, repoint only the owning "
-                      "package, and verify editable metadata plus a fresh "
-                      "import. Fix forward; never restore an older tree merely "
-                      "because its path was once canonical. radia-mcp uses the "
-                      "LAB/100 release-dual rather than solver Phase 8/9.",
+        "detection": "The retired LAB editable verifier is a notice-only shim; "
+                     "`release_quad.py verify-editable` verifies LAB's wheel "
+                     "and the editable install on 100.",
+        "prevention": "Keep LAB on a verified wheel and use the dedicated "
+                      "development venv on 100 for editable installs. The "
+                      "editable-intent CLI refuses mutation on other hosts. "
+                      "Fix forward; never restore an older tree merely because "
+                      "its path was once canonical.",
         "related": ["docs/maintenance.md",
                     "radia_ngsolve/knowledge/install_deploy.py"],
     },

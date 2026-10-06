@@ -1,4 +1,4 @@
-"""Recorded editable-source intent for the LAB / 100号機 development tier.
+"""Recorded editable-source intent for the 100号機 development tier.
 
 The record answers one question per (host, interpreter, package): which
 source tree is *meant* to be installed editable right now. Verification
@@ -10,9 +10,9 @@ way to change the intent is an explicit ``repoint`` with a reason.
 Layout of the record file (``RADIA_EDITABLE_INTENT_FILE`` or
 ``%ProgramData%\\Radia\\editable-intent.json``)::
 
-    {"schema": "radia.editable-intent.v1", "host": "LAB",
+    {"schema": "radia.editable-intent.v1", "host": "INTEL11",
      "interpreters": {"c:/program files/python312/python.exe": {"packages": {
-         "radia-mcp": {"source": "S:/Radia/release-quad/x/packages/radia-mcp",
+         "radia-mcp": {"source": "W:/00_CAE/Radia/01_GitHub/packages/radia-mcp",
                        "commit": "<40 hex>", "tracked_clean": true,
                        "recorded_at": "...Z", "recorded_by": "user@host",
                        "recorded_via": "repoint", "reason": "...",
@@ -74,6 +74,7 @@ EXIT_PRECONDITION = 2
 EXIT_ACTION = 3
 EXIT_VERIFY = 4
 EXIT_UNVERIFIED = 5
+EDITABLE_DEVELOPMENT_HOST = "intel11"
 
 
 # ------------------------------------------------------------------
@@ -691,6 +692,9 @@ def _cmd_repoint(args) -> int:
         raise SystemExit("--record-current and --rollback are exclusive")
     if args.rollback:
         packages = list(args.package) or list(DEFAULT_PACKAGES)
+        if platform.node().split(".", 1)[0].casefold() != EDITABLE_DEVELOPMENT_HOST:
+            return _emit(args, _host_policy_refusal("rollback"),
+                         "Editable rollback is allowed only on 100号機 (INTEL11).")
         report = rollback(packages, args.reason or "rollback to the previous recorded pointer")
         return _emit(args, report, format_action(report))
     if args.record_current:
@@ -699,15 +703,31 @@ def _cmd_repoint(args) -> int:
         if not args.reason:
             raise SystemExit("--reason is required so the record says why this pointer is intended")
         packages = list(args.package) or list(DEFAULT_PACKAGES)
+        if platform.node().split(".", 1)[0].casefold() != EDITABLE_DEVELOPMENT_HOST:
+            return _emit(args, _host_policy_refusal("record-current"),
+                         "Editable intent recording is allowed only on 100号機 (INTEL11).")
         report = record_current(packages, args.reason, require_pushed=args.require_pushed)
         return _emit(args, report, format_action(report))
     if not args.package or len(args.package) != len(args.source):
         raise SystemExit("repoint needs matching --package/--source pairs")
     if not args.reason:
         raise SystemExit("--reason is required so the record says why this pointer moves")
+    if platform.node().split(".", 1)[0].casefold() != EDITABLE_DEVELOPMENT_HOST:
+        return _emit(args, _host_policy_refusal("repoint"),
+                     "Editable repoint is allowed only on 100号機 (INTEL11).")
     report = repoint(list(zip(args.package, args.source)), args.reason, via=args.via,
                      dry_run=args.dry_run, require_pushed=args.require_pushed)
     return _emit(args, report, format_action(report))
+
+
+def _host_policy_refusal(action: str) -> dict:
+    return {
+        "schema": SCHEMA,
+        "exit_code": EXIT_PRECONDITION,
+        "results": [{"status": "refused", "action": action,
+                     "detail": "editable installs and intent writes are restricted to 100号機 (INTEL11)"}],
+        "note": "No pip command was run and no intent record was changed.",
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
