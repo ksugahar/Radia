@@ -502,8 +502,7 @@ PATTERNS: list[dict] = [
                       "pointer. LAB now intentionally uses a verified wheel; "
                       "that is the supported runtime, not an accidental "
                       "Phase 8 deployment.",
-        "detection": "The retired LAB editable verifier is a notice-only shim; "
-                     "`release_quad.py verify-editable` verifies LAB's wheel "
+        "detection": "`release_quad.py verify-editable` verifies LAB's wheel "
                      "and the editable install on 100.",
         "prevention": "Keep LAB on a verified wheel and use the dedicated "
                       "development venv on 100 for editable installs. The "

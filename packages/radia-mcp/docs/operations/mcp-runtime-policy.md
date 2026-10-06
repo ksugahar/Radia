@@ -99,8 +99,7 @@ selected source to `%ProgramData%\Radia\editable-intent.json`
 actor, time and reason, and appends every change to a log beside it. `repoint`
 refuses other hosts, does not uninstall first and does not stop processes. The
 read-only `release_quad.py verify-editable` command checks LAB's fixed wheel
-and 100's development editable. `tools/verify_lab_editable.py` is retired and
-only directs users to that combined check. A pushed ref is required only for
+and 100's development editable. A pushed ref is required only for
 formal handoff or completion evidence (`repoint --require-pushed`), not for
 routine MCP development.
 
