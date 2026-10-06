@@ -31,7 +31,12 @@ Extension (one extra scalar DOF alpha = the net toroidal current):
   where ``K(Theta)`` is the element-local surface stiffness applied to
   the (jump-carrying) open representation of Theta -- no BEM operator is
   ever assembled on the open mesh (the duplicated cut vertices coincide
-  geometrically and would poison the regular quadrature).
+  geometrically and would poison the regular quadrature). The Neumann
+  trace uses the same closed P1 coefficient space: assemble
+  ``b_i = integral N_i (-H_ring . n_triangle) dS`` by element quadrature,
+  then ``q_Theta = M^-1 b``. Averaged vertex normals do not define this
+  weak trace, especially at creases. Six-by-six Gauss points on a Duffy
+  triangle are used; carrier/mesh convergence remains a validation duty.
 * Closure: Faraday's law on the cut loop (a surface loop),
 
       sum_edges Z_s (n x H_t) . dl  =  -j omega Phi_linked,
@@ -276,6 +281,31 @@ def _ring_H_factory(ring_pts):
         return out
 
     return H_ring
+
+
+def _project_ring_neumann(pts, tris, areas, normals, H_ring, M_inv, *, quadrature_n=6):
+    """L2-project -H_ring.n_triangle into the closed surface P1 space.
+
+    Tensor Gauss on the Duffy triangle has normalized weights summing to
+    one. Batch panels so ring-field evaluation does not allocate all
+    panel/quadrature/carrier pairs at once. ``quadrature_n`` is exposed
+    here for convergence diagnostics; the solve uses six points per axis.
+    """
+    x, w = np.polynomial.legendre.leggauss(quadrature_n)
+    x, w = (x + 1) / 2, w / 2
+    u, v = np.meshgrid(x, x, indexing="ij")
+    wu, wv = np.meshgrid(w, w, indexing="ij")
+    bary = np.stack([1-u, u*(1-v), u*v], axis=-1).reshape(-1, 3)
+    weights = (2*u*wu*wv).ravel()
+    rhs = np.zeros(len(pts))
+    for first in range(0, len(tris), 100):
+        ts = tris[first:first+100]
+        gp = np.einsum("qk,tkd->tqd", bary, pts[ts])
+        field = H_ring(gp.reshape(-1, 3)).reshape(gp.shape)
+        values = -np.einsum("tqd,td->tq", field, normals[first:first+100])
+        local = areas[first:first+100, None] * (values*weights) @ bary
+        np.add.at(rhs, ts.ravel(), local.ravel())
+    return M_inv @ rhs
 
 
 def _theta_by_path_integration(pts_o, tris_o, dup, cut_loop, H_ring,
@@ -587,7 +617,7 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
         pts_o, tris_o, dup, cut, H_ring)
     Theta = Theta.astype(complex)
 
-    qT = -np.einsum('ij,ij->i', H_ring(pts), vnorm)
+    qT = _project_ring_neumann(pts, tris, areas, normals, H_ring, M_inv)
     rK_T = np.zeros(nv, dtype=complex)
     for ti, t in enumerate(tris_o):
         gTh = (gvecs[ti, 0] * Theta[t[0]] + gvecs[ti, 1] * Theta[t[1]]
