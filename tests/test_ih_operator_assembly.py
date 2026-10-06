@@ -115,7 +115,7 @@ def test_panel_zs_snapshot_binds_solve_and_provenance(monkeypatch, tmp_path):
     original = zs.read_bytes()
 
     def capture(workpiece, coil, backend, options, run_dir):
-        assert Path(options.panel_zs_file) == (run_dir/'input-panel-zs.json').resolve()
+        assert Path(options.panel_zs_file) == (run_dir/f'input-panel-zs-{hashlib.sha256(original).hexdigest()}.json').resolve()
         assert Path(options.panel_zs_file).read_bytes() == original
         zs.write_text('{"fixture":"edited during assembly"}')
         return _fake_unit_current(workpiece, coil, backend, options, run_dir)
@@ -125,6 +125,18 @@ def test_panel_zs_snapshot_binds_solve_and_provenance(monkeypatch, tmp_path):
              options=assembly.IHOperatorAssemblyOptions(panel_zs_file=str(zs)))
     assert config['surface_impedance']['file_sha256'] == hashlib.sha256(original).hexdigest()
     assert config['independent_fem_validation']['status'] == 'not-performed'
+    assert config['surface_impedance']['source_file'] == str(zs.resolve())
+    snapshot = Path(config['surface_impedance']['snapshot_file'])
+    assert snapshot.read_bytes() == original
+    saved_config = (tmp_path/'native.json').read_bytes()
+    def fail(*args):
+        raise ValueError('fixture failure')
+    monkeypatch.setattr(assembly, '_solve_unit_current', fail)
+    with pytest.raises(ValueError, match='fixture failure'):
+        assembly.assemble_ih_operators(workpiece, coil, output=tmp_path/'native.json',
+            options=assembly.IHOperatorAssemblyOptions(panel_zs_file=str(zs)))
+    assert snapshot.read_bytes() == original
+    assert (tmp_path/'native.json').read_bytes() == saved_config
 
 
 def test_options_reject_nonphysical_values():

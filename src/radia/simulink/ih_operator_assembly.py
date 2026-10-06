@@ -950,8 +950,14 @@ def assemble_ih_operators(
                 if options.panel_zs_file:
                     # Bind the solve and recorded hash to the same immutable
                     # job input even if the student's original file is edited.
-                    snapshot = run_path / 'input-panel-zs.json'
-                    snapshot.write_bytes(Path(options.panel_zs_file).read_bytes())
+                    panel_source = str(Path(options.panel_zs_file).resolve())
+                    panel_bytes = Path(panel_source).read_bytes()
+                    panel_digest = hashlib.sha256(panel_bytes).hexdigest()
+                    snapshot = run_path / f'input-panel-zs-{panel_digest}.json'
+                    if snapshot.exists() and snapshot.read_bytes() != panel_bytes:
+                        raise ValueError('Panel impedance snapshot hash collision')
+                    if not snapshot.exists():
+                        snapshot.write_bytes(panel_bytes)
                     options = replace(options, panel_zs_file=str(snapshot.resolve()))
                     artifacts.append(snapshot.resolve())
                 print(f"workpiece: {workpiece_path}")
@@ -1051,6 +1057,10 @@ def assemble_ih_operators(
                     contracts,
                     gmsh_files,
                 )
+                if options.panel_zs_file:
+                    config["surface_impedance"]["source_file"] = panel_source
+                    config["surface_impedance"]["snapshot_file"] = options.panel_zs_file
+                    config["physical_parameters"]["panel_zs_file"] = panel_source
                 if options.axisymmetric_thermal_vol:
                     config["geometry"]["thermal_vol"] = str(thermal_source)
                     config["geometry"]["thermal_sha256"] = _sha256(thermal_source)

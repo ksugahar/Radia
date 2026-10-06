@@ -15,6 +15,14 @@ Public docs/notebooks:
 Sources:
   - https://docu.ngsolve.org/latest/i-tutorials/
   - https://forum.ngsolve.org/
+
+Student element-Zs workflow: Geometry Update accepts panel_zs_file, an absolute
+mesh/frequency-bound JSON path (ohm, BND-element-order). Use
+radia.simulink.writeIHPanelImpedance with a full ordered complex vector; centroid
+selection is performed by the caller. P1 weak genus-0 only, constant during each
+linear simulation, with content-hash-triggered rebuild. Independent FEM accuracy
+is separate: independent_fem_validation.status starts as not-performed.
+See docs/induction_heating/SIMULINK_ELEMENT_ZS.md.
 """
 
 from radia_mcp.matrix_solvers.direct_solvers_knowledge import SOLVER_CAPACITY

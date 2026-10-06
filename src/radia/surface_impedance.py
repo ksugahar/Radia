@@ -8,6 +8,13 @@ from dataclasses import dataclass
 import numpy as np
 
 
+def require_legacy_vertex_layout(record):
+    """Legacy visualization/export must never reinterpret triangle fields as vertices."""
+    if record.get('esim_impedance_layout') not in (None, 'legacy-vertex-order'):
+        raise ValueError('This legacy vertex consumer cannot read BND-element-order fields; '
+                         'use the current solver qsurf/Ht artifacts instead')
+
+
 def panel_mesh_identity(mesh):
     """Hash ordered triangle coordinates; vertex renumbering alone is harmless."""
     import hashlib
@@ -94,16 +101,16 @@ def assemble_panel_impedance_stiffness(fes, impedance):
     Gram principle as VIM, in the BIE's scalar potential basis (not VIM modes).
     """
     from ngsolve import BilinearForm, InnerProduct, ds, grad
-    from scipy.sparse import coo_matrix
+    from scipy.sparse import coo_matrix, csr_matrix
     u, v = fes.TnT()
-    matrix = np.zeros((fes.ndof, fes.ndof), dtype=complex)
+    matrix = csr_matrix((fes.ndof, fes.ndof), dtype=complex)
     for imaginary, factor in ((False, 1), (True, 1j)):
         z = impedance.coefficient(fes, imaginary=imaginary)
         form = BilinearForm(fes)
         form += z * InnerProduct(grad(u).Trace(), grad(v).Trace()) * ds
         form.Assemble()
         rows, cols, values = form.mat.COO()
-        matrix += factor * coo_matrix((values, (rows, cols)), shape=matrix.shape).toarray()
+        matrix += factor * coo_matrix((values, (rows, cols)), shape=matrix.shape).tocsr()
     return matrix
 
 

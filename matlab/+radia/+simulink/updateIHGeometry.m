@@ -167,6 +167,15 @@ if ~isempty(stored)
 end
 
 if fresh
+    if assembleFcn == builtInFcn
+        panelPath = string(assemblyOptions.panel_zs_file);
+        panelHash = "";
+        if strlength(panelPath) > 0
+            matches = strcmp(string({fingerprint.files.path}), panelPath);
+            panelHash = string(fingerprint.files(matches).sha256);
+        end
+        radia.simulink.verifyIHPanelImpedanceProvenance(configFile, panelPath, panelHash);
+    end
     % Inputs unchanged -> never re-run the assemble command.  Reloading
     % the configuration is still skipped only when BOTH the artifact
     % hash and the model-workspace revision marker prove the workspace
@@ -222,6 +231,18 @@ if ~isfile(configFile)
     error("radia:simulink:IHGeometryUpdateArtifact", ...
         "The assembler finished but did not write the " + ...
         "configuration file: %s", configFile);
+end
+if assembleFcn == builtInFcn
+    if ~isequal(radia.simulink.fileFingerprint(geometryFiles), fingerprint.files)
+        error("radia:simulink:IHGeometryInputChanged", "Inputs changed during assembly; rebuild again.");
+    end
+    panelPath = string(assemblyOptions.panel_zs_file);
+    panelHash = "";
+    if strlength(panelPath) > 0
+        matches = strcmp(string({fingerprint.files.path}), panelPath);
+        panelHash = string(fingerprint.files(matches).sha256);
+    end
+    radia.simulink.verifyIHPanelImpedanceProvenance(configFile, panelPath, panelHash);
 end
 radia.simulink.configureIHNativeModel(modelName, configFile);
 

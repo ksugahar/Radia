@@ -67,7 +67,7 @@ def test_panel_esim_workflow_preserves_heat_and_panel_identity(tmp_path, monkeyp
             surface = calc._extract_bnd_only_inline(fixture, 'sibc')
             centers = np.array([np.mean([surface.vertices[v.nr].point for v in el.vertices], axis=0)
                                 for el in surface.Elements(ng.BND)])
-            values = z0*(1+.05*centers[:,2]/.0125)
+            values = z0*np.where(centers[:,2]>0, 10., 1.)
             zs_file = tmp_path/'panel-zs.json'
             write_panel_impedance(zs_file, surface, values, frequency_hz=1000)
             args.panel_zs_file = str(zs_file)
@@ -86,6 +86,11 @@ def test_panel_esim_workflow_preserves_heat_and_panel_identity(tmp_path, monkeyp
             np.testing.assert_array_equal(result['esim_per_panel_Z_s_real'], values.real)
             assert result['esim_iterations'] == 1
             assert not result['esim_per_panel']
+            assert result['impedance_model'] == 'specified-panel'
+            assert result['skin_depth_wp_mm'] is None
+            assert result['material_metadata_role'] == 'reference-inputs-only'
+            assert len(result['esim_per_panel_H_t']) == len(values)
+            assert result['Z_s_mean_weighting'] == 'surface-area'
         else:
             assert result['esim_fixed_point_relative_error'] <= args.esim_tol
         assert result['esim_impedance_layout'] == 'BND-element-order'

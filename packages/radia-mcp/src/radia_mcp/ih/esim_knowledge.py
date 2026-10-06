@@ -142,7 +142,7 @@ potential; SIBC enters as a complex Robin coefficient.
 | --esim-max-iter     | 15      | Outer Karl iteration cap |
 | --esim-tol          | 1e-3    | Convergence on max\\|dZ_s\\|/\\|Z_s\\| |
 | --esim-relax        | 0.5     | Karl damping (under-relaxation); lower if oscillation |
-| --esim-per-panel    | False   | Per-DOF Z_s mode (BEM-A path only; requires --wp-bem-backend intree-dense) |
+| --esim-per-panel    | False   | P1 element Z_s (weak genus-0 BEM; dense or HACApK) |
 
 ## Workpiece flags
 
@@ -268,17 +268,23 @@ supported (--esim-per-panel) and operates on per-BND-DOF Z_s.
 
 
 ESIM_USAGE_PER_ELEMENT = """
-# Per-element (per-DOF) Z_s vs scalar Z_s
+# Per-triangle Z_s vs scalar Z_s
 
 ## What's the difference
 
 | Aspect              | Scalar Karl (default) | Per-element Karl (--esim-per-panel) |
 |---------------------|-----------------------|--------------------------------------|
-| Z_s representation  | single complex value  | ndarray[ndof] complex per surface DOF |
-| H_t source          | mesh-RMS of |H_t|     | per-DOF |H_t| from variational form |
-| Cell solver calls per iter | 1               | N_DOF (typically 100-5000) |
+| Z_s representation  | single complex value  | ndarray[n_BND_triangles] complex |
+| H_t source          | mesh-RMS of |H_t|     | per-triangle RMS |grad_S(phi)| |
+| Cell solver calls per iter | 1               | N_BND_triangles |
 | Captures saturation pattern? | NO          | YES |
 | Convergence at default --esim-relax 0.5 | reliable | may fail in deep saturation |
+
+## Historical legacy-vertex examples
+
+The following numerical examples refer to historical unmarked vertex-layout
+artifacts, not the current weighted triangle implementation. They do not certify
+current panel Zs or magnetic-material accuracy.
 
 ## When per-element matters
 
@@ -308,8 +314,8 @@ to dZ < 1e-3 in 15 iter when surface DOFs straddle the BH knee.
 Workarounds (in order of escalating cost):
 
 1. Lower --esim-relax (try 0.3 or 0.2) + raise --esim-max-iter (30-60)
-2. Even at lower relax, may oscillate around 0.07-0.2 dZ_max.  P_wp
-   typically stable to ~1 % despite dZ not reaching tol.
+2. Even at lower relax, may oscillate around 0.07-0.2 dZ_max.  An apparently stable P_wp does not establish fixed-point convergence;
+   current solvers reject a nonconverged result.
 3. **Anderson-type-II acceleration (v4.66.0+)**: enable with
    ``--esim-anderson-m <depth>`` where depth is the history length
    (typical 3-5).  Safeguarded against step-clip violations via
@@ -317,26 +323,20 @@ Workarounds (in order of escalating cost):
    and ``n_restarts`` to the JSON output).  Hits dZ < 1e-3 on
    problems that Picard couldn't close even at relax=0.2.
 
-### Per-DOF |H_t| extraction (v4.67.0+)
+### Current element |H_t| extraction
 
-Per-element Karl needs the tangential H field SAMPLED PER DOF, not
-just an L²-projected scalar.  The current extractor uses a
-triangle-gradient of phi at each DOF:
+`panel_tangential_field_rms` integrates |grad_S(phi)|² on each BND triangle.
+`esim_impedance_layout="BND-element-order"` identifies the current arrays;
+never map these arrays onto vertices. Historical unmarked files are legacy
+vertex data. Use current solver qsurf/Ht SOL artifacts for nodal visualization.
+History uses H_t_per_panel_mean / H_t_per_panel_max.
 
-  H_t_per_dof[k] = -grad_S(phi)|_{vertex k}
+Both dense and HACApK support weighted P1 weak genus-0 panel impedance.
+`--panel-zs-file` supplies fixed mesh-bound element impedances without a Karl
+iteration. The student Geometry Update mask accepts `panel_zs_file`; changing
+its content requires assembly again. `independent_fem_validation.status` is
+`not-performed` until a separate compatible reference has actually been run.
 
-implemented in ``bem_sibc_solver.py::extract_H_t_per_dof_grad`` and
-wired into the calc_inductance.py scalar + per-panel Karl paths
-(lines ~805, ~882).  This replaced the earlier "Laplacian sample"
-(which suffered from corner-vertex bias on the closed surface; see
-commit 630527d4 for the symptom).
-
-## Backend restriction
-
---esim-per-panel requires --wp-bem-backend intree-dense (dense LU
-on the BIE system matrix).  The HACApK ACA + GMRES backend does
-NOT yet support per-DOF Z_s -- scalar only.  Adding HACApK per-DOF
-is roadmap.
 """
 
 
@@ -469,8 +469,8 @@ emit JSON to stdout.  ESIM-specific fields:
     "Z_s_abs_mean": float,       # mean |Z_s[i]| across all DOFs
     "Z_s_abs_max": float,        # max
     "Z_s_abs_min": float,        # min
-    "H_t_per_dof_mean": float,   # mean |H_t| across all DOFs
-    "H_t_per_dof_max": float,    # max
+    "H_t_per_panel_mean": float, # mean triangle RMS |H_t|
+    "H_t_per_panel_max": float,  # max triangle RMS |H_t|
     "dZ_max": float,             # max relative change across DOFs
     "t_solve": float
   }
@@ -498,7 +498,7 @@ ESIM_USAGE_TROUBLESHOOTING = """
 | `--impedance-model esim requires --bh-file`        | ESIM requested without BH     | Pass --bh-file <path> |
 | `BH curve empty / not monotone in H`               | Malformed BH file             | Verify two-column ASCII, ascending H, includes (0, 0) |
 | `ESIM:NOT-CONVERGED after N iter`                  | Karl hit max_iter             | Raise --esim-max-iter; lower --esim-relax |
-| `--esim-per-panel ... wp-bem-backend hacapk`       | per-DOF not on HACApK backend | Use --wp-bem-backend intree-dense |
+| Unsupported element ESIM topology/order | P1 weak genus-0 required | Use a supported case |
 | `cell solver SCIPY_AVAILABLE False`                | scipy missing                 | pip install scipy |
 | Karl converges but P_wp wildly off ref             | wrong --half-thickness        | Use min(R_wp, H_wp/2) for solid bulk |
 | `BIE iv overflow` / NaN seed                       | very high xi (R/delta > 100)  | Cell solver uses thin-skin fallback automatically (v4.46.1+); upgrade radia |

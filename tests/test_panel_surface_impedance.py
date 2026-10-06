@@ -47,8 +47,10 @@ def test_weighted_form_and_local_heat_match_independent_panel_integrals():
         panel = PanelSurfaceImpedance(z)
         actual = assemble_panel_impedance_stiffness(fes, panel)
         expected, areas, gradients = independent_form(points, triangles, z)
-        np.testing.assert_allclose(actual, expected, atol=2e-14)
-        np.testing.assert_allclose(actual, actual.T, atol=1e-14)
+        from scipy.sparse import isspmatrix_csr
+        assert isspmatrix_csr(actual)
+        np.testing.assert_allclose(actual.toarray(), expected, atol=2e-14)
+        np.testing.assert_allclose(actual.toarray(), actual.T.toarray(), atol=1e-14)
         np.testing.assert_allclose(actual @ np.ones(4), 0, atol=2e-14)
         h = np.einsum('tik,ti->tk', gradients, phi[triangles])
         q = .5*z.real*np.sum(abs(h)**2, axis=1)
@@ -76,6 +78,28 @@ def test_panel_layout_is_not_a_nodal_array():
             assemble_panel_impedance_stiffness(ng.H1(mesh, order=1), PanelSurfaceImpedance([1, 2]))
 
 
+def test_different_vertex_and_panel_counts_match_independent_form():
+    points = np.array([[1.,0,0],[-1.,0,0],[0,1.,0],[0,-1.,0],[0,0,1.],[0,0,-1.]])
+    triangles = np.array([[4,0,2],[4,2,1],[4,1,3],[4,3,0],
+                          [5,2,0],[5,1,2],[5,3,1],[5,0,3]])
+    mesh = nm.Mesh(dim=3)
+    face = mesh.Add(nm.FaceDescriptor(surfnr=1, domin=1, bc=1))
+    vertices = [mesh.Add(nm.MeshPoint(nm.Pnt(*p))) for p in points]
+    for tri in triangles:
+        mesh.Add(nm.Element2D(face, [vertices[i] for i in tri]))
+    mesh.SetBCName(0, 'sibc')
+    mesh = ng.Mesh(mesh)
+    with ng.TaskManager():
+        fes = ng.H1(mesh, order=1)
+        assert fes.ndof == 6 and mesh.GetNE(ng.BND) == 8
+        z = np.arange(1.,9.)*(1+2j)
+        actual = assemble_panel_impedance_stiffness(fes, PanelSurfaceImpedance(z))
+        expected, _, _ = independent_form(points, triangles, z)
+        np.testing.assert_allclose(actual.toarray(), expected, atol=2e-13)
+        with pytest.raises(ValueError, match='one value per BND'):
+            assemble_panel_impedance_stiffness(fes, PanelSurfaceImpedance(z[:6]))
+
+
 def test_dense_and_hacapk_source_weighting_and_constant_reduction():
     mesh, _, _ = tetra_surface()
     with ng.TaskManager():
@@ -96,6 +120,12 @@ def test_dense_and_hacapk_source_weighting_and_constant_reduction():
         np.testing.assert_allclose(hacapk['phi_vec'], dense['phi_vec'], rtol=1e-9, atol=1e-9)
         assert hacapk['P_density'] == pytest.approx(dense['P_density'], rel=1e-9)
         scalar = solver.solve(source, .002+.003j, omega)
+        hacapk_scalar = solver.solve_hacapk(source, .002+.003j, omega, tol=1e-11)
+        np.testing.assert_allclose(hacapk_scalar['phi_vec'], scalar['phi_vec'], rtol=1e-9, atol=1e-9)
+        assert not np.iscomplexobj(solver._Minv_K)
+        cached = solver._Minv_K
+        solver.solve_hacapk(source, .003+.001j, omega*2, tol=1e-11)
+        assert solver._Minv_K is cached
         constant = solver.solve(source, PanelSurfaceImpedance(np.full(4, .002+.003j)), omega)
         np.testing.assert_allclose(scalar['phi_vec'], constant['phi_vec'], rtol=1e-12, atol=1e-12)
         assert scalar['P_density'] == pytest.approx(constant['P_density'], rel=1e-12)

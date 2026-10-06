@@ -60,7 +60,10 @@ def _complete_sibc_reaction(magnetic_delta_L, phi_inc, phi, stiffness,
         raise ValueError("Panel reciprocity requires the weighted surface stiffness")
     if not is_panel and weighted_stiffness is not None:
         raise ValueError("Weighted surface stiffness requires tagged panel Z_s")
-    matrix = np.asarray(weighted_stiffness if is_panel else stiffness)
+    from scipy.sparse import issparse
+    matrix = weighted_stiffness if is_panel else stiffness
+    if not issparse(matrix):
+        matrix = np.asarray(matrix)
     if incident.ndim != 1 or total.shape != incident.shape or matrix.shape != (len(total), len(total)):
         raise ValueError("SIBC reciprocity requires matching surface FE vectors and stiffness")
     if not is_panel and np.ndim(Z_s) != 0:
@@ -70,7 +73,7 @@ def _complete_sibc_reaction(magnetic_delta_L, phi_inc, phi, stiffness,
             or I_port == 0 or not np.isfinite(z) or z.real < 0
             or not np.isfinite(magnetic_delta_L)
             or not np.all(np.isfinite(incident)) or not np.all(np.isfinite(total))
-            or not np.all(np.isfinite(matrix))):
+            or not np.all(np.isfinite(matrix.data if issparse(matrix) else matrix))):
         raise ValueError("SIBC reciprocity requires finite fields, passive Z_s, positive frequency and nonzero current")
     return complex(magnetic_delta_L + z / (1j * omega * I_port**2)
                    * (incident @ matrix @ total))
