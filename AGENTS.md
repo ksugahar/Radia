@@ -251,6 +251,14 @@ and cleanup of their job-owned `C:\temp` inputs, outputs, staging, environments 
 
 ## Build And Release
 
+- Build ownership (2026-10-06): 100号機 is the build host. Build numerical
+  solver candidates and release artifacts there from an isolated reviewed
+  checkout using current `Build.ps1`/CMake. LAB owns source development and
+  operation; mdx1/mdx2/hibino consume the same hash-verified built artifacts.
+  Do not route an ad-hoc candidate build to LAB or a compute host merely
+  because it has free resources. CI build jobs remain owned by their declared
+  workflows. This build assignment does not authorize heavy numerical
+  validation on 100号機 or replacement of another session's runtime.
 - Dependency versions live in package metadata and CI; do not duplicate pins
   here.
 - Install MKL from its supported package dependency. Do not bundle MKL or an
