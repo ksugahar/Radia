@@ -163,15 +163,15 @@ solver boundary is a checked `.vol` regardless of the creation route.
 
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
-**POLICY (2026-10-04)**: Radia development and the sole editable install use
-100号機 local-drive checkout (dedicated dev venv).
-LAB is test-only: transfer identified source/inputs/build targets to
-`C:\temp\<job-id>`; return logs and hashes. MCP servers and Cubit/MCP packages
-run or deploy only on LAB/100; other hosts use fixed wheels. Both mdx hosts give CI and preflight priority; hibino is computation-only. Keep heavy validation off 100;
-limit its acceptance to install, import and student-facing smoke checks.
+**POLICY**: **mdx1 and mdx2** are Radia's self-hosted CI and preflight pool.
+100号機 (INTEL11) hosts development, review, integration and the release runtime; LAB is the test
+host (fixed wheels, job-local `C:\temp\<job-id>` inputs). Do not run development suites or heavy validation
+on 100号機; limit its release acceptance to installation, import and student application smoke checks. Both mdx hosts give CI and preflight priority.
 GitHub Actions uses the shared `mdx` label and assigns jobs to an available runner.
 Release-quad requires LAB, 100号機, mdx1, and mdx2 for the same release commit.
-LAB and mdx use verified wheels; never install editable outside 100号機.
+Decision 2026-10-01: editable only on 100号機, in a dedicated local development
+venv for maintainers/students, separate from the release runtime. LAB/mdx use
+verified wheels.
 `cubit-mesh-export` uses its own release-dual to LAB and 100号機; the Radia
 solver release-quad must not install, uninstall, repoint, or version-gate it.
 Do not install or run Cubit on mdx1/mdx2 in either release lane. This boundary
@@ -263,8 +263,8 @@ and cleanup of their job-owned `C:\temp` inputs, outputs, staging, environments 
 
 Use `tools/release_quad.py` and the `release-quad` skill. Publish only when
 CI, exact package hashes, native/MEX/SLX checks, and required machine gates pass
-for the same commit. MCP/Cubit independently migrate LAB to wheels; verify
-fresh imports and live sources.
+for the same commit. MCP/Cubit deploy LAB as wheels; verify fresh imports
+and live sources.
 Before tagging, dispatch `Radia Native Release` on the exact release SHA; `ci-verify` requires its successful native check.
 
 ## Optuna
@@ -288,9 +288,9 @@ radia-mcp owns MATLAB, Simulink, MEX, differential-oracle, performance-gate and 
 - Inspect branches, PRs, and remote main before merge or rebase.
 - Do not finish while required tests, CI, build, or release commands run.
 
-Claude normally stops after a tested local commit and reports branch/SHA. Codex
-owns push, CI, fix-forward, tags, publication, deployment, and `release-quad`,
-unless the user explicitly assigns that work to Claude for the specific task.
+Defaults: Codex implements and validates numerics. Claude reviews, integrates,
+pushes, runs CI, fixes forward, tags, publishes, deploys and owns release gates.
+Reassess roles as tools and results evolve; explicit user assignments prevail.
 
 ## Detailed Guidance
 
