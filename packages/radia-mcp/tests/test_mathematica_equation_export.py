@@ -179,3 +179,28 @@ def test_array_shapes(monkeypatch, tex, ok):
     assert result["ok"] is ok
     if ok:
         assert r"\begin{array}" not in result["tex"]
+
+
+def test_control_characters_rejected_before_kernel(evaluation):
+    result = tools.mathematica_export_equation("x\x00")
+    assert not result["ok"] and result["stage"] == "input"
+    assert evaluation == []
+
+
+def test_multiple_expressions_report_actionable_error(monkeypatch):
+    def evaluate(code, timeout):
+        assert "Length[held] != 1" in code
+        return {
+            "exit_code": 0,
+            "result": json.dumps(
+                {
+                    "ok": False,
+                    "error": "Use one expression; join statements with semicolons or wrap them in Module",
+                }
+            ),
+        }
+
+    monkeypatch.setattr(tools, "mathematica_evaluate", evaluate)
+    result = tools.mathematica_export_equation("a=1\na+1")
+    assert not result["ok"] and result["stage"] == "evaluation"
+    assert "Use one expression" in result["error"]
