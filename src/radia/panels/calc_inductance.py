@@ -1258,7 +1258,8 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     if isinstance(Z_s_wp, np.ndarray):
         progress("BEM",
             f"BIE solve Z_s=ndarray[{Z_s_wp.shape[0]}] "
-            f"(mean|Z_s|={abs(np.mean(Z_s_wp)):.3e}, model=esim per-panel)")
+            f"(mean|Z_s|={abs(np.mean(Z_s_wp)):.3e}, "
+            f"model={'specified-panel' if panel_zs_file else 'esim per-panel'})")
     else:
         progress("BEM",
             f"BIE solve Z_s={Z_s_wp:.3e} (model={args.impedance_model})")
@@ -1543,7 +1544,12 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     # Report mean Re/Im for the array case to keep the JSON schema
     # backward-compatible; full array goes under esim_per_panel_Zs.
     if isinstance(Z_s_wp, np.ndarray):
-        Z_s_mean = complex(np.mean(Z_s_wp))
+        panel_areas = np.array([
+            .5*np.linalg.norm(np.cross(
+                np.array(wp_mesh.vertices[el.vertices[1].nr].point)-np.array(wp_mesh.vertices[el.vertices[0].nr].point),
+                np.array(wp_mesh.vertices[el.vertices[2].nr].point)-np.array(wp_mesh.vertices[el.vertices[0].nr].point)))
+            for el in wp_mesh.Elements(_BND)])
+        Z_s_mean = complex(np.average(Z_s_wp, weights=panel_areas))
         Z_s_real_out = float(Z_s_mean.real)
         Z_s_imag_out = float(Z_s_mean.imag)
         per_panel_block = {
@@ -1556,14 +1562,12 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             "esim_per_panel_Z_s_real": Z_s_wp.real.tolist(),
             "esim_per_panel_Z_s_imag": Z_s_wp.imag.tolist(),
         }
-        # Save final per-panel |H_t| at convergence (only when per-panel
-        # mode was active and the final re-solve completed).
-        try:
-            if H_t_per_final is not None:
-                per_panel_block["esim_per_panel_H_t"] = (
-                    H_t_per_final.tolist())
-        except NameError:
-            pass
+        per_panel_block["esim_per_panel_H_t"] = panel_tangential_field_rms(
+            bem.fes, res_bem["phi_vec"]).tolist()
+        per_panel_block["Z_s_mean_weighting"] = "surface-area"
+        if panel_zs_file:
+            per_panel_block["material_metadata_role"] = "reference-inputs-only"
+
     else:
         Z_s_real_out = float(Z_s_wp.real)
         Z_s_imag_out = float(Z_s_wp.imag)
@@ -1748,8 +1752,8 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         "wp_gmres_info": int(info),
         "Z_s_wp_real": Z_s_real_out,
         "Z_s_wp_imag": Z_s_imag_out,
-        "skin_depth_wp_mm": float(delta_wp * 1e3),
-        "impedance_model": args.impedance_model,
+        "skin_depth_wp_mm": None if panel_zs_file else float(delta_wp * 1e3),
+        "impedance_model": "specified-panel" if panel_zs_file else args.impedance_model,
         "esim_iterations": int(n_iter_done),
         "esim_converged": bool(esim_converged),
         "esim_fixed_point_relative_error": esim_fixed_point_error,
@@ -1967,7 +1971,7 @@ def _assemble_full_output(args, coil_data, wp_data):
     # Propagate per-panel block (esim_per_panel, esim_per_panel_Z_s_real/imag,
     # esim_per_panel_H_t) — emitted by _solve_workpiece_weak_coupled when
     # --esim-per-panel is set.
-    for key in ("esim_per_panel", "panel_zs_file", "esim_impedance_layout", "esim_per_panel_centroids",
+    for key in ("Z_s_mean_weighting", "material_metadata_role", "esim_per_panel", "panel_zs_file", "esim_impedance_layout", "esim_per_panel_centroids",
                 "esim_per_panel_Z_s_real",
                 "esim_per_panel_Z_s_imag",
                 "esim_per_panel_H_t"):
@@ -2610,6 +2614,9 @@ def run_inductance(args):
     # to drive the coil EFIE and a workpiece to couple to -- fail fast on a
     # bad contract before the expensive coil solve.
     if args.coupling_mode == "strong":
+        if args.impedance_model != "sibc" or args.esim_per_panel:
+            return {"status": "error", "error":
+                    "Strong coupling supports uniform linear SIBC only; ESIM is unsupported."}
         if args.coil_solver not in ("bem-a", "peec"):
             return {"status": "error",
                     "error": f"--coupling-mode strong supports --coil-solver "

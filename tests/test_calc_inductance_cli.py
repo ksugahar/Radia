@@ -13,3 +13,15 @@ def test_help_renders_without_argparse_percent_interpolation_failure():
     # substring made this test depend on how many options precede it.
     assert re.search(r"\+25-30%\s+over-\s*estimate", help_text)
     assert "--wp-loop-dof" in help_text
+
+
+def test_strong_esim_rejected_before_coil_solve(monkeypatch):
+    args = calc_inductance.build_argparser().parse_args([
+        '--coil-solver','peec','--frequency','1000','--sigma','5.8e7',
+        '--coil-step','not-read.step','--vol','not-read.vol',
+        '--coupling-mode','strong','--impedance-model','esim'])
+    monkeypatch.setattr(calc_inductance, '_solve_coil_peec',
+                        lambda *_: (_ for _ in ()).throw(AssertionError('coil accessed')))
+    result = calc_inductance.run_inductance(args)
+    assert result['status'] == 'error'
+    assert 'ESIM is unsupported' in result['error']

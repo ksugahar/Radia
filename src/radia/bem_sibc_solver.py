@@ -596,7 +596,10 @@ class ScalarBIESIBCSolver:
                 raise ValueError("Panel Z_s requires positive finite frequency")
         else:
             Z_s = _uniform_surface_impedance(Z_s, ndof)
-        K_Z = self.impedance_stiffness(Z_s)
+        is_panel = isinstance(Z_s, PanelSurfaceImpedance)
+        K_Z = self.impedance_stiffness(Z_s) if is_panel else None
+        if not is_panel and getattr(self, '_Minv_K', None) is None:
+            self._Minv_K = self.M_inv @ self.K  # real, reused across frequencies/Zs
 
         # RHS: <phi_inc, v>_S
         if isinstance(phi_inc_cf, np.ndarray):
@@ -614,12 +617,14 @@ class ScalarBIESIBCSolver:
 
         gamma_for_log = complex((1 if isinstance(Z_s, PanelSurfaceImpedance) else Z_s)
                                 / (1j * omega * MU_0) if omega > 0 else 0)
-        Minv_Robin = self.M_inv @ K_Z / (1j * omega * MU_0) if omega > 0 else K_Z * 0
         SL_op, DL_op, M_full = self._SL_hacapk, self._DL_hacapk, self.M
 
         def matvec_complex(x_complex):
             # Zs belongs inside the source flux BEFORE the single-layer map.
-            flux = Minv_Robin @ x_complex
+            # Keep panel K_Z sparse and apply M_inv only to its source vector;
+            # no dense complex n*n Robin matrix is needed by GMRES.
+            flux = ((self.M_inv @ (K_Z @ x_complex)) / (1j * omega * MU_0)
+                    if is_panel else gamma_for_log * (self._Minv_K @ x_complex))
             sl = (SL_op.MatVec(np.ascontiguousarray(flux.real))
                   + 1j * SL_op.MatVec(np.ascontiguousarray(flux.imag)))
             dl = (DL_op.MatVec(np.ascontiguousarray(x_complex.real))
@@ -668,7 +673,8 @@ class ScalarBIESIBCSolver:
             H_t_rms = math.sqrt((abs(Hsq_re) + abs(Hsq_im)) / abs(area))
             gf_phi = GridFunction(self.fes)
             gf_phi.vec.FV().NumPy()[:] = phi_vec.real
-        P_density = 0.5 * float(np.vdot(phi_vec, K_Z.real @ phi_vec).real) / abs(area)
+        loss_flux = K_Z.real @ phi_vec if is_panel else Z_s.real * (self.K @ phi_vec)
+        P_density = 0.5 * float(np.vdot(phi_vec, loss_flux).real) / abs(area)
         return {
             'phi': gf_phi,
             'phi_vec': phi_vec,

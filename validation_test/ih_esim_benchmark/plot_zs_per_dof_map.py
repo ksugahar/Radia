@@ -83,6 +83,8 @@ def main():
 
     with open(json_path) as f:
         d = json.load(f)
+    from radia.surface_impedance import require_legacy_vertex_layout
+    require_legacy_vertex_layout(d)
     Zs_re = np.asarray(d["esim_per_panel_Z_s_real"])
     Zs_im = np.asarray(d["esim_per_panel_Z_s_imag"])
     if "esim_per_panel_H_t" not in d:

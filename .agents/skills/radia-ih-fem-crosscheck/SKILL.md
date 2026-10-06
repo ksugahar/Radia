@@ -34,22 +34,31 @@ Frozen-field loss recalculation is sensitivity analysis, not a reference solve.
 
 ## Execute and decide
 
-Develop on 100; run numerical tests in an idle LAB/compute-host job under
-`C:\temp`. LAB uses fixed wheels, never editable installs. Hash transferred
-inputs and recovered results. Preserve borrowed MATLAB/COMSOL sessions. Use
-official MATLAB MCP for tracked Simulink model checks and edits.
+Follow the repository execution policy for host admission, isolated jobs and
+fixed test environments. Hash transferred inputs and recovered results. Preserve
+borrowed sessions. Use official MATLAB MCP for tracked Simulink model edits.
 
 Find the applicable current route in:
 - `src/radia/panels/calc_inductance.py`: weak PEEC/BEM and local surface heat.
-- `src/radia/panels/calc_fem_kelvin.py`: independent FEM-SIBC with coil excitation.
+- `src/radia/panels/calc_fem_kelvin.py`: independent FEM-SIBC with coil excitation
+  and scalar Zs only. It cannot consume element Zs. For specified-panel cases,
+  the same-boundary-law FEM comparison is currently `not-performed` unless an
+  independently implemented weighted FEM route is supplied and checked. Never
+  average the element Zs and call that a matching reference.
 - `src/radia/panels/calc_axisym_volumetric.py`: supported volumetric axisym case.
 - `validation_test/induction_heating/fem_sibc_through_hole.py` and
   `validation_test/eddy_current_analytical_validation/test_ih_sibc_production.py`:
   bounded examples and acceptance contracts, not substitutes for the user's case.
 - `docs/induction_heating/PANEL_ESIM.md`: local Zs and unsupported topology.
 
-Use at least two refinements for each numerical route. Set tolerances before
-viewing results, justified by the case's error budget and refinement evidence.
+Before either solve, write a comparison-plan JSON with case/source hashes,
+commands and a `gates` array. Each gate records `quantity`, `norm`, `region`,
+`normalization`, `absolute_floor`, `tolerance` and its error-budget rationale.
+Include total power relative error, complex port impedance relative error,
+area-weighted q_surf L2 error, complex tangential H L2 error, electromagnetic
+residual, nonlinear mismatch and electromagnetic-to-thermal power conservation.
+Use at least two refinements for each numerical route. Numerical thresholds are
+case-specific; missing thresholds or missing comparable FEM results cannot pass.
 Do not inherit the copper regression tolerance for magnetic materials.
 Compare total workpiece power, reaction loss/port impedance, spatial q_surf and
 complex tangential H on common physical regions or sample points. Preserve phase,

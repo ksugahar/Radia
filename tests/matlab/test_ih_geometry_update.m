@@ -471,3 +471,38 @@ function tf = isAbsolutePath(path)
 tf = ~isempty(regexp(char(path), '^[A-Za-z]:[\\/]', 'once')) || ...
     startsWith(path, "\\");
 end
+
+function testPanelZsRejectsRelativeMissingAndCustomAssembler(testCase)
+[work, cleanupDir, wp, coil, ~, configFile, ~, command] = fixture(); %#ok<ASGLU>
+[model, closer] = freshModel(); %#ok<ASGLU>
+radia.simulink.addIHGeometryUpdateBlock(model);
+configureBlock(model, wp, coil, command, configFile, "on");
+block = model + "/Geometry Update";
+set_param(block, "panel_zs_file", "relative.json");
+verifyError(testCase, @() radia.simulink.updateIHGeometry(model), "radia:simulink:IHPanelZsFile");
+zs = fullfile(work, "zs.json");
+set_param(block, "panel_zs_file", zs);
+verifyError(testCase, @() radia.simulink.updateIHGeometry(model), "radia:simulink:IHPanelZsFile");
+writelines("{}", zs);
+verifyError(testCase, @() radia.simulink.updateIHGeometry(model), "radia:simulink:IHPanelZsAssembler");
+set_param(block, "assemble_command", "", "assemble_fcn", "fixture_assembler");
+verifyError(testCase, @() radia.simulink.updateIHGeometry(model), "radia:simulink:IHPanelZsAssembler");
+end
+
+function testPanelZsProvenanceChecksSnapshotAndClearedInput(testCase)
+work = string(tempname("C:\temp")); mkdir(work);
+cleanup = onCleanup(@() rmdir(work, "s")); %#ok<NASGU>
+file = fullfile(work, "config.json");
+source = fullfile(work, "zs.json");
+config.surface_impedance = struct("mode","specified-panel", ...
+    "file_sha256","snapshot-hash","source_file",source);
+writelines(jsonencode(config), file);
+radia.simulink.verifyIHPanelImpedanceProvenance(file,source,"snapshot-hash");
+verifyError(testCase, @() radia.simulink.verifyIHPanelImpedanceProvenance(file,source,"different-hash"), ...
+    "radia:simulink:IHPanelZsProvenance");
+verifyError(testCase, @() radia.simulink.verifyIHPanelImpedanceProvenance(file,"",""), ...
+    "radia:simulink:IHPanelZsProvenance");
+config.surface_impedance.mode = "uniform-linear";
+writelines(jsonencode(config), file);
+radia.simulink.verifyIHPanelImpedanceProvenance(file,"","");
+end
