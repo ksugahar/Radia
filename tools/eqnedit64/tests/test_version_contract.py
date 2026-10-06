@@ -23,3 +23,4 @@ def test_version_contract():
         assert re.search(rf"^## {re.escape(version)}(?: |$)", changelog.read_text("utf-8"), re.M)
     for readme in [ROOT / "README.md", PACKAGE / "README.md"]:
         assert f"Source version: **{version}**" in readme.read_text("utf-8")
+    assert f"- 対象: Eqnedit64 {version}" in (ROOT / "docs/GUI_SPEC.md").read_text("utf-8")

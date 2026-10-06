@@ -65,7 +65,7 @@ U+00BD or U+00B2 entries of the shipped font. This predicts which font
 not observe which font a running process received. `--self-test` now makes that
 observation: it calls the production chooser, reads the physical face GDI
 resolved at 96, 120, 144, 192, 288, and 384 dpi, and exits 243 naming the
-substitute and DPI if the palette is not drawing in Latin Modern Math.
+substitute and DPI if the palette is not drawing in Eqnedit Math.
 Diagnostics separate physical-face substitution, glyph coverage, and missing
 ink; they do not infer a root cause from the selected fallback alone. The ink
 probe allocates its surface from the selected font's measured line height and
