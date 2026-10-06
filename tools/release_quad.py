@@ -1201,13 +1201,17 @@ def _verify_100_release_wheel():
 
 def _wheel_runtime_probe_code(version, label):
     """Build the target-side check for wheel metadata, import origin and RECORD."""
-    return """import base64, hashlib, importlib.metadata as m, json, pathlib
+    return """import base64, hashlib, importlib.metadata as m, json, pathlib, sysconfig
 import radia
 version = VERSION_PLACEHOLDER
 d = m.distribution('radia')
 assert d.version == version and radia.__version__ == version, 'Radia version mismatch'
 assert not json.loads(d.read_text('direct_url.json') or '{}').get('dir_info', {}).get('editable', False), 'LABEL_PLACEHOLDER must use a wheel'
-assert pathlib.Path(radia.__file__).resolve() == pathlib.Path(d.locate_file('radia/__init__.py')).resolve(), 'Shadowed Radia import'
+origin = pathlib.Path(radia.__file__).resolve()
+assert origin == pathlib.Path(d.locate_file('radia/__init__.py')).resolve(), 'Shadowed Radia import'
+install_paths = sysconfig.get_paths()
+wheel_roots = [pathlib.Path(install_paths[key]).resolve() for key in ('purelib', 'platlib')]
+assert any(origin.is_relative_to(root) for root in wheel_roots), 'Radia wheel must be under site-packages'
 assert d.files, 'Missing wheel RECORD'
 checked = 0
 for f in d.files:

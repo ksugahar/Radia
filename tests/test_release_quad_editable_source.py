@@ -838,21 +838,29 @@ def test_wheel_verifiers_use_remote_record_gate(monkeypatch, verifier, host, lab
 
 
 @pytest.mark.parametrize(
-    "expected_version,shadow,expected_rc,expected_message",
+    "expected_version,shadow,wrong_root,expected_rc,expected_message",
     [
-        ("5.1.0", False, 0, "LAB wheel verified"),
-        ("5.1.1", False, 1, "Radia version mismatch"),
-        ("5.1.0", True, 1, "Shadowed Radia import"),
+        ("5.1.0", False, False, 0, "LAB wheel verified"),
+        ("5.1.1", False, False, 1, "Radia version mismatch"),
+        ("5.1.0", True, False, 1, "Shadowed Radia import"),
+        ("5.1.0", False, True, 1, "Radia wheel must be under site-packages"),
     ],
 )
 def test_wheel_runtime_probe_checks_installed_version_and_import_origin(
-    tmp_path, expected_version, shadow, expected_rc, expected_message
+    tmp_path, expected_version, shadow, wrong_root, expected_rc, expected_message
 ):
     env = _fake_wheel_site(tmp_path, shadow=shadow)
     code = release_quad._wheel_runtime_probe_code(expected_version, "LAB")
+    # Model the interpreter's install scheme without installing a test package
+    # into the real environment; the production probe itself runs unchanged.
+    install_root = str(tmp_path / ("other-site" if wrong_root else "site"))
+    setup = (
+        "import sysconfig\n"
+        f"sysconfig.get_paths = lambda: {{'purelib': {install_root!r}, 'platlib': {install_root!r}}}\n"
+    )
 
     result = subprocess.run(
-        [sys.executable, "-c", code],
+        [sys.executable, "-c", setup + code],
         capture_output=True,
         text=True,
         env=env,
