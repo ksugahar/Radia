@@ -15,6 +15,7 @@
  */
 #include "tex_parser.h"
 #include "math_symbols.h"
+#include "named_colors.h"
 
 #include <algorithm>
 #include <cstring>
@@ -96,6 +97,7 @@ public:
     }
 
     bool depth_exceeded() const { return depthExceeded_; }
+    const std::string& error() const { return error_; }
 
 private:
     /* Stop conditions for a sequence.  A matrix cell also ends at & and \\;
@@ -107,6 +109,7 @@ private:
     size_t p_;
     int depth_ = 0;          /* recursion depth, to bound pathological nesting */
     bool depthExceeded_ = false;
+    std::string error_;
     int literalSpaceDepth_ = 0; /* inside text-like braced arguments */
 
     /* Parse, layout, and emit are all recursive over the tree, so a deeply
@@ -263,6 +266,14 @@ private:
         ++depth_;
         struct Pop { int& d; ~Pop() { --d; } } pop{depth_};
         while (!at_stop(ctx)) {
+            if (peek_command() == "\\color") {
+                skip_space();
+                read_command();
+                auto color = parse_color();
+                color->children = parse_seq(ctx);
+                out.push_back(std::move(color));
+                break;
+            }
             size_t before = p_;
             NodePtr a = parse_atom_with_scripts();
             if (!a) {
@@ -347,7 +358,7 @@ private:
          * into a+b', and a^2{}' into an invalid double superscript. */
         skip_space();
         const bool groupedPrime = literalSpaceDepth_ == 0 &&
-                                  base->tag() == Node::kLine && peek() == '\'';
+                                  (base->tag() == Node::kLine || base->tag() == Node::kGroup) && peek() == '\'';
         if (groupedPrime) {
             sc = std::make_unique<ScriptNode>();
             sc->base.push_back(std::move(base));
@@ -465,6 +476,31 @@ private:
 
     /* ---- commands ------------------------------------------------------- */
 
+    std::unique_ptr<GroupNode> parse_color() {
+        auto group = std::make_unique<GroupNode>();
+        skip_space();
+        if (peek() == '[') {
+            ++p_;
+            std::string model;
+            while (!eof() && peek() != ']') model += s_[p_++];
+            if (peek() == ']') ++p_;
+            if (model != "named") error_ = "Unsupported colour model: " + model;
+        }
+        skip_space();
+        if (peek() != '{') {
+            error_ = "Colour requires a braced name";
+            return group;
+        }
+        ++p_;
+        while (!eof() && peek() != '}') group->colorName += s_[p_++];
+        if (peek() != '}') error_ = "Unclosed colour name";
+        else ++p_;
+        group->colorHex = named_color_hex(group->colorName);
+        if (group->colorHex.empty())
+            error_ = "Unsupported colour name: " + group->colorName;
+        return group;
+    }
+
     NodePtr parse_command() {
         size_t save = p_;
         /* A pasted backslash can land immediately before Unicode text.  TeX
@@ -479,6 +515,17 @@ private:
             return make_char(tf, cp);
         }
         std::string cmd = read_command();
+        if (cmd == "\\color") {
+            error_ = "Colour switch requires an enclosing sequence/group";
+            return nullptr;
+        }
+        if (cmd == "\\textcolor") {
+            auto color = parse_color();
+            skip_space();
+            if (peek() != '{') error_ = "Textcolor requires a braced body";
+            color->children = parse_arg();
+            return color;
+        }
 
         /* Explicit spacing.  These used to be discarded, so `a \quad b` came
          * back as `ab`: spacing an author had deliberately written was lost
@@ -1050,13 +1097,15 @@ bool has_top_level_row_break(const std::string& source) {
 }  // namespace
 
 std::unique_ptr<LineNode> parse_latex(const std::string& latex,
-                                      bool* depthExceeded) {
+                                      bool* depthExceeded, std::string* error) {
     std::string source = strip_delimiters(latex);
     if (has_top_level_row_break(source))
         source = "\\begin{aligned}" + source + "\\end{aligned}";
     TexParser p(std::move(source));
     std::unique_ptr<LineNode> root = p.parse();
     if (depthExceeded) *depthExceeded = p.depth_exceeded();
+    if (error) *error = p.error();
+    if (!p.error().empty()) return nullptr;
     return root;
 }
 

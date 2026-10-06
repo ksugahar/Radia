@@ -1103,7 +1103,8 @@ try {
     $tableSlideNumber = 2
     foreach ($tableTex in @(
         'f=\begin{cases}\int_a^b x\,dx & x>0\end{cases}',
-        '\begin{pmatrix}\int_a^b x\,dx & 0\\0 & 1\end{pmatrix}')) {
+        '\begin{pmatrix}\int_a^b x\,dx & 0\\0 & 1\end{pmatrix}',
+        '\textcolor{red}{\begin{pmatrix}\int_a^b x\,dx & 0\\0 & 1\end{pmatrix}}')) {
         $tableSlideNumber++
         [IO.File]::WriteAllText($tableCliTexInput, $tableTex,
             [Text.UTF8Encoding]::new($false))
@@ -1117,6 +1118,9 @@ try {
             }
         }
         $tableMath = Read-ClipboardUtf16 $mathMlFormat
+        if ($tableTex.StartsWith('\textcolor') -and $tableMath -notmatch 'mathcolor="#FF0000"') {
+            throw 'Registered MathML lost intentional red colour.'
+        }
         if ($tableMath -notmatch '<mtable' -or $tableMath -notmatch '<msubsup><mo[^>]*>&#x222B;') {
             throw 'Table MathML lost its table or integral structure.'
         }
@@ -1128,6 +1132,9 @@ try {
         if ($tableSlide.Shapes.Count -ne 1) { throw 'Table UI Paste did not create one shape.' }
         $presentation.Save()
         $tableXml = Get-SlideXml $pptxOutput $tableSlideNumber
+        if ($tableTex.StartsWith('\textcolor') -and $tableXml -notmatch '(?i)(?:val|rgb)="FF0000"') {
+            throw 'PowerPoint paste lost intentional red colour.'
+        }
         if ($tableXml -notmatch '(?s)<m:nary>.*?<m:sub>.*?<m:t>𝑎</m:t>.*?</m:sub>.*?<m:sup>.*?<m:t>𝑏</m:t>.*?</m:sup>') {
             throw 'PowerPoint table paste lost integral bounds.'
         }

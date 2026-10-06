@@ -2,9 +2,11 @@
 
 ## 3.1.2 — review candidate
 
+- Native named `\color` / `\textcolor`: scoped edit/save, GDI/SVG/EMF/bitmap and MathML colours, explicit unsupported-name/model errors. Named-colour values tested against MathJax; new native render/Office colour acceptance awaits isolated CI and hand testing.
+
 - Preserve registered MathML for single expressions containing cases or matrices.
 - Wait for asynchronous MathJax startup, format palette environment insertion, and reject invalid MathML.
-- Restore mandatory multi-row PowerPoint acceptance; Web/multi-row limits await isolated Office evidence.
+- Restore mandatory multi-row PowerPoint acceptance; Web/multi-row limits require candidate-specific user hand-test evidence.
 - Pin release signer certificates and reconcile the limits-first Office contract.
 - Preserve primes on bare limit/sum/integral operators across save/reopen,
   and reject overlong diagnostic paths before formatting a trace filename.

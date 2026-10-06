@@ -580,3 +580,32 @@ Web版はブラウザーのCF_HTML経路を使う。現在のPowerPointでのWeb
 - APIで検証できる外部アプリ連携は回帰試験へ追加し、人間の視覚・操作感だけを手動試験に残す。
 - 仕様と実装が食い違う場合は、仕様を曖昧なまま実装に合わせず、どちらが
   製品意図かを決めて両方を同時に修正する。
+
+## Native named colours (3.1.2 candidate, UXP-0030)
+
+Both editions accept named `\color{red}{x}` and `\textcolor{red}{x}`.
+`\color` switches the colour of the remainder of the enclosing group, as in
+MathJax: `\color{red}{x}+y` colours both x and y; `{\color{red}x}+y`
+colours only x. `\textcolor` colours only its braced body. Nested colours
+restore the enclosing colour after the inner body.
+
+Native supports 148 CSS named colours and 68 case-sensitive MathJax dvips
+names (for example `green` = #008000, `Green` = #00A64F), and `[named]`.
+Numeric models (`rgb`, `RGB`, `gray`, `HTML`), colour definitions, CSS colour
+expressions and transparent/currentColor are not supported in native 3.1.2;
+an unsupported name/model reports an error and leaves the valid model intact.
+The Web MathJax package has a wider colour-expression/model vocabulary; parity
+is claimed only for the supported named-colour inputs.
+
+Colour remains in the editable group, selection, Undo, normalized TeX save /
+reopen, GDI canvas / bitmap / outline EMF and SVG glyphs and rules. Native
+CF_HTML and registered MathML emit `mathcolor`; Office TeX retains
+`\textcolor`. PowerPoint's actual colour retention on this new candidate
+requires a new user hand test; earlier 02f74f70c H5/H6 results are historical,
+not evidence for the native colour change. The isolated external-paste suite
+also includes a red matrix with integral bounds, but has not been run locally.
+
+Other unknown control words retain the historical permissive parser fallback
+and can still disappear silently. Proposed follow-up: strict diagnostics on
+load/paste/CLI with recoverable source editing, plus a documented compatibility
+allowlist; this broader parser change is not included in UXP-0030.

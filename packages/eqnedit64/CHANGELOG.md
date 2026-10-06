@@ -2,6 +2,8 @@
 
 ## 3.1.2 — review candidate
 
+- Native named `\color` / `\textcolor`: scoped edit/save, GDI/SVG/EMF/bitmap and MathML colours, explicit unsupported-name/model errors. Named-colour values tested against MathJax; new native render/Office colour acceptance awaits isolated CI and hand testing.
+
 - Share the native/Web fixes and pinned release signer policy in the canonical tools changelog.
 
 ## 3.1.1 — 2026-10-05

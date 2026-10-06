@@ -164,6 +164,24 @@ const server = http.createServer((req, res) => {
               primes:(xml.documentElement.textContent.match(/′/g)||[]).length};
     }));
     assert.deepEqual(primeChecks,[1,2,3].map(primes => ({scripts:2,errors:0,primes})));
+    // Compare native RGB constants with the actual independent MathJax package.
+    const colorHeader = fs.readFileSync(path.join(web, "../src/named_colors.h"), "utf8");
+    const colorPairs = [...colorHeader.matchAll(/\{"([A-Za-z]+)", "(#[0-9A-F]{6})"\}/g)]
+      .map(match => [match[1], match[2]]);
+    assert.equal(colorPairs.length, 216);
+    const colors = await page.evaluate(pairs => pairs.map(([name, expected]) => {
+      const xml = new DOMParser().parseFromString(MathJax.tex2mml("\\textcolor{"+name+"}{x}"), "text/xml");
+      const styled = xml.querySelector("[mathcolor]");
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+      context.fillStyle = styled ? styled.getAttribute("mathcolor") : "#000000";
+      return {name, expected:expected.toLowerCase(), actual:context.fillStyle.toLowerCase(),
+              errors:xml.getElementsByTagName("merror").length};
+    }), colorPairs);
+    for (const color of colors) {
+      assert.equal(color.errors, 0, color.name);
+      assert.equal(color.actual, color.expected, color.name);
+    }
     assert.match(result.sans,/MJXTEX-SS/); assert.match(result.fraktur,/MJXTEX-FR/);
     assert(result.strike > 0);
     // The actual click must put selected text in the radicand, not its index.
