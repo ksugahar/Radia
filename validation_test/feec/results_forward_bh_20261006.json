@@ -1,0 +1,126 @@
+{
+  "schema": "radia.forward-BH.acceptance.v1",
+  "runtime_lock_sha256": "368c5b06b5c8d07c815a0418b9cc9b06f2c9a7401fb25481d579db9c2a1d0161",
+  "status": "passed",
+  "purpose": "Synthetic forward BH and existing HDiv installed-wheel acceptance; no customer model data",
+  "hosts": {
+    "mdx2": {
+      "tests": [
+        "validation_test/feec/test_hdiv_forward_bh.py",
+        "validation_test/feec/test_hdiv_vim_demag_solve.py::test_rt1_linear_solve_is_physically_sane",
+        "validation_test/feec/test_hdiv_vim_energy_newton.py::test_default_nonlinear_is_energy_newton_cpp"
+      ],
+      "forward_evidence": [
+        {
+          "passed": true,
+          "linear_coefficient_relative_error": 3.8814698533291244E-10,
+          "falling_M_avg": [
+            -0.009032958450681108,
+            -0.0009380640188170046,
+            9.08319382940333
+          ],
+          "linear_audit": [
+            {
+              "iterations": 18,
+              "true_relative_residual": 1.0070106765901953E-10
+            },
+            {
+              "iterations": 19,
+              "true_relative_residual": 1.249078880315061E-10
+            },
+            {
+              "iterations": 19,
+              "true_relative_residual": 3.1873645020957813E-10
+            },
+            {
+              "iterations": 19,
+              "true_relative_residual": 6.002468154202125E-10
+            }
+          ],
+          "nonlinear_residual": 5.071315348462509E-16
+        }
+      ],
+      "passed": true
+    },
+    "hibino": {
+      "tests": [
+        "validation_test/feec/test_hdiv_forward_bh.py",
+        "validation_test/feec/test_hdiv_vim_demag_solve.py::test_rt1_linear_solve_is_physically_sane",
+        "validation_test/feec/test_hdiv_vim_energy_newton.py::test_default_nonlinear_is_energy_newton_cpp"
+      ],
+      "forward_evidence": [
+        {
+          "passed": true,
+          "linear_coefficient_relative_error": 3.881474132807455E-10,
+          "falling_M_avg": [
+            -0.00903295845068131,
+            -0.0009380640188166463,
+            9.083193829403331
+          ],
+          "linear_audit": [
+            {
+              "iterations": 18,
+              "true_relative_residual": 1.0070093254054699E-10
+            },
+            {
+              "iterations": 19,
+              "true_relative_residual": 1.249077892834404E-10
+            },
+            {
+              "iterations": 19,
+              "true_relative_residual": 3.187367075320455E-10
+            },
+            {
+              "iterations": 19,
+              "true_relative_residual": 6.002471721400879E-10
+            }
+          ],
+          "nonlinear_residual": 5.053024293915485E-16
+        }
+      ],
+      "passed": true
+    },
+    "mdx1": {
+      "tests": [
+        "validation_test/feec/test_hdiv_forward_bh.py",
+        "validation_test/feec/test_hdiv_vim_demag_solve.py::test_rt1_linear_solve_is_physically_sane",
+        "validation_test/feec/test_hdiv_vim_energy_newton.py::test_default_nonlinear_is_energy_newton_cpp"
+      ],
+      "forward_evidence": [
+        {
+          "passed": true,
+          "linear_coefficient_relative_error": 3.8814730176294224E-10,
+          "falling_M_avg": [
+            -0.009032958450681474,
+            -0.0009380640188167035,
+            9.08319382940333
+          ],
+          "linear_audit": [
+            {
+              "iterations": 18,
+              "true_relative_residual": 1.0070092433198809E-10
+            },
+            {
+              "iterations": 19,
+              "true_relative_residual": 1.249075622679901E-10
+            },
+            {
+              "iterations": 19,
+              "true_relative_residual": 3.1873694190564225E-10
+            },
+            {
+              "iterations": 19,
+              "true_relative_residual": 6.002471013276535E-10
+            }
+          ],
+          "nonlinear_residual": 4.996197888239855E-16
+        }
+      ],
+      "passed": true
+    }
+  },
+  "wheel_sha256": "54840a6f2f06ffa88a9eccc6d521ec1eebaf726e545edf671562564d067f8069",
+  "source_commit": "5f2ce931b6c982cb5a3554e9b3630f878d248348",
+  "build_host": "100",
+  "same_numerical_identity": true
+}

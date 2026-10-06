@@ -133,7 +133,7 @@ class _OperatorBackedResult(dict):
 
 _MU0 = 4e-7 * _PI
 _LINEAR_SOLVERS = {"auto", "cpp-cg"}
-_NONLINEAR_SOLVERS = {"energy-newton", "picard-mass-riesz", "picard-energy"}
+_NONLINEAR_SOLVERS = {"energy-newton", "picard-mass-riesz", "picard-energy", "forward-newton"}
 _PRECONDITIONERS = {"auto", "mass-riesz", "jacobi"}
 _LAST_CPP_SOLVE_TIMINGS = {}
 _LAST_NONLINEAR_SOLVE_STATS = {}
@@ -526,6 +526,11 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                  removes the paired seam faces from the physical charge skin;
                  omitting this argument on a mesh with periodic/cyclic labels
                  fails loudly instead of leaving artificial seam charge.
+    nonlinear_solver='forward-newton' retains the forward B(H) law even
+                 where M(H) falls. This route uses NGSolve GMRES with a
+                 SparseCholesky geometry-mass preconditioner, accepts one
+                 isotropic table, and checks linear and nonlinear true
+                 residuals independently. It does not apply inverse-M caps.
     near/far Gram-build tuning:
       ho_far_factor -- the HDiv near/far separation threshold (pass inf to force the all-high-order
                        reference build).
@@ -717,7 +722,8 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
     bh_falling_magnetization = None
     if bh_table is not None:
         _validate_bh_table(bh_table)
-        bh_falling_magnetization = _bh_table_falling_magnetization(bh_table)
+        bh_falling_magnetization = _bh_table_falling_magnetization(
+            bh_table, inverse=nonlinear_solver != "forward-newton")
 
     # AUTO-MATCH: a CURVED mesh (mesh.GetCurveOrder()>=2) needs a Gram built on the SAME curved geometry as
     # B/M_mass, else N=B^T G B (straight Gram) is geometry-inconsistent and the demag DRIFTS with geometry order
@@ -1016,7 +1022,14 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
         if preconditioner != "mass-riesz" and nonlinear_solver != "energy-newton":
             raise NotImplementedError("vim.Solve: nonlinear_solver=%r is wired only with "
                                       "preconditioner='mass-riesz' for now" % (nonlinear_solver,))
-        if nonlinear_solver == "picard-mass-riesz":
+        if nonlinear_solver == "forward-newton":
+            from ._forward_newton import solve_forward_newton
+            m, iters, stats = solve_forward_newton(
+                mesh, fes, bh_table, H, h_ext, tol=newton_inner_tol,
+                maxit=maxit, nl_tol=nl_tol, nl_maxit=nl_maxit)
+            _capture_nonlinear_solve_stats(stats)
+            solver_used = "forward-newton-ngsolve"
+        elif nonlinear_solver == "picard-mass-riesz":
             m, iters = _solve_nonlinear_picard_mass_riesz_cpp(mesh, fes, bh_table, H, n_face, h_ext,
                                                               tol, maxit, nl_maxit, nl_tol)
             solver_used = "picard-mass-riesz-cpp"

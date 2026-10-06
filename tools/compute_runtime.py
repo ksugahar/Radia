@@ -256,6 +256,31 @@ def verify_job(root: Path, job: dict, lock: dict) -> None:
         raise ValueError("Entrypoint must be hashed")
 
 
+def admission_conflicts(processes, root: Path, *, own_pid=None, parent_pid=None):
+    """Ignore only this interpreter and its exact Windows venv launcher."""
+    own_pid = os.getpid() if own_pid is None else own_pid
+    parent_pid = os.getppid() if parent_pid is None else parent_pid
+    active = []
+    for info in processes:
+        if info["pid"] == own_pid:
+            continue
+        name = (info["name"] or "").lower()
+        command = info.get("cmdline") or []
+        if info["pid"] == parent_pid and name == "python.exe":
+            try:
+                job_arg = command[command.index("--job-root") + 1]
+                if ("run" in command and Path(job_arg).resolve() == root.resolve()
+                        and Path(command[0]).resolve() == Path(sys.executable).resolve()
+                        and any(Path(arg).resolve() == Path(__file__).resolve()
+                                for arg in command[1:] if arg.endswith(".py"))):
+                    continue
+            except (ValueError, IndexError, OSError):
+                pass
+        if name in ("runner.worker.exe", "python.exe", "matlab.exe"):
+            active.append(info)
+    return active
+
+
 def run_job(lock: dict, root: Path) -> int:
     report = probe(lock)
     if report["status"] != "passed":
@@ -267,13 +292,10 @@ def run_job(lock: dict, root: Path) -> int:
     verify_job(root, job, lock)
     (root / "runtime.json").write_text(json.dumps(report, indent=2))
     import psutil
-    active = []
-    for process in psutil.process_iter(["pid", "name", "cmdline"]):
-        if process.pid == os.getpid():
-            continue
-        name = (process.info["name"] or "").lower()
-        if name == "runner.worker.exe" or (job.get("workload", "analysis") != "smoke" and name in ("python.exe", "matlab.exe")):
-            active.append(process.info)
+    active = admission_conflicts(
+        [p.info for p in psutil.process_iter(["pid", "name", "cmdline"])], root)
+    if job.get("workload", "analysis") == "smoke":
+        active = [info for info in active if (info["name"] or "").lower() == "runner.worker.exe"]
     if active:
         raise RuntimeError("Compute admission refused: CI/other computation is active: " + json.dumps(active))
     free = psutil.virtual_memory().available
