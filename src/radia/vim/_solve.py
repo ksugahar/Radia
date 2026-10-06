@@ -526,6 +526,11 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                  removes the paired seam faces from the physical charge skin;
                  omitting this argument on a mesh with periodic/cyclic labels
                  fails loudly instead of leaving artificial seam charge.
+    nonlinear_solver='forward-newton' retains the forward B(H) law even
+                 where M(H) falls. This route uses NGSolve GMRES with a
+                 SparseCholesky geometry-mass preconditioner, accepts one
+                 isotropic table, and checks linear and nonlinear true
+                 residuals independently. It does not apply inverse-M caps.
     near/far Gram-build tuning:
       ho_far_factor -- the HDiv near/far separation threshold (pass inf to force the all-high-order
                        reference build).
