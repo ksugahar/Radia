@@ -70,3 +70,15 @@ def test_environment_cannot_inherit_external_mkl_or_source_override(tmp_path, mo
     assert Path(env["MKLROOT"]) == tmp_path.resolve() / "Library"
     assert env["MKL_THREADING_LAYER"] == "TBB"
     assert "PYTHONPATH" not in env
+
+
+def test_memory_includes_windows_interpreter_child():
+    from types import SimpleNamespace
+    class Child:
+        def memory_info(self):
+            return SimpleNamespace(private=1000, rss=800)
+    class Launcher(Child):
+        def children(self, recursive):
+            assert recursive
+            return [Child(), Child()]
+    assert runtime.process_tree_private_bytes(Launcher()) == 3000

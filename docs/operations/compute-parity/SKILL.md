@@ -48,7 +48,7 @@ the `mdx-compute` skill. Never start a detached computation.
 Deploy on each host with its bootstrap Python of the required patch version:
 
 ```powershell
-python C:/temp/compute-stage/compute_runtime.py deploy --lock C:/temp/compute-stage/lock.json --wheelhouse C:/temp/compute-stage/wheelhouse --runtime C:/ProgramData/Radia/compute-runtimes/<first-16-lock-hash>
+python C:/temp/compute-stage/compute_runtime.py deploy --lock C:/temp/compute-stage/lock.json --wheelhouse C:/temp/compute-stage/wheelhouse --runtime C:/ProgramData/Radia/compute-runtimes/<runtime-id-from-lock>
 ```
 
 These versioned virtual environments are maintained runtime deployments,
@@ -62,6 +62,11 @@ must match across hosts. The launcher explicitly sets MKLROOT to the selected
 runtime's absolute Library directory and rejects numerical DLLs loaded outside
 that runtime. Never substitute default `python` for
 the recorded runtime's `Scripts/python.exe`.
+An operation-helper update may reuse `--runtime-id` only with exactly the same
+Python and numerical wheel identity. Different numerical wheels require a new
+runtime. The full lock still changes with the reviewed helper/operation commit,
+and a job with the old full lock is rejected. This avoids reinstalling the
+numerical stack merely to fix operation monitoring or recovery.
 
 ## Admit and execute a job
 
