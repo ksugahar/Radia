@@ -166,7 +166,7 @@ solver boundary is a checked `.vol` regardless of the creation route.
 **POLICY (2026-10-04)**: Radia development and the sole editable install use
 100号機's local-drive checkout (dedicated dev venv, separate from release).
 LAB is test-only: transfer identified source/inputs/build targets to
-`C:	emp\<job-id>`; return logs and hashes. MCP servers and Cubit/MCP packages
+`C:\temp\<job-id>`; return logs and hashes. MCP servers and Cubit/MCP packages
 run or deploy only on LAB/100; other hosts use fixed wheels. mdx1/mdx2 are
 CI/preflight hosts; hibino is computation-only. Keep heavy validation off 100;
 limit its acceptance to install, import and student-facing smoke checks.
