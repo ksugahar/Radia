@@ -52,9 +52,9 @@ this retired override only; it is not added to the four deployment targets.
 
 Decision 2026-10-01 supersedes the older two-editable-host recipe: LAB consumes
 verified wheels; only 100 has a dedicated local editable development venv.
-Keep its release runtime separate from in-progress development. Tool migration
-is in progress: do not run an old LAB editable installer to undo the wheel
-migration. hibino/mdx1/mdx2/LAB are execution hosts; LAB may run high-memory
+Keep its release runtime separate from in-progress development. `verify-editable`
+checks LAB's wheel and 100's editable; `repoint` permits only 100.
+hibino/mdx1/mdx2/LAB are execution hosts; LAB may run high-memory
 tests after checking available memory and active jobs; mdx CI takes priority.
 
 

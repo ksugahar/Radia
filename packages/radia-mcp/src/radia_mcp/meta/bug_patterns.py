@@ -489,29 +489,29 @@ PATTERNS: list[dict] = [
     },
     {
         "id": "lab-editable-drift-after-pip-force-reinstall",
-        "title": "`pip install --force-reinstall <package>` from PyPI "
-                 "clobbers LAB's editable install pointer.",
+        "title": "Legacy LAB editable state can be overwritten by a wheel install.",
         "topics": ["release", "lab", "editable"],
         "severity": "medium",
         "first_seen": "2026-04-28",
         "last_seen": "2026-06-01",
-        "what": "After release-quad Phase 8, LAB's "
-                "`pip show radia` no longer says "
-                "'Editable project location: public-safe curated corpus'.  "
-                "Source edits no longer flow to runtime; dev loop is "
-                "broken.",
-        "root_cause": "pip install --force-reinstall replaces the "
-                      ".pth pointer with a regular install.  Easy "
-                      "trap when Phase 8 deploy commands accidentally "
-                      "run on LAB.",
-        "detection": "For current deployments, verify LAB's non-editable "
+        "what": "Historically, LAB used an editable Radia install. Installing "
+                "a wheel replaced that source pointer. Source edits no longer "
+                "flow to runtime under that former development setup.",
+        "root_cause": "This records the former LAB editable-development "
+                      "setup: a wheel install replaced the source .pth "
+                      "pointer. LAB now intentionally uses a verified wheel; "
+                      "that is the supported runtime, not an accidental "
+                      "Phase 8 deployment.",
+        "detection": "`release_quad.py verify-editable` checks the current "
+                     "LAB wheel and 100 development editable. Verify LAB's non-editable "
                      "wheel, artifact hashes and fresh import. On 100, verify "
                      "the intended editable development source and fresh "
                      "import separately from the fixed-wheel release runtime.",
         "prevention": "The incident above predates LAB's wheel-only policy. "
                       "Only 100 uses editable installs: record its intended "
                       "source before repointing the owning package and verify "
-                      "editable metadata plus a fresh import. On LAB, repair "
+                      "editable metadata plus a fresh import. The editable-intent "
+                      "CLI refuses mutation on other hosts. On LAB, repair "
                       "with the verified current wheel, never an editable "
                       "pointer. Fix forward; never restore an older tree. "
                       "radia-mcp uses its independent LAB wheel / 100 editable "

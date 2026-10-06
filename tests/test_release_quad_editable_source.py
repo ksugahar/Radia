@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import importlib.util
+import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -25,6 +28,39 @@ def _git(repo, *args):
         capture_output=True,
         text=True,
     ).stdout.strip()
+
+
+def _fake_wheel_site(root, *, shadow=False):
+    """Create a tiny Radia wheel install with a valid hash-checked RECORD."""
+    site = root / "site"
+    package = site / "radia"
+    dist_info = site / "radia-5.1.0.dist-info"
+    package.mkdir(parents=True)
+    dist_info.mkdir()
+    files = {
+        "radia/__init__.py": b"__version__ = '5.1.0'\n",
+        "radia-5.1.0.dist-info/METADATA": (
+            b"Metadata-Version: 2.1\nName: radia\nVersion: 5.1.0\n"
+        ),
+    }
+    for relative, content in files.items():
+        (site / relative).write_bytes(content)
+    rows = []
+    for relative, content in files.items():
+        digest = base64.urlsafe_b64encode(hashlib.sha256(content).digest())
+        rows.append(f"{relative},sha256={digest.rstrip(b'=').decode()},{len(content)}")
+    rows.append("radia-5.1.0.dist-info/RECORD,,")
+    (dist_info / "RECORD").write_text("\n".join(rows) + "\n", encoding="utf-8")
+    paths = [site]
+    if shadow:
+        shadow_root = root / "shadow"
+        shadow_package = shadow_root / "radia"
+        shadow_package.mkdir(parents=True)
+        (shadow_package / "__init__.py").write_bytes(files["radia/__init__.py"])
+        paths.insert(0, shadow_root)
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join(str(path) for path in paths)
+    return env
 
 
 def test_release_quad_git_helper_trusts_only_its_active_worktree(monkeypatch):
@@ -82,17 +118,12 @@ def test_phase8_routes_explicit_hosts_independently_of_controller(monkeypatch, c
     assert calls == expected
 
 
-def test_default_editable_roots_are_fixed_release_checkouts(monkeypatch):
-    monkeypatch.delenv(release_quad.EDITABLE_REPO_LAB_ENV, raising=False)
+def test_default_editable_root_is_the_100_release_checkout(monkeypatch):
     monkeypatch.delenv(release_quad.EDITABLE_REPO_100_ENV, raising=False)
     monkeypatch.setattr(release_quad, "_radia_version", lambda: "5.1.0")
     monkeypatch.setattr(release_quad, "_release_commit", lambda: "c" * 40)
-
-    assert release_quad._editable_repo_lab() == (
-        "S:/Radia/release-quad/v5.1.0-ccccccccc")
     assert release_quad._editable_repo_100() == (
         r"W:\00_CAE\Radia\release-quad\v5.1.0-ccccccccc")
-
 
 def test_editable_runtime_gate_requires_exact_native_manifest():
     gate = release_quad.EDITABLE_RELEASE_VERIFY
@@ -105,34 +136,29 @@ def test_editable_runtime_gate_requires_exact_native_manifest():
     assert '"locked-old" in lowered' in gate
 
 
-def test_deployment_plan_is_solver_only_and_does_not_probe_runtime(
-        monkeypatch, capsys):
+def test_deployment_plan_uses_lab_wheel_and_100_development_editable(monkeypatch, capsys):
     monkeypatch.setattr(release_quad, "_release_commit", lambda: "c" * 40)
-    import json
-
     monkeypatch.setattr(release_quad, "run", lambda *a, **k: pytest.fail("not a dry run"))
     monkeypatch.setattr(release_quad, "_pip_show", lambda *a: pytest.fail("runtime inference"))
     assert release_quad.cmd_deployment_plan(None) == 0
-    plans = json.loads(capsys.readouterr().out)
-    assert [p["solver_source"] for p in plans] == [
-        release_quad._editable_repo_lab(), release_quad._editable_repo_100()]
-    assert all(p["solver_action"] == "verify-and-install" for p in plans)
-    assert all(p["independent_packages"] == "unchanged" for p in plans)
-    assert all(not p["verified"] for p in plans)
+    plans = __import__("json").loads(capsys.readouterr().out)
+    assert [plan["solver_runtime"] for plan in plans] == [
+        "verified-wheel", "release-wheel+development-editable"]
+    assert "development_source" not in plans[0]
+    assert plans[1]["development_source"] == release_quad._editable_repo_100()
+    assert all(plan["solver_action"] == "verify-and-install" for plan in plans)
+    assert all(plan["independent_packages"] == "unchanged" for plan in plans)
+    assert all(not plan["verified"] for plan in plans)
     assert all("mcp" not in key and "cubit" not in key
                for plan in plans for key in plan)
-
 
 @pytest.mark.parametrize("rc", [0, 2, 4])
 def test_lab_deploy_routes_wheel_to_lab_and_propagates_failure(monkeypatch, rc):
     calls = []
     monkeypatch.setattr(release_quad, "_deploy_pypi",
                         lambda host, label: calls.append((host, label)) or rc)
-    monkeypatch.setattr(release_quad, "_record_release_intent_lab",
-                        lambda *_: pytest.fail("LAB must not acquire editable intent"))
     assert release_quad._deploy_lab() == rc
     assert calls == [("102", "LAB")]
-
 
 @pytest.mark.parametrize("drift", [0, 1])
 def test_remote_deploy_changes_only_radia(monkeypatch, drift):
@@ -180,48 +206,25 @@ def test_remote_deploy_changes_only_radia(monkeypatch, drift):
         assert calls[-1] == ("record", "100", "W:/release")
 
 
-def test_done_checks_only_solver_editable_roots(monkeypatch, tmp_path):
-    monkeypatch.setattr(release_quad, "_release_commit", lambda: "c" * 40)
+def test_done_checks_lab_wheel_and_100_editable_only(monkeypatch, tmp_path):
     from argparse import Namespace
-
-    # `done` takes its source from the recorded editable intent and refuses
-    # when there is neither a record nor a release override -- no default tree
-    # is assumed. Record one in an isolated file so this test measures which
-    # roots are checked, not what this machine happens to have recorded.
-    intent_file = tmp_path / "editable-intent.json"
-    monkeypatch.setenv(release_quad.editable_intent.INTENT_FILE_ENV,
-                       str(intent_file))
-    monkeypatch.delenv(release_quad.EDITABLE_REPO_LAB_ENV, raising=False)
-    monkeypatch.delenv(release_quad.EDITABLE_REPO_100_ENV, raising=False)
-    intent_module = release_quad.editable_intent
-    data = intent_module.load_intent(intent_file)
-    intent_module.set_entry(data, "radia", {
-        "source": release_quad._editable_repo_lab(), "commit": None,
-        "tracked_clean": None, "recorded_at": "2026-09-21T00:00:00Z",
-        "recorded_by": "test", "recorded_via": "test", "reason": "fixture",
-        "pushed_refs": None, "previous": None})
-    intent_module.save_intent(data, intent_file)
-
+    monkeypatch.setattr(release_quad, "_release_commit", lambda: "c" * 40)
     calls = []
-    monkeypatch.setattr(release_quad, "cmd_preflight", lambda a: 0)
-    # the retired-override gate reaches mdx1/mdx2/hibino over SSH; stub it
-    # like every other gate so this test still measures the editable roots
-    monkeypatch.setattr(release_quad, "cmd_temp_shadows", lambda a: 0)
+    monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: 0)
+    monkeypatch.setattr(release_quad, "cmd_temp_shadows", lambda _args: 0)
     monkeypatch.setattr(release_quad, "_release_head", lambda: "c" * 40)
-    monkeypatch.setattr(release_quad, "_verify_local_release_source", lambda root, sha: calls.append((root, sha)) or 0)
+    monkeypatch.setattr(release_quad, "_verify_local_release_source",
+                        lambda root, sha: calls.append((root, sha)) or 0)
     monkeypatch.setattr(release_quad, "_verify_head_release_tag", lambda: calls.append("tag") or 0)
-    monkeypatch.setattr(release_quad, "_verify_lab_wheel", lambda: calls.append(dict(release_quad._lab_editable_packages())) or 0)
-    monkeypatch.setattr(release_quad, "_verify_100_release_wheel", lambda: calls.append("100-release") or 0)
-    monkeypatch.setattr(release_quad, "_verify_100_editable", lambda: calls.append(dict(release_quad._remote_100_editable_packages())) or 0)
-    monkeypatch.setattr(release_quad, "cmd_phase9", lambda a: 4)
+    monkeypatch.setattr(release_quad, "_verify_lab_wheel", lambda: calls.append("lab-wheel") or 0)
+    monkeypatch.setattr(release_quad, "_verify_100_release_wheel",
+                        lambda: calls.append("100-release") or 0)
+    monkeypatch.setattr(release_quad, "_verify_100_editable",
+                        lambda: calls.append("100-editable") or 0)
+    monkeypatch.setattr(release_quad, "cmd_phase9", lambda _args: 4)
     assert release_quad.cmd_done(Namespace(simulink_package=None)) == 4
-    assert calls[0] == (str(release_quad.REPO), "c" * 40)
-    assert calls[1] == "tag"
-    assert calls[2] == {"radia": release_quad._editable_repo_lab()}
-    assert calls[3] == "100-release"
-    assert calls[4] == {"radia": release_quad._editable_repo_100()}
-
-
+    assert calls == [(str(release_quad.REPO), "c" * 40), "tag", "lab-wheel",
+                     "100-release", "100-editable"]
 
 def test_done_requires_simulink_candidate_for_5_1_and_newer(monkeypatch, tmp_path):
     monkeypatch.setattr(release_quad, "_release_commit", lambda: "c" * 40)
@@ -326,20 +329,6 @@ def test_restore_editable_is_a_tombstone_that_restores_nothing(monkeypatch, caps
     assert not events
 
 
-def test_editable_release_roots_can_target_one_clean_nas_worktree(monkeypatch):
-    monkeypatch.setenv(
-        release_quad.EDITABLE_REPO_LAB_ENV,
-        "S:/Radia/release-quad/Radia-v4.95.46/",
-    )
-    monkeypatch.setenv(
-        release_quad.EDITABLE_REPO_100_ENV,
-        "W:\\00_CAE\\Radia\\release-quad\\Radia-v4.95.46\\",
-    )
-
-    assert release_quad._lab_editable_packages() == [
-        ("radia", "S:/Radia/release-quad/Radia-v4.95.46")]
-    assert release_quad._remote_100_editable_packages() == [
-        ("radia", r"W:\00_CAE\Radia\release-quad\Radia-v4.95.46")]
 
 
 def test_unc_normalization_covers_canonical_and_release_worktrees():
@@ -367,7 +356,7 @@ def test_unc_normalization_covers_canonical_and_release_worktrees():
 
 
 def test_editable_probe_resolves_git_inside_the_target_process():
-    probe = release_quad.CROSS_MACHINE_PROBE_LAB
+    probe = release_quad.CROSS_MACHINE_PROBE_100_EDITABLE
 
     assert 'git_exe = shutil.which("git")' in probe
     assert "[git_exe," in probe
@@ -641,73 +630,44 @@ def test_remote_deploy_checks_exact_source_before_install(monkeypatch):
     assert "cubit-mesh-export" not in script
 
 
-def test_done_keeps_exact_verified_editables_after_all_gates(monkeypatch, tmp_path):
-    monkeypatch.setenv(release_quad.EDITABLE_REPO_LAB_ENV, str(tmp_path))
+def test_done_keeps_lab_wheel_and_100_editable_checks_after_all_gates(monkeypatch):
     calls = []
     monkeypatch.setattr(release_quad, "cmd_temp_shadows", lambda _args: calls.append("shadows") or 0)
     monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: calls.append("preflight") or 0)
     monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
-    monkeypatch.setattr(
-        release_quad,
-        "_verify_local_release_source",
-        lambda _repo, _sha: calls.append("source") or 0,
-    )
-    monkeypatch.setattr(
-        release_quad,
-        "_verify_head_release_tag",
-        lambda: calls.append("tag") or 0,
-    )
+    monkeypatch.setattr(release_quad, "_verify_local_release_source",
+                        lambda _repo, _sha: calls.append("source") or 0)
+    monkeypatch.setattr(release_quad, "_verify_head_release_tag", lambda: calls.append("tag") or 0)
     monkeypatch.setattr(release_quad, "_verify_lab_wheel", lambda *_args: calls.append("lab") or 0)
     monkeypatch.setattr(release_quad, "_verify_100_release_wheel",
                         lambda *_args: calls.append("100-release") or 0)
     monkeypatch.setattr(release_quad, "_verify_100_editable", lambda *_args: calls.append("100") or 0)
     monkeypatch.setattr(release_quad, "cmd_phase9", lambda _args: calls.append("phase9") or 0)
-    monkeypatch.setattr(
-        release_quad,
-        "_run_retired_standalone_pyside_guard",
-        lambda: calls.append("guard") or 0,
-    )
+    monkeypatch.setattr(release_quad, "_run_retired_standalone_pyside_guard",
+                        lambda: calls.append("guard") or 0)
     monkeypatch.setattr(release_quad, "_check_main_synced", lambda **_kwargs: calls.append("main") or 0)
-    monkeypatch.setattr(
-        release_quad, "_verify_simulink_candidate_state",
-        lambda package: calls.append(("simulink", package)) or 0)
-    monkeypatch.setattr(
-        release_quad, "_verify_final_pip_checks",
-        lambda: calls.append("pip-check") or 0)
-
+    monkeypatch.setattr(release_quad, "_verify_simulink_candidate_state",
+                        lambda package: calls.append(("simulink", package)) or 0)
+    monkeypatch.setattr(release_quad, "_verify_final_pip_checks", lambda: calls.append("pip-check") or 0)
     args = type("Args", (), {"simulink_package": "candidate.zip"})()
     assert release_quad.cmd_done(args) == 0
-    assert calls == [
-        "preflight", "source", "shadows", "tag", "lab", "100-release", "100", "phase9",
-        "guard", "main",
-        ("simulink", "candidate.zip"), "pip-check"
-    ]
+    assert calls == ["preflight", "source", "shadows", "tag", "lab", "100-release", "100",
+                     "phase9", "guard", "main", ("simulink", "candidate.zip"), "pip-check"]
 
-
-
-def test_done_stops_before_machine_checks_when_active_source_is_stale(monkeypatch, tmp_path):
-    monkeypatch.setenv(release_quad.EDITABLE_REPO_LAB_ENV, str(tmp_path))
+def test_done_stops_before_machine_checks_when_active_source_is_stale(monkeypatch):
     calls = []
     monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: calls.append("preflight") or 0)
     monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
-    monkeypatch.setattr(
-        release_quad,
-        "_verify_local_release_source",
-        lambda _repo, _sha: calls.append("source") or 4,
-    )
-
+    monkeypatch.setattr(release_quad, "_verify_local_release_source",
+                        lambda _root, _sha: calls.append("source") or 4)
     def unexpected_machine_check(*_args, **_kwargs):
         raise AssertionError("machine checks must not run from a stale source")
-
     monkeypatch.setattr(release_quad, "_verify_lab_wheel", unexpected_machine_check)
     monkeypatch.setattr(release_quad, "_verify_100_release_wheel", unexpected_machine_check)
     monkeypatch.setattr(release_quad, "_verify_100_editable", unexpected_machine_check)
-
     args = type("Args", (), {"simulink_package": None})()
     assert release_quad.cmd_done(args) == 4
     assert calls == ["preflight", "source"]
-
-
 
 def test_ci_check_runs_use_latest_attempt_for_each_name(monkeypatch):
     runs = {
@@ -847,7 +807,7 @@ def test_native_evidence_must_succeed_even_when_other_checks_are_selected(
     assert f"{release_quad.RELEASE_CHECK_RUN}: {conclusion}" in message
 
 
-@pytest.mark.parametrize("host", ["lab", "100"])
+@pytest.mark.parametrize("host", ["100"])
 def test_explicit_editable_root_does_not_resolve_controller_version_tag(monkeypatch, host):
     env = getattr(release_quad, "EDITABLE_REPO_" + host.upper() + "_ENV")
     monkeypatch.setenv(env, "C:/release-quad/v5.1.0-ccccccccc/")
@@ -875,3 +835,37 @@ def test_wheel_verifiers_use_remote_record_gate(monkeypatch, verifier, host, lab
     assert "d.files" in code and "actual == f.hash.value" in code
     assert "Shadowed Radia import" in code and f"{label} must use a wheel" in code
     assert "'5.1.0'" in code
+
+
+@pytest.mark.parametrize(
+    "expected_version,shadow,wrong_root,expected_rc,expected_message",
+    [
+        ("5.1.0", False, False, 0, "LAB wheel verified"),
+        ("5.1.1", False, False, 1, "Radia version mismatch"),
+        ("5.1.0", True, False, 1, "Shadowed Radia import"),
+        ("5.1.0", False, True, 1, "Radia wheel must be under site-packages"),
+    ],
+)
+def test_wheel_runtime_probe_checks_installed_version_and_import_origin(
+    tmp_path, expected_version, shadow, wrong_root, expected_rc, expected_message
+):
+    env = _fake_wheel_site(tmp_path, shadow=shadow)
+    code = release_quad._wheel_runtime_probe_code(expected_version, "LAB")
+    # Model the interpreter's install scheme without installing a test package
+    # into the real environment; the production probe itself runs unchanged.
+    install_root = str(tmp_path / ("other-site" if wrong_root else "site"))
+    setup = (
+        "import sysconfig\n"
+        f"sysconfig.get_paths = lambda: {{'purelib': {install_root!r}, 'platlib': {install_root!r}}}\n"
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-c", setup + code],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=30,
+    )
+
+    assert result.returncode == expected_rc
+    assert expected_message in result.stdout + result.stderr

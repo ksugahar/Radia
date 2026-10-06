@@ -22,7 +22,6 @@ def isolated_record(tmp_path, monkeypatch):
     """Never read the machine's record or the release overrides from the environment."""
     path = tmp_path / "editable-intent.json"
     monkeypatch.setenv(intent.INTENT_FILE_ENV, str(path))
-    monkeypatch.delenv(release_quad.EDITABLE_REPO_LAB_ENV, raising=False)
     monkeypatch.delenv(release_quad.EDITABLE_REPO_100_ENV, raising=False)
     return path
 
@@ -42,72 +41,18 @@ def test_remote_verify_ships_the_intent_tool_as_the_script():
     assert "//192.168.121.100/work/00_cae/radia/" in release_quad.REMOTE_EDITABLE_VERIFY
 
 
-def test_expected_lab_packages_come_from_the_record_unless_overridden(isolated_record, monkeypatch):
-    assert release_quad._expected_lab_editable_packages() == [
-        ("radia", None), ("cubit-mesh-export", None), ("radia-mcp", None),
-        ("mcp-server-document", None),
-    ]
-    _record(isolated_record, "radia-mcp", "S:/Radia/release-quad/x/packages/radia-mcp")
-    assert dict(release_quad._expected_lab_editable_packages())["radia-mcp"] == (
-        "S:/Radia/release-quad/x/packages/radia-mcp")
-
-    monkeypatch.setenv(release_quad.EDITABLE_REPO_LAB_ENV, "S:/Radia/release-quad/override")
-    assert dict(release_quad._expected_lab_editable_packages())["radia"] == (
-        "S:/Radia/release-quad/override")
 
 
-def test_unrecorded_package_is_unverified_not_drift_and_gets_no_target(monkeypatch, capsys):
-    monkeypatch.setattr(release_quad, "_pip_show", lambda name: {
-        "version": "1.4.53", "location": "site-packages",
-        "editable project location": "S:/Radia/release-quad/x/packages/radia-mcp"})
-    monkeypatch.setattr(release_quad, "_fresh_import_origin",
-                        lambda name: "S:/Radia/release-quad/x/packages/radia-mcp/src/radia_mcp/__init__.py")
-    report = {}
-    assert release_quad._verify_lab_editable([("radia-mcp", None)], report) == 1
-    assert report == {"ok": 0, "drift": 0, "unverified": 1, "missing": 0}
-    out = capsys.readouterr().out
-    assert "UNVERIFIED" in out
-    assert "record-current" in out
-    for forbidden in ("01_GitHub", "pip install -e", "uninstall", "Stop-Process", "2026-05-27"):
-        assert forbidden not in out
 
 
-def test_drift_hint_names_repoint_and_no_default_target(monkeypatch, capsys):
-    monkeypatch.setattr(release_quad, "_pip_show", lambda name: {
-        "version": "1.4.53", "location": "site-packages",
-        "editable project location": "S:/Radia/release-quad/x/packages/radia-mcp"})
-    monkeypatch.setattr(release_quad, "_fresh_import_origin", lambda name: None)
-    report = {}
-    assert release_quad._verify_lab_editable(
-        [("radia-mcp", "S:/Radia/release-quad/y/packages/radia-mcp")], report) == 1
-    assert report["drift"] == 1 and report["unverified"] == 0
-    out = capsys.readouterr().out
-    assert "DRIFT" in out
-    assert "repoint --package <pkg> --source <intended>" in out
-    assert "No default target" in out
-    for forbidden in ("01_GitHub", "pip uninstall", "uninstall -y", "Stop-Process"):
-        assert forbidden not in out
 
 
-def test_verify_editable_exit_codes_distinguish_unverified_from_drift(monkeypatch):
-    def lab(counts):
-        def fake(packages=None, report=None):
-            if report is not None:
-                report.update(counts)
-            return counts["drift"] + counts["unverified"]
-        return fake
-
-    monkeypatch.setattr(release_quad, "_verify_lab_editable", lab({"drift": 0, "unverified": 1}))
-    monkeypatch.setattr(release_quad, "_verify_100_editable", lab({"drift": 0, "unverified": 0}))
-    assert release_quad.cmd_verify_editable(None) == 5
-
-    monkeypatch.setattr(release_quad, "_verify_lab_editable", lab({"drift": 0, "unverified": 0}))
-    monkeypatch.setattr(release_quad, "_verify_100_editable", lab({"drift": 1, "unverified": 0}))
-    assert release_quad.cmd_verify_editable(None) == 1
-
-    monkeypatch.setattr(release_quad, "_verify_100_editable", lab({"drift": 0, "unverified": 0}))
+def test_verify_editable_checks_lab_wheel_and_100_editable(monkeypatch):
+    calls = []
+    monkeypatch.setattr(release_quad, "_verify_lab_wheel", lambda: calls.append("lab-wheel") or 0)
+    monkeypatch.setattr(release_quad, "_verify_100_editable", lambda: calls.append("100-editable") or 0)
     assert release_quad.cmd_verify_editable(None) == 0
-
+    assert calls == ["lab-wheel", "100-editable"]
 
 def _remote_ok(counts):
     return (0, {"schema": intent.SCHEMA, "host": "100", "interpreter": "python",
@@ -172,18 +117,13 @@ def test_remote_verify_counts_unverified_and_drift(monkeypatch):
     assert report["drift"] == 1
 
 
-@pytest.mark.parametrize("record,override", [
-    (False, False), (True, False), (False, True), (True, True)])
+@pytest.mark.parametrize("record", [False, True])
 @pytest.mark.parametrize("source_rc", [0, 4])
-def test_done_default_source_is_the_controller_whatever_lab_intent_says(
-        isolated_record, monkeypatch, record, override, source_rc):
-    # LAB holds a wheel, so its legacy editable record and release override no
-    # longer name the release source: without --release-source `done` verifies
-    # the controller checkout it runs from, and a stale controller stops it.
+def test_done_default_source_is_controller_and_ignores_legacy_lab_intent(
+        isolated_record, monkeypatch, record, source_rc):
+    # Legacy LAB editable records no longer select or gate the runtime source.
     if record:
-        _record(isolated_record, "radia", "S:/Radia/release-quad/recorded/")
-    if override:
-        monkeypatch.setenv(release_quad.EDITABLE_REPO_LAB_ENV, "S:/Radia/release-quad/override/")
+        _record(isolated_record, "radia", "S:/Radia/old-lab-editable/")
     assert release_quad._done_release_source(SimpleNamespace()) == str(release_quad.REPO)
     monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: 0)
     monkeypatch.setattr(release_quad, "_release_head", lambda: "a" * 40)
@@ -191,10 +131,8 @@ def test_done_default_source_is_the_controller_whatever_lab_intent_says(
     monkeypatch.setattr(release_quad, "_verify_local_release_source",
                         lambda repo, sha: seen.append((repo, sha)) or source_rc)
     stop = AssertionError("stop after the source gate")
-
     def later_gate(_args):
         raise stop
-
     monkeypatch.setattr(release_quad, "cmd_temp_shadows", later_gate)
     args = SimpleNamespace(simulink_package=None, release_source=None)
     if source_rc:
@@ -205,41 +143,14 @@ def test_done_default_source_is_the_controller_whatever_lab_intent_says(
         assert raised.value is stop
     assert seen == [(str(release_quad.REPO), "a" * 40)]
 
-
 @pytest.mark.parametrize("rc", [0, 2, 3])
-def test_lab_deploy_delegates_to_the_wheel_route_and_propagates_failure(monkeypatch, rc):
-    """LAB takes the published wheel; it never installs or records an editable.
-
-    Phase 8 installs the numerical solver alone, so cubit-mesh-export and
-    radia-mcp are untouched and no LAB editable intent is written.
-    """
+def test_lab_deploy_uses_wheel_route_and_propagates_failure(monkeypatch, rc):
     calls = []
-    monkeypatch.setenv(release_quad.EDITABLE_REPO_LAB_ENV, "S:/Radia/release-quad/x")
     monkeypatch.setattr(release_quad, "_deploy_pypi",
                         lambda host, label, **kw: calls.append((host, label, kw)) or rc)
-
-    def must_not_run(*_args, **_kwargs):
-        raise AssertionError("LAB wheel deployment must not touch an editable")
-
-    monkeypatch.setattr(release_quad, "_record_release_intent_lab", must_not_run)
-    monkeypatch.setattr(release_quad, "_verify_lab_editable", must_not_run)
     assert release_quad._deploy_lab() == rc
     assert calls == [("102", "LAB", {})]
 
-
-def test_lab_record_helper_adopts_only_solver_without_pip(monkeypatch):
-    seen = {}
-    monkeypatch.setattr(release_quad, "_release_head", lambda: "b" * 40)
-
-    def fake_record_current(packages, reason, **kwargs):
-        seen.update(packages=packages, reason=reason, kwargs=kwargs)
-        return {"results": [], "record_file": "r", "exit_code": 0}
-
-    monkeypatch.setattr(intent, "record_current", fake_record_current)
-    assert release_quad._record_release_intent_lab("S:/Radia/release-quad/x") == 0
-    assert seen["packages"] == ["radia"]
-    assert "phase8" in seen["reason"] and "bbbbbbbbbbbb" in seen["reason"]
-    assert seen["kwargs"] == {"via": "release-quad phase8"}
 
 
 def test_remote_record_helper_uses_record_current_with_the_host_tool(monkeypatch):
@@ -274,22 +185,17 @@ def test_repoint_on_100_forwards_host_namespace_arguments(monkeypatch):
     assert "--record-current" not in argv and "--rollback" not in argv
 
 
-def test_repoint_on_lab_delegates_to_the_intent_tool(monkeypatch):
-    seen = {}
-    monkeypatch.setattr(intent, "main", lambda argv: seen.update(argv=list(argv)) or 0)
-    args = SimpleNamespace(host="lab", package=["radia"], source=["S:/Radia/release-quad/x"],
-                           reason="release worktree", via=None, record_current=False,
-                           rollback=False, dry_run=False, require_pushed=True)
-    assert release_quad.cmd_repoint(args) == 0
-    assert seen["argv"][0] == "repoint"
-    assert "--require-pushed" in seen["argv"]
-    assert "--json" not in seen["argv"]
-
-    undo = SimpleNamespace(host="lab", package=["radia"], source=[], reason="", via=None,
-                           record_current=False, rollback=True, dry_run=False, require_pushed=False)
-    assert release_quad.cmd_repoint(undo) == 0
-    assert "--rollback" in seen["argv"]
-
+def test_repoint_on_lab_is_refused_before_action(monkeypatch, capsys):
+    actions = []
+    monkeypatch.setattr(intent, "main", lambda argv: actions.append(argv) or 0)
+    monkeypatch.setattr(release_quad, "_remote_editable_intent",
+                        lambda *args, **kwargs: actions.append(args))
+    args = SimpleNamespace(host="lab", package=["radia"], source=["S:/old"],
+                           reason="test", via=None, record_current=False,
+                           rollback=False, dry_run=False, require_pushed=False)
+    assert release_quad.cmd_repoint(args) == 2
+    assert actions == []
+    assert "only on 100号機" in capsys.readouterr().out
 
 def test_repoint_refuses_incomplete_requests():
     base = {"host": "lab", "via": None, "record_current": False, "rollback": False,
@@ -317,7 +223,7 @@ def test_restore_editable_is_removed_and_names_no_target(capsys):
 def test_repoint_paths_never_uninstall_or_stop_processes():
     sources = [inspect.getsource(getattr(release_quad, name)) for name in (
         "cmd_repoint", "cmd_restore_editable", "cmd_verify_editable",
-        "_record_release_intent_lab", "_record_release_intent_remote",
+        "_record_release_intent_remote",
         "_verify_remote_editable", "_remote_editable_intent",
     )]
     sources.append(release_quad.REMOTE_EDITABLE_VERIFY)
