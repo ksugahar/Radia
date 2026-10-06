@@ -11,7 +11,8 @@ def surface():
     import ngsolve as ng
     from netgen.occ import Box, OCCGeometry, Pnt, Glue
     body = Box(Pnt(0, 0, 0), Pnt(.01, .01, .01))
-    return ng.Mesh(OCCGeometry(Glue(list(body.faces))).GenerateMesh(maxh=.006))
+    with ng.TaskManager():
+        return ng.Mesh(OCCGeometry(Glue(list(body.faces))).GenerateMesh(maxh=.006))
 
 
 def test_file_roundtrip_and_rejects_wrong_frequency(surface, tmp_path):

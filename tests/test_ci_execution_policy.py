@@ -434,3 +434,18 @@ def test_workflow_discovers_directory_and_preserves_exact_selectors(monkeypatch,
     assert command[-1] == 'tests'
     assert not any(selector in command for selector in selectors)
     assert json.loads(kwargs['env']['RADIA_MCP_CI_SELECTION_JSON']) == selectors
+
+
+def test_host_roles_agree_across_deployment_skills():
+    root = ROOT
+    verify = " ".join((root / ".agents/skills/verify-deploy/SKILL.md").read_text(encoding="utf-8").split())
+    cubit = " ".join((root / ".agents/skills/release-cubit-mesh-export/SKILL.md").read_text(encoding="utf-8").split())
+    build = " ".join((root / ".agents/skills/build/SKILL.md").read_text(encoding="utf-8").split())
+    assert "On LAB, they must resolve to the verified wheel" in verify
+    assert "Only 100号機 uses an editable install" in verify
+    assert "LAB/100 editable sources" not in build
+    assert "LAB/100 must remain verified editable" not in build
+    assert "LAB uses verified wheels and only 100号機 uses an editable development install" in build
+    assert "test host with verified wheels" in cubit
+    assert "LAB `wheel`, 100 `editable`" in cubit
+    assert "release-quad must not install, repoint or gate it" in cubit
