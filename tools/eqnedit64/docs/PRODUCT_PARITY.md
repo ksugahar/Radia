@@ -186,7 +186,9 @@ reopen, GDI canvas / bitmap / outline EMF and SVG glyphs and rules. Native
 CF_HTML and registered MathML emit `mathcolor`; Office TeX retains
 `\textcolor`. User hand testing of e708930c5 on 2026-10-08 confirms
 native canvas red and red after normal PowerPoint paste (H7 EXE), plus H1 EXE
-integral limits OK. H5/H6 re-checks remain pending. The isolated external-paste
+integral limits OK. H6 EXE also passed. H5/H6 Web failed: PowerPoint pasted
+plain text, lost integral bounds and collapsed H6 rows. These supersede earlier
+Web OK reports and block 3.1.2 under UXP-0029. The isolated external-paste
 suite includes a red matrix with integral bounds; that matrix colour result
 has not been measured and is not inferred from the scalar H7 result.
 
@@ -213,3 +215,15 @@ all PowerPoint MathML routes use it and lose colour was too broad and is
 withdrawn: the native registered route's observed red contradicts it. The Web
 CF_HTML colour loss remains observed; its exact internal cause is unverified.
 Outer CF_HTML CSS and Office LaTeX are optional, unverified alternatives.
+
+### Web PowerPoint release blocker (2026-10-08)
+
+H5 Web becomes plain text `y = ∫ a b x 2 d x`; H6 Web becomes one plain-text
+line `y = ∫ a b x 2 d x z = 1`. Earlier Web OK reports are superseded even
+though JS is unchanged. Native H1, H6 and H7 passed on e708930c5. Web structured
+equation copy is not qualified for 3.1.2. Explore direct/conditional CF_HTML
+OMML or prefixed MathML under limits-first UXP-0029; do not restore the old
+mandatory transport/parity restriction as a reason to accept flattened limits.
+No candidate transport is a fix until the user's PowerPoint retains editable
+bounds and the H6 two-row structure. Local browser payload checks alone cannot
+qualify Office import. No public Web transport replacement has been made.
