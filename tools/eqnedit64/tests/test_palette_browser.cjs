@@ -169,6 +169,7 @@ const server = http.createServer((req, res) => {
     const colorPairs = [...colorHeader.matchAll(/\{"([A-Za-z]+)", "(#[0-9A-F]{6})"\}/g)]
       .map(match => [match[1], match[2]]);
     assert.equal(colorPairs.length, 216);
+    colorPairs.push([" red ", "#FF0000"], [" Red ", "#FF0000"]);
     const colors = await page.evaluate(pairs => pairs.map(([name, expected]) => {
       const xml = new DOMParser().parseFromString(MathJax.tex2mml("\\textcolor{"+name+"}{x}"), "text/xml");
       const styled = xml.querySelector("[mathcolor]");

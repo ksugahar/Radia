@@ -134,6 +134,7 @@ struct AppState {
      * it is canonicalised only when focus returns to the canvas. */
     bool sourceEditing = false;
     std::string sourceError;
+    bool rejectedSourceReplaced = false;
     bool backgroundUiTest = false;
     unsigned testModifiers = 0;
     bool dragging = false;
@@ -603,6 +604,13 @@ void update_title() {
 
 void update_status(const wchar_t* transient = nullptr) {
     if (!g.status) return;
+    const std::wstring replacementNotice = L"エラーのあるTeXソースをキャンバスの内容で置き換えました";
+    std::wstring message;
+    if (g.rejectedSourceReplaced) {
+        message = replacementNotice;
+        if (transient) message += std::wstring(L" — ") + transient;
+        transient = message.c_str();
+    }
     if (transient) {
         SendMessageW(g.status, SB_SIMPLE, TRUE, 0);
         SendMessageW(g.status, SB_SETTEXTW, 255, LPARAM(transient));
@@ -1000,6 +1008,7 @@ PrettySource pretty_source(const std::wstring& raw) {
 }
 
 void sync_source_from_model() {
+    if (!g.sourceError.empty()) g.rejectedSourceReplaced = true;
     g.sourceError.clear();
     if (!g.source) return;
     const PrettySource canonical = pretty_source(wide_utf8(g.equation.latex()));
@@ -4374,6 +4383,7 @@ LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                  * treating control id 9001 as an application command would
                  * re-enter the dispatcher for no useful work. */
                 if (g.syncingSource) return 0;
+                g.rejectedSourceReplaced = false;
                 const std::string raw = utf8_wide(window_text(g.source));
                 if (!g.equation.replace_latex(raw, !g.sourceEditing)) {
                     if (g.equation.last_error() == "maximum-nesting-depth") {

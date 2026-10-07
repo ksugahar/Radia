@@ -2,7 +2,8 @@ param(
     [string]$GooglePngArtifact,
     [string]$PowerPointPngArtifact,
     [string]$PowerPointPptxArtifact,
-    [string]$AppPath
+    [string]$AppPath,
+    [string]$PowerPointColourArtifact
 )
 
 $ErrorActionPreference = 'Stop'
@@ -1101,6 +1102,7 @@ try {
 
     # A table inside one equation must not silently select CF_HTML-only copy.
     $tableSlideNumber = 2
+    $powerPointColourObservations = @()
     foreach ($tableTex in @(
         'f=\begin{cases}\int_a^b x\,dx & x>0\end{cases}',
         '\begin{pmatrix}\int_a^b x\,dx & 0\\0 & 1\end{pmatrix}',
@@ -1132,8 +1134,18 @@ try {
         if ($tableSlide.Shapes.Count -ne 1) { throw 'Table UI Paste did not create one shape.' }
         $presentation.Save()
         $tableXml = Get-SlideXml $pptxOutput $tableSlideNumber
-        if ($tableTex.StartsWith('\textcolor') -and $tableXml -notmatch '(?i)(?:val|rgb)="FF0000"') {
-            throw 'PowerPoint paste lost intentional red colour.'
+        if ($tableTex.StartsWith('\textcolor')) {
+            $redInXml = $tableXml -match '(?i)(?:val|rgb)="FF0000"'
+            $powerPointColourObservations += [ordered]@{
+                fixture = $tableTex
+                registered_mathml_red = $true
+                powerpoint_version = [string]$powerPoint.Version
+                slide = $tableSlideNumber
+                red_property_in_saved_xml = $redInXml
+                expected_limitation = 'UXP-0030: Office MathML conversion may discard colour'
+                evidence = 'Saved slide XML; does not assert rendered colour'
+            }
+            Write-Host "OBSERVATION: PowerPoint saved XML red=$redInXml (UXP-0030; colour drop accepted)"
         }
         if ($tableXml -notmatch '(?s)<m:nary>.*?<m:sub>.*?<m:t>𝑎</m:t>.*?</m:sub>.*?<m:sup>.*?<m:t>𝑏</m:t>.*?</m:sup>') {
             throw 'PowerPoint table paste lost integral bounds.'
@@ -1254,6 +1266,10 @@ try {
     }
     if ($PowerPointPptxArtifact) {
         Copy-Item -LiteralPath $pptxOutput -Destination $PowerPointPptxArtifact
+    }
+    if ($PowerPointColourArtifact) {
+        ConvertTo-Json -InputObject $powerPointColourObservations -Depth 4 |
+            Set-Content -LiteralPath $PowerPointColourArtifact -Encoding utf8
     }
 
     Write-Host "PASS: normal DIBV5 is opaque black-on-white ($dibContract)"

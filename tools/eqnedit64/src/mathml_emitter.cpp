@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <memory>
 #include <sstream>
+#include <stdexcept>
 
 namespace eqnedit {
 namespace {
@@ -463,7 +464,11 @@ std::string latex_to_office_mathml_fragment(
         for (const auto& row : rows) {
             if (!fragment.empty()) fragment += "<br>";
             std::string math = tree_to_mathml(*row.line, pointSize);
-            if (!row.color.empty()) math.insert(5, " mathcolor=\"" + row.color + "\"");
+            if (!row.color.empty()) {
+                if (math.compare(0, 6, "<math ") != 0)
+                    throw std::logic_error("Office row must have a math root");
+                math.insert(5, " mathcolor=\"" + row.color + "\"");
+            }
             fragment += math;
         }
         return fragment;
