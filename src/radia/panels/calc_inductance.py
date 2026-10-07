@@ -1234,6 +1234,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
                          bh_curve=bh_curve)
     delta_wp = mat_wp.skin_depth(args.frequency)
 
+    esim_seed_seconds = 0.0
     if panel_zs_file:
         from radia.surface_impedance import read_panel_impedance
         Z_s_wp = read_panel_impedance(panel_zs_file, wp_mesh,
@@ -1243,15 +1244,14 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     elif args.impedance_model == "esim":
         # ESIM cell solver: 1D nonlinear B-H(H) Karl iteration on a
         # cylindrical workpiece slice of radius `half_thickness`.
-        # The seed solve at a small H0=5 A/m only needs a rough Z_s
-        # to start the outer Karl loop; cap inner Picard at 5 iter
-        # to avoid wasting time on a 50-iter solve whose result the
-        # next outer iter overrides anyway.
+        # The converged H0=5 A/m seed initializes the outer Karl loop.
         esim_solver = mat_wp.create_esim_solver(
             args.frequency, args.half_thickness, geometry='cylinder')
         from radia.esim_cell_problem import require_esim_converged
+        seed_started = time.perf_counter()
         seed_result = require_esim_converged(
             esim_solver.solve(5.0), "BEM ESIM seed cell solve")
+        esim_seed_seconds = time.perf_counter() - seed_started
         Z_s_seed = complex(seed_result['Z'])
         if args.esim_per_panel:
             # One constant impedance per BND panel, not per vertex.
@@ -1288,6 +1288,17 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         progress("BEM",
             f"BIE solve Z_s={Z_s_wp:.3e} (model={args.impedance_model})")
     from radia.surface_impedance import PanelSurfaceImpedance, panel_tangential_field_rms
+    panel_evaluator = None
+    if esim_solver is not None and args.esim_per_panel:
+        from radia.esim_panel_evaluator import PanelESIMEvaluator
+        panel_evaluator = PanelESIMEvaluator(
+            esim_solver, mode=getattr(args, 'esim_panel_evaluator', 'direct'),
+            interpolation_tol=float(args.esim_tol) / 10,
+            max_table_cells=getattr(args, 'esim_table_max_cells', 4096),
+            configuration=(lambda: dict(frequency=args.frequency, sigma=args.sigma,
+                half_thickness=args.half_thickness, mu_r=args.mu_r, bh_curve=bh_curve,
+                cell_type=type(esim_solver).__qualname__))
+                if getattr(args, 'esim_panel_evaluator', 'direct') == 'direct' else None)
     def surface_z():
         return PanelSurfaceImpedance(Z_s_wp) if isinstance(Z_s_wp, np.ndarray) else Z_s_wp
     res_bem = None
@@ -1324,12 +1335,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         Z_s_old = Z_s_wp
         if args.esim_per_panel:
             H_t_per = panel_tangential_field_rms(bem.fes, res_bem["phi_vec"])
-            Z_s_new = np.empty(wp_ne_bnd, dtype=complex)
-            for i in range(wp_ne_bnd):
-                cell_result = require_esim_converged(
-                    esim_solver.solve(max(float(H_t_per[i]), 1e-3)),
-                    f"BEM per-panel ESIM cell solve at panel {i}")
-                Z_s_new[i] = complex(cell_result['Z'])
+            Z_s_new = panel_evaluator.evaluate(H_t_per)
             Z_s_wp = anderson.step(Z_s_old, Z_s_new)
             dZ_per_dof = (np.abs(Z_s_new - Z_s_old)
                           / np.maximum(np.abs(Z_s_old), 1e-30))
@@ -1407,9 +1413,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         # Certify the constitutive mismatch on the final re-solved field,
         # not only on the field before the last damped/Anderson update.
         if isinstance(Z_s_wp, np.ndarray):
-            target = np.array([complex(require_esim_converged(
-                esim_solver.solve(max(float(h), 1e-3)),
-                "BEM final per-panel ESIM cell solve")['Z']) for h in H_t_per_final])
+            target = panel_evaluator.certify(H_t_per_final)
         else:
             target = complex(require_esim_converged(
                 esim_solver.solve(max(float(res_bem["H_t_rms"]), 1e-3)),
@@ -1785,6 +1789,10 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         "esim_anderson_restarts": int(anderson.n_restarts) if esim_solver is not None else 0,
         "esim_anderson_clips": int(anderson.n_clips) if esim_solver is not None else 0,
         "esim_history": esim_history,
+        "esim_panel_evaluation": dict(panel_evaluator.diagnostics(),
+            seed_cell_calls=1, seed_seconds=esim_seed_seconds,
+            total_direct_cell_calls=panel_evaluator.diagnostics()["direct_cell_calls"] + 1)
+            if panel_evaluator is not None else None,
         **per_panel_block,
         "msh_file": msh_file,
         "qsurf_sol": qsurf_sol_path,
@@ -1985,6 +1993,7 @@ def _assemble_full_output(args, coil_data, wp_data):
     out["esim_anderson_restarts"] = wp_data.get("esim_anderson_restarts", 0)
     out["esim_anderson_clips"] = wp_data.get("esim_anderson_clips", 0)
     out["esim_history"] = wp_data["esim_history"]
+    out["esim_panel_evaluation"] = wp_data.get("esim_panel_evaluation")
     out["msh_file"] = wp_data["msh_file"]
     out["t_wp_mesh_s"] = wp_data["t_wp_mesh_s"]
     out["t_bem_assembly_s"] = wp_data["t_bem_assembly_s"]
@@ -2681,6 +2690,12 @@ def run_inductance(args):
         return {'status': 'error', 'error':
                 '--esim-per-panel requires --impedance-model esim; '
                 'use --panel-zs-file for specified panel Zs.'}
+    if getattr(args, 'esim_panel_evaluator', 'direct') != 'direct' and (
+            not args.esim_per_panel or args.impedance_model != 'esim'
+            or args.coupling_mode != 'weak' or int(args.h1_order) != 1
+            or args.coil_only or not args.vol):
+        return {'status': 'error', 'error':
+                '--esim-panel-evaluator acceleration requires weak P1 per-panel ESIM with a workpiece'}
 
     # Loop-DOF extension: an EXPLICIT "on" fails fast on unsupported
     # combinations BEFORE the expensive coil solve (the genus check itself
@@ -2938,8 +2953,13 @@ def build_argparser():
                         help="P1 per-BND-triangle ESIM iteration with source-weighted "
                              "surface stiffness and local heat integration. Uses "
                              "the solved per-panel peak H_t; supports intree-dense "
-                             "and HACApK on genus-0 workpieces. One cell solve per "
-                             "panel per iteration. Genus-1 ESIM remains unsupported.")
+                             "and HACApK on genus-0 workpieces. Direct evaluation "
+                             "is the default. Genus-1 ESIM remains unsupported.")
+    parser.add_argument('--esim-panel-evaluator', choices=['direct', 'cache', 'table'], default='direct',
+                        help='Per-run outer ESIM evaluation: direct, exact-value cache, or adaptive log-H linear table. '
+                             'All panels are still directly certified at the final accepted field.')
+    parser.add_argument('--esim-table-max-cells', type=int, default=4096,
+                        help='Maximum direct cells used to construct the adaptive table; fail loud on exhaustion.')
     parser.add_argument("--esim-anderson-m", type=int, default=0,
                         help="Anderson-acceleration memory depth for "
                              "the outer Karl iteration.  0 (default) = "
