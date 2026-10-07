@@ -50,7 +50,10 @@ The carrier ring is found from the closed surface mesh alone:
 
 Supported automatic geometry: one through-hole surrounding the z axis,
 including tubes, rings, stepped shafts and non-axisymmetric walls around such
-a hole. The unit potential jump, true linear residual and Faraday closure are
+a hole, provided a horizontal circle centred on the z axis fits inside the
+material and is found by the candidate search. The certification holds for
+the closed flat surface mesh within numerical tolerances, not for the CAD
+surface. The unit potential jump, true linear residual and Faraday closure are
 checked after construction and solution. Heating and reaction use the full
 field, including the circulating component.
 
@@ -63,9 +66,10 @@ P1 space as the rest of the operator. The former point evaluation with
 averaged vertex normals is not a consistent trace at creases and made the loss
 depend on where the carrier was placed. In the public example the spread of
 the loss over four carriers dropped from 0.79% (point evaluation) to
-0.12% (projection). In exact arithmetic the carrier choice would not
-matter at all; the remaining spread is a discretization error of the P1
-trace/operator pair and is reported, not hidden.
+0.12% (projection). The exact solution of the continuous problem does not
+depend on the carrier; the remaining spread is the sensitivity of the
+discrete problem (P1 trace and operators, quadrature, path integration). It is
+reported, not attributed to a single cause.
 
 ## Accuracy checks and the validation example
 
@@ -81,17 +85,19 @@ independent reference.
 `validation_test/induction_heating/bored_workpiece/` compares the loss of the
 loop-extended BEM with an independent air-domain HCurl FEM (order 2, SIBC
 Robin boundary, no BEM operators) for a synthetic stepped bored workpiece
-excited by closed filament loops. On the finest meshes (6,232 BEM vertices; 601,029 FEM unknowns) the two
-losses differ by 1.40%, within the 2% gate; over three refinements the BEM loss
-changed by 0.03% and the FEM loss by 0.01%, and the BEM power-balance
-difference fell from 2.3% to 0.03%. Both methods share the
+excited by closed filament loops. On the finest meshes (6,232 BEM vertices;
+601,029 FEM unknowns) the two losses differ by 1.40%, within the 2% gate.
+Across the three mesh levels of each method the loss ranged by 0.03% (BEM)
+and 0.01% (FEM) of the finest value, and the BEM power-balance difference
+fell from 2.3% to 0.03%. Both methods share the
 linear SIBC approximation; the example does not validate SIBC against a
 resolved conducting volume.
 
 The remaining difference of about 1.4% did not shrink under mesh
 refinement of either method and its cause was not isolated. For the total
 loss of an induction-heating workpiece this level is treated as agreement,
-because material data dominate the uncertainty. Applications that need
+because for that purpose the material data are expected to dominate the
+uncertainty (an engineering judgement, not a quantity measured here). Applications that need
 field quality at the percent level, such as accelerator magnets, should not
 inherit that tolerance and need their own convergence and reference study.
 
