@@ -226,6 +226,9 @@ inline std::string named_color_hex(const std::string& name) {
     };
     for (const auto& c : colors) if (name == c.name) return c.hex;
     std::string cssName = name;
+    const auto first = cssName.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) return {};
+    cssName = cssName.substr(first, cssName.find_last_not_of(" \t\r\n") - first + 1);
     std::transform(cssName.begin(), cssName.end(), cssName.begin(),
                    [](unsigned char c) { return char(std::tolower(c)); });
     for (const auto& c : colors) if (cssName == c.name) return c.hex;

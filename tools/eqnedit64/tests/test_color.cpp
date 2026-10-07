@@ -74,5 +74,8 @@ int main() {
     partial.select_step_left();
     require(partial.selection_latex() == "\\textcolor{red}{y}",
             "copy of an inner selection lost inherited colour");
+    require(latex_to_mathml("\\color{ red }{x}").find("#FF0000") != std::string::npos,
+            "spaced CSS colour name rejected");
+    require(named_color_hex(" Red ") == "#FF0000", "spaced CSS Red confused with dvips Red");
     std::cout << "PASS: named colours, scope, editor undo, fixed point, MathML and rejection\n";
 }
