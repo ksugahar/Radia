@@ -1120,50 +1120,49 @@ def check_gridfunction_set_definedon_in_loop(filepath: str, lines: List[str]) ->
 
 
 def check_curve_after_vol_import(filepath: str, lines: List[str]) -> List[Dict]:
-    """HIGH: mesh.Curve() after importing a .vol FLATTENS the baked-in curving to facets.
+    """HIGH: mesh.Curve() after importing a .vol is unsafe; loading already applies the stored curving.
 
-    A .vol exported with a curve order (Cubit ``export netgen "<f>" order N``) stores
-    the high-order curved-node data, and ``ngsolve.Mesh("<f>.vol")`` loads it
-    faithfully. But an imported .vol carries NO CAD geometry, so ``mesh.Curve(k)`` --
-    which rebuilds the curved nodes by projecting them onto the ATTACHED geometry --
-    has nothing to project onto and recomputes them FLAT, collapsing the surface to
-    the inscribed polytope. (For HEX this is the only curving path at all: NGSolve
-    never builds hex from geometry, so the curving must come from the export.)
+    ``ngsolve.Mesh("<f>.vol")`` applies the ``curvedelements`` stored in the file,
+    so the saved geometry order is in effect without any Curve call. ``Curve(k)``
+    then rebuilds the curved nodes from the geometry Netgen associates with the
+    mesh, and the result depends on where that geometry comes from (measured on
+    NGSolve 6.2.2607, see docs/ngsolve_integration/curve_order.md and
+    tests/test_curve_order_contract.py):
 
-    Verified empirically on NGSolve 6.2.2604 (a Cubit order-2 curved hex ball):
-    ``Curve(1) == Curve(2) == Curve(3)`` all degrade the DtN eigenvalue floor
-    1.6e-5 -> 5.3e-3 (~320x) and the Gamma surface deviation 5.7e-5 -> 2.3e-2 (~400x,
-    surface area collapsing to 96.7% of 4*pi = the flat-facet area) -- IDENTICAL for
-    every k, because the requested order is irrelevant once the geometry is gone.
-    Worse, ``GetCurveOrder()`` then reports the NEW order while the geometry is
-    actually flat, so the loss is SILENT. (Contrast: on an OCCGeometry mesh, which
-    HAS faces to project onto, Curve(k) correctly IMPROVES the surface -- so this
-    footgun is specific to geometry-less imported meshes, hence the .vol gate.)
+    * CAD-less .vol (Cubit ``export netgen ... order N``), fresh process:
+      every k gives the FLAT polytope while GetCurveOrder() reports k
+      (a curved order-2 hex ball: DtN floor ~320x worse, NGSolve 6.2.2604).
+    * CAD-less .vol after another geometry-bearing mesh was loaded in the same
+      process: Netgen reuses that process-global geometry, so the nodes are
+      projected onto a DIFFERENT shape (area x1e6 and more).
+    * Netgen/OCC .vol meshed in mm and rescaled with ``ngmesh.Scale(1e-3)``:
+      the embedded CAD stays in mm and Curve(k>=2) explodes the surface
+      (2.97e8 x area on a 2026 induction-heating workpiece).
+    * Netgen/OCC .vol saved with its CAD in the same units: Curve(k) is correct.
 
-    Do NOT .Curve() an imported .vol: set the FE order via ``H1(mesh, order=k)``; to
-    change the GEOMETRY order, re-export the .vol at a higher order.
+    Only the last case is safe, and it cannot be told apart from the others by
+    reading the call site. Use ``radia.mesh_curve.ensure_curve_order(mesh, k)``,
+    which keeps a sufficient stored order, checks the embedded CAD extent and
+    verifies area/volume after curving, or bake the order into the export.
     """
     findings = []
     msg_sep = (
-        "'{var}.Curve()' is called on a mesh imported from a .vol. An imported .vol "
-        "carries no CAD geometry, so mesh.Curve() rebuilds the curved nodes FLAT and "
-        "collapses the surface to facets -- it does NOT add curving (and NGSolve has "
-        "no hex-from-geometry path, so hex curving must come from the export). "
-        "Verified on NGSolve 6.2.2604: Curve(k) degrades the DtN floor ~320x "
-        "(1.6e-5 -> 5.3e-3) for every k, while GetCurveOrder() misreports success -- "
-        "a SILENT accuracy trap. Remove the .Curve(); set the FE order with "
-        "H1(mesh, order=k); bake the geometry order into the .vol on export "
-        "(Cubit: export netgen ... order N)."
+        "'{var}.Curve()' is called on a mesh imported from a .vol. Loading already "
+        "applies the stored curving; Curve() rebuilds it from whatever geometry Netgen "
+        "associates with the mesh: a CAD-less export (Cubit) is flattened while "
+        "GetCurveOrder() reports success, or curved onto another mesh's process-global "
+        "geometry; a mesh rescaled after meshing (ngmesh.Scale) explodes. Remove the "
+        ".Curve(); use radia.mesh_curve.ensure_curve_order(mesh, k) if a higher order "
+        "is required, or bake the order into the export (Cubit: export netgen ... "
+        "order N). See docs/ngsolve_integration/curve_order.md."
     )
     msg_chain = (
-        '.Curve() chained onto Mesh(".vol"). An imported .vol has no CAD geometry, so '
-        "mesh.Curve() rebuilds the curved nodes FLAT (surface -> facets); it does not "
-        "add curving and silently degrades accuracy (~320x on a curved hex ball, "
-        "NGSolve 6.2.2604), with GetCurveOrder() misreporting success. Drop the "
-        ".Curve(); set order via H1(mesh, order=k); bake the geometry order into the "
-        ".vol on export."
+        '.Curve() chained onto Mesh(".vol"). Loading already applies the stored '
+        "curving; Curve() rebuilds it from the geometry Netgen associates with the "
+        "mesh (flat for CAD-less exports, another mesh's geometry, or an exploded "
+        "surface after ngmesh.Scale). Drop the .Curve(); use "
+        "radia.mesh_curve.ensure_curve_order(mesh, k) or bake the order into the export."
     )
-
     pathvar_pat = re.compile(r'(\w+)\s*=\s*[rfb]*["\'][^"\']*\.vol\b', re.IGNORECASE)
     chained_pat = re.compile(r'Mesh\s*\(\s*[^)]*\.vol\b[^)]*\)\s*\.\s*Curve\s*\(', re.IGNORECASE)
     vol_literal_pat = re.compile(
@@ -1219,6 +1218,44 @@ def check_curve_after_vol_import(filepath: str, lines: List[str]) -> List[Dict]:
                              'message': msg_sep.format(var=cm.group(1))})
     return findings
 
+
+def check_netgen_scale_after_generate(filepath: str, lines: List[str]) -> List[Dict]:
+    """HIGH: rescaling a generated Netgen mesh leaves its embedded CAD in the old units.
+
+    ``ngm = geo.GenerateMesh(...); ngm.Scale(1e-3); ngm.Save(...)`` moves the nodes
+    but not the OCC geometry saved with the mesh. Any later ``Mesh.Curve(k>=2)``
+    projects the nodes back onto the unscaled CAD (2.97e8 x surface area observed
+    for a mesh made in mm and scaled to m). Scale the shape before meshing:
+    ``shape = shape.Scale(Pnt(0, 0, 0), 1e-3)``. See
+    docs/ngsolve_integration/curve_order.md.
+    """
+    findings = []
+    gen_pat = re.compile(r'^\s*(\w+)\s*=\s*[\w.\[\]()]*GenerateMesh\s*\(')
+    scale_pat = re.compile(r'\b(\w+)\s*\.\s*Scale\s*\(')
+    generated = set()
+    msg = ("'{var}.Scale()' rescales a mesh produced by GenerateMesh. The OCC geometry "
+           "saved with the mesh keeps the old units, so a later Mesh.Curve(k>=2) projects "
+           "the nodes onto the unscaled CAD and explodes the surface. Scale the CAD shape "
+           "before meshing (shape.Scale(Pnt(0,0,0), factor)) and mesh in final units.")
+    in_doc = False
+    for idx, ln in enumerate(lines, 1):
+        s = ln.strip()
+        if s.count('"""') == 1 or s.count("'''") == 1:
+            in_doc = not in_doc
+            continue
+        if in_doc or s.startswith('#'):
+            continue
+        code = ln.split('#', 1)[0]
+        g = gen_pat.search(code)
+        if g:
+            generated.add(g.group(1))
+            continue
+        m = scale_pat.search(code)
+        if m and m.group(1) in generated:
+            findings.append({'line': idx, 'severity': 'HIGH',
+                             'rule': 'netgen-scale-after-generate',
+                             'message': msg.format(var=m.group(1))})
+    return findings
 
 def check_coil_scalar_potential_as_lift(filepath: str, lines: List[str]) -> List[Dict]:
     """CRITICAL: a coil's magnetic SCALAR potential must not drive a reduced-Omega FEM.
@@ -1498,6 +1535,7 @@ ALL_RULES = [
     check_gridfunction_set_definedon_in_loop,
     check_ngsolve_kelvin_missing_bonus_intorder,
     check_curve_after_vol_import,
+    check_netgen_scale_after_generate,
     check_axisymmetric_h1_over_r,
     check_coil_scalar_potential_as_lift,
     # Shared PEEC/BEM rules

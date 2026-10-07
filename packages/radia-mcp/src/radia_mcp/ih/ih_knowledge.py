@@ -281,8 +281,13 @@ polygons.
 
 Never call `mesh.Curve()` merely because the FES order was raised after loading
 an arbitrary `.vol`.  The imported file already owns its geometry order; its
-CAD association may be absent or incomplete.  Post-load `Curve()` can silently
-flatten a baked-in curved mesh or create an invalid mapping.  To change geometry
+CAD association may be absent or incomplete.  Post-load `Curve()` rebuilds the
+curved nodes from whatever geometry Netgen associates with the mesh: a CAD-less
+export is flattened in a fresh process, is curved onto another mesh's
+process-global geometry once such a mesh was loaded, and a mesh rescaled with
+`ngmesh.Scale` after meshing is projected onto its unscaled CAD.  When a higher
+order is unavoidable, use `radia.mesh_curve.ensure_curve_order`, which checks
+the embedded CAD before curving.  To change geometry
 order, curve in the originating mesher and re-export the `.vol`.  To change only
 the approximation order, use `H1(mesh, order=p)` or `HCurl(mesh, order=p)` and
 leave the loaded mesh unchanged.  This is guarded repository-wide by the HIGH
@@ -808,9 +813,12 @@ mesh, gfT, audit = ih_thermal.load_field("workpiece_thermal_heat_T.sol",
 T_at = float(gfT(mesh(x, y, z)))
 ```
 
-Do not call ``Mesh.Curve`` on the reader side "to match the writer": on a
-CAD-derived ``.vol`` a failed ``Curve`` corrupts the element maps (the reference-case
-mesh reported a 6.9e6 m^2 surface) and every later point evaluation is wrong.
+Do not call ``Mesh.Curve`` on the reader side "to match the writer": loading
+already applies the stored order, and the reference-case thermal mesh reported a
+6.9e6 m^2 surface after ``Curve(2)``.  That mesh had been generated in
+millimetres and rescaled with ``ngmesh.Scale(1e-3)``, so its saved CAD stayed in
+millimetres and ``Curve`` projected the nodes onto it; every later point
+evaluation was wrong.  Scale the CAD shape before meshing instead.
 
 ## Post-processing: exposure and case depth (radia 5.1)
 
@@ -902,7 +910,9 @@ reported reference-case curved CAD `.vol`, the removed post-load `Curve(2)` call
 without an exception but inflated the boundary measure from about 0.0233 square
 metres to 6.91 million square metres (about 297 million times).  Therefore
 `GetCurveOrder()` or lack of an exception is not evidence that post-load curving
-was valid.
+was valid.  The cause was the mesh-in-millimetres-then-`ngmesh.Scale(1e-3)`
+workflow, which keeps the saved CAD in millimetres (lint rule
+`netgen-scale-after-generate`; see `docs/ngsolve_integration/curve_order.md`).
 
 ## Axisymmetric discretization contract: Henrotte for EM, NGSolve H1 for heat
 
