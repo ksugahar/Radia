@@ -271,6 +271,11 @@ def solve_panel_esim(evaluator, solve_em, seed, *, tolerance, max_iter,
             expected = float(state['body_reaction_power_W'])+float(state['coil_loss_W'])
             if not np.isclose(port, expected, rtol=1e-10, atol=1e-30):
                 raise RuntimeError('ESIM coupled port power identity failed')
+            air_loss = float(state['coil_loss_air_W'])
+            increment = float(state['body_reaction_power_W'])+float(state['coil_loss_change_W'])
+            power_floor = 64*np.finfo(float).eps*max(abs(port), abs(air_loss), 1e-300)
+            if not np.isclose(port-air_loss, increment, rtol=1e-10, atol=power_floor):
+                raise RuntimeError('ESIM reflected port power / coil-loss change identity failed')
             inner_history.append(dict(iterations=int(state['iterations']),
                 final_certification=final, coupling_residual=float(state['coupling_residual']),
                 body_residual=float(state['body_residual']),
