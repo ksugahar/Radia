@@ -1,10 +1,10 @@
-"""PEEC scalar strong-coupling CLI and port-power accounting.
+"""Optional demo-input validation; collect this file explicitly.
 
-The coupled route redistributes filament currents through complete body
-reaction. Body heat and reaction are checked independently. The change
-in port loss includes body reaction AND the change in coil self loss.
-Current scaling and finite-mesh reaction checks use self-authored cases
-in run_strong_reaction_ring.py; this file also checks legacy CLI wiring.
+Missing optional demo inputs produce visible skips. Required fixture-free
+strong CLI contracts live in test_strong_coupling_cli_contract.py.
+
+Explicit run (requires the demo STEP/VOL inputs):
+    python -m pytest -q validation_test/panels/optional_coupling_strong_peec.py
 """
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ from pathlib import Path
 
 import pytest
 
-import calc_inductance as ci
 
 _REPO = Path(__file__).resolve().parents[2]
 _SAMPLES = _REPO / "src" / "radia" / "panels" / "samples"
@@ -29,41 +28,10 @@ _DEMO_VOL = _SAMPLES / "ih_fem_kelvin_demo.vol"
 # ----------------------------------------------------------------------
 # 1. argparse + guard surface
 # ----------------------------------------------------------------------
-def test_argparse_accepts_peec_strong():
-    p = ci.build_argparser()
-    ns = p.parse_args([
-        "--coil-solver", "peec", "--frequency", "7000",
-        "--coil-step", "c.step", "--vol", "w.vol", "--sigma", "5.8e6",
-        "--coupling-mode", "strong",
-    ])
-    assert ns.coil_solver == "peec"
-    assert ns.coupling_mode == "strong"
 
 
-def test_strong_peec_requires_workpiece_vol():
-    """strong needs a workpiece --vol even for the peec coil."""
-    p = ci.build_argparser()
-    ns = p.parse_args([
-        "--coil-solver", "peec", "--frequency", "7000",
-        "--coil-step", "c.step", "--sigma", "5.8e6",
-        "--coupling-mode", "strong", "--coil-only",
-    ])
-    out = ci.run_inductance(ns)
-    assert out.get("status") == "error"
-    assert "workpiece" in out["error"] and "--vol" in out["error"]
 
 
-def test_strong_peec_rejects_proximity_model_mismatch():
-    """Strong PEEC must not mix proximity and isolated-wire baselines."""
-    p = ci.build_argparser()
-    ns = p.parse_args([
-        "--coil-solver", "peec", "--frequency", "7000",
-        "--coil-step", "c.step", "--vol", "w.vol", "--sigma", "5.8e6",
-        "--coupling-mode", "strong",
-    ])
-    out = ci.run_inductance(ns)
-    assert out.get("status") == "error"
-    assert "--no-peec-proximity" in out["error"]
 
 
 # ----------------------------------------------------------------------

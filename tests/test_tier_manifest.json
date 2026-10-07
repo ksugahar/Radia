@@ -2,8 +2,8 @@
   "schema": "radia.test-tier-manifest.v1",
   "impact_rules": {
     "src/radia/bem_complete_reaction.py": ["tests/test_bem_complete_reaction.py"],
-    "src/radia/bem_coupled_solver.py": ["tests/test_bem_complete_reaction.py", "validation_test/panels/test_coupling_strong.py"],
-    "src/radia/peec_coupled_bem_solver.py": ["tests/test_bem_complete_reaction.py", "validation_test/panels/test_coupling_strong_peec.py"],
+    "src/radia/bem_coupled_solver.py": ["tests/test_bem_complete_reaction.py", "validation_test/panels/test_strong_coupling_cli_contract.py"],
+    "src/radia/peec_coupled_bem_solver.py": ["tests/test_bem_complete_reaction.py", "validation_test/panels/test_strong_coupling_cli_contract.py"],
     "src/radia/bem_loop_work.py": ["tests/test_bem_loop_work_pairings.py"],
     "src/radia/bem_loop_extension.py": ["tests/test_bem_loop_work_pairings.py", "tests/test_bem_loop_panel_impedance.py", "validation_test/bem/test_loop_extension_ring.py"],
     "src/radia/panels/calc_inductance.py": ["tests/test_bem_loop_panel_impedance.py"],
@@ -247,8 +247,7 @@
       "description": "Required NGSolve contracts for mixed Omega, HDiv/topology, eddy currents, SIBC and IH thermal coupling; no partial dependency run.",
       "paths": [
         "tests/test_bem_complete_reaction.py",
-        "validation_test/panels/test_coupling_strong.py",
-        "validation_test/panels/test_coupling_strong_peec.py",
+        "validation_test/panels/test_strong_coupling_cli_contract.py",
         "tests/test_bem_loop_work_pairings.py",
         "tests/test_bem_loop_panel_impedance.py",
         "validation_test/bem/test_loop_extension_ring.py",
