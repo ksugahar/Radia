@@ -139,3 +139,10 @@ PEEC は既に実電流で解く。`Delta_L` / `Delta_R` は受理電流にお�
 
 自己作成の材料・回路例題による接続と離散残差の検証であり、任意材料の精度、
 熱連成、FEM 比較を認証するものではない。Simulink の熱連成経路は本節の追加対象外。
+
+Per-panel ESIM defaults to `--esim-panel-evaluator table` for weak genus-0/1
+and strong BEM/PEEC. The adaptive log-H table reduces outer cell evaluations;
+all-panel direct final certification is unchanged. Select
+`--esim-panel-evaluator direct` for the reference evaluator. Budget, refinement
+or field-range table failures raise with this guidance; no silent fallback.
+The selected mode is recorded in `esim_panel_evaluation.mode`.
