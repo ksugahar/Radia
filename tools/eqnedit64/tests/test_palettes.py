@@ -162,7 +162,7 @@ def test_palette_faces_use_unambiguous_owned_glyphs():
     # line stays as the built module's copy of that lesson.  Do NOT extend it
     # by hand with the next character someone happens to notice.
     assert all("▯" not in face for face in all_faces), (
-        "U+25AF is absent from the embedded Latin Modern Math cmap; "
+        "U+25AF is absent from the embedded Eqnedit Math cmap; "
         "use the owned U+25A1 empty slot instead")
     assert any("□" in face for face in all_faces)
     assert not [

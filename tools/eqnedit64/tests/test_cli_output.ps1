@@ -53,3 +53,14 @@ if ($invalid.ExitCode -ne 94 -or $invalid.Stdout -or
 }
 
 Write-Host '[OK] Eqnedit64 CLI help, version, and errors are redirectable.'
+New-Item -ItemType Directory -Path 'C:\temp' -Force | Out-Null
+$invalidColorPath = Join-Path 'C:\temp' ('eqnedit64-invalid-color-' + [guid]::NewGuid().ToString('N') + '.tex')
+try {
+    [IO.File]::WriteAllText($invalidColorPath, '\color{unsupported}{x}')
+    $invalidColor = Invoke-EqneditCaptured @($invalidColorPath, 'office')
+    if ($invalidColor.ExitCode -ne 97 -or -not $invalidColor.Stderr.Contains('Unsupported colour name')) {
+        throw 'Unsupported colour CLI input failed silently.'
+    }
+} finally {
+    Remove-Item -LiteralPath $invalidColorPath -ErrorAction SilentlyContinue
+}

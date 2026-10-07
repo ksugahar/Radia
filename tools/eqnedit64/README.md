@@ -1,12 +1,14 @@
 # Eqnedit64 — 数式入力に特化したTeXエディタ
 
+Source version: **3.1.2**.
+
 Eqnedit64は、軽快な構造編集とTeXファイルを直接つないだ64-bit Windows
 数式エディタです。数式は常にTeXとして開き、編集し、保存します。
 `Eqnedit64.exe` 単体で動作するポータブルアプリで、インストールや
 レジストリ登録は不要です。
 
 公開ソースはRadiaリポジトリの`tools/eqnedit64`、署名済み単体EXEは
-[Eqnedit64 GitHub Release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.16)
+[Eqnedit64 GitHub Release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.1.1)
 で配布します。旧Eqnedit32バイナリ、MTEF変換コード、逆アセンブリ資料は
 Eqnedit64のソース・ビルド・配布物に含めません。
 
@@ -53,13 +55,11 @@ GUIの画面構成、状態遷移、TeX/クリップボード契約、自動・�
 
 キャンバスからのコピーは、一つの数式を複数形式でクリップボードへ登録します。
 選択範囲があればその範囲を、選択がなければ数式全体を `Ctrl+C` でコピーします。
-PowerPoint、Word、Excel向けには、inline 18 pt MathMLと18 ptを明示した末尾NBSPを
-1つのCF_HTML断片として提供し、編集可能なOffice Mathへ変換します。Windows版は
-単一数式のCtrl+Cで登録`MathML` / `MathML Presentation`も提供します。現在の
-PowerPointはCF_HTML内のMathMLを通常テキストに平坦化するため、この登録形式で
-積分などの上下限を含む数式を編集可能なOMMLに変換します。PowerPointでは数式段落が
-中央寄せになります。複数行の`aligned`は行ごとの配置を崩さないようCF_HTML経路を
-使います。Web版はブラウザー既存のコピー経路を使います。
+EXE/Web は条件付き RichEdit-HTML OMML の CF_HTML を Office 向け主形式として提供します。
+登録 `MathML` / `MathML Presentation` は発行しません。積分の上下限・指数と複数行は
+ユーザーの PowerPoint 試験で確認済みです。CI は固定22式の実クリップボード主 OMML を
+バイト比較します。PowerPoint 貼り付けでは色が失われる既知の制限があります。
+キャンバス・SVG・EMF・DIB・保存TeX の色は保持します。
 旧Office向けには区切り付きLaTeXも残します。IrfanViewなどの画像ソフトは
 EMFまたは全画素不透明の32-bit DIBV5を選べます。TeX対応ソフト向けには生の断片も
 `LaTeX` 形式で保持します。
@@ -229,8 +229,8 @@ cmd /c build\build_tests.bat
 ```
 
 リリース候補の通常回帰、ASan、拡張GUI耐久、署名・単体配布を一括判定する
-最終ゲートは次です。公開配布は、このゲートが生成した `dist\Eqnedit64.exe`
-だけをGitHub Releaseへ添付します。
+最終ゲートは次です。公開配布EXEは、その合格したソースから100号機で
+`build_eqnedt64.bat` により別途ビルド・署名し、証明書とSHA-256を検査します。
 
 ```powershell
 $env:EQNEDIT64_ISOLATED_TEST_SESSION = '1'
@@ -297,7 +297,7 @@ GUIファザーにも完成／未完成TeXのソース編集を混ぜます。�
 検査し、PowerPointなど他製品との貼り付けも `test_external_paste.ps1` が非表示の
 API経由で検査します。この試験は内部生成関数を迂回路として使わず、選択なしの
 通常GUIコピー命令を送ってから、PowerPointの組み込みUI `Paste` が
-左寄せ18 ptの編集可能なOffice Mathと分数・根号の構造を作ることに加え、貼り付けた
+中央寄せを許容した編集可能なOffice Mathと積分上下限・分数・根号の構造を作ることに加え、貼り付けた
 図形をPowerPoint自身でPNG化し、空白や豆腐文字ではなく分数線を含む数式の輪郭が
 描画されること、
 IrfanViewの `/clippaste` が非空画像を作ること、DIBV5の全画素がα=255であること、
@@ -326,3 +326,21 @@ Eqnedit64本体はBSD 2-Clause Licenseです。詳細は[`LICENSE`](LICENSE)を�
 ください。内蔵Eqnedit Math（Latin Modern Mathから変換したTrueTypeフォント）とアプリケーションアイコンの第三者素材は
 [`assets/THIRD_PARTY_NOTICES.md`](assets/THIRD_PARTY_NOTICES.md)および
 [`assets/GUST-FONT-LICENSE.txt`](assets/GUST-FONT-LICENSE.txt)に従います。
+
+
+## 3.1.2 PowerPoint colour limitation (UXP-0030/0031)
+
+PowerPoint import drops colour on the shared conditional OMML CF_HTML route in
+both editions. The user measured all r10 colour variants A–G as not red on
+2026-10-08 and approved releasing 3.1.2 with this documented limitation. Colour
+support remains enabled in the native/Web canvas, SVG, saved TeX, and native
+EMF/DIB output. This decision does not strip colour from the source or renderer.
+PowerPoint colour retention is not an acceptance requirement for this release.
+
+User hand tests: H1/H5/H6 EXE OK on ea787664d; H7 EXE canvas red, PowerPoint
+not red. Web H5/H6 OK on 8361ec916. Hosted CI 37692902458 verified 22/22 primary
+OMML branches byte-identical on the actual Windows clipboard at ea787664d.
+This supports the UXP-0031 EXE-test plus bit-gate qualification for the covered
+corpus; it does not prove every TeX input or every Office/browser environment.
+Changed payload behaviour requires renewed qualification. The release metadata
+commit still requires its own CI. Formal publication follows the release gates.

@@ -13,6 +13,11 @@ int main(int argc, char** argv) {
     SetLastError(1234);
     eqnedit::font_trace("disabled");
     if (GetLastError() != 1234 || std::filesystem::exists(file)) return 3;
+    const std::wstring oversized(32750, L'x');
+    if (!SetEnvironmentVariableW(L"EQNEDIT64_FONT_TRACE_DIR", oversized.c_str())) return 7;
+    SetLastError(1234);
+    eqnedit::font_trace("oversized");
+    if (GetLastError() != 1234 || std::filesystem::exists(file)) return 8;
     SetEnvironmentVariableW(L"EQNEDIT64_FONT_TRACE_DIR", directory.c_str());
     SetLastError(1234);
     eqnedit::font_trace("test.begin", 17);

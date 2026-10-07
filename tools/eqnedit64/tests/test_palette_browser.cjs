@@ -22,12 +22,12 @@ const server = http.createServer((req, res) => {
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.end('<!doctype html><html lang="ja"><meta charset="utf-8">' +
       '<script>window.MathJax={startup:{typeset:false}};</script>' +
-      '<script src="/mathjax/tex-chtml.js"></script>' +
+      (req.url === '/?delayed' ? '' : '<script src="/mathjax/tex-chtml.js"></script>') +
       // The homepage supplies this adapter; exercise the real preview engine.
       '<script>window.SugaharaMath={typeset:function(node){' +
       'return MathJax.startup.promise.then(function(){return MathJax.typesetPromise([node]);}).catch(function(){});}};</script>' +
       fs.readFileSync(path.join(web, "equation-editor.fragment.html"), "utf8")
-        .replace(req.url === "/?cold" ? '<script src="./equation-editor.js"></script>' : "__unused__", ""));
+        .replace((req.url === "/?cold" || req.url === "/?delayed") ? '<script src="./equation-editor.js"></script>' : "__unused__", ""));
   }
 });
 (async () => {
@@ -36,6 +36,45 @@ const server = http.createServer((req, res) => {
   try {
     browser = await chromium.launch({headless:true,
       ...(process.env.EQNEDIT64_BROWSER_PATH ? {executablePath:process.env.EQNEDIT64_BROWSER_PATH} : {})});
+    for (const config of [true, false]) {
+      const delayed = await browser.newPage();
+      const delayedErrors = [];
+      delayed.on("pageerror", error => delayedErrors.push(error.message));
+      await delayed.goto("http://127.0.0.1:" + server.address().port + "/?delayed");
+      await delayed.evaluate(config => {
+        window.MathJax = config ? {startup:{typeset:false}} : undefined;
+      }, config);
+      await delayed.addScriptTag({url:"http://127.0.0.1:" + server.address().port + "/equation-editor.js"});
+      assert.equal(await delayed.locator(".eqed-key").count(), 291);
+      assert(await delayed.locator(".eqed-copy-office").isDisabled());
+      await delayed.evaluate(() => {
+        const originalNow = Date.now;
+        Date.now = () => originalNow() + 61000;
+      });
+      await delayed.waitForFunction(() => document.querySelector(".eqed-copy-office").title.includes("読み込みを待っています"));
+      await delayed.addScriptTag({url:"http://127.0.0.1:" + server.address().port + "/mathjax/tex-chtml.js"});
+      await delayed.waitForFunction(() => !document.querySelector(".eqed-copy-office").disabled);
+      assert.deepEqual(delayedErrors, []);
+      await delayed.locator(".eqed-source").fill("\\foo x");
+      await delayed.locator(".eqed-copy-office").click();
+      await delayed.waitForFunction(() => document.querySelector(".eqed-status").textContent.includes("MathMLに変換できません"));
+      await delayed.evaluate(() => {
+        window.copyAttempts = 0;
+        document.execCommand = function (command) {
+          if (command !== "copy") return false;
+          window.copyAttempts++;
+          const data = new DataTransfer();
+          const event = new ClipboardEvent("copy", {clipboardData:data, cancelable:true});
+          document.dispatchEvent(event);
+          return event.defaultPrevented;
+        };
+      });
+      await delayed.locator(".eqed-source").fill("\\color{red}{x}");
+      await delayed.locator(".eqed-copy-office").click();
+      await delayed.waitForFunction(() => window.copyAttempts === 1);
+      await delayed.waitForFunction(() => document.querySelector(".eqed-status").textContent.includes("コピーしました"));
+      await delayed.close();
+    }
     const cold = await browser.newPage();
     let releaseCancel;
     const cancelGate = new Promise(resolve => {releaseCancel = resolve;});
@@ -78,6 +117,97 @@ const server = http.createServer((req, res) => {
     assert.match(copies[0].html,/menclose/);
     assert.match(copies[0].html,/mathvariant="bold-italic"/);
     assert.doesNotMatch(copies[0].html,/<merror|mathcolor="red"/);
+    // Independent frozen Unicode-name expectations: all Latin letters/digits,
+    // including script/fraktur/blackboard BMP exceptions (UnicodeData names).
+    const alphabetInput = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    const alphabetExpectations = {
+  "script": "𝒜ℬ𝒞𝒟ℰℱ𝒢ℋℐ𝒥𝒦ℒℳ𝒩𝒪𝒫𝒬ℛ𝒮𝒯𝒰𝒱𝒲𝒳𝒴𝒵𝒶𝒷𝒸𝒹ℯ𝒻ℊ𝒽𝒾𝒿𝓀𝓁𝓂𝓃ℴ𝓅𝓆𝓇𝓈𝓉𝓊𝓋𝓌𝓍𝓎𝓏0123456789",
+  "bold-script": "𝓐𝓑𝓒𝓓𝓔𝓕𝓖𝓗𝓘𝓙𝓚𝓛𝓜𝓝𝓞𝓟𝓠𝓡𝓢𝓣𝓤𝓥𝓦𝓧𝓨𝓩𝓪𝓫𝓬𝓭𝓮𝓯𝓰𝓱𝓲𝓳𝓴𝓵𝓶𝓷𝓸𝓹𝓺𝓻𝓼𝓽𝓾𝓿𝔀𝔁𝔂𝔃0123456789",
+  "fraktur": "𝔄𝔅ℭ𝔇𝔈𝔉𝔊ℌℑ𝔍𝔎𝔏𝔐𝔑𝔒𝔓𝔔ℜ𝔖𝔗𝔘𝔙𝔚𝔛𝔜ℨ𝔞𝔟𝔠𝔡𝔢𝔣𝔤𝔥𝔦𝔧𝔨𝔩𝔪𝔫𝔬𝔭𝔮𝔯𝔰𝔱𝔲𝔳𝔴𝔵𝔶𝔷0123456789",
+  "bold-fraktur": "𝕬𝕭𝕮𝕯𝕰𝕱𝕲𝕳𝕴𝕵𝕶𝕷𝕸𝕹𝕺𝕻𝕼𝕽𝕾𝕿𝖀𝖁𝖂𝖃𝖄𝖅𝖆𝖇𝖈𝖉𝖊𝖋𝖌𝖍𝖎𝖏𝖐𝖑𝖒𝖓𝖔𝖕𝖖𝖗𝖘𝖙𝖚𝖛𝖜𝖝𝖞𝖟0123456789",
+  "double-struck": "𝔸𝔹ℂ𝔻𝔼𝔽𝔾ℍ𝕀𝕁𝕂𝕃𝕄ℕ𝕆ℙℚℝ𝕊𝕋𝕌𝕍𝕎𝕏𝕐ℤ𝕒𝕓𝕔𝕕𝕖𝕗𝕘𝕙𝕚𝕛𝕜𝕝𝕞𝕟𝕠𝕡𝕢𝕣𝕤𝕥𝕦𝕧𝕨𝕩𝕪𝕫𝟘𝟙𝟚𝟛𝟜𝟝𝟞𝟟𝟠𝟡",
+  "sans-serif": "𝖠𝖡𝖢𝖣𝖤𝖥𝖦𝖧𝖨𝖩𝖪𝖫𝖬𝖭𝖮𝖯𝖰𝖱𝖲𝖳𝖴𝖵𝖶𝖷𝖸𝖹𝖺𝖻𝖼𝖽𝖾𝖿𝗀𝗁𝗂𝗃𝗄𝗅𝗆𝗇𝗈𝗉𝗊𝗋𝗌𝗍𝗎𝗏𝗐𝗑𝗒𝗓𝟢𝟣𝟤𝟥𝟦𝟧𝟨𝟩𝟪𝟫",
+  "bold-sans-serif": "𝗔𝗕𝗖𝗗𝗘𝗙𝗚𝗛𝗜𝗝𝗞𝗟𝗠𝗡𝗢𝗣𝗤𝗥𝗦𝗧𝗨𝗩𝗪𝗫𝗬𝗭𝗮𝗯𝗰𝗱𝗲𝗳𝗴𝗵𝗶𝗷𝗸𝗹𝗺𝗻𝗼𝗽𝗾𝗿𝘀𝘁𝘂𝘃𝘄𝘅𝘆𝘇𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵",
+  "sans-serif-italic": "𝘈𝘉𝘊𝘋𝘌𝘍𝘎𝘏𝘐𝘑𝘒𝘓𝘔𝘕𝘖𝘗𝘘𝘙𝘚𝘛𝘜𝘝𝘞𝘟𝘠𝘡𝘢𝘣𝘤𝘥𝘦𝘧𝘨𝘩𝘪𝘫𝘬𝘭𝘮𝘯𝘰𝘱𝘲𝘳𝘴𝘵𝘶𝘷𝘸𝘹𝘺𝘻0123456789",
+  "sans-serif-bold-italic": "𝘼𝘽𝘾𝘿𝙀𝙁𝙂𝙃𝙄𝙅𝙆𝙇𝙈𝙉𝙊𝙋𝙌𝙍𝙎𝙏𝙐𝙑𝙒𝙓𝙔𝙕𝙖𝙗𝙘𝙙𝙚𝙛𝙜𝙝𝙞𝙟𝙠𝙡𝙢𝙣𝙤𝙥𝙦𝙧𝙨𝙩𝙪𝙫𝙬𝙭𝙮𝙯0123456789",
+  "monospace": "𝙰𝙱𝙲𝙳𝙴𝙵𝙶𝙷𝙸𝙹𝙺𝙻𝙼𝙽𝙾𝙿𝚀𝚁𝚂𝚃𝚄𝚅𝚆𝚇𝚈𝚉𝚊𝚋𝚌𝚍𝚎𝚏𝚐𝚑𝚒𝚓𝚔𝚕𝚖𝚗𝚘𝚙𝚚𝚛𝚜𝚝𝚞𝚟𝚠𝚡𝚢𝚣𝟶𝟷𝟸𝟹𝟺𝟻𝟼𝟽𝟾𝟿"
+};
+    const productSource = fs.readFileSync(path.join(web,"equation-editor.js"),"utf8");
+    const mappingSource = productSource.slice(productSource.indexOf("var OFFICE_MATH_ALPHABETS"),
+      productSource.indexOf("function officeOmmlRun"));
+    const mapped = await cold.evaluate(({source,input,variants}) => {
+      const transform = new Function(source+"return officeMathAlphabet;")();
+      return Object.fromEntries(variants.map(variant=>[variant,transform(input,variant)]));
+    },{source:mappingSource,input:alphabetInput,variants:Object.keys(alphabetExpectations)});
+    assert.deepEqual(mapped,alphabetExpectations);
+    const greek = await cold.evaluate(source => {
+      const transform = new Function(source+"return officeMathAlphabet;")();
+      return ["bold-sans-serif","sans-serif-bold-italic"].map(variant=>
+        transform("ΑΩαωϴ∇∂ϵϑϰϕϱϖ",variant));
+    },mappingSource);
+    assert.deepEqual(greek,["𝝖𝝮𝝰𝞈𝝧𝝯𝞉𝞊𝞋𝞌𝞍𝞎𝞏","𝞐𝞨𝞪𝟂𝞡𝞩𝟃𝟄𝟅𝟆𝟇𝟈𝟉"]);
+    // Exercise the production copy handler. This verifies generated payloads,
+    // not PowerPoint import; host clipboard stays untouched.
+    for (const [tex, expected] of [
+      ["y=\\int_a^b x^2\\,dx", {limits:true,naryBody:"x2dx"}],
+      ["\\begin{aligned}y&=\\int_a^b x^2\\,dx\\\\z&=1\\end{aligned}", {limits:true,rows:2}],
+      ["\\begin{aligned}y=\\int_a^b x^2\\,dx\\\\z=1\\end{aligned}", {limits:true,rows:2}],
+      ["f=\\begin{cases}\\int_a^b x\\,dx & x>0\\end{cases}", {limits:true,matrix:true}],
+      ["\\begin{pmatrix}\\int_a^b x\\,dx & 0\\\\0 & 1\\end{pmatrix}", {limits:true,matrix:true}],
+      ["\\color{red}{x}", {red:true}],
+      ["\\textcolor{red}{x}+\\textcolor{blue}{y}", {red:true,blue:true}],
+      ["\\frac{x_1^2}{\\sqrt[3]{y}}", {fraction:true,radical:true}],
+      ["\\sqrt{x+y}", {radical:true,radicalBody:"x+y"}],
+      ["\\binom{n}{k}", {fraction:true,noBar:true}],
+      ["\\sum_{i=1}^{n}x_i", {nary:true}],
+      ["\\mathbb{CHNPQRZ}", {text:"ℂℍℕℙℚℝℤ"}],
+      ["\\mathcal{BEFHILMR}", {text:"ℬℰℱℋℐℒℳℛ"}],
+      ["\\mathfrak{CHIRZg}", {text:"ℭℌℑℜℨ𝔤"}],
+      ["\\mathsf{Abc012}", {text:"𝖠𝖻𝖼𝟢𝟣𝟤"}],
+      ["\\mathtt{Az09}", {text:"𝙰𝚣𝟶𝟿"}],
+      ["\\textcolor{red}{\\mathbb{R}}", {text:"ℝ",red:true}]
+    ]) {
+      await cold.locator(".eqed-source").fill(tex);
+      const before = await cold.evaluate(() => window.capturedCopies.length);
+      await cold.locator(".eqed-copy-office").click();
+      const payload = await cold.evaluate(() => window.capturedCopies.at(-1));
+      assert.equal(await cold.evaluate(() => window.capturedCopies.length), before+1,tex);
+      assert.equal(payload.tex,tex);
+      assert.match(payload.html,/<!--\[if gte msEquation 12\]>/);
+      const structure = await cold.evaluate(html => {
+        const omml = html.match(/<!--\[if gte msEquation 12\]>([\s\S]*?)<!\[endif\]-->/)[1];
+        const xml = new DOMParser().parseFromString(omml,"application/xml");
+        const nodes = name => [...xml.getElementsByTagNameNS("*",name)];
+        return {errors:nodes("parsererror").length,
+          sub:nodes("sub").map(n=>n.textContent),sup:nodes("sup").map(n=>n.textContent),
+          rows:nodes("eqArr").map(n=>[...n.children].filter(c=>c.localName==="e").length),
+          matrix:nodes("m").length,fraction:nodes("f").length,radical:nodes("rad").length,
+          nary:nodes("nary").length,
+          naryBodies:nodes("nary").map(n=>[...n.children].find(c=>c.localName==="e").textContent.replace(/\s/g,"")),
+          radicalBodies:nodes("rad").map(n=>[...n.children].find(c=>c.localName==="e").textContent),
+          noBar:nodes("type").some(n=>n.getAttribute("m:val")==="noBar"),
+          text:nodes("span").map(n=>n.textContent).join(""),
+          styles:nodes("span").map(n=>n.getAttribute("style")||"").join(";")};
+      },payload.html);
+      assert.equal(structure.errors,0,tex);
+      if(expected.limits){assert(structure.sub.includes("a"),tex);assert(structure.sup.includes("b"),tex);}
+      if(expected.rows)assert.deepEqual(structure.rows,[expected.rows],tex);
+      if(expected.matrix)assert(structure.matrix>0,tex);
+      if(expected.fraction)assert(structure.fraction>0,tex);
+      if(expected.radical)assert(structure.radical>0,tex);
+      if(expected.radicalBody)assert(structure.radicalBodies.includes(expected.radicalBody),tex);
+      if(expected.noBar)assert(structure.noBar,tex);
+      if(expected.nary)assert(structure.nary>0,tex);
+      if(expected.naryBody)assert(structure.naryBodies.includes(expected.naryBody),tex);
+      if(expected.red)assert.match(structure.styles,/color:#FF0000/);
+      if(expected.blue)assert.match(structure.styles,/color:#0000FF/);
+      if(expected.text)assert.equal(structure.text,expected.text,tex);
+    }
+    await cold.locator(".eqed-source").fill("\\smash{x}");
+    const beforeRejectedCopy = await cold.evaluate(() => window.capturedCopies.length);
+    await cold.locator(".eqed-copy-office").click();
+    assert.equal(await cold.evaluate(() => window.capturedCopies.length),beforeRejectedCopy);
+    assert.match(await cold.locator(".eqed-status").textContent(),/Office形式に変換できません/);
     await cold.evaluate(() => window.releasePalettePreviews());
     await cold.waitForFunction(() => document.querySelectorAll(".eqed-math-face").length ===
       document.querySelectorAll(".eqed-math-face mjx-container, .eqed-preview-error .eqed-math-face").length);
@@ -125,6 +255,25 @@ const server = http.createServer((req, res) => {
               primes:(xml.documentElement.textContent.match(/′/g)||[]).length};
     }));
     assert.deepEqual(primeChecks,[1,2,3].map(primes => ({scripts:2,errors:0,primes})));
+    // Compare native RGB constants with the actual independent MathJax package.
+    const colorHeader = fs.readFileSync(path.join(web, "../src/named_colors.h"), "utf8");
+    const colorPairs = [...colorHeader.matchAll(/\{"([A-Za-z]+)", "(#[0-9A-F]{6})"\}/g)]
+      .map(match => [match[1], match[2]]);
+    assert.equal(colorPairs.length, 216);
+    colorPairs.push([" red ", "#FF0000"], [" Red ", "#FF0000"]);
+    const colors = await page.evaluate(pairs => pairs.map(([name, expected]) => {
+      const xml = new DOMParser().parseFromString(MathJax.tex2mml("\\textcolor{"+name+"}{x}"), "text/xml");
+      const styled = xml.querySelector("[mathcolor]");
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+      context.fillStyle = styled ? styled.getAttribute("mathcolor") : "#000000";
+      return {name, expected:expected.toLowerCase(), actual:context.fillStyle.toLowerCase(),
+              errors:xml.getElementsByTagName("merror").length};
+    }), colorPairs);
+    for (const color of colors) {
+      assert.equal(color.errors, 0, color.name);
+      assert.equal(color.actual, color.expected, color.name);
+    }
     assert.match(result.sans,/MJXTEX-SS/); assert.match(result.fraktur,/MJXTEX-FR/);
     assert(result.strike > 0);
     // The actual click must put selected text in the radicand, not its index.

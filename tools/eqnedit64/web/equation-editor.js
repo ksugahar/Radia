@@ -21,7 +21,7 @@
   /* デプロイごとに上げる。ボタン行の右端に出て、開きっぱなしのタブが
    * 古い版を動かし続けていないかを一目で判別できる（.exe の
    * タイトルバー・ビルドスタンプと同じ教訓）。 */
-  var BUILD = "3.1.1 (2026-10-05)";
+  var BUILD = "3.1.2 (2026-10-08)";
 
   // BEGIN GENERATED PALETTES
   var PALETTES = [
@@ -3112,6 +3112,10 @@
     var serializer = new window.XMLSerializer();
     return leafCells.map(function (cell) {
       var rowMath = math.cloneNode(false);
+      ["mathcolor", "mathvariant"].forEach(function (name) {
+        var value = officeInheritedAttribute(cell, name);
+        if (value) rowMath.setAttribute(name, value);
+      });
       Array.prototype.forEach.call(cell.childNodes, function (child) {
         rowMath.appendChild(child.cloneNode(true));
       });
@@ -3125,7 +3129,7 @@
    * munderoverとなり、native emitterも同じ規則を試験する。 */
   /* MathJax loads \boldsymbol and \cancel on demand, and until the package
    * arrives the synchronous tex2mml the Office copy needs throws
-   * "MathJax retry".  Pull both in once at startup so the first copy of a
+   * "MathJax retry". Pull them and color in once at startup so the first copy of a
    * `\bm` or `\cancel` equation cannot fail on a package that is still in
    * flight.  Fire and forget: the copy path stays synchronous, which is what
    * keeps the user gesture alive for the clipboard write. */
@@ -3136,7 +3140,7 @@
       return Promise.reject(new Error("MathJax conversion unavailable"));
     // Initialize the primary typesetter first. Loading cancel only in the
     // separate MathML converter left the primary jax with an undefined macro.
-    var sample = "\\require{cancel}\\boldsymbol{x}+\\cancel{x}";
+    var sample = "\\require{cancel}\\require{color}\\boldsymbol{x}+\\cancel{x}";
     return mj.tex2chtmlPromise(sample, { display: false }).then(function () {
       return mj.tex2mmlPromise(sample, { display: false });
     }).then(function () {
@@ -3151,7 +3155,8 @@
     var raw = window.MathJax.tex2mml(
       "\\displaystyle " + mathJaxTex(tex), { display: false });
     var doc = new window.DOMParser().parseFromString(raw, "application/xml");
-    if (doc.querySelector("parsererror")) throw new Error("invalid MathML");
+    if (doc.querySelector("parsererror, merror, mtext[mathcolor=\"red\"]"))
+      throw new Error("invalid MathML or unsupported TeX");
     var math = doc.documentElement;
     math.setAttribute("display", "inline");
     math.setAttribute("mathsize", "18pt");
@@ -3165,10 +3170,6 @@
       if (node.getAttribute("stretchy") === "false") {
         node.removeAttribute("stretchy");
       }
-    });
-    Array.prototype.forEach.call(math.querySelectorAll("mstyle"), function (node) {
-      while (node.firstChild) node.parentNode.insertBefore(node.firstChild, node);
-      node.parentNode.removeChild(node);
     });
     Array.prototype.forEach.call(math.querySelectorAll("mo"), function (node) {
       if ("∑∏∐⋃⋂∫∬∭∮∯∰".indexOf(node.textContent) !== -1) {
@@ -3186,12 +3187,343 @@
         node.setAttribute("stretchy", "true");
       }
     });
-    var officeRows = splitUnanchoredOfficeRows(math);
-    if (officeRows) {
-      return officeRows.join(
-        '<span style="font-size:18pt">&#160;</span><br>');
-    }
     return new window.XMLSerializer().serializeToString(math);
+  }
+
+  function officeHtmlEscape(value) {
+    return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/\"/g, "&quot;");
+  }
+
+  var OFFICE_MATH_RUN_STYLE =
+    "font-size:18.0pt;font-family:'Cambria Math';" +
+    "mso-ascii-font-family:'Cambria Math';mso-font-kerning:12.0pt;" +
+    "color:black";
+
+  // MathML3 mathematical alphanumeric equivalences, including the BMP holes
+  // in script/fraktur/double-struck alphabets. Unicode encodes the alphabet,
+  // so Office need not interpret a CSS font or a MathML mathvariant attribute.
+  var OFFICE_MATH_ALPHABETS = {
+    "script": {upper:0x1D49C, lower:0x1D4B6,
+      holes:{B:0x212C,E:0x2130,F:0x2131,H:0x210B,I:0x2110,L:0x2112,
+        M:0x2133,R:0x211B,e:0x212F,g:0x210A,o:0x2134}},
+    "bold-script": {upper:0x1D4D0, lower:0x1D4EA},
+    "fraktur": {upper:0x1D504, lower:0x1D51E,
+      holes:{C:0x212D,H:0x210C,I:0x2111,R:0x211C,Z:0x2128}},
+    "bold-fraktur": {upper:0x1D56C, lower:0x1D586},
+    "double-struck": {upper:0x1D538, lower:0x1D552, digit:0x1D7D8,
+      holes:{C:0x2102,H:0x210D,N:0x2115,P:0x2119,Q:0x211A,R:0x211D,Z:0x2124}},
+    "sans-serif": {upper:0x1D5A0, lower:0x1D5BA, digit:0x1D7E2},
+    "bold-sans-serif": {upper:0x1D5D4, lower:0x1D5EE, digit:0x1D7EC,
+      greekUpper:0x1D756, greekLower:0x1D770},
+    "sans-serif-italic": {upper:0x1D608, lower:0x1D622},
+    "sans-serif-bold-italic": {upper:0x1D63C, lower:0x1D656,
+      greekUpper:0x1D790, greekLower:0x1D7AA},
+    "monospace": {upper:0x1D670, lower:0x1D68A, digit:0x1D7F6}
+  };
+
+  function officeMathAlphabet(text, variant) {
+    var alphabet = OFFICE_MATH_ALPHABETS[variant];
+    if (!alphabet) return text;
+    return Array.from(text).map(function (character) {
+      if (alphabet.holes && Object.prototype.hasOwnProperty.call(alphabet.holes, character))
+        return String.fromCodePoint(alphabet.holes[character]);
+      var cp = character.codePointAt(0);
+      if (cp >= 65 && cp <= 90) return String.fromCodePoint(alphabet.upper + cp - 65);
+      if (cp >= 97 && cp <= 122) return String.fromCodePoint(alphabet.lower + cp - 97);
+      if (cp >= 48 && cp <= 57 && alphabet.digit)
+        return String.fromCodePoint(alphabet.digit + cp - 48);
+      if (alphabet.greekUpper) {
+        if (cp >= 0x391 && cp <= 0x3A9 && cp !== 0x3A2)
+          return String.fromCodePoint(alphabet.greekUpper + cp - 0x391);
+        if (cp >= 0x3B1 && cp <= 0x3C9)
+          return String.fromCodePoint(alphabet.greekLower + cp - 0x3B1);
+        if (cp === 0x3F4) return String.fromCodePoint(alphabet.greekUpper + 17);
+        if (cp === 0x2207) return String.fromCodePoint(alphabet.greekUpper + 25);
+        var greekSymbols = [0x2202,0x3F5,0x3D1,0x3F0,0x3D5,0x3F1,0x3D6];
+        var symbolIndex = greekSymbols.indexOf(cp);
+        if (symbolIndex >= 0)
+          return String.fromCodePoint(alphabet.greekLower + 25 + symbolIndex);
+      }
+      // No Unicode equivalence for this alphabet: keep the original symbol,
+      // including existing supplementary-plane mathematical characters.
+      return character;
+    }).join("");
+  }
+
+  function officeOmmlRun(node, forceNormal) {
+    if (!node.textContent) return "";
+    var variant = officeInheritedAttribute(node, "mathvariant");
+    var colour = officeInheritedAttribute(node, "mathcolor");
+    if (colour) {
+      var colourContext = document.createElement("canvas").getContext("2d");
+      colourContext.fillStyle = colour;
+      colour = colourContext.fillStyle.toUpperCase();
+    }
+    var mappedAlphabet = Object.prototype.hasOwnProperty.call(OFFICE_MATH_ALPHABETS, variant);
+    if (variant && ["normal", "italic", "bold", "bold-italic"].indexOf(variant) < 0 && !mappedAlphabet)
+      throw new Error("unsupported Office mathvariant: " + variant);
+    var normal = mappedAlphabet || forceNormal || variant === "normal" ||
+      (!variant && Array.from(node.textContent).length !== 1) ||
+      node.localName === "mn" || node.localName === "mo" ||
+      node.localName === "mtext";
+    var weight = !mappedAlphabet && variant && variant.indexOf("bold") !== -1 ?
+      ";font-weight:bold" : "";
+    return "<m:r><span style=\"" + OFFICE_MATH_RUN_STYLE +
+      (colour ? ";color:" + officeHtmlEscape(colour) : "") +
+      ";font-style:" + (normal ? "normal" : "italic") + weight + "\">" +
+      officeHtmlEscape(officeMathAlphabet(node.textContent, variant)) + "</span></m:r>";
+  }
+
+  function officeOmmlControl() {
+    return "<span style=\"" + OFFICE_MATH_RUN_STYLE +
+      ";font-style:normal\"><m:ctrlPr></m:ctrlPr></span>";
+  }
+
+  function officeOmmlChildren(node) {
+    var result = "";
+    var children = Array.prototype.slice.call(node.children || []);
+    for (var i = 0; i < children.length; i++) {
+      var child = children[i];
+      var scripted = /^(msub|msup|msubsup|munder|mover|munderover)$/.test(child.localName);
+      var parts = Array.prototype.slice.call(child.children || []);
+      if (scripted && parts[0] && parts[0].localName === "mo" &&
+          "∑∏∐⋃⋂∫∬∭∮∯∰".indexOf(parts[0].textContent) >= 0) {
+        // A scripted large operator and the adjacent operand form one nary
+        // object. Stop at a visible additive/relation separator; do not create
+        // an empty operand box before x^2 dx in the H5/H6 fixtures.
+        var operand = "";
+        while (i + 1 < children.length) {
+          var next = children[i + 1];
+          if (next.localName === "mo" && /^[+=,;<>≤≥≠−-]$/.test(next.textContent)) break;
+          operand += officeOmmlNode(next);
+          i++;
+        }
+        var lower = /^(msub|msubsup|munder|munderover)$/.test(child.localName) ? parts[1] : null;
+        var upper = /^(msup|mover)$/.test(child.localName) ? parts[1] :
+          /^(msubsup|munderover)$/.test(child.localName) ? parts[2] : null;
+        result += officeOmmlNary(parts[0], lower, upper,
+          /^m(under|over|underover)$/.test(child.localName) ? "undOvr" : "subSup", operand);
+      } else {
+        result += officeOmmlNode(child);
+      }
+    }
+    return result;
+  }
+
+  function officeOmmlNary(base, sub, sup, limitLocation, operand) {
+    return "<m:nary><m:naryPr><m:chr m:val=\"" +
+      officeHtmlEscape(base.textContent) + "\"/><m:limLoc m:val=\"" +
+      limitLocation + "\"/><m:grow m:val=\"on\"/>" +
+      (!sub ? '<m:subHide m:val="1"/>' : "") +
+      (!sup ? '<m:supHide m:val="1"/>' : "") +
+      officeOmmlControl() + "</m:naryPr><m:sub>" +
+      (sub ? officeOmmlNode(sub) : "") + "</m:sub><m:sup>" +
+      (sup ? officeOmmlNode(sup) : "") + "</m:sup><m:e>" +
+      (operand || "") + "</m:e></m:nary>";
+  }
+
+  function officeOmmlBar(base, position) {
+    return "<m:bar><m:barPr><m:pos m:val=\"" + position + "\"/>" +
+      officeOmmlControl() + "</m:barPr><m:e>" + officeOmmlNode(base) +
+      "</m:e></m:bar>";
+  }
+
+  function officeOmmlNode(node) {
+    var name = node.localName;
+    var children = Array.prototype.filter.call(node.children || [], function () {
+      return true;
+    });
+    var nary = "∑∏∐⋃⋂∫∬∭∮∯∰";
+    if (name === "mpadded" && ["width", "height", "depth", "lspace", "voffset"].some(
+        function (attribute) { return node.hasAttribute(attribute); })) {
+      throw new Error("unsupported Office padding dimensions");
+    }
+    if (name === "math" || name === "mrow" || name === "mstyle" ||
+        name === "semantics" || name === "mpadded") {
+      return officeOmmlChildren(node);
+    }
+    if (name === "annotation" || name === "annotation-xml") return "";
+    if (name === "mi" || name === "mn" || name === "mo" || name === "mtext") {
+      return officeOmmlRun(node, name !== "mi");
+    }
+    if (name === "mspace") {
+      if (parseFloat(node.getAttribute("width")) === 0) return "";
+      return "<m:r><span style=\"" + OFFICE_MATH_RUN_STYLE +
+        ";font-style:normal\">&#160;</span></m:r>";
+    }
+    if (name === "mfrac") {
+      return "<m:f><m:fPr>" + (node.getAttribute("linethickness") === "0" ?
+        '<m:type m:val="noBar"/>' : "") + officeOmmlControl() + "</m:fPr><m:num>" +
+        officeOmmlNode(children[0]) + "</m:num><m:den>" +
+        officeOmmlNode(children[1]) + "</m:den></m:f>";
+    }
+    if (name === "msqrt" || name === "mroot") {
+      var degree = name === "mroot" ? officeOmmlNode(children[1]) : "";
+      return "<m:rad><m:radPr>" + (name === "msqrt" ?
+        "<m:degHide m:val=\"on\"/>" : "") + officeOmmlControl() +
+        "</m:radPr><m:deg>" + degree + "</m:deg><m:e>" +
+        (name === "msqrt" ? officeOmmlChildren(node) :
+          officeOmmlNode(children[0])) + "</m:e></m:rad>";
+    }
+    if (name === "msup") {
+      if (children[0] && children[0].localName === "mo" &&
+          nary.indexOf(children[0].textContent) !== -1)
+        return officeOmmlNary(children[0], null, children[1], "subSup");
+      return "<m:sSup><m:sSupPr>" + officeOmmlControl() +
+        "</m:sSupPr><m:e>" + officeOmmlNode(children[0]) +
+        "</m:e><m:sup>" + officeOmmlNode(children[1]) + "</m:sup></m:sSup>";
+    }
+    if (name === "msub") {
+      if (children[0] && children[0].localName === "mo" &&
+          nary.indexOf(children[0].textContent) !== -1)
+        return officeOmmlNary(children[0], children[1], null, "subSup");
+      return "<m:sSub><m:sSubPr>" + officeOmmlControl() +
+        "</m:sSubPr><m:e>" + officeOmmlNode(children[0]) +
+        "</m:e><m:sub>" + officeOmmlNode(children[1]) + "</m:sub></m:sSub>";
+    }
+    if (name === "msubsup") {
+      if (children[0] && children[0].localName === "mo" &&
+          nary.indexOf(children[0].textContent) !== -1) {
+        return officeOmmlNary(children[0], children[1], children[2], "subSup");
+      }
+      return "<m:sSubSup><m:sSubSupPr>" + officeOmmlControl() +
+        "</m:sSubSupPr><m:e>" + officeOmmlNode(children[0]) +
+        "</m:e><m:sub>" + officeOmmlNode(children[1]) +
+        "</m:sub><m:sup>" + officeOmmlNode(children[2]) +
+        "</m:sup></m:sSubSup>";
+    }
+    if (name === "munderover" && children[0] &&
+        children[0].localName === "mo" &&
+        nary.indexOf(children[0].textContent) !== -1) {
+      return officeOmmlNary(children[0], children[1], children[2], "undOvr");
+    }
+    if (name === "munder") {
+      if (children[0] && children[0].localName === "mo" &&
+          nary.indexOf(children[0].textContent) !== -1)
+        return officeOmmlNary(children[0], children[1], null, "undOvr");
+      if (children[1] && children[1].localName === "mo" &&
+          (["―", "¯", "_"].indexOf(children[1].textContent) !== -1)) {
+        return officeOmmlBar(children[0], "bot");
+      }
+      return "<m:limLow><m:limLowPr>" + officeOmmlControl() +
+        "</m:limLowPr><m:e>" + officeOmmlNode(children[0]) +
+        "</m:e><m:lim>" + officeOmmlNode(children[1]) + "</m:lim></m:limLow>";
+    }
+    if (name === "mover") {
+      if (children[0] && children[0].localName === "mo" &&
+          nary.indexOf(children[0].textContent) !== -1)
+        return officeOmmlNary(children[0], null, children[1], "undOvr");
+      if (children[1] && children[1].localName === "mo") {
+        if (["―", "¯", "_"].indexOf(children[1].textContent) !== -1) {
+          return officeOmmlBar(children[0], "top");
+        }
+        return "<m:acc><m:accPr><m:chr m:val=\"" +
+          officeHtmlEscape(children[1].textContent) + "\"/>" +
+          officeOmmlControl() + "</m:accPr><m:e>" +
+          officeOmmlNode(children[0]) + "</m:e></m:acc>";
+      }
+      return "<m:limUpp><m:limUppPr>" + officeOmmlControl() +
+        "</m:limUppPr><m:e>" + officeOmmlNode(children[0]) +
+        "</m:e><m:lim>" + officeOmmlNode(children[1]) + "</m:lim></m:limUpp>";
+    }
+    if (name === "mfenced") {
+      var open = node.hasAttribute("open") ? node.getAttribute("open") : "(";
+      var close = node.hasAttribute("close") ? node.getAttribute("close") : ")";
+      return "<m:d><m:dPr><m:begChr m:val=\"" + officeHtmlEscape(open) +
+        "\"/><m:endChr m:val=\"" + officeHtmlEscape(close) + "\"/>" +
+        officeOmmlControl() + "</m:dPr><m:e>" + officeOmmlChildren(node) +
+        "</m:e></m:d>";
+    }
+    if (name === "mtable" && /(?:^|\s)right left(?:\s|$)/.test(
+        node.getAttribute("columnalign") || "")) {
+      // MathJax aligned/align rows: retain one editable equation array.
+      return "<m:eqArr><m:eqArrPr><m:baseJc m:val=\"left\"/>" +
+        "</m:eqArrPr>" + children.map(function (row) {
+          return "<m:e>" + officeOmmlChildren(row) + "</m:e>";
+        }).join("") + "</m:eqArr>";
+    }
+    if (name === "mtable") {
+      return "<m:m><m:mPr>" + officeOmmlControl() + "</m:mPr>" +
+        officeOmmlChildren(node) + "</m:m>";
+    }
+    if (name === "mtr") {
+      var row = "<m:mr>";
+      children.forEach(function (cell) {
+        row += "<m:e>" + officeOmmlNode(cell) + "</m:e>";
+      });
+      return row + "</m:mr>";
+    }
+    if (name === "mtd") return officeOmmlChildren(node);
+    if (name === "menclose") {
+      var notation = (node.getAttribute("notation") || "longdiv").split(/\s+/);
+      var strikes = {updiagonalstrike:"strikeBLTR", downdiagonalstrike:"strikeTLBR",
+        horizontalstrike:"strikeH", verticalstrike:"strikeV"};
+      if (!notation.every(function (item) { return item === "box" || strikes[item]; }))
+        throw new Error("unsupported Office enclosure: " + notation.join(" "));
+      var properties = notation.indexOf("box") >= 0 ? "" :
+        ["hideTop", "hideBot", "hideLeft", "hideRight"].map(function (item) {
+          return "<m:" + item + " m:val=\"1\"/>";
+        }).join("");
+      notation.forEach(function (item) {
+        if (strikes[item]) properties += "<m:" + strikes[item] + " m:val=\"1\"/>";
+      });
+      return "<m:borderBox><m:borderBoxPr>" + properties + officeOmmlControl() +
+        "</m:borderBoxPr><m:e>" + officeOmmlChildren(node) +
+        "</m:e></m:borderBox>";
+    }
+    if (name === "mphantom") {
+      return "<m:phant><m:phantPr><m:show m:val=\"0\"/>" + officeOmmlControl() +
+        "</m:phantPr><m:e>" + officeOmmlChildren(node) + "</m:e></m:phant>";
+    }
+    throw new Error("unsupported Office MathML element: " + name);
+  }
+
+  function officeOmml(mml) {
+    var doc = new window.DOMParser().parseFromString(mml, "application/xml");
+    if (doc.querySelector("parsererror, merror")) throw new Error("invalid MathML");
+    return officeOmmlNode(doc.documentElement);
+  }
+
+  function officeInheritedAttribute(node, name) {
+    for (var current = node; current && current.nodeType === 1;
+         current = current.parentNode) {
+      if (current.hasAttribute(name)) return current.getAttribute(name);
+    }
+    return "";
+  }
+
+  /* UXP-0029: candidate Office HTML transport. Actual PowerPoint acceptance
+   * is a user gate; generated OMML alone is not a successful paste. */
+  function officeOmmlHtml(mml) {
+    var doc = new window.DOMParser().parseFromString(mml, "application/xml");
+    if (doc.querySelector("parsererror, merror")) throw new Error("invalid MathML");
+    var rows = splitUnanchoredOfficeRows(doc.documentElement);
+    var body = rows ? "<m:eqArr><m:eqArrPr><m:baseJc m:val=\"left\"/>" +
+      "</m:eqArrPr>" + rows.map(function (row) {
+        return "<m:e>" + officeOmml(row) + "</m:e>";
+      }).join("") + "</m:eqArr>" : officeOmml(mml);
+    // The legacy namespace + HTML runs are the RichEdit HTML math dialect,
+    // documented by Microsoft (RichEdit HTML Support, 2021-05-30).
+    body = officeCanonicalRuns(body);
+    var math = "<m:oMathPara xmlns:m=\"http://schemas.microsoft.com/office/" +
+      "2004/12/omml\"><m:oMathParaPr><m:jc m:val=\"left\"/>" +
+      "</m:oMathParaPr><m:oMath>" + body + "</m:oMath></m:oMathPara>";
+    return '<p style="margin:0;font-size:18pt;font-family:Cambria Math">' +
+      "<!--[if gte msEquation 12]>" + math + "<![endif]-->" +
+      "<![if !msEquation]>" + mml + "<![endif]></p>";
+  }
+
+  // Shared wire contract v1: merge adjacent runs only when the entire style
+  // string is identical. Never change text, equation structure or run styles.
+  function officeCanonicalRuns(body) {
+    var previous;
+    do {
+      previous = body;
+      body = body.replace(/<m:r><span style="([^"]*)">([^<]*)<\/span><\/m:r><m:r><span style="\1">([^<]*)<\/span><\/m:r>/g,
+        '<m:r><span style="$1">$2$3</span></m:r>');
+    } while (body !== previous);
+    return body;
   }
 
   /* ClipboardItemのtext/htmlはChromiumによってHTML文書として包み直される。
@@ -3770,10 +4102,9 @@
   function composePaletteInsertion(value, start, end, item) {
     if (item[6]) throw new Error(item[6]);
     var snippet = item[1], slot = item[5] || 0;
+    if (snippet.indexOf("\\begin{") >= 0) snippet = prettyTex(snippet);
     if (/^[\^_]\{[^{}]*\}\s*$/.test(snippet))
       return composeInsertion(value, start, end, snippet);
-    if (/^'+$/.test(snippet) && end > start)
-      return composeInsertion(value, end, end, snippet);
     var holes = [], match, pattern = /\{\}|\[\]/g;
     while ((match = pattern.exec(snippet))) holes.push(match.index + 1);
     if (!holes.length) return composeInsertion(value, start, end, snippet);
@@ -3798,9 +4129,30 @@
     var officePreparing = true;
     officeButton.disabled = true;
     officeButton.title = "数式機能を準備しています";
-    var officePreparation = (window.MathJax && window.MathJax.startup
-      ? window.MathJax.startup.promise : Promise.resolve())
-      .then(warmAutoloadedMacros).then(function () {
+    // The editor can load before the asynchronous MathJax script. A config
+    // object is not a started engine; wait for both its promise and converters.
+    var officePreparation = new Promise(function (resolve, reject) {
+      var deadline = Date.now() + 60000;
+      function awaitEngine() {
+        var mj = window.MathJax;
+        var startup = mj && mj.startup && mj.startup.promise;
+        if (startup && typeof startup.then === "function") {
+          startup.then(function () {
+            if (typeof mj.tex2mmlPromise === "function" &&
+                typeof mj.tex2chtmlPromise === "function") resolve();
+            else reject(new Error("MathJax conversion unavailable"));
+          }, reject);
+        } else if (Date.now() >= deadline) {
+          // Keep waiting at a lower rate. A delayed CDN must still recover
+          // without reloading or constructing another editor instance.
+          officeButton.title = "数式機能の読み込みを待っています";
+          window.setTimeout(awaitEngine, 1000);
+        } else {
+          window.setTimeout(awaitEngine, 100);
+        }
+      }
+      awaitEngine();
+    }).then(warmAutoloadedMacros).then(function () {
         officeReady = true;
         officePreparing = false;
         officeButton.disabled = false;
@@ -4134,15 +4486,15 @@
         say("この数式はMathMLに変換できませんでした");
         return;
       }
-      /* native版と同じinline 18 pt MathMLを同期CF_HTMLで渡す。
-       * PowerPointにOMMLを直接渡すと、MathMLからのOffice変換と
-       * 総和記号の大きさや上下限の位置が異なるため使わない。 */
-      /* The trailing inline sentinel keeps the equation out of a centred
-       * display paragraph. Give that otherwise invisible run the same 18 pt
-       * size as the equation so the caret and next insertion agree. */
-      var html = mml + '<span style="font-size:18pt">&#160;</span>';
+      var html;
+      try {
+        html = officeOmmlHtml(mml);
+      } catch (error) {
+        say("この数式はOffice形式に変換できませんでした: " + error.message);
+        return;
+      }
       writeOfficeClipboard(html, tex).then(
-        function () { say("18 pt・左揃えのPowerPoint数式をコピーしました"); },
+        function () { say("数式をコピーしました"); },
         function () { say("コピーできませんでした（ブラウザの権限を確認してください）"); }
       );
     });

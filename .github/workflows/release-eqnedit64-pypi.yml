@@ -135,17 +135,15 @@ jobs:
           $expectedVersion = $env:EQNEDIT64_TAG.Substring('eqnedit64-v'.Length)
           $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $exe).Hash
           $actualVersion = (Get-Item -LiteralPath $exe).VersionInfo.ProductVersion
-          $signature = Get-AuthenticodeSignature -LiteralPath $exe
+          . ./.agents/skills/release-eqnedit64/scripts/assert_release_signature.ps1
+          $signature = Assert-EqneditReleaseSignature $exe -AllowUntrustedRoot
           if ($manifest.schema -cne 'eqnedit64.o-release.v1' -or
               $manifest.tag -cne $env:EQNEDIT64_TAG -or
               $manifest.version -cne $expectedVersion -or
               $manifest.source_sha -cne $env:EQNEDIT64_SHA -or
               $manifest.exe_sha256 -cne $actualHash -or
               $actualVersion -cne $expectedVersion -or
-              $manifest.signer -cne 'CN=ksugahar' -or
-              -not $signature.SignerCertificate -or
-              $signature.SignerCertificate.Subject -cne 'CN=ksugahar' -or
-              $signature.Status -in @('NotSigned', 'HashMismatch')) {
+              $manifest.signer -cne 'CN=ksugahar') {
             throw ('The staged signed Eqnedit64 does not match this tag. ' +
               'It must be the executable compiled and signed from the exact ' +
               'tagged commit, staged by sync_to_o.ps1 before the tag push.')
@@ -203,12 +201,8 @@ jobs:
           if ($actual -ne $expected) {
             throw "SHA-256 mismatch: $actual != $expected"
           }
-          $signature = Get-AuthenticodeSignature -LiteralPath $exe
-          if (-not $signature.SignerCertificate -or
-              $signature.SignerCertificate.Subject -cne 'CN=ksugahar' -or
-              $signature.Status -in @('NotSigned', 'HashMismatch')) {
-            throw "invalid Eqnedit64 Authenticode signature: $($signature.Status)"
-          }
+          . ./.agents/skills/release-eqnedit64/scripts/assert_release_signature.ps1
+          $signature = Assert-EqneditReleaseSignature $exe -AllowUntrustedRoot
           "EQNEDIT64_RELEASE_EXE=$exe" |
             Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 

@@ -4,7 +4,7 @@
 # `build\build_tests.bat` runs the required checks.  Nothing here writes to
 # dist, so a build from this file can never become the shipped executable.
 cmake_minimum_required(VERSION 3.20)
-project(Eqnedit64 VERSION 3.1.1 LANGUAGES CXX)
+project(Eqnedit64 VERSION 3.1.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -16,6 +16,7 @@ set(EQNEDIT_CORE_SOURCES
     src/equation_render.cpp
     src/latex_emitter.cpp
     src/mathml_emitter.cpp
+    src/office_html.cpp
     src/math_symbols.cpp
     src/palettes.cpp
     src/tex_document.cpp
@@ -54,8 +55,20 @@ if(WIN32)
 endif()
 
 enable_testing()
+add_executable(test_color tests/test_color.cpp)
+target_link_libraries(test_color PRIVATE eqnedit_core)
+if(MSVC)
+    target_compile_options(test_color PRIVATE /W4 /WX /utf-8)
+endif()
+add_test(NAME color COMMAND test_color)
 if(WIN32)
     # Manual disposable-CI diagnostic, intentionally not a CTest/release target.
+    add_executable(test_color_render tests/test_color_render.cpp src/eqnedit64.rc)
+    target_include_directories(test_color_render PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(test_color_render PRIVATE eqnedit_core gdi32 user32)
+    target_compile_definitions(test_color_render PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(test_color_render PRIVATE /W4 /WX /utf-8)
+    add_test(NAME color_render COMMAND test_color_render)
     add_executable(font_lifecycle_probe EXCLUDE_FROM_ALL tests/font_lifecycle_probe.cpp)
     target_compile_options(font_lifecycle_probe PRIVATE /W4 /WX /utf-8)
     target_link_libraries(font_lifecycle_probe PRIVATE gdi32 user32)
@@ -97,3 +110,10 @@ if(MSVC)
     target_compile_options(test_node_dispatch PRIVATE /W4 /WX /utf-8)
 endif()
 add_test(NAME node_dispatch COMMAND test_node_dispatch)
+
+# Pure parser/serializer probe: no font registration, rendering or Office.
+add_executable(office_payload_probe tests/office_payload_probe.cpp)
+target_link_libraries(office_payload_probe PRIVATE eqnedit_core)
+if(MSVC)
+    target_compile_options(office_payload_probe PRIVATE /W4 /WX /utf-8)
+endif()

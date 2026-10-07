@@ -144,45 +144,42 @@ def test_extended_math_alphabets_remain_in_decoration_palette() -> None:
     assert '"\\\\displaystyle " + mathJaxTex(tex)' in SOURCE
 
 
-def test_office_copy_is_editable_mathml_without_png_competition() -> None:
-    office = SOURCE.split(
-        'root.querySelector(".eqed-copy-office")', 1
-    )[1].split(
-        'root.querySelector(".eqed-copy-display")', 1
-    )[0]
+def test_office_copy_has_conditional_omml_without_png_competition() -> None:
+    office = SOURCE.split('root.querySelector(".eqed-copy-office")', 1)[1].split(
+        'root.querySelector(".eqed-copy-display")', 1)[0]
     assert "officeMathMl(tex)" in office
+    assert "officeOmmlHtml(mml)" in office
     assert '"image/png"' not in office
-    assert "officeOmml(mml)" not in office
     assert "writeOfficeClipboard(html, tex)" in office
-    assert "<!--[if gte msEquation 12]>" not in office
-    assert "var html = mml + '<span style=\"font-size:18pt\">&#160;</span>'" in office
-    assert '<m:oMath' not in office
-    assert '<m:oMathPara' not in office
-    assert "<!DOCTYPE html>" not in office
+    assert "Office形式に変換できませんでした" in office
+    converter = SOURCE.split("function officeOmmlHtml", 1)[1].split(
+        "function writeOfficeClipboard", 1)[0]
+    assert "<!--[if gte msEquation 12]>" in converter
+    assert "2004/12/omml" in converter
+    assert "<m:eqArr>" in converter
+    assert "rows.map(" in converter
+    assert "officeOmml(row)" in converter
+    assert "<![if !msEquation]>" in converter
+    assert "unsupported Office MathML element" in SOURCE
+    assert "unsupported Office padding dimensions" in SOURCE
 
 
-def test_office_mathml_is_canonical_inline_18pt() -> None:
+def test_office_mathml_is_validated_and_styles_survive_to_omml() -> None:
     canonical = SOURCE.split("function officeMathMl", 1)[1].split(
-        "function getSvgConverter", 1)[0]
+        "function officeHtmlEscape", 1)[0]
     assert "MathJax.tex2mml" in canonical
     assert '{ display: false }' in canonical
     assert 'setAttribute("display", "inline")' in canonical
     assert 'setAttribute("mathsize", "18pt")' in canonical
-    assert "splitUnanchoredOfficeRows(math)" in canonical
-    assert 'cells[0].textContent.trim() === ""' in SOURCE
-    assert "onlyNestedSyntheticTable(content)" in SOURCE
-    assert "collectLeafCells(nested, output)" in SOURCE
-    assert "leafCells.length < 2" in SOURCE
-    assert "officeRows.join(" in canonical
-    assert 'font-size:18pt' in canonical
-    assert "maligngroup" not in canonical
-    assert "malignmark" not in canonical
-    assert 'querySelectorAll("mstyle")' in canonical
+    assert 'querySelectorAll("mstyle")' not in canonical
+    assert 'officeInheritedAttribute(node, "mathcolor")' in SOURCE
+    assert "body = officeCanonicalRuns(body)" in SOURCE
+    assert "colourContext.fillStyle.toUpperCase()" in SOURCE
     assert 'attribute.name.indexOf("data-") === 0' in canonical
     assert 'setAttribute("largeop", "true")' in canonical
-    assert 'node.textContent === "―"' in canonical
-    assert 'parent === "mover" ? "¯" : "_"' in canonical
-    assert 'node.setAttribute("stretchy", "true")' in canonical
+    assert 'cells[0].textContent.trim() === ""' in SOURCE
+    assert "collectLeafCells(nested, output)" in SOURCE
+    assert "leafCells.length < 2" in SOURCE
 
 
 def test_autoloaded_macros_are_warmed_before_the_first_office_copy() -> None:
@@ -193,7 +190,7 @@ def test_autoloaded_macros_are_warmed_before_the_first_office_copy() -> None:
     failed the first copy of a `\\bm` equation on a freshly opened page.
     """
     assert "function warmAutoloadedMacros()" in SOURCE
-    assert r'"\\require{cancel}\\boldsymbol{x}+\\cancel{x}"' in SOURCE
+    assert r'"\\require{cancel}\\require{color}\\boldsymbol{x}+\\cancel{x}"' in SOURCE
     assert "var palettePreviewQueue = officePreparation" in SOURCE
     assert "officeButton.disabled = true" in SOURCE
     assert "officeButton.disabled = false" in SOURCE

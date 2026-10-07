@@ -61,9 +61,10 @@ struct Glyph {
     unsigned short glyphIndex = 0;
     std::string outline;
     std::string text;           /* UTF-8 */
+    std::string color;          /* empty inherits the default ink */
 };
 
-struct Rule { double x = 0, y = 0, w = 0, h = 0; };   /* y is the TOP edge */
+struct Rule { double x = 0, y = 0, w = 0, h = 0; std::string color; }; /* y: top */
 
 struct Placeholder { double x = 0, y = 0, w = 0, h = 0; };
 
@@ -1779,8 +1780,15 @@ private:
                 for (auto& g : b.glyphs) g.bold = true;
                 return b;
             }
-            case Node::kGroup:
-                return layout_list(static_cast<const GroupNode&>(n).children, sizePt);
+            case Node::kGroup: {
+                const auto& group = static_cast<const GroupNode&>(n);
+                Layout colored = layout_list(group.children, sizePt);
+                for (auto& glyph : colored.glyphs)
+                    if (glyph.color.empty()) glyph.color = group.colorHex;
+                for (auto& rule : colored.rules)
+                    if (rule.color.empty()) rule.color = group.colorHex;
+                return colored;
+            }
             case Node::kPrime: {
                 Layout out;
                 int count = std::max(1, static_cast<const PrimeNode&>(n).count);
@@ -2761,7 +2769,7 @@ std::string render_svg(const LineNode& root, const SvgStyle& style) {
     for (const auto& r2 : L.rules) {
         o << "  <rect x=\"" << (r2.x + pad) << "\" y=\"" << (r2.y + baseline)
           << "\" width=\"" << r2.w << "\" height=\"" << r2.h
-          << "\" fill=\"currentColor\"/>\n";
+          << "\" fill=\"" << (r2.color.empty() ? "currentColor" : r2.color) << "\"/>\n";
     }
     for (const auto& g : L.glyphs) {
         if (g.glyphIndex && !g.outline.empty()) {
@@ -2772,7 +2780,7 @@ std::string render_svg(const LineNode& root, const SvgStyle& style) {
               << "\" data-size=\"" << g.size
               << "\" transform=\"translate(" << (g.x + pad) << ','
               << (g.y + baseline) << ") scale(" << g.size << ")\" d=\""
-              << g.outline << "\" fill=\"currentColor\"/>\n";
+              << g.outline << "\" fill=\"" << (g.color.empty() ? "currentColor" : g.color) << "\"/>\n";
             continue;
         }
         const std::string& family = g.cjk ? style.cjk
@@ -2782,6 +2790,7 @@ std::string render_svg(const LineNode& root, const SvgStyle& style) {
           << " font-size=\"" << g.size << "\"";
         if (g.italic) o << " font-style=\"italic\"";
         if (g.bold) o << " font-weight=\"bold\"";
+        if (!g.color.empty()) o << " fill=\"" << g.color << "\"";
         if (std::fabs(g.stretchY - 1.0) > 1e-6 || std::fabs(g.stretchX - 1.0) > 1e-6) {
             o << " transform=\"translate(" << (g.x + pad) << ',' << (g.y + baseline)
               << ") scale(" << g.stretchX << ',' << g.stretchY << ") translate("
@@ -2940,6 +2949,13 @@ bool caret_geometry_equation(const LineNode& root, const NodeList* slot,
     return true;
 }
 
+/* Stored colours are validated six-digit RGB, independent of GDI byte order. */
+COLORREF ink_color(const std::string& hex) {
+    if (hex.empty()) return RGB(20, 20, 20);
+    const unsigned long rgb = std::stoul(hex.substr(1), nullptr, 16);
+    return RGB((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255);
+}
+
 /* Draw one glyph as its outline, recording geometry rather than text.
  *
  * A metafile stores the calls it was given, so a TextOut in it is still a
@@ -3054,7 +3070,7 @@ bool emit_glyph_outline(HDC hdc, HFONT face, const Glyph& g,
     /* The brush matters: the default one is white, and filling white on white
      * reads exactly like the metafile being empty. */
     const int mode = SetPolyFillMode(hdc, WINDING);
-    HBRUSH ink = CreateSolidBrush(RGB(20, 20, 20));
+    HBRUSH ink = CreateSolidBrush(GetTextColor(hdc));
     HGDIOBJ oldBrush = SelectObject(hdc, ink);
     HGDIOBJ oldPen = SelectObject(hdc, GetStockObject(NULL_PEN));
     PolyPolygon(hdc, points.data(), counts.data(), INT(counts.size()));
@@ -3146,16 +3162,16 @@ void draw_equation_gdi(const LineNode& root, HDC hdc,
         DeleteObject(dot);
     }
 
-    HBRUSH ink = CreateSolidBrush(RGB(20, 20, 20));
     for (const auto& rule : L.rules) {
+        HBRUSH ink = CreateSolidBrush(ink_color(rule.color));
         RECT rr{
             LONG(std::floor(left + (rule.x + style.padding) * scale)),
             LONG(std::floor(top + (rule.y + baseline) * scale)),
             LONG(std::ceil(left + (rule.x + rule.w + style.padding) * scale)),
             LONG(std::ceil(top + (rule.y + rule.h + baseline) * scale))};
         FillRect(hdc, &rr, ink);
+        DeleteObject(ink);
     }
-    DeleteObject(ink);
 
     SetTextColor(hdc, RGB(20, 20, 20));
     SetTextAlign(hdc, TA_LEFT | TA_BASELINE | TA_NOUPDATECP);
@@ -3168,6 +3184,7 @@ void draw_equation_gdi(const LineNode& root, HDC hdc,
     HFONT selected = nullptr;
     std::wstring text;
     for (const auto& g : L.glyphs) {
+        SetTextColor(hdc, ink_color(g.color));
         DrawFontKey key;
         key.face = g.cjk ? cjkFace : g.symbol ? symbolFace : serifFace;
         key.height = -std::max(1, int(std::lround(g.size * scale)));

@@ -17,12 +17,13 @@ inline void font_trace(const char* stage, long long result = 0) noexcept {
     wchar_t directory[32768];
     const DWORD length = GetEnvironmentVariableW(L"EQNEDIT64_FONT_TRACE_DIR",
                                                 directory, 32768);
-    if (!length || length >= 32768) {
+    if (!length || length >= 32768 - 32) {
         SetLastError(savedError);
         return;
     }
     wchar_t filename[32768];
-    if (swprintf_s(filename, L"%ls\\font-%lu.jsonl", directory,
+    if (_snwprintf_s(filename, sizeof(filename) / sizeof(filename[0]), _TRUNCATE,
+                     L"%ls\\font-%lu.jsonl", directory,
                    GetCurrentProcessId()) < 0) {
         SetLastError(savedError);
         return;

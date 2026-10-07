@@ -92,7 +92,7 @@ def test_every_face_glyph_is_in_the_embedded_math_font():
          for character in face
          if ord(character) > 0x20 and ord(character) not in covered})
     assert not missing, (
-        "%d palette face character(s) are absent from Latin Modern Math. "
+        "%d palette face character(s) are absent from Eqnedit Math. "
         "pick_button_font tests the whole sample at once, so each one of "
         "these drops EVERY key in EVERY palette to a fallback font: %s"
         % (len(missing),

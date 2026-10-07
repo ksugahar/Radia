@@ -37,7 +37,7 @@ cl /nologo /O2 /W4 /WX /EHsc /MD /std:c++17 /utf-8 ^
    /D_CRT_SECURE_NO_WARNINGS /I src /I "!PYINC!" /I "!PYBIND!" ^
    /TP src\eqnedit_pybind.cpp src\equation_render.cpp src\tex_parser.cpp ^
        src\equation_edit.cpp src\equation_node.cpp src\latex_emitter.cpp ^
-       src\mathml_emitter.cpp src\math_symbols.cpp src\palettes.cpp src\tex_document.cpp ^
+       src\mathml_emitter.cpp src\office_html.cpp src\math_symbols.cpp src\palettes.cpp src\tex_document.cpp ^
    /LD /Fo:build\ /Fe:build\eqnedit_core!EXTSUF! ^
    /link /LIBPATH:"!PYLIBS!" build\Eqnedit64.res gdi32.lib user32.lib
 if errorlevel 1 ( echo [ERROR] eqnedit_core module build failed & exit /b 1 )
