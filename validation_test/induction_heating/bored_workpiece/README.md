@@ -1,184 +1,122 @@
 # Stepped bored workpiece: linear SIBC validation
 
-This example uses a synthetic, axisymmetric workpiece with a stepped axial
-through-hole. It compares total dissipated power from the production P1 scalar
-BIE with one circulation unknown and Faraday closure against an independent
-HCurl air-domain FEM with SIBC. The FEM assembles curl-curl and Robin forms and
-fixed filament loads; it does not use the BEM operators.
+Synthetic geometry and closed prescribed filament currents; independent HCurl
+air-domain FEM and P1 scalar BIE with one circulation unknown. The production
+loop closure now uses distributed Galerkin electric and magnetic work. The
+legacy residual key `faraday_residual_rel` measures that augmented row.
 
 ## Reproduce
 
-Use a Radia build with its native extensions available in `src/radia` and the
-matching NGSolve environment, plus `cubit-mesh-export` for the mesh checker
-(no Cubit process is used). From the repository root, choose a disposable
-scratch directory outside the checkout:
+Use matching native extensions in `src/radia`, NGSolve and the mesh checker.
+Run from the repository root. No installed package is modified.
 
 ```powershell
 $env:OPENBLAS_NUM_THREADS = '2'
 $env:OMP_NUM_THREADS = '2'
 $script = 'validation_test/induction_heating/bored_workpiece/validate.py'
-python $script --work ../bored-workpiece-scratch/coarse --sizes .006 --fem-sizes .0018 --no-carriers --out ../coarse.json
-python $script --work ../bored-workpiece-scratch/middle --sizes .0025 --fem-sizes .0025 --no-carriers --out ../middle.json
-python $script --work ../bored-workpiece-scratch/fine --sizes .0017 --fem-sizes .003 --out ../fine.json
+python $script --work ../bored-scratch/coarse --sizes .006 --fem-sizes .0018 --no-carriers --out ../coarse.json
+python $script --work ../bored-scratch/middle --sizes .0025 --fem-sizes .0025 --no-carriers --out ../middle.json
+python $script --work ../bored-scratch/fine --sizes .0017 --fem-sizes .003 --out ../fine.json
 python $script --merge ../coarse.json ../middle.json ../fine.json
-```
-
-Run the three computations sequentially with a process timeout below 1,200
-seconds each; the total budget is 3,600 seconds. A failed numerical gate returns
-exit code 1 **after saving the evidence**. Inspect the JSON before proceeding;
-a timeout or exception can leave incomplete evidence, which must not be merged.
-A single-size run is deliberately incomplete and fails the refinement gate.
-The merge reevaluates all gates without changing their thresholds. It rejects
-incompatible conditions, limits, source/native hashes, versions and duplicate
-BEM sizes. The merged `results.json` includes each run's provenance and time.
-
-Meshes remain in the scratch directory and are not committed. `--out` selects
-another evidence file. `--sizes` controls BEM sizes; `--fem-sizes` independently
-controls the FEM surface sizes (defaults to the BEM sizes). Only the finest
-BEM run needs the carrier comparison. The FEM sizes are 1.8, 2.5 and 3 mm; the finest FEM is paired with the
-coarse BEM. Every BEM is also compared against that finest FEM in the
-reported table. Refinement is assessed from actual node/DOF counts rather
-than assuming that both routes refine in the same row order.
-
-The script records source and native hashes, the base checkout commit, package
-versions, host, thread count, conditions and gates. Source hashes cover the raw
-executed checkout bytes; Git newline normalization can change those hashes
-between CRLF and LF checkouts without changing code. No installed packages are
-modified by the script.
-
-## Conditions and interpretation
-
-- Workpiece: outer radii 30/24 mm and bore radii 10/14 mm, with both steps at
-  z = 0; height 50 mm, centered at z = 0. All circular corners have 1.8 mm
-  fillets. OCC geometry is authored directly in metres.
-- Excitation: three closed 128-segment polygons approximating radius-40 mm
-  circular filaments at z = -18, 0, +18 mm; each carries a prescribed 100 A
-  peak phasor. There is no circuit-current solve.
-- Linear material: relative permeability 10, conductivity 5e6 S/m, 100 kHz;
-  peak phasors use exp(+i omega t). Skin depth is 0.2251 mm, or 0.1251 of
-  the minimum fillet radius. The two methods share the same linear SIBC
-  approximation; this does not validate that approximation against a resolved
-  conducting volume.
-- BEM: flat P1 surface, dense in-tree operators, singular quadrature 6 and
-  regular degree 7; maximum 7,000 nodes. Surface-Poisson reconstruction of the
-  incident scalar potential uses the fixed filament field.
-- FEM: air sphere of radius 180 mm, A = 0 at the outer boundary, HCurl order 2,
-  sparse Cholesky and real gauge regularization 1e-6. The live OCC mesh is
-  curved to order 2 before saving; the loaded mesh is never re-curved.
-  FEM curvature-safety factor is 1.5. Area and volume are recorded before
-  and after curving. A versioned label contract, curved-element mapping
-  quality and domain-ownership checks must pass before the FEM solve.
-- Carrier study on the finer BEM mesh: automatic carrier and explicit
-  (radius, z) = (20,-13), (25,-10), (19,13) mm. Explicit rings are checked
-  for material containment and segment clearance. The historical point trace
-  uses area-weighted vertex normals only within a temporary comparison patch;
-  production source files are unchanged.
-
-The operating condition was selected to make the circulation effect visible.
-An initial exploratory calculation at 10 kHz and relative permeability 100
-showed a smaller effect, so the geometry was retained and the condition changed
-to 100 kHz and relative permeability 10. The roughly 25% frozen-circulation
-error in this example is **condition-specific**, not a general magnitude.
-The effect depends on geometry, skin depth and magnetic flux through the bore.
-Those two conditions have the same product of frequency and permeability and
-thus the same skin depth for this conductivity; skin depth alone does not
-explain their different circulation sensitivity. The initial exploratory value
-is not presented as a validated FEM comparison.
-
-BEM power balance compares the surface loss with the complete incident-field
-reaction, including the multivalued contribution. FEM power balance compares
-the surface loss with `(omega/2) Im(a^H f)`, using the independently assembled
-load and solution vectors. The observer reads these vectors at solver return
-and does not alter assembly or the solution. The real gauge term contributes
-no dissipative power.
-
-The gates are fixed in the script: true residual and Faraday residual 1e-6;
-unit-jump error 0.005; BEM power balance 2%; FEM power balance 1e-5; total-power
-BEM/FEM difference 2%; successive-mesh power change 5%; L2 carrier power width
-2% and smaller than the historical point trace; frozen-circulation error at
-least 20%; skin-depth/fillet ratio 0.15; per-run runtime 1,200 seconds and summed runtime 3,600 seconds.
-A complete study also requires three BEM levels with at least 25% more nodes
-per level and at least a 10% increase between the smallest and largest FEM
-DOF counts. These coverage checks do not prove convergence.
-Carrier width means `(maximum - minimum) / mean` over the four carriers.
-
-Acceptance scope was corrected at Claude's round-2 review request, not by
-fitting thresholds to results. The 2% values are unchanged. Power-balance and
-cross-method acceptance apply to the finest BEM (largest node count) and the
-independently finest FEM (largest DOF count), even when they occupy different
-rows. Residuals, Faraday residual and unit jump must also pass on every coarse
-level. Coarse BEM balance must strictly decrease as node count increases;
-its absolute value is evidence rather than a 2% acceptance gate. Carrier gates
-apply to the finest BEM. Mesh quality, positive power and FEM residual/balance
-checks remain required on every recorded level. The coarse 2.3363% is retained.
-`check_gates.py` exercises the acceptance definition and rejection cases:
-
-```powershell
 python validation_test/induction_heating/bored_workpiece/check_gates.py
 ```
 
-## Recorded result (2026-10-07, round-2 review)
+Each computation has a 1,200 s budget; summed run time must be at most 3,600 s.
+A single-level result fails coverage by design; it is not a complete study.
+To reproduce the full diagnostic data on this runtime, allow execution beyond
+1,200 seconds while retaining the time gates and their failure verdicts.
+Incomplete or timed-out files must not be merged. Meshes and logs remain scratch
+artifacts. Results record executed source/native hashes, versions, host and time.
 
-Overall validation: **PASS under the reviewer-requested scope above**.
-The thresholds remain 2% for BEM power balance and BEM/FEM total-power
-difference. `complete_validation` indicates study coverage, whereas
-`validation_pass` additionally requires every applicable gate. Historical
-numerical values and their execution provenance are retained unchanged;
-`gate_reevaluation` identifies this later decision and its script hash.
+## Fixed conditions and acceptance
 
-| BEM maxh (mm) | BEM nodes | BEM power (W) | BEM balance | FEM maxh (mm) | FEM DOFs | FEM power (W) | Paired difference | Difference to finest FEM |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 6 | 2470 | 73.612298 | 2.3363% | 1.8 | 601029 | 72.620293 | 1.3660% | 1.3660% |
-| 2.5 | 3778 | 73.630548 | 0.6408% | 2.5 | 486921 | 72.615487 | 1.3979% | 1.3911% |
-| 1.7 | 6232 | 73.635503 | 0.0296% | 3 | 517256 | 72.613378 | 1.4076% | 1.3980% |
+- Metre-authored stepped cylinder: outer radii 30/24 mm, bore radii 10/14 mm,
+  height 50 mm centred at zero, step at zero, circular fillets 1.8 mm.
+- Three closed radius-40 mm, 128-segment filaments at z = -18, 0, 18 mm,
+  each 100 A peak; exp(+i omega t), 100 kHz, permeability 10, conductivity 5e6 S/m.
+  Skin depth 0.2251 mm; depth/fillet ratio 0.1251.
+- BEM: undeformed flat P1, dense in-tree operators, singular quadrature 6,
+  regular degree 7; distributed P0 work uses production quadrature bonus 4.
+- FEM: HCurl order 2, sphere radius 180 mm, outer A=0, real gauge 1e-6,
+  sparse Cholesky. The live SI CAD mesh is curved to order 2 before saving.
+  Label, curved-mapping and ownership checks precede every solve.
 
-Differences use FEM power as denominator; balance uses BEM surface power.
-The last column uses the same finest FEM reference for all BEM levels.
+Thresholds are unchanged: BEM balance <=2%, BEM/FEM difference <=2%,
+linear/augmented-row residual <=1e-6, unit jump error <=0.005, FEM balance
+<=1e-5, successive power change <=5%, L2 carrier width <=2% and smaller than
+point width, frozen-circulation error >=20%, skin-depth/fillet <=0.15.
+At least three BEM levels (node growth >=25% per level), FEM DOF range >=10%,
+and BEM nodes <=7,000 are required. BEM balance must strictly decrease with
+refinement. The absolute 2% balance and cross-method gates apply only to the
+finest BEM and independently finest FEM; all-level residual, FEM and quality
+gates remain required. Carrier checks apply to the finest BEM.
 
-| FEM maxh (mm) | FEM DOFs | Volume elements | FEM power (W) | Difference to finest FEM |
+## Results (2026-10-08)
+
+Overall validation: **FAIL** under the unchanged gates.
+
+The finest-solution and carrier gates pass. The failed gates are
+`balance_monotonic`, `runtime`, and `total_runtime`. Balance is
+0.065102%, 0.069803%, 0.054971%: the middle level increases, so strict
+monotonicity fails. This does not change the 2% finest-solution thresholds.
+The middle computation was stopped after 1,200 seconds; its completed BEM
+was retained and the FEM retried separately. The diagnostic finest run was
+allowed to finish beyond the execution budget. Both exceed the unchanged
+time gates; retry time is included. `execution_events` records these events.
+No failed attempt is relabelled as a passing run.
+
+| BEM maxh mm | Nodes | BEM W | Balance % | FEM maxh mm | FEM DOFs | FEM W | Difference to finest FEM % |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 6 | 2470 | 73.482534 | 0.065102 | 1.8 | 601029 | 72.620293 | 1.187328 |
+| 2.5 | 3778 | 73.576531 | 0.069803 | 2.5 | 486921 | 72.615487 | 1.316763 |
+| 1.7 | 6232 | 73.634332 | 0.054971 | 3 | 517256 | 72.613378 | 1.396357 |
+
+Finest-solution comparison with the previous recorded cut-line closure:
+
+| Quantity | Previous | Distributed work | Change |
+| --- | ---: | ---: | ---: |
+| BEM power W | 73.635503 | 73.634332 | -0.001171 |
+| Balance % | 0.029599 | 0.054971 | +0.025373 |
+| L2 carrier width % | 0.124630 | 0.118411 | -0.006219 |
+| Point carrier width % | 0.790301 | 1.340039 | +0.549738 |
+| Difference to finest FEM % | 1.397970 | 1.396357 | -0.001612 |
+| Frozen circulation power W | 91.100654 | 91.100654 | 0.000000 |
+| Frozen circulation error % | 25.447929 | 25.447929 | 0.000000 |
+
+Percentage changes above are percentage points. The previous independent
+synthetic results are identified by their validation commit in `results.json`.
+
+| Carrier radius,z mm | L2 power W | Point power W | L2 balance % | Point balance % |
 | --- | ---: | ---: | ---: | ---: |
-| 2.5 | 486921 | 90097 | 72.615487 | 0.0066% |
-| 3 | 517256 | 96071 | 72.613378 | 0.0095% |
-| 1.8 | 601029 | 110509 | 72.620293 | 0.0000% |
+| automatic | 73.634332 | 73.134926 | 0.054971 | 0.075635 |
+| 20, -13 | 73.633926 | 73.180752 | 0.057377 | 0.062754 |
+| 25, -10 | 73.609551 | 72.741825 | 0.045069 | 0.197023 |
+| 19, 13 | 73.547174 | 73.722667 | 0.038760 | 0.090746 |
 
-The FEM power range divided by finest FEM power is 0.0095%.
-BEM balance improves with refinement, but BEM/FEM total-power discrepancy
-does not decrease: it stays near 1.4% and slightly increases against the common
-finest FEM reference. Refinement therefore supports the balance improvement,
-not disappearance of the remaining cross-method discrepancy. BEM internal
-power balance is a necessary condition, but does not bound the difference
-from FEM. This is not an
-extrapolated error bound or proof of pointwise field convergence.
+The point-trace comparison still has a distinct meaning: the patched
+area-weighted vertex-normal trace enters the BIE lift and the new distributed
+normal-flux work. Both routes use the new closure; this is not a reproduction
+of the previous closure. Explicit rings at (20,-13), (25,-10), (19,13) mm
+and the automatic ring pass containment/clearance checks. Production files
+are unchanged by the temporary patch.
 
-| Carrier (r, z), mm | L2 power (W) | Point-trace power (W) | L2 balance | Point-trace balance |
-| --- | ---: | ---: | ---: | ---: |
-| automatic | 73.635503 | 73.193760 | 0.0296% | 0.2168% |
-| 20, -13 | 73.632260 | 73.284052 | 0.0373% | 0.1542% |
-| 25, -10 | 73.612248 | 72.776613 | 0.0327% | 0.4383% |
-| 19, 13 | 73.543768 | 73.354736 | 0.0448% | 0.0286% |
+FEM balance compares surface loss with (omega/2) Im(a^H f). BEM balance
+compares loss with the complete incident-field reaction including circulation.
+A small internal balance does not bound cross-method or pointwise field error.
+Refinement is a sensitivity study, not an extrapolated accuracy guarantee.
+Both routes share linear SIBC; no skin-resolved conducting-volume validation
+is claimed. The frozen-circulation diagnostic fixes alpha=0; its error is condition-specific.
+This operating point was selected after a preliminary 10 kHz, permeability-100
+study showed a smaller circulation effect. That exploratory run is not a
+validated FEM comparison. Equal frequency-permeability products give equal
+skin depths, but do not imply equal circulation sensitivity. Outer-boundary,
+filament and quadrature refinement, nonlinear material, off-axis/multiple holes
+and thermal evolution are outside this study.
 
-The carrier comparison uses the finest BEM (6,232 nodes). The power width
-`(maximum - minimum) / mean` is 0.7903%
-for the point trace and 0.1246% for L2.
-The finest BEM frozen-circulation power is 91.100654 W,
-which differs from the finest FEM by
-25.4479%.
+Solver-run times: 1029.7 s, 1654.0 s, 3497.8 s; sum 6181.4 s.
+Source hashes identify the exact executed script and loop-work implementation.
 
-All FEM meshes passed label, curved-mapping and boundary-ownership checks.
-Maximum FEM true residual is 4.812e-14;
-maximum FEM power-balance discrepancy is 1.128e-06.
-Split run times are 627.9, 509.6, 767.3 seconds
-(in merge input order); summed solver-run time is 1904.7 seconds.
-Each run is below 1,200 seconds and the sum is below 3,600 seconds.
-The source base commit in the evidence is the pre-review commit; executed
-validation-source hashes identify the revised script before its new commit.
-
-## Limits
-
-Agreement refers to total dissipated power within the stated gates, not to
-pointwise field equality. The three-level BEM and independently refined FEM study is a sensitivity check,
-not an asymptotic error estimate. BEM and FEM use independently specified
-surface mesh sizes. Outer-boundary, filament-segmentation and
-quadrature refinement are not included in this bounded run. Nonlinear
-materials, off-axis holes, multiple handles, curved BEM panels and thermal
-transients are outside its scope.
+`source_dirty` concerns the library `src` directory. The recorded validator
+hash identifies the executed, uncommitted diagnostic additions before this
+evidence commit. Native kernels came from the installed 5.2.3 distribution;
+the copied native binaries and executed Python source hashes are recorded.

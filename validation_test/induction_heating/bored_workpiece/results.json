@@ -1,11 +1,12 @@
 {
   "provenance": {
-    "commit": "6692a44cc39706154cdb9a42874303474164d986",
+    "commit": "5746c8633f55630c2455d51cedb5008a316a3d6d",
     "source_sha256": {
-      "validation_test/induction_heating/bored_workpiece/validate.py": "a35b2148f27a43dd25bc1958c60d639f45c55244197969f9dd2a351ff9eda451",
-      "src/radia/bem_loop_extension.py": "78f694d157f74eca1cb35a6ece2b1079b0edd028fbddcb1c2369aeac28b9ba5e",
-      "src/radia/bem_sibc_solver.py": "ca044ee5a8f2fb1fa8fc3630f5d47406eed6135544c3117898682d6a305cc684",
+      "validation_test/induction_heating/bored_workpiece/validate.py": "746bfff92a1c6bf136f04e9743cf4b2a428d8bbcaeb5133128fe8b11207f1ad9",
+      "src/radia/bem_loop_extension.py": "2c0e18f15170ef4c44f82c27c6f2866a187f4dde79c230b1fe43c8c492dc4636",
+      "src/radia/bem_sibc_solver.py": "88aec75a943d003665c0a1c846a3fbf6833721693f70e296ea6d8977d2b50438",
       "src/radia/cohomology.py": "a673df2e7632923611e1b8c4071ae1170e7f4ff82ef1cd5caf5fb67ab9131511",
+      "src/radia/bem_loop_work.py": "d83a089be59c277dd1a4a0a1fb291a464724addfb4148e91beaa2c77fa1a7f00",
       "src/radia/panels/calc_fem_kelvin.py": "34e94500a5eb3ccfba01345e39126cdf135deac275733379fd1c0353fd5ca37b",
       "src/radia/biot_savart.py": "3f9d956d456ba4ceaea116e7e37b2b7cea550140a046ccfe16dfc4b337ab11d7"
     },
@@ -18,7 +19,7 @@
       "sparsesolv_ngsolve.pyd": "c404eab1526354be6205bcf8748a1c7f32f974394fd1c389ef42eec31d937ece"
     },
     "source_dirty": false,
-    "utc": "2026-10-07T07:58:00.035285+00:00",
+    "utc": "2026-10-07T21:03:17.393615+00:00",
     "installed_native_distribution": "5.2.3",
     "mesh_checker_version": "2.1.4",
     "python": "3.12.10",
@@ -85,22 +86,22 @@
         "area_m2": 0.016304397052322474,
         "phi_gradient_residual": 0.01064998318118424,
         "automatic": {
-          "P_total": 73.61229831492024,
-          "P_frozen": 90.98187885061816,
-          "P_reaction": 71.89247158435663,
+          "P_total": 73.4825339167015,
+          "P_frozen": 90.98187885061839,
+          "P_reaction": 73.43469511524549,
           "theta_jump": 0.999999999742299,
-          "linear_residual_rel": 5.663236596659139e-16,
-          "faraday_residual_rel": 5.286732550405011e-16,
+          "linear_residual_rel": 1.846246670083433e-16,
+          "faraday_residual_rel": 1.4685625122009524e-16,
           "section_anchor": [
             0.019839128881109135,
             -0.0105140625
           ],
           "automatic_carrier": true,
           "alpha_A": [
-            -242.19888307547532,
-            -5.221930823606776
+            -238.9366920293549,
+            -6.957475105477165
           ],
-          "power_balance_rel": 0.023363307082276297,
+          "power_balance_rel": 0.0006510227520221123,
           "unit_jump_error": 2.577009716731027e-10,
           "carrier_diagnostics": {
             "candidate_count": 465,
@@ -114,18 +115,26 @@
                 "reason": "accepted"
               }
             ]
+          },
+          "loop_work_diagnostics": {
+            "magnetic_work_symmetry": 1.251170579186819e-07,
+            "gradient_work_residual": 3.6912834610511726e-09,
+            "conormal_flux_relative_mismatch": 3.3730416303645084e-08,
+            "quadrature_bonus": 4,
+            "single_layer_matrix_bytes": 195228800,
+            "single_layer_assembly_seconds": 405.22073040000396
           }
         },
         "carriers": [],
-        "elapsed_s": 23.068810299999313
+        "elapsed_s": 427.73941330000525
       },
       "fem": {
-        "P_total": 72.62029318107498,
+        "P_total": 72.62029318107507,
         "ndof": 601029,
         "ne": 110509,
-        "linear_true_relative_residual": 4.81227367923354e-14,
+        "linear_true_relative_residual": 4.7849438688738395e-14,
         "Z_s": "(0.0008885765876316731+0.0008885765876316731j)",
-        "source_work_W": 72.62021122915209,
+        "source_work_W": 72.62021122915212,
         "mesh_check": {
           "schema": "cubit-mesh-export.vol-check.v1",
           "passed": true,
@@ -299,13 +308,13 @@
         "volume_curved_m3": 0.024333982524099133,
         "geometry_order": 2,
         "area_flat_m2": 0.016458068162884396,
-        "area_curved_m2": 0.016518711772086993,
+        "area_curved_m2": 0.016518711772086997,
         "air_radius_m": 0.18,
-        "elapsed_s": 604.6694537000003,
-        "power_balance_rel": 1.1284989264170875e-06
+        "elapsed_s": 601.3004281999893,
+        "power_balance_rel": 1.1284989271942436e-06
       },
-      "bem_fem_power_rel": 0.01366016426526584,
-      "frozen_fem_error_rel": 0.25284372818159095
+      "bem_fem_power_rel": 0.011873275331958144,
+      "frozen_fem_error_rel": 0.25284372818159273
     },
     {
       "maxh_m": 0.0025,
@@ -317,22 +326,22 @@
         "area_m2": 0.01630444221381791,
         "phi_gradient_residual": 0.008134763874393457,
         "automatic": {
-          "P_total": 73.63054830118429,
-          "P_frozen": 90.97799428501116,
-          "P_reaction": 73.15870718181675,
+          "P_total": 73.57653056257524,
+          "P_frozen": 90.97799428501101,
+          "P_reaction": 73.52517223831879,
           "theta_jump": 0.9999999996900857,
-          "linear_residual_rel": 2.5526854260923e-16,
-          "faraday_residual_rel": 1.6661239504945546e-16,
+          "linear_residual_rel": 2.4273427355063554e-16,
+          "faraday_residual_rel": 1.3760783499343402e-16,
           "section_anchor": [
             0.01995975829347802,
             -0.0034265624999999995
           ],
           "automatic_carrier": true,
           "alpha_A": [
-            -240.30622396549802,
-            -6.669429322342307
+            -238.98504951287606,
+            -7.007674692550019
           ],
-          "power_balance_rel": 0.006408224986149569,
+          "power_balance_rel": 0.0006980259039637282,
           "unit_jump_error": 3.0991431643201395e-10,
           "carrier_diagnostics": {
             "candidate_count": 465,
@@ -346,16 +355,24 @@
                 "reason": "accepted"
               }
             ]
+          },
+          "loop_work_diagnostics": {
+            "magnetic_work_symmetry": 1.6357383706196705e-07,
+            "gradient_work_residual": 4.961119984448718e-10,
+            "conormal_flux_relative_mismatch": 4.295446714710751e-09,
+            "quadrature_bonus": 4,
+            "single_layer_matrix_bytes": 456745088,
+            "single_layer_assembly_seconds": 962.5833281000087
           }
         },
         "carriers": [],
-        "elapsed_s": 38.52230399999826
+        "elapsed_s": 1001.2529810999986
       },
       "fem": {
-        "P_total": 72.61548680675902,
+        "P_total": 72.61548680675901,
         "ndof": 486921,
         "ne": 90097,
-        "linear_true_relative_residual": 4.034620459766466e-14,
+        "linear_true_relative_residual": 4.036652564261809e-14,
         "Z_s": "(0.0008885765876316731+0.0008885765876316731j)",
         "source_work_W": 72.61540882494232,
         "mesh_check": {
@@ -533,11 +550,11 @@
         "area_flat_m2": 0.016455364381051652,
         "area_curved_m2": 0.01651870435466858,
         "air_radius_m": 0.18,
-        "elapsed_s": 470.9861330999993,
-        "power_balance_rel": 1.0739006255366945e-06
+        "elapsed_s": 453.93724629998906,
+        "power_balance_rel": 1.07390062531465e-06
       },
-      "bem_fem_power_rel": 0.013978581416475233,
-      "frozen_fem_error_rel": 0.25287315813385103
+      "bem_fem_power_rel": 0.01323469411385636,
+      "frozen_fem_error_rel": 0.25287315813384903
     },
     {
       "maxh_m": 0.0017,
@@ -549,22 +566,22 @@
         "area_m2": 0.016357435136542593,
         "phi_gradient_residual": 0.006419791278139697,
         "automatic": {
-          "P_total": 73.63550281313489,
-          "P_frozen": 91.10065369128331,
-          "P_reaction": 73.65729789396653,
+          "P_total": 73.63433202833146,
+          "P_frozen": 91.10065369128323,
+          "P_reaction": 73.59385429547915,
           "theta_jump": 0.9999999999961132,
-          "linear_residual_rel": 5.251523954385859e-16,
-          "faraday_residual_rel": 4.809437332883065e-16,
+          "linear_residual_rel": 1.857408347318433e-16,
+          "faraday_residual_rel": 1.4639497573774505e-16,
           "section_anchor": [
             0.019980323501945892,
             -0.009375000000000001
           ],
           "automatic_carrier": true,
           "alpha_A": [
-            -238.97556380138974,
-            -7.040234162151869
+            -238.9619754268093,
+            -6.949961884578798
           ],
-          "power_balance_rel": 0.0002959860393287883,
+          "power_balance_rel": 0.000549712773068034,
           "unit_jump_error": 3.8867797869102105e-12,
           "carrier_diagnostics": {
             "candidate_count": 468,
@@ -578,6 +595,14 @@
                 "reason": "accepted"
               }
             ]
+          },
+          "loop_work_diagnostics": {
+            "magnetic_work_symmetry": 2.8546536280809777e-08,
+            "gradient_work_residual": 1.1272852392314441e-12,
+            "conormal_flux_relative_mismatch": 1.138038298475229e-11,
+            "quadrature_bonus": 4,
+            "single_layer_matrix_bytes": 1242810368,
+            "single_layer_assembly_seconds": 2714.799742700008
           }
         },
         "carriers": [
@@ -585,22 +610,22 @@
             "anchor": null,
             "clearance_m": 0.009978827395051076,
             "l2": {
-              "P_total": 73.63550281313489,
-              "P_frozen": 91.10065369128331,
-              "P_reaction": 73.65729789396653,
+              "P_total": 73.63433202833146,
+              "P_frozen": 91.10065369128323,
+              "P_reaction": 73.59385429547915,
               "theta_jump": 0.9999999999961132,
-              "linear_residual_rel": 5.251523954385859e-16,
-              "faraday_residual_rel": 4.809437332883065e-16,
+              "linear_residual_rel": 1.857408347318433e-16,
+              "faraday_residual_rel": 1.4639497573774505e-16,
               "section_anchor": [
                 0.019980323501945892,
                 -0.009375000000000001
               ],
               "automatic_carrier": true,
               "alpha_A": [
-                -238.97556380138974,
-                -7.040234162151869
+                -238.9619754268093,
+                -6.949961884578798
               ],
-              "power_balance_rel": 0.0002959860393287883,
+              "power_balance_rel": 0.000549712773068034,
               "unit_jump_error": 3.8867797869102105e-12,
               "carrier_diagnostics": {
                 "candidate_count": 468,
@@ -614,25 +639,33 @@
                     "reason": "accepted"
                   }
                 ]
+              },
+              "loop_work_diagnostics": {
+                "magnetic_work_symmetry": 2.8546536280809777e-08,
+                "gradient_work_residual": 1.1272852392314441e-12,
+                "conormal_flux_relative_mismatch": 1.138038298475229e-11,
+                "quadrature_bonus": 4,
+                "single_layer_matrix_bytes": 1242810368,
+                "single_layer_assembly_seconds": 2714.799742700008
               }
             },
             "point": {
-              "P_total": 73.19375980444954,
-              "P_frozen": 91.10065369128331,
-              "P_reaction": 73.35241557349856,
+              "P_total": 73.13492612950628,
+              "P_frozen": 91.10065369128323,
+              "P_reaction": 73.19024192925727,
               "theta_jump": 0.9999999999961132,
-              "linear_residual_rel": 3.2961781127345517e-16,
-              "faraday_residual_rel": 2.4631414013405463e-16,
+              "linear_residual_rel": 1.9574126248127296e-16,
+              "faraday_residual_rel": 1.482663140874064e-16,
               "section_anchor": [
                 0.019980323501945892,
                 -0.009375000000000001
               ],
               "automatic_carrier": true,
               "alpha_A": [
-                -239.94888418304248,
-                -7.134714588400904
+                -238.54020788133016,
+                -6.718881455405587
               ],
-              "power_balance_rel": 0.0021676133248640372,
+              "power_balance_rel": 0.0007563527124241354,
               "unit_jump_error": 3.8867797869102105e-12,
               "carrier_diagnostics": {
                 "candidate_count": 468,
@@ -646,6 +679,14 @@
                     "reason": "accepted"
                   }
                 ]
+              },
+              "loop_work_diagnostics": {
+                "magnetic_work_symmetry": 2.8506793747204002e-08,
+                "gradient_work_residual": 1.1272852392314441e-12,
+                "conormal_flux_relative_mismatch": 1.138038298475229e-11,
+                "quadrature_bonus": 4,
+                "single_layer_matrix_bytes": 1242810368,
+                "single_layer_assembly_seconds": 2714.799742700008
               }
             }
           },
@@ -656,42 +697,58 @@
             ],
             "clearance_m": 0.009987147993116535,
             "l2": {
-              "P_total": 73.63226030564489,
-              "P_frozen": 91.10065369128331,
-              "P_reaction": 73.65975809328249,
+              "P_total": 73.63392593857775,
+              "P_frozen": 91.10065369128323,
+              "P_reaction": 73.59167673274872,
               "theta_jump": 0.9999999999996881,
-              "linear_residual_rel": 9.508810833599613e-16,
-              "faraday_residual_rel": 9.411650079543377e-16,
+              "linear_residual_rel": 3.411883569914776e-16,
+              "faraday_residual_rel": 2.9570220137898497e-16,
               "section_anchor": [
                 0.02,
                 -0.013
               ],
               "automatic_carrier": false,
               "alpha_A": [
-                -238.94010034434632,
-                -7.048420618310132
+                -238.9944273406551,
+                -6.960571598732443
               ],
-              "power_balance_rel": 0.00037344755577861655,
-              "unit_jump_error": 3.1186164761720647e-13
+              "power_balance_rel": 0.0005737736415720729,
+              "unit_jump_error": 3.1186164761720647e-13,
+              "loop_work_diagnostics": {
+                "magnetic_work_symmetry": 2.024796497441421e-08,
+                "gradient_work_residual": 1.178744466722037e-12,
+                "conormal_flux_relative_mismatch": 1.0774167269422902e-11,
+                "quadrature_bonus": 4,
+                "single_layer_matrix_bytes": 1242810368,
+                "single_layer_assembly_seconds": 2714.799742700008
+              }
             },
             "point": {
-              "P_total": 73.28405249149338,
-              "P_frozen": 91.10065369128331,
-              "P_reaction": 73.39703598741437,
+              "P_total": 73.18075216695374,
+              "P_frozen": 91.10065369128323,
+              "P_reaction": 73.22667577217095,
               "theta_jump": 0.9999999999996881,
-              "linear_residual_rel": 4.453607515765135e-16,
-              "faraday_residual_rel": 2.2202456553128904e-16,
+              "linear_residual_rel": 2.0314087175822425e-16,
+              "faraday_residual_rel": 0.0,
               "section_anchor": [
                 0.02,
                 -0.013
               ],
               "automatic_carrier": false,
               "alpha_A": [
-                -241.2191075676043,
-                -7.335980629951472
+                -238.77181921872162,
+                -6.770657643841439
               ],
-              "power_balance_rel": 0.001541720088884313,
-              "unit_jump_error": 3.1186164761720647e-13
+              "power_balance_rel": 0.0006275366658221593,
+              "unit_jump_error": 3.1186164761720647e-13,
+              "loop_work_diagnostics": {
+                "magnetic_work_symmetry": 2.0214521198810272e-08,
+                "gradient_work_residual": 1.178744466722037e-12,
+                "conormal_flux_relative_mismatch": 1.0774167269422902e-11,
+                "quadrature_bonus": 4,
+                "single_layer_matrix_bytes": 1242810368,
+                "single_layer_assembly_seconds": 2714.799742700008
+              }
             }
           },
           {
@@ -701,42 +758,58 @@
             ],
             "clearance_m": 0.00498694635598593,
             "l2": {
-              "P_total": 73.61224818478532,
-              "P_frozen": 91.10065369128331,
-              "P_reaction": 73.63631847577459,
+              "P_total": 73.60955062919311,
+              "P_frozen": 91.10065369128323,
+              "P_reaction": 73.57637530157005,
               "theta_jump": 1.0000000000074927,
-              "linear_residual_rel": 4.718097113757403e-16,
-              "faraday_residual_rel": 4.4147987633787615e-16,
+              "linear_residual_rel": 3.6918427422698754e-16,
+              "faraday_residual_rel": 3.5667098751304826e-16,
               "section_anchor": [
                 0.025,
                 -0.01
               ],
               "automatic_carrier": false,
               "alpha_A": [
-                -239.05874568230792,
-                -7.051017790270137
+                -239.0083804977984,
+                -6.960745215293251
               ],
-              "power_balance_rel": 0.0003269875813172174,
-              "unit_jump_error": 7.492673148590256e-12
+              "power_balance_rel": 0.0004506932502573724,
+              "unit_jump_error": 7.492673148590256e-12,
+              "loop_work_diagnostics": {
+                "magnetic_work_symmetry": 1.4793392522654083e-08,
+                "gradient_work_residual": 9.381632263005882e-13,
+                "conormal_flux_relative_mismatch": 1.5326143335049404e-11,
+                "quadrature_bonus": 4,
+                "single_layer_matrix_bytes": 1242810368,
+                "single_layer_assembly_seconds": 2714.799742700008
+              }
             },
             "point": {
-              "P_total": 72.77661321527229,
-              "P_frozen": 91.10065369128331,
-              "P_reaction": 73.09560513773404,
+              "P_total": 72.7418253115039,
+              "P_frozen": 91.10065369128323,
+              "P_reaction": 72.8851434587414,
               "theta_jump": 1.0000000000074927,
-              "linear_residual_rel": 4.879329966282703e-16,
-              "faraday_residual_rel": 4.616337053338935e-16,
+              "linear_residual_rel": 2.0226796899040088e-16,
+              "faraday_residual_rel": 1.7976051031599926e-16,
               "section_anchor": [
                 0.025,
                 -0.01
               ],
               "automatic_carrier": false,
               "alpha_A": [
-                -239.96164232925503,
-                -7.192817070314717
+                -239.1347090862367,
+                -6.782240441241957
               ],
-              "power_balance_rel": 0.004383165255549493,
-              "unit_jump_error": 7.492673148590256e-12
+              "power_balance_rel": 0.0019702302853106257,
+              "unit_jump_error": 7.492673148590256e-12,
+              "loop_work_diagnostics": {
+                "magnetic_work_symmetry": 1.4686396970789725e-08,
+                "gradient_work_residual": 9.381632263005882e-13,
+                "conormal_flux_relative_mismatch": 1.5326143335049404e-11,
+                "quadrature_bonus": 4,
+                "single_layer_matrix_bytes": 1242810368,
+                "single_layer_assembly_seconds": 2714.799742700008
+              }
             }
           },
           {
@@ -746,64 +819,80 @@
             ],
             "clearance_m": 0.004987497359603586,
             "l2": {
-              "P_total": 73.54376762770563,
-              "P_frozen": 91.10065369128331,
-              "P_reaction": 73.5766933275374,
+              "P_total": 73.5471741784816,
+              "P_frozen": 91.10065369128323,
+              "P_reaction": 73.51866722305232,
               "theta_jump": 0.9999999999759115,
-              "linear_residual_rel": 4.812896972709011e-16,
-              "faraday_residual_rel": 4.234084051411006e-16,
+              "linear_residual_rel": 4.817243082263251e-16,
+              "faraday_residual_rel": 3.4327691458955034e-16,
               "section_anchor": [
                 0.019,
                 0.013
               ],
               "automatic_carrier": false,
               "alpha_A": [
-                -239.05432532917115,
-                -6.993089797936946
+                -239.1479242003889,
+                -6.924447831148058
               ],
-              "power_balance_rel": 0.00044770210847011604,
-              "unit_jump_error": 2.408850896529202e-11
+              "power_balance_rel": 0.0003876009615284559,
+              "unit_jump_error": 2.408850896529202e-11,
+              "loop_work_diagnostics": {
+                "magnetic_work_symmetry": 3.617054354112754e-09,
+                "gradient_work_residual": 1.714434797428013e-10,
+                "conormal_flux_relative_mismatch": 1.7141801134877773e-09,
+                "quadrature_bonus": 4,
+                "single_layer_matrix_bytes": 1242810368,
+                "single_layer_assembly_seconds": 2714.799742700008
+              }
             },
             "point": {
-              "P_total": 73.35473646626181,
-              "P_frozen": 91.10065369128331,
-              "P_reaction": 73.37572762356108,
+              "P_total": 73.72266749350788,
+              "P_frozen": 91.10065369128323,
+              "P_reaction": 73.65576738682152,
               "theta_jump": 0.9999999999759115,
-              "linear_residual_rel": 4.661376587307232e-16,
-              "faraday_residual_rel": 4.45966358582151e-16,
+              "linear_residual_rel": 2.400076491130513e-16,
+              "faraday_residual_rel": 1.67909718150723e-16,
               "section_anchor": [
                 0.019,
                 0.013
               ],
               "automatic_carrier": false,
               "alpha_A": [
-                -234.94790230942044,
-                -6.377975025252336
+                -243.40867586920157,
+                -7.893466003666198
               ],
-              "power_balance_rel": 0.00028615953530031213,
-              "unit_jump_error": 2.408850896529202e-11
+              "power_balance_rel": 0.0009074564033138,
+              "unit_jump_error": 2.408850896529202e-11,
+              "loop_work_diagnostics": {
+                "magnetic_work_symmetry": 3.609593995104658e-09,
+                "gradient_work_residual": 1.714434797428013e-10,
+                "conormal_flux_relative_mismatch": 1.7141801134877773e-09,
+                "quadrature_bonus": 4,
+                "single_layer_matrix_bytes": 1242810368,
+                "single_layer_assembly_seconds": 2714.799742700008
+              }
             }
           }
         ],
         "widths": {
           "l2": {
-            "power_width_W": 0.09173518542925763,
-            "power_width_rel": 0.0012463013111542458
+            "power_width_W": 0.0871578498498593,
+            "power_width_rel": 0.0011841094329496983
           },
           "point": {
-            "power_width_W": 0.5781232509895204,
-            "power_width_rel": 0.007903009558313424
+            "power_width_W": 0.9808421820039825,
+            "power_width_rel": 0.013400390857262558
           }
         },
-        "elapsed_s": 318.2491347000032
+        "elapsed_s": 3039.5272229999828
       },
       "fem": {
         "P_total": 72.61337816859105,
         "ndof": 517256,
         "ne": 96071,
-        "linear_true_relative_residual": 4.328831983503403e-14,
+        "linear_true_relative_residual": 4.313395021322984e-14,
         "Z_s": "(0.0008885765876316731+0.0008885765876316731j)",
-        "source_work_W": 72.61330222267986,
+        "source_work_W": 72.61330222267988,
         "mesh_check": {
           "schema": "cubit-mesh-export.vol-check.v1",
           "passed": true,
@@ -979,23 +1068,24 @@
         "area_flat_m2": 0.016455921569440347,
         "area_curved_m2": 0.016518771083272127,
         "air_radius_m": 0.18,
-        "elapsed_s": 448.83121820000815,
-        "power_balance_rel": 1.0458942016899897e-06
+        "elapsed_s": 457.7508025999996,
+        "power_balance_rel": 1.045894201467945e-06
       },
-      "bem_fem_power_rel": 0.014076257988861363,
-      "frozen_fem_error_rel": 0.25459875286024003
+      "bem_fem_power_rel": 0.014060134447539285,
+      "frozen_fem_error_rel": 0.2545987528602387
     }
   ],
-  "elapsed_s": 1904.747682300018,
+  "elapsed_s": 6181.43631629998,
   "runs": [
     {
       "provenance": {
-        "commit": "6692a44cc39706154cdb9a42874303474164d986",
+        "commit": "5746c8633f55630c2455d51cedb5008a316a3d6d",
         "source_sha256": {
-          "validation_test/induction_heating/bored_workpiece/validate.py": "a35b2148f27a43dd25bc1958c60d639f45c55244197969f9dd2a351ff9eda451",
-          "src/radia/bem_loop_extension.py": "78f694d157f74eca1cb35a6ece2b1079b0edd028fbddcb1c2369aeac28b9ba5e",
-          "src/radia/bem_sibc_solver.py": "ca044ee5a8f2fb1fa8fc3630f5d47406eed6135544c3117898682d6a305cc684",
+          "validation_test/induction_heating/bored_workpiece/validate.py": "746bfff92a1c6bf136f04e9743cf4b2a428d8bbcaeb5133128fe8b11207f1ad9",
+          "src/radia/bem_loop_extension.py": "2c0e18f15170ef4c44f82c27c6f2866a187f4dde79c230b1fe43c8c492dc4636",
+          "src/radia/bem_sibc_solver.py": "88aec75a943d003665c0a1c846a3fbf6833721693f70e296ea6d8977d2b50438",
           "src/radia/cohomology.py": "a673df2e7632923611e1b8c4071ae1170e7f4ff82ef1cd5caf5fb67ab9131511",
+          "src/radia/bem_loop_work.py": "d83a089be59c277dd1a4a0a1fb291a464724addfb4148e91beaa2c77fa1a7f00",
           "src/radia/panels/calc_fem_kelvin.py": "34e94500a5eb3ccfba01345e39126cdf135deac275733379fd1c0353fd5ca37b",
           "src/radia/biot_savart.py": "3f9d956d456ba4ceaea116e7e37b2b7cea550140a046ccfe16dfc4b337ab11d7"
         },
@@ -1008,7 +1098,7 @@
           "sparsesolv_ngsolve.pyd": "c404eab1526354be6205bcf8748a1c7f32f974394fd1c389ef42eec31d937ece"
         },
         "source_dirty": false,
-        "utc": "2026-10-07T07:58:00.035285+00:00",
+        "utc": "2026-10-07T21:03:17.393615+00:00",
         "installed_native_distribution": "5.2.3",
         "mesh_checker_version": "2.1.4",
         "python": "3.12.10",
@@ -1019,16 +1109,17 @@
         "threads": 2,
         "radia_import": "src/radia/__init__.py"
       },
-      "elapsed_s": 627.8618698000064
+      "elapsed_s": 1029.6744468999968
     },
     {
       "provenance": {
-        "commit": "6692a44cc39706154cdb9a42874303474164d986",
+        "commit": "5746c8633f55630c2455d51cedb5008a316a3d6d",
         "source_sha256": {
-          "validation_test/induction_heating/bored_workpiece/validate.py": "a35b2148f27a43dd25bc1958c60d639f45c55244197969f9dd2a351ff9eda451",
-          "src/radia/bem_loop_extension.py": "78f694d157f74eca1cb35a6ece2b1079b0edd028fbddcb1c2369aeac28b9ba5e",
-          "src/radia/bem_sibc_solver.py": "ca044ee5a8f2fb1fa8fc3630f5d47406eed6135544c3117898682d6a305cc684",
+          "validation_test/induction_heating/bored_workpiece/validate.py": "746bfff92a1c6bf136f04e9743cf4b2a428d8bbcaeb5133128fe8b11207f1ad9",
+          "src/radia/bem_loop_extension.py": "2c0e18f15170ef4c44f82c27c6f2866a187f4dde79c230b1fe43c8c492dc4636",
+          "src/radia/bem_sibc_solver.py": "88aec75a943d003665c0a1c846a3fbf6833721693f70e296ea6d8977d2b50438",
           "src/radia/cohomology.py": "a673df2e7632923611e1b8c4071ae1170e7f4ff82ef1cd5caf5fb67ab9131511",
+          "src/radia/bem_loop_work.py": "d83a089be59c277dd1a4a0a1fb291a464724addfb4148e91beaa2c77fa1a7f00",
           "src/radia/panels/calc_fem_kelvin.py": "34e94500a5eb3ccfba01345e39126cdf135deac275733379fd1c0353fd5ca37b",
           "src/radia/biot_savart.py": "3f9d956d456ba4ceaea116e7e37b2b7cea550140a046ccfe16dfc4b337ab11d7"
         },
@@ -1041,7 +1132,7 @@
           "sparsesolv_ngsolve.pyd": "c404eab1526354be6205bcf8748a1c7f32f974394fd1c389ef42eec31d937ece"
         },
         "source_dirty": false,
-        "utc": "2026-10-07T07:49:15.270000+00:00",
+        "utc": "2026-10-07T21:21:13.329739+00:00",
         "installed_native_distribution": "5.2.3",
         "mesh_checker_version": "2.1.4",
         "python": "3.12.10",
@@ -1052,16 +1143,17 @@
         "threads": 2,
         "radia_import": "src/radia/__init__.py"
       },
-      "elapsed_s": 509.6339674000046
+      "elapsed_s": 1653.973447199969
     },
     {
       "provenance": {
-        "commit": "6692a44cc39706154cdb9a42874303474164d986",
+        "commit": "5746c8633f55630c2455d51cedb5008a316a3d6d",
         "source_sha256": {
-          "validation_test/induction_heating/bored_workpiece/validate.py": "a35b2148f27a43dd25bc1958c60d639f45c55244197969f9dd2a351ff9eda451",
-          "src/radia/bem_loop_extension.py": "78f694d157f74eca1cb35a6ece2b1079b0edd028fbddcb1c2369aeac28b9ba5e",
-          "src/radia/bem_sibc_solver.py": "ca044ee5a8f2fb1fa8fc3630f5d47406eed6135544c3117898682d6a305cc684",
+          "validation_test/induction_heating/bored_workpiece/validate.py": "746bfff92a1c6bf136f04e9743cf4b2a428d8bbcaeb5133128fe8b11207f1ad9",
+          "src/radia/bem_loop_extension.py": "2c0e18f15170ef4c44f82c27c6f2866a187f4dde79c230b1fe43c8c492dc4636",
+          "src/radia/bem_sibc_solver.py": "88aec75a943d003665c0a1c846a3fbf6833721693f70e296ea6d8977d2b50438",
           "src/radia/cohomology.py": "a673df2e7632923611e1b8c4071ae1170e7f4ff82ef1cd5caf5fb67ab9131511",
+          "src/radia/bem_loop_work.py": "d83a089be59c277dd1a4a0a1fb291a464724addfb4148e91beaa2c77fa1a7f00",
           "src/radia/panels/calc_fem_kelvin.py": "34e94500a5eb3ccfba01345e39126cdf135deac275733379fd1c0353fd5ca37b",
           "src/radia/biot_savart.py": "3f9d956d456ba4ceaea116e7e37b2b7cea550140a046ccfe16dfc4b337ab11d7"
         },
@@ -1074,7 +1166,7 @@
           "sparsesolv_ngsolve.pyd": "c404eab1526354be6205bcf8748a1c7f32f974394fd1c389ef42eec31d937ece"
         },
         "source_dirty": false,
-        "utc": "2026-10-07T07:35:25.716399+00:00",
+        "utc": "2026-10-07T21:49:43.217690+00:00",
         "installed_native_distribution": "5.2.3",
         "mesh_checker_version": "2.1.4",
         "python": "3.12.10",
@@ -1085,9 +1177,13 @@
         "threads": 2,
         "radia_import": "src/radia/__init__.py"
       },
-      "elapsed_s": 767.2518451000069
+      "elapsed_s": 3497.788422200014
     }
   ],
+  "acceptance_reference": {
+    "bem_nodes": 6232,
+    "fem_ndof": 601029
+  },
   "gates": {
     "mesh_0": {
       "mesh_quality": true,
@@ -1126,33 +1222,92 @@
       "bem_balance": true,
       "agreement": true
     },
-    "balance_monotonic": true,
+    "balance_monotonic": false,
     "mesh_sensitivity": true,
     "carrier_solution_checks": true,
     "carrier_width": true,
     "projection_reduces_width": true,
-    "runtime": true,
-    "total_runtime": true,
+    "runtime": false,
+    "total_runtime": false,
     "skin_depth": true,
     "refinement": true
   },
-  "all_recorded_gates_pass": true,
+  "all_recorded_gates_pass": false,
   "carrier_comparison_executed": true,
   "complete_validation": true,
-  "validation_pass": true,
+  "validation_pass": false,
   "mesh_power_change": {
-    "bem": 6.72842821916042e-05,
-    "fem": 2.903925173503019e-05
+    "bem": 0.0007849798343247949,
+    "fem": 2.9039251734808147e-05
   },
-  "acceptance_reference": {
-    "bem_nodes": 6232,
-    "fem_ndof": 601029
+  "closure_comparison": {
+    "old_validation_commit": "d51de0c12",
+    "old_closure": "cut-line Faraday row",
+    "new_closure": "distributed Galerkin electric and magnetic loop work",
+    "old": {
+      "BEM_W": 73.63550281313489,
+      "balance_rel": 0.0002959860393287883,
+      "carrier_width_rel": 0.0012463013111542458,
+      "point_width_rel": 0.007903009558313424,
+      "FEM_W": 72.62029318107498,
+      "BEM_FEM_rel": 0.013979696137118802,
+      "frozen_W": 91.10065369128331,
+      "frozen_FEM_rel": 0.2544792880982798
+    },
+    "new": {
+      "BEM_W": 73.63433202833146,
+      "balance_rel": 0.000549712773068034,
+      "carrier_width_rel": 0.0011841094329496983,
+      "point_width_rel": 0.013400390857262558,
+      "FEM_W": 72.62029318107507,
+      "BEM_FEM_rel": 0.013963574131103051,
+      "frozen_W": 91.10065369128323,
+      "frozen_FEM_rel": 0.25447928809827713
+    },
+    "difference": {
+      "BEM_W": -0.001170784803434799,
+      "balance_rel": 0.0002537267337392457,
+      "carrier_width_rel": -6.219187820454756e-05,
+      "point_width_rel": 0.005497381298949134,
+      "FEM_W": 8.526512829121202e-14,
+      "BEM_FEM_rel": -1.6122006015750756e-05,
+      "frozen_W": -8.526512829121202e-14,
+      "frozen_FEM_rel": -2.6645352591003757e-15
+    },
+    "point_trace_comparison": "Retained: the Neumann trace enters both the BIE lift and the distributed normal-flux work. Only the trace projection is patched; both routes use the new closure.",
+    "frozen_condition": "alpha=0 in the closed scalar system; not frozen material properties"
   },
-  "gate_reevaluation": {
-    "base_commit": "52b0e780d08fec65eccef2cb5b333a16a3118f83",
-    "utc": "2026-10-07T08:37:45.848883+00:00",
-    "script_sha256": "a6600a73d4ae53d23265ecd5f0dff56597a97daeec4f2a33aaa18754b231ed90",
-    "reason": "Reviewer-requested acceptance scope: finest solutions and monotonic coarse balance; thresholds unchanged",
-    "numerical_results_reused": true
-  }
+  "execution_events": {
+    "middle_bounded_attempt": {
+      "returncode": null,
+      "timeout": true,
+      "elapsed_s": 1200.0232853999769
+    },
+    "middle_recovery": {
+      "bounded_attempt": {
+        "returncode": null,
+        "timeout": true,
+        "elapsed_s": 1200.0232853999769
+      },
+      "retry": "independent FEM only; saved completed BEM retained",
+      "retry_elapsed_s": 453.9501647000143
+    },
+    "fine_diagnostic_execution": {
+      "returncode": 1,
+      "timeout": false,
+      "execution_timeout_s": 7200,
+      "elapsed_s": 3498.8665310999786
+    },
+    "fine_observed_resources": {
+      "stage": "fine",
+      "sampled_elapsed_s": 1891.6338839,
+      "observed_peak_working_set_bytes": 14164746240,
+      "measurement": "Windows process peak counter sampled before process exit"
+    }
+  },
+  "failed_gates": [
+    "balance_monotonic",
+    "runtime",
+    "total_runtime"
+  ]
 }

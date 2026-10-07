@@ -72,6 +72,7 @@ def compact(o):
              unit_jump_error=abs(abs(o['theta_jump'])-1))
     if o['carrier_diagnostics']:
         d['carrier_diagnostics']={k:o['carrier_diagnostics'][k] for k in ('candidate_count','minimum_wall_distance','clearance_tolerance','candidates')}
+    d['loop_work_diagnostics']=o['loop_work_diagnostics']
     return d
 
 
@@ -184,7 +185,7 @@ def provenance():
     pkg=ROOT/'src/radia'
     if Path(radia.__file__).resolve().parent!=pkg.resolve(): raise RuntimeError('runtime must use checkout')
     files=[Path(__file__),pkg/'bem_loop_extension.py',pkg/'bem_sibc_solver.py',
-           pkg/'cohomology.py',pkg/'panels/calc_fem_kelvin.py',pkg/'biot_savart.py']
+           pkg/'cohomology.py',pkg/'bem_loop_work.py',pkg/'panels/calc_fem_kelvin.py',pkg/'biot_savart.py']
     return dict(commit=subprocess.check_output(['git','-c','safe.directory=*','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
         source_sha256={p.relative_to(ROOT).as_posix():sha(p) for p in files},
         native_sha256={p.name:sha(p) for p in sorted(pkg.iterdir()) if p.suffix in ('.pyd','.dll','.so')},
