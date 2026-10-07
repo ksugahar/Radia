@@ -78,7 +78,7 @@ def test_argparse_accepts_flag():
 
 @pytest.mark.parametrize("extra,frag", [
     (["--impedance-model", "esim", "--wp-bem-backend", "intree-dense"],
-     "linear SIBC"),
+     "--esim-per-panel"),
     (["--wp-bem-backend", "hacapk"], "intree-dense"),                       # default backend = hacapk
     (["--wp-bem-backend", "intree-dense", "--h1-order", "2"], "P1"),
     # strong coupling now TAKES the loop DOF during every

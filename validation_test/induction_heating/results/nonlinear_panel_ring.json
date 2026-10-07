@@ -1,0 +1,236 @@
+{
+  "schema": "radia.nonlinear-panel-complete-state.v1",
+  "qualification": "Self-authored saturating B(H), prescribed two-filament circuit, flat 128-face torus. Discrete EM/constitutive consistency only; no material accuracy, CAD fitting, mesh convergence or thermal certification.",
+  "seed_relative_difference": 8.780541039005721e-05,
+  "table_relative_difference": 4.7480007298139895e-05,
+  "two_amp_power_over_four_times_one_amp": 0.7781922015142186,
+  "material": {
+    "law": "B=mu0*(H+100*tanh(H/5))",
+    "sigma_S_per_m": 58000000.0,
+    "frequency_Hz": 50000.0,
+    "cell_geometry": "cylinder",
+    "cell_radius_m": 0.003,
+    "cell_nodes": 200,
+    "table_H_min_A_per_m": 0.001,
+    "table_H_max_A_per_m": 10000,
+    "table_positive_rows": 160
+  },
+  "rows": [
+    {
+      "current_A": 1.0,
+      "evaluator": "direct",
+      "seed_factor": 1.0,
+      "triangles": 128,
+      "power_W": 9.768427237769366e-05,
+      "Delta_L_H": -9.15985509808704e-09,
+      "Delta_R_ohm": 0.00019562155984764718,
+      "body_residual": 9.401771670642697e-17,
+      "coil_residual": 9.792378126622628e-09,
+      "faraday_residual": 4.777785131835234e-18,
+      "body_balance": 0.005540254251456351,
+      "constitutive_error": 0.0002473382670781325,
+      "outer_iterations": 7,
+      "inner_iterations_total": 72,
+      "final_inner_iterations": 9,
+      "initial_Z": [
+        0.0002474125106724237,
+        0.00023737273384484954
+      ],
+      "final_Z_real_range": [
+        0.00016687846558717276,
+        0.00021611404253073642
+      ],
+      "final_H_range": [
+        11.059292659991044,
+        23.98646225508082
+      ],
+      "evaluation": {
+        "mode": "direct",
+        "configuration_sha256": "606d3cc3a782af16c01d5bb6a1f87dcb6ba63dc6a9331782c280521fb803fa08",
+        "interpolation_tolerance": 0.0001,
+        "interpolation_error_control": "empirical-midpoint-probes",
+        "final_certification": "direct-all-panels",
+        "field_floor_A_per_m": 0.001,
+        "table_knots": 0,
+        "max_table_cells": 4096,
+        "max_accepted_probe_error": 0.0,
+        "iteration_cell_calls": 896,
+        "table_cell_calls": 0,
+        "certification_cell_calls": 128,
+        "cache_hits": 0,
+        "interpolation_hits": 0,
+        "interval_probes": 0,
+        "direct_cell_calls": 1024,
+        "cell_seconds": 39.82061769992288,
+        "evaluation_seconds": 34.852502099980484,
+        "certification_seconds": 4.970989199995529,
+        "workers": 1,
+        "cell_time_kind": "sum-of-direct-cell-wall-times",
+        "seed_cell_calls": 1
+      },
+      "port_quantity_kind": "secant-at-accepted-current"
+    },
+    {
+      "current_A": 2.0,
+      "evaluator": "direct",
+      "seed_factor": 1.0,
+      "triangles": 128,
+      "power_W": 0.00030406855589964804,
+      "Delta_L_H": -9.311128645023645e-09,
+      "Delta_R_ohm": 0.00015193568863971748,
+      "body_residual": 2.0320638233600268e-16,
+      "coil_residual": 9.95012352255788e-09,
+      "faraday_residual": 1.8313163497066745e-16,
+      "body_balance": 0.004897386997533083,
+      "constitutive_error": 0.00011821707235482327,
+      "outer_iterations": 8,
+      "inner_iterations_total": 81,
+      "final_inner_iterations": 9,
+      "initial_Z": [
+        0.0002474125106724237,
+        0.00023737273384484954
+      ],
+      "final_Z_real_range": [
+        0.00012464822117299327,
+        0.00017143995953170573
+      ],
+      "final_H_range": [
+        22.371927969425048,
+        48.68707251301986
+      ],
+      "evaluation": {
+        "mode": "direct",
+        "configuration_sha256": "606d3cc3a782af16c01d5bb6a1f87dcb6ba63dc6a9331782c280521fb803fa08",
+        "interpolation_tolerance": 0.0001,
+        "interpolation_error_control": "empirical-midpoint-probes",
+        "final_certification": "direct-all-panels",
+        "field_floor_A_per_m": 0.001,
+        "table_knots": 0,
+        "max_table_cells": 4096,
+        "max_accepted_probe_error": 0.0,
+        "iteration_cell_calls": 1024,
+        "table_cell_calls": 0,
+        "certification_cell_calls": 128,
+        "cache_hits": 0,
+        "interpolation_hits": 0,
+        "interval_probes": 0,
+        "direct_cell_calls": 1152,
+        "cell_seconds": 58.66930149964173,
+        "evaluation_seconds": 52.207650500015006,
+        "certification_seconds": 6.4650259999907576,
+        "workers": 1,
+        "cell_time_kind": "sum-of-direct-cell-wall-times",
+        "seed_cell_calls": 1
+      },
+      "port_quantity_kind": "secant-at-accepted-current"
+    },
+    {
+      "current_A": 1.0,
+      "evaluator": "table",
+      "seed_factor": 1.0,
+      "triangles": 128,
+      "power_W": 9.768383354298021e-05,
+      "Delta_L_H": -9.159841187323257e-09,
+      "Delta_R_ohm": 0.0001956207151721232,
+      "body_residual": 2.233034508034581e-16,
+      "coil_residual": 9.792375143713708e-09,
+      "faraday_residual": 1.8291878434830506e-16,
+      "body_balance": 0.0055404467156592455,
+      "constitutive_error": 0.0002672618714752564,
+      "outer_iterations": 7,
+      "inner_iterations_total": 72,
+      "final_inner_iterations": 9,
+      "initial_Z": [
+        0.0002474125106724237,
+        0.00023737273384484954
+      ],
+      "final_Z_real_range": [
+        0.0001668782844878196,
+        0.00021611374003877352
+      ],
+      "final_H_range": [
+        11.059353620333672,
+        23.986529213988184
+      ],
+      "evaluation": {
+        "mode": "table",
+        "configuration_sha256": "606d3cc3a782af16c01d5bb6a1f87dcb6ba63dc6a9331782c280521fb803fa08",
+        "interpolation_tolerance": 0.0001,
+        "interpolation_error_control": "empirical-midpoint-probes",
+        "final_certification": "direct-all-panels",
+        "field_floor_A_per_m": 0.001,
+        "table_knots": 15,
+        "max_table_cells": 4096,
+        "max_accepted_probe_error": 9.997720312000693e-05,
+        "iteration_cell_calls": 0,
+        "table_cell_calls": 197,
+        "certification_cell_calls": 128,
+        "cache_hits": 366,
+        "interpolation_hits": 882,
+        "interval_probes": 183,
+        "direct_cell_calls": 325,
+        "cell_seconds": 12.542019299944513,
+        "evaluation_seconds": 7.56684870000754,
+        "certification_seconds": 4.982453699994949,
+        "workers": 1,
+        "cell_time_kind": "sum-of-direct-cell-wall-times",
+        "seed_cell_calls": 1
+      },
+      "port_quantity_kind": "secant-at-accepted-current"
+    },
+    {
+      "current_A": 1.0,
+      "evaluator": "direct",
+      "seed_factor": 2.0,
+      "triangles": 128,
+      "power_W": 9.768804569516478e-05,
+      "Delta_L_H": -9.159840553582187e-09,
+      "Delta_R_ohm": 0.00019562904602192011,
+      "body_residual": 2.0030262413812143e-16,
+      "coil_residual": 9.792367603258386e-09,
+      "faraday_residual": 1.8289600191904632e-16,
+      "body_balance": 0.00553972536051065,
+      "constitutive_error": 0.00026426530010435474,
+      "outer_iterations": 8,
+      "inner_iterations_total": 81,
+      "final_inner_iterations": 9,
+      "initial_Z": [
+        0.0004948250213448474,
+        0.0004747454676896991
+      ],
+      "final_Z_real_range": [
+        0.0001668830318974857,
+        0.00021613214253385132
+      ],
+      "final_H_range": [
+        11.059161377996864,
+        23.986518664067244
+      ],
+      "evaluation": {
+        "mode": "direct",
+        "configuration_sha256": "606d3cc3a782af16c01d5bb6a1f87dcb6ba63dc6a9331782c280521fb803fa08",
+        "interpolation_tolerance": 0.0001,
+        "interpolation_error_control": "empirical-midpoint-probes",
+        "final_certification": "direct-all-panels",
+        "field_floor_A_per_m": 0.001,
+        "table_knots": 0,
+        "max_table_cells": 4096,
+        "max_accepted_probe_error": 0.0,
+        "iteration_cell_calls": 1024,
+        "table_cell_calls": 0,
+        "certification_cell_calls": 128,
+        "cache_hits": 0,
+        "interpolation_hits": 0,
+        "interval_probes": 0,
+        "direct_cell_calls": 1152,
+        "cell_seconds": 44.39227679997566,
+        "evaluation_seconds": 39.455128200002946,
+        "certification_seconds": 4.9403282000130275,
+        "workers": 1,
+        "cell_time_kind": "sum-of-direct-cell-wall-times",
+        "seed_cell_calls": 1
+      },
+      "port_quantity_kind": "secant-at-accepted-current"
+    }
+  ]
+}

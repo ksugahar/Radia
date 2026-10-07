@@ -13,13 +13,15 @@ def test_current_sibc_and_heat_contracts_are_explicit():
     assert 'must not rotate the accepted temperature a second time' in text
 
 
-def test_per_panel_support_is_bounded_to_weighted_p1_genus_zero():
+def test_per_panel_support_and_simultaneous_nonlinear_gates_are_explicit():
     assert '--esim-per-panel' in ESIM_USAGE_OVERVIEW
     assert 'genus-0' in ESIM_USAGE_OVERVIEW
     assert 'PanelSurfaceImpedance' in ESIM_USAGE_OVERVIEW
-    assert 'P2 BEM and genus-1 nonlinear ESIM remain unsupported' in ESIM_USAGE_OVERVIEW
+    assert 'multiple handles remain unsupported' in ESIM_USAGE_OVERVIEW
     assert 'does not certify nonlinear B-H accuracy' in ESIM_USAGE_OVERVIEW
-    assert 'strong path requires linear SIBC' in ESIM_USAGE_OVERVIEW
+    assert 'Inner coupling tolerance <= esim_tol/10' in ESIM_USAGE_OVERVIEW
+    assert 'secant quantities at the accepted current' in ESIM_USAGE_OVERVIEW
+    assert 'direct ALL-panel cells' in ESIM_USAGE_OVERVIEW
 
 
 def test_sibc_default_is_current_architecture_not_redirect_stub():

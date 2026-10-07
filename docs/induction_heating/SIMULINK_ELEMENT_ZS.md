@@ -117,6 +117,25 @@ Python/CLI の `bem-a` と `peec` 強結合は、genus-0/1、平面 P1、
 配列はスカラー演算に一致し、微小でも値が異なる配列は重み付き経路を使う。
 値・周波数の変更時は分解を更新し、同じ形状に対する準備済み幾何演算を再利用する。
 
-PEEC 強結合では `--no-peec-proximity` が必要。非線形 strong ESIM、P2、
+PEEC 強結合では `--no-peec-proximity` が必要。P2、
 面別 Zs の HACApK、複数ハンドルは未対応。この追加は Python/CLI の電磁経路であり、
 本書の Simulink 熱連成手順は引き続き弱結合用。strong の native 熱連成認証を意味しない。
+
+
+## Python/CLI の非線形面別 ESIM
+
+`--impedance-model esim --esim-per-panel --bh-file <BHファイル>` は、弱結合の
+単一ハンドルと、両コイルモデルの genus-0/1 強結合へ接続される。これらは
+平面・非変形 P1、`intree-dense`、`--esim-anderson-m 0` の減衰 Picard 経路。
+weak genus-0 の既存 HACApK 対応は継続する。ループを含む全表面磁界を面別
+材料則へ渡し、受理候補 Zs でもう一度 EM を解き、全パネルを直接セル計算で認証する。
+表補間モードでも最終認証は直接計算。収束・残差・反作用/発熱の不合格はエラー。
+
+強結合の内側許容誤差は `min(coupling_tol, esim_tol/10)`。
+`esim_history` と `esim_inner_history`、合計内側反復数、初期 Zs、最終直接計算数を
+別々に報告する。BEM コイルの内部 1 A 解は材料評価の前に実電流へ換算し、
+PEEC は既に実電流で解く。`Delta_L` / `Delta_R` は受理電流における複素電力を
+電流の二乗で割った secant 値。異なる電流では材料則も解き直し、発熱を二乗比例させない。
+
+自己作成の材料・回路例題による接続と離散残差の検証であり、任意材料の精度、
+熱連成、FEM 比較を認証するものではない。Simulink の熱連成経路は本節の追加対象外。

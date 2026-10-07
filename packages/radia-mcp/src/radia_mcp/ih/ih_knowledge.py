@@ -1969,7 +1969,7 @@ same source-weighted form; heat is conservatively projected to P1. No fallback i
 Scalar ESIM remains subject to its constitutive convergence checks;
 linear reference tests alone do not certify arbitrary nonlinear BH data.
 
-For genus 1, ``--wp-loop-dof auto`` activates the linear-SIBC,
+For genus 1, ``--wp-loop-dof auto`` activates the SIBC or per-panel ESIM,
 intree-dense, P1 extension. Both spatial heat and reaction include the
 harmonic carrier, not just the reported total loss. The reciprocal
 current.A contribution on the cut-open field retains the cut term.
@@ -1980,7 +1980,7 @@ Work pairings are reciprocal; the mixed BIE matrix is not symmetric.
 This path requires flat undeformed surface triangles. Its additional P0
 single layer is dense in the number of faces and cached per geometry;
 carrier, seam, quadrature and surface refinement still require checks.
-Unsupported weak handle combinations (ESIM, HACApK, P2, genus >= 2)
+Unsupported weak handle combinations (scalar ESIM, HACApK, P2, genus >= 2)
 raise before BEM assembly. There is no ``off`` fallback. Surface winding
 is established by face-BFS plus signed volume, never centroid flipping
 of an inner wall. The P1 incident-potential surface-Poisson residual
@@ -2007,7 +2007,13 @@ loss); the filament route uses its R_f/Zs_fil loss. Each air baseline uses
 the same model as its coupled result. Fixed panel Zs is supported by the Python/CLI strong surface-coil and
 filament-coil routes for flat P1 dense genus-0/1 bodies. Values are used
 face by face; the area-weighted mean is reporting metadata only. Nonlinear
-strong ESIM and the native Simulink strong thermal handoff remain guarded.
+per-panel ESIM connects both strong coil routes through a damped material
+Picard loop at the actual terminal current. Inner coupling tolerance is
+<= esim_tol/10. The final complete EM re-solve and direct ALL-panel cell
+certificate share body/coil/loop and reaction/heat gates. Port quantities are
+secant-at-accepted-current; changing current needs a new material solve.
+Outer and inner iteration histories are separate. The native Simulink strong
+thermal handoff remains guarded.
 Prescribed-source genus-0 phi.B quadrature is unchanged: it converges to
 Js.A work but is not identical on a finite mesh. Strong coupling has its
 own self-authored circuit and surface checks; weak acceptance and native
@@ -2093,8 +2099,9 @@ current ScalarBIESIBCSolver accepts uniform Z_s or PanelSurfaceImpedance on
 surface P1. Untagged nonuniform arrays fail loudly: vertex values are not panel
 values. Source-side weighted stiffness K_gamma and local loss integration use
 one Zs per BND triangle; --esim-per-panel connects this to the genus-0 weak
-coil/heat route. Genus-1 nonlinear ESIM and strong nonlinear coupling remain
-unsupported. This implementation does not certify arbitrary magnetic materials.
+coil/heat route, weak genus-1 and strong genus-0/1 dense flat P1 EM routes.
+Genus-1 and strong nonlinear iterations use damped Picard with simultaneous
+final all-panel direct constitutive certification. This implementation does not certify arbitrary magnetic materials.
 
 ## Coil side: copper (linear, mu_r=1) is the default assumption
 

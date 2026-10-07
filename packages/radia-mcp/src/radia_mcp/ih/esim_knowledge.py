@@ -42,8 +42,15 @@ the BH knee.
 The genus-0 weak-coupling path supports --esim-per-panel on surface P1,
 with intree-dense or HACApK. PanelSurfaceImpedance identifies one Zs per BND
 triangle: source-side weighted stiffness K_gamma, local heat and complete
-reaction use the same local coefficient. The strong path requires linear SIBC.
-P2 BEM and genus-1 nonlinear ESIM remain unsupported; no fallback is selected.
+reaction use the same local coefficient. Weak genus-1 and both strong coil routes
+support per-panel ESIM on flat undeformed P1 dense genus-0/1 bodies, using the
+full loop/coupled surface field at the actual current. These extensions use
+damped Picard (--esim-anderson-m 0). Inner coupling tolerance <= esim_tol/10;
+a final EM re-solve and direct ALL-panel cells certify one state with the body,
+coil, loop and reaction/heat gates. Separate outer/inner histories and cell-call
+counts are reported. Port R/L are secant quantities at the accepted current:
+re-solve the material when current changes. P2 BEM, panel HACA strong bodies and
+multiple handles remain unsupported; no fallback is selected.
 The heat handoff is a positive conservative lumped P1 projection. The saved Ht
 is sqrt(lumped mean |Ht|^2), not an exact panel field. Untagged nodal impedance
 arrays remain rejected. Outer and cell convergence are required. The existing
@@ -142,7 +149,7 @@ potential; SIBC enters as a complex Robin coefficient.
 | --esim-max-iter     | 15      | Outer Karl iteration cap |
 | --esim-tol          | 1e-3    | Convergence on max\\|dZ_s\\|/\\|Z_s\\| |
 | --esim-relax        | 0.5     | Karl damping (under-relaxation); lower if oscillation |
-| --esim-per-panel    | False   | P1 element Z_s (weak genus-0 BEM; dense or HACApK) |
+| --esim-per-panel    | False   | P1 element Z_s (weak genus-0: dense/HACApK; weak handle/strong: dense) |
 
 ## Workpiece flags
 
@@ -334,8 +341,8 @@ History uses H_t_per_panel_mean / H_t_per_panel_max.
 Both dense and HACApK support weighted P1 weak genus-0 panel impedance.
 `--panel-zs-file` supplies fixed mesh-bound element impedances without a Karl
 iteration, including one supported flux-linked handle on the flat P1 dense
-loop-work route. This fixed linear support does not enable genus-1 nonlinear
-ESIM. The student Geometry Update mask accepts `panel_zs_file`; changing
+loop-work route. Nonlinear per-panel ESIM uses its separate simultaneous
+material/EM certification contract. The student Geometry Update mask accepts `panel_zs_file`; changing
 its content requires assembly again. `independent_fem_validation.status` is
 `not-performed` until a separate compatible reference has actually been run.
 
@@ -500,7 +507,7 @@ ESIM_USAGE_TROUBLESHOOTING = """
 | `--impedance-model esim requires --bh-file`        | ESIM requested without BH     | Pass --bh-file <path> |
 | `BH curve empty / not monotone in H`               | Malformed BH file             | Verify two-column ASCII, ascending H, includes (0, 0) |
 | `ESIM:NOT-CONVERGED after N iter`                  | Karl hit max_iter             | Raise --esim-max-iter; lower --esim-relax |
-| Unsupported element ESIM topology/order | P1 weak genus-0 required | Use a supported case |
+| Unsupported element ESIM topology/order | Supported flat P1 body required | Use a supported case |
 | `cell solver SCIPY_AVAILABLE False`                | scipy missing                 | pip install scipy |
 | Karl converges but P_wp wildly off ref             | wrong --half-thickness        | Use min(R_wp, H_wp/2) for solid bulk |
 | `BIE iv overflow` / NaN seed                       | very high xi (R/delta > 100)  | Cell solver uses thin-skin fallback automatically (v4.46.1+); upgrade radia |
