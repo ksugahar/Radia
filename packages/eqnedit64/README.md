@@ -1,5 +1,7 @@
 # Eqnedit64 for Python
 
+Source version: **3.1.2**.
+
 `eqnedit64` packages the same TeX-first equation engine and standalone Windows
 application maintained in the Radia monorepo. The signed one-file
 `Eqnedit64.exe` is the canonical editor and command-line converter and remains
@@ -42,7 +44,25 @@ Only UTF-8 TeX is a source format. MTEF and `.eqn` are intentionally not
 supported. Current wheels target 64-bit Windows and Python 3.10 or newer.
 
 The wheel embeds the signed executable produced for the matching
-`eqnedit64-v3.0.16` GitHub Release; it does not build a second application
+`eqnedit64-v3.1.1` GitHub Release; it does not build a second application
 implementation. The package is BSD 2-Clause licensed. The embedded Eqnedit
 Math font is a TrueType-outline derivative of Latin Modern Math under the
 GUST Font License. Its license and derivation manifest are included in the wheel.
+
+
+## 3.1.2 PowerPoint colour limitation (UXP-0030/0031)
+
+PowerPoint import drops colour on the shared conditional OMML CF_HTML route in
+both editions. The user measured all r10 colour variants A–G as not red on
+2026-10-08 and approved releasing 3.1.2 with this documented limitation. Colour
+support remains enabled in the native/Web canvas, SVG, saved TeX, and native
+EMF/DIB output. This decision does not strip colour from the source or renderer.
+PowerPoint colour retention is not an acceptance requirement for this release.
+
+User hand tests: H1/H5/H6 EXE OK on ea787664d; H7 EXE canvas red, PowerPoint
+not red. Web H5/H6 OK on 8361ec916. Hosted CI 37692902458 verified 22/22 primary
+OMML branches byte-identical on the actual Windows clipboard at ea787664d.
+This supports the UXP-0031 EXE-test plus bit-gate qualification for the covered
+corpus; it does not prove every TeX input or every Office/browser environment.
+Changed payload behaviour requires renewed qualification. The release metadata
+commit still requires its own CI. Formal publication follows the release gates.

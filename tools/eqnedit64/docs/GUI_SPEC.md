@@ -1,7 +1,7 @@
 # Eqnedit64 GUI仕様
 
 - 仕様版: 1.0
-- 対象: Eqnedit64 3.0.16
+- 対象: Eqnedit64 3.1.2 review candidate
 - 基準日: 2026-09-03
 - 適用範囲: `dist\Eqnedit64.exe`
 
@@ -379,25 +379,20 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 
 | Windows形式 | 内容 | 主な利用先 | 契約 |
 |---|---|---|---|
-| 登録形式 `HTML Format` | inline 18 pt MathML + 18 pt末尾NBSPのCF_HTML | Microsoft 365 PowerPoint / Word / Excel、Web版との共通契約 | 必須 |
+| 登録形式 `HTML Format` | 条件付き 18 pt RichEdit-HTML OMML の CF_HTML | Microsoft 365 PowerPoint / Word / Excel、Web版との共通契約 | 必須 |
 | `CF_UNICODETEXT` | `\[<正規化TeX>\]` | 旧Office、通常の文字貼り付け | 必須 |
 | 登録形式 `LaTeX` | 外側区切りなしのraw UTF-8 TeX断片 | TeX対応ソフト | 必須 |
 | `CF_ENHMETAFILE` | 白背景のスケーラブルEMF | IrfanView、Office、画像ソフト | 必須 |
 | `CF_DIBV5` | 全画素α=255の白背景・黒文字、32-bit top-down DIB、原則192 dpi | ラスター貼り付けフォールバック | 必須 |
 
-- Microsoft 365 PowerPoint / Word / Excelはinline 18 pt MathML入りCF_HTMLを
-  編集可能なOffice Mathとして取り込む。native/Webとも18 ptを明示した末尾NBSPを
-  含む同じ入口を使い、PowerPointの通常Ctrl+Vで数式、末尾文字、次の挿入点を
-  18 pt・左寄せにそろえる。左寄せを24 pt固定より優先する。複数行`aligned`は
-  Officeが`columnalign`を無視し、MathML整列要素を可視`&`として描くため、`&`なしの
-  入れ子の1列`aligned`も葉の行まで平坦化し、各行を独立したinline MathML＋
-  18 pt NBSPとして同じCF_HTML内へ並べる。これにより
-  長さが違っても全行の左端が一致し、各行をOffice Mathとして編集できる。
-  明示`&`を持つ入力は分割せず、1つの整列MathMLとして保持する。
-  通常コピーへ登録`MathML` / `MathML Presentation`を混在させるとPowerPointが
-  中央寄せ`m:oMathPara`を優先するため発行しない。Web版だけの条件付きOMMLも発行しない。
-  Office自身の書き出し画像と保存OOXMLで、インライン`m:oMath`、分数、根号、総和、
-  積分、上線、下線構造が見え、native/Webの結果が一致することを必須とする。
+- 2026-10-08 の UXP-0031 により、両版は条件付き RichEdit-HTML OMML の CF_HTML を主形式とする。
+登録 `MathML` / `MathML Presentation` は発行しない。上下限を左寄せより優先する
+UXP-0029 の方針は維持する。8361ec916 の Web H5/H6 はユーザー確認済み。
+署名済み ea787664d の EXE H1/H5/H6 は OK。H7 の PowerPoint 色欠落は既知の制限として承認済み。
+実クリップボードの bit gate と EXE 手動試験の合格後、対象コーパスの Web 手動試験を省略できる。
+詳細と未検証範囲は末尾の Shared Office clipboard contract を参照。
+画像への退化・空のMathZone・上下限の欠落は合格としない。明示 `&` と保存TeXは保持する。
+
 - 通常コピーへPNGを混在させない。PowerPointが画像を優先して編集不能な貼り付けへ
   退化するためである。EMF/DIBV5は画像ソフト用のWindowsフォールバックとして残す。
 - TeX対応ソフトは登録形式 `LaTeX` のraw断片を利用できる。
@@ -522,11 +517,11 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 | AUT-04 | 3,072件のraw TeXで正規化固定点、有限寸法、有効SVG、有効な24 pt MathMLを満たす | `test_tex_fuzz.py` |
 | AUT-05 | 5分類タブ＋選択分類のパレット、キャンバス、常時表示のTeXソース、ステータスが重ならず、全19パレットが一意に分類され、DPI対応する | `test_palettes.py` / `--status-layout-test` |
 | AUT-06 | `WM_CHAR`、サロゲートペア、キー、構造スロットのダブルクリック選択に加え、完成／未完成TeX、双方向同期、1編集バースト1 Undo、両ペインの直接クリック編集、キャンバス上でTeXコマンドを解釈しないことを非表示で処理できる | `--ui-interaction-test` |
-| AUT-07 | raw TeX、inline 18 pt MathML + NBSPの`HTML Format`、有効EMF、全画素α=255で白背景・黒文字のDIBV5を生成し、通常コピーに登録MathMLを混在させない | `--self-test` |
+| AUT-07 | raw TeX、条件付き OMML の HTML Format、有効EMF、不透明DIBV5を保持。登録MathMLは発行しない | `test_office_bit_parity.cjs --wire` / `--self-test` |
 | AUT-08 | `dist` は有効な指定開発者署名を持つexe一つで、試験済みexeと同一、静的ランタイム、別ディレクトリ起動可 | `test_background.ps1` |
 | AUT-09 | `.tex`保存は新規 `equation`、既存 `equation*` 外枠維持、`aligned`、UTF-8の契約を満たす | `test_tex_document.exe` / `--operation-test` |
-| AUT-10 | 実クリップボードにinline 18 pt MathML + NBSPの`HTML Format`、Office用TeX、登録`LaTeX` raw断片、有効EMF、不透明DIBV5を同時登録し、登録MathMLを発行しない | `test_external_paste.ps1` |
-| AUT-11 | 画面外PowerPoint窓の`Application.CommandBars.ExecuteMso("Paste")`が左寄せ18 ptのインライン`m:oMath`と18 ptの末尾文字・挿入点を作り、`m:oMathPara`を作らず、PowerPoint自身の描画で分数・根号・総和・積分・上線・下線が見え、native/Web基準結果が一致する。さらに長さ1/8/16の3行は独立した編集可能`m:oMath`となり、描画左端が4 px以内で一致し、先頭の共通可視プレフィックスが6 px以内である。`Shapes.Paste()`をCtrl+Vの代用にしない | `test_external_paste.ps1` / 研究室ホームページ集中QA |
+| AUT-10 | 単一式・複数行とも条件付き OMML の CF_HTML を主形式とする。raw TeX・EMF・DIBV5も保持 | `test_external_paste.ps1` |
+| AUT-11 | 実PowerPoint UI Pasteで編集可能な上下限を必須とし、単一式の中央寄せを許容する。複数行試験は必須。Webとの描画一致は未検証 | `test_external_paste.ps1` / 隔離Office試験 |
 | AUT-12 | IrfanView `/clippaste` が非空画像を生成し、試験前のクリップボード全形式を復元する | `test_external_paste.ps1` |
 | AUT-13 | Google スライド用PNGとHTMLが同一画像で、300 dpiかつ24 pt基準の同じ物理寸法を持つ | `test_external_paste.ps1` / `--self-test` |
 | AUT-14 | 公開CLIの`入力 出力`構文がTeXファイルをPNG／EMFへ書き、`clipboard clipboard-png`がUnicode／登録LaTeXを優先規則どおり非空300 dpi PNG／全画素α=255 DIBV5へ置換する。`--help` / `--version`はredirect可能で、不正出力は標準エラーと94を返し、二つの`.tex`は変換しない | Eqnedit64 CI / `--self-test` / `test_external_paste.ps1` |
@@ -549,7 +544,7 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 | AUT-31 | 1×1から7×9を含む任意長方形を作成でき、行・列追加／削除が既存セル、上下移動、Undo/Redo、TeX再読込み時の空の端セルを保持する | `test_edit.py` / `test_operations_fuzz.py` / `--ui-interaction-test` |
 | AUT-32 | 行列パレットの全入口と行／列操作が実`WM_COMMAND`経路で状態を変え、全253メニュ項目の監査で操作可能項目0件のno-opを満たす | `test_palettes.py` / `--ui-interaction-test` / `--menu-audit` |
 | AUT-33 | パレット、直接ショートカット、2段ショートカットが、正規TeX各文字の開始・終了境界を改行・字下げ後の表示座標へ変換し、新規TeX範囲だけを非アクティブ選択表示する。直後の `\end{...}` 前に入る整形改行を含めず、キャンバスのフォーカスを保ち、ソース欄へ移ると置換前に選択を解除する | `--ui-interaction-test` |
-| AUT-34 | `&`なし1列`aligned`の長短行がnative/Web入力表示で同じ左端を持ち、入れ子も葉まで平坦化され、Office CF_HTMLでは整列要素や可視`&`を含まない独立inline MathML行となる。明示`&`は1つの整列MathMLと保存TeXを維持する | `test_layout.py` / `test_edit.py` / `test_web_insert.cjs` / `test_web_contract.py` / `test_external_paste.ps1` |
+| AUT-34 | 入力表示の unanchored aligned は共通左端を維持。Office では eqArr の行と上下限を保ち、可視 & を出さない。native/Web 主 OMML が実クリップボードで byte 一致 | `test_office_bit_parity.cjs --wire` / `test_external_paste.ps1` |
 | AUT-35 | TeXソース欄の `Tab` が2つの `{}` 空欄を順に移動し、`Shift+Tab` が前へ戻り、ソースへTab文字を混入させない | `--ui-interaction-test` |
 | AUT-36 | 内蔵数式フォントは検証済みユーザーキャッシュからファイルベースで私有登録し、隔離した健全なsessionでは32回の起動終了後も`fontdrvhost.exe`のPIDとApplication Error件数が変化せず、分類タブ文字が本文相当の画素高を持つ。試験時間以上かつ最低10分の事前観測ですでに同じcrashがある場合、またはPID交代にApplication Errorが伴わない場合は製品FAILでなくINCONCLUSIVEとする | `test_font_safety.py` / `test_font_session.ps1` / `--ui-interaction-test` |
 | AUT-37 | キャンバスから同期したTeXソースはemitter由来のCR/LFを吸収し、`\begin` 後、`\end` 前、`\\` 後だけへCRLFを1個ずつ置いて階層的に字下げする。単独CR/LFや字下げだけの行を含まず、soft wrapを除く論理4行以上をWin32 EDITが認識し、表示文字列を再入力すると改行前と同じ正規化TeXへ戻る | `--ui-interaction-test` |
@@ -584,3 +579,147 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 - APIで検証できる外部アプリ連携は回帰試験へ追加し、人間の視覚・操作感だけを手動試験に残す。
 - 仕様と実装が食い違う場合は、仕様を曖昧なまま実装に合わせず、どちらが
   製品意図かを決めて両方を同時に修正する。
+
+## Historical native colour route evidence (before UXP-0031)
+
+Both editions accept named `\color{red}{x}` and `\textcolor{red}{x}`.
+`\color` switches the colour of the remainder of the enclosing group, as in
+MathJax: `\color{red}{x}+y` colours both x and y; `{\color{red}x}+y`
+colours only x. `\textcolor` colours only its braced body. Nested colours
+restore the enclosing colour after the inner body.
+
+Native supports 148 CSS named colours and 68 case-sensitive MathJax dvips
+names (for example `green` = #008000, `Green` = #00A64F), and `[named]`.
+Numeric models (`rgb`, `RGB`, `gray`, `HTML`), colour definitions, CSS colour
+expressions and transparent/currentColor are not supported in native 3.1.2;
+an unsupported name/model reports an error and leaves the valid model intact.
+The Web MathJax package has a wider colour-expression/model vocabulary; parity
+is claimed only for the supported named-colour inputs.
+
+Colour remains in the editable group, selection, Undo, normalized TeX save /
+reopen, GDI canvas / bitmap / outline EMF and SVG glyphs and rules. Native
+CF_HTML and registered MathML emit `mathcolor`; Office TeX retains
+`\textcolor`. User hand testing of e708930c5 on 2026-10-08 confirms
+native canvas red and red after normal PowerPoint paste (H7 EXE), plus H1 EXE
+integral limits OK. H6 EXE also passed. H5/H6 Web failed: PowerPoint pasted
+plain text, lost integral bounds and collapsed H6 rows. These supersede earlier
+Web OK reports and block 3.1.2 under UXP-0029. The isolated external-paste
+suite includes a red matrix with integral bounds; that matrix colour result
+has not been measured and is not inferred from the scalar H7 result.
+
+Other unknown control words retain the historical permissive parser fallback
+and can still disappear silently. Proposed follow-up: strict diagnostics on
+load/paste/CLI with recoverable source editing, plus a documented compatibility
+allowlist; this broader parser change is not included in UXP-0030.
+
+### PowerPoint colour retention: current evidence
+
+User hand test on 2026-10-08: the signed native e708930c5 candidate displays
+red on its canvas and retains red after normal PowerPoint paste (H7 EXE).
+The native registered-MathML route publishes mstyle mathcolor. The public Web
+3.1.2 CF_HTML MathML route copies successfully but loses red in PowerPoint.
+These are user-observed results in the user's Office environment; they do not
+qualify every colour, compound equation or Office version. The native clipboard
+publishes several formats, so the exact internal PowerPoint conversion call
+was not traced. Native canvas, SVG, EMF/bitmap and saved TeX also retain colour.
+
+Earlier static inspection of Office 16.0.17932.21000 MML2OMML.XSL found unused
+colour variables in CreateRunWithSameProp and CreateRunProp, and no emitted
+colour property. That inspection describes this XSL only. The inference that
+all PowerPoint MathML routes use it and lose colour was too broad and is
+withdrawn: the native registered route's observed red contradicts it. The Web
+CF_HTML colour loss remains observed; its exact internal cause is unverified.
+Outer CF_HTML CSS and Office LaTeX are optional, unverified alternatives.
+
+### Historical Web PowerPoint blocker (resolved by 8361ec916 H5/H6)
+
+H5 Web becomes plain text `y = ∫ a b x 2 d x`; H6 Web becomes one plain-text
+line `y = ∫ a b x 2 d x z = 1`. Earlier Web OK reports are superseded even
+though JS is unchanged. Native H1, H6 and H7 passed on e708930c5. Web structured
+equation copy is not qualified for 3.1.2. Explore direct/conditional CF_HTML
+OMML or prefixed MathML under limits-first UXP-0029; do not restore the old
+mandatory transport/parity restriction as a reason to accept flattened limits.
+No candidate transport is a fix until the user's PowerPoint retains editable
+bounds and the H6 two-row structure. Local browser payload checks alone cannot
+qualify Office import. No public Web transport replacement has been made.
+
+### Web OMML candidate awaiting user acceptance
+
+The new Web candidate BUILD `3.1.2 (2026-10-08 OMML candidate)` uses conditional
+msEquation RichEdit HTML OMML with the legacy namespace and HTML run styles,
+plus MathML for non-Office consumers and raw TeX as text/plain. Independent
+aligned rows become one editable OMML eqArr, anchored aligned rows also use
+eqArr, and internal cases/pmatrix remain matrices. Integral limits use nary
+sub/sup. This is an implementation candidate, not measured Office success.
+At this earlier candidate stage the EXE retained registered MathML and release
+was held until Web H5 bounds/editability and H6 bounds/editability/two rows passed
+in the user's current PowerPoint. No byte-parity requirement is reinstated.
+
+Styles/colour are retained for normal, italic, bold and bold-italic runs.
+Script/calligraphic, fraktur, double-struck, sans-serif and monospace (including
+the bold/italic variants) map to Unicode mathematical alphanumerics, with BMP
+letterlike exceptions. Already encoded mathematical characters are retained.
+Unsupported mathvariant values, dimensional mpadded, unknown elements and
+unsupported enclosure notations abort copy with a visible diagnostic. This
+is not a claim that every palette formula is accepted by the exporter.
+
+Spacing limitation (R7-3): mspace width is approximated by one NBSP, so quad
+and thin space do not retain their distinct widths (negative spaces also
+cannot be reproduced by this approximation). R7-2 remains a user acceptance
+gate: no duplicated MathML fallback or visible conditional markup may appear
+in the PowerPoint result. Browser clipboard reads may reserialize the
+non-Office conditional as a comment; payload generation alone cannot prove
+which branch the user's PowerPoint selects.
+
+
+## Shared Office clipboard contract (UXP-0031, 2026-10-08)
+
+This section supersedes earlier candidate route descriptions above. The user
+reported H5/H6 Web OK on 8361ec916. Both editions now publish conditional
+RichEdit-HTML OMML through CF_HTML as the primary Office format. Native copy
+publishes neither registered `MathML` nor `MathML Presentation`, so PowerPoint
+cannot prefer an untested competing registered equation format. Raw TeX, Office
+TeX, EMF and DIBV5 remain available in the native clipboard.
+
+`eqnedit64.office-omml-bits.v1` compares the literal UTF-8 bytes inside the
+`<!--[if gte msEquation 12]>...<![endif]-->` branch. It excludes CF_HTML byte
+offsets, HTML document envelopes, SourceURL and the non-Office MathML fallback.
+It does not normalize the compared bytes. Producers canonicalize named colours
+to uppercase hex and merge adjacent equal-style runs before publication; text,
+namespace, scripts, colour, styles and row structure remain in the comparison.
+The fixed corpus covers H1/H5/H6, cases, pmatrix, colour and math alphabets.
+
+The mandatory Windows CI gate reads the actual native and browser clipboard,
+rejects registered MathML formats, and checks both wire payloads against their
+producers. Missing conditional OMML or any byte difference fails the gate.
+`test_office_bit_parity.cjs` producer-only mode is useful locally but cannot
+qualify the shared route. Evidence records source SHA, Web/corpus hashes, mode,
+per-item byte lengths and SHA-256 values. This gate proves corpus payload identity,
+not Office rendering or equivalence of all accepted TeX.
+
+The changed EXE route was tested on signed ea787664d (H1/H5/H6 OK; H7
+colour loss accepted for 3.1.2).
+After this qualification, a passing actual-wire gate on the release candidate
+plus an EXE hand test permits omitting the separate Web hand test for covered
+fixtures. A missing/failing gate, a changed shared transport contract or different
+clipboard/browser/Office environment requires renewed Web qualification.
+Hosted CI 37692902458 verified 22/22 actual-wire byte matches on ea787664d.
+User H1/H5/H6 EXE passed; H7 colour loss is accepted for 3.1.2 as documented below.
+
+
+## 3.1.2 PowerPoint colour limitation (UXP-0030/0031)
+
+PowerPoint import drops colour on the shared conditional OMML CF_HTML route in
+both editions. The user measured all r10 colour variants A–G as not red on
+2026-10-08 and approved releasing 3.1.2 with this documented limitation. Colour
+support remains enabled in the native/Web canvas, SVG, saved TeX, and native
+EMF/DIB output. This decision does not strip colour from the source or renderer.
+PowerPoint colour retention is not an acceptance requirement for this release.
+
+User hand tests: H1/H5/H6 EXE OK on ea787664d; H7 EXE canvas red, PowerPoint
+not red. Web H5/H6 OK on 8361ec916. Hosted CI 37692902458 verified 22/22 primary
+OMML branches byte-identical on the actual Windows clipboard at ea787664d.
+This supports the UXP-0031 EXE-test plus bit-gate qualification for the covered
+corpus; it does not prove every TeX input or every Office/browser environment.
+Changed payload behaviour requires renewed qualification. The release metadata
+commit still requires its own CI. Formal publication follows the release gates.

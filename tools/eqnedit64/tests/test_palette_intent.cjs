@@ -88,7 +88,7 @@ for (let pi = 0; pi < shared.palettes.length; ++pi) {
       const actual = editor.composePaletteInsertion("LxR", 1, end, item);
       if (holes.length) {
         const pos = holes[bodySlot], selected = end === 2 ? "x" : "";
-        assert.equal(actual.value, "L" + snippet.slice(0,pos) + selected + snippet.slice(pos) + (end === 2 ? "R" : "xR"));
+        assert.equal(spelling(actual.value), spelling("L" + snippet.slice(0,pos) + selected + snippet.slice(pos) + (end === 2 ? "R" : "xR")));
       }
     }
     count++;

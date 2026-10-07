@@ -1,5 +1,19 @@
 # Changelog
 
+## 3.1.2 — 2026-10-08
+
+- Share the primary conditional RichEdit-HTML OMML CF_HTML route between EXE and Web; preserve integral bounds and multiple rows. No competing registered MathML formats.
+- Require actual Windows clipboard byte identity across 22 fixed fixtures. A passing candidate bit gate plus qualified EXE hand test permits omitting separate Web hand testing for covered fixtures (UXP-0031).
+- Native named `\color` / `\textcolor`: scoped edit/save and GDI/SVG/EMF/DIB colour; unsupported names/models fail explicitly. Web canvas/SVG/saved TeX retain colour.
+- Known limitation: PowerPoint import drops colour on the shared OMML route in both editions. User-tested r10 variants A–G all lost red; releasing 3.1.2 with this limitation was approved. Colour is retained in canvas/SVG/EMF/DIB/saved TeX.
+- Hand-test evidence: H1/H5/H6 EXE OK on ea787664d; Web H5/H6 OK on 8361ec916 plus 22/22 hosted actual-wire bit gate. H7 canvas red, PowerPoint not red (accepted limitation).
+- Preserve bounds inside cases/matrices, normalize palette environment insertion, wait for MathJax startup and reject invalid/unsupported Office structures.
+- Preserve primes on bare limit/sum/integral operators; pin release signer certificates and reject overlong diagnostic paths.
+
+## 3.1.1 — 2026-10-05
+
+- Preserve native single-equation integral bounds in PowerPoint with registered MathML.
+
 ## Unreleased
 
 - Clarify that the signed standalone EXE is the canonical direct converter;

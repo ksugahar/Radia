@@ -1,22 +1,25 @@
 # Eqnedit64 changelog
 
-## 3.1.1 — hand-test candidate
+## 3.1.2 — 2026-10-08
+
+- Share the primary conditional RichEdit-HTML OMML CF_HTML route between EXE and Web; preserve integral bounds and multiple rows. No competing registered MathML formats.
+- Require actual Windows clipboard byte identity across 22 fixed fixtures. A passing candidate bit gate plus qualified EXE hand test permits omitting separate Web hand testing for covered fixtures (UXP-0031).
+- Native named `\color` / `\textcolor`: scoped edit/save and GDI/SVG/EMF/DIB colour; unsupported names/models fail explicitly. Web canvas/SVG/saved TeX retain colour.
+- Known limitation: PowerPoint import drops colour on the shared OMML route in both editions. User-tested r10 variants A–G all lost red; releasing 3.1.2 with this limitation was approved. Colour is retained in canvas/SVG/EMF/DIB/saved TeX.
+- Hand-test evidence: H1/H5/H6 EXE OK on ea787664d; Web H5/H6 OK on 8361ec916 plus 22/22 hosted actual-wire bit gate. H7 canvas red, PowerPoint not red (accepted limitation).
+- Preserve bounds inside cases/matrices, normalize palette environment insertion, wait for MathJax startup and reject invalid/unsupported Office structures.
+- Preserve primes on bare limit/sum/integral operators; pin release signer certificates and reject overlong diagnostic paths.
+
+## 3.1.1 — 2026-10-05
 
 - Preserve integral bounds and other scripts when copying a single equation
   from the Windows app into PowerPoint by publishing registered MathML formats.
   PowerPoint imports the expression as editable OMML and centres its math
   paragraph; aligned multi-row expressions retain the CF_HTML path.
 
-## 3.1.0 — release candidate
+## 3.1.0 — development changes included in 3.1.1
 
-- Replace the native embedded CFF resource with Eqnedit Math, a reproducibly
-  converted TrueType-outline derivative of Latin Modern Math. Both EXE and
-  wheel module use the same asset and physical family; reject a non-TrueType
-  resource before registration. This avoids the reproduced Windows ATM host
-  failure path, rather than hiding it behind successful registration retries.
-  Preserve advances and math-layout tables, test all glyph bounds and winding,
-  and document the modified font and license. Final candidate acceptance is
-  recorded separately in FONT_DIAGNOSTICS.md; this entry is not release approval.
+
 
 - Share Web suffix attachment across degrees, stars, flat/sharp, primes and
   editable scripts so selections survive and repeated scripts do not collide.

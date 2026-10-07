@@ -176,6 +176,9 @@ for (const mark of ["'", "''", "'''"]) {
   const decorated = "{a^{2}}^{" + "\\prime ".repeat(mark.length) + "}";
   assert.deepEqual(editor.composeInsertion("a^{2}", 0, 5, mark),
                    { value: decorated, caret: decorated.length });
+  assert.deepEqual(editor.composePaletteInsertion("a^{2}", 0, 5,
+    ["prime", mark, "prime", "", "template.prime", 0]),
+    { value: decorated, caret: decorated.length });
 }
 assert.deepEqual(editor.composeInsertion("a^{2}", 5, 5, "'"),
                  { value: "a^{2}{}" + onePrime, caret: 7 + onePrime.length });
@@ -209,3 +212,14 @@ assert.equal(editor.braceProblem("\\{ \\} \\{"), null);
 
 console.log("PASS: Web style selection wrapping and caret placement");
 console.log("PASS: Web hole traversal, native source layout, structural Enter");
+
+for (const environment of ["pmatrix", "cases", "aligned"]) {
+  const snippet = "\\begin{" + environment + "}{} & {}\\\\{} & {}\\end{" + environment + "}";
+  const item = [environment, snippet, environment, "", environment, 0];
+  const actual = editor.composePaletteInsertion("x", 0, 1, item);
+  const pretty = editor.prettyTex(snippet);
+  const position = pretty.indexOf("{}");
+  assert.equal(actual.value, pretty.slice(0, position + 1) + "x" + pretty.slice(position + 1));
+  assert.equal(actual.caret, position + 2);
+  assert.match(actual.value, /\n/);
+}

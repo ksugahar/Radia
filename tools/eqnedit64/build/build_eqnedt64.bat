@@ -49,7 +49,7 @@ cl /nologo /O2 /Zi /guard:cf /W4 /WX /w14062 /EHsc /MT /std:c++17 /utf-8 ^
    /D_CRT_SECURE_NO_WARNINGS /DUNICODE /D_UNICODE /I src ^
    /TP src\eqnedt64_app.cpp src\equation_edit.cpp src\equation_render.cpp ^
        src\tex_parser.cpp src\equation_node.cpp src\latex_emitter.cpp ^
-       src\mathml_emitter.cpp src\math_symbols.cpp src\palettes.cpp src\tex_document.cpp ^
+       src\mathml_emitter.cpp src\office_html.cpp src\math_symbols.cpp src\palettes.cpp src\tex_document.cpp ^
    /Fe:build\Eqnedit64.exe /Fo:build\ /Fd:build\Eqnedit64.pdb ^
    /link /SUBSYSTEM:WINDOWS /DEBUG:FULL /OPT:REF /OPT:ICF /guard:cf ^
          /PDB:build\Eqnedit64.pdb /MAP:build\Eqnedit64.map ^

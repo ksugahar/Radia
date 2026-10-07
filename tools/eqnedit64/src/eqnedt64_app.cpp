@@ -43,6 +43,7 @@
 #include "eqnedit64_resource.h"
 #include "eqnedit64_version.h"
 #include "mathml_emitter.h"
+#include "office_html.h"
 #include "palettes.h"
 #include "tex_document.h"
 
@@ -133,6 +134,8 @@ struct AppState {
      * burst is active the EDIT control keeps the user's exact half-typed TeX;
      * it is canonicalised only when focus returns to the canvas. */
     bool sourceEditing = false;
+    std::string sourceError;
+    bool rejectedSourceReplaced = false;
     bool backgroundUiTest = false;
     unsigned testModifiers = 0;
     bool dragging = false;
@@ -602,6 +605,13 @@ void update_title() {
 
 void update_status(const wchar_t* transient = nullptr) {
     if (!g.status) return;
+    const std::wstring replacementNotice = L"エラーのあるTeXソースをキャンバスの内容で置き換えました";
+    std::wstring message;
+    if (g.rejectedSourceReplaced) {
+        message = replacementNotice;
+        if (transient) message += std::wstring(L" — ") + transient;
+        transient = message.c_str();
+    }
     if (transient) {
         SendMessageW(g.status, SB_SIMPLE, TRUE, 0);
         SendMessageW(g.status, SB_SETTEXTW, 255, LPARAM(transient));
@@ -999,6 +1009,8 @@ PrettySource pretty_source(const std::wstring& raw) {
 }
 
 void sync_source_from_model() {
+    if (!g.sourceError.empty()) g.rejectedSourceReplaced = true;
+    g.sourceError.clear();
     if (!g.source) return;
     const PrettySource canonical = pretty_source(wide_utf8(g.equation.latex()));
     if (window_text(g.source) != canonical.text) {
@@ -1100,6 +1112,9 @@ bool choose_path(bool save, std::wstring& path, const wchar_t* defExt,
 }
 
 bool save_document(bool saveAs) {
+    if (!g.sourceError.empty()) {
+        update_status(wide_utf8(g.sourceError).c_str()); MessageBeep(MB_ICONWARNING); return false;
+    }
     /* Save exactly what the structural model represents and show that same
      * canonical TeX in the source pane.  A half-typed source command has
      * already been parsed live; this only ends its Undo burst. */
@@ -1160,7 +1175,9 @@ bool open_document(const std::wstring& path) {
     if (!g.equation.load_latex(doc.body)) {
         debug_event("file.open.rejected", "reason=" + g.equation.last_error());
         MessageBoxW(g.main,
-                    L"数式の入れ子が深すぎます（上限 200）。",
+                    g.equation.last_error() == "maximum-nesting-depth" ?
+                        L"数式の入れ子が深すぎます（上限 200）。" :
+                        wide_utf8(g.equation.last_error()).c_str(),
                     kTitle, MB_ICONERROR);
         return false;
     }
@@ -1638,41 +1655,23 @@ bool open_clipboard_with_retry(HWND owner) {
 
 bool clipboard_set(const std::string& latex) {
     const std::wstring officeText = office_latex_text(latex);
-    const std::string mathMlUtf8 =
-        eqnedit::latex_to_office_mathml_fragment(
-            latex, kOfficePasteFontPoints);
-    const std::wstring registeredMathMl = wide_utf8(
-        eqnedit::latex_to_mathml(latex, kOfficePasteFontPoints));
-    /* Keep CF_HTML's inline sentinel at the accepted 18 pt PowerPoint size
-     * so its final character and next insertion point agree. */
-    std::string officeRows = mathMlUtf8;
-    size_t breakAt = 0;
-    while ((breakAt = officeRows.find("<br>", breakAt)) !=
-           std::string::npos) {
-        officeRows.insert(breakAt, kOfficeInlineSentinel);
-        breakAt += std::strlen(kOfficeInlineSentinel) + 4;
+    std::string officeHtml;
+    try {
+        officeHtml = cf_html_fragment(eqnedit::latex_to_office_html(latex));
+    } catch (const std::exception&) {
+        update_status(L"この数式はOffice形式に変換できませんでした");
+        return false;
     }
-    const std::string officeHtml = cf_html_fragment(
-        officeRows + kOfficeInlineSentinel);
-    const bool registerSingleMath =
-        officeRows.find("<br>") == std::string::npos &&
-        officeRows.find("<mtable") == std::string::npos;
     HGLOBAL unicode = global_copy(officeText.c_str(),
         (officeText.size() + 1) * sizeof(wchar_t));
-    HGLOBAL mathMl = global_copy(registeredMathMl.c_str(),
-        (registeredMathMl.size() + 1) * sizeof(wchar_t));
-    HGLOBAL mathMlPresentation = global_copy(registeredMathMl.c_str(),
-        (registeredMathMl.size() + 1) * sizeof(wchar_t));
     HGLOBAL html = global_copy(officeHtml.c_str(), officeHtml.size() + 1);
     HGLOBAL rawLatex = global_copy(latex.c_str(), latex.size() + 1);
     HENHMETAFILE emf = equation_emf(latex, g.style);
     HGLOBAL dib = equation_dibv5(latex, g.style);
-    if (!unicode || (registerSingleMath && (!mathMl || !mathMlPresentation)) ||
+    if (!unicode ||
         !html ||
         !open_clipboard_with_retry(g.main)) {
         if (unicode) GlobalFree(unicode);
-        if (mathMl) GlobalFree(mathMl);
-        if (mathMlPresentation) GlobalFree(mathMlPresentation);
         if (html) GlobalFree(html);
         if (rawLatex) GlobalFree(rawLatex);
         if (emf) DeleteEnhMetaFile(emf);
@@ -1682,8 +1681,6 @@ bool clipboard_set(const std::string& latex) {
     if (!EmptyClipboard()) {
         CloseClipboard();
         GlobalFree(unicode);
-        GlobalFree(mathMl);
-        GlobalFree(mathMlPresentation);
         GlobalFree(html);
         if (rawLatex) GlobalFree(rawLatex);
         if (emf) DeleteEnhMetaFile(emf);
@@ -1691,23 +1688,8 @@ bool clipboard_set(const std::string& latex) {
         return false;
     }
 
-    /* Current PowerPoint builds flatten MathML inside CF_HTML into ordinary
-     * text. Publish the registered MathML formats as well: PowerPoint imports
-     * these into editable OMML, preserving integral limits and scripts. Keep
-     * CF_HTML and the other representations for consumers that prefer them. */
-    bool mathMlOk = !registerSingleMath;
-    bool mathMlPresentationOk = !registerSingleMath;
-    if (registerSingleMath) {
-        const UINT mathMlFormat = RegisterClipboardFormatW(L"MathML");
-        mathMlOk = mathMlFormat &&
-            SetClipboardData(mathMlFormat, mathMl) != nullptr;
-        if (mathMlOk) mathMl = nullptr;
-        const UINT mathMlPresentationFormat =
-            RegisterClipboardFormatW(L"MathML Presentation");
-        mathMlPresentationOk = mathMlPresentationFormat &&
-            SetClipboardData(mathMlPresentationFormat, mathMlPresentation) != nullptr;
-        if (mathMlPresentationOk) mathMlPresentation = nullptr;
-    }
+    /* UXP-0031: registered MathML must not compete with the shared conditional
+     * OMML HTML payload. The Office bit gate compares this primary route. */
     const UINT htmlFormat = RegisterClipboardFormatW(L"HTML Format");
     const bool htmlOk = htmlFormat &&
         SetClipboardData(htmlFormat, html) != nullptr;
@@ -1725,8 +1707,6 @@ bool clipboard_set(const std::string& latex) {
     CloseClipboard();
 
     if (unicode) GlobalFree(unicode);
-    if (mathMl) GlobalFree(mathMl);
-    if (mathMlPresentation) GlobalFree(mathMlPresentation);
     if (html) GlobalFree(html);
     if (rawLatex) GlobalFree(rawLatex);
     if (emf) DeleteEnhMetaFile(emf);
@@ -1734,7 +1714,7 @@ bool clipboard_set(const std::string& latex) {
     /* TeX, visible Office Math, Unicode fallback, EMF, and opaque
      * DIBV5 are the normal-copy product contract. Cut must not delete the
      * selection if any required representation failed. */
-    return mathMlOk && mathMlPresentationOk && htmlOk && unicodeOk &&
+    return htmlOk && unicodeOk &&
         latexOk && emfOk && dibOk;
 }
 
@@ -1864,9 +1844,14 @@ TwoArgumentAction classify_two_arguments(const std::wstring& input,
     return TwoArgumentAction::Reject;
 }
 
+int report_cli_error(const std::wstring& message, int exitCode);
+
 int copy_tex_cli(const std::string& input, ClipboardCliTarget target) {
     const std::string latex = eqnedit::normalize_tex_paste(input);
     if (latex.empty()) return 83;
+    std::string error;
+    if (!eqnedit::parse_latex(latex, nullptr, &error))
+        return report_cli_error(wide_utf8(error), 97);
     bool copied = false;
     if (target == ClipboardCliTarget::Office)
         copied = clipboard_set(latex);
@@ -1922,6 +1907,9 @@ std::string clipboard_get() {
 }
 
 void edit_copy(bool cut) {
+    if (!g.sourceError.empty()) {
+        update_status(wide_utf8(g.sourceError).c_str()); MessageBeep(MB_ICONWARNING); return;
+    }
     if (GetFocus() == g.source) {
         if (!edit_has_selection()) {
             update_status(L"選択範囲がありません");
@@ -1965,6 +1953,9 @@ void edit_copy(bool cut) {
 }
 
 void edit_copy_google_slides(bool coach = false) {
+    if (!g.sourceError.empty()) {
+        update_status(wide_utf8(g.sourceError).c_str()); MessageBeep(MB_ICONWARNING); return;
+    }
     const std::string latex = g.equation.has_selection()
         ? g.equation.selection_latex() : g.equation.latex();
     if (!clipboard_set_google_slides(latex)) {
@@ -1996,8 +1987,8 @@ void edit_paste() {
             model_changed("edit.paste", latex);
             return;
         }
-        if (g.equation.last_error() == "maximum-nesting-depth") {
-            update_status(L"数式の入れ子が深すぎます（上限 200）");
+        if (!g.equation.last_error().empty()) {
+            update_status(wide_utf8(g.equation.last_error()).c_str());
             MessageBeep(MB_ICONWARNING);
         }
     }
@@ -2249,8 +2240,8 @@ void handle_command(UINT id, bool fromAccelerator = false) {
         case ID_FILE_NEW: new_document(); break;
         case ID_FILE_OPEN: open_dialog(); break;
         case ID_FILE_SAVE: case ID_BUTTON_SAVE:
-            save_document(false);
-            if (!fromAccelerator) update_status(L"ショートカット・コーチ: 次回は Ctrl+S");
+            if (save_document(false) && !fromAccelerator)
+                update_status(L"ショートカット・コーチ: 次回は Ctrl+S");
             break;
         case ID_FILE_SAVE_AS: save_document(true); break;
         case ID_FILE_EXIT: SendMessageW(g.main, WM_CLOSE, 0, 0); break;
@@ -2290,6 +2281,7 @@ void handle_command(UINT id, bool fromAccelerator = false) {
                         g.showEditingMarks ? "on" : "off");
             break;
         case ID_EXPORT_SVG:
+            if (!g.sourceError.empty()) { update_status(wide_utf8(g.sourceError).c_str()); break; }
             export_text(L"svg", L"SVG image (*.svg)\0*.svg\0", g.equation.svg(g.style)); break;
         case ID_HELP_SHORTCUTS: show_shortcuts(); break;
         case ID_HELP_SHORTCUT_COACH:
@@ -4356,15 +4348,23 @@ LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                  * treating control id 9001 as an application command would
                  * re-enter the dispatcher for no useful work. */
                 if (g.syncingSource) return 0;
+                g.rejectedSourceReplaced = false;
                 const std::string raw = utf8_wide(window_text(g.source));
                 if (!g.equation.replace_latex(raw, !g.sourceEditing)) {
-                    sync_source_from_model();
-                    update_status(L"数式の入れ子が深すぎます（上限 200）");
+                    if (g.equation.last_error() == "maximum-nesting-depth") {
+                        sync_source_from_model();
+                        update_status(L"数式の入れ子が深すぎます（上限 200）");
+                    } else {
+                        g.sourceError = g.equation.last_error();
+                        set_dirty(true);
+                        update_status(wide_utf8(g.sourceError).c_str());
+                    }
                     MessageBeep(MB_ICONWARNING);
                     debug_event("source.edit.rejected",
                                 "reason=" + g.equation.last_error());
                     return 0;
                 }
+                g.sourceError.clear();
                 g.sourceEditing = true;
                 set_dirty(true);
                 InvalidateRect(g.canvas, nullptr, FALSE);
@@ -4372,7 +4372,7 @@ LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 return 0;
             }
             if (HWND(lp) == g.source && HIWORD(wp) == EN_KILLFOCUS) {
-                sync_source_from_model();
+                if (g.sourceError.empty()) sync_source_from_model();
                 debug_event("focus.leave_source");
                 return 0;
             }
@@ -4435,6 +4435,11 @@ int self_test() {
                             L"  [" + kBuildTag + L"]") == std::wstring::npos)
         return 158;
     eqnedit::Equation e;
+    eqnedit::Equation colored;
+    if (!colored.load_latex("\\color{red}{\\frac{x}{y}}")) return 159;
+    if (colored.svg().find("#FF0000") == std::string::npos) return 160;
+    if (eqnedit::latex_to_mathml(colored.latex()).find("mathcolor") == std::string::npos) return 161;
+    if (colored.load_latex("\\color{unsupported}{x}")) return 162;
     e.insert_text("x");
     e.insert_template("sub");
     e.insert_text("i");
@@ -4691,6 +4696,9 @@ int operation_log_test(const std::wstring& output) {
 int render_emf(const std::wstring& tex, const std::wstring& path) {
     const std::string latex = eqnedit::normalize_tex_paste(utf8_wide(tex));
     if (latex.empty()) return 83;
+    std::string error;
+    if (!eqnedit::parse_latex(latex, nullptr, &error))
+        return report_cli_error(wide_utf8(error), 97);
     HENHMETAFILE emf = equation_emf(latex, g.style);
     if (!emf) return 95;
     HENHMETAFILE copy = CopyEnhMetaFileW(emf, path.c_str());
@@ -4703,6 +4711,9 @@ int render_emf(const std::wstring& tex, const std::wstring& path) {
 int render_png(const std::wstring& tex, const std::wstring& path) {
     const std::string latex = eqnedit::normalize_tex_paste(utf8_wide(tex));
     if (latex.empty()) return 83;
+    std::string error;
+    if (!eqnedit::parse_latex(latex, nullptr, &error))
+        return report_cli_error(wide_utf8(error), 97);
     GoogleSlidesClipboard image = equation_google_slides(latex, g.style);
     if (!image.png) {
         if (image.html) GlobalFree(image.html);
@@ -5043,6 +5054,8 @@ int ui_fuzz(unsigned seed, int operations) {
         L"x+y", L"\\frac{a}{b}", L"\\sqrt{x_{1}}", L"\\alpha+\\beta",
         L"\\frac{a}{", L"\\begin{aligned}a&=b\\\\c&=d\\end{aligned}",
         L"\\operatorname*{arg\\,min}_{x} f(x)", L"日本語+x",
+        L"\\textcolor{red}{x}", L"{\\color{blue}\\frac{x}{y}}",
+        L"\\color{", L"\\color{unsupported}{x}",
     };
     for (int i = 0; i < operations; ++i) {
         const uint32_t operation = next() % 14;
@@ -5102,7 +5115,7 @@ int ui_fuzz(unsigned seed, int operations) {
              * divergence on every structured equation. */
             const std::wstring shownSource =
                 pretty_source(wide_utf8(g.equation.latex())).text;
-            if (!g.sourceEditing && window_text(g.source) != shownSource) {
+            if (!g.sourceEditing && g.sourceError.empty() && window_text(g.source) != shownSource) {
                 fwprintf(stderr,
                          L"seed %u op %d: source/model divergence\n"
                          L"  source: %s\n  shown:  %s\n",

@@ -85,7 +85,11 @@ jobs:
       - name: Check Eqnedit64 Web contract
         run: |
           python build/generate_palettes.py --check
+          python build/generate_office_alphabets.py --check
           python -m pytest tests/test_web_contract.py tests/test_node_dispatch.py tests/test_version_contract.py tests/test_palette_faces.py tests/test_palette_intent.py -q
+
+      - name: Check shipped TrueType conversion without font registration
+        run: python tests/test_truetype_conversion.py
 
       - name: Check Web JavaScript syntax and insertion behaviour
         run: |
@@ -162,6 +166,19 @@ jobs:
 
       - name: Test font observation failure modes without native execution
         run: python -m pytest tests/test_font_session_observation.py -q
+
+      - name: Test release signer policy without native execution
+        run: pwsh -NoProfile -File tests/test_release_signature.ps1
+
+      - name: Verify pinned signer trust on disposable hosted runner
+        run: |
+          $exe = Join-Path $env:RUNNER_TEMP 'eqnedit64-approved-signer-fixture.exe'
+          Invoke-WebRequest -Uri 'https://github.com/ksugahar/Radia/releases/download/eqnedit64-v3.1.1/Eqnedit64.exe' -OutFile $exe
+          $expected = '9431048EB1DA0444787AAC9C61EF8192386F07F61464D42552D5ADDAD7CB2413'
+          if ((Get-FileHash $exe -Algorithm SHA256).Hash -cne $expected) { throw 'Signer fixture hash mismatch.' }
+          . ../../.agents/skills/release-eqnedit64/scripts/assert_release_signature.ps1
+          $signature = Assert-EqneditReleaseSignature $exe -AllowUntrustedRoot
+          if ($signature.Status -ne 'Valid') { throw 'Pinned hosted signer qualification failed.' }
 
       - name: Enable isolated font lifecycle diagnostics
         run: |
@@ -278,6 +295,29 @@ jobs:
         run: >-
           pwsh -NoProfile -File tests/test_cli_output.ps1
           -AppPath build_cmake/Release/Eqnedit64.exe
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Require native Web Office clipboard bit identity
+        run: |
+          python build/generate_office_alphabets.py --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm install --no-save --package-lock=false playwright@1.55.0 mathjax@3.2.2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npx playwright install chromium
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node tests/test_office_bit_parity.cjs build_cmake/Release/office_payload_probe.exe build_cmake/Release/Eqnedit64.exe --wire
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Preserve Office clipboard byte evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: eqnedit64-office-bit-parity
+          path: ${{ runner.temp }}/eqnedit64-office-bits-*/**
+          if-no-files-found: error
 
       - name: Check font host after the final CLI workload
         if: ${{ always() && inputs.font_acceptance == true }}

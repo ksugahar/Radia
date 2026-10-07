@@ -324,6 +324,9 @@ public:
 class GroupNode : public Node {
 public:
     NodeList children;
+    /* Scoped colour uses the existing editable group slot. Empty = inherit. */
+    std::string colorName;
+    std::string colorHex;
 
     GroupNode() : Node(kGroup) {}
     void accept(NodeVisitor& v) override;

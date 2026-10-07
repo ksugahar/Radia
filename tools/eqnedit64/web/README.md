@@ -68,6 +68,78 @@ Less common alphabets stay in Decoration: `\mathsf`, `\mathtt`, `\mathcal`,
 keeps `\bm`; only the MathJax boundary expands it to `\boldsymbol`.
 
 Inputs and saved/copied source are TeX. MTEF and `.eqn` are not supported
-formats. Office copy emits inline MathML in `text/html` plus plain TeX; image
-copy is a separate action so PowerPoint cannot accidentally prefer PNG over an
-editable equation.
+formats. Office copy candidate emits conditional RichEdit HTML OMML in `text/html`
+plus plain TeX and a non-Office MathML fallback. PNG copy remains a separate
+action. Native and Web need not use identical transports: UXP-0029 prioritizes
+editable limits and row structure. Current production Web MathML was observed
+to flatten bounds and rows; the OMML candidate requires the user's PowerPoint
+H5/H6 re-test before 3.1.2 is released. Browser payload tests are not Office
+acceptance. Candidate BUILD is `3.1.2 (2026-10-08 OMML candidate)`.
+
+The candidate exporter handles token runs, normal/italic/bold/bold-italic,
+colour inheritance, Unicode mathematical alphanumerics (including script,
+fraktur, double-struck, sans-serif and monospace), fractions and binomials, roots, sub/sup scripts and
+large-operator limits, accents/bars, arrays/matrices, phantom and box/strike
+enclosures. Unsupported MathML elements, dimensional padding (e.g. smash),
+other mathvariant values and other enclosures stop copy with a diagnostic;
+they are not flattened silently. Preview and saved TeX remain available.
+This support boundary must be reviewed before final acceptance.
+
+The OMML candidate approximates each nonzero mspace with one NBSP; quad,
+thin and negative spacing therefore do not preserve exact widths. The user's
+H5/H6 re-test must also reject duplicated fallback content or visible
+conditional markup. Unicode alphabet payloads are browser-tested, not a
+claim of independently measured PowerPoint font rendering.
+
+
+## Shared Office clipboard contract (UXP-0031, 2026-10-08)
+
+This section supersedes earlier candidate route descriptions above. The user
+reported H5/H6 Web OK on 8361ec916. Both editions now publish conditional
+RichEdit-HTML OMML through CF_HTML as the primary Office format. Native copy
+publishes neither registered `MathML` nor `MathML Presentation`, so PowerPoint
+cannot prefer an untested competing registered equation format. Raw TeX, Office
+TeX, EMF and DIBV5 remain available in the native clipboard.
+
+`eqnedit64.office-omml-bits.v1` compares the literal UTF-8 bytes inside the
+`<!--[if gte msEquation 12]>...<![endif]-->` branch. It excludes CF_HTML byte
+offsets, HTML document envelopes, SourceURL and the non-Office MathML fallback.
+It does not normalize the compared bytes. Producers canonicalize named colours
+to uppercase hex and merge adjacent equal-style runs before publication; text,
+namespace, scripts, colour, styles and row structure remain in the comparison.
+The fixed corpus covers H1/H5/H6, cases, pmatrix, colour and math alphabets.
+
+The mandatory Windows CI gate reads the actual native and browser clipboard,
+rejects registered MathML formats, and checks both wire payloads against their
+producers. Missing conditional OMML or any byte difference fails the gate.
+`test_office_bit_parity.cjs` producer-only mode is useful locally but cannot
+qualify the shared route. Evidence records source SHA, Web/corpus hashes, mode,
+per-item byte lengths and SHA-256 values. This gate proves corpus payload identity,
+not Office rendering or equivalence of all accepted TeX.
+
+The changed EXE route was tested on signed ea787664d (H1/H5/H6 OK; H7
+colour loss accepted for 3.1.2).
+After this qualification, a passing actual-wire gate on the release candidate
+plus an EXE hand test permits omitting the separate Web hand test for covered
+fixtures. A missing/failing gate, a changed shared transport contract or different
+clipboard/browser/Office environment requires renewed Web qualification.
+Hosted CI 37692902458 verified 22/22 actual-wire byte matches on ea787664d.
+User H1/H5/H6 EXE passed; H7 colour loss is accepted for 3.1.2 as documented below.
+
+
+## 3.1.2 PowerPoint colour limitation (UXP-0030/0031)
+
+PowerPoint import drops colour on the shared conditional OMML CF_HTML route in
+both editions. The user measured all r10 colour variants A–G as not red on
+2026-10-08 and approved releasing 3.1.2 with this documented limitation. Colour
+support remains enabled in the native/Web canvas, SVG, saved TeX, and native
+EMF/DIB output. This decision does not strip colour from the source or renderer.
+PowerPoint colour retention is not an acceptance requirement for this release.
+
+User hand tests: H1/H5/H6 EXE OK on ea787664d; H7 EXE canvas red, PowerPoint
+not red. Web H5/H6 OK on 8361ec916. Hosted CI 37692902458 verified 22/22 primary
+OMML branches byte-identical on the actual Windows clipboard at ea787664d.
+This supports the UXP-0031 EXE-test plus bit-gate qualification for the covered
+corpus; it does not prove every TeX input or every Office/browser environment.
+Changed payload behaviour requires renewed qualification. The release metadata
+commit still requires its own CI. Formal publication follows the release gates.
