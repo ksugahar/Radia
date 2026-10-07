@@ -40,6 +40,13 @@ def test_panel_esim_workflow_preserves_heat_and_panel_identity(tmp_path, monkeyp
             def solve(self, h):
                 return {'Z': z0*(1+.2*h/(1+h)), 'converged': True}
 
+        # Explicit complete identity for this prescribed constitutive substitute.
+        from radia import esim_panel_evaluator as evaluation
+        original_evaluator = evaluation.PanelESIMEvaluator
+        monkeypatch.setattr(evaluation, 'PanelESIMEvaluator', lambda solver, **kw:
+            original_evaluator(solver, configuration=lambda: dict(
+                law='z0*(1+.2*h/(1+h))', z0=z0), **kw))
+
         # The panel module currently imports this dependency by its standalone
         # script name; patch that exact module, not a second package instance.
         material = em_material

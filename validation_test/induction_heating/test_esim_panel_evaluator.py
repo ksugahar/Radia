@@ -19,7 +19,7 @@ def evaluator(cell, **kwargs):
     return PanelESIMEvaluator(cell, configuration=lambda: {'law': 'test'}, **kwargs)
 
 
-@pytest.mark.parametrize('mode', ['direct', 'cache', 'table'])
+@pytest.mark.parametrize('mode', ['direct', 'table'])
 def test_all_panels_directly_certified_even_duplicates(mode):
     cell = Cell()
     ev = evaluator(cell, mode=mode)
@@ -32,13 +32,13 @@ def test_all_panels_directly_certified_even_duplicates(mode):
     assert ev.diagnostics()['certification_cell_calls'] == len(fields)
 
 
-def test_cache_reuse_and_floor():
+def test_table_cache_reuse_and_floor():
     cell = Cell()
-    ev = evaluator(cell, mode='cache')
-    ev.evaluate([0, .0001, 1., 1.])
-    assert cell.calls == [.001, 1.]
-    ev.evaluate([1.])
-    assert len(cell.calls) == 2
+    ev = evaluator(cell, mode='table')
+    ev.evaluate([0, .0001])
+    assert cell.calls == [.001]
+    ev.evaluate([.001])
+    assert len(cell.calls) == 1
 
 
 def test_table_range_extension_no_extrapolation_and_component_errors():
@@ -55,7 +55,7 @@ def test_table_range_extension_no_extrapolation_and_component_errors():
 
 def test_complete_identity_mutation_rejected():
     state = {'sigma': 1}
-    ev = PanelESIMEvaluator(Cell(), mode='cache', configuration=lambda: state)
+    ev = PanelESIMEvaluator(Cell(), mode='table', configuration=lambda: state)
     ev.evaluate([1.])
     state['sigma'] = 2
     with pytest.raises(RuntimeError, match='configuration changed'):
@@ -117,3 +117,9 @@ def test_real_finite_cell_configuration_and_constant_reduction():
 def test_invalid_controls(kwargs):
     with pytest.raises(ValueError):
         evaluator(Cell(), **kwargs)
+
+
+@pytest.mark.parametrize('mode', ['direct', 'table'])
+def test_missing_production_cell_identity_names_attributes(mode):
+    with pytest.raises(ValueError, match='missing attributes: half_thickness'):
+        PanelESIMEvaluator(Cell(), mode=mode)

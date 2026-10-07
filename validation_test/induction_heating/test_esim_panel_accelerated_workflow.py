@@ -2,6 +2,6 @@
 from benchmark_panel_esim import run_case
 
 
-def test_real_nonlinear_direct_cache_table_agreement(tmp_path):
+def test_real_nonlinear_direct_table_agreement(tmp_path):
     result = run_case(tmp_path, repeats=1)
-    assert len(result['runs']) == 3
+    assert len(result['runs']) == 2
