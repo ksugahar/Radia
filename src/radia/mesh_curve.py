@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import math
 
-__all__ = ["CurveOrderError", "ensure_curve_order", "mesh_measures", "vol_embeds_geometry"]
+__all__ = ["CurveOrderError", "ensure_curve_order", "mesh_measures", "vol_geometry_kind"]
 
 
 class CurveOrderError(RuntimeError):
@@ -52,17 +52,47 @@ def mesh_measures(mesh):
     return float(ng.Integrate(one, mesh, ng.BND)), float(ng.Integrate(one, mesh, ng.VOL))
 
 
-def vol_embeds_geometry(vol_path):
-    """True when a Netgen ``.vol`` file stores a geometry archive after ``endmesh``."""
-    seen_end = False
+def _read_vol(vol_path):
+    """Return ``(points, tail_lines)`` of a text Netgen ``.vol``.
+
+    ``points`` is the list of stored vertex coordinates; ``tail_lines`` are the
+    non-empty lines after ``endmesh`` (the geometry archive, if any).
+    """
+    points, tail = [], []
     with open(vol_path, "r", errors="ignore") as handle:
-        for line in handle:
-            if seen_end:
-                if line.strip():
-                    return True
-            elif line.strip() == "endmesh":
-                seen_end = True
-    return False
+        lines = iter(handle)
+        for line in lines:
+            s = line.strip()
+            if s == "points":
+                count = int(next(lines).split()[0])
+                for _ in range(count):
+                    points.append(tuple(float(v) for v in next(lines).split()))
+            elif s == "endmesh":
+                tail = [x.strip() for x in lines if x.strip()]
+                break
+    return points, tail
+
+
+def vol_geometry_kind(vol_path):
+    """Name the geometry archive stored after ``endmesh`` in a Netgen ``.vol``.
+
+    Returns ``"occ"`` for an OCC archive (``TextOutArchive`` header, the
+    ``netgen::OCCGeometry`` class tag and a ``CASCADE Topology`` block),
+    ``"csg"`` for a CSG description, ``"other"`` for unrecognised trailing
+    text and ``None`` when nothing follows ``endmesh``.
+    """
+    return _geometry_kind(_read_vol(vol_path)[1])
+
+
+def _geometry_kind(tail):
+    if not tail:
+        return None
+    if (tail[0] == "TextOutArchive" and "netgen::OCCGeometry" in tail[:12]
+            and any(x.startswith("CASCADE Topology") for x in tail[:40])):
+        return "occ"
+    if tail[0].startswith("csgsurfaces"):
+        return "csg"
+    return "other"
 
 
 def _vertex_box(mesh):
@@ -86,8 +116,10 @@ def ensure_curve_order(mesh, order, *, vol_path, extent_ratio=2.0, measure_ratio
         mesh: ``ngsolve.Mesh`` loaded from ``vol_path`` (possibly re-wrapped
             with ``ngsolve.Mesh(mesh.ngmesh)``).
         order: required geometry order (>= 1).
-        vol_path: the ``.vol`` the mesh was loaded from; its embedded geometry
-            archive is the only accepted CAD provenance.
+        vol_path: the ``.vol`` the mesh was loaded from.  Its embedded OCC
+            archive is the only accepted CAD provenance, and the current mesh
+            vertices must still equal the points stored in it (a mesh moved or
+            rescaled after loading no longer matches its CAD).
         extent_ratio: allowed factor between the CAD and mesh bounding-box
             extents per axis (unit check; coarse meshes stay well inside 2).
         measure_ratio: allowed factor by which curving may change the boundary
@@ -114,18 +146,40 @@ def ensure_curve_order(mesh, order, *, vol_path, extent_ratio=2.0, measure_ratio
     if current >= order:
         return {"action": "kept", "curve_order": current}
 
-    if not vol_embeds_geometry(vol_path):
+    stored_points, tail = _read_vol(vol_path)
+    kind = _geometry_kind(tail)
+    if kind is None:
         raise CurveOrderError(
             f"{what}: stored geometry order {current} < required {order}, and the "
             f".vol stores no CAD to curve against. Re-export it at order {order} "
             f"(Cubit: export netgen ... order {order}) or regenerate it from the CAD; "
             f"Mesh.Curve would flatten it or use another mesh's geometry.")
+    if kind != "occ":
+        raise CurveOrderError(
+            f"{what}: embedded geometry ({kind}) is not supported for guarded curving "
+            f"(OCC archives only). Curve it in the originating mesher.")
+    if len(stored_points) != mesh.nv:
+        raise CurveOrderError(
+            f"{what}: mesh has {mesh.nv} vertices but {vol_path} stores "
+            f"{len(stored_points)}; it is not the mesh loaded from that file.")
+    scale = 0.0
+    worst = 0.0
+    for v, q in zip(mesh.vertices, stored_points):
+        p = v.point
+        for k in range(len(p)):
+            scale = max(scale, abs(q[k]))
+            worst = max(worst, abs(p[k] - q[k]))
+    if worst > 1e-9 * max(scale, 1e-300):
+        raise CurveOrderError(
+            f"{what}: mesh vertices differ from the points stored in {vol_path} by up "
+            f"to {worst:.3e}; the mesh was moved or rescaled after loading and no "
+            f"longer matches its embedded CAD.")
     geometry = mesh.ngmesh.GetGeometry()
     shape = getattr(geometry, "shape", None)
     if shape is None:
         raise CurveOrderError(
-            f"{what}: embedded geometry type {type(geometry).__name__} is not supported "
-            f"for guarded curving (OCC only). Curve it in the originating mesher.")
+            f"{what}: the .vol stores an OCC archive but the loaded mesh exposes "
+            f"{type(geometry).__name__}; reload the mesh from {vol_path}.")
 
     lo_c, hi_c = shape.bounding_box
     lo_m, hi_m = _vertex_box(mesh)

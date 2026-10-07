@@ -52,11 +52,14 @@ and rescaled with `ngmesh.Scale(1e-3)`.
    used. If a higher order is required, call
    `radia.mesh_curve.ensure_curve_order(mesh, order, vol_path=path)` inside the
    caller's `TaskManager`. It keeps a sufficient stored order (`"kept"` does not
-   re-examine the geometry), takes the CAD provenance from the file (an archive
-   after `endmesh`) because `GetGeometry()` cannot tell embedded from borrowed
-   geometry, supports OCC geometry only, rejects a CAD box that differs from the
-   mesh box by more than a factor of 2 or is shifted (mesh rescaled after
-   meshing), and rejects a curving that changes boundary or domain measure by
+   re-examine the geometry), takes the CAD provenance from the file because
+   `GetGeometry()` cannot tell embedded from borrowed geometry (an OCC archive
+   after `endmesh`: `TextOutArchive`, `netgen::OCCGeometry`, `CASCADE
+   Topology`; any other trailing text is refused), requires the current
+   vertices to equal the points stored in that file (a mesh moved or rescaled
+   after loading is refused), rejects a CAD box that differs from the mesh box
+   by more than a factor of 2 or is shifted (mesh rescaled before saving), and
+   rejects a curving that changes boundary or domain measure by
    more than a factor of 3. These are sanity checks for gross errors, not a
    proof of a valid map. After a rejection with `mesh_modified=True` the mesh
    must be reloaded.
