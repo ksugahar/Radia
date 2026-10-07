@@ -52,12 +52,6 @@ def test_alias_flagged():
     assert [x["line"] for x in f] == [3]
 
 
-def test_rebinding_clears():
-    f = _hits(["ngm = geo.GenerateMesh(maxh=1)", "ngm = shape",
-               "ngm.Scale(Pnt(0, 0, 0), .001)"])
-    assert f == []
-
-
 def test_string_ok():
     f = _hits(["ngm = geo.GenerateMesh(maxh=1)", '"""ngm.Scale(.001)"""'])
     assert f == []
@@ -69,6 +63,7 @@ def test_function_scopes_are_separate():
     assert f == []
 
 
+# Paths that a flow-sensitive walk previously missed must all be reported.
 def test_scale_in_rebinding_rhs_flagged():
     f = _hits(["ngm = geo.GenerateMesh()", "ngm = ngm.Scale(.001)"])
     assert [x["line"] for x in f] == [2]
@@ -80,16 +75,45 @@ def test_conditional_rebinding_still_flagged():
     assert [x["line"] for x in f] == [4]
 
 
-def test_loop_target_clears():
-    f = _hits(["ngm = geo.GenerateMesh()", "for ngm in shapes:",
-               "    ngm.Scale(Pnt(0, 0, 0), .001)"])
-    assert f == []
-
-
-def test_loop_carried_generation_flagged():
-    f = _hits(["m = None", "for k in range(2):", "    if m is not None:",
-               "        m.Scale(.001)", "    m = geo.GenerateMesh()"])
+def test_empty_loop_keeps_mesh_flagged():
+    f = _hits(["m = geo.GenerateMesh()", "for m in []:", "    pass", "m.Scale(.001)"])
     assert [x["line"] for x in f] == [4]
+
+
+def test_shift_register_loop_flagged():
+    f = _hits(["a = b = c = None", "for k in range(4):", "    if a is not None:",
+               "        a.Scale(.001)", "    a = b", "    b = c", "    c = geo.GenerateMesh()"])
+    assert [x["line"] for x in f] == [4]
+
+
+def test_while_condition_flagged():
+    f = _hits(["m = None", "while m is None or m.Scale(.001):", "    m = geo.GenerateMesh()"])
+    assert [x["line"] for x in f] == [2]
+
+
+def test_match_guard_flagged():
+    f = _hits(["m = geo.GenerateMesh()", "match flag:", "    case _ if m.Scale(.001):",
+               "        pass"])
+    assert [x["line"] for x in f] == [3]
+
+
+def test_exception_paths_flagged():
+    f = _hits(["try:", "    m = geo.GenerateMesh()", "    may_raise()", "    m = shape",
+               "except RuntimeError:", "    m.Scale(.001)"])
+    assert [x["line"] for x in f] == [6]
+
+
+def test_reused_name_for_shape_is_reported():
+    # Documented over-approximation: one name for mesh and shape is reported.
+    f = _hits(["ngm = geo.GenerateMesh(maxh=1)", "ngm = shape",
+               "ngm.Scale(Pnt(0, 0, 0), .001)"])
+    assert [x["line"] for x in f] == [3]
+
+
+def test_distinct_shape_name_ok():
+    f = _hits(["ngm = geo.GenerateMesh(maxh=1)", "for shape in shapes:",
+               "    shape.Scale(Pnt(0, 0, 0), .001)"])
+    assert f == []
 
 
 def test_registered():
