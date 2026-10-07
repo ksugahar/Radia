@@ -3200,20 +3200,72 @@
     "mso-ascii-font-family:'Cambria Math';mso-font-kerning:12.0pt;" +
     "color:black";
 
+  // MathML3 mathematical alphanumeric equivalences, including the BMP holes
+  // in script/fraktur/double-struck alphabets. Unicode encodes the alphabet,
+  // so Office need not interpret a CSS font or a MathML mathvariant attribute.
+  var OFFICE_MATH_ALPHABETS = {
+    "script": {upper:0x1D49C, lower:0x1D4B6,
+      holes:{B:0x212C,E:0x2130,F:0x2131,H:0x210B,I:0x2110,L:0x2112,
+        M:0x2133,R:0x211B,e:0x212F,g:0x210A,o:0x2134}},
+    "bold-script": {upper:0x1D4D0, lower:0x1D4EA},
+    "fraktur": {upper:0x1D504, lower:0x1D51E,
+      holes:{C:0x212D,H:0x210C,I:0x2111,R:0x211C,Z:0x2128}},
+    "bold-fraktur": {upper:0x1D56C, lower:0x1D586},
+    "double-struck": {upper:0x1D538, lower:0x1D552, digit:0x1D7D8,
+      holes:{C:0x2102,H:0x210D,N:0x2115,P:0x2119,Q:0x211A,R:0x211D,Z:0x2124}},
+    "sans-serif": {upper:0x1D5A0, lower:0x1D5BA, digit:0x1D7E2},
+    "bold-sans-serif": {upper:0x1D5D4, lower:0x1D5EE, digit:0x1D7EC,
+      greekUpper:0x1D756, greekLower:0x1D770},
+    "sans-serif-italic": {upper:0x1D608, lower:0x1D622},
+    "sans-serif-bold-italic": {upper:0x1D63C, lower:0x1D656,
+      greekUpper:0x1D790, greekLower:0x1D7AA},
+    "monospace": {upper:0x1D670, lower:0x1D68A, digit:0x1D7F6}
+  };
+
+  function officeMathAlphabet(text, variant) {
+    var alphabet = OFFICE_MATH_ALPHABETS[variant];
+    if (!alphabet) return text;
+    return Array.from(text).map(function (character) {
+      if (alphabet.holes && Object.prototype.hasOwnProperty.call(alphabet.holes, character))
+        return String.fromCodePoint(alphabet.holes[character]);
+      var cp = character.codePointAt(0);
+      if (cp >= 65 && cp <= 90) return String.fromCodePoint(alphabet.upper + cp - 65);
+      if (cp >= 97 && cp <= 122) return String.fromCodePoint(alphabet.lower + cp - 97);
+      if (cp >= 48 && cp <= 57 && alphabet.digit)
+        return String.fromCodePoint(alphabet.digit + cp - 48);
+      if (alphabet.greekUpper) {
+        if (cp >= 0x391 && cp <= 0x3A9 && cp !== 0x3A2)
+          return String.fromCodePoint(alphabet.greekUpper + cp - 0x391);
+        if (cp >= 0x3B1 && cp <= 0x3C9)
+          return String.fromCodePoint(alphabet.greekLower + cp - 0x3B1);
+        if (cp === 0x3F4) return String.fromCodePoint(alphabet.greekUpper + 17);
+        if (cp === 0x2207) return String.fromCodePoint(alphabet.greekUpper + 25);
+        var greekSymbols = [0x2202,0x3F5,0x3D1,0x3F0,0x3D5,0x3F1,0x3D6];
+        var symbolIndex = greekSymbols.indexOf(cp);
+        if (symbolIndex >= 0)
+          return String.fromCodePoint(alphabet.greekLower + 25 + symbolIndex);
+      }
+      // No Unicode equivalence for this alphabet: keep the original symbol,
+      // including existing supplementary-plane mathematical characters.
+      return character;
+    }).join("");
+  }
+
   function officeOmmlRun(node, forceNormal) {
     var variant = officeInheritedAttribute(node, "mathvariant");
     var colour = officeInheritedAttribute(node, "mathcolor");
-    if (variant && ["normal", "italic", "bold", "bold-italic"].indexOf(variant) < 0)
+    var mappedAlphabet = Object.prototype.hasOwnProperty.call(OFFICE_MATH_ALPHABETS, variant);
+    if (variant && ["normal", "italic", "bold", "bold-italic"].indexOf(variant) < 0 && !mappedAlphabet)
       throw new Error("unsupported Office mathvariant: " + variant);
-    var normal = forceNormal || variant === "normal" ||
+    var normal = mappedAlphabet || forceNormal || variant === "normal" ||
       node.localName === "mn" || node.localName === "mo" ||
       node.localName === "mtext";
-    var weight = variant && variant.indexOf("bold") !== -1 ?
+    var weight = !mappedAlphabet && variant && variant.indexOf("bold") !== -1 ?
       ";font-weight:bold" : "";
     return "<m:r><span style=\"" + OFFICE_MATH_RUN_STYLE +
       (colour ? ";color:" + officeHtmlEscape(colour) : "") +
       ";font-style:" + (normal ? "normal" : "italic") + weight + "\">" +
-      officeHtmlEscape(node.textContent) + "</span></m:r>";
+      officeHtmlEscape(officeMathAlphabet(node.textContent, variant)) + "</span></m:r>";
   }
 
   function officeOmmlControl() {

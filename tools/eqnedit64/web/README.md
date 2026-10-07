@@ -77,9 +77,16 @@ H5/H6 re-test before 3.1.2 is released. Browser payload tests are not Office
 acceptance. Candidate BUILD is `3.1.2 (2026-10-08 OMML candidate)`.
 
 The candidate exporter handles token runs, normal/italic/bold/bold-italic,
-colour inheritance, fractions and binomials, roots, sub/sup scripts and
+colour inheritance, Unicode mathematical alphanumerics (including script,
+fraktur, double-struck, sans-serif and monospace), fractions and binomials, roots, sub/sup scripts and
 large-operator limits, accents/bars, arrays/matrices, phantom and box/strike
 enclosures. Unsupported MathML elements, dimensional padding (e.g. smash),
 other mathvariant values and other enclosures stop copy with a diagnostic;
 they are not flattened silently. Preview and saved TeX remain available.
 This support boundary must be reviewed before final acceptance.
+
+The OMML candidate approximates each nonzero mspace with one NBSP; quad,
+thin and negative spacing therefore do not preserve exact widths. The user's
+H5/H6 re-test must also reject duplicated fallback content or visible
+conditional markup. Unicode alphabet payloads are browser-tested, not a
+claim of independently measured PowerPoint font rendering.

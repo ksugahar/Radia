@@ -241,7 +241,17 @@ held until Web H5 bounds/editability and H6 bounds/editability/two rows pass
 in the user's current PowerPoint. No byte-parity requirement is reinstated.
 
 Styles/colour are retained for normal, italic, bold and bold-italic runs.
+Script/calligraphic, fraktur, double-struck, sans-serif and monospace (including
+the bold/italic variants) map to Unicode mathematical alphanumerics, with BMP
+letterlike exceptions. Already encoded mathematical characters are retained.
 Unsupported mathvariant values, dimensional mpadded, unknown elements and
 unsupported enclosure notations abort copy with a visible diagnostic. This
-explicit candidate boundary is preferable to losing structure silently, but
 is not a claim that every palette formula is accepted by the exporter.
+
+Spacing limitation (R7-3): mspace width is approximated by one NBSP, so quad
+and thin space do not retain their distinct widths (negative spaces also
+cannot be reproduced by this approximation). R7-2 remains a user acceptance
+gate: no duplicated MathML fallback or visible conditional markup may appear
+in the PowerPoint result. Browser clipboard reads may reserialize the
+non-Office conditional as a comment; payload generation alone cannot prove
+which branch the user's PowerPoint selects.
