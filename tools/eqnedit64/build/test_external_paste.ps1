@@ -1142,10 +1142,11 @@ try {
                 powerpoint_version = [string]$powerPoint.Version
                 slide = $tableSlideNumber
                 red_property_in_saved_xml = $redInXml
-                expected_limitation = 'UXP-0030: Office MathML conversion may discard colour'
+                clipboard_route = 'native registered MathML published alongside other formats'
+                expected_behaviour = 'UXP-0030: native scalar red retained in user H7; matrix colour not yet qualified'
                 evidence = 'Saved slide XML; does not assert rendered colour'
             }
-            Write-Host "OBSERVATION: PowerPoint saved XML red=$redInXml (UXP-0030; colour drop accepted)"
+            Write-Host "OBSERVATION: native PowerPoint matrix saved XML red=$redInXml (UXP-0030; scalar H7 retains red, matrix qualification pending)"
         }
         if ($tableXml -notmatch '(?s)<m:nary>.*?<m:sub>.*?<m:t>𝑎</m:t>.*?</m:sub>.*?<m:sup>.*?<m:t>𝑏</m:t>.*?</m:sup>') {
             throw 'PowerPoint table paste lost integral bounds.'
