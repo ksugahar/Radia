@@ -355,62 +355,190 @@ def _theta_by_path_integration(pts_o, tris_o, dup, cut_loop, H_ring,
     return Theta, float(jumps.mean())
 
 
-def _auto_material_ring(pts, tris):
-    """Find an interior circular carrier from the closed surface alone.
+def _segment_surface_distance(a, b, triangles):
+    """Minimum Euclidean distance from a closed segment to flat triangles.
 
-    Supports a through-hole surrounding the z axis, including stepped
-    walls. Every carrier vertex and edge midpoint must be inside a
-    material interval on its radial ray; no CAD or hard-coded radius.
+    Includes face piercing, coplanar overlap, and edge/vertex contact. No
+    finite sampling of the carrier is used as a containment certificate.
     """
+    p, q, r = triangles[:, 0], triangles[:, 1], triangles[:, 2]
+    e, f, d = q-p, r-p, b-a
+    n = np.cross(e, f)
+    nn = np.einsum('ij,ij->i', n, n)
+    ee = np.einsum('ij,ij->i', e, e)
+    ef = np.einsum('ij,ij->i', e, f)
+    ff = np.einsum('ij,ij->i', f, f)
+
+    def face_distance(x):
+        w = x-p
+        en = np.einsum('ij,ij->i', w, e)
+        fn = np.einsum('ij,ij->i', w, f)
+        u, v = (ff*en-ef*fn)/nn, (ee*fn-ef*en)/nn
+        inside = (u >= 0) & (v >= 0) & (u+v <= 1)
+        h = np.einsum('ij,ij->i', w, n)
+        return np.where(inside, h*h/nn, np.inf)
+
+    best = np.minimum(face_distance(a), face_distance(b))
+    den = n @ d
+    t = np.divide(np.einsum('ij,ij->i', p-a, n), den,
+                  out=np.full(len(p), np.inf), where=den != 0)
+    valid = (t >= 0) & (t <= 1)
+    x = a + np.where(valid, t, 0)[:, None]*d
+    # Barycentric inclusion at the plane crossing.
+    w = x-p
+    en, fn = np.einsum('ij,ij->i', w, e), np.einsum('ij,ij->i', w, f)
+    u, v = (ff*en-ef*fn)/nn, (ee*fn-ef*en)/nn
+    if np.any(valid & (u >= 0) & (v >= 0) & (u+v <= 1)):
+        return 0.0
+    dd = float(d @ d)
+    for c, end in ((p,q), (q,r), (r,p)):
+        g, w = end-c, a-c
+        gg = np.einsum('ij,ij->i', g, g)
+        dg, dw = g @ d, w @ d
+        gw = np.einsum('ij,ij->i', g, w)
+        det = dd*gg-dg*dg
+        ss = np.divide(dg*gw-gg*dw, det, out=np.zeros_like(det),
+                       where=det > dd*gg*1e-14)
+        tt = (gw+ss*dg)/gg
+        interior = (det > dd*gg*1e-14) & (ss >= 0) & (ss <= 1) & (tt >= 0) & (tt <= 1)
+        delta = w+ss[:,None]*d-tt[:,None]*g
+        best = np.minimum(best, np.where(interior, np.einsum('ij,ij->i', delta, delta), np.inf))
+        for endpoint in (a,b):
+            t_edge = np.clip(np.einsum('ij,ij->i', endpoint-c, g)/gg, 0, 1)
+            delta = endpoint-c-t_edge[:,None]*g
+            best = np.minimum(best, np.einsum('ij,ij->i', delta, delta))
+        for endpoint in (c,end):
+            t_seg = np.clip((endpoint-a) @ d/dd, 0, 1)
+            delta = endpoint-a-t_seg[:,None]*d
+            best = np.minimum(best, np.einsum('ij,ij->i', delta, delta))
+    return float(np.sqrt(max(0., best.min())))
+
+
+def _surface_winding(point, triangles):
+    """Oriented solid-angle winding; caller supplies a closed oriented mesh."""
+    a, b, c = (triangles[:,i]-point for i in range(3))
+    la, lb, lc = (np.linalg.norm(x, axis=1) for x in (a,b,c))
+    numerator = np.einsum('ij,ij->i', a, np.cross(b,c))
+    denominator = (la*lb*lc + np.einsum('ij,ij->i', a,b)*lc
+                   + np.einsum('ij,ij->i', b,c)*la + np.einsum('ij,ij->i', c,a)*lb)
+    return float(np.sum(2*np.arctan2(numerator, denominator))/(4*math.pi))
+
+
+def _auto_material_ring(pts, tris, *, return_diagnostics=False):
+    """Find a circular carrier inside a closed, oriented, z-axis bore wall.
+
+    Edge/vertex hits and coplanar or tangent rays are ambiguous, never
+    interpreted as an odd crossing proving exterior. Retry at other
+    azimuths and shifted heights. Winding at one point plus positive
+    segment-to-surface clearance certifies the entire connected polygon
+    inside the flat surface, including non-axisymmetric walls. This is
+    deliberately limited to circular carriers surrounding the z axis.
+    """
+    import json
     pts, tris = np.asarray(pts, float), np.asarray(tris, int)
-    origin = pts[tris[:, 0]]
-    edge1 = pts[tris[:, 1]] - origin
-    edge2 = pts[tris[:, 2]] - origin
+    if (pts.ndim != 2 or pts.shape[1] != 3 or len(pts) < 4
+            or tris.ndim != 2 or tris.shape[1] != 3 or len(tris) < 4
+            or not np.all(np.isfinite(pts))
+            or np.any(tris < 0) or np.any(tris >= len(pts))):
+        raise ValueError("Automatic carrier requires finite points and valid triangle indices")
+    directed = np.concatenate([tris[:, [0,1]], tris[:, [1,2]], tris[:, [2,0]]])
+    _, inverse, counts = np.unique(np.sort(directed, axis=1), axis=0,
+                                   return_inverse=True, return_counts=True)
+    orientation = np.bincount(inverse, weights=np.where(directed[:,0] < directed[:,1], 1, -1))
+    if np.any(counts != 2) or np.any(orientation != 0):
+        raise ValueError("Automatic carrier requires a closed consistently oriented surface")
+    triangles = pts[tris]
+    origin = triangles[:,0]
+    edge1, edge2 = triangles[:,1]-origin, triangles[:,2]-origin
     scale = float(np.ptp(pts, axis=0).max())
     tol = max(scale*1e-9, 1e-14)
+    cross = np.cross(edge1, edge2)
+    if not np.all(np.isfinite(pts)) or np.any(np.linalg.norm(cross,axis=1) == 0):
+        raise ValueError("Automatic carrier requires finite nondegenerate triangles")
+    diagnostics = dict(candidate_count=0, ray_attempts=[], candidates=[],
+                       minimum_wall_distance=None, clearance_tolerance=tol)
 
     def intervals(z, angle):
         direction = np.array([math.cos(angle), math.sin(angle), 0.])
         h = np.cross(direction, edge2)
         determinant = np.einsum('ij,ij->i', edge1, h)
-        valid = np.abs(determinant) > scale*scale*1e-13
+        valid = np.abs(determinant) > np.linalg.norm(cross,axis=1)*1e-12
         inverse = np.divide(1., determinant, out=np.zeros_like(determinant), where=valid)
-        offset = np.array([0., 0., z]) - origin
+        offset = np.array([0., 0., z])-origin
         u = inverse*np.einsum('ij,ij->i', offset, h)
         q = np.cross(offset, edge1)
         v = inverse*(q @ direction)
         distance = inverse*np.einsum('ij,ij->i', edge2, q)
-        hits = np.sort(distance[valid & (u >= -1e-10) & (v >= -1e-10)
-            & (u+v <= 1+1e-10) & (distance > tol)])
-        hits = hits[np.r_[True, np.diff(hits)>tol]] if len(hits) else hits
-        # An odd number means the axis is inside material (no bore here).
-        return hits.reshape(-1, 2) if len(hits) and len(hits)%2 == 0 else np.empty((0, 2))
+        hit = valid & (u >= -1e-10) & (v >= -1e-10) & (u+v <= 1+1e-10) & (distance > tol)
+        boundary = hit & ((u <= 1e-10) | (v <= 1e-10) | (u+v >= 1-1e-10))
+        coplanar = (~valid) & (np.abs(np.einsum('ij,ij->i', offset,cross)) <= tol*np.linalg.norm(cross,axis=1))
+        hits = np.sort(distance[hit])
+        ambiguous = bool(np.any(boundary) or np.any(coplanar) or np.any(np.diff(hits) <= tol))
+        reason = ('ambiguous_tangent_edge_or_vertex' if ambiguous else
+                  'odd_crossings_axis_in_material' if len(hits)%2 else
+                  'no_crossings' if not len(hits) else 'ok')
+        diagnostics['ray_attempts'].append(dict(z=float(z), angle=float(angle), crossings=len(hits), reason=reason))
+        return hits.reshape(-1,2) if reason == 'ok' else np.empty((0,2))
 
     lo, hi = float(pts[:,2].min()), float(pts[:,2].max())
+    dz = (hi-lo)/32
     candidates = []
-    for z in np.linspace(lo, hi, 33)[1:-1]:
-        for inner, outer in intervals(z, .137):
+    # Include slab midplanes so a thin axial shelf cannot fall between
+    # all uniform samples. Horizontal triangle faces identify actual shelves.
+    horizontal = np.linalg.norm(cross[:,:2],axis=1) <= np.linalg.norm(cross,axis=1)*1e-12
+    levels = np.unique(np.r_[lo, hi, np.round(origin[horizontal,2]/tol)*tol])
+    heights = np.unique(np.r_[.5*(levels[:-1]+levels[1:]),
+        *[np.linspace(lo,hi,33)[1:-1]+shift*dz for shift in (0., .271, -.193)]])
+    for z in heights[(heights > lo+tol) & (heights < hi-tol)]:
+        spans = []
+        common = None
+        for angle in (.137, .731, 1.913, 2.719):
+            intervals_at_angle = intervals(z,angle)
+            spans.extend(intervals_at_angle.tolist())
+            if common is None and len(intervals_at_angle):
+                common = intervals_at_angle
+        # Intersection across azimuths can find a thin common annulus
+        # even when each individual interval midpoint is outside it.
+        if common is None:
+            common = np.empty((0,2))
+        for angle in np.arange(8)*2*math.pi/8+.319:
+            other = intervals(z,angle)
+            if len(other) and len(common):
+                common = np.array([(max(a,c),min(b,d)) for a,b in common
+                                   for c,d in other if max(a,c)<min(b,d)]).reshape(-1,2)
+        spans.extend(common.tolist())
+        for inner, outer in spans:
             radius = .5*(inner+outer)
-            score = min(.5*(outer-inner), z-lo, hi-z)
-            candidates.append((score, radius, z))
-    angles = np.arange(512)*2*math.pi/512
-    for score, radius, z in sorted(candidates, reverse=True):
-        if score <= tol:continue
-        # Alternate vertices and polygon-edge midpoints of a 256-edge ring.
-        radii = np.where(np.arange(512)%2, radius*math.cos(math.pi/256), radius)
-        inside = True
-        for angle, r in zip(angles, radii):
-            spans = intervals(z, angle)
-            if not np.any((spans[:,0]+tol < r) & (r < spans[:,1]-tol)):
-                inside = False;break
-        if inside:
-            theta = angles[::2]
-            ring = np.c_[radius*np.cos(theta), radius*np.sin(theta), np.full(256,z)]
-            return (float(radius), float(z)), ring
+            score = min(.5*(outer-inner),z-lo,hi-z)
+            candidates.append((score,radius,float(z)))
+    candidates = sorted(set(candidates),reverse=True)
+    diagnostics['candidate_count'] = len(candidates)
+    theta = np.arange(256)*2*math.pi/256
+    for score, radius, z in candidates:
+        record = dict(radius=radius,z=z,minimum_wall_distance=None)
+        diagnostics['candidates'].append(record)
+        ring = np.c_[radius*np.cos(theta),radius*np.sin(theta),np.full(256,z)]
+        if abs(_surface_winding(np.array([0.,0.,z]),triangles)) > 1e-6:
+            record['reason'] = 'axis_not_in_bore'; continue
+        if abs(abs(_surface_winding(ring[0],triangles))-1) > 1e-6:
+            record['reason'] = 'carrier_start_outside'; continue
+        clearance = math.inf
+        for a,b in zip(ring,np.roll(ring,-1,axis=0)):
+            clearance = min(clearance, _segment_surface_distance(a,b,triangles))
+            if clearance == 0.:
+                break
+        record['minimum_wall_distance'] = clearance
+        diagnostics['minimum_wall_distance'] = clearance
+        if clearance <= tol:
+            record['reason'] = 'surface_contact_or_crossing'; continue
+        record['reason'] = 'accepted'
+        result = ((float(radius),float(z)),ring)
+        return (*result,diagnostics) if return_diagnostics else result
+    # Unvisited candidates do not exist on failure; every rejection is retained.
     raise ValueError("Automatic workpiece cohomology could not find an interior carrier around the z axis. "
         "Supported geometry: one through-hole around z (tube, ring, stepped shaft). "
-        "For a different orientation or shape, supply a validated section_anchor and carrier_ring; "
-        "no uncorrected heating result is returned.")
+        "Supply a validated section_anchor and carrier_ring for other shapes; "
+        "no uncorrected heating result is returned. Diagnostics: " + json.dumps(diagnostics))
 
 
 # ----------------------------------------------------------------------
@@ -445,6 +573,8 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
     ``P_total`` [W], ``H_t_rms`` [A/m], ``phi_u``, ``phi_open``,
     ``theta_jump``, ``cut_n_vertices``, plus ``P_frozen`` / ``Ht_frozen``
     (the alpha=0 sub-solve, == the plain solver, for diagnostics).
+    ``carrier_diagnostics`` records automatic search rejections and the
+    accepted polygon's minimum wall clearance (None for a supplied carrier).
     """
     from ngsolve import BND
 
@@ -516,8 +646,10 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
 
     _b1, Pi, expand, _cotree = surface_fundamental_cycles(tris, nv=nv)
     automatic_carrier = section_anchor is None and carrier_ring is None
+    carrier_diagnostics = None
     if automatic_carrier:
-        section_anchor, carrier_ring = _auto_material_ring(pts, tris)
+        section_anchor, carrier_ring, carrier_diagnostics = _auto_material_ring(
+            pts, tris, return_diagnostics=True)
     rho_all = np.sqrt(pts[:, 0] ** 2 + pts[:, 1] ** 2)
     rho0, z0 = float(rho_all.mean()), float(pts[:, 2].mean())
 
@@ -732,6 +864,7 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
         "faraday_residual_rel": faraday_residual_rel,
         "section_anchor": (rho0, z0),
         "automatic_carrier": automatic_carrier,
+        "carrier_diagnostics": carrier_diagnostics,
         "alpha": alpha,
         "P_total": float(P_total),
         "H_t_tri": H_total,
