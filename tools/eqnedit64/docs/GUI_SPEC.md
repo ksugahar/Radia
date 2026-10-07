@@ -643,3 +643,21 @@ mandatory transport/parity restriction as a reason to accept flattened limits.
 No candidate transport is a fix until the user's PowerPoint retains editable
 bounds and the H6 two-row structure. Local browser payload checks alone cannot
 qualify Office import. No public Web transport replacement has been made.
+
+### Web OMML candidate awaiting user acceptance
+
+The new Web candidate BUILD `3.1.2 (2026-10-08 OMML candidate)` uses conditional
+msEquation RichEdit HTML OMML with the legacy namespace and HTML run styles,
+plus MathML for non-Office consumers and raw TeX as text/plain. Independent
+aligned rows become one editable OMML eqArr, anchored aligned rows also use
+eqArr, and internal cases/pmatrix remain matrices. Integral limits use nary
+sub/sup. This is an implementation candidate, not measured Office success.
+Native EXE retains its qualified registered-MathML route. The release stays
+held until Web H5 bounds/editability and H6 bounds/editability/two rows pass
+in the user's current PowerPoint. No byte-parity requirement is reinstated.
+
+Styles/colour are retained for normal, italic, bold and bold-italic runs.
+Unsupported mathvariant values, dimensional mpadded, unknown elements and
+unsupported enclosure notations abort copy with a visible diagnostic. This
+explicit candidate boundary is preferable to losing structure silently, but
+is not a claim that every palette formula is accepted by the exporter.

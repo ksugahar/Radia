@@ -117,6 +117,60 @@ const server = http.createServer((req, res) => {
     assert.match(copies[0].html,/menclose/);
     assert.match(copies[0].html,/mathvariant="bold-italic"/);
     assert.doesNotMatch(copies[0].html,/<merror|mathcolor="red"/);
+    // Exercise the production copy handler. This verifies generated payloads,
+    // not PowerPoint import; host clipboard stays untouched.
+    for (const [tex, expected] of [
+      ["y=\\int_a^b x^2\\,dx", {limits:true,naryBody:"x2dx"}],
+      ["\\begin{aligned}y&=\\int_a^b x^2\\,dx\\\\z&=1\\end{aligned}", {limits:true,rows:2}],
+      ["\\begin{aligned}y=\\int_a^b x^2\\,dx\\\\z=1\\end{aligned}", {limits:true,rows:2}],
+      ["f=\\begin{cases}\\int_a^b x\\,dx & x>0\\end{cases}", {limits:true,matrix:true}],
+      ["\\begin{pmatrix}\\int_a^b x\\,dx & 0\\\\0 & 1\\end{pmatrix}", {limits:true,matrix:true}],
+      ["\\color{red}{x}", {red:true}],
+      ["\\textcolor{red}{x}+\\textcolor{blue}{y}", {red:true,blue:true}],
+      ["\\frac{x_1^2}{\\sqrt[3]{y}}", {fraction:true,radical:true}],
+      ["\\sqrt{x+y}", {radical:true,radicalBody:"x+y"}],
+      ["\\binom{n}{k}", {fraction:true,noBar:true}],
+      ["\\sum_{i=1}^{n}x_i", {nary:true}]
+    ]) {
+      await cold.locator(".eqed-source").fill(tex);
+      const before = await cold.evaluate(() => window.capturedCopies.length);
+      await cold.locator(".eqed-copy-office").click();
+      const payload = await cold.evaluate(() => window.capturedCopies.at(-1));
+      assert.equal(await cold.evaluate(() => window.capturedCopies.length), before+1,tex);
+      assert.equal(payload.tex,tex);
+      assert.match(payload.html,/<!--\[if gte msEquation 12\]>/);
+      const structure = await cold.evaluate(html => {
+        const omml = html.match(/<!--\[if gte msEquation 12\]>([\s\S]*?)<!\[endif\]-->/)[1];
+        const xml = new DOMParser().parseFromString(omml,"application/xml");
+        const nodes = name => [...xml.getElementsByTagNameNS("*",name)];
+        return {errors:nodes("parsererror").length,
+          sub:nodes("sub").map(n=>n.textContent),sup:nodes("sup").map(n=>n.textContent),
+          rows:nodes("eqArr").map(n=>[...n.children].filter(c=>c.localName==="e").length),
+          matrix:nodes("m").length,fraction:nodes("f").length,radical:nodes("rad").length,
+          nary:nodes("nary").length,
+          naryBodies:nodes("nary").map(n=>[...n.children].find(c=>c.localName==="e").textContent.replace(/\s/g,"")),
+          radicalBodies:nodes("rad").map(n=>[...n.children].find(c=>c.localName==="e").textContent),
+          noBar:nodes("type").some(n=>n.getAttribute("m:val")==="noBar"),
+          styles:nodes("span").map(n=>n.getAttribute("style")||"").join(";")};
+      },payload.html);
+      assert.equal(structure.errors,0,tex);
+      if(expected.limits){assert(structure.sub.includes("a"),tex);assert(structure.sup.includes("b"),tex);}
+      if(expected.rows)assert.deepEqual(structure.rows,[expected.rows],tex);
+      if(expected.matrix)assert(structure.matrix>0,tex);
+      if(expected.fraction)assert(structure.fraction>0,tex);
+      if(expected.radical)assert(structure.radical>0,tex);
+      if(expected.radicalBody)assert(structure.radicalBodies.includes(expected.radicalBody),tex);
+      if(expected.noBar)assert(structure.noBar,tex);
+      if(expected.nary)assert(structure.nary>0,tex);
+      if(expected.naryBody)assert(structure.naryBodies.includes(expected.naryBody),tex);
+      if(expected.red)assert.match(structure.styles,/color:red/);
+      if(expected.blue)assert.match(structure.styles,/color:blue/);
+    }
+    await cold.locator(".eqed-source").fill("\\smash{x}");
+    const beforeRejectedCopy = await cold.evaluate(() => window.capturedCopies.length);
+    await cold.locator(".eqed-copy-office").click();
+    assert.equal(await cold.evaluate(() => window.capturedCopies.length),beforeRejectedCopy);
+    assert.match(await cold.locator(".eqed-status").textContent(),/Office形式に変換できません/);
     await cold.evaluate(() => window.releasePalettePreviews());
     await cold.waitForFunction(() => document.querySelectorAll(".eqed-math-face").length ===
       document.querySelectorAll(".eqed-math-face mjx-container, .eqed-preview-error .eqed-math-face").length);
