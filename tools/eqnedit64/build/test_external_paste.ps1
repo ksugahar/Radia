@@ -1127,7 +1127,7 @@ try {
                 slide = $tableSlideNumber
                 red_property_in_saved_xml = $redInXml
                 clipboard_route = 'shared conditional OMML CF_HTML'
-                expected_behaviour = 'UXP-0031: shared conditional OMML candidate; new native H7 and matrix colour qualification pending'
+                expected_behaviour = 'UXP-0030/0031: PowerPoint import drops colour on shared OMML; source/render colour remains'
                 evidence = 'Saved slide XML; does not assert rendered colour'
             }
             Write-Host "OBSERVATION: native PowerPoint matrix saved XML red=$redInXml (UXP-0030; scalar H7 retains red, matrix qualification pending)"

@@ -117,10 +117,29 @@ qualify the shared route. Evidence records source SHA, Web/corpus hashes, mode,
 per-item byte lengths and SHA-256 values. This gate proves corpus payload identity,
 not Office rendering or equivalence of all accepted TeX.
 
-The changed EXE route requires one signed-build H1/H5/H6/H7 PowerPoint hand test.
+The changed EXE route was tested on signed ea787664d (H1/H5/H6 OK; H7
+colour loss accepted for 3.1.2).
 After this qualification, a passing actual-wire gate on the release candidate
 plus an EXE hand test permits omitting the separate Web hand test for covered
 fixtures. A missing/failing gate, a changed shared transport contract or different
 clipboard/browser/Office environment requires renewed Web qualification.
-The current candidate has producer evidence only; hosted wire CI and the new
-signed EXE hand test remain pending. No new colour-retention claim is made.
+Hosted CI 37692902458 verified 22/22 actual-wire byte matches on ea787664d.
+User H1/H5/H6 EXE passed; H7 colour loss is accepted for 3.1.2 as documented below.
+
+
+## 3.1.2 PowerPoint colour limitation (UXP-0030/0031)
+
+PowerPoint import drops colour on the shared conditional OMML CF_HTML route in
+both editions. The user measured all r10 colour variants A–G as not red on
+2026-10-08 and approved releasing 3.1.2 with this documented limitation. Colour
+support remains enabled in the native/Web canvas, SVG, saved TeX, and native
+EMF/DIB output. This decision does not strip colour from the source or renderer.
+PowerPoint colour retention is not an acceptance requirement for this release.
+
+User hand tests: H1/H5/H6 EXE OK on ea787664d; H7 EXE canvas red, PowerPoint
+not red. Web H5/H6 OK on 8361ec916. Hosted CI 37692902458 verified 22/22 primary
+OMML branches byte-identical on the actual Windows clipboard at ea787664d.
+This supports the UXP-0031 EXE-test plus bit-gate qualification for the covered
+corpus; it does not prove every TeX input or every Office/browser environment.
+Changed payload behaviour requires renewed qualification. The release metadata
+commit still requires its own CI. Formal publication follows the release gates.

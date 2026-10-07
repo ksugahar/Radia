@@ -1,17 +1,14 @@
 # Eqnedit64 changelog
 
-## 3.1.2 — review candidate
-- Web conditional OMML passed user H5/H6 on 8361ec916. Native now shares this primary CF_HTML route without competing registered MathML (UXP-0031). Mandatory actual-wire byte identity CI and initial signed native H1/H5/H6/H7 qualification are required. Unsupported exporter structures fail with a diagnostic.
+## 3.1.2 — 2026-10-08
 
-
-- Native named `\color` / `\textcolor`: scoped edit/save, GDI/SVG/EMF/bitmap and MathML colours, explicit unsupported-name/model errors. Named-colour values tested against MathJax; new native render/Office colour acceptance awaits isolated CI and hand testing.
-
-- Preserve integral bounds inside cases and matrices through the shared conditional OMML route.
-- Wait for asynchronous MathJax startup, format palette environment insertion, and reject invalid MathML.
-- Restore mandatory multi-row PowerPoint acceptance; Web/multi-row limits require candidate-specific user hand-test evidence.
-- Pin release signer certificates and reconcile the limits-first Office contract.
-- Preserve primes on bare limit/sum/integral operators across save/reopen,
-  and reject overlong diagnostic paths before formatting a trace filename.
+- Share the primary conditional RichEdit-HTML OMML CF_HTML route between EXE and Web; preserve integral bounds and multiple rows. No competing registered MathML formats.
+- Require actual Windows clipboard byte identity across 22 fixed fixtures. A passing candidate bit gate plus qualified EXE hand test permits omitting separate Web hand testing for covered fixtures (UXP-0031).
+- Native named `\color` / `\textcolor`: scoped edit/save and GDI/SVG/EMF/DIB colour; unsupported names/models fail explicitly. Web canvas/SVG/saved TeX retain colour.
+- Known limitation: PowerPoint import drops colour on the shared OMML route in both editions. User-tested r10 variants A–G all lost red; releasing 3.1.2 with this limitation was approved. Colour is retained in canvas/SVG/EMF/DIB/saved TeX.
+- Hand-test evidence: H1/H5/H6 EXE OK on ea787664d; Web H5/H6 OK on 8361ec916 plus 22/22 hosted actual-wire bit gate. H7 canvas red, PowerPoint not red (accepted limitation).
+- Preserve bounds inside cases/matrices, normalize palette environment insertion, wait for MathJax startup and reject invalid/unsupported Office structures.
+- Preserve primes on bare limit/sum/integral operators; pin release signer certificates and reject overlong diagnostic paths.
 
 ## 3.1.1 — 2026-10-05
 
