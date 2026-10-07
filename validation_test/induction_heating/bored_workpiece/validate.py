@@ -32,10 +32,10 @@ DELTA = math.sqrt(2/(OMEGA*4e-7*math.pi*MUR*SIGMA))
 ZS = (1+1j)/(SIGMA*DELTA)
 FILLET = .0018
 LIMITS = dict(true_residual=1e-6, faraday=1e-6, unit_jump=.005,
-              bem_power_balance=.10, fem_power_balance=1e-5,
-              bem_fem_power=.05, mesh_power_change=.05,
+              bem_power_balance=.02, fem_power_balance=1e-5,
+              bem_fem_power=.02, mesh_power_change=.05,
               carrier_width=.02, frozen_error_min=.20,
-              delta_over_fillet=.15, elapsed_s=1200, bem_nodes=7000)
+              delta_over_fillet=.15, elapsed_s=1200, total_elapsed_s=3600, bem_nodes=7000)
 
 
 def part():
@@ -197,34 +197,7 @@ def provenance():
         radia_import='src/radia/__init__.py')
 
 
-def main():
-    ap=argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('--work',type=Path,required=True)
-    ap.add_argument('--out',type=Path,default=Path(__file__).with_name('results.json'))
-    ap.add_argument('--sizes',default='.006,.0045')
-    ap.add_argument('--no-carriers',action='store_true')
-    a=ap.parse_args();a.work.mkdir(parents=True,exist_ok=True)
-    started=time.perf_counter();ng.SetNumThreads(2)
-    paths,currents=coils()
-    out=dict(provenance=provenance(),limits=LIMITS,
-        conditions=dict(frequency_Hz=FREQ,sigma_S_m=SIGMA,mu_r=MUR,current_peak_A=CURRENT,
-          outer_radii_m=[.030,.024],bore_radii_m=[.010,.014],height_m=.050,step_z_m=0,
-          fillet_radius_m=FILLET,skin_depth_m=DELTA,delta_over_fillet=DELTA/FILLET,
-          coil_radius_m=.040,coil_z_m=[-.018,0,.018],segments_per_loop=128,
-          coil_endpoint_gap_m=0,phasor='peak, exp(+i omega t)',fem_order=2,bem_order=1),meshes=[])
-    def save():
-        a.out.parent.mkdir(parents=True,exist_ok=True)
-        a.out.write_text(json.dumps(out,indent=2,allow_nan=False)+'\n',encoding='utf-8')
-    sizes=[float(x) for x in a.sizes.split(',')]
-    for index,h in enumerate(sizes):
-        print('MESH',h,flush=True)
-        row=dict(maxh_m=h);out['meshes'].append(row)
-        with ng.TaskManager(): row['bem']=bem(h,paths,currents,index==len(sizes)-1 and not a.no_carriers)
-        save();print('BEM',row['bem']['nodes'],row['bem']['automatic']['P_total'],flush=True)
-        row['fem']=fem(h,paths,currents,a.work)
-        row['bem_fem_power_rel']=abs(row['bem']['automatic']['P_total']/row['fem']['P_total']-1)
-        row['frozen_fem_error_rel']=abs(row['bem']['automatic']['P_frozen']/row['fem']['P_total']-1)
-        save();print('FEM',row['fem']['P_total'],flush=True)
+def evaluate(out):
     gates={}
     for i,row in enumerate(out['meshes']):
         b,f=row['bem']['automatic'],row['fem']
@@ -237,7 +210,7 @@ def main():
             fem_balance=f['power_balance_rel']<=LIMITS['fem_power_balance'],
             agreement=row['bem_fem_power_rel']<=LIMITS['bem_fem_power'],
             frozen_error=row['frozen_fem_error_rel']>=LIMITS['frozen_error_min'],automatic=b['automatic_carrier'])
-    if len(sizes)>1:
+    if len(out['meshes'])>1:
         out['mesh_power_change']={}
         for mode in ('bem','fem'):
             last=[row[mode]['automatic']['P_total'] if mode=='bem' else row[mode]['P_total'] for row in out['meshes'][-2:]]
@@ -253,16 +226,77 @@ def main():
             for r in out['meshes'][-1]['bem']['carriers'] for mode in ('l2','point'))
         gates['carrier_width']=widths['l2']['power_width_rel']<=LIMITS['carrier_width']
         gates['projection_reduces_width']=widths['l2']['power_width_rel']<widths['point']['power_width_rel']
-    out['elapsed_s']=time.perf_counter()-started
-    gates['runtime']=out['elapsed_s']<=LIMITS['elapsed_s']
+    gates['runtime']=all(r['elapsed_s']<=LIMITS['elapsed_s'] for r in out['runs'])
+    gates['total_runtime']=out['elapsed_s']<=LIMITS['total_elapsed_s']
     gates['skin_depth']=DELTA/FILLET<=LIMITS['delta_over_fillet']
+    nodes=[r['bem']['nodes'] for r in out['meshes']]
+    dofs=[r['fem']['ndof'] for r in out['meshes']]
+    gates['refinement']=(len(nodes)>=3 and all(b/a>=1.25 for a,b in zip(nodes,nodes[1:]))
+                         and max(dofs)/min(dofs)>=1.10 and max(nodes)<=LIMITS['bem_nodes'])
     out['gates']=gates
     def passed(v):return all(passed(x) for x in v.values()) if isinstance(v,dict) else bool(v)
     out['all_recorded_gates_pass']=passed(gates)
     out['carrier_comparison_executed']=bool(widths)
-    out['complete_validation']=bool(widths) and len(sizes)>=2
+    out['complete_validation']=bool(widths) and len(out['meshes'])>=3 and gates['refinement']
     out['validation_pass']=out['all_recorded_gates_pass'] and out['complete_validation']
-    save();print(json.dumps(gates,indent=2),flush=True)
+
+
+def main():
+    ap=argparse.ArgumentParser(description=__doc__)
+    ap.add_argument('--work',type=Path)
+    ap.add_argument('--merge',type=Path,nargs='+',help='Combine matching split-run evidence')
+    ap.add_argument('--fem-sizes',help='Independent FEM maxh values, one per BEM size')
+    ap.add_argument('--out',type=Path,default=Path(__file__).with_name('results.json'))
+    ap.add_argument('--sizes',default='.006,.0025,.0017')
+    ap.add_argument('--no-carriers',action='store_true')
+    a=ap.parse_args()
+    if a.merge:
+        records=[json.loads(p.read_text(encoding='utf-8')) for p in a.merge]
+        first=records[0]
+        for r in records:
+            if (r['conditions']!=first['conditions'] or r['limits']!=LIMITS or
+                any(r['provenance'][k]!=first['provenance'][k] for k in
+                    ('source_sha256','native_sha256','commit','python','ngsolve','numpy','scipy'))):
+                raise ValueError('split runs have incompatible conditions, limits or runtime sources')
+        out=dict(first)
+        out['meshes']=sorted([row for r in records for row in r['meshes']],key=lambda row:row['bem']['nodes'])
+        if len({row['maxh_m'] for row in out['meshes']})!=len(out['meshes']):
+            raise ValueError('duplicate BEM mesh sizes')
+        out['runs']=[run for r in records for run in r['runs']]
+        out['elapsed_s']=sum(run['elapsed_s'] for run in out['runs'])
+        evaluate(out)
+        a.out.write_text(json.dumps(out,indent=2,allow_nan=False)+'\n',encoding='utf-8')
+        print(json.dumps(out['gates'],indent=2))
+        return 0 if out['validation_pass'] else 1
+    if a.work is None: ap.error('--work is required for computation')
+    a.work.mkdir(parents=True,exist_ok=True)
+    started=time.perf_counter();ng.SetNumThreads(2)
+    paths,currents=coils()
+    out=dict(provenance=provenance(),limits=LIMITS,
+        conditions=dict(frequency_Hz=FREQ,sigma_S_m=SIGMA,mu_r=MUR,current_peak_A=CURRENT,
+          outer_radii_m=[.030,.024],bore_radii_m=[.010,.014],height_m=.050,step_z_m=0,
+          fillet_radius_m=FILLET,skin_depth_m=DELTA,delta_over_fillet=DELTA/FILLET,
+          coil_radius_m=.040,coil_z_m=[-.018,0,.018],segments_per_loop=128,
+          coil_endpoint_gap_m=0,phasor='peak, exp(+i omega t)',fem_order=2,bem_order=1),meshes=[])
+    def save():
+        a.out.parent.mkdir(parents=True,exist_ok=True)
+        a.out.write_text(json.dumps(out,indent=2,allow_nan=False)+'\n',encoding='utf-8')
+    sizes=[float(x) for x in a.sizes.split(',')]
+    fem_sizes=[float(x) for x in a.fem_sizes.split(',')] if a.fem_sizes else sizes
+    if len(fem_sizes)!=len(sizes): ap.error('--fem-sizes must match --sizes')
+    for index,h in enumerate(sizes):
+        print('MESH',h,flush=True)
+        row=dict(maxh_m=h,fem_maxh_m=fem_sizes[index]);out['meshes'].append(row)
+        with ng.TaskManager(): row['bem']=bem(h,paths,currents,index==len(sizes)-1 and not a.no_carriers)
+        save();print('BEM',row['bem']['nodes'],row['bem']['automatic']['P_total'],flush=True)
+        row['fem']=fem(fem_sizes[index],paths,currents,a.work)
+        row['bem_fem_power_rel']=abs(row['bem']['automatic']['P_total']/row['fem']['P_total']-1)
+        row['frozen_fem_error_rel']=abs(row['bem']['automatic']['P_frozen']/row['fem']['P_total']-1)
+        save();print('FEM',row['fem']['P_total'],flush=True)
+    out['elapsed_s']=time.perf_counter()-started
+    out['runs']=[dict(provenance=out['provenance'],elapsed_s=out['elapsed_s'])]
+    evaluate(out)
+    save();print(json.dumps(out['gates'],indent=2),flush=True)
     return 0 if out['all_recorded_gates_pass'] else 1
 
 if __name__=='__main__':
