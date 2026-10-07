@@ -1,0 +1,69 @@
+{
+  "status": "passed",
+  "scope": "existing panel-Zs interface wiring and native lifecycle",
+  "geometry": "self-authored 1 cm cube and 355 degree gapped torus coil",
+  "independent_fem_validation": "not-performed",
+  "panel_count": 36,
+  "panel_values_verified": true,
+  "states": {
+    "first": {
+      "rebuilt": true,
+      "revision": 1,
+      "reason": "rebuilt"
+    },
+    "fresh": {
+      "rebuilt": false,
+      "revision": 1,
+      "reason": "up-to-date"
+    },
+    "reload": {
+      "rebuilt": false,
+      "revision": 1,
+      "reason": "reloaded"
+    },
+    "alias": {
+      "rebuilt": false,
+      "revision": 1,
+      "reason": "up-to-date"
+    },
+    "reopened": {
+      "rebuilt": false,
+      "revision": 1,
+      "reason": "up-to-date"
+    },
+    "changed": {
+      "rebuilt": true,
+      "revision": 2,
+      "reason": "rebuilt"
+    },
+    "cleared": {
+      "rebuilt": true,
+      "revision": 3,
+      "reason": "rebuilt"
+    }
+  },
+  "thermal_power_relative_error": 1.4724904508066386e-16,
+  "final_mean_temperature_K": 293.1500015768513,
+  "panel_power_W": 5.752383295866475e-06,
+  "changed_panel_power_W": 5.450161998074206e-06,
+  "uniform_power_W": 5.771847527664283e-06,
+  "toolkit_structural_check": "healthy",
+  "negative_and_element_integral_tests": {
+    "passed": 17,
+    "failed": 0
+  },
+  "native_thermal_cpp_acceptance": "passed",
+  "runtime": {
+    "host": "lab",
+    "python": "3.12.10",
+    "matlab": "26.1.0.3276743 (R2026a) Update 3",
+    "radia": "5.2.3",
+    "ngsolve": "6.2.2607",
+    "netgen-mesher": "6.2.2607",
+    "mcp": "1.27.0"
+  },
+  "script_sha256": "9b9282005eacf040a33e4ed92c7d886d814eeb76d65ba6907612e6d6b3becdce",
+  "native_source_commit": "0bcddcaa725e550fda63b58f78aa9f437fedb2df",
+  "mex_sha256": "4e6b9f82fe0e5007a2d3729385f59716c7738b5c88d3419ddf97101519d8a161",
+  "source_base": "29931305d4791c384cf0f57670d52218b4602ea4"
+}
