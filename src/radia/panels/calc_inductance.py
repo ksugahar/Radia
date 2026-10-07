@@ -1294,11 +1294,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         panel_evaluator = PanelESIMEvaluator(
             esim_solver, mode=getattr(args, 'esim_panel_evaluator', 'direct'),
             interpolation_tol=float(args.esim_tol) / 10,
-            max_table_cells=getattr(args, 'esim_table_max_cells', 4096),
-            configuration=(lambda: dict(frequency=args.frequency, sigma=args.sigma,
-                half_thickness=args.half_thickness, mu_r=args.mu_r, bh_curve=bh_curve,
-                cell_type=type(esim_solver).__qualname__))
-                if getattr(args, 'esim_panel_evaluator', 'direct') == 'direct' else None)
+            max_table_cells=getattr(args, 'esim_table_max_cells', 4096))
     def surface_z():
         return PanelSurfaceImpedance(Z_s_wp) if isinstance(Z_s_wp, np.ndarray) else Z_s_wp
     res_bem = None
@@ -1759,6 +1755,11 @@ def _solve_workpiece_weak_coupled(args, coil_data):
                 progress("BEM", f"  {line}")
             raise RuntimeError("Failed to export solved SIBC heating field") from e
 
+    panel_evaluation = None
+    if panel_evaluator is not None:
+        panel_evaluation = panel_evaluator.diagnostics()
+        panel_evaluation.update(seed_cell_calls=1, seed_seconds=esim_seed_seconds,
+            total_direct_cell_calls=panel_evaluation["direct_cell_calls"] + 1)
     return {
         "P_wp": P_wp, "H_t_rms": H_t_rms, "A_wp": A_wp,
         "delta_L_nH": delta_L_nH, "delta_R_mOhm": delta_R_mOhm,
@@ -1789,10 +1790,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         "esim_anderson_restarts": int(anderson.n_restarts) if esim_solver is not None else 0,
         "esim_anderson_clips": int(anderson.n_clips) if esim_solver is not None else 0,
         "esim_history": esim_history,
-        "esim_panel_evaluation": dict(panel_evaluator.diagnostics(),
-            seed_cell_calls=1, seed_seconds=esim_seed_seconds,
-            total_direct_cell_calls=panel_evaluator.diagnostics()["direct_cell_calls"] + 1)
-            if panel_evaluator is not None else None,
+        "esim_panel_evaluation": panel_evaluation,
         **per_panel_block,
         "msh_file": msh_file,
         "qsurf_sol": qsurf_sol_path,
@@ -2955,8 +2953,8 @@ def build_argparser():
                              "the solved per-panel peak H_t; supports intree-dense "
                              "and HACApK on genus-0 workpieces. Direct evaluation "
                              "is the default. Genus-1 ESIM remains unsupported.")
-    parser.add_argument('--esim-panel-evaluator', choices=['direct', 'cache', 'table'], default='direct',
-                        help='Per-run outer ESIM evaluation: direct, exact-value cache, or adaptive log-H linear table. '
+    parser.add_argument('--esim-panel-evaluator', choices=['direct', 'table'], default='direct',
+                        help='Per-run outer ESIM evaluation: direct or adaptive log-H linear table. '
                              'All panels are still directly certified at the final accepted field.')
     parser.add_argument('--esim-table-max-cells', type=int, default=4096,
                         help='Maximum direct cells used to construct the adaptive table; fail loud on exhaustion.')

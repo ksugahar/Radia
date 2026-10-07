@@ -42,7 +42,7 @@ def run_case(directory, *, maxh=.008, current=20., repeats=2, threads=1, before_
         output = []
         references = []
         for repeat in range(repeats):
-            for mode in ('direct', 'cache', 'table'):
+            for mode in ('direct', 'table'):
                 if before_run is not None:
                     before_run(repeat, mode)
                 case = directory/f'{repeat}-{mode}'
@@ -74,6 +74,7 @@ def run_case(directory, *, maxh=.008, current=20., repeats=2, threads=1, before_
                 if mode == 'direct':
                     references.append((result, zs, fields))
                 reference, refzs, refh = references[-1]
+                assert result['esim_panel_evaluation']['configuration_sha256'] == reference['esim_panel_evaluation']['configuration_sha256']
                 error_z = float(np.max(abs(zs-refzs)/np.maximum(abs(refzs), 1e-30)))
                 error_h = float(np.max(abs(fields-refh))/max(float(np.max(abs(refh))), 1e-30))
                 error_p = abs(result['P_wp']/reference['P_wp']-1)

@@ -28,10 +28,14 @@ def _solve_cell(solver, field):
 
 def finite_cell_configuration(solver):
     """Fingerprint inputs/state of the fixed finite-slab/cylinder cell law."""
-    state = {name: getattr(solver, name) for name in (
+    names = (
         'half_thickness', 'sigma', 'frequency', 'omega', 'rho', 'n_nodes',
         'geometry', 'linear_mu_r', 'use_complex_mu', 'mu_initial',
-        'delta', 'xi', 'mesh_points', 'n_elements')}
+        'delta', 'xi', 'mesh_points', 'n_elements')
+    missing = [name for name in (*names, 'bh_interp', 'mu_interp') if not hasattr(solver, name)]
+    if missing:
+        raise ValueError('Unsupported ESIM finite-cell configuration; missing attributes: ' + ', '.join(missing))
+    state = {name: getattr(solver, name) for name in names}
     state['cell_type'] = f'{type(solver).__module__}.{type(solver).__qualname__}'
     if solver.bh_interp is not None:
         state['bh'] = {name: getattr(solver.bh_interp, name) for name in
@@ -58,14 +62,15 @@ def _json_value(value):
 class PanelESIMEvaluator:
     """Owned fixed-law evaluator, with no persistent/cross-run table reuse.
 
-    ``configuration`` returns the current complete cell-law configuration.
+    ``configuration`` may supply a complete identity for an explicit test law.
+    Production uses the same finite-cell fingerprint in every mode.
     A mutation invalidates the evaluator loudly instead of reusing old data.
     Certification deliberately bypasses even the exact-value cache.
     """
     def __init__(self, solver, *, mode='direct', interpolation_tol=1e-4,
                  configuration=None, max_table_cells=4096):
-        if mode not in ('direct', 'cache', 'table'):
-            raise ValueError('ESIM evaluator must be direct, cache or table')
+        if mode not in ('direct', 'table'):
+            raise ValueError('ESIM evaluator must be direct or table')
         if not np.isfinite(interpolation_tol) or not 0 < interpolation_tol < 1:
             raise ValueError('ESIM interpolation tolerance must be finite in (0,1)')
         if isinstance(max_table_cells, bool) or int(max_table_cells) != max_table_cells or max_table_cells < 3:
@@ -176,8 +181,6 @@ class PanelESIMEvaluator:
                 return np.empty(0, dtype=complex)
             if self.mode == 'direct':
                 return np.array(self._direct_many(values, 'iteration_cell_calls'))
-            if self.mode == 'cache':
-                return np.array([self._cached(h, 'iteration_cell_calls') for h in values])
             self._extend(float(values.min()), float(values.max()))
             logs = np.log(self.knots)
             impedances = np.array([self.cache[h] for h in self.knots])

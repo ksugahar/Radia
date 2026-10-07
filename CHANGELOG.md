@@ -5,6 +5,11 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Per-panel weak P1 ESIM has an opt-in adaptive log-field table evaluator
+  (`--esim-panel-evaluator table`) with empirical interpolation checks and
+  direct certification of every panel at the final accepted field. Direct
+  evaluation remains the default; call counts and separated timings are reported.
+
 - Behavior change: the accelerator and Kelvin benchmark panels no longer
   call `Mesh.Curve` on a loaded `.vol`; `radia.mesh_curve.ensure_curve_order`
   keeps the geometry order stored in the file and curves only through its
