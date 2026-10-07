@@ -29,14 +29,15 @@ Netgen associates with the mesh. Measured outcomes (sphere, `R = 10 mm`,
 
 | `.vol` content | as loaded | `Curve(p)` after loading |
 | --- | --- | --- |
-| Netgen/OCC, saved at order 3, CAD in the same units | +0.012% (order 3) | correct for any `p` (order 2: −0.12%) |
+| Netgen/OCC, saved at order 3, CAD in the same units | +0.012% (order 3) | correct for `p >= 2` (order 2: −0.12%); `p = 1` straightens it (−5.3%) |
 | Netgen/OCC, saved flat, CAD in the same units | −5.3% (order 1) | correct (order 2: −0.12%) |
 | meshed in mm, `ngmesh.Scale(1e-3)`, saved | −5.3% (order 1) | **+7.9e8 %** (nodes projected onto the mm CAD) |
 | CAD-less (Cubit-style) curved order 3, fresh process | +0.012% (order 3) | **−5.3% for every `p`** while `GetCurveOrder()` reports `p` |
 | same CAD-less file after another `.vol` with CAD was loaded in the process | +0.012% | **curved onto that other geometry** (+7.9e8 % when it was the mm sphere) |
 
-Netgen keeps one process-global geometry. A CAD-less mesh borrows the most
-recently loaded geometry, so the result of a post-load `Curve` depends on the
+A `.vol` with embedded CAD keeps that CAD attached to its mesh even after other
+files are loaded. A CAD-less mesh has none, and `GetGeometry()` then returns the
+most recently loaded geometry, so the result of a post-load `Curve` depends on the
 history of the process. This is why earlier notes in this repository
 disagreed ("flattens", "works", "corrupts the mapping"): each described one
 row of the table.
@@ -49,10 +50,16 @@ and rescaled with `ngmesh.Scale(1e-3)`.
 
 1. **Never call `Mesh.Curve` on a loaded `.vol`.** The stored order is already
    used. If a higher order is required, call
-   `radia.mesh_curve.ensure_curve_order(mesh, order)`: it keeps a sufficient
-   stored order, refuses a mesh without embedded CAD, refuses a CAD whose
-   extent does not match the mesh (rescaled mesh or borrowed geometry), and
-   verifies boundary area and volume after curving.
+   `radia.mesh_curve.ensure_curve_order(mesh, order, vol_path=path)` inside the
+   caller's `TaskManager`. It keeps a sufficient stored order (`"kept"` does not
+   re-examine the geometry), takes the CAD provenance from the file (an archive
+   after `endmesh`) because `GetGeometry()` cannot tell embedded from borrowed
+   geometry, supports OCC geometry only, rejects a CAD box that differs from the
+   mesh box by more than a factor of 2 or is shifted (mesh rescaled after
+   meshing), and rejects a curving that changes boundary or domain measure by
+   more than a factor of 3. These are sanity checks for gross errors, not a
+   proof of a valid map. After a rejection with `mesh_modified=True` the mesh
+   must be reloaded.
 2. **Curve where the CAD lives.** Call `Curve(p)` right after
    `OCCGeometry(shape).GenerateMesh(...)` in the same process, inside
    `TaskManager`, then save. For Cubit, export the order:
@@ -67,21 +74,26 @@ and rescaled with `ngmesh.Scale(1e-3)`.
    JSON) and check `GetCurveOrder()` against it when reading.
 5. **`GetCurveOrder()` is not evidence.** After any change of geometry order,
    compare boundary area and volume before and after (`mesh_measures`).
-6. **Use the geometry order the method needs.** Curved FEM boundaries need a
-   geometry order matching the FE order for optimal convergence (Kelvin
-   shells: order ≥ 2 was required for 1% agreement). A flat geometry at FE
-   order `p` gives an `O(h²)` geometric error that a higher `p` cannot remove.
+6. **Use the geometry order the method needs.** FE order and geometry order
+   are independent. Curved boundaries that the method relies on need a curved
+   geometry (the Kelvin shell agreed with a 2D axisymmetric reference to about
+   1.15% at geometry order 2); a flat geometry at FE order `p` keeps an `O(h²)`
+   geometric error that a higher `p` cannot remove. Flat models (boxes) need no
+   curving at any FE order. The accelerator-magnet panel therefore requires the
+   order only when a Kelvin shell is present and otherwise keeps the stored
+   order; the Kelvin benchmark panel always requires it.
 
-## Boundary-element surfaces are flat today
+## Workpiece boundary-element surfaces are flat today
 
-The workpiece BEM routes (`calc_inductance` panels, `bem_coupled_solver`,
+The P1 workpiece BEM routes (`calc_inductance` panels, `bem_coupled_solver`,
 `peec_coupled_bem_solver`, the loop/cohomology extension) extract the boundary
 by copying vertices into a new surface mesh (`_extract_bnd_only_inline`,
 `_extract_surface_mesh_filtered`). The curved-element data and the CAD
 association are dropped, so these BEM solves always use flat P1 panels,
 whatever order the `.vol` carries. `extract_surface_curved` accepts
 `geom_order` but evaluates only `GetTrafo` at six reference points, so the
-argument is nominal; on a flat parent mesh it returns flat panels.
+argument is nominal: the P2 panel geometry comes from the parent mesh's own
+element maps, so a flat parent gives flat panels.
 `calc_inductance` records `wp_vol_curve_order` but does not use it.
 
 Consequences: the BEM surface area and normals carry an `O(h²/R²)` error at

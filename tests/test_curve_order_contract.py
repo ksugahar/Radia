@@ -115,32 +115,66 @@ def test_rescaled_mesh_curve_explodes(meshes):
 
 def test_ensure_curve_order_guards(meshes):
     out = _run(meshes, """
-        mc = helper(); CurveOrderError, ensure_curve_order = mc.CurveOrderError, mc.ensure_curve_order
+        mc = helper(); CurveOrderError, ensure = mc.CurveOrderError, mc.ensure_curve_order
         res = {}
-        res["kept"] = ensure_curve_order(ng.Mesh("c3.vol"), 2)["action"]
-        r = ensure_curve_order(ng.Mesh("flat.vol"), 2)
-        res["curved"] = r["action"]; res["d_area"] = r["area_rel_change"]
-        for name in ("mm_scaled.vol",):
+        with ng.TaskManager():
+            res["kept"] = ensure(ng.Mesh("c3.vol"), 2, vol_path="c3.vol")["action"]
+            r = ensure(ng.Mesh("flat.vol"), 2, vol_path="flat.vol")
+            res["curved"] = r["action"]; res["ratio"] = r["boundary_ratio"]
             try:
-                ensure_curve_order(ng.Mesh(name), 2); res[name] = "no error"
+                ensure(ng.Mesh("mm_scaled.vol"), 2, vol_path="mm_scaled.vol"); res["mm"] = "no error"
             except CurveOrderError as e:
-                res[name] = "extent" if "extent" in str(e) else str(e)
+                res["mm"] = ("box" if "box" in str(e) else str(e), e.mesh_modified)
         print(json.dumps(res))
     """)
     assert out["kept"] == "kept"
-    assert out["curved"] == "curved" and 0 < out["d_area"] < 0.5
-    assert out["mm_scaled.vol"] == "extent"
+    assert out["curved"] == "curved" and 1.0 < out["ratio"] < 1.1
+    assert out["mm"] == ["box", False]
 
 
-def test_ensure_curve_order_rejects_cadless(meshes):
+def test_ensure_curve_order_rejects_cadless_even_with_borrowed_geometry(meshes):
+    # A CAD-less file loaded after a geometry-bearing one sees that geometry
+    # through GetGeometry(); provenance must come from the file itself.
     out = _run(meshes, """
-        mc = helper(); CurveOrderError, ensure_curve_order = mc.CurveOrderError, mc.ensure_curve_order
+        mc = helper(); CurveOrderError, ensure = mc.CurveOrderError, mc.ensure_curve_order
         lines = open("flat.vol").read().splitlines()
         open("flat_nocad.vol", "w").write("\\n".join(lines[:lines.index("endmesh")+1]) + "\\n")
+        ng.Mesh("c3.vol")
+        m = ng.Mesh("flat_nocad.vol")
+        borrowed = getattr(m.ngmesh.GetGeometry(), "shape", None) is not None
         try:
-            ensure_curve_order(ng.Mesh("flat_nocad.vol"), 2); res = "no error"
+            with ng.TaskManager():
+                ensure(m, 2, vol_path="flat_nocad.vol")
+            res = "no error"
         except CurveOrderError as e:
-            res = "no CAD" if "no CAD" in str(e) else str(e)
-        print(json.dumps({"res": res}))
+            res = ("no CAD" if "no CAD" in str(e) else str(e), e.mesh_modified)
+        print(json.dumps({"borrowed": borrowed, "res": res, "order": m.GetCurveOrder()}))
     """)
-    assert out["res"] == "no CAD"
+    assert out["borrowed"]
+    assert out["res"] == ["no CAD", False]
+    assert out["order"] == 1
+
+
+def test_embedded_cad_stays_with_its_mesh(meshes):
+    out = _run(meshes, """
+        a = ng.Mesh("flat.vol")
+        ng.Mesh("mm_scaled.vol")          # load a different CAD afterwards
+        mc = helper()
+        with ng.TaskManager():
+            mc.ensure_curve_order(a, 2, vol_path="flat.vol")
+        print(json.dumps({"rel": rel(a)}))
+    """)
+    assert abs(out["rel"]) < 5e-3
+
+
+def test_ensure_curve_order_accepts_coarse_correct_mesh(tmp_path):
+    out = _run(tmp_path, """
+        geo = OCCGeometry(Sphere(Pnt(0, 0, 0), 1.0))
+        geo.GenerateMesh(maxh=2.0, curvaturesafety=1).Save("coarse.vol")
+        m = ng.Mesh("coarse.vol")
+        with ng.TaskManager():
+            r = helper().ensure_curve_order(m, 2, vol_path="coarse.vol")
+        print(json.dumps({"action": r["action"], "domain_ratio": r["domain_ratio"]}))
+    """)
+    assert out["action"] == "curved"
+    assert 1.0 < out["domain_ratio"] < 3.0

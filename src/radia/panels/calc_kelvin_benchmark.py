@@ -120,7 +120,9 @@ def solve_kelvin_benchmark(vol_path, mu_r=100.0, H0=1.0,
         # only safe against its own embedded CAD (see radia.mesh_curve).
         from radia.mesh_curve import CurveOrderError, ensure_curve_order
         try:
-            curve = ensure_curve_order(mesh, fes_order, what=str(vol_path))
+            with ngsolve.TaskManager():
+                curve = ensure_curve_order(mesh, fes_order, vol_path=vol_path,
+                                           what=str(vol_path))
         except CurveOrderError as exc:
             return {"error": str(exc)}
         _log(f"geometry order {curve['curve_order']} ({curve['action']})")
