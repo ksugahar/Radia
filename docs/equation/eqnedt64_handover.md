@@ -2,8 +2,8 @@
 
 - 文書状態: 現行
 - 対象製品: Eqnedit64 native / Python package / Web editor
-- 対象リリース: 3.0.13
-- 基準日: 2026-09-03
+- 対象リリース: 3.1.2
+- 基準日: 2026-10-08
 - リポジトリ: `ksugahar/Radia`
 
 この文書は、Eqnedit64を修正、試験、配布するときに最初に読む引き継ぎ正本である。
@@ -211,32 +211,26 @@ Backspace/Deleteが`&`を削除して左右セルを結合する。複数行の�
 
 ### 6.1 通常コピー
 
-通常コピーは同じ数式から、少なくとも次の利用経路を提供する。
+通常コピーは同じ数式から、次の利用経路を提供する。
 
-- UTF-8/Unicode TeX
-- 不透明なEMF
-- 不透明なDIBV5/PNG画像
-- Officeが編集可能な数式へ変換できるinline MathML入りCF_HTML
+- Office用Unicode TeXとraw UTF-8 `LaTeX`。
+- 不透明なEMF、DIBV5（通常コピーへPNGは混在させない）。
+- EXE/Web共通の条件付き18 pt RichEdit-HTML OMML入りCF_HTML。
 
-PowerPointとWordでは、空のテキストボックスや画像への退化ではなく、見えて編集できる
-Office Mathになることが合格条件である。MathMLの文字列がクリップボードに存在するだけ、
-図形数が1以上だけ、例外が出ないだけでは合格にしない。PowerPoint自身に貼り付けさせ、
-数式の輪郭と代表構造を画像化して検査する。
+UXP-0029 の上下限・スクリプト優先は維持する。UXP-0031 により登録 `MathML` /
+`MathML Presentation` は発行せず、両版とも同じ主OMML分岐をPowerPointへ渡す。
+単一式と複数行は、見えて編集可能な数式で上下限・指数・行構造を保つことを合格条件とする。
+画像への退化、空のMathZone、上下限欠落は合格としない。明示 `&` と保存TeXは保持する。
 
-Office向けはnative EXE版とWeb/JS版のどちらも、通常Ctrl+Vで左揃え18 ptの編集可能
-Office Mathになることを製品契約とする。PowerPointでは左揃えと24 pt強制を通常貼り付けで
-UXP-0029 により積分上下限を左揃えより優先する。単一式の中央揃えを許容し、画像への退化と空のMathZoneは拒否する。
-実PowerPoint試験で文字サイズ、段落揃え、貼り付け位置、Office Math構造、描画inkを
-すべて検査する。
+固定コーパスの実Windowsクリップボード主OMML分岐をUTF-8のバイト列で比較する。
+一致する候補のEXE手動試験とbit gateが通れば、対象fixtureのWeb手動試験を省略できる。
+証明範囲はコーパスに限る。gate未実施・失敗、共有契約や環境の変更時はWebも確認する。
+CF_HTML envelope・offset・非Office用MathML fallbackは比較対象から除くが、主分岐の
+文字・構造・色指定は除かない。任意のTeXや全Office版の同値を保証しない。
 
-2026-10-07 の UXP-0029 は、PowerPoint貼り付けで積分上下限とスクリプトの保存を
-左寄せより優先する。Windows版の単一式（cases・行列など式内の表を含む）は
-登録 `MathML` / `MathML Presentation` を発行し、中央寄せの編集可能な
-`m:oMathPara` を許容する。CF_HTML・18 pt末尾NBSPも保持する。
-独立した複数行はCF_HTMLで各行を渡し、左端と上下限を実PowerPoint試験で検査する。
-Web版はブラウザーのCF_HTML経路を使う。現在のPowerPointでのWeb・複数行の上下限は
-隔離Office試験で再確認するまで未検証とし、native/WebのOOXML・PNG一致は保証しない。
-画像への退化・空のMathZone・上下限の欠落は合格としない。明示 `&` と保存TeXは保持する。
+PowerPoint取込では共有OMML経路の色が失われる。ユーザーのr10色指定A–G試験でも
+赤を保持できず、3.1.2はこの制限を明記して公開すると承認された。キャンバス・SVG・
+EMF・DIB・保存TeXの色対応は維持する。詳細は `UXP-0030/0031`、公開結果は§13を参照。
 
 ### 6.2 Google Slidesと画像
 
@@ -483,9 +477,65 @@ O:はINTEL11では `C:\Users\Administrator\OneDrive` へのSUBSTであり、ユ�
 手動試験入口である。GitHub-hosted release workflow はO:を読まず、タグ作成前に
 `eqnedit64-staging`へ置いたEXEとmanifestを取得してタグSHA・版・署名・ハッシュを確認する。
 
-## 13. 現在の公開状態
+## 13. 公開状態とレビュー記録
 
-Eqnedit64 3.0.13が2026-09-03時点の公開済み基準版である。未公開の3.0.12候補で整えた
+### 13.0 3.1.2 公開完了（2026-10-08）
+
+配備担当Claudeが4配布先の一致と公開QAの合格を記録し、公開を完了した。
+
+| 項目 | リリース記録 |
+|---|---|
+| タグ | `eqnedit64-v3.1.2` |
+| タグのsource / merged main | `f853d200180561e1fbb049e6043685aa8cee6d8f` |
+| 統合PR / reviewed head | [#318](https://github.com/ksugahar/Radia/pull/318) / `cfeece018397109cb636789ba56f2be398d74a65` |
+| build / signer | INTEL11、ProductVersion `3.1.2`、Authenticode `Valid` / `CN=ksugahar` |
+| pinned key | `7E80D4365CFDBA7B22B33C35EB7CD6A41050E065` |
+| 署名済みEXE SHA-256 | `3A90CEEA547A0C06859E02328CAE42A5F653C622E5FBA1C0F5041E58412DC433` |
+| Web BUILD | `3.1.2 (2026-10-08)` |
+| 公開JS SHA-256 | `E6A7D287AF00989B554B95052AC49EF0A176015AA76A93C5F9284BA406F931C2` |
+
+- [main Eqnedit64 CI](https://github.com/ksugahar/Radia/actions/runs/37699663051)、
+  [Policy Lint](https://github.com/ksugahar/Radia/actions/runs/37699663008)、
+  [Radia CI](https://github.com/ksugahar/Radia/actions/runs/37699663090)：同じmain SHAで成功。
+- [tag CI](https://github.com/ksugahar/Radia/actions/runs/37702137469)、
+  [publication](https://github.com/ksugahar/Radia/actions/runs/37702511545)：成功。
+- [GitHub Release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.1.2)、
+  正式配備先 `O:\Eqnedit64.exe`、[PyPI 3.1.2](https://pypi.org/project/eqnedit64/3.1.2/) の
+  CPython 3.10–3.13 `win_amd64` wheel全4個の同梱EXEが上記SHA-256で一致。
+  `eqnedit64-staging` は正式タグ公開前の署名済みEXE受渡しに使用した。
+- [Web公開ページ](https://www.ele.kindai.ac.jp/laboratory/sugahara/elemag/equation-editor.php) は
+  exact tag checkoutから再生成。公開JS/PHPと生成物のハッシュ一致、EXEリンク3.1.2、
+  公開browser QA PASSを配備担当が確認した。
+- 手動試験：`ea787664d` のEXE H1/H5/H6 OK、H7はcanvas赤・PowerPoint色欠落。
+  Web H5/H6は `8361ec916` でOK。
+  [actual-wire gate](https://github.com/ksugahar/Radia/actions/runs/37692902458) は
+  `ea787664d` の実Windowsクリップボード22/22主OMMLがbyte一致。
+  共有経路の色欠落は上記§6.1の承認済み制限。
+
+#### 3.1.2 Fableゲート
+
+- reviewer：Claude Code、model `claude-fable-5-1`（Fable 5.1）、2026-10-08。
+- reviewed SHA：`cfeece018397109cb636789ba56f2be398d74a65`、PR #318。
+- 結果：blocking findingなし。PR CI成功を条件にmain統合を承認。
+  finding-resolution SHAは不要（blocking findingなし）。
+- 独立性の留保：同じClaudeセッションが先行レビューにも参加していた。
+  ユーザーがFableへ切り替えたそのセッションを選び、fresh sessionは使用していない。
+  この留保を残し、独立した新規セッションのレビューとは記載しない。
+- Codexはmerged mainのexact SHAからINTEL11でコンパイル・署名し、native実行・
+  font登録は対話デスクトップで行わなかった。Claudeが統合・CI・配備・タグ・公開を担当。
+- 本追補は公開・レビュー結果だけの文書変更で、公開済み製品の動作変更ではない。
+
+#### 3.1.3 後続項目（公開後、未実装）
+
+| ID / 状態 | 指摘と次の作業 | 完了条件 |
+|---|---|---|
+| F-1 / open | `office_bit_corpus.json` に `\left(…\right)`、bare `\sin` / `\lim`、`\text` / 日本語、`\quad`、`\boxed` / `\cancel`、`\binom`、`\overset` を追加。native emitterとMathJaxの同値は構文ごとに未証明 | 両版の実クリップボードbit gateを拡張fixtureで確認し、差異は修正または非同値と明記。Web免除は合格fixtureのみに限定 |
+| F-2 / open（nit） | 大演算子のoperand収集でclosing fenceが `m:e` 内へ入る（`\left(\int_a^b f\right)`）。両版で一致しているが構造が不自然 | operand境界とfence所有を両版で調べ、構造・上下限・編集可能性とbit一致の影響を確認して処置 |
+| F-3 / open（追跡nit） | native converterのMathML `fence` / `stretchy` / `largeop`属性取扱いはJSと同じ。Fable判断は現時点の変更不要 | F-1/F-2拡張時に意図を確認し、変更不要を再確認すれば閉じる。必要になった場合だけ両版同時に変更 |
+
+以下の§13.1–13.6は3.0.13の歴史的な公開・レビュー記録であり、現在の公開状態は上記3.1.2である。
+
+Eqnedit64 3.0.13は2026-09-03時点の公開済み基準版だった。未公開の3.0.12候補で整えた
 構造選択、TeX整形、簡潔な直接CLIを吸収し、改行操作、parser固定点、TeXソースfont検査、
 正式公開前Fableレビューを追加した。通常Ctrl+Vは、native/Webとも左揃えの編集可能なinline
 Office Mathを18 ptで作る。`&`を含まない複数行は各leaf rowへ分けて同じ左端を保ち、
