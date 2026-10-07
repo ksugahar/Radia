@@ -106,3 +106,17 @@ native 出力の有限性は接続の検証です。独立 FEM 比較は別途�
 `independent_fem_validation.status` は `not-performed` のままです。
 この自前例題の簡潔な検証結果は
 `validation_test/induction_heating/results/panel_zs_student_workflow.json` に保存しています。
+
+
+## Python/CLI の固定面別 Zs・強結合
+
+Python/CLI の `bem-a` と `peec` 強結合は、genus-0/1、平面 P1、
+`intree-dense` の workpiece に対して固定 `--panel-zs-file` を使用できる。
+各面の値は局所発熱、完全反作用、genus-1 のループ電流に直接用いられる。
+面積平均 Zs は報告用であり、計算には代用しない。値が全て完全一致する
+配列はスカラー演算に一致し、微小でも値が異なる配列は重み付き経路を使う。
+値・周波数の変更時は分解を更新し、同じ形状に対する準備済み幾何演算を再利用する。
+
+PEEC 強結合では `--no-peec-proximity` が必要。非線形 strong ESIM、P2、
+面別 Zs の HACApK、複数ハンドルは未対応。この追加は Python/CLI の電磁経路であり、
+本書の Simulink 熱連成手順は引き続き弱結合用。strong の native 熱連成認証を意味しない。

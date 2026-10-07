@@ -506,70 +506,10 @@ def _auto_material_ring(pts, tris, *, return_diagnostics=False):
 # ----------------------------------------------------------------------
 # main entry
 # ----------------------------------------------------------------------
-def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, section_anchor=None, carrier_ring=None):
-    """Solve the loop-extended scalar BIE + SIBC on a genus-1 workpiece.
-
-    Args:
-        bem_solver: a ``ScalarBIESIBCSolver`` built on the CLOSED
-            workpiece surface mesh with ``assemble_dense=True`` and the
-            intree P1 path (attributes ``M/K/SL/DL/M_inv/mesh`` used).
-        phi_inc_nodal: (ndof,) complex incident scalar potential at the
-            H1 nodes (e.g. the surface-Poisson reconstruction, or an
-            exact expression for a uniform field).
-        carrier_ring: optional ordered closed-loop vertices inside the
-            material wall, in metres (closing vertex is implicit). Use when
-            normal-ray construction fails on a stepped wall. The unit-jump
-            check still applies. If both carrier_ring and section_anchor
-            are omitted, an interior circular carrier is found automatically
-            from the closed surface for a single through-hole around z.
-        section_anchor: optional (rho, z) point strictly inside the material
-            meridional section, in metres. Supply this for stepped profiles
-            whose surface-node mean lies outside the material.
-        Z_s: passive complex scalar or PanelSurfaceImpedance in BND face order.
-        omega: angular frequency [rad/s].
-        A_inc_fn: callable ``A_inc_fn(points (n,3)) -> (n,3) complex`` --
-            incident vector potential, used for the linked-flux term of
-            the Faraday closure on the cut loop.
-
-    Returns dict with ``alpha`` (net circulating current, complex [A]),
-    ``P_total`` [W], ``H_t_rms`` [A/m], ``phi_u``, ``phi_open``,
-    ``theta_jump``, ``cut_n_vertices``, plus ``P_frozen`` / ``Ht_frozen``
-    (the alpha=0 sub-solve, == the plain solver, for diagnostics).
-    ``carrier_diagnostics`` records automatic search rejections and the
-    accepted polygon's minimum wall clearance (None for a supplied carrier).
-    """
-    from ngsolve import BND
-
-    from .surface_impedance import PanelSurfaceImpedance
-    if not np.isfinite(omega) or omega <= 0:
-        raise ValueError("Loop SIBC requires positive finite frequency")
-    if not isinstance(Z_s, PanelSurfaceImpedance):
-        if (np.ndim(Z_s) != 0 or not np.isfinite(Z_s)
-                or complex(Z_s).real < 0):
-            raise ValueError("Loop SIBC requires passive scalar Z_s or tagged face impedance")
-    mesh = bem_solver.mesh
-    if mesh.GetCurveOrder() > 1 or mesh.deformation is not None:
-        raise ValueError("Loop SIBC requires undeformed flat surface triangles")
-    M = bem_solver.M
-    SL, DL, M_inv = bem_solver.SL, bem_solver.DL, bem_solver.M_inv
-    if SL is None or DL is None:
-        raise ValueError("loop extension needs assemble_dense=True "
-                         "(dense SL/DL) on the ScalarBIESIBCSolver.")
-
-    pts = np.array([[mesh.vertices[i].point[j] for j in range(3)]
-                    for i in range(mesh.nv)])
-    tris = np.array([[v.nr for v in el.vertices]
-                     for el in mesh.Elements(BND)], dtype=np.int64)
+def _prepare_loop_geometry(bem_solver, pts, tris, section_anchor, carrier_ring):
+    """Source/impedance-independent topology, carrier and flat-panel maps."""
     nv, nt = len(pts), len(tris)
-    face_z = (Z_s.values if isinstance(Z_s, PanelSurfaceImpedance)
-              else np.full(nt, complex(Z_s)))
-    if face_z.shape != (nt,):
-        raise ValueError("Loop SIBC requires one impedance per BND triangle")
-    if bem_solver.ndof != nv:
-        raise ValueError(
-            f"loop extension supports the P1 nodal path only "
-            f"(ndof={bem_solver.ndof} != nv={nv}).")
-
+    M_inv = bem_solver.M_inv
     # verify consistent orientation (the extractors now guarantee it; a
     # mesh from another route must be oriented BEFORE the solver is
     # built, because the BEM operators bake the winding in).
@@ -716,48 +656,170 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
     Theta = Theta.astype(complex)
 
     qT = _project_ring_neumann(pts, tris, areas, normals, H_ring, M_inv)
+    return {name: value for name, value in [
+        ('pts_o', pts_o),
+        ('tris_o', tris_o),
+        ('dup', dup),
+        ('Tmap', Tmap),
+        ('areas', areas),
+        ('normals', normals),
+        ('gvecs', gvecs),
+        ('cents', cents),
+        ('Theta', Theta),
+        ('qT', qT),
+        ('theta_jump', theta_jump),
+        ('cut', cut),
+        ('n_cut', n_cut),
+        ('automatic_carrier', automatic_carrier),
+        ('carrier_diagnostics', carrier_diagnostics),
+        ('rho0', rho0),
+        ('z0', z0),
+    ]}
+
+
+def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, section_anchor=None, carrier_ring=None, _reuse_prepared=False):
+    """Solve the loop-extended scalar BIE + SIBC on a genus-1 workpiece.
+
+    Args:
+        bem_solver: a ``ScalarBIESIBCSolver`` built on the CLOSED
+            workpiece surface mesh with ``assemble_dense=True`` and the
+            intree P1 path (attributes ``M/K/SL/DL/M_inv/mesh`` used).
+        phi_inc_nodal: (ndof,) complex incident scalar potential at the
+            H1 nodes (e.g. the surface-Poisson reconstruction, or an
+            exact expression for a uniform field).
+        carrier_ring: optional ordered closed-loop vertices inside the
+            material wall, in metres (closing vertex is implicit). Use when
+            normal-ray construction fails on a stepped wall. The unit-jump
+            check still applies. If both carrier_ring and section_anchor
+            are omitted, an interior circular carrier is found automatically
+            from the closed surface for a single through-hole around z.
+        section_anchor: optional (rho, z) point strictly inside the material
+            meridional section, in metres. Supply this for stepped profiles
+            whose surface-node mean lies outside the material.
+        Z_s: passive complex scalar or PanelSurfaceImpedance in BND face order.
+        omega: angular frequency [rad/s].
+        A_inc_fn: callable ``A_inc_fn(points (n,3)) -> (n,3) complex`` --
+            incident vector potential, used for the linked-flux term of
+            the Faraday closure on the cut loop.
+
+    Returns dict with ``alpha`` (net circulating current, complex [A]),
+    ``P_total`` [W], ``H_t_rms`` [A/m], ``phi_u``, ``phi_open``,
+    ``theta_jump``, ``cut_n_vertices``, plus ``P_frozen`` / ``Ht_frozen``
+    (the alpha=0 sub-solve, == the plain solver, for diagnostics).
+    ``carrier_diagnostics`` records automatic search rejections and the
+    accepted polygon's minimum wall clearance (None for a supplied carrier).
+    """
+    from ngsolve import BND
+
+    from .surface_impedance import PanelSurfaceImpedance
+    if not np.isfinite(omega) or omega <= 0:
+        raise ValueError("Loop SIBC requires positive finite frequency")
+    if not isinstance(Z_s, PanelSurfaceImpedance):
+        if (np.ndim(Z_s) != 0 or not np.isfinite(Z_s)
+                or complex(Z_s).real < 0):
+            raise ValueError("Loop SIBC requires passive scalar Z_s or tagged face impedance")
+    mesh = bem_solver.mesh
+    if mesh.GetCurveOrder() > 1 or mesh.deformation is not None:
+        raise ValueError("Loop SIBC requires undeformed flat surface triangles")
+    M = bem_solver.M
+    SL, DL, M_inv = bem_solver.SL, bem_solver.DL, bem_solver.M_inv
+    if SL is None or DL is None:
+        raise ValueError("loop extension needs assemble_dense=True "
+                         "(dense SL/DL) on the ScalarBIESIBCSolver.")
+
+    pts = np.array([[mesh.vertices[i].point[j] for j in range(3)]
+                    for i in range(mesh.nv)])
+    tris = np.array([[v.nr for v in el.vertices]
+                     for el in mesh.Elements(BND)], dtype=np.int64)
+    nv, nt = len(pts), len(tris)
+    face_z = (Z_s.values if isinstance(Z_s, PanelSurfaceImpedance)
+              else np.full(nt, complex(Z_s)))
+    if face_z.shape != (nt,):
+        raise ValueError("Loop SIBC requires one impedance per BND triangle")
+    if bem_solver.ndof != nv:
+        raise ValueError(
+            f"loop extension supports the P1 nodal path only "
+            f"(ndof={bem_solver.ndof} != nv={nv}).")
+
+    geometry_key = None
+    if _reuse_prepared:
+        import hashlib
+        digest = hashlib.sha256(pts.astype('<f8').tobytes()+tris.astype('<i8').tobytes())
+        for argument in (section_anchor, carrier_ring):
+            digest.update(b'none' if argument is None else np.asarray(argument, dtype='<f8').tobytes())
+        geometry_key = digest.hexdigest()
+        cached_geometry = getattr(bem_solver, '_prepared_loop_geometry', None)
+    else:
+        cached_geometry = None
+    if cached_geometry is not None and cached_geometry[0] == geometry_key:
+        geometry = cached_geometry[1]
+    else:
+        geometry = _prepare_loop_geometry(bem_solver, pts, tris, section_anchor, carrier_ring)
+        if _reuse_prepared:
+            bem_solver._prepared_loop_geometry = (geometry_key, geometry)
+    (pts_o, tris_o, dup, Tmap, areas, normals, gvecs, cents, Theta, qT, theta_jump, cut, n_cut, automatic_carrier, carrier_diagnostics, rho0, z0) = (
+        geometry[name] for name in ('pts_o', 'tris_o', 'dup', 'Tmap', 'areas', 'normals', 'gvecs', 'cents', 'Theta', 'qT', 'theta_jump', 'cut', 'n_cut', 'automatic_carrier', 'carrier_diagnostics', 'rho0', 'z0'))
     # Exact constant panels retain the scalar arithmetic. Separately weighted
     # assembly differs by rounding, amplified in fine-mesh field recovery.
     uniform_z = bool(np.all(face_z == face_z[0]))
-    rK_T = np.zeros(nv, dtype=complex)
-    for ti, t in enumerate(tris_o):
-        gTh = (gvecs[ti, 0] * Theta[t[0]] + gvecs[ti, 1] * Theta[t[1]]
-               + gvecs[ti, 2] * Theta[t[2]])
-        for k in range(3):
-            rK_T[Tmap[t[k]]] += ((1 if uniform_z else face_z[ti])
-                                * areas[ti] * (gvecs[ti, k] @ gTh))
-    if uniform_z:
-        gamma = face_z[0]/(1j * omega * MU_0)
-        a_col = SL @ (gamma * (M_inv @ rK_T) - qT.astype(complex))
-        A_sys = (0.5 * M - DL + gamma * (SL @ M_inv @ bem_solver.K)).astype(complex)
+    prepared_key = None
+    if _reuse_prepared:
+        prepared_key = (geometry_key, hashlib.sha256(face_z.astype('<c16').tobytes()).hexdigest(), float(omega))
+    cached_system = getattr(bem_solver, '_prepared_loop_system', None) if _reuse_prepared else None
+    system_reused = cached_system is not None and cached_system['key'] == prepared_key
+    if system_reused:
+        A_sys = cached_system['A_sys']
     else:
-        a_col = SL @ ((M_inv @ rK_T)/(1j * omega * MU_0) - qT.astype(complex))
-        K_Z = bem_solver.impedance_stiffness(Z_s)
-        if hasattr(K_Z, "toarray"):
-            K_Z = K_Z.toarray()
-        A_sys = (0.5 * M - DL + (SL @ M_inv @ K_Z)/(1j * omega * MU_0)).astype(complex)
+        rK_T = np.zeros(nv, dtype=complex)
+        for ti, t in enumerate(tris_o):
+            gTh = (gvecs[ti, 0] * Theta[t[0]] + gvecs[ti, 1] * Theta[t[1]]
+                   + gvecs[ti, 2] * Theta[t[2]])
+            for k in range(3):
+                rK_T[Tmap[t[k]]] += ((1 if uniform_z else face_z[ti])
+                                    * areas[ti] * (gvecs[ti, k] @ gTh))
+        if uniform_z:
+            gamma = face_z[0]/(1j * omega * MU_0)
+            a_col = SL @ (gamma * (M_inv @ rK_T) - qT.astype(complex))
+            A_sys = (0.5 * M - DL + gamma * (SL @ M_inv @ bem_solver.K)).astype(complex)
+        else:
+            a_col = SL @ ((M_inv @ rK_T)/(1j * omega * MU_0) - qT.astype(complex))
+            K_Z = bem_solver.impedance_stiffness(Z_s)
+            if hasattr(K_Z, "toarray"):
+                K_Z = K_Z.toarray()
+            A_sys = (0.5 * M - DL + (SL @ M_inv @ K_Z)/(1j * omega * MU_0)).astype(complex)
     RHS = (M @ np.asarray(phi_inc_nodal, dtype=complex))
 
     from .bem_loop_work import _loop_work_row
     fE, e_loop, fP, p_loop, loop_source, work_diagnostics = _loop_work_row(
         bem_solver, pts, tris, tris_o, Tmap, gvecs, normals, areas, Theta,
-        face_z, A_inc_fn, qT, phi_inc_nodal)
+        face_z, A_inc_fn, qT, phi_inc_nodal, _prepared_key=prepared_key)
     f_alpha = e_loop + 1j * omega * p_loop
 
     # assemble + solve (Lagrange mean-zero gauge, production style)
     Mrow = M.sum(axis=1).astype(complex)
     N = nv + 2
-    A2 = np.zeros((N, N), dtype=complex)
     b2 = np.zeros(N, dtype=complex)
-    A2[:nv, :nv] = A_sys
-    A2[:nv, nv] = a_col
-    A2[:nv, nv + 1] = Mrow
-    A2[nv, :nv] = fE + 1j * omega * fP
-    A2[nv, nv] = f_alpha
-    A2[nv + 1, :nv] = Mrow
+    if system_reused:
+        A2 = cached_system['A2']
+    else:
+        A2 = np.zeros((N, N), dtype=complex)
+        A2[:nv, :nv] = A_sys
+        A2[:nv, nv] = a_col
+        A2[:nv, nv + 1] = Mrow
+        A2[nv, :nv] = fE + 1j * omega * fP
+        A2[nv, nv] = f_alpha
+        A2[nv + 1, :nv] = Mrow
+        if _reuse_prepared:
+            from scipy.linalg import lu_factor
+            cached_system = dict(key=prepared_key, A_sys=A_sys, A2=A2,
+                                 factor2=lu_factor(A2))
     b2[:nv] = RHS
     b2[nv] = -1j * omega * loop_source
-    u = np.linalg.solve(A2, b2)
+    if _reuse_prepared:
+        from scipy.linalg import lu_solve
+        u = lu_solve(cached_system['factor2'], b2)
+    else:
+        u = np.linalg.solve(A2, b2)
     residual = A2 @ u - b2
     linear_residual_rel = float(np.linalg.norm(residual) / max(np.linalg.norm(b2), np.finfo(float).tiny))
     faraday_residual_rel = float(abs(residual[nv]) / max(abs(b2[nv]), abs((A2 @ u)[nv]), np.finfo(float).tiny))
@@ -792,16 +854,26 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
 
     # frozen sub-solve (diagnostic; == the plain production solve)
     Ng = nv + 1
-    A0 = np.zeros((Ng, Ng), dtype=complex)
     b0 = np.zeros(Ng, dtype=complex)
-    A0[:nv, :nv] = A_sys
-    A0[:nv, nv] = Mrow
-    A0[nv, :nv] = Mrow
     b0[:nv] = RHS
-    phi_f = np.linalg.solve(A0, b0)[:nv]
+    if system_reused:
+        A0 = cached_system['A0']
+    else:
+        A0 = np.zeros((Ng, Ng), dtype=complex)
+        A0[:nv, :nv] = A_sys
+        A0[:nv, nv] = Mrow
+        A0[nv, :nv] = Mrow
+        if _reuse_prepared:
+            cached_system.update(A0=A0, factor0=lu_factor(A0))
+            bem_solver._prepared_loop_system = cached_system
+    phi_f = (lu_solve(cached_system['factor0'], b0)[:nv] if _reuse_prepared
+             else np.linalg.solve(A0, b0)[:nv])
     P_frozen, Ht_frozen = _P_Ht(phi_f, 0.0)
 
     return {
+        "loop_geometry_reused": bool(cached_geometry is not None and cached_geometry[0] == geometry_key),
+        "loop_system_reused": bool(system_reused),
+        "loop_impedance_value_hash": prepared_key[1] if prepared_key is not None else None,
         "loop_impedance_assembly": "scalar-equal-faces" if uniform_z else "weighted-panel",
         "Z_s_per_panel": face_z.copy(),
         "loop_work_diagnostics": work_diagnostics,

@@ -218,13 +218,14 @@ class CoupledBEMSolver:
         from radia.bem_complete_reaction import (solve_complete_body,
             electric_incident_vertex_load, surface_source_reaction_load,
             surface_current_average_maps, surface_coil_reaction_rhs, _iterate_complete_current)
+        from radia.bem_complete_reaction import strong_surface_impedance, strong_impedance_metadata
         from radia.workpiece_surface import _check_sibc_reaction_power
         from ngsolve import GridFunction
         if max_iter < 2 or not np.isfinite(tol) or tol <= 0 or not 0 < relax <= 1:
             raise ValueError('Invalid strong-coupling iteration controls')
         if not np.isfinite(omega) or omega <= 0:
             raise ValueError('Strong coupling needs finite positive frequency')
-        z = complex(Z_s)
+        z = strong_surface_impedance(Z_s, len(self.wp_tris))
         n_J, n_c = self.n_J, self.n_constraint
         if self.coil_hacapk:
             def coil_solve(rhs, particular):
@@ -288,5 +289,6 @@ class CoupledBEMSolver:
             n_J_coil=n_J, n_phi_wp=self.wp_solver.ndof,
             J_coil_re=currents.real, J_coil_im=currents.imag, body_emf=emf,
             wp_c=centers, wp_a=areas, wp_J_re=body['current'].real,
-            wp_J_im=body['current'].imag, wp_q_tri=body['q_tri'], Z_s=z,
+            wp_J_im=body['current'].imag, wp_q_tri=body['q_tri'], wp_H_t_tri=body['field'],
+            **strong_impedance_metadata(z, areas),
             **body['loop_metadata'])

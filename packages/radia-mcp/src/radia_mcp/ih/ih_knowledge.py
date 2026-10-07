@@ -2004,7 +2004,10 @@ complete body reaction; port power includes coil self loss, and port loss
 increment includes the CHANGE in coil self loss. It is not inferred from
 body heat alone. The surface-coil strong model is ideal (zero coil ohmic
 loss); the filament route uses its R_f/Zs_fil loss. Each air baseline uses
-the same model as its coupled result. Fixed panel Zs and nonlinear strong ESIM remain guarded.
+the same model as its coupled result. Fixed panel Zs is supported by the Python/CLI strong surface-coil and
+filament-coil routes for flat P1 dense genus-0/1 bodies. Values are used
+face by face; the area-weighted mean is reporting metadata only. Nonlinear
+strong ESIM and the native Simulink strong thermal handoff remain guarded.
 Prescribed-source genus-0 phi.B quadrature is unchanged: it converges to
 Js.A work but is not identical on a finite mesh. Strong coupling has its
 own self-authored circuit and surface checks; weak acceptance and native
