@@ -2,7 +2,8 @@
   "schema": "radia.test-tier-manifest.v1",
   "impact_rules": {
     "src/radia/bem_loop_work.py": ["tests/test_bem_loop_work_pairings.py"],
-    "src/radia/bem_loop_extension.py": ["tests/test_bem_loop_work_pairings.py", "validation_test/bem/test_loop_extension_ring.py"],
+    "src/radia/bem_loop_extension.py": ["tests/test_bem_loop_work_pairings.py", "tests/test_bem_loop_panel_impedance.py", "validation_test/bem/test_loop_extension_ring.py"],
+    "src/radia/panels/calc_inductance.py": ["tests/test_bem_loop_panel_impedance.py"],
     "src/radia/bem_sibc_solver.py": ["tests/test_bem_sibc_acceptance.py"],
     "src/radia/lamination.py": ["tests/test_lamination_api.py"],
     "docs/maglev/demos/sphere/maglev_sphere_force.py": ["tests/test_maglev_sphere_golden.py"],
@@ -243,6 +244,7 @@
       "description": "Required NGSolve contracts for mixed Omega, HDiv/topology, eddy currents, SIBC and IH thermal coupling; no partial dependency run.",
       "paths": [
         "tests/test_bem_loop_work_pairings.py",
+        "tests/test_bem_loop_panel_impedance.py",
         "validation_test/bem/test_loop_extension_ring.py",
         "tests/test_bem_sibc_acceptance.py",
         "tests/test_surface_orientation.py",

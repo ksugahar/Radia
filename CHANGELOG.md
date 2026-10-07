@@ -5,6 +5,12 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Fixed face-ordered Zs now supports the weak flat-P1 genus-1 loop route.
+  Weighted stiffness, loop electric work, complete reaction and local heat
+  use every face value. Exported Ht retains the circulating mode, including
+  faces with zero real impedance. Nonlinear genus-1 ESIM and strong panel
+  coupling remain separate extensions.
+
 - Genus-1 dense P1 SIBC loop closure now uses distributed Galerkin work
   with both tangential-current and normal-flux magnetic terms. Its
   magnetic source uses the scattered field; electric work and heat use

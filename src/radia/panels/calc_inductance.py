@@ -813,6 +813,18 @@ _GENUS_P_WP_CAVEAT = (
     "analytic shorted-ring golden.")
 
 
+def _solved_panel_tangential_field(bem, result):
+    """Peak face amplitudes from the total solved field, including the loop."""
+    from ngsolve import BND
+    from radia.surface_impedance import panel_tangential_field_rms
+    if "loop_H_t_tri" not in result:
+        return panel_tangential_field_rms(bem.fes, result["phi_vec"])
+    field = np.asarray(result["loop_H_t_tri"], dtype=complex)
+    if field.shape != (bem.mesh.GetNE(BND), 3) or not np.all(np.isfinite(field)):
+        raise ValueError("Loop total tangential field must match finite BND face order")
+    return np.sqrt(np.sum(abs(field)**2, axis=1))
+
+
 def _apply_wp_loop_dof(args, bem, phi_inc, Z_s_wp, omega, coil_data,
                        res_bem, wp_genus, wp_chi):
     """Apply the genus-1 loop-DOF extension to the linear-SIBC weak solve.
@@ -884,8 +896,10 @@ def _apply_wp_loop_dof(args, bem, phi_inc, Z_s_wp, omega, coil_data,
     res_bem["H_t_rms"] = loop_out["H_t_rms"]
     res_bem["phi_vec"] = loop_out["phi_u"]
     res_bem["loop_q_tri"] = loop_out["q_tri"]
+    res_bem["loop_H_t_tri"] = loop_out["H_t_tri"]
     res_bem["loop_reaction_integral"] = loop_out["reaction_integral"]
     loop_meta = {
+        "wp_loop_impedance_assembly": loop_out["loop_impedance_assembly"],
         "wp_loop_dof": True,
         "wp_loop_automatic_carrier": bool(loop_out["automatic_carrier"]),
         "wp_loop_section_anchor_m": list(loop_out["section_anchor"]),
@@ -1061,8 +1075,8 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         f"wp nv={wp_mesh.nv} ne(BND)={wp_mesh.GetNE(BND)} ({t_wp_mesh:.1f}s)")
     wp_chi, wp_genus = _wp_genus_check(wp_mesh)
     panel_zs_file = getattr(args, 'panel_zs_file', '')
-    if panel_zs_file and wp_genus != 0:
-        raise ValueError('Specified panel Zs currently requires a genus-0 surface')
+    if panel_zs_file and wp_genus not in (0, 1):
+        raise ValueError('Specified panel Zs supports genus-0 or one supported flux-linked handle')
     _resolve_workpiece_backend(args, wp_genus, wp_mesh.nv)
 
     # Resolve the loop-DOF mode (see --wp-loop-dof).  "on" was already
@@ -1323,7 +1337,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             progress("BEM", f"BIE ({t_iter:.1f}s)")
             if wp_loop_apply:
                 res_bem, loop_meta = _apply_wp_loop_dof(
-                    args, bem, phi_inc, Z_s_wp, omega, coil_data,
+                    args, bem, phi_inc, surface_z(), omega, coil_data,
                     res_bem, wp_genus, wp_chi)
             break
 
@@ -1586,8 +1600,8 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             "esim_per_panel_Z_s_real": Z_s_wp.real.tolist(),
             "esim_per_panel_Z_s_imag": Z_s_wp.imag.tolist(),
         }
-        per_panel_block["esim_per_panel_H_t"] = panel_tangential_field_rms(
-            bem.fes, res_bem["phi_vec"]).tolist()
+        per_panel_block["esim_per_panel_H_t"] = _solved_panel_tangential_field(
+            bem, res_bem).tolist()
         per_panel_block["Z_s_mean_weighting"] = "surface-area"
         if panel_zs_file:
             per_panel_block["material_metadata_role"] = "reference-inputs-only"
@@ -1719,8 +1733,11 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             # With panel Zs, projected q and Ht do not obey a nodal q/Z identity.
             # Project the solved |H_t|^2 separately: dividing projected heat
             # by a local Z is incorrect across panels with different impedances.
-            if isinstance(Z_s_wp, np.ndarray):
-                gf_h2, _ = _project_sibc_surface_heat(bem.fes, res_bem["phi_vec"], 1.0)
+            if isinstance(Z_s_wp, np.ndarray) or "loop_H_t_tri" in res_bem:
+                half_h2 = (.5*_solved_panel_tangential_field(bem, res_bem)**2
+                           if "loop_H_t_tri" in res_bem else None)
+                gf_h2, _ = _project_sibc_surface_heat(
+                    bem.fes, res_bem["phi_vec"], 1.0, element_heat=half_h2)
                 h_per_dof = np.sqrt(np.maximum(2*gf_h2.vec.FV().NumPy(), 0))
             else:
                 h_per_dof = np.sqrt(np.maximum(
@@ -1950,7 +1967,7 @@ def _assemble_full_output(args, coil_data, wp_data):
         out["wp_loop_dof_skip_reason"] = wp_data["wp_loop_dof_skip_reason"]
     if wp_data.get("wp_loop_dof"):
         out["wp_loop_dof"] = True
-        for key in ("wp_loop_automatic_carrier", "wp_loop_section_anchor_m", "wp_loop_linear_residual_rel", "wp_loop_faraday_residual_rel"):
+        for key in ("wp_loop_automatic_carrier", "wp_loop_section_anchor_m", "wp_loop_linear_residual_rel", "wp_loop_faraday_residual_rel", "wp_loop_impedance_assembly"):
             if key in wp_data: out[key] = wp_data[key]
         out["wp_loop_alpha_A"] = float(wp_data["wp_loop_alpha_A"])
         out["wp_loop_alpha_deg"] = float(wp_data["wp_loop_alpha_deg"])
@@ -2677,10 +2694,10 @@ def run_inductance(args):
     if getattr(args, 'panel_zs_file', ''):
         if (args.coupling_mode != 'weak' or args.impedance_model != 'sibc'
                 or args.esim_per_panel or args.coil_only or not args.vol
-                or args.wp_loop_dof == 'on' or int(args.h1_order) != 1):
+                or int(args.h1_order) != 1):
             return {'status': 'error', 'error':
                     'Specified panel Zs requires weak P1 SIBC, a workpiece, '
-                    'no ESIM iteration and no loop DOF.'}
+                    'no ESIM iteration; one supported handle uses its loop DOF.'}
 
     # --esim-per-panel names the per-panel ESIM iteration; with linear SIBC it
     # would otherwise be dropped and a uniform-Zs result reported.
@@ -2939,7 +2956,7 @@ def build_argparser():
                              "esim: nonlinear Karl iteration; requires "
                              "--bh-file.")
     parser.add_argument('--panel-zs-file', default='',
-                        help='Mesh-bound per-triangle Zs JSON [ohm], weak P1 genus-0 SIBC only')
+                        help='Mesh-bound per-triangle Zs JSON [ohm], weak P1 SIBC; genus-0 or one supported flux-linked handle with dense flat-triangle loop work')
     parser.add_argument("--esim-max-iter", type=int, default=15)
     parser.add_argument("--esim-tol", type=float, default=1e-3)
     parser.add_argument("--esim-relax", type=float, default=0.5,
