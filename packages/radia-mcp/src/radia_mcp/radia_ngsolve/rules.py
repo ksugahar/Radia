@@ -1229,13 +1229,14 @@ def check_netgen_scale_after_generate(filepath: str, lines: List[str]) -> List[D
     ``shape = shape.Scale(Pnt(0, 0, 0), 1e-3)``. See
     docs/ngsolve_integration/curve_order.md.
 
-    The file is parsed and each function body is walked in execution order with
-    the set of names that MAY hold a ``GenerateMesh(...)`` result: right-hand
-    sides are scanned before the assignment rebinds a name, plain aliases
-    propagate, other rebinding (including loop and ``with`` targets) clears a
-    name, and the branches of ``if``/``try``/loops are merged by union.
-    Strings and comments never match. Values passed through containers,
-    attributes or function returns are not tracked.
+    Deliberately flow-insensitive: within one function (or module) scope, every
+    name that is ever bound to a ``GenerateMesh(...)`` result, or to a plain alias
+    of such a name, is a mesh name, and every ``<mesh name>.Scale(...)`` call in
+    that scope is reported wherever it occurs (branches, loops, guards, exception
+    paths). A name reused for a CAD shape in the same scope is therefore also
+    reported; use distinct names for meshes and shapes. Strings and comments never
+    match. Values passed through containers, attributes or function returns are
+    not tracked.
     """
     import ast
 
@@ -1243,112 +1244,54 @@ def check_netgen_scale_after_generate(filepath: str, lines: List[str]) -> List[D
         tree = ast.parse("\n".join(lines))
     except SyntaxError:
         return []
-    msg = ("'{var}.Scale()' rescales a mesh produced by GenerateMesh. The OCC geometry "
-           "saved with the mesh keeps the old units, so a later Mesh.Curve(k>=2) projects "
-           "the nodes onto the unscaled CAD and explodes the surface. Scale the CAD shape "
-           "before meshing (shape.Scale(Pnt(0,0,0), factor)) and mesh in final units.")
-    scopes = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
-    hits = {}
+    msg = ("'{var}.Scale()' is called on a name that holds a GenerateMesh result in this "
+           "scope. Rescaling a generated mesh leaves the OCC geometry saved with it in the "
+           "old units, so a later Mesh.Curve(k>=2) projects the nodes onto the unscaled CAD. "
+           "Scale the CAD shape before meshing (shape.Scale(Pnt(0,0,0), factor)); if this "
+           "name holds a shape here, give meshes and shapes distinct names.")
+    nested = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+
+    def own_nodes(scope):
+        stack = list(ast.iter_child_nodes(scope))
+        while stack:
+            node = stack.pop()
+            if isinstance(node, nested):
+                continue
+            yield node
+            stack.extend(ast.iter_child_nodes(node))
 
     def is_generate(node):
         return (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
                 and node.func.attr == "GenerateMesh")
 
-    def scan(node, state):
-        stack = [node]
-        while stack:
-            n = stack.pop()
-            if isinstance(n, scopes):
-                continue
-            if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
-                    and n.func.attr == "Scale" and isinstance(n.func.value, ast.Name)
-                    and n.func.value.id in state):
-                hits.setdefault((n.lineno, n.col_offset), n.func.value.id)
-            stack.extend(ast.iter_child_nodes(n))
-
-    def names(target):
-        if isinstance(target, ast.Name):
-            return [target.id]
-        if isinstance(target, (ast.Tuple, ast.List)):
-            return [x for e in target.elts for x in names(e)]
-        if isinstance(target, ast.Starred):
-            return names(target.value)
-        return []
-
-    def bind(state, target, value):
-        state = set(state)
-        if isinstance(target, ast.Name) and value is not None and (
-                is_generate(value) or (isinstance(value, ast.Name) and value.id in state)):
-            state.add(target.id)
-        else:
-            state.difference_update(names(target))
-        return state
-
-    def block(stmts, state):
-        for s in stmts:
-            state = stmt(s, state)
-        return state
-
-    def loop(body, orelse, state):
-        out = set(state)
-        for _ in range(2):          # second pass carries names around the back edge
-            out |= block(body, out)
-        return out | block(orelse, out)
-
-    def stmt(s, state):
-        if isinstance(s, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            for d in s.decorator_list:
-                scan(d, state)
-            block(s.body, set())
-            return state - {s.name}
-        if isinstance(s, ast.ClassDef):
-            block(s.body, set())
-            return state - {s.name}
-        if isinstance(s, ast.Assign):
-            scan(s.value, state)
-            for target in s.targets:
-                scan(target, state)
-                state = bind(state, target, s.value)
-            return state
-        if isinstance(s, (ast.AnnAssign, ast.AugAssign)):
-            if s.value is not None:
-                scan(s.value, state)
-            return bind(state, s.target, s.value if isinstance(s, ast.AnnAssign) else None)
-        if isinstance(s, ast.If):
-            scan(s.test, state)
-            return block(s.body, set(state)) | block(s.orelse, set(state))
-        if isinstance(s, (ast.For, ast.AsyncFor)):
-            scan(s.iter, state)
-            return loop(s.body, s.orelse, state - set(names(s.target)))
-        if isinstance(s, ast.While):
-            scan(s.test, state)
-            return loop(s.body, s.orelse, state)
-        if isinstance(s, (ast.With, ast.AsyncWith)):
-            for item in s.items:
-                scan(item.context_expr, state)
-                if item.optional_vars is not None:
-                    state = state - set(names(item.optional_vars))
-            return block(s.body, state)
-        if isinstance(s, ast.Try) or type(s).__name__ == "TryStar":
-            after = block(s.body, set(state))
-            merged = state | after
-            for h in s.handlers:
-                merged |= block(h.body, set(merged) - ({h.name} if h.name else set()))
-            merged |= block(s.orelse, set(after))
-            return block(s.finalbody, merged)
-        if type(s).__name__ == "Match":
-            scan(s.subject, state)
-            out = set(state)
-            for case in s.cases:
-                out |= block(case.body, set(state))
-            return out
-        scan(s, state)
-        return state
-
-    block(tree.body, set())
-    return [{'line': line, 'severity': 'HIGH', 'rule': 'netgen-scale-after-generate',
-             'message': msg.format(var=name)}
-            for (line, _col), name in sorted(hits.items())]
+    findings = []
+    scopes = [tree] + [n for n in ast.walk(tree) if isinstance(n, nested) and not isinstance(n, ast.Lambda)]
+    for scope in scopes:
+        nodes = list(own_nodes(scope))
+        pairs = []
+        for node in nodes:
+            if isinstance(node, ast.Assign):
+                pairs += [(tgt, node.value) for tgt in node.targets if isinstance(tgt, ast.Name)]
+            elif isinstance(node, (ast.AnnAssign, ast.NamedExpr)) and node.value is not None \
+                    and isinstance(node.target, ast.Name):
+                pairs.append((node.target, node.value))
+        meshes = {tgt.id for tgt, value in pairs if is_generate(value)}
+        changed = True
+        while changed:                      # close over plain aliases
+            changed = False
+            for tgt, value in pairs:
+                if isinstance(value, ast.Name) and value.id in meshes and tgt.id not in meshes:
+                    meshes.add(tgt.id)
+                    changed = True
+        for node in nodes:
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "Scale" and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id in meshes):
+                findings.append({'line': node.lineno, 'severity': 'HIGH',
+                                 'rule': 'netgen-scale-after-generate',
+                                 'message': msg.format(var=node.func.value.id)})
+    findings.sort(key=lambda f: f['line'])
+    return findings
 
 
 def check_coil_scalar_potential_as_lift(filepath: str, lines: List[str]) -> List[Dict]:
