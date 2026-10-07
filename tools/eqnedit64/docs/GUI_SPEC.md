@@ -388,7 +388,7 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 - 2026-10-08 の UXP-0031 により、両版は条件付き RichEdit-HTML OMML の CF_HTML を主形式とする。
 登録 `MathML` / `MathML Presentation` は発行しない。上下限を左寄せより優先する
 UXP-0029 の方針は維持する。8361ec916 の Web H5/H6 はユーザー確認済み。
-新しい EXE 経路は署名済み候補で H1/H5/H6/H7 を再確認する。
+署名済み ea787664d の EXE H1/H5/H6 は OK。H7 の PowerPoint 色欠落は既知の制限として承認済み。
 実クリップボードの bit gate と EXE 手動試験の合格後、対象コーパスの Web 手動試験を省略できる。
 詳細と未検証範囲は末尾の Shared Office clipboard contract を参照。
 画像への退化・空のMathZone・上下限の欠落は合格としない。明示 `&` と保存TeXは保持する。
@@ -631,7 +631,7 @@ withdrawn: the native registered route's observed red contradicts it. The Web
 CF_HTML colour loss remains observed; its exact internal cause is unverified.
 Outer CF_HTML CSS and Office LaTeX are optional, unverified alternatives.
 
-### Web PowerPoint release blocker (2026-10-08)
+### Historical Web PowerPoint blocker (resolved by 8361ec916 H5/H6)
 
 H5 Web becomes plain text `y = ∫ a b x 2 d x`; H6 Web becomes one plain-text
 line `y = ∫ a b x 2 d x z = 1`. Earlier Web OK reports are superseded even
@@ -651,8 +651,8 @@ plus MathML for non-Office consumers and raw TeX as text/plain. Independent
 aligned rows become one editable OMML eqArr, anchored aligned rows also use
 eqArr, and internal cases/pmatrix remain matrices. Integral limits use nary
 sub/sup. This is an implementation candidate, not measured Office success.
-Native EXE retains its qualified registered-MathML route. The release stays
-held until Web H5 bounds/editability and H6 bounds/editability/two rows pass
+At this earlier candidate stage the EXE retained registered MathML and release
+was held until Web H5 bounds/editability and H6 bounds/editability/two rows passed
 in the user's current PowerPoint. No byte-parity requirement is reinstated.
 
 Styles/colour are retained for normal, italic, bold and bold-italic runs.
@@ -697,10 +697,29 @@ qualify the shared route. Evidence records source SHA, Web/corpus hashes, mode,
 per-item byte lengths and SHA-256 values. This gate proves corpus payload identity,
 not Office rendering or equivalence of all accepted TeX.
 
-The changed EXE route requires one signed-build H1/H5/H6/H7 PowerPoint hand test.
+The changed EXE route was tested on signed ea787664d (H1/H5/H6 OK; H7
+colour loss accepted for 3.1.2).
 After this qualification, a passing actual-wire gate on the release candidate
 plus an EXE hand test permits omitting the separate Web hand test for covered
 fixtures. A missing/failing gate, a changed shared transport contract or different
 clipboard/browser/Office environment requires renewed Web qualification.
-The current candidate has producer evidence only; hosted wire CI and the new
-signed EXE hand test remain pending. No new colour-retention claim is made.
+Hosted CI 37692902458 verified 22/22 actual-wire byte matches on ea787664d.
+User H1/H5/H6 EXE passed; H7 colour loss is accepted for 3.1.2 as documented below.
+
+
+## 3.1.2 PowerPoint colour limitation (UXP-0030/0031)
+
+PowerPoint import drops colour on the shared conditional OMML CF_HTML route in
+both editions. The user measured all r10 colour variants A–G as not red on
+2026-10-08 and approved releasing 3.1.2 with this documented limitation. Colour
+support remains enabled in the native/Web canvas, SVG, saved TeX, and native
+EMF/DIB output. This decision does not strip colour from the source or renderer.
+PowerPoint colour retention is not an acceptance requirement for this release.
+
+User hand tests: H1/H5/H6 EXE OK on ea787664d; H7 EXE canvas red, PowerPoint
+not red. Web H5/H6 OK on 8361ec916. Hosted CI 37692902458 verified 22/22 primary
+OMML branches byte-identical on the actual Windows clipboard at ea787664d.
+This supports the UXP-0031 EXE-test plus bit-gate qualification for the covered
+corpus; it does not prove every TeX input or every Office/browser environment.
+Changed payload behaviour requires renewed qualification. The release metadata
+commit still requires its own CI. Formal publication follows the release gates.
