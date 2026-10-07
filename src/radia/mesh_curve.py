@@ -52,13 +52,17 @@ def mesh_measures(mesh):
     return float(ng.Integrate(one, mesh, ng.BND)), float(ng.Integrate(one, mesh, ng.VOL))
 
 
-def _read_vol(vol_path):
-    """Return ``(points, tail_lines)`` of a text Netgen ``.vol``.
+def _read_vol(vol_path, *, with_points=True):
+    """Return ``(points, dim, tail_lines)`` of a text Netgen ``.vol``.
 
-    ``points`` is the list of stored vertex coordinates; ``tail_lines`` are the
-    non-empty lines after ``endmesh`` (the geometry archive, if any).
+    ``points`` is a flat ``array('d')`` of the stored vertex coordinates
+    (``dim`` values per point; empty when ``with_points`` is False);
+    ``tail_lines`` are the non-empty lines after ``endmesh`` (the geometry
+    archive, if any).
     """
-    points, tail = [], []
+    from array import array
+
+    points, dim, tail = array("d"), 0, []
     with open(vol_path, "r", errors="ignore") as handle:
         lines = iter(handle)
         for line in lines:
@@ -66,11 +70,14 @@ def _read_vol(vol_path):
             if s == "points":
                 count = int(next(lines).split()[0])
                 for _ in range(count):
-                    points.append(tuple(float(v) for v in next(lines).split()))
+                    values = next(lines).split()
+                    if with_points:
+                        dim = len(values)
+                        points.extend(float(v) for v in values)
             elif s == "endmesh":
                 tail = [x.strip() for x in lines if x.strip()]
                 break
-    return points, tail
+    return points, dim, tail
 
 
 def vol_geometry_kind(vol_path):
@@ -81,7 +88,7 @@ def vol_geometry_kind(vol_path):
     ``"csg"`` for a CSG description, ``"other"`` for unrecognised trailing
     text and ``None`` when nothing follows ``endmesh``.
     """
-    return _geometry_kind(_read_vol(vol_path)[1])
+    return _geometry_kind(_read_vol(vol_path, with_points=False)[2])
 
 
 def _geometry_kind(tail):
@@ -146,7 +153,7 @@ def ensure_curve_order(mesh, order, *, vol_path, extent_ratio=2.0, measure_ratio
     if current >= order:
         return {"action": "kept", "curve_order": current}
 
-    stored_points, tail = _read_vol(vol_path)
+    stored, dim, tail = _read_vol(vol_path)
     kind = _geometry_kind(tail)
     if kind is None:
         raise CurveOrderError(
@@ -158,17 +165,18 @@ def ensure_curve_order(mesh, order, *, vol_path, extent_ratio=2.0, measure_ratio
         raise CurveOrderError(
             f"{what}: embedded geometry ({kind}) is not supported for guarded curving "
             f"(OCC archives only). Curve it in the originating mesher.")
-    if len(stored_points) != mesh.nv:
+    count = len(stored) // dim if dim else 0
+    if count != mesh.nv:
         raise CurveOrderError(
             f"{what}: mesh has {mesh.nv} vertices but {vol_path} stores "
-            f"{len(stored_points)}; it is not the mesh loaded from that file.")
-    scale = 0.0
+            f"{count}; it is not the mesh loaded from that file.")
+    scale = max((abs(x) for x in stored), default=0.0)
     worst = 0.0
-    for v, q in zip(mesh.vertices, stored_points):
+    for i, v in enumerate(mesh.vertices):
         p = v.point
-        for k in range(len(p)):
-            scale = max(scale, abs(q[k]))
-            worst = max(worst, abs(p[k] - q[k]))
+        base = i * dim
+        for k in range(min(dim, len(p))):
+            worst = max(worst, abs(p[k] - stored[base + k]))
     if worst > 1e-9 * max(scale, 1e-300):
         raise CurveOrderError(
             f"{what}: mesh vertices differ from the points stored in {vol_path} by up "
