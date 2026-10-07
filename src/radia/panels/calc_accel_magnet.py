@@ -374,24 +374,31 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
             a_kelvin = float(np.max(np.linalg.norm(coords, axis=1)))
     except Exception:
         pass
-    if add_periodic_kelvin(mesh, kelvin_center):
+    kelvin_periodic = add_periodic_kelvin(mesh, kelvin_center)
+    if kelvin_periodic:
         mesh = ngsolve.Mesh(mesh.ngmesh)
         _log(f"PERIODIC:added (a={a_kelvin:.4f}, offset={kelvin_center})")
 
     # The Kelvin transformation needs a curved Kelvin sphere: the
     # (R/rho')^2 reluctivity scaling assumes a smooth sphere, and a
     # polyhedral one produces large errors outside the shell (validated
-    # 2026-04-17: 1.15% vs 2D axisym at geometry order 2).  Loading the
-    # .vol already applies its stored curvedelements; Mesh.Curve on a
-    # loaded mesh would flatten a CAD-less Cubit export or borrow another
-    # geometry, so only curve through the guarded helper.
+    # 2026-04-17: about 1.15% vs 2D axisym at geometry order 2).  Loading
+    # the .vol already applies its stored curvedelements; Mesh.Curve on a
+    # loaded mesh would flatten a CAD-less Cubit export or use another
+    # mesh's geometry, so only curve through the guarded helper.  Without a
+    # Kelvin shell a lower stored geometry order is kept (FE order and
+    # geometry order are independent).
     if fes_order >= 2:
         from radia.mesh_curve import CurveOrderError, ensure_curve_order
         try:
-            curve = ensure_curve_order(mesh, fes_order, what=str(vol_file))
+            with ngsolve.TaskManager():
+                curve = ensure_curve_order(mesh, fes_order, vol_path=vol_file,
+                                           what=str(vol_file))
+            _log(f"MESH:geometry order {curve['curve_order']} ({curve['action']})")
         except CurveOrderError as exc:
-            return {"error": str(exc)}
-        _log(f"MESH:geometry order {curve['curve_order']} ({curve['action']})")
+            if kelvin_periodic or exc.mesh_modified:
+                return {"error": str(exc)}
+            _log(f"MESH:geometry order {mesh.GetCurveOrder()} kept ({exc})")
 
     t_mesh = time.perf_counter() - t0
     materials = mesh.GetMaterials()  # domain-indexed (short tuple)

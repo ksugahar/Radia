@@ -70,3 +70,38 @@ def test_accel_application_energy_matches_direct(tmp_path, order):
         assert result["W_mag"] > 0
     assert iterative["W_mag"] == pytest.approx(direct["W_mag"], rel=1e-6)
     np.testing.assert_allclose(iterative["B_origin"], direct["B_origin"], rtol=1e-6, atol=1e-12)
+
+
+def test_accel_cadless_flat_mesh_keeps_stored_order(tmp_path):
+    """A CAD-less order-1 .vol without a Kelvin shell runs at FE order 2.
+
+    FE order and geometry order are independent; the panel must neither
+    re-curve the loaded mesh nor reject it when no curved boundary needs it.
+    """
+    from netgen.occ import Box, Pnt, OCCGeometry
+    from radia.em_material import EMMaterial
+    from radia.panels.calc_accel_magnet import solve_accel
+
+    body = Box(Pnt(-.01, -.01, -.01), Pnt(.01, .01, .01))
+    body.mat("yoke")
+    body.faces.name = "outer"
+    with_cad = tmp_path / "yoke.vol"
+    OCCGeometry(body).GenerateMesh(maxh=.012).Save(str(with_cad))
+    lines = with_cad.read_text().splitlines()
+    cadless = tmp_path / "yoke_cadless.vol"
+    cadless.write_text("\n".join(lines[:lines.index("endmesh") + 1]) + "\n")
+    coil = tmp_path / "coil.py"
+    coil.write_text(
+        "from radia.coil_builder import CoilBuilder\n"
+        "def build_coil():\n"
+        "    return (CoilBuilder(current=100).set_start([.03,-.05,0])\n"
+        "            .set_cross_section(.002,.002).add_straight(.1))\n",
+        encoding="utf-8",
+    )
+    common = dict(coil_script=str(coil), formulation="a", fes_order=2,
+                  mat=EMMaterial("linear", 0, 100), solver="sparsecholesky")
+    reference = solve_accel(vol_file=str(with_cad), **common)
+    result = solve_accel(vol_file=str(cadless), **common)
+    assert "error" not in result, result.get("error")
+    assert result["converged"]
+    assert result["W_mag"] == pytest.approx(reference["W_mag"], rel=1e-9)
