@@ -116,8 +116,14 @@ def solve_kelvin_benchmark(vol_path, mu_r=100.0, H0=1.0,
         mesh = ngsolve.Mesh(mesh.ngmesh)
 
     if fes_order >= 2:
-        mesh.Curve(fes_order)
-        _log(f"mesh.Curve({fes_order}) applied")
+        # Loading applied the stored curving; Mesh.Curve on a loaded mesh is
+        # only safe against its own embedded CAD (see radia.mesh_curve).
+        from radia.mesh_curve import CurveOrderError, ensure_curve_order
+        try:
+            curve = ensure_curve_order(mesh, fes_order, what=str(vol_path))
+        except CurveOrderError as exc:
+            return {"error": str(exc)}
+        _log(f"geometry order {curve['curve_order']} ({curve['action']})")
 
     # ---- Build Periodic FES with Dirichlet BCs ----
     #
