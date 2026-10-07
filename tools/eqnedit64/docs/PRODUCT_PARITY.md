@@ -1,6 +1,6 @@
 # Eqnedit product parity policy
 
-## Native rendering acceptance (3.0.16)
+## Native rendering acceptance (3.1.0)
 
 Every supported decoration must render its own mathematical shape, not merely
 nonempty ink. A valid TeX/MathML result does not certify the native canvas.
@@ -27,7 +27,8 @@ and U+2323, not the intersection and union signs. A face may be a word only
 where the inserted character has no standalone shape, such as the combining
 overlay behind `\not`.
 
-Every face character must be in the embedded Latin Modern Math cmap.
+The embedded Eqnedit Math font is a TrueType-outline derivative of Latin Modern Math.
+Every face character must be in its cmap.
 `pick_button_font` gathers all faces into one sample and accepts a font only if
 it owns the whole sample, so an unavailable character does not blank its own
 key — it rejects the math font and redraws every palette in a fallback. That
@@ -35,7 +36,7 @@ all-or-nothing gate stays; the sample is what must be kept clean.
 
 The cmap check predicts that choice. `--self-test` observes it: it runs the
 production chooser, reads back the physical face, and exits 243 naming the
-substitute when the palette is not drawing in Latin Modern Math. Keep both —
+substitute when the palette is not drawing in Eqnedit Math. Keep both —
 the static check says which character is at fault, the runtime check says
 whether the shipped binary actually got the font.
 

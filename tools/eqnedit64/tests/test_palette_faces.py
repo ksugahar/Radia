@@ -9,10 +9,10 @@ at the KEY.
     `\\star` renders as U+22C6 STAR OPERATOR, not U+2605 BLACK STAR.  The
     key promised one glyph and inserted another.
 
-2.  U+2605 is not in Latin Modern Math.  `pick_button_font` concatenates
+2.  U+2605 is not in Eqnedit Math.  `pick_button_font` concatenates
     EVERY palette face into one sample and demands a font that owns the whole
     sample, so a single unavailable character does not blank one key -- it
-    rejects Latin Modern Math outright and drops the ENTIRE palette to the
+    rejects Eqnedit Math outright and drops the ENTIRE palette to the
     next candidate.  Cambria Math fails the same sample, so all 245 keys were
     drawn in Segoe UI Symbol.  That is why the prime family read as typewriter
     quotes: a reader could no longer tell x'' from x-double-prime.
@@ -92,7 +92,7 @@ def test_every_face_glyph_is_in_the_embedded_math_font():
          for character in face
          if ord(character) > 0x20 and ord(character) not in covered})
     assert not missing, (
-        "%d palette face character(s) are absent from Latin Modern Math. "
+        "%d palette face character(s) are absent from Eqnedit Math. "
         "pick_button_font tests the whole sample at once, so each one of "
         "these drops EVERY key in EVERY palette to a fallback font: %s"
         % (len(missing),

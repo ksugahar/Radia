@@ -11,6 +11,19 @@ assert.deepEqual(
 );
 
 let edit;
+// Exercise production palette items, including body selection and caret placement.
+for (const environment of ["pmatrix", "cases", "aligned"]) {
+  const item = editor.palettes.flatMap(p => p.items).find(item =>
+    item[1].startsWith("\\begin{" + environment + "}"));
+  assert(item, environment);
+  const expected = environment === "aligned"
+    ? "\\begin{aligned}\n  {x} &= {} \\\\\n  {} &= {}\n\\end{aligned}"
+    : "\\begin{" + environment + "}\n  {x} & {} \\\\\n  {} & {}\n\\end{" + environment + "}";
+  const inserted = editor.composePaletteInsertion("x", 0, 1, item);
+  assert.equal(inserted.value, expected);
+  assert.equal(inserted.caret, expected.indexOf("{x}") + 2);
+  assert(!item[1].includes("\n"), "insertion must not mutate the catalogue");
+}
 // Suffix palettes share attachment semantics, not a prime-only exception.
 const suffixes = ["^{\\circ} ", "^{*} ", "_{*} ", "^{\\flat} ",
                   "^{\\sharp} ", "^{\\prime }", "^{}", "_{}"];
