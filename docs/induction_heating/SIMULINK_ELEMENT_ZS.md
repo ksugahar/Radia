@@ -61,3 +61,40 @@ Zsはシミュレーション中に固定します。電流変更に対して磁
 `skin_depth_wp_mm` は null、`impedance_model` は `specified-panel` です。
 `writeIHPanelImpedance` は全要素の順序付き複素ベクトルを受け取ります。
 座標・材料領域からの要素選択は呼び出し側で `centroids_m` を使って行います。
+
+## 既存経路を通す実行例
+
+`validation_test/induction_heating/run_panel_zs_student_workflow.py` は、既存の
+形状・電磁アセンブラを使って小さなワークとコイルを生成し、ひな形 CLI →
+`writeIHPanelImpedance` → Geometry Update → native Eddy/Thermal を通します。
+公式 MATLAB MCP と Simulink Agentic Toolkit の `model_edit` でマスクを設定し、
+モデルはジョブ用ディレクトリに生成します。新しいソルバーや追跡対象の SLX を
+追加する例ではありません。
+
+固定した Radia wheel/native runtime、互換 MEX、`cubit_mesh_export`、MATLAB、
+公式 MCP/Toolkit、Python MCP SDK と pytest がある LAB で実行します。
+既存 MATLAB がある場合は追加起動せず、明示したセッションを再利用する必要があります。
+この実行例は MATLAB が存在しない場合だけ、公式 MCP が所有する1セッションを起動します。
+各オプションには、そのホストの実在する絶対パスを指定します。
+ソースツリーをジョブ内に転送して実行してください。固定 wheel の native 部分を
+使い、転送した Python アダプタをジョブ内の bootstrap で読み込みます。
+editable install は不要です。MEX は検証対象の native ソースから作成し、
+`radia_mex.mexw64.build.json` を同じフォルダに置いてください。
+
+```powershell
+$server = Join-Path $env:USERPROFILE '.matlab\agentic-toolkits\bin\matlab-mcp-server.exe'
+$tools = Join-Path $env:USERPROFILE '.matlab\agentic-toolkits\simulink\tools\tools.json'
+$mex = Read-Host 'Compatible native MATLAB directory (absolute path)'
+python validation_test/induction_heating/run_panel_zs_student_workflow.py --job C:\temp\panel-zs-student --matlab-mcp $server --toolkit-tools $tools --mex-dir $mex
+```
+
+パス表記の違い、入力不変時の再構築省略と workspace 再読込、保存・再オープン、
+Zs 変更時の再構築と snapshot hash、Zs 指定を消した場合の uniform モードを確認します。
+solve が記録した要素順の複素 Zs 配列を指定値と照合し、非一様指定時と
+uniform 時の電力に差が出ることも確認します。差の符号は判定条件にしません。
+成功時の `result.json` と失敗時の `failure.json`、公式ツール呼出しの
+`tool-events.json` はジョブディレクトリに保存します。電磁・熱の積分電力保存と
+native 出力の有限性は接続の検証です。独立 FEM 比較は別途必要で、設定の
+`independent_fem_validation.status` は `not-performed` のままです。
+この自前例題の簡潔な検証結果は
+`validation_test/induction_heating/results/panel_zs_student_workflow.json` に保存しています。
