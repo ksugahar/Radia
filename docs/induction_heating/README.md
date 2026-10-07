@@ -17,6 +17,7 @@ Numerical evidence and its checked JSON remain under `validation_test/`.
 | Collaborate on an application model | [Radia Simulink library](../../matlab/README.md) |
 | Read executable field-transfer examples | [Thermal transfer tests](../../tests/test_ih_thermal_transfer.py) |
 | Inspect electromagnetic/thermal operator checks | [IH physics validation](../../validation_test/induction_heating/README.md#simulink-operator-physics-golden) |
+| Analyse a workpiece with a through-hole | [Workpieces with a through-hole](workpiece_holes.md) and its [BEM/FEM validation](../../validation_test/induction_heating/bored_workpiece/README.md) |
 
 The manufactured thermal transient, field-transfer contracts and real
 electromagnetic operator check answer different questions. Use the validation
