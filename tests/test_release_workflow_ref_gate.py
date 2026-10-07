@@ -212,7 +212,10 @@ def test_eqnedit64_release_requires_exact_successful_tag_ci():
     assert "$manifest.source_sha -cne $env:EQNEDIT64_SHA" in release
     assert "name: eqnedit64-signed-standalone" in release
     assert "needs: [qualify, signed-standalone]" in release
-    assert "Get-AuthenticodeSignature" in release
+    # Signer identity is the pinned-thumbprint helper (Authenticode Valid +
+    # approved certificate), not a CN-only check.
+    assert "assert_release_signature.ps1" in release
+    assert "Assert-EqneditReleaseSignature $exe -AllowUntrustedRoot" in release
     assert "CN=ksugahar" in release
     assert "id-token: write" in release
     assert "pypa/gh-action-pypi-publish@release/v1" in release
