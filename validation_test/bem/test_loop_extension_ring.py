@@ -12,9 +12,11 @@ recover the net circulating current alpha to a few percent, and its
 frozen (alpha = 0) sub-solve must reproduce the plain production
 ScalarBIESIBCSolver solve exactly (same operators, same gauge).
 
-The coarse and finer analytic-ring meshes gave |alpha|/|I| = 0.982-0.983
-and frozen/production match = 1.0000.  These stored values are the durable
-regression band for the promoted loop extension.
+The analytic acceptance bands include finite wire thickness and surface
+discretization error. Distributed current/normal-flux work replaces the
+cut-line closure; these physical bands are unchanged. The frozen diagnostic
+still reproduces the ordinary scalar BIE. Three-level work-form convergence
+is recorded separately, rather than treating a coarse value as exact.
 """
 from __future__ import annotations
 

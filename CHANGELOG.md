@@ -5,6 +5,16 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Genus-1 dense P1 SIBC loop closure now uses distributed Galerkin work
+  with both tangential-current and normal-flux magnetic terms. Its
+  magnetic source uses the scattered field; electric work and heat use
+  the total field. This changes genus-1 results; the ordinary scalar BIE
+  and genus-0 route are unchanged. Loop work reciprocity and seam
+  diagnostics are reported. Flat undeformed triangular surfaces are required.
+  A self-authored three-level ring study shows an approximately 1% current
+  correction at its finest level. Historical cut-line results in that study
+  fail the existing CLI reaction/heat power gate; corrected results pass.
+
 - Per-panel weak P1 ESIM has an opt-in adaptive log-field table evaluator
   (`--esim-panel-evaluator table`) with empirical interpolation checks and
   direct certification of every panel at the final accepted field. Direct

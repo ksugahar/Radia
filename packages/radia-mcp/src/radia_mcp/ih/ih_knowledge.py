@@ -1972,6 +1972,13 @@ For genus 1, ``--wp-loop-dof auto`` activates the linear-SIBC,
 intree-dense, P1 extension. Both spatial heat and reaction include the
 harmonic carrier, not just the reported total loss. The reciprocal
 current.A contribution on the cut-open field retains the cut term.
+The loop closure uses distributed Galerkin electric work and magnetic
+work including both tangential current and normal flux. Magnetic work
+acts on the scattered field; electric work and heat use the total field.
+Work pairings are reciprocal; the mixed BIE matrix is not symmetric.
+This path requires flat undeformed surface triangles. Its additional P0
+single layer is dense in the number of faces and cached per geometry;
+carrier, seam, quadrature and surface refinement still require checks.
 Unsupported weak handle combinations (ESIM, HACApK, P2, genus >= 2)
 raise before BEM assembly. There is no ``off`` fallback. Surface winding
 is established by face-BFS plus signed volume, never centroid flipping
