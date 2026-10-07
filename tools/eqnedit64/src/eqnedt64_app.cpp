@@ -43,6 +43,7 @@
 #include "eqnedit64_resource.h"
 #include "eqnedit64_version.h"
 #include "mathml_emitter.h"
+#include "office_html.h"
 #include "palettes.h"
 #include "tex_document.h"
 
@@ -1654,40 +1655,23 @@ bool open_clipboard_with_retry(HWND owner) {
 
 bool clipboard_set(const std::string& latex) {
     const std::wstring officeText = office_latex_text(latex);
-    const std::string mathMlUtf8 =
-        eqnedit::latex_to_office_mathml_fragment(
-            latex, kOfficePasteFontPoints);
-    const std::wstring registeredMathMl = wide_utf8(
-        eqnedit::latex_to_mathml(latex, kOfficePasteFontPoints));
-    /* Keep CF_HTML's inline sentinel at the accepted 18 pt PowerPoint size
-     * so its final character and next insertion point agree. */
-    std::string officeRows = mathMlUtf8;
-    size_t breakAt = 0;
-    while ((breakAt = officeRows.find("<br>", breakAt)) !=
-           std::string::npos) {
-        officeRows.insert(breakAt, kOfficeInlineSentinel);
-        breakAt += std::strlen(kOfficeInlineSentinel) + 4;
+    std::string officeHtml;
+    try {
+        officeHtml = cf_html_fragment(eqnedit::latex_to_office_html(latex));
+    } catch (const std::exception&) {
+        update_status(L"この数式はOffice形式に変換できませんでした");
+        return false;
     }
-    const std::string officeHtml = cf_html_fragment(
-        officeRows + kOfficeInlineSentinel);
-    const bool registerSingleMath =
-        officeRows.find("<br>") == std::string::npos;
     HGLOBAL unicode = global_copy(officeText.c_str(),
         (officeText.size() + 1) * sizeof(wchar_t));
-    HGLOBAL mathMl = global_copy(registeredMathMl.c_str(),
-        (registeredMathMl.size() + 1) * sizeof(wchar_t));
-    HGLOBAL mathMlPresentation = global_copy(registeredMathMl.c_str(),
-        (registeredMathMl.size() + 1) * sizeof(wchar_t));
     HGLOBAL html = global_copy(officeHtml.c_str(), officeHtml.size() + 1);
     HGLOBAL rawLatex = global_copy(latex.c_str(), latex.size() + 1);
     HENHMETAFILE emf = equation_emf(latex, g.style);
     HGLOBAL dib = equation_dibv5(latex, g.style);
-    if (!unicode || (registerSingleMath && (!mathMl || !mathMlPresentation)) ||
+    if (!unicode ||
         !html ||
         !open_clipboard_with_retry(g.main)) {
         if (unicode) GlobalFree(unicode);
-        if (mathMl) GlobalFree(mathMl);
-        if (mathMlPresentation) GlobalFree(mathMlPresentation);
         if (html) GlobalFree(html);
         if (rawLatex) GlobalFree(rawLatex);
         if (emf) DeleteEnhMetaFile(emf);
@@ -1697,8 +1681,6 @@ bool clipboard_set(const std::string& latex) {
     if (!EmptyClipboard()) {
         CloseClipboard();
         GlobalFree(unicode);
-        GlobalFree(mathMl);
-        GlobalFree(mathMlPresentation);
         GlobalFree(html);
         if (rawLatex) GlobalFree(rawLatex);
         if (emf) DeleteEnhMetaFile(emf);
@@ -1706,23 +1688,8 @@ bool clipboard_set(const std::string& latex) {
         return false;
     }
 
-    /* Current PowerPoint builds flatten MathML inside CF_HTML into ordinary
-     * text. Publish the registered MathML formats as well: PowerPoint imports
-     * these into editable OMML, preserving integral limits and scripts. Keep
-     * CF_HTML and the other representations for consumers that prefer them. */
-    bool mathMlOk = !registerSingleMath;
-    bool mathMlPresentationOk = !registerSingleMath;
-    if (registerSingleMath) {
-        const UINT mathMlFormat = RegisterClipboardFormatW(L"MathML");
-        mathMlOk = mathMlFormat &&
-            SetClipboardData(mathMlFormat, mathMl) != nullptr;
-        if (mathMlOk) mathMl = nullptr;
-        const UINT mathMlPresentationFormat =
-            RegisterClipboardFormatW(L"MathML Presentation");
-        mathMlPresentationOk = mathMlPresentationFormat &&
-            SetClipboardData(mathMlPresentationFormat, mathMlPresentation) != nullptr;
-        if (mathMlPresentationOk) mathMlPresentation = nullptr;
-    }
+    /* UXP-0031: registered MathML must not compete with the shared conditional
+     * OMML HTML payload. The Office bit gate compares this primary route. */
     const UINT htmlFormat = RegisterClipboardFormatW(L"HTML Format");
     const bool htmlOk = htmlFormat &&
         SetClipboardData(htmlFormat, html) != nullptr;
@@ -1740,8 +1707,6 @@ bool clipboard_set(const std::string& latex) {
     CloseClipboard();
 
     if (unicode) GlobalFree(unicode);
-    if (mathMl) GlobalFree(mathMl);
-    if (mathMlPresentation) GlobalFree(mathMlPresentation);
     if (html) GlobalFree(html);
     if (rawLatex) GlobalFree(rawLatex);
     if (emf) DeleteEnhMetaFile(emf);
@@ -1749,7 +1714,7 @@ bool clipboard_set(const std::string& latex) {
     /* TeX, visible Office Math, Unicode fallback, EMF, and opaque
      * DIBV5 are the normal-copy product contract. Cut must not delete the
      * selection if any required representation failed. */
-    return mathMlOk && mathMlPresentationOk && htmlOk && unicodeOk &&
+    return htmlOk && unicodeOk &&
         latexOk && emfOk && dibOk;
 }
 

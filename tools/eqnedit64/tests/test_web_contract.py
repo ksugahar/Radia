@@ -173,6 +173,8 @@ def test_office_mathml_is_validated_and_styles_survive_to_omml() -> None:
     assert 'setAttribute("mathsize", "18pt")' in canonical
     assert 'querySelectorAll("mstyle")' not in canonical
     assert 'officeInheritedAttribute(node, "mathcolor")' in SOURCE
+    assert "body = officeCanonicalRuns(body)" in SOURCE
+    assert "colourContext.fillStyle.toUpperCase()" in SOURCE
     assert 'attribute.name.indexOf("data-") === 0' in canonical
     assert 'setAttribute("largeop", "true")' in canonical
     assert 'cells[0].textContent.trim() === ""' in SOURCE

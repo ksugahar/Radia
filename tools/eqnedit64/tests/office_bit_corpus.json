@@ -1,0 +1,90 @@
+[
+  {
+    "id": "H1-H5",
+    "tex": "y=\\int_a^b x^2\\,dx"
+  },
+  {
+    "id": "H6-anchored",
+    "tex": "\\begin{aligned}y&=\\int_a^b x^2\\,dx\\\\z&=1\\end{aligned}"
+  },
+  {
+    "id": "H6-unanchored",
+    "tex": "\\begin{aligned}y=\\int_a^b x^2\\,dx\\\\z=1\\end{aligned}"
+  },
+  {
+    "id": "cases",
+    "tex": "f=\\begin{cases}\\int_a^b x\\,dx & x>0\\end{cases}"
+  },
+  {
+    "id": "pmatrix",
+    "tex": "\\begin{pmatrix}\\int_a^b x\\,dx & 0\\\\0 & 1\\end{pmatrix}"
+  },
+  {
+    "id": "red",
+    "tex": "\\color{red}{x}"
+  },
+  {
+    "id": "nested-colour",
+    "tex": "\\textcolor{red}{x+\\textcolor{blue}{y}}"
+  },
+  {
+    "id": "mathbb",
+    "tex": "\\mathbb{CHNPQRZ}"
+  },
+  {
+    "id": "mathcal",
+    "tex": "\\mathcal{BEFHILMR}"
+  },
+  {
+    "id": "mathfrak",
+    "tex": "\\mathfrak{CHIRZg}"
+  },
+  {
+    "id": "mathsf",
+    "tex": "\\mathsf{Abc012}"
+  },
+  {
+    "id": "mathtt",
+    "tex": "\\mathtt{Az09}"
+  },
+  {
+    "id": "sum",
+    "tex": "\\sum_{i=1}^{n}x_i"
+  },
+  {
+    "id": "root-fraction",
+    "tex": "\\frac{x_1^2}{\\sqrt[3]{y}}"
+  },
+  {
+    "id": "multi-child-root",
+    "tex": "\\sqrt{x+y}"
+  },
+  {
+    "id": "roman",
+    "tex": "\\mathrm{sin}(x)"
+  },
+  {
+    "id": "three-rows",
+    "tex": "\\begin{aligned}I\\\\IIIIIIII\\\\IIIIIIIIIIIIIIII\\end{aligned}"
+  },
+  {
+    "id": "bold",
+    "tex": "\\mathbf{Ax}"
+  },
+  {
+    "id": "bold-symbol",
+    "tex": "\\bm{x}"
+  },
+  {
+    "id": "greek",
+    "tex": "\\alpha+\\beta"
+  },
+  {
+    "id": "bars",
+    "tex": "\\overline{x}+\\underline{y}"
+  },
+  {
+    "id": "accent",
+    "tex": "\\hat{x}"
+  }
+]

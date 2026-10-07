@@ -379,19 +379,18 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 
 | Windows形式 | 内容 | 主な利用先 | 契約 |
 |---|---|---|---|
-| 登録形式 `HTML Format` | inline 18 pt MathML + 18 pt末尾NBSPのCF_HTML | Microsoft 365 PowerPoint / Word / Excel、Web版との共通契約 | 必須 |
+| 登録形式 `HTML Format` | 条件付き 18 pt RichEdit-HTML OMML の CF_HTML | Microsoft 365 PowerPoint / Word / Excel、Web版との共通契約 | 必須 |
 | `CF_UNICODETEXT` | `\[<正規化TeX>\]` | 旧Office、通常の文字貼り付け | 必須 |
 | 登録形式 `LaTeX` | 外側区切りなしのraw UTF-8 TeX断片 | TeX対応ソフト | 必須 |
 | `CF_ENHMETAFILE` | 白背景のスケーラブルEMF | IrfanView、Office、画像ソフト | 必須 |
 | `CF_DIBV5` | 全画素α=255の白背景・黒文字、32-bit top-down DIB、原則192 dpi | ラスター貼り付けフォールバック | 必須 |
 
-- 2026-10-07 の UXP-0029 は、PowerPoint貼り付けで積分上下限とスクリプトの保存を
-左寄せより優先する。Windows版の単一式（cases・行列など式内の表を含む）は
-登録 `MathML` / `MathML Presentation` を発行し、中央寄せの編集可能な
-`m:oMathPara` を許容する。CF_HTML・18 pt末尾NBSPも保持する。
-独立した複数行はCF_HTMLで各行を渡し、左端と上下限を実PowerPoint試験で検査する。
-Web版はブラウザーのCF_HTML経路を使う。現在のPowerPointでのWeb・複数行の上下限は
-隔離Office試験で再確認するまで未検証とし、native/WebのOOXML・PNG一致は保証しない。
+- 2026-10-08 の UXP-0031 により、両版は条件付き RichEdit-HTML OMML の CF_HTML を主形式とする。
+登録 `MathML` / `MathML Presentation` は発行しない。上下限を左寄せより優先する
+UXP-0029 の方針は維持する。8361ec916 の Web H5/H6 はユーザー確認済み。
+新しい EXE 経路は署名済み候補で H1/H5/H6/H7 を再確認する。
+実クリップボードの bit gate と EXE 手動試験の合格後、対象コーパスの Web 手動試験を省略できる。
+詳細と未検証範囲は末尾の Shared Office clipboard contract を参照。
 画像への退化・空のMathZone・上下限の欠落は合格としない。明示 `&` と保存TeXは保持する。
 
 - 通常コピーへPNGを混在させない。PowerPointが画像を優先して編集不能な貼り付けへ
@@ -518,10 +517,10 @@ Web版はブラウザーのCF_HTML経路を使う。現在のPowerPointでのWeb
 | AUT-04 | 3,072件のraw TeXで正規化固定点、有限寸法、有効SVG、有効な24 pt MathMLを満たす | `test_tex_fuzz.py` |
 | AUT-05 | 5分類タブ＋選択分類のパレット、キャンバス、常時表示のTeXソース、ステータスが重ならず、全19パレットが一意に分類され、DPI対応する | `test_palettes.py` / `--status-layout-test` |
 | AUT-06 | `WM_CHAR`、サロゲートペア、キー、構造スロットのダブルクリック選択に加え、完成／未完成TeX、双方向同期、1編集バースト1 Undo、両ペインの直接クリック編集、キャンバス上でTeXコマンドを解釈しないことを非表示で処理できる | `--ui-interaction-test` |
-| AUT-07 | raw TeX、inline 18 pt MathML + NBSPの`HTML Format`、有効EMF、不透明DIBV5を保持する。単一式は登録MathMLを発行し、独立複数行は発行しない | `--self-test` |
+| AUT-07 | raw TeX、条件付き OMML の HTML Format、有効EMF、不透明DIBV5を保持。登録MathMLは発行しない | `test_office_bit_parity.cjs --wire` / `--self-test` |
 | AUT-08 | `dist` は有効な指定開発者署名を持つexe一つで、試験済みexeと同一、静的ランタイム、別ディレクトリ起動可 | `test_background.ps1` |
 | AUT-09 | `.tex`保存は新規 `equation`、既存 `equation*` 外枠維持、`aligned`、UTF-8の契約を満たす | `test_tex_document.exe` / `--operation-test` |
-| AUT-10 | 単一式は登録MathMLを発行し、独立複数行はCF_HTMLを使う。raw TeX・EMF・不透明DIBV5も保持 | `test_external_paste.ps1` |
+| AUT-10 | 単一式・複数行とも条件付き OMML の CF_HTML を主形式とする。raw TeX・EMF・DIBV5も保持 | `test_external_paste.ps1` |
 | AUT-11 | 実PowerPoint UI Pasteで編集可能な上下限を必須とし、単一式の中央寄せを許容する。複数行試験は必須。Webとの描画一致は未検証 | `test_external_paste.ps1` / 隔離Office試験 |
 | AUT-12 | IrfanView `/clippaste` が非空画像を生成し、試験前のクリップボード全形式を復元する | `test_external_paste.ps1` |
 | AUT-13 | Google スライド用PNGとHTMLが同一画像で、300 dpiかつ24 pt基準の同じ物理寸法を持つ | `test_external_paste.ps1` / `--self-test` |
@@ -545,7 +544,7 @@ Web版はブラウザーのCF_HTML経路を使う。現在のPowerPointでのWeb
 | AUT-31 | 1×1から7×9を含む任意長方形を作成でき、行・列追加／削除が既存セル、上下移動、Undo/Redo、TeX再読込み時の空の端セルを保持する | `test_edit.py` / `test_operations_fuzz.py` / `--ui-interaction-test` |
 | AUT-32 | 行列パレットの全入口と行／列操作が実`WM_COMMAND`経路で状態を変え、全253メニュ項目の監査で操作可能項目0件のno-opを満たす | `test_palettes.py` / `--ui-interaction-test` / `--menu-audit` |
 | AUT-33 | パレット、直接ショートカット、2段ショートカットが、正規TeX各文字の開始・終了境界を改行・字下げ後の表示座標へ変換し、新規TeX範囲だけを非アクティブ選択表示する。直後の `\end{...}` 前に入る整形改行を含めず、キャンバスのフォーカスを保ち、ソース欄へ移ると置換前に選択を解除する | `--ui-interaction-test` |
-| AUT-34 | `&`なし1列`aligned`の長短行がnative/Web入力表示で同じ左端を持ち、入れ子も葉まで平坦化され、Office CF_HTMLでは整列要素や可視`&`を含まない独立inline MathML行となる。明示`&`は1つの整列MathMLと保存TeXを維持する | `test_layout.py` / `test_edit.py` / `test_web_insert.cjs` / `test_web_contract.py` / `test_external_paste.ps1` |
+| AUT-34 | 入力表示の unanchored aligned は共通左端を維持。Office では eqArr の行と上下限を保ち、可視 & を出さない。native/Web 主 OMML が実クリップボードで byte 一致 | `test_office_bit_parity.cjs --wire` / `test_external_paste.ps1` |
 | AUT-35 | TeXソース欄の `Tab` が2つの `{}` 空欄を順に移動し、`Shift+Tab` が前へ戻り、ソースへTab文字を混入させない | `--ui-interaction-test` |
 | AUT-36 | 内蔵数式フォントは検証済みユーザーキャッシュからファイルベースで私有登録し、隔離した健全なsessionでは32回の起動終了後も`fontdrvhost.exe`のPIDとApplication Error件数が変化せず、分類タブ文字が本文相当の画素高を持つ。試験時間以上かつ最低10分の事前観測ですでに同じcrashがある場合、またはPID交代にApplication Errorが伴わない場合は製品FAILでなくINCONCLUSIVEとする | `test_font_safety.py` / `test_font_session.ps1` / `--ui-interaction-test` |
 | AUT-37 | キャンバスから同期したTeXソースはemitter由来のCR/LFを吸収し、`\begin` 後、`\end` 前、`\\` 後だけへCRLFを1個ずつ置いて階層的に字下げする。単独CR/LFや字下げだけの行を含まず、soft wrapを除く論理4行以上をWin32 EDITが認識し、表示文字列を再入力すると改行前と同じ正規化TeXへ戻る | `--ui-interaction-test` |
@@ -581,7 +580,7 @@ Web版はブラウザーのCF_HTML経路を使う。現在のPowerPointでのWeb
 - 仕様と実装が食い違う場合は、仕様を曖昧なまま実装に合わせず、どちらが
   製品意図かを決めて両方を同時に修正する。
 
-## Native named colours (3.1.2 candidate, UXP-0030)
+## Historical native colour route evidence (before UXP-0031)
 
 Both editions accept named `\color{red}{x}` and `\textcolor{red}{x}`.
 `\color` switches the colour of the remainder of the enclosing group, as in
@@ -671,3 +670,37 @@ gate: no duplicated MathML fallback or visible conditional markup may appear
 in the PowerPoint result. Browser clipboard reads may reserialize the
 non-Office conditional as a comment; payload generation alone cannot prove
 which branch the user's PowerPoint selects.
+
+
+## Shared Office clipboard contract (UXP-0031, 2026-10-08)
+
+This section supersedes earlier candidate route descriptions above. The user
+reported H5/H6 Web OK on 8361ec916. Both editions now publish conditional
+RichEdit-HTML OMML through CF_HTML as the primary Office format. Native copy
+publishes neither registered `MathML` nor `MathML Presentation`, so PowerPoint
+cannot prefer an untested competing registered equation format. Raw TeX, Office
+TeX, EMF and DIBV5 remain available in the native clipboard.
+
+`eqnedit64.office-omml-bits.v1` compares the literal UTF-8 bytes inside the
+`<!--[if gte msEquation 12]>...<![endif]-->` branch. It excludes CF_HTML byte
+offsets, HTML document envelopes, SourceURL and the non-Office MathML fallback.
+It does not normalize the compared bytes. Producers canonicalize named colours
+to uppercase hex and merge adjacent equal-style runs before publication; text,
+namespace, scripts, colour, styles and row structure remain in the comparison.
+The fixed corpus covers H1/H5/H6, cases, pmatrix, colour and math alphabets.
+
+The mandatory Windows CI gate reads the actual native and browser clipboard,
+rejects registered MathML formats, and checks both wire payloads against their
+producers. Missing conditional OMML or any byte difference fails the gate.
+`test_office_bit_parity.cjs` producer-only mode is useful locally but cannot
+qualify the shared route. Evidence records source SHA, Web/corpus hashes, mode,
+per-item byte lengths and SHA-256 values. This gate proves corpus payload identity,
+not Office rendering or equivalence of all accepted TeX.
+
+The changed EXE route requires one signed-build H1/H5/H6/H7 PowerPoint hand test.
+After this qualification, a passing actual-wire gate on the release candidate
+plus an EXE hand test permits omitting the separate Web hand test for covered
+fixtures. A missing/failing gate, a changed shared transport contract or different
+clipboard/browser/Office environment requires renewed Web qualification.
+The current candidate has producer evidence only; hosted wire CI and the new
+signed EXE hand test remain pending. No new colour-retention claim is made.

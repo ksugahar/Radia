@@ -1,12 +1,12 @@
 # Eqnedit64 changelog
 
 ## 3.1.2 — review candidate
-- Web PowerPoint copy candidate uses conditional OMML to address flattened integral bounds and merged rows; release is held for user H5/H6 re-test. Unsupported exporter structures fail with a diagnostic. Browser payload checks do not qualify Office paste.
+- Web conditional OMML passed user H5/H6 on 8361ec916. Native now shares this primary CF_HTML route without competing registered MathML (UXP-0031). Mandatory actual-wire byte identity CI and initial signed native H1/H5/H6/H7 qualification are required. Unsupported exporter structures fail with a diagnostic.
 
 
 - Native named `\color` / `\textcolor`: scoped edit/save, GDI/SVG/EMF/bitmap and MathML colours, explicit unsupported-name/model errors. Named-colour values tested against MathJax; new native render/Office colour acceptance awaits isolated CI and hand testing.
 
-- Preserve registered MathML for single expressions containing cases or matrices.
+- Preserve integral bounds inside cases and matrices through the shared conditional OMML route.
 - Wait for asynchronous MathJax startup, format palette environment insertion, and reject invalid MathML.
 - Restore mandatory multi-row PowerPoint acceptance; Web/multi-row limits require candidate-specific user hand-test evidence.
 - Pin release signer certificates and reconcile the limits-first Office contract.
