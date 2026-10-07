@@ -5,6 +5,16 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Scalar strong coupling now divides the surface-coil reaction RHS by mu0
+  and uses complete mutual work from the total body current and incident
+  electric projection. Previously the surface-coil redistribution was
+  under-coupled by a factor mu0 and reaction omitted these total-field terms. A genus-1 circulating mode is solved during every
+  coil iteration. Returned fields, currents and reaction share one state,
+  with coil and body residual checks and an independent reaction/heat gate.
+  Port resistance includes the change in coil self loss; it is no longer
+  manufactured from body heat. The prescribed-source genus-0 route is unchanged.
+  Fixed panel impedance and nonlinear strong ESIM remain separate extensions.
+
 - Fixed face-ordered Zs now supports the weak flat-P1 genus-1 loop route.
   Weighted stiffness, loop electric work, complete reaction and local heat
   use every face value. Exported Ht retains the circulating mode, including

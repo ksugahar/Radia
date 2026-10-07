@@ -1,147 +1,19 @@
-"""
-PEEC coil <-> workpiece scalar BIE + SIBC strong coupling.
+"""PEEC filament coil and scalar-body SIBC with complete mutual reaction.
 
-Sibling of ``bem_coupled_solver.CoupledBEMSolver``: SAME iterative
-workpiece back-reaction, but the coil is a PEEC filament loop-bundle
-instead of an impedance-EFIE surface saddle.
+Each Picard iterate solves the total body field, including a genus-1 handle
+current when requested. The complete per-filament body EMF pairs the SAME
+unit-source vector potential and surface-Poisson potential as the forward map.
+Convergence requires a coil-current fixed point and a checked body solve.
 
-Why this exists
-===============
-
-The weak Telegen path (``calc_inductance.py`` ``--coupling-mode weak``)
-evaluates the workpiece surface field from the INCIDENT (bare-coil
-Biot-Savart) field, so it misses the magnetic workpiece's flux
-redistribution / eddy screening and can over-estimate heating under strong
-loading.  The BEM-A coil has a self-consistent path via
-``CoupledBEMSolver``; this module gives the PEEC coil the corresponding
-strong-coupling formulation.
-
-Coupling structure (mirrors CoupledBEMSolver, in impedance space)
-=================================================================
-
-The PEEC loop-bundle system is already complex (Z_fil = R_f + jw L_f),
-so -- unlike the real EFIE saddle -- there is no Re/Im split: the complex
-workpiece back-reaction is injected as one complex per-filament EMF.
-
-    Forward  (coil -> workpiece):
-        I_f  ->  phi_inc(obs) = compute_phi_inc_from_filaments(...)
-        (identical to the validated weak PEEC forward)
-
-    Workpiece BIE + SIBC (ScalarBIESIBCSolver, shared with CoupledBEMSolver):
-        phi_inc  ->  phi_vec, H_t_rms, P_density
-        J_wp = n x H_scat = extract_scattered_wp_J(...)
-
-    Back      (workpiece -> coil):
-        A_wp(r) = (mu0/4pi) sum_j J_wp[j] area[j] / |r - c_j|
-        flux_wp,k = integral over filament k of A_wp . dl        (line integral)
-        emf[k]    = jw * flux_wp,k
-        (filament analogue of CoupledBEMSolver's f_back = int v . A_wp)
-
-    Re-solve  (coupled bundle):
-        [ Z_fil  -1 ] [I_f   ]   [-emf  ]
-        [ 1^T     0 ] [V_port] = [I_port]
-
-Picard-iterated (with under-relaxation on emf) until the terminal
-impedance Z_port = V_port / I_port converges.
-
-R comes from energy, not the terminal reaction (like CoupledBEMSolver)
-=====================================================================
-
-The terminal reflected resistance ``Delta_R = Re(Z_port) - R_air`` from
-the coupled loop solve does NOT generally equal
-``2 P_wp / |I_port|^2`` (the workpiece SIBC dissipation).  The coupled
-solve remains internally reciprocal through the filament back-EMF.  This
-is the same
-SIBC reaction-vs-power adjoint mismatch that ``CoupledBEMSolver`` faces:
-the scalar-potential forward / vector-potential back reaction is a correct
-adjoint for the REACTIVE coupling (Delta_L) but not for the DISSIPATIVE
-part.  That is exactly why ``CoupledBEMSolver`` reports R from
-``2 P_wp / I^2`` (energy) and uses the reaction only for L.  This solver
-follows the same rule: the caller (``calc_inductance._assemble_strong_output``)
-takes R from ``2 P_wp / I^2``; the coupled solve supplies the coil-current
-redistribution + ``Delta_L``.  ``Delta_R`` (from Z_port) is returned only
-as a diagnostic.
-
-VALIDATION STATUS (EXPERIMENTAL)
-===============================
-
-The strong-coupling heating change is driven by coil-current redistribution
-under the back-EMF.  The committed demo is weakly coupled, so it cannot
-exercise that effect; it locks only wiring and self-consistency.  A durable
-strong-loading reference case still needs to be added to the validation
-lane on a compute host.  Until that check passes, treat absolute
-strong-PEEC P_wp / Delta_L as UNVERIFIED.
-
-Strong coupling does not supply the harmonic loop current omitted by a
-single-valued scalar potential on a flux-linked genus-1 workpiece.  That
-limitation is shared by the weak and strong workpiece paths; use the
-explicit loop-DOF extension where supported.  The analytic sphere and
-shorted-ring goldens lock the genus-0 and loop-extension contracts.
-
-Part of the Radia project.
+Terminal resistance includes body dissipation AND the change in coil self
+loss caused by current redistribution. Body heat is checked against complete
+body reaction; it is not used to manufacture the terminal resistance.
 """
 
 import math
-import time
 import numpy as np
 
-from radia.bem_coupled_solver import MU_0, extract_scattered_wp_J
 from radia.peec_bundle import solve_loop_bundle
-
-
-def filament_back_emf(seg_mid, seg_dl, seg_fil, n_fil, wp_c, wp_a,
-                      wp_J_complex, omega, chunk_target=4_000_000):
-    """Per-filament back-reaction EMF from the workpiece surface current.
-
-    ``emf[k] = jw * flux_wp,k`` with
-    ``flux_wp,k = sum_{seg in fil k} A_wp(mid_seg) . dl_seg`` and
-    ``A_wp(r) = (mu0/4pi) sum_j wp_J[j] wp_a[j] / |r - wp_c[j]|``.
-
-    Args:
-        seg_mid: (S, 3) segment midpoints (flattened over all filaments).
-        seg_dl:  (S, 3) segment vectors p2 - p1.
-        seg_fil: (S,) int filament index of each segment.
-        n_fil:   number of filaments K.
-        wp_c:    (M, 3) workpiece panel centroids.
-        wp_a:    (M,) workpiece panel areas.
-        wp_J_complex: (M, 3) complex scattered surface current density.
-        omega:   angular frequency [rad/s].
-        chunk_target: cap on ``chunk_rows * M`` to bound the distance
-            matrix memory.
-
-    Returns:
-        (K,) complex per-filament EMF.
-    """
-    seg_mid = np.asarray(seg_mid, dtype=float)
-    seg_dl = np.asarray(seg_dl, dtype=float)
-    wp_c = np.asarray(wp_c, dtype=float)
-    wp_a = np.asarray(wp_a, dtype=float)
-    wp_J = np.asarray(wp_J_complex, dtype=complex)
-
-    K = int(n_fil)
-    flux = np.zeros(K, dtype=complex)
-    S = seg_mid.shape[0]
-    M = wp_c.shape[0]
-    if S == 0 or M == 0:
-        return 1j * omega * flux
-
-    inv_4pi_mu0 = MU_0 / (4.0 * np.pi)
-    # Source moments J[:,d] * area, one per component.
-    JA = wp_J * wp_a[:, None]                       # (M, 3) complex
-
-    chunk = max(1, int(chunk_target // max(M, 1)))
-    for s0 in range(0, S, chunk):
-        s1 = min(S, s0 + chunk)
-        mids = seg_mid[s0:s1]                        # (cs, 3)
-        diff = mids[:, None, :] - wp_c[None, :, :]   # (cs, M, 3)
-        dist = np.sqrt(np.einsum('smd,smd->sm', diff, diff))  # (cs, M)
-        inv = np.where(dist > 1e-30, 1.0 / dist, 0.0)         # (cs, M)
-        # A[:, d] = inv_4pi_mu0 * inv @ JA[:, d]
-        A = inv_4pi_mu0 * (inv @ JA)                 # (cs, 3) complex
-        contrib = np.einsum('sd,sd->s', A, seg_dl[s0:s1])     # (cs,) complex
-        np.add.at(flux, seg_fil[s0:s1], contrib)
-
-    return 1j * omega * flux
 
 
 class CoupledPEECBEMSolver:
@@ -170,23 +42,6 @@ class CoupledPEECBEMSolver:
         self.n_filaments = len(filament_paths)
         self.mesh_wp = mesh_wp
 
-        # Flatten filament polylines to segment midpoints / dl / owner index
-        # once, for the back-reaction line integral.
-        mids, dls, owner = [], [], []
-        for k, fil in enumerate(filament_paths):
-            for (p1, p2) in fil:
-                p1 = np.asarray(p1, dtype=float)
-                p2 = np.asarray(p2, dtype=float)
-                mids.append(0.5 * (p1 + p2))
-                dls.append(p2 - p1)
-                owner.append(k)
-        self._seg_mid = np.asarray(mids, dtype=float) if mids else \
-            np.zeros((0, 3))
-        self._seg_dl = np.asarray(dls, dtype=float) if dls else \
-            np.zeros((0, 3))
-        self._seg_fil = np.asarray(owner, dtype=np.int64)
-
-        # Workpiece BIE (identical construction to CoupledBEMSolver).
         self.wp_hacapk = bool(wp_hacapk)
         self._wp_gmres = dict(tol=float(wp_gmres_tol),
                               maxiter=int(wp_gmres_maxiter),
@@ -240,182 +95,67 @@ class CoupledPEECBEMSolver:
 
     def solve(self, Z_s, omega, I_port=1.0, max_iter=10, tol=1e-3,
               relax=0.5, verbose=False, loop_dof=False):
-        """Run the iterative coupled PEEC<->workpiece solve.
+        """Couple the complete total body field at every current iterate.
 
-        Args:
-            Z_s: workpiece surface impedance (complex scalar, or ndarray of
-                length ``wp_solver.ndof`` for per-node SIBC).
-            omega: angular frequency [rad/s].
-            I_port: terminal drive current amplitude [A].
-            max_iter, tol, relax: Picard controls (tol on |Z_port|).
-            loop_dof: apply the genus-1 loop-DOF extension ONCE on the
-                CONVERGED state (same dissipation-only convention as
-                ``CoupledBEMSolver.solve``): ``P_total`` / ``H_t_rms``
-                are replaced by the loop-extended values, the terminal
-                impedance keeps the plain-solve convention.  Requires
-                the dense wp backend and a genus-1 workpiece.
-
-        Returns dict with ``L_air``, ``R_air``, ``L_total``, ``R_total``,
-        ``Delta_L``, ``Delta_R``, ``P_total``, ``H_t_rms``, ``iterations``,
-        ``n_filaments``, ``n_phi_wp`` and the workpiece per-panel viz arrays.
+        Convergence is the coil-current fixed-point residual, with a 1e-6
+        body residual gate. Terminal resistance includes coil-loss redistribution.
         """
         from radia.biot_savart import h_segments_batch
+        from radia.bem_loop_extension import A_from_filaments
+        from radia.bem_complete_reaction import (electric_incident_vertex_load,
+                                                solve_complete_body, _iterate_complete_current)
+        from radia.workpiece_surface import _check_sibc_reaction_power
+        if max_iter < 2 or not np.isfinite(tol) or tol <= 0 or not 0 < relax <= 1:
+            raise ValueError('Invalid strong-coupling iteration controls')
+        if not np.isfinite(omega) or omega <= 0 or not np.isfinite(I_port) or I_port == 0:
+            raise ValueError('Strong coupling needs finite positive frequency and nonzero current')
+        z = complex(Z_s)
+        poisson = self._phi_poisson
+        centers = self.wp_nodes[self.wp_tris].mean(axis=1)
+        areas = poisson._areas
+        # Exact unit-filament fields use the SAME functions as the weak path.
+        unit_h = np.stack([h_segments_batch(path, self.wp_nodes) for path in self.paths])
+        unit_a = np.stack([A_from_filaments(centers, [path], [1.]) for path in self.paths])
+        currents_air, z_air = self._bundle_solve(omega, I_port)
+        currents = currents_air.copy()
+        z_fil = self.R_f.astype(complex)+1j*omega*self.L_f
+        if self.Zs_fil is not None:
+            z_fil += np.diag(self.Zs_fil)
+        def response(currents):
+            h_inc = np.einsum('k,kvd->vd', currents, unit_h)
+            phi_inc, phi_resid = poisson(h_inc, max_grad_residual=.10)
+            def a_inc(points):
+                return A_from_filaments(points, self.paths, currents)
+            body = solve_complete_body(self.wp_solver, poisson, phi_inc, z, omega,
+                a_inc, loop_dof=loop_dof, hacapk=self.wp_hacapk, gmres=self._wp_gmres)
+            hload = electric_incident_vertex_load(poisson, z, body['field'])
+            emf = (1j*omega*np.einsum('ktd,td,t->k', unit_a, body['current'], areas)
+                   + np.einsum('kvd,vd->k', unit_h, hload))
+            return dict(body=body, emf=emf)
 
-        if loop_dof and self.wp_hacapk:
-            raise ValueError(
-                "loop_dof=True needs the dense wp backend (wp_hacapk="
-                "False): the HACApK backend exposes no dense SL/DL for "
-                "the loop column.")
-        if max_iter < 2:
-            raise ValueError("max_iter must be >= 2 for coupling convergence")
-        if tol <= 0.0:
-            raise ValueError("tol must be > 0 for coupling convergence")
-        if not 0.0 < relax <= 1.0:
-            raise ValueError("relax must satisfy 0 < relax <= 1")
+        def map_current(emf):
+            return self._bundle_solve(omega, I_port, emf=emf)[0]
 
-        # --- Step 0: uncoupled (air) loop-bundle ---
-        _, Z_air = self._bundle_solve(omega, I_port, emf=None)
-        L_air = Z_air.imag / omega if omega > 0 else 0.0
-        R_air = Z_air.real
-
-        I_f, Z_port = self._bundle_solve(omega, I_port, emf=None)
-        emf = np.zeros(self.n_filaments, dtype=complex)
-        Z_prev = Z_air
-        wp_result = None
-        wp_c = wp_a = wp_J_re = wp_J_im = None
-        iteration = 0
-        dZ_rel = float("inf")
-        converged = False
-
-        for iteration in range(max_iter):
-            # --- Forward: filament currents -> phi_inc at workpiece ---
-            # Exact per-filament segment Biot-Savart H at the vertices,
-            # then the prepared surface-Poisson projection (10%
-            # grad-consistency gate = the shared fail-loud contract).
-            H_inc = np.zeros((len(self.wp_nodes), 3), dtype=complex)
-            for fil_segs, Ik in zip(self.paths, I_f):
-                H_inc += complex(Ik) * h_segments_batch(
-                    fil_segs, self.wp_nodes)
-            phi_inc, phi_resid = self._phi_poisson(
-                H_inc, max_grad_residual=0.10)
-            if verbose:
-                print(f"  iter {iteration}: phi_inc poisson "
-                      f"grad-residual {phi_resid:.1%}")
-
-            # --- Workpiece scalar BIE + SIBC ---
-            if self.wp_hacapk:
-                wp_result = self.wp_solver.solve_hacapk(
-                    phi_inc, Z_s=Z_s, omega=omega,
-                    tol=self._wp_gmres["tol"],
-                    maxiter=self._wp_gmres["maxiter"],
-                    restart=self._wp_gmres["restart"])
-            else:
-                wp_result = self.wp_solver.solve(phi_inc, Z_s=Z_s, omega=omega)
-            phi_vec = wp_result['phi_vec']
-
-            # --- Scattered surface current + per-filament back-EMF ---
-            wp_c, wp_a, wp_J_re, wp_J_im = extract_scattered_wp_J(
-                self.mesh_wp, self.wp_solver.fes, phi_vec, phi_inc)
-            emf_new = filament_back_emf(
-                self._seg_mid, self._seg_dl, self._seg_fil,
-                self.n_filaments, wp_c, wp_a,
-                wp_J_re + 1j * wp_J_im, omega)
-
-            if iteration == 0:
-                emf = emf_new
-            else:
-                emf = relax * emf_new + (1.0 - relax) * emf
-
-            # --- Re-solve coupled loop-bundle ---
-            I_f, Z_port = self._bundle_solve(omega, I_port, emf=emf)
-
-            dZ_rel = abs(Z_port - Z_prev) / max(abs(Z_prev), 1e-30)
-            if verbose:
-                L_now = Z_port.imag / omega
-                print(f"  iter {iteration}: L_total={L_now * 1e9:.3f}nH "
-                      f"R_total={Z_port.real * 1e3:.4f}mOhm "
-                      f"dZ={dZ_rel:.3e}")
-            Z_prev = Z_port
-            if dZ_rel < tol and iteration > 0:
-                converged = True
-                break
-
-        if not converged:
-            raise RuntimeError(
-                "PEEC-workpiece strong coupling did not converge: "
-                f"relative terminal-impedance change={dZ_rel:.3e}, "
-                f"tol={tol:.3e}, max_iter={max_iter}.  Increase "
-                "--coupling-max-iter or reduce --coupling-relax.")
-
-        L_total = Z_port.imag / omega if omega > 0 else 0.0
-        R_total = Z_port.real
-        P_total = wp_result['P_density'] * wp_result['area']
-        H_t_rms = wp_result['H_t_rms']
-
-        # Genus-1 loop DOF on the CONVERGED state (see the loop_dof arg
-        # docstring); the frozen(alpha=0) sub-solve must reproduce the
-        # converged plain solve exactly (operator cross-check).
-        loop_meta = {}
-        if loop_dof:
-            import time as _time
-            from radia.bem_loop_extension import (solve_loop_extended,
-                                                  A_from_filaments)
-
-            def _A_inc_fn(points):
-                return A_from_filaments(points, self.paths, I_f)
-
-            t0 = _time.perf_counter()
-            loop_out = solve_loop_extended(
-                self.wp_solver, phi_inc, Z_s, omega, _A_inc_fn)
-            t_loop = _time.perf_counter() - t0
-            frz_rel = (abs(loop_out["P_frozen"] - P_total)
-                       / max(abs(P_total), 1e-30))
-            if frz_rel > 1e-3:
-                raise RuntimeError(
-                    f"loop-DOF frozen sub-solve disagrees with the "
-                    f"converged plain BIE solve by {frz_rel:.2e} "
-                    f"(P {loop_out['P_frozen']:.4e} vs {P_total:.4e} W) "
-                    f"-- operator mismatch, refusing to report "
-                    f"loop-extended numbers.")
-            P_frozen = float(loop_out["P_frozen"])
-            P_total = float(loop_out["P_total"])
-            H_t_rms = float(loop_out["H_t_rms"])
-            loop_meta = {
-                'wp_loop_alpha': complex(loop_out["alpha"]),
-                'wp_loop_theta_jump': float(loop_out["theta_jump"]),
-                'wp_loop_cut_n_vertices': int(loop_out["cut_n_vertices"]),
-                # frozen (alpha = 0) = the no-mode physics; the ratio
-                # exposes the Lenz-screening effect of the shorted turn
-                'wp_loop_P_frozen': P_frozen,
-                'wp_loop_H_t_frozen': float(loop_out["Ht_frozen"]),
-                'wp_loop_screening_ratio': P_total / max(P_frozen, 1e-300),
-                't_loop_dof_s': float(t_loop),
-            }
-
-        if isinstance(Z_s, np.ndarray):
-            Z_s_out = complex(np.mean(Z_s))
-        else:
-            Z_s_out = complex(Z_s)
-
-        return {
-            'L_air': float(L_air),
-            'R_air': float(R_air),
-            'L_total': float(L_total),
-            'R_total': float(R_total),
-            'Delta_L': float(L_total - L_air),
-            'Delta_R': float(R_total - R_air),
-            'P_total': float(P_total),
-            'H_t_rms': float(H_t_rms),
-            'iterations': iteration + 1,
-            'converged': True,
-            'coupling_residual': float(dZ_rel),
-            'n_filaments': int(self.n_filaments),
-            'n_phi_wp': int(self.wp_solver.ndof),
-            'I_f': I_f,
-            'wp_c': wp_c,
-            'wp_a': wp_a,
-            'wp_J_re': wp_J_re,
-            'wp_J_im': wp_J_im,
-            'Z_s': Z_s_out,
-            **loop_meta,
-        }
+        currents, state, residual, iterations = _iterate_complete_current(
+            currents, response, map_current, max_iter=max_iter, tol=tol, relax=relax, verbose=verbose)
+        body, emf = state['body'], state['emf']
+        # All returned body, emf and current quantities are from the SAME state.
+        body_reaction_power = float(.5*np.vdot(currents, emf).real)
+        balance = _check_sibc_reaction_power(body['heat'], body_reaction_power)
+        coil_work = np.vdot(currents, z_fil @ currents)
+        z_port = (coil_work+np.vdot(currents, emf))/abs(I_port)**2
+        coil_loss = float(.5*coil_work.real)
+        coil_loss_air = float(.5*np.vdot(currents_air, z_fil @ currents_air).real)
+        return dict(L_air=float(z_air.imag/omega), R_air=float(z_air.real),
+            L_total=float(z_port.imag/omega), R_total=float(z_port.real),
+            Delta_L=float((z_port-z_air).imag/omega), Delta_R=float((z_port-z_air).real),
+            P_total=body['heat'], H_t_rms=body['h_rms'], iterations=iterations,
+            converged=True, coupling_residual=residual, body_residual=body['residual'],
+            body_reaction_power_W=body_reaction_power, body_power_balance_relative_error=balance,
+            coil_loss_W=coil_loss, coil_loss_air_W=coil_loss_air,
+            coil_loss_change_W=coil_loss-coil_loss_air,
+            port_power_W=float(.5*abs(I_port)**2*z_port.real),
+            n_filaments=self.n_filaments, n_phi_wp=self.wp_solver.ndof,
+            I_f=currents, body_emf=emf, wp_c=centers, wp_a=areas,
+            wp_J_re=body['current'].real, wp_J_im=body['current'].imag,
+            wp_q_tri=body['q_tri'], Z_s=z, **body['loop_metadata'])

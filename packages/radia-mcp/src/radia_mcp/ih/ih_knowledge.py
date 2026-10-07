@@ -1994,12 +1994,21 @@ refinement, and FEM exterior-size convergence. The full-conductor FEM
 power baseline and analytic shorted-ring test are complementary checks.
 No Takahashi files or reported sixfold ratio are acceptance inputs.
 
-Strong coupled coil solvers are a separate route. Their historical
-post-convergence loop correction does not iterate the loop reaction
-back onto the coil. Do not transfer this weak prescribed-source
-acceptance to strong coupling or claim that plain-phi inductance is
-unaffected by topology. Likewise, the native Simulink preassembled
-operator runtime is not certified by these Python workpiece tests.
+Scalar strong coupled coil solvers use complete mutual reaction from
+TOTAL body surface current and the discrete incident electric projection.
+The genus-1 mode is solved on every coil-current iterate; post-convergence
+loop correction is no longer used. The surface-coil single-layer matrix
+is unscaled, so its reaction RHS includes 1/mu0. Coil fixed-point and body
+residuals certify the same returned state. Body heat is checked against
+complete body reaction; port power includes coil self loss, and port loss
+increment includes the CHANGE in coil self loss. It is not inferred from
+body heat alone. The surface-coil strong model is ideal (zero coil ohmic
+loss); the filament route uses its R_f/Zs_fil loss. Each air baseline uses
+the same model as its coupled result. Fixed panel Zs and nonlinear strong ESIM remain guarded.
+Prescribed-source genus-0 phi.B quadrature is unchanged: it converges to
+Js.A work but is not identical on a finite mesh. Strong coupling has its
+own self-authored circuit and surface checks; weak acceptance and native
+Simulink certification do not transfer to it.
 
 ## When to use this
 
