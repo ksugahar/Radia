@@ -131,5 +131,10 @@ def test_lambda_parameter_is_its_own_scope():
     assert f == []
 
 
+def test_lambda_default_is_outer_scope():
+    f = _hits(["m = geo.GenerateMesh()", "h = lambda x=m.Scale(.001): x"])
+    assert [x["line"] for x in f] == [2]
+
+
 def test_registered():
     assert check_netgen_scale_after_generate in ALL_RULES
