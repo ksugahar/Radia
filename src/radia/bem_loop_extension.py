@@ -28,7 +28,7 @@ Carrier, seam, singular quadrature and thin-ring approximation errors
 remain separate validation duties. No finite-element accuracy claim.
 
 Supports one flux-linked handle, dense undeformed flat triangular P1
-surfaces, passive scalar impedance, and positive frequency. Automatic
+surfaces, passive scalar or face-ordered impedance, and positive frequency. Automatic
 carrier search proves enclosure/clearance; an explicit carrier must lie
 inside the material wall. The alpha=0 frozen diagnostic reproduces the
 ordinary scalar solver with its original gauge.
@@ -525,7 +525,7 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
         section_anchor: optional (rho, z) point strictly inside the material
             meridional section, in metres. Supply this for stepped profiles
             whose surface-node mean lies outside the material.
-        Z_s: complex Leontovich surface impedance (global scalar).
+        Z_s: passive complex scalar or PanelSurfaceImpedance in BND face order.
         omega: angular frequency [rad/s].
         A_inc_fn: callable ``A_inc_fn(points (n,3)) -> (n,3) complex`` --
             incident vector potential, used for the linked-flux term of
@@ -540,24 +540,31 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
     """
     from ngsolve import BND
 
-    if (not np.isfinite(omega) or omega <= 0 or np.ndim(Z_s) != 0
-            or not np.isfinite(Z_s) or complex(Z_s).real < 0):
-        raise ValueError("Loop SIBC requires positive frequency and finite passive scalar Z_s")
+    from .surface_impedance import PanelSurfaceImpedance
+    if not np.isfinite(omega) or omega <= 0:
+        raise ValueError("Loop SIBC requires positive finite frequency")
+    if not isinstance(Z_s, PanelSurfaceImpedance):
+        if (np.ndim(Z_s) != 0 or not np.isfinite(Z_s)
+                or complex(Z_s).real < 0):
+            raise ValueError("Loop SIBC requires passive scalar Z_s or tagged face impedance")
     mesh = bem_solver.mesh
     if mesh.GetCurveOrder() > 1 or mesh.deformation is not None:
         raise ValueError("Loop SIBC requires undeformed flat surface triangles")
-    M, K = bem_solver.M, bem_solver.K
+    M = bem_solver.M
     SL, DL, M_inv = bem_solver.SL, bem_solver.DL, bem_solver.M_inv
     if SL is None or DL is None:
         raise ValueError("loop extension needs assemble_dense=True "
                          "(dense SL/DL) on the ScalarBIESIBCSolver.")
-    gamma = Z_s / (1j * omega * MU_0) if omega > 0 else 0.0
 
     pts = np.array([[mesh.vertices[i].point[j] for j in range(3)]
                     for i in range(mesh.nv)])
     tris = np.array([[v.nr for v in el.vertices]
                      for el in mesh.Elements(BND)], dtype=np.int64)
     nv, nt = len(pts), len(tris)
+    face_z = (Z_s.values if isinstance(Z_s, PanelSurfaceImpedance)
+              else np.full(nt, complex(Z_s)))
+    if face_z.shape != (nt,):
+        raise ValueError("Loop SIBC requires one impedance per BND triangle")
     if bem_solver.ndof != nv:
         raise ValueError(
             f"loop extension supports the P1 nodal path only "
@@ -709,21 +716,32 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
     Theta = Theta.astype(complex)
 
     qT = _project_ring_neumann(pts, tris, areas, normals, H_ring, M_inv)
+    # Exact constant panels retain the scalar arithmetic. Separately weighted
+    # assembly differs by rounding, amplified in fine-mesh field recovery.
+    uniform_z = bool(np.all(face_z == face_z[0]))
     rK_T = np.zeros(nv, dtype=complex)
     for ti, t in enumerate(tris_o):
         gTh = (gvecs[ti, 0] * Theta[t[0]] + gvecs[ti, 1] * Theta[t[1]]
                + gvecs[ti, 2] * Theta[t[2]])
         for k in range(3):
-            rK_T[Tmap[t[k]]] += areas[ti] * (gvecs[ti, k] @ gTh)
-    a_col = SL @ (gamma * (M_inv @ rK_T) - qT.astype(complex))
-
-    A_sys = (0.5 * M - DL + gamma * (SL @ M_inv @ K)).astype(complex)
+            rK_T[Tmap[t[k]]] += ((1 if uniform_z else face_z[ti])
+                                * areas[ti] * (gvecs[ti, k] @ gTh))
+    if uniform_z:
+        gamma = face_z[0]/(1j * omega * MU_0)
+        a_col = SL @ (gamma * (M_inv @ rK_T) - qT.astype(complex))
+        A_sys = (0.5 * M - DL + gamma * (SL @ M_inv @ bem_solver.K)).astype(complex)
+    else:
+        a_col = SL @ ((M_inv @ rK_T)/(1j * omega * MU_0) - qT.astype(complex))
+        K_Z = bem_solver.impedance_stiffness(Z_s)
+        if hasattr(K_Z, "toarray"):
+            K_Z = K_Z.toarray()
+        A_sys = (0.5 * M - DL + (SL @ M_inv @ K_Z)/(1j * omega * MU_0)).astype(complex)
     RHS = (M @ np.asarray(phi_inc_nodal, dtype=complex))
 
     from .bem_loop_work import _loop_work_row
     fE, e_loop, fP, p_loop, loop_source, work_diagnostics = _loop_work_row(
         bem_solver, pts, tris, tris_o, Tmap, gvecs, normals, areas, Theta,
-        Z_s, A_inc_fn, qT, phi_inc_nodal)
+        face_z, A_inc_fn, qT, phi_inc_nodal)
     f_alpha = e_loop + 1j * omega * p_loop
 
     # assemble + solve (Lagrange mean-zero gauge, production style)
@@ -750,11 +768,13 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
     def _P_Ht(phi_u_v, alpha_v):
         phi_o = phi_u_v[Tmap] + alpha_v * Theta
         s2 = 0.0
+        power = 0.0
         for ti, t in enumerate(tris_o):
             g = -(gvecs[ti, 0] * phi_o[t[0]] + gvecs[ti, 1] * phi_o[t[1]]
                   + gvecs[ti, 2] * phi_o[t[2]])
             s2 += areas[ti] * float(np.sum(np.abs(g) ** 2))
-        return (0.5 * Z_s.real * s2, math.sqrt(s2 / float(areas.sum())))
+            power += .5 * face_z[ti].real * areas[ti] * float(np.sum(np.abs(g) ** 2))
+        return (power, math.sqrt(s2 / float(areas.sum())))
 
     P_total, H_t_rms = _P_Ht(phi_u, alpha)
 
@@ -767,8 +787,8 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
     A_inc = np.asarray(A_inc_fn(cents), dtype=complex)
     reaction_magnetic = np.sum(areas * np.einsum(
         'ij,ij->i', np.cross(normals, H_total), A_inc))
-    reaction_electric = Z_s / (1j * omega) * np.sum(
-        areas * np.einsum('ij,ij->i', H_inc, H_total))
+    reaction_electric = np.sum(
+        face_z * areas * np.einsum('ij,ij->i', H_inc, H_total))/(1j * omega)
 
     # frozen sub-solve (diagnostic; == the plain production solve)
     Ng = nv + 1
@@ -782,6 +802,8 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
     P_frozen, Ht_frozen = _P_Ht(phi_f, 0.0)
 
     return {
+        "loop_impedance_assembly": "scalar-equal-faces" if uniform_z else "weighted-panel",
+        "Z_s_per_panel": face_z.copy(),
         "loop_work_diagnostics": work_diagnostics,
         "theta_jump_max_deviation": float(max(abs(Theta[dup[v]]-Theta[v]-theta_jump) for v in cut)),
         "linear_residual_rel": linear_residual_rel,
@@ -792,7 +814,7 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
         "alpha": alpha,
         "P_total": float(P_total),
         "H_t_tri": H_total,
-        "q_tri": 0.5 * Z_s.real * np.sum(np.abs(H_total)**2, axis=1),
+        "q_tri": 0.5 * face_z.real * np.sum(np.abs(H_total)**2, axis=1),
         "reaction_integral": complex(reaction_magnetic + reaction_electric),
         "P_reaction": float(-0.5 * omega * (reaction_magnetic + reaction_electric).imag),
         "H_t_rms": float(H_t_rms),

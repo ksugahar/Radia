@@ -333,7 +333,9 @@ History uses H_t_per_panel_mean / H_t_per_panel_max.
 
 Both dense and HACApK support weighted P1 weak genus-0 panel impedance.
 `--panel-zs-file` supplies fixed mesh-bound element impedances without a Karl
-iteration. The student Geometry Update mask accepts `panel_zs_file`; changing
+iteration, including one supported flux-linked handle on the flat P1 dense
+loop-work route. This fixed linear support does not enable genus-1 nonlinear
+ESIM. The student Geometry Update mask accepts `panel_zs_file`; changing
 its content requires assembly again. `independent_fem_validation.status` is
 `not-performed` until a separate compatible reference has actually been run.
 
