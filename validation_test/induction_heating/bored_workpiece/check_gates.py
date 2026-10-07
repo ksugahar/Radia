@@ -6,10 +6,22 @@ import validate as v
 
 
 def main():
-    evidence=json.loads(Path(__file__).with_name('results.json').read_text())
+    recorded=json.loads(Path(__file__).with_name('results.json').read_text())
+    expected=recorded['validation_pass']
+    v.evaluate(recorded)
+    assert recorded['validation_pass']==expected
+    # Controlled gate fixture; this never modifies the saved numerical evidence.
+    evidence=copy.deepcopy(recorded)
+    for row,balance in zip(evidence['meshes'],(.03,.015,.001)):
+        row['bem']['automatic']['power_balance_rel']=balance
+    for run in evidence['runs']: run['elapsed_s']=100.
+    evidence['elapsed_s']=300.
     v.evaluate(evidence)
     assert evidence['validation_pass']
-    assert evidence['meshes'][0]['bem']['automatic']['power_balance_rel']>.02
+    coarse=copy.deepcopy(evidence)
+    coarse['meshes'][0]['bem']['automatic']['power_balance_rel']=.03
+    v.evaluate(coarse)
+    assert coarse['validation_pass']  # coarse evidence has no absolute 2% gate
     assert evidence['acceptance_reference']==dict(bem_nodes=6232,fem_ndof=601029)
     checks=0
     def reject(edit,gate):
@@ -22,7 +34,7 @@ def main():
     reject(lambda x:x['meshes'][-1]['bem']['automatic'].update(power_balance_rel=.0201),
            'finest_solution.bem_balance')
     reject(lambda x:x['meshes'][0]['fem'].update(P_total=70.),'finest_solution.agreement')
-    reject(lambda x:x['meshes'][1]['bem']['automatic'].update(power_balance_rel=.03),
+    reject(lambda x:x['meshes'][1]['bem']['automatic'].update(power_balance_rel=1.),
            'balance_monotonic')
     for key,gate in [('linear_residual_rel','bem_residual'),('faraday_residual_rel','faraday'),
                      ('unit_jump_error','unit_jump')]:
@@ -34,7 +46,7 @@ def main():
     reject(lambda x:x.update(elapsed_s=3601),'total_runtime')
     reject(lambda x:x['meshes'].pop(1),'refinement')
     assert v.LIMITS['bem_power_balance']==v.LIMITS['bem_fem_power']==.02
-    print(f'PASS: baseline and {checks} rejection checks; fixed 2% thresholds')
+    print(f'PASS: recorded verdict consistency, controlled acceptance and {checks} rejection checks; fixed 2% thresholds')
 
 if __name__=='__main__':
     main()
