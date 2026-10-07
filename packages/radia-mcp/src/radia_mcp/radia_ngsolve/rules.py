@@ -1229,7 +1229,9 @@ def check_netgen_scale_after_generate(filepath: str, lines: List[str]) -> List[D
     ``shape = shape.Scale(Pnt(0, 0, 0), 1e-3)``. See
     docs/ngsolve_integration/curve_order.md.
 
-    Deliberately flow-insensitive: within one function (or module) scope, every
+    Deliberately flow-insensitive: within one function, class, lambda or module
+    scope (decorators, default values and annotations belong to the enclosing
+    scope, where Python evaluates them), every
     name that is ever bound to a ``GenerateMesh(...)`` result, or to a plain alias
     of such a name, is a mesh name, and every ``<mesh name>.Scale(...)`` call in
     that scope is reported wherever it occurs (branches, loops, guards, exception
@@ -1251,11 +1253,29 @@ def check_netgen_scale_after_generate(filepath: str, lines: List[str]) -> List[D
            "name holds a shape here, give meshes and shapes distinct names.")
     nested = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
 
+    def definition_time_exprs(node):
+        """Expressions of a nested definition that run in the ENCLOSING scope."""
+        exprs = list(getattr(node, "decorator_list", []))
+        if isinstance(node, ast.ClassDef):
+            exprs += node.bases + [k.value for k in node.keywords]
+        else:
+            args = node.args
+            exprs += args.defaults + [d for d in args.kw_defaults if d is not None]
+            if not isinstance(node, ast.Lambda):
+                every = args.posonlyargs + args.args + args.kwonlyargs
+                every += [a for a in (args.vararg, args.kwarg) if a is not None]
+                exprs += [a.annotation for a in every if a.annotation is not None]
+                if node.returns is not None:
+                    exprs.append(node.returns)
+        return exprs
+
     def own_nodes(scope):
-        stack = list(ast.iter_child_nodes(scope))
+        body = scope.body
+        stack = list(body) if isinstance(body, list) else [body]
         while stack:
             node = stack.pop()
             if isinstance(node, nested):
+                stack.extend(definition_time_exprs(node))
                 continue
             yield node
             stack.extend(ast.iter_child_nodes(node))
@@ -1265,7 +1285,7 @@ def check_netgen_scale_after_generate(filepath: str, lines: List[str]) -> List[D
                 and node.func.attr == "GenerateMesh")
 
     findings = []
-    scopes = [tree] + [n for n in ast.walk(tree) if isinstance(n, nested) and not isinstance(n, ast.Lambda)]
+    scopes = [tree] + [n for n in ast.walk(tree) if isinstance(n, nested)]
     for scope in scopes:
         nodes = list(own_nodes(scope))
         pairs = []
