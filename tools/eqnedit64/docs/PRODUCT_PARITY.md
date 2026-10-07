@@ -203,6 +203,19 @@ by PowerPoint on the new native colour candidate has not been measured.
 Neither edition promises that PowerPoint retains colour. Native canvas,
 SVG, EMF/bitmap exports and saved TeX carry the colour independently of
 PowerPoint import. Publishing `mathcolor` is not evidence that Office keeps it.
-Token-level MathML, mstyle, CF_HTML CSS and Office TeX import routes remain
-pending a scoped comparison; do not infer that every Office route loses colour
-from the observed Web result alone.
+Cause evidence: static inspection of Office 16.0.17932.21000
+`MML2OMML.XSL`, templates `CreateRunWithSameProp` (lines442-474) and
+`CreateRunProp` (lines944-976). Run colour variables are computed but never
+emitted as a colour property; `mstyle/@mathcolor` is not consulted. Thus this
+converter discards colour for token and mstyle MathML colour attributes,
+regardless of the transport used to feed that converter. This is an Office
+conversion limitation rather than missing colour metadata in Eqnedit64.
+PowerPoint using this same converter (or equivalent logic) is an inference,
+consistent with the user's Web paste result, not an observed internal call.
+Do not generalize this version-specific inspection to every Office version.
+The H7 cause investigation is complete; a MathML route probe is not required
+to explain it. Outer CF_HTML CSS and Office LaTeX input remain optional,
+unverified alternatives. Neither route is promised to preserve colour.
+Image paste/export is the available colour-preserving representation, with
+reduced equation editability; direct OMML recolouring would require a separate
+product decision.
