@@ -178,3 +178,43 @@ def test_ensure_curve_order_accepts_coarse_correct_mesh(tmp_path):
     """)
     assert out["action"] == "curved"
     assert 1.0 < out["domain_ratio"] < 3.0
+
+
+def test_trailing_text_is_not_a_geometry_archive(meshes):
+    out = _run(meshes, """
+        mc = helper(); CurveOrderError, ensure = mc.CurveOrderError, mc.ensure_curve_order
+        lines = open("flat.vol").read().splitlines()
+        body = lines[:lines.index("endmesh")+1]
+        open("flat_comment.vol", "w").write("\\n".join(body + ["# harmless trailing comment"]) + "\\n")
+        ng.Mesh("c3.vol")
+        m = ng.Mesh("flat_comment.vol")
+        try:
+            with ng.TaskManager():
+                ensure(m, 2, vol_path="flat_comment.vol")
+            res = "no error"
+        except CurveOrderError as e:
+            res = ("not supported" if "not supported" in str(e) else str(e), e.mesh_modified)
+        print(json.dumps({"kind": mc.vol_geometry_kind("flat_comment.vol"), "res": res,
+                          "order": m.GetCurveOrder()}))
+    """)
+    assert out["kind"] == "other"
+    assert out["res"] == ["not supported", False]
+    assert out["order"] == 1
+
+
+@pytest.mark.parametrize("factor", [0.8, 1.2, 1e-3])
+def test_mesh_transformed_after_loading_is_rejected(meshes, factor):
+    out = _run(meshes, f"""
+        mc = helper(); CurveOrderError, ensure = mc.CurveOrderError, mc.ensure_curve_order
+        m = ng.Mesh("flat.vol"); m.ngmesh.Scale({factor!r}); m = ng.Mesh(m.ngmesh)
+        try:
+            with ng.TaskManager():
+                ensure(m, 2, vol_path="flat.vol")
+            res = "no error"
+        except CurveOrderError as e:
+            res = ("moved" if "moved or rescaled" in str(e) else str(e), e.mesh_modified)
+        print(json.dumps({{"res": res, "order": m.GetCurveOrder()}}))
+    """)
+    assert out["res"] == ["moved", False]
+    assert out["order"] == 1
+
