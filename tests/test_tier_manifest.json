@@ -200,6 +200,7 @@
         "tests/test_ih_energy_audit_contract.py",
         "tests/test_wheel_package_policy.py",
         "tests/test_application_interface_manifest.py",
+        "tests/test_matlab_python_parity_manifest.py",
         "tests/axifem/test_docs_notebook_evidence.py"
       ]
     },
