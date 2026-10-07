@@ -69,5 +69,28 @@ def test_function_scopes_are_separate():
     assert f == []
 
 
+def test_scale_in_rebinding_rhs_flagged():
+    f = _hits(["ngm = geo.GenerateMesh()", "ngm = ngm.Scale(.001)"])
+    assert [x["line"] for x in f] == [2]
+
+
+def test_conditional_rebinding_still_flagged():
+    f = _hits(["ngm = geo.GenerateMesh()", "if condition:", "    ngm = shape",
+               "ngm.Scale(.001)"])
+    assert [x["line"] for x in f] == [4]
+
+
+def test_loop_target_clears():
+    f = _hits(["ngm = geo.GenerateMesh()", "for ngm in shapes:",
+               "    ngm.Scale(Pnt(0, 0, 0), .001)"])
+    assert f == []
+
+
+def test_loop_carried_generation_flagged():
+    f = _hits(["m = None", "for k in range(2):", "    if m is not None:",
+               "        m.Scale(.001)", "    m = geo.GenerateMesh()"])
+    assert [x["line"] for x in f] == [4]
+
+
 def test_registered():
     assert check_netgen_scale_after_generate in ALL_RULES
