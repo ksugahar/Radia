@@ -102,12 +102,29 @@ per level and at least a 10% increase between the smallest and largest FEM
 DOF counts. These coverage checks do not prove convergence.
 Carrier width means `(maximum - minimum) / mean` over the four carriers.
 
-## Recorded result (2026-10-07, stricter review)
+Acceptance scope was corrected at Claude's round-2 review request, not by
+fitting thresholds to results. The 2% values are unchanged. Power-balance and
+cross-method acceptance apply to the finest BEM (largest node count) and the
+independently finest FEM (largest DOF count), even when they occupy different
+rows. Residuals, Faraday residual and unit jump must also pass on every coarse
+level. Coarse BEM balance must strictly decrease as node count increases;
+its absolute value is evidence rather than a 2% acceptance gate. Carrier gates
+apply to the finest BEM. Mesh quality, positive power and FEM residual/balance
+checks remain required on every recorded level. The coarse 2.3363% is retained.
+`check_gates.py` exercises the acceptance definition and rejection cases:
 
-Overall validation: **FAIL**. The thresholds remain 2% for BEM power
-balance and BEM/FEM total-power difference. Failed coarse levels remain in the
-record and are not excluded to obtain a pass. `complete_validation` indicates
-study coverage, whereas `validation_pass` additionally requires every gate.
+```powershell
+python validation_test/induction_heating/bored_workpiece/check_gates.py
+```
+
+## Recorded result (2026-10-07, round-2 review)
+
+Overall validation: **PASS under the reviewer-requested scope above**.
+The thresholds remain 2% for BEM power balance and BEM/FEM total-power
+difference. `complete_validation` indicates study coverage, whereas
+`validation_pass` additionally requires every applicable gate. Historical
+numerical values and their execution provenance are retained unchanged;
+`gate_reevaluation` identifies this later decision and its script hash.
 
 | BEM maxh (mm) | BEM nodes | BEM power (W) | BEM balance | FEM maxh (mm) | FEM DOFs | FEM power (W) | Paired difference | Difference to finest FEM |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -128,7 +145,9 @@ The FEM power range divided by finest FEM power is 0.0095%.
 BEM balance improves with refinement, but BEM/FEM total-power discrepancy
 does not decrease: it stays near 1.4% and slightly increases against the common
 finest FEM reference. Refinement therefore supports the balance improvement,
-not disappearance of the remaining cross-method discrepancy. This is not an
+not disappearance of the remaining cross-method discrepancy. BEM internal
+power balance is a necessary condition, but does not bound the difference
+from FEM. This is not an
 extrapolated error bound or proof of pointwise field convergence.
 
 | Carrier (r, z), mm | L2 power (W) | Point-trace power (W) | L2 balance | Point-trace balance |

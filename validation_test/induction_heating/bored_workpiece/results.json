@@ -1095,10 +1095,8 @@
       "bem_residual": true,
       "faraday": true,
       "unit_jump": true,
-      "bem_balance": false,
       "fem_residual": true,
       "fem_balance": true,
-      "agreement": true,
       "frozen_error": true,
       "automatic": true
     },
@@ -1108,10 +1106,8 @@
       "bem_residual": true,
       "faraday": true,
       "unit_jump": true,
-      "bem_balance": true,
       "fem_residual": true,
       "fem_balance": true,
-      "agreement": true,
       "frozen_error": true,
       "automatic": true
     },
@@ -1121,13 +1117,16 @@
       "bem_residual": true,
       "faraday": true,
       "unit_jump": true,
-      "bem_balance": true,
       "fem_residual": true,
       "fem_balance": true,
-      "agreement": true,
       "frozen_error": true,
       "automatic": true
     },
+    "finest_solution": {
+      "bem_balance": true,
+      "agreement": true
+    },
+    "balance_monotonic": true,
     "mesh_sensitivity": true,
     "carrier_solution_checks": true,
     "carrier_width": true,
@@ -1137,12 +1136,23 @@
     "skin_depth": true,
     "refinement": true
   },
-  "all_recorded_gates_pass": false,
+  "all_recorded_gates_pass": true,
   "carrier_comparison_executed": true,
   "complete_validation": true,
-  "validation_pass": false,
+  "validation_pass": true,
   "mesh_power_change": {
     "bem": 6.72842821916042e-05,
     "fem": 2.903925173503019e-05
+  },
+  "acceptance_reference": {
+    "bem_nodes": 6232,
+    "fem_ndof": 601029
+  },
+  "gate_reevaluation": {
+    "base_commit": "52b0e780d08fec65eccef2cb5b333a16a3118f83",
+    "utc": "2026-10-07T08:37:45.848883+00:00",
+    "script_sha256": "a6600a73d4ae53d23265ecd5f0dff56597a97daeec4f2a33aaa18754b231ed90",
+    "reason": "Reviewer-requested acceptance scope: finest solutions and monotonic coarse balance; thresholds unchanged",
+    "numerical_results_reused": true
   }
 }

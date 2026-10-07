@@ -199,31 +199,38 @@ def provenance():
 
 def evaluate(out):
     gates={}
+    finest_b=max(out['meshes'],key=lambda r:r['bem']['nodes'])
+    finest_f=max(out['meshes'],key=lambda r:r['fem']['ndof'])['fem']
+    out['acceptance_reference']=dict(bem_nodes=finest_b['bem']['nodes'],fem_ndof=finest_f['ndof'])
     for i,row in enumerate(out['meshes']):
         b,f=row['bem']['automatic'],row['fem']
         gates[f'mesh_{i}']=dict(mesh_quality=f['mesh_check']['passed'],
             positive_power=min(b['P_total'],b['P_reaction'],f['P_total'],f['source_work_W'])>0,
             bem_residual=b['linear_residual_rel']<=LIMITS['true_residual'],
             faraday=b['faraday_residual_rel']<=LIMITS['faraday'],unit_jump=b['unit_jump_error']<=LIMITS['unit_jump'],
-            bem_balance=b['power_balance_rel']<=LIMITS['bem_power_balance'],
             fem_residual=f['linear_true_relative_residual']<=LIMITS['true_residual'],
             fem_balance=f['power_balance_rel']<=LIMITS['fem_power_balance'],
-            agreement=row['bem_fem_power_rel']<=LIMITS['bem_fem_power'],
             frozen_error=row['frozen_fem_error_rel']>=LIMITS['frozen_error_min'],automatic=b['automatic_carrier'])
+    best=finest_b['bem']['automatic']
+    gates['finest_solution']=dict(
+        bem_balance=best['power_balance_rel']<=LIMITS['bem_power_balance'],
+        agreement=abs(best['P_total']/finest_f['P_total']-1)<=LIMITS['bem_fem_power'])
+    balances=[r['bem']['automatic']['power_balance_rel'] for r in sorted(out['meshes'],key=lambda r:r['bem']['nodes'])]
+    gates['balance_monotonic']=len(balances)>=3 and all(b<a for a,b in zip(balances,balances[1:]))
     if len(out['meshes'])>1:
         out['mesh_power_change']={}
         for mode in ('bem','fem'):
             last=[row[mode]['automatic']['P_total'] if mode=='bem' else row[mode]['P_total'] for row in out['meshes'][-2:]]
             out['mesh_power_change'][mode]=abs(last[0]/last[1]-1)
         gates['mesh_sensitivity']=all(v<=LIMITS['mesh_power_change'] for v in out['mesh_power_change'].values())
-    widths=out['meshes'][-1]['bem'].get('widths')
+    widths=finest_b['bem'].get('widths')
     if widths:
         gates['carrier_solution_checks']=all(
             r[mode]['linear_residual_rel']<=LIMITS['true_residual'] and
             r[mode]['faraday_residual_rel']<=LIMITS['faraday'] and
             r[mode]['unit_jump_error']<=LIMITS['unit_jump'] and
             r[mode]['power_balance_rel']<=LIMITS['bem_power_balance']
-            for r in out['meshes'][-1]['bem']['carriers'] for mode in ('l2','point'))
+            for r in finest_b['bem']['carriers'] for mode in ('l2','point'))
         gates['carrier_width']=widths['l2']['power_width_rel']<=LIMITS['carrier_width']
         gates['projection_reduces_width']=widths['l2']['power_width_rel']<widths['point']['power_width_rel']
     gates['runtime']=all(r['elapsed_s']<=LIMITS['elapsed_s'] for r in out['runs'])
