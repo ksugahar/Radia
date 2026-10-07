@@ -1,74 +1,37 @@
-"""Loop-DOF extension of the scalar BIE + SIBC for genus-1 workpieces.
+"""Genus-1 loop extension of the scalar P1 BIE with passive SIBC.
 
-Physics
-=======
-On a genus-1 conductor (ring / tube) whose handle links the source flux,
-the physical eddy current contains a NET circulating component -- the
-shorted transformer turn.  The scalar BIE's surface current
-``J_s = n x (-grad_s phi)`` with a single-valued phi carries ZERO net
-current through any cut of the surface, so that component and its Lenz
-screening are unrepresentable.  The plain scalar solver therefore needs
-a cohomology extension whenever source flux links the surface handle.
+A single-valued surface scalar potential cannot carry the net circulating
+current through the conductor handle. A cut-open unit-carrier potential g
+adds that mode: phi_total = phi_u + alpha*g. Its jump and the weak normal
+trace q_g = projection(-H_carrier.n) use the same oriented closed surface.
 
-Extension (one extra scalar DOF alpha = the net toroidal current):
+The ordinary scalar BIE rows and mean-zero phi_u gauge are unchanged.
+The loop equation tests electric work against the distributed j_g=n x
+(-grad_s g). Magnetic work uses the same distributed current PLUS the
+normal-flux term of the exterior Calderon energy:
 
-    phi_multi = phi_u  (single-valued)  +  alpha * Theta
+    Q_g,u = j_g^T S0 C - q_g^T (.5 M-DL)
+    Q_g,g = j_g^T S0 j_g + q_g^T SL q_g.
 
-* ``Theta`` is the magnetic scalar potential of a UNIT current on a
-  known ring inside the material wall (mid-wall, ray-cast from the cut).
-  It is evaluated on the CUT-OPEN mesh by path integration of
-  ``-H_ring . dl`` along a spanning tree; single-valuedness on the open
-  mesh is guaranteed because the ring is in the same homology class as
-  the cut (their surface loops have zero linking with it), and is
-  VERIFIED by the uniform +-1 jump across the cut (fail-loud assert).
-* The membrane (cut-disk double layer) term of the multivalued exterior
-  identity cancels exactly against Theta's own identity; what survives is
-  Theta's SIBC Neumann defect:
+S0 is the singular Galerkin scalar single layer for constant Cartesian
+face currents; C maps closed P1 coefficients to those currents. The
+kernel normalization is 1/(4*pi*distance), as in SL. The loop row is
+K_Z(g,phi_total)+i*omega*mu0*Q(g,phi_scat)=-i*omega*<A_inc,j_g>.
+Magnetic work acts on the scattered field; electric work and heat use
+the total field. Hence the total-unknown source includes Q_g,u*phi_inc.
+A current-only magnetic row is insufficient for finite impedance.
 
-      alpha column  =  SL @ (gamma M^-1 K(Theta)  -  q_Theta),
-      gamma = Z_s / (j omega mu_0),   q_Theta = -H_ring . n
+This mixed BIE/work system is not a symmetric matrix. Electric and
+magnetic WORK pairings are reciprocal; a changed lift has a discrete
+Calderon-identity defect that must converge with surface refinement.
+Carrier, seam, singular quadrature and thin-ring approximation errors
+remain separate validation duties. No finite-element accuracy claim.
 
-  where ``K(Theta)`` is the element-local surface stiffness applied to
-  the (jump-carrying) open representation of Theta -- no BEM operator is
-  ever assembled on the open mesh (the duplicated cut vertices coincide
-  geometrically and would poison the regular quadrature). The Neumann
-  trace uses the same closed P1 coefficient space: assemble
-  ``b_i = integral N_i (-H_ring . n_triangle) dS`` by element quadrature,
-  then ``q_Theta = M^-1 b``. Averaged vertex normals do not define this
-  weak trace, especially at creases. Six-by-six Gauss points on a Duffy
-  triangle are used; carrier/mesh convergence remains a validation duty.
-* Closure: Faraday's law on the cut loop (a surface loop),
-
-      sum_edges Z_s (n x H_t) . dl  =  -j omega Phi_linked,
-      Phi_linked = loop-integral of (A_inc + A_scat[J_s]) . dl,
-
-  with the scattered vector potential from the panel currents
-  (centroid-approximated single layer).
-
-Validation
-==========
-* Analytic thin-wire shorted ring (torus R=30 mm / b=3 mm, copper,
-  50 kHz, uniform axial field): net current alpha matches the classic
-  ring circuit I = -j w Phi / (Z_s R/b + j w L_ring) to ~2 % in
-  amplitude and ~0.2 deg in phase at two mesh resolutions; the frozen
-  (alpha = 0) sub-system reproduces the production ScalarBIESIBCSolver
-  solve to machine precision (same operators, same gauge).
-* The frozen (alpha = 0) subsystem reproduces the production
-  ``ScalarBIESIBCSolver`` solve to machine precision.
-
-Scope / limitations (fail-loud, not silent)
-===========================================
-* genus-1 with ONE flux-linked handle (one cut, one alpha).  genus >= 2
-  raises.
-* The cut loop comes from ``radia.cohomology.surface_fundamental_cycles``
-  (the repo's single, gmsh-free cohomology engine: harmonic-1-cochain
-  period matrix + class-pure cotree selection); the Theta single-valued
-  check (uniform jump) raises if the mid-wall ring construction fails
-  (e.g. the ray cast finds no opposite wall, or the smoothed ring
-  pierces the surface).
-* P1 (order=1) intree-dense operators only -- the closed
-  ``ScalarBIESIBCSolver`` must have been built with
-  ``assemble_dense=True`` so ``M/K/SL/DL`` are available.
+Supports one flux-linked handle, dense undeformed flat triangular P1
+surfaces, passive scalar impedance, and positive frequency. Automatic
+carrier search proves enclosure/clearance; an explicit carrier must lie
+inside the material wall. The alpha=0 frozen diagnostic reproduces the
+ordinary scalar solver with its original gauge.
 
 References
 ==========
@@ -97,7 +60,6 @@ References
   and FOR the cohomology treatment this module implements (via
   ``radia.cohomology``).
 
-Part of the Radia project.
 """
 from __future__ import annotations
 
@@ -582,6 +544,8 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
             or not np.isfinite(Z_s) or complex(Z_s).real < 0):
         raise ValueError("Loop SIBC requires positive frequency and finite passive scalar Z_s")
     mesh = bem_solver.mesh
+    if mesh.GetCurveOrder() > 1 or mesh.deformation is not None:
+        raise ValueError("Loop SIBC requires undeformed flat surface triangles")
     M, K = bem_solver.M, bem_solver.K
     SL, DL, M_inv = bem_solver.SL, bem_solver.DL, bem_solver.M_inv
     if SL is None or DL is None:
@@ -711,11 +675,6 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
     for v, vd in dup.items():
         Tmap[vd] = v
 
-    def reduce_vec(x):
-        out = np.zeros(nv, dtype=complex)
-        np.add.at(out, Tmap, x.astype(complex))
-        return out
-
     # geometry tables
     areas = np.zeros(nt)
     normals = np.zeros((nt, 3))
@@ -761,48 +720,11 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
     A_sys = (0.5 * M - DL + gamma * (SL @ M_inv @ K)).astype(complex)
     RHS = (M @ np.asarray(phi_inc_nodal, dtype=complex))
 
-    # Faraday closure on the cut loop
-    edge_tris = defaultdict(list)
-    for ti, t in enumerate(tris_o):
-        for a, b in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
-            edge_tris[(min(int(a), int(b)), max(int(a), int(b)))].append(ti)
-    ced = [(cut[i], cut[(i + 1) % n_cut]) for i in range(n_cut)]
-    row_E = np.zeros(nv_o, dtype=complex)
-    for (a, b) in ced:
-        # open triangles adjacent to this cut edge (L uses originals, R
-        # uses duplicates)
-        tis = []
-        for key in ((min(a, b), max(a, b)),
-                    (min(dup[a], dup[b]), max(dup[a], dup[b]))):
-            tis.extend(edge_tris.get(key, []))
-        if not tis:
-            raise ValueError(f"loop extension: no open triangle adjacent "
-                             f"to cut edge ({a},{b}).")
-        dl = pts[b] - pts[a]
-        wgt = 1.0 / len(tis)
-        for ti in tis:
-            n = normals[ti]
-            t = tris_o[ti]
-            for k in range(3):
-                row_E[t[k]] += wgt * Z_s * np.dot(
-                    np.cross(n, -gvecs[ti, k]), dl)
-    mids = np.array([0.5 * (pts[a] + pts[b]) for (a, b) in ced])
-    dls = np.array([pts[b] - pts[a] for (a, b) in ced])
-    row_Phi = np.zeros(nv_o, dtype=complex)
-    for ti in range(nt):
-        d = np.linalg.norm(mids - cents[ti][None, :], axis=1)
-        w = MU_0 / (4 * math.pi) * areas[ti] / np.maximum(d, 1e-9)
-        n = normals[ti]
-        t = tris_o[ti]
-        for k in range(3):
-            Js_k = np.cross(n, -gvecs[ti, k])
-            row_Phi[t[k]] += np.sum(w * (dls @ Js_k))
-    A_mid = np.asarray(A_inc_fn(mids), dtype=complex)
-    Phi_inc_loop = complex(np.sum(np.einsum('ij,ij->i', A_mid, dls)))
-
-    fE = reduce_vec(row_E)
-    fP = reduce_vec(row_Phi)
-    f_alpha = complex((row_E + 1j * omega * row_Phi) @ Theta)
+    from .bem_loop_work import _loop_work_row
+    fE, e_loop, fP, p_loop, loop_source, work_diagnostics = _loop_work_row(
+        bem_solver, pts, tris, tris_o, Tmap, gvecs, normals, areas, Theta,
+        Z_s, A_inc_fn, qT, phi_inc_nodal)
+    f_alpha = e_loop + 1j * omega * p_loop
 
     # assemble + solve (Lagrange mean-zero gauge, production style)
     Mrow = M.sum(axis=1).astype(complex)
@@ -816,7 +738,7 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
     A2[nv, nv] = f_alpha
     A2[nv + 1, :nv] = Mrow
     b2[:nv] = RHS
-    b2[nv] = -1j * omega * Phi_inc_loop
+    b2[nv] = -1j * omega * loop_source
     u = np.linalg.solve(A2, b2)
     residual = A2 @ u - b2
     linear_residual_rel = float(np.linalg.norm(residual) / max(np.linalg.norm(b2), np.finfo(float).tiny))
@@ -860,6 +782,8 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
     P_frozen, Ht_frozen = _P_Ht(phi_f, 0.0)
 
     return {
+        "loop_work_diagnostics": work_diagnostics,
+        "theta_jump_max_deviation": float(max(abs(Theta[dup[v]]-Theta[v]-theta_jump) for v in cut)),
         "linear_residual_rel": linear_residual_rel,
         "faraday_residual_rel": faraday_residual_rel,
         "section_anchor": (rho0, z0),
