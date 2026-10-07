@@ -90,3 +90,37 @@ thin and negative spacing therefore do not preserve exact widths. The user's
 H5/H6 re-test must also reject duplicated fallback content or visible
 conditional markup. Unicode alphabet payloads are browser-tested, not a
 claim of independently measured PowerPoint font rendering.
+
+
+## Shared Office clipboard contract (UXP-0031, 2026-10-08)
+
+This section supersedes earlier candidate route descriptions above. The user
+reported H5/H6 Web OK on 8361ec916. Both editions now publish conditional
+RichEdit-HTML OMML through CF_HTML as the primary Office format. Native copy
+publishes neither registered `MathML` nor `MathML Presentation`, so PowerPoint
+cannot prefer an untested competing registered equation format. Raw TeX, Office
+TeX, EMF and DIBV5 remain available in the native clipboard.
+
+`eqnedit64.office-omml-bits.v1` compares the literal UTF-8 bytes inside the
+`<!--[if gte msEquation 12]>...<![endif]-->` branch. It excludes CF_HTML byte
+offsets, HTML document envelopes, SourceURL and the non-Office MathML fallback.
+It does not normalize the compared bytes. Producers canonicalize named colours
+to uppercase hex and merge adjacent equal-style runs before publication; text,
+namespace, scripts, colour, styles and row structure remain in the comparison.
+The fixed corpus covers H1/H5/H6, cases, pmatrix, colour and math alphabets.
+
+The mandatory Windows CI gate reads the actual native and browser clipboard,
+rejects registered MathML formats, and checks both wire payloads against their
+producers. Missing conditional OMML or any byte difference fails the gate.
+`test_office_bit_parity.cjs` producer-only mode is useful locally but cannot
+qualify the shared route. Evidence records source SHA, Web/corpus hashes, mode,
+per-item byte lengths and SHA-256 values. This gate proves corpus payload identity,
+not Office rendering or equivalence of all accepted TeX.
+
+The changed EXE route requires one signed-build H1/H5/H6/H7 PowerPoint hand test.
+After this qualification, a passing actual-wire gate on the release candidate
+plus an EXE hand test permits omitting the separate Web hand test for covered
+fixtures. A missing/failing gate, a changed shared transport contract or different
+clipboard/browser/Office environment requires renewed Web qualification.
+The current candidate has producer evidence only; hosted wire CI and the new
+signed EXE hand test remain pending. No new colour-retention claim is made.

@@ -199,8 +199,8 @@ const server = http.createServer((req, res) => {
       if(expected.noBar)assert(structure.noBar,tex);
       if(expected.nary)assert(structure.nary>0,tex);
       if(expected.naryBody)assert(structure.naryBodies.includes(expected.naryBody),tex);
-      if(expected.red)assert.match(structure.styles,/color:red/);
-      if(expected.blue)assert.match(structure.styles,/color:blue/);
+      if(expected.red)assert.match(structure.styles,/color:#FF0000/);
+      if(expected.blue)assert.match(structure.styles,/color:#0000FF/);
       if(expected.text)assert.equal(structure.text,expected.text,tex);
     }
     await cold.locator(".eqed-source").fill("\\smash{x}");

@@ -16,6 +16,7 @@ set(EQNEDIT_CORE_SOURCES
     src/equation_render.cpp
     src/latex_emitter.cpp
     src/mathml_emitter.cpp
+    src/office_html.cpp
     src/math_symbols.cpp
     src/palettes.cpp
     src/tex_document.cpp
@@ -109,3 +110,10 @@ if(MSVC)
     target_compile_options(test_node_dispatch PRIVATE /W4 /WX /utf-8)
 endif()
 add_test(NAME node_dispatch COMMAND test_node_dispatch)
+
+# Pure parser/serializer probe: no font registration, rendering or Office.
+add_executable(office_payload_probe tests/office_payload_probe.cpp)
+target_link_libraries(office_payload_probe PRIVATE eqnedit_core)
+if(MSVC)
+    target_compile_options(office_payload_probe PRIVATE /W4 /WX /utf-8)
+endif()

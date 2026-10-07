@@ -49,6 +49,7 @@ pybind11_add_module(eqnedit_core MODULE
     "${EQNEDIT64_SRC}/equation_node.cpp"
     "${EQNEDIT64_SRC}/latex_emitter.cpp"
     "${EQNEDIT64_SRC}/mathml_emitter.cpp"
+    "${EQNEDIT64_SRC}/office_html.cpp"
     "${EQNEDIT64_SRC}/math_symbols.cpp"
     "${EQNEDIT64_SRC}/palettes.cpp"
     "${EQNEDIT64_SRC}/tex_document.cpp"

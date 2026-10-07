@@ -3252,12 +3252,19 @@
   }
 
   function officeOmmlRun(node, forceNormal) {
+    if (!node.textContent) return "";
     var variant = officeInheritedAttribute(node, "mathvariant");
     var colour = officeInheritedAttribute(node, "mathcolor");
+    if (colour) {
+      var colourContext = document.createElement("canvas").getContext("2d");
+      colourContext.fillStyle = colour;
+      colour = colourContext.fillStyle.toUpperCase();
+    }
     var mappedAlphabet = Object.prototype.hasOwnProperty.call(OFFICE_MATH_ALPHABETS, variant);
     if (variant && ["normal", "italic", "bold", "bold-italic"].indexOf(variant) < 0 && !mappedAlphabet)
       throw new Error("unsupported Office mathvariant: " + variant);
     var normal = mappedAlphabet || forceNormal || variant === "normal" ||
+      (!variant && Array.from(node.textContent).length !== 1) ||
       node.localName === "mn" || node.localName === "mo" ||
       node.localName === "mtext";
     var weight = !mappedAlphabet && variant && variant.indexOf("bold") !== -1 ?
@@ -3341,7 +3348,7 @@
       return officeOmmlRun(node, name !== "mi");
     }
     if (name === "mspace") {
-      if (node.getAttribute("width") === "0") return "";
+      if (parseFloat(node.getAttribute("width")) === 0) return "";
       return "<m:r><span style=\"" + OFFICE_MATH_RUN_STYLE +
         ";font-style:normal\">&#160;</span></m:r>";
     }
@@ -3396,8 +3403,7 @@
           nary.indexOf(children[0].textContent) !== -1)
         return officeOmmlNary(children[0], children[1], null, "undOvr");
       if (children[1] && children[1].localName === "mo" &&
-          (children[1].getAttribute("accent") === "true" ||
-           children[1].textContent === "―")) {
+          (["―", "¯", "_"].indexOf(children[1].textContent) !== -1)) {
         return officeOmmlBar(children[0], "bot");
       }
       return "<m:limLow><m:limLowPr>" + officeOmmlControl() +
@@ -3409,7 +3415,7 @@
           nary.indexOf(children[0].textContent) !== -1)
         return officeOmmlNary(children[0], null, children[1], "undOvr");
       if (children[1] && children[1].localName === "mo") {
-        if (children[1].textContent === "―") {
+        if (["―", "¯", "_"].indexOf(children[1].textContent) !== -1) {
           return officeOmmlBar(children[0], "top");
         }
         return "<m:acc><m:accPr><m:chr m:val=\"" +
@@ -3499,12 +3505,25 @@
       }).join("") + "</m:eqArr>" : officeOmml(mml);
     // The legacy namespace + HTML runs are the RichEdit HTML math dialect,
     // documented by Microsoft (RichEdit HTML Support, 2021-05-30).
+    body = officeCanonicalRuns(body);
     var math = "<m:oMathPara xmlns:m=\"http://schemas.microsoft.com/office/" +
       "2004/12/omml\"><m:oMathParaPr><m:jc m:val=\"left\"/>" +
       "</m:oMathParaPr><m:oMath>" + body + "</m:oMath></m:oMathPara>";
     return '<p style="margin:0;font-size:18pt;font-family:Cambria Math">' +
       "<!--[if gte msEquation 12]>" + math + "<![endif]-->" +
       "<![if !msEquation]>" + mml + "<![endif]></p>";
+  }
+
+  // Shared wire contract v1: merge adjacent runs only when the entire style
+  // string is identical. Never change text, equation structure or run styles.
+  function officeCanonicalRuns(body) {
+    var previous;
+    do {
+      previous = body;
+      body = body.replace(/<m:r><span style="([^"]*)">([^<]*)<\/span><\/m:r><m:r><span style="\1">([^<]*)<\/span><\/m:r>/g,
+        '<m:r><span style="$1">$2$3</span></m:r>');
+    } while (body !== previous);
+    return body;
   }
 
   /* ClipboardItemのtext/htmlはChromiumによってHTML文書として包み直される。

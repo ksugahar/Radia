@@ -86,13 +86,12 @@ Eqnedit64.exe と Web/JS 数式エディタは、Radia の `tools/eqnedit64` で
 | 数式3.0由来ショートカット | 互換層として必須 | 非該当 | native固有 |
 | インストール不要のブラウザ利用 | 非該当 | 必須 | Web固有 |
 
-2026-10-07 の UXP-0029 は、PowerPoint貼り付けで積分上下限とスクリプトの保存を
-左寄せより優先する。Windows版の単一式（cases・行列など式内の表を含む）は
-登録 `MathML` / `MathML Presentation` を発行し、中央寄せの編集可能な
-`m:oMathPara` を許容する。CF_HTML・18 pt末尾NBSPも保持する。
-独立した複数行はCF_HTMLで各行を渡し、左端と上下限を実PowerPoint試験で検査する。
-Web版はブラウザーのCF_HTML経路を使う。現在のPowerPointでのWeb・複数行の上下限は
-隔離Office試験で再確認するまで未検証とし、native/WebのOOXML・PNG一致は保証しない。
+2026-10-08 の UXP-0031 により、両版は条件付き RichEdit-HTML OMML の CF_HTML を主形式とする。
+登録 `MathML` / `MathML Presentation` は発行しない。上下限を左寄せより優先する
+UXP-0029 の方針は維持する。8361ec916 の Web H5/H6 はユーザー確認済み。
+新しい EXE 経路は署名済み候補で H1/H5/H6/H7 を再確認する。
+実クリップボードの bit gate と EXE 手動試験の合格後、対象コーパスの Web 手動試験を省略できる。
+詳細と未検証範囲は末尾の Shared Office clipboard contract を参照。
 画像への退化・空のMathZone・上下限の欠落は合格としない。明示 `&` と保存TeXは保持する。
 
 論文からのTeX入力では、両版とも裸の`~`を非改行空白、U+223Cを`\sim`として区別し、
@@ -165,7 +164,7 @@ event before any preview completes. The first payload must contain bold-italic
 and cancellation markup, without MathJax errors. It does not modify the user's
 system clipboard. Website hand testing remains required before publication.
 
-## Native named colours (3.1.2 candidate, UXP-0030)
+## Historical native colour route evidence (before UXP-0031)
 
 Both editions accept named `\color{red}{x}` and `\textcolor{red}{x}`.
 `\color` switches the colour of the remainder of the enclosing group, as in
@@ -255,3 +254,37 @@ gate: no duplicated MathML fallback or visible conditional markup may appear
 in the PowerPoint result. Browser clipboard reads may reserialize the
 non-Office conditional as a comment; payload generation alone cannot prove
 which branch the user's PowerPoint selects.
+
+
+## Shared Office clipboard contract (UXP-0031, 2026-10-08)
+
+This section supersedes earlier candidate route descriptions above. The user
+reported H5/H6 Web OK on 8361ec916. Both editions now publish conditional
+RichEdit-HTML OMML through CF_HTML as the primary Office format. Native copy
+publishes neither registered `MathML` nor `MathML Presentation`, so PowerPoint
+cannot prefer an untested competing registered equation format. Raw TeX, Office
+TeX, EMF and DIBV5 remain available in the native clipboard.
+
+`eqnedit64.office-omml-bits.v1` compares the literal UTF-8 bytes inside the
+`<!--[if gte msEquation 12]>...<![endif]-->` branch. It excludes CF_HTML byte
+offsets, HTML document envelopes, SourceURL and the non-Office MathML fallback.
+It does not normalize the compared bytes. Producers canonicalize named colours
+to uppercase hex and merge adjacent equal-style runs before publication; text,
+namespace, scripts, colour, styles and row structure remain in the comparison.
+The fixed corpus covers H1/H5/H6, cases, pmatrix, colour and math alphabets.
+
+The mandatory Windows CI gate reads the actual native and browser clipboard,
+rejects registered MathML formats, and checks both wire payloads against their
+producers. Missing conditional OMML or any byte difference fails the gate.
+`test_office_bit_parity.cjs` producer-only mode is useful locally but cannot
+qualify the shared route. Evidence records source SHA, Web/corpus hashes, mode,
+per-item byte lengths and SHA-256 values. This gate proves corpus payload identity,
+not Office rendering or equivalence of all accepted TeX.
+
+The changed EXE route requires one signed-build H1/H5/H6/H7 PowerPoint hand test.
+After this qualification, a passing actual-wire gate on the release candidate
+plus an EXE hand test permits omitting the separate Web hand test for covered
+fixtures. A missing/failing gate, a changed shared transport contract or different
+clipboard/browser/Office environment requires renewed Web qualification.
+The current candidate has producer evidence only; hosted wire CI and the new
+signed EXE hand test remain pending. No new colour-retention claim is made.

@@ -904,8 +904,7 @@ try {
         'MathML Presentation')
     $htmlFormat = [EqneditClipboardNative]::RegisterClipboardFormat('HTML Format')
     $requiredFormats = @(
-        13, 14, 17, $latexFormat, $htmlFormat,
-        $mathMlFormat, $mathMlPresentationFormat)
+        13, 14, 17, $latexFormat, $htmlFormat)
     foreach ($requiredFormat in $requiredFormats) {
         if (-not [EqneditClipboardNative]::IsClipboardFormatAvailable($requiredFormat)) {
             throw "Required clipboard format is missing: $requiredFormat"
@@ -920,36 +919,18 @@ try {
             "TeX fragment: actual=<$actualRaw> expected=<$expectedRaw>")
     }
     $officeHtml = Read-ClipboardUtf8 $htmlFormat
-    $registeredMathMl = Read-ClipboardUtf16 $mathMlFormat
-    $registeredMathMlPresentation =
-        Read-ClipboardUtf16 $mathMlPresentationFormat
-    if ($registeredMathMl -ne $registeredMathMlPresentation -or
-        $registeredMathMl -notmatch
-            '<msubsup><mo[^>]*>&#x222B;</mo><mrow><mi>a</mi></mrow><mrow><mi>b</mi></mrow></msubsup>') {
-        throw 'Registered MathML formats lost the integral limit structure.'
+    foreach ($format in @($mathMlFormat, $mathMlPresentationFormat)) {
+        if ([EqneditClipboardNative]::IsClipboardFormatAvailable($format)) {
+            throw 'Normal copy must not publish competing registered MathML (UXP-0031).'
+        }
     }
-    $startMarker = '<!--StartFragment-->'
-    $endMarker = '<!--EndFragment-->'
-    $fragmentStart = $officeHtml.IndexOf($startMarker)
-    $fragmentEnd = $officeHtml.IndexOf($endMarker)
-    if ($fragmentStart -lt 0 -or $fragmentEnd -le $fragmentStart) {
-        throw 'CF_HTML fragment markers are missing.'
-    }
-    $fragmentStart += $startMarker.Length
-    $fragment = $officeHtml.Substring(
-        $fragmentStart, $fragmentEnd - $fragmentStart)
-    $inlineSentinel = '<span style="font-size:18pt">&#160;</span>'
-    $mathMl = if ($fragment.EndsWith($inlineSentinel)) {
-        $fragment.Substring(0, $fragment.Length - $inlineSentinel.Length)
-    } else { '' }
-    if ($officeHtml -notmatch '<math\b' -or
-        $officeHtml -notmatch '</math><span style="font-size:18pt">&#160;</span><!--EndFragment-->' -or
-        $mathMl -notmatch 'display="inline"' -or
-        $mathMl -notmatch 'mathsize="18pt"' -or
-        $mathMl -notmatch '<mfrac>' -or $mathMl -notmatch '<msqrt>' -or
-        $mathMl -notmatch '<munderover><mo[^>]*>&#x2211;</mo>' -or
-        $mathMl -notmatch '<msubsup><mo[^>]*>&#x222B;</mo>') {
-        throw 'Eqnedit64 did not publish inline 18 pt structural MathML in CF_HTML.'
+    $officeBranch = [regex]::Match($officeHtml,
+        '(?s)<!--\[if gte msEquation 12\]>(?<math>.*?)<!\[endif\]-->')
+    if (-not $officeBranch.Success -or
+        $officeBranch.Groups['math'].Value -notmatch '<m:f>' -or
+        $officeBranch.Groups['math'].Value -notmatch '<m:rad>' -or
+        $officeBranch.Groups['math'].Value -notmatch '<m:nary>') {
+        throw 'Normal copy lost primary conditional OMML structure.'
     }
     $dibContract = Assert-DibV5OpaqueBlackOnWhite (Read-ClipboardBytes 17)
 
@@ -998,8 +979,7 @@ try {
         throw ("PowerPoint insertion point after the native equation is not 18 pt: " +
             "$powerPointInsertionFontSize pt.")
     }
-    # PowerPoint converts registered MathML into a centred MathML paragraph.
-    # Its native script layout takes priority over CF_HTML's plain-text fallback.
+    # Shared conditional OMML is the primary Office route (UXP-0031).
     $presentation.SaveAs($pptxOutput, 24)
     $slideXml = Get-SlideXml $pptxOutput
     $hasInlineContainer = $slideXml -match '<a14:m(?:\s|>)'
@@ -1012,12 +992,12 @@ try {
     $accentCount = ([regex]::Matches($slideXml, '<m:acc>')).Count
     $integralLimits = [regex]::Match(
         $slideXml,
-        '(?s)<m:nary><m:naryPr><m:limLoc m:val="subSup"/>.*?' +
+        '(?s)<m:nary><m:naryPr>.*?<m:limLoc m:val="subSup"/>.*?' +
         '<m:sub>(?<lower>.*?)</m:sub><m:sup>(?<upper>.*?)</m:sup><m:e>')
     $hasIntegralLimits = $integralLimits.Success -and
-        $integralLimits.Groups['lower'].Value -match '<m:t>𝑎</m:t>' -and
-        $integralLimits.Groups['upper'].Value -match '<m:t>𝑏</m:t>'
-    if (-not $hasInlineContainer -or -not $hasInlineMath -or -not $hasDisplayMath -or
+        $integralLimits.Groups['lower'].Value -match '<m:t>[a𝑎]</m:t>' -and
+        $integralLimits.Groups['upper'].Value -match '<m:t>[b𝑏]</m:t>'
+    if (-not $hasInlineContainer -or -not $hasInlineMath -or
         -not $hasFraction -or -not $hasRadical -or $naryCount -lt 2 -or
         ($barCount + $accentCount) -lt 2 -or -not $hasIntegralLimits) {
         throw (("PowerPoint paste contract failed: inlineContainer={0}, " +
@@ -1091,16 +1071,16 @@ try {
         $alignedRowsContract =
             Assert-PowerPointMathRowsShareLeftEdge $alignedPowerPointPngOutput
         $alignedSlideXml = Get-SlideXml $pptxOutput 2
-        $savedMathRows = ([regex]::Matches(
-            $alignedSlideXml, '<m:oMath(?:\s|>)')).Count
-        if ($savedMathRows -ne 3 -or
-            $alignedSlideXml -match '<m:t>&amp;</m:t>|<m:eqArr(?:\s|>)|<m:m(?:\s|>)') {
-            throw ("PowerPoint did not retain three independent math rows without " +
-                "visible alignment syntax: rows=$savedMathRows.")
+        [xml]$alignedDocument = $alignedSlideXml
+        $namespace = [Xml.XmlNamespaceManager]::new($alignedDocument.NameTable)
+        $namespace.AddNamespace('m', 'http://schemas.openxmlformats.org/officeDocument/2006/math')
+        $savedMathRows = $alignedDocument.SelectNodes('//m:eqArr/m:e', $namespace).Count
+        if ($savedMathRows -ne 3 -or $alignedSlideXml -match '<m:t>&amp;</m:t>') {
+            throw "PowerPoint did not retain three equation-array rows: rows=$savedMathRows."
         }
     }
 
-    # A table inside one equation must not silently select CF_HTML-only copy.
+    # Internal tables must preserve structure in the shared conditional OMML route.
     $tableSlideNumber = 2
     $powerPointColourObservations = @()
     foreach ($tableTex in @(
@@ -1115,16 +1095,20 @@ try {
             -WorkingDirectory (Split-Path -Parent $app) -WindowStyle Hidden -Wait -PassThru
         if ($tablePublisher.ExitCode -ne 0) { throw 'Table clipboard publication failed.' }
         foreach ($format in @($mathMlFormat, $mathMlPresentationFormat)) {
-            if (-not [EqneditClipboardNative]::IsClipboardFormatAvailable($format)) {
-                throw 'Single-equation table is missing registered MathML.'
+            if ([EqneditClipboardNative]::IsClipboardFormatAvailable($format)) {
+                throw 'Table normal copy published competing registered MathML.'
             }
         }
-        $tableMath = Read-ClipboardUtf16 $mathMlFormat
-        if ($tableTex.StartsWith('\textcolor') -and $tableMath -notmatch 'mathcolor="#FF0000"') {
-            throw 'Registered MathML lost intentional red colour.'
+        $tableHtml = Read-ClipboardUtf8 $htmlFormat
+        $tableBranch = [regex]::Match($tableHtml,
+            '(?s)<!--\[if gte msEquation 12\]>(?<math>.*?)<!\[endif\]-->')
+        $tableMath = $tableBranch.Groups['math'].Value
+        if (-not $tableBranch.Success -or $tableMath -notmatch '<m:m>' -or
+            $tableMath -notmatch '<m:nary>') {
+            throw 'Table conditional OMML lost matrix or integral structure.'
         }
-        if ($tableMath -notmatch '<mtable' -or $tableMath -notmatch '<msubsup><mo[^>]*>&#x222B;') {
-            throw 'Table MathML lost its table or integral structure.'
+        if ($tableTex.StartsWith('\textcolor') -and $tableMath -notmatch 'color:#FF0000') {
+            throw 'Primary Office OMML lost intentional red colour.'
         }
         $tableSlide = $presentation.Slides.Add($tableSlideNumber, 12)
         $powerPointWindow.View.GotoSlide($tableSlideNumber)
@@ -1138,17 +1122,17 @@ try {
             $redInXml = $tableXml -match '(?i)(?:val|rgb)="FF0000"'
             $powerPointColourObservations += [ordered]@{
                 fixture = $tableTex
-                registered_mathml_red = $true
+                primary_office_omml_red = $true
                 powerpoint_version = [string]$powerPoint.Version
                 slide = $tableSlideNumber
                 red_property_in_saved_xml = $redInXml
-                clipboard_route = 'native registered MathML published alongside other formats'
-                expected_behaviour = 'UXP-0030: native scalar red retained in user H7; matrix colour not yet qualified'
+                clipboard_route = 'shared conditional OMML CF_HTML'
+                expected_behaviour = 'UXP-0031: shared conditional OMML candidate; new native H7 and matrix colour qualification pending'
                 evidence = 'Saved slide XML; does not assert rendered colour'
             }
             Write-Host "OBSERVATION: native PowerPoint matrix saved XML red=$redInXml (UXP-0030; scalar H7 retains red, matrix qualification pending)"
         }
-        if ($tableXml -notmatch '(?s)<m:nary>.*?<m:sub>.*?<m:t>𝑎</m:t>.*?</m:sub>.*?<m:sup>.*?<m:t>𝑏</m:t>.*?</m:sup>') {
+        if ($tableXml -notmatch '(?s)<m:nary>.*?<m:sub>.*?<m:t>[a𝑎]</m:t>.*?</m:sub>.*?<m:sup>.*?<m:t>[b𝑏]</m:t>.*?</m:sup>') {
             throw 'PowerPoint table paste lost integral bounds.'
         }
         $tableSlide.Shapes.Item(1).Export($tablePowerPointPngOutput, 2)
@@ -1274,7 +1258,7 @@ try {
     }
 
     Write-Host "PASS: normal DIBV5 is opaque black-on-white ($dibContract)"
-    Write-Host 'PASS: clipboard contains raw LaTeX, inline MathML CF_HTML, registered MathML, Office TeX, EMF, and DIBV5'
+    Write-Host 'PASS: clipboard contains raw LaTeX, primary conditional OMML CF_HTML, Office TeX, EMF, and DIBV5; no registered MathML'
     Write-Host ("PASS: no-selection GUI copy -> visible editable Office Math " +
         "in PowerPoint ($powerPointFontSize pt, tail=$powerPointTailFontSize pt, " +
         "insertion=$powerPointInsertionFontSize pt, " +
