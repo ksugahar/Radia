@@ -368,7 +368,11 @@ def test_strong_cli_required_lane_has_no_optional_demo_cases():
     tree = ast.parse((runner.ROOT / required).read_text(encoding='utf-8'))
     cases = [n for n in tree.body if isinstance(n, ast.FunctionDef)
              and n.name.startswith('test_')]
-    assert len(cases) == 7 and all(not n.decorator_list for n in cases)
+    assert cases
+    # Required cases may be parameterized; no skip/xfail escape is permitted.
+    assert not any(isinstance(n, ast.Attribute) and
+                   n.attr in ('skip', 'skipif', 'importorskip', 'xfail')
+                   for n in ast.walk(tree))
     for name in ('coupling_strong', 'coupling_strong_peec'):
         assert not (runner.ROOT / f'validation_test/panels/test_{name}.py').exists()
         optional = f'validation_test/panels/optional_{name}.py'
