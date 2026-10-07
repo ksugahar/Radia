@@ -1,24 +1,8 @@
-"""Contract + end-to-end smoke for the re-exposed BEM-A strong coupling.
+"""CLI guards, port accounting and current scaling for scalar strong coupling.
 
-Background (2026-07-03): ``bem_coupled_solver.CoupledBEMSolver`` -- the
-validated iterative per-DOF back-reaction coil<->workpiece solver
-(cross-checked vs FEM-Kelvin SIBC: copper +0.3%, steel mu_r=100 +1.7% on
-L, see validation_test/induction_heating/bem_reference) -- had been
-orphaned to the validation lane: the production panel/CLI exposed only
-the weak one-way Telegen path.  It is now re-exposed as
-``calc_inductance.py --coupling-mode strong`` and the notebook-workbench
-method ``METHOD_BEMA_BEM_STRONG``.
-
-These tests lock:
-  1. argparse accepts ``--coupling-mode strong`` + the coupling knobs.
-  2. the fail-fast guards (strong needs bem-a + a workpiece --vol).
-  3. the shared application DesignSpec (IHDesignSpec) build_command for the strong
-     method emits only flags the calc argparse accepts.
-  4. the CLI path runs end-to-end and returns a self-consistent result
-     (L_total = L_coil + dL, R_total = R_coil + dR, dR = 2 P_wp / I^2).
-
-The heavy numeric golden (vs FEM) lives in the bem_reference lane; here
-the end-to-end is a fast self-consistency smoke on the committed demo.
+Body reaction is checked independently against surface heat. Port work
+includes coil self loss, with air and coupled baselines from the same model.
+Self-authored reaction/circuit checks live in test_bem_complete_reaction.py.
 """
 from __future__ import annotations
 
@@ -168,7 +152,7 @@ def test_strong_end_to_end_self_consistent(tmp_path):
     magnitude golden is in the bem_reference lane.  Here we lock the
     wiring: status ok, coupling_mode strong, converged, and the output
     assembly identities L_total = L_coil + dL, R_total = R_coil + dR,
-    dR = 2 P_wp / I^2.
+    dR = 2 P_reaction / I^2 for the ideal surface coil.
     """
     from _bema_coil_vol_helper import coil_vol_for
 
@@ -202,10 +186,12 @@ def test_strong_end_to_end_self_consistent(tmp_path):
                         rel_tol=0, abs_tol=1e-9)
     assert math.isclose(d["R_total_mOhm"], d["R_coil_mOhm"] + d["delta_R_mOhm"],
                         rel_tol=0, abs_tol=1e-9)
-    # dR = 2 P_wp / I^2  (P_wp = 1/2 I^2 dR).
+    # Port loss comes from complete reaction, rather than manufactured heat.
     assert math.isclose(d["delta_R_mOhm"],
-                        2.0 * d["P_wp_W"] / (current * current) * 1e3,
+                        2.0 * d["body_reaction_power_W"] / (current * current) * 1e3,
                         rel_tol=1e-6, abs_tol=1e-12)
+    assert d["body_power_balance_relative_error"] <= .1
+    assert d["body_residual"] <= 1e-6
     assert d["P_wp_W"] >= 0.0
     assert math.isfinite(d["delta_L_nH"])
 
@@ -268,7 +254,7 @@ def test_strong_output_scales_with_terminal_current(tmp_path):
     # And the energy identity holds at BOTH currents.
     for d, I in ((d1, 1.0), (d5, 5.0)):
         assert math.isclose(d["delta_R_mOhm"],
-                            2.0 * d["P_wp_W"] / (I * I) * 1e3,
+                            2.0 * d["body_reaction_power_W"] / (I * I) * 1e3,
                             rel_tol=1e-6, abs_tol=1e-12)
 
 

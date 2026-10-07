@@ -2035,14 +2035,9 @@ def _assemble_full_output(args, coil_data, wp_data):
 #
 # Re-exposes the validated per-DOF back-reaction solver
 # (radia.bem_coupled_solver.CoupledBEMSolver) as the --coupling-mode
-# strong path.  Unlike the weak Telegen path, the coil surface current is
-# recomputed each Picard iteration in response to the workpiece reaction
-# field (A_wp projected per-DOF onto the coil), so ΔL includes the
-# workpiece magnetic-energy term (the term the weak Telegen form drops)
-# and P_wp is self-consistent.  Coil L/R still come from the BEM-A
-# impedance-EFIE coil solve (coil_data); the coupled solver contributes
-# ΔL, ΔR (from P_wp) and H_t.  Cross-checked vs FEM-Kelvin SIBC in
-# validation_test/induction_heating (copper +0.3%, steel μr=100 +1.7% on L).
+# Strong coupling uses complete total-field body reaction in each current
+# iterate. The coupled port has its own air baseline and coil-loss model;
+# body heat is checked independently against complete reaction power.
 # ======================================================================
 def _solve_workpiece_strong_coupled(args):
     """Iterative coil<->workpiece BEM coupling via CoupledBEMSolver.
@@ -2116,7 +2111,7 @@ def _solve_workpiece_strong_coupled(args):
     coil_hacapk = (args.coil_saddle_solver == "hacapk_cocr")
 
     # Resolve the loop-DOF mode (see --wp-loop-dof): the strong path
-    # applies the extension ONCE on the converged Picard state (the
+    # applies the extension inside every Picard state (the
     # solver's ``loop_dof`` arg).  "on" was early-guarded in
     # run_inductance (intree-dense required; solve_loop_extended enforces
     # genus-1); "auto" applies exactly when it can and records why not.
@@ -2178,8 +2173,12 @@ def _solve_workpiece_strong_coupled(args):
     # shared _assemble_strong_output.)
     I_term = float(args.current)
     sol["P_total"] = float(sol["P_total"]) * I_term * I_term
+    for key in ("body_reaction_power_W", "port_power_W", "coil_loss_W",
+                "coil_loss_air_W", "coil_loss_change_W", "wp_q_tri"):
+        if key in sol:
+            sol[key] = sol[key] * I_term * I_term
     sol["H_t_rms"] = float(sol["H_t_rms"]) * abs(I_term)
-    for key in ("wp_J_re", "wp_J_im", "J_coil_re", "J_coil_im"):
+    for key in ("wp_J_re", "wp_J_im", "J_coil_re", "J_coil_im", "body_emf"):
         if sol.get(key) is not None:
             sol[key] = sol[key] * I_term
     # The loop current scales like the fields (alpha ~ I); the frozen
@@ -2229,12 +2228,13 @@ def _solve_workpiece_strong_coupled_peec(args, coil_data):
     ``CoupledPEECBEMSolver`` (back-EMF from the workpiece reaction field
     redistributes the filament currents self-consistently).  Returns the
     same key set as the BEM-A strong path so ``_assemble_strong_output``
-    renders both uniformly; R is taken from ``2 P_wp / I^2`` (energy),
-    ``Delta_L`` from the coupled solve.
+    renders both uniformly. Port R/L and their air baselines come from the
+    same coupled coil model. Port loss change includes body reaction and
+    the change in coil self loss; body heat is checked independently.
 
-    EXPERIMENTAL: the strong-loading response does not yet have a durable
-    independent reference case (the committed demo is weakly coupled).  See
-    ``radia.peec_coupled_bem_solver`` module docstring.
+    Experimental qualification remains for discretization and the SIBC
+    approximation; self-authored circuit/body checks do not certify every
+    physical coil geometry or nonlinear material.
     """
     from ngsolve import Mesh, BND
     from surface_mesh_extract import _extract_surface_mesh_filtered
@@ -2363,7 +2363,7 @@ def _solve_workpiece_strong_coupled_peec(args, coil_data):
 
 
 def _assemble_strong_output(args, coil_data, strong):
-    """L_coil + R_coil (BEM-A) + strong-coupled ΔL / ΔR / P_wp / H_t.
+    """Coupled port quantities, their air baseline, and independent body heat.
 
     Mirrors the key names of ``_assemble_full_output`` (L_total_nH,
     R_total_mOhm, delta_L_nH, delta_R_mOhm, P_wp_W, H_t_rms_A_per_m) so the
@@ -2376,14 +2376,26 @@ def _assemble_strong_output(args, coil_data, strong):
     I = float(args.current)
     P_wp = float(strong["P_total"])
     dL_nH = float(strong["Delta_L"] * 1e9)
-    # ΔR from the self-consistent workpiece dissipation: P_wp = 1/2 I^2 ΔR.
-    dR_mOhm = (2.0 * P_wp / (I * I) * 1e3) if I else 0.0
-    out["L_total_nH"] = float(coil_data["L_coil"] * 1e9) + dL_nH
-    out["R_total_mOhm"] = float(coil_data["R_coil"] * 1e3) + dR_mOhm
+    # Use the coupled port and its own air baseline. Coil loss can change
+    # under redistribution, so reflected port R is not 2*body_heat/I^2.
+    dR_mOhm = float(strong["Delta_R"] * 1e3)
+    out["L_coil_nH"] = float(strong["L_air"] * 1e9)
+    out["R_coil_mOhm"] = float(strong["R_air"] * 1e3)
+    out["L_total_nH"] = float(strong["L_total"] * 1e9)
+    out["R_total_mOhm"] = float(strong["R_total"] * 1e3)
     out["delta_L_nH"] = dL_nH
     out["delta_R_mOhm"] = dR_mOhm
     out["P_wp_W"] = P_wp
     out["H_t_rms_A_per_m"] = float(strong["H_t_rms"])
+    for key in ("body_reaction_power_W", "body_power_balance_relative_error",
+                "body_residual", "port_power_W", "coil_loss_W",
+                "coil_loss_air_W", "coil_loss_change_W"):
+        out[key] = float(strong[key])
+    out["coupling_converged"] = bool(strong["converged"])
+    out["coupling_residual"] = float(strong["coupling_residual"])
+    out["coil_resistance_model"] = ("filament-loop-resistance"
+                                    if coil_data.get("source_type") == "filament"
+                                    else "ideal-surface-coil")
     # Coupled-solver-native quantities (PEC-coil vacuum L + self-consistent
     # total L) for cross-checking against the impedance-EFIE coil L_coil.
     out["coupled_L_air_nH"] = float(strong["L_air"] * 1e9)
@@ -2404,7 +2416,7 @@ def _assemble_strong_output(args, coil_data, strong):
     # Topology context + genus-conditional P_wp caveat: the scalar BIE is
     # locked by the analytic genus-0 sphere; on a genus>=1 workpiece the
     # net shorted-turn eddy current needs the loop-DOF extension, which
-    # the strong drivers apply ONCE on the converged Picard state
+    # the strong drivers apply within every Picard state
     # (auto/on, dense wp backend) -- mirroring the weak path's caveat /
     # note split.
     out["wp_euler_chi"] = int(strong.get("wp_euler_chi", 2))
@@ -2432,14 +2444,10 @@ def _assemble_strong_output(args, coil_data, strong):
             "genus-1 loop DOF active on the converged strong-coupling "
             "state: the net shorted-turn eddy current (wp_loop_alpha_A) "
             "is solved and its Lenz screening is included in P_wp / H_t; "
-            "L_total / delta_L keep the plain-solve convention.")
+            "the same loop field contributes to the coil reaction in every iteration.")
     elif out["wp_genus"] != 0:
         out["P_wp_caveat"] = _GENUS_P_WP_CAVEAT
-    # PEEC filament coil: relabel the coil backend and flag the path as
-    # experimental (the strong-loading response has no durable independent
-    # reference case; the committed demo is weakly coupled).  Delta_R
-    # from the coupled Z_port is surfaced only as a diagnostic (R itself is
-    # taken from 2 P_wp / I^2 above, like the BEM-A path).
+    # PEEC terminal resistance includes changed filament self losses.
     if coil_data.get("source_type") == "filament":
         out["coil_bem_backend"] = "peec-loop-bundle"
         out["coupled_n_filaments"] = int(strong.get("n_filaments", 0))
@@ -2450,10 +2458,8 @@ def _assemble_strong_output(args, coil_data, strong):
             out["coupled_delta_R_reaction_mOhm"] = float(strong["Delta_R"] * 1e3)
         out["experimental"] = True
         out["experimental_note"] = (
-            "strong PEEC coupling: the coil-current redistribution under "
-            "strong loading has no durable independent reference case; the "
-            "committed demo is weakly coupled. "
-            "Treat absolute P_wp / delta_L as unverified.")
+            "Strong PEEC uses complete body reaction with checked current and body residuals. "
+            "Accuracy depends on the surface discretization and SIBC assumptions.")
     return out
 
 
@@ -2718,7 +2724,7 @@ def run_inductance(args):
     # "auto" never errors here -- it resolves inside the weak/strong
     # drivers (apply when genus-1 + prerequisites hold, else skip with
     # wp_loop_dof_skip_reason).  Both coupling modes take the extension
-    # (strong applies it once on the converged Picard state).
+    # (strong applies it inside every coil-current iterate).
     if args.wp_loop_dof == "on":
         if args.coil_only or not args.vol:
             return {"status": "error",

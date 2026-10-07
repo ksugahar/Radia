@@ -81,8 +81,8 @@ def test_argparse_accepts_flag():
      "linear SIBC"),
     (["--wp-bem-backend", "hacapk"], "intree-dense"),                       # default backend = hacapk
     (["--wp-bem-backend", "intree-dense", "--h1-order", "2"], "P1"),
-    # strong coupling now TAKES the loop DOF (applied once on the
-    # converged Picard state) but still needs the dense backend:
+    # strong coupling now TAKES the loop DOF during every
+    # coil-current iteration but still needs the dense backend:
     (["--coupling-mode", "strong", "--no-peec-proximity", "--wp-bem-backend", "hacapk"], "intree-dense"),
 ])
 def test_early_guards_fail_fast(extra, frag):

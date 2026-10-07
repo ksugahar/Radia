@@ -1,29 +1,10 @@
-"""Contract + self-consistency smoke for PEEC-coil strong coupling.
+"""PEEC scalar strong-coupling CLI and port-power accounting.
 
-The weak Telegen path evaluates workpiece heating from the INCIDENT
-(bare-coil) field, so it can over-estimate a strongly loaded magnetic
-workpiece.  The BEM-A coil has a strong (self-consistent) path via
-``CoupledBEMSolver``; the PEEC coil shares the SAME incident-field weak
-path, so its P_wp is over by the same factor.  ``CoupledPEECBEMSolver``
-gives the PEEC coil the same strong coupling (filament back-EMF from the
-workpiece reaction redistributes the loop-bundle currents).  It is exposed
-as ``calc_inductance.py --coil-solver peec --coupling-mode strong``.
-
-These tests lock the WIRING + SELF-CONSISTENCY only:
-  1. argparse accepts ``--coil-solver peec --coupling-mode strong``.
-  2. the strong guard now allows peec (and still needs a workpiece --vol).
-  3. the CLI runs end-to-end and returns self-consistent output
-     (L_total = L_coil + dL, R_total = R_coil + dR, dR = 2 P_wp / I^2),
-     the peec-loop-bundle backend label, and the EXPERIMENTAL flag.
-  4. on the (weakly-coupled) demo, strong P_wp ~= weak P_wp -- locks that
-     the coupled solve reduces to the weak forward when the workpiece
-     barely loads the coil (and does not diverge).
-
-The strong-loading P_wp response is NOT validated here:
-the committed demo is weakly coupled (BEM-A weak == strong to ~2%), so it
-cannot exercise the coil-current redistribution.  That validation needs
-a durable strongly-coupled reference case on a compute host -- see the
-``radia.peec_coupled_bem_solver`` module docstring (VALIDATION STATUS).
+The coupled route redistributes filament currents through complete body
+reaction. Body heat and reaction are checked independently. The change
+in port loss includes body reaction AND the change in coil self loss.
+Current scaling and finite-mesh reaction checks use self-authored cases
+in run_strong_reaction_ring.py; this file also checks legacy CLI wiring.
 """
 from __future__ import annotations
 
@@ -129,9 +110,14 @@ def test_peec_strong_end_to_end_self_consistent(tmp_path):
                         rel_tol=0, abs_tol=1e-9)
     assert math.isclose(d["R_total_mOhm"], d["R_coil_mOhm"] + d["delta_R_mOhm"],
                         rel_tol=0, abs_tol=1e-9)
-    # R is taken from energy: dR = 2 P_wp / I^2.
-    assert math.isclose(d["delta_R_mOhm"], 2.0 * d["P_wp_W"] / 1.0 * 1e3,
+    # A changed filament-current distribution changes coil self loss too.
+    assert math.isclose(d["delta_R_mOhm"],
+                        2.0*(d["body_reaction_power_W"]+d["coil_loss_change_W"])*1e3,
                         rel_tol=1e-6, abs_tol=1e-12)
+    assert math.isclose(d["port_power_W"],
+                        d["body_reaction_power_W"]+d["coil_loss_W"], rel_tol=1e-6)
+    assert d["body_power_balance_relative_error"] <= .1
+    assert d["body_residual"] <= 1e-6
     assert d["P_wp_W"] >= 0.0
     assert math.isfinite(d["delta_L_nH"])
 
@@ -148,15 +134,7 @@ def test_peec_strong_end_to_end_self_consistent(tmp_path):
 
 @pytest.mark.skipif(_SKIP, reason="demo coil STEP / workpiece .vol not present")
 def test_peec_strong_reduces_to_weak_on_weak_coupling(tmp_path):
-    """On the weakly-coupled demo, strong P_wp ~= weak P_wp.
-
-    The demo workpiece barely loads the coil (BEM-A weak == strong to
-    ~2%), so the coil-current redistribution is negligible and the strong
-    forward must reduce to the weak one.  This locks (a) the strong
-    forward is the validated weak forward and (b) the coupled solve does
-    not diverge / blow up on a weakly-coupled input.  It does NOT validate
-    the strong REDUCTION (needs a strongly-coupled case; see module doc).
-    """
+    """Legacy fixture compatibility check; no general strong/weak error bound."""
     weak = _run_cli("weak", tmp_path)
     strong = _run_cli("strong", tmp_path,
                       extra=["--coupling-max-iter", "4", "--coupling-tol", "5e-3"])
