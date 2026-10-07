@@ -378,19 +378,20 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
         mesh = ngsolve.Mesh(mesh.ngmesh)
         _log(f"PERIODIC:added (a={a_kelvin:.4f}, offset={kelvin_center})")
 
-    # Curve the mesh to match fes_order.  This is REQUIRED for the
-    # Kelvin transformation -- the (R/rho')^2 reluctivity scaling
-    # assumes a smooth (curved) Kelvin sphere; a polyhedral
-    # approximation of the sphere produces large geometric errors
-    # that propagate to the field outside the Kelvin shell.
-    # See memory/feedback_kelvin_high_order_required.md (validated
-    # 2026-04-17 to give 1.15% match vs 2D axisym at order=2 +
-    # Curve(2)).  The Cubit .vol's `curvedelements` section already
-    # has the high-order node positions; mesh.Curve(p) tells NGSolve
-    # to actually USE them when evaluating geometry mappings.
+    # The Kelvin transformation needs a curved Kelvin sphere: the
+    # (R/rho')^2 reluctivity scaling assumes a smooth sphere, and a
+    # polyhedral one produces large errors outside the shell (validated
+    # 2026-04-17: 1.15% vs 2D axisym at geometry order 2).  Loading the
+    # .vol already applies its stored curvedelements; Mesh.Curve on a
+    # loaded mesh would flatten a CAD-less Cubit export or borrow another
+    # geometry, so only curve through the guarded helper.
     if fes_order >= 2:
-        mesh.Curve(fes_order)
-        _log(f"MESH:Curve({fes_order}) applied")
+        from radia.mesh_curve import CurveOrderError, ensure_curve_order
+        try:
+            curve = ensure_curve_order(mesh, fes_order, what=str(vol_file))
+        except CurveOrderError as exc:
+            return {"error": str(exc)}
+        _log(f"MESH:geometry order {curve['curve_order']} ({curve['action']})")
 
     t_mesh = time.perf_counter() - t0
     materials = mesh.GetMaterials()  # domain-indexed (short tuple)
