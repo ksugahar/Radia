@@ -357,3 +357,38 @@ def test_axisymmetric_mcp_checks_use_numerical_lane_and_trace_is_fast():
     assert numerical.issubset(solver)
     assert len(solver) == len(set(solver))
     assert 'tests/test_trace_reuse_evidence_contract.py' in fast
+
+
+def test_strong_cli_required_lane_has_no_optional_demo_cases():
+    import ast
+    runner = runner_module()
+    required = 'validation_test/panels/test_strong_coupling_cli_contract.py'
+    numerical, _ = runner.load_profile('solver-numerics')
+    assert required in numerical
+    tree = ast.parse((runner.ROOT / required).read_text(encoding='utf-8'))
+    cases = [n for n in tree.body if isinstance(n, ast.FunctionDef)
+             and n.name.startswith('test_')]
+    assert len(cases) == 7 and all(not n.decorator_list for n in cases)
+    for name in ('coupling_strong', 'coupling_strong_peec'):
+        assert not (runner.ROOT / f'validation_test/panels/test_{name}.py').exists()
+        optional = f'validation_test/panels/optional_{name}.py'
+        assert (runner.ROOT / optional).is_file() and optional not in numerical
+
+
+def test_strong_cli_manifest_split_does_not_collect_native_in_fast_lane():
+    runner = runner_module()
+    current = json.loads(runner.MANIFEST.read_text(encoding='utf-8'))
+    previous = copy.deepcopy(current)
+    required = 'validation_test/panels/test_strong_coupling_cli_contract.py'
+    old = ['validation_test/panels/test_coupling_strong.py',
+           'validation_test/panels/test_coupling_strong_peec.py']
+    previous['profiles']['solver-numerics']['paths'].remove(required)
+    previous['profiles']['solver-numerics']['paths'].extend(old)
+    for key, retired in zip(('src/radia/bem_coupled_solver.py',
+                             'src/radia/peec_coupled_bem_solver.py'), old):
+        previous['impact_rules'][key] = ['tests/test_bem_complete_reaction.py', retired]
+    fast, _ = runner.load_profile('fast-contracts')
+    selected = runner.select_impact_tests(fast, ['tests/test_tier_manifest.json'],
+        previous_manifest=previous, profile_name='fast-contracts')
+    assert required not in selected and not (set(old) & set(selected))
+    assert set(fast) <= set(selected)
