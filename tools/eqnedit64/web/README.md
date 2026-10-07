@@ -68,6 +68,18 @@ Less common alphabets stay in Decoration: `\mathsf`, `\mathtt`, `\mathcal`,
 keeps `\bm`; only the MathJax boundary expands it to `\boldsymbol`.
 
 Inputs and saved/copied source are TeX. MTEF and `.eqn` are not supported
-formats. Office copy emits inline MathML in `text/html` plus plain TeX; image
-copy is a separate action so PowerPoint cannot accidentally prefer PNG over an
-editable equation.
+formats. Office copy candidate emits conditional RichEdit HTML OMML in `text/html`
+plus plain TeX and a non-Office MathML fallback. PNG copy remains a separate
+action. Native and Web need not use identical transports: UXP-0029 prioritizes
+editable limits and row structure. Current production Web MathML was observed
+to flatten bounds and rows; the OMML candidate requires the user's PowerPoint
+H5/H6 re-test before 3.1.2 is released. Browser payload tests are not Office
+acceptance. Candidate BUILD is `3.1.2 (2026-10-08 OMML candidate)`.
+
+The candidate exporter handles token runs, normal/italic/bold/bold-italic,
+colour inheritance, fractions and binomials, roots, sub/sup scripts and
+large-operator limits, accents/bars, arrays/matrices, phantom and box/strike
+enclosures. Unsupported MathML elements, dimensional padding (e.g. smash),
+other mathvariant values and other enclosures stop copy with a diagnostic;
+they are not flattened silently. Preview and saved TeX remain available.
+This support boundary must be reviewed before final acceptance.

@@ -1,6 +1,8 @@
 # Eqnedit64 changelog
 
 ## 3.1.2 — review candidate
+- Web PowerPoint copy candidate uses conditional OMML to address flattened integral bounds and merged rows; release is held for user H5/H6 re-test. Unsupported exporter structures fail with a diagnostic. Browser payload checks do not qualify Office paste.
+
 
 - Native named `\color` / `\textcolor`: scoped edit/save, GDI/SVG/EMF/bitmap and MathML colours, explicit unsupported-name/model errors. Named-colour values tested against MathJax; new native render/Office colour acceptance awaits isolated CI and hand testing.
 
