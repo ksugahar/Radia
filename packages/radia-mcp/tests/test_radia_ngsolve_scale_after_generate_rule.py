@@ -116,5 +116,20 @@ def test_distinct_shape_name_ok():
     assert f == []
 
 
+def test_decorator_argument_is_outer_scope():
+    f = _hits(["m = geo.GenerateMesh()", "@decorate(m.Scale(.001))", "def f():", "    pass"])
+    assert [x["line"] for x in f] == [2]
+
+
+def test_default_value_is_outer_scope():
+    f = _hits(["def f(m=shape.Scale(.001)):", "    shape = geo.GenerateMesh()"])
+    assert f == []
+
+
+def test_lambda_parameter_is_its_own_scope():
+    f = _hits(["m = geo.GenerateMesh()", "h = lambda m: m.Scale(Pnt(0, 0, 0), .001)"])
+    assert f == []
+
+
 def test_registered():
     assert check_netgen_scale_after_generate in ALL_RULES
