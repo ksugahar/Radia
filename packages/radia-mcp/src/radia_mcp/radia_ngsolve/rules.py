@@ -1228,33 +1228,64 @@ def check_netgen_scale_after_generate(filepath: str, lines: List[str]) -> List[D
     for a mesh made in mm and scaled to m). Scale the shape before meshing:
     ``shape = shape.Scale(Pnt(0, 0, 0), 1e-3)``. See
     docs/ngsolve_integration/curve_order.md.
+
+    The check parses the file: names bound to a ``GenerateMesh(...)`` result (and
+    plain aliases of them) are tracked per function scope in source order, a
+    rebinding to anything else clears the name, and ``<name>.Scale(...)`` on a
+    tracked name is reported. Strings and comments are never matched. Values
+    passed through containers, attributes or function returns are not tracked.
     """
-    findings = []
-    gen_pat = re.compile(r'^\s*(\w+)\s*=\s*[\w.\[\]()]*GenerateMesh\s*\(')
-    scale_pat = re.compile(r'\b(\w+)\s*\.\s*Scale\s*\(')
-    generated = set()
+    import ast
+
+    try:
+        tree = ast.parse("\n".join(lines))
+    except SyntaxError:
+        return []
     msg = ("'{var}.Scale()' rescales a mesh produced by GenerateMesh. The OCC geometry "
            "saved with the mesh keeps the old units, so a later Mesh.Curve(k>=2) projects "
            "the nodes onto the unscaled CAD and explodes the surface. Scale the CAD shape "
            "before meshing (shape.Scale(Pnt(0,0,0), factor)) and mesh in final units.")
-    in_doc = False
-    for idx, ln in enumerate(lines, 1):
-        s = ln.strip()
-        if s.count('"""') == 1 or s.count("'''") == 1:
-            in_doc = not in_doc
-            continue
-        if in_doc or s.startswith('#'):
-            continue
-        code = ln.split('#', 1)[0]
-        g = gen_pat.search(code)
-        if g:
-            generated.add(g.group(1))
-            continue
-        m = scale_pat.search(code)
-        if m and m.group(1) in generated:
-            findings.append({'line': idx, 'severity': 'HIGH',
-                             'rule': 'netgen-scale-after-generate',
-                             'message': msg.format(var=m.group(1))})
+
+    def _is_generate(node):
+        return (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "GenerateMesh")
+
+    def _scope_events(scope):
+        events = []
+        stack = list(ast.iter_child_nodes(scope))
+        while stack:
+            node = stack.pop()
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+                continue
+            if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                for target in targets:
+                    if isinstance(target, ast.Name):
+                        events.append(((node.lineno, node.col_offset, 1), "bind", target.id, node.value))
+            elif (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                  and node.func.attr == "Scale" and isinstance(node.func.value, ast.Name)):
+                events.append(((node.lineno, node.col_offset, 0), "scale", node.func.value.id, node))
+            stack.extend(ast.iter_child_nodes(node))
+        events.sort(key=lambda e: e[0])
+        return events
+
+    findings = []
+    scopes = [tree] + [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    for scope in scopes:
+        generated = set()
+        for (line, _col, _kind), kind, name, node in _scope_events(scope):
+            if kind == "bind":
+                if _is_generate(node):
+                    generated.add(name)
+                elif isinstance(node, ast.Name) and node.id in generated:
+                    generated.add(name)
+                else:
+                    generated.discard(name)
+            elif name in generated:
+                findings.append({'line': line, 'severity': 'HIGH',
+                                 'rule': 'netgen-scale-after-generate',
+                                 'message': msg.format(var=name)})
+    findings.sort(key=lambda f: f['line'])
     return findings
 
 def check_coil_scalar_potential_as_lift(filepath: str, lines: List[str]) -> List[Dict]:

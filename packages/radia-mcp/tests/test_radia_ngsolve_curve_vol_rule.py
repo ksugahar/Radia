@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 """Regression test for the 'ngsolve-curve-after-vol-import' lint rule.
 
-A .vol exported with a curve order (e.g. Cubit `export netgen ... order N`) already
-stores its high-order node positions. Calling mesh.Curve() after ngsolve.Mesh(".vol")
-recomputes curved nodes from CAD geometry the imported mesh does not have, dropping
-the baked-in curving -> the surface flattens to facets (~1% floor). The rule flags
+Loading a .vol already applies its stored curved elements. Calling mesh.Curve()
+after ngsolve.Mesh(".vol") rebuilds them from whatever geometry Netgen associates
+with the mesh: a CAD-less export (e.g. Cubit `export netgen ... order N`) flattens,
+another loaded mesh's geometry may be used, and a mesh rescaled after meshing is
+projected onto its unscaled CAD (docs/ngsolve_integration/curve_order.md). The rule flags
 that footgun WITHOUT flagging the legitimate OCC/GenerateMesh().Curve() case.
 """
 from radia_mcp.radia_ngsolve.rules import (

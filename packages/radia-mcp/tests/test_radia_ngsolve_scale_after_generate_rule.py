@@ -36,5 +36,38 @@ def test_comment_ok():
     assert f == []
 
 
+def test_same_line_statements_flagged():
+    f = _hits(["ngm = geo.GenerateMesh(maxh=1); ngm.Scale(.001)"])
+    assert [x["line"] for x in f] == [1]
+
+
+def test_spaced_constructor_flagged():
+    f = _hits(["ngm = OCCGeometry(Sphere(Pnt(0, 0, 0), 10)).GenerateMesh(maxh=5)",
+               "ngm.Scale(.001)"])
+    assert len(f) == 1
+
+
+def test_alias_flagged():
+    f = _hits(["ngm = geo.GenerateMesh(maxh=1)", "other = ngm", "other.Scale(.001)"])
+    assert [x["line"] for x in f] == [3]
+
+
+def test_rebinding_clears():
+    f = _hits(["ngm = geo.GenerateMesh(maxh=1)", "ngm = shape",
+               "ngm.Scale(Pnt(0, 0, 0), .001)"])
+    assert f == []
+
+
+def test_string_ok():
+    f = _hits(["ngm = geo.GenerateMesh(maxh=1)", '"""ngm.Scale(.001)"""'])
+    assert f == []
+
+
+def test_function_scopes_are_separate():
+    f = _hits(["def a():", "    ngm = geo.GenerateMesh(maxh=1)",
+               "def b(ngm):", "    ngm.Scale(.001)"])
+    assert f == []
+
+
 def test_registered():
     assert check_netgen_scale_after_generate in ALL_RULES

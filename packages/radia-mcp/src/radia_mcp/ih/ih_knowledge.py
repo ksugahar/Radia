@@ -814,7 +814,7 @@ T_at = float(gfT(mesh(x, y, z)))
 ```
 
 Do not call ``Mesh.Curve`` on the reader side "to match the writer": loading
-already applies the stored order, and the TKE08 thermal mesh reported a
+already applies the stored order, and a reported thermal workpiece mesh had a
 6.9e6 m^2 surface after ``Curve(2)``.  That mesh had been generated in
 millimetres and rescaled with ``ngmesh.Scale(1e-3)``, so its saved CAD stayed in
 millimetres and ``Curve`` projected the nodes onto it; every later point
@@ -906,7 +906,7 @@ fallback.
 The result JSON records this decision in `mesh_geometry`: policy
 `preserve-input-vol-geometry`, `post_load_curve_applied=false`, the field and
 input curve orders, and the consumed domain and boundary measures.  On the
-reported TKE08 curved CAD `.vol`, the removed post-load `Curve(2)` call returned
+reported curved CAD `.vol`, the removed post-load `Curve(2)` call returned
 without an exception but inflated the boundary measure from about 0.0233 square
 metres to 6.91 million square metres (about 297 million times).  Therefore
 `GetCurveOrder()` or lack of an exception is not evidence that post-load curving
