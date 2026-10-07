@@ -600,10 +600,11 @@ is claimed only for the supported named-colour inputs.
 Colour remains in the editable group, selection, Undo, normalized TeX save /
 reopen, GDI canvas / bitmap / outline EMF and SVG glyphs and rules. Native
 CF_HTML and registered MathML emit `mathcolor`; Office TeX retains
-`\textcolor`. PowerPoint's actual colour retention on this new candidate
-requires a new user hand test; earlier 02f74f70c H5/H6 results are historical,
-not evidence for the native colour change. The isolated external-paste suite
-also includes a red matrix with integral bounds, but has not been run locally.
+`\textcolor`. User hand testing of e708930c5 on 2026-10-08 confirms
+native canvas red and red after normal PowerPoint paste (H7 EXE), plus H1 EXE
+integral limits OK. H5/H6 re-checks remain pending. The isolated external-paste
+suite includes a red matrix with integral bounds; that matrix colour result
+has not been measured and is not inferred from the scalar H7 result.
 
 Other unknown control words retain the historical permissive parser fallback
 and can still disappear silently. Proposed follow-up: strict diagnostics on
@@ -612,26 +613,19 @@ allowlist; this broader parser change is not included in UXP-0030.
 
 ### PowerPoint colour retention: current evidence
 
-The current user hand test of Web `\color{red}{x}` copies successfully,
-but PowerPoint imports it without the red colour. This is a known Web paste
-limitation. Native emits colour in MathML and Office TeX, but colour retention
-by PowerPoint on the new native colour candidate has not been measured.
-Neither edition promises that PowerPoint retains colour. Native canvas,
-SVG, EMF/bitmap exports and saved TeX carry the colour independently of
-PowerPoint import. Publishing `mathcolor` is not evidence that Office keeps it.
-Cause evidence: static inspection of Office 16.0.17932.21000
-`MML2OMML.XSL`, templates `CreateRunWithSameProp` (lines442-474) and
-`CreateRunProp` (lines944-976). Run colour variables are computed but never
-emitted as a colour property; `mstyle/@mathcolor` is not consulted. Thus this
-converter discards colour for token and mstyle MathML colour attributes,
-regardless of the transport used to feed that converter. This is an Office
-conversion limitation rather than missing colour metadata in Eqnedit64.
-PowerPoint using this same converter (or equivalent logic) is an inference,
-consistent with the user's Web paste result, not an observed internal call.
-Do not generalize this version-specific inspection to every Office version.
-The H7 cause investigation is complete; a MathML route probe is not required
-to explain it. Outer CF_HTML CSS and Office LaTeX input remain optional,
-unverified alternatives. Neither route is promised to preserve colour.
-Image paste/export is the available colour-preserving representation, with
-reduced equation editability; direct OMML recolouring would require a separate
-product decision.
+User hand test on 2026-10-08: the signed native e708930c5 candidate displays
+red on its canvas and retains red after normal PowerPoint paste (H7 EXE).
+The native registered-MathML route publishes mstyle mathcolor. The public Web
+3.1.2 CF_HTML MathML route copies successfully but loses red in PowerPoint.
+These are user-observed results in the user's Office environment; they do not
+qualify every colour, compound equation or Office version. The native clipboard
+publishes several formats, so the exact internal PowerPoint conversion call
+was not traced. Native canvas, SVG, EMF/bitmap and saved TeX also retain colour.
+
+Earlier static inspection of Office 16.0.17932.21000 MML2OMML.XSL found unused
+colour variables in CreateRunWithSameProp and CreateRunProp, and no emitted
+colour property. That inspection describes this XSL only. The inference that
+all PowerPoint MathML routes use it and lose colour was too broad and is
+withdrawn: the native registered route's observed red contradicts it. The Web
+CF_HTML colour loss remains observed; its exact internal cause is unverified.
+Outer CF_HTML CSS and Office LaTeX are optional, unverified alternatives.
