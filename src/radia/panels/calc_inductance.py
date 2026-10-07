@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import hashlib
 import math
 import os
 import sys
@@ -738,8 +739,8 @@ def _resolve_workpiece_backend(args, genus, surface_vertices):
     requested = args.wp_bem_backend
     if requested == 'auto':
         if genus >= 1:
-            if genus != 1 or args.impedance_model != 'sibc':
-                raise ValueError('Automatic hole treatment supports one handle and linear SIBC; multiple holes/nonlinear ESIM are not supported')
+            if genus != 1 or (args.impedance_model != 'sibc' and not getattr(args, 'esim_per_panel', False)):
+                raise ValueError('Automatic hole treatment supports one handle and SIBC or per-panel ESIM; multiple holes/scalar nonlinear ESIM are not supported')
             if int(args.h1_order) != 1:
                 raise ValueError('Automatic hole treatment requires --h1-order 1 (surface BEM basis only)')
             requested = 'intree-dense'
@@ -762,8 +763,10 @@ def _resolve_weak_loop_mode(args, wp_genus, basis_order):
     reason = None
     if wp_genus != 1:
         reason = f"loop DOF requires genus-1 (got genus-{wp_genus})"
-    elif args.impedance_model != "sibc":
-        reason = "ESIM and the circulating-current loop DOF are not coupled"
+    elif args.impedance_model != "sibc" and not getattr(args, 'esim_per_panel', False):
+        reason = "nonlinear loop ESIM requires --esim-per-panel"
+    elif args.impedance_model == 'esim' and int(getattr(args, 'esim_anderson_m', 0)) != 0:
+        reason = 'genus-1 ESIM requires damped Picard (--esim-anderson-m 0)'
     elif args.wp_bem_backend != "intree-dense":
         reason = "loop DOF requires the intree-dense backend, not HACApK"
     elif basis_order != 1:
@@ -772,7 +775,7 @@ def _resolve_weak_loop_mode(args, wp_genus, basis_order):
         raise ValueError(
             f"Unsupported weak-coupled absolute heating: {reason}. "
             "Refusing an uncorrected P_wp or qsurf. No model/backend fallback "
-            "is performed. The implemented loop path is genus-1, linear SIBC, "
+            "is performed. The implemented loop path is genus-1, SIBC or per-panel ESIM, "
             "intree-dense, P1; changing to it changes the requested model and "
             "requires separate validation.")
     return mode, True, None
@@ -809,7 +812,7 @@ def _solved_panel_tangential_field(bem, result):
 
 def _apply_wp_loop_dof(args, bem, phi_inc, Z_s_wp, omega, coil_data,
                        res_bem, wp_genus, wp_chi):
-    """Apply the genus-1 loop-DOF extension to the linear-SIBC weak solve.
+    """Apply the genus-1 loop extension at this held SIBC/ESIM impedance.
 
     Uses the loop-extended field consistently for power, spatial heating,
     and reciprocal reaction. The single-valued phi_u alone is insufficient
@@ -848,7 +851,9 @@ def _apply_wp_loop_dof(args, bem, phi_inc, Z_s_wp, omega, coil_data,
             f"unknown coil source_type {coil_data['source_type']!r}")
 
     t0 = time.perf_counter()
-    loop_out = solve_loop_extended(bem, phi_inc, Z_s_wp, omega, A_inc_fn)
+    loop_out = solve_loop_extended(bem, phi_inc, Z_s_wp, omega, A_inc_fn,
+        _reuse_prepared=getattr(args, 'impedance_model', 'sibc') == 'esim'
+            and getattr(args, 'esim_per_panel', False))
     t_loop = time.perf_counter() - t0
 
     # sanity: the frozen sub-solve must reproduce the plain solve
@@ -1313,20 +1318,20 @@ def _solve_workpiece_weak_coupled(args, coil_data):
                 tol=args.wp_gmres_tol, maxiter=500, restart=80)
         t_iter = time.perf_counter() - t0
         t_bie += t_iter
+        if wp_loop_apply:
+            res_bem, loop_meta = _apply_wp_loop_dof(
+                args, bem, phi_inc, surface_z(), omega, coil_data,
+                res_bem, wp_genus, wp_chi)
         H_t_rms_iter = float(res_bem["H_t_rms"])
 
         if esim_solver is None:
             progress("BEM", f"BIE ({t_iter:.1f}s)")
-            if wp_loop_apply:
-                res_bem, loop_meta = _apply_wp_loop_dof(
-                    args, bem, phi_inc, surface_z(), omega, coil_data,
-                    res_bem, wp_genus, wp_chi)
             break
 
         # Karl update.
         Z_s_old = Z_s_wp
         if args.esim_per_panel:
-            H_t_per = panel_tangential_field_rms(bem.fes, res_bem["phi_vec"])
+            H_t_per = _solved_panel_tangential_field(bem, res_bem)
             Z_s_new = panel_evaluator.evaluate(H_t_per)
             Z_s_wp = anderson.step(Z_s_old, Z_s_new)
             dZ_per_dof = (np.abs(Z_s_new - Z_s_old)
@@ -1337,6 +1342,12 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             Ht_max = float(np.max(H_t_per))
             esim_history.append({
                 "iteration": iteration,
+                "held_Z_sha256": hashlib.sha256(np.asarray(Z_s_old, dtype='<c16').tobytes()).hexdigest(),
+                "H_t_per_panel_min": float(np.min(H_t_per)),
+                "relaxation": float(args.esim_relax),
+                "anderson_m": int(args.esim_anderson_m),
+                "loop_faraday_residual": (loop_meta or {}).get('wp_loop_faraday_residual_rel'),
+                "loop_linear_residual": (loop_meta or {}).get('wp_loop_linear_residual_rel'),
                 "Z_s_abs_mean": Zabs_mean,
                 "Z_s_abs_max": float(np.max(np.abs(Z_s_wp))),
                 "Z_s_abs_min": float(np.min(np.abs(Z_s_wp))),
@@ -1394,12 +1405,16 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             res_bem = bem.solve_hacapk(
                 phi_inc, Z_s=surface_z(), omega=omega,
                 tol=args.wp_gmres_tol, maxiter=500, restart=80)
+        if wp_loop_apply:
+            res_bem, loop_meta = _apply_wp_loop_dof(
+                args, bem, phi_inc, surface_z(), omega, coil_data,
+                res_bem, wp_genus, wp_chi)
         t_bie += time.perf_counter() - t0
         # Final per-panel |H_t| via triangle-gradient (matches Karl loop
         # interior; see extract_H_t_per_dof_grad in bem_sibc_solver.py).
         # Used for the Z_s vs H_t scatter / spatial map in publications.
         if isinstance(Z_s_wp, np.ndarray):
-            H_t_per_final = panel_tangential_field_rms(bem.fes, res_bem["phi_vec"])
+            H_t_per_final = _solved_panel_tangential_field(bem, res_bem)
         else:
             H_t_per_final = None
         # Certify the constitutive mismatch on the final re-solved field,
@@ -1782,6 +1797,8 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         "Z_s_wp_imag": Z_s_imag_out,
         "skin_depth_wp_mm": None if panel_zs_file else float(delta_wp * 1e3),
         "impedance_model": "specified-panel" if panel_zs_file else args.impedance_model,
+        "esim_seed_Z_real": float(Z_s_seed.real) if esim_solver is not None else None,
+        "esim_seed_Z_imag": float(Z_s_seed.imag) if esim_solver is not None else None,
         "esim_iterations": int(n_iter_done),
         "esim_converged": bool(esim_converged),
         "esim_fixed_point_relative_error": esim_fixed_point_error,
@@ -1989,6 +2006,8 @@ def _assemble_full_output(args, coil_data, wp_data):
     out["esim_anderson_m"] = wp_data.get("esim_anderson_m", 0)
     out["esim_anderson_restarts"] = wp_data.get("esim_anderson_restarts", 0)
     out["esim_anderson_clips"] = wp_data.get("esim_anderson_clips", 0)
+    out["esim_seed_Z_real"] = wp_data.get("esim_seed_Z_real")
+    out["esim_seed_Z_imag"] = wp_data.get("esim_seed_Z_imag")
     out["esim_history"] = wp_data["esim_history"]
     out["esim_panel_evaluation"] = wp_data.get("esim_panel_evaluation")
     out["msh_file"] = wp_data["msh_file"]
@@ -2024,14 +2043,40 @@ def _assemble_full_output(args, coil_data, wp_data):
 def _strong_workpiece_impedance(args, mesh, scalar_impedance, genus):
     """Read the exact body face order once, never replace it by a mean."""
     path = getattr(args, 'panel_zs_file', '')
-    if not path:
+    if not path and getattr(args, 'impedance_model', 'sibc') != 'esim':
         return scalar_impedance
     if genus not in (0, 1) or mesh.nv > 7000:
         raise ValueError("Strong panel Zs requires genus-0/1 and at most 7000 body vertices")
     if args.wp_bem_backend != 'intree-dense':
         raise ValueError("Strong panel Zs requires the dense P1 body backend")
+    if not path:
+        return scalar_impedance
     from radia.surface_impedance import read_panel_impedance
     return read_panel_impedance(path, mesh, frequency_hz=args.frequency)
+
+
+def _strong_panel_esim(args, mesh, solve_em, *, field_scale):
+    """Reuse the finite-cell law at the actual terminal operating current."""
+    from em_material import EMMaterial, load_bh_file
+    from radia.esim_cell_problem import require_esim_converged
+    from radia.esim_panel_evaluator import PanelESIMEvaluator, solve_panel_esim
+    from ngsolve import BND
+    material = EMMaterial(name='wp', sigma=args.sigma, mu_r=args.mu_r,
+                          bh_curve=load_bh_file(args.bh_file))
+    cell = material.create_esim_solver(args.frequency, args.half_thickness,
+                                      geometry='cylinder')
+    seed = complex(require_esim_converged(cell.solve(5.), 'Strong ESIM seed')['Z'])
+    evaluator = PanelESIMEvaluator(cell, mode=getattr(args, 'esim_panel_evaluator', 'direct'),
+        interpolation_tol=float(args.esim_tol)/10,
+        max_table_cells=getattr(args, 'esim_table_max_cells', 4096))
+    z, state, diagnostics = solve_panel_esim(evaluator, solve_em,
+        np.full(mesh.GetNE(BND), seed, dtype=complex), tolerance=float(args.esim_tol),
+        max_iter=int(args.esim_max_iter), relaxation=float(args.esim_relax),
+        field_scale=field_scale, inner_tolerance=min(float(args.coupling_tol), float(args.esim_tol)/10))
+    diagnostics['esim_panel_evaluation'].update(seed_cell_calls=1,
+        total_direct_cell_calls=diagnostics['esim_panel_evaluation']['direct_cell_calls']+1)
+    state.update(diagnostics)
+    return z, state
 
 
 def _solve_workpiece_strong_coupled(args):
@@ -2096,7 +2141,8 @@ def _solve_workpiece_strong_coupled(args):
     delta_wp = mat_wp.skin_depth(args.frequency)
     Z_s_scalar = (1.0 + 1j) * (1.0 / args.sigma) / delta_wp
     Z_s = _strong_workpiece_impedance(args, wp_mesh, Z_s_scalar, wp_genus)
-    z_description = (f'{Z_s:.3e}' if not getattr(args, 'panel_zs_file', '')
+    z_description = ('per-panel ESIM (finite-cell seed)' if args.impedance_model == 'esim' else
+                     f'{Z_s:.3e}' if not getattr(args, 'panel_zs_file', '')
                      else f'face-ordered ({len(Z_s.values)} panels)')
 
     # Workpiece BIE backend: HACApK (O(N log N), scales past the ~12k-tri
@@ -2150,18 +2196,26 @@ def _solve_workpiece_strong_coupled(args):
         wp_hacapk=wp_hacapk, wp_aca_eps=args.wp_aca_eps,
         wp_gmres_tol=args.wp_gmres_tol,
         coil_hacapk=coil_hacapk, coil_aca_eps=args.coil_aca_eps)
-    sol = solver.solve(
-        Z_s=Z_s, omega=omega,
-        max_iter=int(args.coupling_max_iter),
-        tol=float(args.coupling_tol),
-        relax=float(args.coupling_relax),
-        loop_dof=wp_loop_apply)
+    def solve_em(z):
+        return solver.solve(Z_s=z, omega=omega,
+            max_iter=int(args.coupling_max_iter),
+            tol=min(float(args.coupling_tol), float(args.esim_tol)/10)
+                if args.impedance_model == 'esim' else float(args.coupling_tol),
+            relax=float(args.coupling_relax), loop_dof=wp_loop_apply)
+    if args.impedance_model == 'esim':
+        Z_s, sol = _strong_panel_esim(args, wp_mesh, solve_em,
+                                      field_scale=abs(float(args.current)))
+    else:
+        sol = solve_em(Z_s)
     t_solve = time.perf_counter() - t0
 
     # CoupledBEMSolver drives the coil EFIE at UNIT terminal current (its
     # g_red constraint is normalised; solve() takes no current).  The
-    # problem is linear, so scale the current-dependent outputs to
-    # --current here: fields ~ I, dissipation ~ I^2.  Inductances
+    # held-Z electromagnetic problem is linear, so scale its outputs to
+    # --current here: fields ~ I, dissipation ~ I^2. Nonlinear ESIM has
+    # already selected Z using this actual current; another drive needs a
+    # new material solve. The following scaling is only at this held Z.
+    # Inductances
     # (L_air / L_total / Delta_L) are per-unit-current energies and stay.
     # Missing this scale was the Kubota 2026-07-16 incident: at 6700 A the
     # panel reported P_wp = 8.3e-4 W / H_t = 9.84 A/m -- 1 A-drive values,
@@ -2280,7 +2334,8 @@ def _solve_workpiece_strong_coupled_peec(args, coil_data):
     delta_wp = mat_wp.skin_depth(args.frequency)
     Z_s_scalar = (1.0 + 1j) * (1.0 / args.sigma) / delta_wp
     Z_s = _strong_workpiece_impedance(args, wp_mesh, Z_s_scalar, wp_genus)
-    z_description = (f'{Z_s:.3e}' if not getattr(args, 'panel_zs_file', '')
+    z_description = ('per-panel ESIM (finite-cell seed)' if args.impedance_model == 'esim' else
+                     f'{Z_s:.3e}' if not getattr(args, 'panel_zs_file', '')
                      else f'face-ordered ({len(Z_s.values)} panels)')
     wp_hacapk = (args.wp_bem_backend == "hacapk")
 
@@ -2317,12 +2372,16 @@ def _solve_workpiece_strong_coupled_peec(args, coil_data):
         paths, R_f, L_f, wp_mesh, Zs_fil=Zs_fil, wp_order=1,
         wp_hacapk=wp_hacapk, wp_aca_eps=args.wp_aca_eps,
         wp_gmres_tol=args.wp_gmres_tol)
-    sol = solver.solve(
-        Z_s=Z_s, omega=omega, I_port=float(args.current),
-        max_iter=int(args.coupling_max_iter),
-        tol=float(args.coupling_tol),
-        relax=float(args.coupling_relax),
-        loop_dof=wp_loop_apply)
+    def solve_em(z):
+        return solver.solve(Z_s=z, omega=omega, I_port=float(args.current),
+            max_iter=int(args.coupling_max_iter),
+            tol=min(float(args.coupling_tol), float(args.esim_tol)/10)
+                if args.impedance_model == 'esim' else float(args.coupling_tol),
+            relax=float(args.coupling_relax), loop_dof=wp_loop_apply)
+    if args.impedance_model == 'esim':
+        Z_s, sol = _strong_panel_esim(args, wp_mesh, solve_em, field_scale=1.)
+    else:
+        sol = solve_em(Z_s)
     t_solve = time.perf_counter() - t0
     progress("COUPLED",
         f"converged in {int(sol['iterations'])} iter: "
@@ -2389,7 +2448,7 @@ def _assemble_strong_output(args, coil_data, strong):
                 "coil_loss_air_W", "coil_loss_change_W"):
         out[key] = float(strong[key])
     for key in ('body_impedance_value_hash', 'body_operator_reused',
-                'body_factorization_reused', 'body_geometry_reused'):
+                'body_factorization_reused', 'body_geometry_reused', 'wp_loop_faraday_residual'):
         if key in strong:
             out[key] = strong[key]
     out["coupling_converged"] = bool(strong["converged"])
@@ -2422,6 +2481,15 @@ def _assemble_strong_output(args, coil_data, strong):
             panel_zs_file=str(getattr(args, 'panel_zs_file', '')),
             Z_s_mean_weighting='area', material_metadata_role='report-only',
             skin_depth_wp_mm=None)
+    if getattr(args, 'impedance_model', 'sibc') == 'esim':
+        out['impedance_model'] = 'esim'
+        for key in ('esim_iterations', 'esim_converged', 'esim_fixed_point_relative_error',
+                    'esim_history', 'esim_inner_history', 'esim_inner_iterations_total',
+                    'esim_inner_tolerance', 'esim_tolerance', 'esim_seed_Z_real',
+                    'esim_seed_Z_imag', 'esim_field_scale', 'esim_anderson_m',
+                    'esim_panel_evaluation', 'port_quantity_kind'):
+            out[key] = strong[key]
+        out['esim_operating_current_A'] = float(args.current)
     out["wp_bem_backend"] = "hacapk" if strong.get("wp_hacapk") else "intree-dense"
     out["coil_bem_backend"] = "hacapk_cocr" if strong.get("coil_hacapk") else "dense-lu"
     out["t_wp_mesh_s"] = float(strong["t_wp_mesh_s"])
@@ -2687,9 +2755,11 @@ def run_inductance(args):
     # to drive the coil EFIE and a workpiece to couple to -- fail fast on a
     # bad contract before the expensive coil solve.
     if args.coupling_mode == "strong":
-        if args.impedance_model != "sibc" or args.esim_per_panel:
-            return {"status": "error", "error":
-                    "Strong coupling supports linear SIBC only; nonlinear ESIM is unsupported."}
+        if args.impedance_model == 'esim' and not args.esim_per_panel:
+            return {'status': 'error', 'error': 'Strong nonlinear ESIM requires --esim-per-panel.'}
+        if args.impedance_model == 'esim' and (not args.bh_file or int(args.h1_order) != 1
+                or int(getattr(args, 'esim_anderson_m', 0)) != 0):
+            return {'status': 'error', 'error': 'Strong per-panel ESIM requires a B-H file, P1 and damped Picard (--esim-anderson-m 0).'}
         if args.coil_solver not in ("bem-a", "peec"):
             return {"status": "error",
                     "error": f"--coupling-mode strong supports --coil-solver "
@@ -2720,7 +2790,7 @@ def run_inductance(args):
                     'Specified panel Zs requires P1 SIBC, a workpiece, '
                     'no ESIM iteration; one supported handle uses its loop DOF.'}
 
-    if args.coupling_mode == 'strong' and getattr(args, 'panel_zs_file', ''):
+    if args.coupling_mode == 'strong' and (getattr(args, 'panel_zs_file', '') or args.impedance_model == 'esim'):
         if args.wp_bem_backend == 'auto':
             args.wp_bem_backend = 'intree-dense'
         elif args.wp_bem_backend != 'intree-dense':
@@ -2735,10 +2805,10 @@ def run_inductance(args):
                 'use --panel-zs-file for specified panel Zs.'}
     if getattr(args, 'esim_panel_evaluator', 'direct') != 'direct' and (
             not args.esim_per_panel or args.impedance_model != 'esim'
-            or args.coupling_mode != 'weak' or int(args.h1_order) != 1
+            or int(args.h1_order) != 1
             or args.coil_only or not args.vol):
         return {'status': 'error', 'error':
-                '--esim-panel-evaluator acceleration requires weak P1 per-panel ESIM with a workpiece'}
+                '--esim-panel-evaluator acceleration requires P1 per-panel ESIM with a workpiece'}
 
     # Loop-DOF extension: an EXPLICIT "on" fails fast on unsupported
     # combinations BEFORE the expensive coil solve (the genus check itself
@@ -2751,11 +2821,8 @@ def run_inductance(args):
         if args.coil_only or not args.vol:
             return {"status": "error",
                     "error": "--wp-loop-dof requires a workpiece --vol."}
-        if args.impedance_model != "sibc":
-            return {"status": "error",
-                    "error": "--wp-loop-dof supports the linear SIBC only "
-                             "(--impedance-model sibc); the ESIM Karl loop "
-                             "is not integrated with the loop DOF."}
+        if args.impedance_model != 'sibc' and not args.esim_per_panel:
+            return {'status': 'error', 'error': '--wp-loop-dof nonlinear ESIM requires --esim-per-panel.'}
         if args.wp_bem_backend not in ("auto", "intree-dense"):
             return {"status": "error",
                     "error": "--wp-loop-dof needs the dense operators: pass "
@@ -2997,7 +3064,7 @@ def build_argparser():
                              "surface stiffness and local heat integration. Uses "
                              "the solved per-panel peak H_t; supports intree-dense "
                              "and HACApK on genus-0 workpieces. Direct evaluation "
-                             "is the default. Genus-1 ESIM remains unsupported.")
+                             "is the default. Genus-1 and strong coupling require the dense P1 body path.")
     parser.add_argument('--esim-panel-evaluator', choices=['direct', 'table'], default='direct',
                         help='Per-run outer ESIM evaluation: direct or adaptive log-H linear table. '
                              'All panels are still directly certified at the final accepted field.')

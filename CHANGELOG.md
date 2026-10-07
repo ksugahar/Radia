@@ -5,14 +5,23 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Per-panel nonlinear ESIM now connects the weak genus-1 loop and both
+  strong coil routes on flat P1 dense genus-0/1 bodies. Material updates
+  use the complete surface field at the actual current. A final EM re-solve
+  and direct cells on every panel certify the same returned state; strong
+  coil tolerance is at most one tenth of material tolerance. Material and
+  inner EM histories are separate. Nonlinear port R/L are secant quantities
+  at the accepted current, not values scalable to another drive. Higher
+  bases, multiple handles and the strong native thermal handoff remain
+  unsupported; this adds no general nonlinear-material accuracy claim.
+
 - Fixed face-ordered panel impedance now supports linear strong coupling
   with the surface-coil and filament-coil solvers, for flat P1 dense bodies
   of genus 0 or 1. Every body response uses the specified face values,
   including loop current, local heat and complete reaction. Equal-face
   values retain scalar arithmetic; changing values or frequency refreshes
   the body factorization, while geometry work is retained. Returned powers
-  and fields share the converged coil state. Nonlinear strong ESIM and the
-  strong Simulink thermal handoff remain unsupported; no new native model
+  and fields share the converged coil state. The strong Simulink thermal handoff remains unsupported; no new native model
   or physical-accuracy claim is implied.
 
 - Scalar strong coupling now divides the surface-coil reaction RHS by mu0

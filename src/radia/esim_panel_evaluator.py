@@ -217,3 +217,90 @@ class PanelESIMEvaluator:
                     cell_seconds=self.cell_seconds, evaluation_seconds=self.evaluation_seconds,
                     certification_seconds=self.certification_seconds, workers=1,
                     cell_time_kind='sum-of-direct-cell-wall-times')
+
+
+def solve_panel_esim(evaluator, solve_em, seed, *, tolerance, max_iter,
+                     relaxation=.5, field_scale=1., inner_tolerance=None):
+    """Damped material Picard with a re-solved, direct-certified EM state.
+
+    ``solve_em`` must return a converged held-impedance state, including
+    ``wp_H_t_tri``. Strong callers supply their actual inner tolerance;
+    unit-current BEM callers supply abs(actual current) as field_scale.
+    Returned impedances belong to the returned state, never its next update.
+    """
+    from .surface_impedance import PanelSurfaceImpedance
+    if not np.isfinite(tolerance) or not 0 < tolerance < 1:
+        raise ValueError('ESIM tolerance must be finite in (0,1)')
+    if not np.isfinite(relaxation) or not 0 < relaxation <= 1:
+        raise ValueError('ESIM relaxation must be finite in (0,1]')
+    if isinstance(max_iter, bool) or int(max_iter) != max_iter or max_iter < 1:
+        raise ValueError('ESIM iteration budget must be a positive integer')
+    if not np.isfinite(field_scale) or field_scale < 0:
+        raise ValueError('ESIM field scale must be finite and nonnegative')
+    if inner_tolerance is not None and (not np.isfinite(inner_tolerance)
+            or not 0 < inner_tolerance <= tolerance/10):
+        raise ValueError('Inner coupling tolerance must be <= ESIM tolerance/10')
+    values = PanelSurfaceImpedance(np.asarray(seed, dtype=complex)).values.copy()
+    initial = values.copy()
+    history, inner_history = [], []
+
+    def state_at(z, final=False):
+        held = PanelSurfaceImpedance(z.copy())
+        state = solve_em(held)
+        field = np.asarray(state['wp_H_t_tri'], dtype=complex)
+        if field.shape != (len(z), 3) or not np.all(np.isfinite(field)):
+            raise RuntimeError('ESIM requires the full finite face-ordered surface field')
+        if inner_tolerance is not None:
+            if not np.array_equal(np.asarray(state['Z_s_per_panel']), z):
+                raise RuntimeError('ESIM returned state did not use the held panel impedances')
+            if not state.get('converged', False):
+                raise RuntimeError('ESIM inner coupling did not converge')
+            for key, limit in (('coupling_residual', inner_tolerance),
+                               ('body_residual', 1e-6)):
+                residual = float(state[key])
+                if not np.isfinite(residual) or residual > limit:
+                    raise RuntimeError(f'ESIM final-state {key} exceeds tolerance')
+            if 'wp_loop_faraday_residual' in state:
+                residual = float(state['wp_loop_faraday_residual'])
+                if not np.isfinite(residual) or residual > 1e-6:
+                    raise RuntimeError('ESIM loop Faraday residual exceeds tolerance')
+            balance = float(state['body_power_balance_relative_error'])
+            if not np.isfinite(balance) or balance > .10:
+                raise RuntimeError('ESIM body reaction/heat gate failed')
+            port = float(state['port_power_W'])
+            expected = float(state['body_reaction_power_W'])+float(state['coil_loss_W'])
+            if not np.isclose(port, expected, rtol=1e-10, atol=1e-30):
+                raise RuntimeError('ESIM coupled port power identity failed')
+            inner_history.append(dict(iterations=int(state['iterations']),
+                final_certification=final, coupling_residual=float(state['coupling_residual']),
+                body_residual=float(state['body_residual']),
+                loop_faraday_residual=state.get('wp_loop_faraday_residual')))
+        return held, state, field_scale*np.linalg.norm(field, axis=1)
+
+    for iteration in range(int(max_iter)):
+        held, state, field = state_at(values)
+        target = evaluator.evaluate(field)
+        mismatch = float(np.max(abs(target-values)/np.maximum(abs(values), 1e-30)))
+        history.append(dict(iteration=iteration+1,
+            held_Z_sha256=hashlib.sha256(values.astype('<c16').tobytes()).hexdigest(),
+            H_min=float(field.min()), H_max=float(field.max()),
+            constitutive_relative_error=mismatch, relaxation=float(relaxation),
+            anderson_m=0))
+        values = PanelSurfaceImpedance((1-relaxation)*values+relaxation*target).values.copy()
+        if mismatch <= tolerance:
+            held, state, field = state_at(values, final=True)
+            direct = evaluator.certify(field)
+            error = float(np.max(abs(direct-values)/np.maximum(abs(values), 1e-30)))
+            if not np.isfinite(error) or error > tolerance:
+                raise RuntimeError('Final all-panel direct ESIM constitutive mismatch exceeds tolerance')
+            diagnostics = dict(esim_iterations=iteration+1, esim_converged=True,
+                esim_fixed_point_relative_error=error, esim_history=history,
+                esim_inner_history=inner_history,
+                esim_inner_iterations_total=sum(h['iterations'] for h in inner_history),
+                esim_inner_tolerance=inner_tolerance, esim_tolerance=float(tolerance),
+                esim_seed_Z_real=initial.real.tolist(), esim_seed_Z_imag=initial.imag.tolist(),
+                esim_field_scale=float(field_scale), esim_anderson_m=0,
+                esim_panel_evaluation=evaluator.diagnostics(),
+                port_quantity_kind='secant-at-accepted-current')
+            return held, state, diagnostics
+    raise RuntimeError('Panel ESIM did not converge; refusing heat/reaction output')

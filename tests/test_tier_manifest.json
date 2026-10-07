@@ -6,7 +6,8 @@
     "src/radia/peec_coupled_bem_solver.py": ["tests/test_bem_strong_panel_impedance.py", "tests/test_bem_complete_reaction.py", "validation_test/panels/test_strong_coupling_cli_contract.py"],
     "src/radia/bem_loop_work.py": ["tests/test_bem_strong_panel_impedance.py", "tests/test_bem_loop_work_pairings.py"],
     "src/radia/bem_loop_extension.py": ["tests/test_bem_strong_panel_impedance.py", "tests/test_bem_loop_work_pairings.py", "tests/test_bem_loop_panel_impedance.py", "validation_test/bem/test_loop_extension_ring.py"],
-    "src/radia/panels/calc_inductance.py": ["tests/test_bem_strong_panel_impedance.py", "tests/test_bem_loop_panel_impedance.py"],
+    "src/radia/panels/calc_inductance.py": ["tests/test_panel_esim_complete_state.py", "tests/test_bem_strong_panel_impedance.py", "tests/test_bem_loop_panel_impedance.py"],
+    "src/radia/esim_panel_evaluator.py": ["tests/test_panel_esim_complete_state.py", "validation_test/induction_heating/test_esim_panel_evaluator.py"],
     "src/radia/bem_sibc_solver.py": ["tests/test_bem_strong_panel_impedance.py", "tests/test_bem_sibc_acceptance.py"],
     "src/radia/lamination.py": ["tests/test_lamination_api.py"],
     "docs/maglev/demos/sphere/maglev_sphere_force.py": ["tests/test_maglev_sphere_golden.py"],
@@ -248,6 +249,8 @@
       "paths": [
         "tests/test_bem_complete_reaction.py",
         "tests/test_bem_strong_panel_impedance.py",
+        "tests/test_panel_esim_complete_state.py",
+        "validation_test/induction_heating/test_esim_panel_evaluator.py",
         "validation_test/panels/test_strong_coupling_cli_contract.py",
         "tests/test_bem_loop_work_pairings.py",
         "tests/test_bem_loop_panel_impedance.py",
