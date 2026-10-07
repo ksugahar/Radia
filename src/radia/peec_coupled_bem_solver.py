@@ -104,12 +104,13 @@ class CoupledPEECBEMSolver:
         from radia.bem_loop_extension import A_from_filaments
         from radia.bem_complete_reaction import (electric_incident_vertex_load,
                                                 solve_complete_body, _iterate_complete_current)
+        from radia.bem_complete_reaction import strong_surface_impedance, strong_impedance_metadata
         from radia.workpiece_surface import _check_sibc_reaction_power
         if max_iter < 2 or not np.isfinite(tol) or tol <= 0 or not 0 < relax <= 1:
             raise ValueError('Invalid strong-coupling iteration controls')
         if not np.isfinite(omega) or omega <= 0 or not np.isfinite(I_port) or I_port == 0:
             raise ValueError('Strong coupling needs finite positive frequency and nonzero current')
-        z = complex(Z_s)
+        z = strong_surface_impedance(Z_s, len(self.wp_tris))
         poisson = self._phi_poisson
         centers = self.wp_nodes[self.wp_tris].mean(axis=1)
         areas = poisson._areas
@@ -158,4 +159,5 @@ class CoupledPEECBEMSolver:
             n_filaments=self.n_filaments, n_phi_wp=self.wp_solver.ndof,
             I_f=currents, body_emf=emf, wp_c=centers, wp_a=areas,
             wp_J_re=body['current'].real, wp_J_im=body['current'].imag,
-            wp_q_tri=body['q_tri'], Z_s=z, **body['loop_metadata'])
+            wp_q_tri=body['q_tri'], wp_H_t_tri=body['field'],
+            **strong_impedance_metadata(z, areas), **body['loop_metadata'])

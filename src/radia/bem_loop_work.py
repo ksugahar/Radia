@@ -67,27 +67,21 @@ def _p0_single_layer(bem_solver, areas, *, quadrature_bonus=4):
     return matrix
 
 
-def _loop_work_row(bem_solver, points, closed_triangles, open_triangles,
-                   vertex_map, gradients, normals, areas, theta, impedance,
-                   incident_vector_potential, neumann_trace, incident_potential,
-                   *, quadrature_bonus=4):
+def _prepare_loop_magnetic_work(bem_solver, points, closed_triangles, open_triangles,
+                   vertex_map, gradients, normals, areas, theta,
+                   neumann_trace, *, quadrature_bonus=4):
     """Return electric/magnetic loop rows and their measured work diagnostics.
 
     Magnetic work includes the distributed Cartesian surface current and
     normal magnetic flux with the same exterior Calderon convention as the BIE.
     Seam/conormal diagnostics rebuild edge pairs and solve a surface dual
-    problem per call; only the singular P0 operator is cached.
+    problem per unprepared call. Strong prepared solves also retain geometry-only
+    diagnostics and magnetic work; impedance-dependent work has a separate key.
     Its source pairs with the scattered field; electric work uses the total
     field. An independent reverse contraction checks work reciprocity.
     """
     n = len(points)
     nt = len(areas)
-    impedance = np.asarray(impedance, dtype=complex)
-    if impedance.ndim == 0:
-        impedance = np.full(nt, impedance, dtype=complex)
-    if (impedance.shape != (nt,) or not np.all(np.isfinite(impedance))
-            or np.any(impedance.real < 0)):
-        raise ValueError("Loop work requires finite passive face-ordered impedance")
     currents = np.cross(normals[:, None, :], -gradients)
     loop_current = np.cross(normals, -np.einsum("tik,ti->tk", gradients,
                                                theta[open_triangles]))
@@ -99,9 +93,6 @@ def _loop_work_row(bem_solver, points, closed_triangles, open_triangles,
     maps = [coo_matrix((currents[:, :, c].ravel(), (row_ids, column_ids)),
                        shape=(nt, n)).tocsr() for c in range(3)]
 
-    electric = sum(mapping.T @ (areas*impedance*loop_current[:, c])
-                   for c, mapping in enumerate(maps))
-    electric_diagonal = np.sum(areas*impedance*np.sum(loop_current**2, axis=1))
     single_layer = _p0_single_layer(bem_solver, areas,
                                     quadrature_bonus=quadrature_bonus)
     magnetic = MU_0*sum(mapping.T @ (single_layer.T @ loop_current[:, c])
@@ -112,9 +103,7 @@ def _loop_work_row(bem_solver, points, closed_triangles, open_triangles,
     if np.iscomplexobj(q) and np.any(q.imag != 0):
         raise ValueError("Unit carrier normal trace must be real")
     q = np.asarray(q.real, dtype=float)
-    incident_phi = np.asarray(incident_potential, dtype=complex)
-    if (q.shape != (n,) or incident_phi.shape != (n,) or not np.all(np.isfinite(q))
-            or not np.all(np.isfinite(incident_phi))):
+    if q.shape != (n,) or not np.all(np.isfinite(q)):
         raise ValueError("Loop work requires finite matching normal and incident traces")
     B = .5*bem_solver.M-bem_solver.DL
     # Exterior work: Q_g,u = j_g^T S0 C - q_g^T (.5 M-DL),
@@ -133,15 +122,6 @@ def _loop_work_row(bem_solver, points, closed_triangles, open_triangles,
     if not np.isfinite(symmetry) or symmetry > 1e-6:
         raise RuntimeError(f"Magnetic loop work reciprocity {symmetry:.3e} exceeds 1e-6; "
                            "refine quadrature")
-
-    centroids = points[closed_triangles].mean(axis=1)
-    incident = np.asarray(incident_vector_potential(centroids), dtype=complex)
-    if incident.shape != (nt, 3) or not np.all(np.isfinite(incident)):
-        raise ValueError("Incident vector potential must be finite on every face")
-    # Magnetic work acts on the scattered potential; electric work acts
-    # on total potential. The caller multiplies this source by -i omega.
-    forcing = (np.sum(areas*np.einsum("ij,ij->i", incident, loop_current))
-               - magnetic @ incident_phi)
 
     gradient_load = np.zeros(n)
     for k in range(3):
@@ -169,4 +149,60 @@ def _loop_work_row(bem_solver, points, closed_triangles, open_triangles,
                        quadrature_bonus=quadrature_bonus,
                        single_layer_matrix_bytes=int(single_layer.nbytes),
                        single_layer_assembly_seconds=bem_solver._loop_work_assembly_seconds)
-    return electric, electric_diagonal, magnetic, magnetic_diagonal, forcing, diagnostics
+    return maps, loop_current, magnetic, magnetic_diagonal, diagnostics
+
+def _prepare_loop_work(bem_solver, points, closed_triangles, open_triangles,
+                   vertex_map, gradients, normals, areas, theta, impedance,
+                   neumann_trace, *, quadrature_bonus=4, _geometry_key=None):
+    """Static magnetic work and value-dependent electric work are cached separately."""
+    nt = len(areas)
+    impedance = np.asarray(impedance, dtype=complex)
+    if impedance.ndim == 0:
+        impedance = np.full(nt, impedance, dtype=complex)
+    if (impedance.shape != (nt,) or not np.all(np.isfinite(impedance))
+            or np.any(impedance.real < 0)):
+        raise ValueError("Loop work requires finite passive face-ordered impedance")
+    key = (_geometry_key, quadrature_bonus)
+    cached = getattr(bem_solver, '_prepared_loop_magnetic_work', None) if _geometry_key is not None else None
+    if cached is not None and cached[0] == key:
+        magnetic_work = cached[1]
+    else:
+        magnetic_work = _prepare_loop_magnetic_work(bem_solver, points, closed_triangles,
+            open_triangles, vertex_map, gradients, normals, areas, theta, neumann_trace,
+            quadrature_bonus=quadrature_bonus)
+        if _geometry_key is not None:
+            bem_solver._prepared_loop_magnetic_work = (key, magnetic_work)
+    maps, loop_current, magnetic, magnetic_diagonal, diagnostics = magnetic_work
+    electric = sum(mapping.T @ (areas*impedance*loop_current[:, c])
+                   for c, mapping in enumerate(maps))
+    electric_diagonal = np.sum(areas*impedance*np.sum(loop_current**2, axis=1))
+    return electric, electric_diagonal, magnetic, magnetic_diagonal, loop_current, diagnostics
+
+
+
+def _loop_work_row(bem_solver, points, closed_triangles, open_triangles,
+                   vertex_map, gradients, normals, areas, theta, impedance,
+                   incident_vector_potential, neumann_trace, incident_potential,
+                   *, quadrature_bonus=4, _prepared_key=None):
+    """Reuse static pairings only; evaluate the current source on every call."""
+    phi = np.asarray(incident_potential, dtype=complex)
+    if phi.shape != (len(points),) or not np.all(np.isfinite(phi)):
+        raise ValueError("Loop work requires a finite matching incident trace")
+    cached = getattr(bem_solver, '_prepared_loop_work', None) if _prepared_key is not None else None
+    key = (_prepared_key, quadrature_bonus)
+    if cached is not None and cached[0] == key:
+        work = cached[1]
+    else:
+        work = _prepare_loop_work(bem_solver, points, closed_triangles, open_triangles,
+            vertex_map, gradients, normals, areas, theta, impedance, neumann_trace,
+            quadrature_bonus=quadrature_bonus,
+            _geometry_key=_prepared_key[0] if _prepared_key is not None else None)
+        if _prepared_key is not None:
+            bem_solver._prepared_loop_work = (key, work)
+    electric, diagonal, magnetic, magnetic_diagonal, loop_current, diagnostics = work
+    centers = points[closed_triangles].mean(axis=1)
+    incident = np.asarray(incident_vector_potential(centers), dtype=complex)
+    if incident.shape != (len(areas), 3) or not np.all(np.isfinite(incident)):
+        raise ValueError("Incident vector potential must be finite on every face")
+    forcing = np.sum(areas*np.einsum('td,td->t', incident, loop_current))-magnetic @ phi
+    return electric, diagonal, magnetic, magnetic_diagonal, forcing, diagnostics.copy()

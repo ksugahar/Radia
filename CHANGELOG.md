@@ -5,6 +5,16 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Fixed face-ordered panel impedance now supports linear strong coupling
+  with the surface-coil and filament-coil solvers, for flat P1 dense bodies
+  of genus 0 or 1. Every body response uses the specified face values,
+  including loop current, local heat and complete reaction. Equal-face
+  values retain scalar arithmetic; changing values or frequency refreshes
+  the body factorization, while geometry work is retained. Returned powers
+  and fields share the converged coil state. Nonlinear strong ESIM and the
+  strong Simulink thermal handoff remain unsupported; no new native model
+  or physical-accuracy claim is implied.
+
 - Scalar strong coupling now divides the surface-coil reaction RHS by mu0
   and uses complete mutual work from the total body current and incident
   electric projection. Previously the surface-coil redistribution was

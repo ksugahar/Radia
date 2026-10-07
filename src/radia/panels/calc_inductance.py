@@ -778,39 +778,21 @@ def _resolve_weak_loop_mode(args, wp_genus, basis_order):
     return mode, True, None
 
 def _wp_genus_check(wp_mesh, tag="BEM"):
-    """Euler characteristic / genus of the extracted workpiece surface.
-
-    Returns ``(chi, genus)`` and logs a WARNING for genus >= 1: the scalar
-    potential BIE (J_s = n x -grad phi, single-valued phi) carries ZERO net
-    current through any cut of the surface, so on a handle that links the
-    coil flux the physical shorted-turn eddy current -- and its Lenz
-    screening -- is unrepresentable.  The analytic genus-0 sphere locks
-    the simply connected path; flux-linked genus-1 heating needs the
-    explicit loop-DOF extension.
-    """
+    """Classify the extracted surface; loop-mode support is resolved by the caller."""
     from radia.bem_sibc_solver import surface_euler_characteristic
     chi = surface_euler_characteristic(wp_mesh)
     genus = (2 - chi) // 2
     if chi != 2:
-        progress(tag,
-            f"WARNING: workpiece surface has genus={genus} (Euler chi={chi}, "
-            f"e.g. a tube/ring).  The scalar-potential BIE cannot carry a net "
-            f"circulating (shorted-turn) eddy current on the handle, so its "
-            f"Lenz screening is LOST: H_t / P_wp are over-estimated when the "
-            f"coil flux links the handle. Reaction also needs the full loop field. "
-            f"Use --wp-loop-dof on the supported weak-coupling path for "
-            f"absolute heating.")
+        progress(tag, f"workpiece surface genus={genus} (Euler chi={chi}); "
+                      "the body solve resolves the circulating-current mode")
     return chi, genus
 
 
 _GENUS_P_WP_CAVEAT = (
-    "workpiece surface genus >= 1 (Euler chi != 2): the scalar-potential "
-    "BIE cannot represent the net circulating (shorted-turn) eddy current "
-    "on the handle, so its Lenz screening is missing and H_t / P_wp are "
-    "incorrect when the coil flux links the handle; delta_L is not exempt. "
-    "On the supported weak-coupling path, use --wp-loop-dof "
-    "to add the missing cohomology mode; the extension is locked by the "
-    "analytic shorted-ring golden.")
+    "The circulating handle-current mode is omitted. Flux-linked genus-1 "
+    "reaction and heating require the validated loop extension: flat P1, "
+    "dense body operators, linear SIBC with scalar or fixed panel impedance. "
+    "The sign of the resulting heating change is not prescribed.")
 
 
 def _solved_panel_tangential_field(bem, result):
@@ -2039,6 +2021,19 @@ def _assemble_full_output(args, coil_data, wp_data):
 # iterate. The coupled port has its own air baseline and coil-loss model;
 # body heat is checked independently against complete reaction power.
 # ======================================================================
+def _strong_workpiece_impedance(args, mesh, scalar_impedance, genus):
+    """Read the exact body face order once, never replace it by a mean."""
+    path = getattr(args, 'panel_zs_file', '')
+    if not path:
+        return scalar_impedance
+    if genus not in (0, 1) or mesh.nv > 7000:
+        raise ValueError("Strong panel Zs requires genus-0/1 and at most 7000 body vertices")
+    if args.wp_bem_backend != 'intree-dense':
+        raise ValueError("Strong panel Zs requires the dense P1 body backend")
+    from radia.surface_impedance import read_panel_impedance
+    return read_panel_impedance(path, mesh, frequency_hz=args.frequency)
+
+
 def _solve_workpiece_strong_coupled(args):
     """Iterative coil<->workpiece BEM coupling via CoupledBEMSolver.
 
@@ -2099,7 +2094,10 @@ def _solve_workpiece_strong_coupled(args):
     #     the linear weak path: Z_s = (1+j) * rho / delta ---
     mat_wp = EMMaterial(name="wp", sigma=args.sigma, mu_r=args.mu_r)
     delta_wp = mat_wp.skin_depth(args.frequency)
-    Z_s = (1.0 + 1j) * (1.0 / args.sigma) / delta_wp
+    Z_s_scalar = (1.0 + 1j) * (1.0 / args.sigma) / delta_wp
+    Z_s = _strong_workpiece_impedance(args, wp_mesh, Z_s_scalar, wp_genus)
+    z_description = (f'{Z_s:.3e}' if not getattr(args, 'panel_zs_file', '')
+                     else f'face-ordered ({len(Z_s.values)} panels)')
 
     # Workpiece BIE backend: HACApK (O(N log N), scales past the ~12k-tri
     # dense wall) by default; --wp-bem-backend intree-dense forces the dense
@@ -2137,7 +2135,7 @@ def _solve_workpiece_strong_coupled(args):
 
     progress("COUPLED",
         f"strong coupling: coil {coil_mesh.nv}v / wp {wp_mesh.nv}v, "
-        f"f={args.frequency:g} Hz, Z_s={Z_s:.3e}, "
+        f"f={args.frequency:g} Hz, Z_s={z_description}, "
         f"coil_backend={'hacapk' if coil_hacapk else 'dense-lu'}, "
         f"wp_backend={'hacapk' if wp_hacapk else 'dense'}, "
         f"loop_dof={'on' if wp_loop_apply else 'off'}, "
@@ -2178,7 +2176,7 @@ def _solve_workpiece_strong_coupled(args):
         if key in sol:
             sol[key] = sol[key] * I_term * I_term
     sol["H_t_rms"] = float(sol["H_t_rms"]) * abs(I_term)
-    for key in ("wp_J_re", "wp_J_im", "J_coil_re", "J_coil_im", "body_emf"):
+    for key in ("wp_J_re", "wp_J_im", "J_coil_re", "J_coil_im", "body_emf", "wp_H_t_tri"):
         if sol.get(key) is not None:
             sol[key] = sol[key] * I_term
     # The loop current scales like the fields (alpha ~ I); the frozen
@@ -2280,7 +2278,10 @@ def _solve_workpiece_strong_coupled_peec(args, coil_data):
 
     mat_wp = EMMaterial(name="wp", sigma=args.sigma, mu_r=args.mu_r)
     delta_wp = mat_wp.skin_depth(args.frequency)
-    Z_s = (1.0 + 1j) * (1.0 / args.sigma) / delta_wp
+    Z_s_scalar = (1.0 + 1j) * (1.0 / args.sigma) / delta_wp
+    Z_s = _strong_workpiece_impedance(args, wp_mesh, Z_s_scalar, wp_genus)
+    z_description = (f'{Z_s:.3e}' if not getattr(args, 'panel_zs_file', '')
+                     else f'face-ordered ({len(Z_s.values)} panels)')
     wp_hacapk = (args.wp_bem_backend == "hacapk")
 
     # Loop-DOF resolution (same contract as the BEM-A strong driver).
@@ -2306,15 +2307,11 @@ def _solve_workpiece_strong_coupled_peec(args, coil_data):
 
     progress("COUPLED",
         f"strong PEEC coupling [EXPERIMENTAL]: {len(paths)} filaments / "
-        f"wp {wp_mesh.nv}v, f={args.frequency:g} Hz, Z_s={Z_s:.3e}, "
+        f"wp {wp_mesh.nv}v, f={args.frequency:g} Hz, Z_s={z_description}, "
         f"wp_backend={'hacapk' if wp_hacapk else 'dense'}, "
         f"loop_dof={'on' if wp_loop_apply else 'off'}, "
         f"max_iter={args.coupling_max_iter} tol={args.coupling_tol:g} "
         f"relax={args.coupling_relax:g}")
-    progress("COUPLED",
-        "WARNING: strong PEEC loading response has no durable independent "
-        "reference case (demo is weakly coupled) -- treat absolute P_wp/dL as "
-        "unverified.")
     t0 = time.perf_counter()
     solver = CoupledPEECBEMSolver(
         paths, R_f, L_f, wp_mesh, Zs_fil=Zs_fil, wp_order=1,
@@ -2391,6 +2388,10 @@ def _assemble_strong_output(args, coil_data, strong):
                 "body_residual", "port_power_W", "coil_loss_W",
                 "coil_loss_air_W", "coil_loss_change_W"):
         out[key] = float(strong[key])
+    for key in ('body_impedance_value_hash', 'body_operator_reused',
+                'body_factorization_reused', 'body_geometry_reused'):
+        if key in strong:
+            out[key] = strong[key]
     out["coupling_converged"] = bool(strong["converged"])
     out["coupling_residual"] = float(strong["coupling_residual"])
     out["coil_resistance_model"] = ("filament-loop-resistance"
@@ -2409,6 +2410,18 @@ def _assemble_strong_output(args, coil_data, strong):
     out["Z_s_wp_imag"] = float(strong["Z_s"].imag)
     out["skin_depth_wp_mm"] = float(strong["delta_wp_mm"])
     out["impedance_model"] = "sibc"
+    if 'Z_s_per_panel' in strong:
+        values = np.asarray(strong['Z_s_per_panel'], dtype=complex)
+        field = np.asarray(strong['wp_H_t_tri'], dtype=complex)
+        out.update(impedance_model='specified-panel', esim_per_panel=True,
+            esim_impedance_layout='BND-element-order',
+            esim_per_panel_Z_s_real=values.real.tolist(),
+            esim_per_panel_Z_s_imag=values.imag.tolist(),
+            esim_per_panel_H_t=np.linalg.norm(field, axis=1).tolist(),
+            esim_per_panel_centroids=np.asarray(strong['wp_c']).tolist(),
+            panel_zs_file=str(getattr(args, 'panel_zs_file', '')),
+            Z_s_mean_weighting='area', material_metadata_role='report-only',
+            skin_depth_wp_mm=None)
     out["wp_bem_backend"] = "hacapk" if strong.get("wp_hacapk") else "intree-dense"
     out["coil_bem_backend"] = "hacapk_cocr" if strong.get("coil_hacapk") else "dense-lu"
     out["t_wp_mesh_s"] = float(strong["t_wp_mesh_s"])
@@ -2438,6 +2451,8 @@ def _assemble_strong_output(args, coil_data, strong):
             strong["wp_loop_H_t_frozen"])
         out["wp_loop_screening_ratio"] = float(
             strong["wp_loop_screening_ratio"])
+        if 'wp_loop_impedance_assembly' in strong:
+            out['wp_loop_impedance_assembly'] = strong['wp_loop_impedance_assembly']
         out["wp_loop_regime"] = _loop_regime(out["wp_loop_alpha_deg"])
         out["t_loop_dof_s"] = float(strong.get("t_loop_dof_s", 0.0))
         out["P_wp_note"] = (
@@ -2674,7 +2689,7 @@ def run_inductance(args):
     if args.coupling_mode == "strong":
         if args.impedance_model != "sibc" or args.esim_per_panel:
             return {"status": "error", "error":
-                    "Strong coupling supports uniform linear SIBC only; ESIM is unsupported."}
+                    "Strong coupling supports linear SIBC only; nonlinear ESIM is unsupported."}
         if args.coil_solver not in ("bem-a", "peec"):
             return {"status": "error",
                     "error": f"--coupling-mode strong supports --coil-solver "
@@ -2698,12 +2713,19 @@ def run_inductance(args):
             }
 
     if getattr(args, 'panel_zs_file', ''):
-        if (args.coupling_mode != 'weak' or args.impedance_model != 'sibc'
+        if (args.coupling_mode not in ('weak', 'strong') or args.impedance_model != 'sibc'
                 or args.esim_per_panel or args.coil_only or not args.vol
                 or int(args.h1_order) != 1):
             return {'status': 'error', 'error':
-                    'Specified panel Zs requires weak P1 SIBC, a workpiece, '
+                    'Specified panel Zs requires P1 SIBC, a workpiece, '
                     'no ESIM iteration; one supported handle uses its loop DOF.'}
+
+    if args.coupling_mode == 'strong' and getattr(args, 'panel_zs_file', ''):
+        if args.wp_bem_backend == 'auto':
+            args.wp_bem_backend = 'intree-dense'
+        elif args.wp_bem_backend != 'intree-dense':
+            return {'status': 'error', 'error':
+                    'Strong panel Zs requires the dense P1 body backend.'}
 
     # --esim-per-panel names the per-panel ESIM iteration; with linear SIBC it
     # would otherwise be dropped and a uniform-Zs result reported.

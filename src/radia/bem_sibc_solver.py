@@ -456,7 +456,7 @@ class ScalarBIESIBCSolver:
             return assemble_panel_impedance_stiffness(self.fes, Z_s)
         return _uniform_surface_impedance(Z_s, self.ndof) * self.K
 
-    def solve(self, phi_inc_cf, Z_s, omega):
+    def solve(self, phi_inc_cf, Z_s, omega, *, _prepared_key=None):
         """Solve scalar BIE + SIBC for given incident potential and impedance.
 
         Args:
@@ -490,7 +490,9 @@ class ScalarBIESIBCSolver:
                 raise ValueError("Panel Z_s requires positive finite frequency")
         else:
             Z_s = _uniform_surface_impedance(Z_s, ndof)
-        K_Z = self.impedance_stiffness(Z_s)
+        prepared = getattr(self, '_prepared_body_operator', None) if _prepared_key is not None else None
+        operator_reused = prepared is not None and prepared[0] == _prepared_key
+        K_Z = prepared[1] if operator_reused else self.impedance_stiffness(Z_s)
 
         # RHS: <phi_inc, v>_S
         if isinstance(phi_inc_cf, np.ndarray):
@@ -512,11 +514,16 @@ class ScalarBIESIBCSolver:
         gamma = (1 if isinstance(Z_s, PanelSurfaceImpedance) else Z_s) / (1j * omega * MU_0) if omega > 0 else 0
         gamma_for_log = complex(gamma)
         robin = K_Z / (1j * omega * MU_0) if omega > 0 else K_Z * 0
-        A_sys = (0.5 * self.M - self.DL
-                 + self.SL @ self.M_inv @ robin).astype(complex)
+        if operator_reused:
+            A_sys = prepared[2]
+        else:
+            A_sys = (0.5 * self.M - self.DL
+                     + self.SL @ self.M_inv @ robin).astype(complex)
+            if _prepared_key is not None:
+                self._prepared_body_operator = (_prepared_key, K_Z, A_sys)
 
         # Solve with gauge (Lagrange multiplier for int phi dS = 0)
-        phi_vec = self._solve_with_gauge(A_sys, rhs_vec.astype(complex))
+        phi_vec = self._solve_with_gauge(A_sys, rhs_vec.astype(complex), _prepared_key=_prepared_key)
         t_solve = time.perf_counter() - t0
 
         # Extract H_t_rms = sqrt(<|grad_s phi|^2> / area)
@@ -558,6 +565,8 @@ class ScalarBIESIBCSolver:
             'P_density': float(P_density),
             'area': float(abs(area)),
             'gamma': None if isinstance(Z_s, PanelSurfaceImpedance) else gamma_for_log,
+            'operator_reused': bool(operator_reused),
+            'factorization_reused': bool(getattr(self, '_last_gauge_factorization_reused', False)),
             'impedance_layout': 'BND-element-order' if isinstance(Z_s, PanelSurfaceImpedance) else 'uniform',
             't_solve': round(t_solve, 3),
             'linear_residual_rel': self._last_linear_residual,
@@ -688,16 +697,27 @@ class ScalarBIESIBCSolver:
             'linear_residual_limit': RELATIVE_LIMIT,
         }
 
-    def _solve_with_gauge(self, A_mat, rhs):
-        """Solve A*phi = rhs with gauge constraint int(phi)dS = 0."""
+    def _solve_with_gauge(self, A_mat, rhs, *, _prepared_key=None):
+        """Solve with the existing mean gauge, optionally reusing an owned LU."""
+        from scipy.linalg import lu_factor, lu_solve
         n = len(rhs)
-        A_aug = np.zeros((n + 1, n + 1), dtype=complex)
-        A_aug[:n, :n] = A_mat
-        A_aug[:n, n] = self._c_gauge
-        A_aug[n, :n] = self._c_gauge
+        cached = getattr(self, '_prepared_gauge_factor', None) if _prepared_key is not None else None
+        reused = cached is not None and cached[0] == _prepared_key
+        if reused:
+            A_aug, factor = cached[1:]
+        else:
+            A_aug = np.zeros((n + 1, n + 1), dtype=complex)
+            A_aug[:n, :n] = A_mat
+            A_aug[:n, n] = self._c_gauge
+            A_aug[n, :n] = self._c_gauge
+            if _prepared_key is not None:
+                factor = lu_factor(A_aug)
+                self._prepared_gauge_factor = (_prepared_key, A_aug, factor)
         rhs_aug = np.zeros(n + 1, dtype=complex)
         rhs_aug[:n] = rhs
-        solution = scipy_solve(A_aug, rhs_aug)
+        solution = (lu_solve(factor, rhs_aug) if _prepared_key is not None
+                    else scipy_solve(A_aug, rhs_aug))
+        self._last_gauge_factorization_reused = bool(reused)
         self._last_linear_residual = _check_bie_solution(A_aug, solution, rhs_aug)
         return solution[:n]
 
