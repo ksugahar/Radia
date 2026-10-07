@@ -109,7 +109,7 @@ mesh's element maps; this is not implemented for the P1 loop extension.
 | Rule | Severity | Flags |
 | --- | --- | --- |
 | `ngsolve-curve-after-vol-import` | HIGH | `.Curve()` on a mesh created from a `.vol` literal, path variable or `.Load` |
-| `netgen-scale-after-generate` | HIGH | `.Scale()` on a mesh returned by `GenerateMesh` |
+| `netgen-scale-after-generate` | HIGH | `.Scale()` anywhere in a scope on a name that is ever bound to a `GenerateMesh` result (or its alias); flow-insensitive, so a name reused for a shape is reported too |
 | `ngsbem-missing-curvaturesafety` | MODERATE | ngsbem meshes without `curvaturesafety` |
 | `curve-without-export-curved` (cubit lint) | MODERATE | `.Curve(p>=2)` without a curved Cubit export |
 
