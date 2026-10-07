@@ -132,3 +132,15 @@ def test_weak_genus_one_law_uses_complete_loop_field(setup_cases,tmp_path,monkey
             fixed=ci._solve_workpiece_weak_coupled(args,source)
             for key in ('P_wp','H_t_rms','delta_L_nH','delta_R_mOhm'):
                 np.testing.assert_allclose(result[key],fixed[key],rtol=1e-10,atol=1e-18)
+
+
+def test_reflected_port_gate_rejects_a_stale_air_loss_change():
+    def inconsistent_state(z):
+        return dict(wp_H_t_tri=np.ones((1,3)),Z_s_per_panel=z.values.copy(),
+            converged=True,coupling_residual=0.,body_residual=0.,iterations=2,
+            body_power_balance_relative_error=0.,body_reaction_power_W=.1,
+            coil_loss_W=1.,coil_loss_air_W=1.,coil_loss_change_W=.5,
+            port_power_W=1.1)
+    with pytest.raises(RuntimeError,match='reflected port'):
+        solve_panel_esim(evaluate(Law(1+1j)),inconsistent_state,[1+1j],
+            tolerance=1e-3,max_iter=2,inner_tolerance=1e-8)
