@@ -5,6 +5,11 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Per-panel ESIM now defaults to the adaptive log-H table to reduce outer
+  cell evaluations. Final certification still directly solves every panel.
+  Select `--esim-panel-evaluator direct` to restore the reference evaluator;
+  failed table construction raises with that guidance, without fallback.
+
 - Per-panel nonlinear ESIM now connects the weak genus-1 loop and both
   strong coil routes on flat P1 dense genus-0/1 bodies. Material updates
   use the complete surface field at the actual current. A final EM re-solve

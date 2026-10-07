@@ -123,3 +123,18 @@ def test_invalid_controls(kwargs):
 def test_missing_production_cell_identity_names_attributes(mode):
     with pytest.raises(ValueError, match='missing attributes: half_thickness'):
         PanelESIMEvaluator(Cell(), mode=mode)
+
+
+@pytest.mark.parametrize('failure', ['budget', 'depth', 'range', 'cell'])
+def test_table_failure_advises_explicit_direct_without_fallback(failure):
+    cell=Cell()
+    ev=evaluator(cell,mode='table',max_table_cells=3)
+    with pytest.raises(RuntimeError,match='--esim-panel-evaluator direct'):
+        if failure=='depth': ev._refine(1.,2.,depth=40)
+        elif failure=='range': ev.evaluate([.001,1e10])
+        elif failure=='cell':
+            cell.law=lambda h: complex(float('nan'),1)
+            ev.evaluate([1.])
+        else: ev.evaluate([.1,100.])
+    assert ev.mode=='table'
+    assert ev.diagnostics()['iteration_cell_calls']==0

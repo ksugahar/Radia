@@ -2018,6 +2018,13 @@ Prescribed-source genus-0 phi.B quadrature is unchanged: it converges to
 Js.A work but is not identical on a finite mesh. Strong coupling has its
 own self-authored circuit and surface checks; weak acceptance and native
 Simulink certification do not transfer to it.
+Per-panel ESIM defaults to `--esim-panel-evaluator table` for weak genus-0/1
+and strong BEM/PEEC. The adaptive log-H table reduces outer cell evaluations;
+all-panel direct final certification is unchanged. Select
+`--esim-panel-evaluator direct` for the reference evaluator. Budget, refinement
+or field-range table failures raise with this guidance; no silent fallback.
+The selected mode is recorded in `esim_panel_evaluation.mode`.
+
 
 ## When to use this
 

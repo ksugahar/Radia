@@ -119,7 +119,7 @@ class PanelESIMEvaluator:
     def _cached_pair(self, fields):
         missing = list(dict.fromkeys(float(h) for h in fields if float(h) not in self.cache))
         if self.counts['table_cell_calls'] + len(missing) > self.max_table_cells:
-            raise RuntimeError('ESIM adaptive table cell budget exhausted')
+            raise RuntimeError('ESIM adaptive table cell budget exhausted; pass --esim-panel-evaluator direct')
         if missing:
             values = self._direct_many(missing, 'table_cell_calls')
             self.cache.update(zip(missing, values))
@@ -132,7 +132,7 @@ class PanelESIMEvaluator:
             self.counts['cache_hits'] += 1
             return self.cache[field]
         if category == 'table_cell_calls' and self.counts[category] >= self.max_table_cells:
-            raise RuntimeError('ESIM adaptive table cell budget exhausted')
+            raise RuntimeError('ESIM adaptive table cell budget exhausted; pass --esim-panel-evaluator direct')
         value = self._direct(field, category)
         self.cache[field] = value
         return value
@@ -141,7 +141,7 @@ class PanelESIMEvaluator:
         zl, zh = self._cached_pair((low, high))
         middle = math.exp((math.log(low) + math.log(high)) / 2)
         if middle <= low or middle >= high or depth >= 40:
-            raise RuntimeError('ESIM table refinement exhausted floating-point/depth resolution')
+            raise RuntimeError('ESIM table refinement exhausted floating-point/depth resolution; pass --esim-panel-evaluator direct')
         exact = self._cached(middle, 'table_cell_calls')
         self.counts['interval_probes'] += 1
         difference = exact - (zl + zh) / 2
@@ -165,7 +165,7 @@ class PanelESIMEvaluator:
         # Seed at no more than one decade spacing; probe/adapt each interval.
         count = max(1, math.ceil(math.log10(high) - math.log10(low)))
         if count > self.max_table_cells:
-            raise RuntimeError('ESIM field range exceeds table cell budget')
+            raise RuntimeError('ESIM field range exceeds table cell budget; pass --esim-panel-evaluator direct')
         seeds = np.geomspace(low, high, count + 1)
         seeds[0], seeds[-1] = low, high
         knots = []
@@ -194,6 +194,10 @@ class PanelESIMEvaluator:
                     output.append(complex(np.interp(math.log(field), logs, impedances.real),
                                           np.interp(math.log(field), logs, impedances.imag)))
             return np.array(output)
+        except RuntimeError as error:
+            if self.mode == 'table' and '--esim-panel-evaluator direct' not in str(error):
+                raise RuntimeError(f'ESIM table evaluation failed: {error}; pass --esim-panel-evaluator direct') from error
+            raise
         finally:
             self.evaluation_seconds += time.perf_counter() - started
 

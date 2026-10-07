@@ -152,3 +152,21 @@ def test_strong_peec_rejects_proximity_model_mismatch():
     out = ci.run_inductance(ns)
     assert out.get("status") == "error"
     assert "--no-peec-proximity" in out["error"]
+
+
+@pytest.mark.parametrize('mode', [None, 'direct'])
+def test_panel_evaluator_default_and_reference(mode):
+    options=['--coil-solver','peec','--frequency','7000','--coil-step','c.step',
+             '--vol','w.vol','--sigma','5.8e6']
+    if mode: options += ['--esim-panel-evaluator',mode]
+    ns=ci.build_argparser().parse_args(options)
+    assert ns.esim_panel_evaluator == (mode or 'table')
+
+
+def test_default_table_does_not_reject_scalar_sibc_before_coil(monkeypatch):
+    ns=ci.build_argparser().parse_args(['--coil-solver','peec','--frequency','7000',
+        '--coil-step','c.step','--vol','w.vol','--sigma','5.8e6'])
+    def reached_coil(*args): raise RuntimeError('reached scalar coil solve')
+    monkeypatch.setattr(ci,'_solve_coil_peec',reached_coil)
+    with pytest.raises(RuntimeError,match='reached scalar coil solve'):
+        ci.run_inductance(ns)

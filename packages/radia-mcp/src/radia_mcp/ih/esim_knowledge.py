@@ -56,6 +56,13 @@ is sqrt(lumped mean |Ht|^2), not an exact panel field. Untagged nodal impedance
 arrays remain rejected. Outer and cell convergence are required. The existing
 linear acceptance does not certify nonlinear B-H accuracy, hysteresis or harmonics.
 Historical per-DOF discussions below do not define the current panel ordering.
+Per-panel ESIM defaults to `--esim-panel-evaluator table` for weak genus-0/1
+and strong BEM/PEEC. The adaptive log-H table reduces outer cell evaluations;
+all-panel direct final certification is unchanged. Select
+`--esim-panel-evaluator direct` for the reference evaluator. Budget, refinement
+or field-range table failures raise with this guidance; no silent fallback.
+The selected mode is recorded in `esim_panel_evaluation.mode`.
+
 
 ## Decision table
 

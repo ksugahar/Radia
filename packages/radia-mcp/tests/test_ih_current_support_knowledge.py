@@ -57,3 +57,11 @@ def test_ih_capacity_report_does_not_invent_factor_telemetry_or_expand_ams():
     assert "Missing telemetry is unavailable, never zero" in flat
     assert "nonlinear and physical acceptance criteria unchanged" in flat
     assert "linear_solver_requested and linear_solver" in flat
+
+
+def test_panel_esim_default_keeps_direct_certification_and_reference():
+    text=get_induction_heating_documentation('all')
+    assert '--esim-panel-evaluator table' in text
+    assert '--esim-panel-evaluator direct' in text
+    assert 'all-panel direct final certification is unchanged' in text
+    assert 'esim_panel_evaluation.mode' in text
