@@ -5,6 +5,18 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Behavior change: the accelerator and Kelvin benchmark panels no longer
+  call `Mesh.Curve` on a loaded `.vol`; `radia.mesh_curve.ensure_curve_order`
+  keeps the geometry order stored in the file and curves only through its
+  guarded checks. `calc_kelvin_benchmark` and Kelvin-enabled
+  `calc_accel_magnet` now return an error dict when a CAD-less `.vol` has a
+  lower geometry order than `fes_order >= 2` requires; previously the mesh
+  was silently used with flat elements. Accelerator runs without Kelvin
+  continue with the stored order. See `docs/ngsolve_integration/curve_order.md`.
+- Automatic single-hole material carriers treat tangent, edge and vertex
+  ray hits as ambiguous, retry other azimuths and heights, prove the ring's
+  enclosure, and report diagnostics when no carrier is found.
+
 ## 5.2.3 - ICCG throughput and deterministic AMS corrections
 
 - SparseSolv ICCG retains complex-symmetric defaults and uses natural row
