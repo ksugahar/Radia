@@ -86,5 +86,83 @@
   {
     "id": "accent",
     "tex": "\\hat{x}"
+  },
+  {
+    "id": "fences",
+    "tex": "\\left(x+1\\right)"
+  },
+  {
+    "id": "sin",
+    "tex": "\\sin x"
+  },
+  {
+    "id": "lim",
+    "tex": "\\lim_{x\\to 0} f(x)"
+  },
+  {
+    "id": "text",
+    "tex": "\\text{hello world}"
+  },
+  {
+    "id": "japanese-text",
+    "tex": "\\text{日本語の数式}"
+  },
+  {
+    "id": "quad-space",
+    "tex": "x\\quad y"
+  },
+  {
+    "id": "thin-space",
+    "tex": "x\\,y"
+  },
+  {
+    "id": "boxed",
+    "tex": "\\boxed{x+1}",
+    "coverage": "excluded",
+    "reason": "Native parser has no boxed command; emitter yields only its argument. Web emits a borderBox. Native boxed shape is unsupported, not byte-equivalent."
+  },
+  {
+    "id": "cancel",
+    "tex": "\\cancel{x}",
+    "coverage": "excluded",
+    "reason": "Native cancel uses EM_MBAR emitted as bottom bar; MathJax emits an up-diagonal strike. Different decorations, not byte-equivalent."
+  },
+  {
+    "id": "binom",
+    "tex": "\\binom{n}{k}",
+    "coverage": "excluded",
+    "reason": "Native parser has no binom command; emitter concatenates the arguments. Web emits a parenthesized noBar fraction. Native binom structure is unsupported, not byte-equivalent."
+  },
+  {
+    "id": "overset",
+    "tex": "\\overset{a}{x}"
+  },
+  {
+    "id": "fenced-integral",
+    "tex": "\\left(\\int_a^b f\\right)",
+    "nary_tail_outside": ")"
+  },
+  {
+    "id": "nested-fenced-integral",
+    "tex": "\\left(\\int_a^b \\left(x+1\\right)dx\\right)",
+    "nary_tail_outside": ")"
+  },
+  {
+    "id": "bracketed-integral",
+    "tex": "\\left[\\int_a^b f\\right]",
+    "nary_tail_outside": "]"
+  },
+  {
+    "id": "absolute-integral",
+    "tex": "\\left|\\int_a^b f\\right|",
+    "nary_tail_outside": "|"
+  },
+  {
+    "id": "integral-grouped-operand",
+    "tex": "\\int_a^b (x+1)\\,dx"
+  },
+  {
+    "id": "integral-absolute-operand",
+    "tex": "\\int_a^b |x|\\,dx"
   }
 ]
