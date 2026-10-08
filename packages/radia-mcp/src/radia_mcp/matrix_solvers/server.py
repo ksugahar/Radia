@@ -155,14 +155,19 @@ def pick_a_solver(problem_class: str) -> str:
         ),
         "magnetostatic_hcurl": (
             "Magnetostatic (HCurl A-formulation):\n"
-            "1. Gauge choice — default: ungauged + CompactAMS\n"
+            "1. Large real lowest-order: beta-zero AMS-PCG (compatible ungauged load)\n"
             "   → matrix_solvers_em_specific('gauging')\n"
-            "2. Solver: CG (real SPD)\n"
+            "2. PCG on the compatible real system with its gradient kernel\n"
             "   → matrix_solvers_krylov('cg')\n"
-            "3. Preconditioner: ★ CompactAMS (Hiptmair-Xu)\n"
+            "3. Use radia.p1_linear.solve_p1_linear (linear total-A) or\n"
+            "   radia.p1_newton.solve_p1_newton (nonlinear B-H).\n"
+            "   Straight tetrahedra, homogeneous Dirichlet, finite domain;\n"
+            "   call outside TaskManager. No complex/high-order/periodic extension.\n"
+            "   ICCG: small/complex supported cases or cross-checks;\n"
+            "   ABMC opt-in; speedup per iteration, measure whole-solve.\n"
             "   → matrix_solvers_preconditioners('ams_hiptmair_xu')\n"
             "4. Code recipe via radia.sparsesolv_ngsolve\n"
-            "   → radia_ngsolve MCP, tool sparsesolv('compact_ams')\n"
+            "   → radia_ngsolve MCP, tool ngsolve_usage('solvers')\n"
         ),
         "eddy_current_mqs": (
             "Eddy current MQS (complex symmetric HCurl):\n"

@@ -4,6 +4,9 @@ Tree-cotree gauging, Biro-Preis A-V, ungauged formulations, eddy-current
 low-frequency stabilization.
 """
 
+from radia_mcp.matrix_solvers.preconditioners_knowledge import LOWEST_ORDER_HCURL_ROUTING
+
+
 GAUGING = r"""
 # Gauging electromagnetic potentials
 
@@ -33,7 +36,8 @@ Tradeoff:
 - Ungauged + AMS: easier to set up, no tree-finding code, but iterations
   cost ~10% more.
 
-**Default**: ungauged + CompactAMS unless geometry-specific reason.
+For large real lowest-order magnetostatics use the beta-zero AMS-PCG APIs below;
+CompactAMS recipes remain separate supported alternatives, not this default.
 """
 
 
@@ -120,8 +124,8 @@ write the bilinear form themselves; the system is solved with
 CompactAMS on the A-block + direct on V (Schur complement) or with
 HYPRE AMS-aware preconditioner.
 
-For pure A formulation (most lab use), ungauged + CompactAMS is
-the default — see `preconditioners_knowledge.AMS_HIPTMAIR_XU`.
+For large real lowest-order pure A, prefer the beta-zero AMS-PCG APIs in the
+gauging topic. Complex and A-V paths require their own validated recipes.
 """
 
 
@@ -169,6 +173,9 @@ This is the **production lab configuration** for IH workpiece SIBC,
 PEEC+FEM coupling, and the radia_motor lamination effective-material
 solver.  See `radia_ngsolve.sparsesolv('compact_ams')`.
 """
+
+
+GAUGING += LOWEST_ORDER_HCURL_ROUTING
 
 
 def get_em_specific_knowledge(topic: str = "gauging") -> str:
