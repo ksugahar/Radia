@@ -90,9 +90,9 @@ loop-extended BEM with an independent air-domain HCurl FEM (order 2, SIBC
 Robin boundary, no BEM operators) for a synthetic stepped bored workpiece
 excited by closed filament loops. On the finest meshes (6,232 BEM vertices;
 601,029 FEM unknowns) the two losses differ by 1.40%, within the 2% gate.
-Across the three mesh levels of each method the loss ranged by 0.08% (BEM)
-and 0.003% (FEM) of the finest value, and the BEM power-balance difference
-stayed between 0.055% and 0.070%. Both methods share the
+Across the three mesh levels of each method the loss varied by 0.21% (BEM)
+and 0.010% (FEM) of the value on that method's finest mesh, and the BEM
+power-balance difference stayed between 0.055% and 0.070%. Both methods share the
 linear SIBC approximation; the example does not validate SIBC against a
 resolved conducting volume.
 
@@ -109,13 +109,17 @@ inherit that tolerance and need their own convergence and reference study.
 Linear SIBC (uniform, or per-face values on the weak loop route); flat,
 undeformed P1 surface triangles (a curved or deformed surface raises; small
 fillet radii therefore carry an `O(h²)` geometric error); at most 14,000
-surface faces for the dense loop-work matrix, which needs about 1 GB at
-11,000 faces and whose assembly time grows roughly with the square of the
-face count. Multiple handles, nonlinear ESIM, and geometry with no certified
-interior z-axis carrier raise with an explanation. The solver does not fill
-the hole, remesh, change material physics, or discard its cohomology. The
-field basis order of the thermal FEM is independent of this surface-BEM
-restriction.
+surface faces for the dense loop-work matrix, whose P0 matrix alone takes
+about 1 GB at 11,000 faces (the process needs several times more) and whose
+assembly time grows roughly with the square of the face count.
+
+Multiple handles, scalar nonlinear ESIM, and geometry with no certified
+interior z-axis carrier raise with an explanation. Per-face ESIM impedances
+(`--esim-per-panel`) can be passed to the genus-1 loop route; the validation
+on this page covers linear SIBC only and says nothing about nonlinear
+materials. The solver does not fill the hole, remesh, change material
+physics, or discard its cohomology. The field basis order of the thermal FEM
+is independent of this surface-BEM restriction.
 
 For an advanced nonstandard geometry, `solve_loop_extended` accepts a
 validated `section_anchor` and `carrier_ring`. This bypasses automatic
