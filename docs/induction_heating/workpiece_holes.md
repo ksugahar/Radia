@@ -15,6 +15,31 @@ P1 dense loop-extended BEM for a workpiece with one handle. Explicit backend
 requests are preserved; an incompatible request raises instead of dropping
 the circulating current. The log reports the topology and backend selection.
 
+The separate `--wp-loop-work-backend auto` option uses native NGSolve
+Galerkin FMM for the P0 magnetic loop work at 512 or more surface faces,
+with native direct products below that count. `dense` and `fmm` select
+explicit routes. The Python equivalents are `loop_work_backend` on
+`ScalarBIESIBCSolver` and `wp_loop_work_backend` on the two coupled solvers.
+FMM compresses separated interactions of the Galerkin quadrature; direct
+near/singular integration, the P1 BIE, normal-flux energy and electric work
+are unchanged. It does not replace each triangle by a centroid source.
+Results include `wp_loop_work_diagnostics` with the selected route,
+quadrature bonus, FMM controls and NGSolve version. FMM uses minimum order
+20, direct leaf capacity 100 and separation factors 2/3. Construction/apply
+failure raises with the `dense` option and never changes routes silently.
+
+The self-authored ring compression study is
+`validation_test/induction_heating/run_loop_work_compression.py`. Run the
+dense and FMM cases with identical meshes and thread controls to compare
+heat, fields, lift sensitivity, reaction, residuals, time and process peak.
+For example, run `--level 64 --backend dense --output dense.json`, then
+`--level 64 --backend fmm --reference dense.json --output fmm.json`.
+Use `--compact-cases` for large cost runs and `--repeats 2` to check
+repeatability. Set the BLAS/OpenMP environment thread counts to match
+`--threads` before starting each process.
+The compression acceptance budget is at most 0.1% change in heat at the
+same mesh; it does not bound the discretization or SIBC model error.
+
 ## Why the hole needs its own unknown
 
 The scalar boundary integral equation represents the surface current as
@@ -109,9 +134,13 @@ inherit that tolerance and need their own convergence and reference study.
 Linear SIBC (uniform, or per-face values on the weak loop route); flat,
 undeformed P1 surface triangles (a curved or deformed surface raises; small
 fillet radii therefore carry an `O(h²)` geometric error); at most 14,000
-surface faces for the dense loop-work matrix, whose P0 matrix alone takes
-about 1 GB at 11,000 faces (the process needs several times more) and whose
-assembly time grows roughly with the square of the face count.
+surface faces for loop work. Native direct P0 assembly remains quadratic;
+the dense-equivalent matrix is about 1 GB at 11,000 faces, and construction
+can need several times more. The FMM route retains no NumPy dense P0
+matrix; its complete native storage inventory is unavailable and is reported
+as unknown, separately from measured process peaks. The P1 BIE and final
+mixed solve remain dense, so P0 compression does not remove all quadratic
+storage or the existing geometry/basis limits.
 
 Multiple handles, scalar nonlinear ESIM, and geometry with no certified
 interior z-axis carrier raise with an explanation. Per-face ESIM impedances

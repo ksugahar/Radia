@@ -7,6 +7,12 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- IH knowledge records the separate P0 loop-work auto/dense/fmm selection,
+  deterministic 512-face threshold, direct near/singular quadrature, result
+  diagnostics and remaining dense P1/geometry limits. It distinguishes
+  the compression heat-change budget from physical accuracy and unavailable
+  native storage from zero.
+
 - Add `mathematica_export_equation`: evaluate once, retain InputForm and TeX,
   save an editor input file, copy editable Office math, or render PNG/EMF via
   the existing EqnEdit64 adapter. Centered TeXForm arrays use equivalent matrix

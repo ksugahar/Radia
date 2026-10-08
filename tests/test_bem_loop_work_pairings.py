@@ -28,8 +28,8 @@ def test_genus1_study_exercises_production_power_gate():
             assert _check_sibc_reaction_power(new["power"], -.5*omega*new["reaction"][1]) < .1
 
 
-@pytest.fixture(scope="module")
-def surface():
+@pytest.fixture(scope="module", params=["dense", "fmm"])
+def surface(request):
     points = np.array([[0., 0., 0.], [1., 0., 0.],
                        [0., 1., 0.], [0., 0., 1.]])
     triangles = np.array([[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]])
@@ -49,7 +49,8 @@ def surface():
         bem = ScalarBIESIBCSolver(mesh, order=1, use_intree_bem=True,
                                  assemble_dense=True, intree_geom_order=1,
                                  intree_singular_n_q=10,
-                                 intree_regular_quad_degree=11)
+                                 intree_regular_quad_degree=11,
+                                 loop_work_backend=request.param)
     return bem, points, triangles, areas, normals, gradients
 
 
@@ -81,8 +82,9 @@ def test_complete_work_changes_covariantly_with_generic_lift(surface, zero_mean)
     C = np.zeros((4, 4, 3))
     for ti, triangle in enumerate(t):
         C[ti, triangle] = np.cross(normals[ti], -gradients[ti])
-    Q = (sum(C[:, :, c].T @ S @ C[:, :, c] for c in range(3))
-         + B.T @ np.linalg.solve(bem.SL, B))
+    with ng.TaskManager():
+        Q = (sum(C[:, :, c].T @ S @ C[:, :, c] for c in range(3))
+             + B.T @ np.linalg.solve(bem.SL, B))
     np.testing.assert_allclose(new[0]-old[0], z*bem.K @ w, atol=2e-14, rtol=1e-12)
     np.testing.assert_allclose(new[2]-old[2], MU_0*(w @ Q), atol=2e-15, rtol=1e-7)
     np.testing.assert_allclose(new[1]-old[1], 2*(old[0] @ w)+z*(w @ bem.K @ w),
@@ -153,3 +155,60 @@ def test_unsupported_geometry_rejected_before_assembly(curved):
     with pytest.raises(ValueError, match="undeformed flat"):
         solve_loop_extended(SimpleNamespace(mesh=mesh), np.zeros(4), .03+.02j,
                              300., incident)
+
+
+def test_native_loop_operator_preserves_permutation_and_complex_products(surface):
+    from ngsolve.bem import LaplaceSL
+    from radia.bem_loop_work import _P0SingleLayer
+    bem, _, _, _, _, _ = surface
+    with ng.TaskManager():
+        space=ng.SurfaceL2(bem.mesh,order=0,dual_mapping=False)
+        u,v=space.TnT();d=ng.ds(bonus_intorder=12)
+        native=LaplaceSL(u*d,use_fmm=False)*v*d
+        rows,cols,values=native.mat.COO()
+        from scipy.sparse import coo_matrix
+        dense=coo_matrix((values,(rows,cols)),shape=(space.ndof,space.ndof)).toarray()
+        permutation=np.arange(space.ndof)[::-1]
+        expected=dense[np.ix_(permutation,permutation)]
+        operator=_P0SingleLayer(native,space,permutation,dense.nbytes)
+        vectors=np.c_[np.arange(space.ndof)+.2,np.arange(space.ndof)**2-.7].astype(complex)
+        vectors+=1j*vectors[::-1]
+        np.testing.assert_allclose(operator@vectors,expected@vectors,rtol=1e-13,atol=1e-15)
+        np.testing.assert_allclose(operator.T@vectors,expected.T@vectors,rtol=1e-13,atol=1e-15)
+        np.testing.assert_allclose(vectors.T@operator,vectors.T@expected,rtol=1e-13,atol=1e-15)
+        assert operator.dense_array_bytes==0
+
+
+def test_loop_conormal_diagnostic_rejects_nonmanifold_edge_counts(surface):
+    bem,p,t,areas,normals,gradients=surface
+    duplicate=t.copy();duplicate[1]=duplicate[0]
+    with ng.TaskManager(),pytest.raises(ValueError,match='closed manifold'):
+        _loop_work_row(bem,p,duplicate,t,np.arange(4),gradients,normals,areas,
+            np.array([.3,-.2,.4,.7]),.03+.02j,incident,np.zeros(4),-p[:,2])
+
+
+def test_loop_fmm_failure_is_explicit_without_fallback(surface, monkeypatch):
+    from ngsolve import bem as native_bem
+    bem, _, _, areas, _, _ = surface
+    monkeypatch.setattr(bem, "loop_work_backend", "fmm")
+    calls = []
+
+    def unavailable(*args, **kwargs):
+        calls.append(kwargs)
+        raise AttributeError("FMM unavailable in this build")
+
+    monkeypatch.setattr(native_bem, "LaplaceSL", unavailable)
+    with ng.TaskManager(), pytest.raises(RuntimeError, match="--wp-loop-work-backend dense"):
+        _p0_single_layer(bem, areas, quadrature_bonus=13)
+    assert len(calls) == 1 and calls[0]["use_fmm"] is True
+
+
+def test_loop_route_has_declared_threshold_and_rejects_invalid_option():
+    from types import SimpleNamespace
+    from radia.bem_loop_work import _loop_work_route
+    bem = SimpleNamespace(loop_work_backend="auto")
+    assert _loop_work_route(bem, 511) == "dense"
+    assert _loop_work_route(bem, 512) == "fmm"
+    bem.loop_work_backend = "invalid"
+    with pytest.raises(ValueError, match="auto, dense, or fmm"):
+        _loop_work_route(bem, 512)

@@ -20,7 +20,7 @@ Student element-Zs workflow: Geometry Update accepts panel_zs_file, an absolute
 mesh/frequency-bound JSON path (ohm, BND-element-order). Use
 radia.simulink.writeIHPanelImpedance with a full ordered complex vector; centroid
 selection is performed by the caller. P1 weak coupling, genus-0 or one supported
-flux-linked handle with dense flat-triangle loop work, constant during each
+flux-linked handle with dense P1 BIE and flat-triangle loop work, constant during each
 linear simulation, with content-hash-triggered rebuild. Independent FEM accuracy
 is separate: independent_fem_validation.status starts as not-performed.
 See docs/induction_heating/SIMULINK_ELEMENT_ZS.md.
@@ -1977,9 +1977,18 @@ The loop closure uses distributed Galerkin electric work and magnetic
 work including both tangential current and normal flux. Magnetic work
 acts on the scattered field; electric work and heat use the total field.
 Work pairings are reciprocal; the mixed BIE matrix is not symmetric.
-This path requires flat undeformed surface triangles. Its additional P0
-single layer is dense in the number of faces and cached per geometry;
-carrier, seam, quadrature and surface refinement still require checks.
+This path requires flat undeformed surface triangles. The additional P0
+single layer is cached per geometry. ``--wp-loop-work-backend auto`` selects
+native Galerkin FMM at >=512 faces and native direct products below that;
+``dense`` and ``fmm`` explicitly select either route in weak and both strong
+workflows. Separated interactions are compressed; direct near/singular
+quadrature and the complete closure are unchanged. The result's
+``wp_loop_work_diagnostics`` records the route, FMM controls and NGSolve
+version. Unavailable FMM raises with the dense option, without fallback.
+Native FMM storage is unknown, never zero; use measured process peaks.
+The P1 BIE stays dense and the 14000-face loop guard remains. Compression
+heat-change acceptance is <=0.1% at the same mesh, not a physical-accuracy
+bound. Carrier, seam, quadrature and surface refinement still require checks.
 Unsupported weak handle combinations (scalar ESIM, HACApK, P2, genus >= 2)
 raise before BEM assembly. There is no ``off`` fallback. Surface winding
 is established by face-BFS plus signed volume, never centroid flipping

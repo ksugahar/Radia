@@ -5,6 +5,22 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Genus-1 P0 loop work now selects native Galerkin FMM at 512 or more
+  surface faces (`--wp-loop-work-backend auto`); smaller cases keep native
+  direct products. `dense` and `fmm` explicitly select either route in weak
+  and both strong coil workflows. Far interactions are compressed; direct
+  near/singular quadrature and the complete closure are unchanged. Results
+  report the route, controls and NGSolve version; an unavailable FMM raises
+  with the dense option, without fallback. The 0.1% heat-change budget is
+  an implementation comparison, not a physical-accuracy bound.
+
+- Genus-1 loop work retains the native singular Galerkin P0 single layer
+  and uses its forward/transpose products, removing the COO-to-dense and
+  face-permutation copies. Six products are reused for the row, reverse
+  pairing and diagonal; conormal edge checks are vectorized. The quadrature
+  and complete magnetic closure are unchanged. Direct assembly remains
+  quadratic and still dominates its construction time and peak memory.
+
 - Per-panel ESIM now defaults to the adaptive log-H table to reduce outer
   cell evaluations. Final certification still directly solves every panel.
   Select `--esim-panel-evaluator direct` to restore the reference evaluator;
