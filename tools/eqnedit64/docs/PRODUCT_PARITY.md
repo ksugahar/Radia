@@ -287,7 +287,9 @@ After this qualification, a passing actual-wire gate on the release candidate
 plus an EXE hand test permits omitting the separate Web hand test for covered
 fixtures. A missing/failing gate, a changed shared transport contract or different
 clipboard/browser/Office environment requires renewed Web qualification.
-Hosted CI 37692902458 verified 22/22 actual-wire byte matches on ea787664d.
+Historical run 37692902458 on ea787664d used headless Chromium: the Web side provided in-memory browser-clipboard (producer-equivalent) evidence, not Web OS-clipboard evidence. The first genuine Web OS-clipboard evidence is 3.1.3 run 37718032042 on b06b8d89a (headed full Chromium).
+
+The wire gate runs headed full Chromium. On the hosted Windows runner, both old-headless and new-headless modes do not reach the OS clipboard. The harness independently proves the Web write reached Windows before comparing captured payloads. Hosted run 37718032042 on b06b8d89a established real Windows clipboard identity for both editions: 36/36 covered fixtures; boxed/cancel/binom remain non-covered.
 User H1/H5/H6 EXE passed; H7 colour loss is accepted for 3.1.2 as documented below.
 
 
@@ -301,9 +303,99 @@ EMF/DIB output. This decision does not strip colour from the source or renderer.
 PowerPoint colour retention is not an acceptance requirement for this release.
 
 User hand tests: H1/H5/H6 EXE OK on ea787664d; H7 EXE canvas red, PowerPoint
-not red. Web H5/H6 OK on 8361ec916. Hosted CI 37692902458 verified 22/22 primary
-OMML branches byte-identical on the actual Windows clipboard at ea787664d.
-This supports the UXP-0031 EXE-test plus bit-gate qualification for the covered
-corpus; it does not prove every TeX input or every Office/browser environment.
+not red. Web H5/H6 OK on 8361ec916. Historical run 37692902458 on ea787664d used headless Chromium: the Web side provided in-memory browser-clipboard (producer-equivalent) evidence, not Web OS-clipboard evidence. The first genuine Web OS-clipboard evidence is 3.1.3 run 37718032042 on b06b8d89a (headed full Chromium).
+The user hand tests remain valid; the headed gate establishes the covered corpus
+wire contract, not every TeX input or every Office/browser environment.
 Changed payload behaviour requires renewed qualification. The release metadata
 commit still requires its own CI. Formal publication follows the release gates.
+
+
+## 3.1.3 candidate Office coverage (F-1/F-2/F-3)
+
+The candidate has 39 fixtures: 36 producer-byte matches and 3 explicitly
+non-covered constructs. Actual hosted Windows wire qualification is pending;
+local producer matches are not PowerPoint acceptance. Existing 3.1.2 Office
+hand-test results do not qualify this changed nary boundary. Under UXP-0031 a
+changed shared contract requires renewed qualification before any Web exemption.
+The coverage matrix below records each added fixture; excluded entries remain
+measured in the gate, with raw payloads/hashes/reasons retained, but never count
+as matches. Removing an audited exclusion requires review and actual-wire proof.
+
+| Fixture | TeX | Local producer status |
+|---|---|---|
+| fences | `\left(x+1\right)` | byte-identical; hosted wire pending |
+| sin | `\sin x` | byte-identical; hosted wire pending |
+| lim | `\lim_{x\to 0} f(x)` | byte-identical; hosted wire pending |
+| text | `\text{hello world}` | byte-identical; hosted wire pending |
+| japanese-text | `\text{日本語の数式}` | byte-identical; hosted wire pending |
+| quad-space | `x\quad y` | byte-identical; hosted wire pending |
+| thin-space | `x\,y` | byte-identical; hosted wire pending |
+| boxed | `\boxed{x+1}` | non-covered: Native parser has no boxed command; emitter yields only its argument. Web emits a borderBox. Native boxed shape is unsupported, not byte-equivalent. |
+| cancel | `\cancel{x}` | non-covered: Native cancel uses EM_MBAR emitted as bottom bar; MathJax emits an up-diagonal strike. Different decorations, not byte-equivalent. |
+| binom | `\binom{n}{k}` | non-covered: Native parser has no binom command; emitter concatenates the arguments. Web emits a parenthesized noBar fraction. Native binom structure is unsupported, not byte-equivalent. |
+| overset | `\overset{a}{x}` | byte-identical; hosted wire pending |
+| fenced-integral | `\left(\int_a^b f\right)` | byte-identical; hosted wire pending |
+| nested-fenced-integral | `\left(\int_a^b \left(x+1\right)dx\right)` | byte-identical; hosted wire pending |
+| bracketed-integral | `\left[\int_a^b f\right]` | byte-identical; hosted wire pending |
+| absolute-integral | `\left\|\int_a^b f\right\|` | byte-identical; hosted wire pending |
+| integral-grouped-operand | `\int_a^b (x+1)\,dx` | byte-identical; hosted wire pending |
+| integral-absolute-operand | `\int_a^b \|x\|\,dx` | byte-identical; hosted wire pending |
+
+Native \boxed / \binom are unsupported commands that currently leave their
+arguments as ordinary math; the missing border/noBar fraction is not valid native
+support. Native \cancel maps to EM_MBAR and emits a bottom bar, unlike MathJax's
+diagonal strike. Do not infer native acceptance from the Web results, and do not
+waive Web testing for these three constructs. Fixing these parser/emitter
+representations is separate from the current Office converter corrections.
+
+F-2 boundary rule (same in both serializers): the sibling sequence is the scope.
+Track expected closing delimiters for prefix and operand tokens. Stop at an
+unmatched closing fence, an enclosing symmetric bar, or an additive/relation
+separator at operand depth zero. Matched fences owned by the operand and their
+inner separators remain inside m:e. Composite mrows keep their own scope;
+singleton wrappers may expose a delimiter. Four fenced-integral fixtures assert
+an actual OMML closing sibling after the nary object, in addition to byte identity.
+
+F-3 is confirmed/closed: both producers intentionally ignore differing MathML
+fence/stretchy/largeop attributes for Office token classification. Known delimiter
+characters drive the shared boundary; known scripted operator characters drive
+m:nary. This does not promise scalable OMML delimiters for every stretchy MathML
+node. Raw fallback MathML remains intact. Shared-function U+2061 omission affects
+only mo tokens in the primary Office producer, not visible text or saved TeX.
+
+Spacing note: both Office producers approximate each nonzero mspace with one
+NBSP. The quad/thin-space fixtures prove byte identity, not faithful TeX spacing
+width. This existing limitation is unchanged; Office rendering remains untested
+for the candidate.
+
+
+## r17 upright/font candidate preparation (2026-10-08)
+
+User hand test on signed 01735b5cd: H1/H5, H6, fenced integral, absolute
+operand and parenthesized x+1 passed. sin x pasted as italic sinx and failed.
+This candidate therefore remains unqualified for release despite wire identity.
+
+Both producers now retain span CSS and emit native OMML run properties:
+`m:rPr/m:sty` p for upright, b for bold upright, bi for bold italic, and no
+sty for ordinary italic. Unicode math alphabets already encode their glyph style
+and use p to prevent a second mathematical styling pass. Native MathML now
+distinguishes boldsymbol's variable italic posture from upright digits/capital
+Greek; this affects its fallback MathML too.
+
+Known upright names sin/cos/tan/cot/sec/csc/sinh/cosh/tanh/arcsin/arccos/arctan/
+log/ln/exp/lim become m:func with fName and e, including scripted names. Native
+split-letter rows and Web single tokens are recognized identically. One following
+atomic expression or balanced visible fence group is collected as the argument;
+additive/relation and enclosing-close boundaries stay outside. This represents
+function application for Office spacing; actual PowerPoint spacing remains a
+user-retest requirement, not a producer assertion. A literal upright row matching
+one of these names is interpreted as a function name as well.
+
+The corpus now measures 52 fixtures: 49 covered producer byte matches and 3
+unchanged audited exclusions (boxed/cancel/binom). Added run-style assertions
+cover upright d, bold A, italic run merging, bold-italic variables, bold digits,
+Greek, mapped mathbb and roman/digit merging; function assertions cover sin/lim,
+cos/log, fraction and fenced arguments. Both producer structures are checked.
+A headed Windows wire run on this new candidate and user's sin x / mathbf A x /
+mathrm d x retest are pending. No push, O: update or release is part of this
+preparation.
