@@ -403,9 +403,7 @@ Released 2026-09-14.
   evaluate the source mesh on its boundary facets rather than through a volume
   lookup.  The handoff now records sample and vertex coverage and fails fast
   instead of silently assigning zero heat flux to unmapped target vertices.
-  The default azimuthal sampling count is 128.  reference-case validation against an
-  independent 3D heat solve agreed within 0.13% in input power, 1.6 degC in
-  volume-mean temperature, and 0.03 mm in the 850 degC penetration depth.
+  The default azimuthal sampling count is 128.
   Axisymmetric heat results now also report the physical revolved volume and
   volume-weighted mean temperature.
 
@@ -423,8 +421,8 @@ Released 2026-09-14.
 - Decoupled IH thermal field order from serialized mesh geometry.  The 3D,
   axisymmetric, and EM-table heat solvers now preserve a loaded `.vol` exactly
   instead of calling `Mesh.Curve(fes_order)` after import; that call can silently
-  destroy a curved CAD mapping (the reported reference-case mesh inflated its boundary
-  area by about 297 million times).  Results now record the input curve order,
+  destroy a curved CAD mapping (a reported curved mesh inflated its boundary
+  area by many orders of magnitude).  Results now record the input curve order,
   domain/boundary measures, and the no-post-load-Curve policy.
 
 - HDiv 3D energy-Newton now evaluates material energy, residual and tangent on
@@ -463,8 +461,8 @@ Released 2026-09-14.
 - Decoupled IH thermal field order from serialized mesh geometry.  The 3D,
   axisymmetric, and EM-table heat solvers now preserve a loaded `.vol` exactly
   instead of calling `Mesh.Curve(fes_order)` after import; that call can silently
-  destroy a curved CAD mapping (the reported reference-case mesh inflated its boundary
-  area by about 297 million times).  Results now record the input curve order,
+  destroy a curved CAD mapping (a reported curved mesh inflated its boundary
+  area by many orders of magnitude).  Results now record the input curve order,
   domain/boundary measures, and the no-post-load-Curve policy.
 
 - Fixed MATLAB LTspice binary RAW precision/layout validation and transient

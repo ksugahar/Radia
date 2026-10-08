@@ -307,7 +307,7 @@ crystallized as its own package.
 
 - Clarify that axisymmetric workpieces normally use standard NGSolve H1 heat
   with the revolved measure even when the electromagnetic solve is 3D;
-  Henrotte remains the electromagnetic formulation.  Document the reference-case
+  Henrotte remains the electromagnetic formulation.  Document the
   3D-versus-axisymmetric thermal cross-check, boundary-facet heat transfer,
   coverage audit, fail-fast rules, and the prohibition on post-load
   `Mesh.Curve()` for serialized `.vol` meshes.

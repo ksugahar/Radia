@@ -638,16 +638,10 @@ different cooling/contact boundaries, or a transient rotating hotspot whose
 period is not short compared with the thermal response.  Do not select 3D heat
 merely because the supplied EM mesh or ``qsurf.sol`` is 3D.
 
-The received reference-case order-verification package used 3D heat because it supplied a
-fixed full-workpiece 3D ``.vol`` and intentionally varied only H1 order.  That
-was an experiment constraint, not a formulation requirement.  The independent
-2D meridian cross-check (2026-09-14, H1 order 2, 128 azimuth samples) agreed
-with the 3D order-2 solve as follows:
-
-| reference-case case | input-power difference | volume-mean T difference | mean absolute 850 C depth difference |
-|---|---:|---:|---:|
-| A | 0.069% | 1.32 C | 0.024 mm |
-| B | 0.127% | 1.59 C | 0.029 mm |
+A study that supplies a fixed full-workpiece 3D ``.vol`` and varies only H1
+order may use 3D heat; that is an experiment constraint, not a formulation
+requirement.  An independent 2D meridian cross-check (H1 order 2, 128 azimuth
+samples) against the 3D order-2 solve is the recommended confirmation.
 
 Axisymmetric heat requires a separately generated 2D ``(r,z)`` workpiece mesh.
 Loading a 3D ``.vol`` and calling ``Curve()`` cannot turn it into a 2D mesh:

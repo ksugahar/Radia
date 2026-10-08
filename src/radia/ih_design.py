@@ -201,8 +201,8 @@ class IHDesignSpec:
     qsurf_order: int = 1
     q_phi_average: bool = False
     # Used only by the axisymmetric thermal route with spatial q_surf.
-    # 128 resolved the circumferential mean of the faceted reference-case 3D EM
-    # surface to about 0.1% in the independent 2D cross-check.
+    # 128 resolved the circumferential mean of a faceted 3D EM surface
+    # to about 0.1% in an independent 2D cross-check.
     n_phi_samples: int = 128
     heat_flux_boundaries: str = ""
     convection_boundaries: str = ""
