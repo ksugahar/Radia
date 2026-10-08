@@ -178,3 +178,42 @@ def test_aggregate_solver_guidance_contains_capacity_once():
     for text in (matrix_solvers_direct("all"), sparsesolv("all"),
                  get_full_documentation()):
         assert text.count("# Solver capacity and measured diagnosis") == 1
+
+
+
+def test_lowest_order_ams_routing_is_discoverable_and_bounded():
+    from radia_mcp.matrix_solvers.server import (
+        matrix_solvers_em_specific,
+        matrix_solvers_krylov,
+        matrix_solvers_preconditioners,
+        pick_a_solver,
+    )
+    from radia_mcp.radia_ngsolve.server import ngsolve_usage
+
+    for text in (
+        matrix_solvers_preconditioners("ams"),
+        matrix_solvers_krylov("cg"),
+        matrix_solvers_em_specific("gauging"),
+        ngsolve_usage("solvers"),
+    ):
+        assert text.count("# Lowest-order H(curl) solver routing") == 1
+        assert "beta-zero AMS-PCG" in text
+        assert "radia.p1_linear.solve_p1_linear" in text
+        assert "radia.p1_newton.solve_p1_newton" in text
+        assert "straight 3D tetrahedra" in text
+        assert "compatible current load" in text
+        assert "outside `ngsolve.TaskManager`" in text
+        assert "complex-symmetric" in text and "COCR" in text
+        assert "use_abmc=False" in text and "per iteration" in text
+        assert "whole-solve guarantee" in text
+    route = pick_a_solver("magnetostatic_hcurl")
+    assert "solve_p1_linear" in route and "solve_p1_newton" in route
+    assert "beta-zero AMS-PCG" in route and "outside TaskManager" in route
+    assert "No complex/high-order/periodic extension" in route
+    assert "ABMC opt-in" in route and "whole-solve" in route
+    assert "default: ungauged + CompactAMS" not in route
+    classical = matrix_solvers_preconditioners("classical")
+    assert "ABMC is opt-in" in classical and "per iteration" in classical
+    for tool in (matrix_solvers_preconditioners, matrix_solvers_krylov,
+                 matrix_solvers_em_specific):
+        assert tool("all").count("# Lowest-order H(curl) solver routing") == 1
