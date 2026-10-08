@@ -15,10 +15,8 @@ Sources:
   - public-safe curated corpus (K. Sugahara's EM formulations)
 """
 
-from radia_mcp.matrix_solvers.preconditioners_knowledge import LOWEST_ORDER_HCURL_ROUTING
-
-
 from radia_mcp.matrix_solvers.direct_solvers_knowledge import SOLVER_CAPACITY
+from radia_mcp.matrix_solvers.preconditioners_knowledge import LOWEST_ORDER_HCURL_ROUTING
 
 NGSOLVE_OVERVIEW = """
 # NGSolve Overview
