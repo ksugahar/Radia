@@ -289,3 +289,19 @@ def test_axifem_build_links_python_from_the_base_interpreter():
     assert 'Join-Path $pyBasePrefix "libs\\$pyLib"' in script
     assert '"$PythonImportLibrary"' in script
     assert '"$pyPrefix\\libs\\$pyLib"' not in script
+
+
+@pytest.mark.parametrize("changed", ["src/radia/p1_linear.py", "tests/test_p1_linear.py"])
+def test_p1_linear_routes_to_solver_numerics_and_native_ci(changed):
+    manifest = json.loads((ROOT / "tests/test_tier_manifest.json").read_text())
+    test = "tests/test_p1_linear.py"
+    assert test in manifest["impact_rules"]["src/radia/p1_linear.py"]
+    assert test in manifest["profiles"]["solver-numerics"]["paths"]
+    assert changed in IMPACT.NATIVE_PATHS
+    assert IMPACT.native_required(
+        "push", {"before": "a" * 40}, lambda *args: changed + "\0"
+    )[0]
+    workflow = yaml.safe_load((ROOT / ".github/workflows/sparsesolv.yml").read_text())
+    triggers = workflow.get("on", workflow.get(True))
+    for event in ("push", "pull_request"):
+        assert changed in triggers[event]["paths"]

@@ -1,5 +1,8 @@
 """Krylov subspace methods: CG, BiCGSTAB, GMRES, COCG, COCR, IDR(s)."""
 
+from radia_mcp.matrix_solvers.preconditioners_knowledge import LOWEST_ORDER_HCURL_ROUTING
+
+
 CATALOG = r"""
 # Krylov subspace methods catalog
 
@@ -261,6 +264,9 @@ problems use BiCGSTAB or GMRES from NGSolve.  IDR(s) is on the future
 TODO list for cases where COCR breaks down (very low-frequency complex
 systems where eddy current term dominates over ν·curl·curl).
 """
+
+
+CG_HESTENES_STIEFEL += LOWEST_ORDER_HCURL_ROUTING
 
 
 def get_krylov_knowledge(topic: str = "catalog") -> str:

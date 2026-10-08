@@ -16,6 +16,7 @@ Sources:
 """
 
 from radia_mcp.matrix_solvers.direct_solvers_knowledge import SOLVER_CAPACITY
+from radia_mcp.matrix_solvers.preconditioners_knowledge import LOWEST_ORDER_HCURL_ROUTING
 
 NGSOLVE_OVERVIEW = """
 # NGSolve Overview
@@ -7339,6 +7340,9 @@ Representative next promotions:
 
 
 NGSOLVE_SOLVERS += SOLVER_CAPACITY
+
+NGSOLVE_SOLVERS += LOWEST_ORDER_HCURL_ROUTING
+
 
 def get_ngsolve_documentation(topic: str = "all") -> str:
     """Return NGSolve usage documentation by topic."""

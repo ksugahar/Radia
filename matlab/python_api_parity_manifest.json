@@ -572,6 +572,14 @@
       "notes": "Impressed DC current of a closed meshed conductor (mixed RT0/P0 and the A-phi potential with one cut), the source of meshed-coil total-A solves. Batch only: the current is a GridFunction on the conductor mesh."
     },
     {
+      "id": "first-order-linear-total-a",
+      "patterns": ["p1_linear.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/p1Linear.m"],
+      "notes": "Linear lowest-order total-A magnetostatics with explicit material permeabilities and one beta-zero AMS-PCG solve. Batch only: mesh, A and field objects stay on the Python side; setup requires entry outside TaskManager."
+    },
+    {
       "id": "first-order-nonlinear-newton",
       "patterns": ["p1_newton.py"],
       "classification": "python-fallback",
