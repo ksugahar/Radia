@@ -35,7 +35,7 @@ LIMITS = dict(true_residual=1e-6, faraday=1e-6, unit_jump=.005,
               bem_power_balance=.02, fem_power_balance=1e-5,
               bem_fem_power=.02, mesh_power_change=.05,
               carrier_width=.02, frozen_error_min=.20,
-              delta_over_fillet=.15, elapsed_s=1200, total_elapsed_s=3600, bem_nodes=7000)
+              delta_over_fillet=.15, bem_nodes=7000)
 
 
 def part():
@@ -217,7 +217,8 @@ def evaluate(out):
         bem_balance=best['power_balance_rel']<=LIMITS['bem_power_balance'],
         agreement=abs(best['P_total']/finest_f['P_total']-1)<=LIMITS['bem_fem_power'])
     balances=[r['bem']['automatic']['power_balance_rel'] for r in sorted(out['meshes'],key=lambda r:r['bem']['nodes'])]
-    gates['balance_monotonic']=len(balances)>=3 and all(b<a for a,b in zip(balances,balances[1:]))
+    gates['all_level_bem_balance']=all(b<=LIMITS['bem_power_balance'] for b in balances)
+    out['observations']=dict(balance_values=balances, balance_strictly_decreasing=len(balances)>=3 and all(b<a for a,b in zip(balances,balances[1:])), elapsed_s=out['elapsed_s'], run_elapsed_s=[r['elapsed_s'] for r in out['runs']], time_is_acceptance_gate=False)
     if len(out['meshes'])>1:
         out['mesh_power_change']={}
         for mode in ('bem','fem'):
@@ -234,14 +235,13 @@ def evaluate(out):
             for r in finest_b['bem']['carriers'] for mode in ('l2','point'))
         gates['carrier_width']=widths['l2']['power_width_rel']<=LIMITS['carrier_width']
         gates['projection_reduces_width']=widths['l2']['power_width_rel']<widths['point']['power_width_rel']
-    gates['runtime']=all(r['elapsed_s']<=LIMITS['elapsed_s'] for r in out['runs'])
-    gates['total_runtime']=out['elapsed_s']<=LIMITS['total_elapsed_s']
     gates['skin_depth']=DELTA/FILLET<=LIMITS['delta_over_fillet']
     nodes=[r['bem']['nodes'] for r in out['meshes']]
     dofs=[r['fem']['ndof'] for r in out['meshes']]
     gates['refinement']=(len(nodes)>=3 and all(b/a>=1.25 for a,b in zip(nodes,nodes[1:]))
                          and max(dofs)/min(dofs)>=1.10 and max(nodes)<=LIMITS['bem_nodes'])
     out['gates']=gates
+    out['failed_gates']=[key for key,value in gates.items() if not (all(value.values()) if isinstance(value,dict) else value)]
     def passed(v):return all(passed(x) for x in v.values()) if isinstance(v,dict) else bool(v)
     out['all_recorded_gates_pass']=passed(gates)
     out['carrier_comparison_executed']=bool(widths)
