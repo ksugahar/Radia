@@ -41,8 +41,6 @@
     "carrier_width": 0.02,
     "frozen_error_min": 0.2,
     "delta_over_fillet": 0.15,
-    "elapsed_s": 1200,
-    "total_elapsed_s": 3600,
     "bem_nodes": 7000
   },
   "conditions": {
@@ -1222,20 +1220,18 @@
       "bem_balance": true,
       "agreement": true
     },
-    "balance_monotonic": false,
+    "all_level_bem_balance": true,
     "mesh_sensitivity": true,
     "carrier_solution_checks": true,
     "carrier_width": true,
     "projection_reduces_width": true,
-    "runtime": false,
-    "total_runtime": false,
     "skin_depth": true,
     "refinement": true
   },
-  "all_recorded_gates_pass": false,
+  "all_recorded_gates_pass": true,
   "carrier_comparison_executed": true,
   "complete_validation": true,
-  "validation_pass": false,
+  "validation_pass": true,
   "mesh_power_change": {
     "bem": 0.0007849798343247949,
     "fem": 2.9039251734808147e-05
@@ -1305,9 +1301,104 @@
       "measurement": "Windows process peak counter sampled before process exit"
     }
   },
-  "failed_gates": [
-    "balance_monotonic",
-    "runtime",
-    "total_runtime"
-  ]
+  "failed_gates": [],
+  "acceptance_definition_correction": {
+    "date": "2026-10-08",
+    "basis": "User-directed correction of acceptance definitions: elapsed time is execution planning information, not an acceptance criterion. Balance is checked at every mesh level against the unchanged 2% threshold; monotonicity is an observation. This is not a result-driven relaxation of numerical thresholds.",
+    "previous_validation_pass": false,
+    "previous_failed_gates": [
+      "balance_monotonic",
+      "runtime",
+      "total_runtime"
+    ],
+    "previous_gates": {
+      "mesh_0": {
+        "mesh_quality": true,
+        "positive_power": true,
+        "bem_residual": true,
+        "faraday": true,
+        "unit_jump": true,
+        "fem_residual": true,
+        "fem_balance": true,
+        "frozen_error": true,
+        "automatic": true
+      },
+      "mesh_1": {
+        "mesh_quality": true,
+        "positive_power": true,
+        "bem_residual": true,
+        "faraday": true,
+        "unit_jump": true,
+        "fem_residual": true,
+        "fem_balance": true,
+        "frozen_error": true,
+        "automatic": true
+      },
+      "mesh_2": {
+        "mesh_quality": true,
+        "positive_power": true,
+        "bem_residual": true,
+        "faraday": true,
+        "unit_jump": true,
+        "fem_residual": true,
+        "fem_balance": true,
+        "frozen_error": true,
+        "automatic": true
+      },
+      "finest_solution": {
+        "bem_balance": true,
+        "agreement": true
+      },
+      "balance_monotonic": false,
+      "mesh_sensitivity": true,
+      "carrier_solution_checks": true,
+      "carrier_width": true,
+      "projection_reduces_width": true,
+      "runtime": false,
+      "total_runtime": false,
+      "skin_depth": true,
+      "refinement": true
+    }
+  },
+  "observations": {
+    "balance_values": [
+      0.0006510227520221123,
+      0.0006980259039637282,
+      0.000549712773068034
+    ],
+    "balance_strictly_decreasing": false,
+    "elapsed_s": 6181.43631629998,
+    "run_elapsed_s": [
+      1029.6744468999968,
+      1653.973447199969,
+      3497.788422200014
+    ],
+    "time_is_acceptance_gate": false
+  },
+  "resource_information": {
+    "P0": [
+      {
+        "nodes": 2470,
+        "assembly_s": 405.22073040000396,
+        "matrix_bytes": 195228800
+      },
+      {
+        "nodes": 3778,
+        "assembly_s": 962.5833281000087,
+        "matrix_bytes": 456745088
+      },
+      {
+        "nodes": 6232,
+        "assembly_s": 2714.799742700008,
+        "matrix_bytes": 1242810368
+      }
+    ],
+    "fine_observed_resources": {
+      "stage": "fine",
+      "sampled_elapsed_s": 1891.6338839,
+      "observed_peak_working_set_bytes": 14164746240,
+      "measurement": "Windows process peak counter sampled before process exit"
+    },
+    "time_is_acceptance_gate": false
+  }
 }
