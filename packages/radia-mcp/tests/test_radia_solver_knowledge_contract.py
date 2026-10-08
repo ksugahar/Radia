@@ -209,6 +209,7 @@ def test_lowest_order_ams_routing_is_discoverable_and_bounded():
     route = pick_a_solver("magnetostatic_hcurl")
     assert "solve_p1_linear" in route and "solve_p1_newton" in route
     assert "beta-zero AMS-PCG" in route and "outside TaskManager" in route
+    assert "gradient kernel" in route and "real SPD" not in route
     assert "No complex/high-order/periodic extension" in route
     assert "ABMC opt-in" in route and "whole-solve" in route
     assert "default: ungauged + CompactAMS" not in route
