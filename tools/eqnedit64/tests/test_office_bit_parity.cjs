@@ -155,13 +155,25 @@ function officeBytes(html) {
       // both modes also rejects a stale native clipboard after failed Web copy.
       assert.equal(copied.tex, fixture.tex, fixture.id + ": Web raw TeX not copied");
       if (wire) {
+        // Chromium commits a copy-event write to the OS clipboard
+        // asynchronously. Poll until the raw Windows clipboard no longer holds
+        // the EXE payload read just before (their fallback sections always
+        // differ), instead of reading once and racing the commit.
         const output = path.join(scratch, fixture.id + ".web.cfhtml");
-        execFileSync("pwsh", [
-          "-NoProfile", "-STA", "-File",
-          path.join(__dirname, "read_office_wire.ps1"), "-OutputPath", output
-        ]);
-        assert(officeBytes(fs.readFileSync(output, "utf8"))
-                   .equals(officeBytes(copied.html)),
+        const deadline = Date.now() + 10000;
+        let webWire;
+        for (;;) {
+          execFileSync("pwsh", [
+            "-NoProfile", "-STA", "-File",
+            path.join(__dirname, "read_office_wire.ps1"), "-OutputPath", output
+          ]);
+          webWire = fs.readFileSync(output, "utf8");
+          if (webWire !== native || Date.now() > deadline) break;
+          execFileSync("pwsh", ["-NoProfile", "-Command", "Start-Sleep -Milliseconds 200"]);
+        }
+        assert(webWire !== native,
+               fixture.id + ": Web copy never reached the Windows clipboard");
+        assert(officeBytes(webWire).equals(officeBytes(copied.html)),
                fixture.id +
                    ": browser read differs from raw Windows clipboard");
       }
