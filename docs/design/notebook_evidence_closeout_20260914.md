@@ -73,7 +73,7 @@ can be called citation-complete:
 
 - Clebsch/hodograph and particle-orbit notebooks: SCOFF/Enge and classical
   fringe/edge-focusing claims; existing internal derivations are not publication
-  identities. The cut-selection notebook also names a reference workpiece.
+  identities.
 - Hysteresis and NGSolve integration: Egger, measured B-H and Simkin benchmark
   source identities and original measurement lineage.
 - Maglev: TEAM 28 benchmark specification. Induction heating: the named IGTE
@@ -209,7 +209,7 @@ Cut selection now cites existing canonical `kotiuga1987cuts` and
 `pellikka2013homology` as general background through generated BibTeX/TeX4ht
 artifacts. Kotiuga's [author publication list](https://people.bu.edu/prk/Publications.htm)
 confirms the 1987 title, journal, volume and pages. These references do not
-identify the unnamed reference benchmark or prove the one-handle algorithm.
+identify a benchmark geometry or prove the one-handle algorithm.
 There are now **11 generated bibliographies among 51 notebooks**. The other
 40 absent declarations neither prove citation completeness nor automatically
 require a bibliography: follow each notebook's explicit review scope.
