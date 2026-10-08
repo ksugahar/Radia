@@ -1986,7 +1986,7 @@ axisymmetric FEM-SIBC versus BEM on solid and bored cylinders, separate
 source power and dissipation, local complex magnetic field, surface
 refinement, and FEM exterior-size convergence. The full-conductor FEM
 power baseline and analytic shorted-ring test are complementary checks.
-No Takahashi files or reported sixfold ratio are acceptance inputs.
+No external case files or reported ratios are acceptance inputs.
 
 Scalar strong coupled coil solvers use complete mutual reaction from
 TOTAL body surface current and the discrete incident electric projection.

@@ -43,5 +43,5 @@
   ],
   "selected_cut_length_mm": 176.81253192630746,
   "selected_cut_n_vertices": 35,
-  "note": "Unstructured torus reproduces the class-mixed QR basis recorded on the Takahashi stepped-tube workpiece; the pure-toroidal winding classification recovers the cut."
+  "note": "Unstructured torus reproduces the class-mixed QR basis recorded on a stepped-tube test workpiece; the pure-toroidal winding classification recovers the cut."
 }

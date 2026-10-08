@@ -160,8 +160,8 @@ class CoupledBEMSolver:
         # Default: dense ngsolve.bem scalar BIE (fine for small/moderate wp).
         # wp_hacapk=True: the in-tree Sauter-Schwab Galerkin assembler with an
         # O(N log N) HACApK H-matrix (the weak-path pattern), which scales the
-        # workpiece BIE past the ~12k-tri dense-assembly wall (e.g. the 20k-tri
-        # Takahashi workpiece).  At order=1 the intree path still creates
+        # workpiece BIE past the ~12k-tri dense-assembly wall (e.g. a 20k-tri
+        # workpiece).  At order=1 the intree path still creates
         # ``self.fes`` (H1 P1), so the scattered-current extraction in
         # Complete reaction uses the same incident-field maps for either backend.
         self.wp_hacapk = bool(wp_hacapk)
