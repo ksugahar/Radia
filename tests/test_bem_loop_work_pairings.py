@@ -81,8 +81,9 @@ def test_complete_work_changes_covariantly_with_generic_lift(surface, zero_mean)
     C = np.zeros((4, 4, 3))
     for ti, triangle in enumerate(t):
         C[ti, triangle] = np.cross(normals[ti], -gradients[ti])
-    Q = (sum(C[:, :, c].T @ S @ C[:, :, c] for c in range(3))
-         + B.T @ np.linalg.solve(bem.SL, B))
+    with ng.TaskManager():
+        Q = (sum(C[:, :, c].T @ S @ C[:, :, c] for c in range(3))
+             + B.T @ np.linalg.solve(bem.SL, B))
     np.testing.assert_allclose(new[0]-old[0], z*bem.K @ w, atol=2e-14, rtol=1e-12)
     np.testing.assert_allclose(new[2]-old[2], MU_0*(w @ Q), atol=2e-15, rtol=1e-7)
     np.testing.assert_allclose(new[1]-old[1], 2*(old[0] @ w)+z*(w @ bem.K @ w),
@@ -153,3 +154,33 @@ def test_unsupported_geometry_rejected_before_assembly(curved):
     with pytest.raises(ValueError, match="undeformed flat"):
         solve_loop_extended(SimpleNamespace(mesh=mesh), np.zeros(4), .03+.02j,
                              300., incident)
+
+
+def test_native_loop_operator_preserves_permutation_and_complex_products(surface):
+    from ngsolve.bem import LaplaceSL
+    from radia.bem_loop_work import _P0SingleLayer
+    bem, _, _, _, _, _ = surface
+    with ng.TaskManager():
+        space=ng.SurfaceL2(bem.mesh,order=0,dual_mapping=False)
+        u,v=space.TnT();d=ng.ds(bonus_intorder=12)
+        native=LaplaceSL(u*d,use_fmm=False)*v*d
+        rows,cols,values=native.mat.COO()
+        from scipy.sparse import coo_matrix
+        dense=coo_matrix((values,(rows,cols)),shape=(space.ndof,space.ndof)).toarray()
+        permutation=np.arange(space.ndof)[::-1]
+        expected=dense[np.ix_(permutation,permutation)]
+        operator=_P0SingleLayer(native,space,permutation,dense.nbytes)
+        vectors=np.c_[np.arange(space.ndof)+.2,np.arange(space.ndof)**2-.7].astype(complex)
+        vectors+=1j*vectors[::-1]
+        np.testing.assert_allclose(operator@vectors,expected@vectors,rtol=1e-13,atol=1e-15)
+        np.testing.assert_allclose(operator.T@vectors,expected.T@vectors,rtol=1e-13,atol=1e-15)
+        np.testing.assert_allclose(vectors.T@operator,vectors.T@expected,rtol=1e-13,atol=1e-15)
+        assert operator.dense_array_bytes==0
+
+
+def test_loop_conormal_diagnostic_rejects_nonmanifold_edge_counts(surface):
+    bem,p,t,areas,normals,gradients=surface
+    duplicate=t.copy();duplicate[1]=duplicate[0]
+    with ng.TaskManager(),pytest.raises(ValueError,match='closed manifold'):
+        _loop_work_row(bem,p,duplicate,t,np.arange(4),gradients,normals,areas,
+            np.array([.3,-.2,.4,.7]),.03+.02j,incident,np.zeros(4),-p[:,2])
