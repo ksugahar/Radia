@@ -14,7 +14,6 @@ crystallized as its own package.
 - Show solver-capacity guidance once in aggregate documentation. Align
   host/deployment guidance with editable development on 100 and fixed
   wheels on LAB, and strengthen the preflight package-boundary audit.
-- Publish this package only after Radia 5.3.0 passes release-quad acceptance.
 
 
 - Add `mathematica_export_equation`: evaluate once, retain InputForm and TeX,
