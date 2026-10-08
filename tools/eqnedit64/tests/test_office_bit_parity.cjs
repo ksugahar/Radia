@@ -88,8 +88,13 @@ function officeBytes(html) {
   let browser;
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   try {
+    // Old headless Chromium (headless shell) keeps an in-memory clipboard, so
+    // its copies never reach the Windows clipboard and a wire read only sees
+    // whatever was there before. The wire gate therefore needs the full
+    // Chromium build in new-headless mode, which uses the system clipboard.
     browser = await chromium.launch({
       headless : true,
+      ...(wire ? {channel : "chromium"} : {}),
       ...(process.env.EQNEDIT64_BROWSER_PATH
               ? {executablePath : process.env.EQNEDIT64_BROWSER_PATH}
               : {})
