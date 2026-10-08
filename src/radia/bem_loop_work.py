@@ -6,10 +6,39 @@ coefficients; dissipated power uses the real impedance and conjugation.
 from __future__ import annotations
 
 import numpy as np
-from scipy.sparse import coo_matrix, csc_matrix
-from scipy.sparse.linalg import spsolve
+from scipy.sparse import coo_matrix, csc_matrix, csr_matrix
+from scipy.sparse.linalg import spsolve, LinearOperator
 
 MU_0 = 4e-7 * np.pi
+
+
+class _P0SingleLayer(LinearOperator):
+    """Face-ordered products retaining the native operator, without dense copies."""
+    def __init__(self, operator, space, dofs, native_bytes):
+        self.operator, self.space = operator, space
+        self.matrix, self.dofs = operator.mat, np.asarray(dofs)
+        self.dense_array_bytes = 0  # no NumPy dense matrix is retained
+        self.native_bytes = self.nbytes = int(native_bytes)
+        super().__init__(dtype=np.dtype(float), shape=(len(dofs), len(dofs)))
+
+    def _component(self, values, transpose):
+        x = self.matrix.CreateColVector()
+        y = self.matrix.CreateRowVector()
+        x.FV().NumPy()[self.dofs] = values
+        (self.matrix.T if transpose else self.matrix).Mult(x, y)
+        return y.FV().NumPy()[self.dofs].copy()
+
+    def _apply(self, values, transpose):
+        values = np.asarray(values).reshape(-1)
+        if np.iscomplexobj(values):
+            return self._component(values.real, transpose)+1j*self._component(values.imag, transpose)
+        return self._component(values, transpose)
+
+    def _matvec(self, values):
+        return self._apply(values, False)
+
+    def _rmatvec(self, values):
+        return self._apply(values, True)
 
 
 def _p0_single_layer(bem_solver, areas, *, quadrature_bonus=4):
@@ -33,8 +62,7 @@ def _p0_single_layer(bem_solver, areas, *, quadrature_bonus=4):
         return cached[1]
 
     if len(areas) > 14000:
-        raise ValueError("Dense loop work exceeds 14000 surface faces "
-                         "(about 1.5 GiB for this matrix alone); use a coarser validated mesh")
+        raise ValueError("Loop work exceeds 14000 surface faces; use a coarser validated mesh")
     import time
     started = time.perf_counter()
     space = SurfaceL2(mesh, order=0, dual_mapping=False)
@@ -55,13 +83,14 @@ def _p0_single_layer(bem_solver, areas, *, quadrature_bonus=4):
 
     measure = ds(bonus_intorder=quadrature_bonus)
     operator = LaplaceSL(u*measure, use_fmm=False)*v*measure
-    rows, cols, values = operator.mat.COO()
-    matrix = coo_matrix((values, (rows, cols)),
-                        shape=(space.ndof, space.ndof)).toarray()
-    matrix = np.ascontiguousarray(matrix[np.ix_(dofs, dofs)])
-    if not np.all(np.isfinite(matrix)) or np.any(matrix.diagonal() <= 0):
+    # Native assembly already owns the entries. CSR views validate the matrix;
+    # no COO export, toarray, or face-permutation matrix copy is required.
+    values, columns, offsets = (np.asarray(a) for a in operator.mat.CSR())
+    native_bytes = values.nbytes+columns.nbytes+offsets.nbytes
+    native = csr_matrix((values, columns, offsets), shape=(space.ndof, space.ndof), copy=False)
+    if not np.all(np.isfinite(values)) or np.any(native.diagonal() <= 0):
         raise RuntimeError("Invalid singular Galerkin P0 single-layer matrix")
-    matrix.flags.writeable = False
+    matrix = _P0SingleLayer(operator, space, dofs, native_bytes)
     bem_solver._loop_work_single_layer = (key, matrix)
     bem_solver._loop_work_assembly_seconds = time.perf_counter()-started
     return matrix
@@ -88,6 +117,13 @@ def _prepare_loop_magnetic_work(bem_solver, points, closed_triangles, open_trian
     if np.iscomplexobj(loop_current) and np.any(loop_current.imag != 0):
         raise ValueError("Loop lift must be real")
     loop_current = np.asarray(loop_current.real)
+    a, b = closed_triangles, np.roll(closed_triangles, -1, axis=1)
+    edges = np.sort(np.stack((a, b), axis=-1).reshape(-1, 2), axis=1)
+    order = np.lexsort((edges[:, 1], edges[:, 0]))
+    ordered_edges = edges[order]
+    starts = np.flatnonzero(np.r_[True, np.any(np.diff(ordered_edges, axis=0), axis=1), True])
+    if np.any(np.diff(starts) != 2):
+        raise ValueError("Loop work requires a closed manifold triangular surface")
     row_ids = np.repeat(np.arange(nt), 3)
     column_ids = vertex_map[open_triangles].ravel()
     maps = [coo_matrix((currents[:, :, c].ravel(), (row_ids, column_ids)),
@@ -95,10 +131,10 @@ def _prepare_loop_magnetic_work(bem_solver, points, closed_triangles, open_trian
 
     single_layer = _p0_single_layer(bem_solver, areas,
                                     quadrature_bonus=quadrature_bonus)
-    magnetic = MU_0*sum(mapping.T @ (single_layer.T @ loop_current[:, c])
-                       for c, mapping in enumerate(maps))
-    reverse = MU_0*sum(mapping.T @ (single_layer @ loop_current[:, c])
-                      for c, mapping in enumerate(maps))
+    applied = single_layer @ loop_current
+    transposed = single_layer.T @ loop_current
+    magnetic = MU_0*sum(mapping.T @ transposed[:, c] for c, mapping in enumerate(maps))
+    reverse = MU_0*sum(mapping.T @ applied[:, c] for c, mapping in enumerate(maps))
     q = np.asarray(neumann_trace)
     if np.iscomplexobj(q) and np.any(q.imag != 0):
         raise ValueError("Unit carrier normal trace must be real")
@@ -111,8 +147,7 @@ def _prepare_loop_magnetic_work(bem_solver, points, closed_triangles, open_trian
     # omits finite-SIBC normal flux and fails a generic lift change.
     magnetic -= MU_0*(q @ B)
     reverse -= MU_0*(B.T @ q)
-    magnetic_diagonal = MU_0*sum(loop_current[:, c] @ single_layer
-                                 @ loop_current[:, c] for c in range(3))
+    magnetic_diagonal = MU_0*sum(transposed[:, c] @ loop_current[:, c] for c in range(3))
     magnetic_diagonal += MU_0*(q @ bem_solver.SL @ q)
     if not np.isfinite(magnetic_diagonal) or magnetic_diagonal <= 0:
         raise RuntimeError("Unit carrier exterior magnetic work must be positive")
@@ -132,22 +167,20 @@ def _prepare_loop_magnetic_work(bem_solver, points, closed_triangles, open_trian
     if not np.isfinite(norm) or norm <= 0 or not np.all(np.isfinite(dual)):
         raise RuntimeError("Invalid loop lift or surface-gradient dual solve")
     gradient_work = float(np.sqrt(max(0., gradient_load[1:] @ dual)/norm))
-    edge_flux = {}
-    for ti, triangle in enumerate(closed_triangles):
-        for a, b in zip(triangle, np.roll(triangle, -1)):
-            edge = points[b]-points[a]
-            flux = float(loop_current[ti] @ np.cross(edge, normals[ti]))
-            edge_flux.setdefault(tuple(sorted((int(a), int(b)))), []).append(flux)
-    if any(len(values) != 2 for values in edge_flux.values()):
-        raise ValueError("Loop work requires a closed manifold triangular surface")
-    flux_scale = max(max(sum(abs(v) for v in values)
-                         for values in edge_flux.values()), np.finfo(float).tiny)
-    flux_error = max(abs(sum(values)) for values in edge_flux.values())/flux_scale
+    flux = np.einsum("ti,tki->tk", loop_current,
+                     np.cross(points[b]-points[a], normals[:, None, :])).ravel()[order]
+    pairs = flux.reshape(-1, 2)
+    flux_scale = max(np.max(np.sum(np.abs(pairs), axis=1)), np.finfo(float).tiny)
+    flux_error = np.max(np.abs(np.sum(pairs, axis=1)))/flux_scale
     diagnostics = dict(magnetic_work_symmetry=symmetry,
                        gradient_work_residual=gradient_work,
                        conormal_flux_relative_mismatch=float(flux_error),
                        quadrature_bonus=quadrature_bonus,
                        single_layer_matrix_bytes=int(single_layer.nbytes),
+                       single_layer_native_storage_bytes=single_layer.native_bytes,
+                       single_layer_dense_array_bytes=single_layer.dense_array_bytes,
+                       single_layer_dense_equivalent_bytes=8*nt**2,
+                       single_layer_backend="native-exact",
                        single_layer_assembly_seconds=bem_solver._loop_work_assembly_seconds)
     return maps, loop_current, magnetic, magnetic_diagonal, diagnostics
 

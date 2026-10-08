@@ -5,6 +5,13 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Genus-1 loop work retains the native singular Galerkin P0 single layer
+  and uses its forward/transpose products, removing the COO-to-dense and
+  face-permutation copies. Six products are reused for the row, reverse
+  pairing and diagonal; conormal edge checks are vectorized. The quadrature
+  and complete magnetic closure are unchanged. Direct assembly remains
+  quadratic and still dominates its construction time and peak memory.
+
 - Per-panel ESIM now defaults to the adaptive log-H table to reduce outer
   cell evaluations. Final certification still directly solves every panel.
   Select `--esim-panel-evaluator direct` to restore the reference evaluator;
