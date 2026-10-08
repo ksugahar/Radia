@@ -51,7 +51,6 @@ P2/Q2 and tracked-model changes are on main through
 [PR #280](https://github.com/ksugahar/Radia/pull/280). This is not release
 completion: unmocked production CAD/VOL-to-EM-to-heat acceptance, full-window
 UI inspection and the four-host exact-package gate remain separate requirements.
-The received-casediscrepancy is not asserted resolved by these tests.
 
 ## Evidence ownership
 

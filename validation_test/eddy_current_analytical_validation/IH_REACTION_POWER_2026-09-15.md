@@ -1,7 +1,7 @@
 # IH SIBC reaction and heating: repository acceptance
 
 Status: **implemented and accepted within the scope below**.
-No external case inputs or ratio target are used. Existing installed
+No external case inputs or ratio targets are used. Existing installed
 Radia environments were not repointed. Solver work ran on idle hibino with
 staged Python sources and an identified native runtime.
 
@@ -202,8 +202,7 @@ mapped postprocessing, strong coil-current feedback, and native Simulink
 MEX operators are outside this acceptance. The separate strong route's
 post-convergence loop treatment must not inherit this claim. Coil CAD and
 production VOL export/check gates are separate from the in-memory
-workpiece-stage tests. The received case's exactratio is neither
-asserted fixed nor used as an acceptance input.
+workpiece-stage tests.
 
 This change is a tested repository implementation, not a PyPI publication
 or deployment into existing student environments.
