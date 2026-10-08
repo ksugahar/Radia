@@ -509,7 +509,8 @@ O:はINTEL11では `C:\Users\Administrator\OneDrive` へのSUBSTであり、ユ�
 - 手動試験：`ea787664d` のEXE H1/H5/H6 OK、H7はcanvas赤・PowerPoint色欠落。
   Web H5/H6は `8361ec916` でOK。
   [actual-wire gate](https://github.com/ksugahar/Radia/actions/runs/37692902458) は
-  `ea787664d` の実Windowsクリップボード22/22主OMMLがbyte一致。
+  `ea787664d` の22式の主OMMLがbyte一致（検証経路の注記を参照）。
+  注記: run 37692902458のEXE側は実Windowsクリップボード、Web側はheadless Chromiumの内部クリップボード（producer相当）だった。Webの実OSクリップボード書込みを初めて証明したのは3.1.3 run 37718032042 / b06b8d89a（headed full Chromium、同値対象36/36式）。Web H5/H6の手動試験結果は維持する。
   共有経路の色欠落は上記§6.1の承認済み制限。
 
 #### 3.1.2 Fableゲート
