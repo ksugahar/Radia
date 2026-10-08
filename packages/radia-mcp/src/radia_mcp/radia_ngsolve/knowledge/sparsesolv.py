@@ -441,7 +441,7 @@ Algorithm (Iwashita, Nakashima, Takahashi, IPDPS 2012):
 |----------|---------|-----------------|
 | <10,000  | Any     | No benefit      |
 | 10K-25K  | 4-8     | Marginal        |
-| >25,000  | 4+      | 1.2-1.8x faster |
+| >25,000  | 4+      | 1.2-1.8x per iteration (see whole-solve note) |
 | >100,000 | 8+      | Significant     |
 
 **Crossover point**: ~25,000 DOFs with 8 threads. Below this, the overhead of
@@ -456,6 +456,30 @@ reordering exceeds the parallelism benefit.
 
 The toroidal coil shows higher speedup because HCurl mesh topology creates
 longer dependency chains that benefit more from multi-color parallelism.
+
+These are **per-iteration** figures. Judge ABMC on whole-solve time: the
+colouring weakens IC(0), so the iteration count rises.
+
+## Whole-solve measurement and solver choice (2026-10-08)
+
+Lowest-order Nedelec total-A magnetostatics, ungauged, iron mu_r 1000, meshed
+coil, Cubit tetrahedral meshes of 1.2e5 to 2.1e6 elements (1.4e5 to 2.4e6
+DOFs), ICCG tol 1e-8, one host, median of 3:
+
+- Natural-order IC triangular solves are serial: 1 -> 8 threads gives only
+  1.2-1.5x per iteration (SpMV and vector updates scale; substitution does not).
+- ABMC (default block/colour settings) cuts per-iteration time by 22-24 % at
+  8 threads but raises iterations by 20-34 %. Whole-solve change on the same
+  binary: -10 % (1.4e5 DOFs), -3 %, -0.6 %, +4.8 % (2.4e6 DOFs). ABMC therefore
+  stays opt-in (`use_abmc=False` default); an automatic thread-based default
+  was evaluated and rejected.
+- A symmetric half-storage SpMV (gather, coloured scatter and blocked
+  variants) gave no gain over full CSR on these meshes; full CSR is kept.
+- For large lowest-order curl-curl systems prefer **beta-zero AMS-PCG**:
+  `radia.p1_linear.solve_p1_linear` (linear) or `radia.p1_newton.solve_p1_newton`
+  (nonlinear B-H). On the 2.4e6-DOF case AMS setup + PCG took about 7.8 s at
+  8 threads versus 29 s for natural ICCG. Keep ICCG for small systems, complex
+  ICCG cases and as an independent cross-check.
 
 ## Configuration Parameters
 
