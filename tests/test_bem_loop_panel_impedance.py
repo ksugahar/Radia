@@ -164,3 +164,34 @@ def test_augmented_gradient_quadratic_heat(ring, monkeypatch, law):
     assert quadratic.real == pytest.approx(areas @ out["q_tri"], rel=1e-12)
     from radia.workpiece_surface import _check_sibc_reaction_power
     assert _check_sibc_reaction_power(out["P_total"], out["P_reaction"]) < .1
+
+
+def test_forced_fmm_matches_dense_and_refreshes_prepared_system(ring, monkeypatch):
+    bem, _, triangles, _, z, omega, _, _ = ring
+    from radia.bem_loop_extension import solve_loop_extended
+    _, points, _, _, _, _, a_inc, carrier = ring
+    field = PanelSurfaceImpedance(np.where(np.arange(len(triangles)) % 2, z, 2*z))
+
+    def prepared():
+        with ng.TaskManager():
+            return solve_loop_extended(bem, -points[:, 2].astype(complex), field,
+                omega, a_inc, section_anchor=(.03, 0), carrier_ring=carrier,
+                _reuse_prepared=True)
+
+    monkeypatch.setattr(bem, "loop_work_backend", "dense")
+    direct = prepared()
+    system = bem._prepared_loop_system
+    monkeypatch.setattr(bem, "loop_work_backend", "fmm")
+    compressed = prepared()
+    assert bem._prepared_loop_system is not system
+    np.testing.assert_allclose(compressed["H_t_tri"], direct["H_t_tri"], rtol=1e-7, atol=1e-9)
+    assert compressed["P_total"] == pytest.approx(direct["P_total"], rel=1e-7)
+    diagnostic = compressed["loop_work_diagnostics"]
+    assert diagnostic["single_layer_backend"] == "ngsolve-galerkin-fmm"
+    assert diagnostic["single_layer_native_storage_bytes"] is None
+    assert diagnostic["single_layer_dense_array_bytes"] == 0
+    assert diagnostic["single_layer_fmm_parameters"]["fmm_minorder"] == 20
+    assert diagnostic["ngsolve_version"]
+    again = prepared()
+    assert bem._prepared_loop_system is not system
+    np.testing.assert_array_equal(again["H_t_tri"], compressed["H_t_tri"])

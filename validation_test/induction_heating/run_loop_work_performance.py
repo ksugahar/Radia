@@ -12,6 +12,10 @@ from scipy.sparse import coo_matrix
 from ngsolve.bem import LaplaceSL
 from run_loop_work_ring import ring_mesh
 
+FMM_OPTIONS = dict(fmm_minorder=20, fmm_maxdirect=100, fmm_separation=2,
+                   fmm_eval_separation=3, fmm_maxlevel=20,
+                   fmm_split_kr=5, fmm_order_factor=2)
+
 
 def memory():
     if platform.system()!='Windows':
@@ -37,7 +41,7 @@ def run(level,mode):
         assert len(dofs)==space.ndof and np.array_equal(np.sort(dofs),np.arange(space.ndof))
         u,v=space.TnT();measure=ng.ds(bonus_intorder=4)
         phase('mesh_space',t)
-        t=time.perf_counter();operator=LaplaceSL(u*measure,use_fmm=mode=='fmm',fmm_minorder=20)*v*measure
+        t=time.perf_counter();operator=LaplaceSL(u*measure,use_fmm=mode=='fmm',**FMM_OPTIONS)*v*measure
         matrix=operator.mat;phase('native_single_layer',t)
         if mode=='old':
             t=time.perf_counter();rows,cols,values=matrix.COO();phase('coo_export',t)
@@ -59,8 +63,9 @@ def run(level,mode):
         assert np.all(np.isfinite(forward)) and np.all(np.isfinite(reverse))
         diagonal=np.sum(source*forward)
         assert diagonal>0
-        return dict(schema='radia.loop-work-product-profile.v1',mode=mode,level=level,faces=len(tri),
+        return dict(schema='radia.loop-work-product-profile.v1',mode=mode,level=level,faces=len(tri),vertices=len(points),
             quadrature_bonus=4,fmm_order=20 if mode=='fmm' else None,
+            fmm_parameters=FMM_OPTIONS.copy() if mode=='fmm' else None,ngsolve_version=ng.__version__,
             host=platform.node(),threads=1,dense_matrix_bytes=8*len(tri)**2,
             total_seconds=sum(p['seconds'] for p in phases),phases=phases,**memory()),forward,reverse
 

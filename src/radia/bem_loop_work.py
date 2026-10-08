@@ -10,23 +10,46 @@ from scipy.sparse import coo_matrix, csc_matrix, csr_matrix
 from scipy.sparse.linalg import spsolve, LinearOperator
 
 MU_0 = 4e-7 * np.pi
+# Native Laplace Galerkin FMM compresses separated interactions; singular and
+# near interactions use the same direct quadrature. These controls are fixed.
+_FMM_OPTIONS = dict(fmm_minorder=20, fmm_maxdirect=100, fmm_separation=2,
+                    fmm_eval_separation=3, fmm_maxlevel=20,
+                    fmm_split_kr=5, fmm_order_factor=2)
+_FMM_FACE_THRESHOLD = 512
+
+
+def _loop_work_route(bem_solver, face_count):
+    requested = getattr(bem_solver, "loop_work_backend", "dense")
+    if requested not in ("auto", "dense", "fmm"):
+        raise ValueError("loop_work_backend must be auto, dense, or fmm")
+    return ("fmm" if face_count >= _FMM_FACE_THRESHOLD else "dense") if requested == "auto" else requested
 
 
 class _P0SingleLayer(LinearOperator):
     """Face-ordered products retaining the native operator, without dense copies."""
-    def __init__(self, operator, space, dofs, native_bytes):
+    def __init__(self, operator, space, dofs, native_bytes, *, backend="dense"):
         self.operator, self.space = operator, space
         self.matrix, self.dofs = operator.mat, np.asarray(dofs)
         self.dense_array_bytes = 0  # no NumPy dense matrix is retained
-        self.native_bytes = self.nbytes = int(native_bytes)
+        self.native_bytes = self.nbytes = None if native_bytes is None else int(native_bytes)
+        self.backend = backend
         super().__init__(dtype=np.dtype(float), shape=(len(dofs), len(dofs)))
 
     def _component(self, values, transpose):
         x = self.matrix.CreateColVector()
         y = self.matrix.CreateRowVector()
         x.FV().NumPy()[self.dofs] = values
-        (self.matrix.T if transpose else self.matrix).Mult(x, y)
-        return y.FV().NumPy()[self.dofs].copy()
+        try:
+            (self.matrix.T if transpose else self.matrix).Mult(x, y)
+        except Exception as error:
+            if self.backend == "fmm":
+                raise RuntimeError("Loop-work FMM apply failed; select loop_work_backend='dense' "
+                                   "or --wp-loop-work-backend dense") from error
+            raise
+        result = y.FV().NumPy()[self.dofs].copy()
+        if not np.all(np.isfinite(result)):
+            raise RuntimeError("Nonfinite loop-work single-layer product")
+        return result
 
     def _apply(self, values, transpose):
         values = np.asarray(values).reshape(-1)
@@ -56,7 +79,8 @@ def _p0_single_layer(bem_solver, areas, *, quadrature_bonus=4):
     if frozen != identity:
         raise ValueError("Loop work geometry changed; rebuild the BIE solver")
     bem_solver._loop_work_geometry_identity = identity
-    key = (identity, quadrature_bonus)
+    backend = _loop_work_route(bem_solver, len(areas))
+    key = (identity, quadrature_bonus, backend)
     cached = getattr(bem_solver, "_loop_work_single_layer", None)
     if cached is not None and cached[0] == key:
         return cached[1]
@@ -82,15 +106,22 @@ def _p0_single_layer(bem_solver, areas, *, quadrature_bonus=4):
         raise ValueError("P0 basis scaling does not match the flat triangle areas")
 
     measure = ds(bonus_intorder=quadrature_bonus)
-    operator = LaplaceSL(u*measure, use_fmm=False)*v*measure
-    # Native assembly already owns the entries. CSR views validate the matrix;
-    # no COO export, toarray, or face-permutation matrix copy is required.
-    values, columns, offsets = (np.asarray(a) for a in operator.mat.CSR())
-    native_bytes = values.nbytes+columns.nbytes+offsets.nbytes
-    native = csr_matrix((values, columns, offsets), shape=(space.ndof, space.ndof), copy=False)
-    if not np.all(np.isfinite(values)) or np.any(native.diagonal() <= 0):
-        raise RuntimeError("Invalid singular Galerkin P0 single-layer matrix")
-    matrix = _P0SingleLayer(operator, space, dofs, native_bytes)
+    if backend == "fmm":
+        try:
+            operator = LaplaceSL(u*measure, use_fmm=True, **_FMM_OPTIONS)*v*measure
+        except Exception as error:
+            raise RuntimeError("Loop-work Galerkin FMM construction failed; select "
+                               "loop_work_backend='dense' or --wp-loop-work-backend dense") from error
+        # The native near+FMM operator exposes no complete storage inventory.
+        native_bytes = None
+    else:
+        operator = LaplaceSL(u*measure, use_fmm=False)*v*measure
+        values, columns, offsets = (np.asarray(a) for a in operator.mat.CSR())
+        native_bytes = values.nbytes+columns.nbytes+offsets.nbytes
+        native = csr_matrix((values, columns, offsets), shape=(space.ndof, space.ndof), copy=False)
+        if not np.all(np.isfinite(values)) or np.any(native.diagonal() <= 0):
+            raise RuntimeError("Invalid singular Galerkin P0 single-layer matrix")
+    matrix = _P0SingleLayer(operator, space, dofs, native_bytes, backend=backend)
     bem_solver._loop_work_single_layer = (key, matrix)
     bem_solver._loop_work_assembly_seconds = time.perf_counter()-started
     return matrix
@@ -176,11 +207,15 @@ def _prepare_loop_magnetic_work(bem_solver, points, closed_triangles, open_trian
                        gradient_work_residual=gradient_work,
                        conormal_flux_relative_mismatch=float(flux_error),
                        quadrature_bonus=quadrature_bonus,
-                       single_layer_matrix_bytes=int(single_layer.nbytes),
+                       single_layer_matrix_bytes=single_layer.nbytes,
                        single_layer_native_storage_bytes=single_layer.native_bytes,
                        single_layer_dense_array_bytes=single_layer.dense_array_bytes,
                        single_layer_dense_equivalent_bytes=8*nt**2,
-                       single_layer_backend="native-exact",
+                       single_layer_backend="ngsolve-galerkin-fmm" if single_layer.backend == "fmm" else "native-exact",
+                       single_layer_requested_backend=getattr(bem_solver, "loop_work_backend", "dense"),
+                       single_layer_auto_face_threshold=_FMM_FACE_THRESHOLD,
+                       single_layer_fmm_parameters=_FMM_OPTIONS.copy() if single_layer.backend == "fmm" else None,
+                       ngsolve_version=__import__("ngsolve").__version__,
                        single_layer_assembly_seconds=bem_solver._loop_work_assembly_seconds)
     return maps, loop_current, magnetic, magnetic_diagonal, diagnostics
 
@@ -195,7 +230,7 @@ def _prepare_loop_work(bem_solver, points, closed_triangles, open_triangles,
     if (impedance.shape != (nt,) or not np.all(np.isfinite(impedance))
             or np.any(impedance.real < 0)):
         raise ValueError("Loop work requires finite passive face-ordered impedance")
-    key = (_geometry_key, quadrature_bonus)
+    key = (_geometry_key, quadrature_bonus, _loop_work_route(bem_solver, len(areas)))
     cached = getattr(bem_solver, '_prepared_loop_magnetic_work', None) if _geometry_key is not None else None
     if cached is not None and cached[0] == key:
         magnetic_work = cached[1]
@@ -222,7 +257,7 @@ def _loop_work_row(bem_solver, points, closed_triangles, open_triangles,
     if phi.shape != (len(points),) or not np.all(np.isfinite(phi)):
         raise ValueError("Loop work requires a finite matching incident trace")
     cached = getattr(bem_solver, '_prepared_loop_work', None) if _prepared_key is not None else None
-    key = (_prepared_key, quadrature_bonus)
+    key = (_prepared_key, quadrature_bonus, _loop_work_route(bem_solver, len(areas)))
     if cached is not None and cached[0] == key:
         work = cached[1]
     else:

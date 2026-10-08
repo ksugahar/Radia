@@ -51,9 +51,10 @@ def setup_cases():
 
 def make_solver(cases, model, genus):
     bodies,coil,paths=cases
-    if model=='surface':return CoupledBEMSolver(coil,bodies[genus])
+    if model=='surface':return CoupledBEMSolver(coil,bodies[genus], wp_loop_work_backend='fmm' if genus else 'dense')
     return CoupledPEECBEMSolver(paths,np.diag([.002,.003]),
-                               np.array([[3e-7,1e-7],[1e-7,3.5e-7]]),bodies[genus])
+                               np.array([[3e-7,1e-7],[1e-7,3.5e-7]]),bodies[genus],
+                               wp_loop_work_backend='fmm' if genus else 'dense')
 
 
 def solve(solver,z,genus):
