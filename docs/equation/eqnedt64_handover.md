@@ -509,7 +509,8 @@ O:はINTEL11では `C:\Users\Administrator\OneDrive` へのSUBSTであり、ユ�
 - 手動試験：`ea787664d` のEXE H1/H5/H6 OK、H7はcanvas赤・PowerPoint色欠落。
   Web H5/H6は `8361ec916` でOK。
   [actual-wire gate](https://github.com/ksugahar/Radia/actions/runs/37692902458) は
-  `ea787664d` の実Windowsクリップボード22/22主OMMLがbyte一致。
+  `ea787664d` の22式の主OMMLがbyte一致（検証経路の注記を参照）。
+  注記: run 37692902458のEXE側は実Windowsクリップボード、Web側はheadless Chromiumの内部クリップボード（producer相当）だった。Webの実OSクリップボード書込みを初めて証明したのは3.1.3 run 37718032042 / b06b8d89a（headed full Chromium、同値対象36/36式）。Web H5/H6の手動試験結果は維持する。
   共有経路の色欠落は上記§6.1の承認済み制限。
 
 #### 3.1.2 Fableゲート
@@ -529,9 +530,9 @@ O:はINTEL11では `C:\Users\Administrator\OneDrive` へのSUBSTであり、ユ�
 
 | ID / 状態 | 指摘と次の作業 | 完了条件 |
 |---|---|---|
-| F-1 / open | `office_bit_corpus.json` に `\left(…\right)`、bare `\sin` / `\lim`、`\text` / 日本語、`\quad`、`\boxed` / `\cancel`、`\binom`、`\overset` を追加。native emitterとMathJaxの同値は構文ごとに未証明 | 両版の実クリップボードbit gateを拡張fixtureで確認し、差異は修正または非同値と明記。Web免除は合格fixtureのみに限定 |
-| F-2 / open（nit） | 大演算子のoperand収集でclosing fenceが `m:e` 内へ入る（`\left(\int_a^b f\right)`）。両版で一致しているが構造が不自然 | operand境界とfence所有を両版で調べ、構造・上下限・編集可能性とbit一致の影響を確認して処置 |
-| F-3 / open（追跡nit） | native converterのMathML `fence` / `stretchy` / `largeop`属性取扱いはJSと同じ。Fable判断は現時点の変更不要 | F-1/F-2拡張時に意図を確認し、変更不要を再確認すれば閉じる。必要になった場合だけ両版同時に変更 |
+| F-1 / fixed-awaiting-review（3.1.3候補） | 39式へ拡張し、local producerで36式byte一致。boxed/cancel/binomは理由付きnon-coveredとして測定・記録 | hosted actual-wire gateとレビュー待ち。非対象3式へWeb免除を広げない |
+| F-2 / fixed-awaiting-review（3.1.3候補） | 両版へ同じoperand fence境界を追加。括弧・入れ子・角括弧・絶対値の閉じfenceがnary外のsiblingであることをlocal gateで検査 | hosted wireと変更経路のOffice qualification待ち。3.1.2の結果を新経路へ転用しない |
+| F-3 / confirmed-closed（source確認、peer再確認予定） | 両版はfence/stretchy/largeop属性差をOffice判定へ使わず、既知のtoken文字を共通に分類。任意の伸長fence同値は保証しない | 変更不要のFable判断と両ソースを再確認。詳細・追加式の状態はPRODUCT_PARITYの3.1.3候補節 |
 
 以下の§13.1–13.6は3.0.13の歴史的な公開・レビュー記録であり、現在の公開状態は上記3.1.2である。
 

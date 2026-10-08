@@ -1,5 +1,18 @@
 # Eqnedit64 changelog
 
+## 3.1.3 — review candidate
+
+- Prepare shared OMML run properties (upright/bold/bold-italic) and function
+  application structure after sin hand-test failure; 49 covered producer matches
+  with style/structure assertions. New headed wire and Office retest pending.
+
+- Extend Office byte-parity corpus to 39 fixtures: 36 require identical primary OMML, and 3 audited exclusions are reported separately, never counted as equivalence passes.
+- Give native/Web nary operands the same fence boundary: enclosing closing fences stay outside m:e; matched fences within operands retain their contents and separators.
+- Omit the nonprinting U+2061 function-application token in both Office serializers so bare named functions agree.
+- Known non-covered constructs: native boxed/binom commands do not preserve their structure, and native cancel emits a bottom bar instead of Web's diagonal strike. These constructs require separate Web testing; no native/Web equivalence claim.
+- Confirm both Office producers intentionally classify delimiters/operators from tokens rather than differing MathML fence/stretchy/largeop attributes (F-3). No blanket stretchy-fence or arbitrary-TeX equivalence claim.
+- Candidate only; hosted actual-wire gate and review pending. No O: or public release update.
+
 ## 3.1.2 — 2026-10-08
 
 - Share the primary conditional RichEdit-HTML OMML CF_HTML route between EXE and Web; preserve integral bounds and multiple rows. No competing registered MathML formats.

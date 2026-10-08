@@ -24,3 +24,7 @@ def test_version_contract():
     for readme in [ROOT / "README.md", PACKAGE / "README.md"]:
         assert f"Source version: **{version}**" in readme.read_text("utf-8")
     assert f"- 対象: Eqnedit64 {version}" in (ROOT / "docs/GUI_SPEC.md").read_text("utf-8")
+    # The installed-wheel check pins the version too; a stale pin stops the
+    # hosted job before the Office bit gate runs (3.1.3 candidate, 2026-10-08).
+    assert f'assert eqnedit64.__version__ == "{version}"' in (
+        PACKAGE / "tests/verify_installed.py").read_text("utf-8")

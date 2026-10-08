@@ -23,8 +23,22 @@ const corpus = JSON.parse(
 const fixtureIds = new Set(corpus.map(fixture => fixture.id));
 assert.equal(fixtureIds.size, corpus.length, "Duplicate corpus fixture ID");
 for (const id of ["H1-H5", "H6-anchored", "H6-unanchored", "cases", "pmatrix",
-                  "red", "mathbb", "mathcal", "mathfrak", "mathsf"])
+                  "red", "mathbb", "mathcal", "mathfrak", "mathsf", "fences",
+                  "sin", "lim", "text", "japanese-text", "quad-space",
+                  "thin-space", "boxed", "cancel", "binom", "overset",
+                  "fenced-integral", "nested-fenced-integral", "bracketed-integral",
+                  "absolute-integral", "mathrm-d", "mathbf-A", "bold-italic"])
   assert(fixtureIds.has(id), "Missing mandatory fixture: " + id);
+// Explicit audited non-coverage is never reported as bit equivalence. Do not
+// exempt previously covered fixtures or silently create a general skip lane.
+const allowedExclusions = new Set(["boxed", "cancel", "binom"]);
+for (const fixture of corpus) {
+  assert([undefined, "covered", "excluded"].includes(fixture.coverage), "Invalid coverage");
+  if (fixture.coverage === "excluded") {
+    assert(allowedExclusions.has(fixture.id), "Unaudited exclusion: " + fixture.id);
+    assert(typeof fixture.reason === "string" && fixture.reason.trim(), "Missing exclusion reason");
+  }
+}
 const scratch = fs.mkdtempSync(
     path.join(process.env.RUNNER_TEMP ||
                   (process.platform === "win32" ? "C:\\temp" : os.tmpdir()),
@@ -74,8 +88,15 @@ function officeBytes(html) {
   let browser;
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   try {
+    // Old headless Chromium (headless shell) keeps an in-memory clipboard, so
+    // its copies never reach the Windows clipboard and a wire read only sees
+    // whatever was there before. The wire gate therefore needs the full
+    // Chromium build in new-headless mode, which uses the system clipboard.
     browser = await chromium.launch({
-      headless : true,
+      // Neither headless mode reached the OS clipboard on the hosted runner
+      // (runs 37717127680, 37717585515); the wire gate runs headed.
+      headless : !wire,
+      ...(wire ? {channel : "chromium"} : {}),
       ...(process.env.EQNEDIT64_BROWSER_PATH
               ? {executablePath : process.env.EQNEDIT64_BROWSER_PATH}
               : {})
@@ -126,33 +147,92 @@ function officeBytes(html) {
       await page.locator(".eqed-copy-office").click();
       const copied = wire ? await page.evaluate(async () => {
         const items = await navigator.clipboard.read();
-        for (const item of items)
+        const result = {};
+        for (const item of items) {
           if (item.types.includes("text/html"))
-            return {html : await (await item.getType("text/html")).text()};
-        return null;
+            result.html = await (await item.getType("text/html")).text();
+          if (item.types.includes("text/plain"))
+            result.tex = await (await item.getType("text/plain")).text();
+        }
+        return result.html ? result : null;
       })
                           : await page.evaluate(() => window.lastOfficeCopy);
       assert(copied, fixture.id + ": no Web Office copy");
-      if (!wire)
-        assert.equal(copied.tex, fixture.tex);
+      // Native plain text is Office-wrapped; Web publishes raw TeX. Checking
+      // both modes also rejects a stale native clipboard after failed Web copy.
+      assert.equal(copied.tex, fixture.tex, fixture.id + ": Web raw TeX not copied");
       if (wire) {
+        // Chromium commits a copy-event write to the OS clipboard
+        // asynchronously. Poll until the raw Windows clipboard no longer holds
+        // the EXE payload read just before (their fallback sections always
+        // differ), instead of reading once and racing the commit.
         const output = path.join(scratch, fixture.id + ".web.cfhtml");
-        execFileSync("pwsh", [
-          "-NoProfile", "-STA", "-File",
-          path.join(__dirname, "read_office_wire.ps1"), "-OutputPath", output
-        ]);
-        assert(officeBytes(fs.readFileSync(output, "utf8"))
-                   .equals(officeBytes(copied.html)),
+        const deadline = Date.now() + 10000;
+        let webWire;
+        for (;;) {
+          execFileSync("pwsh", [
+            "-NoProfile", "-STA", "-File",
+            path.join(__dirname, "read_office_wire.ps1"), "-OutputPath", output
+          ]);
+          webWire = fs.readFileSync(output, "utf8");
+          if (webWire !== native || Date.now() > deadline) break;
+          execFileSync("pwsh", ["-NoProfile", "-Command", "Start-Sleep -Milliseconds 200"]);
+        }
+        assert(webWire !== native,
+               fixture.id + ": Web copy never reached the Windows clipboard");
+        assert(officeBytes(webWire).equals(officeBytes(copied.html)),
                fixture.id +
                    ": browser read differs from raw Windows clipboard");
       }
       const n = officeBytes(native), w = officeBytes(copied.html);
+      if (fixture.run_styles || fixture.function_name) {
+        for (const bytes of [n, w]) {
+          const stylesOk = await page.evaluate(({html, styles, functionName}) => {
+            const doc = new DOMParser().parseFromString(html, "application/xml");
+            if (doc.getElementsByTagName("parsererror").length) return false;
+            const ns = "http://schemas.microsoft.com/office/2004/12/omml";
+            const runs = Array.from(doc.getElementsByTagNameNS(ns, "r"));
+            const styleMatches = (styles || []).every(expected => runs.some(run => {
+              const span = run.getElementsByTagName("span")[0];
+              const props = Array.from(run.children).filter(child => child.localName === "rPr");
+              const sty = props[0] && props[0].getElementsByTagNameNS(ns, "sty")[0];
+              return span && span.textContent === expected.text &&
+                (sty ? sty.getAttributeNS(ns, "val") : null) === expected.sty;
+            }));
+            const functions = Array.from(doc.getElementsByTagNameNS(ns, "func"));
+            const functionMatches = !functionName || functions.some(fn => {
+              const name = Array.from(fn.children).find(child => child.localName === "fName");
+              const argument = Array.from(fn.children).find(child => child.localName === "e");
+              return name && argument && name.textContent.startsWith(functionName) &&
+                argument.textContent.length > 0;
+            });
+            return styleMatches && functionMatches;
+          }, {html: bytes.toString("utf8"), styles: fixture.run_styles,
+              functionName: fixture.function_name});
+          assert(stylesOk, fixture.id + ": OMML run style/function structure mismatch");
+        }
+      }
+      if (fixture.nary_tail_outside) {
+        for (const bytes of [n, w]) {
+          const structureOk = await page.evaluate(({html, closing}) => {
+            const doc = new DOMParser().parseFromString(html, "application/xml");
+            if (doc.getElementsByTagName("parsererror").length) return false;
+            const naries = doc.getElementsByTagNameNS(
+              "http://schemas.microsoft.com/office/2004/12/omml", "nary");
+            return naries.length === 1 && Array.from(naries).every(nary =>
+              nary.nextElementSibling && nary.nextElementSibling.textContent.startsWith(closing));
+          }, {html: bytes.toString("utf8"), closing: fixture.nary_tail_outside});
+          assert(structureOk, fixture.id + ": enclosing closing fence not outside m:e");
+        }
+      }
       fs.writeFileSync(path.join(scratch, fixture.id + ".native.html"), native);
       fs.writeFileSync(path.join(scratch, fixture.id + ".web.html"),
                        copied.html);
       const equal = n.equals(w);
       results.push({
         id : fixture.id,
+        coverage : fixture.coverage === "excluded" ? "excluded" : "covered",
+        reason : fixture.reason || null,
         equal,
         native_bytes : n.length,
         web_bytes : w.length,
@@ -172,18 +252,24 @@ function officeBytes(html) {
                               path.join(__dirname, "office_bit_corpus.json")))
                           .digest("hex"),
       mode : wire ? "windows-clipboard-wire" : "producer-bytes",
+      covered_count : results.filter(r => r.coverage === "covered").length,
+      excluded_count : results.filter(r => r.coverage === "excluded").length,
       results
     },
                                                                         null,
                                                                         2));
-    const failures = results.filter(r => !r.equal);
+    const covered = results.filter(r => r.coverage === "covered");
+    const excluded = results.filter(r => r.coverage === "excluded");
+    const failures = covered.filter(r => !r.equal);
     console.log("Office byte evidence: " + scratch);
     assert.deepEqual(failures, [], "Office payload bit mismatch");
     console.log(
-        "PASS: " + results.length +
+        "PASS: " + covered.length +
         " native/Web primary conditional OMML branches are byte-identical (" +
         (wire ? "actual Windows clipboard" : "producer only") +
         "). No Office result inferred.");
+    console.log("NON-COVERED (not equivalence passes): " +
+                excluded.map(r => r.id + ": " + r.reason).join("; "));
   } finally {
     if (browser)
       await browser.close();

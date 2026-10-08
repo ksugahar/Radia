@@ -116,9 +116,15 @@ private:
             result = element("mi", value, "mathvariant=\"normal\"");
         } else if (ch.typeface == TF_MATH_ITALIC) {
             result = element("mi", value, "mathvariant=\"italic\"");
-        } else if (ch.typeface == TF_VECTOR ||
-                   ch.typeface == TF_BOLD_SYMBOL) {
+        } else if (ch.typeface == TF_VECTOR) {
             result = element("mi", value, "mathvariant=\"bold\"");
+        } else if (ch.typeface == TF_BOLD_SYMBOL) {
+            // TeX boldsymbol preserves the base glyph's posture: digits and
+            // ordinary capital Greek are upright; variables remain italic.
+            const bool upright = (ch.charCode >= '0' && ch.charCode <= '9') ||
+                (ch.charCode >= 0x391 && ch.charCode <= 0x3A9);
+            result = element("mi", value, upright ? "mathvariant=\"bold\"" :
+                             "mathvariant=\"bold-italic\"");
         } else if (ch.typeface == TF_MATH_SANS) {
             result = element("mi", value, "mathvariant=\"sans-serif\"");
         } else if (ch.typeface == TF_MATH_MONO) {

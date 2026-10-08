@@ -36,11 +36,15 @@ int main() {
         std::cerr << "boldsymbol did not canonicalize to bm: " << alias << "\n";
         return 2;
     }
+    /* \bm keeps the base glyph's posture: a lower-case Greek variable is
+     * bold-italic (as in MathJax), while \mathbf and \bm digits / capital
+     * Greek are upright bold (3.1.3, UXP-0031 run posture). */
     const std::string mathml = eqnedit::latex_to_mathml(
-        "\\bm{\\alpha}\\mathsf{S}\\mathtt{T}\\mathcal{C}"
+        "\\bm{\\alpha}\\mathbf{A}\\mathsf{S}\\mathtt{T}\\mathcal{C}"
         "\\mathbb{R}\\mathfrak{F}");
-    for (const char* variant : {"bold", "sans-serif", "monospace", "script",
-                                "double-struck", "fraktur"}) {
+    for (const char* variant : {"bold-italic", "bold", "sans-serif",
+                                "monospace", "script", "double-struck",
+                                "fraktur"}) {
         if (mathml.find(std::string("mathvariant=\"") + variant + "\"") ==
             std::string::npos) {
             std::cerr << "MathML lost variant " << variant << ": " << mathml
