@@ -31,7 +31,7 @@ class CoupledPEECBEMSolver:
                  wp_order=1, wp_hacapk=False, wp_aca_eps=1e-10,
                  wp_hacapk_leaf=64, wp_hacapk_eta=2.0,
                  wp_gmres_tol=1e-8, wp_gmres_maxiter=500,
-                 wp_gmres_restart=80):
+                 wp_gmres_restart=80, wp_loop_work_backend="auto"):
         from radia.bem_sibc_solver import ScalarBIESIBCSolver
 
         self.paths = filament_paths
@@ -51,6 +51,7 @@ class CoupledPEECBEMSolver:
                 mesh_wp, order=wp_order, assemble_dense=True,
                 use_intree_bem=True, intree_geom_order=1,
                 intree_singular_n_q=6, intree_regular_quad_degree=7,
+                loop_work_backend=wp_loop_work_backend,
                 use_intree_hacapk=True, hacapk_aca_eps=float(wp_aca_eps),
                 hacapk_leaf=int(wp_hacapk_leaf),
                 hacapk_eta=float(wp_hacapk_eta))
@@ -61,7 +62,8 @@ class CoupledPEECBEMSolver:
             self.wp_solver = ScalarBIESIBCSolver(
                 mesh_wp, order=wp_order, assemble_dense=True,
                 use_intree_bem=True, intree_geom_order=1,
-                intree_singular_n_q=6, intree_regular_quad_degree=7)
+                intree_singular_n_q=6, intree_regular_quad_degree=7,
+                loop_work_backend=wp_loop_work_backend)
         self.wp_nodes = np.array(
             [[mesh_wp.vertices[i].point[j] for j in range(3)]
              for i in range(mesh_wp.nv)])

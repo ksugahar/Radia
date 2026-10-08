@@ -182,7 +182,8 @@ def solve_complete_body(solver, poisson, phi_inc, impedance, omega, a_inc,
         out = solve_loop_extended(solver, phi_inc, solve_z, omega, a_inc, _reuse_prepared=True)
         field, heat = out['H_t_tri'], out['P_total']
         residual = out['linear_residual_rel']
-        metadata = dict(wp_loop_alpha=out['alpha'], wp_loop_theta_jump=out['theta_jump'],
+        metadata = dict(wp_loop_work_diagnostics=out['loop_work_diagnostics'],
+            wp_loop_alpha=out['alpha'], wp_loop_theta_jump=out['theta_jump'],
             wp_loop_cut_n_vertices=out['cut_n_vertices'], wp_loop_P_frozen=out['P_frozen'],
             wp_loop_H_t_frozen=out['Ht_frozen'],
             wp_loop_screening_ratio=heat/max(out['P_frozen'], 1e-300),

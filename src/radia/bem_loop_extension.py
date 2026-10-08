@@ -764,7 +764,9 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
     uniform_z = bool(np.all(face_z == face_z[0]))
     prepared_key = None
     if _reuse_prepared:
-        prepared_key = (geometry_key, hashlib.sha256(face_z.astype('<c16').tobytes()).hexdigest(), float(omega))
+        from .bem_loop_work import _loop_work_route
+        prepared_key = (geometry_key, hashlib.sha256(face_z.astype('<c16').tobytes()).hexdigest(), float(omega),
+                        _loop_work_route(bem_solver, nt))
     cached_system = getattr(bem_solver, '_prepared_loop_system', None) if _reuse_prepared else None
     system_reused = cached_system is not None and cached_system['key'] == prepared_key
     if system_reused:
