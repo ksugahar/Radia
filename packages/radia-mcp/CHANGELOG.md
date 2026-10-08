@@ -5,7 +5,17 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
-## [Unreleased]
+## [2.0.2] - 2026-10-08
+
+- Guide supported large real lowest-order H(curl) analyses through
+  `solve_p1_linear` or `solve_p1_newton` with AMS-PCG, preserving each API's
+  domain and TaskManager restrictions. ICCG remains an option for supported
+  smaller or complex systems and cross-checks; ABMC is opt-in.
+- Show solver-capacity guidance once in aggregate documentation. Align
+  host/deployment guidance with editable development on 100 and fixed
+  wheels on LAB, and strengthen the preflight package-boundary audit.
+- Publish this package only after Radia 5.3.0 passes release-quad acceptance.
+
 
 - Add `mathematica_export_equation`: evaluate once, retain InputForm and TeX,
   save an editor input file, copy editable Office math, or render PNG/EMF via

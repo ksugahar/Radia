@@ -86,4 +86,4 @@ Python). The `radia` extra (`pip install radia-mcp[radia]`) brings in
 the runtime dependency for tools that actually exec radia code.
 """
 
-__version__ = "2.0.1"
+__version__ = "2.0.2"
