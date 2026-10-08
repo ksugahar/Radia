@@ -703,7 +703,9 @@ After this qualification, a passing actual-wire gate on the release candidate
 plus an EXE hand test permits omitting the separate Web hand test for covered
 fixtures. A missing/failing gate, a changed shared transport contract or different
 clipboard/browser/Office environment requires renewed Web qualification.
-Hosted CI 37692902458 verified 22/22 actual-wire byte matches on ea787664d.
+Historical run 37692902458 on ea787664d used headless Chromium: the Web side provided in-memory browser-clipboard (producer-equivalent) evidence, not Web OS-clipboard evidence. The first genuine Web OS-clipboard evidence is 3.1.3 run 37718032042 on b06b8d89a (headed full Chromium).
+
+The wire gate runs headed full Chromium. On the hosted Windows runner, both old-headless and new-headless modes do not reach the OS clipboard. The harness independently proves the Web write reached Windows before comparing captured payloads. Hosted run 37718032042 on b06b8d89a established real Windows clipboard identity for both editions: 36/36 covered fixtures; boxed/cancel/binom remain non-covered.
 User H1/H5/H6 EXE passed; H7 colour loss is accepted for 3.1.2 as documented below.
 
 
@@ -717,10 +719,9 @@ EMF/DIB output. This decision does not strip colour from the source or renderer.
 PowerPoint colour retention is not an acceptance requirement for this release.
 
 User hand tests: H1/H5/H6 EXE OK on ea787664d; H7 EXE canvas red, PowerPoint
-not red. Web H5/H6 OK on 8361ec916. Hosted CI 37692902458 verified 22/22 primary
-OMML branches byte-identical on the actual Windows clipboard at ea787664d.
-This supports the UXP-0031 EXE-test plus bit-gate qualification for the covered
-corpus; it does not prove every TeX input or every Office/browser environment.
+not red. Web H5/H6 OK on 8361ec916. Historical run 37692902458 on ea787664d used headless Chromium: the Web side provided in-memory browser-clipboard (producer-equivalent) evidence, not Web OS-clipboard evidence. The first genuine Web OS-clipboard evidence is 3.1.3 run 37718032042 on b06b8d89a (headed full Chromium).
+The user hand tests remain valid; the headed gate establishes the covered corpus
+wire contract, not every TeX input or every Office/browser environment.
 Changed payload behaviour requires renewed qualification. The release metadata
 commit still requires its own CI. Formal publication follows the release gates.
 
