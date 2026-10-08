@@ -23,8 +23,22 @@ const corpus = JSON.parse(
 const fixtureIds = new Set(corpus.map(fixture => fixture.id));
 assert.equal(fixtureIds.size, corpus.length, "Duplicate corpus fixture ID");
 for (const id of ["H1-H5", "H6-anchored", "H6-unanchored", "cases", "pmatrix",
-                  "red", "mathbb", "mathcal", "mathfrak", "mathsf"])
+                  "red", "mathbb", "mathcal", "mathfrak", "mathsf", "fences",
+                  "sin", "lim", "text", "japanese-text", "quad-space",
+                  "thin-space", "boxed", "cancel", "binom", "overset",
+                  "fenced-integral", "nested-fenced-integral", "bracketed-integral",
+                  "absolute-integral"])
   assert(fixtureIds.has(id), "Missing mandatory fixture: " + id);
+// Explicit audited non-coverage is never reported as bit equivalence. Do not
+// exempt previously covered fixtures or silently create a general skip lane.
+const allowedExclusions = new Set(["boxed", "cancel", "binom"]);
+for (const fixture of corpus) {
+  assert([undefined, "covered", "excluded"].includes(fixture.coverage), "Invalid coverage");
+  if (fixture.coverage === "excluded") {
+    assert(allowedExclusions.has(fixture.id), "Unaudited exclusion: " + fixture.id);
+    assert(typeof fixture.reason === "string" && fixture.reason.trim(), "Missing exclusion reason");
+  }
+}
 const scratch = fs.mkdtempSync(
     path.join(process.env.RUNNER_TEMP ||
                   (process.platform === "win32" ? "C:\\temp" : os.tmpdir()),
@@ -126,15 +140,20 @@ function officeBytes(html) {
       await page.locator(".eqed-copy-office").click();
       const copied = wire ? await page.evaluate(async () => {
         const items = await navigator.clipboard.read();
-        for (const item of items)
+        const result = {};
+        for (const item of items) {
           if (item.types.includes("text/html"))
-            return {html : await (await item.getType("text/html")).text()};
-        return null;
+            result.html = await (await item.getType("text/html")).text();
+          if (item.types.includes("text/plain"))
+            result.tex = await (await item.getType("text/plain")).text();
+        }
+        return result.html ? result : null;
       })
                           : await page.evaluate(() => window.lastOfficeCopy);
       assert(copied, fixture.id + ": no Web Office copy");
-      if (!wire)
-        assert.equal(copied.tex, fixture.tex);
+      // Native plain text is Office-wrapped; Web publishes raw TeX. Checking
+      // both modes also rejects a stale native clipboard after failed Web copy.
+      assert.equal(copied.tex, fixture.tex, fixture.id + ": Web raw TeX not copied");
       if (wire) {
         const output = path.join(scratch, fixture.id + ".web.cfhtml");
         execFileSync("pwsh", [
@@ -147,12 +166,27 @@ function officeBytes(html) {
                    ": browser read differs from raw Windows clipboard");
       }
       const n = officeBytes(native), w = officeBytes(copied.html);
+      if (fixture.nary_tail_outside) {
+        for (const bytes of [n, w]) {
+          const structureOk = await page.evaluate(({html, closing}) => {
+            const doc = new DOMParser().parseFromString(html, "application/xml");
+            if (doc.getElementsByTagName("parsererror").length) return false;
+            const naries = doc.getElementsByTagNameNS(
+              "http://schemas.microsoft.com/office/2004/12/omml", "nary");
+            return naries.length === 1 && Array.from(naries).every(nary =>
+              nary.nextElementSibling && nary.nextElementSibling.textContent.startsWith(closing));
+          }, {html: bytes.toString("utf8"), closing: fixture.nary_tail_outside});
+          assert(structureOk, fixture.id + ": enclosing closing fence not outside m:e");
+        }
+      }
       fs.writeFileSync(path.join(scratch, fixture.id + ".native.html"), native);
       fs.writeFileSync(path.join(scratch, fixture.id + ".web.html"),
                        copied.html);
       const equal = n.equals(w);
       results.push({
         id : fixture.id,
+        coverage : fixture.coverage === "excluded" ? "excluded" : "covered",
+        reason : fixture.reason || null,
         equal,
         native_bytes : n.length,
         web_bytes : w.length,
@@ -172,18 +206,24 @@ function officeBytes(html) {
                               path.join(__dirname, "office_bit_corpus.json")))
                           .digest("hex"),
       mode : wire ? "windows-clipboard-wire" : "producer-bytes",
+      covered_count : results.filter(r => r.coverage === "covered").length,
+      excluded_count : results.filter(r => r.coverage === "excluded").length,
       results
     },
                                                                         null,
                                                                         2));
-    const failures = results.filter(r => !r.equal);
+    const covered = results.filter(r => r.coverage === "covered");
+    const excluded = results.filter(r => r.coverage === "excluded");
+    const failures = covered.filter(r => !r.equal);
     console.log("Office byte evidence: " + scratch);
     assert.deepEqual(failures, [], "Office payload bit mismatch");
     console.log(
-        "PASS: " + results.length +
+        "PASS: " + covered.length +
         " native/Web primary conditional OMML branches are byte-identical (" +
         (wire ? "actual Windows clipboard" : "producer only") +
         "). No Office result inferred.");
+    console.log("NON-COVERED (not equivalence passes): " +
+                excluded.map(r => r.id + ": " + r.reason).join("; "));
   } finally {
     if (browser)
       await browser.close();

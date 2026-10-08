@@ -21,7 +21,7 @@
   /* デプロイごとに上げる。ボタン行の右端に出て、開きっぱなしのタブが
    * 古い版を動かし続けていないかを一目で判別できる（.exe の
    * タイトルバー・ビルドスタンプと同じ教訓）。 */
-  var BUILD = "3.1.2 (2026-10-08)";
+  var BUILD = "3.1.3 (2026-10-08 candidate)";
 
   // BEGIN GENERATED PALETTES
   var PALETTES = [
@@ -3253,6 +3253,9 @@
 
   function officeOmmlRun(node, forceNormal) {
     if (!node.textContent) return "";
+    // Native FunctionNode has no nonprinting MathJax function-application mark.
+    // Omit the same U+2061 token in both OMML producers; preserve the fallback.
+    if (node.localName === "mo" && node.textContent === "\u2061") return "";
     var variant = officeInheritedAttribute(node, "mathvariant");
     var colour = officeInheritedAttribute(node, "mathcolor");
     if (colour) {
@@ -3280,6 +3283,39 @@
       ";font-style:normal\"><m:ctrlPr></m:ctrlPr></span>";
   }
 
+  function officeUnwrapped(node) {
+    while ((node.localName === "mrow" || node.localName === "mstyle") &&
+           node.children.length === 1) node = node.children[0];
+    return node;
+  }
+
+  function officeFenceClose(token) {
+    var pairs = {"(": ")", "[": "]", "{": "}", "⟨": "⟩", "⌈": "⌉",
+      "⌊": "⌋", "⟦": "⟧", "|": "|", "‖": "‖"};
+    return Object.prototype.hasOwnProperty.call(pairs, token) ? pairs[token] : "";
+  }
+
+  function officeAdvanceFence(node, stack) {
+    node = officeUnwrapped(node);
+    if (node.localName !== "mo") return;
+    if (stack.length && stack[stack.length - 1] === node.textContent) stack.pop();
+    else {
+      var close = officeFenceClose(node.textContent);
+      if (close) stack.push(close);
+    }
+  }
+
+  function officeOperandBoundary(node, inside, outside) {
+    node = officeUnwrapped(node);
+    if (node.localName !== "mo") return false;
+    var text = node.textContent;
+    if (/^[)\]}⟩⌉⌋⟧]$/.test(text))
+      return !inside.length || inside[inside.length - 1] !== text;
+    if ((text === "|" || text === "‖") && !inside.length && outside.length &&
+        outside[outside.length - 1] === text) return true;
+    return !inside.length && /^[+=,;<>≤≥≠−-]$/.test(text);
+  }
+
   function officeOmmlChildren(node) {
     var result = "";
     var children = Array.prototype.slice.call(node.children || []);
@@ -3290,12 +3326,16 @@
       if (scripted && parts[0] && parts[0].localName === "mo" &&
           "∑∏∐⋃⋂∫∬∭∮∯∰".indexOf(parts[0].textContent) >= 0) {
         // A scripted large operator and the adjacent operand form one nary
-        // object. Stop at a visible additive/relation separator; do not create
-        // an empty operand box before x^2 dx in the H5/H6 fixtures.
+        // object. Closing enclosing fences and separators at operand depth zero
+        // stay outside m:e; matched fences inside the operand remain inside.
         var operand = "";
+        var outside = [], inside = [];
+        for (var prefix = 0; prefix < i; prefix++)
+          officeAdvanceFence(children[prefix], outside);
         while (i + 1 < children.length) {
           var next = children[i + 1];
-          if (next.localName === "mo" && /^[+=,;<>≤≥≠−-]$/.test(next.textContent)) break;
+          if (officeOperandBoundary(next, inside, outside)) break;
+          officeAdvanceFence(next, inside);
           operand += officeOmmlNode(next);
           i++;
         }

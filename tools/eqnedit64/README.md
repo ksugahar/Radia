@@ -1,6 +1,6 @@
 # Eqnedit64 — 数式入力に特化したTeXエディタ
 
-Source version: **3.1.2**.
+Source version: **3.1.3** (review candidate; released version remains 3.1.2).
 
 Eqnedit64は、軽快な構造編集とTeXファイルを直接つないだ64-bit Windows
 数式エディタです。数式は常にTeXとして開き、編集し、保存します。
@@ -344,3 +344,13 @@ This supports the UXP-0031 EXE-test plus bit-gate qualification for the covered
 corpus; it does not prove every TeX input or every Office/browser environment.
 Changed payload behaviour requires renewed qualification. The release metadata
 commit still requires its own CI. Formal publication follows the release gates.
+
+
+## 3.1.3 candidate coverage limits
+
+The expanded Office gate distinguishes 36 matched fixtures from three non-covered
+constructs: native `\boxed` and `\binom` omit their structure, and native
+`\cancel` emits a bottom bar instead of Web's diagonal strike. These cases do
+not qualify for Web hand-test exemption. Hosted wire/review and changed-boundary
+qualification remain pending; 3.1.3 is not released. See PRODUCT_PARITY's fixture
+matrix. PowerPoint colour loss on the shared OMML route remains a known limitation.

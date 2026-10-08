@@ -255,6 +255,10 @@ std::string emit(const Xml &);
 std::string run(const Xml &n) {
   if (content(n).empty())
     return {};
+  // MathJax marks named-function application with nonprinting U+2061;
+  // native FunctionNode has no such token. Neither route emits it in OMML.
+  if (n.name == "mo" && n.text == "\xE2\x81\xA1")
+    return {};
   const auto variant = inherited(n, "mathvariant");
   const bool mapped = office_alphabets().count(variant) != 0;
   if (!variant.empty() && variant != "normal" && variant != "italic" &&
@@ -305,20 +309,62 @@ std::string nary(const Xml &n, const std::string &body) {
          "</m:sub><m:sup>" + (hi ? emit(*n.children.at(lo ? 2 : 1)) : "") +
          "</m:sup><m:e>" + body + "</m:e></m:nary>";
 }
+// A fence is recognized by its visible delimiter, on both producers, rather
+// than their different fence/stretchy/largeop attributes. Atomic mrows keep
+// their own boundary; a singleton wrapper may still contain a fence token.
+std::string fenceClose(const std::string &token) {
+  static const std::map<std::string, std::string> pairs = {
+      {"(", ")"}, {"[", "]"}, {"{", "}"}, {"⟨", "⟩"}, {"⌈", "⌉"},
+      {"⌊", "⌋"}, {"⟦", "⟧"}, {"|", "|"}, {"‖", "‖"}};
+  auto it = pairs.find(token);
+  return it == pairs.end() ? "" : it->second;
+}
+bool closingFence(const std::string &token) {
+  return token == ")" || token == "]" || token == "}" || token == "⟩" ||
+         token == "⌉" || token == "⌋" || token == "⟧";
+}
+void advanceFence(const Xml &node, std::vector<std::string> &stack) {
+  const auto &token = unwrapped(node);
+  if (token.name != "mo")
+    return;
+  if (!stack.empty() && stack.back() == token.text) {
+    stack.pop_back();
+  } else {
+    const auto close = fenceClose(token.text);
+    if (!close.empty())
+      stack.push_back(close);
+  }
+}
+bool operandBoundary(const Xml &node, const std::vector<std::string> &inside,
+                     const std::vector<std::string> &outside) {
+  const auto &token = unwrapped(node);
+  if (token.name != "mo")
+    return false;
+  const auto &text = token.text;
+  if (closingFence(text))
+    return inside.empty() || inside.back() != text;
+  if ((text == "|" || text == "‖") && inside.empty() && !outside.empty() &&
+      outside.back() == text)
+    return true;
+  return inside.empty() &&
+         (text == "+" || text == "=" || text == "," || text == ";" ||
+          text == "<" || text == ">" || text == "≤" || text == "≥" ||
+          text == "≠" || text == "−" || text == "-");
+}
 std::string sequence(const Xml &n) {
   std::string out;
   for (size_t i = 0; i < n.children.size(); i++) {
     const auto &c = *n.children[i];
     if (scripted(c) && !c.children.empty() && large(*c.children[0])) {
       std::string operand;
+      std::vector<std::string> outside, inside;
+      for (size_t prefix = 0; prefix < i; ++prefix)
+        advanceFence(*n.children[prefix], outside);
       while (i + 1 < n.children.size()) {
         const auto &next = *n.children[i + 1];
-        if (next.name == "mo" &&
-            (next.text == "+" || next.text == "=" || next.text == "," ||
-             next.text == ";" || next.text == "<" || next.text == ">" ||
-             next.text == "≤" || next.text == "≥" || next.text == "≠" ||
-             next.text == "−" || next.text == "-"))
+        if (operandBoundary(next, inside, outside))
           break;
+        advanceFence(next, inside);
         operand += emit(next);
         i++;
       }
