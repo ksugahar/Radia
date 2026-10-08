@@ -27,7 +27,7 @@ for (const id of ["H1-H5", "H6-anchored", "H6-unanchored", "cases", "pmatrix",
                   "sin", "lim", "text", "japanese-text", "quad-space",
                   "thin-space", "boxed", "cancel", "binom", "overset",
                   "fenced-integral", "nested-fenced-integral", "bracketed-integral",
-                  "absolute-integral"])
+                  "absolute-integral", "mathrm-d", "mathbf-A", "bold-italic"])
   assert(fixtureIds.has(id), "Missing mandatory fixture: " + id);
 // Explicit audited non-coverage is never reported as bit equivalence. Do not
 // exempt previously covered fixtures or silently create a general skip lane.
@@ -185,6 +185,33 @@ function officeBytes(html) {
                    ": browser read differs from raw Windows clipboard");
       }
       const n = officeBytes(native), w = officeBytes(copied.html);
+      if (fixture.run_styles || fixture.function_name) {
+        for (const bytes of [n, w]) {
+          const stylesOk = await page.evaluate(({html, styles, functionName}) => {
+            const doc = new DOMParser().parseFromString(html, "application/xml");
+            if (doc.getElementsByTagName("parsererror").length) return false;
+            const ns = "http://schemas.microsoft.com/office/2004/12/omml";
+            const runs = Array.from(doc.getElementsByTagNameNS(ns, "r"));
+            const styleMatches = (styles || []).every(expected => runs.some(run => {
+              const span = run.getElementsByTagName("span")[0];
+              const props = Array.from(run.children).filter(child => child.localName === "rPr");
+              const sty = props[0] && props[0].getElementsByTagNameNS(ns, "sty")[0];
+              return span && span.textContent === expected.text &&
+                (sty ? sty.getAttributeNS(ns, "val") : null) === expected.sty;
+            }));
+            const functions = Array.from(doc.getElementsByTagNameNS(ns, "func"));
+            const functionMatches = !functionName || functions.some(fn => {
+              const name = Array.from(fn.children).find(child => child.localName === "fName");
+              const argument = Array.from(fn.children).find(child => child.localName === "e");
+              return name && argument && name.textContent.startsWith(functionName) &&
+                argument.textContent.length > 0;
+            });
+            return styleMatches && functionMatches;
+          }, {html: bytes.toString("utf8"), styles: fixture.run_styles,
+              functionName: fixture.function_name});
+          assert(stylesOk, fixture.id + ": OMML run style/function structure mismatch");
+        }
+      }
       if (fixture.nary_tail_outside) {
         for (const bytes of [n, w]) {
           const structureOk = await page.evaluate(({html, closing}) => {

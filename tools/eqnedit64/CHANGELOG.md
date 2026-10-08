@@ -2,6 +2,10 @@
 
 ## 3.1.3 — review candidate
 
+- Prepare shared OMML run properties (upright/bold/bold-italic) and function
+  application structure after sin hand-test failure; 49 covered producer matches
+  with style/structure assertions. New headed wire and Office retest pending.
+
 - Extend Office byte-parity corpus to 39 fixtures: 36 require identical primary OMML, and 3 audited exclusions are reported separately, never counted as equivalence passes.
 - Give native/Web nary operands the same fence boundary: enclosing closing fences stay outside m:e; matched fences within operands retain their contents and separators.
 - Omit the nonprinting U+2061 function-application token in both Office serializers so bare named functions agree.

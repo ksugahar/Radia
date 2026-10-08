@@ -783,3 +783,35 @@ Spacing note: both Office producers approximate each nonzero mspace with one
 NBSP. The quad/thin-space fixtures prove byte identity, not faithful TeX spacing
 width. This existing limitation is unchanged; Office rendering remains untested
 for the candidate.
+
+
+## r17 upright/font candidate preparation (2026-10-08)
+
+User hand test on signed 01735b5cd: H1/H5, H6, fenced integral, absolute
+operand and parenthesized x+1 passed. sin x pasted as italic sinx and failed.
+This candidate therefore remains unqualified for release despite wire identity.
+
+Both producers now retain span CSS and emit native OMML run properties:
+`m:rPr/m:sty` p for upright, b for bold upright, bi for bold italic, and no
+sty for ordinary italic. Unicode math alphabets already encode their glyph style
+and use p to prevent a second mathematical styling pass. Native MathML now
+distinguishes boldsymbol's variable italic posture from upright digits/capital
+Greek; this affects its fallback MathML too.
+
+Known upright names sin/cos/tan/cot/sec/csc/sinh/cosh/tanh/arcsin/arccos/arctan/
+log/ln/exp/lim become m:func with fName and e, including scripted names. Native
+split-letter rows and Web single tokens are recognized identically. One following
+atomic expression or balanced visible fence group is collected as the argument;
+additive/relation and enclosing-close boundaries stay outside. This represents
+function application for Office spacing; actual PowerPoint spacing remains a
+user-retest requirement, not a producer assertion. A literal upright row matching
+one of these names is interpreted as a function name as well.
+
+The corpus now measures 52 fixtures: 49 covered producer byte matches and 3
+unchanged audited exclusions (boxed/cancel/binom). Added run-style assertions
+cover upright d, bold A, italic run merging, bold-italic variables, bold digits,
+Greek, mapped mathbb and roman/digit merging; function assertions cover sin/lim,
+cos/log, fraction and fenced arguments. Both producer structures are checked.
+A headed Windows wire run on this new candidate and user's sin x / mathbf A x /
+mathrm d x retest are pending. No push, O: update or release is part of this
+preparation.
