@@ -29,7 +29,13 @@
   },
   {
     "id": "mathbb",
-    "tex": "\\mathbb{CHNPQRZ}"
+    "tex": "\\mathbb{CHNPQRZ}",
+    "run_styles": [
+      {
+        "text": "ℂℍℕℙℚℝℤ",
+        "sty": "p"
+      }
+    ]
   },
   {
     "id": "mathcal",
@@ -93,11 +99,29 @@
   },
   {
     "id": "sin",
-    "tex": "\\sin x"
+    "tex": "\\sin x",
+    "run_styles": [
+      {
+        "text": "sin",
+        "sty": "p"
+      },
+      {
+        "text": "x",
+        "sty": null
+      }
+    ],
+    "function_name": "sin"
   },
   {
     "id": "lim",
-    "tex": "\\lim_{x\\to 0} f(x)"
+    "tex": "\\lim_{x\\to 0} f(x)",
+    "run_styles": [
+      {
+        "text": "lim",
+        "sty": "p"
+      }
+    ],
+    "function_name": "lim"
   },
   {
     "id": "text",
@@ -164,5 +188,131 @@
   {
     "id": "integral-absolute-operand",
     "tex": "\\int_a^b |x|\\,dx"
+  },
+  {
+    "id": "mathrm-d",
+    "tex": "\\mathrm{d}x",
+    "run_styles": [
+      {
+        "text": "d",
+        "sty": "p"
+      },
+      {
+        "text": "x",
+        "sty": null
+      }
+    ]
+  },
+  {
+    "id": "mathbf-A",
+    "tex": "\\mathbf{A}x",
+    "run_styles": [
+      {
+        "text": "A",
+        "sty": "b"
+      },
+      {
+        "text": "x",
+        "sty": null
+      }
+    ]
+  },
+  {
+    "id": "bold-italic",
+    "tex": "\\boldsymbol{A}",
+    "run_styles": [
+      {
+        "text": "A",
+        "sty": "bi"
+      }
+    ]
+  },
+  {
+    "id": "cos",
+    "tex": "\\cos x",
+    "function_name": "cos"
+  },
+  {
+    "id": "log",
+    "tex": "\\log x",
+    "function_name": "log"
+  },
+  {
+    "id": "sin-fraction",
+    "tex": "\\sin\\frac{x}{y}",
+    "function_name": "sin"
+  },
+  {
+    "id": "sin-fenced",
+    "tex": "\\sin\\left(x+1\\right)",
+    "function_name": "sin"
+  },
+  {
+    "id": "roman-digits",
+    "tex": "\\mathrm{AB12}x",
+    "run_styles": [
+      {
+        "text": "AB12",
+        "sty": "p"
+      },
+      {
+        "text": "x",
+        "sty": null
+      }
+    ]
+  },
+  {
+    "id": "italic-merged",
+    "tex": "\\mathit{xy}",
+    "run_styles": [
+      {
+        "text": "xy",
+        "sty": null
+      }
+    ]
+  },
+  {
+    "id": "bold-roman-mixed",
+    "tex": "\\mathbf{A1}\\mathrm{dx}",
+    "run_styles": [
+      {
+        "text": "A1",
+        "sty": "b"
+      },
+      {
+        "text": "dx",
+        "sty": "p"
+      }
+    ]
+  },
+  {
+    "id": "bold-digit",
+    "tex": "\\bm{1}",
+    "run_styles": [
+      {
+        "text": "1",
+        "sty": "b"
+      }
+    ]
+  },
+  {
+    "id": "bold-greek",
+    "tex": "\\bm{\\alpha}",
+    "run_styles": [
+      {
+        "text": "α",
+        "sty": "bi"
+      }
+    ]
+  },
+  {
+    "id": "bold-capital-greek",
+    "tex": "\\bm{\\Gamma}",
+    "run_styles": [
+      {
+        "text": "Γ",
+        "sty": "b"
+      }
+    ]
   }
 ]

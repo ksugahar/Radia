@@ -3266,13 +3266,15 @@
     var mappedAlphabet = Object.prototype.hasOwnProperty.call(OFFICE_MATH_ALPHABETS, variant);
     if (variant && ["normal", "italic", "bold", "bold-italic"].indexOf(variant) < 0 && !mappedAlphabet)
       throw new Error("unsupported Office mathvariant: " + variant);
-    var normal = mappedAlphabet || forceNormal || variant === "normal" ||
-      (!variant && Array.from(node.textContent).length !== 1) ||
-      node.localName === "mn" || node.localName === "mo" ||
-      node.localName === "mtext";
+    var normal = mappedAlphabet || variant === "normal" || variant === "bold" ||
+      (!variant && (forceNormal || Array.from(node.textContent).length !== 1 ||
+        node.localName !== "mi"));
+    var bold = !mappedAlphabet && variant && variant.indexOf("bold") !== -1;
+    var properties = normal || bold ? "<m:rPr><m:sty m:val=\"" +
+      (bold ? (normal ? "b" : "bi") : "p") + "\"/></m:rPr>" : "";
     var weight = !mappedAlphabet && variant && variant.indexOf("bold") !== -1 ?
       ";font-weight:bold" : "";
-    return "<m:r><span style=\"" + OFFICE_MATH_RUN_STYLE +
+    return "<m:r>" + properties + "<span style=\"" + OFFICE_MATH_RUN_STYLE +
       (colour ? ";color:" + officeHtmlEscape(colour) : "") +
       ";font-style:" + (normal ? "normal" : "italic") + weight + "\">" +
       officeHtmlEscape(officeMathAlphabet(node.textContent, variant)) + "</span></m:r>";
@@ -3316,6 +3318,19 @@
     return !inside.length && /^[+=,;<>≤≥≠−-]$/.test(text);
   }
 
+  function officeNamedFunction(node) {
+    node = officeUnwrapped(node);
+    if (/^(msub|msup|msubsup|munder|mover|munderover)$/.test(node.localName) && node.children.length)
+      return officeNamedFunction(node.children[0]);
+    var letters = /^(mrow|mstyle)$/.test(node.localName) && node.children.length &&
+      Array.prototype.every.call(node.children, function (child) {
+        return child.localName === "mi" && officeInheritedAttribute(child, "mathvariant") === "normal";
+      });
+    return (letters || node.localName === "mi" || node.localName === "mo") &&
+      (letters || !officeInheritedAttribute(node, "mathvariant") || officeInheritedAttribute(node, "mathvariant") === "normal") &&
+      "|sin|cos|tan|cot|sec|csc|sinh|cosh|tanh|arcsin|arccos|arctan|log|ln|exp|lim|".indexOf("|" + node.textContent + "|") !== -1;
+  }
+
   function officeOmmlChildren(node) {
     var result = "";
     var children = Array.prototype.slice.call(node.children || []);
@@ -3344,6 +3359,21 @@
           /^(msubsup|munderover)$/.test(child.localName) ? parts[2] : null;
         result += officeOmmlNary(parts[0], lower, upper,
           /^m(under|over|underover)$/.test(child.localName) ? "undOvr" : "subSup", operand);
+      } else if (officeNamedFunction(child)) {
+        var functionName = officeOmmlNode(officeUnwrapped(child));
+        if (i + 1 < children.length && officeUnwrapped(children[i + 1]).localName === "mo" &&
+            children[i + 1].textContent === "\u2061") i++;
+        var argument = "", functionOutside = [], functionInside = [];
+        for (var before = 0; before < i; before++) officeAdvanceFence(children[before], functionOutside);
+        while (i + 1 < children.length) {
+          var argumentNode = children[i + 1];
+          if (officeOperandBoundary(argumentNode, functionInside, functionOutside)) break;
+          officeAdvanceFence(argumentNode, functionInside);
+          argument += officeOmmlNode(argumentNode);
+          i++;
+          if (!functionInside.length) break;
+        }
+        result += "<m:func><m:fName>" + functionName + "</m:fName><m:e>" + argument + "</m:e></m:func>";
       } else {
         result += officeOmmlNode(child);
       }
@@ -3389,7 +3419,7 @@
     }
     if (name === "mspace") {
       if (parseFloat(node.getAttribute("width")) === 0) return "";
-      return "<m:r><span style=\"" + OFFICE_MATH_RUN_STYLE +
+      return "<m:r><m:rPr><m:sty m:val=\"p\"/></m:rPr><span style=\"" + OFFICE_MATH_RUN_STYLE +
         ";font-style:normal\">&#160;</span></m:r>";
     }
     if (name === "mfrac") {
@@ -3560,8 +3590,8 @@
     var previous;
     do {
       previous = body;
-      body = body.replace(/<m:r><span style="([^"]*)">([^<]*)<\/span><\/m:r><m:r><span style="\1">([^<]*)<\/span><\/m:r>/g,
-        '<m:r><span style="$1">$2$3</span></m:r>');
+      body = body.replace(/<m:r>((?:<m:rPr><m:sty m:val="(?:p|b|bi)"\/><\/m:rPr>)?)<span style="([^"]*)">([^<]*)<\/span><\/m:r><m:r>\1<span style="\2">([^<]*)<\/span><\/m:r>/g,
+        '<m:r>$1<span style="$2">$3$4</span></m:r>');
     } while (body !== previous);
     return body;
   }

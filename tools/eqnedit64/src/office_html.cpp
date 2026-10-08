@@ -264,7 +264,18 @@ std::string run(const Xml &n) {
   if (!variant.empty() && variant != "normal" && variant != "italic" &&
       variant != "bold" && variant != "bold-italic" && !mapped)
     throw std::runtime_error("unsupported Office mathvariant");
-  bool normal = mapped || variant == "normal" || n.name != "mi";
+  bool normal = mapped || variant == "normal" || variant == "bold" ||
+                (variant.empty() &&
+                 (n.name != "mi" || std::count_if(n.text.begin(), n.text.end(),
+                                                  [](unsigned char ch) {
+                                                    return (ch & 0xC0) != 0x80;
+                                                  }) > 1));
+  const bool bold = !mapped && variant.find("bold") != std::string::npos;
+  const std::string properties =
+      normal || bold
+          ? "<m:rPr><m:sty m:val=\"" +
+                std::string(bold ? (normal ? "b" : "bi") : "p") + "\"/></m:rPr>"
+          : "";
   std::string colour = inherited(n, "mathcolor");
   if (!colour.empty()) {
     auto canonical = named_color_hex(colour);
@@ -274,7 +285,7 @@ std::string run(const Xml &n) {
     if (colour.empty())
       throw std::runtime_error("unsupported Office colour");
   }
-  return "<m:r><span style=\"" + style +
+  return "<m:r>" + properties + "<span style=\"" + style +
          (colour.empty() ? "" : ";color:" + escape(colour)) +
          ";font-style:" + (normal ? "normal" : "italic") +
          (!mapped && variant.find("bold") != std::string::npos
@@ -351,6 +362,22 @@ bool operandBoundary(const Xml &node, const std::vector<std::string> &inside,
           text == "<" || text == ">" || text == "≤" || text == "≥" ||
           text == "≠" || text == "−" || text == "-");
 }
+bool namedFunction(const Xml &node) {
+  const auto &n = unwrapped(node);
+  if (scripted(n) && !n.children.empty())
+    return namedFunction(*n.children[0]);
+  static const std::string names = "|sin|cos|tan|cot|sec|csc|sinh|cosh|tanh|"
+                                   "arcsin|arccos|arctan|log|ln|exp|lim|";
+  const bool letters =
+      (n.name == "mrow" || n.name == "mstyle") && !n.children.empty() &&
+      std::all_of(n.children.begin(), n.children.end(), [](const auto &ch) {
+        return ch->name == "mi" && inherited(*ch, "mathvariant") == "normal";
+      });
+  return (letters || n.name == "mi" || n.name == "mo") &&
+         (letters || inherited(n, "mathvariant").empty() ||
+          inherited(n, "mathvariant") == "normal") &&
+         names.find("|" + content(n) + "|") != std::string::npos;
+}
 std::string sequence(const Xml &n) {
   std::string out;
   for (size_t i = 0; i < n.children.size(); i++) {
@@ -369,6 +396,28 @@ std::string sequence(const Xml &n) {
         i++;
       }
       out += nary(c, operand);
+    } else if (namedFunction(c)) {
+      const auto name = emit(unwrapped(c));
+      if (i + 1 < n.children.size() &&
+          unwrapped(*n.children[i + 1]).name == "mo" &&
+          content(*n.children[i + 1]) == "\xE2\x81\xA1")
+        ++i;
+      std::string argument;
+      std::vector<std::string> outside, inside;
+      for (size_t prefix = 0; prefix < i; ++prefix)
+        advanceFence(*n.children[prefix], outside);
+      while (i + 1 < n.children.size()) {
+        const auto &next = *n.children[i + 1];
+        if (operandBoundary(next, inside, outside))
+          break;
+        advanceFence(next, inside);
+        argument += emit(next);
+        ++i;
+        if (inside.empty())
+          break;
+      }
+      out += "<m:func><m:fName>" + name + "</m:fName><m:e>" + argument +
+             "</m:e></m:func>";
     } else
       out += emit(c);
   }
@@ -390,7 +439,7 @@ std::string emit(const Xml &n) {
   if (name == "mspace") {
     if (std::stod(n.attr("width")) == 0.0)
       return {};
-    return "<m:r><span style=\"" + style +
+    return "<m:r><m:rPr><m:sty m:val=\"p\"/></m:rPr><span style=\"" + style +
            ";font-style:normal\">&#160;</span></m:r>";
   }
   if (scripted(n) && !n.children.empty() && large(*n.children[0]))
@@ -524,10 +573,10 @@ std::string latex_to_office_html(const std::string &latex) {
   } else
     body = emit(*root);
   const std::regex adjacent(
-      R"rx(<m:r><span style="([^"]*)">([^<]*)</span></m:r><m:r><span style="\1">([^<]*)</span></m:r>)rx");
+      R"rx(<m:r>((?:<m:rPr><m:sty m:val="(?:p|b|bi)"/></m:rPr>)?)<span style="([^"]*)">([^<]*)</span></m:r><m:r>\1<span style="\2">([^<]*)</span></m:r>)rx");
   for (;;) {
     auto merged = std::regex_replace(
-        body, adjacent, "<m:r><span style=\"$1\">$2$3</span></m:r>");
+        body, adjacent, "<m:r>$1<span style=\"$2\">$3$4</span></m:r>");
     if (merged == body)
       break;
     body = std::move(merged);
