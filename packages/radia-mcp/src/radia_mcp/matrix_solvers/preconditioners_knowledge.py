@@ -1,5 +1,25 @@
 """Preconditioner catalog: classical, AMG, AMS (Hiptmair-Xu)."""
 
+LOWEST_ORDER_HCURL_ROUTING = """
+# Lowest-order H(curl) solver routing
+
+For large real lowest-order curl-curl magnetostatics prefer **beta-zero AMS-PCG**.
+Use `radia.p1_linear.solve_p1_linear` for linear total-A with constant scalar
+material permeabilities, or `radia.p1_newton.solve_p1_newton` for nonlinear B-H.
+These APIs require straight 3D tetrahedra, homogeneous tangential Dirichlet
+conditions and a compatible current load; this route does not add Kelvin,
+periodic, high-order, complex or A-V support. Call outside `ngsolve.TaskManager`:
+the solver owns its assembly/solve regions and builds AMS outside them.
+
+Keep ICCG for small systems, supported complex systems and independent
+cross-checks. Hermitian positive-definite ICCG uses conjugate inner products;
+complex-symmetric eddy systems use a validated COCR path, not Hermitian CG.
+ABMC is opt-in (`use_abmc=False`); any quoted ABMC speedup is **per iteration**,
+not a whole-solve guarantee. Measure setup + iterations + solve and true
+residual; changed ordering can increase the number of iterations. No silent
+fallback or DOF-based automatic switch is implied.
+"""
+
 CATALOG = r"""
 # Preconditioner catalog
 
@@ -427,6 +447,10 @@ fix. It perturbs the physical operator; it is not generally just gauge fixing.
 Keep the shift in the PRECONDITIONER only, and measure physical differences
 before claiming they are negligible for a particular mesh and parameter set.
 """
+
+
+AMS_HIPTMAIR_XU += LOWEST_ORDER_HCURL_ROUTING
+CLASSICAL += "\n\nFor large lowest-order H(curl), prefer beta-zero AMS-PCG; see the ams topic. ABMC is opt-in; its speedup is per iteration, not whole-solve. Keep ICCG for small systems, supported complex systems and cross-checks."
 
 
 def get_preconditioners_knowledge(topic: str = "catalog") -> str:
