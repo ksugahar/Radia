@@ -93,7 +93,9 @@ function officeBytes(html) {
     // whatever was there before. The wire gate therefore needs the full
     // Chromium build in new-headless mode, which uses the system clipboard.
     browser = await chromium.launch({
-      headless : true,
+      // Neither headless mode reached the OS clipboard on the hosted runner
+      // (runs 37717127680, 37717585515); the wire gate runs headed.
+      headless : !wire,
       ...(wire ? {channel : "chromium"} : {}),
       ...(process.env.EQNEDIT64_BROWSER_PATH
               ? {executablePath : process.env.EQNEDIT64_BROWSER_PATH}
