@@ -23,8 +23,11 @@ no net current around the hole, so the net circulating current that the
 source flux drives through the bore cannot be represented. Filling the bore,
 or ignoring the circulation, changes the answer. Radia keeps the hole and
 adds one unknown, the net circulating current `α`, represented by the
-multivalued potential `α Θ` of a unit-current carrier ring inside the wall,
-and closes the system with Faraday's law on a cut loop.
+multivalued potential `α Θ` of a unit-current carrier ring inside the wall.
+The extra equation is the loop's work balance in Galerkin form: the electric
+work of the surface current and the exterior magnetic work, including the
+normal-flux term, are integrated over the whole surface rather than along a
+single cut line. The ordinary simply connected BIE is unchanged.
 
 How large the omitted circulation is depends on the geometry and on how much
 source flux links the bore. In the public synthetic example below, fixing
@@ -65,7 +68,7 @@ triangle, and projected with the surface mass matrix, `q_Θ = M⁻¹ b`, the sam
 P1 space as the rest of the operator. The former point evaluation with
 averaged vertex normals is not a consistent trace at creases and made the loss
 depend on where the carrier was placed. In the public example the spread of
-the loss over four carriers dropped from 0.79% (point evaluation) to
+the loss over four carriers dropped from 1.34% (point evaluation) to
 0.12% (projection). The exact solution of the continuous problem does not
 depend on the carrier; the remaining spread is the sensitivity of the
 discrete problem (P1 trace and operators, quadrature, path integration). It is
@@ -77,9 +80,9 @@ Every solve checks the true linear residual, the Faraday residual and the
 unit jump of `Θ`, and reports two complete powers: the surface loss and the
 reaction power of the incident field (including the multivalued part). A large
 difference between them flags an under-resolved surface, but a small one does
-not bound the error: in the validation example the difference fell to
-0.03% on the finest mesh while the loss still differed from the
-independent FEM by 1.4%. Read it together with a mesh study and an
+not bound the error: in the validation example the difference stayed
+between 0.055% and 0.070% on all three meshes while the loss differed from
+the independent FEM by 1.4%. Read it together with a mesh study and an
 independent reference.
 
 `validation_test/induction_heating/bored_workpiece/` compares the loss of the
@@ -87,9 +90,9 @@ loop-extended BEM with an independent air-domain HCurl FEM (order 2, SIBC
 Robin boundary, no BEM operators) for a synthetic stepped bored workpiece
 excited by closed filament loops. On the finest meshes (6,232 BEM vertices;
 601,029 FEM unknowns) the two losses differ by 1.40%, within the 2% gate.
-Across the three mesh levels of each method the loss ranged by 0.03% (BEM)
-and 0.01% (FEM) of the finest value, and the BEM power-balance difference
-fell from 2.3% to 0.03%. Both methods share the
+Across the three mesh levels of each method the loss ranged by 0.08% (BEM)
+and 0.003% (FEM) of the finest value, and the BEM power-balance difference
+stayed between 0.055% and 0.070%. Both methods share the
 linear SIBC approximation; the example does not validate SIBC against a
 resolved conducting volume.
 
@@ -103,10 +106,12 @@ inherit that tolerance and need their own convergence and reference study.
 
 ## Limits
 
-Linear, spatially uniform SIBC; flat P1 surface panels (the extracted BEM
-surface keeps no curved-element map, so small fillet radii carry an `O(h²)`
-geometric error); at most 7000 surface vertices for the current dense loop
-operator. Multiple handles, nonlinear ESIM, and geometry with no certified
+Linear SIBC (uniform, or per-face values on the weak loop route); flat,
+undeformed P1 surface triangles (a curved or deformed surface raises; small
+fillet radii therefore carry an `O(h²)` geometric error); at most 14,000
+surface faces for the dense loop-work matrix, which needs about 1 GB at
+11,000 faces and whose assembly time grows roughly with the square of the
+face count. Multiple handles, nonlinear ESIM, and geometry with no certified
 interior z-axis carrier raise with an explanation. The solver does not fill
 the hole, remesh, change material physics, or discard its cohomology. The
 field basis order of the thermal FEM is independent of this surface-BEM
