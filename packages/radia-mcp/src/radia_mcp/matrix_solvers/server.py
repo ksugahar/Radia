@@ -157,7 +157,7 @@ def pick_a_solver(problem_class: str) -> str:
             "Magnetostatic (HCurl A-formulation):\n"
             "1. Large real lowest-order: beta-zero AMS-PCG (compatible ungauged load)\n"
             "   → matrix_solvers_em_specific('gauging')\n"
-            "2. Solver: CG (real SPD)\n"
+            "2. PCG on the compatible real system with its gradient kernel\n"
             "   → matrix_solvers_krylov('cg')\n"
             "3. Use radia.p1_linear.solve_p1_linear (linear total-A) or\n"
             "   radia.p1_newton.solve_p1_newton (nonlinear B-H).\n"
