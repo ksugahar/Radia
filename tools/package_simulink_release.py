@@ -77,6 +77,8 @@ PACKAGE_FILES = (
     "+radia/+simulink/browseIHGeometryFile.m",
     "+radia/+simulink/configureIHNativeModel.m",
     "+radia/+simulink/fileFingerprint.m",
+    "+radia/+simulink/canonicalInputPath.m",
+    "+radia/+simulink/verifyIHPanelImpedanceProvenance.m",
     "+radia/+simulink/ihEddySFunction.m",
     "+radia/+simulink/ihThermalSFunction.m",
     "+radia/+simulink/ihMonitorSFunction.m",
