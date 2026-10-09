@@ -130,6 +130,8 @@ def test_repack_regenerates_record_after_metadata_edits(tmp_path):
     import shutil
     import subprocess
     import zipfile
+    import os
+    import sys
 
     source = tmp_path / "unpacked"
     metadata = source / "probe-1.0.dist-info"
@@ -149,7 +151,12 @@ def test_repack_regenerates_record_after_metadata_edits(tmp_path):
     command = "$TempDir=" + quote(source) + "; $DistDir=" + quote(destination) + "; $NewWheelPath=" + quote(wheel) + ";\n" + block
     shell = shutil.which("pwsh")
     assert shell, "PowerShell is required to check the wheel builder"
-    subprocess.run([shell, "-NoProfile", "-Command", command], check=True, capture_output=True, text=True)
+    environment = dict(os.environ)
+    # conftest may prepend a mesh tool's embedded Python for its own tests.
+    # This wheel-builder test must use the interpreter running the test suite.
+    environment["PATH"] = str(Path(sys.executable).parent) + os.pathsep + environment["PATH"]
+    subprocess.run([shell, "-NoProfile", "-Command", command], check=True,
+                   capture_output=True, text=True, env=environment)
     with zipfile.ZipFile(wheel) as archive:
         rows = list(csv.reader(io.StringIO(archive.read("probe-1.0.dist-info/RECORD").decode())))
         assert "removed.dll" not in {row[0] for row in rows}
