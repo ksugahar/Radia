@@ -1,0 +1,150 @@
+{
+  "schema": "strong-panel-equivalence-investigation.v1",
+  "baseline_source_commit": "ae1df0dac0793326c79471ef352c1fe1c46bb92f",
+  "ngsolve": "6.2.2607",
+  "model": "Self-authored torus fixture, surface and filament coils, refreshed frequency",
+  "geometry_identical_across_runs": true,
+  "single_thread_runs_bitwise_identical": true,
+  "four_thread_runs_bitwise_identical": false,
+  "comparison_tolerance": 1e-10,
+  "new_measure": "Area-weighted L2 norm of complex surface current and tangential magnetic field",
+  "absolute_floor": null,
+  "production_solver_modified": false,
+  "baseline_tests": {
+    "threads": 4,
+    "passed": 5,
+    "failed": 3
+  },
+  "diagnostics": [
+    {
+      "run": "1a",
+      "threads": 1,
+      "old_componentwise_current_failures": 0,
+      "maximum_complex_current_relative_surface_L2": 0.0,
+      "maximum_absolute_component_difference": 0.0
+    },
+    {
+      "run": "1b",
+      "threads": 1,
+      "old_componentwise_current_failures": 0,
+      "maximum_complex_current_relative_surface_L2": 0.0,
+      "maximum_absolute_component_difference": 0.0
+    },
+    {
+      "run": "4a",
+      "threads": 4,
+      "old_componentwise_current_failures": 59,
+      "maximum_complex_current_relative_surface_L2": 2.0941517089324445e-13,
+      "maximum_absolute_component_difference": 9.85522774499259e-12
+    },
+    {
+      "run": "4b",
+      "threads": 4,
+      "old_componentwise_current_failures": 66,
+      "maximum_complex_current_relative_surface_L2": 2.224539248654198e-13,
+      "maximum_absolute_component_difference": 9.670486633694964e-12
+    }
+  ],
+  "assembly_differences": [
+    {
+      "threads": 1,
+      "matrices": {
+        "SL": {
+          "maximum_relative_frobenius_difference": 0.0,
+          "maximum_absolute_difference": 0.0
+        },
+        "DL": {
+          "maximum_relative_frobenius_difference": 0.0,
+          "maximum_absolute_difference": 0.0
+        },
+        "M": {
+          "maximum_relative_frobenius_difference": 0.0,
+          "maximum_absolute_difference": 0.0
+        },
+        "K": {
+          "maximum_relative_frobenius_difference": 0.0,
+          "maximum_absolute_difference": 0.0
+        },
+        "M_inv": {
+          "maximum_relative_frobenius_difference": 0.0,
+          "maximum_absolute_difference": 0.0
+        }
+      }
+    },
+    {
+      "threads": 4,
+      "matrices": {
+        "SL": {
+          "maximum_relative_frobenius_difference": 0.0,
+          "maximum_absolute_difference": 0.0
+        },
+        "DL": {
+          "maximum_relative_frobenius_difference": 0.0,
+          "maximum_absolute_difference": 0.0
+        },
+        "M": {
+          "maximum_relative_frobenius_difference": 7.962133309675951e-17,
+          "maximum_absolute_difference": 6.776263578034403e-21
+        },
+        "K": {
+          "maximum_relative_frobenius_difference": 8.678811762579137e-17,
+          "maximum_absolute_difference": 1.7763568394002505e-15
+        },
+        "M_inv": {
+          "maximum_relative_frobenius_difference": 1.0797984546269706e-16,
+          "maximum_absolute_difference": 1.4551915228366852e-11
+        }
+      }
+    }
+  ],
+  "interpretation": "Thread-dependent mass/stiffness assembly rounding is observed before inversion. Componentwise normalization magnifies that rounding at symmetry zeros. Surface-norm comparison retains the original relative tolerance; no deterministic assembly guarantee is added.",
+  "negative_controls": {
+    "unit_scales": [
+      1e-06,
+      1.0,
+      1000000.0
+    ],
+    "symmetry_zero_noise_relative_amplitude": 2e-12,
+    "changed_field_relative_amplitude_rejected": 1e-08,
+    "nonzero_field_against_zero_reference_rejected": true
+  },
+  "patched_runs": [
+    {
+      "threads": 1,
+      "passed": 11,
+      "failed": 0
+    },
+    {
+      "threads": 4,
+      "repeat": 1,
+      "passed": 11,
+      "failed": 0
+    },
+    {
+      "threads": 4,
+      "repeat": 2,
+      "passed": 11,
+      "failed": 0
+    }
+  ],
+  "runtime": {
+    "python": "3.12.10",
+    "numpy": "2.5.2",
+    "native_wheel_version": "5.2.3"
+  },
+  "final_validation": {
+    "threads": 4,
+    "test_files": [
+      "test_bem_strong_panel_impedance.py",
+      "test_bem_loop_work_pairings.py",
+      "test_bem_loop_panel_impedance.py"
+    ],
+    "passed": 39,
+    "failed": 0,
+    "scale_controls_threads_1": {
+      "passed": 3,
+      "deselected": 8
+    },
+    "source_and_test_transfer_hashes_verified": true
+  }
+}

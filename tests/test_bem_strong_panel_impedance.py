@@ -61,11 +61,50 @@ def solve(solver,z,genus):
     return solver.solve(z,2*np.pi*50000,max_iter=40,tol=1e-9,relax=.8,loop_dof=bool(genus))
 
 
+def assert_surface_field_close(actual, expected, areas, *, label):
+    """Compare complex vector fields in the surface L2 norm, at the same 1e-10.
+
+    Componentwise relative errors are ill-defined at symmetry zeros. The
+    area-weighted norm measures the whole physical field (including phase),
+    is invariant to units, and needs no absolute tolerance in A/m.
+    """
+    actual, expected, areas = map(np.asarray, (actual, expected, areas))
+    assert actual.shape == expected.shape == (len(areas), 3), label
+    assert np.all(areas > 0) and np.all(np.isfinite(areas)), label
+    assert np.all(np.isfinite(actual)) and np.all(np.isfinite(expected)), label
+    norm = lambda field: np.sqrt(areas @ np.sum(abs(field)**2, axis=1))
+    error, reference = norm(actual-expected), norm(expected)
+    assert error <= 1e-10*reference, (
+        f'{label}: surface L2 error {error:.6g} exceeds 1e-10 * {reference:.6g}')
+
+
+@pytest.mark.parametrize('scale', [1e-6, 1., 1e6])
+def test_surface_field_comparison_is_scale_invariant(scale):
+    areas = np.array([1., 3.])
+    reference = scale*np.array([[0., 1j, 2.], [2j, -1., 0.]])
+    rounded = reference.copy()
+    rounded[0, 0] += scale*2e-12  # a symmetry-zero component
+    assert_surface_field_close(rounded, reference, areas, label='roundoff')
+    changed = reference.copy()
+    changed[0, 0] += scale*1e-8
+    with pytest.raises(AssertionError, match='surface L2 error'):
+        assert_surface_field_close(changed, reference, areas, label='changed field')
+    # A zero reference is not an excuse for an arbitrary absolute error floor.
+    with pytest.raises(AssertionError, match='surface L2 error'):
+        assert_surface_field_close(scale*2e-12*np.ones_like(reference),
+                                   np.zeros_like(reference), areas, label='zero')
+
+
 def compare(a,b):
     for key in ('P_total','H_t_rms','L_total','Delta_L','R_total','Delta_R',
                 'body_reaction_power_W','coil_loss_change_W','port_power_W'):
         np.testing.assert_allclose(a[key],b[key],rtol=1e-10,atol=1e-18,err_msg=key)
-    for key in ('wp_J_re','wp_J_im','wp_q_tri','wp_H_t_tri','body_emf'):
+    np.testing.assert_array_equal(a['wp_a'], b['wp_a'])
+    assert_surface_field_close(a['wp_J_re']+1j*a['wp_J_im'],
+                               b['wp_J_re']+1j*b['wp_J_im'], b['wp_a'], label='wp_J')
+    assert_surface_field_close(a['wp_H_t_tri'], b['wp_H_t_tri'],
+                               b['wp_a'], label='wp_H_t_tri')
+    for key in ('wp_q_tri','body_emf'):
         np.testing.assert_allclose(a[key],b[key],rtol=1e-10,atol=1e-12,err_msg=key)
     if 'wp_loop_alpha' in a:
         np.testing.assert_allclose(a['wp_loop_alpha'],b['wp_loop_alpha'],rtol=1e-10,atol=1e-12)
