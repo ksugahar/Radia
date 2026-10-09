@@ -887,6 +887,7 @@ def _apply_wp_loop_dof(args, bem, phi_inc, Z_s_wp, omega, coil_data,
     res_bem["loop_reaction_integral"] = loop_out["reaction_integral"]
     loop_meta = {
         "wp_loop_impedance_assembly": loop_out["loop_impedance_assembly"],
+        "wp_loop_work_diagnostics": loop_out["loop_work_diagnostics"],
         "wp_loop_dof": True,
         "wp_loop_automatic_carrier": bool(loop_out["automatic_carrier"]),
         "wp_loop_section_anchor_m": list(loop_out["section_anchor"]),
@@ -1118,7 +1119,8 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             bem_input_mesh, order=basis_order, assemble_dense=True,
             use_intree_bem=True, intree_geom_order=vol_curve_order,
             intree_singular_n_q=6, intree_regular_quad_degree=7,
-            bnd_label=bem_bnd_label, log_fn=progress)
+            bnd_label=bem_bnd_label, log_fn=progress,
+            loop_work_backend=getattr(args, "wp_loop_work_backend", "auto"))
     elif args.wp_bem_backend == "hacapk":
         bem = ScalarBIESIBCSolver(
             bem_input_mesh, order=basis_order, assemble_dense=True,
@@ -1127,7 +1129,8 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             use_intree_hacapk=True,
             hacapk_aca_eps=args.wp_aca_eps,
             hacapk_leaf=64, hacapk_eta=2.0,
-            bnd_label=bem_bnd_label, log_fn=progress)
+            bnd_label=bem_bnd_label, log_fn=progress,
+            loop_work_backend=getattr(args, "wp_loop_work_backend", "auto"))
     else:
         raise ValueError(
             f"unknown --wp-bem-backend {args.wp_bem_backend!r}; "
@@ -1966,7 +1969,7 @@ def _assemble_full_output(args, coil_data, wp_data):
         out["wp_loop_dof_skip_reason"] = wp_data["wp_loop_dof_skip_reason"]
     if wp_data.get("wp_loop_dof"):
         out["wp_loop_dof"] = True
-        for key in ("wp_loop_automatic_carrier", "wp_loop_section_anchor_m", "wp_loop_linear_residual_rel", "wp_loop_faraday_residual_rel", "wp_loop_impedance_assembly"):
+        for key in ("wp_loop_automatic_carrier", "wp_loop_section_anchor_m", "wp_loop_linear_residual_rel", "wp_loop_faraday_residual_rel", "wp_loop_impedance_assembly", "wp_loop_work_diagnostics"):
             if key in wp_data: out[key] = wp_data[key]
         out["wp_loop_alpha_A"] = float(wp_data["wp_loop_alpha_A"])
         out["wp_loop_alpha_deg"] = float(wp_data["wp_loop_alpha_deg"])
@@ -2195,7 +2198,8 @@ def _solve_workpiece_strong_coupled(args):
         fes_order=0,
         wp_hacapk=wp_hacapk, wp_aca_eps=args.wp_aca_eps,
         wp_gmres_tol=args.wp_gmres_tol,
-        coil_hacapk=coil_hacapk, coil_aca_eps=args.coil_aca_eps)
+        coil_hacapk=coil_hacapk, coil_aca_eps=args.coil_aca_eps,
+        wp_loop_work_backend=getattr(args, "wp_loop_work_backend", "auto"))
     def solve_em(z):
         return solver.solve(Z_s=z, omega=omega,
             max_iter=int(args.coupling_max_iter),
@@ -2371,7 +2375,8 @@ def _solve_workpiece_strong_coupled_peec(args, coil_data):
     solver = CoupledPEECBEMSolver(
         paths, R_f, L_f, wp_mesh, Zs_fil=Zs_fil, wp_order=1,
         wp_hacapk=wp_hacapk, wp_aca_eps=args.wp_aca_eps,
-        wp_gmres_tol=args.wp_gmres_tol)
+        wp_gmres_tol=args.wp_gmres_tol,
+        wp_loop_work_backend=getattr(args, "wp_loop_work_backend", "auto"))
     def solve_em(z):
         return solver.solve(Z_s=z, omega=omega, I_port=float(args.current),
             max_iter=int(args.coupling_max_iter),
@@ -2519,6 +2524,8 @@ def _assemble_strong_output(args, coil_data, strong):
             strong["wp_loop_H_t_frozen"])
         out["wp_loop_screening_ratio"] = float(
             strong["wp_loop_screening_ratio"])
+        if 'wp_loop_work_diagnostics' in strong:
+            out['wp_loop_work_diagnostics'] = strong['wp_loop_work_diagnostics']
         if 'wp_loop_impedance_assembly' in strong:
             out['wp_loop_impedance_assembly'] = strong['wp_loop_impedance_assembly']
         out["wp_loop_regime"] = _loop_regime(out["wp_loop_alpha_deg"])
@@ -3094,6 +3101,9 @@ def build_argparser():
     parser.add_argument("--wp-bem-backend", default="auto",
                         choices=["auto", "hacapk", "intree-dense"],
                         help="auto: HACApK for simply connected workpieces; dense cohomology for one z-axis through-hole with linear SIBC/P1. Explicit backends are never overridden.")
+    parser.add_argument("--wp-loop-work-backend", default="auto",
+                        choices=["auto", "dense", "fmm"],
+                        help="Genus-1 P0 loop work only: auto uses native Galerkin FMM at >=512 faces, native direct below; dense keeps direct products; fmm always compresses separated interactions. Near/singular quadrature is unchanged. The result records the route and controls.")
     parser.add_argument("--wp-aca-eps", type=float, default=1e-10)
     parser.add_argument("--wp-gmres-tol", type=float, default=1e-10)
     parser.add_argument("--wp-loop-dof", nargs="?", const="on",
@@ -3110,9 +3120,9 @@ def build_argparser():
                              "--h1-order 1); unsupported weak handle "
                              "combinations fail before BEM assembly. "
                              "The loop path requires flat undeformed "
-                             "triangles and adds a dense single layer in "
-                             "the number of surface faces (up to 14000: "
-                             "about 1.5 GiB for this matrix alone). "
+                             "triangles and a P0 Galerkin single layer "
+                             "(up to 14000 faces; auto compresses far "
+                             "interactions, dense remains selectable). "
                              "on (= bare --wp-loop-dof): require it -- "
                              "unmet prerequisites or genus != 1 fail "
                              "loud.  There is deliberately NO 'off': the "

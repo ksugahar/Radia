@@ -20,7 +20,7 @@ Student element-Zs workflow: Geometry Update accepts panel_zs_file, an absolute
 mesh/frequency-bound JSON path (ohm, BND-element-order). Use
 radia.simulink.writeIHPanelImpedance with a full ordered complex vector; centroid
 selection is performed by the caller. P1 weak coupling, genus-0 or one supported
-flux-linked handle with dense flat-triangle loop work, constant during each
+flux-linked handle with dense P1 BIE and flat-triangle loop work, constant during each
 linear simulation, with content-hash-triggered rebuild. Independent FEM accuracy
 is separate: independent_fem_validation.status starts as not-performed.
 See docs/induction_heating/SIMULINK_ELEMENT_ZS.md.
@@ -638,16 +638,10 @@ different cooling/contact boundaries, or a transient rotating hotspot whose
 period is not short compared with the thermal response.  Do not select 3D heat
 merely because the supplied EM mesh or ``qsurf.sol`` is 3D.
 
-The received reference-case order-verification package used 3D heat because it supplied a
-fixed full-workpiece 3D ``.vol`` and intentionally varied only H1 order.  That
-was an experiment constraint, not a formulation requirement.  The independent
-2D meridian cross-check (2026-09-14, H1 order 2, 128 azimuth samples) agreed
-with the 3D order-2 solve as follows:
-
-| reference-case case | input-power difference | volume-mean T difference | mean absolute 850 C depth difference |
-|---|---:|---:|---:|
-| A | 0.069% | 1.32 C | 0.024 mm |
-| B | 0.127% | 1.59 C | 0.029 mm |
+A study that supplies a fixed full-workpiece 3D ``.vol`` and varies only H1
+order may use 3D heat; that is an experiment constraint, not a formulation
+requirement.  An independent 2D meridian cross-check (H1 order 2, 128 azimuth
+samples) against the 3D order-2 solve is the recommended confirmation.
 
 Axisymmetric heat requires a separately generated 2D ``(r,z)`` workpiece mesh.
 Loading a 3D ``.vol`` and calling ``Curve()`` cannot turn it into a 2D mesh:
@@ -1977,9 +1971,18 @@ The loop closure uses distributed Galerkin electric work and magnetic
 work including both tangential current and normal flux. Magnetic work
 acts on the scattered field; electric work and heat use the total field.
 Work pairings are reciprocal; the mixed BIE matrix is not symmetric.
-This path requires flat undeformed surface triangles. Its additional P0
-single layer is dense in the number of faces and cached per geometry;
-carrier, seam, quadrature and surface refinement still require checks.
+This path requires flat undeformed surface triangles. The additional P0
+single layer is cached per geometry. ``--wp-loop-work-backend auto`` selects
+native Galerkin FMM at >=512 faces and native direct products below that;
+``dense`` and ``fmm`` explicitly select either route in weak and both strong
+workflows. Separated interactions are compressed; direct near/singular
+quadrature and the complete closure are unchanged. The result's
+``wp_loop_work_diagnostics`` records the route, FMM controls and NGSolve
+version. Unavailable FMM raises with the dense option, without fallback.
+Native FMM storage is unknown, never zero; use measured process peaks.
+The P1 BIE stays dense and the 14000-face loop guard remains. Compression
+heat-change acceptance is <=0.1% at the same mesh, not a physical-accuracy
+bound. Carrier, seam, quadrature and surface refinement still require checks.
 Unsupported weak handle combinations (scalar ESIM, HACApK, P2, genus >= 2)
 raise before BEM assembly. There is no ``off`` fallback. Surface winding
 is established by face-BFS plus signed volume, never centroid flipping
@@ -1992,7 +1995,7 @@ axisymmetric FEM-SIBC versus BEM on solid and bored cylinders, separate
 source power and dissipation, local complex magnetic field, surface
 refinement, and FEM exterior-size convergence. The full-conductor FEM
 power baseline and analytic shorted-ring test are complementary checks.
-No external case files or reported ratio are acceptance inputs.
+No external case files or reported ratios are acceptance inputs.
 
 Scalar strong coupled coil solvers use complete mutual reaction from
 TOTAL body surface current and the discrete incident electric projection.

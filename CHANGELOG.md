@@ -19,6 +19,22 @@ All notable changes to the `radia` package.  Format: each release lists
   benefit does not guarantee a faster complete solve.
 
 
+- Genus-1 P0 loop work now selects native Galerkin FMM at 512 or more
+  surface faces (`--wp-loop-work-backend auto`); smaller cases keep native
+  direct products. `dense` and `fmm` explicitly select either route in weak
+  and both strong coil workflows. Far interactions are compressed; direct
+  near/singular quadrature and the complete closure are unchanged. Results
+  report the route, controls and NGSolve version; an unavailable FMM raises
+  with the dense option, without fallback. The 0.1% heat-change budget is
+  an implementation comparison, not a physical-accuracy bound.
+
+- Genus-1 loop work retains the native singular Galerkin P0 single layer
+  and uses its forward/transpose products, removing the COO-to-dense and
+  face-permutation copies. Six products are reused for the row, reverse
+  pairing and diagonal; conormal edge checks are vectorized. The quadrature
+  and complete magnetic closure are unchanged. Direct assembly remains
+  quadratic and still dominates its construction time and peak memory.
+
 - Per-panel ESIM now defaults to the adaptive log-H table to reduce outer
   cell evaluations. Final certification still directly solves every panel.
   Select `--esim-panel-evaluator direct` to restore the reference evaluator;
@@ -417,9 +433,7 @@ Released 2026-09-14.
   evaluate the source mesh on its boundary facets rather than through a volume
   lookup.  The handoff now records sample and vertex coverage and fails fast
   instead of silently assigning zero heat flux to unmapped target vertices.
-  The default azimuthal sampling count is 128.  reference-case validation against an
-  independent 3D heat solve agreed within 0.13% in input power, 1.6 degC in
-  volume-mean temperature, and 0.03 mm in the 850 degC penetration depth.
+  The default azimuthal sampling count is 128.
   Axisymmetric heat results now also report the physical revolved volume and
   volume-weighted mean temperature.
 
@@ -437,8 +451,8 @@ Released 2026-09-14.
 - Decoupled IH thermal field order from serialized mesh geometry.  The 3D,
   axisymmetric, and EM-table heat solvers now preserve a loaded `.vol` exactly
   instead of calling `Mesh.Curve(fes_order)` after import; that call can silently
-  destroy a curved CAD mapping (the reported reference-case mesh inflated its boundary
-  area by about 297 million times).  Results now record the input curve order,
+  destroy a curved CAD mapping (a reported curved mesh inflated its boundary
+  area by many orders of magnitude).  Results now record the input curve order,
   domain/boundary measures, and the no-post-load-Curve policy.
 
 - HDiv 3D energy-Newton now evaluates material energy, residual and tangent on
@@ -477,8 +491,8 @@ Released 2026-09-14.
 - Decoupled IH thermal field order from serialized mesh geometry.  The 3D,
   axisymmetric, and EM-table heat solvers now preserve a loaded `.vol` exactly
   instead of calling `Mesh.Curve(fes_order)` after import; that call can silently
-  destroy a curved CAD mapping (the reported reference-case mesh inflated its boundary
-  area by about 297 million times).  Results now record the input curve order,
+  destroy a curved CAD mapping (a reported curved mesh inflated its boundary
+  area by many orders of magnitude).  Results now record the input curve order,
   domain/boundary measures, and the no-post-load-Curve policy.
 
 - Fixed MATLAB LTspice binary RAW precision/layout validation and transient

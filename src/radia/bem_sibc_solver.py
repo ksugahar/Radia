@@ -135,7 +135,7 @@ class ScalarBIESIBCSolver:
                   intree_singular_n_q=8, intree_regular_quad_degree=11,
                   use_intree_hacapk=False, hacapk_aca_eps=1e-10,
                   hacapk_leaf=64, hacapk_eta=2.0,
-                  bnd_label=None, log_fn=None):
+                  bnd_label=None, log_fn=None, loop_work_backend="auto"):
         """Initialize solver and assemble BEM operators.
 
         Args:
@@ -147,6 +147,11 @@ class ScalarBIESIBCSolver:
                 parent ``vol_mesh`` (after ``vol_mesh.Curve(p)``) plus the
                 workpiece sideset name, and the curving is preserved via
                 ``mesh.GetTrafo(el)`` on the parent.
+            loop_work_backend: genus-1 P0 magnetic-work operator only. "auto"
+                uses Galerkin FMM at >=512 faces, native direct below that;
+                "dense" selects native direct products, "fmm" always compresses
+                separated interactions. Quadrature and near/singular terms
+                are unchanged. This option does not select the P1 BIE backend.
             order: H1 polynomial order on surface (default 1).
             assemble_dense: if True (default, backward-compat), extract
                 ``DL`` and ``SL`` to dense ``ndof x ndof`` numpy arrays
@@ -182,6 +187,9 @@ class ScalarBIESIBCSolver:
         else:
             _log_phase = log_fn
 
+        if loop_work_backend not in ("auto", "dense", "fmm"):
+            raise ValueError("loop_work_backend must be auto, dense, or fmm")
+        self.loop_work_backend = loop_work_backend
         self.mesh = mesh
         self.order = order
         self.use_intree_bem = use_intree_bem
