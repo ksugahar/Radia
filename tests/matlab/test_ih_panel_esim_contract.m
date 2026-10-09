@@ -13,6 +13,21 @@ verifyError(testCase,@() radia.simulink.verifyIHESIMDrive(config,2.3),"radia:sim
 verifyError(testCase,@() radia.simulink.verifyIHESIMDrive(config,0),"radia:simulink:IHESIMDriveBand");
 end
 
+function testZeroStartRampRejectsWithEnvelopeMessage(testCase)
+config.surface_impedance = struct("mode","per-panel-esim", ...
+    "reference_current_A",2,"drive_relative_band",.1);
+for sample = [0,.5,1,1.5]
+    try
+        radia.simulink.verifyIHESIMDrive(config,sample);
+        verifyFail(testCase,"A zero-start ramp outside the frozen band was accepted.");
+    catch failure
+        verifyEqual(testCase,failure.identifier,'radia:simulink:IHESIMDriveBand');
+        verifyTrue(testCase,contains(failure.message,'Peak current amplitude (envelope)'));
+        verifyTrue(testCase,contains(failure.message,'zero-start/soft-start ramps are unsupported'));
+    end
+end
+radia.simulink.verifyIHESIMDrive(config,2);
+end
 function testProvenanceRejectsStaleArtifactFrequencyAndMaterial(testCase)
 work=string(tempname()); mkdir(work);
 cleanup=onCleanup(@() rmdir(work,"s"));

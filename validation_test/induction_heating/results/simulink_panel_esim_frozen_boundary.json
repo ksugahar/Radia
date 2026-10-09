@@ -2,7 +2,7 @@
   "schema": "radia.simulink.panel_esim.acceptance.v1",
   "scope": "frozen-reference assembly boundary",
   "source": "self-authored cube and annulus",
-  "matlab_cases": 4,
+  "matlab_cases": 5,
   "python_cases": 23,
   "skips": 0,
   "cases": [

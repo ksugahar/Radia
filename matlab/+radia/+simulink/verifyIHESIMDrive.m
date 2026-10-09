@@ -14,6 +14,6 @@ if ~(isfinite(reference) && reference > 0 && isfinite(band) && band >= 0 && band
 end
 if ~isfinite(current_A) || abs(abs(current_A)/reference-1) > band+32*eps
     error("radia:simulink:IHESIMDriveBand", ...
-        "Drive amplitude is outside frozen ESIM reference %.9g A (relative band %.3g). Rebuild at a new reference current.", reference, band);
+        "Peak current amplitude (envelope) is outside frozen ESIM reference %.9g A (relative band %.3g). Instantaneous carrier samples and zero-start/soft-start ramps are unsupported. Rebuild at a new reference current.", reference, band);
 end
 end

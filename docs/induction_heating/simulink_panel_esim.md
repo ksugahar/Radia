@@ -16,7 +16,7 @@ current amplitude and heat scales with its square. This does not reproduce
 nonlinear ESIM at arbitrary time-varying drive amplitudes.
 
 The allowed drive band defaults to plus/minus 10% and can be tightened down to
-zero. Outside that band, including zero drive, the Eddy block raises an error.
+zero; it cannot be widened beyond 10%. Outside that band, including zero drive, the Eddy block raises an error.
 To use another operating amplitude, change the reference current and explicitly
 rebuild/reinitialize. A drive band is a use restriction, not an accuracy guarantee.
 
@@ -27,3 +27,11 @@ certificate; material, reference current or frequency changes invalidate reuse.
 The named MATLAB entry point is `radia.simulink.assembleIHPanelESIMFromGeometry`.
 Genus-1/strong coupling uses validated Python routes only; unsupported backend
 combinations raise rather than falling back to uniform impedance.
+
+For example, assemble at `esim_reference_current_A=2` and connect a Constant
+with value `2` to Eddy input 1, labelled **peak current amplitude (envelope)**.
+A slowly varying envelope between 1.8 and 2.2 A remains inside the default band.
+Do not connect `2*sin(2*pi*f*t)` or a soft-start ramp from zero: zero/low samples
+raise `IHESIMDriveBand` with an explicit envelope/zero-start error. There is no
+startup grace interval. For another operating envelope, explicitly rebuild at
+its reference amplitude before using it.
