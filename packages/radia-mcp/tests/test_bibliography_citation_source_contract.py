@@ -43,3 +43,16 @@ def test_duplicate_bib_keys_are_ambiguous(tmp_path):
     bib = tmp_path / "fixture.bib"
     bib.write_text("@misc{one,title={Test}}\n@misc{one,title={Second}}", encoding="utf-8")
     assert bibliography_cite_validation(str(tex), str(bib)).startswith("Error:")
+
+
+def test_kuriyama_2019_has_one_canonical_citation_identity():
+    from pathlib import Path
+
+    from radia_mcp.bibliography._bibparse import read_bib_file
+
+    bib = Path(__file__).resolve().parents[1] / "src/radia_mcp/bibliography/data/references.bib"
+    entries = read_bib_file(bib)
+    matches = [entry.key for entry in entries
+               if entry.fields.get("doi", "").casefold() == "10.1109/tmag.2019.2900766"]
+    assert matches == ["Kuriyama2019"]
+    assert "CLN_expansion" not in {entry.key for entry in entries}
