@@ -64,6 +64,8 @@ def test_package_builder_requires_native_ih_assets():
         "+radia/+simulink/fileFingerprint.m",
         "+radia/+simulink/normalizeIHGeometryRoles.m",
         "+radia/+simulink/updateIHGeometry.m",
+        "+radia/+simulink/assembleIHPanelESIMFromGeometry.m",
+        "+radia/+simulink/verifyIHESIMDrive.m",
         "+radia/+simulink/makeMonitorHeaderBusObject.m",
         "+radia/+simulink/makeIHMonitorBusObject.m",
     } <= set(module.PACKAGE_FILES)

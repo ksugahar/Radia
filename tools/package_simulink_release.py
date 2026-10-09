@@ -71,6 +71,7 @@ PACKAGE_FILES = (
     "+radia/+simulink/addIHMonitorDashboard.m",
     "+radia/+simulink/addIHGeometryUpdateBlock.m",
     "+radia/+simulink/assembleIHOperatorsFromGeometry.m",
+    "+radia/+simulink/assembleIHPanelESIMFromGeometry.m",
     "+radia/+simulink/configureFileGeneration.m",
     "+radia/+simulink/ihGeometryExtensions.m",
     "+radia/+simulink/onIHConfigFileChanged.m",
@@ -94,6 +95,7 @@ PACKAGE_FILES = (
     "+radia/+simulink/updateIHGeometry.m",
     "+radia/+simulink/validateIHNativeConfig.m",
     "+radia/+simulink/validateVolFiles.m",
+    "+radia/+simulink/verifyIHESIMDrive.m",
 )
 
 
