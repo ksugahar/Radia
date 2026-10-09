@@ -1,5 +1,7 @@
 # Changelog
 
+- Pre-push transport accepts an optional runner-label to SSH-config-alias mapping through `RADIA_PREFLIGHT_SSH_ALIAS`; runner selection and admission continue to use the original labels.
+
 - Include the geometry updater's referenced input-path and panel-impedance provenance helpers in Simulink release archives, so extracted packages contain their MATLAB dependencies.
 
 - Give fast-contracts a 120-second elapsed-time budget while retaining its required tests, assertions and fail-on-overrun check. Other tier budgets and host routing stay unchanged.

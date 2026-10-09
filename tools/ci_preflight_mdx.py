@@ -9,6 +9,10 @@ deterministic fast gates there.
 Runner availability is checked at admission, including explicit host selection.
 A host-local OS lock protects the shared preflight repository and environment;
 it is not a reservation in GitHub Actions' scheduler.
+
+Optional RADIA_PREFLIGHT_SSH_ALIAS maps runner labels to SSH config aliases
+using comma-separated label=alias entries. Unset keeps label-based connections;
+a configured mapping must cover the selected runner. Connection failures abort.
 """
 
 from __future__ import annotations
@@ -18,6 +22,7 @@ import base64
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -35,6 +40,26 @@ def select_idle_host(runners: list[dict], requested: str = "auto") -> str:
             if {"mdx", host} <= labels and runner.get("status") == "online" and not runner.get("busy", True):
                 return host
     raise RuntimeError("No idle mdx1/mdx2 CI runner is available; retry after CI finishes")
+
+
+def resolve_ssh_destination(host: str, mapping: str | None = None) -> str:
+    """Resolve transport only; never change the selected GitHub runner."""
+    if mapping is None:
+        mapping = os.environ.get("RADIA_PREFLIGHT_SSH_ALIAS", "")
+    if not mapping.strip():
+        return host
+    aliases = {}
+    for entry in mapping.split(","):
+        label, separator, alias = entry.strip().partition("=")
+        label, alias = label.strip(), alias.strip()
+        if (not separator or label not in ("mdx1", "mdx2")
+                or label in aliases
+                or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", alias) is None):
+            raise RuntimeError("Invalid RADIA_PREFLIGHT_SSH_ALIAS mapping")
+        aliases[label] = alias
+    if host not in aliases:
+        raise RuntimeError(f"RADIA_PREFLIGHT_SSH_ALIAS has no mapping for selected runner {host}")
+    return aliases[host]
 
 
 def run(command: list[str], *, cwd: Path | None = None) -> None:
@@ -102,6 +127,7 @@ def main(argv: list[str] | None = None) -> int:
         inventory = json.loads(subprocess.check_output(
             ["gh", "api", "repos/ksugahar/Radia/actions/runners"], text=True))
         args.host = select_idle_host(inventory["runners"], args.host)
+        ssh_destination = resolve_ssh_destination(args.host)
     except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError) as exc:
         print(f"mdx preflight unavailable: {exc}", file=sys.stderr)
         return 1
@@ -124,9 +150,9 @@ def main(argv: list[str] | None = None) -> int:
                         f"New-Item -ItemType Directory -Force -Path '{remote_root}\\incoming', '{remote_root}\\work' | Out-Null",
                     ]
                 ),
-                args.host,
+                ssh_destination,
             )
-            run(["scp", str(bundle), f"{args.host}:{remote_bundle.replace(chr(92), '/')}"])
+            run(["scp", str(bundle), f"{ssh_destination}:{remote_bundle.replace(chr(92), '/')}"])
 
         script = f"""
 $ErrorActionPreference = 'Stop'
@@ -200,7 +226,7 @@ if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
   }}
 }}
 """
-        remote_command(script, args.host)
+        remote_command(script, ssh_destination)
     except (OSError, RuntimeError, subprocess.CalledProcessError) as exc:
         print(f"mdx preflight failed: {exc}", file=sys.stderr)
         return 1
@@ -210,7 +236,7 @@ if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
             remote_command(
                 f"if (Test-Path -LiteralPath '{remote_bundle}') {{ "
                 f"Remove-Item -LiteralPath '{remote_bundle}' -Force -ErrorAction Stop }}\nexit 0",
-                args.host,
+                ssh_destination,
             )
         except (OSError, RuntimeError, subprocess.CalledProcessError) as exc:
             print(f"preflight upload cleanup needs attention: {exc}", file=sys.stderr)

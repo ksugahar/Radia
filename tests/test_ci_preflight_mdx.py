@@ -67,13 +67,76 @@ def test_auto_selects_idle_host():
     assert module.select_idle_host([_runner('mdx1', busy=True), _runner('mdx2')]) == 'mdx2'
 
 
+@pytest.mark.parametrize('mapping,host,expected', [
+    ('', 'mdx1', 'mdx1'),
+    ('mdx1=mdx', 'mdx1', 'mdx'),
+    (' mdx1 = mdx , mdx2 = mdx2 ', 'mdx2', 'mdx2'),
+])
+def test_ssh_destination_mapping(mapping, host, expected):
+    assert _load_module().resolve_ssh_destination(host, mapping) == expected
+
+
+def test_unset_ssh_mapping_keeps_runner_label(monkeypatch):
+    monkeypatch.delenv('RADIA_PREFLIGHT_SSH_ALIAS', raising=False)
+    assert _load_module().resolve_ssh_destination('mdx1') == 'mdx1'
+
+
+@pytest.mark.parametrize('mapping', [
+    'mdx1', 'mdx1=', '=mdx', 'mdx1=mdx,', 'mdx1=mdx,mdx1=mdx2',
+    'other=mdx', 'mdx1=-F', 'mdx1=mdx value', 'mdx1=mdx:22', 'mdx1=mdx=more',
+])
+def test_invalid_ssh_mapping_fails_loudly(mapping):
+    with pytest.raises(RuntimeError, match='Invalid RADIA_PREFLIGHT_SSH_ALIAS'):
+        _load_module().resolve_ssh_destination('mdx1', mapping)
+
+
 def _mock_candidate(monkeypatch, module, tmp_path):
+    monkeypatch.delenv('RADIA_PREFLIGHT_SSH_ALIAS', raising=False)
     monkeypatch.setattr(module.subprocess, 'check_output', lambda *a, **kw:
         json.dumps({'runners': [_runner('mdx1')]}))
     monkeypatch.setattr(module, 'create_bundle', lambda *a: 'a' * 40)
     real_tempdir = module.tempfile.TemporaryDirectory
     monkeypatch.setattr(module.tempfile, 'TemporaryDirectory', lambda **kw:
         real_tempdir(dir=tmp_path))
+
+
+def test_mapping_covers_selected_runner_before_creating_bundle(monkeypatch, tmp_path, capsys):
+    module = _load_module()
+    _mock_candidate(monkeypatch, module, tmp_path)
+    monkeypatch.setenv('RADIA_PREFLIGHT_SSH_ALIAS', 'mdx2=mdx2')
+    def forbidden(*args, **kwargs):
+        pytest.fail('Incomplete mapping must fail before bundle or transport work')
+    monkeypatch.setattr(module, 'create_bundle', forbidden)
+    monkeypatch.setattr(module, 'run', forbidden)
+    assert module.main(['--base', 'a' * 40, '--head', 'b' * 40]) == 1
+    assert 'no mapping for selected runner mdx1' in capsys.readouterr().err
+
+
+def test_alias_used_for_setup_upload_execution_and_cleanup(monkeypatch, tmp_path, capsys):
+    module = _load_module()
+    _mock_candidate(monkeypatch, module, tmp_path)
+    monkeypatch.setenv('RADIA_PREFLIGHT_SSH_ALIAS', 'mdx1=mdx')
+    commands = []
+    monkeypatch.setattr(module, 'run', lambda command, **kw: commands.append(command))
+    assert module.main(['--base', 'a' * 40, '--head', 'b' * 40, '--host', 'mdx1']) == 0
+    assert [command[1] for command in commands if command[0] == 'ssh'] == ['mdx'] * 3
+    upload = next(command for command in commands if command[0] == 'scp')
+    assert upload[2].startswith('mdx:')
+    assert 'Preflight host: mdx1' in capsys.readouterr().out
+
+
+def test_unreachable_alias_aborts_without_label_fallback(monkeypatch, tmp_path, capsys):
+    module = _load_module()
+    _mock_candidate(monkeypatch, module, tmp_path)
+    monkeypatch.setenv('RADIA_PREFLIGHT_SSH_ALIAS', 'mdx1=mdx')
+    commands = []
+    def failed_connection(command, **kwargs):
+        commands.append(command)
+        raise RuntimeError('SSH connection failed')
+    monkeypatch.setattr(module, 'run', failed_connection)
+    assert module.main(['--base', 'a' * 40, '--head', 'b' * 40]) == 1
+    assert commands and all(command[:2] == ['ssh', 'mdx'] for command in commands)
+    assert 'mdx preflight failed: SSH connection failed' in capsys.readouterr().err
 
 
 def test_partial_upload_is_cleaned_on_failure(monkeypatch, tmp_path):
