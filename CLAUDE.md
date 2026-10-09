@@ -227,8 +227,8 @@ mdx1/mdx2 or LAB; check CI/jobs and available memory first. LAB is also an
 execution host for high-memory tests. mdx CI has priority; avoid concurrent
 timing jobs. Gmsh rendering needs a LAB/100 desktop, not mdx/ssh.
 Compute work must never delay or destabilize CI/preflight.
-Historical mdx measurements remain valid provenance. Record non-identifying OS class, thread count, runtime,
-versions and results in validation JSON.
+Historical mdx measurements remain valid provenance. Publish OS, threads,
+versions/results; keep hosts/IPs/paths private.
 
 Measure speed; settle quadrature and threads first.
 hibino has 230 GB memory, no pagefile, no guaranteed speedup.
@@ -296,6 +296,3 @@ Reassess roles as tools and results evolve; explicit user assignments prevail.
 
 Use focused skills and `packages/radia-mcp/src/radia_mcp/**/knowledge/` for detail; correct policy conflicts there with a focused regression.
 Do not expand this file into a second manual.
-
-### Public runtime privacy
-Do not publish machine names, private network addresses, user/share paths, or host-bearing evidence filenames. Result metadata records only OS class, thread count and software versions. Full provenance remains in private handoffs. Existing routing instructions above remain unchanged for phase 2; their exception never applies to result publication.

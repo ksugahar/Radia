@@ -29,17 +29,22 @@ def test_github_endpoint_has_no_empty_trailing_path(monkeypatch, suffix):
     assert seen == ["https://api.github.com/repos/owner/repo" + ("/"+suffix if suffix else "")]
 
 
-def evidence(host="lab"):
-    a = gate.strict_json((EVIDENCE / host / "acceptance.json").read_bytes())
-    f = gate.strict_json((EVIDENCE / host / "full6.json").read_bytes())
-    x = (EVIDENCE / host / "focused.xml").read_bytes()
+def evidence(record="validation"):
+    """Use public numeric records with synthetic host identity for gate tests."""
+    a = gate.strict_json((EVIDENCE / record / "acceptance.json").read_bytes())
+    f = gate.strict_json((EVIDENCE / record / "full6.json").read_bytes())
+    x = (EVIDENCE / record / "focused.xml").read_bytes()
+    tree = ET.fromstring(x)
+    suite = tree if tree.tag == "testsuite" else tree.find("testsuite")
+    suite.set("hostname", "lab")  # Synthetic operational-role fixture only.
+    x = ET.tostring(tree)
     identity = {k: a[k] for k in ("wheel_sha256", "native_sha256", "source_commit", "ci_run", "sources_verified", "version")}
     return a, f, x, identity
 
 
-@pytest.mark.parametrize("host", ["lab", "hibino"])
-def test_real_committed_host_evidence(host):
-    gate.verify_host(*evidence(host), host)
+@pytest.mark.parametrize("record", ["validation", "compute"])
+def test_committed_numeric_record_with_synthetic_host(record):
+    gate.verify_host(*evidence(record), "lab")
 
 
 @pytest.mark.parametrize("key", ["wheel_sha256", "native_sha256", "source_commit", "ci_run", "sources_verified", "version"])
@@ -208,7 +213,7 @@ def test_exact_wheel_end_to_end(tmp_path):
         assert path.startswith("validation_test/esrf_three_engine/results/candidate_aaaaaaaaa/")
         host, name = path.split("/")[-2:]
         # Synthetic four-host API fixture, not a claim of machine acceptance.
-        a, f, x, _ = evidence("lab")
+        a, f, x, _ = evidence()
         tree = ET.fromstring(x)
         suite = tree if tree.tag == "testsuite" else tree.find("testsuite")
         suite.set("hostname", host)

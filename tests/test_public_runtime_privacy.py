@@ -83,3 +83,15 @@ def test_numbered_host_name_rejected():
 def test_lowercase_runtime_machine_field_is_rejected():
     assert lint.public_runtime_identity_hits("result.json", '{"machine":"lab"}')
     assert not lint.public_runtime_identity_hits("result.json", '{"machine":"8-pole PMSM benchmark"}')
+
+
+@pytest.mark.parametrize("host", ["lab", "worker-one", "&#108;ab"])
+def test_xml_host_attribute_is_checked_by_full_pipeline(tmp_path, monkeypatch, host):
+    (tmp_path / "focused.xml").write_text(f'<testsuite hostname="{host}" tests="1"/>', encoding="utf-8")
+    monkeypatch.setattr(lint, "REPO", str(tmp_path))
+    monkeypatch.setattr(lint, "_git_ls_files", lambda *args: ["focused.xml"])
+    monkeypatch.setattr(lint, "_git_grep", lambda *args, **kwargs: [])
+    assert lint.check_public_runtime_privacy()
+
+def test_xml_without_hostname_preserves_numeric_attributes():
+    assert not lint.public_runtime_identity_hits("focused.xml", '<testsuite tests="7" time="9.195"/>')

@@ -396,6 +396,14 @@ def public_runtime_identity_hits(path, content):
                 return [f"{path}: identifying host metadata"]
         except ValueError:
             pass  # Standalone test strings and invalid JSON remain checked.
+    if path.endswith(".xml"):
+        import xml.etree.ElementTree as ET
+        try:
+            document = ET.fromstring(content)
+            if any(key.lower() in ("hostname", "host", "host_name") and value for node in document.iter() for key, value in node.attrib.items()):
+                return [f"{path}: identifying XML host metadata"]
+        except ET.ParseError:
+            pass
     hits = []
     for number, text in enumerate(texts, 1):
         if PUBLIC_RUNTIME_IDENTITY.search(text) or PUBLIC_RUNTIME_UNC.search(text) or (structured and re.search(r"(?i)C:[\\/]+(?:temp|Users)\b", text)):
@@ -410,7 +418,7 @@ def check_public_runtime_privacy():
         for record in _git_grep(pattern, [], extra=("-P", "-I")):
             candidates.add(record.split(":", 1)[0])
     candidates.update(path for path in _git_ls_files()
-                      if _identifying_runtime_filename(path) or path.endswith((".json", ".ipynb")))
+                      if _identifying_runtime_filename(path) or path.endswith((".json", ".ipynb", ".xml")))
     hits = []
     for path in sorted(candidates):
         if path not in PUBLIC_RUNTIME_OPERATIONAL_ALLOW:
