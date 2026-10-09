@@ -70,6 +70,7 @@ def test_hacapk_loop_matches_dense_without_dense_system(ring,jump,offset):
     assert compressed['loop_frozen_residual_rel']<=1e-6
     assert compressed['loop_work_diagnostics']['magnetic_work_symmetry']<=1e-6
     assert compressed['loop_body_backend']=='hacapk'
+    assert compressed['loop_work_diagnostics']['body_hmatrix_controls']==dict(aca_eps=1e-10,leaf_size=64,eta=2.,max_rank=-1)
     assert solvers[1].SL is None and solvers[1].DL is None
     assert not isinstance(solvers[1].M_inv,np.ndarray)
     assert 'A2' not in solvers[1]._prepared_loop_system
@@ -143,3 +144,31 @@ def test_hacapk_keeps_construction_guard_and_rejects_missing_handles():
     with pytest.raises(ValueError,match='multiple holes'):
         ci._resolve_workpiece_backend(args,2,100)
     assert args.wp_bem_backend=='hacapk'
+
+@pytest.mark.parametrize('panel',[False,True])
+def test_genus0_hacapk_released_storage_matches_retained_storage(setup_cases,panel):
+    from radia.bem_sibc_solver import telegen_extract_coil_LR
+    body=setup_cases[0][0]
+    omega=2*np.pi*5e4;mu0=4e-7*np.pi
+    z=(1+1j)*np.sqrt(omega*mu0/(2*5.8e7))
+    solvers=[];outputs=[]
+    with ng.TaskManager():
+        for retain in (True,False):
+            solver=ScalarBIESIBCSolver(body,order=1,assemble_dense=retain,
+                use_intree_bem=True,use_intree_hacapk=True,hacapk_aca_eps=1e-10)
+            solvers.append(solver)
+            impedance=(PanelSurfaceImpedance(np.full(len(list(body.Elements(ng.BND))),z))
+                       if panel else z)
+            outputs.append(solver.solve_hacapk(-ng.z,impedance,omega,tol=1e-12,maxiter=500,restart=100))
+    old,new=outputs
+    for key in ('H_t_rms','P_density','area'):
+        assert abs(new[key]-old[key])<=1e-10*abs(old[key])
+    assert np.linalg.norm(new['phi_vec']-old['phi_vec'])<=1e-10*np.linalg.norm(old['phi_vec'])
+    assert new['linear_residual_rel']<=1e-6
+    assert solvers[1].SL is None and solvers[1].DL is None
+    before,after=[telegen_extract_coil_LR(s,o['phi_vec'],1.,omega,z) for s,o in zip(solvers,outputs)]
+    for key in ('R_port','L_port','P_diss'):
+        assert abs(after[key]-before[key])<=1e-10*abs(before[key])
+    print('genus0-storage',panel,'heat-before',old['P_density']*old['area'],
+          'heat-after',new['P_density']*new['area'],'field-relative',
+          np.linalg.norm(new['phi_vec']-old['phi_vec'])/np.linalg.norm(old['phi_vec']))

@@ -875,6 +875,7 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
     if hacapk:
         bem_solver._loop_hacapk_initial = u.copy()
         work_diagnostics.update(body_backend="hacapk", body_aca_eps=bem_solver.hacapk_aca_eps,
+            body_hmatrix_controls=bem_solver.hacapk_controls.copy(),
             body_hmatrix_stats={"SL":bem_solver._SL_hacapk.GetStats(),"DL":bem_solver._DL_hacapk.GetStats()},
             gmres_controls=settings.copy(), gmres_iterations=len(iterations))
     phi_u, alpha = u[:nv], complex(u[nv])

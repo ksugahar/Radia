@@ -2800,7 +2800,7 @@ def run_inductance(args):
             args.wp_bem_backend = 'intree-dense'
         elif args.wp_bem_backend not in ('intree-dense','hacapk'):
             return {'status': 'error', 'error':
-                    'Strong panel Zs requires the dense P1 body backend.'}
+                    'Strong panel Zs requires an in-tree P1 body backend (intree-dense or hacapk).'}
 
     # --esim-per-panel names the per-panel ESIM iteration; with linear SIBC it
     # would otherwise be dropped and a uniform-Zs result reported.
@@ -3100,7 +3100,8 @@ def build_argparser():
                         choices=["auto", "dense", "fmm"],
                         help="Genus-1 P0 loop work only: auto uses native Galerkin FMM at >=512 faces, native direct below; dense keeps direct products; fmm always compresses separated interactions. Near/singular quadrature is unchanged. The result records the route and controls.")
     parser.add_argument("--wp-aca-eps", type=float, default=1e-10)
-    parser.add_argument("--wp-gmres-tol", type=float, default=1e-10)
+    parser.add_argument("--wp-gmres-tol", type=float, default=1e-10,
+                        help="GMRES stopping tolerance; HACApK loop solves also require the unscaled physical residual <=1e-6 and fail if it is not met.")
     parser.add_argument("--wp-loop-dof", nargs="?", const="on",
                         default="auto", choices=["auto", "on"],
                         help="Genus-1 loop DOF (net shorted-turn eddy "

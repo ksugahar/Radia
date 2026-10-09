@@ -119,6 +119,7 @@ def run(level, backend, compact, repeats, threads, body_backend="dense", aca_eps
     return dict(schema="radia.loop-work-compression.v1", level=level,
         vertices=len(points), faces=len(triangles), backend=backend, platform_class=platform.system(),
         body_backend=body_backend, aca_eps=aca_eps if body_backend=="hacapk" else None,
+        body_hmatrix_controls=(solver.hacapk_controls.copy() if body_backend=="hacapk" else None),
         agreement_bound=max(10*np.sqrt(aca_eps),1e-10) if body_backend=="hacapk" else .001,
         body_hmatrix_stats=([solver._SL_hacapk.GetStats(),solver._DL_hacapk.GetStats()]
                             if body_backend=="hacapk" else None),

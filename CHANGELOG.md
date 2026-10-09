@@ -18,6 +18,8 @@ All notable changes to the `radia` package.  Format: each release lists
   and per-panel ESIM in weak and strong coupling. Complete work, seam,
   residual and power gates are unchanged. Dense kernel-entry construction
   limits remain; source tables are released after compression.
+- Reject genus greater than one for every workpiece backend and coupling
+  mode: validated absolute heating requires every hole to be represented.
 
 - Add `radia.p1_linear.solve_p1_linear` and the MATLAB `p1Linear` wrapper
   for real lowest-order H(curl) magnetostatics on straight tetrahedra,

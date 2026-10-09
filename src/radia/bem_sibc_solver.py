@@ -192,6 +192,7 @@ class ScalarBIESIBCSolver:
             raise ValueError("loop_work_backend must be auto, dense, or fmm")
         self.loop_work_backend = loop_work_backend
         self.hacapk_aca_eps = float(hacapk_aca_eps)
+        self.hacapk_controls = dict(aca_eps=float(hacapk_aca_eps), leaf_size=int(hacapk_leaf), eta=float(hacapk_eta), max_rank=-1)
         if use_intree_hacapk and (not np.isfinite(self.hacapk_aca_eps) or self.hacapk_aca_eps<=0
                 or int(hacapk_leaf)<=0 or not np.isfinite(hacapk_eta) or hacapk_eta<=0):
             raise ValueError("HACApK controls require positive finite eps/eta and leaf size")
