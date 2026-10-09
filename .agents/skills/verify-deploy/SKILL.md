@@ -83,7 +83,7 @@ inventory and a real export/check cycle.
 
 - LAB: verified wheel and fast application checks; 100号機: explicitly
   intended editable source and fast application checks.
-- mdx1: isolated CI/compute environments; never infer their state from LAB
+- mdx1/mdx2: isolated CI/compute environments; never infer their state from LAB
   files.
 - hibino: optional long optimization/validation compute host.
 - Release verification: use `release-quad`; every result must be attributable to

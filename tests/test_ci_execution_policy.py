@@ -316,7 +316,7 @@ def test_policy_twins_define_the_same_mdx_notebook_contract():
     policy = section(agents)
     assert policy == section(claude)
     normalized = " ".join(policy.split())
-    assert "The mdx1 host gives CI and preflight priority" in normalized
+    assert "Both mdx hosts give CI and preflight priority" in normalized
     assert "use hibino first when it is available" in normalized
     assert "the mdx CI queue is idle" in normalized
     assert "CI scope begins at the independently released distribution boundary" in normalized
@@ -356,7 +356,7 @@ def test_policy_twins_define_the_same_compute_host_routing():
     assert "already running and idle" in normalized
     assert "SPOT instance" in normalized
     assert "one heavy job at a time" in normalized
-    assert "an idle mdx1 or LAB" in normalized
+    assert "an idle mdx1/mdx2 or LAB" in normalized
     assert "check CI/jobs and available memory first" in normalized
     assert "LAB is also an execution host for high-memory tests" in normalized
     # ICMP is blocked on hibino, so ping reports a false "down".

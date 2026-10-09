@@ -2700,7 +2700,7 @@ def main():
              "the release commit declaring the same version (default: the "
              "controller itself, which must sit at the tag)")
 
-    shadows = sub.add_parser("temp-shadows", help="verify retired Omega overrides on mdx1 (SSH alias mdx)")
+    shadows = sub.add_parser("temp-shadows", help="verify retired Omega overrides on mdx1/mdx2/hibino")
     shadows.add_argument("--apply", action="store_true", help="remove only unused, non-linked known override trees")
     args = p.parse_args()
     handler = {

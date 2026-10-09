@@ -40,13 +40,13 @@ release skill. Editable source advancement is explicit and forward-only.
 
 After the Kelvin source commits through `7ffda79d3` are integrated into main,
 run `python tools/release_quad.py temp-shadows --apply`. This checks the exact
-`C:\temp\radia-omega-test` tree on mdx1 (SSH alias `mdx`) only. It refuses removal
+`C:\temp\radia-omega-test` tree on mdx1, mdx2, and hibino. It refuses removal
 while Python/MATLAB processes are active, PYTHONPATH still names the tree, or
 reparse points are present. It never terminates research processes or removes
 other scratch directories. Unreachable hosts are unresolved, not clean.
 `all` runs this cleanup first; `done` repeats the read-only absence check.
-Keep the JSON console report with the release evidence. Retired mdx2 and
-currently unconfigured hibino are not contacted or reported as checked.
+Keep the JSON console report with the release evidence. hibino is checked for
+this retired override only; it is not added to the four deployment targets.
 
 ## Solver machine policy
 
@@ -54,7 +54,7 @@ Decision 2026-10-01 supersedes the older two-editable-host recipe: LAB consumes
 verified wheels; only 100 has a dedicated local editable development venv.
 Keep its release runtime separate from in-progress development. `verify-editable`
 checks LAB's wheel and 100's editable; `repoint` permits only 100.
-hibino/mdx1/LAB are execution hosts; LAB may run high-memory
+hibino/mdx1/mdx2/LAB are execution hosts; LAB may run high-memory
 tests after checking available memory and active jobs; mdx CI takes priority.
 
 
@@ -68,7 +68,7 @@ tests after checking available memory and active jobs; mdx CI takes priority.
 host and the student-facing release/usage host; keep its acceptance to
 installation, import, and necessary application smoke. LAB is the test host:
 it runs fixed wheels and job-local `C:\temp\<job-id>` inputs, never an editable.
-mdx1 is the self-hosted CI and preflight pool. hibino is a computation
+mdx1/mdx2 are the self-hosted CI and preflight pool. hibino is a computation
 host, not a QUAD acceptance target.
 
 `phase9` compares only the solver version and the declared tracked solver-file
@@ -77,7 +77,7 @@ drift and never a QUAD blocker.
 
 Deployments and final dependency checks address each target over SSH,
 including LAB. Run the controller on a host with the configured `102`, `100`,
-`mdx` alias for mdx1; the controller's own Python is not a substitute for
+and `mdx` (mdx1) aliases; the controller's own Python is not a substitute for
 a target runtime. A LAB-only controller restriction is no longer necessary.
 
 ## WIP-safe release sources
