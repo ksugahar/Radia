@@ -913,13 +913,16 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
         def frozen_matvec(x):
             return np.r_[A_sys @ x[:nv]+Mrow*x[nv], Mrow @ x[:nv]]
         A0 = LinearOperator((Ng,Ng), matvec=frozen_matvec, dtype=complex)
-        frozen_scales = np.r_[np.ones(nv), scales[-1]]
-        scaled0 = LinearOperator((Ng,Ng), matvec=lambda x: frozen_scales*(A0 @ x), dtype=complex)
-        sol0, info0 = _gmres(scaled0, frozen_scales*b0, rtol=settings['tol'], atol=0.,
-                            maxiter=settings['maxiter'], restart=settings['restart'])
+        # With the loop row removed, all rows already carry surface mass units.
+        # Match the ordinary weak HACApK gauge solve; scaling its gauge alone
+        # causes a stopping floor for tight tolerances on refined surfaces.
+        frozen_iterations = []
+        sol0, info0 = _gmres(A0, b0, rtol=settings['tol'], atol=0.,
+                            maxiter=settings['maxiter'], restart=settings['restart'],
+                            callback=frozen_iterations.append, callback_type='pr_norm')
         frozen_residual = np.linalg.norm(A0 @ sol0-b0)/max(np.linalg.norm(b0), np.finfo(float).tiny)
         if info0 != 0 or not np.isfinite(frozen_residual) or frozen_residual > 1e-6:
-            raise RuntimeError("Loop HACApK frozen true residual failed")
+            raise RuntimeError(f"Loop HACApK frozen true residual failed (info={info0}, iterations={len(frozen_iterations)}, residual={frozen_residual:.3e})")
         phi_f = sol0[:nv]
         if _reuse_prepared:
             bem_solver._prepared_loop_system = cached_system
@@ -943,6 +946,7 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
         "loop_linear_solver": "bordered-gmres" if hacapk else "dense-lu",
         "loop_gmres_iterations": len(iterations) if hacapk else None,
         "loop_frozen_residual_rel": float(frozen_residual) if hacapk else None,
+        "loop_frozen_gmres_iterations": len(frozen_iterations) if hacapk else None,
         "loop_geometry_reused": bool(cached_geometry is not None and cached_geometry[0] == geometry_key),
         "loop_system_reused": bool(system_reused),
         "loop_impedance_value_hash": prepared_key[1] if prepared_key is not None else None,

@@ -18,6 +18,8 @@ All notable changes to the `radia` package.  Format: each release lists
   and per-panel ESIM in weak and strong coupling. Complete work, seam,
   residual and power gates are unchanged. Dense kernel-entry construction
   limits remain; source tables are released after compression.
+  Frozen-loop diagnostics use the ordinary weak solver's unscaled gauge
+  so tight controls do not introduce a gauge-row stopping floor.
 - Reject genus greater than one for every workpiece backend and coupling
   mode: validated absolute heating requires every hole to be represented.
 

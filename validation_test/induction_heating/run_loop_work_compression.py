@@ -48,6 +48,16 @@ def run(level, backend, compact, repeats, threads, body_backend="dense", aca_eps
                 intree_singular_n_q=6, intree_regular_quad_degree=7,
                 loop_work_backend=backend,log_fn=phase)
             body_seconds = time.perf_counter()-started
+            from radia.bem_loop_work import _body_layer
+            solver._loop_body_backend = body_backend
+            sl_work = _body_layer(solver,"SL") if body_backend=="hacapk" else solver.SL
+            reciprocity = {}
+            for label, probe in (("constant",np.ones(len(points))), ("x",points[:,0]), ("z",points[:,2])):
+                forward, reverse = sl_work @ probe, sl_work.T @ probe
+                error = np.linalg.norm(forward-reverse)/max(np.linalg.norm(forward),np.finfo(float).tiny)
+                reciprocity[label] = float(error)
+                if not np.isfinite(error) or error>1e-6:
+                    raise RuntimeError("Body charge-kernel reciprocity exceeds1e-6")
             print("BIE assembled", len(points), "vertices", body_seconds, flush=True)
             original_geometry = extension._prepare_loop_geometry
             try:
@@ -104,7 +114,8 @@ def run(level, backend, compact, repeats, threads, body_backend="dense", aca_eps
                                 work=out["loop_work_diagnostics"],
                                 gmres_iterations=out["loop_gmres_iterations"],
                                 gmres_controls=dict(tol=gmres_tol,restart=100,maxiter=500) if body_backend=="hacapk" else None,
-                                frozen_residual=out["loop_frozen_residual_rel"], **memory())
+                                frozen_residual=out["loop_frozen_residual_rel"],
+                                frozen_gmres_iterations=out["loop_frozen_gmres_iterations"], **memory())
                             if record["linear_residual"] > 1e-6 or record["faraday_residual"] > 1e-6:
                                 raise RuntimeError("Loop solution residual gate failed")
                             if record["power_balance_relative"] > .1:
@@ -120,6 +131,7 @@ def run(level, backend, compact, repeats, threads, body_backend="dense", aca_eps
         vertices=len(points), faces=len(triangles), backend=backend, platform_class=platform.system(),
         body_backend=body_backend, aca_eps=aca_eps if body_backend=="hacapk" else None,
         body_hmatrix_controls=(solver.hacapk_controls.copy() if body_backend=="hacapk" else None),
+        body_sl_reciprocity=reciprocity,
         agreement_bound=max(10*np.sqrt(aca_eps),1e-10) if body_backend=="hacapk" else .001,
         body_hmatrix_stats=([solver._SL_hacapk.GetStats(),solver._DL_hacapk.GetStats()]
                             if body_backend=="hacapk" else None),

@@ -172,3 +172,29 @@ def test_genus0_hacapk_released_storage_matches_retained_storage(setup_cases,pan
     print('genus0-storage',panel,'heat-before',old['P_density']*old['area'],
           'heat-after',new['P_density']*new['area'],'field-relative',
           np.linalg.norm(new['phi_vec']-old['phi_vec'])/np.linalg.norm(old['phi_vec']))
+
+
+def test_tight_frozen_hacapk_matches_plain_weak_solve():
+    path=Path(__file__).resolve().parents[1]/"validation_test/induction_heating/run_loop_work_ring.py"
+    spec=importlib.util.spec_from_file_location("tight_ring_hacapk",path)
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    mesh,points,_=module.ring_mesh(64)
+    omega=2*np.pi*5e4;mu0=4e-7*np.pi
+    z=(1+1j)*np.sqrt(omega*mu0/(2*5.8e7))
+    angles=np.arange(96)*2*np.pi/96
+    carrier=.03*np.c_[np.cos(angles),np.sin(angles),np.zeros(96)]
+    a_inc=lambda p:.5*mu0*np.c_[-p[:,1],p[:,0],np.zeros(len(p))]
+    with ng.TaskManager():
+        solver=ScalarBIESIBCSolver(mesh,order=1,assemble_dense=False,
+            use_intree_bem=True,use_intree_hacapk=True,hacapk_aca_eps=1e-10,
+            intree_geom_order=1,intree_singular_n_q=6,intree_regular_quad_degree=7,
+            loop_work_backend='fmm')
+        incident=-points[:,2].astype(complex)
+        loop=solve_loop_extended(solver,incident,z,omega,a_inc,
+            carrier_ring=carrier,section_anchor=(.03,0),hacapk=True,
+            gmres=dict(tol=1e-13,maxiter=500,restart=100),_reuse_prepared=True)
+        plain=solver.solve_hacapk(incident,z,omega,tol=1e-13,maxiter=500,restart=100)
+    assert loop['loop_frozen_residual_rel']<=1e-6
+    assert plain['linear_residual_rel']<=1e-6
+    assert loop['loop_frozen_gmres_iterations']>0
+    assert abs(loop['P_frozen']-plain['P_density']*plain['area'])<=1e-10*abs(loop['P_frozen'])
