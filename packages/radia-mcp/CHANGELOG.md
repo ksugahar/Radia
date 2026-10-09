@@ -7,6 +7,9 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- Raise the MCP SDK floor to 1.21.1 so supported installations also work
+  with Pydantic 2.14 without importing its removed private typing helper.
+
 - IH knowledge records the separate P0 loop-work auto/dense/fmm selection,
   deterministic 512-face threshold, direct near/singular quadrature, result
   diagnostics and remaining dense P1/geometry limits. It distinguishes
