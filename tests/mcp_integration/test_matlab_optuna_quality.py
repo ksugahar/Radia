@@ -170,7 +170,7 @@ def _passing_release_evidence() -> dict[str, object]:
     python_result = {
         "schema": "radia.validation.optuna50-performance-runtime.v1",
         "runtime": "python-upstream",
-        "host": "LAB",
+        "host": "runtime-fixture",
         "versions": {"optuna": health["distribution"]["upstream_version"]},
         "settings": settings,
         "scalar": {"median_warmed_seconds": 2.0, "checksum": 20.0},
@@ -187,7 +187,7 @@ def _passing_release_evidence() -> dict[str, object]:
     matlab_result = {
         "schema": "radia.validation.optuna50-performance-runtime.v1",
         "runtime": "matlab",
-        "host": "LAB",
+        "host": "runtime-fixture",
         "versions": {"optuna_mex_command_count": command_count},
         "settings": settings,
         "scalar": {"median_warmed_seconds": 1.0, "checksum": 20.0},
@@ -258,7 +258,7 @@ def _passing_release_evidence() -> dict[str, object]:
             "matlab": matlab_result,
             "mex_cold": {
                 "schema": "radia.validation.optuna-mex-first-call.v1",
-                "host": "LAB",
+                "host": "runtime-fixture",
                 "median_first_call_seconds": 0.01,
                 "binary_sha256": mex_sha256,
             },

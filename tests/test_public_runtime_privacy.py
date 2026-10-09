@@ -7,7 +7,7 @@ spec = importlib.util.spec_from_file_location("runtime_privacy", Path(__file__).
 lint = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(lint)
 
-@pytest.mark.parametrize("value", ["INTEL11", "mdx1", "mdx2", "hibino", "192.168.121.102", "10.2.3.4", r"C:\Users\someone\data", r"W:\00_CAE\result"])
+@pytest.mark.parametrize("value", ["INTEL11", "mdx1", "mdx2", "hibino", "192.168.254.254", "10.2.3.4", r"C:\Users\someone\data", r"W:\synthetic-project\result"])
 def test_identifying_result_provenance_rejected(value):
     assert lint.public_runtime_identity_hits("validation_test/results/result.json", value)
 
@@ -62,3 +62,24 @@ def test_host_role_filename_without_metadata_is_rejected(path):
 
 def test_scientific_lab_identifier_filename_is_preserved():
     assert not lint.public_runtime_identity_hits("src/figure/lab_style.py", "# laboratory")
+
+
+def test_bare_private_scratch_and_user_roots_are_identifying():
+    for value in (r"C:\temp", r"C:\Users"):
+        assert lint.public_runtime_identity_hits("result.json", __import__("json").dumps({"note": value}))
+
+
+def test_citation_exception_is_exact_and_does_not_hide_other_fields():
+    path = "packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib"
+    citation = "@misc{hibino2026aca,\n author = {Hibino, Yoshihiko and Other, Author},\n title = {Example},\n year = {2026}\n}"
+    assert not lint.public_runtime_identity_hits(path, citation)
+    assert lint.public_runtime_identity_hits(path, citation.replace("Example", "192.168.254.254"))
+    assert lint.public_runtime_identity_hits(path, citation.replace("hibino2026aca", "other-key"))
+
+def test_numbered_host_name_rejected():
+    assert lint.public_runtime_identity_hits("result.txt", "100\u53f7\u6a5f")
+
+
+def test_lowercase_runtime_machine_field_is_rejected():
+    assert lint.public_runtime_identity_hits("result.json", '{"machine":"lab"}')
+    assert not lint.public_runtime_identity_hits("result.json", '{"machine":"8-pole PMSM benchmark"}')

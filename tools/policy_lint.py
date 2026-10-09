@@ -166,7 +166,6 @@ PUBLIC_RUNTIME_OPERATIONAL_REASONS = {
     'packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/toolbar_probe.py': 'Existing operational build/runtime scratch routing; phase 2.',
     'packages/radia-mcp/pyproject.toml': 'Existing operational build/runtime scratch routing; phase 2.',
     'packages/radia-mcp/src/radia_mcp/bem/server.py': 'Existing operational build/runtime scratch routing; phase 2.',
-    'packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib': 'Published author names and citation keys; not execution provenance.',
     'packages/radia-mcp/src/radia_mcp/bibliography/plans/T14_canonical.py': 'Existing operational build/runtime scratch routing; phase 2.',
     'packages/radia-mcp/src/radia_mcp/document_meta/tools.py': 'Existing operational build/runtime scratch routing; phase 2.',
     'packages/radia-mcp/src/radia_mcp/grant_writing/tools.py': 'Existing operational build/runtime scratch routing; phase 2.',
@@ -368,14 +367,26 @@ def public_runtime_identity_hits(path, content):
     """Reject identifying metadata, including UNC roots, without TeX false hits."""
     if path in PUBLIC_RUNTIME_OPERATIONAL_ALLOW:
         return []
+    if path == "packages/radia-mcp/src/radia_mcp/bibliography/data/references.bib":
+        # Exact published citation keys; only the author-field name is masked.
+        # All other fields and entries retain host/path/IP checks.
+        citation_keys = ('article', 'cefc2026_hmatrix', 'compumag2025', 'HIBINO2018128', 'HIBINO2024', 'hibino2026aca', 'Ida2014')
+        def mask_author(match):
+            entry = match.group()
+            if match.group(1) in citation_keys:
+                return re.sub(r"(?im)^(\s*author\s*=.*)$", lambda line: re.sub(r"(?i)\bHibino\b", "PublishedAuthor", line.group()), entry)
+            return entry
+        content = re.sub(r"(?ms)^@\w+\{([^,]+),.*?(?=^@|\Z)", mask_author, content)
     texts = [content]
+    structured = False
     if path.endswith((".json", ".ipynb")):
         try:
             document = json.loads(content)
+            structured = True
             texts = list(_public_strings(document))
             def contains_host(value):
                 if isinstance(value, dict):
-                    return any((key.lower() in ("host", "hostname", "validation_host", "host_name", "computer_name") and isinstance(item, str) and item.lower() not in ("windows", "linux", "darwin", "runtime")) or contains_host(item) for key, item in value.items())
+                    return any((key.lower() in ("host", "hostname", "validation_host", "host_name", "computer_name", "machine_name") and isinstance(item, str) and item.lower() not in ("windows", "linux", "darwin", "runtime")) or (key.lower() == "machine" and isinstance(item, str) and item.lower() in ("lab", "intel11", "mdx1", "mdx2", "hibino", "100")) or contains_host(item) for key, item in value.items())
                 if isinstance(value, list):
                     return any(contains_host(item) for item in value)
                 return False
@@ -385,7 +396,7 @@ def public_runtime_identity_hits(path, content):
             pass  # Standalone test strings and invalid JSON remain checked.
     hits = []
     for number, text in enumerate(texts, 1):
-        if PUBLIC_RUNTIME_IDENTITY.search(text) or PUBLIC_RUNTIME_UNC.search(text):
+        if PUBLIC_RUNTIME_IDENTITY.search(text) or PUBLIC_RUNTIME_UNC.search(text) or (structured and re.search(r"(?i)C:[\\/]+(?:temp|Users)\b", text)):
             hits.append(f"{path}:{number}: identifying runtime provenance")
     if _identifying_runtime_filename(path):
         hits.append(f"{path}: identifying filename")
