@@ -36,7 +36,7 @@ def test_every_python_module_has_a_checked_matlab_classification():
         "python": "simulink/ih_operator_assembly.py",
         "rule": "simulink-ih-operator-assembly",
         "classification": "python-fallback",
-        "matlab": ["matlab/+radia/+simulink/assembleIHOperatorsFromGeometry.m"],
+        "matlab": ["matlab/+radia/+simulink/assembleIHOperatorsFromGeometry.m", "matlab/+radia/+simulink/assembleIHPanelESIMFromGeometry.m"],
     }
     mmm_topology = next(
         item

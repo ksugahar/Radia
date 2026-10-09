@@ -23,6 +23,12 @@ All notable changes to the `radia` package.  Format: each release lists
 - Reject genus greater than one for every workpiece backend and coupling
   mode: validated absolute heating requires every hole to be represented.
 
+- Add geometry-boundary per-panel ESIM assembly for the native Simulink IH
+  operators. The directly certified panel material state is frozen at a
+  declared peak reference current; time-step amplitude outside its restricted
+  operating band raises. This is not nonlinear ESIM time stepping. Material,
+  frequency and reference-current changes invalidate geometry-update reuse.
+
 - Add `radia.p1_linear.solve_p1_linear` and the MATLAB `p1Linear` wrapper
   for real lowest-order H(curl) magnetostatics on straight tetrahedra,
   in a finite domain with homogeneous tangential Dirichlet boundaries.

@@ -120,6 +120,17 @@ if isfield(assemblyOptions, "panel_zs_file") && strlength(string(assemblyOptions
     assemblyOptions.panel_zs_file = zsPath;
     geometryFiles(end+1) = zsPath;
 end
+if string(assemblyOptions.zs_mode) == "per-panel-esim"
+    bhPath = string(assemblyOptions.esim_bh_file);
+    if ~java.io.File(char(bhPath)).isAbsolute() || ~isfile(bhPath)
+        error("radia:simulink:IHESIMInput", "ESIM needs an existing absolute B-H input.");
+    end
+    if strlength(assembleFcn) > 0 || strlength(command) > 0
+        error("radia:simulink:IHESIMAssembler", "ESIM requires the built-in assembler.");
+    end
+    assemblyOptions.esim_bh_file = radia.simulink.canonicalInputPath(bhPath);
+    geometryFiles(end+1) = assemblyOptions.esim_bh_file;
+end
 if isfield(assemblyOptions,"axisymmetric_thermal_vol") && strlength(string(assemblyOptions.axisymmetric_thermal_vol)) > 0
     thermalPath=string(assemblyOptions.axisymmetric_thermal_vol);
     if ~java.io.File(char(thermalPath)).isAbsolute()
@@ -178,7 +189,7 @@ if fresh
             matches = strcmp(string({fingerprint.files.path}), panelPath);
             panelHash = string(fingerprint.files(matches).sha256);
         end
-        radia.simulink.verifyIHPanelImpedanceProvenance(configFile, panelPath, panelHash);
+        radia.simulink.verifyIHPanelImpedanceProvenance(configFile, panelPath, panelHash, assemblyOptions);
     end
     % Inputs unchanged -> never re-run the assemble command.  Reloading
     % the configuration is still skipped only when BOTH the artifact
@@ -246,7 +257,7 @@ if assembleFcn == builtInFcn
         matches = strcmp(string({fingerprint.files.path}), panelPath);
         panelHash = string(fingerprint.files(matches).sha256);
     end
-    radia.simulink.verifyIHPanelImpedanceProvenance(configFile, panelPath, panelHash);
+    radia.simulink.verifyIHPanelImpedanceProvenance(configFile, panelPath, panelHash, assemblyOptions);
 end
 radia.simulink.configureIHNativeModel(modelName, configFile);
 
@@ -307,9 +318,20 @@ for name = string(fieldnames(finDefaults))'
         values.(name) = finDefaults.(name);
     end
 end
+esimDefaults = struct("zs_mode", "uniform", "esim_panel_evaluator", "table", ...
+    "esim_bh_file", "", "esim_tolerance", "1e-3", "esim_max_iter", "15", ...
+    "esim_half_thickness_m", "0.01", "esim_reference_current_A", "1", ...
+    "esim_drive_relative_band", "0.1", "esim_reference_phase_rad", "0");
+for name = string(fieldnames(esimDefaults))'
+    if isfield(parameters, name), values.(name) = get_param(block, name);
+    else, values.(name) = esimDefaults.(name); end
+end
 % Existing tracked 3D blocks retain their explicit historical 3D behavior.
 for name=["axisymmetric_thermal_vol","n_phi_samples","thermal_order","panel_zs_file"]
     if isfield(parameters,name), values.(name)=get_param(block,name); end
+end
+if ~isfield(parameters,"zs_mode") && isfield(values,"panel_zs_file") && strlength(string(values.panel_zs_file)) > 0
+    values.zs_mode = "element-file";
 end
 end
 

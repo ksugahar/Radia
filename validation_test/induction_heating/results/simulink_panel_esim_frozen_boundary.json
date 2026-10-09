@@ -1,0 +1,46 @@
+{
+  "schema": "radia.simulink.panel_esim.acceptance.v1",
+  "scope": "frozen-reference assembly boundary",
+  "source": "self-authored cube and annulus",
+  "matlab_cases": 4,
+  "python_cases": 23,
+  "skips": 0,
+  "cases": [
+    {
+      "schema": "radia.simulink.panel_esim.acceptance.v1",
+      "workpiece_genus": 0,
+      "coupling_mode": "strong",
+      "backend": "intree-dense",
+      "evaluator": "table",
+      "reference_current_A": 2,
+      "reference_phase_rad": 0,
+      "frequency_hz": 7000,
+      "panel_count": 12,
+      "relative_zs_l2_error": 1.7368809963304103E-16,
+      "relative_heat_error": 8.295584244385613E-16,
+      "comparison_tolerance": 1E-09,
+      "constitutive_residual": 2.3420098576819626E-16,
+      "final_certification": "direct-all-panels",
+      "body_residual": 2.695186809008309E-16,
+      "body_power_balance_relative_error": 0.00019584875702409628
+    },
+    {
+      "schema": "radia.simulink.panel_esim.acceptance.v1",
+      "workpiece_genus": 1,
+      "coupling_mode": "strong",
+      "backend": "intree-dense",
+      "evaluator": "table",
+      "reference_current_A": 2,
+      "reference_phase_rad": 0,
+      "frequency_hz": 7000,
+      "panel_count": 104,
+      "relative_zs_l2_error": 5.530775697281133E-17,
+      "relative_heat_error": 2.1253960495914916E-15,
+      "comparison_tolerance": 1E-09,
+      "constitutive_residual": 5.236893245751477E-16,
+      "final_certification": "direct-all-panels",
+      "body_residual": 7.142511386330246E-16,
+      "body_power_balance_relative_error": 0.0019520986240583046
+    }
+  ]
+}

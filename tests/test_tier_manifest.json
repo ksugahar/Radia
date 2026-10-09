@@ -1,6 +1,7 @@
 {
   "schema": "radia.test-tier-manifest.v1",
   "impact_rules": {
+    "src/radia/simulink/ih_operator_assembly.py": ["tests/test_ih_panel_esim_assembly.py", "tests/test_ih_operator_assembly.py"],
     "src/radia/bem_complete_reaction.py": ["tests/test_bem_strong_panel_impedance.py", "tests/test_bem_complete_reaction.py"],
     "src/radia/bem_coupled_solver.py": ["tests/test_bem_strong_panel_impedance.py", "tests/test_bem_complete_reaction.py", "validation_test/panels/test_strong_coupling_cli_contract.py"],
     "src/radia/peec_coupled_bem_solver.py": ["tests/test_bem_strong_panel_impedance.py", "tests/test_bem_complete_reaction.py", "validation_test/panels/test_strong_coupling_cli_contract.py"],
@@ -329,6 +330,7 @@
         "tests/test_em_table.py",
         "tests/test_ih_nonlinear_heat.py",
         "tests/test_ih_thermal_material_enthalpy.py",
+        "tests/test_ih_panel_esim_assembly.py",
         "tests/test_ih_operator_assembly.py",
         "tests/test_ih_operator_axisym.py",
         "tests/test_ih_fin_surface_boundary.py",
