@@ -168,7 +168,7 @@ solver boundary is a checked `.vol` regardless of the creation route.
 host (fixed wheels, job-local `C:\temp\<job-id>` inputs). Do not run development suites or heavy validation
 on 100号機; limit its release acceptance to installation, import and student application smoke checks. Both mdx hosts give CI and preflight priority.
 GitHub Actions uses the shared `mdx` label and assigns jobs to an available runner.
-Release-quad requires LAB, 100号機, and mdx1 (SSH `mdx`) for the same release commit.
+Release-quad requires LAB and 100号機 for the same release commit. mdx refresh is opt-in.
 Decision 2026-10-01: editable only on 100号機, in a dedicated local development
 venv for maintainers/students, separate from the release runtime. LAB/mdx use
 verified wheels.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""release_quad.py — numerical Radia solver / Simulink three-machine gate.
+"""release_quad.py — numerical Radia solver / Simulink two-machine gate.
 
 Walks the numerical solver release phases in order, gating each
 phase on the success of the previous one. Refuses to skip steps that
@@ -9,9 +9,9 @@ Usage:
     python tools/release_quad.py preflight
         Read-only: report current state and consistency. Use anytime.
 
-    python tools/release_quad.py phase8 [--target lab|100|mdx1|all]
+    python tools/release_quad.py phase8 [--target lab|100|all]
         Install the numerical Radia solver by the target's tier: the published
-        wheel on LAB, mdx1 and 100号機's machine-default release runtime,
+        wheel on LAB and 100号機's machine-default release runtime,
         and the release checkout editable in 100号機's development venv.
         Never change radia-mcp or cubit-mesh-export.
 
@@ -24,25 +24,25 @@ Usage:
         Cross-machine consistency probe. Final gate.
 
     python tools/release_quad.py simulink-candidate --package <zip> --target all
-        Extract and execute the exact Simulink package on all three MATLAB machines.
+        Extract and execute the exact Simulink package on both MATLAB machines.
 
     python tools/release_quad.py optuna-candidate --ci-run-id <id> --target all
         Download the exact radia-optuna wheel from one successful main CI run
-        and execute its installed-wheel MATLAB/Simulink test on all three machines.
+        and execute its installed-wheel MATLAB/Simulink test on both machines.
 
     python tools/release_quad.py optuna-done --wheel <path>
         Require the retained wheel bytes, source commit, CI run, version, and
-        three-machine candidate state to agree before tagging/publication.
+        two-machine candidate state to agree before tagging/publication.
 
     python tools/release_quad.py all
-        phase8 -> phase8e -> phase9 with all preconditions enforced.
+        phase8 -> phase9 with all preconditions enforced.
 
         RADIA_RELEASE_EDITABLE_REPO_100 names the 100-machine view of one
         clean release worktree for the development venv; the editable deploy
         fails before install unless it is tracked-clean at the release SHA.
 
     python tools/release_quad.py done --simulink-package <zip> [--release-source <path>]
-        Require the normal release gate and the matching three-machine Simulink
+        Require the normal release gate and the matching two-machine Simulink
         candidate state. The release source is the controller (which must then
         sit at the tag) or a separate exact-tag checkout; with the latter the
         controller must be a tracked-clean descendant declaring the same
@@ -167,7 +167,7 @@ SIMULINK_GATE_ROOT = Path(r"C:\temp\radia-release-quad")
 OPTUNA_GATE_ROOT = SIMULINK_GATE_ROOT / "radia-optuna"
 OPTUNA_SUCCESS_MARKER = "RADIA_OPTUNA_WHEEL_SIMULINK_OK"
 OPTUNA_WHEEL_RUNNER = REPO / "packages/radia-optuna/tests/run_installed_wheel_simulink.ps1"
-SIMULINK_TARGETS = {
+_KNOWN_SIMULINK_TARGETS = {
     "lab": ("LAB", "102", "python"),
     "100": ("100号機", SSH_100, "python"),
     "mdx1": ("mdx1", SSH_MDX1, "python"),
@@ -185,6 +185,9 @@ except ModuleNotFoundError:  # Loaded by path in unit tests rather than run as a
     _acceptance_spec.loader.exec_module(_acceptance_module)
     RELEASE_ACCEPTANCE_HOSTS = _acceptance_module.RELEASE_ACCEPTANCE_HOSTS
     RELEASE_ACCEPTANCE_HOST_LABELS = _acceptance_module.RELEASE_ACCEPTANCE_HOST_LABELS
+
+SIMULINK_TARGETS = {host: _KNOWN_SIMULINK_TARGETS[host]
+                    for host in RELEASE_ACCEPTANCE_HOSTS}
 
 assert tuple(SIMULINK_TARGETS) == RELEASE_ACCEPTANCE_HOSTS, (
     "release_quad targets and the release acceptance hosts have drifted")
@@ -564,7 +567,7 @@ def _run_simulink_candidate_target(
 def cmd_simulink_candidate(args):
     """Verify one extracted Simulink archive on the requested MATLAB machines."""
     package = Path(args.package).resolve()
-    step("Simulink candidate gate (LAB / 100号機 / mdx1)")
+    step("Simulink candidate gate (LAB / 100号機)")
     try:
         manifest = _simulink_manifest(package)
     except (OSError, RuntimeError, ValueError, zipfile.BadZipFile) as error:
@@ -683,7 +686,7 @@ def _verify_simulink_candidate_state(package_arg: str) -> int:
         fail(message)
         return 4
     info(message)
-    ok("supplied Simulink candidate passed LAB / 100号機 / mdx1")
+    ok("supplied Simulink candidate passed LAB / 100号機")
     return 0
 
 
@@ -932,8 +935,8 @@ def _run_optuna_candidate_target(
 
 
 def cmd_optuna_candidate(args):
-    """Download one main-CI wheel and run it on all three MATLAB machines."""
-    step("radia-optuna exact-wheel candidate gate (LAB / 100号機 / mdx1)")
+    """Download one main-CI wheel and run it on both MATLAB machines."""
+    step("radia-optuna exact-wheel candidate gate (LAB / 100号機)")
     candidate, output = _download_verified_optuna_ci_wheel(args.ci_run_id)
     if candidate is None:
         fail(f"invalid radia-optuna CI candidate: {output}")
@@ -1021,7 +1024,7 @@ def _verify_optuna_candidate_state(wheel_arg: str) -> tuple[int, dict | None]:
     if missing:
         fail(f"radia-optuna candidate has not passed: {', '.join(missing)}")
         return 4, None
-    ok("exact radia-optuna wheel passed LAB / 100号機 / mdx1")
+    ok("exact radia-optuna wheel passed LAB / 100号機")
     return 0, state
 
 
@@ -1392,18 +1395,11 @@ def cmd_phase8(args):
             rc = _deploy_100()
             if rc != 0:
                 return rc
-        elif t == "mdx1":
-            rc = _deploy_mdx(t)
-            if rc != 0:
-                return rc
         elif t == "all":
             rc = _deploy_lab()
             if rc != 0:
                 return rc
             rc = _deploy_100()
-            if rc != 0:
-                return rc
-            rc = cmd_phase8e(args)
             if rc != 0:
                 return rc
         else:
@@ -1616,13 +1612,14 @@ def cmd_phase9(args):
     # LAB holds the published wheel (phase8 installs it over `ssh 102`, as the
     # LAB wheel check reads it), so it takes the installed-wheel probe; only
     # 100号機 keeps an editable release checkout.
-    targets = [
-        ("LAB", ["ssh", "102", "python", "-"], CROSS_MACHINE_PROBE),
-        ("100号機 release", ["ssh", SSH_100, "python", "-"], CROSS_MACHINE_PROBE),
-        ("100号機", ["ssh", SSH_100, DEV_PYTHON_100_PS, "-"], CROSS_MACHINE_PROBE_100_EDITABLE),
-        ("mdx1", ["ssh", SSH_MDX1, "python", "-"], CROSS_MACHINE_PROBE),
-    ]
-    step("Phase 9: cross-machine consistency (LAB / 100号機 / mdx1)")
+    targets = []
+    for host, (label, ssh_host, python) in SIMULINK_TARGETS.items():
+        targets.append((label + " release" if host == "100" else label,
+                        ["ssh", ssh_host, python, "-"], CROSS_MACHINE_PROBE))
+        if host == "100":
+            targets.append((label, ["ssh", ssh_host, DEV_PYTHON_100_PS, "-"],
+                            CROSS_MACHINE_PROBE_100_EDITABLE))
+    step("Phase 9: cross-machine consistency (LAB / 100号機)")
     outputs = []
     for label, cmd_prefix, probe_src in targets:
         out = _probe(label, cmd_prefix, probe_src)
@@ -1660,21 +1657,14 @@ def cmd_phase9(args):
         fail(f"{drift} field(s) drift across machines — release NOT done.")
         return 4
     print("")
-    ok("all fields match across LAB / 100号機 / mdx1 — release verified.")
+    ok("all fields match across LAB / 100号機 — release verified.")
     return 0
 
 
 def cmd_all(args):
-    """Run the full deploy + verify chain (phase8 LAB+100, phase8e mdx1, phase9)."""
-    rc = cmd_temp_shadows(argparse.Namespace(apply=True))
-    if rc != 0: return rc
+    """Run the full deploy + verify chain (phase8 LAB+100, phase9)."""
     rc = cmd_phase8(argparse.Namespace(target="lab,100"))
     if rc != 0: return rc
-    rc = cmd_phase8e(args)
-    if rc != 0:
-        warn("Phase 8e failed (PyPI not yet live or mdx unreachable). "
-              "Phase 9 will be skipped — re-run later when PyPI propagates.")
-        return rc
     return cmd_phase9(args)
 
 
@@ -2196,7 +2186,7 @@ def _run_retired_standalone_pyside_guard():
 def cmd_done(args):
     """Verify the controller release source, LAB wheel and 100 editable runtime.
 
-    Exact-tag, native/source, three-machine and Simulink gates remain mandatory.
+    Exact-tag, native/source, two-machine and Simulink gates remain mandatory.
     LAB's installed wheel is independent of the controller checkout location.
     """
     step("Definition-of-done check "
@@ -2218,10 +2208,6 @@ def cmd_done(args):
         fail("release source is not the exact clean release SHA.")
         return rc
 
-    rc = cmd_temp_shadows(argparse.Namespace(apply=False))
-    if rc != 0:
-        fail("retired Omega override remains or a host could not be verified")
-        return rc
 
     rc = _verify_head_release_tag()
     if rc != 0:
@@ -2257,13 +2243,13 @@ def cmd_done(args):
 
     if _requires_simulink_candidate() and not getattr(args, "simulink_package", None):
         fail("Radia 5.1.0 and newer require --simulink-package with matching "
-             "three-machine MEX/SLX candidate evidence.")
+             "two-machine MEX/SLX candidate evidence.")
         return 4
 
     if getattr(args, "simulink_package", None):
         rc = _verify_simulink_candidate_state(args.simulink_package)
         if rc != 0:
-            fail("Simulink candidate did not satisfy the three-machine gate.")
+            fail("Simulink candidate did not satisfy the two-machine gate.")
             return rc
 
     rc = _verify_final_pip_checks()
@@ -2271,10 +2257,10 @@ def cmd_done(args):
         return rc
 
     print("")
-    suffix = (" The supplied Simulink candidate also passed all three MATLAB "
+    suffix = (" The supplied Simulink candidate also passed both MATLAB "
               "machines." if getattr(args, "simulink_package", None) else "")
-    ok("DEFINITION OF DONE met. Release is consistent across LAB / 100号機 / "
-       "mdx1, LAB and 100号機's release runtime use the verified wheel, "
+    ok("DEFINITION OF DONE met. Release is consistent across LAB / 100号機. "
+       "LAB and 100号機's release runtime use the verified wheel, "
        "100号機's development venv retains the verified editable source, and the retired standalone PySide panel surface is absent. "
        "The recorded editable intent names this release source; move it later "
        "only with an explicit `release_quad repoint --reason`." + suffix)
@@ -2607,11 +2593,11 @@ def main():
     sub.add_parser("preflight",
                     help="read-only state report (always safe)")
     s8 = sub.add_parser("phase8",
-                         help="deploy and verify the Radia solver on LAB / 100号機 / mdx1")
+                         help="deploy and verify the Radia solver on LAB / 100号機")
     s8.add_argument("--target", default="lab,100",
-                     help="comma list: lab, 100, mdx1, all (default lab,100)")
+                     help="comma list: lab, 100, all (default lab,100)")
     sub.add_parser("phase8e",
-                    help="upgrade mdx1 from PyPI (after PyPI propagation)")
+                    help="optional mdx refresh from PyPI; never part of release acceptance")
     sub.add_parser("phase9",
                     help="cross-machine consistency probe")
     ss = sub.add_parser(
@@ -2620,7 +2606,7 @@ def main():
     ss.add_argument("--package", required=True,
                     help="path to an IH preview or full Radia Simulink ZIP")
     ss.add_argument("--target", default="all",
-                    help="comma list: lab, 100, mdx1, all")
+                    help="comma list: lab, 100, all")
     ss.add_argument("--engine-session", action="append", metavar="HOST=NAME",
                     help="shared Engine name or com:<PID> in the selected host's desktop logon (repeatable)")
     ss.add_argument("--python", action="append", metavar="HOST=PATH",
@@ -2635,19 +2621,19 @@ def main():
         help="successful main-push CI run containing radia-optuna-wheel")
     optuna_candidate.add_argument(
         "--target", default="all",
-        help="comma list: lab, 100, mdx1, all")
+        help="comma list: lab, 100, all")
     optuna_candidate.add_argument(
         "--engine-session", action="append", metavar="HOST=NAME",
         help="shared Engine name or com:<PID> in the selected host's desktop logon (repeatable); "
              "without it a target runs only when no MATLAB exists there")
     optuna_done = sub.add_parser(
         "optuna-done",
-        help="require the exact radia-optuna wheel to have passed all three machines")
+        help="require the exact radia-optuna wheel to have passed both machines")
     optuna_done.add_argument(
         "--wheel", required=True,
         help="retained wheel path emitted by optuna-candidate")
     sub.add_parser("all",
-                    help="phase8 -> phase8e -> phase9 in one shot")
+                    help="phase8 -> phase9 in one shot")
     sub.add_parser("verify-editable",
                     help="verify LAB's fixed Radia wheel and 100号機's development editable")
     rp = sub.add_parser(
@@ -2692,7 +2678,7 @@ def main():
         help="non-mutating definition-of-done: exact source + phase9 + guards")
     done.add_argument(
         "--simulink-package",
-        help="also require a matching three-machine Simulink candidate pass")
+        help="also require a matching two-machine Simulink candidate pass")
     done.add_argument(
         "--release-source",
         help="separate exact-tag checkout to verify as the release source; the "

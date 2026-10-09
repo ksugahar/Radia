@@ -45,7 +45,7 @@ Use the official MATLAB MCP Server for MATLAB checks:
    `radia_ih_eddy_sfun` and `radia_ih_thermal_sfun` native blocks, closed
    temperature feedback, and no Python fallback.
 5. For an IH preview release, run the extracted-package verifier through
-   `release_quad simulink-candidate --target all` on LAB, 100号機, and mdx1 (SSH alias `mdx`). hibino is a computation host, not a release-quad acceptance target.
+   `release_quad simulink-candidate --target all` on LAB and 100号機. hibino is a computation host, not a release-quad acceptance target.
 
 ## Artifact Contract
 

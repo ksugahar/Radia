@@ -1,6 +1,6 @@
 """The one place the release acceptance hosts are named.
 
-Release-quad requires LAB, 100号機, mdx1 for the same release commit
+Release-quad requires LAB and 100号機 for the same release commit
 (AGENTS.md / CLAUDE.md, "CI Execution, Validation Evidence, and Notebook
 Policy"). hibino is a computation host and is not an acceptance target.
 
@@ -18,7 +18,7 @@ tooling's SSH, MATLAB and filesystem assumptions.
 
 # Evidence directory names under
 # validation_test/<suite>/results/candidate_<sha9>/<host>/, in gate order.
-RELEASE_ACCEPTANCE_HOSTS = ("lab", "100", "mdx1")
+RELEASE_ACCEPTANCE_HOSTS = ("lab", "100")
 
 # Evidence directories use deployment roles; JUnit records the OS hostname.
 # 100 is an SSH/deployment alias for INTEL11, not a second physical machine.
@@ -34,5 +34,8 @@ RELEASE_ACCEPTANCE_HOST_LABELS = {
     "100": "100号機",
     "mdx1": "mdx1",
 }
+
+RELEASE_ACCEPTANCE_HOST_LABELS = {host: RELEASE_ACCEPTANCE_HOST_LABELS[host]
+                                 for host in RELEASE_ACCEPTANCE_HOSTS}
 
 assert tuple(RELEASE_ACCEPTANCE_HOST_LABELS) == RELEASE_ACCEPTANCE_HOSTS

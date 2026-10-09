@@ -207,7 +207,7 @@ def test_exact_wheel_end_to_end(tmp_path):
         assert commit == "b" * 40
         assert path.startswith("validation_test/esrf_three_engine/results/candidate_aaaaaaaaa/")
         host, name = path.split("/")[-2:]
-        # Synthetic three-host API fixture, not a claim of machine acceptance.
+        # Synthetic two-host API fixture, not a claim of machine acceptance.
         a, f, x, _ = evidence("lab")
         tree = ET.fromstring(x)
         suite = tree if tree.tag == "testsuite" else tree.find("testsuite")
@@ -221,7 +221,7 @@ def test_exact_wheel_end_to_end(tmp_path):
 
     api.file = read_file
     report = gate.verify_artifact(api, run, "b" * 40, wheel_dir, tmp_path, digest)
-    assert report["hosts"] == ["lab", "100", "mdx1"] and report["passed"]
+    assert report["hosts"] == ["lab", "100"] and report["passed"]
     for missing_host in report["hosts"]:
         def incomplete(path, commit):
             if path.split("/")[-2] == missing_host:
@@ -290,17 +290,17 @@ def application_proof():
                         for host in gate.RELEASE_ACCEPTANCE_HOSTS}}
 
 
-def test_application_acceptance_requires_three_exact_mex_results():
+def test_application_acceptance_requires_two_exact_mex_results():
     identity = {"source_commit": "a"*40, "version": "5.1.0"}
     gate.verify_application_acceptance(application_proof(), identity)
     for mutation in ("missing_host", "failed", "wrong_mex", "wrong_source", "missing_time",
                      "wrong_label"):
         proof = application_proof()
-        if mutation == "missing_host": del proof["targets"]["mdx1"]
+        if mutation == "missing_host": del proof["targets"]["lab"]
         elif mutation == "wrong_label": proof["targets"]["100"]["label"] = "mdx1"
         elif mutation == "failed": proof["targets"]["100"]["status"] = "failed"
         elif mutation == "wrong_mex": proof["targets"]["lab"]["mex_sha256"] = "d"*64
         elif mutation == "wrong_source": proof["commit"] = "e"*40
-        else: del proof["targets"]["mdx1"]["verified_at_utc"]
+        else: del proof["targets"]["lab"]["verified_at_utc"]
         with pytest.raises(ValueError):
             gate.verify_application_acceptance(proof, identity)

@@ -53,7 +53,7 @@ def test_phase9_probes_wheel_hosts_as_wheels_and_100_as_editable(monkeypatch):
                                quad.CROSS_MACHINE_PROBE_100_EDITABLE)
     # 100号機's release runtime is a wheel and is compared on its own.
     assert seen["100号機 release"] == (["ssh", "100", "python", "-"], quad.CROSS_MACHINE_PROBE)
-    assert seen["mdx1"][1] is quad.CROSS_MACHINE_PROBE
+    assert "mdx1" not in seen and "mdx2" not in seen
 
 
 def test_phase9_accepts_complete_shuffled_output(monkeypatch):
@@ -91,7 +91,7 @@ def test_independent_package_drift_is_not_part_of_solver_probe(monkeypatch):
 def test_failed_host_cannot_be_omitted(monkeypatch, failure):
     monkeypatch.setattr(
         quad, "_probe",
-        lambda label, *_args: failure if label == "mdx1" else probe())
+        lambda label, *_args: failure if label == "LAB" else probe())
     assert quad.cmd_phase9(None) == 4
 
 

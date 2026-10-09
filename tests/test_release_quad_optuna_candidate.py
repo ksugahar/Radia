@@ -118,7 +118,7 @@ def test_optuna_candidate_records_every_machine_for_one_exact_wheel(
     assert set(state["targets"]) == set(release_quad.SIMULINK_TARGETS)
     assert {row["status"] for row in state["targets"].values()} == {"passed"}
     assert state["targets"]["lab"]["engine_session"] == "radia_shared"
-    assert state["targets"]["mdx1"]["engine_session"] is None
+    assert state["targets"]["100"]["engine_session"] is None
 
 
 def test_optuna_candidate_rejects_ambiguous_engine_sessions_before_any_target(
@@ -147,7 +147,7 @@ def test_optuna_candidate_rejects_ambiguous_engine_sessions_before_any_target(
 
     monkeypatch.setattr(release_quad, "_run_optuna_candidate_target", no_target)
     for target, sessions in (
-        ("mdx1", ["lab=radia_shared"]),            # unselected target
+        ("100", ["lab=radia_shared"]),            # unselected target
         ("lab", ["lab=a", "lab=b"]),             # duplicate target
         ("lab", ["lab="]),                        # empty name
         ("lab", ["radia_shared"]),                 # missing HOST=
