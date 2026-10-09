@@ -18,7 +18,7 @@ authors = [{name = "Kengo Sugahara"}]
 # Core servers import without Radia, Cubit, MKL or a native build.
 # Optional execution backends are installed only for their selected workflows.
 dependencies = [
-    "mcp>=1.20.0,<2",
+    "mcp>=1.21.1,<2",
 ]
 
 [project.optional-dependencies]

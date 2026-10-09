@@ -16,7 +16,7 @@ except ModuleNotFoundError:  # pragma: no cover - Python 3.10
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
-SDK_REQUIREMENT = "mcp>=1.20.0,<2"
+SDK_REQUIREMENT = "mcp>=1.21.1,<2"
 
 
 def test_mcp_sdk_dependency_declares_supported_floor():
