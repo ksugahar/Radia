@@ -80,3 +80,19 @@ def test_release_all_never_refreshes_compute_hosts(monkeypatch):
     monkeypatch.setattr(quad, "cmd_phase9", lambda args: calls.append("phase9") or 0)
     assert quad.cmd_all(None) == 0
     assert calls == ["lab,100", "phase9"]
+
+
+def test_optional_refresh_uses_only_the_mdx_alias(monkeypatch):
+    quad = _load("release_quad")
+    calls = []
+    monkeypatch.setattr(quad, "_deploy_pypi", lambda host, label: calls.append((host, label)) or 0)
+    assert quad.cmd_phase8e(None) == 0
+    assert calls == [("mdx", "mdx1")]
+
+
+def test_done_has_no_compute_refresh_or_remote_cleanup_dependency():
+    import inspect
+    quad = _load("release_quad")
+    source = inspect.getsource(quad.cmd_done)
+    assert "cmd_phase8e(" not in source
+    assert "cmd_temp_shadows(" not in source

@@ -1409,7 +1409,7 @@ def cmd_phase8(args):
 
 
 def cmd_phase8e(args):
-    """Upgrade mdx1 from PyPI (radia only, no Cubit or MCP)."""
+    """Explicit refresh-when-needed on alias mdx; never part of release gates."""
     for host in ("mdx1",):
         rc = _deploy_mdx(host)
         if rc != 0:

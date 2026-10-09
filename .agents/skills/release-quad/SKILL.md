@@ -42,7 +42,8 @@ run `python tools/release_quad.py temp-shadows --apply`. This checks the exact
 `C:\temp\radia-omega-test` tree on mdx1, mdx2, and hibino. It refuses removal
 while Python/MATLAB processes are active, PYTHONPATH still names the tree, or
 reparse points are present. It never terminates research processes or removes
-other scratch directories. Unreachable hosts are unresolved, not clean.
+other scratch directories. Unreachable hosts are unresolved, not clean. Unconfigured hibino and retired
+mdx2 have not been checked; this standalone cleanup may fail on their aliases.
 This standalone cleanup is not called by `all` or `done`.
 Keep the JSON console report with the release evidence. hibino is checked for
 this retired override only; it is not added to the four deployment targets.
