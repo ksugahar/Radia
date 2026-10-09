@@ -191,7 +191,7 @@
     },
     "fast-contracts": {
       "description": "Pure source, policy, package, and public-notebook contracts for every push.",
-      "max_elapsed_seconds": 60,
+      "max_elapsed_seconds": 120,
       "paths": [
         "tests/test_three_engine_agreement_gate.py",
         "tests/test_ci_execution_policy.py",

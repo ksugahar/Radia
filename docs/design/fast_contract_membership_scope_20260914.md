@@ -1,5 +1,9 @@
 # Fast-contract profile membership scope
 
+Current policy (2026-10-09): fast-contracts has a 120-second elapsed-time
+budget. The 60-second results below describe the historical policy and are
+preserved as measured; profile membership and required tests remain unchanged.
+
 ## Failure and cause
 
 Main commit `1cf6c724bdebfa3585f40e0c08dbd54b51aae8e5`, Actions run

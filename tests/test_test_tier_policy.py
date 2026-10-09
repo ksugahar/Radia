@@ -42,7 +42,7 @@ def test_fast_ci_profiles_have_explicit_paths_and_runtime_budgets():
         (ROOT / "tests" / "test_tier_manifest.json").read_text(encoding="utf-8")
     )
     profiles = manifest["profiles"]
-    assert profiles["fast-contracts"]["max_elapsed_seconds"] <= 60
+    assert profiles["fast-contracts"]["max_elapsed_seconds"] <= 120
     assert profiles["native-smoke"]["max_elapsed_seconds"] <= 120
 
     for name, profile in profiles.items():

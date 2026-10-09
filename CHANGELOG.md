@@ -1,5 +1,7 @@
 # Changelog
 
+- Give fast-contracts a 120-second elapsed-time budget while retaining its required tests, assertions and fail-on-overrun check. Other tier budgets and host routing stay unchanged.
+
 - Public validation records omit identifying machine/network/path metadata. Result writers record OS class and software/thread information; public evidence paths and documentation use neutral roles. A tracked-content privacy policy rejects new leaks, with exact documented exceptions for unchanged operational routing pending private configuration.
 
 All notable changes to the `radia` package.  Format: each release lists

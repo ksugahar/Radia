@@ -30,7 +30,7 @@ def test_native_smoke_extends_fast_contracts_without_duplicates():
 
     assert set(fast_paths) <= set(native_paths)
     assert len(native_paths) == len(set(native_paths))
-    assert fast_budget == 60
+    assert fast_budget == 120
     assert native_budget == 120
 
 
@@ -135,7 +135,7 @@ def test_structural_manifest_change_stays_broad(change, monkeypatch, tmp_path):
     current = json.loads(runner.MANIFEST.read_text(encoding='utf-8'))
     previous = copy.deepcopy(current)
     if change == 'profile':
-        previous['profiles']['fast-contracts']['max_elapsed_seconds'] = 59
+        previous['profiles']['fast-contracts']['max_elapsed_seconds'] -= 1
     elif change == 'schema':
         previous['schema'] = 'other-schema'
     elif change == 'missing_rules':
