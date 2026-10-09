@@ -391,7 +391,7 @@ def run_smoke_test(*, jou: str = "", order: int = 2,
     # `materials` and `bcnames` sections directly -- the .vol is the
     # source of truth.
     #
-    # Trailing `exit 0` matters on slower boxes (100号機 2026-04-22):
+    # Trailing `exit 0` matters on slower boxes (runtime host 2026-04-22):
     # Cubit's headless teardown sometimes access-violates before the
     # mesh database destructor flushes the .vol writer; an explicit
     # ``exit 0`` forces the Python/Qt shutdown path through the

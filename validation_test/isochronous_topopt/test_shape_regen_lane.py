@@ -164,7 +164,7 @@ def prepare_shape(out):
 
 
 def mesh_shape(regen):
-    """Run only the licensed mesh phase on LAB/100."""
+    """Run only the licensed mesh phase on validation runtime/100."""
     from cubit_mesh_export.mcp.server import cubit_stl_to_vol
 
     mesh_specs = {

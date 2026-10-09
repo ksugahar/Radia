@@ -259,7 +259,7 @@ Empirical thresholds (after auto_tighten):
         "font_rule": """\
 [font_rule]
 
-SUGAHARA LAB ABSOLUTE FONT RULE:
+SUGAHARA validation runtime ABSOLUTE FONT RULE:
 
   Bounding-box width = 8 cm  ->  figure-text font MUST be 10 pt.
   For ordinary paper profiles, the save-time gate accepts 10.0--10.5 pt
@@ -311,7 +311,7 @@ not fit, simplify the content, use direct labels, or allocate more width.
         "slide_169": """\
 [slide_169]
 
-SUGAHARA LAB 16:9 SLIDE FIGURE RULE:
+SUGAHARA validation runtime 16:9 SLIDE FIGURE RULE:
 
   Author at 24 pt where practical; every font must be at least 20 pt
   after scaling to the actual pasted width.
@@ -331,7 +331,7 @@ title band or Beamer frame title.
         "font_family": """\
 [font_family]
 
-LAB RULE: FIGURES ARE GENERATED IN TIMES NEW ROMAN.
+validation runtime RULE: FIGURES ARE GENERATED IN TIMES NEW ROMAN.
 
 Times New Roman is not a preference here; it is the Sugahara Lab
 standard for publication figures.  It matches the expected IEEE /
@@ -358,7 +358,7 @@ Do not use it for paper, slide, report, or NotebookLM source figures.
         "no_title_in_figure": """\
 [no_title_in_figure]
 
-LAB RULE: NO TITLES INSIDE THE FIGURE.
+validation runtime RULE: NO TITLES INSIDE THE FIGURE.
 
   WRONG:  ax.set_title('AC impedance vs frequency')
   WRONG:  fig.suptitle('Figure 3')
@@ -380,7 +380,7 @@ are intentionally producing a slide-deck figure (not a paper figure).
         "text_overflow": """\
 [text_overflow]
 
-LAB RULE: DIAGRAM TEXT MUST FIT INSIDE THE FIXED FIGURE CANVAS.
+validation runtime RULE: DIAGRAM TEXT MUST FIT INSIDE THE FIXED FIGURE CANVAS.
 
 Concept diagrams often use `ax.text(...)`, `annotate(...)`, or
 `fig.text(...)` instead of x/y axis labels.  These free labels can be
@@ -402,7 +402,7 @@ inspect offenders before calling `emit_paper_figure()`.
         "colorblind_safe": """\
 [colorblind_safe]
 
-LAB RULE: every line color must be either GREYSCALE or in the
+validation runtime RULE: every line color must be either GREYSCALE or in the
 Okabe-Ito 8-color colorblind-safe palette.
 
 Okabe-Ito palette (Wong 2011, Nature Methods 8:441):
@@ -431,7 +431,7 @@ brand palettes you've verified externally.
         "font_embedding": """\
 [font_embedding]
 
-LAB RULE: PDFs MUST embed TrueType (Type-42) fonts.
+validation runtime RULE: PDFs MUST embed TrueType (Type-42) fonts.
 
 Matplotlib defaults: `pdf.fonttype = 3` (raster glyphs).  Type-3 PDFs
 blur when zoomed AND fail IEEE / Elsevier pre-flight.  paper_figure()
@@ -448,7 +448,7 @@ Verify manually:
         "no_legend_overlap": """\
 [no_legend_overlap]
 
-LAB RULE: LEGENDS MUST NOT OVERLAP DATA LINES.
+validation runtime RULE: LEGENDS MUST NOT OVERLAP DATA LINES.
 
 A legend that overlaps even ONE curve is the single most common
 reviewer-visible obvious flaw -- programmatic detection is reliable,
@@ -488,7 +488,7 @@ manually inspected the figure at the final embed scale.
         "no_legend_frame": """\
 [no_legend_frame]
 
-LAB RULE: NO BOX / FRAME AROUND THE LEGEND.
+validation runtime RULE: NO BOX / FRAME AROUND THE LEGEND.
 
   WRONG:  ax.legend()                                # default frameon=True
   WRONG:  ax.legend(frameon=True)
@@ -548,7 +548,7 @@ Reading guide (figure fractions):
         "units": """\
 [units]
 
-LAB STYLE (per IEEE Editorial Style Manual + IEEJ practice):
+validation runtime STYLE (per IEEE Editorial Style Manual + IEEJ practice):
     units in PARENTHESES, NOT square brackets.
 
     correct:  'f (Hz)'  'B (T)'  'Temperature (K)'  'M (kA/m)'
@@ -673,7 +673,7 @@ WHEN TO STAY ON PDF (TikZ exceptions):
   -> for these, use exportgraphics PDF or a hybrid (raster the heavy
      layer, TikZ-overlay the axes/labels).
 
-THE LAB RECIPE (parameterise with the lab profile):
+THE validation runtime RECIPE (parameterise with the lab profile):
 
     cleanfigure('targetResolution', 300);   % decimate dense data
     matlab2tikz('fig/result.tikz', ...
@@ -688,11 +688,11 @@ LaTeX-side prelude (one-time):
 
     \\usepackage{pgfplots}
     \\pgfplotsset{compat=1.18}
-    \\newlength\\figureWidth   \\setlength\\figureWidth{\\columnwidth}
-    \\newlength\\figureHeight  \\setlength\\figureHeight{6cm}
+    private-runtime-path   private-runtime-path
+    private-runtime-path  private-runtime-path
     \\input{fig/result.tikz}
 
-GETTING THE EXACT LAB-PROFILE RECIPE:
+GETTING THE EXACT validation runtime-PROFILE RECIPE:
 
     figure_matlab2tikz_recipe(target='paper_single_column')
         -> ready-to-paste MATLAB recipe sized for IEEE single column
@@ -722,7 +722,7 @@ CAVEATS:
         "export_targets": """\
 [export_targets]
 
-LAB EXPORT-FORMAT MATRIX (extracted 2026-06 from internal MATLAB
+validation runtime EXPORT-FORMAT MATRIX (extracted 2026-06 from internal MATLAB
 + matplotlib scripts).  The correct
 format depends on WHERE the figure is embedded -- the lab uses three
 in practice, not just paper PDF:
@@ -749,7 +749,7 @@ and keeps EMF vector.  Ready-to-paste recipes:
   - figure_office_export_recipe()  -> MATLAB exportgraphics EMF + PNG
   - figure_everyday_recipe()       -> matplotlib everyday analysis figure
 
-OBSERVED LAB HABIT (from internal scripts):
+OBSERVED validation runtime HABIT (from internal scripts):
   - FEMM MATLAB (legacy): set(gca,'FontName','Times'); xlabel('{\\it X}
                    (m)'); print('-dmeta','f.emf');  % print is DEPRECATED
                    -> modern: exportgraphics(...,'ContentType','vector')
@@ -926,7 +926,7 @@ round-trip to (Rougier rules 8/9; the R `ggrepel` lineage).
     - matplotlib-label-lines (github.com/cphyc/matplotlib-label-lines) -- places
       each line's label ON the line: `labelLines(ax.get_lines())`.
 
-  LAB tools (radia_mcp.figure.tools -- the gate-aware versions):
+  validation runtime tools (radia_mcp.figure.tools -- the gate-aware versions):
     - label_curve_endpoints(ax, [{"y_data":.., "text":..}], side='right') +
       fig.subplots_adjust(right=0.78) -- right-margin direct labels.
     - find_best_legend_loc(ax) -- if a legend IS used, pick the least-overlapping
@@ -946,7 +946,7 @@ round-trip to (Rougier rules 8/9; the R `ggrepel` lineage).
       SciencePlots`; `import scienceplots; plt.style.use(['science','ieee'])`
       (or 'nature').  Sets the column width, serif/sans per journal, ticks-in,
       tight rcParams; also ships CJK font styles (e.g. cjk-jp) for Japanese labels.
-    - the LAB path: radia_mcp.figure.paper_figure(profile=...) -- bakes in the exact
+    - the validation runtime path: radia_mcp.figure.paper_figure(profile=...) -- bakes in the exact
       IEEE / IEEJ / IGTE column geometry + 10pt@8cm + Okabe-Ito + Type-42 + frameless
       legend + the no-title / no-overlap / efficiency GATES (emit_paper_figure).
       Prefer this for lab papers; SciencePlots is the lighter general-purpose option.
@@ -1057,7 +1057,7 @@ def figure_diagram_recipes(topic: str = "all") -> str:
   draw.io       one-off GUI diagrams (NOT diffable --  GUI        .drawio    export PDF
                 avoid for reproducible repo figures).
 
-  LAB DEFAULT for a PAPER diagram: TikZ -- text-source/diffable, labels inherit the paper's
+  validation runtime DEFAULT for a PAPER diagram: TikZ -- text-source/diffable, labels inherit the paper's
   Times/newtx font + math (see figure_tikz_recipe for the general schematic; 'tikz_flowchart'
   here for the flowchart idiom).  Reach for Graphviz when the graph is big or a hierarchy/DAG
   you do NOT want to place by hand, then include the rendered PDF.  Mermaid = repo READMEs
@@ -1182,7 +1182,7 @@ Tufte/Rougier canon in figure_design_principles applies here too).
     - label decision branches AND meaningful edges; an unlabeled fork is ambiguous.
     - group related steps with a dashed box (TikZ `fit` / DOT `cluster`) + a group label.
 
-  STILL THE LAB RULES (paper_figure_quality_rules / figure_design_principles):
+  STILL THE validation runtime RULES (paper_figure_quality_rules / figure_design_principles):
     - NO in-figure title (-> the LaTeX caption).
     - light Okabe-Ito / greyscale fills, black outlines; colour carries MEANING
       (one hue per subsystem), not decoration.

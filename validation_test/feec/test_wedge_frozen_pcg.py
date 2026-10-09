@@ -13,9 +13,9 @@ from radia.vim._solve import _h_solve_auto_prec
 
 def test_frozen_wedge_jacobi_reaches_true_residual():
     evidence = Path(__file__).parents[1] / "esrf_three_engine/results/candidate_d0d0bc4b5"
-    reference = json.loads((evidence / "lab-v5-frozen.json").read_text(encoding="utf-8"))
+    reference = json.loads((evidence / "validation-v5-frozen.json").read_text(encoding="utf-8"))
     tolerance = reference["inner_requested_tolerance"]
-    with np.load(evidence / "lab-v5-frozen.npz", allow_pickle=False) as data:
+    with np.load(evidence / "validation-v5-frozen.npz", allow_pickle=False) as data:
         weight, demag, rhs, initial = (data[name].copy() for name in ("W", "N", "rhs", "initial_x"))
     ng.SetNumThreads(4)
     mesh = MakeStructured3DMesh(nx=1, ny=1, nz=1, hexes=False, prism=True,

@@ -1,7 +1,7 @@
 {
   "schema": "radia.motor.pmsm_angle_periodic_rom_validation.v1",
   "generated_at_utc": "2026-07-17T06:36:09.461217+00:00",
-  "validation_host": "Hibino",
+
   "python_version": "3.12.10",
   "ngsolve_version": "6.2.2604",
   "numpy_version": "2.4.3",

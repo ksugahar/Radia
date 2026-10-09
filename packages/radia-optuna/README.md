@@ -90,7 +90,7 @@ remain responsible for obeying the same step-time boundary.
 `radia_optuna_teaching.slx` and
 `radia.simulink.buildOptunaTeachingModel` provide known-optimum, Pareto, and
 pruned/failed student exercises. See
-[`OPTUNA_SIMULINK_LAB.md`](OPTUNA_SIMULINK_LAB.md). These exercises do not
+[`OPTUNA_SIMULINK_validation host.md`](OPTUNA_SIMULINK_validation host.md). These exercises do not
 require Global Optimization Toolbox or Simulink Design Optimization.
 
 The distribution is Windows x64 because the current native artifact is
@@ -162,7 +162,7 @@ alone are not sufficient.
 
 ```powershell
 pwsh -File packages/radia-optuna/tests/run_installed_wheel_simulink.ps1 `
-  -Wheel <wheel> -EvidenceOutput C:\temp\radia-optuna-installed.json
+  -Wheel <wheel> -EvidenceOutput private-runtime-path
 ```
 
 MATLAB runs through the MATLAB Engine for Python. The runner installs the

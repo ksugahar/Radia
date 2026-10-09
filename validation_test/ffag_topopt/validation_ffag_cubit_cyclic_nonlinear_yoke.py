@@ -320,7 +320,7 @@ def run_validation(args):
     result = {
         "schema": "radia.ffag-cubit-cyclic-nonlinear-yoke/v2",
         "generated_at_utc": datetime.now(UTC).isoformat(),
-        "machine": platform.node(),
+        "platform_class": platform.system(),
         "platform": platform.platform(),
         "software": {
             "python": platform.python_version(),

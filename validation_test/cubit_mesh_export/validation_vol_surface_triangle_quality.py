@@ -8,7 +8,7 @@ the boundary triangles that become scalar-BEM/RWG trace elements.
 Run:
 
     python validation_test/cubit_mesh_export/validation_vol_surface_triangle_quality.py
-    python validation_test/cubit_mesh_export/validation_vol_surface_triangle_quality.py --vol C:\\temp\\mesh.vol
+    python validation_test/cubit_mesh_export/validation_vol_surface_triangle_quality.py --vol private-runtime-path
 """
 
 from __future__ import annotations

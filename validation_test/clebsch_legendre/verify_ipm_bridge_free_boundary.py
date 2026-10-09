@@ -50,7 +50,7 @@ validation_test/clebsch_legendre/verify_chaplygin_bend_design.py)
     Psi_B = -b A_th,                Psi_th = a A_B
     dr    = (dPsi/q) e_H + (dA/B) e_perp,   q = B/mu_s = |H|
 
-Golden bands asserted at the end of the run (2026-07-28 baseline, LAB):
+Golden bands asserted at the end of the run (2026-07-28 baseline, validation runtime):
   constant-mu sanity    : both designed walls are an exact annulus (dev < 1e-6)
   flux scale-freedom    : halving Phi halves every wall coordinate (dev < 1e-6)
   orientation           : J keeps one sign on every design (no folding)
@@ -616,7 +616,7 @@ def main():
     report["meta"] = {
         "generated_at_utc": datetime.datetime.now(datetime.timezone.utc)
         .isoformat(timespec="seconds"),
-        "hostname": platform.node(), "python_version": platform.python_version(),
+        "platform_class": platform.system(), "python_version": platform.python_version(),
         "purpose": "correctness validation only (no timing claims)",
     }
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)),

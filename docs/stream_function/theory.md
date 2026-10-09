@@ -227,7 +227,7 @@ solves an EASY uniform target on a *sphere* to 0.24 % single-stroke.
 
 ## Cross-reference
 
-  - Math + literature: the paper outline (W:\02_学会資料\2025年度\2026_01_JIAM\streamfunction\)
+  - Math + literature: the paper outline (private-runtime-path)
   - Regularisation choices: [regularization.md](regularization.md)
   - Chain construction: [single_stroke.md](single_stroke.md)
   - Deformation outer loop: [deformation.md](deformation.md)

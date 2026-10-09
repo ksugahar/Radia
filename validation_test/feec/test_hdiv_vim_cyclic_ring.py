@@ -18,12 +18,12 @@ FRACTION rather than an absolute tolerance because the standalone pole and the r
 independently (netgen is not rotation-equivariant), so a small discretization difference is expected and
 is not what this lane is testing.
 
-MEASURED 2026-08-11 (LAB, N=4, maxh 7 mm, ring 522 / sector 112 elements): <Mz> full ring 3.2157743e+05,
+MEASURED 2026-08-11 (validation runtime, N=4, maxh 7 mm, ring 522 / sector 112 elements): <Mz> full ring 3.2157743e+05,
 lone sector 3.6013978e+05 (+11.99 %), cyclic reduced 3.2157792e+05 (+0.0002 %) -- 100.00 % of the gap
 closed.  A second, independent confirmation on Sculpt hex meshes (6-fold ring) is recorded in
 memory/cyclic_image_reduction_design.md.
 
-MEASURED 2026-08-26 (LAB, N=4 alternating signs, same 522 / 112 element meshes): <Mz> full ring pole 0
+MEASURED 2026-08-26 (validation runtime, N=4 alternating signs, same 522 / 112 element meshes): <Mz> full ring pole 0
 3.9718599e+05, lone sector 3.6013978e+05 (-9.3272 %), cyclic alternating reduced 3.9718954e+05
 (+0.000895 %) -- 99.9904 % of the gap closed.
 """

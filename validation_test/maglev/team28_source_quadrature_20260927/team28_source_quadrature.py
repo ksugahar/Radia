@@ -112,7 +112,7 @@ def main():
     current = t28.REFERENCE_COIL_CURRENT_A
     s = 2.0j * np.pi * t28.FREQUENCY_HZ
     payload = {"schema": "radia.validation.team28-source-quadrature.v1",
-               "host": platform.node(), "radia_version": getattr(radia, "__version__", None),
+               "platform_class": platform.system(), "radia_version": getattr(radia, "__version__", None),
                "radia_module": radia.__file__, "ngsolve": ng.__version__,
                "script_sha256": sha256(__file__),
                "driver_sha256": {"team28_hcurl_vim_force.py": sha256(maglev / "team28_hcurl_vim_force.py"),

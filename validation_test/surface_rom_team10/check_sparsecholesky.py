@@ -63,7 +63,7 @@ def main():
                   scope="coarse residual and three-step nonlinear smoke only",
                   inverse="sparsecholesky", maxh=args.maxh, order=1,
                   ndof=model.fes.ndof, relative_true_residuals=checks,
-                  residual_limit=1e-7, history=history, host=platform.node(),
+                  residual_limit=1e-7, history=history, platform_class=platform.system(),
                   python=platform.python_version(), ngsolve=ng.__version__,
                   linear_solves=info["linear_solves"],
                   sources={p.name: hashlib.sha256(p.read_bytes()).hexdigest()

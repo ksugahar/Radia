@@ -130,7 +130,7 @@ def main() -> None:
         "protocol": "same Cubit unit-sphere meshes (TET size 0.65, HEX sphere scheme 0.4) exported "
                     "with Netgen coefficients and with the geometric refit; D^k F of each element "
                     "recovered from the vectorised NGSolve map and normalised by h_K^k",
-        "environment": {"host": platform.node(), "python": platform.python_version(),
+        "environment": {"platform_class": platform.system(), "python": platform.python_version(),
                         "ngsolve": importlib.metadata.version("ngsolve"),
                         "netgen_dir": str(args.netgen), "refit_dir": str(args.refit)},
         "rows": rows,

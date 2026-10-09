@@ -151,7 +151,7 @@ def main() -> int:
 
     data = dict(
         timestamp=_now(),
-        hostname=platform.node(),
+        platform_class=platform.system(),
         benchmark="hysteresis_step_hex_cube",
         problem=dict(cube_size_m=1.0, H0_A_per_m=H0,
                      drive=f"virgin {N_RAMP} + descending {N_BRANCH} + ascending {N_BRANCH}",

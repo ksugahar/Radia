@@ -7,12 +7,12 @@
     "python": "3.12.10"
   },
   "passed": true,
-  "vol_file": "C:\\temp\\radia-esrf-fem\\example6\\coil_yoke_kelvin.vol",
-  "json_file": "C:\\temp\\radia-esrf-fem\\example6\\coil_yoke_kelvin.vol.json",
+  "vol_file": "<private-path>/radia-esrf-fem\\example6\\coil_yoke_kelvin.vol",
+  "json_file": "<private-path>/radia-esrf-fem\\example6\\coil_yoke_kelvin.vol.json",
   "threshold_pct": 1.0,
   "cad_reference": {
     "available": true,
-    "file": "C:\\temp\\radia-esrf-fem\\example6\\coil_yoke_kelvin.vol.json",
+    "file": "<private-path>/radia-esrf-fem\\example6\\coil_yoke_kelvin.vol.json",
     "auto_discovered": true,
     "mesh_only_materials": [],
     "metadata_checks": {

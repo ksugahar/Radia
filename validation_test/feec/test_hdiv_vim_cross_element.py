@@ -101,7 +101,7 @@ def test_cross_element_cube_mavg_agrees():
     payload = dict(
         description="HDiv-VIM cross-element cube validation (hex/wedge/tet, same 1 m cube, mu_r=1000, +z 200 kA/m)",
         timestamp=datetime.now().isoformat(),
-        hostname=platform.node(),
+        platform_class=platform.system(),
         H_ext_A_per_m=H0, mu_r=MU_R, cube_size_m=CUBE,
         results={n: results[n] for n, _ in CASES},
         M_avg_z_mean_A_per_m=mean,

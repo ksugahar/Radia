@@ -3,7 +3,7 @@
   "case": "Production ICCG/AMS throughput",
   "solver": "radia-ngsolve",
   "created_at_utc": "2026-10-04T01:05:51.156516+00:00",
-  "host": "Windows compute host",
+
   "python": "3.12.10",
   "ngsolve": "6.2.2607",
   "module": "candidate src/radia/sparsesolv_ngsolve.pyd",
@@ -277,7 +277,7 @@
   ],
   "pass": true,
   "run": {
-    "command": "python validation_test/sparsesolv/iccg_study/run_production.py --part throughput --kind symmetric --space hcurl --mesh C:/temp/iccg-production.vol --output validation_test/sparsesolv/iccg_study/results/production-hcurl-candidate.json",
+    "command": "python validation_test/sparsesolv/iccg_study/run_production.py --part throughput --kind symmetric --space hcurl --mesh <private-path>/iccg-production.vol --output validation_test/sparsesolv/iccg_study/results/production-hcurl-candidate.json",
     "workdir": ".",
     "exit_code": 0,
     "duration_s": 9.497202700003982

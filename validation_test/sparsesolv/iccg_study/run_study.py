@@ -248,7 +248,7 @@ def main():
     import radia
     result = dict(schema="cae-ai-lab.solver-run.v1", case="ICCG Hermitian and throughput study: " + args.part,
         solver="radia-ngsolve", created_at_utc=datetime.now(timezone.utc).isoformat(),
-        source_sha=args.source_sha, host=platform.node(),
+        source_sha=args.source_sha, platform_class=platform.system(),
         tool_versions=dict(python=platform.python_version(), numpy=np.__version__, scipy=scipy.__version__,
                            ngsolve=ngsolve.__version__, radia=radia.__version__),
         tolerances=dict(core_true_relative=1e-8, ams_true_relative=1e-7, curl_relative=1e-5),

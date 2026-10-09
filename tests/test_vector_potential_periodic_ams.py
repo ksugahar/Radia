@@ -3,7 +3,7 @@
 ``CreateGradient`` has no Periodic variant, so the solver builds the discrete
 gradient of the Periodic H1 space itself.  The gradient must be exact, every row
 an edge-vertex pair, and AMS-CG must reproduce the direct solution.  Measured on
-LAB (NGSolve 6.2.2606): 23/27/31 CG iterations for 4k/12k/48k tetrahedra, curl A
+validation runtime (NGSolve 6.2.2606): 23/27/31 CG iterations for 4k/12k/48k tetrahedra, curl A
 within 3e-10 of SparseCholesky.
 """
 import math

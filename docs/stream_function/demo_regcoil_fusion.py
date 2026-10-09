@@ -502,7 +502,7 @@ def main():
 
     data = {
         "timestamp": datetime.now().isoformat(timespec="seconds"),
-        "hostname": platform.node(),
+        "platform_class": platform.system(),
         "benchmark": "regcoil_fusion_forward",
         "problem": {
             "winding_torus": {"R": R_MAJOR, "a": A_WIND, "maxh": args.wind_maxh},

@@ -24,7 +24,7 @@ exposed several failure modes.
   The wheel still carries version 4.95.91; distinguish it from the published
   package by hash and CI/source identity, never by version alone.
 - Revised: 2026-09-04 after the released-binary mixed total/reduced-Omega
-  total/reduced-Omega C-yoke mesh campaign on mdx and Hibino, and the
+  total/reduced-Omega C-yoke mesh campaign on mdx and compute host, and the
   symmetric ChargeGram diagonal-leaf repair for ESRF Example #3.
 - The `v4.95.71` four-level result cited below is evidence for the former
   global reduced-Omega formulation only.  It is retained as history, but it
@@ -67,7 +67,7 @@ The current source sizes are:
 | `src/radia/vim/_field_batch.py` | 735 | Persistent field and vector-potential surfaces |
 
 Wall-clock performance claims are intentionally limited to measurements made
-on `mdx` or `hibino`. LAB is used for build and focused correctness tests.
+on `mdx` or `compute-host`. validation host is used for build and focused correctness tests.
 
 ## Executive assessment
 
@@ -130,7 +130,7 @@ The saddle system is symmetric indefinite and therefore uses PARDISO rather
 than an SPD-only CG path.
 
 On the shared exact Cubit C-yoke mesh, all three routes pass a 1% gap-core
-relative-RMS B gate on Hibino.  The current v4 artifacts report a 0.45977%
+relative-RMS B gate on compute host.  The current v4 artifacts report a 0.45977%
 maximum in the linear order-3 run and 0.16023% in the nonlinear order-2 run.
 The nonlinear HDiv-MMM, HCurl reduced-A, and H1 mixed total/reduced Omega
 runs converge and take 11.27 s, 216.93 s, and 134.71 s respectively.  The
@@ -144,7 +144,7 @@ Kelvin-domain elements). All three nonlinear routes converged at every level.
 At the finest level, the maximum pairwise parity-projected gap-core RMS
 difference was `0.27714%`; the maximum discretisation uncertainty was
 `0.17601%`, giving a conservative combined numerical envelope of `0.35399%`.
-The independently repeated finest solve on Hibino reproduced the mdx field
+The independently repeated finest solve on compute host reproduced the mdx field
 within `5.25e-14` relative RMS. This closes the mixed-formulation numerical
 acceptance for the exact `radia 4.95.77` implementation contract; it remains
 an agreement certificate, not analytic absolute truth.
@@ -158,8 +158,8 @@ an agreement certificate, not analytic absolute truth.
 | F1 | Resolved | BDM2 TET directional ChargeGram derivatives used the wrong degree-one moment order on the reviewed baseline. | `TetPotentialMomentsDirectionalUpTo1` stores degree-one moments in `z,y,x` (`PotentialMomentIndex`) order, while two consumers in `rad_hacapk_hdiv.cpp` used `mv[k+1]` as `x,y,z`. On the same 1-cell BDM2 case, the `ec57769de` baseline differs from finite differences by `1.327698e-1` for the complete Gram and `4.145764e-1` for the volume block; fifth-degree homogeneity is wrong by `3.727428e-1`. The correction in `51dce89c1`, included in this revision, reduces these to `4.019822e-9`, `2.778490e-9`, and `4.002814e-16`. |
 | F2 | P1, partially resolved | The field-evaluator IMA contract is green for mapped HEX BDM2 prescribed sources; independent solve parity remains a separate numerical lane. | On the current mdx production body, prescribed full/reduced fields differ by `2.7506 eps`, below the `10 eps` limit. Independently converged mass-Riesz CG full/reduced solves differ by `3.2835e-13` in sampled field. Three legacy focused checks were rerun and remain narrowly red: single-cell HEX `2.02e-14`, multicell HEX `4.93e-14`, and curved TET BDM2 `2.3931e-15` against a `2.2204e-15` limit. Preserve the field limit and fix those paths rather than loosening their tolerances or relabeling Krylov/reduction error as evaluator error. |
 | F3 | P1 | RT0 is publicly advertised again despite the BDM1/BDM2-only decision. | `_capabilities.py` exposes 3D TET/HEX order 0 and `DemagOperator` documents an order-0 broken-interface path. `HDivSolver` and field evaluation accept only orders 1 and 2. Remove the public RT0 entries/path and retain any topology-only experiment outside the production API. |
-| F4 | Resolved on `v4.95.71` | The released operator completes the finer C-yoke TET lane without loss of SPD. | The 1,688-element iron mesh solves on mdx and hibino, all three nonlinear routes converge, and the final three mesh levels pass the contraction/order gate. The older untracked `p^T A p < 0` report is not used as current evidence. |
-| F5 | Resolved for the released `4.95.77` implementation contract | The C-type comparison is the mixed total/reduced-Omega route with two required source-trace jumps, and its three-route nonlinear BDM2 mesh certificate passes. | `validation_test/c_type_three_engine/` owns the exact Cubit/ACIS mesh, shared CoilBuilder, PCHIP B(H) law, Kelvin contract, checkpoints, and portable JSON gates. Four levels on mdx plus the independent Hibino finest replay yield 0.27714% maximum finest pairwise gap-core RMS, a 0.35399% combined numerical envelope, and `5.25e-14` cross-host RMS. The old global-Omega four-level artifact is historical only. A later implementation hash must rerun this campaign before it can make the same claim. |
+| F4 | Resolved on `v4.95.71` | The released operator completes the finer C-yoke TET lane without loss of SPD. | The 1,688-element iron mesh solves on mdx and compute-host, all three nonlinear routes converge, and the final three mesh levels pass the contraction/order gate. The older untracked `p^T A p < 0` report is not used as current evidence. |
+| F5 | Resolved for the released `4.95.77` implementation contract | The C-type comparison is the mixed total/reduced-Omega route with two required source-trace jumps, and its three-route nonlinear BDM2 mesh certificate passes. | `validation_test/c_type_three_engine/` owns the exact Cubit/ACIS mesh, shared CoilBuilder, PCHIP B(H) law, Kelvin contract, checkpoints, and portable JSON gates. Four levels on mdx plus the independent compute host finest replay yield 0.27714% maximum finest pairwise gap-core RMS, a 0.35399% combined numerical envelope, and `5.25e-14` cross-host RMS. The old global-Omega four-level artifact is historical only. A later implementation hash must rerun this campaign before it can make the same claim. |
 | F6 | Resolved for primal solve/field; derivative open | Mapped/non-affine HEX BDM2 is a production material lane. | Complete-host tensor source rules preserve smooth-pair charge cancellation; reflection-invariant whole-host Duffy rules handle self and adjacent pairs. On mdx the 756-DoF q9/q12 operator has spectrum `[-8.53e-16, 0.999899]`, linear/nonlinear solves converge, and its material response differs from q10/q16 by `5.28e-4` in mass norm. q10/q16 differs from q11/q20 by `3.94e-4`. An independent Cubit 2025.12 Curve(2) four-HEX gate also passes linear/nonlinear solve and field checks. Shape derivatives fail loudly until the composite rule is differentiated. |
 | F7 | P2 | IMA disables tree acceleration for field maps. | `HDivFieldEvaluator::AlgorithmFor` returns `Direct` whenever images exist. This protects full/reduced roundoff parity, but large IMA observation maps cannot use the otherwise guarded treecode. Any image-aware acceleration needs a common full/reduced grouping and the F2 contract first. |
 | F8 | P2 | Exact vector-potential evaluation is narrower than H-field evaluation. | Exact `A` uses straight TET BDM1 equivalent currents. BDM2, curved, HEX, and WEDGE use NGSolve-mapped quadrature clouds assembled in Python. This is valid as an explicit converged quadrature route, not an all-topology exact/native claim. |
@@ -213,7 +213,7 @@ The Claude branch contains useful evidence, but it must not be merged wholesale:
 
 The latest Claude HDiv implementation originated outside a branch commit. It
 was a small part of the much larger dirty shared tree at
-`S:\Radia\01_GitHub`, based on `backup/main-pre-release-20260821` at
+`private-runtime-path`, based on `backup/main-pre-release-20260821` at
 `cbc029319`. Commit `51dce89c1` isolates only the patch identified in
 the local handover notes; no other co-located WIP was copied.
 
@@ -227,7 +227,7 @@ The correction is mathematically and structurally appropriate:
 4. The misleading `[1,x,y,z]` comment is replaced with the actual
    `PotentialMomentIndex` storage contract.
 
-An independent LAB comparison used the same mesh, deformation field,
+An independent validation host comparison used the same mesh, deformation field,
 quadrature, charge basis, and finite-difference step for clean `main` and the
 Claude candidate:
 
@@ -519,7 +519,7 @@ box.
 With order-2 HDiv and FEM spaces, `gram_eps=1e-14`, and linear `mu_r=1000`,
 the maximum parity-projected gap-core pairwise relative RMS is 0.12113%.
 Off-plane reflection errors are `1.95e-10` for HDiv, `4.67e-10` for
-reduced-A, and `1.95e-10` for Omega. The three LAB runtimes are 14.01 s,
+reduced-A, and `1.95e-10` for Omega. The three validation host runtimes are 14.01 s,
 12.00 s, and 2.60 s respectively; these are correctness timings, not release
 performance claims.
 
@@ -545,12 +545,12 @@ order-1 result as a discretization failure.
 
 The exact `v4.95.70` PyPI wheel was then run three times without checkpoint
 reuse on each idle 38-core Xeon Platinum 8368 host. Median HDiv/Omega runtimes
-were 12.09/42.59 s on mdx and 11.31/43.28 s on hibino. Thus HDiv was 3.52x and
+were 12.09/42.59 s on mdx and 11.31/43.28 s on compute-host. Thus HDiv was 3.52x and
 3.83x faster in this fixed order-2 nonlinear comparison while using 4.63x fewer
 DoFs. Every run produced the same 0.1803201266% gap-core discrepancy and the
 same nonlinear iteration counts. The raw artifacts and their hashes are
 indexed by
-`validation_test/c_type_three_engine/results/mdx_hibino_20260830_nonlinear_order2_summary.json`.
+`validation_test/c_type_three_engine/results/compute_compute_20260830_nonlinear_order2_summary.json`.
 
 The subsequent `v4.95.71` four-level campaign belongs to the historical global
 reduced-Omega formulation. Its refinement arithmetic is retained for
@@ -586,7 +586,7 @@ mesh-specific residue must be preserved as a result artifact before it is used
 as evidence.
 
 The diagonal-normalization fixture is green, but it does not close the public
-field contract. On the 2026-08-29 LAB build, the following tests failed both in
+field contract. On the 2026-08-29 validation host build, the following tests failed both in
 the combined validation process and when run alone:
 
 | Test | Measured error | Required limit |
@@ -720,7 +720,7 @@ not a reason to claim a HEX computation that was not performed.
 
 These are readiness records, not numerical certificates.  Do not cite
 three-engine agreement for Examples 6 or 7 until the runner finishes from a
-released native wheel on mdx or hibino and writes its checked result JSON.
+released native wheel on mdx or compute-host and writes its checked result JSON.
 
 ### 5.4 Periodic Kelvin BDDC gauge diagnosis (2026-09-04)
 
@@ -770,10 +770,10 @@ Periodic low-order coupling; high-order Kelvin `auto` selects BDDC above
 |---|---|---|
 | Resolved (2026-09-08, Sugahara) | Full-versus-IMA `rad.Fld` roundoff | The curved TET BDM2 check passes at 10 eps and the HEX Gram ENERGY at 10 eps: the image-folded block and the explicit mirrored-neighbour block integrate the same pair.  The two HEX FIELD checks sit at `2.2e-14` and `5.7e-14`.  That is not the directed symmetrization -- with Neumaier-compensated subdomain accumulation the block no longer depends on the summation order -- but the per-term rounding of a numerical 6^6-point pair rule whose full and image evaluations traverse the reference domain in different node orders (map-of-mirrored-nodes against reflect-then-map).  Summed over ~1e6 terms that floor is `sqrt(n_points) eps`, which for this computation IS machine precision; Sugahara accepted it as such on 2026-09-08 and the tests guard `1.2e-13` with the derivation written into them.  A future exact-arithmetic claim would need a canonical pair orientation making the two traversals bit-identical, or an analytic near rule for affine pairs. |
 | Resolved (2026-09-07) | Remove production RT0 | The public `vim.Solve` refuses order 0 with a message naming the only legitimate use (test locked).  The order-0 capability rows stay because broken RT0 is the material-topology operator space of `radia.topology_optimization` (`HDiv(order=0, discontinuous=True)` through `DemagOperator`), which is a different contract from a production solve; the capability table says so. |
-| P1 | Nonlinear C-yoke memory evidence | Four-level accuracy and repeated timing are closed on mdx and hibino for `v4.95.71`. Add measured process peak memory to a future scaling campaign before making a memory-efficiency claim. reduced-A remains an independent third-formulation audit rather than the primary production route. |
-| P1 | ESRF #3 H-matrix three-engine evidence | Run the repaired `leaf=64` operator on mdx or hibino through the tracked nonlinear three-engine runner. Require all three engines to converge, no HDiv Gram-curvature breakdown, and pairwise field RMS within the runner's stated limit. |
-| #6 closed (2026-09-08), #7 open | ESRF #6 and #7 three-engine evidence | Run the new coil-yoke runner from the released native wheel on mdx or hibino. Require all three nonlinear formulations to converge, retain every input mesh/source hash, and meet the core-stencil RMS acceptance limit. |
-| Closed for #6 (2026-09-08), open for #7 | Released reduced-A Kelvin BDDC replay | Install the merged wheel on hibino or mdx and rerun Examples #6 and #7. Preserve the physical/Kelvin gauge values, BDDC iterations, true residual, source and mesh hashes, and three-formulation field comparison in result JSON. |
+| P1 | Nonlinear C-yoke memory evidence | Four-level accuracy and repeated timing are closed on mdx and compute-host for `v4.95.71`. Add measured process peak memory to a future scaling campaign before making a memory-efficiency claim. reduced-A remains an independent third-formulation audit rather than the primary production route. |
+| P1 | ESRF #3 H-matrix three-engine evidence | Run the repaired `leaf=64` operator on mdx or compute-host through the tracked nonlinear three-engine runner. Require all three engines to converge, no HDiv Gram-curvature breakdown, and pairwise field RMS within the runner's stated limit. |
+| #6 closed (2026-09-08), #7 open | ESRF #6 and #7 three-engine evidence | Run the new coil-yoke runner from the released native wheel on mdx or compute-host. Require all three nonlinear formulations to converge, retain every input mesh/source hash, and meet the core-stencil RMS acceptance limit. |
+| Closed for #6 (2026-09-08), open for #7 | Released reduced-A Kelvin BDDC replay | Install the merged wheel on compute-host or mdx and rerun Examples #6 and #7. Preserve the physical/Kelvin gauge values, BDDC iterations, true residual, source and mesh hashes, and three-formulation field comparison in result JSON. |
 | Resolved for primal path | Mapped HEX BDM2 material solve | The composite mapped charge representation passes spectrum, linear/nonlinear solve, IMA, field, and quadrature-convergence gates on mdx. |
 | P2 | Mapped HEX BDM2 shape derivative | Differentiate the same complete-host tensor and whole-host Duffy representation, then lock it against finite differences before enabling topology optimization. The current API fails loudly. |
 | P2 | Image-aware field acceleration | Design grouping that is invariant under explicit reflection and reduced IMA representation; prove `<10 eps` direct parity before enabling tree/H-matrix evaluation for image-bearing field maps. |
@@ -782,14 +782,14 @@ Periodic low-order coupling; high-order Kelvin `auto` selects BDDC above
 | Resolved | reduced-A B-H contract | reduced-A now inverts the shared monotone PCHIP B(H) law by checked scalar root solves, uses the same vacuum-slope continuation, and passes the four-level three-formulation certificate. |
 | P2 | Configuration provenance | Classify all 14 `RADIA_HDIV_*` variables; keep fault injection/test telemetry private, expose supported tuning through `SolverConfig`, and serialize resolved values into result artifacts. |
 | Resolved | Same-material interfaces | The exporter removes only `DomainIn == DomainOut > 0` seams, remaps retained descriptors, and the regenerated C-yoke mesh passes strict labels, adjacency, exact reflection, and Kelvin identification gates. |
-| Resolved | Fine-TET operator indefiniteness | The released `v4.95.71` operator solves the 1,688-element finest C-yoke iron mesh on both mdx and hibino and the final three levels satisfy the contraction/order gate. |
+| Resolved | Fine-TET operator indefiniteness | The released `v4.95.71` operator solves the 1,688-element finest C-yoke iron mesh on both mdx and compute-host and the final three levels satisfy the contraction/order gate. |
 | P3 | Class ownership | Continue decomposition only along measured ownership boundaries; do not replace the old branch cascade with another flag registry. |
 
 ## 7. Focused verification
 
-This revision was verified on LAB with the native module loaded from this
+This revision was verified on validation host with the native module loaded from this
 worktree, then repeated with the exact `v4.95.70` timing wheel and the final
-`v4.95.71` four-level certificate wheel on mdx and hibino:
+`v4.95.71` four-level certificate wheel on mdx and compute-host:
 
 - `Build.ps1 -Verbose`: PASS after the C++ review hardening;
 - latest `origin/main` clean native rebuild with
@@ -819,7 +819,7 @@ worktree, then repeated with the exact `v4.95.70` timing wheel and the final
   28 iterations and `5.3061e-8` at 705,838 DoFs with a uniform `1e-6` gauge;
   the released-wheel three-engine rerun remains open.
 - exact-dense ChargeGram entry, public `DemagOperator`/`vim.Solve`, and
-  configured-principal-submatrix semantics: 9 tests PASS in 5.87 s on LAB;
+  configured-principal-submatrix semantics: 9 tests PASS in 5.87 s on validation host;
 - ESRF #3 exact-dense material diagnostic: PASS under its explicit 1 GiB cap.
   The historical parallel H-matrix failure at PCG iteration zero is explained
   by section 5.2. The repaired H-matrix must still complete the tracked remote
@@ -834,18 +834,18 @@ worktree, then repeated with the exact `v4.95.70` timing wheel and the final
   accuracy at 5.84969%, ruling out interpolation choice as the material cause;
 - order-2 nonlinear primary pair with the shared PCHIP law: PASS at 0.18032%
   gap-core relative RMS on all six remote runs; median HDiv/Omega timing was
-  12.09/42.59 s on mdx and 11.31/43.28 s on hibino, with 10,860/50,322 DoF.
+  12.09/42.59 s on mdx and 11.31/43.28 s on compute-host, with 10,860/50,322 DoF.
 - historical four-level order-2 nonlinear global-Omega certificate on
   `v4.95.71`: PASS for that retired formulation only. It is not evidence for
   the current mixed total/reduced-Omega route and must not be used in release material.
 - current v4 mixed total/reduced-Omega nonlinear BDM2 mesh certificate on `radia 4.95.77`:
   PASS. Four Cubit levels converge for exactly `hdiv_mmm`, `reduced_a`, and
   `mixed_total_reduced_omega`. The finest maximum pairwise gap-core RMS is
-  0.27714%, the combined numerical envelope is 0.35399%, and the mdx/Hibino
+  0.27714%, the combined numerical envelope is 0.35399%, and the mdx/compute host
   replay is `5.25e-14` relative RMS. A global reduced-Omega calculation is
   historical evidence only.
 - release-qud: PASS for `radia 4.95.71`; package versions and production file
-  hashes agree across LAB, the 100-machine, mdx, and hibino.
+  hashes agree across validation host, the 100-machine, mdx, and compute-host.
 
 The focused commands were:
 
@@ -881,7 +881,7 @@ python -m pytest -q `
 ```
 
 Any timing, fine-TET, or corrected C-yoke claim belongs in
-`validation_test/` and must run on hibino first, or on mdx only when hibino is
+`validation_test/` and must run on compute-host first, or on mdx only when compute-host is
 unavailable and the mdx CI queue is idle, with the machine, native build
 identity, element/geometry order, image group, material
 interpolant, ACA settings, DoF, build/apply/solve timing, and result checks
@@ -891,15 +891,15 @@ recorded in JSON.
 
 Branch `claude/hdiv-ima-curved-tet` (on the PR #93 head `35ebfd0cb`).  Three
 findings from the ESRF #6/#7 three-engine runs, each with its fix and its
-validation.  Timing numbers are LAB same-host relative smokes; decision-grade
-timing still belongs on idle mdx/hibino.
+validation.  Timing numbers are validation host same-host relative smokes; decision-grade
+timing still belongs on idle mdx/compute-host.
 
 ### 8.1 The IMA build of ESRF #7 was a per-entry scalar curved Duffy
 
 The #7 one-pole model is not a HEX mesh: `model_one_pole_20mm.vol` is 15,210
 curved P2 TET elements (`check.json`: `tetrahedron_count 15210`, `curve_order
 2`).  Its reduced BDM1 build with `image="-x-y"` ran for more than 61 minutes
-on hibino while the FULL 30 mm model (31,988 curved TET, no image) solved BDM1
+on compute-host while the FULL 30 mm model (31,988 curved TET, no image) solved BDM1
 in 403 s nonlinear and 256 s linear.
 
 Cause (`rad_hacapk_hdiv_entry.cpp`, `HighOrderTetEntryStrategy::Evaluate`):
@@ -1034,7 +1034,7 @@ tolerance was changed. All six dispatch tests pass after this correction.
 The other 40 focused tests covering Picard acceleration/history, mixed Omega,
 ESRF checkpoint contracts, and native TET image dispatch passed.
 
-Tests used the built source/native pair at `C:/temp/radia-hdiv-ima/src`
+Tests used the built source/native pair at `private-runtime-path`
 (commit `8c5b071693961564519effa6463feb531e0f2b1a`), explicitly imported before
 pytest, with the updated tests from the isolated handover worktree. No PYD was
 copied. This is not evidence of a new wheel build or deployment.
@@ -1044,9 +1044,9 @@ differences of 1.9927109321574784e-14 and 4.944633724445392e-14 against the
 unchanged 10-epsilon gate (2.220446049250313e-15). The full field-contract file
 has three passes and two failures. Their cause is not established by this run.
 The #6/#7 production three-engine acceptance and timings require the new native
-release on mdx/hibino; diagnostic MINRES results do not certify production CG.
+release on mdx/compute-host; diagnostic MINRES results do not certify production CG.
 
-The LAB release-worktree editable path is not repaired blindly: release-quad
+The validation host release-worktree editable path is not repaired blindly: release-quad
 retains the verified release source until the explicitly selected development
 checkout is current and clean. Repoint forward to that verified source and
 check editable metadata plus a fresh import; never restore an older checkout
@@ -1054,7 +1054,7 @@ merely because it was once called canonical.
 
 ### 8.6 ESRF #6/#7 restart gate (2026-09-05)
 
-Both hibino and mdx were queried through SSH: no Python compute processes were
+Both compute-host and mdx were queried through SSH: no Python compute processes were
 listed, and both imported installed PyPI Radia 4.95.81 from site-packages.
 Neither host yet contains the new native TET image implementation. No heavy run
 was launched against that old native binary and no PYD was copied.
@@ -1083,7 +1083,7 @@ not successful field agreement or completion of either case.
 With user approval, a candidate wheel was built from `6d66d38f9` using
 `Build.ps1` and `Build_Wheel.ps1 -DryRun`, without publishing it. Its SHA-256 is
 `8c34e57bd9ef9dc98ea788941266133f1cea06e5625be98897428480a9b58a7d`.
-Hibino installed it into `C:/temp/radia-candidate-6d66d38f9/venv`, with
+compute host installed it into `private-runtime-path`, with
 read-only access to system dependencies and candidate-local Radia, threadpoolctl,
 and test tools. All 336 package files matched the wheel; pip check passed;
 the installed native TET image tests passed 8/8. No standalone PYD was copied.
@@ -1120,7 +1120,7 @@ as comparison results. New-wheel three-engine validation is still required.
 
 The material-envelope fix is commit `c11ed1b2b`. Its separate candidate wheel
 (`a9c3ee6cdf2263eb020a21f07514ddc9c254cf129a2fd9f2d250a1b5d1ecac90`)
-was installed in `C:/temp/radia-candidate-c11ed1b2b/venv` on hibino. All 336
+was installed in `private-runtime-path` on compute-host. All 336
 Radia files match the wheel, pip check passes, and 31 installed-wheel native/FEM
 tests pass in 56.26 s. The local focused suite passes 41 tests. Both new
 material-envelope tests were independently run against the previous Fable
@@ -1140,10 +1140,10 @@ yet been demonstrated. No three-engine acceptance, main merge, tag, or PyPI
 publication is claimed. Both invalid FEM pilots and the failed #6 process
 have stopped; the candidate environments remain available for further work.
 
-### 8.8a Installed-wheel reproduction of candidate 63225d0bb on Hibino (2026-09-05)
+### 8.8a Installed-wheel reproduction of candidate 63225d0bb on compute host (2026-09-05)
 
 The candidate from `63225d0bb` was packaged after `Build.ps1` and installed
-only into `C:/temp/radia-candidate-63225d0bb/venv`. No loose native binary was
+only into `private-runtime-path`. No loose native binary was
 deployed, no public package was uploaded, and the system Radia installation
 was unchanged. The installed 336 Radia files match the wheel byte-for-byte;
 `pip check` passed. Wheel SHA256:
@@ -1158,9 +1158,9 @@ physical-upper-band defect, not an accepted accuracy result.
 The installed-wheel validation runner now resolves Radia from the active
 environment rather than forcibly inserting a repository source directory.
 The run used 32 threads, `gram_eps=1e-10`, and no HDiv numerical overrides.
-Evidence: `validation_test/esrf_three_engine/results/hex_gram_definiteness_63225d0bb_hibino.json`.
+Evidence: `validation_test/esrf_three_engine/results/hex_gram_definiteness_63225d0bb_compute.json`.
 
-| Check | Hibino result |
+| Check | compute host result |
 | --- | --- |
 | Mesh | 1648 HEX, 592 non-affine cells, 45,792 field DOF |
 | Gram build | 188.59 s; compression 0.3321; maximum rank 60 |
@@ -1177,14 +1177,14 @@ not an operator-wide error bound. The production CG failure independently
 prevents acceptance. Higher-permeability floor cases were not run because
 the scan stops at its first failure. No three-engine field agreement is
 claimed. All foreground jobs finished, and no Python compute process was
-left running on Hibino.
+left running on compute host.
 
 ### 8.9 ESRF #6 root cause: HEX charge-Gram definiteness (2026-09-05)
 
-The iteration-86 CG breakdown of section 8.8 reproduces on LAB from the
+The iteration-86 CG breakdown of section 8.8 reproduces on validation host from the
 production entry point (`solve_configured_linear_material_auto_prec`, chi0
 warmstart of the energy-Newton path, `p^T A p = -1.3e9` at iteration 86 versus
-`-1.9e9` on hibino with 32 threads): deterministic, not a threading race.  Along
+`-1.9e9` on compute-host with 32 threads): deterministic, not a threading race.  Along
 the breakdown direction `p^T W p = +4.95e12` and `p^T N p = -4.96e12`, and the
 raw O(n^2) quadratic form is `-4.52e12`, so the charge Gram `N = B^T G B` itself
 is indefinite; codex's raw-Gram observation is confirmed.  The Newton tangent is
@@ -1263,12 +1263,12 @@ rebuilds the production Gram on the #6 asset and fails unless the exact
 clusters are PSD, the production CG converges at the chi0 floor and at 2x, 4x
 and 8x larger initial permeability, the preconditioned LOBPCG edges stay inside
 [-1e-8, 1 + 1e-3], and the raw O(n^2) and H-matrix quadratic forms agree along
-the minimizing direction (the separate compression check).  Its LAB result is
+the minimizing direction (the separate compression check).  Its validation host result is
 recorded in `results/hex_gram_definiteness_lab.json`: clusters PSD, raw and
 H-matrix quadratic forms agreeing to 1.8e-14 along the minimizing direction,
 `lambda_max` Ritz 1.051 (2.12 before the admissibility fix), and the CG floor
-scan still red at mu_r 2001 (iteration 100).  Timings are relative (LAB, 421 s
-build against 120 s for the legacy family); the idle mdx/hibino run is codex's.
+scan still red at mu_r 2001 (iteration 100).  Timings are relative (validation host, 421 s
+build against 120 s for the legacy family); the idle mdx/compute-host run is codex's.
 `lambda_min` from LOBPCG is not a definiteness oracle here: the exact null
 space of N (every charge-free field) stalls it at zero, so the production CG
 floor scan is the decisive check.
@@ -1314,7 +1314,7 @@ distorted); a mesh perturbed by `1e-10` m so that every cell is non-affine
 exposed a 4-fold degenerate face mode at `lambda` `-5.009e-3` (self face
 `+0.65`, touching face-face `-0.46`, near band `-0.20` in units of the mode's
 M-norm, almost entirely on affine faces); the consistent band routing leaves a
-mode at `-2.27e-3` and the CG at iteration 98 (hibino).  The reason is
+mode at `-2.27e-3` and the CG at iteration 98 (compute-host).  The reason is
 structural: on the flat lattice the same entry errors that are `4e-6` relative
 give an M-metric error spectrum of `[-1.0e-3, +4.0e-4]`, and `2e-7` entries
 give `[-4.9e-5, +3.2e-5]` -- an amplification of about `1e3`.  The modes
@@ -1330,8 +1330,8 @@ for any charge samples) and only the short-range part, which has no
 cancellation structure, integrated per self/touching block; or the assembly of
 each BDM DOF's composite charge (cell divergence plus boundary face charge,
 zero net) with one rule per DOF pair, i.e. the dipole-kernel formulation with
-analytic element integrals.  Heavy runs are hibino's (Gram build 350 s at
-45,792 DoF); LAB numbers above are relative.
+analytic element integrals.  Heavy runs are compute-host's (Gram build 350 s at
+45,792 DoF); validation host numbers above are relative.
 
 ### 8.11 Pair-domain Duffy quadrature for touching HEX pairs (2026-09-06)
 
@@ -1353,7 +1353,7 @@ rule converged algebraically (unit-cube self-energy `-3.1 %` at 4 points,
 smooth and nonvanishing for any Q2 map, so the analytic radial reduction of
 Taylor-Duffy (which needs affine elements) is not required: tensor Gauss on the
 unit hypercube converges exponentially.  Measured with `glpair_n` points per
-dimension (`pair_duffy_check.py`, LAB): the unit-cube Coulomb self-energy
+dimension (`pair_duffy_check.py`, validation host): the unit-cube Coulomb self-energy
 `1.88231264438961` is reproduced to `2.5e-6` (4), `4.9e-9` (6), `1.8e-12` (8);
 the unit-square self-energy `2.9732095982` to `1.8e-6`, `4.1e-9`, `1.2e-11`;
 on a `2x2x2` lattice warped by `1e-7` every touching block changes by `1.4e-4`
@@ -1367,7 +1367,7 @@ face-face blocks).  `RADIA_HDIV_HEX_PAIR_DUFFY=0` restores the block-wise near
 family for A/B and is reported as a numerical override.
 
 With the pair rule, the near-band product rule and the non-conforming
-fallback in place the #6 gate on hibino (Gram 1220 s, 45792 faces) still broke
+fallback in place the #6 gate on compute-host (Gram 1220 s, 45792 faces) still broke
 the production CG at iteration 93 (`p^T A p = -2.2e11`), with the element
 clusters PSD (`lambda_max 0.9004`), the LOBPCG `lambda_min` Ritz stalled at
 `-4.9e-7` and `lambda_max` Ritz `1.027`.  That pointed away from quadrature and
@@ -1402,7 +1402,7 @@ merged hyperbolic pole tips, one sweep command may not name several volumes,
 and the tolerance must be `1e-3` of the extent (the imprinted lateral faces of
 the tips do not all span the full length; a quarter-extent tolerance pulled
 them into the source set and Cubit demanded multisweep).  Headless Cubit
-2025.12 on LAB: 2408 HEX, 2200 boundary faces, 3616 nodes, order-2 curving,
+2025.12 on validation host: 2408 HEX, 2200 boundary faces, 3616 nodes, order-2 curving,
 `check-vol` PASSED, conforming (0 hanging facets, 0 duplicated faces), and
 byte-identical from the python probe and the generated journal.  Examples 3, 5
 and 7 still mesh and export conforming meshes (144 HEX, 1112 HEX, 367845 TET).
@@ -1410,8 +1410,8 @@ and 7 still mesh and export conforming meshes (144 HEX, 1112 HEX, 367845 TET).
 non-conforming mesh unless `--allow-nonconforming`; the mesh policy records
 `iron_sweep_axis` and `conforming_partition`.
 
-**Gate result (hibino, conforming mesh, pair-domain Duffy family,
-`results/hex_gram_definiteness_hibino.json`): PASSED.**  Gram 1567 s for
+**Gate result (compute-host, conforming mesh, pair-domain Duffy family,
+`results/hex_gram_definiteness_compute.json`): PASSED.**  Gram 1567 s for
 62192 face unknowns; element clusters PSD (`lambda_min -3.8e-16`,
 `lambda_max 0.8891`); the production chi0-warmstart CG converges at every
 floor of the scan -- 431 iterations at `mu_r ~ 2001`, 486 at 4001, 542 at
@@ -1426,12 +1426,12 @@ example 6 alone indefinite was the mesh.  Next validation target: the CEFC
 
 ### 8.13 HEX Gram build cost: the near blocks, and the translation-congruent cache (2026-09-06)
 
-Where HEX stands against TET (all timings mdx/hibino, committed JSON): the
+Where HEX stands against TET (all timings mdx/compute-host, committed JSON): the
 C-type three-engine nonlinear BDM2 run solves 32580 TET face unknowns in 37 s
 (1.1 ms per unknown, 10-23x faster than the two FEM formulations at 0.3 %
 agreement), while the HEX BDM1 quadrupoles need ~1500 s for ~61000 unknowns
 (25 ms per unknown).  The `gram_stats` profile of the Q-mag `h = 10 mm`
-linear run (hibino, 38 threads, thread-summed seconds) locates the whole gap:
+linear run (compute-host, 38 threads, thread-summed seconds) locates the whole gap:
 
 | dispatch class | blocks | thread-seconds | per block |
 |---|---|---|---|
@@ -1463,7 +1463,7 @@ Image blocks (`img > 0`) keep the host key.  `tests/feec/test_hdiv_vim_hex_congr
 locks the mechanism on a graded (non-lattice) swept mesh: the cache engages
 (templates far fewer than hosts, shared hits above 30 % of lookups) and the
 Gram equals the uncached one (`RADIA_HDIV_DISABLE_CONGRUENT_CACHE`, a
-performance latch reported in `hmat_stats`) to `1e-12`.  The hibino timing of
+performance latch reported in `hmat_stats`) to `1e-12`.  The compute-host timing of
 the Q-mag and example-6 builds with and without the cache is the next entry
 of this section; the further levers, in order, are the pair point count
 (`glpair_n` 8 -> 6 is 5.6x on every near block at `6e-9` self-energy accuracy,
@@ -1480,13 +1480,13 @@ block.  That is why the first example-6 gate's cluster check took 2785 s
 against 449 s for the block-wise arm (the ratio of the block costs), why its
 CG floor "took" 2083 s for 431 iterations (the setup, not the iterations), and
 why the nonlinear Q-mag run spent 8545 s of its 10167 s in the Newton loop for
-866 inner CG iterations, while the same nonlinear solve on LAB with the shared
+866 inner CG iterations, while the same nonlinear solve on validation host with the shared
 cache needed 43 s for 2674 inner iterations (16 ms each, 7 Newton iterations,
 no backtracks).  With every BDM1 near pair in the instance-shared cache those
 phases collapse to their iteration cost.
 
-Measured on hibino (38 threads, one job at a time, Q-mag linear `mu_r = 1000`,
-`results/timing_qmag_*_hibino.json`; the pre-fix row is the 17:18 run of the
+Measured on compute-host (38 threads, one job at a time, Q-mag linear `mu_r = 1000`,
+`results/timing_qmag_*_compute-host.json`; the pre-fix row is the 17:18 run of the
 same mesh with the previous wheel):
 
 | build | unknowns | Gram wall | near blocks evaluated | near thread-s | shared hits / lookups |
@@ -1521,9 +1521,9 @@ in `hmat_stats`); the gate and field evidence below then made 6 the default
 for every pair, and the two knobs remain for accuracy studies.
 
 The example-6 definiteness gate on the conforming mesh, rerun with the shared
-cache and the pair point count forced to 5, 6 and 8 for every pair (hibino,
-`results/hex_gram_definiteness_glpair{5,6,8}_hibino.json`; the block-wise
-family arm is `results/hex_gram_definiteness_blockwise_family_hibino.json`):
+cache and the pair point count forced to 5, 6 and 8 for every pair (compute-host,
+`results/hex_gram_definiteness_glpair{5,6,8}_compute-host.json`; the block-wise
+family arm is `results/hex_gram_definiteness_blockwise_family_compute.json`):
 
 | Gram | build | cluster check | CG at the chi0 floor (431 it) | LOBPCG `lambda_max` | verdict |
 |---|---|---|---|---|---|
@@ -1541,7 +1541,7 @@ same `0.99990` at 5, 6 and 8 points with CG iteration counts within a few
 per cent of each other.  The tapered sector lattice of the near-family test
 (the harder distorted case) gives the same generalized spectrum at 8, 6 and 5
 points (`lambda_max` 0.99813 / 0.99813 / 0.99812, `lambda_min` at round-off),
-and the CEFC 2020 quadrupole field on the `h = 15 mm` mesh (LAB, `mu_r =
+and the CEFC 2020 quadrupole field on the `h = 15 mm` mesh (validation host, `mu_r =
 1000`, `B_perp(15 mm)`) moves by `4e-6` relative between 8 and 6 points and by
 `6e-5` between 8 and 5 (`-0.227134`, `-0.227135`, `-0.227147` T), two orders
 below the 0.3 % FEM agreement.  The production default is therefore **6 points
@@ -1549,7 +1549,7 @@ for every pair** (`glpair_n` = `glpair_affine_n` = 6, 2026-09-07); 8 stays an
 explicit choice for entry-level accuracy studies, 5 is acceptable on the
 evidence but not the default.  On the quadrupole `h = 15 mm` mesh most near
 pairs involve a distorted host, so this flip (not the affine-pair rule) is
-what brought that build from 615 s to 119 s on LAB.  At 6 points example 6
+what brought that build from 615 s to 119 s on validation host.  At 6 points example 6
 builds at 2.1 ms per unknown, at 5 points at 0.8 ms, against the TET route's
 1.1 ms per unknown: the HEX Gram build is now of the same order as TET.
 
@@ -1559,10 +1559,10 @@ With the near family cut down, the build-phase timers (`build_prep_s`,
 `build_cluster_s`, `build_leafgen_s`, `build_fill_s`, `build_diag_s` in
 `hmat_stats`, from HACApK `ctl->time[90..92]` and the base build) showed
 where the remaining wall time went: on the quadrupole `h = 10 mm` build on
-LAB, prep (the self-energy pass `ComputeChargeSigma`) 219 s and the ACA+ fill
+validation host, prep (the self-energy pass `ComputeChargeSigma`) 219 s and the ACA+ fill
 658 s of 878 s, cluster tree / leaf generation / diagonal cache below a
 second.  Yet the quadrature branches summed to only a quarter of the thread
-capacity (hibino: 4,275 thread-seconds against 38 x 448 s; the LAB process
+capacity (compute-host: 4,275 thread-seconds against 38 x 448 s; the validation host process
 ran on about half its cores).  The cause was the schedule, not the work:
 `hacapk_parallel_for` called `ngcore::ParallelFor` with the default task
 count, which splits the range into one contiguous chunk per thread -- a
@@ -1581,15 +1581,15 @@ block (`hex_general_shared_entries` equals `hex_general_shared_misses`,
 locked by the congruent-cache test; on the quadrupole the duplication was
 five blocks in 26,000, so the gain is the schedule).
 
-Quadrupole `h = 15 mm`, `mu_r = 1000`, 6 points, LAB (8 threads, relative
+Quadrupole `h = 15 mm`, `mu_r = 1000`, 6 points, validation host (8 threads, relative
 numbers only): Gram build 119 s -> 62 s, prep 28 s -> 5 s, fill 91 s -> 55 s,
 with the quadrature thread-seconds unchanged (382 -> 406 near, 44 far);
 450 thread-seconds over 8 workers is 56 s, so the build now runs at about 93 %
 parallel efficiency against about 40 % before.  Field unchanged
 (`B_perp(15 mm) = -0.227135 T`).
 
-The hibino rerun (38 threads, one job at a time,
-`results/timing_qmag_{h10,h6}_mu1000_dynamic_hibino.json`, the two rows added
+The compute-host rerun (38 threads, one job at a time,
+`results/timing_qmag_{h10,h6}_mu1000_dynamic_compute-host.json`, the two rows added
 to the table of section 8.13) combines the dynamic schedule, the compute-once
 cache and the 6-point default: the `h = 10 mm` Gram (60,816 unknowns) builds
 in **37 s** against 450 s with the congruent cache alone and 1,625 s before
@@ -1604,7 +1604,7 @@ and 50 s of those builds, so the remaining gap to perfect balance is under a
 third and no longer worth a dedicated pass.  The conforming example-6 gate
 under the same wheel builds its Gram in 61 s (first gate 1,567 s) and passes
 with the same `lambda_max` 0.99990
-(`esrf_three_engine/results/hex_gram_definiteness_dynamic_hibino.json`).
+(`esrf_three_engine/results/hex_gram_definiteness_dynamic_compute.json`).
 
 ### 8.15 The same magnet on HEX and on TET (2026-09-07)
 
@@ -1612,8 +1612,8 @@ The per-unknown figures of section 8.14 compare different magnets.  The
 question that matters is the same magnet at the same accuracy, so the CEFC
 2020 quadrupole was meshed from one Cubit import both ways
 (`build_qmag_cubit_mesh.py`, swept HEX and `--scheme tet`, each exported at
-curve order 2 or 1) and solved by every route on hibino, one job at a time,
-linear `mu_r = 1000` (`quadrupole_cefc2020/results/timing_qmag_*_hibino.json`;
+curve order 2 or 1) and solved by every route on compute-host, one job at a time,
+linear `mu_r = 1000` (`quadrupole_cefc2020/results/timing_qmag_*_compute-host.json`;
 the mixed Omega FEM gives `B_perp(15 mm) = -0.22725 T`):
 
 | route | h [mm] | elements | unknowns | Gram [s] | of which prep [s] | solve [s] | total [s] | ms per unknown | `B_perp(15 mm)` [T] |
@@ -1651,9 +1651,9 @@ integral for affine HEX pairs, which is where the remaining Duffy cost sits.
 
 ### 8.16 ESRF example 6: the candidate nonlinear three-engine result (2026-09-08)
 
-The coil-driven quadrupole ran from the production-candidate wheel on mdx1,
+The coil-driven quadrupole ran from the production-candidate wheel on worker-a,
 one job at a time, through the tracked runner
-(`esrf_three_engine/results/case6_nonlinear_three_engine_mdx1.json`; the
+(`esrf_three_engine/results/case6_nonlinear_three_engine_worker_a.json`; the
 per-element warm-start arrays are omitted from the committed copy, which
 records the SHA-256 of the complete artifact).  All three nonlinear
 formulations converged on their own meshes and one shared mesh-free coil
@@ -1705,7 +1705,7 @@ diagonals, mixed Kelvin Omega, constrained Picard acceleration/history,
 ChargeGram dispatch, capability/environment contracts, ESRF model/mesh
 contracts, and Q-mag source/geometry contracts. The native artifact SHA-256 is
 `060e75808a1b4863aaa80976e7ca043031471f35672f834535ef9dc1d481e1f3`.
-The local test record is `C:/temp/hdiv-integration-focused-20260910.xml`;
+The local test record is `private-runtime-path`;
 it is not a remote performance benchmark or a committed release artifact.
 
 This source-build check is not an installed-wheel release gate. The earlier

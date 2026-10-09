@@ -67,6 +67,8 @@
     ],
     ".github/workflows/radia-fast.yml": [
       "tests/test_ci_execution_policy.py",
+        "tests/test_public_runtime_privacy.py",
+      "tests/test_privacy_source_contract.py",
       "tests/test_run_test_tier.py",
       "tests/test_test_tier_policy.py",
       "tests/test_hdiv_bh_table_saturation_contract.py"

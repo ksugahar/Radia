@@ -98,7 +98,7 @@ CPP_SDK_PREREQUISITES = """
 The SDK directory ships inside the Cubit install:
 
 ```
-Windows:  C:\\Program Files\\Coreform Cubit 2025.12\\SDK\\
+Windows:  C:\\Program Files\\Coreform Cubit 2025.12private-runtime-path
 Linux:    /opt/Coreform-Cubit-2025.12/SDK/
 ```
 

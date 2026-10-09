@@ -1,6 +1,6 @@
 """Which mesh is more ACCURATE for the same cost (dof)? tet vs tet vs hex.
 
-Promoted from C:/temp/mesh_quality_study (2026-08-06) with its committed
+Promoted from private-runtime-path (2026-08-06) with its committed
 results JSON (Data Persistence Policy). Re-run with
 `python run_accuracy_per_dof.py` (requires Cubit + netgen + build123d;
 scratch meshes land in artifacts/, gitignored).
@@ -160,7 +160,7 @@ def main():
 
     from ngsolve import TaskManager
     results = {"timestamp": datetime.now().isoformat(),
-               "hostname": platform.node(),
+               "platform_class": platform.system(),
                "problem": ("H1 order-1 Poisson, manufactured "
                            "u=sin(ax)sin(by)exp(cz); relative L2/H1 error "
                            "vs ndof for every route on the same STEP"),

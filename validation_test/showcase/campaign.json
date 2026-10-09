@@ -1,6 +1,6 @@
 {
   "schema": "radia.showcase.campaign.v1",
-  "execution_host": "Hibino",
+  "execution_host": "compute",
   "recovered_archive_sha256": "d211ba5ae1de3af2e6966a25e78f125f224ce3a589a4d0ccb344a211349734c4",
   "source_sha256": {
     "validation_test/showcase/run_selected.py": "bdf7378390a9b15748f2fcc9c940ba33bc920c1fc10cddf276bd68bc19864f27",
@@ -28,12 +28,12 @@
     "ih_fem_kelvin_demo_coil.step": "1a316956fbc8f0e961b78eb1fb54b39378bced0437a71a1c055deca0240a1d0d"
   },
   "result_sha256": {
-    "complex_coil.json": "32715f00164b6619f3a16c9727c7bc50f0cbc0e284da20fc01d5f7580357e5d3",
-    "heating.json": "a8b5a93fbd07f8eed7c934cb7b001f0682d4d7ed765d1324aca7eb6870268789",
-    "lift.json": "a61c1dc8f2044ffa4445d60b9bf3ee75f2db26c339fc91f7d00849188368a541",
-    "motor.json": "86a2536b9a6f15c5ad30a3ae2d549d60394858961af0a2608361256d8ddf2dc2",
-    "particles.json": "cd60074acea0c80853c68afde2a651dd8ac62bff47fd3e3952988944b81c2088",
-    "winding.json": "4ff2f244a50c819d54044e111f0c91fa4303327823f6b382709ef9d64296d822"
+    "complex_coil.json": "ce42985dff4faad909b5a3fe95fb89d048ae4934cc4920a20aa1cc951490e294",
+    "heating.json": "6c65506a545866f869e9a83bc0ae06ce4c379e33f95f776c34de4ceaa390d8e8",
+    "lift.json": "6396ab798cab7eec0e643136b6156108bee0f133f147d0140f73886d9103d803",
+    "motor.json": "30cf1174863bee93231656210321c6cf0d2868adfca98ca13af82df4c91dc642",
+    "particles.json": "eca53ad91d52cf1299fc94fcc78004ccb666c41cd9f01309c897dfe0d3c2f65e",
+    "winding.json": "9b27c0e228db217573c72c6ba027fbccff9e85e9a930fe13f10861dacb829467"
   },
   "scope": "Six focused numerical reruns; historical study notebooks were retained, not all re-executed."
 }

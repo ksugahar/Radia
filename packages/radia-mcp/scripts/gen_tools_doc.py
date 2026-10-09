@@ -151,7 +151,7 @@ def check() -> bool:
     # Read raw bytes, then decode -- matches what write() puts on disk
     # (LF-only). Avoids platform-dependent newline translation at READ
     # time. But the file on disk MAY have CRLF anyway because of:
-    #   (a) Windows `core.autocrlf=true` (LAB + self-hosted runner default)
+    #   (a) Windows `core.autocrlf=true` (validation runtime + self-hosted runner default)
     #   (b) `actions/checkout@v4` on persistent runners doesn't re-write
     #       files that git considers "clean" via autocrlf, even after
     #       `.gitattributes` adds `text eol=lf` rule.

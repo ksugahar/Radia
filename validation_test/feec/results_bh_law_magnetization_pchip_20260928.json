@@ -78,7 +78,7 @@
     }
   },
   "validation": {
-    "host": "mdx1",
+
     "python": "3.12.10",
     "base_commit": "cc211d1816aa9611b8e695d4c0f7a37a60e0a802",
     "trees": {
@@ -135,14 +135,14 @@
           "failed": [],
           "tail": [
             "",
-            "-- generated xml file: C:\\temp\\bhlaw-20260928\\new_hdiv_regression.junit.xml ---",
+            "-- generated xml file: <private-path>/bhlaw-20260928\\new_hdiv_regression.junit.xml ---",
             "================= 338 passed, 1 xfailed in 2022.39s (0:33:42) ================="
           ]
         },
         "base_rerun_failed": null
       }
     },
-    "after_oracle_update": "the two radia-mcp candidate-oracle tests (B-PCHIP expectations) were rewritten to an independent M-PCHIP SciPy oracle; 78 passed on mdx1",
+    "after_oracle_update": "the two radia-mcp candidate-oracle tests (B-PCHIP expectations) were rewritten to an independent M-PCHIP SciPy oracle; 78 passed on worker_a",
     "preexisting": [
       "tests/test_c_type_p1_box_lane.py::test_total_a_zero_source_shortcut_is_bit_identical (1e-12 relative, fails identically on the unchanged tree)"
     ],

@@ -243,18 +243,18 @@ def test_nonlinear_omega_uses_the_periodic_kelvin_h1_factory():
 def test_historical_global_omega_results_preserve_pass_and_failed_gate_evidence():
     results = SUITE / "results"
     mesh = json.loads(
-        (results / "lab_20260829_mesh.json").read_text(encoding="utf-8")
+        (results / "validation_20260829_mesh.json").read_text(encoding="utf-8")
     )
     linear = json.loads(
-        (results / "lab_20260829_linear_order2.json").read_text(encoding="utf-8")
+        (results / "validation_20260829_linear_order2.json").read_text(encoding="utf-8")
     )
     nonlinear = json.loads(
-        (results / "lab_20260829_nonlinear_order1.json").read_text(
+        (results / "validation_20260829_nonlinear_order1.json").read_text(
             encoding="utf-8"
         )
     )
     nonlinear_order2 = json.loads(
-        (results / "lab_20260829_nonlinear_order2_primary.json").read_text(
+        (results / "validation_20260829_nonlinear_order2_primary.json").read_text(
             encoding="utf-8"
         )
     )
@@ -284,12 +284,12 @@ def test_historical_global_omega_results_preserve_pass_and_failed_gate_evidence(
 def test_historical_mixed_omega_v3_evidence_is_not_current_contract():
     results = SUITE / "results"
     linear = json.loads(
-        (results / "hibino_20260902_linear_order3_mixed_omega_v3.json").read_text(
+        (results / "compute_20260902_linear_order3_mixed_omega_v3.json").read_text(
             encoding="utf-8"
         )
     )
     nonlinear = json.loads(
-        (results / "hibino_20260902_nonlinear_order2_mixed_omega_v3.json").read_text(
+        (results / "compute_20260902_nonlinear_order2_mixed_omega_v3.json").read_text(
             encoding="utf-8"
         )
     )
@@ -315,12 +315,12 @@ def test_current_mixed_omega_three_engine_v4_evidence_is_complete():
     results = SUITE / "results"
     linear = json.loads(
         (
-            results / "hibino_20260903_linear_order3_mixed_omega_v4.json"
+            results / "compute_20260903_linear_order3_mixed_omega_v4.json"
         ).read_text(encoding="utf-8")
     )
     nonlinear = json.loads(
         (
-            results / "hibino_20260903_nonlinear_order2_mixed_omega_v4.json"
+            results / "compute_20260903_nonlinear_order2_mixed_omega_v4.json"
         ).read_text(encoding="utf-8")
     )
     expected = {
@@ -371,7 +371,7 @@ def test_current_mixed_omega_mesh_certificate_is_complete_and_portable():
     assert certificate["fine_mesh_maximum_pairwise_relative_rms"] < 0.005
     assert certificate["combined_relative_numerical_uncertainty"] < 0.01
     assert certificate["reproducibility"]["reference_machine"].casefold() == "mdx"
-    assert certificate["reproducibility"]["replicate_machine"].casefold() == "hibino"
+    assert certificate["reproducibility"]["replicate_machine"].casefold() == "compute"
     assert certificate["reproducibility"]["maximum_relative_rms"] < 1e-9
     assert certificate["mesh_family"] == "cubit_20260830_mesh_family.json"
     assert (results / certificate["mesh_family"]).is_file()
@@ -380,7 +380,7 @@ def test_current_mixed_omega_mesh_certificate_is_complete_and_portable():
         "coarse": "c_type_20260903_nonlinear_bdm2_coarse.json",
         "medium": "c_type_20260903_nonlinear_bdm2_medium.json",
         "fine": "c_type_20260903_nonlinear_bdm2_fine.json",
-        "finer": "c_type_20260903_nonlinear_bdm2_finer_mdx.json",
+        "finer": "c_type_20260903_nonlinear_bdm2_finer_reference.json",
     }
     assert [row["name"] for row in certificate["level_results"]] == list(expected)
     for row in certificate["level_results"]:
@@ -398,7 +398,7 @@ def test_historical_global_omega_accuracy_certificate_is_not_relabelled():
     certificate = json.loads(
         (
             results
-            / "mdx_hibino_20260830_nonlinear_order2_convergence.json"
+            / "reference_compute_20260830_nonlinear_order2_convergence.json"
         ).read_text(encoding="utf-8")
     )
 
@@ -420,7 +420,7 @@ def test_historical_global_omega_accuracy_certificate_is_not_relabelled():
     assert certificate["combined_relative_numerical_uncertainty"] < 0.01
     assert certificate["reproducibility"]["reference_machine"].casefold() == "mdx"
     assert certificate["reproducibility"]["replicate_machine"].casefold() == (
-        "hibino"
+        "compute"
     )
     assert certificate["reproducibility"]["maximum_relative_rms"] < 1e-9
     assert all(
@@ -509,7 +509,7 @@ def test_accuracy_replication_rejects_same_host_and_software_drift():
     with pytest.raises(RuntimeError, match="independent host"):
         module._replicate_metrics(base, dict(base))
 
-    different_host = {**base, "machine": "hibino"}
+    different_host = {**base, "machine": "compute"}
     drifted = {**different_host, "radia_version": "4.95.70"}
     with pytest.raises(RuntimeError, match="different Radia version"):
         module._replicate_metrics(base, drifted)

@@ -28,7 +28,7 @@ companion verify_clebsch_legendre_transform.py family):
   Psi_B = -b A_th,                Psi_th = a A_B          (conjugate MMF potential)
   dr    = (dPsi/q) e_H + (dA/B) e_perp,   q = B/mu_s = |H|
 
-Golden bands asserted at the end of the run (2026-07-23 baseline, LAB):
+Golden bands asserted at the end of the run (2026-07-23 baseline, validation runtime):
   constant-mu sanity   : designed walls are an exact annulus (dev < 1e-6)
   wall |B| (5..85 deg) : mean rel err < 1.0 % on the inner wall,
                          < 1.5 % on the outer wall, both mesh resolutions
@@ -460,7 +460,7 @@ def main():
     report["meta"] = {
         "generated_at_utc": datetime.datetime.now(datetime.timezone.utc)
         .isoformat(timespec="seconds"),
-        "hostname": platform.node(),
+        "platform_class": platform.system(),
         "python_version": platform.python_version(),
         "purpose": "correctness validation only (no timing claims)",
     }

@@ -461,7 +461,7 @@ JOURNAL_PROFILES = r"""
 % OR (default):
 \\documentclass[journal]{IEEEtran}  % two-column
 
-\\usepackage[section]{placeins}    % LAB DEFAULT
+\\usepackage[section]{placeins}    % validation runtime DEFAULT
 \\usepackage{subcaption}
 \\usepackage{graphicx}
 ```

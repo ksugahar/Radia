@@ -1,6 +1,6 @@
 """Regression test for the export phantom-block bug.
 
-BUG (2026-05-30, reported by keiko on 100号機 with a 6-turn loft coil
+BUG (2026-05-30, reported by keiko on runtime host with a 6-turn loft coil
 journal at W:/31_Go-Tech/.../2026_05_21_6turn_coil_loft/):
   Running `export netgen` against a journal with K user-defined
   blocks produces:
@@ -104,7 +104,7 @@ def _snapshot_cubit_state():
 
 
 def test_radia_export_netgen_does_not_create_phantom_block(fresh_cubit, tmp_path):
-    """Reproduces the keiko 2026-05-30 100号機 bug.
+    """Reproduces the keiko 2026-05-30 runtime host bug.
 
     A journal with exactly 1 user-defined block (the workpiece sphere)
     must not leave a phantom block in the Cubit session after the export.

@@ -5,19 +5,19 @@
   "case": "series RLC capacitance optimization at 1 kHz",
   "solver": "matlab",
   "solver_backend": "ltspice-ac",
-  "source_artifact": "S:\\Radia\\01_GitHub\\matlab\\samples\\ltspice_rlc_resonance_ac.cir",
+  "source_artifact": "<private-path>/Radia\\01_GitHub\\matlab\\samples\\ltspice_rlc_resonance_ac.cir",
   "pass": true,
   "run": {
     "command": "radia.ltspice.run(..., RawFormat='binary')",
-    "workdir": "C:\\temp\\radia_ltspice_rlc_validation",
+    "workdir": "<private-path>/radia_ltspice_rlc_validation",
     "exit_code": 0,
     "duration_s": 123.2493415,
-    "stdout_log": "C:\\temp\\radia_ltspice_rlc_validation\\best_ac_replay\\ltspice_rlc_resonance_ac.log"
+    "stdout_log": "<private-path>/radia_ltspice_rlc_validation\\best_ac_replay\\ltspice_rlc_resonance_ac.log"
   },
   "result_files": [
-    "S:\\Radia\\01_GitHub\\validation_test\\optimization\\results_ltspice_rlc_ac_resonance_20260806.json",
-    "S:\\Radia\\01_GitHub\\validation_test\\optimization\\ltspice_rlc_ac_resonance_20260806.png",
-    "S:\\Radia\\01_GitHub\\matlab\\samples\\ltspice_rlc_resonance_ac.cir"
+    "<private-path>/Radia\\01_GitHub\\validation_test\\optimization\\results_ltspice_rlc_ac_resonance_20260806.json",
+    "<private-path>/Radia\\01_GitHub\\validation_test\\optimization\\ltspice_rlc_ac_resonance_20260806.png",
+    "<private-path>/Radia\\01_GitHub\\matlab\\samples\\ltspice_rlc_resonance_ac.cir"
   ],
   "checks": {
     "ran_to_completion": true,
@@ -92,7 +92,7 @@
   "simulink_time_domain_crosscheck": {
     "available": true,
     "passed": true,
-    "model_file": "S:\\Radia\\01_GitHub\\matlab\\radia_rlc_resonance_plant.slx",
+    "model_file": "<private-path>/Radia\\01_GitHub\\matlab\\radia_rlc_resonance_plant.slx",
     "measured_ringdown_frequency_Hz": 1001.4525125853172,
     "analytic_ringdown_frequency_Hz": 1001.4531385863119,
     "measurement_relative_error": 6.2509264840983664E-7,

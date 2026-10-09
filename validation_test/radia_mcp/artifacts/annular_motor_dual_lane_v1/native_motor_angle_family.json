@@ -7,7 +7,7 @@
   "execution_policy": "MATLAB and Simulink verification with no external solver session.",
   "execution_environment": {
     "host_role": "compute",
-    "hostname": "MDX2",
+
     "platform": "PCWIN64"
   },
   "matlab_version": "26.1.0.3346908 (R2026a) Update 5",
@@ -505,5 +505,25 @@
     "simulink_s_function_compile",
     "foreign_openmp_runtime_isolation"
   ],
-  "status": "pass"
+  "status": "pass",
+  "source_privacy_redactions": {
+  "src/core/rad_hacapk_hdiv.cpp": {
+    "method": "cpp-tokens-v1",
+    "historical_text_sha256": "3b5e96a2c15ea506eaf644b7517f8cb523e7945126ad4943e15568dcee2a953c",
+    "published_text_sha256": "4a3c2a67c4b9bb71f8edfcfe66746ddd3eeb353012e36ead3a87ccaebba84c81",
+    "semantic_sha256": "62a663bc6ab50907ef76d5a8aac4294fcfc49344ce168a8bfc17b55ebf13de02"
+  },
+  "src/core/rad_hacapk_hdiv.h": {
+    "method": "cpp-tokens-v1",
+    "historical_text_sha256": "5c4145f4c0b91cc5b50e9e7cec6d75dbb3f50321ab6e559afcdba6aaa1ca6f0b",
+    "published_text_sha256": "8d4ed79cbfcb3dca2cadba0d988f51b113a0311a1a02696af7450c37db673416",
+    "semantic_sha256": "b5d6ee3f98f8f74dcfc35bcde3a074ea7bb5aead69291bddb711904e8b788d9a"
+  },
+  "validation_test/radia_mcp/generate_motor_angle_family_mex_artifact.m": {
+    "method": "matlab-runtime-pair-v1",
+    "historical_text_sha256": "adb72df8329ce441483c3bcb332fad46e0dbf2a87a1193f0356d7b738da38258",
+    "published_text_sha256": "6aed0493e9a37298cf6cde01e83b2e031058f72a091e1db7f96137fa06fddca3",
+    "semantic_sha256": "973ca0ca0dd518d81db55f10200b2499254243649ea5269f693b7af465c04d7c"
+  }
+}
 }

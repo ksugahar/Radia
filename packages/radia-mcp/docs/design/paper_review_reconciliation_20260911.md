@@ -3,7 +3,7 @@
 ## Baseline and interpretation
 
 Source inspected: `f5e083375f82233b69fe64097ca570bc671db45e`.
-Original: `C:/temp/pw_review/REVIEW_paper_writing_2026-09-03.md`, read in full.
+Original: `private-runtime-path`, read in full.
 Its baseline was `ddd50dfe4`, compared with `d88fbf9d2`; its line numbers,
 installed versions and tool counts are historical, not current assertions.
 This document maps that report rather than copying its old recommendations.
@@ -29,7 +29,7 @@ From the full repository checkout, process-local `PYTHONPATH` selected
 `packages/radia-mcp/src`; no editable installation or client was changed.
 
 ```powershell
-python -X utf8 -m pytest -q -c packages/radia-mcp/pyproject.toml packages/radia-mcp/tests/test_paper_writing_review_regressions.py packages/radia-mcp/tests/test_paper_writing.py packages/radia-mcp/tests/test_paper_writing_conclusion_first_use.py --basetemp C:/temp/paper-ledger-a
+python -X utf8 -m pytest -q -c packages/radia-mcp/pyproject.toml packages/radia-mcp/tests/test_paper_writing_review_regressions.py packages/radia-mcp/tests/test_paper_writing.py packages/radia-mcp/tests/test_paper_writing_conclusion_first_use.py --basetemp private-runtime-path
 ```
 
 Result: **170 passed, no failures or skips**, 6.98 seconds. This is a focused

@@ -1484,9 +1484,9 @@ def _field_aware_chain(loops, signs, mpts, target_flat, vector_b,
     of candidate orders -- a nearest-neighbour seed and a 2-opt-shortened
     variant (``_two_opt_order``) -- keeping whichever the cut-opt drives
     lowest.  The 2-opt minimises connector LENGTH, which gives the cut-opt a
-    tidier, shorter-rung start and HELPS most cases (LAB Gx: +9..+70 %), but
+    tidier, shorter-rung start and HELPS most cases (validation runtime Gx: +9..+70 %), but
     a length-optimal reorder can break the rungs' symmetric stray-field
-    cancellation and HURT others (LAB Gx abe nl=16: -78 %) -- exactly the
+    cancellation and HURT others (validation runtime Gx abe nl=16: -78 %) -- exactly the
     documented 'shorter rungs != better field' trap (single_stroke.md).
     Selecting the lower-wire-error order makes the 2-opt strictly an upside:
     GUARANTEED never worse than nearest-neighbour, captures its gains where

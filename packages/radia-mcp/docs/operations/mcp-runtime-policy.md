@@ -6,9 +6,9 @@ It does not relax numerical solver, native ABI or release acceptance.
 
 ## Host installation policy (updated 2026-10-04)
 
-100号機 is the only editable development host, using a dedicated local venv
-for maintainers and student contributors. LAB consumes a verified wheel.
-LAB editable installations are unsupported legacy state. Move them forward to
+development host is the only editable development host, using a dedicated local venv
+for maintainers and student contributors. validation host consumes a verified wheel.
+validation host editable installations are unsupported legacy state. Move them forward to
 a verified wheel that includes the reviewed source changes; do not downgrade
 to an older published package just to remove editable metadata. Keep the
 release runtime separate from in-progress edits. The development rules below
@@ -98,7 +98,7 @@ selected source to `%ProgramData%\Radia\editable-intent.json`
 (`RADIA_EDITABLE_INTENT_FILE`) together with the previous pointer, commit,
 actor, time and reason, and appends every change to a log beside it. `repoint`
 refuses other hosts, does not uninstall first and does not stop processes. The
-read-only `release_quad.py verify-editable` command checks LAB's fixed wheel
+read-only `release_quad.py verify-editable` command checks validation host's fixed wheel
 and 100's development editable. A pushed ref is required only for
 formal handoff or completion evidence (`repoint --require-pushed`), not for
 routine MCP development.
@@ -137,9 +137,9 @@ separately, with host/client and observation time. When not checked, say so.
 ## Release completion
 
 For radia-mcp release-dual, completion requires passing the package release
-checks, verified publication, a verified wheel/fresh import on LAB
-and a verified editable update/fresh import on 100, and LAB client reconnection with live source and harmless-tool checks.
-The LAB check must cover affected servers/contracts, not an unrelated tool.
+checks, verified publication, a verified wheel/fresh import on validation host
+and a verified editable update/fresh import on 100, and validation host client reconnection with live source and harmless-tool checks.
+The validation host check must cover affected servers/contracts, not an unrelated tool.
 
 Existing clients on 100 may load the update at their next normal restart.
 Report these as `next-launch-pending`; they do not block publication or release
@@ -152,8 +152,8 @@ This distinction does not weaken wheel, dependency, or numerical acceptance.
 ## Scope
 
 radia-mcp is independently versioned and distributed. Its release-dual targets
-are LAB (verified wheel) and 100 (editable) only, like cubit-mesh-export.
-Do not deploy radia-mcp to hibino, mdx1 or mdx2, or run the full Radia QUAD
+are validation host (verified wheel) and 100 (editable) only, like cubit-mesh-export.
+Do not deploy radia-mcp to compute-host, worker-a or worker-b, or run the full Radia QUAD
 installer for an MCP-only update. Isolated CI/wheel tests on compute runners
 are tests, not host deployment. Existing installations on excluded hosts are
 not automatically removed. MCP updates do not wait for a Radia solver release.

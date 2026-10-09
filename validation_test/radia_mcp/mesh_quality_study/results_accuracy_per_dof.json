@@ -1,6 +1,6 @@
 {
  "timestamp": "2026-08-06T19:12:23.934705",
- "hostname": "lab",
+
  "problem": "H1 order-1 Poisson, manufactured u=sin(ax)sin(by)exp(cz); relative L2/H1 error vs ndof for every route on the same STEP",
  "geometries": {
   "sphere": {

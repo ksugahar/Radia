@@ -40,7 +40,7 @@ ENTRY_SCRIPT = CUBIT_HELPERS / "auto_kelvin_entry.py"
 
 
 def _find_cubit() -> Path | None:
-    # LAB / 100号機 / mdx use this path; mdx rarely runs this test
+    # validation runtime / runtime host / mdx use this path; mdx rarely runs this test
     p = Path(r"C:\Program Files\Coreform Cubit 2025.12\bin\coreform_cubit.exe")
     return p if p.is_file() else None
 

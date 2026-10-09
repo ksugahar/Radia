@@ -245,7 +245,7 @@ def benchmark(case_path: Path, repeats: int) -> dict:
         "radia_version": radia.__version__,
         "radia_git_head": source_commit,
         "python_version": platform.python_version(),
-        "host": platform.node(),
+        "platform_class": platform.system(),
         "binary": {
             "path": relative_binary_path,
             "bytes": binary_path.stat().st_size,

@@ -19,7 +19,7 @@ included. The JSON contains laboratory paths and host/runtime provenance.
   sibling `../esrf6_labels.json` contract. The mesh itself is not included.
 
 `threads8/telemetry.json` records the exact command. It uses the isolated
-hibino candidate venv, wheel mode, p=1, assembly bonuses 4/8, evaluation order
+compute-host candidate venv, wheel mode, p=1, assembly bonuses 4/8, evaluation order
 16, fixed source order 3 and eight threads. Use the pinned lane to reproduce
 the historical result; running the current gate is a separate reanalysis.
 No new computation was launched while preserving these files.

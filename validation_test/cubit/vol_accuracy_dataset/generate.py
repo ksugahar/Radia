@@ -349,7 +349,7 @@ def _write_dataset(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source_cases": str(CASES_PATH.relative_to(REPO_ROOT).as_posix()),
         "environment": {
-            "hostname": platform.node(),
+            "platform_class": platform.system(),
             "platform": platform.platform(),
             "python": platform.python_version(),
             "ngsolve": _package_version("ngsolve"),

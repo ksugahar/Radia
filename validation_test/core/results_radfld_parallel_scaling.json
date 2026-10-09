@@ -1,6 +1,6 @@
 {
   "timestamp": "2026-07-04T20:18:39.144280",
-  "hostname": "mdx",
+
   "benchmark": "radfld_batch_parallel_scaling",
   "problem": {
     "cores": 38,

@@ -11,7 +11,7 @@ deployment.
 ## Reproduction identity
 
 - Native build: clean commit `4cd0a7f4b0a1ca875a3c97a62bf95a8a74656aea`,
-  `Build.ps1 -MatlabMexOnly -RequireNativeProvenance` on LAB, exit 0.
+  `Build.ps1 -MatlabMexOnly -RequireNativeProvenance` on validation host, exit 0.
 - MEX SHA-256: `a9eac0124bc989a77bdfb12a15209bb91c244369bb0f97c2e341f910b303a136`.
 - MATLAB test sources: `19f991add` (only per-suite scratch isolation after the
   build commit; numerical source and MATLAB setup/generator unchanged).
@@ -28,19 +28,19 @@ its owned worker tree on timeout. Running desktop sessions are not attached.
 Host identity is obtained from the OS; the selected scratch and provenance
 environment variables are explicitly passed into the new Engine session.
 
-Both hibino and mdx2 timed out before Engine readiness. Their empty worker logs
+Both compute-host and worker-b timed out before Engine readiness. Their empty worker logs
 were recovered and hash-verified (SHA-256
 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`).
 This is startup failure, not evidence of a numerical failure or a diagnosed
 licensing cause. Credentials and runner services were not changed.
 
-LAB Engine startup succeeded. Initial launcher issues (Engine requires
+validation host Engine startup succeeded. Initial launcher issues (Engine requires
 `io.StringIO`, and `COMPUTERNAME` was not inherited) were corrected before the
 actual tests. Test results and final disposition are recorded below.
 
 ## Result
 
-LAB completed all 87 tests: **84 passed, 3 failed, 0 incomplete**. The generator
+validation host completed all 87 tests: **84 passed, 3 failed, 0 incomplete**. The generator
 correctly returned failure. The unmodified generated result is retained in Git
 at commit `e79a6d8e7`, path
 `artifacts/native_refresh_20260915/native_motor_angle_family.json`, SHA-256
@@ -64,16 +64,16 @@ production proof were not restamped. The new proof-generator regression checks
 separate version/timestamp fields and the actual linked native JSON hash in a
 temporary output, without overwriting that historical proof.
 
-Raw build/Engine logs and transfer inputs are retained on LAB at
-`C:/temp/mcp-native-evidence-logs-20260915`, owned by this maintenance task for
+Raw build/Engine logs and transfer inputs are retained on validation host at
+`private-runtime-path`, owned by this maintenance task for
 the numerical follow-up. Cleanup trigger: accepted replacement evidence and
 its committed diagnosis. Dedicated Engine workers have exited; existing
 desktop MATLAB sessions were not touched.
 
 Both owned remote staging directories were removed after recovery and evidence
-commit; absence was verified on hibino and mdx2. No other job directory was
-removed. The clean LAB build worktree
-`C:/temp/mcp-native-build-20260915-3c6197863` has the same task owner and cleanup
+commit; absence was verified on compute-host and worker-b. No other job directory was
+removed. The clean validation host build worktree
+`private-runtime-path` has the same task owner and cleanup
 trigger as the diagnostic logs. A direct isolated `import radia` confirmed the
 missing `_radia_pybind` runtime; this must be supplied by a genuine build, not
 by weakening the application assertion.
@@ -90,7 +90,7 @@ was held open until a genuinely passing replacement was generated.
   build. Kernel and MATLAB tests are unchanged from the native build commit.
 - Both `-MatlabMexOnly` and `-RadiaOnly` builds passed. A fresh Python process
   imported Radia 5.0.0 from the selected build tree, not a global editable tree.
-- Dedicated LAB R2026a Engine: **87 passed, 0 failed, 0 incomplete**. No tolerance
+- Dedicated validation host R2026a Engine: **87 passed, 0 failed, 0 incomplete**. No tolerance
   was relaxed. Added a non-affine interior-node velocity finite-difference check.
 - Python regression: `test_native_production_hex_volume_self_block_derivative_invariants`
   passed, covering translation, scaling and exact symmetry through pybind11.
@@ -103,7 +103,7 @@ was held open until a genuinely passing replacement was generated.
   versions. The failed JSON is superseded (Git preserves the investigation).
   Kernel and executed-test hashes now guard evidence freshness, not just the
   MEX gateway source. Integration and source-freshness checks: **46 passed**.
-- Current raw logs: `C:/temp/mcp-native-forward-20260915`, owned by this task
+- Current raw logs: `private-runtime-path`, owned by this task
   as build/debug evidence until the next native release accepts this fix.
   The current build tree has the same owner and retention condition; it is
   not an editable installation or a rollback distribution.
@@ -111,8 +111,8 @@ was held open until a genuinely passing replacement was generated.
 This closes the three reproduced failures, not a full Radia release, a live
 MCP deployment, or the unrelated remote Engine startup investigation.
 
-The obsolete LAB staging directory `C:/temp/mcp-native-evidence-logs-20260915`
+The obsolete validation host staging directory `private-runtime-path`
 could not be removed: the execution policy rejected the recursive cleanup
 command before it ran. It remains owned by this task pending permitted cleanup,
 not as a rollback target. Current MEX/Python build logs were separately recovered
-to `C:/temp/mcp-native-forward-20260915` and their SHA-256 hashes verified.
+to `private-runtime-path` and their SHA-256 hashes verified.

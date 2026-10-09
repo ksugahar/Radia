@@ -49,12 +49,12 @@ python src/radia/panels/calc_inductance.py \
     --esim-max-iter 15 --esim-tol 1e-3 --esim-relax 0.5 \
     --esim-per-panel \
     --h1-order 1 --wp-bem-backend intree-dense \
-    --output C:/temp/I100_per_panel.json
+    --output private-runtime-path
 # (drop --esim-per-panel for the scalar comparator)
 
 # 3) Visualisation (Fig. 2 of the paper)
 python validation_test/ih_esim_benchmark/plot_zs_per_dof_map.py \
-    C:/temp/I100_per_panel.json
+    private-runtime-path
 ```
 
 For the full numerical results JSON used in the paper see

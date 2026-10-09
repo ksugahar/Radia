@@ -206,7 +206,7 @@ def test_em_elf_quarter_xz_NI_2000():
     for face-conformality at the air-yoke interface).  The ELF
     13-hex topology is preserved in the .jou + builder for
     reference; users who need the exact 13-hex mesh can disable the
-    `unite` step.  Runtime ~6.5 min on LAB.
+    `unite` step.  Runtime ~6.5 min on validation runtime.
 
     Skipped if the ELF .meg is not present (CI / mdx environments).
     """

@@ -1,6 +1,6 @@
 {
   "timestamp": "2026-03-07T11:36:29.867282",
-  "hostname": "lab",
+
   "benchmark": "bench_parallel_setup",
   "description": "BDDC parallel vs serial setup: 1-thread vs 8-thread",
   "results": [

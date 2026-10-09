@@ -88,10 +88,10 @@ then select the built candidate. Neither command installs a package.
 
 ```powershell
 $env:PYTHONPATH = ''
-python validation_test/sparsesolv/iccg_study/run_production.py --part throughput --kind symmetric --space hcurl --mesh C:/temp/iccg-production.vol --output C:/temp/iccg-baseline.json
+python validation_test/sparsesolv/iccg_study/run_production.py --part throughput --kind symmetric --space hcurl --mesh private-runtime-path --output private-runtime-path
 $env:PYTHONPATH = (Resolve-Path src).Path
-python validation_test/sparsesolv/iccg_study/run_production.py --part throughput --kind symmetric --space hcurl --mesh C:/temp/iccg-production.vol --output C:/temp/iccg-candidate.json
-python validation_test/sparsesolv/iccg_study/run_production.py --part ams --output C:/temp/ams-production.json
+python validation_test/sparsesolv/iccg_study/run_production.py --part throughput --kind symmetric --space hcurl --mesh private-runtime-path --output private-runtime-path
+python validation_test/sparsesolv/iccg_study/run_production.py --part ams --output private-runtime-path
 ```
 
 Check the recorded module identity and binary hash before comparing results.

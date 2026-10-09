@@ -2,8 +2,8 @@
   "schema": "cubit-mesh-export.multi-geometry-validation.v1",
   "generated_at_utc": "2026-09-12T04:34:10.861430+00:00",
   "order": 2,
-  "plugin_dir": "C:\\temp\\radia-cubit-internal-surface-review\\src\\cubit_plugin\\build-ccm",
-  "stdout_log": "C:\\temp\\cubit-multi-geometry-07d26466f.log",
+  "plugin_dir": "<private-path>/radia-cubit-internal-surface-review\\src\\cubit_plugin\\build-ccm",
+  "stdout_log": "<private-path>/cubit-multi-geometry-07d26466f.log",
   "native_provenance": {
     "schema": "cubit-mesh-export.native-payloads.v2",
     "payloads": {
@@ -212,10 +212,10 @@
   "all_passed": true,
   "subprocess_returncode": 0,
   "loaded_ccm": {
-    "path": "C:\\temp\\radia-cubit-internal-surface-review\\src\\cubit_plugin\\build-ccm\\cubit_mesh_export.ccm",
+    "path": "<private-path>/radia-cubit-internal-surface-review\\src\\cubit_plugin\\build-ccm\\cubit_mesh_export.ccm",
     "sha256": "327bba1de087685a2846a3ed088c8a6984c6feba91e8ff62bd4edba36c4cf247",
     "size": 2302464,
-    "load_line": "Loading Plugin: 'C:\\temp\\radia-cubit-internal-surface-review\\src\\cubit_plugin\\build-ccm\\cubit_mesh_export.ccm'",
+    "load_line": "Loading Plugin: '<private-path>/radia-cubit-internal-surface-review\\src\\cubit_plugin\\build-ccm\\cubit_mesh_export.ccm'",
     "observed_in_stdout": true,
     "matches_manifest": true
   }

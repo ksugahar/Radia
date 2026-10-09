@@ -44,7 +44,7 @@ _CI_SELECT_ALL = not _CI_SELECTORS or "tests" in _CI_SELECTED_FILES
 # is not importable, including imports under tests/ subdirectories and missing
 # optional dependencies reached through a project module such as
 # `radia_mcp.radia_ngsolve.solve -> ngsolve`.
-# On LAB / a full-dependency runner, every remaining package test runs. Actual
+# On validation runtime / a full-dependency runner, every remaining package test runs. Actual
 # Netgen/NGSolve solves, convergence studies, and solver comparisons live in
 # the repository-level `validation_test/radia_mcp/` suite instead.
 #
@@ -117,7 +117,7 @@ def _imported_modules(text: str) -> set:
     Relative imports (`from . import x`) are intra-package and skipped;
     In the real GitHub-hosted minimal matrix, `pytest.importorskip("x")`
     collects and self-skips when x is absent.  Under
-    RADIA_MCP_FORCE_MINIMAL=1 on LAB, x may actually be installed; include
+    RADIA_MCP_FORCE_MINIMAL=1 on validation runtime, x may actually be installed; include
     importorskip targets in that simulation so the local gate still behaves
     like the minimal matrix."""
     mods = set()

@@ -2,7 +2,7 @@
 
 Document format conversion: PPTX<->PDF, PDF->JPG, slide / speaker-note extraction, figure-readability check, business-card OCR rename.
 
-Promoted 2026-06-02 from mcp-server-document.doc_convert (LAB-private)
+Promoted 2026-06-02 from mcp-server-document.doc_convert (validation runtime-private)
 to radia-mcp (public PyPI), alongside presentation / poster /
 doc_convert / pdf / bibliography.
 

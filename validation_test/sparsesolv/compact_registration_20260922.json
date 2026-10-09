@@ -1,6 +1,6 @@
 {
   "schema": "radia.compact-registration-validation.v1",
-  "host": "mdx1",
+
   "date": "2026-09-22",
   "ngsolve_version": "6.2.2606",
   "scope": "Python registration change tested against existing native binaries; no native rebuild",

@@ -1,6 +1,6 @@
 {
  "timestamp": "2026-07-12T12:20:11",
- "hostname": "mdx",
+
  "benchmark": "hex_gram_build_ablation",
  "problem": {
   "cube_size_m": 1.0,

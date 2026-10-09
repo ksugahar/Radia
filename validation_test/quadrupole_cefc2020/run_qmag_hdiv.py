@@ -10,7 +10,7 @@ C-type three-engine ``solve_hdiv`` adapter (the coils are Radia racetracks, no c
 evaluates B at the 31 diagonal points and reports B_perp(15 mm) and the gradient.  The checks
 are internal: finite field, the odd symmetry of B_perp along the diagonal (quadrupole), and a
 converged nonlinear loop.  Mesh convergence is judged across the ``qmag_h*.vol`` series.
-Heavy: run on hibino (one job at a time).
+Heavy: run on compute-host (one job at a time).
 """
 from __future__ import annotations
 
@@ -203,7 +203,7 @@ def main(argv=None) -> int:
     if even_part > options.symmetry_tolerance:
         failures.append(f"B_perp is not odd along the diagonal (even part {even_part:.2e})")
     report = {
-        "schema": SCHEMA, "generated_at_utc": datetime.now(timezone.utc).isoformat(), "host": platform.node(),
+        "schema": SCHEMA, "generated_at_utc": datetime.now(timezone.utc).isoformat(), "platform_class": platform.system(),
         "implementation": implementation_identity(),
         "radia_source": radia_source,
         "radia_version": getattr(rad, "__version__", None), "radia_file": rad.__file__,

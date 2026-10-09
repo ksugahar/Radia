@@ -362,7 +362,7 @@ def test_peec_spice_docs_use_installed_radia_package():
     docs_dir = ROOT / "docs" / "peec_integration" / "demos" / "spice"
     forbidden = (
         "src/radia",
-        # Internal lab research trees under W:/30_* must never be imported.
+        # Internal lab research trees under private-runtime-path must never be imported.
         "W:/30_",
         "from peec_matrices import",
         "from lanczos_reduction import",

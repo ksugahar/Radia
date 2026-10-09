@@ -175,7 +175,7 @@ def main() -> None:
         "protocol": "unit sphere; Cubit tet size 0.65 / hex sphere scheme size 0.4; "
                     "export netgen orders 1-5 with Netgen L2 coefficients and with the geometric refit; "
                     "field problem of paper_sphere_benchmark.py for orders 1-4",
-        "environment": {"host": platform.node(), "python": platform.python_version(),
+        "environment": {"platform_class": platform.system(), "python": platform.python_version(),
                         "platform": platform.platform(),
                         "ngsolve": importlib.metadata.version("ngsolve"),
                         "plugin_dir": str(args.plugin_dir), "cubit_exe": str(args.cubit_exe)},

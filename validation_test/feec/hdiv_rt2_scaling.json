@@ -1,7 +1,7 @@
 {
   "schema": "radia.hdiv_rt2_scaling.v1",
   "generated_at_utc": "2026-07-14T08:15:40.777204+00:00",
-  "validation_host": "Hibino",
+
   "platform": "Windows-11-10.0.22000-SP0",
   "python_version": "3.12.10",
   "radia_version": "4.95.10",

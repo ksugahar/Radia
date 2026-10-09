@@ -4,11 +4,11 @@ Radia interface components -- Cubit-side ``register_toolbar.py``, Simulink
 application runners, and ``calc_*.py`` subprocess scripts -- write
 to the same file:
 
-    Windows: C:/temp/radia_panel_log_<user>.txt
+    Windows: private-runtime-path<user>.txt
     Other:   $TMPDIR/radia_panel_log_<user>.txt
 
 The ``<user>`` suffix is so that on a shared Windows machine (e.g.
-100号機 with 21 lab accounts) each user owns their own log file
+runtime host with 21 lab accounts) each user owns their own log file
 instead of fighting over a single ACL-restricted file that the
 first-to-open user (usually Administrator) effectively monopolises.
 
@@ -25,23 +25,23 @@ Every line is tagged with:
 
   - millisecond timestamp
   - source component (cubit / ih-window / inductance / fem_kelvin / ...)
-  - **user@host** so logs from multiple machines (LAB, 100号機, mdx)
+  - **user@host** so logs from multiple machines (validation runtime, runtime host, mdx)
     or multiple users on the same machine can be told apart
 
 Example::
 
-    [2026-04-12 14:30:12.345] [ksugahar@LAB         ] (cubit       ) register_toolbar.py loaded
-    [2026-04-12 14:30:18.892] [ksugahar@LAB         ] (cubit       ) _launch_radia_ngsolve: ENTER
-    [2026-04-12 14:30:25.103] [ksugahar@LAB         ] (ih-workbench) run: cmd=...
-    [2026-04-12 14:30:25.567] [ksugahar@LAB         ] (inductance  ) MESH:loaded radia_model.vol
-    [2026-04-12 14:30:37.842] [ksugahar@LAB         ] (inductance  ) SOLVE_DONE 12.3s
-    [2026-04-12 14:30:37.901] [ksugahar@LAB         ] (ih-workbench) result: L=87.81 nH
+    [2026-04-12 14:30:12.345] [ksugahar@validation runtime         ] (cubit       ) register_toolbar.py loaded
+    [2026-04-12 14:30:18.892] [ksugahar@validation runtime         ] (cubit       ) _launch_radia_ngsolve: ENTER
+    [2026-04-12 14:30:25.103] [ksugahar@validation runtime         ] (ih-workbench) run: cmd=...
+    [2026-04-12 14:30:25.567] [ksugahar@validation runtime         ] (inductance  ) MESH:loaded radia_model.vol
+    [2026-04-12 14:30:37.842] [ksugahar@validation runtime         ] (inductance  ) SOLVE_DONE 12.3s
+    [2026-04-12 14:30:37.901] [ksugahar@validation runtime         ] (ih-workbench) result: L=87.81 nH
 
 The user@host tag is captured **once at process start** (in
 ``init_panel_log``) so it does not change mid-session even if
 environment variables shift. This makes a multi-user log immediately
-self-explanatory: Kubota's runs on 100号機 will be tagged
-``[kubota@KUBOTA-PC      ]``, Sugahara's lab runs ``[ksugahar@LAB         ]``.
+self-explanatory: Kubota's runs on runtime host will be tagged
+``[kubota@KUBOTA-PC      ]``, Sugahara's lab runs ``[ksugahar@validation runtime         ]``.
 
 The log is **NOT truncated** by individual processes — only the
 top-level Cubit-side ``register_toolbar.py`` truncates it on each
@@ -73,7 +73,7 @@ import traceback
 # ============================================================
 # Log file path
 # ============================================================
-# Per-user filename so that on a multi-user Windows box (e.g. 100号機
+# Per-user filename so that on a multi-user Windows box (e.g. runtime host
 # with 21 lab accounts) each user owns their own log file.  A shared
 # file at C:\radia_panel_log.txt was owned by whoever created it first
 # (usually Administrator) and non-admin users silently lost every write

@@ -2381,8 +2381,8 @@ samples: recovered or averaged display fields are not constitutive oracles.
 Validated path: `validation_test/c_type_three_engine/run_three_engine.py`.
 This analysis workflow belongs to Radia MCP, not the exporter-owned Cubit MCP.
 Historical C-type records in `validation_test/c_type_three_engine/results/`
-(`hibino_20260902_linear_order3_mixed_omega_v3.json` and
-`hibino_20260902_nonlinear_order2_mixed_omega_v3.json`) report passed runs on
+(`compute_20260902_linear_order3_mixed_omega_v3.json` and
+`compute_20260902_nonlinear_order2_mixed_omega_v3.json`) report passed runs on
 Radia 4.95.77. They do not certify a rebuilt current binary or FFAG acceptance.
 FFAG comparison on a common Kelvin mesh, CoilBuilder source and NKJ1 material
 remains pending; do not describe FFAG as accepted to 1 % on this evidence.

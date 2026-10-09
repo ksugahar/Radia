@@ -189,7 +189,7 @@ def test_loop_pollution_corrupts_binput_hysteresis():
     results = dict(
         description="Controlled loop injection into the B-input constitutive law "
                     "(collocation failure mode reproduced on the loop-free HDiv solver)",
-        timestamp=datetime.now().isoformat(), hostname=platform.node(),
+        timestamp=datetime.now().isoformat(), platform_class=platform.system(),
         nx=NX, H0_A_per_m=H0, seed=SEED, eps_cases=[])
 
     with ng.TaskManager():

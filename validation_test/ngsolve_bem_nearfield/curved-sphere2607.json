@@ -2,7 +2,7 @@
   "schema": "radia.bem-curved-sphere/v1",
   "ngsolve": "6.2.2607",
   "python": "3.12.10",
-  "host": "lab",
+
   "thresholds": {
     "potential_rms": 1e-06,
     "gradient_rms": 0.0001

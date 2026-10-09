@@ -9,7 +9,7 @@
   "rows": [
     {
       "mesh_size_scale": 2.0,
-      "host": "mdx1",
+
       "tetrahedra": 278276,
       "ndof": 335648,
       "free_dofs": 324992,
@@ -22,7 +22,7 @@
     },
     {
       "mesh_size_scale": 1.5,
-      "host": "mdx1",
+
       "tetrahedra": 511064,
       "ndof": 615444,
       "free_dofs": 596748,
@@ -35,7 +35,7 @@
     },
     {
       "mesh_size_scale": 1.25,
-      "host": "mdx1",
+
       "tetrahedra": 814206,
       "ndof": 977725,
       "free_dofs": 950584,
@@ -44,7 +44,7 @@
     },
     {
       "mesh_size_scale": 1.0,
-      "host": "LAB",
+
       "tetrahedra": 1476314,
       "ndof": 1765868,
       "free_dofs": 1723583,
@@ -65,7 +65,7 @@
   "consequence": "the full-size reduced-A route uses the explicit solver='ams' (AMS-preconditioned CG with a true-residual check)",
   "guarded_2607_validation": {
     "date": "2026-09-30",
-    "host": "LAB",
+
     "ngsolve": "6.2.2607",
     "ngsolve_source_commit": "cf9e5f956a93c343f276a8a4bc960da2e8f24abc",
     "radia_source_commit": "0e9f26bd64bc3bcc4f7fa76931af9adb48868769",
@@ -120,7 +120,7 @@
     "limitations": [
       "Isolated experimental library; not the standard released runtime.",
       "First linear matrix only; not nonlinear ESRF acceptance.",
-      "Concurrent LAB numerical validation; no timing comparison.",
+      "Concurrent validation runtime numerical validation; no timing comparison.",
       "The 950584-free-DOF case was rejected, not solved; its factor NZE was not measured.",
       "Does not prevent every out-of-memory failure or prove the causes of prior unmodified-library crashes.",
       "Full upstream regression suite and exact release-quad remain outstanding."

@@ -1,6 +1,6 @@
 """Compute-host scaling benchmark for solved HDiv ``rad.Fld``.
 
-Run on hibino first after a normal package release. Use mdx only when hibino is
+Run on compute-host first after a normal package release. Use mdx only when compute-host is
 unavailable and the mdx CI runner and queue are idle. The driver measures the
 public field call and checks the forced tree against the exact direct source
 sum on a deterministic observation subset.
@@ -90,7 +90,7 @@ def main():
 
     payload = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "validation_host": platform.node(),
+        "platform_class": platform.system(),
         "git_sha": _git_sha(),
         "radia_version": rad.__version__,
         "python_version": platform.python_version(),

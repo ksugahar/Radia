@@ -8,7 +8,7 @@ release acceptance or proof that every numerical/native route is defect-free.
 
 - The operating manual required Radia installation, attributed the toolbar to
   Radia, and prescribed Cubit deployment to compute hosts. It now names the
-  independent package and LAB/100 release boundary; combined Radia acceptance
+  independent package and validation host/100 release boundary; combined Radia acceptance
   remains explicit and optional.
 - Recipe curation emitted JSON directly as Python source. Boolean/null values
   made the generated module fail at import. It now loads an escaped JSON literal;
@@ -46,7 +46,7 @@ release acceptance or proof that every numerical/native route is defect-free.
   regressions). No skips in this run.
 - Installer/menu/standalone-GUI-assets/toolbar-smoke/release-dual tests:
   **78 passed**. These are regression tests, not a fresh two-host GUI acceptance.
-- Real LAB Cubit: headless ready/ping/brick command/native journal/shutdown pass;
+- Real validation host Cubit: headless ready/ping/brick command/native journal/shutdown pass;
   only the newly owned child was stopped. No interactive GUI was started.
 - Fresh-build local wheel: native provenance gate passed; installed into an
   isolated test environment without Radia/radia-mcp/cae-mcp-core. MCP stdio

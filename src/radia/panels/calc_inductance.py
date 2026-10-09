@@ -474,7 +474,7 @@ def _build_bema_coil_mesh(args):
     # The volume .vol is returned as-is.  Its boundary is the coil surface,
     # and compute_inductance_source_sink now wraps HDivSurface in Compress,
     # which removes the interior-edge DOFs whose null modes made the dense
-    # saddle singular on 2026-05-12 (Keiko mdx + LAB gapped_torus_2port).
+    # saddle singular on 2026-05-12 (Keiko mdx + validation runtime gapped_torus_2port).
     # The workaround then was to extract a flat surface here; that also threw
     # away the curving order baked into the .vol at export, so the coil BEM-A
     # ran on a polygonised surface while the workpiece BEM honoured

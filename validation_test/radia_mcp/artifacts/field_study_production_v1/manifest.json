@@ -47,7 +47,7 @@
   ],
   "execution_environment": {
     "host_role": "compute",
-    "hostname": "Hibino",
+
     "platform": "Windows-11-10.0.22000-SP0"
   },
   "execution_version": {

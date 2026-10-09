@@ -1181,7 +1181,7 @@ exit code (0) and HIDES the SIGSEGV (139) from Python.  Always run with
 direct stdout redirection (`> log.txt 2>&1`) and check `$?` afterwards.
 
 **Root cause (hypothesis, 2026-05-08)**: ABI / version mismatch between
-`sparsesolv_ngsolve.pyd` and the running NGSolve.  Verified on LAB:
+`sparsesolv_ngsolve.pyd` and the running NGSolve.  Verified on validation runtime:
 - `sparsesolv_ngsolve.pyd` last modified 2026-03-15
 - `ngsolve` binaries last modified 2026-04-10 (later)
 

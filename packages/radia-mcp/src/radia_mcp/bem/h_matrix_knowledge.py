@@ -95,7 +95,7 @@ References (this folder):
 HACAPK = r"""
 # HACApK library — Sugahara lab production H-matrix
 
-★ THIS IS THE LAB CORE H-MATRIX LIBRARY.
+★ THIS IS THE validation runtime CORE H-MATRIX LIBRARY.
 
 Source: `src/ext/HACApK_LH-Cimplm/` in the Radia monorepo (MIT license).
 Origin: Post-Peta CREST project (Ida-Iwashita-Tohoku U).

@@ -25,7 +25,7 @@ def sha256(path):
 def main():
     here = Path(__file__).resolve().parent
     mesh_dir = here / "mesh"
-    reference_path = here / "c_type_20260908_linear_kelvin_after_coarse_mdx1.json"
+    reference_path = here / "c_type_20260908_linear_kelvin_after_coarse_worker_a.json"
     output = here / "order3_pair.json"
     ng.SetNumThreads(int(sys.argv[1]) if len(sys.argv) > 1 else 8)
 
@@ -57,7 +57,7 @@ def main():
     stored_hdiv = rte.median_plane_projection(points, np.asarray(reference["fields_T"]["hdiv_mmm"]))
     stored_reduced_a = rte.median_plane_projection(
         points, np.asarray(reference["fields_T"]["reduced_a"]))
-    payload = {"schema": "radia.validation.ctype-order3-pair.v1", "host": platform.node(),
+    payload = {"schema": "radia.validation.ctype-order3-pair.v1", "platform_class": platform.system(),
                "radia_version": getattr(rad, "__version__", None), "radia_module": rad.__file__,
                "ngsolve": ng.__version__, "script_sha256": sha256(__file__),
                "reference_sha256": sha256(reference_path), "mesh_result_sha256": sha256(report_path),

@@ -25,7 +25,7 @@ def sha256(path):
 def main():
     here = Path(__file__).resolve().parent
     mesh_dir = here / "mesh"
-    reference_path = here / "c_type_20260908_linear_kelvin_after_coarse_mdx1.json"
+    reference_path = here / "c_type_20260908_linear_kelvin_after_coarse_worker_a.json"
     output = here / "exact_exterior.json"
     ng.SetNumThreads(int(sys.argv[1]) if len(sys.argv) > 1 else 6)
 
@@ -60,7 +60,7 @@ def main():
     kelvin_radius = float(report["kelvin_radius_m"])
 
     payload = {"schema": "radia.validation.ctype-exact-exterior-source.v1",
-               "host": platform.node(), "radia_version": getattr(rad, "__version__", None),
+               "platform_class": platform.system(), "radia_version": getattr(rad, "__version__", None),
                "radia_module": rad.__file__, "ngsolve": ng.__version__,
                "script_sha256": sha256(__file__), "reference_sha256": sha256(reference_path),
                "mesh_result_sha256": sha256(report_path), "coil": coil_manifest,

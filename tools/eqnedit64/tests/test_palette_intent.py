@@ -1,4 +1,4 @@
-"""Independent face -> TeX specification; safe static checks on LAB.
+"""Independent face -> TeX specification; safe static checks on validation runtime.
 
 The isolated model runner also calls main() to execute every actual command.
 No import of the native module occurs during pytest collection.

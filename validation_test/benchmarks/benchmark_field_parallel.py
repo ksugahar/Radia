@@ -73,7 +73,7 @@ def run_benchmark() -> dict[str, object]:
         return {
             "schema": "radia.validation.benchmark-field-parallel.v1",
             "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-            "host": socket.gethostname(),
+            "platform_class": platform.system(),
             "platform": platform.platform(),
             "python_version": platform.python_version(),
             "radia_version": str(rad.UtiVer()),

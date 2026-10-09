@@ -1,6 +1,6 @@
 {
   "schema": "radia.validation.omega-quadrature.v1",
-  "host": "Hibino",
+
   "runtime": {
     "mode": "wheel",
     "direct_url": {
@@ -10,12 +10,12 @@
           "sha256": "46e3aa1ddd89010e21419e1d28f6e44e403cf95014d7e5486109eca4232145b9"
         }
       },
-      "url": "file:///C:/temp/radia-hdiv-production-34800439509/wheel/radia-4.95.91-cp312-cp312-win_amd64.whl"
+      "url": "file:///<private-path>/radia-hdiv-production-34800439509/wheel/radia-4.95.91-cp312-cp312-win_amd64.whl"
     }
   },
   "implementation": {
     "version": "4.95.91",
-    "module": "C:\\temp\\radia-hdiv-production-34800439509\\venv\\Lib\\site-packages\\radia",
+    "module": "<private-path>/radia-hdiv-production-34800439509\\venv\\Lib\\site-packages\\radia",
     "native": {
       "_radia_pybind.pyd": "cbc9bbbc61b5cd0ee7035c642197522b2615a871e3d4c49c2887184f4f9040ec"
     },
@@ -320,16 +320,16 @@
       "xsuite_bridge.py": "acdc52660bd6d0b0a51acf77cb5304fd3a18a6a7ee2768497efcf5187d18b1d0"
     },
     "ngsolve": "6.2.2606",
-    "solver_file": "C:\\temp\\radia-hdiv-production-34800439509\\venv\\Lib\\site-packages\\radia\\kelvin_solver.py",
+    "solver_file": "<private-path>/radia-hdiv-production-34800439509\\venv\\Lib\\site-packages\\radia\\kelvin_solver.py",
     "solver_sha256": "037f945723cd9e97ac4d2a2f7ffc59b3c3c705652c80b7e094e04dfdc14c6ea6",
     "factory_sha256": "b75ecdf8f884b96e26fdf089ee828f4cc00d874cb680aaccf366cd252fc78237",
     "runner_sha256": "0d4bb5c01aa4562b53c08b5433ccaa13ea011cbbae5015fbb38dd5cccc9b5660",
     "diagnostics_sha256": "f58f1a77d0d3b731b779f2bed5ec00cdecde4b7cb027282de7c8f6f7a1a46b6f"
   },
   "controls": {
-    "factory": "C:\\temp\\radia-hdiv-production-34800439509\\omega\\esrf6.py",
-    "mesh": "C:\\temp\\radia-hdiv-production-34800439509\\inputs\\coil_yoke_kelvin.vol",
-    "output": "C:\\temp\\radia-hdiv-production-34800439509\\outputs\\omega_algebraic_bonus12_16.json",
+    "factory": "<private-path>/radia-hdiv-production-34800439509\\omega\\esrf6.py",
+    "mesh": "<private-path>/radia-hdiv-production-34800439509\\inputs\\coil_yoke_kelvin.vol",
+    "output": "<private-path>/radia-hdiv-production-34800439509\\outputs\\omega_algebraic_bonus12_16.json",
     "mode": "wheel",
     "research_solver": null,
     "orders": [
@@ -362,7 +362,7 @@
       0.0,
       0.0
     ],
-    "coil_source_file": "C:\\temp\\radia-hdiv-production-34800439509\\esrf_three_engine\\esrf_coil_yoke.py",
+    "coil_source_file": "<private-path>/radia-hdiv-production-34800439509\\esrf_three_engine\\esrf_coil_yoke.py",
     "coil_source_sha256": "97af991d78d25e043e88e6152fd1aadfafbed9df6adfb5ece4c626f4a1f34899"
   },
   "rows": [

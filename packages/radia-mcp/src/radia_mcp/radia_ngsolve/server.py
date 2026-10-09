@@ -1872,7 +1872,7 @@ def install_deploy(topic: str = "") -> str:
       development  -- editable source and native-build rules
       ci_compute   -- mdx CI and explicit validation workloads
       release      -- immutable numerical-solver release-quad artifact flow
-      mcp_release  -- independent radia-mcp publish and LAB/100 release-dual
+      mcp_release  -- independent radia-mcp publish and validation runtime/100 release-dual
       cubit        -- independent Cubit plugin boundary
       failures     -- import, ABI, and MCP reload diagnostics
 
@@ -1888,7 +1888,7 @@ def release_workflow(topic: str = "") -> str:
     Package-scoped Radia release workflows.
 
     Separates the numerical solver's QUAD/MEX/SLX pipeline from the
-    independent radia-mcp LAB/100 release-dual and other package-owned lanes.
+    independent radia-mcp validation runtime/100 release-dual and other package-owned lanes.
     Also records historical CI failure modes and safe patch-bump recovery.
 
     Read this when:
@@ -1901,7 +1901,7 @@ def release_workflow(topic: str = "") -> str:
 
     Topics:
       overview               -- distribution ownership and verification targets
-      mcp_release            -- radia-mcp publish and LAB/100 release-dual
+      mcp_release            -- radia-mcp publish and validation runtime/100 release-dual
       phases                 -- numerical solver release pipeline
       simulink_candidate     -- exact-ZIP four-machine publication gate
       preflight_gates        -- Phase 2.5 4-gate pre-push validation

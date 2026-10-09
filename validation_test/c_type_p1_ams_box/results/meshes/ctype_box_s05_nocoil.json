@@ -2,7 +2,7 @@
   "schema": "radia.validation.c-type-box-mesh.v1",
   "geometry": "ESRF Example 5 C-type dipole; iron + finite air box (coil volume left as air)",
   "coil_meshed": false,
-  "vol": "C:\\temp\\ctype_box\\meshes\\ctype_box_s05_nocoil.vol",
+  "vol": "<private-path>/ctype_box\\meshes\\ctype_box_s05_nocoil.vol",
   "vol_sha256": "55d8205511e51090cdf264e62dd194c6cc5097fae265bec33e4103d0000b3966",
   "box_half_m": 0.5,
   "scale": 0.5,

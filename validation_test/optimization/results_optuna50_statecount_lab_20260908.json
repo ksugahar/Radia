@@ -12,7 +12,7 @@
       "schema": "radia.validation.optuna50-performance-runtime.v1",
       "generated_at": "2026-09-08T10:13:47.074Z",
       "runtime": "matlab",
-      "host": "lab",
+
       "versions": {
         "matlab": "26.1.0.3276743 (R2026a) Update 3",
         "native_gateway": "optuna_mex",
@@ -85,7 +85,7 @@
       "schema": "radia.validation.optuna50-performance-runtime.v1",
       "generated_at": "2026-09-08T10:14:35.838Z",
       "runtime": "matlab",
-      "host": "lab",
+
       "versions": {
         "matlab": "26.1.0.3276743 (R2026a) Update 3",
         "native_gateway": "optuna_mex",
@@ -158,7 +158,7 @@
       "schema": "radia.validation.optuna50-performance-runtime.v1",
       "generated_at": "2026-09-08T10:15:43.998Z",
       "runtime": "matlab",
-      "host": "lab",
+
       "versions": {
         "matlab": "26.1.0.3276743 (R2026a) Update 3",
         "native_gateway": "optuna_mex",
@@ -231,7 +231,7 @@
       "schema": "radia.validation.optuna50-performance-runtime.v1",
       "generated_at": "2026-09-08T10:16:46.073Z",
       "runtime": "matlab",
-      "host": "lab",
+
       "versions": {
         "matlab": "26.1.0.3276743 (R2026a) Update 3",
         "native_gateway": "optuna_mex",
@@ -304,7 +304,7 @@
       "schema": "radia.validation.optuna50-performance-runtime.v1",
       "generated_at": "2026-09-08T10:18:39.049Z",
       "runtime": "matlab",
-      "host": "lab",
+
       "versions": {
         "matlab": "26.1.0.3276743 (R2026a) Update 3",
         "native_gateway": "optuna_mex",
@@ -389,7 +389,7 @@
   "acceptance": {
     "passed": false,
     "status": "inconclusive",
-    "reason": "LAB total CPU was observed at 100 percent; wall times cannot establish a speedup.",
+    "reason": "validation runtime total CPU was observed at 100 percent; wall times cannot establish a speedup.",
     "cpu_observations": [
       {
         "local_time": "2026-09-08T19:18:23+09:00",
@@ -401,12 +401,12 @@
       }
     ]
   },
-  "mdx2_attempt": {
+  "worker_b_attempt": {
     "engine_import": true,
     "matlab_started": false,
     "timeout_seconds": 90,
     "route": "foreground SSH, official Python MATLAB Engine",
-    "account": "mdx2\\administrator",
+    "account": "worker_b\\administrator",
     "owned_process_tree_reaped": true,
     "runner_idle_and_no_queued_ci_before_attempt": true
   }

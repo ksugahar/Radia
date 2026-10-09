@@ -1,7 +1,7 @@
 {
   "schema": "radia.validation.matlab-adjoint-quality.v1",
   "generated_at_utc": "2026-07-24T01:37:00.148Z",
-  "hostname": "lab",
+
   "matlab_version": "26.1.0.3276743 (R2026a) Update 3",
   "matlab_release": "2026a",
   "platform": "PCWIN64",
@@ -49,5 +49,5 @@
     "sqp_target_design_error_below_5e_4": true,
     "all_passed": true
   },
-  "timing_scope": "LAB smoke observation; not a published performance benchmark"
+  "timing_scope": "validation runtime smoke observation; not a published performance benchmark"
 }

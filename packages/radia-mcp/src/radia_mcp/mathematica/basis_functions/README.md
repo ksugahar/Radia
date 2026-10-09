@@ -102,7 +102,7 @@ polynomial ranks.
 - **NGSolve C++**: `fem/recursive_pol.hpp` (Legendre/Jacobi recursions),
   `fem/h1hofe*`, `fem/hcurlhofe*`, `fem/hdivhofe*` (per-element high-order
   shape functions).  Re-derivable from these directly.
-- **Original working notebooks (LAB-local, not shipped)**:
+- **Original working notebooks (validation host-local, not shipped)**:
   `public-safe curated corpus functions\*.nb`
   (`H1 Shape functions.nb`, `Hcurl Shape Functions.nb`,
   `High Order Nédélec Elements 3D.nb`, ...; 2026-02 vintage).  These are
@@ -117,7 +117,7 @@ The authoritative per-element shape-function source is NGSolve's
 `fem/recursive_pol.hpp` — covering **all** element types incl.
 `h1hofe_pyramid.cpp`, `h1hofe_prism.cpp`, `hcurlhofe_pyramid.cpp`,
 `hcurlhofe_prism.cpp` (the hard rational pyramid/prism cases).  A local
-copy is kept at **`C:/temp/ngsolve_fem_src/`** (recovered LAB-local; NOT
+copy is kept at **`private-runtime-path`** (recovered validation host-local; NOT
 committed — it is NGSolve's own GPL source, kept only as the porting
 reference).  Each clean `.wls` here is authored from these, then
 self-tested.

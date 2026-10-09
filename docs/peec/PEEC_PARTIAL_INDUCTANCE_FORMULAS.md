@@ -215,7 +215,7 @@ analytical Grover formula for skewed conductors ([9] Chapter 5).
 
 All papers are stored in:
 ```
-W:\03_文献・論文\00_電磁界解析\PEEC法\
+private-runtime-path
 ```
 
 | # | File | Ref |

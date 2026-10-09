@@ -4,7 +4,7 @@
   "status": "pass",
   "scope": "Study-scale one-sided HEX pole-slab FFAG PoC using exact whole-element re-solves after ACA-QR-TSVD proposals. This is not a final two-pole yoke or engineered coil design.",
   "execution": {
-    "machine": "Hibino",
+
     "python": "3.12.10",
     "ngsolve_threads": 16,
     "source_worktree_head": "410dd0dc8277e0faa691223cfaaa6ef377240f8c",
@@ -12,7 +12,7 @@
     "topology_optimization_py_sha256": "BFBA053375608707F673C57F9E565D396C7A55B8971E3D156C96A9912EE49A51",
     "runner_sha256": "CDF7BE537611281308A1B4B8FA91EEEFD82DE02991D85C51FABAA1C1A17E51C3",
     "full_result_sha256": "D4CC931453C2571C124151F608B89179078BDFE0771386C520FEE62DD79F7EE7",
-    "full_result_scratch": "C:\\temp\\ffag_hdiv_mmm_directional_partial3_20260824.json",
+    "full_result_scratch": "<private-path>/ffag_hdiv_mmm_directional_partial3_20260824.json",
     "performance_measurement": "disabled",
     "timings_s": null,
     "peak_working_set_bytes": null

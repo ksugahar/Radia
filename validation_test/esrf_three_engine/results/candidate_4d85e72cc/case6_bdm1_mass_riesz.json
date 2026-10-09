@@ -21,13 +21,13 @@
   },
   "threads": 8,
   "argv": [
-    "C:/temp/esrf6-newton-4d85e72cc/lane/esrf_three_engine/run_case6_repaired_hdiv.py",
+    "<private-path>/esrf6-newton-4d85e72cc/lane/esrf_three_engine/run_case6_repaired_hdiv.py",
     "--iron",
-    "C:/temp/radia-ex6-diag/assets_conforming/model.vol",
+    "<private-path>/radia-ex6-diag/assets_conforming/model.vol",
     "--wheel",
-    "C:/temp/esrf6-newton-4d85e72cc/radia-4.95.91-cp312-cp312-win_amd64.whl",
+    "<private-path>/esrf6-newton-4d85e72cc/radia-4.95.91-cp312-cp312-win_amd64.whl",
     "--output",
-    "C:/temp/esrf6-newton-4d85e72cc/case6_bdm1_mass_riesz.json",
+    "<private-path>/esrf6-newton-4d85e72cc/case6_bdm1_mass_riesz.json",
     "--order",
     "1",
     "--threads",
@@ -37,20 +37,20 @@
   ],
   "implementation": {
     "version": "4.95.91",
-    "radia_path": "C:\\temp\\esrf6-newton-4d85e72cc\\venv\\Lib\\site-packages\\radia",
+    "radia_path": "<private-path>/esrf6-newton-4d85e72cc\\venv\\Lib\\site-packages\\radia",
     "ngsolve": "6.2.2606",
     "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
     "identities": {
       "iron": {
-        "path": "C:\\temp\\radia-ex6-diag\\assets_conforming\\model.vol",
+        "path": "<private-path>/radia-ex6-diag\\assets_conforming\\model.vol",
         "sha256": "fdd1387281e550e27eab435cfac3ec54e0b9d1339438699fdc50c852dfcafc74"
       },
       "wheel": {
-        "path": "C:\\temp\\esrf6-newton-4d85e72cc\\radia-4.95.91-cp312-cp312-win_amd64.whl",
+        "path": "<private-path>/esrf6-newton-4d85e72cc\\radia-4.95.91-cp312-cp312-win_amd64.whl",
         "sha256": "e9e6b9f09d105552330ac9b2b6d870187d825d11bf7a78f407553c8c7a866e25"
       },
       "native": {
-        "path": "C:\\temp\\esrf6-newton-4d85e72cc\\venv\\Lib\\site-packages\\radia\\_radia_pybind.pyd",
+        "path": "<private-path>/esrf6-newton-4d85e72cc\\venv\\Lib\\site-packages\\radia\\_radia_pybind.pyd",
         "sha256": "932e49626c05c1e3d459f20649632d4bfa0adf9b37f325dace4093d74aeeb7b5"
       }
     },

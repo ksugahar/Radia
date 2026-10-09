@@ -121,7 +121,7 @@ bool NetgenCurver::build(const MeshData &md, int order)
 
   // Dump detailed reject CSV only when CUBIT_MESH_EXPORT_NETGEN_REJECT_DUMP is
   // set (to avoid noisy writes in production builds). Value is used as the
-  // output path. Typical use: CUBIT_MESH_EXPORT_NETGEN_REJECT_DUMP=C:\temp\netgen_reject_log.csv
+  // output path. Typical use: CUBIT_MESH_EXPORT_NETGEN_REJECT_DUMP=<private-path>/netgen_reject_log.csv
   if (!project_reject_log_entries_.empty()) {
     const char * dump_path = std::getenv("CUBIT_MESH_EXPORT_NETGEN_REJECT_DUMP");
     if (dump_path && *dump_path) {

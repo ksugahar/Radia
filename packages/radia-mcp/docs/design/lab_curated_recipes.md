@@ -21,7 +21,7 @@ AI) is **persisted** to a per-machine `learned_recipes.jsonl`, and
 winners as candidates next time.
 
 That gives one machine a private learning loop. But the lab has
-many machines (LAB / 100号機 / student laptops) and many years of
+many machines (validation host / development host / student laptops) and many years of
 mesh problems. **A truly smart MCP needs to share knowledge across
 machines and across time** — and ideally publish the distilled
 knowledge to the wider CAE community.
@@ -75,7 +75,7 @@ common pool**, and every machine's smart-recipe generator sees the
 union.
 
 Concretely: a student wins a tough mesh on their laptop at 14:00;
-by 14:30 the AI on the LAB workstation already lists their winning
+by 14:30 the AI on the validation host workstation already lists their winning
 recipe as the top candidate for the same geometry class.
 
 The shared file is append-only JSONL (no locking conflicts); concurrent

@@ -7,7 +7,7 @@ toolbars, dialogs, and encapsulated multi-step workflows.
 Sources:
   - Coreform webinar "How to create a custom GUI in Coreform Cubit (Intro)"
     https://www.youtube.com/watch?v=TnZyZHDMOwA  (Carl McKelvey)
-  - Coreform Cubit 2025.12 / LAB deployment (PySide6 shipped in distribution).
+  - Coreform Cubit 2025.12 / validation runtime deployment (PySide6 shipped in distribution).
   - Coreform examples repo: https://github.com/coreform-llc
     (DAGMC toolbar, tire cross-section toolbar -- both .tar.gz packaged).
 
@@ -41,7 +41,7 @@ to replace old startup references; do not restore shims at removed Radia paths.
 The GUI cold-start command is an explicitly scoped release test, never an LLM
 production execution route. Its wheel and probe run without the Radia package.
 Independent publication uses the cubit-mesh-export tag and PyPI distribution.
-`python tools/release_cubit_dual.py` owns LAB/100 preflight, deployment and done receipts
+`python tools/release_cubit_dual.py` owns validation runtime/100 preflight, deployment and done receipts
 for one published wheel hash and clean source SHA. It leaves Radia/MCP untouched
 and refuses active Cubit instead of stopping user jobs. Optional combined Radia
 Radia owns any optional integration check; ordinary install/verify must not
@@ -118,7 +118,7 @@ TOOLBAR_PYTHON_SCRIPT_CONVENTIONS = """
 # Cubit In-Process Python Script Conventions (CRITICAL)
 
 Scripts executed from a custom toolbar run inside Cubit's embedded Python
-interpreter (currently Python 3.10 for Cubit 2025.12 / LAB). This interpreter has
+interpreter (currently Python 3.10 for Cubit 2025.12 / validation runtime). This interpreter has
 subtle differences from standard CPython that break naive scripts.
 
 ## Required script header
@@ -400,7 +400,7 @@ a downloadable `.tar.gz`):
 - Check the archive into a managed internal share or Artifactory.
 - Each user imports once; updates require re-importing (Cubit replaces
   the existing namespace).
-- For LAB/100 deployment, use the package-owned release-dual workflow so the
+- For validation runtime/100 deployment, use the package-owned release-dual workflow so the
   exact reviewed wheel and toolbar assets are verified on both machines.
 """
 

@@ -21,7 +21,7 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 - Rebuild the optional Python curver against Netgen/NGSolve 6.2.2607.
 - Record the actual Netgen build version in native payload provenance.
 - The Cubit C++ export plugin remains independent of the solver wheel ABI;
-  LAB/100 deployment remains separate from the Radia solver release.
+  validation host/100 deployment remains separate from the Radia solver release.
 
 ## 2.1.2 - Startup that survives removed release checkouts
 
@@ -31,7 +31,7 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
   (the install-time path is only a fallback); if the package cannot be found
   it prints how to re-register instead of a traceback.  Before, removing a versioned release checkout made every
   profile fail with `FileNotFoundError` at Cubit start.
-- The LAB/100 release-dual registers the toolbar for every profile on 100
+- The validation host/100 release-dual registers the toolbar for every profile on 100
   (`--all-users`) and its receipt requires it; it registered only the
   deploying account, leaving student profiles on a retired startup file.
 
@@ -102,7 +102,7 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 - Refuse journal and toolbar output overwrite, validate generated toolbar paths,
   and preserve startup files with per-file backups and atomic replacement.
 - Expand the wheel payload gate and CI mesh-quality coverage before publication.
-- Keep NumPy independently managed by the host: LAB and 100 both run 2.5.2,
+- Keep NumPy independently managed by the host: validation host and 100 both run 2.5.2,
   which passes the isolated Cubit MCP suite including Sculpt contracts.
 - Retry the curved Netgen reference test with finer meshes when a stochastic
   coarse sphere mesh has a genuinely inverted Jacobian; production validation
@@ -168,7 +168,7 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
   and default smoke journal without requiring the Radia distribution.
 - Deploy independently of any installed Radia version. Optional combined
   integration is checked explicitly with `cubit-plugin-install --check-radia-compat`.
-- Add the LAB/100-only `release_quad.py cubit-dual` exact-artifact gate; never
+- Add the validation host/100-only `release_quad.py cubit-dual` exact-artifact gate; never
   reinstall Radia/MCP or deploy Cubit to compute hosts in this lane.
 - Release Claro-owned menu actions on application shutdown to prevent
   Windows fast-fail during interpreter teardown.
@@ -195,7 +195,7 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## 1.0.0 - Stable standalone mesh export
 
-- Standalone wheel acceptance passed on LAB without Radia or radia-mcp:
+- Standalone wheel acceptance passed on validation host without Radia or radia-mcp:
   headless APREPRO sphere, order-2 export, strict labels, CAD measures,
   NGSolve reload and mapped Jacobians. Evidence is retained in
   `validation_test/cubit_mesh_export/standalone_1_0_0_lab_result.json`.
@@ -480,7 +480,7 @@ All 6 mesh exporters now correctly write `.vol` / `.msh` / `.bdf` /
 `.vtk` / `.meg` / FEMEEM `in.dat` to paths containing non-ASCII
 characters (Japanese, Korean, Greek etc.) on any Windows codepage.
 
-Before: `export netgen "C:/temp/日本語/coil.vol"` raised
+Before: `export netgen "private-runtime-path"` raised
   `"No mapping for the Unicode character exists in the target
    multi-byte code page."` and wrote no file.
 After: same command writes the file (22,521 bytes on the reference
@@ -512,12 +512,12 @@ Applied to all 6 exporters:
 ### Smoke test harness
 
 `smoke_test.py` driver wrapper now terminates with explicit
-`exit 0` after `export netgen`.  On slower boxes (100号機)
+`exit 0` after `export netgen`.  On slower boxes (development host)
 Cubit's headless teardown access-violates (exit code 0xC0000005)
 before the mesh DB destructor flushes the `.vol` writer; the
 explicit exit forces shutdown through the normal exit handler so
 the file is closed first.  Removes a flake that had the smoke
-test failing ~50 % on 100号機 while passing on LAB.
+test failing ~50 % on development host while passing on validation host.
 
 ### Compatibility
 

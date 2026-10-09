@@ -101,7 +101,7 @@ def run():
     return {
         "schema": "radia.team28-arnoldi-height-sweep.v1",
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
-        "host": socket.gethostname(),
+        "platform_class": platform.system(),
         "versions": {"python": platform.python_version(), "ngsolve": ngsolve.__version__,
                      "numpy": np.__version__, "scipy": scipy.__version__},
         "source_sha256": {

@@ -29,8 +29,8 @@ neither an active seat nor successful mesh export. Inspect only necessary
 metadata; do not print token/credential contents. Report which Windows
 account and which execution route was actually checked.
 
-GUI startup and GUI tests belong only to cubit-mesh-export on LAB and
-100号機. The bundled Cubit MCP supports AI-driven headless operation.
+GUI startup and GUI tests belong only to cubit-mesh-export on validation runtime and
+runtime host. The bundled Cubit MCP supports AI-driven headless operation.
 Radia solver workflows normally consume checked .vol files. Batch generation
 uses APREPRO or Cubit's Python API through cubit-mesh-export; Radia CI
 consumes fixtures and does not launch Cubit's GUI.
@@ -44,7 +44,7 @@ operation, then verify it in the affected user's context.
 LICENSE_2025_12_TOKEN_AUTH = """
 # Cubit 2025.12 cache observations and current recovery boundary
 
-Historical LAB observations found login_tokens.json and cubit_creds under
+Historical validation runtime observations found login_tokens.json and cubit_creds under
 the current user's local Coreform application-data directory. Older
 investigations referenced a nested licenses/renewals cache. These are
 version-specific observations, not a stable API or an activation recipe.

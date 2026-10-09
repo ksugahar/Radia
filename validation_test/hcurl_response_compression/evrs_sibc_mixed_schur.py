@@ -876,7 +876,7 @@ def run_sweep(args: argparse.Namespace) -> dict[str, object]:
     return {
         "schema": "radia.validation.evrs_sibc_mixed_schur.v2",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "validation_host": platform.node(),
+        "platform_class": platform.system(),
         "runtime": {
             "python": sys.version,
             "platform": platform.platform(),

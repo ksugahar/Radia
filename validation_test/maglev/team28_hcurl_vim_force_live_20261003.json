@@ -2,7 +2,7 @@
   "schema": "radia.team28.hcurl-vim-force.v1",
   "generated_at_utc": "2026-10-03T08:56:09.786404+00:00",
   "runtime": {
-    "hostname": "mdx2",
+
     "python_version": "3.12.10",
     "platform": "Windows-11-10.0.26200-SP0",
     "radia_version": "5.2.1",

@@ -1,6 +1,6 @@
 {
   "schema": "radia.periodic-ams-validation.v1",
-  "host": "Hibino",
+
   "ngsolve": "6.2.2607",
   "python": "3.12.10",
   "source_hashes": {

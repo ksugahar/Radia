@@ -1,7 +1,7 @@
 {
   "schema": "radia.validation.shifted-ams.v1",
   "passed": true,
-  "host": "mdx2",
+
   "ngsolve": "6.2.2606",
   "threads": 8,
   "mkl_threads": 1,

@@ -15,7 +15,7 @@ import subprocess
 
 ARCHIVE = "75e49aa58b43558c7a4cd3f48b6f24d6ca169d96"
 ROOT = Path(__file__).resolve().parents[2]
-PREFIX = "validation_test/c_type_three_engine/results/hibino_20260924_"
+PREFIX = "validation_test/c_type_three_engine/results/compute-host_20260924_"
 
 
 def require(condition, message):
@@ -166,7 +166,7 @@ def summarize():
         "schema": "radia.historical-c-type-refinement-audit.v1",
         "status": "historical_metrics_recomputed_not_current_release_acceptance",
         "archive_commit": ARCHIVE,
-        "runtime": {"host": provenance["host"], "versions": provenance["versions"], "threads": 8},
+        "runtime": {"versions": provenance["versions"], "threads": 8},
         "scope": "Linear mu_r=1000, parity-projected gap core; vacuum diagnostic is separate.",
         "limitations": ["NGSolve 2606 evidence, not a 2607 rerun.",
                         "Pairwise agreement and contracting increments are not absolute error bounds.",

@@ -247,7 +247,7 @@ def main(argv=None):
     out = {
         "schema": "radia.validation.sparsesolv-bddc-coarse-cases.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "hostname": platform.node(), "label": args.label,
+        "platform_class": platform.system(), "label": args.label,
         "environment": {"platform": platform.platform(), "python": platform.python_version(),
                         "ngsolve": ngsolve.__version__, "cpu_count": os.cpu_count()},
         "argv": sys.argv[1:] if argv is None else list(argv), "result": result,

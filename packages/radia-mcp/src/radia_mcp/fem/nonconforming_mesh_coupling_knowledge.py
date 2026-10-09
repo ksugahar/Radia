@@ -650,7 +650,7 @@ Reference: De Gersem-Hameyer 2002 multi-conductor FE eddy current.
 
 ## 3. PCB + free-space EM analysis
 
-Status: lab doesn't do PCB EM analysis (LAB Cubit/NGSolve workflow
+Status: lab doesn't do PCB EM analysis (validation runtime Cubit/NGSolve workflow
 is mostly motor / IH / accelerator / WPT).
 
 If/when needed: mortar PCB-vs-air is the canonical HFSS Mesh Fusion

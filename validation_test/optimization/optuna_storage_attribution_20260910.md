@@ -1,4 +1,4 @@
-# Optuna table/storage attribution — mdx2, 2026-09-10
+# Optuna table/storage attribution — worker-b, 2026-09-10
 
 ## Finding
 
@@ -76,6 +76,6 @@ Run `benchmark_optuna_storage_scaling(outputPath,true)` and
 MATLAB Engine sessions on an otherwise idle host. Use the bundled Engine in
 the authenticated mdx service context; the SSH startup failure is separate.
 All raw timings and top-40 inclusive/self-time profiles are in
-`results_optuna_storage_attribution_mdx2_20260910.json`.
+`results_optuna_storage_attribution_worker_b_20260910.json`.
 Both CI runs succeeded: `34445398310` and `34445704876`. Owned MATLAB sessions
 were closed and no Python/MATLAB process remained after validation.

@@ -129,7 +129,7 @@ def test_write_record_json(study):
         schema="radia.isochronous-topopt-lane/v1",
         generated_at_utc=datetime.now(timezone.utc)
         .strftime("%Y-%m-%dT%H:%M:%SZ"),
-        hostname=platform.node(), radia_version=radia.__version__,
+        platform_class=platform.system(), radia_version=radia.__version__,
         python_version=platform.python_version(),
         ne=int(study.mesh.ne), ndof=int(study.prob.fes.ndof),
         targets=study.targets,

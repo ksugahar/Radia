@@ -1,36 +1,36 @@
 {
   "schema": "radia.validation.esrf6-repaired-three-engine.v1",
-  "machine": "Hibino",
+
   "started_utc": "2026-09-13T11:42:16.689542+00:00",
   "argv": [
-    "C:/temp/esrf6-newton-4d85e72cc/lane/esrf_three_engine/run_case6_fem_acceptance.py",
+    "<private-path>/esrf6-newton-4d85e72cc/lane/esrf_three_engine/run_case6_fem_acceptance.py",
     "--hdiv-result",
-    "C:/temp/esrf6-newton-4d85e72cc/case6_bdm1_mass_riesz.json",
+    "<private-path>/esrf6-newton-4d85e72cc/case6_bdm1_mass_riesz.json",
     "--fem-mesh",
-    "C:/temp/radia-esrf-fem/example6/coil_yoke_kelvin.vol",
+    "<private-path>/radia-esrf-fem/example6/coil_yoke_kelvin.vol",
     "--fem-report",
-    "C:/temp/radia-esrf-fem/example6/coil_yoke_kelvin.mesh.json",
+    "<private-path>/radia-esrf-fem/example6/coil_yoke_kelvin.mesh.json",
     "--output",
-    "C:/temp/esrf6-newton-4d85e72cc/case6_fem_repaired_acceptance.json",
+    "<private-path>/esrf6-newton-4d85e72cc/case6_fem_repaired_acceptance.json",
     "--threads",
     "8"
   ],
   "implementation": {
     "version": "4.95.91",
-    "radia_path": "C:\\temp\\esrf6-newton-4d85e72cc\\venv\\Lib\\site-packages\\radia",
+    "radia_path": "<private-path>/esrf6-newton-4d85e72cc\\venv\\Lib\\site-packages\\radia",
     "ngsolve": "6.2.2606",
     "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
     "identities": {
       "iron": {
-        "path": "C:\\temp\\radia-ex6-diag\\assets_conforming\\model.vol",
+        "path": "<private-path>/radia-ex6-diag\\assets_conforming\\model.vol",
         "sha256": "fdd1387281e550e27eab435cfac3ec54e0b9d1339438699fdc50c852dfcafc74"
       },
       "wheel": {
-        "path": "C:\\temp\\esrf6-newton-4d85e72cc\\radia-4.95.91-cp312-cp312-win_amd64.whl",
+        "path": "<private-path>/esrf6-newton-4d85e72cc\\radia-4.95.91-cp312-cp312-win_amd64.whl",
         "sha256": "e9e6b9f09d105552330ac9b2b6d870187d825d11bf7a78f407553c8c7a866e25"
       },
       "native": {
-        "path": "C:\\temp\\esrf6-newton-4d85e72cc\\venv\\Lib\\site-packages\\radia\\_radia_pybind.pyd",
+        "path": "<private-path>/esrf6-newton-4d85e72cc\\venv\\Lib\\site-packages\\radia\\_radia_pybind.pyd",
         "sha256": "932e49626c05c1e3d459f20649632d4bfa0adf9b37f325dace4093d74aeeb7b5"
       }
     },
@@ -337,7 +337,7 @@
     "driver_sha256": "1c74bd998196913ab0f5c63ed38bcc286d3d0463eba8c0c468b58047fd9c9163",
     "source_adapter_sha256": "97af991d78d25e043e88e6152fd1aadfafbed9df6adfb5ece4c626f4a1f34899"
   },
-  "hdiv_result_sha256": "43fa3d9274790ff9844253ec84d7d5d9f7a063bcf073e74419621fa3197c4f54",
+  "hdiv_result_sha256": "edc8d6160ad23c794433458b50538beb1c9145c9fd009b697b390e173c081408",
   "fem_mesh_sha256": "dfc12b84f80db1fa17fb5012b6f87c072e8aa1fb3c085b61269f047a879a54ac",
   "fem_report_sha256": "abac73f56b716400d450e6a80c90b8c0a29edfad21fee75e35d96eb4fa19b9f0",
   "fem_contract": {
@@ -377,7 +377,7 @@
       "air",
       "kelvin"
     ],
-    "path": "C:\\temp\\radia-esrf-fem\\example6\\coil_yoke_kelvin.vol",
+    "path": "<private-path>/radia-esrf-fem\\example6\\coil_yoke_kelvin.vol",
     "vertices": 24064
   },
   "runner_sha256": "cd1143cc8f4ae2a7382d281d405818de3cdad84e48d1ce8dff782da23822290b",

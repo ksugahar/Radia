@@ -1,7 +1,7 @@
 # Official wheel scalar PCG acceptance
 
 The official CI wheel passed the strong-field native smoke and focused scalar
-PCG regressions on LAB and hibino. This closes the reproduced straight WEDGE
+PCG regressions on validation host and compute-host. This closes the reproduced straight WEDGE
 order-2 inner-solve failure without changing tolerances, iteration limits,
 default preconditioners, or global MKL dispatch settings.
 
@@ -19,7 +19,7 @@ Commands, import paths, dependency inventories and exit codes are retained.
 
 ## Results
 
-| Check | LAB | hibino |
+| Check | validation host | compute-host |
 | --- | --- | --- |
 | Strong-field TET/HEX/WEDGE, orders 1 and 2 | 6 passed | 6 passed |
 | Explicit frozen-PCG and diagonal/nonfinite tests | 7 passed | 7 passed |
@@ -43,7 +43,7 @@ attributed; these results do not establish a single cause for every difference.
 
 ### Cubit package combination
 
-The LAB isolated environment also passed a combination check with official
+The validation host isolated environment also passed a combination check with official
 CME 1.0.1 wheel SHA-256
 `859211e96343cd1e97b202f22ea5d008997406de35459bd200130922e286bf73`.
 All 344 installed Radia package files and 11 CME package files matched their
@@ -57,7 +57,7 @@ CME 1.0.1 deliberately reuses the existing manifest-pinned native payloads;
 no newly rebuilt payload is being published. Source-and-payload provenance
 verification passed against the installed official CME wheel and the current
 checkout. Private local rebuild outputs were retained for audit under
-`S:/Radia/validation_artifacts/hdiv_cleanup_20260915/cme-local-rebuild`.
+`private-runtime-path`.
 The release checkout was restored to its tracked CCM and the same hash-checked
 curver release asset used by CI. QUAD preflight passed the version and native
 provenance gates; its unsynchronized-main warning remains a final release gate.
@@ -66,16 +66,16 @@ These are strong-field straight-element checks, not a blanket qualification of
 curved elements, IMA, pyramid elements or every application. Release publication
 and deployment remain separate gates; no tag is authorized by this record alone.
 
-The completed hibino job is recovered in
-`S:/Radia/validation_artifacts/hdiv_cleanup_20260915/hdiv-pcg-ed58-20260915-recovery.tar.gz`.
+The completed compute-host job is recovered in
+`private-runtime-path`.
 Its SHA-256 is
 `2be9b3518c3c9bc6a9d566ebf90c5310000ac885bef06cecf5752dbd54ea9a65`.
 All 22 archived files were checked against `ed58-recovery-manifest.json` in the
 same directory. The archive preserves inputs, scripts, wheel and results; the
 disposable virtual environment is reproducible and is not archived.
 
-After evidence commit `875ab988d`, the completed hibino job directory
-`C:/temp/hdiv-pcg-ed58-20260915` and its sibling recovery archive were deleted
+After evidence commit `875ab988d`, the completed compute-host job directory
+`private-runtime-path` and its sibling recovery archive were deleted
 at 2026-09-15T07:53:43Z. Path, process, link and archive-hash checks passed;
-both targets were verified absent. See `hibino/cleanup.json`. Unrelated jobs
+both targets were verified absent. See `compute-host/cleanup.json`. Unrelated jobs
 and the installed global Radia environment were not modified.

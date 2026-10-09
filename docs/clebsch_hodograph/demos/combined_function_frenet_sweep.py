@@ -9,7 +9,7 @@ in ONE cross-section) swept along the CURVED orbit it bends.
 
 In the Frenet frame of the orbit the cross-section is FIXED (the design spec:
 b1 bends, b2 focuses).  But the Frenet frame ROTATES with the bend -- by the
-bend angle theta(s) = s / rho, rho = (B rho) / b1 -- so in the LAB frame the
+bend angle theta(s) = s / rho, rho = (B rho) / b1 -- so in the validation runtime frame the
 whole combined-function pole TWISTS by theta(s).  Rung 3's n-fold law then says:
 
     geometric roll theta  =>  dipole (n=1) multipole phase  psi_1 = theta,

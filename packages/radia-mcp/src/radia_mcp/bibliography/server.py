@@ -5,7 +5,7 @@ BibTeX / citation tooling: one canonical references.bib, manuscript-specific
 self-citation ratio, year distribution, journal-name normalization, and health
 report.
 
-Promoted 2026-06-02 from mcp-server-document.bibliography (LAB-private)
+Promoted 2026-06-02 from mcp-server-document.bibliography (validation runtime-private)
 to radia-mcp (public PyPI), alongside presentation / poster /
 doc_convert / pdf / bibliography.
 

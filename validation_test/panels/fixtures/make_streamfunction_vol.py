@@ -8,7 +8,7 @@ Writes two .vol meshes (gitignored) into the directory given as argv[1]:
                         (the evaluation region)
 
 Run inside a SUBPROCESS (the golden test does this) so the NGSolve / Netgen
-import stays out of the pytest process (which crashes on the LAB MKL/Qt DLL
+import stays out of the pytest process (which crashes on the validation runtime MKL/Qt DLL
 shadow).  Deterministic for a fixed geometry + maxh, so the golden bands are
 stable.
 """

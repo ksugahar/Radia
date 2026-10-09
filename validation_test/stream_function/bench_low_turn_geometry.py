@@ -157,7 +157,7 @@ def main():
 
     out = {
         "benchmark": "low_turn_geometry",
-        "hostname": platform.node(),
+        "platform_class": platform.system(),
         "problem": {"a": 0.15, "L_sweep": [0.5, 1.0, 1.5, 2.0],
                     "dsv_sweep": [0.05, 0.035, 0.025], "confine": "abe",
                     "order": 1, "eval_max": EVAL_MAX, "n_set": N_SET},

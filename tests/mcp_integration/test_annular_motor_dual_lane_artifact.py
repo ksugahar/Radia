@@ -37,7 +37,7 @@ def test_annular_motor_artifacts_keep_one_honest_harmonic_fixture_identity():
     ]
     geometry = manifest["physical_identity"]["geometry"]
     assert manifest["execution_environment"]["host_role"] == "compute"
-    assert manifest["execution_environment"]["hostname"]
+    assert "hostname" not in manifest["execution_environment"]
     assert geometry["family"] == "concentric_annular_harmonic_fixture"
     assert geometry["slot_geometry_resolved"] is False
     assert manifest["physical_identity"]["periodicity"]["role"] == (

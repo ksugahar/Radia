@@ -3,21 +3,21 @@
   "scope": "disjoint constant-density Laplace cross blocks only",
   "certifies_hdiv_sibc_coupled_solver": false,
   "runtime": {
-    "hostname": "lab",
+
     "python": "3.12.10",
     "ngsolve": "6.2.2606"
   },
   "provenance": {
     "validator": {
-      "path": "C:\\temp\\radia-ltspice-safety\\validation_test\\vim_coupled\\validate_eddy_cross_epsilon.py",
+      "path": "<private-path>/radia-ltspice-safety\\validation_test\\vim_coupled\\validate_eddy_cross_epsilon.py",
       "sha256": "d4832f38f5c00efdfdb7f219d4265a007d490869ceaf7daaf3056ec6d3ac5891"
     },
     "python_operator": {
-      "path": "C:\\temp\\radia-ltspice-safety\\src\\radia\\vim\\_eddy_hybrid.py",
+      "path": "<private-path>/radia-ltspice-safety\\src\\radia\\vim\\_eddy_hybrid.py",
       "sha256": "e3d0482d40341bb435853280a80e0b1312406807233e892594cc6c0306b589be"
     },
     "native_extension": {
-      "path": "C:\\temp\\radia-ltspice-safety\\src\\radia\\_radia_pybind.pyd",
+      "path": "<private-path>/radia-ltspice-safety\\src\\radia\\_radia_pybind.pyd",
       "sha256": "060e75808a1b4863aaa80976e7ca043031471f35672f834535ef9dc1d481e1f3"
     }
   },

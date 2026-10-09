@@ -28,7 +28,7 @@ if __name__ == '__main__':
                steps=steps, dt=T_END / steps, quarter=QUARTER, gauge=m.gauge, max_newton=max_newton, sigma=SIGMA_PLACEHOLDER,
                ndof=m.fes.ndof, ndof_A=m.Vh.ndof, ndof_phi=m.Qh.ndof, n_gamma=len(m.idx_gamma), n_interior=len(m.idx_int),
                n_air=len(m.idx_air), solve_s=info['seconds'], linear_solves=info['linear_solves'], history=hist,
-               host=platform.node(), ngsolve=ngsolve.__version__,
+               platform_class=platform.system(), ngsolve=ngsolve.__version__,
                linear_residual_limit=info['linear_residual_limit'],
                refinement_solves=info['refinement_solves'],
                max_relative_linear_residual=info['max_relative_linear_residual'],

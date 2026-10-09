@@ -1,7 +1,7 @@
 {
   "radia_version": "4.95.23",
   "executed_at_utc": "2026-07-24T08:31:52.442727+00:00",
-  "host": "lab",
+
   "artifact_schema": "radia_ih_team36_axisymmetric_v1",
   "benchmark_source": "https://www.compumag.org/wp/wp-content/uploads/2021/07/problem-36.pdf",
   "profile": "smoke",
@@ -110,7 +110,7 @@
   ],
   "provenance": {
     "executed_at_utc": "2026-07-24T08:31:52.442727+00:00",
-    "host": "lab",
+
     "radia_version": "4.95.23",
     "radia_mcp_version": "1.4.19",
     "ngsolve_version": "6.2.2604",

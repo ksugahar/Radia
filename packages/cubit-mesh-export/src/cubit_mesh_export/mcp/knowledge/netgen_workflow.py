@@ -613,7 +613,7 @@ Slot98 turns the 2026.6 higher-order quality-metric lesson into a replayable MCP
 gate: archive the raw Tetra10/Tri6 metric list and pass it through
 `cubit_element_quality_gate(element_type="Tetra10"|"Tri6", metric="scaled
 Jacobian"|"Jacobian", min_value=...)` before routing the mesh downstream.  This
-does not claim that 2026.6 is installed on INTEL11; it records that higher-order
+does not claim that 2026.6 is installed on development host; it records that higher-order
 tet/tri Jacobian metrics are a lower-bound quality contract, while live hex-led
 Coreform work on this machine targets the installed 2025.12 headless executable.
 

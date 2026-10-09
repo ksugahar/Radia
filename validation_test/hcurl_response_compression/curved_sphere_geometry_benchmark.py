@@ -52,7 +52,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     return {
         "schema": "radia.validation.curved_sphere_geometry.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "validation_host": platform.node(),
+        "platform_class": platform.system(),
         "runtime": {
             "python": sys.version,
             "platform": platform.platform(),

@@ -64,7 +64,7 @@
       "max_relative_linear_residual": 3.9712740066041605e-11
     }
   ],
-  "host": "mdx1",
+
   "python": "3.12.10",
   "ngsolve": "6.2.2607",
   "linear_solves": 12,

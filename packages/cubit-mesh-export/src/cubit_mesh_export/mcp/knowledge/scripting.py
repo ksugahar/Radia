@@ -1122,7 +1122,7 @@ cmake ...  # netgen sources in-repo (compact_netgen/netgen_src/), no external pa
 Old dynamic-linked ccm is ~238 KB. Check after `cubit-plugin-install`:
 ```python
 import os
-ccm = r"C:\\Program Files\\Coreform Cubit 2025.12\\bin\\plugins\\cubit_mesh_export.ccm"
+ccm = r"C:\\Program Files\\Coreform Cubit 2025.12private-runtime-path"
 print(f"ccm: {os.path.getsize(ccm):,} bytes")  # should be > 400,000
 ```
 
@@ -1317,7 +1317,7 @@ play "export_mesh.py"
 # Execute from command line (use CUBIT_PATH or full path)
 "%CUBIT_PATH%\\coreform_cubit.com" -batch -nographics -nojournal workflow.jou
 # Or with full path:
-"C:\\Program Files\\Coreform Cubit 2025.12\\bin\\coreform_cubit.com" -batch -nographics -nojournal workflow.jou
+"C:\\Program Files\\Coreform Cubit 2025.12private-runtime-path" -batch -nographics -nojournal workflow.jou
 ```
 
 ## Batch Mode vs GUI Mode
@@ -3733,7 +3733,7 @@ FIRST, then size.
 
 ## 6. Cubit version drift
 
-LAB / 100号機 / mdx must run Coreform Cubit 2025.12+.  ACIS
+validation runtime / runtime host / mdx must run Coreform Cubit 2025.12+.  ACIS
 version upgrades subtly change:
 - Default `merge tolerance`
 - UV parametrization of lofted surfaces (`b085b1be` reject count
@@ -3799,7 +3799,7 @@ Human GUI work is separate and exchanges saved artifacts with headless work.
 CUBIT_UTF8_PATH = """
 # UTF-8 / Japanese path support (cubit-mesh-export >= 0.6.0)
 
-Before 0.6.0, `export netgen "C:/temp/日本語/coil.vol"` raised:
+Before 0.6.0, `export netgen "private-runtime-path"` raised:
 
 ```
 No mapping for the Unicode character exists in the target multi-byte
@@ -3843,12 +3843,12 @@ UTF-8.  This is a Cubit core limitation; cubit-mesh-export cannot fix it.
 ## Verification
 
 ```
-export netgen "C:/temp/日本語/coil.vol" overwrite
+export netgen "private-runtime-path" overwrite
 # -> writes 22,521 bytes on the reference sphere test
 ```
 
 Regression guard: `tests/cubit/test_ho_volume_all_formats.py` covers
-ASCII paths; a dedicated Japanese-path smoke test is run in the 100号機
+ASCII paths; a dedicated Japanese-path smoke test is run in the the development runtime
 deploy phase (not in CI because CI runners do not have Cubit installed).
 
 ## See also

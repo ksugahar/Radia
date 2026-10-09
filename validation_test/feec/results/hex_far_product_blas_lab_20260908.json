@@ -63,7 +63,7 @@
   ],
   "schema": "radia.hex-far-product.microbenchmark.v1",
   "timestamp": "2026-09-08T04:41:49.916695+00:00",
-  "machine": "lab",
+
   "platform": "Windows-2022Server-10.0.20348-SP0",
   "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
   "mkl": "2026.1.0",

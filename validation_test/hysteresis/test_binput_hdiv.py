@@ -162,7 +162,7 @@ def test_B_cyclic_loop_hysteretic():
     payload = dict(
         description="HDiv-VIM B-input play hysteresis cube loop (gate B)",
         timestamp=datetime.now().isoformat(),
-        hostname=platform.node(),
+        platform_class=platform.system(),
         h_applied_z=[float(v) for v in hz],
         H_internal_avg_z=[float(v) for v in Hz_int],
         B_avg_z=[float(v) for v in Bz],
@@ -204,7 +204,7 @@ def test_E_strong_coupling_block_loop():
     payload = dict(
         description="HDiv-VIM B-input play hysteresis 4x4x4 strong-coupling loop (gate E)",
         timestamp=datetime.now().isoformat(),
-        hostname=platform.node(),
+        platform_class=platform.system(),
         h_applied_z=[float(v) for v in hz],
         H_internal_avg_z=[float(v) for v in Hz_int],
         B_avg_z=[float(v) for v in Bz],

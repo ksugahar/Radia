@@ -1,6 +1,6 @@
 # TEAM28 Live Regression, 2026-10-03
 
-The adjacent JSON is a fresh mdx2 solve. It replaces the 2026-09-10 record,
+The adjacent JSON is a fresh worker-b solve. It replaces the 2026-09-10 record,
 whose stored keys had been renamed after the run instead of being re-run.
 
 - Source: public main `d99efbc49` checkout; Python sources of `src/radia` are

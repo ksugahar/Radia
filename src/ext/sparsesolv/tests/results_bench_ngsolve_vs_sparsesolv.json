@@ -1,6 +1,6 @@
 {
   "timestamp": "2026-03-07T11:33:11.173785",
-  "hostname": "lab",
+
   "benchmark": "bench_ngsolve_vs_sparsesolv",
   "description": "NGSolve BDDC vs SparseSolv BDDC: setup, solve, iterations",
   "results": [

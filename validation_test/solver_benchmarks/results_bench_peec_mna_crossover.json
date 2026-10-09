@@ -1,6 +1,6 @@
 {
   "timestamp": "2026-04-17T08:47:54.866433",
-  "hostname": "lab",
+
   "benchmark": "bench_peec_mna_crossover",
   "problem": {
     "base_turns": 10,

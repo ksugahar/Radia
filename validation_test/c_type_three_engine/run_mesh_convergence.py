@@ -301,7 +301,7 @@ def analyze(
         "schema": "radia.validation.c-type-absolute-accuracy-certificate.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "passed": passed,
-        "machine": platform.node(),
+        "platform_class": platform.system(),
         "claim": {
             "quantity": "gauge-invariant B in the C-yoke useful gap core",
             "analytic_absolute_truth_claimed": False,

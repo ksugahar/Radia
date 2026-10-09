@@ -15,7 +15,7 @@ Writes two .vol meshes (gitignored) into argv[1]:
                         maxh 0.02                                (eval region)
 
 Run inside a SUBPROCESS (the golden test does) so the NGSolve / Netgen import
-stays out of pytest (which crashes on the LAB MKL/Qt DLL shadow).  Deterministic
+stays out of pytest (which crashes on the validation runtime MKL/Qt DLL shadow).  Deterministic
 for fixed geometry + maxh, so the golden bands are stable.
 """
 import os

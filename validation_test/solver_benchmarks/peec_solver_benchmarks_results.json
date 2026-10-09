@@ -36,30 +36,30 @@
     "mna_largest_common_speedup_dense_over_hacapk": 1.5179149710929536,
     "mna_largest_common_hacapk_peak_memory_mb": 489.9453125,
     "raw_json_sha256": {
-      "dense": "1b815aa4354fd6c193318fabc81d29a7a5d9088e685ae145b8fa44506acd7ab7",
-      "hacapk": "5d4ed89482f074e8f620a8472410bf805df64c09600646eafb723d4be16f1076",
-      "mna_crossover": "780e2163fef9e8829c6772eafe473438eac37e49603c409d755a1b50b6952a0d"
+      "dense": "3f7d0bc1615ca62836ee5cf83ab4fd82b24eb7efd6c3f546103858062a74df20",
+      "hacapk": "c39760ccc5bc5ae02696b6dd9a5eb3c97e1b8fb29207098c4955a9a0a14bf024",
+      "mna_crossover": "6eeb4fa5fff70717b3beee2d39d363e3cb37c349ba9b08cc6042613c03a00e4e"
     }
   },
   "raw_benchmark_files": [
     {
       "name": "dense",
       "path": "validation_test/solver_benchmarks/results_bench_peec_dense.json",
-      "sha256": "1b815aa4354fd6c193318fabc81d29a7a5d9088e685ae145b8fa44506acd7ab7",
+      "sha256": "3f7d0bc1615ca62836ee5cf83ab4fd82b24eb7efd6c3f546103858062a74df20",
       "rows": 5,
       "measured_at": "2026-04-16T07:31:56.252091"
     },
     {
       "name": "hacapk",
       "path": "validation_test/solver_benchmarks/results_bench_peec_hacapk.json",
-      "sha256": "5d4ed89482f074e8f620a8472410bf805df64c09600646eafb723d4be16f1076",
+      "sha256": "c39760ccc5bc5ae02696b6dd9a5eb3c97e1b8fb29207098c4955a9a0a14bf024",
       "rows": 7,
       "measured_at": "2026-04-16T14:50:08.733719"
     },
     {
       "name": "mna_crossover",
       "path": "validation_test/solver_benchmarks/results_bench_peec_mna_crossover.json",
-      "sha256": "780e2163fef9e8829c6772eafe473438eac37e49603c409d755a1b50b6952a0d",
+      "sha256": "6eeb4fa5fff70717b3beee2d39d363e3cb37c349ba9b08cc6042613c03a00e4e",
       "rows": 10,
       "measured_at": "2026-04-17T08:47:54.866433"
     }

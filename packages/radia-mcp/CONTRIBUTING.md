@@ -223,10 +223,10 @@ verifies the wheel, then publishes that same artifact through PyPI Trusted
 Publishing in the `pypi` environment. Do not replace this lane with a local
 Twine upload or treat an old test count as current release evidence.
 
-After publication, verify the published wheel on LAB and update the maintained
+After publication, verify the published wheel on validation host and update the maintained
 editable source on 100 only. Radia MCP uses release-dual independently of the
 Radia solver; do not run `tools/release_quad.py` or deploy to compute hosts for
-this package. Confirm the loaded source and one harmless affected tool on LAB.
+this package. Confirm the loaded source and one harmless affected tool on validation host.
 Existing 100 clients may adopt the update on their next normal restart; their
 pending live checks do not block release completion. See the
 [release completion contract](docs/operations/mcp-runtime-policy.md#release-completion).

@@ -188,7 +188,7 @@ if __name__ == '__main__':
             if rnd < rounds: sel = sel + [pick]
         if rounds >= 0: evaluate('hand', 1, HAND)
     res = dict(case='team10_two_coil_pattern_selection', start=START, features=FEAT, tests=TESTS, k=K, r=RR, ecsw_tol=TOL,
-               gp_length=GP_LEN, eta_stop=ETA_STOP, stride=STRIDE, select_basis=[K_SEL, R_SEL, TOL_SEL], target=0.10, rows=log, ndof=m.fes.ndof, total_s=time.time() - t0, host=platform.node(), ngsolve=ngsolve.__version__,
+               gp_length=GP_LEN, eta_stop=ETA_STOP, stride=STRIDE, select_basis=[K_SEL, R_SEL, TOL_SEL], target=0.10, rows=log, ndof=m.fes.ndof, total_s=time.time() - t0, platform_class=platform.system(), ngsolve=ngsolve.__version__,
                sources={p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in
                         ['team13_model.py', 'transient.py', 'aphi_model.py', 'rom.py', 'rom_aphi.py', 'ecsw.py', 'run_pattern_select.py']})
     (R / f'team10_pattern_select_p{order}{os.environ.get("SELECT_TAG", "")}.json').write_text(json.dumps(res, indent=2))

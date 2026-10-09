@@ -17,7 +17,7 @@ where the single-stroke wire IS the manufacturing deliverable):
   - a positive PEEC inductance L.
 
 Item (c) of "surpass NESCOIL/REGCOIL": the complete design-to-manufacture chain
-in a single run.  Runs in a SUBPROCESS; SKIPS on the LAB MKL/Qt DLL shadow.
+in a single run.  Runs in a SUBPROCESS; SKIPS on the validation runtime MKL/Qt DLL shadow.
 """
 from __future__ import annotations
 

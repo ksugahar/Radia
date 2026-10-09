@@ -119,7 +119,7 @@ def main():
             print(json.dumps(row, allow_nan=False), flush=True)
     files = [Path(__file__), Path(sibc.__file__), Path(bs.__file__), Path(native.__file__)]
     passed = bool(rows[-1]["complete_power_relative_error"] < .01)
-    report = dict(scope=__doc__, host=platform.node(), python=sys.version,
+    report = dict(scope=__doc__, platform_class=platform.system(), python=sys.version,
                   ngsolve=ng.__version__, workpiece_stage_exercised=False,
                   source_sha256={p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in files},
                   rows=rows, finest_power_balance_tolerance=.01, passed=passed)

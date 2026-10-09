@@ -14,7 +14,7 @@
       "schema": "radia.validation.optuna50-performance-runtime.v1",
       "generated_at": "2026-09-08T15:46:53.914Z",
       "runtime": "matlab",
-      "host": "MDX1",
+
       "versions": {
         "matlab": "26.1.0.3346908 (R2026a) Update 5",
         "native_gateway": "optuna_mex",
@@ -87,7 +87,7 @@
       "schema": "radia.validation.optuna50-performance-runtime.v1",
       "generated_at": "2026-09-08T15:47:41.219Z",
       "runtime": "matlab",
-      "host": "MDX1",
+
       "versions": {
         "matlab": "26.1.0.3346908 (R2026a) Update 5",
         "native_gateway": "optuna_mex",
@@ -160,20 +160,20 @@
   "acceptance": {
     "status": "inconclusive",
     "passed": false,
-    "reason": "Only one pair completed. An unrelated 30-thread computation started on mdx1 during baseline1, which also overlapped isolated Python dependency installation. Exclude this pair from speedup acceptance; the lower baseline timings do not establish a regression either.",
+    "reason": "Only one pair completed. An unrelated 30-thread computation started on worker_a during baseline1, which also overlapped isolated Python dependency installation. Exclude this pair from speedup acceptance; the lower baseline timings do not establish a regression either.",
     "checksum_parity_passed": true,
     "python_comparison_completed": false
   },
   "routing": {
-    "hibino": "Existing Python computation active; not used.",
-    "mdx1": {
+    "compute": "Existing Python computation active; not used.",
+    "worker_a": {
       "idle_before_start": true,
       "ci_idle_before_start": true,
       "competing_pid": 12828,
       "competing_start": "2026-09-09T00:47:17.4152741+09:00",
       "own_engine_sessions_quit": true
     },
-    "mdx2": {
+    "worker_b": {
       "idle_before_start": true,
       "engine_import": true,
       "engine_ready": false,
@@ -182,5 +182,5 @@
       "post_probe_python_and_matlab_processes": 0
     }
   },
-  "next_step": "Run repeated alternating old/new MEX and Python on an exclusively idle host. mdx2 requires a working Engine execution context; do not repeat unchanged SSH startup attempts."
+  "next_step": "Run repeated alternating old/new MEX and Python on an exclusively idle host. worker_b requires a working Engine execution context; do not repeat unchanged SSH startup attempts."
 }

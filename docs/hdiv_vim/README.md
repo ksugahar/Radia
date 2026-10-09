@@ -513,7 +513,7 @@ universal default for all wedge geometries.
 
 Fast tests belong in `tests/`; heavier numerical checks belong in
 `validation_test/feec/` and JSON artifacts labelled with the actual validation
-host (`mdx` or `hibino`).  Required HDiv gates:
+host (`mdx` or `compute-host`).  Required HDiv gates:
 
 - analytic demag factors where available;
 - nonlinear BH convergence metadata;
@@ -530,7 +530,7 @@ host (`mdx` or `hibino`).  Required HDiv gates:
 - BDM1/BDM2 flat/curved TET/HEX/WEDGE operator accuracy and cost, including
   mapped-HEX BDM2 spectrum, quadrature convergence, linear/nonlinear solve,
   IMA, and fail-loud shape-derivative gates, plus charge-Gram H-matrix build stats and
-  memory/timing on hibino first, or on mdx only when hibino is unavailable and
+  memory/timing on compute-host first, or on mdx only when compute-host is unavailable and
   the mdx CI queue is idle, for large runs;
 - 2D planar motor saliency checks for the motor lane.
 - reduced-motor torque agreement among Maxwell stress, magnetization-volume

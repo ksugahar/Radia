@@ -97,7 +97,7 @@ def test_host_roles_agree_across_package_guidance_and_recovery():
 
     install = " ".join(INSTALL_DEPLOY.split())
     completion = " ".join(get_release_workflow_documentation("mcp_quality_review").split())
-    assert "Only 100号機 uses editable installs" in install
+    assert "Only runtime host uses editable installs" in install
     assert "verified wheel to LAB" in install
     assert "verified non-editable wheel and fresh import on LAB" in completion
     assert "editable development registration and fresh import on 100" in completion

@@ -1,7 +1,7 @@
 {
  "description": "HDiv-VIM cross-element cube validation (hex/wedge/tet, same 1 m cube, mu_r=1000, +z 200 kA/m)",
  "timestamp": "2026-07-12T11:27:23.493568",
- "hostname": "lab",
+
  "H_ext_A_per_m": 200000.0,
  "mu_r": 1000.0,
  "cube_size_m": 1.0,

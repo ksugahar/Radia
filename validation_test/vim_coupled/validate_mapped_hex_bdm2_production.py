@@ -1,7 +1,7 @@
 """Production validation for mapped/non-affine HEX BDM2 HDiv-VIM.
 
 This is intentionally a validation_test workload. Its two dense Gram builds,
-linear/nonlinear solves, and full/reduced IMA comparisons run on hibino first,
+linear/nonlinear solves, and full/reduced IMA comparisons run on compute-host first,
 or on mdx only behind an idle CI queue, not in the lightweight CI test suite.
 """
 
@@ -267,7 +267,7 @@ def run(rules: list[tuple[int, int]]) -> dict:
     return {
         "schema": "radia.validation.mapped-hex-bdm2-production.v1",
         "created_at_utc": datetime.now(UTC).isoformat(),
-        "machine": platform.node(),
+        "platform_class": platform.system(),
         "versions": {
             "radia": getattr(radia, "__version__", "unknown"),
             "ngsolve": getattr(ng, "__version__", "unknown"),

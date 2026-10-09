@@ -2,12 +2,12 @@
   "schema": "radia.validation.esrf-coil-yoke-three-engine.v2",
   "generated_at_utc": "2026-09-14T15:48:41.696251+00:00",
   "passed": true,
-  "machine": "Hibino",
+
   "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
   "runtime_identity": {
     "distribution_version": "4.95.91",
-    "module": "C:\\temp\\radia-hdiv-production-34800439509\\venv\\Lib\\site-packages\\radia\\__init__.py",
-    "installed_module": "C:\\temp\\radia-hdiv-production-34800439509\\venv\\Lib\\site-packages\\radia\\__init__.py",
+    "module": "<private-path>/radia-hdiv-production-34800439509\\venv\\Lib\\site-packages\\radia\\__init__.py",
+    "installed_module": "<private-path>/radia-hdiv-production-34800439509\\venv\\Lib\\site-packages\\radia\\__init__.py",
     "direct_url": {
       "archive_info": {
         "hash": "sha256=46e3aa1ddd89010e21419e1d28f6e44e403cf95014d7e5486109eca4232145b9",
@@ -15,7 +15,7 @@
           "sha256": "46e3aa1ddd89010e21419e1d28f6e44e403cf95014d7e5486109eca4232145b9"
         }
       },
-      "url": "file:///C:/temp/radia-hdiv-production-34800439509/wheel/radia-4.95.91-cp312-cp312-win_amd64.whl"
+      "url": "file:///<private-path>/radia-hdiv-production-34800439509/wheel/radia-4.95.91-cp312-cp312-win_amd64.whl"
     },
     "editable": false,
     "source_checkout": false,
@@ -132,9 +132,9 @@
     "fem_kelvin_mesh_shared": true,
     "mixed_h1_source_potential": "total_volume_hodge_with_harmonic_cut"
   },
-  "iron_mesh": "C:\\temp\\radia-hdiv-production-34800439509\\inputs\\assets\\model.vol",
+  "iron_mesh": "<private-path>/radia-hdiv-production-34800439509\\inputs\\assets\\model.vol",
   "iron_mesh_sha256": "fdd1387281e550e27eab435cfac3ec54e0b9d1339438699fdc50c852dfcafc74",
-  "fem_mesh": "C:\\temp\\radia-hdiv-production-34800439509\\inputs\\coil_yoke_kelvin.vol",
+  "fem_mesh": "<private-path>/radia-hdiv-production-34800439509\\inputs\\coil_yoke_kelvin.vol",
   "fem_mesh_sha256": "dfc12b84f80db1fa17fb5012b6f87c072e8aa1fb3c085b61269f047a879a54ac",
   "fem_mesh_contract": {
     "asset_manifest_sha256": "b2bbe5db90d581df6719edeaaf8d699b74dae4288701914417a8fe94a1b0c7ac",
@@ -173,7 +173,7 @@
       "air",
       "kelvin"
     ],
-    "path": "C:\\temp\\radia-esrf-fem\\example6\\coil_yoke_kelvin.vol",
+    "path": "<private-path>/radia-esrf-fem\\example6\\coil_yoke_kelvin.vol",
     "vertices": 24064
   },
   "kelvin_center_m": [

@@ -1,6 +1,6 @@
 {
   "schema": "radia.validation.ctype-source-load-quadrature.v1",
-  "host": "intel11",
+
   "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
   "radia_version": "5.0.1",
   "radia_module": "<local-path>/__init__.py",
@@ -9,8 +9,8 @@
   "kelvin_solver_sha256": "97e3145a6b9c7f9a996ccaa82d5900ad904950bb467559f9555da7532e17766d",
   "script_sha256": "76dd39289563e48fe02c8c14426c39933641cd10113c483dfe8e215dd2ac096b",
   "three_engine_sha256": "c54c680ee9730fc1a36a7b1facd0ca6afea3299f27c02465cfee2d714956caaf",
-  "reference": "c_type_20260908_linear_kelvin_after_coarse_mdx1.json",
-  "reference_sha256": "927727fc13a70e6f8ade64719f09c79262bb252f435af62d9795595ccdb5151e",
+  "reference": "c_type_20260908_linear_kelvin_after_coarse_worker_a.json",
+  "reference_sha256": "45acbadd248be04f15b7c4317f09c9905c4f4e8f347bab15faeb96491341a345",
   "mesh_result_sha256": "b0a653e8231a3a6cce02e76bfe48ccccbc5bb327b4f03af461123948a62972e7",
   "mesh_elements": 24134,
   "controls": {

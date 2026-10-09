@@ -1,6 +1,6 @@
 {
   "schema": "radia.torus-physical-current.v1",
-  "host": "mdx2",
+
   "python": "3.12.10",
   "ngsolve": "6.2.2606",
   "numpy": "2.4.3",

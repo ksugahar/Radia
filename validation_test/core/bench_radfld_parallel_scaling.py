@@ -9,8 +9,8 @@ HACApK path already used, which scales) fixed it: single-thread ~3x faster AND ~
 A RegionTaskManager self-wrap in the batch entry makes a BARE rad.Fld (no caller `with TaskManager()`)
 run parallel too.
 
-RUN ON hibino first per the Benchmark Policy; use mdx only when hibino is unavailable and its CI queue is idle.
-Timing must not be measured on the codex-contended LAB.
+RUN ON compute-host first per the Benchmark Policy; use mdx only when compute-host is unavailable and its CI queue is idle.
+Timing must not be measured on the codex-contended validation runtime.
 Isolated env: PYTHONPATH -> a HEAD src/radia copy over the system Python; MKL/OMP=1 so TaskManager owns
 the swept parallelism.  Writes results_radfld_parallel_scaling.json next to this file.
 
@@ -80,7 +80,7 @@ def main():
         results.append(dict(nthreads=nt, t_bare=tb, t_wrapped=tw, speedup_bare_vs_1t=base_bare / tb))
         print("threads=%2d  bare=%7.3fs (%.1fx)  wrapped=%7.3fs" % (nt, tb, base_bare / tb, tw), flush=True)
 
-    out = dict(timestamp=datetime.now().isoformat(), hostname=platform.node(),
+    out = dict(timestamp=datetime.now().isoformat(), platform_class=platform.system(),
                benchmark="radfld_batch_parallel_scaling",
                problem=dict(cores=cores, N_src=216, N_obs=N, field="b",
                             geometry="216 ObjHexahedron sources, 8000 far obs points",

@@ -36,7 +36,7 @@ MATLAB session with:
 
 ```matlab
 addpath('src/radia/simulink');
-radia_motor_rom_sfun_build('S:/Radia/01_GitHub');
+radia_motor_rom_sfun_build('private-runtime-path');
 ```
 
 The S-function takes five parameters:

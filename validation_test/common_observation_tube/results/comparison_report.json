@@ -2,7 +2,7 @@
   "schema": "radia.validation.common-observation-tube-four-formulations.v1",
   "status": "pass",
   "gate_profile": "retained",
-  "machine": "lab",
+
   "python": "3.12.10",
   "versions": {
     "python": "3.12.10",

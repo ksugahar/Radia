@@ -18,7 +18,7 @@ Workflow (peer to ``doc_convert_business_card_*`` in T15):
        the source PDF in place.  Collision-safe (``" (2)"`` suffix).
 
 Originally these helpers lived inline in
-``O:\\BookScanner\\kindle_scanner.py``.  They are promoted to MCP tools
+``O:private-runtime-path``.  They are promoted to MCP tools
 so any post-OCR workflow (Kindle scan, paper scan re-OCR, ad-hoc
 title-from-cover) can reuse them without copy-paste.
 """

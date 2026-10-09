@@ -231,7 +231,7 @@ Lab style — graph rules (Sugahara Lab):
     Latex side:
         \\usepackage{pgfplots}
         \\pgfplotsset{compat=1.18}
-        \\newlength\\figureWidth \\setlength\\figureWidth{\\columnwidth}
+        private-runtime-path private-runtime-path
         \\input{fig/result.tikz}
 
     Cons (when NOT to use TikZ): heavy raster content (heatmaps,
@@ -1199,7 +1199,7 @@ def add_slope_guide(ax, x_center, y_center, slope: float, *,
             ``set_yscale("log")`` first).
         x_center, y_center: centre of the guide in DATA coordinates.
         slope: power-law exponent the guide depicts (e.g. -0.5 for
-            $y\\!\\propto\\!1/\\sqrt{x}$).
+            $y\\!private-runtime-path).
         dx_decades: half-width of the guide in decades of x (default 0.3).
         color: stroke colour for the triangle.
         lw: line width.

@@ -82,7 +82,7 @@ def main():
     }
     fields = {'hdiv_mmm': _validated_field(hdiv['B_T'], len(points)).tolist()}
     report = dict(schema='radia.validation.esrf6-repaired-three-engine.v1',
-                  machine=platform.node(), started_utc=datetime.now(timezone.utc).isoformat(),
+                  platform_class=platform.system(), started_utc=datetime.now(timezone.utc).isoformat(),
                   argv=sys.argv, implementation=hdiv['implementation'],
                   runtime_identity=runtime_identity,
                   hdiv_result_sha256=_sha256(args.hdiv_result), fem_mesh_sha256=fem_sha,

@@ -2,7 +2,7 @@
   "schema": "radia.maglev.ecb-foster-lorentz-3d-reference.v1",
   "generated_at_utc": "2026-09-28T11:57:01.233321+00:00",
   "runtime": {
-    "host": "mdx2",
+
     "python_version": "3.12.10",
     "radia_version": "5.0.2",
     "ngsolve_version": "6.2.2606",

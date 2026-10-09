@@ -2,7 +2,7 @@
   "schema": "radia.beak_section_axisym_sweep.v1",
   "generated_at_utc": "2026-09-22T04:25:34.182031+00:00",
   "git_head": "a2248ac943d084b0ef7faab1d1bb446a835e702d",
-  "host": "intel11",
+
   "question": "the delivery gate was accepted at 150 kHz on two routes that share a surface-impedance assumption.  What does the same section say when its interior is resolved?",
   "section": "the tracked beak profile, revolved about the axis",
   "sigma_S_per_m": 58000000.0,

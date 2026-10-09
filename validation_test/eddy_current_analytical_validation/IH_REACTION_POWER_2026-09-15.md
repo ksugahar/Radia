@@ -2,7 +2,7 @@
 
 Status: **implemented and accepted within the scope below**.
 No external case inputs or ratio targets are used. Existing installed
-Radia environments were not repointed. Solver work ran on idle hibino with
+Radia environments were not repointed. Solver work ran on idle compute-host with
 staged Python sources and an identified native runtime.
 
 ### Linear-scope confirmation (2026-09-16)
@@ -140,7 +140,7 @@ file-to-model delivery gate remains open. Do not report full IH completion.
 ### Simulink runtime acceptance and remaining delivery gates
 
 The existing `tests/matlab/test_native_ih_sfun_integration.m` ran through
-Python MATLAB Engine on LAB R2026a Update 3: eight passed, zero failed or
+Python MATLAB Engine on validation host R2026a Update 3: eight passed, zero failed or
 incomplete, recorded in `ih_simulink_integration_20260915.json`. This covers
 closed-loop heating, current scaling, angle-dependent heat, conservative
 rotation, temperature feedback, distinct field spaces, configuration loading
@@ -167,7 +167,7 @@ Power imbalance is below 4.3e-12, and native handles return from zero to zero.
 The JSON `ih_mex_radial_20260915.json` records the actual binary build identity.
 The binary SHA-256 was checked; native sources and CMake have no diff between
 its build commit and the IH correction commit. Execution used the existing
-LAB MATLAB R2026a Update 3 via the official Python Engine, without restarting it.
+validation host MATLAB R2026a Update 3 via the official Python Engine, without restarting it.
 
 This radial test establishes spatial thermal MEX behavior. Its prescribed source does not validate EM mapping,
 inner-wall convection or production VOL export. Reproduce after `radia.setup`
@@ -184,8 +184,8 @@ is preserved to roundoff, and maximum temperature-rise relative error against
 independently assembled NGSolve forms is 2.06e-7 (0.0000206%). Maximum absolute
 temperature difference is 2.02e-9 K; handles return from zero to zero.
 
-Reproduce with Python `prepare_ih_mex_chain.py --output C:/temp/ih-mex-chain`
-then MATLAB `validate_ih_mex_chain('C:/temp/ih-mex-chain', outputJson)` after
+Reproduce with Python `prepare_ih_mex_chain.py --output private-runtime-path`
+then MATLAB `validate_ih_mex_chain('private-runtime-path', outputJson)` after
 configuring the selected MEX runtime. `ih_mex_chain_20260915.json` records results
 and source/build identity. These are coarse coupling tests, not a new 2% EM
 mesh-convergence certificate. The existing fine-mesh FEM-SIBC comparisons own

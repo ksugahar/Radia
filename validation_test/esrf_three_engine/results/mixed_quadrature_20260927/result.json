@@ -4,7 +4,7 @@
   "release": "5.0.1",
   "release_commit": "5757126e60c6e5b36f281c532138589654db1596",
   "wheel_sha256": "f09b8122ccfe7b914d5a7c3ce7f9dd9c8c6586bef61e43a6feadf636f43d33ca",
-  "host": "mdx2",
+
   "threads": 4,
   "fem_mesh_sha256": "dfc12b84f80db1fa17fb5012b6f87c072e8aa1fb3c085b61269f047a879a54ac",
   "implementation_sha256": {

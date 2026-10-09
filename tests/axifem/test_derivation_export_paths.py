@@ -12,7 +12,7 @@ DERIVATIONS = ROOT / "validation_test/axifem/research/prototypes"
 def test_axifem_reference_links_resolve_inside_repository():
     document = ROOT / "docs/axifem/AXIFEM.md"
     source = document.read_text(encoding="utf-8")
-    # No links into internal lab drives (URL-encoded or the W:/30_* research trees).
+    # No links into internal lab drives (URL-encoded or the private-runtime-path research trees).
     assert "W%3A" not in source and not re.search(r"W:[/\\]30_", source)
     links = re.findall(r"\]\(((?:\.\./)+validation_test/[^)#]+)\)", source)
     assert links

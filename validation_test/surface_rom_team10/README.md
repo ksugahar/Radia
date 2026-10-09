@@ -68,7 +68,7 @@ The two-coil waveforms are in `transient.waveform`.  The rise waveform is
 | training pool (cheap FOM: 30 steps, one Newton step) | `c1_rise`, `c1_pulse`, `c2_pulse`, `c2_pulse_x2`, `mixp_add`, `mixp_oppose`, `c1_rise_half` |
 | trap candidate | `c1_rise_neg` = -`c1_rise` exactly (odd B-H law), so a sound indicator must never pick it |
 
-## Results (hibino / mdx2, 2026-09-27)
+## Results (compute-host / worker-b, 2026-09-27)
 
 ### 1. The excitation pattern must be in the training set, and the surface basis uses it best
 
@@ -155,7 +155,7 @@ see the provenance section.
 
 ### 5. Small selection basis
 
-Source: `results/team10_pattern_select_p3_sel42.json`, hibino.
+Source: `results/team10_pattern_select_p3_sel42.json`, compute-host.
 
 - **Selection basis:** (4, 2), 12 columns, ECSW 1e-2.
 - **Evaluation basis:** unchanged at k16 r8.
@@ -184,7 +184,7 @@ Source: `results/team10_pattern_select_p3_sel42.json`, hibino.
 ### 6. Stop-rule calibration
 
 Source: `results/team10_stop_calibration_p3.json`, `run_stop_calibration.py`,
-hibino, 4766 s.
+compute-host, 4766 s.
 
 - **Training sets:** `c1_rise` plus every subset of 0-2 pool members, 29 sets.
 - **Bases:** each set is scored with both the (4, 2) and the (8, 4) basis.
@@ -250,7 +250,7 @@ Each new FOM run checks every Newton linear solve against the original free-row
 residual (relative limit `1e-7`) and records the maximum per time step.
 Up to three corrections reuse the same factor and original operator before
 the unchanged gate is applied. `refinement_solves` records their cost.
-`python check_refinement.py --output C:/temp/pod-refinement.json` exercises
+`python check_refinement.py --output private-runtime-path` exercises
 correction of a deliberately inaccurate inverse and rejection of a zero inverse.
 `newton_converged` distinguishes convergence from the intentionally truncated
 one-iteration training trajectories. Historical JSON files without these fields
@@ -264,8 +264,8 @@ trajectory finishes with finite fields. See
 `results/sparsecholesky_smoke_20260929.json`. This does not establish p3
 memory capacity or reproduce the historical ROM accuracy/timing campaign.
 
-Heavy.  Run on hibino (one job at a time) or on an idle mdx host.  The
-selection run committed about 27 GB of private memory on mdx2.  That host has
+Heavy.  Run on compute-host (one job at a time) or on an idle mdx host.  The
+selection run committed about 27 GB of private memory on worker-b.  That host has
 no pagefile (commit limit 57.4 GB), and a concurrent MATLAB session holding
 about 10 GB was enough to make it fail.
 
@@ -293,5 +293,5 @@ python run_pattern_select.py 0.006 3 3      # SELECT_ONLY_RESIDUAL, SELECT_CHECK
   version of `run_pattern_select.py`.  The current file adds the steel
   indicator, the small selection basis and the stop rule.
 - **`team10_indicator_check_p3.json`:** parsed from the recovered `run.log`.
-  That run reached the mdx2 commit limit after printing rounds 0-2 and before
+  That run reached the worker-b commit limit after printing rounds 0-2 and before
   writing its own JSON.  The JSON records the log's SHA-256.

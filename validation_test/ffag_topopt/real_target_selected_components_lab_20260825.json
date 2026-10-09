@@ -2,18 +2,18 @@
   "schema": "radia.ffag-fixed-one-pass-c-yoke-summary/v1",
   "status": "pass",
   "provenance": {
-    "machine": "lab",
+
     "python": "3.12.10",
     "radia_distribution_metadata": "4.95.61",
-    "radia_import_source": "//192.168.121.100/work/00_CAE/Radia/release-qud/v4.95.60-integration/src/radia",
+    "radia_import_source": "//runtime/work/00_CAE/Radia/release-qud/v4.95.60-integration/src/radia",
     "radia_import_source_git_head": "c25ac40c404f72e6a891fd3214966cb955ba8c74",
     "ngsolve": "6.2.2606",
     "ngsolve_threads": 16,
     "validation_script_git_head_observed_at_completion": "f9d3f5714",
     "worktree_dirty": true,
-    "full_result": "C:/temp/ffag_full_field_selected_real_iter1_20260825.json",
+    "full_result": "<private-path>/ffag_full_field_selected_real_iter1_20260825.json",
     "performance_measurement": "disabled",
-    "note": "Correctness and restart evidence only; repeat benchmark measurements on mdx or hibino."
+    "note": "Correctness and restart evidence only; repeat benchmark measurements on mdx or compute."
   },
   "problem": {
     "element_family": "HEX",
@@ -81,7 +81,7 @@
     "selected_component_objective_improves": true,
     "selected_component_objective_is_inside_bands": false,
     "manufactured_inverse_gate_remains_the_exact_recovery_oracle": true,
-    "next_run": "Restart from the full result and continue multiple material iterations on mdx or hibino after SSH recovers."
+    "next_run": "Restart from the full result and continue multiple material iterations on mdx or compute after SSH recovers."
   },
   "gates": {
     "coil_yoke_clearance": true,

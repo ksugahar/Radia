@@ -62,13 +62,13 @@ def test_manufactured_result_covers_five_element_families() -> None:
     assert len({case["mesh_id"] for case in result["case_results"]}) == 5
 
 
-def test_historical_hibino_result_records_the_exact_native_runtime() -> None:
-    result = _load("results_ngsolve_matlab_extended_hibino.json")
+def test_historical_compute_result_records_the_exact_native_runtime() -> None:
+    result = _load("results_ngsolve_matlab_extended_compute.json")
     assert result["schema"] == (
         "radia.ngsolve-python-matlab-extended-validation.v1"
     )
     assert result["all_passed"] is True
-    assert result["host_name"].upper() == "HIBINO"
+    assert "host_name" not in result
     assert result["matlab_release"] == "2026a"
     # Archived 2606 evidence; this does not validate the current 2607 runtime.
     assert result["ngsolve_version"] == "6.2.2606"
@@ -77,10 +77,10 @@ def test_historical_hibino_result_records_the_exact_native_runtime() -> None:
     assert result["native_handle_count_after"] == 0
 
 
-def test_canonical_tier_results_are_the_recorded_hibino_results() -> None:
+def test_canonical_tier_results_are_the_recorded_compute_results() -> None:
     for stem in (
         "results_ngsolve_matlab_breadth_500",
         "results_ngsolve_matlab_scale_20",
         "results_ngsolve_matlab_manufactured",
     ):
-        assert _load(f"{stem}.json") == _load(f"{stem}_hibino.json")
+        assert _load(f"{stem}.json") == _load(f"{stem}_compute.json")

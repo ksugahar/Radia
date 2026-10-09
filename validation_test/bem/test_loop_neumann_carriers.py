@@ -106,7 +106,7 @@ def test_carrier_sensitivity(geometry, request, monkeypatch):
     quadrature_error = max(abs(r['qt6']['P_total']/r['qt12']['P_total']-1) for r in rows)
     evidence = dict(geometry=geometry, nv=solver.mesh.nv, rows=rows,
         widths=widths, quadrature_power_relative_error=quadrature_error,
-        elapsed_s=time.perf_counter()-started,host=platform.node(),
+        elapsed_s=time.perf_counter()-started,platform_class=platform.system(),
         ngsolve=ng.__version__, production_module=Path(loop.__file__).resolve().relative_to(
             Path(__file__).resolve().parents[2]).as_posix())
     if os.getenv('QT_EVIDENCE_DIR'):

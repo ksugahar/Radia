@@ -18,7 +18,7 @@ boundary, and an `eps*nu` mass with eps = 1e-6.  The Hiruma coil is in
 - `plate`: Cu plate 17.72 x 17.72 x 2 mm, conductor-only mesh, A_r = 0 on its
   surface (the A1 sweep setting).  Reference: the direct run.
 
-mdx1 (disk) and mdx2 (sphere, plate), 8 threads, commit 41a044187, one binary
+worker-a (disk) and worker-b (sphere, plate), 8 threads, commit 41a044187, one binary
 (`summary_20260928.json`); each host also carried one job of another session.
 
 | case | f | dofs | coarse | iterations | setup s | solve s | peak GB | vs reference |
@@ -82,7 +82,7 @@ At order 3 AMS also needs
 fewer outer iterations than the direct wirebasket inverse (62 vs 85-103, 101
 vs 171-174, 52 vs 77-93), and assembly/BDDC setup plus solve is approximately 5-29x faster where
 the direct solver runs at all; the two largest meshes (0.95M and 1.44M dofs) exceed the direct
-solver's memory on mdx2 (about 45 GB free) and solve with AMS in 13-17 s.
+solver's memory on worker-b (about 45 GB free) and solve with AMS in 13-17 s.
 The disk error against the axisymmetric reference drops from 1.37-1.97 %
 (order 2) to 0.88 %.
 

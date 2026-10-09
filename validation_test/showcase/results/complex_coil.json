@@ -2,7 +2,7 @@
   "schema": "radia.selected_showcase.v1",
   "case": "complex_coil",
   "generated_at_utc": "2026-10-01T03:58:45.004232+00:00",
-  "host": "Hibino",
+
   "python": "3.12.10",
   "versions": {
     "radia": "4.95.90",

@@ -5,8 +5,8 @@
   "commit": "3511ce9439361e7a840488dce92a5c0da6cbf089",
   "mex_sha256": "bcf228785a6e817c971dd3e49a6d2e0c492a12e471ec2bdc78d609ebfebed33a",
   "targets": {
-    "mdx1": {
-      "label": "mdx1",
+    "worker_a": {
+      "label": "worker_a",
       "status": "passed",
       "verified_at_utc": "2026-10-03T13:45:02.610496+00:00",
       "mex_sha256": "bcf228785a6e817c971dd3e49a6d2e0c492a12e471ec2bdc78d609ebfebed33a",
@@ -14,7 +14,7 @@
       "execution_backend": "matlab-engine"
     },
     "100": {
-      "label": "100\u53f7\u6a5f",
+      "label": "runtime",
       "status": "passed",
       "verified_at_utc": "2026-10-03T15:02:53.059758+00:00",
       "mex_sha256": "bcf228785a6e817c971dd3e49a6d2e0c492a12e471ec2bdc78d609ebfebed33a",
@@ -24,7 +24,7 @@
       "output_tail": "RADIA_IH_RELEASE_OK version=0.1.0-preview.8 matlab=2026a backend=matlab-level2+radia-mex-handles\nRADIA_SIMULINK_RELEASE_OK matlab=2026a motor=native-mex-periodic-interpolation reactor=matlab-level2+radia-mex-handle maglev=matlab-level2-shared-mode-foster em_topology=matlab-native-vim-density-adjoint em_check=executed sf_optuna=matlab-native-optuna sf_inner=aca_plus_qr_tsvd ih=matlab-level2+radia-mex-handles"
     },
     "lab": {
-      "label": "LAB",
+      "label": "validation runtime",
       "status": "passed",
       "verified_at_utc": "2026-10-03T15:02:53.062756+00:00",
       "mex_sha256": "bcf228785a6e817c971dd3e49a6d2e0c492a12e471ec2bdc78d609ebfebed33a",
@@ -33,8 +33,8 @@
       "receipt_sha256": "0a5d28e724e1612ef812e188d5b974157421e3a2599679ff68890ba05eac3ce9",
       "output_tail": "RADIA_IH_RELEASE_OK version=0.1.0-preview.8 matlab=2026a backend=matlab-level2+radia-mex-handles\nRADIA_SIMULINK_RELEASE_OK matlab=2026a motor=native-mex-periodic-interpolation reactor=matlab-level2+radia-mex-handle maglev=matlab-level2-shared-mode-foster em_topology=matlab-native-vim-density-adjoint em_check=executed sf_optuna=matlab-native-optuna sf_inner=aca_plus_qr_tsvd ih=matlab-level2+radia-mex-handles"
     },
-    "mdx2": {
-      "label": "mdx2",
+    "worker_b": {
+      "label": "worker_b",
       "status": "passed",
       "verified_at_utc": "2026-10-03T15:06:25.213923+00:00",
       "mex_sha256": "bcf228785a6e817c971dd3e49a6d2e0c492a12e471ec2bdc78d609ebfebed33a",

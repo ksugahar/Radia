@@ -2,7 +2,7 @@
   "schema": "radia.beak_fin.bema_refinement.v1",
   "generated_at_utc": "2026-09-21T05:22:37.423151+00:00",
   "git_head": "c4029753909615a11458615e0e70f8bef33eac6d",
-  "host": "intel11",
+
   "question": "the delivery gate is held at accepted=false by a 3.24% beak-loss-fraction difference between BEM-A and PEEC. Against the independent 2-D n=1024 reference PEEC is 1.5% low and BEM-A 4.6% low, so the difference looked like BEM-A's own discretisation error. Refine BEM-A and see",
   "fixture": "24 mm straight beak fin, 150 kHz, copper",
   "peec": {

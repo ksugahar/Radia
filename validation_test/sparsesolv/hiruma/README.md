@@ -18,7 +18,7 @@ python validation_test/sparsesolv/hiruma/bench_compact_ams.py --verify-baseline
 The gate fixes mesh hashes and finite-element sizes exactly, while accepting a
 small iteration/residual range.  Setup and solve times are recorded but are not
 gated because they depend on the machine and concurrent load.  Heavy scaling
-runs belong on mdx; the tracked 2.5T case is suitable as a LAB smoke run.
+runs belong on mdx; the tracked 2.5T case is suitable as a validation host smoke run.
 
 The fixture was converted from the existing laboratory `mesh1_2.5T.msh`
 dataset.  `prepare_hiruma_vol.py` preserves its points and volume elements and
@@ -37,7 +37,7 @@ mesh sizes, golden range, and one observed timing are recorded in
 
 Additional comparisons remain available as `bench_ams_vs_abmc.py` and
 `bench_cocr_vs_gmres.py`.  They write transient result JSON below
-`C:\temp\radia-validation`, never into the repository.
+`private-runtime-path`, never into the repository.
 
 ## Order 2: AMS as the BDDC wirebasket solver
 
@@ -52,7 +52,7 @@ HCurl also puts the face dofs of badly shaped faces into the wirebasket
 (124,040 of them on the 2.5T mesh); `--edge-wirebasket` returns them to the
 interface.  The larger meshes are the optional scaling inputs described above.
 
-mdx1, 8 threads, 2026-09-27, one binary (`bddc_coarse/`):
+worker-a, 8 threads, 2026-09-27, one binary (`bddc_coarse/`):
 
 | mesh | dofs | coarse solver | iterations | setup s | solve s | wall s | peak GB |
 |---|---|---|---|---|---|---|---|
@@ -66,16 +66,16 @@ mdx1, 8 threads, 2026-09-27, one binary (`bddc_coarse/`):
 The 5.5T direct failure is not the wirebasket size: with `--edge-wirebasket`
 (331,595 wirebasket dofs) it exits the same way, while the 3.5T default
 wirebasket (353,473 dofs) factors on the same host.  The same exit code has
-been seen from sparse Cholesky on a small SPD system on mdx2, so the cause is
+been seen from sparse Cholesky on a small SPD system on worker-b, so the cause is
 unresolved.
 
 Conductor loss agrees with the direct runs to 1e-12 relative and the magnetic
 energy to 6e-9 (the solver tolerance is 1e-8).  Another session's 4-thread job
-shared mdx1 during all runs.  The direct solver's cost is the wirebasket
+shared worker-a during all runs.  The direct solver's cost is the wirebasket
 factorization (setup and memory) and its triangular solves (about 470 ms of
 each iteration at 2.5T); PARDISO was slower (5.5 s per iteration).
 
-What the exploration (`summary_mdx1_20260927.json`) settled:
+What the exploration (`summary_worker_a_20260927.json`) settled:
 
 - One AMS cycle per wirebasket solve is too weak: none of the one-cycle runs
   converged within 1000-1500 iterations.  `cycles=k` runs k stationary steps on the wirebasket system,
@@ -105,7 +105,7 @@ singular gradient coarsest level fails that check and keeps sparse Cholesky
 (storing that factorization's operator densely diverged).  The dual V-cycle
 also runs a loop serially by work (fewer than 16k nonzeros) instead of rows.
 
-mdx1, 8 threads, AMS 4 cycles, edge wirebasket, one binary:
+worker-a, 8 threads, AMS 4 cycles, edge wirebasket, one binary:
 
 | mesh | lean_coarse | iterations | solve s | nodal AMG s | gradient AMG s |
 |---|---|---|---|---|---|
@@ -124,7 +124,7 @@ AMS cycle (825 vs 595 iterations).
 
 ## Independent-host evidence
 
-`compact_ams_results_hibino.json` records the 2026-09-11 Hibino run. Its
+`compact_ams_results_compute.json` records the 2026-09-11 compute host run. Its
 fixture hash and element/DOF counts match the tracked baseline. The run passes
 the existing acceptance range: 144 iterations and true residual
 9.891989345431059e-11. The system shift is zero; epsilon=1e-6 is applied only

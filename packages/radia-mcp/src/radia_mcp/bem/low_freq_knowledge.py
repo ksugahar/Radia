@@ -12,7 +12,7 @@ becomes ill-conditioned:
 | MFIE breakdown | Static MFIE kernel non-invertible on simply-connected regions |
 | PMCHWT breakdown | J → 0 but M → O(1) — scale mismatch |
 
-Why this matters for LAB:
+Why this matters for validation runtime:
 - IH workpiece at 1-100 kHz is "low frequency" relative to RF
 - PEEC coupling at kHz frequencies needs LF-stable formulations
 - ngsolve.bem at DC needs LF stabilization

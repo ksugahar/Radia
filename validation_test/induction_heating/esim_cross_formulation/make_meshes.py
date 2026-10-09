@@ -17,7 +17,7 @@ surface).  Meshes (2) and (3) are INDEPENDENT surface discretisations
 of the same 50 mm cylinder -- comparing P_wp across them isolates the
 outer-field formulation from the mesh.
 
-NOTE (LAB / 100号機): `coreform_cubit -batch <script>` fails here with
+NOTE (validation runtime / runtime host): `coreform_cubit -batch <script>` fails here with
 an RLM license error (-102) in headless batch, but the in-process
 Cubit Python API (`cubit.init([... , '-commandplugindir', plugins])`)
 authenticates correctly.  This script therefore drives everything in a

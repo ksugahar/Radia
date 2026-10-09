@@ -1,0 +1,29 @@
+{
+  "wheel_sha256": "8a7abaa118822791216deeb1a43dedbb7aecbc48dd881f9ecbeb793e2cc8fbd3",
+  "source_commit": "3511ce9439361e7a840488dce92a5c0da6cbf089",
+  "ci_run": 37125753576,
+  "version": "5.2.2",
+
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "steps": [
+    {
+      "name": "pip-check",
+      "exit_code": 0
+    },
+    {
+      "name": "full6",
+      "exit_code": 0
+    },
+    {
+      "name": "focused",
+      "exit_code": 0
+    },
+    {
+      "name": "pip-freeze",
+      "exit_code": 0
+    }
+  ],
+  "passed": true,
+  "sources_verified": 317,
+  "native_sha256": "950dffcf022f35a10a480b805bcddacc6ff3785c7a13d6125c99054f8b5cbd14"
+}

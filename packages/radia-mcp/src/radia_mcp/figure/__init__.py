@@ -1,6 +1,6 @@
 """radia_mcp.figure — Sugahara Lab publication-figure toolkit.
 
-Promoted on 2026-05-26 from LAB-private figure tooling into radia-mcp as
+Promoted on 2026-05-26 from validation runtime-private figure tooling into radia-mcp as
 a standalone subpackage following the `radia_mcp.<topic>.server` pattern.
 
 2026-07-18: figure MERGED into mcp-server-paper-writing (Sugahara).

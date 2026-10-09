@@ -6,7 +6,7 @@ The current MCP operating manual is `urn(topic="overview")` / `urn(topic="method
 This record is numerical evidence, not a second operating manual.
 
 The private SA/RM PCB and NL87 34-basis and compact 10-basis log-component
-checkpoints were replayed on mdx2, CPU, one thread. Saved predictions reproduced
+checkpoints were replayed on worker-b, CPU, one thread. Saved predictions reproduced
 to maximum relative differences below 4.1e-15. Each curve has 2001 samples.
 No raw curves, checkpoints or fitted parameter arrays are published here.
 
@@ -83,6 +83,6 @@ provide. Parsimony is nevertheless an explicit, useful objective.
 28 focused URN/MCP tests passed locally with the pure-Python URN package loaded
 without the unrelated native Radia root. This is not a native solver validation.
 The actual numerical computation uses the checked source modules and an isolated
-mdx2 environment (versions in the JSON); no shared editable install is changed.
-Private inputs and operational evidence are retained on LAB, with SHA-256
+worker-b environment (versions in the JSON); no shared editable install is changed.
+Private inputs and operational evidence are retained on validation host, with SHA-256
 verification before removal of the task-owned remote scratch directory.

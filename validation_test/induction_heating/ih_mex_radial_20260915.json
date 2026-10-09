@@ -1,7 +1,7 @@
 {
   "scope": "IH radial P1 thermal MEX; prescribed uniform source; not EM or production VOL validation",
   "matlab_version": "26.1.0.3276743 (R2026a) Update 3",
-  "mex_path": "C:\\temp\\radia-ih-thermal-boundaries\\matlab\\radia_mex.mexw64",
+  "mex_path": "<private-path>/radia-ih-thermal-boundaries\\matlab\\radia_mex.mexw64",
   "cases": [
     {
       "bore_m": 0,

@@ -1,7 +1,7 @@
 {
   "schema": "radia.validation.mixed_galerkin.v1",
   "generated_at_utc": "2026-09-28T19:25:42.662526+00:00",
-  "hostname": "intel11",
+
   "versions": {
     "python": "3.12.10",
     "platform": "Windows-2022Server-10.0.20348-SP0",

@@ -358,7 +358,7 @@ def run(args):
             "topology inverse with full "
             "HDiv-MMM target/final solves and transfer-map AD; not an "
             "engineering magnet design."),
-        "machine": platform.node(),
+        "platform_class": platform.system(),
         "python": platform.python_version(),
         "mesh": {
             "element_family": "HEX", "hdiv_family": "BDM1",

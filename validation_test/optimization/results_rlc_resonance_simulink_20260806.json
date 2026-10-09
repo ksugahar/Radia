@@ -4,9 +4,9 @@
   "matlab_release": "2026a",
   "simulink_version": "26.1",
   "schema": "radia.validation.rlc-resonance-optimization.v1",
-  "model_file": "S:\\Radia\\01_GitHub\\matlab\\radia_rlc_resonance_plant.slx",
-  "study_file": "C:\\temp\\radia_rlc_resonance_validation\\study.mat",
-  "plot_file": "S:\\Radia\\01_GitHub\\validation_test\\optimization\\rlc_resonance_simulink_20260806.png",
+  "model_file": "<private-path>/Radia\\01_GitHub\\matlab\\radia_rlc_resonance_plant.slx",
+  "study_file": "<private-path>/radia_rlc_resonance_validation\\study.mat",
+  "plot_file": "<private-path>/Radia\\01_GitHub\\validation_test\\optimization\\rlc_resonance_simulink_20260806.png",
   "definition": "underdamped free ring-down frequency from zero crossings",
   "target_frequency_Hz": 1000,
   "fixed_components": {

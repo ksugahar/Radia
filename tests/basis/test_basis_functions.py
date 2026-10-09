@@ -12,7 +12,7 @@ Invariants checked (Phase 1):
   HDiv RT₀:     div = sigma/A constant, trace condition on associated edge
   L2 P0/P1:     basis spans constant/linear, no continuity assumed
 
-Runtime: ~1 sec on LAB.  Suitable for CI without Mathematica.
+Runtime: ~1 sec on validation runtime.  Suitable for CI without Mathematica.
 """
 from __future__ import annotations
 

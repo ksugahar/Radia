@@ -33,7 +33,7 @@ Baseline: a compass-drawn collector THROUGH THE SAME ENTRY FACE, same exit
 midpoint/width/direction, walls = circular arcs -- what an engineer sketches.
 Same flux, same entry data.  Its peak wall |B| vs the cap is the payoff metric.
 
-Golden bands asserted at the end of the run (2026-07-28 baseline, LAB):
+Golden bands asserted at the end of the run (2026-07-28 baseline, validation runtime):
   orientation            : J single-signed on every sampled wall point
   entry Dirichlet data   : A(t) chord-polynomial fit residual < 1e-3 of Phi
   cap wall vs profile    : mean < 1.5 % (full profile incl. the ramp)
@@ -593,7 +593,7 @@ def main():
     report["meta"] = {
         "generated_at_utc": datetime.datetime.now(datetime.timezone.utc)
         .isoformat(timespec="seconds"),
-        "hostname": platform.node(), "python_version": platform.python_version(),
+        "platform_class": platform.system(), "python_version": platform.python_version(),
         "purpose": "correctness validation only (no timing claims)",
     }
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)),

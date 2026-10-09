@@ -1,7 +1,7 @@
 {
   "schema": "radia.validation.maintenance-integration.v1",
   "date": "2026-09-22",
-  "host": "mdx1",
+
   "scope": "Neutral formulation names, public catalog boundary, Nastran documentation, and byte-stable mesh evidence",
   "integrated_branch_tip": "05fe997a22bad27017ef8de87d06b1b909d84138",
   "tests": {

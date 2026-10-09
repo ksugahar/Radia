@@ -192,7 +192,7 @@ Mitigations:
 AMS_HIPTMAIR_XU = r"""
 # Auxiliary Space Maxwell Solver (AMS / HX) — Hiptmair-Xu 2007 ★
 
-★ THIS IS THE LAB CORE PRECONDITIONER FOR HCurl PROBLEMS.
+★ THIS IS THE validation runtime CORE PRECONDITIONER FOR HCurl PROBLEMS.
 
 [LOCAL] 05_AMG_AMS/01_Hiptmair_Xu_2007_Nodal_Auxiliary_Space_Hcurl_Hdiv.pdf
 
@@ -269,7 +269,7 @@ mesh-independent.
 
 **Use the current coordinate-based CompactAMS recipe with NGSolve order=1.
 For the measured order=2 workload, prefer NGSolve `bddc`.**
-The following measurements were reported on mdx1 (idle, 38 cores), on the hiruma complex eddy-current problem
+The following measurements were reported on worker-a (idle, 38 cores), on the hiruma complex eddy-current problem
 (conductor + core + air, σ=0 in air, 30 kHz, `nograds=True` tets, COCR, 1e-8):
 
 | order | use | why (measured) |
@@ -299,7 +299,7 @@ k=3; on p=3 the time is 0.60-0.77x the k=1 NGSolve-wirebasket setting where
 HCurl marked face dofs, 0.97x where it marked none
 (`validation_test/induction_heating/results/bddc_ams_coarse_ih_2607.json`).
 On the Hiruma 30 kHz problem (p=2, eps*nu mass
-1e-6, COCR 1e-8, mdx1, 8 threads, 2026-09-27) wall time against the direct
+1e-6, COCR 1e-8, worker-a, 8 threads, 2026-09-27) wall time against the direct
 wirebasket factorization: 680k dof 174 s -> 77 s (11.6 -> 1.3 GB), 865k dof
 268 s -> 151 s (15.8 -> 1.6 GB); at 1.46M dof the direct factorization
 terminated the process (0xC0000409) and AMS solved it in 193 s / 2.6 GB.

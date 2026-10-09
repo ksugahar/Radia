@@ -1,7 +1,7 @@
 """paper_writing JA-lint re-exports.
 
 Originally these tools lived in mcp-server-document.grant_writing
-(LAB-private).  When paper_writing was promoted to radia-mcp (public
+(validation runtime-private).  When paper_writing was promoted to radia-mcp (public
 PyPI) on 2026-05-26 the 8 JA-lint helpers were INLINE-COPIED into
 ``_ja_lint.py`` so the public package is self-contained.
 

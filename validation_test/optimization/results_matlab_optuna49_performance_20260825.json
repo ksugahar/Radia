@@ -1,7 +1,7 @@
 {
   "schema": "radia.validation.optuna49-performance.v1",
   "generated_at": "2026-08-25T12:21:32+09:00",
-  "host": "LAB",
+
   "versions": {
     "python": "3.12.10",
     "optuna": "4.9.0",
@@ -76,7 +76,7 @@
       0.0074954
     ],
     "fresh_process_first_call_median_s": 0.007793,
-    "gateway_directory": "S:\\Radia\\01_GitHub\\matlab",
+    "gateway_directory": "<private-path>/Radia\\01_GitHub\\matlab",
     "measurement_boundary": "Each value is the first optuna_mex api.info call in a fresh MATLAB process. MATLAB process launch is excluded; filesystem-cache and host-activity effects remain visible in the individual measurements."
   },
   "scope": "Same-host warmed sequential proposal throughput; the analytic objective is included equally on both sides.",

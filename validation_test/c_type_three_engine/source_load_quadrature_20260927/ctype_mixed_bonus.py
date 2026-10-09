@@ -249,7 +249,7 @@ def main():
     stored = {name: rte.median_plane_projection(points, np.asarray(values))
               for name, values in reference["fields_T"].items()}
     payload = {"schema": "radia.validation.ctype-source-load-quadrature.v1",
-               "host": platform.node(), "python": sys.version,
+               "platform_class": platform.system(), "python": sys.version,
                "radia_version": getattr(rad, "__version__", None), "radia_module": rad.__file__,
                "ngsolve": ng.__version__, "threads": args.threads,
                "kelvin_solver_sha256": sha256(ks.__file__),

@@ -1,7 +1,7 @@
 {
  "description": "Real K=40 Potter-Schmulian coupled rod loop vs demag-free intrinsic loop",
  "timestamp": "2026-07-12T16:32:57.134694",
- "hostname": "lab",
+
  "peakB_T": 0.8279312108046935,
  "coupled_area_J_per_m3": 989.1349758722444,
  "intrinsic_area_J_per_m3": 1011.4432884861254,

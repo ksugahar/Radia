@@ -41,7 +41,7 @@ def main():
                 if archive.read(name) != (package / name[6:]).read_bytes():
                     raise RuntimeError('Installed Python differs from wheel: ' + name)
     test = ROOT / 'test_hdiv_vim_energy_newton.py'
-    report = dict(schema='radia.energy-newton-native-audit.v1', host=platform.node(),
+    report = dict(schema='radia.energy-newton-native-audit.v1', platform_class=platform.system(),
                   python=sys.version, executable=sys.executable, package=str(package),
                   versions={name: importlib.metadata.version(name) for name in
                             ('radia', 'ngsolve', 'numpy', 'scipy', 'pytest', 'threadpoolctl')},

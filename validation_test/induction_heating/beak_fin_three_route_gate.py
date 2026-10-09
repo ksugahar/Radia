@@ -88,7 +88,7 @@ def main():
         "schema": "radia.beak_fin_three_route.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "git_head": head,
-        "host": platform.node(),
+        "platform_class": platform.system(),
         "question": ("BEM-A and the surface PEEC both assume a Leontovich "
                      "surface impedance.  Does an interior-resolved solve "
                      "agree with them where that assumption is weakest?"),

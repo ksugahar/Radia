@@ -5,8 +5,7 @@
   "radia_version": "4.95.89",
   "ngsolve_version": "6.2.2606",
   "python_version": "3.12.10",
-  "platform": "Windows-2022Server-10.0.20348-SP0",
-  "host": "lab"
+  "platform": "Windows-2022Server-10.0.20348-SP0"
  },
  "problem": {
   "plate_m": [

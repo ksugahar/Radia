@@ -2,9 +2,9 @@
   "schema": "radia.fin_partial_element_mutual.v1",
   "generated_at_utc": "2026-09-21T19:43:52.198458+00:00",
   "git_head": "b257cbf5f75e78b22facdae8db470d695dcedf8a",
-  "host": "intel11",
+
   "question": "the fin branches take the filamentary Neumann mutual because they are not sub-filaments of a shared parent.  How far is that from the cross-section-averaged value on bands that touch?",
-  "fixture": "C:\\temp\\radia-ih-beakfin-20260922\\tests\\coil_from_cad\\fixtures\\beak_fin_48mm.step",
+  "fixture": "<private-path>/radia-ih-beakfin-20260922\\tests\\coil_from_cad\\fixtures\\beak_fin_48mm.step",
   "n_peri": 256,
   "n_stations": 33,
   "band_length_m": 0.0014999999999999979,

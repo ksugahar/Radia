@@ -26,7 +26,7 @@
   "shapely_version": "2.1.2",
   "script_sha256": "165ee7660eadcc05ce69b12ce290b623ce85088a1507c15d69a5f616a0868b1e",
   "audit": {
-    "path": "C:\\temp\\radia-ex6-diag\\assets_conforming\\model.vol",
+    "path": "<private-path>/radia-ex6-diag\\assets_conforming\\model.vol",
     "sha256": "fdd1387281e550e27eab435cfac3ec54e0b9d1339438699fdc50c852dfcafc74",
     "volume_elements": 2408,
     "boundary_elements": 2200,

@@ -5,7 +5,7 @@
   "input_files_modified": false,
   "rows": [
     {
-      "path": "validation_test/esrf_three_engine/results/case6_nonlinear_three_engine_mdx1.json",
+      "path": "validation_test/esrf_three_engine/results/case6_nonlinear_three_engine_worker_a.json",
       "sha256": "a28ea3b48d8dea8463d15ad051bac319e123d7fc75fda1118bd45c357dfac580",
       "stored_passed": true,
       "acceptance": "HOLD: historical source, not final candidate",

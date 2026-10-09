@@ -96,8 +96,8 @@ CAD engine and post-processor. Version 4.15.2 (March 2026).
 - **Citation**: Geuzaine & Remacle, IJNME 79(11), pp. 1309-1331, 2009
 
 ## Installation (Radia project)
-The canonical launcher is `gmsh` on PATH. On current LAB installs this is the
-Python wrapper `C:\\Program Files\\Python312\\Scripts\\gmsh.bat`, backed by the
+The canonical launcher is `gmsh` on PATH. On current validation runtime installs this is the
+Python wrapper `C:\\Program Files\\Python312private-runtime-path`, backed by the
 `gmsh` Python package (`gmsh.py`) at version 4.15.2. Do not hard-code
 `C:\\gmsh.exe`; use `gmsh` / `shutil.which("gmsh")` / the registered file
 association.
@@ -165,10 +165,10 @@ When passing a Gmsh script snippet with a Windows path through PowerShell,
 prefer single quotes inside the Gmsh snippet:
 
 ```powershell
-gmsh display.geo -string "Print 'C:/temp/frame.png'; Exit;"
+gmsh display.geo -string "Print 'private-runtime-path'; Exit;"
 ```
 
-Do not pass backslash-escaped double quotes such as `\"C:/temp/frame.png\"`
+Do not pass backslash-escaped double quotes such as `\"private-runtime-path"`
 through `gmsh.bat`; the wrapper can leave Gmsh seeing an unquoted `W:` token,
 which fails as `Unknown variable 'W'`. `Print` also needs a graphical
 OpenGL/FLTK context to create PNG/JPEG images; for unattended animation export,

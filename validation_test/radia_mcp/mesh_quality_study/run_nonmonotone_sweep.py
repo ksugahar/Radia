@@ -1,6 +1,6 @@
 """Map netgen's min-quality NON-MONOTONICITY under uniform refinement.
 
-Promoted from C:/temp/mesh_quality_study (2026-08-06) with its committed
+Promoted from private-runtime-path (2026-08-06) with its committed
 results JSON (Data Persistence Policy). Re-run with
 `python run_nonmonotone_sweep.py` (requires Cubit + netgen + gmsh +
 build123d; scratch meshes land in artifacts/, gitignored).
@@ -12,7 +12,7 @@ or a systematic property, by sweeping maxh continuously (24 points per
 geometry) and counting refinement steps where the finer mesh has a WORSE
 worst element. Cubit tetmesh at three sizes provides the reference band.
 
-Quality-class run (correctness, not timing) -- LAB execution allowed.
+Quality-class run (correctness, not timing) -- validation runtime execution allowed.
 """
 import json
 import os
@@ -78,7 +78,7 @@ def main():
     export_step(Sphere(1.0), sp)
 
     results = {"timestamp": datetime.now().isoformat(),
-               "hostname": platform.node(),
+               "platform_class": platform.system(),
                "referee": "gmsh minSICN", "order": 1,
                "drop_tolerance": DROP_TOL, "n_points": N_POINTS,
                "sweeps": {}}

@@ -1,7 +1,7 @@
 {
   "case": "team10_two_coil_indicator_check",
-  "note": "parsed from run.log; the run stopped at the mdx2 commit limit (no pagefile, 57.4 GB) after round 2, before writing its own JSON",
-  "host": "mdx2",
+  "note": "parsed from run.log; the run stopped at the worker_b commit limit (no pagefile, 57.4 GB) after round 2, before writing its own JSON",
+
   "selection_basis": [
     16,
     8,

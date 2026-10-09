@@ -7,7 +7,7 @@ This script computes the reference solution for:
 - Uniform external field H_ext = 1000 A/m (z-direction)
 - High-precision solution using H-formulation perturbation method
 
-Based on: S:/ngsolve/NGSolve/2024_01_31_H-formulation/2025_11_22_H-formulation3D_dipole.py
+Based on: private-runtime-path
 Updated: 2025-11-25
 """
 import os, sys

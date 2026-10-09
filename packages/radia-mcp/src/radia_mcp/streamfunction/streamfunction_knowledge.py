@@ -60,7 +60,7 @@ WHAT THIS FRAMEWORK PROVIDES
     field design is nlevels-independent) by bisection of single-stroke -> PEEC
     L_coil for the turn count that resonates; reports `resonance` {nlevels,
     achieved L, resonance_freq_Hz, L_range_H, in_range}.  Same BEM L machinery,
-    opposite goal.  LAB: C=22nF f=200kHz -> 28.8uH -> nlevels 13 -> 30.3uH ->
+    opposite goal.  validation runtime: C=22nF f=200kHz -> 28.8uH -> nlevels 13 -> 30.3uH ->
     coil resonates 195kHz; connects SF designer to radia-ih.  WITH --greedy-turns
     (few-turn coil) the turns are FIXED by greedy (no nlevels search; L_coil ~ N^2
     pins N), so it instead reports required_cap_F = 1/((2 pi f)^2 L_coil) -- the
@@ -191,7 +191,7 @@ scalar -> Bz, 3-vector -> full B).
 CURRENT-CONFINEMENT BOUNDARY CONDITION  (--confine {off, on, abe})
 -----------------------------------------------------------------
 On a FINITE former the contours run off the edges; closing them with a rim
-chord injects a spurious edge current (LAB short cylinder Gx: single-current
+chord injects a spurious edge current (validation runtime short cylinder Gx: single-current
 rms 0.54, 42/42 contours open).  Confine the current to the patch:
 
   off   no constraint (default; fine when contours close on their own, e.g.
@@ -207,7 +207,7 @@ rms 0.54, 42/42 contours open).  Confine the current to the patch:
         seam are told apart by element adjacency (a boundary mesh-edge borders
         ONE surface element, a seam two).
 
-abe is the best DESIGN + SEPARATE-TURN + GENERAL choice: LAB short cylinder
+abe is the best DESIGN + SEPARATE-TURN + GENERAL choice: validation runtime short cylinder
 Gx -> n_open 0, separate-loops single-current 0.022 (vs on's 0.149), and does
 NOT break uniform (vs on which degrades it).  CAVEAT: abe is NOT automatically
 best for the SINGLE-STROKE WIRE -- its edge equipotential makes a contour hug
@@ -229,7 +229,7 @@ r ~ 1/sqrt|B|) enforces.  Two manufacture refinements:
                     FULL-order psi via mesh.GetTrafo(el) + gfu(trafo(ip))
                     (the element-trafo MeshPoint dodges the boundary-point-
                     eval-returns-0 quirk) -- the FE analogue of the analytical
-                    flux-line trace.  LAB Gx o2: loops_homo 1.32e-4 -> 1.15e-4.
+                    flux-line trace.  validation runtime Gx o2: loops_homo 1.32e-4 -> 1.15e-4.
   --flux-plot p.png  bubble-system flux-line view of the DESIGNED coil's B
   --flux-plane {x,y,z}   field on a cut-plane, bubble-seeded (density ~ |B|) +
                     matplotlib streamplot.  Physical check (the four-lobe Gx
@@ -293,7 +293,7 @@ field_aware (default) keeps that field small two ways:
   (2) VISIT ORDER -- the same wire-error objective is minimised over a small
       candidate set {nearest-neighbour, 2-opt-shortened}, keeping whichever the
       cut-opt drives lowest.  The 2-opt shortens the long "jump to a far lobe
-      and back" rungs (LAB Gx: max 372->289 mm, delivered +19..+70 %) but a
+      and back" rungs (validation runtime Gx: max 372->289 mm, delivered +19..+70 %) but a
       length-optimal reorder can break the rungs' symmetric stray-cancellation
       and HURT some cases (abe nl=16: -78 %) -- the documented "shorter rungs
       != better field" trap.  Selecting the lower-wire-error order makes the

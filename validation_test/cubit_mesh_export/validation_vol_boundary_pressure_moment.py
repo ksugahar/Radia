@@ -13,7 +13,7 @@ force/moment reducer used elsewhere in `radia_ngsolve.force`.
 Run:
 
     python validation_test/cubit_mesh_export/validation_vol_boundary_pressure_moment.py
-    python validation_test/cubit_mesh_export/validation_vol_boundary_pressure_moment.py --vol C:\\temp\\box.vol
+    python validation_test/cubit_mesh_export/validation_vol_boundary_pressure_moment.py --vol private-runtime-path
 """
 
 from __future__ import annotations

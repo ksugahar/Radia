@@ -71,7 +71,7 @@ def main():
     mex = root / "matlab/radia_mex.mexw64"
     record = dict(schema="radia.sparsesolv-matlab-parity.v1",
                   utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                  host=platform.node(), python=platform.python_version(),
+                  platform_class=platform.system(), python=platform.python_version(),
                   mex=str(mex), mex_sha256=hashlib.sha256(mex.read_bytes()).hexdigest(),
                   source_state="Working tree snapshot; source_hashes identify tested files, not the base commit alone",
                   source_base_commit=subprocess.check_output(["git", "-c", f"safe.directory={root.as_posix()}",

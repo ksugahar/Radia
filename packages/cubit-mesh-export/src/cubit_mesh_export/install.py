@@ -153,7 +153,7 @@ def _running_cubit_processes():
     """Return a list of (pid, name) for running Cubit GUI processes.
 
     A non-empty list means the plugin files are likely locked -- installing
-    over them is not safe. The 2026-04-14 incident on 100号機 was caused by
+    over them is not safe. The 2026-04-14 incident on runtime host was caused by
     a running Cubit holding cubit_mesh_export.ccm open, which made copy silently
     produce a half-updated plugin set.
     """

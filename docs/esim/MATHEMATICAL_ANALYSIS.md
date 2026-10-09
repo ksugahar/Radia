@@ -1081,7 +1081,7 @@ admits the closed-form `H(r) = H_0 I_0(γr) / I_0(γR)` with
 first iteration (since `mu_dist` is initialised to the constant value
 and `_solve_linear_system` is solved exactly to floating precision).
 
-A quick verification (LAB, 2026-05-15):
+A quick verification (validation host, 2026-05-15):
 
 ```
 ESIMFiniteSlabSolver(half_thickness=5e-3, sigma=2e6, mu_r=100,

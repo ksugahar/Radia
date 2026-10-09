@@ -261,7 +261,7 @@ void P1TriangleStiffness(const double rn[3], const double zn[3], double mu,
 
 // ---------------------------------------------------------------------------
 // P1 triangle sigma-mass in V-DOF via Hammer 7-point quadrature.
-// Verbatim port of W:/.../axifem/sigma_mass.py:element_sigma_mass.
+// Verbatim port of <private-path>/.../axifem/sigma_mass.py:element_sigma_mass.
 //
 // Basis for A_phi at vertex j: N_A_j(r, z) = r_j * psi_j(r, z) / r
 // where psi_j = alpha_j + beta_j r^2 + gamma_j z is the {1, r^2, z} basis

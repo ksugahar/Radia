@@ -727,7 +727,7 @@ def build(options: argparse.Namespace) -> dict[str, object]:
             and reflection_is_exact
             and kelvin_is_periodic
         ),
-        "machine": platform.node(),
+        "platform_class": platform.system(),
         "cad_authority": str(CAD_JOURNAL),
         "cad_sha256": sha256(CAD_JOURNAL),
         "cubit": str(cubit),

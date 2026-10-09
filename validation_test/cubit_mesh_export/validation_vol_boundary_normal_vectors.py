@@ -9,7 +9,7 @@ planar unit normal.
 Run:
 
     python validation_test/cubit_mesh_export/validation_vol_boundary_normal_vectors.py
-    python validation_test/cubit_mesh_export/validation_vol_boundary_normal_vectors.py --vol C:\\temp\\box.vol
+    python validation_test/cubit_mesh_export/validation_vol_boundary_normal_vectors.py --vol private-runtime-path
 """
 
 from __future__ import annotations

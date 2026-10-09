@@ -199,7 +199,7 @@ def main():
 
     out = {
         "benchmark": "low_turn_budget",
-        "hostname": platform.node(),
+        "platform_class": platform.system(),
         "problem": {
             "former": "cylinder r=0.15 m L=0.50 m (golden fixture)",
             "dsv": "sphere r=0.05 m",

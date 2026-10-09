@@ -53,7 +53,7 @@ def run(case):
         raise ValueError(case)
     return {"schema": "radia.selected_showcase.v1", "case": case,
             "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-            "host": platform.node(),
+            "platform_class": platform.system(),
             **runtime_metadata(__file__, [helper], threads=2),
             "helper": helper.relative_to(ROOT).as_posix(),
             "helper_sha256": hashlib.sha256(helper.read_bytes()).hexdigest(),

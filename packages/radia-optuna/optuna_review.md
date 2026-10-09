@@ -77,7 +77,7 @@ retain their general paths. Reseeding invalidates the native history. Metadata
 comparison uses `isequaln` so unspecified numeric steps do not invalidate every
 cached search space. Empty constraint tables avoid unnecessary column access.
 
-The [paired LAB result](../../validation_test/optimization/results_optuna50_paired_lab_20260908.json)
+The [paired validation host result](../../validation_test/optimization/results_optuna50_paired_lab_20260908.json)
 records 974 versus 797 scalar trials/s for MATLAB versus Python (1.22x) and
 539 versus 247 grouped conditional trials/s (2.18x). Both scripts now execute
 11 prewarm workloads before the 11 measured repeats; the first three measured
@@ -108,14 +108,14 @@ the 24-trial changing-space sequence. The fixture is byte-stable across two
 regenerations with pinned Optuna 5.0.0. The 24 table/reliability/core MATLAB
 regressions and all 11 package Python tests also pass.
 
-The [follow-up LAB record](../../validation_test/optimization/results_optuna50_followup_lab_20260908.json)
+The [follow-up validation host record](../../validation_test/optimization/results_optuna50_followup_lab_20260908.json)
 retains both fresh-Engine measurements preceding the three compatibility
 corrections: scalar 1,281/1,280 trials/s, grouped
 616/666 trials/s, and 1,000-row export 4.080/4.485 ms. The intervening Python
 measurement is 880 scalar and 275 grouped trials/s, with 5.223 ms export.
 All checksums remain within 1e-12. Python also improved relative to the preceding
 record, so the apparent before/after gain includes host-load variation.
-Historical 4.9 LAB scalar time was 72.717 ms per 100 trials (about 1,375 trials/s),
+Historical 4.9 validation host scalar time was 72.717 ms per 100 trials (about 1,375 trials/s),
 versus 78.040/78.105 ms now. This is a regression-investigation baseline, not a
 controlled version comparison: prewarm settings differ and grouped proposals
 changed in 5.0. Recovering historical performance still requires matched-host
@@ -141,18 +141,18 @@ pass. The new MATLAB-only cache invariant checks enqueue, concurrent ask,
 completion, pruning, stale recovery, imported trials, and save/reload against
 the actual table view; it does not add an upstream parity claim.
 The [state-count experiment](../../validation_test/optimization/results_optuna50_statecount_lab_20260908.json)
-is explicitly inconclusive: LAB CPU was observed at 100 percent. All five
+is explicitly inconclusive: validation host CPU was observed at 100 percent. All five
 development timings are retained, including slower candidate runs, so no
-speedup is established. An idle mdx2 SSH Engine attempt imported successfully
+speedup is established. An idle worker-b SSH Engine attempt imported successfully
 but timed out before MATLAB startup after 90 seconds; its owned process tree
 was reaped. Complete an idle-host before/after measurement before accepting
 this increment as an end-to-end performance improvement.
 
-MATLAB Engine 26.1 is installed on mdx2. The official dedicated Engine
+MATLAB Engine 26.1 is installed on worker-b. The official dedicated Engine
 startup/calculation/shutdown diagnostic passed on both mdx runner accounts in
 [run 34210024491](https://github.com/ksugahar/Radia/actions/runs/34210024491).
 SSH startup timed out with both installed and bundled Engine, and owned probe
-processes were reaped. There is no mdx2 MATLAB timing result from these attempts;
+processes were reaped. There is no worker-b MATLAB timing result from these attempts;
 fresh mdx performance validation remains a release requirement.
 
 ## Distribution, MCP, and licensing boundary

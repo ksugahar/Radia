@@ -17,18 +17,18 @@ claim Python-bridge lifecycle coverage from these gateway tests.
 Run from a checkout with a built MEX, using Python with MATLAB Engine installed:
 
 ```powershell
-python validation_test/matlab_runtime/benchmark_setup.py --tests --output C:/temp/matlab-setup.json
+python validation_test/matlab_runtime/benchmark_setup.py --tests --output private-runtime-path
 ```
 
 An explicit `--mex-dir` can select an existing artifact for wrapper-only
 comparison. The runner checks the resolved setup/MEX paths and records MEX and
 source hashes. It owns and closes a private Engine; it never reconnects to a
 user session or changes an editable install. This Windows harness is light
-enough for LAB; it is not a solver-scale benchmark.
+enough for validation host; it is not a solver-scale benchmark.
 
 ## Recorded Comparison
 
-`results/lab_before.json` and `results/lab_after.json` use the same native
+`results/validation_before.json` and `results/validation_after.json` use the same native
 artifact and seven batches of 100 calls, in separate private MATLAB Engines.
 The baseline temporarily restores only the original `callMex.m` in the isolated
 worktree. Source hashes identify each measured snapshot; the base commit alone

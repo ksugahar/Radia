@@ -24,7 +24,7 @@ engineers use:
   circuit without copying private RAW files.
 
 It does **not** redistribute LTspice, LTspice's bundled examples, textbook
-circuits, third-party circuit corpora, private RAW files, or the LAB-private
+circuits, third-party circuit corpora, private RAW files, or the validation host-private
 invention-learning pipeline.  Those materials may be used locally to improve
 the converter, but only the authored converter, small fixtures, and public-safe
 summary schemas belong in this repository.

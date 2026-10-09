@@ -149,7 +149,7 @@ def main():
         "schema": "radia.beak_fin_refinement_gate.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "git_head": head,
-        "host": platform.node(),
+        "platform_class": platform.system(),
         "question": (
             "the delivery gate closed at one discretisation.  Does it survive "
             "refinement of the perimeter and of the axial stations "

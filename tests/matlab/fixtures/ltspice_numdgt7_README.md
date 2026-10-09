@@ -1,6 +1,6 @@
 # LTspice double RAW regression
 
-`ltspice_numdgt7.cir` generated both RAW fixtures on LAB on 2026-09-10.
+`ltspice_numdgt7.cir` generated both RAW fixtures on validation host on 2026-09-10.
 LTspice executable file version: 26.0.2.1 (product version 26.0.1.1).
 Two copies of the same netlist were run with `-Run -b`, adding `-ascii` for
 the text reference. Both owned processes exited with code zero before files

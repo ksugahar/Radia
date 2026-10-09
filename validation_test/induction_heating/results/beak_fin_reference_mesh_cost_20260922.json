@@ -2,9 +2,9 @@
   "schema": "radia.beak_fin_reference_mesh_cost.v1",
   "generated_at_utc": "2026-09-21T21:03:26.305169+00:00",
   "git_head": "cf5d4bddf46a74afe91e5d129988c37c6ade23fd",
-  "host": "intel11",
+
   "question": "with the PEEC side converged and cheap, the comparison is the BEM-A reference.  How coarse can that reference be and still decide the delivery gate the same way?",
-  "fixture": "C:\\temp\\radia-ih-beakfin-20260922\\tests\\coil_from_cad\\fixtures\\beak_fin_48mm.step",
+  "fixture": "<private-path>/radia-ih-beakfin-20260922\\tests\\coil_from_cad\\fixtures\\beak_fin_48mm.step",
   "peec": {
     "n_peri": 256,
     "n_stations": 5

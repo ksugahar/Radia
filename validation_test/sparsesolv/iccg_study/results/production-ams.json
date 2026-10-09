@@ -3,7 +3,7 @@
   "case": "Production ICCG/AMS ams",
   "solver": "radia-ngsolve",
   "created_at_utc": "2026-10-04T01:06:02.097920+00:00",
-  "host": "Windows compute host",
+
   "python": "3.12.10",
   "ngsolve": "6.2.2607",
   "module": "candidate src/radia/sparsesolv_ngsolve.pyd",

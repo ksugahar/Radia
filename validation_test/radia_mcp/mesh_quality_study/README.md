@@ -10,7 +10,7 @@ corner-geometry property — 2026-08-06 decision).
 Every script writes its committed results JSON beside itself (Data
 Persistence Policy) and its scratch meshes into `artifacts/`
 (gitignored). All five require Cubit + netgen + gmsh + build123d; all are
-quality-class runs (no timing), so LAB execution is allowed.
+quality-class runs (no timing), so validation host execution is allowed.
 
 | Script | Question | Result JSON | Runtime |
 |---|---|---|---|
@@ -39,7 +39,7 @@ Persistence Policy); `run_study.py` regenerates it on an idle compute
 host with Cubit + netgen + gmsh + build123d. Scratch meshes land in
 `artifacts/`.
 
-## Measured findings (LAB, Cubit 2025.12 / netgen 6.2.2604)
+## Measured findings (validation host, Cubit 2025.12 / netgen 6.2.2604)
 
 1. **Cubit tet holds the higher worst-element BAND across the whole size
    range**, not just at one point. Over 24-point maxh sweeps:
@@ -217,5 +217,5 @@ elements, and nonlinear problems, where element shape enters the
 inf-sup / interpolation constants differently. The c_core vector cases
 are mass-dominated (k·L ≈ 1.6 gives k² ≪ 1), so their CG counts say
 little about curl-curl conditioning — the sphere is the balanced case.
-Timing was deliberately not measured anywhere (LAB is a contended
+Timing was deliberately not measured anywhere (validation host is a contended
 host); every observable here is deterministic.

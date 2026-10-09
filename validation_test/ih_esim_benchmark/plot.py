@@ -34,7 +34,7 @@ def plot(results_json, out_pdf):
     fig, axes = plt.subplots(2, 2, figsize=(11, 8))
     fig.suptitle(
         f"ESIM Karl Benchmark — radia {d.get('radia_version', '?')} "
-        f"on {d.get('hostname', '?')}",
+        f"on {d.get('platform_class', '?')}",
         fontsize=11)
 
     colors = {"inductance": "tab:blue",

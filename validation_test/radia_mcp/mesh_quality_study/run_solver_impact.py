@@ -1,6 +1,6 @@
 """Does mesh quality actually change SOLVER behaviour?
 
-Promoted from C:/temp/mesh_quality_study (2026-08-06) with its committed
+Promoted from private-runtime-path (2026-08-06) with its committed
 results JSON (Data Persistence Policy). Re-run with
 `python run_solver_impact.py` (requires Cubit + netgen + gmsh +
 build123d; scratch meshes land in artifacts/, gitignored).
@@ -26,7 +26,7 @@ Three pairs:
 
 Cubit meshes travel the PRODUCTION route (.vol -> NGSolve).
 
-Quality-class run (correctness, not timing) -- LAB execution allowed.
+Quality-class run (correctness, not timing) -- validation runtime execution allowed.
 """
 import json
 import os
@@ -141,7 +141,7 @@ def main():
 
     from ngsolve import TaskManager
     results = {"timestamp": datetime.now().isoformat(),
-               "hostname": platform.node(),
+               "platform_class": platform.system(),
                "problem": ("H1 order-1 Poisson, manufactured "
                            "u=sin(kx)sin(ky)exp(kz), Dirichlet on all "
                            "boundaries; CG precision 1e-10, unpreconditioned "

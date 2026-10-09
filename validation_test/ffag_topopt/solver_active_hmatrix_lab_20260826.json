@@ -2,13 +2,13 @@
   "schema": "radia.ffag-hdiv-active-hmatrix-performance/v1",
   "status": "pass-with-remote-remeasurement-pending",
   "provenance": {
-    "machine": "lab",
+
     "python": "3.12.10",
     "ngsolve": "6.2.2606",
     "ngsolve_threads": 16,
     "repository_base_head": "4db0fb7ac",
     "worktree_dirty_during_measurement": true,
-    "paired_diagnostic_result": "C:/temp/ffag_active_hmatrix_same_process_20260825.json",
+    "paired_diagnostic_result": "<private-path>/ffag_active_hmatrix_same_process_20260825.json",
     "measurement_scope": "same process, same ChargeGram, same RHS; diagnostic-only pruning toggle removed from the production source"
   },
   "problem": {
@@ -193,7 +193,7 @@
         "active_principal_bit_identical": true,
         "jit_vs_mkl_relative_error": 2.6263053318672424e-15,
         "publication_timing": false,
-        "note": "The kernel-only median was not sufficient for acceptance. The generic solve took 13.327 s and the JIT solve took 14.888 s, so JIT was removed. LAB was concurrently running unrelated validation."
+        "note": "The kernel-only median was not sufficient for acceptance. The generic solve took 13.327 s and the JIT solve took 14.888 s, so JIT was removed. validation runtime was concurrently running unrelated validation."
       },
       "hdiv_aca_qr_tsvd_ab": {
         "decision": "rejected-for-hdiv-retained-for-stream-function",
@@ -266,6 +266,6 @@
   },
   "follow_up": {
     "next_solver_target": "Investigate deterministic same-object factor diagnostics or private-output grouped low-rank applies; do not reintroduce per-leaf JIT or HDiv post-build QR+TSVD without a solve-level accuracy and timing win.",
-    "remote_measurement": "mdx and hibino are available again; repeat after a formal build/release and PyPI installation, without copying a local pyd."
+    "remote_measurement": "mdx and compute are available again; repeat after a formal build/release and PyPI installation, without copying a local pyd."
   }
 }

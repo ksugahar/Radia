@@ -19,7 +19,7 @@ shims. Existing deployments must regenerate their startup registration using
 `validation_test/cubit_mesh_export/STANDALONE_GUI.md` for acceptance evidence.
 
 Version 2.0.0 publishes this GUI and MCP independently of Radia. Installation
-and deployment verification never import Radia. LAB/100 acceptance
+and deployment verification never import Radia. validation host/100 acceptance
 uses `python tools/release_cubit_dual.py`, not the Radia solver's release-quad
 commands.
 
@@ -121,7 +121,7 @@ cubit-plugin-install
 ```
 
 > **If Cubit exits with code 2 while the export itself succeeded**, check for a
-> machine-wide `CUBIT_PLUGIN_DIR` environment variable. On LAB this caused Cubit
+> machine-wide `CUBIT_PLUGIN_DIR` environment variable. On validation host this caused Cubit
 > to receive a `-commandplugindir` argument and report both the flag and its
 > value as files it could not open. This is a diagnosed environment issue, not
 > a reason to accept every exit code 2. Inspect the log and correct the stale

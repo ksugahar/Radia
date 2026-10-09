@@ -81,7 +81,7 @@ def main(argv=None) -> int:
     report = builder.validate_fem_mesh(vol)
     report.update({
         "schema": "radia.qmag-cefc2020-fem-mesh.v1",
-        "generated_at_utc": datetime.now(timezone.utc).isoformat(), "host": platform.node(),
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(), "platform_class": platform.system(),
         "iron_step_sha256": _sha256(Q.STEP_PATH), "vol": str(vol), "vol_sha256": _sha256(vol),
         "parameters": FEM_MESH_PARAMETERS, "cubit_returncode": int(completed.returncode),
     })

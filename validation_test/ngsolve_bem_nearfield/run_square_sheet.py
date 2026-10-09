@@ -26,7 +26,7 @@ with ng.TaskManager():
         rows.append(row)
 limits={'direct_relative_l2':1e-10,'local_expansion_relative_l2':1e-8}
 passed=all(math.isfinite(row[key]) and row[key]<limit for row in rows for key,limit in limits.items())
-out={'ngsolve':ng.__version__,'host':platform.node(),'bonus_intorder':10,'thresholds':limits,'passed':passed,'results':rows}
+out={'ngsolve':ng.__version__,"platform_class":platform.system(),'bonus_intorder':10,'thresholds':limits,'passed':passed,'results':rows}
 a.output.parent.mkdir(parents=True,exist_ok=True)
 a.output.write_text(json.dumps(out,indent=2),encoding='utf-8')
 print(json.dumps(out,indent=2))

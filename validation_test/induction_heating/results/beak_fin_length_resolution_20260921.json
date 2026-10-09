@@ -2,7 +2,7 @@
   "schema": "radia.beak_fin.length_resolution.v1",
   "generated_at_utc": "2026-09-21T07:11:15.033892+00:00",
   "git_head": "0c4c184a9ead3e9b5de00678c9672873a8ead547",
-  "host": "intel11",
+
   "question": "the delivery gate had stood at accepted=false on a 3.24% beak-loss difference.  h, p and geometry order were each moved on the 24 mm fixture without shifting it.  Both routes sat below the infinite-length 2-D reference in the same order, so the remaining candidate was the fixture length",
   "reference_2d_sibc_n1024": {
     "beak_current_fraction": 0.308146102,

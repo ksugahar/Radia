@@ -23,7 +23,7 @@ coefficient of the conducting sphere:
     Gamma_1 = 3 / (x I_{1/2}(x)/I_{3/2}(x) ... ) - 1
             = -[ 1 - (3/x) coth x + 3/x^2 ]          (verified to 1e-15)
 
-MEASURED (LAB, 2026-07-25), rel = |m_fem - m_ana| / |m_ana|, a/delta = 2:
+MEASURED (validation runtime, 2026-07-25), rel = |m_fem - m_ana| / |m_ana|, a/delta = 2:
 
     lane                                    curve=2      curve=1
     p=1  A* = A-Phi (lanes identical)       2.899%       --

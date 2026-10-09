@@ -155,11 +155,11 @@ requires the explicit `RT=True` flag and is not implied by the `HDiv` name.
 
 ## Release Gate
 
-Before release or `mdx`/`hibino` deployment:
+Before release or `mdx`/`compute-host` deployment:
 
-- run focused HDiv smoke tests on LAB/100号機;
-- run heavy validation/benchmark sweeps on hibino first; use mdx only when
-  hibino is unavailable and the mdx CI runner and job queue are idle;
+- run focused HDiv smoke tests on validation host/development host;
+- run heavy validation/benchmark sweeps on compute-host first; use mdx only when
+  compute-host is unavailable and the mdx CI runner and job queue are idle;
 - record the actual validation host in the result JSON/log;
 - record charge count, HDiv DoF, H-matrix compression, build time, solve time,
   iteration count, and machine label;

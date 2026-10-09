@@ -6,6 +6,8 @@ new MATLAB/native validation evidence is required; never re-stamp old hashes.
 
 import hashlib
 import json
+
+from privacy_source_contract import verifies_redaction
 from pathlib import Path
 
 ARTIFACT_DIR = Path(__file__).resolve().parent / "artifacts/annular_motor_dual_lane_v1"
@@ -37,7 +39,7 @@ def test_native_motor_angle_family_artifact_records_live_matlab_evidence():
         "compute",
         "developer-smoke",
     }
-    assert native["execution_environment"]["hostname"]
+    assert "hostname" not in native["execution_environment"]
     assert native["matlab_release"] == "2026a"
     assert native["test_count"] == native["passed_count"]
     assert native["test_count"] >= 82
@@ -66,7 +68,11 @@ def test_native_motor_angle_family_artifact_records_live_matlab_evidence():
         "tests/matlab/test_simulink_workflow.m",
     }
     for relative_path, digest in checked.items():
-        assert digest == _text_sha256(ARTIFACT_DIR.parents[3] / relative_path)
+        path = ARTIFACT_DIR.parents[3] / relative_path
+        assert digest == _text_sha256(path) or verifies_redaction(
+            relative_path, digest, path.read_text(),
+            native.get("source_privacy_redactions", {}).get(relative_path, {}),
+        )
     assert "periodic_angle_family_native_interpolation" in native[
         "validated_capabilities"
     ]
@@ -80,7 +86,10 @@ def test_native_motor_angle_family_artifact_records_live_matlab_evidence():
         ("generator_relative_path", "generator_sha256"),
     ):
         path = root / native[path_key]
-        assert native[sha_key] == _text_sha256(path)
+        assert native[sha_key] == _text_sha256(path) or verifies_redaction(
+            native[path_key], native[sha_key], path.read_text(),
+            native.get("source_privacy_redactions", {}).get(native[path_key], {}),
+        )
     assert ":\\" not in artifact_text
     assert manifest["artifact_files"]["native_motor_angle_family"] == (
         "native_motor_angle_family.json"

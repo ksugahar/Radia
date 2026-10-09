@@ -1,7 +1,7 @@
 {
   "schema": "radia.ffag-cubit-cyclic-nonlinear-yoke/v2",
   "generated_at_utc": "2026-08-31T04:44:39.767020+00:00",
-  "machine": "mdx",
+
   "platform": "Windows-2022Server-10.0.20348-SP0",
   "software": {
     "python": "3.12.10",
@@ -52,11 +52,11 @@
     "applied_tangential_h_am": 300.0
   },
   "meshes": {
-    "sector": "C:\\temp\\ffag_cyclic_pr_20260831\\data\\sector12.vol",
+    "sector": "<private-path>/ffag_cyclic_pr_20260831\\data\\sector12.vol",
     "sector_sha256": "f2d5e4927eaeeeaa086080c2812ad70770c41d8e9ff7d587f28f1466d09de6e7",
     "sector_elements": 8,
     "sector_dofs": 720,
-    "full_ring": "C:\\temp\\ffag_cyclic_pr_20260831\\data\\full12.vol",
+    "full_ring": "<private-path>/ffag_cyclic_pr_20260831\\data\\full12.vol",
     "full_ring_sha256": "e7623c498c9632b9d5fb299c56d12c866d12afc50b1d0313641a2c62408ba7b7",
     "full_ring_elements": 96,
     "full_ring_dofs": 8640

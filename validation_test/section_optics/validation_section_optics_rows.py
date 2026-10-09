@@ -255,7 +255,7 @@ def main(argv=None):
         "radia_version": getattr(rad, "__version__", "unknown"),
         "python_version": platform.python_version(),
         "platform": platform.platform(),
-        "host": platform.node(),
+        "platform_class": platform.system(),
         "mesh_elements": int(mesh.ne), "ndof": int(fes.ndof),
         "iron_maxh_m": float(options.maxh),
         "orbit_length_m": s_total, "planarity_m": float(oop),

@@ -18,7 +18,7 @@ Run a quick local lane:
 
 ```powershell
 python validation_test/common_observation_tube/compare_four_formulations.py `
-  --output-dir C:/temp/radia_common_tube_smoke `
+  --output-dir private-runtime-path `
   --stations 17 --circle-points 16 --radia-segmentation 2 --fe-order 1 `
   --gate-profile smoke
 ```
@@ -38,7 +38,7 @@ python validation_test/common_observation_tube/compare_four_formulations.py `
 The legacy oracle needs Python 3.8 and the unmodified ESRF Radia extension.
 The runner finds Python through `uv python find 3.8`; set
 `RADIA_LEGACY_PYTHON38` when that interpreter is elsewhere. Set
-`RADIA_LEGACY_EXTENSION` when the extension is not at the LAB default path.
+`RADIA_LEGACY_EXTENSION` when the extension is not at the validation host default path.
 
 `comparison_report.json` is the machine-readable verdict.
 It records the Radia, NGSolve, and Python versions plus the SHA-256 identity of

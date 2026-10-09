@@ -210,7 +210,7 @@ def run_validation(args):
             "validation_wall_s": time.perf_counter() - started,
         },
         "runtime": {
-            "host": platform.node(),
+            "platform_class": platform.system(),
             "python": platform.python_version(),
         },
     }

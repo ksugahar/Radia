@@ -8,7 +8,7 @@ golden tests (``test_peec_bem_golden.py``, ``test_fem_coilmesh_golden.py``,
 Runs in < 1 s per script because ``argparse --help`` parses the CLI then
 exits before any heavy ``import radia`` work.  Use this as a CI-cheap
 regression net; full E2E goldens stay marked ``@pytest.mark.slow`` and
-run on LAB + 100号機 only.
+run on validation runtime + runtime host only.
 
 Future work: add full numerical E2E goldens for
   * calc_accel_magnet.py  (EM Picard, iron yoke)

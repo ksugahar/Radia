@@ -1,6 +1,6 @@
 {
   "schema": "radia.closed-current-schur-validation.v1",
-  "host": "lab",
+
   "ngsolve": "6.2.2607",
   "threads": 2,
   "mesher": "Netgen OCC synthetic loop",

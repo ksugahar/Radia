@@ -119,7 +119,7 @@ all polynomial orders.
 
 ## 4. Verifying in Mathematica
 
-A working H¹ p=2 demo lives at `C:\temp\ngsolve_tet_h1_demo.wls`
+A working H¹ p=2 demo lives at `private-runtime-path`
 (generated from this conversation). Extension recipes for H(curl):
 
 - **Nédélec lowest order:** `N_e = λᵢ ∇λⱼ − λⱼ ∇λᵢ` for each edge e=(i,j).

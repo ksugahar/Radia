@@ -1,7 +1,7 @@
 {
  "schema": "radia.isochronous-topopt-lane/v1",
  "generated_at_utc": "2026-08-09T15:35:29Z",
- "hostname": "lab",
+
  "radia_version": "4.95.50",
  "python_version": "3.12.10",
  "ne": 194,

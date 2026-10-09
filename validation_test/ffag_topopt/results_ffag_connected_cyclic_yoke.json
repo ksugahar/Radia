@@ -152,7 +152,7 @@
     "external_field_matches_full_ring": true
   },
   "runtime": {
-    "host": "lab",
+
     "python": "3.12.10"
   }
 }

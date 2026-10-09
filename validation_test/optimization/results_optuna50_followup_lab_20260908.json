@@ -1,6 +1,6 @@
 {
   "schema": "radia.validation.optuna50-performance-followup.v1",
-  "host": "lab",
+
   "measurement_order": [
     "matlab_first",
     "python",
@@ -12,7 +12,7 @@
     "schema": "radia.validation.optuna50-performance-runtime.v1",
     "generated_at": "2026-09-08T09:53:11.174Z",
     "runtime": "matlab",
-    "host": "lab",
+
     "versions": {
       "matlab": "26.1.0.3276743 (R2026a) Update 3",
       "native_gateway": "optuna_mex",
@@ -85,7 +85,7 @@
     "schema": "radia.validation.optuna50-performance-runtime.v1",
     "generated_at": "2026-09-08T09:53:44.000415+00:00",
     "runtime": "python-upstream",
-    "host": "lab",
+
     "versions": {
       "python": "3.12.10",
       "optuna": "5.0.0",
@@ -160,7 +160,7 @@
     "schema": "radia.validation.optuna50-performance-runtime.v1",
     "generated_at": "2026-09-08T09:54:48.417Z",
     "runtime": "matlab",
-    "host": "lab",
+
     "versions": {
       "matlab": "26.1.0.3276743 (R2026a) Update 3",
       "native_gateway": "optuna_mex",
@@ -229,7 +229,7 @@
       "columns": 7
     }
   },
-  "claim_boundary": "Development measurements, not an idle compute-host release gate. Both MATLAB repeats are retained; Python also improved relative to the preceding record, so before/after differences include host-load variation. Historical 4.9 LAB scalar time was 0.07271665 seconds, grouped 0.1628489; prewarm settings differ and grouped proposal checksums differ across versions. No controlled 4.9-versus-5.0 regression percentage is claimed.",
+  "claim_boundary": "Development measurements, not an idle compute-host release gate. Both MATLAB repeats are retained; Python also improved relative to the preceding record, so before/after differences include host-load variation. Historical 4.9 validation runtime scalar time was 0.07271665 seconds, grouped 0.1628489; prewarm settings differ and grouped proposal checksums differ across versions. No controlled 4.9-versus-5.0 regression percentage is claimed.",
   "pre_compatibility_correction_source_sha256_raw_workspace_bytes": {
     "matlab/+radia/+optuna/Study.m": "f4563d09893655f5b0caff8188e77399ddc449a8b8e938b9fb9df927e9bb855d",
     "matlab/+radia/+optuna/Trial.m": "dff46517bfd3a532db0b67f674fe308b6ed558f8aaa3aa5b78a715d2453b7186",
@@ -250,7 +250,7 @@
     "schema": "radia.validation.optuna50-performance-runtime.v1",
     "generated_at": "2026-09-08T10:06:14.603Z",
     "runtime": "matlab",
-    "host": "lab",
+
     "versions": {
       "matlab": "26.1.0.3276743 (R2026a) Update 3",
       "native_gateway": "optuna_mex",
@@ -323,7 +323,7 @@
     "schema": "radia.validation.optuna50-performance-runtime.v1",
     "generated_at": "2026-09-08T10:07:05.987860+00:00",
     "runtime": "python-upstream",
-    "host": "lab",
+
     "versions": {
       "python": "3.12.10",
       "optuna": "5.0.0",

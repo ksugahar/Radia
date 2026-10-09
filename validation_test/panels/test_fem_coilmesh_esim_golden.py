@@ -63,12 +63,12 @@ def test_fem_coilmesh_esim_converges_steel():
         "--esim-tol", str(p["esim_tol"]),
     ]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1200)
-    # LAB pytest+pardiso artifact: MKL's threading DLL (mkl_intel_thread)
+    # validation runtime pytest+pardiso artifact: MKL's threading DLL (mkl_intel_thread)
     # fails to load in a subprocess spawned under pytest (the conftest
     # MKL add_dll_directory shadow).  The DIRECT (non-pytest) run works
     # fine -- this is an environment limitation, not a solver/test
     # failure, so skip cleanly rather than red-fail.  The assertion logic
-    # itself is cross-checked in C:/temp/verify_esim_assertions.py against
+    # itself is cross-checked in private-runtime-path against
     # the captured values; run calc_fem_coilmesh directly to re-verify.
     _out = (proc.stdout or "") + (proc.stderr or "")
     if proc.returncode != 0 and (

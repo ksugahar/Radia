@@ -1,7 +1,7 @@
 # Retained ESIM spatial evidence
 
 The [documentation example](../../docs/esim_spatial/esim_spatial_demo.ipynb)
-uses these three weak-coupled, 100 A results, computed on mdx2 on 2026-09-15.
+uses these three weak-coupled, 100 A results, computed on worker-b on 2026-09-15.
 `compute_record.json` retains runtime versions, original source hashes and
 input hashes. Recovery replaced machine-local paths with repository-relative
 paths and removed embedded source-code duplicates. Original result hashes are

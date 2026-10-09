@@ -6,7 +6,7 @@ the same Radia change and follow [`../docs/PRODUCT_PARITY.md`](../docs/PRODUCT_P
 
 The Sugahara Laboratory homepage is the current publication surface, not the
 source repository. Its site builder reads this directory from the Radia
-checkout (normally `S:\Radia\01_GitHub`, or the checkout named by the
+checkout (normally `private-runtime-path`, or the checkout named by the
 `RADIA_REPOSITORY` environment variable), expands
 `equation-editor.fragment.html` into the teaching page, copies
 `equation-editor.js` into the generated site, and verifies the copied

@@ -2,7 +2,7 @@
 
 Background (2026-09-05): ``vim.Solve`` on the ESRF example-6 quadrupole iron mesh (1648 Cubit HEX cells,
 592 trilinear-distorted, BDM1) failed in the chi0 warmstart of the energy-Newton path -- the production
-Jacobi CG hit ``p^T A p < 0`` at iteration 86 on hibino and LAB alike -- because the charge Gram
+Jacobi CG hit ``p^T A p < 0`` at iteration 86 on compute-host and validation runtime alike -- because the charge Gram
 ``N = B^T G B`` itself was indefinite: ``lambda_min(M^-1 N)`` between -5e-3 and -2e-3 against the physical
 band [0, 1], while the table's initial permeability (mu_r 2001) gives a mass floor of only 5e-4.  The
 defect is the HEX near family on distorted cells (touching pairs classified far, static-site radial inner,
@@ -20,7 +20,7 @@ This lane rebuilds the production Gram on the real asset and checks, in order:
    agree to ``--compression-tolerance`` of the M-scale (the separate compression-error evaluation).
 
 Any failed check exits non-zero.  Timings are recorded with the host name and are relative only unless
-the host is an idle mdx/hibino.  Run::
+the host is an idle mdx/compute-host.  Run::
 
     python validate_hex_gram_definiteness.py --assets-dir <dir with model.vol> --output results/hex_gram_definiteness_<host>.json
 """
@@ -209,7 +209,7 @@ def lobpcg_generalized(G, M_geom, n_face, k, maxiter, seed=6):
     # about lambda_min: the true one can still be below it.  Keep the residual
     # history so the caller can withhold judgement instead of passing.
     # SciPy signals non-convergence with a UserWarning.  Capture it rather than
-    # letting it print into the void (it did, on hibino) or abort under
+    # letting it print into the void (it did, on compute-host) or abort under
     # -W error: it is evidence the report should carry.
     import warnings
     with warnings.catch_warnings(record=True) as caught_low:
@@ -282,7 +282,7 @@ def main(argv=None) -> int:
     inv_chi0 = 1.0 / max(chi0, 1.0)
     report = {
         "schema": SCHEMA, "generated_at_utc": _dt.datetime.now(_dt.timezone.utc).isoformat(),
-        "host": platform.node(), "radia_version": getattr(radia, "__version__", None), "radia_file": radia.__file__,
+        "platform_class": platform.system(), "radia_version": getattr(radia, "__version__", None), "radia_file": radia.__file__,
         "case": CASE, "iron_mesh": str(mesh_path), "iron_mesh_sha256": sha,
         "chi0": chi0, "inv_chi0": inv_chi0, "gram_eps": options.gram_eps, "glpair_n": options.glpair_n, "checks": {},
     }
@@ -308,7 +308,7 @@ def main(argv=None) -> int:
         stats = dict(G.stats())
         report["gram_stats"] = {k: (float(v) if isinstance(v, (int, float, np.floating)) else str(v))
                                 for k, v in stats.items() if str(k).startswith("hex_") or k in ("compression", "max_rank")}
-        print(f"gram built in {report['gram_build_s']:.0f} s on {platform.node()} (n_face {n_face}, "
+        print(f"gram built in {report['gram_build_s']:.0f} s on {platform.system()} (n_face {n_face}, "
               f"near_inner_exact {stats.get('hex_near_inner_exact')}, glnear {stats.get('hex_glnear_n')})", flush=True)
         M_geom = sp.csr_matrix(M_mass)
         l2 = ng.L2(mesh, order=0)

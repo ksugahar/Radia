@@ -6,7 +6,7 @@ and mesh problems. This is the "why" behind the mechanics that
 cubit_scripting_knowledge shows as recipes.
 
 Source: Coreform webinar "Your first 15 minutes with Coreform Cubit"
-        (2025.8 release). Augmented with LAB field experience from the
+        (2025.8 release). Augmented with validation runtime field experience from the
         Radia + NGSolve workflow.
 """
 
@@ -183,7 +183,7 @@ unmerged_curves = cubit.parse_cubit_list(
 
 ## Related tools in other MCP modules
 
-- `cubit_docs topic=scripting_boolean_policy` - LAB guidance on
+- `cubit_docs topic=scripting_boolean_policy` - validation runtime guidance on
   imprint+merge vs. unite (avoid unite for loft chains).
 - `cubit_scripting_knowledge` topic `acis_tolerance` -
   ACIS-level gotchas that look like merge failures but aren't.
@@ -195,7 +195,7 @@ EXODUS_DATA_MODEL = """
 Cubit is built on the Exodus II mesh format (developed by Sandia, open
 source, on GitHub as part of the CCAs project). Understanding how
 blocks, sidesets, and nodesets differ is essential when exporting to
-Abaqus, Ansys, Nastran, OpenFOAM, or the LAB Radia + NGSolve stack.
+Abaqus, Ansys, Nastran, OpenFOAM, or the validation runtime Radia + NGSolve stack.
 
 ## Quick reference
 
@@ -276,10 +276,10 @@ cubit.cmd('nodeset 2 name "corners"')
 - "I have a heat flux in W/m^2" -> sideset.
 - "I have a fixed temperature in K" -> nodeset.
 
-## LAB policy: `export` uses blocks only
+## validation runtime policy: `export` uses blocks only
 
 The `export netgen` / `export gmsh` / `export nastran_bdf`
-commands (from the `cubit_mesh_export` LAB plugin) read from blocks
+commands (from the `cubit_mesh_export` validation runtime plugin) read from blocks
 only. Sidesets and nodesets are ignored by this plugin.
 
 If you need boundary conditions in the downstream solver:
@@ -457,7 +457,7 @@ cubit.cmd('import stl "model.stl" feature_angle 135.0 merge stitch')
 3. Snapshot (`cubit_checkpoint`) before each destructive repair so you
    can roll back.
 
-## LAB-specific guidance
+## validation runtime-specific guidance
 
 For the Radia + NGSolve stack, the recommended flow when assemblies
 have alignment tolerance issues is:
@@ -563,8 +563,8 @@ solver-neutral `.vol` intake checks as an independent confirmation.
 Recommended public checks:
 
 ```powershell
-python validation_test/cubit_mesh_export/validation_vol_tet_quality.py --vol C:\\temp\\model.vol
-python validation_test/cubit_mesh_export/validation_vol_surface_triangle_quality.py --vol C:\\temp\\model.vol
+python validation_test/cubit_mesh_export/validation_vol_tet_quality.py --vol private-runtime-path
+python validation_test/cubit_mesh_export/validation_vol_surface_triangle_quality.py --vol private-runtime-path
 ```
 
 `NetgenTriTetVolMesh.surface_triangle_quality_summary()` reports boundary

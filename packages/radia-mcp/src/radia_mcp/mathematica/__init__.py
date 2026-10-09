@@ -13,7 +13,7 @@ WOLFRAMSCRIPT_PATH environment variable.  Without it, all tools return
 
 Promoted on 2026-05-20 from
   legacy private source tree
-into radia-mcp as part of consolidating the LAB MCP knowledge under a single
+into radia-mcp as part of consolidating the validation runtime MCP knowledge under a single
 public PyPI package.  Companion knowledge for symbolic differential-forms
 manipulation: pairs well with `radia_mcp.differential_forms` for verifying
 Maxwell equations, vector-calculus identities, and unit conversions.

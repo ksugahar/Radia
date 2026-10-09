@@ -404,7 +404,7 @@ def main() -> int:
     payload = {
         "schema": SCHEMA,
         "generated_at_utc": datetime.now(UTC).isoformat(),
-        "hostname": hostname,
+        "platform_class": platform.system(),
         "local_diagnostic": local_diagnostic,
         "platform": platform.platform(),
         "python_version": platform.python_version(),

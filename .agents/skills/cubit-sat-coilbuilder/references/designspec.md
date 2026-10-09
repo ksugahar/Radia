@@ -9,12 +9,12 @@ schema: radia.sat-coilbuilder-design/v1
 name: ffag_main_bending_magnet
 
 cad:
-  source_sat: W:/path/to/model.SAT                 # REQUIRED
+  source_sat: private-runtime-path                 # REQUIRED
   sha256: <audit SHA-256>                           # REQUIRED
   source_length_unit: mm                            # REQUIRED
   metres_per_source_unit: 0.001                     # REQUIRED
   cubit_version: 2025.12                            # REQUIRED
-  cubit_model: W:/path/to/imported_model.cub5       # REQUIRED
+  cubit_model: private-runtime-path       # REQUIRED
 
 volumes:
   iron:                                             # Cubit volume IDs
@@ -51,8 +51,8 @@ open_region:
 
 acceptance:
   closure_tolerance_m: 1.0e-9
-  source_probe_file: W:/path/to/jmag_probes.json    # REQUIRED when available
-  jmag_reference_file: W:/path/to/jmag_reference.json
+  source_probe_file: private-runtime-path    # REQUIRED when available
+  jmag_reference_file: private-runtime-path
   required_components: [Bx, By, Bz]
   periodic_sector:
     enabled: true                                  # REQUIRED decision

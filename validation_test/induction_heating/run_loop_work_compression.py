@@ -96,7 +96,7 @@ def run(level, backend, compact, repeats, threads):
             if row["repeat"] == repeat:
                 row["body_assembly_seconds"] = body_seconds
     return dict(schema="radia.loop-work-compression.v1", level=level,
-        vertices=len(points), faces=len(triangles), backend=backend, host=platform.node(),
+        vertices=len(points), faces=len(triangles), backend=backend, platform_class=platform.system(),
         threads=threads, ngsolve_version=ng.__version__,
         geometry_sha256=hashlib.sha256(points.tobytes()+triangles.tobytes()).hexdigest(),
         model=dict(major_radius_m=.03, minor_radius_m=.003, frequency_hz=5e4,

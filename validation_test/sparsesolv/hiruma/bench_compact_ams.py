@@ -283,7 +283,7 @@ def main(argv=None):
     out = {
         "schema": "radia.validation.sparsesolv-hiruma.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "hostname": platform.node(),
+        "platform_class": platform.system(),
         "benchmark": "compact_ams_cocr",
         "solver": {
             "krylov": "COCR",

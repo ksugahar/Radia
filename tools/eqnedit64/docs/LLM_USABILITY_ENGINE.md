@@ -61,7 +61,7 @@ LLMが証拠列を引用して最小変更と再現試験を提案
 pwsh -NoProfile -File build\analyze_last_operation_log.ps1
 ```
 
-既定では最新ログを読み、`C:\temp\Eqnedit64-usability-*.json` を作る。
+既定では最新ログを読み、`private-runtime-path` を作る。
 `structure`プライバシーモードでは、TeX、選択、入力内容を長さ、ハッシュ、
 TeXコマンド／環境名へ置換する。内容が原因判断に必要で、ローカルの許可された
 LLMだけへ渡す場合は明示的に次を使う。

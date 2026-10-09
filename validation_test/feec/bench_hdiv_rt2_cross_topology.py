@@ -106,7 +106,7 @@ def main() -> int:
     record = {
         "schema": "radia.hdiv_rt2_cross_topology.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "hostname": hostname,
+        "platform_class": platform.system(),
         "platform": platform.platform(),
         "python_version": platform.python_version(),
         "radia_version": radia.__version__,

@@ -14,7 +14,7 @@ The frozen WEDGE case uses the tracked JSON/NPZ in `../candidate_d0d0bc4b5/`.
 
 The first isolated test input transfer omitted those frozen reference files.
 After adding them, only the failed focused step and subsequent dependency
-inventory were rerun; successful nonlinear results were retained. On mdx1,
+inventory were rerun; successful nonlinear results were retained. On worker-a,
 the default 38-thread assembly also exhausted its localheap allocation.
 The focused rerun explicitly uses four NGSolve threads, as recorded in its
 command. Failed diagnostics remain in the private operational archive.
@@ -34,5 +34,5 @@ optimization. Package SHA-256:
 passed and published these exact bytes to PyPI. The matching wheel and
 Simulink ZIP are attached to [v5.0.3](https://github.com/ksugahar/Radia/releases/tag/v5.0.3).
 Artifact acceptance is complete. Deployed `release_quad done` remains a
-separate gate; at publication LAB/mdx1/mdx2 were updated, while 100 was
+separate gate; at publication validation host/worker-a/worker-b were updated, while 100 was
 waiting for existing MCP consumers to release the old binaries.

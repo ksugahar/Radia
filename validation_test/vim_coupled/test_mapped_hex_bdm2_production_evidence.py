@@ -16,7 +16,7 @@ def test_mapped_hex_bdm2_production_summary_is_green():
     operator = result["operator_quadrature"]
 
     assert result["schema"] == "radia.validation.mapped-hex-bdm2-production.v1"
-    assert result["machine"] == "mdx"
+    assert "machine" not in result
     assert result["geometry"]["geometry_order"] == 1
     assert "trilinear" in result["geometry"]["map"]
     assert [(row["outer_order"], row["inner_order"]) for row in operator["rules"]] == [
@@ -39,7 +39,7 @@ def test_mapped_hex_bdm2_quadrature_reference_is_green():
     assert result["schema"] == (
         "radia.validation.mapped-hex-bdm2-quadrature-reference.v1"
     )
-    assert result["machine"] == "mdx"
+    assert "machine" not in result
     assert [(row["outer_order"], row["inner_order"]) for row in operator["rules"]] == [
         (10, 16),
         (11, 20),

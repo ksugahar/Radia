@@ -80,7 +80,7 @@ def run():
     return {
         "schema": "radia.team28-axisym-fem-height-sweep.v1",
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
-        "host": socket.gethostname(),
+        "platform_class": platform.system(),
         "versions": {
             "python": platform.python_version(),
             "ngsolve": ngsolve.__version__,

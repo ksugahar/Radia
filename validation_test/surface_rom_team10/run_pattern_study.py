@@ -69,7 +69,7 @@ if __name__ == '__main__':
                             print(f'{s} k{k} r{r} {name:13s} {w:10s} {variant:13s}: ' + (f'{100*err:.3f}%' if err is not None else f'FAILED {fail}'), flush=True)
     res = dict(case='team10_two_coil_pattern_study', train=TRAIN, tests=TESTS, rows=rows, ndof=m.fes.ndof,
                fom_sections={w: [h['B_pos'] for h in json.loads((R / f'{base}_n60_quarter_coil2' / f'{w}.json').read_text())['history']] for w in TESTS},
-               host=platform.node(), ngsolve=ngsolve.__version__,
+               platform_class=platform.system(), ngsolve=ngsolve.__version__,
                sources={p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in
                         ['team13_model.py', 'transient.py', 'aphi_model.py', 'rom.py', 'rom_aphi.py', 'ecsw.py', 'run_pattern_study.py']})
     (R / f'team10_pattern_study_p{order}.json').write_text(json.dumps(res, indent=2))

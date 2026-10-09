@@ -223,7 +223,7 @@ def build_report(
     return {
         "schema": "radia.validation.mcp-server-surface.v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "machine": platform.node(),
+        "platform_class": platform.system(),
         "platform": platform.platform(),
         "python": sys.version,
         "repeats": repeats,

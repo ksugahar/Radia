@@ -8,8 +8,8 @@ from pathlib import Path
 def _same_file(left: Path, right: Path) -> bool:
     """Do two names denote the same file?
 
-    ``Path.resolve()`` alone cannot answer this on the validation hosts: mdx1
-    and hibino stage ``<checkout>/src/radia`` as a DIRECTORY JUNCTION into the
+    ``Path.resolve()`` alone cannot answer this on the validation hosts: worker-a
+    and compute-host stage ``<checkout>/src/radia`` as a DIRECTORY JUNCTION into the
     venv's site-packages, so resolving the checkout name yields the
     site-packages name and a plain equality test rejects the very tree the
     caller asked for.  ``samefile`` compares the underlying file and therefore

@@ -2,11 +2,11 @@
   "schema": "radia.ffag-fixed-one-pass-c-yoke-summary/v1",
   "status": "pass",
   "provenance": {
-    "machine": "intel11",
+
     "python": "3.12.10",
     "ngsolve_threads": 8,
     "git_head_observed_at_completion": "80e0d9127ead0aaea18ae211a6eb9588b52cd1d3",
-    "full_result": "C:/temp/ffag_c_yoke_direct_api/manufactured_inverse_recovery_100_20260822.json",
+    "full_result": "<private-path>/ffag_c_yoke_direct_api/manufactured_inverse_recovery_100_20260822.json",
     "performance_measurement": "disabled",
     "post_start_change_not_used": "proposal_adjoint_count=0 support was added after this process loaded the module"
   },

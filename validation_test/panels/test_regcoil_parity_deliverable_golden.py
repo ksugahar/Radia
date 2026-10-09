@@ -9,9 +9,9 @@ SAME run:
 
 This locks "design AT PARITY, deliverable BEYOND" -- the design-to-manufacture
 vs design-only claim -- as a MEASUREMENT (per Repository-First, not a paper
-claim).  Measured on LAB: B.n resid 4.9e-9, STEP 954 kB, L 3.09 uH.
+claim).  Measured on validation runtime: B.n resid 4.9e-9, STEP 954 kB, L 3.09 uH.
 
-Runs the demo in a SUBPROCESS (NGSolve/OCC heavy import); SKIPS on the LAB
+Runs the demo in a SUBPROCESS (NGSolve/OCC heavy import); SKIPS on the validation runtime
 MKL/Qt DLL shadow that breaks NGSolve inside the pytest process.
 """
 from __future__ import annotations

@@ -526,7 +526,7 @@ not a completed FFAG magnet.
 
 ## Exact active-system performance evidence
 
-`solver_active_hmatrix_lab_20260826.json` records a same-process paired LAB
+`solver_active_hmatrix_lab_20260826.json` records a same-process paired validation host
 measurement of exact inactive-leaf pruning.  The 42,480-DoF BDM1 HEX problem
 keeps 25,920 active DoFs.  Pruning preserves the active principal system
 exactly while reducing active charge leaves, accelerating both direct operator
@@ -537,7 +537,7 @@ records the exact local Cholesky mass-Riesz path for broken HDiv: it retains
 PARDISO for a connected conforming mass, and omits the unused Jacobi-diagonal
 setup when mass-Riesz is active.  The final entry replaces the fixed 500-step
 block-PCG startup with independent CG recurrences over shared row-major
-operator and mass-Riesz traversals.  On the same LAB object, six RHS decrease
+operator and mass-Riesz traversals.  On the same validation host object, six RHS decrease
 from 35.85 s to 12.95 s while preserving a true relative residual below
 1.0e-8; one RHS remains on the lower-overhead scalar kernel.
 
@@ -547,18 +547,18 @@ copies, and avoids algebraically redundant constraint projections.  It also
 makes `respect_constraints=True` a true principal-operator contract even when
 the caller supplies nonzero constrained entries.  The paired six-RHS direct
 apply diagnostic fell from 30.22 ms to 18.50 ms with bit-identical active
-output.  A quiet final LAB run took 4.78 s for one RHS and 13.56 s for six RHS;
+output.  A quiet final validation host run took 4.78 s for one RHS and 13.56 s for six RHS;
 the latter retained a relative residual below 1.0e-8.  Internal profiling puts
 7.27 s of the 13.64 s profiled solve in HACApK leaf kernels, making small-leaf
-GEMM overhead the next performance target.  Repeat on mdx and hibino after a
-formal release and PyPI installation before using LAB wall times as publication
+GEMM overhead the next performance target.  Repeat on mdx and compute-host after a
+formal release and PyPI installation before using validation host wall times as publication
 claims.
 
 The leaf follow-up profiles the active operator itself rather than all stored
 leaves.  Each six-RHS apply traverses 726 low-rank and 1,248 dense directions,
 which issue 2,700 DGEMM calls.  Neither a hand-written small-rank kernel nor MKL
 small-GEMM JIT passed the solve-level gate: the generic path completed the
-paired solve in 13.327 s, while the JIT path needed 14.888 s despite a loaded-LAB
+paired solve in 13.327 s, while the JIT path needed 14.888 s despite a loaded-validation host
 kernel-only median of 1.032x.  Both experimental kernels were removed.
 
 ACA+ and QR+TSVD remain production methods for the stream-function solver, but
@@ -583,7 +583,7 @@ topology-preserving `GetTrafo` deformation with a complete physical re-solve
 for every accepted step. Acceptance is evaluated against selected entries of
 the fourth-order Lie map; no gray material or design finite difference is used.
 
-`mmm_topology_two_stage_lie_mdx2_20260930.json` is the retained result,
+`mmm_topology_two_stage_lie_worker_b_20260930.json` is the retained result,
 regenerated after the planar sign-convention change below. It records the
 runtime versions, solve history, recovered displacement, and every scientific
 gate. The fast unit tests cover facade ordering, type checks, and
@@ -601,7 +601,7 @@ outward while the observation stencils, `frame_at` and the A-map route used
 The FFAG cells turn counter-clockwise about +z in positive `B_z`, hence
 `FFAG_CELL_CHARGE_SIGN = -1`, negative `h`, and cell rows `[B_z, -dB_z/dr]`.
 
-`sign_convention_rerun_mdx2_20260930.json` records the regeneration on mdx2
+`sign_convention_rerun_worker_b_20260930.json` records the regeneration on worker-b
 (clean provenance build, NGSolve 2607) and its comparison with the previous
 evidence.  The cell targets, section-optics rows, both canonical HCurl chains
 and the two-stage Lie run are unchanged within numerical noise; the former

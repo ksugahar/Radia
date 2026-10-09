@@ -242,7 +242,7 @@ class PaperProfile:
 # ABSOLUTE FONT RULE (Sugahara Lab, 2026-05-26):
 #
 #   The figure-text font is **10 pt** regardless of column width.
-#   This is the LAB STANDARD: when the figure is finally embedded at
+#   This is the validation runtime STANDARD: when the figure is finally embedded at
 #   8 cm in the document, the rendered text must be 10 pt so that it
 #   matches body-text readability after the figure is printed at
 #   100% scale.  Wider columns (e.g. 18 cm double-column) keep the
@@ -270,7 +270,7 @@ IEEE_SINGLE_COLUMN = PaperProfile(
     full_name="IEEE Transactions, single column",
     width_mm=88.9,                # 3.5 in = 88.9 mm exactly
     column="single",
-    font_pt=10.0,                 # LAB STANDARD: 10 pt @ 8 cm column.
+    font_pt=10.0,                 # validation runtime STANDARD: 10 pt @ 8 cm column.
                                   #   IEEE Author Center allows 8-10 pt
                                   #   figure text; we pin 10 pt for
                                   #   matched body-text readability.
@@ -328,7 +328,7 @@ IEEJ_SINGLE_COLUMN = PaperProfile(
     full_name="IEEJ Trans D / B, single column",
     width_mm=88.0,                # IEEJ規定: 単欄88mm
     column="single",
-    font_pt=10.0,                 # LAB STANDARD: 10 pt @ 8 cm column.
+    font_pt=10.0,                 # validation runtime STANDARD: 10 pt @ 8 cm column.
     legend_pt=10.0,
     tick_pt=10.0,
     linewidth_pt=1.0,
@@ -388,7 +388,7 @@ IGTE_DIGEST_DOUBLE = PaperProfile(
 IGTE_DIGEST_SINGLE = PaperProfile(
     name="igte_digest_single",
     full_name="IGTE / Compumag digest, single-column",
-    width_mm=82.0,                # 8.2 cm, close to the 8 cm LAB anchor.
+    width_mm=82.0,                # 8.2 cm, close to the 8 cm validation runtime anchor.
     column="single",
     font_pt=10.0,                 # SAME 10 pt absolute.
     legend_pt=10.0,

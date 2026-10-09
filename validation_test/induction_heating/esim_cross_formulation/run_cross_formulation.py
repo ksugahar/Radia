@@ -34,7 +34,7 @@ does NOT import cubit (Cubit/NGSolve separation policy): it shells out
 to the two production calc_*.py scripts and reads their JSON.
 
 Per the Benchmark Policy, wall-clock timings are NOT part of the
-committed golden record (they are meaningless on a contended LAB box);
+committed golden record (they are meaningless on a contended validation runtime box);
 only the physics (P_wp, H_t_rms, iterations, converged) is asserted.
 
 Usage:
@@ -278,7 +278,7 @@ def main():
 
     record = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "hostname": platform.node(),
+        "platform_class": platform.system(),
         "python_version": platform.python_version(),
         "platform": platform.platform(),
         "git_sha": _git_sha(),

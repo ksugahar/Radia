@@ -166,7 +166,7 @@
   },
   "quadrature_power_relative_error": 1.810167571392185e-10,
   "elapsed_s": 115.63231249999808,
-  "host": "lab",
+
   "ngsolve": "6.2.2607",
   "production_module": "src/radia/bem_loop_extension.py"
 }

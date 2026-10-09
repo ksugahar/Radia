@@ -1,6 +1,6 @@
 {
   "schema": "radia.validation.optuna-float-precision.v1",
-  "host": "lab",
+
   "matlab": "26.1.0.3276743 (R2026a) Update 3",
   "optuna_version": "5.0.0",
   "oracle_python_version": "3.12.10",

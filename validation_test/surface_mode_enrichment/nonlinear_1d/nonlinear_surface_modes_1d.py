@@ -140,7 +140,7 @@ def main():
     out = Path(__file__).with_name("nonlinear_surface_modes_1d.json")
     out.write_text(json.dumps({
         "schema": "radia.validation.nonlinear-surface-modes-1d.v1",
-        "host": platform.node(), "python": sys.version.split()[0],
+        "platform_class": platform.system(), "python": sys.version.split()[0],
         "numpy": np.__version__, "scipy": scipy.__version__,
         "script_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "acceptance": "HOLD: projection (best-approximation) error, not a solved ROM",

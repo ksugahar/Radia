@@ -1,6 +1,6 @@
 {
   "schema": "radia.validation.beta-zero-ams.v1",
-  "machine": "mdx2",
+
   "ngsolve": "6.2.2606",
   "native_sha256": "ab24a097369360eb05a22ddea63dbb665a4ea1e5c4eeef139f6500b486c2012d",
   "tested_source_base": "00142515f8cf4c80ef9925fd6cee8792850db7ef",

@@ -1,7 +1,7 @@
 {
   "schema": "radia.team28-arnoldi-height-sweep.v1",
   "created_at_utc": "2026-10-03T09:53:19.368507+00:00",
-  "host": "mdx1",
+
   "versions": {
     "python": "3.12.10",
     "ngsolve": "6.2.2607",
@@ -12,7 +12,7 @@
     "docs/maglev/demos/team28/team28_arnoldi_force.py": "574362595b4488cc4e5d0050792fa06187df586df2362177345850b31efb84e9",
     "validation_test/maglev/team28_arnoldi_height_sweep.py": "351ee127e946c24e1b8963f167ce5209e5ae0ea54060c18973dabd76cc46278d",
     "validation_test/maglev/team28_reference.json": "3562cd78badbc2fedeb5a0ad1f52f51b352097a55811e27f33b1129569578679",
-    "validation_test/maglev/team28_axisym_fem_height_sweep.json": "8afdf04c6280252a7d1be11191cb997d01d208027d9fd2a40502a9122947de8f"
+    "validation_test/maglev/team28_axisym_fem_height_sweep.json": "949c46d6a3b542657ae97e3dbff1fa63a9dc92d0b1cd98df52a64b03d999c2fa"
   },
   "method": "axisymmetric mixed phi-B, p=2; block Krylov K_m(K^-1 N, K^-1 F) orthonormalised by modified Gram-Schmidt and congruence projection; one fresh mesh per height",
   "force_note": "legacy_N is the TEAM 28 integral Re[B_r J_t] = 2x the physical time-averaged force; the lift is -legacy_N/2",

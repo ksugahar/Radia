@@ -2,7 +2,7 @@
   "schema": "radia.selected_showcase.v1",
   "case": "heating",
   "generated_at_utc": "2026-10-01T04:13:40.102150+00:00",
-  "host": "Hibino",
+
   "versions": {
     "radia": "4.95.90"
   },

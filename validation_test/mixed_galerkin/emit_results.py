@@ -105,7 +105,7 @@ def build() -> dict:
     return {
         "schema": "radia.validation.mixed_galerkin.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "hostname": platform.node(),
+        "platform_class": platform.system(),
         "versions": versions(),
         "owner": "validation_test/mixed_galerkin -- documentation and talk "
                  "material read this file and must not recompute it",

@@ -174,7 +174,7 @@ def run(args):
     report = {
         "schema": "radia.selected-pole-transfer-components/v1",
         "status": "pass" if all(gates.values()) else "fail",
-        "machine": platform.node(),
+        "platform_class": platform.system(),
         "scope": (
             "Manufactured two-HEX BDM1 pole growth with a fixed one-pass "
             "design orbit and four selected transfer-map components."),

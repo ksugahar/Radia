@@ -205,7 +205,7 @@ info = radia.ngsolve.space_info("model.vol", 6);
 
 `radia.setup()` also keeps generated Simulink cache and code-generation files
 outside the repository. On Windows the default is
-`C:\temp\radia\simulink\R<release>`. Existing explicit
+`private-runtime-path<release>`. Existing explicit
 `Simulink.fileGenControl` settings are preserved. Set
 `RADIA_SIMULINK_FILEGEN_ROOT` or call
 `radia.simulink.configureFileGeneration(RootDirectory=..., Force=true)` to
@@ -911,7 +911,7 @@ oracle-backed features are also required.
 study = radia.optuna.create_study( ...
     study_name="ih-control", direction="minimize", ...
     sampler=radia.optuna.TPESampler(Seed=42), ...
-    storage="C:\temp\ih-control.mat");
+    storage="private-runtime-path");
 results = study.optimize(@(trial) ihObjective(trial), 30);
 best = study.best_trial();
 ```
@@ -1085,7 +1085,7 @@ joint proposal without requiring `suggestVector`:
 sampler = radia.optuna.TPESampler(Seed=42, Multivariate=true);
 study = radia.optuna.create_study( ...
     direction="minimize", sampler=sampler, ...
-    storage="C:\temp\multivariate-study.mat");
+    storage="private-runtime-path");
 study.optimize(@(trial) objectiveWithScalarSuggestions(trial), 40);
 ```
 
@@ -1218,7 +1218,7 @@ settings = struct("method", "Design", ...
     "coil_vol", "coil.vol", "eval_vol", "dsv.vol", ...
     "target_cf", "1", "aca_eps", 1.0e-10);
 config = radia.simulink.writeApplicationConfig( ...
-    "streamfunction", settings, "C:\temp\streamfunction.json");
+    "streamfunction", settings, "private-runtime-path");
 ```
 
 Set the block's `Configuration JSON` parameter to `config` and issue one rising
@@ -1345,10 +1345,10 @@ study = radia.simulink.makeFieldStudySpec( ...
     VolumetricSources=struct("workpiece",2.5e6));
 contract = radia.simulink.compileFieldStudy(study,radia_material_contract);
 requestFile = radia.simulink.writeFieldStudyRequest( ...
-    contract,"C:\temp\radia_field_study\heat.json");
+    contract,"private-runtime-path");
 radia.simulink.writeApplicationConfig("field", ...
     struct("request_file",requestFile), ...
-    "C:\temp\radia_field_study\run.json");
+    "private-runtime-path");
 ```
 
 `harmonic_eddy` uses `(K+j*omega*M_sigma)a=S*i` and accepts complex RMS
@@ -1364,7 +1364,7 @@ independent motor and native Simulink execution gates.
 On Windows, the launcher uses `pwsh Start-Process -WindowStyle Hidden` rather
 than the `CREATE_NO_WINDOW` process flag: LTspice 26 can fail with
 `0xC0000409` under an SSH session when that flag is used. This hidden-window
-route is verified on LAB and 100号機 and remains compatible with batch `-Run
+route is verified on validation host and development host and remains compatible with batch `-Run
 -b` execution.
 The executable details and limitations are reported by the
 `matlab_optuna_simulink_contract` MCP tool.

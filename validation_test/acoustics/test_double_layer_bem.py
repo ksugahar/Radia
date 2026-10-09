@@ -97,7 +97,7 @@ def _write_results():
     result = {
         "schema": "radia.acoustics.double-layer-bem.v1",
         "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "validation_host": platform.node(),
+        "platform_class": platform.system(),
         **metadata,
         "relative_error_vs_soft_sphere_analytic": rel_error,
         "tolerance": 5e-3,

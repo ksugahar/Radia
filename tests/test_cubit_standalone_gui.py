@@ -15,7 +15,7 @@ def _load_from_source(module_path: str):
 
     conftest imports cubit_mesh_export before this module runs, so the package
     is already cached in sys.modules from wherever the editable install
-    resolves -- a release worktree while the LAB pointer is drifted -- and the
+    resolves -- a release worktree while the validation runtime pointer is drifted -- and the
     sys.path.insert above can no longer win.  The contract under test is about
     the repository layout, so the module is loaded by location instead of by
     name.  Editable drift is the drift checker's job, not this test's.

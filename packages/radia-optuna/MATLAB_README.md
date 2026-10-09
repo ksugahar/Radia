@@ -54,7 +54,7 @@ radia.simulink.buildOptunaTeachingModel(Exercise="pareto")
 radia.simulink.buildOptunaTeachingModel(Exercise="reliability")
 ```
 
-See `OPTUNA_SIMULINK_LAB.md` for the student worksheet.
+See `OPTUNA_SIMULINK_validation host.md` for the student worksheet.
 
 The teaching model uses `buildOptunaStudyBlock`, a masked two-input/five-output
 facade over the stable advanced runtime. Four scalar outputs cover the common

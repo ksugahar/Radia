@@ -859,7 +859,7 @@
       }
     }
   ],
-  "host": "Hibino",
+
   "ngsolve": "6.2.2606",
   "sources": {
     "team13_model.py": "1c1a4736ed6acca94799bf93ee6838213a0d826c468bb91bf0ff75469b21eaf2",

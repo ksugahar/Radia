@@ -1,6 +1,6 @@
 {
   "generated_at_utc": "2026-09-15T14:22:15.328935+00:00",
-  "hostname": "mdx2",
+
   "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
   "versions": {
     "radia": "4.95.92",

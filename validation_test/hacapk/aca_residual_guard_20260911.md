@@ -88,7 +88,7 @@ candidate from the edited source; use distinct output DLL names under
 Then run:
 
 ```text
-python validation_test/hacapk/validate_aca_residual_guard.py --before C:/temp/aca_probe_before.dll --after C:/temp/aca_probe_after.dll --output validation_test/hacapk/aca_residual_guard_20260911.json
+python validation_test/hacapk/validate_aca_residual_guard.py --before private-runtime-path --after private-runtime-path --output validation_test/hacapk/aca_residual_guard_20260911.json
 ```
 
 The driver exits nonzero if any candidate case misses the accuracy budget.

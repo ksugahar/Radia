@@ -83,7 +83,7 @@ def main(argv=None) -> int:
         meshes.append(entry)
     manifest = {
         "schema": "radia.qmag-cefc2020-mesh-manifest.v1",
-        "generated_at_utc": datetime.now(timezone.utc).isoformat(), "host": platform.node(),
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(), "platform_class": platform.system(),
         "cubit": str(cubit), "step": str(Q.STEP_PATH), "step_sha256": _sha256(Q.STEP_PATH),
         "iron_volume_m3_cad": Q.IRON_VOLUME_M3, "meshes": meshes,
     }

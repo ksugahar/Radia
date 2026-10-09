@@ -19,7 +19,7 @@ LATTICE/NONLATTICE build-time ratio isolates the hex translation-cache speedup (
 companion of the wedge 8.9-14.9x already reported), and the NONLATTICE column is the
 "(i)-(iii)-only on an arbitrary hex mesh" measurement the manuscript needs.
 
-Benchmark Policy: timing -> hibino first, or mdx only behind an idle CI queue; one subprocess per case (per-case peak
+Benchmark Policy: timing -> compute-host first, or mdx only behind an idle CI queue; one subprocess per case (per-case peak
 working set).  Usage:
   python bench_hex_nonlattice.py --sizes 8,12,16,20          # compute-host driver
   python bench_hex_nonlattice.py --case-n 12 --mode lattice  # one case, JSON on stdout
@@ -144,7 +144,7 @@ def main() -> int:
               f"naive={nv['charge_gram_wall_s']:9.2f}s  (x{ratio:.1f})", flush=True)
 
     data = dict(
-        timestamp=_now(), hostname=platform.node(),
+        timestamp=_now(), platform_class=platform.system(),
         benchmark="hex_gram_build_ablation",
         problem=dict(cube_size_m=CUBE, H0_A_per_m=H0, mu_r=MU_R,
                      warp_amplitude=WARP_A, mesh="structured hex NxNxN", order="RT1"),

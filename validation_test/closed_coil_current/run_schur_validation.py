@@ -43,7 +43,7 @@ def main():
         assert abs(stats["section_current_A"] - 2) <= 1e-10
         cases.append(dict(scale_m=scale, mesh_elements=mesh.ne, **stats))
     record = dict(schema="radia.closed-current-schur-validation.v1",
-                  host=platform.node(), ngsolve=ng.__version__, threads=args.threads,
+                  platform_class=platform.system(), ngsolve=ng.__version__, threads=args.threads,
                   mesher="Netgen OCC synthetic loop", relative_maxh=args.maxh,
                   source_sha256=hashlib.sha256(Path(current.__file__).read_bytes()).hexdigest(),
                   cases=cases, accepted=True)

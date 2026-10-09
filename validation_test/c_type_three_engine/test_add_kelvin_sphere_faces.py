@@ -1,6 +1,6 @@
 """add_kelvin_cubit on a real Cubit model with gap slabs inside the air.
 
-Requires a Cubit seat (LAB or 100 only); run headless:
+Requires a Cubit seat (validation runtime or 100 only); run headless:
 
     python -m pytest validation_test/c_type_three_engine/test_add_kelvin_sphere_faces.py
 

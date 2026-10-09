@@ -891,7 +891,7 @@ def test_broken_hdiv_interface_charge_preserves_uniform_field(
     # tolerance, not machine epsilon.  The sigma-normalized charge-Gram
     # storage (133537e09) legitimately reshuffled the roundoff path and
     # moved the gap to 1.48e-9 (deterministic, identical digits on the
-    # CI runner and LAB), so the old 1e-9 was calibration, not physics:
+    # CI runner and validation runtime), so the old 1e-9 was calibration, not physics:
     # 5e-9 absolute (~1.5e-8 relative) still fails loudly for any real
     # interface-charge defect, which shows up orders of magnitude higher.
     assert abs(measured - reference) < 5e-9

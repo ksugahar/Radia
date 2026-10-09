@@ -491,7 +491,7 @@ def run(args):
     payload = {
         "schema": "radia.mmm-topology-two-stage-fourth-order-lie/v1",
         "status": "pass" if all(gates.values()) else "fail",
-        "machine": platform.node(),
+        "platform_class": platform.system(),
         "python": platform.python_version(),
         "policy": {
             "name": result.policy.name,

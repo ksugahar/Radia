@@ -237,7 +237,7 @@ def main():
         "schema": "radia.beak_section_axisym_sweep.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "git_head": head,
-        "host": platform.node(),
+        "platform_class": platform.system(),
         "question": ("the delivery gate was accepted at 150 kHz on two routes "
                      "that share a surface-impedance assumption.  What does "
                      "the same section say when its interior is resolved?"),

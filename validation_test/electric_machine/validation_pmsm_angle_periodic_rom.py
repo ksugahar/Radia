@@ -323,7 +323,7 @@ def build_summary(
     return {
         "schema": "radia.motor.pmsm_angle_periodic_rom_validation.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "validation_host": platform.node(),
+        "platform_class": platform.system(),
         "python_version": platform.python_version(),
         "ngsolve_version": ng.__version__,
         "numpy_version": np.__version__,

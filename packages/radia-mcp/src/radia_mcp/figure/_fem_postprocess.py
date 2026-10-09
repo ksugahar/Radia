@@ -518,7 +518,7 @@ def plot_field_vs_arclength(ax,
 _FLUX_LINE_KNOWLEDGE = """\
 [flux_line_recipe]
 
-LAB FLUX-LINE TRACING + VISUALIZATION RECIPE (2020-01-06, Sugahara Lab)
+validation runtime FLUX-LINE TRACING + VISUALIZATION RECIPE (2020-01-06, Sugahara Lab)
 
 Promoted from a lab flux-line MATLAB workflow — MATLAB driving an
 axisymmetric FE field-probe to trace flux lines through a 2D magnet and
@@ -586,7 +586,7 @@ SYMPLECTIC INTEGRATORS (陽的_陰的シンプレクティック.jpg):
   the dx/ds = B problem is NOT Hamiltonian -- it's a 2D vector-field
   integration and RK45 is appropriate.
 
-LAB COLOR CONVENTION (Bx vs By):
+validation runtime COLOR CONVENTION (Bx vs By):
 
   Bx (horizontal) = vermillion #D55E00 (Okabe-Ito CVD-safe red)
   By (vertical)   = blue       #0072B2 (Okabe-Ito CVD-safe blue)

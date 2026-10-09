@@ -1962,7 +1962,7 @@ PAPER POINT (Track A): the DtN datasheet is not just a real ladder -- it is a CO
 parameterised by kR, and the Kelvin transformation's place on it (the real axis) is precisely what
 makes it the optimal quasi-static open boundary and disqualifies it for radiation. The figure is the
 Argand plot {Re,Im}(Lambda_n) at fixed kR with the three methods overlaid (the SA paper's frequency
-panel; see C:\\temp\\kelvin_figs\\fig_gg_complex_spectrum for the generated preview).
+panel; see private-runtime-path for the generated preview).
 
 RADIATION BOUNDARY ON KELVIN = a SURFACE IMPEDANCE (SIBC/HOIBC) AT THE EXTERIOR CENTRE (act7_02_radiation_sibc_hoibc_center,
 verified 2026-06-15; grounds the author's IEICE Trans. C 2024 "Extended Kelvin Transformation for

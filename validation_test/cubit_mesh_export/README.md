@@ -10,9 +10,9 @@ CAD measures, NGSolve reload and positive mapped Jacobians. No GUI or system
 plugin replacement is involved. This is a licensed-host check, not normal CI.
 
 ```powershell
-python -m venv C:/temp/cubit-standalone-venv
-C:/temp/cubit-standalone-venv/Scripts/python.exe -m pip install <candidate.whl>
-C:/temp/cubit-standalone-venv/Scripts/python.exe -I validation_test/cubit_mesh_export/validate_standalone_wheel.py --wheel <candidate.whl> --cubit-bin "C:/Program Files/Coreform Cubit 2025.12/bin" --output C:/temp/cubit-standalone-result
+python -m venv private-runtime-path
+private-runtime-path -m pip install <candidate.whl>
+private-runtime-path -I validation_test/cubit_mesh_export/validate_standalone_wheel.py --wheel <candidate.whl> --cubit-bin "C:/Program Files/Coreform Cubit 2025.12/bin" --output private-runtime-path
 ```
 
 The output directory must be new. Retain `result.json`, `vol-check.json`,

@@ -18,7 +18,7 @@
   },
   "reference_observation": {
     "date": "2026-09-11",
-    "machine": "LAB",
+
     "radia": "4.95.91",
     "ngsolve": "6.2.2606",
     "iterations": 144,

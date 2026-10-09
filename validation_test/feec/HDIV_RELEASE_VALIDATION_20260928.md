@@ -1,6 +1,6 @@
 # HDiv validation repair, 2026-09-28
 
-The remaining FEEC failures were reproduced against `c566acfca` on mdx2
+The remaining FEEC failures were reproduced against `c566acfca` on worker-b
 with Python 3.12.10 and NGSolve 6.2.2606. The selected baseline had 10
 failures and 25 passes; tiny reduction-order differences explain the
 different count from the earlier 11-failure triage.
@@ -58,7 +58,7 @@ the exact mass cache key and batched row-major right-hand-side contract remain.
 Non-positive or non-finite factors fail explicitly.
 
 `results_hdiv_sparsecholesky_20260928.json` records 7 focused contracts and
-235 extended tests passing on mdx1. They cover actual mass residuals, cache
+235 extended tests passing on worker-a. They cover actual mass residuals, cache
 updates, multiple right-hand sides, non-SPD rejection, nonlinear solves,
 multiple materials and topology optimization. These are working-tree build
 checks, not exact release-artifact acceptance or production-scale timing.
@@ -69,7 +69,7 @@ order may differ; the repeated-solution vector difference must be below
 ## Broad regression baseline
 
 The committed repair baseline `e6b5f9cca` passed 397 of 398 selected HDiv
-checks on mdx2. The remaining check is the explicit expected failure for
+checks on worker-b. The remaining check is the explicit expected failure for
 HDiv pyramids in the pinned NGSolve 6.2.2606 runtime; pyramid support is
 not claimed. See `results_hdiv_regression_20260928.json` for the exact list.
 This broad run predates the sparse-factor replacement above; its counts

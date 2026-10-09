@@ -1,6 +1,6 @@
 {
   "schema": "radia.maintenance.integration.v1",
-  "host": "mdx1",
+
   "ngsolve": "6.2.2606",
   "numerical_tests": {
     "total_passed": 50,

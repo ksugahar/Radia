@@ -2,7 +2,7 @@
   "schema": "radia.validation.c-type-absolute-accuracy-certificate.v1",
   "generated_at_utc": "2026-09-03T14:38:57.452516+00:00",
   "passed": true,
-  "machine": "mdx",
+
   "claim": {
     "quantity": "gauge-invariant B in the C-yoke useful gap core",
     "analytic_absolute_truth_claimed": false,
@@ -16,7 +16,7 @@
       "name": "coarse",
       "scale": 1.25,
       "result": "c_type_20260903_nonlinear_bdm2_coarse.json",
-      "result_sha256": "a93f5fd00613f08c3bb24f4d25ef622c44ea6f33388c800b4c79e72a1d0bdf2d",
+      "result_sha256": "1980e92a95b6a63fe0a773a03f84b25dc6b5c39534b6c6d57d8724e4f6fd39ab",
       "engines": {
         "hdiv_mmm": {
           "formulation": "HDiv-MMM",
@@ -116,7 +116,7 @@
       "name": "medium",
       "scale": 1.0,
       "result": "c_type_20260903_nonlinear_bdm2_medium.json",
-      "result_sha256": "c264add26a74e16b847dae3409e1e635e86f5cbc309c6df01eb1741cf98e523b",
+      "result_sha256": "67d4cad3847180d94e68887836eb206f2d5e27bd59927288057833532738cd3c",
       "engines": {
         "hdiv_mmm": {
           "formulation": "HDiv-MMM",
@@ -216,7 +216,7 @@
       "name": "fine",
       "scale": 0.8,
       "result": "c_type_20260903_nonlinear_bdm2_fine.json",
-      "result_sha256": "ab4a4f44a5633da5eefa535717ced3585885597750aba865ba491c3e8fd5c1f2",
+      "result_sha256": "b6227a89f5665cb024ad60271bc4f3d605e4982c9175adf7f1023c32257b90d5",
       "engines": {
         "hdiv_mmm": {
           "formulation": "HDiv-MMM",
@@ -315,8 +315,8 @@
     {
       "name": "finer",
       "scale": 0.64,
-      "result": "c_type_20260903_nonlinear_bdm2_finer_mdx.json",
-      "result_sha256": "1cb8d613980a50f951034415a4b53792c5e117c6c8038d93d77537e6cb6fbdbb",
+      "result": "c_type_20260903_nonlinear_bdm2_finer_reference.json",
+      "result_sha256": "d07ef7d4f74f94425fe9c4fa554692ae19cb88c7f6834ba39565206f7389923f",
       "engines": {
         "hdiv_mmm": {
           "formulation": "HDiv-MMM",
@@ -491,7 +491,7 @@
   "combined_relative_numerical_uncertainty": 0.0035398833240351335,
   "reproducibility": {
     "reference_machine": "mdx",
-    "replicate_machine": "Hibino",
+    "replicate_machine": "compute",
     "engines": {
       "hdiv_mmm": {
         "relative_rms": 0.0

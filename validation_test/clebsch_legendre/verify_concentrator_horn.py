@@ -565,7 +565,7 @@ def main():
     report["meta"] = {
         "generated_at_utc": datetime.datetime.now(datetime.timezone.utc)
         .isoformat(timespec="seconds"),
-        "hostname": platform.node(),
+        "platform_class": platform.system(),
         "python_version": platform.python_version(),
         "ngsolve_version": ngsolve.__version__,
         "numpy_version": np.__version__,

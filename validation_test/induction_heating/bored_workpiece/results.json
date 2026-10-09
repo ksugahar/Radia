@@ -26,7 +26,7 @@
     "ngsolve": "6.2.2607",
     "numpy": "2.5.2",
     "scipy": "1.17.1",
-    "host": "lab",
+
     "threads": 2,
     "radia_import": "src/radia/__init__.py"
   },
@@ -1103,7 +1103,7 @@
         "ngsolve": "6.2.2607",
         "numpy": "2.5.2",
         "scipy": "1.17.1",
-        "host": "lab",
+
         "threads": 2,
         "radia_import": "src/radia/__init__.py"
       },
@@ -1137,7 +1137,7 @@
         "ngsolve": "6.2.2607",
         "numpy": "2.5.2",
         "scipy": "1.17.1",
-        "host": "lab",
+
         "threads": 2,
         "radia_import": "src/radia/__init__.py"
       },
@@ -1171,7 +1171,7 @@
         "ngsolve": "6.2.2607",
         "numpy": "2.5.2",
         "scipy": "1.17.1",
-        "host": "lab",
+
         "threads": 2,
         "radia_import": "src/radia/__init__.py"
       },

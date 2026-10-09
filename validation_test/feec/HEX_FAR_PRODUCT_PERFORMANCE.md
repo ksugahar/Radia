@@ -39,7 +39,7 @@ from pip `mkl-devel`, link `mkl_rt.lib`, and put outputs under `C:/temp`.
 Then run:
 
 ```powershell
-python validation_test/feec/run_hex_far_product_benchmark.py --library C:/temp/hex_far_product.dll --output C:/temp/hex_far_product.json --compiler-flags "<actual compiler and flags>"
+python validation_test/feec/run_hex_far_product_benchmark.py --library private-runtime-path --output private-runtime-path --compiler-flags "<actual compiler and flags>"
 python -m pytest tests/test_hdiv_vim_hex_wedge_rt2.py -q
 ```
 

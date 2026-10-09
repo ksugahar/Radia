@@ -68,7 +68,7 @@ def run(case, workdir=None):
         data=dict(tracks=tracks,checks=checks,scope='Saddle-coil electron dispersion only; quadrupole and edge-focusing studies are separate.')
     else: raise ValueError(case)
     assert all(data['checks'].values()), data['checks']
-    return dict(schema='radia.selected_showcase.v1',case=case,generated_at_utc=datetime.now(timezone.utc).isoformat(),host=platform.node(),**runtime_metadata(__file__, helpers, threads=2),result=data)
+    return dict(schema='radia.selected_showcase.v1',case=case,generated_at_utc=datetime.now(timezone.utc).isoformat(),platform_class=platform.system(),**runtime_metadata(__file__, helpers, threads=2),result=data)
 
 
 if __name__=='__main__':

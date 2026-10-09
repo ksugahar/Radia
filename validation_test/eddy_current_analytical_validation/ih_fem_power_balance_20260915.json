@@ -3,7 +3,7 @@
   "bem_validated": false,
   "phasor": "peak, exp(+i omega t)",
   "coil_cross_section_radius": 0.0005,
-  "host": "Hibino",
+
   "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
   "ngsolve": "6.2.2606",
   "sources_sha256": {

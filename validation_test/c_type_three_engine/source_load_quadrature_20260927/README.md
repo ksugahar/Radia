@@ -2,7 +2,7 @@
 
 Diagnostic evidence, not three-engine acceptance. Linear C-type model,
 `mu_r = 1000`, coarse Cubit Kelvin mesh (`mesh_result_sha256` in every JSON;
-24,134 elements), Radia 5.0.1 release tree, NGSolve 6.2.2606, INTEL11,
+24,134 elements), Radia 5.0.1 release tree, NGSolve 6.2.2606, development host,
 8 threads, PARDISO. Each JSON records the host, versions and the hash of the
 script that produced it; the scripts are committed unmodified so the hashes
 still match.
@@ -111,11 +111,11 @@ certificate.
 The scripts expect one staging directory holding `mesh/` (`kelvin_domain.vol`,
 `iron.vol`, `mesh_result.json` of the coarse family),
 `validation_test/c_type_three_engine/run_three_engine.py`, and
-`results/c_type_20260908_linear_kelvin_after_coarse_mdx1.json`.
+`results/c_type_20260908_linear_kelvin_after_coarse_worker_a.json`.
 `ctype_rhs_quadrature.py` and `ctype_mixed_bonus.py` take `--mesh-dir`,
 `--three-engine`, `--reference`, `--output`; run them with
 `--inverse pardiso` as recorded (their `sparsecholesky` default is not usable
-for this saddle-point system: it returned an all-NaN field on mdx2).
+for this saddle-point system: it returned an all-NaN field on worker-b).
 `ctype_exact_exterior.py` and `ctype_order3_pair.py` read the staging
 directory next to the script and take the thread count as the only argument.
 `ctype_near_coil_subdivision.py` takes `--staging` (the same directory, which

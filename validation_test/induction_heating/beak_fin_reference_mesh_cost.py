@@ -96,7 +96,7 @@ def main():
         "schema": "radia.beak_fin_reference_mesh_cost.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "git_head": head,
-        "host": platform.node(),
+        "platform_class": platform.system(),
         "question": ("with the PEEC side converged and cheap, the comparison "
                      "is the BEM-A reference.  How coarse can that reference "
                      "be and still decide the delivery gate the same way?"),

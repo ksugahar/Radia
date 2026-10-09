@@ -543,7 +543,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     return {
         "schema": "radia.validation.hcurl_vim_hdiv_mmm_end_to_end.v8",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "validation_host": platform.node(),
+        "platform_class": platform.system(),
         "runtime": {
             "python": sys.version,
             "platform": platform.platform(),

@@ -31,7 +31,7 @@ from radia.stream_function import (
     solve_abe_bounded_current_potential,
 )
 
-# f2py reference (LAB-only network drive).
+# f2py reference (validation runtime-only network drive).
 REF_DIR = r"W:\04_卒論論文関係\2025年度\046_伊藤海人\2026_01_06_f2py_matlab比較\f2py"
 
 
@@ -714,7 +714,7 @@ def test_radia_field_kernel_magnets():
 
 
 # --------------------------------------------------------------------------
-# f90 cross-check (LAB only) -- runs in a fresh subprocess to dodge conftest's
+# f90 cross-check (validation runtime only) -- runs in a fresh subprocess to dodge conftest's
 # DLL-search pollution (the f2py module bundles its own Intel/MKL DLLs and
 # cannot be imported alongside conftest's preloaded ngsolve/cubit).
 # Verified bit-exact: k_aca identical, ||S_f90 - S_radia||/||S_f90|| ~ 1e-15.

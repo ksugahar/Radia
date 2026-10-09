@@ -1,6 +1,6 @@
 {
   "schema": "radia.validation.nonlinear-surface-modes-1d.v1",
-  "host": "intel11",
+
   "python": "3.12.10",
   "numpy": "2.5.2",
   "scipy": "1.17.1",

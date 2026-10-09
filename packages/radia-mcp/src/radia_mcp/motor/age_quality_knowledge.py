@@ -429,7 +429,7 @@ python -m pytest validation_test\\radia_mcp\\test_build123d_pmsm_field.py `
 MCP gates:
 
 ```powershell
-$env:PYTHONPATH = ".\\packages\\radia-mcp\\src"
+$env:PYTHONPATH = ".private-runtime-path"
 python -m radia_mcp.motor.server --selftest
 python -m pytest packages\\radia-mcp\\tests\\test_each_server_selftest.py -k motor
 ```

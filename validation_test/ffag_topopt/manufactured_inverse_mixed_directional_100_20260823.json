@@ -2,10 +2,10 @@
   "schema": "radia.ffag-fixed-one-pass-c-yoke-summary/v1",
   "status": "pass",
   "provenance": {
-    "machine": "intel11",
+
     "python": "3.12.10",
     "ngsolve_threads": 16,
-    "full_result": "C:/temp/ffag_c_yoke_direct_api/manufactured_inverse_add798_remove83_directional_partial3_100_20260823.json",
+    "full_result": "<private-path>/ffag_c_yoke_direct_api/manufactured_inverse_add798_remove83_directional_partial3_100_20260823.json",
     "performance_measurement": "disabled"
   },
   "problem": {

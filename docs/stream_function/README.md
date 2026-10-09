@@ -42,7 +42,7 @@ short *entry point*; this folder is the detailed reference.
 | Run the executed public notebooks | [theory.ipynb](theory.ipynb), [regularization.ipynb](regularization.ipynb), [deformation.ipynb](deformation.ipynb) |
 | Hook ngsolve.bem H-matrix (2604+) | [ngsbem_integration.md](ngsbem_integration.md) |
 | **Design a stellarator coil** (REGCOIL / NESCOIL / FOCUS: winding-surface current potential, net current, coil force/stress, VMEC boundary, winding-shape) | [**fusion.md**](fusion.md) |
-| Cite / publish this work | paper outline (W:\02_学会資料\2025年度\2026_01_JIAM\streamfunction\, not in repo) |
+| Cite / publish this work | paper outline (private-runtime-path not in repo) |
 
 > **Three different "deformations" — do not confuse them.**
 > (1) [deformation.md](deformation.md) reshapes the coil *surface* and
@@ -109,7 +109,7 @@ What may be **new** (subject to literature search before publication):
   - The **integrated open-source pipeline** that lets the same SF
     design loop run on free-space, material (Radia HDiv-VIM), or surface-
     BEM (ngsolve.bem) kernels by replacing the entry callback.
-    See the paper outline (W:\02_学会資料\2025年度\2026_01_JIAM\streamfunction\paper_outline.md) "Implementation
+    See the paper outline (private-runtime-path) "Implementation
     contribution" for the framing.
 
 ## Feature comparison (with related tools)
@@ -168,7 +168,7 @@ What may be **new** (subject to literature search before publication):
     ``streamfunction(topic=single_stroke)`` for the full session-log narrative,
     and ``streamfunction(topic=regularized)`` for the regularisation-folded
     closed form `ψ = S⁻¹V · W⁻¹ · Σ⁻¹ · UᵀB`.
-  - Memory entries (LAB-private):
+  - Memory entries (validation host-private):
     - ``feedback_single_stroke_chain_orientation_traps``
     - ``feedback_path_a_naive_picard_negative``
     - ``feedback_fmm_vs_aca_distinction``

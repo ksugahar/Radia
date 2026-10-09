@@ -26,7 +26,7 @@ so non-reproduction with tracing does not establish safety.
 
 `test_font_trace` tests disabled behavior, append records and last-error
 preservation without loading a font or linking the renderer. The actual
-instrumented executable must not be run on shared LAB/100 sessions for this
+instrumented executable must not be run on shared validation runtime/100 sessions for this
 investigation. The gate/evidence workflow is maintained separately in PR #205.
 
 Microsoft documents matching flags for Add/RemoveFontResourceExW. There is no
@@ -57,7 +57,7 @@ negative search result does not establish that no upstream defect exists.
 
 Source: PR #205 at `775a03984`; executable SHA-256
 `E883E56313593A6072CE295B7077936211D49BB3BC1221994DFAB287F9984DD5`.
-Evidence is retained under `C:/temp/eqnedit-font-acceptance-34658678863`.
+Evidence is retained under `private-runtime-path`.
 All times below are UTC on 2026-09-11.
 
 | Time | Observation |
@@ -126,12 +126,12 @@ evidence. Product release remains on hold.
 
 The laboratory's historical CLAUDE.md section "Do Not Break the Interactive
 Session's Fonts (2026-09-03)" records 202 incidents since August 23 at offset
-0x366a2. The reviewer reports September 5 symbolization of 203 LAB crashes at
+0x366a2. The reviewer reports September 5 symbolization of 203 validation runtime crashes at
 the same CheckMemoryUsage location; that later count is reviewer-provided, not
 a new recount of the original event logs in this investigation.
 
 Independent non-CI evidence is recorded in
-`C:/temp/eqnedit64-palette-claude-review/REVIEW.md`, section "fontdrvhost crashed
+`private-runtime-path`, section "fontdrvhost crashed
 in 100's session 0": September 11 at 14:21:11 JST, ja-JP session 0, host
 10.0.20348.5256, c0000005/366a2, coincident with self-test startup. The review
 reports no competing Eqnedit64/python/node process in that session and only
@@ -188,7 +188,7 @@ All 12 fresh-worker trials (exit/remove crossed with none/one-glyph measurement,
 three replicates each) completed 64 successful registrations: 768 launches in
 total. No child, measurement, removal, host-exit/PID-change, WER or monitor
 query error was recorded. All report NO_REPRODUCTION_WITHIN_BOUND. Evidence:
-`C:/temp/eqnedit-font-probe-34663488070/summary.json` and adjacent artifacts.
+`private-runtime-path` and adjacent artifacts.
 Probe SHA256: BFE93F6EDF8F1A4D397974844C3F1E9D491441046E0F6F7CD5D84FE96CA22146.
 Font SHA256: 6075562B771F8B82F0C179E363389684F2DD09DE30038269E2628E504BD7BE0F.
 Host StartTime was not recorded in this round; retain that limitation.
@@ -214,7 +214,7 @@ Prefix zero completed twice without a host event/change. Prefixes 3,5,6,8,10
 each reproduced twice (10 incidents total), all c0000005/366a2 in host version
 10.0.20348.5256. Both child processes returned zero in every arm; observer
 query errors were zero. The full-prefix positive control reproduced 2/2.
-Evidence: `C:/temp/eqnedit-font-prefix-34663950430`. The fixed EXE is the
+Evidence: `private-runtime-path`. The fixed EXE is the
 46E9DAEA... payload from run 34661533840, not a newly compiled product.
 
 For prefix3 replicate1, model end was 01:09:43.3044518 UTC, self start
@@ -271,7 +271,7 @@ merely because this product's glyf candidate does not reproduce within a bound.
 Run 34665310648 compared deep-once and prefix10 twice per format on fresh
 workers: CFF reproduced the same host fault 4/4; glyf reproduced 0/4. All
 children returned zero and completed their requested workloads; observer query
-errors were zero. Evidence: `C:/temp/eqnedit-font-outline-34665310648/summary.json`.
+errors were zero. Evidence: `private-runtime-path`.
 This supports outline-format avoidance for these workloads, not a general
 Windows-font safety guarantee or final product acceptance.
 
@@ -296,7 +296,7 @@ all eight fresh-worker arms: CFF 4/4 reproduced c0000005 at 366a2, corrected
 glyf 0/4 reproduced. Both child commands exited zero in every arm. Workload
 completion markers and host start times were recorded; control events and
 observer query errors were empty. Evidence is
-`C:/temp/eqnedit-font-outline-34665720979/summary.json`. Corrected-glyf EXE:
+`private-runtime-path`. Corrected-glyf EXE:
 3331B2D68A31157E76E3A53082AB652E856FD6784BF8B8522560D8CF334152A8;
 module: 451BD1E276AEAA5D85F1E1889C8E57B94234FB6A0D9BB908F75BE99201313839.
 The entire workflow is red because its CFF positive controls intentionally
@@ -317,7 +317,7 @@ the B598... asset: ctest, ten model suites, hidden executable/UI checks,
 120 palette proofs, installed-wheel verification and PNG/EMF/CLI checks.
 Three lifecycle gates performed 32 launches each with one unchanged host PID,
 no control/active crash events and all child exits zero. Evidence:
-`C:/temp/eqnedit-native-acceptance-34666010966/summary.json`.
+`private-runtime-path`.
 
 The product candidate uses the separately named `assets/eqnedit-math.ttf`,
 family `Eqnedit Math`, hash e6a371a1e7be3dfce9f047580cf9888a00cbc4b94c723d746a341ec46145ee3b.
@@ -340,7 +340,7 @@ in 114/120 palette sheets (all cell sheets; selector sheets were unchanged).
 the old family. Metrics and selector fonts resolved the new family while cell
 painting silently selected a fallback. This candidate is NOT accepted merely
 because its CI is green. Evidence:
-`C:/temp/eqnedit-native-acceptance-34666488337/palette-comparison.json`.
+`private-runtime-path`.
 
 Commit 41f4d8667 ties the native wide face and the drawing/SVG default family
 to one resource-family macro. External SVG fallback families remain after the
@@ -357,7 +357,7 @@ corrected pre-rename reference run 34666010966 in decoded RGBA, not merely in
 dimensions or an alpha-only difference check. The previously rectangular
 decoration sheet was also inspected visually and is correct again.
 
-Evidence: `C:/temp/eqnedit-native-acceptance-34667023701/summary.json` and
+Evidence: `private-runtime-path` and
 `palette-comparison.json`. Exact accepted artifacts:
 
 - EXE: 2F602B5F1C13A74CFF5C62048CB0A41BF2AE93182920236FDD98A0A0D5CEA4B0

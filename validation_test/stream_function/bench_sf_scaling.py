@@ -120,7 +120,7 @@ def main():
 
     from datetime import datetime
     data = {"timestamp": datetime.now().isoformat(timespec="seconds"),
-            "hostname": platform.node(),
+            "platform_class": platform.system(),
             "benchmark": "sf_design_scaling",
             "problem": {"geometry": "cylinder lateral surface r=0.15 L=0.5",
                         "target": "Gx (Bz=x)", "order": args.order,

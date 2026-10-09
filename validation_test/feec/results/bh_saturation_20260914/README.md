@@ -3,7 +3,7 @@
 This follow-up does not change the solver, BH input policy, test material,
 or the accepted ESRF6 three-engine evidence. It independently checks the
 reported synthetic-table properties and exercises the existing nine native
-energy-Newton tests on hibino using the repaired candidate wheel.
+energy-Newton tests on compute-host using the repaired candidate wheel.
 
 ## Curve findings
 
@@ -93,7 +93,7 @@ install that wheel and its declared dependencies plus pytest, and execute:
 ```
 
 The raw input/test bytes and executed runner are retained outside Git at
-`S:/Radia/validation_artifacts/bh_saturation_20260914/qualified/`.
+`private-runtime-path`.
 `qualified/recovery_manifest.json` records six individually verified hashes.
 The recovery ZIP SHA-256 is
 `943e415a1f924c5844f58b78dd4439f719f6f912b4e7658a63d2c4bd9afa2244`.
@@ -104,7 +104,7 @@ delete it only after recovery verification and the evidence commit, preserving
 other active jobs. ESRF6 acceptance and formal release ownership remain separate.
 
 Completion: the evidence was committed before cleanup. The job-owned
-`hibino:C:/temp/hdiv-bh-audit-20260914` was then removed after checking for
+`compute-host:private-runtime-path` was then removed after checking for
 active job-owned Python processes and reparse points; absence was verified.
 No other job directory was removed. Final local checks: 8 focused tests PASS,
 532 fast-contract tests PASS in 25.03 seconds including runner overhead, and

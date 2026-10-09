@@ -154,7 +154,7 @@ def run(maxh_m: float = 0.025, evrs_rank: int = 6) -> dict[str, object]:
         "schema": "radia.team28.hcurl-eddy-bubble-acceptance.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "runtime": {
-            "hostname": socket.gethostname(),
+            "platform_class": platform.system(),
             "python_version": platform.python_version(),
             "platform": platform.platform(),
             "radia_version": getattr(radia, "__version__", "unknown"),
@@ -200,7 +200,7 @@ def run(maxh_m: float = 0.025, evrs_rank: int = 6) -> dict[str, object]:
         "hcurl_vim_force_acceptance": {
             "result_file": TEAM28_HCURL_FORCE_JSON.name,
             "generated_at_utc": hcurl_force["generated_at_utc"],
-            "validation_host": hcurl_force["runtime"]["hostname"],
+            "platform_class": hcurl_force["runtime"]["platform_class"],
             "mesh_case_count": len(hcurl_force["cases"]),
             "maximum_force_relative_error": hcurl_force[
                 "maximum_force_relative_error"

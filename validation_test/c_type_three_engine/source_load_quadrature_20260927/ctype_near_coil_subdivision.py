@@ -113,7 +113,7 @@ def main():
     staging = args.staging
     rte = load_module(staging / "run_three_engine.py", "_rte")
     helpers = load_module(staging / "ctype_rhs_quadrature.py", "_quad")
-    reference = json.loads((staging / "c_type_20260908_linear_kelvin_after_coarse_mdx1.json")
+    reference = json.loads((staging / "c_type_20260908_linear_kelvin_after_coarse_worker_a.json")
                            .read_text(encoding="utf-8"))
     report_path = staging / "mesh" / "mesh_result.json"
     report = json.loads(report_path.read_text(encoding="utf-8"))
@@ -144,7 +144,7 @@ def main():
         line_info[name] = {"points_m": pts.tolist(), "signed_distance_to_conductor_m": d.tolist()}
 
     payload = {"schema": "radia.validation.ctype-near-coil-subdivision.v1",
-               "host": platform.node(), "radia_version": getattr(rad, "__version__", None),
+               "platform_class": platform.system(), "radia_version": getattr(rad, "__version__", None),
                "radia_module": rad.__file__, "ngsolve": ng.__version__, "threads": args.threads,
                "script_sha256": sha256(__file__),
                "helpers_sha256": sha256(staging / "ctype_rhs_quadrature.py"),

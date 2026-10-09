@@ -17,7 +17,7 @@ differ ONLY in what the source field H_s is inside the Kelvin exterior:
         Omega_s' = -(rho'/R)^2 Omega_s(local)
                                        make_reduced_potential_scalar_cf
 
-MEASURED (LAB, 2026-07-23), showing clean mesh convergence:
+MEASURED (validation runtime, 2026-07-23), showing clean mesh convergence:
 
     config                 Z          B1         B0
     maxh .14 / order 2   -32.830%   +0.743%   +34.329%

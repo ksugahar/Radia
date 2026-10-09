@@ -105,4 +105,4 @@ client and verify its live provenance, advertised schema, and a harmless
 affected tool through that same connection. Never restore an older runtime
 because its path or version was once canonical, and do not mask a stale client
 with broad process termination. Follow the shared MCP runtime policy for the
-current LAB/100 release-dual acceptance contract.
+current validation host/100 release-dual acceptance contract.

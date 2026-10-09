@@ -264,7 +264,7 @@ SI_UNITS_NOTATION = r"""
 \\sisetup{detect-all}        % use surrounding font style
 % Then:
 \\SI{50}{\\hertz}            % renders "50 Hz"
-\\SI{5.8e7}{\\siemens\\per\\meter}   % "5.8 x 10^7 S/m"
+\\SI{5.8e7}{private-runtime-path   % "5.8 x 10^7 S/m"
 \\SI{1.2}{\\tesla}           % "1.2 T"
 \\num{5.8e7}                % "5.8 x 10^7"
 ```

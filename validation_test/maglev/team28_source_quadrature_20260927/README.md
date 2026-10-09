@@ -1,6 +1,6 @@
 # TEAM 28: coil-source quadrature versus gap (2026-09-27)
 
-Diagnostic evidence, not TEAM 28 acceptance.  INTEL11, Radia 5.0.1 release
+Diagnostic evidence, not TEAM 28 acceptance.  development host, Radia 5.0.1 release
 tree, NGSolve 6.2.2606, 6 threads.  `team28_source_quadrature.json` records
 the script hash and the hashes of the two imported drivers
 (`../team28_hcurl_vim_force.py`, `../team28_coilbuilder_eddy_bubble.py`).

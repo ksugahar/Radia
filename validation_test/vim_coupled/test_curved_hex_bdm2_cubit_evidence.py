@@ -13,7 +13,7 @@ def test_cubit_curve_two_mesh_is_checked_and_nonaffine():
     mesh = result["mesh"]
 
     assert result["schema"] == "radia.validation.curved-hex-bdm2-cubit.v1"
-    assert result["machine"] == "mdx"
+    assert "machine" not in result
     assert result["versions"]["radia"] == "4.95.71"
     assert result["versions"]["cubit_mesh_export"] == "0.14.14"
     assert mesh["curve_order"] == 2
