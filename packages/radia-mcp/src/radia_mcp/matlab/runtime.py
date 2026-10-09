@@ -287,6 +287,9 @@ _PYBIND_CLASS_EXCLUSIONS = {
     "_PEECBuilderInternal.__binding__": "implementation holder",
     "_HACApKPEECManagerInternal.__binding__": "implementation holder",
     "_HACApKBEMManagerInternal.__binding__": "implementation holder",
+    "HACApKBEMManager.ReleaseDenseEntries": (
+        "drops the pybind11 reference to the Python-owned NumPy entry table "
+        "after compression; MATLAB hacapk.bem handles hold no Python arrays"),
     "_HDivVectorPotentialCoefficient.__binding__": (
         "private radia.vim adapter that materializes an NGSolve-owned Python "
         "CoefficientFunction; MATLAB uses the declared vim-public Python "
