@@ -201,7 +201,6 @@ def analyze(manifest: dict, results: dict[str, dict], result_paths: dict[str, Pa
             "gap_elements": int(row["gap_elements"]),
             "result": str(result_paths[name]),
             "result_sha256": sha256(result_paths[name]),
-            "machine": payload.get("machine"),
             "maximum_gap_core_pairwise_relative_rms":
                 max(pair["relative_rms"] for pair in pairs.values()),
             "pairwise_median_projected_gap_core":

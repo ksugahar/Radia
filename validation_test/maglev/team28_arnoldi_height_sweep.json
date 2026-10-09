@@ -12,7 +12,7 @@
     "docs/maglev/demos/team28/team28_arnoldi_force.py": "574362595b4488cc4e5d0050792fa06187df586df2362177345850b31efb84e9",
     "validation_test/maglev/team28_arnoldi_height_sweep.py": "351ee127e946c24e1b8963f167ce5209e5ae0ea54060c18973dabd76cc46278d",
     "validation_test/maglev/team28_reference.json": "3562cd78badbc2fedeb5a0ad1f52f51b352097a55811e27f33b1129569578679",
-    "validation_test/maglev/team28_axisym_fem_height_sweep.json": "949c46d6a3b542657ae97e3dbff1fa63a9dc92d0b1cd98df52a64b03d999c2fa"
+    "validation_test/maglev/team28_axisym_fem_height_sweep.json": "8afdf04c6280252a7d1be11191cb997d01d208027d9fd2a40502a9122947de8f"
   },
   "method": "axisymmetric mixed phi-B, p=2; block Krylov K_m(K^-1 N, K^-1 F) orthonormalised by modified Gram-Schmidt and congruence projection; one fresh mesh per height",
   "force_note": "legacy_N is the TEAM 28 integral Re[B_r J_t] = 2x the physical time-averaged force; the lift is -legacy_N/2",
@@ -453,5 +453,19 @@
     "lift_monotonically_nonincreasing": true
   },
   "pass": true,
-  "elapsed_s": 962.7378662999836
+  "elapsed_s": 962.7378662999836,
+  "source_privacy_redactions": {
+  "validation_test/maglev/team28_arnoldi_height_sweep.py": {
+    "method": "python-runtime-pair-v1",
+    "historical_text_sha256": "351ee127e946c24e1b8963f167ce5209e5ae0ea54060c18973dabd76cc46278d",
+    "published_text_sha256": "10772befb98fda7977265983e0fd1d1a8bbd4c471e92187adf1a64bc9d6223b1",
+    "semantic_sha256": "ae5ae1f50b019015973f3110ffaaa14aca84fa4bc3f4a165c2a1952f31cb35a6"
+  },
+  "validation_test/maglev/team28_axisym_fem_height_sweep.json": {
+    "method": "json-root-runtime-redaction-v1",
+    "historical_text_sha256": "8afdf04c6280252a7d1be11191cb997d01d208027d9fd2a40502a9122947de8f",
+    "published_text_sha256": "8e184f0134e7514a3d012048d2caae270787ca8a55b50298e0f40816dd7e1c6f",
+    "semantic_sha256": "b1c37756d62c35a1c45d0e7483ae3214de76de8d053a54ac9ebd7e152eccdbca"
+  }
+}
 }

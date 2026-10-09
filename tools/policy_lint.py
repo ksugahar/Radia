@@ -119,6 +119,8 @@ def _git_ls_files(*patterns):
 # Move these to private alias configuration in phase 2. Bibliography is an
 # author/citation exception, not a machine provenance exception.
 PUBLIC_RUNTIME_OPERATIONAL_REASONS = {
+    "packages/radia-mcp/src/radia_mcp/radia_ngsolve/knowledge/install_deploy.py": "Verbatim deployment host-role and release routing instructions; phase 2 with private host configuration.",
+    "packages/radia-mcp/src/radia_mcp/radia_ngsolve/knowledge/release_workflow.py": "Verbatim release host, ABI deployment, wheel/editable and recovery routing guidance; phase 2 with runner-move consent.",
     "tests/test_privacy_source_contract.py": "Deliberate privacy metadata and numerical-drift detector fixtures.",
     '.agents/skills/api-inventory/inventory_workflow.js': 'Existing operational deployment/build instructions and scripts; phase 2.',
     '.agents/skills/build/SKILL.md': 'Existing operational deployment/build instructions and scripts; phase 2.',

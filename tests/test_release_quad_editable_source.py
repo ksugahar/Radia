@@ -331,28 +331,23 @@ def test_restore_editable_is_a_tombstone_that_restores_nothing(monkeypatch, caps
 
 
 
-def test_unc_normalization_covers_canonical_and_release_worktrees():
-    release_unc = (
-        r"\\192.168.121.100\work\00_CAE\Radia\release-qud"
-        r"\radia-4.95.75\src\radia\__init__.py"
-    )
-    legacy_root_unc = (
-        r"\\192.168.11.100\work\00_CAE\Radia\01_GitHub"
-        r"\packages\radia-mcp"
-    )
+def test_unc_normalization_covers_synthetic_canonical_and_release_worktrees(monkeypatch):
+    monkeypatch.setattr(release_quad, "_PATH_ALIASES", (
+        ("//192.0.2.10/share/repo/deep/", "x:/deep-root/"),
+        ("//192.0.2.10/share/repo/", "x:/synthetic-root/"),
+        ("//192.0.2.11/share/repo/", "x:/synthetic-root/"),
+        ("w:/synthetic-repo/", "x:/synthetic-root/"),
+    ))
+    assert release_quad._norm_path(r"\\192.0.2.10\share\repo\deep\Candidate\\") == "x:/deep-root/candidate"
+    assert release_quad._norm_path(r"\\192.0.2.10\share\repo\Release\src\radia") == "x:/synthetic-root/release/src/radia"
+    assert release_quad._norm_path(r"\\192.0.2.11\SHARE\REPO\main\packages") == "x:/synthetic-root/main/packages"
+    assert release_quad._norm_path(r"W:\synthetic-repo\main\\") == "x:/synthetic-root/main"
+    assert release_quad._norm_path(r"\\unrelated-server\share\repo\main") == "//unrelated-server/share/repo/main"
 
-    assert release_quad._norm_path(release_unc) == (
-        "s:/radia/release-qud/radia-4.95.75/src/radia/__init__.py"
-    )
-    assert release_quad._norm_path(legacy_root_unc) == (
-        "s:/radia/01_github/packages/radia-mcp"
-    )
-    assert release_quad._norm_path(
-        r"W:\00_CAE\Radia\01_GitHub\src\radia\__init__.py"
-    ) == "s:/radia/01_github/src/radia/__init__.py"
-    assert "//192.168.121.100/work/00_cae/radia/" in (
-        release_quad.REMOTE_EDITABLE_VERIFY
-    )
+
+def test_remote_default_aliases_match_local_normalization_contract():
+    for alias, _ in release_quad._PATH_ALIASES[1:]:
+        assert alias in release_quad.REMOTE_EDITABLE_VERIFY
 
 
 def test_editable_probe_resolves_git_inside_the_target_process():

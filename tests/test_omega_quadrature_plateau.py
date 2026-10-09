@@ -18,7 +18,7 @@ def test_ci_candidate_bonus12_16_replays_recorded_evidence():
     raw = root / "omega_algebraic_bonus12_16.json"
     report = root / "omega_plateau_bonus12_16.json"
     assert hashlib.sha256(raw.read_bytes()).hexdigest() == (
-        "8f914b9f5219b3478ee25b6092fbceb43d89dd32cf59af69ced3b7a636ebc556")
+        "06f5a614b3ec7942063a0328f2785d306e58062f1d283948cbc0318c6f992a0f")
     assert hashlib.sha256(report.read_bytes()).hexdigest() == (
         "fa1577ebf844f56e81ae68362756ae84e88301a00146fbe5b2b7506df6a99a18")
     payload = json.loads(raw.read_text(encoding="utf-8"))

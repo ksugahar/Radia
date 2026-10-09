@@ -34,8 +34,9 @@ def _payload():
 def test_scalar_reference_summary_is_complete_and_self_consistent():
     payload = _payload()
     assert payload["schema"] == "radia.maglev.ecb-foster-lorentz-reference.v2"
-    for key in ("radia_version", "ngsolve_version", "python_version", "host"):
+    for key in ("radia_version", "ngsolve_version", "python_version"):
         assert payload["runtime"][key]
+    assert "host" not in payload["runtime"]
     assert payload["reference_passed"] is True
     assert all(payload["checks"].values()), payload["checks"]
 

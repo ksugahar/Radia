@@ -127,5 +127,15 @@
   "new_source_sha256": "18d5b5ffdb69685889063147ea1f5cf7c4ea6ce5e14611c2e6462fe6db308e60",
   "baseline_commit": "0e9f26bd6",
   "scope": "Trace elimination and factorization only; not ESRF case 6 or complete nonlinear solve timing",
-  "complete": true
+  "complete": true,
+  "source_privacy_redactions": {
+  "validation_test/mixed_omega_trace_reuse/run.py": {
+    "method": "python-keyword-runtime-pair-v1",
+    "historical_hash_normalization": "original-bytes",
+    "published_hash_normalization": "newline-lf",
+    "historical_text_sha256": "082d552243f440ef1cdf8009c616b6ea505deff3be463d6ba9a4ec806d0ee199",
+    "published_text_sha256": "16d6ed5df0ed6ff851ec067cde1fb91656f074edec5d4a0693234dd78a1ad39b",
+    "semantic_sha256": "859ee40a8dc64d53abd74305cbdf8db033a2317821f99034c4cec268bad7f7c5"
+  }
+}
 }

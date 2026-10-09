@@ -825,5 +825,13 @@
     "scalar_model_rejected_for_quantitative_3d_force": true,
     "legacy_all_boundary_model_rejected": true
   },
-  "pass": true
+  "pass": true,
+  "source_privacy_redactions": {
+  "validation_test/maglev/ecb_foster_lorentz_3d_reference.py": {
+    "method": "python-runtime-pair-v1",
+    "historical_text_sha256": "5bed69f541886b5f7c07f2cc0a3215ba17d61d5f449368129e86c4b5eab43c5a",
+    "published_text_sha256": "f3846beeea35a3127d1c8ad6062b0f1df963234375bfd92feff89c74889a5a32",
+    "semantic_sha256": "9995cbae26236acbc6d94feb4f6084aaf257f675fff16ad2698c77b7a43728fb"
+  }
+}
 }

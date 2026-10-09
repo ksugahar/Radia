@@ -370,8 +370,8 @@ def test_current_mixed_omega_mesh_certificate_is_complete_and_portable():
     assert "mixed total/reduced Omega" in certificate["claim"]["scope"]
     assert certificate["fine_mesh_maximum_pairwise_relative_rms"] < 0.005
     assert certificate["combined_relative_numerical_uncertainty"] < 0.01
-    assert certificate["reproducibility"]["reference_machine"].casefold() == "mdx"
-    assert certificate["reproducibility"]["replicate_machine"].casefold() == "compute"
+    assert certificate["reproducibility"]["reference_machine"].casefold() == "reference"
+    assert certificate["reproducibility"]["replicate_machine"].casefold() == "replicate"
     assert certificate["reproducibility"]["maximum_relative_rms"] < 1e-9
     assert certificate["mesh_family"] == "cubit_20260830_mesh_family.json"
     assert (results / certificate["mesh_family"]).is_file()
@@ -418,10 +418,8 @@ def test_historical_global_omega_accuracy_certificate_is_not_relabelled():
     assert all(certificate["checks"].values())
     assert certificate["fine_mesh_maximum_pairwise_relative_rms"] < 0.005
     assert certificate["combined_relative_numerical_uncertainty"] < 0.01
-    assert certificate["reproducibility"]["reference_machine"].casefold() == "mdx"
-    assert certificate["reproducibility"]["replicate_machine"].casefold() == (
-        "compute"
-    )
+    assert certificate["reproducibility"]["reference_machine"].casefold() == "reference"
+    assert certificate["reproducibility"]["replicate_machine"].casefold() == "replicate"
     assert certificate["reproducibility"]["maximum_relative_rms"] < 1e-9
     assert all(
         row["convergence_levels"] == ["medium", "fine", "finer"]
@@ -495,7 +493,7 @@ def test_accuracy_certificate_uses_the_last_three_of_four_mesh_levels():
 def test_accuracy_replication_rejects_same_host_and_software_drift():
     module = _load_convergence_module()
     base = {
-        "machine": "mdx",
+        "machine": "worker-reference",
         "mesh_result_sha256": "mesh",
         "comparison_contract": {"order": 2},
         "radia_version": "4.95.71",
@@ -509,10 +507,17 @@ def test_accuracy_replication_rejects_same_host_and_software_drift():
     with pytest.raises(RuntimeError, match="independent host"):
         module._replicate_metrics(base, dict(base))
 
-    different_host = {**base, "machine": "compute"}
+    different_host = {**base, "machine": "worker-replicate"}
     drifted = {**different_host, "radia_version": "4.95.70"}
     with pytest.raises(RuntimeError, match="different Radia version"):
         module._replicate_metrics(base, drifted)
 
     metrics = module._replicate_metrics(base, different_host)
     assert metrics["maximum_relative_rms"] == 0.0
+    assert metrics["reference_machine"] == "reference"
+    assert metrics["replicate_machine"] == "replicate"
+    assert "worker-reference" not in json.dumps(metrics)
+    assert "worker-replicate" not in json.dumps(metrics)
+    missing_identity = {k: v for k, v in base.items() if k != "machine"}
+    with pytest.raises(RuntimeError, match="both machine names"):
+        module._replicate_metrics(missing_identity, different_host)

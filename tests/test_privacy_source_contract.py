@@ -52,3 +52,24 @@ def test_private_same_host_proof_and_public_payload():
     for raw in ({"note": "192.168.1.2"}, {"nested": [r"W:\private\file"]}, {"details": "mdx1"}, {"nested": [r"\\storage\share"]}):
         with pytest.raises(RuntimeError):
             assembler._validate_public_runtime_payload(raw)
+
+
+def test_python_runtime_pair_rejects_physics_code_drift():
+    path = "validation_test/maglev/ecb_foster_lorentz_3d_reference.py"
+    old = 'runtime = {"host": socket.gethostname()}; power = 1.0'
+    new = 'runtime = {"platform_class": platform.system()}; power = 1.0'
+    assert c.semantic_sha256(path, old) == c.semantic_sha256(path, new)
+    assert c.semantic_sha256(path, old) != c.semantic_sha256(path, new.replace('power = 1.0', 'power = 1.1'))
+
+
+def test_module_docstring_and_json_redactions_reject_physics_changes():
+    path = "docs/maglev/demos/team28/team28_axisym_fem.py"
+    old = '"""Old provenance"""\npower = 1.0\n'
+    new = '"""Neutral provenance"""\npower = 1.0\n'
+    assert c.semantic_sha256(path, old) == c.semantic_sha256(path, new)
+    assert c.semantic_sha256(path, old) != c.semantic_sha256(path, new.replace('1.0', '1.1'))
+    path = "validation_test/maglev/team28_axisym_fem_height_sweep.json"
+    old = '{"host":"worker-one","power":1.0}'
+    new = '{"power":1.0,"source_privacy_redactions":{}}'
+    assert c.semantic_sha256(path, old) == c.semantic_sha256(path, new)
+    assert c.semantic_sha256(path, old) != c.semantic_sha256(path, new.replace('1.0', '1.1'))

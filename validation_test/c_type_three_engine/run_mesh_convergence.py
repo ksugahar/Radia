@@ -206,8 +206,8 @@ def _replicate_metrics(reference: dict, replicate: dict) -> dict[str, object]:
         )[selector]
         rows[engine] = {"relative_rms": _relative_rms(left, right)}
     return {
-        "reference_machine": reference_machine,
-        "replicate_machine": replicate_machine,
+        "reference_machine": "reference",
+        "replicate_machine": "replicate",
         "engines": rows,
         "maximum_relative_rms": max(row["relative_rms"] for row in rows.values()),
     }

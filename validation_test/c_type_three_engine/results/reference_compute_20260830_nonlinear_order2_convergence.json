@@ -455,8 +455,8 @@
   "maximum_discretization_relative_uncertainty": 0.0017600931288894205,
   "combined_relative_numerical_uncertainty": 0.003582685957634814,
   "reproducibility": {
-    "reference_machine": "mdx",
-    "replicate_machine": "compute",
+    "reference_machine": "reference",
+    "replicate_machine": "replicate",
     "engines": {
       "hdiv_mmm": {
         "relative_rms": 0.0

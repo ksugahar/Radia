@@ -1761,6 +1761,12 @@ def _verify_local_release_source(repo, expected_sha):
     return 0
 
 
+_PATH_ALIASES = (
+    ("w:/00_cae/radia/", "s:/radia/"),
+    ("//192.168.11.100/work/00_cae/radia/", "s:/radia/"),
+    ("//192.168.121.100/work/00_cae/radia/", "s:/radia/"),
+)
+
 def _norm_path(p):
     """Lower-case + forward-slashes + strip trailing slash so a UNC and
     a drive-letter form of the same NAS path compare equal."""
@@ -1768,15 +1774,11 @@ def _norm_path(p):
     # INTEL11 sees the LAB Radia share as W:\00_CAE\Radia while LAB records
     # the same files through S:\Radia.  Editable imports may canonicalize to
     # either mapped drive, so compare both spellings in the LAB namespace.
-    p = p.replace("w:/00_cae/radia/", "s:/radia/")
     # Both UNC spellings resolve to the LAB S: drive.  Normalize the whole
     # Radia namespace, not just 01_GitHub: release worktrees live under the
     # same share and editable imports report their real UNC location.
-    for unc_root in (
-        "//192.168.11.100/work/00_cae/radia/",
-        "//192.168.121.100/work/00_cae/radia/",
-    ):
-        p = p.replace(unc_root, "s:/radia/")
+    for alias, canonical in _PATH_ALIASES:
+        p = p.replace(alias, canonical)
     return p
 
 

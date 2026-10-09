@@ -6,8 +6,8 @@ from __future__ import annotations
 INSTALL_DEPLOY = """\
 # Radia install and deployment contract
 
-Radia uses isolated build and release artifacts. Only runtime host has an editable
-development checkout; validation runtime uses verified wheels. CI and release verification
+Radia uses isolated build and release artifacts. Only 100号機 has an editable
+development checkout; LAB uses verified wheels. CI and release verification
 never depend on native binaries copied from another machine.
 
 Available topics: overview, development, ci_compute, release, mcp_release, cubit, failures.
@@ -16,21 +16,21 @@ Available topics: overview, development, ci_compute, release, mcp_release, cubit
 
 | Machine | Primary role | Installation rule |
 |---|---|---|
-| validation runtime | test site and operations | verified wheels for `radia`, `cubit-mesh-export`, `radia-mcp` |
-| runtime host | development and execution | the only editable development host |
+| LAB | test site and operations | verified wheels for `radia`, `cubit-mesh-export`, `radia-mcp` |
+| 100号機 | development and execution | the only editable development host |
 | mdx | CI priority and MATLAB compute | isolated per-run environment; validated workloads |
-| compute host | long optimization and validation when available | release or job-specific environment |
+| hibino | long optimization and validation when available | release or job-specific environment |
 
-Regular GitHub Actions CI uses the `mdx` runner label. validation runtime is not a CI runner.
-Validation studies run on compute host first, or on mdx only when compute host is
+Regular GitHub Actions CI uses the `mdx` runner label. LAB is not a CI runner.
+Validation studies run on hibino first, or on mdx only when hibino is
 unavailable and the mdx CI queue is idle. They are not part of every
-source-change CI run. An idle validation runtime may also run tests and validation, but never
+source-change CI run. An idle LAB may also run tests and validation, but never
 timing or performance measurements.
 
 ## development
 
-Only runtime host uses editable installs so Python source changes are visible on
-the next import. validation runtime uses verified wheels for testing and operations. A running
+Only 100号機 uses editable installs so Python source changes are visible on
+the next import. LAB uses verified wheels for testing and operations. A running
 MCP process still owns already-imported modules and registered tool objects.
 Reconnect affected clients; compatible same-root Python edits may use a
 reviewed safe reload. Root, dependency, entry-point and schema changes require
@@ -48,8 +48,8 @@ installs the exact NGSolve/Netgen pins and `mkl-devel`, builds from the checked
 commit, and retains the resulting artifact as CI evidence. Normal CI runs only
 compact impact-selected regression tests from changed package paths. Solver studies,
 benchmarks, paper data, and machine comparisons belong to `validation_test/`
-and run on compute host first, with mdx reserved as an idle-CI fallback and an idle
-validation runtime allowed for anything except timing.
+and run on hibino first, with mdx reserved as an idle-CI fallback and an idle
+LAB allowed for anything except timing.
 
 ## release
 
@@ -67,14 +67,14 @@ native files into `site-packages`.
 ## mcp_release
 
 radia-mcp publishes independently through `radia-mcp-v<VERSION>` and its package
-CI/PyPI workflow. Its release-dual deploys a verified wheel to validation runtime and updates
-the editable development install on 100 only, not compute host/worker-a/worker-b. Do not run
+CI/PyPI workflow. Its release-dual deploys a verified wheel to LAB and updates
+the editable development install on 100 only, not hibino/mdx1/mdx2. Do not run
 the solver's four-host release gate.
 Mixed omega remains in radia-mcp; Cubit MCP belongs to cubit-mesh-export.
 
 Completion requires passing package checks, verified publication, a verified
-wheel and fresh import on validation runtime, the editable development install and fresh import
-on 100, plus validation runtime live source and harmless
+wheel and fresh import on LAB, the editable development install and fresh import
+on 100, plus LAB live source and harmless
 affected-tool verification. Existing 100 clients may remain next-launch-pending
 until their normal restart; they do not block release completion. Failed
 installation/import still blocks deployment completion. Immediate all-user

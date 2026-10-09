@@ -5,10 +5,17 @@ binding; numerical C++ tokens and the MATLAB generator outside its one
 runtime metadata pair must remain identical.
 """
 import hashlib
+import ast
 import json
 import re
 
 AUDITED_PATHS = {
+    "validation_test/maglev/team28_axisym_fem_height_sweep.py": "python-runtime-pair-v1",
+    "validation_test/maglev/team28_arnoldi_height_sweep.py": "python-runtime-pair-v1",
+    "docs/maglev/demos/team28/team28_axisym_fem.py": "python-module-docstring-v1",
+    "validation_test/mixed_omega_trace_reuse/run.py": "python-keyword-runtime-pair-v1",
+    "validation_test/maglev/team28_axisym_fem_height_sweep.json": "json-root-runtime-redaction-v1",
+    "validation_test/maglev/ecb_foster_lorentz_3d_reference.py": "python-runtime-pair-v1",
     "src/core/rad_hacapk_hdiv.cpp": "cpp-tokens-v1",
     "src/core/rad_hacapk_hdiv.h": "cpp-tokens-v1",
     "validation_test/radia_mcp/generate_motor_angle_family_mex_artifact.m": "matlab-runtime-pair-v1",
@@ -87,6 +94,31 @@ def semantic_sha256(path, text):
     method = AUDITED_PATHS[path]
     if method == "cpp-tokens-v1":
         canonical = json.dumps(cpp_tokens(text), ensure_ascii=True, separators=(",", ":"))
+    elif method == "python-module-docstring-v1":
+        tree = ast.parse(text)
+        if not (tree.body and isinstance(tree.body[0], ast.Expr) and isinstance(tree.body[0].value, ast.Constant) and isinstance(tree.body[0].value.value, str)):
+            raise ValueError("expected one leading module docstring")
+        tree.body.pop(0)
+        canonical = ast.dump(tree, include_attributes=False)
+    elif method == "json-root-runtime-redaction-v1":
+        value = json.loads(text)
+        if "host" in value and not isinstance(value["host"], str):
+            raise ValueError("root runtime host must be a string")
+        value.pop("host", None)
+        value.pop("source_privacy_redactions", None)
+        canonical = json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+    elif method == "python-keyword-runtime-pair-v1":
+        old = "host=platform.node()"
+        new = "platform_class=platform.system()"
+        if text.count(old) + text.count(new) != 1:
+            raise ValueError("expected exactly one audited Python keyword runtime pair")
+        canonical = text.replace(old, "<runtime-metadata-pair>").replace(new, "<runtime-metadata-pair>")
+    elif method == "python-runtime-pair-v1":
+        old = '"host": socket.gethostname()'
+        new = '"platform_class": platform.system()'
+        if text.count(old) + text.count(new) != 1:
+            raise ValueError("expected exactly one audited Python runtime pair")
+        canonical = text.replace(old, "<runtime-metadata-pair>").replace(new, "<runtime-metadata-pair>")
     else:
         old = '"hostname", hostName'
         new = '"platform_class", string(computer(\'arch\'))'

@@ -165,7 +165,7 @@ When passing a Gmsh script snippet with a Windows path through PowerShell,
 prefer single quotes inside the Gmsh snippet:
 
 ```powershell
-gmsh display.geo -string "Print 'private-runtime-path'; Exit;"
+gmsh display.geo -string "Print 'frame.png'; Exit;"
 ```
 
 Do not pass backslash-escaped double quotes such as `\"private-runtime-path"`

@@ -61,8 +61,8 @@ def test_dedicated_cli_owns_release_dual_entrypoint():
         '--action', 'preflight',
         '--wheel', 'candidate.whl',
         '--source-sha', 'a' * 40,
-        '--source-root-lab', r'S:\\Radia\\01_GitHub',
-        '--source-root-100', r'W:\\00_CAE\\Radia\\01_GitHub',
+        '--source-root-lab', r'S:\\synthetic-repo\\main-checkout',
+        '--source-root-100', r'W:\\synthetic-repo\\main-checkout',
         '--evidence-lab', r'C:\\temp\\cubit-dual',
         '--evidence-100', r'C:\\temp\\cubit-dual',
     ])

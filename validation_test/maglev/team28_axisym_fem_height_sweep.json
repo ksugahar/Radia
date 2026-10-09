@@ -165,5 +165,19 @@
     "equilibrium_vs_lab_below_0p05_mm": true
   },
   "pass": true,
-  "elapsed_s": 19.63627679995261
+  "elapsed_s": 19.63627679995261,
+  "source_privacy_redactions": {
+  "docs/maglev/demos/team28/team28_axisym_fem.py": {
+    "method": "python-module-docstring-v1",
+    "historical_text_sha256": "7f781636ab625983cdabce2e0a4c62eb2d4bb41617ff30a4773ddca060a394ad",
+    "published_text_sha256": "7a1d0e4d99e61b5be7414dff1895e984e4107e9721db68b5feab26b16ebe3562",
+    "semantic_sha256": "85755346e416a4ac6cd33efdf6941b9523fc5aff16c4ac915a8aaf4e6a605cba"
+  },
+  "validation_test/maglev/team28_axisym_fem_height_sweep.py": {
+    "method": "python-runtime-pair-v1",
+    "historical_text_sha256": "ae6d1f76bb085639286aeb250dc898546b444628e16141c083a06d07978ef5ea",
+    "published_text_sha256": "0d824f49260ffe81fc0d66b8b3faf27e00c1e01bb1ecf5ec368a76a9aaaf8585",
+    "semantic_sha256": "1e422b2efedad18f1d7e30fcd800529d1ef4cedf52354d3a1a6e7c4ac5a7ddb0"
+  }
+}
 }

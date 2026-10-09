@@ -45,11 +45,13 @@ import sys
 # joins keep the drive letter the script was invoked with.
 _THIS = os.path.abspath(__file__)
 REPO = os.path.dirname(os.path.dirname(_THIS))
+_LAB_UNC_HOSTS = ("192.168.11.100", "192.168.121.100")
+
 def _remap_lab_unc(path: str) -> str:
     """Map the LAB Radia UNC tree to its stable ``S:`` drive spelling."""
     normalized = path.replace("\\", "/")
     lowered = normalized.lower()
-    if not any(host in lowered for host in ("192.168.11.100", "192.168.121.100")):
+    if not any(host in lowered for host in _LAB_UNC_HOSTS):
         return path
     anchor_index = lowered.find("/radia/")
     if anchor_index < 0 and lowered.endswith("/radia"):
