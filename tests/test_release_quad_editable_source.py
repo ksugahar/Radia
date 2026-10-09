@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import importlib.util
 import os
@@ -362,20 +363,10 @@ def test_editable_probe_resolves_git_inside_the_target_process():
 
 
 def test_simulink_candidate_accepts_its_exact_tag_when_controller_is_newer(
-        tmp_path, monkeypatch):
-    repo = tmp_path / "release-controller"
-    repo.mkdir()
-    _git(repo, "init")
-    _git(repo, "config", "user.name", "Radia Test")
-    _git(repo, "config", "user.email", "radia-test@example.invalid")
-    tracked = repo / "tracked.txt"
-    tracked.write_text("candidate\n", encoding="ascii")
-    _git(repo, "add", "tracked.txt")
-    _git(repo, "commit", "-m", "candidate source")
-    candidate = _git(repo, "rev-parse", "HEAD")
+        tmp_path, monkeypatch, release_template):
+    repo, candidate = _release_repo(tmp_path, release_template)
+    # Keep each mutable tag/history in this test's private repository copy.
     _git(repo, "tag", "-a", "v4.95.75", "-m", "release", candidate)
-    tracked.write_text("controller repair\n", encoding="ascii")
-    _git(repo, "commit", "-am", "controller repair")
     head = _git(repo, "rev-parse", "HEAD")
     monkeypatch.setattr(release_quad, "REPO", repo)
 
@@ -392,30 +383,17 @@ def test_simulink_candidate_accepts_its_exact_tag_when_controller_is_newer(
 
 
 def test_local_release_source_requires_exact_sha_and_tracked_clean(
-        tmp_path, monkeypatch):
-    repo = tmp_path / "release-source"
-    repo.mkdir()
-    _git(repo, "init")
-    (repo / "tracked.txt").write_text("release\n", encoding="ascii")
-    _git(repo, "add", "tracked.txt")
-    _git(
-        repo,
-        "-c",
-        "user.name=Radia Test",
-        "-c",
-        "user.email=radia-test@example.invalid",
-        "commit",
-        "-m",
-        "release source",
-    )
-    head = _git(repo, "rev-parse", "HEAD")
+        tmp_path, monkeypatch, release_template):
+    repo = _release_source(tmp_path, release_template)
+    _git(repo, "checkout", "-q", "--detach", "v5.2.1")
+    head = release_template[2]
 
     assert Path(release_quad.GIT_EXE).is_absolute()
     monkeypatch.setenv("PATH", "")
     assert release_quad._verify_local_release_source(str(repo), head) == 0
     assert release_quad._verify_local_release_source(str(repo), "0" * 40) == 4
 
-    (repo / "tracked.txt").write_text("parallel WIP\n", encoding="ascii")
+    (repo / "tool.py").write_text("parallel WIP\n", encoding="ascii")
     assert release_quad._verify_local_release_source(str(repo), head) == 4
 
 
@@ -532,25 +510,45 @@ def test_done_rejects_a_bad_source_or_controller(tmp_path, monkeypatch, case, re
         Namespace(simulink_package=None, release_source=str(source))) == 4
 
 
+def _editable_guard_command(tmp_path, case, release_template):
+    # Command construction is isolated before starting concurrent child shells.
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        controller, release = _release_repo(tmp_path, release_template)
+        expected = release if case == "dirty" else "0" * 40
+        _git(controller, "checkout", "-q", "--detach", release)
+        if case == "dirty":
+            (controller / "tool.py").write_text("parallel WIP\n", encoding="ascii")
+        captured = {}
+        monkeypatch.setattr(release_quad, "_release_head", lambda: expected)
+        monkeypatch.setattr(release_quad, "run", lambda command, **_kw: captured.setdefault(
+            "command", command) and subprocess.CompletedProcess(command, 1))
+        assert release_quad._deploy_editable_remote(
+            "100", "100", str(controller), sys.executable) == 3
+        return captured["command"][-1]
+
+
+@pytest.fixture(scope="module")
+def editable_guard_results(tmp_path_factory, release_template):
+    roots = {case: tmp_path_factory.mktemp("editable-" + case)
+             for case in ("wrong-sha", "dirty")}
+    # Generation mutates the tool module through monkeypatch; keep that serial.
+    # Each child shell then receives its own command and repository snapshot.
+    commands = {case: _editable_guard_command(root, case, release_template)
+                for case, root in roots.items()}
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = {case: pool.submit(subprocess.run,
+            ["pwsh", "-NoProfile", "-NonInteractive", "-EncodedCommand", command],
+            capture_output=True, text=True, timeout=60)
+                   for case, command in commands.items()}
+        results = {case: future.result() for case, future in futures.items()}
+    return results
+
+
 @pytest.mark.skipif(shutil.which("pwsh") is None, reason="needs PowerShell 7 to execute the guard")
 @pytest.mark.parametrize("case,code", [("wrong-sha", 41), ("dirty", 42)])
 def test_editable_deploy_source_refusals_exit_with_their_codes(
-        tmp_path, monkeypatch, case, code, release_template):
-    import sys
-    controller, release = _release_repo(tmp_path, release_template)
-    expected = release if case == "dirty" else "0" * 40
-    _git(controller, "checkout", "-q", "--detach", release)
-    if case == "dirty":
-        (controller / "tool.py").write_text("parallel WIP\n", encoding="ascii")
-    captured = {}
-    monkeypatch.setattr(release_quad, "_release_head", lambda: expected)
-    monkeypatch.setattr(release_quad, "run", lambda command, **_kw: captured.setdefault(
-        "command", command) and subprocess.CompletedProcess(command, 1))
-    assert release_quad._deploy_editable_remote(
-        "100", "100", str(controller), sys.executable) == 3
-    result = subprocess.run(
-        ["pwsh", "-NoProfile", "-NonInteractive", "-EncodedCommand", captured["command"][-1]],
-        capture_output=True, text=True, timeout=60)
+        case, code, editable_guard_results):
+    result = editable_guard_results[case]
     assert result.returncode == code
     assert ("SHA mismatch" if code == 41 else "tracked changes") in result.stderr
     assert "pip install" not in result.stdout

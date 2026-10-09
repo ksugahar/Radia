@@ -579,36 +579,66 @@ def _run_pwsh(script):
     )
 
 
-def test_owned_scratch_removal_waits_for_a_released_image(tmp_path):
-    result = _run_pwsh(_cleanup_script(tmp_path, "\n".join([
-        "$job = Start-ThreadJob { Start-Sleep -Milliseconds 250; ($using:held).Dispose() }",
-        "Remove-OwnedRunRoot -Path $target -TempRoot $root -TimeoutSeconds 30",
-        "Receive-Job $job -Wait | Out-Null",
-        "'removed=' + (-not (Test-Path -LiteralPath $target))",
-    ])))
+@pytest.fixture(scope="module")
+def cleanup_results(tmp_path_factory):
+    """Execute real cleanup guards concurrently, each in its own owned root.
+
+    Every case keeps a distinct process, file handle and filesystem tree.
+    Fixture setup is included in pytest timing; test assertions consume the
+    unmodified process outputs and inspect their own case's surviving files.
+    """
+    cases = {
+        'test_owned_scratch_removal_waits_for_a_released_image': ('', [
+            '$job = Start-ThreadJob { Start-Sleep -Milliseconds 250; ($using:held).Dispose() }',
+            'Remove-OwnedRunRoot -Path $target -TempRoot $root -TimeoutSeconds 30',
+            'Receive-Job $job -Wait | Out-Null',
+            "'removed=' + (-not (Test-Path -LiteralPath $target))",
+        ]),
+        'test_owned_scratch_kept_and_failed_when_never_released': ('', [
+            "try { Remove-OwnedRunRoot -Path $target -TempRoot $root -TimeoutSeconds 0.1; 'UNEXPECTED_REMOVAL' }",
+            "catch { 'failed=' + $_.Exception.Message }",
+            'finally { $held.Dispose() }',
+            "'kept=' + (Test-Path -LiteralPath $target)",
+        ]),
+        'test_owned_scratch_removal_refuses_outside_its_root': ('root', [
+            '$held.Dispose()',
+            "try { Remove-OwnedRunRoot -Path (Split-Path $root) -TempRoot $root; 'UNEXPECTED_REMOVAL' }",
+            "catch { 'refused=' + $_.Exception.Message }",
+        ]),
+        'test_owned_scratch_refuses_a_junction': ('root', [
+            '$held.Dispose()',
+            "$outside = Join-Path (Split-Path $root) 'outside'",
+            'New-Item -ItemType Directory -Path $outside | Out-Null',
+            "Set-Content -LiteralPath (Join-Path $outside 'keep.txt') -Value 'keep'",
+            "New-Item -ItemType Junction -Path (Join-Path $target 'link') -Target $outside | Out-Null",
+            "try { Remove-OwnedRunRoot -Path $target -TempRoot $root; throw 'UNEXPECTED_REMOVAL' }",
+            "catch { if ($_.Exception.Message -notlike '*reparse point*') { throw }; 'refused-junction' }",
+        ]),
+    }
+    roots = {name: tmp_path_factory.mktemp("cleanup-" + name) for name in cases}
+    scripts = {name: _cleanup_script(roots[name] / suffix, "\n".join(body))
+               for name, (suffix, body) in cases.items()}
+    with ThreadPoolExecutor(max_workers=len(cases)) as pool:
+        futures = {name: pool.submit(_run_pwsh, script) for name, script in scripts.items()}
+        return {name: (roots[name], future.result()) for name, future in futures.items()}
+
+
+def test_owned_scratch_removal_waits_for_a_released_image(cleanup_results):
+    tmp_path, result = cleanup_results['test_owned_scratch_removal_waits_for_a_released_image']
     assert result.returncode == 0, result.stderr
     assert "removed=True" in result.stdout
 
 
-def test_owned_scratch_kept_and_failed_when_never_released(tmp_path):
-    result = _run_pwsh(_cleanup_script(tmp_path, "\n".join([
-        "try { Remove-OwnedRunRoot -Path $target -TempRoot $root -TimeoutSeconds 0.1; 'UNEXPECTED_REMOVAL' }",
-        "catch { 'failed=' + $_.Exception.Message }",
-        "finally { $held.Dispose() }",
-        "'kept=' + (Test-Path -LiteralPath $target)",
-    ])))
+def test_owned_scratch_kept_and_failed_when_never_released(cleanup_results):
+    tmp_path, result = cleanup_results['test_owned_scratch_kept_and_failed_when_never_released']
     assert result.returncode == 0, result.stderr
     assert "kept for diagnosis" in result.stdout
     assert "kept=True" in result.stdout
     assert "UNEXPECTED_REMOVAL" not in result.stdout
 
 
-def test_owned_scratch_removal_refuses_outside_its_root(tmp_path):
-    result = _run_pwsh(_cleanup_script(tmp_path / "root", "\n".join([
-        "$held.Dispose()",
-        "try { Remove-OwnedRunRoot -Path (Split-Path $root) -TempRoot $root; 'UNEXPECTED_REMOVAL' }",
-        "catch { 'refused=' + $_.Exception.Message }",
-    ])))
+def test_owned_scratch_removal_refuses_outside_its_root(cleanup_results):
+    tmp_path, result = cleanup_results['test_owned_scratch_removal_refuses_outside_its_root']
     assert "Refusing to remove a folder outside" in result.stdout
     assert (tmp_path / "root" / "owned").is_dir()
 
@@ -621,16 +651,8 @@ def test_runner_emits_evidence_and_marker_only_after_cleanup():
     assert "$evidence.owned_scratch_removed = $true" in runner
 
 
-def test_owned_scratch_refuses_a_junction(tmp_path):
-    result = _run_pwsh(_cleanup_script(tmp_path / "root", "\n".join([
-        "$held.Dispose()",
-        "$outside = Join-Path (Split-Path $root) 'outside'",
-        "New-Item -ItemType Directory -Path $outside | Out-Null",
-        "Set-Content -LiteralPath (Join-Path $outside 'keep.txt') -Value 'keep'",
-        "New-Item -ItemType Junction -Path (Join-Path $target 'link') -Target $outside | Out-Null",
-        "try { Remove-OwnedRunRoot -Path $target -TempRoot $root; throw 'UNEXPECTED_REMOVAL' }",
-        "catch { if ($_.Exception.Message -notlike '*reparse point*') { throw }; 'refused-junction' }",
-    ])))
+def test_owned_scratch_refuses_a_junction(cleanup_results):
+    tmp_path, result = cleanup_results['test_owned_scratch_refuses_a_junction']
     assert result.returncode == 0, result.stderr
     assert "refused-junction" in result.stdout
     assert (tmp_path / "outside" / "keep.txt").read_text().strip() == "keep"
