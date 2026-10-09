@@ -12,6 +12,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('directory',type=Path)
     parser.add_argument('--genus',type=int,choices=(0,1),default=0)
+    parser.add_argument('--backend',choices=('intree-dense','hacapk'),default='intree-dense')
     args=parser.parse_args(); root=args.directory.resolve(); root.mkdir(parents=True,exist_ok=True)
     if args.genus == 0:
         shape=Box(Pnt(0,0,0),Pnt(.01,.01,.01))
@@ -28,7 +29,7 @@ def main():
     argv=['--coil-solver','bem-a','--vol',str(root/'workpiece.vol'),'--coil-vol',str(root/'coil.vol'),
         '--wp-label','sibc','--sigma','5e6','--mu-r','100','--frequency','7000','--current','2',
         '--coil-sigma','5.8e7','--coil-source-name','source','--coil-sink-name','sink',
-        '--coupling-mode','strong','--wp-bem-backend','intree-dense','--wp-loop-dof','auto',
+        '--coupling-mode','strong','--wp-bem-backend',args.backend,'--wp-loop-dof','auto',
         '--h1-order','1','--impedance-model','esim','--esim-per-panel','--bh-file',str(root/'bh.txt'),
         '--esim-panel-evaluator','table','--esim-tol','1e-3','--esim-max-iter','15',
         '--half-thickness','.01','--msh-output',str(root/'reference.msh')]

@@ -25,7 +25,9 @@ residual and direct certificate are bound to `converged-panel-zs.json` using
 `radia.panel_surface_impedance.v1`. Fresh and reused updates verify its hash and
 certificate; material, reference current or frequency changes invalidate reuse.
 The named MATLAB entry point is `radia.simulink.assembleIHPanelESIMFromGeometry`.
-Genus-1/strong coupling uses validated Python routes only; unsupported backend
+Genus-1 strong coupling supports explicit `intree-dense` and `hacapk` Python
+routes; HACApK requires the matching native runtime and records its active loop
+and bordered-GMRES route. Unsupported backend
 combinations raise rather than falling back to uniform impedance.
 
 For example, assemble at `esim_reference_current_A=2` and connect a Constant
