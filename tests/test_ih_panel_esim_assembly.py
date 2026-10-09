@@ -42,7 +42,9 @@ def test_missing_material_and_conflicting_modes_fail(tmp_path):
 
 def test_certified_artifact_is_mesh_frequency_and_material_bound(tmp_path):
     shape=Box(Pnt(0,0,0),Pnt(.01,.01,.01)); shape.faces.name='sibc'
-    vol=tmp_path/'wp.vol'; OCCGeometry(shape).GenerateMesh(maxh=.008).Save(str(vol))
+    vol=tmp_path/'wp.vol'
+    with ng.TaskManager():
+        OCCGeometry(shape).GenerateMesh(maxh=.008).Save(str(vol))
     opts=options(tmp_path)
     surface=_extract_bnd_only_inline(ng.Mesh(str(vol)),'sibc')
     z=np.full(surface.GetNE(ng.BND),.01+.02j)
