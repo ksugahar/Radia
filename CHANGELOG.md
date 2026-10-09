@@ -3,7 +3,21 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
-## Unreleased
+## 5.3.0 - 2026-10-08
+
+- Add `radia.p1_linear.solve_p1_linear` and the MATLAB `p1Linear` wrapper
+  for real lowest-order H(curl) magnetostatics on straight tetrahedra,
+  in a finite domain with homogeneous tangential Dirichlet boundaries.
+  Call outside TaskManager; the solver owns its parallel regions. The
+  compatible current is solved with AMS-preconditioned CG and checked
+  against the shared true-residual gate. Complex, periodic, Kelvin and
+  higher-order problems are outside this API's scope.
+- Register the linear API's numerical tests in solver-numerics and route
+  both source and test changes to SparseSolv native CI. Document AMS-PCG
+  for large supported real systems, ICCG for supported smaller systems
+  and cross-checks, and ABMC as an explicit option whose per-iteration
+  benefit does not guarantee a faster complete solve.
+
 
 - Genus-1 P0 loop work now selects native Galerkin FMM at 512 or more
   surface faces (`--wp-loop-work-backend auto`); smaller cases keep native
