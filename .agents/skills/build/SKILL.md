@@ -19,7 +19,7 @@ description: Build Radia Python or standalone MATLAB MEX artifacts from the sele
 - Inspect CMakeCache.txt before reusing a build directory: source path,
   Python, NGSolve/Netgen and MKL must match this checkout and environment.
   Do not copy a cache or native binary from another branch to make it pass.
-- Coordinate heavy compilation with active performance measurements. mdx1/mdx2
+- Coordinate heavy compilation with active performance measurements. mdx1
   own CI; do not create a LAB runner or stop another task to free resources.
 
 ## Choose the narrow target

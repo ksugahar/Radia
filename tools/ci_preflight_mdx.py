@@ -29,12 +29,12 @@ ZERO = "0" * 40
 
 
 def select_idle_host(runners: list[dict], requested: str = "auto") -> str:
-    for host in (("mdx1", "mdx2") if requested == "auto" else (requested,)):
+    for host in (("mdx1",) if requested in ("auto", "mdx", "mdx1") else ()):
         for runner in runners:
             labels = {label["name"] for label in runner.get("labels", [])}
             if {"mdx", host} <= labels and runner.get("status") == "online" and not runner.get("busy", True):
-                return host
-    raise RuntimeError("No idle mdx1/mdx2 CI runner is available; retry after CI finishes")
+                return "mdx"
+    raise RuntimeError("No idle mdx1 (SSH alias mdx) CI runner is available; retry after CI finishes")
 
 
 def run(command: list[str], *, cwd: Path | None = None) -> None:
@@ -94,8 +94,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--head", required=True, help="local candidate SHA")
     parser.add_argument(
         "--host", default=os.environ.get("RADIA_PREFLIGHT_HOST", "auto"),
-        choices=("auto", "mdx1", "mdx2"),
-        help="Select an idle mdx runner, or explicitly choose mdx1/mdx2",
+        choices=("auto", "mdx", "mdx1"),
+        help="Select an idle mdx runner, or explicitly choose mdx/mdx1",
     )
     args = parser.parse_args(argv)
     try:

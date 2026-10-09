@@ -21,7 +21,7 @@ def test_exact_hosts_and_read_only_default(monkeypatch):
         kwargs["stdout"].write(json.dumps({"passed": True}))
     monkeypatch.setattr(MODULE.subprocess, "run", run)
     assert all(x["passed"] for x in MODULE.inspect_shadows().values())
-    assert [cmd[5] for cmd in calls] == ["mdx1", "mdx2", "hibino"]
+    assert [cmd[5] for cmd in calls] == ["mdx"]
 
 
 def test_unreachable_host_is_not_reported_clean(monkeypatch):

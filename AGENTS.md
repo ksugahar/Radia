@@ -77,7 +77,7 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 `cubit-mesh-export` toolbar. Normal Radia Python must not depend on Qt. LLM/MCP Cubit execution is always batch/nographics and fails rather than launching or attaching to a GUI; the only GUI run is the separately scoped human-facing release test, while journal/checkpoint handoff remains artifact-only.
 
 ### Shared MCP Runtime Ownership
-- radia-mcp releases independently of Radia: release-dual targets LAB (wheel) and 100 (editable), like cubit-mesh-export. Never deploy radia-mcp to hibino/mdx1/mdx2; isolated CI tests are not deployment. Do not wait for a solver release.
+- radia-mcp releases independently of Radia: release-dual targets LAB (wheel) and 100 (editable), like cubit-mesh-export. Never deploy radia-mcp to hibino/mdx1; isolated CI tests are not deployment. Do not wait for a solver release.
 - Routine editable updates: update the usual source -> reconnect -> check the live source and one harmless affected tool. Pure Python edits need no reinstall; source relocation or dependency/package-metadata changes do. No new daemon or mandatory ledger; see the shared runtime policy for exceptions.
 - MCP updates are forward-only: fix forward, never revert/reinstall/redistribute an old version. Retain obsolete copies only as identified debugging evidence with a removal condition, never as deployment targets or rollback reserves; remove them after consumer and unique-work checks. Details follow the shared runtime policy below.
 - MCP is experimental development tooling, not a numerical solver release. Developers may edit live MCP source and change its editable source with
@@ -105,7 +105,7 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
   review upgrade notes and regression-test affected Radia composition contracts.
   Use the official MATLAB Engine for Python when available and appropriate,
   particularly for SSH batch execution and shared-session connections. Keep
-  Engine installed and importable on mdx1/mdx2; record the interpreter, MATLAB
+  Engine installed and importable on mdx1; record the interpreter, MATLAB
   version, and execution route. Reuse Radia MATLAB entry points through either
   route. Engine execution does not waive the official Toolkit model-edit,
   check, save/reopen, and diagnostic requirements for production SLX files.
@@ -163,18 +163,19 @@ solver boundary is a checked `.vol` regardless of the creation route.
 
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
-**POLICY**: **mdx1 and mdx2** are Radia's self-hosted CI and preflight pool.
+**POLICY**: **mdx1** (SSH alias `mdx`) is Radia's self-hosted CI and preflight host.
+mdx2 is retired; no target or fallback.
 100号機 (INTEL11) hosts development, review, integration and the release runtime; LAB is the test
 host (fixed wheels, job-local `C:\temp\<job-id>` inputs). Do not run development suites or heavy validation
-on 100号機; limit its release acceptance to installation, import and student application smoke checks. Both mdx hosts give CI and preflight priority.
-GitHub Actions uses the shared `mdx` label and assigns jobs to an available runner.
-Release-quad requires LAB, 100号機, mdx1, and mdx2 for the same release commit.
+on 100号機; limit its release acceptance to installation, import and student application smoke checks. The mdx1 host gives CI and preflight priority.
+GitHub Actions retains the shared `mdx` runner label.
+Release-quad requires LAB, 100号機, and mdx1 for the same release commit.
 Decision 2026-10-01: editable only on 100号機, in a dedicated local development
 venv for maintainers/students, separate from the release runtime. LAB/mdx use
 verified wheels.
 `cubit-mesh-export` uses its own release-dual to LAB and 100号機; the Radia
 solver release-quad must not install, uninstall, repoint, or version-gate it.
-Do not install or run Cubit on mdx1/mdx2 in either release lane. This boundary
+Do not install or run Cubit on mdx1 in either release lane. This boundary
 does not prohibit Cubit-independent checker unit tests in isolated CI
 environments. Existing installations are not silently removed.
 hibino remains a computation host and is not a release-quad acceptance target.
@@ -223,7 +224,7 @@ hibino is a SPOT instance; only a human starts it.
 Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes hibino hostname` — ICMP is
 blocked, so `ping` reports a false "down" — then check for a running python
 job, because hibino takes one heavy job at a time. Otherwise use an idle
-mdx1/mdx2 or LAB; check CI/jobs and available memory first. LAB is also an
+mdx1 or LAB; check CI/jobs and available memory first. LAB is also an
 execution host for high-memory tests. mdx CI has priority; avoid concurrent
 timing jobs. Gmsh rendering needs a LAB/100 desktop, not mdx/ssh.
 Compute work must never delay or destabilize CI/preflight.
@@ -237,7 +238,7 @@ hibino has 230 GB memory, no pagefile, no guaranteed speedup.
 
 ### Compute Scratch Cleanup
 
-**POLICY (2026-09-13)**: mdx1/mdx2/hibino jobs finish only after verified recovery
+**POLICY (2026-09-13)**: mdx1/hibino jobs finish only after verified recovery
 and cleanup of their job-owned `C:\temp` inputs, outputs, staging, environments and helpers.
 - Recover JSON, logs, commands, runtime/source identity, hashes and non-reconstructible inputs
   to LAB durable storage. Numerical evidence goes in `validation_test/`, public demonstrations

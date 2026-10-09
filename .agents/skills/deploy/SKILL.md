@@ -18,9 +18,9 @@ and [release-dual contract](../../../packages/radia-mcp/docs/operations/mcp-runt
 - LAB is the test host and uses fixed, verified wheels; do not use an editable
   install there.
 - MCP servers and Cubit distributions are deployed to and run on LAB and 100号機
-  only. mdx1, mdx2 and hibino are compute/CI hosts, not MCP or Cubit deployment
+  only. mdx1 and hibino are compute/CI hosts, not MCP or Cubit deployment
   targets.
-- mdx1 and mdx2 are the priority CI runners and MATLAB compute hosts. CI builds
+- mdx1 is the priority CI runners and MATLAB compute hosts. CI builds
   in isolated per-run environments.
 - hibino runs long optimization and validation jobs when available.
 - No workflow selects a LAB runner. The EqnEdit64 release lane is GitHub-hosted

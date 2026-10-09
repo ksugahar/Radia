@@ -114,7 +114,7 @@ def test_phase8_routes_explicit_hosts_independently_of_controller(monkeypatch, c
     assert release_quad.cmd_phase8(Namespace(target=targets)) == 0
     expected = ["102", release_quad.SSH_100, (release_quad.SSH_100, "development")]
     if targets == "all":
-        expected += [release_quad.SSH_MDX1, release_quad.SSH_MDX2]
+        expected += [release_quad.SSH_MDX1]
     assert calls == expected
 
 

@@ -4,7 +4,7 @@ import json
 import subprocess
 import tempfile
 
-HOSTS = ("mdx1", "mdx2", "hibino")
+HOSTS = ("mdx",)
 SCRIPT = r'''
 $ErrorActionPreference = 'Stop'
 $target = 'C:\temp\radia-omega-test'

@@ -1,6 +1,6 @@
 """The gate that publishes and the tool that produces evidence name one host list.
 
-Release-quad requires LAB, 100号機, mdx1 and mdx2 for the same release commit.
+Release-quad requires LAB, 100号機, mdx1 for the same release commit.
 The promotion verifier used to carry its own two-host list -- one of them a
 computation host that is not an acceptance target -- so a release with
 evidence from two of the four machines would have passed the public gate.
@@ -31,14 +31,14 @@ def _load(name):
 
 def test_the_shared_list_is_the_policy_list():
     shared = _load("release_acceptance")
-    assert shared.RELEASE_ACCEPTANCE_HOSTS == ("lab", "100", "mdx1", "mdx2")
+    assert shared.RELEASE_ACCEPTANCE_HOSTS == ("lab", "100", "mdx1")
     assert "hibino" not in shared.RELEASE_ACCEPTANCE_HOSTS, (
         "hibino is a computation host, not a release acceptance target")
 
 
-def test_the_policy_text_names_the_same_four_machines():
+def test_the_policy_text_names_the_same_three_machines():
     policy = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
-    assert re.search(r"Release-quad requires LAB, 100号機, mdx1, and mdx2", policy)
+    assert re.search(r"Release-quad requires LAB, 100号機, and mdx1", policy)
     assert "hibino remains a computation host" in policy
 
 
@@ -48,7 +48,7 @@ def test_release_quad_produces_evidence_for_exactly_those_hosts():
     assert "from release_acceptance import RELEASE_ACCEPTANCE_HOSTS" in source
     assert "tuple(SIMULINK_TARGETS) == RELEASE_ACCEPTANCE_HOSTS" in source
     keys = re.findall(r'^\s{4}"([a-z0-9]+)": \("', source, re.M)
-    assert tuple(keys) == ("lab", "100", "mdx1", "mdx2")
+    assert tuple(keys) == ("lab", "100", "mdx1")
 
 
 def test_the_promotion_gate_has_no_private_host_list():
@@ -60,3 +60,10 @@ def test_the_promotion_gate_has_no_private_host_list():
     assert "for host in RELEASE_ACCEPTANCE_HOSTS" in source
     # And it reports every missing host rather than stopping at the first.
     assert "Acceptance evidence missing for" in source
+
+
+def test_retired_host_has_no_release_route():
+    quad = _load("release_quad")
+    assert quad.SSH_MDX1 == "mdx"
+    assert "mdx2" not in quad.SIMULINK_TARGETS
+    assert not hasattr(quad, "SSH_MDX2")

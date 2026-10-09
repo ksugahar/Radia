@@ -64,7 +64,8 @@ def test_explicit_host_cannot_bypass_availability(runner):
 
 def test_auto_selects_idle_host():
     module = _load_module()
-    assert module.select_idle_host([_runner('mdx1', busy=True), _runner('mdx2')]) == 'mdx2'
+    with pytest.raises(RuntimeError, match="No idle"):
+        module.select_idle_host([_runner("mdx1", busy=True), _runner("mdx2")])
 
 
 def _mock_candidate(monkeypatch, module, tmp_path):
@@ -139,3 +140,10 @@ def test_generated_script_locks_before_setup_and_always_cleans(monkeypatch, tmp_
         expected = 'CI became busy' if busy else 'Git is unavailable'
         assert expected in result.stderr
         assert not bundle.exists()
+
+
+def test_alias_routes_only_to_live_mdx1():
+    module = _load_module()
+    assert module.select_idle_host([_runner("mdx1")], "mdx") == "mdx"
+    with pytest.raises(RuntimeError, match="No idle"):
+        module.select_idle_host([_runner("mdx2")], "mdx2")

@@ -106,19 +106,19 @@ def test_optuna_candidate_records_every_machine_for_one_exact_wheel(
 
     monkeypatch.setattr(release_quad, "_run_optuna_candidate_target", pass_target)
     args = argparse.Namespace(
-        ci_run_id="12345", target="all", engine_session=["mdx2=radia_shared"]
+        ci_run_id="12345", target="all", engine_session=["lab=radia_shared"]
     )
     assert release_quad.cmd_optuna_candidate(args) == 0
     assert [call[0] for call in calls] == list(release_quad.SIMULINK_TARGETS)
-    assert {call[0]: call[3] for call in calls if call[3]} == {"mdx2": "radia_shared"}
+    assert {call[0]: call[3] for call in calls if call[3]} == {"lab": "radia_shared"}
     state = json.loads(
         release_quad._optuna_state_path(digest).read_text(encoding="utf-8")
     )
     assert state["wheel_sha256"] == digest
     assert set(state["targets"]) == set(release_quad.SIMULINK_TARGETS)
     assert {row["status"] for row in state["targets"].values()} == {"passed"}
-    assert state["targets"]["mdx2"]["engine_session"] == "radia_shared"
-    assert state["targets"]["lab"]["engine_session"] is None
+    assert state["targets"]["lab"]["engine_session"] == "radia_shared"
+    assert state["targets"]["mdx1"]["engine_session"] is None
 
 
 def test_optuna_candidate_rejects_ambiguous_engine_sessions_before_any_target(
@@ -147,10 +147,10 @@ def test_optuna_candidate_rejects_ambiguous_engine_sessions_before_any_target(
 
     monkeypatch.setattr(release_quad, "_run_optuna_candidate_target", no_target)
     for target, sessions in (
-        ("mdx1", ["mdx2=radia_shared"]),            # unselected target
-        ("mdx2", ["mdx2=a", "mdx2=b"]),             # duplicate target
-        ("mdx2", ["mdx2="]),                        # empty name
-        ("mdx2", ["radia_shared"]),                 # missing HOST=
+        ("mdx1", ["lab=radia_shared"]),            # unselected target
+        ("lab", ["lab=a", "lab=b"]),             # duplicate target
+        ("lab", ["lab="]),                        # empty name
+        ("lab", ["radia_shared"]),                 # missing HOST=
     ):
         args = argparse.Namespace(
             ci_run_id="12345", target=target, engine_session=sessions
@@ -169,14 +169,14 @@ def test_optuna_candidate_parser_accepts_repeatable_engine_sessions(monkeypatch)
     monkeypatch.setattr(
         release_quad.sys, "argv",
         ["release_quad.py", "optuna-candidate", "--ci-run-id", "1",
-         "--target", "lab,mdx2", "--engine-session", "lab=a",
-         "--engine-session", "mdx2=b"],
+         "--target", "lab,lab", "--engine-session", "lab=a",
+         "--engine-session", "lab=b"],
     )
     try:
         release_quad.main()
     except SystemExit as stop:
         assert stop.code in (0, None)
-    assert captured["args"].engine_session == ["lab=a", "mdx2=b"]
+    assert captured["args"].engine_session == ["lab=a", "lab=b"]
 
 
 def test_optuna_done_requires_exact_head_hash_version_and_four_targets(
@@ -214,7 +214,7 @@ def test_optuna_done_requires_exact_head_hash_version_and_four_targets(
     assert rc == 0
     assert checked == state
 
-    state["targets"]["mdx2"]["status"] = "failed"
+    state["targets"]["lab"]["status"] = "failed"
     path.write_text(json.dumps(state), encoding="utf-8")
     rc, checked = release_quad._verify_optuna_candidate_state(str(wheel))
     assert rc == 4
@@ -329,7 +329,7 @@ def test_remote_candidate_copies_the_engine_worker_and_selects_the_session(
         if command[0] == "scp":
             copies.append((Path(command[1]).name, command[2]))
             return SimpleNamespace(returncode=0, stdout="", stderr="")
-        assert command[0] == "ssh" and "mdx2" in command
+        assert command[0] == "ssh" and "102" in command
         assert "-Command" not in command
         scripts.append(base64.b64decode(command[-1]).decode("utf-16le"))
         kwargs["stdout"].write(release_quad.OPTUNA_SUCCESS_MARKER.encode())
@@ -339,10 +339,10 @@ def test_remote_candidate_copies_the_engine_worker_and_selects_the_session(
 
     monkeypatch.setattr(release_quad.subprocess, "run", completed)
     passed, _ = release_quad._run_optuna_candidate_target(
-        "mdx2", wheel, digest, "o'shared"
+        "lab", wheel, digest, "o'shared"
     )
     assert passed is True
-    remote_root = f"mdx2:C:/temp/radia-release-quad/optuna-{digest[:16]}"
+    remote_root = f"102:C:/temp/radia-release-quad/optuna-{digest[:16]}"
     assert ("verify_simulink_release.py",
             f"{remote_root}/verify_simulink_release.py") in copies
     invocation = scripts[-1]
@@ -353,7 +353,7 @@ def test_remote_candidate_copies_the_engine_worker_and_selects_the_session(
     assert "-EngineSession 'o''shared'" in invocation
 
     scripts.clear()
-    release_quad._run_optuna_candidate_target("mdx2", wheel, digest)
+    release_quad._run_optuna_candidate_target("lab", wheel, digest)
     assert "-EngineWorker" in scripts[-1]
     assert "-EngineSession" not in scripts[-1]
 

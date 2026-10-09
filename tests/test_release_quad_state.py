@@ -159,14 +159,14 @@ def test_candidate_interpreters_are_recorded_per_target(tmp_path, monkeypatch):
         return True, marker
 
     monkeypatch.setattr(module, '_run_simulink_candidate_target', verify_target)
-    args = SimpleNamespace(package=str(package), target='mdx1,mdx2', engine_session=[],
+    args = SimpleNamespace(package=str(package), target='mdx1,lab', engine_session=[],
                            python=[r'mdx1=C:\temp\venv\Scripts\python.exe'])
     assert module.cmd_simulink_candidate(args) == 0
-    assert used == {'mdx1': r'C:\temp\venv\Scripts\python.exe', 'mdx2': None}
+    assert used == {'mdx1': r'C:\temp\venv\Scripts\python.exe', 'lab': None}
     recorded = json.loads(module._simulink_state_path(module._sha256_file(package)).read_text())
     assert recorded['targets']['mdx1']['python_executable'] == r'C:\temp\venv\Scripts\python.exe'
-    assert recorded['targets']['mdx2']['python_executable'] == 'python'
-    for bad in (['lab=C:\\py.exe'], ['mdx1='], ['mdx1=a', 'mdx1=b'], ['mdx1']):
+    assert recorded['targets']['lab']['python_executable'] == 'python'
+    for bad in (['100=C:\\py.exe'], ['mdx1='], ['mdx1=a', 'mdx1=b'], ['mdx1']):
         args.python = bad
         assert module.cmd_simulink_candidate(args) == 2
 
@@ -281,7 +281,7 @@ for index in range(10):
     path = tmp_path / 'state.json'
     workers = []
     try:
-        for host in ('mdx1', 'mdx2'):
+        for host in ('mdx1', 'lab'):
             workers.append(subprocess.Popen([sys.executable, '-c', code, str(TOOL), str(path), host]))
         for worker in workers:
             assert worker.wait(timeout=60) == 0
@@ -291,4 +291,4 @@ for index in range(10):
                 worker.kill()
                 worker.wait()
     assert json.loads(path.read_text())['targets'] == {
-        'mdx1': {'iteration': 9}, 'mdx2': {'iteration': 9}}
+        'mdx1': {'iteration': 9}, 'lab': {'iteration': 9}}
