@@ -90,6 +90,8 @@ PACKAGE_FILES = (
     "+radia/+simulink/openIH.m",
     "+radia/+simulink/requireIHNativeRuntime.m",
     "+radia/+simulink/updateIHGeometry.m",
+    "+radia/+simulink/canonicalInputPath.m",
+    "+radia/+simulink/verifyIHPanelImpedanceProvenance.m",
     "+radia/+simulink/validateIHNativeConfig.m",
     "+radia/+simulink/validateVolFiles.m",
 )
