@@ -155,8 +155,12 @@ def test_repack_regenerates_record_after_metadata_edits(tmp_path):
     # conftest may prepend a mesh tool's embedded Python for its own tests.
     # This wheel-builder test must use the interpreter running the test suite.
     environment["PATH"] = str(Path(sys.executable).parent) + os.pathsep + environment["PATH"]
-    subprocess.run([shell, "-NoProfile", "-Command", command], check=True,
-                   capture_output=True, text=True, env=environment)
+    result = subprocess.run([shell, "-NoProfile", "-Command", command],
+                            capture_output=True, text=True, env=environment)
+    assert result.returncode == 0, (
+        f"Wheel repack failed (exit {result.returncode}).\n"
+        f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    )
     with zipfile.ZipFile(wheel) as archive:
         rows = list(csv.reader(io.StringIO(archive.read("probe-1.0.dist-info/RECORD").decode())))
         assert "removed.dll" not in {row[0] for row in rows}
