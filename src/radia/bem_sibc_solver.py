@@ -155,9 +155,10 @@ class ScalarBIESIBCSolver:
             order: H1 polynomial order on surface (default 1).
             assemble_dense: if True (default, backward-compat), extract
                 ``DL`` and ``SL`` to dense ``ndof x ndof`` numpy arrays
-                via N column matvecs.  This is O(N^3) total (~67 min for
-                N=2474) but lets ``solve()`` use a single dense scipy
-                solve.
+                via N column matvecs. On the in-tree HACApK P1 route, False
+                releases dense construction tables and retains sparse M/K
+                with a cached sparsecholesky mass factor. The default dense
+                route extracts all columns and uses a dense solve.
                 If False, KEEP ``DL_bf`` and ``SL_bf`` as NGSolve
                 bilinear forms only and use ``solve_iterative()`` (GMRES
                 with LinearOperator wrappers).  ~50x faster for typical
@@ -190,6 +191,10 @@ class ScalarBIESIBCSolver:
         if loop_work_backend not in ("auto", "dense", "fmm"):
             raise ValueError("loop_work_backend must be auto, dense, or fmm")
         self.loop_work_backend = loop_work_backend
+        self.hacapk_aca_eps = float(hacapk_aca_eps)
+        if use_intree_hacapk and (not np.isfinite(self.hacapk_aca_eps) or self.hacapk_aca_eps<=0
+                or int(hacapk_leaf)<=0 or not np.isfinite(hacapk_eta) or hacapk_eta<=0):
+            raise ValueError("HACApK controls require positive finite eps/eta and leaf size")
         self.mesh = mesh
         self.order = order
         self.use_intree_bem = use_intree_bem
@@ -263,6 +268,8 @@ class ScalarBIESIBCSolver:
             self.DL = np.zeros((ndof, ndof))
             self.SL[np.ix_(v_global, v_global)] = SL_loc
             self.DL[np.ix_(v_global, v_global)] = DL_loc
+            if use_intree_hacapk and not assemble_dense:
+                del SL_loc, DL_loc
             self._intree_v_global = v_global
             self._DL_bf = None
             self._SL_bf = None
@@ -306,6 +313,16 @@ class ScalarBIESIBCSolver:
                     leaf_size=int(hacapk_leaf),
                     eta=hacapk_eta,
                     max_rank=-1, print_level=0)
+                if not assemble_dense:
+                    _log_phase("BEM", "HACApK release source entries")
+                    # Compressed maps own their H-matrix. The dense kernel table
+                    # is construction scratch, never used by these matvecs.
+                    for handle in (self._SL_hacapk, self._DL_hacapk):
+                        if not hasattr(handle,"ReleaseDenseEntries"):
+                            raise RuntimeError("Compressed scalar P1 BEM requires the current native ReleaseDenseEntries API")
+                        handle.ReleaseDenseEntries()
+                    self.SL = self.DL = None
+                    del SL_arr, DL_arr
                 _log_phase("BEM",
                     f"HACApK compress done "
                     f"({time.perf_counter()-_t_hca:.1f}s)")
@@ -361,7 +378,25 @@ class ScalarBIESIBCSolver:
         _log_phase("BEM",
             f"mass + stiffness done; M_inv "
             f"({time.perf_counter()-_t_mk:.1f}s)")
-        self.M_inv = np.linalg.inv(self.M)
+        if use_intree_hacapk and not assemble_dense:
+            from scipy.sparse import csr_matrix
+            from scipy.sparse.linalg import LinearOperator
+            self.M = csr_matrix(self.M)
+            self.K = csr_matrix(self.K)
+            self._mass_form = mass_bf
+            self._mass_inverse = mass_bf.mat.Inverse(self.fes.FreeDofs(), inverse="sparsecholesky")
+            def mass_apply(x):
+                x = np.asarray(x).reshape(-1)
+                def component(v):
+                    source = mass_bf.mat.CreateColVector()
+                    result = mass_bf.mat.CreateRowVector()
+                    source.FV().NumPy()[:] = v
+                    self._mass_inverse.Mult(source, result)
+                    return result.FV().NumPy().copy()
+                return component(x.real)+1j*component(x.imag) if np.iscomplexobj(x) else component(x)
+            self.M_inv = LinearOperator((ndof,ndof), matvec=mass_apply, dtype=float)
+        else:
+            self.M_inv = np.linalg.inv(self.M)
 
         # Gauge vector: <1, v>_S for Lagrange multiplier
         self._c_gauge = self.M @ np.ones(ndof)
@@ -615,8 +650,6 @@ class ScalarBIESIBCSolver:
             Z_s = _uniform_surface_impedance(Z_s, ndof)
         is_panel = isinstance(Z_s, PanelSurfaceImpedance)
         K_Z = self.impedance_stiffness(Z_s) if is_panel else None
-        if not is_panel and getattr(self, '_Minv_K', None) is None:
-            self._Minv_K = self.M_inv @ self.K  # real, reused across frequencies/Zs
 
         # RHS: <phi_inc, v>_S
         if isinstance(phi_inc_cf, np.ndarray):
@@ -641,7 +674,7 @@ class ScalarBIESIBCSolver:
             # Keep panel K_Z sparse and apply M_inv only to its source vector;
             # no dense complex n*n Robin matrix is needed by GMRES.
             flux = ((self.M_inv @ (K_Z @ x_complex)) / (1j * omega * MU_0)
-                    if is_panel else gamma_for_log * (self._Minv_K @ x_complex))
+                    if is_panel else gamma_for_log * (self.M_inv @ (self.K @ x_complex)))
             sl = (SL_op.MatVec(np.ascontiguousarray(flux.real))
                   + 1j * SL_op.MatVec(np.ascontiguousarray(flux.imag)))
             dl = (DL_op.MatVec(np.ascontiguousarray(x_complex.real))

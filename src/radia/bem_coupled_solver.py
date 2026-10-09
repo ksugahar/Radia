@@ -170,7 +170,7 @@ class CoupledBEMSolver:
                               restart=int(wp_gmres_restart))
         if self.wp_hacapk:
             self.wp_solver = ScalarBIESIBCSolver(
-                mesh_wp, order=wp_order, assemble_dense=True,
+                mesh_wp, order=wp_order, assemble_dense=False,
                 use_intree_bem=True, intree_geom_order=1,
                 intree_singular_n_q=6, intree_regular_quad_degree=7,
                 loop_work_backend=wp_loop_work_backend,

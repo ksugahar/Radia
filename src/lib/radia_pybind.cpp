@@ -6868,6 +6868,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
         bool BuildHMatrix(double aca_eps, int leaf_size, double eta,
                           int max_rank, int print_level) {
+            if (entries_released_) throw std::runtime_error("HACApK BEM entries released; rebuild requires a new manager");
             RadHACApKParams p = RadHACApKBEMDefaultParams();
             if (aca_eps > 0)   p.aca_eps   = aca_eps;
             if (leaf_size > 0) p.leaf_size = leaf_size;
@@ -6879,7 +6880,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
         py::array_t<double> MatVec(py::array_t<double,
                                                 py::array::c_style |
-                                                py::array::forcecast> x) {
+                                                py::array::forcecast> x, bool transpose = false) {
+            if (!manager_->IsValid()) throw std::runtime_error("HACApK BEM matrix has not been built");
             const int n = manager_->GetNDOF();
             auto xb = x.unchecked<1>();
             if ((int)xb.shape(0) != n) {
@@ -6888,11 +6890,18 @@ PYBIND11_MODULE(_radia_pybind, m) {
             }
             std::vector<double> xv(n), yv(n);
             for (int i = 0; i < n; ++i) xv[i] = xb(i);
-            manager_->MatVec(xv, yv);
+            if (transpose) manager_->MatVecTranspose(xv, yv);
+            else manager_->MatVec(xv, yv);
             py::array_t<double> y(n);
             auto yb = y.mutable_unchecked<1>();
             for (int i = 0; i < n; ++i) yb(i) = yv[i];
             return y;
+        }
+
+        void ReleaseDenseEntries() {
+            if (!manager_->IsValid()) throw std::runtime_error("Build HACApK BEM matrix before releasing entries");
+            entries_ = py::array_t<double>();
+            entries_released_ = true;
         }
 
         int GetNDOF() const { return manager_->GetNDOF(); }
@@ -6917,6 +6926,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
         py::array_t<double, py::array::c_style | py::array::forcecast> coords_;
         py::array_t<double, py::array::c_style | py::array::forcecast> entries_;
         std::unique_ptr<RadHACApKBEMManager> manager_;
+        bool entries_released_ = false;
     };
 
     py::class_<PyHACApKBEMManager>(m, "HACApKBEMManager",
@@ -6928,9 +6938,9 @@ PYBIND11_MODULE(_radia_pybind, m) {
             via radia.bem.sibc_hacapk.assemble_SL_dense / assemble_DL_dense
             and hand it here for storage compression and fast MatVec.
 
-            After BuildHMatrix() succeeds, the dense table can be discarded
-            (still held internally by the manager via numpy refcounting,
-            but the H-matrix is what MatVec uses).
+            After BuildHMatrix() succeeds, ReleaseDenseEntries() drops the
+            internal source-table reference. MatVec uses only the H-matrix;
+            rebuilding that released manager is prohibited.
 
             Args:
                 coords: (N, 3) DOF coordinates [m] (= vertex coordinates
@@ -6949,11 +6959,13 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  defaults (aca_eps=1e-6, leaf_size=64, eta=2.0, max_rank=400).
                  Returns True on success.
              )pbdoc")
-        .def("MatVec", &PyHACApKBEMManager::MatVec, py::arg("x"),
+        .def("MatVec", &PyHACApKBEMManager::MatVec, py::arg("x"), py::arg("transpose") = false,
              R"pbdoc(
                  Real matvec y = M * x.  Both x and y are length-N double
                  arrays where N = number of vertices = NDOF.
              )pbdoc")
+        .def("ReleaseDenseEntries", &PyHACApKBEMManager::ReleaseDenseEntries,
+             "Release the build entry table; matvecs remain valid, rebuilding is prohibited.")
         .def("GetNDOF", &PyHACApKBEMManager::GetNDOF)
         .def("IsValid", &PyHACApKBEMManager::IsValid)
         .def("GetStats", &PyHACApKBEMManager::GetStats,

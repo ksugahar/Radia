@@ -109,12 +109,14 @@ def test_ambiguous_or_misaligned_panel_values_fail(ring, wrong):
         solve(ring, value)
 
 
-def test_prescribed_panels_allow_explicit_loop_before_source_build(monkeypatch):
+@pytest.mark.parametrize("backend",["intree-dense","hacapk"])
+def test_prescribed_panels_allow_explicit_loop_before_source_build(monkeypatch,backend):
     from radia.panels import calc_inductance as ci
     args = ci.build_argparser().parse_args([
         "--coil-solver", "peec", "--coil-step", "unused.step",
         "--vol", "unused.vol", "--frequency", "50000", "--sigma", "5.8e7",
-        "--panel-zs-file", "unused.json", "--wp-loop-dof", "on"])
+        "--panel-zs-file", "unused.json", "--wp-loop-dof", "on",
+        "--wp-bem-backend",backend])
 
     def reached_source(_):
         raise RuntimeError("test reached source construction")

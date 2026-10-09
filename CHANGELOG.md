@@ -13,6 +13,12 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## 5.3.0 - 2026-10-08
 
+- Genus-1 P1 SIBC supports an explicit HACApK body route with a loop/gauge
+  bordered GMRES operator, sparse mass factor reuse, tagged panel impedance
+  and per-panel ESIM in weak and strong coupling. Complete work, seam,
+  residual and power gates are unchanged. Dense kernel-entry construction
+  limits remain; source tables are released after compression.
+
 - Add `radia.p1_linear.solve_p1_linear` and the MATLAB `p1Linear` wrapper
   for real lowest-order H(curl) magnetostatics on straight tetrahedra,
   in a finite domain with homogeneous tangential Dirichlet boundaries.

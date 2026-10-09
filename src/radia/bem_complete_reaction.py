@@ -159,8 +159,6 @@ def solve_complete_body(solver, poisson, phi_inc, impedance, omega, a_inc,
               else np.full(len(poisson._tri), z))
     # Exact equal-face values retain the adopted scalar arithmetic.
     solve_z = complex(face_z[0]) if np.all(face_z == face_z[0]) else z
-    if hacapk and isinstance(z, PanelSurfaceImpedance):
-        raise ValueError("Strong panel Zs currently requires the dense body backend")
     import hashlib
     from ngsolve import BND
     # Preparation must also bind vertex/DOF numbering, not only face coordinates.
@@ -174,15 +172,17 @@ def solve_complete_body(solver, poisson, phi_inc, impedance, omega, a_inc,
     value_hash = hashlib.sha256(face_z.astype('<c16').tobytes()).hexdigest()
     prepared_key = (identity, float(omega), value_hash)
     if loop_dof:
-        if hacapk:
-            raise ValueError("Loop strong reaction requires dense body operators")
         import time
         from .bem_loop_extension import solve_loop_extended
         start = time.perf_counter()
-        out = solve_loop_extended(solver, phi_inc, solve_z, omega, a_inc, _reuse_prepared=True)
+        out = solve_loop_extended(solver, phi_inc, solve_z, omega, a_inc, _reuse_prepared=True,
+                                  hacapk=hacapk, gmres=gmres)
         field, heat = out['H_t_tri'], out['P_total']
         residual = out['linear_residual_rel']
-        metadata = dict(wp_loop_work_diagnostics=out['loop_work_diagnostics'],
+        metadata = dict(wp_loop_body_backend=out['loop_body_backend'],
+            wp_loop_linear_solver=out['loop_linear_solver'],
+            wp_loop_gmres_iterations=out['loop_gmres_iterations'],
+            wp_loop_work_diagnostics=out['loop_work_diagnostics'],
             wp_loop_alpha=out['alpha'], wp_loop_theta_jump=out['theta_jump'],
             wp_loop_cut_n_vertices=out['cut_n_vertices'], wp_loop_P_frozen=out['P_frozen'],
             wp_loop_H_t_frozen=out['Ht_frozen'],

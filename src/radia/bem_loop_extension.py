@@ -677,13 +677,14 @@ def _prepare_loop_geometry(bem_solver, pts, tris, section_anchor, carrier_ring):
     ]}
 
 
-def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, section_anchor=None, carrier_ring=None, _reuse_prepared=False):
+def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, section_anchor=None, carrier_ring=None, _reuse_prepared=False, hacapk=False, gmres=None):
     """Solve the loop-extended scalar BIE + SIBC on a genus-1 workpiece.
 
     Args:
         bem_solver: a ``ScalarBIESIBCSolver`` built on the CLOSED
-            workpiece surface mesh with ``assemble_dense=True`` and the
-            intree P1 path (attributes ``M/K/SL/DL/M_inv/mesh`` used).
+            workpiece surface mesh on the intree P1 path. Dense mode uses
+            ``assemble_dense=True``; HACApK uses built SL/DL handles and
+            ``assemble_dense=False`` with a cached sparse mass factor.
         phi_inc_nodal: (ndof,) complex incident scalar potential at the
             H1 nodes (e.g. the surface-Poisson reconstruction, or an
             exact expression for a uniform field).
@@ -693,6 +694,9 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
             check still applies. If both carrier_ring and section_anchor
             are omitted, an interior circular carrier is found automatically
             from the closed surface for a single through-hole around z.
+        hacapk: select the compressed bordered operator explicitly. Failure
+            raises without a dense fallback. Dense construction limits remain.
+        gmres: optional tol/maxiter/restart controls for the compressed solve.
         section_anchor: optional (rho, z) point strictly inside the material
             meridional section, in metres. Supply this for stepped profiles
             whose surface-node mean lies outside the material.
@@ -722,7 +726,10 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
     if mesh.GetCurveOrder() > 1 or mesh.deformation is not None:
         raise ValueError("Loop SIBC requires undeformed flat surface triangles")
     M = bem_solver.M
-    SL, DL, M_inv = bem_solver.SL, bem_solver.DL, bem_solver.M_inv
+    from .bem_loop_work import _body_layer
+    bem_solver._loop_body_backend = "hacapk" if hacapk else "dense"
+    SL, DL = _body_layer(bem_solver, "SL"), _body_layer(bem_solver, "DL")
+    M_inv = bem_solver.M_inv
     if SL is None or DL is None:
         raise ValueError("loop extension needs assemble_dense=True "
                          "(dense SL/DL) on the ScalarBIESIBCSolver.")
@@ -766,11 +773,13 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
     if _reuse_prepared:
         from .bem_loop_work import _loop_work_route
         prepared_key = (geometry_key, hashlib.sha256(face_z.astype('<c16').tobytes()).hexdigest(), float(omega),
-                        _loop_work_route(bem_solver, nt))
+                        _loop_work_route(bem_solver, nt), "hacapk" if hacapk else "dense")
     cached_system = getattr(bem_solver, '_prepared_loop_system', None) if _reuse_prepared else None
     system_reused = cached_system is not None and cached_system['key'] == prepared_key
     if system_reused:
         A_sys = cached_system['A_sys']
+        if hacapk:
+            a_col = cached_system['a_col']
     else:
         rK_T = np.zeros(nv, dtype=complex)
         for ti, t in enumerate(tris_o):
@@ -782,13 +791,20 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
         if uniform_z:
             gamma = face_z[0]/(1j * omega * MU_0)
             a_col = SL @ (gamma * (M_inv @ rK_T) - qT.astype(complex))
-            A_sys = (0.5 * M - DL + gamma * (SL @ M_inv @ bem_solver.K)).astype(complex)
+            if not hacapk:
+                A_sys = (0.5 * M - DL + gamma * (SL @ M_inv @ bem_solver.K)).astype(complex)
         else:
             a_col = SL @ ((M_inv @ rK_T)/(1j * omega * MU_0) - qT.astype(complex))
             K_Z = bem_solver.impedance_stiffness(Z_s)
-            if hasattr(K_Z, "toarray"):
+            if not hacapk and hasattr(K_Z, "toarray"):
                 K_Z = K_Z.toarray()
-            A_sys = (0.5 * M - DL + (SL @ M_inv @ K_Z)/(1j * omega * MU_0)).astype(complex)
+            if not hacapk:
+                A_sys = (0.5 * M - DL + (SL @ M_inv @ K_Z)/(1j * omega * MU_0)).astype(complex)
+        if hacapk:
+            from scipy.sparse.linalg import LinearOperator
+            stiffness = bem_solver.K * face_z[0] if uniform_z else K_Z
+            A_sys = LinearOperator((nv,nv), dtype=complex, matvec=lambda x:
+                .5*(M @ x)-DL @ x+SL @ ((M_inv @ (stiffness @ x))/(1j*omega*MU_0)))
     RHS = (M @ np.asarray(phi_inc_nodal, dtype=complex))
 
     from .bem_loop_work import _loop_work_row
@@ -798,35 +814,69 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
     f_alpha = e_loop + 1j * omega * p_loop
 
     # assemble + solve (Lagrange mean-zero gauge, production style)
-    Mrow = M.sum(axis=1).astype(complex)
+    Mrow = np.asarray(M.sum(axis=1)).reshape(-1).astype(complex)
     N = nv + 2
     b2 = np.zeros(N, dtype=complex)
-    if system_reused:
-        A2 = cached_system['A2']
-    else:
-        A2 = np.zeros((N, N), dtype=complex)
-        A2[:nv, :nv] = A_sys
-        A2[:nv, nv] = a_col
-        A2[:nv, nv + 1] = Mrow
-        A2[nv, :nv] = fE + 1j * omega * fP
-        A2[nv, nv] = f_alpha
-        A2[nv + 1, :nv] = Mrow
+    if hacapk:
+        from scipy.sparse.linalg import LinearOperator, gmres as _gmres
+        row = fE+1j*omega*fP
+        def augmented(x):
+            y = np.empty(N, dtype=complex)
+            y[:nv] = A_sys @ x[:nv]+a_col*x[nv]+Mrow*x[nv+1]
+            y[nv] = row @ x[:nv]+f_alpha*x[nv]
+            y[nv+1] = Mrow @ x[:nv]
+            return y
+        # The physical rows carry different units. Equilibrate the two borders
+        # before iteration, then certify the unscaled physical operator below.
+        scales = np.r_[np.ones(nv), 1/max(np.linalg.norm(row),abs(f_alpha),1e-30),
+                       1/max(np.linalg.norm(Mrow),1e-30)]
+        A2 = LinearOperator((N,N), matvec=augmented, dtype=complex)
+        scaled = LinearOperator((N,N), matvec=lambda x: scales*(A2 @ x), dtype=complex)
+        b2[:nv] = RHS
+        b2[nv] = -1j*omega*loop_source
+        settings = dict(tol=1e-10, maxiter=500, restart=100)
+        settings.update(gmres or {})
+        iterations = []
+        initial = getattr(bem_solver, "_loop_hacapk_initial", None)
+        u, info = _gmres(scaled, scales*b2, x0=initial, rtol=settings['tol'], atol=0.,
+                         maxiter=settings['maxiter'], restart=settings['restart'],
+                         callback=iterations.append, callback_type='pr_norm')
+        if info != 0:
+            raise RuntimeError(f"Loop HACApK bordered GMRES did not converge (info={info})")
         if _reuse_prepared:
-            from scipy.linalg import lu_factor
-            cached_system = dict(key=prepared_key, A_sys=A_sys, A2=A2,
-                                 factor2=lu_factor(A2))
-    b2[:nv] = RHS
-    b2[nv] = -1j * omega * loop_source
-    if _reuse_prepared:
-        from scipy.linalg import lu_solve
-        u = lu_solve(cached_system['factor2'], b2)
+            cached_system = dict(key=prepared_key, A_sys=A_sys, a_col=a_col)
     else:
-        u = np.linalg.solve(A2, b2)
+        if system_reused:
+            A2 = cached_system['A2']
+        else:
+            A2 = np.zeros((N, N), dtype=complex)
+            A2[:nv, :nv] = A_sys
+            A2[:nv, nv] = a_col
+            A2[:nv, nv + 1] = Mrow
+            A2[nv, :nv] = fE + 1j * omega * fP
+            A2[nv, nv] = f_alpha
+            A2[nv + 1, :nv] = Mrow
+            if _reuse_prepared:
+                from scipy.linalg import lu_factor
+                cached_system = dict(key=prepared_key, A_sys=A_sys, A2=A2,
+                                     factor2=lu_factor(A2))
+        b2[:nv] = RHS
+        b2[nv] = -1j * omega * loop_source
+        if _reuse_prepared:
+            from scipy.linalg import lu_solve
+            u = lu_solve(cached_system['factor2'], b2)
+        else:
+            u = np.linalg.solve(A2, b2)
     residual = A2 @ u - b2
     linear_residual_rel = float(np.linalg.norm(residual) / max(np.linalg.norm(b2), np.finfo(float).tiny))
     faraday_residual_rel = float(abs(residual[nv]) / max(abs(b2[nv]), abs((A2 @ u)[nv]), np.finfo(float).tiny))
     if not np.isfinite(linear_residual_rel) or linear_residual_rel > 1e-6 or faraday_residual_rel > 1e-6:
         raise RuntimeError("Loop SIBC true residual / Faraday closure failed")
+    if hacapk:
+        bem_solver._loop_hacapk_initial = u.copy()
+        work_diagnostics.update(body_backend="hacapk", body_aca_eps=bem_solver.hacapk_aca_eps,
+            body_hmatrix_stats={"SL":bem_solver._SL_hacapk.GetStats(),"DL":bem_solver._DL_hacapk.GetStats()},
+            gmres_controls=settings.copy(), gmres_iterations=len(iterations))
     phi_u, alpha = u[:nv], complex(u[nv])
 
     def _P_Ht(phi_u_v, alpha_v):
@@ -858,21 +908,40 @@ def solve_loop_extended(bem_solver, phi_inc_nodal, Z_s, omega, A_inc_fn, *, sect
     Ng = nv + 1
     b0 = np.zeros(Ng, dtype=complex)
     b0[:nv] = RHS
-    if system_reused:
-        A0 = cached_system['A0']
-    else:
-        A0 = np.zeros((Ng, Ng), dtype=complex)
-        A0[:nv, :nv] = A_sys
-        A0[:nv, nv] = Mrow
-        A0[nv, :nv] = Mrow
+    if hacapk:
+        def frozen_matvec(x):
+            return np.r_[A_sys @ x[:nv]+Mrow*x[nv], Mrow @ x[:nv]]
+        A0 = LinearOperator((Ng,Ng), matvec=frozen_matvec, dtype=complex)
+        frozen_scales = np.r_[np.ones(nv), scales[-1]]
+        scaled0 = LinearOperator((Ng,Ng), matvec=lambda x: frozen_scales*(A0 @ x), dtype=complex)
+        sol0, info0 = _gmres(scaled0, frozen_scales*b0, rtol=settings['tol'], atol=0.,
+                            maxiter=settings['maxiter'], restart=settings['restart'])
+        frozen_residual = np.linalg.norm(A0 @ sol0-b0)/max(np.linalg.norm(b0), np.finfo(float).tiny)
+        if info0 != 0 or not np.isfinite(frozen_residual) or frozen_residual > 1e-6:
+            raise RuntimeError("Loop HACApK frozen true residual failed")
+        phi_f = sol0[:nv]
         if _reuse_prepared:
-            cached_system.update(A0=A0, factor0=lu_factor(A0))
             bem_solver._prepared_loop_system = cached_system
-    phi_f = (lu_solve(cached_system['factor0'], b0)[:nv] if _reuse_prepared
-             else np.linalg.solve(A0, b0)[:nv])
+    else:
+        if system_reused:
+            A0 = cached_system['A0']
+        else:
+            A0 = np.zeros((Ng, Ng), dtype=complex)
+            A0[:nv, :nv] = A_sys
+            A0[:nv, nv] = Mrow
+            A0[nv, :nv] = Mrow
+            if _reuse_prepared:
+                cached_system.update(A0=A0, factor0=lu_factor(A0))
+                bem_solver._prepared_loop_system = cached_system
+        phi_f = (lu_solve(cached_system['factor0'], b0)[:nv] if _reuse_prepared
+                 else np.linalg.solve(A0, b0)[:nv])
     P_frozen, Ht_frozen = _P_Ht(phi_f, 0.0)
 
     return {
+        "loop_body_backend": "hacapk" if hacapk else "dense",
+        "loop_linear_solver": "bordered-gmres" if hacapk else "dense-lu",
+        "loop_gmres_iterations": len(iterations) if hacapk else None,
+        "loop_frozen_residual_rel": float(frozen_residual) if hacapk else None,
         "loop_geometry_reused": bool(cached_geometry is not None and cached_geometry[0] == geometry_key),
         "loop_system_reused": bool(system_reused),
         "loop_impedance_value_hash": prepared_key[1] if prepared_key is not None else None,

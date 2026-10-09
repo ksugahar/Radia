@@ -31,7 +31,6 @@ _DEMO_VOL = _SAMPLES / "ih_fem_kelvin_demo.vol"
 @pytest.mark.parametrize('genus,model,backend,order,fragment', [
     (1, 'esim', 'hacapk', 1, 'ESIM'),
     (1, 'esim', 'intree-dense', 1, 'ESIM'),
-    (1, 'sibc', 'hacapk', 1, 'HACApK'),
     (1, 'sibc', 'intree-dense', 2, 'P1'),
     (2, 'sibc', 'intree-dense', 1, 'genus-1'),
 ])
@@ -79,11 +78,7 @@ def test_argparse_accepts_flag():
 @pytest.mark.parametrize("extra,frag", [
     (["--impedance-model", "esim", "--wp-bem-backend", "intree-dense"],
      "--esim-per-panel"),
-    (["--wp-bem-backend", "hacapk"], "intree-dense"),                       # default backend = hacapk
     (["--wp-bem-backend", "intree-dense", "--h1-order", "2"], "P1"),
-    # strong coupling now TAKES the loop DOF during every
-    # coil-current iteration but still needs the dense backend:
-    (["--coupling-mode", "strong", "--no-peec-proximity", "--wp-bem-backend", "hacapk"], "intree-dense"),
 ])
 def test_early_guards_fail_fast(extra, frag):
     """Unsupported combinations return an error dict BEFORE the coil
@@ -94,7 +89,8 @@ def test_early_guards_fail_fast(extra, frag):
     assert frag in out["error"], out["error"]
 
 
-def test_strong_with_dense_backend_passes_early_guards():
+@pytest.mark.parametrize("backend",["intree-dense","hacapk"])
+def test_strong_with_validated_backend_passes_early_guards(backend):
     """--coupling-mode strong + --wp-loop-dof (on) + intree-dense is a
     SUPPORTED combination now: the early guards must NOT reject it (the
     run proceeds to the coil solve, which fails on the dummy c.step --
@@ -102,7 +98,7 @@ def test_strong_with_dense_backend_passes_early_guards():
     with pytest.raises(Exception) as exc:
         ci.run_inductance(_args([
             "--coupling-mode", "strong", "--no-peec-proximity",
-            "--wp-bem-backend", "intree-dense"]))
+            "--wp-bem-backend", backend]))
     assert "wp-loop-dof" not in str(exc.value)
 
 
@@ -132,8 +128,7 @@ def test_auto_workpiece_backend_uses_topology_and_preserves_explicit_request():
     assert ci._resolve_weak_loop_mode(args, 1, 1)[1]
     args.wp_bem_backend='hacapk'
     assert ci._resolve_workpiece_backend(args, 1, 100) == 'hacapk'
-    with pytest.raises(ValueError, match='HACApK'):
-        ci._resolve_weak_loop_mode(args, 1, 1)
+    assert ci._resolve_weak_loop_mode(args, 1, 1)[1]
 
 
 def test_auto_holes_reject_unsupported_physics_and_dense_capacity():

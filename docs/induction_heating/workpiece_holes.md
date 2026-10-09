@@ -13,7 +13,9 @@ Current is peak amperes. The defaults `--wp-loop-dof auto` and
 `--wp-bem-backend auto` select HACApK for a simply connected workpiece and the
 P1 dense loop-extended BEM for a workpiece with one handle. Explicit backend
 requests are preserved; an incompatible request raises instead of dropping
-the circulating current. The log reports the topology and backend selection.
+the circulating current. Explicit `--wp-bem-backend hacapk` also supports
+one handle, using the same distributed loop closure in a bordered GMRES
+operator. The log reports the topology and backend selection.
 
 The separate `--wp-loop-work-backend auto` option uses native NGSolve
 Galerkin FMM for the P0 magnetic loop work at 512 or more surface faces,
@@ -138,9 +140,22 @@ surface faces for loop work. Native direct P0 assembly remains quadratic;
 the dense-equivalent matrix is about 1 GB at 11,000 faces, and construction
 can need several times more. The FMM route retains no NumPy dense P0
 matrix; its complete native storage inventory is unavailable and is reported
-as unknown, separately from measured process peaks. The P1 BIE and final
-mixed solve remain dense, so P0 compression does not remove all quadratic
-storage or the existing geometry/basis limits.
+as unknown, separately from measured process peaks. The default P1 body route retains dense BIE operators and a dense mixed
+solve. Explicit `--wp-bem-backend hacapk` uses compressed SL/DL products
+and a GMRES operator bordered by the loop and mean-gauge equations. The
+mass matrix is factored once with `sparsecholesky`; tagged face impedances
+and per-panel ESIM change only the source stiffness. Strong coupling uses
+the same complete body operator. Every solve certifies the unscaled true
+residual and Faraday row at `1e-6`; failure raises without fallback.
+
+HACApK construction still assembles dense Galerkin entry tables before
+compression. Those source tables are released after a successful build,
+and the mixed complex matrix is never assembled on the compressed route.
+This reduces retained storage, not quadratic construction memory. The
+14,000-face and 7,000-vertex guards therefore remain unchanged. Timing and
+compression depend on geometry and near-field storage; no general speed
+or linear-memory construction claim follows. Record ACA parameters,
+H-matrix statistics and GMRES iterations from the returned diagnostics.
 
 Multiple handles, scalar nonlinear ESIM, and geometry with no certified
 interior z-axis carrier raise with an explanation. Per-face ESIM impedances
