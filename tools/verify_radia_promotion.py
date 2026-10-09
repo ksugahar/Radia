@@ -211,7 +211,7 @@ def verify_application_acceptance(proof, identity):
         require(isinstance(proof.get(key), str) and HASH.fullmatch(proof[key]),
                 f"Missing MATLAB/Simulink artifact identity: {key}")
     targets = proof.get("targets", {})
-    require(set(targets) == set(RELEASE_ACCEPTANCE_HOSTS), "MATLAB/Simulink requires all four hosts")
+    require(set(targets) == set(RELEASE_ACCEPTANCE_HOSTS), "MATLAB/Simulink requires both hosts")
     for host, row in targets.items():
         # Rows are keyed by host and carry the human label simulink-candidate prints.
         require(row.get("label") == RELEASE_ACCEPTANCE_HOST_LABELS[host]

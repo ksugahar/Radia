@@ -113,8 +113,6 @@ def test_phase8_routes_explicit_hosts_independently_of_controller(monkeypatch, c
     monkeypatch.setattr(release_quad, "_deploy_editable_remote", lambda host, *args: calls.append((host, "development")) or 0)
     assert release_quad.cmd_phase8(Namespace(target=targets)) == 0
     expected = ["102", release_quad.SSH_100, (release_quad.SSH_100, "development")]
-    if targets == "all":
-        expected += [release_quad.SSH_MDX1, release_quad.SSH_MDX2]
     assert calls == expected
 
 
@@ -496,10 +494,10 @@ def _done_until_source_gates(monkeypatch, controller, release):
     monkeypatch.setattr(release_quad, "_radia_version", lambda: "5.2.1")
     passed = AssertionError("source gates passed")
 
-    def next_gate(_args):
+    def next_gate():
         raise passed
 
-    monkeypatch.setattr(release_quad, "cmd_temp_shadows", next_gate)
+    monkeypatch.setattr(release_quad, "_verify_head_release_tag", next_gate)
     return passed
 
 
@@ -651,7 +649,7 @@ def test_done_keeps_lab_wheel_and_100_editable_checks_after_all_gates(monkeypatc
     monkeypatch.setattr(release_quad, "_verify_final_pip_checks", lambda: calls.append("pip-check") or 0)
     args = type("Args", (), {"simulink_package": "candidate.zip"})()
     assert release_quad.cmd_done(args) == 0
-    assert calls == ["preflight", "source", "shadows", "tag", "lab", "100-release", "100",
+    assert calls == ["preflight", "source", "tag", "lab", "100-release", "100",
                      "phase9", "guard", "main", ("simulink", "candidate.zip"), "pip-check"]
 
 def test_done_stops_before_machine_checks_when_active_source_is_stale(monkeypatch):
