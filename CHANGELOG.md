@@ -1,6 +1,6 @@
 # Changelog
 
-- Prevent a latent race in large P1/P2 dense Galerkin assembly: buffer test-triangle rows and synchronize shared-row merges. Quadrature is unchanged; audited structured cases showed no corruption.
+- Prevent a latent race in large P1/P2 dense Galerkin assembly: buffer test-triangle rows and synchronize shared-row merges. Quadrature is unchanged; grouped additions agree within contribution-based roundoff bounds. Audited structured cases showed no corruption.
 
 
 - Add an owned native P1 Galerkin entry provider for HACApK SL/DL construction,

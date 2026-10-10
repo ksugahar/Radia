@@ -62,7 +62,7 @@ def test_curved_p2_small_and_large_storage_paths(ndof):
             assert np.count_nonzero(matrix[10:])==0
             assert np.count_nonzero(matrix[:,10:])==0
         del matrices
-    # 4 incident triangle pairs maximum per corner, plus deterministic local
+    # 9 incident triangle pairs maximum per corner, plus deterministic local
     # quadrature. Frobenius scaling avoids component-relative cancellation.
     # This small P2 gate complements the P1 per-entry contribution certificate.
     gamma=64*np.finfo(float).eps/(1-64*np.finfo(float).eps)
