@@ -85,6 +85,29 @@ class _P0SingleLayer(LinearOperator):
         return self._apply(values, True)
 
 
+def _check_loop_work_size(bem_solver, face_count, backend):
+    """Large weak loops require both actually compressed operator routes."""
+    if face_count <= 14000:
+        return
+    if face_count > 20000:
+        raise ValueError("Loop work exceeds the 20000-face on-demand limit")
+    if backend != "fmm" or getattr(bem_solver, "_loop_body_backend", "dense") != "hacapk":
+        raise ValueError("Above 14000 faces loop work requires on-demand P1 HACApK and FMM P0")
+    if bem_solver.ndof > 10000:
+        raise ValueError("Large on-demand loop work exceeds 10000 full nodal DOFs")
+    for name in ("_SL_hacapk", "_DL_hacapk"):
+        handle = getattr(bem_solver, name, None)
+        if (handle is None or not handle.IsValid()
+                or handle.GetStats().get("construction_route") != "p1-entry-on-demand"):
+            raise ValueError("Above 14000 faces loop work requires actual on-demand P1 handles")
+
+
+def _check_strong_loop_size(bem_solver, loop_dof):
+    """The larger weak-loop study does not certify coupled coil scaling."""
+    if loop_dof and bem_solver.ndof > 7000:
+        raise ValueError("Strong genus-1 coupling retains the 7000-nodal-DOF limit")
+
+
 def _p0_single_layer(bem_solver, areas, *, quadrature_bonus=4):
     from ngsolve import BND, BilinearForm, SurfaceL2, ds
     from ngsolve.bem import LaplaceSL
@@ -101,13 +124,12 @@ def _p0_single_layer(bem_solver, areas, *, quadrature_bonus=4):
         raise ValueError("Loop work geometry changed; rebuild the BIE solver")
     bem_solver._loop_work_geometry_identity = identity
     backend = _loop_work_route(bem_solver, len(areas))
+    _check_loop_work_size(bem_solver, len(areas), backend)
     key = (identity, quadrature_bonus, backend)
     cached = getattr(bem_solver, "_loop_work_single_layer", None)
     if cached is not None and cached[0] == key:
         return cached[1]
 
-    if len(areas) > 14000:
-        raise ValueError("Loop work exceeds 14000 surface faces; use a coarser validated mesh")
     import time
     started = time.perf_counter()
     space = SurfaceL2(mesh, order=0, dual_mapping=False)
@@ -230,6 +252,7 @@ def _prepare_loop_magnetic_work(bem_solver, points, closed_triangles, open_trian
                        conormal_flux_relative_mismatch=float(flux_error),
                        quadrature_bonus=quadrature_bonus,
                        body_backend=getattr(bem_solver,"_loop_body_backend","dense"),
+                       body_construction_route=getattr(bem_solver,"_body_construction_route","dense"),
                        single_layer_matrix_bytes=single_layer.nbytes,
                        single_layer_native_storage_bytes=single_layer.native_bytes,
                        single_layer_dense_array_bytes=single_layer.dense_array_bytes,

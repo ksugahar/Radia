@@ -8,7 +8,12 @@
   On-demand managers retain geometry and a fixed-cap pair-block cache, with
   explicit route/storage diagnostics and no dense source entry table. Large
   dense-reference assembly merges task-local rows safely at shared vertices.
-  Size limits remain until the full on-demand pipeline is validated.
+  Preserve dense-entry construction by default through 7,000 full P1 nodal
+  DOFs; larger bodies use on-demand construction, an explicit time/memory
+  tradeoff. Larger weak genus-1 solves require actual on-demand SL/DL and
+  FMM P0, bounded at 20,000 faces / 10,000 full nodal DOFs. Dense/direct-P0
+  and strong coupling limits remain. Record matched construction costs and
+  residual/reciprocity/power checks; no general speed or linear-memory claim.
 
 - Pre-push transport accepts an optional runner-label to SSH-config-alias mapping through `RADIA_PREFLIGHT_SSH_ALIAS`; runner selection and admission continue to use the original labels.
 

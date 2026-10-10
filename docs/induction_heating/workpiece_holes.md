@@ -135,27 +135,71 @@ inherit that tolerance and need their own convergence and reference study.
 
 Linear SIBC (uniform, or per-face values on the weak loop route); flat,
 undeformed P1 surface triangles (a curved or deformed surface raises; small
-fillet radii therefore carry an `O(h²)` geometric error); at most 14,000
-surface faces for loop work. Native direct P0 assembly remains quadratic;
-the dense-equivalent matrix is about 1 GB at 11,000 faces, and construction
-can need several times more. The FMM route retains no NumPy dense P0
-matrix; its complete native storage inventory is unavailable and is reported
-as unknown, separately from measured process peaks. The default P1 body route retains dense BIE operators and a dense mixed
-solve. Explicit `--wp-bem-backend hacapk` uses compressed SL/DL products
-and a GMRES operator bordered by the loop and mean-gauge equations. The
-mass matrix is factored once with `sparsecholesky`; tagged face impedances
-and per-panel ESIM change only the source stiffness. Strong coupling uses
-the same complete body operator. Every solve certifies the unscaled true
-residual and Faraday row at `1e-6`; failure raises without fallback.
+fillet radii therefore carry an `O(h²)` geometric error). Dense body routes,
+strong genus-1 coupling and direct P0 loop work retain their 7,000-nodal-DOF
+or 14,000-face limits. Larger weak genus-1 cases require explicit
+`--wp-bem-backend hacapk`, actually on-demand SL **and** DL construction, and
+FMM P0 loop work (`--wp-loop-work-backend fmm`, or `auto` at this size).
+This route is bounded at 20,000 surface faces and 10,000 full nodal DOFs.
+The CLI also checks the surface-vertex count; interior mesh vertices count
+against the solver's full nodal limit. Missing operators, incompatible routes
+and exceeded bounds raise without fallback. Strong coupling and frozen
+Simulink library artifacts do not inherit this larger weak-route limit.
 
-HACApK construction still assembles dense Galerkin entry tables before
-compression. Those source tables are released after a successful build,
-and the mixed complex matrix is never assembled on the compressed route.
-This reduces retained storage, not quadratic construction memory. The
-14,000-face and 7,000-vertex guards therefore remain unchanged. Timing and
-compression depend on geometry and near-field storage; no general speed
-or linear-memory construction claim follows. Record ACA parameters,
-H-matrix statistics and GMRES iterations from the returned diagnostics.
+For native P1 HACApK, `hacapk_construction="auto"` retains dense-entry
+construction through 7,000 full nodal DOFs, then selects `"on-demand"`.
+This also applies to simply connected bodies: their larger automatic route
+trades construction time for memory. Python callers can explicitly select
+`hacapk_construction="dense-entry"` to retain the old construction, or
+`"on-demand"` to exercise the new route on smaller meshes. Explicit routes
+require compressed native P1 operators (`assemble_dense=False` and
+`use_intree_hacapk=True`). Dense-entry source tables are released after
+compression. On-demand construction evaluates Galerkin entries from owned
+geometry and incident triangle supports; near/singular quadrature is unchanged.
+`hacapk_entry_cache_bytes` is a nonnegative integer byte budget (default
+8 MiB; zero disables caching). Both kernel managers share this bounded cache;
+provider counters are reported as per-build deltas and cumulative totals.
+
+The compressed route assembles the mass and stiffness matrices directly as
+sparse matrices, factors the mass matrix once with `sparsecholesky`, and never
+assembles the mixed complex matrix. Tagged face impedances and per-panel ESIM
+change only source stiffness. Every solve certifies the unscaled true residual
+and Faraday row at `1e-6`. The P0 FMM route retains no NumPy dense P0 matrix;
+its complete native storage inventory remains unknown. H-matrix near blocks
+and sparse factor fill can grow with geometry, so this is not a claim of linear
+construction memory or general speed improvement.
+
+### Construction measurements
+
+Fresh-process, single-thread measurements on the same Windows runtime
+(NGSolve 6.2.2607), using a self-authored ring, compare the prior dense-entry
+construction with the updated default and explicit on-demand construction.
+These timings exclude physical solves; peaks include the whole process.
+
+| Faces | Prior seconds | Updated default seconds | On-demand seconds | Prior/on-demand working-set peak MiB | Prior/on-demand commit peak MiB |
+|---:|---:|---:|---:|---:|---:|
+| 2,048 | 5.74 | 5.68 | 28.01 | 143.9 / 138.8 | 548.0 / 543.9 |
+| 6,272 | 21.39 | 21.75 | 157.09 | 420.4 / 226.3 | 1582.7 / 1307.9 |
+| 11,552 | 43.12 | 43.91 | 382.82 | 1137.9 / 358.4 | 2063.5 / 1437.2 |
+
+All three measured sizes are below the default full-DOF threshold; the
+updated default stays within 2% of the prior time. Explicit on-demand is
+about 7–9 times slower on the two larger cases, with reduced memory peaks.
+A finite cache can evict a triangle-pair block before the other kernel requests
+it, causing recomputation. This implementation unlocks a larger finite size;
+it does not optimize away that cost. Cache-off and multi-thread checks preserve
+the entry/product accuracy contracts.
+
+A separate four-thread 20,000-face / 10,000-DOF weak ring solve passed the
+existing residual, reciprocity, seam and reaction/heat gates for uniform and
+face-jump impedance. Whole-process peaks were 1,292 MiB working set and
+2,936 MiB commit. This large run has no same-mesh dense physical reference
+and its timing is not part of the matched construction table. The smaller
+reference comparisons and compact large case do not establish mesh accuracy
+for arbitrary geometry. Reproducible drivers are
+`validation_test/induction_heating/run_p1_construction_cost.py` and
+`run_loop_work_compression.py`; the compact measurement record is
+`validation_test/induction_heating/results/hacapk_entry_on_demand.json`.
 
 Multiple handles, scalar nonlinear ESIM, and geometry with no certified
 interior z-axis carrier raise with an explanation. Per-face ESIM impedances

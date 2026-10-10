@@ -138,7 +138,7 @@ def test_hacapk_certifies_physical_residual_after_gmres(ring,monkeypatch):
 def test_hacapk_keeps_construction_guard_and_rejects_missing_handles():
     from radia.panels import calc_inductance as ci
     from types import SimpleNamespace
-    args=SimpleNamespace(wp_bem_backend='hacapk',impedance_model='sibc',h1_order=1)
+    args=SimpleNamespace(wp_bem_backend='hacapk',impedance_model='sibc',h1_order=1,coupling_mode='strong')
     with pytest.raises(ValueError,match='7000'):
         ci._resolve_workpiece_backend(args,1,7001)
     with pytest.raises(ValueError,match='multiple holes'):

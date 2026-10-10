@@ -750,7 +750,14 @@ def _resolve_workpiece_backend(args, genus, surface_vertices):
             requested = 'hacapk'
         progress('BEM', f'workpiece backend auto: genus={genus}, selected {requested}; cohomology={genus == 1}')
     if genus == 1 and surface_vertices > 7000:
-        raise ValueError(f'Hole cohomology still uses dense construction tables: {surface_vertices} surface vertices exceed the 7000-vertex limit. Use a coarser validated surface mesh; the hole is never filled or ignored.')
+        if requested != 'hacapk' or getattr(args, 'coupling_mode', 'weak') != 'weak':
+            raise ValueError('Dense and strong genus-1 routes retain the 7000-vertex limit; larger weak surfaces require explicit HACApK')
+        if int(args.h1_order) != 1:
+            raise ValueError('Large weak genus-1 HACApK requires P1 nodal basis')
+        if surface_vertices > 10000:
+            raise ValueError('Large weak genus-1 HACApK exceeds the 10000-surface-vertex limit')
+        if getattr(args, 'wp_loop_work_backend', 'auto') == 'dense':
+            raise ValueError('Large weak genus-1 HACApK requires FMM loop work; dense P0 keeps its 14000-face limit')
     args.wp_bem_backend = requested
     return requested
 
@@ -3066,7 +3073,7 @@ def build_argparser():
                              "surface stiffness and local heat integration. Uses "
                              "the solved per-panel peak H_t; supports intree-dense "
                              "and HACApK on genus-0 workpieces. Adaptive table evaluation "
-                             "is the default. Genus-1 and strong coupling require the dense P1 body path.")
+                             "is the default. Genus-1 and strong coupling require a supported P1 body path.")
     parser.add_argument('--esim-panel-evaluator', choices=['direct', 'table'], default='table',
                         help='Per-panel outer ESIM evaluation: adaptive log-H linear table (default) or direct reference. '
                              'All panels are still directly certified at the final accepted field.')
@@ -3117,7 +3124,7 @@ def build_argparser():
                              "combinations fail before BEM assembly. "
                              "The loop path requires flat undeformed "
                              "triangles and a P0 Galerkin single layer "
-                             "(up to 14000 faces; auto compresses far "
+                             "(up to 20000 faces for weak on-demand HACApK; otherwise 14000; auto compresses far "
                              "interactions, dense remains selectable). "
                              "on (= bare --wp-loop-dof): require it -- "
                              "unmet prerequisites or genus != 1 fail "

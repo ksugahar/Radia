@@ -143,3 +143,35 @@ def test_small_default_keeps_dense_entry_construction(monkeypatch):
                 use_intree_hacapk=True, assemble_dense=False, hacapk_entry_cache_bytes=bad)
     with pytest.raises(ValueError, match='requires non-dense in-tree P1'):
         ScalarBIESIBCSolver(mesh, assemble_dense=True, hacapk_construction='on-demand')
+
+
+@pytest.mark.parametrize('panel',[False,True])
+def test_explicit_genus0_on_demand_matches_retained_dense_body(panel):
+    import netgen.meshing as nm
+    from radia.bem_sibc_solver import ScalarBIESIBCSolver
+    from radia.surface_impedance import PanelSurfaceImpedance
+    points=.03*np.array([[0.,0.,0.],[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]])
+    triangles=((0,2,1),(0,1,3),(0,3,2),(1,2,3))
+    raw=nm.Mesh(dim=3)
+    face=raw.Add(nm.FaceDescriptor(surfnr=1,domin=1,bc=1))
+    vertices=[raw.Add(nm.MeshPoint(nm.Pnt(*point))) for point in points]
+    for triangle in triangles:
+        raw.Add(nm.Element2D(face,[vertices[i] for i in triangle]))
+    mesh=ng.Mesh(raw)
+    omega=2*np.pi*5e4
+    z=(1+1j)*np.sqrt(omega*4e-7*np.pi/(2*5.8e7))
+    impedance=PanelSurfaceImpedance(z*np.array([.8,1.,1.4,2.])) if panel else z
+    outputs=[]
+    with ng.TaskManager():
+        for compressed in (False,True):
+            solver=ScalarBIESIBCSolver(mesh,order=1,assemble_dense=not compressed,
+                use_intree_bem=True,use_intree_hacapk=True,intree_geom_order=1,
+                intree_regular_quad_degree=7,intree_singular_n_q=6,
+                hacapk_construction='on-demand' if compressed else 'auto')
+            outputs.append(solver.solve_hacapk(-ng.z,impedance,omega,
+                tol=1e-12,maxiter=500,restart=100))
+    old,new=outputs
+    for key in ('H_t_rms','P_density','area'):
+        assert abs(new[key]-old[key])<=1e-10*abs(old[key])
+    assert np.linalg.norm(new['phi_vec']-old['phi_vec'])<=1e-10*np.linalg.norm(old['phi_vec'])
+    assert new['linear_residual_rel']<=1e-6
