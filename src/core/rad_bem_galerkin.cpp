@@ -20,12 +20,14 @@
 
 #include <vector>
 #include <array>
-#include <mutex>
 #include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
 #include <algorithm>
+#include <mutex>
+#include <memory>
+#include <limits>
 
 #include <core/taskmanager.hpp>      // ngcore::ParallelFor / TaskManager
 
@@ -507,6 +509,375 @@ inline void accumulate_pair_quadpt(double xi_a, double eta_a,
 // =====================================================================
 // Public entry point
 // =====================================================================
+// Shared quadrature provider. No global entry table or thread-local N*N scratch.
+struct P1EntryProvider::Impl {
+    struct Support { int triangle, local; };
+    struct Slot { uint64_t key = UINT64_MAX; PairBlock block{}; };
+    std::vector<double> coords, nodes;
+    std::vector<int64_t> triangles;
+    std::vector<std::vector<Support>> supports;
+    TriQuad q_reg_near, q_reg_mid, q_reg_far;
+    SSQuad ss_cv, ss_ce, ss_id;
+    int nq_near, nq_mid, nq_far;
+    std::vector<double> L_near,L_mid,L_far;
+    std::vector<double> reg_pts_near,reg_w_near,reg_n_near;
+    std::vector<double> reg_pts_mid,reg_w_mid,reg_n_mid;
+    std::vector<double> reg_pts_far,reg_w_far,reg_n_far;
+    std::vector<double> tri_centroid,tri_diam;
+    std::vector<Slot> slots;
+    mutable std::array<std::mutex,64> locks;
+    mutable std::atomic<uint64_t> evaluations{0}, requests{0}, hits{0}, entries{0};
+    static constexpr double admissibility_eta_far=4.0, admissibility_eta_mid=2.0;
+
+    Impl(const double* verts, int n_v, const int64_t* tris, int n_t,
+         const double* p2_nodes, int regular_quad_degree, int singular_n_q,
+         size_t cache_bytes) {
+        if (n_v<=0 || n_t<=0 || singular_n_q<1 || singular_n_q>32 ||
+            regular_quad_degree<1 || regular_quad_degree>64)
+            throw std::invalid_argument("Invalid P1 geometry dimensions or quadrature controls");
+        coords.assign(verts,verts+size_t(n_v)*3);
+        nodes.assign(p2_nodes,p2_nodes+size_t(n_t)*18);
+        triangles.assign(tris,tris+size_t(n_t)*3);
+        for(double x:coords) if(!std::isfinite(x)) throw std::invalid_argument("Nonfinite P1 coordinates");
+        for(double x:nodes) if(!std::isfinite(x)) throw std::invalid_argument("Nonfinite P1 geometry nodes");
+        double geometry_scale=std::numeric_limits<double>::min();
+        for(double x:coords) geometry_scale=std::max(geometry_scale,std::abs(x));
+        supports.resize(n_v);
+        for(int t=0;t<n_t;++t) {
+            for(int k=0;k<3;++k) {
+                auto v=triangles[size_t(t)*3+k];
+                if(v<0 || v>=n_v) throw std::invalid_argument("P1 triangle vertex outside coordinates");
+                if(v==triangles[size_t(t)*3+(k+1)%3]) throw std::invalid_argument("Repeated P1 triangle vertex");
+                supports[v].push_back({t,k});
+                for(int d=0;d<3;++d) if(std::abs(nodes[size_t(t)*18+k*3+d]-coords[size_t(v)*3+d]) >
+                    64*std::numeric_limits<double>::epsilon()*geometry_scale)
+                    throw std::invalid_argument("P1 geometry corners do not match coordinates");
+            }
+            double r[3],J; p2_geom(&nodes[size_t(t)*18],1./3,1./3,r,&J,nullptr);
+            if(!(J>0) || !std::isfinite(J)) throw std::invalid_argument("Degenerate P1 geometry");
+        }
+        p2_nodes=nodes.data();
+        slots.resize(cache_bytes/sizeof(Slot));
+        // Pre-build quadrature rules.  For regular pairs we have two rules:
+        //   - q_reg_near: full requested order, used when admissibility
+        //     test fails (= near pair, distance comparable to tri size).
+        //   - q_reg_far: cheap 1-pt centroid rule, used when pair is far
+        //     enough that 1-pt quadrature is sufficient.
+        // Admissibility criterion (H-matrix style):
+        //   pair is "far" if  dist(c_a, c_b) > eta * (diam_a + diam_b)/2
+        // with eta = 2 (Laplace standard).  ~80-90% of N_t^2 pairs on
+        // typical compact meshes pass this cutoff -> O(100x) speedup on
+        // those entries.
+        q_reg_near = pick_tri_quad(regular_quad_degree);
+        // Intermediate Stroud 7-point rule.
+        {
+            TriQuad q5 = make_stroud_7();
+            q_reg_mid = q5;
+        }
+        // Far centroid rule.
+        {
+            q_reg_far.xi.push_back(1.0/3.0);
+            q_reg_far.eta.push_back(1.0/3.0);
+            q_reg_far.w.push_back(0.5);  // sum = 1/2 (= area of T_ref)
+        }
+
+        build_ss_common_vertex(singular_n_q, ss_cv);
+        build_ss_common_edge(singular_n_q,   ss_ce);
+        build_ss_identical(singular_n_q,     ss_id);
+
+        // Pre-cache regular-pair physical positions and weights per tri,
+        // for ALL THREE regular rules (near/mid/far).  Per tri keeps
+        //   pts[k] (3, nq_k), w[k] (nq_k), L[k] (nq_k, 3), n_hat[k] (nq_k, 3)
+        // for k = 0 (near), 1 (mid), 2 (far).
+        auto build_L_table = [](const TriQuad& q) {
+            std::vector<double> L(q.n() * 3);
+            for (int qq = 0; qq < q.n(); ++qq) {
+                L[qq*3 + 0] = 1.0 - q.xi[qq] - q.eta[qq];
+                L[qq*3 + 1] = q.xi[qq];
+                L[qq*3 + 2] = q.eta[qq];
+            }
+            return L;
+        };
+        nq_near = q_reg_near.n();
+        nq_mid  = q_reg_mid.n();
+        nq_far  = q_reg_far.n();
+        L_near = build_L_table(q_reg_near);
+        L_mid  = build_L_table(q_reg_mid);
+        L_far  = build_L_table(q_reg_far);
+        reg_pts_near.resize((size_t)n_t * nq_near * 3);
+        reg_w_near.resize((size_t)n_t * nq_near);
+        reg_n_near.resize((size_t)n_t * nq_near * 3);
+        reg_pts_mid.resize((size_t)n_t * nq_mid  * 3);
+        reg_w_mid.resize((size_t)n_t * nq_mid);
+        reg_n_mid.resize((size_t)n_t * nq_mid  * 3);
+        reg_pts_far.resize((size_t)n_t * nq_far  * 3);
+        reg_w_far.resize((size_t)n_t * nq_far);
+        reg_n_far.resize((size_t)n_t * nq_far  * 3);
+
+        // Per-tri centroid + diameter for admissibility test
+        tri_centroid.resize((size_t)n_t * 3);
+        tri_diam.resize((size_t)n_t);
+
+
+        auto build_per_tri = [&](const TriQuad& q,
+                                  std::vector<double>& pts,
+                                  std::vector<double>& w,
+                                  std::vector<double>& n_arr) {
+            int nq = q.n();
+            ngcore::ParallelFor(ngcore::IntRange(n_t), [&](size_t t) {
+                const double* p2 = &p2_nodes[t * 6 * 3];
+                for (int qq = 0; qq < nq; ++qq) {
+                    double r[3], n_hat[3], J;
+                    p2_geom(p2, q.xi[qq], q.eta[qq], r, &J, n_hat);
+                    size_t base = (t * nq + qq) * 3;
+                    pts[base + 0] = r[0]; pts[base + 1] = r[1]; pts[base + 2] = r[2];
+                    n_arr[base + 0] = n_hat[0]; n_arr[base + 1] = n_hat[1];
+                    n_arr[base + 2] = n_hat[2];
+                    w[t * nq + qq] = q.w[qq] * J;
+                }
+            });
+        };
+        build_per_tri(q_reg_near, reg_pts_near, reg_w_near, reg_n_near);
+        build_per_tri(q_reg_mid,  reg_pts_mid,  reg_w_mid,  reg_n_mid);
+        build_per_tri(q_reg_far,  reg_pts_far,  reg_w_far,  reg_n_far);
+
+        // Centroid + diameter per tri (use corner vertices of tri for diam,
+        // not P2 nodes -- diam = max edge length).
+        ngcore::ParallelFor(ngcore::IntRange(n_t), [&](size_t t) {
+            const double* p2 = &p2_nodes[t * 6 * 3];
+            // Corners: P2 nodes [0], [1], [2]
+            double cx = (p2[0] + p2[3] + p2[6]) / 3.0;
+            double cy = (p2[1] + p2[4] + p2[7]) / 3.0;
+            double cz = (p2[2] + p2[5] + p2[8]) / 3.0;
+            tri_centroid[t * 3 + 0] = cx;
+            tri_centroid[t * 3 + 1] = cy;
+            tri_centroid[t * 3 + 2] = cz;
+            // Diameter: max corner-to-corner distance
+            double e0 = (p2[3]-p2[0])*(p2[3]-p2[0]) + (p2[4]-p2[1])*(p2[4]-p2[1]) + (p2[5]-p2[2])*(p2[5]-p2[2]);
+            double e1 = (p2[6]-p2[3])*(p2[6]-p2[3]) + (p2[7]-p2[4])*(p2[7]-p2[4]) + (p2[8]-p2[5])*(p2[8]-p2[5]);
+            double e2 = (p2[6]-p2[0])*(p2[6]-p2[0]) + (p2[7]-p2[1])*(p2[7]-p2[1]) + (p2[8]-p2[2])*(p2[8]-p2[2]);
+            tri_diam[t] = std::sqrt(std::max({e0, e1, e2}));
+        });
+
+
+    }
+    PairBlock ComputePair(int a,int b) const {
+        const int64_t* Va=&triangles[size_t(a)*3];
+        const int64_t* Vb=&triangles[size_t(b)*3];
+        const double* p2a=&nodes[size_t(a)*18];
+        const double* p2b=&nodes[size_t(b)*18];
+        int la_arr[3], lb_arr[3];
+        int n_sh = find_shared(Va, Vb, la_arr, lb_arr);
+
+        double SL_block[9] = {0,0,0,0,0,0,0,0,0};
+        double DL_block[9] = {0,0,0,0,0,0,0,0,0};
+        int parity_sign_b = +1;  // for DL only
+
+        if (n_sh == 0) {
+            // Regular: dispatch to far/mid/near rule by admissibility.
+            double cx = tri_centroid[(size_t)a*3]   - tri_centroid[(size_t)b*3];
+            double cy = tri_centroid[(size_t)a*3+1] - tri_centroid[(size_t)b*3+1];
+            double cz = tri_centroid[(size_t)a*3+2] - tri_centroid[(size_t)b*3+2];
+            double d_centroid = std::sqrt(cx*cx + cy*cy + cz*cz);
+            double diam_sum = tri_diam[a] + tri_diam[b];
+
+            int nq_use;
+            const double* pts_a_use; const double* w_a_use;
+            const double* L_use_a;
+            const double* pts_b_use; const double* w_b_use;
+            const double* n_b_use; const double* L_use_b;
+            if (d_centroid > admissibility_eta_far * diam_sum) {
+                nq_use = nq_far;
+                pts_a_use = &reg_pts_far[(size_t)a * nq_far * 3];
+                w_a_use   = &reg_w_far[(size_t)a * nq_far];
+                pts_b_use = &reg_pts_far[(size_t)b * nq_far * 3];
+                w_b_use   = &reg_w_far[(size_t)b * nq_far];
+                n_b_use   = &reg_n_far[(size_t)b * nq_far * 3];
+                L_use_a = L_far.data();  L_use_b = L_far.data();
+            } else if (d_centroid > admissibility_eta_mid * diam_sum) {
+                nq_use = nq_mid;
+                pts_a_use = &reg_pts_mid[(size_t)a * nq_mid * 3];
+                w_a_use   = &reg_w_mid[(size_t)a * nq_mid];
+                pts_b_use = &reg_pts_mid[(size_t)b * nq_mid * 3];
+                w_b_use   = &reg_w_mid[(size_t)b * nq_mid];
+                n_b_use   = &reg_n_mid[(size_t)b * nq_mid * 3];
+                L_use_a = L_mid.data();  L_use_b = L_mid.data();
+            } else {
+                nq_use = nq_near;
+                pts_a_use = &reg_pts_near[(size_t)a * nq_near * 3];
+                w_a_use   = &reg_w_near[(size_t)a * nq_near];
+                pts_b_use = &reg_pts_near[(size_t)b * nq_near * 3];
+                w_b_use   = &reg_w_near[(size_t)b * nq_near];
+                n_b_use   = &reg_n_near[(size_t)b * nq_near * 3];
+                L_use_a = L_near.data();  L_use_b = L_near.data();
+            }
+
+            for (int qa = 0; qa < nq_use; ++qa) {
+                double xa[3] = {pts_a_use[qa*3], pts_a_use[qa*3+1], pts_a_use[qa*3+2]};
+                double La0 = L_use_a[qa*3], La1 = L_use_a[qa*3+1], La2 = L_use_a[qa*3+2];
+                double wa = w_a_use[qa];
+                for (int qb = 0; qb < nq_use; ++qb) {
+                    double xb[3] = {pts_b_use[qb*3], pts_b_use[qb*3+1], pts_b_use[qb*3+2]};
+                    double Lb0 = L_use_b[qb*3], Lb1 = L_use_b[qb*3+1], Lb2 = L_use_b[qb*3+2];
+                    double wb = w_b_use[qb];
+                    double dx = xa[0] - xb[0];
+                    double dy = xa[1] - xb[1];
+                    double dz = xa[2] - xb[2];
+                    double r2 = dx*dx + dy*dy + dz*dz;
+                    double r = std::sqrt(r2);
+                    double K_sl = INV_4PI / r;
+                    double dot_n = dx * n_b_use[qb*3] + dy * n_b_use[qb*3+1] + dz * n_b_use[qb*3+2];
+                    double K_dl = dot_n * INV_4PI / (r2 * r);
+                    double w_pair = wa * wb;
+                    double w_sl = K_sl * w_pair;
+                    double w_dl = K_dl * w_pair;
+                    double La[3] = {La0, La1, La2};
+                    double Lb[3] = {Lb0, Lb1, Lb2};
+                    for (int i = 0; i < 3; ++i) {
+                        double Li_sl = w_sl * La[i];
+                        double Li_dl = w_dl * La[i];
+                        for (int j = 0; j < 3; ++j) {
+                            SL_block[i*3+j] += Li_sl * Lb[j];
+                            DL_block[i*3+j] += Li_dl * Lb[j];
+                        }
+                    }
+                }
+            }
+        } else {
+            // Singular pair: pick SS rule + permutation
+            int pa[3], pb[3];
+            const SSQuad* qss = nullptr;
+            int perm_la_to_orig[3], perm_lb_to_orig[3];
+
+            if (n_sh == 1) {
+                int la = la_arr[0], lb = lb_arr[0];
+                pa[0] = la; pa[1] = (la + 1) % 3; pa[2] = (la + 2) % 3;
+                pb[0] = lb; pb[1] = (lb + 1) % 3; pb[2] = (lb + 2) % 3;
+                qss = &ss_cv;
+            } else if (n_sh == 2) {
+                int la0 = la_arr[0], lb0 = lb_arr[0];
+                int la1 = la_arr[1], lb1 = lb_arr[1];
+                int apex_a = 0 + 1 + 2 - la0 - la1;
+                int apex_b = 0 + 1 + 2 - lb0 - lb1;
+                pa[0] = la0; pa[1] = la1; pa[2] = apex_a;
+                pb[0] = lb0; pb[1] = lb1; pb[2] = apex_b;
+                qss = &ss_ce;
+            } else {  // n_sh == 3 identical
+                int perm_b_canon[3] = {-1, -1, -1};
+                for (int k = 0; k < 3; ++k) {
+                    perm_b_canon[la_arr[k]] = lb_arr[k];
+                }
+                pa[0] = 0; pa[1] = 1; pa[2] = 2;
+                pb[0] = perm_b_canon[0]; pb[1] = perm_b_canon[1]; pb[2] = perm_b_canon[2];
+                qss = &ss_id;
+            }
+
+            for (int k = 0; k < 3; ++k) {
+                perm_la_to_orig[k] = pa[k];
+                perm_lb_to_orig[k] = pb[k];
+            }
+            parity_sign_b = perm_parity_sign(pb[0], pb[1], pb[2]);
+
+            double p2a_perm[18], p2b_perm[18];
+            permute_p2(p2a, pa[0], pa[1], pa[2], p2a_perm);
+            permute_p2(p2b, pb[0], pb[1], pb[2], p2b_perm);
+
+            int n_quad = qss->n();
+            for (int q = 0; q < n_quad; ++q) {
+                accumulate_pair_quadpt(qss->xi_a[q], qss->eta_a[q],
+                                        qss->xi_b[q], qss->eta_b[q],
+                                        qss->w[q], p2a_perm, p2b_perm,
+                                        SL_block, DL_block);
+            }
+
+            // DL gets parity sign correction (SL invariant under winding)
+            if (parity_sign_b == -1) {
+                for (int k = 0; k < 9; ++k) DL_block[k] = -DL_block[k];
+            }
+
+            // Un-permute the 3x3 block:
+            //  block_perm[i_perm, j_perm] -> SL_orig[pa[i_perm], pb[j_perm]]
+            double SL_orig[9] = {0,0,0,0,0,0,0,0,0};
+            double DL_orig[9] = {0,0,0,0,0,0,0,0,0};
+            for (int i_p = 0; i_p < 3; ++i_p) {
+                for (int j_p = 0; j_p < 3; ++j_p) {
+                    SL_orig[perm_la_to_orig[i_p] * 3 + perm_lb_to_orig[j_p]]
+                        = SL_block[i_p * 3 + j_p];
+                    DL_orig[perm_la_to_orig[i_p] * 3 + perm_lb_to_orig[j_p]]
+                        = DL_block[i_p * 3 + j_p];
+                }
+            }
+            for (int k = 0; k < 9; ++k) {
+                SL_block[k] = SL_orig[k];
+                DL_block[k] = DL_orig[k];
+            }
+        }
+
+        PairBlock out;
+        std::copy(SL_block,SL_block+9,out.SL);
+        std::copy(DL_block,DL_block+9,out.DL);
+        ++evaluations;
+        return out;
+    }
+    PairBlock Pair(int a,int b) {
+        ++requests;
+        if(slots.empty()) return ComputePair(a,b);
+        uint64_t key=(uint64_t(uint32_t(a))<<32)|uint32_t(b);
+        // Fixed-size direct-mapped cache: allocation independent of request count.
+        size_t index=((key^(key>>33))*UINT64_C(0xff51afd7ed558ccd))%slots.size();
+        { std::lock_guard<std::mutex> guard(locks[index%locks.size()]);
+          if(slots[index].key==key) { ++hits; return slots[index].block; } }
+        auto block=ComputePair(a,b);
+        { std::lock_guard<std::mutex> guard(locks[index%locks.size()]);
+          slots[index].key=key; slots[index].block=block; }
+        return block;
+    }
+};
+
+P1EntryProvider::P1EntryProvider(const double* vertices,int n_v,const int64_t* triangles,
+    int n_t,const double* nodes,int regular_degree,int singular_order,size_t cache_bytes)
+    : impl_(std::make_unique<Impl>(vertices,n_v,triangles,n_t,nodes,regular_degree,singular_order,cache_bytes)) {}
+P1EntryProvider::~P1EntryProvider()=default;
+int P1EntryProvider::Size() const { return int(impl_->supports.size()); }
+const double* P1EntryProvider::Coordinates() const { return impl_->coords.data(); }
+void P1EntryProvider::Pair(int a,int b,double* sl,double* dl) const {
+    if(a<0 || b<0 || size_t(a)>=impl_->triangles.size()/3 || size_t(b)>=impl_->triangles.size()/3)
+        throw std::out_of_range("P1 triangle pair outside geometry");
+    auto block=impl_->Pair(a,b);
+    std::copy(block.SL,block.SL+9,sl); std::copy(block.DL,block.DL+9,dl);
+}
+P1EntryProvider::EntryValue P1EntryProvider::Entry(int i,int j) const {
+    if(i<0 || j<0 || i>=Size() || j>=Size()) throw std::out_of_range("P1 entry outside geometry");
+    ++impl_->entries;
+    EntryValue out{};
+    for(auto a:impl_->supports[i]) for(auto b:impl_->supports[j]) {
+        auto block=impl_->Pair(a.triangle,b.triangle);
+        const int k=3*a.local+b.local;
+        out.sl+=block.SL[k]; out.dl+=block.DL[k];
+        out.abs_sl+=std::abs(block.SL[k]); out.abs_dl+=std::abs(block.DL[k]);
+        ++out.contributions;
+    }
+    if(!std::isfinite(out.sl) || !std::isfinite(out.dl)) throw std::runtime_error("Nonfinite P1 entry");
+    return out;
+}
+P1EntryProvider::Statistics P1EntryProvider::Stats() const {
+    size_t bytes=0;
+    for(auto v:{&impl_->coords,&impl_->nodes,&impl_->L_near,&impl_->L_mid,&impl_->L_far,
+        &impl_->reg_pts_near,&impl_->reg_w_near,&impl_->reg_n_near,
+        &impl_->reg_pts_mid,&impl_->reg_w_mid,&impl_->reg_n_mid,
+        &impl_->reg_pts_far,&impl_->reg_w_far,&impl_->reg_n_far,
+        &impl_->tri_centroid,&impl_->tri_diam}) bytes+=v->capacity()*sizeof(double);
+    bytes+=impl_->triangles.capacity()*sizeof(int64_t);
+    bytes+=impl_->supports.capacity()*sizeof(std::vector<Impl::Support>);
+    for(const auto& s:impl_->supports) bytes+=s.capacity()*sizeof(Impl::Support);
+    for(const auto* q:{&impl_->ss_cv,&impl_->ss_ce,&impl_->ss_id})
+        bytes+=(q->xi_a.capacity()+q->eta_a.capacity()+q->xi_b.capacity()+q->eta_b.capacity()+q->w.capacity())*sizeof(double);
+    for(const auto* q:{&impl_->q_reg_near,&impl_->q_reg_mid,&impl_->q_reg_far})
+        bytes+=(q->xi.capacity()+q->eta.capacity()+q->w.capacity())*sizeof(double);
+    return {impl_->entries.load(),impl_->requests.load(),impl_->evaluations.load(),impl_->hits.load(),
+            impl_->slots.capacity()*sizeof(Impl::Slot),bytes};
+}
+
 void AssembleSLDL(
     const double* verts, int n_v,
     const int64_t* tris, int n_t,
@@ -519,134 +890,17 @@ void AssembleSLDL(
 {
     (void)verts;  // unused -- positions come from p2_nodes corners
 
-    // Pre-build quadrature rules.  For regular pairs we have two rules:
-    //   - q_reg_near: full requested order, used when admissibility
-    //     test fails (= near pair, distance comparable to tri size).
-    //   - q_reg_far: cheap 1-pt centroid rule, used when pair is far
-    //     enough that 1-pt quadrature is sufficient.
-    // Admissibility criterion (H-matrix style):
-    //   pair is "far" if  dist(c_a, c_b) > eta * (diam_a + diam_b)/2
-    // with eta = 2 (Laplace standard).  ~80-90% of N_t^2 pairs on
-    // typical compact meshes pass this cutoff -> O(100x) speedup on
-    // those entries.
-    TriQuad q_reg_near = pick_tri_quad(regular_quad_degree);
-    TriQuad q_reg_mid;  // intermediate Stroud 7-pt for moderately far
-    {
-        TriQuad q5 = make_stroud_7();
-        q_reg_mid = q5;
-    }
-    TriQuad q_reg_far;  // 1-pt centroid quadrature
-    {
-        q_reg_far.xi.push_back(1.0/3.0);
-        q_reg_far.eta.push_back(1.0/3.0);
-        q_reg_far.w.push_back(0.5);  // sum = 1/2 (= area of T_ref)
-    }
-    constexpr double admissibility_eta_far = 4.0;  // 1-pt rule above this
-    constexpr double admissibility_eta_mid = 2.0;  // 7-pt rule between mid and far
-    SSQuad ss_cv, ss_ce, ss_id;
-    build_ss_common_vertex(singular_n_q, ss_cv);
-    build_ss_common_edge(singular_n_q,   ss_ce);
-    build_ss_identical(singular_n_q,     ss_id);
-
-    // Pre-cache regular-pair physical positions and weights per tri,
-    // for ALL THREE regular rules (near/mid/far).  Per tri keeps
-    //   pts[k] (3, nq_k), w[k] (nq_k), L[k] (nq_k, 3), n_hat[k] (nq_k, 3)
-    // for k = 0 (near), 1 (mid), 2 (far).
-    auto build_L_table = [](const TriQuad& q) {
-        std::vector<double> L(q.n() * 3);
-        for (int qq = 0; qq < q.n(); ++qq) {
-            L[qq*3 + 0] = 1.0 - q.xi[qq] - q.eta[qq];
-            L[qq*3 + 1] = q.xi[qq];
-            L[qq*3 + 2] = q.eta[qq];
-        }
-        return L;
-    };
-    int nq_near = q_reg_near.n();
-    int nq_mid  = q_reg_mid.n();
-    int nq_far  = q_reg_far.n();
-    std::vector<double> L_near = build_L_table(q_reg_near);
-    std::vector<double> L_mid  = build_L_table(q_reg_mid);
-    std::vector<double> L_far  = build_L_table(q_reg_far);
-    std::vector<double> reg_pts_near((size_t)n_t * nq_near * 3);
-    std::vector<double> reg_w_near  ((size_t)n_t * nq_near);
-    std::vector<double> reg_n_near  ((size_t)n_t * nq_near * 3);
-    std::vector<double> reg_pts_mid ((size_t)n_t * nq_mid  * 3);
-    std::vector<double> reg_w_mid   ((size_t)n_t * nq_mid);
-    std::vector<double> reg_n_mid   ((size_t)n_t * nq_mid  * 3);
-    std::vector<double> reg_pts_far ((size_t)n_t * nq_far  * 3);
-    std::vector<double> reg_w_far   ((size_t)n_t * nq_far);
-    std::vector<double> reg_n_far   ((size_t)n_t * nq_far  * 3);
-
-    // Per-tri centroid + diameter for admissibility test
-    std::vector<double> tri_centroid((size_t)n_t * 3);
-    std::vector<double> tri_diam((size_t)n_t);
-
-    // RegionTaskManager: ensures TaskManager is up and the worker
-    // threads are spinning for the duration of this call.  Without this
-    // wrapper, ngcore::ParallelFor falls back to a single-threaded
-    // serial loop (the case for our pybind path that runs OUTSIDE of
-    // an enclosing NGSolve TaskManager context).
-    int requested_threads = (n_threads > 0)
-        ? n_threads
-        : ngcore::TaskManager::GetMaxThreads();
-    if (requested_threads <= 0) requested_threads = 1;
+    int requested_threads=(n_threads>0)?n_threads:ngcore::TaskManager::GetMaxThreads();
+    if(requested_threads<=0) requested_threads=1;
     ngcore::RegionTaskManager rtm(requested_threads);
-
-    auto build_per_tri = [&](const TriQuad& q,
-                              std::vector<double>& pts,
-                              std::vector<double>& w,
-                              std::vector<double>& n_arr) {
-        int nq = q.n();
-        ngcore::ParallelFor(ngcore::IntRange(n_t), [&](size_t t) {
-            const double* p2 = &p2_nodes[t * 6 * 3];
-            for (int qq = 0; qq < nq; ++qq) {
-                double r[3], n_hat[3], J;
-                p2_geom(p2, q.xi[qq], q.eta[qq], r, &J, n_hat);
-                size_t base = (t * nq + qq) * 3;
-                pts[base + 0] = r[0]; pts[base + 1] = r[1]; pts[base + 2] = r[2];
-                n_arr[base + 0] = n_hat[0]; n_arr[base + 1] = n_hat[1];
-                n_arr[base + 2] = n_hat[2];
-                w[t * nq + qq] = q.w[qq] * J;
-            }
-        });
-    };
-    build_per_tri(q_reg_near, reg_pts_near, reg_w_near, reg_n_near);
-    build_per_tri(q_reg_mid,  reg_pts_mid,  reg_w_mid,  reg_n_mid);
-    build_per_tri(q_reg_far,  reg_pts_far,  reg_w_far,  reg_n_far);
-
-    // Centroid + diameter per tri (use corner vertices of tri for diam,
-    // not P2 nodes -- diam = max edge length).
-    ngcore::ParallelFor(ngcore::IntRange(n_t), [&](size_t t) {
-        const double* p2 = &p2_nodes[t * 6 * 3];
-        // Corners: P2 nodes [0], [1], [2]
-        double cx = (p2[0] + p2[3] + p2[6]) / 3.0;
-        double cy = (p2[1] + p2[4] + p2[7]) / 3.0;
-        double cz = (p2[2] + p2[5] + p2[8]) / 3.0;
-        tri_centroid[t * 3 + 0] = cx;
-        tri_centroid[t * 3 + 1] = cy;
-        tri_centroid[t * 3 + 2] = cz;
-        // Diameter: max corner-to-corner distance
-        double e0 = (p2[3]-p2[0])*(p2[3]-p2[0]) + (p2[4]-p2[1])*(p2[4]-p2[1]) + (p2[5]-p2[2])*(p2[5]-p2[2]);
-        double e1 = (p2[6]-p2[3])*(p2[6]-p2[3]) + (p2[7]-p2[4])*(p2[7]-p2[4]) + (p2[8]-p2[5])*(p2[8]-p2[5]);
-        double e2 = (p2[6]-p2[0])*(p2[6]-p2[0]) + (p2[7]-p2[1])*(p2[7]-p2[1]) + (p2[8]-p2[2])*(p2[8]-p2[2]);
-        tri_diam[t] = std::sqrt(std::max({e0, e1, e2}));
-    });
-
+    P1EntryProvider provider(verts,n_v,tris,n_t,p2_nodes,regular_quad_degree,singular_n_q,0);
     // Zero output matrices
     std::fill(SL_out, SL_out + (size_t)n_v * n_v, 0.0);
     std::fill(DL_out, DL_out + (size_t)n_v * n_v, 0.0);
 
-    // Parallelization strategy: thread-local (n_v, n_v) accumulators
-    // per outer-`a` chunk, reduced at the end.  Avoids atomic-scatter
-    // contention (which made our 24.5M-pair scatter take longer than
-    // the float work).
-    //
-    // Memory: each task allocates a small per-row buffer flushed after
-    // its work block.  For typical cases this stays in L2.
-    //
-    // For very large n_v (>5K), per-thread n_v*n_v allocators would
-    // consume too much; we fall back to an atomic scatter then.  For
-    // n_v <= 5000 the per-thread buffer is 200 MB max which is OK.
+    // Dense reference only: small meshes retain the legacy thread-local
+    // reduction. Large meshes use three row buffers per task and locked
+    // row merges; a plain concurrent scatter would lose shared-vertex sums.
     const bool use_thread_local = (n_v <= 5000);
 
     int n_thr = std::max(1, ngcore::TaskManager::GetMaxThreads());
@@ -666,169 +920,19 @@ void AssembleSLDL(
         int a = static_cast<int>(a_sz);
         int tid = use_thread_local ? ngcore::TaskManager::GetThreadId() : 0;
         std::vector<double> sl_rows, dl_rows;
-        if (!use_thread_local) {
-            sl_rows.assign(size_t(3)*n_v, 0.0);
-            dl_rows.assign(size_t(3)*n_v, 0.0);
+        if(!use_thread_local) {
+            sl_rows.assign(size_t(3)*n_v,0.0);
+            dl_rows.assign(size_t(3)*n_v,0.0);
         }
         double* SL_acc = use_thread_local ? SL_local[tid].data() : sl_rows.data();
         double* DL_acc = use_thread_local ? DL_local[tid].data() : dl_rows.data();
 
         const int64_t* Va = &tris[a * 3];
-        const double* p2a = &p2_nodes[a * 6 * 3];
-
         for (int b = 0; b < n_t; ++b) {
             const int64_t* Vb = &tris[b * 3];
-            const double* p2b = &p2_nodes[b * 6 * 3];
+            double SL_block[9],DL_block[9];
+            provider.Pair(a,b,SL_block,DL_block);
 
-            int la_arr[3], lb_arr[3];
-            int n_sh = find_shared(Va, Vb, la_arr, lb_arr);
-
-            double SL_block[9] = {0,0,0,0,0,0,0,0,0};
-            double DL_block[9] = {0,0,0,0,0,0,0,0,0};
-            int parity_sign_b = +1;  // for DL only
-
-            if (n_sh == 0) {
-                // Regular: dispatch to far/mid/near rule by admissibility.
-                double cx = tri_centroid[(size_t)a*3]   - tri_centroid[(size_t)b*3];
-                double cy = tri_centroid[(size_t)a*3+1] - tri_centroid[(size_t)b*3+1];
-                double cz = tri_centroid[(size_t)a*3+2] - tri_centroid[(size_t)b*3+2];
-                double d_centroid = std::sqrt(cx*cx + cy*cy + cz*cz);
-                double diam_sum = tri_diam[a] + tri_diam[b];
-
-                int nq_use;
-                const double* pts_a_use; const double* w_a_use;
-                const double* L_use_a;
-                const double* pts_b_use; const double* w_b_use;
-                const double* n_b_use; const double* L_use_b;
-                if (d_centroid > admissibility_eta_far * diam_sum) {
-                    nq_use = nq_far;
-                    pts_a_use = &reg_pts_far[(size_t)a * nq_far * 3];
-                    w_a_use   = &reg_w_far[(size_t)a * nq_far];
-                    pts_b_use = &reg_pts_far[(size_t)b * nq_far * 3];
-                    w_b_use   = &reg_w_far[(size_t)b * nq_far];
-                    n_b_use   = &reg_n_far[(size_t)b * nq_far * 3];
-                    L_use_a = L_far.data();  L_use_b = L_far.data();
-                } else if (d_centroid > admissibility_eta_mid * diam_sum) {
-                    nq_use = nq_mid;
-                    pts_a_use = &reg_pts_mid[(size_t)a * nq_mid * 3];
-                    w_a_use   = &reg_w_mid[(size_t)a * nq_mid];
-                    pts_b_use = &reg_pts_mid[(size_t)b * nq_mid * 3];
-                    w_b_use   = &reg_w_mid[(size_t)b * nq_mid];
-                    n_b_use   = &reg_n_mid[(size_t)b * nq_mid * 3];
-                    L_use_a = L_mid.data();  L_use_b = L_mid.data();
-                } else {
-                    nq_use = nq_near;
-                    pts_a_use = &reg_pts_near[(size_t)a * nq_near * 3];
-                    w_a_use   = &reg_w_near[(size_t)a * nq_near];
-                    pts_b_use = &reg_pts_near[(size_t)b * nq_near * 3];
-                    w_b_use   = &reg_w_near[(size_t)b * nq_near];
-                    n_b_use   = &reg_n_near[(size_t)b * nq_near * 3];
-                    L_use_a = L_near.data();  L_use_b = L_near.data();
-                }
-
-                for (int qa = 0; qa < nq_use; ++qa) {
-                    double xa[3] = {pts_a_use[qa*3], pts_a_use[qa*3+1], pts_a_use[qa*3+2]};
-                    double La0 = L_use_a[qa*3], La1 = L_use_a[qa*3+1], La2 = L_use_a[qa*3+2];
-                    double wa = w_a_use[qa];
-                    for (int qb = 0; qb < nq_use; ++qb) {
-                        double xb[3] = {pts_b_use[qb*3], pts_b_use[qb*3+1], pts_b_use[qb*3+2]};
-                        double Lb0 = L_use_b[qb*3], Lb1 = L_use_b[qb*3+1], Lb2 = L_use_b[qb*3+2];
-                        double wb = w_b_use[qb];
-                        double dx = xa[0] - xb[0];
-                        double dy = xa[1] - xb[1];
-                        double dz = xa[2] - xb[2];
-                        double r2 = dx*dx + dy*dy + dz*dz;
-                        double r = std::sqrt(r2);
-                        double K_sl = INV_4PI / r;
-                        double dot_n = dx * n_b_use[qb*3] + dy * n_b_use[qb*3+1] + dz * n_b_use[qb*3+2];
-                        double K_dl = dot_n * INV_4PI / (r2 * r);
-                        double w_pair = wa * wb;
-                        double w_sl = K_sl * w_pair;
-                        double w_dl = K_dl * w_pair;
-                        double La[3] = {La0, La1, La2};
-                        double Lb[3] = {Lb0, Lb1, Lb2};
-                        for (int i = 0; i < 3; ++i) {
-                            double Li_sl = w_sl * La[i];
-                            double Li_dl = w_dl * La[i];
-                            for (int j = 0; j < 3; ++j) {
-                                SL_block[i*3+j] += Li_sl * Lb[j];
-                                DL_block[i*3+j] += Li_dl * Lb[j];
-                            }
-                        }
-                    }
-                }
-            } else {
-                // Singular pair: pick SS rule + permutation
-                int pa[3], pb[3];
-                const SSQuad* qss = nullptr;
-                int perm_la_to_orig[3], perm_lb_to_orig[3];
-
-                if (n_sh == 1) {
-                    int la = la_arr[0], lb = lb_arr[0];
-                    pa[0] = la; pa[1] = (la + 1) % 3; pa[2] = (la + 2) % 3;
-                    pb[0] = lb; pb[1] = (lb + 1) % 3; pb[2] = (lb + 2) % 3;
-                    qss = &ss_cv;
-                } else if (n_sh == 2) {
-                    int la0 = la_arr[0], lb0 = lb_arr[0];
-                    int la1 = la_arr[1], lb1 = lb_arr[1];
-                    int apex_a = 0 + 1 + 2 - la0 - la1;
-                    int apex_b = 0 + 1 + 2 - lb0 - lb1;
-                    pa[0] = la0; pa[1] = la1; pa[2] = apex_a;
-                    pb[0] = lb0; pb[1] = lb1; pb[2] = apex_b;
-                    qss = &ss_ce;
-                } else {  // n_sh == 3 identical
-                    int perm_b_canon[3] = {-1, -1, -1};
-                    for (int k = 0; k < 3; ++k) {
-                        perm_b_canon[la_arr[k]] = lb_arr[k];
-                    }
-                    pa[0] = 0; pa[1] = 1; pa[2] = 2;
-                    pb[0] = perm_b_canon[0]; pb[1] = perm_b_canon[1]; pb[2] = perm_b_canon[2];
-                    qss = &ss_id;
-                }
-
-                for (int k = 0; k < 3; ++k) {
-                    perm_la_to_orig[k] = pa[k];
-                    perm_lb_to_orig[k] = pb[k];
-                }
-                parity_sign_b = perm_parity_sign(pb[0], pb[1], pb[2]);
-
-                double p2a_perm[18], p2b_perm[18];
-                permute_p2(p2a, pa[0], pa[1], pa[2], p2a_perm);
-                permute_p2(p2b, pb[0], pb[1], pb[2], p2b_perm);
-
-                int n_quad = qss->n();
-                for (int q = 0; q < n_quad; ++q) {
-                    accumulate_pair_quadpt(qss->xi_a[q], qss->eta_a[q],
-                                            qss->xi_b[q], qss->eta_b[q],
-                                            qss->w[q], p2a_perm, p2b_perm,
-                                            SL_block, DL_block);
-                }
-
-                // DL gets parity sign correction (SL invariant under winding)
-                if (parity_sign_b == -1) {
-                    for (int k = 0; k < 9; ++k) DL_block[k] = -DL_block[k];
-                }
-
-                // Un-permute the 3x3 block:
-                //  block_perm[i_perm, j_perm] -> SL_orig[pa[i_perm], pb[j_perm]]
-                double SL_orig[9] = {0,0,0,0,0,0,0,0,0};
-                double DL_orig[9] = {0,0,0,0,0,0,0,0,0};
-                for (int i_p = 0; i_p < 3; ++i_p) {
-                    for (int j_p = 0; j_p < 3; ++j_p) {
-                        SL_orig[perm_la_to_orig[i_p] * 3 + perm_lb_to_orig[j_p]]
-                            = SL_block[i_p * 3 + j_p];
-                        DL_orig[perm_la_to_orig[i_p] * 3 + perm_lb_to_orig[j_p]]
-                            = DL_block[i_p * 3 + j_p];
-                    }
-                }
-                for (int k = 0; k < 9; ++k) {
-                    SL_block[k] = SL_orig[k];
-                    DL_block[k] = DL_orig[k];
-                }
-            }
-
-            // Scatter into thread-local SL_acc / DL_acc (or SL_out
-            // into buffered local rows for large n_v).
             for (int i = 0; i < 3; ++i) {
                 int gi = use_thread_local ? static_cast<int>(Va[i]) : i;
                 for (int j = 0; j < 3; ++j) {
@@ -838,15 +942,12 @@ void AssembleSLDL(
                 }
             }
         }  // b
-
-        // Neighboring test triangles share rows. Merge each complete buffered
-        // row under its stripe lock; no unsynchronized shared += remains.
-        if (!use_thread_local) for (int i=0; i<3; ++i) {
+        if(!use_thread_local) for(int i=0;i<3;++i) {
             const int gi=int(Va[i]);
             std::lock_guard<std::mutex> guard(row_mutex[gi%row_mutex.size()]);
-            for (int j=0; j<n_v; ++j) {
-                SL_out[size_t(gi)*n_v+j] += sl_rows[size_t(i)*n_v+j];
-                DL_out[size_t(gi)*n_v+j] += dl_rows[size_t(i)*n_v+j];
+            for(int j=0;j<n_v;++j) {
+                SL_out[size_t(gi)*n_v+j]+=sl_rows[size_t(i)*n_v+j];
+                DL_out[size_t(gi)*n_v+j]+=dl_rows[size_t(i)*n_v+j];
             }
         }
     });  // a (ParallelFor)

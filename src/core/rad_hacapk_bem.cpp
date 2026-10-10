@@ -22,6 +22,10 @@ RadHACApKBEMManager::RadHACApKBEMManager(const double* coordinates,
 {
 }
 
+RadHACApKBEMManager::RadHACApKBEMManager(std::shared_ptr<radia::bem::P1EntryProvider> provider, bool double_layer)
+    : m_coords_ext(provider->Coordinates()), m_entries_ext(nullptr), m_n_v(provider->Size()),
+      m_provider(std::move(provider)), m_double_layer(double_layer) {}
+
 void RadHACApKBEMManager::ExtractCoordinates() {
     m_n_elem = m_n_v;
     m_ndof = m_n_v;
@@ -51,6 +55,10 @@ void RadHACApKBEMManager::InitializeInvChi() {
 }
 
 double RadHACApKBEMManager::GetInteractionMatrixElement(int dof_i, int dof_j) const {
-    // O(1) lookup into the row-major dense table.
+    if (m_provider) {
+        auto entry=m_provider->Entry(dof_i,dof_j);
+        return m_double_layer ? entry.dl : entry.sl;
+    }
+    // Legacy dense-entry reference route.
     return m_entries_ext[static_cast<size_t>(dof_i) * m_n_v + dof_j];
 }

@@ -246,6 +246,10 @@ _PYBIND_INTERNAL_NUMERICAL_COMMANDS = {
 }
 
 _PYBIND_INTERNAL_EXCLUSIONS = {
+    "_CreateP1HACApKGeometry": (
+        "private Python scalar-P1 assembly boundary; MATLAB IH consumes its frozen "
+        "operator artifact through the existing assembly workflow; native MATLAB "
+        "dense-entry hacapk.bem handles retain their declared interface"),
     "_periodic_h1_single_interface": (
         "NGSolve-owned periodic H1 space construction; MATLAB uses "
         "radia.python.periodicH1 under the periodic-h1-space Python fallback "
@@ -287,6 +291,10 @@ _PYBIND_CLASS_EXCLUSIONS = {
     "_PEECBuilderInternal.__binding__": "implementation holder",
     "_HACApKPEECManagerInternal.__binding__": "implementation holder",
     "_HACApKBEMManagerInternal.__binding__": "implementation holder",
+    **{f"_P1EntryProvider.{member}": (
+        "private Python on-demand quadrature holder and validation introspection; "
+        "MATLAB IH consumes the assembled frozen artifact")
+       for member in ("__binding__", "Entry", "GetStats")},
     "HACApKBEMManager.ReleaseDenseEntries": (
         "drops the pybind11 reference to the Python-owned NumPy entry table "
         "after compression; MATLAB hacapk.bem handles hold no Python arrays"),

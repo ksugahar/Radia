@@ -21,6 +21,8 @@
 
 #include "rad_hacapk.h"
 #include <vector>
+#include "rad_bem_galerkin.h"
+#include <memory>
 
 /**
  * Default HACApK parameters tuned for the scalar Laplace SL kernel
@@ -73,6 +75,8 @@ public:
     RadHACApKBEMManager(const double* coordinates,
                         const double* dense_entries,
                         int n_v);
+    RadHACApKBEMManager(std::shared_ptr<radia::bem::P1EntryProvider> provider, bool double_layer);
+
     ~RadHACApKBEMManager() override = default;
 
     /**
@@ -94,6 +98,8 @@ private:
     const double* m_coords_ext;   // not owned, n_v * 3
     const double* m_entries_ext;  // not owned, n_v * n_v row-major
     int m_n_v;
+    std::shared_ptr<radia::bem::P1EntryProvider> m_provider;
+    bool m_double_layer = false;
 };
 
 #endif // __RAD_HACAPK_BEM_H
