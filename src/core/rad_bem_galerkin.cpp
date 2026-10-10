@@ -20,6 +20,7 @@
 
 #include <vector>
 #include <array>
+#include <mutex>
 #include <atomic>
 #include <cmath>
 #include <cstdint>
@@ -660,11 +661,17 @@ void AssembleSLDL(
         }
     }
 
+    std::array<std::mutex,64> row_mutex;
     ngcore::ParallelFor(ngcore::IntRange(n_t), [&](size_t a_sz) {
         int a = static_cast<int>(a_sz);
         int tid = use_thread_local ? ngcore::TaskManager::GetThreadId() : 0;
-        double* SL_acc = use_thread_local ? SL_local[tid].data() : SL_out;
-        double* DL_acc = use_thread_local ? DL_local[tid].data() : DL_out;
+        std::vector<double> sl_rows, dl_rows;
+        if (!use_thread_local) {
+            sl_rows.assign(size_t(3)*n_v, 0.0);
+            dl_rows.assign(size_t(3)*n_v, 0.0);
+        }
+        double* SL_acc = use_thread_local ? SL_local[tid].data() : sl_rows.data();
+        double* DL_acc = use_thread_local ? DL_local[tid].data() : dl_rows.data();
 
         const int64_t* Va = &tris[a * 3];
         const double* p2a = &p2_nodes[a * 6 * 3];
@@ -821,10 +828,9 @@ void AssembleSLDL(
             }
 
             // Scatter into thread-local SL_acc / DL_acc (or SL_out
-            // directly when use_thread_local==false -- single-threaded
-            // path used for very large n_v).
+            // into buffered local rows for large n_v).
             for (int i = 0; i < 3; ++i) {
-                int gi = static_cast<int>(Va[i]);
+                int gi = use_thread_local ? static_cast<int>(Va[i]) : i;
                 for (int j = 0; j < 3; ++j) {
                     int gj = static_cast<int>(Vb[j]);
                     SL_acc[(size_t)gi * n_v + gj] += SL_block[i*3 + j];
@@ -832,6 +838,17 @@ void AssembleSLDL(
                 }
             }
         }  // b
+
+        // Neighboring test triangles share rows. Merge each complete buffered
+        // row under its stripe lock; no unsynchronized shared += remains.
+        if (!use_thread_local) for (int i=0; i<3; ++i) {
+            const int gi=int(Va[i]);
+            std::lock_guard<std::mutex> guard(row_mutex[gi%row_mutex.size()]);
+            for (int j=0; j<n_v; ++j) {
+                SL_out[size_t(gi)*n_v+j] += sl_rows[size_t(i)*n_v+j];
+                DL_out[size_t(gi)*n_v+j] += dl_rows[size_t(i)*n_v+j];
+            }
+        }
     });  // a (ParallelFor)
 
     // Reduce thread-local accumulators (if we used them) into the
@@ -1033,7 +1050,7 @@ void AssembleSLDL_P2(
     std::fill(DL_out, DL_out + (size_t)n_dof * n_dof, 0.0);
 
     // Thread-local n_dof^2 accumulators when the working set fits.
-    // For very large n_dof we fall back to atomic scatter (single-threaded).
+    // Large systems use local rows and synchronized merges.
     const bool use_thread_local = (n_dof <= 5000);
     int n_thr = std::max(1, ngcore::TaskManager::GetMaxThreads());
     std::vector<std::vector<double>> SL_local;
@@ -1047,11 +1064,17 @@ void AssembleSLDL_P2(
         }
     }
 
+    std::array<std::mutex,64> row_mutex;
     ngcore::ParallelFor(ngcore::IntRange(n_t), [&](size_t a_sz) {
         int a = static_cast<int>(a_sz);
         int tid = use_thread_local ? ngcore::TaskManager::GetThreadId() : 0;
-        double* SL_acc = use_thread_local ? SL_local[tid].data() : SL_out;
-        double* DL_acc = use_thread_local ? DL_local[tid].data() : DL_out;
+        std::vector<double> sl_rows, dl_rows;
+        if (!use_thread_local) {
+            sl_rows.assign(size_t(6)*n_dof, 0.0);
+            dl_rows.assign(size_t(6)*n_dof, 0.0);
+        }
+        double* SL_acc = use_thread_local ? SL_local[tid].data() : sl_rows.data();
+        double* DL_acc = use_thread_local ? DL_local[tid].data() : dl_rows.data();
 
         const int64_t* Va = &tris[a * 3];
         const double* p2a = &p2_nodes[a * 6 * 3];
@@ -1208,12 +1231,23 @@ void AssembleSLDL_P2(
 
             // Scatter the 6x6 block into (n_dof, n_dof) using dofs_per_tri.
             for (int i = 0; i < 6; ++i) {
-                int gi = static_cast<int>(Da[i]);
+                int gi = use_thread_local ? static_cast<int>(Da[i]) : i;
                 for (int j = 0; j < 6; ++j) {
                     int gj = static_cast<int>(Db[j]);
                     SL_acc[(size_t)gi * n_dof + gj] += SL_block[i*6 + j];
                     DL_acc[(size_t)gi * n_dof + gj] += DL_block[i*6 + j];
                 }
+            }
+        }
+
+        // Neighboring test triangles share rows. Merge each complete buffered
+        // row under its stripe lock; no unsynchronized shared += remains.
+        if (!use_thread_local) for (int i=0; i<6; ++i) {
+            const int gi=int(Da[i]);
+            std::lock_guard<std::mutex> guard(row_mutex[gi%row_mutex.size()]);
+            for (int j=0; j<n_dof; ++j) {
+                SL_out[size_t(gi)*n_dof+j] += sl_rows[size_t(i)*n_dof+j];
+                DL_out[size_t(gi)*n_dof+j] += dl_rows[size_t(i)*n_dof+j];
             }
         }
     });
