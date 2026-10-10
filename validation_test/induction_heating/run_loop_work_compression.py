@@ -38,8 +38,19 @@ def run(level, backend, compact, repeats, threads, body_backend="dense", aca_eps
     for repeat in range(repeats):
         started = time.perf_counter()
         def phase(_tag,message):
-            if message.startswith("HACApK compress:") or message.startswith("HACApK compress done") or message=="HACApK release source entries":
-                phases.append(dict(repeat=repeat,phase=("before-compression" if ":" in message else "before-entry-release" if message=="HACApK release source entries" else "after-entry-release"),**memory()))
+            labels = {
+                "HACApK release source entries": "before-entry-release",
+                "HACApK on-demand P1 build done": "after-on-demand-build",
+            }
+            label = labels.get(message)
+            if message.startswith("HACApK compress:"):
+                label = "before-compression"
+            elif message.startswith("HACApK compress done"):
+                label = "after-entry-release"
+            elif message.startswith("HACApK on-demand P1 build:"):
+                label = "before-on-demand-build"
+            if label:
+                phases.append(dict(repeat=repeat, phase=label, **memory()))
         with ng.TaskManager():
             mesh, points, triangles = ring_mesh(level)
             solver = ScalarBIESIBCSolver(mesh, order=1, assemble_dense=body_backend=="dense",
@@ -133,6 +144,12 @@ def run(level, backend, compact, repeats, threads, body_backend="dense", aca_eps
         body_hmatrix_controls=(solver.hacapk_controls.copy() if body_backend=="hacapk" else None),
         body_sl_reciprocity=reciprocity,
         agreement_bound=max(10*np.sqrt(aca_eps),1e-10) if body_backend=="hacapk" else .001,
+        body_construction_route=(solver._SL_hacapk.GetStats().get("construction_route", "dense-entry")
+                                 if body_backend=="hacapk" else "dense"),
+        body_build_diagnostics=getattr(solver, "_body_build_diagnostics", None),
+        body_shared_entry_provider=(solver._entry_provider.GetStats()
+                                    if hasattr(solver, "_entry_provider") else None),
+        body_requested_entry_cache_bytes=(8*1024*1024 if hasattr(solver, "_entry_provider") else None),
         body_hmatrix_stats=([solver._SL_hacapk.GetStats(),solver._DL_hacapk.GetStats()]
                             if body_backend=="hacapk" else None),
         threads=threads, ngsolve_version=ng.__version__,

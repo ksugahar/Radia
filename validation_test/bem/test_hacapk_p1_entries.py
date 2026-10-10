@@ -68,6 +68,8 @@ def test_owned_entries_and_cache_independence(reverse, curved):
 
 def test_bad_geometry_and_entry_indices_fail_loudly():
     vertices, triangles, nodes = geometry()
+    with pytest.raises(TypeError):
+        native._CreateP1HACApKGeometry(vertices, triangles, nodes)
     with ng.TaskManager():
         _, _, provider = native._CreateP1HACApKGeometry(vertices, triangles, nodes, 7, 6, 0)
         for i, j in ((-1, 0), (0, -1), (16, 0), (0, 16)):
@@ -75,9 +77,41 @@ def test_bad_geometry_and_entry_indices_fail_loudly():
                 provider.Entry(i, j)
         invalid = triangles.copy(); invalid[0, 0] = len(vertices)
         with pytest.raises(ValueError, match='outside'):
-            native._CreateP1HACApKGeometry(vertices, invalid, nodes)
+            native._CreateP1HACApKGeometry(vertices, invalid, nodes, 7, 6)
         invalid = nodes.copy(); invalid[0, 0, 0] += 1
         with pytest.raises(ValueError, match='corners'):
-            native._CreateP1HACApKGeometry(vertices, triangles, invalid)
+            native._CreateP1HACApKGeometry(vertices, triangles, invalid, 7, 6)
         with pytest.raises(ValueError, match='requires coordinates'):
-            native._CreateP1HACApKGeometry(vertices.ravel(), triangles, nodes)
+            native._CreateP1HACApKGeometry(vertices.ravel(), triangles, nodes, 7, 6)
+
+
+def test_solver_forwards_quadrature_without_dense_source(monkeypatch):
+    import importlib.util
+    from pathlib import Path
+    from scipy.sparse import issparse
+    from radia.bem_sibc_solver import ScalarBIESIBCSolver
+    path = Path(__file__).resolve().parents[1] / 'induction_heating/run_loop_work_ring.py'
+    spec = importlib.util.spec_from_file_location('on_demand_contract_ring', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    mesh, _, _ = module.ring_mesh(16)
+    factory = native._CreateP1HACApKGeometry
+    seen = []
+    def capture(coords, triangles, nodes, regular, singular, cache):
+        seen.append((regular, singular, cache))
+        return factory(coords, triangles, nodes, regular, singular, cache)
+    def forbid_dense(*args, **kwargs):
+        raise AssertionError('On-demand route called the dense assembler')
+    monkeypatch.setattr(native, '_CreateP1HACApKGeometry', capture)
+    monkeypatch.setattr(native, '_AssembleSLDL_Galerkin', forbid_dense)
+    with ng.TaskManager():
+        solver = ScalarBIESIBCSolver(mesh, order=1, use_intree_bem=True,
+            use_intree_hacapk=True, assemble_dense=False, intree_geom_order=1,
+            intree_regular_quad_degree=5, intree_singular_n_q=4,
+            hacapk_entry_cache_bytes=0)
+    assert seen == [(5, 4, 0)]
+    assert solver.SL is None and solver.DL is None
+    assert issparse(solver.M) and issparse(solver.K)
+    assert solver._body_construction_route == 'p1-entry-on-demand'
+    assert solver._entry_provider.GetStats()['cache_bytes'] == 0
+    assert solver._SL_hacapk.GetStats()['source_dense_bytes'] == 0

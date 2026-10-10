@@ -7017,8 +7017,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
               triangles.data(),int(triangles.shape(0)),nodes.data(),regular_degree,singular_order,cache_bytes); }
         return py::make_tuple(std::make_unique<PyHACApKBEMManager>(provider,false),
             std::make_unique<PyHACApKBEMManager>(provider,true),provider);
-    },py::arg("coords"),py::arg("triangles"),py::arg("nodes"),py::arg("regular_degree")=11,
-      py::arg("singular_order")=8,py::arg("cache_bytes")=8*1024*1024,
+    },py::arg("coords"),py::arg("triangles"),py::arg("nodes"),py::arg("regular_degree"),
+      py::arg("singular_order"),py::arg("cache_bytes")=8*1024*1024,
       "Owned P1 geometry and two on-demand HACApK managers; no dense entries. Caller owns TaskManager.");
 
     // ========================================================================

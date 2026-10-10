@@ -824,6 +824,11 @@ struct P1EntryProvider::Impl {
         if(slots.empty()) return ComputePair(a,b);
         uint64_t key=(uint64_t(uint32_t(a))<<32)|uint32_t(b);
         // Fixed-size direct-mapped cache: allocation independent of request count.
+        // Each slot belongs to one of 64 mutex stripes. Readers copy the whole
+        // block while holding that stripe; writers publish key + block under
+        // the same lock, so eviction cannot expose a partially written block.
+        // Compute outside the lock: duplicate misses are safe and return the
+        // same quadrature result, independently of cache scheduling.
         size_t index=((key^(key>>33))*UINT64_C(0xff51afd7ed558ccd))%slots.size();
         { std::lock_guard<std::mutex> guard(locks[index%locks.size()]);
           if(slots[index].key==key) { ++hits; return slots[index].block; } }
