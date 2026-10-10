@@ -27,7 +27,7 @@ from run_loop_work_ring import ring_mesh
 from run_loop_work_performance import memory
 
 
-def run(level, backend, compact, repeats, threads, body_backend="dense", aca_eps=1e-10, gmres_tol=1e-10):
+def run(level, backend, compact, repeats, threads, body_backend="dense", aca_eps=1e-10, gmres_tol=1e-10, body_construction="auto"):
     mu0, omega = 4e-7*np.pi, 2*np.pi*5e4
     z = (1+1j)*np.sqrt(omega*mu0/(2*5.8e7))
 
@@ -53,11 +53,12 @@ def run(level, backend, compact, repeats, threads, body_backend="dense", aca_eps
                 phases.append(dict(repeat=repeat, phase=label, **memory()))
         with ng.TaskManager():
             mesh, points, triangles = ring_mesh(level)
+            construction_kwargs = {} if body_construction=="auto" else dict(hacapk_construction=body_construction)
             solver = ScalarBIESIBCSolver(mesh, order=1, assemble_dense=body_backend=="dense",
                 use_intree_hacapk=body_backend=="hacapk", hacapk_aca_eps=aca_eps,
                 use_intree_bem=True, intree_geom_order=1,
                 intree_singular_n_q=6, intree_regular_quad_degree=7,
-                loop_work_backend=backend,log_fn=phase)
+                loop_work_backend=backend,log_fn=phase,**construction_kwargs)
             body_seconds = time.perf_counter()-started
             from radia.bem_loop_work import _body_layer
             solver._loop_body_backend = body_backend
@@ -164,6 +165,7 @@ def main():
     parser.add_argument("--level", type=int, required=True)
     parser.add_argument("--backend", choices=["auto", "dense", "fmm"], required=True)
     parser.add_argument("--body-backend",choices=["dense","hacapk"],default="dense")
+    parser.add_argument("--body-construction",choices=["auto","dense-entry","on-demand"],default="auto")
     parser.add_argument("--aca-eps",type=float,default=1e-10)
     parser.add_argument("--gmres-tol",type=float,default=1e-10)
     parser.add_argument("--compact-cases", action="store_true")
@@ -175,7 +177,7 @@ def main():
     if args.threads < 1 or args.repeats < 1:
         parser.error("threads and repeats must be positive")
     ng.SetNumThreads(args.threads)
-    result, fields = run(args.level, args.backend, args.compact_cases, args.repeats, args.threads,args.body_backend,args.aca_eps,args.gmres_tol)
+    result, fields = run(args.level, args.backend, args.compact_cases, args.repeats, args.threads,args.body_backend,args.aca_eps,args.gmres_tol,args.body_construction)
     if args.reference:
         reference = json.loads(args.reference.read_text(encoding="utf-8"))
         if (reference["geometry_sha256"] != result["geometry_sha256"]

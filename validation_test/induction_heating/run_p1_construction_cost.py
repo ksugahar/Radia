@@ -60,6 +60,7 @@ def main():
             intree_regular_quad_degree=7,hacapk_aca_eps=1e-10,loop_work_backend='fmm',log_fn=phase)
         if args.expected_route=='p1-entry-on-demand':
             controls['hacapk_entry_cache_bytes']=args.cache_bytes
+            controls['hacapk_construction']='on-demand'
         solver=ScalarBIESIBCSolver(mesh,**controls)
         elapsed=time.perf_counter()-started
         route=solver._SL_hacapk.GetStats().get('construction_route','dense-entry')

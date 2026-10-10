@@ -108,10 +108,38 @@ def test_solver_forwards_quadrature_without_dense_source(monkeypatch):
         solver = ScalarBIESIBCSolver(mesh, order=1, use_intree_bem=True,
             use_intree_hacapk=True, assemble_dense=False, intree_geom_order=1,
             intree_regular_quad_degree=5, intree_singular_n_q=4,
-            hacapk_entry_cache_bytes=0)
+            hacapk_entry_cache_bytes=0, hacapk_construction="on-demand")
     assert seen == [(5, 4, 0)]
     assert solver.SL is None and solver.DL is None
     assert issparse(solver.M) and issparse(solver.K)
     assert solver._body_construction_route == 'p1-entry-on-demand'
     assert solver._entry_provider.GetStats()['cache_bytes'] == 0
     assert solver._SL_hacapk.GetStats()['source_dense_bytes'] == 0
+
+
+def test_small_default_keeps_dense_entry_construction(monkeypatch):
+    import importlib.util
+    from pathlib import Path
+    from radia.bem_sibc_solver import ScalarBIESIBCSolver
+    path = Path(__file__).resolve().parents[1] / 'induction_heating/run_loop_work_ring.py'
+    spec = importlib.util.spec_from_file_location('default_construction_ring', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    mesh, _, _ = module.ring_mesh(16)
+    def forbid_on_demand(*args, **kwargs):
+        raise AssertionError('Small default silently switched to the slower on-demand path')
+    monkeypatch.setattr(native, '_CreateP1HACApKGeometry', forbid_on_demand)
+    with ng.TaskManager():
+        solver = ScalarBIESIBCSolver(mesh, order=1, use_intree_bem=True,
+            use_intree_hacapk=True, assemble_dense=False, intree_geom_order=1,
+            intree_regular_quad_degree=7, intree_singular_n_q=6)
+    assert solver._body_construction_route == 'dense-entry'
+    assert solver.SL is None and solver.DL is None
+    assert not hasattr(solver, '_entry_provider')
+    assert solver._SL_hacapk.GetStats()['construction_route'] == 'dense-entry'
+    for bad in (-1, 1.5, True):
+        with pytest.raises(ValueError, match='nonnegative integer'):
+            ScalarBIESIBCSolver(mesh, order=1, use_intree_bem=True,
+                use_intree_hacapk=True, assemble_dense=False, hacapk_entry_cache_bytes=bad)
+    with pytest.raises(ValueError, match='requires non-dense in-tree P1'):
+        ScalarBIESIBCSolver(mesh, assemble_dense=True, hacapk_construction='on-demand')

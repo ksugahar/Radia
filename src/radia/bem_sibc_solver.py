@@ -136,7 +136,7 @@ class ScalarBIESIBCSolver:
                   use_intree_hacapk=False, hacapk_aca_eps=1e-10,
                   hacapk_leaf=64, hacapk_eta=2.0,
                   bnd_label=None, log_fn=None, loop_work_backend="auto",
-                  hacapk_entry_cache_bytes=8*1024*1024):
+                  hacapk_entry_cache_bytes=8*1024*1024, hacapk_construction="auto"):
         """Initialize solver and assemble BEM operators.
 
         Args:
@@ -157,7 +157,8 @@ class ScalarBIESIBCSolver:
             assemble_dense: if True (default, backward-compat), extract
                 ``DL`` and ``SL`` to dense ``ndof x ndof`` numpy arrays
                 via N column matvecs. On the in-tree HACApK P1 route, False
-                evaluates P1 entries on demand and retains sparse M/K
+                retains sparse M/K and releases dense construction tables,
+                or evaluates P1 entries on demand when selected
                 with a cached sparsecholesky mass factor. The default dense
                 route extracts all columns and uses a dense solve.
                 If False, KEEP ``DL_bf`` and ``SL_bf`` as NGSolve
@@ -171,6 +172,14 @@ class ScalarBIESIBCSolver:
                 sideset only).  Only consumed by the in-tree paths
                 (``use_intree_bem=True``); the ngsolve.bem path uses
                 ``ds`` over all BND.
+            hacapk_construction: scalar in-tree P1 compressed construction.
+                "auto" retains dense-entry compression through 7000 DOFs and
+                selects "on-demand" above it. "dense-entry" and "on-demand"
+                explicitly select a route; neither silently substitutes another.
+                Explicit choices require in-tree P1 HACApK and assemble_dense=False.
+            hacapk_entry_cache_bytes: nonnegative integer, default 8 MiB;
+                zero disables the pair-block cache on the on-demand route.
+                This bounds shared SL/DL pair payload, not total solver memory.
             log_fn: optional progress callback ``log_fn(tag, msg)`` used
                 to surface assembly-phase boundaries to the panel debug
                 log + console.  When None (default) the solver is silent
@@ -191,6 +200,16 @@ class ScalarBIESIBCSolver:
 
         if loop_work_backend not in ("auto", "dense", "fmm"):
             raise ValueError("loop_work_backend must be auto, dense, or fmm")
+        if hacapk_construction not in ("auto", "dense-entry", "on-demand"):
+            raise ValueError("hacapk_construction must be auto, dense-entry, or on-demand")
+        if hacapk_construction != "auto" and (not use_intree_hacapk or not use_intree_bem
+                                              or order != 1 or assemble_dense):
+            raise ValueError("Explicit HACApK construction requires non-dense in-tree P1 HACApK")
+        if use_intree_hacapk and not assemble_dense and (
+                isinstance(hacapk_entry_cache_bytes, bool)
+                or not isinstance(hacapk_entry_cache_bytes, (int, np.integer))
+                or hacapk_entry_cache_bytes < 0):
+            raise ValueError("P1 entry cache bytes must be a nonnegative integer")
         self.loop_work_backend = loop_work_backend
         self.hacapk_aca_eps = float(hacapk_aca_eps)
         self.hacapk_controls = dict(aca_eps=float(hacapk_aca_eps), leaf_size=int(hacapk_leaf), eta=float(hacapk_eta), max_rank=-1)
@@ -250,11 +269,9 @@ class ScalarBIESIBCSolver:
             self._intree_v_global = v_global
             self._DL_bf = self._SL_bf = None
             self._SL_hacapk = self._DL_hacapk = None
-            if use_intree_hacapk and not assemble_dense:
-                if (isinstance(hacapk_entry_cache_bytes, bool)
-                        or not isinstance(hacapk_entry_cache_bytes, (int, np.integer))
-                        or hacapk_entry_cache_bytes < 0):
-                    raise ValueError("P1 entry cache bytes must be a nonnegative integer")
+            on_demand = use_intree_hacapk and not assemble_dense and (
+                hacapk_construction == "on-demand" or (hacapk_construction == "auto" and ndof > 7000))
+            if on_demand:
                 factory = _required_native_symbol("_CreateP1HACApKGeometry")
                 coordinates = np.ascontiguousarray([vertex.point for vertex in mesh.vertices], dtype=float)
                 if coordinates.shape != (ndof, 3):
@@ -266,13 +283,17 @@ class ScalarBIESIBCSolver:
                     intree_regular_quad_degree, intree_singular_n_q, int(hacapk_entry_cache_bytes))
                 self._body_build_diagnostics = []
                 for kernel, handle in (("SL", self._SL_hacapk), ("DL", self._DL_hacapk)):
+                    provider_before = self._entry_provider.GetStats()
                     build_started = time.perf_counter()
                     if not handle.BuildHMatrix(aca_eps=hacapk_aca_eps, leaf_size=int(hacapk_leaf),
                                                eta=hacapk_eta, max_rank=-1, print_level=0):
                         raise RuntimeError("On-demand P1 HACApK construction failed")
+                    provider_after = self._entry_provider.GetStats()
+                    counters = ("entry_requests", "pair_requests", "pair_evaluations", "cache_hits")
                     self._body_build_diagnostics.append(dict(kernel=kernel,
                         seconds=time.perf_counter()-build_started,
-                        provider=self._entry_provider.GetStats()))
+                        provider_cumulative=provider_after,
+                        provider_delta={key: provider_after[key]-provider_before[key] for key in counters}))
                 self.SL = self.DL = None
                 self._body_construction_route = "p1-entry-on-demand"
                 _log_phase("BEM", "HACApK on-demand P1 build done")
@@ -300,6 +321,9 @@ class ScalarBIESIBCSolver:
                 self.DL = np.zeros((ndof, ndof))
                 self.SL[np.ix_(v_global, v_global)] = SL_loc
                 self.DL[np.ix_(v_global, v_global)] = DL_loc
+                if use_intree_hacapk and not assemble_dense:
+                    del SL_loc, DL_loc
+                self._body_construction_route = "dense-entry" if use_intree_hacapk else "dense"
                 self._intree_v_global = v_global
                 self._DL_bf = None
                 self._SL_bf = None
@@ -343,6 +367,12 @@ class ScalarBIESIBCSolver:
                         leaf_size=int(hacapk_leaf),
                         eta=hacapk_eta,
                         max_rank=-1, print_level=0)
+                    if not assemble_dense:
+                        _log_phase("BEM", "HACApK release source entries")
+                        for handle in (self._SL_hacapk, self._DL_hacapk):
+                            handle.ReleaseDenseEntries()
+                        self.SL = self.DL = None
+                        del SL_arr, DL_arr
                     _log_phase("BEM",
                         f"HACApK compress done "
                         f"({time.perf_counter()-_t_hca:.1f}s)")
