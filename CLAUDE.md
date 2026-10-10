@@ -163,11 +163,9 @@ solver boundary is a checked `.vol` regardless of the creation route.
 
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
-**POLICY**: **mdx1 and mdx2** are Radia's self-hosted CI and preflight pool.
-100号機 (INTEL11) hosts development, review, integration and the release runtime; LAB is the test
-host (fixed wheels, job-local `C:\temp\<job-id>` inputs). Do not run development suites or heavy validation
-on 100号機; limit its release acceptance to installation, import and student application smoke checks. Both mdx hosts give CI and preflight priority.
-GitHub Actions uses the shared `mdx` label and assigns jobs to an available runner.
+**POLICY**: CI/builds use 100号機 with the `100` runner label.
+Isolate CI from user runtimes; LAB tests wheels.
+Heavy numerical validation remains on hibino or idle mdx/LAB; mdx keeps preflight/manual MATLAB diagnostics.
 Release-quad requires LAB, 100号機, mdx1, and mdx2 for the same release commit.
 Decision 2026-10-01: editable only on 100号機, in a dedicated local development
 venv for maintainers/students, separate from the release runtime. LAB/mdx use

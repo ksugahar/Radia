@@ -129,7 +129,7 @@ def test_ams_setup_uses_ngsolve_gradient_without_taskmanager():
 def test_matlab_lane_runs_engine_and_retains_json_on_mdx():
     workflow = yaml.safe_load((ROOT/".github/workflows/sparsesolv.yml").read_text())
     job = workflow["jobs"]["ams-regression"]
-    assert "mdx" in job["runs-on"]
+    assert "100" in job["runs-on"]
     step = next(s for s in job["steps"] if s.get("name") == "Build and verify native MATLAB parity")
     assert step["if"] == (
         "steps.native-impact.outputs.required == 'true' && "

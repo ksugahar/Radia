@@ -1,4 +1,4 @@
-"""Keep the mdx-only CI split and remote pre-push contract explicit."""
+"""Keep the 100-host CI split and remote pre-push contract explicit."""
 
 import importlib.util
 from pathlib import Path
@@ -17,18 +17,18 @@ def _preflight_module():
     return module
 
 
-def test_fast_ci_runs_only_on_mdx_and_native_is_a_named_release_lane():
+def test_fast_ci_runs_only_on_100_and_native_is_a_named_release_lane():
     fast = (ROOT / ".github" / "workflows" / "radia-fast.yml").read_text(encoding="utf-8")
     native = (ROOT / ".github" / "workflows" / "build-test.yml").read_text(encoding="utf-8")
     optuna = (ROOT / ".github" / "workflows" / "radia-optuna.yml").read_text(encoding="utf-8")
     release = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
 
     assert "name: Radia\n" in fast
-    assert "runs-on: [self-hosted, Windows, X64, mdx]" in fast
+    assert 'runs-on: [self-hosted, Windows, X64, "100"]' in fast
     assert "Build with MSVC" not in fast
     assert "validation_test/" not in fast
     assert "name: Radia Native Release" in native
-    assert "runs-on: [self-hosted, Windows, X64, mdx]" in native
+    assert 'runs-on: [self-hosted, Windows, X64, "100"]' in native
     assert "mkl-devel" in native
     assert "pybind11==3.0.2" in native
     assert "ninja" in native
@@ -40,7 +40,7 @@ def test_fast_ci_runs_only_on_mdx_and_native_is_a_named_release_lane():
     assert "'tests/'" not in native
     assert '"MKLROOT=$mklRoot"' in native
     assert "MKLROOT=C:\\Program Files\\Python312\\Library" not in native
-    assert "runs-on: [self-hosted, Windows, X64, mdx]" in optuna
+    assert 'runs-on: [self-hosted, Windows, X64, "100"]' in optuna
     assert "windows-radia" not in optuna
     optuna_self_hosted = optuna.split("  installed-wheel-matlab-e2e:", 1)[0]
     assert "actions/setup-python" not in optuna_self_hosted
@@ -304,7 +304,7 @@ def test_pre_push_runs_the_unpushed_candidate_on_mdx():
     assert "developer push must never upload mutable" in hook
 
 
-def test_policy_twins_define_the_same_mdx_notebook_contract():
+def test_policy_twins_define_the_same_ci_notebook_contract():
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
     heading = "### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)"
@@ -316,7 +316,8 @@ def test_policy_twins_define_the_same_mdx_notebook_contract():
     policy = section(agents)
     assert policy == section(claude)
     normalized = " ".join(policy.split())
-    assert "Both mdx hosts give CI and preflight priority" in normalized
+    assert "with the `100` runner label" in normalized
+    assert "Heavy numerical validation remains on hibino or idle mdx/LAB" in normalized
     assert "use hibino first when it is available" in normalized
     assert "the mdx CI queue is idle" in normalized
     assert "CI scope begins at the independently released distribution boundary" in normalized
