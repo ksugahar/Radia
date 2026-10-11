@@ -4,8 +4,7 @@ d=load(inputPath);
 g=gpuDevice();
 before=g.AvailableMemory;
 memoryPlan=memory_plan(d.snapshot,g);
-assert(memoryPlan.estimatedAdditionalBytes<=memoryPlan.budgetBytes, ...
-    'radia:cuda:memoryBudget','AMS benchmark exceeds the conservative GPU memory budget');
+check_memory_budget(memoryPlan);
 wait(g); transfer=tic;
 s=upload(d.snapshot, '');
 rhs=gpuArray(d.rhs);
@@ -44,12 +43,22 @@ end
 zeroRhsWarmMedianSeconds=median(zeroRhsTimes(2:end));
 applyOnlyWarmMedianSeconds=median(applyOnlyTimes(2:end));
 checks=check_errors(s,rhs);
+% Exercise rejection with no allocation and no deliberately oversized GPU job.
+limited=memory_plan(d.snapshot,struct('TotalMemory',g.TotalMemory,'AvailableMemory',0));
+checks.memory_budget_rejection=false;
+try;check_memory_budget(limited);catch e;checks.memory_budget_rejection=strcmp(e.identifier,'radia:cuda:memoryBudget');end
+assert(checks.memory_budget_rejection,'Memory budget guard failed');
 device=struct('name',g.Name,'compute_capability',g.ComputeCapability, ...
     'total_memory',g.TotalMemory,'driver',g.GraphicsDriverVersion,'toolkit',g.ToolkitVersion);
 matlabVersion=version;
 save(outputPath,'solution','info','probeErrors','coldSeconds','times', ...
     'inclusiveSeconds','inclusiveSolution','memoryBytes','uploadSeconds','checks','device','matlabVersion', ...
     'zeroRhsTimes','applyOnlyTimes','zeroRhsWarmMedianSeconds','applyOnlyWarmMedianSeconds','memoryPlan');
+end
+
+function check_memory_budget(plan)
+assert(plan.estimatedAdditionalBytes<=plan.budgetBytes, ...
+    'radia:cuda:memoryBudget','AMS benchmark exceeds the conservative GPU memory budget');
 end
 
 function plan=memory_plan(s,g)

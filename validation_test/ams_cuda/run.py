@@ -95,12 +95,15 @@ def main(args):
                 residual=lambda sol:float(np.linalg.norm((A@sol-rhs)[free])/np.linalg.norm(rhs[free]))
                 ref=reference.FV().NumPy().copy()
                 difference=float(np.linalg.norm((actual-ref)[free])/np.linalg.norm(ref[free]))
+                cpu_ams_solution=x.FV().NumPy().copy()
+                cpu_ams_difference=float(np.linalg.norm((actual-cpu_ams_solution)[free])/np.linalg.norm(cpu_ams_solution[free]))
                 probe=float(np.max(gpu['probeErrors']))
                 entry={'maxh':h,'cycle':cycle,'dofs':fes.ndof,'free_dofs':int(free.sum()),'elements':mesh.ne,
                     'assembly_seconds':assembly,'snapshot_setup_and_probes_seconds':setup,'cpu_direct_factor_seconds':factor,
                     'cpu_ams_seconds':cpu,'cpu_iterations':cpu_iterations,'cpu_warm_median_seconds':statistics.median(cpu[1:]),
                     'gpu':jsonable(gpu),'cpu_true_residual':residual(x.FV().NumPy()),'gpu_true_residual':residual(actual),
                     'relative_difference_from_direct':difference,'max_preconditioner_probe_relative_error':probe,
+                    'relative_difference_from_cpu_ams':cpu_ams_difference,
                     'input_sha256':hashlib.sha256(src.read_bytes()).hexdigest(),
                     'auxiliary_level_rows':[[l['A']['rows'] for l in s['levels']] for s in snapshot['spaces']],
                     'coarse_kinds':[s['levels'][-1]['coarse']['kind'] for s in snapshot['spaces']]}
@@ -108,7 +111,7 @@ def main(args):
                 entry['gpu_warm_median_seconds']=statistics.median(np.asarray(gpu['times']).reshape(-1))
                 entry['speedup_resident_inputs']=entry['cpu_warm_median_seconds']/entry['gpu_warm_median_seconds']
                 entry['speedup_including_transfers']=entry['cpu_warm_median_seconds']/float(gpu['inclusiveSeconds'])
-                entry['accepted']=bool(entry['gpu_true_residual']<=1e-6 and entry['cpu_true_residual']<=1e-6 and difference<=1e-6 and probe<=1e-8)
+                entry['accepted']=bool(entry['gpu_true_residual']<=1e-6 and entry['cpu_true_residual']<=1e-6 and difference<=1e-6 and cpu_ams_difference<=1e-6 and probe<=1e-8)
                 record['cases'].append(entry);result_path.write_text(json.dumps(jsonable(record),indent=2)+'\n')
                 print(json.dumps({k:entry[k] for k in ('dofs','cycle','gpu_true_residual','max_preconditioner_probe_relative_error','accepted')}),flush=True)
                 if not entry['accepted']:raise RuntimeError('AMS CUDA numerical parity failed')
