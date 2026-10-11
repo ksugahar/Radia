@@ -32,9 +32,11 @@ def main():
         root = Path(directory)
         home = root / "home"
         home.mkdir()
-        cubit = root / "programs/Coreform Cubit 2025.12/bin"
-        (cubit / "plugins").mkdir(parents=True)
-        (cubit / "cubit.py").write_text("# test profile only\n")
+        cubit = root / "programs/Coreform Cubit 2026.8/bin"
+        (cubit / "cubit").mkdir(parents=True)
+        (cubit / "cubit/__init__.py").write_text("# test profile only\n")
+        (cubit / "cubitx.exe").touch()
+        (cubit.parent / "plugins").mkdir()
         environment = {
             "HOME": str(home), "USERPROFILE": str(home),
             "LOCALAPPDATA": str(root / "local"), "APPDATA": str(root / "roaming"),
