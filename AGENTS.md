@@ -97,6 +97,30 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 - Manuscript folders contain generated `.bbl` only, never local `.bib` copies.
   Use `bibliography_make_bbl`, regenerate after changes, and check citations.
 
+### CPU / GPU Execution Policy (2026-10-11)
+
+- Radia solver CPU execution is supported through Python/NGSolve only.
+  CPU MEX is no longer a supported execution or distribution target.
+- Radia solver MATLAB execution supports CUDA MEX only and requires a
+  compatible NVIDIA GPU. MATLAB is selected primarily for high-performance
+  GPU execution; Simulink is an optional consumer of the same standalone
+  numerical kernels, not the reason for choosing MATLAB.
+- Never silently fall back from CUDA MEX to CPU numerical execution or Python.
+  Unsupported GPU operations, devices, toolchains and memory requirements
+  fail explicitly. Necessary host initialization and mesh preparation remain
+  distinct from GPU numerical execution; report any CPU solver component.
+- NGSolve owns FE spaces, transformations, quadrature and assembly. Reuse its
+  supported GPU operators where available; classify an assembled-operator
+  CUDA bridge separately from an upstream NGSolve matrix-free GPU backend.
+- Build isolated CUDA MEX candidates on 100; validate on its Quadro RTX 5000.
+  Use mdx/A100 for scheduled large-scale precision, memory and timing studies.
+  Do not replace an active runtime or run competing timing jobs.
+- Validate CUDA results against independent Python/NGSolve CPU execution on
+  identical inputs. Record precision, true residual, cold/warm timings,
+  transfer/setup costs, memory, versions and artifact/source hashes in JSON.
+  HDiv-MMM, model reduction and AMS GPU support require their own evidence;
+  a passing Poisson bridge does not establish their support.
+
 ### MATLAB And Simulink
 
 - Use MathWorks' official MATLAB MCP Server and Simulink Agentic Toolkit.
@@ -118,11 +142,14 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
   kernels remain independently callable standalone MEX functions.
 - Native objects use checked `uint64` handles with type, generation,
   ownership, and liveness validation; never expose raw pointers.
-- Python fallback is allowed at initialization, explicit update, artifact
-  generation, or batch-solve boundaries, never per Simulink time step.
-- Every public Python capability has a named MATLAB entry point or a checked
-  parity-manifest classification. Prefer one C++ source of numerical truth with
-  thin pybind11 and MEX adapters.
+- Explicit Python CPU workflows may be invoked at initialization, explicit
+  update, artifact generation or batch boundaries, never per Simulink time
+  step and never as an implicit fallback from CUDA MEX.
+- Classify public capabilities as Python CPU, MATLAB CUDA GPU, or both in
+  the parity manifest. Do not duplicate CPU implementations or publish CPU
+  MEX merely to mirror Python. Where both routes exist, preserve physical
+  contracts and validate numerical parity; share reusable domain code without
+  duplicating NGSolve finite-element semantics.
 - Measure cold start, warmed median, transfer cost, memory, versions, and
   reliability; do not assume MEX or pybind11 is faster.
 - Level-2 S-Function templates are user-customizable. Do not bury a reusable
