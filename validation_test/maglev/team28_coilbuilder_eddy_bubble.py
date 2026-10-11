@@ -12,6 +12,7 @@ MATLAB exchange export in one reproducible artifact.
 """
 
 from __future__ import annotations
+import radia_gpu.vim as gpu_vim
 
 import argparse
 import json
@@ -335,7 +336,7 @@ def run_case(
             )
         )
     )
-    vim.ExportHCurlEddyFosterJSON(
+    gpu_vim.ExportHCurlEddyFosterJSON(
         foster_model,
         exchange_file,
         force_operator=force_operator,

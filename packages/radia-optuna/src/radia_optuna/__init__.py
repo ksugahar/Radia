@@ -14,7 +14,7 @@ def _staged_matlab_path() -> Path:
 
 
 def _checkout_matlab_path() -> Path | None:
-    candidate = Path(__file__).resolve().parents[4] / "matlab"
+    candidate = Path(__file__).resolve().parents[2] / "matlab"
     if (candidate / "+radia" / "+optuna").is_dir():
         return candidate
     return None

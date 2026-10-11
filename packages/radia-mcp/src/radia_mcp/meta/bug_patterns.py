@@ -168,7 +168,7 @@ PATTERNS: list[dict] = [
         "prevention": "Let radia.simulink.application own the output path and "
                       "require a checked GMSH .msh v4.1 artifact for spatial runs.",
         "related": ["tests/test_simulink_application.py",
-                    "src/radia/simulink/application.py"],
+                    "packages/radia-gpu/src/radia_gpu/simulink/application.py"],
     },
 
     # =====================================================
@@ -831,7 +831,7 @@ PATTERNS: list[dict] = [
     {
         "id": "new-src-module-unclassified-in-parity-manifest",
         "title": "A new module under src/radia lands without an entry in "
-                 "matlab/python_api_parity_manifest.json -- ci_preflight is "
+                 "packages/radia-gpu/matlab/python_api_parity_manifest.json -- ci_preflight is "
                  "GREEN and the self-hosted CI 'Run simple tests' goes red.",
         "topics": ["ci", "matlab", "parity", "test-infrastructure"],
         "severity": "high",
@@ -863,7 +863,7 @@ PATTERNS: list[dict] = [
                       "MATLAB caller to agree with, and its note should record "
                       "what would change the answer, not merely assert the "
                       "classification.",
-        "related": ["matlab/python_api_parity_manifest.json",
+        "related": ["packages/radia-gpu/matlab/python_api_parity_manifest.json",
                     "tools/check_matlab_python_parity.py",
                     "tests/test_matlab_python_parity_manifest.py",
                     "tools/ci_preflight.py"],

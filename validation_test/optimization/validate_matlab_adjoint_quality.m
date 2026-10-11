@@ -7,7 +7,7 @@ arguments
     options.OutputFile (1,1) string=""
 end
 root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
-matlabPath=fullfile(root,"matlab");
+matlabPath=fullfile(root,'packages','radia-gpu','matlab');
 wasPresent=any(strcmpi(string(strsplit(path,pathsep)),string(matlabPath)));
 if ~wasPresent, addpath(matlabPath); end
 cleanup=onCleanup(@()localRestorePath(matlabPath,wasPresent));

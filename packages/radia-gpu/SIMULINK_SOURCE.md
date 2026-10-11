@@ -1,0 +1,169 @@
+> Historical source notes only. CPU Radia MEX is unsupported. The accepted GPU
+> payload is described in README.md; these legacy models are not shipped as
+> validated CUDA applications.
+
+# Radia Simulink Blocks
+
+This directory contains the Simulink boundary for production Radia reduced
+models.  The numerical kernels remain in the Radia C++ API; the Simulink
+files only define the block contract and marshal MATLAB arrays.
+
+## Application blocks
+
+The final human operating surfaces for Electromagnet, PCB PEEC, Motor, Stream
+Function, Induction Heating, and Magnetic Levitation are built by
+`packages/radia-gpu/matlab/+radia/+simulink/buildLibrary.m`. Electromagnet, PCB, Motor, and Stream
+Function retain their explicit-trigger application boundary. Induction
+Heating is separate: readable Level-2 MATLAB Eddy and Thermal S-Functions own
+its ports and lifecycle, while checked `radia_mex` handles own native numerical
+state. Initialization locates NGSolve's runtime through the configured Python
+installation, but no Python solver or per-step fallback is launched. Physical
+operators can be assembled at the explicit model-update boundary from a checked
+workpiece `.vol` plus a coil `.step` (PEEC) or `.vol` (BEM-A).
+
+For a field-producing mode, the runner overrides `--msh-output` with a path in
+the run directory, requires a valid GMSH `.msh v4.1` file, and lists every
+generated GMSH artifact in `result.json`. Scalar/circuit-only modes explicitly
+remain non-spatial. GMSH is used for post-processing only; solver interchange
+continues to use Netgen `.vol`.
+
+MEX/ROM remains an optional backend promotion for the four batch blocks and is
+mandatory for IH. Compilation alone is not a production gate; failure
+propagation, handle lifecycle, repeated runs, and long-run stability must pass
+while the block mask and port contract stay unchanged. Notebook workbenches are
+retired for every application, including IH.
+
+## Motor ROM block
+
+The former fixed-step motor-ROM CPU MEX build recipe has been removed.
+The adapter source is retained under `native/legacy/simulink` as historical
+implementation material, not as a supported build target.
+
+The S-function takes five parameters:
+
+```text
+RadiaMotorROM, sample_time_s, initial_state, max_iterations, tolerance
+```
+
+`RadiaMotorROM` is the struct loaded by the generated `*_load.m` bundle
+helper.  `initial_state` is a MATLAB struct with optional fields
+`time_s`, `rotor_angle_rad`, `rotor_speed_rad_s`,
+`temperature_K`, and `generalized_currents_A`.
+
+The single input vector is ordered as:
+
+```text
+[phase_voltages_V; load_torque_Nm; ambient_temperature_K]
+```
+
+The single output vector is ordered as:
+
+```text
+[phase_currents_A;
+ eddy_currents_A;
+ phase_flux_linkage_Wb;
+ rotor_angle_rad;
+ rotor_speed_rad_s;
+ electromagnetic_torque_Nm;
+ resistive_loss_W;
+ hysteresis_loss_W;
+ temperature_K;
+ energy_balance_residual_W;
+ nonlinear_iterations]
+```
+
+The output is the accepted state after the previous block update.  The ROM
+step is performed once per fixed sample time in `mdlUpdate`, so the block is
+used as a discrete Co-Simulation-style plant.  The adapter rejects bundles
+that require an external hysteresis callback; that callback needs a separate
+stateful bridge and must not silently fall back to a linear model.
+
+## Production block policy
+
+The Simulink layer exposes physical model units, not individual internal
+matrix kernels:
+
+* Moving MagLev models use the masked shared-mode Foster HCurl family block in
+  `packages/radia-gpu/matlab/radia_maglev.slx`; fixed-position LTI exports remain a lower-level
+  diagnostic and controller-composition surface.
+* Dynamic motor ROMs use `radia_motor_rom_sfun` or an FMI Co-Simulation FMU.
+* Fixed reduced IH and HCurl Eddy Bubble Foster models can use
+  `packages/radia-gpu/matlab/+radia/+simulink/stateSpaceMexSFunction.m`, backed by the native
+  `simulink.state_space.*` MEX handle commands. Their matrices are copied once
+  at `Start`; no Python process or per-step state-vector transfer is used.
+* Moving height-family models remain MATLAB S-functions because their reduced
+  operators are interpolated as the mechanical state changes.
+
+## Magnetic-levitation model
+
+`packages/radia-gpu/matlab/radia_maglev.slx` wires consistent coil-current and current-derivative
+sources, mechanical height, the moving Foster HCurl plant, induced response, and
+three-component Lorentz force. The tracked family is diagnostic smoke data.
+Engineering models load a shared-mode JSON family exported by
+`radia.vim.ExportHCurlEddyFosterFamilyJSON`; expensive field assembly remains an
+initialization operation and Python is never launched from a simulation step.
+
+The C ABI remains the canonical implementation boundary so that Python,
+Simulink, FMI, and other hosts cannot silently acquire different numerical
+kernels.
+
+## Induction-heating native preview
+
+The tracked `packages/radia-gpu/matlab/radia_ih.slx` model separates readable Level-2 MATLAB Eddy
+and Thermal S-Functions and closes the temperature feedback explicitly:
+
+```matlab
+addpath('matlab');
+install_radia_ih();
+```
+
+The wrappers call independent `radia_mex('ih.*', ...)` object-handle commands
+that consume checked row-major electromagnetic operators, a
+heat-to-temperature projection, thermal CSR matrices, cell weights, and an
+explicit rotation mode. Thermal publishes only the accepted DWork state and
+advances it in `Update`, so the closed loop has a real one-step delay.
+Rotation transports the accepted workpiece temperature conservatively before
+the implicit thermal solve; Eddy maps the stationary-source heat distribution
+back into workpiece coordinates.
+
+The release model contains a one-DOF diagnostic configuration until geometry is
+assigned. The Geometry Update block then invokes the built-in assembler when
+both custom assembler fields are blank. Only the two absolute geometry paths
+are required; the output JSON name is derived beside the workpiece. Frequency,
+electrical properties, thermal properties, and solver settings remain editable
+because they cannot be inferred from shape. The fixed `sibc`, `body`, `source`,
+and `sink` contract labels are displayed read-only on the mask.
+
+The same operation is available without MATLAB:
+
+```powershell
+python -m pip install "radia[cubit]"  # provides the mandatory check-vol gate
+radia-ih-assemble workpiece.vol coil.step
+radia-ih-assemble workpiece.vol coil.vol -o native_ih.json
+```
+
+The CLI runs strict versioned label contracts and writes their `check-vol`
+reports, unit-current electromagnetic evidence, H1 thermal matrices, GMSH v4.1
+fields, `run.log`, and `result.json` into a persistent artifact directory. A
+STEP coil selects PEEC; a meshed coil selects BEM-A. For the scalar current port
+and a fixed linear material law, the unit-current response is an exact basis and
+the distributed loss scales with current squared. LUT and lumped-state-space
+helpers are not used. A `.vol.gz` input is checked and hashed in its original
+form; only the solver copy in the artifact directory is expanded with normalized
+line endings so Windows CRLF labels remain canonical. Temperature-dependent
+BH/Zs operator rebuilding and arbitrary-angle unstructured-mesh transport still
+require a separately assembled configuration; the shape-only CLI declares
+`rotation_mode="none"` rather than silently applying an invalid node ordering.
+
+For learning and design optimization, wrap a `sim` call or the fast waveform
+function in an objective and use:
+
+```matlab
+objective = @(x) ihObjectiveFromSimulation(x);  % returns one scalar
+opt = radia.simulink.optimizeIH(objective, x0, lower, upper);
+```
+
+The adapter uses `fmincon` when Optimization Toolbox is available and a
+bounded `fminsearch` fallback otherwise. A Simulink objective should create a
+fresh `Simulink.SimulationInput` and set model variables there; this makes the
+same function compatible with `parsim` for batch learning runs.

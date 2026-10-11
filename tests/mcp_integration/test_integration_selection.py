@@ -16,7 +16,7 @@ SPEC.loader.exec_module(SELECTOR)
 @pytest.mark.parametrize("changed", [
     "tests/mcp_integration/test_matlab_source_contract.py",
     "validation_test/maglev/results.json",
-    "matlab/+radia/contract.m",
+    "packages/radia-gpu/matlab/+radia/contract.m",
     "tests/mcp_server/fixtures/bad_radia_script.py",
 ])
 def test_repository_changes_keep_integration_lane(changed):

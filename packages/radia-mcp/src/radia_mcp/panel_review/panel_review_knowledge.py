@@ -4,7 +4,7 @@ APPLICATION_BLOCK_REVIEW = r"""
 # Radia application interface review
 
 Production human interfaces are masked blocks in
-`matlab/radia_simulink_library.slx`. Notebook workbenches are removed for every
+`packages/radia-gpu/matlab/radia_simulink_library.slx`. Notebook workbenches are removed for every
 application, including IH. Desktop PySide analysis windows remain retired.
 
 Review these files together:
@@ -12,10 +12,10 @@ Review these files together:
 ```text
 src/radia/<app>_design.py
 src/radia/panels/calc_<app>.py
-src/radia/simulink/application.py
-matlab/+radia/+simulink/runApplication.m
-matlab/+radia/+simulink/applicationSFunction.m
-matlab/+radia/+simulink/buildLibrary.m
+packages/radia-gpu/src/radia_gpu/simulink/application.py
+packages/radia-gpu/matlab/+radia/+simulink/runApplication.m
+packages/radia-gpu/matlab/+radia/+simulink/applicationSFunction.m
+packages/radia-gpu/matlab/+radia/+simulink/buildLibrary.m
 tests/test_simulink_application.py
 tests/matlab/test_simulink_workflow.m
 ```
@@ -74,7 +74,7 @@ The production result is a masked Simulink block in the single Radia library.
    runner redirects it to a checked GMSH `.msh v4.1` run artifact.
 7. Add Python and MATLAB tests for mask wiring, port types, model update,
    execution, timeout, missing dependency, and failure provenance.
-8. Regenerate `matlab/radia_simulink_library.slx` from the builder.
+8. Regenerate `packages/radia-gpu/matlab/radia_simulink_library.slx` from the builder.
 
 The standard configuration schema is
 `radia.simulink.application_config.v1`. The standard run schema is

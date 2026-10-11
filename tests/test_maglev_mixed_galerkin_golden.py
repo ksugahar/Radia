@@ -28,7 +28,7 @@ import pytest
 
 from radia.maglev.mixed_galerkin import alpha as A
 from radia.maglev.mixed_galerkin import rom_fit as RF
-from radia.maglev.simulink import export as EX
+from radia.maglev import state_space as EX
 
 MU0 = 4.0 * math.pi * 1e-7
 SIGMA_CU = 5.8e7

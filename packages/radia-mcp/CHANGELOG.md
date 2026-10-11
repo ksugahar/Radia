@@ -2532,7 +2532,7 @@ agents scanned:
     jjsantos01/jupyter-notebook-mcp (130★), Vizro MCP
 
   MATLAB / scientific-figure libraries:
-    matlab/matlab-mcp-core-server (official, 771★),
+    packages/radia-gpu/matlab/matlab-mcp-core-server (official, 771★),
     Tsuchijo/matlab-mcp, garrettj403/SciencePlots,
     pnkraemer/tueplots, proplot/Ultraplot, BayesWatch/mpl_sizes,
     masumhabib/PlotPub, altmany/export_fig

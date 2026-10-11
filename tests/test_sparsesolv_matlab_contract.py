@@ -65,20 +65,19 @@ def test_parity_runner_waits_for_the_worker_with_the_configured_timeout(
     assert "--worker" in calls["command"] and "--timeout" not in calls["command"]
 
 
-def test_sparsesolv_has_native_and_explicit_fallback_owners():
-    manifest = json.loads((ROOT / "matlab/python_api_parity_manifest.json").read_text())
+def test_sparsesolv_is_cpu_python_and_cuda_pcg_has_a_separate_owner():
+    manifest = json.loads((ROOT / "packages/radia-gpu/matlab/python_api_parity_manifest.json").read_text())
     entry = next(e for e in manifest["binary_extensions"] if e["python"] == "sparsesolv_ngsolve.pyd")
-    assert entry["status"] == "focused-native-commands"
-    assert (ROOT / entry["fallback"]).is_file()
-    source = (ROOT / "src/matlab/radia_mex.cpp").read_text()
-    for command in entry["native_commands"]:
-        assert f'command == "{command}"' in source
-    for owner in entry["matlab"].split("; "):
-        assert (ROOT / owner).is_file()
+    assert entry["classification"] == "cpu-python-only"
+    assert entry["matlab"] == []
+    assert manifest["cpu_mex_supported"] is False
+    feature = next(e for e in manifest["gpu_features"] if e["id"] == "csr-pcg")
+    assert feature["cpu_fallback"] is False
+    assert (ROOT / feature["source"]).is_file()
 
 
 def test_ams_setup_uses_ngsolve_gradient_without_taskmanager():
-    source = (ROOT / "src/matlab/radia_mex.cpp").read_text()
+    source = (ROOT / "packages/radia-optuna/native/optuna_mex.cpp").read_text()
     body = source.split("void SparseSolvAMS(")[1].split("void SparseSolvIC(")[0]
     assert "hc->CreateGradient()" in body
     assert "RegionTaskManager" not in body
@@ -109,4 +108,7 @@ def test_gpu_ci_has_its_own_build_and_true_residual_acceptance():
     assert "-CudaMexOnly -RequireNativeProvenance" in commands
     assert "run_poisson.py" in commands
     assert "--maxh 0.24" in commands
-    assert "radia-gpu-acceptance" in str(job["steps"][-1])
+    assert "prepare_ci_evidence.py --poisson" in commands
+    uploads = [step for step in job["steps"] if step.get("uses") == "actions/upload-artifact@v4"]
+    evidence = next(step for step in uploads if step["with"]["name"] == "radia-gpu-cuda-evidence")
+    assert "radia-gpu-public-" in evidence["with"]["path"]

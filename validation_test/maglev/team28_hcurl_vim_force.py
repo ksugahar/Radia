@@ -9,6 +9,7 @@ host; ``--maxh 0.025`` is the smaller developer smoke.
 """
 
 from __future__ import annotations
+import radia_gpu.vim as gpu_vim
 
 import argparse
 import json
@@ -260,7 +261,7 @@ def run_case(maxh_m, outer_quad, export_model=None):
         (1, 0),
     )[:, :, None]
     if export_model is not None:
-        vim.ExportHCurlEddyFosterJSON(
+        gpu_vim.ExportHCurlEddyFosterJSON(
             foster_model,
             export_model,
             force_operator=force_operator,
@@ -372,7 +373,7 @@ def run_height_sweep(
         )
         physical_forces.append(force.tolist())
     if export_family is not None:
-        vim.ExportHCurlEddyFosterFamilyJSON(
+        gpu_vim.ExportHCurlEddyFosterFamilyJSON(
             snapshots,
             export_family,
             metadata={

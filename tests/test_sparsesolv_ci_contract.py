@@ -170,7 +170,7 @@ def test_invalid_manifest_fails_closed(change):
     ("src/ext/sparsesolv/test.cpp\0", True),
     ("tests/matlab/test_beam_transfer_mex.m\0", False),
     ("src/core/rad_beam_transfer.cpp\0", True),
-    ("matlab/+radia/+internal/callMex.m\0", False),
+    ("packages/radia-gpu/matlab/+radia/+internal/callMex.m\0", False),
     ("tools/run_test_tier.py\0", True),
     (".github/workflows/sparsesolv.yml\0", True),
 ])
@@ -201,7 +201,7 @@ def test_mixed_manifest_and_runtime_dependency_change_still_runs():
     "src/radia/vector_potential_solver.py", "src/radia/topology_optimization.py",
     "src/radia/ih_thermal.py", "src/radia/ih_axisym_coupled.py",
     "src/radia/panels/calc_fem_kelvin.py",
-    "src/radia/simulink/ih_operator_assembly.py",
+    "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
     "src/radia/coil_from_cad.py",
     "packages/cubit-mesh-export/src/cubit_mesh_export/check.py",
 ])
@@ -217,7 +217,7 @@ def test_numerical_source_changes_select_built_ngsolve_lane(source):
 
 
 @pytest.mark.parametrize("source", [
-    "src/matlab/radia_mex_sparse_symmetry.h",
+    "src/core/radia_mex_sparse_symmetry.h",
     "tests/cpp/test_radia_mex_sparse_symmetry.cpp",
 ])
 def test_mex_sparse_symmetry_sources_require_the_native_lane(source):

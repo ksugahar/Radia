@@ -3,6 +3,7 @@
 Every check compares against an independent dense solve of
 ``(R + sL + Zs Ms) c = P u`` so the modal form is verified, not assumed.
 """
+import radia_gpu.vim as gpu_vim
 
 import json
 
@@ -119,7 +120,7 @@ def test_foster_exchange_and_family_share_one_mode_set(tmp_path):
     for scale in (1.0, 0.8, 0.6):
         models.append(_model(resistance, inductance, scale * port))
         operators.append(rng.standard_normal((3, 6, 2)))
-    single = vim.ExportHCurlEddyFosterJSON(models[0], tmp_path / "single.json",
+    single = gpu_vim.ExportHCurlEddyFosterJSON(models[0], tmp_path / "single.json",
                                            force_operator=operators[0])
     data = json.loads(single.read_text(encoding="utf-8"))
     assert data["schema"] == "radia.hcurl.eddy_foster.exchange.v1"
@@ -127,7 +128,7 @@ def test_foster_exchange_and_family_share_one_mode_set(tmp_path):
     modal = np.asarray(data["arrays"]["modal_port_rhs"]["values"]).reshape(6, 2)
     np.testing.assert_allclose(modal, models[0].modal_port_rhs)
 
-    family = vim.ExportHCurlEddyFosterFamilyJSON(
+    family = gpu_vim.ExportHCurlEddyFosterFamilyJSON(
         [{"height_m": h, "model": m, "force_operator": k}
          for h, m, k in zip((0.012, 0.011, 0.010), models, operators)],
         tmp_path / "family.json")
@@ -141,7 +142,7 @@ def test_foster_exchange_and_family_share_one_mode_set(tmp_path):
 
     moved = _model(resistance * 1.01, inductance, port)
     with pytest.raises(ValueError, match="shared R/L"):
-        vim.ExportHCurlEddyFosterFamilyJSON(
+        gpu_vim.ExportHCurlEddyFosterFamilyJSON(
             [{"height_m": 0.0, "model": models[0]}, {"height_m": 1.0, "model": moved}],
             tmp_path / "bad.json")
 
@@ -176,9 +177,9 @@ def test_foster_exchange_rejects_sibc_models_and_duplicate_heights(tmp_path):
     n = resistance.shape[0]
     sibc = _model(resistance, inductance, port, surface_mass=np.eye(n))
     with pytest.raises(ValueError, match="rationalized"):
-        vim.ExportHCurlEddyFosterJSON(sibc, tmp_path / "sibc.json")
+        gpu_vim.ExportHCurlEddyFosterJSON(sibc, tmp_path / "sibc.json")
     model = _model(resistance, inductance, port)
     with pytest.raises(ValueError, match="strictly increasing"):
-        vim.ExportHCurlEddyFosterFamilyJSON(
+        gpu_vim.ExportHCurlEddyFosterFamilyJSON(
             [{"height_m": 0.0, "model": model}, {"height_m": 0.0, "model": model}],
             tmp_path / "duplicate.json")

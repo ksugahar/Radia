@@ -227,10 +227,6 @@ from ._hcurl_planar_interaction import (  # noqa: F401
     HCurlPlanarVolumeInteraction,
     NgsolveHCurlPlanarVolumeInteraction,
 )
-from ._matlab_bridge import (  # noqa: F401
-    ExportHCurlEddyFosterJSON,
-    ExportHCurlEddyFosterFamilyJSON,
-)
 from ._eddy_foster import (  # noqa: F401
     HCurlEddyFosterModel,
     HCurlEddyFosterModelFromVIM,
@@ -417,7 +413,6 @@ __all__ = [
     "SampleNgsolveHCurlCellSubtetVelocities",
     "HCurlPlanarVolumeInteraction", "NgsolveHCurlPlanarVolumeInteraction",
     "HCurlEddyFosterModel", "HCurlEddyFosterModelFromVIM",
-    "ExportHCurlEddyFosterJSON", "ExportHCurlEddyFosterFamilyJSON",
     "CurrentMagneticFluxDensitySamples", "MagnetizationCurrentCoupling",
     "EVRSTMethodAlgebra", "ReducedPortAdmittance", "ReducedPortImpedance",
     "SharedMeshMaterialModel", "HCurlVIMHDivMMMSolution",

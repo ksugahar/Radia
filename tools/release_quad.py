@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""release_quad.py — numerical Radia solver / Simulink two-machine gate.
+"""release_quad.py — CPU numerical Radia solver two-machine gate.
 
 Walks the numerical solver release phases in order, gating each
 phase on the success of the previous one. Refuses to skip steps that
@@ -23,9 +23,6 @@ Usage:
     python tools/release_quad.py phase9
         Cross-machine consistency probe. Final gate.
 
-    python tools/release_quad.py simulink-candidate --package <zip> --target all
-        Extract and execute the exact Simulink package on both MATLAB machines.
-
     python tools/release_quad.py optuna-candidate --ci-run-id <id> --target all
         Download the exact radia-optuna wheel from one successful main CI run
         and execute its installed-wheel MATLAB/Simulink test on both machines.
@@ -41,9 +38,8 @@ Usage:
         clean release worktree for the development venv; the editable deploy
         fails before install unless it is tracked-clean at the release SHA.
 
-    python tools/release_quad.py done --simulink-package <zip> [--release-source <path>]
-        Require the normal release gate and the matching two-machine Simulink
-        candidate state. The release source is the controller (which must then
+    python tools/release_quad.py done [--release-source <path>]
+        Require the CPU solver release gate. The release source is the controller (which must then
         sit at the tag) or a separate exact-tag checkout; with the latter the
         controller must be a tracked-clean descendant declaring the same
         version. No runtime is changed.
@@ -219,10 +215,6 @@ def _release_commit() -> str:
     return commit
 
 
-def _requires_simulink_candidate() -> bool:
-    from packaging.version import Version
-    return Version(_radia_version()) >= Version("5.1.0")
-
 
 def _release_head():
     return _release_commit()
@@ -343,7 +335,7 @@ def _simulink_state_path(package_sha256: str) -> Path:
 
 def _simulink_mex_sha256(manifest: dict) -> str:
     matches = [row.get("sha256") for row in manifest.get("files", [])
-               if row.get("path") == "matlab/radia_mex.mexw64"]
+               if row.get("path") == "packages/radia-gpu/matlab/radia_mex.mexw64"]
     if len(matches) != 1 or not isinstance(matches[0], str) or len(matches[0]) != 64:
         raise ValueError("Simulink manifest must identify exactly one radia_mex hash")
     return matches[0].lower()
@@ -565,92 +557,9 @@ def _run_simulink_candidate_target(
 
 
 def cmd_simulink_candidate(args):
-    """Verify one extracted Simulink archive on the requested MATLAB machines."""
-    package = Path(args.package).resolve()
-    step("Simulink candidate gate (LAB / 100号機)")
-    try:
-        manifest = _simulink_manifest(package)
-    except (OSError, RuntimeError, ValueError, zipfile.BadZipFile) as error:
-        fail(f"invalid Simulink candidate: {error}")
-        return 2
-    package_sha256 = _sha256_file(package)
-    mex_sha256 = _simulink_mex_sha256(manifest)
-    success_marker = (
-        "RADIA_SIMULINK_RELEASE_OK"
-        if manifest.get("schema") in {
-            "radia.simulink.library-release-manifest.v1",
-            "radia.simulink.library-release-manifest.v2",
-            "radia.simulink.library-release-manifest.v3",
-            "radia.simulink.library-release-manifest.v4",
-        }
-        else "RADIA_IH_RELEASE_OK"
-    )
-    state_path = _simulink_state_path(package_sha256)
-    state = {
-        "schema": "radia.release-quad.simulink-candidate.v1",
-        "package": str(package),
-        "package_sha256": package_sha256,
-        "version": manifest.get("version"),
-        "commit": manifest.get("commit"),
-        "mex_sha256": mex_sha256,
-        "targets": {},
-    }
-    if state_path.is_file():
-        previous = json.loads(state_path.read_text(encoding="utf-8"))
-        if previous.get("package_sha256") == package_sha256:
-            state["targets"] = previous.get("targets", {})
-
-    requested = [part.strip().lower() for part in args.target.split(",")]
-    if "all" in requested:
-        requested = list(SIMULINK_TARGETS)
-    unknown = sorted(set(requested) - set(SIMULINK_TARGETS))
-    if unknown:
-        fail(f"unknown Simulink target(s): {', '.join(unknown)}")
-        return 2
-
-    sessions = _engine_sessions(args, requested)
-    if sessions is None:
-        return 2
-
-    pythons = {}
-    for entry in getattr(args, "python", None) or []:
-        key, separator, path = entry.partition("=")
-        if not separator or key not in requested or not path.strip() or key in pythons:
-            fail("candidate interpreters must be unique selected-target=python-path pairs")
-            return 2
-        pythons[key] = path.strip()
-
-    failed = 0
-    for key in requested:
-        label = SIMULINK_TARGETS[key][0]
-        info(f"verifying extracted package on {label}")
-        session_args = [sessions[key]] if key in sessions else []
-        python_kwargs = {"python_executable": pythons[key]} if key in pythons else {}
-        passed, output = _run_simulink_candidate_target(
-            key, package, package_sha256, success_marker, *session_args, **python_kwargs)
-        state["targets"][key] = {
-            "label": label,
-            "status": "passed" if passed else "failed",
-            "verified_at_utc": datetime.now(timezone.utc).isoformat(),
-            "mex_sha256": mex_sha256,
-            "engine_session": sessions.get(key),
-            "execution_backend": "matlab-com" if sessions.get(key, "").startswith("com:") else "matlab-engine",
-            "python_executable": pythons.get(key, SIMULINK_TARGETS[key][2]
-                                             if SIMULINK_TARGETS[key][1] else sys.executable),
-            "output_tail": output[-4000:],
-        }
-        _write_simulink_state(state_path, state, key)
-        if passed:
-            ok(f"Simulink package passed on {label}")
-        else:
-            failed += 1
-            fail(f"Simulink package failed on {label}")
-            if output:
-                print(output[-4000:])
-    if failed:
-        return 4
-    ok(f"Simulink candidate state: {state_path}")
-    return 0
+    """Reject the retired CPU MEX release route."""
+    fail("CPU MEX releases are unsupported; use the independent radia-gpu release workflow.")
+    return 4
 
 
 def _verify_simulink_candidate_state(package_arg: str) -> int:
@@ -1440,8 +1349,7 @@ h = hashlib.sha256()
 for p in native:
     h.update(p.name.encode()); h.update(b"\\0"); h.update(hashlib.sha256(p.read_bytes()).digest())
 print(f"NATIVE radia           = {h.hexdigest()[:12]}")
-for r in ["simulink/application.py",
-          "panels/calc_inductance.py",
+for r in ["panels/calc_inductance.py",
           "panels/calc_fem_kelvin.py",
           "panels/calc_fem_coilmesh.py"]:
     print(f"SHA radia/{r:35s} = {hsh_text(os.path.join(rad,r))}")
@@ -1493,8 +1401,7 @@ h = hashlib.sha256()
 for p in native:
     h.update(p.name.encode()); h.update(b"\\0"); h.update(hashlib.sha256(p.read_bytes()).digest())
 print(f"NATIVE radia           = {h.hexdigest()[:12]}")
-for r in ["simulink/application.py",
-          "panels/calc_inductance.py",
+for r in ["panels/calc_inductance.py",
           "panels/calc_fem_kelvin.py",
           "panels/calc_fem_coilmesh.py"]:
     print(f"SHA radia/{r:35s} = {hsh_git('src/radia/' + r)}")
@@ -1562,7 +1469,6 @@ _PHASE9_FIELDS = (
     "ABI ngsolve",
     "ABI netgen-mesher",
     "NATIVE radia",
-    "SHA radia/simulink/application.py",
     "SHA radia/panels/calc_inductance.py",
     "SHA radia/panels/calc_fem_kelvin.py",
     "SHA radia/panels/calc_fem_coilmesh.py",
@@ -2034,6 +1940,7 @@ def _git_repo_owner_name():
 
 def _check_github_hosted_workflows(
     sha, *, required_names=None, require_present=None,
+    excluded_workflows=None,
     timeout_sec=1800, poll_sec=20, registration_grace_sec=90
 ):
     """Wait for SHA-bound check-runs and require their latest attempts green.
@@ -2048,9 +1955,14 @@ def _check_github_hosted_workflows(
     that never runs on push has no registration to inspect, and treating that
     silence as success is what let four release tags burn (4.95.86..4.95.89).
 
+    ``excluded_workflows`` scopes a distribution release by the owning Actions
+    workflow, rather than ambiguous job names. Unknown/external checks remain
+    required. Workflow lookup errors or mismatched commit identities fail closed.
+
     Returns (ok: bool, message: str).
     """
     import time as _time
+    import re
 
     repo = _git_repo_owner_name()
     path = f"repos/{repo}/commits/{sha}/check-runs?per_page=100"
@@ -2058,6 +1970,7 @@ def _check_github_hosted_workflows(
     started = _time.time()
     deadline = started + timeout_sec
     last_pending = []
+    workflow_by_run_id = {}
     while True:
         try:
             data, _headers = gh_get(path)
@@ -2067,6 +1980,23 @@ def _check_github_hosted_workflows(
         all_runs = data.get("check_runs", [])
         latest_by_name = {}
         for run in all_runs:
+            if excluded_workflows:
+                match = re.fullmatch(
+                    rf"https://github\.com/{re.escape(repo)}/actions/runs/(\d+)(?:/job/\d+)?/?",
+                    run.get("details_url") or "",
+                )
+                if match:
+                    run_id = match.group(1)
+                    if run_id not in workflow_by_run_id:
+                        try:
+                            workflow, _ = gh_get(f"repos/{repo}/actions/runs/{run_id}")
+                        except Exception as e:
+                            return False, f"Workflow ownership lookup failed: {type(e).__name__}: {e}"
+                        if workflow.get("head_sha") != sha or not workflow.get("path"):
+                            return False, f"Unverified workflow identity for check-run {run.get('name')}"
+                        workflow_by_run_id[run_id] = workflow["path"].split("@", 1)[0]
+                    if workflow_by_run_id[run_id] in excluded_workflows:
+                        continue
             name = run.get("name")
             if not name:
                 continue
@@ -2123,9 +2053,23 @@ def _check_github_hosted_workflows(
 # evidence, which is not the same as passing evidence.
 RELEASE_CHECK_RUN = "radia-native-release-build"
 
+# These independently released owners cannot block the CPU Radia distribution.
+# Keep shared/unknown checks required and the exact native release check mandatory.
+INDEPENDENT_DISTRIBUTION_WORKFLOWS = frozenset({
+    ".github/workflows/radia-gpu.yml",
+    ".github/workflows/radia-gpu-release.yml",
+    ".github/workflows/ltspice-data-safety.yml",
+    ".github/workflows/radia-optuna.yml",
+    ".github/workflows/release-radia-optuna.yml",
+    ".github/workflows/radia-mcp-matrix.yml",
+    ".github/workflows/cubit-mesh-export.yml",
+    ".github/workflows/eqnedit64.yml",
+    ".github/workflows/release-eqnedit64-pypi.yml",
+})
+
 
 def cmd_ci_verify(args):
-    """Require every latest GitHub check-run for the release-tag commit to be green.
+    """Require CPU Radia/shared checks for the release-tag commit to be green.
 
     The commit is the one the existing ``v<version>`` tag names, so this runs
     after tagging; it fails while that tag is missing. It also requires the
@@ -2139,6 +2083,7 @@ def cmd_ci_verify(args):
     print(f"  release tag commit = {head_sha[:8]}")
     gh_ok, gh_msg = _check_github_hosted_workflows(
         head_sha, required_names=None, require_present=[RELEASE_CHECK_RUN],
+        excluded_workflows=INDEPENDENT_DISTRIBUTION_WORKFLOWS,
         timeout_sec=3600
     )
     print("  " + gh_msg)
@@ -2243,29 +2188,20 @@ def cmd_done(args):
              "rebase-conflict sessions).")
         return rc
 
-    if _requires_simulink_candidate() and not getattr(args, "simulink_package", None):
-        fail("Radia 5.1.0 and newer require --simulink-package with matching "
-             "two-machine MEX/SLX candidate evidence.")
-        return 4
-
     if getattr(args, "simulink_package", None):
-        rc = _verify_simulink_candidate_state(args.simulink_package)
-        if rc != 0:
-            fail("Simulink candidate did not satisfy the two-machine gate.")
-            return rc
+        fail("MATLAB/Simulink artifacts belong to radia-gpu, not the CPU Radia release.")
+        return 4
 
     rc = _verify_final_pip_checks()
     if rc != 0:
         return rc
 
     print("")
-    suffix = (" The supplied Simulink candidate also passed both MATLAB "
-              "machines." if getattr(args, "simulink_package", None) else "")
     ok("DEFINITION OF DONE met. Release is consistent across LAB / 100号機. "
        "LAB and 100号機's release runtime use the verified wheel, "
        "100号機's development venv retains the verified editable source, and the retired standalone PySide panel surface is absent. "
        "The recorded editable intent names this release source; move it later "
-       "only with an explicit `release_quad repoint --reason`." + suffix)
+       "only with an explicit `release_quad repoint --reason`.")
     return 0
 
 

@@ -4,7 +4,7 @@ end
 
 function setupOnce(testCase)
 root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
-matlabDirectory=fullfile(root,"matlab");
+matlabDirectory=fullfile(root,'packages','radia-optuna','matlab');
 entries=string(strsplit(path,pathsep));
 testCase.TestData.RemovePath=~any(strcmpi(entries,string(matlabDirectory)));
 if testCase.TestData.RemovePath, addpath(matlabDirectory); end

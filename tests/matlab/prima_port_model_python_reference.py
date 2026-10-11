@@ -1,7 +1,8 @@
 """Write the PRIMA port-model exchanges used by test_prima_port_model.m.
 
-The exporter needs only NumPy/SciPy, so it is loaded from its source file
-without importing the native ``radia`` package.
+The CPU reference models need only NumPy/SciPy and load their numerical source
+without the native package. Writing MATLAB exchanges requires the independently
+installed radia-gpu coupling adapter and its Radia dependency.
 """
 from __future__ import annotations
 
@@ -38,12 +39,13 @@ def rc_two_port_impedance():
 
 
 def write_all(directory: Path) -> None:
+    import radia_gpu.ports as gpu_ports
     directory.mkdir(parents=True, exist_ok=True)
     rl = coupled_rl_admittance()
-    prima_export.export_prima_lti_json(rl, directory / "rl_admittance.json")
-    prima_export.export_prima_lti_json(rl, directory / "rl_impedance.json",
+    gpu_ports.export_prima_lti_json(rl, directory / "rl_admittance.json")
+    gpu_ports.export_prima_lti_json(rl, directory / "rl_impedance.json",
                                        orientation="impedance")
-    prima_export.export_prima_lti_json(rc_two_port_impedance(), directory / "rc_impedance.json")
+    gpu_ports.export_prima_lti_json(rc_two_port_impedance(), directory / "rc_impedance.json")
 
 
 if __name__ == "__main__":

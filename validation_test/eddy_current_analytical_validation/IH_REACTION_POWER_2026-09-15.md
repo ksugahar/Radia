@@ -224,7 +224,7 @@ retained. Python regressions also check P2 tetrahedral assembly, exact constant
 heat capacity and mixed-source power, plus the known constant Robin steady
 solution. The updated MATLAB integration report contains 34 passing tests.
 
-The tracked `matlab/radia_ih.slx` was reconstructed in a temporary directory,
+The tracked `packages/radia-gpu/matlab/radia_ih.slx` was reconstructed in a temporary directory,
 read/edited/checked with the installed official Simulink Toolkit via the
 authorized Python Engine, saved to its exact tracked path, closed and reopened.
 `model_check` reported healthy connectivity. The tracked model then ran the

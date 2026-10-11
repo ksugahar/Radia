@@ -136,6 +136,10 @@ full = [
 Repository = "https://github.com/ksugahar/Radia"
 
 [project.scripts]
+mcp-server-radia-ltspice = "radia_mcp.ltspice.server:main"
+mcp-server-radia-spice-lab = "radia_mcp.ltspice.server:main"
+mcp-spice-circuit-lab = "radia_mcp.ltspice.server:main"
+mcp-ltspice = "radia_mcp.ltspice.server:main"
 mcp-server-radia-design = "radia_mcp.radia_design.server:main"
 mcp-server-radia-electrical = "radia_mcp.radia_electrical.server:main"
 mcp-server-radia-motion = "radia_mcp.radia_motion.server:main"

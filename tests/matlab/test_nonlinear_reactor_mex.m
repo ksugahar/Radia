@@ -6,7 +6,7 @@ end
 function setupOnce(testCase)
 testDir = fileparts(mfilename("fullpath"));
 repoRoot = fileparts(fileparts(testDir));
-addpath(fullfile(repoRoot,"matlab"));
+addpath(fullfile(repoRoot,'packages','radia-gpu','matlab'));
 testCase.TestData.SetupInfo = radia.setup(Force=true);
 end
 

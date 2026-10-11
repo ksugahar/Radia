@@ -554,7 +554,7 @@ src/radia/
   ih_design.py                # Shared settings -> CLI command mapping
   simulink/application.py     # Explicit-trigger Simulink artifact runner
 
-matlab/+radia/+simulink/      # Induction Heating block and MATLAB adapters
+packages/radia-gpu/matlab/+radia/+simulink/      # Induction Heating block and MATLAB adapters
 
 validation_test/
   ih_esim_benchmark/          # benchmark.py + analytical_bessel_baseline.py + results.json

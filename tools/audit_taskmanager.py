@@ -9,7 +9,7 @@ Two checks repo-wide:
    composable building blocks; the caller wraps them.
 
 2. **Caller modules** -- ``src/radia/panels/calc_*.py``,
-   ``src/radia/simulink/*_operator_assembly.py``,
+   ``packages/radia-gpu/src/radia_gpu/simulink/*_operator_assembly.py``,
    ``validation_test/**.py``, ``tests/**.py``, and Python helpers under
    ``docs/`` -- that contain any
    NGSolve-parallel operation (``.Assemble()``,
@@ -17,6 +17,9 @@ Two checks repo-wide:
    ``CGSolver(...)``, ``GMRESSolver(...)``,
    ``GridFunction.Set(coefficient, ...)``) MUST have
    at least one caller-owned ``with TaskManager():`` region.
+
+Explicit mexcuda preparation routes instead forbid TaskManager construction;
+their serial reference execution is required by the GPU policy.
 
 This is intentionally a fast file-level minimum gate.  It detects a caller
 that has no TaskManager region at all. Pytest modules may instead opt into the
@@ -53,18 +56,25 @@ from typing import NamedTuple
 
 ROOT = Path(__file__).absolute().parent.parent
 
+SERIAL_GPU_ROUTES = frozenset({
+    "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
+    "validation_test/ams_cuda/run.py",
+    "validation_test/radia_gpu/export_vol_reference.py",
+    "validation_test/ngsolve_cuda_mex/run_poisson.py",
+})
+
 # Paths classified as HELPERS (must NOT wrap internally).
 HELPER_GLOBS = ["src/radia/**/*.py"]
 HELPER_EXCLUDE = [
     "src/radia/panels/calc_*.py",
-    "src/radia/simulink/*_operator_assembly.py",
+    "packages/radia-gpu/src/radia_gpu/simulink/*_operator_assembly.py",
     "**/__pycache__/**",
 ]
 
 # Paths classified as CALLERS (MUST wrap when doing parallel ops).
 CALLER_GLOBS = [
     "src/radia/panels/calc_*.py",
-    "src/radia/simulink/*_operator_assembly.py",
+    "packages/radia-gpu/src/radia_gpu/simulink/*_operator_assembly.py",
     "validation_test/**/*.py",
     "tests/**/*.py",
     "docs/**/*.py",
@@ -130,7 +140,7 @@ def _gather_files() -> list[Path]:
     command = ["git", "grep", "--untracked", "-Il", "-F"]
     for token in _CANDIDATE_TOKENS:
         command.extend(("-e", token))
-    command.extend(("--", "src/radia", "validation_test", "tests", "docs"))
+    command.extend(("--", "src/radia", "packages/radia-gpu/src/radia_gpu/simulink", "validation_test", "tests", "docs"))
     proc = subprocess.run(
         command,
         cwd=ROOT,
@@ -185,10 +195,7 @@ def _classify(path: Path) -> str | None:
         and name.endswith(".py")
     )
     is_simulink_assembly_caller = (
-        len(parts) >= 4
-        and parts[0] == "src"
-        and parts[1] == "radia"
-        and parts[2] == "simulink"
+        rel.startswith("packages/radia-gpu/src/radia_gpu/simulink/")
         and name.endswith("_operator_assembly.py")
     )
     is_lane_caller = (
@@ -478,6 +485,23 @@ def _audit_caller(path: Path) -> list[Finding]:
     except SyntaxError as exc:
         return [Finding(path, exc.lineno or 0, "parse-error",
                          str(exc)[:80], "fix syntax")]
+    if path.relative_to(ROOT).as_posix() in SERIAL_GPU_ROUTES:
+        names = {"TaskManager"}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                names.update(alias.asname or alias.name for alias in node.names
+                             if alias.name == "TaskManager")
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and (
+                isinstance(node.func, ast.Name) and node.func.id in names
+                or isinstance(node.func, ast.Attribute) and node.func.attr == "TaskManager"
+            ):
+                findings.append(Finding(
+                    path, node.lineno, "gpu-taskmanager",
+                    text.splitlines()[node.lineno - 1].strip()[:80],
+                    "Remove TaskManager: mexcuda preparation uses the serial reference route.",
+                ))
+        return findings
     parallel_ops = _find_parallel_ops(tree)
     if not parallel_ops:
         return findings   # no parallel work; nothing to require
@@ -555,8 +579,8 @@ def main():
     if not args.quiet_ok:
         print(f"audit_taskmanager: scanned "
               f"{len(helpers)} helpers + {len(callers)} callers")
-        print("  policy: helper has 0 wraps; every parallel-op-bearing "
-              "caller file has a caller-owned region")
+        print("  policy: helper has 0 wraps; CPU parallel callers own regions; "
+              "explicit GPU preparation routes forbid TaskManager")
         print()
 
     if helper_findings:

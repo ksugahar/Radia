@@ -709,7 +709,7 @@ Every long run writes machine, MATLAB, Python, Optuna, NumPy, SciPy, PyTorch,
 
 ## 15. Simulink artifact editing rule
 
-The tracked `matlab/radia_simulink_library.slx` is production source. Structural
+The tracked `packages/radia-gpu/matlab/radia_simulink_library.slx` is production source. Structural
 changes must use MathWorks' official Simulink Agentic Toolkit:
 
 1. close scratch and orphaned models;

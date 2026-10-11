@@ -1,0 +1,155 @@
+{
+  "schema": "radia.gpu.a100-poisson-diagnostic-scaling/v1",
+  "passed": true,
+  "source_commit": "4195b093cfa9e8fb959e1a2b4fc565ae4186d755",
+  "wheel_sha256": "30bc7a86d6a65c6aed29b70d4d9ec8f40020c1ef2a089965f393a8c2ae4922c5",
+  "cpu_threads": 1,
+  "formal_performance_checked": false,
+  "limitations": [
+    "CPU sparsecholesky factorization and warmed reuse are reported separately",
+    "GPU upload is the first transfer; warm_with_transfers_seconds adds that measured upload to the warmed kernel median and download, rather than measuring a warmed end-to-end loop",
+    "No comparison against a 52-core CPU run, AMS, ICCG or upstream ngscuda"
+  ],
+  "cases": [
+    {
+      "schema": "radia.gpu.vol-cpu-gpu-comparison/v1",
+      "passed": true,
+      "source_commit": "4195b093cfa9e8fb959e1a2b4fc565ae4186d755",
+      "cpu_reference": {
+        "schema": "radia.gpu.ngsolve-vol-reference/v1",
+        "passed": true,
+        "ngsolve": "6.2.2607",
+        "python": "3.12.10",
+        "source_commit": "6b34c4af5ee86806641a5f7d2f70487a1ecd52de",
+        "mesh_sha256": "be997614f0e2ac49656f91eaa70c6661a373a7109b6fff4cb79a1fbad8ac68f9",
+        "mesh_preflight_passed": true,
+        "label_contract_schema": "radia.vol-label-contract.v1",
+        "cpu_threads": 1,
+        "ndof": 14292,
+        "free_dofs": 10042,
+        "nnz": 244934,
+        "cpu_true_relative_residual": 2.0373617405849547e-14,
+        "system_sha256": "5be56d307ec0adf50536060f524fb4ca8a8e3eb0f184f829104abb684fb0384b",
+        "gpu_checked": false,
+        "timing_checked": true,
+        "formal_performance_checked": false,
+        "cpu_solver": "sparsecholesky",
+        "cpu_factor_seconds": 0.31114660000002914,
+        "cpu_cold_solve_seconds": 0.008550300000024436,
+        "cpu_warm_solve_seconds": [
+          0.007408000000395987,
+          0.007321399999455025,
+          0.0072924000005514245,
+          0.007245800000418967,
+          0.007299799999600509
+        ],
+        "cpu_warm_median_seconds": 0.007299799999600509,
+        "cubit_execution": false,
+        "execution_source_sha256": "82edaf51146b612034bfefa9b5f9d2475ef61302d595ba31b7ef338c3eecd052"
+      },
+      "gpu_vs_ngsolve_direct_relative_l2": 1.2308559722360995e-10,
+      "gpu_report": {
+        "passed": 1,
+        "schema": "radia.cuda-poisson-gpu.v1",
+        "backend": "custom CUDA CSR PCG; NGSolve CPU assembly; not upstream ngscuda",
+        "device": "NVIDIA A100-SXM4-40GB",
+        "compute_capability": "8.0",
+        "total_memory_bytes": 42628612096.0,
+        "available_memory_before": 42181853184.0,
+        "available_memory_after": 42173544912.0,
+        "precision": "float64",
+        "upload_seconds": 0.0431255,
+        "cold_solve_seconds": 0.0113295,
+        "warm_seconds": [
+          0.0064369,
+          0.0060732,
+          0.0060237,
+          0.0060404,
+          0.0064153
+        ],
+        "warm_median_seconds": 0.0060732,
+        "download_seconds": 0.0009515,
+        "warm_with_transfers_seconds": 0.0501502,
+        "info": {
+          "iterations": 83,
+          "true_relative_residual": 7.176136907267038e-11,
+          "precision": "float64",
+          "backend": "CUDA custom CSR kernels; NGSolve CPU assembly",
+          "preconditioner": "Jacobi; not IC or AMS"
+        }
+      },
+      "a100_checked": true,
+      "formal_performance_checked": false
+    },
+    {
+      "schema": "radia.gpu.vol-cpu-gpu-comparison/v1",
+      "passed": true,
+      "source_commit": "4195b093cfa9e8fb959e1a2b4fc565ae4186d755",
+      "cpu_reference": {
+        "schema": "radia.gpu.ngsolve-vol-reference/v1",
+        "passed": true,
+        "ngsolve": "6.2.2607",
+        "python": "3.12.10",
+        "source_commit": "6b34c4af5ee86806641a5f7d2f70487a1ecd52de",
+        "mesh_sha256": "9751f8203dfdd5de58b1867756672c9916115ca34ed3aceae2608965e699b104",
+        "mesh_preflight_passed": true,
+        "label_contract_schema": "radia.vol-label-contract.v1",
+        "cpu_threads": 1,
+        "ndof": 100410,
+        "free_dofs": 83224,
+        "nnz": 2216610,
+        "cpu_true_relative_residual": 2.0930005104126161e-13,
+        "system_sha256": "6540ce223affbbbe96271a72e579745df3fe0cff0b0bc0cd52dea4058bebf276",
+        "gpu_checked": false,
+        "timing_checked": true,
+        "formal_performance_checked": false,
+        "cpu_solver": "sparsecholesky",
+        "cpu_factor_seconds": 12.865463399999499,
+        "cpu_cold_solve_seconds": 0.1901428000001033,
+        "cpu_warm_solve_seconds": [
+          0.1869289000005665,
+          0.1869477000000188,
+          0.1864413000002969,
+          0.18673990000024787,
+          0.18659939999997732
+        ],
+        "cpu_warm_median_seconds": 0.18673990000024787,
+        "cubit_execution": false,
+        "execution_source_sha256": "82edaf51146b612034bfefa9b5f9d2475ef61302d595ba31b7ef338c3eecd052"
+      },
+      "gpu_vs_ngsolve_direct_relative_l2": 3.624353092874747e-11,
+      "gpu_report": {
+        "passed": 1,
+        "schema": "radia.cuda-poisson-gpu.v1",
+        "backend": "custom CUDA CSR PCG; NGSolve CPU assembly; not upstream ngscuda",
+        "device": "NVIDIA A100-SXM4-40GB",
+        "compute_capability": "8.0",
+        "total_memory_bytes": 42628612096.0,
+        "available_memory_before": 42181853184.0,
+        "available_memory_after": 42146867392.0,
+        "precision": "float64",
+        "upload_seconds": 0.0464226,
+        "cold_solve_seconds": 0.036961,
+        "warm_seconds": [
+          0.0319325,
+          0.0364519,
+          0.0317933,
+          0.0339767,
+          0.0266704
+        ],
+        "warm_median_seconds": 0.0319325,
+        "download_seconds": 0.0012148,
+        "warm_with_transfers_seconds": 0.07956990000000001,
+        "info": {
+          "iterations": 139,
+          "true_relative_residual": 8.901546944372613e-11,
+          "precision": "float64",
+          "backend": "CUDA custom CSR kernels; NGSolve CPU assembly",
+          "preconditioner": "Jacobi; not IC or AMS"
+        }
+      },
+      "a100_checked": true,
+      "formal_performance_checked": false
+    }
+  ]
+}

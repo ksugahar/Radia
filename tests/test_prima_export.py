@@ -1,5 +1,6 @@
 """PRIMA port models: orientation, pole-residue form, LTspice text, LTI exchange."""
 from __future__ import annotations
+import radia_gpu.ports as gpu_ports
 
 import json
 import math
@@ -90,7 +91,7 @@ def test_unstable_and_malformed_models_fail_loudly():
     (rc_two_port_impedance(), "impedance"),
 ])
 def test_ltspice_sources_implement_the_port_relation(model, realization):
-    text = pe.ltspice_subckt(model, name="DUT")
+    text = gpu_ports.ltspice_subckt(model, name="DUT")
     assert ".subckt DUT P1_p P1_n" in text and text.rstrip().endswith(".ends DUT")
     assert "+-" not in text
     native = model.oriented(realization)
@@ -114,12 +115,12 @@ def test_ltspice_refuses_models_improper_both_ways():
                                [np.zeros((y.shape[0], x.shape[1])), y]]) for x, y in blocks)
     model = pe.DescriptorPortModel(E, A, B, C, D, "voltage", ("L", "C"))
     with pytest.raises(ValueError, match="improper in both orientations"):
-        pe.ltspice_subckt(model)
+        gpu_ports.ltspice_subckt(model)
 
 
 def test_lti_exchange_is_row_major_and_self_checking(tmp_path):
     model = rc_two_port_impedance()
-    path = pe.export_prima_lti_json(model, tmp_path / "rc.json", metadata={"note": "x"})
+    path = gpu_ports.export_prima_lti_json(model, tmp_path / "rc.json", metadata={"note": "x"})
     payload = json.loads(path.read_text(encoding="utf-8"))
     assert payload["schema"] == pe.SCHEMA
     assert (payload["input_unit"], payload["output_unit"]) == ("A", "V")
@@ -157,4 +158,4 @@ def test_prima_hacapk_descriptor_model_is_stable_and_exported_exactly():
     z_low = prima.port_impedance(1.0)
     assert R_dc == pytest.approx(z_low.real, rel=1e-6)
     assert L_dc == pytest.approx(z_low.imag / (2.0 * math.pi), rel=1e-6)
-    assert "impedance realization" in pe.ltspice_subckt(model, name="HELIX")
+    assert "impedance realization" in gpu_ports.ltspice_subckt(model, name="HELIX")

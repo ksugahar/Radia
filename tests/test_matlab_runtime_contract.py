@@ -19,8 +19,8 @@ def _source(path: str) -> str:
 
 
 def test_matlab_setup_checks_the_native_ngsolve_abi_and_mkl_dispatcher() -> None:
-    setup = _source("matlab/+radia/setup.m")
-    expected = _source("matlab/+radia/+internal/expectedNGSolveVersion.m")
+    setup = _source("packages/radia-gpu/matlab/+radia/setup.m")
+    expected = _source("packages/radia-gpu/matlab/+radia/+internal/expectedNGSolveVersion.m")
     with (ROOT / "pyproject.toml").open("rb") as stream:
         dependencies = tomllib.load(stream)["project"]["dependencies"]
 
@@ -37,7 +37,7 @@ def test_matlab_setup_checks_the_native_ngsolve_abi_and_mkl_dispatcher() -> None
 
 
 def test_cached_mex_setup_keeps_provenance_subprocess_off_the_step_path() -> None:
-    setup = _source("matlab/+radia/setup.m")
+    setup = _source("packages/radia-gpu/matlab/+radia/setup.m")
     cache_branch = setup.index("if ~options.Force && ~isempty(cachedInfo)")
     cache_return = setup.index("    return\nend", cache_branch)
     verifier_launch = setup.index('verifier = fullfile(matlabDir, "verify_radia_mex_provenance.py")')
@@ -49,18 +49,15 @@ def test_cached_mex_setup_keeps_provenance_subprocess_off_the_step_path() -> Non
 def test_matlab_release_uses_sequential_mkl_without_changing_python() -> None:
     build = _source("Build.ps1")
     cmake = _source("CMakeLists.txt")
-    package = _source("tools/package_simulink_release.py")
+    assert not (ROOT / "tools/package_simulink_release.py").exists()
     verifier = _source("tools/verify_simulink_release.py")
 
     assert build.index("$PythonLibrary") < build.index("$env:MKLROOT")
     assert 'MatlabMexOnly' not in build
     assert "mkl_intel_thread" in cmake
     assert "MKL_MATLAB_RUNTIME_DLLS" not in cmake
-    assert "mkl_sequential.3.dll" in package
-    assert "mkl_intel_thread.3.dll" not in package
-    assert "+radia/+internal/expectedNGSolveVersion.m" in package
-    assert "matlab/mkl_sequential.3.dll" in verifier
-    assert "matlab/+radia/+internal/expectedNGSolveVersion.m" in verifier
+    assert "packages/radia-gpu/matlab/mkl_sequential.3.dll" in verifier
+    assert "packages/radia-gpu/matlab/+radia/+internal/expectedNGSolveVersion.m" in verifier
 
 
 def test_release_schema_preserves_historical_threaded_mkl_contracts() -> None:
@@ -78,13 +75,13 @@ def test_release_schema_preserves_historical_threaded_mkl_contracts() -> None:
         module.FULL_REQUIRED_MEMBERS_V2,
         module.FULL_REQUIRED_MEMBERS_V3,
     ):
-        assert "matlab/mkl_intel_thread.3.dll" in historical
-        assert "matlab/mkl_sequential.3.dll" not in historical
-        assert "matlab/+radia/+internal/expectedNGSolveVersion.m" not in historical
+        assert "packages/radia-gpu/matlab/mkl_intel_thread.3.dll" in historical
+        assert "packages/radia-gpu/matlab/mkl_sequential.3.dll" not in historical
+        assert "packages/radia-gpu/matlab/+radia/+internal/expectedNGSolveVersion.m" not in historical
     for current in (module.REQUIRED_MEMBERS, module.FULL_REQUIRED_MEMBERS):
-        assert "matlab/mkl_sequential.3.dll" in current
-        assert "matlab/mkl_intel_thread.3.dll" not in current
-        assert "matlab/+radia/+internal/expectedNGSolveVersion.m" in current
+        assert "packages/radia-gpu/matlab/mkl_sequential.3.dll" in current
+        assert "packages/radia-gpu/matlab/mkl_intel_thread.3.dll" not in current
+        assert "packages/radia-gpu/matlab/+radia/+internal/expectedNGSolveVersion.m" in current
 
 
 def test_verifier_accepts_each_historical_and_current_schema(tmp_path) -> None:
@@ -125,8 +122,8 @@ def test_verifier_accepts_each_historical_and_current_schema(tmp_path) -> None:
 
 
 def test_mex_handle_unlocks_happen_after_registry_critical_sections() -> None:
-    gateway = _source("src/matlab/radia_mex.cpp")
-    ih = _source("src/matlab/radia_ih_mex_commands.cpp")
+    gateway = _source("packages/radia-optuna/native/optuna_mex.cpp")
+    ih = _source("packages/radia-gpu/native/legacy/radia_ih_mex_commands.cpp")
 
     helper = re.search(
         r"void DestroyRegistered\(.*?\n\}\n\n#ifndef", gateway,
@@ -178,7 +175,7 @@ def _manifest_for_schema(schema: str, payloads: dict[str, bytes]) -> dict:
     else:
         manifest.update({
             "package": "radia-simulink-library",
-            "entry_model": "matlab/radia_simulink_library.slx",
+            "entry_model": "packages/radia-gpu/matlab/radia_simulink_library.slx",
             "backend": (
                 "native-mex-sfunction-and-mex-handle"
                 if version == 1 else "application-specific"
@@ -190,9 +187,9 @@ def _manifest_for_schema(schema: str, payloads: dict[str, bytes]) -> dict:
         })
         if version == 1:
             manifest["required_mex"] = [
-                "matlab/radia_mex.mexw64",
-                "matlab/radia_ih_eddy_sfun.mexw64",
-                "matlab/radia_ih_thermal_sfun.mexw64",
+                "packages/radia-gpu/matlab/radia_mex.mexw64",
+                "packages/radia-gpu/matlab/radia_ih_eddy_sfun.mexw64",
+                "packages/radia-gpu/matlab/radia_ih_thermal_sfun.mexw64",
             ]
         else:
             manifest["feature_toolbox_requirements"][
@@ -205,23 +202,23 @@ def _manifest_for_schema(schema: str, payloads: dict[str, bytes]) -> dict:
 
 def _add_level2_manifest_fields(
         manifest: dict, *, full: bool, optuna: bool) -> None:
-    required_mex = ["matlab/radia_mex.mexw64"]
+    required_mex = ["packages/radia-gpu/matlab/radia_mex.mexw64"]
     if optuna:
-        required_mex.append("matlab/optuna_mex.mexw64")
+        required_mex.append("packages/radia-optuna/matlab/optuna_mex.mexw64")
     sfunctions = [
-        "matlab/radia_ih_eddy_sfun.m",
-        "matlab/radia_ih_thermal_sfun.m",
-        "matlab/radia_ih_monitor_sfun.m",
-        "matlab/+radia/+simulink/ihEddySFunction.m",
-        "matlab/+radia/+simulink/ihThermalSFunction.m",
-        "matlab/+radia/+simulink/ihMonitorSFunction.m",
+        "packages/radia-gpu/matlab/radia_ih_eddy_sfun.m",
+        "packages/radia-gpu/matlab/radia_ih_thermal_sfun.m",
+        "packages/radia-gpu/matlab/radia_ih_monitor_sfun.m",
+        "packages/radia-gpu/matlab/+radia/+simulink/ihEddySFunction.m",
+        "packages/radia-gpu/matlab/+radia/+simulink/ihThermalSFunction.m",
+        "packages/radia-gpu/matlab/+radia/+simulink/ihMonitorSFunction.m",
     ]
     if full:
         sfunctions += [
-            "matlab/radia_nonlinear_reactor_sfun.m",
-            "matlab/+radia/+simulink/nonlinearReactorSFunction.m",
-            "matlab/radia_streamfunction_optuna_sfun.m",
-            "matlab/+radia/+simulink/streamFunctionOptunaSFunction.m",
+            "packages/radia-gpu/matlab/radia_nonlinear_reactor_sfun.m",
+            "packages/radia-gpu/matlab/+radia/+simulink/nonlinearReactorSFunction.m",
+            "packages/radia-gpu/matlab/radia_streamfunction_optuna_sfun.m",
+            "packages/radia-gpu/matlab/+radia/+simulink/streamFunctionOptunaSFunction.m",
         ]
         manifest["reactor_backend"] = "matlab-level2+radia-mex-handle"
         manifest["reactor_surrogate"] = False

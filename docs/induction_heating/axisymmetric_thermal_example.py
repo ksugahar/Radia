@@ -15,7 +15,7 @@ from scipy.sparse.linalg import spsolve
 def reproduce(root):
     from validation_test.induction_heating._axisym_test_mesh import make_axisymmetric_mesh
 
-    source = root / 'src/radia/simulink/ih_operator_assembly.py'
+    source = root / 'packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py'
     spec = importlib.util.spec_from_file_location('ih_notebook_assembly', source)
     assembly = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = assembly

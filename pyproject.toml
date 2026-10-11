@@ -16,7 +16,7 @@ authors = [
 maintainers = [
     {name = "Radia Development Team"},
 ]
-keywords = ["magnetostatics", "magnetic field", "radia", "ngsolve", "fem", "synchrotron", "cubit", "mesh", "export", "gmsh", "nastran", "netgen", "spice", "ltspice", "simulink"]
+keywords = ["magnetostatics", "magnetic field", "radia", "ngsolve", "fem", "synchrotron", "cubit", "mesh", "export", "gmsh", "nastran", "netgen"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
@@ -64,22 +64,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-mcp = [
-    # Optional LTspice MCP entry points shipped by the radia distribution.
-    # The complete executable manual is provided by the separate radia-mcp
-    # package, which follows the same SDK compatibility range.
-    "mcp>=1.0,<2",
-]
-optuna = [
-    # Independently versioned monorepo artifact. Pin the release that passed
-    # this Radia version's MATLAB/Simulink integration gate.
-    "radia-optuna==0.2.0",
-]
-optuna-upstream = [
-    # Adds pinned upstream Python/SciPy/PyTorch paths used by GP, scrambled QMC,
-    # and parameter-importance parity; native MATLAB/Simulink use stays lighter.
-    "radia-optuna[upstream]==0.2.0",
-]
+optuna = ["optuna==5.0.0"]
 cubit = [
     "cubit-mesh-export",
 ]
@@ -90,12 +75,6 @@ topopt-cad = [
     "trimesh>=4.0",
     "netCDF4>=1.6",
     "fast-simplification>=0.1",
-]
-spice = [
-    "schemdraw>=0.18",
-]
-ltspice = [
-    "schemdraw>=0.18",
 ]
 build123d = [
     # Pythonic OCCT front-end used by PEEC coil-from-shape helpers
@@ -129,16 +108,12 @@ test = [
     "pytest-cov>=4.0",
     # Execute MANIFEST.in with the build backend's file-selection implementation.
     "setuptools>=45",
-    # Exercise the optional LTspice MCP entry points in the full test lane.
-    "mcp>=1.0,<2",
-    "schemdraw>=0.18",
 ]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "setuptools>=45",
     "matplotlib>=3.5",
-    "schemdraw>=0.18",
 ]
 
 [project.urls]
@@ -150,17 +125,6 @@ Issues = "https://github.com/ksugahar/Radia/issues"
 "ESRF Radia Page" = "https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia"
 
 [project.scripts]
-radia-ih-assemble = "radia.simulink.ih_operator_assembly:main"
-# Circuit/SPICE integration is part of Radia. The shorter canonical names are
-# preferred; legacy names remain wired to the same implementation.
-radia-ltspice = "radia.ltspice.cli:main"
-mcp-server-radia-ltspice = "radia.ltspice.mcp_server:main"
-radia-spice-lab = "radia.ltspice.cli:main"
-mcp-server-radia-spice-lab = "radia.ltspice.mcp_server:main"
-spice-circuit-lab = "radia.ltspice.cli:main"
-mcp-spice-circuit-lab = "radia.ltspice.mcp_server:main"
-ltspice-convert = "radia.ltspice.cli:main"
-mcp-ltspice = "radia.ltspice.mcp_server:main"
 # Desktop PySide and notebook-workbench entry points are retired. Human
 # production operation uses the Radia Simulink library. Python/MCP use the
 # headless calc_*.py and DesignSpec contracts.
@@ -190,12 +154,6 @@ radia = [
     "panels/samples/em/c_type_dipole/*.md",
     "panels/samples/em/c_type_dipole/*.step",
     "panels/application_interface_manifest.json",
-    "simulink/*.m",
-    "simulink/*.cpp",
-    "simulink/*.md",
-    "simulink/contracts/*.json",
-    "ltspice/LICENSE",
-    "ltspice/py.typed",
     "CONVENTIONS.md",
 ]
 

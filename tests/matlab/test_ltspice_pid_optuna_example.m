@@ -4,7 +4,7 @@ end
 
 function setupOnce(testCase)
 root = fileparts(fileparts(fileparts(mfilename("fullpath"))));
-addpath(fullfile(root,"matlab"));
+addpath(fullfile(root,'packages','radia-optuna','matlab'));
 testCase.TestData.Root = root;
 end
 

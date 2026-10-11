@@ -1,7 +1,7 @@
 function result=validate_native_sobol_max_dimension()
 %VALIDATE_NATIVE_SOBOL_MAX_DIMENSION Exercise the full Joe--Kuo table.
 root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
-addpath(fullfile(root,"matlab"));
+addpath(fullfile(root,'packages','radia-gpu','matlab'));
 sampler=radia.optuna.QMCSampler(QMCType="sobol", ...
     Scramble=false,Seed=157);
 tic
