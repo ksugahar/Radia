@@ -6,7 +6,7 @@ from pathlib import Path
 
 def poisson_public(record):
     keys = ('schema', 'passed', 'platform', 'versions', 'ngsolve_upstream_cuda_enabled',
-            'cpu_threads', 'matlab_startup_seconds', 'gateway_checks',
+            'cpu_threads', 'taskmanager_used', 'matlab_startup_seconds', 'gateway_checks',
             'python_peak_rss_bytes', 'source_commit', 'limitations', 'cases')
     result = {key: record[key] for key in keys if key in record}
     build_keys = ('schema', 'source_sha256', 'binary_sha256', 'source_commit',
@@ -20,7 +20,7 @@ def poisson_public(record):
 
 def ams_public(record):
     keys = ('schema', 'accepted', 'platform', 'versions', 'threads', 'precision',
-            'cases', 'source_commit', 'source_dirty', 'matlab_start_seconds',
+            'cases', 'source_commit', 'source_dirty', 'taskmanager_used', 'matlab_start_seconds',
             'gpu_binary_sha256', 'execution_mode')
     result = {key: record[key] for key in keys if key in record}
     if 'build' in record:

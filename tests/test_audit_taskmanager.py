@@ -52,6 +52,7 @@ def test_classification_matches_repository_lanes(
     "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
     "validation_test/ams_cuda/run.py",
     "validation_test/radia_gpu/export_vol_reference.py",
+    "validation_test/ngsolve_cuda_mex/run_poisson.py",
 ])
 @pytest.mark.parametrize("construction", ["TaskManager()", "ng.TaskManager()", "TM()"])
 def test_gpu_routes_forbid_taskmanager(audit_module, tmp_path, relative_path, construction):
