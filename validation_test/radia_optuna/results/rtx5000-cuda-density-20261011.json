@@ -72,5 +72,39 @@
   },
   "validation_script_sha256": "d7ad799424daac18606cfdcfc73d633f3a5e49e94ddd801ca517a3c2a1bc3c1e",
   "scope": "Parzen densities and TPE density batches; CPU host management and random generation retained. Not full Optuna qualification.",
-  "publication_ready": false
+  "publication_ready": false,
+  "installed_wheel_acceptance": {
+    "schema": "radia-optuna.standalone-simulink-test.v1",
+    "ok": true,
+    "complete_trials": 4,
+    "failed_trials": 1,
+    "simulink_block_trials": 4,
+    "simulink_block_resumed_trials": 6,
+    "simulink_block_best": 0.0020714441268835497,
+    "simulink_applied_x": 0.2044868796182513,
+    "simulink_topology_stable": true,
+    "simulink_monitor_bus": "OptunaMonitorBusV1",
+    "simulink_monitor": "simulink-scope-xy",
+    "session_trials": 4,
+    "teaching_model_trials": 12,
+    "table_resume": {
+      "schema": "radia-optuna.table-resume-test.v1",
+      "ok": true,
+      "source_trial_count": 4,
+      "restored_trial_count": 4,
+      "table_names": [
+        "TrialTable",
+        "ObjectiveTable",
+        "ParamTable",
+        "IntermediateTable",
+        "UserAttrTable",
+        "ConstraintTable",
+        "SamplerStateTable"
+      ]
+    },
+    "distinct_parameter_values": 4,
+    "cuda_tests_passed": 3,
+    "wheel_sha256": "131d4cc49b51b089b38bcd5a714c5d527d88c7559e8c2e1913e8ebd2cc45c156",
+    "source_fidelity_verified": true
+  }
 }
