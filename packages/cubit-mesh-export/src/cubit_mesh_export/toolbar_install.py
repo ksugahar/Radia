@@ -303,12 +303,7 @@ def build_official_toolbar_package(output_dir=None):
 
 
 def _existing_toolbar_install_dirs(all_users=False):
-    """Return already-imported WorkflowToolbar directories.
-
-    Cubit performs the first package import so it can register the toolbar in
-    its own preferences. After that import, keeping the self-contained scripts
-    current is an ordinary file synchronization step.
-    """
+    """Return automatic and previously imported WorkflowToolbar directories."""
     roots = []
     local_appdata = os.environ.get("LOCALAPPDATA")
     if local_appdata:
