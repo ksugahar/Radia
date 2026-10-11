@@ -28,12 +28,25 @@ s2=upload(d.snapshot,'');b2=gpuArray(d.rhs);
 inclusiveSolution=gather(x2);wait(g);inclusiveSeconds=toc(timer);
 solution=gather(x);
 memoryBytes=before-g.AvailableMemory;
+% Zero RHS keeps gateway setup but skips PCG iterations. Apply-only includes
+% one AMS cycle and its own gateway setup. These are diagnostic wall times,
+% not exact allocations/kernel-only counters; retain their first samples.
+zeroRhs=zeros(size(rhs),'like',rhs);
+zeroRhsTimes=zeros(6,1);applyOnlyTimes=zeros(6,1);
+for k=1:6
+    timer=tic;[z,zeroInfo]=radia_cuda_ams(s,zeroRhs,1e-9,2000,false);wait(g);zeroRhsTimes(k)=toc(timer);
+    assert(zeroInfo.iterations==0,'Zero RHS unexpectedly ran PCG iterations');
+    timer=tic;[applied,~]=radia_cuda_ams(s,rhs,1e-9,2000,true);wait(g);applyOnlyTimes(k)=toc(timer);
+end
+zeroRhsWarmMedianSeconds=median(zeroRhsTimes(2:end));
+applyOnlyWarmMedianSeconds=median(applyOnlyTimes(2:end));
 checks=check_errors(s,rhs);
 device=struct('name',g.Name,'compute_capability',g.ComputeCapability, ...
     'total_memory',g.TotalMemory,'driver',g.GraphicsDriverVersion,'toolkit',g.ToolkitVersion);
 matlabVersion=version;
 save(outputPath,'solution','info','probeErrors','coldSeconds','times', ...
-    'inclusiveSeconds','inclusiveSolution','memoryBytes','uploadSeconds','checks','device','matlabVersion');
+    'inclusiveSeconds','inclusiveSolution','memoryBytes','uploadSeconds','checks','device','matlabVersion', ...
+    'zeroRhsTimes','applyOnlyTimes','zeroRhsWarmMedianSeconds','applyOnlyWarmMedianSeconds');
 end
 
 function out=upload(a,name)
