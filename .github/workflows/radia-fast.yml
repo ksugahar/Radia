@@ -37,7 +37,7 @@ jobs:
     # Fork code never executes on laboratory infrastructure. GitHub-hosted
     # package/policy workflows still cover that public contribution path.
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    runs-on: [self-hosted, Windows, X64, mdx]
+    runs-on: [self-hosted, Windows, X64, "100"]
     timeout-minutes: 20
     env:
       RADIA_CI_OUTPUT_DIR: 'C:\temp\radia-fast-${{ github.run_id }}-${{ github.run_attempt }}'

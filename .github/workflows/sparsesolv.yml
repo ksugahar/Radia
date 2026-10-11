@@ -419,7 +419,7 @@ concurrency:
 jobs:
   ams-regression:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    runs-on: [self-hosted, Windows, X64, mdx]
+    runs-on: [self-hosted, Windows, X64, "100"]
     # Native build, numerical contracts and MATLAB parity share this job.
     # The full lane exceeded 20 minutes during MATLAB tests on mdx.
     timeout-minutes: 45

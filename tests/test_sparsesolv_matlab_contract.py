@@ -41,27 +41,16 @@ def base_checkout(tmp_path_factory):
     return repo
 
 
-@pytest.mark.parametrize("observations,shared,allowed", [
-    (["15244"], (), False),
-    (["[]"], ("existing",), False),
-    (["[]", "[7352]"], (), False),
-    (["[]", "[]"], (), True),
-])
-def test_owned_engine_requires_process_and_sharing_absence(monkeypatch, observations, shared, allowed):
+def test_owned_engine_does_not_inspect_or_attach_to_caller_sessions(monkeypatch):
     runner = runpy.run_path(str(ROOT/"validation_test/ngsolve_matlab_parity/run_sparsesolv_parity.py"))
-    replies = iter(observations)
-    monkeypatch.setattr(subprocess, "run", lambda *a, **k: SimpleNamespace(stdout=next(replies)))
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Caller-owned MATLAB sessions must remain untouched")
+    monkeypatch.setattr(subprocess, "run", forbidden)
     started = []
-    api = SimpleNamespace(find_matlab=lambda: shared,
+    api = SimpleNamespace(find_matlab=forbidden, connect_matlab=forbidden,
                           start_matlab=lambda options: started.append(options) or "owned")
-    if allowed:
-        assert runner["start_owned_engine"](api) == "owned"
-        assert len(started) == 1
-    else:
-        with pytest.raises(RuntimeError, match="no new MATLAB was started"):
-            runner["start_owned_engine"](api)
-        assert not started
-
+    assert runner["start_owned_engine"](api) == "owned"
+    assert started == ["-nodesktop -nosplash -singleCompThread"]
 
 def test_engine_timeout_retains_evidence_when_cleanup_fails(tmp_path, monkeypatch):
     runner = runpy.run_path(str(ROOT/"validation_test/ngsolve_matlab_parity/run_sparsesolv_parity.py"))
@@ -129,7 +118,7 @@ def test_ams_setup_uses_ngsolve_gradient_without_taskmanager():
 def test_matlab_lane_runs_engine_and_retains_json_on_mdx():
     workflow = yaml.safe_load((ROOT/".github/workflows/sparsesolv.yml").read_text())
     job = workflow["jobs"]["ams-regression"]
-    assert "mdx" in job["runs-on"]
+    assert "100" in job["runs-on"]
     step = next(s for s in job["steps"] if s.get("name") == "Build and verify native MATLAB parity")
     assert step["if"] == (
         "steps.native-impact.outputs.required == 'true' && "
