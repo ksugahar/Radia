@@ -226,7 +226,7 @@ def test_done_checks_lab_wheel_and_100_editable_only(monkeypatch, tmp_path):
     assert calls == [(str(release_quad.REPO), "c" * 40), "tag", "lab-wheel",
                      "100-release", "100-editable"]
 
-def test_done_requires_simulink_candidate_for_5_1_and_newer(monkeypatch, tmp_path):
+def test_cpu_release_does_not_require_matlab_candidate(monkeypatch, tmp_path):
     monkeypatch.setattr(release_quad, "_release_commit", lambda: "c" * 40)
     from argparse import Namespace
 
@@ -242,7 +242,9 @@ def test_done_requires_simulink_candidate_for_5_1_and_newer(monkeypatch, tmp_pat
     monkeypatch.setattr(release_quad, "_check_main_synced", lambda **_k: 0)
     monkeypatch.setattr(release_quad, "_radia_version", lambda: "5.1.0")
 
-    assert release_quad.cmd_done(Namespace(simulink_package=None)) == 4
+    monkeypatch.setattr(release_quad, "_verify_final_pip_checks", lambda: 0)
+    assert release_quad.cmd_done(Namespace(simulink_package=None)) == 0
+    assert release_quad.cmd_done(Namespace(simulink_package="retired.zip")) == 4
 
 
 
@@ -644,10 +646,10 @@ def test_done_keeps_lab_wheel_and_100_editable_checks_after_all_gates(monkeypatc
     monkeypatch.setattr(release_quad, "_verify_simulink_candidate_state",
                         lambda package: calls.append(("simulink", package)) or 0)
     monkeypatch.setattr(release_quad, "_verify_final_pip_checks", lambda: calls.append("pip-check") or 0)
-    args = type("Args", (), {"simulink_package": "candidate.zip"})()
+    args = type("Args", (), {"simulink_package": None})()
     assert release_quad.cmd_done(args) == 0
     assert calls == ["preflight", "source", "shadows", "tag", "lab", "100-release", "100",
-                     "phase9", "guard", "main", ("simulink", "candidate.zip"), "pip-check"]
+                     "phase9", "guard", "main", "pip-check"]
 
 def test_done_stops_before_machine_checks_when_active_source_is_stale(monkeypatch):
     calls = []

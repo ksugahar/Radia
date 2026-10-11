@@ -168,11 +168,14 @@ def test_cpu_optuna_extra_and_matlab_distribution_have_separate_owners():
     assert root_project["optional-dependencies"]["optuna"] == ["optuna==5.0.0"]
     assert "optuna-upstream" not in root_project["optional-dependencies"]
     assert not any("radia-optuna" in requirement for requirement in root_project["dependencies"])
-    assert verify_wheel._cpu_extra_errors(root_project, package_project) == []
-    obsolete = dict(root_project, **{'optional-dependencies': {
-        'optuna': [f'radia-optuna=={version}'],
-        'optuna-upstream': [f'radia-optuna[upstream]=={version}']}})
-    assert len(verify_wheel._cpu_extra_errors(obsolete, package_project)) == 2
+    assert not verify_wheel._cpu_dependency_boundary_errors(root_project, package_project)
+    from copy import deepcopy
+    invalid = deepcopy(root_project)
+    invalid["optional-dependencies"]["optuna"] = [f"radia-optuna=={version}"]
+    assert verify_wheel._cpu_dependency_boundary_errors(invalid, package_project)
+    invalid = deepcopy(root_project)
+    invalid["optional-dependencies"]["optuna-upstream"] = [f"radia-optuna[upstream]=={version}"]
+    assert verify_wheel._cpu_dependency_boundary_errors(invalid, package_project)
     init_source = (
         PACKAGE_ROOT / "src" / "radia_optuna" / "__init__.py"
     ).read_text(encoding="utf-8")

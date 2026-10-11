@@ -112,7 +112,7 @@ def test_retired_desktop_viewer_is_not_packaged():
     assert all("pyvista" not in requirement.lower() for requirement in optional["dev"])
 
 
-def test_mcp_sdk_is_optional_for_core_radia_users():
+def test_mcp_sdk_belongs_to_independent_mcp_distribution():
     config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     project = config["project"]
     optional = project["optional-dependencies"]

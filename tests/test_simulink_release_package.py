@@ -56,12 +56,13 @@ def test_full_library_verifier_gates_optional_optimization_toolbox():
 
 def test_matlab_smoke_decodes_utf8_without_cp932(monkeypatch, tmp_path):
     verify_module = load_module(
-        "verify_simulink_release_encoding", ROOT / "tools/verify_simulink_release.py")
+        "verify_simulink_release_encoding",
+        ROOT / "tools" / "verify_simulink_release.py",
+    )
     archive = tmp_path / "historical.zip"
-    with zipfile.ZipFile(archive, 'w') as bundle:
-        bundle.writestr('packages/radia-gpu/matlab/fixture.m', '% UTF-8 fixture')
-    monkeypatch.setattr(verify_module, 'verify_archive', lambda path: {
-        'schema': 'radia.simulink.ih-release-manifest.v3'})
+    with zipfile.ZipFile(archive, "w") as bundle:
+        bundle.writestr("README.txt", "Historical archive worker fixture")
+    monkeypatch.setattr(verify_module, "verify_archive", lambda _: {"version": "5.2.1"})
     matlab = tmp_path / "matlab.exe"
     matlab.write_bytes(b"MZ")
 
@@ -397,15 +398,3 @@ def fake_x64_pe():
     payload[128:132] = b"PE\0\0"
     payload[132:134] = (0x8664).to_bytes(2, "little")
     return bytes(payload)
-
-
-@pytest.mark.parametrize('full_library', [False, True])
-def test_retired_cpu_mex_zip_publication_fails_before_writing(tmp_path, full_library):
-    module = load_module('retired_cpu_mex_packager', ROOT / 'tools/package_simulink_release.py')
-    mex_dir = tmp_path / 'mex'
-    mex_dir.mkdir()
-    (mex_dir / 'radia_mex.mexw64').write_bytes(fake_x64_pe())
-    out = tmp_path / 'out'
-    with pytest.raises(RuntimeError, match='CPU MEX ZIP publication is retired'):
-        module.build_package(mex_dir, out, full_library=full_library)
-    assert not out.exists()

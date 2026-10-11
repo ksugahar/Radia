@@ -218,10 +218,6 @@ def _release_commit() -> str:
     return commit
 
 
-def _requires_simulink_candidate() -> bool:
-    from packaging.version import Version
-    return Version(_radia_version()) >= Version("5.1.0")
-
 
 def _release_head():
     return _release_commit()
@@ -564,92 +560,9 @@ def _run_simulink_candidate_target(
 
 
 def cmd_simulink_candidate(args):
-    """Verify one extracted Simulink archive on the requested MATLAB machines."""
-    package = Path(args.package).resolve()
-    step("Simulink candidate gate (LAB / 100号機 / mdx1 / mdx2)")
-    try:
-        manifest = _simulink_manifest(package)
-    except (OSError, RuntimeError, ValueError, zipfile.BadZipFile) as error:
-        fail(f"invalid Simulink candidate: {error}")
-        return 2
-    package_sha256 = _sha256_file(package)
-    mex_sha256 = _simulink_mex_sha256(manifest)
-    success_marker = (
-        "RADIA_SIMULINK_RELEASE_OK"
-        if manifest.get("schema") in {
-            "radia.simulink.library-release-manifest.v1",
-            "radia.simulink.library-release-manifest.v2",
-            "radia.simulink.library-release-manifest.v3",
-            "radia.simulink.library-release-manifest.v4",
-        }
-        else "RADIA_IH_RELEASE_OK"
-    )
-    state_path = _simulink_state_path(package_sha256)
-    state = {
-        "schema": "radia.release-quad.simulink-candidate.v1",
-        "package": str(package),
-        "package_sha256": package_sha256,
-        "version": manifest.get("version"),
-        "commit": manifest.get("commit"),
-        "mex_sha256": mex_sha256,
-        "targets": {},
-    }
-    if state_path.is_file():
-        previous = json.loads(state_path.read_text(encoding="utf-8"))
-        if previous.get("package_sha256") == package_sha256:
-            state["targets"] = previous.get("targets", {})
-
-    requested = [part.strip().lower() for part in args.target.split(",")]
-    if "all" in requested:
-        requested = list(SIMULINK_TARGETS)
-    unknown = sorted(set(requested) - set(SIMULINK_TARGETS))
-    if unknown:
-        fail(f"unknown Simulink target(s): {', '.join(unknown)}")
-        return 2
-
-    sessions = _engine_sessions(args, requested)
-    if sessions is None:
-        return 2
-
-    pythons = {}
-    for entry in getattr(args, "python", None) or []:
-        key, separator, path = entry.partition("=")
-        if not separator or key not in requested or not path.strip() or key in pythons:
-            fail("candidate interpreters must be unique selected-target=python-path pairs")
-            return 2
-        pythons[key] = path.strip()
-
-    failed = 0
-    for key in requested:
-        label = SIMULINK_TARGETS[key][0]
-        info(f"verifying extracted package on {label}")
-        session_args = [sessions[key]] if key in sessions else []
-        python_kwargs = {"python_executable": pythons[key]} if key in pythons else {}
-        passed, output = _run_simulink_candidate_target(
-            key, package, package_sha256, success_marker, *session_args, **python_kwargs)
-        state["targets"][key] = {
-            "label": label,
-            "status": "passed" if passed else "failed",
-            "verified_at_utc": datetime.now(timezone.utc).isoformat(),
-            "mex_sha256": mex_sha256,
-            "engine_session": sessions.get(key),
-            "execution_backend": "matlab-com" if sessions.get(key, "").startswith("com:") else "matlab-engine",
-            "python_executable": pythons.get(key, SIMULINK_TARGETS[key][2]
-                                             if SIMULINK_TARGETS[key][1] else sys.executable),
-            "output_tail": output[-4000:],
-        }
-        _write_simulink_state(state_path, state, key)
-        if passed:
-            ok(f"Simulink package passed on {label}")
-        else:
-            failed += 1
-            fail(f"Simulink package failed on {label}")
-            if output:
-                print(output[-4000:])
-    if failed:
-        return 4
-    ok(f"Simulink candidate state: {state_path}")
-    return 0
+    """Reject the retired CPU MEX release route."""
+    fail("CPU MEX releases are unsupported; use the independent radia-gpu release workflow.")
+    return 4
 
 
 def _verify_simulink_candidate_state(package_arg: str) -> int:
@@ -1443,8 +1356,7 @@ h = hashlib.sha256()
 for p in native:
     h.update(p.name.encode()); h.update(b"\\0"); h.update(hashlib.sha256(p.read_bytes()).digest())
 print(f"NATIVE radia           = {h.hexdigest()[:12]}")
-for r in ["simulink/application.py",
-          "panels/calc_inductance.py",
+for r in ["panels/calc_inductance.py",
           "panels/calc_fem_kelvin.py",
           "panels/calc_fem_coilmesh.py"]:
     print(f"SHA radia/{r:35s} = {hsh_text(os.path.join(rad,r))}")
@@ -1496,8 +1408,7 @@ h = hashlib.sha256()
 for p in native:
     h.update(p.name.encode()); h.update(b"\\0"); h.update(hashlib.sha256(p.read_bytes()).digest())
 print(f"NATIVE radia           = {h.hexdigest()[:12]}")
-for r in ["simulink/application.py",
-          "panels/calc_inductance.py",
+for r in ["panels/calc_inductance.py",
           "panels/calc_fem_kelvin.py",
           "panels/calc_fem_coilmesh.py"]:
     print(f"SHA radia/{r:35s} = {hsh_git('src/radia/' + r)}")
@@ -1565,7 +1476,6 @@ _PHASE9_FIELDS = (
     "ABI ngsolve",
     "ABI netgen-mesher",
     "NATIVE radia",
-    "SHA radia/simulink/application.py",
     "SHA radia/panels/calc_inductance.py",
     "SHA radia/panels/calc_fem_kelvin.py",
     "SHA radia/panels/calc_fem_coilmesh.py",
@@ -2257,29 +2167,20 @@ def cmd_done(args):
              "rebase-conflict sessions).")
         return rc
 
-    if _requires_simulink_candidate() and not getattr(args, "simulink_package", None):
-        fail("Radia 5.1.0 and newer require --simulink-package with matching "
-             "four-machine MEX/SLX candidate evidence.")
-        return 4
-
     if getattr(args, "simulink_package", None):
-        rc = _verify_simulink_candidate_state(args.simulink_package)
-        if rc != 0:
-            fail("Simulink candidate did not satisfy the four-machine gate.")
-            return rc
+        fail("MATLAB/Simulink artifacts belong to radia-gpu, not the CPU Radia release.")
+        return 4
 
     rc = _verify_final_pip_checks()
     if rc != 0:
         return rc
 
     print("")
-    suffix = (" The supplied Simulink candidate also passed all four MATLAB "
-              "machines." if getattr(args, "simulink_package", None) else "")
     ok("DEFINITION OF DONE met. Release is consistent across LAB / 100号機 / "
        "mdx1 / mdx2, LAB and 100号機's release runtime use the verified wheel, "
        "100号機's development venv retains the verified editable source, and the retired standalone PySide panel surface is absent. "
        "The recorded editable intent names this release source; move it later "
-       "only with an explicit `release_quad repoint --reason`." + suffix)
+       "only with an explicit `release_quad repoint --reason`.")
     return 0
 
 

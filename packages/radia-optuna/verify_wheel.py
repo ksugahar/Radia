@@ -116,15 +116,20 @@ def _source_payloads(source_manifest: dict[str, object]) -> dict[str, Path]:
     return payloads
 
 
-def _cpu_extra_errors(root_project, source_project) -> list[str]:
-    expected = [r for r in source_project['optional-dependencies']['upstream']
-                if r.startswith('optuna==')]
-    extras = root_project['optional-dependencies']
+def _cpu_dependency_boundary_errors(root_project, source_project):
+    """CPU Radia uses upstream Python Optuna; MATLAB releases independently."""
     errors = []
-    if len(expected) != 1 or extras.get('optuna') != expected:
-        errors.append('radia[optuna] must select the pinned upstream Python Optuna')
-    if 'optuna-upstream' in extras:
-        errors.append('Retired radia[optuna-upstream] must not couple the CPU and MATLAB distributions')
+    upstream = source_project["optional-dependencies"]["upstream"]
+    oracle = [requirement for requirement in upstream if requirement.startswith("optuna==")]
+    extras = root_project["optional-dependencies"]
+    if len(oracle) != 1 or extras.get("optuna") != oracle:
+        errors.append("radia[optuna] must pin the independent package's upstream Python oracle")
+    if "optuna-upstream" in extras:
+        errors.append("Retired radia[optuna-upstream] must not restore the MATLAB distribution dependency")
+    requirements = list(root_project["dependencies"])
+    requirements.extend(requirement for group in extras.values() for requirement in group)
+    if any(requirement.lower().startswith("radia-optuna") for requirement in requirements):
+        errors.append("CPU radia must not depend on the MATLAB radia-optuna distribution")
     return errors
 
 
@@ -150,7 +155,7 @@ def verify(wheel: Path, *, release_candidate: bool = False) -> dict[str, object]
             "package source versions are not synchronized: "
             f"package={source_version}, manifest={source_manifest['version']}"
         )
-    errors.extend(_cpu_extra_errors(root_project, source_project))
+    errors.extend(_cpu_dependency_boundary_errors(root_project, source_project))
 
     with zipfile.ZipFile(wheel) as archive:
         names = set(archive.namelist())

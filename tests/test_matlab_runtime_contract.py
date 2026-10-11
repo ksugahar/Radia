@@ -49,15 +49,13 @@ def test_cached_mex_setup_keeps_provenance_subprocess_off_the_step_path() -> Non
 def test_matlab_release_uses_sequential_mkl_without_changing_python() -> None:
     build = _source("Build.ps1")
     cmake = _source("CMakeLists.txt")
-    package = _source("tools/package_simulink_release.py")
+    assert not (ROOT / "tools/package_simulink_release.py").exists()
     verifier = _source("tools/verify_simulink_release.py")
 
     assert build.index("$PythonLibrary") < build.index("$env:MKLROOT")
     assert 'MatlabMexOnly' not in build
     assert "mkl_intel_thread" in cmake
     assert "MKL_MATLAB_RUNTIME_DLLS" not in cmake
-    assert "CPU MEX ZIP publication is retired" in package
-    assert "packages/radia-gpu" in package
     assert "packages/radia-gpu/matlab/mkl_sequential.3.dll" in verifier
     assert "packages/radia-gpu/matlab/+radia/+internal/expectedNGSolveVersion.m" in verifier
 
