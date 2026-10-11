@@ -142,12 +142,24 @@ def test_overlapping_components_dialog_is_auto_dismissed():
 
 @ltspice
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only")
-def test_no_orphaned_ltspice_after_overlap_run():
+def test_no_orphaned_ltspice_after_overlap_run(monkeypatch):
     """The backend must not leave behind LTspice processes it spawned."""
-    before = _running_ltspice_pids()
+    from pathlib import Path
+    from radia_gpu.ltspice.parser import asc_parser
+    original_popen = asc_parser.subprocess.Popen
+    owned = set()
+
+    def track_popen(command, *args, **kwargs):
+        process = original_popen(command, *args, **kwargs)
+        if Path(command[0]).name.lower() == "ltspice.exe":
+            owned.add(process.pid)
+        return process
+
+    monkeypatch.setattr(asc_parser.subprocess, "Popen", track_popen)
     asc_to_netlist(_OVERLAP_ASC, use_ltspice=True)
-    after = _running_ltspice_pids()
-    leaked = after - before
+    assert owned, "Expected a real LTspice netlist process"
+    # Concurrent CI or another user's LTspice process is not ours.
+    leaked = _running_ltspice_pids() & owned
     assert not leaked, f"LTspice process(es) left orphaned: {sorted(leaked)}"
 
 
