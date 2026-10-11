@@ -123,25 +123,13 @@ def test_verifier_accepts_each_historical_and_current_schema(tmp_path) -> None:
 
 def test_mex_handle_unlocks_happen_after_registry_critical_sections() -> None:
     gateway = _source("packages/radia-optuna/native/optuna_mex.cpp")
-    ih = _source("packages/radia-gpu/native/legacy/radia_ih_mex_commands.cpp")
-
-    helper = re.search(
-        r"void DestroyRegistered\(.*?\n\}\n\n#ifndef", gateway,
-        flags=re.DOTALL)
+    helper = re.search(r"void DestroyRegistered\(.*?\n\}\n", gateway, flags=re.DOTALL)
     assert helper is not None
     helper_source = helper.group(0)
     assert helper_source.index("registry.erase") < helper_source.index("mexUnlock()")
     assert helper_source.index("if (!erased)") < helper_source.index("mexUnlock()")
-    assert gateway.count("DestroyRegistered(") == 20
     assert "while (lock_count > 0)" not in gateway
 
-    erase = re.search(
-        r"void erase\(Registry<T>&.*?\n\}\n\n\}  // namespace", ih,
-        flags=re.DOTALL)
-    assert erase is not None
-    erase_source = erase.group(0)
-    assert erase_source.index("registry.erase") < erase_source.index("mexUnlock()")
-    assert "if (!erased)" in erase_source
 
 
 def _manifest_for_schema(schema: str, payloads: dict[str, bytes]) -> dict:

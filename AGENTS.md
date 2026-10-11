@@ -99,8 +99,8 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
   Use `bibliography_make_bbl`, regenerate after changes, and check citations.
 
 ### CPU / GPU Execution Policy (2026-10-11)
-
-- CPU: Python (pybind11)/NGSolve; CPU MEX is unsupported.
+- CPU solver: Python (pybind11)/NGSolve; the old Radia CPU MEX is removed. mexcuda modules may contain CPU host control; this does not move every calculation to GPU.
+- mexcuda builds must not include, link, or use NGSolve TaskManager. MATLAB owns host scheduling; CUDA owns device execution.
 - GPU: `radia-gpu` uses MATLAB mexcuda for performance; ships optional Simulink/LTspice adapters, no external products.
 - Choose VS/CUDA by target MATLAB mexcuda support. Verify upgrades; never override unsupported compilers.
 - No implicit CPU/Python fallback. Measure host setup and CPU solves separately.
@@ -268,6 +268,7 @@ and live sources.
 Before tagging, dispatch `Radia Native Release` on the exact release SHA; `ci-verify` requires its successful native check.
 
 ## Optuna
+`radia-optuna` uses GPU numerical kernels compiled with MATLAB mexcuda. Keep management, sequential random-state consumption and work without a speed requirement on CPU host code. Select GPU work using measured end-to-end cost, including transfers; compilation alone does not establish GPU execution or speedup. No legacy CPU-only MEX build or silent CPU fallback for a declared GPU operation.
 
 Pinned Optuna 5.0.0 is the sole oracle for shared MATLAB behavior: seed, options,
 parameter/search-space order, history, named constraints, values, states, warnings,

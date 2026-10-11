@@ -36,8 +36,7 @@ retired for every application, including IH.
 ## Motor ROM block
 
 The former fixed-step motor-ROM CPU MEX build recipe has been removed.
-The adapter source is retained under `native/legacy/simulink` as historical
-implementation material, not as a supported build target.
+The retired CPU adapter source has been removed; Git history retains its provenance.
 
 The S-function takes five parameters:
 

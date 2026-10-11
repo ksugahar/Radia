@@ -22,6 +22,27 @@
       "test": "testAskFixedDistributionsMatchesUpstream"
     },
     {
+      "classification": "upstream-python",
+      "file": "test_optuna_cuda.m",
+      "oracle": "optuna_cuda_density_oracle.json",
+      "scope": "Optuna 5.0.0 mixture densities evaluated by CUDA",
+      "test": "testDensityMatchesUpstream"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_cuda.m",
+      "oracle": null,
+      "scope": "mexcuda execution boundary, device failure and lifecycle",
+      "test": "testCudaBuildBoundary"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_cuda.m",
+      "oracle": null,
+      "scope": "mexcuda execution boundary, device failure and lifecycle",
+      "test": "testValidationAndRepeatedDeviceUse"
+    },
+    {
       "classification": "matlab-integration",
       "file": "test_optuna_got_interface.m",
       "oracle": null,

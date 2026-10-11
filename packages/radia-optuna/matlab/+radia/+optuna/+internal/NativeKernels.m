@@ -97,6 +97,12 @@ classdef NativeKernels
             persistent cache initialized
             if isempty(initialized)
                 if exist("optuna_mex","file") == 3
+                    info=optuna_mex('api.info');
+                    if ~isfield(info,"build_route") || string(info.build_route)~="mexcuda" || ...
+                            ~isfield(info,"taskmanager") || info.taskmanager
+                        error("radia:optuna:IncompatibleNativeKernel", ...
+                            "The legacy CPU MEX is retired. Rebuild Optuna using mexcuda without TaskManager.");
+                    end
                     cache="optuna_mex";
                 else
                     cache="";

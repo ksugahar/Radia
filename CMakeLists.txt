@@ -5,40 +5,10 @@ if(RADIA_BUILD_MATLAB_MEX)
     message(FATAL_ERROR "CPU radia_mex is retired. Use Build.ps1 -CudaMexOnly for GPU or -RadiaOnly for CPU Python.")
 endif()
 unset(RADIA_BUILD_MATLAB_MEX CACHE)
-option(RADIA_BUILD_OPTUNA_MEX_ONLY
-    "Configure only the independent MATLAB Optuna MEX gateway" OFF)
-
-function(radia_add_optuna_mex)
-	matlab_add_mex(
-		NAME optuna_mex
-		R2018a
-		SRC ${CMAKE_CURRENT_SOURCE_DIR}/packages/radia-optuna/native/optuna_mex.cpp
-	)
-	target_compile_definitions(optuna_mex PRIVATE
-		RADIA_OPTUNA_MEX_ONLY
-		NOMINMAX
-	)
-	target_compile_features(optuna_mex PRIVATE cxx_std_20)
-	if(MSVC)
-		target_compile_options(optuna_mex PRIVATE /O2 /fp:fast /arch:AVX2 /W0)
-		target_link_options(optuna_mex PRIVATE /NODEFAULTLIB:LIBCMT)
-	endif()
-	add_custom_command(TARGET optuna_mex POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/packages/radia-optuna/matlab"
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			"$<TARGET_FILE:optuna_mex>"
-			"${CMAKE_SOURCE_DIR}/packages/radia-optuna/matlab/$<TARGET_FILE_NAME:optuna_mex>"
-		COMMENT "Copying optuna_mex to matlab"
-	)
-endfunction()
-
 if(RADIA_BUILD_OPTUNA_MEX_ONLY)
-	find_package(Matlab REQUIRED COMPONENTS MX_LIBRARY MEX_LIBRARY)
-	radia_add_optuna_mex()
-	message(STATUS
-		"Standalone optuna_mex configured without Python, NGSolve, MKL, or Radia core")
-	return()
+    message(FATAL_ERROR "Optuna CPU-only MEX build is retired. Use Build.ps1 -OptunaMexOnly (MATLAB mexcuda).")
 endif()
+unset(RADIA_BUILD_OPTUNA_MEX_ONLY CACHE)
 
 # C++17 required for structured bindings and inline variables
 set(CMAKE_CXX_STANDARD 17)

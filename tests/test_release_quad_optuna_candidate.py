@@ -60,16 +60,16 @@ def test_genuine_optuna_build_runs_its_release_quad_candidate_contract():
     assert '"event": "push"' in source and '"headSha": head' in source
 
 
-def test_optuna_workflow_installs_pinned_pybind_before_native_build():
+def test_optuna_workflow_uses_supported_mexcuda_without_pybind():
     root = Path(__file__).resolve().parents[1]
     workflow = (root / ".github/workflows/radia-optuna.yml").read_text(
         encoding="utf-8"
     )
-    dependency = workflow.index(
-        "& $env:RADIA_OPTUNA_CI_PYTHON -m pip install pybind11==3.0.2 ninja"
-    )
-    build = workflow.index("& .\\Build.ps1 -OptunaMexOnly")
-    assert dependency < build
+    assert "pip install pybind11" not in workflow
+    assert "& .\\Build.ps1 -OptunaMexOnly" in workflow
+    assert "runs-on: windows-latest" not in workflow
+    builder = (root / "packages/radia-optuna/buildOptunaMex.m").read_text(encoding="utf-8")
+    assert "mexcuda(" in builder
     assert (
         "& $env:RADIA_OPTUNA_CI_PYTHON -m pip install "
         "build wheel pytest optuna==5.0.0"

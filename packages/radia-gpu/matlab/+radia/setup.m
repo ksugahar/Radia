@@ -14,6 +14,11 @@ arguments
     options.Force (1,1) logical = false
 end
 
+if options.RequireMex
+    error("radia:mex:Retired", ...
+        "CPU radia_mex has been removed. Use explicit Python CPU workflows or supported radia-gpu mexcuda operations.");
+end
+
 % MATLAB owns process-level parallel scheduling. The MEX release therefore
 % uses oneMKL's sequential dispatcher and never injects Intel OpenMP or TBB
 % into the MATLAB process.

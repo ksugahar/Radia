@@ -199,3 +199,23 @@ then pass the retained wheel to
 passes may the matching commit be tagged. The manual release workflow requires
 the same CI run ID and the candidate SHA256, publishes that exact wheel to
 PyPI, and attaches it to the matching GitHub Release.
+
+
+## CUDA execution boundary (2026-10-11)
+
+Build `optuna_mex` with `Build.ps1 -OptunaMexOnly`, which calls MATLAB
+`mexcuda` with its supported compiler configuration. A CUDA-capable NVIDIA
+host and Parallel Computing Toolbox are required for density evaluations.
+No NGSolve, TaskManager, Radia CPU solver, or CPU-only MEX build is linked.
+
+Parzen numerical/categorical mixture densities and univariate/joint/grouped
+TPE candidate density batches execute in FP64 CUDA. Study/Trial management,
+stateful random-number consumption, candidate generation, Pareto/Sobol and
+selection order remain host operations. Device errors raise; they do not
+switch to a CPU density implementation. RNG state is restored on failed
+candidate evaluation. `api.info` reports this boundary and the build route;
+MATLAB rejects old CPU-only MEX binaries even if their command list matches.
+
+The oracle remains Optuna 5.0.0. Numerical parity and transfer-inclusive
+measurements are required before claiming acceleration. Building with
+mexcuda alone does not certify speedup or every sampler's GPU acceleration.

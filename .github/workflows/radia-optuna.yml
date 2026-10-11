@@ -72,11 +72,9 @@ jobs:
           "RADIA_OPTUNA_CI_PYTHON=$py" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           (Join-Path $venv 'Scripts') | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - name: Build standalone optuna_mex
+      - name: Build Optuna CUDA kernels with mexcuda
         shell: pwsh
         run: |
-          & $env:RADIA_OPTUNA_CI_PYTHON -m pip install pybind11==3.0.2 ninja
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & .\Build.ps1 -OptunaMexOnly
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -108,6 +106,13 @@ jobs:
             Pop-Location
           }
 
+      - name: Verify upstream TPE parity and CUDA density lifecycle
+        shell: pwsh
+        run: |
+          $root = (Get-Location).Path.Replace("'", "''")
+          & matlab -batch "addpath('$root/validation_test/radia_optuna'); validate_cuda('$root','$root/packages/radia-optuna/matlab','$root/build-optuna-cuda/validation.json');"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Upload radia-optuna wheel
         uses: actions/upload-artifact@v4
         with:
@@ -119,7 +124,7 @@ jobs:
   installed-wheel-matlab-e2e:
     name: radia-optuna installed-wheel MATLAB/Simulink E2E
     needs: build-test
-    runs-on: windows-latest
+    runs-on: [self-hosted, Windows, X64, "100"]
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -130,15 +135,6 @@ jobs:
           name: radia-optuna-wheel
           path: dist/radia-optuna
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Set up MATLAB and Simulink
-        uses: matlab-actions/setup-matlab@v3
-        with:
-          products: Simulink
-
       - name: Install and inspect only the built wheel
         shell: pwsh
         run: |
@@ -146,7 +142,7 @@ jobs:
           if ($wheels.Count -ne 1) {
             throw "Expected one verified radia-optuna wheel, found $($wheels.Count)"
           }
-          $venv = Join-Path $env:RUNNER_TEMP 'radia-optuna-e2e-venv'
+          $venv = Join-Path $env:RUNNER_TEMP "radia-optuna-e2e-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           python -m venv $venv
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $venvPython = Join-Path $venv 'Scripts/python.exe'

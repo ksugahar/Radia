@@ -46,7 +46,8 @@ def test_fast_ci_runs_only_on_100_and_native_is_a_named_release_lane():
     assert "actions/setup-python" not in optuna_self_hosted
     assert "RADIA_OPTUNA_CI_PYTHON" in optuna_self_hosted
     assert "-m venv" in optuna_self_hosted
-    assert "pip install pybind11==3.0.2 ninja" in optuna_self_hosted
+    assert "pip install pybind11" not in optuna_self_hosted
+    assert "Build Optuna CUDA kernels with mexcuda" in optuna_self_hosted
     assert optuna.count("'.github/workflows/radia-optuna.yml'") == 2
     assert 'workflows: ["Radia Native Release"]' in release
 
