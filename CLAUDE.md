@@ -104,7 +104,7 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 - No implicit CPU/Python solver fallback. Distinguish host setup from GPU solving; report any CPU solver component.
 - Preserve NGSolve FE ownership. Reuse upstream GPU operators; label assembled-CSR bridges separately from matrix-free GPU backends.
 - 100 builds/RTX 5000 acceptance; mdx/A100 scheduled scale/timing. Isolate active runtimes and timing jobs.
-- Verify against Python CPU on identical inputs. Save precision, true residual, cold/warm/setup/transfer times, memory, versions and hashes in JSON. Validate ICCG, AMS, HDiv-MMM and model reduction separately from Poisson.
+- Validate each GPU capability against Python CPU; Poisson does not certify ICCG, AMS, HDiv-MMM or model reduction. Save numerical and timing evidence in JSON.
 
 ### MATLAB And Simulink
 
@@ -127,14 +127,11 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
   kernels remain independently callable standalone MEX functions.
 - Native objects use checked `uint64` handles with type, generation,
   ownership, and liveness validation; never expose raw pointers.
-- Explicit Python CPU workflows may be invoked at initialization, explicit
-  update, artifact generation or batch boundaries, never per Simulink time
-  step and never as an implicit fallback from CUDA MEX.
-- Classify public capabilities as Python CPU, MATLAB CUDA GPU, or both in
-  the parity manifest. Do not duplicate CPU implementations or publish CPU
-  MEX merely to mirror Python. Where both routes exist, preserve physical
-  contracts and validate numerical parity; share reusable domain code without
-  duplicating NGSolve finite-element semantics.
+- Explicit Python CPU workflows are allowed at initialization, update, artifact
+  or batch boundaries, never per Simulink step or as implicit CUDA fallback.
+- Classify capabilities as Python CPU, MATLAB CUDA GPU, or both in the parity
+  manifest. Do not duplicate CPU MEX for parity. Share domain code and verify
+  physical contracts without duplicating NGSolve FE semantics.
 - Measure cold start, warmed median, transfer cost, memory, versions, and
   reliability; do not assume MEX or pybind11 is faster.
 - Level-2 S-Function templates are user-customizable. Do not bury a reusable
