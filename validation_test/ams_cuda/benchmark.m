@@ -3,7 +3,7 @@ addpath(binaryDir);
 repo=fileparts(fileparts(fileparts(mfilename('fullpath'))));
 if nargin<4;matlabDir=fullfile(repo,'packages','radia-gpu','matlab');end
 addpath(matlabDir);
-d=radia.gpu.readAMSExchange(inputPath);
+readTimer=tic;d=radia.gpu.readAMSExchange(inputPath);readSeconds=toc(readTimer);
 g=gpuDevice();
 before=g.AvailableMemory;
 memoryPlan=memory_plan(d.snapshot,g);
@@ -55,7 +55,7 @@ device=struct('name',g.Name,'compute_capability',g.ComputeCapability, ...
     'total_memory',g.TotalMemory,'driver',g.GraphicsDriverVersion,'toolkit',g.ToolkitVersion);
 matlabVersion=version;
 save(outputPath,'solution','info','probeErrors','coldSeconds','times', ...
-    'inclusiveSeconds','inclusiveSolution','memoryBytes','uploadSeconds','checks','device','matlabVersion', ...
+    'inclusiveSeconds','inclusiveSolution','memoryBytes','uploadSeconds','readSeconds','checks','device','matlabVersion', ...
     'zeroRhsTimes','applyOnlyTimes','zeroRhsWarmMedianSeconds','applyOnlyWarmMedianSeconds','memoryPlan');
 end
 

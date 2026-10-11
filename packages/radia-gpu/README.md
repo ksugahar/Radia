@@ -115,6 +115,15 @@ retains NGSolve and Radia ownership; the validation adapter is not installed
 as a CPU solver in this wheel. `radia.gpu.amsPCG` accepts a checked numeric
 hierarchy and RHS already uploaded to GPU memory, with no CPU fallback.
 
+The Python snapshot adapter supports explicit `setup_threads=1..64` for
+OpenMP row/chunk processing. The default is one thread. This affects only
+the adapter build: ordinary Python CPU solvers keep their NGSolve scheduling,
+and CUDA MEX sources include and link no NGSolve code. Coarsening order,
+within-row arithmetic and sparsecholesky factorization remain unchanged.
+Use `validation_test/ams_cuda/setup_benchmark.py` to compare serial and OpenMP
+hierarchies, CPU/GPU results and HDF5/transfer-inclusive times. Its 100-host
+timings are diagnostics; formal performance acceptance requires idle mdx.
+
 All AMS file exchange uses `radia.ams-hdf5.v1` plain HDF5. Install optional
 `radia-gpu[exchange]` dependencies for the Python writer, and read the result
 with `radia.gpu.readAMSExchange`. Values stay FP64 and CSR indices stay

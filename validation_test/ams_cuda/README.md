@@ -258,3 +258,30 @@ performance or allocator peak memory for a 10 GB problem.
 Package CI passed at code commit `170717fa7`, including installed-wheel
 AMS acceptance. Exchange evidence remains in
 [package_hdf5_20261011.json](package_hdf5_20261011.json).
+
+## AMS setup acceleration
+
+`setup_benchmark.py` compares the same hierarchy and solver before/after
+explicit OpenMP setup (`setup_threads=1` versus the requested count), using
+ABBA order. It requires identical hierarchy arrays, checks CPU probes and
+true residuals, and verifies GPU results against the CPU reference. Setup
+phase counters identify strength, coarsening, interpolation, transpose,
+Galerkin, l1/allocation and coarse-factor costs. Coarsening and coarse
+factorization retain their serial order.
+
+The transfer-inclusive total is hierarchy setup + snapshot export + HDF5
+write/read + GPU upload/solve/download. Validation-only CPU probes and MATLAB
+startup are reported separately. Resident solve timings show the repeated
+application cost when a caller keeps the hierarchy on the GPU. This is a
+reusable FEM/AMS kernel study for future control applications, not a CPU/GPU
+winner comparison or certification of a particular Simulink model.
+
+Run on 100 for numerical acceptance and diagnostics:
+
+```powershell
+python validation_test/ams_cuda/setup_benchmark.py --out C:/temp/ams-setup-run --maxh 0.08 --setup-threads 4 --rounds 2
+```
+
+Formal performance acceptance requires an idle GPU-capable mdx. A CPU-only
+run uses `--cpu-only` and leaves GPU/transfer timing pending. Never start A100
+to satisfy this benchmark. Each run writes `result.json`, including failures.

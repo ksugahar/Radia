@@ -30,6 +30,7 @@ def main(args):
     sources=[source,package/'native/radia_cuda_ams.cu',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp',
+             root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp',
              root/'src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp',
              Path(__file__),root/'Build.ps1']
     hashes={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
@@ -39,7 +40,7 @@ def main(args):
              '/DWIN32','/DWNT','/DMSVC_EXPRESS','/DMAX_SYS_DIM=3','/DLAPACK','/DNDEBUG',
              '/DNOMINMAX','/DNGS_PYTHON','/DNETGEN_PYTHON','/DNG_PYTHON','/DHAVE_NETGEN_SOURCES',
              '/DHAVE_STRUCT_TIMESPEC','/DPYBIND11_SIMPLE_GIL_MANAGEMENT','/DPy_NO_LINK_LIB',
-             '/DSPARSESOLV_SERIAL_AMS_SETUP','/D_CRT_SECURE_NO_WARNINGS',
+             '/DSPARSESOLV_SERIAL_AMS_SETUP','/DSPARSESOLV_OPENMP_AMS_SETUP','/openmp','/D_CRT_SECURE_NO_WARNINGS',
              f'/I{net / "include"}',f'/I{net / "include/include"}',f'/I{sysconfig.get_path("include")}',
              f'/I{root / "src/ext/sparsesolv/include"}',f'/Fo{obj}',str(source),'/link',f'/OUT:{binary}',
              f'/IMPLIB:{out / "_radia_ams_snapshot.lib"}',f'/PDB:{out / "_radia_ams_snapshot.pdb"}',
@@ -64,6 +65,7 @@ def main(args):
                 'sha256':{p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest()
                           for p in (binary,out/'radia_cuda_ams.mexw64')},
                 'source_sha256':hashes,'no_cpu_solver_fallback':True}
+        record['snapshot_setup_backend']='OpenMP row/chunk dispatch; default one thread; serial coarse factorization'
         (out/'build.json').write_text(json.dumps(record,indent=2)+'\n')
         print(json.dumps(record,indent=2))
     finally:eng.quit()

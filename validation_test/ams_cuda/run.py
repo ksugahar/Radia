@@ -87,6 +87,7 @@ def main(args):
                 snapshot=bridge.snapshot(a.mat,gradient,fes.FreeDofs(),*coords,probes,cycle)
                 setup=time.perf_counter()-timer
                 expected=snapshot.pop('cpu_probe_results');pre=snapshot.pop('cpu_preconditioner')
+                setup_diagnostics=snapshot.pop('setup_diagnostics',{})
                 x_exact=np.random.default_rng(782).normal(size=fes.ndof)*free
                 native=a.mat.CreateRowVector();native.FV().NumPy()[:]=x_exact
                 b=a.mat.CreateColVector();b.data=a.mat*native
@@ -108,7 +109,7 @@ def main(args):
                     residual=float(np.linalg.norm((A@actual-rhs)[free])/np.linalg.norm(rhs[free]))
                     difference=float(np.linalg.norm((actual-ref)[free])/np.linalg.norm(ref[free]))
                     entry={'maxh':h,'cycle':cycle,'dofs':fes.ndof,'free_dofs':int(free.sum()),
-                        'assembly_seconds':assembly,'snapshot_setup_and_probes_seconds':setup,
+                        'assembly_seconds':assembly,'snapshot_setup_and_probes_seconds':setup,'setup_diagnostics':setup_diagnostics,
                         'cpu_direct_factor_seconds':factor,'cpu_ams_seconds':cpu,'cpu_iterations':cpu_iterations,
                         'cpu_warm_median_seconds':statistics.median(cpu[1:]),'cpu_true_residual':residual,
                         'relative_difference_from_direct':difference,'exchange':exchange,'input_sha256':file_sha256(src),
@@ -127,7 +128,7 @@ def main(args):
                 cpu_ams_difference=float(np.linalg.norm((actual-cpu_ams_solution)[free])/np.linalg.norm(cpu_ams_solution[free]))
                 probe=float(np.max(gpu['probeErrors']))
                 entry={'maxh':h,'cycle':cycle,'dofs':fes.ndof,'free_dofs':int(free.sum()),'elements':mesh.ne,
-                    'assembly_seconds':assembly,'snapshot_setup_and_probes_seconds':setup,'cpu_direct_factor_seconds':factor,
+                    'assembly_seconds':assembly,'snapshot_setup_and_probes_seconds':setup,'setup_diagnostics':setup_diagnostics,'cpu_direct_factor_seconds':factor,
                     'cpu_ams_seconds':cpu,'cpu_iterations':cpu_iterations,'cpu_warm_median_seconds':statistics.median(cpu[1:]),
                     'gpu':jsonable(gpu),'cpu_true_residual':residual(x.FV().NumPy()),'gpu_true_residual':residual(actual),
                     'relative_difference_from_direct':difference,'max_preconditioner_probe_relative_error':probe,

@@ -18,7 +18,7 @@
 ///   - Nodal subspace: Pi^T * A_bc * Pi solved by CompactAMG (component-wise)
 ///   - Fine-grid smoother: l1-Jacobi (fully TaskManager parallel)
 ///
-/// All parallelism via NGSolve TaskManager (no OpenMP).
+/// CPU builds use NGSolve TaskManager; the GPU snapshot adapter may select OpenMP.
 ///
 /// Reference: Hiptmair & Xu, SIAM J. Numer. Anal. 45(6), 2007.
 ///            Kolev & Vassilevski, J. Comput. Math. 27(5), 2009 (the HYPRE AMS algorithm).
@@ -244,9 +244,9 @@ public:
             auto src = b.FVDouble();
             auto dst = b0.FVDouble();
             if (freedofs_)
-                ParallelFor(ndof_hc_, [&](size_t i) { dst[i] = freedofs_->Test(i) ? src[i] : 0.0; });
+                CompactParallelFor(ndof_hc_, [&](size_t i) { dst[i] = freedofs_->Test(i) ? src[i] : 0.0; });
             else
-                ParallelFor(ndof_hc_, [&](size_t i) { dst[i] = src[i]; });
+                CompactParallelFor(ndof_hc_, [&](size_t i) { dst[i] = src[i]; });
         }
         t_bc_ += elapsed();
 
@@ -282,7 +282,7 @@ public:
         // Zero constrained DOFs in output
         if (freedofs_) {
             auto fv = x.FVDouble();
-            ParallelFor(ndof_hc_, [&](size_t i) {
+            CompactParallelFor(ndof_hc_, [&](size_t i) {
                 if (!freedofs_->Test(i)) fv[i] = 0;
             });
         }
@@ -315,7 +315,7 @@ public:
         auto fx = x.FVDouble();
         const auto& A = *A_bc_;
         const float* vf = mixed_precision_ ? abc_values_f_.data() : nullptr;
-        ParallelForRange(ndof_hc_, [&](IntRange range) {
+        CompactParallelForRange(ndof_hc_, [&](IntRange range) {
             for (auto i : range) {
                 if (freedofs_ && !freedofs_->Test(i)) { fx[i] = 0.0; continue; }
                 auto cols = A.GetRowIndices(i);
@@ -454,7 +454,7 @@ private:
         Pix_t_ = make_shared<SparseMatrix<double>>(*grad_t_);
         Piy_t_ = make_shared<SparseMatrix<double>>(*grad_t_);
         Piz_t_ = make_shared<SparseMatrix<double>>(*grad_t_);
-        ParallelFor(ndof_h1_, [&](size_t v) {
+        CompactParallelFor(ndof_h1_, [&](size_t v) {
             auto edges = grad_t_->GetRowIndices(v);
             auto tx = Pix_t_->GetRowValues(v);
             auto ty = Piy_t_->GetRowValues(v);
@@ -479,7 +479,7 @@ private:
                                  const SparseMatrix<double>& Z, std::vector<float>& out) {
                 auto vx = X.AsVector().FVDouble(), vy = Y.AsVector().FVDouble(), vz = Z.AsVector().FVDouble();
                 out.resize(3 * vx.Size());
-                ParallelFor(vx.Size(), [&](size_t k) {
+                CompactParallelFor(vx.Size(), [&](size_t k) {
                     out[3 * k] = float(vx[k]); out[3 * k + 1] = float(vy[k]); out[3 * k + 2] = float(vz[k]);
                 });
             };
@@ -728,7 +728,7 @@ private:
             if (mixed_precision_) {
                 if (rows_only) {
                     auto values = A_bc_->AsVector().FVDouble();
-                    ParallelFor(rows.size(), [&](size_t r) {
+                    CompactParallelFor(rows.size(), [&](size_t r) {
                         for (size_t k = A_bc_->First(rows[r]); k < A_bc_->First(rows[r] + 1); k++)
                             abc_values_f_[k] = float(values[k]);
                     });
@@ -737,7 +737,7 @@ private:
                 }
             }
             fine_l1_norms_.resize(ndof_hc_);
-            ParallelFor(rows_only ? rows.size() : size_t(ndof_hc_), [&](size_t r) {
+            CompactParallelFor(rows_only ? rows.size() : size_t(ndof_hc_), [&](size_t r) {
                 const size_t i = rows_only ? size_t(rows[r]) : r;
                 auto cols = A_bc_->GetRowIndices(i);
                 auto vals = A_bc_->GetRowValues(i);
@@ -806,7 +806,7 @@ private:
         // Step 1: Compute Gd[e] = (G * coord_d)[e] for d=x,y,z
         // This is the edge vector in each coordinate direction.
         std::vector<double> Gx(nedges, 0.0), Gy(nedges, 0.0), Gz(nedges, 0.0);
-        ParallelFor(nedges, [&](size_t e) {
+        CompactParallelFor(nedges, [&](size_t e) {
             auto cols = grad_->GetRowIndices(e);
             auto vals = grad_->GetRowValues(e);
             double gx = 0, gy = 0, gz = 0;
@@ -833,7 +833,7 @@ private:
         double* Gd_ptrs[3] = {Gx.data(), Gy.data(), Gz.data()};
         SparseMatrix<double>* Pi_mats[3] = {Pix_.get(), Piy_.get(), Piz_.get()};
 
-        ParallelFor(nedges, [&](size_t e) {
+        CompactParallelFor(nedges, [&](size_t e) {
             auto g_cols = grad_->GetRowIndices(e);
             auto g_vals = grad_->GetRowValues(e);
 
@@ -854,9 +854,9 @@ private:
     /// and the other endpoint of each of its edges, sorted.
     shared_ptr<SparseMatrix<double>> VertexEdgePattern() const {
         Array<int> counts(ndof_h1_);
-        ParallelFor(ndof_h1_, [&](size_t v) { counts[v] = int(Pix_t_->GetRowIndices(v).Size()) + 1; });
+        CompactParallelFor(ndof_h1_, [&](size_t v) { counts[v] = int(Pix_t_->GetRowIndices(v).Size()) + 1; });
         auto C = make_shared<SparseMatrix<double>>(counts, ndof_h1_);
-        ParallelFor(ndof_h1_, [&](size_t v) {
+        CompactParallelFor(ndof_h1_, [&](size_t v) {
             auto cols = C->GetRowIndices(v);
             auto edges = Pix_t_->GetRowIndices(v);
             cols[0] = int(v);
@@ -882,7 +882,7 @@ private:
         std::atomic<bool> inside{true};
         const int width = Cx.Width();
         if (!rows) nrows = Cx.Height();
-        ParallelForRange(nrows, [&](IntRange range) {
+        CompactParallelForRange(nrows, [&](IntRange range) {
             std::vector<int> marker(width, -1);
             for (auto r : range) {
                 const size_t u = rows ? size_t(rows[r]) : size_t(r);
@@ -946,7 +946,7 @@ private:
     static void CopyVector(const BaseVector& src, BaseVector& dst) {
         auto fv_s = src.FVDouble();
         auto fv_d = dst.FVDouble();
-        ParallelFor(fv_s.Size(), [&](size_t i) { fv_d[i] = fv_s[i]; });
+        CompactParallelFor(fv_s.Size(), [&](size_t i) { fv_d[i] = fv_s[i]; });
     }
 
     /// res = b - A_bc x in one pass over the rows (no separate copy of b); with
@@ -966,13 +966,13 @@ private:
                 // x = 0 before the first sweep: the sweep is x = b / l1 (x is
                 // assigned, so its previous content is never read).
                 auto fv_b = b.FVDouble();
-                ParallelFor(ndof_hc_, [&](size_t i) { fv_x[i] = fv_b[i] / fine_l1_norms_[i]; });
+                CompactParallelFor(ndof_hc_, [&](size_t i) { fv_x[i] = fv_b[i] / fine_l1_norms_[i]; });
                 continue;
             }
             ResidualInto(b, x, res);
             // Jacobi update: x[i] += r[i] / l1_norm[i] (fully parallel)
             auto fv_r = res.FVDouble();
-            ParallelFor(ndof_hc_, [&](size_t i) {
+            CompactParallelFor(ndof_hc_, [&](size_t i) {
                 fv_x[i] += fv_r[i] / fine_l1_norms_[i];
             });
         }
@@ -1030,7 +1030,7 @@ private:
             auto ry = r_Piy_->FVDouble();
             auto rz = r_Piz_->FVDouble();
             const float* tf = pit_values_f_.empty() ? nullptr : pit_values_f_.data();
-            ParallelForRange(ndof_h1_, [&](IntRange range) {
+            CompactParallelForRange(ndof_h1_, [&](IntRange range) {
                 for (auto v : range) {
                     auto cols = Pix_t_->GetRowIndices(v);
                     double sx = 0.0, sy = 0.0, sz = 0.0;
@@ -1086,7 +1086,7 @@ private:
             auto gz = g_Piz_->FVDouble();
             const double w = correction_weight_;
             const float* pf = pi_values_f_.empty() ? nullptr : pi_values_f_.data();
-            ParallelForRange(ndof_hc_, [&](IntRange range) {
+            CompactParallelForRange(ndof_hc_, [&](IntRange range) {
                 for (auto e : range) {
                     auto cols = Pix_->GetRowIndices(e);
                     double s = 0.0;
@@ -1131,7 +1131,7 @@ private:
 
         auto B = make_shared<SparseMatrix<double>>(cnt, A.Width());
 
-        ParallelFor(n, [&](size_t i) {
+        CompactParallelFor(n, [&](size_t i) {
             auto src_cols = A.GetRowIndices(i);
             auto src_vals = A.GetRowValues(i);
             auto dst_cols = B->GetRowIndices(i);
@@ -1157,7 +1157,7 @@ private:
     void FixZeroRows(SparseMatrix<double>& A) const {
         int n = A.Height();
         std::atomic<int> n_fixed{0};
-        ParallelFor(n, [&](size_t i) {
+        CompactParallelFor(n, [&](size_t i) {
             auto cols = A.GetRowIndices(i);
             auto vals = A.GetRowValues(i);
             double l1_norm = 0;
