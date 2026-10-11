@@ -14,7 +14,7 @@ Current scope:
 
 Do not add unrelated features during this maintenance program.
 ## Repository Boundaries
-The monorepo independently releases `radia`, `cubit-mesh-export`, `radia-mcp`, `radia-optuna` and `eqnedit64`.
+The monorepo independently releases `radia`, `radia-gpu`, `cubit-mesh-export`, `radia-mcp`, `radia-optuna` and `eqnedit64`.
 Scope commits and CI to the owner. Shared files trigger multiple lanes only for real shared ABI, build or integration changes.
 
 - `src/`, `matlab/`, `packages/`: production implementation.
@@ -99,11 +99,12 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 
 ### CPU / GPU Execution Policy (2026-10-11)
 
-- CPU solvers: Python/NGSolve only; CPU MEX is unsupported.
-- MATLAB solvers: CUDA MEX with NVIDIA GPU, for GPU performance. Simulink is optional.
-- No implicit CPU/Python solver fallback. Report host setup and CPU solving separately.
-- 100: CUDA builds/RTX 5000 acceptance; mdx/A100: isolated scale/timing.
-- GPU features require Python CPU parity; Poisson does not certify ICCG/AMS/HDiv-MMM. Save validation JSON.
+- CPU: Python (pybind11)/NGSolve; CPU MEX is unsupported.
+- GPU: `radia-gpu` uses MATLAB mexcuda for performance; ships optional Simulink/LTspice adapters, no external products.
+- Choose VS/CUDA by target MATLAB mexcuda support. Verify upgrades; never override unsupported compilers.
+- No implicit CPU/Python fallback. Measure host setup and CPU solves separately.
+- Deploy to 100 (build/RTX 5000) and A100, never 102. Offline A100 stays pending; verify the same artifact hash when available.
+- Require Python CPU parity and validation JSON per GPU feature; Poisson does not certify ICCG/AMS/HDiv-MMM.
 
 ### GPU Kernel Research Strategy (2026-10-11)
 

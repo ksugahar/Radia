@@ -1,0 +1,33 @@
+"""Select public acceptance records; retain raw operational evidence on the runner."""
+import argparse
+import json
+from pathlib import Path
+
+
+def poisson_public(record):
+    keys = ('schema', 'passed', 'platform', 'versions', 'ngsolve_upstream_cuda_enabled',
+            'cpu_threads', 'matlab_startup_seconds', 'gateway_checks',
+            'python_peak_rss_bytes', 'source_commit', 'limitations', 'cases')
+    result = {key: record[key] for key in keys if key in record}
+    build_keys = ('schema', 'source_sha256', 'binary_sha256', 'source_commit',
+                  'source_dirty', 'matlab', 'release', 'gpu', 'python_version',
+                  'no_cpu_solver_fallback', 'cuda_targets')
+    if 'build' in record:
+        result['build'] = {key: record['build'][key] for key in build_keys if key in record['build']}
+    result['timing_classification'] = 'installation diagnostics; not performance acceptance'
+    return result
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--poisson', required=True, type=Path)
+    parser.add_argument('--output', required=True, type=Path)
+    args = parser.parse_args()
+    args.output.mkdir(parents=True, exist_ok=False)
+    for name in ('result.json', 'failed-result.json'):
+        path = args.poisson / name
+        if path.is_file():
+            record = json.loads(path.read_text(encoding='utf-8'))
+            if record.get('schema') != 'radia.ngsolve-cuda-poisson.v1':
+                raise ValueError('Unexpected Poisson acceptance schema')
+            (args.output / name).write_text(json.dumps(poisson_public(record), indent=2)+'\n', encoding='utf-8')

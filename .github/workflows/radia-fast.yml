@@ -11,6 +11,7 @@ on:
       - "tests/mcp_server/**"
       - "packages/cubit-mesh-export/**"
       - "packages/radia-optuna/**"
+      - "packages/radia-gpu/**"
       - "packages/eqnedit64/**"
       - "tools/eqnedit64/**"
   pull_request:
@@ -20,6 +21,7 @@ on:
       - "tests/mcp_server/**"
       - "packages/cubit-mesh-export/**"
       - "packages/radia-optuna/**"
+      - "packages/radia-gpu/**"
       - "packages/eqnedit64/**"
       - "tools/eqnedit64/**"
   workflow_dispatch:
