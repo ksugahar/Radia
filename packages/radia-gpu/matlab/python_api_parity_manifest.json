@@ -56,6 +56,15 @@
       "matlab": "packages/radia-gpu/matlab/+radia/+gpu/csrPCG.m",
       "validation": "validation_test/radia_gpu/results/transfer-54a577e7f.json",
       "cpu_fallback": false
+    },
+    {
+      "id": "ams-experimental",
+      "scope": "Experimental real FP64 lowest-order HCurl AMS cycles 1/7; MATLAB-owned native setup and CUDA application/PCG. Not ICCG or HDiv-MMM certification.",
+      "source": "packages/radia-gpu/native/radia_cuda_ams.cu",
+      "matlab": "packages/radia-gpu/matlab/+radia/+gpu/prepareAMS.m",
+      "validation": "validation_test/ams_cuda/native_setup_validation.py",
+      "cpu_reference": "Python/pybind11 shared HypreBasedAMS, independent solve and true-residual validation",
+      "cpu_fallback": false
     }
   ],
   "legacy_matlab_sources": "Historical sources remain under their integration owner but are not claims of supported CPU MEX or included wholesale in the GPU wheel."

@@ -23,10 +23,13 @@ radia-gpu-path
 Add the reported directory to MATLAB's path. MATLAB R2026a, Parallel Computing
 Toolbox, an NVIDIA GPU and a compatible NVIDIA driver are external requirements.
 Python delivers and verifies the MATLAB payload; it does not execute GPU solves.
-The installed CUDA solvers do not require the Python `radia` or `ngsolve`
-packages. CSR-PCG consumes caller-provided matrix arrays; AMS consumes an
-already-built hierarchy. The current CPU hierarchy-generation route uses
-Radia/NGSolve in a separate preparation environment. Optional
+CSR-PCG consumes caller-provided matrix arrays and requires no Python Radia or
+NGSolve runtime. The experimental native AMS candidate constructs its hierarchy
+inside mexcuda and requires compatible NGSolve/Netgen native libraries, including
+the permitted Python DLL dependency. GPU use requires no Python adapter,
+interpreter initialization, or Python-generated solver snapshot. Native-library
+deployment/packaging acceptance is separate from numerical candidate validation.
+Optional
 `radia-gpu[coupling]` installs Radia for workflows that explicitly need it.
 The Windows x64 binary contains sm_75/sm_80 code and compute_80 PTX.
 Develop and build `radia-gpu` on 100. Final numerical acceptance compares against
@@ -115,14 +118,20 @@ retains NGSolve and Radia ownership; the validation adapter is not installed
 as a CPU solver in this wheel. `radia.gpu.amsPCG` accepts a checked numeric
 hierarchy and RHS already uploaded to GPU memory, with no CPU fallback.
 
-The Python snapshot adapter supports explicit `setup_threads=1..64` for
-OpenMP row/chunk processing. The default is one thread. This affects only
-the adapter build: ordinary Python CPU solvers keep their NGSolve scheduling,
-and CUDA MEX sources include and link no NGSolve code. Coarsening order,
-within-row arithmetic and sparsecholesky factorization remain unchanged.
-Use `validation_test/ams_cuda/setup_benchmark.py` to compare serial and OpenMP
-hierarchies, CPU/GPU results and HDF5/transfer-inclusive times. Its 100-host
-timings are diagnostics; formal performance acceptance requires idle mdx.
+`radia.gpu.prepareAMS(model)` constructs the shared native AMS directly in
+mexcuda host code and uploads its numeric hierarchy by default. GPU users
+supply numeric FEM operators, discrete gradient, coordinates and free-DOF mask;
+no Python adapter or Python-generated solver snapshot is required. The legacy
+MEX constructor is reused, with NGSolve sparsecholesky kept for coarse setup.
+The default host setup uses one thread; `SetupThreads` selects OpenMP row/chunk
+work. No TaskManager region is activated. Indirect NGSolve header/DLL and Python
+DLL dependencies are permitted; no Python interpreter initialization is needed.
+
+Use `validation_test/ams_cuda/native_setup_validation.py` for independent Python
+CPU parity and MATLAB-owned serial/OpenMP setup comparison, including transfer,
+solve and download times. The Python snapshot adapter remains a validation
+oracle only. Build-host timings are diagnostics; formal performance acceptance
+requires an idle GPU-equipped timing host.
 
 All AMS file exchange uses `radia.ams-hdf5.v1` plain HDF5. Install optional
 `radia-gpu[exchange]` dependencies for the Python writer, and read the result
