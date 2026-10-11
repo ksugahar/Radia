@@ -87,8 +87,10 @@ cases that would consume the available GPU memory minus the larger of 2 GiB
 or 20% of total device memory. The estimate is conservative admission control,
 not a measured allocator peak. Develop within GPU memory; increase case sizes
 gradually. A 10 GB matrix alone is not a 10 GB solver working set.
-This small-case runner uses SciPy's MAT v5 writer. Large variables need a
-checked HDF5/MAT v7.3 exchange before attempting a 10 GB hierarchy; MATLAB's
+Artifacts or individual variables exceeding 2 GB must use HDF5 under project
+policy; MATLAB-compatible MAT v7.3 is permitted. This small-case runner
+currently uses SciPy's MAT v5 writer, so it must not be used for those large
+artifacts until a checked HDF5 reader/writer is integrated. MATLAB's
 [MAT-file version limits](https://www.mathworks.com/help/matlab/import_export/mat-file-versions.html)
 apply separately from GPU capacity. This experiment does not certify a 10 GB
 working set.
