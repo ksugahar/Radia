@@ -161,7 +161,7 @@ mask, and fast numerical checks.
 - `packages/radia-gpu/matlab/+radia/+simulink/runApplication.m`: MATLAB process adapter.
 - `packages/radia-gpu/matlab/+radia/+simulink/applicationSFunction.m`: rising-edge block runtime.
 - `packages/radia-gpu/matlab/+radia/+simulink/buildLibrary.m`: single-library builder.
-- `src/radia/panels/application_interface_manifest.json`: production states.
+- `packages/radia-gpu/application_interface_manifest.json`: retained legacy source inventory; not accepted CUDA runtime support.
 
 ## Anti-Patterns
 

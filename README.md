@@ -35,6 +35,18 @@ can prepare geometry, control meshing, execute supported calculations, and
 inspect results. This reduces the need to memorize each tool's commands and
 interaction sequences while keeping the model and results inspectable.
 
+The distributions are independent within this monorepo:
+
+| Distribution | Runtime and integration scope |
+| --- | --- |
+| `radia` | CPU electromagnetic execution through Python/pybind11 and NGSolve |
+| [`radia-gpu`](packages/radia-gpu/README.md) | CUDA MEX, MATLAB, Simulink and LTspice integration code |
+| [`radia-mcp`](packages/radia-mcp/README.md) | AI tools and knowledge spanning both distributions |
+
+The normal `radia` distribution excludes CUDA MEX, MATLAB, Simulink and LTspice
+integration payloads and dependencies. Install `radia-gpu` separately for those
+interfaces. External products are installed separately under their own licenses.
+
 Start from supported CAD, mesh, or model data where available, instead of
 rebuilding every input. What transfers depends on the format and workflow;
 materials, sources, boundary conditions, and units still need to be checked.

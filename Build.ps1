@@ -2,7 +2,8 @@
 # Build.ps1 - Radia CPU pybind11 / GPU mexcuda build entry points
 #
 # Builds _radia_pybind.pyd and auxiliary modules using MSVC compiler
-# with Intel MKL for BLAS/LAPACK and NGSolve for TaskManager parallelization.
+# with Intel MKL for BLAS/LAPACK. Python/NGSolve CPU execution owns TaskManager.
+# CUDA MEX compilation and MATLAB/GPU execution do not use TaskManager.
 #
 # Usage:
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1

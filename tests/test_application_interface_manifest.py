@@ -25,10 +25,12 @@ def test_simulink_application_guide_has_no_retired_panel_path():
 
 def test_application_manifest_has_no_notebook_workbenches():
     manifest_path = (
-        REPO_ROOT / "src" / "radia" / "panels"
+        REPO_ROOT / "packages" / "radia-gpu"
         / "application_interface_manifest.json"
     )
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest['inventory_scope'].startswith('Source-only legacy')
+    assert not (REPO_ROOT/'src/radia/panels/application_interface_manifest.json').exists()
     applications = {item["id"]: item for item in manifest["applications"]}
     spatial = manifest["library"]["spatial_artifact"]
     mesh_preflight = manifest["library"]["mesh_preflight"]

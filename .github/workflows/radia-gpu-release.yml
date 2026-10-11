@@ -28,6 +28,7 @@ jobs:
       artifact_id: ${{ steps.accepted.outputs.artifact-id }}
       tag: ${{ steps.qualified.outputs.tag }}
       sha: ${{ steps.qualified.outputs.sha }}
+      prerelease: ${{ steps.qualified.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,13 +46,13 @@ jobs:
           path: candidate
           run-id: ${{ inputs.ci_run_id }}
           github-token: ${{ github.token }}
-      - name: Qualify exact accepted prerelease
+      - name: Qualify exact accepted release
         id: qualified
         env:
           RUN_ID: ${{ inputs.ci_run_id }}
           WHEEL_SHA256: ${{ inputs.wheel_sha256 }}
         run: |
-          python packages/radia-gpu/release_gate.py --run-json run.json --repository "$GITHUB_REPOSITORY" --run-id "$RUN_ID" --artifact candidate --wheel-sha256 "$WHEEL_SHA256" --output qualified.json
+          python packages/radia-gpu/release_gate.py --run-json run.json --repository "$GITHUB_REPOSITORY" --run-id "$RUN_ID" --artifact candidate --wheel-sha256 "$WHEEL_SHA256" --qualification-directory validation_test/radia_gpu/releases --output qualified.json
           python - <<'PY'
           import json,os,pathlib,shutil
           r=json.loads(pathlib.Path('qualified.json').read_text())
@@ -59,6 +60,7 @@ jobs:
           shutil.copy2(r['wheel'],'dist')
           with open(os.environ['GITHUB_OUTPUT'],'a') as out:
               out.write('tag='+r['tag']+'\nsha='+r['source_commit']+'\n')
+              out.write('prerelease='+str(r['prerelease']).lower()+'\n')
           PY
       - name: Verify main ancestry and existing tag identity
         env:
@@ -106,12 +108,15 @@ jobs:
           artifact-ids: ${{ needs.qualify.outputs.artifact_id }}
           path: dist
           merge-multiple: true
-      - name: Publish exact accepted alpha artifact
+      - name: Publish exact accepted artifact
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.qualify.outputs.tag }}
           SHA: ${{ needs.qualify.outputs.sha }}
+          PRERELEASE: ${{ needs.qualify.outputs.prerelease }}
         run: |
           TAG_SHA=$(git ls-remote "https://github.com/$GITHUB_REPOSITORY.git" "refs/tags/$TAG" | cut -f1)
           if [ -n "$TAG_SHA" ] && [ "$TAG_SHA" != "$SHA" ]; then exit 1; fi
-          gh release create "$TAG" dist/*.whl --repo "$GITHUB_REPOSITORY" --target "$SHA" --prerelease --title "$TAG" --notes 'Independent CUDA MEX, Simulink and LTspice adapter alpha. RTX 5000 installed-wheel acceptance passed. A100 acceptance is pending until available. Stable publication awaits independent review. External products are not bundled.'
+          RELEASE_FLAGS=()
+          if [ "$PRERELEASE" = true ]; then RELEASE_FLAGS+=(--prerelease); fi
+          gh release create "$TAG" dist/*.whl --repo "$GITHUB_REPOSITORY" --target "$SHA" "${RELEASE_FLAGS[@]}" --title "$TAG" --notes 'Independent CUDA MEX, Simulink and LTspice adapters. Published from the exact accepted main CI wheel. Stable versions additionally require independent review and same-wheel A100/CPU parity evidence in validation_test/radia_gpu/releases. External products are not bundled.'

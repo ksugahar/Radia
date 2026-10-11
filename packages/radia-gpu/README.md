@@ -83,6 +83,7 @@ CUDA integration benefit and measured parity/performance, rather than assuming
 host parallel loops execute on the GPU.
 
 The wheel build requires the matching CUDA build receipt and binary hash.
+The independent CPU Radia reference follows its own Python threading policy.
 Canonical CUDA and MATLAB sources live in this package, under `native/` and
 `matlab/`. Packaging stages those sources; it does not read a root MATLAB tree.
 Use only the resulting verified wheel for deployment and PyPI publication.
@@ -91,7 +92,9 @@ The initial alpha requires independent review before a stable release.
 `radia-gpu.yml` builds and accepts the installed wheel on the build host.
 `radia-gpu-release.yml` publishes that successful main CI artifact without
 rebuilding, requiring its exact SHA-256 and installed acceptance provenance.
-The initial publisher rejects stable versions pending independent review.
+Stable versions additionally require the exact-source independent review and
+same-wheel A100/CPU parity record described in
+[`validation_test/radia_gpu/releases`](../../validation_test/radia_gpu/releases/README.md).
 Configure PyPI Trusted Publishing for project `radia-gpu`, GitHub owner
 `ksugahar`, repository `Radia`, workflow `radia-gpu-release.yml`, environment
 `pypi`. A new project needs a pending publisher; checking availability does

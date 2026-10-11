@@ -51,6 +51,14 @@ memory, CG iteration counts, analytic L2 error, true residual and error
 against sparsecholesky. Gateway checks include invalid inputs, zero RHS,
 nonconvergence, repeated calls and clear/reload.
 
+GPU timing schema `radia.cuda-poisson-gpu.v2` measures five complete warmed
+upload/solve/download/release calls. `warm_with_transfers_seconds` is their
+median; `warm_full_transfer_seconds` retains the individual samples.
+`estimated_first_transfer_plus_warm_kernel_seconds` retains the earlier
+sum of first upload, resident-kernel median and download as an estimate.
+Historical v1 records keep their original values and must not be interpreted
+as measured end-to-end timings. Neither timing includes FE assembly or disk I/O.
+
 CPU/GPU CG use different stopping norms; both must pass an independently
 recomputed true residual <= 1e-6, and the GPU solution must agree with the
 direct reference to relative vector L2 <= 1e-8. The direct factorization and

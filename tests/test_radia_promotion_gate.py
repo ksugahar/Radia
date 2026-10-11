@@ -351,10 +351,10 @@ def test_cpu_promotion_does_not_request_matlab_acceptance(monkeypatch, tmp_path)
     class CPUAPI:
         def file(self, path, commit):
             assert path.rsplit("/", 1)[-1] in {"acceptance.json", "full6.json", "focused.xml"}
-            if path.endswith("focused.xml"):
+            if path.endswith("/focused.xml"):
                 host = path.split("/")[-2]
                 hostname = gate.CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES[host]
-                return f'<testsuites><testsuite hostname="{hostname}" /></testsuites>'.encode()
+                return f'<testsuites><testsuite hostname="{hostname}"/></testsuites>'.encode()
             return b"{}"
 
     report = gate.verify_artifact(CPUAPI(), {"head_sha": "a" * 40, "id": 9},
