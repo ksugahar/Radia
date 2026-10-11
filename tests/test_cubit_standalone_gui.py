@@ -59,9 +59,12 @@ def test_claro_actions_are_released_before_python_shutdown():
 
 def test_standalone_registration_in_scratch_profile(monkeypatch, tmp_path):
     from cubit_mesh_export import toolbar_install as installer
-    cubit = tmp_path / 'Coreform Cubit 2025.12/bin'
+    cubit = tmp_path / 'Coreform Cubit 2026.8/bin'
     cubit.mkdir(parents=True)
-    (cubit / 'cubit.py').write_text('')
+    (cubit / 'cubit').mkdir()
+    (cubit / 'cubit/__init__.py').write_text('')
+    (cubit / 'cubitx.exe').touch()
+    (cubit.parent / 'plugins').mkdir()
     monkeypatch.setenv('CUBIT_PATH', str(cubit))
     monkeypatch.setenv('LOCALAPPDATA', str(tmp_path / 'local'))
     monkeypatch.setenv('APPDATA', str(tmp_path / 'roaming'))
