@@ -7,7 +7,7 @@ import pytest
 
 spec = importlib.util.spec_from_file_location(
     "gpu_vol_comparison",
-    Path(__file__).resolve().parents[1] / "validation_test/radia_gpu/compare_vol_gpu.py",
+    Path(__file__).resolve().parents[3] / "validation_test/radia_gpu/compare_vol_gpu.py",
 )
 comparison = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(comparison)
