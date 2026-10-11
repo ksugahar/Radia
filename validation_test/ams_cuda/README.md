@@ -16,8 +16,8 @@ CUDA MEX owns the FP64 AMS cycle, l1-Jacobi sweeps, residual products,
 restriction, prolongation, auxiliary V-cycles and PCG vector operations.
 Both real AMS cycle types 1 and 7 are supported. Mixed precision and
 non-CompactAMG auxiliary solvers fail explicitly. Coarse sparse solves use
-NGSolve's existing ordered sparse LDL factors on the GPU; this initial
-small-coarse-level kernel is serial. Existing dense coarse inverses and the
+NGSolve's existing ordered sparse LDL factors on the GPU; row products
+run within one warp while triangular dependencies stay ordered. Existing dense coarse inverses and the
 explicit ten-sweep coarse treatment are preserved when supplied by setup.
 Coarse factorization and hierarchy creation remain CPU setup work. The
 host computes PCG scalar control from cuBLAS GPU dot-product results; no

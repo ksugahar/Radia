@@ -91,23 +91,35 @@ __global__ void dense_coarse(int n,const double* a,const double* b,double* x) {
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=n)return;
     double s=0;for(int j=0;j<n;++j)s+=a[size_t(i)*n+j]*b[j];x[i]=s;
 }
-// Small coarse level only: preserve NGSolve's sparse LDL factor and ordering.
-// This serial device solve is explicit; it is not a host coarse solve.
+// Preserve NGSolve's sparse LDL factor and its dependency order. A warp
+// shares each row's products; row dependencies remain ordered on device.
 __global__ void sparse_coarse(int n,int used,const int* order,const int* rp,const int* ci,
     const double* a,const double* dinv,const double* b,double* x,double* w) {
-    if(threadIdx.x||blockIdx.x)return;
-    for(int i=0;i<used;++i)w[i]=0;
-    for(int i=0;i<n;++i)if(order[i]>=0)w[order[i]]=b[i];
-    for(int i=0;i<used;++i)for(int j=rp[i];j<rp[i+1];++j)w[ci[j]]-=a[j]*w[i];
-    for(int i=0;i<used;++i)w[i]*=dinv[i];
-    for(int i=used-1;i>=0;--i)for(int j=rp[i];j<rp[i+1];++j)w[i]-=a[j]*w[ci[j]];
-    for(int i=0;i<n;++i)x[i]=order[i]<0?0:w[order[i]];
+    int lane=threadIdx.x;
+    for(int i=lane;i<used;i+=32)w[i]=0;
+    __syncwarp();
+    for(int i=lane;i<n;i+=32)if(order[i]>=0)w[order[i]]=b[i];
+    __syncwarp();
+    for(int i=0;i<used;++i){double value=w[i];
+        for(int j=rp[i]+lane;j<rp[i+1];j+=32)w[ci[j]]-=a[j]*value;
+        __syncwarp();
+    }
+    for(int i=lane;i<used;i+=32)w[i]*=dinv[i];
+    __syncwarp();
+    for(int i=used-1;i>=0;--i){double sum=0;
+        for(int j=rp[i]+lane;j<rp[i+1];j+=32)sum+=a[j]*w[ci[j]];
+        for(int offset=16;offset;offset/=2)sum+=__shfl_down_sync(0xffffffff,sum,offset);
+        if(lane==0)w[i]-=sum;
+        __syncwarp();
+    }
+    for(int i=lane;i<n;i+=32)x[i]=order[i]<0?0:w[order[i]];
 }
 __global__ void verify_factor(int n,int used,const int* order,const int* rp,const int* ci,int* seen,int* err) {
     int i=blockIdx.x*blockDim.x+threadIdx.x;
     if(i<n&&(order[i]<-1||order[i]>=used))atomicExch(err,1);
     if(i<n&&order[i]>=0&&order[i]<used)atomicAdd(seen+order[i],1);
-    if(i<used)for(int j=rp[i];j<rp[i+1];++j)if(ci[j]<=i)atomicExch(err,1);
+    if(i<used)for(int j=rp[i];j<rp[i+1];++j)
+        if(ci[j]<=i||(j>rp[i]&&ci[j]<=ci[j-1]))atomicExch(err,1);
 }
 __global__ void verify_permutation(int used,const int* seen,int* err){int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<used&&seen[i]!=1)atomicExch(err,1);}
 struct CSR {
@@ -153,7 +165,7 @@ struct Coarse {
     }
     void apply(const double* b,double* x)const{
         if(kind=="dense_inverse")dense_coarse<<<(n+T-1)/T,T>>>(n,a,b,x);
-        else sparse_coarse<<<1,1>>>(n,used,order,rp,ci,a,di,b,x,work->p);
+        else sparse_coarse<<<1,32>>>(n,used,order,rp,ci,a,di,b,x,work->p);
     }
 };
 struct Level {
@@ -242,7 +254,7 @@ void run(int nlhs,mxArray** out,int nrhs,const mxArray** args){
     ck(cudaGetLastError());ck(cudaDeviceSynchronize());out[0]=mxGPUCreateMxArrayOnGPU(solution.a);
     const char* names[]={"iterations","true_relative_residual","coarse_execution","setup_execution","workspace_sample_bytes"};
     out[1]=mxCreateStructMatrix(1,1,5,names);mxSetField(out[1],0,names[0],mxCreateDoubleScalar(it));mxSetField(out[1],0,names[1],mxCreateDoubleScalar(rel));
-    mxSetField(out[1],0,names[2],mxCreateString("GPU: existing sparse LDL factors or dense inverse; small sparse solve serial"));
+    mxSetField(out[1],0,names[2],mxCreateString("GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse"));
     mxSetField(out[1],0,names[3],mxCreateString("CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization"));
     mxSetField(out[1],0,names[4],mxCreateDoubleScalar(double(workspace_sample)));
 }
