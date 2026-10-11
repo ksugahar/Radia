@@ -50,9 +50,9 @@ def _find_cubit_exe():
                 continue
             for c in sorted(
                     glob.glob(os.path.join(base, "Coreform Cubit *",
-                                           "bin", "coreform_cubit.exe")),
+                                           "bin", "*cubit*.exe")),
                     reverse=True):
-                if Path(c).is_file():
+                if Path(c).is_file() and Path(c).name.lower() in {"coreform_cubit.exe", "cubitx.exe"}:
                     return Path(c)
     else:
         for name in ("coreform_cubit", "cubit"):
@@ -338,7 +338,7 @@ def _batch_command(cubit_exe: Path, driver: Path) -> list[str]:
     """Build a headless command without Cubit's implicit plugin-path error."""
     cmd = [str(cubit_exe), "-batch", "-nographics", "-nojournal"]
     plugin_dir = cubit_exe.parent / "plugins"
-    if plugin_dir.is_dir():
+    if plugin_dir.is_dir() and cubit_exe.name.lower() != "cubitx.exe":
         # Cubit 2025.12 otherwise treats its auto-discovered plugin path and
         # -commandplugindir as journal inputs, causing exit 2 after export.
         cmd.extend(["-commandplugindir", str(plugin_dir)])
@@ -408,7 +408,11 @@ def run_smoke_test(*, jou: str = "", order: int = 2,
     t0 = time.time()
     cmd = _batch_command(cubit_exe, driver)
     print(f"  Running: {' '.join(cmd)}")
-    proc = subprocess.run(cmd, capture_output=True, text=True,
+    runtime_env = os.environ.copy()
+    acis = cubit_exe.parent.parent / "acis/code/bin"
+    if acis.is_dir():
+        runtime_env["PATH"] = str(acis) + os.pathsep + runtime_env.get("PATH", "")
+    proc = subprocess.run(cmd, capture_output=True, text=True, env=runtime_env,
                            timeout=timeout, cwd=str(work),
                            encoding="utf-8", errors="replace")
     dt = time.time() - t0

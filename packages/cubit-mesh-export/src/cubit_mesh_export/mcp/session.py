@@ -222,7 +222,7 @@ def find_cubit_install(explicit: str | None = None) -> Path | None:
 
     for c in candidates:
         if (c / "cubit.py").exists() or (c / "_cubit3.pyd").exists() \
-                or (c / "_cubit3.so").exists():
+                or (c / "_cubit3.so").exists() or (c / "cubit" / "_cubit3.pyd").is_file():
             return c.resolve()
     return None
 
@@ -284,6 +284,8 @@ def run_headless_journal(
             "error": "Could not locate Coreform Cubit install",
         }
     console = bin_dir / "coreform_cubit.com"
+    if not console.exists() and (bin_dir / "cubitx.exe").is_file():
+        console = bin_dir / "cubitx.exe"
     if not console.exists():
         return {
             "status": "error", "stage": "start", "kind": "environment",
@@ -314,12 +316,27 @@ def run_headless_journal(
         driver.write_text("\n".join([*commands, "exit 0", ""]),
                           encoding="utf-8")
         argv = [str(console), "-nographics", "-batch", "-nojournal"]
+        runtime_env = os.environ.copy()
+        acis = bin_dir.parent / "acis/code/bin"
+        if acis.is_dir():
+            runtime_env["PATH"] = str(acis) + os.pathsep + runtime_env.get("PATH", "")
         if plugin_dir is not None:
-            argv.extend(["-noinitfile", "-commandplugindir", str(plugin_dir)])
+            argv.append("-noinitfile")
+            if console.name.lower() == "cubitx.exe":
+                import shutil
+                staged = Path(scratch) / "plugins"
+                staged.mkdir()
+                for source in plugin_dir.iterdir():
+                    if source.is_file() and source.suffix.lower() in {".ccm", ".dll"}:
+                        target = source.with_suffix(".dll").name
+                        shutil.copy2(source, staged / target)
+                runtime_env["CUBIT_PLUGIN_DIR"] = str(staged)
+            else:
+                argv.extend(["-commandplugindir", str(plugin_dir)])
         argv.append(str(driver))
         try:
             proc = subprocess.run(
-                argv, cwd=str(cwd), capture_output=True, text=True,
+                argv, cwd=str(cwd), capture_output=True, text=True, env=runtime_env,
                 encoding="utf-8", errors="replace", timeout=timeout_s,
                 # Cubit reads from an inherited console/stdin during startup.
                 # Under an MCP stdio server that handle is the JSON-RPC pipe,
@@ -352,7 +369,8 @@ def run_headless_journal(
         "console": str(console),
         "headless_flags": [
             "-nographics", "-batch", "-nojournal",
-            *(["-noinitfile", "-commandplugindir"] if plugin_dir else []),
+            *(["-noinitfile"] if plugin_dir else []),
+            *(["-commandplugindir"] if plugin_dir and console.name.lower() != "cubitx.exe" else []),
         ],
         "command_plugin_directory": str(plugin_dir) if plugin_dir else None,
         "user_init_loaded": plugin_dir is None,

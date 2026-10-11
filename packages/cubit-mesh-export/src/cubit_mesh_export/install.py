@@ -61,6 +61,11 @@ if hasattr(sys.stdout, "reconfigure"):
 # Preflight helpers
 # ============================================================
 
+def _deployed_plugin_name(cubit_dir: Path) -> str:
+    return ("cubit_mesh_export.dll" if (cubit_dir / "bin/cubitx.exe").is_file()
+            else "cubit_mesh_export.ccm")
+
+
 def _find_cubit_dir():
     """Find a supported Coreform Cubit installation directory.
 
@@ -80,14 +85,15 @@ def _find_cubit_dir():
 
     def _supported(root: Path) -> bool:
         return (
-            (root / "bin" / "plugins").is_dir()
+            ((root / "bin" / "plugins").is_dir()
+             or (root / "bin" / "cubit" / "_cubit3.pyd").is_file())
             and _cubit_version_key(str(root)) >= MIN_CUBIT_VERSION
         )
 
     cubit_path = os.environ.get("CUBIT_PATH")
     if cubit_path:
         p = Path(cubit_path)
-        candidates = [p.parent if (p / "plugins").is_dir() else p]
+        candidates = [p.parent if p.name.lower() == "bin" else p]
         if (p / "bin" / "plugins").is_dir():
             candidates.insert(0, p)
         for candidate in candidates:
@@ -146,7 +152,7 @@ def _is_cubit_process_name(name: str) -> bool:
     # Strip the .exe suffix so the compare is uniform.
     if n.endswith(".exe"):
         n = n[:-4]
-    return n == "coreform_cubit"
+    return n in {"coreform_cubit", "cubitx", "clarox"}
 
 
 def _running_cubit_processes():
@@ -217,7 +223,7 @@ def _critical_plugin_files(cubit_dir: Path):
     plugins = cubit_dir / "bin" / "plugins"
     bin_ = cubit_dir / "bin"
     return [
-        plugins / "cubit_mesh_export.ccm",
+        plugins / _deployed_plugin_name(cubit_dir),
         plugins / "cubit_mesh_curver.cp312-win_amd64.pyd",
         plugins / "nglib.dll",
         plugins / "ngcore.dll",
@@ -234,7 +240,7 @@ def _expected_deployments(pkg_dir: Path, cubit_dir: Path):
     pairs = []
     if (pkg_dir / "cubit_mesh_export.ccm").is_file():
         pairs.append((pkg_dir / "cubit_mesh_export.ccm",
-                       plugins_dir / "cubit_mesh_export.ccm"))
+                       plugins_dir / _deployed_plugin_name(cubit_dir)))
     if (pkg_dir / "cubit_mesh_curver.pyd").is_file():
         pairs.append((pkg_dir / "cubit_mesh_curver.pyd",
                        plugins_dir / "cubit_mesh_curver.cp312-win_amd64.pyd"))
@@ -377,6 +383,7 @@ def preflight(cubit_dir: Path, *, verbose: bool = True):
 # ============================================================
 
 _CLEAN_PATTERNS = [
+    "cubit_mesh_export.dll",
     "cubit_mesh_export.ccm",
     "cubit_mesh_export.ccl",
     "cubit_mesh_curver*.pyd",
@@ -619,7 +626,7 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
     copy_jobs = []
     ccm_src = pkg_dir / "cubit_mesh_export.ccm"
     if ccm_src.is_file():
-        copy_jobs.append((ccm_src, plugins_dir / "cubit_mesh_export.ccm"))
+        copy_jobs.append((ccm_src, plugins_dir / _deployed_plugin_name(cubit_dir)))
     else:
         print(f"  [FAIL] cubit_mesh_export.ccm not found in {pkg_dir}")
 

@@ -61,3 +61,29 @@ def test_headless_journal_rejects_missing_command_plugin_directory(
     assert result["kind"] == "input"
     assert result["gui_started"] is False
     assert "command plugin directory not found" in result["error"]
+
+
+def test_cubit_2026_8_stages_dll_and_uses_console_environment(tmp_path, monkeypatch):
+    monkeypatch.setenv("CUBIT_MCP_TEMP", str(tmp_path / "scratch"))
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "cubitx.exe").write_bytes(b"")
+    acis = tmp_path / "acis/code/bin"
+    acis.mkdir(parents=True)
+    plugins = tmp_path / "candidate"
+    plugins.mkdir()
+    (plugins / "cubit_mesh_export.ccm").write_bytes(b"candidate")
+    def fake_run(argv, **kwargs):
+        assert Path(argv[0]).name == "cubitx.exe"
+        assert "-commandplugindir" not in argv
+        staged = Path(kwargs["env"]["CUBIT_PLUGIN_DIR"])
+        assert (staged / "cubit_mesh_export.dll").read_bytes() == b"candidate"
+        assert kwargs["env"]["PATH"].startswith(str(acis))
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+    from pathlib import Path
+    monkeypatch.setattr(session, "get_cubit_bin_dir", lambda: bin_dir)
+    monkeypatch.setattr(session.subprocess, "run", fake_run)
+    result = session.run_headless_journal(["reset"], command_plugin_directory=plugins)
+    assert result["exit_code"] == 0
+    assert result["gui_started"] is False
+    assert "-commandplugindir" not in result["headless_flags"]

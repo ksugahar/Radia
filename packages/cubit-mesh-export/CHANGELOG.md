@@ -2,6 +2,7 @@
 
 - Rebuild the native exporter and curver against the Cubit 2026.8 SDK.
 - Record the actual configured Cubit SDK version in native payload provenance.
+- Detect the packaged Cubit Python API and the new headless console; deploy the native command plugin as a DLL and include the ACIS runtime path.
 
 # Changelog
 

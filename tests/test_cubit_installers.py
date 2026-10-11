@@ -586,7 +586,13 @@ def test_sdist_setup_verifies_payloads_without_native_sources(
     manifest_path = package_dir / "native_payloads.json"
     manifest_path.write_text('{"payloads": {}}', encoding="utf-8")
     monkeypatch.setattr(provenance, "_source_commit", lambda _root: "a" * 40)
+    for build in ("build-pyd", "build-ccm"):
+        folder = tmp_path / "src/cubit_plugin" / build
+        folder.mkdir(parents=True)
+        (folder / "CMakeCache.txt").write_text(
+            "Cubit_DIR:PATH=C:/Program Files/Coreform Cubit 2026.8/cmake\n", encoding="utf-8")
     provenance.record_manifest(tmp_path, package_dir)
+    shutil.rmtree(tmp_path / "src/cubit_plugin")
     assert provenance.verify_manifest(None, package_dir) == []
 
     if damage in ("schema", "size"):
@@ -663,3 +669,17 @@ def test_find_cubit_bin_accepts_2026_8_package_layout(monkeypatch, tmp_path):
     assert panels.find_cubit_bin() is None
     (package / "_cubit3.pyd").write_bytes(b"native")
     assert Path(panels.find_cubit_bin()) == root / "bin"
+
+
+def test_cubit_2026_8_installer_detects_new_layout(tmp_path, monkeypatch):
+    from cubit_mesh_export import install
+    root = tmp_path / "Coreform Cubit 2026.8"
+    package = root / "bin/cubit"
+    package.mkdir(parents=True)
+    (package / "_cubit3.pyd").write_bytes(b"native")
+    (root / "bin/cubitx.exe").write_bytes(b"console")
+    monkeypatch.setenv("CUBIT_PATH", str(root / "bin"))
+    assert install._find_cubit_dir() == root
+    assert install._deployed_plugin_name(root) == "cubit_mesh_export.dll"
+    assert install._is_cubit_process_name("cubitx.exe")
+    assert install._is_cubit_process_name("clarox.exe")
