@@ -869,7 +869,7 @@ mesh = Mesh(vol_path)
 
 ## Requirements
 
-- Coreform Cubit 2025.12+ with Cubit Mesh Export installed (`cubit-plugin-install`)
+- Coreform Cubit 2026.8+ with Cubit Mesh Export installed (`cubit-plugin-install`)
 - NGSolve 6.2.2605+ to load the `.vol` (the 6.2.2607 snapshot writes
   `edgesegmentsgi3`); NGSolve up to 6.2.2607 mis-evaluates curved pyramids
   (see "Curved pyramids")
@@ -1282,7 +1282,7 @@ Fix: Use system Python with CUBIT_PATH environment variable.
      System Python with CUBIT_PATH can access BOTH Cubit API and NGSolve.
 
      # Step 1: Set CUBIT_PATH
-     set CUBIT_PATH="C:/Program Files/Coreform Cubit 2025.12/bin"
+     set CUBIT_PATH="C:/Program Files/Coreform Cubit 2026.8/bin"
 
      # Step 2: Run with system Python (which has NGSolve installed)
      python my_script.py
@@ -1330,7 +1330,7 @@ cubit.init(['cubit', '-nojournal', '-batch'])
 **Wrong import order** (causes DLL conflict):
 ```python
 import sys
-sys.path.append("C:/Program Files/Coreform Cubit 2025.12/bin")
+sys.path.append("C:/Program Files/Coreform Cubit 2026.8/bin")
 import cubit                      # Loads Cubit's bundled VTK DLLs
 import ngsolve                    # FAILS - Netgen can't initialize
 ```

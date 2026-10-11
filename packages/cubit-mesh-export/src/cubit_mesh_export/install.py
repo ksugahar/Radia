@@ -2,7 +2,7 @@
 Cubit plugin installer for cubit-mesh-export.
 
 Deploys the Cubit plugin binaries (.ccm, .pyd) and Netgen DLLs to the
-Coreform Cubit 2025.12+ installation directory.
+Coreform Cubit 2026.8+ installation directory.
 
 After ``pip install cubit-mesh-export``, run::
 
@@ -41,8 +41,8 @@ from pathlib import Path
 
 from cubit_mesh_export._layout import plugin_directory, command_plugin_path
 
-MIN_CUBIT_VERSION = (2025, 12)
-MIN_CUBIT_VERSION_TEXT = "2025.12"
+MIN_CUBIT_VERSION = (2026, 8)
+MIN_CUBIT_VERSION_TEXT = "2026.8"
 _REQUIRED_PACKAGE_BINARIES = (
     "cubit_mesh_export.ccm",
     "cubit_mesh_curver.pyd",

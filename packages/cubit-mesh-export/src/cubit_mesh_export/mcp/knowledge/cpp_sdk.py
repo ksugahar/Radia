@@ -86,7 +86,7 @@ CPP_SDK_PREREQUISITES = """
 
 | Tool        | Version             | Reason                              |
 |-------------|---------------------|-------------------------------------|
-| Cubit       | 2025.12+ recommended| SDK directory shipped + supported   |
+| Cubit       | 2026.8+ recommended| SDK directory shipped + supported   |
 | CMake       | 3.20+               | Cross-platform build system Cubit uses |
 | C++ compiler| C++17 minimum       | Cubit headers require it            |
 |   Windows   | Visual Studio 2022  | MSVC 19.30+ (vcvarsx64 environment) |
@@ -98,8 +98,8 @@ CPP_SDK_PREREQUISITES = """
 The SDK directory ships inside the Cubit install:
 
 ```
-Windows:  C:\\Program Files\\Coreform Cubit 2025.12private-runtime-path
-Linux:    /opt/Coreform-Cubit-2025.12/SDK/
+Windows:  C:\\Program Files\\Coreform Cubit 2026.8private-runtime-path
+Linux:    /opt/Coreform-Cubit-2026.8/SDK/
 ```
 
 Copy this entire `SDK/` tree to your own development area so you can
@@ -112,7 +112,7 @@ The SDK's top-level `CMakeLists.txt` needs to find Cubit and Qt6.
 The canonical pattern (taken from the components example) is:
 
 ```cmake
-set(Cubit_DIR "C:/Program Files/Coreform Cubit 2025.12/cmake"
+set(Cubit_DIR "C:/Program Files/Coreform Cubit 2026.8/cmake"
     CACHE PATH "Cubit cmake config dir")
 set(Qt6_DIR   "C:/Qt/6.8.0/msvc2022_64/lib/cmake/Qt6"
     CACHE PATH "Qt6 cmake config dir")

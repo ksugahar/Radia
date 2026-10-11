@@ -60,7 +60,7 @@ def _discover_cubit_bin():
     import glob as _g
     cands = _g.glob(r"C:\Program Files\Coreform Cubit *")
     if not cands:
-        return r"C:\Program Files\Coreform Cubit 2025.12\bin"  # last-resort
+        raise RuntimeError("Coreform Cubit 2026.8 is not installed")
     def _ver(p):
         name = os.path.basename(p).replace("Coreform Cubit", "", 1).strip()
         try:

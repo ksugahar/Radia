@@ -42,7 +42,7 @@ operation, then verify it in the affected user's context.
 """
 
 LICENSE_2025_12_TOKEN_AUTH = """
-# Cubit 2025.12 cache observations and current recovery boundary
+# Cubit 2026.8 cache observations and current recovery boundary
 
 Historical validation runtime observations found login_tokens.json and cubit_creds under
 the current user's local Coreform application-data directory. Older
@@ -74,7 +74,7 @@ def get_license_documentation(topic: str = "per_user") -> str:
         return (
             f"# ===== Per-user activation rule =====\n\n"
             f"{LICENSE_PER_USER_RULE}\n\n"
-            f"# ===== 2025.12 token-based auth =====\n\n"
+            f"# ===== 2026.8 token-based auth =====\n\n"
             f"{LICENSE_2025_12_TOKEN_AUTH}"
         )
     if topic == "token_cache":

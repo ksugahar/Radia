@@ -376,7 +376,7 @@ with `ImportError: initialization failed` on `from netgen import libngpy`.
 
 ```bash
 # Set CUBIT_PATH once (e.g., in your environment or before running)
-set CUBIT_PATH="C:/Program Files/Coreform Cubit 2025.12/bin"
+set CUBIT_PATH="C:/Program Files/Coreform Cubit 2026.8/bin"
 python my_script.py
 ```
 
@@ -424,10 +424,10 @@ Set `CUBIT_PATH` to avoid hardcoding the Cubit installation path in scripts:
 
 ```bash
 # Windows
-set CUBIT_PATH="C:/Program Files/Coreform Cubit 2025.12/bin"
+set CUBIT_PATH="C:/Program Files/Coreform Cubit 2026.8/bin"
 
 # Linux/Mac
-export CUBIT_PATH="/opt/Coreform-Cubit-2025.12/bin"
+export CUBIT_PATH="/opt/Coreform-Cubit-2026.8/bin"
 ```
 
 **Key benefit**: System Python with `CUBIT_PATH` can access both the Cubit API
@@ -1005,7 +1005,7 @@ if cubit_path:
 
 Or set the environment variable before running:
 ```bash
-set CUBIT_PATH="C:/Program Files/Coreform Cubit 2025.12/bin"
+set CUBIT_PATH="C:/Program Files/Coreform Cubit 2026.8/bin"
 python my_script.py
 ```
 
@@ -1042,7 +1042,7 @@ cubit.init(['cubit', '-nojournal', '-batch'])
 
 ```python
 # WRONG: Cubit first causes DLL conflict
-sys.path.append("C:/Program Files/Coreform Cubit 2025.12/bin")
+sys.path.append("C:/Program Files/Coreform Cubit 2026.8/bin")
 import cubit                      # Loads Cubit's VTK DLLs
 import ngsolve                    # FAILS — Netgen can't initialize
 ```
@@ -1122,7 +1122,7 @@ cmake ...  # netgen sources in-repo (compact_netgen/netgen_src/), no external pa
 Old dynamic-linked ccm is ~238 KB. Check after `cubit-plugin-install`:
 ```python
 import os
-ccm = r"C:\\Program Files\\Coreform Cubit 2025.12private-runtime-path"
+ccm = r"C:\\Program Files\\Coreform Cubit 2026.8private-runtime-path"
 print(f"ccm: {os.path.getsize(ccm):,} bytes")  # should be > 400,000
 ```
 
@@ -1317,7 +1317,7 @@ play "export_mesh.py"
 # Execute from command line (use CUBIT_PATH or full path)
 "%CUBIT_PATH%\\coreform_cubit.com" -batch -nographics -nojournal workflow.jou
 # Or with full path:
-"C:\\Program Files\\Coreform Cubit 2025.12private-runtime-path" -batch -nographics -nojournal workflow.jou
+"C:\\Program Files\\Coreform Cubit 2026.8private-runtime-path" -batch -nographics -nojournal workflow.jou
 ```
 
 ## Batch Mode vs GUI Mode
@@ -3733,7 +3733,8 @@ FIRST, then size.
 
 ## 6. Cubit version drift
 
-validation runtime / runtime host / mdx must run Coreform Cubit 2025.12+.  ACIS
+Licensed validation and usage hosts run Coreform Cubit 2026.8; timing hosts
+do not install Cubit. ACIS
 version upgrades subtly change:
 - Default `merge tolerance`
 - UV parametrization of lofted surfaces (`b085b1be` reject count
@@ -3741,8 +3742,8 @@ version upgrades subtly change:
 - STEP import healing aggressiveness
 
 A .jou that works on an older Cubit may produce a different mesh on
-2025.12.  `cubit-plugin-install` and Cubit Mesh Export toolbar registration reject
-pre-2025.12 installs instead of silently selecting them.
+2026.8.  `cubit-plugin-install` and Cubit Mesh Export toolbar registration reject
+pre-2026.8 installs instead of silently selecting them.
 
 ## 7. Learn Edition 50k element cap (cosmetic)
 

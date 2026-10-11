@@ -119,6 +119,7 @@ def _git_ls_files(*patterns):
 # Move these to private alias configuration in phase 2. Bibliography is an
 # author/citation exception, not a machine provenance exception.
 PUBLIC_RUNTIME_OPERATIONAL_REASONS = {
+    "tools/git-hooks/pre-push": "Operational host routing for the reviewed pre-push gate; no result publication.",
     "packages/radia-mcp/src/radia_mcp/radia_ngsolve/knowledge/install_deploy.py": "Verbatim deployment host-role and release routing instructions; phase 2 with private host configuration.",
     "packages/radia-mcp/src/radia_mcp/radia_ngsolve/knowledge/release_workflow.py": "Verbatim release host, ABI deployment, wheel/editable and recovery routing guidance; phase 2 with runner-move consent.",
     "tests/test_privacy_source_contract.py": "Deliberate privacy metadata and numerical-drift detector fixtures.",
@@ -226,7 +227,7 @@ PUBLIC_RUNTIME_OPERATIONAL_REASONS = {
     'tests/mcp_server/test_radia_rules.py': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
     'tests/test_beam_transfer_mex_pybind_validation.py': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
     'tests/test_ci_execution_policy.py': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
-    'tests/test_ci_preflight_mdx.py': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
+    'tests/test_ci_preflight_lab.py': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
     'tests/test_ci_preflight_scope.py': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
     'tests/test_cubit_installers.py': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
     'tests/test_docs_notebook_contract.py': 'Existing operational scratch/route fixtures; phase 2, no result publication.',
@@ -249,7 +250,7 @@ PUBLIC_RUNTIME_OPERATIONAL_REASONS = {
     'tools/audit_application_block_contract.py': 'Existing operational build/runtime scratch routing; phase 2.',
     'tools/audit_pyside6_only.py': 'Existing operational build/runtime scratch routing; phase 2.',
     'tools/ci_preflight.py': 'Existing operational build/runtime scratch routing; phase 2.',
-    'tools/ci_preflight_mdx.py': 'Existing operational build/runtime scratch routing; phase 2.',
+    'tools/ci_preflight_lab.py': 'Existing operational build/runtime scratch routing; phase 2.',
     'tools/download_release_asset.py': 'Existing operational build/runtime scratch routing; phase 2.',
     'tools/editable_intent.py': 'Existing operational build/runtime scratch routing; phase 2.',
     'tools/eqnedit64/README.md': 'Existing operational build/runtime scratch routing; phase 2.',

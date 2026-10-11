@@ -9,7 +9,10 @@ async def main():
     work = args.work.resolve()
     work.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
-    env['PYTHONPATH'] = str(root/'packages/cubit-mesh-export/src')
+    if args.installed:
+        env.pop('PYTHONPATH', None)
+    else:
+        env['PYTHONPATH'] = str(root/'packages/cubit-mesh-export/src')
     if args.plugin_dir:
         env['CUBIT_PLUGIN_DIR'] = str(args.plugin_dir.resolve())
     env['CUBIT_MCP_TEMP'] = str(work)
@@ -28,7 +31,13 @@ async def main():
                 results[name] = payload
                 return payload
             try:
-                sample = root/'packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/solver_ready_sample.jou'
+                if args.installed:
+                    import cubit_mesh_export
+                    sample = Path(cubit_mesh_export.__file__).parent/'cubit_gui/solver_ready_sample.jou'
+                    results['distribution'] = 'wheel'
+                    results['import_path'] = cubit_mesh_export.__file__
+                else:
+                    sample = root/'packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/solver_ready_sample.jou'
                 mesh = work/'mcp.vol'
                 payload = await call('cubit_exec',{'commands':[f'play "{sample.as_posix()}"',f'export netgen "{mesh.as_posix()}" order 2 overwrite'],'timeout_s':120})
                 if not payload['all_ok'] or payload['gui_started'] is not False:
@@ -51,6 +60,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work', type=Path, required=True, help='Owned output directory outside the checkout')
     parser.add_argument('--plugin-dir', type=Path, help='Directory containing the candidate plugin DLL/CCM')
+    parser.add_argument('--installed', action='store_true', help='Use the installed wheel without source overrides')
     args = parser.parse_args()
     asyncio.run(main())
 

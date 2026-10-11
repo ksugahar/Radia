@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Officially support Coreform Cubit 2026.8; reject older installer targets and native SDK/runtime mismatches.
+- Validate wheel distribution and headless MCP on the licensed validation host. Timing hosts remain Cubit-free.
+
 All notable changes to `cubit-mesh-export` — the high-order curved
 mesh export package for Coreform Cubit (Netgen / GMSH / Nastran /
 VTK / MEG / FEMEEM writers + Python bindings for consistency checks).

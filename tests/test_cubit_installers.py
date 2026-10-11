@@ -83,14 +83,14 @@ def test_native_sdk_runtime_must_match_before_deployment(tmp_path, actual):
             _require_native_sdk_runtime(pkg, root)
 
 
-def test_find_cubit_bin_prefers_2025_12_over_2025_6(monkeypatch, tmp_path):
+def test_find_cubit_bin_prefers_2026_8_over_2025_6(monkeypatch, tmp_path):
     install_panels = _load_install_panels()
 
     monkeypatch.setattr(install_panels.sys, "platform", "win32")
     program_files = _patch_windows_env(monkeypatch, tmp_path)
     _fake_cubit(program_files, "2025.3")
     _fake_cubit(program_files, "2025.6")
-    expected = _fake_cubit(program_files, "2025.12") / "bin"
+    expected = _fake_cubit(program_files, "2026.8") / "bin"
 
     assert Path(install_panels.find_cubit_bin()) == expected
 
@@ -101,7 +101,7 @@ def test_2026_8_package_layout_is_shared_by_installer_and_headless_mcp(monkeypat
     from cubit_mesh_export.mcp import session
 
     program_files = _patch_windows_env(monkeypatch, tmp_path)
-    _fake_cubit(program_files, "2025.12")
+    _fake_cubit(program_files, "2026.8")
     root = program_files / "Coreform Cubit 2026.8"
     (root / "bin/cubit").mkdir(parents=True)
     (root / "bin/cubit/__init__.py").touch()
@@ -123,7 +123,7 @@ def test_2026_8_package_layout_is_shared_by_installer_and_headless_mcp(monkeypat
     assert all(install._is_cubit_process_name(name) for name in ("cubitx.exe", "clarox.exe"))
 
 
-def test_find_cubit_bin_rejects_pre_2025_12(monkeypatch, tmp_path):
+def test_find_cubit_bin_rejects_pre_2026_8(monkeypatch, tmp_path):
     install_panels = _load_install_panels()
 
     monkeypatch.setattr(install_panels.sys, "platform", "win32")
@@ -133,13 +133,13 @@ def test_find_cubit_bin_rejects_pre_2025_12(monkeypatch, tmp_path):
     assert install_panels.find_cubit_bin() is None
 
 
-def test_cubit_mesh_export_installer_requires_2025_12(monkeypatch, tmp_path):
+def test_cubit_mesh_export_installer_requires_2026_8(monkeypatch, tmp_path):
     from cubit_mesh_export import install as cme_install
 
     monkeypatch.setattr(cme_install.sys, "platform", "win32")
     program_files = _patch_windows_env(monkeypatch, tmp_path)
     _fake_cubit(program_files, "2025.6")
-    supported = _fake_cubit(program_files, "2025.12")
+    supported = _fake_cubit(program_files, "2026.8")
 
     assert cme_install._find_cubit_dir() == supported
 
@@ -148,7 +148,7 @@ def test_cubit_mesh_export_verify_requires_curver_pyd(monkeypatch, tmp_path):
     from cubit_mesh_export import install as cme_install
 
     pkg_dir = tmp_path / "pkg"
-    cubit_dir = tmp_path / "Coreform Cubit 2025.12"
+    cubit_dir = tmp_path / "Coreform Cubit 2026.8"
     plugins = cubit_dir / "bin" / "plugins"
     plugins.mkdir(parents=True)
     pkg_dir.mkdir()
@@ -173,7 +173,7 @@ def test_helpers_only_install_does_not_touch_native_plugins(monkeypatch, tmp_pat
     helpers_src.mkdir(parents=True)
     (helpers_src / "add_kelvin.py").write_text("VALUE = 1\n", encoding="utf-8")
 
-    cubit_dir = tmp_path / "Coreform Cubit 2025.12"
+    cubit_dir = tmp_path / "Coreform Cubit 2026.8"
     plugins = cubit_dir / "bin" / "plugins"
     plugins.mkdir(parents=True)
     native = plugins / "cubit_mesh_export.ccm"
@@ -271,7 +271,7 @@ def test_install_panels_writes_and_verifies_current_user(monkeypatch, tmp_path):
 
     monkeypatch.setattr(install_panels.sys, "platform", "win32")
     program_files = _patch_windows_env(monkeypatch, tmp_path)
-    cubit_root = _fake_cubit(program_files, "2025.12")
+    cubit_root = _fake_cubit(program_files, "2026.8")
 
     assert install_panels.install_panels(all_users=False) is True
 
@@ -301,7 +301,7 @@ def test_install_panels_deletes_only_exact_obsolete_exporter_assets(
 
     monkeypatch.setattr(install_panels.sys, "platform", "win32")
     program_files = _patch_windows_env(monkeypatch, tmp_path)
-    _fake_cubit(program_files, "2025.12")
+    _fake_cubit(program_files, "2026.8")
 
     old_startup_root = tmp_path / "LocalAppData" / "Radia" / "Cubit"
     old_toolbar = old_startup_root / "Toolbars" / "radia_export_toolbar"
@@ -337,7 +337,7 @@ def test_install_panels_refreshes_an_existing_official_toolbar(
 
     monkeypatch.setattr(install_panels.sys, "platform", "win32")
     program_files = _patch_windows_env(monkeypatch, tmp_path)
-    _fake_cubit(program_files, "2025.12")
+    _fake_cubit(program_files, "2026.8")
     toolbar_dir = (
         tmp_path / "LocalAppData" / "cubit-mesh-export" / "Cubit" / "Toolbars"
         / "cubit_mesh_export_toolbar"
@@ -426,7 +426,7 @@ def test_install_panels_refuses_corrupt_startup_before_writing_assets(
     install_panels = _load_install_panels()
     monkeypatch.setattr(install_panels.sys, "platform", "win32")
     program_files = _patch_windows_env(monkeypatch, tmp_path)
-    _fake_cubit(program_files, "2025.12")
+    _fake_cubit(program_files, "2026.8")
     cubit_file = tmp_path / "Home" / ".cubit"
     original = ("set echo on\n## BEGIN cubit-mesh-export toolbar\n"
                 "user command that must survive\n").encode("utf-8")
@@ -442,7 +442,7 @@ def test_install_panels_preserves_cp932_startup_with_backup(monkeypatch, tmp_pat
     install_panels = _load_install_panels()
     monkeypatch.setattr(install_panels.sys, "platform", "win32")
     program_files = _patch_windows_env(monkeypatch, tmp_path)
-    _fake_cubit(program_files, "2025.12")
+    _fake_cubit(program_files, "2026.8")
     cubit_file = tmp_path / "Home" / ".cubit"
     original = "# 日本語の設定\r\nset echo on\r\n".encode("cp932")
     cubit_file.write_bytes(original)
