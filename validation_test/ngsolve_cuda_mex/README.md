@@ -26,7 +26,7 @@ Studio installations can coexist. Parallel Computing Toolbox is required.
 # Put the isolated Python Scripts directory first on PATH for this invocation.
 ./Build.ps1 -CudaMexOnly
 python validation_test/ngsolve_cuda_mex/run_poisson.py `
-  --binary-dir ./build-cuda-mex --out C:/temp/poisson-cuda-acceptance --threads 8
+  --binary-dir ./build-cuda-mex --out "$env:TEMP/poisson-cuda-acceptance" --threads 8
 ```
 
 The build stages `radia_cuda_csr_pcg.mexw64` and `build.json` in

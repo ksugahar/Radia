@@ -1,9 +1,6 @@
 {
   "schema": "radia.ngsolve-cuda-poisson.v1",
   "passed": true,
-  "hostname": "T7920",
-  "platform": "Windows-2022Server-10.0.20348-SP0",
-  "python": "C:\\temp\\radia-cuda-env-20261011\\Scripts\\python.exe",
   "versions": {
     "ngsolve": "6.2.2607",
     "netgen-mesher": "6.2.2607",
@@ -24,14 +21,12 @@
   "source_commit": "00f6b25b4666d79fbba287252fa29cf726aab841",
   "build": {
     "schema": "radia.cuda-mex-build.v1",
-    "hostname": "T7920",
     "source_sha256": "9c441d1e64a5e65d8c1e8e653db506a6adccddaba60244c1d9c1b8e57fc97232",
     "binary_sha256": "dad728a360ee7f550e6788b6834a6febe413682201f8446c535003e5cc168091",
     "source_commit": "00f6b25b4666d79fbba287252fa29cf726aab841",
     "source_dirty": false,
     "matlab": "26.1.0.3346908 (R2026a) Update 5",
     "release": "2026a",
-    "compiler_configuration": "C:\\Program Files\\MATLAB\\R2026a\\toolbox\\parallel\\gpu\\extern\\src\\mex\\win64\\nvcc_msvcpp2022.xml",
     "gpu": {
       "name": "Quadro RTX 5000",
       "compute_capability": "7.5",
@@ -40,7 +35,6 @@
       "toolkit": 12.8,
       "driver": "582.78"
     },
-    "python": "C:\\temp\\radia-cuda-env-20261011\\Scripts\\python.exe",
     "python_version": "3.12.10",
     "operation_route": "official MATLAB Engine for Python; task-owned session",
     "no_cpu_solver_fallback": true,
@@ -48,7 +42,8 @@
       "sm_75",
       "sm_80",
       "compute_80 PTX"
-    ]
+    ],
+    "compiler": "MSVC 19.44 / MATLAB nvcc_msvcpp2022"
   },
   "limitations": [
     "Assembled CSR bridge, not an upstream NGSolve matrix-free CUDA backend",
@@ -274,5 +269,7 @@
     "validation_test/ngsolve_cuda_mex/run_poisson.py": "903cad04804b32235675553f761c4a167fcc726eac8e3b86ca8337c865a4170f",
     "validation_test/ngsolve_cuda_mex/benchmark_gpu.m": "60b5b98e99f81ba6c9ed644c56954d276f20b4fea4e2198be12abdc91301fe50",
     "validation_test/ngsolve_cuda_mex/check_gateway.m": "8cae9088dbc0a51e422d4bf4424ab46935a91652fcd3bb73a173e0b7e0905ac5"
-  }
+  },
+  "platform_class": "Windows",
+  "provenance_scope": "Public numerical evidence; full host/path provenance retained in private operational storage."
 }
