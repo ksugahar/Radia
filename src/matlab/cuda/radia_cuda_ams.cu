@@ -72,11 +72,18 @@ __global__ void multiply(int n,const int* rp,const int* ci,const double* av,cons
     int i=blockIdx.x*blockDim.x+threadIdx.x; if(i>=n)return;
     double v=0;for(int j=rp[i];j<rp[i+1];++j)v+=av[j]*x[ci[j]];y[i]=v;
 }
-__global__ void residual(int n,const double* b,const double* ax,double* r) {
-    int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n)r[i]=b[i]-ax[i];
+// Keep the CSR reduction order; only combine independent row-local work.
+__global__ void multiply_residual(int n,const int* rp,const int* ci,const double* av,
+    const double* x,const double* b,double* r) {
+    int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=n)return;
+    double value=0;for(int j=rp[i];j<rp[i+1];++j)value+=av[j]*x[ci[j]];
+    r[i]=b[i]-value;
 }
-__global__ void smooth_update(int n,const double* r,const double* l1,double* x) {
-    int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n)x[i]+=r[i]/l1[i];
+__global__ void relax_from_product(int n,const double* b,const double* ax,const double* l1,double* x) {
+    int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n)x[i]+=(b[i]-ax[i])/l1[i];
+}
+__global__ void initial_relax(int n,const double* b,const double* l1,double* x) {
+    int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n)x[i]=b[i]/l1[i];
 }
 __global__ void scaled_add(int n,double alpha,const double* a,double* b) {
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n)b[i]+=alpha*a[i];
@@ -134,6 +141,9 @@ struct CSR {
         Flag flag;verify_csr<<<(std::max(n,nz)+T-1)/T,T>>>(n,m,nz,rp,ci,a,flag.p);flag.check();
     }
     void mult(const double* x,double* y)const{multiply<<<(n+T-1)/T,T>>>(n,rp,ci,a,x,y);}
+    void res(const double* x,const double* b,double* r)const{
+        multiply_residual<<<(n+T-1)/T,T>>>(n,rp,ci,a,x,b,r);
+    }
 };
 void finite_vec(Input& in,const mxArray* a,int n,const double*& result,bool positive=false){
     result=in.get<double>(a,mxDOUBLE_CLASS,n);Flag f;verify_vec<<<(n+T-1)/T,T>>>(n,result,positive,f.p);f.check();
@@ -176,7 +186,8 @@ struct Level {
         if(last)coarse=std::make_unique<Coarse>(field(v,"coarse"),in,a.n);
         else {p=std::make_unique<CSR>(field(v,"P"),in);pt=std::make_unique<CSR>(field(v,"Pt"),in);}
     }
-    void relax(){a.mult(x.p,tmp.p);residual<<<(a.n+T-1)/T,T>>>(a.n,b.p,tmp.p,r.p);smooth_update<<<(a.n+T-1)/T,T>>>(a.n,r.p,l1,x.p);}
+    void relax(){a.mult(x.p,tmp.p);relax_from_product<<<(a.n+T-1)/T,T>>>(a.n,b.p,tmp.p,l1,x.p);}
+    void initial(){initial_relax<<<(a.n+T-1)/T,T>>>(a.n,b.p,l1,x.p);}
 };
 struct Space {
     CSR p,pt;std::vector<std::unique_ptr<Level>> levels;Buffer rhs,out;
@@ -189,10 +200,10 @@ struct Space {
             if(l.p->n!=l.a.n||l.p->m!=nc||l.pt->n!=nc||l.pt->m!=l.a.n)throw std::runtime_error("AMG transfer dimensions mismatch");}
     }
     void cycle(size_t k){
-        auto& l=*levels[k];l.x.zero();
-        if(l.coarse){if(l.coarse->kind=="ten_l1_jacobi_sweeps")for(int s=0;s<10;++s)l.relax();else l.coarse->apply(l.b.p,l.x.p);return;}
-        for(int s=0;s<l.smooth;++s)l.relax();
-        l.a.mult(l.x.p,l.tmp.p);residual<<<(l.a.n+T-1)/T,T>>>(l.a.n,l.b.p,l.tmp.p,l.r.p);
+        auto& l=*levels[k];
+        if(l.coarse){if(l.coarse->kind=="ten_l1_jacobi_sweeps"){l.initial();for(int s=1;s<10;++s)l.relax();}else l.coarse->apply(l.b.p,l.x.p);return;}
+        l.initial();for(int s=1;s<l.smooth;++s)l.relax();
+        l.a.res(l.x.p,l.b.p,l.r.p);
         l.pt->mult(l.r.p,levels[k+1]->b.p);cycle(k+1);l.p->mult(levels[k+1]->x.p,l.tmp.p);
         scaled_add<<<(l.a.n+T-1)/T,T>>>(l.a.n,1,l.tmp.p,l.x.p);
         for(int s=0;s<l.smooth;++s)l.relax();
@@ -211,13 +222,14 @@ struct AMS {
         for(size_t k=0;k<mxGetNumberOfElements(list);++k){spaces.push_back(std::make_unique<Space>(mxGetCell(list,k),in));
             if(spaces.back()->p.n!=a.n)throw std::runtime_error("AMS interpolation dimension mismatch");}
     }
-    void res(){a.mult(x.p,tmp.p);residual<<<(a.n+T-1)/T,T>>>(a.n,b.p,tmp.p,r.p);}
-    void relax(){for(int s=0;s<smooth;++s){res();smooth_update<<<(a.n+T-1)/T,T>>>(a.n,r.p,l1,x.p);}}
+    void res(){a.res(x.p,b.p,r.p);}
+    void relax(){for(int s=0;s<smooth;++s){a.mult(x.p,tmp.p);relax_from_product<<<(a.n+T-1)/T,T>>>(a.n,b.p,tmp.p,l1,x.p);}}
+    void initial(){initial_relax<<<(a.n+T-1)/T,T>>>(a.n,b.p,l1,x.p);for(int s=1;s<smooth;++s){a.mult(x.p,tmp.p);relax_from_product<<<(a.n+T-1)/T,T>>>(a.n,b.p,tmp.p,l1,x.p);}}
     void grad(){if(!gradient)return;res();spaces[0]->apply(r.p);scaled_add<<<(a.n+T-1)/T,T>>>(a.n,omega,spaces[0]->out.p,x.p);}
     void nodal(){res();for(int k=gradient;k<gradient+3;++k){spaces[k]->apply(r.p);scaled_add<<<(a.n+T-1)/T,T>>>(a.n,omega,spaces[k]->out.p,x.p);}}
-    void apply(const double* rhs,double* output){ck(cudaMemcpy(b.p,rhs,a.n*sizeof(double),cudaMemcpyDeviceToDevice));mask<<<(a.n+T-1)/T,T>>>(a.n,free,b.p);x.zero();
-        if(cycle==1){relax();grad();nodal();grad();relax();}
-        else {relax();grad();relax();nodal();relax();grad();relax();}
+    void apply(const double* rhs,double* output){ck(cudaMemcpy(b.p,rhs,a.n*sizeof(double),cudaMemcpyDeviceToDevice));mask<<<(a.n+T-1)/T,T>>>(a.n,free,b.p);
+        if(cycle==1){initial();grad();nodal();grad();relax();}
+        else {initial();grad();relax();nodal();relax();grad();relax();}
         mask<<<(a.n+T-1)/T,T>>>(a.n,free,x.p);ck(cudaMemcpy(output,x.p,a.n*sizeof(double),cudaMemcpyDeviceToDevice));}
 };
 struct Blas {cublasHandle_t h;Blas(){cb(cublasCreate(&h));}~Blas(){cublasDestroy(h);}double dot(int n,const double* a,const double* b){double d;cb(cublasDdot(h,n,a,1,b,1,&d));return d;}double norm(int n,const double* a){double d;cb(cublasDnrm2(h,n,a,1,&d));return d;}};
@@ -243,11 +255,11 @@ void run(int nlhs,mxArray** out,int nrhs,const mxArray** args){
                 if(!(pap>0)||!(rho>0)||!std::isfinite(pap)||!std::isfinite(rho))throw std::runtime_error("AMS PCG breakdown: nonpositive curvature");
                 double alpha=rho/pap;scaled_add<<<(n+T-1)/T,T>>>(n,alpha,p.p,solution.data());scaled_add<<<(n+T-1)/T,T>>>(n,-alpha,ap.p,r.p);
                 rel=blas.norm(n,r.p)/bnorm;if(!std::isfinite(rel))throw std::runtime_error("nonfinite residual");
-                if(rel<=tol){ams.a.mult(solution.data(),ap.p);residual<<<(n+T-1)/T,T>>>(n,b,ap.p,r.p);rel=blas.norm(n,r.p)/bnorm;if(rel<=tol)break;
+                if(rel<=tol){ams.a.res(solution.data(),b,r.p);rel=blas.norm(n,r.p)/bnorm;if(rel<=tol)break;
                     ams.apply(r.p,z.p);ck(cudaMemcpy(p.p,z.p,n*sizeof(double),cudaMemcpyDeviceToDevice));rho=blas.dot(n,r.p,z.p);continue;}
                 ams.apply(r.p,z.p);double next=blas.dot(n,r.p,z.p);combine<<<(n+T-1)/T,T>>>(n,z.p,next/rho,p.p);rho=next;
             }
-            ams.a.mult(solution.data(),ap.p);residual<<<(n+T-1)/T,T>>>(n,b,ap.p,r.p);rel=blas.norm(n,r.p)/bnorm;
+            ams.a.res(solution.data(),b,r.p);rel=blas.norm(n,r.p)/bnorm;
             if(!std::isfinite(rel)||rel>tol||it>maxiter)throw std::runtime_error("AMS PCG failed its FP64 true residual gate");
         }
     }
