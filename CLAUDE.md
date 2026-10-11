@@ -99,12 +99,12 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 
 ### CPU / GPU Execution Policy (2026-10-11)
 
-- CPU execution: Python (pybind11) with NGSolve; CPU MEX is unsupported.
-- GPU execution: `radia-gpu`, MATLAB mexcuda with NVIDIA GPU. Simulink and LTspice adapters ship here; external products do not. Simulink is optional.
-- Select Visual Studio and CUDA versions from the target MATLAB release's mexcuda support. After upgrades, verify build/GPU smoke; no unsupported-compiler override.
-- No implicit CPU/Python solver fallback. Report host setup and CPU solving separately.
-- `radia-gpu` deploys to 100 and A100, never 102. 100 owns CUDA builds/RTX 5000 acceptance. A100 need not be online; keep acceptance pending and verify the same artifact hash when running.
-- GPU features require Python CPU parity; Poisson does not certify ICCG/AMS/HDiv-MMM. Save validation JSON.
+- CPU: Python (pybind11)/NGSolve; CPU MEX is unsupported.
+- GPU: `radia-gpu` uses MATLAB mexcuda for performance; ships optional Simulink/LTspice adapters, no external products.
+- Choose VS/CUDA by target MATLAB mexcuda support. Verify upgrades; never override unsupported compilers.
+- No implicit CPU/Python fallback. Measure host setup and CPU solves separately.
+- Deploy to 100 (build/RTX 5000) and A100, never 102. Offline A100 stays pending; verify the same artifact hash when available.
+- Require Python CPU parity and validation JSON per GPU feature; Poisson does not certify ICCG/AMS/HDiv-MMM.
 
 ### MATLAB And Simulink
 
