@@ -101,9 +101,7 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 
 ### CPU / GPU Execution Policy (2026-10-11)
 - CPU: Python (pybind11)/NGSolve; CPU MEX is unsupported.
-- GPU: `radia-gpu` uses MATLAB mexcuda for performance; ships optional Simulink/LTspice adapters, no external products.
-- GPU workflows must complete within MATLAB/mexcuda, including solver setup and preconditioner construction; do not require a Python adapter or Python-generated solver snapshot. Native Python DLL dependencies inherited from NGSolve are permitted; GPU use must not require Python adapter execution.
-- Python owns CPU execution and independent numerical-accuracy validation. Python CPU reference runs are validation workflows, not prerequisites for GPU users.
+- GPU: `radia-gpu` uses MATLAB mexcuda for performance; ships optional Simulink/LTspice adapters, no external products. GPU workflows must complete within MATLAB/mexcuda, including solver setup and preconditioner construction; do not require a Python adapter or Python-generated solver snapshot. Native Python DLL dependencies inherited from NGSolve are permitted; GPU use must not require Python adapter execution. Python owns CPU execution and independent numerical-accuracy validation. Python CPU reference runs are validation workflows, not prerequisites for GPU users.
 - Indirect TaskManager dependencies through standard NGSolve headers/DLLs are permitted in mexcuda builds. Never start TaskManager or use its parallel execution in MATLAB/mexcuda workflows; MATLAB owns host scheduling and CUDA owns device execution. AMS preprocessing selects CUDA or OpenMP using numerical parity and transfer-inclusive timing/memory evidence; serial execution remains a reference. The independent CPU Radia route keeps its own threading policy.
 - Choose VS/CUDA by target MATLAB mexcuda support. Verify upgrades; never override unsupported compilers.
 - No implicit CPU/Python fallback. Measure host setup and CPU solves separately.
