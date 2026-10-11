@@ -5,7 +5,8 @@ arguments
     binaryDirectory (1,1) string
     outputJson (1,1) string
 end
-addpath(fullfile(checkout,'packages','radia-optuna','matlab'),binaryDirectory);
+addpath(fullfile(checkout,'packages','radia-optuna','matlab'));
+addpath(binaryDirectory,'-begin');
 binary=string(which('optuna_mex'));
 assert(startsWith(binary,binaryDirectory+filesep), 'Unexpected MEX origin.');
 info=optuna_mex('api.info');
