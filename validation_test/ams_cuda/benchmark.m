@@ -1,5 +1,6 @@
-function benchmark(inputPath, outputPath, binaryDir, matlabDir, setupThreads)
+function benchmark(inputPath, outputPath, binaryDir, matlabDir, setupThreads, useGraph)
 addpath(binaryDir);
+if nargin<6;useGraph=false;end
 repo=fileparts(fileparts(fileparts(mfilename('fullpath'))));
 if nargin<4;matlabDir=fullfile(repo,'packages','radia-gpu','matlab');end
 addpath(matlabDir);
@@ -19,7 +20,7 @@ rhs=gpuArray(d.rhs);
 wait(g);
 uploadSeconds=toc(transfer);
 wait(g); timer=tic;
-[first,info]=radia_cuda_ams(s,rhs,1e-9,2000,false);
+[first,info]=radia_cuda_ams(s,rhs,1e-9,2000,false,useGraph);
 wait(g); coldSeconds=toc(timer);
 probeErrors=zeros(size(d.probes,1),1);
 for k=1:size(d.probes,1)
@@ -30,11 +31,11 @@ for k=1:size(d.probes,1)
 end
 times=zeros(5,1);
 for k=1:5
-    timer=tic; [x,info]=radia_cuda_ams(s,rhs,1e-9,2000,false);wait(g);times(k)=toc(timer);
+    timer=tic; [x,info]=radia_cuda_ams(s,rhs,1e-9,2000,false,useGraph);wait(g);times(k)=toc(timer);
 end
 timer=tic;
 s2=upload(d.snapshot,'');b2=gpuArray(d.rhs);
-[x2,~]=radia_cuda_ams(s2,b2,1e-9,2000,false);
+[x2,~]=radia_cuda_ams(s2,b2,1e-9,2000,false,useGraph);
 inclusiveSolution=gather(x2);wait(g);inclusiveSeconds=toc(timer);
 solution=gather(x);
 memoryBytes=before-g.AvailableMemory;
@@ -44,7 +45,7 @@ memoryBytes=before-g.AvailableMemory;
 zeroRhs=zeros(size(rhs),'like',rhs);
 zeroRhsTimes=zeros(6,1);applyOnlyTimes=zeros(6,1);
 for k=1:6
-    timer=tic;[z,zeroInfo]=radia_cuda_ams(s,zeroRhs,1e-9,2000,false);wait(g);zeroRhsTimes(k)=toc(timer);
+    timer=tic;[z,zeroInfo]=radia_cuda_ams(s,zeroRhs,1e-9,2000,false,useGraph);wait(g);zeroRhsTimes(k)=toc(timer);
     assert(zeroInfo.iterations==0,'Zero RHS unexpectedly ran PCG iterations');
     timer=tic;[applied,~]=radia_cuda_ams(s,rhs,1e-9,2000,true);wait(g);applyOnlyTimes(k)=toc(timer);
 end
