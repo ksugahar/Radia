@@ -1,3 +1,8 @@
+> Historical CPU MEX API reference. CPU MEX is unsupported and is not built or
+> shipped. The supported GPU route is `+radia/+gpu`; it does not use NGSolve
+> TaskManager. AMS setup backends are selected using validated CUDA/OpenMP
+> measurements, with a serial snapshot reference currently provided.
+
 > Historical source documentation. CPU Radia MEX is retired; this tree is owned
 > by radia-gpu, but only the selected CUDA PCG and LTspice payload is currently
 > distributed. See [supported GPU installation and API](../README.md).
@@ -23,8 +28,8 @@ operations.
 The coordinate-based AMS entry requires a real auxiliary matrix assembled on
 the supplied 3D `HCurl` space with `Order=1` and `NoGrads=true`. Use
 `Complex=true` to precondition a matching complex eddy-current matrix. AMS
-setup deliberately runs outside TaskManager; matrix application uses the
-existing native TaskManager path. COCR requires symmetric, not Hermitian,
+setup and matrix application descriptions below refer to the retired CPU MEX
+route. They do not describe the supported CUDA execution path. COCR requires symmetric, not Hermitian,
 systems and a compatible symmetric preconditioner.
 
 Any other space, including `Order=2` with `NoGrads=true`, raises

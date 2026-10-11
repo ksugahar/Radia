@@ -68,8 +68,19 @@ Build on 100 from a clean exact commit with `Build.ps1 -CudaMexOnly
 -RequireNativeProvenance` and `Build.ps1 -AmsCudaOnly
 -RequireNativeProvenance`, then run `python -m build --wheel` in this directory.
 mexcuda compilation and GPU execution never use NGSolve `TaskManager`.
-CUDA kernels and cuBLAS provide GPU parallelism; TaskManager belongs only
-to the separate CPU NGSolve setup/reference route.
+NGSolve preprocessing in this route does not use TaskManager. AMS setup may
+use CUDA or OpenMP when validated for the workload; compare numerical parity,
+transfer-inclusive timing and memory before selecting either backend. The
+current snapshot adapter uses a serial reference. CUDA kernels and cuBLAS
+provide GPU solve parallelism. Independent CPU Radia workflows retain their
+own threading policy.
+
+NGSolve's [device tutorial](https://docu.ngsolve.org/latest/i-tutorials/unit-5.5-cuda/poisson_cuda.html)
+uses `TaskManager` around `ngsolve.gpu` calls, but device operators are provided
+by `ngscuda`; [TaskManager itself](https://docu.ngsolve.org/latest/i-tutorials/appendix-taskmanager/taskmanager.html)
+manages host threads. Reconsider it for this route only with a demonstrated
+CUDA integration benefit and measured parity/performance, rather than assuming
+host parallel loops execute on the GPU.
 
 The wheel build requires the matching CUDA build receipt and binary hash.
 Canonical CUDA and MATLAB sources live in this package, under `native/` and

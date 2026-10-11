@@ -49,7 +49,8 @@ solve of the same manufactured HCurl curl-curl plus mass problem. The
 FP64 true residual must be at most 1e-6; this small run requests 1e-9.
 Results include iterations, first-call and warmed times, input upload,
 transfer-inclusive time, GPU memory observations, versions and hashes.
-CPU timings use caller-owned TaskManager. Invalid CSR, CPU input, NaN,
+New CPU reference timings use serial NGSolve without TaskManager. Historical
+JSON retains the threading configuration used when it was measured. Invalid CSR, CPU input, NaN,
 invalid smoother, nonconvergence, zero RHS and clear/reload checks run on
 the actual gateway. Only sanitized JSON evidence belongs in Git; generated
 HDF5 inputs, raw logs and binaries stay outside tracked source.

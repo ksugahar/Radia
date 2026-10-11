@@ -39,7 +39,7 @@ def main(args):
              '/DWIN32','/DWNT','/DMSVC_EXPRESS','/DMAX_SYS_DIM=3','/DLAPACK','/DNDEBUG',
              '/DNOMINMAX','/DNGS_PYTHON','/DNETGEN_PYTHON','/DNG_PYTHON','/DHAVE_NETGEN_SOURCES',
              '/DHAVE_STRUCT_TIMESPEC','/DPYBIND11_SIMPLE_GIL_MANAGEMENT','/DPy_NO_LINK_LIB',
-             '/DSPARSESOLV_USE_NGSOLVE_TASKMANAGER','/D_CRT_SECURE_NO_WARNINGS',
+             '/DSPARSESOLV_SERIAL_AMS_SETUP','/D_CRT_SECURE_NO_WARNINGS',
              f'/I{net / "include"}',f'/I{net / "include/include"}',f'/I{sysconfig.get_path("include")}',
              f'/I{root / "src/ext/sparsesolv/include"}',f'/Fo{obj}',str(source),'/link',f'/OUT:{binary}',
              f'/IMPLIB:{out / "_radia_ams_snapshot.lib"}',f'/PDB:{out / "_radia_ams_snapshot.pdb"}',

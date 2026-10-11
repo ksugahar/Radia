@@ -395,7 +395,9 @@ public:
         setup_workers_ = 0;
 
         {
+#ifndef SPARSESOLV_SERIAL_AMS_SETUP
         ngcore::RegionTaskManager tasks;
+#endif
 
         // Level 0: finest level
         Level lev0;
@@ -513,7 +515,9 @@ public:
             throw std::invalid_argument("CompactAMG::Refresh: matrix dimension changed");
         if (levels_.empty()) { mat_ = mat; Setup(); return; }
         {
+#ifndef SPARSESOLV_SERIAL_AMS_SETUP
         ngcore::RegionTaskManager tasks;
+#endif
         auto& fine = levels_[0];
         // fine.A carries the previous matrix pattern (a BC-modified copy or
         // the previous matrix itself).
@@ -558,7 +562,9 @@ public:
             return false;
         bool coarsest_changed = false;
         {
+#ifndef SPARSESOLV_SERIAL_AMS_SETUP
         ngcore::RegionTaskManager tasks;
+#endif
         std::vector<char> flags = changed;
         for (size_t l = 0; l < levels_.size(); l++) {
             auto& lev = levels_[l];
@@ -1305,7 +1311,9 @@ private:
     }
 
     void MirrorLevels() {
-        ngcore::RegionTaskManager tasks;  // called after the coarse factorization, outside its region
+#ifndef SPARSESOLV_SERIAL_AMS_SETUP
+        ngcore::RegionTaskManager tasks;
+#endif
         for (auto& lev : levels_) {
             if (mixed_precision_) MirrorValues(*lev.A, lev.values_f);
             else std::vector<float>().swap(lev.values_f);

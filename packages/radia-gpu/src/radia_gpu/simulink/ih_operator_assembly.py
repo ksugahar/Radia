@@ -39,17 +39,13 @@ from radia.ih_thermal_operators import ThermalOperators
 
 
 def _assemble_thermal_operators(workpiece, heat_flux_W_per_m2, options):
-    from ngsolve import TaskManager
     from radia.ih_thermal_operators import _assemble_thermal_operators as assemble
-    with TaskManager():
-        return assemble(workpiece, heat_flux_W_per_m2, options)
+    return assemble(workpiece, heat_flux_W_per_m2, options)
 
 
 def _export_fields(*args, **kwargs):
-    from ngsolve import TaskManager
     from radia.ih_thermal_operators import _export_fields as export
-    with TaskManager():
-        return export(*args, **kwargs)
+    return export(*args, **kwargs)
 
 
 CONFIG_SCHEMA = "radia.ih.simulink.native_sfunction.v1"
