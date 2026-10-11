@@ -6,20 +6,16 @@ that gap for ``pre-push``: it sends the candidate commit delta as a Git bundle
 to mdx, checks it out in an isolated temporary worktree, and runs the
 deterministic fast gates there.
 
-Runner availability is checked at admission, including explicit host selection.
-A host-local OS lock protects the shared preflight repository and environment;
-it is not a reservation in GitHub Actions' scheduler.
-
-Optional RADIA_PREFLIGHT_SSH_ALIAS maps runner labels to SSH config aliases
-using comma-separated label=alias entries. Unset keeps label-based connections;
-a configured mapping must cover the selected runner. Connection failures abort.
+The consolidated mdx compute host is reached directly over SSH, without GitHub
+runner registration. A host-local OS lock protects the shared preflight repo
+and environment; running compute jobs reject admission before setup.
+RADIA_PREFLIGHT_SSH_ALIAS may map mdx to an alternate SSH config alias.
 """
 
 from __future__ import annotations
 
 import argparse
 import base64
-import json
 import os
 from pathlib import Path
 import re
@@ -33,17 +29,8 @@ ROOT = Path(__file__).resolve().parents[1]
 ZERO = "0" * 40
 
 
-def select_idle_host(runners: list[dict], requested: str = "auto") -> str:
-    for host in (("mdx1", "mdx2") if requested == "auto" else (requested,)):
-        for runner in runners:
-            labels = {label["name"] for label in runner.get("labels", [])}
-            if {"mdx", host} <= labels and runner.get("status") == "online" and not runner.get("busy", True):
-                return host
-    raise RuntimeError("No idle mdx1/mdx2 CI runner is available; retry after CI finishes")
-
-
 def resolve_ssh_destination(host: str, mapping: str | None = None) -> str:
-    """Resolve transport only; never change the selected GitHub runner."""
+    """Resolve transport only; never change the selected compute host."""
     if mapping is None:
         mapping = os.environ.get("RADIA_PREFLIGHT_SSH_ALIAS", "")
     if not mapping.strip():
@@ -52,13 +39,13 @@ def resolve_ssh_destination(host: str, mapping: str | None = None) -> str:
     for entry in mapping.split(","):
         label, separator, alias = entry.strip().partition("=")
         label, alias = label.strip(), alias.strip()
-        if (not separator or label not in ("mdx1", "mdx2")
+        if (not separator or label != "mdx"
                 or label in aliases
                 or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", alias) is None):
             raise RuntimeError("Invalid RADIA_PREFLIGHT_SSH_ALIAS mapping")
         aliases[label] = alias
     if host not in aliases:
-        raise RuntimeError(f"RADIA_PREFLIGHT_SSH_ALIAS has no mapping for selected runner {host}")
+        raise RuntimeError(f"RADIA_PREFLIGHT_SSH_ALIAS has no mapping for selected host {host}")
     return aliases[host]
 
 
@@ -118,15 +105,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--base", required=True, help="remote SHA before the push")
     parser.add_argument("--head", required=True, help="local candidate SHA")
     parser.add_argument(
-        "--host", default=os.environ.get("RADIA_PREFLIGHT_HOST", "auto"),
-        choices=("auto", "mdx1", "mdx2"),
-        help="Select an idle mdx runner, or explicitly choose mdx1/mdx2",
+        "--host", default=os.environ.get("RADIA_PREFLIGHT_HOST", "mdx"),
+        choices=("mdx",),
+        help="Use the consolidated mdx compute host",
     )
     args = parser.parse_args(argv)
     try:
-        inventory = json.loads(subprocess.check_output(
-            ["gh", "api", "repos/ksugahar/Radia/actions/runners"], text=True))
-        args.host = select_idle_host(inventory["runners"], args.host)
         ssh_destination = resolve_ssh_destination(args.host)
     except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError) as exc:
         print(f"mdx preflight unavailable: {exc}", file=sys.stderr)
@@ -170,8 +154,8 @@ try {{
   # Fail fast on overlapping preflights; the OS releases the lock on process exit.
   $lock = [IO.File]::Open((Join-Path $root 'preflight.lock'),
     [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
-  if (Get-Process -Name Runner.Worker -ErrorAction SilentlyContinue) {{
-    throw 'CI became busy after host selection; retry after CI finishes'
+  if (Get-Process -Name python,pythonw,MATLAB,Runner.Worker -ErrorAction SilentlyContinue) {{
+    throw 'Compute host is occupied; retry after its jobs finish'
   }}
 if (-not (Test-Path -LiteralPath $git)) {{ throw "Git is unavailable at $git" }}
 if (-not (Test-Path -LiteralPath $system_python)) {{ throw "Python is unavailable at $system_python" }}

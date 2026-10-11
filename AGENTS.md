@@ -165,26 +165,22 @@ solver boundary is a checked `.vol` regardless of the creation route.
 
 **POLICY**: CI/builds use 100号機 with the `100` runner label.
 Isolate CI from user runtimes; LAB tests wheels.
-Heavy numerical validation remains on hibino or idle mdx/LAB; mdx keeps preflight/manual MATLAB diagnostics.
-Release-quad requires LAB, 100号機, mdx1, and mdx2 for the same release commit.
+mdx is the sole compute/SSH-preflight host; mdx1/mdx2/hibino are retired.
+Before the next solver release, migrate release-quad acceptance to the current fleet.
 Decision 2026-10-01: editable only on 100号機, in a dedicated local development
 venv for maintainers/students, separate from the release runtime. LAB/mdx use
 verified wheels.
 `cubit-mesh-export` uses its own release-dual to LAB and 100号機; the Radia
 solver release-quad must not install, uninstall, repoint, or version-gate it.
-Do not install or run Cubit on mdx1/mdx2 in either release lane. This boundary
+Do not install or run Cubit on mdx in either release lane. This boundary
 does not prohibit Cubit-independent checker unit tests in isolated CI
 environments. Existing installations are not silently removed.
 hibino remains a computation host and is not a release-quad acceptance target.
-Long solver work should use hibino first when it is available, mdx
-only when the mdx CI queue is idle.
+Long solver work uses mdx when idle; SSH preflight has priority.
 
-MATLAB-capable runner services must use a MATLAB-authenticated account and pass
-an Engine startup/calculation/shutdown check in the actual service context;
-SYSTEM and SSH success are not substitutes for that acceptance. Keep the
-diagnostic manual-only. mdx1 is scheduled for retirement in March 2027; migrate
-CI routing and release-quad targets together before retirement, following the
-`release-quad` skill and a user-approved replacement plan.
+MATLAB-capable runners use a MATLAB-authenticated account and pass an Engine
+startup/calculation/shutdown check in the actual runner context. SYSTEM and SSH
+success are not substitutes. Keep service diagnostics manual-only.
 
 CI scope begins at the independently released distribution boundary. The
 checked `radia_mcp.meta` catalog and each server's live `tools/list` response
@@ -215,27 +211,20 @@ LAB-owned mapped drives or the workgroup share. Do not restore that dependency.
 
 ### Compute Host Routing
 
-**POLICY (2026-09-28)**: Run solver-heavy validation, optimization, scaling,
-memory, and timing work on hibino when it is **already running and idle**.
-hibino is a SPOT instance; only a human starts it.
-Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes hibino hostname` — ICMP is
-blocked, so `ping` reports a false "down" — then check for a running python
-job, because hibino takes one heavy job at a time. Otherwise use an idle
-mdx1/mdx2 or LAB; check CI/jobs and available memory first. LAB is also an
-execution host for high-memory tests. mdx CI has priority; avoid concurrent
-timing jobs. Gmsh rendering needs a LAB/100 desktop, not mdx/ssh.
-Compute work must never delay or destabilize CI/preflight.
-Historical mdx measurements remain valid provenance. Publish OS, threads,
-versions/results; keep hosts/IPs/paths private.
-
-Measure speed; settle quadrature and threads first.
-hibino has 230 GB memory, no pagefile, no guaranteed speedup.
+**POLICY (2026-10-11)**: Use the consolidated `mdx` host for heavy solver,
+optimization, memory and timing work; mdx1/mdx2/hibino no longer exist as targets.
+Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes mdx hostname`, then check
+running jobs and available memory. Run one heavy job at a time; preflight has
+priority. Never stop another session's jobs. LAB may run high-memory tests when
+explicitly selected; Gmsh rendering needs a desktop.
+Measure speed; settle quadrature and threads first. Historical mdx measurements
+remain valid provenance. Publish OS, threads, versions/results; keep hosts/IPs/paths private.
 
 **POLICY**: 全てのベンチマークスクリプトは機械可読な JSON 結果を保存すること。
 
 ### Compute Scratch Cleanup
 
-**POLICY (2026-09-13)**: mdx1/mdx2/hibino jobs finish only after verified recovery
+**POLICY (2026-09-13)**: mdx jobs finish only after verified recovery
 and cleanup of their job-owned `C:\temp` inputs, outputs, staging, environments and helpers.
 - Recover JSON, logs, commands, runtime/source identity, hashes and non-reconstructible inputs
   to LAB durable storage. Numerical evidence goes in `validation_test/`, public demonstrations

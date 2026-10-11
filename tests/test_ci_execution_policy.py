@@ -317,9 +317,8 @@ def test_policy_twins_define_the_same_ci_notebook_contract():
     assert policy == section(claude)
     normalized = " ".join(policy.split())
     assert "with the `100` runner label" in normalized
-    assert "Heavy numerical validation remains on hibino or idle mdx/LAB" in normalized
-    assert "use hibino first when it is available" in normalized
-    assert "the mdx CI queue is idle" in normalized
+    assert "mdx is the sole compute/SSH-preflight host" in normalized
+    assert "Long solver work uses mdx when idle; SSH preflight has priority" in normalized
     assert "CI scope begins at the independently released distribution boundary" in normalized
     assert "each server's live `tools/list` response are the tool-discovery source of truth" in normalized
     assert "Generated tool inventory snapshots are local diagnostics" in normalized
@@ -353,29 +352,15 @@ def test_policy_twins_define_the_same_compute_host_routing():
     policy = routing_policy(agents)
     assert policy == routing_policy(claude)
     normalized = " ".join(policy.split())
-    # hibino is SPOT: agents may use it, but must not start it.
-    assert "already running and idle" in normalized
-    assert "SPOT instance" in normalized
+    assert "consolidated `mdx` host" in normalized
+    assert "mdx1/mdx2/hibino no longer exist as targets" in normalized
     assert "one heavy job at a time" in normalized
-    assert "an idle mdx1/mdx2 or LAB" in normalized
-    assert "check CI/jobs and available memory first" in normalized
-    assert "LAB is also an execution host for high-memory tests" in normalized
-    # ICMP is blocked on hibino, so ping reports a false "down".
+    assert "running jobs and available memory" in normalized
+    assert "preflight has priority" in normalized
+    assert "Never stop another session's jobs" in normalized
     assert "ConnectTimeout" in normalized
-    assert 'reports a false "down"' in normalized
     assert "Measure speed" in normalized
-    assert "Compute work must never delay or destabilize CI/preflight" in normalized
-    assert "Historical mdx measurements remain valid provenance" in normalized
-
-    for stale in (
-        "`mdx` by default",
-        "`mdx`を既定の静音計算ホスト",
-        "mdx = 静音計算ホスト",
-        # Unconditional "hibino first" reads as "start it if it is down".
-        "on hibino first",
-    ):
-        assert stale not in agents
-        assert stale not in claude
+    assert "remain valid provenance" in normalized
 
 
 def test_agent_policies_stay_compact_and_share_one_policy_body():
