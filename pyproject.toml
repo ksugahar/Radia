@@ -125,7 +125,6 @@ Issues = "https://github.com/ksugahar/Radia/issues"
 "ESRF Radia Page" = "https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia"
 
 [project.scripts]
-radia-ih-assemble = "radia.simulink.ih_operator_assembly:main"
 # Desktop PySide and notebook-workbench entry points are retired. Human
 # production operation uses the Radia Simulink library. Python/MCP use the
 # headless calc_*.py and DesignSpec contracts.

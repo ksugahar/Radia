@@ -23,10 +23,19 @@ Add the reported directory to MATLAB's path. MATLAB R2026a, Parallel Computing
 Toolbox, an NVIDIA GPU and a compatible NVIDIA driver are external requirements.
 Python delivers and verifies the MATLAB payload; it does not execute GPU solves.
 The Windows x64 binary contains sm_75/sm_80 code and compute_80 PTX.
-RTX 5000 acceptance does not certify A100 scaling.
+Develop and build `radia-gpu` on 100. Final numerical acceptance compares against
+Python/NGSolve on mdx. Formal GPU performance
+evaluation uses the mdx A100 when it is online; record source/runtime versions,
+artifact hashes and machine-readable results. CPU-only mdx execution verifies
+the reference calculation, not CUDA execution. RTX 5000 installation acceptance
+does not certify A100 scaling.
+Cubit mesh export is tested separately on 100 and LAB/102. NGSolve validation
+starts by checking and loading an exported `.vol` with its versioned label
+contract; it does not require Cubit on the NGSolve host.
 
 Deployment targets are 100 (build and RTX 5000 acceptance) and A100, excluding
-102. A100 is not always running: record its acceptance as pending while offline,
+102. The 102 host tests `radia` and `radia-mcp` without installing `radia-gpu`.
+A100 is not always running: record its acceptance as pending while offline,
 then validate the same artifact hash when available. Do not treat an offline
 target as a successful test.
 

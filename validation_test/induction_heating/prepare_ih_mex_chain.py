@@ -18,9 +18,9 @@ import radia
 
 ROOT = Path(__file__).resolve().parents[2]
 radia.__path__.insert(0, str(ROOT/'src/radia'))
-import radia.simulink
+import radia_gpu.simulink
 radia.simulink.__path__.insert(0, str(ROOT/'src/radia/simulink'))
-from radia.simulink.ih_operator_assembly import IHOperatorAssemblyOptions, _assemble_thermal_operators
+from radia_gpu.simulink.ih_operator_assembly import IHOperatorAssemblyOptions, _assemble_thermal_operators
 sys.path.insert(0, str(ROOT/'src/radia/panels'))
 import calc_inductance as calc
 
@@ -80,7 +80,7 @@ def run(out, bore):
         assembled_power_W=thermal.heat_power_W,bore_m=bore,nodes=fes.ndof,
         source_sha256={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest()
             for p in [Path(__file__), ROOT/'src/radia/panels/calc_inductance.py',
-                      ROOT/'src/radia/simulink/ih_operator_assembly.py',
+                      ROOT/'packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py',
                       ROOT/'src/radia/bem_sibc_solver.py', ROOT/'src/radia/bem_loop_extension.py',
                       ROOT/'src/radia/workpiece_surface.py']},
         scope='coarse in-memory volume; real weak BEM and production thermal assembly; no CAD/VOL gate')

@@ -104,8 +104,8 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 - GPU: `radia-gpu` uses MATLAB mexcuda for performance; ships optional Simulink/LTspice adapters, no external products.
 - Choose VS/CUDA by target MATLAB mexcuda support. Verify upgrades; never override unsupported compilers.
 - No implicit CPU/Python fallback. Measure host setup and CPU solves separately.
-- Deploy to 100 (build/RTX 5000) and A100, never 102. Offline A100 stays pending; verify the same artifact hash when available.
-- Require Python CPU parity and validation JSON per GPU feature; Poisson does not certify ICCG/AMS/HDiv-MMM.
+- Develop/build radia-gpu on 100; final validation uses NGSolve on mdx, with CUDA execution/timing on its online A100. Never deploy to 102.
+- Record parity, artifact hashes and validation JSON; offline A100 stays pending. Poisson does not certify ICCG/AMS/HDiv-MMM.
 
 ### MATLAB And Simulink
 
@@ -174,18 +174,18 @@ solver boundary is a checked `.vol` regardless of the creation route.
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
 **POLICY**: CI/builds use 100号機 with the `100` runner label.
-Isolate CI from user runtimes; LAB tests wheels.
-LAB owns distribution acceptance and SSH preflight; mdx is reserved for computation-time evaluation; mdx1/mdx2/hibino are retired.
+Isolate CI from user runtimes. LAB/102 tests radia and radia-mcp wheels without radia-gpu.
+LAB owns SSH preflight; mdx validates radia-gpu against NGSolve and evaluates timing. mdx1/mdx2/hibino are retired.
 Before the next solver release, migrate release-quad acceptance to the current fleet.
 Decision 2026-10-01: editable only on 100号機, in a dedicated local development
 venv for maintainers/students, separate from the release runtime. LAB/mdx use
 verified wheels.
-`cubit-mesh-export` uses its own release-dual to LAB and 100号機; the Radia
-solver release-quad must not install, uninstall, repoint, or version-gate it.
+`cubit-mesh-export` is independently tested on 100 and LAB/102. NGSolve hosts start from checked exported .vol files, without Cubit.
+Solver releases must not install, uninstall, repoint, or version-gate the exporter.
 Do not install or run Cubit on mdx in either release lane. This boundary
 does not prohibit Cubit-independent checker unit tests in isolated CI
 environments. Existing installations are not silently removed.
-Distribution tests run on LAB; mdx runs timing evaluations only, without Cubit.
+CPU/MCP distribution tests run on LAB/102; mdx GPU/NGSolve validation runs without Cubit.
 
 MATLAB-capable runners use a MATLAB-authenticated account and pass an Engine
 startup/calculation/shutdown check in the actual runner context. SYSTEM and SSH

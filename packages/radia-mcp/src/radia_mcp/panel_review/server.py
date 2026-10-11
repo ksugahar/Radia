@@ -62,7 +62,7 @@ def panel_review(topic: str = "overview") -> str:
 # ============================================================
 
 @mcp.prompt()
-def review_a_panel(panel_path: str = "matlab/radia_simulink_library.slx") -> str:
+def review_a_panel(panel_path: str = "packages/radia-gpu/matlab/radia_simulink_library.slx") -> str:
     """Run a thorough review of a Radia application block."""
     return (
         f"Please run a thorough Simulink application-block review for: {panel_path}\n\n"

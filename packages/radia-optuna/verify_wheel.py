@@ -86,7 +86,7 @@ def _is_windows_x64_pe(payload: bytes) -> bool:
 
 
 def _source_payloads(source_manifest: dict[str, object]) -> dict[str, Path]:
-    matlab_root = REPO_ROOT / "matlab"
+    matlab_root = REPO_ROOT / "packages/radia-optuna/matlab"
     payloads = {
         str(PACKAGE_PREFIX / path.name): path
         for path in (PACKAGE_ROOT / "src" / "radia_optuna").iterdir()

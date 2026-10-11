@@ -10,82 +10,29 @@ assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
 
 
-def test_every_python_module_has_a_checked_matlab_classification():
+def test_every_python_module_has_an_explicit_cpu_ownership_classification():
     result = MODULE.audit(ROOT)
     assert result["ok"], result["errors"]
-    assert result["classified_file_count"] == result["python_file_count"]
-    for module, owner in [
-        ("picard_acceleration.py", "picardAcceleration"),
-        ("electromagnet_validation.py", "electromagnetValidation"),
-        ("esrf_examples.py", "esrfExamples"),
-        ("static_electromagnet.py", "staticElectromagnet"),
-        ("meshed_current.py", "meshedCurrent"),
-    ]:
-        entry = next(item for item in result["assignments"] if item["python"] == module)
-        assert entry["classification"] == "python-fallback"
-        assert entry["matlab"] == [f"matlab/+radia/+python/{owner}.m"]
-    assert result["counts"]["native-mex"] >= 4
-    assert result["counts"]["python-fallback"] >= 80
-    assert "acoustic-python" in result["python_fallback_families"]
-    ih_assembly = next(
-        item
-        for item in result["assignments"]
-        if item["python"] == "simulink/ih_operator_assembly.py"
-    )
-    assert ih_assembly == {
-        "python": "simulink/ih_operator_assembly.py",
-        "rule": "simulink-ih-operator-assembly",
-        "classification": "python-fallback",
-        "matlab": ["matlab/+radia/+simulink/assembleIHOperatorsFromGeometry.m", "matlab/+radia/+simulink/assembleIHPanelESIMFromGeometry.m"],
-    }
-    mmm_topology = next(
-        item
-        for item in result["assignments"]
-        if item["python"] == "mmm_topology.py"
-    )
-    assert mmm_topology == {
-        "python": "mmm_topology.py",
-        "rule": "mmm-topology-python",
-        "classification": "python-fallback",
-        "matlab": ["matlab/+radia/+python/mmmTopology.m"],
-    }
-    accelerator_validation = next(
-        item
-        for item in result["assignments"]
-        if item["python"] == "accelerator_field_validation.py"
-    )
-    assert accelerator_validation == {
-        "python": "accelerator_field_validation.py",
-        "rule": "accelerator-field-validation-python",
-        "classification": "python-fallback",
-        "matlab": ["matlab/+radia/+python/acceleratorFieldValidation.m"],
-    }
-    lamination = next(
-        item
-        for item in result["assignments"]
-        if item["python"] == "lamination.py"
-    )
-    assert lamination == {
-        "python": "lamination.py",
-        "rule": "lamination-python",
-        "classification": "python-fallback",
-        "matlab": ["matlab/+radia/+python/lamination.m"],
-    }
-    axifem = next(item for item in result["binary_extensions"] if item["python"] == "axifem.pyd")
-    assert axifem["classification"] == "native-mex"
-    assert axifem["status"] == "focused-native-commands"
-    assert axifem["native_commands"] == [
-        "axifem.q1_magnetic_element_matrices",
-        "axifem.q2_magnetic_element_matrices",
-    ]
-    backlog = result["native_promotion_backlog"]
-    assert [item["priority"] for item in backlog] == list(range(1, 8))
-    assert [item["family"] for item in backlog] == [
-        "axifem",
-        "vim-esim-ih",
-        "bem-peec-sibc",
-        "kelvin-dtn",
-        "acoustic-cq-bem-fsi",
-        "motor-maglev",
-        "coil-cad",
-    ]
+    assert result["classified_file_count"] == result["python_file_count"] > 0
+    assert all(item["classification"] == "cpu-python-only" and not item["matlab"]
+               for item in result["assignments"])
+    assert not any(item["python"].startswith(("simulink/", "ltspice/"))
+                   for item in result["assignments"])
+    assert all(item["classification"] == "cpu-python-only" for item in result["binary_extensions"])
+    assert [item["id"] for item in result["gpu_features"]] == ["csr-pcg"]
+
+
+def test_audit_rejects_reintroduced_cpu_mex_and_missing_gpu_source(tmp_path):
+    import json
+    target = tmp_path / "packages/radia-gpu/matlab/python_api_parity_manifest.json"
+    target.parent.mkdir(parents=True)
+    manifest = json.loads((ROOT / target.relative_to(tmp_path)).read_text())
+    manifest["cpu_mex_supported"] = True
+    manifest["gpu_features"][0]["source"] = "../outside.cu"
+    target.write_text(json.dumps(manifest))
+    (tmp_path / "src/radia").mkdir(parents=True)
+    (tmp_path / "src/radia/demo.py").write_text("pass")
+    result = MODULE.audit(tmp_path)
+    assert not result["ok"]
+    assert any("CPU MEX" in error for error in result["errors"])
+    assert any("escaping source" in error for error in result["errors"])

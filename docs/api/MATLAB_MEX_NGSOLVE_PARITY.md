@@ -11,7 +11,7 @@ build without Python support.
 
 The public top-level functions, underscore-prefixed numerical kernels, and
 pybind11 class members are compared against the command inventory in
-`src/matlab/radia_mex.cpp` during the MCP contract test. Mesh-plumbing helpers
+`packages/radia-optuna/native/optuna_mex.cpp` during the MCP contract test. Mesh-plumbing helpers
 and Python-only regression helpers are classified explicitly instead of being
 silently dropped from the count.
 
@@ -35,7 +35,7 @@ is never replaced by a call through `radia_mex` or a silent MATLAB substitute.
 
 Acoustic sphere and convolution-quadrature reference formulas deliberately do
 not count as native parity. They remain readable, independent SciPy and MATLAB
-implementations under `src/radia/acoustics` and `matlab/+radia/+acoustic` so
+implementations under `src/radia/acoustics` and `packages/radia-gpu/matlab/+radia/+acoustic` so
 they can validate the NGSolve/ngsolve.bem CQ-BEM and FSI routes without sharing
 a C++, pybind11, or MEX kernel with the solver under test.
 
@@ -342,7 +342,7 @@ Compatibility evidence is generated from the pinned version and checked in:
 
 - `tests/matlab/fixtures/optuna50_oracle.json`: differential behavior fixtures;
 - `tests/matlab/fixtures/optuna50_public_api.json`: upstream API inventory;
-- `matlab/optuna50_api_coverage.json`: mapped, verified, asserted and unresolved coverage;
+- `packages/radia-optuna/matlab/optuna50_api_coverage.json`: mapped, verified, asserted and unresolved coverage;
 - `tests/matlab/fixtures/optuna_test_manifest.json`: test classification and oracle ownership.
 
 Read the coverage record's `full_compatibility_complete` and its constructor

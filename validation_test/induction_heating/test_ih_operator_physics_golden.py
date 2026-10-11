@@ -70,7 +70,7 @@ def _assemble(tmp):
         WorkPlane,
     )
 
-    from radia.simulink import ih_operator_assembly as assembly
+    from radia_gpu.simulink import ih_operator_assembly as assembly
 
     shape = Box(Pnt(0, 0, 0), Pnt(0.01, 0.01, 0.01))
     shape.mat("workpiece")

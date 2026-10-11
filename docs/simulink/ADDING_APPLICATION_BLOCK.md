@@ -14,7 +14,7 @@ uses a masked Simulink block over the headless contract.
 Stage 1  application variable inventory
 Stage 2  src/radia/panels/calc_<topic>.py + src/radia/<topic>_design.py
 Stage 3  executed docs/<topic>/*.ipynb demonstration
-Stage 4  matlab/+radia/+simulink/* + matlab/radia_simulink_library.slx
+Stage 4  packages/radia-gpu/matlab/+radia/+simulink/* + packages/radia-gpu/matlab/radia_simulink_library.slx
 ```
 
 Do not jump from a scratch script to a block. Use the
@@ -157,10 +157,10 @@ mask, and fast numerical checks.
 
 ## Current References
 
-- `src/radia/simulink/application.py`: shared Python artifact runner.
-- `matlab/+radia/+simulink/runApplication.m`: MATLAB process adapter.
-- `matlab/+radia/+simulink/applicationSFunction.m`: rising-edge block runtime.
-- `matlab/+radia/+simulink/buildLibrary.m`: single-library builder.
+- `packages/radia-gpu/src/radia_gpu/simulink/application.py`: shared Python artifact runner.
+- `packages/radia-gpu/matlab/+radia/+simulink/runApplication.m`: MATLAB process adapter.
+- `packages/radia-gpu/matlab/+radia/+simulink/applicationSFunction.m`: rising-edge block runtime.
+- `packages/radia-gpu/matlab/+radia/+simulink/buildLibrary.m`: single-library builder.
 - `src/radia/panels/application_interface_manifest.json`: production states.
 
 ## Anti-Patterns

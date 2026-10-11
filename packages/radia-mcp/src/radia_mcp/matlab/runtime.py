@@ -107,7 +107,7 @@ def _radia_repo_root():
     candidates = [Path(configured)] if configured else []
     candidates.extend(HERE.resolve().parents)
     for candidate in candidates:
-        source = candidate / "src" / "matlab" / "radia_mex.cpp"
+        source = candidate / "packages/radia-optuna/native/optuna_mex.cpp"
         if source.is_file():
             return candidate, source
     return None, None
@@ -551,189 +551,42 @@ def _radia_mex_group(command):
 
 
 def matlab_radia_mex_contract(topic="all"):
-    """Return the shared Python/NGSolve/MATLAB MEX capability contract."""
+    """Describe supported GPU execution and the retired CPU MEX boundary."""
     topic = str(topic).lower().strip()
     allowed = {"all", "mex", "ngsolve", "optimization", "simulink", "limitations"}
     if topic not in allowed:
         raise ValueError(f"unknown topic: {topic}; available: {', '.join(sorted(allowed))}")
-
-    repo_root, source = _radia_repo_root()
-    commands = _radia_mex_commands()
+    root, _ = _radia_repo_root()
+    source = root / "packages/radia-gpu/native/radia_cuda_csr_pcg.cu" if root else None
     optuna_commands = _optuna_mex_commands()
-    pybind_names = _pybind_public_names()
-    pybind_command_names = [_pybind_command_name(name) for name in pybind_names]
-    pybind_missing = sorted(set(pybind_command_names) - set(commands))
-    all_top_level_names = _pybind_all_top_level_names()
-    internal_names = sorted(name for name in all_top_level_names if name.startswith("_"))
-    internal_unclassified = sorted(
-        set(internal_names)
-        - set(_PYBIND_INTERNAL_NUMERICAL_COMMANDS)
-        - set(_PYBIND_INTERNAL_EXCLUSIONS)
-    )
-    internal_missing = sorted({
-        command
-        for name in internal_names
-        for command in _PYBIND_INTERNAL_NUMERICAL_COMMANDS.get(name, ())
-        if command not in commands
-    })
-    class_surface = _pybind_class_surface()
-    class_relevant = sorted(
-        name for name in class_surface if name not in _PYBIND_CLASS_EXCLUSIONS
-    )
-    class_unmapped = sorted(
-        name for name in class_relevant if name not in _PYBIND_CLASS_COMMANDS
-    )
-    class_missing = sorted({
-        command
-        for name in class_relevant
-        for command in _PYBIND_CLASS_COMMANDS.get(name, ())
-        if command not in commands
-    })
-    class_covered = sum(
-        name in _PYBIND_CLASS_COMMANDS
-        and all(command in commands for command in _PYBIND_CLASS_COMMANDS[name])
-        for name in class_relevant
-    )
-    retired_unsafe_constructor_leaks = sorted(
-        name for name in _RETIRED_UNSAFE_CONSTRUCTORS
-        if name in commands or name.removeprefix("radia.") in pybind_names
-    )
-    retired_unsafe_c_abi_leaks = []
-    if repo_root is not None:
-        for relative_path in (
-            Path("src/lib/radentry.h"),
-            Path("src/lib/radentry.cpp"),
-            Path("src/lib/raddll.def"),
-        ):
-            candidate = repo_root / relative_path
-            if not candidate.is_file():
-                continue
-            candidate_text = candidate.read_text(encoding="utf-8", errors="ignore")
-            retired_unsafe_c_abi_leaks.extend(
-                f"{relative_path.as_posix()}:{symbol}"
-                for symbol in _RETIRED_UNSAFE_C_ABI_SYMBOLS
-                if re.search(rf"\b{re.escape(symbol)}\b", candidate_text)
-            )
-    retired_unsafe_c_abi_leaks.sort()
-    # Parity is a claim about inspected sources: with no command or pybind
-    # surface there is nothing to compare, which is never "complete".
-    parity_complete = bool(commands and pybind_names) and not (
-        pybind_missing or internal_missing or internal_unclassified
-        or class_missing or class_unmapped or retired_unsafe_constructor_leaks
-        or retired_unsafe_c_abi_leaks
-    )
-    radia_matlab_root = (repo_root / "matlab") if repo_root is not None else None
-    radia_package = (radia_matlab_root / "+radia") if radia_matlab_root is not None else None
-    matlab_functions = sorted(path.stem for path in radia_package.rglob("*.m")) if radia_package is not None and radia_package.is_dir() else []
-    optuna_package = (radia_package / "+optuna") if radia_package is not None else None
-    optuna_files = sorted(optuna_package.glob("*.m")) if optuna_package is not None and optuna_package.is_dir() else []
-    optuna_classes = sorted(
-        path.stem for path in optuna_files
-        if "classdef" in path.read_text(encoding="utf-8", errors="ignore")
-    )
-    optuna_functions = sorted(path.stem for path in optuna_files if path.stem not in optuna_classes)
-    optuna_health = matlab_optuna_health(str(repo_root) if repo_root is not None else "")
-    groups = Counter(_radia_mex_group(command) for command in commands)
-    mex_ready = bool(commands and source is not None)
-    base = {
-        "schema": "radia-mcp.matlab-radia-mex/v1",
-        "status": "ready" if mex_ready else "source_unavailable",
-        "parity_status": (
-            "complete_for_radia_pybind_numerics"
-            if parity_complete else "incomplete"
-        ),
-        "source_of_truth": "src/matlab/radia_mex.cpp: Commands()",
-        "mex_entrypoint": "radia_mex",
-        "command_count": len(commands),
-        "optuna_mex_entrypoint": "optuna_mex",
-        "optuna_mex_command_count": len(optuna_commands),
-        "optuna_mex_command_names": optuna_commands,
-        "command_groups": dict(sorted(groups.items())),
-        "command_names": commands,
-        "pybind_public_count": len(pybind_names),
-        "pybind_covered_count": len(pybind_command_names) - len(pybind_missing),
-        "pybind_missing": pybind_missing,
-        "retired_unsafe_constructors": list(_RETIRED_UNSAFE_CONSTRUCTORS),
-        "retired_unsafe_constructor_leaks": retired_unsafe_constructor_leaks,
-        "retired_unsafe_c_abi_symbols": list(_RETIRED_UNSAFE_C_ABI_SYMBOLS),
-        "retired_unsafe_c_abi_leaks": retired_unsafe_c_abi_leaks,
-        "pybind_internal_numerical_count": len(_PYBIND_INTERNAL_NUMERICAL_COMMANDS),
-        "pybind_internal_missing": internal_missing,
-        "pybind_internal_unclassified": internal_unclassified,
-        "pybind_internal_exclusions": dict(sorted(_PYBIND_INTERNAL_EXCLUSIONS.items())),
-        "pybind_class_surface_count": len(class_relevant),
-        "pybind_class_covered_count": class_covered,
-        "pybind_class_missing_commands": class_missing,
-        "pybind_class_unmapped": class_unmapped,
-        "pybind_class_exclusions": dict(sorted(_PYBIND_CLASS_EXCLUSIONS.items())),
-        "matlab_wrapper_count": len(matlab_functions),
-        "matlab_optuna_class_count": len(optuna_classes),
-        "matlab_optuna_function_count": len(optuna_functions),
-        "matlab_optuna_classes": optuna_classes,
-        "matlab_optuna_file_count": optuna_health.get("distribution", {}).get("matlab_file_count"),
-        "matlab_optuna_expected_file_count": optuna_health.get("distribution", {}).get("expected_matlab_file_count"),
-        "matlab_optuna_public_api": optuna_health.get("public_api"),
-        "matlab_optuna_distribution_health": optuna_health,
-        "interfaces": {
-            "python": "radia._radia_pybind and radia Python modules",
-            "matlab": "radia_mex owns Radia/NGSolve operations; optuna_mex independently owns optimization kernels and has no NGSolve, MKL, Radia-core, or Python dependency",
-            "ngsolve": "NGSolve owns meshes/spaces/transforms; MATLAB uses numeric/struct contracts",
-            "mcp": ["matlab_radia_mex_contract", "matlab_optuna_health", "matlab_optuna_oracle_plan", "matlab_optuna_benchmark_plan", "matlab_optuna_release_gate", "matlab_optuna_simulink_contract", "radia_usage", "ngsolve_usage"],
-        },
-        "ngsolve_boundary": {
-            "project_bridge_commands": [name for name in commands if name.startswith("ngsolve.") or name.startswith("hcurl.") or name.startswith("hdiv.")],
-            "numeric_field_and_matrix_boundary": ["ngsolve.space_info", "ngsolve.matrix_dump", "ngsolve.mesh.*", "ngsolve.fespace.*", "ngsolve.bilinear_form.*", "ngsolve.matrix.*", "ngsolve.grid_function.from_fespace", "ngsolve.linear_form.*", "ngsolve.coefficient_function.*", "ngsolve.grid_function.*", "ngsolve.vector.*", "hdiv.field_evaluator.*", "hdiv.planar_evaluator.*"],
-            "canonical_matlab_names": ["radia.ngsolve.space_info", "radia.ngsolve.matrix_dump", "radia.ngsolve.Mesh", "radia.ngsolve.FESpace", "radia.ngsolve.BilinearForm", "radia.ngsolve.Matrix", "radia.ngsolve.LinearForm", "radia.ngsolve.CoefficientFunction", "radia.ngsolve.GridFunction", "radia.ngsolve.Vector", "radia.ngsolve.hcurl_eddy_native_basis", "radia.ngsolve.hcurl_eddy_foster_model", "radia.hcurl.tet_reduced_gram"],
-            "full_external_ngsolve_api": "not duplicated; NGSolve remains the FE object owner",
-            "topology_deformation": "radia.ngsolve.Mesh setDeformation/unsetDeformation/trafoQuality use native VectorH1 and GetTrafo; MATLAB receives per-element Jacobian ratios and spectral condition numbers",
-        },
-        "verified_contract": {
-            "matlab_gate": "runtests('tests/matlab')",
-            "python_numerical_parity_gate": "runtests('tests/matlab/test_radia_ngsolve_parity.m')",
-            "ngsolve_python_mex_parity_gate": "runtests('tests/matlab/test_ngsolve_mex_pybind_parity.m')",
-            "ngsolve_python_mex_validation_case": "validation_test/ngsolve_integration/matlab_mex_native_case.json",
-            "acoustic_reference_validation_gate": "runtests('validation_test/acoustics/test_acoustic_reference.m')",
-            "axifem_python_mex_parity_gate": "runtests('tests/matlab/test_axifem_mex.m')",
-            "hcurl_topology_python_mex_parity_gate": "runtests('tests/matlab/test_hcurl_topology_optimization.m')",
-            "topology_two_level_gate": "runtests('tests/matlab/test_topology_optimization.m')",
-            "optuna_native_kernel_gate": "runtests('tests/matlab/test_radia_mex.m', Name={'test_radia_mex/testOptunaGatewaySeparation','test_radia_mex/testOptunaParetoRankCrowding','test_radia_mex/testOptunaParzenLogPdfKernels'})",
-            "optuna_table_gate": "runtests('tests/matlab/test_optuna_table.m')",
-            "optuna_simulink_block_gate": "runtests('tests/matlab/test_optuna_simulink_block.m')",
-            "optuna_distribution_health_gate": "matlab_optuna_health",
-            "optuna_differential_oracle_gate": "matlab_optuna_oracle_plan",
-            "optuna_performance_gate": "matlab_optuna_benchmark_plan -> matlab_optuna_release_gate",
-            "optuna_native_kernel_benchmark": "validation_test/optimization/results_matlab_optuna_mex_benchmark_20260806.json",
-            "optuna50_performance_benchmark": "validation_test/optimization/results_optuna50_paired_lab_20260908.json",
-            "optuna50_performance_benchmark_status": "recorded 2026-09-08 on LAB (sequential warmed scalar and grouped TPE; the file states its claim scope); not re-measured for this release.",
-            "runtime_probe": "radia.quickCheck()",
-            "native_build": "pwsh -ExecutionPolicy Bypass -File .\\Build.ps1 -MatlabMexOnly -Verbose",
-            "optuna_native_build": "pwsh -ExecutionPolicy Bypass -File .\\Build.ps1 -OptunaMexOnly",
-            "native_motor_family_artifact": "validation_test/radia_mcp/artifacts/annular_motor_dual_lane_v1/native_motor_angle_family.json",
-            "native_motor_family_artifact_status": "recorded 2026-10-03 (MATLAB R2026a Update 5) by native_motor_family_gate with the clean ad4d1c8f9 radia_mex build; 86 of 86 tests passed, and the source hashes in the artifact match this source tree.",
-            "native_motor_family_gate": "run('validation_test/radia_mcp/generate_motor_angle_family_mex_artifact.m')",
-            "openmp_runtime_policy": "radia.setup excludes foreign libiomp5md.dll directories from the MATLAB process PATH",
-        },
-        "limitations": [
-            "Python object identity is not shared with MATLAB; handles and numeric/struct snapshots are the boundary.",
-            "ObjMltExtPgn, ObjMltExtRtg, and ObjMltExtTri were deleted from Python, MATLAB, and the legacy C ABI; no compatibility shims remain.",
-            "Mesh-backed high-order NGSolve spaces remain NGSolve-owned; MATLAB receives assembled data or diagnostics. The native HCurl Foster builder projects M, curl-curl, and ports in C++ and returns a local diffusion Foster model, but it does not replace topology-aware VIM/BEM/SIBC assembly.",
-            "Python convenience modules are tracked separately by matlab/python_api_parity_manifest.json; native MEX coverage alone is not module-level parity.",
-            "MATLAB Optuna shared behavior is judged only against pinned optuna==5.0.0 fixtures; MATLAB-only table/MAT, Simulink, parallel, and MEX behavior is extension evidence, not upstream-parity evidence.",
-            "The native MEX target does not embed or launch Python; Python callback objects are rejected at the MEX boundary and numeric/handle equivalents are used instead. Full Python-DLL independence requires an NGSolve/Netgen build without Python support.",
-            "beam.orbit.track_reference_3d shares the rad_orbit::TrackReferenceOrbit3D kernel with the pybind route but drives Radia-object sources only; the HDiv iron evaluator stays a pybind-owned handle until an evaluator handle exists in the MEX registry.",
-        ],
-    }
     sections = {
-        "mex": {"command_count": len(commands), "command_groups": dict(sorted(groups.items())), "command_names": commands, "optuna_mex_command_count": len(optuna_commands), "optuna_mex_command_names": optuna_commands, "pybind_missing": pybind_missing, "pybind_internal_missing": internal_missing, "pybind_class_missing_commands": class_missing, "pybind_class_unmapped": class_unmapped},
-        "ngsolve": {"owner": "NGSolve", "matlab_boundary": "ngsolve.space_info, ngsolve.matrix_dump, persistent Mesh/FESpace/BilinearForm/Matrix/LinearForm handles, native CoefficientFunction/GridFunction handles, native HCurl response projection, and numeric HDiv field evaluators", "policy": "Use NGSolve for FE plumbing; exchange typed native handles, numeric matrices, vectors, fields, and metadata. Persistent forms expose built-in real/complex volume integrators, scalar CoefficientFunction-weighted volume and trace matrices, native CoefficientFunction volume and boundary RHS assembly in real/complex H1/HCurl/HDiv, and native sparse matvec/inverse operations; arbitrary callbacks and tensor-valued forms remain explicit gaps."},
-        "optimization": {"package": "radia.optuna", "native_gateway": "optuna_mex", "native_gateway_required": True, "native_command_count": len(optuna_commands), "classes": optuna_classes, "factory_functions": optuna_functions, "storage": "MAT-file containing readable MATLAB tables and CAE trial/failure artifacts", "native_kernels": _optuna_native_kernels(optuna_commands), "mcp_tool": "matlab_optuna_simulink_contract"},
-        "simulink": {"class": "radia.optuna.SimulinkRunner", "workflow": "SimulationInput -> sim/parsim -> score/constraints/validation/artifacts -> Study.tell or typed failure", "blocks": ["Radia/Applications/Induction Heating: readable Level-2 MATLAB Eddy and Thermal S-Functions backed by radia_mex handles, raw q/T fields, and IHMonitorBusV1", "radia.simulink.buildTeam28LiftModel", "radia.simulink.buildHCurlEddyFosterModel Block=radia-mex", "radia.simulink.buildMotorAngleFamilyModel", "Optimization/Optuna Study: start/cancel, four convenience outputs, and OptunaMonitorBusV1", "radia.simulink.buildOptunaBlock: advanced six-input/eighteen-output runtime"], "native_state_space_commands": ["simulink.state_space.create", "simulink.state_space.info", "simulink.state_space.output", "simulink.state_space.update", "simulink.state_space.step", "simulink.state_space.snapshot", "simulink.state_space.restore", "simulink.state_space.reset", "simulink.state_space.destroy"], "native_state_space_overloads": {"static": "create(A,B,C,D,x0); output(handle,u); update(handle,u)", "periodic_motor_family": "create(grid,period,A,B,C,D,Q,R,S,x0); output(handle,mechanical_angle,u) -> [linear_outputs; torque]; update(handle,mechanical_angle,u)", "standalone_debug": "step is the atomic output-plus-update probe", "sim_state": "snapshot/restore preserve native state for Simulink CustomSimState"}, "mcp_tool": "matlab_optuna_simulink_contract"},
-        "reinforcement_learning": {"package": "radia.rl", "workflow": "reset -> MEX/Radia step -> reward -> next observation", "adapter": "rlFunctionEnv when Reinforcement Learning Toolbox is installed"},
-        "limitations": {"items": base["limitations"]},
+        "mex": {"owner": "radia-gpu", "entrypoint": "radia_cuda_csr_pcg",
+                "matlab_entrypoint": "radia.gpu.csrPCG", "kernel": "CUDA FP64 CSR Jacobi-PCG",
+                "argument_contract": "GPU int32 CSR indices, GPU FP64 values/RHS/inverse diagonal, host tolerance/max iterations",
+                "native_build": "Build.ps1 -CudaMexOnly -RequireNativeProvenance"},
+        "ngsolve": {"owner": "radia", "cpu_execution": "Python/pybind11/NGSolve",
+                    "gpu_boundary": "Caller-assembled CSR operators; NGSolve retains FE ownership",
+                    "true_relative_residual_limit": 1e-6},
+        "optimization": {"owner": "radia-optuna", "entrypoint": "optuna_mex",
+                         "native_build": "Build.ps1 -OptunaMexOnly",
+                         "health_tool": "matlab_optuna_health"},
+        "simulink": {"owner": "radia-gpu", "builder": "radia.simulink.buildCudaPCGBlock",
+                     "adapter": "readable Level-2 MATLAB S-Function",
+                     "legacy_models": "Source-only until ported and validated; no CPU MEX support"},
+        "limitations": {"items": ["No CPU Radia MEX support or implicit CPU/Python solver fallback.",
+                                   "Poisson acceptance does not certify GPU AMS, ICCG or HDiv-MMM.",
+                                   "External MATLAB, Simulink, LTspice and NVIDIA products are not bundled.",
+                                   "Deploy radia-gpu to 100 and A100, never 102; unavailable A100 remains pending."]},
     }
-    base["topic"] = topic
-    base["topic_data"] = {"sections": sections} if topic == "all" else sections[topic]
-    return base
+    return {"schema": "radia-mcp.matlab-radia-mex/v2", "topic": topic,
+            "status": "source_available" if source and source.is_file() else "source_unavailable",
+            "runtime_checked": False, "cpu_mex_supported": False,
+            "parity_status": "CPU Python and GPU mexcuda are independently validated",
+            "source_of_truth": "packages/radia-gpu/native/radia_cuda_csr_pcg.cu",
+            "mex_entrypoint": "radia_cuda_csr_pcg", "command_count": 0, "command_names": [],
+            "optuna_mex_entrypoint": "optuna_mex", "optuna_mex_command_count": len(optuna_commands),
+            "optuna_mex_command_names": optuna_commands,
+            "topic_data": {"sections": sections} if topic == "all" else sections[topic]}
 
 
 def matlab_optuna_simulink_contract():
@@ -742,8 +595,8 @@ def matlab_optuna_simulink_contract():
     from .optuna_oracle import matlab_optuna_compatibility_contract
 
     upstream = matlab_optuna_compatibility_contract()
-    return {
-        "schema": "radia-mcp.matlab-optuna-simulink/v4",
+    result = {
+        "schema": "radia-mcp.matlab-optuna-simulink/v5",
         "status": "ready",
         "package": "radia.optuna",
         "distribution": "radia-optuna",
@@ -818,7 +671,7 @@ def matlab_optuna_simulink_contract():
         },
         "hcurl_eddy_foster": {
             "package": "radia.simulink",
-            "workflow": "NGSolve vim.ExportHCurlEddyFosterJSON -> MATLAB loadHCurlEddyFosterModel -> solveHCurlEddyFosterHarmonic/buildHCurlEddyFosterModel",
+            "workflow": "NGSolve radia_gpu.vim.ExportHCurlEddyFosterJSON -> MATLAB loadHCurlEddyFosterModel -> solveHCurlEddyFosterHarmonic/buildHCurlEddyFosterModel",
             "equation": "(R+sL)c=-sPi diagonalised by R v = lambda L v (V'LV=I): z_dot=-diag(lambda)z+Bm u, y=Bm'z, Bm=V'P, u=-di/dt.",
             "harmonic_solve": "diagonal modal solve z_j=-s(Bm i)_j/(s+lambda_j); no MEX kernel is required",
             "force": "Optional modal K(k,j,b) force operator: evaluateHCurlEddyFosterForce gives the phasor time average 0.5*real(K z conj(i)); the Simulink block outputs the instantaneous K*z(t)*i(t).",
@@ -997,11 +850,38 @@ def matlab_optuna_simulink_contract():
         "mcp_route": "matlab_optuna_mcp_route",
     }
 
+    # Historical domain models are not supported CPU MEX implementations.
+    # Preserve their descriptions as provenance, separate from the active surface.
+    historical = result["simulink_blocks"][:7]
+    result["simulink_blocks"] = result["simulink_blocks"][7:]
+    result["integration_owner"] = "radia-gpu"
+    result["runtime_checked"] = False
+    result["cpu_radia_mex_supported"] = False
+    result["legacy_domain_models"] = {
+        "status": "source-only; unsupported CPU Radia MEX",
+        "distribution": "radia-gpu",
+        "descriptions": historical,
+    }
+    for key in ("team28", "hcurl_eddy_foster", "cad_topology_optimization"):
+        result[key]["distribution"] = "radia-gpu"
+        result[key]["support_status"] = "historical source; not accepted by radia-gpu release"
+    native_family = result["hcurl_eddy_foster"]["native_motor_angle_family"]
+    native_family["status"] = "unsupported-cpu-mex"
+    native_family["evidence_status"] = (
+        "recorded historical CPU MEX result; source relocation and old results "
+        "do not certify current CUDA support or current source hashes"
+    )
+    topology = result["cad_topology_optimization"]
+    topology["abe_element_fill"]["status"] = "unsupported-cpu-mex"
+    topology["adjoint_optimization"]["status"] = "source-only; CUDA acceptance pending"
+    topology["sheet_metal"]["hcurl_eddy_bubble"]["status"] = "unsupported-cpu-mex"
+    return result
+
 
 def matlab_simulink_library_contract():
     """Return the installation and compatibility contract for Radia blocks."""
-    return {
-        "schema": "radia-mcp.matlab-simulink-library/v3",
+    result = {
+        "schema": "radia-mcp.matlab-simulink-library/v4",
         "status": "ready",
         "library": "radia_simulink_library",
         "browser_name": "Radia",
@@ -1028,7 +908,7 @@ def matlab_simulink_library_contract():
             "Optimization/Optuna Monitor",
         ],
         "applications": {
-            "runner": "radia.simulink.application",
+            "runner": "radia_gpu.simulink.application",
             "matlab_entry_point": "radia.simulink.runApplication",
             "config_writer": "radia.simulink.writeApplicationConfig",
             "config_schema": "radia.simulink.application_config.v1",
@@ -1187,3 +1067,20 @@ def matlab_simulink_library_contract():
         },
         "execute_with": "official MATLAB MCP evaluate_matlab_code",
     }
+    result["status"] = "source-only"
+    result["distribution"] = "radia-gpu"
+    result["runtime_checked"] = False
+    result["cpu_radia_mex_supported"] = False
+    result["historical_library"] = {
+        "library": result.pop("library"),
+        "registration_code": result.pop("registration_code"),
+        "blocks": result.pop("blocks"),
+        "status": "source-only; not shipped as an accepted GPU application library",
+    }
+    result["blocks"] = ["CUDA CSR PCG", "LTspice Circuit"]
+    result["registration_code"] = []
+    result["builders"] = ["radia.simulink.buildCudaPCGBlock", "radia.simulink.buildLTspiceBlock"]
+    result["applications"]["support_status"] = "historical source; migration/acceptance pending"
+    result["applications"]["mex_policy"] = "CPU Radia MEX unsupported; require explicit validated CUDA kernels"
+    result["circuit_field_coupling"]["support_status"] = "historical source; CPU MEX unsupported"
+    return result

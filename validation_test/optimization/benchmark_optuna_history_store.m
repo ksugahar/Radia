@@ -12,7 +12,7 @@ end
 
 here=fileparts(mfilename("fullpath"));
 root=fileparts(fileparts(here));
-addpath(fullfile(root,"matlab"));
+addpath(fullfile(root,'packages','radia-optuna','matlab'));
 warmup=buildStudy(32,options.ReportedSteps);
 warmup.get_trials();
 

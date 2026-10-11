@@ -11,7 +11,7 @@ from setuptools.command.build_py import build_py as _build_py
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = PACKAGE_ROOT.parents[1]
-MATLAB_ROOT = REPO_ROOT / "matlab"
+MATLAB_ROOT = PACKAGE_ROOT / "matlab"
 OPTUNA_SOURCE = MATLAB_ROOT / "+radia" / "+optuna"
 MEX_SOURCE = MATLAB_ROOT / "optuna_mex.mexw64"
 CONTRACT_SOURCES = (

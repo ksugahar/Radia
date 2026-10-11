@@ -54,7 +54,7 @@ from radia.maglev.mixed_galerkin import (
     cad_topology_total_area,
     edge_moment_matrix,
 )
-from radia.maglev.simulink import build_state_space_mimo
+from radia.maglev.state_space import build_state_space_mimo
 
 from _validation_output import validation_output
 

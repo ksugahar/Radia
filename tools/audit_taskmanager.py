@@ -9,7 +9,7 @@ Two checks repo-wide:
    composable building blocks; the caller wraps them.
 
 2. **Caller modules** -- ``src/radia/panels/calc_*.py``,
-   ``src/radia/simulink/*_operator_assembly.py``,
+   ``packages/radia-gpu/src/radia_gpu/simulink/*_operator_assembly.py``,
    ``validation_test/**.py``, ``tests/**.py``, and Python helpers under
    ``docs/`` -- that contain any
    NGSolve-parallel operation (``.Assemble()``,
@@ -57,14 +57,14 @@ ROOT = Path(__file__).absolute().parent.parent
 HELPER_GLOBS = ["src/radia/**/*.py"]
 HELPER_EXCLUDE = [
     "src/radia/panels/calc_*.py",
-    "src/radia/simulink/*_operator_assembly.py",
+    "packages/radia-gpu/src/radia_gpu/simulink/*_operator_assembly.py",
     "**/__pycache__/**",
 ]
 
 # Paths classified as CALLERS (MUST wrap when doing parallel ops).
 CALLER_GLOBS = [
     "src/radia/panels/calc_*.py",
-    "src/radia/simulink/*_operator_assembly.py",
+    "packages/radia-gpu/src/radia_gpu/simulink/*_operator_assembly.py",
     "validation_test/**/*.py",
     "tests/**/*.py",
     "docs/**/*.py",
@@ -130,7 +130,7 @@ def _gather_files() -> list[Path]:
     command = ["git", "grep", "--untracked", "-Il", "-F"]
     for token in _CANDIDATE_TOKENS:
         command.extend(("-e", token))
-    command.extend(("--", "src/radia", "validation_test", "tests", "docs"))
+    command.extend(("--", "src/radia", "packages/radia-gpu/src/radia_gpu/simulink", "validation_test", "tests", "docs"))
     proc = subprocess.run(
         command,
         cwd=ROOT,
@@ -185,10 +185,7 @@ def _classify(path: Path) -> str | None:
         and name.endswith(".py")
     )
     is_simulink_assembly_caller = (
-        len(parts) >= 4
-        and parts[0] == "src"
-        and parts[1] == "radia"
-        and parts[2] == "simulink"
+        rel.startswith("packages/radia-gpu/src/radia_gpu/simulink/")
         and name.endswith("_operator_assembly.py")
     )
     is_lane_caller = (

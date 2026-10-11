@@ -5,7 +5,7 @@ import numpy as np
 import ngsolve as ng
 import pytest
 from netgen.occ import Box, OCCGeometry, Pnt
-from radia.simulink import ih_operator_assembly as assembly
+from radia_gpu.simulink import ih_operator_assembly as assembly
 from radia.panels.calc_inductance import _extract_bnd_only_inline
 from radia.surface_impedance import read_panel_impedance
 

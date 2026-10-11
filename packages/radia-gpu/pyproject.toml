@@ -19,6 +19,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
+coupling = ["radia>=5.3.0"]
 ltspice = ["schemdraw>=0.18"]
 test = ["pytest>=8", "build>=1.2", "schemdraw>=0.18", "mcp>=1.21.1,<2"]
 
@@ -27,6 +28,7 @@ Repository = "https://github.com/ksugahar/Radia"
 Documentation = "https://github.com/ksugahar/Radia/tree/main/packages/radia-gpu"
 
 [project.scripts]
+radia-ih-assemble = "radia_gpu.simulink.ih_operator_assembly:main"
 radia-gpu-path = "radia_gpu.cli:path_main"
 radia-gpu-doctor = "radia_gpu.cli:doctor_main"
 
@@ -41,3 +43,5 @@ where = ["src"]
 [tool.setuptools.package-data]
 radia_gpu = ["manifest.json"]
 "radia_gpu.ltspice" = ["LICENSE", "py.typed"]
+
+"radia_gpu.simulink" = ["contracts/*.json"]

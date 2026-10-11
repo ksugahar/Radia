@@ -14,7 +14,7 @@ from typing import Mapping
 
 import numpy as np
 
-from ._eddy_foster import HCurlEddyFosterModel
+from radia.vim._eddy_foster import HCurlEddyFosterModel
 
 
 def _real_finite_array(value, name: str) -> np.ndarray:

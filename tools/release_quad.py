@@ -342,7 +342,7 @@ def _simulink_state_path(package_sha256: str) -> Path:
 
 def _simulink_mex_sha256(manifest: dict) -> str:
     matches = [row.get("sha256") for row in manifest.get("files", [])
-               if row.get("path") == "matlab/radia_mex.mexw64"]
+               if row.get("path") == "packages/radia-gpu/matlab/radia_mex.mexw64"]
     if len(matches) != 1 or not isinstance(matches[0], str) or len(matches[0]) != 64:
         raise ValueError("Simulink manifest must identify exactly one radia_mex hash")
     return matches[0].lower()

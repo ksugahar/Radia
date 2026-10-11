@@ -25,259 +25,26 @@ def _expected_optuna_health_errors() -> list[str]:
     """
     root = Path(__file__).resolve().parents[2]
     coverage = json.loads(
-        (root / "matlab" / "optuna50_api_coverage.json").read_text(encoding="utf-8")
+        (root / "packages/radia-optuna/matlab" / "optuna50_api_coverage.json").read_text(encoding="utf-8")
     )
     if coverage["full_compatibility_complete"]:
         return []
     return ["required public API scope is not completely evidence-mapped"]
 
 
-def test_radia_mex_contract_reads_the_cpp_command_inventory():
-    contract = matlab_radia_mex_contract("mex")
-
-    assert contract["status"] == "ready"
-    # Verify the actual general-gateway table, not a hand-maintained count.
-    root = Path(__file__).resolve().parents[2]
-    source = (root / "src/matlab/radia_mex.cpp").read_text(encoding="utf-8")
-    command_function = re.search(
-        r"mxArray\s*\*\s*Commands\s*\(\s*\)\s*\{(.*?)#\s*endif\b",
-        source,
-        re.DOTALL,
-    )
-    assert command_function, "Commands() preprocessor table was not found"
-    names_array = re.search(
-        r"#\s*else\b.*?names\s*\[\s*\]\s*=\s*\{(.*?)\}\s*;",
-        command_function.group(1),
-        re.DOTALL,
-    )
-    assert names_array, "General Radia command table was not found"
-    expected_names = re.findall(r'"([a-zA-Z0-9_.]+)"', names_array.group(1))
-    assert expected_names
-    assert contract["command_names"] == expected_names
-    assert contract["command_count"] == len(set(expected_names))
-    assert not any(command.startswith("optuna.") for command in contract["command_names"])
-    assert contract["matlab_wrapper_count"] >= 133
-    expected_errors = _expected_optuna_health_errors()
-    assert contract["matlab_optuna_distribution_health"]["errors"] == (
-        expected_errors
-    )
-    assert contract["matlab_optuna_distribution_health"]["ok"] is (
-        not expected_errors
-    )
-    assert contract["matlab_optuna_file_count"] == (
-        contract["matlab_optuna_expected_file_count"]
-    )
-    root = Path(__file__).resolve().parents[2]
-    coverage = json.loads(
-        (root / "matlab" / "optuna50_api_coverage.json").read_text(
-            encoding="utf-8"
-        )
-    )
-    public_count = len(coverage["entries"])
-    assert contract["matlab_optuna_public_api"] == {
-        "entry_count": public_count,
-        "present_count": public_count,
-        "missing_count": 0,
-        "verified_count": coverage["oracle_verified_count"],
-        "asserted_count": coverage["oracle_asserted_count"],
-        "partial_count": 0,
-        "unmapped_count": 0,
-        "required_count": coverage["required_entry_count"],
-        "required_present_count": coverage["required_entry_count"],
-        "required_verified_count": coverage["required_oracle_mapped_count"],
-        "required_asserted_count": coverage["required_oracle_asserted_count"],
-        "required_unmapped_count": coverage["required_oracle_unmapped_count"],
-        "complete": coverage["full_compatibility_complete"],
-    }
+def test_radia_mex_contract_routes_only_to_supported_gpu_owner():
+    contract = matlab_radia_mex_contract("all")
+    assert contract["schema"] == "radia-mcp.matlab-radia-mex/v2"
+    assert contract["cpu_mex_supported"] is False
+    assert contract["runtime_checked"] is False
+    assert contract["command_names"] == []
+    assert contract["mex_entrypoint"] == "radia_cuda_csr_pcg"
     assert contract["optuna_mex_command_count"] == 21
-    assert contract["matlab_optuna_class_count"] >= 92
-    assert contract["matlab_optuna_function_count"] >= 85
-    assert {
-        "TPESampler",
-        "CmaEsSampler",
-        "GPSampler",
-        "NSGAIISampler",
-        "NSGAIIISampler",
-        "BruteForceSampler",
-        "LiveMonitor",
-    }.issubset(
-        contract["matlab_optuna_classes"]
-    )
-    assert "ngsolve.matrix_dump" in contract["command_names"]
-    assert "ngsolve.mesh.set_deformation" in contract["command_names"]
-    assert "ngsolve.mesh.trafo_quality" in contract["command_names"]
-    assert "ngsolve.fespace.free_dofs" in contract["command_names"]
-    assert "ngsolve.matrix.matvec_into" in contract["command_names"]
-    assert "ngsolve.coefficient_function.component" in contract["command_names"]
-    assert "simulink.state_space.output" in contract["command_names"]
-    assert "simulink.state_space.update" in contract["command_names"]
-    assert "simulink.state_space.snapshot" in contract["command_names"]
-    assert "simulink.state_space.restore" in contract["command_names"]
-    optuna_commands = {
-        "optuna.pareto.rank_crowding",
-        "optuna.parzen.log_pdf_numerical",
-        "optuna.parzen.log_pdf_categorical",
-        "optuna.tpe.best_numerical",
-        "optuna.tpe.best_joint",
-        "optuna.tpe.best_numerical_observations",
-        "optuna.tpe.best_joint_observations",
-        "optuna.tpe.history.reset",
-        "optuna.tpe.history.append_complete",
-        "optuna.tpe.best_grouped_history",
-        "optuna.sobol.points",
-        "optuna.random_state.create",
-        "optuna.random_state.rand",
-        "optuna.random_state.randn",
-        "optuna.random_state.randi",
-        "optuna.random_state.randperm",
-        "optuna.random_state.snapshot",
-        "optuna.random_state.restore",
-        "optuna.random_state.destroy",
-    }
-    assert optuna_commands.issubset(contract["optuna_mex_command_names"])
-    assert not any(name.startswith("optuna.") for name in contract["command_names"])
-    assert {
-        "ih.eddy.create",
-        "ih.eddy.output",
-        "ih.eddy.destroy",
-        "ih.thermal.create",
-        "ih.thermal.output",
-        "ih.thermal.update",
-        "ih.thermal.reset",
-        "ih.thermal.destroy",
-    }.issubset(contract["command_names"])
-    assert "hdiv.field_evaluator.from_cloud" in contract["command_names"]
-    assert "hacapk.charge_gram.configure_charge_map" in contract["command_names"]
-    assert "hacapk.charge_gram.set_image_rotations" in contract["command_names"]
-    assert "hacapk.charge_gram.configured_linear_material_element_blocks" in contract["command_names"]
-    assert "hacapk.charge_gram.configured_linear_material_candidate_clusters" in contract["command_names"]
-    assert "hlu.set_trunc_tol" in contract["command_names"]
-    # The native Lie-map pipeline and 3D reference-orbit tracker remain on the
-    # regular Radia gateway after the Optuna commands are split out.
-    assert {
-        "beam.lie.map_tensors_spoly",
-        "beam.lie.dragt_finn_factorize",
-        "beam.lie.apply_dragt_finn_batch",
-        "beam.orbit.track_reference_3d",
-        "beam.orbit.track_reference_to_plane",
-    }.issubset(contract["command_names"])
-    assert {
-        "topopt.abe_element_fill_plan",
-        "beam.orbit.track_reference_to_plane",
-        "hacapk.charge_gram.configured_field_values_shape_derivative",
-        "hacapk.charge_gram.configured_active_hmatrix_stats",
-        "hdiv.field_evaluator.field_gradient",
-    }.issubset(contract["command_names"])
-    assert contract["command_groups"]["radia-core"] >= 70
-    assert "radia.ObjTetrahedronCurrent" in contract["command_names"]
-    assert contract["pybind_public_count"] == 100
-    assert contract["pybind_covered_count"] == 100
-    assert contract["pybind_missing"] == []
-    assert contract["pybind_internal_numerical_count"] == 21
-    assert contract["pybind_internal_missing"] == []
-    assert contract["pybind_internal_unclassified"] == []
-    assert contract["command_groups"].get("acoustic", 0) == 0
-    assert not any(
-        name.startswith("acoustic.") for name in contract["command_names"]
-    )
-    assert contract["command_groups"]["axifem"] == 2
-    assert "axifem.q1_magnetic_element_matrices" in contract["command_names"]
-    assert "axifem.q2_magnetic_element_matrices" in contract["command_names"]
-    # _ChargeGramHMatrix.charge_sigma (the sigma-normalization diagnostic
-    # from the roundoff-amplification fix) is EXCLUDED with a reason, and
-    # exclusions leave the relevant surface. The raw Rayleigh/leaf diagnostics
-    # and bounded exact-dense fallback are private validation aids, while cyclic
-    # image setup and source memoization expand the covered stateful surface to 128 entries, including
-    # field-gradient and configured directional-Schur/shape-derivative bindings.
-    assert contract["pybind_class_surface_count"] == 128
-    assert "ngsolve.radia_field.set_memoize" in contract["command_names"]
-    assert ("_ChargeGramHMatrix.charge_sigma"
-            in contract["pybind_class_exclusions"])
-    assert (
-        "_ChargeGramHMatrix._reduce_configured_candidate_directional_schur"
-        in contract["pybind_class_exclusions"]
-    )
-    for member in (
-        "raw_symmetric_quadratic_form",
-        "symmetric_leaf_quadratics",
-        "build_exact_dense_normalized_gram",
-        "uses_exact_dense_normalized_gram",
-    ):
-        assert f"_ChargeGramHMatrix.{member}" in contract["pybind_class_exclusions"]
-    for name in (
-        "KelvinRadiaVectorPotential",
-        "KelvinRadiaFluxDensity",
-        "KelvinRadiaFieldStrength",
-        "KelvinRadiaScalarPotential",
-    ):
-        assert f"{name}.__binding__" in contract["pybind_class_exclusions"]
-        assert f"{name}.__init__" in contract["pybind_class_exclusions"]
-    assert contract["pybind_class_covered_count"] == contract["pybind_class_surface_count"]
-    assert contract["pybind_class_missing_commands"] == []
-    assert contract["pybind_class_unmapped"] == []
-    assert contract["parity_status"] == "complete_for_radia_pybind_numerics"
-    assert contract["retired_unsafe_constructor_leaks"] == []
-    assert contract["retired_unsafe_c_abi_leaks"] == []
-    for name in contract["retired_unsafe_constructors"]:
-        assert name not in contract["command_names"]
-    assert "ngsolve.matrix_dump" in contract["ngsolve_boundary"]["project_bridge_commands"]
-    assert "radia.ngsolve.space_info" in contract["ngsolve_boundary"]["canonical_matlab_names"]
-    assert "radia.ngsolve.matrix_dump" in contract["ngsolve_boundary"]["canonical_matlab_names"]
-    assert contract["verified_contract"]["python_numerical_parity_gate"] == (
-        "runtests('tests/matlab/test_radia_ngsolve_parity.m')"
-    )
-    assert contract["verified_contract"]["ngsolve_python_mex_parity_gate"] == (
-        "runtests('tests/matlab/test_ngsolve_mex_pybind_parity.m')"
-    )
-    assert (Path(__file__).resolve().parents[2] /
-            contract["verified_contract"]["ngsolve_python_mex_validation_case"]).is_file()
-    assert contract["verified_contract"]["acoustic_reference_validation_gate"] == (
-        "runtests('validation_test/acoustics/test_acoustic_reference.m')"
-    )
-    assert contract["verified_contract"]["axifem_python_mex_parity_gate"] == (
-        "runtests('tests/matlab/test_axifem_mex.m')"
-    )
-    assert contract["verified_contract"]["hcurl_topology_python_mex_parity_gate"] == (
-        "runtests('tests/matlab/test_hcurl_topology_optimization.m')"
-    )
-    assert contract["verified_contract"]["topology_two_level_gate"] == (
-        "runtests('tests/matlab/test_topology_optimization.m')"
-    )
-    assert "testOptunaParzenLogPdfKernels" in contract["verified_contract"][
-        "optuna_native_kernel_gate"
-    ]
-    assert contract["verified_contract"]["optuna_native_kernel_benchmark"].endswith(
-        "results_matlab_optuna_mex_benchmark_20260806.json"
-    )
-    assert contract["verified_contract"]["optuna50_performance_benchmark"].endswith(
-        "results_optuna50_paired_lab_20260908.json"
-    )
-    root = Path(__file__).resolve().parents[2]
-    cited = [
-        value
-        for value in contract["verified_contract"].values()
-        if isinstance(value, str)
-        and value.startswith("validation_test/")
-        and value.endswith(".json")
-    ]
-    assert cited
-    assert [path for path in cited if not (root / path).is_file()] == []
-    assert contract["verified_contract"]["native_motor_family_artifact"].endswith(
-        "native_motor_angle_family.json"
-    )
-    assert contract["verified_contract"]["native_motor_family_artifact_status"].startswith("recorded ")
-    assert (
-        "not re-measured" in contract["verified_contract"]["optuna50_performance_benchmark_status"]
-    )
-    assert "libiomp5md.dll" in contract["verified_contract"][
-        "openmp_runtime_policy"
-    ]
-    all_contract = matlab_radia_mex_contract("all")
-    family = all_contract["topic_data"]["sections"]["simulink"][
-        "native_state_space_overloads"
-    ]["periodic_motor_family"]
-    assert "mechanical_angle" in family
-    assert "torque" in family
+    sections = contract["topic_data"]["sections"]
+    assert sections["mex"]["owner"] == "radia-gpu"
+    assert sections["ngsolve"]["cpu_execution"] == "Python/pybind11/NGSolve"
+    assert sections["simulink"]["owner"] == "radia-gpu"
+    assert "No CPU Radia MEX" in sections["limitations"]["items"][0]
 
 
 def test_acoustic_validation_references_stay_out_of_native_gateways(monkeypatch):
@@ -288,13 +55,12 @@ def test_acoustic_validation_references_stay_out_of_native_gateways(monkeypatch)
     assert not any(
         command.startswith("acoustic.") for command in contract["command_names"]
     )
-    assert contract["verified_contract"]["acoustic_reference_validation_gate"] == (
-        "runtests('validation_test/acoustics/test_acoustic_reference.m')"
-    )
+    assert contract["cpu_mex_supported"] is False
+    assert contract["runtime_checked"] is False
     assert "_Acoustic" not in (
         root / "src" / "lib" / "radia_pybind.cpp"
     ).read_text(encoding="utf-8")
-    for path in sorted((root / "matlab" / "+radia" / "+acoustic").glob("*.m")):
+    for path in sorted((root / "packages/radia-gpu/matlab" / "+radia" / "+acoustic").glob("*.m")):
         source = path.read_text(encoding="utf-8")
         assert "callMex" not in source
         assert "radia_mex" not in source
@@ -317,7 +83,7 @@ def test_optuna_simulink_contract_is_table_backed():
     assert "ObjectiveTable" in contract["tables"]
     assert "ConstraintTable" in contract["tables"]
     assert "SamplerStateTable" in contract["tables"]
-    assert contract["schema"].endswith("/v4")
+    assert contract["schema"].endswith("/v5")
     assert contract["upstream_oracle"]["ok"] is True
     assert contract["upstream_oracle"]["oracle_versions"]["optuna"] == "5.0.0"
     assert contract["native_acceleration"]["upstream_python_gp_python_per_trial"] is True
@@ -348,16 +114,19 @@ def test_optuna_simulink_contract_is_table_backed():
     assert "parsim" in contract["parallel_trials"]["simulink"]
     assert "parfeval" in contract["parallel_trials"]["ltspice"]
     assert "complex" in contract["ltspice_integrated_workflow"]["raw"]
-    assert len(contract["simulink_blocks"]) == 10
+    assert len(contract["simulink_blocks"]) == 3
+    assert contract["cpu_radia_mex_supported"] is False
+    assert contract["runtime_checked"] is False
+    historical_blocks = contract["legacy_domain_models"]["descriptions"]
     assert "radia_optuna_teaching.slx" in contract["simulink_blocks"][-1]
-    assert "distributed-field kernels" in contract["simulink_blocks"][0]
-    assert "IHMonitorBusV1" in contract["simulink_blocks"][0]
+    assert "distributed-field kernels" in historical_blocks[0]
+    assert "IHMonitorBusV1" in historical_blocks[0]
     optuna_block = next(
         item for item in contract["simulink_blocks"]
         if "OptunaMonitorBusV1" in item
     )
     assert "six-input/eighteen-output" in optuna_block
-    assert "LUT and lumped IH builders are removed" in contract["simulink_blocks"][2]
+    assert "LUT and lumped IH builders are removed" in historical_blocks[2]
     assert contract["team28"]["frequency_hz"] == 50
     team28 = contract["team28"]
     assert team28["validated_dynamic_scope"] == (
@@ -391,11 +160,9 @@ def test_optuna_simulink_contract_is_table_backed():
     )
     assert native_family["recorded_tests"] == artifact["test_count"]
     assert artifact["passed_count"] == artifact["test_count"]
-    assert native_family["evidence_status"].startswith("recorded ")
-    assert (
-        f"{artifact['passed_count']} of {artifact['test_count']} tests passed"
-        in native_family["evidence_status"]
-    )
+    assert native_family["evidence_status"].startswith("recorded historical")
+    assert native_family["status"] == "unsupported-cpu-mex"
+    assert "do not certify current CUDA support" in native_family["evidence_status"]
     assert contract["reinforcement_learning_workflow"]
     topology = contract["cad_topology_optimization"]
     assert topology["sensitivity_policy"].startswith("No cell-wise finite differences")
@@ -406,7 +173,7 @@ def test_optuna_simulink_contract_is_table_backed():
     ]
     assert "existing hex mesh" in topology["boundary"]
     adjoint = topology["adjoint_optimization"]
-    assert adjoint["status"] == "ready"
+    assert adjoint["status"] == "source-only; CUDA acceptance pending"
     assert "radia.topopt.optimizeAdjoint" in adjoint["matlab_api"]
     assert "radia.topopt.optimizeHCurlActivationAdjoint" in adjoint["matlab_api"]
     assert "never" in adjoint["finite_difference_policy"]
@@ -419,7 +186,7 @@ def test_optuna_simulink_contract_is_table_backed():
         "Only behavior mapped"
     )
     hcurl = topology["sheet_metal"]["hcurl_eddy_bubble"]
-    assert hcurl["status"] == "native-mex-ready"
+    assert hcurl["status"] == "unsupported-cpu-mex"
     assert hcurl["python_boundary"] == "none in the MATLAB optimization loop"
     assert "radia.topopt.optimizeAdjoint" in hcurl["matlab_api"]
     assert "radia.topopt.optimizeHCurlActivationAdjoint" in hcurl["matlab_api"]
@@ -432,61 +199,13 @@ def test_optuna_simulink_contract_is_table_backed():
     }.issubset(hcurl["mex_commands"])
 
 
-def test_root_readme_publishes_native_topology_mex_parity():
-    contract = matlab_radia_mex_contract("mex")
+def test_root_readme_publishes_separate_cpu_and_gpu_ownership():
     root = Path(__file__).resolve().parents[2]
-    readme = " ".join((root / "README.md").read_text(encoding="utf-8").split())
-    assert "HCurl-based reduced and topology workflows" in readme
-    assert "HCurl multifrequency topology gradients" in readme
-
-    matlab_readme = " ".join(
-        (root / "matlab" / "README.md").read_text(encoding="utf-8").split()
-    )
-    assert f"{contract['pybind_public_count']} mapped public top-level names" in matlab_readme
-    assert f"{contract['pybind_internal_numerical_count']} underscore-prefixed numerical kernels" in matlab_readme
-    assert f"{contract['pybind_class_surface_count']} stateful class members" in matlab_readme
-    mapped_count = (
-        contract["pybind_public_count"]
-        + contract["pybind_internal_numerical_count"]
-        + contract["pybind_class_surface_count"]
-    )
-    assert (
-        f"All {mapped_count} mapped entries are covered by the current "
-        f"{contract['command_count']}-command gateway"
-    ) in matlab_readme
-    assert "21-command `optuna_mex`" in matlab_readme
-
-    parity_doc = (root / "docs" / "api" / "MATLAB_MEX_NGSOLVE_PARITY.md").read_text(
-        encoding="utf-8"
-    )
-    assert (
-        f"| Stateful pybind11 class surface | {contract['pybind_class_covered_count']} / "
-        f"{contract['pybind_class_surface_count']} covered |"
-    ) in parity_doc
-    assert (
-        f"| Public top-level pybind11 names | {contract['pybind_public_count']} |"
-        in parity_doc
-    )
-    assert (
-        f"| Covered mapped MEX names | {contract['pybind_covered_count']} |"
-        in parity_doc
-    )
-    assert (
-        f"| Radia MEX gateway commands | {contract['command_count']} |"
-        in parity_doc
-    )
-    assert (
-        f"| Optuna MEX gateway commands | {contract['optuna_mex_command_count']} |"
-        in parity_doc
-    )
-    assert (
-        f"| MATLAB Optuna classes | {contract['matlab_optuna_class_count']} |"
-        in parity_doc
-    )
-    assert (
-        f"| MATLAB Optuna functions | {contract['matlab_optuna_function_count']} |"
-        in parity_doc
-    )
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    assert "CPU execution belongs to `radia`" in readme
+    assert "GPU execution belongs to `radia-gpu`" in readme
+    assert "CPU Radia MEX is unsupported" in readme
+    assert "Build.ps1 -MatlabMexOnly" not in readme
 
 
 def test_optuna_quality_helpers_are_exported_from_the_matlab_package():
@@ -529,7 +248,7 @@ def test_optuna_compatibility_and_oracle_audit_are_checked():
     assert closure["surface_present_count"] == 812
     assert closure["surface_missing_count"] == 0
     coverage = json.loads((Path(__file__).resolve().parents[2] /
-        "matlab/optuna50_api_coverage.json").read_text(encoding="utf-8"))
+        "packages/radia-optuna/matlab/optuna50_api_coverage.json").read_text(encoding="utf-8"))
     entries = coverage["entries"]
     required = [entry for entry in entries if entry["scope"] == "required"]
     assert closure["oracle_verified_count"] == sum(e["oracle_status"] == "verified" for e in entries)

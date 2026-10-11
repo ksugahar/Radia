@@ -30,7 +30,7 @@ def verify(path: Path) -> dict:
         if metadata["Name"] != "radia-gpu" or metadata.get_all("Requires-Dist"):
             # Test extras are allowed but runtime solver dependencies are not.
             requirements = metadata.get_all("Requires-Dist",[])
-            if metadata["Name"] != "radia-gpu" or any(not any(f'extra == "{extra}"' in r for extra in ('test', 'ltspice')) for r in requirements):
+            if metadata["Name"] != "radia-gpu" or any(not any(f'extra == "{extra}"' in r for extra in ('test', 'ltspice', 'coupling')) for r in requirements):
                 raise ValueError("Unexpected GPU distribution identity/dependency")
         manifest = json.loads(archive.read("radia_gpu/manifest.json"))
         if manifest.get("schema") != "radia.gpu.distribution.v1" or manifest["version"] != metadata["Version"]:

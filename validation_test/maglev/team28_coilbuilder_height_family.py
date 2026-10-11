@@ -7,6 +7,7 @@ without a hidden state transfer and can drive an averaged mechanical plant.
 """
 
 from __future__ import annotations
+import radia_gpu.vim as gpu_vim
 
 import argparse
 import json
@@ -173,7 +174,7 @@ def run_family(
         positions_m=offsets_m,
         models=tuple(snapshot["model"] for snapshot in snapshots),
     )
-    vim.ExportHCurlEddyFosterFamilyJSON(
+    gpu_vim.ExportHCurlEddyFosterFamilyJSON(
         snapshots,
         family_file,
         metadata={

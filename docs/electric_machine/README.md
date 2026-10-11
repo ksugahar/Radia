@@ -56,7 +56,7 @@ It combines angle-periodic phase and reduced eddy-current ports with the
 HDiv-MMM hysteresis restart contract, rigid-rotation `v x B` flux, cogging
 coenergy, skew, end-winding corrections, temperature-dependent resistance,
 thermal state, and an implicit electromechanical step.  The model bundle writer
-`radia.motor_rom_export.SaveMotorROMBundle` emits NPZ, MAT, JSON, a MATLAB
+`radia_gpu.motor_rom_export.SaveMotorROMBundle` emits NPZ, MAT, JSON, a MATLAB
 loader, and an FMI model-variable fragment; `src/core/rad_motor_rom_c.h`
 provides the deterministic C ABI used by external motion solvers.  The
 Simulink boundary in `src/radia/simulink/` builds a fixed-step C-MEX

@@ -108,9 +108,9 @@ def sha256(path: Path) -> str:
 
 
 def version() -> str:
-    value = (ROOT / "matlab" / "IH_VERSION").read_text(encoding="ascii").strip()
+    value = (ROOT / "packages/radia-gpu/matlab" / "IH_VERSION").read_text(encoding="ascii").strip()
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?", value):
-        raise RuntimeError("matlab/IH_VERSION is not a valid release version")
+        raise RuntimeError("packages/radia-gpu/matlab/IH_VERSION is not a valid release version")
     return value
 
 
@@ -195,7 +195,7 @@ def build_package(
     *,
     full_library: bool = False,
 ) -> tuple[Path, Path]:
-    matlab_source = ROOT / "matlab"
+    matlab_source = ROOT / "packages/radia-gpu/matlab"
     required_models = FULL_REQUIRED_MODELS if full_library else REQUIRED_MODELS
     required_mex = FULL_REQUIRED_MEX if full_library else REQUIRED_MEX
     required_sfunctions = (
@@ -288,9 +288,9 @@ def build_package(
                 "application-specific" if full_library else "preassembled"
             ),
             "entry_model": (
-                "matlab/radia_simulink_library.slx"
+                "packages/radia-gpu/matlab/radia_simulink_library.slx"
                 if full_library
-                else "matlab/radia_ih.slx"
+                else "packages/radia-gpu/matlab/radia_ih.slx"
             ),
             "required_mex": [f"matlab/{name}" for name in required_mex],
             "required_matlab_sfunctions": [
@@ -325,7 +325,7 @@ def build_package(
                 "Optimization",
             ]
             manifest["verification_entry"] = (
-                "matlab/verify_radia_simulink_release.m"
+                "packages/radia-gpu/matlab/verify_radia_simulink_release.m"
             )
             manifest["feature_toolbox_requirements"] = {
                 "adjoint_topology_optimization": ["Optimization Toolbox"],
@@ -352,7 +352,7 @@ def build_package(
         required = {
             "manifest.json",
             f"matlab/{RADIA_MEX_PROVENANCE}",
-            "matlab/verify_radia_mex_provenance.py",
+            "packages/radia-gpu/matlab/verify_radia_mex_provenance.py",
             *(f"matlab/{name}" for name in required_mex),
             *(f"matlab/{name}" for name in required_models),
         }
@@ -363,8 +363,8 @@ def build_package(
         if full_library:
             required.update(
                 {
-                    "matlab/install_radia_simulink.m",
-                    "matlab/verify_radia_simulink_release.m",
+                    "packages/radia-gpu/matlab/install_radia_simulink.m",
+                    "packages/radia-gpu/matlab/verify_radia_simulink_release.m",
                 }
             )
         missing = sorted(required - names)

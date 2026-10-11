@@ -18,118 +18,118 @@ from pathlib import Path, PurePosixPath
 
 REQUIRED_MEMBERS = {
     "manifest.json",
-    "matlab/IH_VERSION",
-    "matlab/install_radia_ih.m",
-    "matlab/radia_ih.slx",
-    "matlab/radia_ih_eddy_sfun.m",
-    "matlab/radia_ih_thermal_sfun.m",
-    "matlab/radia_ih_monitor_sfun.m",
-    "matlab/verify_radia_ih_release.m",
-    "matlab/+radia/setup.m",
-    "matlab/+radia/+internal/expectedNGSolveVersion.m",
-    "matlab/+radia/+internal/pythonProcessPath.m",
-    "matlab/+radia/+simulink/ihEddySFunction.m",
-    "matlab/+radia/+simulink/ihThermalSFunction.m",
-    "matlab/+radia/+simulink/ihMonitorSFunction.m",
-    "matlab/+radia/+simulink/addIHMonitorBus.m",
-    "matlab/+radia/+simulink/addIHMonitorDashboard.m",
-    "matlab/+radia/+simulink/makeMonitorHeaderBusObject.m",
-    "matlab/+radia/+simulink/makeIHMonitorBusObject.m",
-    "matlab/+radia/+simulink/validateIHNativeConfig.m",
-    "matlab/radia_mex.mexw64",
-    "matlab/radia_mex.mexw64.build.json",
-    "matlab/verify_radia_mex_provenance.py",
-    "matlab/mkl_avx2.3.dll",
-    "matlab/mkl_core.3.dll",
-    "matlab/mkl_def.3.dll",
-    "matlab/mkl_sequential.3.dll",
-    "matlab/mkl_rt.3.dll",
+    "packages/radia-gpu/matlab/IH_VERSION",
+    "packages/radia-gpu/matlab/install_radia_ih.m",
+    "packages/radia-gpu/matlab/radia_ih.slx",
+    "packages/radia-gpu/matlab/radia_ih_eddy_sfun.m",
+    "packages/radia-gpu/matlab/radia_ih_thermal_sfun.m",
+    "packages/radia-gpu/matlab/radia_ih_monitor_sfun.m",
+    "packages/radia-gpu/matlab/verify_radia_ih_release.m",
+    "packages/radia-gpu/matlab/+radia/setup.m",
+    "packages/radia-gpu/matlab/+radia/+internal/expectedNGSolveVersion.m",
+    "packages/radia-gpu/matlab/+radia/+internal/pythonProcessPath.m",
+    "packages/radia-gpu/matlab/+radia/+simulink/ihEddySFunction.m",
+    "packages/radia-gpu/matlab/+radia/+simulink/ihThermalSFunction.m",
+    "packages/radia-gpu/matlab/+radia/+simulink/ihMonitorSFunction.m",
+    "packages/radia-gpu/matlab/+radia/+simulink/addIHMonitorBus.m",
+    "packages/radia-gpu/matlab/+radia/+simulink/addIHMonitorDashboard.m",
+    "packages/radia-optuna/matlab/+radia/+simulink/makeMonitorHeaderBusObject.m",
+    "packages/radia-gpu/matlab/+radia/+simulink/makeIHMonitorBusObject.m",
+    "packages/radia-gpu/matlab/+radia/+simulink/validateIHNativeConfig.m",
+    "packages/radia-gpu/matlab/radia_mex.mexw64",
+    "packages/radia-gpu/matlab/radia_mex.mexw64.build.json",
+    "packages/radia-gpu/matlab/verify_radia_mex_provenance.py",
+    "packages/radia-gpu/matlab/mkl_avx2.3.dll",
+    "packages/radia-gpu/matlab/mkl_core.3.dll",
+    "packages/radia-gpu/matlab/mkl_def.3.dll",
+    "packages/radia-gpu/matlab/mkl_sequential.3.dll",
+    "packages/radia-gpu/matlab/mkl_rt.3.dll",
 }
 PREVIEW_V2_REQUIRED_MEMBERS = (
     REQUIRED_MEMBERS
     - {
-        "matlab/+radia/+internal/expectedNGSolveVersion.m",
-        "matlab/mkl_sequential.3.dll",
-        "matlab/radia_mex.mexw64.build.json",
-        "matlab/verify_radia_mex_provenance.py",
+        "packages/radia-gpu/matlab/+radia/+internal/expectedNGSolveVersion.m",
+        "packages/radia-gpu/matlab/mkl_sequential.3.dll",
+        "packages/radia-gpu/matlab/radia_mex.mexw64.build.json",
+        "packages/radia-gpu/matlab/verify_radia_mex_provenance.py",
     }
-    | {"matlab/mkl_intel_thread.3.dll"}
+    | {"packages/radia-gpu/matlab/mkl_intel_thread.3.dll"}
 )
 LEGACY_REQUIRED_MEMBERS = {
     "manifest.json",
-    "matlab/IH_VERSION",
-    "matlab/install_radia_ih.m",
-    "matlab/radia_ih.slx",
-    "matlab/verify_radia_ih_release.m",
-    "matlab/+radia/+simulink/validateIHNativeConfig.m",
-    "matlab/radia_ih_eddy_sfun.mexw64",
-    "matlab/radia_ih_thermal_sfun.mexw64",
+    "packages/radia-gpu/matlab/IH_VERSION",
+    "packages/radia-gpu/matlab/install_radia_ih.m",
+    "packages/radia-gpu/matlab/radia_ih.slx",
+    "packages/radia-gpu/matlab/verify_radia_ih_release.m",
+    "packages/radia-gpu/matlab/+radia/+simulink/validateIHNativeConfig.m",
+    "packages/radia-gpu/matlab/radia_ih_eddy_sfun.mexw64",
+    "packages/radia-gpu/matlab/radia_ih_thermal_sfun.mexw64",
 }
 FULL_REQUIRED_MEMBERS_V2 = {
     "manifest.json",
-    "matlab/install_radia_simulink.m",
-    "matlab/verify_radia_simulink_release.m",
-    "matlab/radia_simulink_library.slx",
-    "matlab/radia_electromagnet.slx",
-    "matlab/radia_ih.slx",
-    "matlab/radia_maglev.slx",
-    "matlab/radia_nonlinear_reactor.slx",
-    "matlab/radia_streamfunction_optimization.slx",
-    "matlab/radia_mex.mexw64",
-    "matlab/radia_ih_eddy_sfun.m",
-    "matlab/radia_ih_thermal_sfun.m",
-    "matlab/radia_ih_monitor_sfun.m",
-    "matlab/radia_nonlinear_reactor_sfun.m",
-    "matlab/radia_streamfunction_optuna_sfun.m",
-    "matlab/+radia/+simulink/ihEddySFunction.m",
-    "matlab/+radia/+simulink/ihThermalSFunction.m",
-    "matlab/+radia/+simulink/ihMonitorSFunction.m",
-    "matlab/+radia/+simulink/addIHMonitorBus.m",
-    "matlab/+radia/+simulink/addIHMonitorDashboard.m",
-    "matlab/+radia/+simulink/makeMonitorHeaderBusObject.m",
-    "matlab/+radia/+simulink/makeIHMonitorBusObject.m",
-    "matlab/+radia/+simulink/makeOptunaMonitorBusObject.m",
-    "matlab/+radia/+simulink/nonlinearReactorSFunction.m",
-    "matlab/+radia/+simulink/streamFunctionOptunaSFunction.m",
-    "matlab/+radia/+simulink/resolveStreamFunctionOptunaObjects.m",
-    "matlab/+radia/+stream/OptunaRunner.m",
-    "matlab/+radia/+simulink/makeNonlinearReactorConfig.m",
-    "matlab/+radia/+simulink/makeNonlinearReactorDemoConfig.m",
-    "matlab/+radia/+simulink/validateNonlinearReactorConfig.m",
-    "matlab/mkl_avx2.3.dll",
-    "matlab/mkl_core.3.dll",
-    "matlab/mkl_def.3.dll",
-    "matlab/mkl_intel_thread.3.dll",
-    "matlab/mkl_rt.3.dll",
+    "packages/radia-gpu/matlab/install_radia_simulink.m",
+    "packages/radia-gpu/matlab/verify_radia_simulink_release.m",
+    "packages/radia-gpu/matlab/radia_simulink_library.slx",
+    "packages/radia-gpu/matlab/radia_electromagnet.slx",
+    "packages/radia-gpu/matlab/radia_ih.slx",
+    "packages/radia-gpu/matlab/radia_maglev.slx",
+    "packages/radia-gpu/matlab/radia_nonlinear_reactor.slx",
+    "packages/radia-gpu/matlab/radia_streamfunction_optimization.slx",
+    "packages/radia-gpu/matlab/radia_mex.mexw64",
+    "packages/radia-gpu/matlab/radia_ih_eddy_sfun.m",
+    "packages/radia-gpu/matlab/radia_ih_thermal_sfun.m",
+    "packages/radia-gpu/matlab/radia_ih_monitor_sfun.m",
+    "packages/radia-gpu/matlab/radia_nonlinear_reactor_sfun.m",
+    "packages/radia-gpu/matlab/radia_streamfunction_optuna_sfun.m",
+    "packages/radia-gpu/matlab/+radia/+simulink/ihEddySFunction.m",
+    "packages/radia-gpu/matlab/+radia/+simulink/ihThermalSFunction.m",
+    "packages/radia-gpu/matlab/+radia/+simulink/ihMonitorSFunction.m",
+    "packages/radia-gpu/matlab/+radia/+simulink/addIHMonitorBus.m",
+    "packages/radia-gpu/matlab/+radia/+simulink/addIHMonitorDashboard.m",
+    "packages/radia-optuna/matlab/+radia/+simulink/makeMonitorHeaderBusObject.m",
+    "packages/radia-gpu/matlab/+radia/+simulink/makeIHMonitorBusObject.m",
+    "packages/radia-optuna/matlab/+radia/+simulink/makeOptunaMonitorBusObject.m",
+    "packages/radia-gpu/matlab/+radia/+simulink/nonlinearReactorSFunction.m",
+    "packages/radia-gpu/matlab/+radia/+simulink/streamFunctionOptunaSFunction.m",
+    "packages/radia-gpu/matlab/+radia/+simulink/resolveStreamFunctionOptunaObjects.m",
+    "packages/radia-gpu/matlab/+radia/+stream/OptunaRunner.m",
+    "packages/radia-gpu/matlab/+radia/+simulink/makeNonlinearReactorConfig.m",
+    "packages/radia-gpu/matlab/+radia/+simulink/makeNonlinearReactorDemoConfig.m",
+    "packages/radia-gpu/matlab/+radia/+simulink/validateNonlinearReactorConfig.m",
+    "packages/radia-gpu/matlab/mkl_avx2.3.dll",
+    "packages/radia-gpu/matlab/mkl_core.3.dll",
+    "packages/radia-gpu/matlab/mkl_def.3.dll",
+    "packages/radia-gpu/matlab/mkl_intel_thread.3.dll",
+    "packages/radia-gpu/matlab/mkl_rt.3.dll",
 }
 FULL_REQUIRED_MEMBERS_V3 = FULL_REQUIRED_MEMBERS_V2 | {
-    "matlab/optuna_mex.mexw64",
+    "packages/radia-optuna/matlab/optuna_mex.mexw64",
 }
 FULL_REQUIRED_MEMBERS = (
     FULL_REQUIRED_MEMBERS_V3
-    - {"matlab/mkl_intel_thread.3.dll"}
+    - {"packages/radia-gpu/matlab/mkl_intel_thread.3.dll"}
     | {
-        "matlab/+radia/+internal/expectedNGSolveVersion.m",
-        "matlab/mkl_sequential.3.dll",
-        "matlab/radia_mex.mexw64.build.json",
-        "matlab/verify_radia_mex_provenance.py",
+        "packages/radia-gpu/matlab/+radia/+internal/expectedNGSolveVersion.m",
+        "packages/radia-gpu/matlab/mkl_sequential.3.dll",
+        "packages/radia-gpu/matlab/radia_mex.mexw64.build.json",
+        "packages/radia-gpu/matlab/verify_radia_mex_provenance.py",
     }
 )
 LEGACY_FULL_REQUIRED_MEMBERS = {
     "manifest.json",
-    "matlab/install_radia_simulink.m",
-    "matlab/verify_radia_simulink_release.m",
-    "matlab/radia_simulink_library.slx",
-    "matlab/radia_ih.slx",
-    "matlab/radia_streamfunction_optimization.slx",
-    "matlab/radia_mex.mexw64",
-    "matlab/radia_ih_eddy_sfun.mexw64",
-    "matlab/radia_ih_thermal_sfun.mexw64",
-    "matlab/mkl_avx2.3.dll",
-    "matlab/mkl_core.3.dll",
-    "matlab/mkl_def.3.dll",
-    "matlab/mkl_intel_thread.3.dll",
-    "matlab/mkl_rt.3.dll",
+    "packages/radia-gpu/matlab/install_radia_simulink.m",
+    "packages/radia-gpu/matlab/verify_radia_simulink_release.m",
+    "packages/radia-gpu/matlab/radia_simulink_library.slx",
+    "packages/radia-gpu/matlab/radia_ih.slx",
+    "packages/radia-gpu/matlab/radia_streamfunction_optimization.slx",
+    "packages/radia-gpu/matlab/radia_mex.mexw64",
+    "packages/radia-gpu/matlab/radia_ih_eddy_sfun.mexw64",
+    "packages/radia-gpu/matlab/radia_ih_thermal_sfun.mexw64",
+    "packages/radia-gpu/matlab/mkl_avx2.3.dll",
+    "packages/radia-gpu/matlab/mkl_core.3.dll",
+    "packages/radia-gpu/matlab/mkl_def.3.dll",
+    "packages/radia-gpu/matlab/mkl_intel_thread.3.dll",
+    "packages/radia-gpu/matlab/mkl_rt.3.dll",
 }
 
 
@@ -216,7 +216,7 @@ def verify_archive(archive: Path) -> dict:
                 f"Simulink release archive is incomplete: {', '.join(missing)}"
             )
         if (preview_v3 or full_v4) and any(
-                name.casefold() == "matlab/mkl_intel_thread.3.dll"
+                name.casefold() == "packages/radia-gpu/matlab/mkl_intel_thread.3.dll"
                 for name in names):
             raise RuntimeError(
                 "Current MATLAB releases must not bundle the threaded MKL runtime"
@@ -249,7 +249,7 @@ def verify_archive(archive: Path) -> dict:
                 raise RuntimeError("The full library must declare production channel")
             if manifest.get("package") != "radia-simulink-library" or \
                     manifest.get("entry_model") != \
-                    "matlab/radia_simulink_library.slx":
+                    "packages/radia-gpu/matlab/radia_simulink_library.slx":
                 raise RuntimeError("The full library entry contract is invalid")
             expected_backend = (
                 "native-mex-sfunction-and-mex-handle"
@@ -262,9 +262,9 @@ def verify_archive(archive: Path) -> dict:
             if full_v2 or full_v3 or full_v4:
                 _verify_level2_ih_contract(manifest)
             elif set(manifest.get("required_mex", [])) != {
-                    "matlab/radia_mex.mexw64",
-                    "matlab/radia_ih_eddy_sfun.mexw64",
-                    "matlab/radia_ih_thermal_sfun.mexw64",
+                    "packages/radia-gpu/matlab/radia_mex.mexw64",
+                    "packages/radia-gpu/matlab/radia_ih_eddy_sfun.mexw64",
+                    "packages/radia-gpu/matlab/radia_ih_thermal_sfun.mexw64",
                 }:
                     raise RuntimeError("The full library MEX inventory is invalid")
             expected_toolboxes = {
@@ -300,21 +300,21 @@ def verify_archive(archive: Path) -> dict:
 def _verify_level2_ih_contract(manifest: dict) -> None:
     if manifest.get("ih_backend") != "matlab-level2+radia-mex-handles":
         raise RuntimeError("The IH Level-2 backend declaration is invalid")
-    expected_mex = {"matlab/radia_mex.mexw64"}
+    expected_mex = {"packages/radia-gpu/matlab/radia_mex.mexw64"}
     if manifest.get("schema") in {
             "radia.simulink.library-release-manifest.v3",
             "radia.simulink.library-release-manifest.v4",
     }:
-        expected_mex.add("matlab/optuna_mex.mexw64")
+        expected_mex.add("packages/radia-optuna/matlab/optuna_mex.mexw64")
     if set(manifest.get("required_mex", [])) != expected_mex:
         raise RuntimeError("The Simulink standalone MEX inventory is invalid")
     expected_sfunctions = {
-        "matlab/radia_ih_eddy_sfun.m",
-        "matlab/radia_ih_thermal_sfun.m",
-        "matlab/radia_ih_monitor_sfun.m",
-        "matlab/+radia/+simulink/ihEddySFunction.m",
-        "matlab/+radia/+simulink/ihThermalSFunction.m",
-        "matlab/+radia/+simulink/ihMonitorSFunction.m",
+        "packages/radia-gpu/matlab/radia_ih_eddy_sfun.m",
+        "packages/radia-gpu/matlab/radia_ih_thermal_sfun.m",
+        "packages/radia-gpu/matlab/radia_ih_monitor_sfun.m",
+        "packages/radia-gpu/matlab/+radia/+simulink/ihEddySFunction.m",
+        "packages/radia-gpu/matlab/+radia/+simulink/ihThermalSFunction.m",
+        "packages/radia-gpu/matlab/+radia/+simulink/ihMonitorSFunction.m",
     }
     if manifest.get("schema") in {
             "radia.simulink.library-release-manifest.v2",
@@ -322,10 +322,10 @@ def _verify_level2_ih_contract(manifest: dict) -> None:
             "radia.simulink.library-release-manifest.v4",
     }:
         expected_sfunctions.update({
-            "matlab/radia_nonlinear_reactor_sfun.m",
-            "matlab/+radia/+simulink/nonlinearReactorSFunction.m",
-            "matlab/radia_streamfunction_optuna_sfun.m",
-            "matlab/+radia/+simulink/streamFunctionOptunaSFunction.m",
+            "packages/radia-gpu/matlab/radia_nonlinear_reactor_sfun.m",
+            "packages/radia-gpu/matlab/+radia/+simulink/nonlinearReactorSFunction.m",
+            "packages/radia-gpu/matlab/radia_streamfunction_optuna_sfun.m",
+            "packages/radia-gpu/matlab/+radia/+simulink/streamFunctionOptunaSFunction.m",
         })
         if manifest.get("reactor_backend") != \
                 "matlab-level2+radia-mex-handle" or \
@@ -561,7 +561,7 @@ def run_matlab_smoke(archive: Path, matlab: Path, timeout: int = 300,
         root = Path(temporary)
         with zipfile.ZipFile(archive) as bundle:
             bundle.extractall(root)
-        matlab_root = str((root / "matlab").resolve()).replace("'", "''")
+        matlab_root = str((root / "packages/radia-gpu/matlab").resolve()).replace("'", "''")
         expression = (
             f"addpath('{matlab_root}','-begin');"
             f"assert(getfield({verification_function}(),'passed'));"

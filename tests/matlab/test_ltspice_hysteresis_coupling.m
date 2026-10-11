@@ -3,7 +3,7 @@ tests=functiontests(localfunctions);
 end
 function setupOnce(t)
 root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
-matlabDirectory=fullfile(root,"matlab");
+matlabDirectory=fullfile(root,'packages','radia-gpu','matlab');
 entries=string(strsplit(path,pathsep));
 t.TestData.RemoveMatlabDirectory= ...
     ~any(strcmpi(entries,string(matlabDirectory)));

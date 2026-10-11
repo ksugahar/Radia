@@ -208,9 +208,9 @@ def test_matlab_runner_hashes_mex_and_avoids_simulink_setup_mutation():
 def test_current_native_api_retains_canonical_h5_and_f4_outputs():
     python_api = (ROOT / "src" / "radia" / "beam.py").read_text(encoding="utf-8")
     matlab_api = (
-        ROOT / "matlab" / "+radia" / "+beam" / "canonicalBodyHamiltonianJet.m"
+        ROOT / "packages/radia-gpu/matlab" / "+radia" / "+beam" / "canonicalBodyHamiltonianJet.m"
     ).read_text(encoding="utf-8")
-    mex_api = (ROOT / "src" / "matlab" / "radia_beam_mex_commands.cpp").read_text(
+    mex_api = (ROOT / "packages/radia-gpu/native/legacy/radia_beam_mex_commands.cpp").read_text(
         encoding="utf-8"
     )
 

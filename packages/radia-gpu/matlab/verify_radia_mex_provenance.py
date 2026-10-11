@@ -56,7 +56,7 @@ def main() -> None:
     parser.add_argument("mex", type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
-    checkout = root if args.mex.resolve().parent == (root / "matlab").resolve() else None
+    checkout = root if args.mex.resolve().parent == (root / "packages/radia-gpu/matlab").resolve() else None
     print("RADIA_MEX_COMMIT:" + verify(args.mex, checkout=checkout))
 
 

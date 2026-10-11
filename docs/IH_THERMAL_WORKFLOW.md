@@ -40,7 +40,7 @@ full-window UI inspection and all four release-host gates remain required.
 The saved one-DOF default is an installation diagnostic, not a physical design.
 
 Radia's production induction-heating interface is the masked **Induction
-Heating** block in `matlab/radia_simulink_library.slx`. The retired `radia-ih`
+Heating** block in `packages/radia-gpu/matlab/radia_simulink_library.slx`. The retired `radia-ih`
 PySide panel and notebook workbench are not supported interfaces.
 
 ## Runtime Structure
@@ -134,7 +134,7 @@ addpath("matlab");
 install_radia_ih();
 ```
 
-The installer opens the tracked `matlab/radia_ih.slx`. Use its Geometry Update
+The installer opens the tracked `packages/radia-gpu/matlab/radia_ih.slx`. Use its Geometry Update
 block to replace the workpiece and coil paths and rebuild the checked operator
 artifact. Current and angle remain ordinary Simulink source signals.
 

@@ -3,14 +3,20 @@ from radia_mcp.matlab import matlab_simulink_library_contract
 
 def test_simulink_library_registration_and_ltspice_scope():
     contract = matlab_simulink_library_contract()
-    assert contract["status"] == "ready"
-    assert contract["schema"] == "radia-mcp.matlab-simulink-library/v3"
-    assert contract["registration_code"] == [
+    assert contract["status"] == "source-only"
+    assert contract["distribution"] == "radia-gpu"
+    assert contract["cpu_radia_mex_supported"] is False
+    assert contract["runtime_checked"] is False
+    assert contract["blocks"] == ["CUDA CSR PCG", "LTspice Circuit"]
+    assert contract["registration_code"] == []
+    historical = contract["historical_library"]
+    assert contract["schema"] == "radia-mcp.matlab-simulink-library/v4"
+    assert historical["registration_code"] == [
         "radia.simulink.buildLibrary",
         "sl_refresh_customizations",
     ]
-    assert "LTspice/LTspice Circuit" in contract["blocks"]
-    assert contract["blocks"][:5] == [
+    assert "LTspice/LTspice Circuit" in historical["blocks"]
+    assert historical["blocks"][:5] == [
         "Applications/Electromagnet",
         "Applications/PCB PEEC",
         "Applications/Motor",
@@ -19,7 +25,7 @@ def test_simulink_library_registration_and_ltspice_scope():
     ]
     assert contract["applications"]["initial_backend"] == "python-headless-cli"
     assert contract["applications"]["per_step_python"] == "forbidden"
-    assert "optional" in contract["applications"]["mex_policy"]
+    assert "CPU Radia MEX unsupported" in contract["applications"]["mex_policy"]
     assert "retired for every application" in contract["applications"]["notebook_policy"]
     preflight = contract["applications"]["mesh_preflight"]
     assert preflight["checker"] == "check-vol"
@@ -35,11 +41,11 @@ def test_simulink_library_registration_and_ltspice_scope():
         "radia.kicad.buildLTspiceBlock",
     ]
     assert "not written back" in contract["kicad_ltspice"]["reverse_sync"]
-    assert "Material Models/Material Dictionary" in contract["blocks"]
-    assert "Coupling/Winding Dictionary" in contract["blocks"]
-    assert "Applications/Field Study" in contract["blocks"]
-    assert "Applications/Magnetic Levitation" in contract["blocks"]
-    assert "Coupling/Field Study Configuration" in contract["blocks"]
+    assert "Material Models/Material Dictionary" in historical["blocks"]
+    assert "Coupling/Winding Dictionary" in historical["blocks"]
+    assert "Applications/Field Study" in historical["blocks"]
+    assert "Applications/Magnetic Levitation" in historical["blocks"]
+    assert "Coupling/Field Study Configuration" in historical["blocks"]
     materials = contract["material_dictionary"]
     assert materials["mesh_format"] == "Netgen .vol"
     assert materials["runtime_bus"] == "RadiaMaterialBus"

@@ -6,7 +6,7 @@ arguments
     withStorage (1,1) logical = true
 end
 root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
-addpath(fullfile(root,"matlab"));
+addpath(fullfile(root,'packages','radia-optuna','matlab'));
 folder=string(tempname(fileparts(outputPath))); mkdir(folder);
 cleanup=onCleanup(@() removeScratch(folder));
 levels=[100,1000,10000]; repeats=7;

@@ -10,7 +10,7 @@ testDir = fileparts(mfilename("fullpath"));
 repoRoot = fileparts(fileparts(testDir));
 addpath(fullfile(repoRoot, "matlab"));
 % Exercise a just-linked gateway before MATLAB releases the staged MEX. The
-% production lane leaves this unset and resolves matlab/radia_mex.mexw64.
+% production lane leaves this unset and resolves packages/radia-gpu/matlab/radia_mex.mexw64.
 mexTestDir = string(getenv("RADIA_MEX_TEST_DIR"));
 if strlength(mexTestDir) > 0
     assert(isfolder(mexTestDir), ...

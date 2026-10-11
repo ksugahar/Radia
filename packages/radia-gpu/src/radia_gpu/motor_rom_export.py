@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 
 import numpy as np
 
-from .motor_rom import AnglePeriodicMotorROM, LoadAnglePeriodicMotorROM
+from radia.motor_rom import AnglePeriodicMotorROM, LoadAnglePeriodicMotorROM
 
 
 def _port_variables(motor: AnglePeriodicMotorROM) -> list[dict[str, object]]:

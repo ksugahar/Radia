@@ -1,0 +1,62 @@
+{
+  "schema": "radia.cpu-gpu-ownership/v2",
+  "source_root": "src/radia",
+  "classifications": [
+    "cpu-python-only",
+    "private/not-applicable"
+  ],
+  "owners": {
+    "cpu": "radia",
+    "matlab": "radia-gpu",
+    "simulink": "radia-gpu",
+    "ltspice": "radia-gpu",
+    "mcp": "radia-mcp",
+    "optuna": "radia-optuna"
+  },
+  "cpu_mex_supported": false,
+  "implicit_cpu_fallback": false,
+  "rules": [
+    {
+      "id": "cpu-python",
+      "patterns": [
+        "*.py"
+      ],
+      "classification": "cpu-python-only",
+      "matlab": [],
+      "notes": "CPU capabilities are exposed through Python/pybind11; no duplicate CPU MEX parity is promised."
+    }
+  ],
+  "binary_extensions": [
+    {
+      "python": "sparsesolv_ngsolve.pyd",
+      "classification": "cpu-python-only",
+      "matlab": []
+    },
+    {
+      "python": "_radia_pybind.pyd",
+      "classification": "cpu-python-only",
+      "matlab": []
+    },
+    {
+      "python": "axifem.pyd",
+      "classification": "cpu-python-only",
+      "matlab": []
+    },
+    {
+      "python": "peec_matrices.pyd",
+      "classification": "cpu-python-only",
+      "matlab": []
+    }
+  ],
+  "gpu_features": [
+    {
+      "id": "csr-pcg",
+      "scope": "FP64 CSR Jacobi-preconditioned CG; caller assembles the system. This does not certify AMS, ICCG or HDiv-MMM.",
+      "source": "packages/radia-gpu/native/radia_cuda_csr_pcg.cu",
+      "matlab": "packages/radia-gpu/matlab/+radia/+gpu/csrPCG.m",
+      "validation": "validation_test/radia_gpu/results/transfer-54a577e7f.json",
+      "cpu_fallback": false
+    }
+  ],
+  "legacy_matlab_sources": "Historical sources remain under their integration owner but are not claims of supported CPU MEX or included wholesale in the GPU wheel."
+}
