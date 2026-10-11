@@ -52,8 +52,16 @@ def verify(path: Path) -> dict:
                          "matlab/+radia/+ltspice/run.m", "ltspice/__init__.py", "ltspice/cli.py", "LICENSE"):
             if required not in manifest["files"]:
                 raise ValueError(f"Missing GPU capability payload: {required}")
+    solvers = []
+    for relative in manifest['files']:
+        if relative.endswith('.mexw64'):
+            name = Path(relative).name
+            if not name.startswith('radia_cuda_'):
+                raise ValueError('Unclassified CUDA solver in GPU wheel: '+relative)
+            solvers.append(name.removeprefix('radia_cuda_').removesuffix('.mexw64'))
     return dict(passed=True, version=metadata["Version"], source_commit=manifest["source_commit"],
-                wheel_sha256=hashlib.sha256(path.read_bytes()).hexdigest(), files=len(expected))
+                wheel_sha256=hashlib.sha256(path.read_bytes()).hexdigest(), files=len(expected),
+                cuda_solvers=sorted(solvers))
 
 
 if __name__ == "__main__":

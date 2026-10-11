@@ -69,7 +69,9 @@ The initial alpha requires independent review before a stable release.
 `radia-gpu.yml` builds and accepts the installed wheel on the build host.
 `radia-gpu-release.yml` publishes that successful main CI artifact without
 rebuilding, requiring its exact SHA-256 and installed acceptance provenance.
-The initial publisher rejects stable versions pending independent review.
+Stable versions additionally require the exact-source independent review and
+same-wheel A100/CPU parity record described in
+[`validation_test/radia_gpu/releases`](../../validation_test/radia_gpu/releases/README.md).
 Configure PyPI Trusted Publishing for project `radia-gpu`, GitHub owner
 `ksugahar`, repository `Radia`, workflow `radia-gpu-release.yml`, environment
 `pypi`. A new project needs a pending publisher; checking availability does
