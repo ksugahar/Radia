@@ -95,8 +95,11 @@ def find_cubit_exe() -> Optional[Path]:
     bin_dir = find_cubit_bin()
     if not bin_dir:
         return None
-    exe = bin_dir / "coreform_cubit.exe"
-    return exe if exe.exists() else None
+    for name in ("cubitx.exe", "coreform_cubit.com"):
+        exe = bin_dir / name
+        if exe.is_file():
+            return exe
+    return None
 
 
 def get_cubit_version() -> Optional[str]:

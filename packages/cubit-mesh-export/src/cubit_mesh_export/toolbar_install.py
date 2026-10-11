@@ -25,6 +25,8 @@ import uuid
 from pathlib import Path
 
 
+from cubit_mesh_export._layout import has_python_binding, plugin_directory
+
 _MARKER_BEGIN = "## BEGIN cubit-mesh-export toolbar"
 _MARKER_END = "## END cubit-mesh-export toolbar"
 
@@ -58,7 +60,7 @@ def _version_key(path: str | os.PathLike[str]) -> tuple[int, ...]:
 def _is_supported_cubit_bin(path: str | os.PathLike[str]) -> bool:
     cubit_bin = Path(path)
     return (
-        (cubit_bin / "cubit.py").is_file()
+        has_python_binding(cubit_bin)
         and _parse_cubit_version(cubit_bin) >= _MIN_CUBIT_VERSION
     )
 
@@ -73,7 +75,7 @@ def find_cubit_bin():
     Returns:
       Path to Cubit ``bin/`` directory, or None if no supported Cubit is found.
     """
-    cubit_path = os.environ.get("CUBIT_PATH")
+    cubit_path = os.environ.get("CUBIT_PATH") or os.environ.get("CUBIT_INSTALL_DIR")
     if cubit_path:
         candidates = [Path(cubit_path)]
         if (Path(cubit_path) / "bin").is_dir():
@@ -658,7 +660,7 @@ def verify_panel_installation(all_users=False, verbose=True):
                 issues.append(f"legacy toolbar marker remains in {cubit_file}")
 
     if cubit_bin:
-        plugin_dir = os.path.join(cubit_bin, "plugins")
+        plugin_dir = str(plugin_directory(Path(cubit_bin)))
         for ini_path in _get_cubit_ini_paths(all_users=all_users):
             if not _ini_has_plugin_path(ini_path, plugin_dir):
                 issues.append(f"plugin path missing from {ini_path}: {plugin_dir}")
@@ -765,7 +767,7 @@ def install_panels(all_users=False):
         print(f"Removed obsolete exporter asset: {path}")
     errors.extend(cleanup_errors)
 
-    plugin_dir = os.path.join(cubit_bin, "plugins")
+    plugin_dir = str(plugin_directory(Path(cubit_bin)))
     for ini_path in _get_cubit_ini_paths(all_users=all_users):
         try:
             if _ensure_plugin_path_in_ini(ini_path, plugin_dir):

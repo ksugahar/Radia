@@ -78,6 +78,34 @@ def test_find_cubit_bin_prefers_2025_12_over_2025_6(monkeypatch, tmp_path):
     assert Path(install_panels.find_cubit_bin()) == expected
 
 
+def test_2026_8_package_layout_is_shared_by_installer_and_headless_mcp(monkeypatch, tmp_path):
+    from cubit_mesh_export import install, toolbar_install, smoke_test
+    from cubit_mesh_export._layout import plugin_directory, command_plugin_path
+    from cubit_mesh_export.mcp import session
+
+    program_files = _patch_windows_env(monkeypatch, tmp_path)
+    _fake_cubit(program_files, "2025.12")
+    root = program_files / "Coreform Cubit 2026.8"
+    (root / "bin/cubit").mkdir(parents=True)
+    (root / "bin/cubit/__init__.py").touch()
+    (root / "bin/cubitx.exe").touch()
+    (root / "plugins").mkdir()
+    monkeypatch.setenv("CUBIT_INSTALL_DIR", str(root))
+
+    assert install._find_cubit_dir() == root
+    assert Path(toolbar_install.find_cubit_bin()) == root / "bin"
+    assert session.find_cubit_install() == root / "bin"
+    assert smoke_test._find_cubit_exe() == root / "bin/cubitx.exe"
+    assert plugin_directory(root) == root / "plugins"
+    assert command_plugin_path(root) == root / "plugins/cubit_mesh_export.dll"
+    argv = smoke_test._batch_command(root / "bin/cubitx.exe", tmp_path / "run.jou")
+    assert "-commandplugindir" not in argv
+    from cubit_mesh_export._layout import runtime_environment
+    monkeypatch.delenv("CUBIT_PLUGIN_DIR", raising=False)
+    assert runtime_environment(root / "bin")["CUBIT_PLUGIN_DIR"] == str(root / "plugins")
+    assert all(install._is_cubit_process_name(name) for name in ("cubitx.exe", "clarox.exe"))
+
+
 def test_find_cubit_bin_rejects_pre_2025_12(monkeypatch, tmp_path):
     install_panels = _load_install_panels()
 

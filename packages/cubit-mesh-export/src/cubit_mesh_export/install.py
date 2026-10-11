@@ -38,6 +38,8 @@ import sys
 import time
 from pathlib import Path
 
+from cubit_mesh_export._layout import plugin_directory, command_plugin_path
+
 MIN_CUBIT_VERSION = (2025, 12)
 MIN_CUBIT_VERSION_TEXT = "2025.12"
 _REQUIRED_PACKAGE_BINARIES = (
@@ -80,14 +82,14 @@ def _find_cubit_dir():
 
     def _supported(root: Path) -> bool:
         return (
-            (root / "bin" / "plugins").is_dir()
+            plugin_directory(root).is_dir()
             and _cubit_version_key(str(root)) >= MIN_CUBIT_VERSION
         )
 
-    cubit_path = os.environ.get("CUBIT_PATH")
+    cubit_path = os.environ.get("CUBIT_PATH") or os.environ.get("CUBIT_INSTALL_DIR")
     if cubit_path:
         p = Path(cubit_path)
-        candidates = [p.parent if (p / "plugins").is_dir() else p]
+        candidates = [p.parent if p.name.lower() == "bin" else p]
         if (p / "bin" / "plugins").is_dir():
             candidates.insert(0, p)
         for candidate in candidates:
@@ -146,7 +148,7 @@ def _is_cubit_process_name(name: str) -> bool:
     # Strip the .exe suffix so the compare is uniform.
     if n.endswith(".exe"):
         n = n[:-4]
-    return n == "coreform_cubit"
+    return n in {"coreform_cubit", "cubitx", "clarox"}
 
 
 def _running_cubit_processes():
@@ -214,10 +216,10 @@ def _file_is_locked(path: Path) -> str:
 
 def _critical_plugin_files(cubit_dir: Path):
     """Files whose state gates a safe install."""
-    plugins = cubit_dir / "bin" / "plugins"
+    plugins = plugin_directory(cubit_dir)
     bin_ = cubit_dir / "bin"
     return [
-        plugins / "cubit_mesh_export.ccm",
+        command_plugin_path(cubit_dir),
         plugins / "cubit_mesh_curver.cp312-win_amd64.pyd",
         plugins / "nglib.dll",
         plugins / "ngcore.dll",
@@ -229,12 +231,12 @@ def _critical_plugin_files(cubit_dir: Path):
 def _expected_deployments(pkg_dir: Path, cubit_dir: Path):
     """Return list[(pkg_src, deployed_dst)] for each binary cubit-plugin-install
     is responsible for."""
-    plugins_dir = cubit_dir / "bin" / "plugins"
+    plugins_dir = plugin_directory(cubit_dir)
     bin_dir = cubit_dir / "bin"
     pairs = []
     if (pkg_dir / "cubit_mesh_export.ccm").is_file():
         pairs.append((pkg_dir / "cubit_mesh_export.ccm",
-                       plugins_dir / "cubit_mesh_export.ccm"))
+                       command_plugin_path(cubit_dir)))
     if (pkg_dir / "cubit_mesh_curver.pyd").is_file():
         pairs.append((pkg_dir / "cubit_mesh_curver.pyd",
                        plugins_dir / "cubit_mesh_curver.cp312-win_amd64.pyd"))
@@ -317,9 +319,9 @@ def verify_deployment(pkg_dir: Path, cubit_dir: Path, *, verbose: bool = True):
     # first installs.
     for stale_ccl in [
         cubit_dir / "bin" / "cubit_mesh_export.ccl",
-        cubit_dir / "bin" / "plugins" / "cubit_mesh_export.ccl",
+        plugin_directory(cubit_dir) / "cubit_mesh_export.ccl",
         cubit_dir / "bin" / "radia_cubit.ccl",
-        cubit_dir / "bin" / "plugins" / "radia_cubit.ccl",
+        plugin_directory(cubit_dir) / "radia_cubit.ccl",
     ]:
         if stale_ccl.is_file():
             msg = (f"stale retired Qt5 .ccl remains: {stale_ccl}. "
@@ -378,6 +380,7 @@ def preflight(cubit_dir: Path, *, verbose: bool = True):
 
 _CLEAN_PATTERNS = [
     "cubit_mesh_export.ccm",
+    "cubit_mesh_export.dll",
     "cubit_mesh_export.ccl",
     "cubit_mesh_curver*.pyd",
     "nglib.dll",
@@ -399,7 +402,7 @@ def _clean_old_plugins(cubit_dir: Path):
     Errors are collected rather than raised so the caller can surface
     every locked/missing-privilege case in one go, then abort.
     """
-    plugins_dir = cubit_dir / "bin" / "plugins"
+    plugins_dir = plugin_directory(cubit_dir)
     bin_dir = cubit_dir / "bin"
     removed = 0
     errors = []
@@ -550,7 +553,7 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
         print("         Set CUBIT_PATH to the Cubit 2025.12 bin directory.")
         return False
 
-    plugins_dir = cubit_dir / "bin" / "plugins"
+    plugins_dir = plugin_directory(cubit_dir)
     print(f"  Cubit:   {cubit_dir}")
     print(f"  Package: {pkg_dir}")
     print()
@@ -619,7 +622,7 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
     copy_jobs = []
     ccm_src = pkg_dir / "cubit_mesh_export.ccm"
     if ccm_src.is_file():
-        copy_jobs.append((ccm_src, plugins_dir / "cubit_mesh_export.ccm"))
+        copy_jobs.append((ccm_src, command_plugin_path(cubit_dir)))
     else:
         print(f"  [FAIL] cubit_mesh_export.ccm not found in {pkg_dir}")
 

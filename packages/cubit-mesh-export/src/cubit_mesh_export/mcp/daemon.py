@@ -169,7 +169,7 @@ def main():
         if requested_mode != "batch":
             raise ValueError("Only headless CUBIT_DAEMON_MODE=batch is supported")
         cubit_mod = _init_cubit()
-        version = getattr(cubit_mod, "__version__", "unknown")
+        version = cubit_mod.get_version()
         _write_response({
             "ready": True,
             "mode": "batch",
