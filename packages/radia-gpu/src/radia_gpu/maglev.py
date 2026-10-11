@@ -50,4 +50,3 @@ xlabel('time (s)'); ylabel('Y(t) admittance');
 title('Step response');
 """)
     return str(out_path), str(m_script)
-

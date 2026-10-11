@@ -146,4 +146,3 @@ def export_prima_lti_json(model: DescriptorPortModel, path, *,
         json.dump(payload, handle, indent=2, allow_nan=False)
         handle.write("\n")
     return path
-

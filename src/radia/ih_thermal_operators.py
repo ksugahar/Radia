@@ -299,4 +299,3 @@ def _export_fields(
     surface.add_scalar_field("heat_flux_W_per_m2_at_1A", qsurf)
     surface.write(str(surface_path))
     return [volume_path.resolve(), surface_path.resolve()]
-
