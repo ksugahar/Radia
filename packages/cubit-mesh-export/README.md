@@ -24,7 +24,7 @@ uses `python tools/release_cubit_dual.py`, not the Radia solver's release-quad
 commands.
 
 The supported binary runtime is 64-bit Windows, CPython 3.12, Coreform Cubit
-2025.12, and Netgen/NGSolve 6.2.2607.  These solver versions are exact pins in
+2026.8, and Netgen/NGSolve 6.2.2607.  These solver versions are exact pins in
 package metadata because `cubit_mesh_curver.pyd` links against the Netgen C++
 ABI.  The separately loaded `cubit_mesh_export.ccm` plugin embeds Compact
 Netgen and does not link against the Python solver wheels.
@@ -36,7 +36,7 @@ Standalone wheel acceptance is recorded under
 Combined Radia installations must also pass Radia's declared exporter
 compatibility check; standalone operation does not import Radia.
 
-- **Cubit plugin** (`.ccm` + `.pyd`, Coreform Cubit 2025.12+):
+- **Cubit plugin** (`.ccm` + `.pyd`, Coreform Cubit 2026.8+):
   - `export {netgen|gmsh|vtk|femeem|meg|nastran_bdf}` APREPRO commands
   - Cubit-owned **Export** menu plus the Cubit Mesh Export WorkflowToolbar
 - **Arbitrary-order curving** (order 1-5) via ACIS geometry projection
@@ -55,7 +55,7 @@ compatibility check; standalone operation does not import Radia.
 
 ## Install
 
-`cubit-mesh-export` is standalone: it needs Coreform Cubit 2025.12, but it does
+`cubit-mesh-export` is standalone: it needs Coreform Cubit 2026.8, but it does
 **not** need `radia` or `radia-mcp`. MCP and its private runtime support are included by default in this wheel.
 
 ```bash
@@ -83,7 +83,7 @@ may depend on Cubit, but Cubit users do not install Radia to use MCP.
 
 `cubit-plugin-install` deploys the plugin binaries, the Netgen DLLs, and the
 Cubit-side Python helpers (`cubit_helpers/add_kelvin.py`,
-`cubit_helpers/auto_kelvin_entry.py`) into your Coreform Cubit 2025.12 profile.
+`cubit_helpers/auto_kelvin_entry.py`) into your Coreform Cubit 2026.8 profile.
 Use `cubit-plugin-install --all-users` for a shared lab machine.
 The generated Cubit startup script finds the installed package at every Cubit
 start through the recorded Python, so a versioned checkout it was installed

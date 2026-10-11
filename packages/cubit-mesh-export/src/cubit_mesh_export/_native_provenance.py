@@ -149,8 +149,17 @@ def record_manifest(repo_root: Path, package_dir: Path) -> dict:
         payload["sha256"] = sha256
         payload["size"] = size
         payload.setdefault("platform", "win_amd64")
-        payload.setdefault("cubit_version", "2025.12")
         build_dir = "build-pyd" if name.endswith(".pyd") else "build-ccm"
+        cache_path = repo_root / "src/cubit_plugin" / build_dir / "CMakeCache.txt"
+        cache = cache_path.read_text(encoding="utf-8")
+        cubit_dir = re.search(r"^Cubit_DIR:PATH=(.+)$", cache, re.MULTILINE)
+        version_match = re.search(
+            r"Coreform Cubit ([0-9]+(?:\.[0-9]+)+)(?:[/\\]|$)",
+            cubit_dir[1].strip() if cubit_dir else "",
+        )
+        if not version_match:
+            raise ValueError(f"Missing Cubit SDK version in {cache_path}")
+        payload["cubit_version"] = version_match[1]
         configs = sorted((repo_root / "src/cubit_plugin" / build_dir / "CMakeFiles").glob(
             "*/CMakeCXXCompiler.cmake"), key=lambda item: item.stat().st_mtime)
         if configs:

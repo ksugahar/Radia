@@ -1,3 +1,8 @@
+## 2.1.5 - Cubit 2026.8
+
+- Rebuild the native exporter and curver against the Cubit 2026.8 SDK.
+- Record the actual configured Cubit SDK version in native payload provenance.
+
 # Changelog
 
 All notable changes to `cubit-mesh-export` — the high-order curved
