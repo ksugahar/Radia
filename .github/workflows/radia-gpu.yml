@@ -100,15 +100,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python validation_test/radia_gpu/run_installed.py --installed-python $installedPython --wheel $wheel.FullName --out "$env:RUNNER_TEMP/radia-gpu-installed-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           exit $LASTEXITCODE
+      - name: Select public numerical evidence
+        if: always()
+        shell: pwsh
+        run: |
+          python packages/radia-gpu/prepare_ci_evidence.py --poisson "$env:RUNNER_TEMP/radia-gpu-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --output "$env:RUNNER_TEMP/radia-gpu-public-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          exit $LASTEXITCODE
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: radia-gpu-cuda-evidence
           path: |
             ${{ runner.temp }}/radia-gpu-wheel-${{ github.run_id }}-${{ github.run_attempt }}/*.whl
-            ${{ runner.temp }}/radia-gpu-installed-acceptance-${{ github.run_id }}-${{ github.run_attempt }}/**/result.json
-            build-cuda-mex/*.mexw64
-            build-cuda-mex/build.json
-            ${{ runner.temp }}/radia-gpu-acceptance-${{ github.run_id }}-${{ github.run_attempt }}/**/result.json
-            ${{ runner.temp }}/radia-gpu-acceptance-${{ github.run_id }}-${{ github.run_attempt }}/failed-result.json
+            ${{ runner.temp }}/radia-gpu-installed-acceptance-${{ github.run_id }}-${{ github.run_attempt }}/result.json
+            ${{ runner.temp }}/radia-gpu-public-${{ github.run_id }}-${{ github.run_attempt }}/*.json
           if-no-files-found: error
