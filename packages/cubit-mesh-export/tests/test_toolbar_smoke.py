@@ -134,7 +134,10 @@ def test_good_probe_requires_clean_process_exit(monkeypatch, tmp_path, returncod
         def wait(self, timeout):
             return returncode
     def launch(*args, **kwargs):
-        expected = [executable, '-nojournal']
+        expected = [executable]
+        if executable == 'clarox.exe':
+            expected += ['-prompt', 'Cubit']
+        expected += ['-nojournal']
         if executable != 'clarox.exe':
             expected += ['-commandplugindir', 'plugins']
         expected += [str(tmp_path / 'probe_bootstrap.py')]
