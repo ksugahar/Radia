@@ -21,6 +21,9 @@ Resolve findings and review the final source before accepting it.
 the payload `manifest_sha256` matching the verified wheel,
 `host: NGSolve`, the measured A100 `device`, at least two
 `simulink_repeated_runs`, and `simulink_failure_cleanup: true`.
+`run_installed.py` records the actual `os_hostname` and MATLAB GPU device
+name, compute capability and total memory. Preserve these measured fields;
+`host` identifies the SSH validation target, not a replacement OS hostname.
 Set `cpu_parity_checked: true` only after testing each published CUDA solver
 against its Python CPU reference. Retain these comparisons in `cpu_parity`,
 keyed by capability, with measured `relative_l2` and `true_relative_residual`.

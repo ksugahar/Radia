@@ -2,6 +2,7 @@
 import argparse
 import importlib.util
 import json
+import socket
 from pathlib import Path
 import subprocess
 import matlab.engine
@@ -39,7 +40,7 @@ finally:
 result_path = args.out / 'result.json'
 result = json.loads(result_path.read_text())
 result.update(source_commit=report['source_commit'], distribution_version=report['version'],
-              manifest_sha256=report['manifest_sha256'])
+              manifest_sha256=report['manifest_sha256'], os_hostname=socket.gethostname())
 if wheel_report:
     result['wheel_sha256'] = wheel_report['wheel_sha256']
 result_path.write_text(json.dumps(result,indent=2)+'\n')
