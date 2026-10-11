@@ -104,7 +104,7 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 - GPU: `radia-gpu` uses MATLAB mexcuda for performance; ships optional Simulink/LTspice adapters, no external products.
 - Choose VS/CUDA by target MATLAB mexcuda support. Verify upgrades; never override unsupported compilers.
 - No implicit CPU/Python fallback. Measure host setup and CPU solves separately.
-- Develop/build radia-gpu on 100; final validation uses NGSolve on mdx, with CUDA execution/timing on its online A100. Never deploy to 102.
+- Develop/build radia-gpu on 100; final validation uses SSH host `NGSolve` (A100); `mdx` is a separate CPU VM. Never deploy to 102.
 - Record parity, artifact hashes and validation JSON; offline A100 stays pending. Poisson does not certify ICCG/AMS/HDiv-MMM.
 
 ### MATLAB And Simulink
@@ -170,7 +170,7 @@ solver boundary is a checked `.vol` regardless of the creation route.
 **POLICY**: CI/builds use 100号機 with the `100` runner label.
 100号機 permits isolated tests and heavy numerical/memory validation.
 Isolate CI from user runtimes. LAB/102 tests radia and radia-mcp wheels without radia-gpu.
-LAB owns SSH preflight; mdx validates radia-gpu against NGSolve and evaluates timing. mdx1/mdx2/hibino are retired.
+LAB owns SSH preflight; `NGSolve` validates radia-gpu on A100; mdx evaluates CPU timing. mdx1/mdx2/hibino are retired.
 Before the next solver release, migrate release-quad acceptance to the current fleet.
 Decision 2026-10-01: editable only on 100号機, in a dedicated local development
 venv for maintainers/students, separate from the release runtime. LAB/mdx use
@@ -180,7 +180,7 @@ Solver releases must not install, uninstall, repoint, or version-gate the export
 Do not install or run Cubit on mdx in either release lane. This boundary
 does not prohibit Cubit-independent checker unit tests in isolated CI
 environments. Existing installations are not silently removed.
-CPU/MCP distribution tests run on LAB/102; mdx GPU/NGSolve validation runs without Cubit.
+CPU/MCP distribution tests run on LAB/102; `NGSolve` A100 validation runs without Cubit.
 
 MATLAB-capable runners use a MATLAB-authenticated account and pass an Engine
 startup/calculation/shutdown check in the actual runner context. SYSTEM and SSH

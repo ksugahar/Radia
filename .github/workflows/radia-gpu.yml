@@ -77,7 +77,7 @@ jobs:
           python -m venv $installed
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $installedPython = Join-Path $installed 'Scripts/python.exe'
-          & $installedPython -m pip install --no-deps $wheel.FullName
+          & $installedPython -I -m pip install --no-deps $wheel.FullName
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python validation_test/radia_gpu/run_installed.py --installed-python $installedPython --wheel $wheel.FullName --out "$env:RUNNER_TEMP/radia-gpu-installed-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           exit $LASTEXITCODE

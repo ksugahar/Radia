@@ -24,8 +24,8 @@ Toolbox, an NVIDIA GPU and a compatible NVIDIA driver are external requirements.
 Python delivers and verifies the MATLAB payload; it does not execute GPU solves.
 The Windows x64 binary contains sm_75/sm_80 code and compute_80 PTX.
 Develop and build `radia-gpu` on 100. Final numerical acceptance compares against
-Python/NGSolve on mdx. Formal GPU performance
-evaluation uses the mdx A100 when it is online; record source/runtime versions,
+Python/NGSolve on SSH host `NGSolve` (A100). Formal GPU performance
+evaluation uses that A100 when it is online; record source/runtime versions,
 artifact hashes and machine-readable results. CPU-only mdx execution verifies
 the reference calculation, not CUDA execution. RTX 5000 installation acceptance
 does not certify A100 scaling.
@@ -87,3 +87,5 @@ for the optional schemdraw route. MCP entry points, including
 `mcp-server-radia-ltspice`, belong to `radia-mcp` and load the GPU distribution
 only when circuit execution is requested. No circuit import alias is left in
 the CPU Radia distribution.
+
+The optional `coupling` extra requires Radia 5.3.1 or later with the CPU thermal-operator API. Existing Radia 5.3.0 wheels do not satisfy this contract; until that CPU release is available, use the standalone CUDA PCG, Simulink PCG and LTspice interfaces.

@@ -439,7 +439,7 @@ jobs:
         if: steps.native-impact.outputs.required == 'true'
         shell: pwsh
         env:
-          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-mcp\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\packages\radia-gpu\src;${{ github.workspace }}\packages\radia-mcp\src;${{ github.workspace }}\packages\cubit-mesh-export\src'
           RADIA_TESTS_ALLOW_PARTIAL: '0'
           RADIA_TEST_NGSOLVE_THREADS: '1'
           OMP_NUM_THREADS: '1'

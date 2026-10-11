@@ -21,6 +21,15 @@ system = struct('row_pointers',int32([0;2;5;7]), ...
     gpuArray(system.columns),gpuArray(system.values),gpuArray([1;0;1]), ...
     gpuArray(system.inverse_diagonal),1e-12,100);
 assert(norm(gather(x)-ones(3,1))<1e-12 && info.true_relative_residual<1e-12);
+% A finite nonzero RHS must never be reported as the zero system.
+rejectedTinyRHS = false;
+try
+    [~,~] = radia.gpu.csrPCG(gpuArray(int32([0;1])),gpuArray(int32(0)), ...
+        gpuArray(1),gpuArray(1e-200),gpuArray(1),1e-10,100);
+catch failure
+    rejectedTinyRHS = contains(failure.message,'RHS norm is outside supported');
+end
+assert(rejectedTinyRHS,'Extreme RHS must fail explicitly rather than report false convergence.');
 model = 'radia_gpu_installed_acceptance';
 assert(~bdIsLoaded(model),'Acceptance model already belongs to another operation.');
 cleanup = onCleanup(@() closeOwned(model));
