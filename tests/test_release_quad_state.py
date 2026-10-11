@@ -211,7 +211,7 @@ for index in range(10):
                 worker.kill()
                 worker.wait()
     assert json.loads(path.read_text())['targets'] == {
-        'mdx1': {'iteration': 9}, 'mdx2': {'iteration': 9}}
+        '100': {'iteration': 9}, 'lab': {'iteration': 9}}
 
 
 def test_cpu_mex_release_route_is_retired():
