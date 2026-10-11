@@ -6,7 +6,7 @@ arguments
     options.Tolerance (1,1) double {mustBePositive} = 1e-10
     options.MaxIterations (1,1) double {mustBeInteger,mustBePositive} = 10000
     options.SampleTime_s (1,1) double {mustBePositive} = 1e-3
-    options.OutputDirectory (1,1) string = "C:\temp\radia_gpu_pcg"
+    options.OutputDirectory (1,1) string = fullfile(tempdir,'radia_gpu_pcg')
 end
 if ~bdIsLoaded(modelName), new_system(modelName); end
 blockPath = modelName+"/CUDA PCG";

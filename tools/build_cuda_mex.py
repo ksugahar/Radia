@@ -23,7 +23,7 @@ def main():
         config = matlab_root / 'toolbox/parallel/gpu/extern/src/mex/win64/nvcc_msvcpp2022.xml'
         if not config.is_file():
             raise RuntimeError('Supported CUDA MSVC 2022 configuration missing')
-        targets = 'NVCCFLAGS=-gencode=arch=compute_61,code=sm_61 -gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80'
+        targets = 'NVCCFLAGS=-gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80'
         eng.mexcuda('-v', '-f', str(config), targets, '-outdir', str(out), str(source), nargout=0)
         binary = out / 'radia_cuda_csr_pcg.mexw64'
         assert binary.is_file()
@@ -36,7 +36,7 @@ def main():
                       matlab=eng.version(), release=eng.eval("version('-release')"),
                       compiler_configuration=str(config), gpu=device, python=sys.executable,
                       python_version=platform.python_version(), operation_route='official MATLAB Engine for Python; task-owned session',
-                      no_cpu_solver_fallback=True, cuda_targets=['sm_61','sm_75','sm_80','compute_80 PTX'])
+                      no_cpu_solver_fallback=True, cuda_targets=['sm_75','sm_80','compute_80 PTX'])
         (out/'build.json').write_text(json.dumps(record,indent=2)+'\n',encoding='utf-8')
         print(json.dumps(record,indent=2))
     finally:
