@@ -16,8 +16,9 @@ Do not add unrelated features during this maintenance program.
 ## Repository Boundaries
 The monorepo independently releases `radia`, `radia-gpu`, `cubit-mesh-export`, `radia-mcp`, `radia-optuna` and `eqnedit64`.
 Scope commits and CI to the owner. Shared files trigger multiple lanes only for real shared ABI, build or integration changes.
+`radia`: CPU Python/pybind11 only. `packages/radia-gpu`: all MATLAB/Simulink/LTspice source, dependencies, build and distribution. `radia-mcp`: cross-package knowledge/tools, optional GPU backend. Keep `radia-optuna` independent.
 
-- `src/`, `matlab/`, `packages/`: production implementation.
+- `src/`, `packages/`: production; integrations belong to their package owner.
 - `tests/`: small executable usage samples and fast deterministic bug/contract protection.
 - `validation_test/`: executable physics/application samples and numerical, performance, native, GUI, and multi-machine evidence with result JSON.
 - `docs/**/*.ipynb`: executed, saved feature introductions and presentation-ready
