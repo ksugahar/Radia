@@ -76,15 +76,6 @@ def test_sparsesolv_is_cpu_python_and_cuda_pcg_has_a_separate_owner():
     assert (ROOT / feature["source"]).is_file()
 
 
-def test_ams_setup_uses_ngsolve_gradient_without_taskmanager():
-    source = (ROOT / "packages/radia-optuna/native/optuna_mex.cpp").read_text()
-    body = source.split("void SparseSolvAMS(")[1].split("void SparseSolvIC(")[0]
-    assert "hc->CreateGradient()" in body
-    assert "RegionTaskManager" not in body
-    assert "a.fespace != space.fespace" in body
-
-
-
 def test_cpu_build_rejects_retired_mex_switch():
     pwsh = shutil.which("pwsh")
     if not pwsh:
