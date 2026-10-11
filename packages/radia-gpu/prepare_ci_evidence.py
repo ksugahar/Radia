@@ -34,7 +34,7 @@ def ams_public(record):
 def setup_public(record):
     keys = ('schema','accepted','timing_classification','formal_performance_acceptance',
             'taskmanager_used','ngsolve_threads','source_commit','source_dirty',
-            'versions','cases','matlab_start_seconds','parallel_contract_passed')
+            'versions','cases','matlab_start_seconds','parallel_contract_passed','memory_measurement')
     result = {key: record[key] for key in keys if key in record}
     result['build'] = ams_public({'build':record.get('build',{})})['build']
     return result

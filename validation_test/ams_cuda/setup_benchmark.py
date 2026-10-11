@@ -15,6 +15,7 @@ import time
 
 import numpy as np
 import ngsolve as ng
+import psutil
 from netgen.csg import unit_cube
 from scipy.io import loadmat
 
@@ -48,6 +49,9 @@ def main(args):
         taskmanager_used=False,ngsolve_threads=1,**source_identity(ROOT),
         versions={p:md.version(p) for p in ('ngsolve','numpy','scipy','h5py')},
         build=build,
+        memory_measurement=dict(gpu='Live allocation delta after repeated solves; not transient allocator peak',
+            host='Process lifetime peak working set; includes previous cases',
+            admission='Conservative GPU estimate with reserved free memory'),
         cases=[])
     eng=None
     try:
@@ -107,6 +111,7 @@ def main(args):
                     sample['exchange']=write_exchange(path,dict(snapshot=snapshot,rhs=rhs,probes=probes,expected=expected))
                     sample['hdf5_write_seconds']=time.perf_counter()-start
                     sample['input_sha256']=file_sha256(path)
+                    sample['hdf5_bytes']=path.stat().st_size
                     if eng is not None:
                         target=directory/'gpu.mat'
                         eng.benchmark(str(path),str(target),str(ROOT/'build-ams-cuda'),str(ROOT/'packages/radia-gpu/matlab'),nargout=0)
@@ -121,6 +126,7 @@ def main(args):
                         error=float(np.max(gpu['probeErrors']))
                         sample.update(gpu_relative_difference_from_cpu=difference,gpu_true_residual=gpu_residual,
                             gpu_probe_relative_error=error,upload_seconds=float(gpu['uploadSeconds']),
+                            gpu_cold_solve_seconds=float(gpu['coldSeconds']),
                             gpu_resident_solve_median_seconds=float(np.median(gpu['times'])),
                             gpu_memory_bytes=float(gpu['memoryBytes']),gpu_memory_plan=jsonable(gpu['memoryPlan']),
                             gpu_device=jsonable(gpu['device']),
@@ -129,10 +135,15 @@ def main(args):
                             sample['hdf5_read_seconds']+sample['gpu_inclusive_seconds'])
                         if difference>1e-6 or gpu_residual>1e-6 or error>1e-8:raise RuntimeError('GPU parity failed')
                     else:sample['setup_exchange_transfer_solve_seconds']=None
+                    memory=psutil.Process().memory_info()
+                    sample['python_rss_bytes']=memory.rss
+                    sample['python_lifetime_peak_rss_bytes']=getattr(memory,'peak_wset',None)
                     (out/'result.json').write_text(json.dumps(jsonable(record),indent=2,allow_nan=False)+'\n',encoding='utf-8')
                 row['medians']={str(t):{key:statistics.median(s[key] for s in row['samples'] if s['setup_threads']==t)
-                    for key in ('snapshot_wall_seconds','setup_seconds','setup_exchange_transfer_solve_seconds')
-                    if row['samples'][0][key] is not None} for t in (1,args.setup_threads)}
+                    for key in ('snapshot_wall_seconds','setup_seconds','setup_exchange_transfer_solve_seconds',
+                        'cpu_reference_solve_seconds','gpu_resident_solve_median_seconds','gpu_inclusive_seconds',
+                        'gpu_memory_bytes')
+                    if row['samples'][0].get(key) is not None} for t in (1,args.setup_threads)}
                 before=row['medians']['1'];after=row['medians'][str(args.setup_threads)]
                 row['before_after']=dict(before_setup_threads=1,after_setup_threads=args.setup_threads,
                     before=before,after=after,
