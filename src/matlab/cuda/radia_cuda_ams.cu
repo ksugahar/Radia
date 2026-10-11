@@ -31,7 +31,13 @@ std::string word(const mxArray* a) {
     char* p=mxArrayToString(a); if(!p) throw std::runtime_error("invalid text");
     std::string s(p); mxFree(p); return s;
 }
+struct Flag {
+    int* p=nullptr; explicit Flag(size_t count=1){size_t bytes=std::max<size_t>(1,count)*sizeof(int);ck(cudaMalloc(&p,bytes));ck(cudaMemset(p,0,bytes));}
+    ~Flag(){if(p)cudaFree(p);}
+    void check(){int value;ck(cudaMemcpy(&value,p,sizeof(int),cudaMemcpyDeviceToHost));if(value)throw std::runtime_error("invalid GPU numeric data or CSR indices");}
+};
 struct Input {
+    Flag validation;
     std::vector<const mxGPUArray*> refs;
     ~Input(){ for(auto p:refs) mxGPUDestroyGPUArray(p); }
     template<class V> const V* get(const mxArray* a,mxClassID type,size_t count) {
@@ -63,11 +69,6 @@ __global__ void verify_mask(int n,const int* free,const double* b,int* err) {
     int i=blockIdx.x*blockDim.x+threadIdx.x;
     if(i<n&&((free[i]!=0&&free[i]!=1)||(!free[i]&&b[i]!=0))) atomicExch(err,1);
 }
-struct Flag {
-    int* p=nullptr; explicit Flag(size_t count=1){size_t bytes=std::max<size_t>(1,count)*sizeof(int);ck(cudaMalloc(&p,bytes));ck(cudaMemset(p,0,bytes));}
-    ~Flag(){if(p)cudaFree(p);}
-    void check(){int value;ck(cudaMemcpy(&value,p,sizeof(int),cudaMemcpyDeviceToHost));if(value)throw std::runtime_error("invalid GPU numeric data or CSR indices");}
-};
 __global__ void multiply(int n,const int* rp,const int* ci,const double* av,const double* x,double* y) {
     int i=blockIdx.x*blockDim.x+threadIdx.x; if(i>=n)return;
     double v=0;for(int j=rp[i];j<rp[i+1];++j)v+=av[j]*x[ci[j]];y[i]=v;
@@ -138,7 +139,7 @@ struct CSR {
         if(count>INT_MAX-T)throw std::runtime_error("CSR index capacity exceeded");nz=int(count);
         rp=in.get<int>(field(v,"rowptr"),mxINT32_CLASS,size_t(n)+1);
         ci=in.get<int>(field(v,"columns"),mxINT32_CLASS,nz);a=in.get<double>(vals,mxDOUBLE_CLASS,nz);
-        Flag flag;verify_csr<<<(std::max(n,nz)+T-1)/T,T>>>(n,m,nz,rp,ci,a,flag.p);flag.check();
+        verify_csr<<<(std::max(n,nz)+T-1)/T,T>>>(n,m,nz,rp,ci,a,in.validation.p);
     }
     void mult(const double* x,double* y)const{multiply<<<(n+T-1)/T,T>>>(n,rp,ci,a,x,y);}
     void res(const double* x,const double* b,double* r)const{
@@ -146,7 +147,7 @@ struct CSR {
     }
 };
 void finite_vec(Input& in,const mxArray* a,int n,const double*& result,bool positive=false){
-    result=in.get<double>(a,mxDOUBLE_CLASS,n);Flag f;verify_vec<<<(n+T-1)/T,T>>>(n,result,positive,f.p);f.check();
+    result=in.get<double>(a,mxDOUBLE_CLASS,n);verify_vec<<<(n+T-1)/T,T>>>(n,result,positive,in.validation.p);
 }
 struct Coarse {
     std::string kind;int n,used=0;const double *a=nullptr,*di=nullptr;const int *order=nullptr,*rp=nullptr,*ci=nullptr;
@@ -156,7 +157,7 @@ struct Coarse {
         if(kind=="dense_inverse") {
             a=in.get<double>(field(v,"values"),mxDOUBLE_CLASS,size_t(n)*n);
             if(size_t(n)*n>INT_MAX-T)throw std::runtime_error("dense coarse capacity exceeded");
-            Flag f;verify_vec<<<(n*n+T-1)/T,T>>>(n*n,a,false,f.p);f.check();
+            verify_vec<<<(n*n+T-1)/T,T>>>(n*n,a,false,in.validation.p);
         } else if(kind=="ngsolve_sparse_ldlt") {
             auto d=field(v,"diagonal_inverse");if(!mxIsGPUArray(d))throw std::runtime_error("coarse diagonal requires GPU");
             auto tmp=mxGPUCreateFromMxArray(d);size_t count=mxGPUGetNumberOfElements(tmp);mxGPUDestroyGPUArray(tmp);
@@ -167,10 +168,13 @@ struct Coarse {
             if(count>INT_MAX-T)throw std::runtime_error("coarse capacity exceeded");
             rp=in.get<int>(field(v,"rowptr"),mxINT32_CLASS,size_t(used)+1);
             ci=in.get<int>(field(v,"columns"),mxINT32_CLASS,count);a=in.get<double>(val,mxDOUBLE_CLASS,count);
-            Flag f,seen(used);verify_csr<<<std::max(1,(std::max(used,int(count))+T-1)/T),T>>>(used,used,int(count),rp,ci,a,f.p);f.check();
-            verify_factor<<<(n+T-1)/T,T>>>(n,used,order,rp,ci,seen.p,f.p);
-            verify_permutation<<<std::max(1,(used+T-1)/T),T>>>(used,seen.p,f.p);
-            verify_vec<<<std::max(1,(used+T-1)/T),T>>>(used,di,false,f.p);f.check();work=std::make_unique<Buffer>(used);
+            Flag seen(used);verify_csr<<<std::max(1,(std::max(used,int(count))+T-1)/T),T>>>(used,used,int(count),rp,ci,a,in.validation.p);
+            // Factor validation dereferences row pointers: validate their bounds
+            // before launching it. Independent finite/index checks share one flag.
+            in.validation.check();
+            verify_factor<<<(n+T-1)/T,T>>>(n,used,order,rp,ci,seen.p,in.validation.p);
+            verify_permutation<<<std::max(1,(used+T-1)/T),T>>>(used,seen.p,in.validation.p);
+            verify_vec<<<std::max(1,(used+T-1)/T),T>>>(used,di,false,in.validation.p);work=std::make_unique<Buffer>(used);
         } else if(kind!="ten_l1_jacobi_sweeps")throw std::runtime_error("unknown coarse solver");
     }
     void apply(const double* b,double* x)const{
@@ -242,7 +246,8 @@ void run(int nlhs,mxArray** out,int nrhs,const mxArray** args){
     Input in;AMS ams(args[0],in);int n=ams.a.n;const double* b;
     ck(cudaMemGetInfo(&available,&total));size_t workspace_sample=memory_before>available?memory_before-available:0;
     finite_vec(in,args[1],n,b);bool apply_only=mxIsLogicalScalarTrue(args[4]);
-    Buffer zero(n);zero.zero();Flag f;verify_mask<<<(n+T-1)/T,T>>>(n,ams.free,apply_only?zero.p:b,f.p);f.check();
+    Buffer zero(n);zero.zero();verify_mask<<<(n+T-1)/T,T>>>(n,ams.free,apply_only?zero.p:b,in.validation.p);
+    in.validation.check(); // No solve may consume unvalidated numerical data.
     Output solution(n);double rel=0;int it=0;
     if(apply_only)ams.apply(b,solution.data());
     else {
