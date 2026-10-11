@@ -70,6 +70,7 @@ solution/residual updates. GPU-to-GPU copies are queued on the same default
 stream as kernels and cuBLAS. Device-to-device cudaMemcpy is already host
 asynchronous according to NVIDIA's API synchronization contract; replacing it
 with cudaMemcpyAsync alone is not evidence of fewer synchronization points.
+See [NVIDIA's synchronization contract](https://docs.nvidia.com/cuda/cuda-runtime-api/api-sync-behavior.html).
 PCG dot products now return device scalars; rho and pAp are read together once
 per iteration, while next-rho and beta stay on device. This removes the separate
 host wait for next-rho. Host scalar convergence and breakdown checks and the final FP64 true-residual
@@ -86,6 +87,11 @@ cases that would consume the available GPU memory minus the larger of 2 GiB
 or 20% of total device memory. The estimate is conservative admission control,
 not a measured allocator peak. Develop within GPU memory; increase case sizes
 gradually. A 10 GB matrix alone is not a 10 GB solver working set.
+This small-case runner uses SciPy's MAT v5 writer. Large variables need a
+checked HDF5/MAT v7.3 exchange before attempting a 10 GB hierarchy; MATLAB's
+[MAT-file version limits](https://www.mathworks.com/help/matlab/import_export/mat-file-versions.html)
+apply separately from GPU capacity. This experiment does not certify a 10 GB
+working set.
 
 [Saved numerical evidence](rtx5000_20261011.json) covers six small real
 curl-curl plus positive-mass cases, with `beta_zero=False`, 96 to 5,326 DOFs,
