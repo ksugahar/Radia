@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-11",
+  "source_commit": "972da281b76ea313256289cdf2ebd106ffc30266",
+  "tools_sha256": "18cdda06890362be52a2d4f3f904dc9ee01d9a2012018c423462dda6633ce97b",
+  "mathematica_version": "14.2.1",
+  "python_version": "3.12.10",
+  "mcp_version": "1.30.0",
+  "transport": "stdio",
+  "passed": true,
+  "tool_count": 15,
+  "checks": [
+    {
+      "tool": "mathematica_evaluate",
+      "passed": true,
+      "elapsed_seconds": 2.714963099999295
+    },
+    {
+      "tool": "mathematica_simplify",
+      "passed": true,
+      "elapsed_seconds": 2.7048117999984242
+    },
+    {
+      "tool": "mathematica_check_identity",
+      "passed": true,
+      "elapsed_seconds": 2.6805344999993395
+    }
+  ],
+  "scope": "Owned temporary server and Wolfram kernels; no client deployment changed."
+}
