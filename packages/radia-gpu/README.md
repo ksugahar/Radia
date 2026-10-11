@@ -23,6 +23,11 @@ radia-gpu-path
 Add the reported directory to MATLAB's path. MATLAB R2026a, Parallel Computing
 Toolbox, an NVIDIA GPU and a compatible NVIDIA driver are external requirements.
 Python delivers and verifies the MATLAB payload; it does not execute GPU solves.
+The installed CUDA solvers do not require the Python `radia` or `ngsolve`
+packages. CSR-PCG consumes caller-provided matrix arrays; AMS consumes an
+already-built hierarchy. The current CPU hierarchy-generation route uses
+Radia/NGSolve in a separate preparation environment. Optional
+`radia-gpu[coupling]` installs Radia for workflows that explicitly need it.
 The Windows x64 binary contains sm_75/sm_80 code and compute_80 PTX.
 Develop and build `radia-gpu` on 100. Final numerical acceptance compares against
 Python/NGSolve on mdx. Formal GPU performance
