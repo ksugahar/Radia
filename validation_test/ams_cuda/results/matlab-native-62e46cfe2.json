@@ -1,7 +1,6 @@
 {
   "schema": "radia.ams-matlab-native-validation.v1",
   "accepted": true,
-  "host": "GPU build host",
   "timing_classification": "diagnostic; not formal performance acceptance",
   "a100_started": false,
   "python_role": "independent CPU oracle and validation orchestration only",
