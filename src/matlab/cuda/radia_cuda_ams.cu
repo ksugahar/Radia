@@ -80,14 +80,24 @@ __global__ void multiply_residual(int n,const int* rp,const int* ci,const double
     double value=0;for(int j=rp[i];j<rp[i+1];++j)value+=av[j]*x[ci[j]];
     r[i]=b[i]-value;
 }
-__global__ void relax_from_product(int n,const double* b,const double* ax,const double* l1,double* x) {
-    int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n)x[i]+=(b[i]-ax[i])/l1[i];
-}
 __global__ void initial_relax(int n,const double* b,const double* l1,double* x) {
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n)x[i]=b[i]/l1[i];
 }
-__global__ void scaled_add(int n,double alpha,const double* a,double* b) {
-    int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n)b[i]+=alpha*a[i];
+// Read the old iterate and write a separate buffer: in-place CSR Jacobi races.
+__global__ void multiply_relax(int n,const int* rp,const int* ci,const double* av,
+    const double* x,const double* b,const double* l1,double* next) {
+    int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=n)return;
+    double value=0;for(int j=rp[i];j<rp[i+1];++j)value+=av[j]*x[ci[j]];
+    next[i]=x[i]+(b[i]-value)/l1[i];
+}
+__global__ void multiply_add(int n,const int* rp,const int* ci,const double* av,
+    const double* x,double alpha,double* y) {
+    int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=n)return;
+    double value=0;for(int j=rp[i];j<rp[i+1];++j)value+=av[j]*x[ci[j]];
+    y[i]+=alpha*value;
+}
+__global__ void pcg_update(int n,double alpha,const double* p,const double* ap,double* x,double* r) {
+    int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n){x[i]+=alpha*p[i];r[i]-=alpha*ap[i];}
 }
 __global__ void combine(int n,const double* z,double beta,double* p) {
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n)p[i]=z[i]+beta*p[i];
@@ -142,6 +152,11 @@ struct CSR {
         verify_csr<<<(std::max(n,nz)+T-1)/T,T>>>(n,m,nz,rp,ci,a,in.validation.p);
     }
     void mult(const double* x,double* y)const{multiply<<<(n+T-1)/T,T>>>(n,rp,ci,a,x,y);}
+    void add(const double* x,double alpha,double* y)const{multiply_add<<<(n+T-1)/T,T>>>(n,rp,ci,a,x,alpha,y);}
+    void relax(Buffer& x,const double* b,const double* l1,Buffer& tmp)const{
+        multiply_relax<<<(n+T-1)/T,T>>>(n,rp,ci,a,x.p,b,l1,tmp.p);
+        std::swap(x.p,tmp.p);
+    }
     void res(const double* x,const double* b,double* r)const{
         multiply_residual<<<(n+T-1)/T,T>>>(n,rp,ci,a,x,b,r);
     }
@@ -190,7 +205,7 @@ struct Level {
         if(last)coarse=std::make_unique<Coarse>(field(v,"coarse"),in,a.n);
         else {p=std::make_unique<CSR>(field(v,"P"),in);pt=std::make_unique<CSR>(field(v,"Pt"),in);}
     }
-    void relax(){a.mult(x.p,tmp.p);relax_from_product<<<(a.n+T-1)/T,T>>>(a.n,b.p,tmp.p,l1,x.p);}
+    void relax(){a.relax(x,b.p,l1,tmp);}
     void initial(){initial_relax<<<(a.n+T-1)/T,T>>>(a.n,b.p,l1,x.p);}
 };
 struct Space {
@@ -208,11 +223,11 @@ struct Space {
         if(l.coarse){if(l.coarse->kind=="ten_l1_jacobi_sweeps"){l.initial();for(int s=1;s<10;++s)l.relax();}else l.coarse->apply(l.b.p,l.x.p);return;}
         l.initial();for(int s=1;s<l.smooth;++s)l.relax();
         l.a.res(l.x.p,l.b.p,l.r.p);
-        l.pt->mult(l.r.p,levels[k+1]->b.p);cycle(k+1);l.p->mult(levels[k+1]->x.p,l.tmp.p);
-        scaled_add<<<(l.a.n+T-1)/T,T>>>(l.a.n,1,l.tmp.p,l.x.p);
+        l.pt->mult(l.r.p,levels[k+1]->b.p);cycle(k+1);l.p->add(levels[k+1]->x.p,1,l.x.p);
         for(int s=0;s<l.smooth;++s)l.relax();
     }
     void apply(const double* residual){pt.mult(residual,levels[0]->b.p);cycle(0);p.mult(levels[0]->x.p,out.p);}
+    void add(const double* residual,double alpha,double* output){pt.mult(residual,levels[0]->b.p);cycle(0);p.add(levels[0]->x.p,alpha,output);}
 };
 struct AMS {
     CSR a;const double* l1;const int* free;int smooth,cycle,gradient;double omega;
@@ -227,14 +242,14 @@ struct AMS {
             if(spaces.back()->p.n!=a.n)throw std::runtime_error("AMS interpolation dimension mismatch");}
     }
     void res(){a.res(x.p,b.p,r.p);}
-    void relax(){for(int s=0;s<smooth;++s){a.mult(x.p,tmp.p);relax_from_product<<<(a.n+T-1)/T,T>>>(a.n,b.p,tmp.p,l1,x.p);}}
-    void initial(){initial_relax<<<(a.n+T-1)/T,T>>>(a.n,b.p,l1,x.p);for(int s=1;s<smooth;++s){a.mult(x.p,tmp.p);relax_from_product<<<(a.n+T-1)/T,T>>>(a.n,b.p,tmp.p,l1,x.p);}}
-    void grad(){if(!gradient)return;res();spaces[0]->apply(r.p);scaled_add<<<(a.n+T-1)/T,T>>>(a.n,omega,spaces[0]->out.p,x.p);}
-    void nodal(){res();for(int k=gradient;k<gradient+3;++k){spaces[k]->apply(r.p);scaled_add<<<(a.n+T-1)/T,T>>>(a.n,omega,spaces[k]->out.p,x.p);}}
-    void apply(const double* rhs,double* output){ck(cudaMemcpy(b.p,rhs,a.n*sizeof(double),cudaMemcpyDeviceToDevice));mask<<<(a.n+T-1)/T,T>>>(a.n,free,b.p);
+    void relax(){for(int s=0;s<smooth;++s)a.relax(x,b.p,l1,tmp);}
+    void initial(){initial_relax<<<(a.n+T-1)/T,T>>>(a.n,b.p,l1,x.p);for(int s=1;s<smooth;++s)a.relax(x,b.p,l1,tmp);}
+    void grad(){if(!gradient)return;res();spaces[0]->add(r.p,omega,x.p);}
+    void nodal(){res();for(int k=gradient;k<gradient+3;++k)spaces[k]->add(r.p,omega,x.p);}
+    void apply(const double* rhs,double* output){ck(cudaMemcpyAsync(b.p,rhs,a.n*sizeof(double),cudaMemcpyDeviceToDevice));mask<<<(a.n+T-1)/T,T>>>(a.n,free,b.p);
         if(cycle==1){initial();grad();nodal();grad();relax();}
         else {initial();grad();relax();nodal();relax();grad();relax();}
-        mask<<<(a.n+T-1)/T,T>>>(a.n,free,x.p);ck(cudaMemcpy(output,x.p,a.n*sizeof(double),cudaMemcpyDeviceToDevice));}
+        mask<<<(a.n+T-1)/T,T>>>(a.n,free,x.p);ck(cudaMemcpyAsync(output,x.p,a.n*sizeof(double),cudaMemcpyDeviceToDevice));}
 };
 struct Blas {cublasHandle_t h;Blas(){cb(cublasCreate(&h));}~Blas(){cublasDestroy(h);}double dot(int n,const double* a,const double* b){double d;cb(cublasDdot(h,n,a,1,b,1,&d));return d;}double norm(int n,const double* a){double d;cb(cublasDnrm2(h,n,a,1,&d));return d;}};
 struct Output {mxGPUArray* a;explicit Output(int n){mwSize s=n;a=mxGPUCreateGPUArray(1,&s,mxDOUBLE_CLASS,mxREAL,MX_GPU_INITIALIZE_VALUES);}~Output(){mxGPUDestroyGPUArray(a);}double* data(){return static_cast<double*>(mxGPUGetData(a));}};
@@ -253,15 +268,15 @@ void run(int nlhs,mxArray** out,int nrhs,const mxArray** args){
     else {
         Buffer r(n),p(n),z(n),ap(n);Blas blas;
         ck(cudaMemGetInfo(&available,&total));workspace_sample=std::max(workspace_sample,memory_before>available?memory_before-available:0);
-        ck(cudaMemcpy(r.p,b,n*sizeof(double),cudaMemcpyDeviceToDevice));
+        ck(cudaMemcpyAsync(r.p,b,n*sizeof(double),cudaMemcpyDeviceToDevice));
         double bnorm=blas.norm(n,b);if(!std::isfinite(bnorm)||bnorm<0)throw std::runtime_error("invalid RHS norm");
-        if(bnorm>0){ams.apply(r.p,z.p);ck(cudaMemcpy(p.p,z.p,n*sizeof(double),cudaMemcpyDeviceToDevice));double rho=blas.dot(n,r.p,z.p);rel=1;
+        if(bnorm>0){ams.apply(r.p,z.p);ck(cudaMemcpyAsync(p.p,z.p,n*sizeof(double),cudaMemcpyDeviceToDevice));double rho=blas.dot(n,r.p,z.p);rel=1;
             for(it=1;it<=maxiter;++it){ams.a.mult(p.p,ap.p);double pap=blas.dot(n,p.p,ap.p);
                 if(!(pap>0)||!(rho>0)||!std::isfinite(pap)||!std::isfinite(rho))throw std::runtime_error("AMS PCG breakdown: nonpositive curvature");
-                double alpha=rho/pap;scaled_add<<<(n+T-1)/T,T>>>(n,alpha,p.p,solution.data());scaled_add<<<(n+T-1)/T,T>>>(n,-alpha,ap.p,r.p);
+                double alpha=rho/pap;pcg_update<<<(n+T-1)/T,T>>>(n,alpha,p.p,ap.p,solution.data(),r.p);
                 rel=blas.norm(n,r.p)/bnorm;if(!std::isfinite(rel))throw std::runtime_error("nonfinite residual");
                 if(rel<=tol){ams.a.res(solution.data(),b,r.p);rel=blas.norm(n,r.p)/bnorm;if(rel<=tol)break;
-                    ams.apply(r.p,z.p);ck(cudaMemcpy(p.p,z.p,n*sizeof(double),cudaMemcpyDeviceToDevice));rho=blas.dot(n,r.p,z.p);continue;}
+                    ams.apply(r.p,z.p);ck(cudaMemcpyAsync(p.p,z.p,n*sizeof(double),cudaMemcpyDeviceToDevice));rho=blas.dot(n,r.p,z.p);continue;}
                 ams.apply(r.p,z.p);double next=blas.dot(n,r.p,z.p);combine<<<(n+T-1)/T,T>>>(n,z.p,next/rho,p.p);rho=next;
             }
             ams.a.res(solution.data(),b,r.p);rel=blas.norm(n,r.p)/bnorm;

@@ -64,6 +64,20 @@ interchangeable.
 
 ## RTX 5000 result, 2026-10-11
 
+The launch-reduction candidate fuses CSR Jacobi products and updates with
+separate old/new buffers, fuses prolongation and addition, and combines PCG
+solution/residual updates. GPU-to-GPU copies are queued on the same default
+stream as kernels and cuBLAS rather than synchronizing the host for each copy.
+Host scalar convergence and breakdown checks and the final FP64 true-residual
+gate remain in place. No CPU solve fallback or CUDA Graph is introduced.
+
+Before uploading, the benchmark estimates numeric inputs, AMS/PCG workspace,
+duplicate uploads and diagnostic arrays, plus library headroom. It rejects
+cases that would consume the available GPU memory minus the larger of 2 GiB
+or 20% of total device memory. The estimate is conservative admission control,
+not a measured allocator peak. Develop within GPU memory; increase case sizes
+gradually. A 10 GB matrix alone is not a 10 GB solver working set.
+
 [Saved numerical evidence](rtx5000_20261011.json) covers six small real
 curl-curl plus positive-mass cases, with `beta_zero=False`, 96 to 5,326 DOFs,
 both AMS cycles and one/two auxiliary levels. Pure curl-curl, complex

@@ -3,6 +3,9 @@ addpath(binaryDir);
 d=load(inputPath);
 g=gpuDevice();
 before=g.AvailableMemory;
+memoryPlan=memory_plan(d.snapshot,g);
+assert(memoryPlan.estimatedAdditionalBytes<=memoryPlan.budgetBytes, ...
+    'radia:cuda:memoryBudget','AMS benchmark exceeds the conservative GPU memory budget');
 wait(g); transfer=tic;
 s=upload(d.snapshot, '');
 rhs=gpuArray(d.rhs);
@@ -46,7 +49,43 @@ device=struct('name',g.Name,'compute_capability',g.ComputeCapability, ...
 matlabVersion=version;
 save(outputPath,'solution','info','probeErrors','coldSeconds','times', ...
     'inclusiveSeconds','inclusiveSolution','memoryBytes','uploadSeconds','checks','device','matlabVersion', ...
-    'zeroRhsTimes','applyOnlyTimes','zeroRhsWarmMedianSeconds','applyOnlyWarmMedianSeconds');
+    'zeroRhsTimes','applyOnlyTimes','zeroRhsWarmMedianSeconds','applyOnlyWarmMedianSeconds','memoryPlan');
+end
+
+function plan=memory_plan(s,g)
+% Allow duplicate uploads, diagnostic copy-on-write arrays, solver work and
+% library headroom. This is an admission estimate, not a measured peak.
+inputBytes=numeric_bytes(s,'')+8*double(s.A.rows);
+workspaceBytes=8*10*double(s.A.rows);
+for k=1:numel(s.spaces)
+    sp=s.spaces{k};
+    workspaceBytes=workspaceBytes+8*(double(sp.P.rows)+double(sp.P.cols));
+    for j=1:numel(sp.levels)
+        l=sp.levels{j};workspaceBytes=workspaceBytes+8*4*double(l.A.rows);
+        if isfield(l,'coarse') && strcmp(l.coarse.kind,'ngsolve_sparse_ldlt')
+            workspaceBytes=workspaceBytes+12*numel(l.coarse.diagonal_inverse);
+        end
+    end
+end
+requested=3*inputBytes+workspaceBytes+8*6*double(s.A.rows);
+headroom=max(256*1024^2,0.25*requested);
+reserve=max(2*1024^3,0.2*double(g.TotalMemory));
+plan=struct('inputBytes',inputBytes,'workspaceEstimateBytes',workspaceBytes, ...
+    'estimatedAdditionalBytes',requested+headroom,'headroomBytes',headroom, ...
+    'reservedFreeBytes',reserve,'availableBeforeBytes',double(g.AvailableMemory), ...
+    'budgetBytes',max(0,double(g.AvailableMemory)-reserve), ...
+    'method','Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak');
+end
+function bytes=numeric_bytes(a,name)
+bytes=0;
+if isstruct(a)
+    names=fieldnames(a);
+    for k=1:numel(names);bytes=bytes+numeric_bytes(a.(names{k}),names{k});end
+elseif iscell(a)
+    for k=1:numel(a);bytes=bytes+numeric_bytes(a{k},'');end
+elseif isnumeric(a) && ~ismember(name,{'rows','cols','num_smooth','cycle_type','correction_weight'})
+    item=whos('a');bytes=double(item.bytes);
+end
 end
 
 function out=upload(a,name)
