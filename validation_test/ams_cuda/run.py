@@ -30,6 +30,8 @@ def jsonable(x):
 def main(args):
     root=Path(__file__).resolve().parents[2]
     binary=root/'build-ams-cuda'
+    gpu_dir=args.gpu_dir.resolve() if args.gpu_dir else binary
+    matlab_dir=args.matlab_dir.resolve() if args.matlab_dir else root/'packages/radia-gpu/matlab'
     sys.path.insert(0,str(binary))
     import _radia_ams_snapshot as bridge
     out=args.out.resolve();out.mkdir(parents=True,exist_ok=False)
@@ -40,7 +42,8 @@ def main(args):
         'scope':'experimental assembled-operator AMS; CPU-owned setup, GPU-owned application and coarse solves',
         'source_commit':subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip(),
         'source_dirty':bool(subprocess.check_output(['git','-C',str(root),'status','--porcelain'],text=True).strip()),
-        'build':json.loads((binary/'build.json').read_text()),'accepted':False}
+        'build':json.loads((binary/'build.json').read_text()),
+        'gpu_binary_sha256':file_sha256(gpu_dir/'radia_cuda_ams.mexw64'),'accepted':False}
     result_path=out/'result.json'
     eng=None
     try:
@@ -79,7 +82,7 @@ def main(args):
                 case=out/f'h{h}-cycle{cycle}';case.mkdir()
                 payload=dict(snapshot=snapshot,rhs=rhs,probes=probes,expected=expected)
                 src=case/'input.hdf5';exchange=write_exchange(src,payload)
-                eng.benchmark(str(src),str(case/'gpu.mat'),str(binary),nargout=0)
+                eng.benchmark(str(src),str(case/'gpu.mat'),str(gpu_dir),str(matlab_dir),nargout=0)
                 gpu=loadmat(case/'gpu.mat',simplify_cells=True)
                 actual=np.asarray(gpu['solution']).reshape(-1)
                 row,col,val=a.mat.COO();A=coo_matrix((np.asarray(val),(np.asarray(row),np.asarray(col))),shape=(fes.ndof,fes.ndof)).tocsr()
@@ -116,4 +119,5 @@ def main(args):
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--out',type=Path,required=True)
     p.add_argument('--maxh',type=float,nargs='+',default=[0.5,0.35]);p.add_argument('--threads',type=int,default=4)
+    p.add_argument('--gpu-dir',type=Path);p.add_argument('--matlab-dir',type=Path)
     main(p.parse_args())

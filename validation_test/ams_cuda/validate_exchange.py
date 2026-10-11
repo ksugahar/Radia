@@ -30,7 +30,7 @@ def main(args):
                      'indices':np.array([0,2,4],dtype=np.int32),'empty':np.empty(0,dtype=np.int32),
                      'snapshot':{'schema':'radia.ams-accelerator.v1','beta_zero':False,
                          'spaces':[{'levels':[{'l1':np.array([1.,2.,3.])}]}]}}
-            count=250_000_001 if large else 0
+            count=268_435_457 if large else 0
             if large:
                 # Disk-backed source: no extra 2 GB Python array allocation.
                 source=args.out/'source.bin'
@@ -43,7 +43,7 @@ def main(args):
             entry={'accepted':bool(result['accepted']),'large':large,**receipt,
                    'write_seconds':write_seconds,'matlab_read_and_check_seconds':read_seconds,
                    'sha256':file_sha256(path)}
-            if large:assert receipt['file_bytes']>2_000_000_000
+            if large:assert receipt['file_bytes']>2**31 and count*8>2**31
             record['cases'].append(entry)
             print(json.dumps(entry),flush=True)
             if large:

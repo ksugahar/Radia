@@ -1,7 +1,8 @@
-function benchmark(inputPath, outputPath, binaryDir)
+function benchmark(inputPath, outputPath, binaryDir, matlabDir)
 addpath(binaryDir);
 repo=fileparts(fileparts(fileparts(mfilename('fullpath'))));
-addpath(fullfile(repo,'packages','radia-gpu','matlab'));
+if nargin<4;matlabDir=fullfile(repo,'packages','radia-gpu','matlab');end
+addpath(matlabDir);
 d=radia.gpu.readAMSExchange(inputPath);
 g=gpuDevice();
 before=g.AvailableMemory;
