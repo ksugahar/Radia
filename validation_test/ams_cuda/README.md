@@ -221,3 +221,39 @@ Source of the sparse factor layout: NGSolve's public `SparseCholeskyTM`
 accessors in `sparsecholesky.hpp` for 6.2.2607. The GPU kernel evaluates the
 standard ordered unit-triangular/diagonal solves from those factors; it
 does not recompute or replace NGSolve's factorization.
+
+### Package/HDF5 and compute GPU acceptance (2026-10-11)
+
+AMS now belongs to `packages/radia-gpu`, including its mexcuda builder,
+MATLAB wrapper and checked HDF5 reader. All snapshots use plain HDF5
+(`radia.ams-hdf5.v1`). An actual 2,147,490,184-byte exchange passes
+Python/MATLAB shape, dtype and full-value checks. This validates exchange,
+rather than a large GPU solve.
+
+[Compute evidence](compute_gpu_20261011.json) records eight CPU/GPU cases,
+versions, build/source hashes, idle observations and raw timing samples.
+The already-running user-provisioned A100-SXM4-40GB compute host was used;
+the agent did not start a machine or access the old A100 SSH alias.
+CPU uses Python/pybind11 + NGSolve; GPU uses mexcuda. Maximum CPU AMS
+solution difference is 2.57e-9 and maximum GPU true residual is 9.36e-10.
+GPU memory admission checks pass for all eight cases.
+
+This separate same-input ABBA comparison retains 30 warmed samples per
+variant/case. Its baseline is the previous optimized binary, rather than
+the earlier baseline in the historical RTX measurements above.
+
+| DOFs | Cycle | Before | After | Time reduction |
+| ---: | ---: | ---: | ---: | ---: |
+| 5,326 | 1 | 25.67 ms | 24.72 ms | 3.68% |
+| 5,326 | 7 | 22.28 ms | 21.45 ms | 3.76% |
+| 12,217 | 1 | 24.02 ms | 22.76 ms | 5.25% |
+| 12,217 | 7 | 21.17 ms | 19.98 ms | 5.64% |
+
+In the separate CPU/GPU acceptance run at 12,217 DOFs, CPU takes
+17.09/17.11 ms and GPU takes 22.68/19.92 ms for cycles 1/7. CPU remains
+faster at these sizes. Both routes satisfy independent true-residual
+gates, but use differing stopping norms. These results do not establish
+performance or allocator peak memory for a 10 GB problem.
+Package CI passed at code commit `170717fa7`, including installed-wheel
+AMS acceptance. Exchange evidence remains in
+[package_hdf5_20261011.json](package_hdf5_20261011.json).

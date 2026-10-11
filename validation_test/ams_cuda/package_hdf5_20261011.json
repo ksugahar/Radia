@@ -929,11 +929,8 @@
     "matlab": "26.1.0.3346908 (R2026a) Update 5"
   },
   "performance": {
-    "status": "pending",
-    "requested_compute_host_gpu_available": false,
-    "requested_cpu_host_busy": true,
-    "before_seconds": null,
-    "after_seconds": null,
-    "reason": "Requested compute host has no NVIDIA GPU and is running another solver job. GPU timing awaits a selected idle GPU host; acceptance timings are diagnostics."
+    "status": "completed_on_new_compute_gpu",
+    "evidence": "compute_gpu_20261011.json",
+    "historical_context": "The original CPU-only host was unsuitable; a newly user-provisioned already-running GPU host was subsequently used."
   }
 }
