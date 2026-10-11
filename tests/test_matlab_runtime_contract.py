@@ -53,11 +53,9 @@ def test_matlab_release_uses_sequential_mkl_without_changing_python() -> None:
     verifier = _source("tools/verify_simulink_release.py")
 
     assert build.index("$PythonLibrary") < build.index("$env:MKLROOT")
-    assert 'if ($MatlabMexOnly)' in build
-    assert '"mkl_sequential"' in build
+    assert 'MatlabMexOnly' not in build
     assert "mkl_intel_thread" in cmake
-    assert "mkl_sequential" in cmake
-    assert "IN LISTS MKL_MATLAB_RUNTIME_DLLS" in cmake
+    assert "MKL_MATLAB_RUNTIME_DLLS" not in cmake
     assert "mkl_sequential.3.dll" in package
     assert "mkl_intel_thread.3.dll" not in package
     assert "+radia/+internal/expectedNGSolveVersion.m" in package
