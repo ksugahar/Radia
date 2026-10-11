@@ -168,9 +168,9 @@ def test_invalid_manifest_fails_closed(change):
 @pytest.mark.parametrize("extra,required", [
     ("tests/new.py\0tools/new.py\0", False),
     ("src/ext/sparsesolv/test.cpp\0", True),
-    ("tests/matlab/test_beam_transfer_mex.m\0", True),
+    ("tests/matlab/test_beam_transfer_mex.m\0", False),
     ("src/core/rad_beam_transfer.cpp\0", True),
-    ("matlab/+radia/+internal/callMex.m\0", True),
+    ("matlab/+radia/+internal/callMex.m\0", False),
     ("tools/run_test_tier.py\0", True),
     (".github/workflows/sparsesolv.yml\0", True),
 ])

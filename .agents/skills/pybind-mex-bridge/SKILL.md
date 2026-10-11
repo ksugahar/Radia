@@ -33,7 +33,8 @@ objects in MATLAB.
    already uses. Record any deliberately retained Python-only boundary.
 2. Add the MEX command, command inventory entry, strict arity/type/shape checks,
    MATLAB wrapper, and Python-to-MATLAB parity-manifest entry together.
-3. Build with `Build.ps1 -MatlabMexOnly`. Test the staged MEX before replacing a
+3. Build GPU kernels with `Build.ps1 -CudaMexOnly`; CPU solver execution stays
+   in Python/pybind11. Do not add or rebuild the retired CPU `radia_mex` gateway. Test the staged MEX before replacing a
    loaded production binary; never work around a MATLAB file lock by weakening
    the ABI check.
 4. Generate expected numerical values by the public Python/pybind11 path on the

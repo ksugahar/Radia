@@ -21,17 +21,6 @@ on:
       - 'validation_test/radia_mcp/test_axi_eddy_current_drive.py'
       - 'validation_test/radia_mcp/test_eddy_driven_region.py'
       - 'validation_test/radia_mcp/test_aphi_gauge_point.py'
-      - 'src/matlab/radia_ih_mex_commands.cpp'
-      - 'matlab/+radia/+simulink/validateIHNativeConfig.m'
-      - 'tests/matlab/test_ih_sparse_inputs.m'
-      - 'matlab/+radia/+internal/nextIHNativeHandle.m'
-      - 'matlab/+radia/+internal/selectedPythonExecutable.m'
-      - 'matlab/+radia/+internal/resolveAssemblyPython.m'
-      - 'matlab/+radia/+simulink/assembleIHOperatorsFromGeometry.m'
-      - 'matlab/+radia/+simulink/addIHGeometryUpdateBlock.m'
-      - 'matlab/+radia/+simulink/updateIHGeometry.m'
-      - 'tests/matlab/test_ih_python_selection.m'
-      - 'tests/matlab/test_ih_geometry_update.m'
       - 'src/radia/bem/sibc_hacapk.py'
       - 'src/radia/panels/surface_mesh_extract.py'
       - 'tests/test_surface_orientation.py'
@@ -75,6 +64,23 @@ on:
       - 'src/radia/vim/_nonlinear.py'
       - 'src/radia/vim/_solve.py'
       - 'tests/test_hdiv_energy_material_consistency.py'
+      - 'src/core/rad_arc_section.h'
+      - 'src/core/rad_arc_current.cpp'
+      - 'src/core/rad_ngsolve_radia_field.h'
+      - 'src/core/rad_parallel.h'
+      - 'tests/test_arc_far_rule.py'
+      - 'tests/test_radiafield_cache_parallel.py'
+      - 'tests/test_radiafield_memoize.py'
+      - 'tests/test_radiafield_precision.py'
+      - 'tests/test_mixed_omega_source_load.py'
+      - 'tests/test_three_engine_energy.py'
+      - 'validation_test/c_type_three_engine/magnetic_energy.py'
+      - 'tests/test_ams_internal_setup_parallel.py'
+      - 'src/core/rad_hacapk*'
+      - 'src/ext/HACApK/**'
+      - 'tests/test_hdiv_chargegram_build_safety.py'
+      - 'tests/test_hdiv_vim_native_matrix.py'
+      - 'tests/test_hdiv_same_process_determinism.py'
       - 'src/radia/vector_potential_solver.py'
       - 'src/radia/scalar_potential_solver.py'
       - 'validation_test/panels/test_scalar_linear_direct.py'
@@ -114,6 +120,10 @@ on:
       - 'tests/test_vector_potential_bh_tail.py'
       - 'tests/test_reduced_a_source_materialization.py'
       - 'tests/test_hdiv_response_contract.py'
+      - 'src/core/rad_beam_transfer.*'
+      - 'src/lib/rad_beam_transfer_pybind.*'
+      - 'src/radia/beam.py'
+      - 'validation_test/accelerator/benchmark_beam_transfer_mex_python.py'
       - 'src/radia/ngsbem_peec_body_coupling.py'
       - 'tests/test_ngsbem_peec_body_direct.py'
       - 'src/radia/ngsbem_eddy.py'
@@ -145,65 +155,21 @@ on:
       - 'tests/test_kelvin_mixed_omega.py'
       - 'tests/test_mixed_omega_review_fixes.py'
       - 'tests/test_c_type_p1_box_lane.py'
-      - 'src/core/rad_hacapk*'
-      - 'matlab/+radia/HACApKChargeGram.m'
-      - 'tests/matlab/test_hacapk_rank_cap.m'
-      - 'src/ext/HACApK/**'
-      - 'tests/test_hdiv_chargegram_build_safety.py'
-      - 'tests/test_hdiv_vim_native_matrix.py'
-      - 'tests/test_hdiv_same_process_determinism.py'
       - 'src/ext/sparsesolv/**'
-      - 'tests/test_ams_internal_setup_parallel.py'
-      - 'src/core/rad_arc_section.h'
-      - 'src/core/rad_arc_current.cpp'
-      - 'src/core/rad_ngsolve_radia_field.h'
-      - 'src/core/rad_parallel.h'
-      - 'tests/test_arc_far_rule.py'
-      - 'tests/test_radiafield_cache_parallel.py'
-      - 'tests/test_radiafield_memoize.py'
-      - 'tests/test_radiafield_precision.py'
-      - 'matlab/+radia/RadiaField.m'
-      - 'tests/matlab/test_radiafield_mex.m'
-      - 'tests/test_mixed_omega_source_load.py'
-      - 'tests/test_three_engine_energy.py'
-      - 'validation_test/c_type_three_engine/magnetic_energy.py'
-      - 'src/matlab/radia_mex.cpp'
       - 'src/matlab/radia_mex_sparse_symmetry.h'
       - 'tests/cpp/test_radia_mex_sparse_symmetry.cpp'
-      - 'matlab/+radia/+internal/callMex.m'
-      - 'matlab/+radia/setup.m'
-      - 'tests/matlab/test_ngsolve_sparsecholesky.m'
-      - 'matlab/+radia/+ngsolve/Matrix.m'
-      - 'tests/matlab/test_mex_runtime_setup.m'
-      - 'src/core/rad_beam_transfer.*'
-      - 'src/lib/rad_beam_transfer_pybind.*'
-      - 'src/matlab/radia_beam_mex_commands.*'
-      - 'src/radia/beam.py'
-      - 'matlab/+radia/+beam/canonicalBodyHamiltonianJet.m'
-      - 'matlab/+radia/+beam/propagateVariationalMap.m'
-      - 'tests/matlab/test_beam_transfer_mex.m'
-      - 'tests/matlab/beam_transfer_python_reference.py'
-      - 'validation_test/accelerator/benchmark_beam_transfer_mex_python.py'
-      - 'matlab/+radia/+sparsesolv/**'
-      - 'matlab/+radia/+python/sparsesolv.m'
-      - 'matlab/+radia/+python/electromagnetValidation.m'
-      - 'matlab/+radia/+python/esrfExamples.m'
-      - 'matlab/+radia/+python/staticElectromagnet.m'
-      - 'matlab/python_api_parity_manifest.json'
-      - 'tests/matlab/*sparsesolv*'
-      - 'validation_test/ngsolve_matlab_parity/run_sparsesolv_parity.py'
       - 'src/radia/__init__.py'
       - 'src/radia/_preconditioners.py'
       - 'CMakeLists.txt'
       - 'Build.ps1'
+      - 'tools/run_test_tier.py'
       - 'tools/native_build_provenance.ps1'
       - 'tests/test_native_build_provenance.py'
-      - 'pyproject.toml'
-      - 'tests/test_tier_manifest.json'
-      - 'tools/run_test_tier.py'
       - 'tools/sparsesolv_ci_impact.py'
       - 'tests/test_sparsesolv_ci_contract.py'
       - '.github/workflows/sparsesolv.yml'
+      - 'pyproject.toml'
+      - 'tests/test_tier_manifest.json'
   push:
     branches: [main]
     paths:
@@ -224,17 +190,6 @@ on:
       - 'validation_test/radia_mcp/test_axi_eddy_current_drive.py'
       - 'validation_test/radia_mcp/test_eddy_driven_region.py'
       - 'validation_test/radia_mcp/test_aphi_gauge_point.py'
-      - 'src/matlab/radia_ih_mex_commands.cpp'
-      - 'matlab/+radia/+simulink/validateIHNativeConfig.m'
-      - 'tests/matlab/test_ih_sparse_inputs.m'
-      - 'matlab/+radia/+internal/nextIHNativeHandle.m'
-      - 'matlab/+radia/+internal/selectedPythonExecutable.m'
-      - 'matlab/+radia/+internal/resolveAssemblyPython.m'
-      - 'matlab/+radia/+simulink/assembleIHOperatorsFromGeometry.m'
-      - 'matlab/+radia/+simulink/addIHGeometryUpdateBlock.m'
-      - 'matlab/+radia/+simulink/updateIHGeometry.m'
-      - 'tests/matlab/test_ih_python_selection.m'
-      - 'tests/matlab/test_ih_geometry_update.m'
       - 'src/radia/bem/sibc_hacapk.py'
       - 'src/radia/panels/surface_mesh_extract.py'
       - 'tests/test_surface_orientation.py'
@@ -278,6 +233,23 @@ on:
       - 'src/radia/vim/_nonlinear.py'
       - 'src/radia/vim/_solve.py'
       - 'tests/test_hdiv_energy_material_consistency.py'
+      - 'src/core/rad_arc_section.h'
+      - 'src/core/rad_arc_current.cpp'
+      - 'src/core/rad_ngsolve_radia_field.h'
+      - 'src/core/rad_parallel.h'
+      - 'tests/test_arc_far_rule.py'
+      - 'tests/test_radiafield_cache_parallel.py'
+      - 'tests/test_radiafield_memoize.py'
+      - 'tests/test_radiafield_precision.py'
+      - 'tests/test_mixed_omega_source_load.py'
+      - 'tests/test_three_engine_energy.py'
+      - 'validation_test/c_type_three_engine/magnetic_energy.py'
+      - 'tests/test_ams_internal_setup_parallel.py'
+      - 'src/core/rad_hacapk*'
+      - 'src/ext/HACApK/**'
+      - 'tests/test_hdiv_chargegram_build_safety.py'
+      - 'tests/test_hdiv_vim_native_matrix.py'
+      - 'tests/test_hdiv_same_process_determinism.py'
       - 'src/radia/vector_potential_solver.py'
       - 'src/radia/scalar_potential_solver.py'
       - 'validation_test/panels/test_scalar_linear_direct.py'
@@ -317,6 +289,10 @@ on:
       - 'tests/test_vector_potential_bh_tail.py'
       - 'tests/test_reduced_a_source_materialization.py'
       - 'tests/test_hdiv_response_contract.py'
+      - 'src/core/rad_beam_transfer.*'
+      - 'src/lib/rad_beam_transfer_pybind.*'
+      - 'src/radia/beam.py'
+      - 'validation_test/accelerator/benchmark_beam_transfer_mex_python.py'
       - 'src/radia/ngsbem_peec_body_coupling.py'
       - 'tests/test_ngsbem_peec_body_direct.py'
       - 'src/radia/ngsbem_eddy.py'
@@ -348,65 +324,21 @@ on:
       - 'tests/test_kelvin_mixed_omega.py'
       - 'tests/test_mixed_omega_review_fixes.py'
       - 'tests/test_c_type_p1_box_lane.py'
-      - 'src/core/rad_hacapk*'
-      - 'matlab/+radia/HACApKChargeGram.m'
-      - 'tests/matlab/test_hacapk_rank_cap.m'
-      - 'src/ext/HACApK/**'
-      - 'tests/test_hdiv_chargegram_build_safety.py'
-      - 'tests/test_hdiv_vim_native_matrix.py'
-      - 'tests/test_hdiv_same_process_determinism.py'
       - 'src/ext/sparsesolv/**'
-      - 'tests/test_ams_internal_setup_parallel.py'
-      - 'src/core/rad_arc_section.h'
-      - 'src/core/rad_arc_current.cpp'
-      - 'src/core/rad_ngsolve_radia_field.h'
-      - 'src/core/rad_parallel.h'
-      - 'tests/test_arc_far_rule.py'
-      - 'tests/test_radiafield_cache_parallel.py'
-      - 'tests/test_radiafield_memoize.py'
-      - 'tests/test_radiafield_precision.py'
-      - 'matlab/+radia/RadiaField.m'
-      - 'tests/matlab/test_radiafield_mex.m'
-      - 'tests/test_mixed_omega_source_load.py'
-      - 'tests/test_three_engine_energy.py'
-      - 'validation_test/c_type_three_engine/magnetic_energy.py'
-      - 'src/matlab/radia_mex.cpp'
       - 'src/matlab/radia_mex_sparse_symmetry.h'
       - 'tests/cpp/test_radia_mex_sparse_symmetry.cpp'
-      - 'matlab/+radia/+internal/callMex.m'
-      - 'matlab/+radia/setup.m'
-      - 'tests/matlab/test_ngsolve_sparsecholesky.m'
-      - 'matlab/+radia/+ngsolve/Matrix.m'
-      - 'tests/matlab/test_mex_runtime_setup.m'
-      - 'src/core/rad_beam_transfer.*'
-      - 'src/lib/rad_beam_transfer_pybind.*'
-      - 'src/matlab/radia_beam_mex_commands.*'
-      - 'src/radia/beam.py'
-      - 'matlab/+radia/+beam/canonicalBodyHamiltonianJet.m'
-      - 'matlab/+radia/+beam/propagateVariationalMap.m'
-      - 'tests/matlab/test_beam_transfer_mex.m'
-      - 'tests/matlab/beam_transfer_python_reference.py'
-      - 'validation_test/accelerator/benchmark_beam_transfer_mex_python.py'
-      - 'matlab/+radia/+sparsesolv/**'
-      - 'matlab/+radia/+python/sparsesolv.m'
-      - 'matlab/+radia/+python/electromagnetValidation.m'
-      - 'matlab/+radia/+python/esrfExamples.m'
-      - 'matlab/+radia/+python/staticElectromagnet.m'
-      - 'matlab/python_api_parity_manifest.json'
-      - 'tests/matlab/*sparsesolv*'
-      - 'validation_test/ngsolve_matlab_parity/run_sparsesolv_parity.py'
       - 'src/radia/__init__.py'
       - 'src/radia/_preconditioners.py'
       - 'CMakeLists.txt'
       - 'Build.ps1'
+      - 'tools/run_test_tier.py'
       - 'tools/native_build_provenance.ps1'
       - 'tests/test_native_build_provenance.py'
-      - 'pyproject.toml'
-      - 'tests/test_tier_manifest.json'
-      - 'tools/run_test_tier.py'
       - 'tools/sparsesolv_ci_impact.py'
       - 'tests/test_sparsesolv_ci_contract.py'
       - '.github/workflows/sparsesolv.yml'
+      - 'pyproject.toml'
+      - 'tests/test_tier_manifest.json'
   workflow_dispatch:
 
 permissions:
@@ -420,8 +352,7 @@ jobs:
   ams-regression:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: [self-hosted, Windows, X64, "100"]
-    # Native build, numerical contracts and MATLAB parity share this job.
-    # The full lane exceeded 20 minutes during MATLAB tests on mdx.
+    # CPU Python/pybind11 build and numerical contracts. GPU mexcuda has its own workflow.
     timeout-minutes: 45
     env:
       # Bound library pools before the parent and its fresh Python children
@@ -441,39 +372,6 @@ jobs:
         run: |
           python tools/sparsesolv_ci_impact.py
           exit $LASTEXITCODE
-
-      - name: Select MATLAB parity impact
-        id: matlab-impact
-        shell: pwsh
-        run: |
-          $workspace = $env:GITHUB_WORKSPACE -replace '\\', '/'
-          # A push can contain several implementation commits followed by docs.
-          # Inspect the complete push; an unavailable base fails closed below.
-          $base = 'HEAD^1'
-          if ($env:GITHUB_EVENT_NAME -eq 'push') {
-            $event = Get-Content -LiteralPath $env:GITHUB_EVENT_PATH -Raw | ConvertFrom-Json
-            $base = [string]$event.before
-          }
-          $diff = @(git -c "safe.directory=$workspace" -C "$workspace" diff --name-only "$base" HEAD -- 2>&1)
-          $diffFailed = $LASTEXITCODE -ne 0
-          $changed = @()
-          if ($diffFailed) {
-            Write-Warning "Cannot determine MATLAB impact in $env:GITHUB_WORKSPACE; running parity. $($diff -join ' ')"
-          } else {
-            $changed = $diff
-          }
-          $required = $diffFailed -or '${{ github.event_name }}' -eq 'workflow_dispatch'
-          $required = $required -or [bool]($changed -match '^(src/ext/HACApK/|src/core/rad_hacapk|matlab/\+radia/HACApKChargeGram\.m|tests/matlab/test_hacapk_rank_cap\.m|src/ext/sparsesolv/|src/matlab/|matlab/\+radia/\+sparsesolv/|tests/matlab/.*sparsesolv|validation_test/ngsolve_matlab_parity/run_sparsesolv|CMakeLists.txt|Build.ps1|\.github/workflows/sparsesolv.yml)')
-          $required = $required -or [bool]($changed -match '^matlab/(python_api_parity_manifest.json|\+radia/\+python/(sparsesolv|electromagnetValidation|esrfExamples|staticElectromagnet)\.m)')
-          $required = $required -or [bool]($changed -match '^(matlab/\+radia/(setup\.m|\+internal/callMex\.m)|tests/matlab/test_mex_runtime_setup\.m|tests/matlab/test_ngsolve_sparsecholesky\.m|matlab/\+radia/\+ngsolve/Matrix\.m)$')
-          $required = $required -or [bool]($changed -match '^(src/(core/rad_beam_transfer|lib/rad_beam_transfer_pybind|matlab/radia_beam_mex_commands|radia/beam\.py)|matlab/\+radia/\+beam/(canonicalBodyHamiltonianJet|propagateVariationalMap)\.m|tests/matlab/(test_beam_transfer_mex\.m|beam_transfer_python_reference\.py)|validation_test/accelerator/benchmark_beam_transfer_mex_python\.py)')
-          $required = $required -or ($changed -contains 'tools/native_build_provenance.ps1')
-          $required = $required -or [bool]($changed -match '^(src/core/rad_ngsolve_radia_field\.h|matlab/\+radia/RadiaField\.m|tests/matlab/test_radiafield_mex\.m)$')
-          $required = $required -or [bool]($changed -match '^(matlab/\+radia/\+internal/(selectedPythonExecutable|resolveAssemblyPython)\.m|matlab/\+radia/\+simulink/(assembleIHOperatorsFromGeometry|addIHGeometryUpdateBlock|updateIHGeometry)\.m|tests/matlab/test_ih_(python_selection|geometry_update)\.m)$')
-          $required = $required -or [bool]($changed -match '^(matlab/\+radia/\+internal/nextIHNativeHandle\.m|matlab/\+radia/\+simulink/validateIHNativeConfig\.m|tests/matlab/test_ih_sparse_inputs\.m)$')
-          "required=$($required.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
-          Write-Host "MATLAB parity required=$required; diff_failed=$diffFailed; changed_files=$($changed.Count)"
-          exit 0
 
       - name: Create isolated native environment
         if: steps.native-impact.outputs.required == 'true'
@@ -573,21 +471,6 @@ jobs:
           python -c "import os, pathlib, xml.etree.ElementTree as ET; p=pathlib.Path(os.environ['RUNNER_TEMP'])/'solver-heavy.xml'; cases=list(ET.parse(p).iter('testcase')); assert cases and all(c.find('skipped') is None for c in cases), 'required numerical tests must execute without skips'; print('Executed numerical cases:', len(cases))"
           exit $LASTEXITCODE
 
-      - name: Build and verify native MATLAB parity
-        if: steps.native-impact.outputs.required == 'true' && steps.matlab-impact.outputs.required == 'true'
-        shell: pwsh
-        env:
-          PYTHONPATH: '${{ github.workspace }}\src'
-        run: |
-          & .\Build.ps1 -MatlabMexOnly -BuildJobs 2
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $matlab = Get-ChildItem "$env:ProgramFiles\MATLAB" -Directory | Sort-Object Name -Descending | Select-Object -First 1
-          if (-not $matlab) { throw 'MATLAB installation required for native parity' }
-          python -m pip install (Join-Path $matlab.FullName 'extern\engines\python')
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python validation_test/ngsolve_matlab_parity/run_sparsesolv_parity.py --output "$env:RUNNER_TEMP\sparsesolv-matlab.json"
-          exit $LASTEXITCODE
-
       - name: Upload solver test results
         if: always() && steps.native-impact.outputs.required == 'true'
         uses: actions/upload-artifact@v4
@@ -597,6 +480,5 @@ jobs:
             ${{ runner.temp }}/sparsesolv-results.xml
             ${{ runner.temp }}/solver-numerics.xml
             ${{ runner.temp }}/solver-heavy.xml
-            ${{ runner.temp }}/sparsesolv-matlab.json
             build-msvc/build.log
           if-no-files-found: warn

@@ -1,7 +1,10 @@
 cmake_minimum_required(VERSION 3.21)
 project(radia C CXX)
 
-option(RADIA_BUILD_MATLAB_MEX "Build the MATLAB MEX gateway" OFF)
+if(RADIA_BUILD_MATLAB_MEX)
+    message(FATAL_ERROR "CPU radia_mex is retired. Use Build.ps1 -CudaMexOnly for GPU or -RadiaOnly for CPU Python.")
+endif()
+unset(RADIA_BUILD_MATLAB_MEX CACHE)
 option(RADIA_BUILD_OPTUNA_MEX_ONLY
     "Configure only the independent MATLAB Optuna MEX gateway" OFF)
 
@@ -202,9 +205,6 @@ if(WIN32)
 		mkl_avx2
 		mkl_def
 	)
-	if(RADIA_BUILD_MATLAB_MEX)
-		list(APPEND _MKL_REQUIRED_RUNTIME_NAMES mkl_sequential)
-	endif()
 	set(MKL_DIR "")
 	foreach(_MKL_CANDIDATE IN LISTS _MKL_CANDIDATES)
 		file(TO_CMAKE_PATH "${_MKL_CANDIDATE}" _MKL_CANDIDATE_NORM)
@@ -227,8 +227,7 @@ if(WIN32)
 	set(MKL_BIN_DIR "${MKL_DIR}/bin")
 	set(MKL_RUNTIME_ABI "3")
 	set(MKL_RT_DLL "${MKL_BIN_DIR}/mkl_rt.${MKL_RUNTIME_ABI}.dll")
-	# Python extensions retain the threaded oneMKL closure. MATLAB gets a
-	# separate sequential closure because MATLAB owns process-level scheduling.
+	# CPU Python extensions use their supported oneMKL runtime closure.
 	set(MKL_RUNTIME_DLLS)
 	foreach(_MKL_RUNTIME_NAME IN ITEMS
 		mkl_rt
@@ -246,25 +245,6 @@ if(WIN32)
 		endif()
 		list(APPEND MKL_RUNTIME_DLLS "${_MKL_RUNTIME_DLL}")
 	endforeach()
-	set(MKL_MATLAB_RUNTIME_DLLS)
-	if(RADIA_BUILD_MATLAB_MEX)
-		foreach(_MKL_RUNTIME_NAME IN ITEMS
-			mkl_rt
-			mkl_core
-			mkl_sequential
-			mkl_avx2
-			mkl_def
-		)
-			set(_MKL_RUNTIME_DLL
-				"${MKL_BIN_DIR}/${_MKL_RUNTIME_NAME}.${MKL_RUNTIME_ABI}.dll")
-			if(NOT EXISTS "${_MKL_RUNTIME_DLL}")
-				message(FATAL_ERROR
-					"MATLAB sequential MKL 2026 runtime not found: ${_MKL_RUNTIME_DLL}. "
-					"Install pip package mkl-devel>=2026,<2027.")
-			endif()
-			list(APPEND MKL_MATLAB_RUNTIME_DLLS "${_MKL_RUNTIME_DLL}")
-		endforeach()
-	endif()
 
 	# Use mkl_rt.lib (dynamic linking) - works with both Intel and MSVC compilers
 	set(MKL_LIB "${MKL_LIB_DIR}/mkl_rt.lib")
@@ -775,132 +755,6 @@ add_custom_command(TARGET _radia_pybind POST_BUILD
 )
 
 message(STATUS "_radia_pybind module configured (pybind11 bindings)")
-
-# ========================================
-# MATLAB MEX gateway (optional)
-# ========================================
-# Stateful C++ objects use checked uint64 handles.  NGSolve remains the owner
-# of TaskManager, mesh loading, finite-element orientation, and space updates.
-if(RADIA_BUILD_MATLAB_MEX)
-	find_package(Matlab REQUIRED COMPONENTS MX_LIBRARY MEX_LIBRARY)
-	execute_process(
-		COMMAND git -c safe.directory=${CMAKE_CURRENT_SOURCE_DIR} rev-parse HEAD
-		WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-		OUTPUT_VARIABLE RADIA_MEX_SOURCE_COMMIT
-		OUTPUT_STRIP_TRAILING_WHITESPACE
-		RESULT_VARIABLE RADIA_MEX_GIT_RESULT)
-	string(LENGTH "${RADIA_MEX_SOURCE_COMMIT}" RADIA_MEX_COMMIT_LENGTH)
-	if(NOT RADIA_MEX_GIT_RESULT EQUAL 0 OR
-		NOT RADIA_MEX_COMMIT_LENGTH EQUAL 40 OR
-		NOT RADIA_MEX_SOURCE_COMMIT MATCHES "^[0-9a-f]+$")
-		message(FATAL_ERROR "radia_mex requires a Git source commit")
-	endif()
-	matlab_add_mex(
-		NAME radia_mex
-		R2018a
-		SRC
-			${CMAKE_CURRENT_SOURCE_DIR}/src/matlab/radia_mex.cpp
-			${CMAKE_CURRENT_SOURCE_DIR}/src/matlab/radia_ih_mex_commands.cpp
-			${CMAKE_CURRENT_SOURCE_DIR}/src/matlab/radia_reactor_mex_commands.cpp
-			${CMAKE_CURRENT_SOURCE_DIR}/src/matlab/radia_beam_mex_commands.cpp
-			${CMAKE_CURRENT_SOURCE_DIR}/src/lib/rad_beam_ngsolve.cpp
-			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_runtime.cpp
-			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_transport.cpp
-			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_thermal.cpp
-			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_nonlinear_reactor_runtime.cpp
-			${RADIA_CORE_SOURCES}
-			${EXT_DIR}/axifem/axi_henrotte_numeric.cpp
-			${EXT_DIR}/auxparse/auxparse.cpp
-			${EXT_DIR}/genmath/gmfft.cpp
-			${EXT_DIR}/genmath/gmtrans.cpp
-			${HACAPK_SOURCES}
-			# The legacy C ABI is still the native Radia compatibility layer.  Its
-			# MEX build is Python-free because radentry.cpp is compiled with the
-			# RADIA_MEX_NO_PYTHON feature below.
-			${RADIA_LIB_SOURCES}
-	)
-	target_include_directories(radia_mex BEFORE PRIVATE
-		${NGSOLVE_BUNDLED_INC}
-		${NGSOLVE_COMPAT_INC}
-	)
-	target_include_directories(radia_mex PRIVATE
-		${EXT_DIR}/sparsesolv/include
-		${CMAKE_CURRENT_SOURCE_DIR}/src/matlab
-		${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink
-		${CORE_DIR}
-		${LIB_DIR}
-		${EXT_DIR}/axifem
-		${EXT_DIR}/auxparse
-		${EXT_DIR}/genmath
-		${EXT_DIR}/HACApK
-		${Netgen_INCLUDE_DIRS}
-		${NGSolve_INCLUDE_DIRS}
-	)
-	target_compile_definitions(radia_mex PRIVATE
-		SPARSESOLV_USE_NGSOLVE_TASKMANAGER
-		SPARSESOLV_USE_MKL
-		_CRT_SECURE_NO_WARNINGS
-		_GM_WITHOUT_BASE
-		ALPHA__DLL__
-		ANSI_DECLARATORS
-		HACAPK_RADIA_LOGGING
-		NOMINMAX
-		RADIA_MEX_NO_PYTHON
-		RADIA_MEX_SOURCE_COMMIT="${RADIA_MEX_SOURCE_COMMIT}"
-	)
-	target_compile_features(radia_mex PRIVATE cxx_std_20)
-	# FindMatlab uses the plain signature internally, so this call must too.
-	# The MEX gateway uses NGSolve's native C++ API directly.  Do not link the
-	# Python runtime here: MATLAB/Simulink must be able to load radia_mex
-	# without starting or embedding Python.
-	target_link_libraries(radia_mex ngstd ngfem ngcomp ngbla)
-	if(WIN32 AND USE_MKL_FOUND)
-		target_link_libraries(radia_mex ${BLAS_LIB})
-		target_include_directories(radia_mex PRIVATE ${BLAS_INCLUDE_DIR})
-		target_compile_definitions(radia_mex PRIVATE HAVE_LAPACK)
-	endif()
-	if(MSVC)
-		# The bundled Windows NGSolve package is built with Python support and
-		# propagates these feature macros through its imported targets. The MEX
-		# gateway uses only the native C++ API, so suppress Python-only header
-		# instantiations here; otherwise radia_mex.obj requests python312.lib.
-		target_compile_options(radia_mex PRIVATE
-			/O2 /fp:fast /W0
-			/UNGS_PYTHON /UNETGEN_PYTHON /UNG_PYTHON
-			/UPYBIND11_SIMPLE_GIL_MANAGEMENT
-			"$<$<COMPILE_LANGUAGE:CXX>:/FI${NGSOLVE_BUNDLED_INC}/core/taskmanager.hpp>"
-			"$<$<COMPILE_LANGUAGE:CXX>:/FI${NGSOLVE_BUNDLED_INC}/core/localheap.hpp>"
-		)
-		target_link_options(radia_mex PRIVATE /NODEFAULTLIB:LIBCMT)
-		target_link_libraries(radia_mex version.lib)
-	endif()
-	add_custom_command(TARGET radia_mex POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/matlab"
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			"$<TARGET_FILE:radia_mex>"
-			"${CMAKE_SOURCE_DIR}/matlab/$<TARGET_FILE_NAME:radia_mex>"
-		COMMENT "Copying radia_mex to matlab"
-	)
-	# Compile the domain-only gateway from the same command source. It does not
-	# resolve the monolithic radia_mex dependency graph at runtime.
-	radia_add_optuna_mex()
-	if(WIN32 AND USE_MKL_FOUND)
-		# MATLAB resolves MEX dependencies from the module directory.  Keep the
-		# oneMKL dispatch DLLs beside radia_mex so it does not depend on the
-		# host Python installation.  Do not copy libiomp5md.dll: MATLAB already
-		# owns an OpenMP runtime and loading a second copy aborts the process.
-		foreach(_MKL_RUNTIME_DLL IN LISTS MKL_MATLAB_RUNTIME_DLLS)
-			get_filename_component(_MKL_RUNTIME_FILENAME "${_MKL_RUNTIME_DLL}" NAME)
-			add_custom_command(TARGET radia_mex POST_BUILD
-				COMMAND ${CMAKE_COMMAND} -E copy_if_different
-					"${_MKL_RUNTIME_DLL}"
-					"${CMAKE_SOURCE_DIR}/matlab/${_MKL_RUNTIME_FILENAME}"
-				COMMENT "Copying ${_MKL_RUNTIME_FILENAME} beside radia_mex"
-			)
-		endforeach()
-	endif()
-	message(STATUS "radia_mex + lightweight optuna_mex configured (MATLAB R2018a interleaved complex API)")
-endif()
 
 # ========================================
 # sparsesolv_ngsolve module (NGSolve preconditioners + Krylov solvers)
