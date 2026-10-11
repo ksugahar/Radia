@@ -173,8 +173,7 @@ solver boundary is a checked `.vol` regardless of the creation route.
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
 **POLICY**: CI/builds use 100号機 with the `100` runner label.
-The upgraded 100号機 also runs development tests and heavy numerical/memory
-validation in isolated job-owned environments; it is not limited to smoke checks.
+100号機 also runs tests and heavy numerical/memory validation in isolated job environments.
 Isolate CI from user runtimes; LAB tests wheels.
 LAB owns distribution acceptance and SSH preflight; mdx is reserved for computation-time evaluation; mdx1/mdx2/hibino are retired.
 Before the next solver release, migrate release-quad acceptance to the current fleet.
@@ -222,12 +221,10 @@ LAB-owned mapped drives or the workgroup share. Do not restore that dependency.
 ### Compute Host Routing
 
 **POLICY (2026-10-11)**: Use the consolidated `mdx` host for computation-time evaluations only; mdx1/mdx2/hibino no longer exist as targets.
-Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes mdx hostname`, then check
-running jobs and available memory. Run one heavy job at a time; preserve active timing jobs. Never stop another session's jobs. LAB may run high-memory tests when
-explicitly selected; Gmsh rendering needs a desktop.
-Formal timing/performance comparisons require an otherwise idle mdx host;
-do not overlap them with CI, validation or other computation. Timing captured
-incidentally on 100号機 or LAB is diagnostic provenance, not performance acceptance.
+Probe `ssh -o ConnectTimeout=6 -o BatchMode=yes mdx hostname`; check jobs and memory.
+Run one heavy job at a time; never stop others' jobs. LAB high-memory tests require
+explicit selection; Gmsh rendering needs a desktop.
+Formal timing requires idle mdx. Incidental 100号機/LAB timings are diagnostic only.
 Measure speed; settle quadrature and threads first. Historical mdx measurements
 remain valid provenance. Publish OS, threads, versions/results; keep hosts/IPs/paths private.
 
@@ -292,5 +289,5 @@ Reassess roles as tools and results evolve; explicit user assignments prevail.
 
 ## Detailed Guidance
 
-Use focused skills and `packages/radia-mcp/src/radia_mcp/**/knowledge/` for detail; correct policy conflicts there with a focused regression.
-Do not expand this file into a second manual.
+Use skills and `packages/radia-mcp/src/radia_mcp/**/knowledge/` for detail; fix
+policy conflicts there with a regression. Keep this policy compact.
