@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import statistics
+import subprocess
 import matlab.engine
 from scipy.io import loadmat
 from run import jsonable
@@ -13,9 +14,17 @@ from run import jsonable
 def main(args):
     args.out.mkdir(parents=True, exist_ok=False)
     builds = [args.before.resolve(), args.after.resolve()]
+    root = Path(__file__).resolve().parents[2]
     record = {'schema': 'radia.ams-cuda-comparison.v1', 'accepted': False,
               'order': ['before', 'after', 'after', 'before'] * args.rounds,
-              'builds': [], 'cases': []}
+              'builds': [], 'cases': [],
+              'measurement_source_commit': subprocess.check_output(
+                  ['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip(),
+              'measurement_source_dirty': bool(subprocess.check_output(
+                  ['git', '-C', str(root), 'status', '--porcelain'], text=True).strip()),
+              'measurement_source_sha256': {
+                  str(path.relative_to(root)).replace('\\', '/'): hashlib.sha256(path.read_bytes()).hexdigest()
+                  for path in (Path(__file__).resolve(), Path(__file__).with_name('benchmark.m'))}}
     eng = None
     try:
         for directory in builds:
@@ -32,13 +41,15 @@ def main(args):
         for source in args.inputs:
             source = source.resolve()
             snapshot = loadmat(source, simplify_cells=True)['snapshot']
+            case_index = len(record['cases'])
             entry = {'input_sha256': hashlib.sha256(source.read_bytes()).hexdigest(),
                      'dofs': int(snapshot['A']['rows']), 'cycle': int(snapshot['cycle_type']),
                      'runs': []}
+            record['cases'].append(entry)
             times = [[], []]
             inclusive = [[], []]
             for block, variant in enumerate([0, 1, 1, 0] * args.rounds):
-                target = args.out / f'case{len(record["cases"])}-block{block}.mat'
+                target = args.out / f'case{case_index}-block{block}.mat'
                 eng.eval('clear radia_cuda_ams;', nargout=0)
                 if block:
                     eng.rmpath(str(builds[previous]), nargout=0)
@@ -54,7 +65,7 @@ def main(args):
                         not all(data['checks'].values())):
                     raise RuntimeError('Interleaved AMS parity or gateway check failed')
                 entry['runs'].append({'variant': ['before', 'after'][variant], **data})
-                print(f'case {len(record["cases"])} block {block}: '
+                print(f'case {case_index} block {block}: '
                       f'{["before", "after"][variant]} {statistics.median(samples):.6f}s', flush=True)
             eng.eval('clear radia_cuda_ams;', nargout=0)
             eng.rmpath(str(builds[previous]), nargout=0)
@@ -66,7 +77,6 @@ def main(args):
                          warm_timing_improved=medians[1] < medians[0],
                          before_inclusive_median_seconds=statistics.median(inclusive[0]),
                          after_inclusive_median_seconds=statistics.median(inclusive[1]))
-            record['cases'].append(entry)
             (args.out / 'result.json').write_text(json.dumps(record, indent=2) + '\n')
         record['accepted'] = True
     except Exception as exc:
