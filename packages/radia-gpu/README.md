@@ -22,7 +22,7 @@ radia-gpu-path
 Add the reported directory to MATLAB's path. MATLAB R2026a, Parallel Computing
 Toolbox, an NVIDIA GPU and a compatible NVIDIA driver are external requirements.
 Python delivers and verifies the MATLAB payload; it does not execute GPU solves.
-The Windows x64 binary contains sm_75/sm_80 code and compute_80 PTX.
+The Windows x64 binary contains sm_61/sm_75/sm_80 code and compute_80 PTX.
 RTX 5000 acceptance does not certify A100 scaling.
 
 Call `radia.gpu.csrPCG` with zero-based int32 CSR row pointers/columns and FP64

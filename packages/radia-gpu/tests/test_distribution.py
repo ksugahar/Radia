@@ -42,3 +42,17 @@ def test_package_exposes_only_gpu_solver_and_no_cpu_runtime_dependency():
     api=load_api()
     assert "ngsolve" not in api.__dict__ and "matlab" not in api.__dict__
     assert "checkout" not in api.matlab_path.__doc__.lower()
+
+
+@pytest.mark.parametrize('member',['../escape','radia_gpu/matlab/radia_mex.mexw64',
+                                  'radia_gpu/matlab/external.dll','radia/__init__.py'])
+def test_wheel_rejects_escape_cpu_solver_and_external_payload(tmp_path,member):
+    import zipfile
+    spec=importlib.util.spec_from_file_location('gpu_wheel_contract',ROOT/'verify_wheel.py')
+    verifier=importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(verifier)
+    wheel=tmp_path/'radia_gpu-0.1.0a1-py3-none-win_amd64.whl'
+    with zipfile.ZipFile(wheel,'w') as archive:
+        archive.writestr(member,b'forbidden')
+    with pytest.raises(ValueError):
+        verifier.verify(wheel)

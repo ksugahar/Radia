@@ -1,8 +1,9 @@
-function result = check_installed(payload, output)
+function result = check_installed(payload, output, checkLTspice)
 %CHECK_INSTALLED Exercise only the wheel's MATLAB payload in an owned session.
 arguments
     payload (1,1) string
     output (1,1) string
+    checkLTspice (1,1) logical = true
 end
 assert(isfolder(payload));
 if ~isfolder(output), mkdir(output); end
@@ -21,9 +22,10 @@ model = 'radia_gpu_installed_acceptance';
 assert(~bdIsLoaded(model),'Acceptance model already belongs to another operation.');
 cleanup = onCleanup(@() closeOwned(model));
 blockOutput = fullfile(output,'simulink');
-radia.simulink.buildCudaPCGBlock(model,OutputDirectory=blockOutput);
+new_system(model);
 workspace = get_param(model,'ModelWorkspace');
 workspace.assignin('cudaSystem',system);
+radia.simulink.buildCudaPCGBlock(model,OutputDirectory=blockOutput);
 add_block('simulink/Sources/Constant',model+"/RHS",'Value','[1;0;1]');
 add_block('simulink/Sinks/To Workspace',model+"/Solution", ...
     'VariableName','gpuSolution','SaveFormat','Array');
@@ -56,6 +58,7 @@ assert(failed,'Nonconvergence unexpectedly succeeded.');
 assert(radia.gpu.internal.systemStore('count','')==0,'Failed block leaked state.');
 evidence = jsondecode(fileread(fullfile(blockOutput,'result.json')));
 assert(~evidence.passed);
+if checkLTspice
 netlist = fullfile(output,'divider.cir');
 file = fopen(netlist,'w'); assert(file>=0);
 fprintf(file,'Radia independent resistor divider\nV1 in 0 2\nR1 in out 1000\nR2 out 0 1000\n.tran 0 0.001\n.end\n');
@@ -63,10 +66,14 @@ fclose(file);
 circuit = radia.ltspice.run(netlist,OutputDirectory=fullfile(output,'ltspice'),Timeout_s=60);
 assert(isfile(circuit.raw_file));
 waveform = circuit.waveform;
+voltage = waveform.values(:,waveform.names=="V(out)");
+if isempty(voltage), voltage = waveform.values(:,strcmpi(waveform.names,"V(out)")); end
+assert(~isempty(voltage) && max(abs(voltage(:)-1))<1e-8,'LTspice divider differs from analytical 1 V.');
+end
 result = struct('schema','radia.gpu.installed-acceptance.v1','passed',true, ...
     'matlab_release',version('-release'),'cuda_residual',info.true_relative_residual, ...
     'simulink_repeated_runs',2,'simulink_failure_cleanup',true, ...
-    'ltspice_raw_created',true,'ltspice_waveform_class',class(waveform));
+    'ltspice_checked',checkLTspice);
 file = fopen(fullfile(output,'result.json'),'w'); assert(file>=0);
 fprintf(file,'%s\n',jsonencode(result)); fclose(file);
 clear cleanup

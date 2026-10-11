@@ -8,6 +8,8 @@ import matlab.engine
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--installed-python', required=True, type=Path)
 parser.add_argument('--out', required=True, type=Path)
+parser.add_argument('--gpu-simulink-only', action='store_true',
+                    help='Explicitly exclude external LTspice acceptance; record it as unchecked')
 args = parser.parse_args()
 report = json.loads(subprocess.check_output(
     [str(args.installed_python), '-c',
@@ -18,7 +20,8 @@ args.out.resolve().mkdir(parents=True, exist_ok=False)
 engine = matlab.engine.start_matlab('-nodesktop -nosplash')
 try:
     engine.addpath(str(Path(__file__).resolve().parent), nargout=0)
-    engine.check_installed(report['matlab_path'], str(args.out.resolve()), nargout=0)
+    engine.check_installed(report['matlab_path'], str(args.out.resolve()),
+                           not args.gpu_simulink_only, nargout=0)
 finally:
     engine.quit()
 print((args.out / 'result.json').read_text())
