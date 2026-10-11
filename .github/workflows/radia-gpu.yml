@@ -7,6 +7,7 @@ on:
       - 'packages/radia-gpu/**'
       - 'packages/radia-mcp/src/radia_mcp/ltspice/**'
       - 'validation_test/radia_gpu/**'
+      - 'validation_test/ams_cuda/**'
       - 'validation_test/ngsolve_cuda_mex/**'
       - 'Build.ps1'
       - '.github/workflows/radia-gpu.yml'
@@ -16,6 +17,7 @@ on:
       - 'packages/radia-gpu/**'
       - 'packages/radia-mcp/src/radia_mcp/ltspice/**'
       - 'validation_test/radia_gpu/**'
+      - 'validation_test/ams_cuda/**'
       - 'validation_test/ngsolve_cuda_mex/**'
       - 'Build.ps1'
       - '.github/workflows/radia-gpu.yml'
@@ -85,7 +87,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python validation_test/radia_gpu/run_installed.py --installed-python $installedPython --wheel $wheel.FullName --out "$env:RUNNER_TEMP/radia-gpu-installed-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $gpuMatlab = & $installedPython -c "import radia_gpu; print(radia_gpu.matlab_path())"
+          $gpuMatlab = & $installedPython -I -c "import radia_gpu; print(radia_gpu.matlab_path())"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python validation_test/ams_cuda/run.py --gpu-dir $gpuMatlab --matlab-dir $gpuMatlab --out "$env:RUNNER_TEMP/radia-ams-installed-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --maxh 0.5 --threads 2
           exit $LASTEXITCODE

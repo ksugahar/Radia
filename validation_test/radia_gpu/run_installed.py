@@ -14,7 +14,7 @@ parser.add_argument('--gpu-simulink-only', action='store_true',
                     help='Explicitly exclude external LTspice acceptance; record it as unchecked')
 args = parser.parse_args()
 report = json.loads(subprocess.check_output(
-    [str(args.installed_python), '-c',
+    [str(args.installed_python), '-I', '-c',
      'import json,radia_gpu; print(json.dumps(radia_gpu.verify()))'], text=True))
 if not report['passed']:
     raise RuntimeError('Installed payload verification failed')
