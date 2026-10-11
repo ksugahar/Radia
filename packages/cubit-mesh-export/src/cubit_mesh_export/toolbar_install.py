@@ -58,7 +58,9 @@ def _version_key(path: str | os.PathLike[str]) -> tuple[int, ...]:
 def _is_supported_cubit_bin(path: str | os.PathLike[str]) -> bool:
     cubit_bin = Path(path)
     return (
-        (cubit_bin / "cubit.py").is_file()
+        ((cubit_bin / "cubit.py").is_file()
+         or ((cubit_bin / "cubit" / "__init__.py").is_file()
+             and (cubit_bin / "cubit" / "_cubit3.pyd").is_file()))
         and _parse_cubit_version(cubit_bin) >= _MIN_CUBIT_VERSION
     )
 

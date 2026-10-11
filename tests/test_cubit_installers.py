@@ -647,3 +647,17 @@ def test_native_module_version_matches_the_distribution():
               / "cubit_mesh_export_pybind.cpp").read_text(encoding="utf-8")
     assert f'__version__ = "{version}"' in init
     assert re.findall(r'm\.attr\("__version__"\) = "([^"]+)"', pybind) == [version]
+
+
+def test_find_cubit_bin_accepts_2026_8_package_layout(monkeypatch, tmp_path):
+    panels = _load_install_panels()
+    monkeypatch.setattr(panels.sys, "platform", "win32")
+    program_files = _patch_windows_env(monkeypatch, tmp_path)
+    root = _fake_cubit(program_files, "2026.8")
+    (root / "bin/cubit.py").unlink()
+    package = root / "bin/cubit"
+    package.mkdir()
+    (package / "__init__.py").write_text("")
+    assert panels.find_cubit_bin() is None
+    (package / "_cubit3.pyd").write_bytes(b"native")
+    assert Path(panels.find_cubit_bin()) == root / "bin"

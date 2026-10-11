@@ -27,7 +27,11 @@
 // the old GeometryQueryTool methods).  Callers MUST null-check.
 //=============================================================================
 
+#if __has_include("CubitCoreModel.hpp")
 #include "CubitCoreModel.hpp"
+#else
+#include "CubitInterface.hpp"
+#endif
 #include "CGMApp.hpp"
 #include "RefEntityFactory.hpp"
 
@@ -38,9 +42,13 @@ class RefVolume;
 namespace cubit_mesh_export {
 
 inline RefEntityFactory* cubit_factory() {
+#if __has_include("CubitCoreModel.hpp")
   CubitCoreModel* model = CubitCoreModel::instance();
   if (!model) return nullptr;
   CGMApp* app = model->cgmapp();
+#else
+  CGMApp* app = CubitInterface::cgm();
+#endif
   if (!app) return nullptr;
   return app->factory();
 }
