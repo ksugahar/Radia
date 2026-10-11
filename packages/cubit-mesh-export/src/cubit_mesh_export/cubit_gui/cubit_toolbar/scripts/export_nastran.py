@@ -2,9 +2,11 @@
 import os
 import sys
 
-# Cubit's official play route does not define __file__. WorkflowToolbar sets
+# Cubit's play route can retain a previous __file__. WorkflowToolbar sets
 # workingdir to this self-contained scripts directory before invoking us.
-_here = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
+_here = os.getcwd()
+if not os.path.isfile(os.path.join(_here, 'cubit_export_menu.py')) and '__file__' in globals():
+    _here = os.path.dirname(os.path.abspath(__file__))
 if not os.path.isfile(os.path.join(_here, 'cubit_export_menu.py')):
     raise RuntimeError('Toolbar working directory is invalid; reimport the exporter toolbar package')
 if _here not in sys.path:

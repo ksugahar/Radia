@@ -34,7 +34,7 @@ def probe():
                 if error:
                     result['error'] = error
                 (out / 'gui-result.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
-                QTimer.singleShot(0, QApplication.instance().quit)
+                QTimer.singleShot(0, lambda: cubit.cmd('exit 0'))
             start_toolbar_checks(out, toolbar_mode, complete)
             deferred = True
             return
@@ -69,7 +69,7 @@ def probe():
     finally:
         if not deferred:
             (out / 'gui-result.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
-            QTimer.singleShot(0, QApplication.instance().quit)
+            QTimer.singleShot(0, lambda: cubit.cmd('exit 0'))
 
 
 QTimer.singleShot(4000, probe)

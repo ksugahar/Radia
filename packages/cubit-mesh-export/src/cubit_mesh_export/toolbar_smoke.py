@@ -179,7 +179,10 @@ def _run_one(cubit_exe: Path, work: Path, timeout: float) -> dict:
     env["CUBIT_MESH_EXPORT_TOOLBAR_PROBE_RESULT"] = str(result_path)
     env["CUBIT_MESH_EXPORT_TOOLBAR_PROBE_TIMEOUT"] = str(max(5.0, timeout - 10.0))
     modern = cubit_exe.name.lower() == "clarox.exe"
-    command = [str(cubit_exe), "-nojournal"]
+    command = [str(cubit_exe)]
+    if modern:
+        command += ["-prompt", "Cubit"]
+    command += ["-nojournal"]
     if not modern:
         command += ["-commandplugindir", str(cubit_exe.parent / "plugins")]
     command.append(str(bootstrap_path))

@@ -1,5 +1,10 @@
 # cubit-mesh-export
 
+`cubit-plugin-install` automatically registers the official Coreform
+WorkflowToolbar for each selected profile. No manual toolbar package import is
+required. Existing user toolbars and unrelated preferences are preserved;
+the toolbar becomes available at the next Cubit start. MCP remains batch-only.
+
 Solver-neutral mesh export from [Coreform Cubit](https://coreform.com/products/coreform-cubit/) to [NGSolve](https://ngsolve.org)/[Netgen](https://github.com/NGSolve/netgen).
 
 `cubit-mesh-export` is an independent Cubit tooling distribution. It ships

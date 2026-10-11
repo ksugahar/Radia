@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.2.1 - Automatic toolbar registration on Cubit 2026.8
+
+- Register Coreform's official WorkflowToolbar during installation, including every requested user profile, without manual package import or GUI launch.
+- Preserve unrelated preferences and toolbars, back up changed preferences, verify registration, and remove only exporter registrations on uninstall.
+- Resolve toolbar button scripts from the declared working directory when Cubit's play route retains a previous script's `__file__`.
+- Match the official GUI launcher and validate real import, restart and all six button dispatches.
+
 ## 2.2.0 - 2026-10-11
 
 - Officially support Coreform Cubit 2026.8; reject older installer targets and native SDK/runtime mismatches.

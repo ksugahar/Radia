@@ -105,5 +105,9 @@ beside it (`<evidence>/<target>/<action>.json`), which `done` reads.
 - The startup shim resolves the installed package at every Cubit start
   (2.1.2+), so older release checkouts, their wheels and LAB-local clones can
   be removed once both hosts report the new version. Ask before deleting.
-- The human GUI release test (toolbar in a real desktop session) stays with
-  the user.
+- Installation registers Coreform's official WorkflowToolbar automatically;
+  never require users to import the package manually. Verify both restart
+  persistence and actual dispatch of all six buttons. The real-desktop GUI
+  release test normally stays with the user; explicit authorization to automate
+  it permits task-owned GUI test processes, without touching existing sessions.
+  MCP execution itself remains batch/nographics only.

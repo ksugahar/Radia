@@ -9,12 +9,17 @@ import sys
 assert importlib.util.find_spec('radia') is None, 'Use the isolated wheel venv'
 import cubit_mesh_export
 from cubit_mesh_export.install import _running_cubit_processes
+from cubit_mesh_export._layout import runtime_environment
+from cubit_mesh_export.toolbar_smoke import _find_cubit_exe
 active = _running_cubit_processes()
 if active:
     raise RuntimeError(f'Existing Cubit sessions must remain untouched: {active}')
 out = Path(sys.argv[1]).resolve()
 out.mkdir(parents=True, exist_ok=False)
-env = os.environ.copy()
+cubit_exe = _find_cubit_exe()
+if cubit_exe is None:
+    raise RuntimeError('Supported Cubit GUI not found')
+env = runtime_environment(cubit_exe.parent)
 for key in ('PYTHONPATH', 'PYTHONHOME', 'CUBIT_PLUGIN_DIR'):
     env.pop(key, None)
 env['CME_GUI_TEST_OUTPUT'] = str(out)
@@ -23,9 +28,11 @@ env['CUBIT_MESH_EXPORT_PYTHON'] = sys.executable
 env['CME_GUI_TEST_HARNESS'] = str(Path(__file__).resolve().parent)
 probe = Path(__file__).with_name('standalone_gui_probe.py')
 with (out / 'cubit.log').open('w', encoding='utf-8') as log:
-    process = subprocess.Popen(['C:/Program Files/Coreform Cubit 2025.12/bin/coreform_cubit.exe',
-                                '-noinitfile', '-nojournal', '-commandplugindir',
-                                'C:/Program Files/Coreform Cubit 2025.12/bin/plugins', str(probe)],
+    command = [str(cubit_exe)]
+    if cubit_exe.name.lower() == 'clarox.exe':
+        command += ['-prompt', 'Cubit']
+    command += ['-noinitfile', '-nojournal', str(probe)]
+    process = subprocess.Popen(command,
                                cwd=out, env=env, stdin=subprocess.PIPE, stdout=log, stderr=log)
     print('Owned Cubit PID:', process.pid, flush=True)
     try:

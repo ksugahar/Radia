@@ -421,6 +421,38 @@ def test_unterminated_startup_block_never_discards_following_user_lines():
     assert lines[-1] == "user command that must survive\n"
 
 
+@pytest.mark.parametrize('existing', [False, True])
+def test_official_toolbar_registration_preserves_user_preferences_and_is_idempotent(tmp_path, existing):
+    installer = _load_install_panels()
+    ini = tmp_path / 'User/AppData/Roaming/Coreform/Cubit.ini'
+    ini.parent.mkdir(parents=True)
+    original = ('[unrelated]\nvalue=keep exactly\n\n[workflow]\nconverted_old=true\n'
+                'toolbars\\0=C:/custom/user.ttb\n'
+                'toolbars\\3=C:/old/cubit_mesh_export_toolbar.ttb\n'
+                'toolbars\\7=C:/duplicate/cubit_mesh_export_toolbar.ttb\n'
+                'custom_option=preserved\n[other]\nvalue=still here\n')
+    if existing:
+        ini.write_text(original, encoding='utf-8')
+    assert installer._register_official_toolbar(ini)
+    assert installer._ini_has_official_toolbar(ini)
+    first = ini.read_bytes()
+    assert not installer._register_official_toolbar(ini)
+    assert ini.read_bytes() == first
+    if existing:
+        assert b'toolbars\\0=C:/custom/user.ttb' in first
+        assert b'custom_option=preserved' in first
+        assert b'[other]\nvalue=still here' in first.replace(b'\r\n', b'\n')
+        assert list(ini.parent.glob('Cubit.ini.cme-backup-*'))[0].read_text() == original
+    target = installer._profile_toolbar_dir(ini)
+    for source, deployed in installer._toolbar_expected_files(target):
+        assert source.read_bytes() == deployed.read_bytes()
+    installer._unregister_official_toolbar(ini)
+    assert not installer._ini_has_official_toolbar(ini)
+    if existing:
+        assert 'toolbars\\0=C:/custom/user.ttb' in ini.read_text()
+        assert 'custom_option=preserved' in ini.read_text()
+
+
 def test_install_panels_refuses_corrupt_startup_before_writing_assets(
         monkeypatch, tmp_path, capsys):
     install_panels = _load_install_panels()
