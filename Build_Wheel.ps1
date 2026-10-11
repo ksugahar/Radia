@@ -202,6 +202,11 @@ if (-not $SkipBuild) {
 # ----------------------------------------------------------------------------
 Write-Host "[5/6] Verifying wheel..." -ForegroundColor Cyan
 
+python "$PSScriptRoot/tools/verify_cpu_wheel.py" $NewWheelPath
+if ($LASTEXITCODE -ne 0) {
+    throw "CPU distribution boundary failed; MATLAB/CUDA/Simulink/LTspice belong to radia-gpu."
+}
+
 # twine check
 python -m twine check $NewWheelPath
 if ($LASTEXITCODE -ne 0) {
