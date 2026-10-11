@@ -116,6 +116,18 @@ def _source_payloads(source_manifest: dict[str, object]) -> dict[str, Path]:
     return payloads
 
 
+def _cpu_extra_errors(root_project, source_project) -> list[str]:
+    expected = [r for r in source_project['optional-dependencies']['upstream']
+                if r.startswith('optuna==')]
+    extras = root_project['optional-dependencies']
+    errors = []
+    if len(expected) != 1 or extras.get('optuna') != expected:
+        errors.append('radia[optuna] must select the pinned upstream Python Optuna')
+    if 'optuna-upstream' in extras:
+        errors.append('Retired radia[optuna-upstream] must not couple the CPU and MATLAB distributions')
+    return errors
+
+
 def verify(wheel: Path, *, release_candidate: bool = False) -> dict[str, object]:
     errors: list[str] = []
     if not re.fullmatch(r"radia_optuna-[^-]+-py3-none-win_amd64\.whl", wheel.name):
@@ -138,15 +150,7 @@ def verify(wheel: Path, *, release_candidate: bool = False) -> dict[str, object]
             "package source versions are not synchronized: "
             f"package={source_version}, manifest={source_manifest['version']}"
         )
-    expected_base = [f"radia-optuna=={source_version}"]
-    expected_upstream = [f"radia-optuna[upstream]=={source_version}"]
-    extras = root_project["optional-dependencies"]
-    if extras.get("optuna") != expected_base:
-        errors.append(f"radia[optuna] must pin {expected_base[0]}")
-    if extras.get("optuna-upstream") != expected_upstream:
-        errors.append(
-            f"radia[optuna-upstream] must pin {expected_upstream[0]}"
-        )
+    errors.extend(_cpu_extra_errors(root_project, source_project))
 
     with zipfile.ZipFile(wheel) as archive:
         names = set(archive.namelist())
