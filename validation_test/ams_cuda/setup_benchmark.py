@@ -144,7 +144,9 @@ def main(args):
                         'cpu_reference_solve_seconds','gpu_resident_solve_median_seconds','gpu_inclusive_seconds',
                         'gpu_memory_bytes')
                     if row['samples'][0].get(key) is not None} for t in (1,args.setup_threads)}
-                before=row['medians']['1'];after=row['medians'][str(args.setup_threads)]
+                timing_keys=('snapshot_wall_seconds','setup_seconds','setup_exchange_transfer_solve_seconds')
+                before={key:value for key,value in row['medians']['1'].items() if key in timing_keys}
+                after={key:value for key,value in row['medians'][str(args.setup_threads)].items() if key in timing_keys}
                 row['before_after']=dict(before_setup_threads=1,after_setup_threads=args.setup_threads,
                     before=before,after=after,
                     time_reduction_seconds={key:before[key]-after[key] for key in before},
