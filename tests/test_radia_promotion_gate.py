@@ -219,7 +219,7 @@ def test_exact_wheel_end_to_end(tmp_path):
         a, f, x, _ = evidence()
         tree = ET.fromstring(x)
         suite = tree if tree.tag == "testsuite" else tree.find("testsuite")
-        suite.set("hostname", host)
+        suite.set("hostname", gate.CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES[host])
         x = ET.tostring(tree)
         if name == "acceptance.json":
             a.update(wheel_sha256=digest, native_sha256=hashlib.sha256(b"native").hexdigest(),
@@ -248,8 +248,19 @@ def test_exact_wheel_end_to_end(tmp_path):
             tree.find(".//testsuite").set("hostname", "INTEL11")
             return ET.tostring(tree)
         return data
+    def old_fleet(path, commit):
+        data = read_file(path, commit)
+        if path.endswith("focused.xml"):
+            tree = ET.fromstring(data)
+            host = path.split("/")[-2]
+            tree.find(".//testsuite").set("hostname", "lab" if host == "lab" else "INTEL11")
+            return ET.tostring(tree)
+        return data
+    api.file = old_fleet
+    with pytest.raises(ValueError, match="Current acceptance host required"):
+        gate.verify_artifact(api, run, "b" * 40, wheel_dir, tmp_path, digest)
     api.file = same_machine
-    with pytest.raises(ValueError, match="Distinct acceptance hosts required"):
+    with pytest.raises(ValueError, match="Current acceptance host required"):
         gate.verify_artifact(api, run, "b" * 40, wheel_dir, tmp_path, digest)
     api.file = read_file
     ctx["ref_type"] = "branch"

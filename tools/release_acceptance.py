@@ -30,6 +30,9 @@ RELEASE_ACCEPTANCE_HOSTNAMES = {
     "mdx1": frozenset({"mdx1"}),
 }
 
+# Publication requires the current physical fleet, not historical role aliases.
+CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES = {"lab": "intel11", "100": "t7920"}
+
 # Human names, for messages that name a machine rather than a directory.
 RELEASE_ACCEPTANCE_HOST_LABELS = {
     "lab": "LAB",
