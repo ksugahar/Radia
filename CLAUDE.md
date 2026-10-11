@@ -97,6 +97,14 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 - Manuscript folders contain generated `.bbl` only, never local `.bib` copies.
   Use `bibliography_make_bbl`, regenerate after changes, and check citations.
 
+### CPU / GPU Execution Policy (2026-10-11)
+
+- CPU solvers: Python/NGSolve only; CPU MEX is unsupported.
+- MATLAB solvers: CUDA MEX with NVIDIA GPU, for GPU performance. Simulink is optional.
+- No implicit CPU/Python solver fallback. Report host setup and CPU solving separately.
+- 100: CUDA builds/RTX 5000 acceptance; mdx/A100: isolated scale/timing.
+- GPU features require Python CPU parity; Poisson does not certify ICCG/AMS/HDiv-MMM. Save validation JSON.
+
 ### MATLAB And Simulink
 
 - Use MathWorks' official MATLAB MCP Server and Simulink Agentic Toolkit.
@@ -118,11 +126,11 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
   kernels remain independently callable standalone MEX functions.
 - Native objects use checked `uint64` handles with type, generation,
   ownership, and liveness validation; never expose raw pointers.
-- Python fallback is allowed at initialization, explicit update, artifact
-  generation, or batch-solve boundaries, never per Simulink time step.
-- Every public Python capability has a named MATLAB entry point or a checked
-  parity-manifest classification. Prefer one C++ source of numerical truth with
-  thin pybind11 and MEX adapters.
+- Explicit Python CPU workflows are allowed at initialization, update, artifact
+  or batch boundaries, never per Simulink step or as implicit CUDA fallback.
+- Classify capabilities as Python CPU, MATLAB CUDA GPU, or both in the parity
+  manifest. Do not duplicate CPU MEX for parity. Share domain code and verify
+  physical contracts without duplicating NGSolve FE semantics.
 - Measure cold start, warmed median, transfer cost, memory, versions, and
   reliability; do not assume MEX or pybind11 is faster.
 - Level-2 S-Function templates are user-customizable. Do not bury a reusable

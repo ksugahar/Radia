@@ -10,6 +10,7 @@
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -RadiaOnly
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -RadiaOnly -RequireNativeProvenance
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -MatlabMexOnly
+#   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -CudaMexOnly
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -OptunaMexOnly
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -Test
 #
@@ -17,6 +18,7 @@
 #   -Rebuild    Clean build directory before building
 #   -RadiaOnly  Build and copy only _radia_pybind.pyd
 #   -MatlabMexOnly  Configure and build the shared radia_mex native gateway
+#   -CudaMexOnly  Stage the CUDA-only NGSolve assembled-operator bridge
 #   -OptunaMexOnly  Configure and build only the lightweight Optuna gateway
 #   -RequireNativeProvenance  Reject dirty source before building; otherwise a
 #                 dirty development build succeeds without a provenance sidecar
@@ -40,6 +42,7 @@ param(
     [switch]$RadiaOnly,
     [switch]$AxiFemOnly,           # configure + build ONLY axifem (fast C++ iteration)
     [switch]$MatlabMexOnly,        # configure + build MATLAB MEX and native S-Functions
+    [switch]$CudaMexOnly,          # isolated CUDA-only assembled-operator gateway
     [switch]$OptunaMexOnly,        # configure + build only optuna_mex
     [switch]$RequireNativeProvenance, # reject dirty source before a provenance-bearing build
     [switch]$InstallToSitePackages  # also copy rebuilt .pyd(s) into the importable site-packages\radia
@@ -68,8 +71,19 @@ function Get-NativeBuildResult {
     return 0
 }
 
-if (@($RadiaOnly, $AxiFemOnly, $MatlabMexOnly, $OptunaMexOnly).Where({ $_ }).Count -gt 1) {
-    throw "-RadiaOnly, -AxiFemOnly, -MatlabMexOnly, and -OptunaMexOnly are mutually exclusive"
+if (@($RadiaOnly, $AxiFemOnly, $MatlabMexOnly, $CudaMexOnly, $OptunaMexOnly).Where({ $_ }).Count -gt 1) {
+    throw "-RadiaOnly, -AxiFemOnly, -MatlabMexOnly, -CudaMexOnly, and -OptunaMexOnly are mutually exclusive"
+}
+if ($CudaMexOnly) {
+    if ($InstallToSitePackages) { throw 'CUDA MEX builds remain staged; no runtime replacement' }
+    $cudaRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+    if ($RequireNativeProvenance) {
+        $cudaStatus = & git -C $cudaRoot status --porcelain
+        if ($LASTEXITCODE -ne 0 -or $cudaStatus) { throw 'CUDA native provenance requires a clean source checkout' }
+    }
+    & python (Join-Path $cudaRoot 'tools/build_cuda_mex.py') --out (Join-Path $cudaRoot 'build-cuda-mex')
+    if ($LASTEXITCODE -ne 0) { throw 'CUDA MEX build failed' }
+    return
 }
 if ($OptunaMexOnly -and $InstallToSitePackages) {
     throw "-InstallToSitePackages does not apply to the standalone Optuna MEX build"
