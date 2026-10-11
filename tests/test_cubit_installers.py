@@ -66,6 +66,23 @@ def _patch_windows_env(monkeypatch, tmp_path: Path):
     return Path(tmp_path / "ProgramFiles")
 
 
+@pytest.mark.parametrize("actual", ["2026.8", "2025.12", "2026.10"])
+def test_native_sdk_runtime_must_match_before_deployment(tmp_path, actual):
+    from cubit_mesh_export.install import _require_native_sdk_runtime
+    pkg = tmp_path / "package"
+    root = tmp_path / "cubit"
+    pkg.mkdir()
+    root.mkdir()
+    (pkg / "native_payloads.json").write_text(json.dumps({
+        "payloads": {"cubit_mesh_export.ccm": {"cubit_version": "2026.8"}}}))
+    (root / "BUILD_INFO").write_text(f"# SDK manifest\nshort={actual}\n")
+    if actual == "2026.8":
+        _require_native_sdk_runtime(pkg, root)
+    else:
+        with pytest.raises(RuntimeError, match="requires Cubit SDK/runtime 2026.8"):
+            _require_native_sdk_runtime(pkg, root)
+
+
 def test_find_cubit_bin_prefers_2025_12_over_2025_6(monkeypatch, tmp_path):
     install_panels = _load_install_panels()
 

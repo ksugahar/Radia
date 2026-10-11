@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import glob
 import hashlib
+import json
 import os
 import shutil
 import sys
@@ -509,6 +510,21 @@ def _copy_verified(src: Path, dst: Path, start_time: float):
 # Main install flow
 # ============================================================
 
+def _require_native_sdk_runtime(pkg_dir: Path, cubit_dir: Path) -> None:
+    """A native command plugin is accepted only by its recorded SDK release."""
+    manifest = json.loads((pkg_dir / "native_payloads.json").read_text(encoding="utf-8"))
+    expected = manifest["payloads"]["cubit_mesh_export.ccm"]["cubit_version"]
+    build_info = cubit_dir / "BUILD_INFO"
+    fields = dict(line.split("=", 1) for line in
+                  build_info.read_text(encoding="utf-8").splitlines()
+                  if "=" in line and not line.startswith("#"))
+    actual = fields.get("short")
+    if actual != expected:
+        raise RuntimeError(
+            f"Native plugin requires Cubit SDK/runtime {expected}; found {actual!r}. "
+            "Build a payload for the target SDK before deployment.")
+
+
 def install_plugin(*, all_users: bool = False, check_only: bool = False,
                     verify_only: bool = False, helpers_only: bool = False):
     """Deploy Cubit plugin binaries to Cubit installation.
@@ -557,6 +573,9 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
     print(f"  Cubit:   {cubit_dir}")
     print(f"  Package: {pkg_dir}")
     print()
+
+    if not helpers_only:
+        _require_native_sdk_runtime(pkg_dir, cubit_dir)
 
     if verify_only:
         ok, issues = verify_deployment(pkg_dir, cubit_dir, verbose=True)
