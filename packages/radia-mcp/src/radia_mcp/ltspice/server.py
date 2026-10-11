@@ -74,6 +74,15 @@ _ideal_transformer_identity_gate = _gpu_callable("radia_gpu.ltspice.ideal_transf
 
 
 mcp = FastMCP("radia-ltspice")
+from radia_mcp.common import register_status_tool
+register_status_tool(
+    mcp, server_name="mcp-server-radia-ltspice",
+    description="LTspice integration with an optional radia-gpu backend",
+    subpackage="radia_mcp.ltspice",
+    related_servers=["radia-matlab", "radia-ngsolve"],
+    optional_deps=["radia_gpu"],
+)
+
 
 
 @mcp.tool()
@@ -618,7 +627,7 @@ def main() -> int:
     """Entry point for the ``mcp-server-radia-ltspice`` console script."""
     if "--selftest" in sys.argv:
         names = set(mcp._tool_manager._tools)
-        assert len(names) == 32 and "netlist_to_asc" in names
+        assert len(names) == 33 and "netlist_to_asc" in names
         print("LTspice MCP discovery self-test passed; execution backend is optional.")
         return 0
     try:

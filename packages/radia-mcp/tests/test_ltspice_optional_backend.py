@@ -11,7 +11,7 @@ def test_ltspice_cold_discovery_and_missing_backend_error():
 import sys
 from radia_mcp.ltspice import server
 from radia_mcp.meta.catalog import get
-assert len(server.mcp._tool_manager._tools) == 32
+assert len(server.mcp._tool_manager._tools) == 33
 assert get('mcp-server-radia-ltspice')['subpackage'] == 'radia_mcp.ltspice'
 assert not any(n == 'radia_gpu' or n.startswith('radia_gpu.') for n in sys.modules)
 try:
