@@ -35,7 +35,7 @@ def _qualify_stable(wheel, qualification_directory):
             or acceptance.get('wheel_sha256') != wheel['wheel_sha256']
             or acceptance.get('manifest_sha256') != wheel['manifest_sha256']
             or acceptance.get('distribution_version') != wheel['version']
-            or acceptance.get('host') != '100'
+            or acceptance.get('execution_role') != 'cuda-build-host'
             or acceptance.get('device') != 'Quadro RTX 5000'
             or acceptance.get('ltspice_checked') is not True
             or not _repeated_runs_pass(acceptance.get('simulink_repeated_runs'))

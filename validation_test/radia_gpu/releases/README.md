@@ -19,11 +19,12 @@ Resolve findings and review the final source before accepting it.
 `build_host_acceptance` contains the real installed acceptance record with schema
 `radia.gpu.installed-acceptance.v1`, the same source/hash/version, `passed: true`,
 the payload `manifest_sha256` matching the verified wheel,
-`host: "100"`, the measured `device: Quadro RTX 5000`, at least two
+`execution_role: cuda-build-host`, the measured `device: Quadro RTX 5000`, at least two
 `simulink_repeated_runs`, and `simulink_failure_cleanup: true`.
-`run_installed.py` records the actual `os_hostname` and MATLAB GPU device
-name, compute capability and total memory. Preserve these measured fields;
-`host` identifies the acceptance target, not a replacement OS hostname.
+`run_installed.py` records the actual OS hostname and MATLAB GPU device,
+compute capability and total memory. Verify the build-host identity in the raw
+operational evidence retained outside Git. Public qualification records retain
+the execution role and measured GPU fields, omitting identifying OS hostnames.
 Set `cpu_parity_checked: true` only after testing each published CUDA solver
 against its Python CPU reference. Retain these comparisons in `cpu_parity`,
 keyed by capability, with measured `relative_l2` and `true_relative_residual`.
