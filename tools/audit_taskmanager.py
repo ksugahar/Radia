@@ -59,6 +59,7 @@ ROOT = Path(__file__).absolute().parent.parent
 SERIAL_GPU_ROUTES = frozenset({
     "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
     "validation_test/ams_cuda/run.py",
+    "validation_test/ams_cuda/setup_benchmark.py",
     "validation_test/radia_gpu/export_vol_reference.py",
     "validation_test/ngsolve_cuda_mex/run_poisson.py",
 })
