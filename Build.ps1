@@ -40,6 +40,7 @@ param(
     [switch]$Test,
     [switch]$Verbose,
     [switch]$RadiaOnly,
+    [switch]$AmsCudaOnly,         # experimental AMS snapshot adapter + CUDA MEX
     [switch]$AxiFemOnly,           # configure + build ONLY axifem (fast C++ iteration)
     [switch]$MatlabMexOnly,        # configure + build MATLAB MEX and native S-Functions
     [switch]$CudaMexOnly,          # isolated CUDA-only assembled-operator gateway
@@ -49,6 +50,15 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($AmsCudaOnly) {
+    if ($RadiaOnly -or $AxiFemOnly -or $MatlabMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test) {
+        throw '-AmsCudaOnly is an isolated experimental build; incompatible options supplied'
+    }
+    & python (Join-Path $PSScriptRoot 'validation_test/ams_cuda/build.py')
+    if ($LASTEXITCODE -ne 0) { throw 'AMS CUDA experimental build failed' }
+    return
+}
 
 function Get-NativeBuildResult {
     param(

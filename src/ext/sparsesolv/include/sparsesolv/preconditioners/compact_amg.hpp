@@ -655,6 +655,18 @@ public:
 
     int NumLevels() const { return (int)levels_.size(); }
 
+    // Read-only numeric snapshot for explicit accelerator adapters. Setup,
+    // coarsening and Galerkin assembly remain owned by this implementation.
+    template <class Visitor> void VisitAcceleratorLevels(Visitor&& visit) const {
+        if (mixed_precision_)
+            throw std::runtime_error("AMS accelerator snapshot requires FP64 levels");
+        for (size_t i = 0; i < levels_.size(); ++i) {
+            const auto& l = levels_[i];
+            visit(i, *l.A, l.P.get(), l.Pt.get(), l.l1_norms,
+                  l.inv.get(), l.dense_inv, num_smooth_);
+        }
+    }
+
     /// Per level of the dual V-cycle: {rows, nonzeros, seconds spent on the
     /// level itself (recursion excluded), coarsest solve: 0 none, 1 sparse, 2 dense}.
     std::vector<std::array<double, 4>> DualLevelProfile() const {
