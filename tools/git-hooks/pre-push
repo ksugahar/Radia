@@ -20,11 +20,15 @@ cd "$REPO_ROOT" || exit 0
 ZERO="0000000000000000000000000000000000000000"
 
 # ---- Duty 1: CI preflight on pushes to main -------------------------------
-if [ "${CI_PREFLIGHT_SKIP:-}" != "1" ] && [ -f tools/ci_preflight_lab.py ]; then
+if [ "${CI_PREFLIGHT_SKIP:-}" != "1" ]; then
     while read -r local_ref local_sha remote_ref remote_sha; do
         # Gate ONLY updates to main (skip deletes + feature branches).
         [ "$remote_ref" = "refs/heads/main" ] || continue
         [ "$local_sha" = "$ZERO" ] && continue          # branch delete
+        if [ ! -f tools/ci_preflight_lab.py ]; then
+            echo "pre-push: LAB preflight helper missing; update this checkout before pushing main." >&2
+            exit 1
+        fi
         echo "pre-push: LAB CI preflight before pushing to main"
         echo "          (bypass with: CI_PREFLIGHT_SKIP=1 git push)"
         if ! (

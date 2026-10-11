@@ -300,6 +300,8 @@ def test_pre_push_runs_the_unpushed_candidate_on_lab():
     assert "numpy scipy pytest pyyaml setuptools 'mcp>=1.0,<2'" in helper
     assert 'import mcp, numpy, pytest, scipy, setuptools, yaml' in helper
     assert "tools/run_test_tier.py --profile fast-contracts" in helper
+    assert "LAB preflight helper missing" in hook
+    assert '&& [ -f tools/ci_preflight_lab.py ]' not in hook
     assert "upload_release_asset.py" not in hook
     assert "developer push must never upload mutable" in hook
 
