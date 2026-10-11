@@ -638,7 +638,7 @@ def verify_panel_installation(all_users=False, verbose=True):
     if not cubit_bin:
         issues.append(
             f"Coreform Cubit {_MIN_CUBIT_VERSION_TEXT}+ not found; "
-            "set CUBIT_PATH to the 2025.12 bin directory"
+            "set CUBIT_PATH to the selected Cubit bin directory"
         )
 
     for cubit_file in _get_cubit_startup_files(all_users=all_users):
@@ -692,7 +692,7 @@ def install_panels(all_users=False):
     cubit_bin = find_cubit_bin()
     if not cubit_bin:
         print(f"ERROR: Coreform Cubit {_MIN_CUBIT_VERSION_TEXT}+ not found.")
-        print("       Set CUBIT_PATH to the Cubit 2025.12 bin directory.")
+        print("       Set CUBIT_PATH to the selected Cubit bin directory.")
         return False
 
     startup_edits = []
@@ -797,7 +797,7 @@ def install_panels(all_users=False):
         print("Import the official toolbar package once in Cubit via:")
         print("  Tools > Custom Toolbar Editor > Import > Package")
         print(f"  {toolbar_package}")
-    print("Then restart Cubit 2025.12 to verify persistent loading.")
+    print("Then restart Cubit to verify persistent loading.")
     return True
 
 

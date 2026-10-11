@@ -566,7 +566,7 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
 
     if not cubit_dir:
         print(f"  [FAIL] Coreform Cubit {MIN_CUBIT_VERSION_TEXT}+ not found.")
-        print("         Set CUBIT_PATH to the Cubit 2025.12 bin directory.")
+        print("         Set CUBIT_PATH to the selected Cubit bin directory.")
         return False
 
     plugins_dir = plugin_directory(cubit_dir)
