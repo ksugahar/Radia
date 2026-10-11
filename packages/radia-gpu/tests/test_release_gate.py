@@ -67,7 +67,7 @@ def test_stable_release_requires_review_and_same_wheel_build_host_parity(tmp_pat
                          independent_review=dict(source_commit=wheel['source_commit'],
                              outcome='accepted', unresolved_findings=[], reviewer='independent Codex',
                              report='Completed read-only review of the exact release source.'),
-                         build_host_acceptance=dict(installed, host='100', device='Quadro RTX 5000',
+                         build_host_acceptance=dict(installed, execution_role='cuda-build-host', device='Quadro RTX 5000',
                              cpu_parity_checked=True, cpu_parity={
                                  'csr_pcg':dict(relative_l2=2e-10, true_relative_residual=1e-10),
                                  'ams':dict(relative_l2=3e-9, true_relative_residual=2e-10)}))
@@ -86,7 +86,7 @@ def test_stable_release_requires_review_and_same_wheel_build_host_parity(tmp_pat
         ('build_host_acceptance.wheel_sha256', 'c'*64),
         ('build_host_acceptance.manifest_sha256', 'c'*64),
         ('build_host_acceptance.device', 'NVIDIA A100'),
-        ('build_host_acceptance.host', '102'),
+        ('build_host_acceptance.execution_role', 'cpu-distribution-host'),
         ('build_host_acceptance.ltspice_checked', False),
         ('build_host_acceptance.cpu_parity_checked', False),
         ('build_host_acceptance.simulink_failure_cleanup', False),
