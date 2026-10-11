@@ -271,7 +271,7 @@ The MCP SDK ships with Radia. Add the server to your MCP client config:
 }
 ```
 
-Exposes thirty-two tools:
+Exposes thirty-three tools:
 
 | Tool | Purpose |
 |---|---|
@@ -537,3 +537,6 @@ Department of Electric and Electronic Engineering, Kindai University
 
 MIT — see [component license](../../src/radia/ltspice/LICENSE).
 
+
+`radia_ltspice_status` reports the MCP runtime, complete tool contract and optional
+GPU backend availability without importing or installing the solver backend.

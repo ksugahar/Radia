@@ -1,0 +1,10 @@
+{
+  "schema": "radia-mcp.cpu-client-gpu-boundary/v1",
+  "passed": true,
+  "source_commit": "bb091893b5efdd4ea2fadb7c265f63e79e1ed122",
+  "wheel_sha256": "0fd52d5e97b198e61e245678abaed7387286372ed00239933b036f546135c4ff",
+  "radia_gpu_installed": false,
+  "missing_backend_error_checked": true,
+  "installed_wheel_stdio_contract": true,
+  "tool_count": 33
+}
