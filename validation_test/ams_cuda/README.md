@@ -54,6 +54,36 @@ invalid smoother, nonconvergence, zero RHS and clear/reload checks run on
 the actual gateway. Only sanitized JSON evidence belongs in Git; generated
 MAT inputs, raw logs and binaries stay outside tracked source.
 
+The first gateway call is measured after MATLAB and `gpuDevice`
+initialization; MATLAB startup is reported separately. Available-memory
+deltas and live-workspace samples are observations, not allocator peaks.
+CPU CG stops on its preconditioned norm and counts the initial residual
+check; GPU PCG stops on the Euclidean norm and counts updates. Both undergo
+the independent true-residual gate, but iteration counts are not directly
+interchangeable.
+
+## RTX 5000 result, 2026-10-11
+
+[Saved numerical evidence](rtx5000_20261011.json) covers six small real
+curl-curl plus positive-mass cases, with `beta_zero=False`, 96 to 5,326 DOFs,
+both AMS cycles and one/two auxiliary levels. Pure curl-curl, complex
+systems, A100 scaling and production model integration remain unverified.
+
+At 5,326 DOFs, on the recorded four-thread CPU comparison:
+
+| AMS cycle | CPU warm median | GPU warm median | GPU with transfers |
+| --- | ---: | ---: | ---: |
+| 1 | 15.80 ms | 41.14 ms | 46.55 ms |
+| 7 | 17.22 ms | 34.23 ms | 49.25 ms |
+
+All six true residual and preconditioner-parity checks pass. The prototype
+does **not** beat CPU AMS at these sizes. Parallelizing coarse row products
+within a warp reduced the earlier ordered single-thread GPU cost, but
+per-call validation/allocation, kernel launches, host scalar synchronization
+and small triangular dependencies still need measurement and optimization
+before claiming fast GPU AMS. A100 must be tested directly on the correct
+coordinated host.
+
 Source of the sparse factor layout: NGSolve's public `SparseCholeskyTM`
 accessors in `sparsecholesky.hpp` for 6.2.2607. The GPU kernel evaluates the
 standard ordered unit-triangular/diagonal solves from those factors; it
