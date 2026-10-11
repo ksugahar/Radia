@@ -5,6 +5,6 @@ description: Compatibility note for previewing Radia interfaces after the PySide
 
 # Interface Preview
 
-Build `matlab/radia_simulink_library.slx` in `C:\temp`, open the library, and
+Build `packages/radia-gpu/matlab/radia_simulink_library.slx` in `C:\temp`, open the library, and
 inspect the five masked application blocks. The production artifact is the
 Simulink library, not a Qt screenshot or docs notebook.

@@ -12,8 +12,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[3]
 INVENTORY_PATH = Path(__file__).with_name("optuna50_public_api.json")
 ORACLE_PATH = Path(__file__).with_name("optuna50_oracle.json")
-MATLAB_DIRECTORY = ROOT / "matlab" / "+radia" / "+optuna"
-DESTINATION = ROOT / "matlab" / "optuna50_api_coverage.json"
+MATLAB_DIRECTORY = ROOT / "packages/radia-optuna/matlab" / "+radia" / "+optuna"
+DESTINATION = ROOT / "packages/radia-optuna/matlab" / "optuna50_api_coverage.json"
 FUNCTION_PATTERN = re.compile(
     r"(?m)^\s*function\s+(?:\[[^]]*\]|\w+)\s*=\s*(\w+)\s*\(|"
     r"^\s*function\s+(\w+)\s*\("

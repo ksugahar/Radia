@@ -63,7 +63,7 @@ def test_application_manifest_has_no_notebook_workbenches():
 
     electromagnet = applications["radia-em"]
     assert electromagnet["optimization_sample"] == (
-        "matlab/radia_electromagnet.slx"
+        "packages/radia-gpu/matlab/radia_electromagnet.slx"
     )
     assert electromagnet["optimization_block"].endswith(
         "/Electromagnet Topology Optimization"
@@ -74,7 +74,7 @@ def test_application_manifest_has_no_notebook_workbenches():
 
     maglev = applications["radia-maglev"]
     assert maglev["backend"] == "matlab-level2-shared-mode-foster"
-    assert maglev["sample"] == "matlab/radia_maglev.slx"
+    assert maglev["sample"] == "packages/radia-gpu/matlab/radia_maglev.slx"
     assert "never called per step" in maglev["backend_policy"]
     assert maglev["optimization_scope"].startswith("control optimization only")
 

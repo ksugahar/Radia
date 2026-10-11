@@ -4,7 +4,7 @@ end
 
 function testMatlabHandoffPreservesNamesAttributesAndConstraints(testCase)
 root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
-addpath(fullfile(root,"matlab"));
+addpath(fullfile(root,'packages','radia-optuna','matlab'));
 study=radia.optuna.Study(Name="bridge-demo", ...
     Sampler=radia.optuna.RandomSampler(31),AutoSave=false);
 study.set_metric_names("loss");

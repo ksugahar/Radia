@@ -50,7 +50,7 @@ def test_api_coverage_is_reproducible_and_names_real_matlab_packages(monkeypatch
         parts = name.split(".")
         if entry["kind"].startswith("class-"):
             parts = parts[:-1]
-        source = REPO_ROOT / "matlab"
+        source = REPO_ROOT / "packages/radia-optuna/matlab"
         for package in parts[:-1]:
             source /= "+" + package
         assert (source / (parts[-1] + ".m")).is_file(), name
@@ -104,7 +104,7 @@ def test_constructor_defaults_are_audited_against_the_pinned_oracle():
     assert record["parameter_count"] > 0
 
     coverage = json.loads(
-        (REPO_ROOT / "matlab/optuna50_api_coverage.json").read_text(encoding="utf-8")
+        (REPO_ROOT / "packages/radia-optuna/matlab/optuna50_api_coverage.json").read_text(encoding="utf-8")
     )
     audit = coverage["constructor_default_audit"]
 
@@ -156,7 +156,7 @@ def test_matlab_path_names_the_layout_it_resolved():
     assert payload["matlab_file_count"] == payload["expected_matlab_file_count"]
 
 
-def test_independent_version_and_radia_extras_are_synchronized():
+def test_cpu_optuna_extra_and_matlab_distribution_have_separate_owners():
     root_project = tomllib.loads(
         (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     )["project"]
@@ -165,12 +165,9 @@ def test_independent_version_and_radia_extras_are_synchronized():
     )["project"]
     version = package_project["version"]
     assert version != root_project["version"]
-    assert root_project["optional-dependencies"]["optuna"] == [
-        f"radia-optuna=={version}"
-    ]
-    assert root_project["optional-dependencies"]["optuna-upstream"] == [
-        f"radia-optuna[upstream]=={version}"
-    ]
+    assert root_project["optional-dependencies"]["optuna"] == ["optuna==5.0.0"]
+    assert "optuna-upstream" not in root_project["optional-dependencies"]
+    assert not any("radia-optuna" in requirement for requirement in root_project["dependencies"])
     init_source = (
         PACKAGE_ROOT / "src" / "radia_optuna" / "__init__.py"
     ).read_text(encoding="utf-8")
@@ -183,7 +180,7 @@ def test_only_declared_adapters_call_other_radia_matlab_namespaces():
             encoding="utf-8"
         )
     )
-    source = REPO_ROOT / "matlab"
+    source = REPO_ROOT / "packages/radia-optuna/matlab"
     observed: set[str] = set()
     pattern = re.compile(r"\bradia\.(?!optuna\b)")
     for path in (source / "+radia" / "+optuna").rglob("*.m"):

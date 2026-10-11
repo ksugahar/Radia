@@ -17,11 +17,11 @@ def test_ih_package_includes_referenced_matlab_helpers():
     for relative in selected:
         if not relative.endswith(".m"):
             continue
-        source = (ROOT / "matlab" / relative).read_text(encoding="utf-8")
+        source = (ROOT / "packages/radia-gpu/matlab" / relative).read_text(encoding="utf-8")
         for name in re.findall(r"\bradia(?:\.[A-Za-z]\w*)+", source):
             parts = name.split(".")
             dependency = "/".join("+" + part for part in parts[:-1]) + "/" + parts[-1] + ".m"
-            if (ROOT / "matlab" / dependency).is_file() and dependency not in selected:
+            if (ROOT / "packages/radia-gpu/matlab" / dependency).is_file() and dependency not in selected:
                 missing.add((relative, dependency))
     assert not missing, sorted(missing)
 
@@ -87,7 +87,7 @@ def test_package_builder_fails_when_mex_is_missing(tmp_path):
 def test_mex_build_verifier_rejects_missing_and_changed_binaries(tmp_path):
     verifier = load_module(
         "verify_radia_mex_build_test",
-        ROOT / "matlab" / "verify_radia_mex_provenance.py",
+        ROOT / "packages/radia-gpu/matlab" / "verify_radia_mex_provenance.py",
     )
     mex = tmp_path / "radia_mex.mexw64"
     mex.write_bytes(fake_x64_pe())
@@ -133,7 +133,7 @@ def test_package_is_hashed_native_ih_allowlist(tmp_path):
     assert manifest["release_channel"] == "preview"
     assert manifest["schema"] == "radia.simulink.ih-release-manifest.v3"
     assert manifest["backend"] == "matlab-level2+radia-mex-handles"
-    assert manifest["required_mex"] == ["matlab/radia_mex.mexw64"]
+    assert manifest["required_mex"] == ["packages/radia-gpu/matlab/radia_mex.mexw64"]
     assert manifest["standalone_mex_debug_api"] is True
     assert manifest["python_runtime_required_for_native_mex"] is True
     assert manifest["python_per_step"] is False
@@ -142,14 +142,14 @@ def test_package_is_hashed_native_ih_allowlist(tmp_path):
     assert len(sums.read_text(encoding="ascii").splitlines()) == 2
     with zipfile.ZipFile(archive) as bundle:
         names = set(bundle.namelist())
-    assert "matlab/radia_ih.slx" in names
-    assert "matlab/radia_ih_eddy_sfun.m" in names
-    assert "matlab/+radia/+simulink/ihEddySFunction.m" in names
-    assert "matlab/radia_ih_eddy_sfun.mexw64" not in names
+    assert "packages/radia-gpu/matlab/radia_ih.slx" in names
+    assert "packages/radia-gpu/matlab/radia_ih_eddy_sfun.m" in names
+    assert "packages/radia-gpu/matlab/+radia/+simulink/ihEddySFunction.m" in names
+    assert "packages/radia-gpu/matlab/radia_ih_eddy_sfun.mexw64" not in names
     assert not any("LUT" in name or "makeIHPlant" in name for name in names)
-    assert "matlab/radia_simulink_library.slx" not in names
-    assert "matlab/mkl_sequential.3.dll" in names
-    assert "matlab/mkl_intel_thread.3.dll" not in names
+    assert "packages/radia-gpu/matlab/radia_simulink_library.slx" not in names
+    assert "packages/radia-gpu/matlab/mkl_sequential.3.dll" in names
+    assert "packages/radia-gpu/matlab/mkl_intel_thread.3.dll" not in names
 
 
 def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
@@ -179,7 +179,7 @@ def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
         "radia.simulink.library-release-manifest.v4"
     )
     assert manifest["release_channel"] == "production"
-    assert manifest["entry_model"] == "matlab/radia_simulink_library.slx"
+    assert manifest["entry_model"] == "packages/radia-gpu/matlab/radia_simulink_library.slx"
     assert manifest["python_per_step"] is False
     assert manifest["python_fallback_per_step"] is False
     assert manifest["backend"] == "application-specific"
@@ -189,8 +189,8 @@ def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
         "matlab-level2+radia-mex-handle"
     assert manifest["reactor_surrogate"] is False
     assert manifest["required_mex"] == [
-        "matlab/radia_mex.mexw64",
-        "matlab/optuna_mex.mexw64",
+        "packages/radia-gpu/matlab/radia_mex.mexw64",
+        "packages/radia-optuna/matlab/optuna_mex.mexw64",
     ]
     assert manifest["required_matlab_products"] == ["MATLAB", "Simulink"]
     assert manifest["feature_toolbox_requirements"] == {
@@ -206,26 +206,26 @@ def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
     with zipfile.ZipFile(archive) as bundle:
         names = set(bundle.namelist())
     assert verify_module.FULL_REQUIRED_MEMBERS <= names
-    assert "matlab/mkl_sequential.3.dll" in names
-    assert "matlab/mkl_intel_thread.3.dll" not in names
-    assert "matlab/radia_electromagnet.slx" in names
-    assert "matlab/radia_maglev.slx" in names
-    assert "matlab/radia_nonlinear_reactor.slx" in names
-    assert "matlab/radia_nonlinear_reactor_sfun.m" in names
-    assert "matlab/radia_streamfunction_optuna_sfun.m" in names
-    assert "matlab/optuna_mex.mexw64" in names
+    assert "packages/radia-gpu/matlab/mkl_sequential.3.dll" in names
+    assert "packages/radia-gpu/matlab/mkl_intel_thread.3.dll" not in names
+    assert "packages/radia-gpu/matlab/radia_electromagnet.slx" in names
+    assert "packages/radia-gpu/matlab/radia_maglev.slx" in names
+    assert "packages/radia-gpu/matlab/radia_nonlinear_reactor.slx" in names
+    assert "packages/radia-gpu/matlab/radia_nonlinear_reactor_sfun.m" in names
+    assert "packages/radia-gpu/matlab/radia_streamfunction_optuna_sfun.m" in names
+    assert "packages/radia-optuna/matlab/optuna_mex.mexw64" in names
     assert (
-        "matlab/+radia/+simulink/nonlinearReactorSFunction.m" in names
+        "packages/radia-gpu/matlab/+radia/+simulink/nonlinearReactorSFunction.m" in names
     )
     assert (
-        "matlab/+radia/+simulink/streamFunctionOptunaSFunction.m" in names
+        "packages/radia-gpu/matlab/+radia/+simulink/streamFunctionOptunaSFunction.m" in names
     )
-    assert "matlab/+radia/+stream/OptunaRunner.m" in names
+    assert "packages/radia-gpu/matlab/+radia/+stream/OptunaRunner.m" in names
     assert (
-        "matlab/+radia/+simulink/resolveStreamFunctionOptunaObjects.m" in names
+        "packages/radia-gpu/matlab/+radia/+simulink/resolveStreamFunctionOptunaObjects.m" in names
     )
-    assert "matlab/+radia/+simulink/motorAngleFamilyMexSFunction.m" in names
-    assert "matlab/python_api_parity_manifest.json" in names
+    assert "packages/radia-gpu/matlab/+radia/+simulink/motorAngleFamilyMexSFunction.m" in names
+    assert "packages/radia-gpu/matlab/python_api_parity_manifest.json" in names
 
 
 def test_full_library_enumerates_only_tracked_matlab_files(monkeypatch, tmp_path):
@@ -242,7 +242,7 @@ def test_full_library_enumerates_only_tracked_matlab_files(monkeypatch, tmp_path
     calls = []
 
     class Result:
-        stdout = "matlab/tracked.m\n"
+        stdout = "packages/radia-gpu/matlab/tracked.m\n"
 
     def fake_run(command, **kwargs):
         calls.append((command, kwargs))
@@ -251,7 +251,7 @@ def test_full_library_enumerates_only_tracked_matlab_files(monkeypatch, tmp_path
     monkeypatch.setattr(package_module, "ROOT", tmp_path)
     monkeypatch.setattr(package_module.subprocess, "run", fake_run)
 
-    assert package_module.release_matlab_files() == (Path("matlab/tracked.m"),)
+    assert package_module.release_matlab_files() == (Path("packages/radia-gpu/matlab/tracked.m"),)
     assert calls[0][0] == [
         "git",
         "-c",
@@ -265,7 +265,7 @@ def test_full_library_enumerates_only_tracked_matlab_files(monkeypatch, tmp_path
 
 def test_full_library_verifier_gates_optional_optimization_toolbox():
     verifier = (
-        ROOT / "matlab" / "verify_radia_simulink_release.m"
+        ROOT / "packages/radia-gpu/matlab" / "verify_radia_simulink_release.m"
     ).read_text(encoding="utf-8")
     assert "electromagnetTopologyExecuted = hasOptimizationToolbox();" in verifier
     assert "electromagnetStatus(end) ~= -1" in verifier
@@ -578,7 +578,7 @@ def test_slx_text_integrity_rejects_mojibake(damaged):
         model.writestr("simulink/blockdiagram.xml", damaged)
     with pytest.raises(RuntimeError, match="Replacement glyph|question-mark run"):
         verify_module._verify_slx_text_integrity(
-            payload.getvalue(), "matlab/damaged.slx"
+            payload.getvalue(), "packages/radia-gpu/matlab/damaged.slx"
         )
 
 
@@ -594,7 +594,7 @@ def test_slx_text_integrity_accepts_valid_utf8_and_single_question_mark():
             '<?xml version="1.0" encoding="utf-8"?><P>Ready?</P>',
         )
     verify_module._verify_slx_text_integrity(
-        payload.getvalue(), "matlab/valid.slx"
+        payload.getvalue(), "packages/radia-gpu/matlab/valid.slx"
     )
 
 

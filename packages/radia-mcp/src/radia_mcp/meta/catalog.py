@@ -33,7 +33,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "LTspice circuit integration through the optional radia-gpu implementation",
         "primary_tools": ["netlist_to_asc", "check_circuit", "compare_topology", "circuit_knowledge"],
         "related": ["radia-matlab", "radia-ngsolve"],
-        "tags": ["circuits", "integration"],
+        "tags": ["application"],
     },
     # ============================================================
     # CAD / mesh authoring
@@ -80,6 +80,7 @@ CATALOG: dict[str, dict[str, Any]] = {
             "gmsh",
             "radia-acoustic",
             "radia-matlab",
+            "radia-ltspice",
             "acoustic-fembem",
             "mathematica",
             "matrix-solvers",
@@ -131,7 +132,7 @@ CATALOG: dict[str, dict[str, Any]] = {
                             "matlab_optuna_mcp_route",
                             "matlab_optuna_simulink_contract",
                             "matlab_radia_acoustic_interface_contract"],
-        "related": ["acoustic-fembem", "radia-ngsolve"],
+        "related": ["acoustic-fembem", "radia-ngsolve", "radia-ltspice"],
         "tags": ["ml", "optimization", "solver"],
     },
     "acoustic-fembem": {

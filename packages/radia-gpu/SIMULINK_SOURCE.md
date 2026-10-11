@@ -1,3 +1,7 @@
+> Historical source notes only. CPU Radia MEX is unsupported. The accepted GPU
+> payload is described in README.md; these legacy models are not shipped as
+> validated CUDA applications.
+
 # Radia Simulink Blocks
 
 This directory contains the Simulink boundary for production Radia reduced
@@ -8,7 +12,7 @@ files only define the block contract and marshal MATLAB arrays.
 
 The final human operating surfaces for Electromagnet, PCB PEEC, Motor, Stream
 Function, Induction Heating, and Magnetic Levitation are built by
-`matlab/+radia/+simulink/buildLibrary.m`. Electromagnet, PCB, Motor, and Stream
+`packages/radia-gpu/matlab/+radia/+simulink/buildLibrary.m`. Electromagnet, PCB, Motor, and Stream
 Function retain their explicit-trigger application boundary. Induction
 Heating is separate: readable Level-2 MATLAB Eddy and Thermal S-Functions own
 its ports and lifecycle, while checked `radia_mex` handles own native numerical
@@ -31,13 +35,9 @@ retired for every application, including IH.
 
 ## Motor ROM block
 
-`radia_motor_rom_sfun.cpp` is a fixed-step C-MEX S-function.  Build it from a
-MATLAB session with:
-
-```matlab
-addpath('src/radia/simulink');
-radia_motor_rom_sfun_build('private-runtime-path');
-```
+The former fixed-step motor-ROM CPU MEX build recipe has been removed.
+The adapter source is retained under `native/legacy/simulink` as historical
+implementation material, not as a supported build target.
 
 The S-function takes five parameters:
 
@@ -84,11 +84,11 @@ The Simulink layer exposes physical model units, not individual internal
 matrix kernels:
 
 * Moving MagLev models use the masked shared-mode Foster HCurl family block in
-  `matlab/radia_maglev.slx`; fixed-position LTI exports remain a lower-level
+  `packages/radia-gpu/matlab/radia_maglev.slx`; fixed-position LTI exports remain a lower-level
   diagnostic and controller-composition surface.
 * Dynamic motor ROMs use `radia_motor_rom_sfun` or an FMI Co-Simulation FMU.
 * Fixed reduced IH and HCurl Eddy Bubble Foster models can use
-  `matlab/+radia/+simulink/stateSpaceMexSFunction.m`, backed by the native
+  `packages/radia-gpu/matlab/+radia/+simulink/stateSpaceMexSFunction.m`, backed by the native
   `simulink.state_space.*` MEX handle commands. Their matrices are copied once
   at `Start`; no Python process or per-step state-vector transfer is used.
 * Moving height-family models remain MATLAB S-functions because their reduced
@@ -96,7 +96,7 @@ matrix kernels:
 
 ## Magnetic-levitation model
 
-`matlab/radia_maglev.slx` wires consistent coil-current and current-derivative
+`packages/radia-gpu/matlab/radia_maglev.slx` wires consistent coil-current and current-derivative
 sources, mechanical height, the moving Foster HCurl plant, induced response, and
 three-component Lorentz force. The tracked family is diagnostic smoke data.
 Engineering models load a shared-mode JSON family exported by
@@ -109,7 +109,7 @@ kernels.
 
 ## Induction-heating native preview
 
-The tracked `matlab/radia_ih.slx` model separates readable Level-2 MATLAB Eddy
+The tracked `packages/radia-gpu/matlab/radia_ih.slx` model separates readable Level-2 MATLAB Eddy
 and Thermal S-Functions and closes the temperature feedback explicitly:
 
 ```matlab

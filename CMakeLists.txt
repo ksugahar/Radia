@@ -12,7 +12,7 @@ function(radia_add_optuna_mex)
 	matlab_add_mex(
 		NAME optuna_mex
 		R2018a
-		SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/matlab/radia_mex.cpp
+		SRC ${CMAKE_CURRENT_SOURCE_DIR}/packages/radia-optuna/native/optuna_mex.cpp
 	)
 	target_compile_definitions(optuna_mex PRIVATE
 		RADIA_OPTUNA_MEX_ONLY
@@ -24,10 +24,10 @@ function(radia_add_optuna_mex)
 		target_link_options(optuna_mex PRIVATE /NODEFAULTLIB:LIBCMT)
 	endif()
 	add_custom_command(TARGET optuna_mex POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/matlab"
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/packages/radia-optuna/matlab"
 		COMMAND ${CMAKE_COMMAND} -E copy_if_different
 			"$<TARGET_FILE:optuna_mex>"
-			"${CMAKE_SOURCE_DIR}/matlab/$<TARGET_FILE_NAME:optuna_mex>"
+			"${CMAKE_SOURCE_DIR}/packages/radia-optuna/matlab/$<TARGET_FILE_NAME:optuna_mex>"
 		COMMENT "Copying optuna_mex to matlab"
 	)
 endfunction()
@@ -327,18 +327,18 @@ include(CTest)
 if(BUILD_TESTING)
     add_executable(test_ih_rotation_runtime
         tests/ih_rotation_runtime.cpp
-        src/radia/simulink/radia_ih_runtime.cpp
-        src/radia/simulink/radia_ih_thermal.cpp
-        src/radia/simulink/radia_ih_transport.cpp)
-    target_include_directories(test_ih_rotation_runtime PRIVATE src/radia/simulink)
+        src/runtime/ih/radia_ih_runtime.cpp
+        src/runtime/ih/radia_ih_thermal.cpp
+        src/runtime/ih/radia_ih_transport.cpp)
+    target_include_directories(test_ih_rotation_runtime PRIVATE src/runtime/ih)
     add_test(NAME radia.ih_rotation.cpp COMMAND test_ih_rotation_runtime)
 
     add_executable(test_radia_ih_thermal_acceptance
         tests/cpp/test_radia_ih_thermal_acceptance.cpp
-        src/radia/simulink/radia_ih_runtime.cpp
-        src/radia/simulink/radia_ih_thermal.cpp
-        src/radia/simulink/radia_ih_transport.cpp)
-    target_include_directories(test_radia_ih_thermal_acceptance PRIVATE src/radia/simulink)
+        src/runtime/ih/radia_ih_runtime.cpp
+        src/runtime/ih/radia_ih_thermal.cpp
+        src/runtime/ih/radia_ih_transport.cpp)
+    target_include_directories(test_radia_ih_thermal_acceptance PRIVATE src/runtime/ih)
     target_compile_features(test_radia_ih_thermal_acceptance PRIVATE cxx_std_17)
     add_test(NAME radia.ih_thermal_acceptance.cpp COMMAND test_radia_ih_thermal_acceptance)
 	add_executable(test_rad_beam_transfer
@@ -388,7 +388,7 @@ if(BUILD_TESTING)
 		${CMAKE_CURRENT_SOURCE_DIR}/tests/cpp/test_radia_mex_sparse_symmetry.cpp
 	)
 	target_include_directories(test_radia_mex_sparse_symmetry PRIVATE
-		${CMAKE_CURRENT_SOURCE_DIR}/src/matlab)
+		${CMAKE_CURRENT_SOURCE_DIR}/src/core)
 	target_compile_features(test_radia_mex_sparse_symmetry PRIVATE cxx_std_17)
 	if(MSVC)
 		target_compile_options(test_radia_mex_sparse_symmetry PRIVATE /W4 /permissive-)

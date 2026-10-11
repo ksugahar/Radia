@@ -76,31 +76,21 @@ and application cases with numerical evidence.
 
 ## NGSolve from MATLAB
 
-**Use NGSolve meshes, finite-element spaces, fields, and sparse operators from
-MATLAB, then connect the result to your circuit, optimizer, or Simulink model.**
-Radia is not only a Python package: its `radia.ngsolve` MATLAB namespace exposes
-selected NGSolve operations through a standalone native MEX gateway.
+CPU execution belongs to `radia` through Python/pybind11/NGSolve.
+GPU execution belongs to `radia-gpu` through MATLAB mexcuda.
+CPU Radia MEX is unsupported. NGSolve owns FE assembly; the initial GPU
+kernel accepts assembled CSR operators and verifies the true residual.
 
-- **Keep the model native.** Meshes, forms, matrices, and vectors can remain
-  C++-owned across calls through checked handles. Export a MATLAB sparse matrix
-  when you need one; repeated native operations need not export it each time.
-- **Use the same numerical kernels.** The native MATLAB and Python adapters
-  share C++ implementations, including the focused AMS/COCR solver interface.
-- **Build an application around the field solve.** Readable MATLAB
-  S-Functions connect supported native states to Simulink; LTspice adapters
-  and the independently distributed `radia-optuna` add circuit and optimization
-  workflows.
+MATLAB, Simulink and LTspice integration source, builds and distribution live
+in [radia-gpu](packages/radia-gpu/README.md), within this monorepo.
+`radia-mcp` provides cross-package knowledge and operation. The independently
+released `radia-optuna` retains its own MATLAB optimization API and MEX.
 
-Start with the [MATLAB mesh and matrix walkthrough](matlab/README.md#persistent-mesh-space-form-and-matrix-handles),
-explore the [Simulink library](#simulink), or inspect the
-[Python/MATLAB comparison cases and saved results](validation_test/ngsolve_matlab_parity/README.md).
-
-This is Radia's MATLAB interface to NGSolve, not an official NGSolve MATLAB
-distribution or a claim of complete native API parity. The
-[backend map](matlab/python_api_parity_manifest.json) distinguishes native MEX,
-MATLAB-native, explicit Python batch fallbacks, and private capabilities.
-MATLAB/Simulink licensing and the [supported runtime](#supported-production-stack)
-still apply.
+The initial GPU alpha supports CSR Jacobi-PCG, its readable Simulink block
+and LTspice integration. Historical CPU MEX models are source-only until
+ported and validated. Poisson acceptance does not certify AMS, ICCG or HDiv-MMM.
+Deploy GPU artifacts to 100 and A100, never 102. A100 acceptance stays pending
+while unavailable.
 
 ## Why Radia?
 
@@ -359,7 +349,7 @@ effects, shield coupling, circuit assembly, and SPICE-compatible extraction.
 PRIMA, block Lanczos, Foster modal models, and universal relaxation networks provide reusable
 reduced models for circuit and transient studies.
 
-The built-in `radia.ltspice` package connects SPICE netlists, editable LTspice
+The independent `radia_gpu.ltspice` package connects SPICE netlists, editable LTspice
 schematics, KiCad-derived circuits, RAW results, and sampled-data Simulink
 plants. Circuit conversion has one Python source of truth and exposes checked
 MATLAB adapters.
@@ -447,80 +437,21 @@ operation.
 
 ### MATLAB and native MEX
 
-Selected NGSolve and Radia capabilities are available through independently
-callable native MEX functions. Checked `uint64` handles own meshes, spaces,
-coefficient and grid functions, forms, vectors, matrices, and repeated native
-state without exposing raw pointers.
+Use the independently distributed [radia-gpu](packages/radia-gpu/README.md).
+Its supported solver route is MATLAB mexcuda, with explicit transfer and
+numerical validation against Python CPU execution. Build on 100 with
+`Build.ps1 -CudaMexOnly -RequireNativeProvenance`.
 
 MathWorks' official MATLAB MCP Server and Simulink Agentic Toolkit own generic
-MATLAB/Simulink operations. Radia follows their compatible stable interfaces and
-adds CAE-domain MEX, artifact, and workflow contracts above that foundation.
-
-The standalone MEX ABI is both a user surface and a debugging boundary. It is
-tested independently for numerical parity, error propagation, lifecycle, and
-performance before a Simulink block depends on it. MATLAB wrappers use an
-explicit Python-DLL boundary only where no stable native object boundary is
-practical; Python is never silently called once per simulation time step.
-
-The NGSolve MATLAB boundary is validated against the public Python API on the
-same meshes. The committed campaign covers 100 core cases plus 500 breadth,
-20 matrix-free scale, and 15 manufactured-solution cases across 2D/3D H1,
-HCurl, and HDiv spaces; the full compute host run ends with zero live native handles.
-
-HCurl-based reduced and topology workflows use the same standalone native
-boundary. HCurl multifrequency topology gradients, activation derivatives,
-and repeated reduced-state operations are available as independently testable
-MEX commands before they are composed into Simulink blocks.
-
-- [MATLAB integration and MEX contracts](matlab/README.md)
-- [NGSolve/MEX parity map](docs/api/MATLAB_MEX_NGSOLVE_PARITY.md)
+MATLAB/Simulink operations; `radia-mcp` adds domain and distribution contracts.
 
 ### Simulink
 
-The final human-facing application interface is the single **Radia** Simulink
-library. The current library contains:
-
-| Group | Blocks |
-| :--- | :--- |
-| **Applications** | Electromagnet, Electromagnet Topology Optimization, PCB PEEC, Motor, Stream Function, Stream Function Optimization, Induction Heating, Magnetic Levitation, Field Study |
-| **Material and coupling** | Temperature-Dependent BH, Material Database, Material Dictionary, Winding Dictionary, Field Study Configuration |
-| **Optimization** | Optuna Optimization, Optuna Monitor, Sheet Metal Optimization, Adjoint Topology Optimization |
-| **Reduced models and circuits** | Nonlinear HDiv-MMM Reactor, Motor Angle Family, LTspice Circuit, Hysteretic LTspice Plant |
-| **Utilities** | Distributed-field statistics and checked result logging |
-
-Register the library after adding the repository's `matlab` directory to the
-MATLAB path:
-
-```matlab
-addpath("matlab")
-radia.setup()
-radia.simulink.buildLibrary()
-sl_refresh_customizations
-```
-
-Application blocks use explicit triggers for expensive CAD, mesh, and field
-solves. Native dynamic blocks use readable Level-2 MATLAB S-Functions for
-ports and lifecycle, with standalone MEX handles for repeated numerical work.
-
-The tracked `radia_nonlinear_reactor.slx` sample solves a nonlinear retained
-HDiv magnetic-moment state at every accepted sample. It exposes terminal
-voltage, flux linkage, differential inductance, peak and distributed magnetic
-flux density, energy, and Newton diagnostics. The block uses no LUT, lumped
-surrogate, or per-step Python call; open it with
-`radia.simulink.openNonlinearReactor()`.
-
-Induction Heating uses separate Eddy and Thermal S-Functions. Eddy accepts
-current, workpiece angle, and distributed temperature and emits distributed
-heat density; Thermal advances the accepted temperature field. Geometry
-updates accept checked workpiece `.vol`/`.vol.gz` and coil STEP or labeled VOL
-inputs, assemble the physical operators, and write evidence before simulation.
-There is no LUT or lumped thermal substitute hidden behind the production
-block.
-
-Tracked `.slx` samples have canonical MATLAB builders and load/update
-regressions. Packaged Simulink releases include the library, MATLAB support
-files, MEX assets, runtime dependencies, a manifest, and checksums. The exact
-archive is published only after it passes the multi-host release gate.
+`radia-gpu` owns the readable CUDA PCG Level-2 S-Function, typed ports and
+lifecycle checks. Standalone numerical MEX remains independently callable.
+`radia-optuna` independently owns its optimization blocks. Historical library
+models remain in the owning package's source tree and require migration and
+validation before GPU release; they are not supported CPU MEX routes.
 
 ### Documentation and visualization
 
@@ -615,7 +546,7 @@ See [BUILD.md](BUILD.md) for compiler, NGSolve, MKL, and packaging details.
 src/core/                       C++ Radia and native electromagnetic kernels
 src/radia/                      Python package, NGSolve integration, methods
 src/radia/ltspice/              SPICE, LTspice, KiCad, and circuit workflows
-matlab/+radia/                  MATLAB API, MEX wrappers, Simulink builders
+packages/radia-gpu/matlab/+radia/                  MATLAB API, MEX wrappers, Simulink builders
 packages/radia-mcp/             MCP servers and executable domain knowledge
 packages/cubit-mesh-export/     Cubit exporters, plugin, and check-vol
 packages/radia-optuna/          Standalone MATLAB/Simulink Optuna package
@@ -648,7 +579,7 @@ Start with the path closest to your task:
 - [Electric machines](docs/electric_machine/README.md)
 - [Magnetic levitation](docs/maglev/demos/README.md)
 - [Gmsh post-processing](docs/gmsh_post/README.md)
-- [MATLAB and Simulink](matlab/README.md)
+- [MATLAB and Simulink](packages/radia-gpu/matlab/README.md)
 - [MCP servers and tools](packages/radia-mcp/README.md)
 - [Cubit mesh export](docs/cubit_mesh_export/README.md)
 

@@ -3,6 +3,7 @@
 Skipped unless LTspice.exe and an interactive Windows desktop are available.
 """
 from __future__ import annotations
+import radia_gpu.ports as gpu_ports
 
 import math
 import re
@@ -30,7 +31,7 @@ FREQUENCIES = (10.0, 300.0, 5e3, 1e5)
 
 def _solve(tmp_path: Path, model, probes: list[str]) -> dict[tuple[int, int], complex]:
     """Drive port 1 with a 1 A AC current (other ports open) and read the probes."""
-    library = pe.write_ltspice_subckt(model, tmp_path / "dut.lib", name="DUT")
+    library = gpu_ports.write_ltspice_subckt(model, tmp_path / "dut.lib", name="DUT")
     pins = " ".join(f"x{k} 0" for k in range(1, model.port_count + 1))
     measures = "\n".join(f".meas AC m{p}_{i} FIND {probe} AT={f}"
                          for p, probe in enumerate(probes) for i, f in enumerate(FREQUENCIES))

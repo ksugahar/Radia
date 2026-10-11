@@ -624,12 +624,13 @@ def test_mcp_tools_registered():
         "circuit_knowledge",
         "buck_seed",
         "patentability_search_plan",
+        "radia_ltspice_status",
     }
     assert names == expected
 
     readme = (
         Path(__file__).parents[4] / "docs" / "ltspice" / "README.md"
     ).read_text(encoding="utf-8")
-    assert "Exposes thirty-two tools:" in readme
+    assert "Exposes thirty-three tools:" in readme
     for name in expected:
         assert f"`{name}" in readme

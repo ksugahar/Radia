@@ -25,7 +25,7 @@ python -m pytest packages/radia-mcp/tests/test_matlab_radia_mex_contract.py -q
 ```
 
 The checked source of truth for module classification is
-`matlab/python_api_parity_manifest.json`.
+`packages/radia-gpu/matlab/python_api_parity_manifest.json`.
 
 ## Remaining native gaps
 
@@ -51,7 +51,7 @@ artifact generation, or a batch solve. It may not run at each Simulink sample.
 
 ## Native promotion order
 
-The checked backlog in `matlab/python_api_parity_manifest.json` fixes the next
+The checked backlog in `packages/radia-gpu/matlab/python_api_parity_manifest.json` fixes the next
 promotion sequence and the owning tests:
 
 1. axifem Q2/heat element arrays and checked numeric assembly

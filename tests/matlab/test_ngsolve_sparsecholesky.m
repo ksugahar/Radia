@@ -7,7 +7,7 @@ classdef test_ngsolve_sparsecholesky < matlab.unittest.TestCase
     methods (TestClassSetup)
         function setupPath(testCase)
             root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
-            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(root,'matlab')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(root,'packages','radia-gpu','matlab')));
             radia.setup(Force=true);
         end
     end

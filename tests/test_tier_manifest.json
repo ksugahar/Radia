@@ -1,7 +1,7 @@
 {
   "schema": "radia.test-tier-manifest.v1",
   "impact_rules": {
-    "src/radia/simulink/ih_operator_assembly.py": ["tests/test_ih_panel_esim_assembly.py", "tests/test_ih_operator_assembly.py"],
+    "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py": ["tests/test_ih_panel_esim_assembly.py", "tests/test_ih_operator_assembly.py"],
     "src/radia/bem_complete_reaction.py": ["tests/test_bem_strong_panel_impedance.py", "tests/test_bem_complete_reaction.py"],
     "src/radia/bem_coupled_solver.py": ["tests/test_bem_strong_panel_impedance.py", "tests/test_bem_complete_reaction.py", "validation_test/panels/test_strong_coupling_cli_contract.py"],
     "src/radia/peec_coupled_bem_solver.py": ["tests/test_bem_strong_panel_impedance.py", "tests/test_bem_complete_reaction.py", "validation_test/panels/test_strong_coupling_cli_contract.py"],
@@ -112,17 +112,17 @@
     "validation_test/feec/check_wedge_charge_pullback.py": [
       "tests/test_wedge_charge_pullback_contract.py"
     ],
-    "src/matlab/radia_mex.cpp": [
+    "packages/radia-optuna/native/optuna_mex.cpp": [
       "tests/test_sparsesolv_matlab_contract.py"
     ],
-    "matlab/+radia/+sparsesolv/": [
+    "packages/radia-gpu/matlab/+radia/+sparsesolv/": [
       "tests/test_sparsesolv_matlab_contract.py"
     ],
-    "matlab/python_api_parity_manifest.json": [
+    "packages/radia-gpu/matlab/python_api_parity_manifest.json": [
       "tests/test_sparsesolv_matlab_contract.py",
       "tests/test_matlab_python_parity_manifest.py"
     ],
-    "matlab/+radia/+python/": [
+    "packages/radia-gpu/matlab/+radia/+python/": [
       "tests/test_matlab_python_parity_manifest.py"
     ],
     "Build.ps1": [

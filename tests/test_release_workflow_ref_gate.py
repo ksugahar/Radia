@@ -156,7 +156,7 @@ def test_optuna_manual_release_selects_one_fully_successful_ci_run():
         "--release-candidate --json"
         in workflow
     )
-    assert '"matlab/optuna_mex.mexw64"' in workflow
+    assert '"packages/radia-optuna/matlab/optuna_mex.mexw64"' in workflow
     assert (
         '"radia_optuna/matlab/optuna_mex.mexw64": Path('
         in workflow

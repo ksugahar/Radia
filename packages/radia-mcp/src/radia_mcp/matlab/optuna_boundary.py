@@ -123,7 +123,7 @@ def matlab_optuna_mcp_route(topic: str = "overview") -> dict[str, Any]:
             "tests/matlab/fixtures/optuna50_oracle.json",
             "tests/matlab/fixtures/optuna50_mcp_oracle.json",
             "tests/matlab/fixtures/optuna50_public_api.json",
-            "matlab/optuna50_api_coverage.json",
+            "packages/radia-optuna/matlab/optuna50_api_coverage.json",
             "tests/matlab/fixtures/optuna_test_manifest.json",
         ],
         "disagreement_policy": (

@@ -630,7 +630,7 @@ try {
     $BuildResult = Get-NativeBuildResult -ExitCode $BuildResult -LogText $BuildLogText -RequiredArtifacts $RequiredNativeArtifacts
     if ($OptunaMexOnly) {
         $RequiredMexArtifacts = @(
-            "$PROJECT_DIR\matlab\optuna_mex.mexw64"
+            "$PROJECT_DIR\packages\radia-optuna\matlab\optuna_mex.mexw64"
         )
         $MissingMexArtifacts = $RequiredMexArtifacts | Where-Object { -not (Test-Path $_) }
         if ($MissingMexArtifacts) {

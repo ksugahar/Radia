@@ -556,7 +556,7 @@ INDUCTION_HEATING_THERMAL = """
 
 ## Production path: native IH Simulink blocks
 
-The tracked production model is ``matlab/radia_ih.slx``.  Its readable Level-2
+The tracked production model is ``packages/radia-gpu/matlab/radia_ih.slx``.  Its readable Level-2
 MATLAB S-Functions expose two independent lifecycle boundaries:
 
 * ``radia.simulink.ihEddySFunction`` receives coil current, workpiece angle,

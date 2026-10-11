@@ -12,7 +12,11 @@ def test_all_mcp_server_scripts_are_cataloged_with_canonical_names():
     scripts = {name for name in project["project"]["scripts"] if name.startswith("mcp-server-")}
     catalog_commands = {entry["command"] for entry in catalog.list_all()}
 
-    assert scripts == catalog_commands
+    compatibility = {"mcp-server-radia-spice-lab": "mcp-server-radia-ltspice"}
+    assert scripts == catalog_commands | compatibility.keys()
+    for alias, canonical in compatibility.items():
+        assert project["project"]["scripts"][alias] == project["project"]["scripts"][canonical]
+        assert catalog.get(alias)["name"] == catalog.get(canonical)["name"]
     for entry in catalog.list_all():
         server_id = entry["command"].removeprefix("mcp-server-")
         assert entry["server_id"] == server_id

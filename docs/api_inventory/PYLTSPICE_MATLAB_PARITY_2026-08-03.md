@@ -7,7 +7,7 @@ its source is not copied into Radia.
 ## Definition of complete
 
 The port is complete only when every public PyLTSpice top-level class and method
-is classified in `matlab/pyltspice_api_compatibility.json`, every `native-matlab`
+is classified in `packages/radia-gpu/matlab/pyltspice_api_compatibility.json`, every `native-matlab`
 or `native-mex` entry has a MATLAB regression test, and the checked inventory
 contains no `missing` entry.  snake_case compatibility aliases and the idiomatic
 MATLAB camelCase names are both part of the contract.

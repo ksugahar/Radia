@@ -5,7 +5,7 @@ arguments
  options.ResultPath (1,1) string=""
 end
 startedAt=datetime("now","TimeZone","local");stopwatch=tic;
-repoRoot=fileparts(fileparts(fileparts(mfilename("fullpath"))));originalPath=path;pathCleanup=onCleanup(@()path(originalPath));addpath(fullfile(repoRoot,"matlab"));
+repoRoot=fileparts(fileparts(fileparts(mfilename("fullpath"))));originalPath=path;pathCleanup=onCleanup(@()path(originalPath));addpath(fullfile(repoRoot,'packages','radia-gpu','matlab'));
 root=options.OutputDirectory;if isfolder(root),rmdir(root,'s');end;mkdir(root);
 executable=radia.ltspice.findExecutable();versionInfo=System.Diagnostics.FileVersionInfo.GetVersionInfo(char(executable));
 host=string(getenv("COMPUTERNAME"));if strlength(host)==0,host=string(System.Net.Dns.GetHostName());end

@@ -85,7 +85,7 @@ Durable evidence is in `validation_test/ngsolve_matlab_parity/`:
   validate the saved evidence; they do not rerun MATLAB or certify a new binary.
 - The MATLAB MCP contract suite has 14 passes and one existing failure:
   `test_root_readme_publishes_native_topology_mex_parity` finds a 365-command
-  current inventory but `matlab/README.md` still says 364. Do not suppress it
+  current inventory but `packages/radia-gpu/matlab/README.md` still says 364. Do not suppress it
   or equate the stale documentation number with a numerical solver failure.
 
 Before ver5 acceptance, select the affected numerical parity lane against the

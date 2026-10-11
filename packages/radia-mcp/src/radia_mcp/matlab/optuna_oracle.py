@@ -50,7 +50,7 @@ def _json(path: Path) -> dict[str, Any]:
 
 def _has_evidence(candidate: Path) -> bool:
     return (
-        (candidate / "matlab" / "optuna_upstream_compatibility.json").is_file()
+        (candidate / "packages" / "radia-optuna" / "matlab" / "optuna_upstream_compatibility.json").is_file()
         and (candidate / "tests" / "matlab" / "fixtures").is_dir()
     )
 
@@ -71,7 +71,7 @@ def _repo_root(repo_root: str | os.PathLike[str] | None = None) -> Path:
             source = "repo_root argument" if argument else "RADIA_REPO_ROOT"
             raise FileNotFoundError(
                 f"The {source} {configured!r} does not contain the checked "
-                "Optuna evidence (matlab/optuna_upstream_compatibility.json "
+                "Optuna evidence (packages/radia-optuna/matlab/optuna_upstream_compatibility.json "
                 "and tests/matlab/fixtures/). Point it at the Radia repository "
                 "root, or omit it to search upward from the installed package."
             )
@@ -101,8 +101,8 @@ _EVIDENCE_KEYS = (
 def _evidence_paths(root: Path) -> dict[str, Path]:
     fixture = root / "tests" / "matlab" / "fixtures"
     return {
-        "compatibility": root / "matlab" / "optuna_upstream_compatibility.json",
-        "api_coverage": root / "matlab" / "optuna50_api_coverage.json",
+        "compatibility": root / "packages/radia-optuna/matlab" / "optuna_upstream_compatibility.json",
+        "api_coverage": root / "packages/radia-optuna/matlab" / "optuna50_api_coverage.json",
         "python_oracle": fixture / "optuna50_oracle.json",
         "public_api_inventory": fixture / "optuna50_public_api.json",
         "mcp_oracle": fixture / "optuna50_mcp_oracle.json",

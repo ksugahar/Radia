@@ -6,13 +6,13 @@ Radia is an AI-native electromagnetic CAE platform.
 Position Radia as AI-operable CAE through MCP: users define the analysis plan, physical assumptions and acceptance criteria; AI assists tool operation and execution.
 Do not market autonomous AI design. Extend NGSolve only for missing engineering capability.
 
-Current scope:
+Scope:
 
 1. Complete and validate HDiv-MMM topology optimization.
 2. Improve repository and `radia-mcp` quality, maintenance, validation,
    build, CI, packaging, and release operation.
 
-Do not add unrelated features during this maintenance program.
+Do not add unrelated features.
 ## Repository Boundaries
 The monorepo independently releases `radia`, `radia-gpu`, `cubit-mesh-export`, `radia-mcp`, `radia-optuna` and `eqnedit64`.
 Scope commits and CI to the owner. Shared files trigger multiple lanes only for real shared ABI, build or integration changes.
@@ -104,8 +104,8 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 - GPU: `radia-gpu` uses MATLAB mexcuda for performance; ships optional Simulink/LTspice adapters, no external products.
 - Choose VS/CUDA by target MATLAB mexcuda support. Verify upgrades; never override unsupported compilers.
 - No implicit CPU/Python fallback. Measure host setup and CPU solves separately.
-- Deploy to 100 (build/RTX 5000) and A100, never 102. Offline A100 stays pending; verify the same artifact hash when available.
-- Require Python CPU parity and validation JSON per GPU feature; Poisson does not certify ICCG/AMS/HDiv-MMM.
+- Develop/build radia-gpu on 100; final validation uses NGSolve on mdx, with CUDA execution/timing on its online A100. Never deploy to 102.
+- Record parity, artifact hashes and validation JSON; offline A100 stays pending. Poisson does not certify ICCG/AMS/HDiv-MMM.
 
 ### GPU Kernel Research Strategy (2026-10-11)
 
@@ -119,16 +119,10 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 ### MATLAB And Simulink
 
 - Use MathWorks' official MATLAB MCP Server and Simulink Agentic Toolkit.
-  The official MCP Server remains the standard MATLAB operation foundation.
-  LAB/100 track compatible stable releases: record versions before release,
-  review upgrade notes and regression-test affected Radia composition contracts.
-  Use the official MATLAB Engine for Python when available and appropriate,
-  particularly for SSH batch execution and shared-session connections. Keep
-  Engine installed and importable on mdx1/mdx2; record the interpreter, MATLAB
-  version, and execution route. Reuse Radia MATLAB entry points through either
-  route. Engine execution does not waive the official Toolkit model-edit,
-  check, save/reopen, and diagnostic requirements for production SLX files.
-  Close only sessions owned by the operation and retain caller-owned sessions.
+  Record stable tool versions and regression-test upgrades. Use official
+  MATLAB Engine for SSH/batch or shared sessions when appropriate; record
+  interpreter, MATLAB version and route. Engine does not waive Toolkit
+  model-edit, check, save/reopen or diagnostic gates. Close only owned sessions.
 - A tracked production `.slx` passes read, edit, check, save, close, and reopen
   on the exact path. Never patch SLX ZIP/XML directly.
 - Public model-authored UI text is English. Mojibake, replacement glyphs,
@@ -183,18 +177,19 @@ solver boundary is a checked `.vol` regardless of the creation route.
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
 **POLICY**: CI/builds use 100号機 with the `100` runner label.
-Isolate CI from user runtimes; LAB tests wheels.
-LAB owns distribution acceptance and SSH preflight; mdx is reserved for computation-time evaluation; mdx1/mdx2/hibino are retired.
+100号機 permits isolated tests and heavy numerical/memory validation.
+Isolate CI from user runtimes. LAB/102 tests radia and radia-mcp wheels without radia-gpu.
+LAB owns SSH preflight; mdx validates radia-gpu against NGSolve and evaluates timing. mdx1/mdx2/hibino are retired.
 Before the next solver release, migrate release-quad acceptance to the current fleet.
 Decision 2026-10-01: editable only on 100号機, in a dedicated local development
 venv for maintainers/students, separate from the release runtime. LAB/mdx use
 verified wheels.
-`cubit-mesh-export` uses its own release-dual to LAB and 100号機; the Radia
-solver release-quad must not install, uninstall, repoint, or version-gate it.
+`cubit-mesh-export` is independently tested on 100 and LAB/102. NGSolve hosts start from checked exported .vol files, without Cubit.
+Solver releases must not install, uninstall, repoint, or version-gate the exporter.
 Do not install or run Cubit on mdx in either release lane. This boundary
 does not prohibit Cubit-independent checker unit tests in isolated CI
 environments. Existing installations are not silently removed.
-Distribution tests run on LAB; mdx runs timing evaluations only, without Cubit.
+CPU/MCP distribution tests run on LAB/102; mdx GPU/NGSolve validation runs without Cubit.
 
 MATLAB-capable runners use a MATLAB-authenticated account and pass an Engine
 startup/calculation/shutdown check in the actual runner context. SYSTEM and SSH
@@ -233,6 +228,7 @@ LAB-owned mapped drives or the workgroup share. Do not restore that dependency.
 Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes mdx hostname`, then check
 running jobs and available memory. Run one heavy job at a time; preserve active timing jobs. Never stop another session's jobs. LAB may run high-memory tests when
 explicitly selected; Gmsh rendering needs a desktop.
+Formal timing requires idle mdx; incidental 100号機/LAB timings are diagnostic only.
 Measure speed; settle quadrature and threads first. Historical mdx measurements
 remain valid provenance. Publish OS, threads, versions/results; keep hosts/IPs/paths private.
 

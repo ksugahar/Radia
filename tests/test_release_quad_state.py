@@ -102,7 +102,7 @@ def test_candidate_uses_package_specific_success_marker(tmp_path, monkeypatch, s
     package.write_bytes(b'candidate identity')
     monkeypatch.setattr(module, '_simulink_manifest', lambda _: {
         'schema': schema, 'version': '5.0.0', 'commit': 'a' * 40,
-        'files': [{'path': 'matlab/radia_mex.mexw64', 'sha256': 'b' * 64}]})
+        'files': [{'path': 'packages/radia-gpu/matlab/radia_mex.mexw64', 'sha256': 'b' * 64}]})
     monkeypatch.setattr(module, 'SIMULINK_GATE_ROOT', tmp_path)
     visited = []
 
@@ -150,7 +150,7 @@ def test_candidate_interpreters_are_recorded_per_target(tmp_path, monkeypatch):
     monkeypatch.setattr(module, '_simulink_manifest', lambda _: {
         'schema': 'radia.simulink.library-release-manifest.v4', 'version': '5.2.1',
         'commit': 'a' * 40,
-        'files': [{'path': 'matlab/radia_mex.mexw64', 'sha256': 'b' * 64}]})
+        'files': [{'path': 'packages/radia-gpu/matlab/radia_mex.mexw64', 'sha256': 'b' * 64}]})
     monkeypatch.setattr(module, 'SIMULINK_GATE_ROOT', tmp_path)
     used = {}
 
@@ -183,7 +183,7 @@ def test_recorded_candidate_state_passes_the_promotion_gate(tmp_path, monkeypatc
     monkeypatch.setattr(module, '_simulink_manifest', lambda _: {
         'schema': 'radia.simulink.library-release-manifest.v4',
         'version': '5.2.1', 'commit': 'a' * 40,
-        'files': [{'path': 'matlab/radia_mex.mexw64', 'sha256': 'b' * 64}]})
+        'files': [{'path': 'packages/radia-gpu/matlab/radia_mex.mexw64', 'sha256': 'b' * 64}]})
     monkeypatch.setattr(module, 'SIMULINK_GATE_ROOT', tmp_path)
     monkeypatch.setattr(module, '_run_simulink_candidate_target',
                         lambda *args: (True, 'RADIA_SIMULINK_RELEASE_OK'))

@@ -115,7 +115,7 @@ jobs:
           wheel = Path(sys.argv[1])
           payloads = {
               "radia_optuna/matlab/optuna_mex.mexw64": Path(
-                  "matlab/optuna_mex.mexw64"
+                  "packages/radia-optuna/matlab/optuna_mex.mexw64"
               ),
               "radia_optuna/matlab/LICENSE": Path("LICENSE"),
           }

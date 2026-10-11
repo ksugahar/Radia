@@ -6,10 +6,10 @@ description: Publish Radia's Simulink application library after verifying its fi
 # Publish Application Blocks
 
 1. Run `simulink-app-health`.
-2. Regenerate and inspect `matlab/radia_simulink_library.slx`.
+2. Regenerate and inspect `packages/radia-gpu/matlab/radia_simulink_library.slx`.
 3. Confirm EM, PCB, Motor, and Stream Function use the tested application
    runner. Confirm IH contains the native Eddy/Thermal MEX S-Functions.
-4. Load, update, and simulate `matlab/radia_ih.slx`; confirm its direct
+4. Load, update, and simulate `packages/radia-gpu/matlab/radia_ih.slx`; confirm its direct
    Thermal-to-Eddy feedback and native-only backend. Treat the first package as
    a preassembled-operator preview until native `.vol` assembly lands.
 5. Build the versioned archive and run `release_quad simulink-candidate` for all

@@ -11,7 +11,7 @@ SCANNED_ROOTS = (
     ROOT / "src" / "lib",
     ROOT / "src" / "radia",
     ROOT / "src" / "ext",
-    ROOT / "matlab",
+    ROOT / "packages/radia-gpu/matlab",
     ROOT / "validation_test",
     ROOT / "packages" / "radia-mcp" / "src" / "radia_mcp" / "ih",
     ROOT / "packages" / "radia-mcp" / "src" / "radia_mcp" / "mor",

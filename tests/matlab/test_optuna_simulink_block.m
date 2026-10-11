@@ -3,7 +3,7 @@ tests=functiontests(localfunctions);
 end
 function setupOnce(testCase)
 root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
-paths=[string(fullfile(root,"matlab")),string(fullfile(root,"tests","matlab","fixtures"))];
+paths=[string(fullfile(root,'packages','radia-optuna','matlab')),string(fullfile(root,"tests","matlab","fixtures"))];
 entries=string(strsplit(path,pathsep));
 removePaths=false(size(paths));
 for index=1:numel(paths)

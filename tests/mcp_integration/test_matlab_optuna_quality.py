@@ -17,7 +17,7 @@ def test_health_uses_distribution_and_upstream_manifests_as_truth(monkeypatch):
     # A clean source checkout intentionally has no ignored Windows MEX binary.
     # Source health therefore validates the guarded standalone command table;
     # installed-distribution health remains responsible for requiring the MEX.
-    mex_path = REPO_ROOT / "matlab" / "optuna_mex.mexw64"
+    mex_path = REPO_ROOT / "packages/radia-optuna/matlab" / "optuna_mex.mexw64"
     path_is_file = Path.is_file
     monkeypatch.setattr(
         Path,
@@ -36,7 +36,7 @@ def test_health_uses_distribution_and_upstream_manifests_as_truth(monkeypatch):
         ).read_text(encoding="utf-8")
     )
     coverage = json.loads(
-        (REPO_ROOT / "matlab" / "optuna50_api_coverage.json").read_text(
+        (REPO_ROOT / "packages/radia-optuna/matlab" / "optuna50_api_coverage.json").read_text(
             encoding="utf-8"
         )
     )

@@ -104,7 +104,7 @@ def _repository_candidates() -> list[Path]:
 
 
 def _repository_layout(root: Path) -> dict[str, Path | str] | None:
-    matlab_root = root / "matlab"
+    matlab_root = root / "packages/radia-optuna/matlab"
     manifest = root / "packages" / "radia-optuna" / "src" / "radia_optuna" / "manifest.json"
     if not (matlab_root / "optuna50_api_coverage.json").is_file():
         return None
@@ -246,7 +246,7 @@ def matlab_optuna_health(distribution_path: str = "") -> dict[str, Any]:
     compatibility_path = matlab_root / "optuna_upstream_compatibility.json"
     notice_path = Path(layout["notice"])
     mex_path = matlab_root / "optuna_mex.mexw64"
-    source_path = root / "src" / "matlab" / "radia_mex.cpp"
+    source_path = root / "packages/radia-optuna/native/optuna_mex.cpp"
 
     manifest = _read_json(manifest_path, errors, "distribution manifest")
     coverage = _read_json(coverage_path, errors, "API coverage")
@@ -493,7 +493,7 @@ def matlab_optuna_oracle_plan(
     output_code = _matlab_literal(str(output))
     matlab_code = (
         f"repoRoot=string({root_code}); cd(repoRoot); "
-        "addpath(fullfile(repoRoot,'matlab')); "
+        "addpath(fullfile(repoRoot,'packages','radia-optuna','matlab')); "
         "suite=testsuite(fullfile(repoRoot,'tests','matlab'),"
         "'IncludeSubfolders',false); names=string({suite.Name}); "
         f"prefixes=string({prefix_code}); selected=false(size(names)); "
@@ -618,7 +618,7 @@ def matlab_optuna_benchmark_plan(
     expected_native_commands = int(health["native"]["command_count"])
     matlab_code = (
         f"repoRoot=string({root_literal}); cd(repoRoot); "
-        "addpath(fullfile(repoRoot,'matlab')); "
+        "addpath(fullfile(repoRoot,'packages','radia-optuna','matlab')); "
         "addpath(fullfile(repoRoot,'validation_test','optimization')); "
         f"result=benchmark_matlab_optuna50(string({matlab_output_literal})); "
         "nativeStatus=radia.optuna.nativeStatus(); "

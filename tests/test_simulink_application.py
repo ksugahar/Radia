@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-from radia.simulink import application as app
+from radia_gpu.simulink import application as app
 
 
 @dataclass

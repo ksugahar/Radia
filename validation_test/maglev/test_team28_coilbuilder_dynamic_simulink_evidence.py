@@ -8,7 +8,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent
 RESULT = HERE / "team28_coilbuilder_dynamic_simulink_results.json"
-MODEL = REPO_ROOT / "matlab" / "radia_team28_coilbuilder_dynamic.slx"
+MODEL = REPO_ROOT / "packages/radia-gpu/matlab" / "radia_team28_coilbuilder_dynamic.slx"
 
 
 def test_dynamic_simulink_result_is_validated_and_replayable():

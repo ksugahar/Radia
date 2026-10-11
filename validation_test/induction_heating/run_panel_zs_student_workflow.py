@@ -243,7 +243,7 @@ def main():
         }
         provenance["source_files"] = {
             path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
-            for directory, suffix in ((root / "src/radia", "*.py"), (root / "matlab", "*.m"))
+            for directory, suffix in ((root / "src/radia", "*.py"), (root / "packages/radia-gpu/matlab", "*.m"))
             for path in directory.rglob(suffix)
         }
         (job / "provenance.json").write_text(json.dumps(provenance, indent=2))
