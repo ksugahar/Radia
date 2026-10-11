@@ -61,6 +61,9 @@ their own licenses. This distribution includes Radia integration code only.
 Build on 100 from a clean exact commit with `Build.ps1 -CudaMexOnly
 -RequireNativeProvenance`, then run `python -m build --wheel` in this directory.
 The wheel build requires the matching CUDA build receipt and binary hash.
+Neither mexcuda compilation nor MATLAB/GPU execution uses NGSolve
+`TaskManager`. Explicit Python/NGSolve CPU preparation and reference
+calculations may use it under the Python execution policy.
 Canonical CUDA and MATLAB sources live in this package, under `native/` and
 `matlab/`. Packaging stages those sources; it does not read a root MATLAB tree.
 Use only the resulting verified wheel for deployment and PyPI publication.

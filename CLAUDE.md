@@ -103,6 +103,7 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 - CPU: Python (pybind11)/NGSolve; CPU MEX is unsupported.
 - GPU: `radia-gpu` uses MATLAB mexcuda for performance; ships optional Simulink/LTspice adapters, no external products.
 - Choose VS/CUDA by target MATLAB mexcuda support. Verify upgrades; never override unsupported compilers.
+- Do not use `ngsolve.TaskManager` during mexcuda compilation or MATLAB/GPU execution. TaskManager belongs only to explicit Python/NGSolve CPU preparation and reference calculations.
 - No implicit CPU/Python fallback. Measure host setup and CPU solves separately.
 - Develop/build radia-gpu on 100; final validation uses SSH host `NGSolve` (A100); `mdx` is a separate CPU VM. Never deploy to 102.
 - Record parity, artifact hashes and validation JSON; offline A100 stays pending. Poisson does not certify ICCG/AMS/HDiv-MMM.
