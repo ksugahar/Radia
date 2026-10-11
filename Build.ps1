@@ -11,6 +11,7 @@
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -RadiaOnly
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -RadiaOnly -RequireNativeProvenance
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -CudaMexOnly
+#   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -AmsCudaOnly
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -OptunaMexOnly
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -Test
 #
@@ -18,6 +19,7 @@
 #   -Rebuild    Clean build directory before building
 #   -RadiaOnly  Build and copy only _radia_pybind.pyd
 #   -CudaMexOnly  Stage the CUDA-only NGSolve assembled-operator bridge
+#   -AmsCudaOnly  Stage the experimental AMS CUDA gateway and snapshot adapter
 #   -OptunaMexOnly  Configure and build only the lightweight Optuna gateway
 #   -RequireNativeProvenance  Reject dirty source before building; otherwise a
 #                 dirty development build succeeds without a provenance sidecar
@@ -39,6 +41,7 @@ param(
     [switch]$Test,
     [switch]$Verbose,
     [switch]$RadiaOnly,
+    [switch]$AmsCudaOnly,         # experimental AMS snapshot adapter + CUDA MEX
     [switch]$AxiFemOnly,           # configure + build ONLY axifem (fast C++ iteration)
     [switch]$CudaMexOnly,          # isolated CUDA-only assembled-operator gateway
     [switch]$OptunaMexOnly,        # configure + build only optuna_mex
@@ -49,6 +52,17 @@ param(
 $ErrorActionPreference = "Stop"
 if ($args.Count -gt 0) {
     throw "Unsupported build arguments: $($args -join ' '). Radia CPU uses -RadiaOnly; GPU uses -CudaMexOnly."
+}
+
+if ($AmsCudaOnly) {
+    if ($RadiaOnly -or $AxiFemOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test) {
+        throw '-AmsCudaOnly is an isolated experimental build; incompatible options supplied'
+    }
+    $amsBuildArgs = @()
+    if ($RequireNativeProvenance) { $amsBuildArgs += '--require-clean-source' }
+    & python (Join-Path $PSScriptRoot 'packages/radia-gpu/tools/build_ams_cuda.py') @amsBuildArgs
+    if ($LASTEXITCODE -ne 0) { throw 'AMS CUDA experimental build failed' }
+    return
 }
 
 function Get-NativeBuildResult {

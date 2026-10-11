@@ -41,6 +41,8 @@ def test_package_exposes_only_gpu_solver_and_no_cpu_runtime_dependency():
     import tomllib
     metadata=tomllib.loads((ROOT/"pyproject.toml").read_text())
     assert metadata["project"]["dependencies"]==[]
+    extras=metadata["project"]["optional-dependencies"]
+    assert set(extras["exchange"]).issubset(extras["test"])
     api=load_api()
     assert "ngsolve" not in api.__dict__ and "matlab" not in api.__dict__
     assert "checkout" not in api.matlab_path.__doc__.lower()

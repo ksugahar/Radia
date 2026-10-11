@@ -39,7 +39,7 @@ def verify(path: Path) -> dict:
         if metadata["Name"] != "radia-gpu" or metadata.get_all("Requires-Dist"):
             # Test extras are allowed but runtime solver dependencies are not.
             requirements = metadata.get_all("Requires-Dist",[])
-            if metadata["Name"] != "radia-gpu" or any(not any(f'extra == "{extra}"' in r for extra in ('test', 'ltspice', 'coupling')) for r in requirements):
+            if metadata["Name"] != "radia-gpu" or any(not any(f'extra == "{extra}"' in r for extra in ('test', 'exchange', 'ltspice', 'coupling')) for r in requirements):
                 raise ValueError("Unexpected GPU distribution identity/dependency")
         manifest_bytes = archive.read("radia_gpu/manifest.json")
         manifest = json.loads(manifest_bytes)
@@ -58,8 +58,14 @@ def verify(path: Path) -> dict:
             raise ValueError("GPU source provenance mismatch")
         if receipt["binary_sha256"] != manifest["files"][binary]:
             raise ValueError("CUDA binary receipt mismatch")
+        ams_receipt = json.loads(archive.read("radia_gpu/ams-build.json"))
+        if (ams_receipt["source_dirty"] or ams_receipt["source_commit"] != manifest["source_commit"]
+                or ams_receipt["binary_sha256"] != manifest["files"]["matlab/radia_cuda_ams.mexw64"]):
+            raise ValueError("AMS CUDA binary receipt mismatch")
         for required in (binary,"matlab/+radia/+gpu/csrPCG.m", "matlab/+radia/+simulink/cudaPCGSFunction.m",
-                         "matlab/+radia/+ltspice/run.m", "ltspice/__init__.py", "ltspice/cli.py", "LICENSE"):
+                         "matlab/+radia/+ltspice/run.m", "matlab/radia_cuda_ams.mexw64",
+                         "matlab/+radia/+gpu/readAMSExchange.m", "matlab/+radia/+gpu/amsPCG.m",
+                         "ams_exchange.py", "ltspice/__init__.py", "ltspice/cli.py", "LICENSE"):
             if required not in manifest["files"]:
                 raise ValueError(f"Missing GPU capability payload: {required}")
     solvers = []

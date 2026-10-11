@@ -17,13 +17,9 @@ if isfile(path)
 end
 end
 
-function testApiAndTaskManager(testCase)
+function testApi(testCase)
 api = radia.apiInfo();
-probe = radia.taskmanagerProbe(200000);
 verifyEqual(testCase, api.api_version, 1);
-verifyGreaterThanOrEqual(testCase, api.taskmanager_max_threads, 1);
-verifyGreaterThanOrEqual(testCase, probe.used_threads, 1);
-verifyTrue(testCase, isfinite(probe.checksum));
 pathEntries = split(string(getenv("PATH")), pathsep);
 excluded = string(testCase.TestData.setupInfo.excluded_openmp_runtime_dirs);
 for index = 1:numel(excluded)

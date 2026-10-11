@@ -1,5 +1,5 @@
 function info = apiInfo()
-%APIINFO Return MEX API, handle-registry, and TaskManager information.
+%APIINFO Return legacy MEX API and handle-registry information.
 
 info = radia.internal.callMex('api.info');
 end

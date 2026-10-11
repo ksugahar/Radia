@@ -26,14 +26,15 @@ radia-optuna-path
 radia-optuna-doctor --json
 ```
 
-Or install the independently versioned release validated by Radia through:
+For the optional upstream Python dependencies of this MATLAB distribution:
 
 ```powershell
-python -m pip install "radia[optuna]"
+python -m pip install "radia-optuna[upstream]"
 ```
 
-`radia[optuna]` installs the native MATLAB/Simulink package without heavy
-Python numerical dependencies. Use `radia[optuna-upstream]` when GP,
+The CPU package's `radia[optuna]` extra installs upstream Python Optuna;
+install `radia-optuna` separately for MATLAB/Simulink. Use
+`radia-optuna[upstream]` when GP,
 scrambled-QMC, importance, advanced terminators, storage transports,
 visualization, or lazy integration exports need the pinned upstream Python,
 SciPy, and PyTorch stack. Individual visualization and integration targets

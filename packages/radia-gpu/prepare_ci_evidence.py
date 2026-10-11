@@ -18,9 +18,23 @@ def poisson_public(record):
     return result
 
 
+def ams_public(record):
+    keys = ('schema', 'accepted', 'platform', 'versions', 'threads', 'precision',
+            'cases', 'source_commit', 'source_dirty', 'matlab_start_seconds',
+            'gpu_binary_sha256', 'execution_mode')
+    result = {key: record[key] for key in keys if key in record}
+    if 'build' in record:
+        result['build'] = {key: record['build'][key] for key in (
+            'schema', 'source_commit', 'source_dirty', 'matlab', 'sha256',
+            'source_sha256', 'no_cpu_solver_fallback') if key in record['build']}
+    result['timing_classification'] = 'numerical acceptance diagnostics; not idle performance acceptance'
+    return result
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--poisson', required=True, type=Path)
+    parser.add_argument('--ams', type=Path)
     parser.add_argument('--output', required=True, type=Path)
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
@@ -31,3 +45,8 @@ if __name__ == '__main__':
             if record.get('schema') != 'radia.ngsolve-cuda-poisson.v1':
                 raise ValueError('Unexpected Poisson acceptance schema')
             (args.output / name).write_text(json.dumps(poisson_public(record), indent=2)+'\n', encoding='utf-8')
+    if args.ams and (args.ams / 'result.json').is_file():
+        record = json.loads((args.ams / 'result.json').read_text(encoding='utf-8'))
+        if record.get('schema') != 'radia.ams-cuda-validation.v1':
+            raise ValueError('Unexpected AMS acceptance schema')
+        (args.output / 'ams-result.json').write_text(json.dumps(ams_public(record), indent=2)+'\n', encoding='utf-8')

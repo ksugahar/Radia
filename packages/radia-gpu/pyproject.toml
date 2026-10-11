@@ -19,9 +19,10 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
+exchange = ["numpy>=1.26", "h5py>=3.10"]
 coupling = ["radia>=5.3.1"]
 ltspice = ["schemdraw>=0.18"]
-test = ["pytest>=8", "build>=1.2", "schemdraw>=0.18", "mcp>=1.21.1,<2"]
+test = ["pytest>=8", "build>=1.2", "numpy>=1.26", "h5py>=3.10", "schemdraw>=0.18", "mcp>=1.21.1,<2"]
 
 [project.urls]
 Repository = "https://github.com/ksugahar/Radia"

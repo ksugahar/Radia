@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""release_quad.py — numerical Radia solver / Simulink two-machine gate.
+"""release_quad.py — CPU numerical Radia solver two-machine gate.
 
 Walks the numerical solver release phases in order, gating each
 phase on the success of the previous one. Refuses to skip steps that
@@ -23,9 +23,6 @@ Usage:
     python tools/release_quad.py phase9
         Cross-machine consistency probe. Final gate.
 
-    python tools/release_quad.py simulink-candidate --package <zip> --target all
-        Extract and execute the exact Simulink package on both MATLAB machines.
-
     python tools/release_quad.py optuna-candidate --ci-run-id <id> --target all
         Download the exact radia-optuna wheel from one successful main CI run
         and execute its installed-wheel MATLAB/Simulink test on both machines.
@@ -41,9 +38,8 @@ Usage:
         clean release worktree for the development venv; the editable deploy
         fails before install unless it is tracked-clean at the release SHA.
 
-    python tools/release_quad.py done --simulink-package <zip> [--release-source <path>]
-        Require the normal release gate and the matching two-machine Simulink
-        candidate state. The release source is the controller (which must then
+    python tools/release_quad.py done [--release-source <path>]
+        Require the CPU solver release gate. The release source is the controller (which must then
         sit at the tag) or a separate exact-tag checkout; with the latter the
         controller must be a tracked-clean descendant declaring the same
         version. No runtime is changed.
@@ -1944,6 +1940,7 @@ def _git_repo_owner_name():
 
 def _check_github_hosted_workflows(
     sha, *, required_names=None, require_present=None,
+    excluded_workflows=None,
     timeout_sec=1800, poll_sec=20, registration_grace_sec=90
 ):
     """Wait for SHA-bound check-runs and require their latest attempts green.
@@ -1958,9 +1955,14 @@ def _check_github_hosted_workflows(
     that never runs on push has no registration to inspect, and treating that
     silence as success is what let four release tags burn (4.95.86..4.95.89).
 
+    ``excluded_workflows`` scopes a distribution release by the owning Actions
+    workflow, rather than ambiguous job names. Unknown/external checks remain
+    required. Workflow lookup errors or mismatched commit identities fail closed.
+
     Returns (ok: bool, message: str).
     """
     import time as _time
+    import re
 
     repo = _git_repo_owner_name()
     path = f"repos/{repo}/commits/{sha}/check-runs?per_page=100"
@@ -1968,6 +1970,7 @@ def _check_github_hosted_workflows(
     started = _time.time()
     deadline = started + timeout_sec
     last_pending = []
+    workflow_by_run_id = {}
     while True:
         try:
             data, _headers = gh_get(path)
@@ -1977,6 +1980,23 @@ def _check_github_hosted_workflows(
         all_runs = data.get("check_runs", [])
         latest_by_name = {}
         for run in all_runs:
+            if excluded_workflows:
+                match = re.fullmatch(
+                    rf"https://github\.com/{re.escape(repo)}/actions/runs/(\d+)(?:/job/\d+)?/?",
+                    run.get("details_url") or "",
+                )
+                if match:
+                    run_id = match.group(1)
+                    if run_id not in workflow_by_run_id:
+                        try:
+                            workflow, _ = gh_get(f"repos/{repo}/actions/runs/{run_id}")
+                        except Exception as e:
+                            return False, f"Workflow ownership lookup failed: {type(e).__name__}: {e}"
+                        if workflow.get("head_sha") != sha or not workflow.get("path"):
+                            return False, f"Unverified workflow identity for check-run {run.get('name')}"
+                        workflow_by_run_id[run_id] = workflow["path"].split("@", 1)[0]
+                    if workflow_by_run_id[run_id] in excluded_workflows:
+                        continue
             name = run.get("name")
             if not name:
                 continue
@@ -2033,9 +2053,23 @@ def _check_github_hosted_workflows(
 # evidence, which is not the same as passing evidence.
 RELEASE_CHECK_RUN = "radia-native-release-build"
 
+# These independently released owners cannot block the CPU Radia distribution.
+# Keep shared/unknown checks required and the exact native release check mandatory.
+INDEPENDENT_DISTRIBUTION_WORKFLOWS = frozenset({
+    ".github/workflows/radia-gpu.yml",
+    ".github/workflows/radia-gpu-release.yml",
+    ".github/workflows/ltspice-data-safety.yml",
+    ".github/workflows/radia-optuna.yml",
+    ".github/workflows/release-radia-optuna.yml",
+    ".github/workflows/radia-mcp-matrix.yml",
+    ".github/workflows/cubit-mesh-export.yml",
+    ".github/workflows/eqnedit64.yml",
+    ".github/workflows/release-eqnedit64-pypi.yml",
+})
+
 
 def cmd_ci_verify(args):
-    """Require every latest GitHub check-run for the release-tag commit to be green.
+    """Require CPU Radia/shared checks for the release-tag commit to be green.
 
     The commit is the one the existing ``v<version>`` tag names, so this runs
     after tagging; it fails while that tag is missing. It also requires the
@@ -2049,6 +2083,7 @@ def cmd_ci_verify(args):
     print(f"  release tag commit = {head_sha[:8]}")
     gh_ok, gh_msg = _check_github_hosted_workflows(
         head_sha, required_names=None, require_present=[RELEASE_CHECK_RUN],
+        excluded_workflows=INDEPENDENT_DISTRIBUTION_WORKFLOWS,
         timeout_sec=3600
     )
     print("  " + gh_msg)

@@ -1,14 +1,15 @@
 ---
 name: release-quad
-description: Two-machine numerical Radia solver and Simulink release gate. Use for release-quad, solver post-release deployment, Radia GitHub Release publication, or the numerical solver Definition of Done across 102号機 and 100号機. radia-mcp and cubit-mesh-export use independent release-dual skills.
+description: Two-machine CPU numerical Radia solver release gate. Use for release-quad, solver post-release deployment, Radia GitHub Release publication, or the numerical solver Definition of Done across LAB/102 and 100号機. radia-mcp and cubit-mesh-export use independent release-dual skills.
 ---
 
 # release-quad
 
 ## Scope
 
-`tools/release_quad.py` owns the numerical `radia` solver and Radia Simulink
-QUAD acceptance. It does not publish, install, uninstall, repoint, reconnect,
+`tools/release_quad.py` owns CPU Python/pybind11 `radia` solver QUAD acceptance.
+Normal `radia` excludes mexcuda, MATLAB, LTspice and Simulink artifacts and
+their CI gates; those belong to independent distribution releases. It does not publish, install, uninstall, repoint, reconnect,
 or version-gate `radia-mcp` or `cubit-mesh-export`.
 
 - `radia-mcp`: follow [package release checks](../../../packages/radia-mcp/CONTRIBUTING.md)
@@ -26,9 +27,8 @@ and editable development move forward to an explicitly selected current source.
 python tools/release_quad.py preflight
 python tools/release_quad.py phase8 --target lab,100
 python tools/release_quad.py phase9
-python tools/release_quad.py simulink-candidate --package <zip> --target all
 python tools/release_quad.py all
-python tools/release_quad.py done --simulink-package <zip>
+python tools/release_quad.py done
 ```
 
 The retired `phase0` Cubit build and `restore-editable` routes are not part of
@@ -94,7 +94,7 @@ tracked-clean release worktree containing the exact wheel's native payloads and
 ```powershell
 $env:RADIA_RELEASE_EDITABLE_REPO_100 = "W:\00_CAE\Radia\release-quad\<release>"
 python tools/release_quad.py all
-python tools/release_quad.py done --simulink-package <zip> --release-source <exact-tag checkout>
+python tools/release_quad.py done --release-source <exact-tag checkout>
 ```
 
 QUAD verifies exact SHA and tracked cleanliness before mutation. `done` is
@@ -119,8 +119,7 @@ The candidate is the exact successful-main wheel. Bind its SHA256, source SHA,
 version, CI run, and all declared target results before tagging and publishing.
 Do not run solver Phase 8 or install other distributions.
 
-Each target runs MATLAB through the same Engine worker as the Simulink gate
-below. The runner's isolated venv installs `matlabengine` matching that host's
+Each independent Optuna target runs MATLAB through its Engine worker. The runner's isolated venv installs `matlabengine` matching that host's
 MATLAB version from PyPI and refuses an Engine bound to another MATLAB root.
 Without a session it starts MATLAB only when the host has no MATLAB process
 or shared Engine; otherwise it fails before launch. Name an existing shared
@@ -137,43 +136,11 @@ readable evidence, and dispatch the release workflow with the exact CI run,
 wheel SHA256, and acceptance commit. Promote the verified artifact without
 rebuilding. Changed bytes require new acceptance.
 
-This does not replace QUAD `done` or the Simulink candidate gate. A full
-Simulink package includes `radia_simulink_library.slx`, support files, standalone
-MEX handles, runtime DLLs, `manifest.json`, and `SHA256SUMS.txt`. Verify the exact
-ZIP independently on LAB and 100 through verified MATLAB Engine
-sessions. Rebuilding the ZIP invalidates all prior candidate evidence.
-
-If Engine discovery cannot reach an existing desktop, an explicitly enabled
-local MATLAB COM Automation session may run the same extracted-package
-verification function. Attach only to a running instance, check the selected
-PID, preserve the borrowed session, and apply the same diagram/MEX refusal
-and path/environment restoration checks. A desktop COM connection may require
-execution in that user's interactive Windows logon instead of SSH's logon.
-Record `execution_backend: matlab-com`, the PID, exact artifact identity,
-success marker and verified restoration in the acceptance evidence. This is
-a host-local transport alternative; it does not waive any two-host gate or
-authorize starting a replacement MATLAB or sharing MATLAB between hosts.
-Select it with `--engine-session 100=com:<PID>` on 100, or
-`--engine-session lab=com:<PID>` in LAB's interactive logon. COM acceptance
-refuses execution on a different host; it does not connect across SSH logons.
-The selected solver candidate interpreter needs `pywin32`; the independent
-Optuna runner installs that client only in its isolated test environment.
-
-Check MATLAB processes, shared Engine names, and the official MCP connection
-separately before acceptance. Reuse an appropriate existing session explicitly:
-`simulink-candidate --package <zip> --target 100 --engine-session 100=<name>`.
-The verifier checks its PID, refuses loaded Simulink diagrams or existing
-Radia/Optuna MEX handles, restores the borrowed path and environment, and does
-not quit it. Without an explicit session it starts MATLAB only when no MATLAB
-process or shared Engine exists; inaccessible existing sessions are not a
-reason to launch a substitute. Close only sessions owned by this operation.
-
-Host default interpreters can hold an older release. Name the candidate
-interpreter per target, for example
-`--python lab=C:\temp\<candidate>\venv\Scripts\python.exe` (repeatable). It runs
-the verifier, must provide the package's radia release (otherwise the target
-fails), and is set as MATLAB's `RADIA_PYTHON_EXECUTABLE`; a borrowed session's
-previous value is restored. The state records each target's interpreter.
+CPU `ci-verify` requires the exact-SHA native release check and successful
+shared/CPU checks. Independently owned GPU, MATLAB/LTspice, Optuna, MCP,
+Cubit and Eqnedit64 workflows do not block CPU publication. Workflow ownership
+is resolved from GitHub Actions run metadata; lookup failures fail closed.
+GPU artifacts use `radia-gpu-release.yml` and their own acceptance evidence.
 
 ## Completion rules
 

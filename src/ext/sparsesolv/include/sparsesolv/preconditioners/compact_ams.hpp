@@ -443,7 +443,9 @@ private:
                        const std::vector<double>& cy,
                        const std::vector<double>& cz) {
         // Parallel region (setup runs outside any caller TaskManager).
+#ifndef SPARSESOLV_SERIAL_AMS_SETUP
         ngcore::RegionTaskManager tasks;
+#endif
         auto t_geometry = std::chrono::steady_clock::now();
         BuildPiComponents(cx, cy, cz);
         grad_t_ = dynamic_pointer_cast<SparseMatrix<double>>(grad_->CreateTranspose(true));
@@ -503,7 +505,9 @@ private:
         auto t0 = std::chrono::high_resolution_clock::now();
         bool in_place = false;
         {
-            ngcore::RegionTaskManager tasks;
+#ifndef SPARSESOLV_SERIAL_AMS_SETUP
+        ngcore::RegionTaskManager tasks;
+#endif
             // A SparseMatrix never changes its pattern, so the matrix object
             // A_bc was last built from needs no comparison.
             in_place = reuse_hierarchy_ && A_bc_ && A_Pix_ && A_Piy_ && A_Piz_
@@ -544,7 +548,9 @@ private:
         if (!in_place) pi_shared_pattern_ = -1;  // the products below get new patterns
         pattern_source_ = mat_;
         if (!in_place) {
-            ngcore::RegionTaskManager tasks;
+#ifndef SPARSESOLV_SERIAL_AMS_SETUP
+        ngcore::RegionTaskManager tasks;
+#endif
             // 1. Create BC-modified matrix (identity rows for constrained DOFs).
             if (freedofs_) {
                 A_bc_ = CreateBCModifiedMatrix(*mat_, *freedofs_);
@@ -596,7 +602,9 @@ private:
 
         // 3. Fix zero rows: set diag = 1.0 for truly zero rows.
         {
-            ngcore::RegionTaskManager tasks;
+#ifndef SPARSESOLV_SERIAL_AMS_SETUP
+        ngcore::RegionTaskManager tasks;
+#endif
             if (!beta_zero_) FixZeroRows(*A_G_);
             FixZeroRows(*A_Pix_);
             FixZeroRows(*A_Piy_);
@@ -709,7 +717,9 @@ private:
         // 5. Float mirror and truncated l1 norms for the fine-grid smoother,
         // in a parallel region (the coarse factorizations above stay outside).
         {
-            ngcore::RegionTaskManager tasks;
+#ifndef SPARSESOLV_SERIAL_AMS_SETUP
+        ngcore::RegionTaskManager tasks;
+#endif
             // After an in-place update only the changed rows need new values.
             const bool rows_only = row_refresh_ && changed_edges_.size() == size_t(ndof_hc_)
                 && fine_l1_norms_.size() == size_t(ndof_hc_)

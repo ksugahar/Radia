@@ -395,7 +395,9 @@ public:
         setup_workers_ = 0;
 
         {
+#ifndef SPARSESOLV_SERIAL_AMS_SETUP
         ngcore::RegionTaskManager tasks;
+#endif
 
         // Level 0: finest level
         Level lev0;
@@ -513,7 +515,9 @@ public:
             throw std::invalid_argument("CompactAMG::Refresh: matrix dimension changed");
         if (levels_.empty()) { mat_ = mat; Setup(); return; }
         {
+#ifndef SPARSESOLV_SERIAL_AMS_SETUP
         ngcore::RegionTaskManager tasks;
+#endif
         auto& fine = levels_[0];
         // fine.A carries the previous matrix pattern (a BC-modified copy or
         // the previous matrix itself).
@@ -558,7 +562,9 @@ public:
             return false;
         bool coarsest_changed = false;
         {
+#ifndef SPARSESOLV_SERIAL_AMS_SETUP
         ngcore::RegionTaskManager tasks;
+#endif
         std::vector<char> flags = changed;
         for (size_t l = 0; l < levels_.size(); l++) {
             auto& lev = levels_[l];
@@ -654,6 +660,18 @@ public:
     }
 
     int NumLevels() const { return (int)levels_.size(); }
+
+    // Read-only numeric snapshot for explicit accelerator adapters. Setup,
+    // coarsening and Galerkin assembly remain owned by this implementation.
+    template <class Visitor> void VisitAcceleratorLevels(Visitor&& visit) const {
+        if (mixed_precision_)
+            throw std::runtime_error("AMS accelerator snapshot requires FP64 levels");
+        for (size_t i = 0; i < levels_.size(); ++i) {
+            const auto& l = levels_[i];
+            visit(i, *l.A, l.P.get(), l.Pt.get(), l.l1_norms,
+                  l.inv.get(), l.dense_inv, num_smooth_);
+        }
+    }
 
     /// Per level of the dual V-cycle: {rows, nonzeros, seconds spent on the
     /// level itself (recursion excluded), coarsest solve: 0 none, 1 sparse, 2 dense}.
@@ -1293,7 +1311,9 @@ private:
     }
 
     void MirrorLevels() {
-        ngcore::RegionTaskManager tasks;  // called after the coarse factorization, outside its region
+#ifndef SPARSESOLV_SERIAL_AMS_SETUP
+        ngcore::RegionTaskManager tasks;
+#endif
         for (auto& lev : levels_) {
             if (mixed_precision_) MirrorValues(*lev.A, lev.values_f);
             else std::vector<float>().swap(lev.values_f);

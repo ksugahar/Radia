@@ -17,6 +17,7 @@ Do not add unrelated features.
 The monorepo independently releases `radia`, `radia-gpu`, `cubit-mesh-export`, `radia-mcp`, `radia-optuna` and `eqnedit64`.
 Scope commits and CI to the owner. Shared files trigger multiple lanes only for real shared ABI, build or integration changes.
 `radia`: CPU Python/pybind11 only. `packages/radia-gpu`: all MATLAB/Simulink/LTspice source, dependencies, build and distribution. `radia-mcp`: cross-package knowledge/tools, optional GPU backend. Keep `radia-optuna` independent.
+CPU `radia` releases exclude mexcuda, MATLAB, LTspice and Simulink artifacts and their CI gates. These belong to independent distribution releases; shared and CPU numerical gates remain mandatory.
 
 - `src/`, `packages/`: production; integrations belong to their package owner.
 - `tests/`: small executable usage samples and fast deterministic bug/contract protection.
@@ -99,14 +100,23 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
   Use `bibliography_make_bbl`, regenerate after changes, and check citations.
 
 ### CPU / GPU Execution Policy (2026-10-11)
-
 - CPU: Python (pybind11)/NGSolve; CPU MEX is unsupported.
 - GPU: `radia-gpu` uses MATLAB mexcuda for performance; ships optional Simulink/LTspice adapters, no external products.
+- Do not use NGSolve TaskManager for mexcuda compilation or GPU execution. AMS preprocessing selects CUDA or OpenMP using numerical parity and transfer-inclusive timing/memory evidence; serial execution remains a reference. The independent CPU Radia route keeps its own threading policy.
 - Choose VS/CUDA by target MATLAB mexcuda support. Verify upgrades; never override unsupported compilers.
-- Do not use `ngsolve.TaskManager` during mexcuda compilation or MATLAB/GPU execution. TaskManager belongs only to explicit Python/NGSolve CPU preparation and reference calculations.
 - No implicit CPU/Python fallback. Measure host setup and CPU solves separately.
 - Develop/build radia-gpu on 100; final validation uses SSH host `NGSolve` (A100); `mdx` is a separate CPU VM. Never deploy to 102.
 - Record parity, artifact hashes and validation JSON; offline A100 stays pending. Poisson does not certify ICCG/AMS/HDiv-MMM.
+
+### GPU Kernel Research Strategy (2026-10-11)
+
+- Use mexcuda as the laboratory's GPU numerical-kernel route. Keep mathematical and physical assumptions explicit and auditable; implement missing Radia-owned critical singular/near-field interaction kernels directly in CUDA. Preserve NGSolve ownership of FE semantics and the existing HACApK/core-kernel policy.
+- The workflow is Python/pybind11 + NGSolve/Netgen modeling, mesh, CPU setup and reference solving; checked numeric exchange (for example MAT/HDF5); then MATLAB + mexcuda GPU execution. Record units, numbering, labels and ABI at the exchange boundary.
+- Numeric artifacts or individual variables exceeding 2 GB must use HDF5; MATLAB-compatible MAT v7.3 is permitted. Check size before writing and use a validated reader/writer pair rather than splitting data merely to bypass this requirement. File-format capacity does not establish GPU working-set capacity.
+- Reuse MATLAB gpuArray/BLAS where they implement the declared formulation correctly. MATLAB supports convergence monitoring, analysis, parameter sweeps and visualization around independently callable GPU kernels; Simulink integration is optional. Select and validate iterative solvers for the actual operator rather than prescribing one solver universally.
+- Establish CPU/GPU numerical agreement and measured performance on small public or independently publishable cases on the local RTX GPU before scaling. Save timings, transfers, memory observations, versions and true residuals in JSON; do not infer speedup from the backend name.
+- Paid A100 capacity is human-started. Prepare inputs, commands, acceptance criteria and a bounded runtime before requesting its use; batch necessary measurements and recover evidence. Never start or provision it autonomously.
+- Target both development and compute GPU architectures, retaining validated PTX compatibility where applicable. Rebuild for a different OS or MATLAB ABI; verify target execution and performance before claiming portability or scaling.
 
 ### MATLAB And Simulink
 

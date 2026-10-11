@@ -1,0 +1,1392 @@
+{
+  "schema": "radia.ams-cuda-overhead-improvement.v1",
+  "precision": "FP64",
+  "threads": 4,
+  "versions": {
+    "ngsolve": "6.2.2607",
+    "numpy": "2.5.4",
+    "scipy": "1.18.1",
+    "matlabengine": "26.1"
+  },
+  "device": {
+    "name": "Quadro RTX 5000",
+    "compute_capability": "7.5",
+    "total_memory": 17179541504.0,
+    "driver": "582.78",
+    "toolkit": 12.8
+  },
+  "numerical_acceptance": {
+    "source_commit": "b4bcf1e224550bf9c4aa22fa82635193de7a45c6",
+    "source_dirty": false,
+    "cases": [
+      {
+        "maxh": 0.5,
+        "cycle": 1,
+        "dofs": 96,
+        "free_dofs": 42,
+        "elements": 53,
+        "cpu_true_residual": 3.0833605834542585e-10,
+        "gpu_true_residual": 3.083360430465695e-10,
+        "relative_difference_from_direct": 6.732509746022905e-10,
+        "max_preconditioner_probe_relative_error": 2.8438491635895845e-15,
+        "accepted": true,
+        "gateway_checks": {
+          "invalid_csr": 1,
+          "cpu_rhs": 1,
+          "nan_rhs": 1,
+          "nonconvergence": 1,
+          "invalid_rowptr": 1,
+          "invalid_smoother": 1,
+          "wrong_rhs_shape": 1,
+          "invalid_tolerance": 1,
+          "invalid_coarse_order": 1,
+          "zero_rhs": 1,
+          "clear_reload": 1
+        }
+      },
+      {
+        "maxh": 0.5,
+        "cycle": 7,
+        "dofs": 96,
+        "free_dofs": 42,
+        "elements": 53,
+        "cpu_true_residual": 3.823406304054088e-11,
+        "gpu_true_residual": 3.823408812812556e-11,
+        "relative_difference_from_direct": 6.8838593096536e-11,
+        "max_preconditioner_probe_relative_error": 3.9989038610961235e-15,
+        "accepted": true,
+        "gateway_checks": {
+          "invalid_csr": 1,
+          "cpu_rhs": 1,
+          "nan_rhs": 1,
+          "nonconvergence": 1,
+          "invalid_rowptr": 1,
+          "invalid_smoother": 1,
+          "wrong_rhs_shape": 1,
+          "invalid_tolerance": 1,
+          "invalid_coarse_order": 1,
+          "zero_rhs": 1,
+          "clear_reload": 1
+        }
+      },
+      {
+        "maxh": 0.2,
+        "cycle": 1,
+        "dofs": 1081,
+        "free_dofs": 613,
+        "elements": 712,
+        "cpu_true_residual": 1.9373104725081936e-10,
+        "gpu_true_residual": 1.93731037990794e-10,
+        "relative_difference_from_direct": 4.0902620812817274e-10,
+        "max_preconditioner_probe_relative_error": 1.4162363613387927e-14,
+        "accepted": true,
+        "gateway_checks": {
+          "invalid_csr": 1,
+          "cpu_rhs": 1,
+          "nan_rhs": 1,
+          "nonconvergence": 1,
+          "invalid_rowptr": 1,
+          "invalid_smoother": 1,
+          "wrong_rhs_shape": 1,
+          "invalid_tolerance": 1,
+          "invalid_coarse_order": 1,
+          "zero_rhs": 1,
+          "clear_reload": 1
+        }
+      },
+      {
+        "maxh": 0.2,
+        "cycle": 7,
+        "dofs": 1081,
+        "free_dofs": 613,
+        "elements": 712,
+        "cpu_true_residual": 7.490905636856755e-11,
+        "gpu_true_residual": 9.35112056785127e-10,
+        "relative_difference_from_direct": 2.4799425614312254e-09,
+        "max_preconditioner_probe_relative_error": 1.391178827080363e-14,
+        "accepted": true,
+        "gateway_checks": {
+          "invalid_csr": 1,
+          "cpu_rhs": 1,
+          "nan_rhs": 1,
+          "nonconvergence": 1,
+          "invalid_rowptr": 1,
+          "invalid_smoother": 1,
+          "wrong_rhs_shape": 1,
+          "invalid_tolerance": 1,
+          "invalid_coarse_order": 1,
+          "zero_rhs": 1,
+          "clear_reload": 1
+        }
+      },
+      {
+        "maxh": 0.12,
+        "cycle": 1,
+        "dofs": 5326,
+        "free_dofs": 3919,
+        "elements": 3937,
+        "cpu_true_residual": 2.196411209961267e-10,
+        "gpu_true_residual": 2.1964112260722043e-10,
+        "relative_difference_from_direct": 7.91954952826805e-10,
+        "max_preconditioner_probe_relative_error": 3.343589545403052e-14,
+        "accepted": true,
+        "gateway_checks": {
+          "invalid_csr": 1,
+          "cpu_rhs": 1,
+          "nan_rhs": 1,
+          "nonconvergence": 1,
+          "invalid_rowptr": 1,
+          "invalid_smoother": 1,
+          "wrong_rhs_shape": 1,
+          "invalid_tolerance": 1,
+          "invalid_coarse_order": 1,
+          "zero_rhs": 1,
+          "clear_reload": 1
+        }
+      },
+      {
+        "maxh": 0.12,
+        "cycle": 7,
+        "dofs": 5326,
+        "free_dofs": 3919,
+        "elements": 3937,
+        "cpu_true_residual": 1.6627946903773755e-10,
+        "gpu_true_residual": 1.6627946612203828e-10,
+        "relative_difference_from_direct": 4.754594788254813e-09,
+        "max_preconditioner_probe_relative_error": 3.448552909980602e-14,
+        "accepted": true,
+        "gateway_checks": {
+          "invalid_csr": 1,
+          "cpu_rhs": 1,
+          "nan_rhs": 1,
+          "nonconvergence": 1,
+          "invalid_rowptr": 1,
+          "invalid_smoother": 1,
+          "wrong_rhs_shape": 1,
+          "invalid_tolerance": 1,
+          "invalid_coarse_order": 1,
+          "zero_rhs": 1,
+          "clear_reload": 1
+        }
+      }
+    ],
+    "accepted": true,
+    "timing_note": "Numerical-only run overlapped unrelated CPU CI; its timing samples are excluded."
+  },
+  "performance": {
+    "schema": "radia.ams-cuda-comparison.v1",
+    "accepted": true,
+    "order": [
+      "before",
+      "after",
+      "after",
+      "before",
+      "before",
+      "after",
+      "after",
+      "before",
+      "before",
+      "after",
+      "after",
+      "before"
+    ],
+    "builds": [
+      {
+        "source_commit": "30d2d7fab0f4aa1fbb43a90bd6cc2c8142609ec3",
+        "source_dirty": false,
+        "mex_sha256": "f6073b98be3c483cd335af37d342ff0b5c696890fed34e75791deb8d7f1bd54e"
+      },
+      {
+        "source_commit": "72c3f8170342a7f1e04a16a31cc0d2c817d03690",
+        "source_dirty": false,
+        "mex_sha256": "a216a812d0227eeb625c6d38bc23297288d22341c9f3f491a363d5127adef4ef"
+      }
+    ],
+    "cases": [
+      {
+        "input_sha256": "fbac9c025ddac962dadb3fcdc9447f800d6e9bb9ce096d0b257e75e06eb1dfb9",
+        "dofs": 5326,
+        "cycle": 1,
+        "runs": [
+          {
+            "variant": "before",
+            "uploadSeconds": 0.0752737,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.196411228472802e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 10485760
+            },
+            "coldSeconds": 0.0830976,
+            "probeErrors": [
+              3.0755881923979724e-14,
+              3.343589545403052e-14,
+              3.1944194723875967e-14
+            ],
+            "times": [
+              0.0421314,
+              0.0426444,
+              0.0421086,
+              0.0419799,
+              0.0398275
+            ],
+            "inclusiveSeconds": 0.0437952,
+            "memoryBytes": 12582912,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          },
+          {
+            "variant": "after",
+            "uploadSeconds": 0.0092377,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.196411228472802e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0341146,
+            "probeErrors": [
+              3.0755881923979724e-14,
+              3.343589545403052e-14,
+              3.1944194723875967e-14
+            ],
+            "times": [
+              0.0307791,
+              0.030789,
+              0.0302449,
+              0.0304593,
+              0.0321226
+            ],
+            "inclusiveSeconds": 0.0382475,
+            "memoryBytes": 5503148,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          },
+          {
+            "variant": "after",
+            "uploadSeconds": 0.0059959,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.196411228472802e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0332534,
+            "probeErrors": [
+              3.0755881923979724e-14,
+              3.343589545403052e-14,
+              3.1944194723875967e-14
+            ],
+            "times": [
+              0.0307649,
+              0.0313163,
+              0.031735,
+              0.030503,
+              0.0311147
+            ],
+            "inclusiveSeconds": 0.0377041,
+            "memoryBytes": 5669384,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          },
+          {
+            "variant": "before",
+            "uploadSeconds": 0.0082586,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.196411228472802e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0400747,
+            "probeErrors": [
+              3.0755881923979724e-14,
+              3.343589545403052e-14,
+              3.1944194723875967e-14
+            ],
+            "times": [
+              0.0367647,
+              0.0381532,
+              0.0379292,
+              0.037349,
+              0.0375069
+            ],
+            "inclusiveSeconds": 0.0430764,
+            "memoryBytes": 5669948,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          },
+          {
+            "variant": "before",
+            "uploadSeconds": 0.0097127,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.196411228472802e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0403161,
+            "probeErrors": [
+              3.0755881923979724e-14,
+              3.343589545403052e-14,
+              3.1944194723875967e-14
+            ],
+            "times": [
+              0.0372617,
+              0.0389255,
+              0.0378202,
+              0.037593,
+              0.0373843
+            ],
+            "inclusiveSeconds": 0.0443777,
+            "memoryBytes": 5669384,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          },
+          {
+            "variant": "after",
+            "uploadSeconds": 0.0091184,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.196411228472802e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0338627,
+            "probeErrors": [
+              3.0755881923979724e-14,
+              3.343589545403052e-14,
+              3.1944194723875967e-14
+            ],
+            "times": [
+              0.0325374,
+              0.0310127,
+              0.0307689,
+              0.030751,
+              0.0321028
+            ],
+            "inclusiveSeconds": 0.0371292,
+            "memoryBytes": 5670020,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          },
+          {
+            "variant": "after",
+            "uploadSeconds": 0.0103477,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.196411228472802e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0343671,
+            "probeErrors": [
+              3.0755881923979724e-14,
+              3.343589545403052e-14,
+              3.1944194723875967e-14
+            ],
+            "times": [
+              0.0315748,
+              0.0310771,
+              0.0327746,
+              0.0310953,
+              0.0311521
+            ],
+            "inclusiveSeconds": 0.0367993,
+            "memoryBytes": 5669312,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          },
+          {
+            "variant": "before",
+            "uploadSeconds": 0.0102136,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.196411228472802e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0410469,
+            "probeErrors": [
+              3.0755881923979724e-14,
+              3.343589545403052e-14,
+              3.1944194723875967e-14
+            ],
+            "times": [
+              0.0385658,
+              0.0370769,
+              0.0375291,
+              0.0383996,
+              0.0371756
+            ],
+            "inclusiveSeconds": 0.043882,
+            "memoryBytes": 5670020,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          },
+          {
+            "variant": "before",
+            "uploadSeconds": 0.0082702,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.196411228472802e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0395088,
+            "probeErrors": [
+              3.0755881923979724e-14,
+              3.343589545403052e-14,
+              3.1944194723875967e-14
+            ],
+            "times": [
+              0.0368302,
+              0.0370235,
+              0.0380632,
+              0.0375366,
+              0.0374174
+            ],
+            "inclusiveSeconds": 0.0431064,
+            "memoryBytes": 5669384,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          },
+          {
+            "variant": "after",
+            "uploadSeconds": 0.0065452,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.196411228472802e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0337052,
+            "probeErrors": [
+              3.0755881923979724e-14,
+              3.343589545403052e-14,
+              3.1944194723875967e-14
+            ],
+            "times": [
+              0.0316038,
+              0.0318538,
+              0.03277,
+              0.0335661,
+              0.0309506
+            ],
+            "inclusiveSeconds": 0.0377045,
+            "memoryBytes": 5669948,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          },
+          {
+            "variant": "after",
+            "uploadSeconds": 0.0058468,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.196411228472802e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0351002,
+            "probeErrors": [
+              3.0755881923979724e-14,
+              3.343589545403052e-14,
+              3.1944194723875967e-14
+            ],
+            "times": [
+              0.0317823,
+              0.0320975,
+              0.0310485,
+              0.0311891,
+              0.0313305
+            ],
+            "inclusiveSeconds": 0.0387271,
+            "memoryBytes": 5669384,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          },
+          {
+            "variant": "before",
+            "uploadSeconds": 0.0090399,
+            "info": {
+              "iterations": 13,
+              "true_relative_residual": 2.196411228472802e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0398768,
+            "probeErrors": [
+              3.0755881923979724e-14,
+              3.343589545403052e-14,
+              3.1944194723875967e-14
+            ],
+            "times": [
+              0.0381909,
+              0.0374308,
+              0.0372863,
+              0.0373284,
+              0.037653
+            ],
+            "inclusiveSeconds": 0.0446892,
+            "memoryBytes": 5670020,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          }
+        ],
+        "before_warm_median_seconds": 0.0375648,
+        "after_warm_median_seconds": 0.0311706,
+        "warm_speedup": 1.2051356085542146,
+        "warm_improvement_percent": 17.02178635318171,
+        "warm_timing_improved": true,
+        "before_inclusive_median_seconds": 0.0438386,
+        "after_inclusive_median_seconds": 0.037704299999999996
+      },
+      {
+        "input_sha256": "0edc397acb3f6f23a062750a88df952ceac872a6f5b8c183d6a52cfacac69a9c",
+        "dofs": 5326,
+        "cycle": 7,
+        "runs": [
+          {
+            "variant": "before",
+            "uploadSeconds": 0.0068136,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.662794673191255e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0365702,
+            "probeErrors": [
+              3.191736863186108e-14,
+              3.1171597010220126e-14,
+              3.448552909980602e-14
+            ],
+            "times": [
+              0.0338371,
+              0.0332142,
+              0.033098,
+              0.0341636,
+              0.0330866
+            ],
+            "inclusiveSeconds": 0.0400459,
+            "memoryBytes": 5669312,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          },
+          {
+            "variant": "after",
+            "uploadSeconds": 0.0075853,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.662794673191255e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0298069,
+            "probeErrors": [
+              3.191736863186108e-14,
+              3.1171597010220126e-14,
+              3.448552909980602e-14
+            ],
+            "times": [
+              0.027222,
+              0.027858,
+              0.0273929,
+              0.0267157,
+              0.0268445
+            ],
+            "inclusiveSeconds": 0.0331977,
+            "memoryBytes": 5670020,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          },
+          {
+            "variant": "after",
+            "uploadSeconds": 0.010313,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.662794673191255e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0311038,
+            "probeErrors": [
+              3.191736863186108e-14,
+              3.1171597010220126e-14,
+              3.448552909980602e-14
+            ],
+            "times": [
+              0.0292302,
+              0.02792,
+              0.0299881,
+              0.0295748,
+              0.0293168
+            ],
+            "inclusiveSeconds": 0.0360388,
+            "memoryBytes": 5669384,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          },
+          {
+            "variant": "before",
+            "uploadSeconds": 0.0101862,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.662794673191255e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0366137,
+            "probeErrors": [
+              3.191736863186108e-14,
+              3.1171597010220126e-14,
+              3.448552909980602e-14
+            ],
+            "times": [
+              0.0334287,
+              0.0332922,
+              0.0333026,
+              0.0331043,
+              0.033274
+            ],
+            "inclusiveSeconds": 0.039742,
+            "memoryBytes": 5669948,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          },
+          {
+            "variant": "before",
+            "uploadSeconds": 0.0083617,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.662794673191255e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0363021,
+            "probeErrors": [
+              3.191736863186108e-14,
+              3.1171597010220126e-14,
+              3.448552909980602e-14
+            ],
+            "times": [
+              0.0335261,
+              0.0345495,
+              0.0332093,
+              0.0335213,
+              0.0330091
+            ],
+            "inclusiveSeconds": 0.0395347,
+            "memoryBytes": 5669384,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          },
+          {
+            "variant": "after",
+            "uploadSeconds": 0.0095965,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.662794673191255e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0301483,
+            "probeErrors": [
+              3.191736863186108e-14,
+              3.1171597010220126e-14,
+              3.448552909980602e-14
+            ],
+            "times": [
+              0.0269734,
+              0.0276318,
+              0.0275155,
+              0.0266802,
+              0.0271131
+            ],
+            "inclusiveSeconds": 0.0336955,
+            "memoryBytes": 5670020,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          },
+          {
+            "variant": "after",
+            "uploadSeconds": 0.0083326,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.662794673191255e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.030058,
+            "probeErrors": [
+              3.191736863186108e-14,
+              3.1171597010220126e-14,
+              3.448552909980602e-14
+            ],
+            "times": [
+              0.0276747,
+              0.0269927,
+              0.0270717,
+              0.0270108,
+              0.0270607
+            ],
+            "inclusiveSeconds": 0.0343559,
+            "memoryBytes": 5669312,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          },
+          {
+            "variant": "before",
+            "uploadSeconds": 0.0076902,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.662794673191255e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0358156,
+            "probeErrors": [
+              3.191736863186108e-14,
+              3.1171597010220126e-14,
+              3.448552909980602e-14
+            ],
+            "times": [
+              0.0343919,
+              0.034159,
+              0.0344411,
+              0.0337738,
+              0.0341668
+            ],
+            "inclusiveSeconds": 0.0397135,
+            "memoryBytes": 5670020,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          },
+          {
+            "variant": "before",
+            "uploadSeconds": 0.00847,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.662794673191255e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.038696,
+            "probeErrors": [
+              3.191736863186108e-14,
+              3.1171597010220126e-14,
+              3.448552909980602e-14
+            ],
+            "times": [
+              0.0334726,
+              0.03453,
+              0.0343182,
+              0.0328251,
+              0.0329883
+            ],
+            "inclusiveSeconds": 0.0394259,
+            "memoryBytes": 5669384,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          },
+          {
+            "variant": "after",
+            "uploadSeconds": 0.0082798,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.662794673191255e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0303558,
+            "probeErrors": [
+              3.191736863186108e-14,
+              3.1171597010220126e-14,
+              3.448552909980602e-14
+            ],
+            "times": [
+              0.0275674,
+              0.0270059,
+              0.0277066,
+              0.0282915,
+              0.0283394
+            ],
+            "inclusiveSeconds": 0.0341709,
+            "memoryBytes": 5669948,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          },
+          {
+            "variant": "after",
+            "uploadSeconds": 0.0079018,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.662794673191255e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.0309493,
+            "probeErrors": [
+              3.191736863186108e-14,
+              3.1171597010220126e-14,
+              3.448552909980602e-14
+            ],
+            "times": [
+              0.0274676,
+              0.0269042,
+              0.0276222,
+              0.0285597,
+              0.0270418
+            ],
+            "inclusiveSeconds": 0.0340545,
+            "memoryBytes": 5669384,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          },
+          {
+            "variant": "before",
+            "uploadSeconds": 0.0086066,
+            "info": {
+              "iterations": 11,
+              "true_relative_residual": 1.662794673191255e-10,
+              "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+              "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+              "workspace_sample_bytes": 8388608
+            },
+            "coldSeconds": 0.036235,
+            "probeErrors": [
+              3.191736863186108e-14,
+              3.1171597010220126e-14,
+              3.448552909980602e-14
+            ],
+            "times": [
+              0.0346762,
+              0.0345066,
+              0.0330244,
+              0.032981,
+              0.0333429
+            ],
+            "inclusiveSeconds": 0.039884,
+            "memoryBytes": 5670020,
+            "checks": {
+              "invalid_csr": 1,
+              "cpu_rhs": 1,
+              "nan_rhs": 1,
+              "nonconvergence": 1,
+              "invalid_rowptr": 1,
+              "invalid_smoother": 1,
+              "wrong_rhs_shape": 1,
+              "invalid_tolerance": 1,
+              "invalid_coarse_order": 1,
+              "zero_rhs": 1,
+              "clear_reload": 1
+            },
+            "device": {
+              "name": "Quadro RTX 5000",
+              "compute_capability": "7.5",
+              "total_memory": 17179541504.0,
+              "driver": "582.78",
+              "toolkit": 12.8
+            },
+            "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+          }
+        ],
+        "before_warm_median_seconds": 0.03345065,
+        "after_warm_median_seconds": 0.027491549999999997,
+        "warm_speedup": 1.2167611502443478,
+        "warm_improvement_percent": 17.814601509985618,
+        "warm_timing_improved": true,
+        "before_inclusive_median_seconds": 0.03972775,
+        "after_inclusive_median_seconds": 0.034112699999999996
+      }
+    ],
+    "measurement_source_commit": "b4bcf1e224550bf9c4aa22fa82635193de7a45c6",
+    "measurement_source_dirty": false,
+    "measurement_source_sha256": {
+      "validation_test/ams_cuda/compare.py": "fdcfc6394ec6ec56b4e63914469a64ecdec01cff52fb53ca068bb6d3392a8b19",
+      "validation_test/ams_cuda/benchmark.m": "7ab9a660c1903c8963f997cffa7e033c20f46b2510aff1670557f5a1e6fee760"
+    },
+    "timing_context": {
+      "host_isolated": false,
+      "background": "Unrelated CPU CI environment preparation/build was active; process priority was BelowNormal.",
+      "method": "Identical inputs and GPU, ABBA order repeated three times, five warmed solves per block.",
+      "interpretation": "Relative GPU gateway comparison on a shared host; not an isolated-host benchmark or CPU speedup claim.",
+      "preliminary_samples_excluded": true,
+      "cpu_ci_steps_observed": {
+        "start": [
+          "Build current package and SparseSolv"
+        ],
+        "end": [
+          "Build current package and SparseSolv"
+        ]
+      }
+    }
+  },
+  "scope": "Small real HCurl curl-curl plus positive-mass acceptance, not GPU scaling evidence.",
+  "a100_execution": "Not started or used.",
+  "changes": [
+    "Fuse CSR residual and row-local smoother work without changing matrix reduction order.",
+    "Start zero-initialized Jacobi sweeps directly with b/l1.",
+    "Batch independent validation checks; preserve row-bound checks before factor traversal."
+  ]
+}
