@@ -38,7 +38,9 @@ def main():
                       python_version=platform.python_version(), operation_route='official MATLAB Engine for Python; task-owned session',
                       no_cpu_solver_fallback=True, cuda_targets=['sm_75','sm_80','compute_80 PTX'])
         (out/'build.json').write_text(json.dumps(record,indent=2)+'\n',encoding='utf-8')
-        print(json.dumps(record,indent=2))
+        # Keep operational identity in the local receipt, not public CI output.
+        print(json.dumps({key:value for key,value in record.items()
+                          if key not in ('hostname','python','compiler_configuration')},indent=2))
     finally:
         eng.quit()
 
