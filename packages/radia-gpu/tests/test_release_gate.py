@@ -14,11 +14,13 @@ def test_release_rejects_foreign_ci_and_mismatched_installed_artifact(tmp_path,m
     run=dict(id=42,status='completed',conclusion='success',event='push',head_branch='main',
              path='.github/workflows/radia-gpu.yml',head_sha='a'*40,
              head_repository={'full_name':'owner/repository'})
-    wheel=dict(passed=True,version='0.1.0a1',source_commit='a'*40,wheel_sha256='b'*64,files=49)
+    wheel=dict(passed=True,version='0.1.0a1',source_commit='a'*40,wheel_sha256='b'*64,files=49,
+               manifest_sha256='d'*64)
     monkeypatch.setattr(gate,'verify',lambda path:wheel)
     (tmp_path/'radia_gpu-0.1.0a1-py3-none-win_amd64.whl').write_bytes(b'checked by wheel verifier')
     record=dict(schema='radia.gpu.installed-acceptance.v1',passed=True,ltspice_checked=True,
                 source_commit='a'*40,wheel_sha256='b'*64,distribution_version='0.1.0a1',
+                manifest_sha256='d'*64,
                 simulink_repeated_runs=2,simulink_failure_cleanup=True)
     evidence=tmp_path/'result.json'
     evidence.write_text(json.dumps(record))
@@ -45,7 +47,8 @@ def test_stable_release_requires_review_and_same_wheel_a100_parity(tmp_path, mon
     gate = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(gate)
     wheel = dict(passed=True, version='0.1.0', source_commit='a'*40,
-                 wheel_sha256='b'*64, files=115, cuda_solvers=['csr_pcg', 'ams'])
+                 wheel_sha256='b'*64, files=115, cuda_solvers=['csr_pcg', 'ams'],
+                 manifest_sha256='d'*64)
     monkeypatch.setattr(gate, 'verify', lambda path: wheel)
     artifact = tmp_path/'artifact'
     artifact.mkdir()
@@ -53,6 +56,7 @@ def test_stable_release_requires_review_and_same_wheel_a100_parity(tmp_path, mon
     installed = dict(schema='radia.gpu.installed-acceptance.v1', passed=True,
                      source_commit=wheel['source_commit'], wheel_sha256=wheel['wheel_sha256'],
                      distribution_version=wheel['version'], ltspice_checked=True,
+                     manifest_sha256=wheel['manifest_sha256'],
                      simulink_repeated_runs=2, simulink_failure_cleanup=True)
     (artifact/'result.json').write_text(json.dumps(installed))
     run = dict(id=42, status='completed', conclusion='success', event='push',
@@ -80,6 +84,7 @@ def test_stable_release_requires_review_and_same_wheel_a100_parity(tmp_path, mon
         ('independent_review.unresolved_findings', ['P2 still open']),
         ('independent_review.report', ''),
         ('a100_acceptance.wheel_sha256', 'c'*64),
+        ('a100_acceptance.manifest_sha256', 'c'*64),
         ('a100_acceptance.device', 'Quadro RTX 5000'),
         ('a100_acceptance.host', '102'),
         ('a100_acceptance.cpu_parity_checked', False),

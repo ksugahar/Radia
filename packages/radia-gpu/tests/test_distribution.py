@@ -25,7 +25,9 @@ def test_installed_manifest_rejects_tampering_and_path_escape(tmp_path,monkeypat
                   capabilities=["test payload"],runtime_requirements=[],
                   files={"matlab/kernel.m":hashlib.sha256(payload.read_bytes()).hexdigest()})
     (tmp_path/"manifest.json").write_text(json.dumps(manifest))
-    assert api.verify()["passed"]
+    checked = api.verify()
+    assert checked["passed"]
+    assert checked['manifest_sha256'] == hashlib.sha256((tmp_path/'manifest.json').read_bytes()).hexdigest()
     payload.write_text("changed payload")
     with pytest.raises(RuntimeError,match="hash mismatch"):
         api.verify()
@@ -56,3 +58,14 @@ def test_wheel_rejects_escape_cpu_solver_and_external_payload(tmp_path,member):
         archive.writestr(member,b'forbidden')
     with pytest.raises(ValueError):
         verifier.verify(wheel)
+
+
+def test_installed_acceptance_rejects_a_different_build_of_the_same_source():
+    spec=importlib.util.spec_from_file_location('gpu_installed_identity',ROOT/'verify_wheel.py')
+    verifier=importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(verifier)
+    wheel = dict(source_commit='a'*40, version='0.1.0', manifest_sha256='b'*64)
+    verifier.verify_installed_identity(dict(wheel), wheel)
+    installed = dict(wheel, manifest_sha256='c'*64)
+    with pytest.raises(ValueError, match='differs from release wheel'):
+        verifier.verify_installed_identity(installed, wheel)

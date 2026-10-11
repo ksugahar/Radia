@@ -8,6 +8,15 @@ import re
 import zipfile
 
 
+def verify_installed_identity(installed: dict, wheel: dict) -> None:
+    """Reject a different build even when its source and version are identical."""
+    digest = wheel.get('manifest_sha256', '')
+    if (not re.fullmatch(r'[0-9a-f]{64}', digest)
+            or any(installed.get(key) != wheel.get(key)
+                   for key in ('source_commit', 'version', 'manifest_sha256'))):
+        raise ValueError('Installed distribution differs from release wheel')
+
+
 def verify(path: Path) -> dict:
     if not re.fullmatch(r"radia_gpu-[^-]+-py3-none-win_amd64\.whl",path.name):
         raise ValueError("Expected a Windows x64 radia-gpu wheel")
@@ -32,7 +41,8 @@ def verify(path: Path) -> dict:
             requirements = metadata.get_all("Requires-Dist",[])
             if metadata["Name"] != "radia-gpu" or any(not any(f'extra == "{extra}"' in r for extra in ('test', 'ltspice', 'coupling')) for r in requirements):
                 raise ValueError("Unexpected GPU distribution identity/dependency")
-        manifest = json.loads(archive.read("radia_gpu/manifest.json"))
+        manifest_bytes = archive.read("radia_gpu/manifest.json")
+        manifest = json.loads(manifest_bytes)
         if manifest.get("schema") != "radia.gpu.distribution.v1" or manifest["version"] != metadata["Version"]:
             raise ValueError("Manifest/metadata mismatch")
         expected = {"radia_gpu/"+n for n in manifest["files"]}
@@ -61,6 +71,7 @@ def verify(path: Path) -> dict:
             solvers.append(name.removeprefix('radia_cuda_').removesuffix('.mexw64'))
     return dict(passed=True, version=metadata["Version"], source_commit=manifest["source_commit"],
                 wheel_sha256=hashlib.sha256(path.read_bytes()).hexdigest(), files=len(expected),
+                manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
                 cuda_solvers=sorted(solvers))
 
 

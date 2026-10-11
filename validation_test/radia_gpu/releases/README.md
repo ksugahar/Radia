@@ -18,6 +18,7 @@ Resolve findings and review the final source before accepting it.
 
 `a100_acceptance` contains the real installed acceptance record with schema
 `radia.gpu.installed-acceptance.v1`, the same source/hash/version, `passed: true`,
+the payload `manifest_sha256` matching the verified wheel,
 `host: NGSolve`, the measured A100 `device`, at least two
 `simulink_repeated_runs`, and `simulink_failure_cleanup: true`.
 Set `cpu_parity_checked: true` only after testing each published CUDA solver

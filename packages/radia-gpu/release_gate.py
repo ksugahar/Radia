@@ -33,6 +33,7 @@ def _qualify_stable(wheel, qualification_directory):
             or a100.get('passed') is not True
             or a100.get('source_commit') != wheel['source_commit']
             or a100.get('wheel_sha256') != wheel['wheel_sha256']
+            or a100.get('manifest_sha256') != wheel['manifest_sha256']
             or a100.get('distribution_version') != wheel['version']
             or a100.get('host') != 'NGSolve'
             or 'A100' not in a100.get('device', '')
@@ -83,6 +84,7 @@ def qualify(run, repository, run_id, artifact, expected_hash,
     if (record.get('passed') is not True or record.get('ltspice_checked') is not True
             or record.get('source_commit') != wheel['source_commit']
             or record.get('wheel_sha256') != expected_hash
+            or record.get('manifest_sha256') != wheel['manifest_sha256']
             or record.get('distribution_version') != wheel['version']
             or not _repeated_runs_pass(record.get('simulink_repeated_runs'))
             or record.get('simulink_failure_cleanup') is not True):

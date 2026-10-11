@@ -25,8 +25,7 @@ if args.wheel:
     verifier = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(verifier)
     wheel_report = verifier.verify(args.wheel)
-    if wheel_report['source_commit'] != report['source_commit'] or wheel_report['version'] != report['version']:
-        raise RuntimeError('Installed distribution differs from release wheel')
+    verifier.verify_installed_identity(report, wheel_report)
 args.out.resolve().mkdir(parents=True, exist_ok=False)
 engine = matlab.engine.start_matlab('-nodesktop -nosplash')
 try:
@@ -39,7 +38,8 @@ finally:
     engine.quit()
 result_path = args.out / 'result.json'
 result = json.loads(result_path.read_text())
-result.update(source_commit=report['source_commit'], distribution_version=report['version'])
+result.update(source_commit=report['source_commit'], distribution_version=report['version'],
+              manifest_sha256=report['manifest_sha256'])
 if wheel_report:
     result['wheel_sha256'] = wheel_report['wheel_sha256']
 result_path.write_text(json.dumps(result,indent=2)+'\n')

@@ -17,7 +17,8 @@ def matlab_path() -> Path:
 def verify() -> dict:
     """Verify the installed payload without importing MATLAB, CUDA or Radia."""
     root = Path(str(files(__package__)))
-    manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+    manifest_bytes = (root / "manifest.json").read_bytes()
+    manifest = json.loads(manifest_bytes)
     if manifest.get("schema") != "radia.gpu.distribution.v1" or manifest.get("version") != __version__:
         raise RuntimeError("Unsupported or mismatched radia-gpu manifest")
     for relative, expected in manifest["files"].items():
@@ -28,4 +29,5 @@ def verify() -> dict:
             raise RuntimeError(f"Payload hash mismatch: {relative}")
     return dict(passed=True, runtime_checked=False, version=__version__, matlab_path=str(matlab_path()),
                 source_commit=manifest["source_commit"], capabilities=manifest["capabilities"],
+                manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
                 runtime_requirements=manifest["runtime_requirements"])
