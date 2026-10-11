@@ -133,6 +133,11 @@ def main(args):
                 row['medians']={str(t):{key:statistics.median(s[key] for s in row['samples'] if s['setup_threads']==t)
                     for key in ('snapshot_wall_seconds','setup_seconds','setup_exchange_transfer_solve_seconds')
                     if row['samples'][0][key] is not None} for t in (1,args.setup_threads)}
+                before=row['medians']['1'];after=row['medians'][str(args.setup_threads)]
+                row['before_after']=dict(before_setup_threads=1,after_setup_threads=args.setup_threads,
+                    before=before,after=after,
+                    time_reduction_seconds={key:before[key]-after[key] for key in before},
+                    time_reduction_fraction={key:1-after[key]/before[key] for key in before if before[key]>0})
                 print(json.dumps(dict(dofs=fes.ndof,cycle=cycle,medians=row['medians'])),flush=True)
         record['accepted']=True
     except Exception as error:

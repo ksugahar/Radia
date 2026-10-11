@@ -7,6 +7,9 @@
 #include <stdexcept>
 #include <utility>
 #ifdef SPARSESOLV_OPENMP_AMS_SETUP
+#ifndef SPARSESOLV_SERIAL_AMS_SETUP
+#error OpenMP snapshot setup must disable internally owned TaskManager regions
+#endif
 #ifndef _OPENMP
 #error SPARSESOLV_OPENMP_AMS_SETUP requires OpenMP compiler support
 #endif
