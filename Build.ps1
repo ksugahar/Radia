@@ -77,6 +77,10 @@ if (@($RadiaOnly, $AxiFemOnly, $MatlabMexOnly, $CudaMexOnly, $OptunaMexOnly).Whe
 if ($CudaMexOnly) {
     if ($InstallToSitePackages) { throw 'CUDA MEX builds remain staged; no runtime replacement' }
     $cudaRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+    if ($RequireNativeProvenance) {
+        $cudaStatus = & git -C $cudaRoot status --porcelain
+        if ($LASTEXITCODE -ne 0 -or $cudaStatus) { throw 'CUDA native provenance requires a clean source checkout' }
+    }
     & python (Join-Path $cudaRoot 'tools/build_cuda_mex.py') --out (Join-Path $cudaRoot 'build-cuda-mex')
     if ($LASTEXITCODE -ne 0) { throw 'CUDA MEX build failed' }
     return
