@@ -29,7 +29,7 @@ evaluation uses the mdx A100 when it is online; record source/runtime versions,
 artifact hashes and machine-readable results. CPU-only mdx execution verifies
 the reference calculation, not CUDA execution. RTX 5000 installation acceptance
 does not certify A100 scaling.
-Cubit mesh export is tested separately on 100 and LAB/102. NGSolve validation
+Cubit mesh export is tested separately on 100 and 102. NGSolve validation
 starts by checking and loading an exported `.vol` with its versioned label
 contract; it does not require Cubit on the NGSolve host.
 
