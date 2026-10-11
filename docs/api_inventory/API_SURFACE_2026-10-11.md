@@ -25,3 +25,5 @@ The user selected complete ownership transfer within the existing monorepo.
 ## Current evidence and limits
 
 PR #339 remains a draft. Its pre-migration installed acceptance passed, but that does not certify the new ownership boundary. The existing candidate still stages MATLAB sources from the repository root and retains LTspice Python implementation in the CPU source tree. Publication is held until migration and the corresponding checks pass. No claim is made that AMS, ICCG or HDiv-MMM GPU support is certified by the Poisson test.
+
+The accepted CUDA PCG and LTspice MATLAB adapters, CUDA build helper, Python LTspice implementation and tests have now moved to `packages/radia-gpu`. The LTspice MCP transport moved to `radia-mcp` with a lazy GPU backend. Remaining legacy MATLAB/Simulink and shared Optuna source paths still require migration; this is not a completed distribution-boundary acceptance.

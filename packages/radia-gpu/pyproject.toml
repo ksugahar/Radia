@@ -19,7 +19,8 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=8", "build>=1.2"]
+ltspice = ["schemdraw>=0.18"]
+test = ["pytest>=8", "build>=1.2", "schemdraw>=0.18", "mcp>=1.21.1,<2"]
 
 [project.urls]
 Repository = "https://github.com/ksugahar/Radia"
@@ -29,8 +30,14 @@ Documentation = "https://github.com/ksugahar/Radia/tree/main/packages/radia-gpu"
 radia-gpu-path = "radia_gpu.cli:path_main"
 radia-gpu-doctor = "radia_gpu.cli:doctor_main"
 
+radia-ltspice = "radia_gpu.ltspice.cli:main"
+radia-spice-lab = "radia_gpu.ltspice.cli:main"
+spice-circuit-lab = "radia_gpu.ltspice.cli:main"
+ltspice-convert = "radia_gpu.ltspice.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
 radia_gpu = ["manifest.json"]
+"radia_gpu.ltspice" = ["LICENSE", "py.typed"]

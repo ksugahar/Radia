@@ -14,7 +14,7 @@ from setuptools.command.bdist_wheel import bdist_wheel as _bdist_wheel
 
 PACKAGE = Path(__file__).resolve().parent
 ROOT = PACKAGE.parents[1]
-MATLAB = ROOT / "matlab"
+MATLAB = PACKAGE / "matlab"
 SIMULINK_FILES = (
     "+radia/+simulink/cudaPCGSFunction.m", "+radia/+simulink/buildCudaPCGBlock.m",
     "+radia/+simulink/buildLTspiceBlock.m", "+radia/+simulink/ltspiceSFunction.m",
@@ -31,7 +31,7 @@ class build_py(_build_py):
         commit = subprocess.check_output(["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True).strip()
         dirty = subprocess.check_output(["git", "-C", str(ROOT), "status", "--porcelain"], text=True).strip()
         binary = build / "radia_cuda_csr_pcg.mexw64"
-        source = ROOT / "src/matlab/cuda/radia_cuda_csr_pcg.cu"
+        source = PACKAGE / "native/radia_cuda_csr_pcg.cu"
         if dirty or receipt["source_dirty"] or receipt["source_commit"] != commit:
             raise RuntimeError("radia-gpu requires a clean exact-commit mexcuda build")
         for path, field in ((binary, "binary_sha256"), (source, "source_sha256")):
@@ -41,7 +41,8 @@ class build_py(_build_py):
         package = Path(self.build_lib) / "radia_gpu"
         staged = package / "matlab"
         staged.mkdir(parents=True, exist_ok=True)
-        expected = {"__init__.py", "cli.py", "LICENSE", "README.md", "build.json"}
+        expected = {p.relative_to(PACKAGE / "src/radia_gpu").as_posix() for p in (PACKAGE / "src/radia_gpu").rglob("*") if p.is_file() and "__pycache__" not in p.parts}
+        expected.update({"LICENSE", "README.md", "build.json"})
         for group in ("+radia/+gpu", "+radia/+ltspice"):
             for path in (MATLAB / group).rglob("*.m"):
                 if path.name in ("runRLCResonanceOptimizationDemo.m", "rlcResonanceObjective.m"):

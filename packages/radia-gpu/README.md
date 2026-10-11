@@ -40,7 +40,8 @@ inputs, unsupported state, breakdown or nonconvergence.
 block. Matrix upload occurs at Start; each RHS upload and solution download
 is explicit in the block. Simulink is optional for standalone MEX use.
 
-LTspice integration includes `radia.ltspice` and the selected sampled-data
+LTspice integration includes MATLAB `radia.ltspice`, Python
+`radia_gpu.ltspice`, and the selected sampled-data
 Simulink workflow. LTspice executes in its own installed runtime; it is not
 a GPU circuit solver. LTspice, MATLAB, Simulink, CUDA Toolkit and NVIDIA
 drivers are not redistributed. Install external products separately under
@@ -51,7 +52,8 @@ their own licenses. This distribution includes Radia integration code only.
 Build on 100 from a clean exact commit with `Build.ps1 -CudaMexOnly
 -RequireNativeProvenance`, then run `python -m build --wheel` in this directory.
 The wheel build requires the matching CUDA build receipt and binary hash.
-It stages canonical MATLAB sources rather than maintaining a package-local fork.
+Canonical CUDA and MATLAB sources live in this package, under `native/` and
+`matlab/`. Packaging stages those sources; it does not read a root MATLAB tree.
 Use only the resulting verified wheel for deployment and PyPI publication.
 The initial alpha requires independent review before a stable release.
 
@@ -70,3 +72,9 @@ after solver/preconditioner parity: preserve NGSolve's FE ownership and validate
 the electromagnetic formulation, nonlinear convergence and optimization outcome
 against the Python CPU route. Report transfer-inclusive timing and peak memory;
 neither successful PCG nor AMS alone certifies HDiv-MMM support.
+
+Python circuit converters use `radia-ltspice`; install `radia-gpu[ltspice]`
+for the optional schemdraw route. MCP entry points, including
+`mcp-server-radia-ltspice`, belong to `radia-mcp` and load the GPU distribution
+only when circuit execution is requested. No circuit import alias is left in
+the CPU Radia distribution.
