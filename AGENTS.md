@@ -6,13 +6,13 @@ Radia is an AI-native electromagnetic CAE platform.
 Position Radia as AI-operable CAE through MCP: users define the analysis plan, physical assumptions and acceptance criteria; AI assists tool operation and execution.
 Do not market autonomous AI design. Extend NGSolve only for missing engineering capability.
 
-Current scope:
+Scope:
 
 1. Complete and validate HDiv-MMM topology optimization.
 2. Improve repository and `radia-mcp` quality, maintenance, validation,
    build, CI, packaging, and release operation.
 
-Do not add unrelated features during this maintenance program.
+Do not add unrelated features.
 ## Repository Boundaries
 The monorepo independently releases `radia`, `radia-gpu`, `cubit-mesh-export`, `radia-mcp`, `radia-optuna` and `eqnedit64`.
 Scope commits and CI to the owner. Shared files trigger multiple lanes only for real shared ABI, build or integration changes.
@@ -168,6 +168,7 @@ solver boundary is a checked `.vol` regardless of the creation route.
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
 **POLICY**: CI/builds use 100号機 with the `100` runner label.
+100号機 permits isolated tests and heavy numerical/memory validation.
 Isolate CI from user runtimes. LAB/102 tests radia and radia-mcp wheels without radia-gpu.
 LAB owns SSH preflight; mdx validates radia-gpu against NGSolve and evaluates timing. mdx1/mdx2/hibino are retired.
 Before the next solver release, migrate release-quad acceptance to the current fleet.
@@ -218,6 +219,7 @@ LAB-owned mapped drives or the workgroup share. Do not restore that dependency.
 Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes mdx hostname`, then check
 running jobs and available memory. Run one heavy job at a time; preserve active timing jobs. Never stop another session's jobs. LAB may run high-memory tests when
 explicitly selected; Gmsh rendering needs a desktop.
+Formal timing requires idle mdx; incidental 100号機/LAB timings are diagnostic only.
 Measure speed; settle quadrature and threads first. Historical mdx measurements
 remain valid provenance. Publish OS, threads, versions/results; keep hosts/IPs/paths private.
 
