@@ -37,11 +37,23 @@ class build_py(_build_py):
         for path, field in ((binary, "binary_sha256"), (source, "source_sha256")):
             if hashlib.sha256(path.read_bytes()).hexdigest() != receipt[field]:
                 raise RuntimeError(f"CUDA build provenance mismatch: {path.name}")
+        ams_build = ROOT / "build-ams-cuda"
+        ams_receipt = json.loads((ams_build / "build.json").read_text(encoding="utf-8"))
+        ams_binary = ams_build / "radia_cuda_ams.mexw64"
+        ams_source = PACKAGE / "native/radia_cuda_ams.cu"
+        ams_hash = hashlib.sha256(ams_binary.read_bytes()).hexdigest()
+        if (ams_receipt["source_dirty"] or ams_receipt["source_commit"] != commit
+                or ams_hash != ams_receipt["sha256"]["build-ams-cuda/radia_cuda_ams.mexw64"]
+                or hashlib.sha256(ams_source.read_bytes()).hexdigest() !=
+                ams_receipt["source_sha256"]["packages/radia-gpu/native/radia_cuda_ams.cu"]):
+            raise RuntimeError("AMS CUDA build provenance mismatch")
         super().run()
         package = Path(self.build_lib) / "radia_gpu"
         staged = package / "matlab"
         staged.mkdir(parents=True, exist_ok=True)
-        expected = {"__init__.py", "cli.py", "LICENSE", "README.md", "build.json"}
+        expected = {p.relative_to(PACKAGE / "src/radia_gpu").as_posix()
+                    for p in (PACKAGE / "src/radia_gpu").rglob("*.py")}
+        expected.update({"LICENSE", "README.md", "build.json", "ams-build.json"})
         for group in ("+radia/+gpu", "+radia/+ltspice"):
             for path in (MATLAB / group).rglob("*.m"):
                 if path.name in ("runRLCResonanceOptimizationDemo.m", "rlcResonanceObjective.m"):
@@ -57,6 +69,18 @@ class build_py(_build_py):
             expected.add(target.relative_to(package).as_posix())
         shutil.copy2(binary, staged / binary.name)
         expected.add("matlab/" + binary.name)
+        shutil.copy2(ams_binary, staged / ams_binary.name)
+        expected.add("matlab/" + ams_binary.name)
+        for name in ("readAMSExchange.m", "amsPCG.m"):
+            target = staged / "+radia/+gpu" / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(PACKAGE / "matlab/+radia/+gpu" / name, target)
+            expected.add(target.relative_to(package).as_posix())
+        public_ams = {key: ams_receipt[key] for key in (
+            "schema", "source_commit", "source_dirty", "matlab", "no_cpu_solver_fallback")}
+        public_ams.update(binary_sha256=ams_hash,
+                          source_sha256=ams_receipt["source_sha256"]["packages/radia-gpu/native/radia_cuda_ams.cu"])
+        (package / "ams-build.json").write_text(json.dumps(public_ams, indent=2)+"\n", encoding="utf-8")
         shutil.copy2(ROOT / "LICENSE", package / "LICENSE")
         shutil.copy2(PACKAGE / "README.md", package / "README.md")
         # Public provenance deliberately omits private host/interpreter/install paths.
@@ -73,7 +97,7 @@ class build_py(_build_py):
         metadata = tomllib.loads((PACKAGE / "pyproject.toml").read_text())
         manifest = dict(schema="radia.gpu.distribution.v1", version=metadata["project"]["version"],
                         source_commit=commit, files=payload,
-                        capabilities=["CUDA FP64 CSR Jacobi-PCG", "Simulink CUDA PCG block", "LTspice sampled-data integration"],
+                        capabilities=["CUDA FP64 CSR Jacobi-PCG", "Experimental CUDA FP64 AMS", "AMS HDF5 exchange", "Simulink CUDA PCG block", "LTspice sampled-data integration"],
                         runtime_requirements=["Windows x64", "MATLAB R2026a", "Parallel Computing Toolbox", "NVIDIA GPU/driver", "Simulink for blocks", "User-installed LTspice for circuit execution"])
         (package / "manifest.json").write_text(json.dumps(manifest, indent=2)+"\n")
 

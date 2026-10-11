@@ -1,6 +1,8 @@
 function benchmark(inputPath, outputPath, binaryDir)
 addpath(binaryDir);
-d=load(inputPath);
+repo=fileparts(fileparts(fileparts(mfilename('fullpath'))));
+addpath(fullfile(repo,'packages','radia-gpu','matlab'));
+d=radia.gpu.readAMSExchange(inputPath);
 g=gpuDevice();
 before=g.AvailableMemory;
 memoryPlan=memory_plan(d.snapshot,g);

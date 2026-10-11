@@ -1,7 +1,6 @@
 """Small AMS CUDA parity acceptance; larger studies belong on idle mdx/A100."""
 from __future__ import annotations
 import argparse
-import hashlib
 import importlib.metadata as md
 import json
 from pathlib import Path
@@ -14,20 +13,11 @@ import time
 import numpy as np
 import ngsolve as ng
 from netgen.csg import unit_cube
-from scipy.io import savemat,loadmat
+from scipy.io import loadmat
 from scipy.sparse import coo_matrix
 import matlab.engine
-
-def serializable(x):
-    if isinstance(x,dict):return {k:serializable(v) for k,v in x.items()}
-    if isinstance(x,list):
-        arr=np.empty((1,len(x)),dtype=object)
-        for k,v in enumerate(x):arr[0,k]=serializable(v)
-        return arr
-    if isinstance(x,np.ndarray):return x
-    if isinstance(x,(bool,np.bool_)):return bool(x)
-    if isinstance(x,(int,float)):return float(x)
-    return x
+sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'packages/radia-gpu/src'))
+from radia_gpu.ams_exchange import write_exchange, read_exchange, file_sha256
 
 def jsonable(x):
     if isinstance(x,np.ndarray):return x.tolist()
@@ -36,15 +26,6 @@ def jsonable(x):
     if isinstance(x,(list,tuple)):return [jsonable(v) for v in x]
     if isinstance(x,bytes):return x.decode('utf-8',errors='replace')
     return x
-
-def numeric_bytes(value):
-    if isinstance(value, dict):
-        return sum(numeric_bytes(v) for v in value.values())
-    if isinstance(value, (list, tuple)):
-        return sum(numeric_bytes(v) for v in value)
-    if isinstance(value, np.ndarray):
-        return value.nbytes
-    return 8
 
 def main(args):
     root=Path(__file__).resolve().parents[2]
@@ -97,9 +78,7 @@ def main(args):
                     cpu.append(time.perf_counter()-timer);cpu_iterations.append(solver.iterations)
                 case=out/f'h{h}-cycle{cycle}';case.mkdir()
                 payload=dict(snapshot=snapshot,rhs=rhs,probes=probes,expected=expected)
-                if numeric_bytes(payload)>=2_000_000_000:
-                    raise RuntimeError('Artifacts exceeding 2 GB require HDF5; this small-case MAT v5 runner does not support them')
-                src=case/'input.mat';savemat(src,serializable(payload),oned_as='column')
+                src=case/'input.hdf5';exchange=write_exchange(src,payload)
                 eng.benchmark(str(src),str(case/'gpu.mat'),str(binary),nargout=0)
                 gpu=loadmat(case/'gpu.mat',simplify_cells=True)
                 actual=np.asarray(gpu['solution']).reshape(-1)
@@ -116,7 +95,7 @@ def main(args):
                     'gpu':jsonable(gpu),'cpu_true_residual':residual(x.FV().NumPy()),'gpu_true_residual':residual(actual),
                     'relative_difference_from_direct':difference,'max_preconditioner_probe_relative_error':probe,
                     'relative_difference_from_cpu_ams':cpu_ams_difference,
-                    'input_sha256':hashlib.sha256(src.read_bytes()).hexdigest(),
+                    'input_sha256':file_sha256(src),'exchange':exchange,
                     'auxiliary_level_rows':[[l['A']['rows'] for l in s['levels']] for s in snapshot['spaces']],
                     'coarse_kinds':[s['levels'][-1]['coarse']['kind'] for s in snapshot['spaces']]}
                 entry['gpu'].pop('solution');entry['gpu'].pop('inclusiveSolution')

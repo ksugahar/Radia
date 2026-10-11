@@ -7,8 +7,9 @@ CPU electromagnetic execution belongs to `radia` (Python/pybind11/NGSolve).
 to locate and use the installed GPU MATLAB files.
 
 This alpha contains FP64 CUDA CSR Jacobi-PCG, a Simulink block for the same
-kernel, and the selected standalone LTspice workflow. It does not claim
-GPU AMS, ICCG, HDiv-MMM, or migration of the older CPU MEX application models.
+kernel, and the selected standalone LTspice workflow. It also contains experimental FP64 assembled-operator AMS and its versioned
+HDF5 exchange. This does not certify production AMS, ICCG, HDiv-MMM, or
+migration of the older CPU MEX application models.
 There is no CPU solver fallback.
 
 ## Install
@@ -49,6 +50,7 @@ their own licenses. This distribution includes Radia integration code only.
 ## Build and release
 
 Build on 100 from a clean exact commit with `Build.ps1 -CudaMexOnly
+-RequireNativeProvenance` and `Build.ps1 -AmsCudaOnly
 -RequireNativeProvenance`, then run `python -m build --wheel` in this directory.
 The wheel build requires the matching CUDA build receipt and binary hash.
 It stages canonical MATLAB sources rather than maintaining a package-local fork.
@@ -70,3 +72,20 @@ after solver/preconditioner parity: preserve NGSolve's FE ownership and validate
 the electromagnetic formulation, nonlinear convergence and optimization outcome
 against the Python CPU route. Report transfer-inclusive timing and peak memory;
 neither successful PCG nor AMS alone certifies HDiv-MMM support.
+
+## Experimental AMS and large numeric exchange
+
+AMS CUDA and its snapshot adapter are package-owned native sources, built by
+`tools/build_ams_cuda.py` through the root build dispatcher. The CPU setup
+retains NGSolve and Radia ownership; the validation adapter is not installed
+as a CPU solver in this wheel. `radia.gpu.amsPCG` accepts a checked numeric
+hierarchy and RHS already uploaded to GPU memory, with no CPU fallback.
+
+All AMS file exchange uses `radia.ams-hdf5.v1` plain HDF5. Install optional
+`radia-gpu[exchange]` dependencies for the Python writer, and read the result
+with `radia.gpu.readAMSExchange`. Values stay FP64 and CSR indices stay
+zero-based int32. Shapes and array dimension order are explicit. HDF5 supports
+the project's >2 GB exchange requirement; it does not bypass int32 kernel
+capacity checks or the GPU working-memory budget. See
+[AMS validation](../../validation_test/ams_cuda/README.md) for numerical gates,
+transfer-inclusive timing and current limitations. A100 remains unmeasured.

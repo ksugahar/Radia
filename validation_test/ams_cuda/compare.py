@@ -8,7 +8,7 @@ import statistics
 import subprocess
 import matlab.engine
 from scipy.io import loadmat
-from run import jsonable
+from run import jsonable, read_exchange, file_sha256
 
 
 def main(args):
@@ -40,9 +40,9 @@ def main(args):
         eng.addpath(str(Path(__file__).resolve().parent), nargout=0)
         for source in args.inputs:
             source = source.resolve()
-            snapshot = loadmat(source, simplify_cells=True)['snapshot']
+            snapshot = read_exchange(source)['snapshot']
             case_index = len(record['cases'])
-            entry = {'input_sha256': hashlib.sha256(source.read_bytes()).hexdigest(),
+            entry = {'input_sha256': file_sha256(source),
                      'dofs': int(snapshot['A']['rows']), 'cycle': int(snapshot['cycle_type']),
                      'runs': []}
             record['cases'].append(entry)

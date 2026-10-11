@@ -52,7 +52,7 @@ transfer-inclusive time, GPU memory observations, versions and hashes.
 CPU timings use caller-owned TaskManager. Invalid CSR, CPU input, NaN,
 invalid smoother, nonconvergence, zero RHS and clear/reload checks run on
 the actual gateway. Only sanitized JSON evidence belongs in Git; generated
-MAT inputs, raw logs and binaries stay outside tracked source.
+HDF5 inputs, raw logs and binaries stay outside tracked source.
 
 The first gateway call is measured after MATLAB and `gpuDevice`
 initialization; MATLAB startup is reported separately. Available-memory
@@ -87,13 +87,25 @@ cases that would consume the available GPU memory minus the larger of 2 GiB
 or 20% of total device memory. The estimate is conservative admission control,
 not a measured allocator peak. Develop within GPU memory; increase case sizes
 gradually. A 10 GB matrix alone is not a 10 GB solver working set.
-Artifacts or individual variables exceeding 2 GB must use HDF5 under project
-policy; MATLAB-compatible MAT v7.3 is permitted. This small-case runner
-currently uses SciPy's MAT v5 writer, so it must not be used for those large
-artifacts until a checked HDF5 reader/writer is integrated. MATLAB's
-[MAT-file version limits](https://www.mathworks.com/help/matlab/import_export/mat-file-versions.html)
-apply separately from GPU capacity. This experiment does not certify a 10 GB
-working set.
+All Python-to-MATLAB AMS inputs now use versioned plain HDF5, including
+artifacts and individual arrays exceeding 2 GB. The package-owned writer is
+`radia_gpu.ams_exchange.write_exchange`; the matching MATLAB entry point is
+`radia.gpu.readAMSExchange`. This is plain HDF5, not a MAT v7.3 struct file:
+do not pass it to MATLAB `load`. FP64 values, zero-based int32 indices, array
+shapes and nested auxiliary levels are preserved explicitly in the schema.
+Streaming file hashes avoid an additional whole-file memory allocation.
+Install the optional Python writer dependencies with `radia-gpu[exchange]`.
+
+CUDA AMS sources, the pybind snapshot adapter and the build helper are owned
+by `packages/radia-gpu/{native,tools}`. CPU hierarchy algorithms and NGSolve
+FE semantics retain their CPU owner. `Build.ps1 -AmsCudaOnly` is a thin
+monorepo dispatcher. The GPU distribution stages the standalone AMS MEX,
+`radia.gpu.amsPCG`, the HDF5 reader and exact-build provenance; it does not
+ship the validation-only CPU pybind adapter.
+
+`python validation_test/ams_cuda/validate_exchange.py --large --out <owned-dir>`
+checks Python-to-MATLAB layout and an actual array/file exceeding 2 GB.
+This is exchange acceptance, not GPU capacity or a 10 GB solve certification.
 
 [Saved numerical evidence](rtx5000_20261011.json) covers six small real
 curl-curl plus positive-mass cases, with `beta_zero=False`, 96 to 5,326 DOFs,

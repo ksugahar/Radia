@@ -12,7 +12,8 @@ import sysconfig
 def main(args):
     import netgen
     import matlab.engine
-    root=Path(__file__).resolve().parents[2]
+    package=Path(__file__).resolve().parents[1]
+    root=package.parents[1]
     commit=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()
     dirty=bool(subprocess.check_output(['git','-C',str(root),'status','--porcelain'],text=True).strip())
     if args.require_clean_source and dirty:raise RuntimeError('Clean source required for AMS build provenance')
@@ -25,13 +26,13 @@ def main(args):
     if not vcvars.is_file():raise RuntimeError('CUDA-compatible VS2022 toolchain required')
     os.environ['NVCC_CCBIN']=str(vs/'VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64')
     os.environ['PATH']=os.environ['NVCC_CCBIN']+os.pathsep+os.environ['PATH']
-    source=Path(__file__).with_name('snapshot_module.cpp')
-    sources=[source,root/'src/matlab/cuda/radia_cuda_ams.cu',
+    source=package/'native/ams_snapshot_module.cpp'
+    sources=[source,package/'native/radia_cuda_ams.cu',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp',
              root/'src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp',
              Path(__file__),root/'Build.ps1']
-    hashes={str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
+    hashes={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
     obj=out/'snapshot.obj';binary=out/'_radia_ams_snapshot.pyd'
     python_lib=Path(sys.base_prefix)/'libs'/f'python{sys.version_info.major}{sys.version_info.minor}.lib'
     command=['cl','/nologo','/LD','/EHsc','/MD','/O2','/fp:precise','/std:c++20','/bigobj','/utf-8','/arch:AVX2',
@@ -51,16 +52,16 @@ def main(args):
     eng=matlab.engine.start_matlab('-nodesktop -nosplash')
     try:
         config=Path(eng.matlabroot())/'toolbox/parallel/gpu/extern/src/mex/win64/nvcc_msvcpp2022.xml'
-        cuda=root/'src/matlab/cuda/radia_cuda_ams.cu'
+        cuda=package/'native/radia_cuda_ams.cu'
         flags='NVCCFLAGS=-gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80'
         eng.mexcuda('-v','-f',str(config),flags,'-lcublas','-outdir',str(out),str(cuda),nargout=0)
-        if (hashes!={str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
+        if (hashes!={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
             or commit!=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()):
             raise RuntimeError('Source changed while building; candidate provenance rejected')
         record={'schema':'radia.ams-cuda-build.v1','host':socket.gethostname(),'python':sys.executable,
                 'matlab':eng.version(),'configuration':str(config),'compiler_bin':os.environ['NVCC_CCBIN'],
                 'source_commit':commit,'source_dirty':dirty,
-                'sha256':{str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest()
+                'sha256':{p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest()
                           for p in (binary,out/'radia_cuda_ams.mexw64')},
                 'source_sha256':hashes,'no_cpu_solver_fallback':True}
         (out/'build.json').write_text(json.dumps(record,indent=2)+'\n')

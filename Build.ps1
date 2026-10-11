@@ -59,7 +59,7 @@ if ($AmsCudaOnly) {
     }
     $amsBuildArgs = @()
     if ($RequireNativeProvenance) { $amsBuildArgs += '--require-clean-source' }
-    & python (Join-Path $PSScriptRoot 'validation_test/ams_cuda/build.py') @amsBuildArgs
+    & python (Join-Path $PSScriptRoot 'packages/radia-gpu/tools/build_ams_cuda.py') @amsBuildArgs
     if ($LASTEXITCODE -ne 0) { throw 'AMS CUDA experimental build failed' }
     return
 }
