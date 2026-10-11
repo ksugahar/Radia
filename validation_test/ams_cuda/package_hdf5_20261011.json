@@ -1,0 +1,939 @@
+{
+  "schema": "radia.ams-package-hdf5-validation.v1",
+  "numerical_accepted": true,
+  "a100_started": false,
+  "a100_used": false,
+  "parity": {
+    "schema": "radia.ams-cuda-validation.v1",
+    "accepted": true,
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "versions": {
+      "ngsolve": "6.2.2607",
+      "numpy": "2.5.4",
+      "scipy": "1.18.1",
+      "matlabengine": "26.1"
+    },
+    "threads": 4,
+    "precision": "FP64",
+    "cases": [
+      {
+        "maxh": 0.5,
+        "cycle": 1,
+        "dofs": 96,
+        "free_dofs": 42,
+        "elements": 53,
+        "assembly_seconds": 0.07108570000127656,
+        "snapshot_setup_and_probes_seconds": 0.04175059999761288,
+        "cpu_direct_factor_seconds": 0.002817600001435494,
+        "cpu_ams_seconds": [
+          0.003033000000868924,
+          0.0031214000009640586,
+          0.0028084000005037524,
+          0.003115399998932844,
+          0.003046499998163199,
+          0.002687199998035794
+        ],
+        "cpu_iterations": [
+          9,
+          9,
+          9,
+          9,
+          9,
+          9
+        ],
+        "cpu_warm_median_seconds": 0.003046499998163199,
+        "gpu": {
+          "memoryPlan": {
+            "inputBytes": 56220,
+            "workspaceEstimateBytes": 16160,
+            "estimatedAdditionalBytes": 268624884,
+            "headroomBytes": 268435456,
+            "reservedFreeBytes": 3435908300.8,
+            "availableBeforeBytes": 16004415488.0,
+            "budgetBytes": 12568507187.2,
+            "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+          },
+          "uploadSeconds": 0.0730409,
+          "info": {
+            "iterations": 8,
+            "true_relative_residual": 3.08336108251209e-10,
+            "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+            "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+            "workspace_sample_bytes": 8388608
+          },
+          "coldSeconds": 0.0465476,
+          "probeErrors": [
+            2.0327882026223077e-15,
+            1.5140383255502774e-15,
+            2.3460611288083147e-15
+          ],
+          "times": [
+            0.0067453,
+            0.0061848,
+            0.0063841,
+            0.0063386,
+            0.0067722
+          ],
+          "inclusiveSeconds": 0.0093387,
+          "memoryBytes": 6291456,
+          "zeroRhsTimes": [
+            0.0024968,
+            0.0020841,
+            0.0020866,
+            0.0020759,
+            0.0022949,
+            0.0020081
+          ],
+          "applyOnlyTimes": [
+            0.0012829,
+            0.0010238,
+            0.0010232,
+            0.0010486,
+            0.0014859,
+            0.0009315
+          ],
+          "zeroRhsWarmMedianSeconds": 0.0020841,
+          "applyOnlyWarmMedianSeconds": 0.0010238,
+          "checks": {
+            "invalid_csr": 1,
+            "cpu_rhs": 1,
+            "nan_rhs": 1,
+            "nonconvergence": 1,
+            "invalid_rowptr": 1,
+            "invalid_smoother": 1,
+            "wrong_rhs_shape": 1,
+            "invalid_tolerance": 1,
+            "invalid_coarse_order": 1,
+            "invalid_coarse_rowptr": 1,
+            "zero_rhs": 1,
+            "clear_reload": 1,
+            "memory_budget_rejection": 1
+          },
+          "device": {
+            "name": "Quadro RTX 5000",
+            "compute_capability": "7.5",
+            "total_memory": 17179541504.0,
+            "driver": "582.78",
+            "toolkit": 12.8
+          },
+          "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+        },
+        "cpu_true_residual": 3.0833607745109444e-10,
+        "gpu_true_residual": 3.0833609525317085e-10,
+        "relative_difference_from_direct": 6.73251735012298e-10,
+        "max_preconditioner_probe_relative_error": 2.3460611288083147e-15,
+        "relative_difference_from_cpu_ams": 3.4763248483992513e-15,
+        "input_sha256": "75e6655806e2051022c2dc91308c39370ceb97ce25e01b4f99f1b02d393f3950",
+        "exchange": {
+          "schema": "radia.ams-hdf5.v1",
+          "format": "HDF5",
+          "numeric_bytes": 60828,
+          "file_bytes": 98486,
+          "arrays": 68
+        },
+        "auxiliary_level_rows": [
+          [
+            26
+          ],
+          [
+            26
+          ],
+          [
+            26
+          ],
+          [
+            26
+          ]
+        ],
+        "coarse_kinds": [
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt"
+        ],
+        "gpu_warm_median_seconds": 0.0063841,
+        "speedup_resident_inputs": 0.47720117137312995,
+        "speedup_including_transfers": 0.32622313578583734,
+        "accepted": true
+      },
+      {
+        "maxh": 0.5,
+        "cycle": 7,
+        "dofs": 96,
+        "free_dofs": 42,
+        "elements": 53,
+        "assembly_seconds": 0.09232609999889974,
+        "snapshot_setup_and_probes_seconds": 0.037691699999413686,
+        "cpu_direct_factor_seconds": 0.0028300999983912334,
+        "cpu_ams_seconds": [
+          0.002984300001116935,
+          0.0024198999999498483,
+          0.004028600000310689,
+          0.0031090999982552603,
+          0.0030198999993444886,
+          0.0031302999996114522
+        ],
+        "cpu_iterations": [
+          7,
+          7,
+          7,
+          7,
+          7,
+          7
+        ],
+        "cpu_warm_median_seconds": 0.0031090999982552603,
+        "gpu": {
+          "memoryPlan": {
+            "inputBytes": 56220,
+            "workspaceEstimateBytes": 16160,
+            "estimatedAdditionalBytes": 268624884,
+            "headroomBytes": 268435456,
+            "reservedFreeBytes": 3435908300.8,
+            "availableBeforeBytes": 15989735424.0,
+            "budgetBytes": 12553827123.2,
+            "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+          },
+          "uploadSeconds": 0.0034703,
+          "info": {
+            "iterations": 6,
+            "true_relative_residual": 3.8234031028184474e-11,
+            "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+            "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+            "workspace_sample_bytes": 8388608
+          },
+          "coldSeconds": 0.005652,
+          "probeErrors": [
+            2.410243325486566e-15,
+            2.3766770676847638e-15,
+            4.506082877175887e-15
+          ],
+          "times": [
+            0.0056595,
+            0.0052393,
+            0.0054423,
+            0.0050514,
+            0.0049593
+          ],
+          "inclusiveSeconds": 0.0077327,
+          "memoryBytes": 0,
+          "zeroRhsTimes": [
+            0.0024181,
+            0.0019047,
+            0.0018585,
+            0.0016881,
+            0.0017003,
+            0.001835
+          ],
+          "applyOnlyTimes": [
+            0.0012291,
+            0.0009818,
+            0.0009597,
+            0.0009866,
+            0.0010387,
+            0.0022681
+          ],
+          "zeroRhsWarmMedianSeconds": 0.001835,
+          "applyOnlyWarmMedianSeconds": 0.0009866,
+          "checks": {
+            "invalid_csr": 1,
+            "cpu_rhs": 1,
+            "nan_rhs": 1,
+            "nonconvergence": 1,
+            "invalid_rowptr": 1,
+            "invalid_smoother": 1,
+            "wrong_rhs_shape": 1,
+            "invalid_tolerance": 1,
+            "invalid_coarse_order": 1,
+            "invalid_coarse_rowptr": 1,
+            "zero_rhs": 1,
+            "clear_reload": 1,
+            "memory_budget_rejection": 1
+          },
+          "device": {
+            "name": "Quadro RTX 5000",
+            "compute_capability": "7.5",
+            "total_memory": 17179541504.0,
+            "driver": "582.78",
+            "toolkit": 12.8
+          },
+          "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+        },
+        "cpu_true_residual": 3.8234055626483934e-11,
+        "gpu_true_residual": 3.823402644869982e-11,
+        "relative_difference_from_direct": 6.883986302158327e-11,
+        "max_preconditioner_probe_relative_error": 4.506082877175887e-15,
+        "relative_difference_from_cpu_ams": 4.391230612744509e-15,
+        "input_sha256": "dc4b27d286ace130357dac3dabbf11ee0acdf544cdf52db51ac2c796f5d46305",
+        "exchange": {
+          "schema": "radia.ams-hdf5.v1",
+          "format": "HDF5",
+          "numeric_bytes": 60828,
+          "file_bytes": 98486,
+          "arrays": 68
+        },
+        "auxiliary_level_rows": [
+          [
+            26
+          ],
+          [
+            26
+          ],
+          [
+            26
+          ],
+          [
+            26
+          ]
+        ],
+        "coarse_kinds": [
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt"
+        ],
+        "gpu_warm_median_seconds": 0.0052393,
+        "speedup_resident_inputs": 0.5934189678497624,
+        "speedup_including_transfers": 0.4020717211653446,
+        "accepted": true
+      },
+      {
+        "maxh": 0.2,
+        "cycle": 1,
+        "dofs": 1081,
+        "free_dofs": 613,
+        "elements": 712,
+        "assembly_seconds": 0.09864440000092145,
+        "snapshot_setup_and_probes_seconds": 0.046755200000916375,
+        "cpu_direct_factor_seconds": 0.006456999999500113,
+        "cpu_ams_seconds": [
+          0.007014299997536,
+          0.007392300001811236,
+          0.006892400000651833,
+          0.006683999999950174,
+          0.006815599997935351,
+          0.0074320999992778525
+        ],
+        "cpu_iterations": [
+          13,
+          13,
+          13,
+          13,
+          13,
+          13
+        ],
+        "cpu_warm_median_seconds": 0.006892400000651833,
+        "gpu": {
+          "memoryPlan": {
+            "inputBytes": 775112,
+            "workspaceEstimateBytes": 165584,
+            "estimatedAdditionalBytes": 270978264,
+            "headroomBytes": 268435456,
+            "reservedFreeBytes": 3435908300.8,
+            "availableBeforeBytes": 15989735424.0,
+            "budgetBytes": 12553827123.2,
+            "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+          },
+          "uploadSeconds": 0.0031858,
+          "info": {
+            "iterations": 12,
+            "true_relative_residual": 1.9373103161873073e-10,
+            "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+            "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+            "workspace_sample_bytes": 8388608
+          },
+          "coldSeconds": 0.0214179,
+          "probeErrors": [
+            1.7757518683518635e-14,
+            9.981249392931208e-15,
+            1.1264396452818003e-14
+          ],
+          "times": [
+            0.0206831,
+            0.0211341,
+            0.0214294,
+            0.0206027,
+            0.0208269
+          ],
+          "inclusiveSeconds": 0.0238619,
+          "memoryBytes": 0,
+          "zeroRhsTimes": [
+            0.001987,
+            0.0020538,
+            0.0019686,
+            0.0019832,
+            0.0019143,
+            0.0019847
+          ],
+          "applyOnlyTimes": [
+            0.0020694,
+            0.0021071,
+            0.0020056,
+            0.0020092,
+            0.0020561,
+            0.002015
+          ],
+          "zeroRhsWarmMedianSeconds": 0.0019832,
+          "applyOnlyWarmMedianSeconds": 0.002015,
+          "checks": {
+            "invalid_csr": 1,
+            "cpu_rhs": 1,
+            "nan_rhs": 1,
+            "nonconvergence": 1,
+            "invalid_rowptr": 1,
+            "invalid_smoother": 1,
+            "wrong_rhs_shape": 1,
+            "invalid_tolerance": 1,
+            "invalid_coarse_order": 1,
+            "invalid_coarse_rowptr": 1,
+            "zero_rhs": 1,
+            "clear_reload": 1,
+            "memory_budget_rejection": 1
+          },
+          "device": {
+            "name": "Quadro RTX 5000",
+            "compute_capability": "7.5",
+            "total_memory": 17179541504.0,
+            "driver": "582.78",
+            "toolkit": 12.8
+          },
+          "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+        },
+        "cpu_true_residual": 1.9373103471756827e-10,
+        "gpu_true_residual": 1.9373102513078318e-10,
+        "relative_difference_from_direct": 4.0902639290916814e-10,
+        "max_preconditioner_probe_relative_error": 1.7757518683518635e-14,
+        "relative_difference_from_cpu_ams": 2.1212753926771214e-14,
+        "input_sha256": "baa9b553a16712d4cb1ba324702931bc882a94705568042155b58e82a69a9ebb",
+        "exchange": {
+          "schema": "radia.ams-hdf5.v1",
+          "format": "HDF5",
+          "numeric_bytes": 827000,
+          "file_bytes": 864684,
+          "arrays": 68
+        },
+        "auxiliary_level_rows": [
+          [
+            214
+          ],
+          [
+            214
+          ],
+          [
+            214
+          ],
+          [
+            214
+          ]
+        ],
+        "coarse_kinds": [
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt"
+        ],
+        "gpu_warm_median_seconds": 0.0208269,
+        "speedup_resident_inputs": 0.3309373934984003,
+        "speedup_including_transfers": 0.2888453979210303,
+        "accepted": true
+      },
+      {
+        "maxh": 0.2,
+        "cycle": 7,
+        "dofs": 1081,
+        "free_dofs": 613,
+        "elements": 712,
+        "assembly_seconds": 0.11625690000073519,
+        "snapshot_setup_and_probes_seconds": 0.04522300000098767,
+        "cpu_direct_factor_seconds": 0.00909719999981462,
+        "cpu_ams_seconds": [
+          0.007262700000865152,
+          0.006206999998539686,
+          0.006546299999172334,
+          0.006260299996938556,
+          0.009916899998643203,
+          0.009049299998878269
+        ],
+        "cpu_iterations": [
+          10,
+          10,
+          10,
+          10,
+          10,
+          10
+        ],
+        "cpu_warm_median_seconds": 0.006546299999172334,
+        "gpu": {
+          "memoryPlan": {
+            "inputBytes": 775112,
+            "workspaceEstimateBytes": 165584,
+            "estimatedAdditionalBytes": 270978264,
+            "headroomBytes": 268435456,
+            "reservedFreeBytes": 3435908300.8,
+            "availableBeforeBytes": 15990134492.0,
+            "budgetBytes": 12554226191.2,
+            "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+          },
+          "uploadSeconds": 0.0032165,
+          "info": {
+            "iterations": 8,
+            "true_relative_residual": 9.351120616601142e-10,
+            "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+            "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+            "workspace_sample_bytes": 8388608
+          },
+          "coldSeconds": 0.0157924,
+          "probeErrors": [
+            1.2848308787388325e-14,
+            1.2253868127075723e-14,
+            1.1775133040463462e-14
+          ],
+          "times": [
+            0.0150954,
+            0.0146915,
+            0.0150232,
+            0.015392,
+            0.0154558
+          ],
+          "inclusiveSeconds": 0.0176397,
+          "memoryBytes": 339736,
+          "zeroRhsTimes": [
+            0.0021318,
+            0.0025441,
+            0.0018866,
+            0.0020147,
+            0.0018905,
+            0.0019404
+          ],
+          "applyOnlyTimes": [
+            0.0023665,
+            0.002111,
+            0.0020295,
+            0.0019563,
+            0.0020727,
+            0.0020135
+          ],
+          "zeroRhsWarmMedianSeconds": 0.0019404,
+          "applyOnlyWarmMedianSeconds": 0.0020295,
+          "checks": {
+            "invalid_csr": 1,
+            "cpu_rhs": 1,
+            "nan_rhs": 1,
+            "nonconvergence": 1,
+            "invalid_rowptr": 1,
+            "invalid_smoother": 1,
+            "wrong_rhs_shape": 1,
+            "invalid_tolerance": 1,
+            "invalid_coarse_order": 1,
+            "invalid_coarse_rowptr": 1,
+            "zero_rhs": 1,
+            "clear_reload": 1,
+            "memory_budget_rejection": 1
+          },
+          "device": {
+            "name": "Quadro RTX 5000",
+            "compute_capability": "7.5",
+            "total_memory": 17179541504.0,
+            "driver": "582.78",
+            "toolkit": 12.8
+          },
+          "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+        },
+        "cpu_true_residual": 7.490906373460173e-11,
+        "gpu_true_residual": 9.351120675177873e-10,
+        "relative_difference_from_direct": 2.4799427132329555e-09,
+        "max_preconditioner_probe_relative_error": 1.2848308787388325e-14,
+        "relative_difference_from_cpu_ams": 2.562151679299151e-09,
+        "input_sha256": "c2d0fb4f09f8dddfb896968b05ec215b1fb7276611a3a50a4808a80225c61be9",
+        "exchange": {
+          "schema": "radia.ams-hdf5.v1",
+          "format": "HDF5",
+          "numeric_bytes": 827000,
+          "file_bytes": 864684,
+          "arrays": 68
+        },
+        "auxiliary_level_rows": [
+          [
+            214
+          ],
+          [
+            214
+          ],
+          [
+            214
+          ],
+          [
+            214
+          ]
+        ],
+        "coarse_kinds": [
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt"
+        ],
+        "gpu_warm_median_seconds": 0.0150954,
+        "speedup_resident_inputs": 0.43366191019597583,
+        "speedup_including_transfers": 0.371111753554331,
+        "accepted": true
+      },
+      {
+        "maxh": 0.12,
+        "cycle": 1,
+        "dofs": 5326,
+        "free_dofs": 3919,
+        "elements": 3937,
+        "assembly_seconds": 0.32790449999811244,
+        "snapshot_setup_and_probes_seconds": 0.07123000000137836,
+        "cpu_direct_factor_seconds": 0.05540399999881629,
+        "cpu_ams_seconds": [
+          0.019560600001568673,
+          0.021360999999160413,
+          0.017806899999413872,
+          0.019148999999742955,
+          0.01922249999915948,
+          0.01899280000361614
+        ],
+        "cpu_iterations": [
+          14,
+          14,
+          14,
+          14,
+          14,
+          14
+        ],
+        "cpu_warm_median_seconds": 0.019148999999742955,
+        "gpu": {
+          "memoryPlan": {
+            "inputBytes": 3739252,
+            "workspaceEstimateBytes": 793064,
+            "estimatedAdditionalBytes": 280701924,
+            "headroomBytes": 268435456,
+            "reservedFreeBytes": 3435908300.8,
+            "availableBeforeBytes": 15990134492.0,
+            "budgetBytes": 12554226191.2,
+            "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+          },
+          "uploadSeconds": 0.0068561,
+          "info": {
+            "iterations": 13,
+            "true_relative_residual": 2.196411166768317e-10,
+            "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+            "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+            "workspace_sample_bytes": 8388608
+          },
+          "coldSeconds": 0.0321628,
+          "probeErrors": [
+            3.0476973785693435e-14,
+            2.928774097791391e-14,
+            3.1071118152119205e-14
+          ],
+          "times": [
+            0.0321099,
+            0.0317918,
+            0.0323329,
+            0.0299465,
+            0.0289126
+          ],
+          "inclusiveSeconds": 0.0352481,
+          "memoryBytes": 6325592,
+          "zeroRhsTimes": [
+            0.0032354,
+            0.00258,
+            0.0025369,
+            0.0024978,
+            0.0025853,
+            0.0024727
+          ],
+          "applyOnlyTimes": [
+            0.0026354,
+            0.0027412,
+            0.0026737,
+            0.0026615,
+            0.0028031,
+            0.0027566
+          ],
+          "zeroRhsWarmMedianSeconds": 0.0025369,
+          "applyOnlyWarmMedianSeconds": 0.0027412,
+          "checks": {
+            "invalid_csr": 1,
+            "cpu_rhs": 1,
+            "nan_rhs": 1,
+            "nonconvergence": 1,
+            "invalid_rowptr": 1,
+            "invalid_smoother": 1,
+            "wrong_rhs_shape": 1,
+            "invalid_tolerance": 1,
+            "invalid_coarse_order": 1,
+            "invalid_coarse_rowptr": 1,
+            "zero_rhs": 1,
+            "clear_reload": 1,
+            "memory_budget_rejection": 1
+          },
+          "device": {
+            "name": "Quadro RTX 5000",
+            "compute_capability": "7.5",
+            "total_memory": 17179541504.0,
+            "driver": "582.78",
+            "toolkit": 12.8
+          },
+          "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+        },
+        "cpu_true_residual": 2.19641116094673e-10,
+        "gpu_true_residual": 2.1964112010071798e-10,
+        "relative_difference_from_direct": 7.919553269683085e-10,
+        "max_preconditioner_probe_relative_error": 3.1071118152119205e-14,
+        "relative_difference_from_cpu_ams": 8.139346484829625e-14,
+        "input_sha256": "8ef69e4f0ad0a6dad292377efdcfa87c67ecf15cee1fd9611c4295926839fa11",
+        "exchange": {
+          "schema": "radia.ams-hdf5.v1",
+          "format": "HDF5",
+          "numeric_bytes": 3994900,
+          "file_bytes": 4052712,
+          "arrays": 108
+        },
+        "auxiliary_level_rows": [
+          [
+            921,
+            222
+          ],
+          [
+            921,
+            298
+          ],
+          [
+            921,
+            295
+          ],
+          [
+            921,
+            303
+          ]
+        ],
+        "coarse_kinds": [
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt"
+        ],
+        "gpu_warm_median_seconds": 0.0317918,
+        "speedup_resident_inputs": 0.6023251278550744,
+        "speedup_including_transfers": 0.5432633248244007,
+        "accepted": true
+      },
+      {
+        "maxh": 0.12,
+        "cycle": 7,
+        "dofs": 5326,
+        "free_dofs": 3919,
+        "elements": 3937,
+        "assembly_seconds": 0.3120073999998567,
+        "snapshot_setup_and_probes_seconds": 0.07276650000130758,
+        "cpu_direct_factor_seconds": 0.06627680000019609,
+        "cpu_ams_seconds": [
+          0.018851400000130525,
+          0.018606800000270596,
+          0.018661900001461618,
+          0.01806170000054408,
+          0.022296700000879355,
+          0.01982309999948484
+        ],
+        "cpu_iterations": [
+          12,
+          12,
+          12,
+          12,
+          12,
+          12
+        ],
+        "cpu_warm_median_seconds": 0.018661900001461618,
+        "gpu": {
+          "memoryPlan": {
+            "inputBytes": 3739252,
+            "workspaceEstimateBytes": 793064,
+            "estimatedAdditionalBytes": 280701924,
+            "headroomBytes": 268435456,
+            "reservedFreeBytes": 3435908300.8,
+            "availableBeforeBytes": 15987910868.0,
+            "budgetBytes": 12552002567.2,
+            "method": "Conservative admission estimate; includes duplicate benchmark uploads; not allocator peak"
+          },
+          "uploadSeconds": 0.0057339,
+          "info": {
+            "iterations": 11,
+            "true_relative_residual": 1.6627946908474726e-10,
+            "coarse_execution": "GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse",
+            "setup_execution": "CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization",
+            "workspace_sample_bytes": 8388608
+          },
+          "coldSeconds": 0.0261186,
+          "probeErrors": [
+            3.089780326279149e-14,
+            3.311493038350272e-14,
+            3.437694292851833e-14
+          ],
+          "times": [
+            0.0250456,
+            0.0252367,
+            0.0255215,
+            0.0271224,
+            0.0279696
+          ],
+          "inclusiveSeconds": 0.0330115,
+          "memoryBytes": 5503892,
+          "zeroRhsTimes": [
+            0.0023144,
+            0.002338,
+            0.00229,
+            0.0023059,
+            0.0021749,
+            0.0022751
+          ],
+          "applyOnlyTimes": [
+            0.0029292,
+            0.0028011,
+            0.0034788,
+            0.0027658,
+            0.0027436,
+            0.0027311
+          ],
+          "zeroRhsWarmMedianSeconds": 0.00229,
+          "applyOnlyWarmMedianSeconds": 0.0027658,
+          "checks": {
+            "invalid_csr": 1,
+            "cpu_rhs": 1,
+            "nan_rhs": 1,
+            "nonconvergence": 1,
+            "invalid_rowptr": 1,
+            "invalid_smoother": 1,
+            "wrong_rhs_shape": 1,
+            "invalid_tolerance": 1,
+            "invalid_coarse_order": 1,
+            "invalid_coarse_rowptr": 1,
+            "zero_rhs": 1,
+            "clear_reload": 1,
+            "memory_budget_rejection": 1
+          },
+          "device": {
+            "name": "Quadro RTX 5000",
+            "compute_capability": "7.5",
+            "total_memory": 17179541504.0,
+            "driver": "582.78",
+            "toolkit": 12.8
+          },
+          "matlabVersion": "26.1.0.3346908 (R2026a) Update 5"
+        },
+        "cpu_true_residual": 1.6627946843962266e-10,
+        "gpu_true_residual": 1.6627947102918405e-10,
+        "relative_difference_from_direct": 4.754589941853919e-09,
+        "max_preconditioner_probe_relative_error": 3.437694292851833e-14,
+        "relative_difference_from_cpu_ams": 8.220037267246112e-14,
+        "input_sha256": "e7bcca1f3826e0b5e00aa538fda7a22f625b9ce69a41f29c4e2a478c1361eb1c",
+        "exchange": {
+          "schema": "radia.ams-hdf5.v1",
+          "format": "HDF5",
+          "numeric_bytes": 3994900,
+          "file_bytes": 4052712,
+          "arrays": 108
+        },
+        "auxiliary_level_rows": [
+          [
+            921,
+            222
+          ],
+          [
+            921,
+            298
+          ],
+          [
+            921,
+            295
+          ],
+          [
+            921,
+            303
+          ]
+        ],
+        "coarse_kinds": [
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt",
+          "ngsolve_sparse_ldlt"
+        ],
+        "gpu_warm_median_seconds": 0.0255215,
+        "speedup_resident_inputs": 0.7312226946481053,
+        "speedup_including_transfers": 0.5653151175033433,
+        "accepted": true
+      }
+    ],
+    "source_commit": "d57471889a87d6b83c5058e7383f4af2600214c3",
+    "source_dirty": false,
+    "matlab_start_seconds": 9.08650470000066,
+    "build": {
+      "schema": "radia.ams-cuda-build.v1",
+      "source_commit": "d57471889a87d6b83c5058e7383f4af2600214c3",
+      "source_dirty": false,
+      "matlab": "26.1.0.3346908 (R2026a) Update 5",
+      "sha256": {
+        "build-ams-cuda/_radia_ams_snapshot.pyd": "03840c9613cc005c3459044e941a97216155b294c6458972c304b2123a7f7213",
+        "build-ams-cuda/radia_cuda_ams.mexw64": "f9bd16bf673b3cbf1313a6302dbcd62f18a1898f138c6a923f56a089c662a32d"
+      },
+      "source_sha256": {
+        "packages/radia-gpu/native/ams_snapshot_module.cpp": "f7591e3a574424715871439cb5c20f45fd90cfb430458b886bc69f24529714a3",
+        "packages/radia-gpu/native/radia_cuda_ams.cu": "caa3b0745e582f7dec283a09ff0fe844c2bebea789e55d3ec15950f9691a6cc4",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp": "c2a00a117adc1872a318735e0671a5aa1c80bf223f96437af6eef779f5c8dd3b",
+        "src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp": "503c7600d4e4771b70e14f3da93b9f4af828d28301176c0261a6c8f5f1bf8af6",
+        "src/ext/sparsesolv/include/sparsesolv/ngsolve/ams_accelerator_snapshot.hpp": "48bc89044da24ae796e246087013b275fd4cbb2c3c9f9585a737caf2452c3bd7",
+        "packages/radia-gpu/tools/build_ams_cuda.py": "5974c17be91bd3d0efc6ce6f0edf824e8e9127cc5f81e6fbca17c71f1a75497a",
+        "Build.ps1": "51ab2c401fc3d8f5903f1bc9c779a51a5e1c7b7d998736f73f09f7314ab515f3"
+      },
+      "no_cpu_solver_fallback": true
+    },
+    "timing_classification": "numerical acceptance diagnostics; not idle performance acceptance"
+  },
+  "exchange": {
+    "schema": "radia.ams-hdf5-validation.v1",
+    "accepted": true,
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "a100_started": false,
+    "versions": {
+      "numpy": "2.5.4",
+      "h5py": "3.16.0",
+      "matlabengine": "26.1"
+    },
+    "cases": [
+      {
+        "accepted": true,
+        "large": false,
+        "schema": "radia.ams-hdf5.v1",
+        "format": "HDF5",
+        "numeric_bytes": 156,
+        "file_bytes": 5568,
+        "arrays": 4,
+        "write_seconds": 0.08807969999907073,
+        "matlab_read_and_check_seconds": 0.2220128000008117,
+        "sha256": "3be323dc9428222628eebc74ab0559eb38dc240fd60ac36823e4cb43f952d2af"
+      },
+      {
+        "accepted": true,
+        "large": true,
+        "schema": "radia.ams-hdf5.v1",
+        "format": "HDF5",
+        "numeric_bytes": 2147483812,
+        "file_bytes": 2147490184,
+        "arrays": 5,
+        "write_seconds": 7.955091200001334,
+        "matlab_read_and_check_seconds": 1.6665539000023273,
+        "sha256": "9cf97478dfd60ad863ce13fd94b6c35c71f3918803d139f64da3c72d145b41d4"
+      }
+    ],
+    "matlab": "26.1.0.3346908 (R2026a) Update 5"
+  },
+  "performance": {
+    "status": "pending",
+    "requested_compute_host_gpu_available": false,
+    "requested_cpu_host_busy": true,
+    "before_seconds": null,
+    "after_seconds": null,
+    "reason": "Requested compute host has no NVIDIA GPU and is running another solver job. GPU timing awaits a selected idle GPU host; acceptance timings are diagnostics."
+  }
+}

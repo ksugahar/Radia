@@ -15,7 +15,6 @@ import ngsolve as ng
 from netgen.csg import unit_cube
 from scipy.io import loadmat
 from scipy.sparse import coo_matrix
-import matlab.engine
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'packages/radia-gpu/src'))
 from radia_gpu.ams_exchange import write_exchange, read_exchange, file_sha256
 
@@ -37,18 +36,23 @@ def main(args):
     out=args.out.resolve();out.mkdir(parents=True,exist_ok=False)
     ng.SetNumThreads(args.threads)
     record={'schema':'radia.ams-cuda-validation.v1','host':socket.gethostname(),'python':sys.executable,
-        'platform':platform.platform(),'versions':{p:md.version(p) for p in ('ngsolve','numpy','scipy','matlabengine')},
+        'platform':platform.platform(),'versions':{p:md.version(p) for p in ('ngsolve','numpy','scipy','h5py')},
         'threads':args.threads,'precision':'FP64','cases':[],
         'scope':'experimental assembled-operator AMS; CPU-owned setup, GPU-owned application and coarse solves',
         'source_commit':subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip(),
         'source_dirty':bool(subprocess.check_output(['git','-C',str(root),'status','--porcelain'],text=True).strip()),
         'build':json.loads((binary/'build.json').read_text()),
-        'gpu_binary_sha256':file_sha256(gpu_dir/'radia_cuda_ams.mexw64'),'accepted':False}
+        'execution_mode':'cpu-only' if args.cpu_only else 'cpu-gpu-parity','accepted':False}
+    if not args.cpu_only:
+        record['gpu_binary_sha256']=file_sha256(gpu_dir/'radia_cuda_ams.mexw64')
     result_path=out/'result.json'
     eng=None
     try:
-        timer=time.perf_counter();eng=matlab.engine.start_matlab('-nodesktop -nosplash');record['matlab_start_seconds']=time.perf_counter()-timer
-        eng.addpath(str(Path(__file__).parent),nargout=0)
+        if not args.cpu_only:
+            import matlab.engine
+            record['versions']['matlabengine']=md.version('matlabengine')
+            timer=time.perf_counter();eng=matlab.engine.start_matlab('-nodesktop -nosplash');record['matlab_start_seconds']=time.perf_counter()-timer
+            eng.addpath(str(Path(__file__).parent),nargout=0)
         for h in args.maxh:
             for cycle in (1,7):
                 print(f'AMS maxh={h} cycle={cycle}',flush=True)
@@ -82,6 +86,20 @@ def main(args):
                 case=out/f'h{h}-cycle{cycle}';case.mkdir()
                 payload=dict(snapshot=snapshot,rhs=rhs,probes=probes,expected=expected)
                 src=case/'input.hdf5';exchange=write_exchange(src,payload)
+                if args.cpu_only:
+                    row,col,val=a.mat.COO();A=coo_matrix((np.asarray(val),(np.asarray(row),np.asarray(col))),shape=(fes.ndof,fes.ndof)).tocsr()
+                    actual=x.FV().NumPy().copy();ref=reference.FV().NumPy()
+                    residual=float(np.linalg.norm((A@actual-rhs)[free])/np.linalg.norm(rhs[free]))
+                    difference=float(np.linalg.norm((actual-ref)[free])/np.linalg.norm(ref[free]))
+                    entry={'maxh':h,'cycle':cycle,'dofs':fes.ndof,'free_dofs':int(free.sum()),
+                        'assembly_seconds':assembly,'snapshot_setup_and_probes_seconds':setup,
+                        'cpu_direct_factor_seconds':factor,'cpu_ams_seconds':cpu,'cpu_iterations':cpu_iterations,
+                        'cpu_warm_median_seconds':statistics.median(cpu[1:]),'cpu_true_residual':residual,
+                        'relative_difference_from_direct':difference,'exchange':exchange,'input_sha256':file_sha256(src),
+                        'accepted':residual<=1e-6 and difference<=1e-6}
+                    record['cases'].append(entry);result_path.write_text(json.dumps(jsonable(record),indent=2)+'\n')
+                    if not entry['accepted']:raise RuntimeError('CPU AMS reference check failed')
+                    continue
                 eng.benchmark(str(src),str(case/'gpu.mat'),str(gpu_dir),str(matlab_dir),nargout=0)
                 gpu=loadmat(case/'gpu.mat',simplify_cells=True)
                 actual=np.asarray(gpu['solution']).reshape(-1)
@@ -120,4 +138,5 @@ if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--out',type=Path,required=True)
     p.add_argument('--maxh',type=float,nargs='+',default=[0.5,0.35]);p.add_argument('--threads',type=int,default=4)
     p.add_argument('--gpu-dir',type=Path);p.add_argument('--matlab-dir',type=Path)
+    p.add_argument('--cpu-only',action='store_true',help='Explicit CPU timing route for a host without a GPU')
     main(p.parse_args())

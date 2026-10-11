@@ -103,12 +103,16 @@ jobs:
           & $installedPython -m pip install --no-deps $wheel.FullName
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python validation_test/radia_gpu/run_installed.py --installed-python $installedPython --wheel $wheel.FullName --out "$env:RUNNER_TEMP/radia-gpu-installed-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $gpuMatlab = & $installedPython -c "import radia_gpu; print(radia_gpu.matlab_path())"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python validation_test/ams_cuda/run.py --gpu-dir $gpuMatlab --matlab-dir $gpuMatlab --out "$env:RUNNER_TEMP/radia-ams-installed-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --maxh 0.5 --threads 2
           exit $LASTEXITCODE
       - name: Select public numerical evidence
         if: always()
         shell: pwsh
         run: |
-          python packages/radia-gpu/prepare_ci_evidence.py --poisson "$env:RUNNER_TEMP/radia-gpu-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --output "$env:RUNNER_TEMP/radia-gpu-public-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          python packages/radia-gpu/prepare_ci_evidence.py --poisson "$env:RUNNER_TEMP/radia-gpu-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --ams "$env:RUNNER_TEMP/radia-ams-installed-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --output "$env:RUNNER_TEMP/radia-gpu-public-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           exit $LASTEXITCODE
       - uses: actions/upload-artifact@v4
         if: always()
