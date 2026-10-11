@@ -112,6 +112,28 @@ individual samples; retain all samples and compare medians rather than a
 single fastest run. These are small acceptance measurements, not GPU scaling
 evidence.
 
+[Saved overhead experiment](rtx5000_fusion_20261011.json) records all samples
+and six numerical-acceptance cases. The paired measurements use identical
+5,326-DOF inputs with 30 warmed samples per build and cycle:
+
+| AMS cycle | Before warm median | After warm median | Reduction | Before/after with transfers |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 37.56 ms | 31.17 ms | 17.0% | 43.84 / 37.70 ms |
+| 7 | 33.45 ms | 27.49 ms | 17.8% | 39.73 / 34.11 ms |
+
+This is a **shared-host relative comparison**: unrelated CPU CI environment
+preparation/build was active, and the measurement process used BelowNormal
+priority. The JSON records the observed CI steps. It is not an isolated-host
+benchmark or evidence of beating CPU AMS; do not combine its samples with
+the earlier CPU table to claim a CPU speedup. Preliminary switching-check
+samples are excluded. A100 was neither started nor used.
+
+All six numerical cases pass: maximum preconditioner probe relative error
+is 3.45e-14, maximum FP64 true relative residual is 9.36e-10, and maximum
+relative solution difference from independent CPU sparsecholesky is 4.76e-9.
+All eleven gateway checks pass. The numerical-only run's timing samples
+are excluded because it overlapped CPU CI as well.
+
 Source of the sparse factor layout: NGSolve's public `SparseCholeskyTM`
 accessors in `sparsecholesky.hpp` for 6.2.2607. The GPU kernel evaluates the
 standard ordered unit-triangular/diagonal solves from those factors; it
