@@ -6,7 +6,7 @@ CPU electromagnetic execution belongs to `radia` (Python/pybind11/NGSolve).
 `radia-mcp` is the AI operation interface. Neither package is required merely
 to locate and use the installed GPU MATLAB files.
 
-This alpha contains FP64 CUDA CSR Jacobi-PCG, a Simulink block for the same
+Version 0.1.0 contains FP64 CUDA CSR Jacobi-PCG, a Simulink block for the same
 kernel, and the selected standalone LTspice workflow. It also contains experimental FP64 assembled-operator AMS and its versioned
 HDF5 exchange. This does not certify production AMS, ICCG, HDiv-MMM, or
 migration of the older CPU MEX application models.
@@ -15,7 +15,7 @@ There is no CPU solver fallback.
 ## Install
 
 ```powershell
-python -m pip install --pre radia-gpu
+python -m pip install radia-gpu
 radia-gpu-doctor --json
 radia-gpu-path
 ```
@@ -32,10 +32,12 @@ deployment/packaging acceptance is separate from numerical candidate validation.
 Optional
 `radia-gpu[coupling]` installs Radia for workflows that explicitly need it.
 The Windows x64 binary contains sm_75/sm_80 code and compute_80 PTX.
-Develop and build `radia-gpu` on 100. Final numerical acceptance compares against
-Python/NGSolve on SSH host `NGSolve` (A100). Formal GPU performance
-evaluation uses that A100 when it is online; record source/runtime versions,
-artifact hashes and machine-readable results. CPU-only mdx execution verifies
+Develop and build `radia-gpu` on 100. Required release acceptance compares each
+published CUDA solver against Python/NGSolve on 100 (Quadro RTX 5000), and
+requires an independent review of the exact source. Record source/runtime
+versions, artifact hashes and machine-readable results. A100 validation and
+scaling are optional additional evidence, not publication requirements.
+Formal timing remains subject to the idle-mdx host policy; 100 timings are diagnostic. CPU-only mdx execution verifies
 the reference calculation, not CUDA execution. RTX 5000 installation acceptance
 does not certify A100 scaling.
 Cubit mesh export is tested separately on 100 and 102. NGSolve validation
@@ -44,7 +46,7 @@ contract; it does not require Cubit on the NGSolve host.
 
 Deployment targets are 100 (build and RTX 5000 acceptance) and A100, excluding
 102. The 102 host tests `radia` and `radia-mcp` without installing `radia-gpu`.
-A100 is not always running: record its acceptance as pending while offline,
+A100 is optional and never blocks development or publication. It is not always running: record its acceptance as pending while offline,
 then validate the same artifact hash when available. Do not treat an offline
 target as a successful test.
 
@@ -96,7 +98,7 @@ The initial alpha requires independent review before a stable release.
 `radia-gpu-release.yml` publishes that successful main CI artifact without
 rebuilding, requiring its exact SHA-256 and installed acceptance provenance.
 Stable versions additionally require the exact-source independent review and
-same-wheel A100/CPU parity record described in
+same-wheel 100 RTX 5000/CPU parity record described in
 [`validation_test/radia_gpu/releases`](../../validation_test/radia_gpu/releases/README.md).
 Configure PyPI Trusted Publishing for project `radia-gpu`, GitHub owner
 `ksugahar`, repository `Radia`, workflow `radia-gpu-release.yml`, environment

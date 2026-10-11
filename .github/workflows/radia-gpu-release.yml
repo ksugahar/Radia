@@ -119,4 +119,4 @@ jobs:
           if [ -n "$TAG_SHA" ] && [ "$TAG_SHA" != "$SHA" ]; then exit 1; fi
           RELEASE_FLAGS=()
           if [ "$PRERELEASE" = true ]; then RELEASE_FLAGS+=(--prerelease); fi
-          gh release create "$TAG" dist/*.whl --repo "$GITHUB_REPOSITORY" --target "$SHA" "${RELEASE_FLAGS[@]}" --title "$TAG" --notes 'Independent CUDA MEX, Simulink and LTspice adapters. Published from the exact accepted main CI wheel. Stable versions additionally require independent review and same-wheel A100/CPU parity evidence in validation_test/radia_gpu/releases. External products are not bundled.'
+          gh release create "$TAG" dist/*.whl --repo "$GITHUB_REPOSITORY" --target "$SHA" "${RELEASE_FLAGS[@]}" --title "$TAG" --notes 'Independent CUDA MEX, Simulink and LTspice adapters. Published from the exact accepted main CI wheel. Stable versions additionally require independent review and same-wheel 100 RTX 5000/CPU parity evidence in validation_test/radia_gpu/releases. External products are not bundled.'
