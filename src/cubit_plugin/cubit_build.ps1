@@ -1,5 +1,6 @@
 param(
-    [switch]$Rebuild
+    [switch]$Rebuild,
+    [ValidateRange(1, 52)][int]$BuildJobs = 4
 )
 
 $ErrorActionPreference = "Stop"
@@ -83,7 +84,7 @@ try {
         "-DNETGEN_DIR=$($env:NETGEN_DIR)" `
         -DCOMPACT_NETGEN_OVERRIDES=NONE $src
     if ($LASTEXITCODE -ne 0) { throw "cmake configure build-pyd failed" }
-    & $cmake --build . --config Release --target cubit_mesh_curver -j
+    & $cmake --build . --config Release --target cubit_mesh_curver -j $BuildJobs
     if ($LASTEXITCODE -ne 0) { throw "cmake build cubit_mesh_curver failed" }
 } finally {
     Pop-Location
@@ -103,7 +104,7 @@ try {
         "-DCubit_DIR=$($env:CUBIT_DIR)" `
         "-DNETGEN_DIR=$($env:NETGEN_DIR)" $src
     if ($LASTEXITCODE -ne 0) { throw "cmake configure build-ccm failed" }
-    & $cmake --build . --config Release --target cubit_mesh_export_ccm -j
+    & $cmake --build . --config Release --target cubit_mesh_export_ccm -j $BuildJobs
     if ($LASTEXITCODE -ne 0) { throw "cmake build cubit_mesh_export_ccm failed" }
 } finally {
     Pop-Location

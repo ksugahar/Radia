@@ -16,6 +16,11 @@ endif()
 # Cubit SDK
 # --------------------------------------------------------
 find_package(Cubit REQUIRED CONFIG)
+if(NOT TARGET cubit_geom)
+  # Cubit 2026.8's CGMPlugin SDK example uses the split CGM core target.
+  find_package(CubitCGM REQUIRED CONFIG HINTS "${Cubit_DIR}")
+  add_library(cubit_geom ALIAS cubit_cgmcore)
+endif()
 
 # --------------------------------------------------------
 # Netgen (optional, for high-order curving order >= 2)
@@ -184,9 +189,8 @@ target_compile_definitions(cubit_mesh_export_ccm PRIVATE _DISABLE_CONSTEXPR_MUTE
 # DELAYLOAD cubit_geom so the .ccm can still load even if
 # cubit_geom.dll init is deferred until first geometry call
 if(MSVC)
-  set_target_properties(cubit_mesh_export_ccm PROPERTIES
-    LINK_FLAGS "/DELAYLOAD:cubit_geom.dll"
-  )
+  target_link_options(cubit_mesh_export_ccm PRIVATE
+    "/DELAYLOAD:$<TARGET_FILE_NAME:cubit_geom>")
   target_link_libraries(cubit_mesh_export_ccm delayimp)
 endif()
 

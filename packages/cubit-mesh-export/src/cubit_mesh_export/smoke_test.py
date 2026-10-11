@@ -38,8 +38,10 @@ import time
 from pathlib import Path
 
 
+from cubit_mesh_export._layout import console_executable, runtime_environment, plugin_directory
+
 def _find_cubit_exe():
-    """Locate coreform_cubit.exe (Windows) or cubit (POSIX)."""
+    """Locate Cubit's headless console (cubitx/.com on Windows)."""
     env_path = os.environ.get("CUBIT_EXE")
     if env_path and Path(env_path).is_file():
         return Path(env_path)
@@ -50,10 +52,11 @@ def _find_cubit_exe():
                 continue
             for c in sorted(
                     glob.glob(os.path.join(base, "Coreform Cubit *",
-                                           "bin", "coreform_cubit.exe")),
+                                           "bin")),
                     reverse=True):
-                if Path(c).is_file():
-                    return Path(c)
+                console = console_executable(Path(c))
+                if console is not None:
+                    return console
     else:
         for name in ("coreform_cubit", "cubit"):
             found = shutil_which_fallback(name)
@@ -337,8 +340,10 @@ def _validate_exported_vol(
 def _batch_command(cubit_exe: Path, driver: Path) -> list[str]:
     """Build a headless command without Cubit's implicit plugin-path error."""
     cmd = [str(cubit_exe), "-batch", "-nographics", "-nojournal"]
-    plugin_dir = cubit_exe.parent / "plugins"
-    if plugin_dir.is_dir():
+    plugin_dir = (plugin_directory(cubit_exe.parent)
+                  if cubit_exe.name.lower() == "cubitx.exe"
+                  else cubit_exe.parent / "plugins")
+    if plugin_dir.is_dir() and cubit_exe.name.lower() != "cubitx.exe":
         # Cubit 2025.12 otherwise treats its auto-discovered plugin path and
         # -commandplugindir as journal inputs, causing exit 2 after export.
         cmd.extend(["-commandplugindir", str(plugin_dir)])
@@ -365,7 +370,7 @@ def run_smoke_test(*, jou: str = "", order: int = 2,
 
     cubit_exe = _find_cubit_exe()
     if cubit_exe is None:
-        print("[FAIL] coreform_cubit.exe not found. "
+        print("[FAIL] Headless Cubit console not found. "
               "Install Cubit or set CUBIT_EXE.")
         return 1
     print(f"  Cubit:  {cubit_exe}")
@@ -410,6 +415,8 @@ def run_smoke_test(*, jou: str = "", order: int = 2,
     print(f"  Running: {' '.join(cmd)}")
     proc = subprocess.run(cmd, capture_output=True, text=True,
                            timeout=timeout, cwd=str(work),
+                           env=runtime_environment(cubit_exe.parent),
+                           stdin=subprocess.DEVNULL,
                            encoding="utf-8", errors="replace")
     dt = time.time() - t0
     print(f"  Cubit exit={proc.returncode} ({dt:.1f}s)")

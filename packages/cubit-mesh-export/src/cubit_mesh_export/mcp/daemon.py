@@ -1,15 +1,13 @@
 """
 daemon.py — JSON-RPC server exposing a persistent Cubit session.
 
-Runs under Cubit's bundled Python 3.10 (`C:/Program Files/Coreform Cubit
-2025.12/bin/python3/python.exe`), NOT the system Python. This is because
-the `cubit` Python binding is a compiled extension (`_cubit3.pyd`) tied
-to the Cubit ABI + Python 3.10.
+Runs under the selected Cubit's bundled Python (Python 3.12 in Cubit 2026.8).
+The compiled `cubit` binding must use that installation's Python ABI.
 
 Role in the lab stack:
     LLM client
         → mcp-server-cubit (Python 3.12)
-            → THIS DAEMON (Python 3.10, subprocess)
+            → THIS DAEMON (Cubit Python, subprocess)
                 → cubit.cmd(...) in batch/nographics mode
 
 Design follows the OCP CAD Viewer philosophy transposed to Cubit:
@@ -169,7 +167,7 @@ def main():
         if requested_mode != "batch":
             raise ValueError("Only headless CUBIT_DAEMON_MODE=batch is supported")
         cubit_mod = _init_cubit()
-        version = getattr(cubit_mod, "__version__", "unknown")
+        version = cubit_mod.get_version()
         _write_response({
             "ready": True,
             "mode": "batch",

@@ -2710,7 +2710,8 @@ def cubit_doctor() -> str:
 	try:
 		import cubit_mesh_export as _cme
 		bundled = Path(_cme.__file__).parent / "cubit_mesh_export.ccm"
-		deployed = (Path(bin_dir) / "plugins" / "cubit_mesh_export.ccm"
+		from cubit_mesh_export._layout import command_plugin_path
+		deployed = (command_plugin_path(Path(bin_dir))
 		            if bin_dir else None)
 		if not bundled.is_file():
 			checks["plugin"] = {"status": "skipped",
