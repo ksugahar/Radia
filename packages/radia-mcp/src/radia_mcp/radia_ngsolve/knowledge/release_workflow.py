@@ -160,6 +160,9 @@ Use the independent `packages/radia-gpu` build, installed-wheel acceptance
 and `radia-gpu-release.yml` publication workflow. Do not attach its artifacts
 or CI requirements to a CPU Radia release.
 
+The solver candidate lane never installs, uninstalls, repoints or reconnects
+radia-mcp. MCP and Cubit retain their independent release-dual lanes.
+
 CPU `ci-verify` resolves exact-SHA Actions workflow ownership before filtering
 independent distribution checks. Shared and CPU checks remain mandatory,
 including `radia-native-release-build`; missing ownership metadata fails closed.
