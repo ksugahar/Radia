@@ -30,18 +30,18 @@ workspace; timings include that overhead. Reusing the input hierarchy on
 the GPU therefore does not mean reusing all gateway workspace. This is a
 correctness-first prototype and can be slower than CPU AMS.
 
-Build on 100/T7920 in an isolated checkout with the configured MATLAB
+Build on the designated Windows build host in an isolated checkout with the configured MATLAB
 Engine Python environment, MATLAB R2026a and its compatible VS2022 toolchain:
 
 ```powershell
 ./Build.ps1 -AmsCudaOnly -RequireNativeProvenance
-python validation_test/ams_cuda/run.py --out C:/temp/ams-cuda-owned-run --maxh 0.5 0.2 0.12
+python validation_test/ams_cuda/run.py --out "$env:TEMP/ams-cuda-owned-run" --maxh 0.5 0.2 0.12
 ```
 
 The CUDA binary includes sm75, sm80 and compute80 PTX. A different OS needs
 its own MEX build. This initial build script targets the confirmed Windows
-100 environment. A100 performance is unverified until separately measured
-on an idle mdx GPU; no A100 result is inferred from RTX measurements.
+build environment. A100 performance is unverified until separately measured
+on an idle compute GPU; no A100 result is inferred from RTX measurements.
 
 Acceptance compares random preconditioner applications with shared C++ AMS,
 and the resulting solution with an independent NGSolve `sparsecholesky`

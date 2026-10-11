@@ -12,7 +12,7 @@
   "source_commit": "30d2d7fab0f4aa1fbb43a90bd6cc2c8142609ec3",
   "source_dirty": false,
   "accepted": true,
-  "host_role": "100 small acceptance; A100 execution unverified",
+  "host_role": "Windows small acceptance; A100 execution unverified",
   "build": {
     "source_commit": "30d2d7fab0f4aa1fbb43a90bd6cc2c8142609ec3",
     "source_dirty": false,
