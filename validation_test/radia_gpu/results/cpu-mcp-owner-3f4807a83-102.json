@@ -1,0 +1,31 @@
+{
+  "schema": "radia.cpu-mcp-owner-acceptance/v1",
+  "passed": true,
+  "source_commit": "3f4807a83d202745b45e0f9190b27c9ccdf7c01e",
+  "host": "102",
+  "cpu": {
+    "wheel_sha256": "baa073b9e8928f1a167ecd0d0008dfdf52ecd00617eb96fa3d4181f743a4e0a8",
+    "version": "5.3.0",
+    "ngsolve": "6.2.2607",
+    "mkl": "2026.1.0",
+    "gpu_installed": false,
+    "matlab_payload_absent": true,
+    "analytic_magnet_relative_error": 7.500205772633568e-16,
+    "B_tesla": [
+      2.5143904487404306e-17,
+      1.1429047494274685e-17,
+      0.06661383297331173
+    ],
+    "analytic_Bz_tesla": 0.06661383297331169,
+    "environment": "isolated venv with existing system-site dependencies; candidate package and native module from this venv",
+    "native_sha256": "279be39eda7bfc16e7f0b1a88373162fe004ef9527a7a43c08332bf54cae8cf5"
+  },
+  "mcp": {
+    "wheel_sha256": "861520e05a7f8b58c6b4eb6e197e90291f42eced60a2c5826b9e3187fad9519b",
+    "radia_gpu_installed": false,
+    "missing_backend_error_checked": true,
+    "installed_wheel_stdio_contract": true,
+    "tool_count": 33
+  },
+  "scope": "Installed native CPU field against analytical rectangular magnet axis formula; optional GPU boundary and actual MCP stdio contract. Not a complete numerical release gate."
+}
