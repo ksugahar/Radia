@@ -84,6 +84,34 @@ and small triangular dependencies still need measurement and optimization
 before claiming fast GPU AMS. A100 must be tested directly on the correct
 coordinated host.
 
+## Residual and validation overhead experiment
+
+The next implementation combines CSR products with residual output, combines
+the smoother's residual subtraction and update, and starts a zero-initialized
+Jacobi sweep directly with `b/l1`. Smoother updates still read a completed
+matrix product: updating `x` inside the CSR kernel would introduce row races.
+Independent input checks share a device error flag. Coarse row-pointer bounds
+are checked before factor validation dereferences them, and all pending
+checks complete before any solve. The hierarchy, factors, FP64 precision,
+iteration rules and acceptance thresholds are unchanged.
+
+`compare.py` compares two hash-verified MEX builds on the **same saved MAT
+inputs**, with before/after/after/before order repeated three times. Each
+block discards its first call and measures five warmed solves, giving 30
+samples per build and case. It also records transfer-inclusive samples,
+CPU-preconditioner probe errors, true residuals and gateway checks in JSON.
+Run it only when competing CI and numerical work have finished:
+
+```powershell
+python validation_test/ams_cuda/compare.py --before $beforeBuild --after $afterBuild --inputs $inputCycle1 $inputCycle7 --out $comparisonOutput
+```
+
+Run `run.py` separately for independent direct-solution checks and CPU timings.
+MEX load/clear between blocks and MATLAB's cached GPU allocator can affect
+individual samples; retain all samples and compare medians rather than a
+single fastest run. These are small acceptance measurements, not GPU scaling
+evidence.
+
 Source of the sparse factor layout: NGSolve's public `SparseCholeskyTM`
 accessors in `sparsecholesky.hpp` for 6.2.2607. The GPU kernel evaluates the
 standard ordered unit-triangular/diagonal solves from those factors; it
