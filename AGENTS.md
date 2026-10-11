@@ -14,7 +14,7 @@ Current scope:
 
 Do not add unrelated features during this maintenance program.
 ## Repository Boundaries
-The monorepo independently releases `radia`, `cubit-mesh-export`, `radia-mcp`, `radia-optuna` and `eqnedit64`.
+The monorepo independently releases `radia`, `radia-gpu`, `cubit-mesh-export`, `radia-mcp`, `radia-optuna` and `eqnedit64`.
 Scope commits and CI to the owner. Shared files trigger multiple lanes only for real shared ABI, build or integration changes.
 
 - `src/`, `matlab/`, `packages/`: production implementation.
@@ -100,7 +100,7 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 ### CPU / GPU Execution Policy (2026-10-11)
 
 - CPU execution: Python (pybind11) with NGSolve; CPU MEX is unsupported.
-- GPU execution: MATLAB mexcuda with NVIDIA GPU, for GPU performance. Simulink is optional.
+- GPU execution: `radia-gpu`, MATLAB mexcuda with NVIDIA GPU. Simulink and LTspice adapters ship here; external products do not. Simulink is optional.
 - Select Visual Studio and CUDA versions from the target MATLAB release's mexcuda support. After upgrades, verify build/GPU smoke; no unsupported-compiler override.
 - No implicit CPU/Python solver fallback. Report host setup and CPU solving separately.
 - 100: CUDA builds/RTX 5000 acceptance; mdx/A100: isolated scale/timing.

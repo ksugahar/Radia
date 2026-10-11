@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=77", "wheel>=0.45", "tomli>=2; python_version < '3.11'"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "radia-gpu"
+version = "0.1.0a1"
+description = "Radia CUDA MEX kernels with Simulink blocks and LTspice integration"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "LicenseRef-Radia"
+authors = [{name = "Radia Development Team"}]
+dependencies = []
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8", "build>=1.2"]
+
+[project.urls]
+Repository = "https://github.com/ksugahar/Radia"
+Documentation = "https://github.com/ksugahar/Radia/tree/main/packages/radia-gpu"
+
+[project.scripts]
+radia-gpu-path = "radia_gpu.cli:path_main"
+radia-gpu-doctor = "radia_gpu.cli:doctor_main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+radia_gpu = ["manifest.json"]

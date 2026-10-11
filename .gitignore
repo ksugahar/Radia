@@ -38,6 +38,7 @@ dist/
 radia-*/
 !packages/radia-mcp/
 !packages/radia-optuna/
+!packages/radia-gpu/
 *.egg-info/
 .eggs/
 
