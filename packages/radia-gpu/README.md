@@ -54,6 +54,16 @@ It stages canonical MATLAB sources rather than maintaining a package-local fork.
 Use only the resulting verified wheel for deployment and PyPI publication.
 The initial alpha requires independent review before a stable release.
 
+`radia-gpu.yml` builds and accepts the installed wheel on the build host.
+`radia-gpu-release.yml` publishes that successful main CI artifact without
+rebuilding, requiring its exact SHA-256 and installed acceptance provenance.
+The initial publisher rejects stable versions pending independent review.
+Configure PyPI Trusted Publishing for project `radia-gpu`, GitHub owner
+`ksugahar`, repository `Radia`, workflow `radia-gpu-release.yml`, environment
+`pypi`. A new project needs a pending publisher; checking availability does
+not reserve its name. Publish only the Windows wheel, not a source archive
+that would require an end user's proprietary build toolchain.
+
 GPU AMS is developed separately. HDiv-MMM is a subsequent evaluation target,
 after solver/preconditioner parity: preserve NGSolve's FE ownership and validate
 the electromagnetic formulation, nonlinear convergence and optimization outcome
