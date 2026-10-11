@@ -99,27 +99,12 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 
 ### CPU / GPU Execution Policy (2026-10-11)
 
-- Radia solver CPU execution is supported through Python/NGSolve only.
-  CPU MEX is no longer a supported execution or distribution target.
-- Radia solver MATLAB execution supports CUDA MEX only and requires a
-  compatible NVIDIA GPU. MATLAB is selected primarily for high-performance
-  GPU execution; Simulink is an optional consumer of the same standalone
-  numerical kernels, not the reason for choosing MATLAB.
-- Never silently fall back from CUDA MEX to CPU numerical execution or Python.
-  Unsupported GPU operations, devices, toolchains and memory requirements
-  fail explicitly. Necessary host initialization and mesh preparation remain
-  distinct from GPU numerical execution; report any CPU solver component.
-- NGSolve owns FE spaces, transformations, quadrature and assembly. Reuse its
-  supported GPU operators where available; classify an assembled-operator
-  CUDA bridge separately from an upstream NGSolve matrix-free GPU backend.
-- Build isolated CUDA MEX candidates on 100; validate on its Quadro RTX 5000.
-  Use mdx/A100 for scheduled large-scale precision, memory and timing studies.
-  Do not replace an active runtime or run competing timing jobs.
-- Validate CUDA results against independent Python/NGSolve CPU execution on
-  identical inputs. Record precision, true residual, cold/warm timings,
-  transfer/setup costs, memory, versions and artifact/source hashes in JSON.
-  HDiv-MMM, model reduction and AMS GPU support require their own evidence;
-  a passing Poisson bridge does not establish their support.
+- CPU solvers: Python/NGSolve only; CPU MEX is unsupported.
+- MATLAB solvers: CUDA MEX with NVIDIA GPU, for GPU performance. Simulink is optional.
+- No implicit CPU/Python solver fallback. Distinguish host setup from GPU solving; report any CPU solver component.
+- Preserve NGSolve FE ownership. Reuse upstream GPU operators; label assembled-CSR bridges separately from matrix-free GPU backends.
+- 100 builds/RTX 5000 acceptance; mdx/A100 scheduled scale/timing. Isolate active runtimes and timing jobs.
+- Verify against Python CPU on identical inputs. Save precision, true residual, cold/warm/setup/transfer times, memory, versions and hashes in JSON. Validate ICCG, AMS, HDiv-MMM and model reduction separately from Poisson.
 
 ### MATLAB And Simulink
 
