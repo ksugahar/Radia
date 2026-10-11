@@ -152,7 +152,7 @@ def record_manifest(repo_root: Path, package_dir: Path) -> dict:
         build_dir = "build-pyd" if name.endswith(".pyd") else "build-ccm"
         cache_path = repo_root / "src/cubit_plugin" / build_dir / "CMakeCache.txt"
         cache = cache_path.read_text(encoding="utf-8")
-        cubit_dir = re.search(r"^Cubit_DIR:PATH=(.+)$", cache, re.MULTILINE)
+        cubit_dir = re.search(r"^Cubit_DIR:(?:PATH|UNINITIALIZED)=(.+)$", cache, re.MULTILINE)
         version_match = re.search(
             r"Coreform Cubit ([0-9]+(?:\.[0-9]+)+)(?:[/\\]|$)",
             cubit_dir[1].strip() if cubit_dir else "",

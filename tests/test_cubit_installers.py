@@ -550,6 +550,8 @@ def test_native_manifest_rejects_drift_in_either_required_payload(
     for build in ("build-pyd", "build-ccm"):
         config = tmp_path / "src/cubit_plugin" / build / "CMakeFiles/4.4.3/CMakeCXXCompiler.cmake"
         config.parent.mkdir(parents=True)
+        (tmp_path / "src/cubit_plugin" / build / "CMakeCache.txt").write_text(
+            "Cubit_DIR:PATH=C:/Program Files/Coreform Cubit 2026.8/cmake\n", encoding="utf-8")
         config.write_text('set(CMAKE_CXX_COMPILER_ID "MSVC")\n'
                           'set(CMAKE_CXX_COMPILER_VERSION "19.51.36257.0")\n', encoding="utf-8")
     manifest = provenance.record_manifest(tmp_path, package_dir)
