@@ -40,6 +40,8 @@ def _find_cubit_exe() -> Path | None:
         program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
         candidates = sorted(
             glob.glob(str(Path(program_files) / "Coreform Cubit *" / "bin"
+                          / "clarox.exe")) +
+            glob.glob(str(Path(program_files) / "Coreform Cubit *" / "bin"
                           / "coreform_cubit.exe")),
             reverse=True,
         )
@@ -57,8 +59,7 @@ def _cubit_pids() -> set[int]:
     if sys.platform != "win32":
         return set()
     result = subprocess.run(
-        ["tasklist", "/FI", "IMAGENAME eq coreform_cubit.exe", "/FO", "CSV",
-         "/NH"],
+        ["tasklist", "/FO", "CSV", "/NH"],
         capture_output=True,
         check=False,
         text=True,
@@ -67,7 +68,7 @@ def _cubit_pids() -> set[int]:
     )
     pids = set()
     for row in csv.reader(result.stdout.splitlines()):
-        if len(row) < 2 or row[0].lower() != "coreform_cubit.exe":
+        if len(row) < 2 or row[0].lower() not in {"coreform_cubit.exe", "clarox.exe", "cubitx.exe"}:
             continue
         try:
             pids.add(int(row[1]))
@@ -173,15 +174,18 @@ def _run_one(cubit_exe: Path, work: Path, timeout: float) -> dict:
             ],
         }
 
-    env = os.environ.copy()
+    from cubit_mesh_export._layout import runtime_environment
+    env = runtime_environment(cubit_exe.parent)
     env["CUBIT_MESH_EXPORT_TOOLBAR_PROBE_RESULT"] = str(result_path)
     env["CUBIT_MESH_EXPORT_TOOLBAR_PROBE_TIMEOUT"] = str(max(5.0, timeout - 10.0))
-    # Cubit 2025.12 can append INI plugin paths after journal arguments and
-    # misread them as journals. Declare the same installed plugin path first.
+    modern = cubit_exe.name.lower() == "clarox.exe"
+    command = [str(cubit_exe), "-nojournal"]
+    if not modern:
+        command += ["-commandplugindir", str(cubit_exe.parent / "plugins")]
+    command.append(str(bootstrap_path))
     with (work / "launcher.log").open("wb") as output:
         launcher = subprocess.Popen(
-            [str(cubit_exe), "-nojournal", "-commandplugindir",
-             str(cubit_exe.parent / "plugins"), str(bootstrap_path)],
+            command,
             cwd=str(work),
             env=env,
             stdin=subprocess.PIPE,

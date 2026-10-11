@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.2.0 - 2026-10-11
 
 - Officially support Coreform Cubit 2026.8; reject older installer targets and native SDK/runtime mismatches.
 - Validate wheel distribution and headless MCP on the licensed validation host. Timing hosts remain Cubit-free.

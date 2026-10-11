@@ -27,6 +27,7 @@ from ngsolve import (
     Integrate, LinearForm, Mesh, TaskManager, cos, dx, grad, sin, sqrt, x, y, z,
 )
 from cubit_mesh_export.check import check_consistency
+from cubit_mesh_export._layout import runtime_environment
 
 ORDERS = (1, 2, 3, 4, 5)
 FIELD_ORDERS = (1, 2, 3, 4)
@@ -51,11 +52,14 @@ def run_cubit(exe: Path, plugin_dir: Path, run_dir: Path, refit: bool, timeout: 
     run_dir.mkdir(parents=True, exist_ok=True)
     jou = run_dir / "driver.jou"
     jou.write_text(journal(run_dir), encoding="utf-8")
-    env = dict(os.environ, CUBIT_MESH_EXPORT_GEOMETRIC_REFIT="1" if refit else "0")
+    if not plugin_dir.is_absolute():
+        raise ValueError("--plugin-dir must be absolute")
+    env = runtime_environment(exe.parent)
+    env.update(CUBIT_MESH_EXPORT_GEOMETRIC_REFIT="1" if refit else "0",
+               CUBIT_PLUGIN_DIR=str(plugin_dir))
     started = time.monotonic()
     proc = subprocess.run(
-        [str(exe), "-batch", "-nographics", "-nojournal", "-noinitfile",
-         "-commandplugindir", str(plugin_dir), str(jou)],
+        [str(exe), "-batch", "-nographics", "-nojournal", "-noinitfile", str(jou)],
         cwd=run_dir, capture_output=True, text=True, encoding="utf-8",
         errors="replace", timeout=timeout, env=env)
     elapsed = time.monotonic() - started
@@ -120,7 +124,7 @@ def geometry(mesh: Mesh, order: int) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cubit-exe", type=Path,
-                        default=Path(r"C:\Program Files\Coreform Cubit 2025.12\bin\coreform_cubit.exe"))
+                        default=Path(r"C:\Program Files\Coreform Cubit 2026.8\bin\cubitx.exe"))
     parser.add_argument("--plugin-dir", type=Path, required=True,
                         help="directory holding the cubit_mesh_export.ccm under test")
     parser.add_argument("--output", type=Path, default=Path(r"C:\temp\cubit-geometric-refit-benchmark"))
@@ -182,7 +186,7 @@ def main() -> None:
         "cubit_seconds": timing,
         "rows": rows,
     }
-    target = Path(__file__).with_name("geometric_refit_benchmark_results.json")
+    target = args.output / "geometric_refit_benchmark_results.json"
     target.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(f"Wrote {target}")
 
