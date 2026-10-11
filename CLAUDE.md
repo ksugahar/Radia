@@ -100,7 +100,6 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
   Use `bibliography_make_bbl`, regenerate after changes, and check citations.
 
 ### CPU / GPU Execution Policy (2026-10-11)
-
 - CPU: Python (pybind11)/NGSolve; CPU MEX is unsupported.
 - GPU: `radia-gpu` uses MATLAB mexcuda for performance; ships optional Simulink/LTspice adapters, no external products.
 - Do not use NGSolve TaskManager for mexcuda compilation or GPU execution. CUDA kernels and cuBLAS own GPU parallelism; TaskManager is limited to CPU NGSolve work.
