@@ -10,6 +10,9 @@ if ~isfolder(output), mkdir(output); end
 addpath(payload);
 resolved = string(which('radia.gpu.csrPCG'));
 assert(startsWith(resolved,payload+filesep),'Checkout shadowed installed GPU code.');
+for entryPoint = ["radia.simulink.buildCudaPCGBlock","radia_gpu_pcg_sfun","radia.ltspice.run"]
+    assert(startsWith(string(which(entryPoint)),payload+filesep),'Installed adapter resolved outside the wheel.');
+end
 radia.gpu.requireRuntime();
 system = struct('row_pointers',int32([0;2;5;7]), ...
     'columns',int32([0;1;0;1;2;1;2]), ...

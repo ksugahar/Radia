@@ -30,6 +30,8 @@ if args.wheel:
 args.out.resolve().mkdir(parents=True, exist_ok=False)
 engine = matlab.engine.start_matlab('-nodesktop -nosplash')
 try:
+    # This session is owned by acceptance: exclude startup-added checkout paths.
+    engine.restoredefaultpath(nargout=0)
     engine.addpath(str(Path(__file__).resolve().parent), nargout=0)
     engine.check_installed(report['matlab_path'], str(args.out.resolve()),
                            not args.gpu_simulink_only, nargout=0)
