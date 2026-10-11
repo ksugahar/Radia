@@ -261,9 +261,7 @@ def verify_artifact(api, run, commit, wheel_dir, context_dir, expected_hash):
     require(not missing,
             f"Acceptance evidence missing for {', '.join(missing)}; release-quad "
             f"requires all of {', '.join(RELEASE_ACCEPTANCE_HOSTS)} at {prefix}")
-    if tuple(int(part) for part in version.split(".")) >= (5, 1, 0):
-        proof = strict_json(api.file(f"{prefix}/application_acceptance.json", commit))
-        verify_application_acceptance(proof, identity)
+    # MATLAB/Simulink acceptance belongs to the independent radia-gpu publisher.
     return dict(identity, acceptance_commit=commit,
                 hosts=list(RELEASE_ACCEPTANCE_HOSTS), passed=True)
 

@@ -309,3 +309,26 @@ def test_application_acceptance_requires_four_exact_mex_results():
         else: del proof["targets"]["mdx1"]["verified_at_utc"]
         with pytest.raises(ValueError):
             gate.verify_application_acceptance(proof, identity)
+
+
+def test_cpu_promotion_does_not_request_matlab_acceptance(monkeypatch, tmp_path):
+    wheel_dir = tmp_path / "wheel"
+    wheel_dir.mkdir()
+    wheel = wheel_dir / "radia-5.3.1-cp312-cp312-win_amd64.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr("radia/__init__.py", '__version__ = "5.3.1"\n')
+        archive.writestr("radia/_radia_pybind.pyd", b"native")
+        archive.writestr("radia/radia_motor_rom.dll", b"motor")
+    (tmp_path / "ci-release-context.json").write_text("{}")
+    monkeypatch.setattr(gate, "verify_context", lambda *args: None)
+    monkeypatch.setattr(gate, "verify_host", lambda *args: None)
+
+    class CPUAPI:
+        def file(self, path, commit):
+            assert path.rsplit("/", 1)[-1] in {"acceptance.json", "full6.json", "focused.xml"}
+            return b"{}"
+
+    report = gate.verify_artifact(CPUAPI(), {"head_sha": "a" * 40, "id": 9},
+                                 "b" * 40, wheel_dir, tmp_path,
+                                 hashlib.sha256(wheel.read_bytes()).hexdigest())
+    assert report["passed"]

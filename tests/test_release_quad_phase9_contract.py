@@ -21,7 +21,7 @@ def probe():
         "ABI netgen-mesher": "6.2.2607",
         "NATIVE radia": "abcdef012345",
     }
-    for name in ("simulink/application.py", "panels/calc_inductance.py",
+    for name in ("panels/calc_inductance.py",
                  "panels/calc_fem_kelvin.py", "panels/calc_fem_coilmesh.py"):
         values["SHA radia/" + name] = "0123456789ab"
     return "\n".join(f"{key} = {value}" for key, value in values.items())

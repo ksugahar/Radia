@@ -93,37 +93,6 @@ def test_lab_acceptance_from_another_controller_reaches_lab(tmp_path, monkeypatc
     assert calls
 
 
-@pytest.mark.parametrize('schema,marker', [
-    ('radia.simulink.library-release-manifest.v4', 'RADIA_SIMULINK_RELEASE_OK'),
-    ('radia.simulink.ih-release-manifest.v3', 'RADIA_IH_RELEASE_OK'),
-])
-def test_candidate_uses_package_specific_success_marker(tmp_path, monkeypatch, schema, marker):
-    package = tmp_path / 'candidate.zip'
-    package.write_bytes(b'candidate identity')
-    monkeypatch.setattr(module, '_simulink_manifest', lambda _: {
-        'schema': schema, 'version': '5.0.0', 'commit': 'a' * 40,
-        'files': [{'path': 'packages/radia-gpu/matlab/radia_mex.mexw64', 'sha256': 'b' * 64}]})
-    monkeypatch.setattr(module, 'SIMULINK_GATE_ROOT', tmp_path)
-    visited = []
-
-    def verify_target(key, path, digest, success_marker, engine_session=None):
-        assert path == package
-        assert digest == module._sha256_file(package)
-        assert success_marker == marker
-        assert engine_session == ('shared_validation' if key == '100' else None)
-        visited.append(key)
-        return True, marker
-
-    monkeypatch.setattr(module, '_run_simulink_candidate_target', verify_target)
-    args = SimpleNamespace(package=str(package), target='all',
-                           engine_session=['100=shared_validation'])
-    assert module.cmd_simulink_candidate(args) == 0
-    assert visited == list(module.SIMULINK_TARGETS)
-    recorded = json.loads(module._simulink_state_path(module._sha256_file(package)).read_text())
-    assert all(target['status'] == 'passed' for target in recorded['targets'].values())
-    assert recorded['mex_sha256'] == 'b' * 64
-    assert all(target['mex_sha256'] == recorded['mex_sha256']
-               for target in recorded['targets'].values())
 
 
 def test_remote_candidate_runs_the_selected_interpreter(tmp_path, monkeypatch):
@@ -144,57 +113,8 @@ def test_remote_candidate_runs_the_selected_interpreter(tmp_path, monkeypatch):
     assert scripts[1].startswith("& 'C:\\temp\\candidate''s venv\\Scripts\\python.exe' ")
 
 
-def test_candidate_interpreters_are_recorded_per_target(tmp_path, monkeypatch):
-    package = tmp_path / 'candidate.zip'
-    package.write_bytes(b'candidate identity')
-    monkeypatch.setattr(module, '_simulink_manifest', lambda _: {
-        'schema': 'radia.simulink.library-release-manifest.v4', 'version': '5.2.1',
-        'commit': 'a' * 40,
-        'files': [{'path': 'packages/radia-gpu/matlab/radia_mex.mexw64', 'sha256': 'b' * 64}]})
-    monkeypatch.setattr(module, 'SIMULINK_GATE_ROOT', tmp_path)
-    used = {}
-
-    def verify_target(key, path, digest, marker, engine_session=None, python_executable=None):
-        used[key] = python_executable
-        return True, marker
-
-    monkeypatch.setattr(module, '_run_simulink_candidate_target', verify_target)
-    args = SimpleNamespace(package=str(package), target='mdx1,mdx2', engine_session=[],
-                           python=[r'mdx1=C:\temp\venv\Scripts\python.exe'])
-    assert module.cmd_simulink_candidate(args) == 0
-    assert used == {'mdx1': r'C:\temp\venv\Scripts\python.exe', 'mdx2': None}
-    recorded = json.loads(module._simulink_state_path(module._sha256_file(package)).read_text())
-    assert recorded['targets']['mdx1']['python_executable'] == r'C:\temp\venv\Scripts\python.exe'
-    assert recorded['targets']['mdx2']['python_executable'] == 'python'
-    for bad in (['lab=C:\\py.exe'], ['mdx1='], ['mdx1=a', 'mdx1=b'], ['mdx1']):
-        args.python = bad
-        assert module.cmd_simulink_candidate(args) == 2
 
 
-def test_recorded_candidate_state_passes_the_promotion_gate(tmp_path, monkeypatch):
-    # The gate consumes this exact state as application_acceptance.json; a
-    # hand-written fixture once hid a label mismatch that blocked promotion.
-    gate_spec = importlib.util.spec_from_file_location(
-        'promotion_gate_roundtrip', TOOL.with_name('verify_radia_promotion.py'))
-    gate = importlib.util.module_from_spec(gate_spec)
-    gate_spec.loader.exec_module(gate)
-    package = tmp_path / 'candidate.zip'
-    package.write_bytes(b'candidate identity')
-    monkeypatch.setattr(module, '_simulink_manifest', lambda _: {
-        'schema': 'radia.simulink.library-release-manifest.v4',
-        'version': '5.2.1', 'commit': 'a' * 40,
-        'files': [{'path': 'packages/radia-gpu/matlab/radia_mex.mexw64', 'sha256': 'b' * 64}]})
-    monkeypatch.setattr(module, 'SIMULINK_GATE_ROOT', tmp_path)
-    monkeypatch.setattr(module, '_run_simulink_candidate_target',
-                        lambda *args: (True, 'RADIA_SIMULINK_RELEASE_OK'))
-    args = SimpleNamespace(package=str(package), target='all', engine_session=[])
-    assert module.cmd_simulink_candidate(args) == 0
-    recorded = json.loads(module._simulink_state_path(module._sha256_file(package)).read_text())
-    identity = {'source_commit': 'a' * 40, 'version': '5.2.1'}
-    gate.verify_application_acceptance(recorded, identity)
-    recorded['targets']['lab']['label'] = 'lab'
-    with pytest.raises(ValueError, match='lab'):
-        gate.verify_application_acceptance(recorded, identity)
 
 
 @pytest.mark.parametrize('matched', [True, False])
@@ -292,3 +212,7 @@ for index in range(10):
                 worker.wait()
     assert json.loads(path.read_text())['targets'] == {
         'mdx1': {'iteration': 9}, 'mdx2': {'iteration': 9}}
+
+
+def test_cpu_mex_release_route_is_retired():
+    assert module.cmd_simulink_candidate(SimpleNamespace()) == 4
