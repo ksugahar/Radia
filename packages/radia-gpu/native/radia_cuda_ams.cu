@@ -12,6 +12,7 @@
 #include <string>
 #include <stdexcept>
 #include <vector>
+void RadiaAMSSetup(int,mxArray**,int,const mxArray**);
 namespace {
 constexpr int T=256;
 void ck(cudaError_t s) { if(s!=cudaSuccess) throw std::runtime_error(cudaGetErrorString(s)); }
@@ -269,6 +270,10 @@ struct Blas {
 };
 struct Output {mxGPUArray* a;explicit Output(int n){mwSize s=n;a=mxGPUCreateGPUArray(1,&s,mxDOUBLE_CLASS,mxREAL,MX_GPU_INITIALIZE_VALUES);}~Output(){mxGPUDestroyGPUArray(a);}double* data(){return static_cast<double*>(mxGPUGetData(a));}};
 void run(int nlhs,mxArray** out,int nrhs,const mxArray** args){
+    if(nrhs>0 && mxIsChar(args[0])) {
+        if(word(args[0])!="setup")throw std::runtime_error("Unknown AMS command");
+        RadiaAMSSetup(nlhs,out,nrhs,args);return;
+    }
     if(nrhs!=5||nlhs!=2)throw std::runtime_error("[x,info]=radia_cuda_ams(snapshot,b,tol,maxiter,apply_only)");
     double tol=scalar(args[2]);int maxiter=integer(args[3]);
     if(!(tol>0&&tol<=1e-6)||maxiter<1||maxiter==INT_MAX||!mxIsLogicalScalar(args[4]))throw std::runtime_error("invalid tolerance, iteration limit or apply flag");
@@ -310,7 +315,7 @@ void run(int nlhs,mxArray** out,int nrhs,const mxArray** args){
     const char* names[]={"iterations","true_relative_residual","coarse_execution","setup_execution","workspace_sample_bytes","residual_checked"};
     out[1]=mxCreateStructMatrix(1,1,6,names);mxSetField(out[1],0,names[0],mxCreateDoubleScalar(it));mxSetField(out[1],0,names[1],mxCreateDoubleScalar(rel));
     mxSetField(out[1],0,names[2],mxCreateString("GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse"));
-    mxSetField(out[1],0,names[3],mxCreateString("CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization"));
+    mxSetField(out[1],0,names[3],mxCreateString("Input hierarchy: MATLAB/mexcuda host setup or explicit validation fixture; no runtime Python fallback"));
     mxSetField(out[1],0,names[4],mxCreateDoubleScalar(double(workspace_sample)));
     mxSetField(out[1],0,names[5],mxCreateLogicalScalar(!apply_only));
 }

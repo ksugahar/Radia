@@ -1,9 +1,14 @@
-function benchmark(inputPath, outputPath, binaryDir, matlabDir)
+function benchmark(inputPath, outputPath, binaryDir, matlabDir, setupThreads)
 addpath(binaryDir);
 repo=fileparts(fileparts(fileparts(mfilename('fullpath'))));
 if nargin<4;matlabDir=fullfile(repo,'packages','radia-gpu','matlab');end
 addpath(matlabDir);
 readTimer=tic;d=radia.gpu.readAMSExchange(inputPath);readSeconds=toc(readTimer);
+nativeSetupSeconds=0;nativeSetupInfo=struct();hierarchyMaxRelativeDifference=0;
+if nargin>=5
+    timer=tic;[native,nativeSetupInfo]=radia.gpu.prepareAMS(d.model,SetupThreads=setupThreads,Upload=false);nativeSetupSeconds=toc(timer);
+    hierarchyMaxRelativeDifference=compare_hierarchy(d.snapshot,native);d.snapshot=native;
+end
 g=gpuDevice();
 before=g.AvailableMemory;
 memoryPlan=memory_plan(d.snapshot,g);
@@ -46,6 +51,7 @@ end
 zeroRhsWarmMedianSeconds=median(zeroRhsTimes(2:end));
 applyOnlyWarmMedianSeconds=median(applyOnlyTimes(2:end));
 checks=check_errors(s,rhs);
+if nargin>=5;checks.native_setup=check_native_setup_errors(d.model);end
 % Exercise rejection with no allocation and no deliberately oversized GPU job.
 limited=memory_plan(d.snapshot,struct('TotalMemory',g.TotalMemory,'AvailableMemory',0));
 checks.memory_budget_rejection=false;
@@ -56,7 +62,8 @@ device=struct('name',g.Name,'compute_capability',g.ComputeCapability, ...
 matlabVersion=version;
 save(outputPath,'solution','info','probeErrors','coldSeconds','times', ...
     'inclusiveSeconds','inclusiveSolution','memoryBytes','uploadSeconds','readSeconds','checks','device','matlabVersion', ...
-    'zeroRhsTimes','applyOnlyTimes','zeroRhsWarmMedianSeconds','applyOnlyWarmMedianSeconds','memoryPlan');
+    'zeroRhsTimes','applyOnlyTimes','zeroRhsWarmMedianSeconds','applyOnlyWarmMedianSeconds','memoryPlan', ...
+    'nativeSetupSeconds','nativeSetupInfo','hierarchyMaxRelativeDifference');
 end
 
 function check_memory_budget(plan)
@@ -146,4 +153,46 @@ end
 function yes=reject(f)
 yes=false;
 try;f();catch e;yes=strcmp(e.identifier,'radia:cuda:ams');end
+end
+
+function difference=compare_hierarchy(expected,actual,path)
+if nargin<3;path='root';end
+difference=0;
+if isstruct(expected)
+    assert(isequal(sort(fieldnames(expected)),sort(fieldnames(actual))),'AMS hierarchy fields differ');
+    names=fieldnames(expected);
+    for k=1:numel(names);difference=max(difference,compare_hierarchy(expected.(names{k}),actual.(names{k}),[path '.' names{k}]));end
+elseif iscell(expected)
+    assert(iscell(actual) && numel(expected)==numel(actual),'AMS hierarchy levels differ');
+    for k=1:numel(expected);difference=max(difference,compare_hierarchy(expected{k},actual{k},sprintf('%s{%d}',path,k)));end
+elseif isnumeric(expected)
+    assert(strcmp(class(expected),class(actual)) && numel(expected)==numel(actual),'AMS hierarchy type/length differs: %s',path);
+    if ~isequaln(expected(:),actual(:))
+        difference=norm(double(expected(:))-double(actual(:)))/max(norm(double(expected(:))),realmin);
+        assert(false,'AMS hierarchy numeric values differ: %s relative=%g',path,difference);
+    end
+else
+    assert(isequaln(expected,actual),'AMS hierarchy metadata differs');
+end
+end
+
+function checks=check_native_setup_errors(model)
+checks=struct();
+bad=model;bad.A.columns(1)=int32(bad.A.cols);
+checks.invalid_csr=reject(@()setup_invoke(bad,1));
+bad=model;bad.free(1)=int32(2);
+checks.invalid_mask=reject(@()setup_invoke(bad,1));
+bad=model;bad.coordinates(1)=NaN;
+checks.nonfinite_coordinates=reject(@()setup_invoke(bad,1));
+bad=model;bad.cycle=2;
+checks.invalid_cycle=reject(@()setup_invoke(bad,1));
+bad=model;bad.schema='unknown';
+checks.invalid_schema=reject(@()setup_invoke(bad,1));
+checks.invalid_threads=reject(@()setup_invoke(model,65));
+bad=model;bad.G.rows=bad.G.rows+1;
+checks.wrong_gradient_shape=reject(@()setup_invoke(bad,1));
+assert(all(structfun(@(x)x,checks)),'Native AMS input rejection failed');
+end
+function setup_invoke(model,threads)
+[~,~]=radia_cuda_ams('setup',model,threads);
 end

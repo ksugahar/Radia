@@ -285,3 +285,22 @@ python validation_test/ams_cuda/setup_benchmark.py --out "$env:TEMP/ams-setup-ru
 Formal performance acceptance requires an idle GPU-capable mdx. A CPU-only
 run uses `--cpu-only` and leaves GPU/transfer timing pending. Never start A100
 to satisfy this benchmark. Each run writes `result.json`, including failures.
+
+## MATLAB-owned native setup
+
+The experimental candidate also exposes `radia.gpu.prepareAMS(model)` within
+MATLAB/mexcuda. It reuses the retired MEX gateway's shared `HypreBasedAMS`
+constructor and NGSolve sparsecholesky; no Python adapter or prebuilt Python
+solver hierarchy is required. Supply a versioned numeric model containing
+`A`, `G` (sorted int32 CSR), `coordinates` (vertices by three), an int32 free-DOF
+mask, and cycle 1 or 7. NGSolve still owns FE orientation and assembly semantics.
+The default uploads the resulting hierarchy for `radia.gpu.amsPCG`; `Upload=false`
+returns host data for explicit transfer management. TaskManager regions are
+compiled out; indirect upstream dependencies are permitted by the clarified
+policy. Python DLL dependencies do not imply interpreter initialization.
+
+Run `native_setup_validation.py --out <owned-output-directory> --maxh 0.12 0.08`
+for independent CPU accuracy and serial/OpenMP setup comparison. HDF5 carries
+validation inputs; GPU users can supply their numeric model directly. JSON
+includes cold/warm, setup plus upload/solve/download, memory, versions, input
+rejections and source/build identity. Build-host timings remain diagnostic.

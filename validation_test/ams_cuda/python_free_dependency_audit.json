@@ -7,15 +7,25 @@
   "libraries": {
     "libngsolve.dll": {
       "sha256": "e70a3384994a6bb0c3b93b92dcfd83a208c129e7b883398dec48dad3a8a0b7c3",
-      "direct_imports_include": ["nglib.dll", "ngcore.dll", "python312.dll", "openblas.dll"]
+      "direct_imports_include": [
+        "nglib.dll",
+        "ngcore.dll",
+        "python312.dll",
+        "openblas.dll"
+      ]
     },
     "ngcore.dll": {
       "sha256": "5fffd984723eb74f701aef154227845cf4a3bdd63cdbb334a0d1c36480011a80",
-      "direct_imports_include": ["python312.dll"]
+      "direct_imports_include": [
+        "python312.dll"
+      ]
     }
   },
-  "python_wrapper_removal_is_sufficient": false,
-  "standalone_python_disabled_build": "Not built or accepted",
+  "python_wrapper_removal_is_sufficient": null,
+  "standalone_python_disabled_build": "Not required; withdrawn after dependency clarification",
   "coarse_backend_required": "NGSolve sparsecholesky",
-  "a100_started": false
+  "a100_started": false,
+  "python_runtime_dll_dependency_permitted": true,
+  "taskmanager_indirect_dependency_permitted": true,
+  "taskmanager_activation_permitted": false
 }

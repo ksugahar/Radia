@@ -1,58 +1,45 @@
-# Python-free AMS runtime investigation
+# MATLAB-owned AMS runtime migration
 
-The requested product boundary is MATLAB/mexcuda execution without a Python
-snapshot adapter. Python CPU reference calculations remain useful development
-and differential-validation tools; they do not establish a Python-free runtime.
+The product constructs AMS within MATLAB/mexcuda. Python generates independent
+CPU validation oracles only; GPU users do not supply a Python-built solver
+snapshot or run a Python adapter. No standalone preprocessing executable is used.
 
-## Observed dependency
+## Existing implementation reused
 
-The current snapshot module creates the AMS hierarchy with NGSolve and exports
-its sparsecholesky factors. The staged CUDA gateway consumes that hierarchy;
-it does not yet construct it directly from the FEM matrix and discrete gradient.
+The retired MEX gateway at commit `cf45378f0`, `src/matlab/radia_mex.cpp`,
+`SparseSolvAMS`, directly constructs the shared `ngla::HypreBasedAMS` from the
+real HCurl matrix, discrete gradient, vertex coordinates and free-DOF mask.
+It deliberately leaves TaskManager inactive during hierarchy construction.
+The new `ams_matlab_setup.cpp` uses the same constructor and exports the same
+hierarchy to the existing FP64 CUDA cycle/PCG implementation. NGSolve continues
+to own FE assembly/orientation and sparsecholesky coarse factorization.
 
-Inspection of the pinned Windows NGSolve 6.2.2607 wheel's PE import tables found
-that both `libngsolve.dll` and `ngcore.dll` directly import `python312.dll`.
-[Dependency evidence](python_free_dependency_audit.json) records library hashes.
-Replacing the Python wrapper with a native executable linked against these
-same libraries would therefore still require the Python runtime. No execution
-or performance certification of a Python-free implementation has been made.
+## Clarified dependency boundary
 
-## Constraints and candidate boundary
+The user permits `python312.dll` dependency and indirect TaskManager dependencies
+through standard NGSolve headers/DLLs. TaskManager activation and parallel
+execution remain forbidden. `SPARSESOLV_SERIAL_AMS_SETUP` removes internally
+owned regions; host row/chunk work uses explicitly selected OpenMP threads.
+Construction rejects an active external TaskManager. MATLAB controls invocation;
+CUDA executes vector, sparse matrix and coarse-factor application operations.
 
-Preserve the NGSolve sparsecholesky coarse factorization. MATLAB `chol`, PARDISO,
-another direct backend, and implicit CPU solver fallback are not substitutes.
-The mexcuda binary must neither include nor link NGSolve TaskManager.
+The pinned upstream DLL import observations in
+[dependency evidence](python_free_dependency_audit.json) remain valid. They no
+longer imply a requirement to maintain a Python-disabled NGSolve build. Neither
+Python interpreter initialization nor Python script calls are part of setup.
 
-A candidate is an independent native preprocessing executable built against
-a Python-disabled NGSolve/Netgen configuration. It would construct the shared
-AMS hierarchy and export the same checked numeric factors. MATLAB would invoke
-it at initialization/update boundaries and pass the result to mexcuda. This
-keeps NGSolve dependencies out of the mexcuda process; it introduces a native
-helper rather than eliminating every adapter. NGSolve remains responsible for
-FE spaces, orientation and assembly; inputs at the solver boundary are checked
-matrices, discrete gradient, coordinates and free-DOF mask.
+## Validation
 
-Upstream [Netgen CMake](https://github.com/NGSolve/netgen/blob/master/CMakeLists.txt)
-provides `USE_PYTHON`; [NGSolve CMake](https://github.com/NGSolve/ngsolve/blob/master/CMakeLists.txt)
-conditions Python linking on `NETGEN_USE_PYTHON`. These are source-level
-configuration observations, not proof that the required standalone build and
-distribution already work for the pinned release.
+`native_setup_validation.py` creates publishable manufactured HCurl problems,
+computes independent Python CPU references, and compares every native hierarchy
+array bitwise with the reference before testing GPU probe and solve accuracy.
+The native command temporarily sets NGSolve's thread limit to one (without
+activating TaskManager), then restores it. This is required both for matching
+factor arithmetic and avoiding severe setup overhead from the default limit.
+It saves JSON on success/failure, including serial/OpenMP native setup,
+transfer/solve/download, cold and warmed solve times, memory diagnostics and
+versions. It uses HDF5 input exchange, including for inputs exceeding 2 GB.
 
-## Required evidence before adoption
-
-1. Build the pinned upstream revision without Python and GUI support, using
-   the project build entry point on the build host; no PARDISO route.
-2. Inspect the complete native dependency closure and demonstrate operation
-   where Python is unavailable. Record exact sources and artifact hashes.
-3. Preserve sparsecholesky numerical contracts, singular coarse-space handling,
-   factor ordering and input validation; verify CPU reference parity.
-4. Define checked/versioned initialization and update artifacts. Use HDF5 for
-   exchanges exceeding 2 GB. Measure helper startup and file exchange costs.
-5. Validate MATLAB-only initialization, repeated GPU solves, failures, memory
-   admission and cleanup. Save before/after transfer-inclusive timing JSON.
-6. Resolve native-library packaging/license ownership and the existing Python
-   CPU execution boundary before treating the helper as a supported product.
-
-The Python/OpenMP snapshot experiment remains development evidence, not the
-requested product architecture. Its larger-size timing run was not started
-after the request to remove the Python adapter. A100 remains off.
+Build through `Build.ps1 -AmsCudaOnly`. Staged artifacts remain isolated from the
+published runtime. Measurements on the GPU build host are diagnostics; formal
+performance acceptance requires an idle GPU-equipped timing host. A100 stays off.
