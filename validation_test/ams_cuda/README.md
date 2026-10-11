@@ -67,8 +67,12 @@ interchangeable.
 The launch-reduction candidate fuses CSR Jacobi products and updates with
 separate old/new buffers, fuses prolongation and addition, and combines PCG
 solution/residual updates. GPU-to-GPU copies are queued on the same default
-stream as kernels and cuBLAS rather than synchronizing the host for each copy.
-Host scalar convergence and breakdown checks and the final FP64 true-residual
+stream as kernels and cuBLAS. Device-to-device cudaMemcpy is already host
+asynchronous according to NVIDIA's API synchronization contract; replacing it
+with cudaMemcpyAsync alone is not evidence of fewer synchronization points.
+PCG dot products now return device scalars; rho and pAp are read together once
+per iteration, while next-rho and beta stay on device. This removes the separate
+host wait for next-rho. Host scalar convergence and breakdown checks and the final FP64 true-residual
 gate remain in place. No CPU solve fallback or CUDA Graph is introduced.
 
 Before uploading, the benchmark estimates numeric inputs, AMS/PCG workspace,

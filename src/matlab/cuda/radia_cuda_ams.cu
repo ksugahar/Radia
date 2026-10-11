@@ -99,8 +99,8 @@ __global__ void multiply_add(int n,const int* rp,const int* ci,const double* av,
 __global__ void pcg_update(int n,double alpha,const double* p,const double* ap,double* x,double* r) {
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n){x[i]+=alpha*p[i];r[i]-=alpha*ap[i];}
 }
-__global__ void combine(int n,const double* z,double beta,double* p) {
-    int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n)p[i]=z[i]+beta*p[i];
+__global__ void combine(int n,const double* z,const double* scalars,double* p) {
+    int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n)p[i]=z[i]+(scalars[2]/scalars[0])*p[i];
 }
 __global__ void mask(int n,const int* free,double* x) {
     int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<n&&!free[i])x[i]=0;
@@ -251,7 +251,19 @@ struct AMS {
         else {initial();grad();relax();nodal();relax();grad();relax();}
         mask<<<(a.n+T-1)/T,T>>>(a.n,free,x.p);ck(cudaMemcpyAsync(output,x.p,a.n*sizeof(double),cudaMemcpyDeviceToDevice));}
 };
-struct Blas {cublasHandle_t h;Blas(){cb(cublasCreate(&h));}~Blas(){cublasDestroy(h);}double dot(int n,const double* a,const double* b){double d;cb(cublasDdot(h,n,a,1,b,1,&d));return d;}double norm(int n,const double* a){double d;cb(cublasDnrm2(h,n,a,1,&d));return d;}};
+struct Blas {
+    cublasHandle_t h;
+    Blas(){cb(cublasCreate(&h));}
+    ~Blas(){cublasDestroy(h);}
+    void dot(int n,const double* a,const double* b,double* device_result){
+        cb(cublasSetPointerMode(h,CUBLAS_POINTER_MODE_DEVICE));
+        cb(cublasDdot(h,n,a,1,b,1,device_result));
+    }
+    double norm(int n,const double* a){
+        cb(cublasSetPointerMode(h,CUBLAS_POINTER_MODE_HOST));
+        double d;cb(cublasDnrm2(h,n,a,1,&d));return d;
+    }
+};
 struct Output {mxGPUArray* a;explicit Output(int n){mwSize s=n;a=mxGPUCreateGPUArray(1,&s,mxDOUBLE_CLASS,mxREAL,MX_GPU_INITIALIZE_VALUES);}~Output(){mxGPUDestroyGPUArray(a);}double* data(){return static_cast<double*>(mxGPUGetData(a));}};
 void run(int nlhs,mxArray** out,int nrhs,const mxArray** args){
     if(nrhs!=5||nlhs!=2)throw std::runtime_error("[x,info]=radia_cuda_ams(snapshot,b,tol,maxiter,apply_only)");
@@ -266,18 +278,22 @@ void run(int nlhs,mxArray** out,int nrhs,const mxArray** args){
     Output solution(n);double rel=0;int it=0;
     if(apply_only)ams.apply(b,solution.data());
     else {
-        Buffer r(n),p(n),z(n),ap(n);Blas blas;
+        Buffer r(n),p(n),z(n),ap(n),scalars(3);Blas blas;
         ck(cudaMemGetInfo(&available,&total));workspace_sample=std::max(workspace_sample,memory_before>available?memory_before-available:0);
         ck(cudaMemcpyAsync(r.p,b,n*sizeof(double),cudaMemcpyDeviceToDevice));
         double bnorm=blas.norm(n,b);if(!std::isfinite(bnorm)||bnorm<0)throw std::runtime_error("invalid RHS norm");
-        if(bnorm>0){ams.apply(r.p,z.p);ck(cudaMemcpyAsync(p.p,z.p,n*sizeof(double),cudaMemcpyDeviceToDevice));double rho=blas.dot(n,r.p,z.p);rel=1;
-            for(it=1;it<=maxiter;++it){ams.a.mult(p.p,ap.p);double pap=blas.dot(n,p.p,ap.p);
+        if(bnorm>0){ams.apply(r.p,z.p);ck(cudaMemcpyAsync(p.p,z.p,n*sizeof(double),cudaMemcpyDeviceToDevice));blas.dot(n,r.p,z.p,scalars.p);rel=1;
+            for(it=1;it<=maxiter;++it){ams.a.mult(p.p,ap.p);blas.dot(n,p.p,ap.p,scalars.p+1);
+                // Read rho and pAp together; next-rho stays on device between iterations.
+                double control[2];ck(cudaMemcpy(control,scalars.p,2*sizeof(double),cudaMemcpyDeviceToHost));
+                double rho=control[0],pap=control[1];
                 if(!(pap>0)||!(rho>0)||!std::isfinite(pap)||!std::isfinite(rho))throw std::runtime_error("AMS PCG breakdown: nonpositive curvature");
                 double alpha=rho/pap;pcg_update<<<(n+T-1)/T,T>>>(n,alpha,p.p,ap.p,solution.data(),r.p);
                 rel=blas.norm(n,r.p)/bnorm;if(!std::isfinite(rel))throw std::runtime_error("nonfinite residual");
                 if(rel<=tol){ams.a.res(solution.data(),b,r.p);rel=blas.norm(n,r.p)/bnorm;if(rel<=tol)break;
-                    ams.apply(r.p,z.p);ck(cudaMemcpyAsync(p.p,z.p,n*sizeof(double),cudaMemcpyDeviceToDevice));rho=blas.dot(n,r.p,z.p);continue;}
-                ams.apply(r.p,z.p);double next=blas.dot(n,r.p,z.p);combine<<<(n+T-1)/T,T>>>(n,z.p,next/rho,p.p);rho=next;
+                    ams.apply(r.p,z.p);ck(cudaMemcpyAsync(p.p,z.p,n*sizeof(double),cudaMemcpyDeviceToDevice));blas.dot(n,r.p,z.p,scalars.p);continue;}
+                ams.apply(r.p,z.p);blas.dot(n,r.p,z.p,scalars.p+2);combine<<<(n+T-1)/T,T>>>(n,z.p,scalars.p,p.p);
+                ck(cudaMemcpyAsync(scalars.p,scalars.p+2,sizeof(double),cudaMemcpyDeviceToDevice));
             }
             ams.a.res(solution.data(),b,r.p);rel=blas.norm(n,r.p)/bnorm;
             if(!std::isfinite(rel)||rel>tol||it>maxiter)throw std::runtime_error("AMS PCG failed its FP64 true residual gate");
