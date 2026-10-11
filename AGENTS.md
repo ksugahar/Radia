@@ -110,16 +110,10 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 ### MATLAB And Simulink
 
 - Use MathWorks' official MATLAB MCP Server and Simulink Agentic Toolkit.
-  The official MCP Server remains the standard MATLAB operation foundation.
-  LAB/100 track compatible stable releases: record versions before release,
-  review upgrade notes and regression-test affected Radia composition contracts.
-  Use the official MATLAB Engine for Python when available and appropriate,
-  particularly for SSH batch execution and shared-session connections. Keep
-  Engine installed and importable on mdx1/mdx2; record the interpreter, MATLAB
-  version, and execution route. Reuse Radia MATLAB entry points through either
-  route. Engine execution does not waive the official Toolkit model-edit,
-  check, save/reopen, and diagnostic requirements for production SLX files.
-  Close only sessions owned by the operation and retain caller-owned sessions.
+  Record stable tool versions and regression-test upgrades. Use official
+  MATLAB Engine for SSH/batch or shared sessions when appropriate; record
+  interpreter, MATLAB version and route. Engine does not waive Toolkit
+  model-edit, check, save/reopen or diagnostic gates. Close only owned sessions.
 - A tracked production `.slx` passes read, edit, check, save, close, and reopen
   on the exact path. Never patch SLX ZIP/XML directly.
 - Public model-authored UI text is English. Mojibake, replacement glyphs,

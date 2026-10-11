@@ -319,8 +319,10 @@ def test_policy_twins_define_the_same_ci_notebook_contract():
     assert policy == section(claude)
     normalized = " ".join(policy.split())
     assert "with the `100` runner label" in normalized
-    assert "LAB owns distribution acceptance and SSH preflight; mdx is reserved for computation-time evaluation" in normalized
-    assert "Distribution tests run on LAB; mdx runs timing evaluations only, without Cubit" in normalized
+    assert "LAB/102 tests radia and radia-mcp wheels without radia-gpu" in normalized
+    assert "mdx validates radia-gpu against NGSolve and evaluates timing" in normalized
+    assert "mdx GPU/NGSolve validation runs without Cubit" in normalized
+    assert "NGSolve hosts start from checked exported .vol files, without Cubit" in normalized
     assert "CI scope begins at the independently released distribution boundary" in normalized
     assert "each server's live `tools/list` response are the tool-discovery source of truth" in normalized
     assert "Generated tool inventory snapshots are local diagnostics" in normalized
