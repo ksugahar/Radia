@@ -4,16 +4,16 @@ on:
   push:
     branches: [main]
     paths:
-      - 'matlab/+radia/+ltspice/readRaw*.m'
-      - 'matlab/+radia/+ltspice/*TransientState.m'
+      - 'packages/radia-gpu/matlab/+radia/+ltspice/readRaw*.m'
+      - 'packages/radia-gpu/matlab/+radia/+ltspice/*TransientState.m'
       - 'tests/matlab/test_ltspice_data_safety.m'
       - 'tests/matlab/fixtures/ltspice_numdgt7*'
       - '.github/workflows/ltspice-data-safety.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'matlab/+radia/+ltspice/readRaw*.m'
-      - 'matlab/+radia/+ltspice/*TransientState.m'
+      - 'packages/radia-gpu/matlab/+radia/+ltspice/readRaw*.m'
+      - 'packages/radia-gpu/matlab/+radia/+ltspice/*TransientState.m'
       - 'tests/matlab/test_ltspice_data_safety.m'
       - 'tests/matlab/fixtures/ltspice_numdgt7*'
       - '.github/workflows/ltspice-data-safety.yml'

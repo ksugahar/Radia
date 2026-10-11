@@ -27,6 +27,14 @@ from typing import Any
 
 # Order roughly follows logical groupings (general → application)
 CATALOG: dict[str, dict[str, Any]] = {
+    "radia-ltspice": {
+        "subpackage": "radia_mcp.ltspice",
+        "entry_point": "mcp-server-radia-ltspice",
+        "description": "LTspice circuit integration through the optional radia-gpu implementation",
+        "primary_tools": ["netlist_to_asc", "check_circuit", "compare_topology", "circuit_knowledge"],
+        "related": ["radia-matlab", "radia-ngsolve"],
+        "tags": ["circuits", "integration"],
+    },
     # ============================================================
     # CAD / mesh authoring
     # ============================================================
@@ -830,6 +838,9 @@ CATALOG["grant-writing"]["integrated_into"] = "paper-writing"
 CATALOG["poster"]["integrated_into"] = "paper-writing"
 
 _ALIASES = {
+    "mcp-server-radia-spice-lab": "radia-ltspice",
+    "mcp-spice-circuit-lab": "radia-ltspice",
+    "mcp-ltspice": "radia-ltspice",
     # CLI-name -> catalog key
     "radia-meta": "meta",
     "radia_meta": "meta",

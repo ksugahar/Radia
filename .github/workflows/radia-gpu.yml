@@ -5,18 +5,8 @@ on:
     branches: [main]
     paths:
       - 'packages/radia-gpu/**'
-      - 'matlab/+radia/+gpu/**'
-      - 'matlab/+radia/+ltspice/**'
-      - 'matlab/+radia/+simulink/*Cuda*.m'
-      - 'matlab/+radia/+simulink/cudaPCGSFunction.m'
-      - 'matlab/+radia/+simulink/*LTspice*.m'
-      - 'matlab/+radia/+simulink/ltspiceSFunction.m'
-      - 'matlab/+radia/+simulink/+internal/runArtifacts.m'
-      - 'matlab/radia_gpu_pcg_sfun.m'
-      - 'matlab/radia_ltspice_sfun.m'
+      - 'packages/radia-mcp/src/radia_mcp/ltspice/**'
       - 'validation_test/radia_gpu/**'
-      - 'src/matlab/cuda/**'
-      - 'tools/build_cuda_mex.py'
       - 'validation_test/ngsolve_cuda_mex/**'
       - 'Build.ps1'
       - '.github/workflows/radia-gpu.yml'
@@ -24,18 +14,8 @@ on:
     branches: [main]
     paths:
       - 'packages/radia-gpu/**'
-      - 'matlab/+radia/+gpu/**'
-      - 'matlab/+radia/+ltspice/**'
-      - 'matlab/+radia/+simulink/*Cuda*.m'
-      - 'matlab/+radia/+simulink/cudaPCGSFunction.m'
-      - 'matlab/+radia/+simulink/*LTspice*.m'
-      - 'matlab/+radia/+simulink/ltspiceSFunction.m'
-      - 'matlab/+radia/+simulink/+internal/runArtifacts.m'
-      - 'matlab/radia_gpu_pcg_sfun.m'
-      - 'matlab/radia_ltspice_sfun.m'
+      - 'packages/radia-mcp/src/radia_mcp/ltspice/**'
       - 'validation_test/radia_gpu/**'
-      - 'src/matlab/cuda/**'
-      - 'tools/build_cuda_mex.py'
       - 'validation_test/ngsolve_cuda_mex/**'
       - 'Build.ps1'
       - '.github/workflows/radia-gpu.yml'
@@ -66,7 +46,7 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $pins.Count -ne 2) { throw 'Expected exact FE reference pins' }
           $matlab = Get-ChildItem "$env:ProgramFiles/MATLAB" -Directory | Sort-Object Name -Descending | Select-Object -First 1
           if (-not $matlab) { throw 'MATLAB is required for mexcuda CI' }
-          & $python -m pip install @pins numpy scipy h5py psutil build wheel pytest (Join-Path $matlab.FullName 'extern/engines/python')
+          & $python -m pip install @pins numpy scipy h5py psutil build wheel pytest schemdraw "mcp>=1.21.1,<2" (Join-Path $matlab.FullName 'extern/engines/python')
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           (Join-Path $venv 'Scripts') | Out-File $env:GITHUB_PATH -Append -Encoding utf8
       - name: Build GPU mexcuda gateway
@@ -87,6 +67,7 @@ jobs:
       - name: Package and verify independent distribution
         shell: pwsh
         run: |
+          $env:PYTHONPATH = "$PWD/packages/radia-gpu/src;$PWD/packages/radia-mcp/src"
           python -m pytest packages/radia-gpu/tests -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m build --wheel --outdir "$env:RUNNER_TEMP/radia-gpu-wheel-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" packages/radia-gpu

@@ -95,7 +95,7 @@ if ($CudaMexOnly) {
         $cudaStatus = & git -C $cudaRoot status --porcelain
         if ($LASTEXITCODE -ne 0 -or $cudaStatus) { throw 'CUDA native provenance requires a clean source checkout' }
     }
-    & python (Join-Path $cudaRoot 'tools/build_cuda_mex.py') --out (Join-Path $cudaRoot 'build-cuda-mex')
+    & python (Join-Path $cudaRoot 'packages/radia-gpu/tools/build_cuda_mex.py') --out (Join-Path $cudaRoot 'build-cuda-mex')
     if ($LASTEXITCODE -ne 0) { throw 'CUDA MEX build failed' }
     return
 }

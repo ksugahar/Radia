@@ -3,7 +3,7 @@ tests=functiontests(localfunctions);
 end
 function setupOnce(t)
 t.TestData.OldPath=path;
-addpath(fullfile(fileparts(fileparts(fileparts(mfilename('fullpath')))),"matlab"));
+addpath(fullfile(fileparts(fileparts(fileparts(mfilename('fullpath')))),"packages","radia-gpu","matlab"));
 end
 function teardownOnce(t),path(t.TestData.OldPath);end
 function setup(t)
