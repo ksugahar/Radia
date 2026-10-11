@@ -16,16 +16,17 @@ def main(args):
     record = {'schema': 'radia.ams-cuda-comparison.v1', 'accepted': False,
               'order': ['before', 'after', 'after', 'before'] * args.rounds,
               'builds': [], 'cases': []}
-    for directory in builds:
-        meta = json.loads((directory / 'build.json').read_text())
-        mex = directory / 'radia_cuda_ams.mexw64'
-        digest = hashlib.sha256(mex.read_bytes()).hexdigest()
-        if digest != meta['sha256']['build-ams-cuda/radia_cuda_ams.mexw64']:
-            raise RuntimeError('MEX does not match recorded build hash')
-        record['builds'].append({'source_commit': meta['source_commit'],
-                                 'source_dirty': meta['source_dirty'], 'mex_sha256': digest})
     eng = None
     try:
+        for directory in builds:
+            meta = json.loads((directory / 'build.json').read_text())
+            mex = directory / 'radia_cuda_ams.mexw64'
+            digest = hashlib.sha256(mex.read_bytes()).hexdigest()
+            hashes = {key.replace('\\', '/'): value for key, value in meta['sha256'].items()}
+            if digest != hashes['build-ams-cuda/radia_cuda_ams.mexw64']:
+                raise RuntimeError('MEX does not match recorded build hash')
+            record['builds'].append({'source_commit': meta['source_commit'],
+                                     'source_dirty': meta['source_dirty'], 'mex_sha256': digest})
         eng = matlab.engine.start_matlab('-nodesktop -nosplash')
         eng.addpath(str(Path(__file__).resolve().parent), nargout=0)
         for source in args.inputs:
