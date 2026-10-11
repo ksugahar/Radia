@@ -18,6 +18,22 @@ from scipy.sparse import coo_matrix
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'packages/radia-gpu/src'))
 from radia_gpu.ams_exchange import write_exchange, read_exchange, file_sha256
 
+def source_identity(root, manifest=None):
+    if manifest:
+        identity=json.loads(manifest.read_text(encoding='utf-8'))
+        commit=identity['source_commit']
+        if len(commit)!=40 or any(c not in '0123456789abcdef' for c in commit):
+            raise ValueError('Invalid exported Git source identity')
+        for relative,digest in identity['source_file_sha256'].items():
+            path=(root/relative).resolve()
+            if not path.is_relative_to(root.resolve()) or file_sha256(path)!=digest:
+                raise RuntimeError('Exported Git source hash mismatch')
+        return {'source_commit':commit,'source_dirty':False,
+                'provenance_route':'hash-verified exported Git tree'}
+    return {'source_commit':subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip(),
+            'source_dirty':bool(subprocess.check_output(['git','-C',str(root),'status','--porcelain'],text=True).strip()),
+            'provenance_route':'Git checkout'}
+
 def jsonable(x):
     if isinstance(x,np.ndarray):return x.tolist()
     if isinstance(x,np.generic):return x.item()
@@ -39,8 +55,7 @@ def main(args):
         'platform':platform.platform(),'versions':{p:md.version(p) for p in ('ngsolve','numpy','scipy','h5py')},
         'threads':args.threads,'precision':'FP64','cases':[],
         'scope':'experimental assembled-operator AMS; CPU-owned setup, GPU-owned application and coarse solves',
-        'source_commit':subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip(),
-        'source_dirty':bool(subprocess.check_output(['git','-C',str(root),'status','--porcelain'],text=True).strip()),
+        **source_identity(root,args.source_manifest),
         'build':json.loads((binary/'build.json').read_text()),
         'execution_mode':'cpu-only' if args.cpu_only else 'cpu-gpu-parity','accepted':False}
     if not args.cpu_only:
@@ -139,4 +154,5 @@ if __name__=='__main__':
     p.add_argument('--maxh',type=float,nargs='+',default=[0.5,0.35]);p.add_argument('--threads',type=int,default=4)
     p.add_argument('--gpu-dir',type=Path);p.add_argument('--matlab-dir',type=Path)
     p.add_argument('--cpu-only',action='store_true',help='Explicit CPU timing route for a host without a GPU')
+    p.add_argument('--source-manifest',type=Path,help='Checked exported-Git identity for compute hosts without Git')
     main(p.parse_args())

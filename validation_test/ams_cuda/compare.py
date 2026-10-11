@@ -8,20 +8,20 @@ import statistics
 import subprocess
 import matlab.engine
 from scipy.io import loadmat
-from run import jsonable, read_exchange, file_sha256
+from run import jsonable, read_exchange, file_sha256, source_identity
 
 
 def main(args):
     args.out.mkdir(parents=True, exist_ok=False)
     builds = [args.before.resolve(), args.after.resolve()]
     root = Path(__file__).resolve().parents[2]
+    identity = source_identity(root,args.source_manifest)
     record = {'schema': 'radia.ams-cuda-comparison.v1', 'accepted': False,
               'order': ['before', 'after', 'after', 'before'] * args.rounds,
               'builds': [], 'cases': [],
-              'measurement_source_commit': subprocess.check_output(
-                  ['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip(),
-              'measurement_source_dirty': bool(subprocess.check_output(
-                  ['git', '-C', str(root), 'status', '--porcelain'], text=True).strip()),
+              'measurement_source_commit': identity['source_commit'],
+              'measurement_source_dirty': identity['source_dirty'],
+              'provenance_route': identity['provenance_route'],
               'measurement_source_sha256': {
                   str(path.relative_to(root)).replace('\\', '/'): hashlib.sha256(path.read_bytes()).hexdigest()
                   for path in (Path(__file__).resolve(), Path(__file__).with_name('benchmark.m'))}}
@@ -95,6 +95,7 @@ if __name__ == '__main__':
     parser.add_argument('--inputs', type=Path, nargs='+', required=True)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--rounds', type=int, default=3)
+    parser.add_argument('--source-manifest',type=Path)
     args = parser.parse_args()
     if args.rounds < 1:
         parser.error('--rounds must be positive')
