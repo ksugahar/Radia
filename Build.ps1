@@ -11,6 +11,7 @@
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -RadiaOnly -RequireNativeProvenance
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -MatlabMexOnly
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -CudaMexOnly
+#   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -AmsCudaOnly
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -OptunaMexOnly
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -Test
 #
@@ -19,6 +20,7 @@
 #   -RadiaOnly  Build and copy only _radia_pybind.pyd
 #   -MatlabMexOnly  Configure and build the shared radia_mex native gateway
 #   -CudaMexOnly  Stage the CUDA-only NGSolve assembled-operator bridge
+#   -AmsCudaOnly  Stage the experimental AMS CUDA gateway and snapshot adapter
 #   -OptunaMexOnly  Configure and build only the lightweight Optuna gateway
 #   -RequireNativeProvenance  Reject dirty source before building; otherwise a
 #                 dirty development build succeeds without a provenance sidecar
@@ -52,10 +54,12 @@ param(
 $ErrorActionPreference = "Stop"
 
 if ($AmsCudaOnly) {
-    if ($RadiaOnly -or $AxiFemOnly -or $MatlabMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test) {
+    if ($RadiaOnly -or $AxiFemOnly -or $MatlabMexOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test) {
         throw '-AmsCudaOnly is an isolated experimental build; incompatible options supplied'
     }
-    & python (Join-Path $PSScriptRoot 'validation_test/ams_cuda/build.py')
+    $amsBuildArgs = @()
+    if ($RequireNativeProvenance) { $amsBuildArgs += '--require-clean-source' }
+    & python (Join-Path $PSScriptRoot 'validation_test/ams_cuda/build.py') @amsBuildArgs
     if ($LASTEXITCODE -ne 0) { throw 'AMS CUDA experimental build failed' }
     return
 }

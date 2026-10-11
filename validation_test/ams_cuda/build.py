@@ -1,5 +1,6 @@
 """Build the experimental AMS bridge through Build.ps1 -AmsCudaOnly on 100."""
 from pathlib import Path
+import argparse
 import hashlib
 import json
 import os
@@ -8,10 +9,13 @@ import subprocess
 import sys
 import sysconfig
 
-def main():
+def main(args):
     import netgen
     import matlab.engine
     root=Path(__file__).resolve().parents[2]
+    commit=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()
+    dirty=bool(subprocess.check_output(['git','-C',str(root),'status','--porcelain'],text=True).strip())
+    if args.require_clean_source and dirty:raise RuntimeError('Clean source required for AMS build provenance')
     if socket.gethostname().lower()!='t7920':
         raise RuntimeError('Candidate builds belong to 100/T7920')
     out=root/'build-ams-cuda';out.mkdir(exist_ok=True)
@@ -50,12 +54,12 @@ def main():
         cuda=root/'src/matlab/cuda/radia_cuda_ams.cu'
         flags='NVCCFLAGS=-gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80'
         eng.mexcuda('-v','-f',str(config),flags,'-lcublas','-outdir',str(out),str(cuda),nargout=0)
-        if hashes!={str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}:
+        if (hashes!={str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
+            or commit!=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()):
             raise RuntimeError('Source changed while building; candidate provenance rejected')
         record={'schema':'radia.ams-cuda-build.v1','host':socket.gethostname(),'python':sys.executable,
                 'matlab':eng.version(),'configuration':str(config),'compiler_bin':os.environ['NVCC_CCBIN'],
-                'source_commit':subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip(),
-                'source_dirty':bool(subprocess.check_output(['git','-C',str(root),'status','--porcelain'],text=True).strip()),
+                'source_commit':commit,'source_dirty':dirty,
                 'sha256':{str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest()
                           for p in (binary,out/'radia_cuda_ams.mexw64')},
                 'source_sha256':hashes,'no_cpu_solver_fallback':True}
@@ -63,4 +67,6 @@ def main():
         print(json.dumps(record,indent=2))
     finally:eng.quit()
 
-if __name__=='__main__':main()
+if __name__=='__main__':
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--require-clean-source',action='store_true')
+    main(p.parse_args())

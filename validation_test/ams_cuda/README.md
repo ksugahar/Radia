@@ -34,8 +34,8 @@ Build on 100/T7920 in an isolated checkout with the configured MATLAB
 Engine Python environment, MATLAB R2026a and its compatible VS2022 toolchain:
 
 ```powershell
-./Build.ps1 -AmsCudaOnly
-python validation_test/ams_cuda/run.py --out C:/temp/ams-cuda-owned-run --maxh 0.5 0.2
+./Build.ps1 -AmsCudaOnly -RequireNativeProvenance
+python validation_test/ams_cuda/run.py --out C:/temp/ams-cuda-owned-run --maxh 0.5 0.2 0.12
 ```
 
 The CUDA binary includes sm75, sm80 and compute80 PTX. A different OS needs
