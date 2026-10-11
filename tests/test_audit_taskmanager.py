@@ -48,6 +48,24 @@ def test_classification_matches_repository_lanes(
     assert audit_module._classify(path) == expected
 
 
+@pytest.mark.parametrize("relative_path", [
+    "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
+    "validation_test/ams_cuda/run.py",
+    "validation_test/radia_gpu/export_vol_reference.py",
+])
+@pytest.mark.parametrize("construction", ["TaskManager()", "ng.TaskManager()", "TM()"])
+def test_gpu_routes_forbid_taskmanager(audit_module, tmp_path, relative_path, construction):
+    path = tmp_path / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("form = BilinearForm(space)\nform.Assemble()\n", encoding="utf-8")
+    assert audit_module._audit_caller(path) == []
+    path.write_text("from ngsolve import TaskManager as TM\n"
+                    f"manager = {construction}\n", encoding="utf-8")
+    findings = audit_module._audit_caller(path)
+    assert len(findings) == 1
+    assert findings[0].kind == "gpu-taskmanager"
+
+
 def test_caller_without_region_is_reported(audit_module, tmp_path):
     path = tmp_path / "tests" / "test_solver.py"
     path.parent.mkdir(parents=True)

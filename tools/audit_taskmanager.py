@@ -18,6 +18,9 @@ Two checks repo-wide:
    ``GridFunction.Set(coefficient, ...)``) MUST have
    at least one caller-owned ``with TaskManager():`` region.
 
+Explicit mexcuda preparation routes instead forbid TaskManager construction;
+their serial reference execution is required by the GPU policy.
+
 This is intentionally a fast file-level minimum gate.  It detects a caller
 that has no TaskManager region at all. Pytest modules may instead opt into the
 shared ``ngsolve_taskmanager`` fixture with ``pytest.mark.usefixtures``. The
@@ -52,6 +55,12 @@ from pathlib import Path
 from typing import NamedTuple
 
 ROOT = Path(__file__).absolute().parent.parent
+
+SERIAL_GPU_ROUTES = frozenset({
+    "packages/radia-gpu/src/radia_gpu/simulink/ih_operator_assembly.py",
+    "validation_test/ams_cuda/run.py",
+    "validation_test/radia_gpu/export_vol_reference.py",
+})
 
 # Paths classified as HELPERS (must NOT wrap internally).
 HELPER_GLOBS = ["src/radia/**/*.py"]
@@ -475,6 +484,23 @@ def _audit_caller(path: Path) -> list[Finding]:
     except SyntaxError as exc:
         return [Finding(path, exc.lineno or 0, "parse-error",
                          str(exc)[:80], "fix syntax")]
+    if path.relative_to(ROOT).as_posix() in SERIAL_GPU_ROUTES:
+        names = {"TaskManager"}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                names.update(alias.asname or alias.name for alias in node.names
+                             if alias.name == "TaskManager")
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and (
+                isinstance(node.func, ast.Name) and node.func.id in names
+                or isinstance(node.func, ast.Attribute) and node.func.attr == "TaskManager"
+            ):
+                findings.append(Finding(
+                    path, node.lineno, "gpu-taskmanager",
+                    text.splitlines()[node.lineno - 1].strip()[:80],
+                    "Remove TaskManager: mexcuda preparation uses the serial reference route.",
+                ))
+        return findings
     parallel_ops = _find_parallel_ops(tree)
     if not parallel_ops:
         return findings   # no parallel work; nothing to require
@@ -552,8 +578,8 @@ def main():
     if not args.quiet_ok:
         print(f"audit_taskmanager: scanned "
               f"{len(helpers)} helpers + {len(callers)} callers")
-        print("  policy: helper has 0 wraps; every parallel-op-bearing "
-              "caller file has a caller-owned region")
+        print("  policy: helper has 0 wraps; CPU parallel callers own regions; "
+              "explicit GPU preparation routes forbid TaskManager")
         print()
 
     if helper_findings:
