@@ -31,7 +31,8 @@ then validate the same artifact hash when available. Do not treat an offline
 target as a successful test.
 
 Call `radia.gpu.csrPCG` with zero-based int32 CSR row pointers/columns and FP64
-GPU values, RHS and positive inverse diagonal. The caller owns FE assembly
+GPU values, RHS and positive inverse diagonal for a symmetric positive-definite
+system. The caller owns FE assembly
 and the GPU arrays. The solver verifies the true residual and raises on invalid
 inputs, unsupported state, breakdown or nonconvergence.
 
