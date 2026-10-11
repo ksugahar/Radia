@@ -1,3 +1,7 @@
+> Historical source notes only. CPU Radia MEX is unsupported. The accepted GPU
+> payload is described in README.md; these legacy models are not shipped as
+> validated CUDA applications.
+
 # Radia Simulink Blocks
 
 This directory contains the Simulink boundary for production Radia reduced
@@ -31,13 +35,9 @@ retired for every application, including IH.
 
 ## Motor ROM block
 
-`radia_motor_rom_sfun.cpp` is a fixed-step C-MEX S-function.  Build it from a
-MATLAB session with:
-
-```matlab
-addpath('src/radia/simulink');
-radia_motor_rom_sfun_build('private-runtime-path');
-```
+The former fixed-step motor-ROM CPU MEX build recipe has been removed.
+The adapter source is retained under `native/legacy/simulink` as historical
+implementation material, not as a supported build target.
 
 The S-function takes five parameters:
 
