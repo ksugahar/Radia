@@ -30,7 +30,9 @@ def main(args):
         eng.addpath(str(Path(__file__).resolve().parent), nargout=0)
         for source in args.inputs:
             source = source.resolve()
+            snapshot = loadmat(source, simplify_cells=True)['snapshot']
             entry = {'input_sha256': hashlib.sha256(source.read_bytes()).hexdigest(),
+                     'dofs': int(snapshot['A']['rows']), 'cycle': int(snapshot['cycle_type']),
                      'runs': []}
             times = [[], []]
             inclusive = [[], []]
@@ -59,6 +61,8 @@ def main(args):
             entry.update(before_warm_median_seconds=medians[0],
                          after_warm_median_seconds=medians[1],
                          warm_speedup=medians[0] / medians[1],
+                         warm_improvement_percent=100 * (1 - medians[1] / medians[0]),
+                         warm_timing_improved=medians[1] < medians[0],
                          before_inclusive_median_seconds=statistics.median(inclusive[0]),
                          after_inclusive_median_seconds=statistics.median(inclusive[1]))
             record['cases'].append(entry)
