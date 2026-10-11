@@ -384,6 +384,7 @@ def _integration_tests(changed: list[str]) -> list[str]:
     broad = (
         "tests/mcp_integration/", "tests/mcp_server/fixtures/", "matlab/",
         "validation_test/", "src/matlab/", "packages/radia-optuna/",
+        "packages/radia-gpu/",
         ".agents/skills/md2html/", ".github/workflows/radia-mcp-matrix.yml",
         "packages/radia-mcp/tools/select_ci_tests.py",
         "packages/radia-mcp/tools/check_package_test_boundary.py",
