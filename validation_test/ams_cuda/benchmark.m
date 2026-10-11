@@ -122,6 +122,8 @@ checks.wrong_rhs_shape=reject(@()invoke(s,b(1:end-1),1e-9,2000));
 checks.invalid_tolerance=reject(@()invoke(s,b,0,2000));
 bad=s;bad.spaces{1}.levels{end}.coarse.order(1)=int32(s.A.rows);
 checks.invalid_coarse_order=reject(@()invoke(bad,b,1e-9,2000));
+bad=s;bad.spaces{1}.levels{end}.coarse.rowptr(end)=int32(-1);
+checks.invalid_coarse_rowptr=reject(@()invoke(bad,b,1e-9,2000));
 [z,info]=radia_cuda_ams(s,zeros(size(b),'like',b),1e-9,2000,false);
 checks.zero_rhs=gather(norm(z))==0 && info.iterations==0;
 clear radia_cuda_ams;

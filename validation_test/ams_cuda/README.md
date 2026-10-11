@@ -74,6 +74,11 @@ PCG dot products now return device scalars; rho and pAp are read together once
 per iteration, while next-rho and beta stay on device. This removes the separate
 host wait for next-rho. Host scalar convergence and breakdown checks and the final FP64 true-residual
 gate remain in place. No CPU solve fallback or CUDA Graph is introduced.
+Coarse-factor validation now bounds-checks each row inside the checking kernel,
+allowing all validation flags to be checked together before execution. Its
+temporary permutation counters live through that check, eliminating intermediate
+host checks and frees. Malformed coarse row pointers are rejected on the actual
+gateway without permitting an out-of-bounds factor traversal.
 
 Before uploading, the benchmark estimates numeric inputs, AMS/PCG workspace,
 duplicate uploads and diagnostic arrays, plus library headroom. It rejects

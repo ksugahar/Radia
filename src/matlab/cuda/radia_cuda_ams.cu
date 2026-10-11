@@ -132,12 +132,16 @@ __global__ void sparse_coarse(int n,int used,const int* order,const int* rp,cons
     }
     for(int i=lane;i<n;i+=32)x[i]=order[i]<0?0:w[order[i]];
 }
-__global__ void verify_factor(int n,int used,const int* order,const int* rp,const int* ci,int* seen,int* err) {
+__global__ void verify_factor(int n,int used,int nz,const int* order,const int* rp,const int* ci,int* seen,int* err) {
     int i=blockIdx.x*blockDim.x+threadIdx.x;
     if(i<n&&(order[i]<-1||order[i]>=used))atomicExch(err,1);
     if(i<n&&order[i]>=0&&order[i]<used)atomicAdd(seen+order[i],1);
-    if(i<used)for(int j=rp[i];j<rp[i+1];++j)
-        if(ci[j]<=i||(j>rp[i]&&ci[j]<=ci[j-1]))atomicExch(err,1);
+    if(i<used){int first=rp[i],last=rp[i+1];
+        // This kernel must be safe even while the independent CSR check fails.
+        if(first<0||last<first||last>nz){atomicExch(err,1);return;}
+        for(int j=first;j<last;++j)
+            if(ci[j]<=i||(j>first&&ci[j]<=ci[j-1]))atomicExch(err,1);
+    }
 }
 __global__ void verify_permutation(int used,const int* seen,int* err){int i=blockIdx.x*blockDim.x+threadIdx.x;if(i<used&&seen[i]!=1)atomicExch(err,1);}
 struct CSR {
@@ -167,6 +171,7 @@ void finite_vec(Input& in,const mxArray* a,int n,const double*& result,bool posi
 struct Coarse {
     std::string kind;int n,used=0;const double *a=nullptr,*di=nullptr;const int *order=nullptr,*rp=nullptr,*ci=nullptr;
     std::unique_ptr<Buffer> work;
+    std::unique_ptr<Flag> seen;
     Coarse(const mxArray* v,Input& in,int rows):kind(word(field(v,"kind"))),n(rows){
         if(integer(field(v,"rows"))!=n)throw std::runtime_error("coarse size mismatch");
         if(kind=="dense_inverse") {
@@ -183,12 +188,10 @@ struct Coarse {
             if(count>INT_MAX-T)throw std::runtime_error("coarse capacity exceeded");
             rp=in.get<int>(field(v,"rowptr"),mxINT32_CLASS,size_t(used)+1);
             ci=in.get<int>(field(v,"columns"),mxINT32_CLASS,count);a=in.get<double>(val,mxDOUBLE_CLASS,count);
-            Flag seen(used);verify_csr<<<std::max(1,(std::max(used,int(count))+T-1)/T),T>>>(used,used,int(count),rp,ci,a,in.validation.p);
-            // Factor validation dereferences row pointers: validate their bounds
-            // before launching it. Independent finite/index checks share one flag.
-            in.validation.check();
-            verify_factor<<<(n+T-1)/T,T>>>(n,used,order,rp,ci,seen.p,in.validation.p);
-            verify_permutation<<<std::max(1,(used+T-1)/T),T>>>(used,seen.p,in.validation.p);
+            seen=std::make_unique<Flag>(used);
+            verify_csr<<<std::max(1,(std::max(used,int(count))+T-1)/T),T>>>(used,used,int(count),rp,ci,a,in.validation.p);
+            verify_factor<<<(n+T-1)/T,T>>>(n,used,int(count),order,rp,ci,seen->p,in.validation.p);
+            verify_permutation<<<std::max(1,(used+T-1)/T),T>>>(used,seen->p,in.validation.p);
             verify_vec<<<std::max(1,(used+T-1)/T),T>>>(used,di,false,in.validation.p);work=std::make_unique<Buffer>(used);
         } else if(kind!="ten_l1_jacobi_sweeps")throw std::runtime_error("unknown coarse solver");
     }
