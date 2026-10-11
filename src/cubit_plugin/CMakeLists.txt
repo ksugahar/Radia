@@ -16,6 +16,17 @@ endif()
 # Cubit SDK
 # --------------------------------------------------------
 find_package(Cubit REQUIRED CONFIG)
+# Cubit 2026.8 splits the former geometry library into CGM core.
+if(EXISTS "${Cubit_DIR}/CubitCGMConfig.cmake")
+  find_package(CubitCGM REQUIRED CONFIG HINTS "${Cubit_DIR}")
+  set(CUBIT_GEOMETRY_TARGET cubit_cgmcore)
+  set(CUBIT_GEOMETRY_DLL cubit_cgmcore.dll)
+elseif(TARGET cubit_geom)
+  set(CUBIT_GEOMETRY_TARGET cubit_geom)
+  set(CUBIT_GEOMETRY_DLL cubit_geom.dll)
+else()
+  message(FATAL_ERROR "Unsupported Cubit geometry SDK")
+endif()
 
 # --------------------------------------------------------
 # Netgen (optional, for high-order curving order >= 2)
@@ -175,7 +186,7 @@ set_target_properties(cubit_mesh_export_ccm PROPERTIES
     PDB_NAME "cubit_mesh_export_ccm"
     COMPILE_PDB_NAME "cubit_mesh_export_ccm"
 )
-target_link_libraries(cubit_mesh_export_ccm cubiti cubit_util cubit_geom)
+target_link_libraries(cubit_mesh_export_ccm cubiti cubit_util ${CUBIT_GEOMETRY_TARGET})
 # Cubit 2025.12 loads its bundled MSVCP140.dll 14.31.  Since MSVC 14.40 the
 # std::mutex constructor is constexpr, and a mutex built that way crashes in
 # lock() against an older runtime.  Keep the pre-14.40 constructor.
@@ -185,7 +196,7 @@ target_compile_definitions(cubit_mesh_export_ccm PRIVATE _DISABLE_CONSTEXPR_MUTE
 # cubit_geom.dll init is deferred until first geometry call
 if(MSVC)
   set_target_properties(cubit_mesh_export_ccm PROPERTIES
-    LINK_FLAGS "/DELAYLOAD:cubit_geom.dll"
+    LINK_FLAGS "/DELAYLOAD:${CUBIT_GEOMETRY_DLL}"
   )
   target_link_libraries(cubit_mesh_export_ccm delayimp)
 endif()
