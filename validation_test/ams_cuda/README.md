@@ -134,6 +134,46 @@ relative solution difference from independent CPU sparsecholesky is 4.76e-9.
 All eleven gateway checks pass. The numerical-only run's timing samples
 are excluded because it overlapped CPU CI as well.
 
+## Idle-host repeat, 2026-10-11
+
+[Saved idle-host evidence](rtx5000_idle_20261011.json) repeats the same six
+small cases after repository CI finished. No CI was active or queued at the
+start, midpoint or end. Two process/load probes five seconds apart preceded
+measurement; total CPU utilization was 5% before and 9% afterward, with 2%
+GPU utilization at both boundaries. Existing idle desktop/MATLAB sessions
+were retained, so this is operational idle rather than exclusive reservation.
+A100 was not started or used.
+
+CPU uses Python/pybind11 + NGSolve with four threads; GPU uses the unchanged
+FP64 mexcuda binary. These are the five-sample warmed solve medians from the
+same acceptance run, excluding hierarchy setup for both routes. GPU gateway
+validation/allocation is included; the last column also includes transfers.
+
+| AMS cycle, 5,326 DOFs | CPU | GPU resident input | GPU with transfers |
+| --- | ---: | ---: | ---: |
+| 1 | 20.44 ms | 32.21 ms | 42.41 ms |
+| 7 | 17.76 ms | 27.40 ms | 33.36 ms |
+
+The GPU is still 1.58x / 1.54x slower than CPU for these cases. All six CPU
+and GPU true residuals are below 1e-9; maximum CPU-preconditioner probe error
+is 3.29e-14 and maximum solution difference from independent sparsecholesky
+is 4.76e-9. All eleven gateway checks pass. Stopping-norm and iteration-count
+semantics remain as described above.
+
+A separate identical-input ABBA comparison retains 30 warmed samples per
+build/cycle: cycle 1 improves from 39.01 to 32.52 ms (16.6%), and cycle 7
+from 34.77 to 28.60 ms (17.7%). These medians belong to that separate
+comparison, not the five-sample CPU/GPU table.
+
+Zero-RHS calls skip PCG iterations but retain gateway validation/allocation,
+cuBLAS setup and the RHS norm. Their paired medians drop from about 7.6 ms
+to 3.2 ms. Apply-only calls, including one AMS cycle and their own setup,
+take about 3.5--3.6 ms after the change. These wall-time diagnostics are not
+exact kernel/allocation counters and use different workspace paths. Do not
+subtract zero-RHS time from apply-only time. Gateway reuse alone therefore
+cannot explain or eliminate the full CPU/GPU gap; iterative launch/sync and
+coarse-solve costs need further profiling before selecting an optimization.
+
 Source of the sparse factor layout: NGSolve's public `SparseCholeskyTM`
 accessors in `sparsecholesky.hpp` for 6.2.2607. The GPU kernel evaluates the
 standard ordered unit-triangular/diagonal solves from those factors; it
