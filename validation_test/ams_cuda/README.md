@@ -279,7 +279,7 @@ winner comparison or certification of a particular Simulink model.
 Run on 100 for numerical acceptance and diagnostics:
 
 ```powershell
-python validation_test/ams_cuda/setup_benchmark.py --out C:/temp/ams-setup-run --maxh 0.08 --setup-threads 4 --rounds 2
+python validation_test/ams_cuda/setup_benchmark.py --out "$env:TEMP/ams-setup-run" --maxh 0.08 --setup-threads 4 --rounds 2
 ```
 
 Formal performance acceptance requires an idle GPU-capable mdx. A CPU-only
