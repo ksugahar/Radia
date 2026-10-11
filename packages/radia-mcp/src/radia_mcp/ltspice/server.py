@@ -74,14 +74,7 @@ _ideal_transformer_identity_gate = _gpu_callable("radia_gpu.ltspice.ideal_transf
 
 
 mcp = FastMCP("radia-ltspice")
-from radia_mcp.common import register_status_tool
-register_status_tool(
-    mcp, server_name="mcp-server-radia-ltspice",
-    description="LTspice integration with an optional radia-gpu backend",
-    subpackage="radia_mcp.ltspice",
-    related_servers=["radia-matlab", "radia-ngsolve"],
-    optional_deps=["radia_gpu"],
-)
+
 
 
 
@@ -621,6 +614,16 @@ def patentability_search_plan(
         domains=domains or [],
         include_japanese=include_japanese,
     )
+
+
+from radia_mcp.common import register_status_tool
+register_status_tool(
+    mcp, server_name="mcp-server-radia-ltspice",
+    description="LTspice integration with an optional radia-gpu backend",
+    subpackage="radia_mcp.ltspice",
+    related_servers=["radia-matlab", "radia-ngsolve"],
+    optional_deps=["radia_gpu"],
+)
 
 
 def main() -> int:
