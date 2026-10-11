@@ -105,6 +105,15 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 - 100: CUDA builds/RTX 5000 acceptance; mdx/A100: isolated scale/timing.
 - GPU features require Python CPU parity; Poisson does not certify ICCG/AMS/HDiv-MMM. Save validation JSON.
 
+### GPU Kernel Research Strategy (2026-10-11)
+
+- Use mexcuda as the laboratory's GPU numerical-kernel route. Keep mathematical and physical assumptions explicit and auditable; implement missing Radia-owned critical singular/near-field interaction kernels directly in CUDA. Preserve NGSolve ownership of FE semantics and the existing HACApK/core-kernel policy.
+- The workflow is Python/pybind11 + NGSolve/Netgen modeling, mesh, CPU setup and reference solving; checked numeric exchange (for example MAT/HDF5); then MATLAB + mexcuda GPU execution. Record units, numbering, labels and ABI at the exchange boundary.
+- Reuse MATLAB gpuArray/BLAS where they implement the declared formulation correctly. MATLAB supports convergence monitoring, analysis, parameter sweeps and visualization around independently callable GPU kernels; Simulink integration is optional. Select and validate iterative solvers for the actual operator rather than prescribing one solver universally.
+- Establish CPU/GPU numerical agreement and measured performance on small public or independently publishable cases on the local RTX GPU before scaling. Save timings, transfers, memory observations, versions and true residuals in JSON; do not infer speedup from the backend name.
+- Paid A100 capacity is human-started. Prepare inputs, commands, acceptance criteria and a bounded runtime before requesting its use; batch necessary measurements and recover evidence. Never start or provision it autonomously.
+- Target both development and compute GPU architectures, retaining validated PTX compatibility where applicable. Rebuild for a different OS or MATLAB ABI; verify target execution and performance before claiming portability or scaling.
+
 ### MATLAB And Simulink
 
 - Use MathWorks' official MATLAB MCP Server and Simulink Agentic Toolkit.
