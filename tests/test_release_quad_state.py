@@ -19,7 +19,7 @@ def state(**targets):
             'mex_sha256': 'b' * 64, 'targets': targets}
 
 
-@pytest.mark.parametrize("key,controller,allowed", [("100", "INTEL11", True), ("lab", "LAB", True), ("lab", "INTEL11", False), ("100", "LAB", False), ("mdx1", "INTEL11", False)])
+@pytest.mark.parametrize("key,controller,allowed", [("100", "INTEL11", True), ("lab", "LAB", True), ("lab", "INTEL11", False), ("100", "LAB", False), ("lab", "mdx1", False)])
 def test_com_acceptance_never_labels_another_host_as_the_target(monkeypatch, tmp_path, key, controller, allowed):
     calls = []
     monkeypatch.setattr(module.platform, "node", lambda: controller)
@@ -138,7 +138,7 @@ def test_remote_candidate_runs_the_selected_interpreter(tmp_path, monkeypatch):
     monkeypatch.setattr(module.subprocess, 'run', run)
     python = r"C:\temp\candidate's venv\Scripts\python.exe"
     passed, _ = module._run_simulink_candidate_target(
-        'mdx1', tmp_path/'candidate.zip', 'a'*64, 'RADIA_SIMULINK_RELEASE_OK',
+        '100', tmp_path/'candidate.zip', 'a'*64, 'RADIA_SIMULINK_RELEASE_OK',
         python_executable=python)
     assert passed
     assert scripts[1].startswith("& 'C:\\temp\\candidate''s venv\\Scripts\\python.exe' ")
@@ -159,14 +159,14 @@ def test_candidate_interpreters_are_recorded_per_target(tmp_path, monkeypatch):
         return True, marker
 
     monkeypatch.setattr(module, '_run_simulink_candidate_target', verify_target)
-    args = SimpleNamespace(package=str(package), target='mdx1,mdx2', engine_session=[],
-                           python=[r'mdx1=C:\temp\venv\Scripts\python.exe'])
+    args = SimpleNamespace(package=str(package), target='100,lab', engine_session=[],
+                           python=[r'100=C:\temp\venv\Scripts\python.exe'])
     assert module.cmd_simulink_candidate(args) == 0
-    assert used == {'mdx1': r'C:\temp\venv\Scripts\python.exe', 'mdx2': None}
+    assert used == {'100': r'C:\temp\venv\Scripts\python.exe', 'lab': None}
     recorded = json.loads(module._simulink_state_path(module._sha256_file(package)).read_text())
-    assert recorded['targets']['mdx1']['python_executable'] == r'C:\temp\venv\Scripts\python.exe'
-    assert recorded['targets']['mdx2']['python_executable'] == 'python'
-    for bad in (['lab=C:\\py.exe'], ['mdx1='], ['mdx1=a', 'mdx1=b'], ['mdx1']):
+    assert recorded['targets']['100']['python_executable'] == r'C:\temp\venv\Scripts\python.exe'
+    assert recorded['targets']['lab']['python_executable'] == 'python'
+    for bad in (['mdx1=C:\\py.exe'], ['100='], ['100=a', '100=b'], ['100']):
         args.python = bad
         assert module.cmd_simulink_candidate(args) == 2
 
@@ -234,11 +234,11 @@ def test_solver_dependency_versions_come_from_exact_metadata_pins():
 def test_stale_snapshot_does_not_erase_another_host(tmp_path):
     path = tmp_path / 'state.json'
     module._write_simulink_state(path, state(lab={'status': 'passed'}), 'lab')
-    stale = state(lab={'status': 'passed'}, mdx1={'status': 'passed'})
+    stale = state(**{'lab': {'status': 'passed'}, '100': {'status': 'passed'}})
     module._write_simulink_state(path, state(lab={'status': 'failed'}), 'lab')
-    module._write_simulink_state(path, stale, 'mdx1')
+    module._write_simulink_state(path, stale, '100')
     assert json.loads(path.read_text())['targets'] == {
-        'lab': {'status': 'failed'}, 'mdx1': {'status': 'passed'}}
+        'lab': {'status': 'failed'}, '100': {'status': 'passed'}}
 
 
 def test_identity_mismatch_preserves_evidence(tmp_path):
@@ -281,7 +281,7 @@ for index in range(10):
     path = tmp_path / 'state.json'
     workers = []
     try:
-        for host in ('mdx1', 'mdx2'):
+        for host in ('100', 'lab'):
             workers.append(subprocess.Popen([sys.executable, '-c', code, str(TOOL), str(path), host]))
         for worker in workers:
             assert worker.wait(timeout=60) == 0
@@ -291,4 +291,4 @@ for index in range(10):
                 worker.kill()
                 worker.wait()
     assert json.loads(path.read_text())['targets'] == {
-        'mdx1': {'iteration': 9}, 'mdx2': {'iteration': 9}}
+        '100': {'iteration': 9}, 'lab': {'iteration': 9}}

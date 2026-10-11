@@ -176,7 +176,7 @@ solver boundary is a checked `.vol` regardless of the creation route.
 100号機 permits isolated tests and heavy numerical/memory validation.
 Isolate CI from user runtimes; LAB tests wheels.
 LAB owns distribution acceptance and SSH preflight; mdx is reserved for computation-time evaluation; mdx1/mdx2/hibino are retired.
-Before the next solver release, migrate release-quad acceptance to the current fleet.
+Release-quad requires 102号機 and 100号機 for the same release commit; mdx timing is separate.
 Decision 2026-10-01: editable only on 100号機, in a dedicated local development
 venv for maintainers/students, separate from the release runtime. LAB/mdx use
 verified wheels.

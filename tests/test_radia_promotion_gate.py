@@ -116,13 +116,16 @@ def test_strengthened_focused_suite_and_reject_unknown_case():
         gate.verify_host(a, f, ET.tostring(root), identity, "lab")
 
 
-def test_100_role_accepts_actual_intel11_hostname_only_for_that_target():
+@pytest.mark.parametrize("host,hostname", [("lab", "lab"), ("lab", "INTEL11"),
+                                          ("100", "INTEL11"), ("100", "T7920")])
+def test_current_and_historical_os_hostnames(host, hostname):
     a, f, xml, identity = evidence()
     root = ET.fromstring(xml)
-    root.find('.//testsuite').set('hostname', 'INTEL11')
+    root.find('.//testsuite').set('hostname', hostname)
     actual = ET.tostring(root)
-    gate.verify_host(a, f, actual, identity, '100')
-    for wrong_target in ('lab', 'mdx1', 'mdx2'):
+    gate.verify_host(a, f, actual, identity, host)
+    wrong_targets = ['mdx1', 'mdx2'] + (['lab'] if hostname == 'T7920' else [])
+    for wrong_target in wrong_targets:
         with pytest.raises(ValueError, match='Wrong acceptance host'):
             gate.verify_host(a, f, actual, identity, wrong_target)
 
@@ -212,11 +215,11 @@ def test_exact_wheel_end_to_end(tmp_path):
         assert commit == "b" * 40
         assert path.startswith("validation_test/esrf_three_engine/results/candidate_aaaaaaaaa/")
         host, name = path.split("/")[-2:]
-        # Synthetic four-host API fixture, not a claim of machine acceptance.
+        # Synthetic two-host API fixture, not a claim of machine acceptance.
         a, f, x, _ = evidence()
         tree = ET.fromstring(x)
         suite = tree if tree.tag == "testsuite" else tree.find("testsuite")
-        suite.set("hostname", host)
+        suite.set("hostname", gate.CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES[host])
         x = ET.tostring(tree)
         if name == "acceptance.json":
             a.update(wheel_sha256=digest, native_sha256=hashlib.sha256(b"native").hexdigest(),
@@ -226,7 +229,7 @@ def test_exact_wheel_end_to_end(tmp_path):
 
     api.file = read_file
     report = gate.verify_artifact(api, run, "b" * 40, wheel_dir, tmp_path, digest)
-    assert report["hosts"] == ["lab", "100", "mdx1", "mdx2"] and report["passed"]
+    assert report["hosts"] == ["lab", "100"] and report["passed"]
     for missing_host in report["hosts"]:
         def incomplete(path, commit):
             if path.split("/")[-2] == missing_host:
@@ -238,6 +241,28 @@ def test_exact_wheel_end_to_end(tmp_path):
     api.file = read_file
     with pytest.raises(ValueError, match="hash mismatch"):
         gate.verify_artifact(api, run, "b" * 40, wheel_dir, tmp_path, "0" * 64)
+    def same_machine(path, commit):
+        data = read_file(path, commit)
+        if path.endswith("focused.xml"):
+            tree = ET.fromstring(data)
+            tree.find(".//testsuite").set("hostname", "INTEL11")
+            return ET.tostring(tree)
+        return data
+    def old_fleet(path, commit):
+        data = read_file(path, commit)
+        if path.endswith("focused.xml"):
+            tree = ET.fromstring(data)
+            host = path.split("/")[-2]
+            tree.find(".//testsuite").set("hostname", "lab" if host == "lab" else "INTEL11")
+            return ET.tostring(tree)
+        return data
+    api.file = old_fleet
+    with pytest.raises(ValueError, match="Current acceptance host required"):
+        gate.verify_artifact(api, run, "b" * 40, wheel_dir, tmp_path, digest)
+    api.file = same_machine
+    with pytest.raises(ValueError, match="Current acceptance host required"):
+        gate.verify_artifact(api, run, "b" * 40, wheel_dir, tmp_path, digest)
+    api.file = read_file
     ctx["ref_type"] = "branch"
     (tmp_path / "ci-release-context.json").write_text(json.dumps(ctx))
     with pytest.raises(ValueError, match="exact release tag"):
@@ -295,17 +320,17 @@ def application_proof():
                         for host in gate.RELEASE_ACCEPTANCE_HOSTS}}
 
 
-def test_application_acceptance_requires_four_exact_mex_results():
+def test_application_acceptance_requires_two_exact_mex_results():
     identity = {"source_commit": "a"*40, "version": "5.1.0"}
     gate.verify_application_acceptance(application_proof(), identity)
     for mutation in ("missing_host", "failed", "wrong_mex", "wrong_source", "missing_time",
                      "wrong_label"):
         proof = application_proof()
-        if mutation == "missing_host": del proof["targets"]["mdx2"]
+        if mutation == "missing_host": del proof["targets"]["lab"]
         elif mutation == "wrong_label": proof["targets"]["100"]["label"] = "mdx1"
         elif mutation == "failed": proof["targets"]["100"]["status"] = "failed"
         elif mutation == "wrong_mex": proof["targets"]["lab"]["mex_sha256"] = "d"*64
         elif mutation == "wrong_source": proof["commit"] = "e"*40
-        else: del proof["targets"]["mdx1"]["verified_at_utc"]
+        else: del proof["targets"]["lab"]["verified_at_utc"]
         with pytest.raises(ValueError):
             gate.verify_application_acceptance(proof, identity)

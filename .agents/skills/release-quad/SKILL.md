@@ -1,6 +1,6 @@
 ---
 name: release-quad
-description: Four-machine numerical Radia solver and Simulink release gate. Use for release-quad, solver post-release deployment, Radia GitHub Release publication, or the numerical solver Definition of Done across LAB, 100号機, mdx1, and mdx2. radia-mcp and cubit-mesh-export use independent release-dual skills.
+description: Two-machine numerical Radia solver and Simulink release gate. Use for release-quad, solver post-release deployment, Radia GitHub Release publication, or the numerical solver Definition of Done across 102号機 and 100号機. radia-mcp and cubit-mesh-export use independent release-dual skills.
 ---
 
 # release-quad
@@ -25,7 +25,6 @@ and editable development move forward to an explicitly selected current source.
 ```powershell
 python tools/release_quad.py preflight
 python tools/release_quad.py phase8 --target lab,100
-python tools/release_quad.py phase8e
 python tools/release_quad.py phase9
 python tools/release_quad.py simulink-candidate --package <zip> --target all
 python tools/release_quad.py all
@@ -43,8 +42,9 @@ run `python tools/release_quad.py temp-shadows --apply`. This checks the exact
 `C:\temp\radia-omega-test` tree on mdx1, mdx2, and hibino. It refuses removal
 while Python/MATLAB processes are active, PYTHONPATH still names the tree, or
 reparse points are present. It never terminates research processes or removes
-other scratch directories. Unreachable hosts are unresolved, not clean.
-`all` runs this cleanup first; `done` repeats the read-only absence check.
+other scratch directories. Unreachable hosts are unresolved, not clean. Unconfigured hibino and retired
+mdx2 have not been checked; this standalone cleanup may fail on their aliases.
+This standalone cleanup is not called by `all` or `done`.
 Keep the JSON console report with the release evidence. hibino is checked for
 this retired override only; it is not added to the four deployment targets.
 
@@ -54,31 +54,26 @@ Decision 2026-10-01 supersedes the older two-editable-host recipe: LAB consumes
 verified wheels; only 100 has a dedicated local editable development venv.
 Keep its release runtime separate from in-progress development. `verify-editable`
 checks LAB's wheel and 100's editable; `repoint` permits only 100.
-hibino/mdx1/mdx2/LAB are execution hosts; LAB may run high-memory
-tests after checking available memory and active jobs; mdx CI takes priority.
+100号機 owns CI/builds and isolated heavy numerical validation. 102号機 owns wheel acceptance.
+The consolidated mdx host is reserved for idle timing evaluations; mdx1/mdx2/hibino are retired.
 
 
 | Machine | Solver install tier | Solver release route |
 |---|---|---|
-| LAB | exact accepted Radia wheel | `phase8 --target lab` (wheel over SSH) |
+| 102号機 | exact accepted Radia wheel | `phase8 --target lab` (wheel over SSH) |
 | 100号機 | release runtime (machine-default Python): exact accepted Radia wheel; dedicated editable development venv `W:\00_CAE\Radia\environments\development` | `phase8 --target 100`: wheel into the release runtime, then editable into that venv only; `done`/`phase9` verify both separately |
-| mdx1 | exact accepted Radia wheel | `phase8e` |
-| mdx2 | exact accepted Radia wheel | `phase8e` |
 
-100号機 (INTEL11) is the development, editable-install, review and integration
-host and the student-facing release/usage host; keep its acceptance to
-installation, import, and necessary application smoke. LAB is the test host:
-it runs fixed wheels and job-local `C:\temp\<job-id>` inputs, never an editable.
-mdx1/mdx2 are the self-hosted CI and preflight pool. hibino is a computation
-host, not a QUAD acceptance target.
+100号機 owns isolated CI/builds and a separate editable development runtime.
+102号機 tests fixed wheels with job-owned scratch. Formal timing belongs only
+to otherwise idle mdx; compute timing is not a release deployment gate.
+
 
 `phase9` compares only the solver version and the declared tracked solver-file
 hashes. MCP and Cubit installations are independent observations, never solver
 drift and never a QUAD blocker.
 
 Deployments and final dependency checks address each target over SSH,
-including LAB. Run the controller on a host with the configured `102`, `100`,
-`mdx1`, and `mdx2` aliases; the controller's own Python is not a substitute for
+including LAB. Run the controller on a host with the configured `102` and `100` aliases; the controller's own Python is not a substitute for
 a target runtime. A LAB-only controller restriction is no longer necessary.
 
 ## WIP-safe release sources
@@ -106,6 +101,12 @@ QUAD verifies exact SHA and tracked cleanliness before mutation. `done` is
 non-mutating and leaves both runtimes unchanged. Later advance the development
 venv's explicitly intended source to current `main` and verify it; do not use an
 old-path restore operation.
+
+## Optional mdx refresh
+
+`phase8e` refreshes the installed Radia on SSH alias `mdx` only when explicitly
+requested, using the controller's chosen released version. It is not called
+by `all`, `phase9` or `done`, and is not a release acceptance target.
 
 ## Independent radia-optuna lane
 
@@ -139,7 +140,7 @@ rebuilding. Changed bytes require new acceptance.
 This does not replace QUAD `done` or the Simulink candidate gate. A full
 Simulink package includes `radia_simulink_library.slx`, support files, standalone
 MEX handles, runtime DLLs, `manifest.json`, and `SHA256SUMS.txt`. Verify the exact
-ZIP independently on LAB, 100, mdx1, and mdx2 through verified MATLAB Engine
+ZIP independently on LAB and 100 through verified MATLAB Engine
 sessions. Rebuilding the ZIP invalidates all prior candidate evidence.
 
 If Engine discovery cannot reach an existing desktop, an explicitly enabled
@@ -150,7 +151,7 @@ and path/environment restoration checks. A desktop COM connection may require
 execution in that user's interactive Windows logon instead of SSH's logon.
 Record `execution_backend: matlab-com`, the PID, exact artifact identity,
 success marker and verified restoration in the acceptance evidence. This is
-a host-local transport alternative; it does not waive any four-host gate or
+a host-local transport alternative; it does not waive any two-host gate or
 authorize starting a replacement MATLAB or sharing MATLAB between hosts.
 Select it with `--engine-session 100=com:<PID>` on 100, or
 `--engine-session lab=com:<PID>` in LAB's interactive logon. COM acceptance
@@ -169,7 +170,7 @@ reason to launch a substitute. Close only sessions owned by this operation.
 
 Host default interpreters can hold an older release. Name the candidate
 interpreter per target, for example
-`--python mdx1=C:\temp\<candidate>\venv\Scripts\python.exe` (repeatable). It runs
+`--python lab=C:\temp\<candidate>\venv\Scripts\python.exe` (repeatable). It runs
 the verifier, must provide the package's radia release (otherwise the target
 fails), and is set as MATLAB's `RADIA_PYTHON_EXECUTABLE`; a borrowed session's
 previous value is restored. The state records each target's interpreter.
