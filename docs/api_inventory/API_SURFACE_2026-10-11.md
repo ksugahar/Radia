@@ -24,6 +24,8 @@ The user selected complete ownership transfer within the existing monorepo.
 
 ## Current evidence and limits
 
-PR #339 remains a draft. Its pre-migration installed acceptance passed, but that does not certify the new ownership boundary. The existing candidate still stages MATLAB sources from the repository root and retains LTspice Python implementation in the CPU source tree. Publication is held until migration and the corresponding checks pass. No claim is made that AMS, ICCG or HDiv-MMM GPU support is certified by the Poisson test.
+PR #339 remains a draft. Its pre-migration installed acceptance passed, but that does not certify the new ownership boundary. The pre-transfer candidate staged MATLAB sources from the repository root and retained LTspice Python implementation in the CPU source tree. The accepted GPU surface now stages package-owned sources. Publication is held until migration and the corresponding checks pass. No claim is made that AMS, ICCG or HDiv-MMM GPU support is certified by the Poisson test.
 
 The accepted CUDA PCG and LTspice MATLAB adapters, CUDA build helper, Python LTspice implementation and tests have now moved to `packages/radia-gpu`. The LTspice MCP transport moved to `radia-mcp` with a lazy GPU backend. Remaining legacy MATLAB/Simulink and shared Optuna source paths still require migration; this is not a completed distribution-boundary acceptance.
+
+Transfer commit `54a577e7f` passed 397 Python/package tests, 16 focused integration contracts, installed CUDA/Simulink/LTspice acceptance and real MCP tools/list plus topology comparison. Its Poisson CPU parity difference was 3.52e-10 and GPU true relative residual 9.99e-11. Public migration evidence is in `validation_test/radia_gpu/results/transfer-54a577e7f.json`; raw operational evidence and the exact wheel are retained privately. These checks certify this transfer stage, not the remaining source migration or publication.
