@@ -249,6 +249,7 @@ def verify_artifact(api, run, commit, wheel_dir, context_dir, expected_hash):
     # It used to name two hosts of its own, one of which is not an acceptance
     # target at all, and would have published on two of the four.
     missing = []
+    observed_hostnames = set()
     for host in RELEASE_ACCEPTANCE_HOSTS:
         try:
             acceptance = strict_json(api.file(f"{prefix}/{host}/acceptance.json", commit))
@@ -258,6 +259,9 @@ def verify_artifact(api, run, commit, wheel_dir, context_dir, expected_hash):
             missing.append(f"{host} ({type(exc).__name__})")
             continue
         verify_host(acceptance, full, focused, identity, host)
+        hostname = ET.fromstring(focused).find(".//testsuite").get("hostname").lower()
+        require(hostname not in observed_hostnames, "Distinct acceptance hosts required")
+        observed_hostnames.add(hostname)
     require(not missing,
             f"Acceptance evidence missing for {', '.join(missing)}; release-quad "
             f"requires all of {', '.join(RELEASE_ACCEPTANCE_HOSTS)} at {prefix}")

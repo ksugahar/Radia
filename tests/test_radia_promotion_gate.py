@@ -116,13 +116,16 @@ def test_strengthened_focused_suite_and_reject_unknown_case():
         gate.verify_host(a, f, ET.tostring(root), identity, "lab")
 
 
-def test_100_role_accepts_actual_intel11_hostname_only_for_that_target():
+@pytest.mark.parametrize("host,hostname", [("lab", "lab"), ("lab", "INTEL11"),
+                                          ("100", "INTEL11"), ("100", "T7920")])
+def test_current_and_historical_os_hostnames(host, hostname):
     a, f, xml, identity = evidence()
     root = ET.fromstring(xml)
-    root.find('.//testsuite').set('hostname', 'INTEL11')
+    root.find('.//testsuite').set('hostname', hostname)
     actual = ET.tostring(root)
-    gate.verify_host(a, f, actual, identity, '100')
-    for wrong_target in ('lab', 'mdx1', 'mdx2'):
+    gate.verify_host(a, f, actual, identity, host)
+    wrong_targets = ['mdx1', 'mdx2'] + (['lab'] if hostname == 'T7920' else [])
+    for wrong_target in wrong_targets:
         with pytest.raises(ValueError, match='Wrong acceptance host'):
             gate.verify_host(a, f, actual, identity, wrong_target)
 
@@ -238,6 +241,17 @@ def test_exact_wheel_end_to_end(tmp_path):
     api.file = read_file
     with pytest.raises(ValueError, match="hash mismatch"):
         gate.verify_artifact(api, run, "b" * 40, wheel_dir, tmp_path, "0" * 64)
+    def same_machine(path, commit):
+        data = read_file(path, commit)
+        if path.endswith("focused.xml"):
+            tree = ET.fromstring(data)
+            tree.find(".//testsuite").set("hostname", "INTEL11")
+            return ET.tostring(tree)
+        return data
+    api.file = same_machine
+    with pytest.raises(ValueError, match="Distinct acceptance hosts required"):
+        gate.verify_artifact(api, run, "b" * 40, wheel_dir, tmp_path, digest)
+    api.file = read_file
     ctx["ref_type"] = "branch"
     (tmp_path / "ci-release-context.json").write_text(json.dumps(ctx))
     with pytest.raises(ValueError, match="exact release tag"):

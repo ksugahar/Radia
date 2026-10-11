@@ -21,10 +21,12 @@ tooling's SSH, MATLAB and filesystem assumptions.
 RELEASE_ACCEPTANCE_HOSTS = ("lab", "100")
 
 # Evidence directories use deployment roles; JUnit records the OS hostname.
-# 100 is an SSH/deployment alias for INTEL11, not a second physical machine.
+# Verified SSH roles on 2026-10-11: 102 -> INTEL11, 100 -> T7920.
+# Historical records used LAB -> lab and 100 -> INTEL11. The promotion
+# verifier also requires distinct OS hostnames across the accepted records.
 RELEASE_ACCEPTANCE_HOSTNAMES = {
-    "lab": frozenset({"lab"}),
-    "100": frozenset({"100", "intel11"}),
+    "lab": frozenset({"lab", "intel11"}),
+    "100": frozenset({"100", "intel11", "t7920"}),
     "mdx1": frozenset({"mdx1"}),
 }
 
