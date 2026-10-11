@@ -101,10 +101,9 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 
 - CPU solvers: Python/NGSolve only; CPU MEX is unsupported.
 - MATLAB solvers: CUDA MEX with NVIDIA GPU, for GPU performance. Simulink is optional.
-- No implicit CPU/Python solver fallback. Distinguish host setup from GPU solving; report any CPU solver component.
-- Preserve NGSolve FE ownership. Reuse upstream GPU operators; label assembled-CSR bridges separately from matrix-free GPU backends.
-- 100 builds/RTX 5000 acceptance; mdx/A100 scheduled scale/timing. Isolate active runtimes and timing jobs.
-- Validate each GPU capability against Python CPU; Poisson does not certify ICCG, AMS, HDiv-MMM or model reduction. Save numerical and timing evidence in JSON.
+- No implicit CPU/Python solver fallback. Report host setup and CPU solving separately.
+- 100: CUDA builds/RTX 5000 acceptance; mdx/A100: isolated scale/timing.
+- GPU features require Python CPU parity; Poisson does not certify ICCG/AMS/HDiv-MMM. Save validation JSON.
 
 ### MATLAB And Simulink
 
