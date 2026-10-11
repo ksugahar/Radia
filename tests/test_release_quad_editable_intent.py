@@ -131,9 +131,9 @@ def test_done_default_source_is_controller_and_ignores_legacy_lab_intent(
     monkeypatch.setattr(release_quad, "_verify_local_release_source",
                         lambda repo, sha: seen.append((repo, sha)) or source_rc)
     stop = AssertionError("stop after the source gate")
-    def later_gate(_args):
+    def later_gate(*_args):
         raise stop
-    monkeypatch.setattr(release_quad, "cmd_temp_shadows", later_gate)
+    monkeypatch.setattr(release_quad, "_verify_head_release_tag", later_gate)
     args = SimpleNamespace(simulink_package=None, release_source=None)
     if source_rc:
         assert release_quad.cmd_done(args) == source_rc
