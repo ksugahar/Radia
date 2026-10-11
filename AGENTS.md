@@ -105,8 +105,8 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 - Do not use NGSolve TaskManager for mexcuda compilation or GPU execution. AMS preprocessing selects CUDA or OpenMP using numerical parity and transfer-inclusive timing/memory evidence; serial execution remains a reference. The independent CPU Radia route keeps its own threading policy.
 - Choose VS/CUDA by target MATLAB mexcuda support. Verify upgrades; never override unsupported compilers.
 - No implicit CPU/Python fallback. Measure host setup and CPU solves separately.
-- Develop/build radia-gpu on 100; final validation uses SSH host `NGSolve` (A100); `mdx` is a separate CPU VM. Never deploy to 102.
-- Record parity, artifact hashes and validation JSON; offline A100 stays pending. Poisson does not certify ICCG/AMS/HDiv-MMM.
+- Develop/build radia-gpu on 100; release acceptance uses 100 RTX 5000 and independent review; SSH host `NGSolve` (A100) is optional additional validation; `mdx` is a separate CPU VM. Never deploy to 102.
+- Record parity, artifact hashes and validation JSON; offline A100 stays pending and does not block development or publication. Poisson does not certify ICCG/AMS/HDiv-MMM.
 
 ### GPU Kernel Research Strategy (2026-10-11)
 

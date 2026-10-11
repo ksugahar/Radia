@@ -5,7 +5,7 @@ it does not rebuild it. CPU `radia`, `radia-mcp`, and `radia-optuna` releases
 remain independent. Prereleases keep the installed 100 acceptance gate.
 
 For a stable version, commit `<version>.json` here only after independent
-review and final acceptance on SSH host `NGSolve`. This record may follow the
+review and final acceptance on 100 (Quadro RTX 5000). This record may follow the
 accepted build commit: the release gate still requires the wheel's exact source
 commit to be an ancestor of `main`. Do not create placeholder acceptance records.
 
@@ -16,14 +16,14 @@ the same `source_commit`, `outcome: accepted`, the independent `reviewer`,
 the completed text in `report`, and an empty `unresolved_findings` list.
 Resolve findings and review the final source before accepting it.
 
-`a100_acceptance` contains the real installed acceptance record with schema
+`build_host_acceptance` contains the real installed acceptance record with schema
 `radia.gpu.installed-acceptance.v1`, the same source/hash/version, `passed: true`,
 the payload `manifest_sha256` matching the verified wheel,
-`host: NGSolve`, the measured A100 `device`, at least two
+`host: "100"`, the measured `device: Quadro RTX 5000`, at least two
 `simulink_repeated_runs`, and `simulink_failure_cleanup: true`.
 `run_installed.py` records the actual `os_hostname` and MATLAB GPU device
 name, compute capability and total memory. Preserve these measured fields;
-`host` identifies the SSH validation target, not a replacement OS hostname.
+`host` identifies the acceptance target, not a replacement OS hostname.
 Set `cpu_parity_checked: true` only after testing each published CUDA solver
 against its Python CPU reference. Retain these comparisons in `cpu_parity`,
 keyed by capability, with measured `relative_l2` and `true_relative_residual`.
@@ -34,7 +34,7 @@ The gate rejects empty results, nonfinite values, relative difference above
 1e-8 or true residual above 1e-6. Retain the detailed numerical, runtime,
 timing and memory evidence alongside the corresponding validation sources.
 
-100 CI verifies LTspice; it is not required on the NGSolve host. NGSolve
+100 CI and stable acceptance require `ltspice_checked: true`. A100 is optional additional validation and never blocks development or publication; preserve unverified A100 status explicitly. LTspice is not required on the NGSolve host. NGSolve
 starts from checked `.vol` files and does not install or run Cubit. Do not
 deploy `radia-gpu` to 102. Commercial reference comparisons remain private
 and never enter qualification records or release artifacts.

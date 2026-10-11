@@ -40,7 +40,7 @@ def test_release_rejects_foreign_ci_and_mismatched_installed_artifact(tmp_path,m
         qualify()
 
 
-def test_stable_release_requires_review_and_same_wheel_a100_parity(tmp_path, monkeypatch):
+def test_stable_release_requires_review_and_same_wheel_build_host_parity(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[1]
     monkeypatch.syspath_prepend(str(root))
     spec = importlib.util.spec_from_file_location('gpu_stable_gate', root/'release_gate.py')
@@ -67,7 +67,7 @@ def test_stable_release_requires_review_and_same_wheel_a100_parity(tmp_path, mon
                          independent_review=dict(source_commit=wheel['source_commit'],
                              outcome='accepted', unresolved_findings=[], reviewer='independent Codex',
                              report='Completed read-only review of the exact release source.'),
-                         a100_acceptance=dict(installed, host='NGSolve', device='NVIDIA A100',
+                         build_host_acceptance=dict(installed, host='100', device='Quadro RTX 5000',
                              cpu_parity_checked=True, cpu_parity={
                                  'csr_pcg':dict(relative_l2=2e-10, true_relative_residual=1e-10),
                                  'ams':dict(relative_l2=3e-9, true_relative_residual=2e-10)}))
@@ -83,18 +83,19 @@ def test_stable_release_requires_review_and_same_wheel_a100_parity(tmp_path, mon
         ('independent_review.outcome', 'pending'),
         ('independent_review.unresolved_findings', ['P2 still open']),
         ('independent_review.report', ''),
-        ('a100_acceptance.wheel_sha256', 'c'*64),
-        ('a100_acceptance.manifest_sha256', 'c'*64),
-        ('a100_acceptance.device', 'Quadro RTX 5000'),
-        ('a100_acceptance.host', '102'),
-        ('a100_acceptance.cpu_parity_checked', False),
-        ('a100_acceptance.simulink_failure_cleanup', False),
-        ('a100_acceptance.simulink_repeated_runs', float('nan')),
-        ('a100_acceptance.simulink_repeated_runs', float('inf')),
-        ('a100_acceptance.cpu_parity', {}),
-        ('a100_acceptance.cpu_parity', {'csr_pcg':dict(relative_l2=0, true_relative_residual=0)}),
-        ('a100_acceptance.cpu_parity.csr_pcg.relative_l2', 1e-5),
-        ('a100_acceptance.cpu_parity.csr_pcg.true_relative_residual', float('nan')),
+        ('build_host_acceptance.wheel_sha256', 'c'*64),
+        ('build_host_acceptance.manifest_sha256', 'c'*64),
+        ('build_host_acceptance.device', 'NVIDIA A100'),
+        ('build_host_acceptance.host', '102'),
+        ('build_host_acceptance.ltspice_checked', False),
+        ('build_host_acceptance.cpu_parity_checked', False),
+        ('build_host_acceptance.simulink_failure_cleanup', False),
+        ('build_host_acceptance.simulink_repeated_runs', float('nan')),
+        ('build_host_acceptance.simulink_repeated_runs', float('inf')),
+        ('build_host_acceptance.cpu_parity', {}),
+        ('build_host_acceptance.cpu_parity', {'csr_pcg':dict(relative_l2=0, true_relative_residual=0)}),
+        ('build_host_acceptance.cpu_parity.csr_pcg.relative_l2', 1e-5),
+        ('build_host_acceptance.cpu_parity.csr_pcg.true_relative_residual', float('nan')),
     ]
     for key, value in mutations:
         candidate = json.loads(json.dumps(qualification))
