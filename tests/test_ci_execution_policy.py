@@ -52,7 +52,7 @@ def test_fast_ci_runs_only_on_100_and_native_is_a_named_release_lane():
     assert 'workflows: ["Radia Native Release"]' in release
 
 
-def test_fast_ci_declares_scalar_bh_audit_dependencies():
+def test_fast_ci_declares_bh_and_wheel_contract_dependencies():
     import yaml
 
     workflow = yaml.safe_load((ROOT / '.github/workflows/radia-fast.yml').read_text(encoding='utf-8'))
@@ -60,7 +60,7 @@ def test_fast_ci_declares_scalar_bh_audit_dependencies():
     setup = next(step['run'] for step in steps
                  if step.get('name') == 'Create isolated fast-CI environment')
     installs = [line.split() for line in setup.splitlines() if '-m pip install ' in line]
-    assert any({'numpy', 'scipy', 'pytest'}.issubset(tokens) for tokens in installs)
+    assert any({'numpy', 'scipy', 'pytest', 'wheel'}.issubset(tokens) for tokens in installs)
     assert 'python -m venv' in setup
     assert 'ngsolve' not in setup.lower()
 
@@ -298,8 +298,8 @@ def test_pre_push_runs_the_unpushed_candidate_on_lab():
     assert "scp" in helper
     assert "tools/ci_preflight.py --since $base" in helper
     assert "'mcp>=1.0,<2'" in helper
-    assert "numpy scipy pytest pyyaml setuptools 'mcp>=1.0,<2'" in helper
-    assert 'import mcp, numpy, pytest, scipy, setuptools, yaml' in helper
+    assert "numpy scipy pytest pyyaml setuptools wheel 'mcp>=1.0,<2'" in helper
+    assert 'import mcp, numpy, pytest, scipy, setuptools, wheel, yaml' in helper
     assert "tools/run_test_tier.py --profile fast-contracts" in helper
     assert "LAB preflight helper missing" in hook
     assert '&& [ -f tools/ci_preflight_lab.py ]' not in hook

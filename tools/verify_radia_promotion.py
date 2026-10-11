@@ -18,6 +18,7 @@ import zipfile
 try:
     from release_acceptance import RELEASE_ACCEPTANCE_HOSTS
     from release_acceptance import RELEASE_ACCEPTANCE_HOSTNAMES
+    from release_acceptance import CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES
     from release_acceptance import RELEASE_ACCEPTANCE_HOST_LABELS
 except ModuleNotFoundError:  # Loaded by path in unit tests rather than run as a script.
     _acceptance_spec = importlib.util.spec_from_file_location(
@@ -25,6 +26,7 @@ except ModuleNotFoundError:  # Loaded by path in unit tests rather than run as a
     _acceptance_module = importlib.util.module_from_spec(_acceptance_spec)
     _acceptance_spec.loader.exec_module(_acceptance_module)
     RELEASE_ACCEPTANCE_HOSTNAMES = _acceptance_module.RELEASE_ACCEPTANCE_HOSTNAMES
+    CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES = _acceptance_module.CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES
     RELEASE_ACCEPTANCE_HOST_LABELS = _acceptance_module.RELEASE_ACCEPTANCE_HOST_LABELS
     RELEASE_ACCEPTANCE_HOSTS = _acceptance_module.RELEASE_ACCEPTANCE_HOSTS
 
@@ -211,7 +213,7 @@ def verify_application_acceptance(proof, identity):
         require(isinstance(proof.get(key), str) and HASH.fullmatch(proof[key]),
                 f"Missing MATLAB/Simulink artifact identity: {key}")
     targets = proof.get("targets", {})
-    require(set(targets) == set(RELEASE_ACCEPTANCE_HOSTS), "MATLAB/Simulink requires all four hosts")
+    require(set(targets) == set(RELEASE_ACCEPTANCE_HOSTS), "MATLAB/Simulink requires both hosts")
     for host, row in targets.items():
         # Rows are keyed by host and carry the human label simulink-candidate prints.
         require(row.get("label") == RELEASE_ACCEPTANCE_HOST_LABELS[host]
@@ -258,6 +260,9 @@ def verify_artifact(api, run, commit, wheel_dir, context_dir, expected_hash):
             missing.append(f"{host} ({type(exc).__name__})")
             continue
         verify_host(acceptance, full, focused, identity, host)
+        hostname = ET.fromstring(focused).find(".//testsuite").get("hostname").lower()
+        require(hostname == CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES[host],
+                "Current acceptance host required")
     require(not missing,
             f"Acceptance evidence missing for {', '.join(missing)}; release-quad "
             f"requires all of {', '.join(RELEASE_ACCEPTANCE_HOSTS)} at {prefix}")

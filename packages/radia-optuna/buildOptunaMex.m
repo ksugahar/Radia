@@ -18,4 +18,3 @@ mexcuda('-v', '-R2018a', '-f', configuration, ...
 binary = fullfile(outputDirectory, "optuna_mex." + mexext);
 assert(isfile(binary), 'radia:optuna:Build', 'mexcuda did not produce optuna_mex.');
 end
-

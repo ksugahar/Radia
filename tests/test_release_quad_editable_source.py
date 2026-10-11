@@ -113,8 +113,6 @@ def test_phase8_routes_explicit_hosts_independently_of_controller(monkeypatch, c
     monkeypatch.setattr(release_quad, "_deploy_editable_remote", lambda host, *args: calls.append((host, "development")) or 0)
     assert release_quad.cmd_phase8(Namespace(target=targets)) == 0
     expected = ["102", release_quad.SSH_100, (release_quad.SSH_100, "development")]
-    if targets == "all":
-        expected += [release_quad.SSH_MDX1, release_quad.SSH_MDX2]
     assert calls == expected
 
 
@@ -493,10 +491,10 @@ def _done_until_source_gates(monkeypatch, controller, release):
     monkeypatch.setattr(release_quad, "_radia_version", lambda: "5.2.1")
     passed = AssertionError("source gates passed")
 
-    def next_gate(_args):
+    def next_gate():
         raise passed
 
-    monkeypatch.setattr(release_quad, "cmd_temp_shadows", next_gate)
+    monkeypatch.setattr(release_quad, "_verify_head_release_tag", next_gate)
     return passed
 
 
@@ -648,7 +646,7 @@ def test_done_keeps_lab_wheel_and_100_editable_checks_after_all_gates(monkeypatc
     monkeypatch.setattr(release_quad, "_verify_final_pip_checks", lambda: calls.append("pip-check") or 0)
     args = type("Args", (), {"simulink_package": None})()
     assert release_quad.cmd_done(args) == 0
-    assert calls == ["preflight", "source", "shadows", "tag", "lab", "100-release", "100",
+    assert calls == ["preflight", "source", "tag", "lab", "100-release", "100",
                      "phase9", "guard", "main", "pip-check"]
 
 def test_done_stops_before_machine_checks_when_active_source_is_stale(monkeypatch):
@@ -802,6 +800,83 @@ def test_native_evidence_must_succeed_even_when_other_checks_are_selected(
     )
     assert not ok
     assert f"{release_quad.RELEASE_CHECK_RUN}: {conclusion}" in message
+
+
+@pytest.mark.parametrize("workflow_path", sorted(release_quad.INDEPENDENT_DISTRIBUTION_WORKFLOWS))
+@pytest.mark.parametrize("status,conclusion", [("queued", None), ("completed", "failure")])
+def test_cpu_release_does_not_wait_for_independent_distribution_ci(
+    monkeypatch, workflow_path, status, conclusion
+):
+    sha = "a" * 40
+    native = _green(release_quad.RELEASE_CHECK_RUN, 1)
+    cpu = _green("fast-contracts", 2)
+    independent = dict(id=3, name="fast-contracts", status=status, conclusion=conclusion,
+        details_url="https://github.com/owner/repo/actions/runs/50/job/60")
+    def github(path):
+        if "/check-runs?" in path:
+            return {"check_runs": [native, cpu, independent]}, {}
+        assert path == "repos/owner/repo/actions/runs/50"
+        return dict(head_sha=sha, path=workflow_path), {}
+    monkeypatch.setattr(release_quad, "_git_repo_owner_name", lambda: "owner/repo")
+    monkeypatch.setattr(release_quad, "gh_get", github)
+    monkeypatch.setattr(release_quad, "_release_head", lambda: sha)
+    assert release_quad.cmd_ci_verify(None) == 0
+
+
+@pytest.mark.parametrize("workflow_path", [".github/workflows/radia-fast.yml", "unknown-shared-check.yml"])
+def test_cpu_release_still_rejects_cpu_and_unclassified_failures(monkeypatch, workflow_path):
+    sha = "a" * 40
+    failed = dict(id=2, name="shared-contracts", status="completed", conclusion="failure",
+        details_url="https://github.com/owner/repo/actions/runs/50/job/60")
+    def github(path):
+        if "/check-runs?" in path:
+            return {"check_runs": [_green(release_quad.RELEASE_CHECK_RUN, 1), failed]}, {}
+        return dict(head_sha=sha, path=workflow_path), {}
+    monkeypatch.setattr(release_quad, "_git_repo_owner_name", lambda: "owner/repo")
+    monkeypatch.setattr(release_quad, "gh_get", github)
+    ok, message = release_quad._check_github_hosted_workflows(sha,
+        require_present=[release_quad.RELEASE_CHECK_RUN],
+        excluded_workflows=release_quad.INDEPENDENT_DISTRIBUTION_WORKFLOWS,
+        timeout_sec=0, poll_sec=0)
+    assert not ok and "shared-contracts: failure" in message
+
+
+@pytest.mark.parametrize("ownership", ["lookup-error", "wrong-sha", "missing-path"])
+def test_cpu_release_cannot_ignore_unverified_workflow_ownership(monkeypatch, ownership):
+    sha = "a" * 40
+    gpu = dict(id=2, name="cuda-mex", status="completed", conclusion="failure",
+        details_url="https://github.com/owner/repo/actions/runs/50/job/60")
+    def github(path):
+        if "/check-runs?" in path:
+            return {"check_runs": [_green(release_quad.RELEASE_CHECK_RUN, 1), gpu]}, {}
+        if ownership == "lookup-error":
+            raise RuntimeError("ownership API unavailable")
+        return dict(head_sha="b" * 40 if ownership == "wrong-sha" else sha,
+            path=None if ownership == "missing-path" else ".github/workflows/radia-gpu.yml"), {}
+    monkeypatch.setattr(release_quad, "_git_repo_owner_name", lambda: "owner/repo")
+    monkeypatch.setattr(release_quad, "gh_get", github)
+    ok, _ = release_quad._check_github_hosted_workflows(sha,
+        require_present=[release_quad.RELEASE_CHECK_RUN],
+        excluded_workflows=release_quad.INDEPENDENT_DISTRIBUTION_WORKFLOWS,
+        timeout_sec=0, poll_sec=0)
+    assert not ok
+
+
+def test_gpu_named_native_check_cannot_replace_cpu_native_acceptance(monkeypatch):
+    sha = "a" * 40
+    gpu = _green(release_quad.RELEASE_CHECK_RUN, 1)
+    gpu["details_url"] = "https://github.com/owner/repo/actions/runs/50/job/60"
+    def github(path):
+        if "/check-runs?" in path:
+            return {"check_runs": [gpu]}, {}
+        return dict(head_sha=sha, path=".github/workflows/radia-gpu.yml"), {}
+    monkeypatch.setattr(release_quad, "_git_repo_owner_name", lambda: "owner/repo")
+    monkeypatch.setattr(release_quad, "gh_get", github)
+    ok, message = release_quad._check_github_hosted_workflows(sha,
+        require_present=[release_quad.RELEASE_CHECK_RUN],
+        excluded_workflows=release_quad.INDEPENDENT_DISTRIBUTION_WORKFLOWS,
+        timeout_sec=0, poll_sec=0, registration_grace_sec=0)
+    assert not ok and release_quad.RELEASE_CHECK_RUN in message
 
 
 @pytest.mark.parametrize("host", ["100"])

@@ -17,6 +17,7 @@ Do not add unrelated features.
 The monorepo independently releases `radia`, `radia-gpu`, `cubit-mesh-export`, `radia-mcp`, `radia-optuna` and `eqnedit64`.
 Scope commits and CI to the owner. Shared files trigger multiple lanes only for real shared ABI, build or integration changes.
 `radia`: CPU Python/pybind11 only. `packages/radia-gpu`: all MATLAB/Simulink/LTspice source, dependencies, build and distribution. `radia-mcp`: cross-package knowledge/tools, optional GPU backend. Keep `radia-optuna` independent.
+CPU `radia` releases exclude mexcuda, MATLAB, LTspice and Simulink artifacts and their CI gates. These belong to independent distribution releases; shared and CPU numerical gates remain mandatory.
 
 - `src/`, `packages/`: production; integrations belong to their package owner.
 - `tests/`: small executable usage samples and fast deterministic bug/contract protection.
@@ -99,9 +100,9 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
   Use `bibliography_make_bbl`, regenerate after changes, and check citations.
 
 ### CPU / GPU Execution Policy (2026-10-11)
-- CPU solver: Python (pybind11)/NGSolve; the old Radia CPU MEX is removed. mexcuda modules may contain CPU host control; this does not move every calculation to GPU.
-- mexcuda builds must not include, link, or use NGSolve TaskManager. MATLAB owns host scheduling; CUDA owns device execution.
+- CPU solver: Python (pybind11)/NGSolve; the old Radia CPU MEX is removed. mexcuda may retain CPU host control; not every calculation belongs on GPU.
 - GPU: `radia-gpu` uses MATLAB mexcuda for performance; ships optional Simulink/LTspice adapters, no external products.
+- Do not use NGSolve TaskManager for mexcuda compilation or GPU execution. AMS preprocessing selects CUDA or OpenMP using numerical parity and transfer-inclusive timing/memory evidence; serial execution remains a reference. The independent CPU Radia route keeps its own threading policy.
 - Choose VS/CUDA by target MATLAB mexcuda support. Verify upgrades; never override unsupported compilers.
 - No implicit CPU/Python fallback. Measure host setup and CPU solves separately.
 - Develop/build radia-gpu on 100; final validation uses SSH host `NGSolve` (A100); `mdx` is a separate CPU VM. Never deploy to 102.
@@ -181,7 +182,7 @@ solver boundary is a checked `.vol` regardless of the creation route.
 100号機 permits isolated tests and heavy numerical/memory validation.
 Isolate CI from user runtimes. LAB/102 tests radia and radia-mcp wheels without radia-gpu.
 LAB owns SSH preflight; `NGSolve` validates radia-gpu on A100; mdx evaluates CPU timing. mdx1/mdx2/hibino are retired.
-Before the next solver release, migrate release-quad acceptance to the current fleet.
+Release-quad requires 102号機 and 100号機 for the same release commit; mdx timing is separate.
 Decision 2026-10-01: editable only on 100号機, in a dedicated local development
 venv for maintainers/students, separate from the release runtime. LAB/mdx use
 verified wheels.
@@ -268,8 +269,7 @@ and live sources.
 Before tagging, dispatch `Radia Native Release` on the exact release SHA; `ci-verify` requires its successful native check.
 
 ## Optuna
-`radia-optuna` uses GPU numerical kernels compiled with MATLAB mexcuda. Keep management, sequential random-state consumption and work without a speed requirement on CPU host code. Select GPU work using measured end-to-end cost, including transfers; compilation alone does not establish GPU execution or speedup. No legacy CPU-only MEX build or silent CPU fallback for a declared GPU operation.
-
+`radia-optuna` uses GPU numerical kernels compiled with MATLAB mexcuda. Keep management, sequential RNG and work without a speed requirement on CPU. Choose GPU work using measured transfer-inclusive cost; compilation alone is not GPU execution or speedup. No CPU-only MEX build or implicit fallback for declared GPU operations.
 Pinned Optuna 5.0.0 is the sole oracle for shared MATLAB behavior: seed, options,
 parameter/search-space order, history, named constraints, values, states, warnings,
 defaults, extension points, and random consumption match upstream-generated fixtures.

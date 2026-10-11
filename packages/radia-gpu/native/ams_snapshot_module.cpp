@@ -12,6 +12,8 @@ PYBIND11_MODULE(_radia_ams_snapshot, m) {
         std::shared_ptr<ngla::BaseMatrix> gradient, std::shared_ptr<ngcore::BitArray> free,
         std::vector<double> x,std::vector<double> y,std::vector<double> z,
         py::array_t<double,py::array::c_style|py::array::forcecast> probes, int cycle) {
+        if (ngcore::GetTaskManager() != nullptr)
+            throw std::invalid_argument("mexcuda AMS preprocessing requires no active TaskManager");
         auto a=std::dynamic_pointer_cast<ngla::SparseMatrix<double>>(matrix);
         auto g=std::dynamic_pointer_cast<ngla::SparseMatrix<double>>(gradient);
         if(!a || !g) throw std::invalid_argument("real nonsymmetric-storage NGSolve sparse matrices required");

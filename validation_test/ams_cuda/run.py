@@ -50,10 +50,12 @@ def main(args):
     sys.path.insert(0,str(binary))
     import _radia_ams_snapshot as bridge
     out=args.out.resolve();out.mkdir(parents=True,exist_ok=False)
-    ng.SetNumThreads(args.threads)
+    if args.threads != 1:
+        raise ValueError("The mexcuda validation route requires serial NGSolve preprocessing (--threads 1)")
+    ng.SetNumThreads(1)
     record={'schema':'radia.ams-cuda-validation.v1','host':socket.gethostname(),'python':sys.executable,
         'platform':platform.platform(),'versions':{p:md.version(p) for p in ('ngsolve','numpy','scipy','h5py')},
-        'threads':args.threads,'precision':'FP64','cases':[],
+        'threads':args.threads,'taskmanager_used':False,'precision':'FP64','cases':[],
         'scope':'experimental assembled-operator AMS; CPU-owned setup, GPU-owned application and coarse solves',
         **source_identity(root,args.source_manifest),
         'build':json.loads((binary/'build.json').read_text()),
@@ -72,12 +74,11 @@ def main(args):
             for cycle in (1,7):
                 print(f'AMS maxh={h} cycle={cycle}',flush=True)
                 timer=time.perf_counter()
-                with ng.TaskManager():
-                    mesh=ng.Mesh(unit_cube.GenerateMesh(maxh=h))
-                    fes=ng.HCurl(mesh,order=1,nograds=True,dirichlet='.*')
-                    u,v=fes.TnT();a=ng.BilinearForm(fes,symmetric=False)
-                    a+=(ng.curl(u)*ng.curl(v)+u*v)*ng.dx;a.Assemble()
-                    gradient,_=fes.CreateGradient()
+                mesh=ng.Mesh(unit_cube.GenerateMesh(maxh=h))
+                fes=ng.HCurl(mesh,order=1,nograds=True,dirichlet='.*')
+                u,v=fes.TnT();a=ng.BilinearForm(fes,symmetric=False)
+                a+=(ng.curl(u)*ng.curl(v)+u*v)*ng.dx;a.Assemble()
+                gradient,_=fes.CreateGradient()
                 assembly=time.perf_counter()-timer
                 free=np.array(list(fes.FreeDofs()),dtype=bool)
                 coords=[[mesh.ngmesh.Points()[i+1][j] for i in range(mesh.nv)] for j in range(3)]
@@ -96,7 +97,7 @@ def main(args):
                 for k in range(6):
                     solver=ng.CGSolver(a.mat,pre=pre,tol=1e-9,maxiter=2000)
                     x=b.CreateVector();timer=time.perf_counter()
-                    with ng.TaskManager():x.data=solver*b
+                    x.data=solver*b
                     cpu.append(time.perf_counter()-timer);cpu_iterations.append(solver.iterations)
                 case=out/f'h{h}-cycle{cycle}';case.mkdir()
                 payload=dict(snapshot=snapshot,rhs=rhs,probes=probes,expected=expected)
@@ -151,7 +152,7 @@ def main(args):
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--out',type=Path,required=True)
-    p.add_argument('--maxh',type=float,nargs='+',default=[0.5,0.35]);p.add_argument('--threads',type=int,default=4)
+    p.add_argument('--maxh',type=float,nargs='+',default=[0.5,0.35]);p.add_argument('--threads',type=int,default=1)
     p.add_argument('--gpu-dir',type=Path);p.add_argument('--matlab-dir',type=Path)
     p.add_argument('--cpu-only',action='store_true',help='Explicit CPU timing route for a host without a GPU')
     p.add_argument('--source-manifest',type=Path,help='Checked exported-Git identity for compute hosts without Git')

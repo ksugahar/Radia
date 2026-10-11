@@ -1,8 +1,8 @@
 """
 Package release workflows for the Radia monorepo.
 
-The Radia monorepo ships four independent PyPI distributions and one
-versioned Simulink library package from one git tree. The numerical Radia
+The Radia monorepo ships independently versioned CPU, GPU, MCP, CAD, optimization
+and editor distributions from one git tree. The numerical Radia
 solver uses its multi-host QUAD gate. radia-mcp and cubit-mesh-export publish
 independently and deploy verified wheels to LAB and editable sources to 100 through DUAL lanes;
 radia-optuna has its own exact-wheel lane. These release boundaries must not
@@ -50,7 +50,8 @@ ci_run_id, wheel_sha256, and full acceptance_commit. Its read-only gate checks
 the GitHub run/workflow/repository, tag context and peeled SHA, main reachability,
 all four hosts and all mandatory tests, and wheel/native hashes. Publication uses
 the same artifact without rebuilding. Changed bytes require new acceptance;
-four-machine QUAD done and Simulink gates remain separate obligations.
+CPU QUAD done remains mandatory. mexcuda, MATLAB, LTspice and Simulink
+artifacts and their CI gates are outside normal radia releases.
 Topics: overview, mcp_release, phases, simulink_candidate, optuna_candidate, preflight_gates, mcp_quality_review,
 ci_failure_modes, recovery, patch_bump_protocol, lab_lock_release,
 version_pairs, ci_monitor_skill.
@@ -59,18 +60,18 @@ version_pairs, ci_monitor_skill.
 ## overview — package ownership and verification targets
 ## ===
 
-The Radia monorepo (`ksugahar/Radia`) ships four independent distributions
+The Radia monorepo (`ksugahar/Radia`) ships independent distributions
 to PyPI. Each distribution follows its own declared verification targets:
 
 | Package           | Tag prefix              | What it ships                                     |
 |-------------------|-------------------------|---------------------------------------------------|
-| radia             | `v`                     | C++ core (.pyd) + Python/MATLAB solver support    |
+| radia             | `v`                     | CPU C++ core (.pyd) + Python/pybind11 support    |
 | cubit-mesh-export | `cubit-mesh-export-v`   | Cubit plugin .ccm/.pyd + check-vol CLI            |
 | radia-mcp         | `radia-mcp-v`           | MCP guidance and workflows, including mixed omega;|
 |                   |                         | Cubit MCP is distributed by cubit-mesh-export     |
 | radia-optuna      | `radia-optuna-v`        | Standalone MATLAB Optuna + lightweight MEX and    |
 |                   |                         | generic Simulink optimization support             |
-| Radia Simulink library | Radia GitHub Release asset | `.slx`, MATLAB support, Level-2 MATLAB S-Functions, standalone MEX handles, runtime DLLs, manifest and checksums |
+| radia-gpu | `radia-gpu-v` | Independently released mexcuda, MATLAB, LTspice and Simulink support |
 
 Packages are independently released. radia-mcp and cubit-mesh-export use
 release-dual (LAB and 100); Radia's solver QUAD covers LAB, 100, mdx1 and mdx2.
@@ -146,54 +147,25 @@ the AI-readable summary; independent package lanes are excluded.
 | 6 | Push approved main and the solver tag | after solver gates | Radia tag CI uploads `ci-release-context` but leaves PyPI on HOLD; other packages retain independent publication gates |
 | 7 | Monitor the exact solver CI run | always | use ci-monitor skill |
 | 8 | Deploy/verify the Radia solver on its current QUAD targets | always | this phase does not install radia-mcp or cubit-mesh-export |
-| 8S | Verify the exact versioned Simulink ZIP on LAB / 100号機 / mdx1 / mdx2 | for every Simulink revision | `simulink-candidate --package <zip> --target all` |
 | 9 | Cross-machine solver consistency probe | always | package-independent MCP state is outside this probe |
-| DoD | Re-run preflight, the controller-source check, both runtime checks, and Phase 9; bind the exact ZIP hash to the release tag without changing any runtime | always | `done --simulink-package <zip>`; only exit 0 authorizes GitHub Release publication. `done` requires the release source (the controller by default, or a separate checkout named by `--release-source`) to be the exact tracked-clean release SHA equal to the peeled `v<radia-version>` tag; with a separate source the controller must be tracked-clean, descend from that commit, and declare the same version. It verifies the exact wheel (RECORD hashes, not editable, no shadowed import) in LAB and in 100号機's machine-default release runtime, verifies 100号機's development-venv editable source, and refuses while NAS main != origin/main. Any later development-venv repoint must select and verify an explicitly intended current source; never restore an older tree merely because its path was once canonical. |
+| DoD | Re-run preflight, the controller-source check, both runtime checks, and Phase 9 without changing any runtime | always | `done`; only exit 0 authorizes GitHub Release publication. `done` requires the release source (the controller by default, or a separate checkout named by `--release-source`) to be the exact tracked-clean release SHA equal to the peeled `v<radia-version>` tag; with a separate source the controller must be tracked-clean, descend from that commit, and declare the same version. It verifies the exact wheel (RECORD hashes, not editable, no shadowed import) in LAB and in 100号機's machine-default release runtime, verifies 100号機's development-venv editable source, and refuses while NAS main != origin/main. Any later development-venv repoint must select and verify an explicitly intended current source; never restore an older tree merely because its path was once canonical. |
 
 ## ===
-## simulink_candidate — exact MEX + SLX publication gate
+## simulink_candidate — independent GPU distribution boundary
 ## ===
 
-The production human interface is released as a full Radia Simulink library
-ZIP. Build it only from the final pushed commit. The package contains
-`radia_simulink_library.slx`, application/support `.m` and `.slx` files,
-standalone `radia_mex`, readable IH Level-2 MATLAB S-Functions, required runtime DLLs,
-`manifest.json`, and an external `SHA256SUMS.txt`.
+Normal CPU `radia` does not ship mexcuda, MATLAB, LTspice or Simulink.
+`simulink-candidate` and `done --simulink-package` are retired CPU routes.
+Use the independent `packages/radia-gpu` build, installed-wheel acceptance
+and `radia-gpu-release.yml` publication workflow. Do not attach its artifacts
+or CI requirements to a CPU Radia release.
 
-```powershell
-python tools/package_simulink_release.py `
-  --full-library --mex-dir matlab --output-dir dist/simulink
-python tools/verify_simulink_release.py `
-  dist/simulink/radia-simulink-library-vX.Y.Z.zip `
-  --matlab "C:\\Program Files\\MATLAB\\R2026a\\bin\\matlab.exe"
-python tools/release_quad.py all
-python tools/release_quad.py simulink-candidate `
-  --package dist/simulink/radia-simulink-library-vX.Y.Z.zip --target all
-python tools/release_quad.py done `
-  --simulink-package dist/simulink/radia-simulink-library-vX.Y.Z.zip
-```
+The solver candidate lane never installs, uninstalls, repoints or reconnects
+radia-mcp. MCP and Cubit retain their independent release-dual lanes.
 
-The candidate state is keyed by the ZIP SHA-256. Rebuilding or modifying the
-archive invalidates the four-machine evidence. `done` also requires the
-manifest commit to equal the peeled release-tag commit, an ancestor of the
-controller `HEAD`, so validation from another commit cannot authorize
-publication. `done` is non-mutating: LAB and 100号機's release runtime keep the
-verified wheel and 100号機's development venv keeps the verified editable
-source. Advance that venv's explicitly intended source to current `main` and
-verify it in place; do not restore a prior tree by historical path name.
-Run each target's candidate verification with `--python HOST=PATH` when the
-host default interpreter does not hold the candidate release. Upload the ZIP,
-external `manifest.json`, and `SHA256SUMS.txt` to the matching Radia GitHub
-Release only after `done` exits 0.
-
-The standalone IH preview remains supported by the same packager without
-`--full-library`; it does not replace the production full-library gate.
-
-The solver candidate lane never installs, uninstalls, repoints, or reconnects
-radia-mcp. MCP uses its own LAB/100 release-dual and records its intended source
-there. A solver deployment must preserve that state without requiring an
-override environment variable. Likewise, Cubit publication and plugin
-deployment belong to the cubit-mesh-export release lane.
+CPU `ci-verify` resolves exact-SHA Actions workflow ownership before filtering
+independent distribution checks. Shared and CPU checks remain mandatory,
+including `radia-native-release-build`; missing ownership metadata fails closed.
 
 ## ===
 ## optuna_candidate — exact standalone wheel publication gate
