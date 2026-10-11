@@ -1,4 +1,4 @@
-"""Keep the mdx-only CI split and remote pre-push contract explicit."""
+"""Keep the 100-host CI split and remote pre-push contract explicit."""
 
 import importlib.util
 from pathlib import Path
@@ -17,18 +17,18 @@ def _preflight_module():
     return module
 
 
-def test_fast_ci_runs_only_on_mdx_and_native_is_a_named_release_lane():
+def test_fast_ci_runs_only_on_100_and_native_is_a_named_release_lane():
     fast = (ROOT / ".github" / "workflows" / "radia-fast.yml").read_text(encoding="utf-8")
     native = (ROOT / ".github" / "workflows" / "build-test.yml").read_text(encoding="utf-8")
     optuna = (ROOT / ".github" / "workflows" / "radia-optuna.yml").read_text(encoding="utf-8")
     release = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
 
     assert "name: Radia\n" in fast
-    assert "runs-on: [self-hosted, Windows, X64, mdx]" in fast
+    assert 'runs-on: [self-hosted, Windows, X64, "100"]' in fast
     assert "Build with MSVC" not in fast
     assert "validation_test/" not in fast
     assert "name: Radia Native Release" in native
-    assert "runs-on: [self-hosted, Windows, X64, mdx]" in native
+    assert 'runs-on: [self-hosted, Windows, X64, "100"]' in native
     assert "mkl-devel" in native
     assert "pybind11==3.0.2" in native
     assert "ninja" in native
@@ -40,7 +40,7 @@ def test_fast_ci_runs_only_on_mdx_and_native_is_a_named_release_lane():
     assert "'tests/'" not in native
     assert '"MKLROOT=$mklRoot"' in native
     assert "MKLROOT=C:\\Program Files\\Python312\\Library" not in native
-    assert "runs-on: [self-hosted, Windows, X64, mdx]" in optuna
+    assert 'runs-on: [self-hosted, Windows, X64, "100"]' in optuna
     assert "windows-radia" not in optuna
     optuna_self_hosted = optuna.split("  installed-wheel-matlab-e2e:", 1)[0]
     assert "actions/setup-python" not in optuna_self_hosted
@@ -304,7 +304,7 @@ def test_pre_push_runs_the_unpushed_candidate_on_mdx():
     assert "developer push must never upload mutable" in hook
 
 
-def test_policy_twins_define_the_same_mdx_notebook_contract():
+def test_policy_twins_define_the_same_ci_notebook_contract():
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
     heading = "### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)"
@@ -316,9 +316,9 @@ def test_policy_twins_define_the_same_mdx_notebook_contract():
     policy = section(agents)
     assert policy == section(claude)
     normalized = " ".join(policy.split())
-    assert "Both mdx hosts give CI and preflight priority" in normalized
-    assert "use hibino first when it is available" in normalized
-    assert "the mdx CI queue is idle" in normalized
+    assert "with the `100` runner label" in normalized
+    assert "mdx is the sole compute/SSH-preflight host" in normalized
+    assert "Long solver work uses mdx when idle; SSH preflight has priority" in normalized
     assert "CI scope begins at the independently released distribution boundary" in normalized
     assert "each server's live `tools/list` response are the tool-discovery source of truth" in normalized
     assert "Generated tool inventory snapshots are local diagnostics" in normalized
@@ -352,29 +352,15 @@ def test_policy_twins_define_the_same_compute_host_routing():
     policy = routing_policy(agents)
     assert policy == routing_policy(claude)
     normalized = " ".join(policy.split())
-    # hibino is SPOT: agents may use it, but must not start it.
-    assert "already running and idle" in normalized
-    assert "SPOT instance" in normalized
+    assert "consolidated `mdx` host" in normalized
+    assert "mdx1/mdx2/hibino no longer exist as targets" in normalized
     assert "one heavy job at a time" in normalized
-    assert "an idle mdx1/mdx2 or LAB" in normalized
-    assert "check CI/jobs and available memory first" in normalized
-    assert "LAB is also an execution host for high-memory tests" in normalized
-    # ICMP is blocked on hibino, so ping reports a false "down".
+    assert "running jobs and available memory" in normalized
+    assert "preflight has priority" in normalized
+    assert "Never stop another session's jobs" in normalized
     assert "ConnectTimeout" in normalized
-    assert 'reports a false "down"' in normalized
     assert "Measure speed" in normalized
-    assert "Compute work must never delay or destabilize CI/preflight" in normalized
-    assert "Historical mdx measurements remain valid provenance" in normalized
-
-    for stale in (
-        "`mdx` by default",
-        "`mdx`を既定の静音計算ホスト",
-        "mdx = 静音計算ホスト",
-        # Unconditional "hibino first" reads as "start it if it is down".
-        "on hibino first",
-    ):
-        assert stale not in agents
-        assert stale not in claude
+    assert "remain valid provenance" in normalized
 
 
 def test_agent_policies_stay_compact_and_share_one_policy_body():

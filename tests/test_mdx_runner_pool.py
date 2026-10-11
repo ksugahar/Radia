@@ -19,18 +19,6 @@ def load_tool(name):
     return module
 
 
-def runner(host, *, busy=False, status='online'):
-    return dict(labels=[dict(name='mdx'), dict(name=host)], busy=busy, status=status)
-
-
-def test_preflight_selects_free_runner_and_rejects_unavailable_pool():
-    tool = load_tool('ci_preflight_mdx')
-    assert tool.select_idle_host([runner('mdx1', busy=True), runner('mdx2')]) == 'mdx2'
-    assert tool.select_idle_host([runner('mdx1'), runner('mdx2', status='offline')]) == 'mdx1'
-    with pytest.raises(RuntimeError, match='No idle'):
-        tool.select_idle_host([runner('mdx1', busy=True), runner('mdx2', status='offline')])
-
-
 def test_quad_deploys_both_compute_hosts_without_mcp(monkeypatch):
     tool = load_tool('release_quad')
     assert set(tool.SIMULINK_TARGETS) == {'lab', '100', 'mdx1', 'mdx2'}

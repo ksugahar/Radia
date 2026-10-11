@@ -51,26 +51,10 @@ def test_new_remote_branch_uses_main_merge_base(tmp_path):
     assert module.resolve_candidate_base(module.ZERO, head) == base
 
 
-def _runner(host, *, busy=False, status='online'):
-    return {'labels': [{'name': 'mdx'}, {'name': host}], 'busy': busy, 'status': status}
-
-
-@pytest.mark.parametrize('runner', [_runner('mdx1', busy=True), _runner('mdx1', status='offline')])
-def test_explicit_host_cannot_bypass_availability(runner):
-    module = _load_module()
-    with pytest.raises(RuntimeError, match='No idle'):
-        module.select_idle_host([runner, _runner('mdx2')], 'mdx1')
-
-
-def test_auto_selects_idle_host():
-    module = _load_module()
-    assert module.select_idle_host([_runner('mdx1', busy=True), _runner('mdx2')]) == 'mdx2'
-
-
 @pytest.mark.parametrize('mapping,host,expected', [
-    ('', 'mdx1', 'mdx1'),
-    ('mdx1=mdx', 'mdx1', 'mdx'),
-    (' mdx1 = mdx , mdx2 = mdx2 ', 'mdx2', 'mdx2'),
+    ('', 'mdx', 'mdx'),
+    ('mdx=compute', 'mdx', 'compute'),
+    (' mdx = compute ', 'mdx', 'compute'),
 ])
 def test_ssh_destination_mapping(mapping, host, expected):
     assert _load_module().resolve_ssh_destination(host, mapping) == expected
@@ -78,29 +62,28 @@ def test_ssh_destination_mapping(mapping, host, expected):
 
 def test_unset_ssh_mapping_keeps_runner_label(monkeypatch):
     monkeypatch.delenv('RADIA_PREFLIGHT_SSH_ALIAS', raising=False)
-    assert _load_module().resolve_ssh_destination('mdx1') == 'mdx1'
+    assert _load_module().resolve_ssh_destination('mdx') == 'mdx'
 
 
 @pytest.mark.parametrize('mapping', [
-    'mdx1', 'mdx1=', '=mdx', 'mdx1=mdx,', 'mdx1=mdx,mdx1=mdx2',
+    'mdx', 'mdx1=', '=mdx', 'mdx1=mdx,', 'mdx1=mdx,mdx1=mdx2',
     'other=mdx', 'mdx1=-F', 'mdx1=mdx value', 'mdx1=mdx:22', 'mdx1=mdx=more',
 ])
 def test_invalid_ssh_mapping_fails_loudly(mapping):
     with pytest.raises(RuntimeError, match='Invalid RADIA_PREFLIGHT_SSH_ALIAS'):
-        _load_module().resolve_ssh_destination('mdx1', mapping)
+        _load_module().resolve_ssh_destination('mdx', mapping)
 
 
 def _mock_candidate(monkeypatch, module, tmp_path):
     monkeypatch.delenv('RADIA_PREFLIGHT_SSH_ALIAS', raising=False)
-    monkeypatch.setattr(module.subprocess, 'check_output', lambda *a, **kw:
-        json.dumps({'runners': [_runner('mdx1')]}))
+    monkeypatch.setattr(module.subprocess, 'check_output', lambda *a, **kw: pytest.fail('Preflight must not query GitHub runner inventory'))
     monkeypatch.setattr(module, 'create_bundle', lambda *a: 'a' * 40)
     real_tempdir = module.tempfile.TemporaryDirectory
     monkeypatch.setattr(module.tempfile, 'TemporaryDirectory', lambda **kw:
         real_tempdir(dir=tmp_path))
 
 
-def test_mapping_covers_selected_runner_before_creating_bundle(monkeypatch, tmp_path, capsys):
+def test_retired_host_mapping_fails_before_creating_bundle(monkeypatch, tmp_path, capsys):
     module = _load_module()
     _mock_candidate(monkeypatch, module, tmp_path)
     monkeypatch.setenv('RADIA_PREFLIGHT_SSH_ALIAS', 'mdx2=mdx2')
@@ -109,33 +92,33 @@ def test_mapping_covers_selected_runner_before_creating_bundle(monkeypatch, tmp_
     monkeypatch.setattr(module, 'create_bundle', forbidden)
     monkeypatch.setattr(module, 'run', forbidden)
     assert module.main(['--base', 'a' * 40, '--head', 'b' * 40]) == 1
-    assert 'no mapping for selected runner mdx1' in capsys.readouterr().err
+    assert 'Invalid RADIA_PREFLIGHT_SSH_ALIAS mapping' in capsys.readouterr().err
 
 
 def test_alias_used_for_setup_upload_execution_and_cleanup(monkeypatch, tmp_path, capsys):
     module = _load_module()
     _mock_candidate(monkeypatch, module, tmp_path)
-    monkeypatch.setenv('RADIA_PREFLIGHT_SSH_ALIAS', 'mdx1=mdx')
+    monkeypatch.setenv('RADIA_PREFLIGHT_SSH_ALIAS', 'mdx=compute')
     commands = []
     monkeypatch.setattr(module, 'run', lambda command, **kw: commands.append(command))
-    assert module.main(['--base', 'a' * 40, '--head', 'b' * 40, '--host', 'mdx1']) == 0
-    assert [command[1] for command in commands if command[0] == 'ssh'] == ['mdx'] * 3
+    assert module.main(['--base', 'a' * 40, '--head', 'b' * 40, '--host', 'mdx']) == 0
+    assert [command[1] for command in commands if command[0] == 'ssh'] == ['compute'] * 3
     upload = next(command for command in commands if command[0] == 'scp')
-    assert upload[2].startswith('mdx:')
-    assert 'Preflight host: mdx1' in capsys.readouterr().out
+    assert upload[2].startswith('compute:')
+    assert 'Preflight host: mdx' in capsys.readouterr().out
 
 
 def test_unreachable_alias_aborts_without_label_fallback(monkeypatch, tmp_path, capsys):
     module = _load_module()
     _mock_candidate(monkeypatch, module, tmp_path)
-    monkeypatch.setenv('RADIA_PREFLIGHT_SSH_ALIAS', 'mdx1=mdx')
+    monkeypatch.setenv('RADIA_PREFLIGHT_SSH_ALIAS', 'mdx=compute')
     commands = []
     def failed_connection(command, **kwargs):
         commands.append(command)
         raise RuntimeError('SSH connection failed')
     monkeypatch.setattr(module, 'run', failed_connection)
     assert module.main(['--base', 'a' * 40, '--head', 'b' * 40]) == 1
-    assert commands and all(command[:2] == ['ssh', 'mdx'] for command in commands)
+    assert commands and all(command[:2] == ['ssh', 'compute'] for command in commands)
     assert 'mdx preflight failed: SSH connection failed' in capsys.readouterr().err
 
 
@@ -147,7 +130,7 @@ def test_partial_upload_is_cleaned_on_failure(monkeypatch, tmp_path):
     def fail_upload(*args, **kwargs):
         raise RuntimeError('upload failed')
     monkeypatch.setattr(module, 'run', fail_upload)
-    assert module.main(['--base', 'a' * 40, '--head', 'b' * 40, '--host', 'mdx1']) == 1
+    assert module.main(['--base', 'a' * 40, '--head', 'b' * 40, '--host', 'mdx']) == 1
     assert scripts[-1].startswith('if (Test-Path -LiteralPath ')
     assert scripts[-1].endswith('exit 0')
     assert '.bundle' in scripts[-1]
@@ -160,7 +143,7 @@ def test_generated_script_locks_before_setup_and_always_cleans(monkeypatch, tmp_
     scripts = []
     monkeypatch.setattr(module, 'remote_command', lambda script, host: scripts.append(script))
     monkeypatch.setattr(module, 'run', lambda *a, **kw: None)
-    assert module.main(['--base', 'a' * 40, '--head', 'b' * 40, '--host', 'mdx1']) == 0
+    assert module.main(['--base', 'a' * 40, '--head', 'b' * 40, '--host', 'mdx']) == 0
     script = next(s for s in scripts if '$lock = $null' in s)
     assert script.index('try {') < script.index('[IO.File]::Open') < script.index('& $git clone')
     assert script.index('Runner.Worker') < script.index('& $git clone')
@@ -199,6 +182,6 @@ def test_generated_script_locks_before_setup_and_always_cleans(monkeypatch, tmp_
                                 capture_output=True, text=True, timeout=30,
                                 encoding='utf-8', errors='replace')
         assert result.returncode != 0
-        expected = 'CI became busy' if busy else 'Git is unavailable'
+        expected = 'Compute host is occupied' if busy else 'Git is unavailable'
         assert expected in result.stderr
         assert not bundle.exists()
