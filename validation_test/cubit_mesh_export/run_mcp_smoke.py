@@ -22,7 +22,8 @@ async def main():
             results['tool_count'] = len(catalog.tools)
             async def call(name,args):
                 result = await session.call_tool(name,args)
-                assert not result.isError, result
+                if result.isError:
+                    raise RuntimeError(f'{name} failed: {result}')
                 payload = json.loads(next(c.text for c in result.content if c.type=='text'))
                 results[name] = payload
                 return payload
@@ -30,12 +31,18 @@ async def main():
                 sample = root/'packages/cubit-mesh-export/src/cubit_mesh_export/cubit_gui/solver_ready_sample.jou'
                 mesh = work/'mcp.vol'
                 payload = await call('cubit_exec',{'commands':[f'play "{sample.as_posix()}"',f'export netgen "{mesh.as_posix()}" order 2 overwrite'],'timeout_s':120})
-                assert payload['all_ok'] and payload['gui_started'] is False, payload
+                if not payload['all_ok'] or payload['gui_started'] is not False:
+                    raise RuntimeError(f'Headless export failed: {payload}')
                 payload = await call('cubit_check_vol',{'vol_path':str(mesh),'strict_labels':True,'quality':True,'threshold_pct':0.05,'report_json':str(work/'check-vol.json')})
-                assert payload.get('passed') or payload.get('report',{}).get('passed'), payload
-                await call('cubit_session_status',{})
+                if payload.get('passed') is not True:
+                    raise RuntimeError(f'Mesh acceptance failed: {payload}')
+                status = await call('cubit_session_status',{})
+                if status['gui_started'] is not False or status['owned'] is not True:
+                    raise RuntimeError(f'Unexpected session ownership or mode: {status}')
             finally:
-                await call('cubit_session_shutdown',{})
+                shutdown = await call('cubit_session_shutdown',{})
+                if shutdown.get('stopped') != 'owned-child':
+                    raise RuntimeError(f'Owned session shutdown failed: {shutdown}')
     results['passed'] = True
     (work/'result.json').write_text(json.dumps(results,indent=2),encoding='utf-8')
     print(json.dumps({'passed':True,'tool_count':results['tool_count'],'result':str(work/'result.json')}))
