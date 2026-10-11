@@ -58,7 +58,8 @@ def run(args):
                     cpu_direct.append(time.perf_counter()-start)
                 reference_array=reference.FV().NumPy()[free].copy()
                 dinv=np.zeros(fes.ndof);dinv[free]=1/matrix.diagonal()
-                pre=ng.DiagonalMatrix(ng.Vector(dinv))
+                diagonal=f.vec.CreateVector();diagonal.FV().NumPy()[:]=dinv
+                pre=ng.DiagonalMatrix(diagonal)
                 cpu_cg=[];iterations=[]
                 for _ in range(6):
                     solver=ng.CGSolver(a.mat,pre=pre,tol=1e-10,maxiter=10000)
