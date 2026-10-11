@@ -5,7 +5,7 @@ same discovery rules:
 
   1. ``$CUBIT_INSTALL_DIR`` env var if set and exists.
   2. Latest ``C:\\Program Files\\Coreform Cubit *`` directory
-     (version-aware sort: 2025.12 > 2025.3).
+     (version-aware sort: 2026.8 > 2026.6).
   3. Returns None + logs a warning if nothing found.
 
 Replaces the prior hardcoded path pattern in
@@ -38,7 +38,7 @@ from typing import Optional
 
 
 def _parse_version(name: str) -> tuple:
-    """Parse 'Coreform Cubit 2025.12' -> (2025, 12) for version sort."""
+    """Parse 'Coreform Cubit 2026.8' -> (2026, 8) for version sort."""
     stem = name.replace("Coreform Cubit", "", 1).strip()
     parts = stem.split(".")
     out = []
@@ -103,7 +103,7 @@ def find_cubit_exe() -> Optional[Path]:
 
 
 def get_cubit_version() -> Optional[str]:
-    """Return the version string '2025.12' (parsed from dir name), or None."""
+    """Return the version string '2026.8' (parsed from dir name), or None."""
     inst = find_cubit_install()
     if not inst:
         return None

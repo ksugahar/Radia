@@ -419,7 +419,7 @@ def _gates_for_changes(changed):
     """Path-aware gate selection (used by the pre-push hook so most pushes
     stay fast): policy + version ALWAYS; the radia-mcp gates only when
     packages/radia-mcp changed. Repository contracts are owned by the fixed
-    fast mdx lane, so broad top-level collection is an explicit diagnostic."""
+    fast LAB lane, so broad top-level collection is an explicit diagnostic."""
     sel = {"policy", "version"}
     if any(
         f == "tools/audit_taskmanager.py"

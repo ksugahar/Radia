@@ -149,7 +149,6 @@ def record_manifest(repo_root: Path, package_dir: Path) -> dict:
         payload["sha256"] = sha256
         payload["size"] = size
         payload.setdefault("platform", "win_amd64")
-        payload.setdefault("cubit_version", "2025.12")
         build_dir = "build-pyd" if name.endswith(".pyd") else "build-ccm"
         cache_path = repo_root / "src/cubit_plugin" / build_dir / "CMakeCache.txt"
         if cache_path.is_file():

@@ -16,9 +16,9 @@ def test_non_identifying_metadata_and_citations_allowed(value):
     assert not lint.public_runtime_identity_hits("docs/runtime.md", value)
 
 def test_only_exact_route_exception_is_allowed():
-    assert not lint.public_runtime_identity_hits("tools/ci_preflight_mdx.py", "mdx1")
+    assert not lint.public_runtime_identity_hits("tools/ci_preflight_lab.py", "mdx1")
     assert lint.public_runtime_identity_hits("tools/new_result_writer.py", "mdx1")
-    assert lint.public_runtime_identity_hits("docs/ci_preflight_mdx.py", "mdx1")
+    assert lint.public_runtime_identity_hits("docs/ci_preflight_lab.py", "mdx1")
 
 def test_host_filename_rejected_without_reading_runtime_field():
     assert lint.public_runtime_identity_hits("results/intel11-result.json", "{}")

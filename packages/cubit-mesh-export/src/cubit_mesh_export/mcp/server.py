@@ -2244,7 +2244,7 @@ def get_lint_rules() -> str:
 		{
 			'rule': 'pyqt5-import-forbidden',
 			'severity': 'HIGH',
-			'description': 'PyQt5 import in Cubit UI code. cubit-mesh-export targets Coreform Cubit 2025.12+ and is PySide6-only.',
+			'description': 'PyQt5 import in Cubit UI code. cubit-mesh-export targets Coreform Cubit 2026.8+ and is PySide6-only.',
 			'trigger': 'from PyQt5.QtWidgets import ...',
 			'fix': 'Use PySide6 only; do not keep a PyQt5 fallback.',
 		},
@@ -4949,7 +4949,7 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 		return json.dumps(_error_payload(
 			"environment", "sculpt.exe not found in the Cubit bin "
 			f"directory ({bin_dir}); Sculpt ships with Coreform Cubit "
-			"2025.12+ on Windows", kind="environment"))
+			"2026.8+ on Windows", kind="environment"))
 	for output in (vol, msh, sculpt_exo):
 		output.parent.mkdir(parents=True, exist_ok=True)
 		try:

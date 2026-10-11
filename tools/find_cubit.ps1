@@ -6,7 +6,7 @@
     Centralizes Cubit install discovery so Build.ps1, cubit_plugin
     builds, and CI no longer hardcode a specific version. Replaces
     the prior pattern:
-        $env:CUBIT_DIR = 'C:\Program Files\Coreform Cubit 2025.3\cmake'
+        $env:CUBIT_DIR = 'C:\Program Files\Coreform Cubit 2026.6\cmake'
     with:
         . tools/find_cubit.ps1
         $env:CUBIT_DIR = $CubitCmakeDir   # always points at latest
@@ -14,14 +14,14 @@
     Discovery rules (first hit wins):
       1. $env:CUBIT_INSTALL_DIR if set and exists
       2. Latest 'C:\Program Files\Coreform Cubit *' dir
-         (version-aware sort: 2025.12 > 2025.3)
+         (version-aware sort: 2026.8 > 2026.6)
       3. $null + warning if nothing found
 
     When dot-sourced, sets script-scoped variables:
-      $CubitInstallDir   = e.g. 'C:\Program Files\Coreform Cubit 2025.12'
+      $CubitInstallDir   = e.g. 'C:\Program Files\Coreform Cubit 2026.8'
       $CubitBinDir       = "$CubitInstallDir\bin"
       $CubitCmakeDir     = "$CubitInstallDir\cmake"
-      $CubitVersion      = e.g. '2025.12'
+      $CubitVersion      = e.g. '2026.8'
 
     When run as a standalone script, prints those values one-per-line
     (KEY=VALUE) so a .bat caller can `FOR /F ... DO` parse them.
@@ -42,7 +42,7 @@
 
 .EXAMPLE
     # Override for an off-default install:
-    $env:CUBIT_INSTALL_DIR = 'D:\Tools\Cubit2025.12'
+    $env:CUBIT_INSTALL_DIR = 'D:\Tools\Cubit2026.8'
     . tools/find_cubit.ps1
 #>
 

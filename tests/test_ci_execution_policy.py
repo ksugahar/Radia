@@ -286,11 +286,11 @@ def test_preflight_git_scope_is_safe_in_an_isolated_worktree(monkeypatch):
         ]
 
 
-def test_pre_push_runs_the_unpushed_candidate_on_mdx():
+def test_pre_push_runs_the_unpushed_candidate_on_lab():
     hook = (ROOT / "tools" / "git-hooks" / "pre-push").read_text(encoding="utf-8")
-    helper = (ROOT / "tools" / "ci_preflight_mdx.py").read_text(encoding="utf-8")
+    helper = (ROOT / "tools" / "ci_preflight_lab.py").read_text(encoding="utf-8")
 
-    assert "ci_preflight_mdx.py --base \"$remote_sha\" --head \"$local_sha\"" in hook
+    assert "ci_preflight_lab.py --base \"$remote_sha\" --head \"$local_sha\"" in hook
     assert '"bundle", "create"' in helper
     assert 'git_output("merge-base", head, main_ref)' in helper
     assert "$base = '{effective_base}'" in helper
@@ -300,6 +300,8 @@ def test_pre_push_runs_the_unpushed_candidate_on_mdx():
     assert "numpy scipy pytest pyyaml setuptools 'mcp>=1.0,<2'" in helper
     assert 'import mcp, numpy, pytest, scipy, setuptools, yaml' in helper
     assert "tools/run_test_tier.py --profile fast-contracts" in helper
+    assert "LAB preflight helper missing" in hook
+    assert '&& [ -f tools/ci_preflight_lab.py ]' not in hook
     assert "upload_release_asset.py" not in hook
     assert "developer push must never upload mutable" in hook
 
@@ -317,8 +319,8 @@ def test_policy_twins_define_the_same_ci_notebook_contract():
     assert policy == section(claude)
     normalized = " ".join(policy.split())
     assert "with the `100` runner label" in normalized
-    assert "mdx is the sole compute/SSH-preflight host" in normalized
-    assert "Long solver work uses mdx when idle; SSH preflight has priority" in normalized
+    assert "LAB owns distribution acceptance and SSH preflight; mdx is reserved for computation-time evaluation" in normalized
+    assert "Distribution tests run on LAB; mdx runs timing evaluations only, without Cubit" in normalized
     assert "CI scope begins at the independently released distribution boundary" in normalized
     assert "each server's live `tools/list` response are the tool-discovery source of truth" in normalized
     assert "Generated tool inventory snapshots are local diagnostics" in normalized
@@ -334,7 +336,7 @@ def test_policy_twins_define_the_same_ci_notebook_contract():
     assert "Do not keep two tests whose purpose and failure signal are the same" in normalized
     assert "an adjacent JSON and a runtime gate are not required" in normalized
     assert "A docs-only contract lane parses changed notebooks" in normalized
-    assert "Developer pre-push hooks run only the impact-scoped mdx preflight" in normalized
+    assert "Developer pre-push hooks run only the impact-scoped LAB preflight" in normalized
 
 
 def test_policy_twins_define_the_same_compute_host_routing():
@@ -356,7 +358,7 @@ def test_policy_twins_define_the_same_compute_host_routing():
     assert "mdx1/mdx2/hibino no longer exist as targets" in normalized
     assert "one heavy job at a time" in normalized
     assert "running jobs and available memory" in normalized
-    assert "preflight has priority" in normalized
+    assert "preserve active timing jobs" in normalized
     assert "Never stop another session's jobs" in normalized
     assert "ConnectTimeout" in normalized
     assert "Measure speed" in normalized

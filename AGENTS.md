@@ -165,7 +165,7 @@ solver boundary is a checked `.vol` regardless of the creation route.
 
 **POLICY**: CI/builds use 100号機 with the `100` runner label.
 Isolate CI from user runtimes; LAB tests wheels.
-mdx is the sole compute/SSH-preflight host; mdx1/mdx2/hibino are retired.
+LAB owns distribution acceptance and SSH preflight; mdx is reserved for computation-time evaluation; mdx1/mdx2/hibino are retired.
 Before the next solver release, migrate release-quad acceptance to the current fleet.
 Decision 2026-10-01: editable only on 100号機, in a dedicated local development
 venv for maintainers/students, separate from the release runtime. LAB/mdx use
@@ -175,8 +175,7 @@ solver release-quad must not install, uninstall, repoint, or version-gate it.
 Do not install or run Cubit on mdx in either release lane. This boundary
 does not prohibit Cubit-independent checker unit tests in isolated CI
 environments. Existing installations are not silently removed.
-hibino remains a computation host and is not a release-quad acceptance target.
-Long solver work uses mdx when idle; SSH preflight has priority.
+Distribution tests run on LAB; mdx runs timing evaluations only, without Cubit.
 
 MATLAB-capable runners use a MATLAB-authenticated account and pass an Engine
 startup/calculation/shutdown check in the actual runner context. SYSTEM and SSH
@@ -201,7 +200,7 @@ an adjacent JSON and a runtime gate are not required. A docs-only contract lane
 parses changed notebooks. Public examples include saved parameterized WebGUI
 geometry/mesh and primary-field scenes.
 
-Developer pre-push hooks run only the impact-scoped mdx preflight. Release
+Developer pre-push hooks run only the impact-scoped LAB preflight. Release
 workflows, never developer hooks, publish immutable artifacts.
 
 No workflow selects a LAB runner. EqnEdit64 signed executables reach GitHub-hosted CI
@@ -211,11 +210,9 @@ LAB-owned mapped drives or the workgroup share. Do not restore that dependency.
 
 ### Compute Host Routing
 
-**POLICY (2026-10-11)**: Use the consolidated `mdx` host for heavy solver,
-optimization, memory and timing work; mdx1/mdx2/hibino no longer exist as targets.
+**POLICY (2026-10-11)**: Use the consolidated `mdx` host for computation-time evaluations only; mdx1/mdx2/hibino no longer exist as targets.
 Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes mdx hostname`, then check
-running jobs and available memory. Run one heavy job at a time; preflight has
-priority. Never stop another session's jobs. LAB may run high-memory tests when
+running jobs and available memory. Run one heavy job at a time; preserve active timing jobs. Never stop another session's jobs. LAB may run high-memory tests when
 explicitly selected; Gmsh rendering needs a desktop.
 Measure speed; settle quadrature and threads first. Historical mdx measurements
 remain valid provenance. Publish OS, threads, versions/results; keep hosts/IPs/paths private.

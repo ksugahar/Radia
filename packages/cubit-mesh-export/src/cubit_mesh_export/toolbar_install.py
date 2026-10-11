@@ -1,5 +1,5 @@
 """
-Cubit toolbar installer for Coreform Cubit 2025.12+.
+Cubit toolbar installer for Coreform Cubit 2026.8+.
 
 Registers the Cubit Mesh Export toolbar and menu at Cubit startup.
 
@@ -35,8 +35,8 @@ _LEGACY_MARKERS = [
     ("## BEGIN cubit_mesh_export toolbar", "## END cubit_mesh_export toolbar"),
 ]
 
-_MIN_CUBIT_VERSION = (2025, 12)
-_MIN_CUBIT_VERSION_TEXT = "2025.12"
+_MIN_CUBIT_VERSION = (2026, 8)
+_MIN_CUBIT_VERSION_TEXT = "2026.8"
 
 
 def _parse_cubit_version(path: str | os.PathLike[str]) -> tuple[int, ...]:
@@ -66,7 +66,7 @@ def _is_supported_cubit_bin(path: str | os.PathLike[str]) -> bool:
 
 
 def find_cubit_bin():
-    """Find the Coreform Cubit 2025.12+ bin directory.
+    """Find the Coreform Cubit 2026.8+ bin directory.
 
     Search order:
       1. CUBIT_PATH environment variable
@@ -638,7 +638,7 @@ def verify_panel_installation(all_users=False, verbose=True):
     if not cubit_bin:
         issues.append(
             f"Coreform Cubit {_MIN_CUBIT_VERSION_TEXT}+ not found; "
-            "set CUBIT_PATH to the 2025.12 bin directory"
+            "set CUBIT_PATH to the selected Cubit bin directory"
         )
 
     for cubit_file in _get_cubit_startup_files(all_users=all_users):
@@ -680,7 +680,7 @@ def verify_panel_installation(all_users=False, verbose=True):
 
 
 def install_panels(all_users=False):
-    """Register the Cubit Mesh Export toolbar for Cubit 2025.12+."""
+    """Register the Cubit Mesh Export toolbar for Cubit 2026.8+."""
     print("=== Coreform Cubit - Panel Installer ===\n")
 
     panels_dir = _get_panels_dir()
@@ -692,7 +692,7 @@ def install_panels(all_users=False):
     cubit_bin = find_cubit_bin()
     if not cubit_bin:
         print(f"ERROR: Coreform Cubit {_MIN_CUBIT_VERSION_TEXT}+ not found.")
-        print("       Set CUBIT_PATH to the Cubit 2025.12 bin directory.")
+        print("       Set CUBIT_PATH to the selected Cubit bin directory.")
         return False
 
     startup_edits = []
@@ -797,7 +797,7 @@ def install_panels(all_users=False):
         print("Import the official toolbar package once in Cubit via:")
         print("  Tools > Custom Toolbar Editor > Import > Package")
         print(f"  {toolbar_package}")
-    print("Then restart Cubit 2025.12 to verify persistent loading.")
+    print("Then restart Cubit to verify persistent loading.")
     return True
 
 

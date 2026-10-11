@@ -146,8 +146,8 @@
     ".github/workflows/radia-optuna.yml": [
       "tests/test_ltspice_ci_scope.py"
     ],
-    "tools/ci_preflight_mdx.py": [
-      "tests/test_ci_preflight_mdx.py"
+    "tools/ci_preflight_lab.py": [
+      "tests/test_ci_preflight_lab.py"
     ],
     "tools/release_quad.py": [
       "tests/test_release_quad_state.py",

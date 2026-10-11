@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Run Radia's fast pre-push contracts on mdx for an unpushed commit.
+"""Run Radia's fast pre-push contracts on lab for an unpushed commit.
 
 GitHub Actions can only inspect commits already on GitHub. This helper closes
 that gap for ``pre-push``: it sends the candidate commit delta as a Git bundle
-to mdx, checks it out in an isolated temporary worktree, and runs the
+to lab, checks it out in an isolated temporary worktree, and runs the
 deterministic fast gates there.
 
-The consolidated mdx compute host is reached directly over SSH, without GitHub
+The LAB validation host is reached directly over SSH, without GitHub
 runner registration. A host-local OS lock protects the shared preflight repo
-and environment; running compute jobs reject admission before setup.
-RADIA_PREFLIGHT_SSH_ALIAS may map mdx to an alternate SSH config alias.
+and environment; isolated worktrees and environments preserve other sessions.
+RADIA_PREFLIGHT_SSH_ALIAS may map lab to an alternate SSH config alias.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ ZERO = "0" * 40
 
 
 def resolve_ssh_destination(host: str, mapping: str | None = None) -> str:
-    """Resolve transport only; never change the selected compute host."""
+    """Resolve transport only; never change the selected validation host."""
     if mapping is None:
         mapping = os.environ.get("RADIA_PREFLIGHT_SSH_ALIAS", "")
     if not mapping.strip():
@@ -39,7 +39,7 @@ def resolve_ssh_destination(host: str, mapping: str | None = None) -> str:
     for entry in mapping.split(","):
         label, separator, alias = entry.strip().partition("=")
         label, alias = label.strip(), alias.strip()
-        if (not separator or label != "mdx"
+        if (not separator or label != "lab"
                 or label in aliases
                 or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", alias) is None):
             raise RuntimeError("Invalid RADIA_PREFLIGHT_SSH_ALIAS mapping")
@@ -105,15 +105,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--base", required=True, help="remote SHA before the push")
     parser.add_argument("--head", required=True, help="local candidate SHA")
     parser.add_argument(
-        "--host", default=os.environ.get("RADIA_PREFLIGHT_HOST", "mdx"),
-        choices=("mdx",),
-        help="Use the consolidated mdx compute host",
+        "--host", default=os.environ.get("RADIA_PREFLIGHT_HOST", "lab"),
+        choices=("lab",),
+        help="Use the LAB validation host",
     )
     args = parser.parse_args(argv)
     try:
         ssh_destination = resolve_ssh_destination(args.host)
     except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError) as exc:
-        print(f"mdx preflight unavailable: {exc}", file=sys.stderr)
+        print(f"lab preflight unavailable: {exc}", file=sys.stderr)
         return 1
     print(f"Preflight host: {args.host}")
 
@@ -140,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
 
         script = f"""
 $ErrorActionPreference = 'Stop'
-$git = 'C:\\actions-runner\\tools\\PortableGit\\bin\\git.exe'
+$git = 'C:\\Program Files\\Git\\cmd\\git.exe'
 $system_python = 'C:\\Program Files\\Python312\\python.exe'
 $root = '{remote_root}'
 $repo = Join-Path $root 'repo'
@@ -154,8 +154,8 @@ try {{
   # Fail fast on overlapping preflights; the OS releases the lock on process exit.
   $lock = [IO.File]::Open((Join-Path $root 'preflight.lock'),
     [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
-  if (Get-Process -Name python,pythonw,MATLAB,Runner.Worker -ErrorAction SilentlyContinue) {{
-    throw 'Compute host is occupied; retry after its jobs finish'
+  if (Get-Process -Name Runner.Worker -ErrorAction SilentlyContinue) {{
+    throw 'LAB runner is occupied; retry after its job finishes'
   }}
 if (-not (Test-Path -LiteralPath $git)) {{ throw "Git is unavailable at $git" }}
 if (-not (Test-Path -LiteralPath $system_python)) {{ throw "Python is unavailable at $system_python" }}
@@ -212,7 +212,7 @@ if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 """
         remote_command(script, ssh_destination)
     except (OSError, RuntimeError, subprocess.CalledProcessError) as exc:
-        print(f"mdx preflight failed: {exc}", file=sys.stderr)
+        print(f"lab preflight failed: {exc}", file=sys.stderr)
         return 1
     finally:
         # Also remove a partial upload when scp or the remote launcher fails.
@@ -225,7 +225,7 @@ if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
         except (OSError, RuntimeError, subprocess.CalledProcessError) as exc:
             print(f"preflight upload cleanup needs attention: {exc}", file=sys.stderr)
 
-    print(f"mdx preflight passed for {args.head}")
+    print(f"lab preflight passed for {args.head}")
     return 0
 
 

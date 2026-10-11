@@ -60,7 +60,7 @@ def _discover_cubit_bin():
     import glob as _g
     cands = _g.glob(r"C:\Program Files\Coreform Cubit *")
     if not cands:
-        return r"C:\Program Files\Coreform Cubit 2025.12\bin"  # last-resort
+        raise RuntimeError("Coreform Cubit 2026.8 is not installed")
     def _ver(p):
         name = os.path.basename(p).replace("Coreform Cubit", "", 1).strip()
         try:
@@ -70,9 +70,6 @@ def _discover_cubit_bin():
     return os.path.join(max(cands, key=_ver), "bin")
 
 
-_CUBIT_BIN = _discover_cubit_bin()
-if _CUBIT_BIN not in sys.path:
-    sys.path.insert(0, _CUBIT_BIN)
 
 
 def _write_response(obj):
@@ -89,7 +86,10 @@ def _log(msg):
 
 def _init_cubit():
     """Import cubit and initialize. Returns the imported module."""
-    import cubit  # noqa: E402  (deferred import; path set above)
+    cubit_bin = _discover_cubit_bin()
+    if cubit_bin not in sys.path:
+        sys.path.insert(0, cubit_bin)
+    import cubit  # noqa: E402  (deferred until CLI validation)
 
     # -nojournal: we don't need automatic .jou journaling.
     # -noecho:    don't re-echo commands to stdout (we'd corrupt JSON-RPC).

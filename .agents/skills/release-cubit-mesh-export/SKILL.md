@@ -8,14 +8,15 @@ description: Release and LAB/100 release-dual deployment of cubit-mesh-export (v
 cubit-mesh-export releases independently of Radia. Its deployment is the
 LAB/100 **release-dual** (`tools/release_cubit_dual.py`); the Radia solver
 release-quad must not install, repoint or gate it. Never install or run Cubit
-on mdx1/mdx2.
+on mdx. mdx is used only for computation-time evaluation.
+Distribution acceptance and pre-push contracts run on LAB with Cubit 2026.8.
 
 ## Hosts (check `hostname` first)
 
 | name | host | ssh alias | notes |
 |---|---|---|---|
 | LAB = 102号機 | 192.168.121.102 | `lab` (also `102`) | test host with verified wheels; pwsh 7 ssh shell |
-| 100号機 | 192.168.121.100, hostname `intel11` | `100` | development/editable/review/integration host; many user profiles |
+| 100号機 | 192.168.121.100, hostname `T7920` | `100` | development/editable/review/integration host; many user profiles |
 
 - On 100, `W:` is local and `S:` is `subst` of `W:\00_CAE`; `W:\` is shared as
   `\\192.168.121.100\Work`. LAB's interactive session maps that share as `S:`.
@@ -51,8 +52,8 @@ on mdx1/mdx2.
    For native changes, rerun `validation_test/cubit_mesh_export/geometric_refit_benchmark.py`
    with an **absolute** `--plugin-dir` (a relative one silently loads the
    installed plugin) and compare the `.vol` bytes with the previous release.
-5. `git push origin HEAD:main` (the pre-push mdx preflight must pass; a
-   `Connection reset` to mdx1 is transport, retry), wait for the
+5. `git push origin HEAD:main` (the pre-push LAB preflight must pass; a
+   `Connection reset` to LAB is transport, retry), wait for the
    `cubit-mesh-export` workflow, then push the annotated tag
    `cubit-mesh-export-vN`; its run publishes to PyPI.
 
