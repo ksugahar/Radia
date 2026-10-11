@@ -54,7 +54,7 @@ if ($args.Count -gt 0) {
 }
 
 if ($AmsCudaOnly) {
-    if ($RadiaOnly -or $AxiFemOnly -or $MatlabMexOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test) {
+    if ($RadiaOnly -or $AxiFemOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test) {
         throw '-AmsCudaOnly is an isolated experimental build; incompatible options supplied'
     }
     $amsBuildArgs = @()

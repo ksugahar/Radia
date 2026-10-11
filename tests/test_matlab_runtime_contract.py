@@ -56,9 +56,8 @@ def test_matlab_release_uses_sequential_mkl_without_changing_python() -> None:
     assert 'MatlabMexOnly' not in build
     assert "mkl_intel_thread" in cmake
     assert "MKL_MATLAB_RUNTIME_DLLS" not in cmake
-    assert "mkl_sequential.3.dll" in package
-    assert "mkl_intel_thread.3.dll" not in package
-    assert "+radia/+internal/expectedNGSolveVersion.m" in package
+    assert "CPU MEX ZIP publication is retired" in package
+    assert "packages/radia-gpu" in package
     assert "packages/radia-gpu/matlab/mkl_sequential.3.dll" in verifier
     assert "packages/radia-gpu/matlab/+radia/+internal/expectedNGSolveVersion.m" in verifier
 

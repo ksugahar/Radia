@@ -118,8 +118,8 @@ def test_mcp_sdk_is_optional_for_core_radia_users():
     optional = project["optional-dependencies"]
 
     assert all(not requirement.lower().startswith("mcp") for requirement in project["dependencies"])
-    assert optional["mcp"] == ["mcp>=1.0,<2"]
-    assert "mcp>=1.0,<2" in optional["test"]
+    assert "mcp" not in optional
+    assert all(not requirement.lower().startswith("mcp") for requirement in optional["test"])
 
 
 def test_repack_regenerates_record_after_metadata_edits(tmp_path):

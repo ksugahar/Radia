@@ -377,8 +377,10 @@ def test_agent_policies_stay_compact_and_share_one_policy_body():
     assert claude[0] == "# Claude Code - Radia Project Policy"
     assert agents[1:] == claude[1:]
     assert len(agents) < 300
-    assert agents_path.stat().st_size < 20_000
-    assert claude_path.stat().st_size < 20_000
+    # Independent GPU ownership and exchange policy add required guidance;
+    # retain the line bound and a bounded document size for both agents.
+    assert len("\n".join(agents).encode("utf-8")) < 24_000
+    assert len("\n".join(claude).encode("utf-8")) < 24_000
 
     policy = "\n".join(agents)
     assert "Investigations remain in Git" in policy
