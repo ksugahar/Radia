@@ -37,6 +37,15 @@ def jsonable(x):
     if isinstance(x,bytes):return x.decode('utf-8',errors='replace')
     return x
 
+def numeric_bytes(value):
+    if isinstance(value, dict):
+        return sum(numeric_bytes(v) for v in value.values())
+    if isinstance(value, (list, tuple)):
+        return sum(numeric_bytes(v) for v in value)
+    if isinstance(value, np.ndarray):
+        return value.nbytes
+    return 8
+
 def main(args):
     root=Path(__file__).resolve().parents[2]
     binary=root/'build-ams-cuda'
@@ -87,7 +96,10 @@ def main(args):
                     with ng.TaskManager():x.data=solver*b
                     cpu.append(time.perf_counter()-timer);cpu_iterations.append(solver.iterations)
                 case=out/f'h{h}-cycle{cycle}';case.mkdir()
-                src=case/'input.mat';savemat(src,dict(snapshot=serializable(snapshot),rhs=rhs,probes=probes,expected=expected),oned_as='column')
+                payload=dict(snapshot=snapshot,rhs=rhs,probes=probes,expected=expected)
+                if numeric_bytes(payload)>=2_000_000_000:
+                    raise RuntimeError('Artifacts exceeding 2 GB require HDF5; this small-case MAT v5 runner does not support them')
+                src=case/'input.mat';savemat(src,serializable(payload),oned_as='column')
                 eng.benchmark(str(src),str(case/'gpu.mat'),str(binary),nargout=0)
                 gpu=loadmat(case/'gpu.mat',simplify_cells=True)
                 actual=np.asarray(gpu['solution']).reshape(-1)
