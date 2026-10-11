@@ -26,7 +26,8 @@ def verify(path: Path) -> dict:
                     or member.suffix in {'.m', '.mlx', '.slx', '.mdl', '.mexw64',
                                          '.mexa64', '.mexmaci64', '.mexmaca64', '.cu', '.cuh'}
                     or any(suffix.startswith('.mex') for suffix in member.suffixes)
-                    or member.name in {'matlab_bridge.py', 'vim_matlab_bridge.py'}):
+                    or member.name in {'matlab_bridge.py', 'vim_matlab_bridge.py',
+                                       'application_interface_manifest.json'}):
                 forbidden.append(name)
         for requirement in metadata.get_all('Requires-Dist', []):
             dependency = re.split(r'[\s\[<>=!~;(]', requirement, maxsplit=1)[0]

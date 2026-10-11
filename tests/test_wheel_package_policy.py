@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
     'radia_gpu/__init__.py', 'radia/ltspice.py', 'radia/matlab_bridge.py',
     'radia/kernel.m', 'radia/model.slx', 'radia/kernel.mexw64',
     'radia/kernel.mexw64.build.json', 'radia/kernel.cu',
+    'radia/panels/application_interface_manifest.json',
     'Requires-Dist: radia-gpu>=0.1.0', 'Requires-Dist: matlabengine; extra == "matlab"',
 ])
 def test_cpu_wheel_rejects_gpu_product_payloads(tmp_path, foreign):

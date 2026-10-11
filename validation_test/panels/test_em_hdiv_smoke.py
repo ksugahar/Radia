@@ -111,7 +111,7 @@ def test_hdiv_fes_order_reaches_cli():
 
 def test_hdiv_headless_entries_are_owned_by_application_manifest():
     manifest_path = (
-        REPO / "src" / "radia" / "panels"
+        REPO / "packages" / "radia-gpu"
         / "application_interface_manifest.json"
     )
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))

@@ -51,7 +51,9 @@
       "block": "radia_simulink_library/Applications/PCB PEEC",
       "design": "radia.pcb_design.PCBDesignSpec",
       "notebook": null,
-      "headless": ["src/radia/panels/calc_pcb_peec.py"]
+      "headless": [
+        "src/radia/panels/calc_pcb_peec.py"
+      ]
     },
     {
       "id": "radia-motor",
@@ -124,7 +126,10 @@
       "block": null,
       "notebook": null,
       "adapter": null,
-      "headless": ["src/radia/panels/check_vol_consistency.py"]
+      "headless": [
+        "src/radia/panels/check_vol_consistency.py"
+      ]
     }
-  ]
+  ],
+  "inventory_scope": "Source-only legacy application inventory. Entries describe the retained source models, not accepted CUDA runtime support. See README.md and SIMULINK_SOURCE.md."
 }
