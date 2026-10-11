@@ -153,3 +153,20 @@ only when circuit execution is requested. No circuit import alias is left in
 the CPU Radia distribution.
 
 The optional `coupling` extra requires Radia 5.3.1 or later with the CPU thermal-operator API. Existing Radia 5.3.0 wheels do not satisfy this contract; until that CPU release is available, use the standalone CUDA PCG, Simulink PCG and LTspice interfaces.
+
+### CUDA Graph experiment (2026-10-12)
+
+`radia.gpu.amsPCG(hierarchy,rhs,tol,maxIterations,false,true)` enables
+experimental CUDA Graph replay of the existing AMS cycle. The default remains
+direct CUDA launches. Graph capture, instantiation and cleanup belong to each
+solve; the graph does not outlive its arrays or workspace. No CPU fallback is
+introduced. NGSolve sparsecholesky setup remains unchanged.
+
+The diagnostic direct/Graph ABBA experiment is recorded in
+`validation_test/ams_cuda/results/cuda-graph-dfeec57af.json`. At 702073 DOFs,
+transfer-inclusive solve time changed from 0.40324 to 0.38472 seconds, while
+setup-inclusive time changed from 4.74394 to 4.74596 seconds. This does not
+establish an end-to-end improvement. Host hierarchy construction remains the
+next acceleration target. CPU parity was verified independently; CPU timing
+was single-shot and does not establish repeated CPU/GPU speedup. These RTX
+5000 timings are diagnostic, not idle-mdx performance acceptance.
