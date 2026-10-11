@@ -169,17 +169,17 @@ def test_optuna_candidate_parser_accepts_repeatable_engine_sessions(monkeypatch)
     monkeypatch.setattr(
         release_quad.sys, "argv",
         ["release_quad.py", "optuna-candidate", "--ci-run-id", "1",
-         "--target", "lab,lab", "--engine-session", "lab=a",
-         "--engine-session", "lab=b"],
+         "--target", "lab,100", "--engine-session", "lab=a",
+         "--engine-session", "100=b"],
     )
     try:
         release_quad.main()
     except SystemExit as stop:
         assert stop.code in (0, None)
-    assert captured["args"].engine_session == ["lab=a", "lab=b"]
+    assert captured["args"].engine_session == ["lab=a", "100=b"]
 
 
-def test_optuna_done_requires_exact_head_hash_version_and_four_targets(
+def test_optuna_done_requires_exact_head_hash_version_and_both_targets(
     monkeypatch, tmp_path
 ):
     wheel = tmp_path / "radia_optuna-0.1.1-py3-none-win_amd64.whl"
