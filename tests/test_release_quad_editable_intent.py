@@ -38,7 +38,7 @@ def _record(path, package, source):
 def test_remote_verify_ships_the_intent_tool_as_the_script():
     assert release_quad.REMOTE_EDITABLE_VERIFY == (
         _TOOL.with_name("editable_intent.py").read_text(encoding="utf-8"))
-    assert "//192.168.121.100/work/00_cae/radia/" in release_quad.REMOTE_EDITABLE_VERIFY
+    assert release_quad._PATH_ALIASES[-1][0] in release_quad.REMOTE_EDITABLE_VERIFY
 
 
 

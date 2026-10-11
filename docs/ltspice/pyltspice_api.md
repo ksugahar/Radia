@@ -667,7 +667,7 @@ Include / Model:
   .model PN LPNP(BF=25 Cje=.3p Cjc=1.5p Rb=250)
 
 Subcircuit (.subckt) in TEXT directive:
-  TEXT x y Left 2 !.subckt MYCOMP T1 T2\\n...\\n.ends MYCOMP
+  TEXT x y Left 2 !.subckt MYCOMP T1 T2private-runtime-path MYCOMP
 
 PARAMETERIZATION
 -----------------

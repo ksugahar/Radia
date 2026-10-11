@@ -2,7 +2,7 @@
   "description": "Golden reference for calc_accel_magnet.py on the C-type dipole em_1-1_full.jou (1/1 full geometry, linear mu_r=1000).",
   "rationale": "Regression guard for the no-reduction baseline.  The yoke spans its full extent in all three axes (x, y, z); the air is a complete sphere with a z=0 mesh seam (geometry full, seam for Kelvin copy-mesh only).  Auto-Kelvin detects symmetry=['z'] from the air's volume centroids straddling z=0 (NOT from vertex range -- that older heuristic spuriously triggered 'x' too on a multi-vol z-only-webcut sphere).  The Kelvin sphere is offset along +x by 3R, webcut at z=0 to match the air's hemispheres.  No sym sidesets, no kelvin_far -- just kelvin_int / kelvin_ext periodic + GND.",
   "sample": {
-    "vol": "C:/temp/em_full.vol",
+    "vol": "<private-path>/em_full.vol",
     "coil_script": "src/radia/panels/samples/em_sample_coil.py",
     "generator_jou": "src/radia/panels/samples/em/em_1-1_full.jou",
     "generator_cmd_note": "Regenerate via Cubit batch: play em_1-1_full.jou + play auto_kelvin_entry.py (with kelvin_reduction=null) + export netgen order=2 overwrite."
@@ -19,7 +19,7 @@
     "solver": "pardiso"
   },
   "observations": {
-    "note": "Absolute-value snapshot for regression guard.  Reference baseline -- reductions (1/2, 1/4, 1/8) impose sym BCs that change the field; the FULL model is the cleanest physics-realistic case for the C-yoke geometry.  Run time ~19 min on LAB (PARDISO factorization of 75k DOFs SPD matrix).",
+    "note": "Absolute-value snapshot for regression guard.  Reference baseline -- reductions (1/2, 1/4, 1/8) impose sym BCs that change the field; the FULL model is the cleanest physics-realistic case for the C-yoke geometry.  Run time ~19 min on validation runtime (PARDISO factorization of 75k DOFs SPD matrix).",
     "I_2000A_coil_py": {
       "B_origin_T": [1.478e-07, 1.585e-06, -5.111e-04],
       "B_origin_mag_T": 5.111e-04,

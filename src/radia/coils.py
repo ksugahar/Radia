@@ -15,7 +15,7 @@ Current is in Amperes (Radia ``ObjFlmCur`` convention).  Returned helper fields
 (:func:`loop_axial_field`, :func:`helmholtz_center_field`) are in Tesla.
 
 VERIFIED (run via PowerShell -- see tests/test_coils.py, and the ELF/MAGIC
-cross-check in C:\\temp\\radia_helmholtz.py):
+cross-check in private-runtime-path):
   * circular_loop on-axis field == single-loop closed form mu0 I R^2 /
     (2 (R^2+z^2)^{3/2}) to <0.05% (nseg=96, convergent in nseg).
   * helmholtz_pair (separation = radius) centre field == (4/5)^{3/2} mu0 I / R

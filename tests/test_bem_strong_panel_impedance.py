@@ -144,7 +144,7 @@ def test_uniform_and_rewritten_panel_strong_work(setup_cases,model,genus):
         compare(rewritten,fresh)
 
 
-def test_panel_arrays_and_remaining_backends_fail_loudly(setup_cases):
+def test_panel_arrays_and_unbuilt_hacapk_handles_fail_loudly(setup_cases):
     with ng.TaskManager():
         solver=make_solver(setup_cases,'filament',0)
         with pytest.raises(ValueError,match='tagged'):
@@ -152,7 +152,7 @@ def test_panel_arrays_and_remaining_backends_fail_loudly(setup_cases):
         with pytest.raises(ValueError,match='one value'):
             solve(solver,PanelSurfaceImpedance(np.full(len(solver.wp_tris)-1,1e-4+1e-4j)),0)
         from radia.bem_complete_reaction import solve_complete_body
-        with pytest.raises(ValueError, match='dense body backend'):
+        with pytest.raises(RuntimeError, match='HACApK handles not built'):
             solve_complete_body(solver.wp_solver, solver._phi_poisson,
                 np.zeros(solver.wp_solver.mesh.nv, complex),
                 PanelSurfaceImpedance(np.full(len(solver.wp_tris), 1e-4+1e-4j)),

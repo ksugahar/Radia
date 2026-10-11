@@ -268,8 +268,8 @@ and top-level pytest collection all pass. Tool discovery is verified from
 snapshots are not committed or used as a CI oracle.
 
 Operational quality is claimed only after the published wheel is verified,
-a non-editable wheel install and fresh import pass on LAB, an editable
-development import passes on 100, and LAB confirms the affected live source
+a non-editable wheel install and fresh import pass on validation host, an editable
+development import passes on 100, and validation host confirms the affected live source
 and a harmless tool call. Existing 100 clients may
 adopt the update on their next normal launch; they do not block the release.
 The numerical solver's four-host release-quad is a separate workflow.
@@ -357,7 +357,7 @@ TeXForm arrays are converted to equivalent matrix syntax, with `wolfram_tex`
 retaining the original. Other array alignments fail explicitly. Calculation
 failure does not invoke the editor; editor failure retains the generated TeX.
 
-MCP execution belongs on 100 or LAB. A remote clipboard is local to the host
+MCP execution belongs on 100 or validation host. A remote clipboard is local to the host
 running EqnEdit64; transfer the `.tex` file to the intended editing host when
 needed. Optional `executable` selects the native backend explicitly.
 
@@ -390,7 +390,7 @@ Continue, …):
     "radia-matlab":        {"command": "mcp-server-radia-matlab"},
     "optuna": {
       "command": "optuna-mcp",
-      "args": ["--storage", "sqlite:///C:/temp/optuna_mcp.db"]
+      "args": ["--storage", "sqlite:///private-runtime-path"]
     }
   }
 }

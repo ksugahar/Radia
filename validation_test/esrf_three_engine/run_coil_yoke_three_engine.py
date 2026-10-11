@@ -648,7 +648,7 @@ def main(argv: list[str] | None = None) -> int:
     def provenance(name: str) -> dict[str, object]:
         return {
             "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-            "machine": platform.node(),
+            "platform_class": platform.system(),
             "nonlinear_maximum_iterations": iteration_caps[name],
             "engine_settings": engine_settings[name],
         }
@@ -742,7 +742,7 @@ def main(argv: list[str] | None = None) -> int:
         "schema": "radia.validation.esrf-coil-yoke-three-engine.v2",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "passed": bool(passed),
-        "machine": platform.node(),
+        "platform_class": platform.system(),
         "python": sys.version,
         "runtime_identity": runtime_identity,
         "implementation_sha256": common["implementation_sha256"],

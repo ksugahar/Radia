@@ -1,9 +1,9 @@
 {
   "schema": "radia.research.reduced-vs-mixed-omega.v1",
   "generated_at_utc": "2026-09-10T08:54:40.793553+00:00",
-  "hostname": "lab",
+
   "radia_version": "4.95.81",
-  "level": "C:\\temp\\radia-ctype-family\\coarse",
+  "level": "<private-path>/radia-ctype-family\\coarse",
   "mesh_elements": 24134,
   "mu_r": 1000.0,
   "claim": "with source_projection_order == order the two admissible sets coincide, so the shifted Omega energies must agree",

@@ -45,4 +45,4 @@ their unit tests live in `packages/cubit-mesh-export/tests`. Re-run
 `cubit-plugin-install` from the selected external interpreter to replace old
 startup references before running the explicitly scoped GUI acceptance.
 No new version, publication,
-shared editable change or LAB/100 deployment is implied by these local tests.
+shared editable change or validation host/100 deployment is implied by these local tests.

@@ -9,7 +9,7 @@ and executable Radia anchors.
 Local use:
 
 ```powershell
-$env:LAB_MATHEMATICA_CURVE_SURFACE_DG_PDF = "<local path to the PDF>"
+$env:validation host_MATHEMATICA_CURVE_SURFACE_DG_PDF = "<local path to the PDF>"
 ```
 
 Do not commit extracted book text or machine-local absolute paths.  Use the

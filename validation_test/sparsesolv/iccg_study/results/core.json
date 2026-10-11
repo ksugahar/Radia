@@ -4,7 +4,7 @@
   "solver": "radia-ngsolve",
   "created_at_utc": "2026-10-04T02:53:17.334804+09:00",
   "source_sha": "6cca23ef604f9c488e150bedcf131157f37bbfae",
-  "host": "mdx2",
+
   "tool_versions": {
     "python": "3.12.10",
     "numpy": "2.5.3",

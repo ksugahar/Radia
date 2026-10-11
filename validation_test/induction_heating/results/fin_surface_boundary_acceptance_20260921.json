@@ -2,7 +2,7 @@
   "schema": "radia.ih.fin_surface.boundary_acceptance.v1",
   "generated_at_utc": "2026-09-21T04:14:58.405818+00:00",
   "git_head": "058058f4b22ce1ed71c0228d0c65c4d85a4a4da1",
-  "host": "intel11",
+
   "python": "3.12.10",
   "ngsolve": "6.2.2606",
   "design": "docs/induction_heating/FIN_PEEC_PRODUCTION_BOUNDARY.md section 5",

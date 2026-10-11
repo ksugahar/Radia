@@ -2,7 +2,7 @@
   "schema": "radia.beak_sibc_validity_map.v1",
   "generated_at_utc": "2026-09-22T05:57:30.479570+00:00",
   "git_head": "72646ab22230cc591d77bf040f54f0c7a7571900",
-  "host": "intel11",
+
   "question": "the surface impedance's failure on this section was explained by delta over the local radius of curvature.  Does the error actually depend on that ratio alone?",
   "reference": "the planar interior-resolved control of radia.sibc_corner_patch, which reproduces the exact Bessel round wire to 3.5e-8",
   "levels": [

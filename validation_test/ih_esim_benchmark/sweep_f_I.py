@@ -10,7 +10,7 @@ The output is a 2D heatmap of (per-element-vs-scalar P_wp gap) vs
 most for IH design.  Figure target: IGTE 2026 digest.
 
 Grid: 9 currents x 6 frequencies x 2 modes = 108 cases.
-Run time on LAB is typically 3--4 hours, depending on high-current
+Run time on validation runtime is typically 3--4 hours, depending on high-current
 stall behaviour.
 
 Usage:

@@ -201,7 +201,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     result = {
         "schema": "radia.validation.hcurl_corner_gmsh.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "validation_host": platform.node(),
+        "platform_class": platform.system(),
         "configuration": vars(args) | {"output": str(output)},
         "mesh": {
             "elements": int(mesh.ne),

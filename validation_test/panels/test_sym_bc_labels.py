@@ -112,7 +112,7 @@ def test_reduction_eighth_with_ht_axis_validates():
     """1/8 with at least one ht=0 axis must pass argument validation
     (no more NotImplementedError -- supported as of 2026-04-25).
 
-    Cubit is importable on the LAB machine so the helper proceeds
+    Cubit is importable on the validation runtime machine so the helper proceeds
     past validation into the actual Cubit work, which then fails
     because no air block exists in the empty Cubit session.  We
     accept any RuntimeError / NotImplementedError NOT containing

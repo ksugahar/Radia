@@ -463,7 +463,7 @@ def test_emit_raises_when_times_new_roman_not_requested(tmp_path):
 
 
 # --------------------------------------------------------------------
-# LAB FONT RULE: 10 pt @ 8 cm, absolute (not relative to column width)
+# validation runtime FONT RULE: 10 pt @ 8 cm, absolute (not relative to column width)
 # --------------------------------------------------------------------
 
 

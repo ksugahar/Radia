@@ -153,7 +153,7 @@ also save a failed JSON with the exception and options before propagating.
 ### Beta-zero measurements (2026-09-23)
 
 The [measurement record](results/beta_zero_ams_20260923.json) compares two
-AMS modes on mdx2, NGSolve 6.2.2606, MKL with one thread. Both use a true
+AMS modes on worker-b, NGSolve 6.2.2606, MKL with one thread. Both use a true
 linear residual tolerance of `1e-6`, nonlinear residual tolerance of `1e-8`,
 and flux-change tolerance of `2e-5`. Values below are single measurements.
 
@@ -251,13 +251,13 @@ convergence evidence, not as timings.
 ## Run
 
 ```powershell
-python validation_test/c_type_p1_ams_box/build_box_mesh.py --output C:/temp/ctype_box/meshes/ctype_box_s075.vol --scale 0.75
+python validation_test/c_type_p1_ams_box/build_box_mesh.py --output private-runtime-path --scale 0.75
 
 python validation_test/c_type_p1_ams_box/run_p1_box.py `
-  --vol C:/temp/ctype_box/meshes/ctype_box_s075.vol `
-  --output C:/temp/ctype_box/results/s075_newton.json `
+  --vol private-runtime-path `
+  --output private-runtime-path `
   --mode nonlinear --threads 8 --engines reduced_a `
-  --reference validation_test/c_type_three_engine/results/c_type_20260903_nonlinear_bdm2_finer_mdx.json
+  --reference validation_test/c_type_three_engine/results/c_type_20260903_nonlinear_bdm2_finer_compute.json
 ```
 
 `tests/test_c_type_p1_box_lane.py` pins the lane's contracts on a small
@@ -269,10 +269,10 @@ mesh without the lane's labels.
 
 ## Results: total_a on one million tetrahedra (2026-09-25)
 
-Host INTEL11, 8 threads, sequential, host otherwise idle; mesh
+Host development host, 8 threads, sequential, host otherwise idle; mesh
 `build_box_mesh.py --scale 0.38` (1,009,219 tets, 1,184,786 dofs; contract
 `results/meshes/ctype_box_s038.json`); loose rule = Newton residual 1e-3.
-Records `results/intel11_20260925_s038_total_*.json`. End-to-end = Newton +
+Records `results/development-host_20260925_s038_total_*.json`. End-to-end = Newton +
 A-phi current + engine setup (mesh load excluded).
 
 | Linear solver | Rule | Newton s | End-to-end s | Newton steps | CG iterations |
@@ -321,7 +321,7 @@ matches the in-session lane engine (`*_total_lane_nativegrad_control`, 25.3 s)
 to 3e-14 in the observed field with identical Newton and CG counts. With the
 in-place AMS update (2026-09-26: Galerkin matrices recomputed numerically on
 their fixed patterns, the three nodal components in one sweep; records
-`intel11_20260926_*`) each AMS update takes 0.35 s instead of 0.82 s (AMS
+`development-host_20260926_*`) each AMS update takes 0.35 s instead of 0.82 s (AMS
 total 6.2 s -> 3.6 s); end-to-end 22.0, 21.7, 21.7 s, Newton and CG counts and
 the observed field unchanged. With the one-pass setup (native
 `LowestOrderCurlSystem`: element dofs, basis curls, volumes, the element-graph
@@ -366,7 +366,7 @@ end-to-end 8.5, 8.4, 7.9 s loose and 11.1 s tight, field unchanged (a load
 spike hit two rows of the campaign; they were rerun on the idle host). All
 with `--inexact-linear`; single host, single problem.
 
-## Results (LAB, 2026-09-22, uncontended sequential runs, 8 threads)
+## Results (validation host, 2026-09-22, uncontended sequential runs, 8 threads)
 
 ### Optional Inexact Newton Inner Solves
 

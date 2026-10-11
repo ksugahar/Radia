@@ -1,0 +1,67 @@
+{
+  "schema": "radia.validation.sparsesolv-bddc-coarse-cases.v1",
+  "generated_at_utc": "2026-09-28T03:58:17.066513+00:00",
+
+  "label": "p3s_sphere_700_direct_edgewb",
+  "environment": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10",
+    "ngsolve": "6.2.2606",
+    "cpu_count": 38
+  },
+  "argv": [
+    "sphere",
+    "--freq",
+    "700",
+    "--hcond",
+    "8e-4",
+    "--hair",
+    "5e-3",
+    "--coarse",
+    "direct",
+    "--edge-wirebasket",
+    "--order",
+    "3",
+    "--threads",
+    "8",
+    "--label",
+    "p3s_sphere_700_direct_edgewb",
+    "--output",
+    "results\\p3s_sphere_700_direct_edgewb.json"
+  ],
+  "result": {
+    "case": "sphere",
+    "freq_hz": 700.0,
+    "ne": 20223,
+    "nv": 3974,
+    "nedge": 25192,
+    "order": 3,
+    "ndof": 293071,
+    "coarse": "direct",
+    "inverse": "sparsecholesky",
+    "cycles": 4,
+    "lean_coarse": 1,
+    "system_eps": 1e-06,
+    "edge_wirebasket": true,
+    "face_dofs_returned_to_interface": 40,
+    "threads": 8,
+    "iterations": 85,
+    "converged": true,
+    "true_residual": 4.801911587275173e-09,
+    "t_mesh": 0.925,
+    "t_assemble_and_bddc_setup": 71.661,
+    "t_solve": 23.416,
+    "t_total_wall": 97.298,
+    "peak_memory_mb": 9313.7,
+    "conductor_loss_w": 463.72206120993917,
+    "reduced_field_energy": 0.15428190585392237,
+    "reference": {
+      "loss_w": 462.9831702285341,
+      "a_over_delta": 2.001764068725952,
+      "source": "Smythe dipole moment",
+      "loss_relative_error": 0.0015959348609590667
+    },
+    "coarse_stats": {}
+  },
+  "binary_sha256": "126CB410B063E05D9DD8BE180398E7C5CF93291D04D1E759F995A7AFA8B30386"
+}

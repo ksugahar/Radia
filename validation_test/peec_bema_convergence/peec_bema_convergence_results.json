@@ -2,7 +2,7 @@
   "schema": "radia.validation.peec-bema-convergence.v2",
   "generated_at_utc": "2026-06-28T08:42:55Z",
   "source_raw_json": "validation_test/peec_bema_convergence/3turnCoil_peec_bema_convergence_2026_05_13.json",
-  "source_raw_json_sha256": "d74edcd380de8e78e31042513caa5afe8592e59a87367dcb6151864b199643d8",
+  "source_raw_json_sha256": "a11eaac0d78a3e00ec725aea06a23ee37a71ed32f69a343430fa335d95960041",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -125,7 +125,7 @@
           "L_nH": 432.57,
           "R_mOhm_SIBC": 5.084,
           "time_s": 170.0,
-          "mesh_file": "C:/temp/3turnCoil_bema_4k.vol"
+          "mesh_file": "<private-path>/3turnCoil_bema_4k.vol"
         },
         {
           "n_tris": 5938,
@@ -135,7 +135,7 @@
           "L_nH": 417.56,
           "R_mOhm_SIBC": 4.762,
           "time_s": 460.4,
-          "mesh_file": "C:/temp/3turnCoil_bema_e.vol"
+          "mesh_file": "<private-path>/3turnCoil_bema_e.vol"
         },
         {
           "n_tris": 9848,
@@ -145,7 +145,7 @@
           "L_nH": 412.18,
           "R_mOhm_SIBC": 4.717,
           "time_s": 1591,
-          "mesh_file": "C:/temp/3turnCoil_bema_d.vol"
+          "mesh_file": "<private-path>/3turnCoil_bema_d.vol"
         }
       ],
       "unreachable": [
@@ -217,7 +217,7 @@
         "question": "Does raising BEM-A geometry curve order move L toward PEEC 430 nH?",
         "answer": "NO.",
         "fixture": "gapped_torus_2port.vol, 150 kHz, HDivSurface RT0 (fes_order=0), fixed n_J=5745",
-        "provenance": "C:/temp/volpeec_proto/curveorder_L_sensitivity.py (2026-07-03)",
+        "provenance": "<private-path>/volpeec_proto/curveorder_L_sensitivity.py (2026-07-03)",
         "data": [
           {
             "curve_order": 1,

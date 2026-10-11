@@ -1,17 +1,17 @@
 {
   "schema": "radia.aca-residual-guard.v1",
-  "hostname": "lab",
+
   "python": "3.12.10",
   "numpy": "2.5.2",
   "aca_tolerance": 1e-10,
   "acceptance_budget": 1e-09,
   "production_hmatrix_rebuilt": false,
   "provenance": {
-    "C:\\temp\\aca_probe_before.dll": "e4095cf0aeb1f22e81e9ddf54d3cc2f4a2bd87cb644ec3fc08031a24f2981309",
-    "C:\\temp\\aca_probe_after.dll": "12156a8b34c06b9d258c1afb540bf48f1d73dd22dcec37ac44ae69f255b62da3",
-    "C:\\temp\\radia-ltspice-safety\\validation_test\\hacapk\\validate_aca_residual_guard.py": "2febf2c0fad4b9e6fe6b3fb1bb61c60f5736fdbaf6090b9a9cf2bb63df1b2963",
-    "C:\\temp\\radia-ltspice-safety\\validation_test\\hacapk\\aca_probe_bridge.c": "54a072a1bbf057f7cd64e1405eb723166f24e97eb49dcdc46c81daaede28f043",
-    "C:\\temp\\radia-ltspice-safety\\src\\ext\\HACApK\\cHACApK_base.c": "cd158f68b3af667b50cd718458e500a5520a54a037f6c3547aec2976204241fd"
+    "<private-path>/aca_probe_before.dll": "e4095cf0aeb1f22e81e9ddf54d3cc2f4a2bd87cb644ec3fc08031a24f2981309",
+    "<private-path>/aca_probe_after.dll": "12156a8b34c06b9d258c1afb540bf48f1d73dd22dcec37ac44ae69f255b62da3",
+    "<private-path>/radia-ltspice-safety\\validation_test\\hacapk\\validate_aca_residual_guard.py": "2febf2c0fad4b9e6fe6b3fb1bb61c60f5736fdbaf6090b9a9cf2bb63df1b2963",
+    "<private-path>/radia-ltspice-safety\\validation_test\\hacapk\\aca_probe_bridge.c": "54a072a1bbf057f7cd64e1405eb723166f24e97eb49dcdc46c81daaede28f043",
+    "<private-path>/radia-ltspice-safety\\src\\ext\\HACApK\\cHACApK_base.c": "cd158f68b3af667b50cd718458e500a5520a54a037f6c3547aec2976204241fd"
   },
   "records": [
     {

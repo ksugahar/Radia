@@ -1,6 +1,6 @@
 {
   "timestamp": "2026-06-03T09:59:35",
-  "hostname": "lab",
+
   "benchmark": "sf_design_scaling",
   "problem": {
     "geometry": "cylinder lateral surface r=0.15 L=0.5",

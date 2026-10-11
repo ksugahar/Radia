@@ -1,4 +1,4 @@
-# IH runtime acceptance follow-up (LAB, 2026-09-16)
+# IH runtime acceptance follow-up (validation host, 2026-09-16)
 
 This is a scoped acceptance record, not a complete IH release certificate.
 The numerical implementation and executed public thermal notebook were merged
@@ -52,18 +52,18 @@ Both mdx runner services were observed running as `.\\Administrator`, and both
 Python 3.12 interpreters imported MATLAB Engine. No shared Engine or running
 MATLAB/ServiceHost process was observed during the read-only inventory.
 
-The mdx2 ServiceHost log from the preceding failed run records online licensing
+The worker-b ServiceHost log from the preceding failed run records online licensing
 error 5002, `Authentication canceled`, at 2026-09-15 23:21:04. This establishes an
 unfinished authentication flow, not who canceled it or why. Authentication must
 be completed by the user before another owned startup/calculation/shutdown
 probe and the exact-package gate. No credential store or runner was modified.
-The mdx1 startup failure is not assigned the same cause without matching evidence.
+The worker-a startup failure is not assigned the same cause without matching evidence.
 
 ## Simulink visual observations
 
 Python Engine attached by the explicitly discovered shared name to the existing
-LAB MATLAB R2026a Update 3 (PID 26692). It confirmed that `radia_ih` resolved to
-`C:/temp/radia-ih-p2-integration/matlab/radia_ih.slx`, with `Dirty=off` and a stopped
+validation host MATLAB R2026a Update 3 (PID 26692). It confirmed that `radia_ih` resolved to
+`private-runtime-path`, with `Dirty=off` and a stopped
 simulation. The borrowed MATLAB was not restarted or closed.
 
 The supported Windows Computer Use route then displayed the actual Simulink

@@ -120,7 +120,7 @@ def main() -> int:
     payload = {
         "schema": "radia.hdiv_rt2_scaling.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "validation_host": host,
+        "platform_class": platform.system(),
         "platform": platform.platform(),
         "python_version": platform.python_version(),
         "radia_version": radia.__version__,

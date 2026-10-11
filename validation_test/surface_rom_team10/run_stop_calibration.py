@@ -76,7 +76,7 @@ if __name__ == '__main__':
     ana = analyse([x for x in rows if 'failure' not in x])
     print(json.dumps(ana, indent=1), flush=True)
     res = dict(case='team10_two_coil_stop_calibration', target=TARGET, bases=BASES, stride=STRIDE, pool=POOL, tests=TESTS, rows=rows,
-               analysis=ana, ndof=m.fes.ndof, total_s=time.time() - t0, host=platform.node(), ngsolve=ngsolve.__version__,
+               analysis=ana, ndof=m.fes.ndof, total_s=time.time() - t0, platform_class=platform.system(), ngsolve=ngsolve.__version__,
                sources={p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in
                         ['team13_model.py', 'transient.py', 'aphi_model.py', 'rom.py', 'rom_aphi.py', 'ecsw.py', 'run_pattern_select.py', 'run_stop_calibration.py']})
     (R / f'team10_stop_calibration_p{order}.json').write_text(json.dumps(res, indent=2))

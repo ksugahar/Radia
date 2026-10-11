@@ -1,11 +1,11 @@
 {
   "schema": "radia.validation.ctype-order3-pair.v1",
-  "host": "intel11",
+
   "radia_version": "5.0.1",
   "radia_module": "<local-path>/__init__.py",
   "ngsolve": "6.2.2606",
   "script_sha256": "73b6784ea450783d48fa28dd8b92dc48e3499de39dd325ce38cde665f64d6e64",
-  "reference_sha256": "927727fc13a70e6f8ade64719f09c79262bb252f435af62d9795595ccdb5151e",
+  "reference_sha256": "45acbadd248be04f15b7c4317f09c9905c4f4e8f347bab15faeb96491341a345",
   "mesh_result_sha256": "b0a653e8231a3a6cce02e76bfe48ccccbc5bb327b4f03af461123948a62972e7",
   "coil": {
     "authority": "ESRF Example 5 rounded rectangular solid current",

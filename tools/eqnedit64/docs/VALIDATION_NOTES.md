@@ -11,7 +11,7 @@
   and uploads both reports even when a step fails. This is bounded lifecycle
   evidence, not proof about every API invocation or a differently signed EXE.
 - Ten mocked PowerShell scenarios passed without launching an executable or
-  registering any fonts on LAB. The original host incident remains OPEN until
+  registering any fonts on validation runtime. The original host incident remains OPEN until
   the release candidate and required isolated/hand-review gates are accepted.
 
 ## 2026-09-11: review 8a34e1b53 and unresolved font-host incident
@@ -25,7 +25,7 @@
   associates startup with the incident but does not identify the failing API
   or establish that file-backed registration is safe. Unchanged rendering
   source alone cannot prove absence of an intermittent regression.
-- Do not repeat on LAB's interactive desktop or 100's shared session 0.
+- Do not repeat on validation runtime's interactive desktop or 100's shared session 0.
   Use an explicitly dedicated disposable environment for future diagnosis,
   with idle controls, event timestamps and host PIDs around every invocation.
   Do not bypass or weaken the host gate because application checks pass.
@@ -46,9 +46,9 @@
   fallback, the focused static/Web tests passed (19 tests).
 - Add a C++ runtime regression requiring named rejection of legacy Font/RM
   nodes and accepting Size as list state. It runs in the disposable hosted CI,
-  not on interactive LAB. Enable `/WX /w14062` for the CMake core so CI has the
+  not on interactive validation runtime. Enable `/WX /w14062` for the CMake core so CI has the
   release compiler's missing-enumerator guard.
-- The unmodified dispatch compiled on LAB (MSVC 19.50). A temporary header
+- The unmodified dispatch compiled on validation runtime (MSVC 19.50). A temporary header
   adding `kReleaseProbe`, compiled against the actual renderer with
   `/W4 /WX /w14062`, failed with C4062/C2220 at `layout_node`. No renderer
   process was executed. The test target also specifies UTF-8 explicitly so
@@ -537,7 +537,7 @@
   Microsoft署名`Valid`、変更・削除なし
 - 残留`Eqnedit64` / `Eqnedit64_asan`プロセス: なし
 - 機械可読な実行報告:
-  `C:\temp\Eqnedit64-final-acceptance.json`
+  `private-runtime-path`
 
 この記録を追加する文書コミットは、上記の署名済み配布バイナリを変更しない。
 次に製品コードまたは配布物を更新するときは、同じ最終ゲートを再実行する。
@@ -573,6 +573,6 @@
 - Eqnedit32参照原本: SHA-256
   `3C4A68070F3D7F14E488AE4F7EDE8E7ADD0F8029995DC800833126CA062A2C6C`、
   Microsoft署名`Valid`、変更・削除なし
-- 機械可読な実行報告: `C:\temp\Eqnedit64-final-acceptance.json`
+- 機械可読な実行報告: `private-runtime-path`
 
 この記録追加は署名済み配布バイナリを変更しない。

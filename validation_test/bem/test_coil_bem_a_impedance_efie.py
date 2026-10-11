@@ -24,7 +24,7 @@ These tests lock the unified path:
    self-contained gapped-torus fixture at 150 kHz and 7 kHz, plus the
    mesh-robust physics lock R(150k)/R(7k) ~ sqrt(150/7) (strong-skin
    Leontovich R ~ sqrt(f)), plus the omega=0 DC branch (R == 0, same
-   external L).  Reference values captured 2026-07-02 on LAB:
+   external L).  Reference values captured 2026-07-02 on validation runtime:
    150 kHz R=1.0453 mOhm L=87.270 nH; 7 kHz R=0.2231 mOhm L=87.332 nH.
 2. ``test_impedance_efie_wire_bessel``: BEM-A on an isolated straight
    round wire reproduces the closed-form Bessel AC resistance -- the
@@ -54,7 +54,7 @@ MU_0 = 4e-7 * math.pi
 # test_coil_bem_a_volume_vol.py; the .vol fixture is regenerated
 # per-machine so bands are deliberately generous).
 PEEC_BAND_NH = (80.0, 92.0)
-# Impedance-EFIE R bands captured 2026-07-02 (LAB), +-15% for
+# Impedance-EFIE R bands captured 2026-07-02 (validation runtime), +-15% for
 # cross-machine mesh variation of the auto-generated fixture.
 R_BAND_150K_MOHM = (0.89, 1.20)    # captured 1.0453
 R_BAND_7K_MOHM = (0.19, 0.26)      # captured 0.2231

@@ -38,7 +38,7 @@ with a C++ accelerator at
 The static and harmonic C++ kernels are both verified production paths.
 The harmonic dyadic path is tracked by
 `validation_test/equivalence_source/phase2_wpt_harmonic.py`; the
-2026-06-28 LAB run reconstructs the 1 MHz Hertzian-dipole case within
+2026-06-28 validation host run reconstructs the 1 MHz Hertzian-dipole case within
 0.12% for both E and nonzero H observations.
 
 ## 3. Quickstart
@@ -182,7 +182,7 @@ for a verified end-to-end test.
 | Python fallback (`use_cpp=False`) | slow (10⁵-panel × 100-obs ≈ 30 s) | Regression cross-check ONLY |
 
 Benchmarks (see `validation_test/equivalence_source/bench_static.py`):
-- 2026-06-28 LAB run: 4/4 numerical cases passed.
+- 2026-06-28 validation host run: 4/4 numerical cases passed.
 - Speed target result: 4/4 cases met the production-scale 50× target.
 - Bit-identical results: `‖H_C++ − H_python‖∞ ≈ 1e-15` (rounding noise).
 

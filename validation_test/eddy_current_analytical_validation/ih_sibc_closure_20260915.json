@@ -1,6 +1,6 @@
 {
   "scope": "Repository-owned linear SIBC acceptance; no external user-case inputs.\n\nScope: axisymmetric solid/bored copper cylinders, uniform scalar SIBC,\nprescribed circular current source, P1 dense BEM, total loop field.\nFEM is the independent axisymmetric A-form reference. BEM is a 3D surface\ndiscretization of the same axisymmetric geometry, not a 3D volume FEM solve.\n",
-  "host": "Hibino",
+
   "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
   "ngsolve": "6.2.2606",
   "threads": 4,

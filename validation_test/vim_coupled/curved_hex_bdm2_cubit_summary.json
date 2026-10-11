@@ -1,7 +1,7 @@
 {
   "schema": "radia.validation.curved-hex-bdm2-cubit.v1",
   "created_at_utc": "2026-08-30T04:26:39.841846+00:00",
-  "machine": "mdx",
+
   "versions": {
     "radia": "4.95.71",
     "ngsolve": "6.2.2606",
@@ -9,7 +9,7 @@
     "cubit_mesh_export": "0.14.14"
   },
   "mesh": {
-    "path": "C:\\temp\\radia_hex_bdm2\\curved_cylinder_hex_q2.vol",
+    "path": "<private-path>/radia_hex_bdm2\\curved_cylinder_hex_q2.vol",
     "sha256": "93737aaa2e1fb7d39bb9f76bd3618d582c56c23b2552f531812c4056cd0cd7c6",
     "sidecar_sha256": "90b99253a7fe062a90df8fc21f83651c88d0083850873cd7de0923481dd138e1",
     "elements": 4,

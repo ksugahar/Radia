@@ -11,7 +11,7 @@ This example checks the per-boundary rows and the generic force/moment reducer.
 Run:
 
     python validation_test/cubit_mesh_export/validation_vol_boundary_traction_moment.py
-    python validation_test/cubit_mesh_export/validation_vol_boundary_traction_moment.py --vol C:\\temp\\box.vol
+    python validation_test/cubit_mesh_export/validation_vol_boundary_traction_moment.py --vol private-runtime-path
 """
 
 from __future__ import annotations

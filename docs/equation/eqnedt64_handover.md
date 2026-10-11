@@ -367,7 +367,7 @@ off-screen bitmap、メッセージ送信、CLI、COM APIで試す。
 
 ### 9.3 フォント試験の隔離
 
-完全なフォントライフサイクル試験を対話中のLABで繰り返してはならない。
+完全なフォントライフサイクル試験を対話中のvalidation hostで繰り返してはならない。
 GitHub-hosted Windows runnerまたは破棄可能なVM/ユーザーセッションで
 `EQNEDIT64_ISOLATED_TEST_SESSION=1`を設定する。
 
@@ -383,7 +383,7 @@ PID交代時は試験時間以上かつ最低10分の事前Application Error観�
 release-blocking FAILとする。共有の対話sessionで長時間fuzzを行った結果は機能試験として
 記録できるが、font host交代を製品原因と判定しない。
 
-対話中LABでは単発のhidden testは実行できるが、環境変数を偽装して32回試験のguardを
+対話中validation hostでは単発のhidden testは実行できるが、環境変数を偽装して32回試験のguardを
 迂回しない。
 
 ### 9.4 外部貼り付け試験
@@ -456,11 +456,11 @@ native出力は `tools/eqnedit64/dist/Eqnedit64.exe`。ビルド前に同じ出�
    その試験だけなら一度のレビューを満たすが、無関係なモデル／仕様変更を加えた場合は
    新しい候補としてFableレビューをやり直す。
 5. 承認された候補を`main`へ統合してpushし、Eqnedit64専用main CIがgreenであることを確認する。
-6. exact `origin/main`からINTEL11（100号機）でrelease EXEをビルドし、
-   `CN=ksugahar`で署名する。LABは検証専用で、正式リリースのビルド・署名には使わない。
+6. exact `origin/main`からdevelopment host（development host）でrelease EXEをビルドし、
+   `CN=ksugahar`で署名する。validation hostは検証専用で、正式リリースのビルド・署名には使わない。
 7. `sync_to_o.ps1 -WhatIf`でversion、build stamp、署名、source SHA、O:配置先を
    事前検査する。private-font full suiteはPR/main/tagの隔離CIだけで行い、
-   INTEL11/LABの対話セッションで`EQNEDIT64_ISOLATED_TEST_SESSION`を偽装して
+   development host/validation hostの対話セッションで`EQNEDIT64_ISOLATED_TEST_SESSION`を偽装して
    `accept_release.ps1`を実行しない。
 8. `.agents/skills/release-eqnedit64/scripts/sync_to_o.ps1`で
    `O:\Eqnedit64.exe`を更新する。
@@ -473,7 +473,7 @@ native出力は `tools/eqnedit64/dist/Eqnedit64.exe`。ビルド前に同じ出�
 13. PyPIから各wheel、GitHub ReleaseからEXEを再取得し、同梱EXEとO:のEXEがbyte-identical、
     SHA-256一致、署名有効であることを外側から確認する。
 
-O:はINTEL11では `C:\Users\Administrator\OneDrive` へのSUBSTであり、ユーザーの
+O:はdevelopment hostでは `private-runtime-path へのSUBSTであり、ユーザーの
 手動試験入口である。GitHub-hosted release workflow はO:を読まず、タグ作成前に
 `eqnedit64-staging`へ置いたEXEとmanifestを取得してタグSHA・版・署名・ハッシュを確認する。
 
@@ -488,7 +488,7 @@ O:はINTEL11では `C:\Users\Administrator\OneDrive` へのSUBSTであり、ユ�
 | タグ | `eqnedit64-v3.1.2` |
 | タグのsource / merged main | `f853d200180561e1fbb049e6043685aa8cee6d8f` |
 | 統合PR / reviewed head | [#318](https://github.com/ksugahar/Radia/pull/318) / `cfeece018397109cb636789ba56f2be398d74a65` |
-| build / signer | INTEL11、ProductVersion `3.1.2`、Authenticode `Valid` / `CN=ksugahar` |
+| build / signer | development host、ProductVersion `3.1.2`、Authenticode `Valid` / `CN=ksugahar` |
 | pinned key | `7E80D4365CFDBA7B22B33C35EB7CD6A41050E065` |
 | 署名済みEXE SHA-256 | `3A90CEEA547A0C06859E02328CAE42A5F653C622E5FBA1C0F5041E58412DC433` |
 | Web BUILD | `3.1.2 (2026-10-08)` |
@@ -522,7 +522,7 @@ O:はINTEL11では `C:\Users\Administrator\OneDrive` へのSUBSTであり、ユ�
 - 独立性の留保：同じClaudeセッションが先行レビューにも参加していた。
   ユーザーがFableへ切り替えたそのセッションを選び、fresh sessionは使用していない。
   この留保を残し、独立した新規セッションのレビューとは記載しない。
-- Codexはmerged mainのexact SHAからINTEL11でコンパイル・署名し、native実行・
+- Codexはmerged mainのexact SHAからdevelopment hostでコンパイル・署名し、native実行・
   font登録は対話デスクトップで行わなかった。Claudeが統合・CI・配備・タグ・公開を担当。
 - 本追補は公開・レビュー結果だけの文書変更で、公開済み製品の動作変更ではない。
 
@@ -587,7 +587,7 @@ source stampの両方を表示する。
   レビューで併記された`\text` / `\operatorname`の空白脱落も、TeX往復、表示幅、SVG、
   MathMLを含め回収した。
 - font-host disposition: 二度の長時間fuzz中のPID交代は、Eqnedit64不在時にも同じ
-  `0xc0000005` / offset `0x366a2`が発生するLAB共有sessionでは製品へ帰属できない。
+  `0xc0000005` / offset `0x366a2`が発生するvalidation host共有sessionでは製品へ帰属できない。
   確認済みメモリフォントtriggerの回避は維持し、最低10分の事前対照窓とApplication Errorを
   組み合わせて`FAIL`と`INCONCLUSIVE`を分ける。
 - review scope: 回収commitは本レビューに記録されたparser固定点、text空白、font判定と

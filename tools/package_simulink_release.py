@@ -71,12 +71,15 @@ PACKAGE_FILES = (
     "+radia/+simulink/addIHMonitorDashboard.m",
     "+radia/+simulink/addIHGeometryUpdateBlock.m",
     "+radia/+simulink/assembleIHOperatorsFromGeometry.m",
+    "+radia/+simulink/assembleIHPanelESIMFromGeometry.m",
     "+radia/+simulink/configureFileGeneration.m",
     "+radia/+simulink/ihGeometryExtensions.m",
     "+radia/+simulink/onIHConfigFileChanged.m",
     "+radia/+simulink/browseIHGeometryFile.m",
     "+radia/+simulink/configureIHNativeModel.m",
     "+radia/+simulink/fileFingerprint.m",
+    "+radia/+simulink/canonicalInputPath.m",
+    "+radia/+simulink/verifyIHPanelImpedanceProvenance.m",
     "+radia/+simulink/ihEddySFunction.m",
     "+radia/+simulink/ihThermalSFunction.m",
     "+radia/+simulink/ihMonitorSFunction.m",
@@ -94,6 +97,7 @@ PACKAGE_FILES = (
     "+radia/+simulink/verifyIHPanelImpedanceProvenance.m",
     "+radia/+simulink/validateIHNativeConfig.m",
     "+radia/+simulink/validateVolFiles.m",
+    "+radia/+simulink/verifyIHESIMDrive.m",
 )
 
 

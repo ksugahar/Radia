@@ -1,6 +1,6 @@
 {
   "ngsolve": "6.2.2607",
-  "host": "mdx1",
+
   "bonus_intorder": 10,
   "thresholds": {
     "direct_relative_l2": 1e-10,

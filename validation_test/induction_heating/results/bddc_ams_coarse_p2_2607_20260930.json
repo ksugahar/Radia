@@ -6,7 +6,7 @@
   "native_source_commit": "0e9f26bd6",
   "release_acceptance": false,
   "runtime_note": "Current Python source with the recorded historical native wheel; this does not verify a same-commit release artifact. Timings are observations for these runs, not general speed guarantees.",
-  "host": "mdx2",
+
   "ngsolve": "6.2.2607",
   "python": "3.12.10",
   "numpy": "2.4.3",

@@ -1,7 +1,7 @@
 {
   "schema": "radia.matlab-sparsecholesky-validation.v1",
   "run_date": "2026-09-29",
-  "host": "INTEL11",
+
   "matlab_version": "26.1.0.3346908 (R2026a) Update 5",
   "ngsolve_version": "6.2.2607",
   "source_commit": "e30ba516ba76fb9d535a382939ed47db6265c86a",

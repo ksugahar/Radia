@@ -7,14 +7,14 @@ toolbars, dialogs, and encapsulated multi-step workflows.
 Sources:
   - Coreform webinar "How to create a custom GUI in Coreform Cubit (Intro)"
     https://www.youtube.com/watch?v=TnZyZHDMOwA  (Carl McKelvey)
-  - Coreform Cubit 2025.12 / LAB deployment (PySide6 shipped in distribution).
+  - Coreform Cubit 2026.8 / validation runtime deployment (PySide6 shipped in distribution).
   - Coreform examples repo: https://github.com/coreform-llc
     (DAGMC toolbar, tire cross-section toolbar -- both .tar.gz packaged).
 
 NOTE: This is *different* from two adjacent topics:
   (a) Radia's production Simulink application blocks and headless Python/MCP
       APIs. They run outside Cubit and do not depend on Qt. The knowledge here
-      covers PySide6 code that runs *inside* Cubit's embedded Python 3.10
+      covers PySide6 code that runs *inside* Cubit's embedded Python 3.12
       interpreter, bound to Cubit's own Qt main window.
   (b) the C++ SDK plugin approach described in `cpp_sdk.py` -- that is for
       deep customization (new command panels with navigation nodes, new
@@ -25,7 +25,7 @@ NOTE: This is *different* from two adjacent topics:
 """
 
 TOOLBAR_OVERVIEW = """
-# In-Cubit Custom Toolbar Overview (Coreform Cubit 2025.12+)
+# In-Cubit Custom Toolbar Overview (Coreform Cubit 2026.8+)
 
 The standalone GUI candidate packages its menu and toolbar installer under
 `cubit_mesh_export.cubit_gui` and `cubit_mesh_export.toolbar_install`; Radia is
@@ -41,7 +41,7 @@ to replace old startup references; do not restore shims at removed Radia paths.
 The GUI cold-start command is an explicitly scoped release test, never an LLM
 production execution route. Its wheel and probe run without the Radia package.
 Independent publication uses the cubit-mesh-export tag and PyPI distribution.
-`python tools/release_cubit_dual.py` owns LAB/100 preflight, deployment and done receipts
+`python tools/release_cubit_dual.py` owns validation runtime/100 preflight, deployment and done receipts
 for one published wheel hash and clean source SHA. It leaves Radia/MCP untouched
 and refuses active Cubit instead of stopping user jobs. Optional combined Radia
 Radia owns any optional integration check; ordinary install/verify must not
@@ -54,7 +54,7 @@ Python-file execution. GUI acceptance includes real imported-button dispatch
 after restart, not merely finding six registered labels. Test drivers enqueue
 native editor actions and return to Cubit before its Python-based importer runs.
 
-Coreform Cubit 2025.12 ships PySide6 as part of its distribution.
+Coreform Cubit 2026.8 ships PySide6 as part of its distribution.
 You can extend the Cubit GUI with custom toolbars that trigger
 Cubit command-language scripts, Python scripts, or nested command panels.
 
@@ -118,7 +118,7 @@ TOOLBAR_PYTHON_SCRIPT_CONVENTIONS = """
 # Cubit In-Process Python Script Conventions (CRITICAL)
 
 Scripts executed from a custom toolbar run inside Cubit's embedded Python
-interpreter (currently Python 3.10 for Cubit 2025.12 / LAB). This interpreter has
+interpreter (currently Python 3.12 for Cubit 2026.8 / validation runtime). This interpreter has
 subtle differences from standard CPython that break naive scripts.
 
 ## Required script header
@@ -400,7 +400,7 @@ a downloadable `.tar.gz`):
 - Check the archive into a managed internal share or Artifactory.
 - Each user imports once; updates require re-importing (Cubit replaces
   the existing namespace).
-- For LAB/100 deployment, use the package-owned release-dual workflow so the
+- For validation runtime/100 deployment, use the package-owned release-dual workflow so the
   exact reviewed wheel and toolbar assets are verified on both machines.
 """
 
@@ -625,7 +625,7 @@ TOOLBAR_TROUBLESHOOTING = """
 
 - Parenthesized multi-line imports break Cubit's importer. Switch to
   backslash continuations or single-line imports.
-- cubit-mesh-export targets Coreform Cubit 2025.12+. Do not add a PyQt5 fallback or
+- cubit-mesh-export targets Coreform Cubit 2026.8+. Do not add a PyQt5 fallback or
   patch older Cubit bundles; upgrade Cubit and re-run `cubit-plugin-install`.
 
 ## Symptom: "cubit.cmd raises 'not initialized'"

@@ -32,7 +32,7 @@ Focused checks cover PCHIP derivatives, TET/HEX/WEDGE orders 1 and 2, affine and
 quadratically deformed geometry, distinct materials, zero-field Hessians, and
 the production outer Newton function with a dense SPD demag test double.
 Those tests do not validate the C++ inner solver or the full ESRF6 magnet.
-An independently identified wheel and Hibino run are required before removing
+An independently identified wheel and compute host run are required before removing
 the existing nonlinear acceptance HOLD. Mixed Omega source-load assembly
 quadrature convergence remains a separate task.
 
@@ -132,10 +132,10 @@ and the unreleased changelog record this change. FEM/Picard stopping measures
 must be interpreted under their own contracts.
 
 The updated deep-saturation sphere regression passed on the same installed
-wheel on hibino (one test, 85.48 s, two threads). It now checks the actual
+wheel on compute-host (one test, 85.48 s, two threads). It now checks the actual
 nonlinear residual against 1e-6 and the final convergence flag, rather than
 inferring success from returning without an exception. Its JUnit evidence is
-in `S:/Radia/validation_artifacts/esrf6_mesh_audit_20260913/deep_saturation.xml`
+in `private-runtime-path`
 (SHA-256 `96537d88f3f5c2cb3e98f8612335bc998f05fd2e0517fb5a8d2abef04b6f60fc`).
 This is a small sphere regression, not strong-saturation ESRF6 certification.
 

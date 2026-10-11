@@ -102,7 +102,7 @@ def main():
     start = time.perf_counter()
     result = dict(schema="cae-ai-lab.solver-run.v1", case="Production ICCG/AMS " + args.part,
         solver="radia-ngsolve", created_at_utc=datetime.now(timezone.utc).isoformat(),
-        host=platform.node(), python=platform.python_version(),
+        platform_class=platform.system(), python=platform.python_version(),
         ngsolve=ng.__version__, module=str(ss.__file__),
         binary_sha256=hashlib.sha256(Path(ss.__file__).read_bytes()).hexdigest(), passed=False)
     result["checkout_commit"] = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()

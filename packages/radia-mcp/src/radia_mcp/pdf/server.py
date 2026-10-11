@@ -2,7 +2,7 @@
 
 PDF manipulation: merge / split / extract-pages / rotate, metadata get-set, bookmarks, watermark, compress, crop-whitespace, font-embed and image-DPI checks.
 
-Promoted 2026-06-02 from mcp-server-document.pdf (LAB-private)
+Promoted 2026-06-02 from mcp-server-document.pdf (validation runtime-private)
 to radia-mcp (public PyPI), alongside presentation / poster /
 doc_convert / pdf / bibliography.
 

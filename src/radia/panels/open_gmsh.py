@@ -8,7 +8,7 @@ Run completes successfully::
 Why a separate script and not ``python -c "..."``?
 
     - Quoting ``r'<path>'`` inside a ``-c`` string is fragile, especially
-      when the user is on a UNC share (``//192.168.11.100/work/...``)
+      when the user is on a UNC share (``//a runtime host/work/...``)
       where forward / backslash conversions can break the literal.
     - ``-c`` failures vanish silently because the panel runs the launcher
       with ``CREATE_NO_WINDOW``.  A real script can wrap the gmsh calls

@@ -1,6 +1,6 @@
 """The gate that publishes and the tool that produces evidence name one host list.
 
-Release-quad requires LAB and 100号機 for the same release commit.
+Release-quad requires 102号機 and 100号機 for the same release commit.
 The promotion verifier used to carry its own two-host list -- one of them a
 computation host that is not an acceptance target -- so a release with
 evidence from two of the four machines would have passed the public gate.
@@ -38,8 +38,8 @@ def test_the_shared_list_is_the_policy_list():
 
 def test_the_policy_text_names_the_same_two_machines():
     policy = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
-    assert re.search(r"Release-quad requires LAB and 100号機", policy)
-    assert "hibino remains a computation host" in policy
+    assert re.search(r"Release-quad requires 102号機 and 100号機", policy)
+    assert "mdx1/mdx2/hibino are retired" in policy
 
 
 def test_release_quad_produces_evidence_for_exactly_those_hosts():

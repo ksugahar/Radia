@@ -270,7 +270,7 @@ def main():
         "schema": "radia.beak_sibc_validity_map.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "git_head": head,
-        "host": platform.node(),
+        "platform_class": platform.system(),
         "question": ("the surface impedance's failure on this section was "
                      "explained by delta over the local radius of curvature.  "
                      "Does the error actually depend on that ratio alone?"),

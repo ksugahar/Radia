@@ -65,7 +65,7 @@ def test_repo_accepts_only_requested_checkout(source_guard, tmp_path):
 
 
 def test_repo_accepts_a_checkout_staged_as_a_junction(source_guard, tmp_path):
-    """mdx1 and hibino stage <checkout>/src/radia as a junction into the venv.
+    """worker-a and compute host stage <checkout>/src/radia as a junction into the venv.
 
     Path.resolve() follows it, so a plain equality test rejected the very tree
     the runner asked for and the default --radia-source repo aborted on both

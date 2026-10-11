@@ -72,7 +72,7 @@ Configure MATLAB `pyenv` to the pinned Optuna 5.0 oracle environment, add
 `validation_test/optimization` to the MATLAB path, then run:
 
 ```matlab
-report = validate_optuna_precision("C:/temp/optuna_precision.json");
+report = validate_optuna_precision("private-runtime-path");
 ```
 
 This runs the diagnostic self-test and the full upstream suite, writes test

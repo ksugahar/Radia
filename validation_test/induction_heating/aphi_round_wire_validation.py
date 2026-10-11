@@ -171,7 +171,7 @@ def main():
         "schema": "radia.eddy_aphi_round_wire.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "git_head": head,
-        "host": platform.node(),
+        "platform_class": platform.system(),
         "question": ("before the A-V solver is used as the fin's independent "
                      "reference, does it reproduce the exact Bessel impedance "
                      "of a round wire across the skin-effect range?"),

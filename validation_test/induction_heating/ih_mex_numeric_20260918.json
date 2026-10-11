@@ -1,7 +1,7 @@
 {
   "schema": "radia.ih.mex-numeric-validation.v1",
   "date": "2026-09-18",
-  "host": "LAB",
+
   "matlab_version": "26.1.0.3276743 (R2026a) Update 3",
   "matlab_pid": 10760,
   "execution_route": "official-matlab-mcp-existing-session",

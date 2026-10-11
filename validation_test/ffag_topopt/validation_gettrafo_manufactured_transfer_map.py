@@ -336,7 +336,7 @@ def run(args):
             "analytic HDiv-MMM shape derivative, relinearized shape LP, "
             "and full transfer-map re-solves; not an engineering magnet "
             "design and not the pending HEX configured-field derivative."),
-        "machine": platform.node(),
+        "platform_class": platform.system(),
         "python": platform.python_version(),
         "mesh": {
             "element_family": "TET",

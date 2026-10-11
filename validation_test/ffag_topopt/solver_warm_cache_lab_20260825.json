@@ -2,15 +2,15 @@
   "schema": "radia.ffag-hdiv-exact-solve-performance/v1",
   "status": "pass-with-reproducibility-follow-up",
   "provenance": {
-    "machine": "lab",
+
     "python": "3.12.10",
     "ngsolve": "6.2.2606",
     "ngsolve_threads": 16,
     "repository_head": "1f561560f0e5e4048c3a1a2af38418db34c12a7a",
     "worktree_dirty": true,
-    "full_performance_result": "C:/temp/ffag_full_field_selected_real_iter1_warm_cache_20260825.json",
-    "warm_cold_diagnostic_result": "C:/temp/ffag_full_field_selected_real_iter1_warm_cold_diagnostic_20260825.json",
-    "measurement_scope": "exploratory LAB measurement; repeat timing on mdx or hibino after cooling-system recovery"
+    "full_performance_result": "<private-path>/ffag_full_field_selected_real_iter1_warm_cache_20260825.json",
+    "warm_cold_diagnostic_result": "<private-path>/ffag_full_field_selected_real_iter1_warm_cold_diagnostic_20260825.json",
+    "measurement_scope": "exploratory validation runtime measurement; repeat timing on mdx or compute after cooling-system recovery"
   },
   "problem": {
     "element_family": "HEX",
@@ -61,7 +61,7 @@
     "accepted_topology_uses_complete_physical_resolve": true
   },
   "follow_up": {
-    "parallel_reproducibility": "Candidate bundles varied across repeated 16-thread LAB runs near TSVD/trust-selection thresholds.",
+    "parallel_reproducibility": "Candidate bundles varied across repeated 16-thread validation runtime runs near TSVD/trust-selection thresholds.",
     "next_solver_target": "Reduce the remaining 476-635 PCG iterations with a measured native preconditioner improvement; warm start alone is not the final speed path."
   }
 }

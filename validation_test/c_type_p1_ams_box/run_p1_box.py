@@ -1170,7 +1170,7 @@ def main() -> None:
         output = {
             "schema": "radia.validation.c-type-p1-box-bench.v1",
             "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-            "machine": platform.node(), "python": sys.version,
+            "platform_class": platform.system(), "python": sys.version,
             "ngsolve": ng.__version__, "completed": False, "passed": False,
             "error": {"type": type(exc).__name__, "message": str(exc)},
             "options": {key: str(value) if isinstance(value, Path) else value
@@ -1335,7 +1335,7 @@ def run(options) -> dict:
         "passed": all(row["nonlinear_stats"].get("converged") is True
                       for row in diagnostics.values()),
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "machine": platform.node(),
+        "platform_class": platform.system(),
         "python": sys.version,
         "ngsolve": ng.__version__,
         "threads": int(options.threads),

@@ -28,7 +28,7 @@ changed by this maintenance patch.
   fail instead of silently skipping.
 - SDK behavior, MATLAB code generation, policy-string comparisons, Cubit
   session behavior, md2html conversion and pure force helpers remain package
-  tests. A copy containing only the package executed 90 focused cases on LAB;
+  tests. A copy containing only the package executed 90 focused cases on validation host;
   repository integration executed 44 cases with no skips. These are not a
   full-package audit or numerical acceptance claim.
 - The native motor-angle source-freshness test was preserved in
@@ -57,7 +57,7 @@ completion, a release, or the outstanding native-evidence refresh.
 The initial 2026-09-15 clean MEX rebuild exposed three failures. The forward
 fix aligns BDM1 self derivatives with the primal Duffy rule and provides the
 newly built Python native runtime to the isolated MATLAB validation.
-The dedicated LAB Engine rerun passed **87/87**, the Python invariant regression
+The dedicated validation host Engine rerun passed **87/87**, the Python invariant regression
 passed, and integration plus source-freshness checks passed **46/46**. The
 native JSON and its linked proof were regenerated from actual passing execution,
 without relaxing numerical tolerances. See

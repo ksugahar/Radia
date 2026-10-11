@@ -1,7 +1,7 @@
 {
   "schema": "radia.acoustics.double-layer-bem.v1",
   "generated_at_utc": "2026-07-19T09:49:52Z",
-  "validation_host": "mdx",
+
   "formulation": "pure_double_layer",
   "boundary_equation": "(1/2 I + K) mu = -u_inc",
   "field_representation": "u_scat = D mu",

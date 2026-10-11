@@ -647,7 +647,7 @@ ESIM_USAGE_HEADLINE_NUMBERS = """
 # Headline numerical results -- for paper-style citation
 
 The IGTE 2026 paper's primary numerical claim (dense 108-case sweep,
-2026-05-30 LAB benchmark):
+2026-05-30 validation runtime benchmark):
 
 ## Per-element vs scalar Z_s (steel cylinder, BH knee)
 

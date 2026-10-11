@@ -247,7 +247,7 @@ def main():
         "schema": "radia.sibc_patch_corrected_beak.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "git_head": head,
-        "host": platform.node(),
+        "platform_class": platform.system(),
         "question": ("the surface impedance fails where the surface curves "
                      "inside a skin depth.  Can it be repaired there instead "
                      "of abandoned, and by how much?"),

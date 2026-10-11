@@ -6,7 +6,7 @@
   "threads": 8,
   "rows": [
     {
-      "file": "mdx1_20260928_p3_disk_1e4_ams.json",
+      "file": "worker_a_20260928_p3_disk_1e4_ams.json",
       "case": "disk",
       "order": 3,
       "ndof": 582178,
@@ -27,7 +27,7 @@
       }
     },
     {
-      "file": "mdx1_20260928_p3_disk_1e4_direct.json",
+      "file": "worker_a_20260928_p3_disk_1e4_direct.json",
       "case": "disk",
       "order": 3,
       "ndof": 582178,
@@ -48,7 +48,7 @@
       }
     },
     {
-      "file": "mdx1_20260928_p3_disk_1e4_direct_edgewb.json",
+      "file": "worker_a_20260928_p3_disk_1e4_direct_edgewb.json",
       "case": "disk",
       "order": 3,
       "ndof": 582178,
@@ -69,7 +69,7 @@
       }
     },
     {
-      "file": "mdx2_20260928_p3_plate_1e3_ams.json",
+      "file": "worker_b_20260928_p3_plate_1e3_ams.json",
       "case": "plate",
       "order": 3,
       "ndof": 1435724,
@@ -85,7 +85,7 @@
       }
     },
     {
-      "file": "mdx2_20260928_p3_sphere_700_ams.json",
+      "file": "worker_b_20260928_p3_sphere_700_ams.json",
       "case": "sphere",
       "order": 3,
       "ndof": 949723,
@@ -104,7 +104,7 @@
       }
     },
     {
-      "file": "mdx2_20260928_p3s_plate_1e3_ams.json",
+      "file": "worker_b_20260928_p3s_plate_1e3_ams.json",
       "case": "plate",
       "order": 3,
       "ndof": 318700,
@@ -120,7 +120,7 @@
       }
     },
     {
-      "file": "mdx2_20260928_p3s_plate_1e3_direct.json",
+      "file": "worker_b_20260928_p3s_plate_1e3_direct.json",
       "case": "plate",
       "order": 3,
       "ndof": 318700,
@@ -136,7 +136,7 @@
       }
     },
     {
-      "file": "mdx2_20260928_p3s_plate_1e3_direct_edgewb.json",
+      "file": "worker_b_20260928_p3s_plate_1e3_direct_edgewb.json",
       "case": "plate",
       "order": 3,
       "ndof": 318700,
@@ -152,7 +152,7 @@
       }
     },
     {
-      "file": "mdx2_20260928_p3s_sphere_700_ams.json",
+      "file": "worker_b_20260928_p3s_sphere_700_ams.json",
       "case": "sphere",
       "order": 3,
       "ndof": 293071,
@@ -171,7 +171,7 @@
       }
     },
     {
-      "file": "mdx2_20260928_p3s_sphere_700_direct.json",
+      "file": "worker_b_20260928_p3s_sphere_700_direct.json",
       "case": "sphere",
       "order": 3,
       "ndof": 293071,
@@ -190,7 +190,7 @@
       }
     },
     {
-      "file": "mdx2_20260928_p3s_sphere_700_direct_edgewb.json",
+      "file": "worker_b_20260928_p3s_sphere_700_direct_edgewb.json",
       "case": "sphere",
       "order": 3,
       "ndof": 293071,
@@ -212,22 +212,22 @@
   "direct_failures": [
     {
       "label": "p3_plate_1e3_direct",
-      "host": "mdx2",
+
       "error": "bad allocation in the BDDC direct wirebasket preconditioner during Assemble"
     },
     {
       "label": "p3_plate_1e3_direct_edgewb",
-      "host": "mdx2",
+
       "error": "bad allocation in the BDDC direct wirebasket preconditioner during Assemble"
     },
     {
       "label": "p3_sphere_700_direct",
-      "host": "mdx2",
+
       "error": "bad allocation in the BDDC direct wirebasket preconditioner during Assemble"
     },
     {
       "label": "p3_sphere_700_direct_edgewb",
-      "host": "mdx2",
+
       "error": "bad allocation in the BDDC direct wirebasket preconditioner during Assemble"
     }
   ],
@@ -236,7 +236,7 @@
     "p3_plate_1e3": 1435724
   },
   "campaign_logs": {
-    "mdx1": "start p3_disk_1e4_direct cpu%=1.8 2026-09-28T12:51:18.1664003+09:00\nend p3_disk_1e4_direct exit=0 2026-09-28T12:56:55.9015005+09:00\nstart p3_disk_1e4_direct_edgewb cpu%=6.2 2026-09-28T12:56:58.9462868+09:00\nend p3_disk_1e4_direct_edgewb exit=0 2026-09-28T13:02:26.4268371+09:00\nstart p3_disk_1e4_ams cpu%=3.1 2026-09-28T13:02:29.4717600+09:00\nend p3_disk_1e4_ams exit=0 2026-09-28T13:02:46.9792439+09:00\ncampaign done\n",
-    "mdx2": "start p3_sphere_700_direct cpu%=4.4 2026-09-28T12:51:16.0547406+09:00\nend p3_sphere_700_direct exit=1 2026-09-28T12:51:34.8152917+09:00\nstart p3_sphere_700_direct_edgewb cpu%=4.9 2026-09-28T12:51:37.8499067+09:00\nend p3_sphere_700_direct_edgewb exit=1 2026-09-28T12:51:58.3214253+09:00\nstart p3_sphere_700_ams cpu%=4.4 2026-09-28T12:52:01.3543111+09:00\nend p3_sphere_700_ams exit=0 2026-09-28T12:52:25.3748322+09:00\nstart p3_plate_1e3_direct cpu%=6.1 2026-09-28T12:52:28.4183099+09:00\nend p3_plate_1e3_direct exit=1 2026-09-28T12:52:51.4719572+09:00\nstart p3_plate_1e3_direct_edgewb cpu%=4.9 2026-09-28T12:52:54.4932990+09:00\nend p3_plate_1e3_direct_edgewb exit=1 2026-09-28T12:53:23.4165032+09:00\nstart p3_plate_1e3_ams cpu%=5.3 2026-09-28T12:53:26.4363080+09:00\nend p3_plate_1e3_ams exit=0 2026-09-28T12:53:57.1825492+09:00\ncampaign done\nstart p3s_sphere_700_direct cpu%=13.6 2026-09-28T12:54:52.2901321+09:00\nend p3s_sphere_700_direct exit=0 2026-09-28T12:56:35.2667581+09:00\nstart p3s_sphere_700_direct_edgewb cpu%=12.2 2026-09-28T12:56:38.3037700+09:00\nend p3s_sphere_700_direct_edgewb exit=0 2026-09-28T12:58:17.2381123+09:00\nstart p3s_sphere_700_ams cpu%=12.6 2026-09-28T12:58:20.2677167+09:00\nend p3s_sphere_700_ams exit=0 2026-09-28T12:58:27.9730181+09:00\nstart p3s_plate_1e3_direct cpu%=12.1 2026-09-28T12:58:31.0113512+09:00\nend p3s_plate_1e3_direct exit=0 2026-09-28T12:58:54.3355034+09:00\nstart p3s_plate_1e3_direct_edgewb cpu%=12 2026-09-28T12:58:57.3710953+09:00\nend p3s_plate_1e3_direct_edgewb exit=0 2026-09-28T12:59:19.9372967+09:00\nstart p3s_plate_1e3_ams cpu%=14.2 2026-09-28T12:59:22.9812290+09:00\nend p3s_plate_1e3_ams exit=0 2026-09-28T12:59:30.8839668+09:00\nsmall done\n"
+    "worker_a": "start p3_disk_1e4_direct cpu%=1.8 2026-09-28T12:51:18.1664003+09:00\nend p3_disk_1e4_direct exit=0 2026-09-28T12:56:55.9015005+09:00\nstart p3_disk_1e4_direct_edgewb cpu%=6.2 2026-09-28T12:56:58.9462868+09:00\nend p3_disk_1e4_direct_edgewb exit=0 2026-09-28T13:02:26.4268371+09:00\nstart p3_disk_1e4_ams cpu%=3.1 2026-09-28T13:02:29.4717600+09:00\nend p3_disk_1e4_ams exit=0 2026-09-28T13:02:46.9792439+09:00\ncampaign done\n",
+    "worker_b": "start p3_sphere_700_direct cpu%=4.4 2026-09-28T12:51:16.0547406+09:00\nend p3_sphere_700_direct exit=1 2026-09-28T12:51:34.8152917+09:00\nstart p3_sphere_700_direct_edgewb cpu%=4.9 2026-09-28T12:51:37.8499067+09:00\nend p3_sphere_700_direct_edgewb exit=1 2026-09-28T12:51:58.3214253+09:00\nstart p3_sphere_700_ams cpu%=4.4 2026-09-28T12:52:01.3543111+09:00\nend p3_sphere_700_ams exit=0 2026-09-28T12:52:25.3748322+09:00\nstart p3_plate_1e3_direct cpu%=6.1 2026-09-28T12:52:28.4183099+09:00\nend p3_plate_1e3_direct exit=1 2026-09-28T12:52:51.4719572+09:00\nstart p3_plate_1e3_direct_edgewb cpu%=4.9 2026-09-28T12:52:54.4932990+09:00\nend p3_plate_1e3_direct_edgewb exit=1 2026-09-28T12:53:23.4165032+09:00\nstart p3_plate_1e3_ams cpu%=5.3 2026-09-28T12:53:26.4363080+09:00\nend p3_plate_1e3_ams exit=0 2026-09-28T12:53:57.1825492+09:00\ncampaign done\nstart p3s_sphere_700_direct cpu%=13.6 2026-09-28T12:54:52.2901321+09:00\nend p3s_sphere_700_direct exit=0 2026-09-28T12:56:35.2667581+09:00\nstart p3s_sphere_700_direct_edgewb cpu%=12.2 2026-09-28T12:56:38.3037700+09:00\nend p3s_sphere_700_direct_edgewb exit=0 2026-09-28T12:58:17.2381123+09:00\nstart p3s_sphere_700_ams cpu%=12.6 2026-09-28T12:58:20.2677167+09:00\nend p3s_sphere_700_ams exit=0 2026-09-28T12:58:27.9730181+09:00\nstart p3s_plate_1e3_direct cpu%=12.1 2026-09-28T12:58:31.0113512+09:00\nend p3s_plate_1e3_direct exit=0 2026-09-28T12:58:54.3355034+09:00\nstart p3s_plate_1e3_direct_edgewb cpu%=12 2026-09-28T12:58:57.3710953+09:00\nend p3s_plate_1e3_direct_edgewb exit=0 2026-09-28T12:59:19.9372967+09:00\nstart p3s_plate_1e3_ams cpu%=14.2 2026-09-28T12:59:22.9812290+09:00\nend p3s_plate_1e3_ams exit=0 2026-09-28T12:59:30.8839668+09:00\nsmall done\n"
   }
 }

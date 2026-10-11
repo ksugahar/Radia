@@ -13,11 +13,11 @@
       "radia_version": "4.95.30",
       "shared_model_identity_sha256": "64b0c69d55ae9b802759b5cfd774e2c67174a5cd2cecb04e6e5c5f70b97304e9",
       "artifact_sha256_by_role": {
-        "manifest": "346ba82368d77738e91284f943a248c662b8ec57ea1bdd4a91f2db227363c57e",
+        "manifest": "4c5eb534fa365e05f102654e1df94b5d4861b1d44ba0641f34edb1a88254872f",
         "gate": "2c805e9d28923b1056e2bb714b3cfd7228d5198e16b941f848dc7a8dd890bc5b",
-        "ngsolve_age": "44759324710cc1817afe47ab24cd7c4176e5d958f969ebb3c3789c4443bd6070",
-        "hdiv_mmm_hcurl_eddy_bubble": "a748442787f366902ad459fb0f0dce836899316c028b2b52abda2343760bd12b",
-        "dual_lane": "b2651f74db4c2fb02075824b1b154afab09a785d31e8a81e42c07f967105525f"
+        "ngsolve_age": "f56c7d2f8dd230d1bd7fa333129c1149c4c16674080377c7b60414d8fb1be710",
+        "hdiv_mmm_hcurl_eddy_bubble": "650a922b0a9f1a6b0f9d99345c21943a46a178f19567f1ba1cbf7dc2c93a5f36",
+        "dual_lane": "d68e8cc185c2466039f51b85a290ff6ed2897ae3128ba8daedb42b753debe1d2"
       },
       "checks": {
         "both_lanes_solved": true,
@@ -34,7 +34,7 @@
       "executed_at_utc": "2026-10-04T03:03:28.916Z",
       "test_count": 86,
       "artifact_sha256_by_role": {
-        "matlab": "aa4ffbdbc719f121bab180addfa789194ef863491fb3782e248408a9fa3a0ddd"
+        "matlab": "17d85cf9fed18f7754b5974d211934a96aebdd4e56523f4eb05424342424f46b"
       },
       "checks": {
         "standalone_batch": true,
@@ -48,5 +48,5 @@
   },
   "status": "pass",
   "pass": true,
-  "proof_payload_sha256": "5be1240e8d549d28f171ecd544e66f29ed7918b89fe10d4723765db4275b95ad"
+  "proof_payload_sha256": "38ebf059f742a12eabd8b4cfe252f1756b072eda2ac075e0f72ba4b7e136d4bc"
 }

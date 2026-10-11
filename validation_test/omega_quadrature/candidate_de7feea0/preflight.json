@@ -4,8 +4,8 @@
   "candidate_unpublished": true,
   "wheel_sha256": "4952ba92cc0502e81949c35745108f6da499d6c6eb5bf1055a46de1be3a9ad4a",
   "native_sha256": "5d8fe9320b6776ed5712ca7158b9878994a827d99d5725278263734dbb8a5ac8",
-  "radia_module": "C:\\temp\\omega-candidate-de7feea0\\venv\\Lib\\site-packages\\radia\\__init__.py",
-  "python_executable": "C:\\temp\\omega-candidate-de7feea0\\venv\\Scripts\\python.exe",
+  "radia_module": "<private-path>/omega-candidate-de7feea0\\venv\\Lib\\site-packages\\radia\\__init__.py",
+  "python_executable": "<private-path>/omega-candidate-de7feea0\\venv\\Scripts\\python.exe",
   "pythonpath": null,
   "packages": {
     "cubit-mesh-export": "0.14.17",

@@ -492,7 +492,7 @@ def run(args):
         preflight = {
             "schema": "radia.ffag-fixed-one-pass-c-yoke-preflight/v1",
             "status": "pass" if all(preflight_gates.values()) else "fail",
-            "machine": platform.node(),
+            "platform_class": platform.system(),
             "python": platform.python_version(),
             "scope": (
                 "Input-only C-yoke gate before ChargeGram construction or "
@@ -655,7 +655,7 @@ def run(args):
                 "scope": (
                     "Exact full-scale HDiv-MMM target reachability before "
                     "the material inverse."),
-                "machine": platform.node(),
+                "platform_class": platform.system(),
                 "python": platform.python_version(),
                 "performance_measurement": (
                     "enabled" if args.record_performance else "disabled"),
@@ -911,7 +911,7 @@ def run(args):
             "reduced_connected_yoke_status": (
                 "requires rotation-related HDiv normal-trace identification"),
         },
-        "machine": platform.node(),
+        "platform_class": platform.system(),
         "python": platform.python_version(),
         "ngsolve_threads": args.threads,
         "mesh": {

@@ -53,7 +53,7 @@ case is not itself a device-field solve.
 
 ## Reproducibility and provenance
 
-- LAB, Windows Server 2022; Cubit 2025.12 student license; Python 3.12.10;
+- validation host, Windows Server 2022; Cubit 2025.12 student license; Python 3.12.10;
   cubit-mesh-export 2.0.0; Netgen/NGSolve 6.2.2606. All Cubit calls used
   -batch -nographics -nojournal, with its command-plugin directory explicitly
   supplied. No Cubit GUI was launched.
@@ -65,9 +65,9 @@ case is not itself a device-field solve.
   -commandplugindir caused the previous code-2 startup diagnostic;
   explicit configuration eliminated it. The packaged cubit-smoke-test
   command now uses the same argument and passes its full solver-ready gate.
-- Raw journals, logs, sidecars, and meshes are retained on LAB under
-  C:\temp\cubit-paper-sphere-benchmark\ and
-  C:\temp\cubit-paper-capacitor-benchmark\. The committed numerical
+- Raw journals, logs, sidecars, and meshes are retained on validation host under
+  private-runtime-path and
+  private-runtime-path The committed numerical
   snapshots are [sphere results](paper_sphere_benchmark_results.json) and
   [capacitor results](paper_capacitor_benchmark_results.json).
 

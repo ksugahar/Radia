@@ -13,7 +13,7 @@
  "ngsolve_version": "6.2.2604",
  "python_version": "3.12.10",
  "platform": "Windows-2022Server-10.0.20348-SP0",
- "hostname": "lab",
+
  "config": {
   "magnet": "parallelogram poles (both edges tilted by beta), gap 0.040 m, pole half-width 0.12 m, L 0.20 m, centered return legs (y in +/-0.05), mu_r 1000 linear",
   "coil": "explicit rounded-parallelogram pair following the pole outline at 0.02 m normal offset (sides x=+/-0.08, corner arcs r=0.02, NI=10 kA per loop); built explicitly to keep the validation geometry independent of CoilBuilder.mirror(); rad.TrfOrnt not used (RadiaField heap corruption)",

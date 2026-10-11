@@ -4,7 +4,7 @@
   "passed": 31,
   "skipped": 1,
   "skip_reason": "Optional genus-0 demo STEP/VOL fixtures not present",
-  "host": "lab",
+
   "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
   "installed_radia": "5.2.3",
   "ngsolve": "6.2.2607",

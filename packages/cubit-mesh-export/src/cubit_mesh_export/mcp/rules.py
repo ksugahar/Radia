@@ -628,7 +628,7 @@ def check_qt_imports(filepath: str, lines: List[str]) -> List[Dict]:
 
 
 def check_no_pyqt5_imports(filepath: str, lines: List[str]) -> List[Dict]:
-	"""HIGH: Cubit Mesh Export UI is PySide6-only on Coreform Cubit 2025.12+."""
+	"""HIGH: Cubit Mesh Export UI is PySide6-only on Coreform Cubit 2026.8+."""
 	findings = []
 	for i, line in enumerate(lines, 1):
 		stripped = line.strip()
@@ -641,7 +641,7 @@ def check_no_pyqt5_imports(filepath: str, lines: List[str]) -> List[Dict]:
 				"rule": "pyqt5-import-forbidden",
 				"message": (
 					"PyQt5 is not supported. cubit-mesh-export targets Coreform "
-					"Cubit 2025.12+ and must use PySide6 only."
+					"Cubit 2026.8+ and must use PySide6 only."
 				),
 			})
 	return findings

@@ -3,9 +3,9 @@
   "candidate_source_sha": "4d85e72cce70e02417abcd7972b509dfc2bac632",
   "candidate_ci_run": "not-applicable-local-isolated-build",
   "wheel_sha256": "e9e6b9f09d105552330ac9b2b6d870187d825d11bf7a78f407553c8c7a866e25",
-  "wheel_file": "C:\\temp\\esrf6-newton-4d85e72cc\\radia-4.95.91-cp312-cp312-win_amd64.whl",
+  "wheel_file": "<private-path>/esrf6-newton-4d85e72cc\\radia-4.95.91-cp312-cp312-win_amd64.whl",
   "native_sha256": "932e49626c05c1e3d459f20649632d4bfa0adf9b37f325dace4093d74aeeb7b5",
-  "native_file": "C:\\temp\\esrf6-newton-4d85e72cc\\venv\\Lib\\site-packages\\radia\\_radia_pybind.pyd",
+  "native_file": "<private-path>/esrf6-newton-4d85e72cc\\venv\\Lib\\site-packages\\radia\\_radia_pybind.pyd",
   "installed_wheel_files": {
     "radia/__init__.py": "9cc53b13813a8fd9fd81229c89aa535c3713d89768943394b5e160474600afb0",
     "radia/_b3d_shim.py": "76f63abffb68d376024905f9ec5634d26e8b26bac8fcb7212f1a3d42e42b108b",
@@ -316,8 +316,8 @@
     "radia/vim/_vim2d.py": "f6ceea5ab7b88e1bef7c684a1f6dba2a96ec2595abfc8d3567a5c9bbbf26fc3a"
   },
   "radia_version": "4.95.91",
-  "radia_module": "C:\\temp\\esrf6-newton-4d85e72cc\\venv\\Lib\\site-packages\\radia\\__init__.py",
-  "python_executable": "C:\\temp\\esrf6-newton-4d85e72cc\\venv\\Scripts\\python.exe",
+  "radia_module": "<private-path>/esrf6-newton-4d85e72cc\\venv\\Lib\\site-packages\\radia\\__init__.py",
+  "python_executable": "<private-path>/esrf6-newton-4d85e72cc\\venv\\Scripts\\python.exe",
   "ngsolve_version": "6.2.2606",
   "packages": {
     "colorama": "0.4.6",
@@ -347,33 +347,33 @@
   },
   "mesh_files": {
     "fem": {
-      "path": "C:\\temp\\radia-esrf-fem\\example6\\coil_yoke_kelvin.vol",
+      "path": "<private-path>/radia-esrf-fem\\example6\\coil_yoke_kelvin.vol",
       "sha256": "dfc12b84f80db1fa17fb5012b6f87c072e8aa1fb3c085b61269f047a879a54ac"
     },
     "iron": {
-      "path": "C:\\temp\\radia-ex6-diag\\assets_conforming\\model.vol",
+      "path": "<private-path>/radia-ex6-diag\\assets_conforming\\model.vol",
       "sha256": "fdd1387281e550e27eab435cfac3ec54e0b9d1339438699fdc50c852dfcafc74"
     },
     "fem_report": {
-      "path": "C:\\temp\\radia-esrf-fem\\example6\\coil_yoke_kelvin.mesh.json",
+      "path": "<private-path>/radia-esrf-fem\\example6\\coil_yoke_kelvin.mesh.json",
       "sha256": "abac73f56b716400d450e6a80c90b8c0a29edfad21fee75e35d96eb4fa19b9f0"
     }
   },
   "check_reports": {
     "fem_check.json": {
-      "path": "C:\\temp\\esrf6-newton-4d85e72cc\\fem_check.json",
-      "sha256": "aa786a82b3d2c3f7464360cabbf9bb89ccc9ab75272254cc884aadad170a9b22"
+      "path": "<private-path>/esrf6-newton-4d85e72cc\\fem_check.json",
+      "sha256": "438d51be7c34558660f6da903c21b36a466cd7b5b7bb12d2a753ac7efcce5fbb"
     },
     "iron_check.json": {
-      "path": "C:\\temp\\esrf6-newton-4d85e72cc\\iron_check.json",
-      "sha256": "95f09c42cf5decefa7f71a4bb882e77ecd8a62a6d8b2ee485a6f001d22de85d4"
+      "path": "<private-path>/esrf6-newton-4d85e72cc\\iron_check.json",
+      "sha256": "e63ad9d41fcfe57b82386430207a57a66f93a646304fab9827eca7e704ee2273"
     },
     "esrf6_labels.json": {
-      "path": "C:\\temp\\esrf6-newton-4d85e72cc\\esrf6_labels.json",
+      "path": "<private-path>/esrf6-newton-4d85e72cc\\esrf6_labels.json",
       "sha256": "de85a25a89aec9df98c241027c3b5af16b8813ef338458214df7723d804975fd"
     },
     "iron_labels.json": {
-      "path": "C:\\temp\\esrf6-newton-4d85e72cc\\iron_labels.json",
+      "path": "<private-path>/esrf6-newton-4d85e72cc\\iron_labels.json",
       "sha256": "eddb5037fff995fbded56597d7e3b40a4afb49f9e95b02a6d9b7aa97fa7d16d5"
     }
   },

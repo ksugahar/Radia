@@ -1,5 +1,9 @@
 # Fast-contract profile membership scope
 
+Current policy (2026-10-09): fast-contracts has a 120-second elapsed-time
+budget. The 60-second results below describe the historical policy and are
+preserved as measured; profile membership and required tests remain unchanged.
+
 ## Failure and cause
 
 Main commit `1cf6c724bdebfa3585f40e0c08dbd54b51aae8e5`, Actions run
@@ -37,8 +41,8 @@ impact, including unrelated solver, build, release-packaging and subprocess test
 
 ## Same-condition replay
 
-Both runs used LAB, the same standalone minimal dependency venv
-`C:/temp/bh-fast-ci-minimal-20260914`, the same checkout directory, comparison
+Both runs used validation host, the same standalone minimal dependency venv
+`private-runtime-path`, the same checkout directory, comparison
 base `6f447f4df388d38a1b796021440e1bd8fdaefc52`, and Git HEAD
 `1cf6c724bdebfa3585f40e0c08dbd54b51aae8e5`. The after run applied the proposed
 working-tree selector/manifest/regression changes; HEAD and changed-file query
@@ -64,10 +68,10 @@ impact rules. Structural profile semantics changes still select broadly.
 Command in both runs (only JUnit/output-log filenames differ):
 
 ```powershell
-C:/temp/bh-fast-ci-minimal-20260914/Scripts/python.exe tools/run_test_tier.py --profile fast-contracts --since 6f447f4df388d38a1b796021440e1bd8fdaefc52 --junitxml C:/temp/fast-budget-before.xml
+private-runtime-path tools/run_test_tier.py --profile fast-contracts --since 6f447f4df388d38a1b796021440e1bd8fdaefc52 --junitxml private-runtime-path
 ```
 
 Raw logs and JUnit evidence are retained at
-`S:/Radia/validation_artifacts/fast_contract_budget_20260914/`.
+`private-runtime-path`.
 Formal acceptance still requires the new PR's exact-SHA CI result. Main merge
 and release remain the management task's responsibility.

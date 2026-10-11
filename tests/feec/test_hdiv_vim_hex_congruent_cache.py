@@ -1,7 +1,7 @@
 """Translation-congruent shared cache of the HEX charge-Gram near blocks.
 
 On a swept (extruded) HEX mesh every host is repeated once per layer, so each expensive near block
-(pair-domain Duffy / near-band product, ~265 ms on hibino) recurs once per layer.  GetHexBlock keys
+(pair-domain Duffy / near-band product, ~265 ms on compute host) recurs once per layer.  GetHexBlock keys
 the instance-shared cache by (host templates, quantized centre offset) instead of host ids, so the
 copies are served from one evaluation.  This test locks (a) the cache engages on a NON-uniform
 swept mesh (the older uniform-lattice cache cannot: the x-spacing is graded), (b) the Gram it

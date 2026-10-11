@@ -73,7 +73,7 @@ STEP ─ fin_sweep.fin_graph_from_step ─ assemble_experimental_fin_peec ─ �
 4. `peec` と `fin-surface` の `qsurf` を同一ワークで比べ、**隅領域の損失分担・損失重心**
    を記録する（差の大小は判定しない。フィン側の精度受け入れは別文書）。
 
-## 5.1 受け入れ実行記録（2026-09-21, INTEL11）
+## 5.1 受け入れ実行記録（2026-09-21, development host）
 
 証跡: `validation_test/induction_heating/results/fin_surface_boundary_acceptance_20260921.json`
 （NGSolve 6.2.2606、ネイティブ再ビルド済み）。

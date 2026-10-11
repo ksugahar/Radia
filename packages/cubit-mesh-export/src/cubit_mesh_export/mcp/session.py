@@ -19,6 +19,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from cubit_mesh_export._layout import has_python_binding, console_executable, runtime_environment
+
 PROTOCOL_VERSION = 1
 
 
@@ -221,8 +223,7 @@ def find_cubit_install(explicit: str | None = None) -> Path | None:
             candidates.append(Path(path))
 
     for c in candidates:
-        if (c / "cubit.py").exists() or (c / "_cubit3.pyd").exists() \
-                or (c / "_cubit3.so").exists():
+        if has_python_binding(c):
             return c.resolve()
     return None
 
@@ -260,7 +261,8 @@ def run_headless_journal(
     ``.exe`` so callers can wait for completion and capture diagnostics.
 
     ``command_plugin_directory`` selects a rebuilt plugin with Cubit's official
-    ``-commandplugindir`` switch.  This is the safe plugin-under-test route when
+    ``-commandplugindir`` switch on older versions, or the documented
+    ``CUBIT_PLUGIN_DIR`` environment variable on 2026.8.  This is the safe plugin-under-test route when
     another user has the deployed plugin open: it does not replace or unload
     the system binary, and it suppresses the user's Cubit init file.
     """
@@ -283,8 +285,8 @@ def run_headless_journal(
             "gui_started": False,
             "error": "Could not locate Coreform Cubit install",
         }
-    console = bin_dir / "coreform_cubit.com"
-    if not console.exists():
+    console = console_executable(bin_dir)
+    if console is None:
         return {
             "status": "error", "stage": "start", "kind": "environment",
             "gui_started": False,
@@ -314,12 +316,17 @@ def run_headless_journal(
         driver.write_text("\n".join([*commands, "exit 0", ""]),
                           encoding="utf-8")
         argv = [str(console), "-nographics", "-batch", "-nojournal"]
+        env = runtime_environment(bin_dir)
         if plugin_dir is not None:
-            argv.extend(["-noinitfile", "-commandplugindir", str(plugin_dir)])
+            argv.append("-noinitfile")
+            if console.name.lower() == "cubitx.exe":
+                env["CUBIT_PLUGIN_DIR"] = str(plugin_dir)
+            else:
+                argv.extend(["-commandplugindir", str(plugin_dir)])
         argv.append(str(driver))
         try:
             proc = subprocess.run(
-                argv, cwd=str(cwd), capture_output=True, text=True,
+                argv, cwd=str(cwd), env=env, capture_output=True, text=True,
                 encoding="utf-8", errors="replace", timeout=timeout_s,
                 # Cubit reads from an inherited console/stdin during startup.
                 # Under an MCP stdio server that handle is the JSON-RPC pipe,
@@ -350,10 +357,7 @@ def run_headless_journal(
         "status": "completed",
         "exit_code": int(proc.returncode),
         "console": str(console),
-        "headless_flags": [
-            "-nographics", "-batch", "-nojournal",
-            *(["-noinitfile", "-commandplugindir"] if plugin_dir else []),
-        ],
+        "headless_flags": [arg for arg in argv[1:] if arg.startswith("-")],
         "command_plugin_directory": str(plugin_dir) if plugin_dir else None,
         "user_init_loaded": plugin_dir is None,
         "gui_started": False,
@@ -648,7 +652,7 @@ class CubitSession:
                 f"Daemon script missing: {daemon_path}. Expected sibling "
                 "of session.py in the mcp-server-cubit package.")
 
-        env = os.environ.copy()
+        env = runtime_environment(self._bin_dir)
         env["CUBIT_DAEMON_MODE"] = self._mode
         env["CUBIT_BIN_DIR"] = str(self._bin_dir)
 

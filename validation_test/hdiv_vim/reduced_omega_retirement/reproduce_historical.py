@@ -207,7 +207,7 @@ def main() -> int:
     options.output.write_text(json.dumps({
         "schema": "radia.research.reduced-vs-mixed-omega.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "hostname": platform.node(),
+        "platform_class": platform.system(),
         "radia_version": rad.__version__,
         "level": str(options.level),
         "mesh_elements": int(mesh.ne),

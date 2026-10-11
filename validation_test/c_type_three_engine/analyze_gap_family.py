@@ -201,7 +201,6 @@ def analyze(manifest: dict, results: dict[str, dict], result_paths: dict[str, Pa
             "gap_elements": int(row["gap_elements"]),
             "result": str(result_paths[name]),
             "result_sha256": sha256(result_paths[name]),
-            "machine": payload.get("machine"),
             "maximum_gap_core_pairwise_relative_rms":
                 max(pair["relative_rms"] for pair in pairs.values()),
             "pairwise_median_projected_gap_core":
@@ -217,7 +216,7 @@ def analyze(manifest: dict, results: dict[str, dict], result_paths: dict[str, Pa
         "schema": "radia.validation.c-type-gap-family-report.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "passed": passed,
-        "machine": platform.node(),
+        "platform_class": platform.system(),
         "claim": {
             "refined": manifest.get("refined"),
             "held_fixed": manifest.get("held_fixed"),

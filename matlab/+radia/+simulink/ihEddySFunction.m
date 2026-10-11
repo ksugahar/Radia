@@ -58,6 +58,7 @@ end
 
 function outputs(block)
 h = requireHandle(block);
+radia.simulink.verifyIHESIMDrive(block.DialogPrm(1).Data, double(block.InputPort(1).Data));
 block.OutputPort(1).Data = radia_mex('ih.eddy.output', h, ...
     double(block.InputPort(1).Data), double(block.InputPort(2).Data), ...
     double(block.InputPort(3).Data(:)));

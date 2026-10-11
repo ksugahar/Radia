@@ -9,7 +9,7 @@ do not certify field agreement, quadrature convergence, or performance.
 - CI run: `34703027075`, successful build/import/native smoke/wheel production.
 - Wheel SHA256: `a4c64938ac814fc12b6631d7ae1e2bddf5da01efd25238ddda052ea080ccafe7`.
 - Native SHA256: `f99ec26e15d880431ed560c3f5cac7a537056e66f1bea0872186cfe32c2158a0`.
-- The isolated Hibino venv passed `pip check`. `preflight.json` records the
+- The isolated compute host venv passed `pip check`. `preflight.json` records the
   installed Python/native files checked against the actual wheel bytes.
 - No native binary was copied into an existing installation.
 
@@ -29,7 +29,7 @@ September 4 local-gap artifact. The generation record, byte identity, and
 present topology checks are separate evidence. They do not prove when those
 bytes were originally generated or that their resolution is sufficient.
 
-`mesh_revision_audit.json` records a fresh read-only check on Hibino:
+`mesh_revision_audit.json` records a fresh read-only check on compute host:
 
 - Both selected meshes: zero hanging facets and duplicated boundary-face pairs.
 - FEM: 1393 Kelvin node pairs; maximum translation error `9.60e-15 m`.
@@ -61,7 +61,7 @@ them. Their mere presence is not evidence that the current runner opened them.
 
 ## Completed candidate runs: acceptance remains HOLD
 
-Both foreground Hibino jobs completed with exit code zero. The original result
+Both foreground compute host jobs completed with exit code zero. The original result
 JSON files are retained without changing their reported flags:
 
 - `three_engine_case6_bonus8_p2.json`, SHA256
@@ -124,7 +124,7 @@ This frozen-state audit neither establishes p-nesting nor nonlinear acceptance.
 
 ### Timing scope
 
-The jobs overlapped on Hibino, so these are run diagnostics, not comparative
+The jobs overlapped on compute host, so these are run diagnostics, not comparative
 performance claims. HDiv took 6246.7 s, including about 6134.1 s for ChargeGram
 construction and 96.8 s for its reported solve. Reduced-A took 2253.2 s and
 mixed Omega 16194.3 s. The high-order HEX Gram build is the dominant cost in

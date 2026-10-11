@@ -1,0 +1,74 @@
+{
+  "wheel_sha256": "623054289d882352c6624806453f2e164983b93cb67e2af6a43a55f10f65287f",
+  "native_sha256": "c05dc4bfeb8e4f6ae99429da922cbfee4b132cb4b31acc98ddf495f322b4bf8c",
+  "source_commit": "0d0be108e6ddb84ddf90d14b7fce58a5e1bd4e03",
+  "ci_run": 36426351986,
+  "sources_verified": 309,
+  "version": "5.0.3",
+  "import_path": "<private-path>/radia-quad-0d0be108e\\venv\\Lib\\site-packages\\radia",
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+
+  "steps": [
+    {
+      "name": "pip-check",
+      "command": [
+        "<private-path>/radia-quad-0d0be108e\\venv\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-m",
+        "pip",
+        "check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "full6",
+      "command": [
+        "<private-path>/radia-quad-0d0be108e\\venv\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-I",
+        "<private-path>/radia-quad-0d0be108e\\inputs\\hdiv_newton_native_smoke_strong.py",
+        "--drive",
+        "300000",
+        "--output",
+        "<private-path>/radia-quad-0d0be108e\\output\\full6.json"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "focused",
+      "command": [
+        "<private-path>/radia-quad-0d0be108e\\venv\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-I",
+        "-m",
+        "pytest",
+        "-q",
+        "--confcutdir",
+        "<private-path>/radia-quad-0d0be108e\\inputs",
+        "<private-path>/radia-quad-0d0be108e\\inputs\\tests\\feec\\test_hdiv_jacobi_diagonal_fail_loud.py",
+        "<private-path>/radia-quad-0d0be108e\\inputs\\validation_test\\feec\\test_wedge_frozen_pcg.py",
+        "-k",
+        "not test_indefinite_operator_with_positive_jacobi_diagonal_raises_in_batched_pcg",
+        "--junitxml",
+        "<private-path>/radia-quad-0d0be108e\\output\\focused.xml"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "pip-freeze",
+      "command": [
+        "<private-path>/radia-quad-0d0be108e\\venv\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-m",
+        "pip",
+        "freeze"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "passed": true
+}

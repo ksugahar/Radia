@@ -421,7 +421,7 @@
 
 - `\text{...}` Japanese now uses an explicitly measured CJK face. It no longer
   passes through Latin Modern Math font linking, which could turn five 12 pt
-  characters into a 306 pt-wide run on LAB.
+  characters into a 306 pt-wide run on validation runtime.
 
 ### Radia-owned Web edition
 

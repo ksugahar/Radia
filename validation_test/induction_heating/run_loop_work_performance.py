@@ -66,7 +66,7 @@ def run(level,mode):
         return dict(schema='radia.loop-work-product-profile.v1',mode=mode,level=level,faces=len(tri),vertices=len(points),
             quadrature_bonus=4,fmm_order=20 if mode=='fmm' else None,
             fmm_parameters=FMM_OPTIONS.copy() if mode=='fmm' else None,ngsolve_version=ng.__version__,
-            host=platform.node(),threads=1,dense_matrix_bytes=8*len(tri)**2,
+            platform_class=platform.system(),threads=1,dense_matrix_bytes=8*len(tri)**2,
             total_seconds=sum(p['seconds'] for p in phases),phases=phases,**memory()),forward,reverse
 
 

@@ -125,7 +125,7 @@ def main():
         case = load_module(args.factory, '_omega_case').create_case(args.mesh)
     mesh, h_s, h_ext = case['mesh'], case['H_s'], case['H_ext']
     rows, nesting = [], []
-    payload = {'schema': 'radia.validation.omega-quadrature.v1', 'host': platform.node(),
+    payload = {'schema': 'radia.validation.omega-quadrature.v1', "platform_class": platform.system(),
                'runtime': runtime, 'implementation': before, 'controls': vars(args).copy(),
                'mesh_sha256': digest(args.mesh), 'mesh_elements': mesh.ne,
                'case': case['controls'], 'rows': rows, 'nesting': nesting,

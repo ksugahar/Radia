@@ -48,7 +48,7 @@ if __name__ == '__main__':
                         print(f'k{k} r{r} {basis:12s} tol{tol:g} el{len(els):5d} {w:10s}: ' +
                               (f'{100*err:.2f}% {sec:.1f}s' if err is not None else f'FAILED {fail}'), flush=True)
     res = dict(case='team10_two_coil_basis_10pct', target=0.10, train=TRAIN, tests=TESTS, rows=rows, ndof=m.fes.ndof,
-               total_s=time.time() - t0, host=platform.node(), ngsolve=ngsolve.__version__,
+               total_s=time.time() - t0, platform_class=platform.system(), ngsolve=ngsolve.__version__,
                sources={p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in
                         ['team13_model.py', 'transient.py', 'aphi_model.py', 'rom.py', 'rom_aphi.py', 'ecsw.py', 'run_basis_10pct.py']})
     (R / f'team10_basis_10pct_p{order}.json').write_text(json.dumps(res, indent=2))

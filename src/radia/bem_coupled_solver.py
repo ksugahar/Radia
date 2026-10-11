@@ -170,7 +170,7 @@ class CoupledBEMSolver:
                               restart=int(wp_gmres_restart))
         if self.wp_hacapk:
             self.wp_solver = ScalarBIESIBCSolver(
-                mesh_wp, order=wp_order, assemble_dense=True,
+                mesh_wp, order=wp_order, assemble_dense=False,
                 use_intree_bem=True, intree_geom_order=1,
                 intree_singular_n_q=6, intree_regular_quad_degree=7,
                 loop_work_backend=wp_loop_work_backend,
@@ -216,6 +216,8 @@ class CoupledBEMSolver:
         The coil SL is unscaled: physical f_complete enters as -f_complete/mu0.
         Coil fixed-point and body residuals must pass before returning one state.
         """
+        from radia.bem_loop_work import _check_strong_loop_size
+        _check_strong_loop_size(self.wp_solver, loop_dof)
         from radia.bem_sibc_solver import H_from_surface_J_complex, A_from_surface_J
         from radia.bem_complete_reaction import (solve_complete_body,
             electric_incident_vertex_load, surface_source_reaction_load,

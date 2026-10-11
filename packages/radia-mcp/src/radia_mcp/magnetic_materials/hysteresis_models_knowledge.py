@@ -13,7 +13,7 @@ Covers 13+ models documented in the lab library at
   Torre, Visintin "Differential Models of Hysteresis" / Applied
   Mathematical Sciences, Hashimoto motor-drive magnetic materials).
 
-★ **LAB CORE METHOD**: B-input Stop model based energy formulation.
+★ **validation runtime CORE METHOD**: B-input Stop model based energy formulation.
   See topic 'lab_core' for the recommended starting point.
 """
 

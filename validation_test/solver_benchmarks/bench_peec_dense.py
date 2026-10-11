@@ -200,7 +200,7 @@ def run_all() -> None:
         "schema": "radia.validation.peec-dense-benchmark.v1",
         "generated_at_utc": generated_at_utc,
         "timestamp": generated_at_utc,
-        "hostname": platform.node(),
+        "platform_class": platform.system(),
         "versions": {
             "python": platform.python_version(),
             "numpy": np.__version__,

@@ -31,8 +31,8 @@ than improve it.
 From MATLAB through the official MathWorks MCP server:
 
 ```matlab
-addpath("S:\Radia\01_GitHub\matlab", "-begin");
-addpath("S:\Radia\01_GitHub\validation_test\ngsolve_matlab_parity");
+addpath("private-runtime-path", "-begin");
+addpath("private-runtime-path");
 report = validate_ngsolve_matlab_100_cases();
 extended = validate_ngsolve_matlab_extended();
 ```
@@ -47,21 +47,21 @@ fails:
 - `results_ngsolve_matlab_manufactured.json`
 - `results_ngsolve_matlab_extended.json`
 
-## HIBINO
+## compute host
 
-HIBINO is the preferred host for the extended lane. Stage the exact checked MEX,
+compute host is the preferred host for the extended lane. Stage the exact checked MEX,
 its five oneMKL sequential runtime DLLs, the MATLAB wrappers, and the generated
 Python oracle. The aggregate result records the host, MATLAB/NGSolve versions,
 MEX path, MEX SHA-256, duration, and final native-handle count. Copy the durable
-machine result back as `results_ngsolve_matlab_extended_hibino.json` (and keep
-the three tier JSON files with matching `_hibino` suffixes).
+machine result back as `results_ngsolve_matlab_extended_compute.json` (and keep
+the three tier JSON files with matching `_compute-host` suffixes).
 
 Temporary meshes and MAT oracles belong under `C:\temp`; only the result JSON
 belongs in the repository.
 
 ## Verified Result
 
-HIBINO passed the complete extended lane with MATLAB R2026a Update 4, NGSolve
+compute host passed the complete extended lane with MATLAB R2026a Update 4, NGSolve
 6.2.2606, and MEX SHA-256
 `9149f254621d30128a661e1d4159e5939459eaa49f82427204fd1ebb78e07beb`:
 

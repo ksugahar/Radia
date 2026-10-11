@@ -13,7 +13,7 @@ first-order FEM/BEM trace:
 Run:
 
     python validation_test/cubit_mesh_export/validation_vol_mesh_health.py
-    python validation_test/cubit_mesh_export/validation_vol_mesh_health.py --vol C:\temp\mesh.vol --out C:\temp\mesh_health.json
+    python validation_test/cubit_mesh_export/validation_vol_mesh_health.py --vol private-runtime-path --out private-runtime-path
 """
 
 from __future__ import annotations

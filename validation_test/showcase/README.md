@@ -10,12 +10,12 @@ record names its runtime, execution date, checks and physical scope.
 From the repository root, in an environment with Radia and NGSolve:
 
 ```powershell
-python validation_test/showcase/run_selected.py complex_coil --output C:/temp/showcase-candidate/complex_coil.json
-python validation_test/showcase/run_selected.py motor --output C:/temp/showcase-candidate/motor.json
-python validation_test/showcase/run_physics.py winding --output C:/temp/showcase-candidate/winding.json
-python validation_test/showcase/run_physics.py lift --output C:/temp/showcase-candidate/lift.json
-python validation_test/showcase/run_physics.py particles --output C:/temp/showcase-candidate/particles.json
-python validation_test/showcase/run_heating.py --output C:/temp/showcase-candidate/heating.json
+python validation_test/showcase/run_selected.py complex_coil --output private-runtime-path
+python validation_test/showcase/run_selected.py motor --output private-runtime-path
+python validation_test/showcase/run_physics.py winding --output private-runtime-path
+python validation_test/showcase/run_physics.py lift --output private-runtime-path
+python validation_test/showcase/run_physics.py particles --output private-runtime-path
+python validation_test/showcase/run_heating.py --output private-runtime-path
 ```
 
 The motor driver imports the numerical helpers from `radia-mcp`; this is an

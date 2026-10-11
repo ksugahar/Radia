@@ -246,6 +246,10 @@ _PYBIND_INTERNAL_NUMERICAL_COMMANDS = {
 }
 
 _PYBIND_INTERNAL_EXCLUSIONS = {
+    "_CreateP1HACApKGeometry": (
+        "private Python scalar-P1 assembly boundary; MATLAB IH consumes its frozen "
+        "operator artifact through the existing assembly workflow; native MATLAB "
+        "dense-entry hacapk.bem handles retain their declared interface"),
     "_periodic_h1_single_interface": (
         "NGSolve-owned periodic H1 space construction; MATLAB uses "
         "radia.python.periodicH1 under the periodic-h1-space Python fallback "
@@ -287,6 +291,13 @@ _PYBIND_CLASS_EXCLUSIONS = {
     "_PEECBuilderInternal.__binding__": "implementation holder",
     "_HACApKPEECManagerInternal.__binding__": "implementation holder",
     "_HACApKBEMManagerInternal.__binding__": "implementation holder",
+    **{f"_P1EntryProvider.{member}": (
+        "private Python on-demand quadrature holder and validation introspection; "
+        "MATLAB IH consumes the assembled frozen artifact")
+       for member in ("__binding__", "Entry", "GetStats")},
+    "HACApKBEMManager.ReleaseDenseEntries": (
+        "drops the pybind11 reference to the Python-owned NumPy entry table "
+        "after compression; MATLAB hacapk.bem handles hold no Python arrays"),
     "_HDivVectorPotentialCoefficient.__binding__": (
         "private radia.vim adapter that materializes an NGSolve-owned Python "
         "CoefficientFunction; MATLAB uses the declared vim-public Python "
@@ -698,7 +709,7 @@ def matlab_radia_mex_contract(topic="all"):
             "native_build": "pwsh -ExecutionPolicy Bypass -File .\\Build.ps1 -MatlabMexOnly -Verbose",
             "optuna_native_build": "pwsh -ExecutionPolicy Bypass -File .\\Build.ps1 -OptunaMexOnly",
             "native_motor_family_artifact": "validation_test/radia_mcp/artifacts/annular_motor_dual_lane_v1/native_motor_angle_family.json",
-            "native_motor_family_artifact_status": "recorded 2026-10-03 on mdx2 (MATLAB R2026a Update 5) by native_motor_family_gate with the clean ad4d1c8f9 radia_mex build; 86 of 86 tests passed, and the source hashes in the artifact match this source tree.",
+            "native_motor_family_artifact_status": "recorded 2026-10-03 (MATLAB R2026a Update 5) by native_motor_family_gate with the clean ad4d1c8f9 radia_mex build; 86 of 86 tests passed, and the source hashes in the artifact match this source tree.",
             "native_motor_family_gate": "run('validation_test/radia_mcp/generate_motor_angle_family_mex_artifact.m')",
             "openmp_runtime_policy": "radia.setup excludes foreign libiomp5md.dll directories from the MATLAB process PATH",
         },
@@ -821,7 +832,7 @@ def matlab_optuna_simulink_contract():
                 "torque": "0.5*x'*Q*x + x'*R*u + 0.5*u'*S*u",
                 "validation_artifact": "validation_test/radia_mcp/artifacts/annular_motor_dual_lane_v1/native_motor_angle_family.json",
                 "recorded_tests": 86,
-                "evidence_status": "recorded 2026-10-03 on mdx2 (MATLAB R2026a Update 5) by native_motor_family_gate with the clean ad4d1c8f9 radia_mex build; 86 of 86 tests passed, and the source hashes in the artifact match this source tree.",
+                "evidence_status": "recorded 2026-10-03 (MATLAB R2026a Update 5) by native_motor_family_gate with the clean ad4d1c8f9 radia_mex build; 86 of 86 tests passed, and the source hashes in the artifact match this source tree.",
             },
             "sibc": "SIBC termination must be rationalized before state-space export; the current numeric bridge records this boundary explicitly.",
         },

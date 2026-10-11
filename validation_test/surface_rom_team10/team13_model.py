@@ -1,7 +1,7 @@
 """TEAM-13-geometry model on a Kelvin open boundary (NGSolve + Radia Kelvin helpers).
 
 Geometry (m): TEAM 13 description / Hanser TU Wien geometry.py (lab copy in
-W:/00_CAE/NGSolve/矢野/2026_03_30_TEAM_benchmark/Problem13).
+private provenance).
   coil   : rounded square loop, outer 200x200 (corner radius 50), inner 150x150
            (corner radius 25), corner centres (+-50,+-50) mm, z in [-50, 50] mm
   steel  : centre plate  x in [-1.6, 1.6], y in [-25, 25], z in [-63.2, 63.2] mm

@@ -228,7 +228,7 @@ def main():
     results = {
         "schema": "radia.validation.ih-esim-cross-path-benchmark.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "hostname": platform.node(),
+        "platform_class": platform.system(),
         "radia_version": None,
         "problem": {
             "vol": str(VOL.relative_to(REPO)).replace("\\", "/"),
@@ -268,7 +268,7 @@ def main():
 def _print_summary_table(results):
     print()
     print("=" * 90)
-    print(f"Summary (radia {results['radia_version']}, {results['hostname']})")
+    print(f"Summary (radia {results['radia_version']}, {results['platform_class']})")
     print("=" * 90)
     paths = results["paths"]
     header = f"{'freq[Hz]':>10s}"

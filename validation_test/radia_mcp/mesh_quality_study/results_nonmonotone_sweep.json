@@ -1,6 +1,6 @@
 {
  "timestamp": "2026-08-06T18:52:27.174295",
- "hostname": "lab",
+
  "referee": "gmsh minSICN",
  "order": 1,
  "drop_tolerance": 0.02,

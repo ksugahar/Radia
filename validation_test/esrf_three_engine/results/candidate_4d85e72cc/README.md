@@ -1,4 +1,4 @@
-# Repaired energy-Newton candidate: Hibino native checks
+# Repaired energy-Newton candidate: compute host native checks
 
 Status: **PASS for nominal ESRF6 BDM1 three-method acceptance**. Both FEM routes
 were re-solved using the same installed candidate as HDiv. This is not a
@@ -10,7 +10,7 @@ the re-solves and scratch cleanup; management owns integration and release.
 
 ## Same-wheel three-method result
 
-`case6_fem_repaired_acceptance.json` completed successfully on hibino with
+`case6_fem_repaired_acceptance.json` completed successfully on compute-host with
 eight threads. The physical source, BH table, observations and installed Python
 and native bytes match the repaired HDiv record; the FEM mesh matches the
 audited identity. Reduced-A and mixed Omega use order 2. HDiv uses BDM1,
@@ -38,16 +38,16 @@ The FEM result SHA-256 is
 Both linked result JSON files preserve their original bytes through explicit
 `-text` attributes; the HDiv evidence bytes are unchanged numerically.
 The recovery archive is
-`S:/Radia/validation_artifacts/esrf6_mesh_audit_20260913/esrf6-newton-4d85e72cc-recovery.zip`,
+`private-runtime-path`,
 SHA-256 `3b198c0a9aba3b6aad02eeecde9014a9eea57f10bef8296bca131a9c8e006808`.
 All 34 manifest entries were independently hashed after recovery, and the
 installed Python/native identity was rechecked unchanged after the solve.
 
-After evidence commit `c68a2a769`, the job-owned hibino venv, outputs, temporary
+After evidence commit `c68a2a769`, the job-owned compute-host venv, outputs, temporary
 profiler, recovery ZIP/helper, and the four recovered input files were deleted.
 All named targets were verified absent. An unrelated IH process was detected
 and preserved. The durable cleanup report is
-`S:/Radia/validation_artifacts/esrf6_mesh_audit_20260913/esrf6_acceptance_cleanup.json`,
+`private-runtime-path`,
 SHA-256 `83ca8552d6564c146a1ef4fbbefa14e3d886652e22c3e502431f018b110ed0e8`.
 Future runs must explicitly restage the verified inputs from the recovery
 archive; do not silently substitute another mesh when old scratch paths vanish.
@@ -64,7 +64,7 @@ result JSON or require another numerical solve.
 
 The final focused selection passed 150 tests, including the numerical-record
 replay. The separate installed-wheel deep-saturation regression passed on
-hibino (one test, 85.48 s). Neither result waives CI-built release requirements.
+compute-host (one test, 85.48 s). Neither result waives CI-built release requirements.
 
 This closes the nominal BDM1 field-agreement item. Separate work remains for
 iron-sensitive nonlinear observables, BDM2/IMA application qualification,
@@ -73,7 +73,7 @@ Hodge quadrature-wiring source change is not included in this candidate wheel.
 
 ## Actual ESRF6 BDM1
 
-`case6_bdm1_mass_riesz.json` records the installed candidate on hibino:
+`case6_bdm1_mass_riesz.json` records the installed candidate on compute-host:
 Newton 8 iterations, one backtrack, residual 3.278340250386088e-7 at target
 2e-5, 62,192 HDiv DoFs, full iron model, no IMA, 8 threads. Gram build took
 267.55 s, solve 383.99 s, total including field observations 655.35 s.
@@ -83,7 +83,7 @@ initial resource probe; later it disappeared and another Python job appeared.
 Neither was stopped or modified. BDM1 is not final BDM2 acceptance.
 
 Recovery SHA-256 is `43fa3d9274790ff9844253ec84d7d5d9f7a063bcf073e74419621fa3197c4f54`.
-The durable copy is in `S:/Radia/validation_artifacts/esrf6_mesh_audit_20260913/`.
+The durable copy is in `private-runtime-path`.
 Cell-average M is retained for iron-side comparisons. Global average M is
 almost zero by quadrupole symmetry and is not an adequate nonlinear observable.
 
@@ -107,7 +107,7 @@ peak fields. Do not change the running nominal acceptance to add these checks.
 At candidate manufacture, GitHub workflow dispatch failed twice with HTTP 500
 and PR creation failed with HTTP 502. PR #231 was subsequently created and its
 source CI passed, but this does not make this wheel a CI-built artifact. It was built in an
-isolated LAB venv from the clean committed source with
+isolated validation host venv from the clean committed source with
 `Build.ps1 -RequireNativeProvenance`, then `Build_Wheel.ps1 -DryRun`.
 The wheel verification passed. The builder's final interactive key prompt was
 stopped after verification; `-DryRun -SkipBuild` with `CI=true` independently
@@ -116,8 +116,8 @@ repeated verification and exited zero. No package was uploaded to PyPI.
 The full build also regenerated the separate Cubit plugin binary. That local
 generated change was restored to HEAD; it is not part of this solver repair.
 No global/editable environment was redirected and no native binary was manually
-copied into an installation. Hibino installed the wheel in the dedicated venv
-`C:/temp/esrf6-newton-4d85e72cc/venv`. `preflight.json` checks installed package
+copied into an installation. compute host installed the wheel in the dedicated venv
+`private-runtime-path`. `preflight.json` checks installed package
 bytes against the wheel, and records the explicit non-CI build identity.
 `pip check` passed. The version number matches the previous candidate, so
 source and wheel hashes, not the version string alone, distinguish this run.
@@ -161,8 +161,8 @@ establish structural, label and sampled-map checks, not all possible surface
 overlaps or relative coil/CAD placement. The iron SHA remains `fdd13872...`
 and the FEM SHA `dfc12b84...`; the full values are in the identity report.
 
-The actual Hibino iron mesh was recovered to
-`C:/temp/esrf6-mesh-audit-20260913/iron_conforming.vol`. The LAB asset mesh has
+The actual compute host iron mesh was recovered to
+`private-runtime-path`. The validation host asset mesh has
 the same SHA; its adjacent STEP files, manifest and journal were recovered
 separately for the management task's geometric audit. That finite audit is now
 complete in `../surface_overlap_20260913/`: the final detector found no overlap

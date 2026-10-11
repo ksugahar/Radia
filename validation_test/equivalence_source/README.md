@@ -106,7 +106,7 @@ null is the WHOLE POINT of the equivalence theorem.
 ## Running
 
 ```bash
-cd S:/Radia/01_GitHub/validation_test/equivalence_source
+cd private-runtime-path
 python phase1_static_coil.py      # ~5 s   (static, analytical coil)
 python phase2_wpt_harmonic.py     # ~3 s   (harmonic, Hertzian dipole)
 python null_field_property.py     # ~2 s   (interior null / exterior real)

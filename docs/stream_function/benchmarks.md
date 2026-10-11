@@ -58,7 +58,7 @@ demo; provides published numbers from a respected MRI shim coil
 design paper.
 
 **Next steps**:
-  1. Extract paper PDF (W:\01_paper or W:\02_学会資料\…).
+  1. Extract paper PDF (private-runtime-path or private-runtime-path).
   2. Read target field formula, source plane dimensions, target DSV
      spec.
   3. Reproduce in our pipeline + JSON output.
@@ -104,7 +104,7 @@ spec and reporting comparable numbers is the most defensible
 side-by-side validation we can show in a paper.
 
 **Next steps**:
-  1. Install CoilGen + MATLAB / GNU Octave on LAB.
+  1. Install CoilGen + MATLAB / GNU Octave on validation host.
   2. Pick a shipped CoilGen example (e.g., Gx gradient or shim).
   3. Reproduce same spec in our pipeline.
   4. Side-by-side table: RMS, wire length, inductance, compute time.
@@ -162,5 +162,5 @@ proof-of-priority on any specific contribution is intended.
 ## Cross-reference
 
   - Capability matrix: [README.md](README.md)
-  - Paper outline: W:\02_学会資料\2025年度\2026_01_JIAM\streamfunction\paper_outline.md (moved out of repo)
+  - Paper outline: private-runtime-path (moved out of repo)
   - MCP topic: `streamfunction(topic=session_2026_05_30)` section 11

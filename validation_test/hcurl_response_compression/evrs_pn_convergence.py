@@ -282,7 +282,7 @@ def run_sweep(args: argparse.Namespace) -> dict[str, object]:
     return {
         "schema": "radia.validation.evrs_pn_convergence.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "validation_host": platform.node(),
+        "platform_class": platform.system(),
         "runtime": {
             "python": sys.version,
             "platform": platform.platform(),

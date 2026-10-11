@@ -5,7 +5,7 @@ because "pandoc had bugs", then md2html itself accumulated seven defect
 classes, and the migration argument had become circular.  Measurement broke
 the circle: pandoc 3.9's own markdown reader handles every math invariant the
 md2html audit defined -- it parses math as grammar, so the regex-layer defect
-classes cannot exist in it -- while the LAB requirements ([N] citation links,
+classes cannot exist in it -- while the validation runtime requirements ([N] citation links,
 ||x||->\\Vert, cp932 input) are genuinely absent from stock pandoc.
 
 This file keeps that verdict executable instead of anecdotal:
@@ -13,7 +13,7 @@ This file keeps that verdict executable instead of anecdotal:
 * the INVARIANT tests assert that md2html and pandoc, fed the same source,
   both satisfy the math invariants -- a true independent-implementation
   cross-check of the arithmatex-based converter;
-* the GAP test asserts the LAB features are still md2html-only.  If a future
+* the GAP test asserts the validation runtime features are still md2html-only.  If a future
   pandoc grows them, the assert flips and the migration calculus has changed.
 
 Lane placement: validation_test (optional external binary, environment
@@ -129,7 +129,7 @@ def test_less_than_in_math_survives(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# The gap that keeps md2html alive: LAB features stock pandoc does not have.
+# The gap that keeps md2html alive: validation runtime features stock pandoc does not have.
 # If pandoc ever grows one of these, this test flips and the migration
 # calculus should be revisited.
 # ---------------------------------------------------------------------------

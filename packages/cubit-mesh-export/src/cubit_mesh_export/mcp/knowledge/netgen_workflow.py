@@ -613,7 +613,7 @@ Slot98 turns the 2026.6 higher-order quality-metric lesson into a replayable MCP
 gate: archive the raw Tetra10/Tri6 metric list and pass it through
 `cubit_element_quality_gate(element_type="Tetra10"|"Tri6", metric="scaled
 Jacobian"|"Jacobian", min_value=...)` before routing the mesh downstream.  This
-does not claim that 2026.6 is installed on INTEL11; it records that higher-order
+does not claim that 2026.6 is installed on development host; it records that higher-order
 tet/tri Jacobian metrics are a lower-bound quality contract, while live hex-led
 Coreform work on this machine targets the installed 2025.12 headless executable.
 
@@ -869,7 +869,7 @@ mesh = Mesh(vol_path)
 
 ## Requirements
 
-- Coreform Cubit 2025.12+ with Cubit Mesh Export installed (`cubit-plugin-install`)
+- Coreform Cubit 2026.8+ with Cubit Mesh Export installed (`cubit-plugin-install`)
 - NGSolve 6.2.2605+ to load the `.vol` (the 6.2.2607 snapshot writes
   `edgesegmentsgi3`); NGSolve up to 6.2.2607 mis-evaluates curved pyramids
   (see "Curved pyramids")
@@ -1282,7 +1282,7 @@ Fix: Use system Python with CUBIT_PATH environment variable.
      System Python with CUBIT_PATH can access BOTH Cubit API and NGSolve.
 
      # Step 1: Set CUBIT_PATH
-     set CUBIT_PATH="C:/Program Files/Coreform Cubit 2025.12/bin"
+     set CUBIT_PATH="C:/Program Files/Coreform Cubit 2026.8/bin"
 
      # Step 2: Run with system Python (which has NGSolve installed)
      python my_script.py
@@ -1330,7 +1330,7 @@ cubit.init(['cubit', '-nojournal', '-batch'])
 **Wrong import order** (causes DLL conflict):
 ```python
 import sys
-sys.path.append("C:/Program Files/Coreform Cubit 2025.12/bin")
+sys.path.append("C:/Program Files/Coreform Cubit 2026.8/bin")
 import cubit                      # Loads Cubit's bundled VTK DLLs
 import ngsolve                    # FAILS - Netgen can't initialize
 ```

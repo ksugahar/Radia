@@ -206,8 +206,8 @@ def _replicate_metrics(reference: dict, replicate: dict) -> dict[str, object]:
         )[selector]
         rows[engine] = {"relative_rms": _relative_rms(left, right)}
     return {
-        "reference_machine": reference_machine,
-        "replicate_machine": replicate_machine,
+        "reference_machine": "reference",
+        "replicate_machine": "replicate",
         "engines": rows,
         "maximum_relative_rms": max(row["relative_rms"] for row in rows.values()),
     }
@@ -301,7 +301,7 @@ def analyze(
         "schema": "radia.validation.c-type-absolute-accuracy-certificate.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "passed": passed,
-        "machine": platform.node(),
+        "platform_class": platform.system(),
         "claim": {
             "quantity": "gauge-invariant B in the C-yoke useful gap core",
             "analytic_absolute_truth_claimed": False,

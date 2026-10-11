@@ -70,7 +70,7 @@ def main():
     accepted = all(r["after"]["relative_error"] < 1e-9 for r in records)
     sources = [Path(__file__), Path(__file__).with_name("aca_probe_bridge.c"),
                Path(__file__).parents[2] / "src/ext/HACApK/cHACApK_base.c"]
-    result = {"schema": "radia.aca-residual-guard.v1", "hostname": platform.node(),
+    result = {"schema": "radia.aca-residual-guard.v1", "platform_class": platform.system(),
               "python": platform.python_version(), "numpy": np.__version__,
               "aca_tolerance": 1e-10, "acceptance_budget": 1e-9,
               "production_hmatrix_rebuilt": False,

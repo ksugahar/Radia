@@ -49,7 +49,7 @@ No optimizer production source is changed.
    inherited built-in member classification. Same-runtime determinism is not
    cross-version determinism.
 4. Rebase and finish the separate constructor-default audit after its owner
-   commits the seven-file WIP. `C:/temp/radia-optuna-ctor-audit` was inspected
+   commits the seven-file WIP. `private-runtime-path` was inspected
    read-only and remains untouched.
 
 Acceptance for this phase: 76 MATLAB upstream-suite tests plus precision

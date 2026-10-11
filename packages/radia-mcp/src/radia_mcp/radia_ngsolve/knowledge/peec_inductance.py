@@ -368,7 +368,7 @@ diagnostic and a HINT pointing at CAD regeneration or BEM-A switch.
 **No silent wrong-spine output** (the regression that caught a user's
 ``1turn_coil_loft_outsideline.step`` on 2026-05-15).
 
-## Verification (2026-04-28 on 100号機)
+## Verification (2026-04-28 on runtime host)
 
 | Coil topology                        | Tier hit  | L (nH)    | vs golden  |
 |--------------------------------------|-----------|-----------|------------|
@@ -599,8 +599,8 @@ found a new geometry class -- file a bug report with the .step.
 PEEC_IND_JAPANESE_PATH = """
 # PEEC inductance — Japanese / Unicode path support
 
-Verified 2026-04-21 on LAB + 100号機 with paths like
-``C:\\temp\\日本語テスト\\3turncoil.stp``:
+Verified 2026-04-21 on validation runtime + runtime host with paths like
+``private-runtime-path``:
 
 | Layer                              | Status | Mechanism                               |
 |------------------------------------|--------|------------------------------------------|
@@ -631,7 +631,7 @@ Supported workflow:
      or pass them to the headless CLI through MCP.
   3. Run the application; the artifact paths remain Unicode end to end.
 
-All verified on 100号機 with L_coil = 426.245 nH on Japanese path.
+All verified on the development runtime with L_coil = 426.245 nH on Japanese path.
 """
 
 

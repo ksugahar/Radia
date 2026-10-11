@@ -123,7 +123,7 @@ def main():
         "schema": "radia.fin_partial_element_mutual.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "git_head": head,
-        "host": platform.node(),
+        "platform_class": platform.system(),
         "question": (
             "the fin branches take the filamentary Neumann mutual because "
             "they are not sub-filaments of a shared parent.  How far is that "

@@ -2,7 +2,7 @@
 
 Conference poster generation + lint: betterposter / Kelvin LaTeX templates, color-contrast (WCAG), font-size-by-viewing-distance, zone balance, QR audit, compile + print-readiness.
 
-Promoted 2026-06-02 from mcp-server-document.poster (LAB-private)
+Promoted 2026-06-02 from mcp-server-document.poster (validation runtime-private)
 to radia-mcp (public PyPI), alongside presentation / poster /
 doc_convert / pdf / bibliography.
 

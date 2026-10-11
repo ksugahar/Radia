@@ -26,7 +26,7 @@ and a direct solver:
     A-Phi J = -s sigma (A_s + A_r + grad W), W = V/s    (mixed HCurl x H1)
           symmetric form: nu curlcurl + s sigma (A_r + grad W).(A' + grad W')
 
-MEASURED (LAB, 2026-07-25), rel = |m_fem - m_ana| / |m_ana|:
+MEASURED (validation runtime, 2026-07-25), rel = |m_fem - m_ana| / |m_ana|:
 
     p-sweep (ne=10000):
     p    A* (A-method)   A-Phi        FES verify (slaved / ratio)

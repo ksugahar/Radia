@@ -726,7 +726,7 @@ def main(argv: list[str] | None = None) -> int:
         "schema": "radia.validation.esrf-hybrid-undulator-three-engine.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "passed": bool(passed),
-        "machine": platform.node(),
+        "platform_class": platform.system(),
         "python": sys.version,
         "peak_process_memory_mb": _process_peak_memory_mb(),
         "radia_version": importlib.metadata.version("radia"),

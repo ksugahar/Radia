@@ -1,0 +1,73 @@
+{
+  "schema": "radia.toolchain-build-verification.v1",
+  "date": "2026-10-11",
+  "source_commit": "75c49f5f733845aec4a6e450fc2d3a8cb7ffadc8",
+  "source_dirty": false,
+  "os": "Windows x64",
+  "toolchain": {
+    "visual_studio_build_tools": "18.10.3",
+    "msvc": "14.51.36231",
+    "windows_sdk": "10.0.26100.0",
+    "python": "3.12.10",
+    "ngsolve": "6.2.2607",
+    "netgen_mesher": "6.2.2607",
+    "mkl_devel": "2026.1.0",
+    "matlab": "26.1.0.3346908 (R2026a) Update 5"
+  },
+  "commands": [
+    "pwsh -NoProfile -File Build.ps1 -RadiaOnly -BuildJobs 4 -RequireNativeProvenance",
+    "pwsh -NoProfile -File Build.ps1 -MatlabMexOnly -BuildJobs 4 -RequireNativeProvenance"
+  ],
+  "builds": {
+    "radia_core": "passed",
+    "radia_mex": "passed",
+    "optuna_mex": "passed"
+  },
+  "python_smoke": {
+    "status": "passed",
+    "native_import": "passed",
+    "finite_axial_magnet_field": "passed"
+  },
+  "matlab_smoke": {
+    "status": "passed",
+    "execution_route": "MathWorks MATLAB Engine for Python; operation-owned session",
+    "api": {
+      "api_version": 1,
+      "handle_count": 0,
+      "ih_handle_count": 0,
+      "reactor_handle_count": 0,
+      "taskmanager_max_threads": 52,
+      "source_commit": "75c49f5f733845aec4a6e450fc2d3a8cb7ffadc8"
+    },
+    "optuna": {
+      "api_version": 1,
+      "backend": "optuna_mex",
+      "command_count": 21,
+      "handle_count": 0
+    },
+    "taskmanager_probe": {
+      "active_threads": 52,
+      "used_threads": 50,
+      "max_thread_id": 51,
+      "checksum": 20070.68818270431
+    }
+  },
+  "artifacts": [
+    {
+      "name": "_radia_pybind.pyd",
+      "bytes": 4090880,
+      "sha256": "38e0b4ecc6fb286d777225c386aac61d99a39f55bdb9280793c46d145b344aaa"
+    },
+    {
+      "name": "radia_mex.mexw64",
+      "bytes": 4349440,
+      "sha256": "1aaf972c55e7af4f3a7b6f8509229f5486de3d54b5bf51a55b6121469e79055e"
+    },
+    {
+      "name": "optuna_mex.mexw64",
+      "bytes": 158208,
+      "sha256": "a8b9db3bfd0a3892d2e971b898362464f19c1c63c14fc6ca194759cf3f2b86de"
+    }
+  ],
+  "scope": "Compilation and small loading/API checks only; no full solver, MEX parity or release-quad acceptance. Existing installations unchanged. Operational provenance is retained in private storage."
+}

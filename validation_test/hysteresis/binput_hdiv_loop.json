@@ -1,7 +1,7 @@
 {
  "description": "HDiv-VIM B-input play hysteresis cube loop (gate B)",
  "timestamp": "2026-07-15T11:26:57.989896",
- "hostname": "lab",
+
  "h_applied_z": [
   50000.0,
   100000.0,

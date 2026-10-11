@@ -166,7 +166,7 @@ MATHEMATICA_VERIFICATION = r"""
 
 ## H¹ p=2 demo
 
-A working H¹ p=2 demo lives at `C:\temp\ngsolve_tet_h1_demo.wls`
+A working H¹ p=2 demo lives at `private-runtime-path`
 (generated from earlier Mathematica session work). Use as a starting
 template.
 

@@ -1,6 +1,6 @@
 {
   "schema": "radia.validation.team28-source-quadrature.v1",
-  "host": "intel11",
+
   "radia_version": "5.0.1",
   "radia_module": "<local-path>/__init__.py",
   "ngsolve": "6.2.2606",

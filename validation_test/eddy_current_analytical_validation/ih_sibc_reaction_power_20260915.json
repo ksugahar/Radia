@@ -1,6 +1,6 @@
 {
   "scope": "Diagnose the missing electric reciprocity term on a genus-zero cylinder.\n\nThe source is a closed 720-segment, one-ampere peak ring at r=30 mm.\nThe workpiece is r=25 mm, h=25 mm, sigma=5.8e7 S/m, mu_r=1 at 1 kHz.\nUses explicit in-memory Netgen surface meshes, not production VOL exports.\n\nFor exp(+i omega t), total H=-grad(phi), incident H=-grad(psi):\n  delta_L = int(phi n.B_inc) / I**2\n            + Zs/(i omega I**2) int(grad_s(psi).grad_s(phi)).\nThe second term is from -E cross H_inc in electromagnetic reciprocity.\nIt is bilinear, NOT a conjugated norm of the solved field. Therefore the\nreaction power is independent of the surface-loss evaluation.\n\nThis diagnostic does NOT validate nonlinear ESIM, multiply-connected\nsurfaces, finite-source FEM equivalence, or the production application path.\nThe old term is retained in the output solely to reproduce the defect.\n",
-  "host": "Hibino",
+
   "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
   "ngsolve": "6.2.2606",
   "production_path_fixed": false,

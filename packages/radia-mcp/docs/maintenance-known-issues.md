@@ -26,7 +26,7 @@ client verification are not automatically open code defects.
 
 Release-operation follow-up (2026-09-16): removed the obsolete four-host solver
 release requirement and live-Cubit GUI/IPC guidance from CONTRIBUTING. The
-runtime policy now distinguishes required LAB wheel/live acceptance from
+runtime policy now distinguishes required validation host wheel/live acceptance from
 nonblocking 100 next-launch adoption. At that time both hosts still required
 editable updates; the 2026-10-04 policy supersedes that installation detail.
 Historical observations below are scoped to their recorded dates, not
@@ -145,7 +145,7 @@ plain and IEEEtran passed two pdflatex runs, one-page checks, undefined citation
 missing glyph and overfull-box checks, plus extracted Unicode/literal text
 assertions. Full-page Poppler images were visually reviewed without clipping,
 overlap or missing glyphs. Evidence lives under
-C:/temp/pytest-bib-render-20260912-a (PDFs, acceptance.json and images); the
+private-runtime-path (PDFs, acceptance.json and images); the
 dedicated pytest result has 2 passes. This closes the named synthetic rendering
 cases, not arbitrary bst styles, languages, macro expansion or real-manuscript
 submission acceptance. The test leaves visual_review=pending until human/agent

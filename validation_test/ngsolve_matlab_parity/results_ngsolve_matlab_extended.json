@@ -92,9 +92,9 @@
     "manufactured": false
   },
   "native_handle_count_after": 0,
-  "host_name": "HIBINO",
+
   "computer_architecture": "win64",
-  "mex_path": "C:\\temp\\radia_ngsolve_hibino_stage\\matlab\\radia_mex.mexw64",
+  "mex_path": "<private-path>/radia_ngsolve_compute_stage\\matlab\\radia_mex.mexw64",
   "mex_sha256": "9149f254621d30128a661e1d4159e5939459eaa49f82427204fd1ebb78e07beb",
   "matlab_version": "26.1.0.3312084 (R2026a) Update 4",
   "matlab_release": "2026a",

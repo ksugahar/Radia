@@ -12,7 +12,7 @@ acceleration AND a **kernel-agnostic block-entry callback bridge**
 (via Pierre Marchand's HTool work).  Our SF framework's callback
 contract is structurally compatible with the latter.
 
-## Status (LAB, 2026-05-30)
+## Status (validation host, 2026-05-30)
 
 ```
 > pip show ngsolve

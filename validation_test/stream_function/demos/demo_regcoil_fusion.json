@@ -1,6 +1,6 @@
 {
   "timestamp": "2026-06-03T18:51:34",
-  "hostname": "lab",
+
   "benchmark": "regcoil_fusion_forward",
   "problem": {
     "winding_torus": {

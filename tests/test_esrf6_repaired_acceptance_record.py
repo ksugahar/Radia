@@ -12,7 +12,7 @@ def test_ci_wheel_nominal_three_engine_record():
     path = directory / 'three_engine_case6_bdm1_bonus12.json'
     # Label-only terminology update in 6216de330; numerical evidence is unchanged.
     assert hashlib.sha256(path.read_bytes()).hexdigest() == (
-        'e19541032ec0ba496065ece3870c95d8732f6bb6ceeac203ee147bd5fa85947e')
+        '95ea8b127cb0edf0cec8f7c9c274da151061ce70e5cfdfcb46c84f12bcea2133')
     result = json.loads(path.read_bytes())
     assert result['passed'] is True and result['nonlinear_converged'] is True
     runtime = result['runtime_identity']

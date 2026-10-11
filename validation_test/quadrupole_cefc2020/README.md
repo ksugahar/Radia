@@ -45,21 +45,21 @@ and the `B_perp(15 mm)` gap against a 3 % band.
 ## Running
 
 ```powershell
-python build_qmag_cubit_mesh.py --output-dir C:\temp\radia-qmag\meshes --sizes 0.010 0.006 0.004
-python run_qmag_hdiv.py --mesh C:\temp\radia-qmag\meshes\qmag_h10.vol --case mu1000 --output results\qmag_h10_mu1000_hibino.json
-python run_qmag_hdiv.py --mesh C:\temp\radia-qmag\meshes\qmag_h10.vol --case J3.0 --output results\qmag_h10_J3.0_hibino.json
-python build_qmag_fem_mesh.py --output-dir C:\temp\radia-qmag\fem
-python run_qmag_three_engine.py --fem-mesh C:\temp\radia-qmag\fem\coil_yoke_kelvin.vol --fem-mesh-report C:\temp\radia-qmag\fem\qmag_fem_kelvin.mesh.json --case mu1000 --hdiv-result results\qmag_h10_mu1000_hibino.json --output results\three_engine_mu1000_hibino.json
+python build_qmag_cubit_mesh.py --output-dir private-runtime-path --sizes 0.010 0.006 0.004
+python run_qmag_hdiv.py --mesh private-runtime-path --case mu1000 --output results\qmag_h10_mu1000_compute-host.json
+python run_qmag_hdiv.py --mesh private-runtime-path --case J3.0 --output results\qmag_h10_J3.0_compute-host.json
+python build_qmag_fem_mesh.py --output-dir private-runtime-path
+python run_qmag_three_engine.py --fem-mesh private-runtime-path --fem-mesh-report private-runtime-path --case mu1000 --hdiv-result results\qmag_h10_mu1000_compute-host.json --output results\three_engine_mu1000_compute.json
 ```
 
 The HEX mesh builder writes conforming z-swept HEX (imprint/merge, per-volume
 explicit sweep, `check-vol` and `radia.vim.mesh_conformity_report` gates).  The
 solves are heavy (one charge Gram per HDiv case, a 183k-element Kelvin FEM per
-formulation) and run on hibino, one job at a time; results are committed under
+formulation) and run on compute-host, one job at a time; results are committed under
 `results/` with the host name in the file name.
 
 `run_qmag_hdiv.py` defaults to `--radia-source repo`. For distributed-wheel
-validation on hibino or mdx, use a dedicated non-editable environment and add
+validation on compute-host or mdx, use a dedicated non-editable environment and add
 `--radia-source installed`. This checks the distribution's WHEEL metadata,
 rejects editable installs (including another checkout), and verifies that the
 loaded `radia/__init__.py` matches the distribution's recorded file. Missing
@@ -69,7 +69,7 @@ version. Keep `qmag_source.py` beside the runner when staging validation files.
 This source-selection option applies to the HDiv runner only; the other
 builders and three-engine runner still select their repository source.
 
-## Results (hibino, 2026-09-07)
+## Results (compute-host, 2026-09-07)
 
 Linear cases, HDiv-MMM on the `h = 10 mm` conforming HEX mesh (2352 BDM1
 elements, 60,816 unknowns, mass-Riesz CG to `1e-8`) against the mixed
@@ -89,7 +89,7 @@ carry the full point-wise fields and the mesh hashes.
 The nonlinear row is the tabulated B(H) law at the design current: HDiv-MMM
 converged its energy Newton loop (mass-Riesz CG inner solves); the mixed Omega
 row was then produced by the since-retired Picard route with constrained
-Anderson mixing (52 iterations, 126 min on hibino) after plain damped Picard
+Anderson mixing (52 iterations, 126 min on compute-host) after plain damped Picard
 stalled at the 80-iteration cap with a relative B change of 7.8e-4.  Since
 2026-09-30 the mixed Omega B-H solve is Newton only: the runner has no mixed
 relaxation, Anderson, or warm-start options, and a non-converged Newton solve
@@ -106,7 +106,7 @@ field: `run_qmag_multipoles.py` expands `B_y + i B_x` on a circle of radius
 of `1e-4 B_2`, plus the quadrupole-forbidden `b_3, b_4, b_5` as a mesh-symmetry
 check.  Linear `mu_r = 1000`, design current; every mesh from the same Cubit
 import (`build_qmag_cubit_mesh.py`, HEX swept or `--scheme tet`, exported at
-curve order 2 or 1).  Correctness study on LAB, no timings:
+curve order 2 or 1).  Correctness study on validation host, no timings:
 
 | route | h [mm] | unknowns | `b_6` | `b_10` | `b_14` | forbidden `b_3` |
 |---|---|---|---|---|---|---|
@@ -140,9 +140,9 @@ next TET-side lever is a cheaper and more accurate curved touching family.
 
 ## HEX against TET on this magnet
 
-`results/timing_qmag_*_hibino.json` time every route (swept HEX BDM1, TET
+`results/timing_qmag_*_compute-host.json` time every route (swept HEX BDM1, TET
 BDM1 / BDM2 on straight and on curved-Q2 meshes from the same CAD import) on
-hibino for the linear `mu_r = 1000` case; the table and its reading are in
+compute-host for the linear `mu_r = 1000` case; the table and its reading are in
 section 8.15 of `docs/hdiv_vim/HDiv-MMM_review.md`.  The curved TET BDM2
 solve on the 5 mm mesh (63,204 tets, 1.17 M unknowns) first took a 57 GB host
 down through an `n_host x n_host` touching-block index (22 GB; fixed, the

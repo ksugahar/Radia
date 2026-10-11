@@ -91,7 +91,7 @@ def run(notebook, output, curvaturesafety, bonus):
     conservation = float(np.linalg.norm(divergence@solution) /
                          (np.linalg.norm(divergence)*np.linalg.norm(solution)))
     report = {
-        'schema': 'radia.torus-physical-current.v1', 'host': platform.node(),
+        'schema': 'radia.torus-physical-current.v1', "platform_class": platform.system(),
         'python': platform.python_version(), 'ngsolve': ng.__version__,
         'numpy': np.__version__, 'notebook_sha256': hashlib.sha256(raw).hexdigest(),
         'driver_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),

@@ -4,7 +4,7 @@ mathematica_evaluate (低レベル subprocess bridge) の上に、数式工程
 (数式 DB との往復、paper 執筆、Maxwell 検証、物理単位変換) で頻出
 する操作を 1 関数 1 目的で wrap した薄いラッパー群。
 
-LAB / kubota / 学生がよく行う操作:
+validation runtime / kubota / 学生がよく行う操作:
   - simplify: FullSimplify  (式の整理)
   - to_tex:   TeXForm        (paper 用 LaTeX 文字列)
   - check_identity: 等式 LHS == RHS が常に成り立つか

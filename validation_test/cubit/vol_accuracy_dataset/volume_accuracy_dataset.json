@@ -3,7 +3,7 @@
   "generated_at": "2026-08-21T20:10:00.649512+00:00",
   "source_cases": "validation_test/cubit/vol_accuracy_dataset/cases.json",
   "environment": {
-    "hostname": "lab",
+
     "platform": "Windows-2022Server-10.0.20348-SP0",
     "python": "3.12.10",
     "ngsolve": "6.2.2604",

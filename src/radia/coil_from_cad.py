@@ -530,7 +530,7 @@ def _classify_lead_caps(leads: list, chain_centroids_cad: np.ndarray):
     itself at a lead cap position).  Without the helix-only filter, the
     chain vertices at lead cap positions create distance=0 ties on both
     caps and argmin picks the wrong cap (whichever appears first), which
-    flips the orientation.  See the W:/kubota/3turncoil.stp case where
+    flips the orientation.  See the private-runtime-path case where
     chain[0] = inner_cap AND chain[-1] = outer_cap of the same lead --
     both produce d=0 and argmin returns the first match.
 
@@ -2715,7 +2715,7 @@ def _filaments_from_step_compute(step_path: str,
         This is the PRIMARY path for ``n_peri``.  Chosen over the walker
         because the walker hangs or natively crashes on multi-turn loft
         STEPs (Kubota's 3turncoil.stp: walker hangs netgen.occ > 5 min;
-        on 100号機 the subprocess exits with an unhandleable native
+        on the development runtime the subprocess exits with an unhandleable native
         error code).  Longest-edge is robust because it samples the
         whole spine in one pass rather than walking step-by-step.
 

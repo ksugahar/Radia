@@ -50,7 +50,7 @@ def run(notebook, output):
     naive, naive_residual = extract(transformed, e)
     np.testing.assert_allclose(covariant, legacy, rtol=1e-8)
     report = {
-        "schema": "radia.closed-torus-diagnostic.v1", "host": platform.node(),
+        "schema": "radia.closed-torus-diagnostic.v1", "platform_class": platform.system(),
         "python": platform.python_version(), "ngsolve": ng.__version__, "numpy": np.__version__,
         "notebook_sha256": hashlib.sha256(raw).hexdigest(),
         "diagnostic_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),

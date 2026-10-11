@@ -42,8 +42,8 @@ Run the static audit without editing the CAD:
 
 ```powershell
 python .agents/skills/cubit-sat-coilbuilder/scripts/audit_sat.py `
-  "W:\ffag\model.SAT" `
-  --output "C:\temp\model.sat-audit.json"
+  "private-runtime-path" `
+  --output "private-runtime-path"
 ```
 
 The report records the SHA-256, ACIS header, declared and parsed body counts,
@@ -59,8 +59,8 @@ volume inventory separately from the original CAD:
 
 ```powershell
 python .agents/skills/cubit-sat-coilbuilder/scripts/cubit_import_inventory.py `
-  "W:\ffag\model.SAT" `
-  --output "C:\temp\model.cubit-inventory.json"
+  "private-runtime-path" `
+  --output "private-runtime-path"
 ```
 
 The inventory captures Cubit version, volume ids, persisted names when Cubit

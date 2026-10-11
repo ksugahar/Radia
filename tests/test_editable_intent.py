@@ -109,11 +109,15 @@ def test_record_is_keyed_by_interpreter_and_package(intent_file):
     assert ei.recorded_packages(loaded) == ["radia-mcp"]
 
 
-def test_norm_path_unifies_nas_spellings():
-    unc = r"\\192.168.121.100\work\00_CAE\Radia\release-quad\x\packages\radia-mcp"
-    assert ei.norm_path(unc) == "s:/radia/release-quad/x/packages/radia-mcp"
-    assert ei.norm_path(r"W:\00_CAE\Radia\release-quad\x\\") == "s:/radia/release-quad/x"
-    assert ei.norm_path("S:/Radia/release-quad/X/") == ei.norm_path(unc[: -len(r"\packages\radia-mcp")])
+def test_norm_path_unifies_synthetic_nas_spellings(monkeypatch):
+    monkeypatch.setattr(ei, "_PATH_ALIASES", (
+        ("//192.0.2.10/share/repo/", "x:/synthetic-root/"),
+        ("w:/synthetic-repo/", "x:/synthetic-root/"),
+    ))
+    unc = r"\\192.0.2.10\share\repo\Release\x\packages\radia-mcp"
+    assert ei.norm_path(unc) == "x:/synthetic-root/release/x/packages/radia-mcp"
+    assert ei.norm_path(r"W:\synthetic-repo\Release\x\\") == "x:/synthetic-root/release/x"
+    assert ei.norm_path("X:/synthetic-root/Release/X/") == ei.norm_path(unc[:-len(r"\packages\radia-mcp")])
 
 
 def test_verify_without_record_is_unverified_and_names_no_target(intent_file, fake, sources):

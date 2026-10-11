@@ -8,7 +8,7 @@
   Freq : 7000 Hz, delta=0.790 mm (R/delta = 31.7)
 
 [1/5] CoilBuilder -> filament paths
-S:\Radia\01_GitHub\src\radia\radia_coil_builder.py:79: UserWarning: Gimbal lock detected. Setting third angle to zero since it is not possible to uniquely determine all angles.
+<private-path>/Radia\01_GitHub\src\radia\radia_coil_builder.py:79: UserWarning: Gimbal lock detected. Setting third angle to zero since it is not possible to uniquely determine all angles.
   self.euler_angles = rot.as_euler('ZXZ', degrees=True) * (-1)
   9 filaments, sub-cell 2.000 x 2.000 mm (1.3s)
 

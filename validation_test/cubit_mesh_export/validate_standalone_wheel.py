@@ -37,7 +37,7 @@ def main():
     out.mkdir(parents=True, exist_ok=False)
     result = {"schema": "cubit-mesh-export.standalone-acceptance.v1",
               "passed": False, "gui_started": False,
-              "host": socket.gethostname(), "python": sys.executable,
+              "platform_class": platform.system(), "python": sys.executable,
               "wheel": str(args.wheel.resolve())}
     started = time.monotonic()
     try:

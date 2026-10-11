@@ -37,7 +37,7 @@ raise SystemExit(lib.run_benchmark())
     data = json.loads(run.stdout)
     data.update(schema='radia.hex-far-product.microbenchmark.v1',
                 timestamp=datetime.now(timezone.utc).isoformat(),
-                machine=platform.node(), platform=platform.platform(),
+                platform_class=platform.system(), platform=platform.platform(),
                 python=sys.version, mkl=importlib.metadata.version('mkl'),
                 compiler_flags=args.compiler_flags,
                 scope='synthetic kernel only; not full Gram or solve acceptance')

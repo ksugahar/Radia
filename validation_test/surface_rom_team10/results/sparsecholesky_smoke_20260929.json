@@ -58,7 +58,7 @@
       }
     }
   ],
-  "host": "mdx1",
+
   "python": "3.12.10",
   "ngsolve": "6.2.2606",
   "linear_solves": 12,

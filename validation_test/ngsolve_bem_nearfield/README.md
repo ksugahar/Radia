@@ -5,8 +5,8 @@ used by RadField. They do not establish acceptance of an induction-heating
 model or a Radia solver release.
 
 ```powershell
-python validation_test/ngsolve_bem_nearfield/run_square_sheet.py --output C:/temp/square-sheet.json
-python validation_test/ngsolve_bem_nearfield/run_curved_sphere.py --output C:/temp/curved-sphere.json
+python validation_test/ngsolve_bem_nearfield/run_square_sheet.py --output private-runtime-path
+python validation_test/ngsolve_bem_nearfield/run_curved_sphere.py --output private-runtime-path
 ```
 
 The square sheet checks the single-layer potential against the closed-form

@@ -1,6 +1,6 @@
 """Is a mesher's MIN quality a reproducible property? (control for the sweep)
 
-Promoted from C:/temp/mesh_quality_study (2026-08-06) with its committed
+Promoted from private-runtime-path (2026-08-06) with its committed
 results JSON (Data Persistence Policy). Re-run with
 `python run_size_target_sensitivity.py` (requires Cubit + netgen + gmsh +
 build123d; scratch meshes land in artifacts/, gitignored).
@@ -16,7 +16,7 @@ two ways it could fail to be:
 
 Both meshers are measured the same way, so neither claim is asymmetric.
 
-Quality-class run (correctness, not timing) -- LAB execution allowed.
+Quality-class run (correctness, not timing) -- validation runtime execution allowed.
 """
 import json
 import os
@@ -91,7 +91,7 @@ def main():
     export_step(Sphere(1.0), sp)
 
     results = {"timestamp": datetime.now().isoformat(),
-               "hostname": platform.node(),
+               "platform_class": platform.system(),
                "referee": "gmsh minSICN", "order": 1, "repeats": REPEATS,
                "repeatability": {}, "target_sensitivity": {}}
 

@@ -135,7 +135,8 @@ class ScalarBIESIBCSolver:
                   intree_singular_n_q=8, intree_regular_quad_degree=11,
                   use_intree_hacapk=False, hacapk_aca_eps=1e-10,
                   hacapk_leaf=64, hacapk_eta=2.0,
-                  bnd_label=None, log_fn=None, loop_work_backend="auto"):
+                  bnd_label=None, log_fn=None, loop_work_backend="auto",
+                  hacapk_entry_cache_bytes=8*1024*1024, hacapk_construction="auto"):
         """Initialize solver and assemble BEM operators.
 
         Args:
@@ -155,9 +156,11 @@ class ScalarBIESIBCSolver:
             order: H1 polynomial order on surface (default 1).
             assemble_dense: if True (default, backward-compat), extract
                 ``DL`` and ``SL`` to dense ``ndof x ndof`` numpy arrays
-                via N column matvecs.  This is O(N^3) total (~67 min for
-                N=2474) but lets ``solve()`` use a single dense scipy
-                solve.
+                via N column matvecs. On the in-tree HACApK P1 route, False
+                retains sparse M/K and releases dense construction tables,
+                or evaluates P1 entries on demand when selected
+                with a cached sparsecholesky mass factor. The default dense
+                route extracts all columns and uses a dense solve.
                 If False, KEEP ``DL_bf`` and ``SL_bf`` as NGSolve
                 bilinear forms only and use ``solve_iterative()`` (GMRES
                 with LinearOperator wrappers).  ~50x faster for typical
@@ -169,6 +172,14 @@ class ScalarBIESIBCSolver:
                 sideset only).  Only consumed by the in-tree paths
                 (``use_intree_bem=True``); the ngsolve.bem path uses
                 ``ds`` over all BND.
+            hacapk_construction: scalar in-tree P1 compressed construction.
+                "auto" retains dense-entry compression through 7000 DOFs and
+                selects "on-demand" above it. "dense-entry" and "on-demand"
+                explicitly select a route; neither silently substitutes another.
+                Explicit choices require in-tree P1 HACApK and assemble_dense=False.
+            hacapk_entry_cache_bytes: nonnegative integer, default 8 MiB;
+                zero disables the pair-block cache on the on-demand route.
+                This bounds shared SL/DL pair payload, not total solver memory.
             log_fn: optional progress callback ``log_fn(tag, msg)`` used
                 to surface assembly-phase boundaries to the panel debug
                 log + console.  When None (default) the solver is silent
@@ -189,7 +200,22 @@ class ScalarBIESIBCSolver:
 
         if loop_work_backend not in ("auto", "dense", "fmm"):
             raise ValueError("loop_work_backend must be auto, dense, or fmm")
+        if hacapk_construction not in ("auto", "dense-entry", "on-demand"):
+            raise ValueError("hacapk_construction must be auto, dense-entry, or on-demand")
+        if hacapk_construction != "auto" and (not use_intree_hacapk or not use_intree_bem
+                                              or order != 1 or assemble_dense):
+            raise ValueError("Explicit HACApK construction requires non-dense in-tree P1 HACApK")
+        if use_intree_hacapk and not assemble_dense and (
+                isinstance(hacapk_entry_cache_bytes, bool)
+                or not isinstance(hacapk_entry_cache_bytes, (int, np.integer))
+                or hacapk_entry_cache_bytes < 0):
+            raise ValueError("P1 entry cache bytes must be a nonnegative integer")
         self.loop_work_backend = loop_work_backend
+        self.hacapk_aca_eps = float(hacapk_aca_eps)
+        self.hacapk_controls = dict(aca_eps=float(hacapk_aca_eps), leaf_size=int(hacapk_leaf), eta=float(hacapk_eta), max_rank=-1)
+        if use_intree_hacapk and (not np.isfinite(self.hacapk_aca_eps) or self.hacapk_aca_eps<=0
+                or int(hacapk_leaf)<=0 or not np.isfinite(hacapk_eta) or hacapk_eta<=0):
+            raise ValueError("HACApK controls require positive finite eps/eta and leaf size")
         self.mesh = mesh
         self.order = order
         self.use_intree_bem = use_intree_bem
@@ -240,75 +266,116 @@ class ScalarBIESIBCSolver:
                 f"extract_surface_curved: {len(tris)} tris, {len(verts)} verts "
                 f"(geom_order={intree_geom_order}, "
                 f"{time.perf_counter()-_t_ext:.1f}s)")
-            _cpp_assemble = _required_native_symbol("_AssembleSLDL_Galerkin")
-            _t_sldl = time.perf_counter()
-            _log_phase("BEM",
-                f"SLDL Galerkin assembly: C++ kernel, "
-                f"{len(tris)} tris, quad_deg={intree_regular_quad_degree}, "
-                f"sing_n_q={intree_singular_n_q}")
-            v_arr = np.ascontiguousarray(verts, dtype=np.float64)
-            t_arr = np.ascontiguousarray(tris, dtype=np.int64)
-            p_arr = np.ascontiguousarray(tri_p2, dtype=np.float64)
-            SL_loc, DL_loc = _cpp_assemble(
-                v_arr, t_arr, p_arr,
-                intree_regular_quad_degree,
-                intree_singular_n_q,
-                0)   # n_threads=0 -> OpenMP default
-            _log_phase("BEM",
-                f"SLDL Galerkin assembly done "
-                f"({time.perf_counter()-_t_sldl:.1f}s)")
-            # Lift to full ndof basis (interior vertices contribute zero
-            # rows/cols since their hat is 0 on BND).
-            self.SL = np.zeros((ndof, ndof))
-            self.DL = np.zeros((ndof, ndof))
-            self.SL[np.ix_(v_global, v_global)] = SL_loc
-            self.DL[np.ix_(v_global, v_global)] = DL_loc
             self._intree_v_global = v_global
-            self._DL_bf = None
-            self._SL_bf = None
+            self._DL_bf = self._SL_bf = None
+            self._SL_hacapk = self._DL_hacapk = None
+            on_demand = use_intree_hacapk and not assemble_dense and (
+                hacapk_construction == "on-demand" or (hacapk_construction == "auto" and ndof > 7000))
+            if on_demand:
+                factory = _required_native_symbol("_CreateP1HACApKGeometry")
+                coordinates = np.ascontiguousarray([vertex.point for vertex in mesh.vertices], dtype=float)
+                if coordinates.shape != (ndof, 3):
+                    raise ValueError("On-demand P1 requires one mesh vertex per nodal DOF")
+                _log_phase("BEM", f"HACApK on-demand P1 build: {len(tris)} faces, {ndof} DOFs")
+                self._SL_hacapk, self._DL_hacapk, self._entry_provider = factory(
+                    coordinates, np.ascontiguousarray(v_global[tris], dtype=np.int64),
+                    np.ascontiguousarray(tri_p2, dtype=float),
+                    intree_regular_quad_degree, intree_singular_n_q, int(hacapk_entry_cache_bytes))
+                self._body_build_diagnostics = []
+                for kernel, handle in (("SL", self._SL_hacapk), ("DL", self._DL_hacapk)):
+                    provider_before = self._entry_provider.GetStats()
+                    build_started = time.perf_counter()
+                    if not handle.BuildHMatrix(aca_eps=hacapk_aca_eps, leaf_size=int(hacapk_leaf),
+                                               eta=hacapk_eta, max_rank=-1, print_level=0):
+                        raise RuntimeError("On-demand P1 HACApK construction failed")
+                    provider_after = self._entry_provider.GetStats()
+                    counters = ("entry_requests", "pair_requests", "pair_evaluations", "cache_hits")
+                    self._body_build_diagnostics.append(dict(kernel=kernel,
+                        seconds=time.perf_counter()-build_started,
+                        provider_cumulative=provider_after,
+                        provider_delta={key: provider_after[key]-provider_before[key] for key in counters}))
+                self.SL = self.DL = None
+                self._body_construction_route = "p1-entry-on-demand"
+                _log_phase("BEM", "HACApK on-demand P1 build done")
+            else:
+                _cpp_assemble = _required_native_symbol("_AssembleSLDL_Galerkin")
+                _t_sldl = time.perf_counter()
+                _log_phase("BEM",
+                    f"SLDL Galerkin assembly: C++ kernel, "
+                    f"{len(tris)} tris, quad_deg={intree_regular_quad_degree}, "
+                    f"sing_n_q={intree_singular_n_q}")
+                v_arr = np.ascontiguousarray(verts, dtype=np.float64)
+                t_arr = np.ascontiguousarray(tris, dtype=np.int64)
+                p_arr = np.ascontiguousarray(tri_p2, dtype=np.float64)
+                SL_loc, DL_loc = _cpp_assemble(
+                    v_arr, t_arr, p_arr,
+                    intree_regular_quad_degree,
+                    intree_singular_n_q,
+                    0)   # n_threads=0 -> OpenMP default
+                _log_phase("BEM",
+                    f"SLDL Galerkin assembly done "
+                    f"({time.perf_counter()-_t_sldl:.1f}s)")
+                # Lift to full ndof basis (interior vertices contribute zero
+                # rows/cols since their hat is 0 on BND).
+                self.SL = np.zeros((ndof, ndof))
+                self.DL = np.zeros((ndof, ndof))
+                self.SL[np.ix_(v_global, v_global)] = SL_loc
+                self.DL[np.ix_(v_global, v_global)] = DL_loc
+                if use_intree_hacapk and not assemble_dense:
+                    del SL_loc, DL_loc
+                self._body_construction_route = "dense-entry" if use_intree_hacapk else "dense"
+                self._intree_v_global = v_global
+                self._DL_bf = None
+                self._SL_bf = None
 
-            # Optional: compress SL and DL via HACApK for fast MatVec.
-            # When use_intree_hacapk=True the compressed handles are
-            # built and stored as self._SL_hacapk / self._DL_hacapk; the
-            # caller can then choose between solve() (dense LU) and
-            # solve_hacapk() (GMRES via H-matrix MatVec).  At N<5000 on
-            # compact wp geometries (~80%+ near-field) compression gives
-            # essentially no speedup, but at N>10K or for frequency
-            # sweeps with reused operators the compressed MatVec wins.
-            self._SL_hacapk = None
-            self._DL_hacapk = None
-            if use_intree_hacapk:
-                _t_hca = time.perf_counter()
-                _log_phase("BEM",
-                    f"HACApK compress: SL + DL, ndof={ndof}, "
-                    f"aca_eps={hacapk_aca_eps}, leaf={int(hacapk_leaf)}, "
-                    f"eta={hacapk_eta}")
-                from radia import _radia_pybind as _rpb_h
-                # Build coordinate array sized for the FULL ndof; for
-                # interior vertices that don't appear in BND we use the
-                # MESH vertex coordinate (the H-matrix clustering only
-                # uses these for spatial bisection, never for kernel).
-                coords_full = np.zeros((ndof, 3), dtype=np.float64)
-                for i in range(ndof):
-                    coords_full[i] = mesh.vertices[i].point
-                coords_full = np.ascontiguousarray(coords_full)
-                SL_arr = np.ascontiguousarray(self.SL)
-                DL_arr = np.ascontiguousarray(self.DL)
-                self._SL_hacapk = _rpb_h.HACApKBEMManager(coords_full, SL_arr)
-                self._SL_hacapk.BuildHMatrix(
-                    aca_eps=hacapk_aca_eps,
-                    leaf_size=int(hacapk_leaf),
-                    eta=hacapk_eta,
-                    max_rank=-1, print_level=0)
-                self._DL_hacapk = _rpb_h.HACApKBEMManager(coords_full, DL_arr)
-                self._DL_hacapk.BuildHMatrix(
-                    aca_eps=hacapk_aca_eps,
-                    leaf_size=int(hacapk_leaf),
-                    eta=hacapk_eta,
-                    max_rank=-1, print_level=0)
-                _log_phase("BEM",
-                    f"HACApK compress done "
-                    f"({time.perf_counter()-_t_hca:.1f}s)")
+                # Optional: compress SL and DL via HACApK for fast MatVec.
+                # When use_intree_hacapk=True the compressed handles are
+                # built and stored as self._SL_hacapk / self._DL_hacapk; the
+                # caller can then choose between solve() (dense LU) and
+                # solve_hacapk() (GMRES via H-matrix MatVec).  At N<5000 on
+                # compact wp geometries (~80%+ near-field) compression gives
+                # essentially no speedup, but at N>10K or for frequency
+                # sweeps with reused operators the compressed MatVec wins.
+                self._SL_hacapk = None
+                self._DL_hacapk = None
+                if use_intree_hacapk:
+                    _t_hca = time.perf_counter()
+                    _log_phase("BEM",
+                        f"HACApK compress: SL + DL, ndof={ndof}, "
+                        f"aca_eps={hacapk_aca_eps}, leaf={int(hacapk_leaf)}, "
+                        f"eta={hacapk_eta}")
+                    from radia import _radia_pybind as _rpb_h
+                    # Build coordinate array sized for the FULL ndof; for
+                    # interior vertices that don't appear in BND we use the
+                    # MESH vertex coordinate (the H-matrix clustering only
+                    # uses these for spatial bisection, never for kernel).
+                    coords_full = np.zeros((ndof, 3), dtype=np.float64)
+                    for i in range(ndof):
+                        coords_full[i] = mesh.vertices[i].point
+                    coords_full = np.ascontiguousarray(coords_full)
+                    SL_arr = np.ascontiguousarray(self.SL)
+                    DL_arr = np.ascontiguousarray(self.DL)
+                    self._SL_hacapk = _rpb_h.HACApKBEMManager(coords_full, SL_arr)
+                    self._SL_hacapk.BuildHMatrix(
+                        aca_eps=hacapk_aca_eps,
+                        leaf_size=int(hacapk_leaf),
+                        eta=hacapk_eta,
+                        max_rank=-1, print_level=0)
+                    self._DL_hacapk = _rpb_h.HACApKBEMManager(coords_full, DL_arr)
+                    self._DL_hacapk.BuildHMatrix(
+                        aca_eps=hacapk_aca_eps,
+                        leaf_size=int(hacapk_leaf),
+                        eta=hacapk_eta,
+                        max_rank=-1, print_level=0)
+                    if not assemble_dense:
+                        _log_phase("BEM", "HACApK release source entries")
+                        for handle in (self._SL_hacapk, self._DL_hacapk):
+                            handle.ReleaseDenseEntries()
+                        self.SL = self.DL = None
+                        del SL_arr, DL_arr
+                    _log_phase("BEM",
+                        f"HACApK compress done "
+                        f"({time.perf_counter()-_t_hca:.1f}s)")
         else:
             from ngsolve.bem import LaplaceDL, LaplaceSL
             # BEM operators.  Probed 2026-04-29 on N=2477 wp:
@@ -344,24 +411,47 @@ class ScalarBIESIBCSolver:
         mass_bf = BilinearForm(self.fes)
         mass_bf += u.Trace() * v.Trace() * ds
         mass_bf.Assemble()
-        self.M = np.zeros((ndof, ndof))
         rows, cols, vals = mass_bf.mat.COO()
-        for r_, c_, val in zip(rows, cols, vals):
-            self.M[int(r_), int(c_)] = val
+        sparse_body = use_intree_hacapk and not assemble_dense
+        if sparse_body:
+            from scipy.sparse import coo_matrix
+            self.M = coo_matrix((vals, (rows, cols)), shape=(ndof, ndof)).tocsr()
+        else:
+            self.M = np.zeros((ndof, ndof))
+            for r_, c_, val in zip(rows, cols, vals):
+                self.M[int(r_), int(c_)] = val
 
         # Surface stiffness K (Laplace-Beltrami)
         stiff_bf = BilinearForm(self.fes)
         stiff_bf += InnerProduct(grad(u).Trace(), grad(v).Trace()) * ds
         stiff_bf.Assemble()
-        self.K = np.zeros((ndof, ndof))
         rows, cols, vals = stiff_bf.mat.COO()
-        for r_, c_, val in zip(rows, cols, vals):
-            self.K[int(r_), int(c_)] = val
+        if sparse_body:
+            self.K = coo_matrix((vals, (rows, cols)), shape=(ndof, ndof)).tocsr()
+        else:
+            self.K = np.zeros((ndof, ndof))
+            for r_, c_, val in zip(rows, cols, vals):
+                self.K[int(r_), int(c_)] = val
 
         _log_phase("BEM",
             f"mass + stiffness done; M_inv "
             f"({time.perf_counter()-_t_mk:.1f}s)")
-        self.M_inv = np.linalg.inv(self.M)
+        if use_intree_hacapk and not assemble_dense:
+            from scipy.sparse.linalg import LinearOperator
+            self._mass_form = mass_bf
+            self._mass_inverse = mass_bf.mat.Inverse(self.fes.FreeDofs(), inverse="sparsecholesky")
+            def mass_apply(x):
+                x = np.asarray(x).reshape(-1)
+                def component(v):
+                    source = mass_bf.mat.CreateColVector()
+                    result = mass_bf.mat.CreateRowVector()
+                    source.FV().NumPy()[:] = v
+                    self._mass_inverse.Mult(source, result)
+                    return result.FV().NumPy().copy()
+                return component(x.real)+1j*component(x.imag) if np.iscomplexobj(x) else component(x)
+            self.M_inv = LinearOperator((ndof,ndof), matvec=mass_apply, dtype=float)
+        else:
+            self.M_inv = np.linalg.inv(self.M)
 
         # Gauge vector: <1, v>_S for Lagrange multiplier
         self._c_gauge = self.M @ np.ones(ndof)
@@ -615,8 +705,6 @@ class ScalarBIESIBCSolver:
             Z_s = _uniform_surface_impedance(Z_s, ndof)
         is_panel = isinstance(Z_s, PanelSurfaceImpedance)
         K_Z = self.impedance_stiffness(Z_s) if is_panel else None
-        if not is_panel and getattr(self, '_Minv_K', None) is None:
-            self._Minv_K = self.M_inv @ self.K  # real, reused across frequencies/Zs
 
         # RHS: <phi_inc, v>_S
         if isinstance(phi_inc_cf, np.ndarray):
@@ -641,7 +729,7 @@ class ScalarBIESIBCSolver:
             # Keep panel K_Z sparse and apply M_inv only to its source vector;
             # no dense complex n*n Robin matrix is needed by GMRES.
             flux = ((self.M_inv @ (K_Z @ x_complex)) / (1j * omega * MU_0)
-                    if is_panel else gamma_for_log * (self._Minv_K @ x_complex))
+                    if is_panel else gamma_for_log * (self.M_inv @ (self.K @ x_complex)))
             sl = (SL_op.MatVec(np.ascontiguousarray(flux.real))
                   + 1j * SL_op.MatVec(np.ascontiguousarray(flux.imag)))
             dl = (DL_op.MatVec(np.ascontiguousarray(x_complex.real))

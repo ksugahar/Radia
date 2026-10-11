@@ -8,9 +8,9 @@ passed to the thermal step).
 
 These are SUBPROCESS tests: the pytest process never imports ngsolve /
 PySide6 -- both the mesh generation and the calc run happen in child
-processes.  That keeps them safe on the LAB box where importing PySide6
+processes.  That keeps them safe on the validation runtime box where importing PySide6
 under pytest crashes (0xc0000139, MKL DLL shadow).  ``validation_test/panels`` is
-CI-ignored, so this is a LAB/local regression lock (same tier as
+CI-ignored, so this is a validation runtime/local regression lock (same tier as
 ``test_heat_chain_golden.py``).
 """
 from __future__ import annotations

@@ -1,4 +1,4 @@
-# Persisted native TPE history — mdx2, 2026-09-10
+# Persisted native TPE history — worker-b, 2026-09-10
 
 ## Change and scope
 
@@ -17,7 +17,7 @@ receive incremental cache repair. Large-history resume latency is not measured.
 
 ## Measurements
 
-Same benchmark and mdx2 host as schema-6 baseline commit `27a0e1c82`:
+Same benchmark and worker-b host as schema-6 baseline commit `27a0e1c82`:
 MATLAB R2026a Update 5, seed 37, one float, scalar TPE, StoragePath enabled,
 AutoSave=false. Seven timed repetitions, first two discarded. Each trial probe
 is followed by table materialization and a full save; profiling is separate.
@@ -46,9 +46,9 @@ crash recovery before changing full-checkpoint durability. Rustuna was not run.
 
 - Candidate CI: https://github.com/ksugahar/Radia/actions/runs/34453133245
   (success; focused normalized-snapshot roundtrip test passed before timing).
-- Baseline: `results_optuna_normalized_storage_mdx2_20260910.json`, run
+- Baseline: `results_optuna_normalized_storage_worker_b_20260910.json`, run
   `34451777406`.
-- Candidate raw artifact: `results_optuna_persisted_native_mdx2_20260910.json`.
+- Candidate raw artifact: `results_optuna_persisted_native_worker_b_20260910.json`.
   SHA256: `ab94b75697209f5ada7ee2374d2f39274a27931bd72344698418dce4ec0907ed`.
 - Executed TPESampler.m SHA256 (checked against the service run copy):
   `d9d5e5a63538fe95d9124f5051725b6c01e9a83869d4deb0eaf01369c55c6857`.
@@ -59,7 +59,7 @@ crash recovery before changing full-checkpoint durability. Rustuna was not run.
 - Run `benchmark_optuna_storage_scaling(outputPath,true)` in a dedicated
   Engine on an idle compute host. Use the authenticated mdx service context.
   The experimental service workflow is not a production workflow change.
-- The owned MATLAB Engine shut down; no python/MATLAB process remained on mdx2.
+- The owned MATLAB Engine shut down; no python/MATLAB process remained on worker-b.
 - 76 pinned upstream-oracle tests passed locally, including repeated persisted
   resume for intersection transitions and grouped categorical branches.
   Expected proposals remain upstream-generated, not handwritten values.

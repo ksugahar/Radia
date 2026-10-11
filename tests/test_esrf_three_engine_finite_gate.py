@@ -120,8 +120,8 @@ def test_mode_alone_does_not_certify_a_residual(gate, residual):
 
 
 @pytest.mark.parametrize('path', [
-    'validation_test/esrf_three_engine/results/case6_nonlinear_three_engine_mdx1.json',
-    'validation_test/quadrupole_cefc2020/results/three_engine_J3.0_hibino.json',
+    'validation_test/esrf_three_engine/results/case6_nonlinear_three_engine_worker_a.json',
+    'validation_test/quadrupole_cefc2020/results/three_engine_J3.0_compute.json',
 ])
 def test_published_false_convergence_evidence_is_rejected(gate, path):
     payload = json.loads((RUNNER.parents[2] / path).read_text(encoding='utf-8'))

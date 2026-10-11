@@ -2,7 +2,7 @@
   "schema": "radia.selected_showcase.v1",
   "case": "lift",
   "generated_at_utc": "2026-10-01T04:00:50.364711+00:00",
-  "host": "Hibino",
+
   "versions": {
     "radia": "4.95.90",
     "ngsolve": "6.2.2606",

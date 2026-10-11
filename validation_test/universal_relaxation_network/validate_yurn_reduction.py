@@ -45,7 +45,7 @@ def main():
     reduction = importlib.import_module("_urn_validation.reduction")
     report = {
         "schema": "radia.yurn-private-reduction-validation.v1",
-        "host": platform.node(),
+        "platform_class": platform.system(),
         "python": sys.version,
         "torch": torch.__version__,
         "numpy": np.__version__,

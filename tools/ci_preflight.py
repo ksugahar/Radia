@@ -45,11 +45,13 @@ import sys
 # joins keep the drive letter the script was invoked with.
 _THIS = os.path.abspath(__file__)
 REPO = os.path.dirname(os.path.dirname(_THIS))
+_LAB_UNC_HOSTS = ("192.168.11.100", "192.168.121.100")
+
 def _remap_lab_unc(path: str) -> str:
     """Map the LAB Radia UNC tree to its stable ``S:`` drive spelling."""
     normalized = path.replace("\\", "/")
     lowered = normalized.lower()
-    if not any(host in lowered for host in ("192.168.11.100", "192.168.121.100")):
+    if not any(host in lowered for host in _LAB_UNC_HOSTS):
         return path
     anchor_index = lowered.find("/radia/")
     if anchor_index < 0 and lowered.endswith("/radia"):
@@ -417,7 +419,7 @@ def _gates_for_changes(changed):
     """Path-aware gate selection (used by the pre-push hook so most pushes
     stay fast): policy + version ALWAYS; the radia-mcp gates only when
     packages/radia-mcp changed. Repository contracts are owned by the fixed
-    fast mdx lane, so broad top-level collection is an explicit diagnostic."""
+    fast LAB lane, so broad top-level collection is an explicit diagnostic."""
     sel = {"policy", "version"}
     if any(
         f == "tools/audit_taskmanager.py"

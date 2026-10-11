@@ -304,7 +304,7 @@ public:
     // dof's total charge is zero (divergence theorem), so N = B^T G B is scale-invariant.  Geometry =
     // Q1..Q3 polynomial maps fitted from GetTrafo (cell_type 0=tri/1=quad) -> ONE path flat/curved.
     // BDM1 admits geometry through Q2; BDM2 admits geometry through Q3.  Quadrature
-    // (numpy-validated, C:\temp\vim2d_proto.py): REGULAR symmetric outer everywhere (the log kernel's
+    // (numpy-validated, <private-path>/vim2d_proto.py): REGULAR symmetric outer everywhere (the log kernel's
     // single-layer potentials are continuous, so NO graded outer is needed -- simpler than 3D); inner =
     // signed radial cones from the nearest anchor SITE for near field points, cheap far cloud otherwise.
     // Gates: eig(M^-1 N) in [0,1]; DISK demag == 1/2 exact; ellipse a:b -> N=b/(a+b); 2D Clausius-
@@ -902,7 +902,7 @@ private:
     // inner curved kernel from nq^3 to nq*ntri evaluations.
     // Canonical touching host pair (lo << 32 | hi over the cell-then-face host numbering) -> block slot.
     // A hash map, not an n_host x n_host table: the table cost 22 GB on a 63k-tet mesh (75k hosts) and
-    // took hibino down through its commit limit, while the touching pairs themselves number ~16 per host.
+    // took compute host down through its commit limit, while the touching pairs themselves number ~16 per host.
     std::unordered_map<unsigned long long, int> m_curvedTouchBlockIndex;
     std::vector<std::vector<double>> m_curvedTouchBlocks; // precomputed symmetric touching blocks
     double m_curvedTouchBuildTime = 0.0;

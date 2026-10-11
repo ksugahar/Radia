@@ -133,7 +133,7 @@ def main(argv=None) -> int:
         key = str(el.type).rsplit(".", 1)[-1]
         families[key] = families.get(key, 0) + 1
     report = {
-        "schema": SCHEMA, "generated_at_utc": datetime.now(timezone.utc).isoformat(), "host": platform.node(),
+        "schema": SCHEMA, "generated_at_utc": datetime.now(timezone.utc).isoformat(), "platform_class": platform.system(),
         "implementation": implementation_identity(),
         "radia_version": getattr(rad, "__version__", None), "radia_file": rad.__file__,
         "mesh": {"path": str(mesh_path), "sha256": hashlib.sha256(mesh_path.read_bytes()).hexdigest(),

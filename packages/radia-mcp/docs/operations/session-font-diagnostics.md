@@ -33,6 +33,6 @@ scheduled repair commands must not be repointed to this module: unsupported
 options fail closed. This change does not edit any existing scheduled task.
 
 Acceptance for this recovery is mocked ABI, ownership, failure and MCP registry
-tests only. No LAB/100 native font API, fontdrvhost workload, font registration,
+tests only. No validation host/100 native font API, fontdrvhost workload, font registration,
 Office export or session-repair validation was performed. A successful mocked
 test does not certify an actual font or another client's document export.

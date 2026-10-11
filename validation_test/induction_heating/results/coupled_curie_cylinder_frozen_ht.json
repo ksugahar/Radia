@@ -1645,12 +1645,12 @@
    "--source-commit",
    "36c0a7301f7cdd202dc6d94d90e3cb40a10c0c06",
    "--work",
-   "C:\\temp\\ih_curie_20260927_36c0a7301\\work",
+   "<private-path>/ih_curie_20260927_36c0a7301\\work",
    "--out",
-   "C:\\temp\\ih_curie_20260927_36c0a7301\\result.json"
+   "<private-path>/ih_curie_20260927_36c0a7301\\result.json"
   ],
   "utc": "2026-09-27T11:46:00+00:00",
-  "host": "Hibino",
+
   "python": "3.12.10",
   "numpy": "2.4.3",
   "scipy": "1.17.1",

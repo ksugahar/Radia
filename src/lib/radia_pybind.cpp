@@ -6866,20 +6866,28 @@ PYBIND11_MODULE(_radia_pybind, m) {
                                                               static_cast<int>(n));
         }
 
+        PyHACApKBEMManager(std::shared_ptr<radia::bem::P1EntryProvider> provider, bool double_layer)
+            : provider_(std::move(provider)) {
+            manager_=std::make_unique<RadHACApKBEMManager>(provider_,double_layer);
+        }
+
         bool BuildHMatrix(double aca_eps, int leaf_size, double eta,
                           int max_rank, int print_level) {
+            if (entries_released_) throw std::runtime_error("HACApK BEM entries released; rebuild requires a new manager");
             RadHACApKParams p = RadHACApKBEMDefaultParams();
             if (aca_eps > 0)   p.aca_eps   = aca_eps;
             if (leaf_size > 0) p.leaf_size = leaf_size;
             if (eta > 0)       p.eta       = eta;
             if (max_rank > 0)  p.max_rank  = max_rank;
             p.print_level = print_level;
+            py::gil_scoped_release release;
             return manager_->BuildHMatrix(p);
         }
 
         py::array_t<double> MatVec(py::array_t<double,
                                                 py::array::c_style |
-                                                py::array::forcecast> x) {
+                                                py::array::forcecast> x, bool transpose = false) {
+            if (!manager_->IsValid()) throw std::runtime_error("HACApK BEM matrix has not been built");
             const int n = manager_->GetNDOF();
             auto xb = x.unchecked<1>();
             if ((int)xb.shape(0) != n) {
@@ -6888,11 +6896,19 @@ PYBIND11_MODULE(_radia_pybind, m) {
             }
             std::vector<double> xv(n), yv(n);
             for (int i = 0; i < n; ++i) xv[i] = xb(i);
-            manager_->MatVec(xv, yv);
+            if (transpose) manager_->MatVecTranspose(xv, yv);
+            else manager_->MatVec(xv, yv);
             py::array_t<double> y(n);
             auto yb = y.mutable_unchecked<1>();
             for (int i = 0; i < n; ++i) yb(i) = yv[i];
             return y;
+        }
+
+        void ReleaseDenseEntries() {
+            if (!manager_->IsValid()) throw std::runtime_error("Build HACApK BEM matrix before releasing entries");
+            if(provider_) throw std::runtime_error("On-demand P1 geometry owns no dense entry table");
+            entries_ = py::array_t<double>();
+            entries_released_ = true;
         }
 
         int GetNDOF() const { return manager_->GetNDOF(); }
@@ -6910,6 +6926,17 @@ PYBIND11_MODULE(_radia_pybind, m) {
             d["build_time"] = s.build_time;
             d["memory_mb"] = s.memory_mb;
             d["dense_memory_mb"] = s.dense_memory_mb;
+            d["construction_route"] = provider_ ? "p1-entry-on-demand" : "dense-entry";
+            if(provider_) {
+                auto p=provider_->Stats();
+                d["provider_entry_requests"]=p.entries;
+                d["provider_pair_requests"]=p.pair_requests;
+                d["provider_pair_evaluations"]=p.pair_evaluations;
+                d["provider_cache_hits"]=p.cache_hits;
+                d["provider_cache_bytes"]=p.cache_bytes;
+                d["provider_geometry_bytes"]=p.geometry_bytes;
+                d["source_dense_bytes"]=0;
+            }
             return d;
         }
 
@@ -6917,6 +6944,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
         py::array_t<double, py::array::c_style | py::array::forcecast> coords_;
         py::array_t<double, py::array::c_style | py::array::forcecast> entries_;
         std::unique_ptr<RadHACApKBEMManager> manager_;
+        std::shared_ptr<radia::bem::P1EntryProvider> provider_;
+        bool entries_released_ = false;
     };
 
     py::class_<PyHACApKBEMManager>(m, "HACApKBEMManager",
@@ -6928,9 +6957,9 @@ PYBIND11_MODULE(_radia_pybind, m) {
             via radia.bem.sibc_hacapk.assemble_SL_dense / assemble_DL_dense
             and hand it here for storage compression and fast MatVec.
 
-            After BuildHMatrix() succeeds, the dense table can be discarded
-            (still held internally by the manager via numpy refcounting,
-            but the H-matrix is what MatVec uses).
+            After BuildHMatrix() succeeds, ReleaseDenseEntries() drops the
+            internal source-table reference. MatVec uses only the H-matrix;
+            rebuilding that released manager is prohibited.
 
             Args:
                 coords: (N, 3) DOF coordinates [m] (= vertex coordinates
@@ -6949,16 +6978,48 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  defaults (aca_eps=1e-6, leaf_size=64, eta=2.0, max_rank=400).
                  Returns True on success.
              )pbdoc")
-        .def("MatVec", &PyHACApKBEMManager::MatVec, py::arg("x"),
+        .def("MatVec", &PyHACApKBEMManager::MatVec, py::arg("x"), py::arg("transpose") = false,
              R"pbdoc(
                  Real matvec y = M * x.  Both x and y are length-N double
                  arrays where N = number of vertices = NDOF.
              )pbdoc")
+        .def("ReleaseDenseEntries", &PyHACApKBEMManager::ReleaseDenseEntries,
+             "Release the build entry table; matvecs remain valid, rebuilding is prohibited.")
         .def("GetNDOF", &PyHACApKBEMManager::GetNDOF)
         .def("IsValid", &PyHACApKBEMManager::IsValid)
         .def("GetStats", &PyHACApKBEMManager::GetStats,
              "Return dict with n_dof, n_leaves, n_lowrank, n_dense, "
              "max_rank, compression, build_time [s], memory_mb, dense_memory_mb.");
+
+    py::class_<radia::bem::P1EntryProvider,std::shared_ptr<radia::bem::P1EntryProvider>>(m,"_P1EntryProvider")
+        .def("Entry",[](const radia::bem::P1EntryProvider& p,int i,int j) {
+            auto e=p.Entry(i,j);
+            return py::make_tuple(e.sl,e.dl,e.abs_sl,e.abs_dl,e.contributions);
+        })
+        .def("GetStats",[](const radia::bem::P1EntryProvider& p) {
+            auto s=p.Stats(); py::dict d;
+            d["entry_requests"]=s.entries; d["pair_requests"]=s.pair_requests;
+            d["pair_evaluations"]=s.pair_evaluations; d["cache_hits"]=s.cache_hits;
+            d["cache_bytes"]=s.cache_bytes; d["geometry_bytes"]=s.geometry_bytes;
+            return d;
+        });
+    m.def("_CreateP1HACApKGeometry",[](py::array_t<double,py::array::c_style|py::array::forcecast> coords,
+        py::array_t<int64_t,py::array::c_style|py::array::forcecast> triangles,
+        py::array_t<double,py::array::c_style|py::array::forcecast> nodes,
+        int regular_degree,int singular_order,size_t cache_bytes) {
+        if(coords.ndim()!=2 || coords.shape(1)!=3 || coords.shape(0)>std::numeric_limits<int>::max() ||
+           triangles.ndim()!=2 || triangles.shape(1)!=3 || triangles.shape(0)>std::numeric_limits<int>::max() ||
+           nodes.ndim()!=3 || nodes.shape(0)!=triangles.shape(0) || nodes.shape(1)!=6 || nodes.shape(2)!=3)
+            throw std::invalid_argument("P1 geometry requires coordinates (N,3), triangles (T,3), nodes (T,6,3)");
+        std::shared_ptr<radia::bem::P1EntryProvider> provider;
+        { py::gil_scoped_release release;
+          provider=std::make_shared<radia::bem::P1EntryProvider>(coords.data(),int(coords.shape(0)),
+              triangles.data(),int(triangles.shape(0)),nodes.data(),regular_degree,singular_order,cache_bytes); }
+        return py::make_tuple(std::make_unique<PyHACApKBEMManager>(provider,false),
+            std::make_unique<PyHACApKBEMManager>(provider,true),provider);
+    },py::arg("coords"),py::arg("triangles"),py::arg("nodes"),py::arg("regular_degree"),
+      py::arg("singular_order"),py::arg("cache_bytes")=8*1024*1024,
+      "Owned P1 geometry and two on-demand HACApK managers; no dense entries. Caller owns TaskManager.");
 
     // ========================================================================
     // Fast C++ Galerkin SL/DL assembler -- Phase 1.9

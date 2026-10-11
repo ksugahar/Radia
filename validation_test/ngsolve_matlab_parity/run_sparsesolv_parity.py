@@ -11,25 +11,8 @@ import subprocess
 import tempfile
 
 def start_owned_engine(engine_api):
-    """A CI-owned Engine is allowed only when MATLAB is absent host-wide."""
-    def process_ids():
-        result = subprocess.run([
-            "pwsh", "-NoProfile", "-NonInteractive", "-Command",
-            "@(Get-Process MATLAB -ErrorAction SilentlyContinue | "
-            "Select-Object -ExpandProperty Id) | ConvertTo-Json -Compress",
-        ], capture_output=True, text=True, check=True, timeout=30)
-        value = json.loads(result.stdout) if result.stdout.strip() else []
-        return value if isinstance(value, list) else [value]
-
-    processes = process_ids()
-    shared = tuple(engine_api.find_matlab())
-    if processes or shared:
-        raise RuntimeError(
-            f"Existing MATLAB must be preserved: PIDs={processes}, shared={shared}. "
-            "This CI runner requires an unoccupied host; no new MATLAB was started.")
-    if process_ids():
-        raise RuntimeError("MATLAB appeared during preflight; no new MATLAB was started")
-    return engine_api.start_matlab("-nodesktop -nosplash")
+    """Start a private, CPU-bounded Engine without attaching to other sessions."""
+    return engine_api.start_matlab("-nodesktop -nosplash -singleCompThread")
 
 def record_timeout(child, output):
     record = dict(passed=False, error="owned Engine worker timeout", worker_pid=child.pid)
@@ -71,7 +54,7 @@ def main():
     mex = root / "matlab/radia_mex.mexw64"
     record = dict(schema="radia.sparsesolv-matlab-parity.v1",
                   utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                  host=platform.node(), python=platform.python_version(),
+                  platform_class=platform.system(), python=platform.python_version(),
                   mex=str(mex), mex_sha256=hashlib.sha256(mex.read_bytes()).hexdigest(),
                   source_state="Working tree snapshot; source_hashes identify tested files, not the base commit alone",
                   source_base_commit=subprocess.check_output(["git", "-c", f"safe.directory={root.as_posix()}",

@@ -19,7 +19,7 @@ Outputs:
                                   the swept data of both forms + parameters
   cube_alpha_sweep.pdf / .png     IEEE single-column figure
 
-Figure conventions (lab-wide, self-contained -- no LAB-private helper):
+Figure conventions (lab-wide, self-contained -- no validation runtime-private helper):
   no in-figure title (goes in the LaTeX caption), Times New Roman,
   ~10 pt on an 8.8 cm (3.5 in) single column, box on, ticks inward.
 """
@@ -92,7 +92,7 @@ def run_sweep():
             "grid_nodes_per_axis": int(len(mg.nodes[0])),
         },
         "meta": {
-            "hostname": platform.node(),
+            "platform_class": platform.system(),
             "script": "cube_alpha_sweep_figure.py",
             "description": ("mixed Galerkin alpha(s) of a 5 mm Cu cube: projected "
                             "(BoxMixedGalerkin, main curves) and additive (Y_mixed)"),

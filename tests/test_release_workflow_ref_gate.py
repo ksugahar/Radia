@@ -40,7 +40,7 @@ def test_pypi_distributions_have_independent_ci_boundaries():
     fast=texts["Radia"]
     native=texts["Radia Native Release"]
     assert "workflow_dispatch:" in fast
-    assert "runs-on: [self-hosted, Windows, X64, mdx]" in fast
+    assert 'runs-on: [self-hosted, Windows, X64, "100"]' in fast
     assert "Build with MSVC" not in fast
     assert "compileall -q src/radia" in fast
     assert "compileall -q src/radia packages/radia-mcp/src" not in fast

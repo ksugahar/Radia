@@ -6,7 +6,7 @@
   "mex_sha256": "3c99b6f787ac775ce59729b145f16873cb7f571b2500c16803de7c443075ebd3",
   "targets": {
     "100": {
-      "label": "100\u53f7\u6a5f",
+      "label": "runtime",
       "status": "passed",
       "verified_at_utc": "2026-10-04T03:30:34.804575+00:00",
       "mex_sha256": "3c99b6f787ac775ce59729b145f16873cb7f571b2500c16803de7c443075ebd3",
@@ -14,8 +14,8 @@
       "output_tail": "RADIA_IH_RELEASE_OK version=0.1.0-preview.8 matlab=2026a backend=matlab-level2+radia-mex-handles\nRADIA_SIMULINK_RELEASE_OK matlab=2026a motor=native-mex-periodic-interpolation reactor=matlab-level2+radia-mex-handle maglev=matlab-level2-shared-mode-foster em_topology=matlab-native-vim-density-adjoint em_check=executed sf_optuna=matlab-native-optuna sf_inner=aca_plus_qr_tsvd ih=matlab-level2+radia-mex-handles",
       "session_restored": true
     },
-    "mdx2": {
-      "label": "mdx2",
+    "worker_b": {
+      "label": "worker_b",
       "status": "passed",
       "verified_at_utc": "2026-10-04T03:32:21.968899+00:00",
       "mex_sha256": "3c99b6f787ac775ce59729b145f16873cb7f571b2500c16803de7c443075ebd3",
@@ -23,7 +23,7 @@
       "output_tail": "RADIA_IH_RELEASE_OK version=0.1.0-preview.8 matlab=2026a backend=matlab-level2+radia-mex-handles\nRADIA_SIMULINK_RELEASE_OK matlab=2026a motor=native-mex-periodic-interpolation reactor=matlab-level2+radia-mex-handle maglev=matlab-level2-shared-mode-foster em_topology=matlab-native-vim-density-adjoint em_check=executed sf_optuna=matlab-native-optuna sf_inner=aca_plus_qr_tsvd ih=matlab-level2+radia-mex-handles"
     },
     "lab": {
-      "label": "LAB",
+      "label": "validation runtime",
       "status": "passed",
       "verified_at_utc": "2026-10-04T03:30:50.628139+00:00",
       "mex_sha256": "3c99b6f787ac775ce59729b145f16873cb7f571b2500c16803de7c443075ebd3",
@@ -31,8 +31,8 @@
       "output_tail": "RADIA_IH_RELEASE_OK version=0.1.0-preview.8 matlab=2026a backend=matlab-level2+radia-mex-handles\nRADIA_SIMULINK_RELEASE_OK matlab=2026a motor=native-mex-periodic-interpolation reactor=matlab-level2+radia-mex-handle maglev=matlab-level2-shared-mode-foster em_topology=matlab-native-vim-density-adjoint em_check=executed sf_optuna=matlab-native-optuna sf_inner=aca_plus_qr_tsvd ih=matlab-level2+radia-mex-handles",
       "session_restored": true
     },
-    "mdx1": {
-      "label": "mdx1",
+    "worker_a": {
+      "label": "worker_a",
       "status": "passed",
       "verified_at_utc": "2026-10-04T03:33:48.214063+00:00",
       "mex_sha256": "3c99b6f787ac775ce59729b145f16873cb7f571b2500c16803de7c443075ebd3",

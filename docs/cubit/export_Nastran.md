@@ -99,7 +99,7 @@ independent reader and save a JSON report with:
 ```powershell
 python -m pip install "pyNastran==1.4.1"
 python validation_test\cubit\validate_nastran_with_pynastran.py `
-  --output-json C:\temp\nastran-interchange.json
+  --output-json private-runtime-path
 ```
 
 The independent gate checks GRID coordinates, element-to-node references,

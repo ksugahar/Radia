@@ -54,7 +54,7 @@
   },
   "native_thermal_cpp_acceptance": "passed",
   "runtime": {
-    "host": "lab",
+
     "python": "3.12.10",
     "matlab": "26.1.0.3276743 (R2026a) Update 3",
     "radia": "5.2.3",

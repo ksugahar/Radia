@@ -616,5 +616,5 @@ python validation_test/sparsesolv/hiruma/bench_compact_ams.py --all
 # Comparison with ABMC-ICCG
 python validation_test/sparsesolv/hiruma/bench_ams_vs_abmc.py mesh1_3.5T
 
-# Transient results are written below C:\temp\radia-validation
+# Transient results are written below private-runtime-path
 ```

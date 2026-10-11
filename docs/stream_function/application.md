@@ -195,7 +195,7 @@ by bisection** — each candidate is a single-stroke → PEEC `L_coil` — for t
 turn count whose coil resonates, then designs at that `nlevels` and reports
 `resonance` (`nlevels`, achieved `L_coil`, `resonance_freq_Hz`, the achievable
 `L_range_H`, and an `in_range` flag — an out-of-range `L_target` is **reported**,
-not silently clamped).  LAB cylinder, `C = 22 nF`, `f = 200 kHz` → `L_target =
+not silently clamped).  validation host cylinder, `C = 22 nF`, `f = 200 kHz` → `L_target =
 28.8 µH` → `nlevels = 13` → `L_coil = 30.3 µH`, coil resonates at **195 kHz**
 (the integer-turn quantisation leaves a few %; the tank `C` trims the rest), and
 the uniform field is still hit (4.5e-4).  Locked by
@@ -215,7 +215,7 @@ relative error vs the operating frequency).  This is the **"few-turn uniform IH
 coil → required capacitor"** answer: design the low-turn uniform coil, then size
 the capacitor to `required_cap_F`; or drop `--greedy-turns` to let `nlevels` be
 searched for `L_target`.  The `resonance` dict carries `mode = "from_greedy_coil"`
-(vs `"search_nlevels"`).  Verified end-to-end (LAB cylinder + DSV, uniform `Bz`,
+(vs `"search_nlevels"`).  Verified end-to-end (validation host cylinder + DSV, uniform `Bz`,
 8 greedy turns, `47 nF` @ `200 kHz`): `L_coil = 25.3 µH`, `required_cap_F =
 25.0 nF`, the `47 nF` cap resonates that coil at `146 kHz`.  Locked by
 `validation_test/panels/test_streamfunction_golden.py::test_streamfunction_resonance_with_greedy_reports_cap`.
@@ -223,7 +223,7 @@ searched for `L_target`.  The `resonance` dict carries `mode = "from_greedy_coil
 ## Current-confinement boundary condition (`--confine {off, on, abe}`)
 
 On a **finite** former the contours run off the edges; closing them with a rim
-chord injects a spurious edge current (LAB short cylinder Gx: single-current
+chord injects a spurious edge current (validation host short cylinder Gx: single-current
 rms 0.54, 42/42 contours open).  Confine the current to the patch:
 
 | value | BC | use |
@@ -236,7 +236,7 @@ rms 0.54, 42/42 contours open).  Confine the current to the patch:
 *DUCAS*; Appendix eq. 6 `T = R·T_IN`, constraints A-1/A-3).  It is implemented
 as a DOF-reduction matrix `R` (`off`/`on` are the column-select special case);
 a physical boundary edge (borders ONE surface element) is told apart from a CAD
-**seam** (borders two) by element adjacency.  LAB short cylinder Gx: `abe`
+**seam** (borders two) by element adjacency.  validation host short cylinder Gx: `abe`
 closes the contours (`n_open 0`), gives 6.7× better separate-loops
 single-current than `on` (0.022 vs 0.149), and does **not** break uniform.
 
@@ -259,7 +259,7 @@ the same density rule the flux-line **bubble system**
   `--contour-sub 3` subdivides each surface triangle 3×3 and evaluates the
   full-order `psi` via `mesh.GetTrafo(el)` + `gfu(trafo(ip))` (the element-trafo
   MeshPoint dodges the boundary-point-eval-returns-0 quirk) -- the FE analogue
-  of the analytical flux-line trace inside an element.  LAB Gx order 2:
+  of the analytical flux-line trace inside an element.  validation host Gx order 2:
   separate-turn `loops_homogeneity` 1.3e-4 → 1.1e-4, smoother wires.
 - **`--flux-plot out.png` / `--flux-plane {x,y,z}` (bubble-system flux view).**
   Renders the designed coil's actual `B` field as flux lines on a cut-plane,
@@ -288,7 +288,7 @@ they carry the series current so their stray field is real, not cosmetic.
   set of candidate orders -- a nearest-neighbour seed and a 2-opt-shortened
   variant (which untangles the long "jump to a far lobe and back" crossings) --
   keeping whichever the cut-opt drives lowest.  The 2-opt **shortens** the
-  rungs, which helps most cases (LAB Gx: connectors max 372→289 mm, delivered
+  rungs, which helps most cases (validation host Gx: connectors max 372→289 mm, delivered
   single-stroke +19…+70 %), but a length-optimal reorder can break the rungs'
   symmetric stray-field cancellation and *hurt* some cases (the documented
   "shorter rungs ≠ better field" trap, see [`single_stroke.md`](single_stroke.md)).

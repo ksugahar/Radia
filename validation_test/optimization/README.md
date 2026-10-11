@@ -18,9 +18,9 @@ when needed.
 python validation_test\optimization\validation_optuna_waveguide_slab.py
 python validation_test\optimization\validation_optuna_waveguide_bragg_filter.py
 matlab -batch "addpath('validation_test/optimization'); validate_matlab_optuna_quality"
-python validation_test\optimization\benchmark_optuna50_python.py --output C:\temp\optuna50_python.json
-matlab -batch "addpath('validation_test/optimization'); benchmark_matlab_optuna50('C:/temp/optuna50_matlab.json')"
-pwsh -ExecutionPolicy Bypass -File validation_test\optimization\benchmark_optuna_mex_cold_start.ps1 -Output C:\temp\optuna_mex_first_call.json
+python validation_test\optimization\benchmark_optuna50_python.py --output private-runtime-path
+matlab -batch "addpath('validation_test/optimization'); benchmark_matlab_optuna50('private-runtime-path')"
+pwsh -ExecutionPolicy Bypass -File validation_test\optimization\benchmark_optuna_mex_cold_start.ps1 -Output private-runtime-path
 matlab -batch "addpath('validation_test/optimization'); validate_matlab_adjoint_quality"
 ```
 
@@ -39,13 +39,13 @@ Each runner fails if its explicit-seed proposal checksum changes. The checked
 scripts first prewarm each complete workload for 11 repeats, then measure 11
 repeats and discard the first three. This symmetric prewarm excludes delayed
 MATLAB JIT compilation; it does not measure cold-start cost. The
-[2026-09-08 LAB result](results_optuna50_paired_lab_20260908.json) includes all
+[2026-09-08 validation host result](results_optuna50_paired_lab_20260908.json) includes all
 measured timings and both runtimes, including the slower MATLAB table-export
 measurement alongside the faster scalar and grouped TPE results. The checked
 result JSON records the environment, raw medians, throughput ratios, and the
 claim boundary; persistence, parallel scheduling, objective cost, and cold
 process startup are deliberately reported outside this shared-behavior gate.
-The [follow-up LAB measurements](results_optuna50_followup_lab_20260908.json)
+The [follow-up validation host measurements](results_optuna50_followup_lab_20260908.json)
 retain two fresh-Engine repeats around one Python run after intersection-cache,
 parameter-name, and table-construction changes. These are development evidence,
 not an idle compute-host release gate. Historical 4.9 measurements remain useful
@@ -53,8 +53,8 @@ regression baselines, but require matched prewarming and workload semantics
 before claiming a controlled version-to-version speed change.
 
 The subsequent [state-count experiment](results_optuna50_statecount_lab_20260908.json)
-is **inconclusive**, not a passed performance gate: LAB CPU saturation invalidated
-the before/after speed inference, and mdx2 SSH Engine startup timed out. Retain
+is **inconclusive**, not a passed performance gate: validation host CPU saturation invalidated
+the before/after speed inference, and worker-b SSH Engine startup timed out. Retain
 this negative evidence and rerun on an idle supported execution context.
 
 The checked result also records the separate `optuna_mex` operational boundary:

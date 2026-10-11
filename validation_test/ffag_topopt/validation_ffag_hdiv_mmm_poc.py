@@ -205,7 +205,7 @@ def run(args):
         "scope": (
             "One-sided HEX pole-slab PoC with a uniform applied source; "
             "not a final two-pole yoke or engineered FFAG coil."),
-        "machine": platform.node(),
+        "platform_class": platform.system(),
         "python": platform.python_version(),
         "ngsolve_threads": args.threads,
         "energies_mev": [float(value) for value in args.energies],

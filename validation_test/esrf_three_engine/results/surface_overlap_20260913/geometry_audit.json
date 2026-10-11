@@ -1,6 +1,6 @@
 {
   "radia_version": "4.95.91",
-  "radia_path": "C:\\temp\\esrf6-newton-4d85e72cc\\venv\\Lib\\site-packages\\radia\\__init__.py",
+  "radia_path": "<private-path>/esrf6-newton-4d85e72cc\\venv\\Lib\\site-packages\\radia\\__init__.py",
   "ngsolve_version": "6.2.2606",
   "inputs": {
     "iron_step_sha256": "cc34b508a472603d1c225cce11b932e1b3589d277122acc0de1a97f6f18c2ba4",
@@ -83,7 +83,7 @@
   },
   "meshes": {
     "iron": {
-      "path": "C:/temp/radia-ex6-diag/assets_conforming/model.vol",
+      "path": "<private-path>/radia-ex6-diag/assets_conforming/model.vol",
       "sha256": "fdd1387281e550e27eab435cfac3ec54e0b9d1339438699fdc50c852dfcafc74",
       "iron_elements": 2408,
       "iron_vertex_bbox_m": [
@@ -133,7 +133,7 @@
       ]
     },
     "fem": {
-      "path": "C:/temp/radia-esrf-fem/example6/coil_yoke_kelvin.vol",
+      "path": "<private-path>/radia-esrf-fem/example6/coil_yoke_kelvin.vol",
       "sha256": "dfc12b84f80db1fa17fb5012b6f87c072e8aa1fb3c085b61269f047a879a54ac",
       "iron_elements": 34228,
       "iron_vertex_bbox_m": [

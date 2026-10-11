@@ -7,7 +7,7 @@ material partitions, source-potential traces and Kelvin interface data. This
 decision does not retire reduced scalar potentials as a mathematical method.
 
 `reduced_vs_mixed_coarse.json` is the unmodified historical research output
-(LAB, Radia 4.95.81, 24,134 elements, linear mu_r=1000). Its `claim` field records
+(validation host, Radia 4.95.81, 24,134 elements, linear mu_r=1000). Its `claim` field records
 the hypothesis under test, NOT an established result. At p=2, q=22 the reported
 energies disagree, with a large relative discrepancy in the Kelvin contribution.
 The comparison does not isolate the iron-region variable transformation because

@@ -2,7 +2,7 @@
   "scope": "topology and trace coupling, not discretization convergence",
   "meshes": {
     "iron": {
-      "path": "C:\\temp\\radia-ex6-diag\\assets_conforming\\model.vol",
+      "path": "<private-path>/radia-ex6-diag\\assets_conforming\\model.vol",
       "sha256": "fdd1387281e550e27eab435cfac3ec54e0b9d1339438699fdc50c852dfcafc74",
       "elements": 2408,
       "curve_order": 2,
@@ -14,7 +14,7 @@
       "elapsed_s": 0.7678066000225954
     },
     "fem": {
-      "path": "C:\\temp\\radia-esrf-fem\\example6\\coil_yoke_kelvin.vol",
+      "path": "<private-path>/radia-esrf-fem\\example6\\coil_yoke_kelvin.vol",
       "sha256": "dfc12b84f80db1fa17fb5012b6f87c072e8aa1fb3c085b61269f047a879a54ac",
       "elements": 134686,
       "curve_order": 2,

@@ -23,7 +23,7 @@
     "opposite_diagonal_tessellations_area": 0.9999999999999999
   },
   "normal_two_owner": {
-    "path": "C:\\temp\\esrf6-newton-4d85e72cc\\control_two_owner.vol",
+    "path": "<private-path>/esrf6-newton-4d85e72cc\\control_two_owner.vol",
     "sha256": "d3d7d122a97621bb1abcd67229f0af4b95a79db90e44415cca235d171b05a065",
     "volume_elements": 2,
     "boundary_elements": 7,
@@ -57,7 +57,7 @@
     "scope": "All registered boundary faces, including once-registered two-owner interfaces. Coordinates use NGSolve curved mapping. Triangle intersections are on a finite tessellation, not a certified curved-patch intersection proof. Positive-area coplanar overlaps and strict transverse piercings are reported; tangencies and very small features can remain unresolved."
   },
   "partial_overlap": {
-    "path": "C:\\temp\\esrf6-newton-4d85e72cc\\control_partial_overlap.vol",
+    "path": "<private-path>/esrf6-newton-4d85e72cc\\control_partial_overlap.vol",
     "sha256": "7e5f25bd2da68675a6eb17e412076fe72c226526c36a8e314639e891db7b6f7e",
     "volume_elements": 2,
     "boundary_elements": 8,

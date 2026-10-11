@@ -9,15 +9,15 @@ nonintersection, volume validity, or discretization convergence. ESRF6 numerical
 acceptance remains **HOLD**. No field solve was launched during this audit.
 
 The known-bad iron mesh is not the selected input. Six obsolete copies were
-found and deleted: two each on hibino, mdx1, and mdx2. The current identity gate
-was exercised on both bad hibino files before deletion: both were rejected;
+found and deleted: two each on compute-host, worker-a, and worker-b. The current identity gate
+was exercised on both bad compute-host files before deletion: both were rejected;
 the selected iron/FEM pair was accepted.
 
 ## Exact Inputs and Runtime
 
-All geometric runs executed on hibino with NGSolve 6.2.2606 and Shapely 2.1.2,
+All geometric runs executed on compute-host with NGSolve 6.2.2606 and Shapely 2.1.2,
 using the isolated candidate environment at
-`C:/temp/esrf6-newton-4d85e72cc/venv`. The audit imports NGSolve, not a different
+`private-runtime-path`. The audit imports NGSolve, not a different
 Radia source overlay. Coordinates and tolerances are in metres.
 
 | Input | SHA-256 |
@@ -27,8 +27,8 @@ Radia source overlay. Coordinates and tolerances are in metres.
 | Known-bad iron, 4768 HEX | `0d4449962b60757cba78e771a136b2805a4323e26a1ee6d7ae482751bb7e5a5f` |
 
 Selected paths are recorded in each JSON. They are respectively
-`C:/temp/radia-ex6-diag/assets_conforming/model.vol` and
-`C:/temp/radia-esrf-fem/example6/coil_yoke_kelvin.vol`.
+`private-runtime-path` and
+`private-runtime-path`.
 
 ## Method and Limits
 
@@ -90,7 +90,7 @@ Controls cover partial overlap, different subdivisions, opposite square
 diagonals, normal edge adjacency, separated triangles, transverse intersection,
 and that measured grazing case. Full synthetic meshes also verify that a
 normal two-tetrahedron shared interface is not reported and a partially
-overlapping pair is detected. All control assertions passed on hibino.
+overlapping pair is detected. All control assertions passed on compute-host.
 
 A positive control translates the grazing triangle by `1e-6 m` and detects a
 thin overlap of `5.098975283407465e-13 m^2`. The two nondegenerate coordinate
@@ -108,18 +108,18 @@ recorded detector failure, not as additional maintained validators.
 ## Cleanup and Retention
 
 Durable raw archive:
-`S:/Radia/validation_artifacts/esrf6_mesh_audit_20260913/`, separated by host.
+`private-runtime-path`, separated by host.
 It holds full before/after inventories, deletion receipts, scripts, original
 detector versions, and synthetic mesh inputs. These operational inventories are
 not tracked source. Selected numerical JSON and final audit code are tracked here.
 
 | Host | VOL files before | Known-bad deleted | VOL files after | Known-bad remaining |
 |---|---:|---:|---:|---:|
-| hibino | 188 | 2 | 186 | 0 |
-| mdx1 | 158 | 2 | 156 | 0 |
-| mdx2 | 162 | 2 | 160 | 0 |
+| compute-host | 188 | 2 | 186 | 0 |
+| worker-a | 158 | 2 | 156 | 0 |
+| worker-b | 162 | 2 | 160 | 0 |
 
-Scope was non-link top-level `C:/temp/radia*`, `esrf*`, and `ctype*` directories
+Scope was non-link top-level `private-runtime-path`, `esrf*`, and `ctype*` directories
 and their `.vol` files. The two removed relative paths on every host were
 `radia-validation/assets/example_6_quadrupole/model.vol` and
 `radia-xfer6/assets/example_6_quadrupole/model.vol`. Each deletion used a fresh
@@ -128,7 +128,7 @@ active compute process, and nonrecursive `Remove-Item -LiteralPath`.
 
 Audit scratch cleanup completed after durable recovery, hash verification, and
 evidence commit `d3b6e0e2a`. The remote verification/deletion receipts record
-25 files removed on hibino and 5 on each mdx host. Transfer manifests and helper
+25 files removed on compute-host and 5 on each mdx host. Transfer manifests and helper
 scripts were also removed. Receipts were recovered, hash-verified, and removed
 remotely; the durable archive contains `recovery_verification.json` and each
 host's `recovery_receipt.json`.
@@ -143,9 +143,9 @@ are outside this cleanup. This report does not claim that all historical
 
 ## CAD, Coil and Gap Follow-Up
 
-Hibino's installed repair candidate also ran `geometry_audit.json` and
+compute host's installed repair candidate also ran `geometry_audit.json` and
 `gap_membership.json`. The seven source/input/result files were recovered to
-`S:/Radia/validation_artifacts/esrf6_mesh_audit_20260913/geometry/`; every SHA-256
+`private-runtime-path`; every SHA-256
 matched the remote file before cleanup. The scripts remain in that archive.
 
 The STEP and rebuilt model contain 40 iron solids and 64 coil solids. Total

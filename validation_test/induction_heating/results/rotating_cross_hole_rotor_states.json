@@ -1704,12 +1704,12 @@
    "--source-commit",
    "e99bf84d0565584c551368902c344a32d8605d2d",
    "--work",
-   "C:\\temp\\ih_rotor_bem_e99bf84d0\\work",
+   "<private-path>/ih_rotor_bem_e99bf84d0\\work",
    "--out",
-   "C:\\temp\\ih_rotor_bem_e99bf84d0\\result.json"
+   "<private-path>/ih_rotor_bem_e99bf84d0\\result.json"
   ],
   "utc": "2026-09-27T14:25:10+00:00",
-  "host": "Hibino",
+
   "python": "3.12.10",
   "numpy": "2.4.3",
   "scipy": "1.17.1",

@@ -1,0 +1,1567 @@
+{
+  "schema": "radia.hacapk-genus-one-validation.v1",
+  "production_source_commit": "b427bd8fa9318d73618229353afa6f4417f1254c",
+  "os": "Windows",
+  "model": "Self-authored thin ring with scalar and face-aligned jump impedance",
+  "construction": "Dense entry assembly retained; persistent compressed products release source entries",
+  "guard": {
+    "vertices": 7000,
+    "faces": 14000,
+    "larger_cases": "Deferred to an entry-on-demand implementation"
+  },
+  "physical_residual_gate": 1e-06,
+  "reciprocity_gate": 1e-06,
+  "heat_change_gate": 0.001,
+  "default_aca_eps": 1e-10,
+  "measurements": [
+    {
+      "faces": 512,
+      "vertices": 256,
+      "geometry_sha256": "6871235cd105d4eb4e946d6fe2f305f139511cd40281148bb101b8d26dc466ba",
+      "threads": 1,
+      "ngsolve_version": "6.2.2607",
+      "body_backend": "dense",
+      "body_hmatrix_controls": null,
+      "body_hmatrix_stats": null,
+      "body_sl_reciprocity": {
+        "constant": 2.3754466467073212e-08,
+        "x": 5.103058398375451e-08,
+        "z": 7.259460363596134e-07
+      },
+      "body_storage_phases": [],
+      "peak_working_set_bytes": 149139456,
+      "working_set_bytes": 130129920,
+      "peak_commit_bytes": 636084224,
+      "maxima": {
+        "linear_residual": 3.359281925203602e-16,
+        "faraday_residual": 1.9524157761400263e-16,
+        "lift_field_relative": 0.0006329754292752915,
+        "lift_heat_relative": 0.0010017694106505548,
+        "power_balance_relative": 0.0033238131395538772
+      },
+      "body_assembly_seconds": 1.4129346999980044,
+      "first_case_seconds": 4.910876399997505,
+      "remaining_case_seconds": [
+        3.8945849999945494,
+        3.883833499996399,
+        3.9408401000036974,
+        4.293257400000584,
+        3.95136160000402,
+        3.940789499996754,
+        3.8970423999999184,
+        3.9330922000008286,
+        3.925088100004359,
+        3.948515399999451,
+        3.944761099999596
+      ],
+      "case_count": 12,
+      "gmres_controls": null,
+      "baseline_cases": [
+        {
+          "impedance_law": "scalar",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 4.923713728309342e-07,
+          "alpha": [
+            -0.037097519014935916,
+            -0.0006930875436349008
+          ],
+          "power_balance_relative": 0.0027441657962878896,
+          "linear_residual": 2.6803498240725444e-16,
+          "faraday_residual": 1.9524157761400263e-16,
+          "frozen_residual": null
+        },
+        {
+          "impedance_law": "jump",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 7.647318531685954e-07,
+          "alpha": [
+            -0.036647858329115615,
+            -0.0011136463054550333
+          ],
+          "power_balance_relative": 0.0023148385113220815,
+          "linear_residual": 3.359281925203602e-16,
+          "faraday_residual": 1.1439936188320466e-17,
+          "frozen_residual": null
+        }
+      ]
+    },
+    {
+      "faces": 512,
+      "vertices": 256,
+      "geometry_sha256": "6871235cd105d4eb4e946d6fe2f305f139511cd40281148bb101b8d26dc466ba",
+      "threads": 1,
+      "ngsolve_version": "6.2.2607",
+      "body_backend": "hacapk",
+      "body_hmatrix_controls": {
+        "aca_eps": 1e-10,
+        "leaf_size": 64,
+        "eta": 2.0,
+        "max_rank": -1
+      },
+      "body_hmatrix_stats": [
+        {
+          "n_dof": 256,
+          "n_leaves": 16,
+          "n_lowrank": 0,
+          "n_dense": 16,
+          "max_rank": 0,
+          "compression": 1.0,
+          "build_time": 0.0003904,
+          "memory_mb": 0.5,
+          "dense_memory_mb": 0.5
+        },
+        {
+          "n_dof": 256,
+          "n_leaves": 16,
+          "n_lowrank": 0,
+          "n_dense": 16,
+          "max_rank": 0,
+          "compression": 1.0,
+          "build_time": 0.0003821,
+          "memory_mb": 0.5,
+          "dense_memory_mb": 0.5
+        }
+      ],
+      "body_sl_reciprocity": {
+        "constant": 2.375446643946027e-08,
+        "x": 5.103058404509512e-08,
+        "z": 7.259460362873298e-07
+      },
+      "body_storage_phases": [
+        {
+          "repeat": 0,
+          "phase": "before-compression",
+          "peak_working_set_bytes": 113881088,
+          "working_set_bytes": 112799744,
+          "peak_commit_bytes": 378359808
+        },
+        {
+          "repeat": 0,
+          "phase": "before-entry-release",
+          "peak_working_set_bytes": 113881088,
+          "working_set_bytes": 112914432,
+          "peak_commit_bytes": 378359808
+        },
+        {
+          "repeat": 0,
+          "phase": "after-entry-release",
+          "peak_working_set_bytes": 113881088,
+          "working_set_bytes": 112918528,
+          "peak_commit_bytes": 378359808
+        }
+      ],
+      "peak_working_set_bytes": 146558976,
+      "working_set_bytes": 129847296,
+      "peak_commit_bytes": 634748928,
+      "maxima": {
+        "reference_heat_relative": 7.931565071395141e-08,
+        "reference_alpha_relative": 8.97932151782432e-09,
+        "reference_reaction_relative": 3.0617128610188615e-07,
+        "reference_field_relative": 1.9496887751273576e-05,
+        "gmres_iterations": 12,
+        "frozen_gmres_iterations": 26,
+        "linear_residual": 3.1271497856988817e-09,
+        "faraday_residual": 1.9526540935990934e-16,
+        "frozen_residual": 6.637832164296334e-11,
+        "lift_field_relative": 0.0006329796428930769,
+        "lift_heat_relative": 0.0010018858292650812,
+        "power_balance_relative": 0.003323814450761464
+      },
+      "body_assembly_seconds": 1.3851433000018005,
+      "first_case_seconds": 4.974627099996724,
+      "remaining_case_seconds": [
+        5.057407599997532,
+        4.0971353000059025,
+        3.9107995000013034,
+        3.9459159999969415,
+        3.912075600004755,
+        3.9872190999958548,
+        3.888455400003295,
+        3.878601600001275,
+        3.924960699994699,
+        3.9348246000008658,
+        3.921390399998927
+      ],
+      "case_count": 12,
+      "gmres_controls": {
+        "tol": 1e-10,
+        "restart": 100,
+        "maxiter": 500
+      },
+      "baseline_cases": [
+        {
+          "impedance_law": "scalar",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 4.923713728310753e-07,
+          "alpha": [
+            -0.03709751901493755,
+            -0.0006930875436349903
+          ],
+          "power_balance_relative": 0.0027441657960969312,
+          "linear_residual": 9.211876749760432e-11,
+          "faraday_residual": 1.9526540935990934e-16,
+          "frozen_residual": 6.637832164296334e-11
+        },
+        {
+          "impedance_law": "jump",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 7.647317925133909e-07,
+          "alpha": [
+            -0.03664785862050556,
+            -0.0011136462555141338
+          ],
+          "power_balance_relative": 0.0023149104486424044,
+          "linear_residual": 3.1271497856988817e-09,
+          "faraday_residual": 4.575974475328187e-18,
+          "frozen_residual": 5.432658961011914e-11
+        }
+      ]
+    },
+    {
+      "faces": 2048,
+      "vertices": 1024,
+      "geometry_sha256": "ab49458da03a7ad19e9a64c0dfae16f2a4dbf52a3b5dd701d9cff41d2c8b8715",
+      "threads": 1,
+      "ngsolve_version": "6.2.2607",
+      "body_backend": "dense",
+      "body_hmatrix_controls": null,
+      "body_hmatrix_stats": null,
+      "body_sl_reciprocity": {
+        "constant": 5.248302859771667e-09,
+        "x": 1.1673377829286238e-08,
+        "z": 1.6049150028924782e-07
+      },
+      "body_storage_phases": [],
+      "peak_working_set_bytes": 305156096,
+      "working_set_bytes": 189841408,
+      "peak_commit_bytes": 710017024,
+      "maxima": {
+        "linear_residual": 8.386539058945434e-16,
+        "faraday_residual": 1.946734793544175e-16,
+        "lift_field_relative": 0.00015981631976217037,
+        "lift_heat_relative": 0.0002517762984819427,
+        "power_balance_relative": 0.0008316633483855806
+      },
+      "body_assembly_seconds": 6.232149799994659,
+      "first_case_seconds": 20.076947699999437,
+      "remaining_case_seconds": [
+        15.980508299995563,
+        15.982379400003992,
+        16.187968700003694,
+        16.212379699994926,
+        16.229602400002477,
+        15.945180000002438,
+        16.013973900000565,
+        15.97989090000192,
+        16.287051799998153,
+        16.939179400003923,
+        16.033613600004173
+      ],
+      "case_count": 12,
+      "gmres_controls": null,
+      "baseline_cases": [
+        {
+          "impedance_law": "scalar",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 5.079551570604767e-07,
+          "alpha": [
+            -0.03772048487586895,
+            -0.0006986211734320937
+          ],
+          "power_balance_relative": 0.0006881406971630533,
+          "linear_residual": 6.881947007127369e-16,
+          "faraday_residual": 1.9462412065789012e-16,
+          "frozen_residual": null
+        },
+        {
+          "impedance_law": "jump",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 7.882166492341271e-07,
+          "alpha": [
+            -0.03726748305552846,
+            -0.0011224691592128704
+          ],
+          "power_balance_relative": 0.0005851391077353885,
+          "linear_residual": 8.386539058945434e-16,
+          "faraday_residual": 7.601982744388404e-19,
+          "frozen_residual": null
+        }
+      ]
+    },
+    {
+      "faces": 2048,
+      "vertices": 1024,
+      "geometry_sha256": "ab49458da03a7ad19e9a64c0dfae16f2a4dbf52a3b5dd701d9cff41d2c8b8715",
+      "threads": 1,
+      "ngsolve_version": "6.2.2607",
+      "body_backend": "hacapk",
+      "body_hmatrix_controls": {
+        "aca_eps": 1e-10,
+        "leaf_size": 64,
+        "eta": 2.0,
+        "max_rank": -1
+      },
+      "body_hmatrix_stats": [
+        {
+          "n_dof": 1024,
+          "n_leaves": 184,
+          "n_lowrank": 40,
+          "n_dense": 144,
+          "max_rank": 88,
+          "compression": 0.8411483764648438,
+          "build_time": 0.023707600000000002,
+          "memory_mb": 6.72918701171875,
+          "dense_memory_mb": 8.0
+        },
+        {
+          "n_dof": 1024,
+          "n_leaves": 184,
+          "n_lowrank": 40,
+          "n_dense": 144,
+          "max_rank": 99,
+          "compression": 0.9514827728271484,
+          "build_time": 0.023605800000000003,
+          "memory_mb": 7.6118621826171875,
+          "dense_memory_mb": 8.0
+        }
+      ],
+      "body_sl_reciprocity": {
+        "constant": 5.248304457534906e-09,
+        "x": 1.1673370849898574e-08,
+        "z": 1.604916894575034e-07
+      },
+      "body_storage_phases": [
+        {
+          "repeat": 0,
+          "phase": "before-compression",
+          "peak_working_set_bytes": 148750336,
+          "working_set_bytes": 130146304,
+          "peak_commit_bytes": 394309632
+        },
+        {
+          "repeat": 0,
+          "phase": "before-entry-release",
+          "peak_working_set_bytes": 148750336,
+          "working_set_bytes": 146456576,
+          "peak_commit_bytes": 394309632
+        },
+        {
+          "repeat": 0,
+          "phase": "after-entry-release",
+          "peak_working_set_bytes": 148750336,
+          "working_set_bytes": 129675264,
+          "peak_commit_bytes": 394309632
+        }
+      ],
+      "peak_working_set_bytes": 220061696,
+      "working_set_bytes": 163901440,
+      "peak_commit_bytes": 669122560,
+      "maxima": {
+        "reference_heat_relative": 5.740999615699849e-07,
+        "reference_alpha_relative": 2.255432948191714e-08,
+        "reference_reaction_relative": 8.436202170170048e-07,
+        "reference_field_relative": 4.3459720956879434e-05,
+        "gmres_iterations": 10,
+        "frozen_gmres_iterations": 27,
+        "linear_residual": 3.1752073382682395e-09,
+        "faraday_residual": 5.838639488379399e-16,
+        "frozen_residual": 6.164407200758249e-11,
+        "lift_field_relative": 0.00016828047106754907,
+        "lift_heat_relative": 0.0002508803028187234,
+        "power_balance_relative": 0.0008317390314920292
+      },
+      "body_assembly_seconds": 6.2146085999993375,
+      "first_case_seconds": 19.790778800001135,
+      "remaining_case_seconds": [
+        15.784008700000413,
+        15.657994000001054,
+        15.762499299999035,
+        15.780558300000848,
+        15.780348100000992,
+        15.643062600000121,
+        15.567892799997935,
+        15.626575399997819,
+        15.722904000002018,
+        15.759630500004278,
+        15.764718899998115
+      ],
+      "case_count": 12,
+      "gmres_controls": {
+        "tol": 1e-10,
+        "restart": 100,
+        "maxiter": 500
+      },
+      "baseline_cases": [
+        {
+          "impedance_law": "scalar",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 5.079551572424364e-07,
+          "alpha": [
+            -0.037720484876824875,
+            -0.0006986211735000439
+          ],
+          "power_balance_relative": 0.0006881403790588436,
+          "linear_residual": 9.8060944432169e-10,
+          "faraday_residual": 5.838639488379399e-16,
+          "frozen_residual": 5.0478066585458086e-11
+        },
+        {
+          "impedance_law": "jump",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 7.88217096403278e-07,
+          "alpha": [
+            -0.03726748305182201,
+            -0.0011224684525322857
+          ],
+          "power_balance_relative": 0.0005853496421073245,
+          "linear_residual": 2.646314670780981e-09,
+          "faraday_residual": 1.9463451300263317e-16,
+          "frozen_residual": 6.164407200758249e-11
+        }
+      ]
+    },
+    {
+      "faces": 6272,
+      "vertices": 3136,
+      "geometry_sha256": "eaf2627416f466a5477167913d8d627cddb0a00cb92d06a6677ccd80212e9184",
+      "threads": 1,
+      "ngsolve_version": "6.2.2607",
+      "body_backend": "dense",
+      "body_hmatrix_controls": null,
+      "body_hmatrix_stats": null,
+      "body_sl_reciprocity": {
+        "constant": 1.673311981657671e-09,
+        "x": 3.74784330375062e-09,
+        "z": 5.102515857487356e-08
+      },
+      "body_storage_phases": [],
+      "peak_working_set_bytes": 1379364864,
+      "working_set_bytes": 584171520,
+      "peak_commit_bytes": 1731981312,
+      "maxima": {
+        "linear_residual": 1.5997570274475e-15,
+        "faraday_residual": 1.9449298621644433e-16,
+        "lift_field_relative": 5.215986577692076e-05,
+        "lift_heat_relative": 8.208103551887724e-05,
+        "power_balance_relative": 0.00026980320654579337
+      },
+      "body_assembly_seconds": 23.334073099998932,
+      "first_case_seconds": 61.97312950000196,
+      "remaining_case_seconds": [
+        50.2395319999996,
+        50.05648070000461,
+        52.49582519999967,
+        52.98670119999588,
+        55.964669500004675,
+        55.73095639999519,
+        50.89144249999663,
+        50.70134469999903,
+        53.155834099998174,
+        53.46408710000105,
+        53.44171920000372
+      ],
+      "case_count": 12,
+      "gmres_controls": null,
+      "baseline_cases": [
+        {
+          "impedance_law": "scalar",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 5.114307607636156e-07,
+          "alpha": [
+            -0.03786496390472537,
+            -0.0007001249291819492
+          ],
+          "power_balance_relative": 0.00022237326574203742,
+          "linear_residual": 1.5997570274475e-15,
+          "faraday_residual": 1.944692487432106e-16,
+          "frozen_residual": null
+        },
+        {
+          "impedance_law": "jump",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 7.935116862158552e-07,
+          "alpha": [
+            -0.037411040928117485,
+            -0.0011248161646275334
+          ],
+          "power_balance_relative": 0.00018943389597314564,
+          "linear_residual": 1.00947076249624e-15,
+          "faraday_residual": 1.9449298621644433e-16,
+          "frozen_residual": null
+        }
+      ]
+    },
+    {
+      "faces": 6272,
+      "vertices": 3136,
+      "geometry_sha256": "eaf2627416f466a5477167913d8d627cddb0a00cb92d06a6677ccd80212e9184",
+      "threads": 1,
+      "ngsolve_version": "6.2.2607",
+      "body_backend": "hacapk",
+      "body_hmatrix_controls": {
+        "aca_eps": 1e-10,
+        "leaf_size": 64,
+        "eta": 2.0,
+        "max_rank": -1
+      },
+      "body_hmatrix_stats": [
+        {
+          "n_dof": 3136,
+          "n_leaves": 676,
+          "n_lowrank": 152,
+          "n_dense": 524,
+          "max_rank": 140,
+          "compression": 0.5360011331541545,
+          "build_time": 0.31979100000000005,
+          "memory_mb": 40.216835021972656,
+          "dense_memory_mb": 75.03125
+        },
+        {
+          "n_dof": 3136,
+          "n_leaves": 676,
+          "n_lowrank": 152,
+          "n_dense": 524,
+          "max_rank": 142,
+          "compression": 0.6005670244819866,
+          "build_time": 0.2725881,
+          "memory_mb": 45.06129455566406,
+          "dense_memory_mb": 75.03125
+        }
+      ],
+      "body_sl_reciprocity": {
+        "constant": 1.6732925034117458e-09,
+        "x": 3.747886713753107e-09,
+        "z": 5.1025044771775065e-08
+      },
+      "body_storage_phases": [
+        {
+          "repeat": 0,
+          "phase": "before-compression",
+          "peak_working_set_bytes": 439365632,
+          "working_set_bytes": 276045824,
+          "peak_commit_bytes": 685629440
+        },
+        {
+          "repeat": 0,
+          "phase": "before-entry-release",
+          "peak_working_set_bytes": 439365632,
+          "working_set_bytes": 372523008,
+          "peak_commit_bytes": 1073651712
+        },
+        {
+          "repeat": 0,
+          "phase": "after-entry-release",
+          "peak_working_set_bytes": 439365632,
+          "working_set_bytes": 215166976,
+          "peak_commit_bytes": 1073651712
+        }
+      ],
+      "peak_working_set_bytes": 454090752,
+      "working_set_bytes": 289189888,
+      "peak_commit_bytes": 1317683200,
+      "maxima": {
+        "reference_heat_relative": 8.41809742690991e-07,
+        "reference_alpha_relative": 3.7922459835066884e-08,
+        "reference_reaction_relative": 1.038313774293087e-06,
+        "reference_field_relative": 9.949418095122779e-05,
+        "gmres_iterations": 10,
+        "frozen_gmres_iterations": 27,
+        "linear_residual": 3.03673791334125e-09,
+        "faraday_residual": 5.834850162491863e-16,
+        "frozen_residual": 7.990662490424497e-11,
+        "lift_field_relative": 0.00013883537871375574,
+        "lift_heat_relative": 8.259986284175902e-05,
+        "power_balance_relative": 0.00026974073069019333
+      },
+      "body_assembly_seconds": 22.5376441000044,
+      "first_case_seconds": 62.89936840000155,
+      "remaining_case_seconds": [
+        44.48247000000265,
+        44.39541640000243,
+        44.732248700005584,
+        44.973457200001576,
+        45.03634520000196,
+        44.42451489999803,
+        44.599014499995974,
+        44.59565840000141,
+        44.9879157999967,
+        45.08946719999949,
+        44.97916210000403
+      ],
+      "case_count": 12,
+      "gmres_controls": {
+        "tol": 1e-10,
+        "restart": 100,
+        "maxiter": 500
+      },
+      "baseline_cases": [
+        {
+          "impedance_law": "scalar",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 5.114307610639938e-07,
+          "alpha": [
+            -0.03786496390696102,
+            -0.0007001249293296654
+          ],
+          "power_balance_relative": 0.00022237286021820069,
+          "linear_residual": 1.0337331396652808e-09,
+          "faraday_residual": 5.834850162491863e-16,
+          "frozen_residual": 1.6346699792249332e-11
+        },
+        {
+          "impedance_law": "jump",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 7.935110269169922e-07,
+          "alpha": [
+            -0.03741104098404868,
+            -0.0011248173055337313
+          ],
+          "power_balance_relative": 0.00018922640492502474,
+          "linear_residual": 3.03673791334125e-09,
+          "faraday_residual": 1.94475183383148e-16,
+          "frozen_residual": 7.990662490424497e-11
+        }
+      ]
+    },
+    {
+      "faces": 11552,
+      "vertices": 5776,
+      "geometry_sha256": "a8a53e5fb6c3d42cbbad248bb91c0858decb76445424be997540619439b63392",
+      "threads": 1,
+      "ngsolve_version": "6.2.2607",
+      "body_backend": "dense",
+      "body_hmatrix_controls": null,
+      "body_hmatrix_stats": null,
+      "body_sl_reciprocity": {
+        "constant": 9.038680754196338e-10,
+        "x": 2.0274795046536515e-09,
+        "z": 2.7542679692816935e-08
+      },
+      "body_storage_phases": [],
+      "peak_working_set_bytes": 7462199296,
+      "working_set_bytes": 4259098624,
+      "peak_commit_bytes": 7809306624,
+      "maxima": {
+        "linear_residual": 1.5262266356996042e-15,
+        "faraday_residual": 9.494034833885467e-18,
+        "lift_field_relative": 0.0,
+        "lift_heat_relative": 0.0,
+        "power_balance_relative": 0.00011892582863204382
+      },
+      "body_assembly_seconds": 51.70203500000207,
+      "first_case_seconds": 157.69283539999742,
+      "remaining_case_seconds": [
+        46.712243100002524
+      ],
+      "case_count": 2,
+      "gmres_controls": null,
+      "baseline_cases": [
+        {
+          "impedance_law": "scalar",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 5.121939822971145e-07,
+          "alpha": [
+            -0.037897378291712545,
+            -0.0007004829616543149
+          ],
+          "power_balance_relative": 0.00011892582863204382,
+          "linear_residual": 1.5262266356996042e-15,
+          "faraday_residual": 9.494034833885467e-18,
+          "frozen_residual": null
+        },
+        {
+          "impedance_law": "jump",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 7.946797949216454e-07,
+          "alpha": [
+            -0.03744323528112428,
+            -0.0011253709597598923
+          ],
+          "power_balance_relative": 0.00010134960402918836,
+          "linear_residual": 1.475248245584158e-15,
+          "faraday_residual": 6.4559436870421185e-18,
+          "frozen_residual": null
+        }
+      ]
+    },
+    {
+      "faces": 11552,
+      "vertices": 5776,
+      "geometry_sha256": "a8a53e5fb6c3d42cbbad248bb91c0858decb76445424be997540619439b63392",
+      "threads": 1,
+      "ngsolve_version": "6.2.2607",
+      "body_backend": "hacapk",
+      "body_hmatrix_controls": {
+        "aca_eps": 1e-10,
+        "leaf_size": 64,
+        "eta": 2.0,
+        "max_rank": -1
+      },
+      "body_hmatrix_stats": [
+        {
+          "n_dof": 5776,
+          "n_leaves": 1504,
+          "n_lowrank": 200,
+          "n_dense": 1304,
+          "max_rank": 166,
+          "compression": 0.36675323576016144,
+          "build_time": 0.7907269,
+          "memory_mb": 93.35087585449219,
+          "dense_memory_mb": 254.533203125
+        },
+        {
+          "n_dof": 5776,
+          "n_leaves": 1504,
+          "n_lowrank": 200,
+          "n_dense": 1304,
+          "max_rank": 174,
+          "compression": 0.4144007573127125,
+          "build_time": 0.8514434000000001,
+          "memory_mb": 105.47875213623047,
+          "dense_memory_mb": 254.533203125
+        }
+      ],
+      "body_sl_reciprocity": {
+        "constant": 9.03918461997253e-10,
+        "x": 2.027421952322578e-09,
+        "z": 2.754217254227193e-08
+      },
+      "body_storage_phases": [
+        {
+          "repeat": 0,
+          "phase": "before-compression",
+          "peak_working_set_bytes": 1191358464,
+          "working_set_bytes": 657600512,
+          "peak_commit_bytes": 1439195136
+        },
+        {
+          "repeat": 0,
+          "phase": "before-entry-release",
+          "peak_working_set_bytes": 1191358464,
+          "working_set_bytes": 874024960,
+          "peak_commit_bytes": 1576398848
+        },
+        {
+          "repeat": 0,
+          "phase": "after-entry-release",
+          "peak_working_set_bytes": 1191358464,
+          "working_set_bytes": 340230144,
+          "peak_commit_bytes": 1576398848
+        }
+      ],
+      "peak_working_set_bytes": 1191358464,
+      "working_set_bytes": 455950336,
+      "peak_commit_bytes": 1748217856,
+      "maxima": {
+        "reference_heat_relative": 5.632098452057477e-07,
+        "reference_alpha_relative": 2.5530468281492767e-08,
+        "reference_reaction_relative": 2.4139209420237506e-07,
+        "reference_field_relative": 0.0001583832857214724,
+        "gmres_iterations": 8,
+        "frozen_gmres_iterations": 28,
+        "linear_residual": 2.7747664157425776e-09,
+        "faraday_residual": 2.2785683601325116e-18,
+        "frozen_residual": 7.039778306715054e-11,
+        "lift_field_relative": 0.0,
+        "lift_heat_relative": 0.0,
+        "power_balance_relative": 0.00011892515962541594
+      },
+      "body_assembly_seconds": 45.426844299996446,
+      "first_case_seconds": 128.24744009999995,
+      "remaining_case_seconds": [
+        2.0702645999990636
+      ],
+      "case_count": 2,
+      "gmres_controls": {
+        "tol": 1e-10,
+        "restart": 100,
+        "maxiter": 500
+      },
+      "baseline_cases": [
+        {
+          "impedance_law": "scalar",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 5.121939827211422e-07,
+          "alpha": [
+            -0.037897378294394574,
+            -0.0007004829618658224
+          ],
+          "power_balance_relative": 0.00011892515962541594,
+          "linear_residual": 8.733997578970614e-10,
+          "faraday_residual": 7.595227867108373e-19,
+          "frozen_residual": 3.594676061460623e-11
+        },
+        {
+          "impedance_law": "jump",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 7.946802424931297e-07,
+          "alpha": [
+            -0.037443234878467783,
+            -0.0011253718272395067
+          ],
+          "power_balance_relative": 0.00010054492099698109,
+          "linear_residual": 2.7747664157425776e-09,
+          "faraday_residual": 2.2785683601325116e-18,
+          "frozen_residual": 7.039778306715054e-11
+        }
+      ]
+    },
+    {
+      "faces": 2048,
+      "vertices": 1024,
+      "geometry_sha256": "ab49458da03a7ad19e9a64c0dfae16f2a4dbf52a3b5dd701d9cff41d2c8b8715",
+      "threads": 8,
+      "ngsolve_version": "6.2.2607",
+      "body_backend": "dense",
+      "body_hmatrix_controls": null,
+      "body_hmatrix_stats": null,
+      "body_sl_reciprocity": {
+        "constant": 5.248302857852353e-09,
+        "x": 1.167337782617399e-08,
+        "z": 1.6049150027331108e-07
+      },
+      "body_storage_phases": [],
+      "peak_working_set_bytes": 393228288,
+      "working_set_bytes": 290324480,
+      "peak_commit_bytes": 4315254784,
+      "maxima": {
+        "linear_residual": 6.769621172553278e-16,
+        "faraday_residual": 1.9470575985255865e-16,
+        "lift_field_relative": 0.0,
+        "lift_heat_relative": 0.0,
+        "power_balance_relative": 0.0006881406972607529
+      },
+      "body_assembly_seconds": 1.0683917999995174,
+      "first_case_seconds": 4.489613899997494,
+      "remaining_case_seconds": [
+        2.373519300002954
+      ],
+      "case_count": 2,
+      "gmres_controls": null,
+      "baseline_cases": [
+        {
+          "impedance_law": "scalar",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 5.079551570604619e-07,
+          "alpha": [
+            -0.037720484875869015,
+            -0.0006986211734320616
+          ],
+          "power_balance_relative": 0.0006881406972607529,
+          "linear_residual": 6.76200747869117e-16,
+          "faraday_residual": 1.9463451300263317e-16,
+          "frozen_residual": null
+        },
+        {
+          "impedance_law": "jump",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 7.882166492341272e-07,
+          "alpha": [
+            -0.037267483055528426,
+            -0.0011224691592128702
+          ],
+          "power_balance_relative": 0.0005851391077313917,
+          "linear_residual": 6.769621172553278e-16,
+          "faraday_residual": 1.9470575985255865e-16,
+          "frozen_residual": null
+        }
+      ]
+    },
+    {
+      "faces": 2048,
+      "vertices": 1024,
+      "geometry_sha256": "ab49458da03a7ad19e9a64c0dfae16f2a4dbf52a3b5dd701d9cff41d2c8b8715",
+      "threads": 8,
+      "ngsolve_version": "6.2.2607",
+      "body_backend": "hacapk",
+      "body_hmatrix_controls": {
+        "aca_eps": 1e-10,
+        "leaf_size": 64,
+        "eta": 2.0,
+        "max_rank": -1
+      },
+      "body_hmatrix_stats": [
+        {
+          "n_dof": 1024,
+          "n_leaves": 184,
+          "n_lowrank": 40,
+          "n_dense": 144,
+          "max_rank": 88,
+          "compression": 0.8411483764648438,
+          "build_time": 0.0069747,
+          "memory_mb": 6.72918701171875,
+          "dense_memory_mb": 8.0
+        },
+        {
+          "n_dof": 1024,
+          "n_leaves": 184,
+          "n_lowrank": 40,
+          "n_dense": 144,
+          "max_rank": 99,
+          "compression": 0.9514827728271484,
+          "build_time": 0.0056663,
+          "memory_mb": 7.6118621826171875,
+          "dense_memory_mb": 8.0
+        }
+      ],
+      "body_sl_reciprocity": {
+        "constant": 5.248304445156792e-09,
+        "x": 1.1673370838071309e-08,
+        "z": 1.6049168946553475e-07
+      },
+      "body_storage_phases": [
+        {
+          "repeat": 0,
+          "phase": "before-compression",
+          "peak_working_set_bytes": 271368192,
+          "working_set_bytes": 135417856,
+          "peak_commit_bytes": 3332562944
+        },
+        {
+          "repeat": 0,
+          "phase": "before-entry-release",
+          "peak_working_set_bytes": 271368192,
+          "working_set_bytes": 151617536,
+          "peak_commit_bytes": 3332562944
+        },
+        {
+          "repeat": 0,
+          "phase": "after-entry-release",
+          "peak_working_set_bytes": 271368192,
+          "working_set_bytes": 134836224,
+          "peak_commit_bytes": 3332562944
+        }
+      ],
+      "peak_working_set_bytes": 271368192,
+      "working_set_bytes": 166629376,
+      "peak_commit_bytes": 4192530432,
+      "maxima": {
+        "reference_heat_relative": 2.176006659304619e-07,
+        "reference_alpha_relative": 1.844553016361976e-08,
+        "reference_reaction_relative": 2.8168745991319355e-07,
+        "reference_field_relative": 2.6368563917075835e-05,
+        "gmres_iterations": 10,
+        "frozen_gmres_iterations": 27,
+        "linear_residual": 2.094670593831713e-09,
+        "faraday_residual": 1.5203965488776809e-18,
+        "frozen_residual": 6.164407582121063e-11,
+        "lift_field_relative": 0.0,
+        "lift_heat_relative": 0.0,
+        "power_balance_relative": 0.0006881403790588436
+      },
+      "body_assembly_seconds": 1.0925064999973984,
+      "first_case_seconds": 5.784806999996363,
+      "remaining_case_seconds": [
+        0.5767065999971237
+      ],
+      "case_count": 2,
+      "gmres_controls": {
+        "tol": 1e-10,
+        "restart": 100,
+        "maxiter": 500
+      },
+      "baseline_cases": [
+        {
+          "impedance_law": "scalar",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 5.079551572424362e-07,
+          "alpha": [
+            -0.037720484876824854,
+            -0.0006986211735000438
+          ],
+          "power_balance_relative": 0.0006881403790588436,
+          "linear_residual": 9.806094443182531e-10,
+          "faraday_residual": 1.5203965488776809e-18,
+          "frozen_residual": 5.0478057235901984e-11
+        },
+        {
+          "impedance_law": "jump",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 7.882168207505949e-07,
+          "alpha": [
+            -0.03726748237740674,
+            -0.0011224692737722018
+          ],
+          "power_balance_relative": 0.0005846395275612704,
+          "linear_residual": 2.094670593831713e-09,
+          "faraday_residual": 1.1402974116582607e-18,
+          "frozen_residual": 6.164407582121063e-11
+        }
+      ]
+    }
+  ],
+  "body_product_accuracy": {
+    "schema": "radia.hacapk-body-accuracy.v1",
+    "faces": 2048,
+    "vertices": 1024,
+    "geometry_sha256": "ab49458da03a7ad19e9a64c0dfae16f2a4dbf52a3b5dd701d9cff41d2c8b8715",
+    "os": "Windows",
+    "threads": 1,
+    "ngsolve_version": "6.2.2607",
+    "regular_quad_degree": 7,
+    "singular_n_q": 6,
+    "probe_seed": 271828,
+    "norm": "Euclidean relative action norm, normalized deterministic vectors; not an induced norm bound",
+    "probes": [
+      "constant",
+      "x",
+      "z",
+      "theta7_phi3",
+      "random_real",
+      "random_complex"
+    ],
+    "records": [
+      {
+        "controls": {
+          "aca_eps": 1e-10,
+          "leaf_size": 64,
+          "eta": 2.0,
+          "max_rank": -1
+        },
+        "layers": {
+          "SL": {
+            "errors": {
+              "constant_forward": 3.2813542351413445e-13,
+              "constant_transpose": 4.87734099050303e-13,
+              "x_forward": 5.909787404787088e-13,
+              "x_transpose": 8.862010341068768e-13,
+              "z_forward": 3.262537625578202e-12,
+              "z_transpose": 3.883866936758142e-12,
+              "theta7_phi3_forward": 2.0445297257306366e-11,
+              "theta7_phi3_transpose": 1.9943868233637844e-11,
+              "random_real_forward": 4.726765636346987e-12,
+              "random_real_transpose": 4.861826471966042e-12,
+              "random_complex_forward": 5.516745976135515e-12,
+              "random_complex_transpose": 4.86362642912888e-12
+            },
+            "max_relative": 2.0445297257306366e-11,
+            "stats": {
+              "n_dof": 1024,
+              "n_leaves": 184,
+              "n_lowrank": 40,
+              "n_dense": 144,
+              "max_rank": 88,
+              "compression": 0.8411483764648438,
+              "build_time": 0.023747,
+              "memory_mb": 6.72918701171875,
+              "dense_memory_mb": 8.0
+            }
+          },
+          "DL": {
+            "errors": {
+              "constant_forward": 7.399867697012368e-14,
+              "constant_transpose": 9.817578929145915e-14,
+              "x_forward": 7.510439444781746e-14,
+              "x_transpose": 1.0660020302647618e-13,
+              "z_forward": 7.470963256214123e-12,
+              "z_transpose": 4.458177216577561e-12,
+              "theta7_phi3_forward": 9.480306549383448e-12,
+              "theta7_phi3_transpose": 7.773861277639851e-12,
+              "random_real_forward": 5.476637480649091e-13,
+              "random_real_transpose": 6.986459983024822e-13,
+              "random_complex_forward": 7.170581015552843e-13,
+              "random_complex_transpose": 6.634161108180844e-13
+            },
+            "max_relative": 9.480306549383448e-12,
+            "stats": {
+              "n_dof": 1024,
+              "n_leaves": 184,
+              "n_lowrank": 40,
+              "n_dense": 144,
+              "max_rank": 99,
+              "compression": 0.9514827728271484,
+              "build_time": 0.024129,
+              "memory_mb": 7.6118621826171875,
+              "dense_memory_mb": 8.0
+            }
+          }
+        }
+      },
+      {
+        "controls": {
+          "aca_eps": 1e-12,
+          "leaf_size": 64,
+          "eta": 2.0,
+          "max_rank": -1
+        },
+        "layers": {
+          "SL": {
+            "errors": {
+              "constant_forward": 2.3101931267321366e-15,
+              "constant_transpose": 3.363523669487018e-15,
+              "x_forward": 4.268901151447176e-15,
+              "x_transpose": 6.257618008850958e-15,
+              "z_forward": 2.1069160450651038e-14,
+              "z_transpose": 2.7680998287866308e-14,
+              "theta7_phi3_forward": 1.2206172022482246e-13,
+              "theta7_phi3_transpose": 1.5339570402830784e-13,
+              "random_real_forward": 3.7748167534247395e-14,
+              "random_real_transpose": 4.6087627973720973e-14,
+              "random_complex_forward": 4.280673846397022e-14,
+              "random_complex_transpose": 4.3312879988790065e-14
+            },
+            "max_relative": 1.5339570402830784e-13,
+            "stats": {
+              "n_dof": 1024,
+              "n_leaves": 184,
+              "n_lowrank": 40,
+              "n_dense": 144,
+              "max_rank": 102,
+              "compression": 0.9679183959960938,
+              "build_time": 0.0235794,
+              "memory_mb": 7.74334716796875,
+              "dense_memory_mb": 8.0
+            }
+          },
+          "DL": {
+            "errors": {
+              "constant_forward": 6.395054278374641e-16,
+              "constant_transpose": 1.1438639364305562e-15,
+              "x_forward": 6.589486824381219e-16,
+              "x_transpose": 1.1372439917951973e-15,
+              "z_forward": 6.075087876631631e-14,
+              "z_transpose": 3.649045026996735e-14,
+              "theta7_phi3_forward": 4.541692377917016e-14,
+              "theta7_phi3_transpose": 6.780180101399502e-14,
+              "random_real_forward": 5.862037012950409e-15,
+              "random_real_transpose": 6.455617258861004e-15,
+              "random_complex_forward": 6.699439786771882e-15,
+              "random_complex_transpose": 6.8979057828836574e-15
+            },
+            "max_relative": 6.780180101399502e-14,
+            "stats": {
+              "n_dof": 1024,
+              "n_leaves": 184,
+              "n_lowrank": 40,
+              "n_dense": 144,
+              "max_rank": 113,
+              "compression": 1.0821762084960938,
+              "build_time": 0.027495600000000002,
+              "memory_mb": 8.65740966796875,
+              "dense_memory_mb": 8.0
+            }
+          }
+        }
+      }
+    ]
+  },
+  "tight_iterative_diagnostic": [
+    {
+      "faces": 2048,
+      "vertices": 1024,
+      "geometry_sha256": "ab49458da03a7ad19e9a64c0dfae16f2a4dbf52a3b5dd701d9cff41d2c8b8715",
+      "threads": 1,
+      "ngsolve_version": "6.2.2607",
+      "body_backend": "hacapk",
+      "body_hmatrix_controls": {
+        "aca_eps": 1e-10,
+        "leaf_size": 64,
+        "eta": 2.0,
+        "max_rank": -1
+      },
+      "body_hmatrix_stats": [
+        {
+          "n_dof": 1024,
+          "n_leaves": 184,
+          "n_lowrank": 40,
+          "n_dense": 144,
+          "max_rank": 88,
+          "compression": 0.8411483764648438,
+          "build_time": 0.024408500000000003,
+          "memory_mb": 6.72918701171875,
+          "dense_memory_mb": 8.0
+        },
+        {
+          "n_dof": 1024,
+          "n_leaves": 184,
+          "n_lowrank": 40,
+          "n_dense": 144,
+          "max_rank": 99,
+          "compression": 0.9514827728271484,
+          "build_time": 0.0238785,
+          "memory_mb": 7.6118621826171875,
+          "dense_memory_mb": 8.0
+        }
+      ],
+      "body_sl_reciprocity": {
+        "constant": 5.248304457534906e-09,
+        "x": 1.1673370849898574e-08,
+        "z": 1.604916894575034e-07
+      },
+      "body_storage_phases": [
+        {
+          "repeat": 0,
+          "phase": "before-compression",
+          "peak_working_set_bytes": 148623360,
+          "working_set_bytes": 130019328,
+          "peak_commit_bytes": 394276864
+        },
+        {
+          "repeat": 0,
+          "phase": "before-entry-release",
+          "peak_working_set_bytes": 148623360,
+          "working_set_bytes": 145948672,
+          "peak_commit_bytes": 394276864
+        },
+        {
+          "repeat": 0,
+          "phase": "after-entry-release",
+          "peak_working_set_bytes": 148623360,
+          "working_set_bytes": 129167360,
+          "peak_commit_bytes": 394276864
+        }
+      ],
+      "peak_working_set_bytes": 216031232,
+      "working_set_bytes": 158052352,
+      "peak_commit_bytes": 668336128,
+      "maxima": {
+        "reference_heat_relative": 2.2940760402434535e-11,
+        "reference_alpha_relative": 2.04584386626986e-11,
+        "reference_reaction_relative": 9.888352359155306e-10,
+        "reference_field_relative": 4.598567750767995e-08,
+        "gmres_iterations": 19,
+        "frozen_gmres_iterations": 36,
+        "linear_residual": 1.8924012455334963e-12,
+        "faraday_residual": 3.892281978854864e-16,
+        "frozen_residual": 8.528399305800816e-14,
+        "lift_field_relative": 0.0,
+        "lift_heat_relative": 0.0,
+        "power_balance_relative": 0.0006881406976830817
+      },
+      "body_assembly_seconds": 6.244860799997696,
+      "first_case_seconds": 19.954516099998727,
+      "remaining_case_seconds": [
+        0.3736380999980611
+      ],
+      "case_count": 2,
+      "gmres_controls": {
+        "tol": 1e-13,
+        "restart": 100,
+        "maxiter": 500
+      },
+      "baseline_cases": [
+        {
+          "impedance_law": "scalar",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 5.079551570603553e-07,
+          "alpha": [
+            -0.037720484875869084,
+            -0.0006986211734319567
+          ],
+          "power_balance_relative": 0.0006881406976830817,
+          "linear_residual": 1.7060784774724324e-12,
+          "faraday_residual": 3.892281978854864e-16,
+          "frozen_residual": 2.6695423506511425e-14
+        },
+        {
+          "impedance_law": "jump",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 7.882166492522093e-07,
+          "alpha": [
+            -0.03726748305542888,
+            -0.0011224691599691229
+          ],
+          "power_balance_relative": 0.0005851380953674212,
+          "linear_residual": 1.8924012455334963e-12,
+          "faraday_residual": 1.1402974116582607e-18,
+          "frozen_residual": 8.528399305800816e-14
+        }
+      ]
+    },
+    {
+      "faces": 2048,
+      "vertices": 1024,
+      "geometry_sha256": "ab49458da03a7ad19e9a64c0dfae16f2a4dbf52a3b5dd701d9cff41d2c8b8715",
+      "threads": 1,
+      "ngsolve_version": "6.2.2607",
+      "body_backend": "hacapk",
+      "body_hmatrix_controls": {
+        "aca_eps": 1e-12,
+        "leaf_size": 64,
+        "eta": 2.0,
+        "max_rank": -1
+      },
+      "body_hmatrix_stats": [
+        {
+          "n_dof": 1024,
+          "n_leaves": 184,
+          "n_lowrank": 40,
+          "n_dense": 144,
+          "max_rank": 102,
+          "compression": 0.9679183959960938,
+          "build_time": 0.026144800000000003,
+          "memory_mb": 7.74334716796875,
+          "dense_memory_mb": 8.0
+        },
+        {
+          "n_dof": 1024,
+          "n_leaves": 184,
+          "n_lowrank": 40,
+          "n_dense": 144,
+          "max_rank": 113,
+          "compression": 1.0821762084960938,
+          "build_time": 0.0269869,
+          "memory_mb": 8.65740966796875,
+          "dense_memory_mb": 8.0
+        }
+      ],
+      "body_sl_reciprocity": {
+        "constant": 5.248303046307023e-09,
+        "x": 1.1673377368546536e-08,
+        "z": 1.6049150394791865e-07
+      },
+      "body_storage_phases": [
+        {
+          "repeat": 0,
+          "phase": "before-compression",
+          "peak_working_set_bytes": 148893696,
+          "working_set_bytes": 130289664,
+          "peak_commit_bytes": 394477568
+        },
+        {
+          "repeat": 0,
+          "phase": "before-entry-release",
+          "peak_working_set_bytes": 148893696,
+          "working_set_bytes": 148459520,
+          "peak_commit_bytes": 394477568
+        },
+        {
+          "repeat": 0,
+          "phase": "after-entry-release",
+          "peak_working_set_bytes": 148893696,
+          "working_set_bytes": 131678208,
+          "peak_commit_bytes": 394477568
+        }
+      ],
+      "peak_working_set_bytes": 218107904,
+      "working_set_bytes": 159887360,
+      "peak_commit_bytes": 670449664,
+      "maxima": {
+        "reference_heat_relative": 2.294320289308871e-11,
+        "reference_alpha_relative": 2.0458715492769312e-11,
+        "reference_reaction_relative": 9.888450058781473e-10,
+        "reference_field_relative": 4.598568067235313e-08,
+        "gmres_iterations": 19,
+        "frozen_gmres_iterations": 36,
+        "linear_residual": 1.892401271597453e-12,
+        "faraday_residual": 3.892482413157801e-16,
+        "frozen_residual": 8.540009343930507e-14,
+        "lift_field_relative": 0.0,
+        "lift_heat_relative": 0.0,
+        "power_balance_relative": 0.0006881406976924076
+      },
+      "body_assembly_seconds": 6.28839059999882,
+      "first_case_seconds": 20.059849099998246,
+      "remaining_case_seconds": [
+        0.36479339999641525
+      ],
+      "case_count": 2,
+      "gmres_controls": {
+        "tol": 1e-13,
+        "restart": 100,
+        "maxiter": 500
+      },
+      "baseline_cases": [
+        {
+          "impedance_law": "scalar",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 5.079551570603504e-07,
+          "alpha": [
+            -0.037720484875869084,
+            -0.000698621173431956
+          ],
+          "power_balance_relative": 0.0006881406976924076,
+          "linear_residual": 1.706076161918886e-12,
+          "faraday_residual": 3.892482413157801e-16,
+          "frozen_residual": 4.511242910130711e-14
+        },
+        {
+          "impedance_law": "jump",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 7.882166492522112e-07,
+          "alpha": [
+            -0.037267483055428874,
+            -0.0011224691599691322
+          ],
+          "power_balance_relative": 0.0005851380953552088,
+          "linear_residual": 1.892401271597453e-12,
+          "faraday_residual": 1.5203965488776809e-18,
+          "frozen_residual": 8.540009343930507e-14
+        }
+      ]
+    },
+    {
+      "faces": 6272,
+      "vertices": 3136,
+      "geometry_sha256": "eaf2627416f466a5477167913d8d627cddb0a00cb92d06a6677ccd80212e9184",
+      "threads": 1,
+      "ngsolve_version": "6.2.2607",
+      "body_backend": "hacapk",
+      "body_hmatrix_controls": {
+        "aca_eps": 1e-10,
+        "leaf_size": 64,
+        "eta": 2.0,
+        "max_rank": -1
+      },
+      "body_hmatrix_stats": [
+        {
+          "n_dof": 3136,
+          "n_leaves": 676,
+          "n_lowrank": 152,
+          "n_dense": 524,
+          "max_rank": 140,
+          "compression": 0.5360011331541545,
+          "build_time": 0.28705210000000003,
+          "memory_mb": 40.216835021972656,
+          "dense_memory_mb": 75.03125
+        },
+        {
+          "n_dof": 3136,
+          "n_leaves": 676,
+          "n_lowrank": 152,
+          "n_dense": 524,
+          "max_rank": 142,
+          "compression": 0.6005670244819866,
+          "build_time": 0.2749879,
+          "memory_mb": 45.06129455566406,
+          "dense_memory_mb": 75.03125
+        }
+      ],
+      "body_sl_reciprocity": {
+        "constant": 1.6732925034117458e-09,
+        "x": 3.747886713753107e-09,
+        "z": 5.1025044771775065e-08
+      },
+      "body_storage_phases": [
+        {
+          "repeat": 0,
+          "phase": "before-compression",
+          "peak_working_set_bytes": 439144448,
+          "working_set_bytes": 275824640,
+          "peak_commit_bytes": 685576192
+        },
+        {
+          "repeat": 0,
+          "phase": "before-entry-release",
+          "peak_working_set_bytes": 439144448,
+          "working_set_bytes": 372477952,
+          "peak_commit_bytes": 1073561600
+        },
+        {
+          "repeat": 0,
+          "phase": "after-entry-release",
+          "peak_working_set_bytes": 439144448,
+          "working_set_bytes": 215121920,
+          "peak_commit_bytes": 1073561600
+        }
+      ],
+      "peak_working_set_bytes": 446877696,
+      "working_set_bytes": 419680256,
+      "peak_commit_bytes": 1316950016,
+      "maxima": {
+        "reference_heat_relative": 5.924057910888791e-10,
+        "reference_alpha_relative": 3.05653745019448e-11,
+        "reference_reaction_relative": 4.572151546256009e-10,
+        "reference_field_relative": 1.1128681134950844e-07,
+        "gmres_iterations": 18,
+        "frozen_gmres_iterations": 37,
+        "linear_residual": 3.1765419632929956e-12,
+        "faraday_residual": 3.891283625196904e-16,
+        "frozen_residual": 9.895112751582272e-14,
+        "lift_field_relative": 5.216005047883725e-05,
+        "lift_heat_relative": 8.208063087256079e-05,
+        "power_balance_relative": 0.000269803397954238
+      },
+      "body_assembly_seconds": 22.629294799997297,
+      "first_case_seconds": 66.21499390000099,
+      "remaining_case_seconds": [
+        44.97193089999928,
+        44.96105979999993,
+        45.585578799997165,
+        45.5559127000015,
+        45.88289649999933,
+        50.42851199999859,
+        45.14166020000266,
+        45.09171729999798,
+        45.72109880000062,
+        45.80172230000608,
+        46.23101070000121
+      ],
+      "case_count": 12,
+      "gmres_controls": {
+        "tol": 1e-13,
+        "restart": 100,
+        "maxiter": 500
+      },
+      "baseline_cases": [
+        {
+          "impedance_law": "scalar",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 5.114307607636341e-07,
+          "alpha": [
+            -0.03786496390472521,
+            -0.0007001249291819149
+          ],
+          "power_balance_relative": 0.00022237326580731853,
+          "linear_residual": 2.5470684569047434e-12,
+          "faraday_residual": 3.891283625196904e-16,
+          "frozen_residual": 4.720232336027574e-14
+        },
+        {
+          "impedance_law": "jump",
+          "carrier_offset_m": 0.0,
+          "lift": 0,
+          "heat_power_w": 7.935116860694629e-07,
+          "alpha": [
+            -0.03741104092850149,
+            -0.0011248161646180159
+          ],
+          "power_balance_relative": 0.00018943400144522116,
+          "linear_residual": 2.780640334416066e-12,
+          "faraday_residual": 9.875391537741164e-18,
+          "frozen_residual": 9.895112751582272e-14
+        }
+      ]
+    }
+  ],
+  "contracts": {
+    "numerical_cases": 42,
+    "passed": 42,
+    "skipped": 0,
+    "production_source_commit": "b427bd8fa9318d73618229353afa6f4417f1254c",
+    "g1a": "Generic lift covariance on both P0 routes with zero-mean and nonzero-mean lifts",
+    "postrelease": "Strong panel ESIM reuse, genus-zero weak/strong and port extraction, native forward/transpose/stats and forbidden rebuild",
+    "tight_frozen": "2048-face unscaled frozen solve matches plain weak HACApK at tol=1e-13"
+  },
+  "limits": [
+    "Vector action probes are not an induced-norm theorem",
+    "Tighter physical solve errors plateau at iterative/arithmetic floor; direct-versus-ACA product error is reported independently",
+    "Memory release is resident storage reduction, not reduced construction peak",
+    "Geometry is an analytic ring approximation, not a reference solution for arbitrary geometry"
+  ]
+}

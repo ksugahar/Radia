@@ -1,7 +1,7 @@
 {
   "schema": "radia.validation.maxwell-pec-sphere-2607.v1",
   "date": "2026-09-30",
-  "host": "mdx2",
+
   "source_commit": "6d1be6b586e1d27f3486482343349af91e6f4330",
   "source_sha256": "22cbe8170e4695a4c577a80979fda1d9c26c9dcb4948ec27c6360e98d476cd66",
   "ngsolve": "6.2.2607",

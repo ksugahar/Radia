@@ -1,6 +1,6 @@
 """Exercise existing panel-Zs wiring through the official MATLAB MCP/Toolkit.
 
-Run on LAB with installed Radia native/MEX runtimes and job-local sources.
+Run on validation runtime with installed Radia native/MEX runtimes and job-local sources.
 This is interface acceptance, not an independent electromagnetic accuracy test.
 The model is generated in the job directory; no tracked SLX is changed.
 """
@@ -226,7 +226,7 @@ def main():
     if not args.job.is_absolute() or job.exists():
         raise ValueError("Use a fresh absolute job directory")
     job.mkdir(parents=True)
-    provenance = dict(host=socket.gethostname(), python=platform.python_version(),
+    provenance = dict(platform_class=platform.system(), python=platform.python_version(),
                       source_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
     (job / "provenance.json").write_text(json.dumps(provenance, indent=2))
     try:

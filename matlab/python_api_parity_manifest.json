@@ -493,8 +493,8 @@
       "patterns": ["simulink/ih_operator_assembly.py"],
       "classification": "python-fallback",
       "backend_contract": "process-python",
-      "matlab": ["matlab/+radia/+simulink/assembleIHOperatorsFromGeometry.m"],
-      "notes": "Geometry, mesh, electromagnetic, and thermal operator assembly runs only at the explicit Simulink update boundary. The generated standalone MEX handles own every simulation step."
+      "matlab": ["matlab/+radia/+simulink/assembleIHOperatorsFromGeometry.m", "matlab/+radia/+simulink/assembleIHPanelESIMFromGeometry.m"],
+      "notes": "Geometry, mesh, electromagnetic, and thermal operator assembly runs only at the explicit Simulink update boundary. The generated standalone MEX handles own every simulation step. Per-panel ESIM is certified and frozen at its declared reference current; runtime drive-band violations raise."
     },
     {
       "id": "fin-surface-peec",

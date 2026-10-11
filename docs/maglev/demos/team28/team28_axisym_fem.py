@@ -3,7 +3,7 @@ full-FEM levitation-force solve (ground-truth baseline for the reduced-model
 verification).
 
 Ported from the learning material
-    W:\\00_CAE\\NGSolve\\01_菅原\\2024_08_TEAM28\\50Hz_可動\\axisymmetric_mixed.ipynb
+    private provenance
 (axisymmetric MIXED phi-B formulation, anisotropic-nu infinite-element
 shell for the open boundary).  This reproduces the full-FEM levitation
 force F_z at a single disk height so we have a runnable, self-contained

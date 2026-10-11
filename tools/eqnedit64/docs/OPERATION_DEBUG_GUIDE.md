@@ -94,7 +94,7 @@ Google スライド用コピーでは、登録PNGとHTMLに埋め込んだPNGが
 pwsh -NoProfile -File build\analyze_last_operation_log.ps1
 ```
 
-出力は `C:\temp\Eqnedit64-usability-*.json` です。既定の`structure`モードは
+出力は `private-runtime-path` です。既定の`structure`モードは
 数式本文、選択内容、入力詳細を伏せ、長さ、ハッシュ、TeX構造だけを残します。
 内容を含める必要があり、ローカルの許可されたLLMへだけ渡す場合は
 `-Privacy full`を明示します。

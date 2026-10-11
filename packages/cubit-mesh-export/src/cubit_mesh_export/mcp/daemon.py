@@ -1,15 +1,13 @@
 """
 daemon.py — JSON-RPC server exposing a persistent Cubit session.
 
-Runs under Cubit's bundled Python 3.10 (`C:/Program Files/Coreform Cubit
-2025.12/bin/python3/python.exe`), NOT the system Python. This is because
-the `cubit` Python binding is a compiled extension (`_cubit3.pyd`) tied
-to the Cubit ABI + Python 3.10.
+Runs under the selected Cubit's bundled Python (Python 3.12 in Cubit 2026.8).
+The compiled `cubit` binding must use that installation's Python ABI.
 
 Role in the lab stack:
     LLM client
         → mcp-server-cubit (Python 3.12)
-            → THIS DAEMON (Python 3.10, subprocess)
+            → THIS DAEMON (Cubit Python, subprocess)
                 → cubit.cmd(...) in batch/nographics mode
 
 Design follows the OCP CAD Viewer philosophy transposed to Cubit:
@@ -62,7 +60,7 @@ def _discover_cubit_bin():
     import glob as _g
     cands = _g.glob(r"C:\Program Files\Coreform Cubit *")
     if not cands:
-        return r"C:\Program Files\Coreform Cubit 2025.12\bin"  # last-resort
+        raise RuntimeError("Coreform Cubit 2026.8 is not installed")
     def _ver(p):
         name = os.path.basename(p).replace("Coreform Cubit", "", 1).strip()
         try:
@@ -72,9 +70,6 @@ def _discover_cubit_bin():
     return os.path.join(max(cands, key=_ver), "bin")
 
 
-_CUBIT_BIN = _discover_cubit_bin()
-if _CUBIT_BIN not in sys.path:
-    sys.path.insert(0, _CUBIT_BIN)
 
 
 def _write_response(obj):
@@ -91,7 +86,10 @@ def _log(msg):
 
 def _init_cubit():
     """Import cubit and initialize. Returns the imported module."""
-    import cubit  # noqa: E402  (deferred import; path set above)
+    cubit_bin = _discover_cubit_bin()
+    if cubit_bin not in sys.path:
+        sys.path.insert(0, cubit_bin)
+    import cubit  # noqa: E402  (deferred until CLI validation)
 
     # -nojournal: we don't need automatic .jou journaling.
     # -noecho:    don't re-echo commands to stdout (we'd corrupt JSON-RPC).
@@ -169,7 +167,7 @@ def main():
         if requested_mode != "batch":
             raise ValueError("Only headless CUBIT_DAEMON_MODE=batch is supported")
         cubit_mod = _init_cubit()
-        version = getattr(cubit_mod, "__version__", "unknown")
+        version = cubit_mod.get_version()
         _write_response({
             "ready": True,
             "mode": "batch",

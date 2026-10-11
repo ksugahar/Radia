@@ -233,7 +233,7 @@
       }
     }
   ],
-  "host": "lab",
+
   "python_version": "3.12.10",
   "radia_fixed_wheel_version": "5.2.3",
   "thread_environment": {

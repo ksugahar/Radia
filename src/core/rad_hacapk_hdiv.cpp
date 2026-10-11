@@ -6978,8 +6978,8 @@ bool RadHACApKChargeGram::HexPairTakesGeneralPath(int kindT, int hT, int kindS, 
     {
         // Every touching pair and every near-band pair is an expensive tensor block whatever the hosts'
         // affinity and whatever the order, so all of them belong in the instance-shared compute-once
-        // cache.  Measured per block on one Q-mag mesh: BDM1 pair-domain Duffy 265 ms (hibino), BDM2
-        // exact-affine near 442 ms and graded near 155 ms (LAB), against 2 us for a far block.  This
+        // cache.  Measured per block on one Q-mag mesh: BDM1 pair-domain Duffy 265 ms (compute host), BDM2
+        // exact-affine near 442 ms and graded near 155 ms (validation runtime), against 2 us for a far block.  This
         // predicate only selects WHICH CACHE serves the block -- GetHexBlock computes the same
         // QuadBlockHex either way -- so the classification never changes a number.  Before 2026-09-08
         // the rule was BDM1-only and the BDM2 affine-affine near blocks fell through to the per-thread

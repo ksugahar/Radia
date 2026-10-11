@@ -19,7 +19,7 @@ ns={'np':np}
 exec(compile(ast.Module(body=[node],type_ignores=[]),str(args.baseline_source),'exec'),ns)
 baseline=ns['_matching_trace_direct_inverse']
 ng.SetNumThreads(8);ng.SetHeapSize(10000000)
-record=dict(host=platform.node(),ngsolve=ng.__version__,threads=8,cases=[],
+record=dict(platform_class=platform.system(),ngsolve=ng.__version__,threads=8,cases=[],
     method='Identical matrix graphs, three different positive primal coefficients; fresh baseline vs cache updates',
     runner_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
     old_source_sha256=hashlib.sha256(args.baseline_source.read_bytes()).hexdigest(),

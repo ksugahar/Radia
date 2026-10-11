@@ -19,20 +19,20 @@ the RESEARCH-MESH configurations with golden bands set from the measured
 | `test_vfrac_multimaterial_lane.py` | the same chain with a PARTITIONED two-material body (core r<=0.3 inside shell r<=0.6, union = the single-material sphere): conformal Sculpt interface, named `.vol` regions, per-region `mu_r` | gates green with the OUTER faces matching the topological skin and interface faces > 0 (measured 894 + 190); core/shell share interface nodes; uniform `mu_r` recovers the sphere's 1/3 (measured 0.327) with per-region mean-magnetization ratio ~1 (1.001), while a 200x contrast drives that ratio below 0.5 (0.006) -- the demag factor is geometric and stays 0.32734 in both, so it cannot be the discriminator. Requires a Cubit license (~5 min). |
 
 Run solver-heavy lanes only on an idle compute host under the repository host
-policy. Do not run this whole directory on LAB/100 merely because Cubit is
+policy. Do not run this whole directory on validation host/100 merely because Cubit is
 installed there. The former one-minute development-host estimate does not apply
 to shape reacceptance with resolved facet boundaries.
 
 For the post-Taubin shape lane, use the staged driver:
 
 ```bash
-python validation_test/isochronous_topopt/run_shape_reacceptance.py prepare --directory C:/temp/shape-run
-# Transfer prepare.json, prepare.state.json, both STLs and design_lsd.exo to LAB.
-python validation_test/isochronous_topopt/run_shape_reacceptance.py mesh --directory C:/temp/shape-run --command-plugin-directory "C:/Program Files/Coreform Cubit 2025.12/bin/plugins" --tet-curve-interval 16
+python validation_test/isochronous_topopt/run_shape_reacceptance.py prepare --directory private-runtime-path
+# Transfer prepare.json, prepare.state.json, both STLs and design_lsd.exo to validation host.
+python validation_test/isochronous_topopt/run_shape_reacceptance.py mesh --directory private-runtime-path --command-plugin-directory "C:/Program Files/Coreform Cubit 2025.12/bin/plugins" --tet-curve-interval 16
 # Transfer the resulting directory back to the same isolated compute environment.
-python validation_test/isochronous_topopt/run_shape_reacceptance.py evaluate --directory C:/temp/shape-run
+python validation_test/isochronous_topopt/run_shape_reacceptance.py evaluate --directory private-runtime-path
 # After recovering the completed directory, independently audit receipt consistency.
-python validation_test/isochronous_topopt/run_shape_reacceptance.py audit --directory C:/temp/shape-run
+python validation_test/isochronous_topopt/run_shape_reacceptance.py audit --directory private-runtime-path
 ```
 
 Use a fresh owned directory; a repeated or failed phase is deliberately refused.
@@ -53,7 +53,7 @@ evaluation state, and the verified prepare/mesh parent receipt chain.
 
 ### Post-Taubin acceptance, 2026-09-14
 
-`shape_reacceptance_20260914.json` records a completed mdx2 run against candidate
+`shape_reacceptance_20260914.json` records a completed worker-b run against candidate
 wheel source `59b094d8ed2c19e35967fd7631f3a1473eb3d200`, with the explicit
 `topopt_cad.py` overlay identified inside the result. This is acceptance of this
 shape lane, not acceptance of every solver or of a new binary release.
@@ -72,7 +72,7 @@ JSON copy, whereas the receipt digest identifies original bytes. The separate
 `shape_reacceptance_20260914_audit.json` records post-execution validation;
 `numerical_recomputed=false` means it does not impersonate a new solver run.
 Original numerical driver SHA is preserved rather than replaced by the later
-validator's SHA. Full console logs and failed mesh trials are retained on LAB,
+validator's SHA. Full console logs and failed mesh trials are retained on validation host,
 not published as repository log files.
 
 Notes fixed by this lane (do not re-walk):

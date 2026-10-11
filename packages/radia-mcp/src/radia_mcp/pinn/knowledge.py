@@ -217,7 +217,7 @@ For Maxwell's equations:
 - Doesn't preserve discrete conservation (d²=0) — spurious modes
   in long-time integration
 
-For LAB practice: use PINN for:
+For validation runtime practice: use PINN for:
 - Inverse problems
 - Multi-fidelity (combine measurement + FEM data)
 - Real-time query after offline training

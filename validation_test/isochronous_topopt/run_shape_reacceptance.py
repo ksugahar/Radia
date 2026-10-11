@@ -1,6 +1,6 @@
 """Staged replay of the existing shape lane; never changes a live install.
 
-Run prepare/evaluate on an idle compute host and mesh on licensed LAB/100.
+Run prepare/evaluate on an idle compute host and mesh on licensed validation runtime/100.
 The prepare phase records its staircase reference from that exact design run;
 only checked Cubit meshes cross back to the compute host for evaluation.
 An explicit topopt-cad source overlay permits testing a Python-only fix against
@@ -123,7 +123,7 @@ def run_phase(args):
     import radia.topopt_cad as cad
 
     provenance = {
-        "host": platform.node(), "python": sys.version,
+        "platform_class": platform.system(), "python": sys.version,
         "interpreter": sys.executable, "radia_file": radia.__file__,
         "radia_version": radia.__version__, "ngsolve_version": ngsolve.__version__,
         "topopt_cad_file": cad.__file__, "topopt_cad_sha256": digest(cad.__file__),

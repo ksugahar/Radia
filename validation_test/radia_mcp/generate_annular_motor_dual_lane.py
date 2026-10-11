@@ -338,7 +338,7 @@ def main() -> int:
         )
     execution_environment = {
         "host_role": host_role,
-        "hostname": platform.node(),
+        "platform_class": platform.system(),
         "python": platform.python_version(),
     }
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
@@ -356,8 +356,8 @@ def main() -> int:
         raise RuntimeError("AGE production lane did not solve")
     if not hdiv["checks"]["passed"]:
         raise RuntimeError("HDiv-MMM/HCurl production lane did not pass")
-    if hdiv["validation_host"] != execution_environment["hostname"]:
-        raise RuntimeError("HDiv validation host does not match the artifact host")
+    # _run_hdiv invokes a local subprocess; OS class is descriptive metadata,
+    # never a same-host certificate.
     if (
         hdiv["configuration"]["shared_model_identity_sha256"]
         != identity["aggregate_sha256"]

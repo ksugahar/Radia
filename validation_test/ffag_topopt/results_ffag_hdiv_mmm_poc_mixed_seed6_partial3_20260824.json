@@ -4,7 +4,7 @@
   "status": "pass",
   "scope": "Study-scale connected-seed HEX pole-slab FFAG PoC with bidirectional whole-element proposals and exact re-solves. This is not a final two-pole yoke or engineered coil design.",
   "execution": {
-    "machine": "Hibino",
+
     "python": "3.12.10",
     "ngsolve_threads": 16,
     "source_worktree_head": "177939a5b",
@@ -12,7 +12,7 @@
     "topology_optimization_py_sha256": "BFBA053375608707F673C57F9E565D396C7A55B8971E3D156C96A9912EE49A51",
     "runner_sha256": "ECFB86DF03F5E9D06F0355176CC6155EB93C69ED4ACD094E86CB21973BEEF413",
     "full_result_sha256": "8C0182C3DAE3B1F4AE6D611753BA5343B3AE9B60C89A33F2BEAFA4BFF5A1F69B",
-    "full_result_scratch": "C:\\temp\\ffag_hdiv_mmm_mixed_seed6_partial3_20260824.json",
+    "full_result_scratch": "<private-path>/ffag_hdiv_mmm_mixed_seed6_partial3_20260824.json",
     "performance_measurement": "disabled",
     "timings_s": null,
     "peak_working_set_bytes": null

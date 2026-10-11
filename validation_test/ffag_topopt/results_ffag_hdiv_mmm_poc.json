@@ -2,7 +2,7 @@
   "schema": "radia.ffag-hdiv-mmm-poc/v1",
   "status": "pass",
   "scope": "One-sided HEX pole-slab PoC with a uniform applied source; not a final two-pole yoke or engineered FFAG coil.",
-  "machine": "mdx2",
+
   "python": "3.12.10",
   "ngsolve_threads": 16,
   "energies_mev": [

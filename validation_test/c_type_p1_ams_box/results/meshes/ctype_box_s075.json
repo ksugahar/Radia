@@ -1,7 +1,7 @@
 {
-  "vol": "C:\\temp\\ctype_box\\meshes\\ctype_box_s075.vol",
+  "vol": "<private-path>/ctype_box\\meshes\\ctype_box_s075.vol",
   "vol_sha256": "9cf43d682a72f17e959a10d79038db8ecc5d75415dba43649084183bee9f8799",
-  "bdf": "C:\\temp\\ctype_box\\meshes\\ctype_box_s075.bdf",
+  "bdf": "<private-path>/ctype_box\\meshes\\ctype_box_s075.bdf",
   "bdf_sha256": "7090ed933cfabea34a1f053a4ce3fd6327ec48ffd208860c1bda0cf20469d2c6",
   "nodes": 33552,
   "tetrahedra": 195309,

@@ -3,7 +3,7 @@
   "radia_version": "4.95.55",
   "python_version": "3.12.10",
   "platform": "Windows-2022Server-10.0.20348-SP0",
-  "host": "lab",
+
   "versions": {
     "ngsolve": "6.2.2604"
   },

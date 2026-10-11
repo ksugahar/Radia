@@ -27,9 +27,29 @@
 
 #include <vector>
 #include <cstdint>
+#include <memory>
+#include <cstddef>
 
 namespace radia {
 namespace bem {
+
+/** Owned, geometry-backed P1 quadrature. Cache size never grows with ACA requests. */
+class P1EntryProvider {
+public:
+    struct EntryValue { double sl=0,dl=0,abs_sl=0,abs_dl=0; uint64_t contributions=0; };
+    struct Statistics { uint64_t entries,pair_requests,pair_evaluations,cache_hits; size_t cache_bytes,geometry_bytes; };
+    P1EntryProvider(const double* vertices,int n_v,const int64_t* triangles,int n_t,
+        const double* nodes,int regular_degree,int singular_order,size_t cache_bytes=8*1024*1024);
+    ~P1EntryProvider();
+    int Size() const;
+    const double* Coordinates() const;
+    EntryValue Entry(int i,int j) const;
+    void Pair(int a,int b,double* sl,double* dl) const;
+    Statistics Stats() const;
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
 
 /**
  * Build the Laplace SL and DL Galerkin matrices on a P1-H1 surface mesh

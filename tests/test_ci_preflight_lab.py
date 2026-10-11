@@ -1,0 +1,187 @@
+"""Focused tests for the lab pre-push candidate boundary."""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+from pathlib import Path
+import subprocess
+
+import pytest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _load_module():
+    path = ROOT / "tools" / "ci_preflight_lab.py"
+    spec = importlib.util.spec_from_file_location("ci_preflight_lab", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def _git(repo: Path, *args: str) -> str:
+    return subprocess.check_output(
+        ["git", *args], cwd=repo, text=True, encoding="utf-8"
+    ).strip()
+
+
+def test_new_remote_branch_uses_main_merge_base(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-b", "main")
+    _git(repo, "config", "user.email", "ci@example.invalid")
+    _git(repo, "config", "user.name", "CI Test")
+    (repo / "base.txt").write_text("base\n", encoding="utf-8")
+    _git(repo, "add", "base.txt")
+    _git(repo, "commit", "-m", "base")
+    base = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "update-ref", "refs/remotes/origin/main", base)
+    _git(repo, "switch", "-c", "feature")
+    (repo / "feature.txt").write_text("feature\n", encoding="utf-8")
+    _git(repo, "add", "feature.txt")
+    _git(repo, "commit", "-m", "feature")
+    head = _git(repo, "rev-parse", "HEAD")
+
+    module = _load_module()
+    module.ROOT = repo
+
+    assert module.resolve_candidate_base(module.ZERO, head) == base
+
+
+@pytest.mark.parametrize('mapping,host,expected', [
+    ('', 'lab', 'lab'),
+    ('lab=compute', 'lab', 'compute'),
+    (' lab = compute ', 'lab', 'compute'),
+])
+def test_ssh_destination_mapping(mapping, host, expected):
+    assert _load_module().resolve_ssh_destination(host, mapping) == expected
+
+
+def test_unset_ssh_mapping_keeps_runner_label(monkeypatch):
+    monkeypatch.delenv('RADIA_PREFLIGHT_SSH_ALIAS', raising=False)
+    assert _load_module().resolve_ssh_destination('lab') == 'lab'
+
+
+@pytest.mark.parametrize('mapping', [
+    'lab', 'lab1=', '=lab', 'lab1=lab,', 'lab1=lab,lab1=lab2',
+    'other=lab', 'lab1=-F', 'lab1=lab value', 'lab1=lab:22', 'lab1=lab=more',
+])
+def test_invalid_ssh_mapping_fails_loudly(mapping):
+    with pytest.raises(RuntimeError, match='Invalid RADIA_PREFLIGHT_SSH_ALIAS'):
+        _load_module().resolve_ssh_destination('lab', mapping)
+
+
+def _mock_candidate(monkeypatch, module, tmp_path):
+    monkeypatch.delenv('RADIA_PREFLIGHT_SSH_ALIAS', raising=False)
+    monkeypatch.setattr(module.subprocess, 'check_output', lambda *a, **kw: pytest.fail('Preflight must not query GitHub runner inventory'))
+    monkeypatch.setattr(module, 'create_bundle', lambda *a: 'a' * 40)
+    real_tempdir = module.tempfile.TemporaryDirectory
+    monkeypatch.setattr(module.tempfile, 'TemporaryDirectory', lambda **kw:
+        real_tempdir(dir=tmp_path))
+
+
+def test_retired_host_mapping_fails_before_creating_bundle(monkeypatch, tmp_path, capsys):
+    module = _load_module()
+    _mock_candidate(monkeypatch, module, tmp_path)
+    monkeypatch.setenv('RADIA_PREFLIGHT_SSH_ALIAS', 'lab2=lab2')
+    def forbidden(*args, **kwargs):
+        pytest.fail('Incomplete mapping must fail before bundle or transport work')
+    monkeypatch.setattr(module, 'create_bundle', forbidden)
+    monkeypatch.setattr(module, 'run', forbidden)
+    assert module.main(['--base', 'a' * 40, '--head', 'b' * 40]) == 1
+    assert 'Invalid RADIA_PREFLIGHT_SSH_ALIAS mapping' in capsys.readouterr().err
+
+
+def test_alias_used_for_setup_upload_execution_and_cleanup(monkeypatch, tmp_path, capsys):
+    module = _load_module()
+    _mock_candidate(monkeypatch, module, tmp_path)
+    monkeypatch.setenv('RADIA_PREFLIGHT_SSH_ALIAS', 'lab=compute')
+    commands = []
+    monkeypatch.setattr(module, 'run', lambda command, **kw: commands.append(command))
+    assert module.main(['--base', 'a' * 40, '--head', 'b' * 40, '--host', 'lab']) == 0
+    assert [command[1] for command in commands if command[0] == 'ssh'] == ['compute'] * 3
+    upload = next(command for command in commands if command[0] == 'scp')
+    assert upload[2].startswith('compute:')
+    assert 'Preflight host: lab' in capsys.readouterr().out
+
+
+def test_unreachable_alias_aborts_without_label_fallback(monkeypatch, tmp_path, capsys):
+    module = _load_module()
+    _mock_candidate(monkeypatch, module, tmp_path)
+    monkeypatch.setenv('RADIA_PREFLIGHT_SSH_ALIAS', 'lab=compute')
+    commands = []
+    def failed_connection(command, **kwargs):
+        commands.append(command)
+        raise RuntimeError('SSH connection failed')
+    monkeypatch.setattr(module, 'run', failed_connection)
+    assert module.main(['--base', 'a' * 40, '--head', 'b' * 40]) == 1
+    assert commands and all(command[:2] == ['ssh', 'compute'] for command in commands)
+    assert 'lab preflight failed: SSH connection failed' in capsys.readouterr().err
+
+
+def test_partial_upload_is_cleaned_on_failure(monkeypatch, tmp_path):
+    module = _load_module()
+    _mock_candidate(monkeypatch, module, tmp_path)
+    scripts = []
+    monkeypatch.setattr(module, 'remote_command', lambda script, host: scripts.append(script))
+    def fail_upload(*args, **kwargs):
+        raise RuntimeError('upload failed')
+    monkeypatch.setattr(module, 'run', fail_upload)
+    assert module.main(['--base', 'a' * 40, '--head', 'b' * 40, '--host', 'lab']) == 1
+    assert scripts[-1].startswith('if (Test-Path -LiteralPath ')
+    assert scripts[-1].endswith('exit 0')
+    assert '.bundle' in scripts[-1]
+
+
+@pytest.mark.parametrize('busy', [False, True])
+def test_generated_script_locks_before_setup_and_always_cleans(monkeypatch, tmp_path, busy):
+    module = _load_module()
+    _mock_candidate(monkeypatch, module, tmp_path)
+    scripts = []
+    monkeypatch.setattr(module, 'remote_command', lambda script, host: scripts.append(script))
+    monkeypatch.setattr(module, 'run', lambda *a, **kw: None)
+    assert module.main(['--base', 'a' * 40, '--head', 'b' * 40, '--host', 'lab']) == 0
+    script = next(s for s in scripts if '$lock = $null' in s)
+    assert script.index('try {') < script.index('[IO.File]::Open') < script.index('& $git clone')
+    assert script.index('Runner.Worker') < script.index('& $git clone')
+    assert '[IO.FileShare]::None' in script
+    assert script.index('} finally {') > script.index('worktree add')
+    assert '$lock.Dispose()' in script
+    # Parse the generated PowerShell without executing any remote command.
+    import shutil
+    pwsh = shutil.which('pwsh')
+    if pwsh:
+        file = tmp_path / 'probe.ps1'
+        file.write_text(script, encoding='utf-8')
+        command = '$e=$null; $t=$null; [void][System.Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$t,[ref]$e); if($e.Count){$e | Out-String | Write-Error; exit 1}'
+        parser = tmp_path / 'parse.ps1'
+        parser.write_text(command, encoding='utf-8')
+        subprocess.run([pwsh, '-NoProfile', '-File', str(parser), str(file)], check=True, timeout=30)
+        # Exercise setup failure with only this test's scratch paths and no Git/network work.
+        isolated = script.replace(r'C:\temp\radia-preflight', str(tmp_path))
+        isolated = isolated.replace(r'C:\Program Files\Git\cmd\git.exe',
+                                    str(tmp_path / 'missing-git.exe'))
+        bundle_line = next(line for line in isolated.splitlines() if line.startswith('$bundle = '))
+        bundle = Path(bundle_line.split("'", 2)[1])
+        bundle.parent.mkdir(parents=True, exist_ok=True)
+        bundle.write_bytes(b'partial upload')
+        # Never depend on the host runner (including the one executing this test).
+        process_result = "[pscustomobject]@{ Id = 123 }" if busy else "$null"
+        isolated = (
+            "function Get-Process { param($Name, $ErrorAction) "
+            f"return {process_result} " + "}\n" + isolated
+        )
+        file.write_text(isolated, encoding='utf-8')
+        # pwsh writes its failure text in the console code page (cp932 on a
+        # Japanese Windows), so a strict utf-8 decode raised inside the reader
+        # thread and left result.stderr as None.
+        result = subprocess.run([pwsh, '-NoProfile', '-File', str(file)],
+                                capture_output=True, text=True, timeout=30,
+                                encoding='utf-8', errors='replace')
+        assert result.returncode != 0
+        expected = 'LAB runner is occupied' if busy else 'Git is unavailable'
+        assert expected in result.stderr
+        assert not bundle.exists()

@@ -27,7 +27,7 @@ Consequences, stated honestly up front:
       is Rung 1.5, where no quadrature exists and the hodograph is the only
       linear-cost tool.
 
-Golden bands asserted at the end of the run (2026-07-28 baseline, LAB):
+Golden bands asserted at the end of the run (2026-07-28 baseline, validation runtime):
   hodograph vs exact family : r_in, rho_fit, MMF rel err < 2e-3 per point;
                               body area rel err < 5e-3 (the residual 3.86e-3
                               is the angular quantization of the body mask --
@@ -323,7 +323,7 @@ def main():
     report["meta"] = {
         "generated_at_utc": datetime.datetime.now(datetime.timezone.utc)
         .isoformat(timespec="seconds"),
-        "hostname": platform.node(), "python_version": platform.python_version(),
+        "platform_class": platform.system(), "python_version": platform.python_version(),
         "purpose": "correctness validation only (no timing claims)",
     }
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)),

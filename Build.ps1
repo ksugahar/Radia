@@ -1,5 +1,5 @@
 #==============================================================================
-# Build.ps1 - Build Radia with MSVC + Intel MKL + NGSolve
+# Build.ps1 - Radia CPU pybind11 / GPU mexcuda build entry points
 #
 # Builds _radia_pybind.pyd and auxiliary modules using MSVC compiler
 # with Intel MKL for BLAS/LAPACK and NGSolve for TaskManager parallelization.
@@ -9,14 +9,14 @@
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -Rebuild
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -RadiaOnly
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -RadiaOnly -RequireNativeProvenance
-#   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -MatlabMexOnly
+#   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -CudaMexOnly
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -OptunaMexOnly
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -Test
 #
 # Options:
 #   -Rebuild    Clean build directory before building
 #   -RadiaOnly  Build and copy only _radia_pybind.pyd
-#   -MatlabMexOnly  Configure and build the shared radia_mex native gateway
+#   -CudaMexOnly  Stage the CUDA-only NGSolve assembled-operator bridge
 #   -OptunaMexOnly  Configure and build only the lightweight Optuna gateway
 #   -RequireNativeProvenance  Reject dirty source before building; otherwise a
 #                 dirty development build succeeds without a provenance sidecar
@@ -39,13 +39,16 @@ param(
     [switch]$Verbose,
     [switch]$RadiaOnly,
     [switch]$AxiFemOnly,           # configure + build ONLY axifem (fast C++ iteration)
-    [switch]$MatlabMexOnly,        # configure + build MATLAB MEX and native S-Functions
+    [switch]$CudaMexOnly,          # isolated CUDA-only assembled-operator gateway
     [switch]$OptunaMexOnly,        # configure + build only optuna_mex
     [switch]$RequireNativeProvenance, # reject dirty source before a provenance-bearing build
     [switch]$InstallToSitePackages  # also copy rebuilt .pyd(s) into the importable site-packages\radia
 )
 
 $ErrorActionPreference = "Stop"
+if ($args.Count -gt 0) {
+    throw "Unsupported build arguments: $($args -join ' '). Radia CPU uses -RadiaOnly; GPU uses -CudaMexOnly."
+}
 
 function Get-NativeBuildResult {
     param(
@@ -68,8 +71,19 @@ function Get-NativeBuildResult {
     return 0
 }
 
-if (@($RadiaOnly, $AxiFemOnly, $MatlabMexOnly, $OptunaMexOnly).Where({ $_ }).Count -gt 1) {
-    throw "-RadiaOnly, -AxiFemOnly, -MatlabMexOnly, and -OptunaMexOnly are mutually exclusive"
+if (@($RadiaOnly, $AxiFemOnly, $CudaMexOnly, $OptunaMexOnly).Where({ $_ }).Count -gt 1) {
+    throw "-RadiaOnly, -AxiFemOnly, -CudaMexOnly, and -OptunaMexOnly are mutually exclusive"
+}
+if ($CudaMexOnly) {
+    if ($InstallToSitePackages) { throw 'CUDA MEX builds remain staged; no runtime replacement' }
+    $cudaRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+    if ($RequireNativeProvenance) {
+        $cudaStatus = & git -C $cudaRoot status --porcelain
+        if ($LASTEXITCODE -ne 0 -or $cudaStatus) { throw 'CUDA native provenance requires a clean source checkout' }
+    }
+    & python (Join-Path $cudaRoot 'tools/build_cuda_mex.py') --out (Join-Path $cudaRoot 'build-cuda-mex')
+    if ($LASTEXITCODE -ne 0) { throw 'CUDA MEX build failed' }
+    return
 }
 if ($OptunaMexOnly -and $InstallToSitePackages) {
     throw "-InstallToSitePackages does not apply to the standalone Optuna MEX build"
@@ -85,9 +99,7 @@ $NativeBuildProvenanceScript = "$PROJECT_DIR\tools\native_build_provenance.ps1"
 . $NativeBuildProvenanceScript
 $NativeBuildSourceIdentity = $null
 $NativeProvenanceBinaries = @()
-if ($MatlabMexOnly) {
-    $NativeProvenanceBinaries += "$PROJECT_DIR\matlab\radia_mex.mexw64"
-} elseif (-not $AxiFemOnly -and -not $OptunaMexOnly) {
+if (-not $AxiFemOnly -and -not $OptunaMexOnly) {
     $NativeProvenanceBinaries += "$PROJECT_DIR\src\radia\_radia_pybind.pyd"
 }
 if ($NativeProvenanceBinaries.Count -gt 0) {
@@ -150,9 +162,6 @@ if ($OptunaMexOnly) {
         $MklCandidates += $env:MKLROOT
     }
     $MklRuntimeNames = @("mkl_rt", "mkl_core", "mkl_intel_thread", "mkl_avx2", "mkl_def")
-    if ($MatlabMexOnly) {
-        $MklRuntimeNames += "mkl_sequential"
-    }
     $INTEL_MKL = ""
     foreach ($candidate in ($MklCandidates | Select-Object -Unique)) {
         if (-not (Test-Path "$candidate\lib\mkl_rt.lib")) {
@@ -204,13 +213,7 @@ if (-not $OptunaMexOnly) {
         exit 1
     }
 }
-$MatlabMexCMakeArgs = if ($OptunaMexOnly) {
-    " ^`n    -DRADIA_BUILD_MATLAB_MEX=OFF ^`n    -DRADIA_BUILD_OPTUNA_MEX_ONLY=ON"
-} elseif ($MatlabMexOnly) {
-    " ^`n    -DRADIA_BUILD_MATLAB_MEX=ON ^`n    -DRADIA_BUILD_OPTUNA_MEX_ONLY=OFF"
-} else {
-    " ^`n    -DRADIA_BUILD_OPTUNA_MEX_ONLY=OFF"
-}
+$OptunaCMakeArgs = " ^`n    -DRADIA_BUILD_OPTUNA_MEX_ONLY=$($OptunaMexOnly.ToString().ToUpperInvariant())"
 $PythonCMakeArgs = if ($OptunaMexOnly) {
     ""
 } else {
@@ -290,7 +293,7 @@ Write-Host ""
 
 if ($Rebuild) {
     $BuildDirsToClean = @($BUILD_DIR)
-    if (-not $AxiFemOnly -and -not $MatlabMexOnly) {
+    if (-not $AxiFemOnly) {
         $BuildDirsToClean += @(
             "$PROJECT_DIR\src\cubit_plugin\build-pyd",
             "$PROJECT_DIR\src\cubit_plugin\build-ccm"
@@ -390,7 +393,6 @@ set VSLANG=1033
 
 $MklBatchEnvironment
 set RADIA_ONLY=$RadiaOnly
-set MATLAB_MEX_ONLY=$MatlabMexOnly
 set OPTUNA_MEX_ONLY=$OptunaMexOnly
 set RUN_CPP_TESTS=$Test
 
@@ -405,7 +407,7 @@ echo ========================================
     -DCMAKE_MAKE_PROGRAM="$NINJA_EXE" ^
     -DCMAKE_C_COMPILER=cl ^
     -DCMAKE_CXX_COMPILER=cl ^
-    -DCMAKE_BUILD_TYPE=Release$PythonCMakeArgs$NGSolveCMakeArgs$MatlabMexCMakeArgs
+    -DCMAKE_BUILD_TYPE=Release$PythonCMakeArgs$NGSolveCMakeArgs$OptunaCMakeArgs
 
 if errorlevel 1 (
     echo ERROR: CMake configuration failed
@@ -424,26 +426,6 @@ if /I "%OPTUNA_MEX_ONLY%"=="True" (
     )
     echo.
     echo Build completed -OptunaMexOnly.
-    exit /b 0
-)
-
-if /I "%MATLAB_MEX_ONLY%"=="True" (
-    echo.
-    echo ========================================
-    echo   Building MATLAB MEX targets
-    echo ========================================
-    "$CMAKE_EXE" --build . --config Release --target optuna_mex -j $BuildJobs
-    if errorlevel 1 (
-        echo ERROR: optuna_mex target build failed
-        exit /b 1
-    )
-    "$CMAKE_EXE" --build . --config Release --target radia_mex -j $BuildJobs
-    if errorlevel 1 (
-        echo ERROR: radia_mex target build failed
-        exit /b 1
-    )
-    echo.
-    echo Build completed -MatlabMexOnly.
     exit /b 0
 )
 
@@ -627,18 +609,15 @@ try {
         }
     }
     $RequiredNativeArtifacts = @()
-    if ($BuildCubitPlugin -and -not ($RadiaOnly -or $AxiFemOnly -or $MatlabMexOnly -or $OptunaMexOnly)) {
+    if ($BuildCubitPlugin -and -not ($RadiaOnly -or $AxiFemOnly -or $OptunaMexOnly)) {
         $RequiredNativeArtifacts += "$PROJECT_DIR\src\cubit_plugin\build-pyd\cubit_mesh_curver.cp312-win_amd64.pyd"
         $RequiredNativeArtifacts += "$PROJECT_DIR\src\cubit_plugin\build-ccm\cubit_mesh_export.ccm"
     }
     $BuildResult = Get-NativeBuildResult -ExitCode $BuildResult -LogText $BuildLogText -RequiredArtifacts $RequiredNativeArtifacts
-    if ($MatlabMexOnly -or $OptunaMexOnly) {
+    if ($OptunaMexOnly) {
         $RequiredMexArtifacts = @(
             "$PROJECT_DIR\matlab\optuna_mex.mexw64"
         )
-        if ($MatlabMexOnly) {
-            $RequiredMexArtifacts += "$PROJECT_DIR\matlab\radia_mex.mexw64"
-        }
         $MissingMexArtifacts = $RequiredMexArtifacts | Where-Object { -not (Test-Path $_) }
         if ($MissingMexArtifacts) {
             Write-Host "ERROR: MATLAB MEX artifacts were not produced:" -ForegroundColor Red
@@ -649,16 +628,9 @@ try {
 
     if ($BuildResult -ne 0) { throw "Build failed with exit code $BuildResult" }
 
-    if ($MatlabMexOnly) {
-        Write-NativeBuildProvenance `
-            -BinaryPath "$PROJECT_DIR\matlab\radia_mex.mexw64" `
-            -RepoRoot $PROJECT_DIR `
-            -StartIdentity $NativeBuildSourceIdentity
-    }
-
     # For -AxiFemOnly, axifem.pyd is already placed in src/radia/ by the
     # CMake POST_BUILD copy, so skip the full module/cubit copy section below.
-    if (-not $AxiFemOnly -and -not $MatlabMexOnly -and -not $OptunaMexOnly) {
+    if (-not $AxiFemOnly -and -not $OptunaMexOnly) {
     # ========================================================================
     # Copy .pyd files to src/radia/
     # ========================================================================
@@ -888,7 +860,7 @@ print(f"radia {radia.__version__} OK from {radia_file}")
     $ImportCheck | python -
     if ($LASTEXITCODE -ne 0) { Write-Host "Import failed!" -ForegroundColor Red; exit 1 }
 
-    if ($RadiaOnly -or $AxiFemOnly -or $MatlabMexOnly -or $OptunaMexOnly) {
+    if ($RadiaOnly -or $AxiFemOnly -or $OptunaMexOnly) {
         Write-Host "Skipping full pytest because only a focused build was requested." -ForegroundColor Yellow
     } else {
         Push-Location $PROJECT_DIR

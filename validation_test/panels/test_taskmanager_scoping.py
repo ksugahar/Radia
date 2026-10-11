@@ -2,7 +2,7 @@
 `from ngsolve import TaskManager` inside a function that ALREADY used
 `with TaskManager():` earlier in the same function.
 
-Background (keiko @ 100号機, radia 4.85.1, 2026-05-30):
+Background (keiko @ runtime host, radia 4.85.1, 2026-05-30):
 
     File "calc_verify_vol.py", line 38, in verify_vol
         with TaskManager():

@@ -1,6 +1,6 @@
 {
  "timestamp": "2026-07-12T10:16:28",
- "hostname": "mdx",
+
  "benchmark": "hysteresis_step_hex_cube",
  "problem": {
   "cube_size_m": 1.0,

@@ -390,7 +390,7 @@ def run_height_sweep(
         "schema": "radia.team28.hcurl-vim-family.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "runtime": {
-            "hostname": socket.gethostname(),
+            "platform_class": platform.system(),
             "python_version": platform.python_version(),
             "platform": platform.platform(),
             "radia_version": getattr(radia, "__version__", "unknown"),
@@ -464,7 +464,7 @@ def run(maxh_values, outer_quad=4, outer_check=None, export_model=None):
         "schema": "radia.team28.hcurl-vim-force.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "runtime": {
-            "hostname": socket.gethostname(),
+            "platform_class": platform.system(),
             "python_version": platform.python_version(),
             "platform": platform.platform(),
             "radia_version": getattr(radia, "__version__", "unknown"),

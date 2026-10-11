@@ -41,9 +41,9 @@
   "bema_convergence": {
     "description": "BEM-A (Weggler stabilized EFIE on HDivSurface RT0 + SIBC) mesh sweep via ngsolve.bem.LaplaceSL with use_fmm=False (dense LU).",
     "data": [
-      {"n_tris": 4028,  "n_src_tris": 6,  "A_src_mm2": 25.78, "A_src_error_pct": -17.3, "L_nH": 432.57, "R_mOhm_SIBC": 5.084, "time_s": 170.0, "mesh_file": "C:/temp/3turnCoil_bema_4k.vol"},
-      {"n_tris": 5938,  "n_src_tris": 6,  "A_src_mm2": 25.78, "A_src_error_pct": -17.3, "L_nH": 417.56, "R_mOhm_SIBC": 4.762, "time_s": 460.4, "mesh_file": "C:/temp/3turnCoil_bema_e.vol"},
-      {"n_tris": 9848,  "n_src_tris": 14, "A_src_mm2": 29.16, "A_src_error_pct": -6.4,  "L_nH": 412.18, "R_mOhm_SIBC": 4.717, "time_s": 1591,  "mesh_file": "C:/temp/3turnCoil_bema_d.vol"}
+      {"n_tris": 4028,  "n_src_tris": 6,  "A_src_mm2": 25.78, "A_src_error_pct": -17.3, "L_nH": 432.57, "R_mOhm_SIBC": 5.084, "time_s": 170.0, "mesh_file": "<private-path>/3turnCoil_bema_4k.vol"},
+      {"n_tris": 5938,  "n_src_tris": 6,  "A_src_mm2": 25.78, "A_src_error_pct": -17.3, "L_nH": 417.56, "R_mOhm_SIBC": 4.762, "time_s": 460.4, "mesh_file": "<private-path>/3turnCoil_bema_e.vol"},
+      {"n_tris": 9848,  "n_src_tris": 14, "A_src_mm2": 29.16, "A_src_error_pct": -6.4,  "L_nH": 412.18, "R_mOhm_SIBC": 4.717, "time_s": 1591,  "mesh_file": "<private-path>/3turnCoil_bema_d.vol"}
     ],
     "unreachable": [
       {

@@ -251,7 +251,7 @@ markers = [
     "golden: Golden/reference tests separated from the ordinary CI gate",
     "benchmark: Performance benchmarks (not run by default)",
     "validation: Heavy validation_test suite (manual / release validation)",
-    "compute_host: Solver-heavy validation restricted to mdx or hibino",
+    "compute_host: Solver-heavy validation restricted to approved compute hosts",
 ]
 minversion = "7.0"
 norecursedirs = [

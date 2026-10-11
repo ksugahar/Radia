@@ -474,7 +474,7 @@ def _build_bema_coil_mesh(args):
     # The volume .vol is returned as-is.  Its boundary is the coil surface,
     # and compute_inductance_source_sink now wraps HDivSurface in Compress,
     # which removes the interior-edge DOFs whose null modes made the dense
-    # saddle singular on 2026-05-12 (Keiko mdx + LAB gapped_torus_2port).
+    # saddle singular on 2026-05-12 (Keiko mdx + validation runtime gapped_torus_2port).
     # The workaround then was to extract a flat surface here; that also threw
     # away the curving order baked into the .vol at export, so the coil BEM-A
     # ran on a polygonised surface while the workpiece BEM honoured
@@ -737,6 +737,8 @@ def _delta_L_telegen_phiB_from_surface_J(
 def _resolve_workpiece_backend(args, genus, surface_vertices):
     """Resolve the explicitly topology-aware auto backend before assembly."""
     requested = args.wp_bem_backend
+    if genus > 1:
+        raise ValueError("Absolute heating cannot omit multiple holes; genus-0/1 only is validated")
     if requested == 'auto':
         if genus >= 1:
             if genus != 1 or (args.impedance_model != 'sibc' and not getattr(args, 'esim_per_panel', False)):
@@ -747,8 +749,15 @@ def _resolve_workpiece_backend(args, genus, surface_vertices):
         else:
             requested = 'hacapk'
         progress('BEM', f'workpiece backend auto: genus={genus}, selected {requested}; cohomology={genus == 1}')
-    if genus == 1 and requested == 'intree-dense' and surface_vertices > 7000:
-        raise ValueError(f'Hole cohomology currently needs dense operators: {surface_vertices} surface vertices exceed the 7000-vertex limit. Use a coarser validated surface mesh; the hole is never filled or ignored.')
+    if genus == 1 and surface_vertices > 7000:
+        if requested != 'hacapk' or getattr(args, 'coupling_mode', 'weak') != 'weak':
+            raise ValueError('Dense and strong genus-1 routes retain the 7000-vertex limit; larger weak surfaces require explicit HACApK')
+        if int(args.h1_order) != 1:
+            raise ValueError('Large weak genus-1 HACApK requires P1 nodal basis')
+        if surface_vertices > 10000:
+            raise ValueError('Large weak genus-1 HACApK exceeds the 10000-surface-vertex limit')
+        if getattr(args, 'wp_loop_work_backend', 'auto') == 'dense':
+            raise ValueError('Large weak genus-1 HACApK requires FMM loop work; dense P0 keeps its 14000-face limit')
     args.wp_bem_backend = requested
     return requested
 
@@ -767,8 +776,8 @@ def _resolve_weak_loop_mode(args, wp_genus, basis_order):
         reason = "nonlinear loop ESIM requires --esim-per-panel"
     elif args.impedance_model == 'esim' and int(getattr(args, 'esim_anderson_m', 0)) != 0:
         reason = 'genus-1 ESIM requires damped Picard (--esim-anderson-m 0)'
-    elif args.wp_bem_backend != "intree-dense":
-        reason = "loop DOF requires the intree-dense backend, not HACApK"
+    elif args.wp_bem_backend not in ("intree-dense", "hacapk"):
+        reason = "loop DOF requires an in-tree P1 body backend"
     elif basis_order != 1:
         reason = "loop DOF requires the P1 nodal path"
     if reason:
@@ -853,7 +862,9 @@ def _apply_wp_loop_dof(args, bem, phi_inc, Z_s_wp, omega, coil_data,
     t0 = time.perf_counter()
     loop_out = solve_loop_extended(bem, phi_inc, Z_s_wp, omega, A_inc_fn,
         _reuse_prepared=getattr(args, 'impedance_model', 'sibc') == 'esim'
-            and getattr(args, 'esim_per_panel', False))
+            and getattr(args, 'esim_per_panel', False),
+        hacapk=args.wp_bem_backend == 'hacapk',
+        gmres=dict(tol=args.wp_gmres_tol,maxiter=500,restart=100))
     t_loop = time.perf_counter() - t0
 
     # sanity: the frozen sub-solve must reproduce the plain solve
@@ -889,6 +900,8 @@ def _apply_wp_loop_dof(args, bem, phi_inc, Z_s_wp, omega, coil_data,
         "wp_loop_impedance_assembly": loop_out["loop_impedance_assembly"],
         "wp_loop_work_diagnostics": loop_out["loop_work_diagnostics"],
         "wp_loop_dof": True,
+        "wp_loop_body_backend": loop_out["loop_body_backend"],
+        "wp_loop_linear_solver": loop_out["loop_linear_solver"],
         "wp_loop_automatic_carrier": bool(loop_out["automatic_carrier"]),
         "wp_loop_section_anchor_m": list(loop_out["section_anchor"]),
         "wp_loop_linear_residual_rel": float(loop_out["linear_residual_rel"]),
@@ -1123,7 +1136,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             loop_work_backend=getattr(args, "wp_loop_work_backend", "auto"))
     elif args.wp_bem_backend == "hacapk":
         bem = ScalarBIESIBCSolver(
-            bem_input_mesh, order=basis_order, assemble_dense=True,
+            bem_input_mesh, order=basis_order, assemble_dense=False,
             use_intree_bem=True, intree_geom_order=vol_curve_order,
             intree_singular_n_q=6, intree_regular_quad_degree=7,
             use_intree_hacapk=True,
@@ -1969,7 +1982,7 @@ def _assemble_full_output(args, coil_data, wp_data):
         out["wp_loop_dof_skip_reason"] = wp_data["wp_loop_dof_skip_reason"]
     if wp_data.get("wp_loop_dof"):
         out["wp_loop_dof"] = True
-        for key in ("wp_loop_automatic_carrier", "wp_loop_section_anchor_m", "wp_loop_linear_residual_rel", "wp_loop_faraday_residual_rel", "wp_loop_impedance_assembly", "wp_loop_work_diagnostics"):
+        for key in ("wp_loop_automatic_carrier", "wp_loop_section_anchor_m", "wp_loop_linear_residual_rel", "wp_loop_faraday_residual_rel", "wp_loop_impedance_assembly", "wp_loop_work_diagnostics", "wp_loop_body_backend", "wp_loop_linear_solver"):
             if key in wp_data: out[key] = wp_data[key]
         out["wp_loop_alpha_A"] = float(wp_data["wp_loop_alpha_A"])
         out["wp_loop_alpha_deg"] = float(wp_data["wp_loop_alpha_deg"])
@@ -2050,8 +2063,8 @@ def _strong_workpiece_impedance(args, mesh, scalar_impedance, genus):
         return scalar_impedance
     if genus not in (0, 1) or mesh.nv > 7000:
         raise ValueError("Strong panel Zs requires genus-0/1 and at most 7000 body vertices")
-    if args.wp_bem_backend != 'intree-dense':
-        raise ValueError("Strong panel Zs requires the dense P1 body backend")
+    if args.wp_bem_backend not in ('intree-dense', 'hacapk'):
+        raise ValueError("Strong panel Zs requires an in-tree P1 body backend")
     if not path:
         return scalar_impedance
     from radia.surface_impedance import read_panel_impedance
@@ -2148,9 +2161,9 @@ def _solve_workpiece_strong_coupled(args):
                      f'{Z_s:.3e}' if not getattr(args, 'panel_zs_file', '')
                      else f'face-ordered ({len(Z_s.values)} panels)')
 
-    # Workpiece BIE backend: HACApK (O(N log N), scales past the ~12k-tri
-    # dense wall) by default; --wp-bem-backend intree-dense forces the dense
-    # path (small wp / debug).  Uses the existing weak-path flag.
+    # HACApK compresses the body maps and uses a bordered operator for one
+    # handle. Construction still uses dense entry tables; guards remain.
+    # The explicit dense route retains its existing LU solve.
     wp_hacapk = (args.wp_bem_backend == "hacapk")
     # Coil EFIE backend: dense-LU by default (fastest below ~12k n_J);
     # --coil-saddle-solver hacapk_cocr compresses the coil SL to an O(N log N)
@@ -2170,11 +2183,6 @@ def _solve_workpiece_strong_coupled(args):
         wp_loop_apply = False
         wp_loop_skip = (f"genus-{wp_genus} surface (the loop DOF applies "
                         f"to genus-1 only; genus-0 needs none)")
-    elif wp_hacapk:
-        wp_loop_apply = False
-        wp_loop_skip = ("the HACApK backend exposes no dense SL/DL for "
-                        "the loop column (pass --wp-bem-backend "
-                        "intree-dense)")
     else:
         wp_loop_apply = True
     if wp_loop_req == "auto" and wp_loop_skip is not None and wp_genus >= 1:
@@ -2352,11 +2360,6 @@ def _solve_workpiece_strong_coupled_peec(args, coil_data):
         wp_loop_apply = False
         wp_loop_skip = (f"genus-{wp_genus} surface (the loop DOF applies "
                         f"to genus-1 only; genus-0 needs none)")
-    elif wp_hacapk:
-        wp_loop_apply = False
-        wp_loop_skip = ("the HACApK backend exposes no dense SL/DL for "
-                        "the loop column (pass --wp-bem-backend "
-                        "intree-dense)")
     else:
         wp_loop_apply = True
     if wp_loop_req == "auto" and wp_loop_skip is not None and wp_genus >= 1:
@@ -2524,6 +2527,8 @@ def _assemble_strong_output(args, coil_data, strong):
             strong["wp_loop_H_t_frozen"])
         out["wp_loop_screening_ratio"] = float(
             strong["wp_loop_screening_ratio"])
+        for key in ('wp_loop_body_backend','wp_loop_linear_solver','wp_loop_gmres_iterations'):
+            if key in strong: out[key] = strong[key]
         if 'wp_loop_work_diagnostics' in strong:
             out['wp_loop_work_diagnostics'] = strong['wp_loop_work_diagnostics']
         if 'wp_loop_impedance_assembly' in strong:
@@ -2800,9 +2805,9 @@ def run_inductance(args):
     if args.coupling_mode == 'strong' and (getattr(args, 'panel_zs_file', '') or args.impedance_model == 'esim'):
         if args.wp_bem_backend == 'auto':
             args.wp_bem_backend = 'intree-dense'
-        elif args.wp_bem_backend != 'intree-dense':
+        elif args.wp_bem_backend not in ('intree-dense','hacapk'):
             return {'status': 'error', 'error':
-                    'Strong panel Zs requires the dense P1 body backend.'}
+                    'Strong panel Zs requires an in-tree P1 body backend (intree-dense or hacapk).'}
 
     # --esim-per-panel names the per-panel ESIM iteration; with linear SIBC it
     # would otherwise be dropped and a uniform-Zs result reported.
@@ -2830,12 +2835,9 @@ def run_inductance(args):
                     "error": "--wp-loop-dof requires a workpiece --vol."}
         if args.impedance_model != 'sibc' and not args.esim_per_panel:
             return {'status': 'error', 'error': '--wp-loop-dof nonlinear ESIM requires --esim-per-panel.'}
-        if args.wp_bem_backend not in ("auto", "intree-dense"):
+        if args.wp_bem_backend not in ("auto", "intree-dense", "hacapk"):
             return {"status": "error",
-                    "error": "--wp-loop-dof needs the dense operators: pass "
-                             "--wp-bem-backend intree-dense (the HACApK "
-                             "backend does not expose SL/DL for the loop "
-                             "column)."}
+                    "error": "--wp-loop-dof requires intree-dense or hacapk P1 body operators."}
         if args.coupling_mode == "weak" and int(args.h1_order) != 1:
             return {"status": "error",
                     "error": "--wp-loop-dof supports the P1 nodal path only "
@@ -3071,7 +3073,7 @@ def build_argparser():
                              "surface stiffness and local heat integration. Uses "
                              "the solved per-panel peak H_t; supports intree-dense "
                              "and HACApK on genus-0 workpieces. Adaptive table evaluation "
-                             "is the default. Genus-1 and strong coupling require the dense P1 body path.")
+                             "is the default. Genus-1 and strong coupling require a supported P1 body path.")
     parser.add_argument('--esim-panel-evaluator', choices=['direct', 'table'], default='table',
                         help='Per-panel outer ESIM evaluation: adaptive log-H linear table (default) or direct reference. '
                              'All panels are still directly certified at the final accepted field.')
@@ -3105,7 +3107,8 @@ def build_argparser():
                         choices=["auto", "dense", "fmm"],
                         help="Genus-1 P0 loop work only: auto uses native Galerkin FMM at >=512 faces, native direct below; dense keeps direct products; fmm always compresses separated interactions. Near/singular quadrature is unchanged. The result records the route and controls.")
     parser.add_argument("--wp-aca-eps", type=float, default=1e-10)
-    parser.add_argument("--wp-gmres-tol", type=float, default=1e-10)
+    parser.add_argument("--wp-gmres-tol", type=float, default=1e-10,
+                        help="GMRES stopping tolerance; HACApK loop solves also require the unscaled physical residual <=1e-6 and fail if it is not met.")
     parser.add_argument("--wp-loop-dof", nargs="?", const="on",
                         default="auto", choices=["auto", "on"],
                         help="Genus-1 loop DOF (net shorted-turn eddy "
@@ -3121,7 +3124,7 @@ def build_argparser():
                              "combinations fail before BEM assembly. "
                              "The loop path requires flat undeformed "
                              "triangles and a P0 Galerkin single layer "
-                             "(up to 14000 faces; auto compresses far "
+                             "(up to 20000 faces for weak on-demand HACApK; otherwise 14000; auto compresses far "
                              "interactions, dense remains selectable). "
                              "on (= bare --wp-loop-dof): require it -- "
                              "unmet prerequisites or genus != 1 fail "

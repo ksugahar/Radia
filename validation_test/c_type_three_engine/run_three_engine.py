@@ -860,7 +860,7 @@ def main() -> None:
         "schema": "radia.validation.c-type-formulation-comparison.v4",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "passed": passed,
-        "machine": platform.node(),
+        "platform_class": platform.system(),
         "python": sys.version,
         "peak_process_memory_mb": _process_peak_memory_mb(),
         "radia_version": radia_version,

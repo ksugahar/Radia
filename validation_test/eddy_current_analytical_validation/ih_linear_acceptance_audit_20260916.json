@@ -1,6 +1,6 @@
 {
   "scope": "Repository-owned linear SIBC acceptance; no external user-case inputs.\n\nScope: axisymmetric solid/bored copper cylinders, uniform scalar SIBC,\nprescribed circular current source, P1 dense BEM, total loop field.\nFEM is the independent axisymmetric A-form reference. BEM is a 3D surface\ndiscretization of the same axisymmetric geometry, not a 3D volume FEM solve.\n",
-  "evidence_sha256": "88eee22ee4ba80f0b50ce87b13c4742539e7c2f2ff6be08e8119db703e130a9e",
+  "evidence_sha256": "cb42126515162f3083397c2ca2033c81d37f01ae34ccbd22b7cf54ee0b4fa78c",
   "audit_source_sha256": "195ed59e60280cf35b2642fa2b4ca2feea6c158dc132ba4e46ca72803af10b0d",
   "audit_kind": "saved-measurement and recovered-source audit; no solver rerun",
   "source_identity": {

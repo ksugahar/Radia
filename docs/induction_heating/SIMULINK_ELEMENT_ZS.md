@@ -15,23 +15,23 @@ P0 組立プロセスのピークは4.15 GiBでした（通常 BIE のメモリ�
    次のコマンドで、その表面に対応したJSONのひな形を作ります。
 
    ```powershell
-   python -m radia.surface_impedance C:\temp\ih-case\workpiece.vol --label sibc --frequency 1000 --real-ohm 0.001 --imag-ohm 0.001 --output C:\temp\ih-case\zs-template.json
+   python -m radia.surface_impedance private-runtime-path --label sibc --frequency 1000 --real-ohm 0.001 --imag-ohm 0.001 --output private-runtime-path
    ```
 
 2. MATLABで表面三角形の重心から領域を選び、Zsを設定します。例の値は
    入力方法の説明用です。実材料のZsは別途決定・検証してください。
 
    ```matlab
-   table = jsondecode(fileread('C:\temp\ih-case\zs-template.json'));
+   table = jsondecode(fileread('private-runtime-path'));
    Zs = 0.001*(1+1i)*ones(size(table.centroids_m,1),1);
    Zs(table.centroids_m(:,3)>0) = 0.002*(1+1i);
    radia.simulink.writeIHPanelImpedance( ...
-       'C:\temp\ih-case\zs-template.json', 'C:\temp\ih-case\zs.json', Zs);
+       'private-runtime-path', 'private-runtime-path', Zs);
    ```
 
 3. `radia.simulink.openIH()`でIHモデルを開き、**Geometry Update**を開きます。
    ワークとコイル、周波数、材料・熱物性を設定し、**Element Zs JSON**に
-   `C:\temp\ih-case\zs.json`を指定します。**Rebuild now**で電磁解と熱源を
+   `private-runtime-path`を指定します。**Rebuild now**で電磁解と熱源を
    再構築します。コイルSTEPはPEEC、コイル`.vol`はBEM-Aを使います。
    ひな形とモデルの周波数は一致させてください。
 
@@ -80,7 +80,7 @@ Zsの不連続面でも面ごとの重みを使います。非線形ESIMのgenus
 追加する例ではありません。
 
 固定した Radia wheel/native runtime、互換 MEX、`cubit_mesh_export`、MATLAB、
-公式 MCP/Toolkit、Python MCP SDK と pytest がある LAB で実行します。
+公式 MCP/Toolkit、Python MCP SDK と pytest がある validation host で実行します。
 既存 MATLAB がある場合は追加起動せず、明示したセッションを再利用する必要があります。
 この実行例は MATLAB が存在しない場合だけ、公式 MCP が所有する1セッションを起動します。
 各オプションには、そのホストの実在する絶対パスを指定します。
@@ -93,7 +93,7 @@ editable install は不要です。MEX は検証対象の native ソースから
 $server = Join-Path $env:USERPROFILE '.matlab\agentic-toolkits\bin\matlab-mcp-server.exe'
 $tools = Join-Path $env:USERPROFILE '.matlab\agentic-toolkits\simulink\tools\tools.json'
 $mex = Read-Host 'Compatible native MATLAB directory (absolute path)'
-python validation_test/induction_heating/run_panel_zs_student_workflow.py --job C:\temp\panel-zs-student --matlab-mcp $server --toolkit-tools $tools --mex-dir $mex
+python validation_test/induction_heating/run_panel_zs_student_workflow.py --job private-runtime-path --matlab-mcp $server --toolkit-tools $tools --mex-dir $mex
 ```
 
 パス表記の違い、入力不変時の再構築省略と workspace 再読込、保存・再オープン、

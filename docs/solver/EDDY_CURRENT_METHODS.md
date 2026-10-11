@@ -213,7 +213,7 @@ results = solver.frequency_sweep(
 
 Pure FEM approach using the Kelvin transformation to handle the unbounded exterior domain. The Kelvin transform maps the infinite exterior to a bounded region, eliminating the need for BEM or artificial boundary conditions (PML/ABC). **Supports both magnetostatic and eddy current analysis.**
 
-Two formulations are implemented in EMPY (`S:\NGSolve\EMPY\EMPY_Analysis\EddyCurrent`):
+Two formulations are implemented in EMPY (`private-runtime-path`):
 
 | Formulation | Unknowns | FE Spaces | Multi-Loop |
 |---|---|---|---|
@@ -1330,8 +1330,8 @@ results = solver.frequency_sweep(H_inc_cf, freqs=[1e3, 10e3, 100e3],
 
 ## References
 
-- **EMPY T-Omega method**: `S:\NGSolve\EMPY\EMPY_Analysis\EddyCurrent` (T_Omega_Method.py)
-- **EMPY A-Phi method**: `S:\NGSolve\EMPY\EMPY_Analysis\SolverRun.py`
+- **EMPY T-Omega method**: `private-runtime-path` (T_Omega_Method.py)
+- **EMPY A-Phi method**: `private-runtime-path`
 - **Weggler stabilization**: [Maxwell_DtN_Stabilized.ipynb](https://github.com/Weggler/docu-ngsbem/blob/main/demos/Maxwell_DtN_Stabilized.ipynb)
 - **Weggler thesis**: L. Weggler, "High order boundary element methods", PhD thesis, Saarland University (2011)
 - **ngbem**: [github.com/Weggler/ngbem](https://github.com/Weggler/ngbem) (MIT license)

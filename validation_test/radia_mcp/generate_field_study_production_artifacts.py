@@ -663,7 +663,7 @@ def main() -> int:
         "created_at_utc": datetime.now(UTC).isoformat(),
         "execution_environment": {
             "host_role": host_role,
-            "hostname": platform.node(),
+            "platform_class": platform.system(),
             "platform": platform.platform(),
         },
         "execution_version": {

@@ -2,12 +2,12 @@
   {
     "name": "result.json",
     "bytes": 18660,
-    "sha256": "180cf420bf925310d3f20269896314af2de48e08a99984f1b13d388be14ad5ef"
+    "sha256": "993ba337419a5e7e1bcf35a9ecac2b6d3b1415bb7e02df623492773bfb32ee17"
   },
   {
     "name": "junit.xml",
     "bytes": 1399,
-    "sha256": "b569e7ff66619a5eb37db1287481c9709bc4010f7f46f12bc540e22484a839ce"
+    "sha256": "31a5984da3a40c2bbde2526671ee3f5a60a7c0ad1d5071a2ce5608004c3f8005"
   },
   {
     "name": "run_energy_newton_audit.py",

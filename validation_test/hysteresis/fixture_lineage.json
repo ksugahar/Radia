@@ -1,6 +1,6 @@
 {
   "schema": "radia.hysteresis-fixture-lineage.v1",
-  "host": "lab",
+
   "python": "3.12.10",
   "numpy": "2.5.2",
   "source_kind": "analytical Potter-Schmulian branch data; not a measured specimen",

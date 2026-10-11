@@ -8,7 +8,7 @@ hex mesh -- sector domain STL -> `cubit_stl_to_vol` hex -> `DensityAdjointVIM`
 `iron_only_mesh` / `verify_design_iron_only`.  Needs a Cubit license
 (headless batch per the driving policy); wall ~3-4 min on a development host.
 
-Measured 2026-08-09 (LAB, Cubit 2025.12), the golden anchors:
+Measured 2026-08-09 (validation runtime, Cubit 2025.12), the golden anchors:
 
 * sector STL from the netgen surface export: watertight, V = 3.1415e-4
   (the analytic sector volume to 5 digits);

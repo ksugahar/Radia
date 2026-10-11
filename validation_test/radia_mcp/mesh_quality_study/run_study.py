@@ -147,7 +147,7 @@ def main():
     t0 = time.time()
     geoms = build_geometries()
     results = {"timestamp": datetime.now().isoformat(),
-               "hostname": platform.node(),
+               "platform_class": platform.system(),
                "referee": "gmsh minSICN (radia_mcp.gmsh.msh_inspect)",
                "note": ("quality-class study (no timing); "
                         "equal_budget = netgen maxh calibrated to "

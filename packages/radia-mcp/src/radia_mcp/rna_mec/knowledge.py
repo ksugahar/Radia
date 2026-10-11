@@ -89,7 +89,7 @@ the network becomes a nonlinear algebraic system.
 | Lumped equivalent for SPICE coupling  | natural          | hard           |
 | Detailed flux distribution            | rough            | best           |
 | Saturation in core                    | OK (lookup BH)   | OK (BH curve)  |
-| Hysteresis (MEC + Play / Energy)      | LAB specialty    | OK             |
+| Hysteresis (MEC + Play / Energy)      | validation runtime specialty    | OK             |
 | Leakage flux (3D)                     | difficult        | natural        |
 | Optimization (sensitivity / TO)       | fast             | slow           |
 | Population-based design (10^6 calls)  | only choice      | infeasible     |

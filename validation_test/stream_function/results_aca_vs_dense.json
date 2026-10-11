@@ -1,6 +1,6 @@
 {
   "timestamp": "2026-05-29T07:24:59.159440",
-  "hostname": "lab",
+
   "benchmark": "stream_function_aca_vs_naive_tsvd",
   "problem": {
     "kernel": "1/(1+alpha r^2)",

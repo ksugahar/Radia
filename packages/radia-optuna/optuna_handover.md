@@ -85,7 +85,7 @@ objectives, minimize/maximize, and the all-good split boundary. Its MATLAB
 comparison also exercises reverse insertion, replacement, and cache reset.
 Performance acceptance remains separate from numerical acceptance: a speedup
 must be measured on an idle host with matching MATLAB code and old/new MEX,
-then compared against pinned Python Optuna. Busy LAB timings are not proof of
+then compared against pinned Python Optuna. Busy validation host timings are not proof of
 a gain, and no Rustuna-scale acceleration is claimed. Long-run evidence belongs
 under `validation_test/optimization`, not the short regression suite.
 
@@ -102,19 +102,19 @@ compatibility outside the fixtures.
 The 2026-09-09 mdx attempt is recorded in
 `validation_test/optimization/results_optuna50_native_selection_attempt_20260909.json`.
 Both old/new MEX completed the same MATLAB workload with matching checksums,
-but another computation started during the mdx1 comparison; the pair is not
-performance acceptance. mdx2 imported Engine but timed out during startup
+but another computation started during the worker-a comparison; the pair is not
+performance acceptance. worker-b imported Engine but timed out during startup
 after 90 seconds; its owned process tree was terminated and absence of Python
 and MATLAB processes verified. Repeated isolated timing and the Python
 comparison remain pending. Use an available idle host or a verified working
-Engine execution context, not repeated unchanged mdx2 SSH startup probes.
+Engine execution context, not repeated unchanged worker-b SSH startup probes.
 
-On 2026-09-10 the mdx2 authenticated CI service completed the old/new MEX
+On 2026-09-10 the worker-b authenticated CI service completed the old/new MEX
 comparison and pinned Python baseline (Actions run `34444333755`). The
 MATLAB-bundled Engine still timed out over SSH, but the service route worked;
 the guard now waits briefly for MATLAB shutdown before the next session.
 Evidence is in
-`validation_test/optimization/results_optuna50_native_selection_mdx2_20260910.json`.
+`validation_test/optimization/results_optuna50_native_selection_worker_b_20260910.json`.
 Same MATLAB sources, old/new MEX in old-new-new-old order, followed by two
 Python runs: median-of-run-median throughput was 1056 versus 702 trials/s for
 scalar TPE and 545 versus 239 for grouped conditional TPE (1.51x and 2.28x).
@@ -124,7 +124,7 @@ so these are descriptive ratios, not confidence bounds or universal claims.
 The Python-throughput target is met for these 100-trial workloads; larger
 histories, cold startup, peak memory, and durable table/MAT write costs remain
 outside this measurement. The experimental service workflow lives only on
-`codex/optuna-mdx2-service-benchmark`, not in the production diagnostic.
+`codex/optuna-worker-b-service-benchmark`, not in the production diagnostic.
 
 The subsequent storage attribution is documented in
 `validation_test/optimization/optuna_storage_attribution_20260910.md`, with
@@ -154,12 +154,12 @@ consumers directly reading MAT internals must understand the versioned layout.
 AutoSave frequency, primary read-back validation, atomic replacement, and
 verified backup are unchanged. That change alone left native-history eligibility unchanged.
 
-mdx2 run `34451777406` measured full-save medians of 0.084/0.103/0.264 seconds
+worker-b run `34451777406` measured full-save medians of 0.084/0.103/0.264 seconds
 at 100/1,000/10,000 trials, compared with 0.208/1.328/9.902 seconds before.
 At 10,000 trials the observed reduction is approximately 37x; the file shrank
 from 2,508,755 to 472,890 bytes and profiled table.saveobj calls fell from
 40,096 to 44. See
-`validation_test/optimization/results_optuna_normalized_storage_mdx2_20260910.json`.
+`validation_test/optimization/results_optuna_normalized_storage_worker_b_20260910.json`.
 This is a same-host, non-interleaved scalar workload comparison, not a general
 throughput claim. Next priorities remain explicit incremental durability and
 safe native-cache rebuilding for persisted/imported studies.
@@ -168,7 +168,7 @@ Acceptance after this storage change: 76 upstream-oracle MATLAB tests,
 26 table/reliability/core tests (including nonempty snapshots, RUNNING state,
 version-5 migration and invalid-snapshot backup recovery), and 11 standalone
 Python package tests passed. The targeted normalized-snapshot regression also
-passed on mdx2 before its benchmark. No release or deployment is implied.
+passed on worker-b before its benchmark. No release or deployment is implied.
 
 ### Persisted native TPE history (2026-09-10)
 
@@ -185,7 +185,7 @@ existing general-computation rules. Public after_trial calls with FrozenTrial
 snapshots invalidate it instead of appending the same completed trial twice.
 This does not promise incremental cache repair after arbitrary mid-session edits.
 
-mdx2 run `34453133245` passed. With StoragePath and AutoSave=false, sums of
+worker-b run `34453133245` passed. With StoragePath and AutoSave=false, sums of
 ask/suggest/tell component medians changed from 3.57/4.24/15.52 ms to
 3.19/3.64/12.93 ms at 100/1,000/10,000 history rows. The 10,000-row trial
 probe improved by 16.7%, and profiling confirms native-history proposals.
@@ -211,7 +211,7 @@ Non-tail/multiple matches preserve the existing remove-and-append ordering.
 Exact state, revision, timestamp, schema, save frequency and backup guarantees
 are unchanged; there is no extra cache or storage format.
 
-mdx2 baseline/candidate/baseline sessions measured the 8,986-trial fill
+worker-b baseline/candidate/baseline sessions measured the 8,986-trial fill
 segment at 42.445/39.355/42.209 s (about 7% less loop time). At 10,000 rows,
 individual ask/suggest/tell component medians only improved about 1.4% against
 the repeated baseline, so do not generalize the fill result. Dirty-table and
@@ -333,22 +333,22 @@ That baseline was migration input, not the target compatibility claim. The
 active branch now contains only the 5.0 fixture names and bridge pin, uses
 unified public TPE, named constraints, Optuna 5 defaults and mutation points,
 and has deleted removed integrations and APIs. The local 150-test fast suite,
-wheel verification, installed-wheel Simulink E2E, and paired LAB development
+wheel verification, installed-wheel Simulink E2E, and paired validation host development
 benchmark pass. Release status remains pending until the fresh long mdx
 performance lane, CI, merge, tag, publication, and release-quad gates pass.
 
 The follow-up scalar performance change enables the completed-history MEX for
 default sequential TPE, reuses unchanged distributions and NaN-bearing metadata,
-and invalidates native history on reseed. The paired prewarmed LAB measurement
+and invalidates native history on reseed. The paired prewarmed validation host measurement
 in `validation_test/optimization/results_optuna50_paired_lab_20260908.json`
 reports MATLAB/Python throughput ratios of 1.222 scalar and 2.184 grouped TPE.
 The separate table-export ratio is 0.886; no universal speed claim is made.
 All 150 MATLAB tests (74 shared-oracle and 76 integration) and 11 Python package
 tests pass after this change; the rebuilt wheel passes strict source fidelity.
 Engine startup/calculation/
-shutdown passed on both mdx CI runner accounts in run 34210024491. mdx2 has
+shutdown passed on both mdx CI runner accounts in run 34210024491. worker-b has
 Engine 26.1 installed, but its SSH startup still timed out; this does not
-provide a MATLAB performance result on mdx2.
+provide a MATLAB performance result on worker-b.
 
 The prior coverage audit also remains binding: verified entries must be derived
 from the test manifest and oracle fixture provenance. A maintained allow-list
@@ -924,10 +924,10 @@ measured 1,144/473 trials/s versus Python 874/282, with 1,000-row export
 The final implementation passes 75 upstream-oracle and 24 table/reliability/core
 MATLAB tests, with 11 package Python tests passing.
 
-Historical 4.9 LAB scalar performance was approximately 1,375 trials/s.
+Historical 4.9 validation host scalar performance was approximately 1,375 trials/s.
 Do not declare performance complete just because 5.0 exceeds Python. Establish
 a matched-host/prewarm historical baseline and run the compute-host gate;
-the current LAB measurements include host-load variation and are not release
+the current validation host measurements include host-load variation and are not release
 acceptance. Preserve all repeated results rather than selecting the fastest.
 
 ### State-count and empty-store performance increment
@@ -941,9 +941,9 @@ Python tests. A MATLAB-only cache invariant covers enqueue through reload.
 
 Performance acceptance remains open. The JSON
 `validation_test/optimization/results_optuna50_statecount_lab_20260908.json`
-retains the five LAB development runs and marks them inconclusive because CPU
+retains the five validation host development runs and marks them inconclusive because CPU
 was observed at 100 percent. Do not use these numbers to claim improvement.
-hibino/mdx1 were busy; idle mdx2 imported Engine over SSH but startup timed out
+compute-host/worker-a were busy; idle worker-b imported Engine over SSH but startup timed out
 after 90 seconds and the owned process tree was reaped. Use the already
 verified authenticated CI execution context or another idle compute host for
 the controlled before/after gate; do not reinstall Engine or repeat unchanged

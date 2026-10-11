@@ -16,9 +16,9 @@ The AMS comparison additionally uses the installed Radia/NGSolve native pair.
 Run in a Developer PowerShell with CMake on PATH, from the repository root:
 
 ```powershell
-python validation_test/sparsesolv/iccg_study/build_variants.py --output C:/temp/iccg-variants
-python validation_test/sparsesolv/iccg_study/run_study.py --build C:/temp/iccg-variants --output C:/temp/iccg-core.json --source-sha (git rev-parse HEAD) --part core
-python validation_test/sparsesolv/iccg_study/run_study.py --build C:/temp/iccg-variants --output C:/temp/iccg-ams.json --source-sha (git rev-parse HEAD) --part ams
+python validation_test/sparsesolv/iccg_study/build_variants.py --output private-runtime-path
+python validation_test/sparsesolv/iccg_study/run_study.py --build private-runtime-path --output private-runtime-path --source-sha (git rev-parse HEAD) --part core
+python validation_test/sparsesolv/iccg_study/run_study.py --build private-runtime-path --output private-runtime-path --source-sha (git rev-parse HEAD) --part ams
 ```
 
 Use a fresh output directory. Source transformations assert their expected
@@ -65,7 +65,7 @@ NGSolve threads. These timings cannot establish parallel prototype performance.
 ## Results, 2026-10-04
 
 Header baseline: `6cca23ef604f9c488e150bedcf131157f37bbfae`.
-Measured on mdx2, MSVC 19.44, Python 3.12.10, NGSolve 6.2.2607, Radia 5.2.2.
+Measured on worker-b, MSVC 19.44, Python 3.12.10, NGSolve 6.2.2607, Radia 5.2.2.
 The 16 core checks pass. All 24 benchmark rows pass the original-system
 relative residual limit `1e-8`; paired solutions, histories and shifts are
 bit-identical. An independent second timing pass confirms the large-case

@@ -176,7 +176,7 @@ if __name__ == '__main__':
                maxh_steel=maxh, order=order, steps=steps, dt=T_END / steps,
                sigma_placeholder=SIGMA_PLACEHOLDER, ndof=model.fes.ndof, n_gamma=len(model.idx_gamma),
                n_interior=len(model.idx_int), n_air=len(model.idx_air), solve_s=sec, history=hist,
-               host=platform.node(), ngsolve=ngsolve.__version__,
+               platform_class=platform.system(), ngsolve=ngsolve.__version__,
                sources={p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in ['team13_model.py', 'transient.py']})
     (out / f'{wave}.json').write_text(json.dumps(res, indent=2))
     print('done', wave, 'ndof', model.fes.ndof, 'gamma', len(model.idx_gamma), 'int', len(model.idx_int), 'sec', round(sec, 1))

@@ -3,7 +3,7 @@
   "radia_version": "5.1.0",
   "python_version": "3.12.10",
   "platform": "Windows-11-10.0.26200-SP0",
-  "host": "mdx2",
+
   "mesh_elements": 2766,
   "ndof": 33192,
   "iron_maxh_m": 0.018,

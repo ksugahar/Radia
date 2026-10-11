@@ -23,7 +23,7 @@ from io import StringIO
 # FastMCP uses stdio transport (stdin/stdout = MCP protocol frames,
 # stderr = logs). build123d 0.10.x emits hundreds of INFO lines per
 # Text/extrude/Sketch call, overflowing the OS pipe buffer (~64 KB)
-# and stalling the MCP tool-call round-trip. Users (LAB + 100号機)
+# and stalling the MCP tool-call round-trip. Users (validation runtime + runtime host)
 # observed execute_build123d timing out without a visible error.
 # Setting the level to WARNING restores normal throughput.
 logging.getLogger("build123d").setLevel(logging.WARNING)

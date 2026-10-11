@@ -7,7 +7,7 @@ GitHub Actions run `36675230770` from source commit
 - Wheel SHA-256: `2f5633376a33582a8bffaa2a696e24f9da6abb3b801eb4c6bd388755e334d22b`
 - Native extension SHA-256: `32486195d84799c7c41c1736533b645c6d0cb59be9ab1aa612273933c08d3732`
 - Wheel Python sources verified: 313
-- Targets: LAB, 100, mdx1, and mdx2
+- Targets: validation host, 100, worker-a, and worker-b
 
 Each target used a fresh virtual environment and the same retained wheel.
 `acceptance.json` records package identity and successful commands,

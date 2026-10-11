@@ -683,7 +683,7 @@
     "grid_nodes_per_axis": 108
   },
   "meta": {
-    "hostname": "intel11",
+
     "script": "cube_alpha_sweep_figure.py",
     "description": "mixed Galerkin alpha(s) of a 5 mm Cu cube: projected (BoxMixedGalerkin, main curves) and additive (Y_mixed)",
     "timestamp": "2026-09-21T00:32:37.641185+00:00"

@@ -1,6 +1,6 @@
 {
   "timestamp": "2026-03-07T11:35:09.086984",
-  "hostname": "lab",
+
   "benchmark": "bench_iterations",
   "description": "BDDC iteration count vs problem size and polynomial order",
   "results": [

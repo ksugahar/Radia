@@ -1,7 +1,7 @@
 {
  "description": "HDiv-VIM B-input play hysteresis 4x4x4 strong-coupling loop (gate E)",
  "timestamp": "2026-07-15T11:27:49.943918",
- "hostname": "lab",
+
  "h_applied_z": [
   50000.0,
   100000.0,

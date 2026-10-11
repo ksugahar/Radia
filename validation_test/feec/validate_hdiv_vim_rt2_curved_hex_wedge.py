@@ -2,7 +2,7 @@
 
 The input ``.vol`` files are supplied explicitly because curved HEX/WEDGE
 meshes are produced by the Cubit export workflow and are not tiny CI fixtures.
-Use ``--solve`` on hibino first, or on mdx only when hibino is unavailable and
+Use ``--solve`` on compute-host first, or on mdx only when compute-host is unavailable and
 the mdx CI queue is idle. The JSON records the host, topology, dimensions,
 build/solve timings, and finite field-evaluation gate.
 """
@@ -163,7 +163,7 @@ def main() -> int:
         "schema": "radia.hdiv_rt2_curved.v1",
         "timing_scope": "single-run compute-host validation; do not infer host performance from one run",
         "generated_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
-        "hostname": socket.gethostname(),
+        "platform_class": platform.system(),
         "platform": platform.platform(),
         "python_version": platform.python_version(),
         "radia_version": radia.__version__,

@@ -1,6 +1,6 @@
 ---
 name: release-quad
-description: Two-machine numerical Radia solver and Simulink release gate. Use for release-quad, solver post-release deployment, Radia GitHub Release publication, or the numerical solver Definition of Done across LAB and 100号機. radia-mcp and cubit-mesh-export use independent release-dual skills.
+description: Two-machine numerical Radia solver and Simulink release gate. Use for release-quad, solver post-release deployment, Radia GitHub Release publication, or the numerical solver Definition of Done across 102号機 and 100号機. radia-mcp and cubit-mesh-export use independent release-dual skills.
 ---
 
 # release-quad
@@ -54,21 +54,19 @@ Decision 2026-10-01 supersedes the older two-editable-host recipe: LAB consumes
 verified wheels; only 100 has a dedicated local editable development venv.
 Keep its release runtime separate from in-progress development. `verify-editable`
 checks LAB's wheel and 100's editable; `repoint` permits only 100.
-hibino/mdx1/mdx2/LAB are execution hosts; LAB may run high-memory
-tests after checking available memory and active jobs; mdx CI takes priority.
+100号機 owns CI/builds and isolated heavy numerical validation. 102号機 owns wheel acceptance.
+The consolidated mdx host is reserved for idle timing evaluations; mdx1/mdx2/hibino are retired.
 
 
 | Machine | Solver install tier | Solver release route |
 |---|---|---|
-| LAB | exact accepted Radia wheel | `phase8 --target lab` (wheel over SSH) |
+| 102号機 | exact accepted Radia wheel | `phase8 --target lab` (wheel over SSH) |
 | 100号機 | release runtime (machine-default Python): exact accepted Radia wheel; dedicated editable development venv `W:\00_CAE\Radia\environments\development` | `phase8 --target 100`: wheel into the release runtime, then editable into that venv only; `done`/`phase9` verify both separately |
 
-100号機 (INTEL11) is the development, editable-install, review and integration
-host and the student-facing release/usage host; keep its acceptance to
-installation, import, and necessary application smoke. LAB is the test host:
-it runs fixed wheels and job-local `C:\temp\<job-id>` inputs, never an editable.
-mdx1/mdx2 are the self-hosted CI and preflight pool. hibino is a computation
-host, not a QUAD acceptance target.
+100号機 owns isolated CI/builds and a separate editable development runtime.
+102号機 tests fixed wheels with job-owned scratch. Formal timing belongs only
+to otherwise idle mdx; compute timing is not a release deployment gate.
+
 
 `phase9` compares only the solver version and the declared tracked solver-file
 hashes. MCP and Cubit installations are independent observations, never solver

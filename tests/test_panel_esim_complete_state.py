@@ -94,7 +94,8 @@ def test_surface_coil_actual_current_law_and_secant_power(setup_cases, genus):
 
 
 @pytest.mark.parametrize('nonlinear', [False,True])
-def test_weak_genus_one_law_uses_complete_loop_field(setup_cases,tmp_path,monkeypatch,nonlinear):
+@pytest.mark.parametrize('backend',['intree-dense','hacapk'])
+def test_weak_genus_one_law_uses_complete_loop_field(setup_cases,tmp_path,monkeypatch,nonlinear,backend):
     from radia.panels import calc_inductance as ci
     import em_material
     import radia.esim_panel_evaluator as evaluation
@@ -114,7 +115,8 @@ def test_weak_genus_one_law_uses_complete_loop_field(setup_cases,tmp_path,monkey
         original_evaluator(cell,configuration=lambda:dict(analytic_law=1),**k))
     args=ci.build_argparser().parse_args(['--coil-solver','peec','--coil-step','prescribed.step',
         '--vol',path,'--wp-label','sibc','--frequency','50000','--current','1',
-        '--sigma','5.8e7','--mu-r','1','--wp-bem-backend','intree-dense',
+        '--sigma','5.8e7','--mu-r','1','--wp-bem-backend',backend,
+        '--wp-gmres-tol','1e-12',
         '--impedance-model','esim','--esim-per-panel','--bh-file',str(bh),
         '--esim-tol','1e-5','--esim-max-iter','30','--esim-relax','.8'])
     source=dict(source_type='filament',paths=setup_cases[2],I_fil=np.array([.6,.4]))

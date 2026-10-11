@@ -166,7 +166,7 @@
   },
   "quadrature_power_relative_error": 2.146982480688564e-08,
   "elapsed_s": 114.65388040000107,
-  "host": "lab",
+
   "ngsolve": "6.2.2607",
   "production_module": "src/radia/bem_loop_extension.py",
   "status": "rejected_initial_test",

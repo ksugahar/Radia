@@ -1,6 +1,6 @@
 {
   "timestamp": "2026-03-07T11:35:04.423456",
-  "hostname": "lab",
+
   "benchmark": "bench_phase_timing",
   "description": "BDDC setup phase timing: SparseSolv vs NGSolve",
   "results": [

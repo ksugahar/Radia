@@ -1,6 +1,6 @@
 {
  "timestamp": "2026-08-07T08:16:09.974426",
- "hostname": "lab",
+
  "problem": "HCurl curl-curl+mass and HDiv div-div+mass, lowest order, manufactured solutions; Jacobi-CG with a verified residual",
  "maxsteps": 30000,
  "spaces": {

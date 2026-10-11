@@ -1,6 +1,6 @@
 {
   "timestamp": "2026-04-16T07:31:56.252091",
-  "hostname": "lab",
+
   "benchmark": "bench_peec_dense",
   "problem": {
     "base_turns": 20,

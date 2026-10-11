@@ -72,7 +72,7 @@ cl /nologo /O2 /Gy /I src/ext/HACApK /I src/core
   validation_test/hacapk/aca_probe_unreachable.c
   src/ext/HACApK/cHACApK_base.c src/ext/HACApK/cHACApK_lib.c
   /FoC:/temp/ /FeC:/temp/probe_aca_zero_row.exe /link /OPT:REF
-C:/temp/probe_aca_zero_row.exe
+private-runtime-path
 ```
 
 The compiler invocation above is line-wrapped for readability. This run used

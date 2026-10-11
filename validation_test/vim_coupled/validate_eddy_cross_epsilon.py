@@ -100,7 +100,7 @@ def run(orders=(3, 5), epsilons=(0.3, 0.1, 0.03), aca_tolerances=(1e-6, 1e-10)):
         "schema": "radia.eddy-cross-epsilon-validation.v1",
         "scope": "disjoint constant-density Laplace cross blocks only",
         "certifies_hdiv_sibc_coupled_solver": False,
-        "runtime": {"hostname": platform.node(), "python": platform.python_version(),
+        "runtime": {"platform_class": platform.system(), "python": platform.python_version(),
                     "ngsolve": ng.__version__},
         "provenance": {key: {"path": str(path.resolve()),
                              "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}

@@ -5,7 +5,7 @@
     "command": "python validation_test/induction_heating/generate_ih_operator_physics_results.py",
     "python": "3.12.10",
     "ngsolve": "6.2.2607",
-    "host": "lab",
+
     "commit": "24a3f19cdfeeac0d1f956ccac329cdd58306f844",
     "dirty": true,
     "source_sha256": {

@@ -78,11 +78,49 @@ class IHOperatorAssemblyOptions:
     axisymmetric_thermal_vol: str = ""
     n_phi_samples: int = 128
     panel_zs_file: str = ""
+    zs_mode: str = ""
+    esim_bh_file: str = ""
+    esim_panel_evaluator: str = "table"
+    esim_tolerance: float = 1e-3
+    esim_max_iter: int = 15
+    esim_half_thickness_m: float = 0.01
+    esim_reference_current_A: float = 1.0
+    esim_drive_relative_band: float = 0.1
+    esim_reference_phase_rad: float = 0.0
 
     def checked(self) -> "IHOperatorAssemblyOptions":
+        if not self.zs_mode:
+            return replace(self, zs_mode="element-file" if self.panel_zs_file else "uniform").checked()
+        if self.zs_mode == "uniform" and self.panel_zs_file:
+            raise ValueError("uniform mode cannot also specify panel_zs_file")
+        if self.zs_mode not in {"uniform", "element-file", "per-panel-esim"}:
+            raise ValueError("zs_mode must be uniform, element-file or per-panel-esim")
+        if self.zs_mode == "element-file" and not self.panel_zs_file:
+            raise ValueError("element-file mode requires panel_zs_file")
+        if self.zs_mode == "per-panel-esim":
+            if self.panel_zs_file:
+                raise ValueError("per-panel-esim cannot also specify panel_zs_file")
+            if not Path(self.esim_bh_file).is_absolute() or not Path(self.esim_bh_file).is_file():
+                raise ValueError("ESIM requires an existing absolute B-H input path")
+            if self.esim_panel_evaluator not in {"table", "direct"}:
+                raise ValueError("esim_panel_evaluator must be table or direct")
+            if not math.isfinite(self.esim_tolerance) or not 0 < self.esim_tolerance < 1:
+                raise ValueError("esim_tolerance must be finite in (0,1)")
+            if isinstance(self.esim_max_iter, bool) or not isinstance(self.esim_max_iter, int) or self.esim_max_iter < 1:
+                raise ValueError("esim_max_iter must be a positive integer")
+            if self.esim_reference_phase_rad != 0:
+                raise ValueError("Only zero-phase peak reference current is supported")
+            if not math.isfinite(self.esim_drive_relative_band) or not 0 <= self.esim_drive_relative_band <= .1:
+                raise ValueError("esim_drive_relative_band must be finite in [0,0.1]")
+            for name in ("esim_half_thickness_m", "esim_reference_current_A"):
+                value = getattr(self, name)
+                if not math.isfinite(value) or value <= 0:
+                    raise ValueError(f"{name} must be finite and positive")
+        elif self.esim_bh_file:
+            raise ValueError("B-H input requires per-panel-esim mode")
         if self.panel_zs_file:
-            if self.coupling_mode != 'weak':
-                raise ValueError('panel_zs_file requires weak coupling')
+            if self.coupling_mode != "weak":
+                raise ValueError("panel_zs_file requires weak coupling; strong assembly is validated for per-panel-esim only")
             if not Path(self.panel_zs_file).is_absolute() or not Path(self.panel_zs_file).is_file():
                 raise ValueError('panel_zs_file must be an existing absolute JSON path')
         if isinstance(self.n_phi_samples, bool) or not isinstance(self.n_phi_samples, int) or self.n_phi_samples < 1:
@@ -419,6 +457,14 @@ def _unit_current_argv(
             ]
         )
 
+    if options.zs_mode == "per-panel-esim":
+        argv[argv.index("--impedance-model")+1] = "esim"
+        argv[argv.index("--current")+1] = format(options.esim_reference_current_A, ".17g")
+        argv.extend(["--esim-per-panel", "--bh-file", options.esim_bh_file,
+            "--esim-panel-evaluator", options.esim_panel_evaluator,
+            "--esim-tol", format(options.esim_tolerance, ".17g"),
+            "--esim-max-iter", str(options.esim_max_iter),
+            "--half-thickness", format(options.esim_half_thickness_m, ".17g")])
     if options.panel_zs_file:
         argv.extend(['--panel-zs-file', options.panel_zs_file])
     return argv
@@ -447,6 +493,10 @@ def _solve_unit_current(
     payload = run_inductance(arguments)
     if payload.get("status") == "error" or payload.get("error"):
         raise RuntimeError(str(payload.get("error", "IH electromagnetic solve failed")))
+    if options.zs_mode == "per-panel-esim":
+        provenance = _write_esim_panel_artifact(workpiece, options, payload, run_dir)
+    if options.zs_mode == "per-panel-esim" and options.coupling_mode == "strong":
+        _export_strong_panel_heat(workpiece, options, payload, run_dir, field_path)
     qsurf_solution = Path(str(payload.get("qsurf_sol", ""))).resolve()
     if not qsurf_solution.is_file():
         raise RuntimeError(
@@ -462,7 +512,113 @@ def _solve_unit_current(
     values = np.asarray(qsurf.vec.FV().NumPy(), dtype=float).copy()
     if values.size != fes.ndof or not np.all(np.isfinite(values)):
         raise RuntimeError("qsurf.sol does not match the workpiece H1 P1 space")
+    if options.zs_mode == "per-panel-esim":
+        payload["simulink_esim_provenance"] = provenance
+        scale = options.esim_reference_current_A**2
+        values /= scale
+        qsurf.vec.FV().NumPy()[:] = values
+        qsurf.Save(str(qsurf_solution))
+        payload["simulink_unit_heat_power_W"] = float(payload["P_wp_W"])/scale
     return UnitCurrentResult(values, payload, qsurf_solution, field_mesh)
+
+
+
+
+def _export_strong_panel_heat(workpiece, options, payload, run_dir, field_path):
+    """Export accepted total-field heat using the existing conservative P1 map."""
+    from ngsolve import H1, GridFunction, Mesh, NodeId, VERTEX
+    from radia.panels.calc_inductance import _extract_bnd_only_inline
+    from radia.bem_sibc_solver import _project_sibc_surface_heat
+    from radia.surface_impedance import PanelSurfaceImpedance, panel_mesh_identity
+    from radia.gmsh_post_export import GmshPostExport
+    volume = Mesh(str(workpiece))
+    surface = _extract_bnd_only_inline(volume, options.workpiece_label)
+    _, centroids = panel_mesh_identity(surface)
+    if not np.allclose(np.asarray(payload["esim_per_panel_centroids"]), centroids, rtol=0, atol=1e-12):
+        raise RuntimeError("Strong ESIM heat surface order mismatch")
+    z = PanelSurfaceImpedance(np.asarray(payload["esim_per_panel_Z_s_real"])
+                             + 1j*np.asarray(payload["esim_per_panel_Z_s_imag"]))
+    field = np.asarray(payload["esim_per_panel_H_t"], float)
+    if field.shape != z.values.shape or not np.all(np.isfinite(field)) or np.any(field < 0):
+        raise RuntimeError("Strong ESIM requires finite accepted per-face field amplitudes")
+    heat = .5*z.values.real*field**2
+    surface_space = H1(surface, order=1)
+    projected, power = _project_sibc_surface_heat(surface_space, None, z, element_heat=heat)
+    expected = float(payload["P_wp_W"])
+    if not np.isfinite(expected) or expected <= 0 or abs(power-expected) > 1e-8*expected:
+        raise RuntimeError("Strong ESIM heat projection does not conserve accepted body loss")
+    volume_space = H1(volume, order=1)
+    output = GridFunction(volume_space)
+    output.vec[:] = 0
+    coordinates = {}
+    for vertex in volume.vertices:
+        key = tuple(vertex.point)
+        dofs = volume_space.GetDofNrs(NodeId(VERTEX, vertex.nr))
+        if key in coordinates or len(dofs) != 1 or dofs[0] < 0:
+            raise RuntimeError("Strong ESIM requires unique coordinates and active volume vertex DOFs")
+        coordinates[key] = dofs[0]
+    values = output.vec.FV().NumPy()
+    for vertex in surface.vertices:
+        key = tuple(vertex.point)
+        dofs = surface_space.GetDofNrs(NodeId(VERTEX, vertex.nr))
+        if key not in coordinates or len(dofs) != 1 or dofs[0] < 0:
+            raise RuntimeError("Strong ESIM surface-to-volume heat mapping is incomplete")
+        values[coordinates[key]] = projected.vec[dofs[0]]
+    solution = (run_dir/"strong-panel-qsurf.sol").resolve()
+    output.Save(str(solution))
+    fields = GmshPostExport(volume)
+    fields.add_scalar_field("accepted_panel_heat_W_per_m2", output)
+    fields.write(str(field_path))
+    payload.update(qsurf_sol=str(solution), qsurf_em_vol=str(workpiece), msh_file=str(field_path),
+                   simulink_heat_projection="solved-face-positive-lumped-P1",
+                   simulink_heat_power_relative_error=abs(power-expected)/expected)
+
+
+def _write_esim_panel_artifact(workpiece, options, payload, run_dir):
+    """Bind converged material state to mesh and direct all-panel certificate."""
+    from ngsolve import Mesh
+    from radia.panels.calc_inductance import _extract_bnd_only_inline
+    from radia.surface_impedance import write_panel_impedance, read_panel_impedance
+    genus = int(payload.get("wp_genus", 0))
+    if genus not in (0, 1) or (genus == 1 and not payload.get("wp_loop_dof", False)):
+        raise RuntimeError("Simulink ESIM requires a validated genus-0 or active genus-1 loop route")
+    accepted = float(payload.get("esim_operating_current_A", payload.get("current_A", float("nan"))))
+    if not np.isfinite(accepted) or accepted != options.esim_reference_current_A:
+        raise RuntimeError("ESIM accepted operating current differs from assembly reference")
+    evaluation = payload.get("esim_panel_evaluation") or {}
+    residual = float(payload.get("esim_fixed_point_relative_error", float("nan")))
+    if (not payload.get("esim_converged") or not payload.get("esim_per_panel")
+            or payload.get("esim_impedance_layout") != "BND-element-order"
+            or evaluation.get("final_certification") != "direct-all-panels"
+            or evaluation.get("mode") != options.esim_panel_evaluator
+            or not isinstance(payload.get("esim_iterations"), int)
+            or isinstance(payload.get("esim_iterations"), bool)
+            or not 0 < payload.get("esim_iterations", 0) <= options.esim_max_iter
+            or not np.isfinite(residual) or residual < 0 or residual > options.esim_tolerance):
+        raise RuntimeError("Simulink ESIM requires converged all-panel direct certification")
+    surface = _extract_bnd_only_inline(Mesh(str(workpiece)), options.workpiece_label)
+    values = (np.asarray(payload["esim_per_panel_Z_s_real"], float)
+              + 1j*np.asarray(payload["esim_per_panel_Z_s_imag"], float))
+    artifact = (run_dir/"converged-panel-zs.json").resolve()
+    write_panel_impedance(artifact, surface, values, frequency_hz=options.frequency_hz)
+    provenance = dict(mode="per-panel-esim", evaluator=options.esim_panel_evaluator,
+        bh_sha256=_sha256(Path(options.esim_bh_file)),
+        iterations=int(payload["esim_iterations"]), final_residual=residual,
+        tolerance=options.esim_tolerance, final_certification="direct-all-panels",
+        reference_current_A=options.esim_reference_current_A, reference_phase_rad=options.esim_reference_phase_rad,
+        frequency_hz=options.frequency_hz, drive_relative_band=options.esim_drive_relative_band,
+        zs_semantics="frozen_at_reference_current", workpiece_genus=genus,
+        loop_dof=bool(payload.get("wp_loop_dof", False)),
+        body_backend=payload.get("wp_bem_backend", options.workpiece_bem_backend),
+        constitutive_behavior="frozen-at-assembly-reference-current",
+        constant_during_simulation=True)
+    data = json.loads(artifact.read_text(encoding="utf-8"))
+    provenance["surface_sha256"] = data["surface_sha256"]
+    data["provenance"] = provenance
+    _write_json(artifact, data)
+    read_panel_impedance(artifact, surface, frequency_hz=options.frequency_hz)
+    provenance.update(artifact_file=str(artifact), artifact_sha256=_sha256(artifact))
+    return provenance
 
 
 def _coo_values(matrix: Any) -> dict[tuple[int, int], float]:
@@ -747,6 +903,8 @@ def _native_config(
             "intree-dense workpiece backend and a supported genus-1 mesh."
         )
     solver_power = float(electromagnetic.solver_payload.get("P_wp_W", math.nan))
+    if options.zs_mode == "per-panel-esim":
+        solver_power /= options.esim_reference_current_A**2
     if not math.isfinite(solver_power) or solver_power <= 0.0:
         raise RuntimeError("the electromagnetic result does not contain positive P_wp_W")
     relative_power_error = abs(thermal.heat_power_W - solver_power) / solver_power
@@ -960,6 +1118,15 @@ def assemble_ih_operators(
                         snapshot.write_bytes(panel_bytes)
                     options = replace(options, panel_zs_file=str(snapshot.resolve()))
                     artifacts.append(snapshot.resolve())
+                if options.zs_mode == "per-panel-esim":
+                    bh_source = Path(options.esim_bh_file).resolve()
+                    bh_bytes = bh_source.read_bytes()
+                    bh_snapshot = run_path / ("input-bh-"+hashlib.sha256(bh_bytes).hexdigest()+bh_source.suffix)
+                    if bh_snapshot.exists() and bh_snapshot.read_bytes() != bh_bytes:
+                        raise RuntimeError("B-H snapshot hash collision")
+                    bh_snapshot.write_bytes(bh_bytes)
+                    options = replace(options, esim_bh_file=str(bh_snapshot.resolve()))
+                    artifacts.append(bh_snapshot.resolve())
                 print(f"workpiece: {workpiece_path}")
                 print(f"coil ({backend}): {coil_path}")
                 print(f"output: {output_path}")
@@ -1057,6 +1224,12 @@ def assemble_ih_operators(
                     contracts,
                     gmsh_files,
                 )
+                if options.zs_mode == "per-panel-esim":
+                    provenance = electromagnetic.solver_payload["simulink_esim_provenance"]
+                    config["surface_impedance"] = provenance
+                    config["physical_parameters"]["esim_bh_file"] = str(bh_source)
+                    config["surface_impedance"]["bh_source_file"] = str(bh_source)
+                    artifacts.append(Path(provenance["artifact_file"]))
                 if options.panel_zs_file:
                     config["surface_impedance"]["source_file"] = panel_source
                     config["surface_impedance"]["snapshot_file"] = options.panel_zs_file
@@ -1173,6 +1346,15 @@ def build_argparser() -> argparse.ArgumentParser:
         action=argparse.BooleanOptionalAction,
         default=True,
     )
+    parser.add_argument('--zs-mode', choices=('uniform', 'element-file', 'per-panel-esim'), default='')
+    parser.add_argument('--esim-bh-file', default='')
+    parser.add_argument('--esim-panel-evaluator', choices=('table', 'direct'), default='table')
+    parser.add_argument('--esim-tolerance', type=float, default=1e-3)
+    parser.add_argument('--esim-max-iter', type=int, default=15)
+    parser.add_argument('--esim-half-thickness-m', type=float, default=.01)
+    parser.add_argument('--esim-reference-phase-rad', type=float, default=0.)
+    parser.add_argument('--esim-drive-relative-band', type=float, default=.1)
+    parser.add_argument('--esim-reference-current-A', type=float, default=1.)
     parser.add_argument('--panel-zs-file', default='', help='Absolute mesh-bound panel Zs JSON [ohm]')
     parser.add_argument("--coupling-mode", choices=("weak", "strong"), default="weak")
     parser.add_argument(
@@ -1186,7 +1368,11 @@ def build_argparser() -> argparse.ArgumentParser:
 def _options_from_args(args: argparse.Namespace) -> IHOperatorAssemblyOptions:
     return IHOperatorAssemblyOptions(
         frequency_hz=args.frequency_hz,
-        panel_zs_file=args.panel_zs_file,
+        panel_zs_file=args.panel_zs_file, zs_mode=args.zs_mode,
+        esim_bh_file=args.esim_bh_file, esim_panel_evaluator=args.esim_panel_evaluator,
+        esim_tolerance=args.esim_tolerance, esim_max_iter=args.esim_max_iter,
+        esim_half_thickness_m=args.esim_half_thickness_m,
+        esim_reference_current_A=args.esim_reference_current_A, esim_drive_relative_band=args.esim_drive_relative_band, esim_reference_phase_rad=args.esim_reference_phase_rad,
         axisymmetric_thermal_vol=args.axisymmetric_thermal_vol,
         n_phi_samples=args.n_phi_samples,
         thermal_order=args.thermal_order,

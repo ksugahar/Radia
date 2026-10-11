@@ -166,7 +166,7 @@
     },
     "latest_mixed_run": {
       "source_commit": "239504dd9",
-      "host": "mdx1",
+
       "run_date": "2026-09-29",
       "raw_sha256": "545bd6d660cc95fe0574a3fc7f96ae0dfa685178180ac1b71c1d7894154c68b4",
       "ngsolve_version": null,

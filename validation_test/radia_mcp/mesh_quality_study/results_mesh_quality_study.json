@@ -1,6 +1,6 @@
 {
  "timestamp": "2026-08-06T17:25:46.249759",
- "hostname": "lab",
+
  "referee": "gmsh minSICN (radia_mcp.gmsh.msh_inspect)",
  "note": "quality-class study (no timing); equal_budget = netgen maxh calibrated to cubit_tet element count +/-10%",
  "cases": [

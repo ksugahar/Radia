@@ -1,11 +1,11 @@
 {
  "schema": "radia.validation.esrf-hex-gram-definiteness.v1",
  "generated_at_utc": "2026-09-05T08:01:09.215159+00:00",
- "host": "lab",
+
  "radia_version": "4.95.81",
- "radia_file": "C:\\temp\\radia-hdiv-fix6\\src\\radia\\__init__.py",
+ "radia_file": "<private-path>/radia-hdiv-fix6\\src\\radia\\__init__.py",
  "case": 6,
- "iron_mesh": "C:\\temp\\radia-xfer6\\assets\\example_6_quadrupole\\model.vol",
+ "iron_mesh": "<private-path>/radia-xfer6\\assets\\example_6_quadrupole\\model.vol",
  "iron_mesh_sha256": "0d4449962b60757cba78e771a136b2805a4323e26a1ee6d7ae482751bb7e5a5f",
  "chi0": 2000.200000000012,
  "inv_chi0": 0.000499950004999497,

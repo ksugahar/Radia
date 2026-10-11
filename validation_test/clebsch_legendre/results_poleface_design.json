@@ -2167,7 +2167,7 @@
   },
   "meta": {
     "generated_at_utc": "2026-07-29T11:05:55+00:00",
-    "hostname": "Hibino",
+
     "python_version": "3.12.10",
     "ngsolve_version": "6.2.2604",
     "numpy_version": "2.4.3",

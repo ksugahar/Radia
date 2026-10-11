@@ -44,7 +44,7 @@ Stale / research-only `ih_*` files in this directory (e.g.
 demoted formulations or local test runs.  They are gitignored
 (`*.vol`) so they do not enter git, and they do not ship in CI-
 built wheels (CI starts from a clean checkout and regenerates only
-the canonical .vol files via Cubit batch).  Local LAB checkouts
+the canonical .vol files via Cubit batch).  Local validation host checkouts
 may retain them for research convenience.
 
 ## Electromagnet Simulink block

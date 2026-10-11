@@ -123,7 +123,7 @@ def main() -> int:
             ),
             "python": platform.python_version(),
             "ngsolve": getattr(ng, "__version__", "unknown"),
-            "host": socket.gethostname(),
+            "platform_class": platform.system(),
             "commit": source_commit,
             "dirty": source_dirty,
             "source_sha256": {

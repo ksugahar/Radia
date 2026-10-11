@@ -20,7 +20,7 @@ This is the quantitative backing for the discussion-section claim of the
 their eigenvalue is invariant to Gram compression error).
 
 Runtime ~2-4 min (dense generalized eigensolve at 5616 dof, twice) -- the
-validation_test lane.  Correctness only; no timing claims (LAB per Benchmark
+validation_test lane.  Correctness only; no timing claims (validation runtime per Benchmark
 Policy).  Results saved to loop_spectrum_protection.json.
 """
 import json
@@ -60,7 +60,7 @@ def _densify_N(B, H, n):
 def test_loop_eigenvalue_protected_from_compression():
     results = dict(
         description="HDiv charge-Gram loop-eigenvalue protection vs ACA compression",
-        timestamp=datetime.now().isoformat(), hostname=platform.node(),
+        timestamp=datetime.now().isoformat(), platform_class=platform.system(),
         nx=NX, nu0=NU0, eps_cases=[])
 
     with ng.TaskManager():

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 
@@ -29,12 +30,16 @@ def test_3d_reference_is_full_current_and_source_exact():
     assert payload["profile"] == "full"
     assert payload["pass"] is True
     assert all(payload["checks"].values()), payload["checks"]
-    assert payload["source_sha256"] == {
-        "validation_script": _sha256(SCRIPT),
-        "lorentz_module": _sha256(LORENTZ),
-    }
+    assert payload["source_sha256"]["lorentz_module"] == _sha256(LORENTZ)
+    original = payload["source_sha256"]["validation_script"]
+    if original != _sha256(SCRIPT):
+        spec = importlib.util.spec_from_file_location("privacy_source", REPO / "validation_test/radia_mcp/privacy_source_contract.py")
+        contract = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(contract)
+        relative = "validation_test/maglev/ecb_foster_lorentz_3d_reference.py"
+        assert contract.verifies_redaction(relative, original, SCRIPT.read_text(encoding="utf-8"), payload.get("source_privacy_redactions", {}).get(relative, {}))
+    assert "host" not in payload["runtime"]
     for name in (
-        "host",
         "python_version",
         "radia_version",
         "ngsolve_version",

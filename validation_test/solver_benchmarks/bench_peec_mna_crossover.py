@@ -4,7 +4,7 @@ Measures the crossover N at which the HACApK-MNA path
 (PEECCircuitSolver(..., use_hacapk=True)) beats the dense C++ MNASolver
 on the full nodal impedance solve.
 
-FINDINGS (LAB, 2026-04-16)
+FINDINGS (validation runtime, 2026-04-16)
 --------------------------
 Stage 5 showed that naive nested BiCGSTAB (scipy bicgstab outer +
 HACApK BiCGSTAB inner) stalls above N ~ 200 on a strongly coupled
@@ -343,7 +343,7 @@ def run_all() -> None:
         "schema": "radia.validation.peec-mna-crossover-benchmark.v1",
         "generated_at_utc": generated_at_utc,
         "timestamp": generated_at_utc,
-        "hostname": platform.node(),
+        "platform_class": platform.system(),
         "versions": {
             "python": platform.python_version(),
             "numpy": np.__version__,

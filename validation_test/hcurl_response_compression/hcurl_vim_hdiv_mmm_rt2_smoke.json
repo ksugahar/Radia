@@ -1,7 +1,7 @@
 {
   "schema": "radia.validation.hcurl_vim_hdiv_mmm_end_to_end.v8",
   "generated_at_utc": "2026-07-17T05:02:44.073289+00:00",
-  "validation_host": "Hibino",
+
   "runtime": {
     "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
     "platform": "Windows-11-10.0.22000-SP0",

@@ -16,7 +16,7 @@ artifact.  This golden locks the (b) claim -- "REGCOIL misses with iron, radia's
 material-aware Kelvin-DtN matches" -- as a MEASUREMENT (Repository-First).
 
 Runs _design_once in a SUBPROCESS (NGSolve Kelvin-FEM heavy import); SKIPS on the
-LAB MKL/Qt DLL shadow that breaks NGSolve inside the pytest process.
+validation runtime MKL/Qt DLL shadow that breaks NGSolve inside the pytest process.
 """
 from __future__ import annotations
 

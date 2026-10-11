@@ -63,6 +63,6 @@ def provenance(argv, source_commit, files):
             "command": [os.path.basename(sys.executable), *argv],
             "utc": datetime.datetime.now(datetime.timezone.utc).isoformat(
                 timespec="seconds"),
-            "host": platform.node(), "python": platform.python_version(),
+            "platform_class": platform.system(), "python": platform.python_version(),
             "numpy": np.__version__, "scipy": scipy.__version__,
             "ngsolve": ngsolve.__version__, "cpu_count": os.cpu_count()}

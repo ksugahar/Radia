@@ -290,7 +290,7 @@ def document_meta_template_loader(kind: str = "",
 # ---------------------------------------------------------------------------
 # lint_all -- redesigned 2026-06-02 for radia-mcp.
 #
-# The LAB-private original hard-imported grant_writing.tools for the "common"
+# The validation runtime-private original hard-imported grant_writing.tools for the "common"
 # checks AND the "grant" domain.  grant_writing is now a first-class public
 # radia-mcp subpackage, so lint_all is a DECLARATIVE REGISTRY over the document
 # family (grant_writing / presentation / paper_writing / poster), dispatched by
@@ -740,7 +740,7 @@ def document_meta_notebook_result_audit(repo_root: str = "",
         repo_root: Radia repository root.  Empty means auto-detect from cwd.
         notebook_root: Optional subdirectory to scan, absolute or repo-relative.
             Empty defaults to ``docs/`` when it exists.
-        include_gitignored: Include notebooks ignored by git (LAB-local docs,
+        include_gitignored: Include notebooks ignored by git (validation runtime-local docs,
             work-in-progress notebook galleries).  Defaults false for public
             repo policy checks.
         tracked_only: In a git checkout, scan only tracked notebooks by default.

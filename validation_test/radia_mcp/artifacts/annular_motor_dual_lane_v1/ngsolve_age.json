@@ -4,7 +4,7 @@
   "timestamp_utc": "2026-07-31T07:55:16.561253+00:00",
   "execution_environment": {
     "host_role": "compute",
-    "hostname": "Hibino",
+
     "python": "3.12.10"
   },
   "motor_validation_lane": "ngsolve_age",

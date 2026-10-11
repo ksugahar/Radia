@@ -43,7 +43,7 @@ def main():
                "tests/matlab/test_mex_runtime_setup.m", "validation_test/matlab_runtime/benchmark_setup.py"]
     record = dict(schema="radia.matlab-setup-overhead.v1", passed=False,
                   utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                  host=platform.node(), python=platform.python_version(),
+                  platform_class=platform.system(), python=platform.python_version(),
                   scope="api.commands gateway overhead; not numerical solver performance",
                   mex=str(mex), mex_sha256=hashlib.sha256(mex.read_bytes()).hexdigest(),
                   source_hashes={p: hashlib.sha256((root / p).read_bytes()).hexdigest() for p in sources},

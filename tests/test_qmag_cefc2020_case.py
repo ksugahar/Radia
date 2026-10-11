@@ -1,6 +1,6 @@
 """Fast contracts of the CEFC 2020 quadrupole validation lane (validation_test/quadrupole_cefc2020).
 
-The heavy HDiv-MMM solves run on hibino; these tests lock what can be checked in seconds: the
+The heavy HDiv-MMM solves run on compute host; these tests lock what can be checked in seconds: the
 racetrack coil set is a clean quadrupole with the documented sign convention, the iron law loads
 with its documented shape, and the generated Cubit journal is the conforming imprint/merge +
 per-volume z-sweep contract without entity ids.

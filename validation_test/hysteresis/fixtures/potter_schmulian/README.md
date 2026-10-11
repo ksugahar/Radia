@@ -1,7 +1,7 @@
 # Analytical branch-source preservation
 
 Recovered without modification from the lab source directory:
-`W:\999_菅原賢悟\19_磁気ヒステリシス\2024_IGTE_共同研究\2024_03_08_H-input_B-input\Potter_Schmulian`.
+`private-runtime-path`.
 
 `CASE_02.m` constructs analytical branches, optimizes endpoints with
 `fminsearch`, and resamples with `makima` before saving `B_input.mat`.

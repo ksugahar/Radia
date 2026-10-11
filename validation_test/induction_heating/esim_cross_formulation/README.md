@@ -9,7 +9,7 @@ end-to-end workpiece power `P_wp` must agree, and the design-relevant
 per-element/uniform ratio must be reproduced across both.
 
 Backs the validation tier **(vi)** of two manuscripts (materials live
-outside the repo, under `W:\02_学会資料`):
+outside the repo, under `private-runtime-path`):
 - SA-26-070 (IEEJ 静止器・回転機合同研究会 @ 八戸, 2026-08)
 - IGTE 2026 selected-papers full paper (Kubota et al.)
 

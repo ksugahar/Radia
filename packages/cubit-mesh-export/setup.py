@@ -9,7 +9,7 @@ to gate wheel/sdist creation on a provenance invariant:
 If the invariant is violated, the build aborts BEFORE setuptools bundles
 the stale file into a wheel. Without this guard, ``pip install`` or
 ``pip wheel`` would happily package the latest .cpp changes' *non-built*
-binaries, which is how 100号機 got a post-6a8d2e5 Python package with a
+binaries, which is how runtime host got a post-6a8d2e5 Python package with a
 pre-6a8d2e5 .ccm on 2026-04-14.
 
 The retired .ccl is not packaged. The .ccm and .pyd are both mandatory wheel

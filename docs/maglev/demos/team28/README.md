@@ -431,7 +431,7 @@ is `~6e-6`, negligible) -- a pure convention factor, not the dipole error.
   (laser triangulation, 4-measurement average, Table I).  PDF in the lab
   corpus `05_TEAM_benchmark/23_problem28/`.
 - Geometry + full-FEM ground truth: lab learning material
-  `W:\00_CAE\NGSolve\01_菅原\2024_08_TEAM28` (axisymmetric NGSolve TEAM 28,
+  `private-runtime-path (axisymmetric NGSolve TEAM 28,
   DC / 50Hz / 50Hz_可動 / Transient + field-validation figure).
   Disk: Al, R=65mm, t=3mm, sigma=3.4e7; coils: 960t/+20A (r=41mm) and
   576t/-20A (r=87.5mm) counter-wound, 50 Hz.

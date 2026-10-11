@@ -32,7 +32,7 @@ def test_free_boundary_artifacts_record_compute_runtime():
         result = _load(path)
         assert result["schema"] == schema
         meta = result["meta"]
-        assert meta["hostname"].lower() in {"mdx", "hibino"}
+        assert "hostname" not in meta
         assert meta["python_version"]
         assert meta["ngsolve_version"]
         assert meta["numpy_version"]

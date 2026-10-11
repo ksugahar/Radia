@@ -141,7 +141,7 @@ computes `Z_s^anal` over a frequency sweep.
 calls `ESIMFiniteSlabSolver(geometry='cylinder', bh_curve=None, mu_r=100, ...)`
 at each frequency and compares.
 
-**Result** (LAB, radia 4.46.3, `n_nodes=2000`):
+**Result** (validation host, radia 4.46.3, `n_nodes=2000`):
 
 | ξ = R/δ | Frequency | μ_r | δ [mm] | Re(Z_s)_anal [Ω] | Re(Z_s)_num [Ω] | Rel. err |
 |---|---|---|---|---|---|---|
@@ -190,7 +190,7 @@ cylindrical steel workpiece (R_wp = half-thickness = 5 mm,
 Mesh: `wp_mesh_nv = 73, wp_mesh_n_tris = 142` (BIE);
 `ndof = 76024 / 87503` (FEM-Kelvin / FEM-coilmesh).
 
-**Three paths driven at four frequencies** (LAB, radia 4.46.3,
+**Three paths driven at four frequencies** (validation host, radia 4.46.3,
 [`validation_test/ih_esim_benchmark/results.json`](../../validation_test/ih_esim_benchmark/results.json)):
 
 | f [kHz] | Path | \|Z_s\| [Ω] | L_total [nH] | P_wp [µW] | Karl iter | t_total [s] |
@@ -337,7 +337,7 @@ top open item for IGTE.
 
 ## 6. Curve-Order × Basis-Order Study: Linear-SIBC on Cu Workpiece
 
-**Test setup** (2026-05-18, LAB benchmark): Cu cylindrical workpiece
+**Test setup** (2026-05-18, validation host benchmark): Cu cylindrical workpiece
 (`ih_bem_sample_p{1,2}.vol`, R = 25 mm, H = 25 mm, σ = 5.8 × 10⁷ S/m,
 μ_r = 1) driven by the IGTE-benchmark PEEC coil
 (`ih_fem_kelvin_demo_coil.step`, 16 perimeter filaments) at 50 kHz, 1 A.
@@ -354,7 +354,7 @@ isolates the curve-order effect from any mesh-refinement effect.
 | `p1_h2` | 1 (flat Tri3) | 2 (P2)  | 2150 | 168.24 | 53.310 | −44.658 | 27.119 | 4.96 | 7.19 |
 | `p2_h2` | 2 (curved Tri6) | 2 (P2) | 2150 | 168.81 | 53.256 | −44.711 | 27.165 | 4.96 | 7.21 |
 
-(From `C:/temp/igte_bench/{p1_h1,p1_h2,p2_h2}.json` — reproducible
+(From `private-runtime-path` — reproducible
 via the bash script at the end of this section.)
 
 **Observations:**
@@ -751,7 +751,7 @@ done
 End-to-end walkthrough using the canonical IGTE-benchmark inputs.
 All numbers below are **real** — they are the values stored in
 [`validation_test/ih_esim_benchmark/results.json`](../../validation_test/ih_esim_benchmark/results.json)
-(radia 4.46.3, LAB, 2026-05-15), reproducible via the
+(radia 4.46.3, validation host, 2026-05-15), reproducible via the
 `benchmark.py` script in the same directory.
 
 ### 11.1 Problem statement
@@ -784,7 +784,7 @@ python src/radia/panels/calc_inductance.py \
     --output result_50kHz.json
 ```
 
-Wall time: 5.3 s (LAB, Windows, MKL).
+Wall time: 5.3 s (validation host, Windows, MKL).
 
 ### 11.3 JSON output — REAL numbers
 

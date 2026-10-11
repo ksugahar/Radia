@@ -45,7 +45,7 @@ def main():
     args = parser.parse_args()
     ng.SetNumThreads(4)
     t0 = time.perf_counter()
-    report = dict(scope=__doc__, host=platform.node(), python=sys.version,
+    report = dict(scope=__doc__, platform_class=platform.system(), python=sys.version,
                   ngsolve=ng.__version__, threads=4, cases=[])
     limits = dict(loss_relative_error=.02, reaction_relative_error=.02,
                   complex_tangential_field_relative_l2=.02,

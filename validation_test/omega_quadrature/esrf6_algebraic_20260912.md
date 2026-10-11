@@ -1,6 +1,6 @@
 # ESRF 6 algebraic and field diagnostics: HOLD
 
-These are new solves on hibino, not a relabeling of the earlier energy audit.
+These are new solves on compute-host, not a relabeling of the earlier energy audit.
 The physical problem is linear iron, mu_r=1000, response p=1, source projection
 order 3, eight threads, and the existing 134686-element curved TET mesh. This is
 not the original nonlinear ESRF example or current-main release acceptance.
@@ -9,7 +9,7 @@ not the original nonlinear ESRF example or current-main release acceptance.
 
 The installed non-editable candidate is the same unpublished 4.95.91 wheel
 recorded in `candidate_de7feea0/README.md`. Wheel and mesh hashes were checked
-again on hibino before execution. No installation or native payload changed.
+again on compute-host before execution. No installation or native payload changed.
 
 - Wheel SHA256: `4952ba92cc0502e81949c35745108f6da499d6c6eb5bf1055a46de1be3a9ad4a`.
 - Native SHA256: `5d8fe9320b6776ed5712ca7158b9878994a827d99d5725278263734dbb8a5ac8`.

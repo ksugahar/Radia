@@ -219,7 +219,7 @@ def test_inductance_bem_a_vacuum_rect_united():
                           "by surface RWG.")
     # Panel-level R lock for the unified impedance-EFIE (the ONLY
     # place the CLI-path BEM-A R is asserted since the PEC removal;
-    # captured 0.6785 mOhm at 50 kHz / maxh=0.012 on LAB 2026-07-02,
+    # captured 0.6785 mOhm at 50 kHz / maxh=0.012 on validation runtime 2026-07-02,
     # +-20% band for per-machine re-mesh variation).
     _assert_in_range(result["R_coil_mOhm"], 0.54, 0.82,
                      "R_coil_mOhm (BEM-A impedance-EFIE band)",

@@ -67,7 +67,7 @@ def main():
     with ng.TaskManager():
         cases = [evaluate(h, bonus) for h, bonus in ((.35, 12), (.35, 24), (.175, 12), (.175, 24))]
     out = {"schema": "radia.bem-curved-sphere/v1", "ngsolve": ng.__version__,
-           "python": platform.python_version(), "host": platform.node(),
+           "python": platform.python_version(), "platform_class": platform.system(),
            "thresholds": LIMITS, "accepted_case": {"maxh": .175, "bonus_intorder": 24},
            "passed": cases[-1]["passed"], "cases": cases}
     args.output.parent.mkdir(parents=True, exist_ok=True)

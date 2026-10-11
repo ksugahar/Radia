@@ -1,6 +1,6 @@
 {
   "schema": "radia.validation.omega-quadrature.v1",
-  "host": "mdx2",
+
   "runtime": {
     "mode": "research",
     "direct_url": {}
@@ -304,18 +304,18 @@
       "xsuite_bridge.py": "acdc52660bd6d0b0a51acf77cb5304fd3a18a6a7ee2768497efcf5187d18b1d0"
     },
     "ngsolve": "6.2.2606",
-    "solver_file": "C:\\temp\\omega-quadrature-small\\kelvin_solver.py",
+    "solver_file": "<private-path>/omega-quadrature-small\\kelvin_solver.py",
     "solver_sha256": "7d207b91c9f3498d5f8b659ef7824aad31d70e6ccf868d6fe4f0fef44bdf9931",
     "factory_sha256": "aa9616a6fdd77108dd4b0e3b8665e34e321cda74ec22fe3d5ffda188dec44f27",
     "runner_sha256": "931f3d674b0da6cdad133da6ec9274590df139f5fb94d0f4104943692f00f752",
     "diagnostics_sha256": "953c742f1beb089264cef2bf16c9752d52f944a12a45500d1308f6cf347753d5"
   },
   "controls": {
-    "factory": "C:\\temp\\omega-quadrature-small\\ctype.py",
-    "mesh": "C:\\temp\\radia-ctype-family\\coarse\\kelvin_domain.vol",
-    "output": "C:\\temp\\omega-quadrature-small\\result.json",
+    "factory": "<private-path>/omega-quadrature-small\\ctype.py",
+    "mesh": "<private-path>/radia-ctype-family\\coarse\\kelvin_domain.vol",
+    "output": "<private-path>/omega-quadrature-small\\result.json",
     "mode": "research",
-    "research_solver": "C:\\temp\\omega-quadrature-small\\kelvin_solver.py",
+    "research_solver": "<private-path>/omega-quadrature-small\\kelvin_solver.py",
     "orders": [
       1
     ],
@@ -348,8 +348,8 @@
     "mesh_report": {
       "schema": "radia.validation.c-type-cubit-meshes.v1",
       "passed": true,
-      "machine": "lab",
-      "cad_authority": "C:\\temp\\radia-hdiv-fix6\\validation_test\\c_type_three_engine\\cad\\c_type_iron.jou",
+
+      "cad_authority": "<private-path>/radia-hdiv-fix6\\validation_test\\c_type_three_engine\\cad\\c_type_iron.jou",
       "cad_sha256": "dc857c13ada42f8c7f73f7e0eab634523a839c185af376c6b5e2634aa2abfb1f",
       "cubit": "C:\\Program Files\\Coreform Cubit 2025.12\\bin\\coreform_cubit.com",
       "command_plugin_dir": null,
@@ -412,9 +412,9 @@
       "mesh_iron_volume_m3": 0.0014460953333333615,
       "relative_iron_volume_error": 2.4996485084668267e-13,
       "artifacts": {
-        "iron_vol": "C:\\temp\\radia-ctype-family\\coarse\\iron.vol",
+        "iron_vol": "<private-path>/radia-ctype-family\\coarse\\iron.vol",
         "iron_vol_sha256": "f9cf6eeb0fe99f775d99aad5740cd8e63ee6f845489cfb9a2ccb534bda0d44b0",
-        "kelvin_domain_vol": "C:\\temp\\radia-ctype-family\\coarse\\kelvin_domain.vol",
+        "kelvin_domain_vol": "<private-path>/radia-ctype-family\\coarse\\kelvin_domain.vol",
         "kelvin_domain_vol_sha256": "078a8fa56d065c0e0dfb8721f540e1a4b8e96a7932905305dd4c78cdda9dde2f"
       },
       "inventory": {
@@ -454,22 +454,22 @@
           "run": {
             "command": [
               "check-vol",
-              "C:\\temp\\radia-ctype-family\\coarse\\iron.vol",
+              "<private-path>/radia-ctype-family\\coarse\\iron.vol",
               "--strict-labels",
               "--required-materials",
               "iron",
               "--required-boundaries",
               "iron_boundary",
               "--report-json",
-              "C:\\temp\\radia-ctype-family\\coarse\\iron.vol-check.json",
+              "<private-path>/radia-ctype-family\\coarse\\iron.vol-check.json",
               "--format",
               "json"
             ],
             "returncode": 0,
             "runtime_s": 0.9746887999936007,
-            "log": "C:\\temp\\radia-ctype-family\\coarse\\iron.check-vol.log"
+            "log": "<private-path>/radia-ctype-family\\coarse\\iron.check-vol.log"
           },
-          "report": "C:\\temp\\radia-ctype-family\\coarse\\iron.vol-check.json",
+          "report": "<private-path>/radia-ctype-family\\coarse\\iron.vol-check.json",
           "payload": {
             "schema": "cubit-mesh-export.vol-check.v1",
             "generated_at_utc": "2026-09-07T07:31:01.392171+00:00",
@@ -479,12 +479,12 @@
               "python": "3.12.10"
             },
             "passed": true,
-            "vol_file": "C:\\temp\\radia-ctype-family\\coarse\\iron.vol",
-            "json_file": "C:\\temp\\radia-ctype-family\\coarse\\iron.vol.json",
+            "vol_file": "<private-path>/radia-ctype-family\\coarse\\iron.vol",
+            "json_file": "<private-path>/radia-ctype-family\\coarse\\iron.vol.json",
             "threshold_pct": 1.0,
             "cad_reference": {
               "available": true,
-              "file": "C:\\temp\\radia-ctype-family\\coarse\\iron.vol.json",
+              "file": "<private-path>/radia-ctype-family\\coarse\\iron.vol.json",
               "auto_discovered": true,
               "mesh_only_materials": [],
               "metadata_checks": {
@@ -936,7 +936,7 @@
           "run": {
             "command": [
               "check-vol",
-              "C:\\temp\\radia-ctype-family\\coarse\\kelvin_domain.vol",
+              "<private-path>/radia-ctype-family\\coarse\\kelvin_domain.vol",
               "--strict-labels",
               "--required-materials",
               "iron,air,kelvin",
@@ -945,15 +945,15 @@
               "--air-materials",
               "air,kelvin",
               "--report-json",
-              "C:\\temp\\radia-ctype-family\\coarse\\kelvin_domain.vol-check.json",
+              "<private-path>/radia-ctype-family\\coarse\\kelvin_domain.vol-check.json",
               "--format",
               "json"
             ],
             "returncode": 0,
             "runtime_s": 38.624228000000585,
-            "log": "C:\\temp\\radia-ctype-family\\coarse\\kelvin_domain.check-vol.log"
+            "log": "<private-path>/radia-ctype-family\\coarse\\kelvin_domain.check-vol.log"
           },
-          "report": "C:\\temp\\radia-ctype-family\\coarse\\kelvin_domain.vol-check.json",
+          "report": "<private-path>/radia-ctype-family\\coarse\\kelvin_domain.vol-check.json",
           "payload": {
             "schema": "cubit-mesh-export.vol-check.v1",
             "generated_at_utc": "2026-09-07T07:31:40.019396+00:00",
@@ -963,12 +963,12 @@
               "python": "3.12.10"
             },
             "passed": true,
-            "vol_file": "C:\\temp\\radia-ctype-family\\coarse\\kelvin_domain.vol",
-            "json_file": "C:\\temp\\radia-ctype-family\\coarse\\kelvin_domain.vol.json",
+            "vol_file": "<private-path>/radia-ctype-family\\coarse\\kelvin_domain.vol",
+            "json_file": "<private-path>/radia-ctype-family\\coarse\\kelvin_domain.vol.json",
             "threshold_pct": 1.0,
             "cad_reference": {
               "available": true,
-              "file": "C:\\temp\\radia-ctype-family\\coarse\\kelvin_domain.vol.json",
+              "file": "<private-path>/radia-ctype-family\\coarse\\kelvin_domain.vol.json",
               "auto_discovered": true,
               "mesh_only_materials": [],
               "metadata_checks": {
@@ -1482,11 +1482,11 @@
             "-batch",
             "-nojournal",
             "-input",
-            "C:\\temp\\radia-ctype-family\\coarse\\build_iron.jou"
+            "<private-path>/radia-ctype-family\\coarse\\build_iron.jou"
           ],
           "returncode": 0,
           "runtime_s": 1.7521624000073643,
-          "log": "C:\\temp\\radia-ctype-family\\coarse\\iron.cubit.log"
+          "log": "<private-path>/radia-ctype-family\\coarse\\iron.cubit.log"
         },
         "kelvin_domain": {
           "command": [
@@ -1495,11 +1495,11 @@
             "-batch",
             "-nojournal",
             "-input",
-            "C:\\temp\\radia-ctype-family\\coarse\\build_kelvin_domain.jou"
+            "<private-path>/radia-ctype-family\\coarse\\build_kelvin_domain.jou"
           ],
           "returncode": 0,
           "runtime_s": 3.062765800001216,
-          "log": "C:\\temp\\radia-ctype-family\\coarse\\kelvin_domain.cubit.log"
+          "log": "<private-path>/radia-ctype-family\\coarse\\kelvin_domain.cubit.log"
         }
       }
     }

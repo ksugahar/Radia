@@ -203,7 +203,7 @@
     "validation_wall_s": 13.951540899986867
   },
   "runtime": {
-    "host": "lab",
+
     "python": "3.12.10"
   }
 }

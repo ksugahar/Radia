@@ -11,25 +11,25 @@
     ]
   },
   "extraction": {
-    "vol": "C:\\temp\\nfs_e2e\\nfs_e2e_inner.vol",
-    "sol": "C:\\temp\\nfs_e2e\\H_inner.sol",
+    "vol": "<private-path>/nfs_e2e\\nfs_e2e_inner.vol",
+    "sol": "<private-path>/nfs_e2e\\H_inner.sol",
     "surface_label": "nfs_surface",
-    "nfs_artifact": "C:\\temp\\nfs_e2e\\nfs.json",
+    "nfs_artifact": "<private-path>/nfs_e2e\\nfs.json",
     "nfs_artifact_bytes": 21255
   },
   "cli_result": {
     "status": "OK",
-    "vol": "C:\\temp\\nfs_e2e\\nfs_e2e_inner.vol",
-    "sol": "C:\\temp\\nfs_e2e\\H_inner.sol",
+    "vol": "<private-path>/nfs_e2e\\nfs_e2e_inner.vol",
+    "sol": "<private-path>/nfs_e2e\\H_inner.sol",
     "surface_label": "nfs_surface",
     "n_faces": 96,
     "omega": 0.0,
-    "artifact": "C:\\temp\\nfs_e2e\\nfs.json",
+    "artifact": "<private-path>/nfs_e2e\\nfs.json",
     "artifact_bytes": 21255
   },
   "projection": {
     "outer_mesh_kind": "OCC sphere shell R=0.6 to R=3.0",
-    "outer_sol": "C:\\temp\\nfs_e2e\\H_outer_reconstructed.sol",
+    "outer_sol": "<private-path>/nfs_e2e\\H_outer_reconstructed.sol",
     "outer_sol_bytes": 362736
   },
   "verification": {

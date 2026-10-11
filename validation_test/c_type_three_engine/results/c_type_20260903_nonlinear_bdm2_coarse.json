@@ -2,7 +2,7 @@
   "schema": "radia.validation.c-type-formulation-comparison.v4",
   "generated_at_utc": "2026-09-03T13:31:12.408010+00:00",
   "passed": true,
-  "machine": "Hibino",
+
   "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
   "radia_version": "4.95.77",
   "radia_module": "C:\\Program Files\\Python312\\Lib\\site-packages\\radia\\__init__.py",
@@ -1302,7 +1302,7 @@
       "engine": "mixed_total_reduced_omega"
     }
   },
-  "mesh_result": "C:\\temp\\radia_ctype_accuracy_20260830_v49571\\meshes\\coarse\\mesh_result.json",
+  "mesh_result": "<private-path>/radia_ctype_accuracy_20260830_v49571\\meshes\\coarse\\mesh_result.json",
   "mesh_result_sha256": "23e8fb218ce814a4a46cb030c01a570a91a2b8b669987d7bb926c0d3aa071d49",
   "bh_table": "C:\\Program Files\\Python312\\Lib\\site-packages\\radia\\panels\\samples\\em_sample_bh.txt",
   "bh_table_sha256": "7a0711748f130a636f19957ac6f2de2d00d32bf164c7c244d09aaae5af5222ee",

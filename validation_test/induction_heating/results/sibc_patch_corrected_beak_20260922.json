@@ -2,7 +2,7 @@
   "schema": "radia.sibc_patch_corrected_beak.v1",
   "generated_at_utc": "2026-09-22T04:17:21.712631+00:00",
   "git_head": "a2248ac943d084b0ef7faab1d1bb446a835e702d",
-  "host": "intel11",
+
   "question": "the surface impedance fails where the surface curves inside a skin depth.  Can it be repaired there instead of abandoned, and by how much?",
   "method": "overlapping patches, Proekt, Yuferev, Tsukerman and Ida (2002); patch scale from the corner-layer result of Dauge, Dular, Krahenbuhl, Peron, Perrussel and Poignard (2014)",
   "frequency_hz": 150000.0,

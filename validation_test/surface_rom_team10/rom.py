@@ -136,6 +136,6 @@ if __name__ == '__main__':
                     print(f'k{k} r{r} {w}: steel B error {100*err:.3f}%  newton {st["newton_mean"]:.1f}/{st["newton_max"]}  {st["seconds"]:.0f}s', flush=True)
     res = dict(case='team13_surface_rom', half=half, maxh_steel=maxh, order=order, steps=steps, train=train_w, test=test_w,
                ndof=m.fes.ndof, n_gamma=len(m.idx_gamma), n_interior=len(m.idx_int), nu_ref=NU_REF, rows=rows,
-               host=platform.node(), ngsolve=ngsolve.__version__,
+               platform_class=platform.system(), ngsolve=ngsolve.__version__,
                sources={p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in ['team13_model.py', 'transient.py', 'rom.py']})
     (fdir / f'rom_{"-".join(train_w)}.json').write_text(json.dumps(res, indent=2))

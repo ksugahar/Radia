@@ -2,15 +2,15 @@
   "schema": "cubit-mesh-export.standalone-acceptance.v1",
   "passed": true,
   "gui_started": false,
-  "host": "lab",
-  "python": "C:\\temp\\cubit-standalone-1.0.0-venv\\Scripts\\python.exe",
-  "wheel": "C:\\temp\\radia-cubit-1.0.0-dist\\cubit_mesh_export-1.0.0-cp312-cp312-win_amd64.whl",
+
+  "python": "<private-path>/cubit-standalone-1.0.0-venv\\Scripts\\python.exe",
+  "wheel": "<private-path>/radia-cubit-1.0.0-dist\\cubit_mesh_export-1.0.0-cp312-cp312-win_amd64.whl",
   "radia_absent": true,
   "radia_mcp_absent": true,
   "version": "1.0.0",
-  "import_path": "C:\\temp\\cubit-standalone-1.0.0-venv\\Lib\\site-packages\\cubit_mesh_export",
+  "import_path": "<private-path>/cubit-standalone-1.0.0-venv\\Lib\\site-packages\\cubit_mesh_export",
   "wheel_sha256": "dd9afd666391a525c9d43e24fbbb0aa08f6d9577da14241aa1806325d954aa03",
-  "native_import_path": "C:\\temp\\cubit-standalone-1.0.0-venv\\Lib\\site-packages\\cubit_mesh_export\\cubit_mesh_curver.pyd",
+  "native_import_path": "<private-path>/cubit-standalone-1.0.0-venv\\Lib\\site-packages\\cubit_mesh_export\\cubit_mesh_curver.pyd",
   "dependencies": {
     "netgen-mesher": "6.2.2606",
     "ngsolve": "6.2.2606",
@@ -30,12 +30,12 @@
     "-noinitfile",
     "-commandplugindir",
     "C:\\Program Files\\Coreform Cubit 2025.12\\bin\\plugins",
-    "C:\\temp\\cubit-standalone-1.0.0-final\\driver.jou"
+    "<private-path>/cubit-standalone-1.0.0-final\\driver.jou"
   ],
   "cubit_exit_code": 0,
   "issues": [],
   "vol_sha256": "1e23078fca2700c7a0dbfc2152acff3635f96a7caf5bf01c786d047694be9166",
-  "check_report": "C:\\temp\\cubit-standalone-1.0.0-final\\vol-check.json",
+  "check_report": "<private-path>/cubit-standalone-1.0.0-final\\vol-check.json",
   "mesh": {
     "dimension": 3,
     "curve_order": 2,

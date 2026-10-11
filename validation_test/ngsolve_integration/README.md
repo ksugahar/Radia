@@ -243,7 +243,7 @@ B_cf = rad.RadiaField(magnet, 'b')  # No separate module needed
 
 If using an older version, rebuild:
 ```bash
-cd S:/Radia/01_GitHub
+cd private-runtime-path
 .\Build.ps1
 ```
 

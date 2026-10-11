@@ -220,7 +220,7 @@ def main(argv=None):
     out = {
         "schema": "radia.validation.sparsesolv-hiruma-bddc-coarse.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "hostname": platform.node(),
+        "platform_class": platform.system(),
         "label": args.label,
         "physics": {"frequency_hz": freq, "sigma_cu": sigma_cu,
                     "mu_r_core": mu_r_core, "tol": args.tol,

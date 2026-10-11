@@ -12,8 +12,8 @@ Two results a K=3 toy cannot demonstrate and a 0D material model cannot produce:
       oint H.dB is a spatially-varying hysteresis-loss density; the loop-free solve
       resolves the spatial map + integrates the total, which a 0D loss curve cannot.
 
-Correctness (numerical agreement / physical soundness), so LAB per the Benchmark
-Policy; per-step timing uses hibino first or an idle-CI mdx fallback. Results saved to
+Correctness (numerical agreement / physical soundness), so validation runtime per the Benchmark
+Policy; per-step timing uses compute-host first or an idle-CI mdx fallback. Results saved to
 real_material_*.json.
 """
 import json
@@ -100,7 +100,7 @@ def test_real_material_coupled_loop_matches_intrinsic():
 
     (HERE / "real_material_loop.json").write_text(json.dumps(dict(
         description="Real K=40 Potter-Schmulian coupled rod loop vs demag-free intrinsic loop",
-        timestamp=datetime.now().isoformat(), hostname=platform.node(),
+        timestamp=datetime.now().isoformat(), platform_class=platform.system(),
         peakB_T=peakB, coupled_area_J_per_m3=area, intrinsic_area_J_per_m3=area0,
         loop_area_rel_diff=rel, loss_coupled_W_per_kg_50Hz=area * 50.0 / RHO_STEEL,
         picard_iters=iters, ndof=res["ndof"], n_el=res["n_el"],
@@ -137,7 +137,7 @@ def test_real_material_spatial_loss_nonuniform():
 
     (HERE / "real_material_spatial_loss.json").write_text(json.dumps(dict(
         description="Real K=40 Potter-Schmulian per-element hysteresis loss density, cube demag",
-        timestamp=datetime.now().isoformat(), hostname=platform.node(),
+        timestamp=datetime.now().isoformat(), platform_class=platform.system(),
         peakB_T=peakB, n_el=int(loss_el.size),
         loss_density_min=float(loss_el.min()), loss_density_max=float(loss_el.max()),
         loss_density_mean=mean_dens, spatial_spread=spread, total_loss_J_per_cycle=total), indent=1))

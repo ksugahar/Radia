@@ -1,13 +1,13 @@
 {
   "schema": "radia.validation.evrs_sibc_mixed_schur.v1",
   "generated_at_utc": "2026-07-16T10:40:42.232066+00:00",
-  "validation_host": "lab",
+
   "runtime": {
     "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
     "platform": "Windows-2022Server-10.0.20348-SP0",
     "ngsolve_version": "6.2.2604"
   },
-  "note": "LAB/desktop smoke only: timings are recorded to diagnose the run, not as benchmark data.",
+  "note": "validation runtime/desktop smoke only: timings are recorded to diagnose the run, not as benchmark data.",
   "configuration": {
     "order": 6,
     "orders": [

@@ -19,7 +19,7 @@ def digest(path):
 
 def test_retained_inputs_and_results_match_the_record():
     record = read("compute_record.json")
-    assert record["hostname"].lower() == "mdx2"
+    assert "hostname" not in record
     for name, expected in record["inputs"].items():
         assert digest(ROOT / "inputs" / name) == expected
     assert [case["frequency_hz"] for case in record["cases"]] == [10000, 50000, 100000]

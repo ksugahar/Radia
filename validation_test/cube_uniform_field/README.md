@@ -10,5 +10,5 @@ mesh-backed HDiv-MMM implementation and have been retired from this corpus.
 Their source and measured outputs remain available in Git history.
 
 Useful problem sizes are validation workloads, not pull-request tests. Run them
-on hibino when available, or on mdx while its CI queue is idle, and preserve the
+on compute-host when available, or on mdx while its CI queue is idle, and preserve the
 result as JSON under `validation_test/`.

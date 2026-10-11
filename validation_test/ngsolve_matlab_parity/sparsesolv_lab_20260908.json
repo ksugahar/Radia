@@ -1,9 +1,9 @@
 {
   "schema": "radia.sparsesolv-matlab-parity.v1",
   "utc": "2026-09-08T10:39:28.519601+00:00",
-  "host": "lab",
+
   "python": "3.12.10",
-  "mex": "C:\\temp\\radia-axifem-q2-heat-axis\\matlab\\radia_mex.mexw64",
+  "mex": "<private-path>/radia-axifem-q2-heat-axis\\matlab\\radia_mex.mexw64",
   "mex_sha256": "4636050da2d42a74a2d29d972e823224c57f525c9d50f134b97c8cdcbf01f77c",
   "source_state": "Working tree snapshot; source_hashes identify tested files, not the base commit alone",
   "source_base_commit": "423a9aa233ccac6cac9c9c765254c48f3814cbe1",
@@ -38,7 +38,7 @@
   },
   "passed": true,
   "matlab": "26.1.0.3276743 (R2026a) Update 3",
-  "resolved_mex": "C:\\temp\\radia-axifem-q2-heat-axis\\matlab\\radia_mex.mexw64",
+  "resolved_mex": "<private-path>/radia-axifem-q2-heat-axis\\matlab\\radia_mex.mexw64",
   "tests": {
     "names": [
       "test_sparsesolv_mex/testPythonParityAndLifetime",
@@ -103,12 +103,12 @@
       }
     ],
     "oracle": {
-      "mesh": "C:\\temp\\tpc8426648_b365_48f3_826f_536c39cc5054\\mesh.vol",
+      "mesh": "<private-path>/tpc8426648_b365_48f3_826f_536c39cc5054\\mesh.vol",
       "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
       "ngsolve": "6.2.2606",
       "mesh_sha256": "856a22cccc556233768608de694d5785c6acbb3871df568dd11368ad2a7755f4",
       "sparsesolv_sha256": "95aedba4799f6572c0b06614afaf6ed037c33ac7500e435c9abe0db50ce765da",
-      "sparsesolv_binary": "C:\\temp\\radia-axifem-q2-heat-axis\\src\\radia\\sparsesolv_ngsolve.pyd"
+      "sparsesolv_binary": "<private-path>/radia-axifem-q2-heat-axis\\src\\radia\\sparsesolv_ngsolve.pyd"
     }
   }
 }

@@ -34,7 +34,7 @@ SKIP notice for steps 1-3 and uses a pre-built fallback mesh
 
 Output:
     results_phase3.json
-    [intermediate artifacts in C:/temp/nfs_e2e/]
+    [intermediate artifacts in private-runtime-path
 """
 
 from __future__ import annotations

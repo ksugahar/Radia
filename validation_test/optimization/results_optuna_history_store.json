@@ -1,6 +1,6 @@
 {
   "timestamp": "2026-08-28T15:40:16+09:00",
-  "hostname": "HIBINO",
+
   "benchmark": "radia.optuna history store scaling",
   "schema": "radia.optuna.history-store-benchmark.v1",
   "matlab_version": "26.1.0.3312084 (R2026a) Update 4",

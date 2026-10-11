@@ -18,7 +18,7 @@ Usage:
 Promoted from legacy private source tree to public radia-mcp on
 2026-04-24 (single Radia monorepo).  General PEEC inductance formulae
 live in radia_mcp.radia_ngsolve.peec_inductance_knowledge; this
-subpackage holds the LAB PEEC workflow (Loop-Star, FastHenry parsing,
+subpackage holds the validation runtime PEEC workflow (Loop-Star, FastHenry parsing,
 PEECBuilder/PEECCircuitSolver API, Bessel/Dowell/ESIM surface
 impedance, PRIMA MOR, SPICE extraction).
 """

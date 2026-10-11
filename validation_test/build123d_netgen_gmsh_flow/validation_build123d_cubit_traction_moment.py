@@ -12,7 +12,7 @@ named Netgen `.vol` boundaries and compared by face name.
 Run:
 
     python validation_test/build123d_netgen_gmsh_flow/validation_build123d_cubit_traction_moment.py
-    python validation_test/build123d_netgen_gmsh_flow/validation_build123d_cubit_traction_moment.py --vol C:\\temp\\box.vol
+    python validation_test/build123d_netgen_gmsh_flow/validation_build123d_cubit_traction_moment.py --vol private-runtime-path
 """
 
 from __future__ import annotations

@@ -6,7 +6,7 @@ PANEL_CONVENTIONS = r"""
 ## Process architecture
 
 ```text
-Cubit 2025.12 embedded Python/PySide6
+Cubit 2026.8 embedded Python/PySide6
   -> C++ export netgen
   -> self-contained .vol/.sol files
   -> Radia Simulink application block (separate MATLAB process)

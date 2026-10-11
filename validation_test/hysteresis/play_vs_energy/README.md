@@ -28,7 +28,7 @@ verifies the forward equivalence, then exhibits the inverse differences.
 
 The Potter-Schmulian B-input.mat (analytical Jiles-Atherton-style model,
 20 BMax levels up to 1.9 T) is used so anyone can reproduce the result
-deterministically. Path: `W:\999_菅原賢悟\19_磁気ヒステリシス\2024_IGTE_共同研究\2024_03_08_H-input_B-input\Potter_Schmulian\B_input.mat`.
+deterministically. Path: `private-runtime-path`.
 
 ## Background
 

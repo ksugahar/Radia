@@ -1751,6 +1751,12 @@ def _verify_local_release_source(repo, expected_sha):
     return 0
 
 
+_PATH_ALIASES = (
+    ("w:/00_cae/radia/", "s:/radia/"),
+    ("//192.168.11.100/work/00_cae/radia/", "s:/radia/"),
+    ("//192.168.121.100/work/00_cae/radia/", "s:/radia/"),
+)
+
 def _norm_path(p):
     """Lower-case + forward-slashes + strip trailing slash so a UNC and
     a drive-letter form of the same NAS path compare equal."""
@@ -1758,15 +1764,11 @@ def _norm_path(p):
     # INTEL11 sees the LAB Radia share as W:\00_CAE\Radia while LAB records
     # the same files through S:\Radia.  Editable imports may canonicalize to
     # either mapped drive, so compare both spellings in the LAB namespace.
-    p = p.replace("w:/00_cae/radia/", "s:/radia/")
     # Both UNC spellings resolve to the LAB S: drive.  Normalize the whole
     # Radia namespace, not just 01_GitHub: release worktrees live under the
     # same share and editable imports report their real UNC location.
-    for unc_root in (
-        "//192.168.11.100/work/00_cae/radia/",
-        "//192.168.121.100/work/00_cae/radia/",
-    ):
-        p = p.replace(unc_root, "s:/radia/")
+    for alias, canonical in _PATH_ALIASES:
+        p = p.replace(alias, canonical)
     return p
 
 
@@ -2422,118 +2424,15 @@ def _motor_pin_status():
 
 
 def cmd_evidence_motor(args):
-    """Regenerate the motor MEX evidence artifact on HIBINO.
-
-    Scripted form of the 2026-08-07 manual run: build the MEX on LAB,
-    ship the snapshot closure to hibino over scp, run the generator in
-    a SYNCHRONOUS ssh (Windows OpenSSH reaps detached children on
-    session exit — Start-Process launches died twice before this was
-    understood), fetch the artifact back, verify the SHA pins, regenerate
-    the production replacement proof, and run the existing acceptance
-    tests without editing them.
-    """
-    step("evidence-motor: HIBINO MATLAB evidence regeneration")
-
-    art, drifted = _motor_pin_status()
-    if not drifted and not getattr(args, "force", False):
-        ok(f"evidence already current (tests={art['test_count']}, "
-           f"host={art['execution_environment']['hostname']}) — use --force to regenerate")
-        return 0
+    """Check historical motor evidence; CPU MEX regeneration is retired."""
     if getattr(args, "check", False):
+        _, drifted = _motor_pin_status()
         for rel in drifted:
             fail("pin drift: " + rel)
         return 4 if drifted else 0
-    for rel in drifted:
-        warn("pin drift: " + rel + " — regenerating")
-
-    # 1) fresh MEX from current source
-    # Preserve the caller's mapped-drive spelling on Windows. Path.resolve()
-    # expands S:/W: to a UNC path, which cmd.exe cannot use as the working
-    # directory of the CMake/Ninja post-build copy commands.
-    build_script = Path.cwd() / "Build.ps1"
-    if not build_script.is_file():
-        build_script = REPO / "Build.ps1"
-    p = run(["pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
-             "-File", str(build_script), "-MatlabMexOnly"], check=False)
-    if p.returncode != 0:
-        fail("Build.ps1 -MatlabMexOnly failed")
-        return 3
-
-    # 2) snapshot zip
-    zip_path = Path(r"C:\temp\radia_motor_evidence_quad.zip")
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
-        for f in _MOTOR_SNAPSHOT_FILES:
-            z.write(REPO / f, f)
-        for root in _MOTOR_SNAPSHOT_ROOTS:
-            for dirpath, dirnames, filenames in os.walk(REPO / root):
-                dirnames[:] = [d for d in dirnames
-                               if d not in ("__pycache__", ".pytest_cache")]
-                for fn in filenames:
-                    full = Path(dirpath) / fn
-                    z.write(full, full.relative_to(REPO).as_posix())
-    info(f"snapshot: {zip_path} ({zip_path.stat().st_size/1e6:.1f} MB)")
-
-    # 3) runner (ASCII only; synchronous MATLAB, refuses on busy host)
-    gen_rel = r"validation_test\radia_mcp\generate_motor_angle_family_mex_artifact.m"
-    runner = "\n".join([
-        "$ErrorActionPreference = 'Stop'",
-        "if (Get-Process -Name MATLAB -ErrorAction SilentlyContinue) {",
-        "    Write-Output 'BUSY: MATLAB already running on hibino'; exit 2 }",
-        f"$dest = '{_HIBINO_DEST}'",
-        "if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }",
-        "Expand-Archive -Path 'C:\\temp\\radia_motor_evidence_quad.zip' -DestinationPath $dest -Force",
-        "$env:RADIA_VALIDATION_HOST_ROLE = 'compute'",
-        f"$gen = Join-Path $dest '{gen_rel}'",
-        "$log = 'C:\\temp\\radia_motor_evidence_quad.log'",
-        "Remove-Item $log -Force -ErrorAction SilentlyContinue",
-        f"& '{MATLAB_EXE}' -wait -batch (\"run('\" + $gen + \"')\") -logfile $log",
-        "Write-Output ('MATLAB_EXIT=' + $LASTEXITCODE)",
-        "Get-Content $log -Tail 8 -ErrorAction SilentlyContinue",
-        "exit $LASTEXITCODE",
-    ]) + "\n"
-    runner_path = Path(r"C:\temp\radia_motor_evidence_quad_runner.ps1")
-    runner_path.write_text(runner, encoding="ascii")
-
-    for src, dst in ((zip_path, "C:/temp/radia_motor_evidence_quad.zip"),
-                     (runner_path, "C:/temp/radia_motor_evidence_quad_runner.ps1")):
-        p = run(["scp", "-o", "ConnectTimeout=20", str(src),
-                 f"{SSH_HIBINO}:{dst}"], check=False)
-        if p.returncode != 0:
-            fail(f"scp to hibino failed: {src}")
-            return 3
-
-    # 4) synchronous run (previous artifact: 79 tests in ~2 min + startup)
-    p = run(["ssh", SSH_HIBINO, "pwsh -NoProfile -ExecutionPolicy Bypass "
-             "-File C:\\temp\\radia_motor_evidence_quad_runner.ps1"],
-            check=False, timeout=1800)
-    if p.returncode != 0:
-        fail(f"hibino generator failed (exit {p.returncode}) — see log above")
-        return 3
-
-    # 5) fetch artifact back + verify pins
-    art_remote = (_HIBINO_DEST.replace("\\", "/") + "/" +
-                  _MOTOR_ARTIFACT.replace("\\", "/"))
-    p = run(["scp", "-o", "ConnectTimeout=20",
-             f"{SSH_HIBINO}:{art_remote}", str(REPO / _MOTOR_ARTIFACT)],
-            check=False)
-    if p.returncode != 0:
-        fail("scp of the regenerated artifact failed")
-        return 3
-    art, drifted = _motor_pin_status()
-    if drifted:
-        for rel in drifted:
-            fail("pin STILL drifted after regeneration: " + rel)
-        return 4
-    ok(f"artifact regenerated: {art['status']}, "
-       f"{art['passed_count']}/{art['test_count']} on "
-       f"{art['execution_environment']['hostname']} ({art['matlab_release']})")
-
-    # 6) rebind the proof to the new artifact, then run the acceptance checks
-    rc = _motor_post_regeneration()
-    if rc != 0:
-        return rc
-    info("stage & commit:  git add " + _MOTOR_ARTIFACT + " " + _MOTOR_PROOF)
-    return 0
+    fail("CPU MEX evidence regeneration is retired. CPU uses Python/pybind11; "
+         "GPU capabilities require independent mexcuda validation.")
+    return 2
 
 
 def _motor_post_regeneration(run_fn=None):

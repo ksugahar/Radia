@@ -97,6 +97,15 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 - Manuscript folders contain generated `.bbl` only, never local `.bib` copies.
   Use `bibliography_make_bbl`, regenerate after changes, and check citations.
 
+### CPU / GPU Execution Policy (2026-10-11)
+
+- CPU execution: Python (pybind11) with NGSolve; CPU MEX is unsupported.
+- GPU execution: MATLAB mexcuda with NVIDIA GPU, for GPU performance. Simulink is optional.
+- Select Visual Studio and CUDA versions from the target MATLAB release's mexcuda support. After upgrades, verify build/GPU smoke; no unsupported-compiler override.
+- No implicit CPU/Python solver fallback. Report host setup and CPU solving separately.
+- 100: CUDA builds/RTX 5000 acceptance; mdx/A100: isolated scale/timing.
+- GPU features require Python CPU parity; Poisson does not certify ICCG/AMS/HDiv-MMM. Save validation JSON.
+
 ### MATLAB And Simulink
 
 - Use MathWorks' official MATLAB MCP Server and Simulink Agentic Toolkit.
@@ -118,11 +127,11 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
   kernels remain independently callable standalone MEX functions.
 - Native objects use checked `uint64` handles with type, generation,
   ownership, and liveness validation; never expose raw pointers.
-- Python fallback is allowed at initialization, explicit update, artifact
-  generation, or batch-solve boundaries, never per Simulink time step.
-- Every public Python capability has a named MATLAB entry point or a checked
-  parity-manifest classification. Prefer one C++ source of numerical truth with
-  thin pybind11 and MEX adapters.
+- Explicit Python CPU workflows are allowed at initialization, update, artifact
+  or batch boundaries, never per Simulink step or as implicit CUDA fallback.
+- Classify capabilities as Python CPU, MATLAB CUDA GPU, or both in the parity
+  manifest. Do not duplicate CPU MEX for parity. Share domain code and verify
+  physical contracts without duplicating NGSolve FE semantics.
 - Measure cold start, warmed median, transfer cost, memory, versions, and
   reliability; do not assume MEX or pybind11 is faster.
 - Level-2 S-Function templates are user-customizable. Do not bury a reusable
@@ -163,30 +172,24 @@ solver boundary is a checked `.vol` regardless of the creation route.
 
 ### CI Execution, Validation Evidence, and Notebook Policy (2026-09-03)
 
-**POLICY**: **mdx1 and mdx2** are Radia's self-hosted CI and preflight pool.
-100号機 (INTEL11) hosts development, review, integration and the release runtime; LAB is the test
-host (fixed wheels, job-local `C:\temp\<job-id>` inputs). Do not run development suites or heavy validation
-on 100号機; limit its release acceptance to installation, import and student application smoke checks. Both mdx hosts give CI and preflight priority.
-GitHub Actions uses the shared `mdx` label and assigns jobs to an available runner.
-Release-quad requires LAB and 100号機 for the same release commit. mdx refresh is opt-in.
+**POLICY**: CI/builds use 100号機 with the `100` runner label.
+100号機 permits isolated tests and heavy numerical/memory validation.
+Isolate CI from user runtimes; LAB tests wheels.
+LAB owns distribution acceptance and SSH preflight; mdx is reserved for computation-time evaluation; mdx1/mdx2/hibino are retired.
+Release-quad requires 102号機 and 100号機 for the same release commit; mdx timing is separate.
 Decision 2026-10-01: editable only on 100号機, in a dedicated local development
 venv for maintainers/students, separate from the release runtime. LAB/mdx use
 verified wheels.
 `cubit-mesh-export` uses its own release-dual to LAB and 100号機; the Radia
 solver release-quad must not install, uninstall, repoint, or version-gate it.
-Do not install or run Cubit on mdx1/mdx2 in either release lane. This boundary
+Do not install or run Cubit on mdx in either release lane. This boundary
 does not prohibit Cubit-independent checker unit tests in isolated CI
 environments. Existing installations are not silently removed.
-hibino remains a computation host and is not a release-quad acceptance target.
-Long solver work should use hibino first when it is available, mdx
-only when the mdx CI queue is idle.
+Distribution tests run on LAB; mdx runs timing evaluations only, without Cubit.
 
-MATLAB-capable runner services must use a MATLAB-authenticated account and pass
-an Engine startup/calculation/shutdown check in the actual service context;
-SYSTEM and SSH success are not substitutes for that acceptance. Keep the
-diagnostic manual-only. mdx1 is scheduled for retirement in March 2027; migrate
-CI routing and release-quad targets together before retirement, following the
-`release-quad` skill and a user-approved replacement plan.
+MATLAB-capable runners use a MATLAB-authenticated account and pass an Engine
+startup/calculation/shutdown check in the actual runner context. SYSTEM and SSH
+success are not substitutes. Keep service diagnostics manual-only.
 
 CI scope begins at the independently released distribution boundary. The
 checked `radia_mcp.meta` catalog and each server's live `tools/list` response
@@ -207,7 +210,7 @@ an adjacent JSON and a runtime gate are not required. A docs-only contract lane
 parses changed notebooks. Public examples include saved parameterized WebGUI
 geometry/mesh and primary-field scenes.
 
-Developer pre-push hooks run only the impact-scoped mdx preflight. Release
+Developer pre-push hooks run only the impact-scoped LAB preflight. Release
 workflows, never developer hooks, publish immutable artifacts.
 
 No workflow selects a LAB runner. EqnEdit64 signed executables reach GitHub-hosted CI
@@ -217,27 +220,19 @@ LAB-owned mapped drives or the workgroup share. Do not restore that dependency.
 
 ### Compute Host Routing
 
-**POLICY (2026-09-28)**: Run solver-heavy validation, optimization, scaling,
-memory, and timing work on hibino when it is **already running and idle**.
-hibino is a SPOT instance; only a human starts it.
-Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes hibino hostname` — ICMP is
-blocked, so `ping` reports a false "down" — then check for a running python
-job, because hibino takes one heavy job at a time. Otherwise use an idle
-mdx1/mdx2 or LAB; check CI/jobs and available memory first. LAB is also an
-execution host for high-memory tests. mdx CI has priority; avoid concurrent
-timing jobs. Gmsh rendering needs a LAB/100 desktop, not mdx/ssh.
-Compute work must never delay or destabilize CI/preflight.
-Historical mdx measurements remain valid provenance. Record host, runtime,
-versions and results in validation JSON.
-
-Measure speed; settle quadrature and threads first.
-hibino has 230 GB memory, no pagefile, no guaranteed speedup.
+**POLICY (2026-10-11)**: Use the consolidated `mdx` host for computation-time evaluations only; mdx1/mdx2/hibino no longer exist as targets.
+Probe with `ssh -o ConnectTimeout=6 -o BatchMode=yes mdx hostname`, then check
+running jobs and available memory. Run one heavy job at a time; preserve active timing jobs. Never stop another session's jobs. LAB may run high-memory tests when
+explicitly selected; Gmsh rendering needs a desktop.
+Formal timing requires idle mdx; incidental 100号機/LAB timings are diagnostic only.
+Measure speed; settle quadrature and threads first. Historical mdx measurements
+remain valid provenance. Publish OS, threads, versions/results; keep hosts/IPs/paths private.
 
 **POLICY**: 全てのベンチマークスクリプトは機械可読な JSON 結果を保存すること。
 
 ### Compute Scratch Cleanup
 
-**POLICY (2026-09-13)**: mdx1/mdx2/hibino jobs finish only after verified recovery
+**POLICY (2026-09-13)**: mdx jobs finish only after verified recovery
 and cleanup of their job-owned `C:\temp` inputs, outputs, staging, environments and helpers.
 - Recover JSON, logs, commands, runtime/source identity, hashes and non-reconstructible inputs
   to LAB durable storage. Numerical evidence goes in `validation_test/`, public demonstrations

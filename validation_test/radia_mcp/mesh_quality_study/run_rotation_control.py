@@ -1,6 +1,6 @@
 """Control: is hex's huge L2 win on the thin plate just AXIS ALIGNMENT?
 
-Promoted from C:/temp/mesh_quality_study (2026-08-07) with its committed
+Promoted from private-runtime-path (2026-08-07) with its committed
 results JSON (Data Persistence Policy). Re-run with
 `python run_rotation_control.py` (requires Cubit + netgen + build123d).
 
@@ -141,7 +141,7 @@ def main():
 
     from ngsolve import TaskManager
     out = {"timestamp": datetime.now().isoformat(),
-           "hostname": platform.node(),
+           "platform_class": platform.system(),
            "rotation_deg": {"z": 30, "y": 20},
            "note": ("same geometry, same meshes, same exact-solution "
                     "identity; only the field's orientation changes"),

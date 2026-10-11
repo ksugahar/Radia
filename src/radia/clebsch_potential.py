@@ -29,7 +29,7 @@ Two solvers:
       gauge-fixing mass term eps_gauge stabilises the null-space of each
       degenerate-elliptic sub-problem.
 
-      Reference: EMPY project (W:\\00_CAE\\NGSolve\\EMPY\\EMPY_Analysis\\
+      Reference: EMPY project (private provenance
       Clebsch_potential).  3-D NGSolve realisation first reported here;
       WA-O1 CEFC 2026 (Ren et al.) "not yet 3D".
 

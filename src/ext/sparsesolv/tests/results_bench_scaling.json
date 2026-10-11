@@ -1,6 +1,6 @@
 {
   "timestamp": "2026-03-07T11:38:15.965894",
-  "hostname": "lab",
+
   "benchmark": "bench_scaling",
   "description": "SparseSolv BDDC vs NGSolve BDDC setup time scaling",
   "results": [

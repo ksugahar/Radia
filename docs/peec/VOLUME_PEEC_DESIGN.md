@@ -172,7 +172,7 @@ and identifies cross-section corners.
 CLAUDE.md / `coil_from_cad.py` doc comments:
 > the walker hangs or natively crashes on multi-turn loft STEPs
 > (Kubota's 3turncoil.stp: walker hangs netgen.occ > 5 min;
->  on 100号機 the subprocess exits with an unhandleable native
+>  on development host the subprocess exits with an unhandleable native
 >  error code).
 
 The 3-turn pancake is exactly the geometry where the walker fails.

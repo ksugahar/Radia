@@ -2,7 +2,7 @@
   "schema": "radia.ih-coarse-study.partial.v1",
   "status": "partial",
   "scope": "One coarse tube at p2. Initial failures retained; full case/order/cycle sweep not complete.",
-  "host": "mdx1",
+
   "ngsolve": "6.2.2607",
   "python": "3.12.10",
   "numpy": "2.5.3",

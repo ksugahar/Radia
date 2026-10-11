@@ -1,6 +1,6 @@
 # CoilBuilder.mirror() straight-heading fix (true geometric mirror)
 
-2026-07-10 LAB report, fixed 2026-07-11.  `CoilBuilder.mirror()` emitted
+2026-07-10 validation host report, fixed 2026-07-11.  `CoilBuilder.mirror()` emitted
 mirrored StraightSegment objects that extended in the WRONG direction,
 outside the loop outline.
 

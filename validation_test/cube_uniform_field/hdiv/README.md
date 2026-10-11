@@ -12,7 +12,7 @@ object/MMPM solver comparisons.
 
 The common problem is a 1 m cube centered at the origin with an applied field
 of 200 kA/m in +z. The main drivers write JSON into this directory by default.
-Useful sizes are validation workloads: run them on hibino when available, or on
+Useful sizes are validation workloads: run them on compute-host when available, or on
 mdx while its CI queue is idle.
 
 ```powershell
@@ -32,16 +32,16 @@ HACApK statistics, timing, and memory information.
 
 The mdx sweep from 2026-07-08 is preserved as raw JSON:
 
-- `hdiv_cube_mdx_scaling_20260708.json`: structured HEX scaling.
-- `hdiv_tet_cube_mdx_scaling_20260708.json`: TET scaling and ACA sensitivity.
-- `hdiv_tet_ho_oneside_mdx_ab_20260708.json`: TET one-sided far-entry A/B.
-- `hdiv_wedge_cube_mdx_scaling_20260708.json`: WEDGE scaling and sensitivity.
-- `hdiv_wedge_oneside_mdx_ab_20260708.json`: WEDGE one-sided far-entry A/B.
-- `hdiv_wedge_trans_cache_mdx_ab_20260708.json`: initial translation-cache A/B.
-- `hdiv_wedge_trans_cache_all_mdx_ab_20260708.json`: full cache-scope A/B.
-- `hdiv_wedge_trans_cache_fastbasis_mdx_ab_20260708.json`: fast-basis A/B.
-- `hdiv_wedge_all_fastbasis_mdx_scaling_20260708.json`: fast-basis scaling.
-- `hdiv_wedge_all_fastbasis_applysolve_mdx_scaling_20260708.json`: final
+- `hdiv_cube_compute_scaling_20260708.json`: structured HEX scaling.
+- `hdiv_tet_cube_compute_scaling_20260708.json`: TET scaling and ACA sensitivity.
+- `hdiv_tet_ho_oneside_compute_ab_20260708.json`: TET one-sided far-entry A/B.
+- `hdiv_wedge_cube_compute_scaling_20260708.json`: WEDGE scaling and sensitivity.
+- `hdiv_wedge_oneside_compute_ab_20260708.json`: WEDGE one-sided far-entry A/B.
+- `hdiv_wedge_trans_cache_compute_ab_20260708.json`: initial translation-cache A/B.
+- `hdiv_wedge_trans_cache_all_compute_ab_20260708.json`: full cache-scope A/B.
+- `hdiv_wedge_trans_cache_fastbasis_compute_ab_20260708.json`: fast-basis A/B.
+- `hdiv_wedge_all_fastbasis_compute_scaling_20260708.json`: fast-basis scaling.
+- `hdiv_wedge_all_fastbasis_applysolve_compute_scaling_20260708.json`: final
   apply/solve profile.
 
 `results_hex_nonlattice.json` records the 2026-07-12 structured-cache ablation.

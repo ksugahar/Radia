@@ -40,7 +40,7 @@
     "documentation and policy baseline consistency",
     "radia-mcp pytest coverage",
     "package version management",
-    "monorepo packages/radia-mcp consolidation instead of old S:/mcp-server layout"
+    "monorepo packages/radia-mcp consolidation instead of old <private-path>/mcp-server layout"
   ],
   "remaining_operational_gates": [
     {
@@ -49,7 +49,7 @@
     },
     {
       "gate": "release-quad deploy smoke",
-      "required_for": "claiming operational quality across LAB, 100 machine, mdx, and hibino"
+      "required_for": "claiming operational quality across validation runtime, 100 machine, mdx, and compute"
     },
     {
       "gate": "GUI panel and MCP knowledge round-trip",

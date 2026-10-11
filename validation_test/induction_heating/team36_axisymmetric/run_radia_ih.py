@@ -6,6 +6,7 @@ import importlib.metadata
 import json
 import math
 import os
+import platform
 import socket
 import subprocess
 import time
@@ -595,7 +596,7 @@ def run(
     artifact = {
         "radia_version": radia_version,
         "executed_at_utc": executed_at_utc,
-        "host": host,
+        "platform_class": platform.system(),
         "artifact_schema": SCHEMA,
         "benchmark_source": SOURCE_URL,
         "profile": profile,
@@ -653,7 +654,7 @@ def run(
         "history": history,
         "provenance": {
             "executed_at_utc": executed_at_utc,
-            "host": host,
+            "platform_class": platform.system(),
             "radia_version": radia_version,
             "radia_mcp_version": package_version("radia-mcp"),
             "ngsolve_version": ngsolve_version,

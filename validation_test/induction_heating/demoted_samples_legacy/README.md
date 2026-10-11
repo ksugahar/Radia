@@ -32,7 +32,7 @@ They still work for archaeology and validation experiments — they're just no
 longer automatically installed into the Cubit panel's Browse dialog. To run one:
 
 1. From the Radia source tree, copy the `.jou` / `.py` to a working
-   directory of your choice (e.g. `C:\temp\`).
+   directory of your choice (e.g. `private-runtime-path`).
 2. If you want Kelvin open-boundary, **always pick the `.py`** — it
    explicitly calls `add_kelvin_cubit()`.  The `.jou` files in this
    directory do *not* add Kelvin.

@@ -1,6 +1,6 @@
 {
   "benchmark": "low_turn_geometry",
-  "hostname": "lab",
+
   "problem": {
     "a": 0.15,
     "L_sweep": [

@@ -1,9 +1,9 @@
 {
   "schema": "radia.energy-newton-native-audit.v1",
-  "host": "Hibino",
+
   "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
-  "executable": "C:\\temp\\hdiv-bh-audit-20260914\\venv\\Scripts\\python.exe",
-  "package": "C:\\temp\\hdiv-bh-audit-20260914\\venv\\Lib\\site-packages\\radia",
+  "executable": "<private-path>/hdiv-bh-audit-20260914\\venv\\Scripts\\python.exe",
+  "package": "<private-path>/hdiv-bh-audit-20260914\\venv\\Lib\\site-packages\\radia",
   "versions": {
     "radia": "4.95.91",
     "ngsolve": "6.2.2606",

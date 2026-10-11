@@ -73,7 +73,7 @@ to verified citations: newly selected background works and remaining limitations
 are explicit in the notebook narrative, which supersedes retained script labels.
 
 - **Analytical formulas:** the previously unavailable nine originals were located
-  in `W:/03_文献・論文/00_電磁界解析/02_解析積分公式集/00_electromagnetic_integral_formula_series/`.
+  in `private-runtime-path`.
   Their front-page author lists and SA/RM identifiers were read and visually
   verified. Part 4 uses its own front-page author order, not a later part's
   reordered citation; Part 8 has Matsuo alone. Years follow report identifiers,

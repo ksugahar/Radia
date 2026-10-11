@@ -41,7 +41,7 @@ def verify(output):
             errors[key] = float(np.max(np.abs(actual - saved[key])))
     report = {
         "schema": "radia.hysteresis-fixture-lineage.v1",
-        "host": platform.node(), "python": platform.python_version(), "numpy": np.__version__,
+        "platform_class": platform.system(), "python": platform.python_version(), "numpy": np.__version__,
         "source_kind": "analytical Potter-Schmulian branch data; not a measured specimen",
         "source_generator": "CASE_02.m uses S=0.9, Ms=1.91, Hc=500; fminsearch and makima interpolation",
         "verification_scope": "Reidentification from preserved MAT branches, not a rerun of MATLAB generation or the coupled field solve",

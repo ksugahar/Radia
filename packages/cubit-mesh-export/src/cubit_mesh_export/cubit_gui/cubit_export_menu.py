@@ -21,7 +21,7 @@ This module avoids:
   - dialogs without `parent=find_claro()` — they get hidden behind the
     Cubit main window on Windows
 
-Qt binding: **PySide6 only**. Target is Cubit 2025.12
+Qt binding: **PySide6 only**. Target is Cubit 2026.8
 which ships PySide6.  No PyQt5 fallback — per CLAUDE.md "No Fallbacks
 — Fail Fast, Fail Loud", an old Cubit without PySide6 must raise the
 underlying ImportError loudly so the operator can fix the env.
@@ -31,7 +31,7 @@ import json
 import os
 import sys
 
-# Qt binding: PySide6 only. Target is Cubit 2025.12
+# Qt binding: PySide6 only. Target is Cubit 2026.8
 # which ships PySide6.  Per CLAUDE.md "No Fallbacks — Fail Fast, Fail
 # Loud" any ImportError propagates so the operator sees the real cause
 # (old Cubit, broken PySide6 install, wrong Python env) instead of a

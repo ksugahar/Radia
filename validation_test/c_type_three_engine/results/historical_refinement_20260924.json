@@ -3,7 +3,7 @@
   "status": "historical_metrics_recomputed_not_current_release_acceptance",
   "archive_commit": "75e49aa58b43558c7a4cd3f48b6f24d6ca169d96",
   "runtime": {
-    "host": "Hibino",
+
     "versions": {
       "radia": "5.0.0",
       "ngsolve": "6.2.2606",

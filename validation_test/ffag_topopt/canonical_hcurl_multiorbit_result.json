@@ -113,7 +113,7 @@
     }
   ],
   "generated_at_utc": "2026-09-30T13:39:02.937027+00:00",
-  "hostname": "mdx2",
+
   "arguments": {
     "iron_maxh": 0.02,
     "threads": 8,
@@ -141,6 +141,6 @@
     "b_rk_tolerance": 1e-08,
     "tree_theta": 0.5,
     "tree_gate": 0.005,
-    "output": "C:\\temp\\et_build_src\\evidence\\canonical_hcurl_multiorbit_result.json"
+    "output": "<private-path>/et_build_src\\evidence\\canonical_hcurl_multiorbit_result.json"
   }
 }

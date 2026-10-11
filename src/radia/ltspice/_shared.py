@@ -25,7 +25,7 @@ def decode_asc_bytes(raw: bytes) -> str:
       - UTF-8 (with or without BOM)
       - Windows-1252 / Latin-1 (older 8-bit; e.g. a bare 0xB5 for µ)
 
-    The historical `raw[:2] == b"\\xff\\xfe"` check only caught BOM-marked
+    The historical `raw[:2] == b"private-runtime-path"` check only caught BOM-marked
     UTF-16 LE; a BOM-less UTF-16 file decoded as UTF-8 yields text riddled
     with NUL characters, so `Version` / `SHEET` / `WIRE` never match and
     the schematic reads as empty.  This helper detects that case by the

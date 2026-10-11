@@ -12,7 +12,7 @@ averaged over a small cube around each point (2x2x2 Gauss, half-width 2e-5 m) be
 on the z = 0 mesh seam where a piecewise field is double-valued, while the HDiv-MMM field (a Coulomb
 integral) is evaluated pointwise.  The verdict is the relative RMS of the vector field difference over
 the 31 points and the B_perp(15 mm) gap, against ``--relative-tolerance`` (default 3 %).
-Heavy: run on hibino.
+Heavy: run on compute-host.
 """
 from __future__ import annotations
 
@@ -158,7 +158,7 @@ def main(argv=None) -> int:
             raise ValueError("--hdiv-result observation points differ")
         fields["hdiv_mmm"] = np.asarray(prior["B_total_T"], dtype=float)
         diagnostics["hdiv_mmm"] = dict(prior["hdiv"]) | {"reused_result": str(options.hdiv_result.resolve())}
-        hdiv_provenance = {"mesh": prior["mesh"], "host": prior.get("host")}
+        hdiv_provenance = {"mesh": prior["mesh"]}
     else:
         with ng.TaskManager():
             hdiv_mesh = ng.Mesh(str(options.hdiv_mesh.resolve()))
@@ -172,7 +172,7 @@ def main(argv=None) -> int:
         fields["hdiv_mmm"] = np.asarray(field, dtype=float)
         diagnostics["hdiv_mmm"] = diag
         hdiv_provenance = {"mesh": {"path": str(options.hdiv_mesh.resolve()), "sha256": _sha256(options.hdiv_mesh),
-                                    "ne": int(hdiv_mesh.ne), "conformity": conformity}, "host": platform.node()}
+                                    "ne": int(hdiv_mesh.ne), "conformity": conformity}, "platform_class": platform.system()}
 
     # Mixed total/reduced Omega on the Kelvin mesh (cube-averaged at the seam).  Its B-H iron is
     # solved by Newton; a non-converged solve raises MixedOmegaNewtonNotConverged and is never a result.
@@ -215,7 +215,7 @@ def main(argv=None) -> int:
         if case["nonlinear"] and not diag.get("nonlinear_stats", {}).get("converged", True):
             failures.append(f"{name}: nonlinear loop did not converge")
     report = {
-        "schema": SCHEMA, "generated_at_utc": datetime.now(timezone.utc).isoformat(), "host": platform.node(),
+        "schema": SCHEMA, "generated_at_utc": datetime.now(timezone.utc).isoformat(), "platform_class": platform.system(),
         "implementation": implementation_identity(),
         "radia_version": getattr(rad, "__version__", None), "radia_file": rad.__file__, "case": case,
         "fem_mesh": {"path": str(fem_path), "sha256": _sha256(fem_path), "report_sha256": _sha256(report_path),

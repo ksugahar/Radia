@@ -9,7 +9,7 @@
     "numpy": "2.4.6",
     "scipy": "1.17.1",
     "mesh_generator": "Coreform Cubit 2025.12 headless Python",
-    "machine_class": "LAB"
+    "machine_class": "validation runtime"
   },
   "identity": {
     "geometry": "solid circular disk",

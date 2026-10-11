@@ -186,7 +186,7 @@ pip install numpy pandas psutil
 
 ```bash
 # A-Φ法
-cd S:/Radia/01_GitHub/validation_test/ngsolve_integration/rotating_magnets
+cd private-runtime-path
 python comparison_A_Phi_method.py
 
 # T-Ω法

@@ -383,7 +383,7 @@ behavioral regression. The other five scientific evidence gaps are unchanged.
   11.5 mm occurs in transient Table I samples, not as that stated reference.
   Source PDF SHA-256 is `f0013db710e2109dcbea37a213d750deaa245f1004a0a8044289535bb6e7f041`.
   Code and tests use `team28_reference.json`. Four actual FEM/reduced-model regressions
-  passed on mdx2 (2 threads; final run 48 s), with unchanged tolerances. Exact source
+  passed on worker-b (2 threads; final run 48 s), with unchanged tolerances. Exact source
   hashes/runtime are in `team28_reference_regression.json`. The retained model
   weight 1.055 N differs from the reference mass 0.107 kg; dZ=0 is a steady
   frequency-domain sample at 10.8 mm, not the nominal initial height 3.8 mm.
@@ -393,7 +393,7 @@ behavioral regression. The other five scientific evidence gaps are unchanged.
   0.0522. Alternating basis signs with unchanged `e=ones/n` changes 172.779 nH to
   115.106 nH; transforming the excitation with the basis preserves the value.
   `validation_test/bem/closed_torus_diagnostic.json` records the spectrum,
-  residuals, hashes and 85 s mdx2 run. The MCP blanket closed-surface nullspace
+  residuals, hashes and 85 s worker-b run. The MCP blanket closed-surface nullspace
   claim and advice against refinement are withdrawn. This is not acceptance of
   physical loop inductance: current conservation/port constraints and quadrature
   convergence remain necessary before promoting that historical extractor.
@@ -480,8 +480,8 @@ Four algebraic tests now include nonsymmetric and indefinite rejection cases.
 
 ## Shape-lane numerical closure (2026-09-14)
 
-The post-Taubin staged run completed on mdx2 with the identified candidate
-wheel, process-local CAD overlay and licensed LAB Cubit meshes. The 26,948-tet
+The post-Taubin staged run completed on worker-b with the identified candidate
+wheel, process-local CAD overlay and licensed validation host Cubit meshes. The 26,948-tet
 reference and 235/1,461-cell hex meshes passed their existing gates. All original
 field tests passed: maximum native/NGSolve discrepancy `6.272e-10`, maximum
 independent reciprocity discrepancy `4.038e-8`, fine-hex/reference discrepancy

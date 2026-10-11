@@ -14,7 +14,7 @@ The version alone does not distinguish this wheel from earlier candidates.
 
 ## Recovered results
 
-Both files were recovered from hibino and their SHA-256 hashes were compared
+Both files were recovered from compute-host and their SHA-256 hashes were compared
 with the remote originals before recording them here.
 
 | File | SHA-256 |
@@ -49,9 +49,9 @@ It does not qualify strong-saturation material accuracy from bore fields alone.
 Final JSON SHA-256:
 `b00ba5d7a6532721e23eefe6e8b1c0b8889b9f52e1f4240bbd2f2a99570d722f`.
 Recovery archive (inputs, outputs, drivers, wheel and pip inventory):
-`S:/Radia/validation_artifacts/esrf6_ci_acceptance_20260915/radia-hdiv-production-34800439509-recovery.tar.gz`.
+`private-runtime-path`.
 Archive SHA-256:
 `66371be72e10d1a4cd5efe1d8f78426513792b96838344f9d97342cb3a85828c`.
 All 34 entries in `recovery_manifest.json` were verified after extraction.
-The HDiv task owns cleanup of the completed hibino directory after this evidence
+The HDiv task owns cleanup of the completed compute-host directory after this evidence
 commit; no unrelated compute or shared runtime is included.

@@ -1008,5 +1008,5 @@
   "assertions_passed": true,
   "note": "OCC Boolean point membership, not positive distance, determines CAD occupancy. Wire samples describe orientation only; physical coil source remains solid-current CoilBuilder. Solid centres/volumes are placement checks, not full Boolean shape-equivalence proofs.",
   "script_sha256": "b35698b637cdcda410dfbaefd00b4b1929cdfbceaec95772034e6fddf6ff5de7",
-  "geometry_audit_sha256": "4682b3336d90ee407831e12713758328fcc755b388088ffa8512a86cf9fbc5fa"
+  "geometry_audit_sha256": "1900a9c7aecd564ebca4b36cef8054d9a3371f523c2d6bc1ff1c8fb4b0017061"
 }

@@ -1,7 +1,7 @@
 {
   "schema": "radia.validation.optuna49-performance.v1",
   "generated_at": "2026-08-26T21:45:20+09:00",
-  "host": "LAB",
+
   "versions": {
     "python": "3.12.10",
     "optuna": "4.9.0",

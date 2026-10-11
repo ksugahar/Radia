@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "host": "mdx2",
+
   "source_commit": "e6b5f9cca421b13469e24044380b9b22f60194e2",
   "scope": "HDiv regression baseline before mass-Riesz sparsecholesky migration",
   "python": "3.12.10",

@@ -2,7 +2,7 @@
   "schema": "radia.team28.hcurl-eddy-bubble-acceptance.v1",
   "generated_at_utc": "2026-10-03T09:53:39.793950+00:00",
   "runtime": {
-    "hostname": "mdx1",
+
     "python_version": "3.12.10",
     "platform": "Windows-11-10.0.26200-SP0",
     "radia_version": "5.2.2",
@@ -155,7 +155,7 @@
   "hcurl_vim_force_acceptance": {
     "result_file": "team28_hcurl_vim_force_summary.json",
     "generated_at_utc": "2026-09-28T11:44:42.387590+00:00",
-    "validation_host": "mdx2",
+
     "mesh_case_count": 3,
     "maximum_force_relative_error": 0.005129236519677127,
     "outer_quadrature_relative_force_change": 0.00019733545232909143,

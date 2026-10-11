@@ -1,7 +1,7 @@
 {
  "description": "HDiv charge-Gram loop-eigenvalue protection vs ACA compression",
  "timestamp": "2026-07-14T01:33:42.986172",
- "hostname": "lab",
+
  "nx": 6,
  "nu0": 0.005025125628140704,
  "eps_cases": [

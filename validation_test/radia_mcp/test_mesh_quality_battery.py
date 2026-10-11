@@ -14,7 +14,7 @@ remains available separately as a curvature-fidelity diagnostic):
 Headless throughout (driving policy).  Requires Cubit + netgen + gmsh
 (+ build123d for the geometry authoring); skipped otherwise.  This lane
 asserts CORRECTNESS floors and reports the measured numbers -- timing
-comparisons use hibino first or an idle-CI mdx fallback, not here.
+comparisons use compute-host first or an idle-CI mdx fallback, not here.
 """
 
 import json

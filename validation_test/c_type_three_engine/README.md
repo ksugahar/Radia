@@ -52,22 +52,22 @@ Build meshes on a Cubit 2025.12 host:
 
 ```powershell
 python validation_test/c_type_three_engine/build_cubit_meshes.py `
-  --output-dir C:/temp/radia_ctype_three_engine/meshes
+  --output-dir private-runtime-path
 ```
 
 Run a fast linear preflight, then the nonlinear production comparison:
 
 ```powershell
 python validation_test/c_type_three_engine/run_three_engine.py `
-  --mesh-dir C:/temp/radia_ctype_three_engine/meshes `
+  --mesh-dir private-runtime-path `
   --mode linear `
-  --output C:/temp/radia_ctype_three_engine/linear.json
+  --output private-runtime-path
 
 python validation_test/c_type_three_engine/run_three_engine.py `
-  --mesh-dir C:/temp/radia_ctype_three_engine/meshes `
+  --mesh-dir private-runtime-path `
   --mode nonlinear `
   --reduced-a-solver direct `
-  --output C:/temp/radia_ctype_three_engine/nonlinear.json
+  --output private-runtime-path
 ```
 
 Every run executes all three formulations. It is accepted only if every
@@ -90,7 +90,7 @@ change, tolerance, and iteration limit for every engine. Pairwise agreement is
 not a pass when any engine is unconverged. Use `--nonlinear-verbose` for remote
 progress logs.
 
-Heavy nonlinear runs belong on hibino first, with mdx allowed only when hibino
+Heavy nonlinear runs belong on compute-host first, with mdx allowed only when compute-host
 is unavailable and its CI queue is idle. The mesh build remains a
 foreground Cubit job, and the solver run remains a foreground Python job so a
 result cannot be mistaken for a completed validation while a detached process
@@ -104,12 +104,12 @@ unstructured Cubit meshes must not be mistaken for asymptotic convergence.
 
 ```powershell
 python validation_test/c_type_three_engine/build_mesh_family.py `
-  --output-dir C:/temp/radia_ctype_accuracy/meshes
+  --output-dir private-runtime-path
 
 python validation_test/c_type_three_engine/run_mesh_convergence.py `
-  --mesh-family C:/temp/radia_ctype_accuracy/meshes/mesh_family.json `
-  --output C:/temp/radia_ctype_accuracy/mdx_certificate.json `
-  --replicate-final-result C:/temp/radia_ctype_accuracy/hibino_finer.json `
+  --mesh-family private-runtime-path `
+  --output private-runtime-path `
+  --replicate-final-result private-runtime-path `
   --resume
 ```
 
@@ -121,7 +121,7 @@ analytic solution.
 
 ## Tracked evidence
 
-`results/lab_20260829_mesh.json` records the passing Cubit/Kelvin topology
+`results/validation_20260829_mesh.json` records the passing Cubit/Kelvin topology
 contract. The `20260829` and `20260830` field artifacts remain tracked as
 historical evidence for the former global reduced-Omega route only. They do
 not certify the current mixed total/reduced-Omega formulation, because they omit its required
@@ -129,16 +129,16 @@ physical-air/Kelvin source-potential jump.
 
 The current pre-release evidence is explicit about native binary provenance:
 the current Python mixed-formulation source was overlaid on the installed
-`radia 4.95.77` wheel on Hibino; no `.pyd` was copied. The native HDiv kernel,
+`radia 4.95.77` wheel on compute host; no `.pyd` was copied. The native HDiv kernel,
 CoilBuilder, Radia source evaluation, and NGSolve assembly were therefore the
 installed wheel's components.
 
-- `results/hibino_20260903_linear_order3_mixed_omega_v4.json` is the linear
+- `results/compute_20260903_linear_order3_mixed_omega_v4.json` is the linear
   order-3 full three-engine run. At a 1% all-pair gate its HDiv/mixed,
   HDiv/reduced-A, and mixed/reduced-A gap-core RMS differences are 0.41955%,
   0.38661%, and 0.45977%. The physical source-trace residuals are 1.26933%
   on iron/air and 1.75381% on `kelvin_int`, both below the 5% cut gate.
-- `results/hibino_20260903_nonlinear_order2_mixed_omega_v4.json` is the
+- `results/compute_20260903_nonlinear_order2_mixed_omega_v4.json` is the
   nonlinear full three-engine run with the shared monotone PCHIP B(H) table.
   All engines converge; the three respective gap-core RMS differences are
   0.12324%, 0.10674%, and 0.16023%. Its trace residuals are 2.98511% and
@@ -154,7 +154,7 @@ with its portable level artifacts:
 - finest all-pair gap-core RMS: `0.27714%`;
 - maximum discretisation uncertainty: `0.17601%`;
 - conservative combined numerical envelope: `0.35399%`;
-- mdx/Hibino independent-host replay: `5.25e-14` relative RMS.
+- mdx/compute host independent-host replay: `5.25e-14` relative RMS.
 
 All certificate checks pass for `radia 4.95.77`, including nonlinear
 convergence, mesh contraction, cross-formulation agreement, and independent
@@ -170,7 +170,7 @@ materials, but the material touching the identified physical sphere is the
 reduced source enclosure, so that space owned no degree of freedom there and
 the periodic identification paired nothing. The recorded open boundary was in
 fact a Dirichlet truncation at the sphere. The four `results/
-c_type_20260908_linear_kelvin_*_mdx1.json` artifacts are the same linear
+c_type_20260908_linear_kelvin_*_worker-a.json` artifacts are the same linear
 order-2 run before and after the fix on the same two meshes, measured against
 HDiv-MMM whose open boundary is exact.
 
@@ -205,7 +205,7 @@ up to about 1e-4 reference barycentric OUTSIDE the returned element (a
 tolerance-band answer is never read as a membership); pieces shorter than
 1 nm are grazing contacts, not crossings; and both the curved walk and the
 sampled counts are seeded with the straight-segment midpoints so thin elements
-are not stepped over.  `results/lab_20260911_gap_probe_locator_regression.json`
+are not stepped over.  `results/validation_20260911_gap_probe_locator_regression.json`
 records the probe on the four scale-family meshes: all twenty lines agree
 between the four counts and the coverage deviation is zero.
 
@@ -233,8 +233,8 @@ FEM routes' gap-core increments, observed order in N and Richardson estimate,
 which estimate gap-refinement sensitivity under an asymptotic-convergence
 assumption, not a rigorous error bound for the gap or whole model.
 
-`results/lab_20260912_gap_family.json` and the three
-`lab_20260912_gap_family_n{06,12,24}_mesh.json` contracts (LAB, curve order
+`results/validation_20260912_gap_family.json` and the three
+`lab_20260912_gap_family_n{06,12,24}_mesh.json` contracts (validation host, curve order
 2, Cubit 2025.12):
 
 | N | elements | gap elements | minimum crossings | longest stay / limit |
@@ -250,7 +250,7 @@ All three pass the exact reflection, periodic Kelvin (462 pairs, trace ratio
 
 The first attempts at the family stopped in PARDISO: N=6 order 3 and N=12
 order 2 exhausted the 57 GB of mdx at about 1.5 M HCurl unknowns, and N=24
-order 1 (4.1 M) exhausted the 220 GB of hibino.  The iterative routes do not
+order 1 (4.1 M) exhausted the 220 GB of compute-host.  The iterative routes do not
 apply (AMS is refused on periodic Kelvin HCurl; BDDC at order 1 keeps every
 edge in the coarse space).  The cause was the pip NGSolve PARDISO wrapper:
 it hard-codes the minimum-degree ordering and ignores the ordering it is
@@ -272,8 +272,8 @@ of reach, so the order-2 family stops at N=12.
 
 ### Three-engine results on the gap family
 
-hibino, one contract per family: the branch's Python source over the
-installed `radia 4.95.90` binaries (`results/hibino_20260912_gap_family_
+compute-host, one contract per family: the branch's Python source over the
+installed `radia 4.95.90` binaries (`results/compute-host_20260912_gap_family_
 native_overlay_manifest.json` records their hashes; the driver's
 `radia_version` field is the installed distribution's `4.95.90` while the
 source is `4.95.91`), linear, HDiv BDM2, direct reduced-A with METIS,
@@ -287,11 +287,11 @@ source is `4.95.91`), linear, HDiv BDM2, direct reduced-A with METIS,
 | N=6 | 2 | 0.092% | 0.117% | 0.051% | 544,793 |
 | N=12 | 2 | 0.088% | 0.107% | 0.035% | 2,732,075 |
 
-(`results/hibino_20260912_gap_family_*_metis.json`; the `mdx*_20260911_*`
-and `hibino_20260912_*_order{1,2}.json` files without `_metis` are the
+(`results/compute-host_20260912_gap_family_*_metis.json`; the `mdx*_20260911_*`
+and `compute-host_20260912_*_order{1,2}.json` files without `_metis` are the
 same levels on the shipped solver, identical fields to 4e-14.)
 
-`results/hibino_20260912_gap_family_report_linear_order1.json` is the
+`results/compute_20260912_gap_family_report_linear_order1.json` is the
 `analyze_gap_family.py` report on the order-1 family.  It passes: HDiv-MMM
 is identical across the three levels (it never sees the gap air), and both
 FEM routes' gap-core increments contract in N -- reduced-A with ratio 0.31
@@ -348,7 +348,7 @@ Recompute the metrics in a full-history checkout (standard-library Python;
 no solver or archived Python code is executed):
 
 ```powershell
-python validation_test/c_type_three_engine/audit_20260924_refinement.py --output C:/temp/historical-refinement.json
+python validation_test/c_type_three_engine/audit_20260924_refinement.py --output private-runtime-path
 ```
 
 The audit recomputes parity projection and all three pairwise core norms

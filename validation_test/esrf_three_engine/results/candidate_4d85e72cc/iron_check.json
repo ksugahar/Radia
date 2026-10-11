@@ -7,7 +7,7 @@
     "python": "3.12.10"
   },
   "passed": true,
-  "vol_file": "C:\\temp\\radia-ex6-diag\\assets_conforming\\model.vol",
+  "vol_file": "<private-path>/radia-ex6-diag\\assets_conforming\\model.vol",
   "json_file": null,
   "threshold_pct": 1.0,
   "cad_reference": {

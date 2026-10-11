@@ -315,7 +315,7 @@ def main():
     # Save JSON
     out = {
         "timestamp": datetime.now().isoformat(),
-        "hostname": platform.node(),
+        "platform_class": platform.system(),
         "benchmark": "ams_vs_abmc",
         "physics": {
             "frequency_hz": freq, "sigma_cu": sigma_cu,

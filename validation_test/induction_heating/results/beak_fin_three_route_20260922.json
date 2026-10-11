@@ -2,7 +2,7 @@
   "schema": "radia.beak_fin_three_route.v1",
   "generated_at_utc": "2026-09-22T00:23:17.159114+00:00",
   "git_head": "4c191183184668d48f3089c62231ee8a05c8e35b",
-  "host": "intel11",
+
   "question": "BEM-A and the surface PEEC both assume a Leontovich surface impedance.  Does an interior-resolved solve agree with them where that assumption is weakest?",
   "frequency_hz": 5000.0,
   "fixture": "tests\\coil_from_cad\\fixtures\\beak_fin_48mm.step",

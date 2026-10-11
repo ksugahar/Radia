@@ -1,6 +1,6 @@
 {
  "timestamp": "2026-08-06T18:50:48.146446",
- "hostname": "lab",
+
  "problem": "H1 order-1 Poisson, manufactured u=sin(kx)sin(ky)exp(kz), Dirichlet on all boundaries; CG precision 1e-10, unpreconditioned (Projector) and Jacobi",
  "referee": "gmsh minSICN",
  "cases": [

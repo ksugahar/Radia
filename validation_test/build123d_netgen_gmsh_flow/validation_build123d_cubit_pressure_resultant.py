@@ -9,7 +9,7 @@ vocabulary.
 Run:
 
     python validation_test/build123d_netgen_gmsh_flow/validation_build123d_cubit_pressure_resultant.py
-    python validation_test/build123d_netgen_gmsh_flow/validation_build123d_cubit_pressure_resultant.py --vol C:\\temp\\box.vol
+    python validation_test/build123d_netgen_gmsh_flow/validation_build123d_cubit_pressure_resultant.py --vol private-runtime-path
 """
 
 from __future__ import annotations

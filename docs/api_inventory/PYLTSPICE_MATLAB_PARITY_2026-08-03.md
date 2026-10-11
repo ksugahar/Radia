@@ -40,7 +40,7 @@ opaque `uint64` handles and remains owned by the Level-2 MATLAB wrapper.
 3. Complete asynchronous `SimRunner`/`RunTask` behavior and callback semantics.
 4. Complete multi-plot RAW, stepped-log query, operating-point, alias,
    back-annotation, and property readers.
-5. Run MATLAB and Simulink E2E tests on LAB and 100号機 with the current ADI
+5. Run MATLAB and Simulink E2E tests on validation host and development host with the current ADI
    LTspice release.
 
 Until all five gates pass, documentation and release notes must say

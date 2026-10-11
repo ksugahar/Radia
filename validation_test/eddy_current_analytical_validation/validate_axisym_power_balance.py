@@ -46,7 +46,7 @@ def main():
         "bem_validated": False,
         "phasor": "peak, exp(+i omega t)",
         "coil_cross_section_radius": args.coil_radius,
-        "host": platform.node(), "python": sys.version,
+        "platform_class": platform.system(), "python": sys.version,
         "ngsolve": ng.__version__,
         "sources_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sources},
         "rows": rows, "power_balance_tolerance": 1e-4, "passed": passed,

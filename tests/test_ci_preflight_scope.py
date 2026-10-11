@@ -59,14 +59,11 @@ def test_meta_catalog_loads_with_package_relative_imports():
     assert "meta" in catalog
 
 
-def test_lab_unc_remap_supports_current_and_historical_nas_addresses():
+def test_lab_unc_remap_supports_synthetic_current_and_historical_routes(monkeypatch):
     module = _load_module()
-
-    assert module._remap_lab_unc(
-        r"\\192.168.121.100\work\00_CAE\Radia\01_GitHub"
-    ) == r"S:\Radia\01_GitHub"
-    assert module._remap_lab_unc(
-        r"\\192.168.11.100\work\00_CAE\Radia\02_Worktrees\candidate"
-    ) == r"S:\Radia\02_Worktrees\candidate"
-    unrelated = r"\\server\share\Radia\01_GitHub"
+    monkeypatch.setattr(module, "_LAB_UNC_HOSTS", ("192.0.2.10", "192.0.2.11"))
+    assert module._remap_lab_unc(r"\\192.0.2.10\share\repo\Radia\main-checkout") == r"S:\Radia\main-checkout"
+    assert module._remap_lab_unc(r"\\192.0.2.11\share\repo\Radia\candidate-worktree") == r"S:\Radia\candidate-worktree"
+    assert module._remap_lab_unc(r"\\192.0.2.10\share\repo\RADIA\candidate") == r"S:\RADIA\candidate"
+    unrelated = r"\\unrelated-server\share\repo\Radia\candidate"
     assert module._remap_lab_unc(unrelated) == unrelated

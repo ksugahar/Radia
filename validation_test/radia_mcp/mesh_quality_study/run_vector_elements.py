@@ -1,6 +1,6 @@
 """Does the H1 mesh verdict survive on VECTOR elements (HCurl / HDiv)?
 
-Promoted from C:/temp/mesh_quality_study (2026-08-07) with its committed
+Promoted from private-runtime-path (2026-08-07) with its committed
 results JSON (Data Persistence Policy). Re-run with
 `python run_vector_elements.py` (requires Cubit + netgen + gmsh +
 build123d).
@@ -194,7 +194,7 @@ def main():
 
     from ngsolve import TaskManager
     results = {"timestamp": datetime.now().isoformat(),
-               "hostname": platform.node(),
+               "platform_class": platform.system(),
                "problem": ("HCurl curl-curl+mass and HDiv div-div+mass, "
                            "lowest order, manufactured solutions; "
                            "Jacobi-CG with a verified residual"),

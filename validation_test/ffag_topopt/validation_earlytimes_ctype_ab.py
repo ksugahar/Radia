@@ -1081,7 +1081,7 @@ def run_case(options, iron_maxh):
         return {
             "schema": "radia.validation.earlytimes-ctype-ab.v1",
             "status": "pass",
-            "hostname": platform.node(),
+            "platform_class": platform.system(),
             "runtime_s": time.perf_counter() - started,
             "solve_wall_s": solve_wall,
             "field_map_wall_s": field_wall,
@@ -1352,7 +1352,7 @@ def main():
     document = {
         "schema": "radia.validation.earlytimes-ctype-ab-study.v1",
         "status": "running",
-        "hostname": platform.node(),
+        "platform_class": platform.system(),
         "python": platform.python_version(),
         "ngsolve": getattr(ng, "__version__", "unknown"),
         "source_revision": options.source_revision,
@@ -1388,7 +1388,7 @@ def main():
             json.dumps(
                 {
                     "status": document["status"],
-                    "hostname": document["hostname"],
+                    "platform_class": document["platform_class"],
                     "runtime_s": document["runtime_s"],
                     "case_count": len(document["cases"]),
                     "output_json": str(options.output_json),

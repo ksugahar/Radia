@@ -25,6 +25,27 @@ def _loop_work_route(bem_solver, face_count):
     return ("fmm" if face_count >= _FMM_FACE_THRESHOLD else "dense") if requested == "auto" else requested
 
 
+def _body_layer(bem_solver, name):
+    """Apply the selected body map and its actual algebraic transpose."""
+    if getattr(bem_solver, "_loop_body_backend", "dense") != "hacapk":
+        return getattr(bem_solver, name)
+    handle = getattr(bem_solver, "_"+name+"_hacapk", None)
+    if handle is None or not handle.IsValid():
+        raise RuntimeError("Loop HACApK body handles are unavailable")
+    if not hasattr(handle,"ReleaseDenseEntries"):
+        raise RuntimeError("Loop HACApK requires the current native transpose API")
+    n = bem_solver.ndof
+    def apply(x, transpose=False):
+        x = np.asarray(x).reshape(-1)
+        fn = lambda v: handle.MatVec(np.ascontiguousarray(v, dtype=float), transpose=transpose)
+        y = fn(x.real)+1j*fn(x.imag) if np.iscomplexobj(x) else fn(x)
+        if not np.all(np.isfinite(y)):
+            raise RuntimeError("Nonfinite loop HACApK body product")
+        return y
+    return LinearOperator((n,n), matvec=apply,
+                          rmatvec=lambda x: apply(x, True), dtype=float)
+
+
 class _P0SingleLayer(LinearOperator):
     """Face-ordered products retaining the native operator, without dense copies."""
     def __init__(self, operator, space, dofs, native_bytes, *, backend="dense"):
@@ -64,6 +85,29 @@ class _P0SingleLayer(LinearOperator):
         return self._apply(values, True)
 
 
+def _check_loop_work_size(bem_solver, face_count, backend):
+    """Large weak loops require both actually compressed operator routes."""
+    if face_count <= 14000:
+        return
+    if face_count > 20000:
+        raise ValueError("Loop work exceeds the 20000-face on-demand limit")
+    if backend != "fmm" or getattr(bem_solver, "_loop_body_backend", "dense") != "hacapk":
+        raise ValueError("Above 14000 faces loop work requires on-demand P1 HACApK and FMM P0")
+    if bem_solver.ndof > 10000:
+        raise ValueError("Large on-demand loop work exceeds 10000 full nodal DOFs")
+    for name in ("_SL_hacapk", "_DL_hacapk"):
+        handle = getattr(bem_solver, name, None)
+        if (handle is None or not handle.IsValid()
+                or handle.GetStats().get("construction_route") != "p1-entry-on-demand"):
+            raise ValueError("Above 14000 faces loop work requires actual on-demand P1 handles")
+
+
+def _check_strong_loop_size(bem_solver, loop_dof):
+    """The larger weak-loop study does not certify coupled coil scaling."""
+    if loop_dof and bem_solver.ndof > 7000:
+        raise ValueError("Strong genus-1 coupling retains the 7000-nodal-DOF limit")
+
+
 def _p0_single_layer(bem_solver, areas, *, quadrature_bonus=4):
     from ngsolve import BND, BilinearForm, SurfaceL2, ds
     from ngsolve.bem import LaplaceSL
@@ -80,13 +124,12 @@ def _p0_single_layer(bem_solver, areas, *, quadrature_bonus=4):
         raise ValueError("Loop work geometry changed; rebuild the BIE solver")
     bem_solver._loop_work_geometry_identity = identity
     backend = _loop_work_route(bem_solver, len(areas))
+    _check_loop_work_size(bem_solver, len(areas), backend)
     key = (identity, quadrature_bonus, backend)
     cached = getattr(bem_solver, "_loop_work_single_layer", None)
     if cached is not None and cached[0] == key:
         return cached[1]
 
-    if len(areas) > 14000:
-        raise ValueError("Loop work exceeds 14000 surface faces; use a coarser validated mesh")
     import time
     started = time.perf_counter()
     space = SurfaceL2(mesh, order=0, dual_mapping=False)
@@ -172,14 +215,15 @@ def _prepare_loop_magnetic_work(bem_solver, points, closed_triangles, open_trian
     q = np.asarray(q.real, dtype=float)
     if q.shape != (n,) or not np.all(np.isfinite(q)):
         raise ValueError("Loop work requires finite matching normal and incident traces")
-    B = .5*bem_solver.M-bem_solver.DL
+    DL = _body_layer(bem_solver, "DL")
+    SL = _body_layer(bem_solver, "SL")
     # Exterior work: Q_g,u = j_g^T S0 C - q_g^T (.5 M-DL),
     # Q_g,g = j_g^T S0 j_g + q_g^T SL q_g. Current-only work
     # omits finite-SIBC normal flux and fails a generic lift change.
-    magnetic -= MU_0*(q @ B)
-    reverse -= MU_0*(B.T @ q)
+    magnetic -= MU_0*(.5*(bem_solver.M.T @ q) - DL.T @ q)
+    reverse -= MU_0*(.5*(bem_solver.M.T @ q) - DL.T @ q)
     magnetic_diagonal = MU_0*sum(transposed[:, c] @ loop_current[:, c] for c in range(3))
-    magnetic_diagonal += MU_0*(q @ bem_solver.SL @ q)
+    magnetic_diagonal += MU_0*(q @ (SL @ q))
     if not np.isfinite(magnetic_diagonal) or magnetic_diagonal <= 0:
         raise RuntimeError("Unit carrier exterior magnetic work must be positive")
     scale = max(np.max(np.abs(magnetic)), abs(magnetic_diagonal),
@@ -207,6 +251,8 @@ def _prepare_loop_magnetic_work(bem_solver, points, closed_triangles, open_trian
                        gradient_work_residual=gradient_work,
                        conormal_flux_relative_mismatch=float(flux_error),
                        quadrature_bonus=quadrature_bonus,
+                       body_backend=getattr(bem_solver,"_loop_body_backend","dense"),
+                       body_construction_route=getattr(bem_solver,"_body_construction_route","dense"),
                        single_layer_matrix_bytes=single_layer.nbytes,
                        single_layer_native_storage_bytes=single_layer.native_bytes,
                        single_layer_dense_array_bytes=single_layer.dense_array_bytes,
@@ -230,7 +276,8 @@ def _prepare_loop_work(bem_solver, points, closed_triangles, open_triangles,
     if (impedance.shape != (nt,) or not np.all(np.isfinite(impedance))
             or np.any(impedance.real < 0)):
         raise ValueError("Loop work requires finite passive face-ordered impedance")
-    key = (_geometry_key, quadrature_bonus, _loop_work_route(bem_solver, len(areas)))
+    key = (_geometry_key, quadrature_bonus, _loop_work_route(bem_solver, len(areas)),
+           getattr(bem_solver, "_loop_body_backend", "dense"))
     cached = getattr(bem_solver, '_prepared_loop_magnetic_work', None) if _geometry_key is not None else None
     if cached is not None and cached[0] == key:
         magnetic_work = cached[1]

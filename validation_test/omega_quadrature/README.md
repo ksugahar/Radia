@@ -1,6 +1,6 @@
 # Mixed Omega quadrature re-solves
 
-Run this heavy validation on mdx or hibino, not as part of fast CI. This lane
+Run this heavy validation on mdx or compute-host, not as part of fast CI. This lane
 does not grant #6 or three-engine field acceptance. No p=4 run is needed.
 It uses the production mixed solver, requests the assembled system explicitly,
 and solves again for every assembly bonus and response order. The source Hodge
@@ -40,7 +40,7 @@ relax a limit after observing the result.
 Example (paths refer to the compute host):
 
 ```text
-python run.py --mode research --factory ctype.py --mesh C:/temp/radia-ctype-family/coarse/kelvin_domain.vol --orders 1 2 3 --bonuses 4 8 12 --evaluation-order 16 --output C:/temp/omega-audit/result.json
+python run.py --mode research --factory ctype.py --mesh private-runtime-path --orders 1 2 3 --bonuses 4 8 12 --evaluation-order 16 --output private-runtime-path
 ```
 
 The C-type factory consumes the sibling mesh_result.json. Use only a mesh that
@@ -76,7 +76,7 @@ candidate wheel and physical model. C-type is a control, not an #6 substitute.
 ## Small research validation, 2026-09-11
 
 Saved JSON files in this directory are research evidence, NOT formal-wheel
-acceptance. mdx2 used Radia 4.95.81 staging with the clean-main b5a54e473
+acceptance. worker-b used Radia 4.95.81 staging with the clean-main b5a54e473
 kelvin_solver.py explicitly overlaid (Python only), NGSolve 6.2.2606, 24 threads.
 The C-type coarse mesh has 24,134 elements. Source order was 3, evaluation order
 8; this low-cost check verifies the lane, not final quadrature convergence.

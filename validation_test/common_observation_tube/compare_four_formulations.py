@@ -554,7 +554,7 @@ def run(
         "schema": "radia.validation.common-observation-tube-four-formulations.v1",
         "status": "pass" if all(checks.values()) else "fail",
         "gate_profile": gate_profile,
-        "machine": platform.node(),
+        "platform_class": platform.system(),
         "python": platform.python_version(),
         "versions": {
             "python": platform.python_version(),

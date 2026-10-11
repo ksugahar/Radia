@@ -13,7 +13,7 @@ crystallized as its own package.
   smaller or complex systems and cross-checks; ABMC is opt-in.
 - Show solver-capacity guidance once in aggregate documentation. Align
   host/deployment guidance with editable development on 100 and fixed
-  wheels on LAB, and strengthen the preflight package-boundary audit.
+  wheels on validation host, and strengthen the preflight package-boundary audit.
 
 
 - Raise the MCP SDK floor to 1.21.1 so supported installations also work
@@ -37,8 +37,8 @@ crystallized as its own package.
 
 - `release_workflow` knowledge describes the current release-quad
   definition of done: the release source is the peeled `v<radia-version>`
-  tag (or a checkout named by `--release-source`), LAB and 100号機's release
-  runtime are verified exact wheels, 100号機's development venv is the
+  tag (or a checkout named by `--release-source`), validation host and development host's release
+  runtime are verified exact wheels, development host's development venv is the
   editable source, and `done` changes no runtime.
 - `ngsolve` knowledge: the GridFunction-snapshot trap is illustrated with a
   generic iteration instead of a retired reduction recurrence and its stage
@@ -245,9 +245,9 @@ crystallized as its own package.
 - Remove retired Cubit bytecode caches from maintained editable deployments and
   align the public release manual with independent MCP/Cubit package ownership.
 - Replace obsolete coupled-version, mass-process-stop, four-host MCP, and fixed
-  server-count guidance with the current LAB/100 release-dual contract.
+  server-count guidance with the current validation host/100 release-dual contract.
 - Align shared deployment and Simulink skills with forward-only editable
-  updates and the LAB/100/mdx1/mdx2 solver acceptance pool; remove a dated live
+  updates and the validation host/100/worker-a/worker-b solver acceptance pool; remove a dated live
   bibliography-runtime handoff from the active operating contract.
 - Remove the retired solver-QUAD Cubit phase-0 build helper; the exporter-owned
   `src/cubit_plugin/cubit_build.ps1` remains the single native build route, and
@@ -279,7 +279,7 @@ crystallized as its own package.
 
 - Separate Radia MCP release-dual guidance from the numerical solver's four-host
   release; expose the independent workflow through the `mcp_release` manual topic.
-- Require editable/fresh-import checks on LAB and 100 plus LAB live acceptance;
+- Require editable/fresh-import checks on validation host and 100 plus validation host live acceptance;
   existing 100 clients adopt updates on next launch without blocking the release.
 - Remove retired live-Cubit GUI/IPC contribution guidance after the package split.
 
@@ -1268,7 +1268,7 @@ crystallized as its own package.
   layers that pair with that external server.  Install the official
   server separately with `pip install --upgrade optuna optuna-mcp` and
   run it as `optuna-mcp` (optionally with
-  `--storage sqlite:///C:/temp/optuna_mcp.db` for persistence).
+  `--storage sqlite:///private-runtime-path` for persistence).
 - **radia-ngsolve (dtn_coarse_mesh, accuracy)**: tightened the `p`-method
   claim after an adversarial methodology review. "mode `n` exact iff order
   `p ≥ n`" is precise only in the **reference space** / 2-D; on the curved
@@ -1409,9 +1409,9 @@ alongside `radia` v4.86.0:
 
 Released 2026-05-26.
 
-User directive: "残課題をクリアしてからpypi公開＋100号機とmdxにデプロイ
+User directive: "残課題をクリアしてからpypi公開＋development hostとmdxにデプロイ
 だね。" (clear the 3 residual paper-writing gaps then PyPI publish +
-deploy to 100号機/mdx).
+deploy to development host/mdx).
 
 Closes 3 known gaps that surfaced during v0.92.0 selftest review:
 
@@ -1604,7 +1604,7 @@ Web-research basis (2026-05-26):
     text-text overlap clean, recipe content, IoU math (4 corner cases)
   - Undefined variables: clean paper with where-clauses (0 undefined),
     \\eta_s undefined flagged, IEEEdescription nomenclature exempts
-    defined symbols, universal whitelist exempts \\pi/\\omega/\\sigma/f,
+    defined symbols, universal whitelist exempts private-runtime-path
     extra_whitelist runtime arg, missing tex returns error,
     first-occurrence context retrieved
 
@@ -1823,7 +1823,7 @@ Released 2026-05-26.
 User directives (2 of them):
 
   1. "mcp-server-document には、paper-writing は残さない。世界に公開
-     する以上。"  (the LAB-private copy at
+     する以上。"  (the validation host-private copy at
      mcp-server-document.paper_writing was deleted in the
      accompanying mcp-server-document v3.3.0 release.)
   2. "世の中の github を探し電磁場にとってよいものがあれば吸収して
@@ -1899,7 +1899,7 @@ mcp-server-paper-writing --selftest now exercises:
 
 ### Companion release (mcp-server-document)
 
-mcp-server-document v3.3.0 (LAB-private) deleted the now-redundant
+mcp-server-document v3.3.0 (validation host-private) deleted the now-redundant
 `mcp_server_document/paper_writing/` directory.  The public PyPI
 `radia-mcp.paper_writing` is the canonical implementation going
 forward.
@@ -2003,7 +2003,7 @@ User directive: "TeX の figure の配置スキルを paper writing に
 - meta-health: 9/9 (bidirectional related-edge invariant
   maintained: 4 reverse edges added to literature-index, graph,
   chart2d, md2html, all pointing back to paper-writing)
-- LAB editable install at `the LAB editable install`
+- validation host editable install at `the validation host editable install`
   refreshed to 0.88.0
 - pyproject.toml + __init__.py bumped to 0.88.0
 
@@ -2011,7 +2011,7 @@ Catalog: **39 → 40 servers**.
 
 NOTE: mcp-server-document.paper_writing source remains for now
 (unlike md2html / graph / mathematica which were deleted during
-their migrations).  Per migration-policy convention, the LAB-private
+their migrations).  Per migration-policy convention, the validation host-private
 copy can be retired in a follow-up commit once the user confirms the
 public version is the canonical one.
 
@@ -2065,7 +2065,7 @@ What shipped:
       NOT cover this: DCIM Chow 1991 / Aksun two-level 1996 / MPIE
       Michalski-Mosig 1997 / GPOF Hua-Sarkar 1989 / VECTFIT
       Gustavsen-Semlyen 1999 + open-source impl pointers)
-    * LAB_USAGE_NOTES (where lab DOES and DOES NOT need Sommerfeld;
+    * validation host_USAGE_NOTES (where lab DOES and DOES NOT need Sommerfeld;
       cross-references to bem_low_freq, bem_mmm_msc, bem_h_matrix,
       analytical_formulas, matrix_solvers, ndt, litz_transmission)
     * REFERENCES (the absorbed bundle + Chew 1995 + Kong 1972 +
@@ -2196,7 +2196,7 @@ What shipped:
   | 1 | ~6.5 cm (rel_width derived from target) | **~5.0 × 3.3 cm** | Leave whitespace on the column; figure does NOT dominate |
   | 2 | full 8.89 cm | **~3.6 × 5.3 cm** | `sharey=True` drops inner ylabel + ticks; `wspace=0.10` (~3 mm inner gap); each panel claims every mm |
 
-  Both keep the LAB FONT RULE (10 pt absolute @ 8 cm; text size
+  Both keep the validation host FONT RULE (10 pt absolute @ 8 cm; text size
   identical between regimes — only axes box scales).
 
 - **NEW `paper_figure_8cm_recipe(panels, profile, target_axes_cm,
@@ -2354,7 +2354,7 @@ Released 2026-05-26.
 User decision (after the lab document server enumeration):
   - DISCARD: `mcp_server_document/diagram/` (raster → Excalidraw
              pipeline) + sibling `the lab document server's excalidraw tree` Node.js
-             tree.  Not LAB-aligned; bulky deps; better third-party
+             tree.  Not validation host-aligned; bulky deps; better third-party
              options exist.
   - COMPLETE MIGRATION: `mathematica/` → `radia_mcp.mathematica`
              (already done in v0.69; this release removes the stale
@@ -2390,7 +2390,7 @@ What shipped:
     file rejection; non-.md rejection; lower-level md_to_html dict
     shape; explicit title override.
 
-- **mcp-server-document v3.0.0 → v3.1.0** (LAB-private):
+- **mcp-server-document v3.0.0 → v3.1.0** (validation host-private):
     Removed `diagram`, `mathematica`, `md2html` from
     `server.py::_build_mcp()` (12 subpackages, 326 tools remain).
     Removed `diagram` keyword + extras + `diagram/skill.md`
@@ -2413,7 +2413,7 @@ Survey verdict (4 candidates from the lab document server, 2 chosen):
   ⏸  DEFERRED: pdf (1055 LOC PDF toolkit) -- still recommended for
                 v0.83+, would absorb the Type-42 verifier we built
                 in v0.80.0 into a richer toolkit
-  ❌ KEPT IN mcp-server-document (LAB-private, scope mismatch):
+  ❌ KEPT IN mcp-server-document (validation host-private, scope mismatch):
      grant_writing, paper_writing, presentation, poster, circuit,
      bibliography, doc_convert, ocr, document_meta, research_project,
      graph (already migrated, OLD source intentionally kept as
@@ -2828,7 +2828,7 @@ What shipped:
    errors='replace' on the harness side).  Auto-parameterized from
    the meta catalog so new servers are tested automatically.
    Includes a floor invariant (`test_at_least_30_servers_runnable`)
-   that detects the LAB editable-install drift incident pattern from
+   that detects the validation host editable-install drift incident pattern from
    CLAUDE.md 2026-05-19.
 
 4. **Catalog alias resolution** (`radia_mcp.meta.catalog`).
@@ -3204,7 +3204,7 @@ which panel mode is asking.
 
 - **`peec_inductance` tool** in `mcp-server-radia-ngsolve`: 5 sub-topics
   (overview / centerline / jou / sibling_jou / japanese_path) promoted
-  from LAB-private `mcp-server-ih` after the feature stabilised.
+  from validation host-private `mcp-server-ih` after the feature stabilised.
 - **Cubit daemon license warmup**: `cubit_license_warmup.py` mirrors
   `coreform_cubit.ps1` renewals cache logic (3-day cache + 7-day
   expiry).  Cold daemon start 30 – 60 s → 3 s.

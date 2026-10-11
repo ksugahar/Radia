@@ -401,7 +401,7 @@ def run(profile="smoke"):
         "schema": "radia.maglev.ecb-foster-lorentz-3d-reference.v1",
         "generated_at_utc": datetime.now(UTC).isoformat(),
         "runtime": {
-            "host": socket.gethostname(),
+            "platform_class": platform.system(),
             "python_version": platform.python_version(),
             "radia_version": getattr(radia, "__version__", "unknown"),
             "ngsolve_version": _package_version("ngsolve"),

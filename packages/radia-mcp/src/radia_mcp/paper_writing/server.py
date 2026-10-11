@@ -6,7 +6,7 @@ Journal paper writing skill suite -- IMRaD lint, abstract / citation
 PDF download (IEEE / ScienceDirect / Emerald with cookies).
 
 Promoted 2026-05-26 from mcp-server-document.paper_writing
-(LAB-private) to radia-mcp (public PyPI).
+(validation runtime-private) to radia-mcp (public PyPI).
 
 2026-07-17: the presentation server was MERGED into this one (Sugahara:
 slide decks cannot yet be authored end-to-end by AI, so the slide lint /

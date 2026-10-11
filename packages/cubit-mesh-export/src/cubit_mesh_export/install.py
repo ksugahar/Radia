@@ -2,7 +2,7 @@
 Cubit plugin installer for cubit-mesh-export.
 
 Deploys the Cubit plugin binaries (.ccm, .pyd) and Netgen DLLs to the
-Coreform Cubit 2025.12+ installation directory.
+Coreform Cubit 2026.8+ installation directory.
 
 After ``pip install cubit-mesh-export``, run::
 
@@ -32,14 +32,17 @@ from __future__ import annotations
 import argparse
 import glob
 import hashlib
+import json
 import os
 import shutil
 import sys
 import time
 from pathlib import Path
 
-MIN_CUBIT_VERSION = (2025, 12)
-MIN_CUBIT_VERSION_TEXT = "2025.12"
+from cubit_mesh_export._layout import plugin_directory, command_plugin_path
+
+MIN_CUBIT_VERSION = (2026, 8)
+MIN_CUBIT_VERSION_TEXT = "2026.8"
 _REQUIRED_PACKAGE_BINARIES = (
     "cubit_mesh_export.ccm",
     "cubit_mesh_curver.pyd",
@@ -80,14 +83,14 @@ def _find_cubit_dir():
 
     def _supported(root: Path) -> bool:
         return (
-            (root / "bin" / "plugins").is_dir()
+            plugin_directory(root).is_dir()
             and _cubit_version_key(str(root)) >= MIN_CUBIT_VERSION
         )
 
-    cubit_path = os.environ.get("CUBIT_PATH")
+    cubit_path = os.environ.get("CUBIT_PATH") or os.environ.get("CUBIT_INSTALL_DIR")
     if cubit_path:
         p = Path(cubit_path)
-        candidates = [p.parent if (p / "plugins").is_dir() else p]
+        candidates = [p.parent if p.name.lower() == "bin" else p]
         if (p / "bin" / "plugins").is_dir():
             candidates.insert(0, p)
         for candidate in candidates:
@@ -146,14 +149,14 @@ def _is_cubit_process_name(name: str) -> bool:
     # Strip the .exe suffix so the compare is uniform.
     if n.endswith(".exe"):
         n = n[:-4]
-    return n == "coreform_cubit"
+    return n in {"coreform_cubit", "cubitx", "clarox"}
 
 
 def _running_cubit_processes():
     """Return a list of (pid, name) for running Cubit GUI processes.
 
     A non-empty list means the plugin files are likely locked -- installing
-    over them is not safe. The 2026-04-14 incident on 100号機 was caused by
+    over them is not safe. The 2026-04-14 incident on runtime host was caused by
     a running Cubit holding cubit_mesh_export.ccm open, which made copy silently
     produce a half-updated plugin set.
     """
@@ -214,10 +217,10 @@ def _file_is_locked(path: Path) -> str:
 
 def _critical_plugin_files(cubit_dir: Path):
     """Files whose state gates a safe install."""
-    plugins = cubit_dir / "bin" / "plugins"
+    plugins = plugin_directory(cubit_dir)
     bin_ = cubit_dir / "bin"
     return [
-        plugins / "cubit_mesh_export.ccm",
+        command_plugin_path(cubit_dir),
         plugins / "cubit_mesh_curver.cp312-win_amd64.pyd",
         plugins / "nglib.dll",
         plugins / "ngcore.dll",
@@ -229,12 +232,12 @@ def _critical_plugin_files(cubit_dir: Path):
 def _expected_deployments(pkg_dir: Path, cubit_dir: Path):
     """Return list[(pkg_src, deployed_dst)] for each binary cubit-plugin-install
     is responsible for."""
-    plugins_dir = cubit_dir / "bin" / "plugins"
+    plugins_dir = plugin_directory(cubit_dir)
     bin_dir = cubit_dir / "bin"
     pairs = []
     if (pkg_dir / "cubit_mesh_export.ccm").is_file():
         pairs.append((pkg_dir / "cubit_mesh_export.ccm",
-                       plugins_dir / "cubit_mesh_export.ccm"))
+                       command_plugin_path(cubit_dir)))
     if (pkg_dir / "cubit_mesh_curver.pyd").is_file():
         pairs.append((pkg_dir / "cubit_mesh_curver.pyd",
                        plugins_dir / "cubit_mesh_curver.cp312-win_amd64.pyd"))
@@ -317,9 +320,9 @@ def verify_deployment(pkg_dir: Path, cubit_dir: Path, *, verbose: bool = True):
     # first installs.
     for stale_ccl in [
         cubit_dir / "bin" / "cubit_mesh_export.ccl",
-        cubit_dir / "bin" / "plugins" / "cubit_mesh_export.ccl",
+        plugin_directory(cubit_dir) / "cubit_mesh_export.ccl",
         cubit_dir / "bin" / "radia_cubit.ccl",
-        cubit_dir / "bin" / "plugins" / "radia_cubit.ccl",
+        plugin_directory(cubit_dir) / "radia_cubit.ccl",
     ]:
         if stale_ccl.is_file():
             msg = (f"stale retired Qt5 .ccl remains: {stale_ccl}. "
@@ -378,6 +381,7 @@ def preflight(cubit_dir: Path, *, verbose: bool = True):
 
 _CLEAN_PATTERNS = [
     "cubit_mesh_export.ccm",
+    "cubit_mesh_export.dll",
     "cubit_mesh_export.ccl",
     "cubit_mesh_curver*.pyd",
     "nglib.dll",
@@ -399,7 +403,7 @@ def _clean_old_plugins(cubit_dir: Path):
     Errors are collected rather than raised so the caller can surface
     every locked/missing-privilege case in one go, then abort.
     """
-    plugins_dir = cubit_dir / "bin" / "plugins"
+    plugins_dir = plugin_directory(cubit_dir)
     bin_dir = cubit_dir / "bin"
     removed = 0
     errors = []
@@ -506,6 +510,21 @@ def _copy_verified(src: Path, dst: Path, start_time: float):
 # Main install flow
 # ============================================================
 
+def _require_native_sdk_runtime(pkg_dir: Path, cubit_dir: Path) -> None:
+    """A native command plugin is accepted only by its recorded SDK release."""
+    manifest = json.loads((pkg_dir / "native_payloads.json").read_text(encoding="utf-8"))
+    expected = manifest["payloads"]["cubit_mesh_export.ccm"]["cubit_version"]
+    build_info = cubit_dir / "BUILD_INFO"
+    fields = dict(line.split("=", 1) for line in
+                  build_info.read_text(encoding="utf-8").splitlines()
+                  if "=" in line and not line.startswith("#"))
+    actual = fields.get("short")
+    if actual != expected:
+        raise RuntimeError(
+            f"Native plugin requires Cubit SDK/runtime {expected}; found {actual!r}. "
+            "Build a payload for the target SDK before deployment.")
+
+
 def install_plugin(*, all_users: bool = False, check_only: bool = False,
                     verify_only: bool = False, helpers_only: bool = False):
     """Deploy Cubit plugin binaries to Cubit installation.
@@ -547,13 +566,16 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
 
     if not cubit_dir:
         print(f"  [FAIL] Coreform Cubit {MIN_CUBIT_VERSION_TEXT}+ not found.")
-        print("         Set CUBIT_PATH to the Cubit 2025.12 bin directory.")
+        print("         Set CUBIT_PATH to the selected Cubit bin directory.")
         return False
 
-    plugins_dir = cubit_dir / "bin" / "plugins"
+    plugins_dir = plugin_directory(cubit_dir)
     print(f"  Cubit:   {cubit_dir}")
     print(f"  Package: {pkg_dir}")
     print()
+
+    if not helpers_only:
+        _require_native_sdk_runtime(pkg_dir, cubit_dir)
 
     if verify_only:
         ok, issues = verify_deployment(pkg_dir, cubit_dir, verbose=True)
@@ -619,7 +641,7 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
     copy_jobs = []
     ccm_src = pkg_dir / "cubit_mesh_export.ccm"
     if ccm_src.is_file():
-        copy_jobs.append((ccm_src, plugins_dir / "cubit_mesh_export.ccm"))
+        copy_jobs.append((ccm_src, command_plugin_path(cubit_dir)))
     else:
         print(f"  [FAIL] cubit_mesh_export.ccm not found in {pkg_dir}")
 

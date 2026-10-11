@@ -135,7 +135,7 @@ def main():
 
     data = {
         "timestamp": datetime.now().isoformat(),
-        "hostname": platform.node(),
+        "platform_class": platform.system(),
         "benchmark": "stream_function_aca_vs_naive_tsvd",
         "problem": {"kernel": "1/(1+alpha r^2)", "alpha": 400.0,
                     "M_over_N": 0.25, "modes": 20, "aca_eps": 1.0e-8,

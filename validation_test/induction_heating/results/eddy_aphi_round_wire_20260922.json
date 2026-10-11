@@ -2,7 +2,7 @@
   "schema": "radia.eddy_aphi_round_wire.v1",
   "generated_at_utc": "2026-09-21T23:12:04.732018+00:00",
   "git_head": "8e33532efa8b1f5ab19ca839de7adf12659fa875",
-  "host": "intel11",
+
   "question": "before the A-V solver is used as the fin's independent reference, does it reproduce the exact Bessel impedance of a round wire across the skin-effect range?",
   "geometry": {
     "radius_mm": 1.0,

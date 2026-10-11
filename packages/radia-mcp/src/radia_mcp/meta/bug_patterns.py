@@ -379,7 +379,7 @@ PATTERNS: list[dict] = [
         "severity": "high",
         "first_seen": "2026-05-30",
         "last_seen": "2026-05-30",
-        "what": "After logging off LAB + 100号機 + mdx, all three "
+        "what": "After logging off LAB + runtime host + mdx, all three "
                 "still get NoAvailableSeats on the next --login.  Seat "
                 "stays stuck for hours.",
         "root_cause": "Cubit 2025.8 introduced a new licensing portal.  "
@@ -409,7 +409,7 @@ PATTERNS: list[dict] = [
         "severity": "high",
         "first_seen": "2026-05-30",
         "last_seen": "2026-05-30",
-        "what": "Admin ran rlm_activate --logout via SSH on 100号機.  "
+        "what": "Admin ran rlm_activate --logout via SSH on runtime host.  "
                 "Reported 'Logged out exit 0'.  Other users still "
                 "see NoAvailableSeats.",
         "root_cause": "Server-side activations are keyed on (user, "
@@ -591,7 +591,7 @@ PATTERNS: list[dict] = [
         "severity": "medium",
         "first_seen": "2026-06-01",
         "last_seen": "2026-06-01",
-        "what": "phase8 on 100号機 + mdx fails: cubit-smoke 'export did "
+        "what": "phase8 on runtime host + mdx fails: cubit-smoke 'export did "
                 "not produce smoke.vol', Cubit exit=1 (0xC0000005); "
                 "cubit.log says 'License Error: No license found'.  This "
                 "stops `all` before phase8e/phase9 even though the "

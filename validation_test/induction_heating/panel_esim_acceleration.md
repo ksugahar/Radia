@@ -32,7 +32,7 @@ thread budgets; wall-time improvement is a measurement, not a CI pass criterion.
 This stage does not extend genus-1 or strong-coupling support.
 
 The [recorded comparison](results/panel_esim_acceleration_lab.json) used 240
-panels and two repeats on LAB with one thread. Direct evaluation took
+panels and two repeats on validation host with one thread. Direct evaluation took
 64.78/64.69 s and 3121 direct cell solves per run; table evaluation took
 24.15/24.38 s and 1185 direct solves. Each mode retained 240 direct final
 certification solves and 12 outer iterations. The largest table-versus-direct

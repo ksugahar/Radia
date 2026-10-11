@@ -1,4 +1,4 @@
-"""Validate true Cubit order-2 curved HEX BDM2 on hibino first or idle-CI mdx.
+"""Validate true Cubit order-2 curved HEX BDM2 on compute-host first or idle-CI mdx.
 
 Generate the temporary mesh on a Cubit host first::
 
@@ -158,7 +158,7 @@ def run(mesh_path: Path) -> dict:
     return {
         "schema": "radia.validation.curved-hex-bdm2-cubit.v1",
         "created_at_utc": datetime.now(UTC).isoformat(),
-        "machine": platform.node(),
+        "platform_class": platform.system(),
         "versions": {
             "radia": getattr(radia, "__version__", "unknown"),
             "ngsolve": getattr(ng, "__version__", "unknown"),

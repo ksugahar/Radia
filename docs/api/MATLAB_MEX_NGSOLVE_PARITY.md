@@ -215,7 +215,7 @@ routine CI solver-heavy:
 - 20 matrix-free cases from 21,515 to 134,130 DoFs; and
 - 15 manufactured-solution cases over five element families.
 
-The checked HIBINO run passed all 535 extended cases on MATLAB R2026a Update
+The checked compute host run passed all 535 extended cases on MATLAB R2026a Update
 4 and NGSolve 6.2.2606, with zero live native handles at termination. MATLAB
 may request a MATLAB `sparse` matrix at an explicit observation or optimization
 boundary; `radia.ngsolve.Matrix`, `Vector`, and `Solver` retain NGSolve storage

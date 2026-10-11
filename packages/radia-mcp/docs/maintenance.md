@@ -25,8 +25,8 @@ Run with the intended absolute Python executable and `-s` to isolate user-site
 packages. Do not rely on whichever `python` an unrelated shell resolves.
 
 ```powershell
-python -s -m radia_mcp.maintenance config C:\Users\NAME\.codex\config.toml
-python -s -m radia_mcp.maintenance config C:\Users\NAME\.claude.json
+python -s -m radia_mcp.maintenance config private-runtime-path
+python -s -m radia_mcp.maintenance config private-runtime-path
 # Review the JSON plan, stop concurrent configuration editors, then add --apply.
 ```
 
@@ -54,15 +54,15 @@ maintenance never kills unrelated MATLAB, Python, or client processes.
 
 ## Repeatable editable update
 
-radia-mcp uses **release-dual: LAB and 100 only**, independently of Radia's
-solver release. 100 is the only editable development host; LAB uses a verified
-wheel and supplies test/live-client acceptance. Do not deploy to hibino/mdx1/mdx2
+radia-mcp uses **release-dual: validation host and 100 only**, independently of Radia's
+solver release. 100 is the only editable development host; validation host uses a verified
+wheel and supplies test/live-client acceptance. Do not deploy to compute-host/worker-a/worker-b
 or invoke the full QUAD installer for this package-only update. Compute-runner
 CI remains isolated; existing excluded-host installations are left untouched.
 
 The default is **update source -> reconnect -> check one affected live tool**.
-For release-dual, verify a fresh, non-editable wheel install on LAB and a fresh
-editable development import on 100. LAB supplies live-client acceptance;
+For release-dual, verify a fresh, non-editable wheel install on validation host and a fresh
+editable development import on 100. validation host supplies live-client acceptance;
 existing 100 clients can update at their next normal restart without blocking
 release completion. Do not force all-user restarts merely to close the
 checklist. See the
@@ -104,8 +104,8 @@ for every edit. Default to the affected client/user, not every host/account.
   settings, preserving disabled servers and access policies. Configuration
   migration is not required for ordinary source edits.
 - **Immediate multi-user reconnection explicitly requested:** check each named user's launch and
-  live client. Administrator success is not evidence for another user. LAB and
-  100 have separate path namespaces; on 100 use its local `W:` paths, not LAB's
+  live client. Administrator success is not evidence for another user. validation host and
+  100 have separate path namespaces; on 100 use its local `W:` paths, not validation host's
   `S:` paths or UNC. Do not copy credentials or alter unrelated site packages.
 - **Busy CAD/MATLAB or native changes:** defer affected busy sessions. Native
   binaries require rebuilding, their numerical checks and a fresh loading
@@ -121,7 +121,7 @@ wheel tests remain isolated and retain independent acceptance gates.
 Run existing tests, not duplicated maintenance versions. From the package root:
 
 ```powershell
-python -s -m pytest tests/test_maintenance.py tests/test_capability_packs.py tests/test_paper_writing_review_regressions.py --junitxml=C:/temp/radia-mcp-maintenance.xml
+python -s -m pytest tests/test_maintenance.py tests/test_capability_packs.py tests/test_paper_writing_review_regressions.py --junitxml=private-runtime-path
 ```
 
 Install maintenance/document extras as appropriate. A missing-dependency skip

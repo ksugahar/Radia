@@ -1,6 +1,6 @@
 {
   "timestamp": "2026-03-07T11:38:34.015465",
-  "hostname": "lab",
+
   "benchmark": "bench_bddc_vs_abmc",
   "description": "BDDC vs ABMC+ICCG: setup, solve, iterations for HCurl",
   "results": [

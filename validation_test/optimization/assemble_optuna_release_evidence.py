@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import runpy
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,39 @@ def _sha256(path: Path) -> str:
 def _require(condition: bool, message: str) -> None:
     if not condition:
         raise RuntimeError(message)
+
+
+def _require_private_same_host(python_result, matlab_result):
+    # Same-host timing certification requires private runtime provenance.
+    # Descriptive public OS metadata cannot establish a physical host identity.
+    _require(
+        bool(str(python_result.get("host", "")).strip())
+        and bool(str(matlab_result.get("host", "")).strip()),
+        "same-host certification requires private runtime provenance",
+    )
+    _require(
+        str(python_result.get("host", "")).casefold()
+        == str(matlab_result.get("host", "")).casefold(),
+        "Python and MATLAB performance hosts differ",
+    )
+
+
+def _public_runtime_payload(value):
+    """Keep private execution identity out of the assembled public record."""
+    identity_keys = {"host", "hostname", "host_name", "validation_host", "machine_name", "computer_name"}
+    if isinstance(value, dict):
+        return {key: _public_runtime_payload(item) for key, item in value.items() if key not in identity_keys}
+    if isinstance(value, list):
+        return [_public_runtime_payload(item) for item in value]
+    return value
+
+
+def _validate_public_runtime_payload(value):
+    # Use the same structural JSON/UNC/contextual-host detector as CI. This is
+    # publication validation, independent of operational input/host admission.
+    policy = runpy.run_path(str(Path(__file__).resolve().parents[2] / "tools/policy_lint.py"))
+    hits = policy["public_runtime_identity_hits"]("result.json", json.dumps(value))
+    _require(not hits, "public evidence contains identifying runtime metadata")
 
 
 def main() -> None:
@@ -75,11 +109,7 @@ def main() -> None:
         matlab_result.get("runtime") == "matlab",
         "MATLAB performance runtime is invalid",
     )
-    _require(
-        str(python_result.get("host", "")).casefold()
-        == str(matlab_result.get("host", "")).casefold(),
-        "Python and MATLAB performance hosts differ",
-    )
+    _require_private_same_host(python_result, matlab_result)
     _require(parallel.get("gate", {}).get("passed") is True, "parallel gate failed")
     history_rows = history.get("results", [])
     _require(bool(history_rows), "history benchmark has no rows")
@@ -166,9 +196,11 @@ def main() -> None:
     }
     evidence["ok"] = evidence["summary"]["passed"]
 
+    evidence = _public_runtime_payload(evidence)
+    _validate_public_runtime_payload(evidence)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
-        json.dumps(evidence, indent=2, ensure_ascii=False) + "\n",
+        json.dumps(_public_runtime_payload(evidence), indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
     print(args.output)

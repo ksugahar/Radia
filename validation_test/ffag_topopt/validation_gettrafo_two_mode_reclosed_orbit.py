@@ -740,7 +740,7 @@ def run(args):
             "analytic implicit orbit/map derivative; not an engineering "
             "magnet design or a HEX shape-derivative claim."),
         "validation_class": args.validation_class,
-        "machine": platform.node(),
+        "platform_class": platform.system(),
         "python": platform.python_version(),
         "mesh": {
             "element_family": "TET",

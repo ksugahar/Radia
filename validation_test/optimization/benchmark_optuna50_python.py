@@ -172,7 +172,7 @@ def main() -> None:
         "schema": "radia.validation.optuna50-performance-runtime.v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "runtime": "python-upstream",
-        "host": os.environ.get("COMPUTERNAME", platform.node()),
+        "platform_class": platform.system(),
         "versions": {
             "python": sys.version.split()[0],
             "optuna": optuna.__version__,

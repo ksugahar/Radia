@@ -319,7 +319,7 @@ def run_validation(args):
         },
         "settings": vars(args) | {"output": str(args.output)},
         "runtime": {
-            "host": platform.node(),
+            "platform_class": platform.system(),
             "python": platform.python_version(),
             "ngsolve": ng.__version__,
             "wall_s": time.perf_counter() - started,
@@ -427,7 +427,7 @@ def main(argv=None):
             },
             "settings": vars(args) | {"output": str(args.output)},
             "runtime": {
-                "host": platform.node(),
+                "platform_class": platform.system(),
                 "python": platform.python_version(),
                 "wall_s": time.perf_counter() - started,
             },

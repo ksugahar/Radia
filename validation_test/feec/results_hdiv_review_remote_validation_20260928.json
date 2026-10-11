@@ -3,7 +3,7 @@
   "date": "2026-09-28",
   "purpose": "Full tests/ and validation_test/feec run of the HDiv-MMM review fixes, then a base-vs-fixed triage of every validation failure.",
   "full_run": {
-    "host": "mdx1",
+
     "python": "3.12.10",
     "versions_ngsolve_numpy_scipy": [
       "6.2.2606",
@@ -97,13 +97,13 @@
     ]
   },
   "triage": {
-    "host": "mdx2",
+
     "python": "3.12.10",
     "lanes": {
       "base_98de8de89": {
         "source_commit": "98de8de89f64559cb2d4a0776e5074ccfcb9634d",
         "native_sha256": "9279dce4c647833276338e5e8ed785033acd0636c43c4331b8302fd8eae116d4",
-        "versions": "6.2.2606 2.4.3 1.17.1 C:\\temp\\hdiv-review-triage-20260928\\base\\src\\radia\\__init__.py",
+        "versions": "6.2.2606 2.4.3 1.17.1 <private-path>/hdiv-review-triage-20260928\\base\\src\\radia\\__init__.py",
         "paths": [
           "validation_test/feec/test_hdiv_hacapk_gram_performance.py::test_hex_chargegram_hacapk_build_enters_lowrank_regime",
           "validation_test/feec/test_hdiv_vim_curved_ima_roundoff.py",
@@ -125,7 +125,7 @@
       "main_fixed": {
         "source_commit": "d7df4492e9facfa1fccbaf9f26803d14340c6d1d +overlay:src/radia/accelerator_lie_topopt.py,validation_test/feec/test_hdiv_vim_symmetric_outer_quad.py,validation_test/feec/test_soft_iron_shapes.py",
         "native_sha256": "400d87a1721aa95043291e8923e4a5b0a889bb9cf1fbb42270684d47957c0930",
-        "versions": "6.2.2606 2.4.3 1.17.1 C:\\temp\\hdiv-review-triage-20260928\\main\\src\\radia\\__init__.py",
+        "versions": "6.2.2606 2.4.3 1.17.1 <private-path>/hdiv-review-triage-20260928\\main\\src\\radia\\__init__.py",
         "paths": [
           "validation_test/feec/test_hdiv_hacapk_gram_performance.py::test_hex_chargegram_hacapk_build_enters_lowrank_regime",
           "validation_test/feec/test_hdiv_vim_curved_ima_roundoff.py",

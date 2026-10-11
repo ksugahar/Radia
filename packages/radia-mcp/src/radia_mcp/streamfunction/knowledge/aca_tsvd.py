@@ -164,7 +164,7 @@ ACA_TSVD_PERFORMANCE = r"""
 
 validation_test/stream_function/bench_aca_vs_dense.py: (ACA+)+TSVD vs naive dense TSVD
 (build full A via the SAME per-call kernel, then numpy.linalg.svd).  Smooth
-1/(1+alpha r^2) kernel, M = N/4, LAB 2026-05-29.  The kernel is numerically low
+1/(1+alpha r^2) kernel, M = N/4, validation runtime 2026-05-29.  The kernel is numerically low
 rank so k_aca stays ~30 while N grows; the eval-count reduction
 M*N -> ~k_aca(M+N) widens with N and, since both methods call the same kernel,
 shows up almost one-for-one in wall-clock time:
@@ -244,13 +244,13 @@ tests/test_stream_function.py (10 tests):
   of the same HACApK ACA+): identical k_aca and
   ||S_f90 - S_radia|| / ||S_f90|| ~ 1e-15 for BOTH methods.  Runs in a fresh
   subprocess to dodge conftest's DLL-search pollution (the f2py module bundles
-  its own Intel/MKL DLLs).  LAB-only (skip if the local reference module is absent).
+  its own Intel/MKL DLLs).  validation runtime-only (skip if the local reference module is absent).
 - Methods 2 and 3 agree to ~1e-9.
 - Least-norm solve recovers B in range(A); validates B-length.
 - Generic Radia-field path: factors permanent-magnet field-kernel coupling
   to < 1e-5 (test_radia_field_kernel_magnets).
 
-f2py reference (LAB): public-safe curated corpus
+f2py reference (validation runtime): public-safe curated corpus
 
 The checks above validate the SOLVER (the matrix A, the ACA+ factorisation, the
 TSVD least-norm solve). The checks below validate the DESIGN -- that the psi the
@@ -376,7 +376,7 @@ kernel-agnostic re-implementation of exactly this CP+TSVD solve.
   modern analogue is our CMA-ES outer loop (topic "cmaes"): SA/CMA-ES handles the
   nonlinear DOF, TSVD owns the linear amplitude solve.
 
-## Source folder (LAB, owner-password PDFs; decrypt with pikepdf)
+## Source folder (validation runtime, owner-password PDFs; decrypt with pikepdf)
 public-safe curated corpus (Turner target-field subfolder; Truncated Singular
 Value Decomposition subfolder = the Abe / NESCOIL / TSVD line).
 """
@@ -979,7 +979,7 @@ is a DIFFERENT problem class with a DIFFERENT natural matrix shape
 (M x N_DOF, M usually small).  The (A) callback contract is the
 right abstraction for OUR problem class.
 
-**Status 2026-05-30**: NGSolve **6.2.2604** is INSTALLED on LAB
+**Status 2026-05-30**: NGSolve **6.2.2604** is INSTALLED on validation runtime
 and exposes the new FMM-style hierarchical BEM in ``ngsolve.bem``:
 
   - ``BiotSavartCF(order, kappa, center, rad)`` -- multipole
@@ -1186,7 +1186,7 @@ Maintained demo sources under ``docs/stream_function``:
   | ``demo_planar_uniform_fem_psi_aca.py`` | Same + HACApK ACA+ via callback      | 1.78 %   | 0.67 % |
   | ``view_sf_coil_gx_gmsh.py``          | GMSH viewer (contours / chain / step)  | --       | --     |
 
-## 6. NGSolve 6.2.2604 + ngsolve.bem (installed on LAB)
+## 6. NGSolve 6.2.2604 + ngsolve.bem (installed on validation runtime)
 
 Confirmed 2026-05-30:
 

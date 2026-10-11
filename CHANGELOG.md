@@ -1,9 +1,48 @@
 # Changelog
 
+- Prevent a latent race in large P1/P2 dense Galerkin assembly: buffer test-triangle rows and synchronize shared-row merges. Quadrature is unchanged; grouped additions agree within contribution-based roundoff bounds. Audited structured cases showed no corruption.
+
+
+- Add an owned native P1 Galerkin entry provider for HACApK SL/DL construction,
+  sharing the existing singular and regular quadrature with the dense reference.
+  On-demand managers retain geometry and a fixed-cap pair-block cache, with
+  explicit route/storage diagnostics and no dense source entry table. Large
+  dense-reference assembly merges task-local rows safely at shared vertices.
+  Preserve dense-entry construction by default through 7,000 full P1 nodal
+  DOFs; larger bodies use on-demand construction, an explicit time/memory
+  tradeoff. Larger weak genus-1 solves require actual on-demand SL/DL and
+  FMM P0, bounded at 20,000 faces / 10,000 full nodal DOFs. Dense/direct-P0
+  and strong coupling limits remain. Record matched construction costs and
+  residual/reciprocity/power checks; no general speed or linear-memory claim.
+
+- Pre-push transport accepts an optional runner-label to SSH-config-alias mapping through `RADIA_PREFLIGHT_SSH_ALIAS`; runner selection and admission continue to use the original labels.
+
+- Include the geometry updater's referenced input-path and panel-impedance provenance helpers in Simulink release archives, so extracted packages contain their MATLAB dependencies.
+
+- Give fast-contracts a 120-second elapsed-time budget while retaining its required tests, assertions and fail-on-overrun check. Other tier budgets and host routing stay unchanged.
+
+- Public validation records omit identifying machine/network/path metadata. Result writers record OS class and software/thread information; public evidence paths and documentation use neutral roles. A tracked-content privacy policy rejects new leaks, with exact documented exceptions for unchanged operational routing pending private configuration.
+
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
 ## 5.3.0 - 2026-10-08
+
+- Genus-1 P1 SIBC supports an explicit HACApK body route with a loop/gauge
+  bordered GMRES operator, sparse mass factor reuse, tagged panel impedance
+  and per-panel ESIM in weak and strong coupling. Complete work, seam,
+  residual and power gates are unchanged. Dense kernel-entry construction
+  limits remain; source tables are released after compression.
+  Frozen-loop diagnostics use the ordinary weak solver's unscaled gauge
+  so tight controls do not introduce a gauge-row stopping floor.
+- Reject genus greater than one for every workpiece backend and coupling
+  mode: validated absolute heating requires every hole to be represented.
+
+- Add geometry-boundary per-panel ESIM assembly for the native Simulink IH
+  operators. The directly certified panel material state is frozen at a
+  declared peak reference current; time-step amplitude outside its restricted
+  operating band raises. This is not nonlinear time stepping. Material,
+  frequency and reference-current changes invalidate geometry-update reuse.
 
 - Add `radia.p1_linear.solve_p1_linear` and the MATLAB `p1Linear` wrapper
   for real lowest-order H(curl) magnetostatics on straight tetrahedra,
@@ -359,7 +398,7 @@ MATLAB/Simulink acceptance are tracked separately and remain under verification.
 ## 5.0.3 - HDiv validation and solver maintenance
 
 Published 2026-09-28 after exact tag-wheel and Simulink/MEX acceptance on
-LAB, 100, mdx1 and mdx2. Deployment status is tracked separately from
+validation host, 100, worker-a and worker-b. Deployment status is tracked separately from
 artifact acceptance by `release_quad done`.
 
 - Conforming HDiv mass-Riesz solves use NGSolve SparseCholesky. Local dense
@@ -766,7 +805,7 @@ Released 2026-08-30.
 - Kept Simulink `.slxc`, `slprj`, and generated-code output outside the source
   tree through `radia.setup` and a checked `Simulink.fileGenControl` helper.
   Existing external settings remain intact, while an in-repository default is
-  redirected to the versioned `C:\temp\radia\simulink` cache.
+  redirected to the versioned `private-runtime-path` cache.
 - Removed obsolete root-level handover notes, moved native build logs under
   `build-msvc`, and made manual VTK validation write to `C:\temp`. A focused
   repository-root gate now rejects journals, logs, object files, VTU/TeX
@@ -981,7 +1020,7 @@ Released 2026-08-26.
   the official Optuna MCP ownership and license boundary, bundles checked
   upstream notices, emits its MEX-bearing Windows platform wheel directly, and
   releases only the exact successful main-CI wheel after that wheel passes the
-  standalone LAB / 100-machine / mdx / hibino QUAD gate.
+  standalone validation host / 100-machine / mdx / compute-host QUAD gate.
 
 ## 4.95.62 - Standalone MATLAB Optuna 4.9.0 distribution
 
@@ -1442,7 +1481,7 @@ Released 2026-08-07.
 - Fixed OCC/STEP coil pose applying the two Z Euler angles in swapped order.
 - Mesh-quality studies: error-vs-dof ranking (hex wins conditioning + H1,
   not L2); min-quality shown chaotic in the size target.
-- Motor MEX evidence regenerated on HIBINO (79/79, R2026a) for the new
+- Motor MEX evidence regenerated on compute host (79/79, R2026a) for the new
   optuna kernels.
 
 - Clarified grant-writing guidance for OSS/AI proposals: Git/GitHub provides
@@ -1472,7 +1511,7 @@ Released 2026-08-06.
 
 Released 2026-08-06.
 
-- Scoped Git's safe-directory allowance to the configured LAB and 100-machine
+- Scoped Git's safe-directory allowance to the configured validation host and 100-machine
   release worktree during exact-SHA checks, without changing global Git
   configuration.
 
@@ -1480,7 +1519,7 @@ Released 2026-08-06.
 
 Released 2026-08-06.
 
-- Added a parallel-work-safe QUAD route that deploys LAB and the 100-machine
+- Added a parallel-work-safe QUAD route that deploys validation host and the 100-machine
   host from one explicit clean NAS release worktree without disturbing active
   development.
 - Made editable deployment fail before process shutdown or installation when
@@ -2209,7 +2248,7 @@ Released 2026-05-25.
 Fixes `radia-vol-viewer --register` silently failing to install the
 ftype handler on Windows.  The previous implementation passed an
 `ftype` argument with embedded quotes through `subprocess.run(["cmd",
-"/c", "ftype", 'Radia.VolViewer="C:\\...\\app.exe" "%1"'])`; the argv
+"/c", "ftype", 'Radia.VolViewer="C:private-runtime-path" "%1"'])`; the argv
 → Windows-command-line round-trip mangled the quotes so cmd.exe
 received `ftype Radia.VolViewer=\C:\...\app.exe\ \%1\` and discarded
 the registration.  Symptom: `--register` prints "Done", `.vol=Radia
@@ -2222,7 +2261,7 @@ The fix replaces both `register_associations()` and
 no cmd.exe involvement, no quoting ambiguity).  `winreg` is stdlib;
 no new dependency.
 
-Discovered 2026-05-24 during the Stage 2 deploy to 100号機 + mdx,
+Discovered 2026-05-24 during the Stage 2 deploy to development host + mdx,
 worked around at the time with a manual `reg add` per-machine.
 
 ## 4.76.1 — .sol viewer: colour-mapped field (scalfunction/vecfunction)
@@ -2817,7 +2856,7 @@ in v4.53.0: +3 RMF + densification tests).
 ## 4.53.0 — keiko's "arc + leads" 1-turn coil now works end-to-end (CCW winding + adaptive resampling)
 
 Released 2026-05-16.  Responds to keiko's patch report
-(`W:\31_Go-Tech\10_IH_toymodel\2026_05_10_1turn_coil_loft\README_coil_from_cad_patch.txt`)
+(`private-runtime-path
 which documents 3 patches she applied locally to get her
 `1turn_coil_loft_outsideline.step` PEEC-solvable.  v4.53.0
 integrates her bug fix verbatim (CCW winding) and replaces her
@@ -3321,7 +3360,7 @@ upstream branch that was wrong.
 
 ## 4.28.1 — radia_ih Run button stays disabled after Browse... fix
 
-Released 2026-05-08.  Hot-fix for kubota's report on mdx + 100号機.
+Released 2026-05-08.  Hot-fix for kubota's report on mdx + development host.
 
 ### Why
 
@@ -3755,7 +3794,7 @@ sibling .jou), each with a hard band + golden tolerance.
 ### IH panel workflows
 
 PEEC+BEM (`calc_peec_bem.py`) and FEM A-V (`calc_fem_coilmesh.py`)
-unchanged; verified on LAB + 100号機 that no regression.
+unchanged; verified on validation host + development host that no regression.
 
 ### Packaging / deployment / documentation
 

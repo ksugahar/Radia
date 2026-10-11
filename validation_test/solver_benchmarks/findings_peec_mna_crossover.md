@@ -169,4 +169,4 @@ dominates anyway.
 
 Default uses OUTER_METHOD="lgmres"; change the module-level constant
 at the top of the script to "bicgstab" or "gcrotmk" to sweep.  Wall
-time ~7 minutes for the current SUBDIVISIONS settings on LAB.
+time ~7 minutes for the current SUBDIVISIONS settings on validation host.

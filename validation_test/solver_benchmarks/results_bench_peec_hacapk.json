@@ -1,6 +1,6 @@
 {
   "timestamp": "2026-04-16T14:50:08.733719",
-  "hostname": "lab",
+
   "benchmark": "bench_peec_hacapk",
   "problem": {
     "base_turns": 20,

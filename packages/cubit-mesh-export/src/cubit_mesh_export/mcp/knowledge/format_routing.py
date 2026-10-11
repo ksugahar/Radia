@@ -208,7 +208,7 @@ Route by semantic inventory:
   pyramids can legitimately report zero material volume in the sidecar while
   still being present in the `.vol` topology.
 - **Headless Cubit smoke tests can export a valid `.vol` before teardown warns.**
-  On INTEL11, `cubit-smoke-test` may observe `coreform_cubit.exe` exiting with
+  On development host, `cubit-smoke-test` may observe `coreform_cubit.exe` exiting with
   code 2 after the `.vol` is already written.  Treat that as a teardown warning
   only when the emitted `.vol` parses, required material labels such as
   `coil`/`workpiece`/`air` are present, and required boundary labels such as

@@ -911,7 +911,7 @@ from datetime import datetime
 def save_results(path, name, problem, results):
     data = {
         "timestamp": datetime.now().isoformat(),   # when
-        "hostname":  platform.node(),               # which machine
+        "platform_class": platform.system(),      # non-identifying OS class
         "experiment": name,                         # what
         "problem":   problem,   # input params (mesh h, freq, material, ...)
         "results":   results,   # list of per-case dicts (the numbers)

@@ -138,7 +138,7 @@ def test_per_region_nl_equal_table_matches_single():
     The two runs take different assembly/warmstart code paths and each stops at nl_tol=1e-6, so
     their difference is the Newton-endpoint scatter, NOT Krylov precision -- and that scatter is
     thread-schedule dependent (TaskManager reduction order feeds the nonlinear iteration).  Measured
-    2026-07-12 (LAB, 38 threads, 5 runs): worst per-element relative difference 6.7e-5 .. 1.0e-3,
+    2026-07-12 (validation runtime, 38 threads, 5 runs): worst per-element relative difference 6.7e-5 .. 1.0e-3,
     worst absolute 5.8 .. 44 A/m at |M|_max ~ 1.5e6; volume-averaged M agrees to <= 2.5e-5 relative.
     The previous gate (rtol=1e-5, atol=1.0) sat INSIDE that band and flipped with the machine's idle
     thread count (~50% failure rate when idle).  Gates below sit ~5x above the observed scatter and

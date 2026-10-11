@@ -77,7 +77,7 @@ executable guidance, not a full clone of upstream NGSolve or model retraining.
 Durable evidence is in `validation_test/ngsolve_matlab_parity/`:
 
 - Core 100 linear cases, with sparse entries, matvec and native solves.
-- HIBINO extended run dated 2026-09-01: breadth 500, scale 20 (21,515 to
+- compute host extended run dated 2026-09-01: breadth 500, scale 20 (21,515 to
   134,130 DoFs), and manufactured-solution 15 cases passed, with zero remaining
   native handles. The result identifies MATLAB R2026a, NGSolve 6.2.2606 and
   MEX SHA-256 `9149f254621d30128a661e1d4159e5939459eaa49f82427204fd1ebb78e07beb`.

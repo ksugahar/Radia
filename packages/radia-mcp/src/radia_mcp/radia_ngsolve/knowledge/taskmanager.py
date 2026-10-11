@@ -45,7 +45,7 @@ parallel code in Radia should use it.
 ## Without TaskManager
 
 Without the context manager, NGSolve falls back to **single thread**:
-assembly, solve, integrate all run on one core.  On a 28-core LAB
+assembly, solve, integrate all run on one core.  On a 28-core validation runtime
 machine you lose ~20× wall-clock for free.  This is the most common
 "why is my solve so slow" cause in panel scripts.
 
@@ -171,13 +171,13 @@ with TaskManager():
 
 | Machine | Cores | NGSolve default |
 |---------|-------|-----------------|
-| LAB (Threadripper Pro) | 28 | 28 |
-| 100号機 (multi-user)   | 16 | 16 (shared) |
+| validation runtime (Threadripper Pro) | 28 | 28 |
+| runtime host (multi-user)   | 16 | 16 (shared) |
 | mdx (compute node)     | 28-56 | 28-56 |
 | CI runner (GH Actions) | 4 | 4 |
 
-On 100号機 (shared with other users), prefer `--nthreads 8` or `12` to
-avoid starving other users.  LAB and mdx: default is fine.
+On runtime host (shared with other users), prefer `--nthreads 8` or `12` to
+avoid starving other users.  validation runtime and mdx: default is fine.
 
 ## Reading the current thread cap
 
@@ -412,7 +412,7 @@ hit is inside a `with TaskManager():` block in the same function.
 ## 2. Forgetting `--nthreads` CLI
 
 Without the flag, the script always uses `ngsolve.ngsglobals.numthreads`
-which is set by whatever ran first in the process.  On 100号機 this
+which is set by whatever ran first in the process.  On runtime host this
 can be 1 (left over from another user's debug session).  Always:
 
 ```python

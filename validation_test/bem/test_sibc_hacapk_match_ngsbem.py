@@ -3,9 +3,9 @@ P1 triangles must match NGSolve.bem to ~1e-8 (SL) and ~1e-7 (DL) on a
 99-vertex sphere mesh.
 
 The reference is a high-precision NGSolve.bem extraction with
-bonus_intorder=10 (anchor: C:/temp/ngsbem_sl_anchor.npz).  If the
+bonus_intorder=10 (anchor: private-runtime-path).  If the
 anchor is missing, the test is skipped -- regenerate via
-C:/temp/ngsbem_sl_anchor.py (LAB only, requires NGSolve >= 6.2.2603).
+private-runtime-path (validation runtime only, requires NGSolve >= 6.2.2603).
 """
 import os
 import numpy as np

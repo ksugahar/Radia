@@ -425,7 +425,7 @@ Interface thickness scaling:
 Set C_dw = (2 tanh^(-1)(0.9) sqrt(C_dif) / delta_if)^2 to target a
 specific interface band width.
 
-## 3.5.2 Yamada's RD-based level-set method (LAB SIGNATURE)
+## 3.5.2 Yamada's RD-based level-set method (validation runtime SIGNATURE)
 
 Uses TOPOLOGY SENSITIVITY S_topo as the reaction term + clips
 level-set to [-1, 1].  Semi-implicit time discretisation: treat

@@ -4,7 +4,7 @@
 This is the unstructured-tet counterpart of bench_hdiv_cube.py.  It uses the
 current production path, radia.vim.Solve, not the retired Radia object/MMPM
 benchmark. Useful sizes are validation-class workloads and should run on
-hibino first, or on mdx only when hibino is unavailable and its CI queue is
+compute-host first, or on mdx only when compute-host is unavailable and its CI queue is
 idle.
 """
 from __future__ import annotations
@@ -305,7 +305,7 @@ def _build_payload(args: argparse.Namespace, rows: list[dict[str, Any]], bh_sour
         "runtime": {
             "python": sys.version,
             "platform": platform.platform(),
-            "machine": platform.node(),
+            "platform_class": platform.system(),
         },
         "results": rows,
     }

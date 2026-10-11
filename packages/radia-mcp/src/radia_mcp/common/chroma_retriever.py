@@ -21,7 +21,7 @@ Usage:
     from radia_mcp.common.chroma_retriever import ChromaRetriever
 
     rag = ChromaRetriever(
-        db_dir="C:/temp/radia_lit_chroma",
+        db_dir="private-runtime-path",
         collection="lit_em",
         embedding_model="all-MiniLM-L6-v2",
     )
@@ -456,11 +456,11 @@ def _ocr_page_easyocr(page, languages, dpi: int) -> str:
 
 
 def _ocr_page_ndlocr(page, dpi: int) -> str:
-    """OCR a rendered PDF page with NDLOCR-Lite (the LAB'S PREFERRED OCR:
+    """OCR a rendered PDF page with NDLOCR-Lite (the validation runtime'S PREFERRED OCR:
     layout-aware reading order, CPU-fast ~1.6s/page, handles Latin + Japanese --
     e.g. recovers the Zienkiewicz FEM volumes' garbled text layer to clean
     English).  Runs the ``ndlocr-lite`` CLI on a temp PNG.  Point NDLOCR_LITE_DIR
-    at its ``src`` dir (default ``C:\\Tools\\ndlocr-lite\\src``)."""
+    at its ``src`` dir (default ``C:private-runtime-path``)."""
     import fitz  # pymupdf
     import os
     import sys

@@ -81,7 +81,7 @@ kernels `A` is numerically **low rank**, so we instead:
 Net cost is roughly `(M/k_aca)^2` lower than the dense route.
 
 **Measured** (`validation_test/stream_function/bench_aca_vs_dense.py`, smooth
-`1/(1+alpha r^2)` kernel, `M = N/4`, same per-call kernel for both methods, LAB
+`1/(1+alpha r^2)` kernel, `M = N/4`, same per-call kernel for both methods, validation host
 2026-05-29).  The kernel is numerically low rank so `k_aca` stays ~constant
 (~30) while `N` grows; the eval-count reduction `M*N -> ~k_aca(M+N)` therefore
 widens with `N`, and -- since both methods call the same kernel -- shows up
@@ -208,7 +208,7 @@ block and register it in the application interface manifest.
 - **vs the Fortran reference** `coil_solver.f90` (`method_aca_tsvd_1/2`, a
   faithful port of the same HACApK ACA+): identical `k_aca` and
   `||S_f90 - S_radia|| / ||S_f90|| ~ 1e-15` for both methods
-  (`tests/test_stream_function.py::test_matches_f90_reference`, LAB-only).
+  (`tests/test_stream_function.py::test_matches_f90_reference`, validation host-only).
 - **magnetic-material path**: `test_radia_field_kernel_magnets` factors the
   fixed-magnet field matrix of a permanent-magnet array to `< 1e-5`.
 
