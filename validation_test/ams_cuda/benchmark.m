@@ -123,6 +123,11 @@ bad=s;bad.A.rowptr(2)=int32(-1);checks.invalid_rowptr=reject(@()invoke(bad,b,1e-
 bad=s;bad.l1(1)=0;checks.invalid_smoother=reject(@()invoke(bad,b,1e-9,2000));
 checks.wrong_rhs_shape=reject(@()invoke(s,b(1:end-1),1e-9,2000));
 checks.invalid_tolerance=reject(@()invoke(s,b,0,2000));
+bad=s;bad.l1(:)=realmin('double');largeRhs=realmax('double')*ones(size(b),'like',b);
+checks.apply_overflow=reject(@()invoke(bad,largeRhs,1e-9,2000,true));
+[applied,applyInfo]=radia_cuda_ams(s,b,1e-9,2000,true);
+checks.apply_status=all(isfinite(gather(applied))) && ~applyInfo.residual_checked ...
+    && isnan(applyInfo.true_relative_residual);
 bad=s;bad.spaces{1}.levels{end}.coarse.order(1)=int32(s.A.rows);
 checks.invalid_coarse_order=reject(@()invoke(bad,b,1e-9,2000));
 bad=s;bad.spaces{1}.levels{end}.coarse.rowptr(end)=int32(-1);
@@ -131,11 +136,12 @@ checks.invalid_coarse_rowptr=reject(@()invoke(bad,b,1e-9,2000));
 checks.zero_rhs=gather(norm(z))==0 && info.iterations==0;
 clear radia_cuda_ams;
 [x,info]=radia_cuda_ams(s,b,1e-9,2000,false);
-checks.clear_reload=all(isfinite(gather(x))) && info.true_relative_residual<=1e-9;
+checks.clear_reload=all(isfinite(gather(x))) && info.residual_checked && info.true_relative_residual<=1e-9;
 assert(all(structfun(@(x)logical(x),checks)),'AMS gateway checks failed');
 end
-function invoke(s,b,tol,iterations)
-[~,~]=radia_cuda_ams(s,b,tol,iterations,false);
+function invoke(s,b,tol,iterations,applyOnly)
+if nargin<5;applyOnly=false;end
+[~,~]=radia_cuda_ams(s,b,tol,iterations,applyOnly);
 end
 function yes=reject(f)
 yes=false;

@@ -278,8 +278,12 @@ void run(int nlhs,mxArray** out,int nrhs,const mxArray** args){
     finite_vec(in,args[1],n,b);bool apply_only=mxIsLogicalScalarTrue(args[4]);
     Buffer zero(n);zero.zero();verify_mask<<<(n+T-1)/T,T>>>(n,ams.free,apply_only?zero.p:b,in.validation.p);
     in.validation.check(); // No solve may consume unvalidated numerical data.
-    Output solution(n);double rel=0;int it=0;
-    if(apply_only)ams.apply(b,solution.data());
+    Output solution(n);double rel=apply_only?mxGetNaN():0;int it=0;
+    if(apply_only){
+        ams.apply(b,solution.data());
+        verify_vec<<<(n+T-1)/T,T>>>(n,solution.data(),false,in.validation.p);
+        in.validation.check(); // Finite inputs can still overflow during an AMS cycle.
+    }
     else {
         Buffer r(n),p(n),z(n),ap(n),scalars(3);Blas blas;
         ck(cudaMemGetInfo(&available,&total));workspace_sample=std::max(workspace_sample,memory_before>available?memory_before-available:0);
@@ -303,11 +307,12 @@ void run(int nlhs,mxArray** out,int nrhs,const mxArray** args){
         }
     }
     ck(cudaGetLastError());ck(cudaDeviceSynchronize());out[0]=mxGPUCreateMxArrayOnGPU(solution.a);
-    const char* names[]={"iterations","true_relative_residual","coarse_execution","setup_execution","workspace_sample_bytes"};
-    out[1]=mxCreateStructMatrix(1,1,5,names);mxSetField(out[1],0,names[0],mxCreateDoubleScalar(it));mxSetField(out[1],0,names[1],mxCreateDoubleScalar(rel));
+    const char* names[]={"iterations","true_relative_residual","coarse_execution","setup_execution","workspace_sample_bytes","residual_checked"};
+    out[1]=mxCreateStructMatrix(1,1,6,names);mxSetField(out[1],0,names[0],mxCreateDoubleScalar(it));mxSetField(out[1],0,names[1],mxCreateDoubleScalar(rel));
     mxSetField(out[1],0,names[2],mxCreateString("GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse"));
     mxSetField(out[1],0,names[3],mxCreateString("CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization"));
     mxSetField(out[1],0,names[4],mxCreateDoubleScalar(double(workspace_sample)));
+    mxSetField(out[1],0,names[5],mxCreateLogicalScalar(!apply_only));
 }
 }
 void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** args){try{run(nlhs,out,nrhs,args);}catch(const std::exception& e){mexErrMsgIdAndTxt("radia:cuda:ams","%s",e.what());}}
