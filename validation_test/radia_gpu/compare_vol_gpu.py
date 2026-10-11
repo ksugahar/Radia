@@ -10,7 +10,6 @@ from pathlib import Path
 import subprocess
 
 import numpy as np
-from scipy.io import loadmat
 
 def validate_solution(reference, solution, residual):
     reference = np.asarray(reference).reshape(-1)
@@ -31,6 +30,7 @@ def validate_solution(reference, solution, residual):
 
 def main(args):
     import matlab.engine
+    from scipy.io import loadmat
 
     base = args.bundle.resolve()
     cpu = json.loads((base / 'cpu-result.json').read_text())
