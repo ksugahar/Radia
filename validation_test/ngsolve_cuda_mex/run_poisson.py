@@ -118,4 +118,12 @@ if __name__=='__main__':
     p.add_argument('--binary-dir',type=Path,required=True)
     p.add_argument('--threads',type=int,default=8)
     p.add_argument('--maxh',nargs='+',type=float,default=[0.24,0.16,0.11])
-    run(p.parse_args())
+    args=p.parse_args()
+    try:
+        run(args)
+    except Exception as error:
+        args.out.mkdir(parents=True,exist_ok=True)
+        (args.out/'failed-result.json').write_text(json.dumps(dict(
+            schema='radia.ngsolve-cuda-poisson.v1',passed=False,
+            hostname=socket.gethostname(),error=str(error),python=sys.executable),indent=2)+'\n')
+        raise

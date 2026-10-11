@@ -267,5 +267,12 @@
       "gpu_resident_speedup_vs_cpu_cg": 1.8805224991670537,
       "gpu_transfer_inclusive_speedup_vs_cpu_cg": 1.3557465560039998
     }
-  ]
+  ],
+  "validation_source_commit": "aa7b3dc35634991e84a61e7268b8c7e7c5ae269f",
+  "validation_source_identity_note": "Measurement used the BaseVector construction correction subsequently committed in validation_source_commit; native build source is recorded separately.",
+  "validation_sources_sha256": {
+    "validation_test/ngsolve_cuda_mex/run_poisson.py": "903cad04804b32235675553f761c4a167fcc726eac8e3b86ca8337c865a4170f",
+    "validation_test/ngsolve_cuda_mex/benchmark_gpu.m": "60b5b98e99f81ba6c9ed644c56954d276f20b4fea4e2198be12abdc91301fe50",
+    "validation_test/ngsolve_cuda_mex/check_gateway.m": "8cae9088dbc0a51e422d4bf4424ab46935a91652fcd3bb73a173e0b7e0905ac5"
+  }
 }
