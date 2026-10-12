@@ -328,14 +328,28 @@ and adaptive reuse. Adaptive reuse rebuilds on the next iteration if PCG exceeds
 solve checks a true residual at 1e-10, each nonlinear run at 1e-9, and independent
 CPU solution, B-field RMS and nonlinear residual parity must be <=1e-7.
 
-This first implementation uses dense quadrature maps and is limited to 2000
-DOFs. It does not certify scalable sparse GPU assembly or persistent MEX
-workspace: workspace is allocated per linear solve. Report GPU input bytes and
-sampled device memory separately from an actual peak measurement. Total solve
-times include constitutive/tangent updates, line search, AMS setup, PCG and final
-download; shared FE preparation, upload and MATLAB startup are separate. Build-host
-numbers are diagnostics, never formal timing acceptance or CPU speedup claims.
+The current implementation assembles sparse CSR operators from six mapped curl
+vectors and 36 CSR slots per affine tetrahedron. It supports lowest-order HCurl
+on affine tetrahedra; other element orders or geometry fail explicitly. NGSolve
+owns orientation and mapped shape functions. No global dense matrix is formed.
+`radia.gpu.AMSContext` owns a checked native handle, persistent PCG buffers and
+cached CUDA graph. Hierarchy replacement preserves its PCG workspace. Nonlinear
+residual, tangent and element-energy buffers also remain on the device. Native
+buffer allocation counters must remain zero during each resident linear solve;
+returned MATLAB arrays and CUDA graph internals are outside this counter.
 
+CPU reference assembly and solves use caller-owned NGSolve TaskManager regions;
+MATLAB native setup uses OpenMP with serial sparsecholesky coarse factorization.
+Both backends enforce the same true linear residual. Near floating-point energy
+roundoff, a line-search step must reduce the actual residual by ten percent or
+pass the final nonlinear gate; tolerances are not relaxed.
+
+Run `nonlinear_resident.py --out <job-owned-output> --maxh .04 --threads 8
+--setup-threads 8 --contract` for sparse scaling and lifecycle checks. Total times
+include nonlinear updates, line search, AMS setup, PCG and final download; GPU
+total also includes upload. Shared FE preparation and MATLAB startup are recorded
+separately. Build-host numbers remain diagnostic timing, not formal performance
+acceptance. The historical dense study below is superseded for scaling.
 
 The accepted [nonlinear evidence](results/nonlinear-resident-20261013.json)
 contains 260- and 698-DOF cases on the same native binary, plus cycles 1 and 7
@@ -343,3 +357,36 @@ linear setup parity. The larger case reproduced a nonfinite gradient coarse
 factor before the fix. Its known constant nullspace now receives an explicit
 potential gauge per connected zero-row-sum component before sparsecholesky;
 no diagonal perturbation or numerical fallback is used.
+
+
+## Sparse nonlinear scaling evidence
+
+[Accepted sparse study](results/nonlinear-sparse-resident-20261013.json) includes
+260, 5,326, 86,735 and 251,896 DOFs on the same native binary, with independent
+Python CPU assembly/AMS and MATLAB GPU assembly/AMS. The largest case has
+205,728 affine tetrahedra and 4,000,702 CSR nonzeros. Both CPU assembly/solve and
+GPU host setup use eight threads; GPU computation uses a Quadro RTX 5000.
+
+Largest-case total times (median of two samples per route, order 1,2,3,3,2,1):
+
+| AMS policy | Hierarchy builds | Python CPU | MATLAB GPU | CPU/GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Every Newton update | 8 | 14.205 s | 8.992 s | 1.58x |
+| Frozen | 1 | 21.212 s | 6.505 s | 3.26x |
+| Adaptive reuse | 2 | 14.088 s | 4.642 s | 3.03x |
+
+Adaptive GPU reuse reduces total time by 1.94x versus rebuilding every update;
+freezing is slower than adaptive reuse despite avoiding another setup. Each run
+requires eight Newton updates. Maximum independent solution difference is
+1.52e-13, B-field relative RMS difference 2.46e-15, and independent nonlinear
+residual 2.78e-14. Every linear solve passes the 1e-10 true-residual gate.
+
+The retained PCG workspace is 10,075,864 bytes. No additional native Buffer
+allocation occurs during resident solves. Maximum sampled device allocation
+delta is about 348 MiB; this is not a whole-process peak measurement. Lifecycle
+checks pass after hierarchy replacement and caller-array release, reject stale
+and incorrectly typed handles, and verify zero-RHS reset and context cleanup.
+Shared FE preparation (48.47 s) and MATLAB startup (11.09 s) are separately
+reported rather than hidden in solver timings. These are manufactured-model
+build-host diagnostics with two samples per policy, not physical-device or
+formal timing acceptance. A100 was not used.
