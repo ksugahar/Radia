@@ -119,3 +119,26 @@ contract tests do not certify these mathematical changes. Rebuild and compare
 against the pre-migration CPU reference before any release integration. The
 session deliverable is a radia-gpu release after the requested RadFld, Matrix
 Build and HDiv-MMM work and their applicable release gates have been completed.
+
+## Required IH Simulink release comparison
+
+The release scope also includes the radia-ih GPU implementation running in
+Simulink, compared against an independent Python/pybind11 CPU reference for the
+same publishable physical IH case. A one-DOF smoke configuration, a frozen unit-
+current loss field, or GPU PCG alone does not certify the coupled IH workflow.
+The existing IH_RELEASE.md preview limitations must be checked against the final
+implementation rather than assumed resolved.
+
+Record the supported electromagnetic/thermal physics, mesh/label and material
+contracts, excitation and time-step history, numerical limits, true residuals,
+loss/power and temperature comparisons, cold start and warmed transfer-inclusive
+full execution time, memory indicators and limitations, and exact source/input/
+artifact identities in JSON. Use identical supported physical assumptions on
+both routes; do not compare nonlinear CPU physics with a frozen GPU model.
+Python is an independent accuracy oracle, not a GPU-user setup dependency.
+
+Apply simulink-app-health using the official MATLAB MCP and Simulink toolkit.
+Check the actual model, save it, close and reopen the exact saved path, repeat
+execution, and verify failure cleanup. Do not edit SLX ZIP/XML. Integrate the
+latest accepted IH work without overwriting another session's changes. CI and
+same-artifact distribution acceptance remain release gates. A100 remains off.
