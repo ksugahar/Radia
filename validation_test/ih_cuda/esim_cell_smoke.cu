@@ -5,6 +5,8 @@
 #include <vector>
 #include <stdexcept>
 #include <limits>
+#include <string>
+#include <climits>
 using namespace radia_ih_cuda;
 namespace {
 void check(cudaError_t e){if(e!=cudaSuccess)throw std::runtime_error(cudaGetErrorString(e));}
