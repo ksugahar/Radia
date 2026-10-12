@@ -359,3 +359,5 @@ void run(int nlhs,mxArray** out,int nrhs,const mxArray** args){
 }
 }
 void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** args){try{run(nlhs,out,nrhs,args);}catch(const std::exception& e){mexErrMsgIdAndTxt("radia:cuda:ams","%s",e.what());}}
+
+#include "ams_setup_gpu.cuh"

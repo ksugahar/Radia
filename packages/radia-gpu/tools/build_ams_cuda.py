@@ -28,6 +28,7 @@ def main(args):
     os.environ['PATH']=os.environ['NVCC_CCBIN']+os.pathsep+os.environ['PATH']
     source=package/'native/ams_snapshot_module.cpp'
     sources=[source,package/'native/radia_cuda_ams.cu',package/'native/ams_matlab_setup.cpp',
+             package/'native/ams_setup_gpu.hpp',package/'native/ams_setup_gpu.cuh',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_ams.hpp',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_amg.hpp',
              root/'src/ext/sparsesolv/include/sparsesolv/preconditioners/compact_parallel.hpp',
@@ -79,7 +80,7 @@ def main(args):
                           for p in (binary,out/'radia_cuda_ams.mexw64')},
                 'source_sha256':hashes,'no_cpu_solver_fallback':True}
         record['snapshot_setup_backend']='OpenMP row/chunk dispatch; default one thread; serial coarse factorization'
-        record['matlab_setup_backend']='Shared native AMS in mexcuda host; serial NGSolve sparsecholesky; no TaskManager regions'
+        record['matlab_setup_backend']='Shared native AMS; optional CUDA AP and Pt(AP); serial NGSolve sparsecholesky; no TaskManager regions'
         record['python_runtime_adapter_required']=False
         record['python_dll_indirect_dependency_permitted']=True
         (out/'build.json').write_text(json.dumps(record,indent=2)+'\n')

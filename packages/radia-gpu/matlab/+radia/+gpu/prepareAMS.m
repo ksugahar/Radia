@@ -7,8 +7,9 @@ arguments
     model (1,1) struct
     options.SetupThreads (1,1) double {mustBeInteger,mustBeInRange(options.SetupThreads,1,64)} = 1
     options.Upload (1,1) logical = true
+    options.SetupOnGPU (1,1) logical = true
 end
-[hierarchy,info]=radia_cuda_ams('setup',model,options.SetupThreads);
+[hierarchy,info]=radia_cuda_ams('setup',model,options.SetupThreads,options.SetupOnGPU);
 info.upload_seconds=0;
 if options.Upload
     device=gpuDevice();

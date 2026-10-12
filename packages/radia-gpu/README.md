@@ -170,3 +170,26 @@ establish an end-to-end improvement. Host hierarchy construction remains the
 next acceleration target. CPU parity was verified independently; CPU timing
 was single-shot and does not establish repeated CPU/GPU speedup. These RTX
 5000 timings are diagnostic, not idle-mdx performance acceptance.
+
+### CUDA AMS matrix generation
+
+`radia.gpu.prepareAMS(model,SetupThreads=4)` now generates the auxiliary and
+AMG coarse Galerkin matrices on CUDA. `SetupOnGPU=false` explicitly selects
+the previous host matrix-generation path for validation. Both paths retain
+NGSolve AMG coarsening/interpolation and serial `sparsecholesky` coarse
+factorization. Python is not a prerequisite and TaskManager is not activated.
+
+CUDA computes sorted CSR `AP` followed by `Pt(AP)`, preserving the current
+NGSolve sparse-product accumulation order and separate FP64 multiply/add
+rounding. Each row has one owner; floating-point atomics are not used. The
+matrix cache and all scratch allocations belong to one setup command and are
+freed on normal/error exit. Allocation checks reserve at least 2 GiB or 20%
+of device memory. Unsupported capacity or device state raises an error.
+
+The shared CPU code leaves its optional accelerator callback disabled.
+`graph_validation.py --comparison generation --rounds 2` compares both
+matrix-generation paths in ABBA order, excluding backend warmups. Full time
+includes host setup, device generation transfers, hierarchy upload, solve and
+solution download. Setup memory records the exact maximum concurrently owned
+CUDA allocation bytes; solve memory records a live allocation delta, not a
+whole-process peak. RTX 5000/100 measurements remain diagnostic.

@@ -56,6 +56,17 @@ inline void DeterministicCoarseSolve(const BaseMatrix& inverse,
         result[i] = order[i] == -1 ? 0.0 : work[order[i]];
 }
 
+// Optional scoped native accelerator. Python/CPU execution leaves this null.
+// It must return the same full-storage P^T A P, or throw; no backend fallback.
+using CompactGalerkinCallback = shared_ptr<SparseMatrix<double>> (*)(
+    const SparseMatrix<double>&, const SparseMatrix<double>&, const SparseMatrix<double>&);
+inline thread_local CompactGalerkinCallback compact_galerkin_callback = nullptr;
+inline shared_ptr<SparseMatrix<double>> CompactRestrict(const SparseMatrix<double>& A,
+    const SparseMatrix<double>& P, const SparseMatrix<double>& Pt) {
+    if (compact_galerkin_callback) return compact_galerkin_callback(A,P,Pt);
+    return dynamic_pointer_cast<SparseMatrix<double>>(A.Restrict(P));
+}
+
 inline bool GalerkinProductOnPattern(const SparseMatrix<double>& Pt, const SparseMatrix<double>& A,
                                      const SparseMatrix<double>& P, SparseMatrix<double>& C);
 inline shared_ptr<SparseMatrix<double>> GalerkinPattern(const SparseMatrix<double>& Pt,
@@ -477,7 +488,7 @@ public:
             // 4. Galerkin coarse matrix: A_c = P^T * A * P
             Level next_lev;
             next_lev.A = native_galerkin_ ? GalerkinProduct(*cur.Pt, *cur.A, *P)
-                                          : dynamic_pointer_cast<SparseMatrix<double>>(cur.A->Restrict(*P));
+                                          : CompactRestrict(*cur.A,*P,*cur.Pt);
             phase(4);
             if (!next_lev.A) break;
 
@@ -536,7 +547,7 @@ public:
             in_place = in_place && GalerkinProductOnPattern(*cur.Pt, *cur.A, *cur.P, *next.A);
             if (!in_place) {
                 auto coarse = native_galerkin_ ? GalerkinProduct(*cur.Pt, *cur.A, *cur.P)
-                    : dynamic_pointer_cast<SparseMatrix<double>>(cur.A->Restrict(*cur.P));
+                    : CompactRestrict(*cur.A,*cur.P,*cur.Pt);
                 if (!coarse || coarse->Height() != next.ndof)
                     throw std::runtime_error("CompactAMG::Refresh: Galerkin product changed size");
                 next.A = coarse;

@@ -580,10 +580,10 @@ private:
                 if (!beta_zero_) A_G_ = GalerkinProduct(*grad_t_, *A_bc_, *grad_);
             } else {
                 if (!beta_zero_)
-                    A_G_ = dynamic_pointer_cast<SparseMatrix<double>>(A_bc_->Restrict(*grad_));
-                A_Pix_ = dynamic_pointer_cast<SparseMatrix<double>>(A_bc_->Restrict(*Pix_));
-                A_Piy_ = dynamic_pointer_cast<SparseMatrix<double>>(A_bc_->Restrict(*Piy_));
-                A_Piz_ = dynamic_pointer_cast<SparseMatrix<double>>(A_bc_->Restrict(*Piz_));
+                    A_G_ = CompactRestrict(*A_bc_,*grad_,*grad_t_);
+                A_Pix_ = CompactRestrict(*A_bc_,*Pix_,*Pix_t_);
+                A_Piy_ = CompactRestrict(*A_bc_,*Piy_,*Piy_t_);
+                A_Piz_ = CompactRestrict(*A_bc_,*Piz_,*Piz_t_);
             }
         }
         auto t1 = std::chrono::high_resolution_clock::now();

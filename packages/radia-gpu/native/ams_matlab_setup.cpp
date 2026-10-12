@@ -7,6 +7,7 @@
 #include "sparsesolv/preconditioners/compact_ams.hpp"
 #include <mex.h>
 #include <matrix.h>
+#include "ams_setup_gpu.hpp"
 #include <climits>
 #include <filesystem>
 #include <limits>
@@ -93,6 +94,47 @@ Mx csr(const ngla::SparseMatrix<double>& a) {
     put(result.get(),"rows",number(a.Height()));put(result.get(),"cols",number(a.Width()));
     put(result.get(),"rowptr",std::move(rows));put(result.get(),"columns",std::move(cols));put(result.get(),"values",std::move(vals));return result;
 }
+struct HostCSR {
+    std::vector<int> rp,ci;std::vector<double> av;int n,m;
+    explicit HostCSR(const ngla::SparseMatrix<double>& a):n(a.Height()),m(a.Width()) {
+        if(n<1||m<1||n>INT_MAX-256||m>INT_MAX-256||a.NZE()>size_t(INT_MAX-256))
+            throw std::overflow_error("CUDA setup CSR capacity");
+        rp.resize(size_t(n)+1);ci.resize(a.NZE());av.resize(a.NZE());
+        int offset=0;
+        for(int i=0;i<n;++i){rp[i]=offset;offset+=int(a.GetRowIndices(i).Size());}rp[n]=offset;
+        ngla::CompactParallelFor(n,[&](size_t i){auto cols=a.GetRowIndices(i);auto vals=a.GetRowValues(i);
+            for(int k=0;k<cols.Size();++k){ci[rp[i]+k]=cols[k];av[rp[i]+k]=vals[k];}});
+    }
+    AMSSetupCSR view() const {return {n,m,int(av.size()),rp.data(),ci.data(),av.data()};}
+};
+struct GPUGeneration;
+thread_local GPUGeneration* active_generation=nullptr;
+struct GPUGeneration {
+    void* device=nullptr;GPUGeneration* previous=nullptr;
+    ngla::CompactGalerkinCallback previous_callback=nullptr;
+    const ngla::SparseMatrix<double>* identity=nullptr;std::unique_ptr<HostCSR> a;
+    explicit GPUGeneration(bool enabled) {
+        if(!enabled)return;
+        device=AMSSetupGPUCreate();previous=active_generation;
+        previous_callback=ngla::compact_galerkin_callback;active_generation=this;
+        ngla::compact_galerkin_callback=generate;
+    }
+    ~GPUGeneration(){if(device){ngla::compact_galerkin_callback=previous_callback;active_generation=previous;AMSSetupGPUDestroy(device);}}
+    static std::shared_ptr<ngla::SparseMatrix<double>> generate(const ngla::SparseMatrix<double>& matrix,
+        const ngla::SparseMatrix<double>& p,const ngla::SparseMatrix<double>& pt) {
+        auto& scope=*active_generation;
+        if(scope.identity!=&matrix){scope.a=std::make_unique<HostCSR>(matrix);scope.identity=&matrix;}
+        HostCSR prolong(p),transpose(pt);
+        auto product=AMSSetupGPURestrict(scope.device,&matrix,scope.a->view(),prolong.view(),transpose.view());
+        ngcore::Array<int> counts(pt.Height());
+        for(int i=0;i<pt.Height();++i)counts[i]=product.rowptr[i+1]-product.rowptr[i];
+        auto out=std::make_shared<ngla::SparseMatrix<double>>(counts,p.Width());
+        ngla::CompactParallelFor(pt.Height(),[&](size_t i){auto cols=out->GetRowIndices(i);auto vals=out->GetRowValues(i);
+            for(int k=0;k<cols.Size();++k){cols[k]=product.columns[product.rowptr[i]+k];vals[k]=product.values[product.rowptr[i]+k];}});
+        return out;
+    }
+    AMSSetupGPUStats stats() const {return device?AMSSetupGPUStatistics(device):AMSSetupGPUStats{};}
+};
 Mx coarse(const ngla::BaseMatrix* inverse,const std::vector<double>& dense,int n) {
     if(!dense.empty())throw std::runtime_error("Native host requires sparsecholesky coarse factors");
     auto* factor=dynamic_cast<const ngla::SparseCholesky<double>*>(inverse);
@@ -147,7 +189,9 @@ Mx snapshot(const ngla::HypreBasedAMS& a) {
 }
 // This entry is linked into the CUDA gateway, never distributed as CPU MEX.
 void RadiaAMSSetup(int nlhs,mxArray** output,int nrhs,const mxArray** input) {
-    if(nrhs!=3||nlhs!=2)throw std::runtime_error("[snapshot,info]=radia_cuda_ams('setup',model,threads)");
+    if((nrhs!=3&&nrhs!=4)||nlhs!=2)throw std::runtime_error("[snapshot,info]=radia_cuda_ams('setup',model,threads[,gpu_generation])");
+    if(nrhs==4&&!mxIsLogicalScalar(input[3]))throw std::runtime_error("Logical gpu_generation required");
+    const bool gpu_generation=nrhs==4&&mxIsLogicalScalarTrue(input[3]);
     const mxArray* model=input[1];
     if(word(field(model,"schema"))!="radia.ams-native-input.v1")throw std::runtime_error("Unsupported input schema");
     int threads=dimension(input[2]);
@@ -171,12 +215,13 @@ void RadiaAMSSetup(int nlhs,mxArray** output,int nrhs,const mxArray** input) {
         auto free=std::make_shared<ngcore::BitArray>(a->Height());free->Clear();
         for(int i=0;i<a->Height();++i){if(mask[i]!=0&&mask[i]!=1)throw std::runtime_error("Invalid free mask");if(mask[i])free->SetBit(i);}
         double cycle_value=scalar(field(model,"cycle"));if(cycle_value!=1&&cycle_value!=7)throw std::runtime_error("Unsupported AMS cycle");
+        GPUGeneration gpu(gpu_generation);
         auto start=std::chrono::steady_clock::now();
         ngla::HypreBasedAMS ams(a,g,free,coords[0],coords[1],coords[2],int(cycle_value));
         double setup_s=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
         start=std::chrono::steady_clock::now();auto result=snapshot(ams);
         double export_s=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
-        auto diagnostic=structure({"schema","setup_seconds","export_seconds","setup_threads","python_adapter_used","coarse_backend","amg_phase_seconds"});
+        auto diagnostic=structure({"schema","setup_seconds","export_seconds","setup_threads","python_adapter_used","coarse_backend","amg_phase_seconds","matrix_generation_backend","gpu_products","gpu_generation_seconds","gpu_upload_bytes","gpu_download_bytes","gpu_setup_peak_owned_bytes"});
         put(diagnostic.get(),"schema",text("radia.ams-matlab-setup.v1"));put(diagnostic.get(),"setup_seconds",number(setup_s));
         put(diagnostic.get(),"export_seconds",number(export_s));put(diagnostic.get(),"setup_threads",number(threads));
         put(diagnostic.get(),"python_adapter_used",own(mxCreateLogicalScalar(false)));put(diagnostic.get(),"coarse_backend",text("ngsolve_sparsecholesky"));
@@ -184,5 +229,12 @@ void RadiaAMSSetup(int nlhs,mxArray** output,int nrhs,const mxArray** input) {
         for(const auto* auxiliary : {ams.GetBGAsAMG(),ams.GetBPixAsAMG(),ams.GetBPiyAsAMG(),ams.GetBPizAsAMG()})
             if(auxiliary)for(size_t i=0;i<phases.size();++i)phases[i]+=auxiliary->SetupPhases()[i];
         put(diagnostic.get(),"amg_phase_seconds",mxvector(phases.data(),phases.size(),mxDOUBLE_CLASS));
+    auto stats=gpu.stats();
+    put(diagnostic.get(),"matrix_generation_backend",text(gpu_generation?"CUDA deterministic Galerkin":"NGSolve CPU Galerkin"));
+    put(diagnostic.get(),"gpu_products",number(stats.products));
+    put(diagnostic.get(),"gpu_generation_seconds",number(stats.seconds));
+    put(diagnostic.get(),"gpu_upload_bytes",number(stats.upload_bytes));
+    put(diagnostic.get(),"gpu_download_bytes",number(stats.download_bytes));
+    put(diagnostic.get(),"gpu_setup_peak_owned_bytes",number(stats.peak_owned_bytes));
     output[0]=result.release();output[1]=diagnostic.release();
 }

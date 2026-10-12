@@ -1,13 +1,14 @@
-function benchmark(inputPath, outputPath, binaryDir, matlabDir, setupThreads, useGraph)
+function benchmark(inputPath, outputPath, binaryDir, matlabDir, setupThreads, useGraph, setupOnGPU)
 addpath(binaryDir);
 if nargin<6;useGraph=false;end
+if nargin<7;setupOnGPU=true;end
 repo=fileparts(fileparts(fileparts(mfilename('fullpath'))));
 if nargin<4;matlabDir=fullfile(repo,'packages','radia-gpu','matlab');end
 addpath(matlabDir);
 readTimer=tic;d=radia.gpu.readAMSExchange(inputPath);readSeconds=toc(readTimer);
 nativeSetupSeconds=0;nativeSetupInfo=struct();hierarchyMaxRelativeDifference=0;
 if nargin>=5
-    timer=tic;[native,nativeSetupInfo]=radia.gpu.prepareAMS(d.model,SetupThreads=setupThreads,Upload=false);nativeSetupSeconds=toc(timer);
+    timer=tic;[native,nativeSetupInfo]=radia.gpu.prepareAMS(d.model,SetupThreads=setupThreads,Upload=false,SetupOnGPU=setupOnGPU);nativeSetupSeconds=toc(timer);
     hierarchyMaxRelativeDifference=compare_hierarchy(d.snapshot,native);d.snapshot=native;
 end
 g=gpuDevice();
