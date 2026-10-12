@@ -35,6 +35,11 @@ try
         mustFail(@()radia_cuda_hmatrix('apply',h,1));
         mustFail(@()radia_cuda_hmatrix('destroy',h));
     end
+    probe=inputs.entry_probe;
+    entries=radia_cuda_hmatrix('analytic_entry_batch',probe.cells,probe.faces,probe.rows,probe.columns);
+    entryError=norm(entries-probe.expected)/max(norm(probe.expected),realmin);
+    assert(entryError<=1e-12,'Indexed analytic entry parity failed');
+    result.indexed_entries=struct('count',numel(entries),'relative_error',entryError,'workspace_capacity',256);
     assert(radia_cuda_hmatrix('live_count')==0);
     stale=h;
     clear radia_cuda_hmatrix

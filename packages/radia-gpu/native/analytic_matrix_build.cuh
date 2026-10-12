@@ -6,9 +6,10 @@ namespace radia_hmatrix_cuda {
 struct AnalyticSource {double vertices[12];std::size_t first,count;bool volume;};
 struct QuadraturePoint {double point[3],weight;};
 struct AnalyticBlock {std::vector<AnalyticSource> sources;std::vector<QuadraturePoint> quadrature;};
-inline AnalyticBlock analyticSources(const std::vector<double>& cells,const std::vector<double>& faces){
-    if(cells.size()%12||faces.size()%9||cells.size()/12+faces.size()/9==0||cells.size()/12+faces.size()/9>128)
-        throw std::invalid_argument("Analytic constant block requires 1..128 linear tet/triangle charges");
+inline AnalyticBlock analyticSources(const std::vector<double>& cells,const std::vector<double>& faces,
+                                    std::size_t sourceLimit=128){
+    if(cells.size()%12||faces.size()%9||cells.size()/12+faces.size()/9==0||cells.size()/12+faces.size()/9>sourceLimit)
+        throw std::invalid_argument("Analytic constant charge source count outside declared budget");
     AnalyticBlock block;std::vector<double> points,weights;rad_gl4_duffy_tet(points,weights);
     for(int volume=1;volume>=0;--volume){
         const auto& geometry=volume?cells:faces;const std::size_t width=volume?12:9;
@@ -49,11 +50,27 @@ __device__ double analyticQuadDot(const AnalyticSource* sources,const Quadrature
     }
     return sum*0.07957747154594766788;
 }
+__device__ double analyticSymmetricEntry(const AnalyticSource* sources,const QuadraturePoint* quadrature,
+                                       std::size_t row,std::size_t column){
+    // Canonical ordering preserves the dense CPU-compatible entry arithmetic,
+    // including when ACA requests the same entry through its column direction.
+    if(row>column){const auto swap=row;row=column;column=swap;}
+    const double value=analyticQuadDot(sources,quadrature,row,column);
+    return row==column?value:.5*(value+analyticQuadDot(sources,quadrature,column,row));
+}
+struct AnalyticEntryIndex {std::size_t row,column;};
+__global__ void evaluateAnalyticEntries(const AnalyticSource* sources,const QuadraturePoint* quadrature,
+        std::size_t sourceCount,const AnalyticEntryIndex* indices,std::size_t count,double* values,int* invalid){
+    const auto i=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(i>=count)return;
+    const auto index=indices[i];
+    if(index.row>=sourceCount||index.column>=sourceCount){atomicExch(invalid,1);values[i]=0.;return;}
+    const auto value=analyticSymmetricEntry(sources,quadrature,index.row,index.column);
+    if(!isfinite(value))atomicExch(invalid,1);values[i]=value;
+}
 __global__ void assembleAnalyticConstant(const AnalyticSource* sources,const QuadraturePoint* quadrature,
         std::size_t n,double* matrix,int* invalid){
     const auto i=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(i>=n*n)return;
-    const auto row=i/n,col=i%n;if(row>col)return;double value=analyticQuadDot(sources,quadrature,row,col);
-    if(row!=col)value=.5*(value+analyticQuadDot(sources,quadrature,col,row));
+    const auto row=i/n,col=i%n;if(row>col)return;double value=analyticSymmetricEntry(sources,quadrature,row,col);
     if(!isfinite(value))atomicExch(invalid,1);matrix[i]=value;if(row!=col)matrix[col*n+row]=value;
 }
 __global__ void analyticPhysicalScale(std::size_t n,const double* matrix,double* scale,int* invalid){

@@ -82,7 +82,11 @@ def main():
             x4=rng.normal(size=4);first4=np.asarray(mixedgram.matvec_sym(x4));third4=np.asarray(mixedgram.matvec_sym(mixedgram.matvec_sym(first4)))
         cases.append(dict(name='native-CUDA-analytic-tet-triangle-block',config=dict(schema_version=1.,operator_kind='gram',assembly='analytic_constant_block',cells=cells[:,None],faces=triangles[:,None]),initial=x4[:,None],expected_first=first4[:,None],expected_third=third4[:,None]))
         record['CPU_oracle']=dict(module='radia._radia_pybind',binary_sha256=sha(native.__file__),ngsolve=ng.__version__,note='Independent installed public CPU reference: sampled and integrated constant-tet/triangle Gram')
-        inputfile=a.out/'inputs.mat';savemat(inputfile,dict(cases=structs(cases)));record['input_sha256']=sha(inputfile)
+        with ng.TaskManager():
+            entry_rows=np.tile(np.arange(4),150);entry_columns=np.tile(np.array([3,2,1,0]),150)
+            entry_expected=np.array([mixedgram.entry(int(i),int(j)) for i,j in zip(entry_rows,entry_columns)])
+        entry_probe=dict(cells=cells[:,None],faces=triangles[:,None],rows=(entry_rows+1.).reshape(-1,1),columns=(entry_columns+1.).reshape(-1,1),expected=entry_expected[:,None])
+        inputfile=a.out/'inputs.mat';savemat(inputfile,dict(cases=structs(cases),entry_probe=entry_probe));record['input_sha256']=sha(inputfile)
         import matlab.engine
         eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread');pid=int(eng.feature('getpid'));subprocess.run(['powershell','-NoProfile','-Command',f'(Get-Process -Id {pid}).PriorityClass="BelowNormal"'],check=True,capture_output=True)
         eng.addpath(str(a.artifact),str(Path(__file__).parent),str(ROOT/'packages/radia-gpu/matlab'),nargout=0)

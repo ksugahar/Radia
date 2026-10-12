@@ -1,6 +1,7 @@
 // Experimental numeric leaf boundary, not full HDiv assembly or solver acceptance.
 #include "mex.h"
 #include "hmatrix_hacapk_pack.cuh"
+#include "hmatrix_entry_oracle.cuh"
 #include <map>
 #include <memory>
 #include <chrono>
@@ -78,6 +79,30 @@ Plan read(const mxArray* cfg){
 void mexFunction(int nl,mxArray* out[],int nr,const mxArray* in[]){
 try{
     if(!nr)throw std::invalid_argument("Command required");auto command=text(in[0]);
+    if(command=="analytic_entry_batch"){
+        // Native assembly diagnostic boundary; the full ACA adapter owns its
+        // oracle across callbacks instead of uploading geometry on every row.
+        arity(nr,5,nl,1);std::size_t payloadBytes=0;
+        for(int i=1;i<5;++i)checkPayload(in[i],payloadBytes);
+        const auto rows=numbers(in[3]),columns=numbers(in[4]);
+        if(rows.size()!=columns.size())throw std::invalid_argument("Entry index shape mismatch");
+        auto block=analyticSources(numbers(in[1]),numbers(in[2]),2147483647u);
+        const std::size_t capacity=256;
+        std::vector<AnalyticEntryIndex> request;
+        for(std::size_t i=0;i<rows.size();++i){
+            if(rows[i]<1||columns[i]<1||rows[i]>block.sources.size()||columns[i]>block.sources.size()||
+               std::floor(rows[i])!=rows[i]||std::floor(columns[i])!=columns[i])
+                throw std::invalid_argument("Entry indices must be one-based charge indices");
+            request.push_back({std::size_t(rows[i])-1,std::size_t(columns[i])-1});
+        }
+        AnalyticEntryOracle oracle(block,capacity);std::vector<double> result;result.reserve(request.size());
+        for(std::size_t offset=0;offset<request.size();offset+=capacity){
+            const auto end=std::min(offset+capacity,request.size());
+            const std::vector<AnalyticEntryIndex> batch(request.begin()+offset,request.begin()+end);
+            const auto values=oracle.evaluate(batch,nullptr);result.insert(result.end(),values.begin(),values.end());
+        }
+        out[0]=mxCreateDoubleMatrix(result.size(),1,mxREAL);std::copy(result.begin(),result.end(),mxGetDoubles(out[0]));return;
+    }
     if(command=="create"||command=="create_analytic_constant_block"){
         arity(nr,2,nl,1);if(!mxIsStruct(in[1])||mxGetNumberOfElements(in[1])!=1)throw std::invalid_argument("Expected scalar H-matrix configuration");std::size_t payloadBytes=0;checkPayload(in[1],payloadBytes);Plan plan;AnalyticBlock block;
         if(command=="create")plan=read(in[1]);
