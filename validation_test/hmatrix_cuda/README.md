@@ -263,6 +263,47 @@ is preserved. Both BBOX and PCA strategies on an independently authored
 direct matrix multiplication (maximum relative difference 3.353e-13).
 `results/full-host-assembly-20261013.json` records source and executable hashes.
 This closes the host dependency/assembly subgate; the batch callback in this
-test evaluates the synthetic CPU kernel, not CUDA. Connecting the complete
-builder to the CUDA entry oracle, physical normalization and resident packing,
-and general HDiv-MMM physical validation remain pending. No timing was measured.
+test evaluates the synthetic CPU kernel, not CUDA. The following section
+records the subsequent CUDA connection. No timing was measured in this gate.
+
+## Complete constant-charge CUDA hierarchy path
+
+`Build.ps1 -HMatrixCudaOnly -HMatrixMklRoot <isolated-venv>/Library
+-RequireNativeProvenance` links the complete existing C cluster/leaf/ACA
+implementation with supported MKL and the serial MATLAB host scheduler.
+The new `create_analytic_hacapk` command accepts constant affine tetra/triangle
+charges, explicitly bounded to 4096 sources. It preserves BBOX support radii,
+production ACA dispatch, diagonal normalization and rank-cap dense promotion.
+CUDA computes both compressed-entry requests and exact dense leaves. Dense
+leaves use contiguous batches of at most 256 entries; CPU default builds retain
+the scalar order. Scoped callbacks capture C ABI failures and owners reject
+failed builds before creating a resident handle. Symmetric fill, geometry-radius
+and cluster-strategy state is reset on exit.
+
+The 132-tetra direct-CPU parity subgate passes at 1.440e-11 relative error,
+with 14272 evaluated entries in 113 batches, 7 stored upper leaves and 99688
+owned resident device bytes (292324 accounted setup peak). At this tolerance,
+all selected low-rank leaves exhausted the rank budget and were promoted to
+dense: this is full hierarchy assembly, **not** successful compression.
+`solveHDivRT0(...,'hacapk')` connects that builder to native NGSolve FE setup
+and the resident material solver. The eight-tetra physical path retains CPU
+coefficient difference 1.126e-11 and independent true residual 9.729e-12.
+
+`measure_hdiv_assembly.py` compares the previous scalar-dense CUDA assembly
+with batched CUDA assembly using the same physical mesh and CPU reference.
+Its guarded ABBA timer includes FE setup, assembly, transfers, solve, result
+recovery and destruction. It is an idle-100 diagnostic, not formal mdx
+performance acceptance. First payloads are distinguished from cold processes;
+available-memory samples are not global peaks. General high-order/curved FE,
+images, constraints, nonlinear physics, large compressed-leaf validation and
+release acceptance remain pending.
+
+`results/full-cuda-assembly-20261013.json` records the latest checked build
+(`984875630`, `job-fop0ay52`) and same-hash A100 numerical subgates. The
+idle-100 eight-tetra ABBA whole-solve medians are 1.30363 s before batching
+and 0.0480764 s after batching (27.12x). CPU coefficient difference remains
+1.126e-11, independent true residual 9.729e-12, 21 iterations, and accounted
+owned peak 28996 bytes in both modes. These are CUDA-before/CUDA-after
+diagnostics on this bounded physical case, not CPU-vs-GPU or general-solver
+performance acceptance. A100 validation here uses independent CPU FE fixtures;
+native FE initialization on A100 was not reaccepted for this latest artifact.

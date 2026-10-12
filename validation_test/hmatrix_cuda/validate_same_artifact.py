@@ -2,24 +2,27 @@
 No build/install and no Python solver snapshot prerequisite for GPU users.
 """
 from pathlib import Path
-import argparse,hashlib,json,subprocess,time
+import argparse,hashlib,json,subprocess,time,os
 
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def main():
     p=argparse.ArgumentParser();p.add_argument('--job',type=Path,required=True);p.add_argument('--profile',action='store_true');a=p.parse_args();j=a.job
-    record=dict(schema='radia.hmatrix-same-artifact.v1',accepted=False,scope='Existing numerical leaf/operator subgates, not full HACApK/HDiv-MMM solve',true_residual=None,true_residual_reason='Operator subgate, not a linear solve',performance_acceptance=False)
+    record=dict(schema='radia.hmatrix-same-artifact.v1',accepted=False,scope='Existing numerical/operator and bounded physical material subgates; not general HDiv-MMM acceptance',true_residual=None,true_residual_reason='Per-case original-equation residuals are reported in material_solver, not a single suite residual',performance_acceptance=False)
     eng=None
     try:
         manifest=json.loads((j/'manifest.json').read_text(encoding='utf-8'))
         for name,h in manifest.items():
             if sha(j/name)!=h:raise RuntimeError('Staged artifact/input hash mismatch: '+name)
         record['sha256']=manifest
+        if (j/'runtime').is_dir():os.environ['PATH']=str(j/'runtime')+';'+os.environ['PATH']
+        os.environ['MKL_NUM_THREADS']='1';os.environ['MKL_THREADING_LAYER']='SEQUENTIAL'
         gpu=subprocess.check_output(['nvidia-smi','--query-gpu=name,driver_version,memory.total,memory.free,utilization.gpu','--format=csv,noheader'],text=True).strip()
         record['gpu_before']=gpu
         fields=gpu.split(',')
         if len(fields)!=5 or int(fields[-1].strip().split()[0])>5:raise RuntimeError('GPU is busy or ambiguous')
         import matlab.engine
         started=time.perf_counter();eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread');record['engine_start_seconds']=time.perf_counter()-started
+        pid=int(eng.feature('getpid'));subprocess.run(['powershell','-NoProfile','-Command',f'(Get-Process -Id {pid}).PriorityClass="BelowNormal"'],check=True,capture_output=True)
         eng.addpath(str(j),str(j/'matlab'),nargout=0);record['matlab']=eng.version()
         started=time.perf_counter();eng.checkResidentHMatrix(str(j/'inputs.mat'),str(j/'matlab.json'),nargout=0);record['suite_seconds']=time.perf_counter()-started
         result=json.loads((j/'matlab.json').read_text(encoding='utf-8'));assert result['accepted'];record['result']=result

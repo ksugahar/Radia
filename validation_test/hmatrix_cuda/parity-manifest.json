@@ -24,7 +24,7 @@
     {
       "CPU": "RT0 NGSolve charge map/mass/RHS + public ChargeGram linear material solve",
       "MATLAB": "radia.gpu.solveHDivRT0; radia_cuda_projection assemble_hdiv_rt0 + radia_cuda_hmatrix solve_linear_material",
-      "scope": "1..16 affine tetra RT0, exact dense analytic Gram, linear isotropic material; accepted one and eight tetra cases, no adaptive whole HACApK"
+      "scope": "1..16 affine tetra RT0, exact dense or complete constant-charge HACApK hierarchy, linear isotropic material; one/eight-tetra subgates, not general HDiv"
     }
   ],
   "native_commands": [
@@ -40,13 +40,14 @@
     "analytic_aca_vector",
     "analytic_aca_compress",
     "analytic_aca_leaf",
-    "solve_linear_material"
+    "solve_linear_material",
+    "create_analytic_hacapk"
   ],
   "handle_contract": "Scalar uint64 type/generation/liveness checked; native GPU ownership and stream checked",
   "numerical_relative_limit": 1e-12,
   "pending": [
     "General HACApK adaptive Matrix Build",
-    "Physical NGSolve charge-map assembly",
+    "General high-order/curved NGSolve charge-map assembly",
     "Constitutive/preconditioner/solver integration",
     "Full HDiv-MMM physics and true residual",
     "Device reset lifecycle",
@@ -54,5 +55,9 @@
     "Release CI and distribution acceptance"
   ],
   "aca_compression_acceptance": "Cyclic-search defect fixed; tiny physical block passed; 66x66 cap exhausted so requested compression convergence and full assembly remain pending",
-  "aca_dense_promotion": "CPU rank-budget condition preserved; bounded direct CUDA batches; physical CPU 1e-8 and direct CUDA 1e-12 subgates, whole adaptive assembly pending"
+  "aca_dense_promotion": "CPU rank-budget condition preserved; bounded direct CUDA batches; physical CPU 1e-8 and direct CUDA 1e-12 subgates, whole adaptive assembly pending",
+  "full_constant_charge_assembly": "Existing full BBOX support-aware hierarchy, normalized production ACA, CUDA entries and exact dense promotion, serial host; 132-tetra direct CPU parity. Strict cap promoted all low-rank leaves; no compression-success claim. General FE/high-order/curved/images remain pending.",
+  "full_assembly_physical_relative_limit": 1e-08,
+  "bounded_rt0_coefficient_relative_limit": 1e-10,
+  "bounded_rt0_true_residual_limit": 1e-11
 }
