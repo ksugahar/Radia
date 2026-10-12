@@ -1,7 +1,6 @@
 {
   "schema": "radia.optuna.cuda-acceptance.v1",
   "ok": true,
-  "host": "T7920",
   "source_sha": "feb104bc47b85febf6372fbb22058182461aa16a",
   "execution_route": "official-matlab-engine-or-batch",
   "matlab": "26.1.0.3346908 (R2026a) Update 5",
@@ -224,5 +223,7 @@
   "python_contract_tests": {
     "passed": 63,
     "failed": 0
-  }
+  },
+  "platform": "windows-x64",
+  "runtime_identity": "Private raw provenance retained outside the repository"
 }
