@@ -74,7 +74,7 @@ EXIT_PRECONDITION = 2
 EXIT_ACTION = 3
 EXIT_VERIFY = 4
 EXIT_UNVERIFIED = 5
-EDITABLE_DEVELOPMENT_HOST = "intel11"
+EDITABLE_DEVELOPMENT_HOST = "t7920"
 
 
 # ------------------------------------------------------------------
@@ -595,7 +595,8 @@ def format_action(report: dict) -> str:
     if report.get("dry_run"):
         lines.append("  dry run: nothing was installed or recorded")
     for result in report["results"]:
-        lines.append(f"  [{result['status'].upper():<14}] {result['package']} -> {result.get('source') or ''}")
+        subject = result.get("package") or result.get("action") or "editable intent"
+        lines.append(f"  [{result['status'].upper():<14}] {subject} -> {result.get('source') or ''}")
         if result.get("detail"):
             lines.append("      " + str(result["detail"]).replace("\n", "\n      "))
         if result.get("hint"):
@@ -694,7 +695,7 @@ def _cmd_repoint(args) -> int:
         packages = list(args.package) or list(DEFAULT_PACKAGES)
         if platform.node().split(".", 1)[0].casefold() != EDITABLE_DEVELOPMENT_HOST:
             return _emit(args, _host_policy_refusal("rollback"),
-                         "Editable rollback is allowed only on 100号機 (INTEL11).")
+                         "Editable rollback is allowed only on 100号機 (T7920).")
         report = rollback(packages, args.reason or "rollback to the previous recorded pointer")
         return _emit(args, report, format_action(report))
     if args.record_current:
@@ -705,7 +706,7 @@ def _cmd_repoint(args) -> int:
         packages = list(args.package) or list(DEFAULT_PACKAGES)
         if platform.node().split(".", 1)[0].casefold() != EDITABLE_DEVELOPMENT_HOST:
             return _emit(args, _host_policy_refusal("record-current"),
-                         "Editable intent recording is allowed only on 100号機 (INTEL11).")
+                         "Editable intent recording is allowed only on 100号機 (T7920).")
         report = record_current(packages, args.reason, require_pushed=args.require_pushed)
         return _emit(args, report, format_action(report))
     if not args.package or len(args.package) != len(args.source):
@@ -714,7 +715,7 @@ def _cmd_repoint(args) -> int:
         raise SystemExit("--reason is required so the record says why this pointer moves")
     if platform.node().split(".", 1)[0].casefold() != EDITABLE_DEVELOPMENT_HOST:
         return _emit(args, _host_policy_refusal("repoint"),
-                     "Editable repoint is allowed only on 100号機 (INTEL11).")
+                     "Editable repoint is allowed only on 100号機 (T7920).")
     report = repoint(list(zip(args.package, args.source)), args.reason, via=args.via,
                      dry_run=args.dry_run, require_pushed=args.require_pushed)
     return _emit(args, report, format_action(report))
@@ -723,9 +724,10 @@ def _cmd_repoint(args) -> int:
 def _host_policy_refusal(action: str) -> dict:
     return {
         "schema": SCHEMA,
+        "record_file": str(intent_file_path()),
         "exit_code": EXIT_PRECONDITION,
         "results": [{"status": "refused", "action": action,
-                     "detail": "editable installs and intent writes are restricted to 100号機 (INTEL11)"}],
+                     "detail": "editable installs and intent writes are restricted to 100号機 (T7920)"}],
         "note": "No pip command was run and no intent record was changed.",
     }
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 5.3.2 - 2026-10-12
+
+- Repair dedicated development-runtime intent recording for the current build
+  host and preserve actionable diagnostics when a different host is refused.
+- Keep CPU Python/pybind11 publication independent of MATLAB/CUDA, Simulink,
+  MCP and mesh-exporter distributions. Numerical formulations are unchanged;
+  validate the new wheel against independent one-hole HCurl FEM before promotion.
+
 ## 5.3.1 - 2026-10-12
 
 - Release the CPU Python/pybind11 solver with bounded P1 HACApK entry-on-demand
