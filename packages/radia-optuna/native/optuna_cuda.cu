@@ -87,27 +87,28 @@ __device__ double component(const DeviceEstimator& e, const double* data,
     const double z = (x - mu) / sigma;
     return -0.5 * z * z - 0.91893853320467274178 - log(sigma) - denominator;
 }
-// One CUDA thread per candidate; preserve component/dimension summation order.
+// A block per candidate evaluates mixture components in parallel. The final
+// ordered reduction retains the oracle's summation and tie-breaking contract.
 __global__ void density(const double* samples, std::size_t count,
                          const DeviceEstimator* estimators, std::size_t dimensions,
-                         const double* data, double* output) {
-    const std::size_t row = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+                         const double* data, double* terms, double* output) {
+    const std::size_t row = blockIdx.x;
     if (row >= count) return;
-    double maximum = -INFINITY;
-    for (std::size_t k = 0; k < estimators[0].kernels; ++k) {
+    const auto kernels = estimators[0].kernels;
+    double* components = terms + row * kernels;
+    for (std::size_t k = threadIdx.x; k < kernels; k += blockDim.x) {
         double value = log(data[estimators[0].weights + k]);
         for (std::size_t d = 0; d < dimensions; ++d)
             value += component(estimators[d], data, samples[row * dimensions + d], k);
-        maximum = fmax(maximum, value);
+        components[k] = value;
     }
+    __syncthreads();
+    if (threadIdx.x != 0) return;
+    double maximum = -INFINITY;
+    for (std::size_t k = 0; k < kernels; ++k) maximum = fmax(maximum, components[k]);
     if (maximum == -INFINITY) { output[row] = maximum; return; }
     double total = 0.0;
-    for (std::size_t k = 0; k < estimators[0].kernels; ++k) {
-        double value = log(data[estimators[0].weights + k]);
-        for (std::size_t d = 0; d < dimensions; ++d)
-            value += component(estimators[d], data, samples[row * dimensions + d], k);
-        total += exp(value - maximum);
-    }
+    for (std::size_t k = 0; k < kernels; ++k) total += exp(components[k] - maximum);
     output[row] = maximum + log(total);
 }
 __global__ void select_best(const double* below, const double* above,
@@ -136,12 +137,12 @@ struct DeviceMixture {
     }
 };
 void launch(Buffer& samples, std::size_t count, std::size_t dimensions,
-            DeviceMixture& mixture, Buffer& output) {
-    if (count > static_cast<std::size_t>(INT_MAX) * 128)
+            DeviceMixture& mixture, Buffer& terms, Buffer& output) {
+    if (count > static_cast<std::size_t>(INT_MAX))
         throw std::overflow_error("Optuna CUDA grid size overflow");
-    density<<<static_cast<unsigned>((count + 127) / 128), 128>>>(
+    density<<<static_cast<unsigned>(count), 128>>>(
         samples.as<double>(), count, mixture.descriptors.as<DeviceEstimator>(),
-        dimensions, mixture.data.as<double>(), output.as<double>());
+        dimensions, mixture.data.as<double>(), terms.as<double>(), output.as<double>());
     check(cudaGetLastError(), "launch density");
     ++stats.density_launches;
 }
@@ -156,12 +157,13 @@ std::vector<double> log_pdf(const std::vector<double>& samples,
     if (!count) return result;
     const auto input_bytes = product(samples.size(), sizeof(double));
     const auto output_bytes = product(count, sizeof(double));
-    Buffer input(input_bytes), output(output_bytes);
+    const auto term_bytes = product(product(count, packed.estimators.front().kernels), sizeof(double));
+    Buffer input(input_bytes), output(output_bytes), terms(term_bytes);
     DeviceMixture mixture(packed);
-    stats.peak_temporary_bytes = std::max(stats.peak_temporary_bytes, input_bytes + output_bytes +
+    stats.peak_temporary_bytes = std::max(stats.peak_temporary_bytes, input_bytes + output_bytes + term_bytes +
         product(packed.values.size(), sizeof(double)) + product(packed.estimators.size(), sizeof(DeviceEstimator)));
     upload(input.data, samples.data(), input_bytes);
-    launch(input, count, estimators.size(), mixture, output);
+    launch(input, count, estimators.size(), mixture, terms, output);
     download(result.data(), output.data, output_bytes);
     return result;
 }
@@ -174,14 +176,17 @@ std::size_t best(const std::vector<double>& candidates,
     const auto count = candidates.size() / below.size();
     const auto input_bytes = product(candidates.size(), sizeof(double));
     const auto output_bytes = product(count, sizeof(double));
+    const auto term_bytes = product(product(count,
+        std::max(lower.estimators.front().kernels, upper.estimators.front().kernels)), sizeof(double));
     Buffer input(input_bytes), lower_pdf(output_bytes), upper_pdf(output_bytes), index(sizeof(std::size_t));
+    Buffer terms(term_bytes);
     DeviceMixture lower_mix(lower), upper_mix(upper);
-    stats.peak_temporary_bytes = std::max(stats.peak_temporary_bytes, input_bytes + 2 * output_bytes + sizeof(std::size_t) +
+    stats.peak_temporary_bytes = std::max(stats.peak_temporary_bytes, input_bytes + 2 * output_bytes + term_bytes + sizeof(std::size_t) +
         product(lower.values.size() + upper.values.size(), sizeof(double)) +
         product(lower.estimators.size() + upper.estimators.size(), sizeof(DeviceEstimator)));
     upload(input.data, candidates.data(), input_bytes);
-    launch(input, count, below.size(), lower_mix, lower_pdf);
-    launch(input, count, above.size(), upper_mix, upper_pdf);
+    launch(input, count, below.size(), lower_mix, terms, lower_pdf);
+    launch(input, count, above.size(), upper_mix, terms, upper_pdf);
     select_best<<<1, 1>>>(lower_pdf.as<double>(), upper_pdf.as<double>(), count, index.as<std::size_t>());
     check(cudaGetLastError(), "launch selection");
     ++stats.selection_launches;
