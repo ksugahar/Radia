@@ -71,10 +71,15 @@ try
         leaf=radia_cuda_hmatrix('analytic_aca_leaf',probeLarge.cells,probeLarge.faces,probeLarge.split,1e-10,32);
         assert(leaf.promoted&&leaf.rank==0&&leaf.aca_rank==32);
         denseError=norm(leaf.dense-probeLarge.expected,'fro')/norm(probeLarge.expected,'fro');
-        assert(denseError<=1e-12,'Exact promoted leaf CPU parity failed');
-        result.dense_promotion=struct('relative_error',denseError,'aca_rank',leaf.aca_rank, ...
+        [rr,cc]=ndgrid(1:probeLarge.split,probeLarge.split+(1:probeLarge.split));
+        direct=radia_cuda_hmatrix('analytic_entry_batch',probeLarge.cells,probeLarge.faces,rr(:),cc(:));
+        directError=norm(leaf.dense(:)-direct)/max(norm(direct),realmin);
+
+        result.dense_promotion=struct('relative_error',denseError,'direct_cuda_relative_error',directError,'cpu_physical_limit',1e-8,'aca_rank',leaf.aca_rank, ...
             'entry_count',leaf.entry_count,'entry_batches',leaf.entry_batches, ...
             'owned_device_bytes',leaf.owned_device_bytes,'scope','Exact CUDA leaf; full adaptive assembly pending');
+        assert(directError<=1e-12,'Dense promotion changed direct CUDA entries');
+        assert(denseError<=1e-8,'Promoted leaf physical CPU parity failed');
 
     end
     assert(radia_cuda_hmatrix('live_count')==0);

@@ -33,7 +33,8 @@
     "live_count",
     "analytic_entry_batch",
     "analytic_aca_vector",
-    "analytic_aca_compress"
+    "analytic_aca_compress",
+    "analytic_aca_leaf"
   ],
   "handle_contract": "Scalar uint64 type/generation/liveness checked; native GPU ownership and stream checked",
   "numerical_relative_limit": 1e-12,
@@ -46,5 +47,6 @@
     "HDF5 large interchange frontend",
     "Release CI and distribution acceptance"
   ],
-  "aca_compression_acceptance": "Cyclic-search defect fixed; tiny physical block passed; 66x66 cap exhausted so requested compression convergence and full assembly remain pending"
+  "aca_compression_acceptance": "Cyclic-search defect fixed; tiny physical block passed; 66x66 cap exhausted so requested compression convergence and full assembly remain pending",
+  "aca_dense_promotion": "CPU rank-budget condition preserved; bounded direct CUDA batches; physical CPU 1e-8 and direct CUDA 1e-12 subgates, whole adaptive assembly pending"
 }

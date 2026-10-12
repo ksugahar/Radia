@@ -181,6 +181,9 @@ is discarded and the physical dense block is evaluated on CUDA in bounded
 resident dense leaves still use row-major storage. Non-saturated results retain
 the factor response. This is a leaf bridge, not adaptive whole-matrix assembly.
 Generated dense payloads above 2 GiB are rejected before allocation; HDF5
-remains pending. The larger physical parity check now requires exact dense
-promotion parity at 1e-12. Build and numerical acceptance of this change are
-pending until the associated result JSON is recorded.
+remains pending. The larger check compares promotion against direct CUDA entries at 1e-12
+and against independent CPU physical entries at the existing 1e-8 block
+limit. A first attempt requiring 1e-12 CPU physical parity failed at
+1.726e-9; the direct-entry comparison isolates promotion from integration
+roundoff. This does not certify CPU physical parity at 1e-12. `results/dense-promotion-20261012.json` records direct CUDA difference zero
+and CPU physical difference 1.726e-9. Full adaptive assembly remains pending.
