@@ -42,6 +42,23 @@ def test_cli_refuses_mutation_from_lab(intent_file, monkeypatch, tmp_path, capsy
     assert not intent_file.exists()
 
 
+def test_refused_record_report_is_renderable(intent_file, monkeypatch, capsys):
+    monkeypatch.setattr(ei.platform, "node", lambda: "LAB")
+    assert ei.main(["--json", "repoint", "--record-current", "--reason", "release"]) == ei.EXIT_PRECONDITION
+    report = json.loads(capsys.readouterr().out)
+    assert "REFUSED" in ei.format_action(report)
+    assert report["record_file"] == str(intent_file)
+    assert not intent_file.exists()
+
+
+def test_current_build_host_can_record_intent(intent_file, monkeypatch, capsys):
+    monkeypatch.setattr(ei.platform, "node", lambda: "T7920")
+    monkeypatch.setattr(ei, "record_current", lambda *args, **kwargs: {
+        "schema": ei.SCHEMA, "record_file": str(intent_file), "results": [], "exit_code": 0})
+    assert ei.main(["--json", "repoint", "--record-current", "--reason", "release"]) == 0
+    assert json.loads(capsys.readouterr().out)["exit_code"] == 0
+
+
 @pytest.fixture
 def sources(tmp_path):
     old = tmp_path / "old-tree" / "packages" / "radia-mcp"
