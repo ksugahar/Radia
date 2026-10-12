@@ -9,7 +9,7 @@
   "gpu": "Quadro RTX 5000",
   "compute_capability": "7.5",
   "driver": "13",
-  "binary": "C:\\temp\\codex-optuna-tpe-cuda-20261012\\final\\source\\packages\\radia-optuna\\matlab\\optuna_mex.mexw64",
+  "binary": "packages/radia-optuna/matlab/optuna_mex.mexw64",
   "binary_sha256": "4d052685a040e654bbb3883f9fcefefad09fcae8c99bbe370768924af6c6279e",
   "fixture_sha256": "c4efca89215c84cb92590364ad0b1476f9562cb610f4be1cfdd35554c3439eb0",
   "optuna_version": "5.0.0",
