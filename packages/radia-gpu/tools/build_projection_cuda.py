@@ -12,7 +12,7 @@ def main():
     source=root/'packages/radia-gpu/native/radia_cuda_projection.cu'
     out=Path(tempfile.mkdtemp(prefix='projection-cuda-',dir='C:/temp'))
     receipt=dict(accepted=False,a100_used=False,scope='Experimental native mapped-target replay, not full RadFld migration',source_commit=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip(),source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),taskmanager_started=False)
-    sources=[source,source.with_name('radia_projection_host.cpp'),source.with_name('radia_projection_host.cuh'),source.with_name('hdiv_rt0_host.cuh'),Path(__file__),root/'Build.ps1']
+    sources=[source,source.with_name('radia_projection_host.cpp'),source.with_name('radia_projection_host.cuh'),source.with_name('hdiv_rt0_host.cuh'),source.with_name('hdiv_element_setup.cuh'),Path(__file__),root/'Build.ps1']
     receipt['source_dirty']=dirty
     receipt['source_sha256']={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
     print(str(out),flush=True);eng=None
