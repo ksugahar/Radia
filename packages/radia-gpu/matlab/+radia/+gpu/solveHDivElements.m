@@ -2,7 +2,7 @@ function result=solveHDivElements(meshPath,order,appliedField,invChi,tolerance,m
 % Experimental bounded P2 tetrahedral HDiv material solve, no Python setup.
 arguments
     meshPath (1,:) char
-    order (1,1) double {mustBeMember(order,[1 2 3])}
+    order (1,1) double {mustBeMember(order,[1 2])}
     appliedField (1,3) double {mustBeFinite}
     invChi (1,1) double {mustBePositive,mustBeFinite}
     tolerance (1,1) double {mustBePositive,mustBeFinite}=1e-10

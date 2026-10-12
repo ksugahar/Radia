@@ -7,7 +7,7 @@ def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 def main():
     p=argparse.ArgumentParser()
     for name in ('projection','hmatrix','out'):p.add_argument('--'+name,type=Path,required=True)
-    p.add_argument('--order',type=int,choices=[1,2,3],default=1)
+    p.add_argument('--order',type=int,choices=[1,2],default=1)
     p.add_argument('--geometry',choices=['affine','curved'],default='curved');a=p.parse_args()
     if a.geometry=='curved' and a.order==3:p.error('Existing curved charge semantics support orders 1 and 2')
     a.projection=a.projection.resolve();a.hmatrix=a.hmatrix.resolve();a.out=a.out.resolve();a.out.mkdir(parents=True,exist_ok=False)
