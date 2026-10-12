@@ -17,6 +17,8 @@ assert(gather(norm(y-2*x)/norm(y))<1e-9,'resident retained ownership');
 assert(first.workspace_allocations==1&&second.workspace_allocations==1,'workspace generation');
 assert(second.solve_count==2&&second.hierarchy_builds==2,'workspace survives hierarchy replacement');
 assert(first.native_buffer_allocations_during_solve==0&&second.native_buffer_allocations_during_solve==0,'native work allocation');
+[zero,zeroInfo]=radia_cuda_ams('solve',h,op,zeros(size(b),'like',b),1e-10,4000,true);
+assert(gather(norm(zero))==0&&zeroInfo.iterations==0,'zero RHS must reset resident iterate');
 clear cleanup;
 expectError(@()radia_cuda_ams('release',h));
 expectError(@()radia_cuda_ams('nonlinear_release',h));
