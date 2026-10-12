@@ -3295,7 +3295,7 @@ void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
     const char* fields[] = {
         "api_version", "backend", "command_count", "handle_count"
 #ifdef RADIA_OPTUNA_CUDA
-        , "execution", "host_parallel_runtime", "density_launches", "selection_launches", "host_to_device_bytes",
+        , "execution", "host_parallel_runtime", "allocator", "density_launches", "selection_launches", "host_to_device_bytes",
         "device_to_host_bytes", "peak_temporary_bytes", "cuda_runtime", "cuda_driver", "cuda_device"
 #endif
     };
@@ -3307,6 +3307,8 @@ void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
     const auto stats = optuna_cuda::statistics();
     mxSetField(plhs[0], 0, "execution", mxCreateString("matlab-mexcuda"));
     mxSetField(plhs[0], 0, "host_parallel_runtime", mxCreateString("openmp"));
+    mxSetField(plhs[0], 0, "allocator", mxCreateString(
+        stats.stream_ordered_allocator ? "cuda-stream-ordered" : "cudaMalloc"));
     mxSetField(plhs[0], 0, "density_launches", mxCreateDoubleScalar(static_cast<double>(stats.density_launches)));
     mxSetField(plhs[0], 0, "selection_launches", mxCreateDoubleScalar(static_cast<double>(stats.selection_launches)));
     mxSetField(plhs[0], 0, "host_to_device_bytes", mxCreateDoubleScalar(static_cast<double>(stats.host_to_device_bytes)));

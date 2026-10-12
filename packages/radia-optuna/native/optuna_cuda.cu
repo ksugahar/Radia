@@ -1,5 +1,6 @@
 #include "optuna_cuda.hpp"
 #include <cuda_runtime.h>
+#include "gpu/mxGPUArray.h"
 #include <algorithm>
 #include <cfloat>
 #include <climits>
@@ -23,8 +24,17 @@ std::size_t product(std::size_t a, std::size_t b) {
 }
 struct Buffer {
     void* data = nullptr;
-    explicit Buffer(std::size_t bytes) { if (bytes) check(cudaMalloc(&data, bytes), "allocate"); }
-    ~Buffer() { if (data) cudaFree(data); }
+    bool stream_ordered = stats.stream_ordered_allocator;
+    explicit Buffer(std::size_t bytes) {
+        if (bytes) check(stream_ordered ? cudaMallocAsync(&data, bytes, 0) :
+                                         cudaMalloc(&data, bytes), "allocate");
+    }
+    ~Buffer() {
+        if (data) {
+            if (stream_ordered) cudaFreeAsync(data, 0);
+            else cudaFree(data);
+        }
+    }
     Buffer(const Buffer&) = delete;
     Buffer& operator=(const Buffer&) = delete;
     template<class T> T* as() { return static_cast<T*>(data); }
@@ -123,9 +133,14 @@ __global__ void select_best(const double* below, const double* above,
     *result = best;
 }
 void initialize() {
+    mxInitGPU();
     check(cudaGetDevice(&stats.device), "get device");
     check(cudaRuntimeGetVersion(&stats.runtime_version), "runtime version");
     check(cudaDriverGetVersion(&stats.driver_version), "driver version");
+    int pool_supported = 0;
+    check(cudaDeviceGetAttribute(&pool_supported, cudaDevAttrMemoryPoolsSupported,
+                                 stats.device), "memory pool support");
+    stats.stream_ordered_allocator = pool_supported != 0;
 }
 struct DeviceMixture {
     Buffer descriptors, data;
