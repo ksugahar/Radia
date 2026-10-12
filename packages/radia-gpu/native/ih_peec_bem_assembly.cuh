@@ -15,14 +15,14 @@ mxArray* assemblePEECBEM(const mxArray* cfg){
  for(size_t i=0;i<ns;++i){double squared=0.;for(int d=0;d<3;++d){double delta=segments[i*6+d+3]-segments[i*6+d];squared+=delta*delta;}if(!std::isfinite(squared)||squared<=1e-30)throw std::invalid_argument("Degenerate filament segment");}
  auto assignment=realVector(field(cfg,"segment_coil"),ns);size_t coils=0;for(double x:assignment){if(x<1||x>16||x!=int(x))throw std::invalid_argument("Coil IDs must be 1..16");coils=std::max(coils,size_t(x));}
  std::vector<int64_t> triangles(triangleInput.size());std::map<std::pair<int64_t,int64_t>,std::pair<int,int>> edges;
- std::vector<double> nodes(nt*18),area(nt),normal(nt*3),gradient(nt*9),centers(nt*3),mass(nv*nv,0.),stiffness(nv*nv,0.),field(nt*3*nv,0.);
+ std::vector<double> nodes(nt*18),area(nt),normal(nt*3),gradient(nt*9),centers(nt*3),mass(nv*nv,0.),stiffness(nv*nv,0.),fieldGradient(nt*3*nv,0.);
  auto cross=[](const double* a,const double* b,double* c){c[0]=a[1]*b[2]-a[2]*b[1];c[1]=a[2]*b[0]-a[0]*b[2];c[2]=a[0]*b[1]-a[1]*b[0];};
  for(size_t e=0;e<nt;++e){
   for(size_t k=0;k<3;++k){double index=triangleInput[e*3+k];if(index<1||index>nv||index!=int(index))throw std::invalid_argument("Triangle index outside vertices");triangles[e*3+k]=int64_t(index)-1;}
   auto* tri=&triangles[e*3];if(tri[0]==tri[1]||tri[1]==tri[2]||tri[2]==tri[0])throw std::invalid_argument("Repeated triangle vertex");
   const double *p[3]={&vertices[tri[0]*3],&vertices[tri[1]*3],&vertices[tri[2]*3]};double d1[3],d2[3],raw[3];for(int d=0;d<3;++d){d1[d]=p[1][d]-p[0][d];d2[d]=p[2][d]-p[0][d];}cross(d1,d2,raw);double twoArea=std::sqrt(raw[0]*raw[0]+raw[1]*raw[1]+raw[2]*raw[2]);if(!std::isfinite(twoArea)||twoArea<1e-30)throw std::invalid_argument("Degenerate P1 triangle");area[e]=twoArea*.5;
   for(int d=0;d<3;++d){normal[e*3+d]=raw[d]/twoArea;centers[e*3+d]=(p[0][d]+p[1][d]+p[2][d])/3.;for(int k=0;k<3;++k)nodes[e*18+k*3+d]=p[k][d];nodes[e*18+9+d]=(p[0][d]+p[1][d])*.5;nodes[e*18+12+d]=(p[1][d]+p[2][d])*.5;nodes[e*18+15+d]=(p[2][d]+p[0][d])*.5;}
-  for(int k=0;k<3;++k){int a=(k+1)%3,b=(k+2)%3;double opposite[3],g[3];for(int d=0;d<3;++d)opposite[d]=p[b][d]-p[a][d];cross(&normal[e*3],opposite,g);for(int d=0;d<3;++d){gradient[e*9+k*3+d]=g[d]/twoArea;field[(e*3+d)*nv+tri[k]]=-g[d]/twoArea;}
+  for(int k=0;k<3;++k){int a=(k+1)%3,b=(k+2)%3;double opposite[3],g[3];for(int d=0;d<3;++d)opposite[d]=p[b][d]-p[a][d];cross(&normal[e*3],opposite,g);for(int d=0;d<3;++d){gradient[e*9+k*3+d]=g[d]/twoArea;fieldGradient[(e*3+d)*nv+tri[k]]=-g[d]/twoArea;}
    auto edge=std::minmax(tri[k],tri[(k+1)%3]);auto& count=edges[{edge.first,edge.second}];++count.first;count.second+=tri[k]<tri[(k+1)%3]?1:-1;}
   for(int i=0;i<3;++i)for(int j=0;j<3;++j){mass[tri[i]*nv+tri[j]]+=area[e]*(i==j?2.:1.)/12.;double dot=0.;for(int d=0;d<3;++d)dot+=gradient[e*9+i*3+d]*gradient[e*9+j*3+d];stiffness[tri[i]*nv+tri[j]]+=area[e]*dot;}
  }
@@ -41,5 +41,5 @@ mxArray* assemblePEECBEM(const mxArray* cfg){
  }
  const char* names[]={"mass","surface_stiffness","single_layer","double_layer","field_gradient","face_area_m2","face_normals","unit_h","unit_a","incident_weak_map","body_volume_m3"};auto* out=mxCreateStructMatrix(1,1,11,names);
  auto set=[&](int index,const std::vector<double>& values,size_t rows,size_t columns){mxSetField(out,0,names[index],realMatrixOut(values,rows,columns));};
- set(0,mass,nv,nv);set(1,stiffness,nv,nv);set(2,sl,nv,nv);set(3,dl,nv,nv);set(4,field,nt*3,nv);set(5,area,nt,1);set(6,normal,nt,3);set(7,h,nv*3,coils);set(8,a,nt*3,coils);set(9,weak,nv,coils);mxSetField(out,0,names[10],mxCreateDoubleScalar(volume));return out;
+ set(0,mass,nv,nv);set(1,stiffness,nv,nv);set(2,sl,nv,nv);set(3,dl,nv,nv);set(4,fieldGradient,nt*3,nv);set(5,area,nt,1);set(6,normal,nt,3);set(7,h,nv*3,coils);set(8,a,nt*3,coils);set(9,weak,nv,coils);mxSetField(out,0,names[10],mxCreateDoubleScalar(volume));return out;
 }
