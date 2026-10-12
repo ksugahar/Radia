@@ -1,7 +1,15 @@
-/* Shared unmodified mathematical routes from rad_hdiv_vim.cpp.
+/* Shared mathematical routes from rad_hdiv_vim.cpp.
  * CPU: exported native functions; CUDA: device functions in a separate namespace.
  * Do not include scheduling/FE objects in the device build. */
 namespace RAD_FIELD_NAMESPACE {
+
+RAD_FIELD_KERNEL inline bool FieldIsFinite(double value) {
+#ifdef RAD_FIELD_DEVICE_KERNELS
+    return isfinite(value);
+#else
+    return std::isfinite(value);
+#endif
+}
 
 // CPU keeps degree-18 potential support. CUDA field scratch is sized to six,
 // the highest retained RadFld volume degree; recurrence bounds are unchanged.
@@ -1942,7 +1950,7 @@ RAD_FIELD_KERNEL static bool coplanar_outside_inverse_cube_moment(
                                    -u1/(perpendicular2*R1));
         total-=perpendicular*edge_integral;
     }
-    if(!std::isfinite(total)||total<=0.0)return false;
+    if(!FieldIsFinite(total)||total<=0.0)return false;
     moment=total;
     return true;
 }

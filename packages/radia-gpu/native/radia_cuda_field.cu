@@ -335,7 +335,7 @@ void dispatch(int nlhs,mxArray** out,int nrhs,const mxArray** in) {
     if(command=="field") {
         if(nrhs!=4||nlhs!=2) throw std::invalid_argument("field(handle,observations,algorithm) requires two outputs");
         auto& c=context(in[1]); const auto algorithm=text(in[3]);
-        if(algorithm!="direct"&&algorithm!="tree"&&algorithm!="tree_mixed32") throw std::invalid_argument("Explicit direct or tree algorithm required");
+        if(algorithm!="direct"&&algorithm!="tree"&&algorithm!="tree_mixed32") throw std::invalid_argument("Explicit direct, tree or tree_mixed32 algorithm required");
         const std::size_t n=mxGetM(in[2]);
         if(n>std::size_t(std::numeric_limits<int>::max())) throw std::invalid_argument("Observation count exceeds launch range");
         const std::size_t one=bytes(n,3*sizeof(double)), temporary=bytes(one,2);
