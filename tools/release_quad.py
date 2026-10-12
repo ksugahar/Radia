@@ -162,6 +162,7 @@ MATLAB_EXE = r"C:\Program Files\MATLAB\R2026a\bin\matlab.exe"
 SIMULINK_GATE_ROOT = Path(r"C:\temp\radia-release-quad")
 OPTUNA_GATE_ROOT = SIMULINK_GATE_ROOT / "radia-optuna"
 OPTUNA_SUCCESS_MARKER = "RADIA_OPTUNA_WHEEL_SIMULINK_OK"
+OPTUNA_TARGETS = {"100": ("100号機", SSH_100, "python")}
 OPTUNA_WHEEL_RUNNER = REPO / "packages/radia-optuna/tests/run_installed_wheel_simulink.ps1"
 _KNOWN_SIMULINK_TARGETS = {
     "lab": ("LAB", "102", "python"),
@@ -774,8 +775,8 @@ def _optuna_remote_invocation(
 def _run_optuna_candidate_target(
         key: str, wheel: Path, wheel_sha256: str,
         engine_session: str | None = None) -> tuple[bool, str]:
-    label, host, python_command = SIMULINK_TARGETS[key]
-    if key == "lab" and platform.node().strip().lower() == "lab":
+    label, host, python_command = OPTUNA_TARGETS[key]
+    if key == "100" and platform.node().strip().lower() == "t7920":
         host = None
     if engine_session and engine_session.startswith("com:"):
         error = _local_com_target_error(key, engine_session)
@@ -867,8 +868,8 @@ def cmd_optuna_candidate(args):
 
     requested = [part.strip().lower() for part in args.target.split(",")]
     if "all" in requested:
-        requested = list(SIMULINK_TARGETS)
-    unknown = sorted(set(requested) - set(SIMULINK_TARGETS))
+        requested = list(OPTUNA_TARGETS)
+    unknown = sorted(set(requested) - set(OPTUNA_TARGETS))
     if unknown:
         fail(f"unknown radia-optuna target(s): {', '.join(unknown)}")
         return 2
@@ -877,7 +878,7 @@ def cmd_optuna_candidate(args):
         return 2
     failed = 0
     for key in requested:
-        label = SIMULINK_TARGETS[key][0]
+        label = OPTUNA_TARGETS[key][0]
         info(f"verifying exact installed wheel on {label}")
         session_args = [sessions[key]] if key in sessions else []
         passed, target_output = _run_optuna_candidate_target(
@@ -928,12 +929,12 @@ def _verify_optuna_candidate_state(wheel_arg: str) -> tuple[int, dict | None]:
             or state.get("version") != verification.get("version")):
         fail("radia-optuna candidate state differs from wheel, version, or HEAD")
         return 4, None
-    missing = [key for key in SIMULINK_TARGETS
+    missing = [key for key in OPTUNA_TARGETS
                if state.get("targets", {}).get(key, {}).get("status") != "passed"]
     if missing:
         fail(f"radia-optuna candidate has not passed: {', '.join(missing)}")
         return 4, None
-    ok("exact radia-optuna wheel passed LAB / 100号機")
+    ok("exact radia-optuna wheel passed 100号機")
     return 0, state
 
 

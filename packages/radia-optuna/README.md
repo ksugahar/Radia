@@ -201,6 +201,8 @@ This evidence includes source-fidelity verification, the installed doctor,
 standalone Simulink success and typed-failure paths, and all seven persisted
 tables after MAT reload. Shared Study/Trial MCP operations remain upstream.
 
+102号機 is not a CUDA acceptance target: its GTX 1080 is outside the compiled GPU architectures. A100 validation remains optional and pending until the same artifact can be checked there.
+
 ### Reproducible performance evidence
 
 The CUDA gateway packs inputs into one host-to-device transfer and uses one
@@ -242,11 +244,11 @@ Long benchmarks live under `validation_test/optimization`. The Optuna 5 lane
 uses `benchmark_optuna50_python.py` and `benchmark_matlab_optuna50.m`, records
 the complete machine/runtime/load state, and checks seeded proposal checksums
 before comparing warmed medians. Results produced against 4.x are historical
-and cannot satisfy the 0.2.0 release gate. Parallel results remain calibrated
+and cannot satisfy the 0.3.0 release gate. Parallel results remain calibrated
 scheduler evidence rather than a promise that every CAE objective scales by
 the same factor; cheap objectives should remain sequential.
 
-Publication also uses the standalone four-machine release-quad lane. After the
+Publication also uses the standalone exact-wheel CUDA lane on 100号機. After the
 successful `main` CI run, execute
 `python tools/release_quad.py optuna-candidate --ci-run-id <id> --target all`,
 then pass the retained wheel to

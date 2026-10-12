@@ -1,7 +1,7 @@
 name: Release radia-optuna
 
 # Publication is deliberately manual. release_quad.py downloads one successful
-# main-push CI artifact, runs that exact wheel on four MATLAB machines, and
+# main-push CI artifact, runs that exact wheel on the declared CUDA acceptance host, and
 # emits its SHA256. This workflow accepts only that CI run and hash; it never
 # rebuilds the distribution or substitutes a tag-run artifact.
 on:
@@ -155,7 +155,7 @@ jobs:
           WHEEL: ${{ steps.artifact.outputs.wheel }}
           WHEEL_SHA256: ${{ steps.artifact.outputs.sha256 }}
         run: |
-          NOTES=$(printf 'Independent MATLAB optimization implementation differentially verified against Optuna 4.9.0.\n\nWheel SHA256: `%s`\n' "$WHEEL_SHA256")
+          NOTES=$(printf 'MATLAB mexcuda optimization with Optuna 5.0.0 oracle validation. Numerical TPE densities and selection run on CUDA; management and sequential random consumption remain host code.\n\nWheel SHA256: `%s`\n' "$WHEEL_SHA256")
           if gh release view "$TAG_NAME" >/dev/null 2>&1; then
             gh release upload "$TAG_NAME" "$WHEEL" --clobber
           else
