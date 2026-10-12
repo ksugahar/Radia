@@ -2,7 +2,9 @@
 
 #include "rad_hdiv_vim.h"
 
+#ifndef RADIA_FIELD_SERIAL_ONLY
 #include <core/taskmanager.hpp>
+#endif
 
 #include <algorithm>
 #include <array>
@@ -17,27 +19,7 @@
 namespace rad_hdiv {
 namespace {
 
-struct CompensatedVec3 {
-    double sum[3] = {0.0, 0.0, 0.0};
-    double correction[3] = {0.0, 0.0, 0.0};
-
-    void Add(int component, double value) {
-        const double next = sum[component] + value;
-        correction[component] += std::fabs(sum[component]) >= std::fabs(value)
-            ? (sum[component] - next) + value
-            : (value - next) + sum[component];
-        sum[component] = next;
-    }
-
-    void Add(const double value[3]) {
-        for (int component = 0; component < 3; ++component) Add(component, value[component]);
-    }
-
-    void Store(double out[3]) const {
-        for (int component = 0; component < 3; ++component)
-            out[component] = sum[component] + correction[component];
-    }
-};
+using CompensatedVec3 = FieldCompensated3;
 
 using Vec = std::array<double, 3>;
 
@@ -646,13 +628,7 @@ struct HDivFieldEvaluator::Impl {
             AddCurvedTriangle(curved_triangles[atom.index], r, out);
         } else {
             const PointSource& source = points[atom.index];
-            const double dx = r[0]-source.position[0];
-            const double dy = r[1]-source.position[1];
-            const double dz = r[2]-source.position[2];
-            const double r2 = dx*dx + dy*dy + dz*dz;
-            if (r2 <= 1e-300) return;
-            const double scale = source.strength/(r2*std::sqrt(r2));
-            out[0] += scale*dx; out[1] += scale*dy; out[2] += scale*dz;
+            AddCloudPoint(source.position.data(), source.strength, r, out);
         }
     }
 
@@ -766,27 +742,8 @@ struct HDivFieldEvaluator::Impl {
     }
 
     void AddMultipole(const TreeNode& node, const double r[3], double out[3]) const {
-        const Vec R = {r[0]-node.center[0], r[1]-node.center[1], r[2]-node.center[2]};
-        const double r2 = Dot(R, R);
-        if (r2 <= 1e-300) return;
-        const double inv_r = 1.0/std::sqrt(r2);
-        const double inv_r3 = inv_r/r2;
-        const double inv_r5 = inv_r3/r2;
-        const double inv_r7 = inv_r5/r2;
-        const double pR = Dot(node.dipole, R);
-        Vec second_R{};
-        double trace = 0.0;
-        for (int i = 0; i < 3; ++i) {
-            trace += node.second[3*i+i];
-            for (int j = 0; j < 3; ++j) second_R[i] += node.second[3*i+j]*R[j];
-        }
-        const double R_second_R = Dot(R, second_R);
-        for (int k = 0; k < 3; ++k) {
-            out[k] += node.charge*R[k]*inv_r3;
-            out[k] += 3.0*R[k]*pR*inv_r5 - node.dipole[k]*inv_r3;
-            out[k] += 7.5*R[k]*R_second_R*inv_r7
-                    - 1.5*(trace*R[k] + 2.0*second_R[k])*inv_r5;
-        }
+        AddFieldMultipole(node.center.data(), node.charge, node.dipole.data(),
+                          node.second.data(), r, out);
     }
 
     void AddTree(int node_index, const double r[3], double out[3]) const {
@@ -849,6 +806,7 @@ struct HDivFieldEvaluator::Impl {
     // INSIDE the source sum.  The chunked compensated reduction changes
     // the summation order, so a small-batch result may differ from the
     // same point evaluated inside a large batch at the last-ULP level.
+#ifndef RADIA_FIELD_SERIAL_ONLY
     void EvaluateBaseDirectParallel(const double r[3], double out[3]) const {
         const std::size_t total = atoms.size();
         const std::size_t threads = static_cast<std::size_t>(
@@ -897,6 +855,8 @@ struct HDivFieldEvaluator::Impl {
         }
         accumulated.Store(out);
     }
+
+#endif
 
     bool TreePassesProbe(const double* observations, std::size_t n_observations) const {
         const std::size_t count = std::min<std::size_t>(
@@ -1217,6 +1177,9 @@ std::shared_ptr<HDivFieldEvaluator> HDivFieldEvaluator::FromCurvedTet(
 
 void HDivFieldEvaluator::Evaluate(const double* observations, std::size_t n_observations,
                                   double* output, Algorithm algorithm) const {
+#ifdef RADIA_FIELD_SERIAL_ONLY
+    EvaluateSerial(observations, n_observations, output, algorithm);
+#else
     if (!observations || !output) {
         if (n_observations == 0) return;
         throw std::invalid_argument("HDivFieldEvaluator.field: null observation/output buffer");
@@ -1283,6 +1246,7 @@ void HDivFieldEvaluator::Evaluate(const double* observations, std::size_t n_obse
         output[3*index+1] = total[1];
         output[3*index+2] = total[2];
     });
+#endif
 }
 
 void HDivFieldEvaluator::EvaluateSerial(const double* observations, std::size_t n_observations,
@@ -1309,6 +1273,9 @@ void HDivFieldEvaluator::EvaluateSerial(const double* observations, std::size_t 
 void HDivFieldEvaluator::EvaluateGradient(
     const double* observations, std::size_t n_observations,
     double* gradient_out) const {
+#ifdef RADIA_FIELD_SERIAL_ONLY
+    EvaluateGradientSerial(observations, n_observations, gradient_out);
+#else
     if (!observations || !gradient_out) {
         if (n_observations == 0) return;
         throw std::invalid_argument(
@@ -1320,6 +1287,7 @@ void HDivFieldEvaluator::EvaluateGradient(
             m_impl->EvaluatePhysicalGradient(
                 observations+3*index, gradient_out+9*index);
         });
+#endif
 }
 
 void HDivFieldEvaluator::EvaluateGradientSerial(
@@ -1360,6 +1328,34 @@ const char* HDivFieldEvaluator::AlgorithmName(Algorithm algorithm) {
     if (algorithm == Algorithm::Auto) return "auto";
     if (algorithm == Algorithm::Direct) return "direct";
     return "tree";
+}
+
+FieldCloudSnapshot HDivFieldEvaluator::ExportCloudSnapshot() const {
+    if (m_impl->points.size() != m_impl->atoms.size())
+        throw std::invalid_argument("CUDA cloud boundary rejects analytic/curved element sources");
+    FieldCloudSnapshot packed;
+    packed.theta=m_impl->options.theta;
+    packed.order=m_impl->order;
+    for(const auto& point:m_impl->points) {
+        FieldCloudPoint p{};
+        std::copy(point.position.begin(),point.position.end(),p.position);
+        p.strength=point.strength; packed.points.push_back(p);
+    }
+    // BuildNode emits preorder. A subtree ends at its parent's next sibling.
+    packed.nodes.resize(m_impl->nodes.size());
+    auto pack = [&](auto&& self,int index,int escape)->void {
+        const auto& n=m_impl->nodes[index]; auto& p=packed.nodes[index];
+        p.begin=n.begin; p.end=n.end; p.left=n.left; p.escape=escape;
+        std::copy(n.center.begin(),n.center.end(),p.center);
+        std::copy(n.dipole.begin(),n.dipole.end(),p.dipole);
+        std::copy(n.second.begin(),n.second.end(),p.second);
+        p.radius=n.radius; p.charge=n.charge;
+        if(!n.IsLeaf()) { self(self,n.left,n.right); self(self,n.right,escape); }
+    };
+    pack(pack,0,-1);
+    for(const auto& image:m_impl->images)
+        packed.images.push_back({image.mask,image.sign,image.angle});
+    return packed;
 }
 
 std::size_t HDivFieldEvaluator::SourceCount() const { return m_impl->atoms.size(); }

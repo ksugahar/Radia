@@ -8,7 +8,9 @@
 #include <map>
 #include <vector>
 
+#ifndef RADIA_FIELD_SERIAL_ONLY
 #include "rad_parallel.h"
+#endif
 
 namespace rad_hdiv {
 
@@ -1458,7 +1460,11 @@ std::vector<double> TetHCurlReducedGram(
 
     std::vector<double> cell_blocks(
         static_cast<size_t>(n_cells)*n_modes*n_modes, 0.0);
+#ifdef RADIA_FIELD_SERIAL_ONLY
+    for(size_t target_index=0;target_index<static_cast<size_t>(n_cells);++target_index) {
+#else
     ngcore::ParallelFor(ngcore::IntRange(n_cells), [&](size_t target_index) {
+#endif
         const int target = static_cast<int>(target_index);
         double Vt[4][3];
         for (int a = 0; a < 4; ++a)
@@ -1526,7 +1532,11 @@ std::vector<double> TetHCurlReducedGram(
                     block[static_cast<size_t>(i)*n_modes + j] += weight*dot;
                 }
         }
+#ifdef RADIA_FIELD_SERIAL_ONLY
+    }
+#else
     });
+#endif
 
     std::vector<double> result(static_cast<size_t>(n_modes)*n_modes, 0.0);
     for (int target = 0; target < n_cells; ++target) {

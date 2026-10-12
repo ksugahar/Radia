@@ -41,6 +41,7 @@ param(
     [switch]$Test,
     [switch]$Verbose,
     [switch]$RadiaOnly,
+    [switch]$FieldCudaOnly,       # isolated retained-cloud RadFld CUDA gateway
     [switch]$AmsCudaOnly,         # experimental AMS snapshot adapter + CUDA MEX
     [switch]$AxiFemOnly,           # configure + build ONLY axifem (fast C++ iteration)
     [switch]$CudaMexOnly,          # isolated CUDA-only assembled-operator gateway
@@ -52,6 +53,17 @@ param(
 $ErrorActionPreference = "Stop"
 if ($args.Count -gt 0) {
     throw "Unsupported build arguments: $($args -join ' '). Radia CPU uses -RadiaOnly; GPU uses -CudaMexOnly."
+}
+
+if ($FieldCudaOnly) {
+    if ($RadiaOnly -or $AxiFemOnly -or $AmsCudaOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test) {
+        throw '-FieldCudaOnly is an isolated experimental build; incompatible options supplied'
+    }
+    $fieldBuildArgs = @()
+    if ($RequireNativeProvenance) { $fieldBuildArgs += '--require-clean-source' }
+    & python (Join-Path $PSScriptRoot 'packages/radia-gpu/tools/build_field_cuda.py') @fieldBuildArgs
+    if ($LASTEXITCODE -ne 0) { throw 'RadFld CUDA experimental build failed' }
+    return
 }
 
 if ($AmsCudaOnly) {
