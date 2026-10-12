@@ -3,6 +3,8 @@
 #include "gpu/mxGPUArray.h"
 #include "ih_resident_kernels.cuh"
 #include "ih_bicgstab_kernels.cuh"
+#include "ih_complex_solver.cuh"
+#include "ih_thermal_kernels.cuh"
 #include <vector>
 #include <stdexcept>
 #include <cmath>
@@ -25,7 +27,7 @@ std::vector<cuDoubleComplex> complexValues(const mxArray* a,size_t count){
 void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** in){
  try{
     mxInitGPU();
-    if(nrhs!=4||nlhs!=3)throw std::runtime_error("Expected A(3x3),P(6x3),x(3),current scalar and three outputs");
+    if(nrhs!=4||nlhs!=4)throw std::runtime_error("Expected A(3x3),P(6x3),x(3),current scalar and four outputs");
     if(mxGetM(in[0])!=3||mxGetN(in[0])!=3||mxGetM(in[1])!=6||mxGetN(in[1])!=3)throw std::runtime_error("Invalid matrix shape");
     if(!mxIsDouble(in[3])||mxIsComplex(in[3])||mxGetNumberOfElements(in[3])!=1||!std::isfinite(mxGetScalar(in[3])))throw std::runtime_error("Invalid drive");
     auto ac=complexValues(in[0],9),pc=complexValues(in[1],18),x=complexValues(in[2],3);
@@ -46,9 +48,36 @@ void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** in){
         quadraticLoss<<<1,32>>>(pv,dy.get<cuDoubleComplex>(),dw.get<double>(),2,3,dq.get<double>());
     }
     check(cudaGetLastError());check(cudaDeviceSynchronize());
-    out[0]=mxCreateDoubleMatrix(3,1,mxCOMPLEX);out[1]=mxCreateDoubleMatrix(2,1,mxREAL);
-    std::vector<cuDoubleComplex> y(3);check(cudaMemcpy(y.data(),dy.p,3*sizeof(cuDoubleComplex),cudaMemcpyDeviceToHost));
+    ComplexSolver eddy(av);
+    check(cudaMemcpyAsync(eddy.rhs(),dy.p,3*sizeof(cuDoubleComplex),cudaMemcpyDeviceToDevice,eddy.stream()));
+    auto eddyResult=eddy.solve(1e-12,200);
+    quadraticLoss<<<1,32,0,eddy.stream()>>>(pv,eddy.solution(),dw.get<double>(),2,3,dq.get<double>());
+    check(cudaStreamSynchronize(eddy.stream()));
+    Buffer dk,dcv,dmap,dmr,dmc,dload,dtemp,done,dambient,dsystem,dcandidate,dbad;
+    std::vector<double> k={2.,-1.,0.,-1.,2.,-1.,0.,-1.,2.},cv(9,0.),sys(9);
+    std::vector<cuDoubleComplex> system(9);
+    for(int i=0;i<3;++i)cv[3*i+i]=.1;
+    for(int i=0;i<9;++i)system[i]=make_cuDoubleComplex((i%4==0?1.:0.)+.01*k[i]+.02*cv[i],0.);
+    dk.put(k);dcv.put(cv);dsystem.put(system);dmap.put(std::vector<double>{1.,0.,.5,.5,0.,1.});
+    dmr.put(std::vector<int32_t>{0,2,4,6});dmc.put(std::vector<int32_t>{0,1,0,1,0,1});
+    dload.put(std::vector<double>(3));dtemp.put(std::vector<double>{300.,301.,302.});
+    done.put(std::vector<double>(3,1.));dambient.put(std::vector<double>{293.15});
+    dcandidate.put(std::vector<double>(3));dbad.put(std::vector<int>{0});
+    ComplexCSRView thermalMatrix{3,dar.get<int32_t>(),dc.get<int32_t>(),dsystem.get<cuDoubleComplex>()};
+    ComplexSolver thermal(thermalMatrix);
+    RealCSRView kv{3,dar.get<int32_t>(),dc.get<int32_t>(),dk.get<double>()};
+    RealCSRView cvv{3,dar.get<int32_t>(),dc.get<int32_t>(),dcv.get<double>()};
+    RealCSRView loadMap{3,dmr.get<int32_t>(),dmc.get<int32_t>(),dmap.get<double>()};
+    thermalLoad<<<1,32,0,thermal.stream()>>>(loadMap,dq.get<double>(),dload.get<double>());
+    thermalIncrementRHS<<<1,32,0,thermal.stream()>>>(kv,cvv,dload.get<double>(),dtemp.get<double>(),done.get<double>(),dambient.get<double>(),.01,1.,2.,thermal.rhs());
+    auto thermalResult=thermal.solve(1e-12,200);
+    thermalCandidate<<<1,32,0,thermal.stream()>>>(dtemp.get<double>(),thermal.solution(),dcandidate.get<double>(),dbad.get<int>(),3);
+    int invalid=0;check(cudaMemcpyAsync(&invalid,dbad.p,sizeof(int),cudaMemcpyDeviceToHost,thermal.stream()));
+    check(cudaStreamSynchronize(thermal.stream()));if(invalid)throw std::runtime_error("Invalid thermal candidate");
+    out[0]=mxCreateDoubleMatrix(3,1,mxCOMPLEX);out[1]=mxCreateDoubleMatrix(2,1,mxREAL);out[3]=mxCreateDoubleMatrix(3,1,mxREAL);
+    std::vector<cuDoubleComplex> y(3);check(cudaMemcpy(y.data(),eddy.solution(),3*sizeof(cuDoubleComplex),cudaMemcpyDeviceToHost));
     check(cudaMemcpy(mxGetDoubles(out[1]),dq.p,2*sizeof(double),cudaMemcpyDeviceToHost));
+    check(cudaMemcpy(mxGetDoubles(out[3]),dcandidate.p,3*sizeof(double),cudaMemcpyDeviceToHost));
     auto* result=mxGetComplexDoubles(out[0]);for(int i=0;i<3;++i){result[i].real=cuCreal(y[i]);result[i].imag=cuCimag(y[i]);}
     // Identity-system first-correction convergence: omega is deliberately
     // not formed when s=0. This checks the resident BiCGStab stage contract.
@@ -71,6 +100,10 @@ void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** in){
     check(cudaMemcpy(&state,ds.p,sizeof(state),cudaMemcpyDeviceToHost));
     if(state.status!=1||state.iteration!=1)throw std::runtime_error("BiCGStab first-correction transition failed");
     for(int i=0;i<3;++i)if(cuCabs(cuCsub(solution[i],x[i]))>1e-12)throw std::runtime_error("BiCGStab identity correction failed");
-    out[2]=mxCreateDoubleScalar(10);
+    const char* fields[]={"resident_repeats","eddy_true_residual","thermal_true_residual"};
+    out[2]=mxCreateStructMatrix(1,1,3,fields);
+    mxSetField(out[2],0,fields[0],mxCreateDoubleScalar(10));
+    mxSetField(out[2],0,fields[1],mxCreateDoubleScalar(eddyResult.trueRelativeResidual));
+    mxSetField(out[2],0,fields[2],mxCreateDoubleScalar(thermalResult.trueRelativeResidual));
  }catch(const std::exception& e){mexErrMsgIdAndTxt("radia:ih:cudaSmoke","%s",e.what());}
 }
