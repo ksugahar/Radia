@@ -74,6 +74,12 @@ public:
             cudaCheck(cudaGraphInstantiate(&executable_,graph_,nullptr,nullptr,0));
         } catch(...) {release();throw;}
     }
+    // Only the checked owner may call this after CUDA confirms a device reset.
+    // Stale device addresses must never be freed into a new CUDA context.
+    void abandonAfterDeviceReset() noexcept {
+        stream_=nullptr;blas_=nullptr;graph_=nullptr;executable_=nullptr;
+        scalar_=nullptr;workspace_=nullptr;
+    }
     ~ComplexSolver(){release();}
     cudaStream_t stream()const{return stream_;}
     cuDoubleComplex* rhs(){return rhs_;}

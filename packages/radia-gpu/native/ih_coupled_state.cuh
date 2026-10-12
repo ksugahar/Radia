@@ -65,6 +65,16 @@ public:
             cudaCheck(cudaEventCreateWithFlags(&heatReady_,cudaEventDisableTiming));reset();
         }catch(...){release();throw;}
     }
+    void abandonAfterDeviceReset() noexcept {
+        if(eddy_)eddy_->abandonAfterDeviceReset();
+        if(thermal_)thermal_->abandonAfterDeviceReset();
+        heat_=candidateHeat_=load_=temperature_=candidate_=controls_=nullptr;
+        invalid_=nullptr;heatReady_=nullptr;
+    }
+    std::size_t ownedBytes()const {
+        return eddy_->ownedBytes()+thermal_->ownedBytes()+
+            (2*op_.heatSamples+3*op_.thermalSystem.rows+2)*sizeof(double)+sizeof(int);
+    }
     ~CoupledState(){release();}
     void reset() {
         cudaCheck(cudaMemcpyAsync(temperature_,op_.initialTemperature,op_.thermalSystem.rows*sizeof(double),cudaMemcpyDeviceToDevice,thermal_->stream()));
