@@ -24,7 +24,7 @@ for sample=1:numel(routes)
             J=J+C{k}'*((w.*nu).*C{k});
         end
         J=J+2*s.gamma*(CB'*(w.*CB));r(~free)=0;
-        J(~free,:)=0;J(:,~free)=0;
+        rawValues=J(index);J(~free,:)=0;J(:,~free)=0;
         relative=gather(norm(r)/norm(rhs));
         fprintf('route=%d outer=%d residual=%.3e\n',route,outer,relative);
         if relative<=1e-9;break;end
@@ -33,11 +33,18 @@ for sample=1:numel(routes)
         op.values=J(index);
         rebuild=isempty(hierarchy)||route==1||(route==3&&rebuildNext);
         if rebuild
-            wait(d);t=tic;model=s.model;model.A.values=gather(op.values);
+            wait(d);t=tic;model=s.model;model.A.values=gather(rawValues);
             [hierarchy,~]=radia.gpu.prepareAMS(model,SetupThreads=1);
             wait(d);setupSeconds=setupSeconds+toc(t);builds=builds+1;firstIterations=0;
         end
-        wait(d);t=tic;[delta,info]=radia.gpu.amsPCG(hierarchy,-r,1e-10,2000,false,false,op);
+        wait(d);t=tic;
+        try
+            [delta,info]=radia.gpu.amsPCG(hierarchy,-r,1e-10,2000,false,false,op);
+        catch exception
+            debugHierarchy=download(hierarchy);debugOperator=download(op);debugRhs=gather(-r);
+            save([outputPath '.failure.mat'],'debugHierarchy','debugOperator','debugRhs','outer','route');
+            rethrow(exception);
+        end
         wait(d);solveSeconds=solveSeconds+toc(t);
         if firstIterations==0;firstIterations=info.iterations;end
         rebuildNext=info.iterations>max(30,2*firstIterations);
@@ -61,4 +68,15 @@ end
 function value=magneticEnergy(x,C,w,M,rhs,nu0,gamma)
 b2=(C{1}*x).^2+(C{2}*x).^2+(C{3}*x).^2;
 value=gather(sum(w.*(0.5*nu0*b2+0.25*gamma*b2.^2))+0.5*x'*M*x-rhs'*x);
+end
+
+function out=download(value)
+if isa(value,'gpuArray');out=gather(value);
+elseif isstruct(value)
+    out=value;names=fieldnames(value);
+    for k=1:numel(names);out.(names{k})=download(value.(names{k}));end
+elseif iscell(value)
+    out=cell(size(value));for k=1:numel(value);out{k}=download(value{k});end
+else;out=value;
+end
 end

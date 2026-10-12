@@ -603,6 +603,8 @@ public:
     /// Build coarse matrices with the native symbolic + numeric Galerkin product
     /// instead of SparseMatrix::Restrict (same matrices up to summation order).
     void SetNativeGalerkin(bool on) { native_galerkin_ = on; }
+    // Only a caller with a known constant nullspace may request gauge fixing.
+    void SetConstantNullspace(bool on) { constant_nullspace_ = on; }
     /// V-cycle residuals read float32 mirrors of the level matrices (set before Setup).
     void SetMixedPrecision(bool on) { mixed_precision_ = on; }
     /// Lean coarse levels (set before Setup): stop coarsening on a level of at
@@ -701,6 +703,7 @@ private:
     mutable int setup_workers_ = 0;
     mutable std::vector<double> dual_level_s_;
     double stall_ratio_ = 0.0;   // 0: coarsen down to min_coarse (default)
+    bool constant_nullspace_ = false;
     int dense_coarse_max_ = 0;   // 0: sparse Cholesky on the coarsest level (default)
     int refresh_count_ = 0;
     bool native_galerkin_ = false;
@@ -1256,7 +1259,38 @@ private:
     void SparseCoarsest(Level& c) {
         std::vector<double>().swap(c.dense_inv);
         c.A->SetInverseType("sparsecholesky");
-        c.inv = c.A->InverseMatrix(shared_ptr<BitArray>(nullptr));
+        shared_ptr<BitArray> coarse_free;
+        if (constant_nullspace_) {
+            // G annihilates constants. Pin one unknown in each connected
+            // zero-row-sum component instead of factoring a singular matrix.
+            // This chooses a potential gauge; its gradient is unchanged.
+            coarse_free = make_shared<BitArray>(c.ndof);
+            coarse_free->Set();
+            std::vector<char> seen(c.ndof, 0);
+            for (int seed = 0; seed < c.ndof; ++seed) {
+                if (seen[seed]) continue;
+                std::vector<int> component{seed};seen[seed] = 1;
+                bool constant_kernel = true;
+                for (size_t head = 0; head < component.size(); ++head) {
+                    int i = component[head];
+                    auto cols = c.A->GetRowIndices(i);
+                    auto vals = c.A->GetRowValues(i);
+                    double sum = 0, scale = 0;
+                    for (int k = 0; k < cols.Size(); ++k) {
+                        sum += vals[k];scale += std::abs(vals[k]);
+                        int j = cols[k];
+                        if (j != i && vals[k] != 0 && !seen[j]) {
+                            seen[j] = 1;component.push_back(j);
+                        }
+                    }
+                    if (!std::isfinite(sum) || !std::isfinite(scale))
+                        throw std::runtime_error("AMG coarse matrix is nonfinite");
+                    if (std::abs(sum) > 1e-10 * scale) constant_kernel = false;
+                }
+                if (constant_kernel) coarse_free->Clear(seed);
+            }
+        }
+        c.inv = c.A->InverseMatrix(coarse_free);
     }
 
     /// In-place Gauss-Jordan inverse without pivoting (the coarse matrices are
