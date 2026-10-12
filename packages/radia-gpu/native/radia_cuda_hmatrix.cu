@@ -30,6 +30,7 @@ std::vector<double> rowNumbers(const mxArray* a,std::size_t width){
     auto col=numbers(a);if(mxGetN(a)!=width)throw std::invalid_argument("Curved row-major record width mismatch");
     std::vector<double> result(col.size());const auto rows=mxGetM(a);for(std::size_t r=0;r<rows;++r)for(std::size_t c=0;c<width;++c)result[r*width+c]=col[r+rows*c];return result;
 }
+std::string text(const mxArray* a);
 CurvedBlock curvedBlock(const mxArray* cfg){
     if(!mxIsStruct(cfg)||mxGetNumberOfElements(cfg)!=1)throw std::invalid_argument("Expected scalar curved configuration");
     const std::vector<std::string> allowed={"schema_version","geometry_mode","cell_nodes","face_nodes","cell_vertices","face_vertices","host","kind","expo","tet_rule","tri_rule","gl","gw","charge_map"};
