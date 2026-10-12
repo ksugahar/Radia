@@ -4,6 +4,7 @@ import argparse
 import importlib.metadata as md
 import json
 from pathlib import Path
+import os
 import platform
 import socket
 import statistics
@@ -56,7 +57,7 @@ def main(args):
     record={'schema':'radia.ams-cuda-validation.v1','host':socket.gethostname(),'python':sys.executable,
         'platform':platform.platform(),'versions':{p:md.version(p) for p in ('ngsolve','numpy','scipy','h5py')},
         'threads':args.threads,'taskmanager_used':False,'precision':'FP64','cases':[],
-        'scope':'experimental assembled-operator AMS; CPU-owned setup, GPU-owned application and coarse solves',
+        'scope':'experimental assembled-operator AMS; MATLAB/mexcuda-owned setup and GPU solves; Python independent CPU oracle',
         **source_identity(root,args.source_manifest),
         'build':json.loads((binary/'build.json').read_text()),
         'execution_mode':'cpu-only' if args.cpu_only else 'cpu-gpu-parity','accepted':False}
@@ -67,6 +68,11 @@ def main(args):
     try:
         if not args.cpu_only:
             import matlab.engine
+            import netgen
+            net=Path(netgen.__file__).parent
+            os.environ['PATH']=os.pathsep.join([str(Path(sys.prefix)/'bin'),str(net),
+                str(net.parent/'ngsolve_openblas'),str(net.parent/'ngsolve.libs'),
+                str(net.parent/'netgen_mesher.libs'),str(Path(sys.base_prefix)),os.environ['PATH']])
             record['versions']['matlabengine']=md.version('matlabengine')
             timer=time.perf_counter();eng=matlab.engine.start_matlab('-nodesktop -nosplash');record['matlab_start_seconds']=time.perf_counter()-timer
             eng.addpath(str(Path(__file__).parent),nargout=0)

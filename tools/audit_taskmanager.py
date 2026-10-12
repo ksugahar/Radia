@@ -61,6 +61,7 @@ SERIAL_GPU_ROUTES = frozenset({
     "validation_test/ams_cuda/run.py",
     "validation_test/ams_cuda/setup_benchmark.py",
     "validation_test/ams_cuda/native_setup_validation.py",
+    "validation_test/ams_cuda/graph_validation.py",
     "validation_test/radia_gpu/export_vol_reference.py",
     "validation_test/ngsolve_cuda_mex/run_poisson.py",
 })
