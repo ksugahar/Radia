@@ -1,3 +1,4 @@
+#include <vector>
 /*-------------------------------------------------------------------------
 *
 * File name:      rad_biot_savart_filaments.cpp
