@@ -20,6 +20,9 @@ tooling's SSH, MATLAB and filesystem assumptions.
 # validation_test/<suite>/results/candidate_<sha9>/<host>/, in gate order.
 RELEASE_ACCEPTANCE_HOSTS = ("lab", "100")
 
+# Public evidence names describe execution roles, never machine identities.
+PUBLIC_RELEASE_ACCEPTANCE_ROLES = {"lab": "validation", "100": "build"}
+
 # Evidence directories use deployment roles; JUnit records the OS hostname.
 # Verified SSH roles on 2026-10-11: 102 -> INTEL11, 100 -> T7920.
 # Historical records used LAB -> lab and 100 -> INTEL11. The promotion

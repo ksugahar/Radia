@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import hmac
 import importlib.util
 import json
 import math
@@ -17,6 +18,7 @@ import zipfile
 
 try:
     from release_acceptance import RELEASE_ACCEPTANCE_HOSTS
+    from release_acceptance import PUBLIC_RELEASE_ACCEPTANCE_ROLES
     from release_acceptance import RELEASE_ACCEPTANCE_HOSTNAMES
     from release_acceptance import CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES
     from release_acceptance import RELEASE_ACCEPTANCE_HOST_LABELS
@@ -29,6 +31,7 @@ except ModuleNotFoundError:  # Loaded by path in unit tests rather than run as a
     CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES = _acceptance_module.CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES
     RELEASE_ACCEPTANCE_HOST_LABELS = _acceptance_module.RELEASE_ACCEPTANCE_HOST_LABELS
     RELEASE_ACCEPTANCE_HOSTS = _acceptance_module.RELEASE_ACCEPTANCE_HOSTS
+    PUBLIC_RELEASE_ACCEPTANCE_ROLES = _acceptance_module.PUBLIC_RELEASE_ACCEPTANCE_ROLES
 
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 HASH = re.compile(r"[0-9a-f]{64}\Z")
@@ -155,7 +158,87 @@ def verify_context(api, context, run, version):
     require(obj["type"] == "commit" and obj["sha"] == run["head_sha"], "Remote tag moved")
 
 
-def verify_host(acceptance, full, junit, identity, host):
+def _json_digest(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"),
+                                     allow_nan=False).encode()).hexdigest()
+
+
+def _xml_digest(value):
+    return hashlib.sha256(ET.canonicalize(value.decode()).encode()).hexdigest()
+
+
+def verify_public_attestation(acceptance, full, junit, host):
+    """Check the maintainer's private-machine verification and public byte binding.
+
+    Like the original committed acceptance records, this is a maintainer
+    attestation, not remote hardware authentication. A release-private HMAC key
+    gives the same physical machine one opaque token across both target roles.
+    Raw records and the key remain in private release storage.
+    """
+    proof = acceptance.get("private_runtime_verification", {})
+    require(proof.get("schema") == "radia.private-runtime-verification.v1",
+            "Missing private runtime verification")
+    require(proof.get("execution_role") == PUBLIC_RELEASE_ACCEPTANCE_ROLES[host]
+            and proof.get("current_machine_verified") is True,
+            "Wrong or unverified execution role")
+    for key in ("verification_batch", "machine_token"):
+        require(isinstance(proof.get(key), str) and HASH.fullmatch(proof[key]),
+                "Invalid private verification token")
+    raw = proof.get("raw_records_sha256", {})
+    require(set(raw) == {"acceptance", "full6", "focused"}
+            and all(isinstance(v, str) and HASH.fullmatch(v) for v in raw.values()),
+            "Missing raw evidence hashes")
+    clean = {k: v for k, v in acceptance.items() if k != "private_runtime_verification"}
+    require(proof.get("public_records_sha256") == dict(
+        acceptance=_json_digest(clean), full6=_json_digest(full), focused=_xml_digest(junit)),
+        "Public evidence differs from verified export")
+    require(not any(k.lower() in {"hostname", "host", "host_name"}
+                    for node in ET.fromstring(junit).iter() for k in node.attrib),
+            "Public XML contains private host metadata")
+    return proof
+
+
+def prepare_public_host(acceptance, full, junit, identity, host, batch_key):
+    """Verify raw records on the current fleet before removing identifying data."""
+    require(len(batch_key) >= 32, "Private verification key is too short")
+    verify_host(acceptance, full, junit, identity, host)
+    tree = ET.fromstring(junit)
+    suite = tree if tree.tag == "testsuite" else tree.find("testsuite")
+    hostname = suite.get("hostname", "").lower()
+    require(hostname == CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES[host],
+            "Current acceptance host required")
+    a, f = json.loads(json.dumps(acceptance)), json.loads(json.dumps(full))
+    require("private_runtime_verification" not in a, "Expected original raw acceptance")
+    f["radia"] = "<installed-wheel>/radia/__init__.py"
+    for node in tree.iter():
+        for key in list(node.attrib):
+            if key.lower() in {"hostname", "host", "host_name"}:
+                del node.attrib[key]
+    public_xml = ET.tostring(tree, encoding="utf-8", xml_declaration=True)
+    a["private_runtime_verification"] = dict(
+        schema="radia.private-runtime-verification.v1",
+        execution_role=PUBLIC_RELEASE_ACCEPTANCE_ROLES[host], current_machine_verified=True,
+        verification_batch=hashlib.sha256(batch_key).hexdigest(),
+        machine_token=hmac.new(batch_key, hostname.encode(), hashlib.sha256).hexdigest(),
+        raw_records_sha256=dict(acceptance=_json_digest(acceptance), full6=_json_digest(full),
+                               focused=_xml_digest(junit)),
+        public_records_sha256=dict(acceptance=_json_digest(a), full6=_json_digest(f),
+                                  focused=_xml_digest(public_xml)))
+    verify_host(a, f, public_xml, identity, host, public=True)
+    return a, f, public_xml
+
+
+def verify_private_batch(proofs):
+    require(len(proofs) == len(RELEASE_ACCEPTANCE_HOSTS)
+            and {p["execution_role"] for p in proofs} == set(PUBLIC_RELEASE_ACCEPTANCE_ROLES.values()),
+            "All execution roles required")
+    require(len({p["verification_batch"] for p in proofs}) == 1,
+            "Acceptance records were not verified in one private batch")
+    require(len({p["machine_token"] for p in proofs}) == len(RELEASE_ACCEPTANCE_HOSTS),
+            "Distinct physical acceptance machines required")
+
+
+def verify_host(acceptance, full, junit, identity, host, *, public=False):
     require(acceptance.get("passed") is True, "Host did not pass")
     for key, value in identity.items():
         require(acceptance.get(key) == value, f"Host identity mismatch: {key}")
@@ -197,8 +280,11 @@ def verify_host(acceptance, full, junit, identity, host):
     require(len(suites) == 1 and suites[0].get("tests") == str(len(cases))
             and all(suites[0].get(k) == "0" for k in ("failures", "errors", "skipped")),
             "Focused suite totals mismatch")
-    hostnames = RELEASE_ACCEPTANCE_HOSTNAMES.get(host, {host})
-    require(suites[0].get("hostname", "").lower() in hostnames, "Wrong acceptance host")
+    if public:
+        verify_public_attestation(acceptance, full, junit, host)
+    else:
+        hostnames = RELEASE_ACCEPTANCE_HOSTNAMES.get(host, {host})
+        require(suites[0].get("hostname", "").lower() in hostnames, "Wrong acceptance host")
     require(all(math.isfinite(float(node.get("time", "nan")))
                 and float(node.get("time", "nan")) >= 0 for node in suites + cases),
             "Nonfinite or invalid focused duration")
@@ -251,24 +337,34 @@ def verify_artifact(api, run, commit, wheel_dir, context_dir, expected_hash):
     # It used to name two hosts of its own, one of which is not an acceptance
     # target at all, and would have published on two of the four.
     missing = []
+    public = tuple(map(int, version.split("."))) >= (5, 3, 1)
+    private_proofs = []
     for host in RELEASE_ACCEPTANCE_HOSTS:
+        directory = PUBLIC_RELEASE_ACCEPTANCE_ROLES[host] if public else host
         try:
-            acceptance = strict_json(api.file(f"{prefix}/{host}/acceptance.json", commit))
-            full = strict_json(api.file(f"{prefix}/{host}/full6.json", commit))
-            focused = api.file(f"{prefix}/{host}/focused.xml", commit)
+            acceptance = strict_json(api.file(f"{prefix}/{directory}/acceptance.json", commit))
+            full = strict_json(api.file(f"{prefix}/{directory}/full6.json", commit))
+            focused = api.file(f"{prefix}/{directory}/focused.xml", commit)
         except Exception as exc:  # noqa: BLE001 -- report every missing host, then fail
             missing.append(f"{host} ({type(exc).__name__})")
             continue
-        verify_host(acceptance, full, focused, identity, host)
-        hostname = ET.fromstring(focused).find(".//testsuite").get("hostname").lower()
-        require(hostname == CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES[host],
-                "Current acceptance host required")
+        if public:
+            verify_host(acceptance, full, focused, identity, host, public=True)
+            private_proofs.append(acceptance["private_runtime_verification"])
+        else:
+            verify_host(acceptance, full, focused, identity, host)
+            hostname = ET.fromstring(focused).find(".//testsuite").get("hostname").lower()
+            require(hostname == CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES[host],
+                    "Current acceptance host required")
     require(not missing,
             f"Acceptance evidence missing for {', '.join(missing)}; release-quad "
             f"requires all of {', '.join(RELEASE_ACCEPTANCE_HOSTS)} at {prefix}")
+    if public:
+        verify_private_batch(private_proofs)
     # MATLAB/Simulink acceptance belongs to the independent radia-gpu publisher.
-    return dict(identity, acceptance_commit=commit,
-                hosts=list(RELEASE_ACCEPTANCE_HOSTS), passed=True)
+    roles = ({"execution_roles": list(PUBLIC_RELEASE_ACCEPTANCE_ROLES.values())} if public
+             else {"hosts": list(RELEASE_ACCEPTANCE_HOSTS)})
+    return dict(identity, acceptance_commit=commit, **roles, passed=True)
 
 
 def main():

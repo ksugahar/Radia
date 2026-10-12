@@ -130,6 +130,84 @@ def test_current_and_historical_os_hostnames(host, hostname):
             gate.verify_host(a, f, actual, identity, wrong_target)
 
 
+def private_current_evidence(host):
+    a, f, xml, identity = evidence()
+    a["version"] = f["version"] = identity["version"] = "5.3.1"
+    tree = ET.fromstring(xml)
+    suite = tree.find(".//testsuite")
+    suite.set("hostname", gate.CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES[host])
+    names = {case.get("name") for case in suite.findall("testcase")}
+    for name in gate.STRENGTHENED_TESTS - names:
+        ET.SubElement(suite, "testcase", name=name, time="0.0")
+    suite.set("tests", str(len(gate.STRENGTHENED_TESTS)))
+    return a, f, ET.tostring(tree), identity
+
+
+def test_public_export_preserves_numbers_and_passes_privacy_policy():
+    spec = importlib.util.spec_from_file_location("public_lint", ROOT / "tools/policy_lint.py")
+    lint = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(lint)
+    proofs = []
+    for host in gate.RELEASE_ACCEPTANCE_HOSTS:
+        a, f, xml, identity = private_current_evidence(host)
+        public_a, public_f, public_xml = gate.prepare_public_host(a, f, xml, identity, host, b"x" * 32)
+        gate.verify_host(public_a, public_f, public_xml, identity, host, public=True)
+        assert public_f["rows"] == f["rows"]
+        assert {k: v for k, v in public_a.items() if k != "private_runtime_verification"} == a
+        prefix = "validation_test/results/" + gate.PUBLIC_RELEASE_ACCEPTANCE_ROLES[host]
+        for name, content in (("acceptance.json", json.dumps(public_a)),
+                              ("full6.json", json.dumps(public_f)), ("focused.xml", public_xml.decode())):
+            assert not lint.public_runtime_identity_hits(prefix + "/" + name, content)
+        proofs.append(public_a["private_runtime_verification"])
+    gate.verify_private_batch(proofs)
+    assert proofs[0]["machine_token"] != proofs[1]["machine_token"]
+
+
+def test_public_export_rejects_historical_machine_for_current_role():
+    a, f, xml, identity = private_current_evidence("100")
+    tree = ET.fromstring(xml)
+    tree.find(".//testsuite").set("hostname", "INTEL11")
+    with pytest.raises(ValueError, match="Current acceptance host required"):
+        gate.prepare_public_host(a, f, ET.tostring(tree), identity, "100", b"x" * 32)
+
+
+@pytest.mark.parametrize("changed", ["acceptance", "full6", "focused", "unverified", "missing"])
+def test_public_gate_rejects_changed_or_unverified_export(changed):
+    a, f, xml, identity = private_current_evidence("lab")
+    a, f, xml = gate.prepare_public_host(a, f, xml, identity, "lab", b"x" * 32)
+    if changed == "acceptance":
+        a["steps"][0]["elapsed_s"] = a["steps"][0].get("elapsed_s", 0) + 1
+    elif changed == "full6":
+        f["rows"][0]["seconds"] += 1
+    elif changed == "focused":
+        tree = ET.fromstring(xml)
+        tree.find(".//testcase").set("time", "123.0")
+        xml = ET.tostring(tree)
+    elif changed == "unverified":
+        a["private_runtime_verification"]["current_machine_verified"] = False
+    else:
+        del a["private_runtime_verification"]
+    with pytest.raises(ValueError):
+        gate.verify_host(a, f, xml, identity, "lab", public=True)
+
+
+@pytest.mark.parametrize("changed", ["machine_token", "verification_batch", "missing_role"])
+def test_public_gate_requires_distinct_machines_in_one_complete_batch(changed):
+    proofs = []
+    for host in gate.RELEASE_ACCEPTANCE_HOSTS:
+        a, f, xml, identity = private_current_evidence(host)
+        a, _, _ = gate.prepare_public_host(a, f, xml, identity, host, b"x" * 32)
+        proofs.append(a["private_runtime_verification"])
+    if changed == "machine_token":
+        proofs[1][changed] = proofs[0][changed]
+    elif changed == "verification_batch":
+        proofs[1][changed] = "a" * 64
+    else:
+        proofs.pop()
+    with pytest.raises(ValueError):
+        gate.verify_private_batch(proofs)
+
+
 @pytest.mark.parametrize("key", ["residual", "linear_parity", "order"])
 def test_bool_is_not_a_numerical_result(key):
     a, f, x, identity = evidence()
@@ -194,6 +272,41 @@ def test_publication_has_no_automatic_bypass():
     assert "environment: pypi" in publish
     assert "actions/checkout" not in publish
     assert "Build" not in publish
+
+
+def test_public_exact_wheel_end_to_end(tmp_path):
+    wheel_dir = tmp_path / "dist"
+    wheel_dir.mkdir()
+    wheel = wheel_dir / "radia-5.3.1-cp312-cp312-win_amd64.whl"
+    with zipfile.ZipFile(wheel, "w") as z:
+        z.writestr("radia/__init__.py", '__version__ = "5.3.1"\n')
+        z.writestr("radia/_radia_pybind.pyd", b"native")
+        z.writestr("radia/radia_motor_rom.dll", b"motor")
+    digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
+    api = FakeAPI()
+    api.records["git/ref/tags/v5.3.1"] = api.records["git/ref/tags/v5.0.0"]
+    run = gate.verify_run(api, 9, "b" * 40)
+    ctx = dict(schema="radia.ci-release-context.v1", run_id=9, sha="a" * 40,
+               ref_type="tag", ref="refs/tags/v5.3.1", release_tags=["v5.3.1"])
+    (tmp_path / "ci-release-context.json").write_text(json.dumps(ctx))
+    records = {}
+    for host, role in gate.PUBLIC_RELEASE_ACCEPTANCE_ROLES.items():
+        a, f, x, identity = private_current_evidence(host)
+        identity.update(wheel_sha256=digest, native_sha256=hashlib.sha256(b"native").hexdigest(),
+                        source_commit="a" * 40, ci_run=9, sources_verified=1)
+        a.update(identity)
+        a, f, x = gate.prepare_public_host(a, f, x, identity, host, b"x" * 32)
+        records[role] = {"acceptance.json": json.dumps(a).encode(),
+                         "full6.json": json.dumps(f).encode(), "focused.xml": x}
+
+    def read_file(path, commit):
+        assert commit == "b" * 40
+        role, name = path.split("/")[-2:]
+        return records[role][name]
+
+    api.file = read_file
+    report = gate.verify_artifact(api, run, "b" * 40, wheel_dir, tmp_path, digest)
+    assert report["passed"] and report["execution_roles"] == ["validation", "build"]
 
 
 def test_exact_wheel_end_to_end(tmp_path):
@@ -346,15 +459,19 @@ def test_cpu_promotion_does_not_request_matlab_acceptance(monkeypatch, tmp_path)
         archive.writestr("radia/radia_motor_rom.dll", b"motor")
     (tmp_path / "ci-release-context.json").write_text("{}")
     monkeypatch.setattr(gate, "verify_context", lambda *args: None)
-    monkeypatch.setattr(gate, "verify_host", lambda *args: None)
+    monkeypatch.setattr(gate, "verify_host", lambda *args, **kwargs: None)
 
     class CPUAPI:
         def file(self, path, commit):
             assert path.rsplit("/", 1)[-1] in {"acceptance.json", "full6.json", "focused.xml"}
+            role = path.split("/")[-2]
+            assert role in gate.PUBLIC_RELEASE_ACCEPTANCE_ROLES.values()
             if path.endswith("/focused.xml"):
-                host = path.split("/")[-2]
-                hostname = gate.CURRENT_RELEASE_ACCEPTANCE_HOSTNAMES[host]
-                return f'<testsuites><testsuite hostname="{hostname}"/></testsuites>'.encode()
+                return b'<testsuites><testsuite/></testsuites>'
+            if path.endswith("/acceptance.json"):
+                return json.dumps({"private_runtime_verification": dict(
+                    execution_role=role, verification_batch="a" * 64,
+                    machine_token=hashlib.sha256(role.encode()).hexdigest())}).encode()
             return b"{}"
 
     report = gate.verify_artifact(CPUAPI(), {"head_sha": "a" * 40, "id": 9},
