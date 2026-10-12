@@ -171,3 +171,16 @@ a shared algorithm defect worth fixing. Variable-DOF leaf rules require their
 own acceptance. Full adaptive assembly, full CPU native build, HDiv-MMM solves,
 true residuals and whole-run performance remain pending. This supersedes the
 cyclic-search failure, without deleting its original evidence.
+
+## Exact rank-budget promotion bridge
+
+`analytic_aca_leaf` retains the existing ACA+ diagnostic inputs and CPU
+rank-budget promotion condition. A saturated rank below both dimensions
+is discarded and the physical dense block is evaluated on CUDA in bounded
+256-entry batches. The MATLAB result uses column-major dense storage; native
+resident dense leaves still use row-major storage. Non-saturated results retain
+the factor response. This is a leaf bridge, not adaptive whole-matrix assembly.
+Generated dense payloads above 2 GiB are rejected before allocation; HDF5
+remains pending. The larger physical parity check now requires exact dense
+promotion parity at 1e-12. Build and numerical acceptance of this change are
+pending until the associated result JSON is recorded.

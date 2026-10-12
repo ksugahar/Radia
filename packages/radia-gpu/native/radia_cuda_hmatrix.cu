@@ -80,7 +80,7 @@ Plan read(const mxArray* cfg){
 void mexFunction(int nl,mxArray* out[],int nr,const mxArray* in[]){
 try{
     if(!nr)throw std::invalid_argument("Command required");auto command=text(in[0]);
-    if(command=="analytic_aca_compress"){
+    if(command=="analytic_aca_compress"||command=="analytic_aca_leaf"){
         arity(nr,6,nl,1);std::size_t payloadBytes=0;
         for(int i=1;i<6;++i)checkPayload(in[i],payloadBytes);
         auto block=analyticSources(numbers(in[1]),numbers(in[2]),2147483647u);
@@ -109,6 +109,34 @@ try{
         EntryCallbackScope binding(oracle,nullptr,&scale);
         const int rank=cHACApK_acaplus(a2.data(),a1.data(),parameters,int(rows),int(columns),1,int(rows+1),lod.data(),0,int(rankLimit),epsilon[0],1.,epsilon[0]*1.e-3);
         binding.rethrow();if(rank<1||rank>int(rankLimit))throw std::runtime_error("ACA compression did not return valid factors");
+        // Preserve the production CPU rank-budget rule. Exact entries remain
+        // CUDA evaluated; this is not a switch to a CPU numerical backend.
+        const bool promoted=rank>=int(rankLimit)&&rankLimit<rows&&rankLimit<columns;
+        if(command=="analytic_aca_leaf"&&promoted){
+            const auto count=checkedProduct(rows,columns);
+            if(count>(std::size_t(2)<<30)/sizeof(double))
+                throw std::runtime_error("Dense leaf exceeds 2 GiB; HDF5 frontend required");
+            // Release discarded factors before allocating the exact dense leaf.
+            std::vector<double>().swap(a1);std::vector<double>().swap(a2);
+            std::unique_ptr<mxArray,decltype(&mxDestroyArray)> dense(mxCreateDoubleMatrix(rows,columns,mxREAL),&mxDestroyArray);
+            auto* values=mxGetDoubles(dense.get());
+            for(std::size_t offset=0;offset<count;offset+=256){
+                std::vector<AnalyticEntryIndex> indices;
+                for(auto k=offset;k<std::min(count,offset+256);++k)
+                    indices.push_back({k%rows,rows+k/rows});
+                const auto batch=oracle.evaluate(indices,nullptr);
+                std::copy(batch.begin(),batch.end(),values+offset);
+            }
+            const char* names[]={"rank","dense","promoted","aca_rank","entry_batches","entry_count","owned_device_bytes"};
+            out[0]=mxCreateStructMatrix(1,1,7,names);
+            mxSetField(out[0],0,"rank",mxCreateDoubleScalar(0));
+            mxSetField(out[0],0,"dense",dense.release());
+            mxSetField(out[0],0,"promoted",mxCreateLogicalScalar(true));
+            mxSetField(out[0],0,"aca_rank",mxCreateDoubleScalar(rank));
+            mxSetField(out[0],0,"entry_batches",mxCreateDoubleScalar(oracle.batches));
+            mxSetField(out[0],0,"entry_count",mxCreateDoubleScalar(oracle.entries));
+            mxSetField(out[0],0,"owned_device_bytes",mxCreateDoubleScalar(oracle.ownedBytes));return;
+        }
         // Return physical factors while keeping ACA's existing normalized entry
         // semantics and standard threshold multiplier during compression.
         for(int k=0;k<rank;++k){

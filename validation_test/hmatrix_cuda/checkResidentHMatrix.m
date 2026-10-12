@@ -68,6 +68,14 @@ try
             'owned_device_bytes',factors.owned_device_bytes,'scope','Separated constant-tet block above default 65-charge leaf threshold', ...
             'cpu_leaf_stats',probeLarge.cpu_leaf_stats);
         assert(relativeError<=1e-8,'Admissible ACA block physical CPU parity failed');
+        leaf=radia_cuda_hmatrix('analytic_aca_leaf',probeLarge.cells,probeLarge.faces,probeLarge.split,1e-10,32);
+        assert(leaf.promoted&&leaf.rank==0&&leaf.aca_rank==32);
+        denseError=norm(leaf.dense-probeLarge.expected,'fro')/norm(probeLarge.expected,'fro');
+        assert(denseError<=1e-12,'Exact promoted leaf CPU parity failed');
+        result.dense_promotion=struct('relative_error',denseError,'aca_rank',leaf.aca_rank, ...
+            'entry_count',leaf.entry_count,'entry_batches',leaf.entry_batches, ...
+            'owned_device_bytes',leaf.owned_device_bytes,'scope','Exact CUDA leaf; full adaptive assembly pending');
+
     end
     assert(radia_cuda_hmatrix('live_count')==0);
     stale=h;
