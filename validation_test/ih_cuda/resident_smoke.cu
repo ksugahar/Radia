@@ -5,6 +5,7 @@
 #include "ih_bicgstab_kernels.cuh"
 #include "ih_complex_solver.cuh"
 #include "ih_thermal_kernels.cuh"
+#include "ih_coupled_state.cuh"
 #include <vector>
 #include <stdexcept>
 #include <cmath>
@@ -100,10 +101,42 @@ void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** in){
     check(cudaMemcpy(&state,ds.p,sizeof(state),cudaMemcpyDeviceToHost));
     if(state.status!=1||state.iteration!=1)throw std::runtime_error("BiCGStab first-correction transition failed");
     for(int i=0;i<3;++i)if(cuCabs(cuCsub(solution[i],x[i]))>1e-12)throw std::runtime_error("BiCGStab identity correction failed");
-    const char* fields[]={"resident_repeats","eddy_true_residual","thermal_true_residual"};
-    out[2]=mxCreateStructMatrix(1,1,3,fields);
+    // Persistent coupled state: operators remain uploaded across all updates.
+    // Use A*x as the per-amp RHS, matching the independent CPU algebra oracle.
+    complexMatvec<<<1,32>>>(av,dx.get<cuDoubleComplex>(),drhs.get<cuDoubleComplex>());
+    check(cudaDeviceSynchronize());
+    CoupledOperators coupled{};
+    coupled.eddy=av;coupled.lossProjection=pv;coupled.thermalSystem=thermalMatrix;
+    coupled.stiffness=kv;coupled.convection=cvv;coupled.heatProjection=loadMap;
+    coupled.rhsPerAmp=drhs.get<cuDoubleComplex>();coupled.lossWeights=dw.get<double>();
+    coupled.constantCoefficients=done.get<double>();coupled.initialTemperature=dtemp.get<double>();
+    coupled.heatSamples=2;coupled.lossComponents=3;coupled.dt=.01;coupled.conductivity=1.;coupled.convectionScale=2.;
+    // A missing dynamic material implementation must never freeze ESIM silently.
+    coupled.dynamicMaterial=true;
+    bool rejected=false;try{CoupledState unsupported(coupled);}catch(const std::invalid_argument&){rejected=true;}
+    if(!rejected)throw std::runtime_error("Missing dynamic material update accepted");
+    coupled.dynamicMaterial=false;
+    CoupledState persistent(coupled);
+    for(int step=0;step<10;++step)persistent.update(mxGetScalar(in[3]),293.15,1e-12,200);
+    if(persistent.steps()!=10)throw std::runtime_error("Resident update count mismatch");
+    auto trajectory=persistent.temperature();auto acceptedHeat=persistent.heat();
+    bool invalidControlRejected=false;
+    try{persistent.update(std::numeric_limits<double>::quiet_NaN(),293.15);}catch(const std::invalid_argument&){invalidControlRejected=true;}
+    if(!invalidControlRejected||persistent.steps()!=10||persistent.temperature()!=trajectory||persistent.heat()!=acceptedHeat)
+        throw std::runtime_error("Invalid update changed accepted resident state");
+    persistent.reset();
+    const auto resetTemperature=persistent.temperature();const auto resetHeat=persistent.heat();
+    if(persistent.steps()!=0||resetTemperature!=std::vector<double>({300.,301.,302.})||resetHeat!=std::vector<double>({0.,0.}))
+        throw std::runtime_error("Resident reset mismatch");
+    const char* fields[]={"resident_repeats","eddy_true_residual","thermal_true_residual","resident_temperature","resident_steps","reset_checked","invalid_update_checked","missing_material_rejected"};
+    out[2]=mxCreateStructMatrix(1,1,8,fields);
     mxSetField(out[2],0,fields[0],mxCreateDoubleScalar(10));
     mxSetField(out[2],0,fields[1],mxCreateDoubleScalar(eddyResult.trueRelativeResidual));
     mxSetField(out[2],0,fields[2],mxCreateDoubleScalar(thermalResult.trueRelativeResidual));
+    auto* residentTemperature=mxCreateDoubleMatrix(3,1,mxREAL);
+    std::copy(trajectory.begin(),trajectory.end(),mxGetDoubles(residentTemperature));
+    mxSetField(out[2],0,fields[3],residentTemperature);
+    mxSetField(out[2],0,fields[4],mxCreateDoubleScalar(10));
+    for(int f=5;f<8;++f)mxSetField(out[2],0,fields[f],mxCreateLogicalScalar(true));
  }catch(const std::exception& e){mexErrMsgIdAndTxt("radia:ih:cudaSmoke","%s",e.what());}
 }
