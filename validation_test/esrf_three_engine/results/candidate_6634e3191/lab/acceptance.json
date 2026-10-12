@@ -1,0 +1,32 @@
+{
+  "wheel_sha256": "d3c9bb4b76201c6ddc55556764c23c1464ca1d08927fe03ff0c520908ef88605",
+  "native_sha256": "7871a3df0172de256235cf6eeeba31bd3269d2b1305d0632c7fa2df4c1e31275",
+  "source_commit": "6634e31917f494628b2d4b90ee45af1fdaea07fd",
+  "ci_run": 38215376138,
+  "sources_verified": 263,
+  "version": "5.3.1",
+  "fixture_sha256": "f4a679c782663e5bf0d3ead5ea0c2295517fea673915e4191aad03a5f7967758",
+  "steps": [
+    {
+      "name": "pip-check",
+      "exit_code": 0,
+      "elapsed_s": 0.4629787000012584
+    },
+    {
+      "name": "full6",
+      "exit_code": 0,
+      "elapsed_s": 12.058880000011413
+    },
+    {
+      "name": "focused",
+      "exit_code": 0,
+      "elapsed_s": 9.880689099998563
+    },
+    {
+      "name": "pip-freeze",
+      "exit_code": 0,
+      "elapsed_s": 0.33161110000219196
+    }
+  ],
+  "passed": true
+}
