@@ -14,6 +14,8 @@ import importlib.util
 import ctypes
 import subprocess
 
+from element_cases import REPRESENTATIONS, element_case
+
 import h5py
 import numpy as np
 from scipy.io import loadmat
@@ -60,6 +62,7 @@ def main():
     p.add_argument('--out', type=Path, required=True)
     p.add_argument('--reference-dir', type=Path, required=True)
     p.add_argument('--sizes', type=int, nargs='+', default=[4096, 16384, 65536])
+    p.add_argument('--representation', choices=('cloud',)+REPRESENTATIONS, default='cloud')
     p.add_argument('--targets', type=int, default=1024)
     p.add_argument('--rounds', type=int, default=2)
     p.add_argument('--threads', type=int, default=4)
@@ -84,9 +87,11 @@ def main():
         raise RuntimeError('Build artifact hash mismatch')
     record = dict(schema='radia.radfld-cuda-validation.v1', accepted=False,
                   timing_classification='100 RTX 5000 diagnostic; not idle-mdx performance acceptance',
-                  scope='existing retained point cloud only; no analytic/curved element substitution; no generic RadFld dispatch yet',
+                  scope=args.representation+' numeric sources; no generic RadFld object dispatch',
                   build=receipt, cpu_reference=reference_receipt, threads=args.threads,
-                  script_sha256=digest(__file__), matlab_script_sha256=digest(Path(__file__).with_name('runFieldCase.m')),
+                  script_sha256=digest(__file__),
+                  element_cases_sha256=digest(Path(__file__).with_name('element_cases.py')),
+                  element_wrapper_sha256=digest(ROOT/'packages/radia-gpu/matlab/+radia/+gpu/FieldElements.m'), matlab_script_sha256=digest(Path(__file__).with_name('runFieldCase.m')),
                   matlab_wrapper_sha256=digest(ROOT/'packages/radia-gpu/matlab/+radia/+gpu/FieldCloud.m'),
                   idle_guard_sha256=digest(ROOT/'validation_test/ams_cuda/graph_validation.py'),
                   validation_commit=subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD'],text=True).strip(),
@@ -115,10 +120,17 @@ def main():
             # Include genuine near-field and coincident retained-cloud cases.
             obs[:min(16, args.targets)] = xyz[:min(16, args.targets)]+[0.001, -0.002, 0.003]
             obs[0] = xyz[0]
+            source=None
+            if args.representation!='cloud':
+                source,obs=element_case(args.representation,size,args.targets)
             masks = np.array([1., 5.]); signs = np.array([1., -1.]); angles = np.array([0.3, -0.2])
             leaf, theta = 32, 0.025
             input_file = args.out/f'input-{size}.h5'
             with h5py.File(input_file, 'w') as h:
+                h.attrs['representation']=args.representation
+                if source is not None:
+                    for key,value in source.items():
+                        if isinstance(value,np.ndarray): h.create_dataset(key,data=value.T)
                 for name, value in dict(xyz=xyz.T, strength=q, observations=obs.T,
                                         masks=masks, signs=signs, angles=angles,
                                         leaf=float(leaf), theta=theta).items():
@@ -127,7 +139,8 @@ def main():
                 memory_before = cpu_memory()
                 with ng.TaskManager():
                     start = time.perf_counter()
-                    f = oracle.Field(xyz, q, masks, signs, angles, leaf, theta)
+                    f = (oracle.Field(xyz, q, masks, signs, angles, leaf, theta) if source is None
+                         else oracle.Field.from_elements(source,masks,signs,angles,leaf,theta))
                     value = np.asarray(f.field(obs, algorithm))
                     del f
                     elapsed = time.perf_counter()-start
@@ -135,7 +148,7 @@ def main():
             direct, _, _ = cpu('direct')
             references = {name: cpu(name)[0] for name in ('direct', 'tree')}
             tree_error = relative(references['tree'], direct)
-            case = dict(sources=size, targets=args.targets, leaf_size=leaf, theta=theta,
+            case = dict(sources=size if source is None else 2*size, representation=args.representation, targets=args.targets, leaf_size=leaf, theta=theta,
                         image_count=2, input_sha256=digest(input_file), input_bytes=input_file.stat().st_size,
                         cpu_tree_vs_direct_relative=tree_error, samples=[])
             case['cpu_tree_vs_direct_max_point_relative'] = point_relative(references['tree'], direct)

@@ -75,12 +75,23 @@ const double* doubles(const mxArray* a,std::size_t cols,const char* name) {
         if(!std::isfinite(p[i])) throw std::invalid_argument(std::string(name)+" must be finite");
     return p;
 }
-std::vector<double> rows3(const mxArray* a,const char* name) {
-    const auto* p=doubles(a,3,name); const std::size_t n=mxGetM(a);
-    std::vector<double> r(bytes(n,3));
-    for(std::size_t i=0;i<n;++i) for(int k=0;k<3;++k) r[3*i+k]=p[i+n*k];
+std::vector<double> rows(const mxArray* a,std::size_t cols,const char* name) {
+    const auto* p=doubles(a,cols,name); const std::size_t n=mxGetM(a);
+    std::vector<double> r(bytes(n,cols));
+    for(std::size_t i=0;i<n;++i) for(std::size_t k=0;k<cols;++k) r[cols*i+k]=p[i+n*k];
     return r;
 }
+std::vector<double> rows3(const mxArray* a,const char* name) { return rows(a,3,name); }
+const mxArray* member(const mxArray* a,const char* name) {
+    const auto* value=mxGetField(a,0,name);
+    if(!value) throw std::invalid_argument(std::string("Source specification missing ")+name);
+    return value;
+}
+std::vector<double> optionalRows(const mxArray* a,const char* name,std::size_t cols) {
+    const auto* value=mxGetField(a,0,name);
+    return value?rows(value,cols,name):std::vector<double>{};
+}
+
 double scalar(const mxArray* a) {
     if(!mxIsDouble(a)||mxIsComplex(a)||mxIsSparse(a)||mxGetNumberOfElements(a)!=1||!std::isfinite(mxGetScalar(a)))
         throw std::invalid_argument("Expected a finite real double scalar");
@@ -186,27 +197,67 @@ void dispatch(int nlhs,mxArray** out,int nrhs,const mxArray** in) {
         // Destruction remains possible after GPU reset or device selection.
         registry.erase(found); mexUnlock(); return;
     }
-    if(command=="create_cloud") {
-        if(nrhs!=8||nlhs!=2) throw std::invalid_argument("create_cloud requires xyz,q,masks,signs,angles,leaf,theta and two outputs");
-        const std::size_t n=mxGetM(in[1]);
-        if(!n || n>std::size_t(std::numeric_limits<int>::max()/2)) throw std::invalid_argument("Source count outside tree index range");
-        auto xyz=rows3(in[1],"xyz"); const auto* q=doubles(in[2],1,"strength");
-        if(mxGetM(in[2])!=n) throw std::invalid_argument("strength length mismatch");
-        const auto* masks=doubles(in[3],1,"masks"); const auto* signs=doubles(in[4],1,"signs");
-        const auto* angles=doubles(in[5],1,"angles"); const std::size_t ni=mxGetM(in[3]);
-        if(mxGetM(in[4])!=ni||mxGetM(in[5])!=ni) throw std::invalid_argument("Image array length mismatch");
+    if(command=="create_cloud" || command=="create_elements") {
+        const bool elements=command=="create_elements";
+        const int shift=elements?1:0;
+        if(nrhs!=8-shift||nlhs!=2) throw std::invalid_argument("create_cloud requires xyz,q,masks,signs,angles,leaf,theta and two outputs");
+        std::size_t n=0; std::vector<double> xyz,qv;
+        if(!elements) {
+            n=mxGetM(in[1]); xyz=rows3(in[1],"xyz");
+            const auto* q=doubles(in[2],1,"strength");
+            if(mxGetM(in[2])!=n) throw std::invalid_argument("strength length mismatch");
+            if(n) qv.assign(q,q+n);
+        } else if(!mxIsStruct(in[1]) || mxGetNumberOfElements(in[1])!=1) {
+            throw std::invalid_argument("Element source must be a scalar versioned struct");
+        }
+        const auto* masks=doubles(in[3-shift],1,"masks"); const auto* signs=doubles(in[4-shift],1,"signs");
+        const auto* angles=doubles(in[5-shift],1,"angles"); const std::size_t ni=mxGetM(in[3-shift]);
+        if(mxGetM(in[4-shift])!=ni||mxGetM(in[5-shift])!=ni) throw std::invalid_argument("Image array length mismatch");
         std::vector<int> im(ni); std::vector<double> si(ni),an(ni);
         for(std::size_t i=0;i<ni;++i) {
             if(masks[i]!=std::floor(masks[i])||masks[i]<0||masks[i]>7) throw std::invalid_argument("Image masks must be integers in [0,7]");
             im[i]=int(masks[i]); si[i]=signs[i]; an[i]=angles[i];
         }
-        const double leaf=scalar(in[6]);
+        const double leaf=scalar(in[6-shift]);
         if(leaf<1||leaf>65536||leaf!=std::floor(leaf)) throw std::invalid_argument("Invalid leaf size");
-        FieldEvaluatorOptions options; options.leaf_size=int(leaf); options.theta=scalar(in[7]);
-        room(bytes(n,sizeof(FieldCloudPoint)+sizeof(FieldSourceRef)+sizeof(std::size_t)+2*sizeof(FieldCloudNode))+
-             bytes(ni,sizeof(FieldCloudImage)));
-        auto host=HDivFieldEvaluator::FromCloud(std::move(xyz),std::vector<double>(q,q+n),im,si,options);
-        host->SetImageRotations(an); auto packed=host->ExportCloudSnapshot();
+        FieldEvaluatorOptions options; options.leaf_size=int(leaf); options.theta=scalar(in[7-shift]);
+        std::shared_ptr<HDivFieldEvaluator> host;
+        if(!elements) {
+            if(!n || n>std::size_t(std::numeric_limits<int>::max()/2)) throw std::invalid_argument("Source count outside tree index range");
+            room(bytes(n,sizeof(FieldCloudPoint)+sizeof(FieldSourceRef)+sizeof(std::size_t)+2*sizeof(FieldCloudNode))+bytes(ni,sizeof(FieldCloudImage)));
+            host=HDivFieldEvaluator::FromCloud(std::move(xyz),std::move(qv),im,si,options);
+        } else {
+            const auto* spec=in[1];
+            if(scalar(member(spec,"version"))!=1) throw std::invalid_argument("Unsupported element source schema version");
+            const auto kind=text(member(spec,"representation"));
+            std::size_t vc=0,sc=0;
+            if(kind=="tet") {vc=16;sc=22;}
+            else if(kind=="polynomial_tet") {vc=32;sc=22;}
+            else if(kind=="cubic_tet") {vc=32;sc=29;}
+            else if(kind=="sextic_quartic_tet") {vc=96;sc=44;}
+            else if(kind=="curved_tet") {vc=34;sc=24;}
+            else throw std::invalid_argument("Unsupported element representation");
+            const auto* volume=member(spec,"volume");const auto* surface=member(spec,"surface");
+            n=mxGetM(volume)+mxGetM(surface);
+            if(!n || n>std::size_t(std::numeric_limits<int>::max()/2)) throw std::invalid_argument("Source count outside tree index range");
+            // Conservative admission precedes host tree/moment construction.
+            room(bytes(n,sizeof(FieldTetSource)+sizeof(FieldSourceRef)+sizeof(std::size_t)+2*sizeof(FieldCloudNode))+bytes(ni,sizeof(FieldCloudImage)));
+            auto v=rows(volume,vc,"volume"), t=rows(surface,sc,"surface");
+            auto vo=optionalRows(spec,"volume_origins",3),so=optionalRows(spec,"surface_origins",3);
+            if(kind=="curved_tet") {
+                if(!vo.empty()||!so.empty()) throw std::invalid_argument("Curved sources use reference densities; origins are unsupported");
+                auto gl=rows(member(spec,"gauss_points"),1,"gauss_points");
+                auto gw=rows(member(spec,"gauss_weights"),1,"gauss_weights");
+                if(gl.empty()||gl.size()>64||gl.size()!=gw.size()) throw std::invalid_argument("Gauss rule must contain 1..64 matched nodes and weights");
+                for(std::size_t i=0;i<gl.size();++i)
+                    if(gl[i]<0||gl[i]>1||gw[i]<=0) throw std::invalid_argument("Gauss nodes must lie in [0,1] and weights must be positive");
+                host=HDivFieldEvaluator::FromCurvedTet(std::move(v),std::move(t),std::move(gl),std::move(gw),im,si,options);
+            } else if(kind=="tet") host=HDivFieldEvaluator::FromTet(std::move(v),std::move(t),im,si,options,std::move(vo),std::move(so));
+            else if(kind=="polynomial_tet") host=HDivFieldEvaluator::FromPolynomialTet(std::move(v),std::move(t),im,si,options,std::move(vo),std::move(so));
+            else if(kind=="cubic_tet") host=HDivFieldEvaluator::FromCubicPolynomialTet(std::move(v),std::move(t),im,si,options,std::move(vo),std::move(so));
+            else host=HDivFieldEvaluator::FromSexticQuarticPolynomialTet(std::move(v),std::move(t),im,si,options,std::move(vo),std::move(so));
+        }
+        host->SetImageRotations(an); auto packed=host->ExportSnapshot();
         for(const auto& node:packed.nodes) {
             if(!std::isfinite(node.radius)||!std::isfinite(node.charge))
                 throw std::invalid_argument("Source extent/strength overflows tree moments");
@@ -219,16 +270,24 @@ void dispatch(int nlhs,mxArray** out,int nrhs,const mxArray** in) {
         c->npoints=n; c->nimages=ni; c->theta=packed.theta;
         const std::size_t need=bytes(packed.points.size(),sizeof(FieldCloudPoint))+
             bytes(packed.order.size(),sizeof(std::size_t))+bytes(packed.nodes.size(),sizeof(FieldCloudNode))+
-            bytes(packed.images.size(),sizeof(FieldCloudImage))+bytes(packed.sources.size(),sizeof(FieldSourceRef));
+            bytes(packed.images.size(),sizeof(FieldCloudImage))+bytes(packed.sources.size(),sizeof(FieldSourceRef))+
+            bytes(packed.tets.size(),sizeof(FieldTetSource))+bytes(packed.triangles.size(),sizeof(FieldTriSource))+
+            bytes(packed.cubic_triangles.size(),sizeof(FieldCubicTriSource))+
+            bytes(packed.curved_tets.size(),sizeof(FieldCurvedTetSource))+bytes(packed.curved_triangles.size(),sizeof(FieldCurvedTriSource))+
+            bytes(packed.gauss_points.size()+packed.gauss_weights.size(),sizeof(double));
         room(need); std::size_t before,total,after; check(cudaMemGetInfo(&before,&total));
         check(UploadFieldFarGauss());
         upload(*c,c->sources,packed.sources);
+        upload(*c,c->tets,packed.tets); upload(*c,c->triangles,packed.triangles);
+        upload(*c,c->cubic_triangles,packed.cubic_triangles);
+        upload(*c,c->curved_tets,packed.curved_tets); upload(*c,c->curved_triangles,packed.curved_triangles);
+        upload(*c,c->gauss_points,packed.gauss_points); upload(*c,c->gauss_weights,packed.gauss_weights);
         upload(*c,c->points,packed.points); upload(*c,c->order,packed.order);
         upload(*c,c->nodes,packed.nodes); upload(*c,c->images,packed.images);
         c->view={c->tets.as<FieldTetSource>(),c->triangles.as<FieldTriSource>(),
             c->cubic_triangles.as<FieldCubicTriSource>(),c->curved_tets.as<FieldCurvedTetSource>(),
             c->curved_triangles.as<FieldCurvedTriSource>(),c->points.as<FieldCloudPoint>(),
-            c->gauss_points.as<double>(),c->gauss_weights.as<double>(),0};
+            c->gauss_points.as<double>(),c->gauss_weights.as<double>(),static_cast<int>(packed.gauss_points.size())};
         check(cudaStreamSynchronize(c->stream)); check(cudaMemGetInfo(&after,&total));
         // Steady-clock generations survive module unload/reload without reusing
         // a counter starting at one. Creation is serialized by MATLAB.
