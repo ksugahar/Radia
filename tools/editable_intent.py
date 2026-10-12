@@ -595,7 +595,8 @@ def format_action(report: dict) -> str:
     if report.get("dry_run"):
         lines.append("  dry run: nothing was installed or recorded")
     for result in report["results"]:
-        lines.append(f"  [{result['status'].upper():<14}] {result['package']} -> {result.get('source') or ''}")
+        subject = result.get("package") or result.get("action") or "editable intent"
+        lines.append(f"  [{result['status'].upper():<14}] {subject} -> {result.get('source') or ''}")
         if result.get("detail"):
             lines.append("      " + str(result["detail"]).replace("\n", "\n      "))
         if result.get("hint"):
@@ -725,7 +726,7 @@ def _host_policy_refusal(action: str) -> dict:
         "schema": SCHEMA,
         "record_file": str(intent_file_path()),
         "exit_code": EXIT_PRECONDITION,
-        "results": [{"status": "refused", "action": action, "package": "radia",
+        "results": [{"status": "refused", "action": action,
                      "detail": "editable installs and intent writes are restricted to 100号機 (T7920)"}],
         "note": "No pip command was run and no intent record was changed.",
     }
