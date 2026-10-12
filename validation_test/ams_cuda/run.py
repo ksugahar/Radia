@@ -101,7 +101,16 @@ def main(args):
                     x.data=solver*b
                     cpu.append(time.perf_counter()-timer);cpu_iterations.append(solver.iterations)
                 case=out/f'h{h}-cycle{cycle}';case.mkdir()
-                payload=dict(snapshot=snapshot,rhs=rhs,probes=probes,expected=expected)
+                def native_csr(matrix):
+                    i,j,v=matrix.COO()
+                    csr=coo_matrix((v,(i,j)),shape=(matrix.height,matrix.width)).tocsr()
+                    csr.sort_indices()
+                    return dict(rows=csr.shape[0],cols=csr.shape[1],
+                                rowptr=csr.indptr.astype(np.int32),columns=csr.indices.astype(np.int32),
+                                values=csr.data.astype(np.float64))
+                model=dict(schema='radia.ams-native-input.v1',A=native_csr(a.mat),G=native_csr(gradient),
+                           coordinates=np.asarray(coords).T.copy(),free=free.astype(np.int32),cycle=cycle)
+                payload=dict(model=model,snapshot=snapshot,rhs=rhs,probes=probes,expected=expected)
                 src=case/'input.hdf5';exchange=write_exchange(src,payload)
                 if args.cpu_only:
                     row,col,val=a.mat.COO();A=coo_matrix((np.asarray(val),(np.asarray(row),np.asarray(col))),shape=(fes.ndof,fes.ndof)).tocsr()
@@ -117,13 +126,16 @@ def main(args):
                     record['cases'].append(entry);result_path.write_text(json.dumps(jsonable(record),indent=2)+'\n')
                     if not entry['accepted']:raise RuntimeError('CPU AMS reference check failed')
                     continue
-                eng.benchmark(str(src),str(case/'gpu.mat'),str(gpu_dir),str(matlab_dir),nargout=0)
+                eng.benchmark(str(src),str(case/'gpu.mat'),str(gpu_dir),str(matlab_dir),1.0,nargout=0)
                 gpu=loadmat(case/'gpu.mat',simplify_cells=True)
                 actual=np.asarray(gpu['solution']).reshape(-1)
                 row,col,val=a.mat.COO();A=coo_matrix((np.asarray(val),(np.asarray(row),np.asarray(col))),shape=(fes.ndof,fes.ndof)).tocsr()
                 residual=lambda sol:float(np.linalg.norm((A@sol-rhs)[free])/np.linalg.norm(rhs[free]))
                 ref=reference.FV().NumPy().copy()
                 difference=float(np.linalg.norm((actual-ref)[free])/np.linalg.norm(ref[free]))
+                pipeline=np.asarray(gpu['pipelineSolution']).reshape(-1)
+                pipeline_residual=residual(pipeline)
+                pipeline_difference=float(np.linalg.norm((pipeline-ref)[free])/np.linalg.norm(ref[free]))
                 cpu_ams_solution=x.FV().NumPy().copy()
                 cpu_ams_difference=float(np.linalg.norm((actual-cpu_ams_solution)[free])/np.linalg.norm(cpu_ams_solution[free]))
                 probe=float(np.max(gpu['probeErrors']))
@@ -133,14 +145,16 @@ def main(args):
                     'gpu':jsonable(gpu),'cpu_true_residual':residual(x.FV().NumPy()),'gpu_true_residual':residual(actual),
                     'relative_difference_from_direct':difference,'max_preconditioner_probe_relative_error':probe,
                     'relative_difference_from_cpu_ams':cpu_ams_difference,
+                    'native_pipeline_true_residual':pipeline_residual,
+                    'native_pipeline_relative_difference_from_direct':pipeline_difference,
                     'input_sha256':file_sha256(src),'exchange':exchange,
                     'auxiliary_level_rows':[[l['A']['rows'] for l in s['levels']] for s in snapshot['spaces']],
                     'coarse_kinds':[s['levels'][-1]['coarse']['kind'] for s in snapshot['spaces']]}
-                entry['gpu'].pop('solution');entry['gpu'].pop('inclusiveSolution')
+                entry['gpu'].pop('solution');entry['gpu'].pop('inclusiveSolution');entry['gpu'].pop('pipelineSolution')
                 entry['gpu_warm_median_seconds']=statistics.median(np.asarray(gpu['times']).reshape(-1))
                 entry['speedup_resident_inputs']=entry['cpu_warm_median_seconds']/entry['gpu_warm_median_seconds']
                 entry['speedup_including_transfers']=entry['cpu_warm_median_seconds']/float(gpu['inclusiveSeconds'])
-                entry['accepted']=bool(entry['gpu_true_residual']<=1e-6 and entry['cpu_true_residual']<=1e-6 and difference<=1e-6 and cpu_ams_difference<=1e-6 and probe<=1e-8)
+                entry['accepted']=bool(entry['gpu_true_residual']<=1e-6 and entry['cpu_true_residual']<=1e-6 and difference<=1e-6 and cpu_ams_difference<=1e-6 and probe<=1e-8 and pipeline_residual<=1e-6 and pipeline_difference<=1e-8 and not bool(gpu['pipelineSetup']['python_adapter_used']))
                 record['cases'].append(entry);result_path.write_text(json.dumps(jsonable(record),indent=2)+'\n')
                 print(json.dumps({k:entry[k] for k in ('dofs','cycle','gpu_true_residual','max_preconditioner_probe_relative_error','accepted')}),flush=True)
                 if not entry['accepted']:raise RuntimeError('AMS CUDA numerical parity failed')
