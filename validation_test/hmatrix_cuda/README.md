@@ -90,3 +90,22 @@ other-computation guard, so latest-artifact timing remains pending.
 `results/quadrature-sharing-20261012.json` verifies that the extracted shared
 quadrature helper is textually identical to the previous CPU implementation.
 The full CPU solver build remains a separate CI gate.
+
+## Indexed assembly checkpoint
+
+`hmatrix_entry_oracle.cuh` retains linear constant-charge geometry and its exact
+quadrature on the GPU. It evaluates bounded indexed row/column requests without
+allocating the global dense matrix. The native caller supplies a stream and
+reuses one workspace; shared host callers serialize that workspace. Values are
+raw physical entries, so the existing HACApK normalization remains the caller's
+responsibility. The diagnostic `analytic_entry_batch` command uploads geometry
+once per command and exercises three 256-entry-capacity batches; it is not a
+persistent MATLAB assembly handle or an adaptive compression implementation.
+
+`results/indexed-entry-20261012.json` records the clean `712fa3960` build,
+600 requested entries with CPU relative difference 5.924e-16, and the ten
+existing numerical/lifecycle cases. Full adaptive ACA+ callback wiring,
+OpenMP leaf scheduling, real NGSolve charge-map assembly, material mass,
+constraints, iterative solver and true residual remain required. Large-scale
+assembly, whole-solve timing and peak-memory acceptance are pending. CI was
+running and queued, so this checkpoint contains no new performance comparison.
