@@ -340,3 +340,33 @@ Accounted owned setup/solver peak is 166916 bytes. Initial payload whole time
 is diagnostic only, not a warm comparison. See `results/hdiv-64tet-20261013.json`.
 General high-order/curved/constraint/nonlinear and release gates remain pending;
 the new projection binary has not yet been reaccepted on A100.
+
+## High-order and curved FE staging boundary
+
+`inspect_hdiv_elements` in the experimental projection mexcuda module stages
+NGSolve-owned mapped HDiv mass and P2 reference-node samples. Orders 1..3 are
+admitted for affine tetrahedra, orders 1..2 for curved tetrahedra, with explicit
+128-cell/1024-DOF budgets. It starts no TaskManager and requires no Python
+fixture for MATLAB use. `validate_element_setup.py` independently assembles
+the NGSolve mass in a caller-owned Python TaskManager and compares the native
+mapped nodes on an affine public tetrahedron and an original unit sphere.
+This diagnostic command is not a charge-map constructor or a GPU material solve.
+
+Remaining integration must preserve these existing mathematical contracts:
+
+- `_charge_basis` uses local L2/SurfaceL2 mass inverses and an orientation-aware
+  change of monomial basis for **each** element, not one reused element basis.
+- `_charge_basis_curved` uses reference-frame monomials, mapped P2 nodes and
+  the existing structural-zero floor. Its supported curved orders are 1 and 2.
+- `PhiInnerHOHostVec` uses analytic moment contractions, including the distinct
+  reference-moment branch for higher degree. RadFld scalar kernels alone do
+  not replace this host-block contract.
+- `QuadBlockHOTet` uses the existing singular host-vector Duffy path on touching
+  curved pairs; only non-touching curved pairs use the existing direct tensor
+  rule. Symmetrization, image transforms and near/far selection must survive.
+- The resulting charge map and Gram must feed the resident material equation;
+  compare coefficients and physical quantities with independent CPU assembly
+  and check the true residual before any whole-workflow timing acceptance.
+
+FE staging parity alone leaves general HDiv and release acceptance pending.
+The NGSolve A100 is offline and is not started or contacted for this gate.
