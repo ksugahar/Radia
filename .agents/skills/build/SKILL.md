@@ -59,8 +59,10 @@ Use Build.ps1's current propagation paths, not historical .ccl/plugin recipes.
 
 ## Other distributions
 
-- Standalone MATLAB Optuna uses `-OptunaMexOnly` and its independent workflow;
-  it must not acquire Radia/NGSolve/MKL dependencies.
+- Standalone MATLAB Optuna uses `-OptunaMexOnly` and its independent mexcuda workflow;
+  it must not acquire Radia/NGSolve/MKL dependencies. Use the package mexcuda recipe for GPU numerical kernels and CPU host control.
+  Use bounded OpenMP for suitable parallel host work and retain serial
+  state management and ordered random consumption.
 - Eqnedit64 uses the tracked release-eqnedit64 skill and current build scripts.
   Do not run historical EQNEDT32 patchers or font tests on the LAB desktop.
 - For sparsesolv inspect the current in-repository CMake integration. Do not

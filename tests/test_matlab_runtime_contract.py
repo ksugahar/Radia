@@ -18,32 +18,14 @@ def _source(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
-def test_matlab_setup_checks_the_native_ngsolve_abi_and_mkl_dispatcher() -> None:
+def test_retired_cpu_gateway_cannot_be_loaded_by_matlab_setup():
     setup = _source("packages/radia-gpu/matlab/+radia/setup.m")
-    expected = _source("packages/radia-gpu/matlab/+radia/+internal/expectedNGSolveVersion.m")
-    with (ROOT / "pyproject.toml").open("rb") as stream:
-        dependencies = tomllib.load(stream)["project"]["dependencies"]
-
-    version = re.search(r'value\s*=\s*"([0-9.]+)";', expected).group(1)
-    assert f"ngsolve=={version}" in dependencies
-    assert f"netgen-mesher=={version}" in dependencies
-    assert 'setenv("MKL_THREADING_LAYER", "SEQUENTIAL")' in setup
-    assert '"mkl_threading_layer_requested"' in setup
-    assert '"mkl_threading_layer",' not in setup
-    assert "RADIA_NGSOLVE_VERSION:" in setup
-    assert "RADIA_NETGEN_VERSION:" in setup
-    assert "radia.internal.expectedNGSolveVersion()" in setup
-    assert "radia:setup:NGSolveABI" in setup
-
-
-def test_cached_mex_setup_keeps_provenance_subprocess_off_the_step_path() -> None:
-    setup = _source("packages/radia-gpu/matlab/+radia/setup.m")
-    cache_branch = setup.index("if ~options.Force && ~isempty(cachedInfo)")
-    cache_return = setup.index("    return\nend", cache_branch)
-    verifier_launch = setup.index('verifier = fullfile(matlabDir, "verify_radia_mex_provenance.py")')
-    assert cache_return < verifier_launch
-    assert "verifyLoadedMex(cachedInfo.mex_source_commit)" in setup[cache_branch:cache_return]
-    assert "strlength(cachedInfo.mex_source_commit) == 40" in setup[cache_branch:cache_return]
+    boundary = _source("packages/radia-gpu/matlab/+radia/+internal/callMex.m")
+    for source in (setup, boundary):
+        assert "radia:mex:Retired" in source
+        assert "radia_mex(" not in source
+        assert "-MatlabMexOnly" not in source
+    assert "MKL_THREADING_LAYER" not in setup
 
 
 def test_matlab_release_uses_sequential_mkl_without_changing_python() -> None:
@@ -123,25 +105,13 @@ def test_verifier_accepts_each_historical_and_current_schema(tmp_path) -> None:
 
 def test_mex_handle_unlocks_happen_after_registry_critical_sections() -> None:
     gateway = _source("packages/radia-optuna/native/optuna_mex.cpp")
-    ih = _source("packages/radia-gpu/native/legacy/radia_ih_mex_commands.cpp")
-
-    helper = re.search(
-        r"void DestroyRegistered\(.*?\n\}\n\n#ifndef", gateway,
-        flags=re.DOTALL)
+    helper = re.search(r"void DestroyRegistered\(.*?\n\}\n", gateway, flags=re.DOTALL)
     assert helper is not None
     helper_source = helper.group(0)
     assert helper_source.index("registry.erase") < helper_source.index("mexUnlock()")
     assert helper_source.index("if (!erased)") < helper_source.index("mexUnlock()")
-    assert gateway.count("DestroyRegistered(") == 20
     assert "while (lock_count > 0)" not in gateway
 
-    erase = re.search(
-        r"void erase\(Registry<T>&.*?\n\}\n\n\}  // namespace", ih,
-        flags=re.DOTALL)
-    assert erase is not None
-    erase_source = erase.group(0)
-    assert erase_source.index("registry.erase") < erase_source.index("mexUnlock()")
-    assert "if (!erased)" in erase_source
 
 
 def _manifest_for_schema(schema: str, payloads: dict[str, bytes]) -> dict:

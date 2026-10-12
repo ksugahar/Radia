@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[3]
 TEST_DIRECTORY = ROOT / "tests" / "matlab"
 
 CLASSIFICATION_BY_FILE = {
+    "test_optuna_cuda.m": "matlab-integration",
     "test_optuna_upstream_oracle.m": "upstream-python",
     "test_optuna_core_parity.m": "upstream-python",
     "test_optuna_pruner_parity.m": "upstream-python",
@@ -26,6 +27,7 @@ CLASSIFICATION_BY_FILE = {
 }
 
 INTEGRATION_SCOPE = {
+    "test_optuna_cuda.m": "mexcuda execution boundary, device failure and lifecycle",
     "test_optuna_table.m": (
         "MATLAB table storage, MAT persistence, and SimulinkRunner integration"
     ),
@@ -91,6 +93,10 @@ def build_manifest() -> dict[str, object]:
                 scope = INTEGRATION_SCOPE.get(
                     filename, "MATLAB test-policy integration"
                 )
+            if filename == "test_optuna_cuda.m" and test_name == "testDensityMatchesUpstream":
+                effective_classification = "upstream-python"
+                oracle = "optuna_cuda_density_oracle.json"
+                scope = "Optuna 5.0.0 mixture densities evaluated by CUDA"
             entries.append(
                 {
                     "classification": effective_classification,

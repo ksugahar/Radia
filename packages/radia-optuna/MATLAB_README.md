@@ -14,6 +14,12 @@ Radia solver, NGSolve, oneMKL, Cubit, or Python binary dependency. Missing or
 incompatible native gateways fail loudly and never redirect through
 `radia_mex`.
 
+Build the gateway with `Build.ps1 -OptunaMexOnly` using MATLAB's supported
+`mexcuda` toolchain. TPE density, candidate scoring and maximum selection
+require Parallel Computing Toolbox and a supported NVIDIA GPU. Random
+consumption, candidate generation and study management execute on the host.
+The GPU path requires no Python runtime and rejects CPU-only gateway binaries.
+
 `radia.optuna.SimulinkRunner` is part of this standalone distribution. It uses
 `Simulink.SimulationInput` and the public `sim`/`parsim` APIs without loading
 Radia. Radia electromagnetic models and application-specific adapters are not

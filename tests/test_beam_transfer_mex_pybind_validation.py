@@ -210,16 +210,11 @@ def test_current_native_api_retains_canonical_h5_and_f4_outputs():
     matlab_api = (
         ROOT / "packages/radia-gpu/matlab" / "+radia" / "+beam" / "canonicalBodyHamiltonianJet.m"
     ).read_text(encoding="utf-8")
-    mex_api = (ROOT / "packages/radia-gpu/native/legacy/radia_beam_mex_commands.cpp").read_text(
-        encoding="utf-8"
-    )
 
     assert "H2/H3/H4/H5" in python_api
     assert "A/F2/F3/F4" in python_api
     assert "H2/H3/H4/H5" in matlab_api
     assert "A/F2/F3/F4" in matlab_api
-    assert '"H5_per_m"' in mex_api
-    assert '"F4_per_m"' in mex_api
 
 
 def test_build_writes_hash_bound_native_provenance_manifests():

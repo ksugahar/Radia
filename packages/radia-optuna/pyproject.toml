@@ -5,12 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "radia-optuna"
 version = "0.2.0"
-description = "Independent MATLAB optimization implementation differentially verified against Optuna 5.0.0"
+description = "MATLAB mexcuda optimization with Simulink integration, verified against Optuna 5.0.0"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "BSD-3-Clause"
 authors = [{name = "Radia Development Team"}]
-keywords = ["matlab", "optuna", "optimization", "tpe", "cma-es", "simulink"]
+keywords = ["matlab", "mexcuda", "cuda", "optuna", "optimization", "tpe", "simulink"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",

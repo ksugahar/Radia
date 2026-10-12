@@ -2,7 +2,7 @@ import hashlib,json,os,re,shutil,subprocess
 from collections import Counter
 from pathlib import Path
 from .optuna_boundary import matlab_optuna_mcp_route
-from .optuna_quality import matlab_optuna_health
+from .optuna_quality import matlab_optuna_health, _optuna_source_commands
 HERE=Path(__file__).parent; EXT=HERE/"extensions/radia-matlab-tools.json"; MATLAB=HERE/"matlab"
 PROFILES={"existing":("existing","desktop"),"auto_nodesktop":("auto","nodesktop"),"new_nodesktop":("new","nodesktop")}
 def matlab_extension_path():
@@ -114,29 +114,11 @@ def _radia_repo_root():
 
 
 def _mex_command_branches():
-    """Read the separated Radia and Optuna command lists from shared source."""
+    """The CPU Radia MEX is retired; Optuna owns its independent command table."""
     _root, source = _radia_repo_root()
     if source is None:
         return [], []
-    text = source.read_text(encoding="utf-8")
-    match = re.search(
-        r"mxArray\* Commands\(\)\s*\{(?P<body>.*?)constexpr std::size_t count",
-        text,
-        flags=re.DOTALL,
-    )
-    if match is None:
-        return [], []
-    body = match.group("body")
-    conditional = re.search(
-        r"#ifdef\s+RADIA_OPTUNA_MEX_ONLY(?P<optuna>.*?)"
-        r"#else(?P<radia>.*?)#endif",
-        body,
-        flags=re.DOTALL,
-    )
-    if conditional is None:
-        return re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)"', body), []
-    extract = lambda text: re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)"', text)
-    return extract(conditional.group("radia")), extract(conditional.group("optuna"))
+    return [], _optuna_source_commands(source)
 
 
 def _radia_mex_commands():

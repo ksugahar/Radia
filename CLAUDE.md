@@ -61,10 +61,7 @@ Prefer established public abstractions over proprietary plumbing.
 - Use HACApK for Radia core compact interactions; do not restore core ExaFMM.
 - NGSolve BEM is supported. Its native multipole/FMM facilities may be used for
   smooth free-space BEM and Biot-Savart work.
-- Python FE work follows caller-owned `ngsolve.TaskManager()`. MATLAB
-  parallel work follows MATLAB's runtime.
-  Exception: `p1_newton.solve_p1_newton` and `p1_linear.solve_p1_linear` own
-  regions and reject active TaskManager for AMS setup; helpers stay caller-owned.
+- Python FE work follows caller-owned `ngsolve.TaskManager()`. MATLAB parallel work follows MATLAB's runtime. Exception: `p1_newton.solve_p1_newton` and `p1_linear.solve_p1_linear` own regions and reject active TaskManager for AMS setup; helpers stay caller-owned.
 - Fail loudly on unsupported geometry, labels, ABI, convergence, or backend
   state. Never silently substitute a numerically different route.
 ## Interfaces
@@ -102,7 +99,7 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
 ### CPU / GPU Execution Policy (2026-10-11)
 - CPU: Python (pybind11)/NGSolve, built with Visual Studio Build Tools on Windows; NGSolve TaskManager owns CPU parallel execution under the caller-owned region policy. CPU MEX is unsupported.
 - GPU: `radia-gpu` uses MATLAB mexcuda for performance; ships optional Simulink/LTspice adapters, no external products. GPU workflows must complete within MATLAB/mexcuda, including solver setup and preconditioner construction; do not require a Python adapter or Python-generated solver snapshot. Native Python DLL dependencies inherited from NGSolve are permitted; GPU use must not require Python adapter execution. Python owns CPU execution and independent numerical-accuracy validation. Python CPU reference runs are validation workflows, not prerequisites for GPU users.
-- Indirect TaskManager dependencies through standard NGSolve headers/DLLs are permitted in mexcuda builds. Never start TaskManager or use its parallel execution in MATLAB/mexcuda workflows; MATLAB owns host scheduling and CUDA owns device execution. AMS preprocessing selects CUDA or OpenMP using numerical parity and transfer-inclusive timing/memory evidence; serial execution remains a reference. Use CUDA GPU parallelism wherever beneficial and OpenMP for suitable CPU host work, based on measured end-to-end benefit; bound OpenMP threads to avoid oversubscription with MATLAB. The two supported execution routes are Python/pybind11 with NGSolve TaskManager and MATLAB/mexcuda with CUDA/OpenMP, without TaskManager execution.
+- mexcuda modules may retain CPU host control; not every calculation belongs on GPU. Never include, link, or use NGSolve TaskManager in mexcuda builds. MATLAB owns host scheduling and CUDA owns device execution; evaluate bounded OpenMP host work using numerical parity and transfer-inclusive timing. Python CPU reference runs are independent validation, not GPU-user prerequisites.
 - Choose VS/CUDA by target MATLAB mexcuda support. Verify upgrades; never override unsupported compilers.
 - No implicit CPU/Python fallback. Measure host setup and CPU solves separately.
 - Develop/build radia-gpu on 100; release acceptance uses 100 RTX 5000 and independent review; SSH host `NGSolve` (A100) is optional additional validation; `mdx` is a separate CPU VM. Never deploy to 102.
@@ -269,7 +266,7 @@ and live sources.
 Before tagging, dispatch `Radia Native Release` on the exact release SHA; `ci-verify` requires its successful native check.
 
 ## Optuna
-
+`radia-optuna` uses GPU numerical kernels compiled with MATLAB mexcuda. Keep management, sequential RNG and work without a speed requirement on CPU. Choose GPU work using measured transfer-inclusive cost; compilation alone is not GPU execution or speedup. No CPU-only MEX build or implicit fallback for declared GPU operations.
 Pinned Optuna 5.0.0 is the sole oracle for shared MATLAB behavior: seed, options,
 parameter/search-space order, history, named constraints, values, states, warnings,
 defaults, extension points, and random consumption match upstream-generated fixtures.

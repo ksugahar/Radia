@@ -20,7 +20,7 @@
 #   -RadiaOnly  Build and copy only _radia_pybind.pyd
 #   -CudaMexOnly  Stage the CUDA-only NGSolve assembled-operator bridge
 #   -AmsCudaOnly  Stage the experimental AMS CUDA gateway and snapshot adapter
-#   -OptunaMexOnly  Configure and build only the lightweight Optuna gateway
+#   -OptunaMexOnly  Build the Optuna CUDA kernels and CPU host control using mexcuda
 #   -RequireNativeProvenance  Reject dirty source before building; otherwise a
 #                 dirty development build succeeds without a provenance sidecar
 #   -Test       Run source-tree import test + pytest after build
@@ -28,7 +28,7 @@
 #
 # Requirements:
 #   - Visual Studio Build Tools (any version with VC.Tools.x86.x64) — auto-detected via vswhere
-#   - MATLAB with MEX support (-OptunaMexOnly needs only Visual Studio + MATLAB)
+#   - MATLAB with Parallel Computing Toolbox and a supported mexcuda compiler
 #   - Intel MKL from `python -m pip install mkl-devel`
 #   - NGSolve (pip install or source build)
 #   - Python 3.12 with pybind11
@@ -44,7 +44,7 @@ param(
     [switch]$AmsCudaOnly,         # experimental AMS snapshot adapter + CUDA MEX
     [switch]$AxiFemOnly,           # configure + build ONLY axifem (fast C++ iteration)
     [switch]$CudaMexOnly,          # isolated CUDA-only assembled-operator gateway
-    [switch]$OptunaMexOnly,        # configure + build only optuna_mex
+    [switch]$OptunaMexOnly,        # mexcuda kernels + CPU host control
     [switch]$RequireNativeProvenance, # reject dirty source before a provenance-bearing build
     [switch]$InstallToSitePackages  # also copy rebuilt .pyd(s) into the importable site-packages\radia
 )
@@ -55,7 +55,7 @@ if ($args.Count -gt 0) {
 }
 
 if ($AmsCudaOnly) {
-    if ($RadiaOnly -or $AxiFemOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test) {
+    if ($RadiaOnly -or $AxiFemOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild) {
         throw '-AmsCudaOnly is an isolated experimental build; incompatible options supplied'
     }
     $amsBuildArgs = @()
@@ -100,8 +100,22 @@ if ($CudaMexOnly) {
     if ($LASTEXITCODE -ne 0) { throw 'CUDA MEX build failed' }
     return
 }
-if ($OptunaMexOnly -and $InstallToSitePackages) {
-    throw "-InstallToSitePackages does not apply to the standalone Optuna MEX build"
+if ($OptunaMexOnly) {
+    if ($InstallToSitePackages -or $Rebuild) {
+        throw 'Optuna mexcuda build is isolated; install/rebuild switches are unsupported'
+    }
+    $optunaRoot = $PSScriptRoot.Replace("'", "''")
+    if ($RequireNativeProvenance) {
+        $optunaStatus = & git -C $PSScriptRoot status --porcelain
+        if ($LASTEXITCODE -ne 0 -or $optunaStatus) { throw 'Optuna provenance requires clean source' }
+    }
+    & matlab -batch "addpath('$optunaRoot/packages/radia-optuna'); buildOptunaMex;"
+    if ($LASTEXITCODE -ne 0) { throw 'Optuna mexcuda build failed' }
+    if ($Test) {
+        & matlab -batch "addpath('$optunaRoot/validation_test/optimization'); validate_optuna_cuda('$optunaRoot'); addpath('$optunaRoot/validation_test/radia_optuna'); validate_cuda('$optunaRoot','$optunaRoot/packages/radia-optuna/matlab','$optunaRoot/build-optuna-cuda/validation.json');"
+        if ($LASTEXITCODE -ne 0) { throw 'Optuna CUDA validation failed' }
+    }
+    return
 }
 
 # ============================================================================
@@ -114,7 +128,7 @@ $NativeBuildProvenanceScript = "$PROJECT_DIR\tools\native_build_provenance.ps1"
 . $NativeBuildProvenanceScript
 $NativeBuildSourceIdentity = $null
 $NativeProvenanceBinaries = @()
-if (-not $AxiFemOnly -and -not $OptunaMexOnly) {
+if (-not $AxiFemOnly) {
     $NativeProvenanceBinaries += "$PROJECT_DIR\src\radia\_radia_pybind.pyd"
 }
 if ($NativeProvenanceBinaries.Count -gt 0) {
@@ -129,31 +143,28 @@ if ($NativeProvenanceBinaries.Count -gt 0) {
 
 $PythonCommand = Get-Command python -ErrorAction SilentlyContinue
 $PythonExecutable = if ($PythonCommand) { $PythonCommand.Source } else { "" }
-if ((-not $OptunaMexOnly -or $Test) -and -not $PythonExecutable) {
+if (-not $PythonExecutable) {
     throw "Python is required for Radia builds and for -Test"
 }
 $Pybind11CMakeDir = ""
-if (-not $OptunaMexOnly) {
-    $Pybind11CMakeDir = (& $PythonExecutable -c "import pybind11; print(pybind11.get_cmake_dir())").Trim()
-    if (-not (Test-Path "$Pybind11CMakeDir\pybind11Config.cmake")) {
-        Write-Host "ERROR: pybind11 CMake package not found under $Pybind11CMakeDir" -ForegroundColor Red
-        exit 1
-    }
+
+$Pybind11CMakeDir = (& $PythonExecutable -c "import pybind11; print(pybind11.get_cmake_dir())").Trim()
+if (-not (Test-Path "$Pybind11CMakeDir\pybind11Config.cmake")) {
+    Write-Host "ERROR: pybind11 CMake package not found under $Pybind11CMakeDir" -ForegroundColor Red
+    exit 1
 }
 
 # ---- Cubit install discovery ------------------------------------------------
-if ($OptunaMexOnly) {
-    Write-Host "Cubit: not part of the optuna_mex target" -ForegroundColor Gray
+
+# Picks the highest-version 'Coreform Cubit *' under Program Files or
+# honors $env:CUBIT_INSTALL_DIR. Cubit absence does not block Radia core.
+. "$PROJECT_DIR\tools\find_cubit.ps1"
+if ($CubitInstallDir) {
+    Write-Host "Cubit: $CubitVersion at $CubitInstallDir"
 } else {
-    # Picks the highest-version 'Coreform Cubit *' under Program Files or
-    # honors $env:CUBIT_INSTALL_DIR. Cubit absence does not block Radia core.
-    . "$PROJECT_DIR\tools\find_cubit.ps1"
-    if ($CubitInstallDir) {
-        Write-Host "Cubit: $CubitVersion at $CubitInstallDir"
-    } else {
-        Write-Host "Cubit: NOT FOUND -- Cubit-plugin .pyd build will be skipped" -ForegroundColor Yellow
-    }
+    Write-Host "Cubit: NOT FOUND -- Cubit-plugin .pyd build will be skipped" -ForegroundColor Yellow
 }
+
 $DetectedCubitCmakeDir = if ($CubitInstallDir) {
     Join-Path $CubitInstallDir "cmake"
 } else {
@@ -165,53 +176,48 @@ Write-Host "Cubit native targets enabled: $BuildCubitPlugin" -ForegroundColor Gr
 
 # Intel MKL 2026 (required for BLAS/LAPACK and HACApK). The selected
 # Python environment is authoritative; MKLROOT is an explicit fallback only.
-if ($OptunaMexOnly) {
-    $INTEL_MKL = ""
-} else {
-    $MklCandidates = @()
-    $PythonLibrary = & $PythonExecutable -c "import pathlib, sys; print(pathlib.Path(sys.prefix) / 'Library')" 2>$null
-    if ($PythonLibrary -and (Test-Path $PythonLibrary)) {
-        $MklCandidates += $PythonLibrary
+
+$MklCandidates = @()
+$PythonLibrary = & $PythonExecutable -c "import pathlib, sys; print(pathlib.Path(sys.prefix) / 'Library')" 2>$null
+if ($PythonLibrary -and (Test-Path $PythonLibrary)) {
+    $MklCandidates += $PythonLibrary
+}
+if ($env:MKLROOT -and (Test-Path $env:MKLROOT)) {
+    $MklCandidates += $env:MKLROOT
+}
+$MklRuntimeNames = @("mkl_rt", "mkl_core", "mkl_intel_thread", "mkl_avx2", "mkl_def")
+$INTEL_MKL = ""
+foreach ($candidate in ($MklCandidates | Select-Object -Unique)) {
+    if (-not (Test-Path "$candidate\lib\mkl_rt.lib")) {
+        continue
     }
-    if ($env:MKLROOT -and (Test-Path $env:MKLROOT)) {
-        $MklCandidates += $env:MKLROOT
+    $missingRuntime = @($MklRuntimeNames | Where-Object {
+        -not (Test-Path "$candidate\bin\$_.3.dll")
+    })
+    if ($missingRuntime.Count -eq 0) {
+        $INTEL_MKL = $candidate
+        break
     }
-    $MklRuntimeNames = @("mkl_rt", "mkl_core", "mkl_intel_thread", "mkl_avx2", "mkl_def")
-    $INTEL_MKL = ""
-    foreach ($candidate in ($MklCandidates | Select-Object -Unique)) {
-        if (-not (Test-Path "$candidate\lib\mkl_rt.lib")) {
-            continue
-        }
-        $missingRuntime = @($MklRuntimeNames | Where-Object {
-            -not (Test-Path "$candidate\bin\$_.3.dll")
-        })
-        if ($missingRuntime.Count -eq 0) {
-            $INTEL_MKL = $candidate
-            break
-        }
-        Write-Host "Ignoring incomplete MKL candidate $candidate (missing $($missingRuntime -join ', '))" -ForegroundColor Yellow
-    }
-    $MklImportLibrary = "$INTEL_MKL\lib\mkl_rt.lib"
-    $MklRuntime = "$INTEL_MKL\bin\mkl_rt.3.dll"
-    if (-not (Test-Path $MklImportLibrary) -or -not (Test-Path $MklRuntime)) {
-        if ($AxiFemOnly) {
-        # These focused targets do not link MKL. An incremental configure on a
-        # populated build dir may retain cached MKL paths, so warn, don't exit.
-            Write-Host "WARNING: Intel MKL not found at $INTEL_MKL -- continuing (-AxiFemOnly does not need MKL)" -ForegroundColor Yellow
-        } else {
-            Write-Host "ERROR: complete Intel MKL 2026 runtime not found" -ForegroundColor Red
-            Write-Host 'Install with: python -m pip install "mkl-devel>=2026,<2027"' -ForegroundColor Yellow
-            exit 1
-        }
+    Write-Host "Ignoring incomplete MKL candidate $candidate (missing $($missingRuntime -join ', '))" -ForegroundColor Yellow
+}
+$MklImportLibrary = "$INTEL_MKL\lib\mkl_rt.lib"
+$MklRuntime = "$INTEL_MKL\bin\mkl_rt.3.dll"
+if (-not (Test-Path $MklImportLibrary) -or -not (Test-Path $MklRuntime)) {
+    if ($AxiFemOnly) {
+    # These focused targets do not link MKL. An incremental configure on a
+    # populated build dir may retain cached MKL paths, so warn, don't exit.
+        Write-Host "WARNING: Intel MKL not found at $INTEL_MKL -- continuing (-AxiFemOnly does not need MKL)" -ForegroundColor Yellow
+    } else {
+        Write-Host "ERROR: complete Intel MKL 2026 runtime not found" -ForegroundColor Red
+        Write-Host 'Install with: python -m pip install "mkl-devel>=2026,<2027"' -ForegroundColor Yellow
+        exit 1
     }
 }
 
 # NGSolve (optional override via NGSOLVE_DIR / Netgen_DIR environment variables)
 $NGSolveCMakeArgs = ""
 $NetgenPackageDir = $null
-if ($OptunaMexOnly) {
-    Write-Host "NGSolve: not part of the optuna_mex target" -ForegroundColor Gray
-} elseif ($env:NGSOLVE_DIR -and (Test-Path "$env:NGSOLVE_DIR\NGSolveConfig.cmake")) {
+if ($env:NGSOLVE_DIR -and (Test-Path "$env:NGSOLVE_DIR\NGSolveConfig.cmake")) {
     $NetgenCMakeDir = if ($env:Netgen_DIR -and
         (Test-Path "$env:Netgen_DIR\NetgenConfig.cmake")) {
         $env:Netgen_DIR
@@ -221,19 +227,14 @@ if ($OptunaMexOnly) {
     $NGSolveCMakeArgs = " ^`n    -DNGSolve_DIR=`"$env:NGSOLVE_DIR`" ^`n    -DNetgen_DIR=`"$NetgenCMakeDir`""
     Write-Host "NGSolve: $env:NGSOLVE_DIR (from env)" -ForegroundColor Gray
 }
-if (-not $OptunaMexOnly) {
-    $NetgenPackageDir = (& $PythonExecutable -c "import netgen,os;print(os.path.dirname(netgen.__file__))").Trim()
-    if (-not (Test-Path "$NetgenPackageDir\include")) {
-        Write-Host "ERROR: Netgen include directory not found under $NetgenPackageDir" -ForegroundColor Red
-        exit 1
-    }
+
+$NetgenPackageDir = (& $PythonExecutable -c "import netgen,os;print(os.path.dirname(netgen.__file__))").Trim()
+if (-not (Test-Path "$NetgenPackageDir\include")) {
+    Write-Host "ERROR: Netgen include directory not found under $NetgenPackageDir" -ForegroundColor Red
+    exit 1
 }
-$OptunaCMakeArgs = " ^`n    -DRADIA_BUILD_OPTUNA_MEX_ONLY=$($OptunaMexOnly.ToString().ToUpperInvariant())"
-$PythonCMakeArgs = if ($OptunaMexOnly) {
-    ""
-} else {
-    " ^`n    -DPython3_EXECUTABLE=`"$PythonExecutable`" ^`n    -Dpybind11_DIR=`"$Pybind11CMakeDir`""
-}
+
+$PythonCMakeArgs = " ^`n    -DPython3_EXECUTABLE=`"$PythonExecutable`" ^`n    -Dpybind11_DIR=`"$Pybind11CMakeDir`""
 
 # Visual Studio (any version) via vswhere
 $VS_PATH = $null
@@ -291,18 +292,14 @@ if (-not ($NINJA_EXE -and (Test-Path $NINJA_EXE))) {
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-if ($OptunaMexOnly) {
-    Write-Host "  Optuna MEX Build (MSVC + MATLAB)" -ForegroundColor Cyan
-} else {
+
     Write-Host "  Radia Build (MSVC + MKL + NGSolve)" -ForegroundColor Cyan
-}
+
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
-if ($OptunaMexOnly) {
-    Write-Host "MKL:   not part of the optuna_mex target" -ForegroundColor Gray
-} else {
+
     Write-Host "MKL:   $INTEL_MKL (mkl_rt.3.dll)" -ForegroundColor Gray
-}
+
 Write-Host "Build: $BUILD_DIR" -ForegroundColor Gray
 Write-Host ""
 
@@ -379,15 +376,12 @@ echo Build completed.
 exit /b 0
 "@
 } else {
-$MklBatchEnvironment = if ($OptunaMexOnly) {
-    "REM optuna_mex does not use MKL"
-} else {
-@"
+$MklBatchEnvironment = @"
 set LIB=$INTEL_MKL\lib;%LIB%
 set INCLUDE=$INTEL_MKL\include;%INCLUDE%
 set MKLROOT=$INTEL_MKL
 "@
-}
+
 $BatchContent = @"
 @echo off
 setlocal enabledelayedexpansion
@@ -408,7 +402,6 @@ set VSLANG=1033
 
 $MklBatchEnvironment
 set RADIA_ONLY=$RadiaOnly
-set OPTUNA_MEX_ONLY=$OptunaMexOnly
 set RUN_CPP_TESTS=$Test
 
 cd /d "$BUILD_DIR"
@@ -422,26 +415,11 @@ echo ========================================
     -DCMAKE_MAKE_PROGRAM="$NINJA_EXE" ^
     -DCMAKE_C_COMPILER=cl ^
     -DCMAKE_CXX_COMPILER=cl ^
-    -DCMAKE_BUILD_TYPE=Release$PythonCMakeArgs$NGSolveCMakeArgs$OptunaCMakeArgs
+    -DCMAKE_BUILD_TYPE=Release$PythonCMakeArgs$NGSolveCMakeArgs
 
 if errorlevel 1 (
     echo ERROR: CMake configuration failed
     exit /b 1
-)
-
-if /I "%OPTUNA_MEX_ONLY%"=="True" (
-    echo.
-    echo ========================================
-    echo   Building lightweight Optuna MEX target
-    echo ========================================
-    "$CMAKE_EXE" --build . --config Release --target optuna_mex -j $BuildJobs
-    if errorlevel 1 (
-        echo ERROR: optuna_mex target build failed
-        exit /b 1
-    )
-    echo.
-    echo Build completed -OptunaMexOnly.
-    exit /b 0
 )
 
 echo.
@@ -624,28 +602,17 @@ try {
         }
     }
     $RequiredNativeArtifacts = @()
-    if ($BuildCubitPlugin -and -not ($RadiaOnly -or $AxiFemOnly -or $OptunaMexOnly)) {
+    if ($BuildCubitPlugin -and -not ($RadiaOnly -or $AxiFemOnly)) {
         $RequiredNativeArtifacts += "$PROJECT_DIR\src\cubit_plugin\build-pyd\cubit_mesh_curver.cp312-win_amd64.pyd"
         $RequiredNativeArtifacts += "$PROJECT_DIR\src\cubit_plugin\build-ccm\cubit_mesh_export.ccm"
     }
     $BuildResult = Get-NativeBuildResult -ExitCode $BuildResult -LogText $BuildLogText -RequiredArtifacts $RequiredNativeArtifacts
-    if ($OptunaMexOnly) {
-        $RequiredMexArtifacts = @(
-            "$PROJECT_DIR\packages\radia-optuna\matlab\optuna_mex.mexw64"
-        )
-        $MissingMexArtifacts = $RequiredMexArtifacts | Where-Object { -not (Test-Path $_) }
-        if ($MissingMexArtifacts) {
-            Write-Host "ERROR: MATLAB MEX artifacts were not produced:" -ForegroundColor Red
-            $MissingMexArtifacts | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
-            $BuildResult = 1
-        }
-    }
 
     if ($BuildResult -ne 0) { throw "Build failed with exit code $BuildResult" }
 
     # For -AxiFemOnly, axifem.pyd is already placed in src/radia/ by the
     # CMake POST_BUILD copy, so skip the full module/cubit copy section below.
-    if (-not $AxiFemOnly -and -not $OptunaMexOnly) {
+    if (-not $AxiFemOnly) {
     # ========================================================================
     # Copy .pyd files to src/radia/
     # ========================================================================
@@ -844,15 +811,6 @@ if ($Test) {
     Write-Host ""
     Write-Host "Running tests..." -ForegroundColor Cyan
 
-    if ($OptunaMexOnly) {
-        & $PythonExecutable -m pytest "$PROJECT_DIR\packages\radia-optuna\tests" -q
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "radia-optuna tests failed!" -ForegroundColor Red
-            exit 1
-        }
-        return
-    }
-
     $oldPythonPath = $env:PYTHONPATH
     if ($oldPythonPath) {
         $env:PYTHONPATH = "$PROJECT_DIR\src;$oldPythonPath"
@@ -875,7 +833,7 @@ print(f"radia {radia.__version__} OK from {radia_file}")
     $ImportCheck | python -
     if ($LASTEXITCODE -ne 0) { Write-Host "Import failed!" -ForegroundColor Red; exit 1 }
 
-    if ($RadiaOnly -or $AxiFemOnly -or $OptunaMexOnly) {
+    if ($RadiaOnly -or $AxiFemOnly) {
         Write-Host "Skipping full pytest because only a focused build was requested." -ForegroundColor Yellow
     } else {
         Push-Location $PROJECT_DIR
