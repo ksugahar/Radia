@@ -23,6 +23,7 @@ on:
       - 'Build.ps1'
       - 'tools/native_build_provenance.ps1'
       - 'CMakeLists.txt'
+      - 'validation_test/optimization/validate_optuna_cuda.m'
       - '.github/workflows/radia-optuna.yml'
   pull_request:
     branches: [main]
@@ -45,6 +46,7 @@ on:
       - 'Build.ps1'
       - 'tools/native_build_provenance.ps1'
       - 'CMakeLists.txt'
+      - 'validation_test/optimization/validate_optuna_cuda.m'
       - '.github/workflows/radia-optuna.yml'
   workflow_dispatch:
 
@@ -77,7 +79,7 @@ jobs:
         run: |
           & $env:RADIA_OPTUNA_CI_PYTHON -m pip install pybind11==3.0.2 ninja
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & .\Build.ps1 -OptunaMexOnly
+          & .\Build.ps1 -OptunaMexOnly -Test
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Test, build, and verify radia-optuna wheel
@@ -108,6 +110,14 @@ jobs:
             Pop-Location
           }
 
+      - name: Upload CUDA oracle acceptance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-optuna-cuda-acceptance
+          path: validation_test/optimization/results_optuna_cuda_100.json
+          if-no-files-found: error
+
       - name: Upload radia-optuna wheel
         uses: actions/upload-artifact@v4
         with:
@@ -119,7 +129,7 @@ jobs:
   installed-wheel-matlab-e2e:
     name: radia-optuna installed-wheel MATLAB/Simulink E2E
     needs: build-test
-    runs-on: windows-latest
+    runs-on: [self-hosted, Windows, X64, "100"]
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -129,15 +139,6 @@ jobs:
         with:
           name: radia-optuna-wheel
           path: dist/radia-optuna
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Set up MATLAB and Simulink
-        uses: matlab-actions/setup-matlab@v3
-        with:
-          products: Simulink
 
       - name: Install and inspect only the built wheel
         shell: pwsh
@@ -166,8 +167,17 @@ jobs:
         uses: matlab-actions/run-command@v3
         with:
           command: >-
-            restoredefaultpath;
             addpath(getenv('RADIA_OPTUNA_MATLAB_PATH'));
             addpath(getenv('RADIA_OPTUNA_TEST_PATH'));
             result=test_standalone_simulink(getenv('RADIA_OPTUNA_MATLAB_PATH'));
             assert(result.ok);
+            fid=fopen('installed-wheel-simulink.json','w');
+            fprintf(fid,'%s\n',jsonencode(result,PrettyPrint=true));
+            fclose(fid);
+
+      - name: Upload installed-wheel GPU and Simulink evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-optuna-simulink-gpu-acceptance
+          path: installed-wheel-simulink.json
+          if-no-files-found: error

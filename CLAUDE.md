@@ -61,10 +61,7 @@ Prefer established public abstractions over proprietary plumbing.
 - Use HACApK for Radia core compact interactions; do not restore core ExaFMM.
 - NGSolve BEM is supported. Its native multipole/FMM facilities may be used for
   smooth free-space BEM and Biot-Savart work.
-- Python FE work follows caller-owned `ngsolve.TaskManager()`. MATLAB
-  parallel work follows MATLAB's runtime.
-  Exception: `p1_newton.solve_p1_newton` and `p1_linear.solve_p1_linear` own
-  regions and reject active TaskManager for AMS setup; helpers stay caller-owned.
+- Python FE work follows caller-owned `ngsolve.TaskManager()`. MATLAB parallel work follows MATLAB's runtime. Exception: `p1_newton.solve_p1_newton` and `p1_linear.solve_p1_linear` own regions and reject active TaskManager for AMS setup; helpers stay caller-owned.
 - Fail loudly on unsupported geometry, labels, ABI, convergence, or backend
   state. Never silently substitute a numerically different route.
 ## Interfaces
@@ -100,6 +97,7 @@ Coreform Cubit's private PySide6 is allowed only inside Cubit for the
   Use `bibliography_make_bbl`, regenerate after changes, and check citations.
 
 ### CPU / GPU Execution Policy (2026-10-11)
+- MATLAB native extensions compile only through `mexcuda`, including CPU/Simulink kernels; direct `mex` and CMake `matlab_add_mex` builds are prohibited. CPU host parallel kernels use OpenMP with bounded threads; state management and ordered random consumption remain serial.
 - CPU: Python (pybind11)/NGSolve, built with Visual Studio Build Tools on Windows; NGSolve TaskManager owns CPU parallel execution under the caller-owned region policy. CPU MEX is unsupported.
 - GPU: `radia-gpu` uses MATLAB mexcuda for performance; ships optional Simulink/LTspice adapters, no external products. GPU workflows must complete within MATLAB/mexcuda, including solver setup and preconditioner construction; do not require a Python adapter or Python-generated solver snapshot. Native Python DLL dependencies inherited from NGSolve are permitted; GPU use must not require Python adapter execution. Python owns CPU execution and independent numerical-accuracy validation. Python CPU reference runs are validation workflows, not prerequisites for GPU users.
 - Indirect TaskManager dependencies through standard NGSolve headers/DLLs are permitted in mexcuda builds. Never start TaskManager or use its parallel execution in MATLAB/mexcuda workflows; MATLAB owns host scheduling and CUDA owns device execution. AMS preprocessing selects CUDA or OpenMP using numerical parity and transfer-inclusive timing/memory evidence; serial execution remains a reference. Use CUDA GPU parallelism wherever beneficial and OpenMP for suitable CPU host work, based on measured end-to-end benefit; bound OpenMP threads to avoid oversubscription with MATLAB. The two supported execution routes are Python/pybind11 with NGSolve TaskManager and MATLAB/mexcuda with CUDA/OpenMP, without TaskManager execution.
@@ -269,6 +267,8 @@ and live sources.
 Before tagging, dispatch `Radia Native Release` on the exact release SHA; `ci-verify` requires its successful native check.
 
 ## Optuna
+
+`radia-optuna` provides mexcuda kernels for MATLAB and optional Simulink use. TPE density and candidate evaluation use CUDA; host parallel kernels use OpenMP.
 
 Pinned Optuna 5.0.0 is the sole oracle for shared MATLAB behavior: seed, options,
 parameter/search-space order, history, named constraints, values, states, warnings,

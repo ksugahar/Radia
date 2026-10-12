@@ -9,27 +9,15 @@ option(RADIA_BUILD_OPTUNA_MEX_ONLY
     "Configure only the independent MATLAB Optuna MEX gateway" OFF)
 
 function(radia_add_optuna_mex)
-	matlab_add_mex(
-		NAME optuna_mex
-		R2018a
-		SRC ${CMAKE_CURRENT_SOURCE_DIR}/packages/radia-optuna/native/optuna_mex.cpp
-	)
-	target_compile_definitions(optuna_mex PRIVATE
-		RADIA_OPTUNA_MEX_ONLY
-		NOMINMAX
-	)
-	target_compile_features(optuna_mex PRIVATE cxx_std_20)
-	if(MSVC)
-		target_compile_options(optuna_mex PRIVATE /O2 /fp:fast /arch:AVX2 /W0)
-		target_link_options(optuna_mex PRIVATE /NODEFAULTLIB:LIBCMT)
-	endif()
-	add_custom_command(TARGET optuna_mex POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/packages/radia-optuna/matlab"
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			"$<TARGET_FILE:optuna_mex>"
-			"${CMAKE_SOURCE_DIR}/packages/radia-optuna/matlab/$<TARGET_FILE_NAME:optuna_mex>"
-		COMMENT "Copying optuna_mex to matlab"
-	)
+    # MATLAB selects its supported CUDA and host toolchain; no CPU-only target.
+    find_program(OPTUNA_MATLAB_EXECUTABLE matlab
+        HINTS "${Matlab_ROOT_DIR}/bin" REQUIRED)
+    add_custom_target(optuna_mex
+        COMMAND "${OPTUNA_MATLAB_EXECUTABLE}" -wait -batch
+            "addpath('${CMAKE_SOURCE_DIR}/packages/radia-optuna/tools'); build_mexcuda('${CMAKE_SOURCE_DIR}');"
+        BYPRODUCTS "${CMAKE_SOURCE_DIR}/packages/radia-optuna/matlab/optuna_mex.mexw64"
+        VERBATIM
+    )
 endfunction()
 
 if(RADIA_BUILD_OPTUNA_MEX_ONLY)

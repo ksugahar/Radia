@@ -1,5 +1,25 @@
 # radia-optuna
 
+The native gateway is built with MATLAB `mexcuda`. TPE Parzen density,
+candidate scoring, and first-maximum selection execute on an NVIDIA GPU in
+double precision. Study/Trial management, estimator construction, seeded
+random consumption, and candidate generation remain on the CPU host.
+CPU host parallel kernels use OpenMP through the same mexcuda build; ordered
+random consumption remains serial. Ordinary `mex` compilation is prohibited.
+These TPE operations require Parallel Computing Toolbox and a supported
+NVIDIA GPU; a CPU-only gateway is rejected. GPU users do not need Python.
+Optional upstream-backed features retain their Python requirements below.
+
+Use the same GPU-backed TPE from MATLAB or the included masked Simulink
+study block and `SimulinkRunner`. Simulink is optional for MATLAB-only use.
+
+Build on the designated 100 host with `Build.ps1 -OptunaMexOnly -Test`.
+MATLAB selects its supported CUDA toolkit and Visual Studio compiler.
+The focused acceptance saves `validation_test/optimization/results_optuna_cuda_100.json`,
+including upstream 5.0.0 density/selection checks, exact random consumption,
+CUDA launch counters, runtime versions, transfers and temporary device memory.
+This is correctness evidence; formal speed comparisons require idle mdx.
+
 `radia-optuna` is an independent, separately distributed MATLAB optimization
 component from the Radia monorepo. It installs the `radia.optuna` MATLAB
 namespace, the 21-command `optuna_mex`, and checked compatibility contracts

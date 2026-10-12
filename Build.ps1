@@ -109,6 +109,22 @@ if ($OptunaMexOnly -and $InstallToSitePackages) {
 # ============================================================================
 
 $PROJECT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
+if ($OptunaMexOnly) {
+    if ($RequireNativeProvenance) {
+        $OptunaStatus = git -C $PROJECT_DIR status --porcelain
+        if ($LASTEXITCODE -ne 0 -or $OptunaStatus) { throw 'Optuna CUDA provenance requires clean source' }
+    }
+    $OptunaMatlab = Get-Command matlab -ErrorAction Stop
+    $OptunaRoot = $PROJECT_DIR.Replace("'", "''").Replace('\', '/')
+    & $OptunaMatlab.Source -wait -batch "addpath('$OptunaRoot/packages/radia-optuna/tools'); build_mexcuda('$OptunaRoot');"
+    if ($LASTEXITCODE -ne 0) { throw 'Optuna mexcuda build failed' }
+    if ($Test) {
+        & $OptunaMatlab.Source -wait -batch "addpath('$OptunaRoot/validation_test/optimization'); validate_optuna_cuda('$OptunaRoot');"
+        if ($LASTEXITCODE -ne 0) { throw 'Optuna CUDA validation failed' }
+    }
+    return
+}
+
 $BUILD_DIR = "$PROJECT_DIR\build-msvc"
 $NativeBuildProvenanceScript = "$PROJECT_DIR\tools\native_build_provenance.ps1"
 . $NativeBuildProvenanceScript

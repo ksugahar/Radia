@@ -226,6 +226,10 @@ def test_focused_optuna_build_keeps_python_and_pybind_out_of_the_build_contract(
     optuna_guard = build.index("if (-not $OptunaMexOnly) {")
     pybind_probe = build.index("import pybind11; print(pybind11.get_cmake_dir())")
     assert optuna_guard < pybind_probe
+    assert build.index("build_mexcuda") < pybind_probe
+    assert "matlab_add_mex(" not in (REPO_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+    cuda_build = (PACKAGE_ROOT / "tools/build_mexcuda.m").read_text(encoding="utf-8")
+    assert "mexcuda(" in cuda_build and "--compiler-options=/openmp" in cuda_build
     assert "$PythonCMakeArgs = if ($OptunaMexOnly)" in build
     assert "$NINJA_COMMAND = Get-Command ninja" in build
     assert "-InstallToSitePackages does not apply" in build

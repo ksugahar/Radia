@@ -384,6 +384,9 @@ def test_agent_policies_stay_compact_and_share_one_policy_body():
 
     policy = "\n".join(agents)
     assert "Investigations remain in Git" in policy
+    assert "direct `mex` and CMake `matlab_add_mex` builds are prohibited" in policy
+    assert "CPU host parallel kernels use OpenMP with bounded threads" in policy
+    assert "state management and ordered random consumption remain serial" in policy
     assert "Do not expand this file into a second manual" in policy
     assert "packages/radia-mcp/src/radia_mcp/**/knowledge/" in policy
 
