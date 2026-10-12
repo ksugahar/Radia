@@ -20,3 +20,9 @@ solve/residual checks, thermal state updates and shared Simulink block state.
 Keep electromagnetic/thermal vectors resident between updates; transfer only
 required controls and observed outputs. Preserve block output/update ordering,
 SI units, ESIM physical contracts and independently validated CPU results.
+
+Device-scalar BiCGStab stages now compile and pass the identity-system first-
+correction convergence check, including bypass of the zero omega denominator.
+Full cuBLAS device reductions, the persistent solve loop, true-residual gate,
+preconditioning, thermal evolution and Simulink context are still pending.
+The stage check is not iterative-solver or physical IH acceptance.
