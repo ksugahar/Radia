@@ -1,7 +1,9 @@
 // Direct in-process HACApK packing: never exposes pointers to MATLAB.
 #pragma once
 #include "hmatrix_resident.cuh"
+extern "C" {
 #include "cHACApK_base.h"
+}
 namespace radia_hmatrix_cuda {
 inline Plan fromHacapk(const st_cHACApK_leafmtxp_t& matrix,
                       const st_cHACApK_lcontrol_t& control,

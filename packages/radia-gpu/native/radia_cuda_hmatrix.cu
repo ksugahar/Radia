@@ -80,6 +80,29 @@ Plan read(const mxArray* cfg){
 void mexFunction(int nl,mxArray* out[],int nr,const mxArray* in[]){
 try{
     if(!nr)throw std::invalid_argument("Command required");auto command=text(in[0]);
+    if(command=="analytic_aca_compress"){
+        arity(nr,6,nl,1);std::size_t payloadBytes=0;
+        for(int i=1;i<6;++i)checkPayload(in[i],payloadBytes);
+        auto block=analyticSources(numbers(in[1]),numbers(in[2]),2147483647u);
+        const auto rows=integer(in[3],true),rankLimit=integer(in[5],true),n=block.sources.size();
+        const auto epsilon=numbers(in[4]);
+        if(rows>=n||rankLimit>std::min(rows,n-rows)||epsilon.size()!=1||epsilon[0]<=0||epsilon[0]>=1)
+            throw std::invalid_argument("Invalid ACA block split/rank/tolerance");
+        const auto columns=n-rows;
+        std::vector<double> a2(checkedProduct(rows,rankLimit)),a1(checkedProduct(columns,rankLimit));
+        std::vector<int> lod(n+1);for(std::size_t i=0;i<n;++i)lod[i+1]=int(i+1);
+        double parameters[100]={};parameters[61]=2;
+        AnalyticEntryOracle oracle(block,256);EntryCallbackScope binding(oracle,nullptr);
+        const int rank=cHACApK_acaplus(a2.data(),a1.data(),parameters,int(rows),int(columns),1,int(rows+1),lod.data(),0,int(rankLimit),epsilon[0],1.,epsilon[0]);
+        binding.rethrow();if(rank<1||rank>int(rankLimit))throw std::runtime_error("ACA compression did not return valid factors");
+        const char* names[]={"rank","a1","a2","entry_batches","entry_count","owned_device_bytes"};
+        out[0]=mxCreateStructMatrix(1,1,6,names);mxSetField(out[0],0,"rank",mxCreateDoubleScalar(rank));
+        auto* first=mxCreateDoubleMatrix(columns,rank,mxREAL);auto* second=mxCreateDoubleMatrix(rows,rank,mxREAL);
+        std::copy(a1.begin(),a1.begin()+columns*rank,mxGetDoubles(first));std::copy(a2.begin(),a2.begin()+rows*rank,mxGetDoubles(second));
+        mxSetField(out[0],0,"a1",first);mxSetField(out[0],0,"a2",second);
+        mxSetField(out[0],0,"entry_batches",mxCreateDoubleScalar(oracle.batches));mxSetField(out[0],0,"entry_count",mxCreateDoubleScalar(oracle.entries));
+        mxSetField(out[0],0,"owned_device_bytes",mxCreateDoubleScalar(oracle.ownedBytes));return;
+    }
     if(command=="analytic_aca_vector"){
         arity(nr,7,nl,1);std::size_t payloadBytes=0;
         for(int i=1;i<7;++i)checkPayload(in[i],payloadBytes);

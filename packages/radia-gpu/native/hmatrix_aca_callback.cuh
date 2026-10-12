@@ -46,3 +46,6 @@ extern "C" void cHACApK_entry_batch(int count,const int* rows,const int* columns
             std::fill(output,output+count,std::numeric_limits<double>::quiet_NaN());
     }
 }
+extern "C" double cHACApK_entry_ij(int row,int column,int problem){
+    double value=0.;cHACApK_entry_batch(1,&row,&column,problem,&value);return value;
+}
