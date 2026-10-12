@@ -1,6 +1,5 @@
 {
   "schema": "radia.validation.optuna-cuda.v1",
-  "host": "T7920",
   "matlab": "26.1.0.3346908 (R2026a) Update 5",
   "gpu": "Quadro RTX 5000",
   "compute_capability": "7.5",
@@ -106,5 +105,6 @@
     "cuda_tests_passed": 3,
     "wheel_sha256": "131d4cc49b51b089b38bcd5a714c5d527d88c7559e8c2e1913e8ebd2cc45c156",
     "source_fidelity_verified": true
-  }
+  },
+  "platform": "windows-x64"
 }

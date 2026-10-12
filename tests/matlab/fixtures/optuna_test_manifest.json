@@ -44,6 +44,13 @@
     },
     {
       "classification": "matlab-integration",
+      "file": "test_optuna_cuda.m",
+      "oracle": null,
+      "scope": "mexcuda execution boundary, device failure and lifecycle",
+      "test": "testGpuFailureRestoresRandomState"
+    },
+    {
+      "classification": "matlab-integration",
       "file": "test_optuna_got_interface.m",
       "oracle": null,
       "scope": "MATLAB Global Optimization Toolbox-shaped surface: optimoptions, the [x, fval, exitflag, output] contract, init/iter/done callbacks, and sdo-style parameter objects; this is not upstream parity",

@@ -1,5 +1,8 @@
 #include "mex.h"
-#include "optuna_cuda.h"
+#include "optuna_cuda.hpp"
+#ifndef _OPENMP
+#error "Optuna mexcuda requires the OpenMP-enabled host compiler"
+#endif
 
 
 #include <algorithm>
@@ -21,7 +24,6 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
 
 namespace {
 
@@ -673,7 +675,7 @@ mxArray* Commands() {
 void OptunaParetoRankCrowding(int nlhs, mxArray* plhs[], int nrhs,
                               const mxArray* prhs[]) {
     CheckArity(nrhs, 3, nlhs, 2,
-        "[rank, crowding] = optuna_mex('optuna.pareto.rank_crowding', values, signs)");
+        "[rank, crowding] = radia_mex('optuna.pareto.rank_crowding', values, signs)");
 
     std::size_t count = 0, objective_count = 0;
     const auto values = RealMatrix(prhs[1], count, objective_count, "values");
@@ -809,7 +811,7 @@ double OptunaLogSumExp(const std::vector<double>& values) {
 void OptunaParzenLogPdfNumerical(int nlhs, mxArray* plhs[], int nrhs,
                                  const mxArray* prhs[]) {
     CheckArity(nrhs, 9, nlhs, 1,
-        "value = optuna_mex('optuna.parzen.log_pdf_numerical', samples, weights, mu, sigma, internal_low, internal_high, log_scale, step)");
+        "value = radia_mex('optuna.parzen.log_pdf_numerical', samples, weights, mu, sigma, internal_low, internal_high, log_scale, step)");
     const auto samples = RealVector(prhs[1], "samples");
     const auto weights = RealVector(prhs[2], "weights");
     const auto mu = RealVector(prhs[3], "mu");
@@ -840,26 +842,60 @@ void OptunaParzenLogPdfNumerical(int nlhs, mxArray* plhs[], int nrhs,
     if (!(weight_sum > 0.0))
         BadArgument("Parzen weights must contain positive mass");
 
+    for (double sample : samples)
+        if (!std::isfinite(sample) || (log_scale && sample <= 0.0) ||
+            (discrete && log_scale && sample - 0.5 * step <= 0.0))
+            BadArgument("samples contain values outside the numerical density domain");
+    plhs[0] = RealColumn(optuna_cuda::log_pdf(samples, {{
+        &weights, &mu, &sigma, nullptr, 0, internal_low, internal_high,
+        step, false, log_scale}}));
+    return;
+
     std::vector<double> denominator(weights.size());
     for (std::size_t kernel = 0; kernel < weights.size(); ++kernel)
         denominator[kernel] = OptunaLogNormalMass(
             (internal_low - mu[kernel]) / sigma[kernel],
             (internal_high - mu[kernel]) / sigma[kernel]);
 
-    for (double sample : samples) {
+    std::vector<double> result(samples.size());
+    std::vector<double> components(weights.size());
+    constexpr double half_log_two_pi = 0.91893853320467274178;
+    for (std::size_t sample_index = 0; sample_index < samples.size(); ++sample_index) {
+        const double sample = samples[sample_index];
         if (!std::isfinite(sample) || (log_scale && sample <= 0.0))
             BadArgument("samples contain values outside the numerical density domain");
-        if (discrete && log_scale && !(sample - .5*step > 0.0 && std::isfinite(sample + .5*step)))
-            BadArgument("log-discrete sample interval must be positive and finite");
+        for (std::size_t kernel = 0; kernel < weights.size(); ++kernel) {
+            double component = 0.0;
+            if (discrete) {
+                double sample_low = sample - 0.5 * step;
+                double sample_high = sample + 0.5 * step;
+                if (log_scale) {
+                    if (!(sample_low > 0.0 && sample_high > 0.0))
+                        BadArgument("log-discrete sample interval must be positive");
+                    sample_low = std::log(sample_low);
+                    sample_high = std::log(sample_high);
+                }
+                component = OptunaLogNormalMass(
+                    (sample_low - mu[kernel]) / sigma[kernel],
+                    (sample_high - mu[kernel]) / sigma[kernel]) -
+                    denominator[kernel];
+            } else {
+                const double internal_sample = log_scale ? std::log(sample) : sample;
+                const double z = (internal_sample - mu[kernel]) / sigma[kernel];
+                component = -0.5 * z * z - half_log_two_pi -
+                    std::log(sigma[kernel]) - denominator[kernel];
+            }
+            components[kernel] = component + std::log(weights[kernel]);
+        }
+        result[sample_index] = OptunaLogSumExp(components);
     }
-    plhs[0] = RealColumn(optuna_cuda::numerical(samples, weights, mu, sigma,
-        denominator, log_scale, step));
+    plhs[0] = RealColumn(result);
 }
 
 void OptunaParzenLogPdfCategorical(int nlhs, mxArray* plhs[], int nrhs,
                                    const mxArray* prhs[]) {
     CheckArity(nrhs, 4, nlhs, 1,
-        "value = optuna_mex('optuna.parzen.log_pdf_categorical', samples, weights, probabilities)");
+        "value = radia_mex('optuna.parzen.log_pdf_categorical', samples, weights, probabilities)");
     const auto samples = RealVector(prhs[1], "samples");
     const auto weights = RealVector(prhs[2], "weights");
     std::size_t kernel_count = 0, choice_count = 0;
@@ -879,13 +915,32 @@ void OptunaParzenLogPdfCategorical(int nlhs, mxArray* plhs[], int nrhs,
         if (!std::isfinite(probability) || probability < 0.0)
             BadArgument("categorical probabilities must be finite and nonnegative");
 
-    for (double raw_choice : samples) {
+    for (double sample : samples)
+        if (!std::isfinite(sample) || sample != std::floor(sample) ||
+            sample < 1.0 || sample > static_cast<double>(choice_count))
+            BadArgument("categorical samples must be one-based integer choice indices");
+    plhs[0] = RealColumn(optuna_cuda::log_pdf(samples, {{
+        &weights, nullptr, nullptr, &probabilities, choice_count, 0.0, 0.0,
+        std::numeric_limits<double>::quiet_NaN(), true, false}}));
+    return;
+
+    std::vector<double> result(samples.size());
+    std::vector<double> components(kernel_count);
+    for (std::size_t sample_index = 0; sample_index < samples.size(); ++sample_index) {
+        const double raw_choice = samples[sample_index];
         if (!std::isfinite(raw_choice) || raw_choice != std::floor(raw_choice) ||
             raw_choice < 1.0 || raw_choice > static_cast<double>(choice_count))
             BadArgument("categorical samples must be one-based integer choice indices");
+        const std::size_t choice = static_cast<std::size_t>(raw_choice) - 1;
+        for (std::size_t kernel = 0; kernel < kernel_count; ++kernel) {
+            const double probability = std::max(
+                probabilities[kernel * choice_count + choice],
+                std::numeric_limits<double>::min());
+            components[kernel] = std::log(probability) + std::log(weights[kernel]);
+        }
+        result[sample_index] = OptunaLogSumExp(components);
     }
-    plhs[0] = RealColumn(optuna_cuda::categorical(samples, weights,
-        probabilities, choice_count));
+    plhs[0] = RealColumn(result);
 }
 
 void OptunaRandomStateSeed(OptunaRandomStateHandle& state,
@@ -1032,7 +1087,7 @@ double OptunaParzenLogPdfAt(
 void OptunaTPEBestNumerical(int nlhs, mxArray* plhs[], int nrhs,
                             const mxArray* prhs[]) {
     CheckArity(nrhs, 15, nlhs, 1,
-        "value = optuna_mex('optuna.tpe.best_numerical', handle, count, below_weights, below_mu, below_sigma, above_weights, above_mu, above_sigma, internal_low, internal_high, low, high, log_scale, step)");
+        "value = radia_mex('optuna.tpe.best_numerical', handle, count, below_weights, below_mu, below_sigma, above_weights, above_mu, above_sigma, internal_low, internal_high, low, high, log_scale, step)");
     OptunaRandomStateHandle& state = OptunaRandomState(Handle(prhs[1]));
     const int count = PositiveInteger(prhs[2], "count");
     const auto below_weights = RealVector(prhs[3], "below_weights");
@@ -1102,9 +1157,9 @@ void OptunaTPEBestNumerical(int nlhs, mxArray* plhs[], int nrhs,
 
     constexpr double inverse_sqrt_two = 0.70710678118654752440;
     const double probability_epsilon = std::numeric_limits<double>::epsilon();
+    std::vector<double> gpu_candidates(static_cast<std::size_t>(count));
     double best_value = std::numeric_limits<double>::quiet_NaN();
     double best_acquisition = -std::numeric_limits<double>::infinity();
-    std::vector<double> candidates(static_cast<std::size_t>(count));
     for (int index = 0; index < count; ++index) {
         const std::size_t component = components[static_cast<std::size_t>(index)];
         const double mean = below_mu[component];
@@ -1124,20 +1179,14 @@ void OptunaTPEBestNumerical(int nlhs, mxArray* plhs[], int nrhs,
         if (discrete)
             candidate = low + std::round((candidate - low) / step) * step;
         candidate = std::min(std::max(candidate, low), high);
-        candidates[static_cast<std::size_t>(index)] = candidate;
+        gpu_candidates[static_cast<std::size_t>(index)] = candidate;
     }
-    const auto below = optuna_cuda::numerical(candidates, below_weights, below_mu,
-        below_sigma, below_denominator, log_scale, step);
-    const auto above = optuna_cuda::numerical(candidates, above_weights, above_mu,
-        above_sigma, above_denominator, log_scale, step);
-    for (int index = 0; index < count; ++index) {
-        const double candidate = candidates[static_cast<std::size_t>(index)];
-        const double acquisition = below[index] - above[index];
-        if (acquisition > best_acquisition) {
-            best_acquisition = acquisition;
-            best_value = candidate;
-        }
-    }
+    const auto best = optuna_cuda::best(gpu_candidates,
+        {{&below_weights, &below_mu, &below_sigma, nullptr, 0,
+          internal_low, internal_high, step, false, log_scale}},
+        {{&above_weights, &above_mu, &above_sigma, nullptr, 0,
+          internal_low, internal_high, step, false, log_scale}});
+    best_value = gpu_candidates[best];
     checkpoint.accepted = true;
     plhs[0] = mxCreateDoubleScalar(best_value);
 }
@@ -1182,6 +1231,17 @@ OptunaJointEstimator OptunaParseJointEstimator(const mxArray* value,
             result.choice_count, "probabilities");
         if (rows != result.weights.size() || result.choice_count == 0)
             BadArgument("joint categorical probabilities have invalid shape");
+        for (std::size_t row = 0; row < rows; ++row) {
+            double total = 0.0;
+            for (std::size_t choice = 0; choice < result.choice_count; ++choice) {
+                const double probability = result.probabilities[row * result.choice_count + choice];
+                if (!std::isfinite(probability) || probability < 0.0)
+                    BadArgument("joint categorical probabilities must be finite and nonnegative");
+                total += probability;
+            }
+            if (std::abs(total - 1.0) > 1e-8)
+                BadArgument("joint categorical probability rows must sum to one");
+        }
     } else {
         result.mu = RealVector(OptunaRequiredField(value, "mu"), "mu");
         result.sigma = RealVector(OptunaRequiredField(value, "sigma"), "sigma");
@@ -1198,6 +1258,10 @@ OptunaJointEstimator OptunaParseJointEstimator(const mxArray* value,
         if (step_values.size() != 1)
             BadArgument("joint numerical step must be a scalar or NaN");
         result.step = step_values.front();
+        if ((!std::isnan(result.step) && (!std::isfinite(result.step) || result.step <= 0.0)) ||
+            (result.log_scale && (result.low <= 0.0 ||
+                (std::isfinite(result.step) && result.low - 0.5 * result.step <= 0.0))))
+            BadArgument("joint numerical estimator has invalid step or logarithmic domain");
         if (result.mu.size() != result.weights.size() ||
             result.sigma.size() != result.weights.size() ||
             !(result.internal_low < result.internal_high) ||
@@ -1205,8 +1269,9 @@ OptunaJointEstimator OptunaParseJointEstimator(const mxArray* value,
             BadArgument("joint numerical estimator has invalid shape or bounds");
         result.denominator.resize(result.weights.size());
         for (std::size_t kernel = 0; kernel < result.weights.size(); ++kernel) {
-            if (!(result.sigma[kernel] > 0.0))
-                BadArgument("joint numerical sigma must be positive");
+            if (!std::isfinite(result.mu[kernel]) ||
+                !std::isfinite(result.sigma[kernel]) || !(result.sigma[kernel] > 0.0))
+                BadArgument("joint numerical mu/sigma must be finite with positive sigma");
             result.denominator[kernel] = OptunaLogNormalMass(
                 (result.internal_low - result.mu[kernel]) / result.sigma[kernel],
                 (result.internal_high - result.mu[kernel]) / result.sigma[kernel]);
@@ -1223,21 +1288,32 @@ OptunaJointEstimator OptunaParseJointEstimator(const mxArray* value,
     return result;
 }
 
-std::vector<double> OptunaJointDensity(const std::vector<double>& candidates,
-    std::size_t count, const std::vector<OptunaJointEstimator>& estimators) {
-    std::vector<double> parameters;
-    std::vector<optuna_cuda::Dimension> dimensions;
-    auto append = [&](const std::vector<double>& values) {
-        const std::size_t offset = parameters.size();
-        parameters.insert(parameters.end(), values.begin(), values.end());
-        return offset;
-    };
-    for (const auto& e : estimators) {
-        dimensions.push_back({append(e.mu), append(e.sigma), append(e.denominator),
-            append(e.probabilities), e.choice_count, e.categorical, e.log_scale, e.step});
+double OptunaJointComponentLogPdf(const OptunaJointEstimator& estimator,
+                                  double sample, std::size_t kernel) {
+    if (estimator.categorical) {
+        const std::size_t choice = static_cast<std::size_t>(sample) - 1;
+        return std::log(std::max(
+            estimator.probabilities[kernel * estimator.choice_count + choice],
+            std::numeric_limits<double>::min()));
     }
-    return optuna_cuda::joint(candidates, count, estimators.front().weights,
-        parameters, dimensions);
+    constexpr double half_log_two_pi = 0.91893853320467274178;
+    if (std::isfinite(estimator.step)) {
+        double sample_low = sample - 0.5 * estimator.step;
+        double sample_high = sample + 0.5 * estimator.step;
+        if (estimator.log_scale) {
+            sample_low = std::log(sample_low);
+            sample_high = std::log(sample_high);
+        }
+        return OptunaLogNormalMass(
+            (sample_low - estimator.mu[kernel]) / estimator.sigma[kernel],
+            (sample_high - estimator.mu[kernel]) / estimator.sigma[kernel]) -
+            estimator.denominator[kernel];
+    }
+    const double internal_sample = estimator.log_scale ? std::log(sample) : sample;
+    const double z = (internal_sample - estimator.mu[kernel]) /
+                     estimator.sigma[kernel];
+    return -0.5 * z * z - half_log_two_pi -
+           std::log(estimator.sigma[kernel]) - estimator.denominator[kernel];
 }
 
 std::vector<double> OptunaBestJoint(
@@ -1247,6 +1323,14 @@ std::vector<double> OptunaBestJoint(
     const std::size_t dimension = below.size();
     if (dimension == 0 || above.size() != dimension)
         BadArgument("joint TPE estimator dimensions must agree");
+    if (dimension > std::numeric_limits<std::size_t>::max() /
+                        sizeof(double) / static_cast<std::size_t>(count))
+        BadArgument("joint TPE candidate allocation size overflow");
+    for (std::size_t index = 0; index < dimension; ++index) {
+        if (below[index].categorical != above[index].categorical ||
+            (below[index].categorical && below[index].choice_count != above[index].choice_count))
+            BadArgument("joint TPE below/above distribution domains must agree");
+    }
     const std::size_t below_kernels = below.front().weights.size();
     const std::size_t above_kernels = above.front().weights.size();
     for (std::size_t index = 1; index < dimension; ++index)
@@ -1254,8 +1338,6 @@ std::vector<double> OptunaBestJoint(
             above[index].weights.size() != above_kernels)
             BadArgument("joint TPE dimensions must share mixture component counts");
 
-    if (dimension > std::numeric_limits<std::size_t>::max() / static_cast<std::size_t>(count))
-        BadArgument("joint TPE candidate shape exceeds addressable memory");
     RandomStateCheckpoint checkpoint(state);
     std::vector<double> cumulative(below.front().weights.size());
     std::partial_sum(below.front().weights.begin(), below.front().weights.end(),
@@ -1315,28 +1397,26 @@ std::vector<double> OptunaBestJoint(
         }
     }
 
-    std::size_t best = 0;
-    double best_acquisition = -std::numeric_limits<double>::infinity();
-    const auto below_density = OptunaJointDensity(candidates, count, below);
-    const auto above_density = OptunaJointDensity(candidates, count, above);
-    for (int row = 0; row < count; ++row) {
-        const double acquisition = below_density[row] - above_density[row];
-        if (acquisition > best_acquisition) {
-            best_acquisition = acquisition;
-            best = static_cast<std::size_t>(row);
-        }
-    }
+    auto views = [](const std::vector<OptunaJointEstimator>& source) {
+        std::vector<optuna_cuda::Estimator> result;
+        for (const auto& e : source)
+            result.push_back({&e.weights, &e.mu, &e.sigma, &e.probabilities,
+                e.choice_count, e.internal_low, e.internal_high, e.step,
+                e.categorical, e.log_scale});
+        return result;
+    };
+    const auto best = optuna_cuda::best(candidates, views(below), views(above));
+    checkpoint.accepted = true;
     std::vector<double> result(dimension);
     std::copy(candidates.begin() + best * dimension,
               candidates.begin() + (best + 1) * dimension, result.begin());
-    checkpoint.accepted = true;
     return result;
 }
 
 void OptunaTPEBestJoint(int nlhs, mxArray* plhs[], int nrhs,
                         const mxArray* prhs[]) {
     CheckArity(nrhs, 6, nlhs, 1,
-        "values = optuna_mex('optuna.tpe.best_joint', handle, count, categorical, below_estimators, above_estimators)");
+        "values = radia_mex('optuna.tpe.best_joint', handle, count, categorical, below_estimators, above_estimators)");
     OptunaRandomStateHandle& state = OptunaRandomState(Handle(prhs[1]));
     const int count = PositiveInteger(prhs[2], "count");
     const mxArray* categorical = prhs[3];
@@ -1651,7 +1731,7 @@ std::vector<OptunaJointEstimator> OptunaBuildJointEstimators(
 void OptunaTPEBestJointObservations(int nlhs, mxArray* plhs[], int nrhs,
                                     const mxArray* prhs[]) {
     CheckArity(nrhs, 16, nlhs, 1,
-        "values = optuna_mex('optuna.tpe.best_joint_observations', handle, count, categorical, lows, highs, log_scale, steps, choice_counts, good, bad, prior_weight, magic_clip, endpoints, below_weights, above_weights)");
+        "values = radia_mex('optuna.tpe.best_joint_observations', handle, count, categorical, lows, highs, log_scale, steps, choice_counts, good, bad, prior_weight, magic_clip, endpoints, below_weights, above_weights)");
     OptunaRandomStateHandle& state = OptunaRandomState(Handle(prhs[1]));
     const int count = PositiveInteger(prhs[2], "count");
     const mxArray* categorical_array = prhs[3];
@@ -1762,7 +1842,7 @@ OptunaJointEstimator OptunaBuildUnivariateNumericalEstimator(
 void OptunaTPEBestNumericalObservations(int nlhs, mxArray* plhs[], int nrhs,
                                         const mxArray* prhs[]) {
     CheckArity(nrhs, 14, nlhs, 1,
-        "value = optuna_mex('optuna.tpe.best_numerical_observations', handle, count, good, bad, low, high, log_scale, step, prior_weight, magic_clip, endpoints, below_weights, above_weights)");
+        "value = radia_mex('optuna.tpe.best_numerical_observations', handle, count, good, bad, low, high, log_scale, step, prior_weight, magic_clip, endpoints, below_weights, above_weights)");
     OptunaRandomStateHandle& state = OptunaRandomState(Handle(prhs[1]));
     const int count = PositiveInteger(prhs[2], "count");
     const auto good = RealVector(prhs[3], "good");
@@ -1793,7 +1873,7 @@ void OptunaTPEBestNumericalObservations(int nlhs, mxArray* plhs[], int nrhs,
 void OptunaTPEHistoryReset(int nlhs, mxArray*[], int nrhs,
                            const mxArray* prhs[]) {
     CheckArity(nrhs, 2, nlhs, 0,
-        "optuna_mex('optuna.tpe.history.reset', handle)");
+        "radia_mex('optuna.tpe.history.reset', handle)");
     auto& state = OptunaRandomState(Handle(prhs[1]));
     state.tpe_history.clear();
     state.tpe_history_rows.clear();
@@ -1803,7 +1883,7 @@ void OptunaTPEHistoryReset(int nlhs, mxArray*[], int nrhs,
 void OptunaTPEHistoryAppendComplete(int nlhs, mxArray*[], int nrhs,
                                     const mxArray* prhs[]) {
     CheckArity(nrhs, 6, nlhs, 0,
-        "optuna_mex('optuna.tpe.history.append_complete', handle, trial_number, objective, distribution_ids, values)");
+        "radia_mex('optuna.tpe.history.append_complete', handle, trial_number, objective, distribution_ids, values)");
     auto& state = OptunaRandomState(Handle(prhs[1]));
     const int trial_number = NonnegativeInteger(prhs[2], "trial_number");
     const double objective = Scalar(prhs[3], "objective");
@@ -1849,7 +1929,7 @@ void OptunaTPEHistoryAppendComplete(int nlhs, mxArray*[], int nrhs,
 void OptunaTPEBestGroupedHistory(int nlhs, mxArray* plhs[], int nrhs,
                                  const mxArray* prhs[]) {
     CheckArity(nrhs, 17, nlhs, 1,
-        "values = optuna_mex('optuna.tpe.best_grouped_history', handle, count, group_offsets, distribution_ids, categorical, lows, highs, log_scale, steps, choice_counts, minimize, gamma, max_good, prior_weight, magic_clip, endpoints)");
+        "values = radia_mex('optuna.tpe.best_grouped_history', handle, count, group_offsets, distribution_ids, categorical, lows, highs, log_scale, steps, choice_counts, minimize, gamma, max_good, prior_weight, magic_clip, endpoints)");
     auto& state = OptunaRandomState(Handle(prhs[1]));
     const int count = PositiveInteger(prhs[2], "count");
     const auto group_offsets = IntegerVector(prhs[3], "group_offsets");
@@ -1915,6 +1995,7 @@ void OptunaTPEBestGroupedHistory(int nlhs, mxArray* plhs[], int nrhs,
     for (int index = 0; index < good_count; ++index)
         globally_good[ranked[static_cast<std::size_t>(index)]] = 1;
 
+    RandomStateCheckpoint checkpoint(state);
     std::vector<double> result(dimension);
     for (std::size_t group = 0; group + 1 < group_offsets.size(); ++group) {
         const std::size_t begin = static_cast<std::size_t>(group_offsets[group]);
@@ -1964,6 +2045,7 @@ void OptunaTPEBestGroupedHistory(int nlhs, mxArray* plhs[], int nrhs,
         std::copy(candidate.begin(), candidate.end(), result.begin() + begin);
     }
     plhs[0] = RealRow(result);
+    checkpoint.accepted = true;
 }
 
 std::uint32_t OptunaRandomStateInterval(OptunaRandomStateHandle& state,
@@ -2029,7 +2111,7 @@ void OptunaRandomStateCommand(const std::string& command, int nlhs,
                               const mxArray* prhs[]) {
     if (command == "optuna.random_state.create") {
         CheckArity(nrhs, 2, nlhs, 1,
-            "handle = optuna_mex('optuna.random_state.create', seed)");
+            "handle = radia_mex('optuna.random_state.create', seed)");
         const double raw_seed = Scalar(prhs[1], "seed");
         if (raw_seed < 0.0 || raw_seed != std::floor(raw_seed) ||
             raw_seed > static_cast<double>(std::numeric_limits<std::uint32_t>::max()))
@@ -2126,15 +2208,31 @@ void OptunaRandomStateCommand(const std::string& command, int nlhs,
 void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
     CheckArity(nrhs, 1, nlhs, 1, "info = optuna_mex('api.info')");
     const char* fields[] = {
-        "api_version", "backend", "command_count", "handle_count", "build_route", "gpu_operations", "host_operations", "taskmanager"};
-    plhs[0] = mxCreateStructMatrix(1, 1, 8, fields);
+        "api_version", "backend", "command_count", "handle_count", "build_route", "taskmanager", "gpu_operations", "host_operations"
+        , "execution", "host_parallel_runtime", "allocator", "density_launches", "selection_launches", "host_to_device_bytes",
+        "device_to_host_bytes", "peak_temporary_bytes", "cuda_runtime", "cuda_driver", "cuda_device"
+    };
+    plhs[0] = mxCreateStructMatrix(1, 1, sizeof(fields) / sizeof(fields[0]), fields);
+    mxSetField(plhs[0], 0, "build_route", mxCreateString("mexcuda"));
+    mxSetField(plhs[0], 0, "taskmanager", mxCreateLogicalScalar(false));
+    mxSetField(plhs[0], 0, "gpu_operations", mxCreateString("Parzen densities and TPE candidate evaluation/selection"));
+    mxSetField(plhs[0], 0, "host_operations", mxCreateString("Management, ordered RNG, candidate generation, Pareto and Sobol"));
     mxSetField(plhs[0], 0, "api_version", mxCreateDoubleScalar(1.0));
     mxSetField(plhs[0], 0, "backend", mxCreateString("optuna_mex"));
     mxSetField(plhs[0], 0, "command_count", mxCreateDoubleScalar(21.0));
-    mxSetField(plhs[0], 0, "build_route", mxCreateString("mexcuda"));
-    mxSetField(plhs[0], 0, "gpu_operations", mxCreateString("Parzen numerical/categorical densities; univariate/joint/grouped TPE density batches"));
-    mxSetField(plhs[0], 0, "host_operations", mxCreateString("management, sequential random state and candidate generation, Pareto, Sobol"));
-    mxSetField(plhs[0], 0, "taskmanager", mxCreateLogicalScalar(false));
+    const auto stats = optuna_cuda::statistics();
+    mxSetField(plhs[0], 0, "execution", mxCreateString("matlab-mexcuda"));
+    mxSetField(plhs[0], 0, "host_parallel_runtime", mxCreateString("openmp"));
+    mxSetField(plhs[0], 0, "allocator", mxCreateString(
+        stats.stream_ordered_allocator ? "cuda-stream-ordered" : "cudaMalloc"));
+    mxSetField(plhs[0], 0, "density_launches", mxCreateDoubleScalar(static_cast<double>(stats.density_launches)));
+    mxSetField(plhs[0], 0, "selection_launches", mxCreateDoubleScalar(static_cast<double>(stats.selection_launches)));
+    mxSetField(plhs[0], 0, "host_to_device_bytes", mxCreateDoubleScalar(static_cast<double>(stats.host_to_device_bytes)));
+    mxSetField(plhs[0], 0, "device_to_host_bytes", mxCreateDoubleScalar(static_cast<double>(stats.device_to_host_bytes)));
+    mxSetField(plhs[0], 0, "peak_temporary_bytes", mxCreateDoubleScalar(static_cast<double>(stats.peak_temporary_bytes)));
+    mxSetField(plhs[0], 0, "cuda_runtime", mxCreateDoubleScalar(stats.runtime_version));
+    mxSetField(plhs[0], 0, "cuda_driver", mxCreateDoubleScalar(stats.driver_version));
+    mxSetField(plhs[0], 0, "cuda_device", mxCreateDoubleScalar(stats.device));
     std::lock_guard<std::mutex> guard(registry_mutex);
     mxSetField(plhs[0], 0, "handle_count", mxCreateDoubleScalar(
         static_cast<double>(optuna_random_state_registry.size())));

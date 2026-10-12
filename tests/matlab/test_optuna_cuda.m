@@ -38,3 +38,21 @@ verifyError(testCase,@()optuna_mex('optuna.parzen.log_pdf_numerical', ...
     1e308,1,0,1,-2,3,false,NaN),'radia:optuna:mex:Exception');
 verifyEqual(testCase,call(),expected,'AbsTol',0);
 end
+
+function testGpuFailureRestoresRandomState(testCase)
+lower=struct('categorical',true,'weights',1,'probabilities',[1,0]);
+upper=struct('categorical',true,'weights',1,'probabilities',[0,1]);
+state=optuna_mex('optuna.random_state.create',42);
+reference=optuna_mex('optuna.random_state.create',42);
+cleanup=onCleanup(@()destroyStates(state,reference));
+verifyError(testCase,@()optuna_mex('optuna.tpe.best_joint',state,24,true,{lower},{upper}), ...
+    'radia:optuna:mex:Exception');
+actual=optuna_mex('optuna.random_state.rand',state,8);
+expected=optuna_mex('optuna.random_state.rand',reference,8);
+verifyEqual(testCase,actual,expected);
+end
+
+function destroyStates(state,reference)
+optuna_mex('optuna.random_state.destroy',state);
+optuna_mex('optuna.random_state.destroy',reference);
+end

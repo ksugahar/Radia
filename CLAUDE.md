@@ -61,10 +61,7 @@ Prefer established public abstractions over proprietary plumbing.
 - Use HACApK for Radia core compact interactions; do not restore core ExaFMM.
 - NGSolve BEM is supported. Its native multipole/FMM facilities may be used for
   smooth free-space BEM and Biot-Savart work.
-- Python FE work follows caller-owned `ngsolve.TaskManager()`. MATLAB
-  parallel work follows MATLAB's runtime.
-  Exception: `p1_newton.solve_p1_newton` and `p1_linear.solve_p1_linear` own
-  regions and reject active TaskManager for AMS setup; helpers stay caller-owned.
+- Python FE work follows caller-owned `ngsolve.TaskManager()`. MATLAB parallel work follows MATLAB's runtime. Exception: `p1_newton.solve_p1_newton` and `p1_linear.solve_p1_linear` own regions and reject active TaskManager for AMS setup; helpers stay caller-owned.
 - Fail loudly on unsupported geometry, labels, ABI, convergence, or backend
   state. Never silently substitute a numerically different route.
 ## Interfaces

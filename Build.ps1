@@ -55,7 +55,7 @@ if ($args.Count -gt 0) {
 }
 
 if ($AmsCudaOnly) {
-    if ($RadiaOnly -or $AxiFemOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test) {
+    if ($RadiaOnly -or $AxiFemOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild) {
         throw '-AmsCudaOnly is an isolated experimental build; incompatible options supplied'
     }
     $amsBuildArgs = @()
@@ -101,8 +101,8 @@ if ($CudaMexOnly) {
     return
 }
 if ($OptunaMexOnly) {
-    if ($InstallToSitePackages -or $Rebuild -or $Test) {
-        throw 'Optuna mexcuda build is isolated; install/rebuild/test switches are unsupported'
+    if ($InstallToSitePackages -or $Rebuild) {
+        throw 'Optuna mexcuda build is isolated; install/rebuild switches are unsupported'
     }
     $optunaRoot = $PSScriptRoot.Replace("'", "''")
     if ($RequireNativeProvenance) {
@@ -111,6 +111,10 @@ if ($OptunaMexOnly) {
     }
     & matlab -batch "addpath('$optunaRoot/packages/radia-optuna'); buildOptunaMex;"
     if ($LASTEXITCODE -ne 0) { throw 'Optuna mexcuda build failed' }
+    if ($Test) {
+        & matlab -batch "addpath('$optunaRoot/validation_test/optimization'); validate_optuna_cuda('$optunaRoot'); addpath('$optunaRoot/validation_test/radia_optuna'); validate_cuda('$optunaRoot','$optunaRoot/packages/radia-optuna/matlab','$optunaRoot/build-optuna-cuda/validation.json');"
+        if ($LASTEXITCODE -ne 0) { throw 'Optuna CUDA validation failed' }
+    }
     return
 }
 
