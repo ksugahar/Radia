@@ -91,7 +91,7 @@ try{
         const auto columns=n-rows;
         std::vector<double> a2(checkedProduct(rows,rankLimit)),a1(checkedProduct(columns,rankLimit));
         std::vector<int> lod(n+1);for(std::size_t i=0;i<n;++i)lod[i+1]=int(i+1);
-        double parameters[100]={};parameters[61]=2;
+        double parameters[100]={};parameters[61]=1;parameters[62]=double(rankLimit);parameters[64]=1;
         AnalyticEntryOracle oracle(block,256);EntryCallbackScope binding(oracle,nullptr);
         const int rank=cHACApK_acaplus(a2.data(),a1.data(),parameters,int(rows),int(columns),1,int(rows+1),lod.data(),0,int(rankLimit),epsilon[0],1.,epsilon[0]);
         binding.rethrow();if(rank<1||rank>int(rankLimit))throw std::runtime_error("ACA compression did not return valid factors");

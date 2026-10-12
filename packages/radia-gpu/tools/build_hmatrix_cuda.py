@@ -10,7 +10,7 @@ def main():
     dirty=bool(subprocess.check_output(['git','-C',str(root),'status','--porcelain'],text=True).strip())
     if args.require_clean_source and dirty:raise RuntimeError('Clean source required')
     files=[root/'packages/radia-gpu/native/radia_cuda_hmatrix.cu',root/'packages/radia-gpu/native/hmatrix_resident.cuh',root/'packages/radia-gpu/native/hmatrix_hacapk_pack.cuh',root/'packages/radia-gpu/native/hmatrix_entry_oracle.cuh',root/'packages/radia-gpu/native/hmatrix_aca_callback.cuh',root/'src/ext/HACApK/cHACApK_calc_entry_ij.h',root/'src/ext/HACApK/cHACApK_base.h',root/'packages/radia-gpu/native/analytic_matrix_build.cuh',root/'packages/radia-gpu/native/radia_field_exact.cuh',root/'src/core/rad_charge_quadrature.h',root/'src/core/rad_hdiv_vim.h',root/'src/core/rad_field_cloud_kernel.h',root/'src/core/rad_hdiv_field_math.inc',root/'src/core/rad_hdiv_field_kernel_api.inc',root/'src/core/rad_field_source_kernel.inc',Path(__file__),root/'Build.ps1']
-    files += [root/'src/ext/HACApK/cHACApK_base.c',root/'src/ext/HACApK/cHACApK_lib.c',root/'src/core/rad_hacapk_parallel.h'] + sorted((root/'src/ext/HACApK').glob('*.h'))
+    files += [root/'src/ext/HACApK/cHACApK_base.c',root/'src/ext/HACApK/cHACApK_aca.inc',root/'packages/radia-gpu/native/hmatrix_aca_host.c',root/'src/ext/HACApK/cHACApK_lib.c',root/'src/core/rad_hacapk_parallel.h'] + sorted((root/'src/ext/HACApK').glob('*.h'))
     files=list(dict.fromkeys(files))
     hashes={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
     base=root/'build-hmatrix-cuda';base.mkdir(exist_ok=True);out=Path(tempfile.mkdtemp(prefix='job-',dir=base));print(out,flush=True)
@@ -20,9 +20,10 @@ def main():
         ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
         cc=Path('C:/BuildTools/VS2022-CUDA/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64');os.environ['NVCC_CCBIN']=str(cc)
         objects=[]
-        for name in ['cHACApK_base','cHACApK_lib']:
+        for name in ['hmatrix_aca_host','cHACApK_lib']:
             obj=out/(name+'.obj');batch=out/(name+'.cmd');objects.append(str(obj))
-            batch.write_text('@echo off\ncall "C:/BuildTools/VS2022-CUDA/VC/Auxiliary/Build/vcvars64.bat" >nul\n'+f'cl /nologo /c /TC /MD /O2 /Gy /DRAD_HACAPK_BATCH_ENTRIES /I"{root/"src/core"}" /I"{root/"src/ext/HACApK"}" "{root/"src/ext/HACApK"/(name+".c")}" /Fo:"{obj}"\n',encoding='utf-8')
+            source=root/('packages/radia-gpu/native' if name=='hmatrix_aca_host' else 'src/ext/HACApK')/(name+'.c')
+            batch.write_text('@echo off\ncall "C:/BuildTools/VS2022-CUDA/VC/Auxiliary/Build/vcvars64.bat" >nul\n'+f'cl /nologo /c /TC /MD /O2 /Gy /DRAD_HACAPK_BATCH_ENTRIES /I"{root/"src/core"}" /I"{root/"src/ext/HACApK"}" "{source}" /Fo:"{obj}"\n',encoding='utf-8')
             compiled=subprocess.run(['cmd','/c',str(batch)],capture_output=True)
             (out/(name+'-compile.log')).write_bytes(compiled.stdout+compiled.stderr);compiled.check_returncode()
         import matlab.engine
