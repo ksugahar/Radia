@@ -86,12 +86,13 @@ try{
     if(!nr)throw std::invalid_argument("Command required");auto command=text(in[0]);
 #ifdef RADIA_HMATRIX_FULL_HOST
     if(command=="create_analytic_hacapk"){
-        arity(nr,2,nl,1);std::size_t bytes=0;checkPayload(in[1],bytes);
+        arity(nr,2,nl,1);if(!mxIsStruct(in[1])||mxGetNumberOfElements(in[1])!=1)throw std::invalid_argument("Expected scalar HACApK configuration");std::size_t bytes=0;checkPayload(in[1],bytes);
         if(integer(field(in[1],0,"schema_version"),true)!=1)throw std::invalid_argument("Unsupported HACApK schema");
         for(int f=0;f<mxGetNumberOfFields(in[1]);++f){std::string key=mxGetFieldNameByNumber(in[1],f);
             if(key!="schema_version"&&key!="cells"&&key!="faces"&&key!="operator_kind"&&key!="charge_map"&&key!="epsilon"&&key!="leaf_size"&&key!="eta"&&key!="max_rank")throw std::invalid_argument("Unsupported HACApK option: "+key);}
         auto epsilon=numbers(field(in[1],0,"epsilon")),eta=numbers(field(in[1],0,"eta"));
         if(epsilon.size()!=1||eta.size()!=1)throw std::invalid_argument("Expected scalar HACApK tolerance/admissibility");
+        if(mxGetN(field(in[1],0,"cells"))>1||mxGetN(field(in[1],0,"faces"))>1)throw std::invalid_argument("Geometry uses flat coordinate column vectors");
         auto block=analyticSources(numbers(field(in[1],0,"cells")),numbers(field(in[1],0,"faces")),4096);
         const auto mode=text(field(in[1],0,"operator_kind"));SparseMap map;
         if(mode=="demag")map=readChargeMap(field(in[1],0,"charge_map"),block.sources.size());else if(mode!="gram")throw std::invalid_argument("Operator kind must be gram or demag");

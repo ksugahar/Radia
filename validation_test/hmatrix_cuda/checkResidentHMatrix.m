@@ -8,6 +8,10 @@ inputs=load(inputPath);result=struct('accepted',false,'cases',struct([]));
 try
     if isfield(inputs,'full_assembly_probe')
         test=inputs.full_assembly_probe;
+        failed=false;try,unused=radia_cuda_hmatrix('create_analytic_hacapk',[test.config test.config]);catch e %#ok<NASGU>
+            assert(strcmp(e.identifier,'radia:cuda:hmatrix'));failed=true;
+        end
+        assert(failed&&radia_cuda_hmatrix('live_count')==0,'Struct-array configuration must be rejected');
         h=radia_cuda_hmatrix('create_analytic_hacapk',test.config);
         free=onCleanup(@()radia_cuda_hmatrix('destroy',h));
         radia_cuda_hmatrix('upload',h,test.initial);
