@@ -1,6 +1,6 @@
 {
   "schema": "radia.radfld-cuda-status.v1",
-  "status": "pending-idle-timing-scaling-and-release",
+  "status": "pending-scaling-generic-dispatch-and-release",
   "accepted": false,
   "source_commit": "0c499f29e341da6947dd022446b7eec21798774a",
   "scope": "Retained cloud and five retained element families have small actual projection precision gates; generic RadFld dispatch, scaling, Matrix Build, HDiv-MMM and release remain pending.",
@@ -77,5 +77,7 @@
     }
   },
   "latest_precision_evidence": "elements-projection-precision-20261012.json",
-  "historical_fields_note": "Initial build and migration fields below retain their original checkpoint provenance; latest precision evidence supersedes old unbuilt status."
+  "historical_fields_note": "Initial build and migration fields below retain their original checkpoint provenance; latest precision evidence supersedes old unbuilt status.",
+  "latest_timing_evidence": "projection-abba-20261012.json",
+  "timing_note": "Small idle-100 diagnostic complete; not formal mdx acceptance. Earlier socket CIM load was contradicted by per-logical-CPU/process probes. Larger scaling and whole-application acceptance remain pending."
 }

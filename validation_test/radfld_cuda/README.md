@@ -234,3 +234,32 @@ continuous transfer-inclusive timing comparison remains pending: host CPU
 load was still approximately 50 percent. The independent CPU adapter's schema
 version conversion was corrected to accept the same numeric version=1 used
 by the MATLAB element struct; core CPU mathematics remains at 69301918a.
+
+## Idle diagnostic ABBA checkpoint (2026-10-12)
+
+`results/projection-abba-20261012.json` records continuous source/target
+construction, transfers, evaluation, SetValues projection, result recovery
+and release. Both algorithms were called once before two ABBA rounds.
+Independent CPU precision input hashes match these inputs. All cases use
+24 actual mapped targets: 256 point sources or 16 volume plus 16 surface
+records. These are small diagnostics, not scaling or mdx performance gates.
+
+| Representation | FP64 median ms | Mixed32 median ms |
+|---|---:|---:|
+| Cloud | 3.488 | 5.651 |
+| Tet | 3.155 | 4.575 |
+| Polynomial tet | 3.401 | 3.503 |
+| Cubic tet | 3.130 | 4.356 |
+| Sextic/quartic tet | 4.753 | 4.765 |
+| Curved tet | 4.530 | 3.472 |
+
+Mixed precision is not uniformly faster at this size and remains explicit.
+Owned device buffers are identical in size; no memory reduction is claimed.
+Cold calls and exact owned/sampled memory metrics are retained with their
+limitations. Host/process/global peak memory remains unmeasured.
+
+The earlier socket CIM average near 50 percent conflicted with all-104-CPU
+samples (3.02 percent mean), process CPU deltas and empty queues. The latter
+established the idle diagnostic window; socket CIM alone must not govern
+future waits. `measure_projection_precision.py` repeats the queue/process/GPU
+guards outside timed intervals. Formal performance acceptance remains mdx-only.
