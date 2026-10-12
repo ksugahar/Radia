@@ -1,10 +1,10 @@
 """Isolated, low-priority persistent IH mexcuda build on 100."""
 from pathlib import Path
-import argparse,ctypes,hashlib,json,socket,subprocess
+import argparse,ctypes,hashlib,json,socket,subprocess,tempfile
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--require-clean-source',action='store_true');args=parser.parse_args()
-    root=Path(__file__).resolve().parents[3];package=root/'packages/radia-gpu';out=root/'build-ih-cuda';out.mkdir(exist_ok=True)
+    root=Path(__file__).resolve().parents[3];package=root/'packages/radia-gpu';base=root/'build-ih-cuda';base.mkdir(exist_ok=True);out=Path(tempfile.mkdtemp(prefix='job-',dir=base));print('IH CUDA build directory: '+str(out),flush=True)
     record=dict(schema='radia.ih-cuda-build.v1',accepted=False,scope='Persistent fixed operators; dynamic ESIM physical frontend pending',a100_used=False)
     eng=None
     try:

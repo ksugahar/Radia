@@ -148,6 +148,11 @@ void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** in){
   if(nrhs<2)throw std::invalid_argument("Missing IH handle");auto& c=get(in[1]);
   if(command=="reset"){if(nrhs!=2||nlhs)throw std::invalid_argument("reset signature mismatch");c.state->reset();return;}
   if(command=="update"){if(nrhs!=4||nlhs)throw std::invalid_argument("update requires current and ambient");c.state->update(number(in[2]),number(in[3]));return;}
+  if(command=="electromagnetic_state"){
+   if(nrhs!=2||nlhs!=1)throw std::invalid_argument("electromagnetic_state returns one complex vector");
+   const auto v=c.state->electromagneticState();out[0]=mxCreateDoubleMatrix(v.size(),1,mxCOMPLEX);
+   for(size_t i=0;i<v.size();++i){mxGetComplexDoubles(out[0])[i].real=cuCreal(v[i]);mxGetComplexDoubles(out[0])[i].imag=cuCimag(v[i]);}return;
+  }
   if(command=="outputs"){
    if(nrhs!=2||nlhs!=3)throw std::invalid_argument("outputs returns temperature, heat and info");
    out[0]=vectorOut(c.state->temperature());out[1]=vectorOut(c.state->heat());const char* f[]={"steps","owned_device_bytes","eddy_iterations","eddy_true_residual","thermal_iterations","thermal_true_residual","preconditioner_precision"};out[2]=mxCreateStructMatrix(1,1,7,f);

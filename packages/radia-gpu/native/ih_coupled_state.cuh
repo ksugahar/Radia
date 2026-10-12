@@ -106,6 +106,12 @@ public:
         if(invalid)throw std::runtime_error("IH candidate temperature rejected; accepted state preserved");
         std::swap(temperature_,candidate_);std::swap(heat_,candidateHeat_);lastEddy_=eddyResult;lastThermal_=thermalResult;++steps_;
     }
+    // Explicit observation only; never an intermediate Simulink transfer.
+    std::vector<cuDoubleComplex> electromagneticState() {
+        std::vector<cuDoubleComplex> out(op_.eddy.rows);
+        cudaCheck(cudaMemcpyAsync(out.data(),eddy_->solution(),out.size()*sizeof(cuDoubleComplex),cudaMemcpyDeviceToHost,eddy_->stream()));
+        cudaCheck(cudaStreamSynchronize(eddy_->stream()));return out;
+    }
     std::vector<double> temperature() {
         std::vector<double> out(op_.thermalSystem.rows);
         cudaCheck(cudaMemcpyAsync(out.data(),temperature_,out.size()*sizeof(double),cudaMemcpyDeviceToHost,thermal_->stream()));
