@@ -15,7 +15,9 @@ threadCleanup=onCleanup(@()maxNumCompThreads(previousThreads));
 result=struct(schema="radia.optuna.cuda-performance.v1",ok=false,variant=variant, ...
     timing_class="formal-user-selected-idle-gpu-host",platform="windows-x64", ...
     matlab=string(version),matlab_threads=1,openmp_threads=string(getenv('OMP_NUM_THREADS')), ...
-    rounds=rounds,binary_sha256=sha256(binary),source_sha=string(getenv('RADIA_OPTUNA_SOURCE_SHA')));
+    rounds=rounds,binary_sha256=sha256(binary), ...
+    benchmark_sha256=sha256(string(mfilename('fullpath'))+".m"), ...
+    source_sha=string(getenv('RADIA_OPTUNA_SOURCE_SHA')));
 try
     start=tic; device=gpuDevice; result.gpu_initialization_seconds=toc(start);
     result.gpu=string(device.Name); result.compute_capability=string(device.ComputeCapability);
@@ -74,10 +76,10 @@ assert(result.ok,'CUDA performance evaluation failed; see %s',outputPath);
 end
 
 function values=measure(call,rounds,batch)
-call(); values=zeros(1,rounds);
+value=call(); values=zeros(1,rounds); %#ok<NASGU>
 for repetition=1:rounds
     start=tic;
-    for iteration=1:batch, call(); end
+    for iteration=1:batch, value=call(); end %#ok<NASGU>
     values(repetition)=toc(start)/batch;
 end
 end

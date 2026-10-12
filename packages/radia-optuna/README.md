@@ -203,6 +203,41 @@ tables after MAT reload. Shared Study/Trial MCP operations remain upstream.
 
 ### Reproducible performance evidence
 
+The CUDA gateway packs inputs into one host-to-device transfer and uses one
+per-call GPU allocation, including joint TPE evaluation. It retains ordered
+random consumption and the existing GPU kernels; it never chooses a CPU
+fallback for a declared GPU operation.
+
+An idle, user-selected A100 40 GB host was used for the 2026-10-12 formal
+comparison because the original timing host had no NVIDIA GPU. MATLAB R2026a
+used one host thread. Four fresh MATLAB sessions ran baseline / optimized /
+optimized / baseline, with 31 repetitions per shape per session. The TPE call
+includes candidate sampling, input handling, transfers and GPU selection;
+random-handle creation/destruction is outside the timer.
+
+| Candidates | Mixture components | Dimensions | Baseline TPE (us) | Optimized TPE (us) | Speedup |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 24 | 32 | 1 | 373.2 | 315.3 | 1.18x |
+| 24 | 32 | 5 | 407.8 | 367.4 | 1.11x |
+| 256 | 128 | 1 | 468.1 | 420.3 | 1.11x |
+| 256 | 128 | 5 | 625.7 | 595.5 | 1.05x |
+| 4096 | 512 | 1 | 3020.7 | 2768.8 | 1.09x |
+| 4096 | 512 | 5 | 5624.1 | 5450.8 | 1.03x |
+
+Small density-only calls remain slower than the vectorized MATLAB CPU
+reference. These results compare two GPU implementations and do not establish
+a speedup over Optuna Python or a CPU C++ implementation. Selected candidates
+match across variants; both the RTX 5000 build host and A100 pass the Optuna
+5.0.0 oracle checks. See the [machine-readable results](../../validation_test/optimization/results_optuna_cuda_performance_a100_20261012.json)
+for raw observations, hashes, uncertainty and limitations.
+
+To reproduce, use the same hash-verified binaries built on the build host and
+run `benchmark_optuna_cuda(binaryDirectory, outputPath, variant, 31)` from
+`validation_test/optimization` in a fresh owned MATLAB session for each variant.
+Set `OMP_NUM_THREADS=1` before starting MATLAB. Check idle GPU/CPU state,
+running jobs, queues and available memory before each session; never run
+formal timing alongside other computation.
+
 Long benchmarks live under `validation_test/optimization`. The Optuna 5 lane
 uses `benchmark_optuna50_python.py` and `benchmark_matlab_optuna50.m`, records
 the complete machine/runtime/load state, and checks seeded proposal checksums
