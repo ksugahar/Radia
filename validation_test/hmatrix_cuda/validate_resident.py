@@ -97,7 +97,9 @@ def main():
             with ng.TaskManager():
                 largegram=native._ChargeGramHMatrix(larger,np.empty(0),2*n,eps=1e-10,leaf=64,eta=2.,near_factor=1e30,build=True,far_quad=0)
                 block_reference=np.array([[largegram.entry(i,n+j) for j in range(n)] for i in range(n)])
-            payload['aca_large_probe']=dict(cells=larger[:,None],faces=np.empty((0,1)),split=float(n),expected=block_reference)
+                stats=largegram.stats();leaf_stats={key:stats[key] for key in ['n_dof','n_leaves','n_lowrank','n_dense','max_rank']}
+                if leaf_stats['n_lowrank']<1:raise RuntimeError('CPU leaf builder did not select an admissible low-rank leaf')
+            payload['aca_large_probe']=dict(cells=larger[:,None],faces=np.empty((0,1)),split=float(n),expected=block_reference,cpu_leaf_stats=leaf_stats)
         inputfile=a.out/'inputs.mat';savemat(inputfile,payload);record['input_sha256']=sha(inputfile)
         import matlab.engine
         eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread');pid=int(eng.feature('getpid'));subprocess.run(['powershell','-NoProfile','-Command',f'(Get-Process -Id {pid}).PriorityClass="BelowNormal"'],check=True,capture_output=True)

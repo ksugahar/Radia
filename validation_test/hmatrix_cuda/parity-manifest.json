@@ -46,5 +46,5 @@
     "HDF5 large interchange frontend",
     "Release CI and distribution acceptance"
   ],
-  "aca_compression_acceptance": "failed two-by-two block on both independent scalar C and CUDA; not release accepted"
+  "aca_compression_acceptance": "Cyclic-search defect fixed; tiny physical block passed; 66x66 cap exhausted so requested compression convergence and full assembly remain pending"
 }

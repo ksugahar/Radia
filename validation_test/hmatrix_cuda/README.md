@@ -143,3 +143,31 @@ the mathematical route. See `results/aca-cuda-connection-20261012.json`.
 Large assembly and solve tests stop here. Next check actual admissible-leaf
 selection and small-block ACA+ behavior, and complete the shared CPU native
 build gate. No new whole-time comparison was performed with CI queued.
+
+## Cyclic-search correction
+
+The original reference searches stopped before the final cyclic row/column.
+For the two-by-two fixture that skipped the only remaining active candidate,
+leaving zero reference residuals and accepting rank one too early. Bounded
+full-cycle scans now include that candidate; retry limits, masks, ACA updates
+and tolerances are preserved in the shared CPU/CUDA body. Twelve scalar and
+twelve batched C regression cases cover square/rectangular full-rank and
+rank-one matrices (`check_entry_batch.py --compression`).
+
+Clean CUDA build `af2f12ad6` returns rank two for the physical tiny fixture,
+CPU relative difference 1.403e-16; independent scalar C gives 1.235e-16.
+`validate_resident.py --aca-block-size 66` also checks a separated 66-by-66
+constant-tet block against independent pybind physical entries. The actual
+CPU builder reports two low-rank and eight dense leaves for 132 charges.
+Physical block error is 2.046e-9, but rank reaches the diagnostic cap of 32.
+That is not convergence to requested 1e-10. The full builder must retain its
+existing exact-dense promotion when a cap is exhausted below both dimensions.
+`results/aca-cyclic-search-fix-20261012.json` distinguishes these gates.
+
+In the uniform one-charge-per-element path, leaf_size=64 yields threshold 65;
+both dimensions must reach it and support-box gap admissibility must pass.
+The earlier forced 2-by-2 ACA test is normally a dense leaf, but still exposed
+a shared algorithm defect worth fixing. Variable-DOF leaf rules require their
+own acceptance. Full adaptive assembly, full CPU native build, HDiv-MMM solves,
+true residuals and whole-run performance remain pending. This supersedes the
+cyclic-search failure, without deleting its original evidence.

@@ -65,7 +65,8 @@ try
         relativeError=norm(factors.a2*factors.a1.'-probeLarge.expected,'fro')/norm(probeLarge.expected,'fro');
         result.admissible_block=struct('rows',probeLarge.split,'columns',probeLarge.split,'rank',factors.rank, ...
             'relative_error',relativeError,'entry_count',factors.entry_count,'entry_batches',factors.entry_batches, ...
-            'owned_device_bytes',factors.owned_device_bytes,'scope','Separated constant-tet block above default 65-charge leaf threshold');
+            'owned_device_bytes',factors.owned_device_bytes,'scope','Separated constant-tet block above default 65-charge leaf threshold', ...
+            'cpu_leaf_stats',probeLarge.cpu_leaf_stats);
         assert(relativeError<=1e-8,'Admissible ACA block physical CPU parity failed');
     end
     assert(radia_cuda_hmatrix('live_count')==0);
