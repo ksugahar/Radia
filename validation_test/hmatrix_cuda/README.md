@@ -320,3 +320,9 @@ to 217704 (35.3%). No timing improvement is established. The direct CPU
 in the strict case is not evidence of a CUDA-only failure. The origin of the
 small singular-value floor still needs isolation. A single matvec comparison
 is not an operator norm certificate. See `results/epsilon-sensitivity-20261013.json`.
+
+`results/full-operator-20261013.json` strengthens this diagnostic by comparing
+all 256 basis-vector GPU applications with the complete independent CPU direct
+matrix: relative Frobenius error 9.960e-10 (unchanged limit 1e-8), symmetry
+error 2.536e-17. This certifies the bounded constant-charge operator comparison,
+not general HDiv-MMM physical or release acceptance. No timing is measured.

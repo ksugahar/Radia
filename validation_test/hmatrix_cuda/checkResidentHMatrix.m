@@ -19,6 +19,20 @@ try
         difference=norm(actual-test.expected)/max(norm(test.expected),realmin);
         assert(difference<=1e-8,'Full CUDA HACApK assembly differs from CPU direct entries');
         result.full_assembly=struct('relative_difference',difference,'stats',radia_cuda_hmatrix('stats',h),'scope','Constant affine tetra charges; full native hierarchy and CUDA entries; not general HDiv physics');
+        if isfield(test,'expected_matrix')
+            n=size(test.expected_matrix,1);assembled=zeros(n,n);
+            for column=1:n
+                basis=zeros(n,1);basis(column)=1;
+                radia_cuda_hmatrix('upload',h,basis);
+                radia_cuda_hmatrix('apply',h,1);
+                assembled(:,column)=radia_cuda_hmatrix('download',h);
+            end
+            operatorError=norm(assembled-test.expected_matrix,'fro')/max(norm(test.expected_matrix,'fro'),realmin);
+            result.full_assembly.operator_frobenius_relative_error=operatorError;
+            result.full_assembly.operator_columns_checked=n;
+            result.full_assembly.symmetry_relative_error=norm(assembled-assembled.','fro')/max(norm(assembled,'fro'),realmin);
+            assert(operatorError<=1e-8,'Full CUDA operator differs from independent CPU direct matrix');
+        end
         clear free
         assert(radia_cuda_hmatrix('live_count')==0);
     end

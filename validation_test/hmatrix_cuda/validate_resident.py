@@ -109,7 +109,7 @@ def main():
                 with ng.TaskManager():
                     direct=np.array([[largegram.entry(i,j) for j in range(2*n)] for i in range(2*n)])
                 x=rng.normal(size=(2*n,1))
-                payload['full_assembly_probe']=dict(config=dict(schema_version=1.,cells=larger[:,None],faces=np.empty((0,1)),operator_kind='gram',epsilon=a.full_epsilon,leaf_size=64.,eta=2.,max_rank=float(parser_rank)),initial=x,expected=direct@x)
+                payload['full_assembly_probe']=dict(config=dict(schema_version=1.,cells=larger[:,None],faces=np.empty((0,1)),operator_kind='gram',epsilon=a.full_epsilon,leaf_size=64.,eta=2.,max_rank=float(parser_rank)),initial=x,expected=direct@x,expected_matrix=direct)
         elif a.full_assembly:raise ValueError('--full-assembly requires --aca-block-size')
         solver_cases=[]
         for test in cases:
