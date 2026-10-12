@@ -504,6 +504,8 @@ def gmsh_usage(topic: str = "all") -> str:
 
     Topics: policy, overview, cli, shortcuts, options, msh_format,
             geo, high_order, workflow, onelab, pitfalls, animation,
+            magnetic_movies (signed magnetic field lines, seeding,
+            moving-mesh movies and time-resolution acceptance),
             paraview (ParaView-filter -> gmsh-tool correspondence
             matrix with measured semantics and honest gaps)
 
