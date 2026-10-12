@@ -1,4 +1,4 @@
-function result=solveHDivElements(meshPath,order,appliedField,invChi,tolerance,maxIterations)
+function result=solveHDivElements(meshPath,order,appliedField,invChi,tolerance,maxIterations,assemblyMode)
 % Experimental bounded P2 tetrahedral HDiv material solve, no Python setup.
 arguments
     meshPath (1,:) char
@@ -7,6 +7,7 @@ arguments
     invChi (1,1) double {mustBePositive,mustBeFinite}
     tolerance (1,1) double {mustBePositive,mustBeFinite}=1e-10
     maxIterations (1,1) double {mustBeInteger,mustBePositive}=1000
+    assemblyMode (1,:) char {mustBeMember(assemblyMode,{'direct','host-cache'})}='direct'
 end
 assert(tolerance<=1e-6,'True residual tolerance must be at most 1e-6');
 timer=tic;
@@ -17,6 +18,7 @@ else
     config=radia.gpu.affineHDivQuadrature(order);config.geometry_mode='affine';
 end
 config.schema_version=1;
+if strcmp(assemblyMode,'host-cache'),config.host_vector_cache=true;end
 for name={'cell_nodes','face_nodes','cell_vertices','face_vertices','host','kind','expo','charge_map'}
     config.(name{1})=setup.(name{1});
 end
@@ -32,5 +34,6 @@ result=struct('coefficients',solution.x,'mean_magnetization',setup.mean_operator
     'scope','Bounded tetrahedral high-order dense near-rule Gram, linear isotropic material');
 clear closer
 result.whole_seconds=toc(timer);
+result.assembly_mode=assemblyMode;
 result.memory_limitations='Accounted owned buffers; no cuBLAS, host or global allocation peak.';
 end

@@ -33,7 +33,7 @@ std::vector<double> rowNumbers(const mxArray* a,std::size_t width){
 std::string text(const mxArray* a);
 CurvedBlock curvedBlock(const mxArray* cfg){
     if(!mxIsStruct(cfg)||mxGetNumberOfElements(cfg)!=1)throw std::invalid_argument("Expected scalar curved configuration");
-    const std::vector<std::string> allowed={"schema_version","geometry_mode","cell_nodes","face_nodes","cell_vertices","face_vertices","host","kind","expo","tet_rule","tri_rule","gl","gw","charge_map"};
+    const std::vector<std::string> allowed={"schema_version","geometry_mode","host_vector_cache","cell_nodes","face_nodes","cell_vertices","face_vertices","host","kind","expo","tet_rule","tri_rule","gl","gw","charge_map"};
     for(int f=0;f<mxGetNumberOfFields(cfg);++f)if(std::find(allowed.begin(),allowed.end(),mxGetFieldNameByNumber(cfg,f))==allowed.end())throw std::invalid_argument("Unsupported curved option");
     auto schema=numbers(field(cfg,0,"schema_version"));if(schema.size()!=1||schema[0]!=1.)throw std::invalid_argument("Unsupported curved schema");
     const auto cells=rowNumbers(field(cfg,0,"cell_nodes"),30),faces=rowNumbers(field(cfg,0,"face_nodes"),18);
@@ -42,6 +42,7 @@ CurvedBlock curvedBlock(const mxArray* cfg){
     const auto n=hosts.size();if(!n||n>512||kinds.size()!=n||expo.size()!=3*n||cv.size()/4!=cells.size()/30||fv.size()/3!=faces.size()/18)throw std::invalid_argument("Curved assembly shape/budget mismatch");
     const auto mode=text(field(cfg,0,"geometry_mode"));if(mode!="affine"&&mode!="curved")throw std::invalid_argument("Unsupported HDiv geometry mode");const bool affine=mode=="affine";
     CurvedBlock block;block.gl=numbers(field(cfg,0,"gl"));block.gw=numbers(field(cfg,0,"gw"));
+    if(const auto* cache=mxGetField(cfg,0,"host_vector_cache")){if(!mxIsLogicalScalar(cache))throw std::invalid_argument("Host-vector cache option must be scalar logical");block.hostVectorCache=mxIsLogicalScalarTrue(cache);}
     if(block.gl.size()!=8||block.gw.size()!=8)throw std::invalid_argument("Curved assembly requires existing eight-point inner Gauss rule");
     for(int k=0;k<8;++k)if(block.gl[k]<=0||block.gl[k]>=1||block.gw[k]<=0||(k&&block.gl[k]<=block.gl[k-1]))throw std::invalid_argument("Invalid curved inner quadrature");
     auto rule=[&](const char* key,std::vector<ReferencePoint>& output){auto values=rowNumbers(field(cfg,0,key),4);if(values.empty()||values.size()>4*128)throw std::invalid_argument("Curved outer quadrature budget exceeded");

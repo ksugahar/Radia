@@ -207,12 +207,23 @@ public:
     }
     void assembleCurved(const CurvedBlock& block){
         valid();if(initialized||count!=1||coefficients.size!=checkedProduct(n,n)||block.charges.size()!=n)throw std::invalid_argument("Curved assembly requires a fresh dense block");
-        const auto extra=checkedProduct(n,sizeof(CurvedCharge))+checkedProduct(block.tet.size()+block.tri.size(),sizeof(ReferencePoint))+checkedProduct(block.gl.size()+block.gw.size(),sizeof(double))+sizeof(int);
+        std::vector<HostTargetPoint> hostPoints;std::vector<HostTargetSpan> hostSpans;if(block.hostVectorCache)curvedHostTargets(block,hostPoints,hostSpans);
+        const auto cacheCount=checkedProduct(n,hostPoints.size());
+        const auto extra=checkedProduct(n,sizeof(CurvedCharge))+checkedProduct(block.tet.size()+block.tri.size(),sizeof(ReferencePoint))+checkedProduct(block.gl.size()+block.gw.size(),sizeof(double))+sizeof(int)
+            +checkedProduct(hostPoints.size(),sizeof(HostTargetPoint))+checkedProduct(hostSpans.size(),sizeof(HostTargetSpan))+checkedProduct(cacheCount,sizeof(double));
+        if(extra>(std::size_t(2)<<30))throw std::invalid_argument("Curved host-vector workspace exceeds 2 GiB");
         std::size_t free,total;check(cudaMemGetInfo(&free,&total));const auto reserve=std::max(std::size_t(2)<<30,total/5);
         if(free<=reserve||extra>free-reserve)throw std::runtime_error("Curved assembly GPU reserve exceeded");
         Buffer<CurvedCharge> charges;Buffer<ReferencePoint> tet,tri;Buffer<double> gl,gw;Buffer<int> invalid;
         charges.upload(block.charges);tet.upload(block.tet);tri.upload(block.tri);gl.upload(block.gl);gw.upload(block.gw);invalid.upload(std::vector<int>{0});setupPeakOwnedBytes=ownedBytes+extra;
-        for(std::size_t first=0;first<n*n;first+=128){const auto batch=std::min(std::size_t(128),n*n-first);
+        Buffer<HostTargetPoint> targetPoints;Buffer<HostTargetSpan> targetSpans;Buffer<double> potentialCache;
+        if(block.hostVectorCache){
+            targetPoints.upload(hostPoints);targetSpans.upload(hostSpans);potentialCache.allocate(cacheCount);
+            for(std::size_t first=0;first<cacheCount;first+=4096){const auto batch=std::min(std::size_t(4096),cacheCount-first);
+                cacheCurvedHostPotentials<<<unsigned((batch+127)/128),128,0,stream>>>(charges.data,n,targetPoints.data,targetPoints.size,tet.data,tet.size,tri.data,tri.size,gl.data,gw.data,int(gl.size),first,batch,potentialCache.data,invalid.data);check(cudaGetLastError());check(cudaStreamSynchronize(stream));
+            }
+            assembleCachedCurvedGram<<<unsigned((n*n+127)/128),128,0,stream>>>(charges.data,n,targetPoints.data,targetPoints.size,targetSpans.data,potentialCache.data,coefficients.data,invalid.data);check(cudaGetLastError());check(cudaStreamSynchronize(stream));
+        }else for(std::size_t first=0;first<n*n;first+=128){const auto batch=std::min(std::size_t(128),n*n-first);
             assembleCurvedGram<<<unsigned((batch+31)/32),32,0,stream>>>(charges.data,n,tet.data,tet.size,tri.data,tri.size,gl.data,gw.data,int(gl.size),first,batch,coefficients.data,invalid.data);check(cudaGetLastError());check(cudaStreamSynchronize(stream));
         }
         analyticPhysicalScale<<<unsigned((n+255)/256),256,0,stream>>>(n,coefficients.data,scale.data,invalid.data);check(cudaGetLastError());

@@ -4,7 +4,22 @@
 namespace radia_hmatrix_cuda {
 struct CurvedCharge {double nodes[30];int vertices[4],expo[3],kind,host;bool affine=false;};
 struct ReferencePoint {double xi[3],weight;};
-struct CurvedBlock {std::vector<CurvedCharge> charges;std::vector<ReferencePoint> tet,tri;std::vector<double> gl,gw;};
+struct CurvedBlock {std::vector<CurvedCharge> charges;std::vector<ReferencePoint> tet,tri;std::vector<double> gl,gw;bool hostVectorCache=false;};
+struct HostTargetPoint {std::size_t representative;ReferencePoint quadrature;};
+struct HostTargetSpan {std::size_t first,count;};
+// Group only identical mapped hosts. Monomial weights stay charge-specific.
+inline void curvedHostTargets(const CurvedBlock& block,std::vector<HostTargetPoint>& points,std::vector<HostTargetSpan>& spans){
+    std::vector<std::size_t> representatives;spans.resize(block.charges.size());
+    for(std::size_t i=0;i<block.charges.size();++i){const auto& a=block.charges[i];bool found=false;
+        for(auto representative:representatives){const auto& b=block.charges[representative];if(a.kind!=b.kind||a.host!=b.host)continue;
+            if(a.affine!=b.affine)throw std::invalid_argument("Inconsistent geometry for charge host");
+            for(int k=0;k<(a.kind?18:30);++k)if(a.nodes[k]!=b.nodes[k])throw std::invalid_argument("Inconsistent mapped charge host");
+            for(int k=0;k<(a.kind?3:4);++k)if(a.vertices[k]!=b.vertices[k])throw std::invalid_argument("Inconsistent host topology");
+            spans[i]=spans[representative];found=true;break;
+        }
+        if(!found){const auto& rule=a.kind?block.tri:block.tet;spans[i]={points.size(),rule.size()};representatives.push_back(i);for(const auto& q:rule)points.push_back({i,q});}
+    }
+}
 __device__ bool curvedTouch(const CurvedCharge& a,const CurvedCharge& b){
     int shared=0;for(int i=0;i<(a.kind?3:4);++i)for(int j=0;j<(b.kind?3:4);++j)if(a.vertices[i]==b.vertices[j]){++shared;break;}
     return shared>=2||(shared==1&&(a.kind||b.kind));
@@ -32,12 +47,10 @@ __device__ void curvedMappedPoint(const CurvedCharge& a,const ReferencePoint& q,
     else rad_hdiv_cuda::CurvedTetMapMeasure(reinterpret_cast<const double(*)[3]>(a.nodes),q.xi[0],q.xi[1],q.xi[2],x,measure);
     weight=q.weight*measure*curvedMonomial(a,q.xi);
 }
-__device__ double curvedQuadDot(const CurvedCharge& target,const CurvedCharge& source,
+__device__ double curvedSourcePotential(const CurvedCharge& target,const CurvedCharge& source,const double* p,
         const ReferencePoint* tet,std::size_t nt,const ReferencePoint* tri,std::size_t ns,
         const double* gl,const double* gw,int nq){
-    const auto* tq=target.kind?tri:tet;const auto n=target.kind?ns:nt;
-    const bool touching=curvedTouch(target,source);double sum=0.;
-    for(std::size_t t=0;t<n;++t){double p[3],weight;curvedMappedPoint(target,tq[t],p,weight);double inner=0.;
+    const bool touching=curvedTouch(target,source);double inner=0.;
         if(source.affine)inner=affineReferencePotential(source,p);
         else if(touching){
             if(source.kind)inner=rad_hdiv_cuda::CurvedTriPotential(reinterpret_cast<const double(*)[3]>(source.nodes),source.expo[0],source.expo[1],p,gl,gw,nq,true);
@@ -48,9 +61,34 @@ __device__ double curvedQuadDot(const CurvedCharge& target,const CurvedCharge& s
                 const double dx=p[0]-x[0],dy=p[1]-x[1],dz=p[2]-x[2],r=sqrt(dx*dx+dy*dy+dz*dz);if(r>=1e-300)inner+=w/r;
             }
         }
-        sum+=weight*inner;
+    return inner;
+}
+__device__ double curvedQuadDot(const CurvedCharge& target,const CurvedCharge& source,
+        const ReferencePoint* tet,std::size_t nt,const ReferencePoint* tri,std::size_t ns,
+        const double* gl,const double* gw,int nq){
+    const auto* tq=target.kind?tri:tet;const auto n=target.kind?ns:nt;double sum=0.;
+    for(std::size_t t=0;t<n;++t){double p[3],weight;curvedMappedPoint(target,tq[t],p,weight);
+        sum+=weight*curvedSourcePotential(target,source,p,tet,nt,tri,ns,gl,gw,nq);
     }
     return sum*0.07957747154594766788;
+}
+__global__ void cacheCurvedHostPotentials(const CurvedCharge* charges,std::size_t n,const HostTargetPoint* points,std::size_t np,
+    const ReferencePoint* tet,std::size_t nt,const ReferencePoint* tri,std::size_t ns,const double* gl,const double* gw,int nq,
+    std::size_t first,std::size_t count,double* cache,int* invalid){
+    const auto local=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(local>=count)return;const auto i=first+local;if(i>=n*np)return;
+    const auto source=i/np,point=i%np;const auto& q=points[point];const auto& target=charges[q.representative];double p[3],weight;curvedMappedPoint(target,q.quadrature,p,weight);
+    const double value=curvedSourcePotential(target,charges[source],p,tet,nt,tri,ns,gl,gw,nq);if(!isfinite(value))atomicExch(invalid,1);cache[i]=value;
+}
+__device__ double curvedCachedDot(const CurvedCharge* charges,std::size_t target,std::size_t source,
+    const HostTargetPoint* points,std::size_t np,const HostTargetSpan* spans,const double* cache){
+    const auto span=spans[target];double sum=0.;for(std::size_t k=0;k<span.count;++k){const auto point=span.first+k;double p[3],weight;curvedMappedPoint(charges[target],points[point].quadrature,p,weight);sum+=weight*cache[source*np+point];}
+    return sum*0.07957747154594766788;
+}
+__global__ void assembleCachedCurvedGram(const CurvedCharge* charges,std::size_t n,const HostTargetPoint* points,std::size_t np,
+    const HostTargetSpan* spans,const double* cache,double* matrix,int* invalid){
+    const auto i=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(i>=n*n)return;const auto row=i/n,col=i%n;if(row>col)return;
+    double value=curvedCachedDot(charges,row,col,points,np,spans,cache);if(row!=col)value=.5*(value+curvedCachedDot(charges,col,row,points,np,spans,cache));
+    if(!isfinite(value))atomicExch(invalid,1);matrix[i]=value;if(row!=col)matrix[col*n+row]=value;
 }
 __global__ void assembleCurvedGram(const CurvedCharge* charges,std::size_t n,
     const ReferencePoint* tet,std::size_t nt,const ReferencePoint* tri,std::size_t ns,

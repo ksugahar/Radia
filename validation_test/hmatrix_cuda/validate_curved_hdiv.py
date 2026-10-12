@@ -8,10 +8,11 @@ def main():
     p=argparse.ArgumentParser()
     for name in ('projection','hmatrix','out'):p.add_argument('--'+name,type=Path,required=True)
     p.add_argument('--order',type=int,choices=[1,2],default=1)
+    p.add_argument('--assembly-mode',choices=['direct','host-cache'],default='direct')
     p.add_argument('--geometry',choices=['affine','curved'],default='curved');a=p.parse_args()
     if a.geometry=='curved' and a.order==3:p.error('Existing curved charge semantics support orders 1 and 2')
     a.projection=a.projection.resolve();a.hmatrix=a.hmatrix.resolve();a.out=a.out.resolve();a.out.mkdir(parents=True,exist_ok=False)
-    result=dict(accepted=False,scope='Bounded public tetrahedral HDiv, dense near-rule Gram, linear isotropic material',geometry=a.geometry,order=a.order,a100_used=False,release_accepted=False,general_hdiv_validation_complete=False,timing_accepted=False)
+    result=dict(accepted=False,scope='Bounded public tetrahedral HDiv, dense near-rule Gram, linear isotropic material',geometry=a.geometry,order=a.order,assembly_mode=a.assembly_mode,a100_used=False,release_accepted=False,general_hdiv_validation_complete=False,timing_accepted=False)
     eng=None
     try:
         ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
@@ -50,7 +51,8 @@ def main():
         result['matlab_source_sha256']={f.relative_to(matlab_source).as_posix():sha(f) for f in matlab_source.rglob('*.m')}
         eng.addpath(str(a.projection),str(a.hmatrix),str(matlab_source),nargout=0)
         eng.workspace['mesh_path']=str(mesh_path);eng.workspace['degree']=float(a.order);eng.workspace['fixture_path']=str(fixture);eng.workspace['output_path']=str(a.out/'native.mat')
-        eng.eval("cpu=load(fixture_path);setup=radia_cuda_projection('assemble_hdiv_elements',mesh_path,degree,[1 .2 .1]);mass_error=norm(setup.mass-full(cpu.mass),'fro')/norm(full(cpu.mass),'fro');charge_error=norm(setup.charge_map-full(cpu.B),'fro')/norm(full(cpu.B),'fro');rhs_error=norm(setup.rhs-cpu.rhs)/norm(cpu.rhs);assert(max([mass_error charge_error rhs_error])<1e-11);solution=radia.gpu.solveHDivElements(mesh_path,degree,[1 .2 .1],2.5,1e-11,1000);coefficient_error=norm(solution.coefficients-cpu.expected)/norm(cpu.expected);physical_error=norm(solution.mean_magnetization-cpu.mean_operator*cpu.expected)/norm(cpu.mean_operator*cpu.expected);independent_true_residual=norm(cpu.rhs-cpu.system*solution.coefficients)/norm(cpu.rhs);assert(radia_cuda_hmatrix('live_count')==0);save(output_path,'solution','mass_error','charge_error','rhs_error','coefficient_error','physical_error','independent_true_residual','-v7');assert(max([coefficient_error physical_error])<1e-8);assert(independent_true_residual<1e-10);",nargout=0)
+        eng.workspace['assembly_mode']=a.assembly_mode
+        eng.eval("cpu=load(fixture_path);setup=radia_cuda_projection('assemble_hdiv_elements',mesh_path,degree,[1 .2 .1]);mass_error=norm(setup.mass-full(cpu.mass),'fro')/norm(full(cpu.mass),'fro');charge_error=norm(setup.charge_map-full(cpu.B),'fro')/norm(full(cpu.B),'fro');rhs_error=norm(setup.rhs-cpu.rhs)/norm(cpu.rhs);assert(max([mass_error charge_error rhs_error])<1e-11);solution=radia.gpu.solveHDivElements(mesh_path,degree,[1 .2 .1],2.5,1e-11,1000,assembly_mode);coefficient_error=norm(solution.coefficients-cpu.expected)/norm(cpu.expected);physical_error=norm(solution.mean_magnetization-cpu.mean_operator*cpu.expected)/norm(cpu.mean_operator*cpu.expected);independent_true_residual=norm(cpu.rhs-cpu.system*solution.coefficients)/norm(cpu.rhs);assert(radia_cuda_hmatrix('live_count')==0);save(output_path,'solution','mass_error','charge_error','rhs_error','coefficient_error','physical_error','independent_true_residual','-v7');assert(max([coefficient_error physical_error])<1e-8);assert(independent_true_residual<1e-10);",nargout=0)
         native=loadmat(a.out/'native.mat',simplify_cells=True)
         result['native']={key:float(native[key]) for key in ('mass_error','charge_error','rhs_error','coefficient_error','physical_error','independent_true_residual')};result['solution']=native['solution'];result['accepted']=True
     except BaseException as exc:result['error']=f'{type(exc).__name__}: {exc}';raise

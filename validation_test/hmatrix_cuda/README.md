@@ -403,3 +403,14 @@ failures were retained privately. All 40 recovered job files were verified
 before deleting the isolated remote job; the host remains running. General
 adaptive high-order assembly, images, constraints, nonlinear material, broad
 physics, IH Simulink and release/distribution gates remain pending.
+
+### Host-vector cache candidate (not built or accepted)
+
+`host-vector-cache-stage-20261013.json` tracks an opt-in `host-cache` assembly
+mode. It reuses source potential at identical mapped target-host quadrature
+points across target monomials. Charge weights, inner integral math, ordered
+outer sums and symmetric assembly stay unchanged. Reused hosts must have identical
+geometry and topology; inconsistent input fails. Temporary workspace increases
+setup owned memory and is budget checked. Default `direct` stays selected.
+Clean build, direct/cache and independent CPU whole-solve parity, lifecycle and
+idle whole timing are pending; implementation alone establishes no speedup.
