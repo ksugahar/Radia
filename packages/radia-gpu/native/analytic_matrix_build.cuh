@@ -52,9 +52,9 @@ __device__ double analyticQuadDot(const AnalyticSource* sources,const Quadrature
 __global__ void assembleAnalyticConstant(const AnalyticSource* sources,const QuadraturePoint* quadrature,
         std::size_t n,double* matrix,int* invalid){
     const auto i=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(i>=n*n)return;
-    const auto row=i/n,col=i%n;double value=analyticQuadDot(sources,quadrature,row,col);
+    const auto row=i/n,col=i%n;if(row>col)return;double value=analyticQuadDot(sources,quadrature,row,col);
     if(row!=col)value=.5*(value+analyticQuadDot(sources,quadrature,col,row));
-    if(!isfinite(value))atomicExch(invalid,1);matrix[i]=value;
+    if(!isfinite(value))atomicExch(invalid,1);matrix[i]=value;if(row!=col)matrix[col*n+row]=value;
 }
 __global__ void analyticPhysicalScale(std::size_t n,const double* matrix,double* scale,int* invalid){
     auto i=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(i>=n)return;

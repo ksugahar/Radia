@@ -41,6 +41,14 @@ SparseMap readChargeMap(const mxArray* a,std::size_t rows){
     }
     for(std::size_t row=0;row<rows;++row){for(const auto& entry:entries[row]){b.indices.push_back(entry.first);b.values.push_back(entry.second);}b.offsets[row+1]=b.indices.size();}b.validate();return b;
 }
+void checkPayload(const mxArray* a,std::size_t& bytes,int depth=0){
+    if(!a)return;if(depth>32)throw std::invalid_argument("Configuration nesting limit exceeded");
+    if(mxIsStruct(a)){for(std::size_t i=0;i<mxGetNumberOfElements(a);++i)for(int f=0;f<mxGetNumberOfFields(a);++f)checkPayload(mxGetFieldByNumber(a,i,f),bytes,depth+1);return;}
+    const auto limit=std::size_t(2)<<30;
+    auto add=[&](std::size_t n,std::size_t width){auto count=checkedProduct(n,width);if(count>limit-bytes)throw std::invalid_argument("Payload exceeds 2 GiB: HDF5 frontend required (not connected to this experimental gateway)");bytes+=count;};
+    if(mxIsSparse(a)){const auto columns=mxGetN(a);add(mxGetJc(a)[columns],mxGetElementSize(a)+sizeof(mwIndex));add(columns+1,sizeof(mwIndex));}
+    else add(mxGetNumberOfElements(a),mxGetElementSize(a));
+}
 Plan read(const mxArray* cfg){
     if(mxGetNumberOfElements(cfg)!=1||integer(field(cfg,0,"schema_version"),true)!=1)throw std::invalid_argument("Unsupported leaf schema");
     const auto n=integer(field(cfg,0,"dimension"),true);auto values=numbers(field(cfg,0,"permutation"));
@@ -71,7 +79,7 @@ void mexFunction(int nl,mxArray* out[],int nr,const mxArray* in[]){
 try{
     if(!nr)throw std::invalid_argument("Command required");auto command=text(in[0]);
     if(command=="create"||command=="create_analytic_constant_block"){
-        arity(nr,2,nl,1);Plan plan;AnalyticBlock block;
+        arity(nr,2,nl,1);if(!mxIsStruct(in[1])||mxGetNumberOfElements(in[1])!=1)throw std::invalid_argument("Expected scalar H-matrix configuration");std::size_t payloadBytes=0;checkPayload(in[1],payloadBytes);Plan plan;AnalyticBlock block;
         if(command=="create")plan=read(in[1]);
         else{
             if(const auto* assembly=mxGetField(in[1],0,"assembly")){if(text(assembly)!="analytic_constant_block")throw std::invalid_argument("Unsupported analytic assembly mode");}

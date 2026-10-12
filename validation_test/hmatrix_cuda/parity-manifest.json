@@ -1,0 +1,29 @@
+{
+  "schema": "radia.experimental-hmatrix-parity.v1",
+  "status": "experimental-kernel-subgates-only",
+  "cpu_owner": "Python/pybind11 with caller-owned NGSolve TaskManager",
+  "gpu_owner": "MATLAB mexcuda, CUDA device execution, no TaskManager activation",
+  "cpu_mex_supported": false,
+  "python_gpu_runtime_required": false,
+  "capabilities": [
+    {
+      "CPU": "_ChargeGramHMatrix.matvec_sym",
+      "MATLAB": "radia.gpu.HMatrixOperator upload/apply/download (operator_kind=gram)",
+      "scope": "Symmetric dense/low-rank leaves, permutation and physical normalization; not complete class parity"
+    },
+    {
+      "CPU": "B.T @ _ChargeGramHMatrix.matvec_sym(B @ x)",
+      "MATLAB": "radia.gpu.HMatrixOperator (operator_kind=demag, charge_map=B)",
+      "scope": "Resident real charge-map operator composition; FE geometry assembly and solve not certified"
+    },
+    {
+      "CPU": "_ChargeGramHMatrix constant tet/triangle analytic constructor and matvec_sym",
+      "MATLAB": "radia.gpu.HMatrixOperator (assembly=analytic_constant_block)",
+      "scope": "Bounded constant-density linear tet/triangle block; all-analytic strategy, no images"
+    }
+  ],
+  "native_commands": ["create", "create_analytic_constant_block", "upload", "apply", "download", "stats", "destroy", "live_count"],
+  "handle_contract": "Scalar uint64 type/generation/liveness checked; native GPU ownership and stream checked",
+  "numerical_relative_limit": 1e-12,
+  "pending": ["General HACApK adaptive Matrix Build", "Physical NGSolve charge-map assembly", "Constitutive/preconditioner/solver integration", "Full HDiv-MMM physics and true residual", "Device reset lifecycle", "HDF5 large interchange frontend", "Release CI and distribution acceptance"]
+}

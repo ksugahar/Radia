@@ -81,7 +81,7 @@ def main():
             mixedgram=native._ChargeGramHMatrix(cells,triangles,2,eps=1e-12,leaf=64,eta=2.,near_factor=1e30,build=True,far_quad=0)
             x4=rng.normal(size=4);first4=np.asarray(mixedgram.matvec_sym(x4));third4=np.asarray(mixedgram.matvec_sym(mixedgram.matvec_sym(first4)))
         cases.append(dict(name='native-CUDA-analytic-tet-triangle-block',config=dict(schema_version=1.,operator_kind='gram',assembly='analytic_constant_block',cells=cells[:,None],faces=triangles[:,None]),initial=x4[:,None],expected_first=first4[:,None],expected_third=third4[:,None]))
-        record['CPU_oracle']=dict(module='radia._radia_pybind',binary_sha256=sha(native.__file__),ngsolve=ng.__version__,note='Installed independent CPU reference; sampled Gram only')
+        record['CPU_oracle']=dict(module='radia._radia_pybind',binary_sha256=sha(native.__file__),ngsolve=ng.__version__,note='Independent installed public CPU reference: sampled and integrated constant-tet/triangle Gram')
         inputfile=a.out/'inputs.mat';savemat(inputfile,dict(cases=structs(cases)));record['input_sha256']=sha(inputfile)
         import matlab.engine
         eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread');pid=int(eng.feature('getpid'));subprocess.run(['powershell','-NoProfile','-Command',f'(Get-Process -Id {pid}).PriorityClass="BelowNormal"'],check=True,capture_output=True)

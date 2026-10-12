@@ -43,6 +43,8 @@ try
     assert(h~=stale);mustFail(@()radia_cuda_hmatrix('apply',stale,1));
     clear free
     assert(radia_cuda_hmatrix('live_count')==0);
+    mustFailCreate(1);
+    mustFailCreate(repmat(inputs.cases(1).config,1,2));
     bad=inputs.cases(1).config;bad.permutation(:)=1;
     mustFailCreate(bad);
     bad=inputs.cases(1).config;bad.scale(1)=0;
