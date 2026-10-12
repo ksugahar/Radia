@@ -16,7 +16,7 @@ def structs(rows):
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--artifact',type=Path,required=True);parser.add_argument('--out',type=Path,required=True);a=parser.parse_args();a.out.mkdir(parents=True,exist_ok=False)
-    record=dict(schema='radia.hmatrix-resident-numerical.v1',accepted=False,a100_used=False,timing_acceptance=False,scope='Resident symmetric leaf algebra and public sampled/integrated-tet Gram CPU parity; not native Matrix Build or full HDiv-MMM physics acceptance')
+    record=dict(schema='radia.hmatrix-resident-numerical.v1',accepted=False,a100_used=False,timing_acceptance=False,scope='Resident symmetric leaf algebra and public sampled/integrated-tet Gram CPU parity; bounded native constant-charge block assembly only; not general HACApK Matrix Build or full HDiv-MMM physics acceptance')
     eng=None
     source_files=(Path(__file__),Path(__file__).with_name('checkResidentHMatrix.m'),ROOT/'packages/radia-gpu/matlab/+radia/+gpu/HMatrixOperator.m')
     source_hashes={str(p.relative_to(ROOT)):sha(p) for p in source_files}
@@ -74,6 +74,13 @@ def main():
         normalized=raw/sigma[:,None]/sigma[None,:]
         config=dict(schema_version=1.,operator_kind='gram',dimension=2.,permutation=np.array([[1.],[2.]]),scale=sigma[:,None],leaves=structs([dict(row=1.,column=1.,rows=2.,columns=2.,rank=0.,a1=normalized.ravel(order='C')[:,None],a2=np.empty((0,1)))]))
         cases.append(dict(name='public-pybind-analytic-tet-Gram',config=config,initial=x[:,None],expected_first=y[:,None],expected_third=y3[:,None]))
+        # GPU builds these entries from geometry, not CPU-generated coefficients.
+        cases.append(dict(name='native-CUDA-analytic-tet-block',config=dict(schema_version=1.,operator_kind='gram',assembly='analytic_constant_block',cells=cells[:,None],faces=np.empty((0,1))),initial=x[:,None],expected_first=y[:,None],expected_third=y3[:,None]))
+        triangles=np.concatenate([tetra[[0,1,2]].ravel(),tetra2[[0,2,3]].ravel()])
+        with ng.TaskManager():
+            mixedgram=native._ChargeGramHMatrix(cells,triangles,2,eps=1e-12,leaf=64,eta=2.,near_factor=1e30,build=True,far_quad=0)
+            x4=rng.normal(size=4);first4=np.asarray(mixedgram.matvec_sym(x4));third4=np.asarray(mixedgram.matvec_sym(mixedgram.matvec_sym(first4)))
+        cases.append(dict(name='native-CUDA-analytic-tet-triangle-block',config=dict(schema_version=1.,operator_kind='gram',assembly='analytic_constant_block',cells=cells[:,None],faces=triangles[:,None]),initial=x4[:,None],expected_first=first4[:,None],expected_third=third4[:,None]))
         record['CPU_oracle']=dict(module='radia._radia_pybind',binary_sha256=sha(native.__file__),ngsolve=ng.__version__,note='Installed independent CPU reference; sampled Gram only')
         inputfile=a.out/'inputs.mat';savemat(inputfile,dict(cases=structs(cases)));record['input_sha256']=sha(inputfile)
         import matlab.engine

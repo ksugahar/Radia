@@ -24,6 +24,7 @@ try
     end
     result.sampled_free_after=gpu.AvailableMemory;
     result.live_count=radia_cuda_hmatrix('live_count');assert(result.live_count==0);
+    result.cold_scope='First payload calls after MATLAB/MEX initialization and a memory probe; not cold process or MEX loading.';
     result.memory_limitations='Owned device buffers exact; CUDA driver/MATLAB free-memory samples are not peaks. Native host/process peak unmeasured.';
     result.accepted=true;
 catch failure

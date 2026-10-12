@@ -53,7 +53,18 @@ Plan read(const mxArray* cfg){
         leaf.rows=integer(field(blocks,i,"rows"),true);leaf.columns=integer(field(blocks,i,"columns"),true);leaf.rank=integer(field(blocks,i,"rank"));
         leaf.a1=numbers(field(blocks,i,"a1"));leaf.a2=numbers(field(blocks,i,"a2"));leaves.push_back(std::move(leaf));
     }
-    return pack(n,leaves,permutation,numbers(field(cfg,0,"scale")));
+    if(leaves.size()>2147483647u)throw std::overflow_error("Too many native leaves");
+    std::vector<st_cHACApK_leafmtx_t> native(leaves.size());
+    std::vector<st_cHACApK_leafmtx_t*> pointers(leaves.size()+1,nullptr);
+    for(std::size_t i=0;i<leaves.size();++i){auto& leaf=leaves[i];if(leaf.row>leaf.column)throw std::invalid_argument("Numeric schema packs upper leaves only");
+        auto& target=native[i];target.ltmtx=leaf.rank?1:2;target.kt=int(leaf.rank);target.nstrtl=int(leaf.row+1);target.nstrtt=int(leaf.column+1);target.ndl=int(leaf.rows);target.ndt=int(leaf.columns);target.a1=leaf.a1.data();target.a2=leaf.a2.data();pointers[i+1]=&target;
+        // Validate lengths before the native adapter reads any pointers.
+        if(leaf.a1.size()!=checkedProduct(leaf.columns,leaf.rank?leaf.rank:leaf.rows)||leaf.a2.size()!=(leaf.rank?checkedProduct(leaf.rows,leaf.rank):0))throw std::invalid_argument("Invalid native factor storage");
+    }
+    std::vector<int> lod(n+1);for(std::size_t i=0;i<n;++i)lod[i+1]=int(permutation[i]+1);
+    st_cHACApK_leafmtxp_t matrix{};matrix.nd=int(n);matrix.nlf=int(leaves.size());matrix.st_lf=pointers.data();
+    st_cHACApK_lcontrol_t control{};control.lod=lod.data();
+    return fromHacapk(matrix,control,numbers(field(cfg,0,"scale")));
 }
 }
 void mexFunction(int nl,mxArray* out[],int nr,const mxArray* in[]){
@@ -63,6 +74,7 @@ try{
         arity(nr,2,nl,1);Plan plan;AnalyticBlock block;
         if(command=="create")plan=read(in[1]);
         else{
+            if(const auto* assembly=mxGetField(in[1],0,"assembly")){if(text(assembly)!="analytic_constant_block")throw std::invalid_argument("Unsupported analytic assembly mode");}
             if(integer(field(in[1],0,"schema_version"),true)!=1)throw std::invalid_argument("Unsupported analytic block schema");
             for(int f=0;f<mxGetNumberOfFields(in[1]);++f){std::string key=mxGetFieldNameByNumber(in[1],f);
                 if(key!="schema_version"&&key!="cells"&&key!="faces"&&key!="operator_kind"&&key!="charge_map"&&key!="assembly")

@@ -7,7 +7,7 @@ end
 inputs=load(inputPath);result=struct('accepted',false,'cases',struct([]));
 try
     for k=1:numel(inputs.cases)
-        test=inputs.cases(k);h=radia_cuda_hmatrix('create',test.config);
+        test=inputs.cases(k);h=create(test.config);
         free=onCleanup(@()radia_cuda_hmatrix('destroy',h));
         mustFail(@()radia_cuda_hmatrix('apply',h,1));
         mustFail(@()radia_cuda_hmatrix('upload',h,nan(size(test.initial))));
@@ -57,6 +57,9 @@ try
     wrapper=operator.download();assert(norm(wrapper-inputs.cases(4).expected_third)<=1e-12*norm(inputs.cases(4).expected_third));
     clear free
     assert(radia_cuda_hmatrix('live_count')==0);
+    bad=inputs.cases(end).config;bad.cells(:)=0;bad.faces=zeros(0,1);mustFailCreate(bad);
+    bad=inputs.cases(end).config;bad.image_masks=1;mustFailCreate(bad);
+    assert(radia_cuda_hmatrix('live_count')==0);
     result.wrapper_checked=true;result.accepted=true;result.live_count=0;result.reload_stale_handle_rejected=true;
     result.invalid_create_released=true;
 catch failure
@@ -64,6 +67,10 @@ catch failure
     saveResult();rethrow(failure)
 end
 saveResult();
+    function h=create(config)
+        command='create';if isfield(config,'assembly'),command='create_analytic_constant_block';end
+        h=radia_cuda_hmatrix(command,config);
+    end
     function mustFail(call)
         failed=false;try,call();catch e
             assert(strcmp(e.identifier,'radia:cuda:hmatrix'));failed=true;
@@ -71,7 +78,7 @@ saveResult();
         assert(failed,'Expected a checked native rejection');
     end
     function mustFailCreate(config)
-        failed=false;try,unused=radia_cuda_hmatrix('create',config);catch e %#ok<NASGU>
+        failed=false;try,unused=create(config);catch e %#ok<NASGU>
             assert(strcmp(e.identifier,'radia:cuda:hmatrix'));failed=true;
         end
         assert(failed,'Expected a checked create rejection');
