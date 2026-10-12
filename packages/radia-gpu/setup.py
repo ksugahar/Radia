@@ -55,7 +55,7 @@ class build_py(_build_py):
         expected.update({"LICENSE", "README.md", "build.json", "ams-build.json"})
         for group in ("+radia/+gpu", "+radia/+ltspice"):
             for path in (MATLAB / group).rglob("*.m"):
-                if path.name in {"FieldCloud.m", "FieldElements.m", "ihResidentSFunction.m", "radia_ih_cuda_sfun.m"}:
+                if path.name in {"FieldCloud.m", "FieldElements.m"}:
                     continue  # Experimental RadFld module has its own staged build/acceptance.
                 if path.name in ("runRLCResonanceOptimizationDemo.m", "rlcResonanceObjective.m"):
                     continue  # Independent Optuna-dependent examples are not a runtime dependency.

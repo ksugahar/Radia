@@ -6,6 +6,24 @@ Hardware selects a candidate, not numerical acceptance. FP64 remains the
 reference and the current released precision until the complete physical case
 passes the gates below.
 
+## First candidate: FP32 preconditioning, FP64 outer iteration
+
+Qualify FP32 preconditioner storage and application first, on both intended GPU
+families. Keep the physical operator, solution, outer reductions and original
+true-residual evaluation in FP64. Compare iteration count and whole-workflow
+cost with FP64 preconditioning; half-size preconditioner values alone do not
+establish a speedup or half the total memory use.
+
+Use IC/PCG only for blocks satisfying the required Hermitian positive-definite
+contract. The full complex PEEC-BEM system must use a suitable nonsymmetric
+outer solver. If preconditioner application varies between iterations (adaptive
+inner tolerance, precision or cycles), use a flexible outer method such as
+FGMRES. Preserve sparsecholesky ownership for required direct FE subsolves.
+Detect FP32 factorization breakdown, loss of definiteness, nonfinite values and
+outer stagnation explicitly. Do not relax residual limits or silently change
+backend/precision. Record preconditioner setup, apply time, outer iterations,
+transfer-inclusive total time and actual memory separately in the same JSON.
+
 ## Candidate boundaries
 
 - Evaluate FP32 storage/multiplication for repeated PEEC/BEM operator actions
