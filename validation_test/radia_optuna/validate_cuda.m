@@ -5,10 +5,12 @@ arguments
     binaryDirectory (1,1) string
     outputJson (1,1) string
 end
+binaryDirectory=string(java.io.File(binaryDirectory).getCanonicalPath());
 addpath(fullfile(checkout,'packages','radia-optuna','matlab'));
 addpath(binaryDirectory,'-begin');
-binary=string(which('optuna_mex'));
-assert(startsWith(binary,binaryDirectory+filesep), 'Unexpected MEX origin.');
+binary=string(java.io.File(which('optuna_mex')).getCanonicalPath());
+expected=string(java.io.File(fullfile(binaryDirectory,"optuna_mex."+mexext)).getCanonicalPath());
+assert(strcmpi(binary,expected), 'Unexpected MEX origin.');
 info=optuna_mex('api.info');
 assert(string(info.build_route)=="mexcuda" && ~info.taskmanager);
 suite=testsuite(fullfile(checkout,'tests','matlab','test_optuna_upstream_oracle.m'));

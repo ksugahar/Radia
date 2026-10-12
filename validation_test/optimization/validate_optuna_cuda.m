@@ -5,8 +5,9 @@ arguments
     outputPath (1,1) string = fullfile(repoRoot,'validation_test','optimization','results_optuna_cuda_100.json')
 end
 addpath(fullfile(repoRoot,'packages','radia-optuna','matlab'));
-binary = string(which('optuna_mex'));
-assert(binary == fullfile(repoRoot,'packages','radia-optuna','matlab',"optuna_mex."+mexext), 'Unexpected native gateway: %s',binary);
+binary = string(java.io.File(which('optuna_mex')).getCanonicalPath());
+expected = string(java.io.File(fullfile(repoRoot,'packages','radia-optuna','matlab',"optuna_mex."+mexext)).getCanonicalPath());
+assert(strcmpi(binary,expected), 'Unexpected native gateway: %s',binary);
 device = gpuDevice;
 fixturePath = fullfile(repoRoot,'tests','matlab','fixtures','optuna50_cuda_oracle.json');
 oracle = jsondecode(fileread(fixturePath));
