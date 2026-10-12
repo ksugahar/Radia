@@ -3397,5 +3397,53 @@
         "cuda_device": 0
       }
     }
+  },
+  "idle_preflight": {
+    "logical_processors": 18,
+    "free_physical_memory_before_bytes": 57803599872,
+    "foreign_python_matlab_jobs_before": 0,
+    "gpu_idle_before_each_session": true,
+    "sessions": [
+      {
+        "variant": "baseline",
+        "repeat": 1,
+        "cpu_load_percent": [
+          3
+        ],
+        "gpu_utilization_percent": 0,
+        "gpu_used_before_mib": 10,
+        "engine_start_seconds": 5.433053500000028
+      },
+      {
+        "variant": "optimized",
+        "repeat": 1,
+        "cpu_load_percent": [
+          0
+        ],
+        "gpu_utilization_percent": 0,
+        "gpu_used_before_mib": 427,
+        "engine_start_seconds": 4.536283299999923
+      },
+      {
+        "variant": "optimized",
+        "repeat": 2,
+        "cpu_load_percent": [
+          5
+        ],
+        "gpu_utilization_percent": 0,
+        "gpu_used_before_mib": 427,
+        "engine_start_seconds": 4.607991800000036
+      },
+      {
+        "variant": "baseline",
+        "repeat": 2,
+        "cpu_load_percent": [
+          3
+        ],
+        "gpu_utilization_percent": 0,
+        "gpu_used_before_mib": 427,
+        "engine_start_seconds": 4.572177099999976
+      }
+    ]
   }
 }
