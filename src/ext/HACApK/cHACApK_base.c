@@ -699,16 +699,7 @@ void cHACApK_calc_vec(
 {
   int ii,ill,itt,il;
 
-  for (ii=0; ii<ndp; ii++) {
-    if(lmsk[ii]==0) {
-      if(ld==0) {
-        ill=ip+nstrtl; itt=ii+nstrtt;
-      } else {
-        ill=ii+nstrtl; itt=ip+nstrtt;
-      }
-      vec[ii]=cHACApK_entry_ij(lod[ill],lod[itt],i_bemv);
-    }
-  }
+  cHACApK_active_entry_vector(ndp,ip,nstrtl,nstrtt,lod,i_bemv,lmsk,ld,vec);
   if(k==0) return;
   /* Use pre-allocated workspace instead of malloc/free */
   /* Extract column with stride using BLAS dcopy (optimized strided access) */

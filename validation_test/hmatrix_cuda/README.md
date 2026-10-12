@@ -109,3 +109,15 @@ OpenMP leaf scheduling, real NGSolve charge-map assembly, material mass,
 constraints, iterative solver and true residual remain required. Large-scale
 assembly, whole-solve timing and peak-memory acceptance are pending. CI was
 running and queued, so this checkpoint contains no new performance comparison.
+
+The shared ACA active-vector extraction now has an opt-in compile-time
+`RAD_HACAPK_BATCH_ENTRIES` boundary. Default CPU builds still call the scalar
+entry function in the same order. Opt-in builds request active entries in
+chunks of at most 256, scatter to their original positions, and then execute
+the existing ACA subtraction/pivot logic. No global callback setter was added.
+`check_entry_batch.py` builds and executes both C paths on 100;
+`results/aca-entry-contract-20261012.json` records 36 cases per path covering
+both directions, masks, permutation and chunk boundaries. This tests extraction
+only: the CUDA callback definition, complete native HACApK build and compression
+parity remain pending. The GPU build must not enable the macro before that
+definition and its physical-entry normalization/error handling are connected.
