@@ -305,13 +305,18 @@ void run(int nlhs,mxArray** out,int nrhs,const mxArray** args){
         if(word(args[0])!="setup")throw std::runtime_error("Unknown AMS command");
         RadiaAMSSetup(nlhs,out,nrhs,args);return;
     }
-    if((nrhs!=5&&nrhs!=6)||nlhs!=2)throw std::runtime_error("[x,info]=radia_cuda_ams(snapshot,b,tol,maxiter,apply_only[,use_graph])");
-    if(nrhs==6&&!mxIsLogicalScalar(args[5]))throw std::runtime_error("logical use_graph required");
-    const bool use_graph=nrhs==6&&mxIsLogicalScalarTrue(args[5]);
+    if((nrhs<5||nrhs>7)||nlhs!=2)throw std::runtime_error("[x,info]=radia_cuda_ams(snapshot,b,tol,maxiter,apply_only[,use_graph])");
+    if(nrhs>=6&&!mxIsLogicalScalar(args[5]))throw std::runtime_error("logical use_graph required");
+    const bool use_graph=nrhs>=6&&mxIsLogicalScalarTrue(args[5]);
     double tol=scalar(args[2]);int maxiter=integer(args[3]);
     if(!(tol>0&&tol<=1e-6)||maxiter<1||maxiter==INT_MAX||!mxIsLogicalScalar(args[4]))throw std::runtime_error("invalid tolerance, iteration limit or apply flag");
     mxInitGPU();size_t memory_before,total,available;ck(cudaMemGetInfo(&memory_before,&total));
     Input in;AMS ams(args[0],in);int n=ams.a.n;const double* b;
+    // Frozen AMS preconditions the current tangent; residuals use that tangent.
+    std::unique_ptr<CSR> current;
+    if(nrhs==7){current=std::make_unique<CSR>(args[6],in);
+        if(current->n!=n||current->m!=n)throw std::runtime_error("current operator dimensions mismatch");}
+    const CSR& op=current?*current:ams.a;
     ck(cudaMemGetInfo(&available,&total));size_t workspace_sample=memory_before>available?memory_before-available:0;
     finite_vec(in,args[1],n,b);bool apply_only=mxIsLogicalScalarTrue(args[4]);
     Buffer zero(n);zero.zero();verify_mask<<<(n+T-1)/T,T,0,launch_stream>>>(n,ams.free,apply_only?zero.p:b,in.validation.p);
@@ -332,19 +337,19 @@ void run(int nlhs,mxArray** out,int nrhs,const mxArray** args){
             if(use_graph)graph=std::make_unique<AMSGraph>(ams,r.p,z.p);
             auto precondition=[&](){if(graph)graph->apply();else ams.apply(r.p,z.p);};
             precondition();ck(cudaMemcpyAsync(p.p,z.p,n*sizeof(double),cudaMemcpyDeviceToDevice,launch_stream));blas.dot(n,r.p,z.p,scalars.p);rel=1;
-            for(it=1;it<=maxiter;++it){ams.a.mult(p.p,ap.p);blas.dot(n,p.p,ap.p,scalars.p+1);
+            for(it=1;it<=maxiter;++it){op.mult(p.p,ap.p);blas.dot(n,p.p,ap.p,scalars.p+1);
                 // Read rho and pAp together; next-rho stays on device between iterations.
                 double control[2];ck(cudaMemcpy(control,scalars.p,2*sizeof(double),cudaMemcpyDeviceToHost));
                 double rho=control[0],pap=control[1];
                 if(!(pap>0)||!(rho>0)||!std::isfinite(pap)||!std::isfinite(rho))throw std::runtime_error("AMS PCG breakdown: nonpositive curvature");
                 double alpha=rho/pap;pcg_update<<<(n+T-1)/T,T,0,launch_stream>>>(n,alpha,p.p,ap.p,solution.data(),r.p);
                 rel=blas.norm(n,r.p)/bnorm;if(!std::isfinite(rel))throw std::runtime_error("nonfinite residual");
-                if(rel<=tol){ams.a.res(solution.data(),b,r.p);rel=blas.norm(n,r.p)/bnorm;if(rel<=tol)break;
+                if(rel<=tol){op.res(solution.data(),b,r.p);rel=blas.norm(n,r.p)/bnorm;if(rel<=tol)break;
                     precondition();ck(cudaMemcpyAsync(p.p,z.p,n*sizeof(double),cudaMemcpyDeviceToDevice,launch_stream));blas.dot(n,r.p,z.p,scalars.p);continue;}
                 precondition();blas.dot(n,r.p,z.p,scalars.p+2);combine<<<(n+T-1)/T,T,0,launch_stream>>>(n,z.p,scalars.p,p.p);
                 ck(cudaMemcpyAsync(scalars.p,scalars.p+2,sizeof(double),cudaMemcpyDeviceToDevice,launch_stream));
             }
-            ams.a.res(solution.data(),b,r.p);rel=blas.norm(n,r.p)/bnorm;
+            op.res(solution.data(),b,r.p);rel=blas.norm(n,r.p)/bnorm;
             if(!std::isfinite(rel)||rel>tol||it>maxiter)throw std::runtime_error("AMS PCG failed its FP64 true residual gate");
         }
     }
