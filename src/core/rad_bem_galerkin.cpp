@@ -29,7 +29,7 @@
 #include <memory>
 #include <limits>
 
-#include <core/taskmanager.hpp>      // ngcore::ParallelFor / TaskManager
+#include "rad_host_parallel.h"
 
 namespace radia { namespace bem {
 
@@ -624,7 +624,7 @@ struct P1EntryProvider::Impl {
                                   std::vector<double>& w,
                                   std::vector<double>& n_arr) {
             int nq = q.n();
-            ngcore::ParallelFor(ngcore::IntRange(n_t), [&](size_t t) {
+            radia::host::ParallelFor(radia::host::IntRange(n_t), [&](size_t t) {
                 const double* p2 = &p2_nodes[t * 6 * 3];
                 for (int qq = 0; qq < nq; ++qq) {
                     double r[3], n_hat[3], J;
@@ -643,7 +643,7 @@ struct P1EntryProvider::Impl {
 
         // Centroid + diameter per tri (use corner vertices of tri for diam,
         // not P2 nodes -- diam = max edge length).
-        ngcore::ParallelFor(ngcore::IntRange(n_t), [&](size_t t) {
+        radia::host::ParallelFor(radia::host::IntRange(n_t), [&](size_t t) {
             const double* p2 = &p2_nodes[t * 6 * 3];
             // Corners: P2 nodes [0], [1], [2]
             double cx = (p2[0] + p2[3] + p2[6]) / 3.0;
@@ -895,9 +895,9 @@ void AssembleSLDL(
 {
     (void)verts;  // unused -- positions come from p2_nodes corners
 
-    int requested_threads=(n_threads>0)?n_threads:ngcore::TaskManager::GetMaxThreads();
+    int requested_threads=(n_threads>0)?n_threads:radia::host::ThreadCount();
     if(requested_threads<=0) requested_threads=1;
-    ngcore::RegionTaskManager rtm(requested_threads);
+    radia::host::ThreadScope rtm(requested_threads);
     P1EntryProvider provider(verts,n_v,tris,n_t,p2_nodes,regular_quad_degree,singular_n_q,0);
     // Zero output matrices
     std::fill(SL_out, SL_out + (size_t)n_v * n_v, 0.0);
@@ -908,7 +908,7 @@ void AssembleSLDL(
     // row merges; a plain concurrent scatter would lose shared-vertex sums.
     const bool use_thread_local = (n_v <= 5000);
 
-    int n_thr = std::max(1, ngcore::TaskManager::GetMaxThreads());
+    int n_thr = std::max(1, radia::host::ThreadCount());
     std::vector<std::vector<double>> SL_local;
     std::vector<std::vector<double>> DL_local;
     if (use_thread_local) {
@@ -921,9 +921,9 @@ void AssembleSLDL(
     }
 
     std::array<std::mutex,64> row_mutex;
-    ngcore::ParallelFor(ngcore::IntRange(n_t), [&](size_t a_sz) {
+    radia::host::ParallelFor(radia::host::IntRange(n_t), [&](size_t a_sz) {
         int a = static_cast<int>(a_sz);
-        int tid = use_thread_local ? ngcore::TaskManager::GetThreadId() : 0;
+        int tid = use_thread_local ? radia::host::ThreadId() : 0;
         std::vector<double> sl_rows, dl_rows;
         if(!use_thread_local) {
             sl_rows.assign(size_t(3)*n_v,0.0);
@@ -960,7 +960,7 @@ void AssembleSLDL(
     // Reduce thread-local accumulators (if we used them) into the
     // output buffers in parallel.
     if (use_thread_local) {
-        ngcore::ParallelFor(ngcore::IntRange((size_t)n_v * n_v), [&](size_t idx) {
+        radia::host::ParallelFor(radia::host::IntRange((size_t)n_v * n_v), [&](size_t idx) {
             double sl_sum = 0.0, dl_sum = 0.0;
             for (int k = 0; k < n_thr; ++k) {
                 sl_sum += SL_local[k][idx];
@@ -1084,9 +1084,9 @@ void AssembleSLDL_P2(
 
     int requested_threads = (n_threads > 0)
         ? n_threads
-        : ngcore::TaskManager::GetMaxThreads();
+        : radia::host::ThreadCount();
     if (requested_threads <= 0) requested_threads = 1;
-    ngcore::RegionTaskManager rtm(requested_threads);
+    radia::host::ThreadScope rtm(requested_threads);
 
     // Pre-cache per-tri regular-pair physical positions, weights, normals,
     // AND 6-hat values per quadpt.  N_*[t * nq + qq] is a 6-element
@@ -1097,7 +1097,7 @@ void AssembleSLDL_P2(
                               std::vector<double>& n_arr,
                               std::vector<double>& N_arr) {
         int nq = q.n();
-        ngcore::ParallelFor(ngcore::IntRange(n_t), [&](size_t t) {
+        radia::host::ParallelFor(radia::host::IntRange(n_t), [&](size_t t) {
             const double* p2 = &p2_nodes[t * 6 * 3];
             for (int qq = 0; qq < nq; ++qq) {
                 double r[3], n_hat[3], J;
@@ -1138,7 +1138,7 @@ void AssembleSLDL_P2(
     // Centroid + diameter per tri.
     std::vector<double> tri_centroid((size_t)n_t * 3);
     std::vector<double> tri_diam((size_t)n_t);
-    ngcore::ParallelFor(ngcore::IntRange(n_t), [&](size_t t) {
+    radia::host::ParallelFor(radia::host::IntRange(n_t), [&](size_t t) {
         const double* p2 = &p2_nodes[t * 6 * 3];
         double cx = (p2[0] + p2[3] + p2[6]) / 3.0;
         double cy = (p2[1] + p2[4] + p2[7]) / 3.0;
@@ -1158,7 +1158,7 @@ void AssembleSLDL_P2(
     // Thread-local n_dof^2 accumulators when the working set fits.
     // Large systems use local rows and synchronized merges.
     const bool use_thread_local = (n_dof <= 5000);
-    int n_thr = std::max(1, ngcore::TaskManager::GetMaxThreads());
+    int n_thr = std::max(1, radia::host::ThreadCount());
     std::vector<std::vector<double>> SL_local;
     std::vector<std::vector<double>> DL_local;
     if (use_thread_local) {
@@ -1171,9 +1171,9 @@ void AssembleSLDL_P2(
     }
 
     std::array<std::mutex,64> row_mutex;
-    ngcore::ParallelFor(ngcore::IntRange(n_t), [&](size_t a_sz) {
+    radia::host::ParallelFor(radia::host::IntRange(n_t), [&](size_t a_sz) {
         int a = static_cast<int>(a_sz);
-        int tid = use_thread_local ? ngcore::TaskManager::GetThreadId() : 0;
+        int tid = use_thread_local ? radia::host::ThreadId() : 0;
         std::vector<double> sl_rows, dl_rows;
         if (!use_thread_local) {
             sl_rows.assign(size_t(6)*n_dof, 0.0);
@@ -1360,7 +1360,7 @@ void AssembleSLDL_P2(
 
     // Reduce thread-local accumulators in parallel.
     if (use_thread_local) {
-        ngcore::ParallelFor(ngcore::IntRange((size_t)n_dof * n_dof), [&](size_t idx) {
+        radia::host::ParallelFor(radia::host::IntRange((size_t)n_dof * n_dof), [&](size_t idx) {
             double sl_sum = 0.0, dl_sum = 0.0;
             for (int k = 0; k < n_thr; ++k) {
                 sl_sum += SL_local[k][idx];

@@ -4,6 +4,8 @@
 #include "gpu/mxGPUArray.h"
 #include "ih_coupled_state.cuh"
 #include "ih_esim_coupling.cuh"
+#include "rad_bem_galerkin.h"
+#include "rad_biot_savart_filaments.h"
 #include <map>
 #include <string>
 #include <cstdint>
@@ -63,6 +65,7 @@ std::vector<double> realVector(const mxArray* a,size_t count){
  if(!mxIsDouble(a)||mxIsComplex(a)||mxIsSparse(a)||mxGetNumberOfElements(a)!=count)throw std::invalid_argument("IH real vector shape mismatch");
  const auto* p=mxGetDoubles(a);std::vector<double> v(p,p+count);for(double x:v)if(!std::isfinite(x))throw std::invalid_argument("Nonfinite IH vector");return v;
 }
+#include "ih_peec_bem_assembly.cuh"
 // Explicit bounded operator frontend. Geometry/reaction assembly is separate.
 struct ElementMaterial {
  Matrix evaluation,entryMap;Buffer axis,rho,mu,saturation,geometry,fields,base,baseWeights;
@@ -174,6 +177,7 @@ mxArray* vectorOut(const std::vector<double>& v){auto* a=mxCreateDoubleMatrix(v.
 void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** in){
  try{
   mxInitGPU();if(!nrhs)throw std::invalid_argument("Missing IH command");const auto command=text(in[0]);
+  if(command=="assemble_peec_bem"){if(nrhs!=2||nlhs!=1)throw std::invalid_argument("assemble_peec_bem requires geometry and one output");out[0]=assemblePEECBEM(in[1]);return;}
   if(command=="create"){
    if(nrhs!=2||nlhs!=1)throw std::invalid_argument("create requires config and one output");
    if(generation==0x0000ffffffffffffULL)throw std::overflow_error("IH handle generation exhausted");

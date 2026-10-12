@@ -15,7 +15,7 @@
 #include <cstring>
 #include <algorithm>
 
-#include <core/taskmanager.hpp>
+#include "rad_host_parallel.h"
 
 namespace radia { namespace bs {
 
@@ -72,12 +72,12 @@ void HFromSegmentsComplex(
 
     int requested_threads = (n_threads > 0)
         ? n_threads
-        : ngcore::TaskManager::GetMaxThreads();
+        : radia::host::ThreadCount();
     if (requested_threads <= 0) requested_threads = 1;
-    ngcore::RegionTaskManager rtm(requested_threads);
+    radia::host::ThreadScope rtm(requested_threads);
 
     // Parallel over obs points.  Each obs is independent.
-    ngcore::ParallelFor(ngcore::IntRange(n_obs), [&](size_t j_sz) {
+    radia::host::ParallelFor(radia::host::IntRange(n_obs), [&](size_t j_sz) {
         int j = static_cast<int>(j_sz);
         double ox = obs[j * 3 + 0];
         double oy = obs[j * 3 + 1];
@@ -180,11 +180,11 @@ void AFromSegmentsComplex(
 
     int requested_threads = (n_threads > 0)
         ? n_threads
-        : ngcore::TaskManager::GetMaxThreads();
+        : radia::host::ThreadCount();
     if (requested_threads <= 0) requested_threads = 1;
-    ngcore::RegionTaskManager rtm(requested_threads);
+    radia::host::ThreadScope rtm(requested_threads);
 
-    ngcore::ParallelFor(ngcore::IntRange(n_obs), [&](size_t j_sz) {
+    radia::host::ParallelFor(radia::host::IntRange(n_obs), [&](size_t j_sz) {
         int j = static_cast<int>(j_sz);
         double ox = obs[j * 3 + 0];
         double oy = obs[j * 3 + 1];
