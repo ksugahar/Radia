@@ -30,7 +30,7 @@ def main():
         batch=out/'compile.cmd'
         batch.write_text('@echo off\ncall "'+str(vs/'VC/Auxiliary/Build/vcvars64.bat')+'" >nul\n'+subprocess.list2cmdline(cmd)+'\nexit /b %errorlevel%\n',encoding='utf-8')
         subprocess.run(['cmd','/c',str(batch)],check=True)
-        eng.mexcuda('-v','-f',str(config),'-R2018a','-DWIN32','-DNOMINMAX','NVCCFLAGS=-std=c++20 --fmad=false -gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80',*[f'-I{netgen / "include" / d}' for d in ('','include','general','linalg','meshing','gprim')],f'-I{prefix / "include"}',f'-I{root / "packages/radia-gpu/native"}',f'-L{netgen / "lib"}',f'-L{prefix / "libs"}','-llibngsolve','-lngcore','-lpython312','-outdir',str(out),str(source),str(obj),nargout=0)
+        eng.mexcuda('-v','-f',str(config),'-R2018a','-DWIN32','-DNOMINMAX','NVCCFLAGS=-std=c++20 --fmad=false -gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_80,code=compute_80',*[f'-I{netgen / "include" / d}' for d in ('','include','general','linalg','meshing','gprim')],f'-I{prefix / "include"}',f'-I{root / "packages/radia-gpu/native"}',f'-L{netgen / "lib"}',f'-L{prefix / "libs"}','-llibngsolve','-lnglib','-lngcore','-lpython312','-outdir',str(out),str(source),str(obj),nargout=0)
         if receipt['source_sha256']!={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}:raise RuntimeError('Source changed during build')
         binary=out/'radia_cuda_projection.mexw64' 
         receipt.update(accepted=True,binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),matlab=eng.version())
