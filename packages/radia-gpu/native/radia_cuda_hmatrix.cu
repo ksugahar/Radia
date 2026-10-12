@@ -89,6 +89,10 @@ try{
         if(rows>=n||rankLimit>std::min(rows,n-rows)||epsilon.size()!=1||epsilon[0]<=0||epsilon[0]>=1)
             throw std::invalid_argument("Invalid ACA block split/rank/tolerance");
         const auto columns=n-rows;
+        // This bounded diagnostic returns factors directly to MATLAB. Reject
+        // oversized generated payloads before host allocation (HDF5 pending).
+        if(checkedProduct(n,rankLimit)>(std::size_t(2)<<30)/sizeof(double))
+            throw std::runtime_error("ACA factor payload exceeds 2 GiB; HDF5 frontend required");
         std::vector<double> a2(checkedProduct(rows,rankLimit)),a1(checkedProduct(columns,rankLimit));
         std::vector<int> lod(n+1);for(std::size_t i=0;i<n;++i)lod[i+1]=int(i+1);
         double parameters[100]={};parameters[61]=1;parameters[62]=double(rankLimit);parameters[64]=1;

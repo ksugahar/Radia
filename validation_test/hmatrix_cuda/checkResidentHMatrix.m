@@ -59,6 +59,15 @@ try
         'entry_batches',factors.entry_batches,'entry_count',factors.entry_count, ...
         'owned_device_bytes',factors.owned_device_bytes,'scope','One raw physical offdiagonal block, not full adaptive matrix or solver');
     assert(compressionError<=1e-8,'Existing ACA+ with CUDA entry compression parity failed');
+    if isfield(inputs,'aca_large_probe')
+        probeLarge=inputs.aca_large_probe;
+        factors=radia_cuda_hmatrix('analytic_aca_compress',probeLarge.cells,probeLarge.faces,probeLarge.split,1e-10,min(32,probeLarge.split));
+        relativeError=norm(factors.a2*factors.a1.'-probeLarge.expected,'fro')/norm(probeLarge.expected,'fro');
+        result.admissible_block=struct('rows',probeLarge.split,'columns',probeLarge.split,'rank',factors.rank, ...
+            'relative_error',relativeError,'entry_count',factors.entry_count,'entry_batches',factors.entry_batches, ...
+            'owned_device_bytes',factors.owned_device_bytes,'scope','Separated constant-tet block above default 65-charge leaf threshold');
+        assert(relativeError<=1e-8,'Admissible ACA block physical CPU parity failed');
+    end
     assert(radia_cuda_hmatrix('live_count')==0);
     stale=h;
     clear radia_cuda_hmatrix

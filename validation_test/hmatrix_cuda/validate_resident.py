@@ -15,7 +15,7 @@ def structs(rows):
     return out
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--artifact',type=Path,required=True);parser.add_argument('--out',type=Path,required=True);a=parser.parse_args();a.out.mkdir(parents=True,exist_ok=False)
+    parser=argparse.ArgumentParser();parser.add_argument('--artifact',type=Path,required=True);parser.add_argument('--out',type=Path,required=True);parser.add_argument('--aca-block-size',type=int,default=0);a=parser.parse_args();a.out.mkdir(parents=True,exist_ok=False)
     record=dict(schema='radia.hmatrix-resident-numerical.v1',accepted=False,a100_used=False,timing_acceptance=False,scope='Resident symmetric leaf algebra and public sampled/integrated-tet Gram CPU parity; bounded native constant-charge block assembly only; not general HACApK Matrix Build or full HDiv-MMM physics acceptance')
     eng=None
     source_files=(Path(__file__),Path(__file__).with_name('checkResidentHMatrix.m'),ROOT/'packages/radia-gpu/matlab/+radia/+gpu/HMatrixOperator.m')
@@ -87,7 +87,18 @@ def main():
             entry_expected=np.array([mixedgram.entry(int(i),int(j)) for i,j in zip(entry_rows,entry_columns)])
             aca_matrix=np.array([[mixedgram.entry(i,j) for j in range(4)] for i in range(4)])
         entry_probe=dict(cells=cells[:,None],faces=triangles[:,None],rows=(entry_rows+1.).reshape(-1,1),columns=(entry_columns+1.).reshape(-1,1),expected=entry_expected[:,None],aca_matrix=aca_matrix)
-        inputfile=a.out/'inputs.mat';savemat(inputfile,dict(cases=structs(cases),entry_probe=entry_probe));record['input_sha256']=sha(inputfile)
+        payload=dict(cases=structs(cases),entry_probe=entry_probe)
+        if a.aca_block_size:
+            n=a.aca_block_size
+            if not 65<=n<=256:raise ValueError('Admissible-block validation requires 65..256 charges per cluster')
+            small=tetra*.25
+            centers=np.array([[.3*(i%11),.3*(i//11),0.] for i in range(n)])
+            larger=np.concatenate([(small+c).ravel() for c in centers]+[(small+c+np.array([30.,0.,0.])).ravel() for c in centers])
+            with ng.TaskManager():
+                largegram=native._ChargeGramHMatrix(larger,np.empty(0),2*n,eps=1e-10,leaf=64,eta=2.,near_factor=1e30,build=True,far_quad=0)
+                block_reference=np.array([[largegram.entry(i,n+j) for j in range(n)] for i in range(n)])
+            payload['aca_large_probe']=dict(cells=larger[:,None],faces=np.empty((0,1)),split=float(n),expected=block_reference)
+        inputfile=a.out/'inputs.mat';savemat(inputfile,payload);record['input_sha256']=sha(inputfile)
         import matlab.engine
         eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread');pid=int(eng.feature('getpid'));subprocess.run(['powershell','-NoProfile','-Command',f'(Get-Process -Id {pid}).PriorityClass="BelowNormal"'],check=True,capture_output=True)
         eng.addpath(str(a.artifact),str(Path(__file__).parent),str(ROOT/'packages/radia-gpu/matlab'),nargout=0)

@@ -340,7 +340,9 @@ int cHACApK_acaplus(
       if(ntries_row>0) {
         rownorm = 0.0; i=i_ref;
         //        print*,'lrow_msk',lrow_msk
-        while(i!=(i_ref+ndl-1)%ndl && rownorm<za_ACA_EPS && ntries_row>0) {
+        /* Inspect every row once, including the final cyclic candidate. */
+        int scanned_rows = 0;
+        while(scanned_rows++<ndl && rownorm<za_ACA_EPS && ntries_row>0) {
           //          print*,'i=',i,' ii=',mod((i_ref+ndl-2),ndl)+1
           if(lrow_msk[i]==0) {
             //            write(6,1000) 'i=',i
@@ -368,7 +370,9 @@ int cHACApK_acaplus(
       if(ntries_col>0) {
         colnorm = 0.0; j=j_ref;
         //        print*,'lcol_msk',lcol_msk
-        while(j!=(j_ref+ndt-1)%ndt && colnorm<za_ACA_EPS && ntries_col>0) {
+        /* Inspect every column once, including the final cyclic candidate. */
+        int scanned_columns = 0;
+        while(scanned_columns++<ndt && colnorm<za_ACA_EPS && ntries_col>0) {
           if(lcol_msk[j]==0) {
             cHACApK_calc_vec(zaa,zab,ndl,ndt,k+1,j,pa_ref,nstrtl,nstrtt,lod,i_bemv,lrow_msk,1,workspace);
             colnorm = cHACApK_unrm_d(ndl,pa_ref);
