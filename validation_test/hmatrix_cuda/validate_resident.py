@@ -15,9 +15,11 @@ def structs(rows):
     return out
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--artifact',type=Path,required=True);parser.add_argument('--out',type=Path,required=True);parser.add_argument('--aca-block-size',type=int,default=0);parser.add_argument('--full-assembly',action='store_true');parser.add_argument('--full-max-rank',type=int,default=32);parser.add_argument('--physical-refinements',type=int,choices=[0,1],default=0);a=parser.parse_args();a.out.mkdir(parents=True,exist_ok=False)
+    parser=argparse.ArgumentParser();parser.add_argument('--artifact',type=Path,required=True);parser.add_argument('--out',type=Path,required=True);parser.add_argument('--aca-block-size',type=int,default=0);parser.add_argument('--full-assembly',action='store_true');parser.add_argument('--full-max-rank',type=int,default=32);parser.add_argument('--full-epsilon',type=float,default=1e-10);parser.add_argument('--physical-refinements',type=int,choices=[0,1],default=0);a=parser.parse_args();a.out.mkdir(parents=True,exist_ok=False)
     record=dict(schema='radia.hmatrix-resident-numerical.v1',accepted=False,a100_used=False,timing_acceptance=False,scope='Resident symmetric leaf algebra and public sampled/integrated-tet Gram CPU parity; bounded native constant-charge block assembly only; not general HACApK Matrix Build or full HDiv-MMM physics acceptance')
     if not 1<=a.full_max_rank<=4096:raise ValueError('Full hierarchy rank budget must be 1..4096')
+    if not 0<a.full_epsilon<1:raise ValueError('Full hierarchy epsilon must be in (0,1)')
+    record['full_epsilon']=a.full_epsilon
     parser_rank = a.full_max_rank
     record['full_max_rank']=parser_rank
     eng=None
@@ -107,7 +109,7 @@ def main():
                 with ng.TaskManager():
                     direct=np.array([[largegram.entry(i,j) for j in range(2*n)] for i in range(2*n)])
                 x=rng.normal(size=(2*n,1))
-                payload['full_assembly_probe']=dict(config=dict(schema_version=1.,cells=larger[:,None],faces=np.empty((0,1)),operator_kind='gram',epsilon=1e-10,leaf_size=64.,eta=2.,max_rank=float(parser_rank)),initial=x,expected=direct@x)
+                payload['full_assembly_probe']=dict(config=dict(schema_version=1.,cells=larger[:,None],faces=np.empty((0,1)),operator_kind='gram',epsilon=a.full_epsilon,leaf_size=64.,eta=2.,max_rank=float(parser_rank)),initial=x,expected=direct@x)
         elif a.full_assembly:raise ValueError('--full-assembly requires --aca-block-size')
         solver_cases=[]
         for test in cases:

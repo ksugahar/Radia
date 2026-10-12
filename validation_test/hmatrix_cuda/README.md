@@ -307,3 +307,16 @@ owned peak 28996 bytes in both modes. These are CUDA-before/CUDA-after
 diagnostics on this bounded physical case, not CPU-vs-GPU or general-solver
 performance acceptance. A100 validation here uses independent CPU FE fixtures;
 native FE initialization on A100 was not reaccepted for this latest artifact.
+
+## Compression tolerance diagnostic on 256 constant charges
+
+`validate_resident.py --aca-block-size 128 --full-assembly --full-max-rank 64
+--full-epsilon 1e-6` keeps the production defaults and the existing independent
+CPU parity limit (1e-8) unchanged. One low-rank upper leaf survives; matvec
+relative difference is 5.815e-10 and owned resident bytes decrease from 336392
+to 217704 (35.3%). No timing improvement is established. The direct CPU
+128-by-128 offdiagonal block has optimal rank-64 relative Frobenius tail
+4.472e-10, above the stricter 1e-10 assembly tolerance. Thus dense promotion
+in the strict case is not evidence of a CUDA-only failure. The origin of the
+small singular-value floor still needs isolation. A single matvec comparison
+is not an operator norm certificate. See `results/epsilon-sensitivity-20261013.json`.
