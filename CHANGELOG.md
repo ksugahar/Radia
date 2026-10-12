@@ -1,5 +1,16 @@
 # Changelog
 
+## 5.3.1 - 2026-10-12
+
+- Release the CPU Python/pybind11 solver with bounded P1 HACApK entry-on-demand
+  construction and the completed weak genus-1 validation. MATLAB/CUDA artifacts
+  remain in independently released distributions.
+- Include the genus-1 circulating-current cohomology implementation and its
+  independent HCurl FEM/BEM validation on a synthetic bored workpiece;
+  retain the existing residual, balance, carrier and 2% physical comparison gates.
+- Document IH solver handoff, operator limits, independent validation, and
+  the publication boundary for project-specific analysis data.
+
 - Prevent a latent race in large P1/P2 dense Galerkin assembly: buffer test-triangle rows and synchronize shared-row merges. Quadrature is unchanged; grouped additions agree within contribution-based roundoff bounds. Audited structured cases showed no corruption.
 
 

@@ -7,6 +7,9 @@ Simulink library for application models.
 These executed notebooks explain numerical evidence, not production controls.
 Numerical evidence and its checked JSON remain under `validation_test/`.
 
+The reusable solver development contract and publication boundary are recorded
+in the [solver handoff](SOLVER_DEVELOPMENT_HANDOFF.md).
+
 ## Choose your next step
 
 | Purpose | Entry point |
