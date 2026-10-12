@@ -124,14 +124,46 @@ template<class T> struct Buffer {
     void allocate(std::size_t n){check(cudaGetDevice(&device));size=n;if(n)check(cudaMalloc(reinterpret_cast<void**>(&data),checkedProduct(n,sizeof(T))));}
     void upload(const std::vector<T>& v){allocate(v.size());if(size)check(cudaMemcpy(data,v.data(),size*sizeof(T),cudaMemcpyHostToDevice));}
 };
+struct SparseMap {
+    std::size_t rows=0,columns=0;
+    std::vector<std::size_t> offsets,indices;
+    std::vector<double> values;
+    void validate()const {
+        if(!rows||!columns||offsets.size()!=rows+1||offsets.front()!=0||offsets.back()!=values.size()||indices.size()!=values.size())
+            throw std::invalid_argument("Invalid charge-map shape");
+        for(std::size_t i=0;i<rows;++i)if(offsets[i]>offsets[i+1])throw std::invalid_argument("Invalid charge-map offsets");
+        for(auto j:indices)if(j>=columns)throw std::invalid_argument("Invalid charge-map index");
+        for(auto v:values)if(!std::isfinite(v))throw std::invalid_argument("Nonfinite charge-map value");
+    }
+    SparseMap transpose()const {
+        validate();SparseMap t;t.rows=columns;t.columns=rows;t.offsets.assign(columns+1,0);
+        for(auto i:indices)++t.offsets[i+1];for(std::size_t i=0;i<columns;++i)t.offsets[i+1]+=t.offsets[i];
+        t.indices.resize(indices.size());t.values.resize(values.size());auto next=t.offsets;
+        for(std::size_t row=0;row<rows;++row)for(auto k=offsets[row];k<offsets[row+1];++k){auto q=next[indices[k]]++;t.indices[q]=row;t.values[q]=values[k];}return t;
+    }
+};
+__global__ void sparseMapApply(std::size_t rows,const std::size_t* offsets,const std::size_t* indices,
+                              const double* values,const double* x,double* y) {
+    auto i=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(i>=rows)return;
+    double result=0;for(auto k=offsets[i];k<offsets[i+1];++k)result+=values[k]*x[indices[k]];y[i]=result;
+}
+struct DeviceMap {
+    Buffer<std::size_t> offsets,indices;Buffer<double> values;std::size_t rows=0;
+    void upload(const SparseMap& map){rows=map.rows;offsets.upload(map.offsets);indices.upload(map.indices);values.upload(map.values);}
+    void apply(const double* x,double* y,cudaStream_t stream){
+        sparseMapApply<<<unsigned((rows+255)/256),256,0,stream>>>(rows,offsets.data,indices.data,values.data,x,y);check(cudaGetLastError());
+    }
+    void abandon(){offsets.data=nullptr;indices.data=nullptr;values.data=nullptr;}
+};
 class Resident {
     Buffer<Direction> directions;Buffer<double> coefficients,scale,input,tmp,partial,state;
     Buffer<std::size_t> permutation,rowOffsets,partialIndices;
+    DeviceMap chargeMap,chargeTranspose;Buffer<double> dofState;std::size_t dofs=0;
     cudaStream_t stream=nullptr;std::size_t n,count;bool initialized=false;int device=0;
     void valid(){int current;check(cudaGetDevice(&current));if(current!=device)throw std::runtime_error("H-matrix context belongs to another GPU");auto status=cudaStreamQuery(stream);if(status!=cudaSuccess&&status!=cudaErrorNotReady)check(status);}
 public:
-    std::size_t ownedBytes=0,applications=0;
-    explicit Resident(const Plan& p):n(p.n),count(p.directions.size()) {
+    std::size_t ownedBytes=0,applications=0,kernelsPerApplication=4;
+    explicit Resident(const Plan& p,const SparseMap* map=nullptr):n(p.n),count(p.directions.size()) {
         check(cudaGetDevice(&device));
         if(count>2147483647u||n>std::size_t(2147483647u)*256)throw std::invalid_argument("CUDA grid range exceeded");
         auto bytes=[&](std::size_t size,std::size_t width){auto b=checkedProduct(size,width);if(b>std::numeric_limits<std::size_t>::max()-ownedBytes)throw std::overflow_error("Device allocation overflow");ownedBytes+=b;};
@@ -140,6 +172,13 @@ public:
         bytes(n,sizeof(std::size_t));bytes(p.rowOffsets.size(),sizeof(std::size_t));bytes(p.partialIndices.size(),sizeof(std::size_t));
         std::size_t free,total;check(cudaMemGetInfo(&free,&total));const auto reserve=std::max(std::size_t(2)<<30,total/5);
         if(free<=reserve||ownedBytes>free-reserve)throw std::runtime_error("GPU memory reserve would be exceeded");
+        SparseMap transpose;
+        if(map){map->validate();if(map->rows!=n||map->columns>2147483647u)throw std::invalid_argument("Charge-map dimension mismatch");transpose=map->transpose();
+            bytes(map->offsets.size(),sizeof(std::size_t));bytes(transpose.offsets.size(),sizeof(std::size_t));
+            bytes(map->indices.size(),2*sizeof(std::size_t));bytes(map->values.size(),2*sizeof(double));bytes(map->columns,sizeof(double));
+            if(ownedBytes>free-reserve)throw std::runtime_error("GPU charge-map memory reserve would be exceeded");
+            dofs=map->columns;kernelsPerApplication=6;chargeMap.upload(*map);chargeTranspose.upload(transpose);dofState.allocate(dofs);
+        }
         directions.upload(p.directions);coefficients.upload(p.coefficients);scale.upload(p.scale);
         permutation.upload(p.permutation);rowOffsets.upload(p.rowOffsets);partialIndices.upload(p.partialIndices);
         input.allocate(n);tmp.allocate(p.tmpCount);partial.allocate(p.partialCount);state.allocate(n);
@@ -147,28 +186,30 @@ public:
     }
     ~Resident(){if(stream){int previous=device;cudaGetDevice(&previous);if(previous!=device)cudaSetDevice(device);
         auto status=cudaStreamQuery(stream);
-        if(status!=cudaSuccess&&status!=cudaErrorNotReady){directions.data=nullptr;coefficients.data=nullptr;scale.data=nullptr;input.data=nullptr;tmp.data=nullptr;partial.data=nullptr;state.data=nullptr;permutation.data=nullptr;rowOffsets.data=nullptr;partialIndices.data=nullptr;}
+        if(status!=cudaSuccess&&status!=cudaErrorNotReady){directions.data=nullptr;coefficients.data=nullptr;scale.data=nullptr;input.data=nullptr;tmp.data=nullptr;partial.data=nullptr;state.data=nullptr;permutation.data=nullptr;rowOffsets.data=nullptr;partialIndices.data=nullptr;chargeMap.abandon();chargeTranspose.abandon();dofState.data=nullptr;}
         else{cudaStreamSynchronize(stream);cudaStreamDestroy(stream);}if(previous!=device)cudaSetDevice(previous);}}
     void upload(const std::vector<double>& values){
-        valid();if(values.size()!=n)throw std::invalid_argument("State dimension mismatch");
+        valid();const auto dimension=dofs?dofs:n;if(values.size()!=dimension)throw std::invalid_argument("State dimension mismatch");
         for(double v:values)if(!std::isfinite(v))throw std::invalid_argument("Nonfinite state");
-        check(cudaMemcpyAsync(state.data,values.data(),n*sizeof(double),cudaMemcpyHostToDevice,stream));
+        check(cudaMemcpyAsync(dofs?dofState.data:state.data,values.data(),dimension*sizeof(double),cudaMemcpyHostToDevice,stream));
         check(cudaStreamSynchronize(stream));initialized=true;
     }
     void apply(std::size_t repeats){
         valid();if(!initialized)throw std::runtime_error("Upload initial state before apply");
         if(!repeats||repeats>10000)throw std::invalid_argument("Invalid repetition count");
         for(std::size_t k=0;k<repeats;++k){
+            if(dofs)chargeMap.apply(dofState.data,state.data,stream);
             gatherInput<<<unsigned((n+255)/256),256,0,stream>>>(n,permutation.data,scale.data,state.data,input.data);check(cudaGetLastError());
             projectRanks<<<unsigned(count),128,0,stream>>>(directions.data,count,coefficients.data,input.data,tmp.data);check(cudaGetLastError());
             applyLeaves<<<unsigned(count),128,0,stream>>>(directions.data,count,coefficients.data,input.data,tmp.data,partial.data);check(cudaGetLastError());
             reduceOutput<<<unsigned((n+255)/256),256,0,stream>>>(n,rowOffsets.data,partialIndices.data,permutation.data,scale.data,partial.data,state.data);check(cudaGetLastError());
+            if(dofs)chargeTranspose.apply(state.data,dofState.data,stream);
         }
         applications+=repeats;
     }
     std::vector<double> download(){
-        valid();if(!initialized)throw std::runtime_error("No resident state");std::vector<double> result(n);
-        check(cudaMemcpyAsync(result.data(),state.data,n*sizeof(double),cudaMemcpyDeviceToHost,stream));check(cudaStreamSynchronize(stream));
+        valid();if(!initialized)throw std::runtime_error("No resident state");const auto dimension=dofs?dofs:n;std::vector<double> result(dimension);
+        check(cudaMemcpyAsync(result.data(),dofs?dofState.data:state.data,dimension*sizeof(double),cudaMemcpyDeviceToHost,stream));check(cudaStreamSynchronize(stream));
         for(double v:result)if(!std::isfinite(v))throw std::runtime_error("Nonfinite resident result");return result;
     }
 };
