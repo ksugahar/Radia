@@ -192,6 +192,13 @@ void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** in){
   }
   if(nrhs<2)throw std::invalid_argument("Missing IH handle");auto& c=get(in[1]);
   if(command=="reset"){if(nrhs!=2||nlhs)throw std::invalid_argument("reset signature mismatch");c.state->reset();return;}
+  if(command=="diagnostic_operator"){
+   if(nrhs!=2||nlhs!=1)throw std::invalid_argument("diagnostic_operator returns candidate operator, not accepted state");
+   std::vector<cuDoubleComplex> values(c.a.z.size());
+   cudaCheck(cudaDeviceSynchronize());cudaCheck(cudaMemcpy(values.data(),c.a.dz.p,values.size()*sizeof(cuDoubleComplex),cudaMemcpyDeviceToHost));
+   out[0]=mxCreateDoubleMatrix(c.a.rows,c.a.columns,mxCOMPLEX);
+   for(size_t row=0;row<c.a.rows;++row)for(int32_t k=c.a.rowptr[row];k<c.a.rowptr[row+1];++k){auto& z=mxGetComplexDoubles(out[0])[row+c.a.rows*c.a.col[k]];z.real=cuCreal(values[k]);z.imag=cuCimag(values[k]);}return;
+  }
   if(command=="update"){if(nrhs!=4||nlhs)throw std::invalid_argument("update requires current and ambient");c.state->update(number(in[2]),number(in[3]));return;}
   if(command=="electromagnetic_state"){
    if(nrhs!=2||nlhs!=1)throw std::invalid_argument("electromagnetic_state returns one complex vector");
