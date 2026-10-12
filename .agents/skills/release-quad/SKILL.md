@@ -119,6 +119,8 @@ The candidate is the exact successful-main wheel. Bind its SHA256, source SHA,
 version, CI run, and all declared target results before tagging and publishing.
 Do not run solver Phase 8 or install other distributions.
 
+Optuna CUDA acceptance targets 100号機; 102号機 is excluded because its GTX 1080 is outside the compiled architectures. A100 acceptance remains optional and pending until the identical artifact is available there. Solver CPU acceptance hosts are unchanged.
+
 Each independent Optuna target runs MATLAB through its Engine worker. The runner's isolated venv installs `matlabengine` matching that host's
 MATLAB version from PyPI and refuses an Engine bound to another MATLAB root.
 Without a session it starts MATLAB only when the host has no MATLAB process

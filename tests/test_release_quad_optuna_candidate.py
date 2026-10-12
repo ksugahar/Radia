@@ -106,19 +106,18 @@ def test_optuna_candidate_records_every_machine_for_one_exact_wheel(
 
     monkeypatch.setattr(release_quad, "_run_optuna_candidate_target", pass_target)
     args = argparse.Namespace(
-        ci_run_id="12345", target="all", engine_session=["lab=radia_shared"]
+        ci_run_id="12345", target="all", engine_session=["100=radia_shared"]
     )
     assert release_quad.cmd_optuna_candidate(args) == 0
-    assert [call[0] for call in calls] == list(release_quad.SIMULINK_TARGETS)
-    assert {call[0]: call[3] for call in calls if call[3]} == {"lab": "radia_shared"}
+    assert [call[0] for call in calls] == list(release_quad.OPTUNA_TARGETS)
+    assert {call[0]: call[3] for call in calls if call[3]} == {"100": "radia_shared"}
     state = json.loads(
         release_quad._optuna_state_path(digest).read_text(encoding="utf-8")
     )
     assert state["wheel_sha256"] == digest
-    assert set(state["targets"]) == set(release_quad.SIMULINK_TARGETS)
+    assert set(state["targets"]) == set(release_quad.OPTUNA_TARGETS)
     assert {row["status"] for row in state["targets"].values()} == {"passed"}
-    assert state["targets"]["lab"]["engine_session"] == "radia_shared"
-    assert state["targets"]["100"]["engine_session"] is None
+    assert state["targets"]["100"]["engine_session"] == "radia_shared"
 
 
 def test_optuna_candidate_rejects_ambiguous_engine_sessions_before_any_target(
@@ -203,7 +202,7 @@ def test_optuna_done_requires_exact_head_hash_version_and_both_targets(
         "wheel_sha256": digest,
         "version": "0.1.1",
         "targets": {
-            key: {"status": "passed"} for key in release_quad.SIMULINK_TARGETS
+            key: {"status": "passed"} for key in release_quad.OPTUNA_TARGETS
         },
     }
     path = release_quad._optuna_state_path(digest)
@@ -214,7 +213,7 @@ def test_optuna_done_requires_exact_head_hash_version_and_both_targets(
     assert rc == 0
     assert checked == state
 
-    state["targets"]["lab"]["status"] = "failed"
+    state["targets"]["100"]["status"] = "failed"
     path.write_text(json.dumps(state), encoding="utf-8")
     rc, checked = release_quad._verify_optuna_candidate_state(str(wheel))
     assert rc == 4
@@ -280,7 +279,7 @@ def test_installed_wheel_runner_emits_quad_success_marker_and_checks_notices():
 
 
 def test_local_candidate_decodes_matlab_output_as_utf8(monkeypatch, tmp_path):
-    monkeypatch.setattr(release_quad.platform, "node", lambda: "LAB")
+    monkeypatch.setattr(release_quad.platform, "node", lambda: "T7920")
     wheel = tmp_path / "radia_optuna-0.1.1-py3-none-win_amd64.whl"
     wheel.write_bytes(b"platform-wheel")
     observed = {}
@@ -296,7 +295,7 @@ def test_local_candidate_decodes_matlab_output_as_utf8(monkeypatch, tmp_path):
 
     monkeypatch.setattr(release_quad.subprocess, "run", completed)
     passed, output = release_quad._run_optuna_candidate_target(
-        "lab", wheel, hashlib.sha256(wheel.read_bytes()).hexdigest()
+        "100", wheel, hashlib.sha256(wheel.read_bytes()).hexdigest()
     )
 
     assert passed is True
@@ -311,7 +310,7 @@ def test_local_candidate_decodes_matlab_output_as_utf8(monkeypatch, tmp_path):
     assert "-EngineSession" not in observed["command"]
 
     release_quad._run_optuna_candidate_target(
-        "lab", wheel, hashlib.sha256(wheel.read_bytes()).hexdigest(), "radia_lab"
+        "100", wheel, hashlib.sha256(wheel.read_bytes()).hexdigest(), "radia_lab"
     )
     command = observed["command"]
     assert command[command.index("-EngineSession") + 1] == "radia_lab"
@@ -320,6 +319,7 @@ def test_local_candidate_decodes_matlab_output_as_utf8(monkeypatch, tmp_path):
 def test_remote_candidate_copies_the_engine_worker_and_selects_the_session(
     monkeypatch, tmp_path
 ):
+    monkeypatch.setattr(release_quad.platform, "node", lambda: "CONTROLLER")
     wheel = tmp_path / "radia_optuna-0.1.1-py3-none-win_amd64.whl"
     wheel.write_bytes(b"platform-wheel")
     digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
@@ -329,7 +329,7 @@ def test_remote_candidate_copies_the_engine_worker_and_selects_the_session(
         if command[0] == "scp":
             copies.append((Path(command[1]).name, command[2]))
             return SimpleNamespace(returncode=0, stdout="", stderr="")
-        assert command[0] == "ssh" and "102" in command
+        assert command[0] == "ssh" and "100" in command
         assert "-Command" not in command
         scripts.append(base64.b64decode(command[-1]).decode("utf-16le"))
         kwargs["stdout"].write(release_quad.OPTUNA_SUCCESS_MARKER.encode())
@@ -339,10 +339,10 @@ def test_remote_candidate_copies_the_engine_worker_and_selects_the_session(
 
     monkeypatch.setattr(release_quad.subprocess, "run", completed)
     passed, _ = release_quad._run_optuna_candidate_target(
-        "lab", wheel, digest, "o'shared"
+        "100", wheel, digest, "o'shared"
     )
     assert passed is True
-    remote_root = f"102:C:/temp/radia-release-quad/optuna-{digest[:16]}"
+    remote_root = f"100:C:/temp/radia-release-quad/optuna-{digest[:16]}"
     assert ("verify_simulink_release.py",
             f"{remote_root}/verify_simulink_release.py") in copies
     invocation = scripts[-1]
@@ -353,7 +353,7 @@ def test_remote_candidate_copies_the_engine_worker_and_selects_the_session(
     assert "-EngineSession 'o''shared'" in invocation
 
     scripts.clear()
-    release_quad._run_optuna_candidate_target("lab", wheel, digest)
+    release_quad._run_optuna_candidate_target("100", wheel, digest)
     assert "-EngineWorker" in scripts[-1]
     assert "-EngineSession" not in scripts[-1]
 
@@ -517,12 +517,12 @@ def _fake_runner(tmp_path, tail):
 ])
 def test_local_candidate_requires_the_runner_to_finish(monkeypatch, tmp_path,
                                                         tail, passes):
-    monkeypatch.setattr(release_quad.platform, "node", lambda: "LAB")
+    monkeypatch.setattr(release_quad.platform, "node", lambda: "T7920")
     wheel = tmp_path / "radia_optuna-0.2.0-py3-none-win_amd64.whl"
     wheel.write_bytes(b"wheel")
     monkeypatch.setattr(release_quad, "OPTUNA_WHEEL_RUNNER", _fake_runner(tmp_path, tail))
     passed, output = release_quad._run_optuna_candidate_target(
-        "lab", wheel, hashlib.sha256(wheel.read_bytes()).hexdigest()
+        "100", wheel, hashlib.sha256(wheel.read_bytes()).hexdigest()
     )
     assert release_quad.OPTUNA_SUCCESS_MARKER in output
     assert passed is passes
