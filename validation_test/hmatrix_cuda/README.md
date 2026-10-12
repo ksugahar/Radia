@@ -251,3 +251,18 @@ solver or weakened SPD check was introduced. The initial A100 load failed
 on the isolated dependency bin path and was corrected without changing
 global installations. Failure evidence is retained. General HDiv-MMM and
 adaptive HACApK validation remain incomplete.
+
+## Full native host assembly dependency gate
+
+`check_full_host.py --mkl-root <isolated-venv>/Library --out <new-job>`
+builds the existing complete C cluster/leaf/fill implementation, including
+MKL PCA/LAPACK dependencies, with `hmatrix_serial_host.c` instead of
+TaskManager scheduling. The original production ACA dispatch (`param[60]=1`)
+is preserved. Both BBOX and PCA strategies on an independently authored
+132-point smooth synthetic kernel pass scalar and batch dispatch against
+direct matrix multiplication (maximum relative difference 3.353e-13).
+`results/full-host-assembly-20261013.json` records source and executable hashes.
+This closes the host dependency/assembly subgate; the batch callback in this
+test evaluates the synthetic CPU kernel, not CUDA. Connecting the complete
+builder to the CUDA entry oracle, physical normalization and resident packing,
+and general HDiv-MMM physical validation remain pending. No timing was measured.

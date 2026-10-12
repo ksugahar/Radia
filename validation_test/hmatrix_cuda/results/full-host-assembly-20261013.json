@@ -1,0 +1,45 @@
+{
+  "schema": "radia.hacapk-full-host.v1",
+  "accepted": true,
+  "scope": "Synthetic full native cluster/leaf/ACA infrastructure; not CUDA or HDiv physical acceptance",
+  "source_commit": "9c915daa0c10738615c998e6f50c14dcfcf35d42",
+  "source_sha256": {
+    "validation_test/hmatrix_cuda/check_full_host.c": "daee71f3caaa13cdab6429ebcb3ac4b8f0e0e541d5ad0961aa5718681b850aea",
+    "packages/radia-gpu/native/hmatrix_serial_host.c": "2d18961c058a624d9d4d5f0bff2bf65360e81ba61a1f086963a6985dab91f2e5",
+    "src/ext/HACApK/cHACApK_base.c": "2d46f3d08133eddf75aa90bdc9bf40b97119bce9e5a09a7f77f0712a52884f20",
+    "src/ext/HACApK/cHACApK_cpp_impl.c": "daea8270a5204c366a68daf475e9a895757a4d71d71971c205a75ebf1140c8ee",
+    "src/ext/HACApK/cHACApK_lib.c": "94bcef9be652932b29785c417b446b91b984c5e92e41f8c55fb49a08df0e0cb8",
+    "src/ext/HACApK/cHACApK_pca_cluster.c": "f942f053d6742ce4a530a87cce6c2fba41bdbfdbdbc13032cb244cbc0eccb1d2",
+    "validation_test/hmatrix_cuda/check_full_host.py": "e143bc1af2c3b015374cef7eab2fc58bb7168e18a51282fc44fede680732f2f3",
+    "src/ext/HACApK/cHACApK_aca.inc": "72f78d46b4d4da59522faa6e3ff63b33597fa07bcddf5dd53530ef643fb14b7e",
+    "src/ext/HACApK/cHACApK_base.h": "0feb4603a640d028ff0cfc44ca1d0240552c3633f3fc4a3f33658ac7cac255c5",
+    "src/ext/HACApK/cHACApK_block_tree.h": "84ece12e48084b36cf209fc2bf9e85a319ce5f19fe2d07fc2d42c850c0f5209a",
+    "src/ext/HACApK/cHACApK_calc_entry_ij.h": "fad71d96a59e5c4ec7096224ae7e41ac45febe9e033ced29a3bff30c2dc7dc65",
+    "src/ext/HACApK/cHACApK_cpp.h": "a0d11801e0bcbb5f4faa893e994ba8f3bd3baf0aa203031124192c38c9034c86",
+    "src/ext/HACApK/cHACApK_harith.h": "b8295d8c8fe427cef7517daa64e695b678302150f1b6a1306a5fd642fc71a18b",
+    "src/ext/HACApK/cHACApK_lib.h": "bd128cbf005444096be5a860bbbcaa23b57fac3f55890725ada5abf5646c9688",
+    "src/ext/HACApK/cHACApK_pca_cluster.h": "177ba81580c0ca5cec8996d32c55f17b3ecc224a21dd0296f05712b1d88a82ba",
+    "src/ext/HACApK/hacapk_log.h": "1b214205bf87ece8acb939c2a4694eea8466e22469ce4c4b2dc36eae2584b146",
+    "src/ext/HACApK/mpi_stub.h": "7f714678b49169e92b221f615d64e4c9f1192ba4bcda30fd7290cab2ad021dcf",
+    "src/core/rad_hacapk_parallel.h": "76a31060959b87db46dadeb247a4186b5a533ff7b1a742d27013fbc1c75ecf9d"
+  },
+  "cases": {
+    "scalar": {
+      "cases": 2,
+      "maximum_relative_difference": 3.352302628071643e-13,
+      "lowrank_leaves": 4,
+      "taskmanager_started": false,
+      "binary_sha256": "04b4e2588d2fcf9420c165b90eb34ac4b3606bdc5cff24e85ad22d81b3371307"
+    },
+    "batch": {
+      "cases": 2,
+      "maximum_relative_difference": 3.352302628071643e-13,
+      "lowrank_leaves": 4,
+      "taskmanager_started": false,
+      "binary_sha256": "d8340cd3471a27ad293c2904c674a870bfd3db2632f31f5225b06d71babd979b"
+    }
+  },
+  "timing_measured": false,
+  "mkl_import_library_sha256": "47bde98a96791544094778455dd312c046b8087b15ca962b146c0b8abe7f9a45",
+  "mkl_header_sha256": "bb48bea8c45502766e3689052ae17e16c02e7a4c57463e00bfc75503be20cf12"
+}
