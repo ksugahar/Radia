@@ -209,21 +209,23 @@ def _matlab_top_level_inventory(root: Path) -> tuple[list[str], list[str]]:
 
 
 def _optuna_source_commands(source_path: Path) -> list[str]:
-    """Read the standalone Optuna command table from the shared MEX source."""
+    """Read the command table from the independently owned Optuna gateway."""
     if not source_path.is_file():
         return []
     source = source_path.read_text(encoding="utf-8", errors="ignore")
     match = re.search(
         r"mxArray\*\s+Commands\(\)\s*\{\s*"
-        r"#ifdef\s+RADIA_OPTUNA_MEX_ONLY\s*"
         r"static\s+const\s+char\*\s+names\[\]\s*=\s*\{(.*?)\};\s*"
-        r"#else",
+        r"constexpr\s+std::size_t\s+count",
         source,
         flags=re.DOTALL,
     )
     if match is None:
         return []
-    return re.findall(r'"([^"]+)"', match.group(1))
+    commands = re.findall(r'"([^"]+)"', match.group(1))
+    if any(not command.startswith(("api.", "optuna.")) for command in commands):
+        return []
+    return commands
 
 
 def matlab_optuna_health(distribution_path: str = "") -> dict[str, Any]:
