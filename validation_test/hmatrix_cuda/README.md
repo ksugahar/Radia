@@ -121,3 +121,25 @@ both directions, masks, permutation and chunk boundaries. This tests extraction
 only: the CUDA callback definition, complete native HACApK build and compression
 parity remain pending. The GPU build must not enable the macro before that
 definition and its physical-entry normalization/error handling are connected.
+
+## CUDA ACA connection: numerical stop
+
+The module now defines the C batch callback with a scoped thread-local binding
+to the resident analytic oracle, captures exceptions at the C ABI, and rethrows
+before accepting factors. `analytic_aca_vector` passes eight masked/permuted
+row/column cases with CPU relative difference 9.688e-16. The original
+`calc_vec`, `aca` and `acaplus` bodies are shared verbatim through
+`cHACApK_aca.inc`; the narrow native C host unit needs no TaskManager or Python.
+Host ACA arithmetic uses the existing non-BLAS implementation intentionally.
+
+Compression is **not accepted**. Clean build `8a3885533` compiles and links the
+existing ACA+ to CUDA entries, with charge-diagonal normalization and the
+standard 1e-3 threshold multiplier. The two-by-two offdiagonal test returns
+rank one and relative error 0.0594196. Independent scalar C execution of the
+same shared ACA+ reproduces that rank/error (`check_aca_cpu.c` consumes the
+public toy Gram values from the validation MAT). This isolates the failure
+from CUDA entry parity; it does not certify compression or justify changing
+the mathematical route. See `results/aca-cuda-connection-20261012.json`.
+Large assembly and solve tests stop here. Next check actual admissible-leaf
+selection and small-block ACA+ behavior, and complete the shared CPU native
+build gate. No new whole-time comparison was performed with CI queued.
