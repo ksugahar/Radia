@@ -48,6 +48,11 @@ for sample=1:numel(routes)
         rebuildNext=info.iterations>max(30,2*firstIterations);
         slope=gather(residual'*delta);alpha=1;
         while radia_cuda_ams('nonlinear_energy',nonlinear,x+alpha*delta)>oldEnergy+1e-4*alpha*slope
+            if abs(alpha*slope)<=64*eps*max(1,abs(oldEnergy))
+                [trialResidual,~,~]=radia_cuda_ams('nonlinear_evaluate',nonlinear,x+alpha*delta);
+                trialRelative=gather(norm(trialResidual)/norm(rhs));
+                if trialRelative<.9*relative||trialRelative<=1e-9;break;end
+            end
             alpha=alpha/2;
             assert(alpha>=2^-20,'radia:nonlinear:lineSearch','Line search failed');
         end

@@ -63,6 +63,14 @@ def cpu_run(route,fes,form,rhs,gradient,coords,bridge,threads):
             trial.data=x.vec-alpha*delta
             with ng.TaskManager():trial_energy=form.Energy(trial)-ng.InnerProduct(rhs,trial)
             if trial_energy<=old+1e-4*alpha*slope:break
+            # Near roundoff, an energy subtraction cannot resolve descent.
+            # Require actual residual reduction; convergence gates are unchanged.
+            if abs(alpha*slope)<=64*np.finfo(float).eps*max(1.,abs(old)):
+                trial_r=residual.CreateVector()
+                with ng.TaskManager():form.Apply(trial,trial_r)
+                trial_r.data-=rhs
+                trial_rel=np.linalg.norm(trial_r.FV().NumPy()[free])/np.linalg.norm(rhs.FV().NumPy()[free])
+                if trial_rel<.9*rel or trial_rel<=1e-9:break
             alpha*=.5
             if alpha<2**-20:raise RuntimeError('CPU line search failed')
         x.vec.data=trial;history.append([outer,float(rel),iterations,float(linrel),alpha])
@@ -81,6 +89,7 @@ def main(args):
         routes=args.routes,cpu_threads=args.threads,gpu_host_setup_threads=args.setup_threads,
         assembly_storage='sparse CSR plus 6 mapped curl vectors and 36 CSR slots per tetrahedron',
         gpu_residency='nonlinear CSR buffers and cached AMS/PCG workspace; explicit tangent download only for hierarchy rebuild',
+        near_roundoff_line_search='energy decrement <=64*eps*max(1,abs(E)): require 10 percent residual decrease or final nonlinear gate',
         timing_boundary='numeric FE input to final solution; shared FE preparation and MATLAB startup separately; GPU total includes upload',
         nonlinear_tolerance=1e-9,linear_true_tolerance=1e-10,cpu_cg_internal_tolerance=1e-12,independent_parity_limit=1e-7)
     eng=None;preprocessing=time.perf_counter()
@@ -127,7 +136,7 @@ def main(args):
         rhs.FV().NumPy()[~free]=0;gradient,_=fes.CreateGradient()
         coords=np.asarray([[mesh.ngmesh.Points()[i+1][k] for i in range(mesh.nv)] for k in range(3)])
         record['shared_fe_setup_seconds']=time.perf_counter()-preprocessing
-        cpu_samples=[];cpu=None
+        cpu_samples=[];record["cpu_samples"]=cpu_samples;cpu=None
         for route in args.routes:
             actual,sample=cpu_run(route,fes,form,rhs,gradient,coords,bridge,args.threads);cpu_samples.append(sample)
             if cpu is None:cpu=actual
