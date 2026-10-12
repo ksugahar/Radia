@@ -27,20 +27,24 @@ def main(args):
         host=socket.gethostname(),timing_classification='diagnostic; not formal performance acceptance',
         a100_started=False,python_role='independent CPU oracle and validation orchestration only',
         gpu_runtime_python_adapter_required=False,taskmanager_regions_enabled=False,
+        execution_mode='CPU fixture generation only' if args.generate_only else 'native MATLAB validation',
         source_commit=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),cases=[])
     eng=None
     try:
-        import netgen,matlab.engine
+        import netgen
         net=Path(netgen.__file__).parent
         os.environ['PATH']=os.pathsep.join([str(Path(sys.prefix)/'bin'),str(net),str(net.parent/'ngsolve_openblas'),str(net.parent/'ngsolve.libs'),str(net.parent/'netgen_mesher.libs'),str(Path(sys.base_prefix)),os.environ['PATH']])
         sys.path.insert(0,str(ROOT/'build-ams-cuda'))
         import _radia_ams_snapshot as bridge
         ng.SetNumThreads(1)
-        eng=matlab.engine.start_matlab('-nodesktop -nosplash')
-        eng.addpath(str(Path(__file__).parent),nargout=0)
+        if not args.generate_only:
+            import matlab.engine
+            eng=matlab.engine.start_matlab('-nodesktop -nosplash')
+            eng.addpath(str(Path(__file__).parent),nargout=0)
         record['build']=json.loads((ROOT/'build-ams-cuda/build.json').read_text())
         for h in args.maxh:
             mesh=ng.Mesh(unit_cube.GenerateMesh(maxh=h))
+            print(f'mesh ready: maxh={h}, vertices={mesh.nv}',flush=True)
             fes=ng.HCurl(mesh,order=1,nograds=True,dirichlet='.*')
             u,v=fes.TnT();a=ng.BilinearForm(fes,symmetric=False)
             a+=(ng.curl(u)*ng.curl(v)+u*v)*ng.dx;a.Assemble()
@@ -52,7 +56,7 @@ def main(args):
             b=a.mat.CreateColVector();b.data=a.mat*x
             rhs=b.FV().NumPy().copy();rhs[~free]=0;b.FV().NumPy()[:]=rhs
             probes=np.random.default_rng(31415).normal(size=(3,fes.ndof))
-            for cycle in (1,7):
+            for cycle in args.cycles:
                 reference=bridge.snapshot(a.mat,gradient,fes.FreeDofs(),*coords,probes,cycle,1)
                 pre=reference.pop('cpu_preconditioner');expected=reference.pop('cpu_probe_results');cpu_setup=reference.pop('setup_diagnostics')
                 timer=time.perf_counter();solver=ng.CGSolver(a.mat,pre=pre,tol=1e-9,maxiter=2000)
@@ -71,6 +75,11 @@ def main(args):
                 path=out/f'h{h}-c{cycle}.hdf5'
                 write_exchange(path,dict(model=model,snapshot=reference,rhs=rhs,probes=probes,expected=expected))
                 case['input_sha256']=file_sha256(path)
+                case.update(input_bytes=path.stat().st_size,vertices=mesh.nv,
+                            matrix_nonzeros=len(model['A']['values']))
+                print(f'CPU/HDF5 ready: dofs={fes.ndof}, cycle={cycle}, bytes={path.stat().st_size}',flush=True)
+                if args.generate_only:
+                    continue
                 warmup=out/f'h{h}-c{cycle}-cold.mat'
                 eng.benchmark(str(path),str(warmup),str(ROOT/'build-ams-cuda'),
                               str(ROOT/'packages/radia-gpu/matlab'),1.0,nargout=0)
@@ -123,4 +132,6 @@ if __name__=='__main__':
     p.add_argument('--out',type=Path,required=True)
     p.add_argument('--maxh',type=float,nargs='+',default=[0.12,0.08])
     p.add_argument('--threads',type=int,default=4);p.add_argument('--rounds',type=int,default=1)
+    p.add_argument('--generate-only',action='store_true',help='Write independent CPU/HDF5 fixtures without starting MATLAB')
+    p.add_argument('--cycles',type=int,nargs='+',choices=[1,7],default=[1,7])
     main(p.parse_args())

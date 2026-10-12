@@ -4,17 +4,17 @@ Timing on RTX 5000/100 is diagnostic only. Python orchestrates validation;
 it is not required by the MATLAB GPU runtime.
 """
 from pathlib import Path
-import argparse, hashlib, json, os, statistics, sys
+import argparse, hashlib, json, os, statistics, sys, time
 import numpy as np
 from scipy.io import loadmat
 ROOT=Path(__file__).resolve().parents[2]
 
-def cpu_oracle(path):
+def cpu_oracle(path,oracle_dir=ROOT/'build-ams-cuda'):
     """Independent Python/NGSolve solve from the identical checked operators."""
     import ngsolve as ng
     from pyngcore import Array_I_S,Array_D_S
     sys.path.insert(0,str(ROOT/'packages/radia-gpu/src'))
-    sys.path.insert(0,str(ROOT/'build-ams-cuda'))
+    sys.path.insert(0,str(oracle_dir))
     from radia_gpu.ams_exchange import read_exchange
     import _radia_ams_snapshot as bridge
     ng.SetNumThreads(1)
@@ -35,7 +35,8 @@ def cpu_oracle(path):
     true=float(np.linalg.norm(residual.FV().NumPy()[free])/np.linalg.norm(data['rhs'][free]))
     if true>1e-6:raise RuntimeError('CPU true residual failed')
     return dict(a=a,rhs=rhs,x=x,free=free,cpu=x.FV().NumPy().copy(),
-        true_residual=true,probe_diff=probe_diff)
+        true_residual=true,probe_diff=probe_diff,dofs=int(model['A']['rows']),
+        matrix_nonzeros=len(model['A']['values']))
 
 def main(args):
     import netgen, matlab.engine
@@ -50,26 +51,42 @@ def main(args):
         memory_measurement='setup: peak concurrently owned CUDA allocation bytes; solve: live allocation delta, not whole-process peak')
     eng=None
     try:
+        startup=time.perf_counter()
         eng=matlab.engine.start_matlab('-nodesktop -nosplash')
+        record['matlab_startup_seconds']=time.perf_counter()-startup
         eng.addpath(str(Path(__file__).parent),nargout=0)
-        record['build']=json.loads((ROOT/'build-ams-cuda/build.json').read_text())
+        record['build']=json.loads(args.build_receipt.read_text())
+        record['binary_sha256']=file_hash(args.binary_dir/'radia_cuda_ams.mexw64')
+        record['oracle_sha256']=file_hash(next(args.oracle_dir.glob('_radia_ams_snapshot*.pyd')))
+        record['validator_sha256']=file_hash(Path(__file__))
+        record['benchmark_sha256']=file_hash(Path(__file__).with_name('benchmark.m'))
+        declared=record['build'].get('binary_sha256',record['build'].get('sha256',{}).get('build-ams-cuda/radia_cuda_ams.mexw64'))
+        if declared!=record['binary_sha256']:
+            raise RuntimeError('CUDA binary does not match the selected build receipt')
         import ngsolve
         record['ngsolve_version']=ngsolve.__version__
         for path in args.inputs:
-            case=dict(input=path.name,input_sha256=hashlib.sha256(path.read_bytes()).hexdigest(),samples=[]);record['cases'].append(case)
-            oracle=cpu_oracle(path)
+            case=dict(input=path.name,input_sha256=file_hash(path),input_bytes=path.stat().st_size,samples=[]);record['cases'].append(case)
+            oracle=cpu_oracle(path,args.oracle_dir)
             case['cpu_true_relative_residual']=oracle['true_residual']
             case['cpu_probe_reference_relative_difference']=oracle['probe_diff']
+            case.update(dofs=oracle['dofs'],matrix_nonzeros=oracle['matrix_nonzeros'])
             # Exclude first native/MATLAB/CUDA load and both backend warmups.
+            case['warmups']=[]
             for mode in [False,True]:
-                eng.benchmark(str(path.resolve()),str((args.out/f'{path.stem}-warm-{mode}.mat').resolve()),str(ROOT/'build-ams-cuda'),
-                    str(ROOT/'packages/radia-gpu/matlab'),4.0,False if generation else mode,mode if generation else True,nargout=0)
+                warm_path=args.out/f'{path.stem}-warm-{mode}.mat'
+                eng.benchmark(str(path.resolve()),str(warm_path.resolve()),str(args.binary_dir),
+                    str(args.matlab_dir),4.0,False if generation else mode,mode if generation else True,nargout=0)
+                warm=loadmat(warm_path,simplify_cells=True)
+                case['warmups'].append(dict(accelerated=mode,native_setup_seconds=float(warm['nativeSetupSeconds']),
+                    first_solve_seconds=float(warm['coldSeconds']),pipeline_seconds=float(warm['pipelineSeconds']),
+                    excluded_from_medians=True))
             ref=None
             for index,mode in enumerate([False,True,True,False]*args.rounds):
                 graph=False if generation else mode
                 target=args.out/f'{path.stem}-{index}.mat'
-                eng.benchmark(str(path.resolve()),str(target.resolve()),str(ROOT/'build-ams-cuda'),
-                    str(ROOT/'packages/radia-gpu/matlab'),4.0,graph,mode if generation else True,nargout=0)
+                eng.benchmark(str(path.resolve()),str(target.resolve()),str(args.binary_dir),
+                    str(args.matlab_dir),4.0,graph,mode if generation else True,nargout=0)
                 r=loadmat(target,simplify_cells=True)
                 actual=np.asarray(r['pipelineSolution']).reshape(-1)
                 if ref is None:ref=actual.copy()
@@ -85,6 +102,7 @@ def main(args):
                     stage_sum_seconds=float(r['nativeSetupSeconds']+r['inclusiveSeconds']),
                     pipeline_gpu_live_allocation_delta_bytes=float(r['pipelineMemoryBytes']),
                     pipeline_setup=r['pipelineSetup'],
+                    gpu_memory_admission_plan=r['memoryPlan'],
                     warmed_solve_median_seconds=float(np.median(r['times'])),
                     cpu_solution_relative_difference=cpu_delta,cpu_checked_true_relative_residual=cpu_checked_residual,
                     direct_solution_relative_difference=delta,probe_relative_difference=float(np.max(r['probeErrors'])),
@@ -114,12 +132,20 @@ def main(args):
             raise TypeError(type(value).__name__)
         (args.out/'result.json').write_text(json.dumps(record,indent=2,default=convert,allow_nan=False)+'\n')
 
+def file_hash(path):
+    with path.open('rb') as stream:
+        return hashlib.file_digest(stream,'sha256').hexdigest()
+
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--out',type=Path,required=True)
     p.add_argument('--inputs',type=Path,nargs='+',required=True)
     p.add_argument('--comparison',choices=['graph','generation'],default='graph')
     p.add_argument('--rounds',type=int,default=1)
+    p.add_argument('--binary-dir',type=Path,default=ROOT/'build-ams-cuda')
+    p.add_argument('--matlab-dir',type=Path,default=ROOT/'packages/radia-gpu/matlab')
+    p.add_argument('--build-receipt',type=Path,default=ROOT/'build-ams-cuda/build.json')
+    p.add_argument('--oracle-dir',type=Path,default=ROOT/'build-ams-cuda')
     args=p.parse_args()
     if args.rounds<1:p.error('--rounds must be positive')
     main(args)

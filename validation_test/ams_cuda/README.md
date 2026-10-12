@@ -304,3 +304,21 @@ for independent CPU accuracy and serial/OpenMP setup comparison. HDF5 carries
 validation inputs; GPU users can supply their numeric model directly. JSON
 includes cold/warm, setup plus upload/solve/download, memory, versions, input
 rejections and source/build identity. Build-host timings remain diagnostic.
+
+For staged scaling, `native_setup_validation.py --generate-only --cycles 7`
+creates only the manufactured model, independent CPU oracle and HDF5 exchange;
+it does not start MATLAB. Reduce `--maxh` one step at a time, checking idle-host
+status and available host/device memory before each stage. The existing native
+and MATLAB admission guards retain at least 20% of total GPU memory (or 2 GiB).
+
+`graph_validation.py --comparison generation --rounds 2` compares CPU Galerkin
+generation against CUDA generation with the same GPU solve, in warmed ABBA
+order. Use `--binary-dir`, `--matlab-dir` and `--build-receipt` to select an
+accepted installed distribution without rebuilding or changing that runtime.
+The binary must match the selected receipt. `--oracle-dir` selects the separate
+Python reference extension. Streamed input hashes also support exchanges above
+2 GB. Results include problem dimensions, independent CPU solution/residual
+checks, exact hierarchy parity, continuous public-API time including transfers,
+and memory admission estimates alongside measured allocation counters.
+The setup allocator peak and resident solve allocation delta describe different
+phases; neither is a measurement of whole-process peak, and they are not summed.
