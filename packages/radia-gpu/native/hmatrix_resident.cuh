@@ -213,6 +213,22 @@ public:
         check(cudaMemcpyAsync(dofs?dofState.data:state.data,values.data(),dimension*sizeof(double),cudaMemcpyHostToDevice,stream));
         check(cudaStreamSynchronize(stream));initialized=true;
     }
+    std::size_t dimension()const{return dofs?dofs:n;}
+    bool isDemag()const{return dofs!=0;}
+    cudaStream_t executionStream(){valid();return stream;}
+    // Internal device-to-device application for Krylov vectors. No host
+    // vector transfer or synchronization; accepted uploaded state is untouched.
+    void applyDevice(const double* x,double* y){
+        valid();
+        if(dofs)chargeMap.apply(x,state.data,stream);
+        const double* source=dofs?state.data:x;
+        gatherInput<<<unsigned((n+255)/256),256,0,stream>>>(n,permutation.data,scale.data,source,input.data);check(cudaGetLastError());
+        projectRanks<<<unsigned(count),128,0,stream>>>(directions.data,count,coefficients.data,input.data,tmp.data);check(cudaGetLastError());
+        applyLeaves<<<unsigned(count),128,0,stream>>>(directions.data,count,coefficients.data,input.data,tmp.data,partial.data);check(cudaGetLastError());
+        double* target=dofs?state.data:y;
+        reduceOutput<<<unsigned((n+255)/256),256,0,stream>>>(n,rowOffsets.data,partialIndices.data,permutation.data,scale.data,partial.data,target);check(cudaGetLastError());
+        if(dofs)chargeTranspose.apply(state.data,y,stream);
+    }
     void apply(std::size_t repeats){
         valid();if(!initialized)throw std::runtime_error("Upload initial state before apply");
         if(!repeats||repeats>10000)throw std::invalid_argument("Invalid repetition count");

@@ -35,6 +35,28 @@ try
         mustFail(@()radia_cuda_hmatrix('apply',h,1));
         mustFail(@()radia_cuda_hmatrix('destroy',h));
     end
+    if isfield(inputs,'solver_cases')
+        result.material_solver=struct([]);
+        for k=1:numel(inputs.solver_cases)
+            test=inputs.solver_cases(k);h=create(test.config);free=onCleanup(@()radia_cuda_hmatrix('destroy',h));
+            solution=radia_cuda_hmatrix('solve_linear_material',h,test.mass,test.rhs,test.inv_chi,1e-11,100);
+            error=norm(solution.x-test.expected)/norm(test.expected);
+            residual=norm(test.rhs-test.operator*solution.x)/norm(test.rhs);
+            assert(error<=1e-10&&residual<=1e-10&&solution.true_relative_residual<=1e-11);
+            zero=radia_cuda_hmatrix('solve_linear_material',h,test.mass,zeros(size(test.rhs)),test.inv_chi,1e-11,100);
+            assert(norm(zero.x)==0&&zero.iterations==0);
+            mustFail(@()radia_cuda_hmatrix('solve_linear_material',h,test.mass,test.rhs,test.inv_chi,1e-11,1));
+            radia_cuda_hmatrix('upload',h,test.rhs);before=radia_cuda_hmatrix('download',h);
+            bad=test.mass;bad(1,2)=bad(1,2)+1;
+            mustFail(@()radia_cuda_hmatrix('solve_linear_material',h,bad,test.rhs,test.inv_chi,1e-11,100));
+            assert(isequal(before,radia_cuda_hmatrix('download',h)));
+            row=struct('relative_error',error,'independent_true_residual',residual,'solver_true_residual',solution.true_relative_residual, ...
+                'iterations',solution.iterations,'solver_owned_device_bytes',solution.solver_owned_device_bytes, ...
+                'scope','Material equation algebra on public sampled Gram, not real HDiv FE physical acceptance');
+            if k==1,result.material_solver=row;else,result.material_solver(k)=row;end
+            clear free
+        end
+    end
     probe=inputs.entry_probe;
     entries=radia_cuda_hmatrix('analytic_entry_batch',probe.cells,probe.faces,probe.rows,probe.columns);
     entryError=norm(entries-probe.expected)/max(norm(probe.expected),realmin);

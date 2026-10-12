@@ -100,6 +100,16 @@ def main():
                 stats=largegram.stats();leaf_stats={key:stats[key] for key in ['n_dof','n_leaves','n_lowrank','n_dense','max_rank']}
                 if leaf_stats['n_lowrank']<1:raise RuntimeError('CPU leaf builder did not select an admissible low-rank leaf')
             payload['aca_large_probe']=dict(cells=larger[:,None],faces=np.empty((0,1)),split=float(n),expected=block_reference,cpu_leaf_stats=leaf_stats)
+        solver_cases=[]
+        for test in cases:
+            if not test['name'].startswith('demag-'):continue
+            charge=test['config']['charge_map'];charge=charge.toarray() if hasattr(charge,'toarray') else charge
+            with ng.TaskManager():
+                demag=np.column_stack([charge.T@np.asarray(gram.matvec_sym(charge[:,k])) for k in range(charge.shape[1])])
+            trial=rng.normal(size=(charge.shape[1],charge.shape[1]));mass=trial.T@trial+np.eye(charge.shape[1]);rhs=rng.normal(size=charge.shape[1]);inv_chi=2.5
+            expected=np.linalg.solve(inv_chi*mass+demag,rhs)
+            solver_cases.append(dict(config=test['config'],mass=csc_matrix(mass),rhs=rhs[:,None],inv_chi=inv_chi,expected=expected[:,None],operator=inv_chi*mass+demag))
+        payload['solver_cases']=structs(solver_cases)
         inputfile=a.out/'inputs.mat';savemat(inputfile,payload);record['input_sha256']=sha(inputfile)
         import matlab.engine
         eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread');pid=int(eng.feature('getpid'));subprocess.run(['powershell','-NoProfile','-Command',f'(Get-Process -Id {pid}).PriorityClass="BelowNormal"'],check=True,capture_output=True)

@@ -3,6 +3,7 @@
 #include "hmatrix_hacapk_pack.cuh"
 #include "hmatrix_entry_oracle.cuh"
 #include "hmatrix_aca_callback.cuh"
+#include "hmatrix_material_solver.cuh"
 #include <map>
 #include <memory>
 #include <chrono>
@@ -80,6 +81,16 @@ Plan read(const mxArray* cfg){
 void mexFunction(int nl,mxArray* out[],int nr,const mxArray* in[]){
 try{
     if(!nr)throw std::invalid_argument("Command required");auto command=text(in[0]);
+    if(command=="solve_linear_material"){
+        arity(nr,7,nl,1);auto& op=*contexts.at(token(in[1]));std::size_t bytes=0;for(int i=2;i<7;++i)checkPayload(in[i],bytes);
+        auto mass=readChargeMap(in[2],op.dimension());auto rhs=numbers(in[3]);auto invChi=numbers(in[4]);auto tolerance=numbers(in[5]);
+        if(invChi.size()!=1||tolerance.size()!=1)throw std::invalid_argument("Expected scalar material/tolerance");
+        auto result=solveLinearMaterial(op,mass,rhs,invChi[0],tolerance[0],int(integer(in[6],true)));
+        const char* names[]={"x","iterations","true_relative_residual","solver_owned_device_bytes","preconditioner"};out[0]=mxCreateStructMatrix(1,1,5,names);
+        auto* x=mxCreateDoubleMatrix(result.x.size(),1,mxREAL);std::copy(result.x.begin(),result.x.end(),mxGetDoubles(x));mxSetField(out[0],0,"x",x);
+        mxSetField(out[0],0,"iterations",mxCreateDoubleScalar(result.iterations));mxSetField(out[0],0,"true_relative_residual",mxCreateDoubleScalar(result.relativeResidual));
+        mxSetField(out[0],0,"solver_owned_device_bytes",mxCreateDoubleScalar(result.ownedBytes));mxSetField(out[0],0,"preconditioner",mxCreateString("inv_chi mass diagonal"));return;
+    }
     if(command=="analytic_aca_compress"||command=="analytic_aca_leaf"){
         arity(nr,6,nl,1);std::size_t payloadBytes=0;
         for(int i=1;i<6;++i)checkPayload(in[i],payloadBytes);
