@@ -25,7 +25,7 @@ do {
     $previous=$owned.Count
     $owned+=@($all | Where-Object { $_.ParentProcessId -in $owned -and $_.ProcessId -notin $owned } | ForEach-Object ProcessId)
 } while ($owned.Count -gt $previous)
-$ids=@($all | Where-Object { $_.Name -match '^(python|MATLAB|nvcc|ninja|cl|MSBuild|ngsolve).*\.exe$' -and $_.ProcessId -notin $owned } | ForEach-Object ProcessId)
+$ids=@($all | Where-Object { $_.Name -match '^(python[\d.w]*|MATLAB|nvcc|ninja|cl|MSBuild|ngsolve)\.exe$' -and $_.ProcessId -notin $owned } | ForEach-Object ProcessId)
 $before=@{}
 foreach($pidValue in $ids) { $p=Get-Process -Id $pidValue -ErrorAction SilentlyContinue; if($p) { $before[$pidValue]=$p.CPU } }
 Start-Sleep -Seconds 1
