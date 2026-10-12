@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 import importlib.metadata as md
 import json
+import os
 from pathlib import Path
 import socket
 import statistics
