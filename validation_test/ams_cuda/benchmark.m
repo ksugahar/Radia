@@ -62,10 +62,24 @@ assert(checks.memory_budget_rejection,'Memory budget guard failed');
 device=struct('name',g.Name,'compute_capability',g.ComputeCapability, ...
     'total_memory',g.TotalMemory,'driver',g.GraphicsDriverVersion,'toolkit',g.ToolkitVersion);
 matlabVersion=version;
+% Measure the public user pipeline continuously, after releasing diagnostic
+% duplicate uploads. Input HDF5 reading and parity checks are outside this
+% interval; native validation, GPU setup transfers, upload, solve and gather
+% are all inside it.
+pipelineSeconds=NaN;pipelineMemoryBytes=NaN;pipelineSolution=[];pipelineSetup=struct();pipelineInfo=struct();
+if nargin>=5
+    clear s s2 rhs b2 x x2 first zeroRhs applied z;
+    wait(g);pipelineBefore=g.AvailableMemory;timer=tic;
+    [pipelineHierarchy,pipelineSetup]=radia.gpu.prepareAMS(d.model,SetupThreads=setupThreads,SetupOnGPU=setupOnGPU);
+    [pipelineX,pipelineInfo]=radia.gpu.amsPCG(pipelineHierarchy,gpuArray(d.rhs),1e-9,2000,false,useGraph);
+    pipelineSolution=gather(pipelineX);wait(g);pipelineSeconds=toc(timer);
+    pipelineMemoryBytes=pipelineBefore-g.AvailableMemory;
+end
 save(outputPath,'solution','info','probeErrors','coldSeconds','times', ...
     'inclusiveSeconds','inclusiveSolution','memoryBytes','uploadSeconds','readSeconds','checks','device','matlabVersion', ...
     'zeroRhsTimes','applyOnlyTimes','zeroRhsWarmMedianSeconds','applyOnlyWarmMedianSeconds','memoryPlan', ...
-    'nativeSetupSeconds','nativeSetupInfo','hierarchyMaxRelativeDifference');
+    'nativeSetupSeconds','nativeSetupInfo','hierarchyMaxRelativeDifference', ...
+    'pipelineSeconds','pipelineMemoryBytes','pipelineSolution','pipelineSetup','pipelineInfo');
 end
 
 function check_memory_budget(plan)

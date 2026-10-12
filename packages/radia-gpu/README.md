@@ -193,3 +193,26 @@ includes host setup, device generation transfers, hierarchy upload, solve and
 solution download. Setup memory records the exact maximum concurrently owned
 CUDA allocation bytes; solve memory records a live allocation delta, not a
 whole-process peak. RTX 5000/100 measurements remain diagnostic.
+
+The clean candidate `73b33291d` passed bitwise comparison of every hierarchy
+array and sparsecholesky factor against the independent CPU oracle. The
+continuously timed public API pipeline (four samples per backend, two ABBA
+rounds after warmup) produced:
+
+| HCurl DOFs | Before, seconds | CUDA generation, seconds | Speedup |
+| --- | ---: | ---: | ---: |
+| 86735 | 0.61350 | 0.43760 | 1.40 |
+| 702073 | 4.99129 | 2.68588 | 1.86 |
+
+At 702073 DOFs, maximum CPU solution relative difference was 4.12e-8 and
+independently checked true relative residual was 7.64e-10. CUDA setup's peak
+owned allocation was 1317974332 bytes (1.23 GiB); the public pipeline's live
+GPU allocation delta was approximately 464841076 bytes (0.43 GiB), unchanged
+between backends. These are different stages, not a whole-process peak.
+Small 5326-DOF stage-sum timing regressed from 0.10574 to 0.11374 seconds.
+The explicitly selected backend does not silently switch based on size.
+
+Full JSON, memory definitions, artifact/source hashes, numerical gates and
+limitations: `validation_test/ams_cuda/results/cuda-galerkin-73b33291d.json`.
+The candidate is not a deployed release; formal performance acceptance remains
+pending. No A100 operations were performed.
