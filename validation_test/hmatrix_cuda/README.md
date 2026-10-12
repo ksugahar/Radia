@@ -187,3 +187,16 @@ limit. A first attempt requiring 1e-12 CPU physical parity failed at
 1.726e-9; the direct-entry comparison isolates promotion from integration
 roundoff. This does not certify CPU physical parity at 1e-12. `results/dense-promotion-20261012.json` records direct CUDA difference zero
 and CPU physical difference 1.726e-9. Full adaptive assembly remains pending.
+
+## MATLAB host scheduling boundary
+
+`hmatrix_serial_host.c` implements the existing HACApK C scheduling API on
+the owning MATLAB thread. It replaces, rather than links alongside, the
+TaskManager implementation in a future full native assembly target. CUDA
+entry bindings are thread-local, so serial control preserves ownership without
+requiring worker binding or oversubscribing CI. `check_entry_batch.py
+--serial-host` checks empty work, 257 ordered iterations, one job and thread
+identity. `results/serial-host-20261012.json` records that C contract only.
+The current narrow CUDA target still does not build the full cluster/leaf
+implementation; PCA/LAPACK integration and full physical acceptance remain
+pending. No speedup is inferred from serial host control.
