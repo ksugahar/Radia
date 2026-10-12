@@ -26,7 +26,7 @@ def main():
         header=ROOT/'packages/radia-gpu/native/ih_resident_kernels.cuh'
         record['source_dirty']=bool(subprocess.check_output(['git','-C',str(ROOT),'status','--porcelain'],text=True).strip())
         record['source_commit']=subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD'],text=True).strip()
-        record['source_sha256']={p.relative_to(ROOT).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in (src,header,header.with_name("ih_bicgstab_kernels.cuh"),header.with_name("ih_complex_solver.cuh"),header.with_name("ih_thermal_kernels.cuh"),header.with_name("ih_coupled_state.cuh"),Path(__file__))}
+        record['source_sha256']={p.relative_to(ROOT).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in (src,header,header.with_name("ih_bicgstab_kernels.cuh"),header.with_name("ih_complex_solver.cuh"),header.with_name("ih_thermal_kernels.cuh"),header.with_name("ih_coupled_state.cuh"),header.with_name("ih_preconditioner.cuh"),Path(__file__))}
         eng.mexcuda('-v','-R2018a','-f',str(config),'NVCCFLAGS=--fmad=false -gencode=arch=compute_75,code=sm_75',
             '-I'+str(header.parent),'-lcublas','-outdir',str(OUT),str(src),nargout=0)
         eng.addpath(str(OUT),nargout=0)

@@ -25,7 +25,7 @@ struct Buffer {
 struct Matrix {
  size_t rows=0,columns=0;std::vector<int32_t> rowptr,col;
  std::vector<cuDoubleComplex> z;std::vector<double> real;
- Buffer dr,dc,dz,dreal;
+ Buffer dr,dc,dz,dreal,df;
  void read(const mxArray* a,bool complex){
   if(!mxIsDouble(a)||mxGetNumberOfDimensions(a)!=2||(!complex&&mxIsComplex(a)))throw std::invalid_argument("IH matrix must be double with declared complexity");
   rows=dimension(mxGetM(a));columns=dimension(mxGetN(a));
@@ -46,9 +46,17 @@ struct Matrix {
  }
  size_t bytes()const{return rowptr.size()*sizeof(int32_t)+col.size()*sizeof(int32_t)+z.size()*sizeof(cuDoubleComplex)+real.size()*sizeof(double);}
  void upload(){dr.put(rowptr);dc.put(col);dz.put(z);dreal.put(real);}
+ void uploadFP32(){
+  std::vector<cuFloatComplex> values;values.reserve(z.size());
+  for(auto x:z){float r=float(cuCreal(x)),im=float(cuCimag(x));
+   if(!std::isfinite(r)||!std::isfinite(im)||(cuCreal(x)!=0.&&r==0.f)||(cuCimag(x)!=0.&&im==0.f))
+    throw std::invalid_argument("Preconditioner entry is outside FP32 representable range");
+   values.push_back(make_cuFloatComplex(r,im));}
+  dr.put(rowptr);dc.put(col);df.put(values);
+ }
  ComplexCSRView complexView()const{return {rows,dr.get<int32_t>(),dc.get<int32_t>(),dz.get<cuDoubleComplex>()};}
  RealCSRView realView()const{return {rows,dr.get<int32_t>(),dc.get<int32_t>(),dreal.get<double>()};}
- void abandon(){dr.p=dc.p=dz.p=dreal.p=nullptr;}
+ void abandon(){dr.p=dc.p=dz.p=dreal.p=df.p=nullptr;}
 };
 std::vector<double> realVector(const mxArray* a,size_t count){
  if(!mxIsDouble(a)||mxIsComplex(a)||mxIsSparse(a)||mxGetNumberOfElements(a)!=count)throw std::invalid_argument("IH real vector shape mismatch");
@@ -56,19 +64,20 @@ std::vector<double> realVector(const mxArray* a,size_t count){
 }
 struct Context {
  int device=0;cudaStream_t guard=nullptr;
- Matrix a,p,system,k,c,projection;Buffer rhs,weights,ones,initial;
+ Matrix a,p,system,k,c,projection,preconditioner;
+ PreconditionerPrecision precision=PreconditionerPrecision::None;Buffer rhs,weights,ones,initial;
  std::unique_ptr<CoupledState> state;size_t owned=0;
  ~Context(){
   int previous=device;cudaGetDevice(&previous);if(previous!=device)cudaSetDevice(device);
   const auto status=guard?cudaStreamQuery(guard):cudaSuccess;
   if(status!=cudaSuccess&&status!=cudaErrorNotReady){
    if(state)state->abandonAfterDeviceReset();
-   for(auto* m:{&a,&p,&system,&k,&c,&projection})m->abandon();
+   for(auto* m:{&a,&p,&system,&k,&c,&projection,&preconditioner})m->abandon();
    rhs.p=weights.p=ones.p=initial.p=nullptr;guard=nullptr;
   }
   state.reset();
   // Free operators while their owning device is selected.
-  for(auto* m:{&a,&p,&system,&k,&c,&projection})for(auto* b:{&m->dr,&m->dc,&m->dz,&m->dreal}){if(b->p)cudaFree(b->p);b->p=nullptr;}
+  for(auto* m:{&a,&p,&system,&k,&c,&projection,&preconditioner})for(auto* b:{&m->dr,&m->dc,&m->dz,&m->dreal,&m->df}){if(b->p)cudaFree(b->p);b->p=nullptr;}
   for(auto* b:{&rhs,&weights,&ones,&initial}){if(b->p)cudaFree(b->p);b->p=nullptr;}
   if(guard)cudaStreamDestroy(guard);if(previous!=device)cudaSetDevice(previous);
  }
@@ -76,8 +85,16 @@ struct Context {
  explicit Context(const mxArray* cfg){
   if(number(field(cfg,"schema_version"))!=1.)throw std::invalid_argument("Unsupported IH operator schema");
   if(text(field(cfg,"material_mode"))!="fixed")throw std::invalid_argument("Dynamic ESIM physical frontend is not connected; frozen substitution forbidden");
+  const auto* precisionField=mxGetField(cfg,0,"preconditioner_precision");
+  if(precisionField){const auto mode=text(precisionField);
+   if(mode=="fp32")precision=PreconditionerPrecision::FP32;
+   else if(mode=="fp64")precision=PreconditionerPrecision::FP64;
+   else if(mode!="none")throw std::invalid_argument("Unsupported IH preconditioner precision");
+  }
   a.read(field(cfg,"eddy"),true);p.read(field(cfg,"loss_projection"),true);system.read(field(cfg,"thermal_system"),true);
   k.read(field(cfg,"stiffness"),false);c.read(field(cfg,"convection"),false);projection.read(field(cfg,"heat_projection"),false);
+  if(precision!=PreconditionerPrecision::None){preconditioner.read(field(cfg,"preconditioner_inverse"),true);
+   if(preconditioner.rows!=a.rows||preconditioner.columns!=a.columns)throw std::invalid_argument("Fixed preconditioner dimensions disagree");}
   const auto n=system.rows;double components=number(field(cfg,"loss_components"));
   if(components<1||components>INT_MAX||components!=int(components)||p.rows%int(components))throw std::invalid_argument("Invalid IH loss components");
   const size_t samples=p.rows/size_t(components);
@@ -89,13 +106,18 @@ struct Context {
   double dt=number(field(cfg,"sample_time_s")),conductivity=number(field(cfg,"conductivity_scale")),convection=number(field(cfg,"convection_scale"));
   if(dt<=0.||conductivity<0.||convection<0.)throw std::invalid_argument("Invalid IH thermal parameters");
   owned=a.bytes()+p.bytes()+system.bytes()+k.bytes()+c.bytes()+projection.bytes()+b.size()*sizeof(cuDoubleComplex)+(w.size()+o.size()+t.size())*sizeof(double);
-  const size_t workspace=(a.rows*9+n*9+2)*sizeof(cuDoubleComplex)+(2*samples+3*n+2)*sizeof(double)+2*sizeof(BiCGState)+sizeof(int);
+  if(precision!=PreconditionerPrecision::None)owned+=preconditioner.rowptr.size()*sizeof(int32_t)+preconditioner.col.size()*sizeof(int32_t)+preconditioner.z.size()*(precision==PreconditionerPrecision::FP32?sizeof(cuFloatComplex):sizeof(cuDoubleComplex));
+  const size_t workspace=(a.rows*(precision==PreconditionerPrecision::None?9:11)+n*9+2)*sizeof(cuDoubleComplex)+(2*samples+3*n+2)*sizeof(double)+2*sizeof(BiCGState)+sizeof(int);
   size_t available,total;cudaCheck(cudaMemGetInfo(&available,&total));const size_t reserve=std::max<size_t>(2ULL<<30,total/5);
   if(available<=reserve||owned>available-reserve||workspace>available-reserve-owned)throw std::runtime_error("IH context exceeds GPU memory budget");
   cudaCheck(cudaGetDevice(&device));cudaCheck(cudaStreamCreateWithFlags(&guard,cudaStreamNonBlocking));
   try {
-  for(auto* m:{&a,&p,&system,&k,&c,&projection})m->upload();rhs.put(b);weights.put(w);ones.put(o);initial.put(t);
+  for(auto* m:{&a,&p,&system,&k,&c,&projection})m->upload();
+  if(precision==PreconditionerPrecision::FP32)preconditioner.uploadFP32();
+  else if(precision==PreconditionerPrecision::FP64)preconditioner.upload();
+  rhs.put(b);weights.put(w);ones.put(o);initial.put(t);
   CoupledOperators op{};op.eddy=a.complexView();op.lossProjection=p.complexView();op.thermalSystem=system.complexView();op.stiffness=k.realView();op.convection=c.realView();op.heatProjection=projection.realView();
+  if(precision!=PreconditionerPrecision::None)op.eddyPreconditioner={a.rows,preconditioner.dr.get<int32_t>(),preconditioner.dc.get<int32_t>(),preconditioner.dz.get<cuDoubleComplex>(),preconditioner.df.get<cuFloatComplex>(),precision};
   op.rhsPerAmp=rhs.get<cuDoubleComplex>();op.lossWeights=weights.get<double>();op.constantCoefficients=ones.get<double>();op.initialTemperature=initial.get<double>();
   op.heatSamples=samples;op.lossComponents=unsigned(components);op.dt=dt;op.conductivity=conductivity;op.convectionScale=convection;
   state=std::make_unique<CoupledState>(op);owned+=state->ownedBytes();
@@ -128,8 +150,13 @@ void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** in){
   if(command=="update"){if(nrhs!=4||nlhs)throw std::invalid_argument("update requires current and ambient");c.state->update(number(in[2]),number(in[3]));return;}
   if(command=="outputs"){
    if(nrhs!=2||nlhs!=3)throw std::invalid_argument("outputs returns temperature, heat and info");
-   out[0]=vectorOut(c.state->temperature());out[1]=vectorOut(c.state->heat());const char* f[]={"steps","owned_device_bytes"};out[2]=mxCreateStructMatrix(1,1,2,f);
-   mxSetField(out[2],0,f[0],mxCreateDoubleScalar(double(c.state->steps())));mxSetField(out[2],0,f[1],mxCreateDoubleScalar(double(c.owned)));return;
+   out[0]=vectorOut(c.state->temperature());out[1]=vectorOut(c.state->heat());const char* f[]={"steps","owned_device_bytes","eddy_iterations","eddy_true_residual","thermal_iterations","thermal_true_residual","preconditioner_precision"};out[2]=mxCreateStructMatrix(1,1,7,f);
+   mxSetField(out[2],0,f[0],mxCreateDoubleScalar(double(c.state->steps())));mxSetField(out[2],0,f[1],mxCreateDoubleScalar(double(c.owned)));
+   mxSetField(out[2],0,f[2],mxCreateDoubleScalar(c.state->eddyResult().iterations));
+   mxSetField(out[2],0,f[3],mxCreateDoubleScalar(c.state->eddyResult().trueRelativeResidual));
+   mxSetField(out[2],0,f[4],mxCreateDoubleScalar(c.state->thermalResult().iterations));
+   mxSetField(out[2],0,f[5],mxCreateDoubleScalar(c.state->thermalResult().trueRelativeResidual));
+   mxSetField(out[2],0,f[6],mxCreateString(c.precision==PreconditionerPrecision::FP32?"fp32":c.precision==PreconditionerPrecision::FP64?"fp64":"none"));return;
   }
   throw std::invalid_argument("Unknown IH CUDA command");
  }catch(const std::exception& e){mexErrMsgIdAndTxt("radia:ih:cuda","%s",e.what());}

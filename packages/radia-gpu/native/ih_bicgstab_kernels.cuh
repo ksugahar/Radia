@@ -62,6 +62,17 @@ __global__ void bicgUpdate(const BiCGState* scalar,const cuDoubleComplex* p,
     x[i]=cuCadd(x[i],cuCadd(cuCmul(scalar->alpha,p[i]),cuCmul(scalar->omega,s[i])));
     r[i]=cuCsub(s[i],cuCmul(scalar->omega,t[i]));
 }
+// Right-preconditioned solution correction uses M^-1 p and M^-1 s;
+// the recursive residual still uses the original (unpreconditioned) s.
+__global__ void bicgUpdateRight(const BiCGState* scalar,const cuDoubleComplex* phat,
+        const cuDoubleComplex* shat,const cuDoubleComplex* rawS,const cuDoubleComplex* t,
+        cuDoubleComplex* x,cuDoubleComplex* r,std::size_t n) {
+    const std::size_t i=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;
+    if(i>=n||scalar->status<0||scalar->status==1)return;
+    if(scalar->status==2){x[i]=cuCadd(x[i],cuCmul(scalar->alpha,phat[i]));r[i]=rawS[i];return;}
+    x[i]=cuCadd(x[i],cuCadd(cuCmul(scalar->alpha,phat[i]),cuCmul(scalar->omega,shat[i])));
+    r[i]=cuCsub(rawS[i],cuCmul(scalar->omega,t[i]));
+}
 __global__ void bicgFinish(BiCGState* scalar,const cuDoubleComplex* rr) {
     if(scalar->status<0||scalar->status==1)return;
     const double norm=cuCreal(*rr);

@@ -2,6 +2,7 @@
 #pragma once
 #include "ih_resident_kernels.cuh"
 #include "ih_bicgstab_kernels.cuh"
+#include "ih_preconditioner.cuh"
 #include <cublas_v2.h>
 #include <stdexcept>
 #include <limits>
@@ -24,6 +25,8 @@ class ComplexSolver {
     cuDoubleComplex *workspace_=nullptr,*rr_=nullptr;
     BiCGState* scalar_=nullptr;
     ComplexCSRView matrix_{};
+    ComplexPreconditioner preconditioner_{};
+    cuDoubleComplex *phat_=nullptr,*shat_=nullptr;
     cuDoubleComplex *rhs_,*solution_,*r_,*r0_,*p_,*v_,*s_,*t_,*ax_;
     int n_=0;
     void dot(const cuDoubleComplex* a,const cuDoubleComplex* b,cuDoubleComplex* out) {
@@ -33,15 +36,23 @@ class ComplexSolver {
         const unsigned blocks=(unsigned(n_)+127)/128;
         dot(r0_,r_,&scalar_->rho);
         bicgDirection<<<blocks,128,0,stream_>>>(scalar_,r_,v_,p_,n_);
-        complexMatvec<<<blocks,128,0,stream_>>>(matrix_,p_,v_);
+        const cuDoubleComplex* actionP=p_;
+        if(preconditioner_.precision!=PreconditionerPrecision::None){
+            applyFixedPreconditioner<<<blocks,128,0,stream_>>>(preconditioner_,p_,phat_,scalar_);actionP=phat_;
+        }
+        complexMatvec<<<blocks,128,0,stream_>>>(matrix_,actionP,v_);
         dot(r0_,v_,&scalar_->denominator);
         bicgAlpha<<<1,1,0,stream_>>>(scalar_);
         bicgIntermediate<<<blocks,128,0,stream_>>>(scalar_,r_,v_,s_,n_);
         dot(s_,s_,rr_);bicgCheckIntermediate<<<1,1,0,stream_>>>(scalar_,rr_);
-        complexMatvec<<<blocks,128,0,stream_>>>(matrix_,s_,t_);
+        const cuDoubleComplex* actionS=s_;
+        if(preconditioner_.precision!=PreconditionerPrecision::None){
+            applyFixedPreconditioner<<<blocks,128,0,stream_>>>(preconditioner_,s_,shat_,scalar_);actionS=shat_;
+        }
+        complexMatvec<<<blocks,128,0,stream_>>>(matrix_,actionS,t_);
         dot(t_,s_,&scalar_->ts);dot(t_,t_,&scalar_->tt);
         bicgOmega<<<1,1,0,stream_>>>(scalar_);
-        bicgUpdate<<<blocks,128,0,stream_>>>(scalar_,p_,s_,t_,solution_,r_,n_);
+        bicgUpdateRight<<<blocks,128,0,stream_>>>(scalar_,actionP,actionS,s_,t_,solution_,r_,n_);
         dot(r_,r_,rr_);bicgFinish<<<1,1,0,stream_>>>(scalar_,rr_);
     }
     void release() noexcept {
@@ -55,18 +66,23 @@ class ComplexSolver {
 public:
     ComplexSolver(const ComplexSolver&)=delete;
     ComplexSolver& operator=(const ComplexSolver&)=delete;
-    explicit ComplexSolver(ComplexCSRView matrix):matrix_(matrix) {
+    explicit ComplexSolver(ComplexCSRView matrix,ComplexPreconditioner preconditioner={}):matrix_(matrix),preconditioner_(preconditioner) {
         if(!matrix.rows||matrix.rows>std::size_t(std::numeric_limits<int>::max()))throw std::invalid_argument("IH solver dimension out of range");
         n_=int(matrix.rows);
+        if(preconditioner.precision!=PreconditionerPrecision::None&&
+            (preconditioner.rows!=matrix.rows||!preconditioner.rowptr||!preconditioner.columns||
+             (preconditioner.precision==PreconditionerPrecision::FP32?!preconditioner.values32:!preconditioner.values64)))
+            throw std::invalid_argument("Invalid fixed IH preconditioner");
         try {
             cudaCheck(cudaStreamCreateWithFlags(&stream_,cudaStreamNonBlocking));
             blasCheck(cublasCreate(&blas_));blasCheck(cublasSetStream(blas_,stream_));
             blasCheck(cublasSetPointerMode(blas_,CUBLAS_POINTER_MODE_DEVICE));
-            cudaCheck(cudaMalloc(&workspace_,(std::size_t(n_)*9+1)*sizeof(cuDoubleComplex)));
+            cudaCheck(cudaMalloc(&workspace_,workspaceBytes()));
             cudaCheck(cudaMalloc(&scalar_,sizeof(BiCGState)));
             rhs_=workspace_;solution_=rhs_+n_;r_=solution_+n_;r0_=r_+n_;
             p_=r0_+n_;v_=p_+n_;s_=v_+n_;t_=s_+n_;ax_=t_+n_;rr_=ax_+n_;
-            cudaCheck(cudaMemsetAsync(workspace_,0,(std::size_t(n_)*9+1)*sizeof(cuDoubleComplex),stream_));
+            cudaCheck(cudaMemsetAsync(workspace_,0,workspaceBytes(),stream_));
+            if(preconditioner_.precision!=PreconditionerPrecision::None){phat_=rr_+1;shat_=phat_+n_;}
             dot(rhs_,rhs_,rr_);cudaCheck(cudaStreamSynchronize(stream_));
             cudaCheck(cudaStreamBeginCapture(stream_,cudaStreamCaptureModeThreadLocal));
             for(int i=0;i<8;++i)iteration();
@@ -84,7 +100,8 @@ public:
     cudaStream_t stream()const{return stream_;}
     cuDoubleComplex* rhs(){return rhs_;}
     const cuDoubleComplex* solution()const{return solution_;}
-    std::size_t ownedBytes()const{return (std::size_t(n_)*9+1)*sizeof(cuDoubleComplex)+sizeof(BiCGState);}
+    std::size_t workspaceBytes()const{return (std::size_t(n_)*(preconditioner_.precision==PreconditionerPrecision::None?9:11)+1)*sizeof(cuDoubleComplex);}
+    std::size_t ownedBytes()const{return workspaceBytes()+sizeof(BiCGState);}
     struct Result {unsigned iterations;double trueRelativeResidual;};
     Result solve(double tolerance,int maxIterations) {
         if(!std::isfinite(tolerance)||tolerance<=0.||tolerance>1e-6||maxIterations<1)throw std::invalid_argument("Invalid IH solve limits");
