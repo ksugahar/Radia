@@ -28,18 +28,36 @@ def digest(path):
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
-def relative(value, reference):
-    if value.shape != reference.shape or not np.isfinite(value).all() or not np.isfinite(reference).all():
+def scaled_fields(value, reference):
+    if (value.shape != reference.shape or value.ndim != 2 or value.shape[1] != 3
+        or not np.isfinite(value).all() or not np.isfinite(reference).all()):
         raise RuntimeError('Nonfinite field or CPU/CUDA shape mismatch')
-    return float(np.linalg.norm(value-reference)/max(np.linalg.norm(reference), np.finfo(float).tiny))
+    # Common scaling avoids overflow in subtraction and squared vector norms.
+    magnitude = max(float(np.max(np.abs(value), initial=0)),
+                    float(np.max(np.abs(reference), initial=0)))
+    if magnitude == 0:
+        return value, reference
+    return value/magnitude, reference/magnitude
+
+
+def relative(value, reference):
+    value, reference = scaled_fields(value, reference)
+    error = float(np.linalg.norm(value-reference)/max(np.linalg.norm(reference), np.finfo(float).tiny))
+    if not np.isfinite(error):
+        raise RuntimeError('Unrepresentable field error; numerical acceptance failed')
+    return error
 
 
 def point_relative(value, reference):
-    if value.shape != reference.shape or not np.isfinite(value).all() or not np.isfinite(reference).all():
-        raise RuntimeError('Nonfinite field or CPU/CUDA shape mismatch')
+    value, reference = scaled_fields(value, reference)
+    if not len(value):
+        return 0.0
     scale = np.linalg.norm(reference, axis=1)
     floor = max(float(scale.max())*1e-12, np.finfo(float).tiny)
-    return float(np.max(np.linalg.norm(value-reference, axis=1)/np.maximum(scale, floor)))
+    error = float(np.max(np.linalg.norm(value-reference, axis=1)/np.maximum(scale, floor)))
+    if not np.isfinite(error):
+        raise RuntimeError('Unrepresentable pointwise error; numerical acceptance failed')
+    return error
 
 
 def cpu_memory():
