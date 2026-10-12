@@ -285,3 +285,19 @@ The bounded, single-thread, below-normal numerical checks completed; their
 times are excluded, not presented as speed comparisons. Exact device buffer
 ownership, logical MATLAB cache bytes and sampled GPU free memory retain
 their stated limits. Larger idle timing is still pending.
+
+
+## Matrix Build / HDiv-MMM resident checkpoint (2026-10-12)
+
+The next stage now has executable code in `validation_test/hmatrix_cuda` and
+`packages/radia-gpu/native`: checked persistent symmetric HACApK leaf application,
+physical normalization/permutation and resident `B^T G B`. A bounded CUDA
+constant-density linear tet/triangle block builder reuses the exact existing
+quadrature and analytic potential formulas. Ten numerical subgates pass; this
+does not certify adaptive HACApK Matrix Build, FE charge-map construction,
+constitutive/preconditioner integration or a complete HDiv-MMM solve.
+
+See `../hmatrix_cuda/README.md` for source/artifact identity, the earlier guarded
+operator-residency diagnostic and its limitations. Latest-artifact timing is
+pending competing computation. Experimental runtime payloads remain excluded
+from the published wheel. A100 has not been operated.

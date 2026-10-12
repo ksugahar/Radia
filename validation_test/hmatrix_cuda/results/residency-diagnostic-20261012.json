@@ -1,0 +1,134 @@
+{
+  "schema": "radia.hmatrix-residency-diagnostic.v1",
+  "accepted": true,
+  "timing_acceptance": false,
+  "a100_used": false,
+  "classification": "Idle-100 diagnostic, not mdx performance acceptance",
+  "scope": "Preassembled numeric leaf setup and three repeated operator applications, not FE Matrix Build or HDiv-MMM solve",
+  "cpu_mean_percent": 0.8,
+  "build": {
+    "schema": "radia.hmatrix-cuda-build.v1",
+    "accepted": true,
+    "source_dirty": false,
+    "source_commit": "b7be1da75c73d419d543699ea41443e6659db10b",
+    "source_sha256": {
+      "packages/radia-gpu/native/radia_cuda_hmatrix.cu": "099ee698775d4fb91b59180cd78fe2973f4f5349c58c34dafbcb28818285feae",
+      "packages/radia-gpu/native/hmatrix_resident.cuh": "d9d77afaabc3ad09229d1e2bd0afa95a35c38fbaa44270f2e42a7e326b2a87a2",
+      "packages/radia-gpu/native/hmatrix_hacapk_pack.cuh": "6504faf096219b420dbb0d796187411e2398eda405872c0fd99d3bd626d5dc7a",
+      "src/ext/HACApK/cHACApK_base.h": "0feb4603a640d028ff0cfc44ca1d0240552c3633f3fc4a3f33658ac7cac255c5",
+      "packages/radia-gpu/native/analytic_matrix_build.cuh": "ad11c34f4b67502d2908728147a9131ec3c9e3586a9f851c3cad9606a44188f5",
+      "packages/radia-gpu/native/radia_field_exact.cuh": "b76475d480ff7a06244ba56b938d9c0c54d92914fc087592a44088ef878ba127",
+      "src/core/rad_charge_quadrature.h": "f96cf5b92c6b4c26555cb4413e9efbe5e89754dc16ad9d502afecd09f1ee4989",
+      "src/core/rad_hdiv_vim.h": "bcc63c34546f21ab8fd65e39e6b6668fe687b217d62c1d61229653b5cad19308",
+      "src/core/rad_field_cloud_kernel.h": "af0fc87f58921c6368e5fbb448b372bea7fe40eef2bcff77f9508e09de374834",
+      "src/core/rad_hdiv_field_math.inc": "082adedb5c9a80d222bea026f4756aa4ea14d1e127774a4a7aff7867f8e8205e",
+      "src/core/rad_hdiv_field_kernel_api.inc": "18eb7b6468488c92a6e84a0be6ca7a97ddc6ab5eb4d0342b3453f210d024d589",
+      "src/core/rad_field_source_kernel.inc": "cb8bec501a06ad1d80712371fb4b7c97d4edcb7cb14a8aa67e22ea0cf4919fb8",
+      "packages/radia-gpu/tools/build_hmatrix_cuda.py": "50961afe614ef401643b28a08347ad444b81c452a22fe1aad14366b06ed5cdd0",
+      "Build.ps1": "b86553480773a18726b5031e92bd1bfb63c5d1ca04f1055c098dda30ad0cef2a"
+    },
+    "a100_used": false,
+    "scope": "Resident numeric HACApK leaf application only; assembly/physical solver not accepted",
+    "matlab": "26.1.0.3346908 (R2026a) Update 5",
+    "binary_sha256": "1db458926f4efe0f3dd614cc21c89654f36213f29e9f8094ba3b7105f88c3bca",
+    "cuda_targets": [
+      "sm_75",
+      "sm_80",
+      "compute_80 PTX"
+    ],
+    "taskmanager_started": false,
+    "python_runtime_required": false
+  },
+  "input_sha256": "741adfc7138c7e81e545e5aad24c4c8863fcba98ec11c9c59ca4da23ebdb420a",
+  "result": {
+    "accepted": true,
+    "steps": 3,
+    "samples": [
+      {
+        "mode": "rebuild",
+        "whole_seconds": 0.0079561,
+        "amortized_apply_seconds": 0.0026520333333333334,
+        "relative_error": 7.222706075575992e-16
+      },
+      {
+        "mode": "resident",
+        "whole_seconds": 0.0037726,
+        "amortized_apply_seconds": 0.0012575333333333333,
+        "relative_error": 7.222706075575992e-16
+      },
+      {
+        "mode": "resident",
+        "whole_seconds": 0.0036191,
+        "amortized_apply_seconds": 0.0012063666666666667,
+        "relative_error": 7.222706075575992e-16
+      },
+      {
+        "mode": "rebuild",
+        "whole_seconds": 0.0078076,
+        "amortized_apply_seconds": 0.0026025333333333333,
+        "relative_error": 7.222706075575992e-16
+      },
+      {
+        "mode": "rebuild",
+        "whole_seconds": 0.0076287,
+        "amortized_apply_seconds": 0.0025429000000000003,
+        "relative_error": 7.222706075575992e-16
+      },
+      {
+        "mode": "resident",
+        "whole_seconds": 0.0051103,
+        "amortized_apply_seconds": 0.0017034333333333332,
+        "relative_error": 7.222706075575992e-16
+      },
+      {
+        "mode": "resident",
+        "whole_seconds": 0.0026378,
+        "amortized_apply_seconds": 0.0008792666666666667,
+        "relative_error": 7.222706075575992e-16
+      },
+      {
+        "mode": "rebuild",
+        "whole_seconds": 0.0071158,
+        "amortized_apply_seconds": 0.0023719333333333333,
+        "relative_error": 7.222706075575992e-16
+      }
+    ],
+    "scope": "Numeric leaf construction, transfers, repeated operator apply, recovery and release only",
+    "sampled_free_before": 16004415488.0,
+    "memory": {
+      "owned_device_bytes": 573312,
+      "applications": 0,
+      "kernel_launches": 0,
+      "host_synchronizations_per_apply": 0,
+      "setup_peak_owned_device_bytes": 573312
+    },
+    "cold_rebuild": {
+      "mode": "rebuild",
+      "whole_seconds": 0.0273169,
+      "amortized_apply_seconds": 0.009105633333333333,
+      "relative_error": 7.222706075575992e-16
+    },
+    "cold_resident": {
+      "mode": "resident",
+      "whole_seconds": 0.0084437,
+      "amortized_apply_seconds": 0.002814566666666667,
+      "relative_error": 7.222706075575992e-16
+    },
+    "sampled_free_after": 16002318336.0,
+    "live_count": 0,
+    "memory_limitations": "Owned device buffers exact; CUDA driver/MATLAB free-memory samples are not peaks. Native host/process peak unmeasured.",
+    "cold_scope": "First payload calls after MATLAB/MEX initialization and memory probe; not cold process/module loading."
+  },
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "source_sha256": {
+    "validation_test\\hmatrix_cuda\\measure_resident.py": "bebbfe113cbd0cc9402ad6c4fbb61b99639d664f8d62b91cb627c8e5d2af07e3",
+    "validation_test\\hmatrix_cuda\\profileResidentHMatrix.m": "71ddc80bc23fbf5be196736ff369d4e106ce0e14e112339771eccf3caf97b119",
+    "packages\\radia-gpu\\matlab\\+radia\\+gpu\\HMatrixOperator.m": "d98a77641d51eea484cefc8d9ee5b12d03395725b3ac7ccda8150e242933052a"
+  },
+  "median_whole_seconds": {
+    "rebuild": 0.00771815,
+    "resident": 0.00369585
+  },
+  "speedup_rebuild_over_resident": 2.0883288012229935,
+  "artifact_limit": "Measured earlier b7be1da75 artifact, not the latest 0863b258a artifact; latest timing blocked by competing computation."
+}

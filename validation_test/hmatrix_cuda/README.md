@@ -68,3 +68,25 @@ max(2 GiB, 20% device memory) free. A100 is never started or connected. The gate
 not connected yet; these bounded fixtures are small.
 The experimental class/module remain excluded from published wheel payloads
 until their physical and release acceptance is complete.
+
+## Recorded checkpoint (2026-10-12)
+
+`results/resident-numerical-20261012.json` accepts ten small cases against
+independent NumPy algebra and the installed public Python/pybind CPU route.
+The latest native artifact is built from `0863b258a`; maximum relative vector
+difference is 7.223e-16. Native geometry-to-CUDA constant-charge assembly passes
+for tetrahedra and tetrahedron/triangle combinations. This is not full adaptive
+Matrix Build or complete HDiv-MMM physical acceptance.
+
+`results/residency-diagnostic-20261012.json` retains an earlier `b7be1da75`
+artifact's guarded idle-100 diagnostic: a 275-dimensional synthetic mixed-leaf
+operator, three applications, continuous packing/setup/transfers/recovery/release
+median 7.718 ms rebuilding versus 3.696 ms resident (2.09x). Exact owned device
+buffers are 573312 bytes in both modes; no buffer-memory reduction is claimed.
+These times do not certify the latest artifact, a large physical problem, cold
+process startup or mdx performance. A later timing attempt was rejected by the
+other-computation guard, so latest-artifact timing remains pending.
+
+`results/quadrature-sharing-20261012.json` verifies that the extracted shared
+quadrature helper is textually identical to the previous CPU implementation.
+The full CPU solver build remains a separate CI gate.
