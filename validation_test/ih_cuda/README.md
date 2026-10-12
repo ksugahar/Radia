@@ -26,3 +26,13 @@ correction convergence check, including bypass of the zero omega denominator.
 Full cuBLAS device reductions, the persistent solve loop, true-residual gate,
 preconditioning, thermal evolution and Simulink context are still pending.
 The stage check is not iterative-solver or physical IH acceptance.
+
+The next compiled validation connects complete complex BiCGStab (cuBLAS device
+reductions, eight-iteration CUDA graph batches, final true residual) to coherent
+loss, device heat-load projection and a backward-Euler temperature increment
+solve. The 3-unknown synthetic system agrees with NumPy direct algebra and
+passes true-residual gates for zero, positive and negative excitation. This
+checks numerical plumbing, not a PEEC-BEM physical model. The context is currently
+retained only during the validation call; checked persistent MATLAB ownership,
+Simulink output/update lifecycle and actual CPU/pybind11 physics comparison are
+still required. No timing/performance claim follows from this result.
