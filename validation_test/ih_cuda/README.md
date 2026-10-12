@@ -114,3 +114,13 @@ backward Euler algebra. This is synthetic orchestration validation, not physical
 PEEC-BEM/ESIM parity. Actual native geometry assembly, nonlinear ESIM/reaction
 coupling and independent pybind11 physical acceptance still block release.
 A100 was not used. No speedup is claimed from these checks.
+
+## Constitutive iteration checkpoint (2026-10-13)
+
+`run_esim_coupling.py` exercises temperature material updates, ESIM cells,
+complex solves and thermal updates through `CoupledState` owner callbacks.
+Five updates, rejected-candidate state retention and reset pass on 100 and
+the same binary on the already-running NGSolve A100. The generic diagonal
+block does not include complete coil/body reaction assembly or nonlinear B-H.
+The production persistent MEX gateway and Simulink connection remain pending.
+See `results/esim-coupling-20261013.json` for residuals and memory limits.
