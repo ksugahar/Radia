@@ -96,6 +96,8 @@ jobs:
           $gpuMatlab = & $installedPython -I -c "import radia_gpu; print(radia_gpu.matlab_path())"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python validation_test/ams_cuda/run.py --gpu-dir $gpuMatlab --matlab-dir $gpuMatlab --out "$env:RUNNER_TEMP/radia-ams-installed-acceptance-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --maxh 0.5 --threads 1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python validation_test/ams_cuda/nonlinear_resident.py --gpu-dir $gpuMatlab --matlab-dir $gpuMatlab --out "$env:RUNNER_TEMP/radia-ams-nonlinear-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" --maxh 0.35 --threads 2 --setup-threads 2 --contract
           exit $LASTEXITCODE
       - name: Select public numerical evidence
         if: always()

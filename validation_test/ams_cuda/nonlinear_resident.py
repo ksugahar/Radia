@@ -80,6 +80,8 @@ def cpu_run(route,fes,form,rhs,gradient,coords,bridge,threads):
 
 def main(args):
     root=Path(__file__).resolve().parents[2];out=args.out.resolve();out.mkdir(parents=True,exist_ok=False)
+    gpu_dir=(args.gpu_dir or root/'build-ams-cuda').resolve()
+    matlab_dir=(args.matlab_dir or root/'packages/radia-gpu/matlab').resolve()
     record=dict(schema='radia.ams-nonlinear-sparse-resident.v2',accepted=False,host=socket.gethostname(),
         source_commit=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
         timing_classification='build-host diagnostic; not formal performance acceptance',a100_used=False,
@@ -102,7 +104,8 @@ def main(args):
         for relative,digest in build['source_sha256'].items():
             if hashlib.sha256((root/relative).read_bytes()).hexdigest()!=digest:raise RuntimeError('Native source changed since build')
         for relative,digest in build['sha256'].items():
-            if hashlib.sha256((root/relative).read_bytes()).hexdigest()!=digest:raise RuntimeError('Native binary hash mismatch')
+            candidate=gpu_dir/Path(relative).name if relative.endswith('.mexw64') else root/relative
+            if hashlib.sha256(candidate.read_bytes()).hexdigest()!=digest:raise RuntimeError('Native binary hash mismatch')
         record['gpu_binary_sha256']=build['sha256']['build-ams-cuda/radia_cuda_ams.mexw64']
         record['versions']={p:md.version(p) for p in ('ngsolve','numpy','scipy','matlabengine')}
         ng.SetNumThreads(args.threads)
@@ -150,9 +153,9 @@ def main(args):
         import matlab.engine
         startup=time.perf_counter();eng=matlab.engine.start_matlab('-nodesktop -nosplash');record['matlab_startup_seconds']=time.perf_counter()-startup
         eng.addpath(str(Path(__file__).parent),nargout=0)
-        eng.nonlinear_resident(str(out/'input.mat'),str(out/'gpu.mat'),str(root/'build-ams-cuda'),str(root/'packages/radia-gpu/matlab'),float(args.setup_threads),nargout=0)
+        eng.nonlinear_resident(str(out/'input.mat'),str(out/'gpu.mat'),str(gpu_dir),str(matlab_dir),float(args.setup_threads),nargout=0)
         if args.contract:
-            eng.resident_contract(str(out/'input.mat'),str(out/'contract.mat'),str(root/'build-ams-cuda'),str(root/'packages/radia-gpu/matlab'),nargout=0)
+            eng.resident_contract(str(out/'input.mat'),str(out/'contract.mat'),str(gpu_dir),str(matlab_dir),nargout=0)
             record['resident_contract']=loadmat(out/'contract.mat',simplify_cells=True)['report']
         gpu=loadmat(out/'gpu.mat',simplify_cells=True);record['gpu']=[];record['gpu_device']=gpu['gpuInfo']
         for solution,report in zip(gpu['solutions'],gpu['reports']):
@@ -176,5 +179,6 @@ def main(args):
 
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--out',type=Path,required=True);p.add_argument('--maxh',type=float,default=.12)
+    p.add_argument('--gpu-dir',type=Path);p.add_argument('--matlab-dir',type=Path)
     p.add_argument('--contract',action='store_true');p.add_argument('--threads',type=int,default=8);p.add_argument('--setup-threads',type=int,default=8)
     p.add_argument('--routes',type=int,nargs='+',choices=[1,2,3],default=[1,2,3,3,2,1]);main(p.parse_args())

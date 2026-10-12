@@ -6,10 +6,14 @@ CPU electromagnetic execution belongs to `radia` (Python/pybind11/NGSolve).
 `radia-mcp` is the AI operation interface. Neither package is required merely
 to locate and use the installed GPU MATLAB files.
 
-Version 0.1.0 contains FP64 CUDA CSR Jacobi-PCG, a Simulink block for the same
+Version 0.1.2 contains FP64 CUDA CSR Jacobi-PCG, a Simulink block for the same
 kernel, and the selected standalone LTspice workflow. It also contains experimental FP64 assembled-operator AMS and its versioned
 HDF5 exchange. This does not certify production AMS, ICCG, HDiv-MMM, or
 migration of the older CPU MEX application models.
+The experimental AMS also includes sparse nonlinear affine-tetrahedron assembly
+and a persistent `radia.gpu.AMSContext` with reusable GPU PCG workspace. Its
+manufactured monotone-material verification does not certify measured steel or
+arbitrary nonlinear devices. See the sparse study in validation_test/ams_cuda.
 There is no CPU solver fallback.
 
 ## Install
