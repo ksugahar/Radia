@@ -48,25 +48,21 @@ __device__ inline void cellRow(const ESIMCellParameters& p,int i,cuDoubleComplex
     lower=make_cuDoubleComplex(l,0.);upper=make_cuDoubleComplex(u,0.);
     diagonal=cuCadd(make_cuDoubleComplex(-l-u,0.),cuCmul(make_cuDoubleComplex(0.,p.omega),mu));
 }
-// Caller owns workspace[4 * panels * nodes] for H, mu, c' and d'.
-// Each CUDA thread owns one panel cell; no host cell solve or Python callback.
-__global__ void finiteESIMCells(ESIMCellParameters p,const double* surfaceFields,std::size_t panels,
-        cuDoubleComplex* workspace,ESIMCellResult* results) {
-    const std::size_t panel=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(panel>=panels)return;
+// One cell arithmetic is shared by uniform and element-specific material paths.
+__device__ inline ESIMCellResult solveFiniteESIMCell(ESIMCellParameters p,double surface,cuDoubleComplex* H) {
     ESIMCellResult result{};result.status=-1;
-    const double surface=surfaceFields[panel];
     if(p.nodes<3||p.maxIterations<1||!isfinite(surface)||surface<=0.||
        !isfinite(p.halfThickness)||p.halfThickness<=0.||!isfinite(p.resistivity)||p.resistivity<=0.||
        !isfinite(p.omega)||p.omega<0.||!isfinite(p.tolerance)||p.tolerance<=0.||
        !isfinite(p.relaxation)||p.relaxation<=0.||p.relaxation>1.||!cellFinite(p.law.initialMu)||
-       cuCreal(p.law.initialMu)<=0.||cuCimag(p.law.initialMu)>0.) {results[panel]=result;return;}
-    auto* H=workspace+panel*std::size_t(p.nodes)*4;auto* mu=H+p.nodes;auto* cp=mu+p.nodes;auto* dp=cp+p.nodes;
+       cuCreal(p.law.initialMu)<=0.||cuCimag(p.law.initialMu)>0.) {return result;}
+    auto* mu=H+p.nodes;auto* cp=mu+p.nodes;auto* dp=cp+p.nodes;
     for(int i=0;i<p.nodes;++i)mu[i]=p.law.initialMu;
     for(int iteration=0;iteration<p.maxIterations;++iteration) {
         for(int i=0;i<p.nodes;++i) {
             cuDoubleComplex l,d,u,b;cellRow(p,i,mu[i],surface,l,d,u,b);
             if(i){d=cuCsub(d,cuCmul(l,cp[i-1]));b=cuCsub(b,cuCmul(l,dp[i-1]));}
-            if(!cellFinite(d)||cuCabs(d)==0.){result.status=-2;results[panel]=result;return;}
+            if(!cellFinite(d)||cuCabs(d)==0.){result.status=-2;return result;}
             cp[i]=cuCdiv(u,d);dp[i]=cuCdiv(b,d);
         }
         H[p.nodes-1]=dp[p.nodes-1];
@@ -79,18 +75,18 @@ __global__ void finiteESIMCells(ESIMCellParameters p,const double* surfaceFields
             if(i+1<p.nodes)residual=cuCadd(residual,cuCmul(u,H[i+1]));
             const double r=cuCabs(residual);residualSquared+=r*r;
             auto next=cellMu(p.law,cuCabs(H[i]));
-            if(!cellFinite(H[i])||!cellFinite(next)||cuCreal(next)<=0.||cuCimag(next)>0.){result.status=-2;results[panel]=result;return;}
+            if(!cellFinite(H[i])||!cellFinite(next)||cuCreal(next)<=0.||cuCimag(next)>0.){result.status=-2;return result;}
             change=fmax(change,cuCabs(cuCsub(next,mu[i])));muScale=fmax(muScale,cuCabs(mu[i]));
             // cp is no longer needed after back substitution.
             cp[i]=next;
         }
         result.trueResidual=sqrt(residualSquared)/surface;
-        if(!isfinite(result.trueResidual)||result.trueResidual>1e-6){result.status=-2;results[panel]=result;return;}
+        if(!isfinite(result.trueResidual)||result.trueResidual>1e-6){result.status=-2;return result;}
         result.relativeChange=change/muScale;result.iterations=iteration+1;
         for(int i=0;i<p.nodes;++i)mu[i]=cuCadd(cuCmul(make_cuDoubleComplex(1.-p.relaxation,0.),mu[i]),cuCmul(make_cuDoubleComplex(p.relaxation,0.),cp[i]));
         if(result.relativeChange<p.tolerance){result.status=1;break;}
     }
-    if(result.status!=1){result.status=-3;results[panel]=result;return;}
+    if(result.status!=1){result.status=-3;return result;}
     const double h=p.halfThickness/(p.nodes-1);
     for(int i=0;i+1<p.nodes;++i) {
         const auto derivative=cuCdiv(cuCsub(H[i+1],H[i]),make_cuDoubleComplex(h,0.));
@@ -105,6 +101,21 @@ __global__ void finiteESIMCells(ESIMCellParameters p,const double* surfaceFields
     result.activePower+=result.magneticPower;
     result.impedance=make_cuDoubleComplex(2.*result.activePower/(surface*surface),2.*result.reactivePower/(surface*surface));
     if(!cellFinite(result.impedance)||result.activePower<0.)result.status=-2;
-    results[panel]=result;
+    return result;
+}
+// Uniform-law entry remains available for existing differential tests.
+__global__ void finiteESIMCells(ESIMCellParameters p,const double* surfaceFields,std::size_t panels,
+        cuDoubleComplex* workspace,ESIMCellResult* results) {
+    const auto panel=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(panel>=panels)return;
+    results[panel]=solveFiniteESIMCell(p,surfaceFields[panel],workspace+panel*std::size_t(p.nodes)*4);
+}
+// Element laws are staged on device from the accepted local temperature.
+// A fixed stride is checked by the owner; no shared temperature or element-0 law.
+__global__ void finiteElementESIMCells(const ESIMCellParameters* parameters,const double* surfaceFields,
+        std::size_t panels,int workspaceNodes,cuDoubleComplex* workspace,ESIMCellResult* results) {
+    const auto panel=std::size_t(blockIdx.x)*blockDim.x+threadIdx.x;if(panel>=panels)return;
+    const auto p=parameters[panel];
+    if(p.nodes<3||p.nodes>workspaceNodes){ESIMCellResult r{};r.status=-1;results[panel]=r;return;}
+    results[panel]=solveFiniteESIMCell(p,surfaceFields[panel],workspace+panel*std::size_t(workspaceNodes)*4);
 }
 } // namespace radia_ih_cuda

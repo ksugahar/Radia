@@ -1,5 +1,32 @@
 # IH resident CUDA development validation
 
+## Research release acceptance (2026-10-13)
+
+The user explicitly permits an experimental temperature-dependent PEEC-BEM
+(ESIM) release without independent full-physics certification. The historical
+requirements below do not make that certification a research-release blocker.
+Implementation consistency, checked convergence/true residuals, per-element
+temperature and heat state, complete reaction coupling, Simulink repeated-run
+and cleanup checks, exact-artifact distribution and documented limitations
+remain required. This permission does not certify the physical model or waive
+unsupported-input errors. Already-running NGSolve A100 evaluation is authorized;
+this task never starts or stops that host.
+
+`ih_temperature_material.cuh` stages an explicit piecewise-linear material
+table in kelvin at each element's evaluated temperature. Temperature FE
+coefficients pass through an explicit evaluation map; coefficients are not
+assumed to be nodal temperatures. Resistivity, complex initial permeability,
+saturation and common-knot cubic B(H) coefficients have declared interpolation.
+Out-of-table temperatures are rejected; there is no implicit extrapolation.
+`finiteElementESIMCells` reuses the existing finite-cell arithmetic with
+element-specific parameters and checked workspace stride.
+
+`run_temperature_material.py` checks three independently authored generic
+material cells, distinct mapped temperatures, repeated calls and rejected
+out-of-table input. It is a component check, not complete PEEC-BEM, nonlinear
+temperature-dependent B(H), Simulink or release acceptance. The material
+primitives are not yet connected to the persistent public MEX context.
+
 `run_resident_smoke.py` builds a validation-only mexcuda gateway and checks the
 resident complex CSR action, scalar-drive RHS and coherent quadratic loss
 against independent NumPy complex algebra. Ten iterations retain operators and
