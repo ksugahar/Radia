@@ -19,3 +19,9 @@ def test_public_poisson_keeps_numerics_and_omits_private_provenance():
     assert result['cases'] == source['cases']
     assert result['build'] == dict(source_commit='abc', binary_sha256='def', release='2026a')
     assert not {'hostname', 'python', 'error'} & result.keys()
+    setup = module.setup_public(dict(source, schema='radia.ams-setup-comparison.v1',
+        accepted=True, timing_classification='diagnostic',formal_performance_acceptance='pending'))
+    assert setup['cases'] == source['cases']
+    assert setup['taskmanager_used'] is False
+    assert setup['formal_performance_acceptance'] == 'pending'
+    assert not {'hostname','host','python','error'} & setup.keys()

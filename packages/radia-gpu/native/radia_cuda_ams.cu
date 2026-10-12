@@ -12,8 +12,11 @@
 #include <string>
 #include <stdexcept>
 #include <vector>
+void RadiaAMSSetup(int,mxArray**,int,const mxArray**);
 namespace {
 constexpr int T=256;
+// Nonzero only while recording a preconditioner graph; normal work uses MATLAB's legacy stream.
+thread_local cudaStream_t launch_stream=nullptr;
 void ck(cudaError_t s) { if(s!=cudaSuccess) throw std::runtime_error(cudaGetErrorString(s)); }
 void cb(cublasStatus_t s) { if(s!=CUBLAS_STATUS_SUCCESS) throw std::runtime_error("cuBLAS failed: "+std::to_string(s)); }
 const mxArray* field(const mxArray* a,const char* name) {
@@ -153,20 +156,20 @@ struct CSR {
         if(count>INT_MAX-T)throw std::runtime_error("CSR index capacity exceeded");nz=int(count);
         rp=in.get<int>(field(v,"rowptr"),mxINT32_CLASS,size_t(n)+1);
         ci=in.get<int>(field(v,"columns"),mxINT32_CLASS,nz);a=in.get<double>(vals,mxDOUBLE_CLASS,nz);
-        verify_csr<<<(std::max(n,nz)+T-1)/T,T>>>(n,m,nz,rp,ci,a,in.validation.p);
+        verify_csr<<<(std::max(n,nz)+T-1)/T,T,0,launch_stream>>>(n,m,nz,rp,ci,a,in.validation.p);
     }
-    void mult(const double* x,double* y)const{multiply<<<(n+T-1)/T,T>>>(n,rp,ci,a,x,y);}
-    void add(const double* x,double alpha,double* y)const{multiply_add<<<(n+T-1)/T,T>>>(n,rp,ci,a,x,alpha,y);}
+    void mult(const double* x,double* y)const{multiply<<<(n+T-1)/T,T,0,launch_stream>>>(n,rp,ci,a,x,y);}
+    void add(const double* x,double alpha,double* y)const{multiply_add<<<(n+T-1)/T,T,0,launch_stream>>>(n,rp,ci,a,x,alpha,y);}
     void relax(Buffer& x,const double* b,const double* l1,Buffer& tmp)const{
-        multiply_relax<<<(n+T-1)/T,T>>>(n,rp,ci,a,x.p,b,l1,tmp.p);
+        multiply_relax<<<(n+T-1)/T,T,0,launch_stream>>>(n,rp,ci,a,x.p,b,l1,tmp.p);
         std::swap(x.p,tmp.p);
     }
     void res(const double* x,const double* b,double* r)const{
-        multiply_residual<<<(n+T-1)/T,T>>>(n,rp,ci,a,x,b,r);
+        multiply_residual<<<(n+T-1)/T,T,0,launch_stream>>>(n,rp,ci,a,x,b,r);
     }
 };
 void finite_vec(Input& in,const mxArray* a,int n,const double*& result,bool positive=false){
-    result=in.get<double>(a,mxDOUBLE_CLASS,n);verify_vec<<<(n+T-1)/T,T>>>(n,result,positive,in.validation.p);
+    result=in.get<double>(a,mxDOUBLE_CLASS,n);verify_vec<<<(n+T-1)/T,T,0,launch_stream>>>(n,result,positive,in.validation.p);
 }
 struct Coarse {
     std::string kind;int n,used=0;const double *a=nullptr,*di=nullptr;const int *order=nullptr,*rp=nullptr,*ci=nullptr;
@@ -177,7 +180,7 @@ struct Coarse {
         if(kind=="dense_inverse") {
             a=in.get<double>(field(v,"values"),mxDOUBLE_CLASS,size_t(n)*n);
             if(size_t(n)*n>INT_MAX-T)throw std::runtime_error("dense coarse capacity exceeded");
-            verify_vec<<<(n*n+T-1)/T,T>>>(n*n,a,false,in.validation.p);
+            verify_vec<<<(n*n+T-1)/T,T,0,launch_stream>>>(n*n,a,false,in.validation.p);
         } else if(kind=="ngsolve_sparse_ldlt") {
             auto d=field(v,"diagonal_inverse");if(!mxIsGPUArray(d))throw std::runtime_error("coarse diagonal requires GPU");
             auto tmp=mxGPUCreateFromMxArray(d);size_t count=mxGPUGetNumberOfElements(tmp);mxGPUDestroyGPUArray(tmp);
@@ -189,15 +192,15 @@ struct Coarse {
             rp=in.get<int>(field(v,"rowptr"),mxINT32_CLASS,size_t(used)+1);
             ci=in.get<int>(field(v,"columns"),mxINT32_CLASS,count);a=in.get<double>(val,mxDOUBLE_CLASS,count);
             seen=std::make_unique<Flag>(used);
-            verify_csr<<<std::max(1,(std::max(used,int(count))+T-1)/T),T>>>(used,used,int(count),rp,ci,a,in.validation.p);
-            verify_factor<<<(n+T-1)/T,T>>>(n,used,int(count),order,rp,ci,seen->p,in.validation.p);
-            verify_permutation<<<std::max(1,(used+T-1)/T),T>>>(used,seen->p,in.validation.p);
-            verify_vec<<<std::max(1,(used+T-1)/T),T>>>(used,di,false,in.validation.p);work=std::make_unique<Buffer>(used);
+            verify_csr<<<std::max(1,(std::max(used,int(count))+T-1)/T),T,0,launch_stream>>>(used,used,int(count),rp,ci,a,in.validation.p);
+            verify_factor<<<(n+T-1)/T,T,0,launch_stream>>>(n,used,int(count),order,rp,ci,seen->p,in.validation.p);
+            verify_permutation<<<std::max(1,(used+T-1)/T),T,0,launch_stream>>>(used,seen->p,in.validation.p);
+            verify_vec<<<std::max(1,(used+T-1)/T),T,0,launch_stream>>>(used,di,false,in.validation.p);work=std::make_unique<Buffer>(used);
         } else if(kind!="ten_l1_jacobi_sweeps")throw std::runtime_error("unknown coarse solver");
     }
     void apply(const double* b,double* x)const{
-        if(kind=="dense_inverse")dense_coarse<<<(n+T-1)/T,T>>>(n,a,b,x);
-        else sparse_coarse<<<1,32>>>(n,used,order,rp,ci,a,di,b,x,work->p);
+        if(kind=="dense_inverse")dense_coarse<<<(n+T-1)/T,T,0,launch_stream>>>(n,a,b,x);
+        else sparse_coarse<<<1,32,0,launch_stream>>>(n,used,order,rp,ci,a,di,b,x,work->p);
     }
 };
 struct Level {
@@ -209,7 +212,7 @@ struct Level {
         else {p=std::make_unique<CSR>(field(v,"P"),in);pt=std::make_unique<CSR>(field(v,"Pt"),in);}
     }
     void relax(){a.relax(x,b.p,l1,tmp);}
-    void initial(){initial_relax<<<(a.n+T-1)/T,T>>>(a.n,b.p,l1,x.p);}
+    void initial(){initial_relax<<<(a.n+T-1)/T,T,0,launch_stream>>>(a.n,b.p,l1,x.p);}
 };
 struct Space {
     CSR p,pt;std::vector<std::unique_ptr<Level>> levels;Buffer rhs,out;
@@ -246,13 +249,42 @@ struct AMS {
     }
     void res(){a.res(x.p,b.p,r.p);}
     void relax(){for(int s=0;s<smooth;++s)a.relax(x,b.p,l1,tmp);}
-    void initial(){initial_relax<<<(a.n+T-1)/T,T>>>(a.n,b.p,l1,x.p);for(int s=1;s<smooth;++s)a.relax(x,b.p,l1,tmp);}
+    void initial(){initial_relax<<<(a.n+T-1)/T,T,0,launch_stream>>>(a.n,b.p,l1,x.p);for(int s=1;s<smooth;++s)a.relax(x,b.p,l1,tmp);}
     void grad(){if(!gradient)return;res();spaces[0]->add(r.p,omega,x.p);}
     void nodal(){res();for(int k=gradient;k<gradient+3;++k)spaces[k]->add(r.p,omega,x.p);}
-    void apply(const double* rhs,double* output){ck(cudaMemcpyAsync(b.p,rhs,a.n*sizeof(double),cudaMemcpyDeviceToDevice));mask<<<(a.n+T-1)/T,T>>>(a.n,free,b.p);
+    void apply(const double* rhs,double* output){ck(cudaMemcpyAsync(b.p,rhs,a.n*sizeof(double),cudaMemcpyDeviceToDevice,launch_stream));mask<<<(a.n+T-1)/T,T,0,launch_stream>>>(a.n,free,b.p);
         if(cycle==1){initial();grad();nodal();grad();relax();}
         else {initial();grad();relax();nodal();relax();grad();relax();}
-        mask<<<(a.n+T-1)/T,T>>>(a.n,free,x.p);ck(cudaMemcpyAsync(output,x.p,a.n*sizeof(double),cudaMemcpyDeviceToDevice));}
+        mask<<<(a.n+T-1)/T,T,0,launch_stream>>>(a.n,free,x.p);ck(cudaMemcpyAsync(output,x.p,a.n*sizeof(double),cudaMemcpyDeviceToDevice,launch_stream));}
+};
+// Record the fixed AMS cycle once per solve. All graph buffers remain owned by
+// AMS and the PCG workspace until the graph is destroyed. Capture does not run
+// kernels; each replay initializes its iterates before consuming them.
+struct AMSGraph {
+    cudaStream_t stream=nullptr;
+    cudaGraph_t graph=nullptr;
+    cudaGraphExec_t executable=nullptr;
+    AMSGraph(AMS& ams,const double* rhs,double* output) {
+        ck(cudaStreamCreateWithFlags(&stream,cudaStreamNonBlocking));
+        try {
+            ck(cudaStreamBeginCapture(stream,cudaStreamCaptureModeThreadLocal));
+            launch_stream=stream;
+            try { ams.apply(rhs,output); }
+            catch(...) { launch_stream=nullptr; cudaStreamEndCapture(stream,&graph); throw; }
+            launch_stream=nullptr;
+            ck(cudaStreamEndCapture(stream,&graph));
+            ck(cudaGraphInstantiate(&executable,graph,nullptr,nullptr,0));
+        } catch(...) { release(); throw; }
+    }
+    void release() noexcept {
+        if(executable)cudaGraphExecDestroy(executable);
+        if(graph)cudaGraphDestroy(graph);
+        if(stream)cudaStreamDestroy(stream);
+    }
+    ~AMSGraph(){release();}
+    AMSGraph(const AMSGraph&)=delete;
+    AMSGraph& operator=(const AMSGraph&)=delete;
+    void apply(){ck(cudaGraphLaunch(executable,nullptr));}
 };
 struct Blas {
     cublasHandle_t h;
@@ -269,50 +301,63 @@ struct Blas {
 };
 struct Output {mxGPUArray* a;explicit Output(int n){mwSize s=n;a=mxGPUCreateGPUArray(1,&s,mxDOUBLE_CLASS,mxREAL,MX_GPU_INITIALIZE_VALUES);}~Output(){mxGPUDestroyGPUArray(a);}double* data(){return static_cast<double*>(mxGPUGetData(a));}};
 void run(int nlhs,mxArray** out,int nrhs,const mxArray** args){
-    if(nrhs!=5||nlhs!=2)throw std::runtime_error("[x,info]=radia_cuda_ams(snapshot,b,tol,maxiter,apply_only)");
+    if(nrhs>0 && mxIsChar(args[0])) {
+        if(word(args[0])!="setup")throw std::runtime_error("Unknown AMS command");
+        RadiaAMSSetup(nlhs,out,nrhs,args);return;
+    }
+    if((nrhs!=5&&nrhs!=6)||nlhs!=2)throw std::runtime_error("[x,info]=radia_cuda_ams(snapshot,b,tol,maxiter,apply_only[,use_graph])");
+    if(nrhs==6&&!mxIsLogicalScalar(args[5]))throw std::runtime_error("logical use_graph required");
+    const bool use_graph=nrhs==6&&mxIsLogicalScalarTrue(args[5]);
     double tol=scalar(args[2]);int maxiter=integer(args[3]);
     if(!(tol>0&&tol<=1e-6)||maxiter<1||maxiter==INT_MAX||!mxIsLogicalScalar(args[4]))throw std::runtime_error("invalid tolerance, iteration limit or apply flag");
     mxInitGPU();size_t memory_before,total,available;ck(cudaMemGetInfo(&memory_before,&total));
     Input in;AMS ams(args[0],in);int n=ams.a.n;const double* b;
     ck(cudaMemGetInfo(&available,&total));size_t workspace_sample=memory_before>available?memory_before-available:0;
     finite_vec(in,args[1],n,b);bool apply_only=mxIsLogicalScalarTrue(args[4]);
-    Buffer zero(n);zero.zero();verify_mask<<<(n+T-1)/T,T>>>(n,ams.free,apply_only?zero.p:b,in.validation.p);
+    Buffer zero(n);zero.zero();verify_mask<<<(n+T-1)/T,T,0,launch_stream>>>(n,ams.free,apply_only?zero.p:b,in.validation.p);
     in.validation.check(); // No solve may consume unvalidated numerical data.
     Output solution(n);double rel=apply_only?mxGetNaN():0;int it=0;
     if(apply_only){
         ams.apply(b,solution.data());
-        verify_vec<<<(n+T-1)/T,T>>>(n,solution.data(),false,in.validation.p);
+        verify_vec<<<(n+T-1)/T,T,0,launch_stream>>>(n,solution.data(),false,in.validation.p);
         in.validation.check(); // Finite inputs can still overflow during an AMS cycle.
     }
     else {
         Buffer r(n),p(n),z(n),ap(n),scalars(3);Blas blas;
         ck(cudaMemGetInfo(&available,&total));workspace_sample=std::max(workspace_sample,memory_before>available?memory_before-available:0);
-        ck(cudaMemcpyAsync(r.p,b,n*sizeof(double),cudaMemcpyDeviceToDevice));
+        ck(cudaMemcpyAsync(r.p,b,n*sizeof(double),cudaMemcpyDeviceToDevice,launch_stream));
         double bnorm=blas.norm(n,b);if(!std::isfinite(bnorm)||bnorm<0)throw std::runtime_error("invalid RHS norm");
-        if(bnorm>0){ams.apply(r.p,z.p);ck(cudaMemcpyAsync(p.p,z.p,n*sizeof(double),cudaMemcpyDeviceToDevice));blas.dot(n,r.p,z.p,scalars.p);rel=1;
+        if(bnorm>0){
+            std::unique_ptr<AMSGraph> graph;
+            if(use_graph)graph=std::make_unique<AMSGraph>(ams,r.p,z.p);
+            auto precondition=[&](){if(graph)graph->apply();else ams.apply(r.p,z.p);};
+            precondition();ck(cudaMemcpyAsync(p.p,z.p,n*sizeof(double),cudaMemcpyDeviceToDevice,launch_stream));blas.dot(n,r.p,z.p,scalars.p);rel=1;
             for(it=1;it<=maxiter;++it){ams.a.mult(p.p,ap.p);blas.dot(n,p.p,ap.p,scalars.p+1);
                 // Read rho and pAp together; next-rho stays on device between iterations.
                 double control[2];ck(cudaMemcpy(control,scalars.p,2*sizeof(double),cudaMemcpyDeviceToHost));
                 double rho=control[0],pap=control[1];
                 if(!(pap>0)||!(rho>0)||!std::isfinite(pap)||!std::isfinite(rho))throw std::runtime_error("AMS PCG breakdown: nonpositive curvature");
-                double alpha=rho/pap;pcg_update<<<(n+T-1)/T,T>>>(n,alpha,p.p,ap.p,solution.data(),r.p);
+                double alpha=rho/pap;pcg_update<<<(n+T-1)/T,T,0,launch_stream>>>(n,alpha,p.p,ap.p,solution.data(),r.p);
                 rel=blas.norm(n,r.p)/bnorm;if(!std::isfinite(rel))throw std::runtime_error("nonfinite residual");
                 if(rel<=tol){ams.a.res(solution.data(),b,r.p);rel=blas.norm(n,r.p)/bnorm;if(rel<=tol)break;
-                    ams.apply(r.p,z.p);ck(cudaMemcpyAsync(p.p,z.p,n*sizeof(double),cudaMemcpyDeviceToDevice));blas.dot(n,r.p,z.p,scalars.p);continue;}
-                ams.apply(r.p,z.p);blas.dot(n,r.p,z.p,scalars.p+2);combine<<<(n+T-1)/T,T>>>(n,z.p,scalars.p,p.p);
-                ck(cudaMemcpyAsync(scalars.p,scalars.p+2,sizeof(double),cudaMemcpyDeviceToDevice));
+                    precondition();ck(cudaMemcpyAsync(p.p,z.p,n*sizeof(double),cudaMemcpyDeviceToDevice,launch_stream));blas.dot(n,r.p,z.p,scalars.p);continue;}
+                precondition();blas.dot(n,r.p,z.p,scalars.p+2);combine<<<(n+T-1)/T,T,0,launch_stream>>>(n,z.p,scalars.p,p.p);
+                ck(cudaMemcpyAsync(scalars.p,scalars.p+2,sizeof(double),cudaMemcpyDeviceToDevice,launch_stream));
             }
             ams.a.res(solution.data(),b,r.p);rel=blas.norm(n,r.p)/bnorm;
             if(!std::isfinite(rel)||rel>tol||it>maxiter)throw std::runtime_error("AMS PCG failed its FP64 true residual gate");
         }
     }
     ck(cudaGetLastError());ck(cudaDeviceSynchronize());out[0]=mxGPUCreateMxArrayOnGPU(solution.a);
-    const char* names[]={"iterations","true_relative_residual","coarse_execution","setup_execution","workspace_sample_bytes","residual_checked"};
-    out[1]=mxCreateStructMatrix(1,1,6,names);mxSetField(out[1],0,names[0],mxCreateDoubleScalar(it));mxSetField(out[1],0,names[1],mxCreateDoubleScalar(rel));
+    const char* names[]={"iterations","true_relative_residual","coarse_execution","setup_execution","workspace_sample_bytes","residual_checked","preconditioner_execution"};
+    out[1]=mxCreateStructMatrix(1,1,7,names);mxSetField(out[1],0,names[0],mxCreateDoubleScalar(it));mxSetField(out[1],0,names[1],mxCreateDoubleScalar(rel));
     mxSetField(out[1],0,names[2],mxCreateString("GPU: existing sparse LDL factors with warp-parallel row products, or existing dense inverse"));
-    mxSetField(out[1],0,names[3],mxCreateString("CPU Python/NGSolve: FE assembly, AMS coarsening, interpolation, Galerkin products and factorization"));
+    mxSetField(out[1],0,names[3],mxCreateString("Input hierarchy: MATLAB/mexcuda host setup or explicit validation fixture; no runtime Python fallback"));
     mxSetField(out[1],0,names[4],mxCreateDoubleScalar(double(workspace_sample)));
     mxSetField(out[1],0,names[5],mxCreateLogicalScalar(!apply_only));
+    mxSetField(out[1],0,names[6],mxCreateString((!apply_only&&use_graph)?"CUDA Graph replay of the unchanged AMS cycle":"direct CUDA kernels"));
 }
 }
 void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** args){try{run(nlhs,out,nrhs,args);}catch(const std::exception& e){mexErrMsgIdAndTxt("radia:cuda:ams","%s",e.what());}}
+
+#include "ams_setup_gpu.cuh"

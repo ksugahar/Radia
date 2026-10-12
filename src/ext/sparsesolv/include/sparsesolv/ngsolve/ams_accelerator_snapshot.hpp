@@ -10,8 +10,8 @@ namespace py = pybind11;
 namespace ngla {
 template<class T, class Range> py::array_t<T> AcceleratorArray(const Range& values) {
     py::array_t<T> out(values.Size());
-    auto dst = out.mutable_unchecked<1>();
-    for (size_t i = 0; i < size_t(values.Size()); ++i) dst(i) = values[i];
+    auto* dst = out.mutable_data();
+    CompactParallelFor(values.Size(), [&](size_t i) { dst[i] = values[i]; });
     return out;
 }
 inline py::dict AcceleratorCSR(const SparseMatrix<double>& a) {
@@ -19,15 +19,18 @@ inline py::dict AcceleratorCSR(const SparseMatrix<double>& a) {
         throw std::overflow_error("AMS CUDA bridge requires int32 CSR capacity");
     py::array_t<int> rows(a.Height()+1), cols(a.NZE());
     py::array_t<double> vals(a.NZE());
-    auto r=rows.mutable_unchecked<1>(); auto c=cols.mutable_unchecked<1>();
-    auto v=vals.mutable_unchecked<1>();
+    auto* r=rows.mutable_data(); auto* c=cols.mutable_data();
+    auto* v=vals.mutable_data();
     int k=0;
     for (int i=0; i<a.Height(); ++i) {
-        r(i)=k;
-        auto ci=a.GetRowIndices(i); auto av=a.GetRowValues(i);
-        for (int j=0; j<ci.Size(); ++j) { c(k)=ci[j]; v(k++)=av[j]; }
+        r[i]=k;
+        k+=int(a.GetRowIndices(i).Size());
     }
-    r(a.Height())=k;
+    r[a.Height()]=k;
+    CompactParallelFor(a.Height(), [&](size_t i) {
+        auto ci=a.GetRowIndices(i); auto av=a.GetRowValues(i);
+        for (int j=0; j<ci.Size(); ++j) { c[r[i]+j]=ci[j]; v[r[i]+j]=av[j]; }
+    });
     py::dict out; out["rows"]=a.Height(); out["cols"]=a.Width();
     out["rowptr"]=rows; out["columns"]=cols; out["values"]=vals;
     return out;
@@ -88,8 +91,10 @@ inline py::dict AcceleratorAMS(const HypreBasedAMS& ams) {
     out["correction_weight"]=ams.GetCorrectionWeight(); out["beta_zero"]=ams.GetBetaZero();
     py::array_t<int> free(ams.GetNdofHC());
     auto freedofs=ams.GetFreeDofs();
-    for (int i=0;i<ams.GetNdofHC();++i)
-        free.mutable_data()[i]=!freedofs || freedofs->Test(i);
+    auto* free_data=free.mutable_data();
+    CompactParallelFor(ams.GetNdofHC(), [&](size_t i) {
+        free_data[i]=!freedofs || freedofs->Test(i);
+    });
     out["free"]=free;
     py::list spaces;
     auto append=[&](const auto& p,const auto& pt, const CompactAMG* amg) {

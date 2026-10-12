@@ -31,10 +31,20 @@ def ams_public(record):
     return result
 
 
+def setup_public(record):
+    keys = ('schema','accepted','timing_classification','formal_performance_acceptance',
+            'taskmanager_used','ngsolve_threads','source_commit','source_dirty',
+            'versions','cases','matlab_start_seconds','parallel_contract_passed','memory_measurement')
+    result = {key: record[key] for key in keys if key in record}
+    result['build'] = ams_public({'build':record.get('build',{})})['build']
+    return result
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--poisson', required=True, type=Path)
     parser.add_argument('--ams', type=Path)
+    parser.add_argument('--setup', type=Path)
     parser.add_argument('--output', required=True, type=Path)
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
@@ -50,3 +60,8 @@ if __name__ == '__main__':
         if record.get('schema') != 'radia.ams-cuda-validation.v1':
             raise ValueError('Unexpected AMS acceptance schema')
         (args.output / 'ams-result.json').write_text(json.dumps(ams_public(record), indent=2)+'\n', encoding='utf-8')
+    if args.setup and (args.setup / 'result.json').is_file():
+        record = json.loads((args.setup / 'result.json').read_text(encoding='utf-8'))
+        if record.get('schema') != 'radia.ams-setup-comparison.v1':
+            raise ValueError('Unexpected AMS setup comparison schema')
+        (args.output / 'ams-setup-result.json').write_text(json.dumps(setup_public(record),indent=2,allow_nan=False)+'\n',encoding='utf-8')

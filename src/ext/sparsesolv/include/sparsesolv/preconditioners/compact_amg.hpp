@@ -7,7 +7,7 @@
 ///
 /// Compact AMG implementation (~700 lines) that uses
 /// NGSolve's SparseMatrix, TaskManager, and InverseMatrix infrastructure.
-/// All parallelism via TaskManager (no OpenMP).
+/// CPU builds use TaskManager; the GPU snapshot adapter may select OpenMP.
 ///
 /// Algorithm: Classical AMG with PMIS coarsening + direct interpolation + l1-GS smoother.
 /// Reference: Ruge & Stueben (1987), De Sterck et al. (2006) for PMIS.
@@ -16,6 +16,7 @@
 #define SPARSESOLV_COMPACT_AMG_HPP
 
 #include <comp.hpp>
+#include "compact_parallel.hpp"
 #include <sparsecholesky.hpp>
 #include <vector>
 #include <cmath>
@@ -55,6 +56,17 @@ inline void DeterministicCoarseSolve(const BaseMatrix& inverse,
         result[i] = order[i] == -1 ? 0.0 : work[order[i]];
 }
 
+// Optional scoped native accelerator. Python/CPU execution leaves this null.
+// It must return the same full-storage P^T A P, or throw; no backend fallback.
+using CompactGalerkinCallback = shared_ptr<SparseMatrix<double>> (*)(
+    const SparseMatrix<double>&, const SparseMatrix<double>&, const SparseMatrix<double>&);
+inline thread_local CompactGalerkinCallback compact_galerkin_callback = nullptr;
+inline shared_ptr<SparseMatrix<double>> CompactRestrict(const SparseMatrix<double>& A,
+    const SparseMatrix<double>& P, const SparseMatrix<double>& Pt) {
+    if (compact_galerkin_callback) return compact_galerkin_callback(A,P,Pt);
+    return dynamic_pointer_cast<SparseMatrix<double>>(A.Restrict(P));
+}
+
 inline bool GalerkinProductOnPattern(const SparseMatrix<double>& Pt, const SparseMatrix<double>& A,
                                      const SparseMatrix<double>& P, SparseMatrix<double>& C);
 inline shared_ptr<SparseMatrix<double>> GalerkinPattern(const SparseMatrix<double>& Pt,
@@ -75,7 +87,7 @@ inline shared_ptr<SparseMatrix<double>> GalerkinProduct(const SparseMatrix<doubl
     const size_t nchunks = std::max<size_t>(1, std::min<size_t>(height, 256));
     struct Chunk { std::vector<int> cols; std::vector<double> vals; std::vector<int> counts; };
     std::vector<Chunk> chunks(nchunks);
-    ParallelFor(nchunks, [&](size_t c) {
+    CompactParallelFor(nchunks, [&](size_t c) {
         const size_t begin = height * c / nchunks, end = height * (c + 1) / nchunks;
         auto& chunk = chunks[c];
         chunk.counts.resize(end - begin);
@@ -114,14 +126,14 @@ inline shared_ptr<SparseMatrix<double>> GalerkinProduct(const SparseMatrix<doubl
             for (int j : row_cols) marker[j] = -1;
             chunk.counts[u - begin] = int(row_cols.size());
         }
-    });
+    }, height);
     Array<int> counts(height);
     for (size_t c = 0; c < nchunks; c++) {
         const size_t begin = height * c / nchunks;
         for (size_t r = 0; r < chunks[c].counts.size(); r++) counts[begin + r] = chunks[c].counts[r];
     }
     auto C = make_shared<SparseMatrix<double>>(counts, width);
-    ParallelFor(nchunks, [&](size_t c) {
+    CompactParallelFor(nchunks, [&](size_t c) {
         const size_t begin = height * c / nchunks, end = height * (c + 1) / nchunks;
         size_t k = 0;
         for (size_t u = begin; u < end; u++) {
@@ -129,7 +141,7 @@ inline shared_ptr<SparseMatrix<double>> GalerkinProduct(const SparseMatrix<doubl
             auto vals = C->GetRowValues(u);
             for (int j = 0; j < cols.Size(); j++, k++) { cols[j] = chunks[c].cols[k]; vals[j] = chunks[c].vals[k]; }
         }
-    });
+    }, height);
     return C;
 }
 
@@ -141,7 +153,7 @@ inline void ResidualWithValues(const SparseMatrix<double>& A, const float* value
     auto fb = b.FVDouble();
     auto fx = x.FVDouble();
     auto fr = res.FVDouble();
-    ParallelForRange(A.Height(), [&](IntRange range) {
+    CompactParallelForRange(A.Height(), [&](IntRange range) {
         for (auto i : range) {
             auto cols = A.GetRowIndices(i);
             double s = fb[i];
@@ -161,7 +173,7 @@ inline void ResidualWithValues(const SparseMatrix<double>& A, const float* value
 inline void MirrorValues(const SparseMatrix<double>& A, std::vector<float>& out) {
     auto values = A.AsVector().FVDouble();
     out.resize(values.Size());
-    ParallelForRange(values.Size(), [&](IntRange range) {
+    CompactParallelForRange(values.Size(), [&](IntRange range) {
         for (auto k : range) out[k] = float(values[k]);
     });
 }
@@ -183,7 +195,7 @@ inline bool SameSparsityPattern(const SparseMatrix<double>& a, const SparseMatri
     if (&a == &b) return true;
     if (a.Height() != b.Height() || a.Width() != b.Width() || a.NZE() != b.NZE()) return false;
     std::atomic<bool> same{true};
-    ParallelForRange(a.Height(), [&](IntRange range) {
+    CompactParallelForRange(a.Height(), [&](IntRange range) {
         for (auto i : range) {
             auto ca = a.GetRowIndices(i);
             auto cb = b.GetRowIndices(i);
@@ -202,7 +214,7 @@ inline bool SameSparsityPattern(const SparseMatrix<double>& a, const SparseMatri
 /// CreateBCModifiedMatrix without allocating a new matrix.
 inline void FillBCModifiedValues(const SparseMatrix<double>& A, const BitArray& freedofs,
                                  SparseMatrix<double>& B) {
-    ParallelFor(A.Height(), [&](size_t i) {
+    CompactParallelFor(A.Height(), [&](size_t i) {
         auto cols = A.GetRowIndices(i);
         auto src = A.GetRowValues(i);
         auto dst = B.GetRowValues(i);
@@ -220,7 +232,7 @@ inline void FillBCModifiedValues(const SparseMatrix<double>& A, const BitArray& 
 inline void FillBCModifiedValuesTracked(const SparseMatrix<double>& A, const BitArray& freedofs,
                                         SparseMatrix<double>& B, std::vector<char>& changed) {
     changed.assign(A.Height(), 0);
-    ParallelFor(A.Height(), [&](size_t i) {
+    CompactParallelFor(A.Height(), [&](size_t i) {
         auto cols = A.GetRowIndices(i);
         auto src = A.GetRowValues(i);
         auto dst = B.GetRowValues(i);
@@ -259,7 +271,7 @@ inline shared_ptr<SparseMatrix<double>> GalerkinPattern(const SparseMatrix<doubl
             }
         }
     };
-    ParallelForRange(height, [&](IntRange range) {
+    CompactParallelForRange(height, [&](IntRange range) {
         std::vector<int> marker(width, -1);
         for (auto u : range) {
             int n = 0;
@@ -268,7 +280,7 @@ inline shared_ptr<SparseMatrix<double>> GalerkinPattern(const SparseMatrix<doubl
         }
     });
     auto C = make_shared<SparseMatrix<double>>(counts, width);
-    ParallelForRange(height, [&](IntRange range) {
+    CompactParallelForRange(height, [&](IntRange range) {
         std::vector<int> marker(width, -1);
         for (auto u : range) {
             auto cols = C->GetRowIndices(u);
@@ -300,7 +312,7 @@ inline bool GalerkinProductOnPattern(const SparseMatrix<double>& Pt, const Spars
 inline std::vector<char> AffectedGalerkinRows(const SparseMatrix<double>& Pt,
                                               const std::vector<char>& changed) {
     std::vector<char> out(Pt.Height(), 0);
-    ParallelFor(Pt.Height(), [&](size_t u) {
+    CompactParallelFor(Pt.Height(), [&](size_t u) {
         for (int e : Pt.GetRowIndices(u))
             if (changed[e]) { out[u] = 1; break; }
     });
@@ -324,7 +336,7 @@ inline bool GalerkinProductOnPatternRows(const SparseMatrix<double>& Pt, const S
         throw std::invalid_argument("GalerkinProductOnPattern: dimension mismatch");
     std::atomic<bool> inside{true};
     const int width = C.Width();
-    ParallelForRange(nrows, [&](IntRange range) {
+    CompactParallelForRange(nrows, [&](IntRange range) {
         std::vector<int> marker(width, -1);
         for (auto r : range) {
             const size_t u = rows ? size_t(rows[r]) : size_t(r);
@@ -476,7 +488,7 @@ public:
             // 4. Galerkin coarse matrix: A_c = P^T * A * P
             Level next_lev;
             next_lev.A = native_galerkin_ ? GalerkinProduct(*cur.Pt, *cur.A, *P)
-                                          : dynamic_pointer_cast<SparseMatrix<double>>(cur.A->Restrict(*P));
+                                          : CompactRestrict(*cur.A,*P,*cur.Pt);
             phase(4);
             if (!next_lev.A) break;
 
@@ -535,7 +547,7 @@ public:
             in_place = in_place && GalerkinProductOnPattern(*cur.Pt, *cur.A, *cur.P, *next.A);
             if (!in_place) {
                 auto coarse = native_galerkin_ ? GalerkinProduct(*cur.Pt, *cur.A, *cur.P)
-                    : dynamic_pointer_cast<SparseMatrix<double>>(cur.A->Restrict(*cur.P));
+                    : CompactRestrict(*cur.A,*cur.P,*cur.Pt);
                 if (!coarse || coarse->Height() != next.ndof)
                     throw std::runtime_error("CompactAMG::Refresh: Galerkin product changed size");
                 next.A = coarse;
@@ -625,7 +637,7 @@ public:
         if (freedofs_) {
             auto fv = x.FVDouble();
             int n = (int)fv.Size();
-            ParallelFor(n, [&](size_t i) {
+            CompactParallelFor(n, [&](size_t i) {
                 if (!freedofs_->Test(i))
                     fv[i] = 0;
             });
@@ -650,7 +662,7 @@ public:
             auto fv1 = x1.FVDouble();
             auto fv2 = x2.FVDouble();
             int n = (int)fv1.Size();
-            ParallelFor(n, [&](size_t i) {
+            CompactParallelFor(n, [&](size_t i) {
                 if (!freedofs_->Test(i)) {
                     fv1[i] = 0;
                     fv2[i] = 0;
@@ -751,7 +763,7 @@ private:
 
         auto B = make_shared<SparseMatrix<double>>(cnt, A.Width());
 
-        ParallelFor(n, [&](size_t i) {
+        CompactParallelFor(n, [&](size_t i) {
             auto src_cols = A.GetRowIndices(i);
             auto src_vals = A.GetRowValues(i);
             auto dst_cols = B->GetRowIndices(i);
@@ -791,10 +803,10 @@ private:
         //   Strong connection: -a_ij >= theta * max_neg
         //   If no negative off-diagonals (rare), fallback to absolute value criterion.
         std::vector<int> row_count(n, 0);
-        std::vector<int> workers(ngcore::TaskManager::GetNumThreads(), 0);
+        std::vector<int> workers(CompactWorkerCount(), 0);
 
-        ParallelForRange(n, [&](IntRange range) {
-            if (range.Size()) workers[ngcore::TaskManager::GetThreadId()] = 1;
+        CompactParallelForRange(n, [&](IntRange range) {
+            if (range.Size()) workers[CompactWorkerId()] = 1;
             for (auto i : range) {
             auto cols = A.GetRowIndices(i);
             auto vals = A.GetRowValues(i);
@@ -837,7 +849,7 @@ private:
         // Pass 2: fill col_idx
         S.col_idx.resize(S.row_ptr[n]);
 
-        ParallelFor(n, [&](size_t i) {
+        CompactParallelFor(n, [&](size_t i) {
             auto cols = A.GetRowIndices(i);
             auto vals = A.GetRowValues(i);
 
@@ -998,7 +1010,7 @@ private:
 
         // Strength flags aligned with A's value positions (flat, filled in parallel)
         std::vector<char> strong_flag(A.NZE(), 0);
-        ParallelFor(nf, [&](size_t i) {
+        CompactParallelFor(nf, [&](size_t i) {
             auto cols = A.GetRowIndices(i);
             const size_t base = A.First(i);
             const int spos = S.row_ptr[i];
@@ -1016,7 +1028,7 @@ private:
 
         // Count entries per row in P
         std::vector<int> P_row_nnz(nf, 0);
-        ParallelFor(nf, [&](size_t i) {
+        CompactParallelFor(nf, [&](size_t i) {
             if (cf_marker[i] == 1) {
                 P_row_nnz[i] = 1;  // C-point: identity
             } else {
@@ -1040,7 +1052,7 @@ private:
         auto P = make_shared<SparseMatrix<double>>(cnt, nc);
 
         // Fill P values
-        ParallelFor(nf, [&](size_t i) {
+        CompactParallelFor(nf, [&](size_t i) {
             if (cf_marker[i] == 1) {
                 // C-point: P(i, coarse_idx[i]) = 1
                 P->GetRowIndices(i)[0] = coarse_idx[i];
@@ -1121,7 +1133,7 @@ private:
         const auto& A = *lev.A;
         const bool mirror = mixed_precision_ && lev.values_f.size() == A.NZE();
         auto values = A.AsVector().FVDouble();
-        ParallelFor(rows.size(), [&](size_t r) {
+        CompactParallelFor(rows.size(), [&](size_t r) {
             const int i = rows[r];
             auto vals = A.GetRowValues(i);
             double sum = 0;
@@ -1137,7 +1149,7 @@ private:
                         std::vector<double>& norms) const {
         int n = A.Height();
         norms.resize(n);
-        ParallelFor(n, [&](size_t i) {
+        CompactParallelFor(n, [&](size_t i) {
             auto vals = A.GetRowValues(i);
             double sum = 0;
             for (int j = 0; j < vals.Size(); j++)
@@ -1150,7 +1162,7 @@ private:
     static void CopyVector(const BaseVector& src, BaseVector& dst) {
         auto fv_s = src.FVDouble();
         auto fv_d = dst.FVDouble();
-        ParallelFor(fv_s.Size(), [&](size_t i) { fv_d[i] = fv_s[i]; });
+        CompactParallelFor(fv_s.Size(), [&](size_t i) { fv_d[i] = fv_s[i]; });
     }
 
     /// res = b - A x in one pass over the rows (no separate copy of b).
@@ -1259,7 +1271,7 @@ private:
             const double inv = 1.0 / pivot;
             for (int j = 0; j < n; j++) if (j != k) a(k, j) *= inv;
             a(k, k) = inv;
-            ParallelForRange(n, [&](IntRange range) {
+            CompactParallelForRange(n, [&](IntRange range) {
                 for (auto i : range) {
                     if (int(i) == k) continue;
                     const double f = a(i, k);
@@ -1284,7 +1296,7 @@ private:
         if (b2) {
             auto fb2 = b2->FVDouble();
             auto fx2 = x2->FVDouble();
-            ParallelForRange(n, [&](IntRange range) {
+            CompactParallelForRange(n, [&](IntRange range) {
                 for (auto i : range) {
                     const double* row = M + size_t(i) * n;
                     double s1 = 0, s2 = 0;
@@ -1294,7 +1306,7 @@ private:
                 }
             });
         } else {
-            ParallelForRange(n, [&](IntRange range) {
+            CompactParallelForRange(n, [&](IntRange range) {
                 for (auto i : range) {
                     const double* row = M + size_t(i) * n;
                     double s = 0;
@@ -1328,7 +1340,7 @@ private:
             // Every real V-cycle starts from zero, including coarse corrections.
             auto fv_b = b.FVDouble();
             auto fv_x = x.FVDouble();
-            ParallelFor(lev.ndof, [&](size_t i) {
+            CompactParallelFor(lev.ndof, [&](size_t i) {
                 fv_x[i] = fv_b[i] / lev.l1_norms[i];
             });
             return;
@@ -1342,7 +1354,7 @@ private:
         auto fv_x = x.FVDouble();
         auto fv_r = res.FVDouble();
         int n = lev.ndof;
-        ParallelFor(n, [&](size_t i) {
+        CompactParallelFor(n, [&](size_t i) {
             fv_x[i] += fv_r[i] / lev.l1_norms[i];
         });
     }
@@ -1450,7 +1462,7 @@ private:
     template <typename F>
     static void RowLoop(size_t n, F&& f, size_t work = 0) {
         if ((work ? work : n) < kSerialWork) { for (size_t i = 0; i < n; i++) f(i); }
-        else ParallelFor(n, f);
+        else CompactParallelFor(n, f);
     }
 
     /// Fused residual: res = b - A*x for two RHS in single matrix pass

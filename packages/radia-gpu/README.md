@@ -23,10 +23,13 @@ radia-gpu-path
 Add the reported directory to MATLAB's path. MATLAB R2026a, Parallel Computing
 Toolbox, an NVIDIA GPU and a compatible NVIDIA driver are external requirements.
 Python delivers and verifies the MATLAB payload; it does not execute GPU solves.
-The installed CUDA solvers do not require the Python `radia` or `ngsolve`
-packages. CSR-PCG consumes caller-provided matrix arrays; AMS consumes an
-already-built hierarchy. The current CPU hierarchy-generation route uses
-Radia/NGSolve in a separate preparation environment. Optional
+CSR-PCG consumes caller-provided matrix arrays and requires no Python Radia or
+NGSolve runtime. The experimental native AMS candidate constructs its hierarchy
+inside mexcuda and requires compatible NGSolve/Netgen native libraries, including
+the permitted Python DLL dependency. GPU use requires no Python adapter,
+interpreter initialization, or Python-generated solver snapshot. Native-library
+deployment/packaging acceptance is separate from numerical candidate validation.
+Optional
 `radia-gpu[coupling]` installs Radia for workflows that explicitly need it.
 The Windows x64 binary contains sm_75/sm_80 code and compute_80 PTX.
 Develop and build `radia-gpu` on 100. Required release acceptance compares each
@@ -117,6 +120,21 @@ retains NGSolve and Radia ownership; the validation adapter is not installed
 as a CPU solver in this wheel. `radia.gpu.amsPCG` accepts a checked numeric
 hierarchy and RHS already uploaded to GPU memory, with no CPU fallback.
 
+`radia.gpu.prepareAMS(model)` constructs the shared native AMS directly in
+mexcuda host code and uploads its numeric hierarchy by default. GPU users
+supply numeric FEM operators, discrete gradient, coordinates and free-DOF mask;
+no Python adapter or Python-generated solver snapshot is required. The legacy
+MEX constructor is reused, with NGSolve sparsecholesky kept for coarse setup.
+The default host setup uses one thread; `SetupThreads` selects OpenMP row/chunk
+work. No TaskManager region is activated. Indirect NGSolve header/DLL and Python
+DLL dependencies are permitted; no Python interpreter initialization is needed.
+
+Use `validation_test/ams_cuda/native_setup_validation.py` for independent Python
+CPU parity and MATLAB-owned serial/OpenMP setup comparison, including transfer,
+solve and download times. The Python snapshot adapter remains a validation
+oracle only. Build-host timings are diagnostics; formal performance acceptance
+requires an idle GPU-equipped timing host.
+
 All AMS file exchange uses `radia.ams-hdf5.v1` plain HDF5. Install optional
 `radia-gpu[exchange]` dependencies for the Python writer, and read the result
 with `radia.gpu.readAMSExchange`. Values stay FP64 and CSR indices stay
@@ -135,3 +153,66 @@ only when circuit execution is requested. No circuit import alias is left in
 the CPU Radia distribution.
 
 The optional `coupling` extra requires Radia 5.3.1 or later with the CPU thermal-operator API. Existing Radia 5.3.0 wheels do not satisfy this contract; until that CPU release is available, use the standalone CUDA PCG, Simulink PCG and LTspice interfaces.
+
+### CUDA Graph experiment (2026-10-12)
+
+`radia.gpu.amsPCG(hierarchy,rhs,tol,maxIterations,false,true)` enables
+experimental CUDA Graph replay of the existing AMS cycle. The default remains
+direct CUDA launches. Graph capture, instantiation and cleanup belong to each
+solve; the graph does not outlive its arrays or workspace. No CPU fallback is
+introduced. NGSolve sparsecholesky setup remains unchanged.
+
+The diagnostic direct/Graph ABBA experiment is recorded in
+`validation_test/ams_cuda/results/cuda-graph-dfeec57af.json`. At 702073 DOFs,
+transfer-inclusive solve time changed from 0.40324 to 0.38472 seconds, while
+setup-inclusive time changed from 4.74394 to 4.74596 seconds. This does not
+establish an end-to-end improvement. Host hierarchy construction remains the
+next acceleration target. CPU parity was verified independently; CPU timing
+was single-shot and does not establish repeated CPU/GPU speedup. These RTX
+5000 timings are diagnostic, not idle-mdx performance acceptance.
+
+### CUDA AMS matrix generation
+
+`radia.gpu.prepareAMS(model,SetupThreads=4)` now generates the auxiliary and
+AMG coarse Galerkin matrices on CUDA. `SetupOnGPU=false` explicitly selects
+the previous host matrix-generation path for validation. Both paths retain
+NGSolve AMG coarsening/interpolation and serial `sparsecholesky` coarse
+factorization. Python is not a prerequisite and TaskManager is not activated.
+
+CUDA computes sorted CSR `AP` followed by `Pt(AP)`, preserving the current
+NGSolve sparse-product accumulation order and separate FP64 multiply/add
+rounding. Each row has one owner; floating-point atomics are not used. The
+matrix cache and all scratch allocations belong to one setup command and are
+freed on normal/error exit. Allocation checks reserve at least 2 GiB or 20%
+of device memory. Unsupported capacity or device state raises an error.
+
+The shared CPU code leaves its optional accelerator callback disabled.
+`graph_validation.py --comparison generation --rounds 2` compares both
+matrix-generation paths in ABBA order, excluding backend warmups. Full time
+includes host setup, device generation transfers, hierarchy upload, solve and
+solution download. Setup memory records the exact maximum concurrently owned
+CUDA allocation bytes; solve memory records a live allocation delta, not a
+whole-process peak. RTX 5000/100 measurements remain diagnostic.
+
+The clean candidate `73b33291d` passed bitwise comparison of every hierarchy
+array and sparsecholesky factor against the independent CPU oracle. The
+continuously timed public API pipeline (four samples per backend, two ABBA
+rounds after warmup) produced:
+
+| HCurl DOFs | Before, seconds | CUDA generation, seconds | Speedup |
+| --- | ---: | ---: | ---: |
+| 86735 | 0.61350 | 0.43760 | 1.40 |
+| 702073 | 4.99129 | 2.68588 | 1.86 |
+
+At 702073 DOFs, maximum CPU solution relative difference was 4.12e-8 and
+independently checked true relative residual was 7.64e-10. CUDA setup's peak
+owned allocation was 1317974332 bytes (1.23 GiB); the public pipeline's live
+GPU allocation delta was approximately 464841076 bytes (0.43 GiB), unchanged
+between backends. These are different stages, not a whole-process peak.
+Small 5326-DOF stage-sum timing regressed from 0.10574 to 0.11374 seconds.
+The explicitly selected backend does not silently switch based on size.
+
+Full JSON, memory definitions, artifact/source hashes, numerical gates and
+limitations: `validation_test/ams_cuda/results/cuda-galerkin-73b33291d.json`.
+The candidate is not a deployed release; formal performance acceptance remains
+pending. No A100 operations were performed.
