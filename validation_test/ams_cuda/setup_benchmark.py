@@ -60,6 +60,11 @@ def main(args):
         record['parallel_contract_passed']=bool(bridge._check_openmp_contract(args.setup_threads))
         if not args.cpu_only:
             import matlab.engine
+            import netgen
+            net=Path(netgen.__file__).parent
+            os.environ['PATH']=os.pathsep.join([str(Path(sys.prefix)/'bin'),str(net),
+                str(net.parent/'ngsolve_openblas'),str(net.parent/'ngsolve.libs'),
+                str(net.parent/'netgen_mesher.libs'),str(Path(sys.base_prefix)),os.environ['PATH']])
             start=time.perf_counter();eng=matlab.engine.start_matlab('-nodesktop -nosplash')
             record['matlab_start_seconds']=time.perf_counter()-start
             eng.addpath(str(Path(__file__).parent),nargout=0)
