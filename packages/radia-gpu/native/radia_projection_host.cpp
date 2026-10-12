@@ -12,6 +12,7 @@
 #include <limits>
 #include <cmath>
 #include <cstdint>
+#include "hdiv_rt0_host.cuh"
 
 namespace {
 using Point=std::array<double,3>;
@@ -73,6 +74,12 @@ extern "C" void RadiaProjectionGateway(int nl,mxArray* out[],int nr,const mxArra
 try{
     if(nr<1)throw std::runtime_error("Command required");
     auto command=text(in[0]);
+    if(command=="assemble_hdiv_rt0"){
+        arity(nr,3,nl,1);
+        if(!mxIsDouble(in[2])||mxIsComplex(in[2])||mxIsSparse(in[2])||mxGetNumberOfElements(in[2])!=3)throw std::invalid_argument("Applied field must contain three real doubles");
+        std::array<double,3> applied;for(int i=0;i<3;++i){applied[i]=mxGetDoubles(in[2])[i];if(!std::isfinite(applied[i]))throw std::invalid_argument("Nonfinite applied field");}
+        out[0]=radia::rt0_cuda::assemble(text(in[1]),applied);return;
+    }
     if(command=="create"){
         arity(nr,4,nl,1);auto c=std::make_unique<Context>();
         if(!mxIsDouble(in[3])||mxIsComplex(in[3])||mxGetNumberOfElements(in[3])!=1)

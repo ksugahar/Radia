@@ -52,7 +52,7 @@ try
             assert(isequal(before,radia_cuda_hmatrix('download',h)));
             row=struct('relative_error',error,'independent_true_residual',residual,'solver_true_residual',solution.true_relative_residual, ...
                 'iterations',solution.iterations,'solver_owned_device_bytes',solution.solver_owned_device_bytes, ...
-                'scope','Material equation algebra on public sampled Gram, not real HDiv FE physical acceptance');
+                'scope',test.scope,'mean_magnetization_relative_error',norm(test.mean_operator*(solution.x-test.expected))/max(norm(test.mean_operator*test.expected),realmin));
             if k==1,result.material_solver=row;else,result.material_solver(k)=row;end
             clear free
         end

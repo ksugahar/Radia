@@ -109,6 +109,32 @@ def main():
             trial=rng.normal(size=(charge.shape[1],charge.shape[1]));mass=trial.T@trial+np.eye(charge.shape[1]);rhs=rng.normal(size=charge.shape[1]);inv_chi=2.5
             expected=np.linalg.solve(inv_chi*mass+demag,rhs)
             solver_cases.append(dict(config=test['config'],mass=csc_matrix(mass),rhs=rhs[:,None],inv_chi=inv_chi,expected=expected[:,None],operator=inv_chi*mass+demag))
+        # Actual RT0 FE material case, using a public checked tetra fixture.
+        # Python FE assembly is a validation fixture only; native MATLAB FE
+        # setup remains required before this can become a GPU user workflow.
+        import radia.vim._vim as cpu_vim
+        meshfile=ROOT/'tests/fixtures/beam/affine_field_tetra.vol'
+        mesh=ng.Mesh(str(meshfile))
+        if mesh.dim!=3 or tuple(mesh.GetMaterials())!=('air',) or tuple(mesh.GetBoundaries())!=('boundary',):raise RuntimeError('Public tetra label contract mismatch')
+        with ng.TaskManager():
+            fes=ng.HDiv(mesh,order=0);cb=cpu_vim._charge_basis(fes,4)
+            physical=native._ChargeGramHMatrix(cb['cell_verts'],cb['face_verts'],cb['n_el'],eps=1e-12,leaf=64,eta=2.,near_factor=1e30,build=True,far_quad=0)
+            B=cb['B'];mass=cb['M_mass']
+            physical.configure_charge_map(np.asarray(B.indptr,dtype=np.int32),np.asarray(B.indices,dtype=np.int32),np.asarray(B.data,dtype=np.float64),fes.ndof)
+            physical.configure_mass_matrix_ngsolve(cb['M_mass_ngsolve']);physical.configure_geometry_mass_matrix_ngsolve(cb['M_mass_ngsolve'])
+            load=ng.LinearForm(fes);load+=ng.CoefficientFunction((1.,.2,.1))*fes.TestFunction()*ng.dx;load.Assemble();rhs=np.array(load.vec.FV().NumPy());inv_chi=2.5
+            reference=physical.solve_configured_linear_material_mass_riesz(inv_chi,rhs,1e-11,100)
+            demag=np.column_stack([B.T@np.asarray(physical.matvec_sym(B[:,k].toarray().ravel())) for k in range(fes.ndof)])
+            system=inv_chi*mass.toarray()+demag
+            expected=np.asarray(reference['m'])
+            if np.linalg.norm(rhs-system@expected)/np.linalg.norm(rhs)>1e-10:raise RuntimeError('CPU physical true residual rejected')
+            means=[]
+            for c in range(3):
+                form=ng.LinearForm(fes);form+=fes.TestFunction()[c]*ng.dx;form.Assemble();means.append(np.array(form.vec.FV().NumPy())/ng.Integrate(1,mesh))
+        config=dict(schema_version=1.,operator_kind='demag',assembly='analytic_constant_block',cells=np.asarray(cb['cell_verts'])[:,None],faces=np.asarray(cb['face_verts'])[:,None],charge_map=B.tocsc())
+        for row in solver_cases:row.update(mean_operator=np.zeros((0,row['rhs'].size)),scope='Sampled-Gram material algebra')
+        solver_cases.append(dict(config=config,mass=mass.tocsc(),rhs=rhs[:,None],inv_chi=inv_chi,expected=expected[:,None],operator=system,mean_operator=np.asarray(means),scope='Public affine tetra RT0 FE material solve; Python-generated FE validation fixture, not native MATLAB setup'))
+        record['physical_fixture']=dict(mesh_sha256=sha(meshfile),cpu_vim_sha256=sha(cpu_vim.__file__),cpu_preconditioner='NGSolve mass-Riesz sparsecholesky',gpu_preconditioner='Explicit inv_chi mass diagonal',cpu_true_residual=float(np.linalg.norm(rhs-system@expected)/np.linalg.norm(rhs)),cpu_iterations=int(reference['iters']),native_matlab_fe_setup_accepted=False)
         payload['solver_cases']=structs(solver_cases)
         inputfile=a.out/'inputs.mat';savemat(inputfile,payload);record['input_sha256']=sha(inputfile)
         import matlab.engine
