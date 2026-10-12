@@ -61,3 +61,21 @@ formal timing acceptance remains idle-mdx-only. Reserve max(2 GiB,20%) of RTX
 
 The papers motivate candidates, not evidence of speed or accuracy for this
 RadFld projection. Backend integration and measurements are still pending.
+
+## MATLAB-first batching experiment
+
+`evaluateProjectionTargets.m` accepts actual mapped target coordinates and a
+completed MATLAB/mexcuda field callback. It merges exact duplicate coordinates
+only and restores the original target order. Reuse requires identical targets
+and an explicit revision key; callers must change the key for every source,
+geometry, transform or evaluator-option update. It never approximates a field
+or performs nodal interpolation. This is not yet connected to GridFunction.Set.
+Its whole_evaluation_seconds includes target deduplication, callback transfers
+and result reconstruction, but is explicitly not complete FE projection time.
+
+Before timing, instrument the actual NGSolve native CF/Set boundary to recover
+target/batch counts and field time. Python may orchestrate the independent CPU
+reference; no Python field loop is introduced. MATLAB hosts batching/accelerator
+experiments. Native NGSolve retains the actual projection, and an explicit
+native bridge is still required for a Python-free MATLAB end-to-end projection.
+Do not report MATLAB matrix multiplication as a replacement for Set semantics.
