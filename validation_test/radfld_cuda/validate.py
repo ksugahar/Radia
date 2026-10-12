@@ -29,10 +29,14 @@ def digest(path):
 
 
 def relative(value, reference):
+    if value.shape != reference.shape or not np.isfinite(value).all() or not np.isfinite(reference).all():
+        raise RuntimeError('Nonfinite field or CPU/CUDA shape mismatch')
     return float(np.linalg.norm(value-reference)/max(np.linalg.norm(reference), np.finfo(float).tiny))
 
 
 def point_relative(value, reference):
+    if value.shape != reference.shape or not np.isfinite(value).all() or not np.isfinite(reference).all():
+        raise RuntimeError('Nonfinite field or CPU/CUDA shape mismatch')
     scale = np.linalg.norm(reference, axis=1)
     floor = max(float(scale.max())*1e-12, np.finfo(float).tiny)
     return float(np.max(np.linalg.norm(value-reference, axis=1)/np.maximum(scale, floor)))
