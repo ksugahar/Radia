@@ -36,6 +36,7 @@ def main():
  os.environ['PATH']=os.pathsep.join(map(str,paths))+os.pathsep+os.environ['PATH']
  cases=[]
  record=dict(accepted=False,scope='Actual SetValues projection with independently evaluated RadFld sources; not whole application acceptance',representation=a.representation,placement=a.placement,cases=cases,timing_acceptance=False,a100_used=False,ngsolve=ng.__version__,binary_sha256=hashlib.sha256((out/'radia_cuda_projection.mexw64').read_bytes()).hexdigest());eng=None
+ record.update(validator_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),relative_limit=1e-4,whole_transfer_inclusive_seconds=None,memory_limitations='Exact owned device buffers and cudaMemGetInfo samples only; host/process/device global peak not measured. Incidental per-call times are diagnostic, not a continuous full-operation timing.')
  try:
   import matlab.engine
   eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread')
@@ -68,6 +69,16 @@ def main():
      eng.workspace['field_algorithm']=a.algorithm;eng.addpath(str(a.field_build),str(root/'packages/radia-gpu/matlab'),nargout=0)
      eng.eval("[cpu_vector,~]=radia_cuda_projection('project',h,cpu_values);"+create,nargout=0)
      try:
+      eng.eval('[probe_values,device_memory]=gpu_field.field(mapped_targets,field_algorithm);',nargout=0)
+      probe=np.asarray(eng.workspace['probe_values']);field_error=float(np.linalg.norm(probe-expected)/max(np.linalg.norm(expected),1e-30))
+      cases[-1]['relative_field_error']=field_error;cases[-1]['device_memory']={key:float(value) for key,value in eng.workspace['device_memory'].items() if isinstance(value,(int,float))}
+      assert field_error<=(1e-12 if a.algorithm=='direct' else 1e-4)
+      if a.algorithm=='tree_mixed32':
+       with ng.TaskManager():cpu_tree=f.field(points,'tree')
+       eng.eval("[fp64_values,fp64_memory]=gpu_field.field(mapped_targets,'tree');[fp64_vector,~]=radia_cuda_projection('project',h,fp64_values);",nargout=0)
+       fp64=np.asarray(eng.workspace['fp64_values']);parity=float(np.linalg.norm(fp64-cpu_tree)/max(np.linalg.norm(cpu_tree),1e-30));assert parity<=1e-12
+       added=float(np.linalg.norm(probe-fp64)/max(np.linalg.norm(fp64),1e-30));assert added<=1e-4
+       cases[-1].update(fp64_tree_CPU_parity=parity,relative_field_difference_from_FP64_tree=added,fp64_tree_relative_to_CPU_direct=float(np.linalg.norm(fp64-expected)/max(np.linalg.norm(expected),1e-30)),fp64_tree_device_memory={key:float(value) for key,value in eng.workspace['fp64_memory'].items() if isinstance(value,(int,float))})
       eng.eval('[gpu_vector,field_cache,field_info]=projectBatchedField(h,@(p)gpu_field.field(p,field_algorithm),\"cloud-v1\");[again,field_cache,reuse_info]=projectBatchedField(h,@(p)error(\"unexpected evaluation\"),\"cloud-v1\",field_cache);assert(isequal(again,gpu_vector));',nargout=0)
       gv=np.asarray(eng.workspace['gpu_vector']).ravel();cv=np.asarray(eng.workspace['cpu_vector']).ravel();e=float(np.linalg.norm(gv-cv)/max(np.linalg.norm(cv),1e-30));assert e<=(1e-12 if a.algorithm=='direct' else 1e-4)
       with ng.TaskManager():

@@ -214,3 +214,23 @@ Python and its operation-owned MATLAB session run below normal priority with
 one host computation thread. An old CPU oracle without `from_elements` must
 be rebuilt in a fresh job directory before element checks. These options are
 validation preparation; they do not constitute completed element acceptance.
+
+## Element precision acceptance checkpoint (2026-10-12)
+
+`results/elements-projection-precision-20261012.json` now records all five
+source families through actual order-1 HDiv, HCurl and VectorH1 projection.
+Small far direct cases matched the independent pre-CUDA CPU mathematical
+route. Original-placement mixed cases passed with projected FE L2 differences
+below 2.2e-15. Far mixed cases with 16 volume and 16 surface records passed
+the 1e-4 field and projected FE L2 gates (maximum 6.641e-5).
+The FP32-added field difference against the same FP64 tree was at most
+1.110e-7; the remaining error belongs to the tree approximation for these
+inputs. FP64 CUDA tree parity against the independent CPU tree also passed.
+
+These are small-case precision gates, not general geometry, larger scaling,
+whole-application, release or performance acceptance. Exact owned device
+buffers and sampled free memory are included with their limitations. The
+continuous transfer-inclusive timing comparison remains pending: host CPU
+load was still approximately 50 percent. The independent CPU adapter's schema
+version conversion was corrected to accept the same numeric version=1 used
+by the MATLAB element struct; core CPU mathematics remains at 69301918a.

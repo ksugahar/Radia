@@ -22,7 +22,7 @@ PYBIND11_MODULE(_radia_field_reference,m) {
             return f;
         }))
         .def_static("from_elements",[](py::dict spec,Array masks,Array signs,Array angles,int leaf,double theta) {
-            if(py::cast<int>(spec["version"])!=1) throw std::invalid_argument("Unsupported source version");
+            if(py::cast<double>(spec["version"])!=1.0) throw std::invalid_argument("Unsupported source version");
             auto values=[&](const char* key,int columns,bool optional=false) {
                 if(optional&&!spec.contains(key)) return std::vector<double>{};
                 Array a=py::cast<Array>(spec[key]);

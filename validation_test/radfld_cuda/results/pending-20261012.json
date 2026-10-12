@@ -1,10 +1,10 @@
 {
   "schema": "radia.radfld-cuda-status.v1",
-  "status": "pending-idle-host",
+  "status": "pending-idle-timing-scaling-and-release",
   "accepted": false,
   "source_commit": "0c499f29e341da6947dd022446b7eec21798774a",
-  "scope": "Retained-cloud direct/tree CUDA backend only; generic RadFld, analytic/curved sources, Matrix Build and HDiv-MMM CUDA work remain pending.",
-  "build_status": "Initial module compiled at 52bdfc6fc; subsequent lifetime guards require rebuild and GPU acceptance.",
+  "scope": "Retained cloud and five retained element families have small actual projection precision gates; generic RadFld dispatch, scaling, Matrix Build, HDiv-MMM and release remain pending.",
+  "build_status": "Field CUDA source 76e9bb885 compiled; five element families passed small CPU parity and mixed-precision projection gates.",
   "initial_build": {
     "schema": "radia.field-cuda-build.v1",
     "source_commit": "52bdfc6fc80dae5a0a05829c91cf8f5afe9238f6",
@@ -75,5 +75,7 @@
       "src/core/rad_field_sources.h": "28bbbd100a2bcdc01c71cedfff2756548427226ead2dcd7aae5b5510dafd4029",
       "packages/radia-gpu/native/radia_field_exact.cuh": "b76475d480ff7a06244ba56b938d9c0c54d92914fc087592a44088ef878ba127"
     }
-  }
+  },
+  "latest_precision_evidence": "elements-projection-precision-20261012.json",
+  "historical_fields_note": "Initial build and migration fields below retain their original checkpoint provenance; latest precision evidence supersedes old unbuilt status."
 }
