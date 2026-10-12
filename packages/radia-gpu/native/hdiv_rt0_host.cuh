@@ -17,10 +17,10 @@ inline mxArray* matrix(std::size_t rows,std::size_t cols,const std::vector<doubl
 inline mxArray* assemble(const std::string& path,const std::array<double,3>& field){
     auto mesh=std::make_shared<ngcomp::MeshAccess>(path);
     const auto ne=mesh->GetNE(ngfem::VOL);
-    if(mesh->GetDimension()!=3||!ne||ne>16||mesh->GetDeformation())throw std::invalid_argument("RT0 setup requires 1..16 undeformed affine tetrahedra");
+    if(mesh->GetDimension()!=3||!ne||ne>128||mesh->GetDeformation())throw std::invalid_argument("RT0 setup requires 1..128 undeformed affine tetrahedra");
     ngcore::Flags flags;flags.SetFlag("order",0);
     auto space=std::make_shared<ngcomp::HDivHighOrderFESpace>(mesh,flags);space->Update();space->FinalizeUpdate();
-    const auto nd=space->GetNDof();if(!nd||nd>256)throw std::runtime_error("RT0 setup DOF budget exceeded");
+    const auto nd=space->GetNDof();if(!nd||nd>1024)throw std::runtime_error("RT0 setup DOF budget exceeded");
     const std::array<std::array<double,3>,4> refs={{{1,0,0},{0,1,0},{0,0,1},{0,0,0}}};
     std::vector<double> cells,faces,mass(nd*nd,0.),rhs(nd,0.),mean(3*nd,0.);double volume=0.;
     std::map<Key,Facet> topology;std::vector<std::array<Vec,4>> vertices;
@@ -56,7 +56,7 @@ inline mxArray* assemble(const std::string& path,const std::array<double,3>& fie
         if(!topology.count(key))throw std::runtime_error("Mesh skin does not match tetra topology");
     }
     std::size_t nf=0;for(const auto& [key,f]:topology)if(f.count==1){if(!skin.count(key))throw std::runtime_error("Missing exterior mesh skin");++nf;}
-    if(ne+nf>128||volume<=0)throw std::runtime_error("RT0 geometry budget/volume invalid");
+    if(ne+nf>1024||volume<=0)throw std::runtime_error("RT0 geometry budget/volume invalid");
     std::vector<double> B((ne+nf)*nd,0.);
     for(std::size_t e=0;e<ne;++e){
         ngstd::HeapReset reset(heap);ngfem::ElementId eid(ngfem::VOL,int(e));auto& trafo=mesh->GetTrafo(eid,heap);const auto& fe=dynamic_cast<const ngfem::HDivFiniteElement<3>&>(space->GetFE(eid,heap));ngstd::Array<int> dofs;space->GetDofNrs(eid,dofs);
