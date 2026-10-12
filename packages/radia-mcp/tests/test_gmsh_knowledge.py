@@ -1,6 +1,20 @@
 from radia_mcp.gmsh.gmsh_knowledge import get_gmsh_documentation
 
 
+def test_magnetic_movie_recipe_is_discoverable_without_optional_runtime():
+    recipe = get_gmsh_documentation(" magnetic_movies ")
+    assert recipe in get_gmsh_documentation("all")
+    assert "magnetic_movies" in get_gmsh_documentation("unknown")
+    for contract in (
+        "signed instantaneous vector", "not particle trajectories",
+        "Equal crossing flux does not give uniform screen density",
+        "full azimuth", "reference mesh lookup", "0.2 ms",
+        "decoded movie frame", "not installed-wheel tools",
+        "gmsh_streamlines", "verify_movie.py",
+    ):
+        assert contract in recipe
+
+
 def test_gmsh_knowledge_records_zup_geo_opt_and_animation_export():
     cli = get_gmsh_documentation("cli")
     opt_file = get_gmsh_documentation("opt_file")
