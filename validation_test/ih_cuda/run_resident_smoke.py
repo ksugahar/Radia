@@ -26,7 +26,7 @@ def main():
         header=ROOT/'packages/radia-gpu/native/ih_resident_kernels.cuh'
         record['source_dirty']=bool(subprocess.check_output(['git','-C',str(ROOT),'status','--porcelain'],text=True).strip())
         record['source_commit']=subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD'],text=True).strip()
-        record['source_sha256']={p.relative_to(ROOT).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in (src,header,Path(__file__))}
+        record['source_sha256']={p.relative_to(ROOT).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in (src,header,header.with_name("ih_bicgstab_kernels.cuh"),Path(__file__))}
         eng.mexcuda('-v','-R2018a','-f',str(config),'NVCCFLAGS=--fmad=false -gencode=arch=compute_75,code=sm_75',
             '-I'+str(header.parent),'-outdir',str(OUT),str(src),nargout=0)
         eng.addpath(str(OUT),nargout=0)
@@ -43,7 +43,7 @@ def main():
             ye=float(np.linalg.norm(actual-expected)/max(np.linalg.norm(expected),1.))
             qe=float(np.linalg.norm(actual_q-loss)/max(np.linalg.norm(loss),1.))
             if not np.isfinite(actual).all() or not np.isfinite(actual_q).all() or max(ye,qe)>1e-12:raise RuntimeError('CPU/CUDA algebra mismatch')
-            cases.append(dict(current_A=current,complex_operator_relative=ye,quadratic_loss_relative=qe,resident_repeats=int(repeats)))
+            cases.append(dict(current_A=current,complex_operator_relative=ye,quadratic_loss_relative=qe,resident_repeats=int(repeats),bicgstab_identity_first_correction_checked=True))
         record.update(accepted=True,cases=cases,matlab=eng.version(),binary_sha256=hashlib.sha256((OUT/'resident_smoke.mexw64').read_bytes()).hexdigest())
     except BaseException as error:
         record['error']=str(error)

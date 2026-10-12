@@ -2,6 +2,7 @@
 #include "mex.h"
 #include "gpu/mxGPUArray.h"
 #include "ih_resident_kernels.cuh"
+#include "ih_bicgstab_kernels.cuh"
 #include <vector>
 #include <stdexcept>
 #include <cmath>
@@ -49,6 +50,27 @@ void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** in){
     std::vector<cuDoubleComplex> y(3);check(cudaMemcpy(y.data(),dy.p,3*sizeof(cuDoubleComplex),cudaMemcpyDeviceToHost));
     check(cudaMemcpy(mxGetDoubles(out[1]),dq.p,2*sizeof(double),cudaMemcpyDeviceToHost));
     auto* result=mxGetComplexDoubles(out[0]);for(int i=0;i<3;++i){result[i].real=cuCreal(y[i]);result[i].imag=cuCimag(y[i]);}
+    // Identity-system first-correction convergence: omega is deliberately
+    // not formed when s=0. This checks the resident BiCGStab stage contract.
+    double norm=0.;for(const auto z:x)norm+=cuCreal(z)*cuCreal(z)+cuCimag(z)*cuCimag(z);
+    BiCGState state{};state.rho=state.denominator=make_cuDoubleComplex(norm,0.);
+    state.rhsNormSquared=norm;state.relativeToleranceSquared=1e-24;
+    Buffer ds,dsolution,dscratch,dr,dt,drr;
+    ds.put(std::vector<BiCGState>{state});dsolution.put(std::vector<cuDoubleComplex>(3));
+    dscratch.put(std::vector<cuDoubleComplex>(3));dr.put(x);dt.put(std::vector<cuDoubleComplex>(3));
+    drr.put(std::vector<cuDoubleComplex>{make_cuDoubleComplex(0.,0.)});
+    bicgAlpha<<<1,1>>>(ds.get<BiCGState>());
+    bicgIntermediate<<<1,32>>>(ds.get<BiCGState>(),dx.get<cuDoubleComplex>(),dx.get<cuDoubleComplex>(),dscratch.get<cuDoubleComplex>(),3);
+    bicgCheckIntermediate<<<1,1>>>(ds.get<BiCGState>(),drr.get<cuDoubleComplex>());
+    bicgOmega<<<1,1>>>(ds.get<BiCGState>());
+    bicgUpdate<<<1,32>>>(ds.get<BiCGState>(),dx.get<cuDoubleComplex>(),dscratch.get<cuDoubleComplex>(),dt.get<cuDoubleComplex>(),dsolution.get<cuDoubleComplex>(),dr.get<cuDoubleComplex>(),3);
+    bicgFinish<<<1,1>>>(ds.get<BiCGState>(),drr.get<cuDoubleComplex>());
+    check(cudaGetLastError());check(cudaDeviceSynchronize());
+    std::vector<cuDoubleComplex> solution(3);
+    check(cudaMemcpy(solution.data(),dsolution.p,3*sizeof(cuDoubleComplex),cudaMemcpyDeviceToHost));
+    check(cudaMemcpy(&state,ds.p,sizeof(state),cudaMemcpyDeviceToHost));
+    if(state.status!=1||state.iteration!=1)throw std::runtime_error("BiCGStab first-correction transition failed");
+    for(int i=0;i<3;++i)if(cuCabs(cuCsub(solution[i],x[i]))>1e-12)throw std::runtime_error("BiCGStab identity correction failed");
     out[2]=mxCreateDoubleScalar(10);
  }catch(const std::exception& e){mexErrMsgIdAndTxt("radia:ih:cudaSmoke","%s",e.what());}
 }
