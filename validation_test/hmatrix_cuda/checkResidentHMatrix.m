@@ -55,10 +55,10 @@ try
     factors=radia_cuda_hmatrix('analytic_aca_compress',probe.cells,probe.faces,2,1e-10,2);
     reconstructed=factors.a2*factors.a1.';expected=probe.aca_matrix(1:2,3:4);
     compressionError=norm(reconstructed-expected,'fro')/max(norm(expected,'fro'),realmin);
-    assert(compressionError<=1e-8,'Existing ACA+ with CUDA entry compression parity failed');
     result.aca_cuda_compression=struct('rank',factors.rank,'relative_error',compressionError, ...
         'entry_batches',factors.entry_batches,'entry_count',factors.entry_count, ...
         'owned_device_bytes',factors.owned_device_bytes,'scope','One raw physical offdiagonal block, not full adaptive matrix or solver');
+    assert(compressionError<=1e-8,'Existing ACA+ with CUDA entry compression parity failed');
     assert(radia_cuda_hmatrix('live_count')==0);
     stale=h;
     clear radia_cuda_hmatrix

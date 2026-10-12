@@ -9,12 +9,13 @@ struct EntryCallbackBinding {
     AnalyticEntryOracle& oracle;
     cudaStream_t stream;
     std::exception_ptr failure;
+    const std::vector<double>* physicalScale;
 };
 inline thread_local EntryCallbackBinding* activeEntryBinding=nullptr;
 class EntryCallbackScope {
     EntryCallbackBinding binding;
 public:
-    EntryCallbackScope(AnalyticEntryOracle& oracle,cudaStream_t stream):binding{oracle,stream,{}}{
+    EntryCallbackScope(AnalyticEntryOracle& oracle,cudaStream_t stream,const std::vector<double>* scale=nullptr):binding{oracle,stream,{},scale}{
         if(activeEntryBinding)throw std::runtime_error("Nested HACApK CUDA entry binding");
         activeEntryBinding=&binding;
     }
@@ -38,7 +39,17 @@ extern "C" void cHACApK_entry_batch(int count,const int* rows,const int* columns
             if(rows[i]<1||columns[i]<1)throw std::invalid_argument("HACApK indices are one-based");
             indices.push_back({std::size_t(rows[i]-1),std::size_t(columns[i]-1)});
         }
-        const auto values=binding->oracle.evaluate(indices,binding->stream);
+        auto values=binding->oracle.evaluate(indices,binding->stream);
+        if(binding->physicalScale){
+            const auto& scale=*binding->physicalScale;
+            for(int i=0;i<count;++i){
+                if(indices[i].row>=scale.size()||indices[i].column>=scale.size())throw std::invalid_argument("ACA physical scale shape mismatch");
+                const auto rowScale=scale[indices[i].row],columnScale=scale[indices[i].column];
+                if(!std::isfinite(rowScale)||!std::isfinite(columnScale)||rowScale<=0||columnScale<=0)
+                    throw std::invalid_argument("Invalid ACA physical scale");
+                values[i]*=(1./rowScale)*(1./columnScale);
+            }
+        }
         std::copy(values.begin(),values.end(),output);
     }catch(...){
         if(binding&&!binding->failure)binding->failure=std::current_exception();
