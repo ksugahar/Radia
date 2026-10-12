@@ -201,7 +201,7 @@ This evidence includes source-fidelity verification, the installed doctor,
 standalone Simulink success and typed-failure paths, and all seven persisted
 tables after MAT reload. Shared Study/Trial MCP operations remain upstream.
 
-102号機 is not a CUDA acceptance target: its GTX 1080 is outside the compiled GPU architectures. A100 validation remains optional and pending until the same artifact can be checked there.
+Acceptance requires a GPU architecture included in the compiled artifact. Additional device acceptance remains pending until the same artifact is verified there.
 
 ### Reproducible performance evidence
 
@@ -248,7 +248,7 @@ and cannot satisfy the 0.3.0 release gate. Parallel results remain calibrated
 scheduler evidence rather than a promise that every CAE objective scales by
 the same factor; cheap objectives should remain sequential.
 
-Publication also uses the standalone exact-wheel CUDA lane on 100号機. After the
+Publication also uses the standalone exact-wheel CUDA lane on the supported GPU acceptance host. After the
 successful `main` CI run, execute
 `python tools/release_quad.py optuna-candidate --ci-run-id <id> --target all`,
 then pass the retained wheel to
