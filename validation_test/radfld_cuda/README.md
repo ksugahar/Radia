@@ -205,3 +205,12 @@ target capture, evaluation, projection, result recovery and release. Exact
 owned device buffer sizes and sampled CUDA free memory are distinguished from
 unmeasured process/host peaks. Timings on 100 are diagnostic, never formal mdx
 acceptance. Current timing and memory results remain pending due to host load.
+
+The projection validator now accepts `--representation` for each of the five
+element families, `--algorithm`, `--sources`, `--placement far|native` and an
+explicit `--result` path. Geometry and polynomial origins are translated
+together in the far case; near/exact cases retain their original geometry.
+Python and its operation-owned MATLAB session run below normal priority with
+one host computation thread. An old CPU oracle without `from_elements` must
+be rebuilt in a fresh job directory before element checks. These options are
+validation preparation; they do not constitute completed element acceptance.
