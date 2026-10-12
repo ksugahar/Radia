@@ -3,6 +3,7 @@
 #include "mex.h"
 #include "gpu/mxGPUArray.h"
 #include "ih_coupled_state.cuh"
+#include "ih_esim_coupling.cuh"
 #include <map>
 #include <string>
 #include <cstdint>
@@ -62,20 +63,54 @@ std::vector<double> realVector(const mxArray* a,size_t count){
  if(!mxIsDouble(a)||mxIsComplex(a)||mxIsSparse(a)||mxGetNumberOfElements(a)!=count)throw std::invalid_argument("IH real vector shape mismatch");
  const auto* p=mxGetDoubles(a);std::vector<double> v(p,p+count);for(double x:v)if(!std::isfinite(x))throw std::invalid_argument("Nonfinite IH vector");return v;
 }
+// Explicit bounded operator frontend. Geometry/reaction assembly is separate.
+struct ElementMaterial {
+ Matrix evaluation,entryMap;Buffer axis,rho,mu,saturation,geometry,fields,base,baseWeights;
+ std::unique_ptr<ESIMCoupling> coupling;
+ std::size_t owned=0;
+ void abandon(){if(coupling)coupling->abandonAfterDeviceReset();evaluation.abandon();entryMap.abandon();for(auto* b:{&axis,&rho,&mu,&saturation,&geometry,&fields,&base,&baseWeights})b->p=nullptr;}
+ explicit ElementMaterial(const mxArray* cfg,Matrix& a,Matrix& p,Buffer& weights,const std::vector<double>& w,std::size_t thermalDOF,unsigned components){
+  const auto elements=p.rows/components;if(elements>4096||a.rows>4096)throw std::invalid_argument("Element ESIM research dimensions exceed 4096");
+  evaluation.read(field(cfg,"temperature_evaluation"),false);entryMap.read(field(cfg,"operator_impedance_map"),true);
+  if(evaluation.rows!=elements||evaluation.columns!=thermalDOF||entryMap.rows!=a.z.size()||entryMap.columns!=elements)
+   throw std::invalid_argument("Element ESIM map dimensions disagree; impedance map rows follow eddy CSR entries");
+  const auto* kelvin=field(cfg,"temperature_axis_K");const auto nt=mxGetNumberOfElements(kelvin);
+  if(nt<2||nt>4096)throw std::invalid_argument("Temperature axis requires 2..4096 entries");
+  auto temperatures=realVector(kelvin,nt);for(size_t j=0;j<nt;++j)if(temperatures[j]<=0.||(j&&temperatures[j]<=temperatures[j-1]))throw std::invalid_argument("Kelvin axis must be positive and strictly increasing");
+  auto properties=[&](const char* name,bool positive){const auto* input=field(cfg,name);if(mxGetM(input)!=elements||mxGetN(input)!=nt)throw std::invalid_argument("Material table must be element by temperature");auto source=realVector(input,elements*nt);std::vector<double> out(elements*nt);for(size_t e=0;e<elements;++e)for(size_t t=0;t<nt;++t){auto v=source[e+elements*t];if(positive?v<=0.:v<0.)throw std::invalid_argument("Invalid material table value");out[e*nt+t]=v;}return out;};
+  auto resistivity=properties("resistivity_ohm_m",true),sat=properties("saturation_magnetization_A_per_m",false);
+  const auto* inputMu=field(cfg,"initial_permeability_H_per_m");
+  if(!mxIsDouble(inputMu)||mxIsSparse(inputMu)||mxGetM(inputMu)!=elements||mxGetN(inputMu)!=nt)throw std::invalid_argument("Permeability table shape/type mismatch");
+  std::vector<cuDoubleComplex> permeability(elements*nt);for(size_t e=0;e<elements;++e)for(size_t t=0;t<nt;++t){auto j=e+elements*t;auto z=mxIsComplex(inputMu)?make_cuDoubleComplex(mxGetComplexDoubles(inputMu)[j].real,mxGetComplexDoubles(inputMu)[j].imag):make_cuDoubleComplex(mxGetDoubles(inputMu)[j],0.);if(!cellFiniteHost(z)||cuCreal(z)<=0.||cuCimag(z)>0.)throw std::invalid_argument("Permeability must be finite and passive");permeability[e*nt+t]=z;}
+  if(mxGetField(cfg,0,"bh_knots")||mxGetField(cfg,0,"bh_coefficients"))throw std::invalid_argument("Temperature-dependent nonlinear B-H gateway is not yet accepted");
+  const auto* inputGeometry=field(cfg,"esim_cell_parameters");if(mxGetM(inputGeometry)!=elements||mxGetN(inputGeometry)!=7)throw std::invalid_argument("ESIM cells require element by 7 parameters");auto values=realVector(inputGeometry,elements*7);
+  std::vector<ESIMCellParameters> cells(elements);int maxNodes=0;for(size_t e=0;e<elements;++e){auto at=[&](size_t k){return values[e+elements*k];};auto& cell=cells[e];
+   if(at(0)<3||at(0)>4096||at(0)!=int(at(0))||at(1)<1||at(1)>10000||at(1)!=int(at(1))||(at(2)!=0.&&at(2)!=1.)||at(3)<=0.||at(4)<=0.||at(5)<=0.||at(5)>1e-6||at(6)<=0.||at(6)>1.)throw std::invalid_argument("Invalid ESIM cell geometry/iteration contract");
+   cell.nodes=int(at(0));cell.maxIterations=int(at(1));cell.cylinder=at(2)!=0.;cell.halfThickness=at(3);cell.omega=at(4);cell.tolerance=at(5);cell.relaxation=at(6);maxNodes=std::max(maxNodes,cell.nodes);}
+  auto guesses=realVector(field(cfg,"initial_field_A_per_m"),elements);for(auto x:guesses)if(x<=0.)throw std::invalid_argument("ESIM initial fields must be positive");
+  double iterations=number(field(cfg,"max_constitutive_iterations"));if(iterations<2||iterations>10000||iterations!=int(iterations))throw std::invalid_argument("Invalid constitutive iteration limit");
+  owned=evaluation.bytes()+entryMap.bytes()+temperatures.size()*sizeof(double)+resistivity.size()*sizeof(double)+permeability.size()*sizeof(cuDoubleComplex)+sat.size()*sizeof(double)+cells.size()*sizeof(ESIMCellParameters)+guesses.size()*sizeof(double)+a.z.size()*sizeof(cuDoubleComplex)+w.size()*sizeof(double);
+  size_t available,total;cudaCheck(cudaMemGetInfo(&available,&total));auto reserve=std::max<size_t>(2ULL<<30,total/5);if(available<=reserve||owned>available-reserve)throw std::runtime_error("Element material upload exceeds GPU reserve");
+  evaluation.upload();entryMap.upload();axis.put(temperatures);rho.put(resistivity);mu.put(permeability);saturation.put(sat);geometry.put(cells);fields.put(guesses);base.put(a.z);baseWeights.put(w);
+  ESIMCouplingView v{};v.temperatureEvaluation=evaluation.realView();v.table={axis.get<double>(),rho.get<double>(),saturation.get<double>(),nullptr,nullptr,mu.get<cuDoubleComplex>(),int(nt),0};v.entryMap=entryMap.complexView();v.fieldProjection=p.complexView();v.matrix=a.complexView();v.baseValues=base.get<cuDoubleComplex>();v.mutableValues=static_cast<cuDoubleComplex*>(a.dz.p);v.geometry=geometry.get<ESIMCellParameters>();v.initialFields=fields.get<double>();v.baseLossWeights=baseWeights.get<double>();v.mutableLossWeights=static_cast<double*>(weights.p);v.elements=elements;v.components=components;v.workspaceNodes=maxNodes;v.maxIterations=int(iterations);v.tolerance=number(field(cfg,"constitutive_tolerance"));v.relaxation=number(field(cfg,"constitutive_relaxation"));v.fieldFloor=number(field(cfg,"field_floor_A_per_m"));coupling=std::make_unique<ESIMCoupling>(v);owned+=coupling->ownedBytes();
+ }
+ static bool cellFiniteHost(cuDoubleComplex z){return std::isfinite(cuCreal(z))&&std::isfinite(cuCimag(z));}
+};
 struct Context {
  int device=0;cudaStream_t guard=nullptr;
  Matrix a,p,system,k,c,projection,preconditioner;
  PreconditionerPrecision precision=PreconditionerPrecision::None;Buffer rhs,weights,ones,initial;
+ std::unique_ptr<ElementMaterial> material;
  std::unique_ptr<CoupledState> state;size_t owned=0;
  ~Context(){
   int previous=device;cudaGetDevice(&previous);if(previous!=device)cudaSetDevice(device);
   const auto status=guard?cudaStreamQuery(guard):cudaSuccess;
   if(status!=cudaSuccess&&status!=cudaErrorNotReady){
-   if(state)state->abandonAfterDeviceReset();
+   if(state)state->abandonAfterDeviceReset();if(material)material->abandon();
    for(auto* m:{&a,&p,&system,&k,&c,&projection,&preconditioner})m->abandon();
    rhs.p=weights.p=ones.p=initial.p=nullptr;guard=nullptr;
   }
-  state.reset();
+  state.reset();material.reset();
   // Free operators while their owning device is selected.
   for(auto* m:{&a,&p,&system,&k,&c,&projection,&preconditioner})for(auto* b:{&m->dr,&m->dc,&m->dz,&m->dreal,&m->df}){if(b->p)cudaFree(b->p);b->p=nullptr;}
   for(auto* b:{&rhs,&weights,&ones,&initial}){if(b->p)cudaFree(b->p);b->p=nullptr;}
@@ -84,7 +119,7 @@ struct Context {
  void check(){int current;cudaCheck(cudaGetDevice(&current));if(current!=device)throw std::runtime_error("IH context belongs to another GPU");cudaCheck(cudaStreamQuery(guard));}
  explicit Context(const mxArray* cfg){
   if(number(field(cfg,"schema_version"))!=1.)throw std::invalid_argument("Unsupported IH operator schema");
-  if(text(field(cfg,"material_mode"))!="fixed")throw std::invalid_argument("Dynamic ESIM physical frontend is not connected; frozen substitution forbidden");
+  const auto materialMode=text(field(cfg,"material_mode"));if(materialMode!="fixed"&&materialMode!="element-esim-operators")throw std::invalid_argument("Unsupported IH material frontend");
   const auto* precisionField=mxGetField(cfg,0,"preconditioner_precision");
   if(precisionField){const auto mode=text(precisionField);
    if(mode=="fp32")precision=PreconditionerPrecision::FP32;
@@ -107,7 +142,7 @@ struct Context {
   if(dt<=0.||conductivity<0.||convection<0.)throw std::invalid_argument("Invalid IH thermal parameters");
   owned=a.bytes()+p.bytes()+system.bytes()+k.bytes()+c.bytes()+projection.bytes()+b.size()*sizeof(cuDoubleComplex)+(w.size()+o.size()+t.size())*sizeof(double);
   if(precision!=PreconditionerPrecision::None)owned+=preconditioner.rowptr.size()*sizeof(int32_t)+preconditioner.col.size()*sizeof(int32_t)+preconditioner.z.size()*(precision==PreconditionerPrecision::FP32?sizeof(cuFloatComplex):sizeof(cuDoubleComplex));
-  const size_t workspace=(a.rows*(precision==PreconditionerPrecision::None?9:11)+n*9+2)*sizeof(cuDoubleComplex)+(2*samples+3*n+2)*sizeof(double)+2*sizeof(BiCGState)+sizeof(int);
+  const size_t workspace=(a.rows*(precision==PreconditionerPrecision::None?10:12)+n*9+2)*sizeof(cuDoubleComplex)+(2*samples+3*n+2)*sizeof(double)+2*sizeof(BiCGState)+sizeof(int);
   size_t available,total;cudaCheck(cudaMemGetInfo(&available,&total));const size_t reserve=std::max<size_t>(2ULL<<30,total/5);
   if(available<=reserve||owned>available-reserve||workspace>available-reserve-owned)throw std::runtime_error("IH context exceeds GPU memory budget");
   cudaCheck(cudaGetDevice(&device));cudaCheck(cudaStreamCreateWithFlags(&guard,cudaStreamNonBlocking));
@@ -120,6 +155,12 @@ struct Context {
   if(precision!=PreconditionerPrecision::None)op.eddyPreconditioner={a.rows,preconditioner.dr.get<int32_t>(),preconditioner.dc.get<int32_t>(),preconditioner.dz.get<cuDoubleComplex>(),preconditioner.df.get<cuFloatComplex>(),precision};
   op.rhsPerAmp=rhs.get<cuDoubleComplex>();op.lossWeights=weights.get<double>();op.constantCoefficients=ones.get<double>();op.initialTemperature=initial.get<double>();
   op.heatSamples=samples;op.lossComponents=unsigned(components);op.dt=dt;op.conductivity=conductivity;op.convectionScale=convection;
+  if(materialMode=="element-esim-operators"){
+   material=std::make_unique<ElementMaterial>(cfg,a,p,weights,w,n,unsigned(components));owned+=material->owned;op.dynamicMaterial=true;op.materialOwner=material->coupling.get();
+   op.updateMaterial=[](void* owner,cudaStream_t stream,const double* t,double current){static_cast<ESIMCoupling*>(owner)->prepare(stream,t,current);};
+   op.solveMaterial=[](void* owner,ComplexSolver& solver,double tolerance,int iterations){return static_cast<ESIMCoupling*>(owner)->solve(solver,tolerance,iterations);};
+   op.commitMaterial=[](void* owner){static_cast<ESIMCoupling*>(owner)->commit();};op.resetMaterial=[](void* owner){static_cast<ESIMCoupling*>(owner)->reset();};
+  }
   state=std::make_unique<CoupledState>(op);owned+=state->ownedBytes();
   }catch(...){cudaStreamDestroy(guard);guard=nullptr;throw;}
  }
@@ -155,13 +196,13 @@ void mexFunction(int nlhs,mxArray** out,int nrhs,const mxArray** in){
   }
   if(command=="outputs"){
    if(nrhs!=2||nlhs!=3)throw std::invalid_argument("outputs returns temperature, heat and info");
-   out[0]=vectorOut(c.state->temperature());out[1]=vectorOut(c.state->heat());const char* f[]={"steps","owned_device_bytes","eddy_iterations","eddy_true_residual","thermal_iterations","thermal_true_residual","preconditioner_precision"};out[2]=mxCreateStructMatrix(1,1,7,f);
+   out[0]=vectorOut(c.state->temperature());out[1]=vectorOut(c.state->heat());const char* f[]={"steps","owned_device_bytes","eddy_iterations","eddy_true_residual","thermal_iterations","thermal_true_residual","preconditioner_precision","constitutive_iterations","constitutive_true_residual","constitutive_field_residual","material_mode"};out[2]=mxCreateStructMatrix(1,1,11,f);
    mxSetField(out[2],0,f[0],mxCreateDoubleScalar(double(c.state->steps())));mxSetField(out[2],0,f[1],mxCreateDoubleScalar(double(c.owned)));
    mxSetField(out[2],0,f[2],mxCreateDoubleScalar(c.state->eddyResult().iterations));
    mxSetField(out[2],0,f[3],mxCreateDoubleScalar(c.state->eddyResult().trueRelativeResidual));
    mxSetField(out[2],0,f[4],mxCreateDoubleScalar(c.state->thermalResult().iterations));
    mxSetField(out[2],0,f[5],mxCreateDoubleScalar(c.state->thermalResult().trueRelativeResidual));
-   mxSetField(out[2],0,f[6],mxCreateString(c.precision==PreconditionerPrecision::FP32?"fp32":c.precision==PreconditionerPrecision::FP64?"fp64":"none"));return;
+   mxSetField(out[2],0,f[6],mxCreateString(c.precision==PreconditionerPrecision::FP32?"fp32":c.precision==PreconditionerPrecision::FP64?"fp64":"none"));mxSetField(out[2],0,f[7],mxCreateDoubleScalar(c.material?c.material->coupling->iterations():0));mxSetField(out[2],0,f[8],mxCreateDoubleScalar(c.material?c.material->coupling->residual():0));mxSetField(out[2],0,f[9],mxCreateDoubleScalar(c.material?c.material->coupling->fieldResidual():0));mxSetField(out[2],0,f[10],mxCreateString(c.material?"element-esim-operators":"fixed"));return;
   }
   throw std::invalid_argument("Unknown IH CUDA command");
  }catch(const std::exception& e){mexErrMsgIdAndTxt("radia:ih:cuda","%s",e.what());}

@@ -12,7 +12,7 @@ def main():
         record['source_commit']=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()
         record['source_dirty']=bool(subprocess.check_output(['git','-C',str(root),'status','--porcelain'],text=True).strip())
         if args.require_clean_source and record['source_dirty']:raise RuntimeError('Clean source required')
-        sources=[package/'native'/name for name in ('radia_cuda_ih.cu','ih_coupled_state.cuh','ih_complex_solver.cuh','ih_bicgstab_kernels.cuh','ih_thermal_kernels.cuh','ih_resident_kernels.cuh','ih_preconditioner.cuh')]+[Path(__file__),root/'Build.ps1']
+        sources=[package/'native'/name for name in ('radia_cuda_ih.cu','ih_coupled_state.cuh','ih_complex_solver.cuh','ih_bicgstab_kernels.cuh','ih_thermal_kernels.cuh','ih_resident_kernels.cuh','ih_preconditioner.cuh','ih_esim_coupling.cuh','ih_temperature_material.cuh','ih_esim_cell.cuh')]+[Path(__file__),root/'Build.ps1']
         hashes=lambda:{p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
         record['source_sha256']=hashes()
         ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(),0x4000)
