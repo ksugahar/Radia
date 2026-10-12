@@ -62,3 +62,8 @@ validation_test/showcase/results/*.json -text whitespace=cr-at-eol
 # measures the same bytes as the index and as Linux/mdx CI.
 AGENTS.md text eol=lf
 CLAUDE.md text eol=lf
+
+# Exact-wheel acceptance retains byte hashes of exported IH records.
+# Preserve this release's evidence bytes across Windows and Linux checkouts.
+validation_test/induction_heating/bored_workpiece/results/candidate_0bdd66c9c/*.json -text whitespace=cr-at-eol
+validation_test/induction_heating/bored_workpiece/results/candidate_0bdd66c9c/*.xml -text whitespace=cr-at-eol
