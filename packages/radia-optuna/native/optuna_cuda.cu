@@ -5,6 +5,7 @@
 #include <cfloat>
 #include <climits>
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -22,6 +23,29 @@ std::size_t product(std::size_t a, std::size_t b) {
         throw std::overflow_error("Optuna CUDA allocation size overflow");
     return a * b;
 }
+std::size_t sum(std::size_t a, std::size_t b) {
+    if (a > std::numeric_limits<std::size_t>::max() - b)
+        throw std::overflow_error("Optuna CUDA arena size overflow");
+    return a + b;
+}
+// Pack all inputs into one upload and use one per-call device allocation.
+// Nothing persists across calls or MATLAB device changes.
+struct Arena {
+    std::vector<unsigned char> input;
+    std::size_t bytes = 0;
+    template<class T> std::size_t reserve(std::size_t count) {
+        const auto padding = (alignof(T) - bytes % alignof(T)) % alignof(T);
+        const auto offset = sum(bytes, padding);
+        bytes = sum(offset, product(count, sizeof(T)));
+        return offset;
+    }
+    template<class T> std::size_t append(const std::vector<T>& values) {
+        const auto offset = reserve<T>(values.size());
+        input.resize(bytes);
+        if (!values.empty()) std::memcpy(input.data() + offset, values.data(), product(values.size(), sizeof(T)));
+        return offset;
+    }
+};
 struct Buffer {
     void* data = nullptr;
     bool stream_ordered = stats.stream_ordered_allocator;
@@ -37,7 +61,9 @@ struct Buffer {
     }
     Buffer(const Buffer&) = delete;
     Buffer& operator=(const Buffer&) = delete;
-    template<class T> T* as() { return static_cast<T*>(data); }
+    template<class T> T* as(std::size_t offset = 0) {
+        return reinterpret_cast<T*>(static_cast<unsigned char*>(data) + offset);
+    }
 };
 void upload(void* target, const void* source, std::size_t bytes) {
     if (bytes) check(cudaMemcpy(target, source, bytes, cudaMemcpyHostToDevice), "upload");
@@ -143,21 +169,17 @@ void initialize() {
     stats.stream_ordered_allocator = pool_supported != 0;
 }
 struct DeviceMixture {
-    Buffer descriptors, data;
-    explicit DeviceMixture(const Packed& p)
-        : descriptors(product(p.estimators.size(), sizeof(DeviceEstimator))),
-          data(product(p.values.size(), sizeof(double))) {
-        upload(descriptors.data, p.estimators.data(), product(p.estimators.size(), sizeof(DeviceEstimator)));
-        upload(data.data, p.values.data(), product(p.values.size(), sizeof(double)));
-    }
+    std::size_t descriptors, data;
+    DeviceMixture(Arena& arena, const Packed& p)
+        : descriptors(arena.append(p.estimators)), data(arena.append(p.values)) {}
 };
-void launch(Buffer& samples, std::size_t count, std::size_t dimensions,
-            DeviceMixture& mixture, Buffer& terms, Buffer& output) {
+void launch(Buffer& arena, std::size_t samples, std::size_t count, std::size_t dimensions,
+            const DeviceMixture& mixture, std::size_t terms, std::size_t output) {
     if (count > static_cast<std::size_t>(INT_MAX))
         throw std::overflow_error("Optuna CUDA grid size overflow");
     density<<<static_cast<unsigned>(count), 128>>>(
-        samples.as<double>(), count, mixture.descriptors.as<DeviceEstimator>(),
-        dimensions, mixture.data.as<double>(), terms.as<double>(), output.as<double>());
+        arena.as<double>(samples), count, arena.as<DeviceEstimator>(mixture.descriptors),
+        dimensions, arena.as<double>(mixture.data), arena.as<double>(terms), arena.as<double>(output));
     check(cudaGetLastError(), "launch density");
     ++stats.density_launches;
 }
@@ -170,16 +192,17 @@ std::vector<double> log_pdf(const std::vector<double>& samples,
     const auto count = samples.size() / estimators.size();
     std::vector<double> result(count);
     if (!count) return result;
-    const auto input_bytes = product(samples.size(), sizeof(double));
     const auto output_bytes = product(count, sizeof(double));
-    const auto term_bytes = product(product(count, packed.estimators.front().kernels), sizeof(double));
-    Buffer input(input_bytes), output(output_bytes), terms(term_bytes);
-    DeviceMixture mixture(packed);
-    stats.peak_temporary_bytes = std::max(stats.peak_temporary_bytes, input_bytes + output_bytes + term_bytes +
-        product(packed.values.size(), sizeof(double)) + product(packed.estimators.size(), sizeof(DeviceEstimator)));
-    upload(input.data, samples.data(), input_bytes);
-    launch(input, count, estimators.size(), mixture, terms, output);
-    download(result.data(), output.data, output_bytes);
+    Arena layout;
+    const auto input = layout.append(samples);
+    DeviceMixture mixture(layout, packed);
+    const auto output = layout.reserve<double>(count);
+    const auto terms = layout.reserve<double>(product(count, packed.estimators.front().kernels));
+    Buffer arena(layout.bytes);
+    stats.peak_temporary_bytes = std::max(stats.peak_temporary_bytes, layout.bytes);
+    upload(arena.data, layout.input.data(), layout.input.size());
+    launch(arena, input, count, estimators.size(), mixture, terms, output);
+    download(result.data(), arena.as<double>(output), output_bytes);
     for (double value : result)
         if (!std::isfinite(value)) throw std::runtime_error("Optuna CUDA density is nonfinite");
     return result;
@@ -191,24 +214,23 @@ std::size_t best(const std::vector<double>& candidates,
         throw std::invalid_argument("Optuna CUDA candidate shape");
     Packed lower(below), upper(above);
     const auto count = candidates.size() / below.size();
-    const auto input_bytes = product(candidates.size(), sizeof(double));
-    const auto output_bytes = product(count, sizeof(double));
-    const auto term_bytes = product(product(count,
-        std::max(lower.estimators.front().kernels, upper.estimators.front().kernels)), sizeof(double));
-    Buffer input(input_bytes), lower_pdf(output_bytes), upper_pdf(output_bytes), index(sizeof(std::size_t));
-    Buffer terms(term_bytes);
-    DeviceMixture lower_mix(lower), upper_mix(upper);
-    stats.peak_temporary_bytes = std::max(stats.peak_temporary_bytes, input_bytes + 2 * output_bytes + term_bytes + sizeof(std::size_t) +
-        product(lower.values.size() + upper.values.size(), sizeof(double)) +
-        product(lower.estimators.size() + upper.estimators.size(), sizeof(DeviceEstimator)));
-    upload(input.data, candidates.data(), input_bytes);
-    launch(input, count, below.size(), lower_mix, terms, lower_pdf);
-    launch(input, count, above.size(), upper_mix, terms, upper_pdf);
-    select_best<<<1, 1>>>(lower_pdf.as<double>(), upper_pdf.as<double>(), count, index.as<std::size_t>());
+    Arena layout;
+    const auto input = layout.append(candidates);
+    DeviceMixture lower_mix(layout, lower), upper_mix(layout, upper);
+    const auto lower_pdf = layout.reserve<double>(count), upper_pdf = layout.reserve<double>(count);
+    const auto index = layout.reserve<std::size_t>(1);
+    const auto terms = layout.reserve<double>(product(count,
+        std::max(lower.estimators.front().kernels, upper.estimators.front().kernels)));
+    Buffer arena(layout.bytes);
+    stats.peak_temporary_bytes = std::max(stats.peak_temporary_bytes, layout.bytes);
+    upload(arena.data, layout.input.data(), layout.input.size());
+    launch(arena, input, count, below.size(), lower_mix, terms, lower_pdf);
+    launch(arena, input, count, above.size(), upper_mix, terms, upper_pdf);
+    select_best<<<1, 1>>>(arena.as<double>(lower_pdf), arena.as<double>(upper_pdf), count, arena.as<std::size_t>(index));
     check(cudaGetLastError(), "launch selection");
     ++stats.selection_launches;
     std::size_t result;
-    download(&result, index.data, sizeof(result));
+    download(&result, arena.as<std::size_t>(index), sizeof(result));
     if (result >= count)
         throw std::runtime_error("Optuna CUDA candidate acquisition is nonfinite");
     return result;
