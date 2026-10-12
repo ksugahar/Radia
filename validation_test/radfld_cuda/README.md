@@ -142,3 +142,14 @@ Check the actual model, save it, close and reopen the exact saved path, repeat
 execution, and verify failure cleanup. Do not edit SLX ZIP/XML. Integrate the
 latest accepted IH work without overwriting another session's changes. CI and
 same-artifact distribution acceptance remain release gates. A100 remains off.
+
+The IH implementation now starts with resident complex CSR matvec, scalar-drive
+RHS generation, and a coherent quadratic loss projection in
+`packages/radia-gpu/native/ih_resident_kernels.cuh`. These are unbuilt primitives,
+not a working coupled IH backend. The loss projection sums complex basis fields
+before squaring, retaining cross terms; volume and surface measures must remain
+explicit and distinct. Next connect checked operator/state ownership, the
+complex solve and thermal update, residual gates and a shared Simulink context.
+Upload static operators once, exchange only required controls/observations at
+step boundaries, and avoid downloading heat/temperature solely to re-upload it
+between the coupled device computations. Preserve Simulink output/update order.
