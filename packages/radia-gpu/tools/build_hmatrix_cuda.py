@@ -23,8 +23,8 @@ def main():
         for name in ['cHACApK_base','cHACApK_lib']:
             obj=out/(name+'.obj');batch=out/(name+'.cmd');objects.append(str(obj))
             batch.write_text('@echo off\ncall "C:/BuildTools/VS2022-CUDA/VC/Auxiliary/Build/vcvars64.bat" >nul\n'+f'cl /nologo /c /TC /MD /O2 /Gy /DRAD_HACAPK_BATCH_ENTRIES /I"{root/"src/core"}" /I"{root/"src/ext/HACApK"}" "{root/"src/ext/HACApK"/(name+".c")}" /Fo:"{obj}"\n',encoding='utf-8')
-            compiled=subprocess.run(['cmd','/c',str(batch)],capture_output=True,text=True)
-            (out/(name+'-compile.log')).write_text(compiled.stdout+compiled.stderr,encoding='utf-8');compiled.check_returncode()
+            compiled=subprocess.run(['cmd','/c',str(batch)],capture_output=True)
+            (out/(name+'-compile.log')).write_bytes(compiled.stdout+compiled.stderr);compiled.check_returncode()
         import matlab.engine
         eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread')
         pid=int(eng.feature('getpid'));subprocess.run(['powershell','-NoProfile','-Command',f'(Get-Process -Id {pid}).PriorityClass="BelowNormal"'],check=True,capture_output=True)
