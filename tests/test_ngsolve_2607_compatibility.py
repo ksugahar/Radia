@@ -89,12 +89,16 @@ def test_build_scripts_resolve_netgen_from_the_active_python_environment():
     cmake = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
     assert "pybind11.get_cmake_dir()" in cmake
     assert "set(pybind11_DIR ${PYTHON_SITE_PACKAGES}" not in cmake
-    assert "target_include_directories(radia_mex BEFORE PRIVATE" in cmake
-    mex_includes = cmake[
-        cmake.index("target_include_directories(radia_mex BEFORE PRIVATE") :
-        cmake.index("target_compile_definitions(radia_mex PRIVATE")
+    # CPU execution is pybind11. Its NGSolve-bundled headers must precede
+    # the system pybind11 headers; the retired CPU MEX target is not an ABI gate.
+    marker = "target_include_directories(_radia_pybind BEFORE PRIVATE"
+    assert marker in cmake
+    cpu_includes = cmake.split(marker, 1)[1].split(")", 1)[0]
+    assert cpu_includes.split() == [
+        "${NGSOLVE_BUNDLED_INC}", "${NGSOLVE_COMPAT_INC}",
+        "${Netgen_INCLUDE_DIRS}", "${NGSolve_INCLUDE_DIRS}",
     ]
-    assert "${Python3_INCLUDE_DIRS}" not in mex_includes
+    assert 'set(NGSOLVE_BUNDLED_INC "${_NETGEN_PKG_DIR}/include")' in cmake
 
 
 # Deprecated in 2606 and removed from ngsolve.bem in 2607.
