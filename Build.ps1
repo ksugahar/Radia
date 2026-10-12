@@ -42,6 +42,7 @@ param(
     [switch]$Verbose,
     [switch]$RadiaOnly,
     [switch]$HMatrixCudaOnly,    # isolated resident HACApK leaf application
+    [string]$HMatrixMklRoot,     # explicit isolated MKL for complete C HACApK assembly
     [switch]$ProjectionCudaOnly, # experimental NGSolve target replay bridge
     [switch]$IhCudaOnly,          # isolated persistent coupled IH CUDA gateway
     [switch]$FieldCudaOnly,       # isolated retained-cloud RadFld CUDA gateway
@@ -54,6 +55,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if ($HMatrixMklRoot -and -not $HMatrixCudaOnly) { throw '-HMatrixMklRoot requires -HMatrixCudaOnly' }
 if ($args.Count -gt 0) {
     throw "Unsupported build arguments: $($args -join ' '). Radia CPU uses -RadiaOnly; GPU uses -CudaMexOnly."
 }
@@ -63,6 +65,7 @@ if ($HMatrixCudaOnly) {
         throw '-HMatrixCudaOnly is an isolated experimental build'
     }
     $hMatrixBuildArgs = @()
+    if ($HMatrixMklRoot) { $hMatrixBuildArgs += @('--mkl-root', $HMatrixMklRoot) }
     if ($RequireNativeProvenance) { $hMatrixBuildArgs += '--require-clean-source' }
     & python (Join-Path $PSScriptRoot 'packages/radia-gpu/tools/build_hmatrix_cuda.py') @hMatrixBuildArgs
     if ($LASTEXITCODE -ne 0) { throw 'H-matrix CUDA experimental build failed' }

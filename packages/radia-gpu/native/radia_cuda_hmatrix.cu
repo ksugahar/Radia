@@ -4,6 +4,9 @@
 #include "hmatrix_entry_oracle.cuh"
 #include "hmatrix_aca_callback.cuh"
 #include "hmatrix_material_solver.cuh"
+#ifdef RADIA_HMATRIX_FULL_HOST
+#include "hmatrix_full_assembly.cuh"
+#endif
 #include <map>
 #include <memory>
 #include <chrono>
@@ -81,6 +84,26 @@ Plan read(const mxArray* cfg){
 void mexFunction(int nl,mxArray* out[],int nr,const mxArray* in[]){
 try{
     if(!nr)throw std::invalid_argument("Command required");auto command=text(in[0]);
+#ifdef RADIA_HMATRIX_FULL_HOST
+    if(command=="create_analytic_hacapk"){
+        arity(nr,2,nl,1);std::size_t bytes=0;checkPayload(in[1],bytes);
+        if(integer(field(in[1],0,"schema_version"),true)!=1)throw std::invalid_argument("Unsupported HACApK schema");
+        for(int f=0;f<mxGetNumberOfFields(in[1]);++f){std::string key=mxGetFieldNameByNumber(in[1],f);
+            if(key!="schema_version"&&key!="cells"&&key!="faces"&&key!="operator_kind"&&key!="charge_map"&&key!="epsilon"&&key!="leaf_size"&&key!="eta"&&key!="max_rank")throw std::invalid_argument("Unsupported HACApK option: "+key);}
+        auto epsilon=numbers(field(in[1],0,"epsilon")),eta=numbers(field(in[1],0,"eta"));
+        if(epsilon.size()!=1||eta.size()!=1)throw std::invalid_argument("Expected scalar HACApK tolerance/admissibility");
+        auto block=analyticSources(numbers(field(in[1],0,"cells")),numbers(field(in[1],0,"faces")),4096);
+        const auto mode=text(field(in[1],0,"operator_kind"));SparseMap map;
+        if(mode=="demag")map=readChargeMap(field(in[1],0,"charge_map"),block.sources.size());else if(mode!="gram")throw std::invalid_argument("Operator kind must be gram or demag");
+        auto assembled=assembleFull(block,epsilon[0],int(integer(field(in[1],0,"leaf_size"),true)),eta[0],int(integer(field(in[1],0,"max_rank"),true)));
+        auto c=std::make_unique<Resident>(assembled.plan,mode=="demag"?&map:nullptr);
+        c->setupPeakOwnedBytes=std::max(c->ownedBytes,assembled.oracleOwned);
+        if(generation==0x0000ffffffffffffULL)throw std::overflow_error("Handle generation exhausted");
+        const auto t=0x484d000000000000ULL|++generation;
+        auto* output=mxCreateNumericMatrix(1,1,mxUINT64_CLASS,mxREAL);*static_cast<std::uint64_t*>(mxGetData(output))=t;
+        contexts.emplace(t,std::move(c));mexLock();mexAtExit(cleanup);out[0]=output;return;
+    }
+#endif
     if(command=="solve_linear_material"){
         arity(nr,7,nl,1);auto& op=*contexts.at(token(in[1]));std::size_t bytes=0;for(int i=2;i<7;++i)checkPayload(in[i],bytes);
         auto mass=readChargeMap(in[2],op.dimension());auto rhs=numbers(in[3]);auto invChi=numbers(in[4]);auto tolerance=numbers(in[5]);
