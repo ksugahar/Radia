@@ -28,7 +28,7 @@ def main():
         for name,h in manifest.items():
             if sha(j/name)!=h:raise RuntimeError('Staged hash mismatch: '+name)
         os.environ.update(MKL_NUM_THREADS='1',OMP_NUM_THREADS='1',MKL_THREADING_LAYER='SEQUENTIAL')
-        prefix=Path(sys.prefix);site=prefix/'Lib/site-packages';os.environ['PATH']=';'.join(map(str,[j/'runtime',prefix/'Scripts',prefix/'Library/bin',prefix/'bin',site/'netgen',site/'netgen_mesher.libs',site/'ngsolve.libs',Path(sys.base_prefix)]))+';'+os.environ['PATH']
+        prefix=Path(sys.prefix);site=prefix/'Lib/site-packages';os.environ['PATH']=';'.join(map(str,[j/'runtime',prefix/'Scripts',prefix/'Library/bin',prefix/'bin',site/'netgen',site/'netgen_mesher.libs',site/'ngsolve.libs',site/'ngsolve_openblas',Path(sys.base_prefix)]))+';'+os.environ['PATH']
         r['idle_before']=idle()
         import matlab.engine
         start=time.perf_counter();eng=matlab.engine.start_matlab('-nodesktop -nosplash -singleCompThread');r['owned_engine_start_seconds']=time.perf_counter()-start;r['matlab']=eng.version()
