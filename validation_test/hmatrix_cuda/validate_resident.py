@@ -15,7 +15,7 @@ def structs(rows):
     return out
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--artifact',type=Path,required=True);parser.add_argument('--out',type=Path,required=True);parser.add_argument('--aca-block-size',type=int,default=0);a=parser.parse_args();a.out.mkdir(parents=True,exist_ok=False)
+    parser=argparse.ArgumentParser();parser.add_argument('--artifact',type=Path,required=True);parser.add_argument('--out',type=Path,required=True);parser.add_argument('--aca-block-size',type=int,default=0);parser.add_argument('--physical-refinements',type=int,choices=[0,1],default=0);a=parser.parse_args();a.out.mkdir(parents=True,exist_ok=False)
     record=dict(schema='radia.hmatrix-resident-numerical.v1',accepted=False,a100_used=False,timing_acceptance=False,scope='Resident symmetric leaf algebra and public sampled/integrated-tet Gram CPU parity; bounded native constant-charge block assembly only; not general HACApK Matrix Build or full HDiv-MMM physics acceptance')
     eng=None
     source_files=(Path(__file__),Path(__file__).with_name('checkResidentHMatrix.m'),ROOT/'packages/radia-gpu/matlab/+radia/+gpu/HMatrixOperator.m')
@@ -115,6 +115,8 @@ def main():
         import radia.vim._vim as cpu_vim
         meshfile=ROOT/'tests/fixtures/beam/affine_field_tetra.vol'
         mesh=ng.Mesh(str(meshfile))
+        if a.physical_refinements:
+            mesh.Refine();meshfile=a.out/'physical.vol';mesh.ngmesh.Save(str(meshfile));mesh=ng.Mesh(str(meshfile))
         if mesh.dim!=3 or tuple(mesh.GetMaterials())!=('air',) or tuple(mesh.GetBoundaries())!=('boundary',):raise RuntimeError('Public tetra label contract mismatch')
         with ng.TaskManager():
             fes=ng.HDiv(mesh,order=0);cb=cpu_vim._charge_basis(fes,4)

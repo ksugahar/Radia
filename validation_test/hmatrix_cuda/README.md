@@ -217,3 +217,37 @@ device bytes in both modes. See `results/a100-same-artifact-20261012.json`.
 This is not full HACApK assembly, an HDiv-MMM solve, true-residual acceptance
 or full-solver performance. The initial profile attempt failed on absent
 psutil and is retained separately; no host package was installed.
+
+## MATLAB-native RT0 material path
+
+`radia.gpu.solveHDivRT0` loads a checked affine-tetra mesh through NGSolve,
+constructs RT0 mapped divergence/normal charges, mass and applied-field RHS
+inside the mexcuda host bridge, then constructs the constant-charge Gram on
+CUDA. No Python FE snapshot is required by this MATLAB entry point. The
+current bounded path rejects curved/non-tetra meshes and more than 16 cells;
+it uses exact dense Gram, not adaptive whole HACApK assembly. The projection
+module now contains sm75/sm80/PTX and links supported nglib mesh access.
+
+The FP64 material PCG keeps mass, vectors and the demagnetization operator on
+GPU. It uses an explicitly selected inv_chi mass-diagonal preconditioner;
+CPU reference uses NGSolve mass-Riesz sparsecholesky. cuBLAS scalar reductions
+synchronize host control; no synchronization-free solver claim is made.
+Convergence is checked by recomputing the original equation residual, with
+restart on recursive/true-residual disagreement and loud failure at limits.
+
+One and eight tetra physical subgates passed on 100 and the same hashes on
+the authorized A100. The eight-tetra A100 coefficient/mean-magnetization
+relative differences are 1.126e-11/3.663e-12; independent true residual is
+9.729e-12. Accounted owned peak is 31852 bytes. The recorded first solve
+0.291 s follows a separate FE parity check and is not warmed performance.
+See `results/hdiv-native-rt0-a100-20261012.json`. Experimental MATLAB entry
+points remain excluded from the wheel until full release acceptance.
+
+The first live-refined CPU reference exposed four zero mass diagonals in
+28 DOFs (24 free). Saving/reloading the same mesh produces 24 DOFs with
+positive minimum mass eigenvalue 0.0287241. Validation now reloads its mesh
+artifact, matching the native mesh-file entry point; no alternate direct
+solver or weakened SPD check was introduced. The initial A100 load failed
+on the isolated dependency bin path and was corrected without changing
+global installations. Failure evidence is retained. General HDiv-MMM and
+adaptive HACApK validation remain incomplete.

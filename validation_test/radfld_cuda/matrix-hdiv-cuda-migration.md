@@ -45,4 +45,5 @@ This is an implementation inventory, not GPU acceptance or a performance result.
 
 Release status: no Matrix Build or HDiv-MMM GPU physical acceptance is established
 by this inventory. RadFld CUDA projection has its own bounded numerical evidence.
-A100 is excluded from all current build, connection and execution operations.
+A100 tests are now separately authorized on the already running validation host.
+Native builds remain on 100; validation authorization does not authorize power actions.
