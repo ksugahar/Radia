@@ -380,3 +380,13 @@ CPU coefficient, mean magnetization and true-residual gates. The earlier volume
 normalization failure is retained in durable evidence. This dense near-rule
 subgate does not certify general adaptive/high-order HDiv, constraints, images,
 nonlinear materials, performance, packaging or release. A100 was not used.
+
+The latest same-artifact cases additionally cover the public affine tetrahedron
+at HDiv orders 1 and 2 through `solveHDivElements`. The wrapper preserves the
+existing CPU capability limit of order 2. Native charge-map staging at order 3
+is not whole-solver acceptance. Affine analytic reference moments and curved
+touching Duffy rules feed the same resident material solve. Latest curved order 2
+coefficient disagreement is 5.02e-10 and independent true residual 7.95e-12.
+`validate_hdiv_artifact.py` evaluates the same native setup and built artifacts
+on an independently staged host; Python supplies independent validation fixtures
+and Engine orchestration only, with no GPU-user Python adapter.
