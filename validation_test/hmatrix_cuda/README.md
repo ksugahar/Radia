@@ -326,3 +326,17 @@ all 256 basis-vector GPU applications with the complete independent CPU direct
 matrix: relative Frobenius error 9.960e-10 (unchanged limit 1e-8), symmetry
 error 2.536e-17. This certifies the bounded constant-charge operator comparison,
 not general HDiv-MMM physical or release acceptance. No timing is measured.
+
+## Native RT0 physical scaling to 64 tetrahedra
+
+The bounded native FE setup now admits up to 128 affine tetrahedra, 1024 DOFs
+and 1024 charges, rejecting over-budget or unsupported geometry before the
+corresponding dense allocation. A fresh `ProjectionCudaOnly` build from
+`7bf728b70` passes the twice-refined public tetra fixture with the existing
+full-HACApK artifact. Native mass/RHS/mean operators agree with independent
+NGSolve assembly; material coefficients differ by 9.680e-12, mean magnetization
+by 4.611e-13, and independent true residual is 8.674e-12 (32 iterations).
+Accounted owned setup/solver peak is 166916 bytes. Initial payload whole time
+is diagnostic only, not a warm comparison. See `results/hdiv-64tet-20261013.json`.
+General high-order/curved/constraint/nonlinear and release gates remain pending;
+the new projection binary has not yet been reaccepted on A100.

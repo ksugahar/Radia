@@ -1,0 +1,52 @@
+{
+  "schema": "radia.hdiv-rt0-scale-physical.v1",
+  "accepted": true,
+  "tetrahedra": 64,
+  "dofs": 160,
+  "source_commit": "7bf728b70ed6ae03b1e653b56864433524bed6cf",
+  "projection_binary_sha256": "59cbdf9c460aac141872380821040f1d5a7fd1938045a6f0a820e759ccc7a652",
+  "hmatrix_binary_sha256": "c2c5819bbf3b45cee75e14ad656eba9816335d311b2175deff08dbacc3ffc1c0",
+  "mesh_sha256": "c19b63740c7a60c5514eccae031684935d5f1f6c6dbfee7a2b286d7d80b0b39f",
+  "input_sha256": "ecfdb4a0af7f8f2e1f9bca0cc4f7116638601c9be88e3fb48e48937ca348dc96",
+  "source_sha256": {
+    "packages/radia-gpu/native/hdiv_rt0_host.cuh": "f8c3f77bce429d2eb20025e077084faf148c483d8381c3cc7e2619bc79b3fc42",
+    "validation_test/hmatrix_cuda/validate_resident.py": "9e936c90a0f3ae797e77c98f2a21ccce581dae583cacd64649767954cac04419",
+    "validation_test/hmatrix_cuda/validate_native_rt0.py": "44a684f82533be9c9e366091b4c43be011e7d565a87f2702ae162c74e1fce181",
+    "packages/radia-gpu/matlab/+radia/+gpu/solveHDivRT0.m": "576a736903c29005077aab4161b44d2dae580d313f51b02810ecf9aa71c4b026"
+  },
+  "numerical": {
+    "mass_relative_error": 2.14178129408573e-16,
+    "rhs_relative_error": 2.08838200981033e-16,
+    "mean_operator_relative_error": 2.0296365454065245e-14,
+    "coefficient_relative_error": 9.679120153718948e-12,
+    "mean_magnetization_relative_error": 4.610550840892025e-13,
+    "independent_true_relative_residual": 8.673383267922555e-12
+  },
+  "solution_diagnostic": {
+    "mean_magnetization": [
+      0.348923479708606,
+      0.07193025603618772,
+      0.036780671770467455
+    ],
+    "true_relative_residual": 8.673364236720938e-12,
+    "iterations": 32,
+    "preconditioner": "inv_chi mass diagonal",
+    "operator_owned_device_bytes": 119488,
+    "solver_owned_device_bytes": 26376,
+    "setup_peak_owned_device_bytes": 166916,
+    "combined_peak_owned_device_bytes": 166916,
+    "assembly": "hacapk",
+    "scope": "Bounded affine-tetra RT0, analytic constant-charge Gram, linear isotropic material",
+    "whole_seconds": 1.7143825,
+    "memory_limitations": "Owned operator and solver buffers; no process/global peak. Setup scratch and solver scratch have different lifetimes."
+  },
+  "timing_acceptance": false,
+  "general_hdiv_validation_complete": false,
+  "release_accepted": false,
+  "limitations": [
+    "Undeformed affine tetra RT0 and linear isotropic material only.",
+    "Whole seconds is initial payload diagnostic on 100, not warm ABBA or formal mdx timing.",
+    "No global/runtime/host peak measured.",
+    "A100 same-artifact acceptance of this new projection binary pending."
+  ]
+}
