@@ -86,39 +86,6 @@ catch exception
     result.error=string(getReport(exception,'extended','hyperlinks','off'));
 end
 
-function records=profileDensity()
-% Diagnostic provenance on 100; formal timing acceptance remains separate.
-shapes=[24 32; 4096 512];
-records=cell(size(shapes,1),1);
-for index=1:size(shapes,1)
-    count=shapes(index,1); kernels=shapes(index,2);
-    x=linspace(-3,3,count).'; mu=linspace(-2,2,kernels);
-    sigma=linspace(0.4,1.3,kernels); weights=ones(1,kernels)/kernels;
-    call=@()optuna_mex('optuna.parzen.log_pdf_numerical',x,weights,mu,sigma,-3,3,false,NaN);
-    reference=@()continuousReference(x,weights,mu,sigma);
-    start=tic; actual=call(); cold=toc(start);
-    expected=reference();
-    difference=max(abs(actual-expected));
-    assert(difference<=1e-10,'Large density/reference mismatch');
-    cudaTimes=zeros(1,5); hostTimes=zeros(1,5);
-    for repetition=1:5
-        start=tic; call(); cudaTimes(repetition)=toc(start);
-        start=tic; reference(); hostTimes(repetition)=toc(start);
-    end
-    records{index}=struct(candidates=count,kernels=kernels, ...
-        first_call_seconds=cold,cuda_transfer_inclusive_median_seconds=median(cudaTimes), ...
-        matlab_host_reference_median_seconds=median(hostTimes), ...
-        host_over_cuda_ratio=median(hostTimes)/median(cudaTimes), ...
-        max_abs_error=difference,classification="100-diagnostic-only");
-end
-end
-
-function result=continuousReference(x,weights,mu,sigma)
-mass=0.5*(erf((3-mu)./sigma/sqrt(2))-erf((-3-mu)./sigma/sqrt(2)));
-terms=-0.5*((x-mu)./sigma).^2-log(sigma)-0.5*log(2*pi)-log(mass)+log(weights);
-maximum=max(terms,[],2);
-result=maximum+log(sum(exp(terms-maximum),2));
-end
 result.cases=records;
 result.native=optuna_mex('api.info');
 result.density_launch_delta=result.native.density_launches-before.density_launches;
@@ -161,4 +128,38 @@ digest=java.security.MessageDigest.getInstance('SHA-256');
 fid=fopen(filename,'rb'); assert(fid>=0); cleanup=onCleanup(@()fclose(fid));
 while ~feof(fid), digest.update(fread(fid,1048576,'*uint8')); end
 value=lower(string(reshape(dec2hex(typecast(digest.digest(),'uint8'),2).',1,[])));
+end
+
+function records=profileDensity()
+% Diagnostic provenance on 100; formal timing acceptance remains separate.
+shapes=[24 32; 4096 512];
+records=cell(size(shapes,1),1);
+for index=1:size(shapes,1)
+    count=shapes(index,1); kernels=shapes(index,2);
+    x=linspace(-3,3,count).'; mu=linspace(-2,2,kernels);
+    sigma=linspace(0.4,1.3,kernels); weights=ones(1,kernels)/kernels;
+    call=@()optuna_mex('optuna.parzen.log_pdf_numerical',x,weights,mu,sigma,-3,3,false,NaN);
+    reference=@()continuousReference(x,weights,mu,sigma);
+    start=tic; actual=call(); cold=toc(start);
+    expected=reference();
+    difference=max(abs(actual-expected));
+    assert(difference<=1e-10,'Large density/reference mismatch');
+    cudaTimes=zeros(1,5); hostTimes=zeros(1,5);
+    for repetition=1:5
+        start=tic; value=call(); cudaTimes(repetition)=toc(start);
+        start=tic; hostValue=reference(); hostTimes(repetition)=toc(start);
+    end
+    records{index}=struct(candidates=count,kernels=kernels, ...
+        first_call_seconds=cold,cuda_transfer_inclusive_median_seconds=median(cudaTimes), ...
+        matlab_host_reference_median_seconds=median(hostTimes), ...
+        host_over_cuda_ratio=median(hostTimes)/median(cudaTimes), ...
+        max_abs_error=difference,classification="100-diagnostic-only");
+end
+end
+
+function result=continuousReference(x,weights,mu,sigma)
+mass=0.5*(erf((3-mu)./sigma/sqrt(2))-erf((-3-mu)./sigma/sqrt(2)));
+terms=-0.5*((x-mu)./sigma).^2-log(sigma)-0.5*log(2*pi)-log(mass)+log(weights);
+maximum=max(terms,[],2);
+result=maximum+log(sum(exp(terms-maximum),2));
 end
