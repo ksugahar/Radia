@@ -153,3 +153,32 @@ complex solve and thermal update, residual gates and a shared Simulink context.
 Upload static operators once, exchange only required controls/observations at
 step boundaries, and avoid downloading heat/temperature solely to re-upload it
 between the coupled device computations. Preserve Simulink output/update order.
+
+## Native FEM projection bridge checkpoint
+
+`Build.ps1 -ProjectionCudaOnly -RequireNativeProvenance` now builds an
+experimental mexcuda gateway that reuses NGSolve SetValues. Host NGSolve code
+is compiled by supported MSVC (C++20, matching AVX2 ABI); mexcuda links the
+entry point. This compilation alone is not GPU acceleration.
+
+The context captures the actual mapped evaluation targets through an initial
+SetValues pass, then accepts bulk field values as a native vector CF and uses
+SetValues again. `projectBatchedField.m` connects MATLAB/CUDA field callbacks
+and exact-target/source-revision reuse. No nodal-sampling substitute is used.
+The initial capture pass and source construction must be included in cold
+whole-workflow timing; the helper's timer alone excludes those construction costs.
+NGSolve owns all FE interpolation, orientation and element transformations.
+No TaskManager is started. Only real 3D HDiv/HCurl/VectorH1 are supported now.
+
+`check_projection_bridge.py` independently constructs Python/NGSolve analytic
+Set references and optionally compares retained-cloud CPU pybind direct fields
+with the identified earlier CUDA cloud artifact through the same native
+projection. Python is validation-only; MATLAB performs the batched GPU route.
+`results/native-projection-cloud-20261012.json` records the clean projection
+build and the original cloud artifact/reference hashes. Three order-1 spaces
+passed, with analytic coefficient-vector error below 9e-16 and zero observed
+CPU/CUDA cloud projection difference for this small case. This is not physical
+FE L2 acceptance or general Radia-object/analytic/high-order/curved acceptance.
+Full legacy command migration, profiling counters, lifecycle across clear/reload,
+source-strength update tests, physical field gates and idle timing/memory are
+still pending. No speedup or complete RadFld migration is claimed.
