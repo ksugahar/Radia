@@ -200,3 +200,20 @@ identity. `results/serial-host-20261012.json` records that C contract only.
 The current narrow CUDA target still does not build the full cluster/leaf
 implementation; PCA/LAPACK integration and full physical acceptance remain
 pending. No speedup is inferred from serial host control.
+
+## Same-artifact A100 subgate
+
+The user authorized tests on the already running NGSolve A100 host.
+`validate_same_artifact.py` verifies every staged input/module/wrapper hash,
+uses an owned MATLAB Engine session and releases it on success or failure.
+Python transports CPU validation inputs only; it is not a GPU user adapter.
+The 100-built `15e2bef2a` binary passed the same numerical/lifecycle suite on
+A100-SXM4-40GB, including exact dense promotion and CPU physical parity.
+The optional profile uses Windows system CPU/memory samples and GPU utilization
+before/after; these samples do not exclude transient external load or measure
+process/global peaks. The small 275-dimensional, three-apply ABBA diagnostic
+records 4.292 ms rebuild versus 2.481 ms resident (1.73x), with 573312 owned
+device bytes in both modes. See `results/a100-same-artifact-20261012.json`.
+This is not full HACApK assembly, an HDiv-MMM solve, true-residual acceptance
+or full-solver performance. The initial profile attempt failed on absent
+psutil and is retained separately; no host package was installed.
