@@ -8,6 +8,16 @@
 #include <limits>
 #include <algorithm>
 namespace radia_ih_cuda {
+// A saddle-point RHS can give r^H A r == 0 at the first BiCG step.
+// BiCGStab permits any fixed shadow with nonzero shadow^H r. Use a
+// deterministic dense shadow perturbation; certify the original equation.
+__global__ void initializeShadow(const cuDoubleComplex* rhs,cuDoubleComplex* shadow,
+        const cuDoubleComplex* squaredNorm,int n) {
+    const int i=int(blockIdx.x*blockDim.x+threadIdx.x);if(i>=n)return;
+    const double scale=sqrt(cuCreal(*squaredNorm)/double(n));
+    const double fraction=double(i+1)/double(n+1);
+    shadow[i]=cuCadd(rhs[i],make_cuDoubleComplex(scale*(1.+fraction),scale*.25*fraction));
+}
 inline void cudaCheck(cudaError_t e){if(e!=cudaSuccess)throw std::runtime_error(cudaGetErrorString(e));}
 inline void blasCheck(cublasStatus_t e){if(e!=CUBLAS_STATUS_SUCCESS)throw std::runtime_error("IH cuBLAS operation failed");}
 __global__ void initializeBiCG(BiCGState* scalar,const cuDoubleComplex* norm,double tolerance) {
@@ -108,7 +118,9 @@ public:
         cudaCheck(cudaMemsetAsync(solution_,0,std::size_t(n_)*sizeof(cuDoubleComplex),stream_));
         cudaCheck(cudaMemcpyAsync(r_,rhs_,std::size_t(n_)*sizeof(cuDoubleComplex),cudaMemcpyDeviceToDevice,stream_));
         cudaCheck(cudaMemcpyAsync(r0_,rhs_,std::size_t(n_)*sizeof(cuDoubleComplex),cudaMemcpyDeviceToDevice,stream_));
-        dot(rhs_,rhs_,rr_);initializeBiCG<<<1,1,0,stream_>>>(scalar_,rr_,tolerance);
+        dot(rhs_,rhs_,rr_);
+        initializeShadow<<<(unsigned(n_)+127)/128,128,0,stream_>>>(rhs_,r0_,rr_,n_);
+        initializeBiCG<<<1,1,0,stream_>>>(scalar_,rr_,tolerance);
         BiCGState state{};
         for(int i=0;i<maxIterations;i+=8) {
             if(maxIterations-i>=8)cudaCheck(cudaGraphLaunch(executable_,stream_));
