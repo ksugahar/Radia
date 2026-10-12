@@ -98,6 +98,8 @@ try{
         auto assembled=assembleFull(block,epsilon[0],int(integer(field(in[1],0,"leaf_size"),true)),eta[0],int(integer(field(in[1],0,"max_rank"),true)));
         auto c=std::make_unique<Resident>(assembled.plan,mode=="demag"?&map:nullptr);
         c->setupPeakOwnedBytes=std::max(c->ownedBytes,assembled.oracleOwned);
+        c->assemblyEntryBatches=assembled.entryBatches;c->assemblyEntryCount=assembled.entryCount;
+        c->assemblyLeafCount=assembled.leafCount;c->assemblyLowrankCount=assembled.lowrankCount;
         if(generation==0x0000ffffffffffffULL)throw std::overflow_error("Handle generation exhausted");
         const auto t=0x484d000000000000ULL|++generation;
         auto* output=mxCreateNumericMatrix(1,1,mxUINT64_CLASS,mxREAL);*static_cast<std::uint64_t*>(mxGetData(output))=t;
@@ -268,7 +270,10 @@ try{
     }
     if(command=="stats"){
         arity(nr,2,nl,1);const auto& c=*contexts.at(token(in[1]));const char* names[]={"owned_device_bytes","applications","kernel_launches","host_synchronizations_per_apply","setup_peak_owned_device_bytes"};
-        out[0]=mxCreateStructMatrix(1,1,5,names);mxSetField(out[0],0,names[0],mxCreateDoubleScalar(c.ownedBytes));mxSetField(out[0],0,names[1],mxCreateDoubleScalar(c.applications));mxSetField(out[0],0,names[2],mxCreateDoubleScalar(c.kernelsPerApplication*c.applications));mxSetField(out[0],0,names[3],mxCreateDoubleScalar(0));mxSetField(out[0],0,names[4],mxCreateDoubleScalar(std::max(c.ownedBytes,c.setupPeakOwnedBytes)));return;
+        out[0]=mxCreateStructMatrix(1,1,5,names);mxSetField(out[0],0,names[0],mxCreateDoubleScalar(c.ownedBytes));mxSetField(out[0],0,names[1],mxCreateDoubleScalar(c.applications));mxSetField(out[0],0,names[2],mxCreateDoubleScalar(c.kernelsPerApplication*c.applications));mxSetField(out[0],0,names[3],mxCreateDoubleScalar(0));mxSetField(out[0],0,names[4],mxCreateDoubleScalar(std::max(c.ownedBytes,c.setupPeakOwnedBytes)));
+        const char* extra[]={"assembly_entry_batches","assembly_entry_count","assembly_leaf_count","assembly_lowrank_count"};
+        const std::size_t counts[]={c.assemblyEntryBatches,c.assemblyEntryCount,c.assemblyLeafCount,c.assemblyLowrankCount};
+        for(int i=0;i<4;++i){mxAddField(out[0],extra[i]);mxSetField(out[0],0,extra[i],mxCreateDoubleScalar(counts[i]));}return;
     }
     throw std::invalid_argument("Unknown H-matrix command");
 }catch(const std::exception& e){mexErrMsgIdAndTxt("radia:cuda:hmatrix","%s",e.what());}

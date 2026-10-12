@@ -710,6 +710,23 @@ static int fill_dense_leaf_exact(
     fprintf(stderr, "ndt=%d ndl=%d\n",ndt,ndl);
     return 0;
   }
+#ifdef RAD_HACAPK_BATCH_ENTRIES
+  /* Preserve row-major dense storage and exact entries while amortizing the
+   * CUDA callback transfer/synchronization across contiguous leaf entries. */
+  {
+    int rows[256], columns[256];
+    const size_t total=(size_t)ndl*(size_t)ndt;
+    for(size_t start=0;start<total;start+=256) {
+      const int count=(int)((total-start)<256 ? total-start : 256);
+      for(int k=0;k<count;++k) {
+        const size_t index=start+(size_t)k;
+        rows[k]=lodl[nstrtl+(int)(index/(size_t)ndt)];
+        columns[k]=lodt[nstrtt+(int)(index%(size_t)ndt)];
+      }
+      cHACApK_entry_batch(count,rows,columns,i_bemv,leaf->a1+start);
+    }
+  }
+#else
   for (int il=0; il<ndl; il++) {
     const int ill=il+nstrtl;
     for (int it=0; it<ndt; it++) {
@@ -718,6 +735,7 @@ static int fill_dense_leaf_exact(
         lodl[ill],lodt[itt],i_bemv);
     }
   }
+#endif
   return 1;
 }
 

@@ -166,6 +166,7 @@ class Resident {
     void valid(){int current;check(cudaGetDevice(&current));if(current!=device)throw std::runtime_error("H-matrix context belongs to another GPU");auto status=cudaStreamQuery(stream);if(status!=cudaSuccess&&status!=cudaErrorNotReady)check(status);}
 public:
     std::size_t ownedBytes=0,setupPeakOwnedBytes=0,applications=0,kernelsPerApplication=4;
+    std::size_t assemblyEntryBatches=0,assemblyEntryCount=0,assemblyLeafCount=0,assemblyLowrankCount=0;
     explicit Resident(const Plan& p,const SparseMap* map=nullptr):n(p.n),count(p.directions.size()) {
         check(cudaGetDevice(&device));
         if(count>2147483647u||n>std::size_t(2147483647u)*256)throw std::invalid_argument("CUDA grid range exceeded");

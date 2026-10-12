@@ -46,6 +46,8 @@ inline FullAssembly assembleFull(const AnalyticBlock& block,double epsilon,int l
     if(int(native.control->param[60])!=1)throw std::runtime_error("Unexpected native ACA dispatch");
     FullAssembly result;result.plan=fromHacapk(*native.matrix,*native.control,scale);
     result.entryBatches=oracle.batches;result.entryCount=oracle.entries;result.oracleOwned=oracle.ownedBytes;
-    result.leafCount=native.matrix->nlf;result.lowrankCount=native.matrix->nlfkt;return result;
+    for(int i=1;i<=native.matrix->nlf;++i){const auto* leaf=native.matrix->st_lf[i];
+        if(leaf&&leaf->nstrtl<=leaf->nstrtt){++result.leafCount;if(leaf->ltmtx==1&&leaf->kt>0)++result.lowrankCount;}}
+    return result;
 }
 }

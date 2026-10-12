@@ -6,6 +6,18 @@ arguments
 end
 inputs=load(inputPath);result=struct('accepted',false,'cases',struct([]));
 try
+    if isfield(inputs,'full_assembly_probe')
+        test=inputs.full_assembly_probe;
+        h=radia_cuda_hmatrix('create_analytic_hacapk',test.config);
+        free=onCleanup(@()radia_cuda_hmatrix('destroy',h));
+        radia_cuda_hmatrix('upload',h,test.initial);
+        radia_cuda_hmatrix('apply',h,1);actual=radia_cuda_hmatrix('download',h);
+        difference=norm(actual-test.expected)/max(norm(test.expected),realmin);
+        assert(difference<=1e-8,'Full CUDA HACApK assembly differs from CPU direct entries');
+        result.full_assembly=struct('relative_difference',difference,'stats',radia_cuda_hmatrix('stats',h),'scope','Constant affine tetra charges; full native hierarchy and CUDA entries; not general HDiv physics');
+        clear free
+        assert(radia_cuda_hmatrix('live_count')==0);
+    end
     for k=1:numel(inputs.cases)
         test=inputs.cases(k);h=create(test.config);
         free=onCleanup(@()radia_cuda_hmatrix('destroy',h));
