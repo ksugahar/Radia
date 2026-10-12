@@ -1,4 +1,4 @@
-#==============================================================================
+﻿#==============================================================================
 # Build.ps1 - Radia CPU pybind11 / GPU mexcuda build entry points
 #
 # Builds _radia_pybind.pyd and auxiliary modules using MSVC compiler
@@ -41,6 +41,7 @@ param(
     [switch]$Test,
     [switch]$Verbose,
     [switch]$RadiaOnly,
+    [switch]$IhCudaOnly,          # isolated persistent coupled IH CUDA gateway
     [switch]$FieldCudaOnly,       # isolated retained-cloud RadFld CUDA gateway
     [switch]$AmsCudaOnly,         # experimental AMS snapshot adapter + CUDA MEX
     [switch]$AxiFemOnly,           # configure + build ONLY axifem (fast C++ iteration)
@@ -53,6 +54,17 @@ param(
 $ErrorActionPreference = "Stop"
 if ($args.Count -gt 0) {
     throw "Unsupported build arguments: $($args -join ' '). Radia CPU uses -RadiaOnly; GPU uses -CudaMexOnly."
+}
+
+if ($IhCudaOnly) {
+    if ($RadiaOnly -or $FieldCudaOnly -or $AxiFemOnly -or $AmsCudaOnly -or $CudaMexOnly -or $OptunaMexOnly -or $InstallToSitePackages -or $Rebuild -or $Test) {
+        throw '-IhCudaOnly is an isolated experimental build; incompatible options supplied'
+    }
+    $ihBuildArgs = @()
+    if ($RequireNativeProvenance) { $ihBuildArgs += '--require-clean-source' }
+    & python (Join-Path $PSScriptRoot 'packages/radia-gpu/tools/build_ih_cuda.py') @ihBuildArgs
+    if ($LASTEXITCODE -ne 0) { throw 'IH CUDA experimental build failed' }
+    return
 }
 
 if ($FieldCudaOnly) {
