@@ -322,3 +322,7 @@ checks, exact hierarchy parity, continuous public-API time including transfers,
 and memory admission estimates alongside measured allocation counters.
 The setup allocator peak and resident solve allocation delta describe different
 phases; neither is a measurement of whole-process peak, and they are not summed.
+Use `--require-idle-host` on Windows to reject queued/running CI, other active
+numerical/build processes and sustained GPU load before startup and between
+benchmark calls. A conflict aborts this validator, closes its owned Engine and
+saves a failed JSON; retry in a new output directory after the host becomes idle.

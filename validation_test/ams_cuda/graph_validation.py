@@ -4,10 +4,45 @@ Timing on RTX 5000/100 is diagnostic only. Python orchestrates validation;
 it is not required by the MATLAB GPU runtime.
 """
 from pathlib import Path
-import argparse, hashlib, json, os, statistics, sys, time
+import argparse, hashlib, json, os, statistics, subprocess, sys, time
 import numpy as np
 from scipy.io import loadmat
 ROOT=Path(__file__).resolve().parents[2]
+
+def assert_idle_host():
+    """Check between calls, outside timed intervals; never stop another job."""
+    if os.name!='nt':
+        raise RuntimeError('The idle-host probe currently requires Windows')
+    for status in ('queued','in_progress'):
+        runs=json.loads(subprocess.check_output(['gh','run','list','--repo','ksugahar/Radia',
+            '--status',status,'--limit','1','--json','status'],text=True))
+        if runs:
+            raise RuntimeError('CI/preflight is active or queued; retry on an idle host')
+    probe=r'''
+$all=Get-CimInstance Win32_Process
+$owned=@(OWNER_PID)
+do {
+    $previous=$owned.Count
+    $owned+=@($all | Where-Object { $_.ParentProcessId -in $owned -and $_.ProcessId -notin $owned } | ForEach-Object ProcessId)
+} while ($owned.Count -gt $previous)
+$ids=@($all | Where-Object { $_.Name -match '^(python|MATLAB|nvcc|ninja|cl|MSBuild|ngsolve).*\.exe$' -and $_.ProcessId -notin $owned } | ForEach-Object ProcessId)
+$before=@{}
+foreach($pidValue in $ids) { $p=Get-Process -Id $pidValue -ErrorAction SilentlyContinue; if($p) { $before[$pidValue]=$p.CPU } }
+Start-Sleep -Seconds 1
+$busy=@(foreach($pidValue in $ids) { $p=Get-Process -Id $pidValue -ErrorAction SilentlyContinue; if($p -and $before.ContainsKey($pidValue) -and ($p.CPU-$before[$pidValue]) -gt 0.25) { $pidValue } })
+ConvertTo-Json -InputObject $busy -Compress
+'''.replace('OWNER_PID',str(os.getpid()))
+    busy=json.loads(subprocess.check_output(['powershell','-NoProfile','-Command',probe],text=True))
+    if busy:
+        raise RuntimeError('Another numerical/build process is active; retry on an idle host')
+    def gpu_util():
+        values=subprocess.check_output(['nvidia-smi','--query-gpu=utilization.gpu',
+            '--format=csv,noheader,nounits'],text=True)
+        return max(float(v) for v in values.split())
+    if gpu_util()>25:
+        time.sleep(0.5)
+        if gpu_util()>25:
+            raise RuntimeError('GPU is busy outside this benchmark; retry on an idle host')
 
 def cpu_oracle(path,oracle_dir=ROOT/'build-ams-cuda'):
     """Independent Python/NGSolve solve from the identical checked operators."""
@@ -48,9 +83,11 @@ def main(args):
         timing_classification='diagnostic; not formal performance acceptance',a100_started=False,
         comparison='CPU versus CUDA Galerkin generation; identical remaining setup and GPU solve' if generation else 'direct CUDA kernels versus CUDA Graph; same host setup threads and GPU arithmetic',
         setup_threads=4,rounds=args.rounds,cases=[],
+        idle_host_checks_enabled=args.require_idle_host,
         memory_measurement='setup: peak concurrently owned CUDA allocation bytes; solve: live allocation delta, not whole-process peak')
     eng=None
     try:
+        if args.require_idle_host:assert_idle_host()
         startup=time.perf_counter()
         eng=matlab.engine.start_matlab('-nodesktop -nosplash')
         record['matlab_startup_seconds']=time.perf_counter()-startup
@@ -68,12 +105,14 @@ def main(args):
         for path in args.inputs:
             case=dict(input=path.name,input_sha256=file_hash(path),input_bytes=path.stat().st_size,samples=[]);record['cases'].append(case)
             oracle=cpu_oracle(path,args.oracle_dir)
+            if args.require_idle_host:assert_idle_host()
             case['cpu_true_relative_residual']=oracle['true_residual']
             case['cpu_probe_reference_relative_difference']=oracle['probe_diff']
             case.update(dofs=oracle['dofs'],matrix_nonzeros=oracle['matrix_nonzeros'])
             # Exclude first native/MATLAB/CUDA load and both backend warmups.
             case['warmups']=[]
             for mode in [False,True]:
+                if args.require_idle_host:assert_idle_host()
                 warm_path=args.out/f'{path.stem}-warm-{mode}.mat'
                 eng.benchmark(str(path.resolve()),str(warm_path.resolve()),str(args.binary_dir),
                     str(args.matlab_dir),4.0,False if generation else mode,mode if generation else True,nargout=0)
@@ -83,6 +122,7 @@ def main(args):
                     excluded_from_medians=True))
             ref=None
             for index,mode in enumerate([False,True,True,False]*args.rounds):
+                if args.require_idle_host:assert_idle_host()
                 graph=False if generation else mode
                 target=args.out/f'{path.stem}-{index}.mat'
                 eng.benchmark(str(path.resolve()),str(target.resolve()),str(args.binary_dir),
@@ -146,6 +186,7 @@ if __name__=='__main__':
     p.add_argument('--matlab-dir',type=Path,default=ROOT/'packages/radia-gpu/matlab')
     p.add_argument('--build-receipt',type=Path,default=ROOT/'build-ams-cuda/build.json')
     p.add_argument('--oracle-dir',type=Path,default=ROOT/'build-ams-cuda')
+    p.add_argument('--require-idle-host',action='store_true',help='Reject CI/compute/GPU contention between measured calls')
     args=p.parse_args()
     if args.rounds<1:p.error('--rounds must be positive')
     main(args)
