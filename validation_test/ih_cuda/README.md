@@ -63,3 +63,27 @@ Python prerequisite for the eventual GPU product, and its gateway is not shipped
 The official MATLAB MCP currently reports `failed to attach to MATLAB session`;
 no production SLX acceptance has been performed. Engine-owned sessions were used
 only for these standalone CUDA development checks.
+
+## Current checkpoint: FP32 preconditioning and persistent Simulink state
+
+This checkpoint supersedes the earlier pending implementation notes above.
+The checked persistent mexcuda context now owns electromagnetic, loss and
+thermal device state across MATLAB calls. Fixed right preconditioning can store
+and apply its inverse-action matrix in FP32 while the original operator, outer
+BiCGStab vectors/reductions and final true residual remain FP64. The supplied
+inverse-action matrix is not yet a native IC/AMG builder.
+
+`results/fp32-preconditioner-20261012.json` records nine algebra cases (no,
+FP64 and FP32 preconditioning, three drives, ten thermal updates), independent
+NumPy comparisons, true residuals, iteration counts and owned buffer sizes.
+It does not contain timing acceptance or sampled peak memory.
+
+Official MATLAB MCP attachment was restored in an operation-owned session.
+The official Simulink Toolkit checked the disposable resident-state model;
+save/close/reopen and repeated simulation passed with zero live contexts after
+simulation. `results/fp32-simulink-algebra-20261012.json` records the FP32
+preconditioned temperature and heat trajectories against independent NumPy
+backward Euler algebra. This is synthetic orchestration validation, not physical
+PEEC-BEM/ESIM parity. Actual native geometry assembly, nonlinear ESIM/reaction
+coupling and independent pybind11 physical acceptance still block release.
+A100 was not used. No speedup is claimed from these checks.
