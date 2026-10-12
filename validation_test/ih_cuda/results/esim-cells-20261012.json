@@ -1,0 +1,261 @@
+{
+  "schema": "radia.ih-esim-cell-cuda.v1",
+  "accepted": true,
+  "scope": "Finite slab/cylinder cells only; full PEEC-BEM, pybind11 physical and Simulink acceptance pending",
+  "timing_acceptance": false,
+  "a100_used": false,
+  "source_commit": "a127be707e88000c5c17604a401c76fbf5de5f0c",
+  "source_dirty": false,
+  "source_sha256": {
+    "validation_test/ih_cuda/esim_cell_smoke.cu": "0aee72bdbb6834376750784c15e8eda91c710932f22d0105d0c5cebea09dc8e9",
+    "packages/radia-gpu/native/ih_esim_cell.cuh": "1a9b645b3be9ea623559ad09a9bdcb65b8f2e1696150801cab3e29d768f171e5",
+    "validation_test/ih_cuda/run_esim_cell_smoke.py": "b117b729b3493513e94651735ae7411ad78ff9d0f2eaef932195c214c858c5ed",
+    "src/radia/esim_cell_problem.py": "e53962942f82f8c35e4bd1841f79aae95c57c4a5d27ab9209c0d7a24e2a6a8c4",
+    "src/radia/bh_law.py": "baa389dd6e4de70f349d318df46ac80fa7baaf6a83d5dbea0ad3d4d33be6daae"
+  },
+  "cases": [
+    {
+      "geometry": "slab",
+      "material": "linear",
+      "surface_field_A_per_m": 0.001,
+      "impedance_relative": 4.014515050261679e-15,
+      "field_relative": 4.580731041405578e-15,
+      "power_relative": 4.016250864463725e-15,
+      "true_residual": 1.5301949499203312e-12,
+      "iterations": 1
+    },
+    {
+      "geometry": "slab",
+      "material": "linear",
+      "surface_field_A_per_m": 1.0,
+      "impedance_relative": 4.130901906919115e-15,
+      "field_relative": 4.297648810369302e-15,
+      "power_relative": 4.130901906919115e-15,
+      "true_residual": 1.5856176009000083e-12,
+      "iterations": 1
+    },
+    {
+      "geometry": "slab",
+      "material": "linear",
+      "surface_field_A_per_m": 100.0,
+      "impedance_relative": 5.8538172062398454e-15,
+      "field_relative": 5.972610556701689e-15,
+      "power_relative": 5.8111022139805516e-15,
+      "true_residual": 1.6384073981520294e-12,
+      "iterations": 1
+    },
+    {
+      "geometry": "slab",
+      "material": "linear",
+      "surface_field_A_per_m": 10000.0,
+      "impedance_relative": 3.582672827404151e-15,
+      "field_relative": 4.5071238276069114e-15,
+      "power_relative": 3.6676046806184045e-15,
+      "true_residual": 1.4064025306111395e-12,
+      "iterations": 1
+    },
+    {
+      "geometry": "slab",
+      "material": "complex",
+      "surface_field_A_per_m": 0.001,
+      "impedance_relative": 5.301133457510239e-15,
+      "field_relative": 4.830899401389366e-15,
+      "power_relative": 5.261363452830283e-15,
+      "true_residual": 2.1724464297759705e-12,
+      "iterations": 1
+    },
+    {
+      "geometry": "slab",
+      "material": "complex",
+      "surface_field_A_per_m": 1.0,
+      "impedance_relative": 5.011844244968747e-15,
+      "field_relative": 4.423936008583737e-15,
+      "power_relative": 5.013452720769429e-15,
+      "true_residual": 1.576735722064567e-12,
+      "iterations": 1
+    },
+    {
+      "geometry": "slab",
+      "material": "complex",
+      "surface_field_A_per_m": 100.0,
+      "impedance_relative": 4.459051319658434e-15,
+      "field_relative": 3.870014810647087e-15,
+      "power_relative": 4.454851030357712e-15,
+      "true_residual": 1.617874947074183e-12,
+      "iterations": 1
+    },
+    {
+      "geometry": "slab",
+      "material": "complex",
+      "surface_field_A_per_m": 10000.0,
+      "impedance_relative": 4.9519588140578e-15,
+      "field_relative": 4.365400980919881e-15,
+      "power_relative": 4.93204766211976e-15,
+      "true_residual": 1.747834840587289e-12,
+      "iterations": 1
+    },
+    {
+      "geometry": "slab",
+      "material": "nonlinear",
+      "surface_field_A_per_m": 0.001,
+      "impedance_relative": 7.456799183680905e-16,
+      "field_relative": 4.3736505660625703e-16,
+      "power_relative": 7.70221752650085e-16,
+      "true_residual": 5.525749129678066e-13,
+      "iterations": 15
+    },
+    {
+      "geometry": "slab",
+      "material": "nonlinear",
+      "surface_field_A_per_m": 1.0,
+      "impedance_relative": 2.310607154012032e-16,
+      "field_relative": 2.0186624387304066e-16,
+      "power_relative": 2.310607154012032e-16,
+      "true_residual": 5.937107195694066e-13,
+      "iterations": 15
+    },
+    {
+      "geometry": "slab",
+      "material": "nonlinear",
+      "surface_field_A_per_m": 100.0,
+      "impedance_relative": 2.0194926789160893e-15,
+      "field_relative": 1.4058917871305878e-15,
+      "power_relative": 1.970393276039301e-15,
+      "true_residual": 1.0664995510123421e-12,
+      "iterations": 18
+    },
+    {
+      "geometry": "slab",
+      "material": "nonlinear",
+      "surface_field_A_per_m": 10000.0,
+      "impedance_relative": 3.2966793154263563e-15,
+      "field_relative": 3.363886471262429e-15,
+      "power_relative": 3.2430423220493485e-15,
+      "true_residual": 1.1998058677922205e-12,
+      "iterations": 44
+    },
+    {
+      "geometry": "cylinder",
+      "material": "linear",
+      "surface_field_A_per_m": 0.001,
+      "impedance_relative": 1.6835566153117479e-15,
+      "field_relative": 2.508576677099268e-15,
+      "power_relative": 1.750611335770978e-15,
+      "true_residual": 1.7958984509941913e-12,
+      "iterations": 1
+    },
+    {
+      "geometry": "cylinder",
+      "material": "linear",
+      "surface_field_A_per_m": 1.0,
+      "impedance_relative": 2.175327077313582e-15,
+      "field_relative": 2.394474750716504e-15,
+      "power_relative": 2.175327077313582e-15,
+      "true_residual": 1.7840816420916349e-12,
+      "iterations": 1
+    },
+    {
+      "geometry": "cylinder",
+      "material": "linear",
+      "surface_field_A_per_m": 100.0,
+      "impedance_relative": 1.7228389361477047e-15,
+      "field_relative": 2.2347831743970896e-15,
+      "power_relative": 1.666015997280443e-15,
+      "true_residual": 1.6338778536039573e-12,
+      "iterations": 1
+    },
+    {
+      "geometry": "cylinder",
+      "material": "linear",
+      "surface_field_A_per_m": 10000.0,
+      "impedance_relative": 1.9637192442837652e-15,
+      "field_relative": 2.534813768637326e-15,
+      "power_relative": 2.0134716182975463e-15,
+      "true_residual": 1.5054638519208957e-12,
+      "iterations": 1
+    },
+    {
+      "geometry": "cylinder",
+      "material": "complex",
+      "surface_field_A_per_m": 0.001,
+      "impedance_relative": 5.445819732006646e-15,
+      "field_relative": 6.443068523073597e-15,
+      "power_relative": 5.396522688071065e-15,
+      "true_residual": 1.8657479216483795e-12,
+      "iterations": 1
+    },
+    {
+      "geometry": "cylinder",
+      "material": "complex",
+      "surface_field_A_per_m": 1.0,
+      "impedance_relative": 5.252123683654654e-15,
+      "field_relative": 6.201454470107635e-15,
+      "power_relative": 5.254736742066862e-15,
+      "true_residual": 1.4837988134741602e-12,
+      "iterations": 1
+    },
+    {
+      "geometry": "cylinder",
+      "material": "complex",
+      "surface_field_A_per_m": 100.0,
+      "impedance_relative": 4.7857372001312775e-15,
+      "field_relative": 6.197626067414437e-15,
+      "power_relative": 4.797591683789864e-15,
+      "true_residual": 1.7227964936504426e-12,
+      "iterations": 1
+    },
+    {
+      "geometry": "cylinder",
+      "material": "complex",
+      "surface_field_A_per_m": 10000.0,
+      "impedance_relative": 5.035788049326128e-15,
+      "field_relative": 6.1646098504405345e-15,
+      "power_relative": 5.0696266056152335e-15,
+      "true_residual": 1.6635947250483584e-12,
+      "iterations": 1
+    },
+    {
+      "geometry": "cylinder",
+      "material": "nonlinear",
+      "surface_field_A_per_m": 0.001,
+      "impedance_relative": 9.978617284270968e-16,
+      "field_relative": 8.2668144665429e-16,
+      "power_relative": 9.516351017256708e-16,
+      "true_residual": 8.675844889965727e-13,
+      "iterations": 15
+    },
+    {
+      "geometry": "cylinder",
+      "material": "nonlinear",
+      "surface_field_A_per_m": 1.0,
+      "impedance_relative": 8.47397928721324e-16,
+      "field_relative": 6.12294251925302e-16,
+      "power_relative": 8.47397928721324e-16,
+      "true_residual": 1.0987433660469674e-12,
+      "iterations": 15
+    },
+    {
+      "geometry": "cylinder",
+      "material": "nonlinear",
+      "surface_field_A_per_m": 100.0,
+      "impedance_relative": 1.0954255204164298e-15,
+      "field_relative": 5.926535345987546e-16,
+      "power_relative": 1.0862829650038114e-15,
+      "true_residual": 7.69813762698619e-13,
+      "iterations": 18
+    },
+    {
+      "geometry": "cylinder",
+      "material": "nonlinear",
+      "surface_field_A_per_m": 10000.0,
+      "impedance_relative": 3.4371177891813727e-15,
+      "field_relative": 4.831060949257212e-15,
+      "power_relative": 3.431255184656287e-15,
+      "true_residual": 9.385927582789447e-13,
+      "iterations": 47
+    }
+  ],
+  "nonconvergence_rejected": true,
+  "matlab": "26.1.0.3346908 (R2026a) Update 5",
+  "binary_sha256": "65c56d8b052278cf2fafe81df8dcd37bda4380f448255b0af95e2259352557a5"
+}

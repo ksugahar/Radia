@@ -44,3 +44,22 @@ material implementation. The device state is currently scoped to a single
 validation MEX invocation. Checked persistent MATLAB handles, actual ESIM cell
 and reaction-field updates, independent physical CPU parity and Simulink
 acceptance remain pending. No full IH or release acceptance is claimed.
+
+## Native nonlinear ESIM cells
+
+`run_esim_cell_smoke.py` differentially checks the unmodified Python
+`ESIMFiniteSlabSolver` against device finite differences for slab and cylinder
+cells, constant real/complex permeability and monotone B(H) piecewise cubics.
+Each CUDA thread solves one cell with the original boundary stencils, Picard
+relaxation, convergence criterion and midpoint active/reactive power integration.
+This is finite-difference cell arithmetic, not a replacement for NGSolve FE
+semantics. Nonconvergence and linear true residual above 1e-6 fail loudly.
+
+The validation supplies interpolation coefficients from the independent CPU
+oracle. A MATLAB/native B(H) coefficient constructor, full material-state and
+reaction-field coupling, checked persistent MATLAB handles, pybind11 model
+parity and Simulink acceptance are still required. This validation is not a
+Python prerequisite for the eventual GPU product, and its gateway is not shipped.
+The official MATLAB MCP currently reports `failed to attach to MATLAB session`;
+no production SLX acceptance has been performed. Engine-owned sessions were used
+only for these standalone CUDA development checks.
